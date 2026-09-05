@@ -2929,7 +2929,18 @@ def play_game(
             **({"objectives_layout": objective_layout} if objective_layout else {}),
             "packs": [],
         },
-        "armies": {"p1": str(list_p1), "p2": str(list_p2)},
+        # 2026-09-05 fix: BASENAME + content hash, not the caller's absolute
+        # path. `str(list_p1)` put `/home/<user>/...` or `/root/...` into the
+        # DIGESTED body -- the whole reason 11 pinned digests diverged
+        # between a laptop and a build box was this one field (see
+        # DIGEST_DIVERGENCE_2026-09-05.md). `armies_sha256` keeps the digest
+        # able to see WHICH army content played -- the point of hashing
+        # `armies` at all -- without the machine-dependent path.
+        "armies": {"p1": Path(list_p1).name, "p2": Path(list_p2).name},
+        "armies_sha256": {
+            "p1": hashlib.sha256(Path(list_p1).read_bytes()).hexdigest(),
+            "p2": hashlib.sha256(Path(list_p2).read_bytes()).hexdigest(),
+        },
         "opener": 0,
         "objectives": {"p1": p1, "p2": p2, "neutral": len(owners) - p1 - p2},
         # Expert-iteration step 2: the AUX targets at game end, `record_aux`

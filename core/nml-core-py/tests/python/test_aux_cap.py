@@ -48,7 +48,11 @@ FAST = {"top_k": 2, "horizon": 1}
 #: moved this seed's game under `LEGACY_FIDELITY_KNOBS` too — this test is
 #: about record_aux/cap_share, not that knob, so the pin just follows today's
 #: other defaults rather than pinning a growing list of unrelated ones.
-DEFAULT_27_DIGEST = "86249fc93149f8d49e74f19fbef634e985f3224710aba39d4248f535f8c94504"
+#: Re-pinned 2026-09-05 (armies-basename fix, DIGEST_DIVERGENCE_2026-09-05.md):
+#: `armies` moved from the caller's absolute path to the list basename plus
+#: `armies_sha256`, so every digest that hashes `armies` moved by that one
+#: field — the played game (and this comment's own vintage) did not.
+DEFAULT_27_DIGEST = "23edd5cdb09ea738c67bfd3092d46abe5a72983f612151436d396658e46cce68"
 
 #: `cap_share=0.25`'s coin on seed 27: 12 of 51 activations fire. The stream
 #: is `seed * CAP_SEED_STRIDE + seq`, so the count is pinned, not statistical.

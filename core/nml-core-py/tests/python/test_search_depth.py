@@ -50,7 +50,10 @@ FAST = {"top_k": 2, "horizon": 1}
 #: about deep_player/menu_los/menu_wide, not that knob, so the pin just
 #: follows today's other defaults rather than pinning a growing list of
 #: unrelated ones.
-SEED_27_FAST_DIGEST = "86249fc93149f8d49e74f19fbef634e985f3224710aba39d4248f535f8c94504"
+#: Re-pinned 2026-09-05 (armies-basename fix, DIGEST_DIVERGENCE_2026-09-05.md):
+#: `armies` moved from the caller's absolute path to the list basename plus
+#: `armies_sha256`; the game did not move.
+SEED_27_FAST_DIGEST = "23edd5cdb09ea738c67bfd3092d46abe5a72983f612151436d396658e46cce68"
 
 
 def _lists_missing() -> bool:
