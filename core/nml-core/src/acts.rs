@@ -313,23 +313,44 @@ pub const CURRENT_RULES_EPOCH: u32 = 5;
 /// `CURRENT_RULES_EPOCH` moves on for later waves.
 pub const EPOCH_3_TABLE_RULES: u32 = 3;
 
-/// The frozen `since_epoch` for wave 2's five family ports (Lacerate,
-/// Utility Buff, Surge's own wave-2 gates, Ambush — Takedown ported 0 names,
-/// nothing to freeze). Named the same way `EPOCH_3_TABLE_RULES` is: the
-/// epoch a record needs to reach to get these rules — NOT the epoch their
-/// code happened to be written under (every "WAVE 2" comment in
-/// `unit.rs`/`sim.rs` still says the literal `4`, since that's what wave 2
-/// was written against before this fix). See the WAVE 2 STAMPING-GAP
-/// INCIDENT note on `CURRENT_RULES_EPOCH` above for why the NEEDED epoch is
-/// `5`, one past the family ports' own literal: Gen-2b was already stamping
-/// `rules_epoch: 4` before this wave's rule code existed, so `4` would keep
-/// that corpus wrongly getting these rules forever. `5` instead excludes
-/// every record stamped `4` or below (Gen-2b included) while still catching
-/// every wave-2 call site's original intent (a fresh record from the moment
-/// these rules landed onward). Every one of `unit.rs`/`sim.rs`'s wave-2 call
-/// sites reads THIS constant, not the literal `4` or `CURRENT_RULES_EPOCH`,
-/// so a record stamping `rules_epoch: 5` keeps getting all five forever, no
-/// matter how many times `CURRENT_RULES_EPOCH` moves on for later waves.
+/// EPOCH GATES BY RECORDING SHA (05.09., correcting `EPOCH_5_TABLE_RULES`
+/// below): the Gen-2b recording fleet launched at `cf8831d1` — the Lacerate
+/// family's OWN merge commit (14:54Z), landed before the fleet's 15:17Z
+/// launch — so Lacerate WAS live in the recorder for every `rules_epoch: 4`
+/// record. Utility Buff (`a27456d8`, 16:31Z), Takedown (`9efca1ed`, 17:14Z,
+/// 0 names), Surge (`e941277d`, 17:48Z), Ambush (`9001b7ae`, 20:57Z) and
+/// Shred (`99aee491`, 21:55Z) all merged AFTER the fleet launched and were
+/// NOT in the recorder — those five (Takedown moot) correctly stay gated at
+/// `EPOCH_5_TABLE_RULES` below. Lacerate alone needs its OWN frozen value —
+/// the epoch a record needs to reach to get IT is `4`, not `5` — so a record
+/// stamping `rules_epoch: 4` (Gen-2b included) keeps getting Lacerate
+/// forever, while `rules_epoch: 3` and below still don't. Only
+/// `unit.rs::rules_of_primitive`'s Lacerate-family call site reads this
+/// constant.
+pub const EPOCH_4_TABLE_RULES: u32 = 4;
+
+/// The frozen `since_epoch` for wave 2's remaining family ports (Utility
+/// Buff, Surge's own wave-2 gates, Ambush, Shred's widened save-fail window —
+/// Takedown ported 0 names, nothing to freeze; Lacerate moved to its OWN
+/// `EPOCH_4_TABLE_RULES` above, 05.09. correction: it was live in the Gen-2b
+/// recorder, the other four and Shred were not). Named the same way
+/// `EPOCH_3_TABLE_RULES` is: the epoch a record needs to reach to get these
+/// rules — NOT the epoch their code happened to be written under (every
+/// "WAVE 2" comment in `unit.rs`/`sim.rs` still says the literal `4`, since
+/// that's what wave 2 was written against before this fix). See the WAVE 2
+/// STAMPING-GAP INCIDENT note on `CURRENT_RULES_EPOCH` above for why the
+/// NEEDED epoch is `5`, one past the family ports' own literal: Gen-2b was
+/// already stamping `rules_epoch: 4` before this wave's rule code existed,
+/// so `4` would keep that corpus wrongly getting these rules forever. `5`
+/// instead excludes every record stamped `4` or below (Gen-2b included)
+/// while still catching every wave-2 call site's original intent (a fresh
+/// record from the moment these rules landed onward). Every one of
+/// `unit.rs`/`sim.rs`'s remaining wave-2 call sites (and `sim.rs`'s Shred
+/// Boost gate, moved here 05.09. — it merged AFTER the recording fleet
+/// closed, gated on the literal `4` until now) reads THIS constant, not the
+/// literal `4` or `CURRENT_RULES_EPOCH`, so a record stamping `rules_epoch:
+/// 5` keeps getting all of them forever, no matter how many times
+/// `CURRENT_RULES_EPOCH` moves on for later waves.
 pub const EPOCH_5_TABLE_RULES: u32 = 5;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
@@ -782,7 +803,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 mod tests {
     use super::{
         read_act_header, rule_on, MeleeReach, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
-        EPOCH_5_TABLE_RULES,
+        EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -844,6 +865,29 @@ mod tests {
         assert!(
             rule_on(5, EPOCH_5_TABLE_RULES),
             "a record stamped rules_epoch:5 (recorded after this fix) gets all of wave 2"
+        );
+    }
+
+    /// EPOCH GATES BY RECORDING SHA (05.09.): `EPOCH_4_TABLE_RULES` is
+    /// Lacerate's OWN frozen value — it merged (`cf8831d1`) BEFORE the
+    /// Gen-2b recording fleet launched, so a record stamped `rules_epoch: 4`
+    /// (Gen-2b included) gets Lacerate, unlike Utility Buff/Takedown/Surge/
+    /// Ambush/Shred (all merged after the fleet launched, all frozen at
+    /// `EPOCH_5_TABLE_RULES`).
+    #[test]
+    fn epoch_4_table_rules_is_lacerates_own_frozen_value() {
+        assert_eq!(EPOCH_4_TABLE_RULES, 4, "Lacerate's gate freezes at its own recording epoch, 4");
+        assert!(
+            rule_on(4, EPOCH_4_TABLE_RULES),
+            "a record stamped rules_epoch:4 (Gen-2b's own recording epoch) gets Lacerate"
+        );
+        assert!(
+            !rule_on(3, EPOCH_4_TABLE_RULES),
+            "a record stamped rules_epoch:3 (before Lacerate merged) does not get Lacerate"
+        );
+        assert!(
+            rule_on(4, EPOCH_4_TABLE_RULES) && !rule_on(4, EPOCH_5_TABLE_RULES),
+            "at rules_epoch:4, Lacerate is ON while the four later families and Shred are OFF"
         );
     }
 

@@ -21,7 +21,7 @@
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES};
+use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES};
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
     RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
@@ -1437,7 +1437,11 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     // carry `bypass_regen` bypasses Regeneration, facet-scoped per profile
     // ("Ignores Regeneration" ungated, "… in Melee" melee-only); the plain
     // "Lacerate" name keeps its own prefix reading above (main.gd:6995-6997).
-    if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
+    // EPOCH GATES BY RECORDING SHA (05.09.): Lacerate merged (`cf8831d1`)
+    // BEFORE the Gen-2b recording fleet launched, so it needs its OWN frozen
+    // value, `acts::EPOCH_4_TABLE_RULES` — NOT `EPOCH_5_TABLE_RULES`, which is
+    // for the four wave-2 families that merged after the fleet launched.
+    if rule_on(rules_epoch, EPOCH_4_TABLE_RULES) {
         for hit in rules_of_primitive(reg, p, "Lacerate") {
             if !hit.bypass_regen || hit.name.starts_with("Lacerate") {
                 continue;
@@ -2514,15 +2518,22 @@ mod tests {
     }
 
     /// Lacerate family (rules-wave2-lacerate2) — one test per ported name,
-    /// through the same template as the Bane ladder. Epoch literals 5/4, NOT
-    /// `CURRENT_RULES_EPOCH`: a wave-3 epoch bump must not re-date what these
-    /// assertions mean.
+    /// through the same template as the Bane ladder. Epoch literals 5/4/3,
+    /// NOT `CURRENT_RULES_EPOCH`: a wave-3 epoch bump must not re-date what
+    /// these assertions mean.
+    ///
+    /// EPOCH GATES BY RECORDING SHA (05.09. correction): Lacerate's OWN merge
+    /// commit (`cf8831d1`) landed BEFORE the Gen-2b recording fleet launched,
+    /// so it was live in the recorder for every `rules_epoch: 4` record —
+    /// `acts::EPOCH_4_TABLE_RULES`, not `EPOCH_5_TABLE_RULES` (that value is
+    /// for the four families that merged AFTER the fleet launched). Epoch 4
+    /// now GETS Lacerate; only epoch 3 and below replay the pre-wave reading.
     ///
     /// "Ignores Regeneration" (main.gd:6983-6989, common entries): bypass on
-    /// BOTH profiles at epoch 5; epoch 4 (Gen-2b's stamping-gap window — see
-    /// `acts::EPOCH_5_TABLE_RULES`) replays the pre-wave reading.
+    /// BOTH profiles from epoch 4 onward; epoch 3 replays the pre-wave
+    /// reading.
     #[test]
-    fn ignores_regeneration_bypasses_regen_on_every_profile_at_epoch_5() {
+    fn ignores_regeneration_bypasses_regen_on_every_profile_from_epoch_4() {
         assert_eq!(
             bane_stamp_of("Ignores Regeneration", "gf", "robot_legions", 5),
             (true, true),
@@ -2530,16 +2541,21 @@ mod tests {
         );
         assert_eq!(
             bane_stamp_of("Ignores Regeneration", "gf", "robot_legions", 4),
+            (true, true),
+            "rules_epoch 4 is Gen-2b's OWN recording epoch: Lacerate WAS live in the recorder, RED before the fix"
+        );
+        assert_eq!(
+            bane_stamp_of("Ignores Regeneration", "gf", "robot_legions", 3),
             (false, false),
-            "the wave is epoch-gated: rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
+            "the wave is epoch-gated: epoch 3 predates Lacerate entirely"
         );
         assert_eq!(bane_stamp_of("", "gf", "robot_legions", 5), (false, false), "no rule, no bypass");
     }
 
     /// "Unstoppable in Melee" (main.gd:6986-6989): the melee_only facet keeps
-    /// the rifle clean and the blade bypassing at epoch 5.
+    /// the rifle clean and the blade bypassing from epoch 4 onward.
     #[test]
-    fn unstoppable_in_melee_bypasses_regen_in_melee_only_at_epoch_5() {
+    fn unstoppable_in_melee_bypasses_regen_in_melee_only_from_epoch_4() {
         assert_eq!(
             bane_stamp_of("Unstoppable in Melee", "gf", "robot_legions", 5),
             (false, true),
@@ -2547,8 +2563,13 @@ mod tests {
         );
         assert_eq!(
             bane_stamp_of("Unstoppable in Melee", "gf", "robot_legions", 4),
+            (false, true),
+            "rules_epoch 4 is Gen-2b's OWN recording epoch: Lacerate WAS live in the recorder, RED before the fix"
+        );
+        assert_eq!(
+            bane_stamp_of("Unstoppable in Melee", "gf", "robot_legions", 3),
             (false, false),
-            "the wave is epoch-gated: rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
+            "the wave is epoch-gated: epoch 3 predates Lacerate entirely"
         );
         assert_eq!(bane_stamp_of("", "gf", "robot_legions", 5), (false, false), "no rule, no bypass");
     }
@@ -2556,7 +2577,7 @@ mod tests {
     /// "Ignores Regeneration in Melee" (gf/gff common): the same melee-only
     /// facet, distinct name, same primitive.
     #[test]
-    fn ignores_regeneration_in_melee_bypasses_regen_in_melee_only_at_epoch_5() {
+    fn ignores_regeneration_in_melee_bypasses_regen_in_melee_only_from_epoch_4() {
         assert_eq!(
             bane_stamp_of("Ignores Regeneration in Melee", "gf", "robot_legions", 5),
             (false, true),
@@ -2564,8 +2585,13 @@ mod tests {
         );
         assert_eq!(
             bane_stamp_of("Ignores Regeneration in Melee", "gf", "robot_legions", 4),
+            (false, true),
+            "rules_epoch 4 is Gen-2b's OWN recording epoch: Lacerate WAS live in the recorder, RED before the fix"
+        );
+        assert_eq!(
+            bane_stamp_of("Ignores Regeneration in Melee", "gf", "robot_legions", 3),
             (false, false),
-            "the wave is epoch-gated: rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
+            "the wave is epoch-gated: epoch 3 predates Lacerate entirely"
         );
         assert_eq!(bane_stamp_of("", "gf", "robot_legions", 5), (false, false), "no rule, no bypass");
     }
