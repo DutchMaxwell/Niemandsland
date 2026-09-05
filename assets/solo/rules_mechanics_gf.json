@@ -937,6 +937,15 @@
     "bypass_regen": true,
     "shooting_only": true
    }
+  },
+  "Piercing Fighter": {
+   "primitive": "Piercing Assault",
+   "rated": false,
+   "book_version": "3.5.3",
+   "params": {
+    "ap_bonus": 1,
+    "condition": "in_melee"
+   }
   }
  },
  "factions": {
@@ -6715,9 +6724,12 @@
     }
    },
    "Piercing Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Fighter"
+    }
    },
    "Precision Charge Aura": {
     "primitive": "Shot Modifier",
@@ -10572,9 +10584,12 @@
     }
    },
    "Piercing Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Fighter"
+    }
    },
    "Piercing Shooter Aura": {
     "primitive": null,

@@ -11,7 +11,7 @@ from pathlib import Path
 
 PRIORITY = {name + " Aura" for name in (
     "Scout", "Ambush", "Rapid Rush", "Relentless", "Piercing Assault")}
-DEFERRED = {"Piercing Fighter Aura", "Piercing Shooter Aura"}
+DEFERRED = {"Piercing Shooter Aura"}
 
 
 def entries(data):
