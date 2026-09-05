@@ -227,3 +227,19 @@ func test_aircraft_move_record_carries_the_straight_lane() -> void:
 	assert_bool(bool(data.get("aircraft", false))).is_true()
 	assert_float(float(data.get("achieved_in", 0.0))).is_equal_approx(30.0, 0.1)
 	assert_float(float(data.get("band_in", 0.0))).is_equal_approx(30.0, 0.001)
+
+
+func test_aircraft_common_entries_select_the_real_flight_and_targeting_gates() -> void:
+	for system in ["gf", "gff", "aof", "aofr", "aofs"]:
+		var air := _unit(2, [Vector3(-0.45, 0, 0)], ["Aircraft"], "Aircraft Fixture")
+		air.unit_properties["game_system"] = system
+		_arm(air, [{"name": "Gun", "range": 24, "attacks": 4, "rules": []}])
+		var enemy := _unit(1, [Vector3(0.45, 0, 0)], [], "Target Fixture")
+		var controller := _controller([air, enemy])
+		assert_bool(SoloController.is_aircraft(air)).is_true()
+		assert_float(SoloController.target_range_penalty_in(air)).is_equal_approx(12.0, 0.001)
+		var start: Vector3 = (air.models[0] as ModelInstance).node.global_position
+		assert_object(controller.activate_next_ai_unit()).is_same(air)
+		assert_bool(bool(controller.last_report.get("aircraft", false))).is_true()
+		var finish: Vector3 = (air.models[0] as ModelInstance).node.global_position
+		assert_float(start.distance_to(finish) / IN2M).is_equal_approx(30.0, 0.1)
