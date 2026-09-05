@@ -133,5 +133,24 @@ includes the public server's dummy/validation tests. Install the extension
 before running `test/e2e/e2e_dev_brain_test.gd`; otherwise its optional native
 tests explicitly skip. That suite boots the real main scene, asserts a
 brain-tagged controller decision, and terminates its own fake process to
-exercise the fallback. The fake is independent of the public server so PR 1
-can be tested without PR 2 or private code.
+exercise the fallback. The fake is independent of the public server so the
+seam-wiring PR can be tested before the server/docs PR, without private code.
+
+For the full native gdUnit suite, also set `NML_DOCTRINE_PYO3_PYTHON` to the
+Python interpreter importing `nml_core` built from the same source. Otherwise
+the existing table/twin objective-doctrine tests intentionally fail.
+
+`test/e2e/dev_brain_arena_accept.py` runs the sequential acceptance sweep:
+
+```sh
+python3 test/e2e/dev_brain_arena_accept.py \
+  --baseline /path/to/main-checkout --candidate /path/to/bridge-checkout \
+  --out /path/to/new-results-directory --seeds 20
+```
+
+Both checkouts must have their own matching native extension installed. Use
+a reserved test slot; this runner never builds and starts only one Godot at
+a time. It warms both paths, compares complete decision bytes (including
+state digests) on 20 seeds with the URL unset, completes 20 constant-scorer
+games, and kills its own server mid-game once. It requires real arena result
+files and writes the comparison hashes and batch timings to `summary.json`.
