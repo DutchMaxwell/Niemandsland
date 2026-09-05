@@ -588,15 +588,25 @@ pub fn resolve_volley_with_tray(
     for (sh, k, pi) in shots {
         let att = sh.att;
         let p = &sh.profiles[pi];
-        let reach = if def.ranged_shrouding {
+        let mut reach = if def.ranged_shrouding {
             let r = shrouded_reach(p.range as f64, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in);
             shroud_shortened |= r < p.range as f64;
             r
         } else {
             p.range as f64
         };
+        // WAVE 3 MARK (`acts::rule_on` inside `ctx_live`, EPOCH_6_TABLE_RULES):
+        // the target's live "+6\" shooting range" record extends the reach the
+        // range gate tests — `ctx_of` (the EV imagination) leaves it 0.
+        reach += def.range_mark_in;
         if p.range <= 0 || reach < reach_gate {
             continue;
+        }
+        if def.range_mark_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate {
+            out.log.push(format!(
+                "Increased Shooting Range Mark: {} gains +{:.0}\" reach on {}",
+                sh.owner, def.range_mark_in, def_owner
+            ));
         }
         let n = sh.attacks[k];
         if n <= 0 {

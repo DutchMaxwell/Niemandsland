@@ -1720,16 +1720,32 @@ fn sighted_profiles_of(
     // volley here, at the same per-weapon sight/range seam a weapon's own
     // Indirect flag rides. A record stamped below epoch 6 keeps today's
     // inert reading — the grant lands on the ledger but no resolver reads it.
+    let epoch6 = rule_on(sc.rules_epoch, EPOCH_6_TABLE_RULES);
+    let mark_indirect = epoch6 && mods::granted_vs(state, ti, "Indirect");
+    let mark_range = if epoch6 && mods::granted_vs(state, ti, "+6\" shooting range") {
+        INCREASED_SHOOTING_RANGE_MARK_IN
+    } else {
+        0.0
+    };
     for (i, p) in us.shoot.iter().enumerate() {
-        if (p.range as f64) < d {
+        if (p.range as f64) + mark_range < d {
             continue;
         }
         sc.keep.push(i);
-        let reach = sight_reach_in(p.range as f64, state.aircraft[ti], def);
+        let reach = sight_reach_in(p.range as f64 + mark_range, state.aircraft[ti], def);
         // Indirect (GF v3.5.1) "may target enemies that are not in line of
         // sight as if in line of sight": the range gate stays, the sight test
         // goes (main.gd:4136-4138).
-        let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach, p.indirect);
+        let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach, p.indirect || mark_indirect);
+        // Rules-must-log: the mark fires only where it changes the volley.
+        if mark_indirect && !p.indirect && seen > 0 {
+            trace_rule("volley", "Indirect Mark",
+                &format!("{} fires at {} without line of sight", statics[state.roster.profile[mi]].name, statics[state.roster.profile[ti]].name));
+        }
+        if mark_range > 0.0 && (p.range as f64) < d {
+            trace_rule("volley", "Increased Shooting Range Mark",
+                &format!("{} gains +{mark_range:.0}\" reach on {}", statics[state.roster.profile[mi]].name, statics[state.roster.profile[ti]].name));
+        }
         sc.attacks.push(bearer_scaled_attacks(p, state.alive[mi], us.model_count, seen));
     }
 }
@@ -3484,17 +3500,23 @@ fn resolve_with(
             // sight (main.gd:4011-4029 runs the same waiver in the table's own
             // per-target validity check), so the pooled gate consults it —
             // a record below epoch 6 never waives anything here.
+            let mark_indirect = rule_on(sc.rules_epoch, EPOCH_6_TABLE_RULES)
+                && mods::granted_vs(&next, ti, "Indirect");
             let sighted = if moved {
-                match cover {
+                (match cover {
                     Cover::Board(t) if t.is_valid() => !t.los_blocked(
                         geom::centre(&next.positions[si]),
                         geom::centre(&next.positions[ti]),
                     ),
                     _ => next.los[si].is_none() && next.los_pairs.is_none(),
-                }
+                }) || mark_indirect
             } else {
-                next.sees(si, &shoot_key) && los_clear(&next, si, ti)
+                (next.sees(si, &shoot_key) && los_clear(&next, si, ti)) || mark_indirect
             };
+            if mark_indirect && !(next.sees(si, &shoot_key) && los_clear(&next, si, ti)) {
+                trace_rule("volley", "Indirect Mark",
+                    &format!("{} may target {} without line of sight", statics[pi_s].name, statics[next.roster.profile[ti]].name));
+            }
             if plan.is_some() || sighted {
                 let d = geom::dist_in(&next.positions[si], &next.positions[ti]);
                 // NML-1152: the pooled plan's own modifier distance — unit
