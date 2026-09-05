@@ -226,3 +226,33 @@ func test_battle_log_names_the_weapon_the_bonus_lifts_into_reach(timeout := 1200
 	assert_int(_main.battle_log.entries().size()) \
 		.override_failure_message("a unit without a range bonus still logged a bonus line") \
 		.is_equal(before)
+
+
+func test_reach_hunt_human_cap_selects_rush_or_charge() -> void:
+	var manager: ObjectManager = _main.object_manager
+	var bands := {"advance": 6, "rush": 12, "charge": 14}
+	manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+	assert_int(manager._cap_band_inches(bands)).is_equal(12)
+	var charge_mode := int(ObjectManager.MovementCap.get("CHARGE", -1))
+	assert_int(charge_mode).is_greater_equal(0)
+	manager.set_movement_cap(charge_mode)
+	assert_int(manager._cap_band_inches(bands)).is_equal(14)
+	manager.set_movement_cap(ObjectManager.MovementCap.OFF)
+	assert_int(manager._cap_band_inches(bands)).is_equal(14)
+
+
+func test_reach_hunt_range_bonus_reaches_the_real_volley_and_named_log() -> void:
+	var gunner := _armed(1, "Fixture", [Vector3.ZERO], [{"name": "Rifle", "range": 24, "attacks": 2}])
+	gunner.unit_properties["game_system"] = "aof"
+	gunner.unit_properties["faction_folder"] = "mummified_undead"
+	gunner.unit_properties["special_rules"] = ["Reach Hunt"]
+	var target := _armed(2, "Target", [Vector3(_x_for_gap(26.0), 0, 0)], [])
+	assert_int(SoloController.shooting_range_bonus(gunner)).is_equal(4)
+	assert_array(_volley_weapons(gunner, target)).contains(["Rifle"])
+	var start: int = _main.battle_log.entries().size()
+	_main._solo_log_range_bonus(gunner, target)
+	var text := ""
+	for entry in _main.battle_log.entries().slice(start):
+		text += str(entry["text"]) + "\n"
+	assert_str(text).contains("Reach Hunt")
+	assert_str(text).contains("Rifle")

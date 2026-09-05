@@ -445,3 +445,23 @@ func test_bands_for_model_resolves_unit_via_parent_meta() -> void:
 	var b := c.bands_for_model(child)
 	assert_int(b["advance"]).is_equal(8)
 	assert_int(b["rush"]).is_equal(16)
+
+
+func test_reach_hunt_keeps_rush_and_charge_bands_distinct() -> void:
+	var covered := 0
+	for system in RulesRegistry.SYSTEMS:
+		var factions: Dictionary = RulesRegistry.map_for(system).get("factions", {})
+		for faction in factions:
+			if not factions[faction].has("Reach Hunt"):
+				continue
+			covered += 1
+			var props := {"game_system": system, "faction_folder": faction, "special_rules": ["Reach Hunt"]}
+			var bands := MovementRangeController.move_bands_for_props(props)
+			assert_int(bands["advance"]).is_equal(6)
+			assert_int(bands["rush"]).is_equal(12)
+			assert_int(bands.get("charge", -1)).is_equal(14)
+			props["special_rules"] = ["Fast", "Reach Hunt"]
+			bands = MovementRangeController.move_bands_for_props(props)
+			assert_int(bands["rush"]).is_equal(16)
+			assert_int(bands.get("charge", -1)).is_equal(18)
+	assert_int(covered).is_greater_equal(7)

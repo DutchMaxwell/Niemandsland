@@ -434,3 +434,16 @@ func test_spell_ev_core_ranges_tokens_and_status() -> void:
 	assert_int(int(hit["cost"])).is_equal(1)
 	assert_float(float(BattleSim._spell_ev_from(spells, 2, def_ctx, 30.0)["ev"])).is_equal_approx(0.0, 0.0001)
 	assert_float(float(BattleSim._spell_ev_from(spells, 0, def_ctx, 12.0)["ev"])).is_equal_approx(0.0, 0.0001)
+
+
+func test_reach_hunt_simulator_moves_only_charge_the_extra_distance() -> void:
+	var state := _state_with_grunts()
+	var unit: GameUnit = state["units"]["Grunts"]["unit"]
+	unit.unit_properties["game_system"] = "aof"
+	unit.unit_properties["faction_folder"] = "mummified_undead"
+	unit.unit_properties["special_rules"] = ["Reach Hunt"]
+	var goal := Vector3(40.0 * IN2M, 0, 0)
+	var start := _centre(state)
+	for pair in [[AiDecision.Action.RUSH, 12.0], [AiDecision.Action.CHARGE, 14.0]]:
+		var next := BattleSim.resolve(state, {"unit": "Grunts", "kind": pair[0], "dest": goal})
+		assert_float((_centre(next) - start).length() / IN2M).is_equal_approx(pair[1], 0.01)
