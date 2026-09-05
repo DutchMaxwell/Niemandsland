@@ -4047,6 +4047,16 @@
      "over_in": 9.0
     }
    },
+   "Piercing Warrior": {
+    "primitive": "Piercing Hunter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "ranged_over_or_charge",
+     "over_in": 9
+    }
+   },
    "Relentless Mark": {
     "primitive": "Utility Buff",
     "rated": false,
@@ -4198,6 +4208,16 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Havocbound Boost"
+    }
+   },
+   "Piercing Warrior": {
+    "primitive": "Piercing Hunter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "ranged_over_or_charge",
+     "over_in": 9
     }
    },
    "Precision Fighter Buff": {
