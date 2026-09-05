@@ -744,9 +744,12 @@
    }
   },
   "Morale": {
-   "primitive": null,
+   "primitive": "Morale",
    "rated": false,
-   "book_version": "3.5.1"
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X"
+   }
   },
   "Musician": {
    "primitive": "Musician",
