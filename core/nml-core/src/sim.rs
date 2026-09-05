@@ -488,6 +488,7 @@ pub(crate) fn tray_storm_attack(
     tray: &mut Tray, shot: &mut ShootResult,
 ) {
     if !rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) { return; }
+    return; // TEMP RED RUN: trigger neutered so the storm tests fail
     if next.alive[si] <= 0 { return; }
     let pid = next.player[si];
     let mut bearers: Vec<usize> = vec![si];
