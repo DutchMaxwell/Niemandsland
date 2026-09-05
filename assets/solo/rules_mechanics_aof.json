@@ -925,9 +925,12 @@
     }
    },
    "Bestial Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Bestial Boost"
+    }
    },
    "Casting Debuff": {
     "primitive": "Utility Buff",
@@ -956,9 +959,12 @@
     }
    },
    "Melee Evasion Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Melee Evasion"
+    }
    },
    "Melee Slayer": {
     "primitive": "Melee Slayer",
@@ -1124,9 +1130,12 @@
     }
    },
    "Changebound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Changebound Boost"
+    }
    },
    "Dangerous Terrain Debuff": {
     "primitive": "Utility Buff",
@@ -1523,9 +1532,12 @@
     }
    },
    "Harassing Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Harassing Boost"
+    }
    },
    "Lacerate": {
     "primitive": "Lacerate",
@@ -1741,9 +1753,12 @@
     }
    },
    "Fearless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Fearless"
+    }
    },
    "Guarded": {
     "primitive": "Guarded",
@@ -1925,9 +1940,12 @@
     }
    },
    "Melee Slayer Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Melee Slayer"
+    }
    },
    "Precise": {
     "primitive": "Precise",
@@ -2803,9 +2821,12 @@
     }
    },
    "Empyrean Spirit Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Empyrean Spirit Boost"
+    }
    },
    "Ethereal": {
     "primitive": "Teleport",
@@ -3348,9 +3369,12 @@
     }
    },
    "Melee Evasion Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Melee Evasion"
+    }
    },
    "Mischievous": {
     "primitive": "Bane",
@@ -3373,9 +3397,12 @@
     }
    },
    "Mischievous Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Mischievous Boost"
+    }
    },
    "Piercing Fighter": {
     "primitive": "Piercing Assault",
@@ -3607,9 +3634,12 @@
     }
    },
    "Lucky Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Lucky Boost"
+    }
    },
    "Melee Evasion": {
     "primitive": "Melee Evasion",
@@ -3782,9 +3812,12 @@
     }
    },
    "Havocbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Havocbound Boost"
+    }
    },
    "Increased Shooting Range Aura": {
     "primitive": "Royal Legion",
@@ -3821,9 +3854,12 @@
     }
    },
    "Melee Slayer Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Melee Slayer"
+    }
    },
    "Morale Debuff": {
     "primitive": "Utility Buff",
@@ -3987,9 +4023,12 @@
     }
    },
    "Havocbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Havocbound Boost"
+    }
    },
    "Precision Fighter Buff": {
     "primitive": "Utility Buff",
@@ -4136,9 +4175,12 @@
     }
    },
    "Fearless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Fearless"
+    }
    },
    "Highborn": {
     "primitive": "Quick",
@@ -4160,9 +4202,12 @@
     }
    },
    "Highborn Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Highborn Boost"
+    }
    },
    "Piercing Tag": {
     "primitive": "Piercing Tag",
@@ -4637,9 +4682,12 @@
     }
    },
    "Piercing Hunter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Hunter"
+    }
    },
    "Precision Debuff": {
     "primitive": "Utility Buff",
@@ -4784,9 +4832,12 @@
     }
    },
    "Lustbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Lustbound Boost"
+    }
    },
    "Melee Evasion": {
     "primitive": "Melee Evasion",
@@ -4998,9 +5049,12 @@
     "book_version": "3.5.3"
    },
    "Indirect when Shooting Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Indirect when Shooting"
+    }
    },
    "Infiltrate": {
     "primitive": "Infiltrate",
@@ -5171,9 +5225,12 @@
     }
    },
    "Destroyer Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Destroyer Boost"
+    }
    },
    "Destructive": {
     "primitive": "Destructive",
@@ -5394,9 +5451,12 @@
     }
    },
    "Ferocious Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ferocious Boost"
+    }
    },
    "Hit & Run": {
     "primitive": "Hit & Run",
@@ -5418,9 +5478,12 @@
     }
    },
    "Hit & Run Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Hit & Run Fighter"
+    }
    },
    "Melee Evasion": {
     "primitive": "Melee Evasion",
@@ -5496,9 +5559,12 @@
     }
    },
    "Piercing Hunter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Hunter"
+    }
    },
    "Ravage": {
     "primitive": "Ravage",
@@ -5688,9 +5754,12 @@
     }
    },
    "Ossified Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ossified Boost"
+    }
    },
    "Piercing Shooter": {
     "primitive": "Piercing Hunter",
@@ -5849,9 +5918,12 @@
     }
    },
    "Plaguebound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Plaguebound Boost"
+    }
    },
    "Precision Fighter Buff": {
     "primitive": "Utility Buff",
@@ -6246,9 +6318,12 @@
     }
    },
    "Bounding Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Bounding"
+    }
    },
    "Casting Debuff": {
     "primitive": "Utility Buff",
@@ -6283,19 +6358,28 @@
     }
    },
    "Changebound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Changebound Boost"
+    }
    },
    "Fearless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Fearless"
+    }
    },
    "Indirect when Shooting Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Indirect when Shooting"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -6424,9 +6508,12 @@
     }
    },
    "Hit & Run Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Hit & Run Fighter"
+    }
    },
    "Lustbound": {
     "primitive": "Royal Legion",
@@ -6448,9 +6535,12 @@
     }
    },
    "Lustbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Lustbound Boost"
+    }
    },
    "Melee Evasion": {
     "primitive": "Melee Evasion",
@@ -6667,9 +6757,12 @@
     }
    },
    "Plaguebound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Plaguebound Boost"
+    }
    },
    "Precision Attacks Buff": {
     "primitive": "Utility Buff",
@@ -6772,9 +6865,12 @@
     }
    },
    "Bounding Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Bounding"
+    }
    },
    "Crack": {
     "primitive": "Crack",
@@ -7421,9 +7517,12 @@
     }
    },
    "Buccaneer Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Buccaneer Boost"
+    }
    },
    "Casting Debuff": {
     "primitive": "Utility Buff",
@@ -7722,9 +7821,12 @@
     }
    },
    "Piercing Hunter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Hunter"
+    }
    },
    "Ravage": {
     "primitive": "Ravage",
@@ -7872,9 +7974,12 @@
     }
    },
    "Grounded Protection Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Grounded Protection"
+    }
    },
    "Grounded Reinforcement": {
     "primitive": "Shielded",
@@ -7886,9 +7991,12 @@
     }
    },
    "Grounded Reinforcement Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Grounded Reinforcement"
+    }
    },
    "Grounded Speed": {
     "primitive": "Fast",
@@ -8238,9 +8346,12 @@
     }
    },
    "Grounded Protection Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Grounded Protection"
+    }
    },
    "Grounded Reinforcement": {
     "primitive": "Shielded",
@@ -8285,9 +8396,12 @@
     }
    },
    "Melee Evasion Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Melee Evasion"
+    }
    },
    "Melee Slayer": {
     "primitive": "Melee Slayer",

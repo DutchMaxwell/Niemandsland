@@ -8,7 +8,30 @@ const AURA_BASELINES := {
 }
 
 
-func _assert_aura_channel(name: String) -> void:
+const AURA_1B_LEGACY := {
+	"aof/Increased Shooting Range Aura": {"book_version": "3.5.3", "params": {"charge_mod": 0.0, "range_bonus_in": 6.0}, "primitive": "Royal Legion", "rated": false},
+	"aofr/Increased Shooting Range Aura": {"book_version": "3.5.3", "params": {"charge_mod": 0.0, "range_bonus_in": 6.0}, "primitive": "Royal Legion", "rated": false},
+	"aofs/Bounding Aura": {"book_version": "3.5.3", "params": {"aura": true, "lost_if_bearer_dies": true, "max_targets": 3.0, "picked_pregame": true, "place_d3_plus": 1.0}, "primitive": "Bounding", "rated": false},
+	"aofs/Guardian Boost Aura": {"book_version": "3.5.3", "params": {"aura_expand": true, "incoming_ap_reduction": 1.0, "lost_if_bearer_killed": true, "max_picks": 3.0}, "primitive": "Fortified", "rated": false},
+	"aofs/Harassing Boost Aura": {"book_version": "3.5.3", "params": {"aura_expand": true, "lost_if_bearer_killed": true, "max_picks": 3.0, "move_in": 6.0, "per_round": true}, "primitive": "Hit & Run", "rated": false},
+	"aofs/Increased Shooting Range Aura": {"book_version": "3.5.3", "params": {"aura_expand": true, "charge_mod": 0.0, "lost_if_bearer_killed": true, "max_picks": 3.0, "range_bonus_in": 6.0}, "primitive": "Royal Legion", "rated": false},
+	"aofs/Indirect when Shooting Aura": {"book_version": "3.5.3", "params": {"aura": true, "hold_and_shoot": true, "ignores_cover": true, "ignores_los": true, "lost_if_bearer_dies": true, "max_targets": 3.0, "moved_hit_penalty": 1.0, "picked_pregame": true}, "primitive": "Indirect", "rated": false},
+	"aofs/Piercing Hunter Aura": {"book_version": "3.5.3", "params": {"ap_bonus": 1.0, "aura_expand": true, "condition": "ranged_over", "lost_if_bearer_killed": true, "max_picks": 3.0, "over_in": 9.0}, "primitive": "Piercing Hunter", "rated": false},
+	"gf/Increased Shooting Range Aura": {"book_version": "3.5.3", "params": {"charge_mod": 0.0, "range_bonus_in": 6.0}, "primitive": "Royal Legion", "rated": false},
+	"gff/Bounding Aura": {"book_version": "3.5.3", "params": {"aura": true, "lost_if_bearer_dies": true, "max_targets": 3.0, "picked_pregame": true, "place_d3_plus": 1.0}, "primitive": "Bounding", "rated": false},
+	"gff/Guardian Boost Aura": {"book_version": "3.5.3", "params": {"aura_expand": true, "incoming_ap_reduction": 1.0, "lost_if_bearer_killed": true, "max_picks": 3.0}, "primitive": "Fortified", "rated": false},
+	"gff/Harassing Boost Aura": {"book_version": "3.5.3", "params": {"aura_expand": true, "lost_if_bearer_killed": true, "max_picks": 3.0, "move_in": 6.0, "per_round": true}, "primitive": "Hit & Run", "rated": false},
+	"gff/Ignores Cover Aura": {"book_version": "3.5.3", "params": {"aura_expand": true, "cover_only": true, "ignores_cover": true, "lost_if_bearer_killed": true, "max_picks": 3.0, "shooting_only": true}, "primitive": "Indirect", "rated": false},
+	"gff/Ignores Cover when Shooting Aura": {"book_version": "3.5.3", "params": {"aura_expand": true, "cover_only": true, "ignores_cover": true, "lost_if_bearer_killed": true, "max_picks": 3.0, "shooting_only": true}, "primitive": "Indirect", "rated": false},
+	"gff/Increased Shooting Range Aura": {"book_version": "3.5.3", "params": {"aura_expand": true, "charge_mod": 0.0, "lost_if_bearer_killed": true, "max_picks": 3.0, "range_bonus_in": 6.0}, "primitive": "Royal Legion", "rated": false},
+	"gff/Indirect when Shooting Aura": {"book_version": "3.5.3", "params": {"aura": true, "hold_and_shoot": true, "ignores_cover": true, "ignores_los": true, "lost_if_bearer_dies": true, "max_targets": 3.0, "moved_hit_penalty": 1.0, "picked_pregame": true}, "primitive": "Indirect", "rated": false},
+	"gff/Infiltrate Aura": {"book_version": "3.5.3", "params": {"aura": true, "counts_as": "Ambush", "lost_if_bearer_dies": true, "max_targets": 3.0, "min_enemy_dist_in": 3.0, "picked_pregame": true}, "primitive": "Infiltrate", "rated": false},
+	"gff/Piercing Hunter Aura": {"book_version": "3.5.3", "params": {"ap_bonus": 1.0, "aura_expand": true, "condition": "ranged_over", "lost_if_bearer_killed": true, "max_picks": 3.0, "over_in": 9.0}, "primitive": "Piercing Hunter", "rated": false},
+}
+
+
+
+func _assert_aura_channel(name: String, preserved: Dictionary = {}) -> void:
 	RulesRegistry.reset_cache()
 	var checked := 0
 	var wrong: Array = []
@@ -20,6 +43,10 @@ func _assert_aura_channel(name: String) -> void:
 				continue
 			checked += 1
 			var entry: Dictionary = section[name]
+			var key := "%s/%s" % [system, name]
+			if entry.get("primitive") != "Aura Channel" and preserved.has(key):
+				assert_dict(entry).is_equal(preserved[key])
+				continue
 			# #702 also preserves the existing skirmish encodings; only null entries migrate.
 			if system in ["gff", "aofs"] and name in ["Rapid Rush Aura", "Piercing Assault Aura"]:
 				var params := {"aura_expand": true, "max_picks": 3.0, "lost_if_bearer_killed": true}
@@ -54,6 +81,59 @@ func test_relentless_aura_channel() -> void:
 
 func test_piercing_assault_aura_channel() -> void:
 	_assert_aura_channel("Piercing Assault Aura")
+
+
+func test_aura_slice_1b_channels() -> void:
+	for name in [
+		"Ballistic Vest Boost Aura",
+		"Bestial Boost Aura",
+		"Bounding Aura",
+		"Buccaneer Boost Aura",
+		"Changebound Boost Aura",
+		"Clan Warrior Boost Aura",
+		"Crazed Boost Aura",
+		"Cyber-Eyes Boost Aura",
+		"Dash Aura",
+		"Defensive Growth Aura",
+		"Destroyer Boost Aura",
+		"Devout Boost Aura",
+		"Empyrean Spirit Boost Aura",
+		"Exotic Gear Boost Aura",
+		"Fearless Aura",
+		"Ferocious Boost Aura",
+		"Flying Aura",
+		"Gloom-Mist Boost Aura",
+		"Grounded Precision Aura",
+		"Grounded Protection Aura",
+		"Grounded Reinforcement Aura",
+		"Guardian Boost Aura",
+		"Guerrilla Boost Aura",
+		"Harassing Boost Aura",
+		"Havocbound Boost Aura",
+		"Highborn Boost Aura",
+		"Hit & Run Fighter Aura",
+		"Hive Bond Boost Aura",
+		"Hold the Line Boost Aura",
+		"Ignores Cover Aura",
+		"Ignores Cover when Shooting Aura",
+		"Increased Shooting Range Aura",
+		"Indirect when Shooting Aura",
+		"Infected Boost Aura",
+		"Infiltrate Aura",
+		"Lucky Boost Aura",
+		"Lustbound Boost Aura",
+		"Machine-Fog Boost Aura",
+		"Melee Evasion Aura",
+		"Melee Slayer Aura",
+		"Mischievous Boost Aura",
+		"Ossified Boost Aura",
+		"Piercing Hunter Aura",
+		"Plaguebound Boost Aura",
+		"Point-Blank Piercing Aura",
+		"Predator Shooter Aura",
+		"Protected Aura",
+	]:
+		_assert_aura_channel(name, AURA_1B_LEGACY)
 
 
 func test_registry_primitive_gaps_match_the_explicit_allow_list() -> void:
@@ -201,7 +281,12 @@ func test_committed_maps_carry_no_rule_texts() -> void:
 				for key in forbidden:
 					assert_bool(entry.has(key)).override_failure_message(
 						"%s/%s carries forbidden key %s" % [s, rule_name, key]).is_false()
-				for pv in (entry.get("params", {}) as Dictionary).values():
+				var params: Dictionary = entry.get("params", {})
+				for key in params:
+					var pv: Variant = params[key]
+					if key == "grants" and entry.get("primitive") == "Aura Channel":
+						assert_str(str(pv)).is_equal(str(rule_name).trim_suffix(" Aura"))
+						continue
 					if pv is String:
 						assert_bool((pv as String).length() <= 24 and not (pv as String).contains(". ")) \
 							.override_failure_message("prose-like param in %s/%s: %s" % [s, rule_name, pv]).is_true()
