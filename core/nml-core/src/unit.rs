@@ -392,6 +392,17 @@ pub struct ShootProfile {
     pub rules: Vec<String>,
     // --- stamped facets (ai_ev.gd:203-274) ---
     pub versatile_attack: bool,
+    /// The wave-3 Versatile-Attack-family NAME the epoch-6 named arm stated
+    /// this profile's buff under ("Watchborn", "Vinci Tech", "Vinci Tech
+    /// Boost") — the rules-must-log subject at the volley fold. Empty on
+    /// every generic stamp (the primitive walk), so pre-wave behaviour logs
+    /// nothing and every earlier epoch's replay stays byte-identical.
+    pub versatile_name: String,
+    /// The "Vinci Tech Boost" form (`pick_one: false` in the registry): the
+    /// bearer gets BOTH arms (AP(+1) AND +1 to hit) instead of
+    /// `versatile_best_mode`'s pick. Stamped only when the model also
+    /// carries Vinci Tech — the rule's own printed condition.
+    pub versatile_both: bool,
     pub on6_ap: i64,
     /// `AiEv.stamp_sergeant` :267-274 writes the bearer's own attack share here.
     /// ALWAYS 0 in this port — see `UnitStatic::unimplemented`.
@@ -2619,6 +2630,60 @@ impl UnitStatic {
                         sp.shred_ones_rule = hit.name.clone();
                         sp.shred_ones_owner = p.name.clone();
                     }
+                }
+            }
+        }
+        // Versatile Attack family wave 3 (rules-wave3-versatile), gated on
+        // `EPOCH_6_TABLE_RULES` (the FROZEN wave-3 constant — never the
+        // literal 6, never CURRENT_RULES_EPOCH) so every record stamped 5 or
+        // below (the Gen-3 recording fleet included) replays byte-exact.
+        // The family's own spellings, read off the registry BY NAME — the
+        // census's own-token evidence:
+        //   * "Watchborn" and "Vinci Tech" are live at every epoch off the
+        //     generic pass (`stamp`'s rules_of_primitive walk, ungated since
+        //     the first core stage) — no delta, name only (the surge2
+        //     shape);
+        //   * "Vinci Tech Boost" (`pick_one: false`) is the BOTH-arms form:
+        //     AP(+1) AND +1 to hit instead of the pick — but only when the
+        //     model also carries Vinci Tech, the rule's own printed
+        //     condition; the volley fold consumes it (dice.rs) and the EV
+        //     imagination reads the same stamped flag (combat.rs).
+        // The named forms log at the volley fold (rules-must-log); the
+        // generic stamps keep every earlier epoch's replay byte-identical.
+        if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+            let map = reg.rules_for(&p.game_system);
+            let mut seen: Vec<String> = Vec::new();
+            let mut name: Option<String> = None;
+            let (mut boost, mut has_vinci, mut both) = (false, false, false);
+            for raw in &p.special_rules {
+                let n = base_rule_name(raw);
+                if n.is_empty() || seen.iter().any(|s| *s == n) {
+                    continue;
+                }
+                seen.push(n.clone());
+                if n == "Vinci Tech" {
+                    has_vinci = true;
+                }
+                let Some(e) = map.lookup(&p.faction_folder, &n) else {
+                    continue;
+                };
+                if e.primitive.as_deref() != Some("Versatile Attack") {
+                    continue;
+                }
+                match n.as_str() {
+                    "Watchborn" | "Vinci Tech" => name = Some(n.clone()),
+                    "Vinci Tech Boost" => boost = true,
+                    _ => {}
+                }
+            }
+            if boost && has_vinci {
+                name = Some("Vinci Tech Boost".to_string());
+                both = true;
+            }
+            if let Some(vn) = name {
+                for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+                    sp.versatile_name = vn.clone();
+                    sp.versatile_both = both;
                 }
             }
         }

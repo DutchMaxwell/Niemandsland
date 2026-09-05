@@ -281,6 +281,19 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # arm. `upgrades` stays unread: neither twin's band or range pass reads
     # it either (the move_rule_mods precedent).
     "Royal Legion": frozenset({"range_bonus_in", "charge_mod"}),
+    # Versatile Attack family wave (rules-wave3-versatile, 2026-09-05): the
+    # three ported names (Watchborn, Vinci Tech, Vinci Tech Boost) ride their
+    # OWN tokens — unit.rs::build_for's epoch-6 named arm (frozen
+    # EPOCH_6_TABLE_RULES) states each spelling literally; Watchborn/Vinci
+    # Tech are live at every epoch off the generic stamp pass (name only),
+    # Vinci Tech Boost's both-arms form rides the same stamped channel and
+    # the volley fold logs the named forms. Deliberately NO
+    # CONSUMED_PARAM_KEYS row here: the resolver reads NO params (the
+    # AP(+1)/+1/over-9 shape is the primitive's own fixed semantics, uniform
+    # across every entry), so a row would be read-by-nobody evidence — and
+    # it would over-credit the primitive's fifth member (Exotic Gear /
+    # Exotic Gear Boost, aofs-only, outside this census universe) the #489
+    # shape if the universe ever widens.
 }
 
 
