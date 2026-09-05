@@ -397,6 +397,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
 /// plan the band-slack circles are centred on, those caps, and the board and
 /// terrain every correction is spent against.
 struct Pull<'a> {
+    rules_epoch: u32,
     goal: &'a [[f64; 2]],
     caps_in: &'a [f64],
     capped: bool,
@@ -458,26 +459,37 @@ impl Pull<'_> {
             if config_coherent(cfg, max_chain) {
                 return true;
             }
-            let main = largest_component(cfg);
+            let table_rules = rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES);
+            // The table takes one shape snapshot per sweep. Later nudges do
+            // not change the nearest-neighbour or over-spread reads this pass.
+            let snapshot = cfg.to_vec();
+            let main = largest_component(&snapshot);
             let mut moved = false;
             // (a) reconnect — nearest in-component neighbour by EDGE distance,
             // the FIRST winner on a tie (the component's own BFS order).
             for i in (0..n).filter(|i| !main.contains(i)) {
                 let (mut nd, mut near) = (f64::INFINITY, usize::MAX);
                 for &m in &main {
-                    if edge(&cfg[i], &cfg[m]) < nd {
-                        nd = edge(&cfg[i], &cfg[m]);
+                    let shapes = if table_rules { &snapshot[..] } else { &cfg[..] };
+                    if edge(&shapes[i], &shapes[m]) < nd {
+                        nd = edge(&shapes[i], &shapes[m]);
                         near = m;
                     }
                 }
                 if near == usize::MAX {
                     continue;
                 }
-                let (to, len) = (cfg[near].c, (nd - COH_LINK_IN).min(COH_LINK_IN));
+                // Preserve the table expression literally: nd is in inches,
+                // while its subtrahend and caps are in world metres. This is
+                // the repair whose remaining illegality triggers shortening.
+                let len = if table_rules {
+                    ((nd - COH_LINK_IN * IN2M) / IN2M).min(COH_LINK_IN)
+                } else { (nd - COH_LINK_IN).min(COH_LINK_IN) };
+                let to = cfg[near].c;
                 moved |= self.nudge(cfg, i, to, len, rep);
             }
             // (b) over-spread — pull the model furthest from the centroid in.
-            if overspread(cfg, max_chain) {
+            if overspread(if table_rules { &snapshot } else { cfg }, max_chain) {
                 let sum = |k: usize| cfg.iter().map(|d| d.c[k]).sum::<f64>() / n as f64;
                 let c = [sum(0), sum(1)];
                 // `_furthest_from_world` :6672 keeps the FIRST strict maximum.
@@ -609,7 +621,7 @@ pub fn finalize_placement(
     // repair itself returns at once on a coherent config. The whole-unit
     // fallback below also checks overlap and forbidden rest ground.
     if !config_coherent(&cfg, super::MAX_CHAIN_IN) {
-        let pull = Pull { goal: &goal, caps_in, capped, board_in, terrain, external };
+        let pull = Pull { rules_epoch: flags.rules_epoch, goal: &goal, caps_in, capped, board_in, terrain, external };
         rep.coherent = pull.run(&mut cfg, &mut rep);
     }
     if n > 1 && flags.start_world.len() == n
@@ -720,6 +732,27 @@ fn shorten_to_legal(start_world: &[geom::V3], cfg: &[Disc], external: &[Disc],
 
 #[cfg(test)]
 mod shorten_tests {
+    #[test]
+    fn whole_unit_shorten_uses_the_table_straggler_repair() {
+        let pin: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/whole_unit_shorten.json")).unwrap();
+        let pin = &pin["repair_probe"];
+        let n = |v: &serde_json::Value| v.as_f64().unwrap();
+        let start: Vec<geom::V3> = pin["planned_world"].as_array().unwrap().iter()
+            .map(|p| [n(&p[0]) as f32, 0.0, n(&p[2]) as f32]).collect();
+        let planned: Vec<V2> = start.iter().map(|p|
+            [(p[0] as f64 / IN2M + 36.0) as f32, (p[2] as f64 / IN2M + 24.0) as f32]).collect();
+        let run = |rules_epoch| finalize_placement(&planned, &[n(&pin["radius_m"]) / IN2M; 2],
+            &[], &[], [72.0,48.0], None, GateFlags { start_world:&start,
+                rules_epoch, ..Default::default() }).0;
+        let got = run(6);
+        let want = n(&pin["expected_world"][1][0]);
+        let gap = (((got[1][0] as f64 - 36.0) * IN2M - want) / IN2M).abs();
+        assert!(gap <= n(&pin["tolerance_in"]), "table repair differs by {gap:.9}in");
+        assert_eq!(run(0),run(5));
+        assert_ne!(run(5),got);
+    }
+
     #[test]
     fn whole_unit_shorten_is_gated_at_the_table_rules_epoch() {
         let board = [72.0, 48.0];

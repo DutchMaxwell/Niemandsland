@@ -788,6 +788,35 @@
       0.4244292080402374
     ]
   ],
+  "repair_probe": {
+    "description": "Generated two-round-base probe of the production straggler repair feeding shortening",
+    "expected_world": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0.030079999938607216,
+        0,
+        0
+      ]
+    ],
+    "planned_world": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0.055479999631643295,
+        0,
+        0
+      ]
+    ],
+    "radius_m": 0.0125,
+    "tolerance_in": 1e-05
+  },
   "source_case": "recorded-003",
   "source_gate_call": 1,
   "start_world": [
