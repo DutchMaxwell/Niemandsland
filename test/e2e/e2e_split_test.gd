@@ -125,6 +125,8 @@ func test_split_resolves_from_a_manually_picked_last_wound() -> void:
 
 func test_split_resolves_from_regiment_pooled_wounds() -> void:
 	var carrier := _carrier()
+	carrier.unit_properties.merge({"regiment_mode": true, "game_system": "aofr",
+		"faction_folder": "rift_daemons_of_change"}, true)
 	var regiment: Regiment = _main.opr_army_manager.form_regiment(carrier)
 	assert_object(regiment).is_not_null()
 	await _main._solo_apply_wounds(carrier, 1)
