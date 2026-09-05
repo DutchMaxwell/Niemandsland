@@ -104,6 +104,20 @@ pub struct Ctx {
     /// `Melee Evasion` — the melee twin of Evasive (ai_ev.gd:150).
     pub melee_evasion: bool,
     pub fortified: bool,
+    /// WAVE 3 — the Fortified family's DATA-ALIAS stamp (`fortified_alias_of`
+    /// below, gated `EPOCH_6_TABLE_RULES`; the stamp IS the dice hook's gate).
+    /// `fortified_boost_ap` — the carried Boost entry's reduction (`over_in`
+    /// absent, the table's `gate_in <= 0.0` shape): EVERY save batch, every
+    /// leg — the table passes `over9=false` to all of them (main.gd:3508,
+    /// :6119). `fortified_alias_ap`/`fortified_alias_over_in` — the gated
+    /// shape ("Guardian"/"Primeborn"/"Warden"/"Ossified"). 0 = not carried.
+    pub fortified_boost_ap: i64,
+    pub fortified_alias_ap: i64,
+    pub fortified_alias_over_in: f64,
+    /// The volley's over-9" GATE (main.gd:3090/6415): only
+    /// `resolve_volley_with_tray` sets it, on its local Ctx copy; every other
+    /// save path leaves it false.
+    pub fortified_alias_over9: bool,
     pub guarded: bool,
     pub ranged_shrouding: bool,
     /// The clamp pair the three ranged reads share (dice.rs's volley,
@@ -545,6 +559,11 @@ pub struct UnitStatic {
     /// Merged + stamped MELEE profiles (range 0) — `AiShooting.melee_profiles`
     /// ai_shooting.gd:44-56, the set `_profiles_of(su, true)` builds.
     pub melee: Vec<ShootProfile>,
+    /// WAVE 3 — the Fortified family's own registry names as carried (unit.rs
+    /// ::fortified_alias_of, gated `EPOCH_6_TABLE_RULES`), for the
+    /// rules-must-log line the volley/melee orchestrators push. "" = none.
+    pub fortified_alias_name: String,
+    pub fortified_boost_name: String,
     pub model_count: i64,
     pub wounds_max: Vec<i64>,
     pub quality: i64,
@@ -918,6 +937,57 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
         }
     }
     best
+}
+
+/// The Fortified family's DATA-ALIAS stamp — main.gd:6447-6462's coverage wave
+/// (`unit_rules_of_primitive(defender, "Fortified")`, literal name skipped):
+/// a Boost entry (`incoming_ap_reduction`, NO `over_in`) is the table's
+/// `gate_in <= 0.0` branch — EVERY save batch, every leg; a gated entry
+/// ("Guardian"/"Primeborn"/"Warden"/"Ossified") fires only past its own
+/// `over_in`, which only the volley can measure. The table applies the FIRST
+/// entry whose gate passes and breaks (:6461); every shipped entry carries
+/// `incoming_ap_reduction: 1`, so the max here IS that first read — the
+/// primal-Boost "uniform printed shape" precedent. Scans own rules AND
+/// `item_grants`, each gated by `rule_on_all_models` (TC-023's all-models read).
+#[derive(Default)]
+struct FortifiedAlias {
+    boost_ap: i64,
+    boost_name: String,
+    alias_ap: i64,
+    alias_over_in: f64,
+    alias_name: String,
+}
+
+fn fortified_alias_of(reg: &mut Registries, p: &Profile) -> FortifiedAlias {
+    let mut out = FortifiedAlias::default();
+    let map = reg.rules_for(&p.game_system);
+    let mut raws: Vec<&String> = p.special_rules.iter().collect();
+    raws.extend(p.item_grants.iter());
+    for raw in raws {
+        let name = base_rule_name(raw);
+        if name.is_empty() || name == "Fortified" || !rule_on_all_models(p, &name) {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &name) else {
+            continue;
+        };
+        if e.primitive.as_deref() != Some("Fortified") {
+            continue;
+        }
+        let ap = e.param_i("incoming_ap_reduction", 1);
+        let over_in = e.param_f("over_in", 0.0);
+        if over_in <= 0.0 {
+            if ap > out.boost_ap {
+                out.boost_ap = ap;
+                out.boost_name = name;
+            }
+        } else if ap > out.alias_ap {
+            out.alias_ap = ap;
+            out.alias_over_in = over_in;
+            out.alias_name = name;
+        }
+    }
+    out
 }
 
 /// `RulesRegistry.unit_rule_active` rules_registry.gd:132-137 — the unit carries
@@ -1453,6 +1523,16 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         0
     };
     let (stealth_alias_penalty, stealth_alias_over_in) = stealth_alias_of(reg, p);
+    // WAVE 3 — the family's DATA-ALIAS amounts, gated on the FROZEN
+    // `EPOCH_6_TABLE_RULES`: an `rules_epoch: 5` record (the Gen-3 fleet's
+    // window) reads zeros and replays byte-exact; the stamp IS the gate.
+    let (fortified_boost_ap, fortified_alias_ap, fortified_alias_over_in) =
+        if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+            let fa = fortified_alias_of(reg, p);
+            (fa.boost_ap, fa.alias_ap, fa.alias_over_in)
+        } else {
+            (0, 0, 0.0)
+        };
     let upr_shooting = (has_exact_rule(&p.special_rules, "Unpredictable")
         && unit_rule_active(reg, p, "Unpredictable"))
         || (has_exact_rule(&p.special_rules, "Unpredictable Shooter")
@@ -1550,6 +1630,11 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         evasive: rule_on_all_models(p, "Evasive"),
         melee_evasion: rule_on_all_models(p, "Melee Evasion"),
         fortified: rule_on_all_models(p, "Fortified"),
+        // WAVE 3 — stamped above, behind `EPOCH_6_TABLE_RULES`.
+        fortified_boost_ap,
+        fortified_alias_ap,
+        fortified_alias_over_in,
+        fortified_alias_over9: false,
         // Guarded OR Versatile Defense — ai_ev.gd:157-158.
         guarded: rule_on_all_models(p, "Guarded") || rule_on_all_models(p, "Versatile Defense"),
         ranged_shrouding: ranged_shroud.is_some(),
@@ -3127,9 +3212,16 @@ impl UnitStatic {
         };
         let royal_legion = royal_legion_family_of(reg, p, rules_epoch);
 
+        // WAVE 3 — the family's own registry names for the rules-must-log
+        // line, stamped behind the same frozen `EPOCH_6_TABLE_RULES` gate.
+    let fa = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
+        .then(|| fortified_alias_of(reg, p))
+        .unwrap_or_default();
         UnitStatic {
             ctx: ctx_for(reg, p, rules_epoch),
             name: p.name.clone(),
+            fortified_alias_name: fa.alias_name,
+            fortified_boost_name: fa.boost_name,
             shoot,
             melee,
             model_count: p.model_count,
@@ -4987,6 +5079,194 @@ mod tests {
         let plain = header.profiles.get("plain_change_disciple").expect("plain_change_disciple");
         let us = UnitStatic::build(&mut reg, plain);
         assert_eq!(us.ctx.stealth_alias_penalty, 0, "no Screened, no alias");
+    }
+
+    /// The Fortified family's seven carriers — one per name — plus a plain gf
+    /// sibling. The registry entries they resolve against are the SHIPPED ones
+    /// (rules_mechanics_gf.json custodian_brothers / prime_brothers,
+    /// rules_mechanics_aof.json eternal_wardens / ossified_undead); the header
+    /// only stamps the carriers. Every weapon is AP(1) so the save target
+    /// moves exactly one step when the family fires.
+    const FORTIFIED_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "guardian_unit":{"unit_id":"guardian_unit","name":"Guardian Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"custodian_brothers","special_rules":["Guardian"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "guardian_boost_unit":{"unit_id":"guardian_boost_unit","name":"Guardian Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"custodian_brothers","special_rules":["Guardian Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "primeborn_unit":{"unit_id":"primeborn_unit","name":"Primeborn Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"prime_brothers","special_rules":["Primeborn"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "warden_unit":{"unit_id":"warden_unit","name":"Warden Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"eternal_wardens","special_rules":["Warden"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "warden_boost_unit":{"unit_id":"warden_boost_unit","name":"Warden Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"eternal_wardens","special_rules":["Warden Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "ossified_unit":{"unit_id":"ossified_unit","name":"Ossified Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead","special_rules":["Ossified"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "ossified_boost_unit":{"unit_id":"ossified_boost_unit","name":"Ossified Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead","special_rules":["Ossified Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "plain_unit":{"unit_id":"plain_unit","name":"Plain Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"custodian_brothers","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]}}}"#;
+
+    /// Builds the named carrier at `epoch` — the per-name tests' own build.
+    fn fortified_unit(key: &str, epoch: u32) -> UnitStatic {
+        let header = read_act_header(FORTIFIED_HEADER).expect("FORTIFIED_HEADER parses");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get(key).unwrap_or_else(|| panic!("{key}"));
+        UnitStatic::build_for(&mut reg, p, epoch)
+    }
+
+    /// One AP(1) rifle volley (64 attacks) at the carrier, centre distance
+    /// `dist_in` — returns (save target, alias/boost arm fired).
+    fn fortified_volley(us: &UnitStatic, dist_in: f64) -> (i64, bool) {
+        let mut tray = crate::dice::Tray::seeded(27);
+        let out = crate::dice::resolve_shooting_with_tray(
+            &us.shoot, &[0], &[64], &Ctx { quality: 4, ..us.ctx }, &us.ctx, dist_in, &mut tray,
+        );
+        (out.rolls[1].target, out.fortified_fired)
+    }
+
+    /// One AP(1) CCW strike phase (64 attacks) against the carrier — the
+    /// Boost names' own leg: no distance exists here, the no-gate shape
+    /// applies. Returns (save target, alias/boost arm fired).
+    fn fortified_melee(us: &UnitStatic) -> (i64, bool) {
+        let strikers = [crate::dice::Shooter {
+            profiles: &us.melee, keep: &[0], attacks: &[64], att: &us.ctx, owner: "att",
+        }];
+        let mut tray = crate::dice::Tray::seeded(27);
+        let out = crate::dice::resolve_melee_with_tray(
+            &strikers, &us.ctx, "def", false, true, false, &mut tray,
+        );
+        (out.rolls[1].target, out.fortified_fired)
+    }
+
+    /// Guardian (`incoming_ap_reduction: 1, over_in: 9`) — PRESENT at epoch 6:
+    /// the stamp is live, a 12" volley saves one better, the arm reports
+    /// itself; ABSENT at epoch 5 (acts::EPOCH_6_TABLE_RULES's own window).
+    #[test]
+    fn guardian_is_live_at_epoch_6_and_absent_at_epoch_5() {
+        let us6 = fortified_unit("guardian_unit", 6);
+        assert_eq!(us6.ctx.fortified_alias_ap, 1, "Guardian's incoming_ap_reduction");
+        assert_eq!(us6.ctx.fortified_alias_over_in, 9.0, "Guardian's own over_in gate");
+        assert_eq!(us6.fortified_alias_name, "Guardian");
+        let (target6, fired6) = fortified_volley(&us6, 12.0);
+        assert_eq!(target6, 4, "AP(1) volley past 9\": saves on 4+ instead of 5+");
+        assert!(fired6, "rules-must-log: the volley must report the alias arm");
+        let us5 = fortified_unit("guardian_unit", 5);
+        assert_eq!(us5.ctx.fortified_alias_ap, 0, "epoch 5 gets none of wave 3");
+        let (target5, fired5) = fortified_volley(&us5, 12.0);
+        assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
+        assert!(!fired5);
+    }
+
+    /// Primeborn (gf/prime_brothers, same gated shape as Guardian) — live at
+    /// epoch 6, absent at 5.
+    #[test]
+    fn primeborn_is_live_at_epoch_6_and_absent_at_epoch_5() {
+        let us6 = fortified_unit("primeborn_unit", 6);
+        assert_eq!(us6.ctx.fortified_alias_ap, 1, "Primeborn's incoming_ap_reduction");
+        assert_eq!(us6.ctx.fortified_alias_over_in, 9.0);
+        assert_eq!(us6.fortified_alias_name, "Primeborn");
+        let (target6, fired6) = fortified_volley(&us6, 12.0);
+        assert_eq!(target6, 4, "saves on 4+ instead of 5+");
+        assert!(fired6, "rules-must-log");
+        let us5 = fortified_unit("primeborn_unit", 5);
+        assert_eq!(us5.ctx.fortified_alias_ap, 0, "epoch 5 gets none of wave 3");
+        let (target5, fired5) = fortified_volley(&us5, 12.0);
+        assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
+        assert!(!fired5);
+    }
+
+    /// Warden (aof/eternal_wardens, Guardian's AoF twin) — live at 6, absent
+    /// at 5.
+    #[test]
+    fn warden_is_live_at_epoch_6_and_absent_at_epoch_5() {
+        let us6 = fortified_unit("warden_unit", 6);
+        assert_eq!(us6.ctx.fortified_alias_ap, 1, "Warden's incoming_ap_reduction");
+        assert_eq!(us6.ctx.fortified_alias_over_in, 9.0);
+        assert_eq!(us6.fortified_alias_name, "Warden");
+        let (target6, fired6) = fortified_volley(&us6, 12.0);
+        assert_eq!(target6, 4, "saves on 4+ instead of 5+");
+        assert!(fired6, "rules-must-log");
+        let us5 = fortified_unit("warden_unit", 5);
+        assert_eq!(us5.ctx.fortified_alias_ap, 0, "epoch 5 gets none of wave 3");
+        let (target5, fired5) = fortified_volley(&us5, 12.0);
+        assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
+        assert!(!fired5);
+    }
+
+    /// Ossified (aof/ossified_undead, Guardian's undead twin) — live at 6,
+    /// absent at 5.
+    #[test]
+    fn ossified_is_live_at_epoch_6_and_absent_at_epoch_5() {
+        let us6 = fortified_unit("ossified_unit", 6);
+        assert_eq!(us6.ctx.fortified_alias_ap, 1, "Ossified's incoming_ap_reduction");
+        assert_eq!(us6.ctx.fortified_alias_over_in, 9.0);
+        assert_eq!(us6.fortified_alias_name, "Ossified");
+        let (target6, fired6) = fortified_volley(&us6, 12.0);
+        assert_eq!(target6, 4, "saves on 4+ instead of 5+");
+        assert!(fired6, "rules-must-log");
+        let us5 = fortified_unit("ossified_unit", 5);
+        assert_eq!(us5.ctx.fortified_alias_ap, 0, "epoch 5 gets none of wave 3");
+        let (target5, fired5) = fortified_volley(&us5, 12.0);
+        assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
+        assert!(!fired5);
+    }
+
+    /// Guardian Boost (`incoming_ap_reduction: 1`, NO `over_in`) — PRESENT at
+    /// epoch 6 on the MELEE leg too (main.gd:6119 passes over9=false there);
+    /// ABSENT at epoch 5.
+    #[test]
+    fn guardian_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+        let us6 = fortified_unit("guardian_boost_unit", 6);
+        assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
+        assert_eq!(us6.ctx.fortified_alias_ap, 0, "no gated entry carried");
+        assert_eq!(us6.fortified_boost_name, "Guardian Boost");
+        let (target6, fired6) = fortified_melee(&us6);
+        assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
+        assert!(fired6, "rules-must-log: the melee phase must report the boost");
+        let us5 = fortified_unit("guardian_boost_unit", 5);
+        assert_eq!(us5.ctx.fortified_boost_ap, 0, "epoch 5 gets none of wave 3");
+        let (target5, fired5) = fortified_melee(&us5);
+        assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
+        assert!(!fired5);
+    }
+
+    /// Warden Boost (aof/eternal_wardens) — the same no-gate shape, live at 6,
+    /// absent at 5.
+    #[test]
+    fn warden_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+        let us6 = fortified_unit("warden_boost_unit", 6);
+        assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
+        assert_eq!(us6.fortified_boost_name, "Warden Boost");
+        let (target6, fired6) = fortified_melee(&us6);
+        assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
+        assert!(fired6, "rules-must-log: the melee phase must report the boost");
+        let us5 = fortified_unit("warden_boost_unit", 5);
+        assert_eq!(us5.ctx.fortified_boost_ap, 0, "epoch 5 gets none of wave 3");
+        let (target5, fired5) = fortified_melee(&us5);
+        assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
+        assert!(!fired5);
+    }
+
+    /// Ossified Boost (aof/ossified_undead) — the same no-gate shape, live at
+    /// 6, absent at 5.
+    #[test]
+    fn ossified_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+        let us6 = fortified_unit("ossified_boost_unit", 6);
+        assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
+        assert_eq!(us6.fortified_boost_name, "Ossified Boost");
+        let (target6, fired6) = fortified_melee(&us6);
+        assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
+        assert!(fired6, "rules-must-log: the melee phase must report the boost");
+        let us5 = fortified_unit("ossified_boost_unit", 5);
+        assert_eq!(us5.ctx.fortified_boost_ap, 0, "epoch 5 gets none of wave 3");
+        let (target5, fired5) = fortified_melee(&us5);
+        assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
+        assert!(!fired5);
+    }
+
+    /// The plain sibling carries nothing: no stamp, no firing — the control
+    /// every per-name test leans on.
+    #[test]
+    fn a_unit_without_the_family_stamps_and_fires_nothing() {
+        let plain = fortified_unit("plain_unit", 6);
+        assert_eq!(plain.ctx.fortified_boost_ap, 0, "no rule, no Boost stamp");
+        assert_eq!(plain.ctx.fortified_alias_ap, 0, "no rule, no alias stamp");
+        assert_eq!(plain.fortified_alias_name, "");
+        assert_eq!(plain.fortified_boost_name, "");
+        let (target, fired) = fortified_volley(&plain, 12.0);
+        assert_eq!(target, 5, "the plain AP(1) save");
+        assert!(!fired);
     }
 
     /// Predator = the Surge `extra_attack` DATA ALIAS, same shape as the

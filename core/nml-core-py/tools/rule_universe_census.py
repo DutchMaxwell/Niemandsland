@@ -318,6 +318,11 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # would be trusted whole for every name under it - the #489 over-credit
     # shape.
     "Aura Channel": frozenset({"grants"}),
+    # Fortified-family wave (rules-wave3-fortified, 2026-09-05): unit.rs
+    # ::fortified_alias_of reads `incoming_ap_reduction` and `over_in` (the
+    # Boost-vs-gated shape split and the gated aliases' distance gate) off
+    # every carried Fortified-primitive entry behind EPOCH_6_TABLE_RULES.
+    "Fortified": frozenset({"incoming_ap_reduction", "over_in"}),
 }
 
 
