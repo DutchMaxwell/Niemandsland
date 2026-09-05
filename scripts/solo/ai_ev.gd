@@ -433,7 +433,7 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# main._solo_conditional_ap (both read the same registry params via AiCombatMath.conditional_ap_bonus).
 	for cap in profile.get("cond_ap", []):
 		ap += AiCombatMath.conditional_ap_bonus(cap as Dictionary, maxi(int(def_ctx.get("tough", 1)), 1),
-			int(def_ctx.get("defense", 4)), bool(def_ctx.get("charging", false)), dist_in, melee)
+			int(def_ctx.get("defense", 4)), charging, dist_in, melee)
 	var bane := bool(profile.get("bane", false))
 	# Fortified (defender): each incoming hit's FINAL AP counts as -1 (min 0) — applied per sub-batch.
 	var fort := bool(def_ctx.get("fortified", false))
