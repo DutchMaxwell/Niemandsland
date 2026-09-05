@@ -149,6 +149,10 @@ func test_aura_slice_1b_channels() -> void:
 		_assert_aura_channel(name, AURA_1B_LEGACY)
 
 
+func test_piercing_fighter_aura_channels() -> void:
+	_assert_aura_channel("Piercing Fighter Aura")
+
+
 func test_aura_slice_1c_channels() -> void:
 	for name in [
 		"Protection Feat Aura",
