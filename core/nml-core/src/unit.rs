@@ -1238,6 +1238,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         pierce_assault_grant: false,
         growth_ap_mod: 0,
         growth_hit_mod: 0,
+        growth_def_mod: 0,
+        growth_fortify_ap: 0,
         ambush_arrival_ap: 0,
     }
 }

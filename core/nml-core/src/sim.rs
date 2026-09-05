@@ -21,7 +21,7 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES};
+use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
@@ -1362,6 +1362,15 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
+    // rules-wave3-growthmark — the family's DEFENDER-side facets, gated on
+    // `EPOCH_6_TABLE_RULES` (frozen at 6, the stamping-gap rule): a record
+    // stamping `rules_epoch: 5` (the recording fleet's live epoch) replays
+    // byte-exact, exactly like the Lacerate/ambush waves' own gates.
+    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        let (dm, fa) = growth_defense_of(statics, state, i);
+        c.growth_def_mod = dm;
+        c.growth_fortify_ap = fa;
+    }
     // Ambush family (rules-wave2-ambush): "Ambushing Piercing Shot" shoots
     // AP(+1) on the very round the unit arrives — `ambush_arrived_round` is
     // the stamp `arrive_unit`/`_finish_reserve_arrival` writes, and `!melee`
@@ -1829,6 +1838,20 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
         melee_profiles_of(um, count, &mut sc);
         sc.keep = (0..um.melee.len()).collect();
         drop_spent_limited(&um.melee, &state.limited_used[mi], &mut sc);
+        // rules-wave3-growthmark (epoch 6) — Regenerative Strength's melee
+        // facet: +X attacks with ONE melee weapon, X = the bearer's own
+        // marker count (`scope: "one_melee_weapon"`; the unit's FIRST melee
+        // profile is the pick). Gated `EPOCH_6_TABLE_RULES`, so a rules_epoch
+        // 5 record replays byte-exact.
+        if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) && state.growth_markers[mi] > 0 {
+            let atk = um.growth.iter().map(|g| g.attacks_per_marker).sum::<i64>()
+                * state.growth_markers[mi];
+            if atk != 0 {
+                if let Some(a) = sc.attacks.first_mut() {
+                    *a += atk;
+                }
+            }
+        }
         parts.push((
             mi,
             sc,
@@ -1881,6 +1904,22 @@ fn strike_phase(
     }
     let ut = &statics[next.roster.profile[ti]];
     let def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch);
+    // rules-wave3-growthmark (epoch 6) — the LOGGING-RULE lines for the
+    // defender-side facets this strike is about to fold.
+    if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+        if def.growth_def_mod != 0 {
+            shot.log.push(format!(
+                "Defensive Growth: {} Defense rolls +{} ({} marker(s))",
+                ut.name, def.growth_def_mod, next.growth_markers[ti]
+            ));
+        }
+        if def.growth_fortify_ap != 0 {
+            shot.log.push(format!(
+                "Fortified Growth: every unit attacking {} rides AP({}) per two markers",
+                ut.name, def.growth_fortify_ap
+            ));
+        }
+    }
     let members: Vec<crate::dice::Shooter<'_>> = parts
         .iter()
         .map(|(mi, sc, att)| {
@@ -1909,6 +1948,9 @@ fn strike_phase(
         mark_spent_limited(melee, &sc.keep, &mut next.limited_used[*mi]);
     }
     let caused = r.caused;
+    // rules-wave3-growthmark (epoch 6) — Regenerative Strength: wounds this
+    // strike IGNORED (Regeneration's own count) bank the bearer a marker.
+    let ignored = r.caused - r.wounds;
     let w = shot.absorb(r);
     // B13: the table measures the lash-back on wounds actually TAKEN — the
     // wound-POOL difference (`_solo_retaliate_hits` :4570, NML-937), snapshotted
@@ -1922,6 +1964,11 @@ fn strike_phase(
     // this phase.
     let alive_before = next.alive[ti];
     land_wounds(next, ti, w);
+    // rules-wave3-growthmark (epoch 6) — the ignore-wound marker AFTER the
+    // landing: a bearer that ignored some of these wounds banks for them.
+    if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+        growth_on_ignore_wound(statics, next, ti, ignored, shot);
+    }
     // Block B13 — the lash-back: ONLY wounds that LANDED post-Regeneration
     // count (the table's `landed_on_defender`, :6147-6149), only a striker
     // that still has models, and NON-CHAINING by construction: the wounds
@@ -3620,6 +3667,14 @@ fn resolve_with(
                             tray_vs_marks(statics, &mut next, si, g.ti, g.d, seams);
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch);
+                            // rules-wave3-growthmark (epoch 6) — the volley's
+                            // LOGGING-RULE lines, named after the entry that
+                            // carried the facet (the two Defensive names share
+                            // one ladder).
+                            if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+                                let usg = &statics[next.roster.profile[g.ti]];
+                                growth_log_defender(usg, &def, next.growth_markers[g.ti], shot);
+                            }
                             let alive_before_g = next.alive[g.ti];
                             let wounds_before_g = wounds_left(&next, g.ti);
                             let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
@@ -3696,8 +3751,17 @@ fn resolve_with(
                             // puts several sub-phases into ONE report, and the
                             // replay gate compares the whole activation roll by
                             // roll.
+                            // rules-wave3-growthmark (epoch 6) — the wounds
+                            // this volley IGNORED, before `absorb` consumes
+                            // the result (Regenerative Strength's trigger).
+                            let ignored = r.caused - r.wounds;
                             let w = shot.absorb(r);
                             land_wounds(&mut next, g.ti, w);
+                            // rules-wave3-growthmark (epoch 6) — the
+                            // ignore-wound marker AFTER the landing.
+                            if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+                                growth_on_ignore_wound(statics, &mut next, g.ti, ignored, shot);
+                            }
                             // Coverage wave — growth markers (Precision
                             // Frenzy): main.gd:3228/9934 credit the shooter's
                             // own kill marker when this volley just fully
