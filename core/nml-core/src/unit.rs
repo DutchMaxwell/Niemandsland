@@ -552,14 +552,15 @@ pub struct UnitStatic {
     /// these same params into the profile `move_bands` this core consumes as
     /// `state.bands` — so a live re-fold at the move seam would double-count
     /// a recorded band; this stamp is the core's own per-entry read, never a
-    /// simulation input. The conditions the entries also record
-    /// (`charge_only`, `upgrades`, `terrain_within_in`, `uses_per_game`) are
-    /// read by nobody on this core — neither twin's band pass reads them
-    /// either, so the flat fold IS the shipped behaviour. The conditional
-    /// names (Speed Feat, Grounded Speed, Highborn Boost, Scurry Boost) stay
-    /// OUT of this loop for exactly that reason: their entries express the
-    /// magnitudes but not the conditions, so stamping them would claim
-    /// coverage the core does not have.
+    /// simulation input. The wave-3 arm (`EPOCH_6_TABLE_RULES`,
+    /// rules-wave3-fastband) stamps Highborn Boost/Scurry Boost BY NAME and
+    /// reads their `upgrades` base rule — a statics-time condition ("If this
+    /// model has Highborn/Scurry"); on every real book carrier the base
+    /// rides along, so the stamp and the band passes' flat fold agree.
+    /// Speed Feat (`uses_per_game`) and Grounded Speed (`terrain_within_in`,
+    /// a per-activation majority-of-models read) stay OUT: no statics-time
+    /// answer, and stamping them flat would claim coverage the core does
+    /// not have (#489's over-credit shape).
     pub move_rule_mods: Option<Bands>,
     /// Versatile Reach (solo_controller.gd:1787-1789) — `Some(charge_bonus_in)`
     /// when the unit carries the rule, i.e. the CHARGE half of the per-activation
@@ -2234,6 +2235,52 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
             acc.advance += e.param_f("advance_mod", 0.0);
             acc.rush += e.param_f("rush_mod", e.param_f("charge_mod", 0.0));
             hit = true;
+        }
+    }
+    // WAVE 3 Fast family (rules-wave3-fastband), gated on
+    // `EPOCH_6_TABLE_RULES` (frozen at 6, never the literal or
+    // `CURRENT_RULES_EPOCH`): the two move-band Boost upgrades stamp BY NAME
+    // (the census's own-token evidence), each firing only with the base rule
+    // its entry's `upgrades` param names ("If this model has
+    // Highborn/Scurry") and contributing its own advance_mod/rush_mod — the
+    // same per-name stack both band passes fold (Highborn 2/2 + Highborn
+    // Boost 4/4 = 6/6). Grounded Speed stays OUT: its `terrain_within_in`
+    // gate is a per-activation majority read no statics-time stamp can
+    // answer, so a flat stamp would be #489's over-credit, not a port.
+    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        for name in ["Highborn Boost", "Scurry Boost"] {
+            if !unit_rule_active(reg, p, name) {
+                continue;
+            }
+            // The registry read is scoped: `map`/`e` borrow `reg` mutably,
+            // and the `upgrades` prereq check below needs that borrow free.
+            let (base, adv, rsh) = {
+                let map = reg.rules_for(&p.game_system);
+                let Some(e) = map.lookup(&p.faction_folder, name) else {
+                    continue;
+                };
+                (
+                    e.param_s("upgrades").to_string(),
+                    e.param_f("advance_mod", 0.0),
+                    e.param_f("rush_mod", e.param_f("charge_mod", 0.0)),
+                )
+            };
+            if base.is_empty() || !unit_rule_active(reg, p, &base) {
+                continue;
+            }
+            acc.advance += adv;
+            acc.rush += rsh;
+            hit = true;
+            // Rules-must-log: one stderr line when NML_TRACE_RULES=1, same
+            // shape as sim.rs's S10 arms / rollout.rs's round-start leg.
+            crate::sim::trace_rule(
+                "move-bands",
+                name,
+                &format!(
+                    "{}: +{adv}\" advance, +{rsh}\" rush/charge from {base}",
+                    p.name
+                ),
+            );
         }
     }
     if hit { Some(acc) } else { None }
@@ -4303,7 +4350,10 @@ mod tests {
       "plain_wormhole_daemons_of_war":{"unit_id":"plain_wormhole_daemons_of_war","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"wormhole_daemons_of_war","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "rapid_charge_aura_unit":{"unit_id":"rapid_charge_aura_unit","name":"Rapid Charge Aura Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":["Rapid Charge Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "rapid_charge_expanded_unit":{"unit_id":"rapid_charge_expanded_unit","name":"Rapid Charge Expanded","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":["Rapid Charge Aura","Rapid Charge"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
-      "plain_alien_hives_qf":{"unit_id":"plain_alien_hives_qf","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+      "plain_alien_hives_qf":{"unit_id":"plain_alien_hives_qf","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "highborn_boost_unit":{"unit_id":"highborn_boost_unit","name":"Highborn Boost Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"high_elf_fleets","special_rules":["Highborn","Highborn Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "highborn_boost_bare_unit":{"unit_id":"highborn_boost_bare_unit","name":"Highborn Boost Bare","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"high_elf_fleets","special_rules":["Highborn Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "scurry_boost_unit":{"unit_id":"scurry_boost_unit","name":"Scurry Boost Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"ratmen_clans","special_rules":["Scurry","Scurry Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
 
     fn quickfast_bands(name: &str, rules_epoch: u32) -> Option<Bands> {
         let header = read_act_header(QUICKFAST_HEADER).expect("header");
@@ -4532,5 +4582,51 @@ mod tests {
     fn increased_shooting_range_aura_stamps_through_its_own_entry() {
         assert_eq!(royal_legion_halves("isr_aura_unit", 6), (6.0, 0.0));
         assert_eq!(royal_legion_halves("isr_aura_unit", 5), (0.0, 0.0));
+    }
+
+    /// WAVE 3 (rules-wave3-fastband): Highborn Boost rides its OWN
+    /// Fast-primitive entry (+4"/+4") on top of Highborn's +2"/+2" — the
+    /// per-name stack both band passes fold — and fires only with the base
+    /// rule its entry's `upgrades` param names ("If this model has
+    /// Highborn"). Epoch literals, never a symbol: PRESENT at 6, ABSENT at 5
+    /// (the recording fleet's epoch — the boost arm is off, Highborn's own
+    /// 2/2 stands). RED: drop the epoch-6 arm (or the entry) and the epoch-6
+    /// row falls back to 2/2.
+    #[test]
+    fn highborn_boost_stamps_its_own_entry_over_the_epoch6_gate() {
+        assert_eq!(
+            quickfast_bands("highborn_boost_unit", 6),
+            Some(Bands { advance: 6.0, rush: 6.0 }),
+            "Highborn 2/2 + Highborn Boost 4/4, the loaders' per-name stack"
+        );
+        assert_eq!(
+            quickfast_bands("highborn_boost_unit", 5),
+            Some(Bands { advance: 2.0, rush: 2.0 }),
+            "epoch 5 (the recorder): the boost arm is off"
+        );
+        assert_eq!(
+            quickfast_bands("highborn_boost_bare_unit", 6),
+            None,
+            "the boost fires only with its `upgrades` base rule carried"
+        );
+    }
+
+    /// WAVE 3 (rules-wave3-fastband): Scurry Boost, same shape — its OWN
+    /// Fast-primitive entry (+4"/+4") over Scurry's +2"/+2", gated on the
+    /// entry's `upgrades` base rule and the epoch-6 gate (literals: present
+    /// at 6, absent at 5). RED: drop the epoch-6 arm and the epoch-6 row
+    /// falls back to 2/2.
+    #[test]
+    fn scurry_boost_stamps_its_own_entry_over_the_epoch6_gate() {
+        assert_eq!(
+            quickfast_bands("scurry_boost_unit", 6),
+            Some(Bands { advance: 6.0, rush: 6.0 }),
+            "Scurry 2/2 + Scurry Boost 4/4, the loaders' per-name stack"
+        );
+        assert_eq!(
+            quickfast_bands("scurry_boost_unit", 5),
+            Some(Bands { advance: 2.0, rush: 2.0 }),
+            "epoch 5 (the recorder): the boost arm is off"
+        );
     }
 }
