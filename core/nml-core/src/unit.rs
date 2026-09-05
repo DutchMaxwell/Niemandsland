@@ -209,6 +209,15 @@ pub struct Ctx {
     pub pierce_melee_grant: bool,
     /// A live `grants_rule: "Piercing Assault"` — AP(+1) while charging.
     pub pierce_assault_grant: bool,
+    // --- Wave 3 "Utility Buff" marks (epoch-gated `acts::rule_on(.., 6)`). ---
+    /// A live attackers-side `grants_rule: "Indirect"` on this unit (Indirect
+    /// Mark) — whoever SHOOTS at it may waive the sight test. Zero on every
+    /// `ctx_of`; only `sim::ctx_live` folds the ledger's once-record.
+    pub indirect_mark: bool,
+    /// A live attackers-side `grants_rule: "+6\" shooting range"` (Increased
+    /// Shooting Range Mark) — the shooter's volley reach gains this many
+    /// inches. `0.0` on every `ctx_of`.
+    pub range_mark_in: f64,
     // --- Block B7, the Growth-Marker family. ZERO on every `ctx_of` (baked
     // into `ctx_for` below), like `hit_mod` — only `sim::ctx_live` reads the
     // live marker count and folds it in, so the EV imagination stays
@@ -1277,6 +1286,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         pierce_shooting_grant: false,
         pierce_melee_grant: false,
         pierce_assault_grant: false,
+        indirect_mark: false,
+        range_mark_in: 0.0,
         growth_ap_mod: 0,
         growth_hit_mod: 0,
         ambush_arrival_ap: 0,

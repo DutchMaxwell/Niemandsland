@@ -20,7 +20,7 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES};
+use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
@@ -474,6 +474,11 @@ pub(crate) fn tray_breath_attack(
 /// mechanics param `range_in: 6.0`, rules_mechanics_gf.json / _aof.json,
 /// "Re-Position Artillery").
 pub const REPOSITION_PICK_RANGE_IN: f64 = 6.0;
+/// "Increased Shooting Range Mark" — the +6" the grant's own name carries
+/// (gf/aof/aofr registry entries; the gff variant carries `range_bonus_in`
+/// instead, a param this resolver does not read — see the PR's needs-primitive
+/// list). Hardcode, not a param read: the grant record carries the NAME only.
+pub const INCREASED_SHOOTING_RANGE_MARK_IN: f64 = 6.0;
 /// "...which may immediately move by up to 9\"" (mechanics param
 /// `reposition_in: 9.0`).
 pub const REPOSITION_MOVE_IN: f32 = 9.0;
@@ -1358,6 +1363,21 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             c.regen_target_spell
         };
     }
+    // WAVE 3 MARKS (`acts::rule_on`, frozen at `EPOCH_6_TABLE_RULES`): the two
+    // enemy-side grant names the pre-attack pick already records on the marked
+    // unit (main.gd:16534, `beneficiary: "attackers"`). `indirect_mark` is
+    // consumed by the volley's sight seams (`sighted_profiles_of`, the pooled
+    // gate), `range_mark_in` by the dice-side reach gate — a record below
+    // epoch 6 keeps today's inert reading, and the EV imagination (`ctx_of`)
+    // stays blind, the sighting seam's own asymmetry.
+    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        c.indirect_mark = mods::granted_vs(state, i, "Indirect");
+        c.range_mark_in = if mods::granted_vs(state, i, "+6\" shooting range") {
+            INCREASED_SHOOTING_RANGE_MARK_IN
+        } else {
+            0.0
+        };
+    }
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
@@ -1472,6 +1492,12 @@ pub struct Scratch {
     /// when the fold ran. EMPTY means "the unit's own slice is the answer", which
     /// is what `folded_slice` reads; every other filler clears it.
     pub fold: Vec<ShootProfile>,
+    /// The caller's `Seams::rules_epoch`, carried so a member-level profile
+    /// read can gate a wave-3 mark consumer (`acts::rule_on` off a struct the
+    /// call already passes — no shared signature widened, the wave-3 rule).
+    /// 0 (the `Default`) is pre-epoch-6: every existing caller keeps its
+    /// reading exactly as it replays today.
+    pub rules_epoch: u32,
 }
 
 /// `BattleSim._profiles_of(su, false, d)` battle_sim.gd:714-749 fused with the
@@ -1688,6 +1714,12 @@ fn sighted_profiles_of(
     sc.attacks.clear();
     let blockers = sight::blockers_of(state, mi, ti);
     let def = &statics[state.roster.profile[ti]].ctx;
+    // WAVE 3 MARK CONSUMERS (`acts::rule_on`, frozen at `EPOCH_6_TABLE_RULES`):
+    // the two enemy-side grant names the pre-attack pick already records on
+    // the marked unit (main.gd:16534, `beneficiary: "attackers"`) reach the
+    // volley here, at the same per-weapon sight/range seam a weapon's own
+    // Indirect flag rides. A record stamped below epoch 6 keeps today's
+    // inert reading — the grant lands on the ledger but no resolver reads it.
     for (i, p) in us.shoot.iter().enumerate() {
         if (p.range as f64) < d {
             continue;
@@ -3110,6 +3142,7 @@ fn resolve_with(
     let mut next = state.clone();
     let was_shaken = next.shaken[si];
     let mut sc = Scratch::default();
+    sc.rules_epoch = seams.rules_epoch; // wave-3 mark consumers read it off Scratch
 
     // --- move (battle_sim.gd:575-596) ---
     // `SoloController.sim_move_bands(su["unit"])` is a pure read of the unit's
@@ -3446,6 +3479,11 @@ fn resolve_with(
             // way). Without a board the rows are all there is, and only a state
             // that stamps no sight seam at all can still be trusted: both reads
             // are then `true` for every pair, wherever the unit stands.
+            // WAVE 3 MARK (`acts::rule_on`, frozen at `EPOCH_6_TABLE_RULES`):
+            // "Indirect Mark" makes the marked unit a LEGAL target without
+            // sight (main.gd:4011-4029 runs the same waiver in the table's own
+            // per-target validity check), so the pooled gate consults it —
+            // a record below epoch 6 never waives anything here.
             let sighted = if moved {
                 match cover {
                     Cover::Board(t) if t.is_valid() => !t.los_blocked(
@@ -3573,6 +3611,7 @@ fn resolve_with(
                                 }
                                 let um = &statics[next.roster.profile[mi]];
                                 let mut msc = Scratch::default();
+                                msc.rules_epoch = seams.rules_epoch;
                                 if seams.sighting {
                                     sighted_profiles_of(
                                         um, &next, statics, mi, g.ti, &zones, g.d, &mut msc,
@@ -4930,6 +4969,106 @@ mod tests {
         statics[0].utility_buffs = vec![];
         let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
         assert!(next.buffs.iter().all(|v| v.is_empty()));
+    }
+
+    // ----------------- WAVE 3: the two mark consumers (epoch 6) -------------
+
+    /// One record as the pre-attack pick (`record_buff`, main.gd:16534) lands
+    /// it on the marked unit: the whole grant rides `beneficiary: "attackers"`.
+    fn mark(rule: &str) -> crate::mods::LiveMod {
+        crate::mods::LiveMod {
+            hit_mod: 0,
+            casting_mod: 0,
+            morale_mod: 0,
+            grants_rule: Rc::from(rule),
+            scope: Rc::from("shooting"),
+            attackers: true,
+            once: true,
+        }
+    }
+
+    /// The volley fixture with the sighting seam ON and the record's own epoch,
+    /// so the wave-3 mark consumers are reachable at 6 and inert at 5.
+    fn run_marked(st: &State, statics: &[UnitStatic], epoch: u32, buffs: &[(usize, &crate::mods::LiveMod)]) -> ShootResult {
+        let mut s = st.clone();
+        for (u, m) in buffs {
+            s.buffs[*u] = vec![(*m).clone()];
+        }
+        let seams = Seams { sighting: true, rules_epoch: epoch, ..Default::default() };
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        resolve_stochastic_tray_on_board(
+            statics, &s, &buff_action(Some("b")), &terrain, seams, &mut rng, &mut tray,
+        )
+        .unwrap()
+        .1
+    }
+
+    /// WAVE 3 — Indirect Mark: the once-record the pick lands on the marked
+    /// unit reaches the volley's own sight seam (the pooled gate and the
+    /// per-model sight test). The fixture's `ah` at 2" sits between `a` and
+    /// `b`, so every rifle's per-model sight test fails; with the mark the
+    /// volley still fires its single bearer-scaled rifle, at epoch 5 — and
+    /// without the record at 6 — the block stands. RED before the fix: the
+    /// record landed on the ledger but no resolver read it, so the first
+    /// assert saw no attack die at all.
+    #[test]
+    fn indirect_mark_lets_the_volley_fire_at_a_blocked_target_from_epoch_6() {
+        let (st, statics) = buff_line();
+        let on = run_marked(&st, &statics, 6, &[(2, &mark("Indirect"))]);
+        assert_eq!(on.rolls[0].count, 1, "epoch 6: the mark waives the blocked sight");
+        let off = run_marked(&st, &statics, 5, &[(2, &mark("Indirect"))]);
+        assert!(
+            off.rolls.iter().all(|r| r.kind != "attack"),
+            "epoch 5 (the recording fleet's epoch) keeps the record inert, RED before the fix"
+        );
+        let none = run_marked(&st, &statics, 6, &[]);
+        assert!(none.rolls.iter().all(|r| r.kind != "attack"), "no record, no waiver");
+        // "once": the exchange that used the waiver spends the record.
+        let (spent, _) = {
+            let mut s = st.clone();
+            s.buffs[2] = vec![mark("Indirect")];
+            let seams = Seams { sighting: true, rules_epoch: 6, ..Default::default() };
+            let terrain = crate::terrain::Terrain::default();
+            let mut tray = Tray::seeded(11);
+            let mut rng = crate::rng::GodotRng::new(0);
+            resolve_stochastic_tray_on_board(
+                &statics, &s, &buff_action(Some("b")), &terrain, seams, &mut rng, &mut tray,
+            )
+            .unwrap()
+        };
+        assert!(spent.buffs[2].is_empty(), "main.gd:3244 — the volley's exchange spends it");
+    }
+
+    /// WAVE 3 — Increased Shooting Range Mark: with `b` parked at 28" (past the
+    /// rifle's plain 24") the mark's live `+6" shooting range` record extends
+    /// the volley's reach so the rifle fires, at epoch 6 only. The EV
+    /// imagination (`ctx_of`) stays blind to the mark — the sighting seam's
+    /// own asymmetry — and a record below epoch 6 never extends anything.
+    #[test]
+    fn increased_shooting_range_mark_extends_the_volley_reach_from_epoch_6() {
+        let (mut st, statics) = buff_line();
+        st.positions[2] = vec![
+            [28.0 * IN2M, 0.0, 0.0],
+            [28.02 * IN2M, 0.0, 0.0],
+            [28.04 * IN2M, 0.0, 0.0],
+        ];
+        // `ah` off the firing line so the range gate is the ONLY variable.
+        st.positions[1] = vec![[-2.0 * IN2M, 5.0 * IN2M, 0.0]];
+
+        let on = run_marked(&st, &statics, 6, &[(2, &mark("+6\" shooting range"))]);
+        assert_eq!(on.rolls[0].count, 1, "epoch 6: 24 + 6 reach covers the 28\" gap");
+        let off = run_marked(&st, &statics, 5, &[(2, &mark("+6\" shooting range"))]);
+        assert!(
+            off.rolls.iter().all(|r| r.kind != "attack"),
+            "epoch 5: the record is inert, RED before the fix"
+        );
+        let none = run_marked(&st, &statics, 6, &[]);
+        assert!(none.rolls.iter().all(|r| r.kind != "attack"), "no record, plain 24\" reach");
+        // The rifle's range must be dead on the dice too, not just out of
+        // `keep`: without the mark the reach gate skips the weapon silently.
+        assert!(none.rolls.is_empty() || none.rolls.iter().all(|r| r.kind != "attack"));
     }
 
     // ------------------------------------------------- BLOCK B11: Quick Shot ---
