@@ -30,16 +30,15 @@ use nml_core::state::{ProfileCache, Profiles, Roster};
 use nml_core::terrain::Terrain;
 use nml_core::unit::{StaticsCache, UnitStatic};
 use nml_core::{
-    plan_with_rollout_sig, reply_threat, resolve, score, ActStatics, Action, Knobs, Pick,
+    reply_threat, resolve, score, ActStatics, Action, Knobs, Pick,
     PolicyMode, Registries, Seams,
 };
 
 mod mvcall;
 mod positioncall;
 mod plain;
-// Inert until the separately reviewed leaf-hook wiring lands.
-#[allow(dead_code)]
 mod brain_transport;
+mod brain;
 
 use plain::Captured;
 
@@ -105,6 +104,7 @@ pub struct NmlCore {
     last_error: String,
     dropped: Vec<String>,
     header: Option<GameHeader>,
+    brain: Option<Result<brain::Client, String>>,
 }
 
 #[godot_api]
@@ -298,6 +298,11 @@ impl NmlCore {
     #[func]
     fn set_game_header(&mut self, header: VarDictionary) -> bool {
         self.last_error.clear();
+        self.brain = brain::Client::from_env(godot::classes::Os::singleton().is_debug_build());
+        if let Some(Ok(client)) = &self.brain {
+            godot_print!("brain: {} {} at {}, w={}", client.identity["name"].as_str().unwrap(),
+                client.identity["hash"].as_str().unwrap(), client.url, client.weight);
+        }
         let profiles = plain::profiles_of_header(&plain::sub_dict(&header, "profiles"));
         if profiles.list.is_empty() {
             self.last_error = "game header carries no \"profiles\"".to_string();
@@ -697,7 +702,18 @@ impl NmlCore {
         let act = act_statics_of(statics);
         let mut knobs = h.knobs;
         knobs.seam_path = knobs.seam_path || path_seam;
-        let pick = plan_with_rollout_sig(
+        let client = match self.brain.as_ref() {
+            Some(Ok(client)) => Some(client),
+            Some(Err(reason)) => return Err(reason.clone()),
+            None => None,
+        };
+        let hook = client.map(|client| brain::Hook {
+            client, statics: &unit_statics, terrain: &h.terrain,
+            rows: std::cell::RefCell::new(nml_core::rows::RowEncoder::new(&root)),
+            hero_attach: knobs.hero_attach, opener_seat: act.opener_seat,
+        });
+        let before = client.map(|c| (c.batches.get(), c.micros.get()));
+        let pick = nml_core::plan::plan_with_leaf_value(
             &cap.state,
             &h.terrain,
             &unit_statics,
@@ -705,9 +721,23 @@ impl NmlCore {
             &act,
             player,
             Some(sig),
+            hook.as_ref().map(|h| h as &dyn nml_core::plan::LeafValue),
+            client.map_or(0.0, |c| c.weight),
         )
         .map_err(|u| format!("{u:?}"))?;
-        Ok(pick_out(&pick, &cap, sig))
+        let mut out = pick_out(&pick, &cap, sig);
+        if let (Some(client), Some((batches, micros))) = (client, before) {
+            if client.batches.get() == batches {
+                return Err("LeafValueBridge(NotConsumed)".into());
+            }
+            let mut info = VarDictionary::new();
+            info.set("name", &GString::from(client.identity["name"].as_str().unwrap()));
+            info.set("hash", &GString::from(client.identity["hash"].as_str().unwrap()));
+            info.set("batches", (client.batches.get() - batches) as i64);
+            info.set("batch_us", (client.micros.get() - micros) as i64);
+            out.set("brain", &info);
+        }
+        Ok(out)
     }
 
     /// The body of `doctrine_place` in `Result` form — the marshalling is

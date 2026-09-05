@@ -198,7 +198,7 @@ impl LeafValue for PyLeafValue<'_> {
         for st in leaves {
             let t = nmlcore::tokens::build(st, side, self.statics, self.terrain, &mut rows,
                 &[], -1, self.hero_attach, self.opener_seat)?;
-            tokens_dict(py, t).and_then(|d| batch.append(d)).map_err(&park)?;
+            to_py(py, &t.to_json()).and_then(|d| batch.append(d)).map_err(&park)?;
         }
         self.fun.call1((batch, side)).and_then(|o| o.extract::<Vec<f64>>()).map_err(&park)
     }

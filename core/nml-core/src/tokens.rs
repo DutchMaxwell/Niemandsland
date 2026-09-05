@@ -69,6 +69,25 @@ pub struct Tokens {
     pub label: i16,
 }
 
+impl Tokens {
+    /// The Python policy_tokens/leaf_value_fn dictionary, shared with the
+    /// developer bridge. Promote f32 to f64 exactly as Python float extraction
+    /// does; serializing f32 directly would shorten decimals differently.
+    pub fn to_json(&self) -> serde_json::Value {
+        fn rows<const N: usize>(a: &[[f32; N]]) -> Vec<Vec<f64>> {
+            a.iter().map(|r| r.iter().map(|v| *v as f64).collect()).collect()
+        }
+        serde_json::json!({
+            "units": rows(&self.units), "units_mask": self.units_mask,
+            "objs": rows(&self.objs), "objs_mask": self.objs_mask,
+            "terr": rows(&self.terr), "terr_mask": self.terr_mask,
+            "glob": self.glob.iter().map(|v| *v as f64).collect::<Vec<_>>(),
+            "cands": rows(&self.cands), "cands_mask": self.cands_mask,
+            "actor": self.actor, "target": self.target, "label": self.label,
+        })
+    }
+}
+
 #[inline]
 fn mirror(side: i64, x: f64, z: f64) -> (f64, f64) {
     if side == 2 { (-x, -z) } else { (x, z) }
