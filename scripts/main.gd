@@ -6525,9 +6525,12 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	if bool(profile.get("shred", false)):
 		shred_extra = AiCombatMath.shred_bonus_wounds(save_faces, reroll)
 		if shred_extra > 0 and battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Shred: %d Defense roll%s of 1 → +%d wound%s" % [
-				shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
-			_solo_rule_float(defender, "Shred +%d" % shred_extra, Color(1.0, 0.5, 0.4))
+			var shred_name := _solo_shred_facet_name(striker, int(profile.get("range", 0)))
+			if shred_name.is_empty():
+				shred_name = "Shred"
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d Defense roll%s of 1 → +%d wound%s" % [
+				shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
+			_solo_rule_float(defender, "%s +%d" % [shred_name, shred_extra], Color(1.0, 0.5, 0.4))
 	var unsaved := maxi(0, count - blocks)
 	# apply_deadly=false (Bug: Deadly no-carry-over): return the RAW unsaved count so the caller can
 	# apply Deadly per-model (each ×X, capped at one model, no spill). The pooled deadly_multiplier path
@@ -6980,10 +6983,14 @@ func _solo_on6_ap_bonus(profile: Dictionary, striker: GameUnit) -> int:
 ## shredded when shooting and "Shred when Shooting" also shredded in melee — both halves are printed
 ## rules in all five core books, so both leaks were live.
 func _solo_shred_facet_applies(member: GameUnit, profile_range: int) -> bool:
+	return not _solo_shred_facet_name(member, profile_range).is_empty()
+
+
+func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
 	for e in RulesRegistry.unit_rules_of_primitive(member, "Shred"):
 		if AiEv.facet_applies((e as Dictionary).get("params", {}), profile_range):
-			return true
-	return false
+			return str((e as Dictionary).get("name", "Shred"))
+	return ""
 
 
 func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
