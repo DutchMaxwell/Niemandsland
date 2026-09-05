@@ -702,11 +702,7 @@ impl NmlCore {
         let act = act_statics_of(statics);
         let mut knobs = h.knobs;
         knobs.seam_path = knobs.seam_path || path_seam;
-        let client = match self.brain.as_ref() {
-            Some(Ok(client)) => Some(client),
-            Some(Err(reason)) => return Err(reason.clone()),
-            None => None,
-        };
+        let client = self.brain.as_ref().map(Result::as_ref).transpose()?;
         let hook = client.map(|client| brain::Hook {
             client, statics: &unit_statics, terrain: &h.terrain,
             rows: std::cell::RefCell::new(nml_core::rows::RowEncoder::new(&root)),
