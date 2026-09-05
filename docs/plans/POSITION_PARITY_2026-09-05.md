@@ -186,9 +186,12 @@ Shape capability is advertised only for non-charge actions. Seven charge
 fixtures still encounter the skipped charge gate and retain their shape decline;
 that remainder belongs to the charge-final-placement port.
 
-PR 1's first two complete runs agree: 183 positions, 4 equal, 97 within 0.5in,
+PR 1's three complete runs agree: 183 positions, 4 equal, 97 within 0.5in,
 82 declined; `base_shapes` falls 147 -> 7 and all other decline counts stay fixed.
 Every endpoint matches the original raw report; removing conservative shape
 coverage declines exposes four existing above-half-inch residuals (15 models),
 without worsening any per-model tier or previously accepted delta. Those cases
 are `recorded-005`, `recorded-079`, `recorded-138`, and `recorded-166`.
+
+Three-run SHA-256 (timing excluded):
+`ceed09f8894999d98de97000adb8ad702e98153b7075c71f4a980086dddae5ce`.
