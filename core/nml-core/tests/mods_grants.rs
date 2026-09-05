@@ -97,6 +97,8 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         second_wind_round: -1,
         second_wind_uses: 0,
         limited_used: vec![Vec::new(); 2],
+        piercing_tag_used: vec![false; 2],
+        piercing_tag_markers: vec![0; 2],
     };
     (st, vec![UnitStatic::default(), UnitStatic::default()])
 }

@@ -1033,6 +1033,8 @@ mod tests {
             second_wind_round: -1,
             second_wind_uses: 0,
             limited_used: vec![Vec::new(); n],
+            piercing_tag_used: vec![false; n],
+            piercing_tag_markers: vec![0; n],
         }
     }
 

@@ -31,7 +31,7 @@ use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
 use crate::terrain::{base_in_terrain, gives_cover, is_dangerous, Terrain};
-use crate::unit::{Ctx, UnitStatic, ShootProfile, UtilityBuff};
+use crate::unit::{Ctx, PiercingTagEntry, UnitStatic, ShootProfile, UtilityBuff};
 #[cfg(test)]
 use crate::unit::GrowthRule;
 use crate::{CONTROL_EPS, IN2M};
@@ -690,6 +690,92 @@ fn tray_vs_marks(
             });
         }
     }
+}
+
+/// Wave 3 — `main._solo_apply_piercing_tag` main.gd:16999-17027, the marker
+/// family's PLACEMENT half, in the table's own once-per-activation
+/// before-attacking slot right after the Utility Buffs (main.gd:1071; Mind
+/// Control sits between them on the table and is a seam this core does not
+/// have). Per BEARER — the acting unit, then each attached hero, the table's
+/// own members loop (:17005-17007) — every entry of the family the bearer
+/// carries fires at its own literal, ONCE PER GAME (the shared
+/// `piercing_tag_used` flag :17015/:17021 — one flag for all three names, set
+/// only after a successful pick, so a bearer with no legal target may try
+/// again next activation): the TOUGHEST enemy within the entry's range and
+/// sight (`_solo_utility_target`, the `utility_targets` pick) takes
+/// `maxi(rule_rating(raw), 1)` markers onto its `piercing_tag_markers` pool.
+/// The SPEND half is the volley seam's, `piercing_tag_spend`.
+///
+/// The table's `_solo_is_ai_unit` gate (:17003) is NOT ported — this core has
+/// no AI-side seam and selfplay stamps BOTH slots AI (main.gd:1790); like the
+/// recorder gap below it only matters for a rules_epoch-6 human-vs-AI corpus,
+/// and none exists. GATED `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`: a
+/// recording fleet is stamping rules_epoch 5 today, and wave 3's rules do not
+/// exist in that recorder — see `acts::EPOCH_6_TABLE_RULES`.
+fn tray_piercing_tag(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    seams: Seams,
+    shot: &mut ShootResult,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+        return;
+    }
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach {
+        bearers.extend(next.attached[si].iter().copied());
+    }
+    for &bearer in &bearers {
+        if next.alive[bearer] <= 0 {
+            continue;
+        }
+        let pb = next.roster.profile[bearer];
+        for t in &statics[pb].piercing_tags {
+            if next.piercing_tag_used[bearer] {
+                continue;
+            }
+            let probe = UtilityBuff {
+                name: t.name.clone(),
+                target: "enemy".into(),
+                range_in: t.range_in,
+                needs_los: t.needs_los,
+                max_targets: 1,
+                ..UtilityBuff::default()
+            };
+            let Some(ti) = utility_targets(statics, next, bearer, &probe, seams).into_iter().next() else {
+                continue;
+            };
+            next.piercing_tag_used[bearer] = true;
+            next.piercing_tag_markers[ti] += t.markers;
+            // Rules-must-log — the table's own line, main.gd:17025-17027.
+            shot.log.push(format!(
+                "{}: {} places {} marker{} on {} — friendly attackers may spend them for +AP",
+                t.name,
+                statics[pb].name,
+                t.markers,
+                if t.markers == 1 { "" } else { "s" },
+                statics[next.roster.profile[ti]].name
+            ));
+        }
+    }
+}
+
+/// Wave 3 — `main._solo_spend_piercing_tag` main.gd:17030-17042: the next
+/// volley at the marked target spends EVERY marker for +AP(markers) on THIS
+/// volley, AI and human volleys alike (main.gd:3123/:9857 — the melee seams
+/// never call it), once per group. The pool zeroes and the AP rides the
+/// attacker Ctxs (`Ctx::tag_ap_mod`), the same profile-AP merge dice.rs's
+/// volley fold gives Piercing Growth's marker delta. GATED
+/// `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)` like the placement: below the
+/// family's epoch the pool is empty by construction, so this reads 0.
+fn piercing_tag_spend(next: &mut State, ti: usize, rules_epoch: u32) -> i64 {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        return 0;
+    }
+    let markers = next.piercing_tag_markers[ti].max(0);
+    next.piercing_tag_markers[ti] = 0;
+    markers
 }
 
 /// `tray_charge`'s strike-order leg: the static Unwieldy flag, or — wave 2
@@ -3571,6 +3657,14 @@ fn resolve_with(
         tray_utility_buff(statics, &mut next, si, seams, cover);
     }
 
+    // --- PIERCING TAG (main.gd:1071, the table's pre-attack slot right after
+    // the Utility Buffs + Mind Control — Mind Control is a seam this core does
+    // not have), tray path only — see `tray_piercing_tag`. Dice-free: no tray
+    // draw either way (the marker count comes off the rule's rating).
+    if let Some((_, shot)) = dice.as_mut() {
+        tray_piercing_tag(statics, &mut next, si, seams, shot);
+    }
+
     // --- GROWTH MARKERS (main.gd:16984), the per-round tick lazily anchored
     // to this unit's own next activation — tray path only. See
     // `growth_round_start`; dice-free, `was_shaken` is the round-start
@@ -3742,6 +3836,17 @@ fn resolve_with(
                             // BEFORE this group's profiles and contexts are
                             // read (:3082), so the grant reaches this volley.
                             tray_vs_marks(statics, &mut next, si, g.ti, g.d, seams);
+                            // Wave 3 — Piercing Tag: the marked target's pool
+                            // spends EVERY marker on THIS volley (main.gd
+                            // :3123 AI / :9857 human, shooting only — the
+                            // melee seams never call it), once per group.
+                            let tag_ap = piercing_tag_spend(&mut next, g.ti, seams.rules_epoch);
+                            if tag_ap > 0 {
+                                let s = if tag_ap == 1 { "" } else { "s" };
+                                shot.log.push(format!(
+                                    "Piercing Tag: {tag_ap} marker{s} spent — +AP({tag_ap}) on this volley"
+                                ));
+                            }
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch);
                             // rules-wave3-growthmark (epoch 6) — the volley's
@@ -3803,6 +3908,7 @@ fn resolve_with(
                                 {
                                     att.hit_mod += att.instinctive_hit_bonus;
                                 }
+                                att.tag_ap_mod = tag_ap;
                             }
                             // CLASS FIX (external review 03.09. item 3 / F9,
                             // `acts::rule_on`) — same gate as `strike_phase`'s
@@ -4237,6 +4343,8 @@ mod tests {
             second_wind_round: -1,
             second_wind_uses: 0,
             limited_used: vec![Vec::new(); 4],
+            piercing_tag_used: vec![false; 4],
+            piercing_tag_markers: vec![0; 4],
         }
     }
 
@@ -4479,6 +4587,147 @@ mod tests {
             weapon: weapon.into(),
             target: target.into(),
         }
+    }
+
+    // ------------------------------- wave 3: the Piercing-Tag family ---
+
+    /// A tagger (unit 0, the name's own stamp) and its victim (unit 2, "b")
+    /// 12" apart on the split line, the victim the VALUE pick (alive + Tough 1
+    /// beats every other enemy candidate's 1). The Rifle draws 6 attack dice
+    /// at the Default 2+ hit target; the victim saves at Defense 4, so the
+    /// spent markers' +AP is observable on the save target — dice.rs's own
+    /// Piercing-Growth precedent.
+    fn tag_line(rule: &str, markers: i64, range_in: f64) -> (State, Vec<UnitStatic>) {
+        let (st, mut statics) = split_line();
+        statics[0] = UnitStatic {
+            name: "tagger".into(),
+            model_count: 1,
+            shoot: vec![gun("Rifle", 6, 24)],
+            piercing_tags: vec![PiercingTagEntry {
+                name: rule.into(),
+                markers,
+                range_in,
+                needs_los: true,
+            }],
+            ..Default::default()
+        };
+        statics[2].ctx = Ctx { defense: 4, tough: 1, ..Default::default() };
+        (st, statics)
+    }
+
+    fn tag_volley(
+        statics: &[UnitStatic],
+        st: &State,
+        seams: Seams,
+    ) -> (State, ShootResult) {
+        // The ROSTER keys are the split line's (a/ah/b/bh); the STATICS names
+        // (what the table's get_name shows and every log line signs) are the
+        // fixture's own.
+        let action = Action {
+            kind: HOLD,
+            unit: "a".into(),
+            dest: None,
+            shoot: Some("b".into()),
+            charge: None,
+            patient: false,
+            split: None,
+            traced: None,
+        };
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(27);
+        let mut rng = crate::rng::GodotRng::new(0);
+        resolve_stochastic_tray_on_board(
+            statics, st, &action, &terrain, seams, &mut rng, &mut tray,
+        )
+        .expect("volley resolves")
+    }
+
+    /// Piercing Tag — the activation places 1 marker on the toughest enemy in
+    /// 24"/LOS and THIS volley spends it: +AP(1) on the save, the pool empty
+    /// and the once-per-game flag set after. Epoch literals 6/5, NOT
+    /// `CURRENT_RULES_EPOCH`: a wave-4 bump must not re-date what these mean.
+    /// RED before the fix: nothing places, nothing spends.
+    #[test]
+    fn piercing_tag_places_one_marker_and_spends_it_on_this_volley() {
+        let (st, statics) = tag_line("Piercing Tag", 1, 24.0);
+        let s6 = Seams { rules_epoch: 6, ..Seams::default() };
+        let (next, shot) = tag_volley(&statics, &st, s6);
+        assert_eq!(shot.rolls[1].target, 5, "the spent marker's +AP(1) on this volley");
+        assert!(next.piercing_tag_used[0], "the once-per-game flag set at the placement");
+        assert_eq!(next.piercing_tag_markers[2], 0, "the pool spends whole");
+        assert!(
+            shot.log.iter().any(|l| l.starts_with("Piercing Tag: tagger places 1 marker on b")),
+            "rules-must-log: the placement line, main.gd:17025 shape — got {:#?}",
+            shot.log
+        );
+        assert!(
+            shot.log.iter().any(|l| l.starts_with("Piercing Tag: 1 marker spent")),
+            "rules-must-log: the spend line, main.gd:17040 shape — got {:#?}",
+            shot.log
+        );
+
+        // The gate: a rules_epoch-5 record (the fleet stamps 5 today) replays
+        // the pre-wave reading — no placement, no spend, no lines.
+        let s5 = Seams { rules_epoch: 5, ..Seams::default() };
+        let (next5, shot5) = tag_volley(&statics, &st, s5);
+        assert_eq!(shot5.rolls[1].target, 4, "epoch 5: no markers, the plain save");
+        assert!(!next5.piercing_tag_used[0]);
+        assert_eq!(next5.piercing_tag_markers[2], 0);
+        assert!(shot5.log.iter().all(|l| !l.contains("Piercing Tag")));
+
+        // Once per game: a bearer that already placed never places again.
+        let (mut used, _) = tag_line("Piercing Tag", 1, 24.0);
+        used.piercing_tag_used[0] = true;
+        let (next_u, shot_u) = tag_volley(&statics, &used, s6);
+        assert_eq!(shot_u.rolls[1].target, 4, "used: no second placement");
+        assert_eq!(next_u.piercing_tag_markers[2], 0);
+    }
+
+    /// Piercing Spotter — the same resolver at its OWN literal and params
+    /// (range 30): the table's AI never rolls the printed 4+ (`place_roll` is
+    /// dead data on main.gd:17002 too — one `unit_rules_of_primitive` loop
+    /// serves the whole family), so the twin places the same maxi(rating, 1)
+    /// marker and logs the rule's own name. Epoch literals 6/5.
+    #[test]
+    fn piercing_spotter_places_through_the_same_family_resolver() {
+        let (st, statics) = tag_line("Piercing Spotter", 1, 30.0);
+        let s6 = Seams { rules_epoch: 6, ..Seams::default() };
+        let (next, shot) = tag_volley(&statics, &st, s6);
+        assert_eq!(shot.rolls[1].target, 5, "the spent marker's +AP(1) at the Spotter's own 30-inch read");
+        assert!(
+            shot.log.iter().any(|l| l.starts_with("Piercing Spotter: tagger places 1 marker on b")),
+            "the placement names the SPOTTER — got {:#?}",
+            shot.log
+        );
+        assert!(!next.piercing_tag_used[2], "only the TAGGER's flag moves — the victim carries no rule");
+
+        let s5 = Seams { rules_epoch: 5, ..Seams::default() };
+        let (next5, shot5) = tag_volley(&statics, &st, s5);
+        assert_eq!(shot5.rolls[1].target, 4, "epoch 5: no markers, the plain save");
+        assert!(shot5.log.iter().all(|l| !l.contains("Piercing")));
+    }
+
+    /// Piercing Target — the third name at its OWN literal and params (range
+    /// 18): the table implements its "+AP(X) when attacking" with the same
+    /// marker pool and the same spend-everything volley seam (main.gd:17012's
+    /// primitive loop + :3123), so the twin does too. Epoch literals 6/5.
+    #[test]
+    fn piercing_target_places_through_the_same_family_resolver() {
+        let (st, statics) = tag_line("Piercing Target", 1, 18.0);
+        let s6 = Seams { rules_epoch: 6, ..Seams::default() };
+        let (next, shot) = tag_volley(&statics, &st, s6);
+        assert_eq!(shot.rolls[1].target, 5, "the spent marker's +AP(1) at the Target's own 18-inch read");
+        assert!(
+            shot.log.iter().any(|l| l.starts_with("Piercing Target: tagger places 1 marker on b")),
+            "the placement names the TARGET — got {:#?}",
+            shot.log
+        );
+        assert_eq!(next.piercing_tag_markers[2], 0);
+
+        let s5 = Seams { rules_epoch: 5, ..Seams::default() };
+        let (next5, shot5) = tag_volley(&statics, &st, s5);
+        assert_eq!(shot5.rolls[1].target, 4, "epoch 5: no markers, the plain save");
+        assert!(shot5.log.iter().all(|l| !l.contains("Piercing")));
     }
 
     /// NML-1150: an act whose two members fire at TWO different units resolves
