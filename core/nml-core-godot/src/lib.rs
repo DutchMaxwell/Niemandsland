@@ -36,6 +36,9 @@ use nml_core::{
 
 mod mvcall;
 mod plain;
+// Inert until the separately reviewed leaf-hook wiring lands.
+#[allow(dead_code)]
+mod brain_transport;
 
 use plain::Captured;
 
