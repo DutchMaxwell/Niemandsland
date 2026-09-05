@@ -2891,7 +2891,9 @@ const KITE_RANGE_MARGIN_IN: f64 = 0.25;
 
 /// Rules-must-log: each S10 arm names its rule on stderr when NML_TRACE_RULES=1.
 /// Off by default — the fast core stays silent in gates and rollouts.
-fn trace_rule(arm: &str, rule: &str, detail: &str) {
+/// `pub(crate)` since the Battleborn wave-3 round-start leg (rollout.rs) logs
+/// through the same seam.
+pub(crate) fn trace_rule(arm: &str, rule: &str, detail: &str) {
     if std::env::var("NML_TRACE_RULES").as_deref() == Ok("1") {
         eprintln!("[{arm}] {rule} — {detail}");
     }

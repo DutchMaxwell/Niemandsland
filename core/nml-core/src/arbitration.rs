@@ -32,7 +32,7 @@ use crate::mission::{
     apply_destroy_step, playout_seize, sabotage_winner, vp_of, vp_score_end, vp_score_round,
 };
 use crate::rng::GodotRng;
-use crate::rollout::{round_start_refresh, Rollout};
+use crate::rollout::{battleborn_recovery_roll, round_start_refresh, Rollout};
 use crate::sim::{resolve_stochastic_on_board_reach, Scratch, Unsupported};
 use crate::state::State;
 
@@ -245,6 +245,10 @@ pub fn full_playout_bent(
         state.round = r;
         for k in 0..state.units() {
             round_start_refresh(roll.policy.statics, &mut state, k);
+            // Battleborn family wave 3 (rules-wave3-battleborn): the die-roll
+            // recover aliases roll at the same round boundary, off the seeded
+            // playout `GodotRng` (main.gd `_solo_battleborn_recovery`).
+            battleborn_recovery_roll(roll.policy.statics, &mut state, k, rng);
         }
         let (s, last) = playout_round_tail(roll, state, opener, rng, bend, sc)?;
         state = s;

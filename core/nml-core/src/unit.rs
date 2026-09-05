@@ -21,7 +21,9 @@
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES};
+use crate::acts::{
+    rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
+};
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
     RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
@@ -458,6 +460,14 @@ pub struct UnitStatic {
     /// is read here once instead of per imagined round.
     pub battleborn_active: bool,
     pub steadfast_active: bool,
+    /// Battleborn family wave 3 (rules-wave3-battleborn) — the LOWEST
+    /// `recover_target` off the unit's die-roll recover aliases ("Honor Code",
+    /// "Vale Oath", "Vale Oath Boost", "Unmovable" — main.gd
+    /// `:_solo_round_start_recovery_rule`'s generic Battleborn-primitive alias
+    /// layer, rolled by `:_solo_battleborn_recovery`). 0 = the unit rolls no
+    /// recovery die at a round start. Static per unit, so the registry answers
+    /// once here and the round-start leg reads the number only.
+    pub battleborn_recover_target: u32,
     /// `RulesRegistry.unit_rule_active(gu, "Mend")` main.gd:5236 — the heal
     /// primitive's registry gate; the import folds item-granted rules into
     /// `special_rules` (opr_api_client.gd:261-263), so a Paternal Bond item
@@ -2043,6 +2053,18 @@ impl UnitStatic {
             casts_per_round: p.caster_value,
             battleborn_active: unit_rule_active(reg, p, "Battleborn"),
             steadfast_active: unit_rule_active(reg, p, "Steadfast"),
+            // Battleborn family wave 3 (rules-wave3-battleborn): the four
+            // die-roll recover aliases ride the Battleborn primitive; each
+            // alias is stamped BY NAME (the census's own-token evidence,
+            // mirroring main.gd:`_solo_round_start_recovery_rule`'s alias
+            // loop) at the LOWEST `recover_target` it carries — "Vale Oath
+            // Boost"'s text recovers on 3+ INSTEAD of only on 4+, so min is
+            // the reading. Gated on `EPOCH_6_TABLE_RULES` (frozen at 6, never
+            // the literal or `CURRENT_RULES_EPOCH`) so an epoch-5 corpus
+            // replay stays byte-exact.
+            // RED (rules-wave3-battleborn): the registry read is the FIX half —
+            // the scaffolding stamps 0 so the four new name tests can fail.
+            battleborn_recover_target: 0,
             mend_active: unit_rule_active(reg, p, "Mend"),
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
@@ -2329,7 +2351,105 @@ mod tests {
         );
     }
 
+    /// Battleborn family (rules-wave3-battleborn) — the rule-less carrier
+    /// template: `battleborn_target_of` swaps the rule and the faction over
+    /// so the REAL registry entry resolves — gf/titan_lords (Honor Code),
+    /// aof/chivalrous_kingdoms (Vale Oath, Vale Oath Boost), aof/giant_tribes
+    /// (Unmovable) — the same factions the mechanics maps field.
+    const BATTLEBORN_FAMILY_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"titan_lords",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// One name's family stamp at `epoch`: the LOWEST `recover_target` the
+    /// carrier's Battleborn-primitive aliases carry.
+    fn battleborn_target_of(rule: &str, system: &str, faction: &str, epoch: u32) -> u32 {
+        let tpl = BATTLEBORN_FAMILY_HEADER
+            .replace("\"special_rules\":[]", &format!("\"special_rules\":[\"{rule}\"]"))
+            .replace("\"game_system\":\"gf\"", &format!("\"game_system\":\"{system}\""))
+            .replace("\"faction_folder\":\"titan_lords\"", &format!("\"faction_folder\":\"{faction}\""));
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        UnitStatic::build_for(&mut reg, p, epoch).battleborn_recover_target
+    }
+
     /// "Rapid Ambush" (gf/dark_brothers): `arrive_from_round` 1 at epoch 5 —
+    /// "Honor Code" (gf/titan_lords): `recover_target` 4 at epoch 6 — and
+    /// NOTHING at epoch 5 (the flat Battleborn/Steadfast free-clear epoch) or
+    /// without the rule. Epoch literals 6/5, NOT `CURRENT_RULES_EPOCH`: a
+    /// wave-4 bump must not re-date what these assertions mean.
+    #[test]
+    fn an_honor_code_stamps_recover_target_4_at_epoch_6() {
+        assert_eq!(
+            battleborn_target_of("Honor Code", "gf", "titan_lords", 6),
+            4,
+            "the registry's own recover_target"
+        );
+        assert_eq!(
+            battleborn_target_of("Honor Code", "gf", "titan_lords", 5),
+            0,
+            "the wave is epoch-gated: rules_epoch 5 replays the free-clear reading, RED before the fix"
+        );
+        assert_eq!(battleborn_target_of("", "gf", "titan_lords", 6), 0, "no rule, no stamp");
+    }
+
+    /// "Vale Oath" (aof/chivalrous_kingdoms): `recover_target` 4 at epoch 6;
+    /// epoch 5 and the rule-less carrier stay 0.
+    #[test]
+    fn a_vale_oath_stamps_recover_target_4_at_epoch_6() {
+        assert_eq!(
+            battleborn_target_of("Vale Oath", "aof", "chivalrous_kingdoms", 6),
+            4,
+            "the registry's own recover_target"
+        );
+        assert_eq!(
+            battleborn_target_of("Vale Oath", "aof", "chivalrous_kingdoms", 5),
+            0,
+            "the wave is epoch-gated: rules_epoch 5 replays the free-clear reading, RED before the fix"
+        );
+        assert_eq!(battleborn_target_of("", "aof", "chivalrous_kingdoms", 6), 0, "no rule, no stamp");
+    }
+
+    /// "Vale Oath Boost" (aof/chivalrous_kingdoms): the Boost's own
+    /// `recover_target` 3 at epoch 6 — the 3+-instead-of-4+ text —; epoch 5
+    /// and the rule-less carrier stay 0.
+    #[test]
+    fn a_vale_oath_boost_stamps_recover_target_3_at_epoch_6() {
+        assert_eq!(
+            battleborn_target_of("Vale Oath Boost", "aof", "chivalrous_kingdoms", 6),
+            3,
+            "the registry's own recover_target — the 3+ extension"
+        );
+        assert_eq!(
+            battleborn_target_of("Vale Oath Boost", "aof", "chivalrous_kingdoms", 5),
+            0,
+            "the wave is epoch-gated: rules_epoch 5 replays the free-clear reading, RED before the fix"
+        );
+        assert_eq!(battleborn_target_of("", "aof", "chivalrous_kingdoms", 6), 0, "no rule, no stamp");
+    }
+
+    /// "Unmovable" (aof/giant_tribes): `recover_target` 4 at epoch 6; epoch 5
+    /// and the rule-less carrier stay 0.
+    #[test]
+    fn an_unmovable_stamps_recover_target_4_at_epoch_6() {
+        assert_eq!(
+            battleborn_target_of("Unmovable", "aof", "giant_tribes", 6),
+            4,
+            "the registry's own recover_target"
+        );
+        assert_eq!(
+            battleborn_target_of("Unmovable", "aof", "giant_tribes", 5),
+            0,
+            "the wave is epoch-gated: rules_epoch 5 replays the free-clear reading, RED before the fix"
+        );
+        assert_eq!(battleborn_target_of("", "aof", "giant_tribes", 6), 0, "no rule, no stamp");
+    }
+
+
     /// the round the table's `ambush_earliest_round` hardcodes; epoch 4
     /// (Gen-2b's stamping-gap window) and the rule-less carrier stay 0 (the
     /// caller's own ladder answers).

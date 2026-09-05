@@ -28,6 +28,7 @@ use serde_json::{json, Value};
 use crate::acts::Knobs;
 use crate::menu::Candidate;
 use crate::mission::{apply_destroy_step, playout_seize, vp_of, vp_score_round};
+use crate::rng::GodotRng;
 use crate::playout::{other_player, Policy};
 use crate::score::score_with_variant;
 use crate::sim::{reply_threat, Scratch, Unsupported};
@@ -309,6 +310,43 @@ pub(crate) fn round_start_refresh(statics: &[UnitStatic], state: &mut State, i: 
     }
 }
 
+/// Battleborn family wave 3 (rules-wave3-battleborn) — main.gd
+/// `:_solo_battleborn_recovery` (the army-book round-start recovery): every
+/// ALIVE Shaken unit whose whole closure carries one of the die-roll recover
+/// aliases rolls ONE die (1..6) and stops being Shaken at its stamped
+/// `recover_target` (`DiceRules.is_success` — face >= target, no modifier).
+/// The playout books this from arbitration's round boundary, where the seeded
+/// `GodotRng` answers the real tray roll; the planner's imagined refresh
+/// (`round_start_refresh`, `cross_round`) never rolls — GDScript's
+/// `AiPlanner._round_start_refresh` knows neither the aliases nor a die, so
+/// the rollout keeps the free-clear Battleborn/Steadfast arm alone.
+pub(crate) fn battleborn_recovery_roll(
+    statics: &[UnitStatic],
+    state: &mut State,
+    i: usize,
+    rng: &mut GodotRng,
+) {
+    let target = statics[state.roster.profile[i]].battleborn_recover_target;
+    if target == 0 || !state.shaken[i] || state.alive[i] == 0 {
+        return;
+    }
+    let face = rng.randi_range(1, 6);
+    if face >= target as i64 {
+        state.shaken[i] = false;
+    }
+    // Rules-must-log: one stderr line when NML_TRACE_RULES=1, same shape as
+    // sim.rs's S10 arms.
+    crate::sim::trace_rule(
+        "round-start",
+        "Battleborn recovery",
+        &format!(
+            "{} rolls {face}, target {target}+ -> {}",
+            state.key(i),
+            if state.shaken[i] { "stays Shaken" } else { "stops being Shaken" },
+        ),
+    );
+}
+
 /// `AiPlanner._cross_round` ai_planner.gd:462-476 — cross the round boundary
 /// inside the mental game and return the imagined new round's OPENER: under
 /// strict alternation the side with FEWER alive units finished its activations
@@ -348,5 +386,68 @@ pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
     match order.first() {
         Some(&x) => ids[x],
         None => 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::rng::GodotRng;
+    use crate::unit::UnitStatic;
+
+    /// Battleborn family (rules-wave3-battleborn) — the round-start recovery
+    /// leg end to end: a Shaken unit stamped `battleborn_recover_target` 4
+    /// rolls the seeded `GodotRng` and stops being Shaken exactly when the
+    /// face reaches the target (main.gd `_solo_battleborn_recovery` via
+    /// `DiceRules.is_success`); the same seed's probe roll predicts which.
+    /// A rule-less unit (target 0, the epoch-5 reading this wave must keep
+    /// byte-exact) never rolls and never recovers.
+    #[test]
+    fn the_battleborn_recovery_leg_rolls_the_seeded_die_at_target() {
+        use crate::acts::read_act_header;
+        use crate::state::ProfileCache;
+        use crate::{io, rollout};
+        const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+          "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":3,
+            "wounds_max":[3],"model_count":1,"caster_value":0,"base_radius":0.016,
+            "game_system":"gf","faction_folder":"robot_legions","special_rules":[],
+            "item_grants":[],"attached_hero_rules":[],
+            "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
+        const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","units":{
+          "p1_0_a":{"player":1,"alive":1,"wounds":[3],"radii":[0.016],
+            "positions":[[0.0,0.0,0.0]],"in_cover":false,"shaken":false,
+            "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+            "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+            "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},
+            "bands":{"advance":6.0,"rush":12.0}}}}"#;
+        let header = read_act_header(HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let mut st = io::state_from_json(PLAIN, &mut cache, &mut roster).expect("state");
+        let statics =
+            vec![UnitStatic { battleborn_recover_target: 4, ..Default::default() }];
+        let mut recovered = 0;
+        let mut stayed = 0;
+        for seed in 0..64i64 {
+            st.shaken[0] = true;
+            let face = GodotRng::new(seed).randi_range(1, 6);
+            let mut rng = GodotRng::new(seed);
+            rollout::battleborn_recovery_roll(&statics, &mut st, 0, &mut rng);
+            if face >= 4 {
+                assert!(!st.shaken[0], "face {face} reaches the 4+ target");
+                recovered += 1;
+            } else {
+                assert!(st.shaken[0], "face {face} stays under the 4+ target");
+                stayed += 1;
+            }
+        }
+        assert!(recovered > 0 && stayed > 0, "both die halves must occur across the seeds");
+        // Rule-less (the epoch-5 reading): target 0 -> no die, Shaken stays.
+        let statics0 = vec![UnitStatic::default()];
+        for seed in 0..64i64 {
+            st.shaken[0] = true;
+            let mut rng = GodotRng::new(seed);
+            rollout::battleborn_recovery_roll(&statics0, &mut st, 0, &mut rng);
+            assert!(st.shaken[0], "no rule, no recovery");
+        }
     }
 }
