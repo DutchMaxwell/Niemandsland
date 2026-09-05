@@ -1243,3 +1243,5 @@ asserted in BOTH halves of the game.
 separate wave and are listed in `KNOWN_OPEN` in the test: **Thrust in Melee** (9), **Piercing Fighter**
 (7), **Piercing Shooter** (5) — 21 entries. The second test, `test_the_known_open_families_are_still_
 exactly_three`, fails if one of them starts resolving, which forces the list to be kept honest.
+
+Every registry entry in all five system maps must identify an implemented table primitive, except `Unique` (list-building only) and `Sniper REMOVE` (pending snapshot curation). `Aura Channel` entries must name a mapped base in `params.grants`; import expansion remains the single grant path. `test/rules_registry_test.gd` checks the shrinking allow-list and expanded-roster hashes. Measure the current book snapshot with `python3 core/nml-core-py/tools/rule_universe_census.py --books "$BOOKS" --repo . --out-json /tmp/rule-census.json --out-md /tmp/rule-census.md`; assess null and missing entries separately, and require both gap columns to contain only the documented exceptions.
