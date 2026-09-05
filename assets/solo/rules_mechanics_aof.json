@@ -7661,6 +7661,14 @@
      "weapon_only": true
     }
    },
+   "Takedown when Shooting": {
+    "primitive": "Takedown",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "shooting_only": true
+    }
+   },
    "Unpredictable Fighter": {
     "primitive": "Unpredictable Fighter",
     "rated": false,
