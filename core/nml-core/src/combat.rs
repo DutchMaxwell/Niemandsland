@@ -366,6 +366,12 @@ pub fn conditional_ap_bonus(
         return 0;
     }
     match c.condition.as_str() {
+        // Wave 4 (rules-wave4-boostbases) — "Havocbound Boost"'s always-on
+        // spelling ("always gets AP(+1) … instead of only when …"): no gate.
+        // Only unit.rs build_for's epoch-6 named arm creates this condition
+        // (the FROZEN `EPOCH_6_TABLE_RULES`), so every pre-epoch-6 replay
+        // stays byte-exact.
+        "always" => c.ap_bonus,
         "vs_tough_ge" if target_tough >= c.threshold => c.ap_bonus,
         "vs_armor" if target_defense <= c.threshold => c.ap_bonus,
         "on_charge" if is_charging => c.ap_bonus,
