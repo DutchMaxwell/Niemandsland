@@ -140,6 +140,16 @@ pub struct ShootResult {
     /// this activation (main.gd's `ap < ap_before` guard), as read by
     /// `save_batch`; the orchestrators turn it into the rules-must-log line.
     pub fortified_fired: bool,
+    /// Wave 4 (`rules-wave4-boostbases`) — the volley's ACTIVE Bane Boost
+    /// window for THIS batch (the "Mischievous Boost" stamp, strictly past
+    /// the entry's own `over_in`; 0 = the base 6s-only window). Set by the
+    /// volley per weapon, read by `save_batch`; the melee resolve never sets
+    /// it — its save batches run on fresh results, the base window.
+    pub bane_low: i64,
+    /// How many saves the WIDENED window added to the re-roll batches (the
+    /// successful 5s the base 6s leg would never have touched) — the volley
+    /// turns a non-zero count into the one rules-must-log line.
+    pub bane_rerolled: i64,
 }
 
 impl ShootResult {
@@ -163,6 +173,7 @@ impl ShootResult {
         self.caused += other.caused;
         self.log.extend(other.log);
         self.fortified_fired = self.fortified_fired || other.fortified_fired;
+        self.bane_rerolled += other.bane_rerolled;
         for u in other.unported {
             self.mark(u);
         }
@@ -234,11 +245,19 @@ fn surge_attack_hits(
 /// `AiCombatMath.blocks_with_bane` :354-363 — each unmodified Defense 6 is
 /// replaced by the next re-roll face, in order; a re-rolled 6 still blocks.
 fn blocks_with_bane(faces: &[u8], reroll: &[u8], target: i64) -> i64 {
+    blocks_with_bane_from(faces, reroll, target, 6)
+}
+
+/// The widened window (wave 4, "Mischievous Boost"'s `reroll_save_low: 5`):
+/// every SUCCESSFUL unmodified save at or above `from` re-rolls too, not
+/// just 6s (`from` 6 = the base leg, byte-exact). A face below the save
+/// target is no success — it never re-rolls.
+fn blocks_with_bane_from(faces: &[u8], reroll: &[u8], target: i64, from: i64) -> i64 {
     let mut ri = 0usize;
     let mut blocks = 0i64;
     for &f in faces {
-        let eff = if f == 6 {
-            let r = reroll.get(ri).copied().unwrap_or(6);
+        let eff = if f == 6 || (f as i64 >= from && f as i64 >= target) {
+            let r = reroll.get(ri).copied().unwrap_or(f);
             ri += 1;
             r
         } else {
@@ -333,8 +352,11 @@ fn save_batch(
         owner: def_owner.into(),
     });
     let mut reroll: Vec<u8> = Vec::new();
+    // Wave 4 — the widened window (0 = the base 6s-only leg, byte-exact):
+    // successful unmodified saves from `bane_low` up re-roll too.
+    let bane_from = if p.bane && out.bane_low > 1 { out.bane_low } else { 6 };
     if p.bane {
-        let n = sixes(&faces);
+        let n = faces.iter().filter(|&&f| f == 6 || (f as i64 >= bane_from && f as i64 >= target)).count() as i64;
         if n > 0 {
             reroll = tray.roll(n as usize);
             out.rolls.push(Roll {
@@ -344,9 +366,12 @@ fn save_batch(
                 faces: reroll.clone(),
                 owner: def_owner.into(),
             });
+            // The widened window's own share — the successful 5s the base leg
+            // would never have touched (rules-must-log count).
+            out.bane_rerolled += faces.iter().filter(|&&f| out.bane_low > 1 && f < 6 && f as i64 >= out.bane_low && f as i64 >= target).count() as i64;
         }
     }
-    let unsaved = (count - blocks_with_bane(&faces, &reroll, target)).max(0);
+    let unsaved = (count - blocks_with_bane_from(&faces, &reroll, target, bane_from)).max(0);
     let shred = if p.shred || shred_grant || (p.shred_alias && shred_alias_dice) {
         // Wave 3: the per-face wound amount rides the profile's epoch-6
         // stamped `extra_wound_per_save_one` read (0 = unread -> the base
@@ -615,6 +640,9 @@ pub fn resolve_volley_with_tray(
     // `over_in` gate, as first fired.
     let mut ma_fired: Vec<(&str, i64, f64)> = Vec::new();
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
+    // Wave 4 — "Machine-Fog Boost"'s once-per-volley rules-must-log flag
+    // (the defender-side alias marker, the alias_cover_logged shape).
+    let mut mfb_fired = false;
     // Wave 3 — the Shielded-family alias's own rules-must-log flag: the +1
     // rode a family DATA alias rather than the literal name, one line per
     // volley below (`ShootResult.log` precedent).
@@ -722,6 +750,10 @@ pub fn resolve_volley_with_tray(
         if gp != 0 && gp_fired.iter().all(|(o, _)| *o != sh.owner) {
             gp_fired.push((sh.owner, gp));
         }
+        // Wave 4 — "Machine-Fog Boost" names itself once per volley: the
+        // unconditional -1 rode this weapon's to-hit sum (the defender-side
+        // alias marker, Ctx::evasive_alias).
+        mfb_fired |= def.evasive_alias;
         if p.unstoppable && m < 0 {
             m = 0;
         }
@@ -838,6 +870,12 @@ pub fn resolve_volley_with_tray(
         } else {
             1
         };
+        // Wave 4 — "Mischievous Boost"'s widened Bane window: strictly past
+        // the entry's own over_in, the shred window's own volley gate shape.
+        // 0 = the base 6s-only window; the melee resolve never sets it (its
+        // save batches run on fresh results), so melee never widens — no
+        // pre-charge gap (the shred2 precedent).
+        out.bane_low = if p.bane_low > 1 && mod_dist_in > p.bane_over_in { p.bane_low } else { 0 };
         let on6 = if p.on6_ap > 0 {
             p.on6_ap
         } else if p.rending || p.destructive || att.rending_grant {
@@ -947,6 +985,17 @@ pub fn resolve_volley_with_tray(
     }
     for (owner, hit) in &gp_fired {
         out.log.push(format!("Grounded Precision: {owner} — {hit:+} to hit (in terrain)"));
+    }
+    // Wave 4 — the two Boostbases rules-must-log lines, once per volley.
+    if mfb_fired {
+        out.log
+            .push(format!("Machine-Fog Boost: {def_owner} — attackers get -1 to hit (always)"));
+    }
+    if out.bane_rerolled > 0 {
+        out.log.push(format!(
+            "Mischievous Boost: {def_owner} — {} successful save(s) of 5-6 re-roll",
+            out.bane_rerolled
+        ));
     }
     if shielded_alias_fired {
         out.log.push(format!(
@@ -1211,6 +1260,8 @@ pub fn resolve_melee_with_tray(
     // Wave 3 — Grounded Precision's melee half names itself once per member
     // (rules-must-log, the volley's own flag shape).
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
+    // Wave 4 — "Machine-Fog Boost"'s once-per-melee rules-must-log flag.
+    let mut mfb_fired = false;
     for sh in strikers {
         let gp = grounded_precision_mod(sh.att);
         if gp != 0 && gp_fired.iter().all(|(o, _)| *o != sh.owner) {
@@ -1231,6 +1282,8 @@ pub fn resolve_melee_with_tray(
             if p.hazardous {
                 out.mark("hazardous");
             }
+            // Wave 4 — the unconditional -1 rode this strike's to-hit sum.
+            mfb_fired |= def.evasive_alias;
             let target = melee_hit_target(p, sh.att, def, charging, uf_hit);
             let faces = tray.roll(n as usize);
             out.rolls.push(Roll {
@@ -1327,6 +1380,11 @@ pub fn resolve_melee_with_tray(
     }
     for (owner, hit) in &gp_fired {
         out.log.push(format!("Grounded Precision: {owner} — {hit:+} to hit (in terrain)"));
+    }
+    // Wave 4 — the Boost's rules-must-log line, once per melee resolve.
+    if mfb_fired {
+        out.log
+            .push(format!("Machine-Fog Boost: {def_owner} — attackers get -1 to hit (always)"));
     }
     if shielded_alias_fired {
         out.log.push(format!(

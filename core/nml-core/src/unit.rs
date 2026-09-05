@@ -133,6 +133,15 @@ pub struct Ctx {
     /// same `gate <= 0.0` reading `_solo_hit_mod_info` uses, main.gd:5602).
     pub stealth_alias_over_in: f64,
     pub evasive: bool,
+    /// Wave 4 (`rules-wave4-boostbases`) — "Machine-Fog Boost" is the reason
+    /// `evasive` is on: the printed unconditional form of Machine-Fog's own
+    /// -1 (the base entry's conditional alias leg stands down so the two
+    /// never stack). The dice seams name the RULE in their rules-must-log
+    /// lines off this marker; a plain "Evasive" carrier keeps it false and
+    /// stays silent, the `indirect_alias` marker precedent. Stamped behind
+    /// the FROZEN `EPOCH_6_TABLE_RULES` — pre-epoch corpora replay
+    /// byte-exact.
+    pub evasive_alias: bool,
     /// `Melee Evasion` — the melee twin of Evasive (ai_ev.gd:150).
     pub melee_evasion: bool,
     pub fortified: bool,
@@ -435,6 +444,19 @@ pub struct ShootProfile {
     /// widened window counts only past this centre distance, exactly 9" not
     /// "over" — same strict gate as every other over-9" read in this port.
     pub shred_over_in: f64,
+    /// Wave 4 (`rules-wave4-boostbases`) — the Bane Boost's widened save
+    /// re-roll window ("Mischievous Boost"'s own `reroll_save_low`, stamped
+    /// by `build_for`'s epoch-6 arm only when the model also carries the
+    /// entry's `upgrades` base rule): successful unmodified defense rolls
+    /// from this face up re-roll, not just 6s. 0 = the base 6s-only window.
+    /// Read by the volley strictly past `bane_over_in`; the melee resolve
+    /// never widens — no pre-charge gap (the Shred Boost's own measured
+    /// shape).
+    pub bane_low: i64,
+    /// The Bane Boost's distance gate (the entry's own `over_in`): the
+    /// widened window counts only past this centre distance, exactly 9" not
+    /// "over" — same strict gate as every other over-9" read in this port.
+    pub bane_over_in: f64,
     /// Wave 3 (`rules-wave3-shred3`): the family's per-face wound amount,
     /// read off the carried Shred-primitive entry's own
     /// `extra_wound_per_save_one` (`build_for`'s epoch-6 arm, gated
@@ -725,6 +747,18 @@ pub struct UnitStatic {
     /// Block C1 — the mirror half of solo_controller.gd:9667: the Fighter half
     /// fires only on the melee leg (`after_shoot == false`), exact name only.
     pub hit_and_run_fighter_active: bool,
+    /// Wave 4 (`rules-wave4-boostbases`) — the two "Hit & Run" Boost
+    /// spellings ("Guerrilla Boost", "Harassing Boost", the entry's own
+    /// `move_in: 6`) stamp the carrier's own post-attack band here, behind
+    /// the FROZEN `EPOCH_6_TABLE_RULES`; 0.0 = the shared base 3" const.
+    /// The fire gate itself still runs on `hit_and_run_active` (the base
+    /// family flag), which is what enforces the printed "If most models …
+    /// have Guerrilla/Harassing" coupling.
+    pub hit_and_run_move_in: f32,
+    /// The Boost spelling whose band this is — the rules-must-log line's
+    /// rule name (sim.rs's "Hit & Run: …" battle-log twin). "" = the base
+    /// const (the `fortified_alias_name` precedent).
+    pub hit_and_run_rule: String,
     /// Block B11 — `RulesRegistry.unit_rule_active(gu, "Quick Shot")`
     /// solo_controller.gd:1846/:4033 — a carrier's move-and-shoot band becomes
     /// its RUSH distance, so RUSH may also shoot (normally HOLD/ADVANCE only).
@@ -915,6 +949,29 @@ fn rule_on_all_models(p: &Profile, rule: &str) -> bool {
         .all(|hr| has_special_rule(hr, rule))
 }
 
+/// The two "Hit & Run" Boost spellings (gf/rebel_guerrillas "Guerrilla Boost",
+/// aof|gf dark-elf "Harassing Boost"): the entry's own `move_in` replaces the
+/// shared 3" const when the FROZEN `EPOCH_6_TABLE_RULES` gate is on — wave 4
+/// (`rules-wave4-boostbases`), read BY NAME, never by iterating the shared
+/// primitive (the census's trusted-whole trap, #489). The fire gate itself
+/// (`tray_hit_and_run`) still runs on `hit_and_run_active`, which is what
+/// enforces the printed base-rule coupling. (0.0, "") = no Boost — the base
+/// band.
+fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (f32, String) {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        return (0.0, String::new());
+    }
+    for name in ["Guerrilla Boost", "Harassing Boost"] {
+        if unit_rule_active(reg, p, name) {
+            let mv = unit_param_f(reg, p, name, "move_in", 0.0);
+            if mv > 0.0 {
+                return (mv as f32, name.to_string());
+            }
+        }
+    }
+    (0.0, String::new())
+}
+
 /// `_solo_hit_mod_info`'s Stealth-primitive DATA-ALIAS loop (main.gd:5588-
 /// 5610): the best (`maxi`) `hit_penalty` among the DEFENDER's Stealth-
 /// primitive rules other than the literal "Stealth" name (`n == "Stealth"`
@@ -927,12 +984,20 @@ fn rule_on_all_models(p: &Profile, rule: &str) -> bool {
 /// build time either — both stay unimplemented, like the rest of this
 /// crate's documented gaps (dice.rs:317-330).
 fn stealth_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64) {
+    stealth_alias_of_excluding(reg, p, "")
+}
+
+/// The same walk with one name stood down — the thin-wrapper shape the
+/// signature rule prescribes: "Machine-Fog Boost" (wave 4) REPLACES its base
+/// entry's conditional alias leg with an unconditional evasive fold, and the
+/// two must never stack. `skip` "" = the plain walk, byte-exact.
+fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> (i64, f64) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
     let map = reg.rules_for(&p.game_system);
     for r in &p.special_rules {
         let name = base_rule_name(r);
-        if name.is_empty() || name == "Stealth" || !rule_on_all_models(p, &name) {
+        if name.is_empty() || name == "Stealth" || name == skip || !rule_on_all_models(p, &name) {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &name) else {
@@ -1605,7 +1670,16 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         0
     };
-    let (stealth_alias_penalty, stealth_alias_over_in) = stealth_alias_of(reg, p);
+    // Wave 4 — "Machine-Fog Boost": the printed unconditional form of
+    // Machine-Fog's own -1 (folds into `evasive`, below; the base entry's
+    // conditional alias leg stands down so the two never stack).
+    let machine_fog_boost = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
+        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Machine-Fog Boost");
+    let (stealth_alias_penalty, stealth_alias_over_in) = if machine_fog_boost {
+        stealth_alias_of_excluding(reg, p, "Machine-Fog")
+    } else {
+        stealth_alias_of(reg, p)
+    };
     // WAVE 3 — the family's DATA-ALIAS amounts, gated on the FROZEN
     // `EPOCH_6_TABLE_RULES`: an `rules_epoch: 5` record (the Gen-3 fleet's
     // window) reads zeros and replays byte-exact; the stamp IS the gate.
@@ -1711,7 +1785,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         stealth: rule_on_all_models(p, "Stealth"),
         stealth_alias_penalty,
         stealth_alias_over_in,
-        evasive: rule_on_all_models(p, "Evasive"),
+        evasive: rule_on_all_models(p, "Evasive") || machine_fog_boost,
+        evasive_alias: machine_fog_boost,
         melee_evasion: rule_on_all_models(p, "Melee Evasion"),
         fortified: rule_on_all_models(p, "Fortified"),
         // WAVE 3 — stamped above, behind `EPOCH_6_TABLE_RULES`.
@@ -3147,13 +3222,19 @@ impl UnitStatic {
         //     shut, the table's own conservative reading, main.gd:6382).
         // The named forms log at the dice folds (rules-must-log); the
         // generic pass's unnamed specs keep every earlier epoch's replay
-        // byte-identical. Havocbound Boost (always + `upgrades` coupling)
-        // and Point-Blank Piercing (a `within_in` cap) need new mechanism —
+        // byte-identical. Wave 4 (rules-wave4-boostbases) ports "Havocbound
+        // Boost" onto the same mechanism (the always leg + the `upgrades`
+        // coupling, above); Point-Blank Piercing (a `within_in` cap) stays
         // listed needs-primitive, nothing invented (#489 discipline).
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
             let mut live: Vec<CondAp> = Vec::new();
             let map = reg.rules_for(&p.game_system);
             let mut seen: Vec<String> = Vec::new();
+            // Wave 4 (rules-wave4-boostbases): "Havocbound Boost" REPLACES its
+            // base's two conditional legs when carried — the printed "always
+            // … (instead of only when …)" — so the walk knows before it
+            // reaches either name.
+            let havoc_boosted = p.special_rules.iter().any(|r| base_rule_name(r) == "Havocbound Boost");
             for raw in &p.special_rules {
                 let n = base_rule_name(raw);
                 if n.is_empty() || seen.iter().any(|s| *s == n) {
@@ -3172,7 +3253,7 @@ impl UnitStatic {
                 }
                 match n.as_str() {
                     "Piercing Hunter" => {} // live off the generic pass at every epoch — no delta
-                    "Havocbound" => {
+                    "Havocbound" if !havoc_boosted => {
                         live.push(CondAp {
                             ap_bonus: ap,
                             condition: "on_charge".into(),
@@ -3196,12 +3277,53 @@ impl UnitStatic {
                             ..Default::default()
                         });
                     }
+                    "Havocbound Boost" => {
+                        // Wave 4 — the always leg, the entry's own `upgrades`
+                        // coupling ("If this model has Havocbound"); the
+                        // volley's and the strike's named cond_ap lines log.
+                        if has_exact_rule(&p.special_rules, e.param_s("upgrades")) {
+                            live.push(CondAp {
+                                ap_bonus: ap, condition: "always".into(), name: n.clone(),
+                                ..Default::default()
+                            });
+                        }
+                    }
                     _ => {}
                 }
             }
             if !live.is_empty() {
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {
                     sp.cond_ap.extend(live.iter().cloned());
+                }
+            }
+        }
+        // Boostbases wave (rules-wave4-boostbases), gated on the FROZEN
+        // `EPOCH_6_TABLE_RULES`: "Mischievous Boost" is the Bane family's
+        // widened save re-roll window — the entry's own `reroll_save_low` +
+        // `over_in`, firing only when the model also carries the entry's
+        // `upgrades` base rule, the shred2 arm 6b's own shape. Stamped on
+        // the SHOOT array only: the volley consumes the window strictly past
+        // the entry's own over_in distance (dice.rs `save_batch`); melee
+        // never widens — no pre-charge gap (the shred2 precedent). Read BY
+        // NAME, never by iterating the shared primitive (#489).
+        if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+            let map = reg.rules_for(&p.game_system);
+            // The carry gate IS the port: a faction lookup alone would stamp
+            // every goblin bane carrier, carried Boost or not.
+            if let Some(e) = map
+                .lookup(&p.faction_folder, "Mischievous Boost")
+                .filter(|_| has_exact_rule(&p.special_rules, "Mischievous Boost"))
+            {
+                let base = e.param_s("upgrades");
+                let low = e.param_i("reroll_save_low", 0);
+                if e.primitive.as_deref() == Some("Bane") && low > 1
+                    && has_exact_rule(&p.special_rules, base)
+                {
+                    let over = e.param_f("over_in", 9.0);
+                    for sp in shoot.iter_mut().filter(|sp| sp.bane) {
+                        sp.bane_low = low;
+                        sp.bane_over_in = over;
+                    }
                 }
             }
         }
@@ -3341,6 +3463,10 @@ impl UnitStatic {
     let fa = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
         .then(|| fortified_alias_of(reg, p))
         .unwrap_or_default();
+    // Wave 4 (`rules-wave4-boostbases`) — the Hit & Run Boost band, stamped
+    // behind the same FROZEN `EPOCH_6_TABLE_RULES` gate (the sim fold reads
+    // the field, the rules-must-log line reads the name).
+    let (hnr_move_in, hnr_rule) = hit_and_run_boost_of(reg, p, rules_epoch);
         UnitStatic {
             ctx: ctx_for(reg, p, rules_epoch),
             name: p.name.clone(),
@@ -3395,6 +3521,10 @@ impl UnitStatic {
             // (the census's trusted-whole trap, #489).
             hit_and_run_shooter_active: unit_rule_active(reg, p, "Hit & Run Shooter"),
             hit_and_run_fighter_active: unit_rule_active(reg, p, "Hit & Run Fighter"),
+            // Wave 4 — the Boost band (0.0 = the base 3" const) and the
+            // firing name for the battle-log twin.
+            hit_and_run_move_in: hnr_move_in,
+            hit_and_run_rule: hnr_rule,
             quick_shot_active: unit_rule_active(reg, p, "Quick Shot"),
             second_wind_active: unit_rule_active(reg, p, "Second Wind")
                 || unit_rule_active(reg, p, "Inquisitorial Agent")

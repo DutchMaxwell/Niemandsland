@@ -1160,6 +1160,11 @@ fn tray_hit_and_run(
     if next.hit_and_run_round[si] == next.round {
         return false;
     }
+    // Wave 4 (rules-wave4-boostbases) — the Boost spellings' own band
+    // ("Guerrilla Boost"/"Harassing Boost", the entry's `move_in: 6`);
+    // 0.0 (no Boost, or an `rules_epoch: 5` record) keeps the shared base
+    // 3" const, byte-exact.
+    let band = if us.hit_and_run_move_in > 0.0 { us.hit_and_run_move_in } else { HIT_AND_RUN_MOVE_IN };
     let Some(enemy) = nearest_enemy_reposition(statics, next, si) else { return false };
     let delta = geom::sub(geom::centre(&next.positions[si]), geom::centre(&next.positions[enemy]));
     let len = (delta[0] * delta[0] + delta[2] * delta[2]).sqrt();
@@ -1189,7 +1194,7 @@ fn tray_hit_and_run(
                     t,
                     si,
                     dest,
-                    HIT_AND_RUN_MOVE_IN as f64,
+                    band as f64,
                     seams.hero_attach,
                     true,
                     crate::mv::FAST_PLANNER_GUARD,
@@ -1204,7 +1209,7 @@ fn tray_hit_and_run(
             }
         }
     }
-    let dist_in = clamp_move_to_board(terrain, &next.positions[si], dir, HIT_AND_RUN_MOVE_IN);
+    let dist_in = clamp_move_to_board(terrain, &next.positions[si], dir, band);
     if dist_in <= 0.0 {
         return false;
     }
@@ -4261,12 +4266,18 @@ fn resolve_with(
         let hnr_attacked = shot_leg || kind == CHARGE;
         if hnr_attacked && tray_hit_and_run(statics, &mut next, si, seams, cover, shot_leg) {
             // The table's own battle-log line, main.gd:1089 — the rules-must-
-            // log twin of `record_decision`'s "hit-and-run" entry.
+            // log twin of `record_decision`'s "hit-and-run" entry. Wave 4
+            // (rules-wave4-boostbases): a Boost carrier names its own spelling
+            // and prints its own band; the base line stays byte-exact.
+            let pi = next.roster.profile[si];
+            let us = &statics[pi];
+            let (rule, band) = if us.hit_and_run_rule.is_empty() {
+                ("Hit & Run".to_string(), HIT_AND_RUN_MOVE_IN.to_string())
+            } else {
+                (us.hit_and_run_rule.clone(), us.hit_and_run_move_in.to_string())
+            };
             let (_, shot) = dice.as_mut().unwrap();
-            shot.log.push(format!(
-                "Hit & Run: {} steps up to 3\" after its attack",
-                statics[next.roster.profile[si]].name
-            ));
+            shot.log.push(format!("{rule}: {} steps up to {band}\" after its attack", us.name));
         }
     }
 
@@ -6967,6 +6978,151 @@ mod tests {
         assert!(shot.rolls.is_empty(), "the charge fell short — no melee, no dice at all");
         assert!((next.positions[0][0][0] - (st.positions[0][0][0] - 3.0 * IN2M as f64)).abs() < 1e-9);
         assert_eq!(next.hit_and_run_round[0], next.round);
+    }
+
+    // ------------------------------------- BLOCK B5 boost: the 6" BAND (w4) ---
+
+    /// Wave 4 — a one-model "Hit & Run" Boost carrier for the REAL `build_for`
+    /// (the gf faction block whose mechanics entry fields the name), with the
+    /// shoot key the action rides (`buff_action` fires the shot leg on the key
+    /// alone — the same shape the 3" tests use).
+    fn boost_carrier(system: &str, faction: &str, rules: &[&str]) -> crate::state::Profile {
+        crate::state::Profile {
+            unit_id: "u".into(),
+            name: "a".into(),
+            quality: 4,
+            defense: 4,
+            tough: 1,
+            wounds_max: vec![1],
+            model_count: 1,
+            weapons: vec![crate::state::Weapon {
+                name: "Rifle".into(),
+                range: 24.0,
+                attacks: 2,
+                count: 1,
+                ap: 0,
+                rules: vec![],
+            }],
+            special_rules: rules.iter().map(|s| s.to_string()).collect(),
+            caster_value: 0,
+            base_radius: 0.0,
+            base_shape: String::new(),
+            base_w_mm: 0.0,
+            base_d_mm: 0.0,
+            game_system: system.into(),
+            faction_folder: faction.into(),
+            item_grants: vec![],
+            attached_hero_rules: vec![],
+            move_bands: MoveBands::default(),
+        }
+    }
+
+    /// The buff_line scene with the shooter slot swapped for the REAL
+    /// `build_for` product of that carrier, patched down to the carrier's own
+    /// single model.
+    fn boost_line(
+        system: &str,
+        faction: &str,
+        rules: &[&str],
+        epoch: u32,
+    ) -> (State, Vec<UnitStatic>) {
+        let (mut st, mut statics) = buff_line();
+        let mut reg = crate::rules::Registries::new(&repo_root());
+        statics[0] = UnitStatic::build_for(&mut reg, &boost_carrier(system, faction, rules), epoch);
+        st.positions[0] = vec![[0.0, 0.0, 0.0]];
+        st.radii[0] = vec![IN2M];
+        st.wounds[0] = vec![1];
+        st.alive[0] = 1;
+        (st, statics)
+    }
+
+    /// Wave 4 (rules-wave4-boostbases) — the "Guerrilla Boost" carrier (gf/
+    /// rebel_guerrillas, the entry's own `move_in: 6`) steps 6" after its
+    /// shot and names its own spelling in the battle-log twin; the epoch-5
+    /// build of the same carrier keeps the base 3" band and the base line,
+    /// byte-exact. RED if the fold keeps the shared const.
+    #[test]
+    fn guerrilla_boost_carrier_steps_six_inches_at_epoch_6() {
+        let terrain = crate::terrain::Terrain::default();
+        let (st, statics) =
+            boost_line("gf", "rebel_guerrillas", &["Guerrilla", "Guerrilla Boost"], 6);
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next.hit_and_run_round[0], next.round, "the Boost carrier still hit-and-runs");
+        for (got, before) in next.positions[0].iter().zip(st.positions[0].iter()) {
+            assert!(
+                (got[0] - (before[0] - 6.0 * IN2M as f64)).abs() < 1e-6,
+                "the Boost band is 6\", got {got:?}"
+            );
+        }
+        assert!(
+            shot.log.iter().any(|l| l.contains("Guerrilla Boost: a steps up to 6\"")),
+            "rules-must-log: the Boost names itself (RED before the fix)"
+        );
+
+        // The epoch-5 build of the same carrier: the base band, byte-exact.
+        let (st5, statics5) =
+            boost_line("gf", "rebel_guerrillas", &["Guerrilla", "Guerrilla Boost"], 5);
+        let mut tray5 = Tray::seeded(11);
+        let mut rng5 = crate::rng::GodotRng::new(0);
+        let (next5, shot5) = resolve_stochastic_tray_on_board(
+            &statics5, &st5, &buff_action(Some("b")), &terrain, Seams::default(), &mut rng5, &mut tray5,
+        )
+        .unwrap();
+        for (got, before) in next5.positions[0].iter().zip(st5.positions[0].iter()) {
+            assert!((got[0] - (before[0] - 3.0 * IN2M as f64)).abs() < 1e-6, "got {got:?}");
+        }
+        assert!(
+            shot5.log.iter().any(|l| l.contains("Hit & Run: a steps up to 3\"")),
+            "epoch 5: the base line, byte-exact"
+        );
+    }
+
+    /// The "Harassing Boost" spelling (gf/dark_elf_raiders): the same 6" band
+    /// at epoch 6; WITHOUT the Boost the base "Harassing" carrier keeps the
+    /// shared 3" const — the Boost band only lands on a real Boost carrier.
+    #[test]
+    fn harassing_boost_carrier_steps_six_inches_at_epoch_6() {
+        let terrain = crate::terrain::Terrain::default();
+        let (st, statics) =
+            boost_line("gf", "dark_elf_raiders", &["Harassing", "Harassing Boost"], 6);
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next.hit_and_run_round[0], next.round, "the Boost carrier still hit-and-runs");
+        for (got, before) in next.positions[0].iter().zip(st.positions[0].iter()) {
+            assert!(
+                (got[0] - (before[0] - 6.0 * IN2M as f64)).abs() < 1e-6,
+                "the Boost band is 6\", got {got:?}"
+            );
+        }
+        assert!(
+            shot.log.iter().any(|l| l.contains("Harassing Boost: a steps up to 6\"")),
+            "rules-must-log: the Boost names itself (RED before the fix)"
+        );
+
+        // Without the Boost: the base 3" const (still a Hit & Run carrier).
+        let (stb, staticsb) = boost_line("gf", "dark_elf_raiders", &["Harassing"], 6);
+        let mut trayb = Tray::seeded(11);
+        let mut rngb = crate::rng::GodotRng::new(0);
+        let (nextb, shotb) = resolve_stochastic_tray_on_board(
+            &staticsb, &stb, &buff_action(Some("b")), &terrain, Seams::default(), &mut rngb, &mut trayb,
+        )
+        .unwrap();
+        for (got, before) in nextb.positions[0].iter().zip(stb.positions[0].iter()) {
+            assert!((got[0] - (before[0] - 3.0 * IN2M as f64)).abs() < 1e-6, "got {got:?}");
+        }
+        assert!(
+            shotb.log.iter().any(|l| l.contains("Hit & Run: a steps up to 3\"")),
+            "no Boost: the base line, byte-exact"
+        );
     }
 
     /// RED for the fire gate, all built on the falls-short charge above (so
