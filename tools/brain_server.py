@@ -17,26 +17,21 @@ def finite(value):
     return type(value) in (int, float) and math.isfinite(value)
 
 
-def vector(value, size, valid=finite):
-    return isinstance(value, list) and len(value) == size and all(valid(v) for v in value)
+def tensor(value, shape):
+    if not shape:
+        return finite(value)
+    return isinstance(value, list) and len(value) == shape[0] and all(tensor(v, shape[1:]) for v in value)
 
 
 def validate_tokens(tokens):
     # Exact policy_tokens/leaf_value_fn shape from nml-core/src/tokens.rs.
     shapes = {"units": (24, 72), "objs": (6, 12), "terr": (18, 12), "cands": (160, 40)}
-    expected = {*shapes, *(key + "_mask" for key in shapes), "glob", "actor", "target", "label"}
-    if not isinstance(tokens, dict) or set(tokens) != expected:
+    shapes.update({key + "_mask": (shape[0],) for key, shape in list(shapes.items())})
+    shapes.update(glob=(16,), actor=(160,), target=(160,), label=())
+    if not isinstance(tokens, dict) or set(tokens) != set(shapes):
         raise ValueError("leaf must be a policy_tokens dictionary")
-    for key, (count, width) in shapes.items():
-        if not vector(tokens[key], count, lambda row: vector(row, width)):
-            raise ValueError("token rows/width/numbers")
-        if not vector(tokens[key + "_mask"], count, lambda v: type(v) is int and v in (0, 1)):
-            raise ValueError("token mask")
-    if not vector(tokens["glob"], 16):
-        raise ValueError("global token")
-    for key in ("actor", "target"):
-        if not vector(tokens[key], 160, lambda v: type(v) is int and -1 <= v < 24):
-            raise ValueError("token pointer")
+    if any(not tensor(tokens[key], shape) for key, shape in shapes.items()):
+        raise ValueError("token dimensions/numbers")
     if tokens["label"] != -1 or any(tokens["cands_mask"]):
         raise ValueError("leaf tokens must be state-only")
 

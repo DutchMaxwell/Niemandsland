@@ -84,3 +84,12 @@ def test_load_dummy_module(monkeypatch):
     assert scorer([token()], 1) == [0.0]
     assert identity["name"] == "dummy-zero"
     assert len(identity["hash"]) == 64
+
+
+@pytest.mark.parametrize("key,value", [("units", []), ("units", [[0.0] * 71] * 24),
+    ("glob", [float("nan")] * 16), ("actor", [True] * 160), ("label", 0)])
+def test_token_dimensions_and_numbers_are_validated(key, value):
+    leaf = token()
+    leaf[key] = value
+    with pytest.raises(ValueError):
+        brain_server.validate_tokens(leaf)
