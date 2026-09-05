@@ -432,7 +432,13 @@ fn save_batch(
 /// is not split fire and no longer raises any flag.
 ///
 /// TO-HIT AND SAVE MODIFIERS with no field in the profile/context model:
-///   * Indirect's moved -1 and its Quick Readjustment opt-out (:3163-3169).
+///   * Indirect's moved -1 (:3163-3169). Its faction-level opt-out is
+///     DECLARED, not ported (rules-wave3-indirect2): with no moved-penalty
+///     primitive in this profile/context model, the opt-out's `no_moved_penalty`
+///     param (the Indirect mechanics entry) has nothing to act on, so the core
+///     registers neither the penalty nor its opt-out — needs primitive:
+///     `moved_hit_penalty` (a firing-side to-hit modifier when the unit moved
+///     this activation) before either can be stamped.
 ///   * Spot markers, Reckless AP, `AiEv.stamp_conditional_ap`
 ///     (Shatter / Tear / Disintegrate). The Piercing tag PORTED in wave 3
 ///     (the marker pool + the `tag_ap_mod` fold above); vs-target Marks
