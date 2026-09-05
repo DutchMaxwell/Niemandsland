@@ -6512,8 +6512,9 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		var sixes: int = AiCombatMath.bane_reroll_count(save_faces)
 		if sixes > 0:
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "Bane: %s re-rolls %d unmodified Defense 6%s" % [
-					defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
+				var bane_name := _solo_bane_facet_name(striker, int(profile.get("range", 0)))
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense 6%s" % [
+					bane_name if not bane_name.is_empty() else "Bane", defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
 			reroll = await _solo_tray_roll(sixes, base_defense + ap, _solo_owner_label(defender), "defense",
 				"Defense re-roll (Bane) vs %s" % weapon_name)
 		blocks = AiCombatMath.blocks_with_bane(save_faces, reroll, base_defense, ap)
@@ -6571,13 +6572,17 @@ func _solo_striker_has_bane(striker: GameUnit, profile: Dictionary, melee: bool)
 	# re-roll unmodified Defense results of 6 when blocking hits from this model's weapons").
 	# bypass_regen stays per-alias data (_solo_ignores_regen reads it), so a no-bypass alias
 	# re-rolls the sixes without cutting through Regeneration.
-	if striker != null:
-		for e in RulesRegistry.unit_rules_of_primitive(striker, "Bane"):
-			var n := str((e as Dictionary)["name"])
-			if not n.begins_with("Bane") and not n.ends_with("Aura") \
-					and bool(((e as Dictionary).get("params", {}) as Dictionary).get("reroll_save_sixes", false)):
-				return true
-	return false
+	return not _solo_bane_facet_name(striker, 0 if melee else 1).is_empty()
+
+
+func _solo_bane_facet_name(striker: GameUnit, profile_range: int) -> String:
+	for e in RulesRegistry.unit_rules_of_primitive(striker, "Bane"):
+		var n := str((e as Dictionary)["name"])
+		var params: Dictionary = (e as Dictionary).get("params", {})
+		if not n.begins_with("Bane") and not n.ends_with("Aura") \
+				and bool(params.get("reroll_save_sixes", false)) and AiEv.facet_applies(params, profile_range):
+			return n
+	return ""
 
 
 ## The target's Regeneration / medic (GF Advanced Rules v3.5.1: "When a unit where all models have this
