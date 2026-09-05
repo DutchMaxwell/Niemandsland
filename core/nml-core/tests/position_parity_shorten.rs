@@ -9,15 +9,14 @@ use std::{collections::HashMap, rc::Rc};
 
 /// Replay the original fixed action through the real simulator as well as
 /// the direct movement wrapper: losing Seams.rules_epoch must fail here.
-#[test]
-fn whole_unit_shorten_epoch_reaches_the_simulator_movement() {
+fn resolved_endings(case_id: &str) -> Vec<Vec<nml_core::geom::V3>> {
     use serde_json::{json, Value};
     use nml_core::state::ProfileCache;
     use nml_core::mv::step::MoveRules;
     let fixtures: Value = serde_json::from_str(include_str!(
         "../../../test/fixtures/position_parity/cases.json")).unwrap();
     let case = fixtures["cases"].as_array().unwrap().iter()
-        .find(|c| c["id"] == "recorded-003").unwrap();
+        .find(|c| c["id"] == case_id).unwrap();
     let mut units = serde_json::Map::new();
     let mut profiles = Profiles { list: vec![], index: HashMap::new() };
     for spec in case["units"].as_array().unwrap() {
@@ -33,6 +32,9 @@ fn whole_unit_shorten_epoch_reaches_the_simulator_movement() {
         profiles.list.push(serde_json::from_value(p).unwrap());
         let mut u = spec.clone();
         u["alive"] = json!(spec["positions"].as_array().unwrap().len());
+        if key == case["action"]["unit"].as_str().unwrap() {
+            u["bands"] = json!({"advance":case["action"]["band_in"], "rush":case["action"]["band_in"]});
+        }
         units.insert(key, u);
     }
     let mut cache = ProfileCache::new(Rc::new(profiles));
@@ -50,6 +52,9 @@ fn whole_unit_shorten_epoch_reaches_the_simulator_movement() {
         let expected = MoveRules { rules_epoch }.plain_move(&state, &terrain, si,
             geom::to_f32(action.dest.unwrap()), case["action"]["band_in"].as_f64().unwrap(),
             true, true, nml_core::mv::FAST_PLANNER_GUARD).unwrap();
+        if rules_epoch >= 6 {
+            assert_eq!(expected.shorten_covered, case_id != "recorded-144");
+        }
         let got = resolve_on_board(&statics, &state, &action, &terrain,
             Seams { movement:true, hero_attach:true, rules_epoch,
                 ..Seams::default() }).unwrap();
@@ -59,8 +64,21 @@ fn whole_unit_shorten_epoch_reaches_the_simulator_movement() {
         }
         endings.push(expected.end);
     }
+    endings
+}
+
+#[test]
+fn whole_unit_shorten_epoch_reaches_the_simulator_movement() {
+    let endings = resolved_endings("recorded-003");
     assert_eq!(endings[0], endings[1]);
     assert_eq!(endings[2], endings[3]);
     assert_ne!(endings[1], endings[2], "fixture must exercise epoch-6 shortening");
 }
 
+#[test]
+fn whole_unit_shorten_defers_the_pending_boxed_escape() {
+    let endings = resolved_endings("recorded-144");
+    for end in &endings[1..] {
+        assert_eq!(*end, endings[0], "unported boxed continuation must keep the previous result");
+    }
+}

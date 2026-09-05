@@ -103,3 +103,11 @@ The optional Stage A envelope accepts `rules_epoch`, defaulting to table epoch
 6. The simulator supplies its own replay epoch through `MoveRules`; epochs
 below `EPOCH_6_TABLE_RULES` retain the previous movement result. The original
 free movement function retains its argument list and epoch-0 behavior.
+
+Shortening coverage stops at the pending boxed continuation: for a granted band
+of at least two inches whose candidate advances less than one inch, the core
+retains its previous result. `Landing.shorten_covered` reports that boundary;
+the Stage A adapter retains the shortening decline when the table used it.
+These are the table's boxed-entry distance conditions, conservatively applied
+before its unported lateral-room probe. This keeps that dependency for the
+boxed-escape port instead of changing an unsupported continuation's result.
