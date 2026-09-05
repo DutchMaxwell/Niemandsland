@@ -411,8 +411,10 @@ fn save_batch(
 ///
 /// TO-HIT AND SAVE MODIFIERS with no field in the profile/context model:
 ///   * Indirect's moved -1 and its Quick Readjustment opt-out (:3163-3169).
-///   * Spot markers, the Piercing tag, Reckless AP, vs-target Marks,
-///     `AiEv.stamp_conditional_ap` (Shatter / Tear / Disintegrate).
+///   * Spot markers, Reckless AP, `AiEv.stamp_conditional_ap`
+///     (Shatter / Tear / Disintegrate). The Piercing tag PORTED in wave 3
+///     (the marker pool + the `tag_ap_mod` fold above); vs-target Marks
+///     PORTED in B2b (`tray_vs_marks`).
 ///   * unit-level Bane / Lacerate — the STRIKER's own special rules, not just
 ///     the weapon's (:6490-6500) — so a unit-level Bane neither re-rolls the
 ///     defender's 6s nor bypasses Regeneration here.
@@ -756,7 +758,13 @@ pub fn resolve_volley_with_tray(
             // Ambush family (rules-wave2-ambush): "Ambushing Piercing Shot"'s
             // arrival-round AP(+1) — SHOOTING only, the melee fold at :992
             // never reads it (its own facet gate).
-            + att.ambush_arrival_ap;
+            + att.ambush_arrival_ap
+            // Wave 3 — Piercing Tag's spent markers: +AP(markers) on THIS
+            // volley only (main.gd:3123/:9857), stamped by the tray seam
+            // after the pool zeroes (sim.rs). The melee fold never reads it —
+            // the table's melee seams have no tag spend — and the EV
+            // imagination stays blind, the table's own resolve-time spend.
+            + att.tag_ap_mod;
         // Wave 2 — the "AP(+1) when shooting" mark's flat AP, off its
         // epoch-gated Ctx leg (`sim::ctx_live`).
         if att.pierce_shooting_grant {

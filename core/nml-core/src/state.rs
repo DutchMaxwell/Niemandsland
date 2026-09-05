@@ -465,6 +465,17 @@ pub struct State {
     /// (`unit_properties["limited_used"]`, solo_controller.gd:7681-7722).
     /// Per unit, weapon names fired this game; never resets on a later round.
     pub limited_used: Vec<Vec<String>>,
+    /// Wave 3 — `unit_properties["piercing_tag_used"]` (main.gd:17015): the
+    /// Piercing-Tag family's once-per-GAME placement stamp, per member (the
+    /// acting unit or an attached hero), shared across all three family names
+    /// — the table keeps ONE flag, not one per name. Never resets on a later
+    /// round, the `second_wind_used` shape.
+    pub piercing_tag_used: Vec<bool>,
+    /// Wave 3 — `unit_properties["piercing_tag_markers"]` (main.gd:17023):
+    /// the marker pool ON the tagged unit — added by the tagger's activation
+    /// (`_solo_apply_piercing_tag`), spent whole by the next volley at this
+    /// unit for +AP per marker (main.gd:3123 AI / :9857 human, shooting only).
+    pub piercing_tag_markers: Vec<i64>,
 }
 
 impl State {

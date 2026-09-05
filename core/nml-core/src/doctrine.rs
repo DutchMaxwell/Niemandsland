@@ -168,6 +168,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         growth_markers: vec![0; n], growth_round: vec![-1; n],
         second_wind_used: vec![false; n], second_wind_round: -1, second_wind_uses: 0,
         limited_used: vec![Vec::new(); n],
+        piercing_tag_used: vec![false; n], piercing_tag_markers: vec![0; n],
     }
 }
 

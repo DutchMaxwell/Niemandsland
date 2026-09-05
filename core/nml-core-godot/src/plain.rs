@@ -438,6 +438,10 @@ pub fn build_state(
         second_wind_round: -1,
         second_wind_uses: 0,
         limited_used: vec![Vec::new(); n],
+        // Wave 3 — the Piercing-Tag ledger keys start empty/false: the Godot
+        // host never writes them (the recorder stamps neither key yet).
+        piercing_tag_used: vec![false; n],
+        piercing_tag_markers: vec![0; n],
         los_pairs,
     };
     let mut mask: Vec<u32> = Vec::with_capacity(n);

@@ -692,6 +692,14 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         second_wind_round: -1,
         second_wind_uses: 0,
         limited_used: vec![Vec::new(); n],
+        // Wave 3 — the Piercing-Tag ledger keys are NOT recorded corpora
+        // inputs: `AiActRecorder._ledger_of` stamps neither key today, so a
+        // captured state always starts the pool empty and the used flags
+        // false (the recorder would need its own wave before any rules_epoch-6
+        // corpus could carry them; every shipped corpus is 5 or lower, where
+        // the family gate keeps these inert anyway).
+        piercing_tag_used: vec![false; n],
+        piercing_tag_markers: vec![0; n],
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
             // Read the matrix in its own (key-sorted) order and STORE it in
             // roster order, so `_los_clear`'s port can index it with roster

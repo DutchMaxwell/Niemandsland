@@ -244,6 +244,16 @@ pub struct Ctx {
     /// only — the melee fold never reads it. Stamped in `ctx_live` off
     /// `State.ambush_arrived_round` (the stamp `arrive_unit` writes).
     pub ambush_arrival_ap: i64,
+    // --- Wave 3, the Piercing-Tag family's spend. ZERO on every `ctx_of` /
+    // `ctx_live` — stamped ONLY by the volley seam's spend (sim.rs) after the
+    // target's marker pool zeroes, so the EV imagination stays blind to it
+    // exactly like `growth_ap_mod` (the table spends at resolve time only,
+    // main.gd:3123/:9857) and melee never spends at all (the two spend call
+    // sites are shooting paths; :6012's melee seam has no tag spend).
+    /// +AP(markers) on THIS volley — folded into every shot profile's ap the
+    /// same merge dice.rs's volley fold gives Piercing Growth's marker delta
+    /// (main.gd:3124-3131 adds `tag_ap` to each `prof["ap"]`).
+    pub tag_ap_mod: i64,
     // --- Block C2 — the melee / charge leg of the Shot Modifier family,
     // `_solo_hit_mod_info`'s melee branch (main.gd:5658-5668): an entry is
     // kept when `all_attacks` OR `melee_only` OR (`when: "charge"` on a
@@ -612,6 +622,11 @@ pub struct UnitStatic {
     /// this port consumes (`growth_of`); the live marker count itself lives on
     /// `State.growth_markers`, not here.
     pub growth: Vec<GrowthRule>,
+    /// Wave 3 — every "Piercing Tag" family entry this unit carries, each at
+    /// its OWN literal (`piercing_tags_of`), empty below `rules_epoch` 6. The
+    /// live pool and used-flag live on `State.piercing_tag_markers` /
+    /// `State.piercing_tag_used`, not here.
+    pub piercing_tags: Vec<PiercingTagEntry>,
     /// Rules this unit carries that the port does NOT model — reported by name
     /// with a node count instead of being silently skipped.
     pub unimplemented: Vec<Unimplemented>,
@@ -1336,6 +1351,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_ap_mod: 0,
         growth_hit_mod: 0,
         ambush_arrival_ap: 0,
+        tag_ap_mod: 0,
     }
 }
 
@@ -1813,6 +1829,72 @@ fn ambush_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ambu
     f
 }
 
+/// One "Piercing Tag" registry entry the unit carries — wave 3's marker
+/// family (`_solo_apply_piercing_tag` main.gd:16999-17027, the three registry
+/// names that ride the "Piercing Tag" primitive). The table's resolver reads
+/// exactly these per entry, in `unit_rules_of_primitive`'s own order:
+/// `range_in` (its GDScript default 24.0), `needs_los` (default true) and the
+/// RAW rule string's parsed rating — `maxi(rule_rating(str(raw)), 1)`
+/// (main.gd:17022; the params' `"rating": "X"` placeholder parses as 0, so a
+/// bare name places ONE marker). The entry's `place_roll` (Piercing Spotter)
+/// and `uses_per_game` are dead data on the TABLE's own resolver — the AI
+/// never rolls for the Spotter and the shared `piercing_tag_used` flag IS the
+/// once-per-game beat — so the twin reads neither.
+///
+/// GATED `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)` (frozen at 6, never the
+/// literal and never `CURRENT_RULES_EPOCH`): a recording fleet is stamping
+/// `rules_epoch: 5` today and wave 3's rules do not exist in that recorder —
+/// see `acts::EPOCH_6_TABLE_RULES`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PiercingTagEntry {
+    pub name: String,
+    /// The marker count one placement adds: `maxi(rule_rating(raw), 1)`.
+    pub markers: i64,
+    /// The pick's range gate, centre to centre (`_solo_utility_target`).
+    pub range_in: f64,
+    /// The pick's sight gate (`bool(sp.get("needs_los", true))`).
+    pub needs_los: bool,
+}
+
+/// Every "Piercing Tag" family entry the unit carries, in
+/// `unit_rules_of_primitive`'s own order (own rules then item grants, each
+/// base name once — rules_registry.gd:155-176) — but each at its OWN literal,
+/// never a bare primitive loop, the #489 trusted-whole trap (a name this arm
+/// does not list stays unwired and the census keeps it MISSING/STAMPED).
+/// Empty below `rules_epoch` 6 — see the struct's gate note.
+fn piercing_tags_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<PiercingTagEntry> {
+    let mut out = Vec::new();
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        return out;
+    }
+    let mut raws: Vec<&String> = p.special_rules.iter().collect();
+    raws.extend(p.item_grants.iter());
+    let map = reg.rules_for(&p.game_system);
+    let mut seen: Vec<String> = Vec::new();
+    for raw in raws {
+        let n = base_rule_name(raw);
+        if n.is_empty() || seen.iter().any(|s| *s == n) {
+            continue;
+        }
+        seen.push(n.clone());
+        if !matches!(n.as_str(), "Piercing Tag" | "Piercing Spotter" | "Piercing Target") {
+            continue;
+        }
+        let Some(e) =
+            map.lookup(&p.faction_folder, &n).filter(|e| e.primitive.as_deref() == Some("Piercing Tag"))
+        else {
+            continue;
+        };
+        out.push(PiercingTagEntry {
+            name: n,
+            markers: rule_rating(raw, 0).max(1),
+            range_in: e.param_f("range_in", 24.0),
+            needs_los: e.param_b_or("needs_los", true),
+        });
+    }
+    out
+}
+
 /// One "Growth Markers" registry entry — `_solo_growth_markers`/`_growth_
 /// facet_bonus` main.gd:16978/17060. Block B7 consumes only the two facets a
 /// LIVE training-pool carrier actually uses, the ones `_solo_growth_attack_
@@ -2284,6 +2366,7 @@ impl UnitStatic {
             ambush_family: ambush_family_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             growth: growth_of(reg, p, &mut unimplemented),
+            piercing_tags: piercing_tags_of(reg, p, rules_epoch),
             unimplemented,
         }
     }
@@ -2503,6 +2586,94 @@ mod tests {
             AmbushFamily::default(),
             "no rule, no stamp"
         );
+    }
+
+    /// Piercing Tag family (wave 3) — one test per ported name, through the
+    /// REAL gf registry (alien_hives / high_elf_fleets / custodian_brothers),
+    /// the ambush template: the rule swapped into the carrier's
+    /// special_rules, the faction over so the entry resolves. Epoch literals
+    /// 6/5, NOT `CURRENT_RULES_EPOCH`: a wave-4 bump must not re-date what
+    /// these assertions mean.
+    fn piercing_tags_of(rule: &str, faction: &str, epoch: u32) -> Vec<PiercingTagEntry> {
+        let tpl = AMBUSH_FAMILY_HEADER
+            .replace("\"special_rules\":[]", &format!("\"special_rules\":[\"{rule}\"]"))
+            .replace("\"faction_folder\":\"robot_legions\"", &format!("\"faction_folder\":\"{faction}\""));
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        UnitStatic::build_for(&mut reg, p, epoch).piercing_tags
+    }
+
+    /// "Piercing Tag" (gf/alien_hives): range 24, LOS, ONE marker off the
+    /// bare name's maxi(rule_rating, 1) — and a rated form "Piercing Tag(2)"
+    /// places TWO. RED before the fix: the stamp reads empty everywhere.
+    #[test]
+    fn piercing_tag_stamps_its_pick_and_marker_count_at_epoch_6() {
+        assert_eq!(
+            piercing_tags_of("Piercing Tag", "alien_hives", 6),
+            vec![PiercingTagEntry {
+                name: "Piercing Tag".into(),
+                markers: 1,
+                range_in: 24.0,
+                needs_los: true,
+            }],
+            "the gf/alien_hives entry: 24\"/LOS, the bare name's one marker"
+        );
+        assert_eq!(
+            piercing_tags_of("Piercing Tag(2)", "alien_hives", 6)[0].markers, 2,
+            "the RAW rule string's parsed rating is the marker count (main.gd:17022)"
+        );
+        assert!(
+            piercing_tags_of("Piercing Tag", "alien_hives", 5).is_empty(),
+            "the wave is epoch-gated: the fleet stamps rules_epoch 5 and wave 3 does not exist in that recorder"
+        );
+        assert!(piercing_tags_of("", "alien_hives", 6).is_empty(), "no rule, no stamp");
+    }
+
+    /// "Piercing Spotter" (gf/high_elf_fleets): its OWN params (range 30);
+    /// `place_roll` is dead data on the TABLE's own resolver (main.gd:17002
+    /// never rolls) — the AI places the same maxi(rating, 1) marker. RED
+    /// before the fix.
+    #[test]
+    fn piercing_spotter_stamps_its_own_params_at_epoch_6() {
+        assert_eq!(
+            piercing_tags_of("Piercing Spotter", "high_elf_fleets", 6),
+            vec![PiercingTagEntry {
+                name: "Piercing Spotter".into(),
+                markers: 1,
+                range_in: 30.0,
+                needs_los: true,
+            }],
+            "the gf/high_elf_fleets entry: 30\"/LOS, no die roll — the table rolls none either"
+        );
+        assert!(
+            piercing_tags_of("Piercing Spotter", "high_elf_fleets", 5).is_empty(),
+            "the wave is epoch-gated: rules_epoch 5 predates wave 3"
+        );
+        assert!(piercing_tags_of("", "high_elf_fleets", 6).is_empty(), "no rule, no stamp");
+    }
+
+    /// "Piercing Target" (gf/custodian_brothers): its OWN params (range 18);
+    /// the table implements its "+AP(X) when attacking" with the same pool +
+    /// spend-everything volley seam the other two names ride. RED before the
+    /// fix.
+    #[test]
+    fn piercing_target_stamps_its_own_params_at_epoch_6() {
+        assert_eq!(
+            piercing_tags_of("Piercing Target", "custodian_brothers", 6),
+            vec![PiercingTagEntry {
+                name: "Piercing Target".into(),
+                markers: 1,
+                range_in: 18.0,
+                needs_los: true,
+            }],
+            "the gf/custodian_brothers entry: 18\"/LOS, the same pool the volley spends"
+        );
+        assert!(
+            piercing_tags_of("Piercing Target", "custodian_brothers", 5).is_empty(),
+            "the wave is epoch-gated: rules_epoch 5 predates wave 3"
+        );
+        assert!(piercing_tags_of("", "custodian_brothers", 6).is_empty(), "no rule, no stamp");
     }
 
     /// "Ambush Beacon" (gf/eternal_dynasty): the registry's `beacon_in` is
