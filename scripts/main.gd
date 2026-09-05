@@ -17335,12 +17335,10 @@ func _solo_try_spawn(unit: GameUnit) -> void:
 	for value in members:
 		var member := value as GameUnit
 		if member == null or SoloController.unit_in_reserve(member) \
-				or not RulesRegistry.unit_rule_active(member, "Spawn"):
+				or not RulesRegistry.has_primitive(RulesRegistry.system_of_unit(member), RulesRegistry.faction_of_unit(member), "Spawn"):
 			continue
 		var spent: Dictionary = member.unit_properties.get("spawn_spent", {})
 		var offered: Dictionary = member.unit_properties.get("spawn_offered_round", {})
-		member.unit_properties["spawn_spent"] = spent
-		member.unit_properties["spawn_offered_round"] = offered
 		for item in member.get_alive_models():
 			var model := item as ModelInstance
 			if model.node == null or not is_instance_valid(model.node):
@@ -17348,6 +17346,8 @@ func _solo_try_spawn(unit: GameUnit) -> void:
 			for raw in model.properties.get("special_rules", []):
 				if RulesRegistry.base_rule_name(str(raw)) != "Spawn":
 					continue
+				member.unit_properties["spawn_spent"] = spent
+				member.unit_properties["spawn_offered_round"] = offered
 				var key := "%d:%s" % [member.models.find(model), str(raw)]
 				if bool(RulesRegistry.unit_param(member, "Spawn", "once_per_game", true)) and spent.has(key):
 					continue
