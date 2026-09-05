@@ -1776,6 +1776,119 @@ fn aura_name_of(p: &Profile, base: &str) -> String {
         .unwrap_or_else(|| format!("{base} Aura"))
 }
 
+// --- Wave 3 "Boost Aura (tail)" family (gated `acts::rule_on(.., EPOCH_6_TABLE_RULES)`). ---
+//
+// The import expansion (opr_army_manager.gd:_expand_auras :2112-2147 and its
+// loader twin list_to_profile.py:_expand_auras :350) is additive and deduped:
+// every "<X> Aura" carried by a unit or its attached heroes hands the base
+// rule "<X>" to the unit AND to each of those heroes ("this model and its
+// unit get X", book text). The AURA ENTRY ITSELF stays in special_rules and
+// carries no params any resolver reads — the census caps this family's names
+// at STAMPED / MISSING (PR #489's "recognised, read by nobody" shape).
+//
+// This wave makes the aura entry a FIRST-CLASS core read for the fifteen
+// names: the same additive, deduped grant, computed by the core off the
+// carried "* Boost Aura" entries, gated `rule_on(rules_epoch,
+// EPOCH_6_TABLE_RULES)` (the frozen wave-3 constant — a recorder stamping
+// `rules_epoch: 5` never played wave 3's rules, see acts.rs). Dedup is the
+// loader's own exact-match test (`g not in m["special_rules"]`), so a
+// post-import profile — where the import already granted the base — expands
+// byte-identical: the known corpora (epochs <= 5, gate off) and the epoch-6
+// replay of an expanded profile are both untouched. The import expansion
+// STAYS: it is the cross-unit leg (a HERO carried by a host stamps its base
+// onto the host, which build_for cannot see) and the fallback for every
+// earlier epoch. What the core gains is the leg the loader twin skips —
+// `LEGACY_CORE_SELFPLAY` returns from `_expand_auras` before it runs.
+pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
+    "Hold the Line Boost Aura",
+    "Targeting Visor Boost Aura",
+    "Warden Boost Aura",
+    "Lucky Boost Aura",
+    "Buccaneer Boost Aura",
+    "Vale Oath Boost Aura",
+    "Wave-Step Boost Aura",
+    "Royal Warrior Boost Aura",
+    "Bestial Boost Aura",
+    "Vinci Tech Boost Aura",
+    "Ossified Boost Aura",
+    "Shadowborn Boost Aura",
+    "Destroyer Boost Aura",
+    "Empyrean Spirit Boost Aura",
+    "Wild Veil Boost Aura",
+];
+
+/// The loader's own base-name cut (`rule[:-len(" Aura")].strip()`), kept only
+/// for the fifteen entries this wave fields: the carried aura entry's base
+/// rule name, `Some("Lucky Boost")` for "Lucky Boost Aura". `None` = not an
+/// aura entry of this family — a striker's scoped "* Aura" facet (unit.rs
+/// ::stamp_unit_strikers) and every other carried name pass through untouched.
+fn boost_aura_base_of(aura: &str) -> Option<&str> {
+    let entry = aura.trim();
+    if !BOOST_AURA_CHANNEL_NAMES.contains(&entry) {
+        return None;
+    }
+    entry.strip_suffix(" Aura")
+}
+
+/// The wave-3 Boost-aura expansion read — the loader's `_aura_granted_rules`
+/// + `_expand_auras` member loop over what one profile can see: every carried
+/// aura entry of the fifteen hands its base to the unit (`special_rules`) and
+/// to each attached hero (`attached_hero_rules`, the `rule_on_all_models`
+/// members ai_ev.gd:79-83 reads). Additive and deduped, the loader's own
+/// exact-match test; the aura entry itself is never removed.
+pub(crate) fn expand_boost_aura(p: &Profile, rules_epoch: u32) -> Cow<'_, Profile> {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        // The gate is OFF on every recorded corpus (epochs <= 5): the profile
+        // passes through UNCLONED — the expansion read costs nothing there.
+        return Cow::Borrowed(p);
+    }
+    let mut expanded = p.clone();
+    // The loader's member loop: the bases of the auras across the unit AND
+    // its heroes, collected first, then granted to EVERY member — each
+    // target list deduped by its own exact-match test.
+    let mut bases: Vec<String> = Vec::new();
+    for aura in p
+        .special_rules
+        .iter()
+        .chain(p.attached_hero_rules.iter().flatten())
+    {
+        if let Some(base) = boost_aura_base_of(aura) {
+            if !bases.iter().any(|b| b == base) {
+                bases.push(base.to_string());
+            }
+        }
+    }
+    for base in bases.iter() {
+        if !expanded.special_rules.iter().any(|r| r == base) {
+            expanded.special_rules.push(base.clone());
+            // Rules-must-log: the unit, the aura entry that fired, the grant.
+            crate::sim::trace_rule(
+                "boost-aura",
+                &format!("{} (unit {})", boost_aura_name_of(p, base), p.name),
+                &format!("grants '{base}'"),
+            );
+        }
+    }
+    for hero in expanded.attached_hero_rules.iter_mut() {
+        for base in bases.iter() {
+            if !hero.iter().any(|r| r == base) {
+                hero.push(base.clone());
+            }
+        }
+    }
+    Cow::Owned(expanded)
+}
+
+/// The carried aura entry a fired base came from — "X Boost Aura", for the log.
+fn boost_aura_name_of(p: &Profile, base: &str) -> String {
+    p.special_rules
+        .iter()
+        .chain(p.attached_hero_rules.iter().flatten())
+        .find(|r| boost_aura_base_of(r) == Some(base))
+        .cloned()
+        .unwrap_or_else(|| format!("{base} Aura"))
+}
+
 /// `RulesRegistry.unit_rules_of_primitive(shooter, "Shot Modifier")`,
 /// main.gd:5681-5701 — scoped to this port's eight named carriers: B4's
 /// (Good Shot, Bad Shot, Targeting Visor) plus block C3's four flat/over-9"
@@ -2465,13 +2578,18 @@ impl UnitStatic {
     /// `lib::build_statics`/`act_statics` and the two host caches do — so the
     /// gate rides the same line the profile table does.
     pub fn build_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> UnitStatic {
-        // Wave 3 aura expansion read (`EPOCH_6_TABLE_RULES`, frozen): the
+        // Wave 3 aura expansion reads (`EPOCH_6_TABLE_RULES`, frozen): the
         // core's own additive leg of the import expansion — post-import
         // profiles expand byte-identical (the loader's dedup), a
         // `LEGACY_CORE_SELFPLAY` feed gains the leg its loader twin skips,
         // and a Borrowed cow keeps every earlier-epoch replay clone-free.
+        // Chained: Aura Channel first, then Boost Aura sees its output — both
+        // are additive/dedup-checked against their OWN disjoint name lists,
+        // so the order between the two independent families is inert.
         let aura_leg = expand_aura_channel(p, rules_epoch);
         let p: &Profile = &aura_leg;
+        let boost_leg = expand_boost_aura(p, rules_epoch);
+        let p: &Profile = &boost_leg;
         let mut unimplemented: Vec<Unimplemented> = Vec::new();
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
         stamp(reg, p, &mut shoot, &mut unimplemented);
@@ -2903,6 +3021,158 @@ mod tests {
     /// The checkout this crate lives in — mirrors `rows.rs`'s own helper.
     fn repo_root() -> String {
         format!("{}/../..", env!("CARGO_MANIFEST_DIR"))
+    }
+
+    // --- Wave 3 "Boost Aura (tail)" family — tests (rules-wave3-aura4). ---
+    // The carrier template: the unit's `special_rules` and
+    // `attached_hero_rules` are swapped in by the helpers below (empty lists =
+    // the no-aura arm). The default faction stays robot_legions for the pure
+    // name read — no registry entry resolves for it (the aura entry is
+    // primitive-null BY DESIGN; that is the STAMPED cap this wave lifts).
+    // The wiring test swaps to human_defense_force, whose registry entry
+    // resolves the granted base ("Targeting Visor Boost", Shot Modifier,
+    // hit_bonus 1).
+    const BOOST_AURA_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,
+          "rules":[]}]}}}"#;
+
+    /// The wave-3 expansion read at `epoch` over the carrier template: the
+    /// EXPANDED profile (`expand_boost_aura`'s own output, so `build_for` can
+    /// consume exactly what the read produced).
+    fn boost_aura_profile(faction: &str, special: &str, heroes: &str, epoch: u32) -> Profile {
+        let tpl = BOOST_AURA_HEADER
+            .replace("robot_legions", faction)
+            .replace(
+                "\"special_rules\":[]",
+                &format!("\"special_rules\":{special}"),
+            )
+            .replace(
+                "\"attached_hero_rules\":[]",
+                &format!("\"attached_hero_rules\":{heroes}"),
+            );
+        let header = read_act_header(&tpl).expect("header");
+        let p = header.profiles.get("carrier").expect("carrier");
+        expand_boost_aura(p, epoch).into_owned()
+    }
+
+    /// The wave-3 expansion read at `epoch`: the (special_rules,
+    /// attached_hero_rules) pair after the read.
+    fn boost_aura_expanded(
+        special: &str,
+        heroes: &str,
+        epoch: u32,
+    ) -> (Vec<String>, Vec<Vec<String>>) {
+        let p = boost_aura_profile("robot_legions", special, heroes, epoch);
+        (
+            p.special_rules.clone(),
+            p.attached_hero_rules.iter().map(|h| h.to_vec()).collect(),
+        )
+    }
+
+    /// One aura name's truth table through the template: the base granted at
+    /// epoch 6 (the entry core-read, the aura entry itself kept — additive,
+    /// the loader's own shape), NOTHING at epoch 5 (`EPOCH_6_TABLE_RULES` is
+    /// the frozen wave-3 gate — RED before the fix) and nothing without the
+    /// aura. Epoch literals 6/5, NOT `CURRENT_RULES_EPOCH`: a wave-4 bump
+    /// must not re-date what these assertions mean.
+    macro_rules! boost_aura_test {
+        ($test:ident, $aura:literal) => {
+            #[test]
+            fn $test() {
+                let base = $aura.strip_suffix(" Aura").expect("aura name ends ' Aura'");
+                let granted = |epoch: u32| {
+                    let (special, _) =
+                        boost_aura_expanded(&format!("[\"{}\"]", $aura), "[]", epoch);
+                    special
+                };
+                assert!(
+                    granted(6).iter().any(|r| r == base),
+                    "epoch 6: the aura entry is core-read, grants '{}'",
+                    base
+                );
+                assert!(
+                    granted(6).iter().any(|r| r == $aura),
+                    "the aura entry itself stays on the unit — additive, never removed"
+                );
+                assert!(
+                    !granted(5).iter().any(|r| r == base),
+                    "epoch 5: the gate is OFF (EPOCH_6_TABLE_RULES) — RED before the fix"
+                );
+                let (empty, _) = boost_aura_expanded("[]", "[]", 6);
+                assert!(
+                    empty.is_empty(),
+                    "no aura entry, no grant — epoch 6 stays inert"
+                );
+            }
+        };
+    }
+
+    boost_aura_test!(a_hold_the_line_boost_aura_grants_its_base_at_epoch_6, "Hold the Line Boost Aura");
+    boost_aura_test!(a_targeting_visor_boost_aura_grants_its_base_at_epoch_6, "Targeting Visor Boost Aura");
+    boost_aura_test!(a_warden_boost_aura_grants_its_base_at_epoch_6, "Warden Boost Aura");
+    boost_aura_test!(a_lucky_boost_aura_grants_its_base_at_epoch_6, "Lucky Boost Aura");
+    boost_aura_test!(a_buccaneer_boost_aura_grants_its_base_at_epoch_6, "Buccaneer Boost Aura");
+    boost_aura_test!(a_vale_oath_boost_aura_grants_its_base_at_epoch_6, "Vale Oath Boost Aura");
+    boost_aura_test!(a_wave_step_boost_aura_grants_its_base_at_epoch_6, "Wave-Step Boost Aura");
+    boost_aura_test!(a_royal_warrior_boost_aura_grants_its_base_at_epoch_6, "Royal Warrior Boost Aura");
+    boost_aura_test!(a_bestial_boost_aura_grants_its_base_at_epoch_6, "Bestial Boost Aura");
+    boost_aura_test!(a_vinci_tech_boost_aura_grants_its_base_at_epoch_6, "Vinci Tech Boost Aura");
+    boost_aura_test!(an_ossified_boost_aura_grants_its_base_at_epoch_6, "Ossified Boost Aura");
+    boost_aura_test!(a_shadowborn_boost_aura_grants_its_base_at_epoch_6, "Shadowborn Boost Aura");
+    boost_aura_test!(a_destroyer_boost_aura_grants_its_base_at_epoch_6, "Destroyer Boost Aura");
+    boost_aura_test!(an_empyrean_spirit_boost_aura_grants_its_base_at_epoch_6, "Empyrean Spirit Boost Aura");
+    boost_aura_test!(a_wild_veil_boost_aura_grants_its_base_at_epoch_6, "Wild Veil Boost Aura");
+
+    /// WIRING: the expansion reaches the static layer — a carrier printed with
+    /// ONLY "Hold the Line Boost Aura" captures at +2 morale through
+    /// `build_for` at epoch 6 (the core's own additive leg hands "Hold the
+    /// Line Boost" to `banner_bonus_of`'s Banner-primitive alias), NOT at
+    /// epoch 5 (the gate is off there, the import expansion is the only leg —
+    /// RED before the fix). human_defense_force carries BOTH the aura entry
+    /// and the base's Banner-primitive entry, so the same-faction lookup
+    /// resolves (the Shot-Modifier Boosts' bases live in other factions'
+    /// blocks — dao_union — and would not resolve here).
+    #[test]
+    fn a_hold_the_line_boost_aura_carrier_captures_at_plus_two_only_at_epoch_6() {
+        let build = |epoch: u32| {
+            let p = boost_aura_profile(
+                "human_defense_force",
+                "[\"Hold the Line Boost Aura\"]",
+                "[]",
+                epoch,
+            );
+            capture_reads(&mut Registries::new(&repo_root()), &p).morale_bonus
+        };
+        assert_eq!(build(6), 2, "epoch 6: build_for consumes the core-read grant");
+        assert_eq!(build(5), 0, "epoch 5: the gate is OFF — RED before the fix");
+    }
+
+    /// HERO LEG: a hero carried by the host prints the aura on the HERO's own
+    /// list — the loader's member loop grants the base to EVERY member (the
+    /// host AND the hero), because `AiEv.rule_on_all_models` (ai_ev.gd:79-83)
+    /// reads the hero's list. Epoch 6 core-read; epoch 5 untouched (the import
+    /// leg already ran there — unchanged). `attached_hero_rules` is one list
+    /// PER HERO, hence the nested array.
+    #[test]
+    fn a_hero_boost_aura_stamps_the_base_on_host_and_hero_at_epoch_6() {
+        let read = |epoch: u32| {
+            let (special, heroes) = boost_aura_expanded(
+                "[\"Hold the Line Boost\"]",
+                "[[\"Hold the Line Boost Aura\"]]",
+                epoch,
+            );
+            (
+                special.iter().any(|r| r == "Hold the Line Boost"),
+                heroes.iter().any(|h| h.iter().any(|r| r == "Hold the Line Boost")),
+            )
+        };
+        assert_eq!(read(6), (true, true), "epoch 6: host and hero both carry the base");
+        assert_eq!(read(5), (true, false), "epoch 5: the gate is OFF — RED before the fix");
     }
 
     /// Two units: `mark_carrier` prints "Unstoppable Mark" as a UNIT-level
