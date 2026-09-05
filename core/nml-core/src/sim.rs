@@ -16,7 +16,6 @@ use crate::combat::{
     at_or_below_half, block_chance, effective_attacks, melee_ev, morale_target, shielded_defense,
     shoot_ev, should_test_shooting_morale, shrouded_reach, ANGELIC_BLESSING_BOOST_TARGET_SPELL,
     CURSED_UNDEAD_BOOST_TARGET, HOLD_THE_LINE_BOOST_MORALE_BONUS, SELF_REPAIR_BOOST_TARGET,
-    SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN,
 };
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
@@ -1638,7 +1637,7 @@ fn sight_reach_in(range_in: f64, def_aircraft: bool, def: &Ctx) -> f64 {
     let r = (range_in - if def_aircraft { sight::AIRCRAFT_TARGET_RANGE_PENALTY_IN } else { 0.0 })
         .max(0.0);
     let r = if def.ranged_shrouding {
-        shrouded_reach(r, SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN)
+        shrouded_reach(r, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in)
     } else {
         r
     };
@@ -3909,7 +3908,12 @@ mod d6a_tests {
     #[test]
     fn the_sight_reach_follows_the_targets_two_range_rules() {
         let plain = Ctx::default();
-        let shroud = Ctx { ranged_shrouding: true, ..Ctx::default() };
+        let shroud = Ctx {
+            ranged_shrouding: true,
+            ranged_shroud_penalty_in: 6.0,
+            ranged_shroud_floor_in: 6.0,
+            ..Ctx::default()
+        };
         assert_eq!(sight_reach_in(24.0, false, &plain), 24.0);
         // Aircraft: -12" (SoloController.AIRCRAFT_TARGET_RANGE_PENALTY_IN).
         assert_eq!(sight_reach_in(24.0, true, &plain), 12.0);

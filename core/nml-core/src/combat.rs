@@ -539,7 +539,7 @@ pub fn shoot_ev(
     for (k, &pi) in keep.iter().enumerate() {
         let p = &profiles[pi];
         let reach = if shrouded {
-            shrouded_reach(p.range as f64, SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN)
+            shrouded_reach(p.range as f64, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in)
         } else {
             p.range as f64
         };

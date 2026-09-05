@@ -293,3 +293,116 @@ fn a_mark_on_the_bearer_hands_its_attacker_the_rending_grant() {
         without.wounds, with.wounds
     );
 }
+
+// ------------------------- Ranged Shrouding (wave 3, epoch 6) -------------------------
+
+/// A single-model carrier of the Ranged-Shrouding DATA-ALIAS family, in the
+/// faction block whose mechanics entry fields the name (the registry's own
+/// per-faction blocks: Darkborn in gf's dark_brothers, the Shadowborn pair in
+/// aof's shadow_stalkers, the Wild Veil pair in aof's wood_elves).
+fn shroud_carrier(system: &str, faction: &str, rules: &[&str]) -> Profile {
+    Profile {
+        unit_id: "u".into(), name: "u".into(), quality: 4, defense: 4, tough: 1,
+        wounds_max: vec![], model_count: 1, weapons: vec![],
+        special_rules: rules.iter().map(|s| s.to_string()).collect(),
+        caster_value: 0, base_radius: 0.0, base_shape: String::new(),
+        base_w_mm: 0.0, base_d_mm: 0.0, game_system: system.into(),
+        faction_folder: faction.into(),
+        item_grants: vec![], attached_hero_rules: vec![], move_bands: MoveBands::default(),
+    }
+}
+
+/// One per ported name: the clamp PRESENT at epoch 6 (the `Ctx.ranged_
+/// shrouding` flag that drives dice.rs's volley clamp, combat.rs's shoot_ev
+/// and sim.rs's sight_reach_in), ABSENT at epoch 5 — the Gen-3 recording
+/// fleet stamps `rules_epoch: 5`, and none of wave 3 existed in that
+/// recorder (`acts::EPOCH_6_TABLE_RULES`, the frozen gate).
+fn shrouds_only_from_epoch_6(system: &str, faction: &str, rule: &str, pen: f64) {
+    let repo = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let mut reg = nml_core::Registries::new(&repo);
+    let on = UnitStatic::build_for(&mut reg, &shroud_carrier(system, faction, &[rule]), 6);
+    let off = UnitStatic::build_for(&mut reg, &shroud_carrier(system, faction, &[rule]), 5);
+    assert!(
+        on.ctx.ranged_shrouding,
+        "epoch 6: {rule} clamps enemy weapon ranges (RED before the fix)"
+    );
+    assert_eq!(
+        on.ctx.ranged_shroud_penalty_in, pen,
+        "epoch 6: the entry's own printed range penalty"
+    );
+    assert_eq!(on.ctx.ranged_shroud_floor_in, 6.0, "the family's min. 6\"");
+    assert!(
+        !off.ctx.ranged_shrouding,
+        "epoch 5: pre-port records stay clamp-free — the alias walk never fires"
+    );
+    assert_eq!(
+        off.ctx.ranged_shroud_penalty_in, 6.0,
+        "epoch 5 keeps the pre-port constants — no alias params leak below the gate"
+    );
+}
+
+#[test]
+fn darkborn_shrouds_only_from_epoch_6() {
+    shrouds_only_from_epoch_6("gf", "dark_brothers", "Darkborn", 4.0);
+}
+
+#[test]
+fn shadowborn_shrouds_only_from_epoch_6() {
+    shrouds_only_from_epoch_6("aof", "shadow_stalkers", "Shadowborn", 4.0);
+}
+
+#[test]
+fn shadowborn_boost_shrouds_only_from_epoch_6() {
+    shrouds_only_from_epoch_6("aof", "shadow_stalkers", "Shadowborn Boost", 8.0);
+}
+
+#[test]
+fn wild_veil_shrouds_only_from_epoch_6() {
+    shrouds_only_from_epoch_6("aof", "wood_elves", "Wild Veil", 4.0);
+}
+
+#[test]
+fn wild_veil_boost_shrouds_only_from_epoch_6() {
+    shrouds_only_from_epoch_6("aof", "wood_elves", "Wild Veil Boost", 8.0);
+}
+
+/// The effect end to end on the tray: an 8" rifle against a Darkborn
+/// defender at 8" fires raw (reach 8 >= gate 8) and is SILENCED under the
+/// alias's own -4" clamp (reach 6 < 8) — no attack die drawn, and the
+/// clamp's one rules-must-log line. Epoch 5 replays the raw reach.
+#[test]
+fn a_darkborn_defender_silences_the_edge_of_range_volley_from_epoch_6() {
+    let repo = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let mut reg = nml_core::Registries::new(&repo);
+    let rifle = [ShootProfile { range: 8, attacks: 2, ..Default::default() }];
+    let att = Ctx { quality: 4, models: 1, ..Default::default() };
+    let volley = |def: &Ctx| {
+        resolve_volley_with_tray(
+            &[Shooter { profiles: &rifle, keep: &[0], attacks: &[2], att: &att, owner: "bow" }],
+            def, "dark", 8.0, 8.0, false, true, true, true, &mut Tray::seeded(9),
+        )
+    };
+
+    let shrouded = UnitStatic::build_for(&mut reg, &shroud_carrier("gf", "dark_brothers", &["Darkborn"]), 6);
+    let clamped = volley(&shrouded.ctx);
+    assert!(
+        clamped.rolls.iter().all(|r| r.kind != "attack"),
+        "the clamp takes the 8\" rifle under the gate: no attack die drawn (RED before the fix)"
+    );
+    assert!(
+        clamped.log.iter().any(|l| l.contains("Ranged Shrouding")),
+        "the clamp logs its one line: {:?}",
+        clamped.log
+    );
+
+    let legacy = UnitStatic::build_for(&mut reg, &shroud_carrier("gf", "dark_brothers", &["Darkborn"]), 5);
+    let free = volley(&legacy.ctx);
+    assert!(
+        free.rolls.iter().any(|r| r.kind == "attack"),
+        "epoch 5: the raw 8\" reach fires — no rule of the family in that record"
+    );
+    assert!(
+        free.log.iter().all(|l| !l.contains("Ranged Shrouding")),
+        "no clamp, no log line"
+    );
+}

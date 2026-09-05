@@ -31,7 +31,7 @@ use crate::combat::{
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
     IMPACT_HIT_TARGET, LONG_RANGE_IN, NO_RETREAT_SELF_WOUND_MAX, RAVAGE_WOUND_TARGET,
-    RENDING_AP_BONUS, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN, THRUST_AP_BONUS, UNMODIFIED_SIX,
+    RENDING_AP_BONUS, THRUST_AP_BONUS, UNMODIFIED_SIX,
 };
 use crate::rng::GodotRng;
 use crate::unit::{CondAp, Ctx, ShootProfile};
@@ -556,6 +556,10 @@ pub fn resolve_volley_with_tray(
     // centre to unit centre) — NML-1152, found by a read-only corpus audit:
     // the twin was reusing the range gap as the modifier gate too.
     let reach_gate = dist_in.ceil();
+    // Wave 3 — the Ranged-Shrouding clamp's own rules-must-log flag: set the
+    // moment a profile's working reach actually drops below its raw range
+    // (dice.rs `ShootResult.log` precedent), one line per volley below.
+    let mut shroud_shortened = false;
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
     // body below stays the single-shooter one.
     //
@@ -585,7 +589,9 @@ pub fn resolve_volley_with_tray(
         let att = sh.att;
         let p = &sh.profiles[pi];
         let reach = if def.ranged_shrouding {
-            shrouded_reach(p.range as f64, SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN)
+            let r = shrouded_reach(p.range as f64, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in);
+            shroud_shortened |= r < p.range as f64;
+            r
         } else {
             p.range as f64
         };
@@ -778,6 +784,12 @@ pub fn resolve_volley_with_tray(
         }
     }
     // --- `_solo_land_wounds` :6623 -> `_solo_apply_regeneration` :6543 ---
+    if shroud_shortened {
+        out.log.push(format!(
+            "Ranged Shrouding: {def_owner} — enemy weapon ranges -{:.0}\" (min {:.0}\") against it",
+            def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in
+        ));
+    }
     out.caused = regen_proof + regenable;
     out.wounds = regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
     out
