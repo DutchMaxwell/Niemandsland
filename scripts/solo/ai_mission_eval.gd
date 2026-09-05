@@ -542,7 +542,7 @@ static func features(state: Dictionary, player: int, incoming: Dictionary = {},
 			var ou: Dictionary = state["units"][ok]
 			if int(ou["player"]) == int(su["player"]) or int(ou["alive"]) <= 0:
 				continue
-			var oreach := float(SoloController.sim_move_bands(ou["unit"]).get("rush", 12)) 				+ BattleSim.CONTACT_IN
+			var oreach := float(SoloController.sim_move_bands(ou["unit"]).get("charge", 12)) 				+ BattleSim.CONTACT_IN
 			if BattleSim.dist_in(su["positions"], ou["positions"]) <= oreach:
 				exposed = true
 				if rich:
