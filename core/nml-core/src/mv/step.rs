@@ -31,6 +31,7 @@ use crate::geom::{self, V3};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
+use crate::acts::{rule_on, EPOCH_6_TABLE_RULES};
 
 use super::cost::{CellSet, Grid, Zone};
 use super::entry::plan_unit_step_call;
@@ -67,6 +68,8 @@ pub struct Mover {
 /// What the charge move did.
 #[derive(Clone, Debug)]
 pub struct Landing {
+    /// False for legacy/charge results and the pending boxed continuation.
+    pub shorten_covered: bool,
     pub movers: Vec<Mover>,
     /// Per-model resting place, WORLD metres, in `movers` order.
     pub end: Vec<V3>,
@@ -682,7 +685,8 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             [w[0], self.pos[i][1], w[2]]
         })
         .collect();
-    Landing { movers: self.movers.clone(), end, budget_in, arc_in, dangerous, call }
+    Landing { shorten_covered: !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES),
+        movers: self.movers.clone(), end, budget_in, arc_in, dangerous, call }
 }
 }
 
@@ -940,7 +944,18 @@ pub fn plain_move(
         guard,
         allow_contact: false,
     };
-    Some(mv.execute(band_in, avoid_diff, &radii_m))
+    let land = mv.execute(band_in, avoid_diff, &radii_m);
+    // Stage boundary: the table may next enter boxed escape for a >=2-inch
+    // band ending under 1 inch. Until that continuation is ported, preserve
+    // the previous result and explicitly decline shortening coverage there.
+    let starts: Vec<V2> = mv.pos.iter().map(|p| t.to_inch(*p)).collect();
+    let ends: Vec<V2> = land.end.iter().map(|p| t.to_inch(*p)).collect();
+    if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) && band_in >= 2.0
+        && achieved_in(&starts, &ends) < 1.0
+    {
+        return plain_move(state, t, si, dest, band_in, hero_attach, fast_planner, guard);
+    }
+    Some(land)
 }
 }
 
@@ -1148,6 +1163,7 @@ mod tests {
         let st = two_unit_state(vec![away, away, away], vec![[1.0, 0.0, 0.0]]);
         let movers: Vec<Mover> = (0..3).map(|model| Mover { unit: 0, model }).collect();
         let land = |dang: Vec<bool>| Landing {
+            shorten_covered: false,
             movers: movers.clone(),
             end: vec![away; 3],
             budget_in: 6.0,

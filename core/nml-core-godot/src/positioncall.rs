@@ -98,7 +98,9 @@ pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionar
     if action.kind != 3 {
         caps.push(&GString::from("final_placement").to_variant());
         caps.push(&GString::from("base_shapes").to_variant());
-        if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        if rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
+            && landing.as_ref().is_none_or(|land| land.shorten_covered)
+        {
             caps.push(&GString::from("whole_unit_shorten").to_variant());
         }
     }

@@ -971,6 +971,7 @@ impl Core {
                     .collect(),
             ),
         );
+        m.insert("shorten_covered".into(), Value::Bool(l.shorten_covered));
         m.insert("budget_in".into(), Value::from(l.budget_in));
         m.insert("arc_in".into(), Value::from(l.arc_in));
         m.insert("remaining_in".into(), Value::from(l.remaining_in()));
