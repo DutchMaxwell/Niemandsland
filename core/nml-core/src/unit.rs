@@ -735,6 +735,38 @@ fn stealth_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64) {
     (best_penalty, best_over_in)
 }
 
+/// Battleborn family wave 3 (rules-wave3-battleborn) — main.gd
+/// `:_solo_round_start_recovery_rule`'s generic Battleborn-primitive alias
+/// layer, stamped BY NAME: each die-roll recover alias the unit carries
+/// resolves its OWN registry entry and the LOWEST `recover_target` wins
+/// ("Vale Oath Boost"'s text recovers on 3+ INSTEAD of only on 4+).
+/// 0 = the unit rolls no recovery die at a round start. Gated on
+/// `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)` (frozen at 6, never the
+/// literal 5 or `CURRENT_RULES_EPOCH`) — an epoch-5 corpus replays the
+/// Battleborn/Steadfast free-clear reading byte-exact.
+fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> u32 {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        return 0;
+    }
+    let carried = |name: &str| {
+        has_special_rule(&p.special_rules, name) || has_special_rule(&p.item_grants, name)
+    };
+    let mut best = 0u32;
+    for name in ["Honor Code", "Vale Oath", "Vale Oath Boost", "Unmovable"] {
+        if !carried(name) {
+            continue;
+        }
+        let target = match reg.rules_for(&p.game_system).lookup(&p.faction_folder, name) {
+            Some(e) => e.param_i("recover_target", 0),
+            None => 0,
+        };
+        if target > 0 && (best == 0 || (target as u32) < best) {
+            best = target as u32;
+        }
+    }
+    best
+}
+
 /// `RulesRegistry.unit_rule_active` rules_registry.gd:132-137 — the unit carries
 /// it AND the map fields it for this (system, faction). A MISSING map answers
 /// true (the wave-1..4 fallback).
@@ -2062,9 +2094,7 @@ impl UnitStatic {
             // the reading. Gated on `EPOCH_6_TABLE_RULES` (frozen at 6, never
             // the literal or `CURRENT_RULES_EPOCH`) so an epoch-5 corpus
             // replay stays byte-exact.
-            // RED (rules-wave3-battleborn): the registry read is the FIX half —
-            // the scaffolding stamps 0 so the four new name tests can fail.
-            battleborn_recover_target: 0,
+            battleborn_recover_target: battleborn_recover_target_of(reg, p, rules_epoch),
             mend_active: unit_rule_active(reg, p, "Mend"),
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
@@ -2377,7 +2407,6 @@ mod tests {
         UnitStatic::build_for(&mut reg, p, epoch).battleborn_recover_target
     }
 
-    /// "Rapid Ambush" (gf/dark_brothers): `arrive_from_round` 1 at epoch 5 —
     /// "Honor Code" (gf/titan_lords): `recover_target` 4 at epoch 6 — and
     /// NOTHING at epoch 5 (the flat Battleborn/Steadfast free-clear epoch) or
     /// without the rule. Epoch literals 6/5, NOT `CURRENT_RULES_EPOCH`: a
@@ -2449,7 +2478,7 @@ mod tests {
         assert_eq!(battleborn_target_of("", "aof", "giant_tribes", 6), 0, "no rule, no stamp");
     }
 
-
+    /// "Rapid Ambush" (gf/dark_brothers): `arrive_from_round` 1 at epoch 5 —
     /// the round the table's `ambush_earliest_round` hardcodes; epoch 4
     /// (Gen-2b's stamping-gap window) and the rule-less carrier stay 0 (the
     /// caller's own ladder answers).
