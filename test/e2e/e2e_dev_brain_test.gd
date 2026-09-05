@@ -86,6 +86,13 @@ func test_fake_brain_is_in_decisions_and_killed_server_declines(
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(port_file))
 	OS.set_environment("NML_BRAIN_URL", "http://127.0.0.1:" + port)
 	var sc := _controller()
+	_main.solo_controller = sc
+	_main.solo_ai_slots = {2: true}
+	_main._solo_difficulty_grades = {}
+	_main._solo_apply_difficulty()
+	assert_bool(sc.difficulty_by_slot[2].planner).is_true()
+	assert_bool(sc.difficulty_by_slot.has(1)).is_false()
+	assert_bool(sc.auto_interference).is_false()
 	assert_object(_pick(sc)).is_not_null()
 	assert_int(sc._core_calls).is_greater(0)
 	assert_str(JSON.stringify(sc.decision_log)).contains("constant-test")
@@ -93,6 +100,18 @@ func test_fake_brain_is_in_decisions_and_killed_server_declines(
 	_server_pid = -1
 	assert_object(_pick(sc)).is_not_null()
 	assert_str(str(sc._core_declines)).contains("LeafValue")
+	await Boot.settle(get_tree())
+
+
+func test_unset_url_preserves_the_interactive_grade() -> void:
+	var sc := _controller()
+	_main.solo_controller = sc
+	_main.solo_ai_slots = {2: true}
+	_main._solo_difficulty_grades = {}
+	_main._solo_apply_difficulty()
+	assert_bool(sc.difficulty_by_slot[2].planner).is_false()
+	assert_bool(sc.difficulty_by_slot.has(1)).is_false()
+	assert_bool(sc.auto_interference).is_false()
 	await Boot.settle(get_tree())
 
 
