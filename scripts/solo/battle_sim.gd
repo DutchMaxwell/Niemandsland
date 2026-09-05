@@ -715,8 +715,10 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	var band_in := 0.0
 	if kind == AiDecision.Action.ADVANCE:
 		band_in = float(bands.get("advance", 6))
-	elif kind == AiDecision.Action.RUSH or kind == AiDecision.Action.CHARGE:
+	elif kind == AiDecision.Action.RUSH:
 		band_in = float(bands.get("rush", 12))
+	elif kind == AiDecision.Action.CHARGE:
+		band_in = float(bands.get("charge", bands.get("rush", 12)))
 	var positions: Array = su["positions"]
 	if band_in > 0.0 and action.has("dest") and not positions.is_empty():
 		var centre := Vector3.ZERO
@@ -1779,7 +1781,7 @@ static func _unit_profile(u: GameUnit) -> Dictionary:
 		"wounds_max": wounds_max, "model_count": u.models.size(), "weapons": weapons,
 		"special_rules": u.get_special_rules(), "caster_value": u.get_caster_value(),
 		"move_bands": {"advance": float(bands.get("advance", 6)),
-			"rush": float(bands.get("rush", 12))},
+			"rush": float(bands.get("rush", 12)), "charge": float(bands.get("charge", bands.get("rush", 12)))},
 		"base_radius": SoloController.model_base_radius_m(u.models[0]) \
 			if not u.models.is_empty() else SeparationChecker.DEFAULT_BASE_RADIUS_M,
 		# NML-1073 M5 D5-4b: the base SHAPE, which `base_radius` above cannot carry.
@@ -1912,7 +1914,8 @@ static func charge_illegal_plain(state: Dictionary, header: Dictionary,
 	var vu: Dictionary = units[victim_key]
 	if bool(vu.get("aircraft", false)):
 		return true
-	var band := float((au.get("bands", {}) as Dictionary).get("rush", 12))
+	var bands: Dictionary = au.get("bands", {})
+	var band := float(bands.get("charge", bands.get("rush", 12)))
 	if gap_in > _melee_shroud_charge_in_plain(band, vu):
 		return true
 	# _charge_capped_by_difficult (solo_controller.gd:2746-2757)
