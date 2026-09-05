@@ -771,7 +771,14 @@ pub fn resolve_volley_with_tray(
         // range gap.
             if cond_ap_dice {
             for c in &p.cond_ap {
-                ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
+                let d = conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
+                ap += d;
+                // Rules-must-log: the wave-3 NAMED forms log their own AP
+                // (rule, unit, what changed). The generic pass's specs carry
+                // no name — old replays log nothing, byte-identical.
+                if d > 0 && !c.name.is_empty() {
+                    out.log.push(format!("{}: AP(+{}) on {}'s volley", c.name, d, sh.owner));
+                }
             }
             // Wave 2 — the Slayer mark's granted conditional (epoch-gated).
             if att.slayer_grant {
@@ -1094,7 +1101,13 @@ pub fn resolve_melee_with_tray(
             // `on_charge`/`vs_tough_ge` gates fire correctly here.
             if cond_ap_dice {
                 for c in &p.cond_ap {
-                    ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, 0.0, true);
+                    let d = conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, 0.0, true);
+                    ap += d;
+                    // Rules-must-log, the melee half: only the wave-3 NAMED
+                    // forms log; unnamed specs stay silent (old replays).
+                    if d > 0 && !c.name.is_empty() {
+                        out.log.push(format!("{}: AP(+{}) on {}'s strike", c.name, d, sh.owner));
+                    }
                 }
                 // Wave 2 — the Slayer mark and Piercing Assault on their
                 // granted legs, the same ladder the weapon-stamped conds ride.

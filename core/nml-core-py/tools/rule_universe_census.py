@@ -235,6 +235,17 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     "Ranged Shrouding": frozenset(
         {"range_penalty_in", "floor_in", "move_penalty_in", "melee_move_penalty_in", "melee_floor_in"}
     ),
+    # Piercing Hunter family wave (rules-wave3-piercehunt, 2026-09-05): the
+    # three ported names (Piercing Hunter, Havocbound, Piercing Shooter) ride
+    # their OWN tokens — unit.rs::build_for's epoch-6 named arm (frozen
+    # EPOCH_6_TABLE_RULES) states each spelling literally and the dice folds
+    # log the named forms. Deliberately NO CONSUMED_PARAM_KEYS row here: the
+    # conditional-AP class's params are uniform across every entry
+    # (ap_bonus/condition on all of them), so a row would over-credit the two
+    # UNPORTED members (Point-Blank Piercing needs a `within_in` cap the
+    # CondAp spec does not carry; Havocbound Boost needs an always-on leg +
+    # the `upgrades` coupling the stamp pass does not read) — the #489
+    # over-credit shape, declined.
 }
 
 
