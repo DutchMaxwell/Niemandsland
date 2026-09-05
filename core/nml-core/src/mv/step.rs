@@ -92,6 +92,11 @@ pub struct Landing {
 }
 
 impl Landing {
+    /// Post-charge snap result: None when the stage is not entered.
+    pub fn snap_charge(&mut self, _state: &State, _target: usize, _rules_epoch: u32) -> Option<f64> {
+        None
+    }
+
     /// `SoloController.last_move_remaining_in` :8659-8667.
     pub fn remaining_in(&self) -> f64 {
         (self.budget_in - self.arc_in).max(0.0)
@@ -883,6 +888,12 @@ pub struct MoveRules {
 }
 
 impl MoveRules {
+#[allow(clippy::too_many_arguments)]
+pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
+    band_in: f64, hero_attach: bool, fast_planner: bool, guard: i64) -> Option<Landing> {
+    charge_move(state, t, si, ci, band_in, hero_attach, fast_planner, guard)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn plain_move(
     self,
