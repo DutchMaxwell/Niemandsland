@@ -89,3 +89,17 @@ one-model mutation to prove that the checked-in baseline rejects regressions.
 Repeat `--check-report` with distinct saved report paths to verify determinism
 without relaunching completed runs. Baseline creation still requires three
 matching reports and an explicit reason; normal CI launches three fresh runs.
+
+## Shared shortening pin
+
+`whole_unit_shorten.json` captures production `_shorten_world_to_legal` call 1
+from unchanged `recorded-003`: original start, post-repair candidate, actual
+moving/external base shapes, terrain, and table output. Both Rust and gdUnit
+read these values. The 16-step bisection selects 33129/65536; the next factor
+breaks the one-inch coherency link. Its 1e-5-inch tolerance is narrower than the
+existing accepted endpoint residuals and does not change the corpus gate.
+
+The optional Stage A envelope accepts `rules_epoch`, defaulting to table epoch
+6. The simulator supplies its own replay epoch through `MoveRules`; epochs
+below `EPOCH_6_TABLE_RULES` retain the previous movement result. The original
+free movement function retains its argument list and epoch-0 behavior.

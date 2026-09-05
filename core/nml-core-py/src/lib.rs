@@ -941,7 +941,7 @@ impl Core {
         let Some(&si) = st.roster.index.get(unit) else {
             return to_py(py, &Value::Null);
         };
-        let land = nmlcore::mv::step::plain_move(
+        let land = (nmlcore::mv::step::MoveRules { rules_epoch: self.knobs.rules_epoch }).plain_move(
             st,
             &self.terrain,
             si,
