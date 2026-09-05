@@ -159,16 +159,14 @@
         ]
       },
       "generated-oval-large": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           6.047151727026461e-07
         ],
         "model_ids": [
           "u00:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -279,7 +277,6 @@
           "u10:5"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -292,7 +289,7 @@
         ]
       },
       "recorded-001": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           4.3999491714117096e-07,
           1.1733197790431226e-06,
@@ -362,9 +359,7 @@
           "u03:19",
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -390,7 +385,7 @@
         ]
       },
       "recorded-002": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.9677170889640916e-06,
           1.7599796685646839e-06,
@@ -415,9 +410,7 @@
           "u06:4",
           "u07:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -454,7 +447,6 @@
           "u10:5"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -493,7 +485,6 @@
           "u07:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -531,9 +522,7 @@
           "u08:4",
           "u09:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -570,7 +559,6 @@
           "u07:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -651,7 +639,6 @@
           "u05:19"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -746,7 +733,6 @@
           "u10:19"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -774,7 +760,7 @@
         ]
       },
       "recorded-009": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.7599796685646839e-06
         ],
@@ -784,15 +770,13 @@
         "model_ids": [
           "u02:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-010": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           6.918172910851026e-07,
           8.928813672298875e-07,
@@ -808,9 +792,7 @@
           "u00:1",
           "u01:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -889,7 +871,6 @@
           "u04:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -946,7 +927,6 @@
           "u09:0"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -961,7 +941,7 @@
         ]
       },
       "recorded-013": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           3.344475944619297e-06,
           9.275907313754415e-07,
@@ -1031,9 +1011,7 @@
           "u03:19",
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -1059,7 +1037,7 @@
         ]
       },
       "recorded-014": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           0.0,
           1.6593247445233873e-06,
@@ -1081,9 +1059,7 @@
           "u17:3",
           "u17:4"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           0,
           1,
@@ -1093,7 +1069,7 @@
         ]
       },
       "recorded-015": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.6593247445233873e-06
         ],
@@ -1103,9 +1079,7 @@
         "model_ids": [
           "u16:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -1134,7 +1108,6 @@
           "u11:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -1146,7 +1119,7 @@
         ]
       },
       "recorded-017": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.6236227852854553e-06,
           1.6593247445233873e-06,
@@ -1168,9 +1141,7 @@
           "u17:3",
           "u17:4"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -1180,7 +1151,7 @@
         ]
       },
       "recorded-018": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.866598895215613e-07,
           2.991390224512628e-06,
@@ -1202,9 +1173,7 @@
           "u10:3",
           "u11:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -1214,7 +1183,7 @@
         ]
       },
       "recorded-019": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.346639558086245e-06,
           0.0,
@@ -1230,9 +1199,7 @@
           "u07:1",
           "u07:2"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           0,
@@ -1311,7 +1278,6 @@
           "u02:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -1339,7 +1305,7 @@
         ]
       },
       "recorded-021": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.9561270249444864e-06,
           2.364901619955589e-06,
@@ -1358,9 +1324,7 @@
           "u05:2",
           "u06:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -1369,7 +1333,7 @@
         ]
       },
       "recorded-022": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.253106073324947e-06,
           1.6593247445233873e-06,
@@ -1436,9 +1400,7 @@
           "u17:18",
           "u17:19"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -1534,7 +1496,6 @@
           "u02:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -1630,7 +1591,6 @@
           "u17:19"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -1657,7 +1617,7 @@
         ]
       },
       "recorded-025": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.5033159668990007e-06
         ],
@@ -1667,9 +1627,7 @@
         "model_ids": [
           "u16:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -1775,7 +1733,7 @@
         ]
       },
       "recorded-027": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.6593247445233873e-06
         ],
@@ -1785,9 +1743,7 @@
         "model_ids": [
           "u16:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -1864,7 +1820,6 @@
           "u06:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -1892,7 +1847,7 @@
         ]
       },
       "recorded-029": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           8.296623722616936e-07,
           7.333248619019516e-07,
@@ -1962,9 +1917,7 @@
           "u05:19",
           "u06:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -1990,7 +1943,7 @@
         ]
       },
       "recorded-030": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           8.551963986088706e-07
         ],
@@ -2000,15 +1953,13 @@
         "model_ids": [
           "u02:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-031": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.866598895215613e-07,
           1.3118113926427277e-06,
@@ -2045,9 +1996,7 @@
           "u14:8",
           "u14:9"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -2085,7 +2034,6 @@
           "u16:4"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -2193,7 +2141,7 @@
         ]
       },
       "recorded-034": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06,
           1.1733197790431226e-06,
@@ -2221,9 +2169,7 @@
           "u11:5",
           "u12:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -2235,7 +2181,7 @@
         ]
       },
       "recorded-035": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.866598895215613e-07
         ],
@@ -2245,9 +2191,7 @@
         "model_ids": [
           "u15:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -2294,7 +2238,6 @@
           "u10:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -2383,7 +2326,6 @@
           "u04:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -2411,7 +2353,7 @@
         ]
       },
       "recorded-038": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           3.159260190808928e-06
         ],
@@ -2421,15 +2363,13 @@
         "model_ids": [
           "u16:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-039": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06
         ],
@@ -2439,9 +2379,7 @@
         "model_ids": [
           "u07:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -2488,7 +2426,6 @@
           "u10:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -2506,7 +2443,7 @@
         ]
       },
       "recorded-041": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.3118113926427277e-06
         ],
@@ -2516,9 +2453,7 @@
         "model_ids": [
           "u02:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -2579,7 +2514,7 @@
         ]
       },
       "recorded-043": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.2094303454052922e-06,
           1.4666497238039032e-06,
@@ -2616,9 +2551,7 @@
           "u10:8",
           "u10:9"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -2671,7 +2604,6 @@
           "u10:9"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -2689,7 +2621,7 @@
         ]
       },
       "recorded-045": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           4.581960212003207e-06,
           1.2094303454052922e-06,
@@ -2726,9 +2658,7 @@
           "u10:8",
           "u10:9"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -2811,7 +2741,6 @@
           "u05:19"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -2862,7 +2791,6 @@
           "u03:0"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -2875,7 +2803,7 @@
         ]
       },
       "recorded-048": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.346639558086245e-06,
           1.1733197790431226e-06,
@@ -2891,9 +2819,7 @@
           "u11:1",
           "u11:2"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -2927,7 +2853,6 @@
           "u03:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -2990,7 +2915,6 @@
           "u05:13"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -3037,7 +2961,6 @@
           "u03:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -3050,7 +2973,7 @@
         ]
       },
       "recorded-052": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           0.0
         ],
@@ -3060,15 +2983,13 @@
         "model_ids": [
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           0
         ]
       },
       "recorded-053": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.6236227852854553e-06
         ],
@@ -3078,9 +2999,7 @@
         "model_ids": [
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -3112,7 +3031,6 @@
           "u01:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -3125,7 +3043,7 @@
         ]
       },
       "recorded-055": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           6.559056963213638e-07,
           6.918172910851026e-07,
@@ -3153,9 +3071,7 @@
           "u08:5",
           "u09:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -3193,7 +3109,6 @@
           "u12:5"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -3206,7 +3121,7 @@
         ]
       },
       "recorded-057": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.3118113926427277e-06,
           1.0576161564640142e-06,
@@ -3228,9 +3143,7 @@
           "u02:3",
           "u02:4"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -3266,7 +3179,6 @@
           "u01:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -3279,7 +3191,7 @@
         ]
       },
       "recorded-059": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           7.89815047702232e-07,
           2.7399277963198026e-06,
@@ -3298,9 +3210,7 @@
           "u15:2",
           "u15:3"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -3309,7 +3219,7 @@
         ]
       },
       "recorded-060": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.9332994476078064e-07,
           1.4666497238039032e-06
@@ -3322,16 +3232,14 @@
           "u16:0",
           "u16:1"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1
         ]
       },
       "recorded-061": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.866598895215613e-07,
           5.866598895215613e-07,
@@ -3356,9 +3264,7 @@
           "u12:4",
           "u12:5"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -3369,7 +3275,7 @@
         ]
       },
       "recorded-062": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           3.7564561577251865e-06,
           4.230464625856057e-06,
@@ -3391,9 +3297,7 @@
           "u14:3",
           "u14:4"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -3403,7 +3307,7 @@
         ]
       },
       "recorded-063": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06
         ],
@@ -3413,15 +3317,13 @@
         "model_ids": [
           "u06:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-064": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.6593247445233873e-06
         ],
@@ -3431,15 +3333,13 @@
         "model_ids": [
           "u06:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-065": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.3118113926427277e-06,
           1.3118113926427277e-06,
@@ -3461,9 +3361,7 @@
           "u02:3",
           "u02:4"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -3473,7 +3371,7 @@
         ]
       },
       "recorded-066": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           0.0
         ],
@@ -3483,15 +3381,13 @@
         "model_ids": [
           "u03:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           0
         ]
       },
       "recorded-067": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.3118113926427277e-06
         ],
@@ -3501,15 +3397,13 @@
         "model_ids": [
           "u06:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-068": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           8.296623722616936e-07
         ],
@@ -3519,9 +3413,7 @@
         "model_ids": [
           "u03:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -3553,7 +3445,6 @@
           "u07:5"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -3586,7 +3477,7 @@
         ]
       },
       "recorded-071": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           0.0,
           1.1733197790431226e-06,
@@ -3656,9 +3547,7 @@
           "u05:19",
           "u06:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           0,
           1,
@@ -3684,7 +3573,7 @@
         ]
       },
       "recorded-072": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.4188606908105844e-06
         ],
@@ -3694,15 +3583,13 @@
         "model_ids": [
           "u09:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-073": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06,
           5.866598895215613e-07,
@@ -3727,9 +3614,7 @@
           "u02:4",
           "u03:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -3740,7 +3625,7 @@
         ]
       },
       "recorded-074": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.4666497238039032e-06
         ],
@@ -3750,9 +3635,7 @@
         "model_ids": [
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -3799,7 +3682,6 @@
           "u11:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -3843,7 +3725,6 @@
           "u13:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -3867,7 +3748,6 @@
           "u04:0"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape"
         ],
         "tiers": [
@@ -3875,7 +3755,7 @@
         ]
       },
       "recorded-078": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.346639558086245e-06
         ],
@@ -3885,9 +3765,7 @@
         "model_ids": [
           "u18:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -3918,9 +3796,7 @@
           "u07:4",
           "u07:5"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           2,
           2,
@@ -3960,7 +3836,6 @@
           "u21:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -3991,7 +3866,6 @@
           "u08:2"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -4001,7 +3875,7 @@
         ]
       },
       "recorded-082": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06
         ],
@@ -4011,9 +3885,7 @@
         "model_ids": [
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -4090,7 +3962,6 @@
           "u06:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -4729,7 +4600,7 @@
         ]
       },
       "recorded-098": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.866598895215613e-07,
           1.3118113926427277e-06,
@@ -4757,9 +4628,7 @@
           "u03:5",
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -4771,7 +4640,7 @@
         ]
       },
       "recorded-099": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.3118113926427277e-06
         ],
@@ -4781,9 +4650,7 @@
         "model_ids": [
           "u07:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -4818,7 +4685,6 @@
           "u04:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -4832,7 +4698,7 @@
         ]
       },
       "recorded-101": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           3.5199593371293677e-06,
           2.346639558086245e-06,
@@ -4902,9 +4768,7 @@
           "u14:19",
           "u15:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -4930,7 +4794,7 @@
         ]
       },
       "recorded-102": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.579630095404464e-06,
           1.951595017726271e-06,
@@ -4967,9 +4831,7 @@
           "u18:8",
           "u19:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -4984,7 +4846,7 @@
         ]
       },
       "recorded-103": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.866598895215613e-07,
           1.7599796685646839e-06,
@@ -5024,9 +4886,7 @@
           "u10:9",
           "u11:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -5042,7 +4902,7 @@
         ]
       },
       "recorded-104": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06,
           0.0,
@@ -5070,9 +4930,7 @@
           "u03:5",
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           0,
@@ -5110,7 +4968,6 @@
           "u03:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -5191,7 +5048,6 @@
           "u01:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -5270,7 +5126,6 @@
           "u12:19"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -5298,7 +5153,7 @@
         ]
       },
       "recorded-110": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.6236227852854553e-06,
           1.1733197790431226e-06,
@@ -5335,9 +5190,7 @@
           "u05:8",
           "u05:9"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -5378,7 +5231,6 @@
           "u03:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -5647,7 +5499,6 @@
           "u08:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -5680,7 +5531,6 @@
           "u01:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -5691,7 +5541,7 @@
         ]
       },
       "recorded-121": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.866598895215613e-07,
           5.866598895215613e-07,
@@ -5710,9 +5560,7 @@
           "u00:2",
           "u01:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -5759,7 +5607,6 @@
           "u05:9"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -5776,7 +5623,7 @@
         ]
       },
       "recorded-123": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.0576161564640142e-06
         ],
@@ -5786,15 +5633,13 @@
         "model_ids": [
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-124": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.855181462750883e-06,
           1.855181462750883e-06,
@@ -5816,9 +5661,7 @@
           "u06:3",
           "u06:4"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -5828,7 +5671,7 @@
         ]
       },
       "recorded-125": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06,
           1.1733197790431226e-06,
@@ -5895,9 +5738,7 @@
           "u12:18",
           "u12:19"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -5922,7 +5763,7 @@
         ]
       },
       "recorded-126": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           4.837721381621169e-06,
           2.6236227852854553e-06,
@@ -5959,9 +5800,7 @@
           "u16:8",
           "u16:9"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -6017,7 +5856,6 @@
           "u01:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -6106,7 +5944,6 @@
           "u12:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -6172,7 +6009,6 @@
           "u07:9"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -6189,7 +6025,7 @@
         ]
       },
       "recorded-130": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.866598895215613e-07,
           2.4188606908105844e-06,
@@ -6205,9 +6041,7 @@
           "u15:1",
           "u15:2"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -6215,7 +6049,7 @@
         ]
       },
       "recorded-131": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.119371820569284e-06,
           1.951595017726271e-06,
@@ -6252,9 +6086,7 @@
           "u17:8",
           "u17:9"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -6269,7 +6101,7 @@
         ]
       },
       "recorded-132": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           8.921281985026615e-07,
           1.4666497238039032e-06,
@@ -6288,9 +6120,7 @@
           "u13:2",
           "u14:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -6299,7 +6129,7 @@
         ]
       },
       "recorded-133": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.4666497238039032e-06,
           1.253106073324947e-06,
@@ -6324,9 +6154,7 @@
           "u08:4",
           "u09:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -6378,7 +6206,6 @@
           "u04:0"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -6397,7 +6224,7 @@
         ]
       },
       "recorded-135": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           3.5199593371293677e-06,
           2.364901619955589e-06,
@@ -6416,9 +6243,7 @@
           "u10:2",
           "u11:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -6466,7 +6291,7 @@
         ]
       },
       "recorded-137": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06
         ],
@@ -6476,9 +6301,7 @@
         "model_ids": [
           "u14:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -6512,9 +6335,7 @@
           "u12:5",
           "u13:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           2,
           2,
@@ -6526,7 +6347,7 @@
         ]
       },
       "recorded-139": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06,
           2.346639558086245e-06,
@@ -6566,9 +6387,7 @@
           "u03:9",
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -6584,7 +6403,7 @@
         ]
       },
       "recorded-140": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.288080782320071e-07,
           1.3836345821702052e-06,
@@ -6606,9 +6425,7 @@
           "u10:3",
           "u10:4"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -6724,7 +6541,6 @@
           "u13:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -6775,7 +6591,6 @@
           "u09:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -6826,7 +6641,6 @@
           "u07:9"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -6870,7 +6684,6 @@
           "u09:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -6883,7 +6696,7 @@
         ]
       },
       "recorded-146": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1169671522268495e-06
         ],
@@ -6893,9 +6706,7 @@
         "model_ids": [
           "u14:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -6972,7 +6783,6 @@
           "u17:0"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -7001,7 +6811,7 @@
         ]
       },
       "recorded-148": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.9069971683847042e-06
         ],
@@ -7011,15 +6821,13 @@
         "model_ids": [
           "u13:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-149": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           4.69327911617249e-06
         ],
@@ -7029,15 +6837,13 @@
         "model_ids": [
           "u10:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-150": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06
         ],
@@ -7047,15 +6853,13 @@
         "model_ids": [
           "u10:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-151": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06
         ],
@@ -7065,15 +6869,13 @@
         "model_ids": [
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-152": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           0.0,
           0.0,
@@ -7113,9 +6915,7 @@
           "u02:9",
           "u03:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           0,
           0,
@@ -7172,7 +6972,6 @@
           "u07:0"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -7191,7 +6990,7 @@
         ]
       },
       "recorded-154": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06,
           0.0,
@@ -7228,9 +7027,7 @@
           "u16:8",
           "u16:9"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           0,
@@ -7245,7 +7042,7 @@
         ]
       },
       "recorded-155": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.866598895215613e-07
         ],
@@ -7255,9 +7052,7 @@
         "model_ids": [
           "u15:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -7283,7 +7078,6 @@
           "u01:0"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -7335,7 +7129,6 @@
           "u03:0"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -7354,7 +7147,7 @@
         ]
       },
       "recorded-158": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06
         ],
@@ -7364,15 +7157,13 @@
         "model_ids": [
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
       },
       "recorded-159": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.866598895215613e-07,
           1.1733197790431226e-06,
@@ -7403,9 +7194,7 @@
           "u02:6",
           "u03:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -7418,7 +7207,7 @@
         ]
       },
       "recorded-160": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.346639558086245e-06,
           1.1733197790431226e-06,
@@ -7443,9 +7232,7 @@
           "u11:4",
           "u12:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -7456,7 +7243,7 @@
         ]
       },
       "recorded-161": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           3.3186494890467746e-06,
           7.137025588021292e-06,
@@ -7481,9 +7268,7 @@
           "u18:4",
           "u18:5"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -7494,7 +7279,7 @@
         ]
       },
       "recorded-162": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           0.0,
           0.0,
@@ -7534,9 +7319,7 @@
           "u06:9",
           "u07:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           0,
           0,
@@ -7590,7 +7373,6 @@
           "u05:9"
         ],
         "reasons": [
-          "base_shapes",
           "whole_unit_shorten"
         ],
         "tiers": [
@@ -7624,7 +7406,6 @@
           "u19:2"
         ],
         "reasons": [
-          "base_shapes",
           "boxed_escape",
           "whole_unit_shorten"
         ],
@@ -7635,7 +7416,7 @@
         ]
       },
       "recorded-165": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06
         ],
@@ -7645,9 +7426,7 @@
         "model_ids": [
           "u04:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -7693,9 +7472,7 @@
           "u11:9",
           "u12:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           2,
           1,
@@ -7711,7 +7488,7 @@
         ]
       },
       "recorded-167": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06,
           8.799898342823419e-07,
@@ -7751,9 +7528,7 @@
           "u11:9",
           "u12:0"
         ],
-        "reasons": [
-          "base_shapes"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -7771,7 +7546,7 @@
     },
     "summary": {
       "by_reason": {
-        "base_shapes": 147,
+        "base_shapes": 7,
         "boxed_escape": 16,
         "caught_panic": 0,
         "charge_final_placement": 11,
@@ -7781,8 +7556,8 @@
         "skirmish_chain": 1,
         "whole_unit_shorten": 70
       },
-      "declined": 167,
-      "equal": 2,
+      "declined": 82,
+      "equal": 4,
       "formation": {
         "declined": 0,
         "equal": 168,
@@ -7791,17 +7566,17 @@
         "within_0.5in": 168
       },
       "models": {
-        "beyond_0.5in": 0,
-        "declined": 1252,
-        "equal": 6,
+        "beyond_0.5in": 15,
+        "declined": 764,
+        "equal": 43,
         "n": 1302,
-        "within_0.5in": 50
+        "within_0.5in": 523
       },
       "n": 183,
-      "within_0.5in": 16
+      "within_0.5in": 97
     }
   },
-  "reason": "Initial Stage A baseline: fixed actions from 168 paired solo recordings plus generated geometry coverage; no gameplay port",
+  "reason": "PR 1 implements oval footprints in final placement and collapse-ladder coherency; fixture bytes and endpoints are unchanged; seven skipped-charge shape declines remain.",
   "schema": 1,
-  "source_revision": "f04a218edcf32f983d786f6eb7be7040730bee4b"
+  "source_revision": "ba3174d5571d800bb32aa9e31104f42dc54a0ae4"
 }

@@ -175,8 +175,9 @@ pub const SHAPE_EPSILON_M: f64 = 0.00001;
 /// `base_d_mm` along world Z — and that is what the header's two axes mean.
 /// The field is kept because the math is the table's whole function, and a
 /// hand-dragged model in a human game DOES turn (`ObjectManager` :1597).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum BaseShape {
+    #[default]
     Round,
     Oval { w_mm: f64, d_mm: f64, yaw: f32 },
 }
