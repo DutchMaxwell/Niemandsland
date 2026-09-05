@@ -10,15 +10,10 @@
 //! measure the arc the melee snap has to fit into (`last_move_remaining_in`
 //! :8659 = the granted band minus the LONGEST single-model arc).
 //!
-//! WHAT IS NOT PORTED HERE, stated so the seam is not read as more than it is:
-//!   * `_finalize_placement` (:6303) — the hard post-plan gate. A charge skips
-//!     its coherency and terrain shorten but still gets its overlap push, so a
-//!     landing here can sit a hair inside a base the table would have pushed off.
-//!   * the stall escalation (:4816), the gate-collapse ladder (:4871) and the
-//!     boxed/sidestep escape (:4941). All three are `not allow_contact`, so a
-//!     charge never enters any of them — no divergence, only unwritten code.
-//!   * the prewarm plan cache (pure, cannot change a result) and the regiment
-//!     tray slide (`_is_regiment`, not a `State` field).
+//! Epoch-6 charges share the table's contact-aware final gate and budgeted snap.
+//! Ordinary moves also run stall escalation and the gate-collapse ladder.
+//! Remaining Stage A gap: the boxed/sidestep escape for ordinary loose moves.
+//! The prewarm cache and regiment tray slide are outside this loose-model port.
 //!
 //! WALLS. `plan_unit_step` routes around `TerrainOverlay.get_wall_segments_world()`
 //! and the act corpus carried none before rung D5-2a. `Terrain::walls_in` is

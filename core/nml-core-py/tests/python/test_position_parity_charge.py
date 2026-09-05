@@ -28,7 +28,9 @@ def test_charge_placement_and_snap_use_the_header_epoch(case_id):
         state = core.state_of(plain)
         move = core.charge_move(state, action['unit'], action['target'])
         resolved = core.resolve(state, action).plain()
-        assert move['end'] == resolved['units'][action['unit']]['positions']
+        keys = state.keys()
+        assert move['end'] == [resolved['units'][keys[u]]['positions'][m]
+                               for u, m in move['movers']]
         if epoch >= 6:
             assert max(math.dist(a,b) / .0254 for a,b in zip(move['end'],pin['expected_world'])) <= pins['tolerance_in']
             if pin['snap_in'] is None:
