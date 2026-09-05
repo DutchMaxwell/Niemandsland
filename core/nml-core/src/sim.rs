@@ -3892,11 +3892,14 @@ fn resolve_with(
                                     msc.keep = keep;
                                     msc.attacks = attacks;
                                 }
-                                parts.push((
-                                    mi,
-                                    msc,
-                                    ctx_live_vs(ctx_of(um, &next, mi), statics, &next, mi, g.ti, false, seams.rules_epoch),
-                                ));
+                                // Wave 3 — Mobile Artillery's stationary gate:
+                                // the act-scope `moved` flag is the twin of the
+                                // table's `moved_round == current_round` stamp
+                                // (main.gd:7650/:5773-5775) — a HOLD act never
+                                // moves, an ADVANCE/RUSH did.
+                                let mut att = ctx_live_vs(ctx_of(um, &next, mi), statics, &next, mi, g.ti, false, seams.rules_epoch);
+                                att.moved_this_round = moved;
+                                parts.push((mi, msc, att));
                             }
                             // Block C5 — Instinctive: the +1 reaches the
                             // shooting fold ONLY when THIS group's target is

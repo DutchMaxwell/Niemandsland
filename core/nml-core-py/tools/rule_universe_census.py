@@ -294,6 +294,18 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # it would over-credit the primitive's fifth member (Exotic Gear /
     # Exotic Gear Boost, aofs-only, outside this census universe) the #489
     # shape if the universe ever widens.
+    # Shot-Modifier family wave (rules-wave3-shotmod, 2026-09-05): unit.rs
+    # ::shot_modifier_runtime_of (epoch-6 arm) stamps the two RUNTIME-GATED
+    # shooting members BY NAME — Mobile Artillery (`requires_stationary`, the
+    # act-scope moved flag sim.rs stamps over the volley Ctx) and Grounded
+    # Precision (`terrain_within_in`, consumed off Ctx.in_cover at the volley
+    # AND melee seams, dice.rs). The static stamp arm's own reads
+    # (`hit_bonus`/`over_in`) are deliberately NOT listed: that arm is a NAME
+    # allowlist, so per-entry param evidence is not sufficient for it —
+    # listing them would over-credit Cyber-Eyes / Cyber-Eyes Boost (read by
+    # nobody) the exact #489 shape. Without this row the primitive is
+    # untracked for every name under it.
+    "Shot Modifier": frozenset({"requires_stationary", "terrain_within_in"}),
 }
 
 
