@@ -32,21 +32,22 @@
 //! keeps its endpoint bit for bit instead of picking up a metre round trip.
 //! The geometry is scale-free; the four metre constants are converted once.
 //!
-//! BASES. `State` carries one radius per model, so every base here is the round
-//! one `SeparationChecker._edge_distance_meters` :294 handles exactly; an
-//! oval/rect base is its circumscribed circle, which is what the escape scan
-//! (:160, `bounding_radius`) uses on the table anyway.
+//! BASES. Overlap relaxation and coherency use the real footprint through the
+//! shared `geom::pair_gap_m`. Terrain rest, wall chords and the escape scan
+//! retain bounding radii, exactly where the table uses them.
 
 use super::geom2::{point_seg_distance, seg_seg_distance, V2};
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
+use crate::geom::{self, BaseShape};
 
 /// One base as the gate sees it: centre in the planner's INCH frame, radius in
-/// inches — `SeparationChecker.BaseShape` of kind ROUND.
-#[derive(Clone, Copy, Debug)]
+/// inches, with the footprint read from the same base data as the table.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Disc {
     pub c: [f64; 2],
     pub r: f64,
+    pub shape: BaseShape,
 }
 
 /// `SeparationResolver.RESOLVE_EPSILON_INCHES` separation_resolver.gd:46.
@@ -105,7 +106,9 @@ pub struct GateReport {
 /// The two unit-level exemptions `_clamp_gate_walls` reads before it reverts
 /// anything (:6392-6393, handed down from `_finalize_placement`).
 #[derive(Clone, Copy, Debug, Default)]
-pub struct GateFlags {
+pub struct GateFlags<'a> {
+    /// Footprints in moving-model order, including attached heroes. Empty is round.
+    pub shapes: &'a [BaseShape],
     /// `unit.has_special_rule("Flying")` — Flying crosses walls legally, so a
     /// wall-crossing gate push is no tunnel and the clamp is skipped whole.
     pub flying: bool,
@@ -148,7 +151,7 @@ fn resolve_overlaps(s: &mut Disc, obs: &[Disc]) -> bool {
     for _ in 0..MAX_OVERLAP_ITERS {
         let (mut res, mut deepest) = ([0.0f64, 0.0], 0.0f64);
         for o in obs {
-            let overlap = -(dist(s.c, o.c) - s.r - o.r);
+            let overlap = -edge(s, o);
             if overlap <= RESOLVE_EPS_IN {
                 continue;
             }
@@ -241,10 +244,16 @@ fn project_out_forbidden(p: [f64; 2], r_in: f64, t: &Terrain, board_in: [f64; 2]
     p
 }
 
-/// `SeparationChecker.edge_distance` :294 for two ROUND bases — the one measure
+/// `SeparationChecker.edge_distance` :294 — the shared footprint measure
 /// both the coherency link and the no-stack test are written in.
 fn edge(a: &Disc, b: &Disc) -> f64 {
-    dist(a.c, b.c) - a.r - b.r
+    if a.shape == BaseShape::Round && b.shape == BaseShape::Round {
+        // Keep the established all-round planner arithmetic bit for bit.
+        return dist(a.c, b.c) - a.r - b.r;
+    }
+    let pos = |c: [f64; 2]| [(c[0] * IN2M) as f32, 0.0, (c[1] * IN2M) as f32];
+    geom::pair_gap_m(pos(a.c), a.r * IN2M, a.shape,
+        pos(b.c), b.r * IN2M, b.shape) / IN2M
 }
 
 /// `_config_overspread_world` :6650 — the widest EDGE-to-edge spread exceeds
@@ -287,6 +296,23 @@ fn largest_component(cfg: &[Disc]) -> Vec<usize> {
 /// asked of that walk rather than of a second BFS.
 fn config_coherent(cfg: &[Disc], max_chain: f64) -> bool {
     cfg.len() <= 1 || (largest_component(cfg).len() == cfg.len() && !overspread(cfg, max_chain))
+}
+
+/// Shape-aware wrapper for the collapse ladder's start/end predicates. The
+/// footprint is geometry and therefore has no rules-epoch switch.
+pub(crate) fn coherent_placement(planned: &[V2], radii_in: &[f64], flags: GateFlags<'_>) -> bool {
+    if flags.shapes.iter().all(|s| *s == BaseShape::Round) {
+        // The original ladder's round-only float32 predicates stay unchanged.
+        return planned.len() <= 1 || (super::components_r(planned, radii_in).len() == 1
+            && super::max_edge_spread_r(planned, radii_in) <= super::MAX_CHAIN_IN);
+    }
+    let cfg: Vec<Disc> = planned.iter().enumerate().map(|(i, p)| Disc {
+        c: [p[0] as f64, p[1] as f64],
+        r: radii_in.get(i).copied().unwrap_or(0.0),
+        shape: flags.shapes.get(i).copied().unwrap_or_default(),
+        ..Default::default()
+    }).collect();
+    config_coherent(&cfg, super::MAX_CHAIN_IN)
 }
 
 /// `_cap_gate_disp` :6360 — truncate one gate correction to the model's
@@ -546,6 +572,7 @@ pub fn finalize_placement(
             Disc {
                 c,
                 r: radii_in.get(i).copied().unwrap_or(0.0),
+                shape: flags.shapes.get(i).copied().unwrap_or_default(),
             }
         })
         .collect();
@@ -590,4 +617,50 @@ pub fn finalize_placement(
         })
         .collect();
     (out, rep)
+}
+
+#[cfg(test)]
+mod shape_tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn pinned_base_shapes_fixture_uses_real_footprint() {
+        let fixtures: Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/cases.json")).unwrap();
+        let pin: Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/base_shapes.json")).unwrap();
+        let case = fixtures["cases"].as_array().unwrap().iter()
+            .find(|c| c["id"] == pin["source_case"]).unwrap();
+        let discs: Vec<Disc> = case["units"].as_array().unwrap().iter().map(|u| {
+            let p = &u["positions"][0];
+            Disc { c: [p[0].as_f64().unwrap() / IN2M, p[2].as_f64().unwrap() / IN2M],
+                r: u["radii"][0].as_f64().unwrap() / IN2M,
+                shape: if u["base_shape"] == "oval" {
+                    BaseShape::Oval { w_mm: u["base_w_mm"].as_f64().unwrap(),
+                        d_mm: u["base_d_mm"].as_f64().unwrap(), yaw: 0.0 }
+                } else { BaseShape::Round }, ..Default::default() }
+        }).collect();
+        let got = edge(&discs[0], &discs[1]);
+        let expected = pin["edge_in"].as_f64().unwrap();
+        assert!((got - expected).abs() <= pin["tolerance_in"].as_f64().unwrap(),
+            "generated-oval-large: gate edge={got:.9}in table={expected:.9}in");
+        // Axis/contact probes reuse this bucket fixture's bases. Pin both the
+        // moving oval and an oval obstacle; only the centres are translated.
+        for probe in pin["probes"].as_array().unwrap() {
+            for swap in [false, true] {
+                let (moving, mut other) = if swap { (discs[1], discs[0]) } else { (discs[0], discs[1]) };
+                other.c = [36.0 + probe["obstacle_offset_m"][0].as_f64().unwrap() / IN2M,
+                    24.0 + probe["obstacle_offset_m"][1].as_f64().unwrap() / IN2M];
+                let shapes = [moving.shape];
+                let (got, _) = finalize_placement(&[[36.0, 24.0]], &[moving.r], &[other], &[],
+                    [72.0, 48.0], None, GateFlags { shapes: &shapes, ..Default::default() });
+                for axis in 0..2 {
+                    let expected = [36.0, 24.0][axis] + probe["expected_push_m"][axis].as_f64().unwrap() / IN2M;
+                    assert!((got[0][axis] as f64 - expected).abs() < 0.00001,
+                        "shape-aware final placement: swap={swap} got={got:?} expected axis={expected}");
+                }
+            }
+        }
+    }
 }

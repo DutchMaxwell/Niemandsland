@@ -159,6 +159,7 @@ fn the_gate_pushes_off_another_units_base() {
     let other = Disc {
         c: [36.4, 24.0],
         r: 0.8,
+        ..Default::default()
     };
     let (got, _) = finalize_placement(&planned, &[0.8], &[other], &[4.0], [72.0, 48.0], None, GateFlags::default());
     let d =
@@ -437,6 +438,7 @@ fn the_wall_clamp_reverts_a_gate_push_that_tunnels() {
     let flying = GateFlags {
         flying: true,
         traversal: false,
+        ..Default::default()
     };
     let (fly, frep) = finalize_placement(
         &planned,

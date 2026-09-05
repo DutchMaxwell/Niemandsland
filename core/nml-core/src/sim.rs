@@ -4997,6 +4997,11 @@ mod tests {
             index: r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect(),
             profile: vec![0, 1, 2, 3],
         });
+        // Movement now reads every obstacle's base profile as well as its
+        // precomputed combat static; all four profile indices must exist.
+        st.profiles = Rc::new(Profiles {
+            list: vec![st.profiles.list[0].clone(); 4], index: HashMap::new(),
+        });
         st.positions = vec![
             vec![[0.0, 0.0, 0.0], [0.02 * IN2M, 0.0, 0.0]],
             vec![[2.0 * IN2M, 0.0, 0.0]],

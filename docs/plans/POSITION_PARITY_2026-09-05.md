@@ -164,3 +164,23 @@ explicit reason and three identical runs. Timing is evidence, not equality.
 
 Only after measured parity reaches the target should the series attempt the
 fixed-seed arena gate. Every PR remains unmerged.
+
+## PR 1: shape-aware final placement
+
+`gate::Disc` now carries the recorded footprint alongside its bounding radius.
+The moving models (including attached heroes) and live external obstacles read
+`State::base_shape`, backed by the same dimensions and per-model radii the table
+reconstructs. Overlap relaxation and coherency use `geom::pair_gap_m`; the
+collapse ladder reads the same shaped graph. The all-round ladder retains its
+original arithmetic. Terrain rest, wall chords and fallback escape scans keep
+bounding circles, as their table counterparts do. Geometry is not epoch-gated.
+
+The Rust RED pins `generated-oval-large` from the decline bucket: the circular
+gate measured 4.791311318 inches against the table's 6.244360534-inch footprint
+gap. Both tests read `cases.json` and `base_shapes.json`. Additional shared
+short-axis, long-axis and clear-contact probes exercise moving and obstacle
+ovals. No production GDScript or environment defaults change.
+
+Shape capability is advertised only for non-charge actions. Seven charge
+fixtures still encounter the skipped charge gate and retain their shape decline;
+that remainder belongs to the charge-final-placement port.
