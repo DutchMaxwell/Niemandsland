@@ -81,3 +81,25 @@ func test_reinforced_real_save_threshold_and_named_log() -> void:
 		far_text += str(entry["text"]) + "\n"
 	assert_str(far_text).contains("Reinforced:")
 	assert_str(far_text).contains("saves on 5+")
+
+
+func test_reinforced_charge_threat_reads_the_actual_approach_distance() -> void:
+	var attacker := Boot.make_unit(_main, 2, "Attacker", [Vector3.ZERO])
+	var defender := Boot.make_unit(_main, 1, "Defender", [Vector3(12.0 * 0.0254, 0, 0)])
+	attacker.unit_properties["quality"] = 4
+	defender.unit_properties.merge({"defense": 4, "special_rules": ["Reinforced"],
+		"game_system": "gf", "faction_folder": "prime_brothers"}, true)
+	var weapon := OPRApiClient.OPRWeapon.new()
+	weapon.name = "Blade"
+	weapon.range_value = 0
+	weapon.attacks = 12
+	weapon.count = 1
+	weapon.special_rules = ["AP(2)"]
+	var source := OPRApiClient.OPRUnit.new()
+	source.weapons.append(weapon)
+	attacker.source_type = "opr"
+	attacker.source_data = source
+	_main.opr_army_manager.game_units = {attacker.unit_id: attacker, defender.unit_id: defender}
+	var state := BattleSim.capture(_main.opr_army_manager)
+	assert_float(BattleSim.melee_threat(state["units"][attacker.unit_id], state["units"][defender.unit_id])) \
+		.is_equal_approx(4.0, 0.0001)
