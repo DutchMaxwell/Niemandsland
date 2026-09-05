@@ -179,3 +179,40 @@ func test_battle_log_names_the_weapon_the_penalty_locks_out(timeout := 120000) -
 	assert_str(text).contains("Aircraft")
 	# The cannon still fires, so it is never listed as locked out.
 	assert_str(text.substr(text.find("out of reach"))).not_contains("Cannon")
+
+
+func test_shrouded_registry_reach_floors_and_joined_model_gates() -> void:
+	for context in [["gf", "dark_brothers"], ["gf", "dark_prime_brothers"],
+			["aof", "shadow_stalkers"], ["aof", "wood_elves"]]:
+		var target := _armed(2, context[1], [Vector3.ZERO], [])
+		target.unit_properties["game_system"] = context[0]
+		target.unit_properties["faction_folder"] = context[1]
+		target.unit_properties["special_rules"] = ["Shrouded"]
+		assert_bool(RulesRegistry.has_primitive(context[0], context[1], "Shrouded")).is_true()
+		assert_float(SoloController.ranged_shroud_reach_in(24.0, target)).is_equal(20.0)
+		assert_float(SoloController.melee_shroud_charge_in(12.0, target)).is_equal(10.0)
+		assert_float(SoloController.ranged_shroud_reach_in(7.0, target)).is_equal(6.0)
+		assert_float(SoloController.melee_shroud_charge_in(7.0, target)).is_equal(6.0)
+		var hero := _armed(2, "Hero_" + context[1], [Vector3.ZERO], [])
+		target.unit_properties["attached_heroes"] = [hero]
+		assert_float(SoloController.ranged_shroud_reach_in(24.0, target)).is_equal(24.0)
+		assert_float(SoloController.melee_shroud_charge_in(12.0, target)).is_equal(12.0)
+		hero.unit_properties["special_rules"] = ["Shrouded"]
+		assert_float(SoloController.ranged_shroud_reach_in(24.0, target)).is_equal(20.0)
+		assert_float(SoloController.melee_shroud_charge_in(12.0, target)).is_equal(10.0)
+
+
+func test_shrouded_real_volley_gate_and_named_locked_weapon_log() -> void:
+	var gunner := _armed(1, "Fixture", [Vector3.ZERO], [{"name": "Rifle", "range": 24, "attacks": 2}])
+	var target := _armed(2, "Target", [Vector3(_x_for_gap(22.0), 0, 0)], [])
+	target.unit_properties["game_system"] = "gf"
+	target.unit_properties["faction_folder"] = "dark_brothers"
+	target.unit_properties["special_rules"] = ["Shrouded"]
+	assert_array(_volley_weapons(gunner, target)).not_contains(["Rifle"])
+	var start: int = _main.battle_log.entries().size()
+	_main._solo_log_reach_shrink(gunner, target)
+	var text := ""
+	for entry in _main.battle_log.entries().slice(start):
+		text += str(entry["text"]) + "\n"
+	assert_str(text).contains("Shrouded")
+	assert_str(text).contains("Rifle")
