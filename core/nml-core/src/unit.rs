@@ -338,6 +338,21 @@ pub struct ShootProfile {
     /// widened window counts only past this centre distance, exactly 9" not
     /// "over" — same strict gate as every other over-9" read in this port.
     pub shred_over_in: f64,
+    /// Wave 3 (`rules-wave3-shred3`): the family's per-face wound amount,
+    /// read off the carried Shred-primitive entry's own
+    /// `extra_wound_per_save_one` (`build_for`'s epoch-6 arm, gated
+    /// `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`). 0 = unread — the dice
+    /// path falls back to the base +1 the wave-1 alias arm hard-codes, so
+    /// every epoch-5 record replays byte-exact.
+    pub shred_ones_wound_bonus: i64,
+    /// The entry whose `extra_wound_per_save_one` this profile carries (the
+    /// plain names: Destroyer/Infected/Warbound) — the rules-must-log
+    /// line's rule name (dice.rs `save_batch`'s ShootResult.log push).
+    /// "" = none.
+    pub shred_ones_rule: String,
+    /// The unit carrying that entry (`Profile::name`) — the log line's
+    /// unit. "" = none.
+    pub shred_ones_owner: String,
     pub indirect: bool,
     pub limited: bool,
     pub takedown: bool,
@@ -845,6 +860,11 @@ struct PrimitiveHit {
     /// one meaning, two key spellings across the systems), read off the
     /// carried `Shred` primitive entry. 0 = not a Boost.
     save_fail_max: i64,
+    /// The family's own per-face wound amount (`extra_wound_per_save_one` —
+    /// the fixed +1 every Shred entry prints; the shred3 wave makes the core
+    /// READ it instead of hard-coding it, `build_for`'s epoch-6 arm). 0 =
+    /// the entry carries no such param.
+    extra_wound_per_save_one: i64,
 }
 
 /// `RulesRegistry.unit_rules_of_primitive` rules_registry.gd:155-176 — every
@@ -878,6 +898,7 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
                     within_in: e.param_f("within_in", 0.0),
                     over_in: e.param_f("over_in", 9.0),
                     save_fail_max: e.param_i("save_fail_max", 0).max(e.param_i("extra_wound_save_low", 0)),
+                    extra_wound_per_save_one: e.param_i("extra_wound_per_save_one", 0),
                 });
             }
         }
@@ -2200,6 +2221,34 @@ impl UnitStatic {
             if !live.is_empty() {
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {
                     sp.cond_ap.extend(live.iter().cloned());
+                }
+            }
+        }
+        // Shred wave 3 (rules-wave3-shred3): the family's per-face wound
+        // amount is now READ off the carried Shred-primitive entry
+        // (`extra_wound_per_save_one`) instead of hard-coded — the wave-1
+        // alias arm's fixed +1 stays every pre-epoch-6 reading's value, so
+        // Warbound/Infected/Destroyer flip STAMPED -> PORTED only when the
+        // core actually consumes the param. Gated on `EPOCH_6_TABLE_RULES`
+        // (frozen, never the literal or CURRENT_RULES_EPOCH): the alias leg
+        // already shreds at epoch >= 3 and every epoch-5 record replays
+        // byte-exact. Read by dice.rs::save_batch, which names the firing
+        // in ShootResult.log (rules-must-log).
+        if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+            for hit in rules_of_primitive(reg, p, "Shred") {
+                let amt = hit.extra_wound_per_save_one;
+                if amt <= 0 {
+                    continue;
+                }
+                for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+                    if sp.shred_alias
+                        && facet_applies(hit.melee_only, hit.shooting_only, sp.range)
+                        && amt > sp.shred_ones_wound_bonus
+                    {
+                        sp.shred_ones_wound_bonus = amt;
+                        sp.shred_ones_rule = hit.name.clone();
+                        sp.shred_ones_owner = p.name.clone();
+                    }
                 }
             }
         }
