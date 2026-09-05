@@ -413,6 +413,18 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 		ledger["vs_mark_round"] = vsm
 	if bool(u.unit_properties.get("second_wind_used", false)):
 		ledger["second_wind_used"] = true
+	# Wave 3 — the Storm Attack family's once-per-game flags (main.gd:17244
+	# writes `storm_used_<snake>` per rule): recorded as the DISPLAY names
+	# whose flag stands, so the core's `State.storm_used` (per unit, the
+	# names already fired this game) matches the registry's own names without
+	# a snake-case round trip.
+	var storm: Array = []
+	for e in RulesRegistry.unit_rules_of_primitive(u, "Storm Attack"):
+		var rn := str((e as Dictionary)["name"])
+		if bool(u.unit_properties.get("storm_used_%s" % rn.to_snake_case(), false)):
+			storm.append(rn)
+	if not storm.is_empty():
+		ledger["storm_used"] = storm
 	var markers := 0
 	for e in RulesRegistry.unit_rules_of_primitive(u, "Growth Markers"):
 		var rn := str((e as Dictionary)["name"]).to_snake_case()

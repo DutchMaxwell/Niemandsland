@@ -476,6 +476,11 @@ pub struct State {
     /// (`_solo_apply_piercing_tag`), spent whole by the next volley at this
     /// unit for +AP per marker (main.gd:3123 AI / :9857 human, shooting only).
     pub piercing_tag_markers: Vec<i64>,
+    /// Wave 3 — `unit_properties["storm_used_<rule>"]` (main.gd:17244): the
+    /// Storm Attack family's ONCE-per-game flags, per unit the DISPLAY names
+    /// already fired this game (the recorder stamps them off the same flags,
+    /// act_recorder.gd `_ledger_of`); never resets on a later round.
+    pub storm_used: Vec<Vec<String>>,
 }
 
 impl State {
