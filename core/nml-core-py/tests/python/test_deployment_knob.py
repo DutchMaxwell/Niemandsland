@@ -54,7 +54,10 @@ SEED = 27
 #: result — popping that one key restores `95f3afea…` exactly, so the game
 #: stream is unchanged and only stamp metadata moved. The stripped pin
 #: survives future stamp additions; only an in-game or header drift trips it.
-DEFAULT_SEED_25_DIGEST = "f6cf8286c87aee17808cce00759c5f6a7ceb717396c49c4de169b7c9cee24296"
+#: Re-pinned 2026-09-05 (armies-basename fix, DIGEST_DIVERGENCE_2026-09-05.md):
+#: `armies` moved from the caller's absolute path to the list basename plus
+#: `armies_sha256`; the game did not move.
+DEFAULT_SEED_25_DIGEST = "ce46e9247e20ef58f50b659f5338ea44a8dca8f8917258b61d11a64e79633ec6"
 
 
 def _lists_missing() -> bool:

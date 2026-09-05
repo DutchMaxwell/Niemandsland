@@ -35,6 +35,9 @@ EXCLUDED, and named rather than quietly skipped (`--excluded` prints the list):
 
 `armies` is held by list BASENAME: a reference recorded on the fleet carries that
 machine's path for the same list, and the path is not a rule.
+  * `armies_sha256` (2026-09-05) — the content hash `armies`' basename alone
+    cannot carry; `tools/core_selfplay.gd` never writes such a field, so it is
+    Python-only provenance like `tool`, not a held quantity.
   * `planner_positions[].intent` — the planner's prose sentence, a report string
     rather than a rule; the Python row carries the key, empty.
   * The Python-only extras `rounds_played`, `rounds_log`, `wall_seconds` and the
@@ -69,7 +72,7 @@ import nml_core  # noqa: E402
 import selfplay as sp  # noqa: E402
 
 #: Top-level result fields this gate does not hold — see the module docstring.
-EXCLUDED_TOP = ("tool", "knobs", "rounds_played", "rounds_log", "wall_seconds", "dice_tally")
+EXCLUDED_TOP = ("tool", "knobs", "armies_sha256", "rounds_played", "rounds_log", "wall_seconds", "dice_tally")
 #: Per-row fields this gate does not hold.
 EXCLUDED_ROW = ("intent", "unit", "kind", "action")
 #: `planner_positions[].board` column indices that carry a FLOAT.

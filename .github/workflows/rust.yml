@@ -63,3 +63,27 @@ jobs:
 
       - name: Run nml-core-py pytest suite
         run: PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900
+
+      - name: needs_lists Python subset (only if the private fixtures are staged)
+        # The suite above silently @needs_lists-skips 62 tests whenever the terrain
+        # bank + 1000pt army lists are absent -- true for every public PR today, so
+        # this gap has never actually run here (farm finding 05.09.). Mirrors the
+        # "Fixture-gated tests" Rust step above: named and skip-if-absent, never a
+        # silent green. Home-relative because the tests read `~/...`, same as the
+        # farm; point HOME at the checkout so a maintainer can stage fixtures the
+        # same repo-relative way the Rust step already does.
+        #
+        # Picked 3 tests that assert STRUCTURE (key presence, a numeric constant,
+        # digest INEQUALITY) and never a hardcoded digest string: the same 05.09.
+        # farm run found 11 other @needs_lists tests whose pinned digest does not
+        # reproduce even on an unmodified historical commit rebuilt on today's farm
+        # boxes (root cause open, not the rule changes, not epoch, not randomness --
+        # see /root/w3_known_py_failures.txt on the wave-3 boxes). A hardcoded-digest
+        # test here would make this step exactly as fragile; these three are not.
+        if: hashFiles('selfplay_out/terrain_bank/**') != '' && hashFiles('nml-mission/farm/ai_lists/**') != ''
+        env:
+          HOME: ${{ github.workspace }}
+        run: >
+          PYTHONPATH=core/nml-core-py/python python3 -m pytest -q --timeout 900
+          core/nml-core-py/tests/python/test_rules_epoch_stamp.py
+          core/nml-core-py/tests/python/test_mass_fast.py::test_the_worker_passes_the_fidelity_knobs_into_the_game
