@@ -299,7 +299,16 @@ fn save_batch(
     if count <= 0 {
         return 0;
     }
-    let target = save_target(defense, fortified_ap(ap, def.fortified));
+    // rules-wave3-growthmark (epoch 6) — the DEFENDER-side facets ride the
+    // same save target: the +X-to-Defense ladder and Fortified Growth's
+    // attacker-AP cut, floored at the hard 0 the rule prints. Both ctx
+    // fields are zero unless `sim::ctx_live` folded them behind
+    // `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`, so pre-epoch corpora
+    // replay byte-exact.
+    let target = save_target(
+        defense + def.growth_def_mod,
+        (fortified_ap(ap, def.fortified) + def.growth_fortify_ap).max(0),
+    );
     let faces = tray.roll(count as usize);
     out.rolls.push(Roll {
         kind: "defense",

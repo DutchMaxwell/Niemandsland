@@ -112,13 +112,23 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # entry "Surge" was TRUSTED WHOLE — PR #489's bug, reopened here until now.
     "Surge": frozenset({"extra_attack", "melee_only", "shooting_only", "within_in", "over_in"}),
     # Block B7: `unit::growth_of` stamps `UnitStatic.growth` off every "Growth
-    # Markers" entry the unit carries, but `sim::growth_bonus_of` only ever
-    # folds the AP/hit facets into the tray (main.gd:4287/:5675-5680) — the
-    # defense facet (Defensive Frenzy/Growth), the defender-side AP reduction
-    # (Fortified Growth's `enemy_ap_per_two`) and the extra-attacks facet
-    # (Regenerative Strength) are recorded (registry-gated) and read by
-    # nothing, the Utility-Buff over-count shape #489 found.
-    "Growth Markers": frozenset({"ap_per_marker", "ap_per_two", "hit_per_marker", "hit_per_two"}),
+    # Markers" entry the unit carries, and `sim::growth_bonus_of` folds the
+    # AP/hit facets into the tray (main.gd:4287/:5675-5680). The
+    # rules-wave3-growthmark epoch-6 wave consumes the rest: the marker-gain
+    # triggers (`per_round`/`on_kill` were already read by
+    # `sim::growth_round_start`/`growth_on_kill`, `max_markers` caps them) and
+    # the four new facets — Defensive Frenzy/Growth's `defense_per_marker`/
+    # `defense_per_two` (sim::growth_defense_of -> dice.rs save target),
+    # Fortified Growth's `enemy_ap_per_two` (defender-side AP cut) and
+    # Regenerative Strength's `on_ignore_wound`/`attacks_per_marker`
+    # (sim::growth_on_ignore_wound / melee_parts). `min_ap`/`all_models`/
+    # `scope` stay unread on this core (the floor is the hard 0 every entry
+    # prints; the whole-unit gates are implicit in the marker fold), so a
+    # floor-only entry would still ride STAMPED.
+    "Growth Markers": frozenset({"ap_per_marker", "ap_per_two", "hit_per_marker", "hit_per_two",
+        "per_round", "max_markers", "on_kill",
+        "defense_per_marker", "defense_per_two", "enemy_ap_per_two",
+        "on_ignore_wound", "attacks_per_marker"}),
     # Block B13: unit.rs::retaliate_hits_per_wound reads `hits_per_wound` into
     # Ctx.retaliate_hits_per_wound (sim.rs::strike_phase lash-back). "rating"
     # stays unread on this core (the shipped "X" string falls back to the

@@ -1381,6 +1381,15 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
+    // rules-wave3-growthmark — the family's DEFENDER-side facets, gated on
+    // `EPOCH_6_TABLE_RULES` (frozen at 6, the stamping-gap rule): a record
+    // stamping `rules_epoch: 5` (the recording fleet's live epoch) replays
+    // byte-exact, exactly like the Lacerate/ambush waves' own gates.
+    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        let (dm, fa) = growth_defense_of(statics, state, i);
+        c.growth_def_mod = dm;
+        c.growth_fortify_ap = fa;
+    }
     // Ambush family (rules-wave2-ambush): "Ambushing Piercing Shot" shoots
     // AP(+1) on the very round the unit arrives — `ambush_arrived_round` is
     // the stamp `arrive_unit`/`_finish_reserve_arrival` writes, and `!melee`
@@ -1437,6 +1446,28 @@ fn growth_bonus_of(statics: &[UnitStatic], state: &State, i: usize) -> (i64, i64
     (ap, hit)
 }
 
+/// rules-wave3-growthmark (epoch 6) — `growth_bonus_of`'s DEFENDER-side
+/// sister, per `growth_defense_of`'s rule text: Defensive Frenzy/Growth sum
+/// `defense_per_marker`/`defense_per_two` (the +X-to-Defense ladder) and
+/// Fortified Growth sums `enemy_ap_per_two` (negative, the attacker-AP cut;
+/// `min_ap` stays unread — the hard 0 floor is dice::save_batch's own
+/// `max(0)`, the only floor every shipped entry prints).
+/// One marker counter per unit, folded the same `markers`/`markers / 2` way
+/// as the attack half above.
+fn growth_defense_of(statics: &[UnitStatic], state: &State, i: usize) -> (i64, i64) {
+    let markers = state.growth_markers[i];
+    if markers <= 0 {
+        return (0, 0);
+    }
+    let mut dm = 0;
+    let mut fa = 0;
+    for g in &statics[state.roster.profile[i]].growth {
+        dm += g.defense_per_marker * markers + g.defense_per_two * (markers / 2);
+        fa += g.enemy_ap_per_two * (markers / 2);
+    }
+    (dm, fa)
+}
+
 /// `_solo_growth_round_start` main.gd:16984 — the per-round marker for a
 /// `per_round` Growth Markers rule, ticked once per ROUND (`growth_round`
 /// gate, the `hit_and_run_round` shape) and blocked while Shaken. This core
@@ -1470,6 +1501,53 @@ fn growth_on_kill(statics: &[UnitStatic], next: &mut State, si: usize) {
     if next.growth_markers[si] < cap {
         next.growth_markers[si] += 1;
     }
+}
+
+/// rules-wave3-growthmark (epoch 6) — the defender-side facets' log lines.
+fn growth_log_defender(us: &UnitStatic, def: &Ctx, markers: i64, shot: &mut ShootResult) {
+    if def.growth_def_mod != 0 {
+        let dn = us.growth.iter().find(|g| g.defense_per_marker != 0 || g.defense_per_two != 0).map(|g| g.name.clone()).unwrap_or_default();
+        shot.log.push(format!(
+            "{}: {} Defense rolls +{} ({} marker(s))", dn, us.name, def.growth_def_mod, markers));
+    }
+    if def.growth_fortify_ap != 0 {
+        let fn_ = us.growth.iter().find(|g| g.enemy_ap_per_two != 0).map(|g| g.name.clone()).unwrap_or_default();
+        shot.log.push(format!(
+            "{}: every unit attacking {} rides AP({}) per two markers", fn_, us.name, def.growth_fortify_ap));
+    }
+}
+
+/// rules-wave3-growthmark (epoch 6) — Regenerative Strength's own trigger
+/// (`on_ignore_wound`): +1 marker for every wound this unit IGNORED
+/// (Regeneration's ignored count, `caused - landed`), capped at the rule's
+/// own `max_markers`. Called with the DEFENDER's index at the volley and the
+/// melee-strike tail, after the wounds (and the ignore) landed; a dead bearer
+/// banks nothing. The gain is logged once per phase — the LOGGING RULE is
+/// "every rule you make applicable emits ONE log line when it fires".
+fn growth_on_ignore_wound(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    ignored: i64,
+    shot: &mut ShootResult,
+) {
+    if ignored <= 0 || next.alive[si] <= 0 {
+        return;
+    }
+    let us = &statics[next.roster.profile[si]];
+    let Some(cap) = us.growth.iter().find(|g| g.on_ignore_wound).map(|g| g.max_markers) else {
+        return;
+    };
+    let before = next.growth_markers[si];
+    let gain = ignored.min((cap - before).max(0));
+    if gain <= 0 {
+        return;
+    }
+    next.growth_markers[si] = before + gain;
+    shot.log.push(format!(
+        "Regenerative Strength: {} banks {} marker(s) for ignoring wounds",
+        us.name, gain
+    ));
 }
 
 /// `BattleSim._ctx_of(su, true)` battle_sim.gd:701-708, MELEE half: the same
@@ -1821,6 +1899,20 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
         melee_profiles_of(um, count, &mut sc);
         sc.keep = (0..um.melee.len()).collect();
         drop_spent_limited(&um.melee, &state.limited_used[mi], &mut sc);
+        // rules-wave3-growthmark (epoch 6) — Regenerative Strength's melee
+        // facet: +X attacks with ONE melee weapon, X = the bearer's own
+        // marker count (`scope: "one_melee_weapon"`; the unit's FIRST melee
+        // profile is the pick). Gated `EPOCH_6_TABLE_RULES`, so a rules_epoch
+        // 5 record replays byte-exact.
+        if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) && state.growth_markers[mi] > 0 {
+            let atk = um.growth.iter().map(|g| g.attacks_per_marker).sum::<i64>()
+                * state.growth_markers[mi];
+            if atk != 0 {
+                if let Some(a) = sc.attacks.first_mut() {
+                    *a += atk;
+                }
+            }
+        }
         parts.push((
             mi,
             sc,
@@ -1873,6 +1965,22 @@ fn strike_phase(
     }
     let ut = &statics[next.roster.profile[ti]];
     let def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch);
+    // rules-wave3-growthmark (epoch 6) — the LOGGING-RULE lines for the
+    // defender-side facets this strike is about to fold.
+    if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+        if def.growth_def_mod != 0 {
+            shot.log.push(format!(
+                "Defensive Growth: {} Defense rolls +{} ({} marker(s))",
+                ut.name, def.growth_def_mod, next.growth_markers[ti]
+            ));
+        }
+        if def.growth_fortify_ap != 0 {
+            shot.log.push(format!(
+                "Fortified Growth: every unit attacking {} rides AP({}) per two markers",
+                ut.name, def.growth_fortify_ap
+            ));
+        }
+    }
     let members: Vec<crate::dice::Shooter<'_>> = parts
         .iter()
         .map(|(mi, sc, att)| {
@@ -1901,6 +2009,9 @@ fn strike_phase(
         mark_spent_limited(melee, &sc.keep, &mut next.limited_used[*mi]);
     }
     let caused = r.caused;
+    // rules-wave3-growthmark (epoch 6) — Regenerative Strength: wounds this
+    // strike IGNORED (Regeneration's own count) bank the bearer a marker.
+    let ignored = r.caused - r.wounds;
     let w = shot.absorb(r);
     // B13: the table measures the lash-back on wounds actually TAKEN — the
     // wound-POOL difference (`_solo_retaliate_hits` :4570, NML-937), snapshotted
@@ -1914,6 +2025,11 @@ fn strike_phase(
     // this phase.
     let alive_before = next.alive[ti];
     land_wounds(next, ti, w);
+    // rules-wave3-growthmark (epoch 6) — the ignore-wound marker AFTER the
+    // landing: a bearer that ignored some of these wounds banks for them.
+    if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+        growth_on_ignore_wound(statics, next, ti, ignored, shot);
+    }
     // Block B13 — the lash-back: ONLY wounds that LANDED post-Regeneration
     // count (the table's `landed_on_defender`, :6147-6149), only a striker
     // that still has models, and NON-CHAINING by construction: the wounds
@@ -3626,6 +3742,14 @@ fn resolve_with(
                             tray_vs_marks(statics, &mut next, si, g.ti, g.d, seams);
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch);
+                            // rules-wave3-growthmark (epoch 6) — the volley's
+                            // LOGGING-RULE lines, named after the entry that
+                            // carried the facet (the two Defensive names share
+                            // one ladder).
+                            if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+                                let usg = &statics[next.roster.profile[g.ti]];
+                                growth_log_defender(usg, &def, next.growth_markers[g.ti], shot);
+                            }
                             let alive_before_g = next.alive[g.ti];
                             let wounds_before_g = wounds_left(&next, g.ti);
                             let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
@@ -3703,8 +3827,17 @@ fn resolve_with(
                             // puts several sub-phases into ONE report, and the
                             // replay gate compares the whole activation roll by
                             // roll.
+                            // rules-wave3-growthmark (epoch 6) — the wounds
+                            // this volley IGNORED, before `absorb` consumes
+                            // the result (Regenerative Strength's trigger).
+                            let ignored = r.caused - r.wounds;
                             let w = shot.absorb(r);
                             land_wounds(&mut next, g.ti, w);
+                            // rules-wave3-growthmark (epoch 6) — the
+                            // ignore-wound marker AFTER the landing.
+                            if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+                                growth_on_ignore_wound(statics, &mut next, g.ti, ignored, shot);
+                            }
                             // Coverage wave — growth markers (Precision
                             // Frenzy): main.gd:3228/9934 credit the shooter's
                             // own kill marker when this volley just fully
@@ -6342,6 +6475,197 @@ mod tests {
         .unwrap();
         assert_eq!(shot.rolls[1].target, 5,
             "2 markers banked over 2 rounds -> AP(+1) on this round's shot (Defense 4+ becomes 5+)");
+    }
+
+    // ------------- block B7b: the epoch-6 Growth Markers wave -------------
+
+    /// Growth Markers wave (epoch 6) — `growth_defense_of`, the DEFENDER-side
+    /// sister of `growth_bonus_of`: the two Defensive names' +X-to-Defense
+    /// ladder and Fortified Growth's attacker-AP cut, zero for a non-bearer.
+    #[test]
+    fn growth_defense_of_sums_the_defense_and_fortify_ladders() {
+        let mut st = four_unit_line();
+        let mut statics = vec![UnitStatic::default()];
+        statics[0].growth = vec![
+            GrowthRule { defense_per_marker: 1, ..Default::default() },
+            GrowthRule { defense_per_two: 1, enemy_ap_per_two: -1, ..Default::default() },
+        ];
+        assert_eq!(growth_defense_of(&statics, &st, 0), (0, 0), "no markers, no ladder");
+        st.growth_markers[0] = 3;
+        assert_eq!(
+            growth_defense_of(&statics, &st, 0),
+            (4, -1),
+            "3 markers: +3 +1 to Defense, -1 AP per two markers"
+        );
+    }
+
+    /// rules-wave3-growthmark (epoch 6) — "Defensive Frenzy" PRESENT at
+    /// rules_epoch 6, ABSENT at 5: two banked markers lift the bearer's OWN
+    /// save target by 2. Same draws at both epochs (same seed), so the only
+    /// thing that can move the defense target is the rule gate.
+    #[test]
+    fn defensive_frenzys_defense_ladder_applies_only_at_epoch_6() {
+        let (mut st, mut statics) = buff_line();
+        statics[2].growth = vec![GrowthRule {
+            name: "Defensive Frenzy".into(),
+            on_kill: true, max_markers: 2, defense_per_marker: 1, ..Default::default()
+        }];
+        statics[0].shoot = vec![gun("Rifle", 20, 24)];
+        st.growth_markers[2] = 2;
+        let terrain = crate::terrain::Terrain::default();
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (next6, shot6) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 6, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot6.rolls[1].kind, "defense");
+        assert_eq!(shot6.rolls[1].target, 6, "2 markers x +1 on Defense 4+");
+        assert!(shot6.log.iter().any(|l| l.contains("Defensive Frenzy")),
+            "the LOGGING-RULE line: {:?}", shot6.log);
+
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (next5, shot5) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 5, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot5.rolls[1].kind, "defense");
+        assert_eq!(shot5.rolls[1].target, 4, "rules_epoch 5 replays byte-exact");
+        assert_eq!(next5.growth_markers[2], 2);
+        assert!(shot5.log.iter().all(|l| !l.contains("Defensive")), "no log line");
+        assert_eq!(next6.growth_markers[2], next5.growth_markers[2]);
+    }
+
+    /// rules-wave3-growthmark (epoch 6) — "Defensive Growth": +1 to Defense
+    /// per TWO markers (3 banked markers = +1, not +3 — the ladder is
+    /// `markers / 2`), and the same epoch gate as its Frenzy sister.
+    #[test]
+    fn defensive_growths_defense_per_two_applies_only_at_epoch_6() {
+        let (mut st, mut statics) = buff_line();
+        statics[2].growth = vec![GrowthRule {
+            name: "Defensive Growth".into(),
+            per_round: true, max_markers: 4, defense_per_two: 1, ..Default::default()
+        }];
+        statics[0].shoot = vec![gun("Rifle", 20, 24)];
+        st.growth_markers[2] = 3;
+        let terrain = crate::terrain::Terrain::default();
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (_, shot6) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 6, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot6.rolls[1].target, 5, "3 markers = 1 pair -> +1 on Defense 4+ (not +3)");
+        assert!(shot6.log.iter().any(|l| l.contains("Defensive Growth")),
+            "the LOGGING-RULE line: {:?}", shot6.log);
+
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (_, shot5) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 5, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot5.rolls[1].target, 4, "rules_epoch 5 replays byte-exact");
+        assert!(shot5.log.iter().all(|l| !l.contains("Defensive")), "no log line");
+    }
+
+    /// rules-wave3-growthmark (epoch 6) — "Fortified Growth": every unit
+    /// attacking the bearer rides AP(-1) per two markers, floored at AP(0)
+    /// (the AP(2) rifle at 4 banked markers swings the save target back from
+    /// 6+ to 4+), epoch-gated like the Defensive pair.
+    #[test]
+    fn fortified_growths_ap_cut_applies_only_at_epoch_6() {
+        let (mut st, mut statics) = buff_line();
+        statics[2].growth = vec![GrowthRule {
+            name: "Fortified Growth".into(),
+            per_round: true, max_markers: 4, enemy_ap_per_two: -1, ..Default::default()
+        }];
+        let mut rifle = gun("Rifle", 20, 24);
+        rifle.ap = 2;
+        statics[0].shoot = vec![rifle];
+        st.growth_markers[2] = 4;
+        let terrain = crate::terrain::Terrain::default();
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (_, shot6) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 6, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot6.rolls[1].target, 4,
+            "AP(2) cut by 2 (4 markers = 2 pairs) -> AP(0), Defense 4+");
+        assert!(shot6.log.iter().any(|l| l.contains("Fortified Growth")),
+            "the LOGGING-RULE line: {:?}", shot6.log);
+
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (_, shot5) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 5, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot5.rolls[1].target, 6, "rules_epoch 5 replays byte-exact: AP(2) stands");
+    }
+
+    /// rules-wave3-growthmark (epoch 6) — "Regenerative Strength": every
+    /// wound the bearer IGNORED banks one marker (Regeneration's own
+    /// ignored count), and the gain carries the LOGGING-RULE line. A
+    /// rules_epoch 5 replay banks nothing — the gate, not the wound count,
+    /// is what differs between the two runs.
+    #[test]
+    fn regenerative_strength_banks_markers_when_it_ignores_wounds_at_epoch_6() {
+        let (mut st, mut statics) = buff_line();
+        statics[2].growth = vec![GrowthRule {
+            on_ignore_wound: true, max_markers: 4, ..Default::default()
+        }];
+        statics[2].ctx.regeneration = true;
+        statics[2].ctx.regen_target = 2;
+        statics[2].ctx.regen_target_spell = 2;
+        statics[0].shoot = vec![gun("Rifle", 20, 24)];
+        st.growth_markers[2] = 0;
+        let terrain = crate::terrain::Terrain::default();
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (next6, shot6) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 6, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(next6.growth_markers[2] >= 1,
+            "wounds ignored at 2+ banked markers: {:?} log {:?}", next6.growth_markers, shot6.log);
+        assert!(shot6.log.iter().any(|l| l.contains("Regenerative Strength")),
+            "the LOGGING-RULE line: {:?}", shot6.log);
+
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (next5, shot5) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 5, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next5.growth_markers[2], 0, "rules_epoch 5 replays byte-exact: no markers banked");
+        assert!(shot5.log.iter().all(|l| !l.contains("Regenerative Strength")));
+    }
+
+    /// rules-wave3-growthmark (epoch 6) — "Regenerative Strength" 's melee
+    /// facet: +X attacks with one melee weapon, X = the bearer's own marker
+    /// count, PRESENT at rules_epoch 6 and ABSENT at 5 (`melee_parts`).
+    #[test]
+    fn regenerative_strengths_attacks_facet_applies_only_at_epoch_6() {
+        let (mut st, mut statics) = buff_line();
+        statics[0].growth = vec![GrowthRule {
+            on_ignore_wound: true, attacks_per_marker: 1, max_markers: 4, ..Default::default()
+        }];
+        st.growth_markers[0] = 3;
+        let parts6 = melee_parts(&statics, &st, 0, 2, Seams { rules_epoch: 6, ..Default::default() });
+        assert_eq!(parts6[0].1.attacks[0], 1 + 3, "3 markers x +1 attack");
+        let parts5 = melee_parts(&statics, &st, 0, 2, Seams { rules_epoch: 5, ..Default::default() });
+        assert_eq!(parts5[0].1.attacks[0], 1, "rules_epoch 5 replays byte-exact");
     }
 
     // ------------------------------------------------- block B8: Second Wind ---
