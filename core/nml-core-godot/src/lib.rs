@@ -35,6 +35,7 @@ use nml_core::{
 };
 
 mod mvcall;
+mod positioncall;
 mod plain;
 // Inert until the separately reviewed leaf-hook wiring lands.
 #[allow(dead_code)]
@@ -461,21 +462,33 @@ impl NmlCore {
     ) -> VarDictionary {
         self.last_error.clear();
         let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // Optional harness envelope: same public arity, shared core executor.
+            // Production calls omit this field and keep their original path.
+            if call.contains_key("position_action") {
+                return positioncall::run(&plain::sub_dict(&call, "position_action"),
+                    fast_planner, fast_planner_guard);
+            }
             let line = mvcall::call_line(&call);
             let mc = nml_core::mv::entry::read_call_line(&line)?;
             nml_core::mv::entry::plan_unit_step_call(&mc, fast_planner, fast_planner_guard)
+                .map(|p| mvcall::planned_out(&p))
         }));
         let out = match caught {
             Ok(r) => r,
             Err(_) => Err("panic inside the port".to_string()),
         };
         match out {
-            Ok(p) => mvcall::planned_out(&p),
+            Ok(p) => p,
             Err(e) => {
                 self.last_error = e.clone();
                 let mut d = VarDictionary::new();
                 d.set("ok", false);
                 d.set("error", &GString::from(e.as_str()));
+                d.set("decline_reason", if e == "panic inside the port" {
+                    "caught_panic"
+                } else {
+                    "parse_error"
+                });
                 d
             }
         }
