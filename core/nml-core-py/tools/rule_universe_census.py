@@ -24,12 +24,24 @@ distinct rule name against the four layers that must know it:
                              of its consumed roles - stamped, read by nobody
                              (PR #489's finding: a shared primitive's token
                              alone over-credits every name under it);
-                   PARTIAL - no arm, but the effect reaches the core only
-                             through a precomputed channel: the loader's
-                             MOVE_PRIMITIVES move-band pass (list_to_profile.py)
-                             or the conditional-AP pass (an entry param
-                             `condition`/`on6_ap`);
-                   MISSING - no evidence (noted when Rust docs name it).
+                    PARTIAL - no arm, but the effect reaches the core only
+                              through a precomputed channel: the loader's
+                              MOVE_PRIMITIVES move-band pass (list_to_profile.py)
+                              or the conditional-AP pass (an entry param
+                              `condition`/`on6_ap`);
+                    MISSING - no evidence (noted when Rust docs name it);
+                    GRANT-MISSING - the entry carries a grant-type param
+                              (`grants` - the Aura Channel family, plus the
+                              Infiltrate-primitive "Surprise Attack") and its
+                              own evidence says PORTED, but the name it
+                              GRANTS does not itself resolve PORTED in the
+                              same system: the aura is read, grants a name
+                              the core has no handler for, and does nothing
+                              on the table (the six Boost auras, 2026-09-05).
+                              NOT counted as ported. Grant chains are
+                              followed transitively under a visited set plus
+                              MAX_GRANT_DEPTH; a cycle or over-deep chain
+                              resolves UNRESOLVED, which is not PORTED.
 
      A port PR for a shared "class" primitive (one resolver arm, params vary
      per entry) MUST add its consumed param keys to CONSUMED_PARAM_KEYS below
@@ -65,7 +77,23 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 SYSTEMS = ("gf", "aof")
 
-STATUS_RANK = {"PORTED": 3, "STAMPED": 2, "PARTIAL": 1, "MISSING": 0, "N/A": -1}
+STATUS_RANK = {"PORTED": 3, "STAMPED": 2, "PARTIAL": 1, "MISSING": 0,
+               "GRANT-MISSING": 0, "N/A": -1}
+
+# Grant-type entries (2026-09-05): an entry whose params carry a `grants`
+# value GRANTS another rule - the core's generic reader reaching the entry is
+# not the effect; the granted rule resolving is. Found by scanning the live
+# registries for the param key, never hand-listed: today the "Aura Channel"
+# family (every "<X> Aura" aura, 89 names) and the Infiltrate-primitive
+# "Surprise Attack". A carrier counts PORTED only if every name in its
+# params.grants is itself PORTED in the same system (GRANT-MISSING
+# otherwise); chains are followed under a visited set and this depth cap -
+# a cycle or over-deep chain resolves UNRESOLVED, which is not PORTED (an
+# unresolvable grant cannot prove coverage). Depth 8 is far above anything
+# the registries contain (no chain is deeper than 1 today); it exists so a
+# future cyclic registry cannot hang the census.
+GRANT_PARAM_KEY = "grants"
+MAX_GRANT_DEPTH = 8
 
 # Names that are census hygiene, not porting targets (SPEC_block_C_next_
 # 2026-09-02.md's "Census hygiene, not ports" bullet). A MISSING verdict on
@@ -427,7 +455,8 @@ def load_mechanics(repo: Path, system: str) -> dict:
         for name, entry in block.items():
             slot = info.setdefault(
                 name, {"primitives": set(), "entry": False, "cond_ap": False,
-                       "param_keys": set(), "vs_target": False, "grants_rule_values": set()}
+                       "param_keys": set(), "vs_target": False, "grants_rule_values": set(),
+                       "grants_values": set()}
             )
             slot["entry"] = True
             primitive = entry.get("primitive") if isinstance(entry, dict) else None
@@ -443,6 +472,9 @@ def load_mechanics(repo: Path, system: str) -> dict:
                 grant = params.get("grants_rule")
                 if isinstance(grant, str) and grant:
                     slot["grants_rule_values"].add(grant)
+                grant = params.get(GRANT_PARAM_KEY)
+                if isinstance(grant, str) and grant:
+                    slot["grants_values"].add(grant)
     return info
 
 
@@ -768,7 +800,7 @@ def build_universe(books: list[dict]) -> dict:
 
 
 def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
-                consumed_grants: set | None = None) -> dict:
+                consumed_grants: set | None = None, grant_dead: str | None = None) -> dict:
     rows = {}
     AURA_SUFFIX = " Aura"
 
@@ -889,6 +921,62 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
             "factions_by_system": {s: sorted(f) for s, f in u["factions_by_system"].items()},
             "per_system": per_system,
         }
+
+    # Pass 3 (grant follow, 2026-09-05): a grant-carrying entry (params
+    # `grants` - see GRANT_PARAM_KEY) counts PORTED only if every name it
+    # grants is itself PORTED in the same system. The generic reader reaching
+    # the entry is not the effect: the six Boost auras were read, granted a
+    # name the core has no handler for, and did nothing on the table. A
+    # granted name outside the book universe is still judged by the same
+    # machinery (registry entry + tokens), never by row absence alone.
+    def grant_resolved(gname: str, s: str, seen: frozenset, depth: int) -> str:
+        if grant_dead is not None and gname == grant_dead:
+            return "MISSING"  # --grant-red RED knob: force this grant dead
+        if depth > MAX_GRANT_DEPTH or gname in seen:
+            return "UNRESOLVED"  # cycle or over-deep chain: not PORTED
+        grow = rows.get(gname)
+        gps = grow["per_system"].get(s) if grow else None
+        gmech = mechanics[s].get(gname)
+        if gps is not None:
+            st = gps["core"]
+        elif gmech is not None and gmech["entry"]:
+            st, _ = core_status_for(gname, gmech, tokens, bands, hide,
+                                    consumed_grants or set())
+        else:
+            return "MISSING"
+        if st != "PORTED":
+            return st
+        for g in sorted((gmech or {}).get("grants_values") or ()):
+            sub = grant_resolved(g, s, seen | {gname}, depth + 1)
+            if sub != "PORTED":
+                return sub
+        return "PORTED"
+
+    for name in list(rows):
+        row = rows[name]
+        for s in sorted(row["per_system"]):
+            mech = mechanics[s].get(name)
+            grants = sorted((mech or {}).get("grants_values") or ())
+            if not grants:
+                continue
+            ps = row["per_system"][s]
+            if ps["core"] != "PORTED":
+                continue
+            subs = {g: grant_resolved(g, s, frozenset({name}), 1) for g in grants}
+            if all(v == "PORTED" for v in subs.values()):
+                ps["core_note"] += "; grant follow: " + ", ".join(
+                    f"'{g}' resolves PORTED" for g in grants
+                )
+                continue
+            ps["core"] = "GRANT-MISSING"
+            dead = ", ".join(
+                f"'{g}' resolves {v}" for g, v in sorted(subs.items()) if v != "PORTED"
+            )
+            ps["core_note"] += (
+                f"; GRANT-MISSING: params.grants {dead} in {s} - not PORTED,"
+                f" so the granted rule has no core handler (chains: visited set"
+                f" + depth cap {MAX_GRANT_DEPTH}; UNRESOLVED = cycle/over-deep)"
+            )
     return rows
 
 
@@ -948,6 +1036,10 @@ def summarize(rows: dict) -> dict:
         "core_stamped": count(lambda r: best_core(r) == "STAMPED"),
         "core_partial": count(lambda r: best_core(r) == "PARTIAL"),
         "core_missing": count(lambda r: best_core(r) == "MISSING"),
+        # grant follow (2026-09-05): entries whose own evidence said PORTED
+        # but whose granted rule does not resolve PORTED - the aura is read
+        # and does nothing. NOT counted as ported; its own bucket.
+        "core_grant_missing": count(lambda r: best_core(r) == "GRANT-MISSING"),
         # census hygiene (NA_NAMES): not a porting target, so not counted in
         # any ported/unported bucket above and excluded from the denominator
         # summary_lines prints for them (core_ported_denominator below).
@@ -986,6 +1078,9 @@ def summarize(rows: dict) -> dict:
             "core_stamped": sum(1 for _n, r in sub if r["per_system"][s]["core"] == "STAMPED"),
             "core_partial": sum(1 for _n, r in sub if r["per_system"][s]["core"] == "PARTIAL"),
             "core_missing": sum(1 for _n, r in sub if r["per_system"][s]["core"] == "MISSING"),
+            "core_grant_missing": sum(
+                1 for _n, r in sub if r["per_system"][s]["core"] == "GRANT-MISSING"
+            ),
             "encoder_slot": sum(1 for _n, r in sub if r["per_system"][s]["encoder_slot"]),
         }
     summary["by_system"] = by_system
@@ -1156,6 +1251,7 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
             "method": {
                 "walk": "specialRules[].name and rules[].name over every book JSON, recursive; base = name before '('",
                 "core_ported": "name token, or a CONSUMED_PARAM_KEYS-consumed primitive-param, in non-test core/nml-core/src code beyond rules.rs",
+                "core_grant_missing": "own evidence said PORTED, but the entry carries a grants param whose target does not itself resolve PORTED in the same system (transitive: visited set + MAX_GRANT_DEPTH; UNRESOLVED = not ported)",
                 "core_stamped": "primitive token present but this entry's params map to no CONSUMED_PARAM_KEYS role - recognised, not read",
                 "core_partial": "move-band pass primitive (list_to_profile.py:MOVE_PRIMITIVES) or conditional-AP entry param",
                 "core_missing": "no token evidence; 'named in Rust docs' when a comment mentions it",
@@ -1194,6 +1290,41 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
                     for ps in rows[n]["per_system"].values()
                 ):
                     aliased.add(n)
+        # Grant follow (2026-09-05): hiding a primitive also starves every
+        # grant-carrier GRANTED a hidden name - its port evidence flows
+        # through the granted name's status, so it drops with them, the same
+        # transitive closure the grant pass walks (visited-set loop guard).
+        changed = True
+        while changed:
+            changed = False
+            for n in rows:
+                if n in aliased:
+                    continue
+                for s in SYSTEMS:
+                    m = mechanics[s].get(n)
+                    if m and any(g in aliased for g in (m.get("grants_values") or ())):
+                        aliased.add(n)
+                        changed = True
+                        break
+        # Grant follow (2026-09-05): hiding a primitive also starves every
+        # grant-carrier GRANTED a hidden name - its port evidence flows
+        # through the granted name's status, so it drops with them, the same
+        # transitive closure the grant pass walks (visited-set loop guard).
+        # Own-token evidence (a name whose own spelling is core code) still
+        # survives the hide, as it did before grant following - the strict
+        # drop-exact verdict stays the knob's known approximation there.
+        changed = True
+        while changed:
+            changed = False
+            for n in rows:
+                if n in aliased:
+                    continue
+                for s in SYSTEMS:
+                    m = mechanics[s].get(n)
+                    if m and any(g in aliased for g in (m.get("grants_values") or ())):
+                        aliased.add(n)
+                        changed = True
+                        break
         ported_aliased = sum(1 for n in aliased if best_core(rows[n]) == "PORTED")
         result["red"] = {
             "primitive": hide,
@@ -1213,14 +1344,19 @@ def summary_lines(res: dict) -> list[str]:
     t = s["total"]
     pd = s["core_ported_denominator"]
     consumed, stamped = s["core_ported"], s["core_stamped"]
+    gm = s["core_grant_missing"]
     lines = [
         f"RULES-COVERAGE registry-primitive : {s['registry_primitive']}/{t}",
         f"RULES-COVERAGE mechanics-entry    : {s['mechanics_entry']}/{t}",
         f"RULES-COVERAGE core-ported        : {consumed}/{pd}"
         f"  (STAMPED: {stamped}, PARTIAL: {s['core_partial']}, MISSING: {s['core_missing']},"
         f" N/A: {s['core_na']} excluded from {pd})",
+        f"RULES-COVERAGE core-grant-missing : {gm}/{pd}"
+        f"  (own evidence said PORTED, but the entry's granted rule is not"
+        f" PORTED - NOT counted as ported)",
         f"RULES-COVERAGE consumed vs stamped: consumed {consumed}/{pd}"
-        f" · stamped-only {stamped} · missing {pd - consumed - stamped}",
+        f" · stamped-only {stamped} · grant-missing {gm}"
+        f" · missing {pd - consumed - stamped - gm}",
         f"RULES-COVERAGE encoder-slot       : {s['encoder_slot']}/{t}",
         f"RULES-COVERAGE all-layers         : {s['all_layers']}/{t}",
         f"RULES-COVERAGE aura-granted       : {s['aura_live']}/{t}"

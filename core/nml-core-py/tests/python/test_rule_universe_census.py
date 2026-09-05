@@ -114,7 +114,8 @@ def test_census_matrix_red_knob_and_test_gate(mini):
         "RULES-COVERAGE core-ported        : 1/3"
         "  (STAMPED: 1, PARTIAL: 0, MISSING: 1, N/A: 0 excluded from 3)"
     ) in lines
-    assert "consumed 1/3 · stamped-only 1 · missing 1" in lines[3]
+    consumed_line = next(l for l in lines if "consumed" in l and "stamped-only" in l)
+    assert "consumed 1/3 · stamped-only 1 · grant-missing 0 · missing 1" in consumed_line
 
     red = census.census(books, root, hide="Furious")["red"]
     assert red["before"] == 1
@@ -376,6 +377,113 @@ def test_aura_live_control_and_core_counter_net(tmp_path):
         " import expansion; NOT counted as core-ported)"
     ) in lines
     assert "LIVE via the import expansion" in live["core_note"]
+
+
+def test_grant_follow_aura_counts_only_if_granted_rule_ported(tmp_path):
+    """Grant follow (2026-09-05): an entry carrying a `grants` param (the
+    Aura Channel family) counts PORTED only if the name it grants is itself
+    PORTED in the same system - the generic reader reaching the entry is not
+    the effect (the six Boost auras: read, granted a dead rule, did nothing).
+    A carrier whose grant is PORTED stays PORTED; a carrier granted a
+    MISSING or census-hygiene N/A rule flips to GRANT-MISSING and leaves
+    core-ported."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
+        "common": {
+            "Good Boost": {"primitive": "Rage", "params": {}},
+            "Dead Boost": {"primitive": "Rage", "params": {}},
+            "Good Boost Aura": {"primitive": "Aura Channel",
+                                "params": {"grants": "Good Boost"}},
+            "Dead Boost Aura": {"primitive": "Aura Channel",
+                                "params": {"grants": "Dead Boost"}},
+            "Swift": {"primitive": None, "params": {}},
+            "Swift Aura": {"primitive": "Aura Channel",
+                           "params": {"grants": "Swift"}},
+        },
+        "factions": {},
+    }))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    (root / "core/nml-core/src/arm.rs").write_text(
+        'pub const AC: &str = "Aura Channel";\n'
+        'pub const GB: &str = "Good Boost";\n'
+    )
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [
+            {"name": "Good Boost"}, {"name": "Dead Boost"},
+            {"name": "Good Boost Aura"}, {"name": "Dead Boost Aura"},
+            {"name": "Swift"}, {"name": "Swift Aura"},
+        ],
+    }))
+    res = census.census(tmp_path / "books", root)
+    per = res["rows"]
+    live = per["Good Boost Aura"]["per_system"]["gf"]
+    assert live["core"] == "PORTED", "grant resolves PORTED - the aura stays"
+    assert "grant follow: 'Good Boost' resolves PORTED" in live["core_note"]
+    dead = per["Dead Boost Aura"]["per_system"]["gf"]
+    assert dead["core"] == "GRANT-MISSING", (
+        f"granted rule MISSING - the aura must flip, got {dead['core']}"
+    )
+    assert "params.grants 'Dead Boost' resolves MISSING" in dead["core_note"]
+    hygiene = per["Swift Aura"]["per_system"]["gf"]
+    assert hygiene["core"] == "GRANT-MISSING", (
+        "an N/A grant target is not PORTED - the strict rule flips the aura"
+    )
+    assert per["Good Boost"]["per_system"]["gf"]["core"] == "PORTED"
+    assert per["Dead Boost"]["per_system"]["gf"]["core"] == "MISSING"
+    assert per["Swift"]["per_system"]["gf"]["core"] == "N/A"
+
+    s = res["summary"]
+    assert s["core_grant_missing"] == 2
+    assert s["core_ported"] == 2, "GRANT-MISSING must not count as ported"
+    assert s["core_stamped"] == 0
+    assert s["core_missing"] == 1
+    lines = census.summary_lines(res)
+    grant_line = next(l for l in lines if "core-grant-missing" in l)
+    assert "2/5" in grant_line and "NOT counted as ported" in grant_line
+    consumed_line = next(l for l in lines if "consumed" in l and "stamped-only" in l)
+    assert "grant-missing 2" in consumed_line and "missing 1" in consumed_line
+
+
+def test_grant_cycle_resolves_unresolved_and_never_loops(tmp_path):
+    """Transitive safety: if a grant chain ever pointed at another grant, the
+    census must not loop. A cycle resolves UNRESOLVED under the visited set,
+    and UNRESOLVED is not PORTED - both carriers read GRANT-MISSING (an
+    unresolvable grant cannot prove coverage). MAX_GRANT_DEPTH caps over-deep
+    chains the same way."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
+        "common": {
+            "Loop A Aura": {"primitive": "Aura Channel",
+                            "params": {"grants": "Loop B Aura"}},
+            "Loop B Aura": {"primitive": "Aura Channel",
+                            "params": {"grants": "Loop A Aura"}},
+        },
+        "factions": {},
+    }))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    (root / "core/nml-core/src/arm.rs").write_text('pub const AC: &str = "Aura Channel";\n')
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [{"name": "Loop A Aura"}, {"name": "Loop B Aura"}],
+    }))
+    res = census.census(tmp_path / "books", root)
+    per = res["rows"]
+    for name in ("Loop A Aura", "Loop B Aura"):
+        ps = per[name]["per_system"]["gf"]
+        assert ps["core"] == "GRANT-MISSING", f"cycle must not read {ps['core']}"
+        assert "UNRESOLVED" in ps["core_note"], "the note must say why"
+    assert census.MAX_GRANT_DEPTH >= 1, "depth cap exists and is documented"
 
 
 def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
