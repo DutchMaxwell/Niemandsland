@@ -83,9 +83,9 @@ call. MOVE boundary failures are parse errors or caught panics. The search's
 | Decline reason / residual bucket | Measured positions | Closing PR |
 | --- | --- | --- |
 | base_shapes | 7 | PR 1: non-charge closed; charge-gate remainder |
-| whole_unit_shorten | 70 | PR 2 (proposed) |
+| whole_unit_shorten | 14 | PR 2: 56 closed; boxed-continuation remainder |
 | boxed_escape | 16 | PR 3 (proposed) |
-| accepted non-equal endpoints (difference, not decline) | 97 | PR 4 (investigate first) |
+| accepted non-equal endpoints (difference, not decline) | 152 | PR 4 (investigate first) |
 | charge_final_placement | 11 | PR 5 (proposed) |
 | charge_snap | 6 | PR 6 (proposed) |
 | skirmish_chain | 1 | PR 7 (proposed) |
@@ -98,7 +98,7 @@ Reason counts overlap: a charge can expose a gate skip and a missing snap.
 The aggregate declined count counts that position once. Shape coverage is
 conservative: a gate with any live non-round obstacle exposes the missing shape
 capability, even when the current result does not touch that obstacle.
-The inventory counts above reflect PR 1; the measurements above preserve PR 0.
+The inventory counts above reflect PR 2; the measurements above preserve PR 0.
 
 A missing extension, invalid reference rebuild, missing output/model, unexpected
 stage, or nonfinite coordinate fails the instrument instead of manufacturing a
@@ -115,14 +115,14 @@ to accepted equality or the accepted half-inch count.
 | Large bases | Recorded radii and footprints feed final corrections | Bounding-radius terrain rest matches the table |
 | Difficult terrain | `mv/cap.rs` trims polylines; `mv/step.rs` replans at cap | Compare per-model trim, unit replan, and Flying/Strider exemptions |
 | Gate displacement budget | `mv/step.rs::gate_caps` computes remaining per-model caps | Compare corrections after table gate and retrace |
-| Non-charge final placement | `mv/gate.rs` has bounds, overlap, terrain projection, coherency repair, wall clamp | Whole-unit shorten remains absent |
+| Non-charge final placement | `mv/gate.rs` includes epoch-6 shortening and table straggler repair | 14 shortening cases await boxed continuation |
 | Charge rest / overlap / coherency | Formation and shaped near-face aim exist | `mv/step.rs` skips the entire final-placement call when contact is allowed |
 | Charge snap | `Landing::remaining_in` records budget minus longest model arc | MOVE endpoints precede table snap; reserve slack/contact checks remain a gap |
 | Boxed escape | Core stops after the forward gate-collapse ladder | Table can rotate goals when its lateral-room probe succeeds |
 | Coherency hold | Core prefers coherent ladder rungs | Table holds if every rung tears an initially coherent unit |
 | Walls | Both planners route around walls; core non-charge gate clamps crossings | Compare final per-model endpoints and separate formation results |
 | Charge corridor | Table declaration probe routes, trims, finalizes and probes contact | Stage A covers execution geometry; declaration/target selection is outside the fixed-action input |
-| Numeric conversions | Core explicitly models several Vector3 float32 roundings | 97 accepted non-equal positions; investigate residuals before attributing cause |
+| Numeric conversions | Core explicitly models several Vector3 float32 roundings | 152 accepted non-equal positions; investigate residuals before attributing cause |
 
 Generated cases enter both contact and no-contact charge gates; the 14-inch
 charge exposes exhausted snap slack. The difficult-terrain case grants 6 inches,
@@ -148,8 +148,7 @@ Order is determined by the measured decline/difference buckets, descending by
 count; one bucket per PR. The initial proposed sequence is shown above; remeasure
 after each port because overlapping coverage and residual-difference counts can
 change. The small accepted residuals need a root-cause test before any port.
-Charge-gate,
-shorten, shape and snap gaps remain separate ports. Zero is an observation on
+Charge-gate, shorten, shape and snap gaps remain separate ports. Zero is an observation on
 this fixture set, not proof that the unexercised coherency-hold path is ported.
 
 Each port starts with a failing Rust test and pins shared fixture values on both
@@ -195,3 +194,5 @@ are `recorded-005`, `recorded-079`, `recorded-138`, and `recorded-166`.
 
 Three-run SHA-256 (timing excluded):
 `ceed09f8894999d98de97000adb8ad702e98153b7075c71f4a980086dddae5ce`.
+
+PR 2 acceptance: [three runs, test evidence and the 14-case remainder](https://github.com/DutchMaxwell/Niemandsland/pull/724).
