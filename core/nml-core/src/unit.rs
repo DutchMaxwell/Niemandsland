@@ -1024,7 +1024,7 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
 /// Rules-must-log: the aura fold names its unit and what it granted on stderr
 /// when NML_TRACE_RULES=1 — the same gate `sim::trace_rule` uses. Off by
 /// default: the fast core stays silent in gates and rollouts.
-fn trace_rule(unit: &str, rule: &str, detail: &str) {
+fn aura_channel_trace_rule(unit: &str, rule: &str, detail: &str) {
     if std::env::var("NML_TRACE_RULES").as_deref() == Ok("1") {
         eprintln!("[aura-channel] {unit} — {rule} — {detail}");
     }
@@ -1099,7 +1099,7 @@ fn apply_aura_channel(reg: &mut Registries, p: &mut Profile, rules_epoch: u32) {
             }
         }
         if added > 0 {
-            trace_rule(&p.name, &aura, &format!("granted {base} to {added} member(s)"));
+            aura_channel_trace_rule(&p.name, &aura, &format!("granted {base} to {added} member(s)"));
         }
     }
 }
