@@ -132,6 +132,8 @@ mod tests {
             &corpus.knobs, &act.statics, act.player, None, Some(&hook), 1.0);
         assert!(result.is_ok(), "HTTP leaf hook did not reach the search: {result:?}");
         assert_eq!(client.batches.get(), 1);
+        eprintln!("BRAIN_LATENCY batches_per_activation={} batch_ms={:.3}",
+            client.batches.get(), client.micros.get() as f64 / 1000.0);
         server.join().unwrap();
     }
 }
