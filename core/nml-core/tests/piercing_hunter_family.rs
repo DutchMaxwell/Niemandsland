@@ -80,7 +80,9 @@ fn forms_with<'a>(us: &'a UnitStatic, cond: &str) -> Vec<&'a CondAp> {
 
 /// "Piercing Hunter" (gf/blessed_sisters): the ranged_over leg the generic
 /// conditional-AP pass has stamped since NML-1103 — PRESENT at 6, PRESENT at
-/// 5 (byte-exact, the port never re-dates it), absent WITHOUT the rule.
+/// 5 (byte-exact, the port never re-dates it), absent WITHOUT the rule. The
+/// unit-level spec lands on EVERY stamped profile, so one ranged weapon plus
+/// one melee weapon means two specs — one per array.
 #[test]
 fn piercing_hunter_reads_as_ranged_over_at_every_epoch() {
     for epoch in [6, 5] {
@@ -88,8 +90,8 @@ fn piercing_hunter_reads_as_ranged_over_at_every_epoch() {
         let over = forms_with(&us, "ranged_over");
         assert_eq!(
             over.len(),
-            1,
-            "epoch {epoch}: exactly one ranged_over spec (the generic pass's)"
+            2,
+            "epoch {epoch}: the ranged_over spec on both stamped profiles"
         );
         assert_eq!(over[0].ap_bonus, 1, "epoch {epoch}: AP(+1)");
         assert!((over[0].over_in - 9.0).abs() < 1e-9, "epoch {epoch}: over 9 in");
@@ -111,10 +113,18 @@ fn piercing_hunter_reads_as_ranged_over_at_every_epoch() {
 fn havocbound_stamps_its_two_legs_from_epoch_6() {
     let on = build_at("gf", "havoc_brothers", &["Havocbound"], 6);
     let charge = forms_with(&on, "on_charge");
-    assert_eq!(charge.len(), 1, "epoch 6: the charge leg, stated by name (RED before the fix)");
+    assert_eq!(
+        charge.len(),
+        2,
+        "epoch 6: the charge leg on both profiles, stated by name (RED before the fix)"
+    );
     assert_eq!(charge[0].ap_bonus, 1, "epoch 6: AP(+1)");
     let over = forms_with(&on, "ranged_over");
-    assert_eq!(over.len(), 1, "epoch 6: the ranged leg (RED before the fix)");
+    assert_eq!(
+        over.len(),
+        2,
+        "epoch 6: the ranged leg on both profiles (RED before the fix)"
+    );
     assert_eq!(over[0].ap_bonus, 1, "epoch 6: AP(+1)");
     assert!((over[0].over_in - 9.0).abs() < 1e-9, "epoch 6: at the entry's own over_in");
 
@@ -142,7 +152,11 @@ fn havocbound_stamps_its_two_legs_from_epoch_6() {
 fn piercing_shooter_stamps_the_any_range_leg_from_epoch_6() {
     let on = build_at("aof", "chivalrous_kingdoms", &["Piercing Shooter"], 6);
     let over = forms_with(&on, "ranged_over");
-    assert_eq!(over.len(), 1, "epoch 6: the any-range leg (RED before the fix)");
+    assert_eq!(
+        over.len(),
+        2,
+        "epoch 6: the any-range leg on both profiles (RED before the fix)"
+    );
     assert_eq!(over[0].ap_bonus, 1, "epoch 6: AP(+1)");
     assert!((over[0].over_in - (-1.0)).abs() < 1e-9, "epoch 6: the degenerate over_in");
 

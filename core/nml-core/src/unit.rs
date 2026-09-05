@@ -268,6 +268,11 @@ pub struct CondAp {
     pub over_in: f64,
     pub condition: String,
     pub threshold: i64,
+    /// The rule NAME, for the rules-must-log line at the dice folds
+    /// (`ShootResult.log`). Empty on every spec the generic pass stamps —
+    /// pre-wave behaviour logs nothing and old replays stay byte-identical —
+    /// only the wave-3 named forms carry it (Piercing Hunter family).
+    pub name: String,
 }
 
 /// One merged, stamped weapon profile — `AiShooting._profile` ai_shooting.gd:90-152
@@ -1839,6 +1844,7 @@ fn cond_ap_of(reg: &mut Registries, p: &Profile, base: &str) -> (Option<CondAp>,
             over_in: e.param_f("over_in", LONG_RANGE_IN),
             condition: e.param_s("condition").to_string(),
             threshold: e.param_i("threshold", 0),
+            ..Default::default()
         }),
         on6,
     )
@@ -2064,6 +2070,83 @@ impl UnitStatic {
                     if facet_applies(hit.melee_only, hit.shooting_only, sp.range) {
                         sp.surge = true;
                     }
+                }
+            }
+        }
+        // Piercing Hunter family wave 3 (rules-wave3-piercehunt), gated on
+        // `EPOCH_6_TABLE_RULES` (the FROZEN wave-3 constant — never the
+        // literal 6, never CURRENT_RULES_EPOCH) so every record stamped 5 or
+        // below (the Gen-3 recording fleet included) replays byte-exact. The
+        // family's own spellings, read off the registry BY NAME — the
+        // census's own-token evidence:
+        //   * "Piercing Hunter" is live at every epoch off the generic
+        //     pass's ranged_over spec (NML-1103) — no delta, name only;
+        //   * "Havocbound"'s entry spelling (condition:
+        //     "ranged_over_or_charge") is INERT on the shared match — its
+        //     two printed legs are stated instead: on_charge (the charge
+        //     leg) plus ranged_over at the entry's own over_in (the shoot
+        //     leg);
+        //   * "Piercing Shooter" ("gets AP(+1) when shooting") is the
+        //     ranged_over spelling at its degenerate bound (over_in -1: any
+        //     MEASURED distance fires; the unknown-distance sentinel stays
+        //     shut, the table's own conservative reading, main.gd:6382).
+        // The named forms log at the dice folds (rules-must-log); the
+        // generic pass's unnamed specs keep every earlier epoch's replay
+        // byte-identical. Havocbound Boost (always + `upgrades` coupling)
+        // and Point-Blank Piercing (a `within_in` cap) need new mechanism —
+        // listed needs-primitive, nothing invented (#489 discipline).
+        if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+            let mut live: Vec<CondAp> = Vec::new();
+            let map = reg.rules_for(&p.game_system);
+            let mut seen: Vec<String> = Vec::new();
+            for raw in &p.special_rules {
+                let n = base_rule_name(raw);
+                if n.is_empty() || seen.iter().any(|s| *s == n) {
+                    continue;
+                }
+                seen.push(n.clone());
+                let Some(e) = map.lookup(&p.faction_folder, &n) else {
+                    continue;
+                };
+                if e.primitive.as_deref() != Some("Piercing Hunter") {
+                    continue;
+                }
+                let ap = e.param_i("ap_bonus", 0);
+                if ap <= 0 {
+                    continue;
+                }
+                match n.as_str() {
+                    "Piercing Hunter" => {} // live off the generic pass at every epoch — no delta
+                    "Havocbound" => {
+                        live.push(CondAp {
+                            ap_bonus: ap,
+                            condition: "on_charge".into(),
+                            name: n.clone(),
+                            ..Default::default()
+                        });
+                        live.push(CondAp {
+                            ap_bonus: ap,
+                            condition: "ranged_over".into(),
+                            over_in: e.param_f("over_in", LONG_RANGE_IN),
+                            name: n.clone(),
+                            ..Default::default()
+                        });
+                    }
+                    "Piercing Shooter" => {
+                        live.push(CondAp {
+                            ap_bonus: ap,
+                            condition: "ranged_over".into(),
+                            over_in: -1.0,
+                            name: n.clone(),
+                            ..Default::default()
+                        });
+                    }
+                    _ => {}
+                }
+            }
+            if !live.is_empty() {
+                for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+                    sp.cond_ap.extend(live.iter().cloned());
                 }
             }
         }

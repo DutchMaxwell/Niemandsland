@@ -723,6 +723,7 @@ mod tests {
             over_in: LONG_RANGE_IN,
             condition: cond.into(),
             threshold,
+            ..Default::default()
         };
         // Shatter / Tear: vs_tough_ge, no gate.
         let shatter = spec("vs_tough_ge", "", false, 3);
