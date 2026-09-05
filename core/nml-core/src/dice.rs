@@ -34,7 +34,7 @@ use crate::combat::{
     RENDING_AP_BONUS, THRUST_AP_BONUS, UNMODIFIED_SIX,
 };
 use crate::rng::GodotRng;
-use crate::unit::{CondAp, Ctx, ShootProfile};
+use crate::unit::{CondAp, Ctx, ShieldedAlias, ShootProfile};
 
 /// One dice tray: the generator `seed_tray_rng` seeds, and nothing else.
 #[derive(Debug, Clone, Copy)]
@@ -594,6 +594,10 @@ pub fn resolve_volley_with_tray(
     // `over_in` gate, as first fired.
     let mut ma_fired: Vec<(&str, i64, f64)> = Vec::new();
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
+    // Wave 3 — the Shielded-family alias's own rules-must-log flag: the +1
+    // rode a family DATA alias rather than the literal name, one line per
+    // volley below (`ShootResult.log` precedent).
+    let mut shielded_alias_fired = false;
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
     // body below stays the single-shooter one.
     //
@@ -816,6 +820,7 @@ pub fn resolve_volley_with_tray(
         // then Cover — which Blast / Indirect / Ignores Cover skip (:3221).
         let mut base = shielded_defense(def.defense, def.shielded);
         base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN);
+        shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
         let save_def = if p.blast > 1 || p.indirect || p.ignores_cover {
             base
         } else {
@@ -912,6 +917,13 @@ pub fn resolve_volley_with_tray(
     }
     for (owner, hit) in &gp_fired {
         out.log.push(format!("Grounded Precision: {owner} — {hit:+} to hit (in terrain)"));
+    }
+    if shielded_alias_fired {
+        out.log.push(format!(
+            "{}: {def_owner} — +1 to defense rolls (saves on {}+)",
+            def.shielded_alias.name(),
+            shielded_defense(def.defense, true)
+        ));
     }
     out.caused = regen_proof + regenable;
     out.wounds = regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
@@ -1118,6 +1130,9 @@ pub fn resolve_melee_with_tray(
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
+    // Wave 3 — the Shielded-family alias's rules-must-log flag, the volley
+    // fold's melee twin (Shielded is the whole melee Defense ladder here).
+    let mut shielded_alias_fired = false;
     // (1) Unpredictable :5957 — ONE die for the whole phase, before anything
     //     else: 1-3 is AP(+1) on every melee weapon, 4-6 is +1 to hit
     //     (`unpredictable_fighter_effect` ai_combat_math.gd:387-388).
@@ -1235,6 +1250,7 @@ pub fn resolve_melee_with_tray(
             // Melee reads neither Cover nor Guarded (`profile_ev` keeps both on
             // the shooting side); Shielded is the whole Defense ladder here.
             let save_def = shielded_defense(def.defense, def.shielded);
+            shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
             let mut ap = p.ap + uf_ap + sh.att.growth_ap_mod
@@ -1281,6 +1297,13 @@ pub fn resolve_melee_with_tray(
     }
     for (owner, hit) in &gp_fired {
         out.log.push(format!("Grounded Precision: {owner} — {hit:+} to hit (in terrain)"));
+    }
+    if shielded_alias_fired {
+        out.log.push(format!(
+            "{}: {def_owner} — +1 to defense rolls (saves on {}+)",
+            def.shielded_alias.name(),
+            shielded_defense(def.defense, true)
+        ));
     }
     out.caused += regen_proof + regenable;
     out.wounds += regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);

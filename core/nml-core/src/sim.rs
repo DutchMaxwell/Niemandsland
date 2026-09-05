@@ -31,7 +31,7 @@ use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
 use crate::terrain::{base_in_terrain, gives_cover, is_dangerous, Terrain};
-use crate::unit::{Ctx, PiercingTagEntry, UnitStatic, ShootProfile, UtilityBuff};
+use crate::unit::{Ctx, PiercingTagEntry, ShieldedAlias, UnitStatic, ShootProfile, UtilityBuff};
 #[cfg(test)]
 use crate::unit::GrowthRule;
 use crate::{CONTROL_EPS, IN2M};
@@ -1463,6 +1463,32 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         } else {
             0.0
         };
+    }
+    // Wave 3 — the Shielded-family coverage legs (main.gd:5506-5525's
+    // save-time read, granted half), gated on `EPOCH_6_TABLE_RULES` (frozen
+    // at 6): the Gen-3 recorder stamps `rules_epoch: 5` and never saw these
+    // rules. A live grant of an unconditional alias raises the working
+    // Defense at once; the terrain-conditional kind folds ONLY on the live
+    // majority-in-cover answer (`_solo_majority_in_cover` -> `state.in_cover`,
+    // the same live read `ctx_of` writes over the template) — as does the
+    // static stamp's terrain-pending alias. EV-only paths never call
+    // `ctx_live` and stay blind, exactly like every other grant leg.
+    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        if c.shielded_alias != ShieldedAlias::None && !c.shielded && c.in_cover {
+            c.shielded = true;
+        }
+        for (name, alias, terrain) in [
+            ("+1 to Defense", ShieldedAlias::PlusOneToDefense, false),
+            ("Sturdy Boost", ShieldedAlias::SturdyBoost, false),
+            ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement, true),
+        ] {
+            if mods::granted(state, i, name) && (!terrain || c.in_cover) {
+                c.shielded = true;
+                if c.shielded_alias == ShieldedAlias::None {
+                    c.shielded_alias = alias;
+                }
+            }
+        }
     }
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;

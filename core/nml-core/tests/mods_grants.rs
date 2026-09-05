@@ -408,3 +408,210 @@ fn a_darkborn_defender_silences_the_edge_of_range_volley_from_epoch_6() {
         "no clamp, no log line"
     );
 }
+
+// ------------------------- Shielded family (wave 3, epoch 6) -------------------------
+
+/// The Shielded-family aliases are per-faction registry entries ("+1 to
+/// Defense" in gf's wormhole_daemons_of_war, "Sturdy Boost" in gf's
+/// dwarf_guilds, "Grounded Reinforcement" in gf's soul_snatcher_cults —
+/// primitive "Shielded", `defense_bonus: 1`).
+fn alias_at_epoch(system: &str, faction: &str, rule: &str, epoch: u32) -> Ctx {
+    let repo = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let mut reg = nml_core::Registries::new(&repo);
+    UnitStatic::build_for(&mut reg, &shroud_carrier(system, faction, &[rule]), epoch).ctx
+}
+
+/// The live-grant shape: the spell ledger hands the WHOLE joined chain the
+/// granted name (mods::granted), folded by sim::ctx_live exactly where the
+/// static has-rule test stamps its flag.
+fn granted_ctx(
+    st: &nml_core::State,
+    statics: &[UnitStatic],
+    i: usize,
+    melee: bool,
+    epoch: u32,
+) -> Ctx {
+    ctx_live(ctx_of(&statics[st.roster.profile[i]], st, i), statics, st, i, melee, epoch)
+}
+
+/// One per ported name: the static alias PRESENT at epoch 6, ABSENT at
+/// epoch 5 — the Gen-3 recording fleet stamps `rules_epoch: 5`, and none of
+/// wave 3 existed in that recorder (`acts::EPOCH_6_TABLE_RULES`, the frozen
+/// gate).
+#[test]
+fn a_static_plus_one_to_defense_raises_the_save_from_epoch_6() {
+    let on = alias_at_epoch("gf", "wormhole_daemons_of_war", "+1 to Defense", 6);
+    let off = alias_at_epoch("gf", "wormhole_daemons_of_war", "+1 to Defense", 5);
+    assert!(
+        on.shielded,
+        "epoch 6: '+1 to Defense' is the Shielded wording (RED before the fix)"
+    );
+    assert!(
+        !off.shielded,
+        "epoch 5: pre-port records stay alias-free — the walk never fires"
+    );
+}
+
+#[test]
+fn a_static_sturdy_boost_raises_the_save_from_epoch_6() {
+    let on = alias_at_epoch("gf", "dwarf_guilds", "Sturdy Boost", 6);
+    let off = alias_at_epoch("gf", "dwarf_guilds", "Sturdy Boost", 5);
+    assert!(
+        on.shielded,
+        "epoch 6: 'Sturdy Boost' is the Shielded wording (RED before the fix)"
+    );
+    assert!(
+        !off.shielded,
+        "epoch 5: pre-port records stay alias-free — the walk never fires"
+    );
+}
+
+/// The granted kind — the live spell grant of an unconditional alias raises
+/// the working Defense the round it lands, at epoch 6 only.
+#[test]
+fn a_live_plus_one_to_defense_grant_raises_the_save_from_epoch_6() {
+    let (mut st, statics) = two_units();
+    st.buffs[1].push(grant("+1 to Defense", "", true));
+    let on = granted_ctx(&st, &statics, 1, false, 6);
+    let off = granted_ctx(&st, &statics, 1, false, 5);
+    assert!(
+        on.shielded,
+        "epoch 6: the '+1 to Defense' grant reaches the defender's ctx (RED before the fix)"
+    );
+    assert!(
+        !off.shielded,
+        "epoch 5: pre-port records stay grant-blind to the family"
+    );
+}
+
+#[test]
+fn a_live_sturdy_boost_grant_raises_the_save_from_epoch_6() {
+    let (mut st, statics) = two_units();
+    st.buffs[1].push(grant("Sturdy Boost", "", true));
+    let on = granted_ctx(&st, &statics, 1, false, 6);
+    let off = granted_ctx(&st, &statics, 1, false, 5);
+    assert!(
+        on.shielded,
+        "epoch 6: the 'Sturdy Boost' grant reaches the defender's ctx (RED before the fix)"
+    );
+    assert!(
+        !off.shielded,
+        "epoch 5: pre-port records stay grant-blind to the family"
+    );
+}
+
+/// Grounded Reinforcement's terrain clause: the +1 folds ONLY when the
+/// majority-in-cover answer is yes (`_solo_majority_in_cover`, the live
+/// `state.in_cover` here), and never below the epoch gate.
+#[test]
+fn a_live_grounded_reinforcement_grant_folds_only_in_cover_from_epoch_6() {
+    let (mut st, statics) = two_units();
+    st.buffs[1].push(grant("Grounded Reinforcement", "", true));
+    st.in_cover[1] = true;
+    let covered = granted_ctx(&st, &statics, 1, false, 6);
+    let bare = granted_ctx(&st, &statics, 1, false, 5);
+    let mut exposed = st;
+    exposed.in_cover[1] = false;
+    let uncovered = granted_ctx(&exposed, &statics, 1, false, 6);
+    assert!(
+        covered.shielded,
+        "epoch 6, majority in cover: the terrain-conditional alias applies (RED before the fix)"
+    );
+    assert!(
+        !uncovered.shielded,
+        "epoch 6, not in cover: the terrain clause withholds the +1"
+    );
+    assert!(
+        !bare.shielded,
+        "epoch 5: pre-port records stay grant-blind even in cover"
+    );
+}
+
+/// A defense-4 defender profile carrying a live grant of `rule` on its chain
+/// (the two_units state's own bare statics carry no Defense to read).
+fn shielded_state(rule: &str) -> (nml_core::State, Vec<UnitStatic>) {
+    let repo = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let mut reg = nml_core::Registries::new(&repo);
+    let carrier = shroud_carrier("gf", "elven_jesters", &[]);
+    let (mut st, _) = two_units();
+    st.buffs[1].push(grant(rule, "", true));
+    (
+        st,
+        vec![
+            UnitStatic::build_for(&mut reg, &carrier, 6),
+            UnitStatic::build_for(&mut reg, &carrier, 6),
+        ],
+    )
+}
+
+/// The effect end to end on the tray: a granted alias defender saves one
+/// better (the `defense` roll's target drops 4 -> 3) and the rule logs its
+/// one plain line; epoch 5 replays the raw target with no log line.
+#[test]
+fn a_volley_against_a_granted_alias_defender_saves_one_better_from_epoch_6() {
+    let (st, statics) = shielded_state("+1 to Defense");
+    let rifle = [ShootProfile { range: 12, attacks: 2, ..Default::default() }];
+    let att = Ctx { quality: 4, models: 1, ..Default::default() };
+    let volley = |def: &Ctx| {
+        resolve_volley_with_tray(
+            &[Shooter { profiles: &rifle, keep: &[0], attacks: &[2], att: &att, owner: "bow" }],
+            def, "def", 8.0, 8.0, false, true, true, true, &mut Tray::seeded(9),
+        )
+    };
+
+    let on = granted_ctx(&st, &statics, 1, false, 6);
+    let raised = volley(&on);
+    assert!(
+        raised.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
+        "epoch 6: the +1 lowers the save target 4 -> 3 on this defense-4 defender (RED before the fix)"
+    );
+    assert!(
+        raised.log.iter().any(|l| l.contains("+1 to Defense")),
+        "the alias logs its one rules-must-log line: {:?}",
+        raised.log
+    );
+
+    let off = granted_ctx(&st, &statics, 1, false, 5);
+    let legacy = volley(&off);
+    assert!(
+        legacy.rolls.iter().any(|r| r.kind == "defense" && r.target == 4),
+        "epoch 5: the raw defense-4 save target — no rule of the family in that record"
+    );
+    assert!(
+        legacy.log.iter().all(|l| !l.contains("Defense")),
+        "no alias, no log line"
+    );
+}
+
+/// The melee half of the same ladder (Shielded is the whole melee Defense
+/// ladder, dice.rs): the granted alias lowers the strike-back save target
+/// and logs, epoch 6 only.
+#[test]
+fn a_melee_exchange_against_a_granted_alias_defender_saves_one_better_from_epoch_6() {
+    let (st, statics) = shielded_state("Sturdy Boost");
+    let fists = [ShootProfile { range: 0, attacks: 6, ..Default::default() }];
+    let melee = |def: &Ctx| {
+        resolve_melee_with_tray(
+            &[Shooter {
+                profiles: &fists, keep: &[0], attacks: &[6],
+                att: &Ctx { quality: 4, models: 1, ..Default::default() }, owner: "att",
+            }],
+            def, "def", true, false, true, &mut Tray::seeded(7),
+        )
+    };
+    let raised = melee(&granted_ctx(&st, &statics, 1, true, 6));
+    assert!(
+        raised.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
+        "epoch 6: the +1 lowers the melee save target too (RED before the fix)"
+    );
+    assert!(
+        raised.log.iter().any(|l| l.contains("Sturdy Boost")),
+        "the melee ladder logs the same one line: {:?}",
+        raised.log
+    );
+    let legacy = melee(&granted_ctx(&st, &statics, 1, true, 5));
+    assert!(
+        legacy.rolls.iter().all(|r| r.kind != "defense" || r.target == 4),
+        "epoch 5: the raw melee save target"
+    );
+}

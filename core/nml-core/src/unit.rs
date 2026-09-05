@@ -35,6 +35,38 @@ use crate::rules::{
 };
 use crate::state::{Bands, Profile, Profiles, Weapon};
 
+/// The Shielded-family DATA-alias stamp (wave 3, `acts::EPOCH_6_TABLE_RULES`):
+/// the table's Shielded coverage read (`_solo_defense_parts`, main.gd:5506-
+/// 5525) takes the literal name first, then the family's own entries — each on
+/// all models, its +1 riding the SAME floored rung (`combat::shielded_defense`)
+/// and the same "not from spells" clause the spell path's own ladder keeps.
+/// `None` = the literal name or no member of the family; the literal keeps its
+/// pre-port silent read.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ShieldedAlias {
+    #[default]
+    None,
+    PlusOneToDefense,
+    SturdyBoost,
+    /// The terrain-conditional kind: its `terrain_within_in` gates the +1 on
+    /// the majority-in-cover answer (`_solo_majority_in_cover`), which is
+    /// live state — the static stamp leaves `shielded` off and
+    /// `sim::ctx_live` folds it beside the granted names.
+    GroundedReinforcement,
+}
+
+impl ShieldedAlias {
+    /// The rules-must-log name, verbatim the rule's own text.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::None => "",
+            Self::PlusOneToDefense => "+1 to Defense",
+            Self::SturdyBoost => "Sturdy Boost",
+            Self::GroundedReinforcement => "Grounded Reinforcement",
+        }
+    }
+}
+
 /// `AiEv` unit context — `ctx_for`'s dictionary as a struct. `models`,
 /// `in_cover` and `fatigued` are the DYNAMIC three `BattleSim._ctx_of`
 /// (battle_sim.gd:701-712) writes over the template per call.
@@ -115,6 +147,13 @@ pub struct Ctx {
     pub ranged_shroud_penalty_in: f64,
     pub ranged_shroud_floor_in: f64,
     pub shielded: bool,
+    /// Wave 3 — the Shielded-family DATA-alias fold (`acts::EPOCH_6_TABLE_
+    /// RULES`): WHICH member of the family is driving the working `shielded`
+    /// +1, `None` for the literal "Shielded" (its pre-port silent read) or no
+    /// member. The three names are the wave's assignment; the fold itself is
+    /// `ctx_for` (static carriers) plus `sim::ctx_live` (granted names and
+    /// the terrain clause on the live in_cover answer).
+    pub shielded_alias: ShieldedAlias,
     pub in_cover: bool,
     /// `AiEv.ctx_for`'s third argument, which `BattleSim._ctx_of` never passes
     /// (battle_sim.gd:702) — always 0 in the sim, modelled for `impact_ev`.
@@ -1142,6 +1181,46 @@ fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
     None
 }
 
+/// main.gd:5506-5525's Shielded coverage wave, the STATIC half — the literal
+/// name first (the ungated pre-port read), then the wave's three names, each
+/// on all models like the base form, its own entry deciding both reads: the
+/// +1 is the entry's own `defense_bonus` (0 = no fold) and
+/// `terrain_within_in > 0` makes it the majority-in-cover kind, which only
+/// the live fold (`sim::ctx_live`, on the recorded/computed `state.in_cover`)
+/// can resolve — so a terrain-gated alias returns pending here. Item-granted
+/// rules already reach it through the import's fold (`rules_of_primitive`'s
+/// own+item walk). EPOCH-GATED (`acts::rule_on`): the walk is wave-3
+/// behaviour, so a record below `EPOCH_6_TABLE_RULES` keeps the pre-port
+/// reading — the bare literal with nothing beside it.
+fn shielded_alias_of(
+    reg: &mut Registries,
+    p: &Profile,
+    rules_epoch: u32,
+) -> Option<(ShieldedAlias, bool)> {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) || rule_on_all_models(p, "Shielded") {
+        return None;
+    }
+    const ALIASES: [(&str, ShieldedAlias); 3] = [
+        ("+1 to Defense", ShieldedAlias::PlusOneToDefense),
+        ("Sturdy Boost", ShieldedAlias::SturdyBoost),
+        ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement),
+    ];
+    let map = reg.rules_for(&p.game_system);
+    for (name, alias) in ALIASES {
+        if !rule_on_all_models(p, name) {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, name) else {
+            continue;
+        };
+        if e.primitive.as_deref() != Some("Shielded") || e.param_i("defense_bonus", 0) <= 0 {
+            continue;
+        }
+        return Some((alias, e.param_f("terrain_within_in", 0.0) > 0.0));
+    }
+    None
+}
+
 /// The four reads above for one unit profile.
 pub fn capture_reads(reg: &mut Registries, p: &Profile) -> CaptureReads {
     let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules);
@@ -1409,6 +1488,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // until sim.rs's volley site stamps the act-scope flag over it.
     let (mobile_artillery_hit, mobile_artillery_over_in, grounded_precision_hit) =
         shot_modifier_runtime_of(reg, p, rules_epoch);
+    let shielded_alias = shielded_alias_of(reg, p, rules_epoch);
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -1460,7 +1540,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         mobile_artillery_over_in,
         grounded_precision_hit,
         moved_this_round: true,
-        shielded: rule_on_all_models(p, "Shielded"),
+        shielded: rule_on_all_models(p, "Shielded")
+            || shielded_alias.as_ref().is_some_and(|(_, pending)| !*pending),
+        shielded_alias: shielded_alias.map_or(ShieldedAlias::None, |(a, _)| a),
         in_cover: false,
         // HARD 0, and it stays 0: `BattleSim._ctx_of` never passes
         // `AiEv.ctx_for`'s third argument either (battle_sim.gd:702,
