@@ -56,7 +56,7 @@ jobs:
         run: pip install maturin pytest numpy pytest-timeout
 
       - name: Build nml-core-py wheel
-        run: maturin build --release -m core/nml-core-py/Cargo.toml -o dist
+        run: NML_BUILD_COMMIT=$GITHUB_SHA maturin build --release -m core/nml-core-py/Cargo.toml -o dist
 
       - name: Install nml-core-py wheel
         run: pip install dist/*.whl

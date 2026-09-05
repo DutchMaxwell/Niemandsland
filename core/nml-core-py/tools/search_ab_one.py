@@ -118,6 +118,7 @@ def main() -> int:
     res["armies"] = {"p1": a.army1, "p2": a.army2}
     res["wall_seconds"] = round(wall, 3)
     res["prescreen"] = {
+        **res.get("prescreen", {}),
         "tool": "search_ab_one", "deployment": "arena",
         "seed": a.seed,
         "dice_seed_used": a.dice_seed,

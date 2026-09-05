@@ -26,6 +26,19 @@ CARGO_TARGET_DIR=~/.cache/nml-m3-1-target \
 `uv pip install --python ~/venvs/nmlcore/bin/python core/target/wheels/nml_core-*.whl`
 (the one workspace target dir, F7 — not the crate's own `target/`).
 
+Each wheel embeds `nml_core.BUILD_COMMIT`, `BUILD_DIRTY`, and `BUILD_INFO`
+(commit, dirty flag, rules epoch, crate version, UTC build time). The commit
+comes from `NML_BUILD_COMMIT`, otherwise the build checkout's full Git HEAD,
+otherwise `unknown`; Git status supplies the dirty flag when available
+(false without Git does not certify that an archive is pristine). A fleet
+building a tarball must pass the exact full SHA used to download that archive:
+`NML_BUILD_COMMIT="$SOURCE_COMMIT" maturin build --release -j2 -m core/nml-core-py/Cargo.toml -o dist`.
+The stamp identifies the compiled core even when the wheel runs in another
+checkout. Every self-play result carries it under `prescreen`; replay tools
+warn once on a missing/different stamp, or refuse with exit 3 when passed
+`--require-same-core` or `NML_REQUIRE_SAME_CORE=1`. Runtime Git is only a
+non-blocking fallback for an unknown build, and never changes `BUILD_INFO`.
+
 ## API
 
 ```python

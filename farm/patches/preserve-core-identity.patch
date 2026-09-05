@@ -1,0 +1,14 @@
+diff --git a/gen0_one.py b/gen0_one.py
+--- a/gen0_one.py
++++ b/gen0_one.py
+@@ -125,2 +125,3 @@
+     res["prescreen"] = {
++        **res.get("prescreen", {}),
+         "tool": "gen0_one",
+diff --git a/gen1_one.py b/gen1_one.py
+--- a/gen1_one.py
++++ b/gen1_one.py
+@@ -213,2 +213,3 @@
+     res["prescreen"] = {
++        **res.get("prescreen", {}),
+         "tool": "gen1_one",

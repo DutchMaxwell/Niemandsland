@@ -9,6 +9,9 @@ description = "NML-1073 M3-1: the Python seam — the Rust search, resolve and m
 name = "nml_core"
 crate-type = ["cdylib"]
 
+[build-dependencies]
+time = { version = "0.3", default-features = false, features = ["std", "formatting"] }
+
 [dependencies]
 pyo3 = { version = "0.29", features = ["extension-module"] }
 serde = { version = "1", features = ["derive"] }

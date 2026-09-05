@@ -2641,6 +2641,18 @@ fn deploy_finish(
     to_py(py, &Value::Object(out))
 }
 
+const BUILD_COMMIT: &str = env!("NML_BUILD_COMMIT");
+
+fn build_info() -> Value {
+    serde_json::json!({
+        "commit": BUILD_COMMIT,
+        "dirty": env!("NML_BUILD_DIRTY") == "true",
+        "rules_epoch": nmlcore::CURRENT_RULES_EPOCH,
+        "crate_version": env!("CARGO_PKG_VERSION"),
+        "build_time_utc": env!("NML_BUILD_TIME_UTC"),
+    })
+}
+
 #[pymodule]
 fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__doc__", "NML-1073 M3-1 — the Niemandsland fast rules core, callable from Python.")?;
@@ -2661,6 +2673,9 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh
     // `play_game()` stamps. See `acts::rule_on`.
     m.add("CURRENT_RULES_EPOCH", nmlcore::CURRENT_RULES_EPOCH)?;
+    m.add("BUILD_COMMIT", BUILD_COMMIT)?;
+    m.add("BUILD_DIRTY", env!("NML_BUILD_DIRTY") == "true")?;
+    m.add("BUILD_INFO", to_py(m.py(), &build_info())?)?;
     // NML-1073 M3-4: the board as a pure lookup — the header's terrain in, the
     // same answers `SchoolTerrain` gives the live game out.
     m.add_function(wrap_pyfunction!(board, m)?)?;
@@ -2694,4 +2709,22 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("RUSH", nmlcore::RUSH)?;
     m.add("CHARGE", nmlcore::CHARGE)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod build_identity_tests {
+    #[test]
+    fn build_identity_is_valid_and_has_current_epoch() {
+        let commit = super::BUILD_COMMIT;
+        assert!(
+            commit == "unknown"
+                || (commit.len() == 40 && commit.bytes().all(|b| b.is_ascii_hexdigit()))
+        );
+        let info = super::build_info();
+        assert_eq!(info["commit"], commit);
+        assert_eq!(info["rules_epoch"], nmlcore::CURRENT_RULES_EPOCH);
+        assert!(info["dirty"].is_boolean());
+        assert_eq!(info["crate_version"], env!("CARGO_PKG_VERSION"));
+        assert!(info["build_time_utc"].as_str().unwrap().ends_with('Z'));
+    }
 }
