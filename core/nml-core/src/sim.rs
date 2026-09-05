@@ -6337,7 +6337,7 @@ mod tests {
     fn defensive_frenzys_defense_ladder_applies_only_at_epoch_6() {
         let (mut st, mut statics) = buff_line();
         statics[2].growth = vec![GrowthRule {
-            on_kill: true, max_markers: 2, defense_per_marker: 1, ..Default::default(),
+            on_kill: true, max_markers: 2, defense_per_marker: 1, ..Default::default()
         }];
         statics[0].shoot = vec![gun("Rifle", 20, 24)];
         st.growth_markers[2] = 2;
@@ -6375,7 +6375,7 @@ mod tests {
     fn defensive_growths_defense_per_two_applies_only_at_epoch_6() {
         let (mut st, mut statics) = buff_line();
         statics[2].growth = vec![GrowthRule {
-            per_round: true, max_markers: 4, defense_per_two: 1, ..Default::default(),
+            per_round: true, max_markers: 4, defense_per_two: 1, ..Default::default()
         }];
         statics[0].shoot = vec![gun("Rifle", 20, 24)];
         st.growth_markers[2] = 3;
@@ -6410,7 +6410,7 @@ mod tests {
     fn fortified_growths_ap_cut_applies_only_at_epoch_6() {
         let (mut st, mut statics) = buff_line();
         statics[2].growth = vec![GrowthRule {
-            per_round: true, max_markers: 4, enemy_ap_per_two: -1, ..Default::default(),
+            per_round: true, max_markers: 4, enemy_ap_per_two: -1, ..Default::default()
         }];
         let mut rifle = gun("Rifle", 20, 24);
         rifle.ap = 2;
@@ -6448,7 +6448,7 @@ mod tests {
     fn regenerative_strength_banks_markers_when_it_ignores_wounds_at_epoch_6() {
         let (mut st, mut statics) = buff_line();
         statics[2].growth = vec![GrowthRule {
-            on_ignore_wound: true, max_markers: 4, ..Default::default(),
+            on_ignore_wound: true, max_markers: 4, ..Default::default()
         }];
         statics[2].ctx.regeneration = true;
         statics[2].ctx.regen_target = 2;
@@ -6486,7 +6486,7 @@ mod tests {
     fn regenerative_strengths_attacks_facet_applies_only_at_epoch_6() {
         let (mut st, mut statics) = buff_line();
         statics[0].growth = vec![GrowthRule {
-            on_ignore_wound: true, attacks_per_marker: 1, max_markers: 4, ..Default::default(),
+            on_ignore_wound: true, attacks_per_marker: 1, max_markers: 4, ..Default::default()
         }];
         st.growth_markers[0] = 3;
         let parts6 = melee_parts(&statics, &st, 0, 2, Seams { rules_epoch: 6, ..Default::default() });
