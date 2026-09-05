@@ -569,6 +569,10 @@ pub fn resolve_volley_with_tray(
     // moment a profile's working reach actually drops below its raw range
     // (dice.rs `ShootResult.log` precedent), one line per volley below.
     let mut shroud_shortened = false;
+    // Wave 3 — the Indirect family's rules-must-log flag: set the moment an
+    // alias-marked profile's cover skip actually lands on an in-cover target
+    // (`shroud_shortened`'s shape) — one line per volley below.
+    let mut alias_cover_logged = false;
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
     // body below stays the single-shooter one.
     //
@@ -758,6 +762,26 @@ pub fn resolve_volley_with_tray(
         } else {
             covered_defense(base, def.in_cover)
         };
+        // Wave 3 — rules-must-log: the unit-level Indirect names ("Indirect
+        // when Shooting" / "Ignores Cover when Shooting", unit.rs build_for's
+        // epoch-6 walk) stamp their skip with an `*_alias` marker, so the
+        // volley names the RULE — not the weapon tag — the one time its cover
+        // skip lands (`Ranged Shrouding`'s one-line shape). An epoch-5 static
+        // carries no markers and stays silent.
+        if !alias_cover_logged
+            && def.in_cover
+            && p.blast <= 1
+            && (p.indirect_alias || p.ignores_cover_alias)
+        {
+            alias_cover_logged = true;
+            let rule = if p.ignores_cover_alias {
+                "Ignores Cover when Shooting"
+            } else {
+                "Indirect when Shooting"
+            };
+            out.log
+                .push(format!("{rule}: {} — {}'s cover save is skipped", sh.owner, def_owner));
+        }
         // Block B7 — Piercing Growth: main.gd:4287's marker-driven AP delta,
         // shooting and melee both (`_solo_attack_groups` adds it to `prof
         // ["ap"]` regardless of which the caller built profiles for).

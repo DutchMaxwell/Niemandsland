@@ -352,6 +352,16 @@ pub struct ShootProfile {
     /// "over" — same strict gate as every other over-9" read in this port.
     pub shred_over_in: f64,
     pub indirect: bool,
+    /// The unit-level "Indirect when Shooting" stamp (`build_for`'s epoch-6
+    /// named walk below) — set ALONGSIDE `indirect` so the volley log
+    /// (dice.rs) can name the RULE, not the weapon tag, when its cover skip
+    /// lands. The log leg reads this field only; every effect read keeps the
+    /// plain flag.
+    pub indirect_alias: bool,
+    /// The unit-level "Ignores Cover when Shooting" stamp — the same
+    /// log-only marker shape as `indirect_alias` for the cover-only name
+    /// (whose plain flag block 5 already stamps, ungated).
+    pub ignores_cover_alias: bool,
     pub limited: bool,
     pub takedown: bool,
     pub rules: Vec<String>,
@@ -436,6 +446,8 @@ impl ShootProfile {
             && self.shred == o.shred
             && self.shred_alias == o.shred_alias
             && self.indirect == o.indirect
+            && self.indirect_alias == o.indirect_alias
+            && self.ignores_cover_alias == o.ignores_cover_alias
             && self.limited == o.limited
             && self.takedown == o.takedown
             && self.rules == o.rules
@@ -2365,6 +2377,40 @@ impl UnitStatic {
             }
         }
 
+        // Indirect family (rules-wave3-indirect), gated `EPOCH_6_TABLE_RULES`
+        // (frozen at 6 — the recorder fleet stamps `rules_epoch: 5`, and its
+        // records carry no wave-3 rules): the two unit-level names state
+        // their facets BY NAME off the same primitive walk block 5 rides.
+        // "Indirect when Shooting" stamps the plain `indirect` flag the save
+        // gate, the EV imagination and the sight waiver all read; "Ignores
+        // Cover when Shooting" stamps plain `ignores_cover` like block 5's
+        // ungated arm (whose effect predates this gate) — each alongside its
+        // `*_alias` marker, which only the volley log reads. A record below
+        // `rules_epoch` 6 replays untouched.
+        if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+            for hit in rules_of_primitive(reg, p, "Indirect") {
+                match hit.name.as_str() {
+                    "Indirect when Shooting" => {
+                        for sp in shoot.iter_mut() {
+                            if sp.range > 0 {
+                                sp.indirect = true;
+                                sp.indirect_alias = true;
+                            }
+                        }
+                    }
+                    "Ignores Cover when Shooting" => {
+                        for sp in shoot.iter_mut() {
+                            if sp.range > 0 {
+                                sp.ignores_cover = true;
+                                sp.ignores_cover_alias = true;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         let is_caster = has_special_rule(&p.special_rules, "Caster")
             || has_special_rule(&p.special_rules, "Caster Group");
         let spells = if is_caster {
@@ -2946,6 +2992,111 @@ mod tests {
         };
         assert_eq!(read(6), (true, true), "epoch 6: host and hero both carry the base");
         assert_eq!(read(5), (true, false), "epoch 5: the gate is OFF — RED before the fix");
+    }
+
+    /// Indirect family (rules-wave3-indirect) — the rule-less carrier
+    /// template: the `rule` swapped into `special_rules` so the REAL gf
+    /// common-block entry resolves (both ported names live there), one ranged
+    /// Rifle (24") so the shooting-only facet is observable.
+    const INDIRECT_FAMILY_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "carrier":{"unit_id":"carrier","name":"Carrier","quality":2,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// One name's family stamp: the `rule` swapped into the carrier's
+    /// special_rules, built at `epoch` off the REAL registry.
+    fn indirect_family_of(rule: &str, epoch: u32) -> UnitStatic {
+        let tpl = INDIRECT_FAMILY_HEADER
+            .replace("\"special_rules\":[]", &format!("\"special_rules\":[\"{rule}\"]"));
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        UnitStatic::build_for(&mut reg, p, epoch)
+    }
+
+    /// "Indirect when Shooting" (gf common block): the unit-level name stamps
+    /// the full Indirect facet onto every RANGED profile at the wave-3 gate —
+    /// the profile's own `indirect` flag that the save gate (dice.rs), the EV
+    /// imagination (combat.rs `profile_ev`) and the sight waiver (sim.rs
+    /// `sighted_count`) all read. Epoch literals 6/5, NOT
+    /// `CURRENT_RULES_EPOCH`: a wave-4 bump must not re-date what these
+    /// assertions mean. RED (drop `build_for`'s named walk): the epoch-6
+    /// assertion trips on the unstamped flag.
+    #[test]
+    fn indirect_when_shooting_stamps_its_ranged_facet_at_epoch_6() {
+        assert!(
+            indirect_family_of("Indirect when Shooting", 6).shoot[0].indirect,
+            "the unit-level name reaches the ranged profile at the wave-3 gate"
+        );
+        assert!(
+            !indirect_family_of("Indirect when Shooting", 5).shoot[0].indirect,
+            "the wave is epoch-gated: rules_epoch 5 is the recorder fleet's stamping epoch, RED before the fix"
+        );
+        assert!(
+            !indirect_family_of("", 6).shoot[0].indirect,
+            "no rule, no stamp"
+        );
+    }
+
+    /// "Ignores Cover when Shooting" (gf common block): the EFFECT is block
+    /// 5's ungated cover-ignore arm (ai_ev.gd:273-281's loop, live at every
+    /// epoch — the epoch-5 leg is the regression guard), so THIS wave's port
+    /// is the name-literal walk (the census's own-token evidence) plus the
+    /// rules-must-log line: the volley names the RULE — not the weapon tag —
+    /// the one time its cover skip lands on an in-cover target. RED (drop the
+    /// named walk or the dice log leg): the epoch-6 log assertion trips on an
+    /// empty log.
+    #[test]
+    fn ignores_cover_when_shooting_reaches_the_ranged_stamp_and_logs_its_cover_skip() {
+        let volley_log = |us: &UnitStatic| {
+            let def =
+                Ctx { defense: 4, models: 5, tough: 1, in_cover: true, ..Default::default() };
+            let mut tray = crate::dice::Tray::seeded(27);
+            let one = [crate::dice::Shooter {
+                profiles: &us.shoot,
+                keep: &[0],
+                attacks: &[us.shoot[0].attacks],
+                att: &us.ctx,
+                owner: &us.name,
+            }];
+            crate::dice::resolve_volley_with_tray(
+                &one, &def, "Target", 12.0, 12.0, true, true, true, true, &mut tray,
+            )
+            .log
+        };
+        assert!(
+            volley_log(&indirect_family_of("Ignores Cover when Shooting", 6))
+                .iter()
+                .any(|l| l.starts_with("Ignores Cover when Shooting: Carrier")),
+            "the rule logs its cover skip — rules must log"
+        );
+        assert!(
+            !volley_log(&indirect_family_of("Ignores Cover when Shooting", 5))
+                .iter()
+                .any(|l| l.starts_with("Ignores Cover when Shooting:")),
+            "the LOG is wave-3 behaviour: block 5's pre-existing effect stays silent at epoch 5"
+        );
+        assert!(
+            !volley_log(&indirect_family_of("", 6))
+                .iter()
+                .any(|l| l.starts_with("Ignores Cover when Shooting:")),
+            "no rule, no log line"
+        );
+        assert!(
+            indirect_family_of("Ignores Cover when Shooting", 6).shoot[0].ignores_cover,
+            "the named walk stamps the plain flag the save gate reads"
+        );
+        assert!(
+            indirect_family_of("Ignores Cover when Shooting", 5).shoot[0].ignores_cover,
+            "block 5's ungated cover arm predates this wave — the regression guard"
+        );
+        assert!(
+            !indirect_family_of("", 6).shoot[0].ignores_cover,
+            "no rule, no stamp"
+        );
     }
 
     /// One rule's truth table through the template: the (shoot, melee) bane
