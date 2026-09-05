@@ -78,6 +78,11 @@ func _texts(report: Dictionary) -> String:
 	return "\n".join(texts)
 
 
+func _corridor_records(solo: SoloController) -> Array:
+	return solo.decision_log.filter(func(record: Dictionary) -> bool:
+		return str(record.get("rule", "")).begins_with("#183 charge declaration"))
+
+
 func test_issue_183_blocked_corridor_is_rejected_before_activation_is_spent() -> void:
 	var attacker := _unit(2, "Melee", [Vector3.ZERO])
 	_arm(attacker, [{"name": "CCW", "range": 0, "attacks": 2}])
@@ -91,6 +96,7 @@ func test_issue_183_blocked_corridor_is_rejected_before_activation_is_spent() ->
 	assert_float(attacker.models[0].node.global_position.distance_to(position_before) / IN2M).is_greater(1.0)
 	assert_str(_texts(report)).contains("rejected")
 	assert_str(_texts(report)).contains("instead")
+	assert_int(_corridor_records(solo).size()).is_equal(1)
 
 
 func test_clean_lane_and_in_band_detour_remain_reachable() -> void:
@@ -166,7 +172,7 @@ func test_rejected_charge_keeps_a_legal_ranged_volley() -> void:
 	var attacker := _unit(2, "Hybrid", [Vector3.ZERO])
 	_arm(attacker, [
 		{"name": "Rifle", "range": 24, "attacks": 2},
-		{"name": "CCW", "range": 0, "attacks": 2},
+		{"name": "CCW", "range": 0, "attacks": 3},
 	])
 	var target := _unit(1, "Target", [Vector3(0.28, 0, 0)])
 	var solo := _controller([attacker, target], FULL_HEIGHT_WALL)
@@ -174,3 +180,20 @@ func test_rejected_charge_keeps_a_legal_ranged_volley() -> void:
 	assert_int(int(report.get("action", -1))).is_not_equal(AiDecision.Action.CHARGE)
 	assert_bool(bool(report.get("can_shoot", false))).is_true()
 	assert_str(_texts(report)).contains("instead")
+	assert_int(_corridor_records(solo).size()).is_equal(1)
+
+
+func test_blocked_corridor_does_not_claim_a_shooting_tree_charge_refusal() -> void:
+	var attacker := _unit(2, "Shooter", [Vector3.ZERO])
+	_arm(attacker, [
+		{"name": "Rifle", "range": 24, "attacks": 2},
+		{"name": "CCW", "range": 0, "attacks": 2},
+	])
+	var target := _unit(1, "Target", [Vector3(0.28, 0, 0)])
+	var solo := _controller([attacker, target], FULL_HEIGHT_WALL)
+	assert_bool(bool(_probe(solo, attacker, target)["reachable"])).is_false()
+	var report := solo._act(attacker)
+	assert_int(int(report.get("action", -1))).is_not_equal(AiDecision.Action.CHARGE)
+	assert_bool(bool(report.get("can_shoot", false))).is_true()
+	assert_str(_texts(report)).not_contains("rejected")
+	assert_array(_corridor_records(solo)).is_empty()

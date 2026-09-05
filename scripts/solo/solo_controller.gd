@@ -1896,6 +1896,14 @@ func _act(unit: GameUnit) -> Dictionary:
 			and not charge_futile and not charge_toll_blocked,
 		"shoot_after_advance": shoot_range > 0 and (enemy_dist - (rush if quick_shot else advance)) <= float(shoot_range),
 	}
+	# Attribute a fallback to #183 only if removing this gate changes the tree's
+	# choice from CHARGE. Preserve every other legality and preference gate.
+	var corridor_replaced_charge := false
+	if charge_corridor_blocked:
+		var unblocked_ctx := ctx.duplicate()
+		unblocked_ctx["enemy_in_charge"] = charge_gap <= charge_band and not target_is_aircraft \
+			and not charge_capped and not charge_futile and not charge_toll_blocked
+		corridor_replaced_charge = int(AiDecision.decide_solo(unblocked_ctx)["action"]) == AiDecision.Action.CHARGE
 	var dec := AiDecision.decide_solo(ctx)
 	var action: int = int(dec["action"])
 	var do_shoot: bool = bool(dec["shoot"])
@@ -2126,7 +2134,7 @@ func _act(unit: GameUnit) -> Dictionary:
 				"why": ("reaches firing position" if bool(fl.get("within_advance", false)) else "approach toward firing lane"),
 				"data": {"angle_deg": float(fl.get("angle_deg", 0.0)), "anchor_dist_in": float(fl.get("dist_in", 0.0)),
 					"ring_in": float(fl.get("ring_in", 0.0)), "ev": float(fl.get("ev", 0.0))}})
-	if charge_corridor_blocked:
+	if corridor_replaced_charge:
 		var fallback_name := AiDecision.action_name(action)
 		_rule_note(report, "%s: charge on %s rejected — the executable corridor cannot reach contact within %.1f\"; %s instead" % [
 			unit.get_name(), target_unit.get_name(), float(charge_probe.get("effective_band_in", charge_band)),
