@@ -9110,8 +9110,9 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 				var causes: PackedStringArray = []
 				if SoloController.target_range_penalty_in(target) > 0.0:
 					causes.append("Aircraft -12\"")
-				if AiEv.rule_on_all_models(target, "Ranged Shrouding"):
-					causes.append("Ranged Shrouding")
+				var shroud := SoloController.ranged_shroud_spec(target)
+				if not shroud.is_empty():
+					causes.append(str(shroud["name"]))
 				why = " — %s" % ", ".join(causes)
 			return "out of range (%.1f\" edge to edge > %d\"%s)" % [dist, rng_in, why]
 		return "no model has line of sight" + _solo_los_refusal_detail(attacker, target)
@@ -9250,7 +9251,7 @@ func _solo_reach_note(attacker: GameUnit, hovered: GameUnit) -> String:
 	if eff_reach >= raw_reach:
 		return ""
 	return " · reach %d\" (%s)" % [eff_reach,
-		("Aircraft -12\"" if SoloController.target_range_penalty_in(hovered) > 0.0 else "Ranged Shrouding")]
+		("Aircraft -12\"" if SoloController.target_range_penalty_in(hovered) > 0.0 else str(SoloController.ranged_shroud_spec(hovered).get("name", "Ranged Shrouding")))]
 
 
 func _solo_update_los_line(screen_pos: Vector2) -> void:
@@ -9746,13 +9747,15 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 	if battle_log == null or attacker == null or target == null:
 		return
 	var aircraft: bool = SoloController.target_range_penalty_in(target) > 0.0
-	var shrouded: bool = AiEv.rule_on_all_models(target, "Ranged Shrouding")
+	var shroud := SoloController.ranged_shroud_spec(target)
+	var shrouded := not shroud.is_empty()
 	if aircraft:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s is an Aircraft: weapon ranges count -12\" against it (GF v3.5.1)" % target.get_name(), true)
 	if shrouded:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s has Ranged Shrouding: weapon ranges -6\" (min 6\") against it" % target.get_name(), true)
+			"%s has %s: weapon ranges -%s\" (min %s\") against it" % [target.get_name(),
+				shroud["name"], str(shroud["range_penalty_in"]), str(shroud["floor_in"])], true)
 	if not (aircraft or shrouded):
 		return
 	var locked: PackedStringArray = []
@@ -9776,7 +9779,7 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 	if locked.is_empty():
 		return
 	_log_rule_event(BattleLog.Category.COMBAT, "%s: %s out of reach against %s — %s not fired" % [
-		attacker.get_name(), ("Aircraft -12\"" if aircraft else "Ranged Shrouding"),
+		attacker.get_name(), ("Aircraft -12\"" if aircraft else str(shroud.get("name", "Ranged Shrouding"))),
 		target.get_name(), ", ".join(locked)], true)
 
 

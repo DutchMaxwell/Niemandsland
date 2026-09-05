@@ -5648,29 +5648,33 @@ static func target_range_penalty_in(target: GameUnit) -> float:
 	return float(RulesRegistry.unit_param(target, "Aircraft", "target_range_penalty_in", AIRCRAFT_TARGET_RANGE_PENALTY_IN))
 
 
+static func ranged_shroud_spec(target: GameUnit) -> Dictionary:
+	if target == null:
+		return {}
+	if AiEv.rule_on_all_models(target, "Ranged Shrouding"):
+		return {"name": "Ranged Shrouding",
+			"range_penalty_in": RulesRegistry.unit_param(target, "Ranged Shrouding", "range_penalty_in", AiCombatMath.SHROUD_RANGE_PENALTY_IN),
+			"floor_in": RulesRegistry.unit_param(target, "Ranged Shrouding", "floor_in", AiCombatMath.SHROUD_FLOOR_IN)}
+	for e in RulesRegistry.unit_rules_of_primitive(target, "Ranged Shrouding"):
+		var name := str((e as Dictionary).get("name", ""))
+		if name == "Ranged Shrouding" or not AiEv.rule_on_all_models(target, name):
+			continue
+		var params: Dictionary = (e as Dictionary).get("params", {})
+		return {"name": name,
+			"range_penalty_in": params.get("range_penalty_in", AiCombatMath.SHROUD_RANGE_PENALTY_IN),
+			"floor_in": params.get("floor_in", AiCombatMath.SHROUD_FLOOR_IN)}
+	return {}
+
+
 ## Ranged Shrouding (army-book: "-6\" range to a min. of 6\" when trying to shoot units where all models
 ## have this rule"): the working reach against `target` — untouched when the rule is absent. Registry-
 ## tuned penalty/floor; the aura-granted form is expanded at import (aura wave), so the plain rule check
 ## sees it too.
 static func ranged_shroud_reach_in(reach_in: float, target: GameUnit) -> float:
-	if target == null:
+	var spec := ranged_shroud_spec(target)
+	if spec.is_empty():
 		return reach_in
-	if AiEv.rule_on_all_models(target, "Ranged Shrouding"):
-		return AiCombatMath.shrouded_reach(reach_in,
-			float(RulesRegistry.unit_param(target, "Ranged Shrouding", "range_penalty_in", AiCombatMath.SHROUD_RANGE_PENALTY_IN)),
-			float(RulesRegistry.unit_param(target, "Ranged Shrouding", "floor_in", AiCombatMath.SHROUD_FLOOR_IN)))
-	# Coverage wave: DATA aliases (Darkborn — "-4\" range to a min. of 6\"", composite with a melee
-	# half) via the generic primitive layer; all-models rules like the base form.
-	for e in RulesRegistry.unit_rules_of_primitive(target, "Ranged Shrouding"):
-		var ed := e as Dictionary
-		var n := str(ed["name"])
-		if n == "Ranged Shrouding" or not AiEv.rule_on_all_models(target, n):
-			continue
-		var sp: Dictionary = ed.get("params", {})
-		return AiCombatMath.shrouded_reach(reach_in,
-			float(sp.get("range_penalty_in", AiCombatMath.SHROUD_RANGE_PENALTY_IN)),
-			float(sp.get("floor_in", AiCombatMath.SHROUD_FLOOR_IN)))
-	return reach_in
+	return AiCombatMath.shrouded_reach(reach_in, float(spec["range_penalty_in"]), float(spec["floor_in"]))
 
 
 ## Melee Shrouding (army-book: "-3\" movement to a min. of 6\" when trying to charge units where all

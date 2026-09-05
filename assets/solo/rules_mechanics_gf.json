@@ -2980,6 +2980,17 @@
      "extra_wound_per_save_one": 1
     }
    },
+   "Shrouded": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_penalty_in": 4,
+     "floor_in": 6,
+     "melee_move_penalty_in": 2,
+     "melee_floor_in": 6
+    }
+   },
    "Stealth Buff": {
     "primitive": "Stealth",
     "rated": false,
@@ -3427,6 +3438,17 @@
     "book_version": "3.5.3",
     "params": {
      "extra_wound_per_save_one": 1
+    }
+   },
+   "Shrouded": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_penalty_in": 4,
+     "floor_in": 6,
+     "melee_move_penalty_in": 2,
+     "melee_floor_in": 6
     }
    },
    "Unstoppable Mark": {
