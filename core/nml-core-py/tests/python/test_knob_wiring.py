@@ -405,8 +405,11 @@ def test_the_seam_refuses_more_than_five_markers():
 #: shipped-default state (no legacy fixtures here) — the byte-identity
 #: reference the mixed patch must not move: the mixed branch is additive
 #: beside the pure modes.
-RULEBOOK_27_DIGEST = "87759e0a3786a0b15528b35fa90dd80119553830c81ccac71bb6867dd5dc14f7"
-DOCTRINE_27_DIGEST = "4c1b8685dee47c05bc3ec7b7507028c20e757fc6a4ead2d023d32d6a04a27d1b"
+#: Re-pinned 2026-09-05 (armies-basename fix, DIGEST_DIVERGENCE_2026-09-05.md):
+#: `armies` moved from the caller's absolute path to the list basename plus
+#: `armies_sha256`; the placement did not move.
+RULEBOOK_27_DIGEST = "2f53887dde5bc64ee85f8dd3cdbedd08e12712290c9c6bc69ed0fce398deb5b4"
+DOCTRINE_27_DIGEST = "108d9655c3f2e2f88c774a98bfda0450032e8b439aec551511ad098bf23f9444"
 MIXED_A = {"1": "search", "2": "random"}  # the doctrine sits seat 1
 
 
