@@ -1414,9 +1414,10 @@ static func _best_charge(state: Dictionary, key: String) -> String:
 			continue
 		var us := BattleSim._ctx_of(su)
 		var them := BattleSim._ctx_of(tu)
-		if AiEv.melee_ev(ours, us, them, true) < SoloController.FUTILE_CHARGE_EV:
+		var gap := maxf(BattleSim.edge_gap_in(su["positions"], su.get("radii", []), tu["positions"], tu.get("radii", [])), 0.0)
+		if AiEv.melee_ev(ours, us, them, true, gap) < SoloController.FUTILE_CHARGE_EV:
 			continue
-		var s := AiEv.charge_score(ours, us, BattleSim._profiles_of(tu, true), them)
+		var s := AiEv.charge_score(ours, us, BattleSim._profiles_of(tu, true), them, gap)
 		if s > best_score:
 			best_score = s
 			best = str(ek)
