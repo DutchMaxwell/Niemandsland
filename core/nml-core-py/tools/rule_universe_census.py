@@ -306,6 +306,18 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # nobody) the exact #489 shape. Without this row the primitive is
     # untracked for every name under it.
     "Shot Modifier": frozenset({"requires_stationary", "terrain_within_in"}),
+    # Aura-Channel family wave (rules-wave3-aura1, 2026-09-05): unit.rs's
+    # apply_aura_channel (epoch-6 gated, EPOCH_6_TABLE_RULES) reads each
+    # "<X> Aura" entry's own `grants` base and folds it onto the unit and its
+    # attached heroes — the import twin's expansion (opr_army_manager.gd:2117 /
+    # list_to_profile.py:350) re-stated from the entry's own param, so the core
+    # no longer depends on an import-time rewrite it cannot see. The fold is
+    # idempotent with the import expansion by construction (append only when
+    # absent), so epoch-5 records (the recording fleet's stamp) replay
+    # byte-exact with the import fold alone. Without this row the primitive
+    # would be trusted whole for every name under it - the #489 over-credit
+    # shape.
+    "Aura Channel": frozenset({"grants"}),
 }
 
 
@@ -757,7 +769,11 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
             where = mention_of(name, mentions)
             if where:
                 note = (note + "; " if note else "") + f"named in Rust docs ({where})"
-        primitives = sorted(mech["primitives"])
+        # The RED knob hides the primitive from the label too: an aura whose
+        # own consumed primitive is hidden must fall back to the aura rule's
+        # UNMAPPED-registered cap (STAMPED), not ride a label the hide never
+        # touched (the drop-exactly-its-names invariant).
+        primitives = sorted(p for p in mech["primitives"] if p != hide)
         primitive_label = (
             "|".join(primitives)
             if primitives
@@ -830,6 +846,18 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
                         f" (aura rule: capped at STAMPED; LIVE via the import"
                         f" expansion — opr_army_manager.gd:2117 /"
                         f" list_to_profile.py:350)"
+                    )
+                elif ps["core"] == "PORTED":
+                    # The aura's OWN consumed primitive (rules-wave3-aura1):
+                    # this entry carries a CONSUMED_PARAM_KEYS class the core
+                    # reads (the Aura-Channel fold), so its own evidence
+                    # stands - never mirrored into the base's import note,
+                    # which would credit the expansion instead of the entry.
+                    ps["core_note"] = (
+                        f"aura of '{base}': own entry is core-read"
+                        f" ({ps['core_note']}; the import expansion"
+                        f" opr_army_manager.gd:2117 / list_to_profile.py:350"
+                        f" stays the pre-6 fallback)"
                     )
                 else:
                     ps["core"] = base_ps["core"]
@@ -1142,11 +1170,18 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
             )
         }
         # "X Aura" names ride their base through the import-time expansion, so
-        # hiding a primitive drops them too when the base is aliased.
+        # hiding a primitive drops them too when the base is aliased - UNLESS
+        # the aura carries its OWN consumed primitive (the Aura-Channel class,
+        # rules-wave3-aura1): its core evidence is the entry's own `grants`
+        # read, not the base's token, so hiding the base cannot drop it.
         aliased = set(direct)
         for n in rows:
             if n.endswith(" Aura") and n[:-5] in direct and n[:-5] in universe:
-                aliased.add(n)
+                if all(
+                    ps["primitive"] in ("UNMAPPED", "UNMAPPED-registered")
+                    for ps in rows[n]["per_system"].values()
+                ):
+                    aliased.add(n)
         ported_aliased = sum(1 for n in aliased if best_core(rows[n]) == "PORTED")
         result["red"] = {
             "primitive": hide,
