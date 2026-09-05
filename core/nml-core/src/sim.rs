@@ -6337,6 +6337,7 @@ mod tests {
     fn defensive_frenzys_defense_ladder_applies_only_at_epoch_6() {
         let (mut st, mut statics) = buff_line();
         statics[2].growth = vec![GrowthRule {
+            name: "Defensive Frenzy".into(),
             on_kill: true, max_markers: 2, defense_per_marker: 1, ..Default::default()
         }];
         statics[0].shoot = vec![gun("Rifle", 20, 24)];
@@ -6375,6 +6376,7 @@ mod tests {
     fn defensive_growths_defense_per_two_applies_only_at_epoch_6() {
         let (mut st, mut statics) = buff_line();
         statics[2].growth = vec![GrowthRule {
+            name: "Defensive Growth".into(),
             per_round: true, max_markers: 4, defense_per_two: 1, ..Default::default()
         }];
         statics[0].shoot = vec![gun("Rifle", 20, 24)];
@@ -6410,6 +6412,7 @@ mod tests {
     fn fortified_growths_ap_cut_applies_only_at_epoch_6() {
         let (mut st, mut statics) = buff_line();
         statics[2].growth = vec![GrowthRule {
+            name: "Fortified Growth".into(),
             per_round: true, max_markers: 4, enemy_ap_per_two: -1, ..Default::default()
         }];
         let mut rifle = gun("Rifle", 20, 24);
