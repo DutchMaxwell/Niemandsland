@@ -779,6 +779,31 @@ fn merge_identical(profiles: Vec<ShootProfile>) -> Vec<ShootProfile> {
     out
 }
 
+/// The "Unregistered Rules" wave (epoch 6): names that are word-for-word
+/// twins of an existing ported primitive under another faction's name. Their
+/// registry entries ship with THIS wave, so a record below
+/// `EPOCH_6_TABLE_RULES` was recorded against a table that had none of them —
+/// every by-primitive walk below must skip them until the record's own epoch
+/// reaches 6, exactly the stamping-gap rule `EPOCH_5_TABLE_RULES` fixed for
+/// wave 2. Reach Hunt is the only one whose port rides a name-literal list
+/// (the move bands); the other three ride by-primitive walks and need this
+/// name check to stay invisible below the wave.
+fn wave3_alias(name: &str) -> bool {
+    matches!(
+        name,
+        "Violent" | "Vicious" | "Warding" | "Reach Hunt"
+    )
+}
+
+/// Rules-must-log: each wave-3 arm names its rule on stderr when
+/// NML_TRACE_RULES=1. Off by default — the fast core stays silent in gates
+/// and rollouts. Same shape as `sim.rs`'s own helper (the S10 arms).
+fn trace_rule(arm: &str, rule: &str, detail: &str) {
+    if std::env::var("NML_TRACE_RULES").as_deref() == Ok("1") {
+        eprintln!("[{arm}] {rule} — {detail}");
+    }
+}
+
 /// `AiEv.facet_applies` ai_ev.gd:105-110 — the melee/shooting gate of a
 /// unit-level facet; `profile_range` 0 means a melee profile.
 fn facet_applies(melee_only: bool, shooting_only: bool, profile_range: i64) -> bool {
@@ -1198,6 +1223,20 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
             if e.primitive.as_deref() != Some("Regeneration") {
                 continue;
             }
+            // Wave 3 (epoch 6): "Warding" is Angelic Blessing/Knightborn's
+            // word-for-word twin — its registry entry ships with this wave,
+            // so a record below `EPOCH_6_TABLE_RULES` keeps NOT seeing it.
+            if wave3_alias(&n) {
+                if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+                    continue;
+                }
+                trace_rule(
+                    "regen",
+                    &n,
+                    &format!("regen alias on {} — wounds ignored on {}+ (spells {}+)", p.name,
+                        e.param_i("ignore_target", 0), e.param_i("ignore_target_spell", 0)),
+                );
+            }
             if e.param_b("all_models") && !rule_on_all_models(p, &n) {
                 continue;
             }
@@ -1441,6 +1480,7 @@ fn stamp(
     p: &Profile,
     shoot: &mut [ShootProfile],
     unimplemented: &mut Vec<Unimplemented>,
+    rules_epoch: u32,
 ) {
     // 1. Versatile Attack, unit-wide (ai_ev.gd:209-217).
     if has_special_rule(&p.special_rules, "Versatile Attack")
@@ -1537,7 +1577,20 @@ fn stamp(
     //    keeps every pre-port corpus byte-exact. `profile_ev` reads neither
     //    leg — ai_ev.gd's EV imagination sees the weapon flag only.
     let plain_shred = unit_rule_active(reg, p, "Shred");
-    let shred_hits = rules_of_primitive(reg, p, "Shred");
+    let mut shred_hits = rules_of_primitive(reg, p, "Shred");
+    // Wave 3 (epoch 6): "Violent" is Warbound/Destroyer/Infected's
+    // word-for-word twin — its registry entry ships with this wave, so a
+    // record below `EPOCH_6_TABLE_RULES` keeps NOT seeing it (the walk below
+    // is epoch-blind; the dice-side gate at sim.rs is epoch 3, older than the
+    // wave).
+    shred_hits.retain(|h| !wave3_alias(&h.name) || rule_on(rules_epoch, EPOCH_6_TABLE_RULES));
+    for h in shred_hits.iter().filter(|h| wave3_alias(&h.name)) {
+        trace_rule(
+            "stamp",
+            &h.name,
+            &format!("shred alias on {} — blocking rolls of unmodified 1 take +1 wound", p.name),
+        );
+    }
     for sp in shoot.iter_mut() {
         if plain_shred
             || shred_hits
@@ -1627,9 +1680,22 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     if table_ladder {
         // The coverage wave (main.gd:6553-6560): Bane-primitive data aliases
         // whose own entry carries `reroll_save_sixes` — no scope qualifier.
+        // Wave 3 (epoch 6): "Vicious" is Bestial/Mischievous/Scrapper's
+        // word-for-word twin — its registry entry ships with this wave, so a
+        // record below `EPOCH_6_TABLE_RULES` keeps NOT seeing it.
         for hit in rules_of_primitive(reg, p, "Bane") {
             if hit.name.starts_with("Bane") || hit.name.ends_with("Aura") {
                 continue;
+            }
+            if wave3_alias(&hit.name) {
+                if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+                    continue;
+                }
+                trace_rule(
+                    "strikers",
+                    &hit.name,
+                    &format!("bane alias on {} — defender re-rolls unmodified 6s", p.name),
+                );
             }
             u_bane |= hit.reroll_save_sixes;
         }
@@ -2448,8 +2514,25 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // zero-banded, NOT `Bands::default()` — those serde defaults are the
     // 6"/12" OPR fallback, not zero.
     let (mut acc, mut hit) = (Bands { advance: 0.0, rush: 0.0 }, false);
-    for name in ["Agile", "Highborn", "Quick", "Scurry", "Rapid Charge", "Rapid Charge Aura"] {
+    for name in [
+        "Agile",
+        "Highborn",
+        "Quick",
+        "Scurry",
+        "Rapid Charge",
+        "Rapid Charge Aura",
+        // Wave 3 (epoch 6): "Reach Hunt" is Royal Legion/Lustbound's
+        // word-for-word twin (+4" range when shooting — the loader-side
+        // `shooting_range_bonus` half, unmodelled on this core exactly like
+        // the twins' — and +2" on Charge actions, this arm). Its registry
+        // entry ships with this wave, so a record below
+        // `EPOCH_6_TABLE_RULES` keeps NOT seeing it.
+        "Reach Hunt",
+    ] {
         if !unit_rule_active(reg, p, name) {
+            continue;
+        }
+        if wave3_alias(name) && !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
             continue;
         }
         let map = reg.rules_for(&p.game_system);
@@ -2457,6 +2540,17 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
             acc.advance += e.param_f("advance_mod", 0.0);
             acc.rush += e.param_f("rush_mod", e.param_f("charge_mod", 0.0));
             hit = true;
+            if wave3_alias(name) {
+                trace_rule(
+                    "move_bands",
+                    name,
+                    &format!(
+                        "move-band alias on {} — charge actions +{:.0}\"",
+                        p.name,
+                        e.param_f("rush_mod", e.param_f("charge_mod", 0.0))
+                    ),
+                );
+            }
         }
     }
     // WAVE 3 Fast family (rules-wave3-fastband), gated on
@@ -2592,7 +2686,7 @@ impl UnitStatic {
         let p: &Profile = &boost_leg;
         let mut unimplemented: Vec<Unimplemented> = Vec::new();
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
-        stamp(reg, p, &mut shoot, &mut unimplemented);
+        stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch);
         stamp_conditional_ap(reg, p, &mut shoot);
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
         stamp_shot_modifier(reg, p, &mut shoot);
@@ -2602,7 +2696,7 @@ impl UnitStatic {
         // battle_sim.gd:719-720 takes the identical path); a rule the port
         // cannot model is reported ONCE, not once per array.
         let mut melee_unimpl: Vec<Unimplemented> = Vec::new();
-        stamp(reg, p, &mut melee, &mut melee_unimpl);
+        stamp(reg, p, &mut melee, &mut melee_unimpl, rules_epoch);
         stamp_conditional_ap(reg, p, &mut melee);
         stamp_unit_strikers(reg, p, &mut melee, rules_epoch);
         // Lacerate+Counter wave, epoch-gated (`acts::rule_on`, epoch 3): the
@@ -5289,5 +5383,150 @@ mod tests {
             Some(Bands { advance: 2.0, rush: 2.0 }),
             "epoch 5 (the recorder): the boost arm is off"
         );
+    }
+
+    // ------------------------------------------------------------------
+    // The "Unregistered Rules" wave (epoch 6) — one test per ported name,
+    // through the REAL registry. Each carrier holds a ranged Rifle (24") and
+    // a melee Blade, so the shooting/melee scoping is observable per profile.
+    // Epoch literals 6/5, NOT `CURRENT_RULES_EPOCH`: a wave-4 bump must not
+    // re-date what these assertions mean (the Ambush family's rule).
+    const WAVE3_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},
+          {"name":"Blade","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// One name's wave-3 static at `epoch`: `rule` swapped into the carrier's
+    /// special_rules, (system, faction) over so the REAL registry entry
+    /// resolves — the same factions the mechanics maps field.
+    fn wave3_static_of(rule: &str, system: &str, faction: &str, epoch: u32) -> UnitStatic {
+        let tpl = WAVE3_HEADER
+            .replace("\"special_rules\":[]", &format!("\"special_rules\":[\"{rule}\"]"))
+            .replace("\"game_system\":\"gf\"", &format!("\"game_system\":\"{system}\""))
+            .replace("\"faction_folder\":\"robot_legions\"", &format!("\"faction_folder\":\"{faction}\""));
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        UnitStatic::build_for(&mut reg, p, epoch)
+    }
+
+    /// "Violent" (Warbound/Destroyer/Infected's word-for-word twin, Shred
+    /// primitive): enemies blocking on unmodified 1s take +1 wound — the
+    /// shred-alias stamp on BOTH profiles at epoch 6; epoch 5 (the Gen-3
+    /// fleet's stamping window) and the rule-less carrier stay clean.
+    /// RED: the by-primitive walk is ungated, so the entry fires at 5 too.
+    #[test]
+    fn violent_shreds_block_rolls_of_one_at_epoch_6_not_5() {
+        let on = wave3_static_of("Violent", "gf", "war_disciples", 6);
+        assert!(
+            on.shoot[0].shred_alias && on.melee[0].shred_alias,
+            "the Shred alias at the wave's own epoch"
+        );
+        let before = wave3_static_of("Violent", "gf", "war_disciples", 5);
+        assert!(
+            !before.shoot[0].shred_alias && !before.melee[0].shred_alias,
+            "rules_epoch 5 is the Gen-3 fleet's stamping-gap window, RED before the fix"
+        );
+        assert!(
+            !wave3_static_of("", "gf", "war_disciples", 6).shoot[0].shred_alias,
+            "no rule, no shred"
+        );
+    }
+
+    /// "Vicious" (Bestial/Mischievous/Scrapper's word-for-word twin, Bane
+    /// primitive, `reroll_save_sixes`): the defender re-rolls unmodified 6s
+    /// against both profiles at epoch 6; epoch 5 and the rule-less carrier
+    /// stay clean. RED: the coverage wave's own gate is epoch 3, older than
+    /// the wave.
+    #[test]
+    fn vicious_rerolls_defender_sixes_at_epoch_6_not_5() {
+        let on = wave3_static_of("Vicious", "gf", "jackals", 6);
+        assert!(
+            on.shoot[0].bane && on.melee[0].bane,
+            "the Bane alias at the wave's own epoch"
+        );
+        let before = wave3_static_of("Vicious", "gf", "jackals", 5);
+        assert!(
+            !before.shoot[0].bane && !before.melee[0].bane,
+            "rules_epoch 5 is the Gen-3 fleet's stamping-gap window, RED before the fix"
+        );
+        assert!(
+            !wave3_static_of("", "gf", "jackals", 6).shoot[0].bane,
+            "no rule, no re-roll"
+        );
+    }
+
+    /// "Warding" (Angelic Blessing/Knightborn's word-for-word twin,
+    /// Regeneration primitive): wounds ignored on a 6+, spell wounds on a 4+,
+    /// at epoch 6; epoch 5 and the rule-less carrier stay (0, 0).
+    /// RED: the regen alias wave's own gate is epoch 3, older than the wave.
+    #[test]
+    fn warding_ignores_wounds_on_six_and_spells_on_four_at_epoch_6_not_5() {
+        let on = wave3_static_of("Warding", "aof", "kingdom_of_angels", 6);
+        assert_eq!(
+            (on.ctx.regen_target, on.ctx.regen_target_spell),
+            (6, 4),
+            "the entry's own ignore_target / ignore_target_spell"
+        );
+        let before = wave3_static_of("Warding", "aof", "kingdom_of_angels", 5);
+        assert_eq!(
+            (before.ctx.regen_target, before.ctx.regen_target_spell),
+            (0, 0),
+            "rules_epoch 5 is the Gen-3 fleet's stamping-gap window, RED before the fix"
+        );
+        assert_eq!(
+            (
+                wave3_static_of("", "aof", "kingdom_of_angels", 6).ctx.regen_target,
+                wave3_static_of("", "aof", "kingdom_of_angels", 6).ctx.regen_target_spell
+            ),
+            (0, 0),
+            "no rule, no ward"
+        );
+    }
+
+    /// "Reach Hunt" (Royal Legion/Lustbound's word-for-word twin, Royal
+    /// Legion primitive): +2" on Charge actions (the `charge_mod`) at epoch
+    /// 6; epoch 5 and the rule-less carrier stay None. The +4" shooting-range
+    /// half is the loader-side `shooting_range_bonus`, unmodelled on this
+    /// core exactly like the twins' (sim.rs `has_shoot_target`'s note).
+    /// RED: the name is not in the move-band list yet.
+    #[test]
+    fn reach_hunt_charges_two_inches_further_at_epoch_6_not_5() {
+        assert_eq!(
+            wave3_static_of("Reach Hunt", "aof", "lust_disciples", 6).move_rule_mods,
+            Some(Bands { advance: 0.0, rush: 2.0 }),
+            "the entry's own charge_mod"
+        );
+        assert_eq!(
+            wave3_static_of("Reach Hunt", "aof", "lust_disciples", 5).move_rule_mods,
+            None,
+            "rules_epoch 5 is the Gen-3 fleet's stamping-gap window, RED before the fix"
+        );
+        assert_eq!(
+            wave3_static_of("", "aof", "lust_disciples", 6).move_rule_mods,
+            None,
+            "no rule, no band"
+        );
+    }
+
+    /// "Reinforced" PIN (NOT a port): its registry entry (Fortified
+    /// primitive, the over-9"-gated form) is table-live through main.gd's
+    /// own coverage wave, but the core's save batch sees no modifier
+    /// distance (`dice.rs`'s documented Fortified-aliases gap), and a flat
+    /// fortified stamp would over-credit at close range — the #489 shape.
+    /// The name must stay MISSING in the core until the distance-gated fold
+    /// exists; this test pins that decision.
+    #[test]
+    fn reinforced_stays_out_of_the_core_until_the_gated_fortified_fold_exists() {
+        for epoch in [5, 6] {
+            assert!(
+                !wave3_static_of("Reinforced", "gf", "prime_brothers", epoch).ctx.fortified,
+                "no flat fortified alias at epoch {epoch} — needs-primitive, not a flat stamp"
+            );
+        }
     }
 }

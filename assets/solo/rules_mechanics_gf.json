@@ -2413,6 +2413,15 @@
      "ignore_target": 5
     }
    },
+   "Reinforced": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1,
+     "over_in": 9
+    }
+   },
    "Shielded": {
     "primitive": "Shielded",
     "rated": false,
@@ -4224,6 +4233,15 @@
     "params": {
      "place_in": 9.0
     }
+   },
+   "Vicious": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": false
+    }
    }
   },
   "havoc_brothers": {
@@ -5283,6 +5301,14 @@
     "primitive": null,
     "rated": false,
     "book_version": "3.5.3"
+   },
+   "Violent": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
    }
   },
   "jackals": {
@@ -5520,6 +5546,15 @@
     "primitive": null,
     "rated": false,
     "book_version": "3.5.3"
+   },
+   "Vicious": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": false
+    }
    }
   },
   "knight_brothers": {
@@ -5722,6 +5757,16 @@
     "primitive": null,
     "rated": false,
     "book_version": "3.5.3"
+   },
+   "Warding": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 4,
+     "all_models": true
+    }
    }
   },
   "knight_prime_brothers": {
@@ -5945,6 +5990,16 @@
     "primitive": null,
     "rated": false,
     "book_version": "3.5.3"
+   },
+   "Warding": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 4,
+     "all_models": true
+    }
    }
   },
   "lust_disciples": {
@@ -6017,6 +6072,15 @@
     "book_version": "3.5.3",
     "params": {
      "shoot_after_rush": true
+    }
+   },
+   "Reach Hunt": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4,
+     "charge_mod": 2
     }
    },
    "Relentless Aura": {
@@ -6943,6 +7007,15 @@
     "book_version": "3.5.3",
     "params": {
      "ignore_target": 5
+    }
+   },
+   "Reinforced": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1,
+     "over_in": 9
     }
    },
    "Retaliate": {
@@ -8369,6 +8442,15 @@
      "shoot_after_rush": true
     }
    },
+   "Reach Hunt": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4,
+     "charge_mod": 2
+    }
+   },
    "Shatter": {
     "primitive": "Shatter",
     "rated": false,
@@ -8475,6 +8557,14 @@
     "params": {
      "hit_penalty": 1,
      "melee_only": true
+    }
+   },
+   "Violent": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
     }
    },
    "Warbound": {
@@ -8643,6 +8733,14 @@
     "primitive": null,
     "rated": false,
     "book_version": "3.5.3"
+   },
+   "Violent": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
    },
    "Warbound": {
     "primitive": "Shred",
@@ -9830,6 +9928,15 @@
      "target": "enemy"
     }
    },
+   "Reach Hunt": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4,
+     "charge_mod": 2
+    }
+   },
    "Resistance": {
     "primitive": "Resistance",
     "rated": false,
@@ -10212,6 +10319,14 @@
      "hits": 3,
      "facet": "ap1",
      "uses_per_game": 1
+    }
+   },
+   "Violent": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
     }
    },
    "Warbound": {
