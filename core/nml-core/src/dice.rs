@@ -333,7 +333,20 @@ fn save_batch(
     }
     let unsaved = (count - blocks_with_bane(&faces, &reroll, target)).max(0);
     let shred = if p.shred || shred_grant || (p.shred_alias && shred_alias_dice) {
-        shred_faces(&faces, &reroll, shred_low.max(1), target as i64)
+        // Wave 3: the per-face wound amount rides the profile's epoch-6
+        // stamped `extra_wound_per_save_one` read (0 = unread -> the base
+        // +1 the wave-1 alias arm hard-codes, byte-exact at every earlier
+        // epoch). The firing names itself (rules-must-log) only when the
+        // read actually rode along — every pre-epoch-6 corpus stays silent.
+        let bonus = p.shred_ones_wound_bonus.max(1);
+        let shreds = shred_faces(&faces, &reroll, shred_low.max(1), target as i64);
+        let wound = shreds * bonus;
+        if wound > 0 && p.shred_ones_wound_bonus > 0 {
+            out.log.push(format!(
+                "Shred ({}): {} — {} failed save rolls cost {} extra wounds against {}",
+                p.shred_ones_rule, p.shred_ones_owner, shreds, wound, def_owner));
+        }
+        wound
     } else {
         0
     };
@@ -3094,6 +3107,134 @@ mod tests {
             plain_out.wounds, without_base.wounds);
         assert_eq!(boosted.wounds - without_base.wounds, twos,
             "without the base rule the boost widens nothing");
+    }
+
+    // ------------- Wave 3: the Shred per-save-one param read (unit.rs
+    // ::build_for's epoch-6 arm -> dice.rs::save_batch's wound-amount
+    // multiply, the entry's own `extra_wound_per_save_one`). One RED/GREEN
+    // test per ported name, on a fixture registry whose entry says 2: the
+    // shipped books all say 1, which is exactly the +1 the wave-1 alias arm
+    // hard-codes, so a real-book run cannot tell the read apart. At the
+    // LITERAL epoch 6 the entry's param is the per-face cost; at the LITERAL
+    // epoch 5 the read is gated off and the wave-1 base +1 replays (the
+    // alias already shreds at 5 — earlier epochs stay byte-exact); a non-
+    // carrier on the same seed never shreds. The firing names itself in
+    // ShootResult.log (rules-must-log) at 6, stays silent at 5.
+
+    fn shred_param_registry(tag: &str, system: &str, faction: &str, name: &str) -> String {
+        let dir = std::env::temp_dir().join(format!("nml_shred3_{}_{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let map_dir = dir.join("assets/solo");
+        std::fs::create_dir_all(&map_dir).expect("temp map dir");
+        let body = format!(
+            r#"{{"common":{{}},"factions":{{"{faction}":{{"{name}":{{"primitive":"Shred","rated":false,"book_version":"3.5.3","params":{{"extra_wound_per_save_one":2}}}}}}}}}}"#
+        );
+        std::fs::write(map_dir.join(format!("rules_mechanics_{system}.json")), body)
+            .expect("write temp mechanics map");
+        dir.to_string_lossy().into_owned()
+    }
+
+    fn shred_param_built(root: &str, id: &str, epoch: u32) -> UnitStatic {
+        let header = read_act_header(SHRED_HEADER).expect("header");
+        let mut reg = Registries::new(root);
+        let p = header.profiles.get(id).expect(id);
+        UnitStatic::build_for(&mut reg, p, epoch)
+    }
+
+    #[test]
+    fn a_warbound_carriers_save_ones_cost_the_entry_param_at_epoch_6() {
+        let root = shred_param_registry("warbound", "gf", "war_disciples", "Warbound");
+        let us6 = shred_param_built(&root, "warbound", 6);
+        let us5 = shred_param_built(&root, "warbound", 5);
+        let plain = shred_param_built(&root, "plain_ogre", 6);
+        let def = defender(4, 5);
+        let p6 = [us6.melee[0].clone()];
+        let p5 = [us5.melee[0].clone()];
+        let pc = [plain.melee[0].clone()];
+        let mut t6 = Tray::seeded(2);
+        let on6 = resolve_melee_with_tray(&[striker(&p6, &[0], &[6], &us6.ctx)], &def, "Target",
+            false, true, true, &mut t6);
+        let mut t5 = Tray::seeded(2);
+        let on5 = resolve_melee_with_tray(&[striker(&p5, &[0], &[6], &us5.ctx)], &def, "Target",
+            false, true, true, &mut t5);
+        let mut tc = Tray::seeded(2);
+        let control = resolve_melee_with_tray(&[striker(&pc, &[0], &[6], &plain.ctx)], &def, "Target",
+            false, true, true, &mut tc);
+        assert_eq!(on6.rolls, control.rolls, "the gate moves no die");
+        let ones = on6.rolls[1].faces.iter().filter(|&&f| f == 1).count() as i64;
+        assert!(ones > 0, "the seed must land unmodified save 1s or the test is blind");
+        assert_eq!(on6.wounds - control.wounds, 2 * ones,
+            "epoch 6: each unmodified save 1 costs the entry's extra_wound_per_save_one (2)");
+        assert_eq!(on5.wounds - control.wounds, ones,
+            "epoch 5: the read is gated off — the wave-1 base +1 replays");
+        assert!(on6.log.iter().any(|l| l.contains("Shred (Warbound)")),
+            "rules must log: the firing names the rule");
+        assert!(on5.log.iter().all(|l| !l.contains("Shred")),
+            "epoch 5 replays silent — no wave-3 log line");
+    }
+
+    #[test]
+    fn an_infected_carriers_save_ones_cost_the_entry_param_at_epoch_6() {
+        let root = shred_param_registry("infected", "gf", "infected_colonies", "Infected");
+        let us6 = shred_param_built(&root, "infected", 6);
+        let us5 = shred_param_built(&root, "infected", 5);
+        let plain = shred_param_built(&root, "plain_gf", 6);
+        let def = defender(4, 5);
+        let p6 = [us6.shoot[0].clone()];
+        let p5 = [us5.shoot[0].clone()];
+        let pc = [plain.shoot[0].clone()];
+        let mut t6 = Tray::seeded(3);
+        let on6 = resolve_volley_with_tray(&[striker(&p6, &[0], &[6], &us6.ctx)], &def, "Target",
+            12.0, 12.0, true, true, true, true, &mut t6);
+        let mut t5 = Tray::seeded(3);
+        let on5 = resolve_volley_with_tray(&[striker(&p5, &[0], &[6], &us5.ctx)], &def, "Target",
+            12.0, 12.0, true, true, true, true, &mut t5);
+        let mut tc = Tray::seeded(3);
+        let control = resolve_volley_with_tray(&[striker(&pc, &[0], &[6], &plain.ctx)], &def, "Target",
+            12.0, 12.0, true, true, true, true, &mut tc);
+        assert_eq!(on6.rolls, control.rolls, "the gate moves no die");
+        let ones = on6.rolls[1].faces.iter().filter(|&&f| f == 1).count() as i64;
+        assert!(ones > 0, "the seed must land unmodified save 1s or the test is blind");
+        assert_eq!(on6.wounds - control.wounds, 2 * ones,
+            "epoch 6: each unmodified save 1 costs the entry's extra_wound_per_save_one (2)");
+        assert_eq!(on5.wounds - control.wounds, ones,
+            "epoch 5: the read is gated off — the wave-1 base +1 replays");
+        assert!(on6.log.iter().any(|l| l.contains("Shred (Infected)")),
+            "rules must log: the firing names the rule");
+        assert!(on5.log.iter().all(|l| !l.contains("Shred")),
+            "epoch 5 replays silent — no wave-3 log line");
+    }
+
+    #[test]
+    fn a_destroyer_carriers_save_ones_cost_the_entry_param_at_epoch_6() {
+        let root = shred_param_registry("destroyer", "aof", "ogres", "Destroyer");
+        let us6 = shred_param_built(&root, "destroyer", 6);
+        let us5 = shred_param_built(&root, "destroyer", 5);
+        let plain = shred_param_built(&root, "plain_ogre", 6);
+        let def = defender(4, 5);
+        let p6 = [us6.melee[0].clone()];
+        let p5 = [us5.melee[0].clone()];
+        let pc = [plain.melee[0].clone()];
+        let mut t6 = Tray::seeded(2);
+        let on6 = resolve_melee_with_tray(&[striker(&p6, &[0], &[6], &us6.ctx)], &def, "Target",
+            false, true, true, &mut t6);
+        let mut t5 = Tray::seeded(2);
+        let on5 = resolve_melee_with_tray(&[striker(&p5, &[0], &[6], &us5.ctx)], &def, "Target",
+            false, true, true, &mut t5);
+        let mut tc = Tray::seeded(2);
+        let control = resolve_melee_with_tray(&[striker(&pc, &[0], &[6], &plain.ctx)], &def, "Target",
+            false, true, true, &mut tc);
+        assert_eq!(on6.rolls, control.rolls, "the gate moves no die");
+        let ones = on6.rolls[1].faces.iter().filter(|&&f| f == 1).count() as i64;
+        assert!(ones > 0, "the seed must land unmodified save 1s or the test is blind");
+        assert_eq!(on6.wounds - control.wounds, 2 * ones,
+            "epoch 6: each unmodified save 1 costs the entry's extra_wound_per_save_one (2)");
+        assert_eq!(on5.wounds - control.wounds, ones,
+            "epoch 5: the read is gated off — the wave-1 base +1 replays");
+        assert!(on6.log.iter().any(|l| l.contains("Shred (Destroyer)")),
+            "rules must log: the firing names the rule");
+        assert!(on5.log.iter().all(|l| !l.contains("Shred")),
+            "epoch 5 replays silent — no wave-3 log line");
     }
 
     /// Condition kind 2 — `vs_tough_ge` behind `charge_only` (Melee Slayer):
