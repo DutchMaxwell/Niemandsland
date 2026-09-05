@@ -71,8 +71,7 @@ static func lookup(system: String, faction: String, rule_name: String) -> Dictio
 
 ## Whether the map resolves `rule_name` to an automating primitive for (system, faction).
 ## NOTE: unautomated entries carry an explicit JSON `"primitive": null` — and str(null) is "<null>",
-## not "" — so the check must type-test, or every unautomated rule counts as automated (surfaced by
-## the Aircraft system-scoping tests: the rule is gf-only, the aof entry stays primitive: null).
+## not "" — so the check must type-test, or every unautomated rule counts as automated.
 static func has_primitive(system: String, faction: String, rule_name: String) -> bool:
 	var p: Variant = lookup(system, faction, rule_name).get("primitive")
 	return p is String and not (p as String).is_empty()
