@@ -181,6 +181,11 @@ pub(crate) struct PlainLedger {
     /// 10474), per unit, ONCE per game (no "round" derivation, unlike growth).
     #[serde(default)]
     second_wind_used: bool,
+    /// Wave 3 — the Storm Attack family's once-per-game flags (main.gd:17244
+    /// writes `storm_used_<snake>`), recorded as the DISPLAY names whose flag
+    /// stands (act_recorder.gd `_ledger_of`). Empty on every older corpus.
+    #[serde(default)]
+    storm_used: Vec<String>,
 }
 
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
@@ -700,6 +705,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         // the family gate keeps these inert anyway).
         piercing_tag_used: vec![false; n],
         piercing_tag_markers: vec![0; n],
+        storm_used: vec![Vec::new(); n],
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
             // Read the matrix in its own (key-sorted) order and STORE it in
             // roster order, so `_los_clear`'s port can index it with roster
@@ -784,6 +790,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
             st.hit_and_run_round[ui] = ledger.hit_and_run_round;
             st.vs_mark_round[ui] = ledger.vs_mark_round;
             st.second_wind_used[ui] = ledger.second_wind_used;
+            st.storm_used[ui] = ledger.storm_used.clone();
             st.growth_markers[ui] = ledger.growth;
             // `growth_round` has no key of its own on the wire (see
             // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED

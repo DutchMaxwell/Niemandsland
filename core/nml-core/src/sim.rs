@@ -31,7 +31,7 @@ use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
 use crate::terrain::{base_in_terrain, gives_cover, is_dangerous, Terrain};
-use crate::unit::{Ctx, PiercingTagEntry, ShieldedAlias, UnitStatic, ShootProfile, UtilityBuff};
+use crate::unit::{Ctx, PiercingTagEntry, ShieldedAlias, UnitStatic, ShootProfile, StormFacet, UtilityBuff};
 #[cfg(test)]
 use crate::unit::GrowthRule;
 use crate::{CONTROL_EPS, IN2M};
@@ -467,6 +467,87 @@ pub(crate) fn tray_breath_attack(
     land_wounds(next, ti, landed);
     if shooting_morale_trigger(next, ut, ti, alive_before, wounds_before) {
         tray_morale(next, ut, ti, false, seams.rules_epoch, tray, shot);
+    }
+}
+
+/// `_solo_apply_storm_attack` main.gd:17226-17293, called at main.gd:1073
+/// after Utility Buff in the table's own pre-attack order. Official text:
+/// "Once per game, when this model is activated, before attacking, roll 3
+/// dice. For each 2+ one enemy unit within 12\" takes 3 hits with <keyword>."
+///
+/// The payload rides the four ported primitives' own mechanics
+/// (`unit::StormFacet`); the once-per-game state is `State.storm_used` (the
+/// `limited_used` shape, recorded via `io::PlainLedger.storm_used`). Targets:
+/// alive, un-reserved, unattached enemies within the rule's own `range_in` of
+/// the ACTING unit's models (`_solo_nearest_model_gap_in` = the base-edge
+/// gap, no LOS — the table's own read); an empty pool does NOT spend the
+/// burst (main.gd:17257). Per success the best target (largest
+/// `combined_alive`) takes the burst, repeatable; a destroyed target drops
+/// out. Wave-3 gate: a record stamped 5 never saw these rules in its
+/// recorder (`acts::EPOCH_6_TABLE_RULES`).
+pub(crate) fn tray_storm_attack(
+    statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) { return; }
+    if next.alive[si] <= 0 { return; }
+    let pid = next.player[si];
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
+    for b in bearers {
+        if next.alive[b] <= 0 { continue; }
+        let owner = statics[next.roster.profile[b]].name.clone();
+        for spec in &statics[next.roster.profile[b]].storm {
+            if next.storm_used[b].iter().any(|n| n == &spec.name) { continue; }
+            // The pool is THIS entry's: every alive, un-reserved, unattached
+            // enemy within the rule's own range of the ACTING unit's models.
+            let mut targets: Vec<usize> = (0..next.units())
+                .filter(|&ti| next.player[ti] != pid && next.alive[ti] > 0 && combined_alive(next, ti, seams) > 0 && !next.dormant[ti] && !(seams.hero_attach && next.attached_to[ti].is_some()))
+                .filter(|&ti| geom::edge_gap_in(&next.positions[si], &next.radii[si], &next.positions[ti], &next.radii[ti], DEFAULT_BASE_RADIUS_M) <= spec.range_in)
+                .collect();
+            // no enemy in reach — the once-per-game is NOT spent
+            if targets.is_empty() { continue; }
+            next.storm_used[b].push(spec.name.clone());
+            let faces = tray.roll(spec.dice.max(1) as usize);
+            shot.rolls.push(crate::dice::Roll {
+                kind: "attack", count: spec.dice, target: spec.trigger,
+                faces: faces.clone(), owner: owner.clone(),
+            });
+            let successes = crate::dice::faces_to_hits(&faces, spec.trigger as u8) as i64;
+            shot.log.push(format!("{}: {} unleashes the storm — {} of {} dice hit (once per game)", spec.name, owner, successes, spec.dice));
+            for _ in 0..successes {
+                targets.retain(|&ti| combined_alive(next, ti, seams) > 0);
+                // Best target per success, FIRST on a tie (the table's own
+                // descending pick; first-index is this port's declared tie-break).
+                let mut best = match targets.first() {
+                    Some(&t) => t, None => break,
+                };
+                for &t in targets.iter().skip(1) {
+                    if combined_alive(next, t, seams) > combined_alive(next, best, seams) { best = t; }
+                }
+                let mut hits = spec.hits;
+                if spec.facet == StormFacet::Surge {
+                    let s_faces = tray.roll(hits.max(1) as usize);
+                    shot.rolls.push(crate::dice::Roll {
+                        kind: "attack", count: hits, target: 6,
+                        faces: s_faces.clone(), owner: owner.clone(),
+                    });
+                    hits += s_faces.iter().filter(|&&f| f == 6).count() as i64;
+                }
+                let ut = &statics[next.roster.profile[best]];
+                let def = ctx_of(ut, next, best);
+                let (alive_before, wounds_before) = (next.alive[best], wounds_left(next, best));
+                let (ap, bane, shred) = match spec.facet {
+                    StormFacet::Ap1 => (1, false, false), StormFacet::Bane => (0, true, false),
+                    StormFacet::Shred => (0, false, true), StormFacet::Surge => (0, false, false),
+                };
+                let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(hits, ap, bane, shred, &def, &ut.name, tray));
+                land_wounds(next, best, landed);
+                if shooting_morale_trigger(next, ut, best, alive_before, wounds_before) {
+                    tray_morale(next, ut, best, false, seams.rules_epoch, tray, shot);
+                }
+            }
+        }
     }
 }
 
@@ -3731,6 +3812,13 @@ fn resolve_with(
         tray_piercing_tag(statics, &mut next, si, seams, shot);
     }
 
+    // --- STORM ATTACK (main.gd:1073, after Utility Buff in the table's own
+    // pre-attack slot order), every action kind, tray path only. See
+    // `tray_storm_attack`; no enemy in reach does not spend the burst.
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_storm_attack(statics, &mut next, si, seams, tray, shot);
+    }
+
     // --- GROWTH MARKERS (main.gd:16984), the per-round tick lazily anchored
     // to this unit's own next activation — tray path only. See
     // `growth_round_start`; dice-free, `was_shaken` is the round-start
@@ -4424,6 +4512,7 @@ mod tests {
             limited_used: vec![Vec::new(); 4],
             piercing_tag_used: vec![false; 4],
             piercing_tag_markers: vec![0; 4],
+            storm_used: vec![Vec::new(); 4],
         }
     }
 
@@ -4433,6 +4522,237 @@ mod tests {
     /// (1 < 2), but 1+2 > 2 means Fear(2) should flip the result. Both units'
     /// quality is set to fail morale for certain, so `alive == 0` after the
     /// call marks exactly which side was made to test — and lose.
+    fn repo_root() -> String {
+        format!("{}/../..", env!("CARGO_MANIFEST_DIR"))
+    }
+
+    /// The bearer: an "a" whose ONLY rule is the named chaos Storm, read off
+    /// the REAL gf registry (`assets/solo/rules_mechanics_gf.json`).
+    fn storm_bearer(rule: &str, faction: &str, rules_epoch: u32) -> UnitStatic {
+        let p = Profile {
+            unit_id: "a".into(),
+            name: "a".into(),
+            quality: 4,
+            defense: 4,
+            tough: 1,
+            wounds_max: vec![1],
+            model_count: 1,
+            weapons: vec![],
+            special_rules: vec![rule.into()],
+            caster_value: 0,
+            base_radius: 0.0,
+            base_shape: String::new(),
+            base_w_mm: 0.0,
+            base_d_mm: 0.0,
+            game_system: "gf".into(),
+            faction_folder: faction.into(),
+            item_grants: vec![],
+            attached_hero_rules: vec![],
+            move_bands: MoveBands::default(),
+        };
+        let mut reg = crate::rules::Registries::new(&repo_root());
+        UnitStatic::build_for(&mut reg, &p, rules_epoch)
+    }
+
+    /// Bearer "a" vs a 3-model Defense-4 target "b" 5" edge-to-edge (inside
+    /// the 12" band); ah/bh field no models. `breath_line`'s shape, but the
+    /// rule arrives through the registry.
+    fn storm_line(rule: &str, faction: &str, rules_epoch: u32) -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        let r = &*st.roster;
+        st.roster = Rc::new(crate::state::Roster {
+            keys: r.keys.clone(),
+            index: r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect(),
+            profile: vec![0, 1, 2, 3],
+        });
+        st.positions = vec![
+            vec![[0.0, 0.0, 0.0]],
+            vec![],
+            vec![[5.0 * IN2M, 0.0, 0.0], [5.02 * IN2M, 0.0, 0.0], [5.04 * IN2M, 0.0, 0.0]],
+            vec![],
+        ];
+        st.radii = vec![vec![IN2M], vec![], vec![IN2M; 3], vec![]];
+        st.wounds = vec![vec![1], vec![], vec![1, 1, 1], vec![]];
+        st.alive = vec![1, 0, 3, 0];
+        let bearer = storm_bearer(rule, faction, rules_epoch);
+        let mut b = UnitStatic { name: "b".into(), ..Default::default() };
+        b.model_count = 3;
+        b.wounds_max = vec![1, 1, 1];
+        b.ctx.defense = 4;
+        (
+            st,
+            vec![
+                bearer,
+                UnitStatic { name: "ah".into(), ..Default::default() },
+                b,
+                UnitStatic { name: "bh".into(), ..Default::default() },
+            ],
+        )
+    }
+
+    fn storm_action() -> Action {
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
+    }
+
+    fn run_storm(
+        st: &State,
+        statics: &[UnitStatic],
+        seed: i64,
+        rules_epoch: u32,
+    ) -> (State, ShootResult) {
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(seed);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let seams = Seams { rules_epoch, ..Seams::default() };
+        resolve_stochastic_tray_on_board(
+            statics, st, &storm_action(), &terrain, seams, &mut rng, &mut tray,
+        )
+        .unwrap()
+    }
+
+    /// Storm of Change: seed 37 = storm faces [1, 1, 2] (one success), Shred
+    /// save batch [3, 3, 1] at Defense 4 — 3 failed saves + Shred's +1 on the
+    /// natural 1. The epoch-5 control (the fleet stamps 5) draws NOTHING.
+    #[test]
+    fn storm_of_change_fires_shred_on_activation_at_epoch_six_not_five() {
+        let (st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (next, shot) = run_storm(&st, &statics, 37, 6);
+        let storm = &shot.rolls[0];
+        assert_eq!(
+            (storm.kind, storm.count, storm.target, storm.owner.as_str()),
+            ("attack", 3, 2, "a"),
+            "the once-per-game burst rolls its 3 dice at the 2+ trigger"
+        );
+        let save = &shot.rolls[1];
+        assert_eq!((save.kind, save.count, save.target, save.owner.as_str()), ("defense", 3, 4, "b"));
+        assert_eq!(shot.caused, 4, "3 failed saves + Shred's +1 on the natural 1");
+        assert_eq!(next.alive[2], 0);
+        assert!(
+            shot.log.iter().any(|l| l.contains("Storm of Change")
+                && l.contains("unleashes the storm")),
+            "rules must log: the line names the rule, the bearer and the dice"
+        );
+
+        let (st5, statics5) = storm_line("Storm of Change", "wormhole_daemons_of_change", 5);
+        let (next5, shot5) = run_storm(&st5, &statics5, 37, 5);
+        assert!(shot5.rolls.is_empty(), "epoch 5 predates the wave-3 port");
+        assert!(shot5.log.is_empty());
+        assert_eq!(next5.wounds[2], vec![1, 1, 1]);
+    }
+
+    /// Storm of Lust, payload Surge — one die PER HIT, each 6 adds a hit
+    /// (the Surge primitive's own facet). Seed 3: storm [1, 1, 4] (one
+    /// success), surge dice [4, 6, 4] add one, the grown batch [3, 1, 2, 5]
+    /// loses three. Epoch 5: nothing.
+    #[test]
+    fn storm_of_lust_pays_surge_dice_per_hit_at_epoch_six_not_five() {
+        let (st, statics) = storm_line("Storm of Lust", "wormhole_daemons_of_lust", 6);
+        let (next, shot) = run_storm(&st, &statics, 3, 6);
+        let storm = &shot.rolls[0];
+        assert_eq!((storm.kind, storm.count, storm.target), ("attack", 3, 2));
+        let surge = &shot.rolls[1];
+        assert_eq!(
+            (surge.kind, surge.count, surge.target, surge.faces.clone()),
+            ("attack", 3, 6, vec![4, 6, 4]),
+            "one die per hit, 6 = one extra hit"
+        );
+        let save = &shot.rolls[2];
+        assert_eq!(
+            (save.kind, save.count, save.target),
+            ("defense", 4, 4),
+            "the batch grows by the surge six before it rolls"
+        );
+        assert_eq!(shot.caused, 3);
+        assert_eq!(next.alive[2], 0);
+
+        let (st5, statics5) = storm_line("Storm of Lust", "wormhole_daemons_of_lust", 5);
+        let (next5, shot5) = run_storm(&st5, &statics5, 3, 5);
+        assert!(shot5.rolls.is_empty());
+        assert_eq!(next5.wounds[2], vec![1, 1, 1]);
+    }
+
+    /// Storm of Plague, payload Bane — the defender re-rolls its unmodified
+    /// 6s (the Bane primitive's own batch leg). Seed 3: storm [1, 1, 4] (one
+    /// success), save batch [4, 6, 4] — the six blocks, Bane re-rolls it into
+    /// a 3, that failed re-roll wounds. Epoch 5: nothing.
+    #[test]
+    fn storm_of_plague_forces_the_bane_reroll_at_epoch_six_not_five() {
+        let (st, statics) = storm_line("Storm of Plague", "wormhole_daemons_of_plague", 6);
+        let (_, shot) = run_storm(&st, &statics, 3, 6);
+        let storm = &shot.rolls[0];
+        assert_eq!((storm.kind, storm.count, storm.target), ("attack", 3, 2));
+        let save = &shot.rolls[1];
+        assert_eq!((save.kind, save.count, save.target, save.faces.clone()), ("defense", 3, 4, vec![4, 6, 4]));
+        let reroll = &shot.rolls[2];
+        assert_eq!(
+            (reroll.kind, reroll.count, reroll.target, reroll.faces.clone()),
+            ("defense", 1, 4, vec![3]),
+            "Bane re-rolls the defender's unmodified six"
+        );
+        assert_eq!(shot.caused, 1, "the re-rolled six failed into a wound");
+
+        let (st5, statics5) = storm_line("Storm of Plague", "wormhole_daemons_of_plague", 5);
+        let (next5, shot5) = run_storm(&st5, &statics5, 3, 5);
+        assert!(shot5.rolls.is_empty());
+        assert_eq!(next5.wounds[2], vec![1, 1, 1]);
+    }
+
+    /// Storm of War, payload AP(1) — the save target worsens by one (Defense
+    /// 4+ becomes 5+). Seed 3: storm [1, 1, 4] (one success), batch [4, 6, 4]
+    /// at target 5 — two failures. Epoch 5: nothing.
+    #[test]
+    fn storm_of_war_puts_ap_one_on_the_burst_at_epoch_six_not_five() {
+        let (st, statics) = storm_line("Storm of War", "wormhole_daemons_of_war", 6);
+        let (next, shot) = run_storm(&st, &statics, 3, 6);
+        let storm = &shot.rolls[0];
+        assert_eq!((storm.kind, storm.count, storm.target), ("attack", 3, 2));
+        let save = &shot.rolls[1];
+        assert_eq!(
+            (save.kind, save.count, save.target),
+            ("defense", 3, 5),
+            "AP(1) shifts the save from Defense 4+ to 5+"
+        );
+        assert_eq!(shot.caused, 2);
+        assert_eq!(next.alive[2], 1);
+
+        let (st5, statics5) = storm_line("Storm of War", "wormhole_daemons_of_war", 5);
+        let (next5, shot5) = run_storm(&st5, &statics5, 3, 5);
+        assert!(shot5.rolls.is_empty());
+        assert_eq!(next5.wounds[2], vec![1, 1, 1]);
+    }
+
+    /// ONCE per game, not once per activation: the burst spends the bearer's
+    /// flag (the `limited_used` shape — DISPLAY name, never reset), and a
+    /// preset flag keeps the burst quiet on a fresh target pool.
+    #[test]
+    fn storm_is_once_per_game_per_bearer() {
+        let (st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (next, shot) = run_storm(&st, &statics, 3, 6);
+        assert!(!shot.rolls.is_empty());
+        assert_eq!(next.storm_used[0], vec!["Storm of Change".to_string()]);
+
+        let (st2, statics2) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let mut spent = st2;
+        spent.storm_used[0] = vec!["Storm of Change".to_string()];
+        let (next2, shot2) = run_storm(&spent, &statics2, 3, 6);
+        assert!(shot2.rolls.is_empty(), "already spent this game");
+        assert!(shot2.log.is_empty());
+        assert_eq!(next2.wounds[2], vec![1, 1, 1]);
+    }
+
+    /// No enemy within the 12" band — the burst does NOT fire and the
+    /// once-per-game is NOT spent (main.gd:17257's own gate).
+    #[test]
+    fn storm_out_of_reach_is_not_spent() {
+        let (mut st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        st.positions[2] =
+            vec![[20.0 * IN2M, 0.0, 0.0], [20.02 * IN2M, 0.0, 0.0], [20.04 * IN2M, 0.0, 0.0]];
+        let (next, shot) = run_storm(&st, &statics, 3, 6);
+        assert!(shot.rolls.is_empty(), "18\" edge gap is past the 12\" band");
+        assert!(next.storm_used[0].is_empty());
+        assert_eq!(next.wounds[2], vec![1, 1, 1]);
+    }
+
     #[test]
     fn fear_x_lifts_its_own_side_s_tally_in_the_ev_melee_comparison() {
         let mut st = four_unit_line();
