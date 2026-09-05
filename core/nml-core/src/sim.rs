@@ -5050,10 +5050,18 @@ mod tests {
                 sc0.keep, sc0.attacks, plain_seen, st.los_clear(0, 2), st.sees(0, "b"));
         }
         let off = run_marked(&st, &statics, 5, &[(2, &mark("Indirect"))]);
-        assert!(
-            off.rolls.iter().all(|r| r.kind != "attack"),
-            "epoch 5 (the recording fleet's epoch) keeps the record inert, RED before the fix"
-        );
+        {
+            let mut sc5 = Scratch::default();
+            sc5.rules_epoch = 5;
+            sighted_profiles_of(&statics[0], &st, &statics, 0, 2, &Vec::new(), 12.0, &mut sc5);
+            let blockers = sight::blockers_of(&st, 0, 2);
+            let plain_seen = sight::sighted_count(&st, &Vec::new(), &blockers, 0, 2, 24.0, false);
+            assert!(
+                off.rolls.iter().all(|r| r.kind != "attack"),
+                "error diag5 keep={:?} attacks={:?} plain_seen={} los_clear={} sees={} rolls={:?}",
+                sc5.keep, sc5.attacks, plain_seen, st.los_clear(0, 2), st.sees(0, "b"), off.rolls
+            );
+        }
         let none = run_marked(&st, &statics, 6, &[]);
         assert!(none.rolls.iter().all(|r| r.kind != "attack"), "no record, no waiver");
         // "once": the exchange that used the waiver spends the record.
