@@ -8383,8 +8383,12 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 				int((mrd as Dictionary).get("morale_mod", 0))])
 		var test_target: int = AiCombatMath.morale_target(unit.get_quality(), morale_bonus + spell_morale)
 		if morale_bonus > 0 and battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Banner: %s gets +%d to morale test rolls (passes on %d+)" % [
-				unit.get_name(), morale_bonus, test_target], true)
+			var rating := SoloController.morale_rating_of(unit)
+			var source := "Morale(%d)" % rating if rating > 0 else "Banner"
+			if rating > 0 and morale_bonus > rating:
+				source += " + Banner"
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s gets +%d to morale test rolls (passes on %d+)" % [
+				source, unit.get_name(), morale_bonus, test_target], true)
 		if spell_morale != 0 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %+d to morale test rolls — %s passes on %d+" % [
 				", ".join(morale_notes), spell_morale, unit.get_name(), test_target], true)
