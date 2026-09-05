@@ -284,6 +284,27 @@ pub struct Ctx {
     /// The `when: "charge"` names (Precision Charge Aura): only while the
     /// strike is a charge.
     pub melee_hit_bonus_charge: i64,
+    // --- Wave 3 — the Shot Modifier family's two RUNTIME-GATED shooting
+    // members (main.gd:5761-5779's data-driven loop), stamped BY NAME in
+    // `ctx_for` behind the EPOCH_6_TABLE_RULES gate (`shot_modifier_runtime_
+    // of`). Consumed in dice.rs's volley and melee folds. ---
+    /// Mobile Artillery's +N to hit strictly past its own `over_in`, only
+    /// while the shooter has NOT moved this round — the dynamic half is
+    /// `moved_this_round` below, the table's `moved_round ==
+    /// current_round` stamp gate (main.gd:5773-5775).
+    pub mobile_artillery_hit: i64,
+    pub mobile_artillery_over_in: f64,
+    /// Grounded Precision's +N on every attack (its `all_attacks`), only
+    /// while the attacker stands in terrain — the core's own cover read
+    /// (`in_cover`) standing in for the table's majority-of-models gate
+    /// (`_solo_majority_in_cover`, main.gd:7065-7083; the snapshot's cover
+    /// is the unit-centre probe, battle_sim.gd:753).
+    pub grounded_precision_hit: i64,
+    /// The act-scope `moved` flag, stamped at sim.rs's volley call site over
+    /// the template. Default TRUE — a context nobody stamped counts as
+    /// moved, so the Mobile Artillery bonus stays OFF (#489's direction:
+    /// under-credit, never over-credit).
+    pub moved_this_round: bool,
 }
 
 /// One conditional-AP spec — the registry `params` block of a Shatter / Tear /
@@ -1346,8 +1367,10 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // Block C2 — the melee/charge leg of the Shot Modifier family (see the
     // `Ctx` fields). The name list IS the port: these three are exactly the
     // family's entries with no runtime gate, and naming them one by one keeps
-    // the rest of the primitive (Grounded Precision, Precision Feat, Mobile
-    // Artillery, ...) uncredited — #489's lesson.
+    // the rest of the primitive (Precision Feat, ...) uncredited — #489's
+    // lesson. The two runtime-gated shooters ride `shot_modifier_runtime_of`
+    // below; Grounded Precision's `all_attacks` melee half is consumed at the
+    // melee seam itself (dice.rs::melee_hit_target).
     let (mut melee_hit_bonus, mut melee_hit_bonus_charge) = (0, 0);
     for (name, charge_only) in [
         ("Good Fighter", false),
@@ -1381,6 +1404,11 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         0
     };
     let ranged_shroud = ranged_shroud_params(reg, p, rules_epoch);
+    // Wave 3 — the family's two runtime-gated shooting members (see
+    // `shot_modifier_runtime_of`); `moved_this_round` keeps its default true
+    // until sim.rs's volley site stamps the act-scope flag over it.
+    let (mobile_artillery_hit, mobile_artillery_over_in, grounded_precision_hit) =
+        shot_modifier_runtime_of(reg, p, rules_epoch);
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -1428,6 +1456,10 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         ranged_shrouding: ranged_shroud.is_some(),
         ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s[0]),
         ranged_shroud_floor_in: ranged_shroud.map_or(SHROUD_FLOOR_IN, |s| s[1]),
+        mobile_artillery_hit,
+        mobile_artillery_over_in,
+        grounded_precision_hit,
+        moved_this_round: true,
         shielded: rule_on_all_models(p, "Shielded"),
         in_cover: false,
         // HARD 0, and it stays 0: `BattleSim._ctx_of` never passes
@@ -1971,9 +2003,11 @@ fn boost_aura_name_of(p: &Profile, base: &str) -> String {
 /// same gate). The melee-/charge-scoped members (Good Fighter, Precision
 /// Fighter Aura, Precision Charge Aura) are stamped onto `Ctx` by `ctx_for`
 /// (block C2); the runtime-gated ones — Mobile Artillery
-/// (`requires_stationary`), Grounded Precision (`terrain_within_in`),
-/// Precision Feat (`uses_per_game`) — stay out: this core has no runtime gate
-/// for them, so stamping them flat would be bug #489's over-credit.
+/// (`requires_stationary`) and Grounded Precision (`terrain_within_in`) —
+/// ride `shot_modifier_runtime_of` below (wave 3: their gates ARE the
+/// runtime state), while Precision Feat (`uses_per_game`) stays out: a
+/// once-per-game PLAYER CHOICE the table never automates, so stamping it
+/// flat would be bug #489's over-credit.
 fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile]) {
     let mut flat = 0;
     let mut over9 = 0;
@@ -2009,6 +2043,44 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         sp.hit_bonus += flat;
         sp.hit_bonus_over9 += over9;
     }
+}
+
+/// Wave 3 — the Shot Modifier family's two RUNTIME-GATED shooting members,
+/// stamped BY NAME (#489's lesson: naming them one by one keeps the rest of
+/// the primitive uncredited). `stamp_shot_modifier` above covers the eight
+/// flat/over-9" names whose bonuses are unconditional per weapon; these two
+/// carry a runtime gate the table's own loop reads per shot
+/// (main.gd:5761-5779): Mobile Artillery's `requires_stationary` (the
+/// `moved_round == current_round` stamp, main.gd:5773-5775) and Grounded
+/// Precision's `terrain_within_in` (`_solo_majority_in_cover`,
+/// main.gd:5771). The core answers the first with the act-scope `moved`
+/// flag (Ctx::moved_this_round, stamped at sim.rs's volley site) and the
+/// second with its own cover read (Ctx::in_cover — the centre-probe
+/// stand-in for the table's majority-of-models gate, battle_sim.gd:753).
+/// Returns `(mobile_artillery_hit, mobile_artillery_over_in,
+/// grounded_precision_hit)`, zeros = nothing carried. Gated on
+/// `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)` (frozen at 6, never the
+/// literal or `CURRENT_RULES_EPOCH`): the Gen-3 recorder stamps
+/// `rules_epoch: 5` and keeps today's reading byte-exact.
+fn shot_modifier_runtime_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, i64) {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        return (0, 0.0, 0);
+    }
+    let (mut mobile_hit, mut mobile_over, mut grounded_hit) = (0, 0.0, 0);
+    if unit_rule_active(reg, p, "Mobile Artillery") {
+        if let Some(e) = reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Mobile Artillery") {
+            mobile_hit = e.param_i("hit_bonus", 0);
+            mobile_over = e.param_f("over_in", 0.0);
+        }
+    }
+    if unit_rule_active(reg, p, "Grounded Precision") {
+        if let Some(e) = reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Grounded Precision") {
+            if e.param_f("terrain_within_in", 0.0) > 0.0 {
+                grounded_hit = e.param_i("hit_bonus", 0);
+            }
+        }
+    }
+    (mobile_hit, mobile_over, grounded_hit)
 }
 
 /// One "Utility Buff" registry entry's params — `_solo_apply_utility_buffs`
