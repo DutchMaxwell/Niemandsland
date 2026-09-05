@@ -1425,9 +1425,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    }
   },
   "berserker_clans": {
@@ -1538,9 +1541,12 @@
     }
    },
    "Quick Shot Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Quick Shot"
+    }
    },
    "Ravage": {
     "primitive": "Ravage",
@@ -1977,9 +1983,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    }
   },
   "blood_prime_brothers": {
@@ -2202,9 +2211,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    }
   },
   "brute_coalitions": {
@@ -2616,9 +2628,12 @@
     }
    },
    "Quick Shot Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Quick Shot"
+    }
    },
    "Rapid Charge": {
     "primitive": "Fast",
@@ -3103,9 +3118,12 @@
     }
    },
    "Targeting Visor Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Targeting Visor Boost"
+    }
    }
   },
   "dark_brothers": {
@@ -3286,9 +3304,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    }
   },
   "dark_elf_raiders": {
@@ -3675,9 +3696,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    }
   },
   "dwarf_guilds": {
@@ -3838,9 +3862,12 @@
     }
    },
    "Swift Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Swift"
+    }
    },
    "Unpredictable": {
     "primitive": "Unpredictable",
@@ -3931,9 +3958,12 @@
     }
    },
    "Rapid Blink Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Blink Boost"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -4003,9 +4033,12 @@
     }
    },
    "Teleport Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Teleport"
+    }
    },
    "Unpredictable": {
     "primitive": "Unpredictable",
@@ -4447,9 +4480,12 @@
     }
    },
    "Quick Shot Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Quick Shot"
+    }
    },
    "Re-Deployment": {
     "primitive": "Re-Deployment",
@@ -5703,9 +5739,12 @@
     }
    },
    "Scrapper Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scrapper Boost"
+    }
    },
    "Shatter": {
     "primitive": "Shatter",
@@ -5983,9 +6022,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    }
   },
   "knight_prime_brothers": {
@@ -6204,9 +6246,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    }
   },
   "lust_disciples": {
@@ -6528,9 +6573,12 @@
     }
    },
    "Teleport Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Teleport"
+    }
    },
    "Unpredictable": {
     "primitive": "Unpredictable",
@@ -6762,9 +6810,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    }
   },
   "mercenaries": {
@@ -7510,9 +7561,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    }
   },
   "psycho_cults": {
@@ -7564,9 +7618,12 @@
     }
    },
    "Protection Feat Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Protection Feat"
+    }
    },
    "Psychotic": {
     "primitive": "Surge",
@@ -7587,9 +7644,12 @@
     }
    },
    "Psychotic Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Psychotic Boost"
+    }
    },
    "Relentless Aura": {
     "primitive": "Aura Channel",
@@ -7851,9 +7911,12 @@
     }
    },
    "Scurry Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scurry Boost"
+    }
    },
    "Self-Destruct": {
     "primitive": "Self-Destruct",
@@ -8012,9 +8075,12 @@
     }
    },
    "Rending in Melee Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rending in Melee"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -8033,9 +8099,12 @@
     }
    },
    "Strider Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Strider"
+    }
    },
    "Surge": {
     "primitive": "Surge",
@@ -8140,9 +8209,12 @@
     }
    },
    "Protection Feat Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Protection Feat"
+    }
    },
    "Rapid Advance": {
     "primitive": "Rapid Advance",
@@ -8174,9 +8246,12 @@
     }
    },
    "Reanimation Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Reanimation"
+    }
    },
    "Relentless Aura": {
     "primitive": "Aura Channel",
@@ -8745,9 +8820,12 @@
     }
    },
    "Shadow Operative Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Shadow Operative Boost"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -8882,9 +8960,12 @@
     }
    },
    "Safety Gear Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Safety Gear Boost"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -8912,9 +8993,12 @@
     }
    },
    "Teleport Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Teleport"
+    }
    }
   },
   "soul_snatcher_cults": {
@@ -9017,9 +9101,12 @@
     }
    },
    "Quick Shot Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Quick Shot"
+    }
    },
    "Re-Deployment": {
     "primitive": "Re-Deployment",
@@ -9265,9 +9352,12 @@
     }
    },
    "Warbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Warbound Boost"
+    }
    }
   },
   "watch_brothers": {
@@ -9414,9 +9504,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    },
    "Watchborn": {
     "primitive": "Versatile Attack",
@@ -9622,9 +9715,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    },
    "Watchborn": {
     "primitive": "Versatile Attack",
@@ -9815,9 +9911,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    },
    "Wolfborn": {
     "primitive": "Bounding",
@@ -10045,9 +10144,12 @@
     }
    },
    "Versatile Reach Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Reach"
+    }
    },
    "Wolfborn": {
     "primitive": "Bounding",
@@ -10187,9 +10289,12 @@
     }
    },
    "Quick Shot Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Quick Shot"
+    }
    },
    "Reinforcement": {
     "primitive": "Reinforcement",
@@ -10248,9 +10353,12 @@
     }
    },
    "Strider Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Strider"
+    }
    },
    "Union Assault": {
     "primitive": "Vanguard",
@@ -10418,9 +10526,12 @@
     }
    },
    "Teleport Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Teleport"
+    }
    },
    "Unstoppable in Melee Aura": {
     "primitive": "Aura Channel",
@@ -10603,9 +10714,12 @@
     }
    },
    "Strider Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Strider"
+    }
    },
    "Surge": {
     "primitive": "Surge",
@@ -10722,9 +10836,12 @@
     }
    },
    "Rending in Melee Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rending in Melee"
+    }
    },
    "Screened": {
     "primitive": "Stealth",
@@ -10737,9 +10854,12 @@
     }
    },
    "Screened Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Screened"
+    }
    },
    "Steadfast": {
     "primitive": "Steadfast",
@@ -10903,9 +11023,12 @@
     }
    },
    "Warbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Warbound Boost"
+    }
    }
   }
  }
