@@ -21,10 +21,13 @@
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES};
+use crate::acts::{
+    rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
+};
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
     RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
+    SHROUD_RANGE_PENALTY_IN,
 };
 use crate::rules::{
     base_rule_name, has_special_rule, rule_rating, unit_rating, Registries, Spell,
@@ -102,6 +105,14 @@ pub struct Ctx {
     pub fortified: bool,
     pub guarded: bool,
     pub ranged_shrouding: bool,
+    /// The clamp pair the three ranged reads share (dice.rs's volley,
+    /// combat.rs's shoot_ev, sim.rs's sight_reach_in): the carried entry's
+    /// own `range_penalty_in`/`floor_in` — the literal "Ranged Shrouding"
+    /// resolves to exactly the `SHROUD_RANGE_PENALTY_IN`/`SHROUD_FLOOR_IN`
+    /// constants its entry prints. Read only while `ranged_shrouding`;
+    /// `ctx_for` always sets them beside the flag.
+    pub ranged_shroud_penalty_in: f64,
+    pub ranged_shroud_floor_in: f64,
     pub shielded: bool,
     pub in_cover: bool,
     /// `AiEv.ctx_for`'s third argument, which `BattleSim._ctx_of` never passes
@@ -902,6 +913,45 @@ fn melee_shroud_params(reg: &mut Registries, p: &Profile) -> Option<[f64; 2]> {
     None
 }
 
+/// `SoloController.ranged_shroud_reach_in` solo_controller.gd:5642-5661 — the
+/// literal name first (its own entry's `range_penalty_in`/`floor_in`, the
+/// SHROUD_* constants as defaults), then the DATA aliases of the primitive
+/// (Darkborn, Shadowborn, Wild Veil and their Boosts — "-4\"/-8\" range to a
+/// min. of 6\""), each on all models like the base form. `None` = the unit
+/// carries no rule of the family. The composite aliases' melee half already
+/// rides `melee_shroud_params` above. EPOCH-GATED (`acts::rule_on`): the
+/// alias walk is wave-3 behaviour, so a record below `EPOCH_6_TABLE_RULES`
+/// keeps the pre-port reading — the bare literal with the fixed constants.
+fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<[f64; 2]> {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        return rule_on_all_models(p, "Ranged Shrouding")
+            .then_some([SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN]);
+    }
+    if rule_on_all_models(p, "Ranged Shrouding") {
+        let map = reg.rules_for(&p.game_system);
+        let e = map.lookup(&p.faction_folder, "Ranged Shrouding");
+        return Some(match e {
+            Some(e) => [
+                e.param_f("range_penalty_in", SHROUD_RANGE_PENALTY_IN),
+                e.param_f("floor_in", SHROUD_FLOOR_IN),
+            ],
+            None => [SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN],
+        });
+    }
+    for hit in rules_of_primitive(reg, p, "Ranged Shrouding") {
+        if hit.name == "Ranged Shrouding" || !rule_on_all_models(p, &hit.name) {
+            continue;
+        }
+        let map = reg.rules_for(&p.game_system);
+        let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
+        return Some([
+            e.param_f("range_penalty_in", SHROUD_RANGE_PENALTY_IN),
+            e.param_f("floor_in", SHROUD_FLOOR_IN),
+        ]);
+    }
+    None
+}
+
 /// The four reads above for one unit profile.
 pub fn capture_reads(reg: &mut Registries, p: &Profile) -> CaptureReads {
     let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules);
@@ -1147,6 +1197,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         0
     };
+    let ranged_shroud = ranged_shroud_params(reg, p, rules_epoch);
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -1191,7 +1242,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         fortified: rule_on_all_models(p, "Fortified"),
         // Guarded OR Versatile Defense — ai_ev.gd:157-158.
         guarded: rule_on_all_models(p, "Guarded") || rule_on_all_models(p, "Versatile Defense"),
-        ranged_shrouding: rule_on_all_models(p, "Ranged Shrouding"),
+        ranged_shrouding: ranged_shroud.is_some(),
+        ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s[0]),
+        ranged_shroud_floor_in: ranged_shroud.map_or(SHROUD_FLOOR_IN, |s| s[1]),
         shielded: rule_on_all_models(p, "Shielded"),
         in_cover: false,
         // HARD 0, and it stays 0: `BattleSim._ctx_of` never passes

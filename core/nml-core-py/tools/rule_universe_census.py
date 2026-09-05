@@ -220,6 +220,21 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # port). Without this row the primitive is trusted whole for every name
     # under it — the #489 over-credit shape.
     "Ambush": frozenset({"counts_as", "beacon_in", "arrive_from_round", "re_reserve", "uses_per_game"}),
+    # Ranged-Shrouding family wave (rules-wave3-rangeshroud, 2026-09-05):
+    # unit.rs::ranged_shroud_params (epoch-6 arm) reads the carried entry's
+    # own `range_penalty_in`/`floor_in` off the literal name AND every alias
+    # whose primitive is "Ranged Shrouding" (Darkborn, Shadowborn, Wild Veil
+    # and their Boosts), mirroring SoloController.ranged_shroud_reach_in's
+    # coverage wave (solo_controller.gd:5651-5660). The melee half of the
+    # composite aliases was already consumed pre-wave by unit.rs
+    # ::melee_shroud_params' own alias walk (`move_penalty_in` on the
+    # Melee-Shrouding primitive, `melee_move_penalty_in`/`melee_floor_in` on
+    # the composite Ranged-Shrouding entries, `floor_in` as the fallback
+    # floor). Without this row the primitive is trusted whole for every name
+    # under it — the #489 over-credit shape.
+    "Ranged Shrouding": frozenset(
+        {"range_penalty_in", "floor_in", "move_penalty_in", "melee_move_penalty_in", "melee_floor_in"}
+    ),
 }
 
 
