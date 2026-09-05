@@ -111,9 +111,6 @@ def make_server(host, port, scorer, identity):
             except OSError:
                 pass  # client already declined its deadline
 
-        def log_message(self, *_args):
-            pass
-
     return HTTPServer((host, port), Handler)
 
 
@@ -133,14 +130,12 @@ def load_scorer():
 
 def main():
     scorer, identity = load_scorer()
-    server = make_server("127.0.0.1", int(os.environ.get("NML_BRAIN_PORT", "8765")), scorer, identity)
-    print("brain: %(name)s %(hash)s" % identity, "at http://127.0.0.1:%d" % server.server_port, flush=True)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
+    with make_server("127.0.0.1", int(os.environ.get("NML_BRAIN_PORT", "8765")), scorer, identity) as server:
+        print("brain: %(name)s %(hash)s" % identity, "at http://127.0.0.1:%d" % server.server_port, flush=True)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == "__main__":
