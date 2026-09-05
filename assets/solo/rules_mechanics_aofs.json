@@ -889,9 +889,12 @@
  "factions": {
   "beastmen": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Bestial": {
     "primitive": "Bane",
@@ -1226,9 +1229,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -1714,9 +1720,12 @@
   },
   "dark_elves": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Harassing": {
     "primitive": "Hit & Run",
@@ -2551,9 +2560,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Rending in Melee Aura": {
     "primitive": null,
@@ -3001,9 +3013,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -3024,9 +3039,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -3731,9 +3749,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -4082,9 +4103,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -4796,9 +4820,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shatter": {
     "primitive": "Shatter",
@@ -5312,9 +5339,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -5843,9 +5873,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Spell Accumulator": {
     "primitive": "Spell Accumulator",
@@ -5879,9 +5912,12 @@
   },
   "outskirt_raiders": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Defense Debuff": {
     "primitive": "Utility Buff",
@@ -6073,9 +6109,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -6176,9 +6215,12 @@
   },
   "ratmen": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Bane in Melee Aura": {
     "primitive": "Bane",
@@ -6381,9 +6423,12 @@
   },
   "rift_daemons_of_change": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Bounding": {
     "primitive": "Bounding",
@@ -6513,9 +6558,12 @@
   },
   "rift_daemons_of_lust": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Counter-Attack": {
     "primitive": "Counter",
@@ -6704,9 +6752,12 @@
   },
   "rift_daemons_of_plague": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Fortified Growth": {
     "primitive": "Growth Markers",
@@ -6773,9 +6824,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Rending in Melee Aura": {
     "primitive": null,
@@ -6814,9 +6868,12 @@
     }
    },
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Bounding": {
     "primitive": "Bounding",
@@ -7406,9 +7463,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -7885,9 +7945,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -8089,9 +8152,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -8363,9 +8429,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
