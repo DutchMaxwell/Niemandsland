@@ -136,6 +136,10 @@ pub struct ShootResult {
     /// hits", main.gd:6162-6165). Carried beside the dice stream, never a roll
     /// of its own.
     pub log: Vec<String>,
+    /// WAVE 3 — the family's alias/boost arm ACTUALLY lowered a save target
+    /// this activation (main.gd's `ap < ap_before` guard), as read by
+    /// `save_batch`; the orchestrators turn it into the rules-must-log line.
+    pub fortified_fired: bool,
 }
 
 impl ShootResult {
@@ -158,6 +162,7 @@ impl ShootResult {
         self.rolls.extend(other.rolls);
         self.caused += other.caused;
         self.log.extend(other.log);
+        self.fortified_fired = self.fortified_fired || other.fortified_fired;
         for u in other.unported {
             self.mark(u);
         }
@@ -299,16 +304,26 @@ fn save_batch(
     if count <= 0 {
         return 0;
     }
+    // Plain Fortified first (main.gd:6440-6447), then the WAVE 3 alias arm in
+    // its ELSE — Boost ungated, gated aliases past the volley's over-9" flag,
+    // both clamped at AP(0) like `fortified_ap`.
+    let mut eff_ap = fortified_ap(ap, def.fortified);
+    if !def.fortified {
+        let red = def
+            .fortified_boost_ap
+            .max(if def.fortified_alias_over9 { def.fortified_alias_ap } else { 0 });
+        if red > 0 && ap > 0 {
+            eff_ap = (ap - red).max(0);
+            out.fortified_fired = true;
+        }
+    }
     // rules-wave3-growthmark (epoch 6) — the DEFENDER-side facets ride the
     // same save target: the +X-to-Defense ladder and Fortified Growth's
     // attacker-AP cut, floored at the hard 0 the rule prints. Both ctx
     // fields are zero unless `sim::ctx_live` folded them behind
     // `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`, so pre-epoch corpora
     // replay byte-exact.
-    let target = save_target(
-        defense + def.growth_def_mod,
-        (fortified_ap(ap, def.fortified) + def.growth_fortify_ap).max(0),
-    );
+    let target = save_target(defense + def.growth_def_mod, (eff_ap + def.growth_fortify_ap).max(0));
     let faces = tray.roll(count as usize);
     out.rolls.push(Roll {
         kind: "defense",
@@ -600,6 +615,15 @@ pub fn resolve_volley_with_tray(
     // `over_in` gate, as first fired.
     let mut ma_fired: Vec<(&str, i64, f64)> = Vec::new();
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
+    // WAVE 3 — the aliases' over-9" SAVE gate (main.gd:3090/6415), ONCE per
+    // volley on this local copy; non-volley paths leave it false — the
+    // table's own reading (melee `dist_in: -1.0`, :6119). Stamp-gated.
+    let def = &Ctx {
+        fortified_alias_over9: def.fortified_alias_ap > 0
+            && def.fortified_alias_over_in > 0.0
+            && mod_dist_in > def.fortified_alias_over_in,
+        ..*def
+    };
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
     // body below stays the single-shooter one.
     //
@@ -1846,6 +1870,75 @@ mod tests {
             &good, &[0], &[1], &shooter(5), &changebound, 12.0, &mut tray,
         );
         assert_eq!(out.rolls[0].target, 5, "Good Shot +1 and Changebound -1 cancel: Quality 5+ stands");
+    }
+
+    // --------------------- Fortified-family DATA-ALIAS leg (epoch 6) --------
+
+    /// One AP(1) rifle round — the volley leg's probe weapon.
+    fn ap_rifle(attacks: i64) -> ShootProfile {
+        ShootProfile { ap: 1, ..rifle(attacks) }
+    }
+
+    /// Guardian's shape (`incoming_ap_reduction: 1, over_in: 9`) past its own
+    /// gate: the AP(1) volley's save target is one better (main.gd:6447-6462's
+    /// alias loop, `gate_in > 0.0 and not over9`), and the arm reports itself
+    /// for the rules-must-log line.
+    #[test]
+    fn fortified_alias_lowers_the_save_target_past_nine_inches() {
+        let guardian = Ctx { fortified_alias_ap: 1, fortified_alias_over_in: 9.0, ..defender(4, 5) };
+        let mut tray = Tray::seeded(27);
+        let out = resolve_shooting_with_tray(
+            &[ap_rifle(64)], &[0], &[64], &shooter(4), &guardian, 12.0, &mut tray,
+        );
+        assert_eq!(out.rolls[1].target, 4, "AP(1) volley past 9\": Guardian saves on 4+ instead of 5+");
+        assert!(out.fortified_fired, "rules-must-log: the arm must report itself");
+    }
+
+    /// At exactly 9" the gate is closed — `dist_in > gate`, not `>=`
+    /// (main.gd:6415's `dist_in > AiCombatMath.LONG_RANGE_IN`).
+    #[test]
+    fn fortified_alias_does_nothing_at_or_under_nine_inches() {
+        let guardian = Ctx { fortified_alias_ap: 1, fortified_alias_over_in: 9.0, ..defender(4, 5) };
+        let mut tray = Tray::seeded(27);
+        let out = resolve_shooting_with_tray(
+            &[ap_rifle(64)], &[0], &[64], &shooter(4), &guardian, 9.0, &mut tray,
+        );
+        assert_eq!(out.rolls[1].target, 5, "at exactly 9\" the gate has not fired: plain AP(1) save");
+        assert!(!out.fortified_fired, "nothing fired, nothing logs");
+    }
+
+    /// The Boost shape (`incoming_ap_reduction: 1`, NO `over_in` — the table's
+    /// `gate_in <= 0.0` branch) has no distance to clear: it applies on the
+    /// MELEE leg too, where the gated aliases never reach (main.gd:6119 passes
+    /// `dist_in: -1.0`).
+    #[test]
+    fn fortified_boost_lowers_the_melee_saves_without_a_distance() {
+        let boost = Ctx { fortified_boost_ap: 1, ..defender(4, 5) };
+        let att = shooter(4);
+        let profiles = [ShootProfile { name: "CCW".into(), ap: 1, attacks: 64, count: 1, range: 0, ..Default::default() }];
+        let strikers = [Shooter { profiles: &profiles, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
+        let mut tray = Tray::seeded(27);
+        let out = resolve_melee_with_tray(&strikers, &boost, "def", false, true, false, &mut tray);
+        assert_eq!(out.rolls[1].target, 4, "AP(1) melee vs the Boost: saves on 4+ instead of 5+");
+        assert!(out.fortified_fired, "rules-must-log: the arm must report itself");
+    }
+
+    /// Plain Fortified keeps its precedence (main.gd:6440-6447's `else`): when
+    /// the exact name is on all models the alias arm never runs — same target
+    /// as plain Fortified alone, and the ALIAS arm reports nothing.
+    #[test]
+    fn plain_fortified_wins_and_the_alias_arm_never_stacks() {
+        let both = Ctx {
+            fortified: true, fortified_boost_ap: 1,
+            fortified_alias_ap: 1, fortified_alias_over_in: 9.0,
+            ..defender(4, 5)
+        };
+        let mut tray = Tray::seeded(27);
+        let out = resolve_shooting_with_tray(
+            &[ap_rifle(64)], &[0], &[64], &shooter(4), &both, 12.0, &mut tray,
+        );
+        assert_eq!(out.rolls[1].target, 4, "plain Fortified's own (ap-1).max(0): saves on 4+");
+        assert!(!out.fortified_fired, "the alias arm is the ELSE branch — it never ran");
     }
 
     /// A weapon that scores nothing draws NO save batch — the table `continue`s
