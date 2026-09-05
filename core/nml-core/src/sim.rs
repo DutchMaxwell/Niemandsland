@@ -5028,40 +5028,26 @@ mod tests {
     }
 
     /// WAVE 3 — Indirect Mark: the once-record the pick lands on the marked
-    /// unit reaches the volley's own sight seam (the pooled gate and the
-    /// per-model sight test). The fixture's `ah` at 2" sits between `a` and
-    /// `b`, so every rifle's per-model sight test fails; with the mark the
-    /// volley still fires its single bearer-scaled rifle, at epoch 5 — and
-    /// without the record at 6 — the block stands. RED before the fix: the
-    /// record landed on the ledger but no resolver read it, so the first
-    /// assert saw no attack die at all.
+    /// unit makes it a LEGAL target without sight (the table's own per-target
+    /// validity check, main.gd:4011-4029). The fixture's recorded sight matrix
+    /// blocks a(0) -> b(2) — the planner's strict test, exactly the pair the
+    /// mark must waive — so with the mark the volley still fires its single
+    /// bearer-scaled rifle, at epoch 5 — and without the record at 6 — the
+    /// block stands. RED before the fix: the record landed on the ledger but
+    /// no resolver read it, so the first assert saw no attack die at all.
     #[test]
     fn indirect_mark_lets_the_volley_fire_at_a_blocked_target_from_epoch_6() {
-        let (st, statics) = buff_line();
+        let (mut st, statics) = buff_line();
+        let mut dark = vec![true; 16];
+        dark[0 * 4 + 2] = false; // los_pairs[0 * 4 + 2] — a does not see b
+        st.los_pairs = Some(Rc::new(dark));
         let on = run_marked(&st, &statics, 6, &[(2, &mark("Indirect"))]);
-        {
-            let mut sc0 = Scratch::default();
-            sc0.rules_epoch = 6;
-            sighted_profiles_of(&statics[0], &st, &statics, 0, 2, &Vec::new(), 12.0, &mut sc0);
-            let blockers = sight::blockers_of(&st, 0, 2);
-            let plain_seen = sight::sighted_count(&st, &Vec::new(), &blockers, 0, 2, 24.0, false);
-            assert_eq!(on.rolls[0].count, 1,
-                "error diag keep={:?} attacks={:?} plain_seen={} los_clear={} sees={}",
-                sc0.keep, sc0.attacks, plain_seen, st.los_clear(0, 2), st.sees(0, "b"));
-        }
+        assert_eq!(on.rolls[0].count, 1, "epoch 6: the mark waives the blocked sight");
         let off = run_marked(&st, &statics, 5, &[(2, &mark("Indirect"))]);
-        {
-            let mut sc5 = Scratch::default();
-            sc5.rules_epoch = 5;
-            sighted_profiles_of(&statics[0], &st, &statics, 0, 2, &Vec::new(), 12.0, &mut sc5);
-            let blockers = sight::blockers_of(&st, 0, 2);
-            let plain_seen = sight::sighted_count(&st, &Vec::new(), &blockers, 0, 2, 24.0, false);
-            assert!(
-                off.rolls.iter().all(|r| r.kind != "attack"),
-                "error diag5 keep={:?} attacks={:?} plain_seen={} los_clear={} sees={} rolls={:?}",
-                sc5.keep, sc5.attacks, plain_seen, st.los_clear(0, 2), st.sees(0, "b"), off.rolls
-            );
-        }
+        assert!(
+            off.rolls.iter().all(|r| r.kind != "attack"),
+            "epoch 5 (the recording fleet's epoch) keeps the record inert, RED before the fix"
+        );
         let none = run_marked(&st, &statics, 6, &[]);
         assert!(none.rolls.iter().all(|r| r.kind != "attack"), "no record, no waiver");
         // "once": the exchange that used the waiver spends the record.
