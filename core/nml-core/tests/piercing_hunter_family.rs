@@ -178,7 +178,10 @@ fn piercing_shooter_stamps_the_any_range_leg_from_epoch_6() {
 #[test]
 fn a_havocbound_charge_folds_its_ap_and_logs_from_epoch_6() {
     let us = build_at("gf", "havoc_brothers", &["Havocbound"], 6);
-    let att = Ctx { quality: 4, models: 1, ..Default::default() };
+    // Quality 1: every strike hits on a 1+ — the melee AP fold only runs
+    // once `hits > 0`, and the tray tests must never depend on a seeded
+    // to-hit roll.
+    let att = Ctx { quality: 1, models: 1, ..Default::default() };
     let def = Ctx { defense: 4, models: 1, tough: 1, ..Default::default() };
     let volley = |profiles: &[ShootProfile], charging: bool| {
         resolve_melee_with_tray(
@@ -218,7 +221,9 @@ fn a_havocbound_charge_folds_its_ap_and_logs_from_epoch_6() {
 /// their rule at 6 and stay silent at 5.
 #[test]
 fn the_ranged_legs_fold_their_ap_and_log_from_epoch_6() {
-    let att = Ctx { quality: 4, models: 1, ..Default::default() };
+    // Quality 1: every shot hits on a 1+ (see the melee test's note) — the
+    // AP folds must run on every seeded tray.
+    let att = Ctx { quality: 1, models: 1, ..Default::default() };
     let def = Ctx { defense: 4, models: 1, tough: 1, ..Default::default() };
     let volley = |profiles: &[ShootProfile], dist: f64| {
         resolve_volley_with_tray(
