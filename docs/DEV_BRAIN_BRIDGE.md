@@ -17,8 +17,9 @@ NML_BRAIN_MODULE=brain_dummy python3 tools/brain_server.py
 ```
 
 Then, in another terminal, launch the editor/debug game with the Rust planner
-enabled and choose the `planner_v0` solo difficulty (or an existing difficulty
-that enables rollout planning):
+enabled and start a solo game. With both switches below set, AI-marked slots
+automatically use the rollout planner; human slots remain human. No new player
+difficulty is exposed. Explicit arena difficulty selections take precedence:
 
 ```sh
 NML_CORE=1 NML_BRAIN_URL=http://127.0.0.1:8765 NML_BRAIN_W=1 \
