@@ -10525,9 +10525,12 @@
     }
    },
    "Split": {
-    "primitive": null,
+    "primitive": "Split",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 6
+    }
    },
    "Surge": {
     "primitive": "Surge",
