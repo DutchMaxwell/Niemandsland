@@ -3058,6 +3058,15 @@ fn consolidate_after_melee(next: &mut State, cover: Cover, seams: Seams, si: usi
     }
 }
 
+/// The Shred Boost's widened save-fail window (`#678`, merged AFTER the
+/// Gen-2b recording fleet closed at `cf8831d1`): `EPOCH_5_TABLE_RULES`, not
+/// the literal `4` it shipped gated on — a record stamping `rules_epoch: 4`
+/// (Gen-2b included) never saw this rule played, unlike Lacerate
+/// (`acts::EPOCH_4_TABLE_RULES`, merged BEFORE the fleet launched).
+fn shred_boost_active(rules_epoch: u32) -> bool {
+    rule_on(rules_epoch, EPOCH_5_TABLE_RULES)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_with(
     statics: &[UnitStatic],
@@ -3620,10 +3629,8 @@ fn resolve_with(
                                 // The Shred-family alias gate — the same epoch.
                                 rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES),
                                 // The Shred Boost's widened save-fail window —
-                                // the WAVE-2 epoch, the LITERAL 4 (never the
-                                // `CURRENT_RULES_EPOCH` symbol: a future bump
-                                // must not re-date this family's rules).
-                                rule_on(seams.rules_epoch, 4),
+                                // see `shred_boost_active`'s doc above.
+                                shred_boost_active(seams.rules_epoch),
                                 tray,
                             );
                             for (mi, msc, _) in &parts {
@@ -4868,6 +4875,22 @@ mod tests {
             "rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
         );
         assert!(!charger_strikes_last(&statics2, &st2, 0, s5), "no rule, no leg");
+    }
+
+    /// EPOCH GATES BY RECORDING SHA (05.09.): unlike Lacerate (merged BEFORE
+    /// the Gen-2b fleet launched, `acts::EPOCH_4_TABLE_RULES`), the Shred
+    /// Boost family (`#678`) merged AFTER the fleet closed — a record
+    /// stamping `rules_epoch: 4` (Gen-2b included) must not get its widened
+    /// save-fail window. RED on unfixed main: `resolve_with`'s call site
+    /// still reads the literal `4`, so `shred_boost_active(4)` is `true`.
+    #[test]
+    fn shred_boost_active_needs_epoch_5_not_the_recorders_epoch_4() {
+        assert!(shred_boost_active(5), "rules_epoch 5 (recorded after Shred merged) gets the widened window");
+        assert!(
+            !shred_boost_active(4),
+            "rules_epoch 4 is Gen-2b's recording epoch: Shred merged after the fleet closed, RED before the fix"
+        );
+        assert!(!shred_boost_active(3), "epoch 3 predates the Shred Boost family entirely");
     }
 
     /// B2b — the two write-half names. Casting Buff picks by the
