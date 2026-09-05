@@ -1,30 +1,25 @@
 //! The Versatile Attack family (wave 3, epoch 6) — one test per ported name,
-//! through the REAL registry (each name's own (system, faction) entry, the
-//! folder its book prints). The family rides the LIVE versatile mechanism:
+//! through the REAL registry. The family rides the LIVE versatile mechanism:
 //! the generic `stamp()` pass has carried every Versatile-Attack-primitive
 //! entry (`Watchborn`, `Vinci Tech` included) since the first core stage, so
-//! the buff itself is PRESENT at 6 AND at 5 (the inverted ladder — the port
-//! must never re-date it). What wave 3 adds is the census's own-token
-//! evidence (the named epoch-6 arm, `acts::EPOCH_6_TABLE_RULES` frozen) plus
-//! the rules-must-log lines on the volley fold, and the Boost's BOTH-arms
-//! form: "Vinci Tech Boost" always gets AP(+1) AND +1 to hit instead of the
-//! EV-best pick. Epoch literals 6/5, never `CURRENT_RULES_EPOCH`: a wave-4
-//! bump must not re-date what these assertions mean.
-//!
-//! Numbers are deterministic: quality 4 vs defense 4 at ap 0 makes
-//! `versatile_best_mode` pick the AP arm (ev_ap 5/12 >= ev_hit 1/3), so the
-//! pre-port pick reads attack target 4+ / save 5+; the both-arms form reads
-//! attack 3+ / save 5+. Seed 27's first two faces are [1, 5] — one hit at
-//! 4+, so the save batch always exists.
+//! the buff is PRESENT at 6 AND at 5 (the inverted ladder — never re-dated).
+//! Wave 3 adds the census's own-token evidence (the named epoch-6 arm,
+//! `acts::EPOCH_6_TABLE_RULES` frozen), the rules-must-log lines on the
+//! volley fold, and the Boost's BOTH-arms form (AP(+1) AND +1 to hit
+//! instead of the EV-best pick). Epoch literals 6/5, never
+//! `CURRENT_RULES_EPOCH`. Numbers are deterministic: quality 4 vs defense 4
+//! at ap 0 makes `versatile_best_mode` pick the AP arm (ev_ap >= ev_hit), so
+//! the pick reads attack 4+ / save 5+; the both-arms form reads attack 3+ /
+//! save 5+. Seed 27's first two faces are [1, 5] — one hit at 4+, so the
+//! save batch always exists.
 
-use nml_core::dice::{resolve_volley_with_tray, Shooter, Tray};
+use nml_core::dice::{resolve_volley_with_tray, ShootResult, Shooter, Tray};
 use nml_core::state::{MoveBands, Profile, Weapon};
 use nml_core::unit::{Ctx, UnitStatic};
 use nml_core::Registries;
 
 /// A single-model carrier of one family name, in the faction block whose
-/// mechanics entry fields the name, with one ranged and one melee weapon so
-/// both stamped arrays are non-empty.
+/// mechanics entry fields the name.
 fn carrier(system: &str, faction: &str, rules: &[&str]) -> Profile {
     Profile {
         unit_id: "u".into(),
@@ -35,22 +30,8 @@ fn carrier(system: &str, faction: &str, rules: &[&str]) -> Profile {
         wounds_max: vec![],
         model_count: 1,
         weapons: vec![
-            Weapon {
-                name: "Rifle".into(),
-                range: 24.0,
-                attacks: 2,
-                count: 1,
-                ap: 0,
-                rules: vec![],
-            },
-            Weapon {
-                name: "Claws".into(),
-                range: 0.0,
-                attacks: 1,
-                count: 1,
-                ap: 0,
-                rules: vec![],
-            },
+            Weapon { name: "Rifle".into(), range: 24.0, attacks: 2, count: 1, ap: 0, rules: vec![] },
+            Weapon { name: "Claws".into(), range: 0.0, attacks: 1, count: 1, ap: 0, rules: vec![] },
         ],
         special_rules: rules.iter().map(|s| s.to_string()).collect(),
         caster_value: 0,
@@ -72,19 +53,12 @@ fn build_at(system: &str, faction: &str, rules: &[&str], epoch: u32) -> UnitStat
     UnitStatic::build_for(&mut reg, &carrier(system, faction, rules), epoch)
 }
 
-/// One volley at 12" (over 9"), quality 4 into defense 4, ap 0: the pick
-/// arms are AP(+1) only — attack target 4+, save 5+.
-fn volley(us: &UnitStatic, owner: &str) -> nml_core::dice::ShootResult {
+/// One volley at 12" (over 9"), quality 4 into defense 4, ap 0.
+fn volley(us: &UnitStatic, owner: &str) -> ShootResult {
     let att = Ctx { quality: 4, models: 1, ..Default::default() };
     let def = Ctx { defense: 4, models: 1, tough: 1, ..Default::default() };
     resolve_volley_with_tray(
-        &[Shooter {
-            profiles: &us.shoot,
-            keep: &[0],
-            attacks: &[2],
-            att: &att,
-            owner,
-        }],
+        &[Shooter { profiles: &us.shoot, keep: &[0], attacks: &[2], att: &att, owner }],
         &def,
         "target",
         12.0,
@@ -98,12 +72,11 @@ fn volley(us: &UnitStatic, owner: &str) -> nml_core::dice::ShootResult {
 }
 
 /// "Watchborn" (gf/watch_brothers): the buff is PRESENT at 6 AND at 5 (the
-/// generic primitive pass — never re-dated); the named rules-must-log line
-/// exists ONLY from 6 (the new part, gated); absent WITHOUT the rule.
+/// generic primitive pass — never re-dated); its named log line exists ONLY
+/// from 6 (the new part, gated); absent WITHOUT the rule.
 #[test]
 fn watchborn_buff_at_both_epochs_and_its_log_from_6() {
-    let on = build_at("gf", "watch_brothers", &["Watchborn"], 6);
-    let v6 = volley(&on, "watch");
+    let v6 = volley(&build_at("gf", "watch_brothers", &["Watchborn"], 6), "watch");
     assert_eq!(v6.rolls[0].target, 4, "epoch 6: the pick keeps the hit arm shut");
     assert_eq!(v6.rolls[1].target, 5, "epoch 6: AP(+1) over 9\" (the generic buff)");
     assert!(
@@ -112,8 +85,7 @@ fn watchborn_buff_at_both_epochs_and_its_log_from_6() {
         v6.log
     );
 
-    let legacy = build_at("gf", "watch_brothers", &["Watchborn"], 5);
-    let v5 = volley(&legacy, "watch");
+    let v5 = volley(&build_at("gf", "watch_brothers", &["Watchborn"], 5), "watch");
     assert_eq!(v5.rolls[0].target, 4, "epoch 5: byte-exact pick");
     assert_eq!(v5.rolls[1].target, 5, "epoch 5: the generic buff still fires");
     assert!(
@@ -122,22 +94,16 @@ fn watchborn_buff_at_both_epochs_and_its_log_from_6() {
         v5.log
     );
 
-    let none = build_at("gf", "watch_brothers", &[], 6);
-    let v0 = volley(&none, "watch");
+    let v0 = volley(&build_at("gf", "watch_brothers", &[], 6), "watch");
     assert_eq!(v0.rolls[1].target, 4, "no rule, no AP");
-    assert!(
-        v0.log.iter().all(|l| !l.starts_with("Watchborn:")),
-        "no rule, no log: {:?}",
-        v0.log
-    );
+    assert!(v0.log.iter().all(|l| !l.starts_with("Watchborn:")), "no rule, no log");
 }
 
 /// "Vinci Tech" (aof/duchies_of_vinci): the same ladder — buff at both
 /// epochs off the generic pass, its own log line only from 6.
 #[test]
 fn vinci_tech_buff_at_both_epochs_and_its_log_from_6() {
-    let on = build_at("aof", "duchies_of_vinci", &["Vinci Tech"], 6);
-    let v6 = volley(&on, "vinci");
+    let v6 = volley(&build_at("aof", "duchies_of_vinci", &["Vinci Tech"], 6), "vinci");
     assert_eq!(v6.rolls[1].target, 5, "epoch 6: AP(+1) over 9\" (the generic buff)");
     assert!(
         v6.log.iter().any(|l| l.starts_with("Vinci Tech:")),
@@ -145,8 +111,7 @@ fn vinci_tech_buff_at_both_epochs_and_its_log_from_6() {
         v6.log
     );
 
-    let legacy = build_at("aof", "duchies_of_vinci", &["Vinci Tech"], 5);
-    let v5 = volley(&legacy, "vinci");
+    let v5 = volley(&build_at("aof", "duchies_of_vinci", &["Vinci Tech"], 5), "vinci");
     assert_eq!(v5.rolls[1].target, 5, "epoch 5: the generic buff still fires");
     assert!(
         v5.log.iter().all(|l| !l.starts_with("Vinci Tech:")),
@@ -155,32 +120,19 @@ fn vinci_tech_buff_at_both_epochs_and_its_log_from_6() {
     );
 
     let none = build_at("aof", "duchies_of_vinci", &[], 6);
-    assert_eq!(
-        volley(&none, "vinci").rolls[1].target,
-        4,
-        "no rule, no AP"
-    );
+    assert_eq!(volley(&none, "vinci").rolls[1].target, 4, "no rule, no AP");
 }
 
 /// "Vinci Tech Boost" (aof/duchies_of_vinci), with its Vinci Tech coupling:
 /// from epoch 6 the bearer gets BOTH arms (attack 3+ AND save 5+) instead of
 /// the pick, and names itself on the tray's log. At 5 the pick stays
 /// byte-exact. The Boost WITHOUT Vinci Tech never engages — the rule's own
-/// printed condition ("If this model has Vinci Tech") — while the generic
-/// primitive buff keeps its pre-existing reading.
+/// printed condition — while the generic primitive buff keeps its reading.
 #[test]
 fn vinci_tech_boost_gets_both_arms_from_epoch_6() {
-    let on = build_at(
-        "aof",
-        "duchies_of_vinci",
-        &["Vinci Tech", "Vinci Tech Boost"],
-        6,
-    );
+    let on = build_at("aof", "duchies_of_vinci", &["Vinci Tech", "Vinci Tech Boost"], 6);
     let v6 = volley(&on, "vinci");
-    assert_eq!(
-        v6.rolls[0].target, 3,
-        "epoch 6: the hit arm fires TOO (both, not pick) (RED before the fix)"
-    );
+    assert_eq!(v6.rolls[0].target, 3, "epoch 6: the hit arm fires TOO (both, not pick) (RED)");
     assert_eq!(v6.rolls[1].target, 5, "epoch 6: the AP arm fires as well");
     assert!(
         v6.log.iter().any(|l| l.starts_with("Vinci Tech Boost:")),
@@ -188,12 +140,7 @@ fn vinci_tech_boost_gets_both_arms_from_epoch_6() {
         v6.log
     );
 
-    let legacy = build_at(
-        "aof",
-        "duchies_of_vinci",
-        &["Vinci Tech", "Vinci Tech Boost"],
-        5,
-    );
+    let legacy = build_at("aof", "duchies_of_vinci", &["Vinci Tech", "Vinci Tech Boost"], 5);
     let v5 = volley(&legacy, "vinci");
     assert_eq!(v5.rolls[0].target, 4, "epoch 5: byte-exact pick, no hit arm");
     assert_eq!(v5.rolls[1].target, 5, "epoch 5: the generic pick's AP arm");
@@ -205,19 +152,15 @@ fn vinci_tech_boost_gets_both_arms_from_epoch_6() {
 
     // The Boost alone never engages: the printed condition needs Vinci Tech.
     // The generic primitive buff (pre-existing, ungated) still picks AP.
-    let lone = build_at("aof", "duchies_of_vinci", &["Vinci Tech Boost"], 6);
-    let vl = volley(&lone, "vinci");
+    let lone = volley(&build_at("aof", "duchies_of_vinci", &["Vinci Tech Boost"], 6), "vinci");
+    assert_eq!(lone.rolls[0].target, 4, "boost without Vinci Tech: no hit arm");
     assert_eq!(
-        vl.rolls[0].target, 4,
-        "boost without Vinci Tech: no hit arm"
-    );
-    assert_eq!(
-        vl.rolls[1].target, 5,
+        lone.rolls[1].target, 5,
         "boost without Vinci Tech: the generic pick's AP arm (pre-existing)"
     );
     assert!(
-        vl.log.iter().all(|l| !l.starts_with("Vinci Tech Boost:")),
+        lone.log.iter().all(|l| !l.starts_with("Vinci Tech Boost:")),
         "boost without Vinci Tech: the rule does not fire, no log: {:?}",
-        vl.log
+        lone.log
     );
 }

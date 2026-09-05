@@ -439,7 +439,14 @@ pub fn profile_ev(
     let mut versatile_ap = 0;
     if p.versatile_attack && dist_in > LONG_RANGE_IN && (!melee || charging) {
         let choose_def = shielded_defense(def.defense, def.shielded);
-        let (hit_mod, ap_mod) = versatile_best_mode(target, choose_def, p.ap, p.bane);
+        // Wave 3 — the "Vinci Tech Boost" form (`pick_one: false`, stamped
+        // only under the frozen EPOCH_6_TABLE_RULES gate): BOTH arms instead
+        // of the pick, the same stamped flag the volley fold reads.
+        let (hit_mod, ap_mod) = if p.versatile_both {
+            (1, 1)
+        } else {
+            versatile_best_mode(target, choose_def, p.ap, p.bane)
+        };
         versatile_ap = ap_mod;
         target = modified_hit_target(target, hit_mod);
     }

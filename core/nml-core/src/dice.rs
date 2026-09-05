@@ -668,14 +668,38 @@ pub fn resolve_volley_with_tray(
         target = modified_hit_target(target, m);
         let mut versatile_ap = 0;
         if (p.versatile_attack || att.versatile_grant) && mod_dist_in > LONG_RANGE_IN {
-            let (hit_mod, ap_mod) = versatile_best_mode(
-                target,
-                shielded_defense(def.defense, def.shielded),
-                p.ap + upr_ap,
-                p.bane,
-            );
+            // Wave 3 — the "Vinci Tech Boost" form (`pick_one: false`,
+            // stamped only under the frozen EPOCH_6_TABLE_RULES gate): BOTH
+            // arms instead of the pick. The flag rides the same stamp the
+            // generic buff rides, so a pre-epoch-6 record keeps the pick.
+            let (hit_mod, ap_mod) = if p.versatile_both {
+                (1, 1)
+            } else {
+                versatile_best_mode(
+                    target,
+                    shielded_defense(def.defense, def.shielded),
+                    p.ap + upr_ap,
+                    p.bane,
+                )
+            };
             versatile_ap = ap_mod;
             target = modified_hit_target(target, hit_mod);
+            // Rules-must-log — only the wave-3 NAMED family forms log (the
+            // named arm's stamp); the generic stamps stay silent, so every
+            // earlier epoch's replay is byte-identical.
+            if !p.versatile_name.is_empty() {
+                let what = if p.versatile_both {
+                    "AP(+1) and +1 to hit"
+                } else if ap_mod > 0 {
+                    "AP(+1)"
+                } else {
+                    "+1 to hit"
+                };
+                out.log.push(format!(
+                    "{}: {} on {}'s volley over 9\"",
+                    p.versatile_name, what, sh.owner
+                ));
+            }
         }
         // Precise is NOT in the rolled target. `_solo_tray_roll` is handed the
         // plain `to_hit` (main.gd:3200) and `_solo_hits` applies the +1 when it
