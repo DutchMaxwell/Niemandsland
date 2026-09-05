@@ -189,6 +189,10 @@ func test_aura_slice_1c_channels() -> void:
 		_assert_aura_channel(name, AURA_1C_LEGACY)
 
 
+func test_piercing_fighter_aura_channels() -> void:
+	_assert_aura_channel("Piercing Fighter Aura")
+
+
 func test_registry_primitive_gaps_match_the_explicit_allow_list() -> void:
 	RulesRegistry.reset_cache()
 	var allowed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://test/fixtures/rules_registry_open.json"))
