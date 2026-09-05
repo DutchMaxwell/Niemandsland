@@ -1381,9 +1381,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Re-Deployment": {
     "primitive": "Re-Deployment",
@@ -1793,9 +1796,12 @@
     }
    },
    "Piercing Assault Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Assault"
+    }
    },
    "Predator": {
     "primitive": "Surge",
@@ -1814,9 +1820,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Re-Deployment": {
     "primitive": "Re-Deployment",
@@ -1976,9 +1985,12 @@
     }
    },
    "Piercing Assault Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Assault"
+    }
    },
    "Precise": {
     "primitive": "Precise",
@@ -2005,9 +2017,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Ravage": {
     "primitive": "Ravage",
@@ -2170,9 +2185,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -2190,9 +2208,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Screened": {
     "primitive": "Stealth",
@@ -2787,9 +2808,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Re-Deployment": {
     "primitive": "Re-Deployment",
@@ -3186,9 +3210,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Ravage": {
     "primitive": "Ravage",
@@ -4199,9 +4226,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -4219,9 +4249,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -4432,9 +4465,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -5303,9 +5339,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Scrapper": {
     "primitive": "Bane",
@@ -5497,9 +5536,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Ravage": {
     "primitive": "Ravage",
@@ -5707,9 +5749,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Ravage": {
     "primitive": "Ravage",
@@ -5900,9 +5945,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -5920,9 +5968,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shatter": {
     "primitive": "Shatter",
@@ -6563,9 +6614,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -6583,9 +6637,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -6755,9 +6812,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Ravage": {
     "primitive": "Ravage",
@@ -6868,9 +6928,12 @@
   },
   "ratmen_clans": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Defense Debuff": {
     "primitive": "Utility Buff",
@@ -6960,9 +7023,12 @@
     }
    },
    "Piercing Assault Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Assault"
+    }
    },
    "Precision Shooter Aura": {
     "primitive": "Shot Modifier",
@@ -7289,9 +7355,12 @@
   },
   "robot_legions": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Ambushing Piercing Shot": {
     "primitive": "Ambush",
@@ -7389,9 +7458,12 @@
     }
    },
    "Piercing Assault Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Assault"
+    }
    },
    "Protection Feat": {
     "primitive": "Regeneration",
@@ -7443,9 +7515,12 @@
     "book_version": "3.5.3"
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -7753,9 +7828,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -8365,9 +8443,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -8385,9 +8466,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -8552,9 +8636,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Re-Position Artillery": {
     "primitive": "Utility Buff",
@@ -8727,9 +8814,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Ravage": {
     "primitive": "Ravage",
@@ -8958,9 +9048,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Re-Deployment": {
     "primitive": "Re-Deployment",
@@ -9166,9 +9259,12 @@
     }
    },
    "Rapid Rush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Rush"
+    }
    },
    "Ravage": {
     "primitive": "Ravage",
@@ -9287,9 +9383,12 @@
   },
   "wormhole_daemons_of_change": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Bounding": {
     "primitive": "Bounding",
@@ -9465,9 +9564,12 @@
   },
   "wormhole_daemons_of_lust": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Counter-Attack": {
     "primitive": "Counter",
@@ -9560,9 +9662,12 @@
     }
    },
    "Piercing Assault Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Assault"
+    }
    },
    "Quick": {
     "primitive": "Quick",
@@ -9680,9 +9785,12 @@
   },
   "wormhole_daemons_of_plague": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Difficult Terrain Debuff": {
     "primitive": "Utility Buff",
@@ -9768,9 +9876,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Rending in Melee Aura": {
     "primitive": null,
@@ -9837,9 +9948,12 @@
     }
    },
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Crack": {
     "primitive": "Crack",

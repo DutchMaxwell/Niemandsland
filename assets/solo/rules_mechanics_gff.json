@@ -1121,9 +1121,12 @@
   },
   "badland_nomads": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Badlands Hunter": {
     "primitive": "Shred",
@@ -2241,9 +2244,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -2376,9 +2382,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -2396,9 +2405,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -2464,9 +2476,12 @@
   },
   "city_runners": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Crack": {
     "primitive": "Crack",
@@ -4466,9 +4481,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -4486,9 +4504,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -4674,9 +4695,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -5518,9 +5542,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Scrapper": {
     "primitive": "Bane",
@@ -6099,9 +6126,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -6119,9 +6149,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shatter": {
     "primitive": "Shatter",
@@ -6993,9 +7026,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -7013,9 +7049,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -7361,9 +7400,12 @@
     "book_version": "3.5.3"
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -7374,9 +7416,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Self-Destruct": {
     "primitive": "Self-Destruct",
@@ -7435,9 +7480,12 @@
   },
   "ratmen_clans": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Evasive": {
     "primitive": "Evasive",
@@ -7806,9 +7854,12 @@
   },
   "robot_legions": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Ambushing Piercing Shot": {
     "primitive": "Ambush",
@@ -7921,9 +7972,12 @@
     "book_version": "3.5.3"
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -8189,9 +8243,12 @@
     }
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -8863,9 +8920,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -8883,9 +8943,12 @@
     "book_version": "3.5.3"
    },
    "Scout Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scout"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -9939,9 +10002,12 @@
   },
   "wormhole_daemons_of_change": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Bounding": {
     "primitive": "Bounding",
@@ -10099,9 +10165,12 @@
   },
   "wormhole_daemons_of_lust": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Counter-Attack": {
     "primitive": "Counter",
@@ -10277,9 +10346,12 @@
   },
   "wormhole_daemons_of_plague": {
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Fortified Growth": {
     "primitive": "Growth Markers",
@@ -10354,9 +10426,12 @@
     }
    },
    "Relentless Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Relentless"
+    }
    },
    "Rending in Melee Aura": {
     "primitive": null,
@@ -10410,9 +10485,12 @@
     }
    },
    "Ambush Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ambush"
+    }
    },
    "Crack": {
     "primitive": "Crack",
