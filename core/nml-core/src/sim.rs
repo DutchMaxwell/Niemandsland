@@ -5039,7 +5039,16 @@ mod tests {
     fn indirect_mark_lets_the_volley_fire_at_a_blocked_target_from_epoch_6() {
         let (st, statics) = buff_line();
         let on = run_marked(&st, &statics, 6, &[(2, &mark("Indirect"))]);
-        assert_eq!(on.rolls[0].count, 1, "epoch 6: the mark waives the blocked sight");
+        {
+            let mut sc0 = Scratch::default();
+            sc0.rules_epoch = 6;
+            sighted_profiles_of(&statics[0], &st, &statics, 0, 2, &Vec::new(), 12.0, &mut sc0);
+            let blockers = sight::blockers_of(&st, 0, 2);
+            let plain_seen = sight::sighted_count(&st, &Vec::new(), &blockers, 0, 2, 24.0, false);
+            assert_eq!(on.rolls[0].count, 1,
+                "error diag keep={:?} attacks={:?} plain_seen={} los_clear={} sees={}",
+                sc0.keep, sc0.attacks, plain_seen, st.los_clear(0, 2), st.sees(0, "b"));
+        }
         let off = run_marked(&st, &statics, 5, &[(2, &mark("Indirect"))]);
         assert!(
             off.rolls.iter().all(|r| r.kind != "attack"),
