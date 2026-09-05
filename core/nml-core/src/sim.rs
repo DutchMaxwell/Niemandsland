@@ -1184,7 +1184,7 @@ fn tray_hit_and_run(
                     centre[1],
                     centre[2] + (centre[2] - foe[2]),
                 ];
-                crate::mv::step::plain_move(
+                (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).plain_move(
                     next,
                     t,
                     si,
@@ -3442,7 +3442,7 @@ fn consolidate_after_melee(next: &mut State, cover: Cover, seams: Seams, si: usi
     };
     let Cover::Board(t) = cover else { return };
     let Some(goal) = consolidation_goal(next, winner) else { return };
-    if let Some(land) = crate::mv::step::plain_move(
+    if let Some(land) = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).plain_move(
         next,
         t,
         winner,
@@ -3590,7 +3590,7 @@ fn resolve_with(
             let (dest, band) =
                 s10_dest_arms(statics, &next, si, kind, dest, band_in, &mut hold);
             if !hold {
-                landing = crate::mv::step::plain_move(
+                landing = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).plain_move(
                     &next,
                     t,
                     si,

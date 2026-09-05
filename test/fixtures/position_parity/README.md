@@ -89,3 +89,25 @@ one-model mutation to prove that the checked-in baseline rejects regressions.
 Repeat `--check-report` with distinct saved report paths to verify determinism
 without relaunching completed runs. Baseline creation still requires three
 matching reports and an explicit reason; normal CI launches three fresh runs.
+
+## Shared shortening pin
+
+`whole_unit_shorten.json` captures production `_shorten_world_to_legal` call 1
+from unchanged `recorded-003`: original start, post-repair candidate, actual
+moving/external base shapes, terrain, and table output. Both Rust and gdUnit
+read these values. The 16-step bisection selects 33129/65536; the next factor
+breaks the one-inch coherency link. Its 1e-5-inch tolerance is narrower than the
+existing accepted endpoint residuals and does not change the corpus gate.
+
+The optional Stage A envelope accepts `rules_epoch`, defaulting to table epoch
+6. The simulator supplies its own replay epoch through `MoveRules`; epochs
+below `EPOCH_6_TABLE_RULES` retain the previous movement result. The original
+free movement function retains its argument list and epoch-0 behavior.
+
+Shortening coverage stops at the pending boxed continuation: for a granted band
+of at least two inches whose candidate advances less than one inch, the core
+retains its previous result. `Landing.shorten_covered` reports that boundary;
+the Stage A adapter retains the shortening decline when the table used it.
+These are the table's boxed-entry distance conditions, conservatively applied
+before its unported lateral-room probe. This keeps that dependency for the
+boxed-escape port instead of changing an unsupported continuation's result.

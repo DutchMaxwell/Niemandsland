@@ -31,6 +31,7 @@ use crate::geom::{self, V3};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
+use crate::acts::{rule_on, EPOCH_6_TABLE_RULES};
 
 use super::cost::{CellSet, Grid, Zone};
 use super::entry::plan_unit_step_call;
@@ -67,6 +68,8 @@ pub struct Mover {
 /// What the charge move did.
 #[derive(Clone, Debug)]
 pub struct Landing {
+    /// False for legacy/charge results and the pending boxed continuation.
+    pub shorten_covered: bool,
     pub movers: Vec<Mover>,
     /// Per-model resting place, WORLD metres, in `movers` order.
     pub end: Vec<V3>,
@@ -329,6 +332,7 @@ fn spacing_zones(
 /// none of this as charge-specific, so a future non-charge caller builds one of
 /// these too — only `allow_contact` tells `build_call` which move it is.
 struct Move<'a> {
+    rules_epoch: u32,
     state: &'a State,
     t: &'a Terrain,
     si: usize,
@@ -483,7 +487,8 @@ fn plan_once(
 /// epsilon a full-band mover in a deploy-packed line always needs.
 /// The two unit rules `mv::gate`'s wall clamp asks about (:6392-6393).
 fn gate_flags(&self) -> super::gate::GateFlags<'_> {
-    super::gate::GateFlags { flying: self.flying, traversal: self.traversal, ..Default::default() }
+    super::gate::GateFlags { flying: self.flying, traversal: self.traversal,
+        start_world: &self.pos, rules_epoch: self.rules_epoch, ..Default::default() }
 }
 
 fn gate_caps(&self, trails: &[Vec<V2>], radii_m: &[f64], reach_in: f64) -> Vec<f64> {
@@ -595,8 +600,8 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         .any(|(i, p)| g2::distance_to(*p, starts[i]) as f64 * IN2M > OVERLAP_EPS_M);
     // :4884-4885 — THE HARD FINAL PLACEMENT GATE, applied HERE, after the trim,
     // so the trim can never cut a gate-corrected endpoint off its trail. Passes
-    // 1-4 and the wall clamp are ported (`mv::gate`); the whole-unit shorten
-    // (:6465) is still out. A CHARGE is deliberately left out of this call even
+    // 1-4, the epoch-gated whole-unit shorten and the wall clamp are ported
+    // (`mv::gate`). A CHARGE is deliberately left out of this call even
     // though the table gates one too: its gate is a different animal — no band
     // caps (the contact push owns the endpoint) and the contact-model exemption
     // — and neither of those is written yet.
@@ -680,7 +685,8 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             [w[0], self.pos[i][1], w[2]]
         })
         .collect();
-    Landing { movers: self.movers.clone(), end, budget_in, arc_in, dangerous, call }
+    Landing { shorten_covered: !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES),
+        movers: self.movers.clone(), end, budget_in, arc_in, dangerous, call }
 }
 }
 
@@ -825,6 +831,7 @@ pub fn charge_move(
     let avoid_dang =
         !flying && !targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_dangerous);
     let ch = Move {
+        rules_epoch: 0,
         state,
         t,
         si,
@@ -866,6 +873,28 @@ pub fn plain_move(
     fast_planner: bool,
     guard: i64,
 ) -> Option<Landing> {
+    MoveRules::default().plain_move(state, t, si, dest, band_in, hero_attach, fast_planner, guard)
+}
+
+/// Rule context for movement callers; the original free function preserves epoch 0.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MoveRules {
+    pub rules_epoch: u32,
+}
+
+impl MoveRules {
+#[allow(clippy::too_many_arguments)]
+pub fn plain_move(
+    self,
+    state: &State,
+    t: &Terrain,
+    si: usize,
+    dest: V3,
+    band_in: f64,
+    hero_attach: bool,
+    fast_planner: bool,
+    guard: i64,
+) -> Option<Landing> {
     let board = t.board_in();
     if !t.is_valid() || board[0] <= 0.0 || board[1] <= 0.0 {
         return None;
@@ -897,6 +926,7 @@ pub fn plain_move(
     let avoid_dang =
         !flying && !targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_dangerous);
     let mv = Move {
+        rules_epoch: self.rules_epoch,
         state,
         t,
         si,
@@ -914,7 +944,19 @@ pub fn plain_move(
         guard,
         allow_contact: false,
     };
-    Some(mv.execute(band_in, avoid_diff, &radii_m))
+    let land = mv.execute(band_in, avoid_diff, &radii_m);
+    // Stage boundary: the table may next enter boxed escape for a >=2-inch
+    // band ending under 1 inch. Until that continuation is ported, preserve
+    // the previous result and explicitly decline shortening coverage there.
+    let starts: Vec<V2> = mv.pos.iter().map(|p| t.to_inch(*p)).collect();
+    let ends: Vec<V2> = land.end.iter().map(|p| t.to_inch(*p)).collect();
+    if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) && band_in >= 2.0
+        && achieved_in(&starts, &ends) < 1.0
+    {
+        return plain_move(state, t, si, dest, band_in, hero_attach, fast_planner, guard);
+    }
+    Some(land)
+}
 }
 
 #[cfg(test)]
@@ -1121,6 +1163,7 @@ mod tests {
         let st = two_unit_state(vec![away, away, away], vec![[1.0, 0.0, 0.0]]);
         let movers: Vec<Mover> = (0..3).map(|model| Mover { unit: 0, model }).collect();
         let land = |dang: Vec<bool>| Landing {
+            shorten_covered: false,
             movers: movers.clone(),
             end: vec![away; 3],
             budget_in: 6.0,
