@@ -31,6 +31,19 @@ const AURA_1B_LEGACY := {
 
 
 
+const AURA_1C_LEGACY := {
+	"aofs/Ranged Slayer Aura": {"book_version": "3.5.3", "params": {"ap_bonus": 2.0, "aura_expand": true, "condition": "vs_tough_ge", "gate": "ranged_over", "lost_if_bearer_killed": true, "max_picks": 3.0, "over_in": 9.0, "threshold": 3.0}, "primitive": "Slayer", "rated": false},
+	"aofs/Rapid Advance Aura": {"book_version": "3.5.3", "params": {"advance_mod": 4.0, "aura_expand": true, "lost_if_bearer_killed": true, "max_picks": 3.0}, "primitive": "Rapid Advance", "rated": false},
+	"aofs/Speed Feat Aura": {"book_version": "3.5.3", "params": {"advance_mod": 2.0, "aura_expand": true, "lost_if_bearer_killed": true, "max_picks": 3.0, "rush_mod": 4.0, "uses_per_game": 1.0}, "primitive": "Quick", "rated": false},
+	"aofs/Sturdy Boost Aura": {"book_version": "3.5.3", "params": {"aura_expand": true, "defense_bonus": 1.0, "lost_if_bearer_killed": true, "max_picks": 3.0}, "primitive": "Shielded", "rated": false},
+	"gff/Ranged Slayer Aura": {"book_version": "3.5.3", "params": {"ap_bonus": 2.0, "aura_expand": true, "condition": "vs_tough_ge", "gate": "ranged_over", "lost_if_bearer_killed": true, "max_picks": 3.0, "over_in": 9.0, "threshold": 3.0}, "primitive": "Slayer", "rated": false},
+	"gff/Rapid Advance Aura": {"book_version": "3.5.3", "params": {"advance_mod": 4.0, "aura_expand": true, "lost_if_bearer_killed": true, "max_picks": 3.0}, "primitive": "Rapid Advance", "rated": false},
+	"gff/Speed Feat Aura": {"book_version": "3.5.3", "params": {"advance_mod": 2.0, "aura_expand": true, "lost_if_bearer_killed": true, "max_picks": 3.0, "rush_mod": 4.0, "uses_per_game": 1.0}, "primitive": "Quick", "rated": false},
+	"gff/Sturdy Boost Aura": {"book_version": "3.5.3", "params": {"aura_expand": true, "defense_bonus": 1.0, "lost_if_bearer_killed": true, "max_picks": 3.0}, "primitive": "Shielded", "rated": false},
+}
+
+
+
 func _assert_aura_channel(name: String, preserved: Dictionary = {}) -> void:
 	RulesRegistry.reset_cache()
 	var checked := 0
@@ -134,6 +147,46 @@ func test_aura_slice_1b_channels() -> void:
 		"Protected Aura",
 	]:
 		_assert_aura_channel(name, AURA_1B_LEGACY)
+
+
+func test_aura_slice_1c_channels() -> void:
+	for name in [
+		"Protection Feat Aura",
+		"Psychotic Boost Aura",
+		"Quick Shot Aura",
+		"Raider Boost Aura",
+		"Ranged Slayer Aura",
+		"Rapid Advance Aura",
+		"Rapid Blink Boost Aura",
+		"Ravage Aura",
+		"Reanimation Aura",
+		"Reckless Piercing Aura",
+		"Rending in Melee Aura",
+		"Royal Warrior Boost Aura",
+		"Safety Gear Boost Aura",
+		"Savage Boost Aura",
+		"Scrapper Boost Aura",
+		"Screened Aura",
+		"Scurry Boost Aura",
+		"Shadow Operative Boost Aura",
+		"Shadowborn Boost Aura",
+		"Speed Feat Aura",
+		"Strider Aura",
+		"Sturdy Boost Aura",
+		"Swift Aura",
+		"Targeting Visor Boost Aura",
+		"Teleport Aura",
+		"Tenacious Boost Aura",
+		"Vale Oath Boost Aura",
+		"Versatile Attack Aura",
+		"Versatile Reach Aura",
+		"Vinci Tech Boost Aura",
+		"Warbound Boost Aura",
+		"Warden Boost Aura",
+		"Wave-Step Boost Aura",
+		"Wild Veil Boost Aura",
+	]:
+		_assert_aura_channel(name, AURA_1C_LEGACY)
 
 
 func test_registry_primitive_gaps_match_the_explicit_allow_list() -> void:
