@@ -17,7 +17,8 @@ class CoreIdentityCheck:
         self.warned = False
 
     def check(self, record, path):
-        recorded = (record.get("prescreen") or {}).get("core_commit") or "unknown"
+        recorded = ((record.get("prescreen") or {}).get("core_commit")
+                    or record.get("core_commit") or "unknown")
         if recorded == self.running and recorded != "unknown":
             return
         message = "core identity record=%s recorded=%s running=%s" % (path, recorded, self.running)

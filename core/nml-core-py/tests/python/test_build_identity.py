@@ -78,7 +78,7 @@ def run_tool(tool, bank, *args, strict_env=False):
                           text=True, capture_output=True, env=env, timeout=60)
 
 
-@pytest.mark.parametrize("stamp", ["different", "matching", "missing"])
+@pytest.mark.parametrize("stamp", ["different", "matching", "missing", "legacy_matching", "legacy_different"])
 @pytest.mark.parametrize("strict", ["off", "flag", "env"])
 @pytest.mark.parametrize("tool", ["one", "shards"])
 def test_replay_cli_core_gate(tiny_record, stamp, strict, tool):
@@ -87,10 +87,15 @@ def test_replay_cli_core_gate(tiny_record, stamp, strict, tool):
     rec.setdefault("prescreen", {})["knobs"] = dict(gr.KNOBS, movement="rigid", record_cands=True)
     running = getattr(nml_core, "BUILD_COMMIT", "a" * 40)
     recorded = ("b" if running != "b" * 40 else "c") * 40
-    if stamp != "missing":
+    if stamp.startswith("legacy_"):
+        # Fleet recorders used to replace prescreen wholesale after play_game.
+        rec["prescreen"].pop("core_commit", None)
+        rec["core_commit"] = running if stamp == "legacy_matching" else recorded
+    elif stamp != "missing":
         rec["prescreen"]["core_commit"] = running if stamp == "matching" else recorded
     else:
         rec["prescreen"].pop("core_commit", None)
+        rec.pop("core_commit", None)
     path = bank / "gen0_s17_d23.json"
     path.write_text(json.dumps(rec))
     args = [path, path] if tool == "one" else [bank, "--out", bank / "shards", "--workers", "1"]
@@ -99,17 +104,38 @@ def test_replay_cli_core_gate(tiny_record, stamp, strict, tool):
         args += ["--require-same-core"]
     result = run_tool(tool, bank, *args, strict_env=strict == "env")
     output = result.stdout + result.stderr
-    refused = strict != "off" and stamp != "matching"
+    matching = stamp in ("matching", "legacy_matching")
+    refused = strict != "off" and not matching
     assert result.returncode == (3 if refused else 0), output
-    if stamp != "matching":
+    if not matching:
         assert str(path) in output
         assert running in output
-        assert (recorded if stamp == "different" else "unknown") in output
+        assert ("unknown" if stamp == "missing" else recorded) in output
         assert ("REFUSED" if refused else "WARN") in output
         if not refused:
             assert output.count("WARN") == 1
     if not refused:
         assert "core_commit=" + running in output
+    if matching:
+        assert "WARN" not in output
+
+
+@pytest.mark.parametrize("prescreen", [None, {}, {"core_commit": ""}])
+def test_core_gate_accepts_legacy_stamp(prescreen, capsys):
+    from core_identity import CoreIdentityCheck
+    CoreIdentityCheck(True).check(
+        {"prescreen": prescreen, "core_commit": nml_core.BUILD_COMMIT}, "legacy.json")
+    assert capsys.readouterr().err == ""
+
+
+def test_core_gate_prescreen_takes_precedence(capsys):
+    from core_identity import CoreIdentityCheck
+    other = ("b" if nml_core.BUILD_COMMIT != "b" * 40 else "c") * 40
+    with pytest.raises(SystemExit) as exc:
+        CoreIdentityCheck(True).check({"prescreen": {"core_commit": other},
+                                     "core_commit": nml_core.BUILD_COMMIT}, "conflict.json")
+    assert exc.value.code == 3
+    assert "recorded=" + other in capsys.readouterr().err
 
 
 def test_build_identity_precedes_runtime_git(monkeypatch):
