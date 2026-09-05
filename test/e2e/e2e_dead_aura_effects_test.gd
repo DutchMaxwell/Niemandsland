@@ -92,6 +92,55 @@ func test_piercing_fighter_save_step_logs_one_named_ap_bonus() -> void:
 	assert_str(text).contains("saves on 5+")
 
 
+func test_piercing_shooter_aura_reaches_ev_and_named_dice_parts() -> void:
+	for pair in [["gf", "wormhole_daemons_of_war"], ["gff", "wormhole_daemons_of_war"],
+			["aof", "rift_daemons_of_war"], ["aofr", "rift_daemons_of_war"],
+			["aofs", "rift_daemons_of_war"], ["aof", "chivalrous_kingdoms"],
+			["aofr", "chivalrous_kingdoms"], ["aofs", "chivalrous_kingdoms"],
+			["aof", "ossified_undead"], ["aofr", "ossified_undead"], ["aofs", "ossified_undead"]]:
+		var system := str(pair[0])
+		var faction := str(pair[1])
+		var u := _unit(["Piercing Shooter Aura"], system, faction)
+		var grants := AiEv.aura_granted_rules([u])
+		assert_array(grants).is_equal(["Piercing Shooter"])
+		u.unit_properties["special_rules"].append_array(grants)
+		var foe := _unit([], system, faction)
+		for reach in [0, 24]:
+			var profile := {"range": reach, "attacks": 12, "ap": 0, "rules": []}
+			var stamped: Array = AiEv.stamp_conditional_ap([profile.duplicate(true)], u)
+			var expected := profile.duplicate(true)
+			expected["ap"] = 1 if reach > 0 else 0
+			assert_float(AiEv.profile_ev(stamped[0], {"quality": 4}, {"defense": 4}, 12.0, false)) \
+				.override_failure_message("%s/%s reach=%d EV" % [system, faction, reach]) \
+				.is_equal_approx(AiEv.profile_ev(expected, {"quality": 4}, {"defense": 4}, 12.0, false), 0.0001)
+			for charging in [false, true]:
+				var parts: Array = _main._solo_conditional_ap_parts(profile, u, foe, charging, 12.0, reach == 0)
+				assert_array(parts).is_equal([{"name": "Piercing Shooter", "bonus": 1}] if reach > 0 else [])
+			profile["rules"] = ["Piercing Shooter"]
+			var deduped: Array = AiEv.stamp_conditional_ap([profile], u)
+			assert_int(deduped[0].get("cond_ap", []).size()).is_equal(1)
+
+
+func test_piercing_shooter_save_step_logs_one_named_ap_bonus() -> void:
+	_main.solo_ai_slots = {2: true}
+	_main._ensure_solo_controller()
+	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
+	_main._solo_batch = true
+	var u := _carrier("Piercing Shooter", "gf", "wormhole_daemons_of_war")
+	var foe := _unit([], "gf", "wormhole_daemons_of_war")
+	await _main._solo_resolve_saves(u, foe, "Rifle", [4], 1, 4,
+		{"range": 24, "ap": 0, "rules": ["Piercing Shooter"]}, false, false)
+	var named := 0
+	var text := ""
+	for entry in _main.battle_log.entries():
+		var line := str(entry["text"])
+		text += line + "\n"
+		if line.contains("Piercing Shooter: AP(+1)"):
+			named += 1
+	assert_int(named).is_equal(1)
+	assert_str(text).contains("saves on 5+")
+
+
 func test_shred_facet_lands_on_the_half_the_rule_is_printed_for() -> void:
 	# Family 1. main.gd stamps prof["shred"] from the unit's rules; both stamps used to accept ANY
 	# Shred-primitive rule, so the shooting half also shredded in melee and the melee half when shooting.

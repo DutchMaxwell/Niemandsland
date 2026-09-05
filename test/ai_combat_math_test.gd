@@ -277,6 +277,14 @@ func test_piercing_fighter_condition_selects_melee_independent_of_charge() -> vo
 		assert_int(AiCombatMath.conditional_ap_bonus(params, 1, 4, charging, 12.0, false)).is_equal(0)
 
 
+func test_piercing_shooter_condition_selects_shooting_independent_of_distance() -> void:
+	var params := {"ap_bonus": 1, "condition": "ranged"}
+	for charging in [false, true]:
+		for distance in [-1.0, 0.0, 8.0, 12.0]:
+			assert_int(AiCombatMath.conditional_ap_bonus(params, 1, 4, charging, distance, false)).is_equal(1)
+			assert_int(AiCombatMath.conditional_ap_bonus(params, 1, 4, charging, distance, true)).is_equal(0)
+
+
 func test_conditional_ap_range_gates() -> void:
 	# Piercing Hunter: AP(+1) only when shooting from over 9" — melee and close shots stay flat;
 	# dist -1 (unknown) is conservative.
