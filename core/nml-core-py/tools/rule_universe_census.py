@@ -91,6 +91,18 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # mods.rs/sim.rs (#489): dice.rs sums hit_mod into to-hit (shoot+melee);
     # sim.rs sums morale_mod. casting_mod/def_mod/ap_mod/move_mod/
     # range_bonus_in are recorded, read by nothing on this core.
+    # Closure audit (rules-wave3-utilbuff4, 2026-09-05) of the 16 names the
+    # #694 follow-up measured STAMPED: nothing added, deliberately. The
+    # grant-only entries' records land in the ledger (sim.rs::record_buff)
+    # but their nine granted names (Dangerous/Difficult Terrain, Slow, Fast,
+    # Swift, Entrenched, Rapid Advance, Rapid Rush, Rapid Charge) are read at
+    # NO granted()/granted_vs() call site; casting_mod is recorded but
+    # Role::Casting (mods.rs) is never summed; defense_mod/def_mod, ap_mod,
+    # move_mod and range_bonus_in are not modeled on unit.rs's UtilityBuff,
+    # so record_buff drops the all-zero row. The pick gates (range_in/
+    # target/needs_los/max_targets/once/beneficiary) are read only to shape
+    # the pick, never the effect - listing one would flip all 16 while their
+    # effects stay unread, the exact #489 shape this table exists to prevent.
     "Utility Buff": frozenset({"hit_mod", "morale_mod"}),
     # Block B6: unit.rs::stamp reads `extra_attack` to route a Surge entry
     # into `surge_attack`/`surge_attack_low` (dice.rs::surge_attack_hits, both

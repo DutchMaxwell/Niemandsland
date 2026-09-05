@@ -1653,7 +1653,11 @@ pub struct UtilityBuff {
 /// only from `rules_epoch` 4 on. Of the other 18 family names wave 3 ported
 /// the two marks whose records this core now consumes (`sim::ctx_live` +
 /// the volley sight/range seams); the remaining 16 stay stamped-but-unconsumed
-/// (their seams still do not exist on this core).
+/// (audited 2026-09-05: the grant-only names' nine granted names are read at
+/// no `mods::granted`/`granted_vs` call site, `casting_mod` is recorded but
+/// `Role::Casting` is never summed, and `defense_mod`/`ap_mod`/`move_mod`/
+/// `range_bonus_in` are not modeled on `UtilityBuff` — `record_buff` drops
+/// the all-zero row — their seams still do not exist on this core).
 const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Unwieldy Debuff",
     "Unpredictable Shooter Mark",
