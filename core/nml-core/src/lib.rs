@@ -102,7 +102,7 @@ pub use state::{
     Bands, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, State, Weapon,
 };
 pub use terrain::{PlainTerrain, Terrain};
-pub use unit::{capture_reads, CaptureReads, StaticsCache, Unimplemented, UnitStatic};
+pub use unit::{capture_reads, capture_reads_for_epoch, CaptureReads, StaticsCache, Unimplemented, UnitStatic};
 
 /// Builds the per-unit static closure for a whole corpus, in profile-table order.
 /// `repo_root` is the checkout the mechanics assets are read from

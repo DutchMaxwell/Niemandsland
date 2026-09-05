@@ -1021,6 +1021,88 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
     let _ = rule_rating("", 0); // keep the import honest: ratings are unread here
     out
 }
+/// Rules-must-log: the aura fold names its unit and what it granted on stderr
+/// when NML_TRACE_RULES=1 — the same gate `sim::trace_rule` uses. Off by
+/// default: the fast core stays silent in gates and rollouts.
+fn aura_channel_trace_rule(unit: &str, rule: &str, detail: &str) {
+    if std::env::var("NML_TRACE_RULES").as_deref() == Ok("1") {
+        eprintln!("[aura-channel] {unit} — {rule} — {detail}");
+    }
+}
+
+/// The Aura-Channel family's read (rules-wave3-aura1, epoch 6): every carried
+/// rule (own + item-granted + attached heroes') whose registry entry resolves
+/// to the "Aura Channel" primitive, with its `grants` base. The family's
+/// "<X> Aura" entries ("This model and its unit get X") are expanded at IMPORT
+/// (opr_army_manager.gd:_expand_auras / list_to_profile.py:_expand_auras), so a
+/// header recorded through either path already carries the granted base on
+/// every member and the entry itself rides UNMAPPED-registered — no primitive,
+/// no params anyone reads, the census's capped-at-STAMPED shape. This fold
+/// makes the entry FIRST-CLASS: the core reads the entry's own `grants` param
+/// instead of depending on an import-time rewrite it cannot see, so a header
+/// carrying the RAW entries resolves identically. Idempotent with the import
+/// expansion BY CONSTRUCTION (the base is appended only when absent), so a
+/// corpus recorded with the expansion on replays byte-exact — and the fold's
+/// own effect is observable exactly where that rewrite did not run.
+fn aura_channel_hits(reg: &mut Registries, p: &Profile) -> Vec<(String, String)> {
+    let map = reg.rules_for(&p.game_system);
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut raws: Vec<&String> = p.special_rules.iter().collect();
+    raws.extend(p.item_grants.iter());
+    for hr in &p.attached_hero_rules {
+        raws.extend(hr.iter());
+    }
+    let mut seen: Vec<String> = Vec::new();
+    for raw in raws {
+        let aura = base_rule_name(raw);
+        if aura.is_empty() || seen.iter().any(|s| *s == aura) {
+            continue;
+        }
+        seen.push(aura.clone());
+        let Some(e) = map.lookup(&p.faction_folder, &aura) else {
+            continue;
+        };
+        if e.primitive.as_deref() != Some("Aura Channel") {
+            continue;
+        }
+        let base = e.param_s("grants").trim().to_string();
+        if !base.is_empty() && !out.iter().any(|(_, b)| *b == base) {
+            out.push((aura, base));
+        }
+    }
+    out
+}
+
+/// The fold's application: each hit's `grants` base joins the unit's own list
+/// AND every attached hero's — the import twin's `expand_auras_of` shape (the
+/// "all models" quantifier reads the heroes' own lists), each name once.
+/// Gated `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)` (the FROZEN constant,
+/// never the literal or `CURRENT_RULES_EPOCH`): the recording fleet stamps
+/// `rules_epoch: 5` and wave 3's registry rows do not exist in that recorder,
+/// so a record stamped 5 must keep the import-fold-only reading it played
+/// with. Logs one line per aura entry that actually changed a member — the
+/// logging rule: a rule that fires silently is not shipped.
+fn apply_aura_channel(reg: &mut Registries, p: &mut Profile, rules_epoch: u32) {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        return;
+    }
+    for (aura, base) in aura_channel_hits(reg, p) {
+        let mut added = 0;
+        if !has_special_rule(&p.special_rules, &base) {
+            p.special_rules.push(base.clone());
+            added += 1;
+        }
+        for hr in p.attached_hero_rules.iter_mut() {
+            if !has_special_rule(hr, &base) {
+                hr.push(base.clone());
+                added += 1;
+            }
+        }
+        if added > 0 {
+            aura_channel_trace_rule(&p.name, &aura, &format!("granted {base} to {added} member(s)"));
+        }
+    }
+}
 
 /// The capture-time registry reads that do NOT live on the profile — the ones
 /// `BattleSim.capture` (battle_sim.gd:1329/1332) and
@@ -1144,6 +1226,23 @@ fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
 
 /// The four reads above for one unit profile.
 pub fn capture_reads(reg: &mut Registries, p: &Profile) -> CaptureReads {
+    capture_reads_for_epoch(reg, p, 0)
+}
+
+/// The epoch-aware capture twin (rules-wave3-aura1): `capture_reads` keeps its
+/// signature for its existing callers (never widen a shared function) and
+/// stays epoch-blind — the pre-6 reading every recorded capture mirrors. The
+/// epoch-aware caller adopts this wrapper, which applies the aura fold before
+/// the reads, so the capture-time reads answer a RAW header the way the
+/// table's own expansion would have.
+pub fn capture_reads_for_epoch(
+    reg: &mut Registries,
+    p: &Profile,
+    rules_epoch: u32,
+) -> CaptureReads {
+    let mut p = p.clone();
+    apply_aura_channel(reg, &mut p, rules_epoch);
+    let p = &p;
     let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules);
     for hero in &p.attached_hero_rules {
         morale_bonus = morale_bonus.max(banner_bonus_of(reg, p, hero));
@@ -2757,6 +2856,14 @@ impl UnitStatic {
         let boost_leg = expand_boost_aura(p, rules_epoch);
         let p: &Profile = &boost_leg;
         let mut unimplemented: Vec<Unimplemented> = Vec::new();
+        // The Aura-Channel fold (rules-wave3-aura1, epoch 6) runs BEFORE any
+        // read: the granted bases join a CLONE of the profile's own rule lists
+        // (each name once), so every stamp/ctx read below sees them exactly as
+        // the import expansion's fold delivered them on recorded corpora.
+        // Shadowing `p` keeps every existing read site untouched.
+        let mut p = p.clone();
+        apply_aura_channel(reg, &mut p, rules_epoch);
+        let p = &p;
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
         stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch);
         stamp_conditional_ap(reg, p, &mut shoot);
@@ -5600,5 +5707,153 @@ mod tests {
                 "no flat fortified alias at epoch {epoch} — needs-primitive, not a flat stamp"
             );
         }
+    }
+
+    // ---------------- Aura Channel (rules-wave3-aura1, epoch 6) --------------
+    // One name per test: the effect PRESENT at epoch 6, ABSENT at epoch 5 or
+    // without the rule. Epoch LITERALS (never CURRENT_RULES_EPOCH) so the
+    // assertions keep their meaning after the next epoch bump — the fold is
+    // gated `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`.
+
+    /// One aura carrier's `UnitStatic` at `epoch`: the rule swapped into a
+    /// gf unit of `faction`, the REAL registry resolving the entry's
+    /// `grants` base and the base's own effect. Empty rule = the rule-less
+    /// carrier leg.
+    fn aura_static(rule: &str, faction: &str, epoch: u32) -> UnitStatic {
+        let tpl = if rule.is_empty() {
+            AMBUSH_FAMILY_HEADER.to_string()
+        } else {
+            AMBUSH_FAMILY_HEADER
+                .replace("\"special_rules\":[]", &format!("\"special_rules\":[\"{rule}\"]"))
+                .replace("\"faction_folder\":\"robot_legions\"", &format!("\"faction_folder\":\"{faction}\""))
+                .replace(RIFLE_ONLY, RIFLE_AND_BLADE)
+        };
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        UnitStatic::build_for(&mut reg, p, epoch)
+    }
+
+    /// The melee-array legs need a NON-EMPTY melee table — `all()` over an
+    /// empty vec would assert nothing.
+    const RIFLE_ONLY: &str = "\"weapons\":[{\"name\":\"Rifle\",\"range\":24,\"attacks\":1,\"count\":1,\"ap\":0,\"rules\":[]}]";
+    const RIFLE_AND_BLADE: &str = "\"weapons\":[{\"name\":\"Rifle\",\"range\":24,\"attacks\":1,\"count\":1,\"ap\":0,\"rules\":[]},{\"name\":\"Blade\",\"range\":0,\"attacks\":1,\"count\":1,\"ap\":0,\"rules\":[]}]";
+
+    /// The capture twin's `CaptureReads` at `epoch` — the shroud read lives
+    /// there, not on `Ctx`.
+    fn aura_capture(rule: &str, faction: &str, epoch: u32) -> CaptureReads {
+        let tpl = AMBUSH_FAMILY_HEADER
+            .replace("\"special_rules\":[]", &format!("\"special_rules\":[\"{rule}\"]"))
+            .replace("\"faction_folder\":\"robot_legions\"", &format!("\"faction_folder\":\"{faction}\""))
+            .replace(RIFLE_ONLY, RIFLE_AND_BLADE);
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        capture_reads_for_epoch(&mut reg, p, epoch)
+    }
+
+    #[test]
+    fn a_furious_aura_grants_furious_to_its_unit_at_epoch_6() {
+        assert!(aura_static("Furious Aura", "alien_hives", 6).ctx.furious);
+        assert!(!aura_static("Furious Aura", "alien_hives", 5).ctx.furious, "epoch 5 keeps the import-fold-only reading");
+        assert!(!aura_static("", "alien_hives", 6).ctx.furious, "no aura entry, no grant");
+    }
+
+    #[test]
+    fn a_steadfast_aura_grants_steadfast_to_its_unit_at_epoch_6() {
+        assert!(aura_static("Steadfast Aura", "change_disciples", 6).steadfast_active);
+        assert!(!aura_static("Steadfast Aura", "change_disciples", 5).steadfast_active);
+        assert!(!aura_static("", "change_disciples", 6).steadfast_active);
+    }
+
+    #[test]
+    fn a_resistance_aura_grants_resistance_to_its_unit_at_epoch_6() {
+        assert_eq!(aura_static("Resistance Aura", "change_disciples", 6).ctx.regen_target, 6);
+        assert_eq!(aura_static("Resistance Aura", "change_disciples", 5).ctx.regen_target, 0);
+        assert_eq!(aura_static("", "change_disciples", 6).ctx.regen_target, 0);
+    }
+
+    #[test]
+    fn an_unpredictable_fighter_aura_grants_the_fighter_at_epoch_6() {
+        assert!(aura_static("Unpredictable Fighter Aura", "dwarf_guilds", 6).ctx.unpredictable);
+        assert!(!aura_static("Unpredictable Fighter Aura", "dwarf_guilds", 5).ctx.unpredictable);
+        assert!(!aura_static("", "dwarf_guilds", 6).ctx.unpredictable);
+    }
+
+    #[test]
+    fn a_versatile_defense_aura_guards_its_unit_at_epoch_6() {
+        assert!(aura_static("Versatile Defense Aura", "change_disciples", 6).ctx.guarded);
+        assert!(!aura_static("Versatile Defense Aura", "change_disciples", 5).ctx.guarded);
+        assert!(!aura_static("", "change_disciples", 6).ctx.guarded);
+    }
+
+    #[test]
+    fn a_counter_attack_aura_strikes_first_in_melee_at_epoch_6() {
+        assert!(aura_static("Counter-Attack Aura", "dao_union", 6).melee.iter().all(|sp| sp.counter));
+        assert!(!aura_static("Counter-Attack Aura", "dao_union", 5).melee.iter().any(|sp| sp.counter));
+        assert!(!aura_static("", "dao_union", 6).melee.iter().any(|sp| sp.counter));
+    }
+
+    #[test]
+    fn a_no_retreat_aura_grants_no_retreat_at_epoch_6() {
+        assert!(aura_static("No Retreat Aura", "infected_colonies", 6).ctx.no_retreat);
+        assert!(!aura_static("No Retreat Aura", "infected_colonies", 5).ctx.no_retreat);
+        assert!(!aura_static("", "infected_colonies", 6).ctx.no_retreat);
+    }
+
+    #[test]
+    fn a_fortified_aura_fortifies_its_unit_at_epoch_6() {
+        assert!(aura_static("Fortified Aura", "blessed_sisters", 6).ctx.fortified);
+        assert!(!aura_static("Fortified Aura", "blessed_sisters", 5).ctx.fortified);
+        assert!(!aura_static("", "blessed_sisters", 6).ctx.fortified);
+    }
+
+    #[test]
+    fn an_unpredictable_shooter_aura_grants_the_shooter_at_epoch_6() {
+        assert!(aura_static("Unpredictable Shooter Aura", "infected_colonies", 6).ctx.unpredictable_shooting);
+        assert!(!aura_static("Unpredictable Shooter Aura", "infected_colonies", 5).ctx.unpredictable_shooting);
+        assert!(!aura_static("", "infected_colonies", 6).ctx.unpredictable_shooting);
+    }
+
+    #[test]
+    fn a_hit_and_run_shooter_aura_grants_the_shooter_at_epoch_6() {
+        assert!(aura_static("Hit & Run Shooter Aura", "custodian_brothers", 6).hit_and_run_shooter_active);
+        assert!(!aura_static("Hit & Run Shooter Aura", "custodian_brothers", 5).hit_and_run_shooter_active);
+        assert!(!aura_static("", "custodian_brothers", 6).hit_and_run_shooter_active);
+    }
+
+    #[test]
+    fn a_ranged_shrouding_aura_shrouds_its_unit_at_epoch_6() {
+        assert!(aura_static("Ranged Shrouding Aura", "custodian_brothers", 6).ctx.ranged_shrouding);
+        assert!(!aura_static("Ranged Shrouding Aura", "custodian_brothers", 5).ctx.ranged_shrouding);
+        assert!(!aura_static("", "custodian_brothers", 6).ctx.ranged_shrouding);
+    }
+
+    #[test]
+    fn a_melee_shrouding_aura_shrouds_the_charge_at_epoch_6() {
+        assert_eq!(aura_capture("Melee Shrouding Aura", "battle_brothers", 6).shroud, Some([3.0, 6.0]));
+        assert_eq!(aura_capture("Melee Shrouding Aura", "battle_brothers", 5).shroud, None);
+        assert_eq!(aura_capture("", "battle_brothers", 6).shroud, None);
+    }
+
+    #[test]
+    fn an_unstoppable_in_melee_aura_banes_melee_at_epoch_6() {
+        assert!(aura_static("Unstoppable in Melee Aura", "custodian_brothers", 6).melee.iter().all(|sp| sp.bane));
+        assert!(!aura_static("Unstoppable in Melee Aura", "custodian_brothers", 5).melee.iter().any(|sp| sp.bane));
+        assert!(!aura_static("", "custodian_brothers", 6).melee.iter().any(|sp| sp.bane));
+    }
+
+    #[test]
+    fn a_shred_in_melee_aura_shreds_melee_at_epoch_6() {
+        assert!(aura_static("Shred in Melee Aura", "blessed_sisters", 6).melee.iter().all(|sp| sp.shred_alias));
+        assert!(!aura_static("Shred in Melee Aura", "blessed_sisters", 5).melee.iter().any(|sp| sp.shred_alias));
+        assert!(!aura_static("", "blessed_sisters", 6).melee.iter().any(|sp| sp.shred_alias));
+    }
+
+    #[test]
+    fn a_shred_when_shooting_aura_shreds_shooting_at_epoch_6() {
+        assert!(aura_static("Shred when Shooting Aura", "custodian_brothers", 6).shoot.iter().all(|sp| sp.shred_alias));
+        assert!(!aura_static("Shred when Shooting Aura", "custodian_brothers", 5).shoot.iter().any(|sp| sp.shred_alias));
+        assert!(!aura_static("", "custodian_brothers", 6).shoot.iter().any(|sp| sp.shred_alias));
     }
 }

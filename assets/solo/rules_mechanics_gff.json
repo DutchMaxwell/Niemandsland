@@ -928,9 +928,12 @@
     }
    },
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Hit & Run Fighter": {
     "primitive": "Hit & Run Fighter",
@@ -2298,9 +2301,12 @@
     "book_version": "3.5.3"
    },
    "Unpredictable Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unpredictable Fighter"
+    }
    },
    "Unstoppable when Shooting Aura": {
     "primitive": "Utility Buff",
@@ -2350,9 +2356,12 @@
     }
    },
    "Versatile Defense Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Defense"
+    }
    }
   },
   "change_disciples": {
@@ -2385,9 +2394,12 @@
     }
    },
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Mend": {
     "primitive": "Mend",
@@ -2418,9 +2430,12 @@
     }
    },
    "Resistance Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Resistance"
+    }
    },
    "Scout Aura": {
     "primitive": "Aura Channel",
@@ -2447,9 +2462,12 @@
     }
    },
    "Steadfast Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Steadfast"
+    }
    },
    "Surge": {
     "primitive": "Surge",
@@ -2487,9 +2505,12 @@
     }
    },
    "Versatile Defense Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Defense"
+    }
    }
   },
   "city_runners": {
@@ -2738,9 +2759,12 @@
     }
    },
    "Hit & Run Shooter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Hit & Run Shooter"
+    }
    },
    "Piercing Target": {
     "primitive": "Piercing Tag",
@@ -2811,9 +2835,12 @@
     }
    },
    "Steadfast Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Steadfast"
+    }
    },
    "Stealth Aura": {
     "primitive": "Stealth",
@@ -2840,9 +2867,12 @@
     "book_version": "3.5.3"
    },
    "Unstoppable in Melee Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unstoppable in Melee"
+    }
    },
    "Versatile Attack": {
     "primitive": "Versatile Attack",
@@ -2875,9 +2905,12 @@
     }
    },
    "Counter-Attack Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Counter-Attack"
+    }
    },
    "Disintegrate": {
     "primitive": "Disintegrate",
@@ -2937,9 +2970,12 @@
     }
    },
    "Hit & Run Shooter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Hit & Run Shooter"
+    }
    },
    "Increased Shooting Range Aura": {
     "primitive": "Royal Legion",
@@ -3278,9 +3314,12 @@
     }
    },
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Harassing": {
     "primitive": "Hit & Run",
@@ -3819,9 +3858,12 @@
     "book_version": "3.5.3"
    },
    "Unpredictable Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unpredictable Fighter"
+    }
    }
   },
   "elven_jesters": {
@@ -3981,9 +4023,12 @@
     "book_version": "3.5.3"
    },
    "Unpredictable Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unpredictable Fighter"
+    }
    }
   },
   "eternal_dynasty": {
@@ -4050,9 +4095,12 @@
     }
    },
    "Counter-Attack Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Counter-Attack"
+    }
    },
    "Fearless Aura": {
     "primitive": "Aura Channel",
@@ -4480,9 +4528,12 @@
   },
   "havoc_brothers": {
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Havocbound": {
     "primitive": "Piercing Hunter",
@@ -4541,9 +4592,12 @@
     }
    },
    "Resistance Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Resistance"
+    }
    },
    "Scout Aura": {
     "primitive": "Aura Channel",
@@ -4570,9 +4624,12 @@
     }
    },
    "Steadfast Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Steadfast"
+    }
    },
    "Unpredictable Fighter": {
     "primitive": "Unpredictable Fighter",
@@ -4602,9 +4659,12 @@
     }
    },
    "Versatile Defense Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Defense"
+    }
    }
   },
   "high_elf_fleets": {
@@ -4689,9 +4749,12 @@
     }
    },
    "Hit & Run Shooter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Hit & Run Shooter"
+    }
    },
    "Increased Shooting Range Aura": {
     "primitive": "Royal Legion",
@@ -4735,9 +4798,12 @@
     }
    },
    "Resistance Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Resistance"
+    }
    },
    "Scout Aura": {
     "primitive": "Aura Channel",
@@ -5108,9 +5174,12 @@
     }
    },
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Hit & Run": {
     "primitive": "Hit & Run",
@@ -5219,9 +5288,12 @@
     }
    },
    "Resistance Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Resistance"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -5410,9 +5482,12 @@
     }
    },
    "No Retreat Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "No Retreat"
+    }
    },
    "Precision Growth": {
     "primitive": "Growth Markers",
@@ -5466,9 +5541,12 @@
     }
    },
    "Unpredictable Shooter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unpredictable Shooter"
+    }
    }
   },
   "jackals": {
@@ -5702,9 +5780,12 @@
     }
    },
    "Unpredictable Shooter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unpredictable Shooter"
+    }
    }
   },
   "knight_brothers": {
@@ -5873,9 +5954,12 @@
     "book_version": "3.5.3"
    },
    "Unpredictable Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unpredictable Fighter"
+    }
    },
    "Versatile Attack": {
     "primitive": "Versatile Attack",
@@ -6091,9 +6175,12 @@
     "book_version": "3.5.3"
    },
    "Unpredictable Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unpredictable Fighter"
+    }
    },
    "Versatile Attack": {
     "primitive": "Versatile Attack",
@@ -6124,9 +6211,12 @@
   },
   "lust_disciples": {
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Lustbound": {
     "primitive": "Royal Legion",
@@ -6201,9 +6291,12 @@
     }
    },
    "Resistance Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Resistance"
+    }
    },
    "Scout Aura": {
     "primitive": "Aura Channel",
@@ -6240,9 +6333,12 @@
     }
    },
    "Steadfast Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Steadfast"
+    }
    },
    "Unpredictable Fighter": {
     "primitive": "Unpredictable Fighter",
@@ -6272,9 +6368,12 @@
     }
    },
    "Versatile Defense Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Defense"
+    }
    }
   },
   "machine_cults": {
@@ -6449,9 +6548,12 @@
     "book_version": "3.5.3"
    },
    "Unpredictable Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unpredictable Fighter"
+    }
    },
    "Versatile Attack": {
     "primitive": "Versatile Attack",
@@ -6642,9 +6744,12 @@
     }
    },
    "Unstoppable in Melee Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unstoppable in Melee"
+    }
    },
    "Versatile Reach": {
     "primitive": "Versatile Reach",
@@ -7021,9 +7126,12 @@
     }
    },
    "Unpredictable Shooter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unpredictable Shooter"
+    }
    }
   },
   "plague_disciples": {
@@ -7048,9 +7156,12 @@
     }
    },
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Mend": {
     "primitive": "Mend",
@@ -7116,9 +7227,12 @@
     }
    },
    "Resistance Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Resistance"
+    }
    },
    "Scout Aura": {
     "primitive": "Aura Channel",
@@ -7145,9 +7259,12 @@
     }
    },
    "Steadfast Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Steadfast"
+    }
    },
    "Surge": {
     "primitive": "Surge",
@@ -7185,9 +7302,12 @@
     }
    },
    "Versatile Defense Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Defense"
+    }
    }
   },
   "prime_brothers": {
@@ -7545,9 +7665,12 @@
     "book_version": "3.5.3"
    },
    "Unpredictable Fighter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unpredictable Fighter"
+    }
    }
   },
   "ratmen_clans": {
@@ -7978,9 +8101,12 @@
     }
    },
    "No Retreat Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "No Retreat"
+    }
    },
    "Piercing Assault": {
     "primitive": "Piercing Assault",
@@ -8179,9 +8305,12 @@
     }
    },
    "Counter-Attack Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Counter-Attack"
+    }
    },
    "Disintegrate": {
     "primitive": "Disintegrate",
@@ -8421,9 +8550,12 @@
     }
    },
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Lacerate": {
     "primitive": "Lacerate",
@@ -8986,9 +9118,12 @@
     }
    },
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Melee Evasion": {
     "primitive": "Melee Evasion",
@@ -9037,9 +9172,12 @@
     }
    },
    "Resistance Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Resistance"
+    }
    },
    "Scout Aura": {
     "primitive": "Aura Channel",
@@ -9066,9 +9204,12 @@
     }
    },
    "Steadfast Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Steadfast"
+    }
    },
    "Unpredictable Fighter": {
     "primitive": "Unpredictable Fighter",
@@ -9098,9 +9239,12 @@
     }
    },
    "Versatile Defense Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Versatile Defense"
+    }
    },
    "Warbound": {
     "primitive": "Shred",
@@ -9523,9 +9667,12 @@
     }
    },
    "Counter-Attack Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Counter-Attack"
+    }
    },
    "Courage Aura": {
     "primitive": "Banner",
@@ -9710,9 +9857,12 @@
     }
    },
    "Counter-Attack Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Counter-Attack"
+    }
    },
    "Courage Aura": {
     "primitive": "Banner",
@@ -9927,9 +10077,12 @@
     }
    },
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Grounded Precision": {
     "primitive": "Shot Modifier",
@@ -9986,9 +10139,12 @@
     }
    },
    "No Retreat Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "No Retreat"
+    }
    },
    "Piercing Hunter": {
     "primitive": "Piercing Hunter",
@@ -10213,9 +10369,12 @@
     }
    },
    "Resistance Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Resistance"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -10264,9 +10423,12 @@
     "book_version": "3.5.3"
    },
    "Unstoppable in Melee Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Unstoppable in Melee"
+    }
    },
    "Vanguard": {
     "primitive": "Vanguard",
@@ -10296,9 +10458,12 @@
     }
    },
    "Counter-Attack Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Counter-Attack"
+    }
    },
    "Hit & Run": {
     "primitive": "Hit & Run",
@@ -10585,9 +10750,12 @@
     }
    },
    "Steadfast Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Steadfast"
+    }
    },
    "Surge": {
     "primitive": "Surge",
@@ -10634,9 +10802,12 @@
     }
    },
    "Furious Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Furious"
+    }
    },
    "Melee Evasion": {
     "primitive": "Melee Evasion",
