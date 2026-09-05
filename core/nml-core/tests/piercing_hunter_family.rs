@@ -188,7 +188,11 @@ fn a_havocbound_charge_folds_its_ap_and_logs_from_epoch_6() {
             &[Shooter {
                 profiles,
                 keep: &[0],
-                attacks: &[1],
+                // Two attack dice: a charge rolls to-hit on 2+ (Thrust's
+                // floor), and seed 9's first two faces are [1, 6] — one hit
+                // every time, so the AP fold (and its log) always runs. One
+                // die rolled a natural 1 and skipped the fold entirely.
+                attacks: &[2],
                 att: &att,
                 owner: "havoc",
             }],
