@@ -66,11 +66,11 @@ def replay(path, lists, repo, bank):
     rec = json.loads(Path(path).read_text(encoding="utf-8"))
     # ARENA records (the A/B harness) carry the same header at the TOP level —
     # knobs, seed, dice_seed; the layout seed stays the armed() +500000 shim —
-    # and no prescreen block, so their rows record the CHOSEN act but no menu
+    # and no prescreen beyond build identity, so their rows record the CHOSEN act but no menu
     # (record_cands was never on): the fidelity check downgrades to the forced
     # acts plus the outcome. seed/dice_seed were always top-level reads.
     kn = rec.get("prescreen", {}).get("knobs") or rec["knobs"]
-    if rec.get("prescreen") and (not kn.get("record_cands") or kn.get("record_aux")):
+    if selfplay.without_core_build_stamp(rec).get("prescreen") and (not kn.get("record_cands") or kn.get("record_aux")):
         raise SystemExit("REFUSED %s: not a Gen-0 teacher recording" % path)
     A.update(rows=rec["planner_positions"], i=0, acts=[])
     gr.G["dice"] = rec["dice_seed"]

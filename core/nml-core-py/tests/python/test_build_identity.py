@@ -150,3 +150,28 @@ def test_build_metadata_does_not_mask_or_break_sidecar_comparison():
     stamped["winner"] = "draw"
     stamped["prescreen"]["rules_epoch"] = 5
     assert sidecar_gate.compare(original, stamped, 0.0001)
+
+
+def test_narrator_accepts_a_metadata_only_prescreen(tiny_record):
+    import game_narrator
+    bank, _ = tiny_record
+    record = play(tiny_record, False)
+    path = bank / "game.json"
+    path.write_text(json.dumps(record))
+    replayed, acts = game_narrator.replay(str(path), str(bank), str(ROOT), str(bank))
+    assert len(acts) == len(record["planner_positions"]) > 0
+    assert replayed["prescreen"] == record["prescreen"]
+
+
+@pytest.mark.parametrize("module,seat_flag", [("search_ab_one", "--deep-player"), ("eval_ab_one", "--cand-player")])
+def test_ab_writers_preserve_build_metadata(tmp_path, monkeypatch, module, seat_flag):
+    import importlib
+    tool = importlib.import_module(module)
+    stamp = {"core_commit": nml_core.BUILD_COMMIT, "core_build": dict(nml_core.BUILD_INFO)}
+    monkeypatch.setattr(sp, "play_game", lambda *a, **kw: {"winner": "draw", "prescreen": dict(stamp)})
+    monkeypatch.setattr(sys, "argv", [module, str(tmp_path), "--seed", "17", "--dice-seed", "23",
+                                      "--army1", "a.json", "--army2", "b.json", seat_flag, "1"])
+    assert tool.main() == 0
+    record = json.loads(next(tmp_path.glob("*.json")).read_text())
+    for key, value in stamp.items():
+        assert record["prescreen"][key] == value
