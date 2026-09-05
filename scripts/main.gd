@@ -11788,7 +11788,8 @@ func _build_movement_cap_row() -> void:
 	var specs := [
 		[ObjectManager.MovementCap.OFF, "Off"],
 		[ObjectManager.MovementCap.ADVANCE, "Advance"],
-		[ObjectManager.MovementCap.RUSH, "Rush/Charge"],
+		[ObjectManager.MovementCap.RUSH, "Rush"],
+		[ObjectManager.MovementCap.CHARGE, "Charge"],
 	]
 	for spec in specs:
 		var btn := Button.new()
