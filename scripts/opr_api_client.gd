@@ -1735,3 +1735,26 @@ static func create_test_army(player_id: int = 1) -> OPRArmy:
 
 	army.points = army.get_total_points()
 	return army
+
+
+func named_unit_profile(book_id: String, system: String, faction: String,
+		unit_name: String, count: int) -> OPRUnit:
+	if book_id.is_empty():
+		book_index_entry("", system)
+		var section: Dictionary = (_books_index as Dictionary).get(system, {})
+		for candidate in section:
+			if str(section[candidate].get("faction_folder", "")) == faction:
+				book_id = candidate
+				break
+	var book: Dictionary = _army_books.get(book_id, {})
+	if book.is_empty():
+		book = _snapshot_book(book_id, system)
+	if book.is_empty():
+		book = await _fetch_army_book(book_id, system)
+	for definition in book.get("units", []):
+		if str(definition.get("name", "")) == unit_name and count > 0:
+			var profile := _parse_unit_from_list({"id": definition["id"]}, book, system)
+			profile.size = count
+			profile.game_system = system
+			return profile
+	return null
