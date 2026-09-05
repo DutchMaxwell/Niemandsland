@@ -94,3 +94,10 @@ func test_spawn_registry_entries_expose_the_consumed_placement_and_use_limits() 
 			assert_bool(RulesRegistry.has_primitive(system, faction, "Spawn")).is_true()
 			assert_int(int(RulesRegistry.param(system, faction, "Spawn", "place_in", 0))).is_equal(6)
 			assert_bool(bool(RulesRegistry.param(system, faction, "Spawn", "once_per_game", false))).is_true()
+
+
+func test_spawn_uses_the_bearer_model_rule_without_a_unit_wide_grant() -> void:
+	var carrier := _carrier()
+	carrier.unit_properties["special_rules"] = []
+	await _main._solo_try_reanimation(carrier)
+	assert_array(_spawned()).has_size(1)
