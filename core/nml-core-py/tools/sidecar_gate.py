@@ -172,6 +172,7 @@ def _armies_by_name(block: dict) -> dict:
 
 def compare(ref: dict, got: dict, tol: float) -> list[tuple]:
     """Every held quantity, in report order. Empty = field-for-field equal."""
+    ref, got = sp.without_core_build_stamp(ref), sp.without_core_build_stamp(got)
     bad: list[tuple] = []
     ref_top = {k: v for k, v in ref.items() if k not in EXCLUDED_TOP and k != "planner_positions"}
     got_top = {k: v for k, v in got.items() if k not in EXCLUDED_TOP and k != "planner_positions"}

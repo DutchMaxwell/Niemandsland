@@ -126,3 +126,27 @@ def test_unknown_build_falls_back_without_blocking(monkeypatch):
     assert sp._record_core_commit() == "c" * 40
     monkeypatch.setattr(sp, "_git_full_sha", lambda: "unknown")
     assert sp._record_core_commit() == "unknown"
+
+
+def test_build_metadata_does_not_change_gameplay_digest():
+    original = {"winner": "draw", "planner_positions": []}
+    stamped = dict(original, prescreen={"core_commit": "a" * 40, "core_build": {"dirty": False}})
+    assert sp.result_digest(stamped) == sp.result_digest(original)
+    # Other prescreen fields still contribute; do not exclude the whole object.
+    stamped["prescreen"]["rules_epoch"] = 5
+    assert sp.result_digest(stamped) != sp.result_digest(original)
+    held = dict(original, prescreen={"rules_epoch": 5})
+    assert sp.result_digest(stamped) == sp.result_digest(held)
+    assert "core_build" in stamped["prescreen"], "digest must not mutate the record"
+
+
+def test_build_metadata_does_not_mask_or_break_sidecar_comparison():
+    import sidecar_gate
+    original = {"winner": "draw", "planner_positions": []}
+    stamped = dict(original, prescreen={"core_commit": "a" * 40, "core_build": {"dirty": False}})
+    assert sidecar_gate.compare(original, stamped, 0.0001) == []
+    stamped["winner"] = "p1"
+    assert sidecar_gate.compare(original, stamped, 0.0001)
+    stamped["winner"] = "draw"
+    stamped["prescreen"]["rules_epoch"] = 5
+    assert sidecar_gate.compare(original, stamped, 0.0001)

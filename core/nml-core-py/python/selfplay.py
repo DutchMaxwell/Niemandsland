@@ -2967,6 +2967,20 @@ def play_game(
 DIGEST_EXCLUDED_FIELDS = ("wall_seconds", "dice_tally")
 
 
+def without_core_build_stamp(result: dict) -> dict:
+    """A comparison view without the two new provenance fields, never game data."""
+    body = dict(result)
+    prescreen = body.get("prescreen")
+    identity_keys = ("core_commit", "core_build")
+    if isinstance(prescreen, dict) and any(k in prescreen for k in identity_keys):
+        remaining = {k: v for k, v in prescreen.items() if k not in identity_keys}
+        if remaining:
+            body["prescreen"] = remaining
+        else:
+            del body["prescreen"]
+    return body
+
+
 def result_digest(result: dict) -> str:
     """GATE Q C4 (NML-1073) — a SHA-256 over the WHOLE game result, canonical
     (recursively sorted keys, floats through Python's own round-trip
@@ -2982,8 +2996,9 @@ def result_digest(result: dict) -> str:
     consumes), `terrain`, or `magic` — so it produced the SAME hash for the
     pre-#392 quality/defense encoding, for a deliberately shifted terrain
     board, and for `sidecars=False`. `result_digest` does not: every field
-    `play_game` returns is in scope except `DIGEST_EXCLUDED_FIELDS`."""
-    body = {k: v for k, v in result.items() if k not in DIGEST_EXCLUDED_FIELDS}
+    `play_game` returns is in scope except `DIGEST_EXCLUDED_FIELDS` and the
+    two provenance-only fields `prescreen.core_commit` / `core_build`."""
+    body = {k: v for k, v in without_core_build_stamp(result).items() if k not in DIGEST_EXCLUDED_FIELDS}
     canonical = json.dumps(body, sort_keys=True, ensure_ascii=True, allow_nan=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
