@@ -69,7 +69,7 @@ pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionar
     };
     let mut out = VarDictionary::new();
     out.set("ok", true);
-    out.set("snap_in", snap_in.map_or(Variant::nil(), |v| v.to_variant()));
+    out.set("snap_in", &snap_in.map_or(Variant::nil(), |v| v.to_variant()));
     let mut points = VarArray::new();
     let mut model_ids = VarArray::new();
     if let Some(ref land) = landing {
