@@ -1474,10 +1474,13 @@ func charge_illegal_why(unit: GameUnit, tgt: GameUnit, band_in: float) -> String
 		return "out of charge band (%.1f\" > %.1f\")" % [gap, band]
 	if _charge_capped_by_difficult(unit, unit_centre(unit), unit_centre(tgt), gap):
 		return "difficult cap (p.11)"
+	var probe := charge_path_probe(unit, tgt, band)
+	if not bool(probe.get("reachable", true)):
+		return "corridor cannot reach contact within %.1f\"" % float(probe["effective_band_in"])
 	return ""
 
 
-## Head wave 1: the same three RULE gates for the planner's IMAGINATION. The adoption
+## Head wave 1: the same RULE gates for the planner's IMAGINATION. The adoption
 ## re-gate (NML-1026) stopped illegal charges from executing, but the planner kept
 ## proposing them (~1.3/game across the cycle-7 book, 1268x difficult cap) and burned
 ## search budget on fantasies. Coordinates come from the SIM state (valid for imagined
@@ -1847,6 +1850,14 @@ func _act(unit: GameUnit) -> Dictionary:
 			"rule": "Difficult cap (p.11): every charge corridor crosses difficult terrain and the gap exceeds 6\" — the charge cannot reach, the tree fights on without it",
 			"candidates": [], "chosen": "charge unavailable (difficult cap)", "why": "difficult-capped charge",
 			"data": {"gap_in": charge_gap, "cap_in": DIFFICULT_MOVE_CAP_IN}})
+	# #183: deterministic charges get one real-corridor proof before the tree may
+	# see them. Cheap rule gates stay first; the pure probe neither moves models nor
+	# consumes planner/RNG/log state.
+	var charge_probe: Dictionary = {}
+	var charge_corridor_blocked := false
+	if charge_gap <= charge_band and not target_is_aircraft and not charge_capped:
+		charge_probe = charge_path_probe(unit, target_unit, charge_band)
+		charge_corridor_blocked = not bool(charge_probe.get("reachable", true))
 	# Quick Shot (army-book, grill round 2 cut A: "may shoot after using Rush actions"): the unit's
 	# move-and-shoot band is its RUSH distance, so the tree, the solver and the post-move gates all
 	# measure the same working reach.
@@ -1881,9 +1892,18 @@ func _act(unit: GameUnit) -> Dictionary:
 		# #321: nor a target the unit's melee cannot plausibly hurt — the charge would be a wasted
 		# activation walking into counter-strikes (the futility floor, rule-noted above).
 		"enemy_in_charge": charge_gap <= charge_band and not target_is_aircraft and not charge_capped \
+			and not charge_corridor_blocked \
 			and not charge_futile and not charge_toll_blocked,
 		"shoot_after_advance": shoot_range > 0 and (enemy_dist - (rush if quick_shot else advance)) <= float(shoot_range),
 	}
+	# Attribute a fallback to #183 only if removing this gate changes the tree's
+	# choice from CHARGE. Preserve every other legality and preference gate.
+	var corridor_replaced_charge := false
+	if charge_corridor_blocked:
+		var unblocked_ctx := ctx.duplicate()
+		unblocked_ctx["enemy_in_charge"] = charge_gap <= charge_band and not target_is_aircraft \
+			and not charge_capped and not charge_futile and not charge_toll_blocked
+		corridor_replaced_charge = int(AiDecision.decide_solo(unblocked_ctx)["action"]) == AiDecision.Action.CHARGE
 	var dec := AiDecision.decide_solo(ctx)
 	var action: int = int(dec["action"])
 	var do_shoot: bool = bool(dec["shoot"])
@@ -2067,7 +2087,7 @@ func _act(unit: GameUnit) -> Dictionary:
 				action_why = "adopted charge re-gated (%s) — rushing instead" % charge_deny
 				honesty_alarm("illegal charge adopted", "%s -> %s: %s" % [
 					unit.get_name(), target_unit.get_name(), charge_deny])
-				_rule_note(report, "%s: the adopted plan declared an illegal charge on %s (%s) — re-gated to Rush (GF v3.5.1 p.9/p.11)" % [
+				_rule_note(report, "%s: the adopted charge on %s was rejected (%s); rushes instead" % [
 					unit.get_name(), target_unit.get_name(), charge_deny], true)
 		_rule_note(report, str(pl["why"]), false)
 	if not planner_used and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) and _position_solver_active():
@@ -2114,6 +2134,17 @@ func _act(unit: GameUnit) -> Dictionary:
 				"why": ("reaches firing position" if bool(fl.get("within_advance", false)) else "approach toward firing lane"),
 				"data": {"angle_deg": float(fl.get("angle_deg", 0.0)), "anchor_dist_in": float(fl.get("dist_in", 0.0)),
 					"ring_in": float(fl.get("ring_in", 0.0)), "ev": float(fl.get("ev", 0.0))}})
+	if corridor_replaced_charge:
+		var fallback_name := AiDecision.action_name(action)
+		_rule_note(report, "%s: charge on %s rejected — the executable corridor cannot reach contact within %.1f\"; %s instead" % [
+			unit.get_name(), target_unit.get_name(), float(charge_probe.get("effective_band_in", charge_band)),
+			fallback_name], true)
+		record_decision({"kind": "mission", "unit": unit.get_name(),
+			"rule": "#183 charge declaration: the executable movement corridor must reach base contact inside the granted band",
+			"candidates": [], "chosen": "%s instead" % fallback_name,
+			"why": str(charge_probe.get("reason", "charge corridor falls short")),
+			"data": {"gap_in": charge_gap, "band_in": charge_band,
+				"effective_band_in": float(charge_probe.get("effective_band_in", charge_band))}})
 	var action_data := {"arch": archetype, "role": archetype_role_label(archetype),
 		"objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
 		"enemy_in_charge": bool(ctx["enemy_in_charge"]), "shoot_after_advance": bool(ctx["shoot_after_advance"]),
@@ -5152,13 +5183,15 @@ static func _achieved_m(before: Array, after: Array) -> float:
 ## One planning pass: rigid clamp to the table, then obstacle-aware per-model planning. Returns the new
 ## positions; `trails` receives one world polyline per model.
 func _plan_move(unit: GameUnit, models: Array, positions: Array, goal: Vector3, reach_in: float,
-		allow_contact: bool, avoid_difficult: bool, avoid_dangerous: bool, trails: Array, charge_target: GameUnit) -> Array:
+		allow_contact: bool, avoid_difficult: bool, avoid_dangerous: bool, trails: Array,
+		charge_target: GameUnit, dry_run: bool = false) -> Array:
 	var delta := MoveIntent.plan_unit_move(positions, goal, reach_in)
 	delta = _clamp_delta_to_bounds(positions, delta)
 	if delta == Vector3.ZERO:
 		_fill_straight_trails(trails, positions, positions)
 		return positions.duplicate()
-	return _plan_positions(unit, models, positions, delta, allow_contact, trails, avoid_difficult, avoid_dangerous, charge_target, reach_in)
+	return _plan_positions(unit, models, positions, delta, allow_contact, trails, avoid_difficult,
+		avoid_dangerous, charge_target, reach_in, dry_run)
 
 
 ## Would the rigid move's per-model TARGETS land inside difficult terrain? (Objective or charge target
@@ -6157,8 +6190,9 @@ func _apply_model_positions(models: Array, new_positions: Array) -> void:
 ## slide. `world_trails` (optional out): one WORLD-space waypoint list per model — the real route taken.
 func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vector3, allow_contact: bool,
 		world_trails: Array = [], avoid_difficult: bool = true, avoid_dangerous: bool = false,
-		charge_target: GameUnit = null, charge_arc_in: float = 0.0) -> Array:
-	last_flow_order = []
+		charge_target: GameUnit = null, charge_arc_in: float = 0.0, dry_run: bool = false) -> Array:
+	if not dry_run:
+		last_flow_order = []
 	var rigid: Array = []
 	for p in positions:
 		rigid.append((p as Vector3) + delta)
@@ -6256,7 +6290,7 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	# instant. INERT IN BATCH (_solo_batch) → self-play stays byte-identical + deterministic (verifiable).
 	# A miss always recomputes exactly as before, so a cache miss can never change the result.
 	var plan_key := ""
-	if prewarm_enabled:
+	if prewarm_enabled and not dry_run:
 		plan_key = _plan_signature(mpos, mdelta, walls_in, sampled["grid"], allow_contact, board_in, opts)
 		var hit: Dictionary = _plan_cache.get(plan_key, {})
 		if not hit.is_empty():
@@ -6277,8 +6311,11 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 			charge_arc_in, avoid_difficult, avoid_dangerous, allow_contact],
 		"model_pos": mpos, "delta": mdelta, "walls": walls_in, "grid": sampled["grid"],
 		"allow_contact": allow_contact, "board_in": board_in, "opts": opts, "terrain_cb": terrain_type_at}
-	var mrec := MoveRecorder.begin(mctx)
-	var _prof_mv_t0 := BattleSim.prof_t0()
+	var mrec := MoveRecorder.begin(mctx) if not dry_run else {}
+	var _prof_mv_t0 := BattleSim.prof_t0() if not dry_run else 0
+	var trace_before: bool = MovementPlanner.trace_on
+	if dry_run:
+		MovementPlanner.trace_on = false
 	var planned: Array
 	if _move_seam_on():
 		planned = _core_move_plan(mctx, mpos, mdelta, walls_in, sampled["grid"],
@@ -6286,13 +6323,17 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	else:
 		planned = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
 			allow_contact, board_in, plan_trails, opts)
-	BattleSim.prof_mark("move", _prof_mv_t0)
-	MoveRecorder.finish(mrec, planned, plan_trails, opts)
-	if prewarm_enabled and not plan_key.is_empty():
+	if dry_run:
+		MovementPlanner.trace_on = trace_before
+	else:
+		BattleSim.prof_mark("move", _prof_mv_t0)
+		MoveRecorder.finish(mrec, planned, plan_trails, opts)
+	if prewarm_enabled and not dry_run and not plan_key.is_empty():
 		_plan_cache_store(plan_key, planned, plan_trails, opts.get("flow_order", []))
 	# The sequential per-model flow (finding 7) writes back the order its models filed to their slots, so the
 	# presentation glides each model individually in that order (main._solo_animate_move).
-	last_flow_order = (opts.get("flow_order", []) as Array).duplicate()
+	if not dry_run:
+		last_flow_order = (opts.get("flow_order", []) as Array).duplicate()
 	# The unified solver (solve_formation, inside plan_unit_step) resolves unit-spacing, own-base separation,
 	# coherency and terrain-avoidance TOGETHER — but its least-violating fallback can still KEEP a residual
 	# violation. The HARD final gate (findings 3 + 6) that guarantees them is applied by the CALLER
@@ -8626,6 +8667,144 @@ func _charge_move(unit: GameUnit, target: GameUnit, band_in: float) -> int:
 	var centre := unit_centre(unit)
 	var goal := centre + Vector3(dir.x, 0.0, dir.y) * (travel * INCHES_TO_METERS)
 	return _move_toward(unit, goal, band_in, true, target)
+
+
+## #183 declaration probe. A deterministic charge is available only when the same
+## corridor and final-placement constraints used by _execute_move leave enough of
+## the granted band to reach base contact. The result also carries the measured
+## values used by the caller's rejection record.
+##
+## This facade is observationally pure. The planner's dry-run mode bypasses its
+## cache, recorder, profiler and presentation writes; placement-only scratch state
+## is restored after the calculation. Models, RNG, decisions and network state are
+## never written.
+func charge_path_probe(unit: GameUnit, target: GameUnit, band_in: float) -> Dictionary:
+	var gate_before := _gate_clamped_models.duplicate(true)
+	var notes_before := board_clamp_notes.duplicate()
+	var walls_before := _rest_walls_cache.duplicate(true)
+	var walls_frame_before := _rest_walls_frame
+	var core_warn_before := _core_move_warned
+	var core_checks_before := _core_move_checks
+	var core_diffs_before := _core_move_diffs
+	var result := _charge_path_probe_impl(unit, target, band_in)
+	_gate_clamped_models = gate_before
+	board_clamp_notes = notes_before
+	_rest_walls_cache = walls_before
+	_rest_walls_frame = walls_frame_before
+	_core_move_warned = core_warn_before
+	_core_move_checks = core_checks_before
+	_core_move_diffs = core_diffs_before
+	return result
+
+
+static func charge_snap_fits_unit_budget(residual_in: float, longest_arc_in: float,
+		band_in: float) -> bool:
+	var remaining_in := maxf(0.0, band_in - longest_arc_in)
+	return longest_arc_in <= band_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES \
+		and residual_in <= MELEE_ENGAGE_IN \
+		and residual_in <= remaining_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES
+
+
+func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -> Dictionary:
+	var nearest := nearest_charge_vector(unit, target)
+	var gap_in: float = float(nearest.get("gap", INF))
+	var direction: Vector2 = nearest.get("dir", Vector2.ZERO)
+	var result := {
+		"reachable": true,
+		"gap_in": gap_in,
+		"band_in": band_in,
+		"effective_band_in": band_in,
+		"direction": direction,
+		"reason": "",
+	}
+	if gap_in == INF or direction == Vector2.ZERO:
+		return result
+	var models := _moving_models(unit)
+	var positions := _positions_of(models)
+	if positions.is_empty():
+		return result
+
+	var flying: bool = unit.has_special_rule("Flying")
+	var ignores_difficult: bool = flying or unit.has_special_rule("Strider")
+	var own_radius_m := _move_base_radius_m(models)
+	var travel_in := minf(band_in, gap_in)
+	var centre := unit_centre(unit)
+	var goal := _clamp_to_bounds(centre
+		+ Vector3(direction.x, 0.0, direction.y) * (travel_in * INCHES_TO_METERS))
+	var avoid_difficult := not ignores_difficult \
+		and not _targets_in_difficult(positions, goal, band_in, own_radius_m)
+	var avoid_dangerous := not flying \
+		and not _targets_in_dangerous(positions, goal, band_in, own_radius_m)
+	var trails: Array = []
+	var planned := _plan_move(unit, models, positions, goal, band_in, true,
+		avoid_difficult, avoid_dangerous, trails, target, true)
+
+	var radii_m: Array = []
+	for model in models:
+		radii_m.append(model_base_radius_m(model as ModelInstance))
+	var effective_band := band_in
+	if not ignores_difficult and _trails_cross_difficult(trails, radii_m):
+		effective_band = minf(band_in, DIFFICULT_MOVE_CAP_IN)
+		trails = []
+		planned = _plan_move(unit, models, positions, goal, effective_band, true,
+			false, avoid_dangerous, trails, target, true)
+	result["effective_band_in"] = effective_band
+
+	# Match _execute_move's p.7 distance trim before the hard placement gate.
+	var budget_m := effective_band * INCHES_TO_METERS
+	for i in range(mini(trails.size(), planned.size())):
+		var trail := trails[i] as Array
+		if MovementPlanner.polyline_length(trail) > budget_m + 0.0005:
+			var trimmed := MovementPlanner.trim_polyline(trail, budget_m)
+			trails[i] = trimmed
+			if not trimmed.is_empty():
+				var endpoint := trimmed.back() as Vector3
+				planned[i] = Vector3(endpoint.x, (planned[i] as Vector3).y, endpoint.z)
+	var finalized := planned
+	if not _is_regiment(unit):
+		finalized = _finalize_placement(unit, models, positions, planned, true, target)
+		for i in range(mini(trails.size(), finalized.size())):
+			trails[i] = _retrace_to(trails[i] as Array, positions[i] as Vector3,
+				finalized[i] as Vector3)
+
+	var target_shapes: Array = []
+	for target_model in _moving_models(target):
+		var target_shape := SeparationChecker.shape_for_model(target_model as ModelInstance)
+		if target_shape != null:
+			target_shapes.append(target_shape)
+	if target_shapes.is_empty():
+		return result
+
+	# snap_charge spends from last_move_remaining_in(), which is based on the
+	# LONGEST route in the formation, not the route of the model that will make
+	# contact. Mirror that shared unit budget here or a trailing model can consume
+	# the snap allowance after the nearest model appeared able to finish.
+	var longest_arc_in := 0.0
+	for trail in trails:
+		longest_arc_in = maxf(longest_arc_in,
+			MovementPlanner.polyline_length(trail as Array) / INCHES_TO_METERS)
+	var remaining_in := maxf(0.0, effective_band - longest_arc_in)
+	result["arc_in"] = longest_arc_in
+	result["remaining_in"] = remaining_in
+	for i in range(mini(models.size(), mini(finalized.size(), trails.size()))):
+		var mover_shape := SeparationChecker.shape_for_model(models[i] as ModelInstance)
+		if mover_shape == null:
+			continue
+		var start: Vector3 = positions[i]
+		var finish: Vector3 = finalized[i]
+		mover_shape.center += Vector2(finish.x - start.x, finish.z - start.z)
+		var residual_in := INF
+		for target_shape in target_shapes:
+			residual_in = minf(residual_in,
+				SeparationChecker.edge_distance(mover_shape, target_shape as SeparationChecker.BaseShape))
+		if charge_snap_fits_unit_budget(residual_in, longest_arc_in, effective_band):
+			result["contact_model"] = i
+			result["residual_in"] = residual_in
+			return result
+
+	result["reachable"] = false
+	result["reason"] = "executable corridor cannot reach base contact within %.1f\"" % effective_band
+	return result
 
 
 ## NML-002 Strafing — pure move-through test: did any of the mover's trail legs pass over one
