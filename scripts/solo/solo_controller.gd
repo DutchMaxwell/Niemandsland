@@ -3145,6 +3145,10 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		pick = AiPlanner.plan_with_rollout(state, me)
 	BattleSim.prof_mark("search", _prof_srch_t0)
 	AiActRecorder.finish(act_rec, pick)
+	if pick.has("brain"):
+		record_decision({"kind": "brain", "unit": "", "rule": "developer leaf evaluator",
+			"candidates": [], "chosen": "", "why": "Rust search consumed leaf values",
+			"data": pick["brain"]})
 	if not act_rec.is_empty():
 		_act_line_seq = _move_act_seq   # this activation already has its FULL line
 	if not bool(pick.get("used", false)):
@@ -3319,6 +3323,8 @@ func _core_pick_of(out: Dictionary, state: Dictionary) -> Dictionary:
 		"expectation": {"before": base, "after": after},
 		"runner_up": runner, "waits": waits, "rolled_units": rolled}
 	var leaf_plain: Dictionary = out.get("leaf_state", {})
+	if out.has("brain"):
+		pick["brain"] = out["brain"]
 	if not (leaf_plain.get("units", {}) as Dictionary).is_empty():
 		pick["leaf"] = BattleSim.state_from_plain(leaf_plain, army_manager)
 	return pick

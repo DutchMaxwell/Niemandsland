@@ -148,6 +148,7 @@ dependencies = [
  "godot",
  "nml-core",
  "serde_json",
+ "time",
 ]
 
 [[package]]

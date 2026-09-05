@@ -127,6 +127,8 @@ pub enum Unsupported {
     /// `FittedEval` / `PolicyOrder`: a blend that was asked for and cannot be
     /// honoured is a decline, never a silent fall-back to the hand leaf.
     LeafValueMissing,
+    /// Developer loopback evaluator refused; never silently substitute hand values.
+    LeafValueBridge(&'static str),
     /// NML-1073 M3-6b — `tokens::build` refuses a state whose live roster,
     /// marker count or menu width exceeds the padding budget (`N_UNITS`,
     /// `N_OBJ`, `N_CAND`) rather than truncate a row: a truncated board is a

@@ -312,12 +312,25 @@ pub fn plan_with_rollout_sig(
     player: i64,
     sig: Option<i64>,
 ) -> Result<Pick, Unsupported> {
+    plan_with_leaf_value(state, terrain, statics, knobs, act, player, sig, None, 0.0)
+}
+
+/// The existing search with an optional batched leaf evaluator. The default
+/// entry point delegates here with the original unarmed values.
+#[allow(clippy::too_many_arguments)]
+pub fn plan_with_leaf_value(
+    state: &State, terrain: &Terrain, statics: &[UnitStatic], knobs: &Knobs,
+    act: &ActStatics, player: i64, sig: Option<i64>,
+    leaf_value: Option<&dyn LeafValue>, leaf_value_w: f64,
+) -> Result<Pick, Unsupported> {
     let seams = seams_of(knobs);
     let index = reach_of(seams, state, terrain);
     let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref(), knobs), *knobs);
     let mut sc = Scratch::default();
     let mut search = Search::new(roll, act);
     search.sig = sig;
+    search.leaf_value = leaf_value;
+    search.leaf_value_w = leaf_value_w;
     search.run(state, player, &mut sc, None)
 }
 

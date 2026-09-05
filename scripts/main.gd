@@ -1816,8 +1816,12 @@ func _solo_apply_difficulty() -> void:
 			var grade := str(_solo_difficulty_grades[slot])
 			solo_controller.set_difficulty(int(slot), SoloDifficulty.for_grade(grade, _solo_arena_seed))
 		return
-	for pid in solo_ai_slots:   # interactive human-vs-AI: Solo-panel grade for every AI-marked army
-		solo_controller.set_difficulty(int(pid), SoloDifficulty.for_grade(_solo_interactive_grade, _solo_arena_seed))
+	var interactive_grade := _solo_interactive_grade
+	# Developer-only bridge: the rollout preset is intentionally absent from the player UI.
+	if OS.is_debug_build() and not OS.get_environment("NML_BRAIN_URL").is_empty() and BattleSim.core_enabled():
+		interactive_grade = "planner_v0"
+	for pid in solo_ai_slots:   # Human slots stay human; explicit arena grades above take precedence.
+		solo_controller.set_difficulty(int(pid), SoloDifficulty.for_grade(interactive_grade, _solo_arena_seed))
 
 
 ## Point the controller at `slot` as the acting AI and the OTHER slot as its enemy — main's combat helpers
