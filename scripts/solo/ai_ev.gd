@@ -163,6 +163,7 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"counter_models": counter_models,
 		"regeneration": _regen_target(unit) > 0,
 		"regen_target": _regen_target(unit),
+		"regen_target_spell": _regen_target(unit, true),
 	}
 
 
@@ -182,12 +183,28 @@ static func _fortified_over_in(unit: GameUnit) -> float:
 ## → 5+ (any bearing model), else Self-Repair (wave-4 army-book, all models) → 6+. Mirrors main's
 ## _solo_regen_target so the EV metric and the dice resolution ignore wounds at the SAME rate — wave 5:
 ## both read the target from the RulesRegistry mechanics map (constants as byte-identical fallback).
-static func _regen_target(unit: GameUnit) -> int:
+static func _regen_target(unit: GameUnit, from_spell: bool = false) -> int:
+	var best := 0
 	if unit.has_special_rule("Regeneration") or unit.has_special_rule("Medical Training"):
-		return int(RulesRegistry.unit_param(unit, "Regeneration", "ignore_target", REGENERATION_TARGET))
+		best = int(RulesRegistry.unit_param(unit, "Regeneration", "ignore_target", REGENERATION_TARGET))
 	if rule_on_all_models(unit, "Self-Repair"):
-		return int(RulesRegistry.unit_param(unit, "Self-Repair", "ignore_target", SELF_REPAIR_TARGET))
-	return 0
+		var target := int(RulesRegistry.unit_param(unit, "Self-Repair", "ignore_target", SELF_REPAIR_TARGET))
+		best = target if best == 0 else mini(best, target)
+	var key := "ignore_target_spell" if from_spell else "ignore_target"
+	if rule_on_all_models(unit, "Resistance"):
+		var target := int(RulesRegistry.unit_param(unit, "Resistance", key, 2 if from_spell else 6))
+		best = target if best == 0 else mini(best, target)
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Regeneration"):
+		var name := str((e as Dictionary).get("name", ""))
+		if name in ["Regeneration", "Self-Repair", "Resistance"]:
+			continue
+		var params: Dictionary = (e as Dictionary).get("params", {})
+		if bool(params.get("all_models", false)) and not rule_on_all_models(unit, name):
+			continue
+		var target := int(params.get(key, params.get("ignore_target", 0)))
+		if target > 0 and (best == 0 or target < best):
+			best = target
+	return best
 
 
 static func takedown_rule_for_profile(unit: GameUnit, profile_range: int) -> String:
