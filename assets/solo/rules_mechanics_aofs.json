@@ -6991,9 +6991,13 @@
     }
    },
    "Spawn": {
-    "primitive": null,
+    "primitive": "Spawn",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 6,
+     "once_per_game": true
+    }
    },
    "Storm of Lust": {
     "primitive": "Storm Attack",
