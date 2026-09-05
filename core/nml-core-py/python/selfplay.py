@@ -94,25 +94,27 @@ from list_to_profile import (
 )
 
 
-def _git_short_sha() -> str:
-    """The short sha of the checkout this module runs from — the core build
-    identity a corpus stamps as `core_commit` (Gen-1 recorder fix: Gen-0's
-    rows could not say WHICH build had scored them). "unknown" when the tree
-    is not a checkout (a wheel install) or git is unavailable — the stamp
-    must never block a game."""
+def _git_full_sha() -> str:
+    """Last-resort runtime checkout identity when an older build has no stamp."""
     try:
         return subprocess.run(
             ["git", "-C", str(Path(__file__).resolve().parent),
-             "rev-parse", "--short", "HEAD"],
+             "rev-parse", "HEAD"],
             capture_output=True, text=True, check=True, timeout=10,
         ).stdout.strip()
     except Exception:
         return "unknown"
 
 
-#: Computed ONCE at import — every game this process writes stamps the same
-#: sha, whatever the tree does afterwards.
-_core_commit = _git_short_sha()
+def _record_core_commit() -> str:
+    commit = getattr(nml_core, "BUILD_COMMIT", "unknown")
+    return _git_full_sha() if commit == "unknown" else commit
+
+
+# Resolve once per process. A runtime fallback never rewrites the embedded
+# BUILD_INFO: an unknown build remains distinguishable from a verified stamp.
+_core_commit = _record_core_commit()
+_core_build = dict(getattr(nml_core, "BUILD_INFO", {}))
 
 
 # core_selfplay.gd:20-23
@@ -2231,10 +2233,9 @@ def play_game(
     already computed ride along as arrays PARALLEL to `list` —
     `cands["scored"][i]` is candidate i's hand prior score, `cands["rs"][i]`
     its rollout/search value, None where the pool never rolled it — and the
-    header stamps `core_commit`, the short sha of the checkout the core was
-    built from. False (the default) writes the rows byte for byte as every
-    corpus before this flag did, stamps neither, and nothing joins `knobs` —
-    the keys ride the rows and the header alone.
+    header retains its top-level `core_commit` compatibility stamp. Every
+    game, including when this flag is False, additionally carries the build
+    identity under `prescreen`. The candidate rows themselves are unchanged.
 
     `deep_player` (the SEARCH A/B seam) is the per-seat counterpart of
     `top_k`/`horizon`: seat 1 or 2 plays ITS activations with a SECOND core
@@ -2805,10 +2806,8 @@ def play_game(
         # Rides the "interleaved" branch only (NML-1147a pattern): a "zone" or
         # "arena" game stays the exact object it was, `result_digest` included.
         **({"placement_sequence": deploy_seq} if eff_deployment == "interleaved" else {}),
-        # Gen-1 recorder fix: WHICH core build recorded the game — the short
-        # sha of the checkout at import. Rides the expert-iteration corpus
-        # path only (NML-1147a pattern): a default game stays the exact
-        # object it always was, digest included.
+        "prescreen": {"core_commit": _core_commit, "core_build": dict(_core_build)},
+        # Preserve the existing top-level stamp on candidate recordings.
         **({"core_commit": _core_commit} if record_cands else {}),
         # `tools/core_selfplay.gd` stamps no such field (it always runs the
         # planner's own defaults) — this documents the fast trainer's MODE,

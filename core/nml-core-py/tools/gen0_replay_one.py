@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402
 import selfplay  # noqa: E402
+from core_identity import CoreIdentityCheck, add_core_argument  # noqa: E402
 
 _layout, _tray = nml_core.objective_layout, nml_core.Tray
 G = {"dice": 0, "rows": [], "i": 0, "cmp": 0, "ok": 0, "hand": 0}
@@ -152,17 +153,13 @@ def armed(fn):
         nml_core.objective_layout, nml_core.Tray = prev_layout, prev_tray
 
 
-def replay(path: str, lists: str, dice_offset: int) -> dict:
+def replay(path: str, lists: str, dice_offset: int, core_check=None) -> dict:
     """One game replayed; the returned `divergence` is "" only on a clean run."""
     rec = json.loads(Path(path).read_text(encoding="utf-8"))
+    (core_check or CoreIdentityCheck()).check(rec, path)
     kn = rec["prescreen"]["knobs"]
-    # The corpus names no core commit (DESIGN §1.6.4): the sha ef9a3e48 is
-    # DERIVED from the fleet epoch and corroborated by one signature probe —
-    # `record_cands` landed at PR #522. A file saying otherwise was not
-    # written by the build this proof is about. `record_aux` (PR #533) is
-    # NOT refused: its targets (models-alive/wounds on `rounds_log`, DESIGN_
-    # gen0_training §2.6) are additive to the game actually played, so a
-    # Gen-1 record stamping it replays exactly like one that does not.
+    # Candidate menus are required for fidelity checks; auxiliary targets
+    # remain additive and do not prevent replay.
     if not kn.get("record_cands"):
         raise SystemExit("REFUSED %s: record_cands=%s" % (path, kn.get("record_cands")))
     G.update(dice=rec["dice_seed"] + dice_offset, rows=rec["planner_positions"],
@@ -193,24 +190,23 @@ def main() -> int:
     ap.add_argument("games", nargs="+", help="corpus gen0_s<seed>_d<dice>.json files")
     ap.add_argument("--lists", default=LISTS, help="local mirror of the fleet's ai_lists")
     ap.add_argument("--dice-offset", type=int, default=0, help="RED: must diverge")
+    add_core_argument(ap)
     a = ap.parse_args()
-    print("[REPLAY] corpus commit ef9a3e48, DERIVED (DESIGN §1.6.4) from the fleet epoch:"
-          " record_cands landed at PR #522, and every file below must report cands=true"
-          " (record_aux, PR #533, is additive and accepted either way).\n[REPLAY]"
-          " module=%s dice_offset=%d"
-          % (nml_core.__file__, a.dice_offset))
+    core_check = CoreIdentityCheck(a.require_same_core)
+    print("[REPLAY] module=%s dice_offset=%d core_commit=%s"
+          % (nml_core.__file__, a.dice_offset, core_check.running))
     out = []
     for g in a.games:
-        out.append(replay(g, a.lists, a.dice_offset))
+        out.append(replay(g, a.lists, a.dice_offset, core_check))
         print("[GAME] %(file)s %(matched)d/%(recorded)d hand=%(hand_top1)d"
               " %(seconds).2fs %(divergence)s" % out[-1])
     good = sum(1 for r in out if not r["divergence"])
     seen = sum(r["compared"] for r in out) or 1
     print("[VERDICT] %s %d/%d games, %d positions compared, %d menus matched exactly,"
-          " hand-argmax top-1 %.1f%%, %.2f s/game"
+          " hand-argmax top-1 %.1f%%, %.2f s/game core_commit=%s"
           % ("PASS" if good == len(out) else "FAIL", good, len(out), seen,
              sum(r["matched"] for r in out), 100.0 * sum(r["hand_top1"] for r in out) / seen,
-             sum(r["seconds"] for r in out) / len(out)))
+             sum(r["seconds"] for r in out) / len(out), core_check.running))
     return 0 if good == len(out) else 1
 
 

@@ -80,12 +80,13 @@ def _export_picker(core, state, player, net_player=0, eps=0.0, explore_seed=0, c
     return pick
 
 
-def replay_game(path: str, lists: str) -> tuple:
+def replay_game(path: str, lists: str, core_check=None) -> tuple:
     # A divergence discards THIS game's rows (skipped and counted, never
     # written) — it does not fail the shard.
     global _ROWS, _OPENER, _TERR
     _ROWS = []
     rec = json.loads(Path(path).read_text(encoding="utf-8"))
+    (core_check or gr.CoreIdentityCheck()).check(rec, path)
     kn = rec["prescreen"]["knobs"]
     if not kn.get("record_cands") or kn.get("record_aux"):
         return [], {"file": Path(path).name, "positions": 0, "divergence": "REFUSED: not a Gen-0 recording"}
@@ -137,13 +138,13 @@ def pack(rows: list) -> dict:
     return out
 
 
-def run_shard(idx: int, games: list, lists: str, out_dir: str, id_of: dict) -> dict:
+def run_shard(idx: int, games: list, lists: str, out_dir: str, id_of: dict, core_check=None) -> dict:
     # Whole-or-nothing: partial progress never reaches the final filenames.
     npz_p, json_p = shard_paths(Path(out_dir), idx)
     rows, index = [], []
     label_kinds = {"played": 0, "best": 0}
     for g in games:
-        game_rows, meta = replay_game(str(g), lists)
+        game_rows, meta = replay_game(str(g), lists, core_check)
         for r in game_rows:
             r["game_id"] = id_of[Path(g).name]
             # `label_kind` is bookkeeping for the shard's own meta below, not
@@ -165,11 +166,15 @@ def run_shard(idx: int, games: list, lists: str, out_dir: str, id_of: dict) -> d
     return {"shard": idx, "games": len(games), "positions": len(rows)}
 
 
-def _worker(task_q, done_q, lists, out_dir, corpus) -> None:
+def _worker(task_q, done_q, lists, out_dir, corpus, core_check) -> None:
     # id_of: corpus-GLOBAL game index, stable across --limit/--sample-every.
     id_of = {p.name: i for i, p in enumerate(sorted(Path(corpus).glob("gen0_s*_d*.json")))}
     for idx, games in iter(task_q.get, None):
-        done_q.put(run_shard(idx, games, lists, out_dir, id_of))
+        try:
+            done_q.put(run_shard(idx, games, lists, out_dir, id_of, core_check))
+        except SystemExit as exc:
+            done_q.put({"games": 0, "exit_code": exc.code})
+            return
 
 
 def discover_shards(corpus, out_dir, shard_size, sample_every, limit):
@@ -189,41 +194,50 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=10)
     ap.add_argument("--sample-every", type=int, default=1)
     ap.add_argument("--limit", type=int, default=0)
+    gr.add_core_argument(ap)
     a = ap.parse_args()
     out_dir = Path(a.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
     games, shards, todo = discover_shards(a.corpus, out_dir, a.shard_size, a.sample_every, a.limit)
+    core_check = gr.CoreIdentityCheck(a.require_same_core)
+    # Preflight in the parent: warn once for the run and refuse before any
+    # outputs or workers exist (also checks a resumed, already-exported corpus).
+    for game in games:
+        core_check.check(json.loads(game.read_text(encoding="utf-8")), game)
+    out_dir.mkdir(parents=True, exist_ok=True)
     n_workers = min(a.workers, len(todo))
-    print("[SHARDS] %d games, %d shards, %d already done, %d to run -> %d workers"
-          % (len(games), len(shards), len(shards) - len(todo), len(todo), n_workers))
+    print("[SHARDS] %d games, %d shards, %d already done, %d to run -> %d workers core_commit=%s"
+          % (len(games), len(shards), len(shards) - len(todo), len(todo), n_workers, core_check.running))
     if not todo:
         # Nothing to replay (a rerun over a finished corpus): the night
         # chain's sentinel must still land, or a re-launch after completion
         # hangs it forever.
-        (out_dir / "STATUS").write_text("DONE games=0/0 rate=0.000/s elapsed=0.0s\n")
+        (out_dir / "STATUS").write_text("DONE games=0/0 rate=0.000/s elapsed=0.0s core_commit=%s\n" % core_check.running)
         return 0
     ctx = mp.get_context("fork")
     task_q, done_q = ctx.Queue(), ctx.Queue()
     for item in list(todo) + [None] * n_workers:
         task_q.put(item)
-    procs = [ctx.Process(target=_worker, args=(task_q, done_q, a.lists, str(out_dir), a.corpus)) for _ in range(n_workers)]
+    procs = [ctx.Process(target=_worker, args=(task_q, done_q, a.lists, str(out_dir), a.corpus, core_check)) for _ in range(n_workers)]
     [p.start() for p in procs]
     (out_dir / "pids.json").write_text(json.dumps({"main": os.getpid(), "workers": [p.pid for p in procs]}))
     total_games = sum(len(g) for _, g in todo)
     t0, done_games, last_status = time.time(), 0, 0.0
+    exit_code = 0
 
     def write_status(done=False):
         rate = done_games / max(time.time() - t0, 1e-9)
         (out_dir / "status.json").write_text(json.dumps({"games_done": done_games, "games_total": total_games,
             "rate_games_per_s": round(rate, 3), "elapsed_s": round(time.time() - t0, 1)}))
         # The night chain's sentinel: a line starting "DONE" in plain STATUS.
-        (out_dir / "STATUS").write_text("%s games=%d/%d rate=%.3f/s elapsed=%.1fs\n"
-            % ("DONE" if done else "RUNNING", done_games, total_games, rate, time.time() - t0))
+        (out_dir / "STATUS").write_text("%s games=%d/%d rate=%.3f/s elapsed=%.1fs core_commit=%s\n"
+            % ("REFUSED" if exit_code else "DONE" if done else "RUNNING", done_games, total_games, rate, time.time() - t0, core_check.running))
 
     write_status()
     while any(p.is_alive() for p in procs) or not done_q.empty():
         try:
-            done_games += done_q.get(timeout=5)["games"]
+            result = done_q.get(timeout=5)
+            done_games += result["games"]
+            exit_code = result.get("exit_code", 0) or exit_code
         except Exception:
             pass
         if time.time() - last_status > 120:
@@ -231,8 +245,9 @@ def main() -> int:
             last_status = time.time()
     [p.join() for p in procs]
     write_status(done=True)
-    print("[SHARDS] done: %d games in %.1fs" % (done_games, time.time() - t0))
-    return 0
+    print("[SHARDS] %s: %d games in %.1fs core_commit=%s"
+          % ("refused" if exit_code else "done", done_games, time.time() - t0, core_check.running))
+    return exit_code
 
 
 if __name__ == "__main__":
