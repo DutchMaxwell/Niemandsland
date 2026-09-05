@@ -832,8 +832,8 @@ pub fn charge_move(
 ///
 /// NOT here: the boxed/sidestep escape :4960 (S8). `_finalize_placement`
 /// :6371, the stall escalation :4820 (S7) and the gate-collapse ladder :4890
-/// (S6) are all entered below — unlike a charge, which `not allow_contact`
-/// excludes from every one of them.
+/// (S6) are all entered below. Epoch-6 charges share final placement but
+/// retain the table's exclusion from stall, ladder and boxed retries.
 #[allow(clippy::too_many_arguments)]
 pub fn plain_move(
     state: &State,

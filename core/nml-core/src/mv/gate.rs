@@ -17,8 +17,8 @@
 //! wall clamp. GateFlags carries the original world positions and replay epoch.
 //!
 //! Remaining gap:
-//!   * skirmish's 6" chain (`CoherencyChecker` :18), corpus-absent and unported
-//!     with the regiments, exactly as `deployment.rs:1783` says.
+//!   * non-charge skirmish's 6" chain (`CoherencyChecker` :18); charge gates
+//!     select the table's system-specific chain through GateFlags.
 //!
 //! THE BOUNDED FIXED POINT. There is no outer `repeat` in the table: the
 //! iteration lives INSIDE the passes and each bound is its own constant —
