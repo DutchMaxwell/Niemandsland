@@ -1434,6 +1434,25 @@ pub fn resolve_breath_attack_with_tray(
     out
 }
 
+/// The Storm Attack family's payload (wave 3): `hits` direct hits landed as
+/// ONE save batch carrying the burst's keyword facet — Bane's six-re-roll and
+/// Shred's save-fail +1 through the same `save_batch` legs every ported Bane/
+/// Shred carrier rides, AP(1) as the batch's own AP. Bane's wounds cut through
+/// Regeneration (`_solo_ignores_regen`, the volley tail's own ladder at the
+/// `p.bane` arm above), the other facets land regenerable. The table twin is
+/// `_solo_apply_storm_attack`'s `_solo_save_batch` call (main.gd:17287).
+pub fn resolve_storm_hits_with_tray(
+    hits: i64, ap: i64, bane: bool, shred_grant: bool, def: &Ctx, def_owner: &str, tray: &mut Tray,
+) -> ShootResult {
+    let mut out = ShootResult::default();
+    if hits <= 0 { return out; }
+    let bare = ShootProfile { ap, bane, ..Default::default() };
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, shred_grant, false, 1, tray, &mut out);
+    out.caused = w;
+    out.wounds = if bane { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
+    out
+}
+
 // ------------------------------------- D1-B5b: MORALE on the same tray ---
 
 /// `AiCombatMath.Morale` — the three outcomes of a morale test.

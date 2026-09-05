@@ -640,6 +640,10 @@ pub struct UnitStatic {
     /// breath-weapon primitive's registry gate, block B3's `mend_active`
     /// precedent.
     pub breath_attack_active: bool,
+    /// The Storm Attack family's carried bursts (wave 3, `storm_of`): one
+    /// entry per "Storm of X" the unit bears, params off its own registry
+    /// entry, empty below `EPOCH_6_TABLE_RULES`.
+    pub storm: Vec<StormSpec>,
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
@@ -2402,6 +2406,44 @@ const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Primal Boost Buff",
 ];
 
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StormFacet { Shred, Surge, Bane, Ap1 }
+
+/// One carried "Storm of X" burst (main.gd:17231, the table's automation):
+/// once per game, when ACTIVATED, before attacking — roll `dice`, per
+/// `trigger`+ one enemy unit within `range_in` takes `hits` hits w/ `facet`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StormSpec {
+    pub name: String,
+    pub dice: i64, pub trigger: i64, pub range_in: f64,
+    pub hits: i64, pub facet: StormFacet,
+}
+
+/// The Storm Attack family's stamp (wave 3): every carried "Storm Attack"
+/// entry, read off its OWN params, gated on the FROZEN `EPOCH_6_TABLE_RULES`
+/// — the fleet stamps `rules_epoch: 5` and wave 3's rules do not exist in
+/// that recorder, so a record below 6 must never carry them.
+fn storm_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<StormSpec> {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) { return Vec::new(); }
+    let map = reg.rules_for(&p.game_system);
+    let mut seen = std::collections::HashSet::new();
+    p.special_rules.iter().chain(p.item_grants.iter())
+        .filter_map(|raw| {
+            let n = base_rule_name(raw);
+            (!n.is_empty() && seen.insert(n.clone())).then_some(n)
+        })
+        .filter_map(|n| map.lookup(&p.faction_folder, &n)
+            .filter(|e| e.primitive.as_deref() == Some("Storm Attack")).map(|e| (n, e)))
+        .map(|(n, e)| StormSpec {
+            name: n, dice: e.param_i("dice", 3), trigger: e.param_i("trigger_target", 2),
+            range_in: e.param_f("range_in", 12.0), hits: e.param_i("hits", 3),
+            facet: match e.param_s("facet") { "shred" => StormFacet::Shred, "surge" => StormFacet::Surge,
+                "bane" => StormFacet::Bane, _ => StormFacet::Ap1 }, // the table's own `sp.get("facet", "ap1")` fallback
+        })
+        .collect()
+}
+
 /// Every "Utility Buff" entry the unit carries, in `unit_rules_of_primitive`'s
 /// own order (own rules then item grants, each base name once — rules_registry
 /// .gd:155-176). The two printed defaults that differ between the arms are
@@ -3369,6 +3411,7 @@ impl UnitStatic {
             },
             ambush_family: ambush_family_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
+            storm: storm_of(reg, p, rules_epoch),
             growth: growth_of(reg, p, &mut unimplemented),
             piercing_tags: piercing_tags_of(reg, p, rules_epoch),
             unimplemented,
@@ -3649,6 +3692,76 @@ mod tests {
     /// strikers`'s `sp.unstoppable_ev = sp.unstoppable || u_unstop;` back to
     /// the pre-fix `sp.unstoppable |= u_unstop;`): this test fails, the tray
     /// assertion tripping on the now-true `unstoppable`.
+    /// PROOF (1): a unit carrying only "Unstoppable Mark" has NO unstoppable
+    /// on the tray path but keeps it on the EV path; a unit with a weapon's
+    /// real "Unstoppable" rule has it on both. RED (revert `stamp_unit_
+    /// strikers`'s `sp.unstoppable_ev = sp.unstoppable || u_unstop;` back to
+    /// the pre-fix `sp.unstoppable |= u_unstop;`): this test fails, the tray
+    /// assertion tripping on the now-true `unstoppable`.
+    /// The family's registry stamp: each chaos Storm reads its OWN entry's
+    /// params off the real gf registry, at epoch literals 6/5 — never
+    /// `CURRENT_RULES_EPOCH` — so the assertions stay true after a bump.
+    fn storm_spec(rule: &str, faction: &str, epoch: u32) -> Vec<StormSpec> {
+        let p = Profile {
+            unit_id: "carrier".into(),
+            name: "carrier".into(),
+            special_rules: vec![rule.into()],
+            game_system: "gf".into(),
+            faction_folder: faction.into(),
+            ..storm_profile_template()
+        };
+        let mut reg = Registries::new(&repo_root());
+        UnitStatic::build_for(&mut reg, &p, epoch).storm
+    }
+
+    use crate::state::MoveBands;
+
+    /// A minimal `Profile` (no `Default`) with everything the stamp reads.
+    fn storm_profile_template() -> Profile {
+        Profile {
+            unit_id: String::new(),
+            name: String::new(),
+            quality: 0,
+            defense: 0,
+            tough: 0,
+            wounds_max: vec![],
+            model_count: 1,
+            weapons: vec![],
+            special_rules: vec![],
+            caster_value: 0,
+            base_radius: 0.0,
+            base_shape: String::new(),
+            base_w_mm: 0.0,
+            base_d_mm: 0.0,
+            game_system: String::new(),
+            faction_folder: String::new(),
+            item_grants: vec![],
+            attached_hero_rules: vec![],
+            move_bands: MoveBands::default(),
+        }
+    }
+
+    #[test]
+    fn the_four_chaos_storms_stamp_their_own_registry_params_at_epoch_six() {
+        let cases: [(&str, &str, StormFacet); 4] = [
+            ("Storm of Change", "wormhole_daemons_of_change", StormFacet::Shred),
+            ("Storm of Lust", "wormhole_daemons_of_lust", StormFacet::Surge),
+            ("Storm of Plague", "wormhole_daemons_of_plague", StormFacet::Bane),
+            ("Storm of War", "wormhole_daemons_of_war", StormFacet::Ap1),
+        ];
+        for (rule, faction, facet) in cases {
+            let specs = storm_spec(rule, faction, 6);
+            assert_eq!(specs.len(), 1, "{rule} stamps exactly its own entry");
+            let s = &specs[0];
+            assert_eq!((s.name.as_str(), s.dice, s.trigger, s.range_in, s.hits, s.facet),
+                (rule, 3, 2, 12.0, 3, facet), "{rule}: the printed burst shape");
+            assert!(
+                storm_spec(rule, faction, 5).is_empty(),
+                "{rule}: epoch 5 predates the wave-3 port"
+            );
+        }
+    }
+
     #[test]
     fn unstoppable_mark_carrier_is_ev_only_a_real_unstoppable_reaches_both() {
         let header = read_act_header(HEADER).expect("header");
