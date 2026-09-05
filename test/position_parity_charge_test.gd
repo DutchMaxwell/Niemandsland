@@ -26,6 +26,8 @@ func test_charge_gate_shape_and_snap_pins_match_the_table() -> void:
 				).is_less_equal(float(pins["tolerance_in"]))
 
 func _table_charge(fixture: Dictionary) -> Dictionary:
+	var previous := [MovementPlanner.fast_planner, MovementPlanner.fast_planner_guard,
+		SoloController._move_seam_env, SoloController._move_check_env]
 	var board: Node3D = auto_free(Node3D.new())
 	add_child(board)
 	var army := Parity.FixtureArmy.new()
@@ -90,4 +92,46 @@ func _table_charge(fixture: Dictionary) -> Dictionary:
 			model.node = null
 		unit.models.clear()
 	army.game_units.clear()
+	MovementPlanner.fast_planner = bool(previous[0])
+	MovementPlanner.fast_planner_guard = int(previous[1])
+	SoloController._move_seam_env = int(previous[2])
+	SoloController._move_check_env = int(previous[3])
 	return result
+
+func test_charge_snap_positive_and_budget_boundary_probes() -> void:
+	var pins: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
+		"res://test/fixtures/position_parity/charge_gates.json"))
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	for probe in pins["snap_probes"]:
+		var units: Array = []
+		for point in [probe["start"],probe["target"]]:
+			var unit := GameUnit.new()
+			unit.unit_properties = {"base_size_round":int(round(float(probe["radius_m"])*2000.0))}
+			var model := ModelInstance.new()
+			model.unit = unit
+			model.is_alive = true
+			model.properties = {"tough":1}
+			model.node = auto_free(Node3D.new())
+			add_child(model.node)
+			model.node.global_position = Vector3(point[0],point[1],point[2])
+			unit.models.append(model)
+			units.append(unit)
+		solo.last_move_budget_in = float(probe["band_in"])
+		solo.last_move_paths = [{"path":[Vector3.ZERO,Vector3(float(probe["arc_in"])*0.0254,0,0)]}]
+		var snap: Variant = null
+		if solo.nearest_melee_gap_in(units[0],units[1]) <= SoloController.MELEE_ENGAGE_IN:
+			snap = solo.snap_charge(units[0],units[1],solo.last_move_remaining_in())
+		if probe["expected_snap_in"] == null:
+			assert_bool(snap == null).is_true()
+		else:
+			assert_float(absf(float(snap)-float(probe["expected_snap_in"]))
+				).is_less_equal(float(probe["tolerance_in"]))
+		var p: Array = probe["expected_world"]
+		assert_float(units[0].models[0].node.global_position.distance_to(Vector3(p[0],p[1],p[2])) / 0.0254
+			).is_less_equal(float(probe["tolerance_in"]))
+		for unit in units:
+			for model in unit.models:
+				model.unit = null
+				model.node = null
+			unit.models.clear()

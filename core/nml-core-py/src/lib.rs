@@ -880,7 +880,7 @@ impl Core {
         else {
             return to_py(py, &Value::Null);
         };
-        let land = nmlcore::mv::step::charge_move(
+        let land = (nmlcore::mv::step::MoveRules { rules_epoch: self.knobs.rules_epoch }).charge_move(
             st,
             &self.terrain,
             si,
@@ -890,8 +890,10 @@ impl Core {
             true,
             nmlcore::mv::FAST_PLANNER_GUARD,
         );
-        let Some(l) = land else { return to_py(py, &Value::Null) };
+        let Some(mut l) = land else { return to_py(py, &Value::Null) };
+        let snap = l.snap_charge(st, ci, self.knobs.rules_epoch);
         let mut m = Map::new();
+        m.insert("snap_in".into(), snap.map(Value::from).unwrap_or(Value::Null));
         m.insert(
             "movers".into(),
             Value::Array(

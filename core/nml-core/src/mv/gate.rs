@@ -107,6 +107,10 @@ pub struct GateReport {
 /// anything (:6392-6393, handed down from `_finalize_placement`).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GateFlags<'a> {
+    /// Some selects the charge arm; target centres/radii use the table contact test.
+    pub charge_targets: Option<&'a [(geom::V3, f64)]>,
+    /// Charge coherency is 6 inches for skirmish systems, otherwise 9.
+    pub charge_chain_in: f64,
     /// Original world positions for the table whole-unit fallback. Empty disables it.
     pub start_world: &'a [geom::V3],
     /// Replays below the table-rules epoch retain the original gate.
@@ -397,6 +401,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
 /// plan the band-slack circles are centred on, those caps, and the board and
 /// terrain every correction is spent against.
 struct Pull<'a> {
+    max_chain: f64,
     rules_epoch: u32,
     goal: &'a [[f64; 2]],
     caps_in: &'a [f64],
@@ -454,7 +459,7 @@ impl Pull<'_> {
     /// A final overlap push clears whatever the inward pulls stacked (:6636) —
     /// skipped on the early exit above, exactly as the table skips it.
     fn run(&self, cfg: &mut [Disc], rep: &mut GateReport) -> bool {
-        let (n, max_chain) = (cfg.len(), super::MAX_CHAIN_IN);
+        let (n, max_chain) = (cfg.len(), self.max_chain);
         for _ in 0..COH_REPAIR_PASSES {
             if config_coherent(cfg, max_chain) {
                 return true;
@@ -592,7 +597,11 @@ pub fn finalize_placement(
             }
         })
         .collect();
-    let capped = caps_in.len() == n;
+    let charge = flags.charge_targets.is_some() && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES);
+    let max_chain = if charge && flags.charge_chain_in > 0.0 {
+        flags.charge_chain_in
+    } else { super::MAX_CHAIN_IN };
+    let capped = !charge && caps_in.len() == n;
     // (terrain) :6402-6412 — project every model out of forbidden rest ground
     // BEFORE the overlap push, so the crowd resolves around spots that are
     // already legal. A projection costing MORE than the model's band slack is
@@ -601,6 +610,14 @@ pub fn finalize_placement(
     // goes to the caller's ladder at a shorter reach — route truth wins.
     if let Some(t) = terrain {
         for i in 0..n {
+            if charge {
+                let y = flags.start_world.get(i).map_or(0.0, |p| p[1]);
+                let at = t.from_inch([cfg[i].c[0] as f32, cfg[i].c[1] as f32], y);
+                let contact = flags.charge_targets.unwrap_or(&[]).iter().any(|(p, r)|
+                    geom::length(geom::sub(at, *p)) as f64 - cfg[i].r * IN2M - r
+                        <= BASE_CONTACT_EPS_IN * IN2M * 4.0);
+                if contact { continue; }
+            }
             let proj = project_out_forbidden(cfg[i].c, cfg[i].r, t, board_in);
             if capped && dist(proj, goal[i]) > caps_in[i] {
                 rep.capped[i] = true;
@@ -620,11 +637,11 @@ pub fn finalize_placement(
     // the straggler repair before falling back to the whole-unit shorten. The
     // repair itself returns at once on a coherent config. The whole-unit
     // fallback below also checks overlap and forbidden rest ground.
-    if !config_coherent(&cfg, super::MAX_CHAIN_IN) {
-        let pull = Pull { rules_epoch: flags.rules_epoch, goal: &goal, caps_in, capped, board_in, terrain, external };
+    if !config_coherent(&cfg, max_chain) {
+        let pull = Pull { max_chain, rules_epoch: flags.rules_epoch, goal: &goal, caps_in, capped, board_in, terrain, external };
         rep.coherent = pull.run(&mut cfg, &mut rep);
     }
-    if n > 1 && flags.start_world.len() == n
+    if !charge && n > 1 && flags.start_world.len() == n
         && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES)
         && !config_legal(&cfg, external, terrain)
     {

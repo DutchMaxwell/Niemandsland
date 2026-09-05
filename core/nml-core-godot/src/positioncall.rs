@@ -33,6 +33,7 @@ pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionar
         return Err("Stage A rules_epoch must be a nonnegative integer".into());
     }
     let rules_epoch = rules_epoch as u32;
+    let mut snap_in = None;
     let landing = match action.kind {
         0 => None,
         1 | 2 => Some(
@@ -58,15 +59,17 @@ pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionar
                 .as_ref()
                 .and_then(|key| state.roster.index.get(key))
                 .ok_or_else(|| "Stage A charge names no live target".to_string())?;
-            Some(
-                step::charge_move(state, &terrain, si, *target, band, true, fast, guard)
-                    .ok_or_else(|| "Stage A charge needs a board and live models".to_string())?,
-            )
+            let mut land = (step::MoveRules { rules_epoch })
+                .charge_move(state, &terrain, si, *target, band, true, fast, guard)
+                .ok_or_else(|| "Stage A charge needs a board and live models".to_string())?;
+            snap_in = land.snap_charge(state, *target, rules_epoch);
+            Some(land)
         }
         _ => return Err("Stage A action kind must be HOLD/ADVANCE/RUSH/CHARGE".into()),
     };
     let mut out = VarDictionary::new();
     out.set("ok", true);
+    out.set("snap_in", snap_in.map_or(Variant::nil(), |v| v.to_variant()));
     let mut points = VarArray::new();
     let mut model_ids = VarArray::new();
     if let Some(ref land) = landing {
@@ -95,17 +98,21 @@ pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionar
     for name in ["formation", "terrain_cap", "gate_budget", "walls"] {
         caps.push(&GString::from(name).to_variant());
     }
-    if action.kind != 3 {
+    if action.kind != 3 || rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         caps.push(&GString::from("final_placement").to_variant());
         caps.push(&GString::from("base_shapes").to_variant());
-        if rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
+        if action.kind == 3 {
+            caps.push(&GString::from("charge_final_placement").to_variant());
+            caps.push(&GString::from("charge_snap").to_variant());
+            caps.push(&GString::from("skirmish_chain").to_variant());
+        }
+        if action.kind != 3 && rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
             && landing.as_ref().is_none_or(|land| land.shorten_covered)
         {
             caps.push(&GString::from("whole_unit_shorten").to_variant());
         }
     }
-    // step::Move::execute still skips shaped final placement on charges;
-    // skirmish chains and post-charge snap remain unported.
+    // Non-charge skirmish chains and boxed escape remain separate ports.
     out.set("stage_a_capabilities", &caps);
     Ok(out)
 }

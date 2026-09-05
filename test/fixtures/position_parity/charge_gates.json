@@ -59,5 +59,145 @@
       "charge_gap_in": 3.7806559594597404,
       "budget_in": 6.0
     }
+  ],
+  "snap_probes": [
+    {
+      "name": "remaining_budget",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.0377,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 2,
+      "arc_in": 1,
+      "expected_snap_in": 0.5,
+      "expected_world": [
+        0.0127,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    },
+    {
+      "name": "exhausted_budget",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.0377,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 1,
+      "arc_in": 1,
+      "expected_snap_in": -0.5,
+      "expected_world": [
+        0,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    },
+    {
+      "name": "contact_slack",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.026778,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 1,
+      "arc_in": 0.97,
+      "expected_snap_in": 0.07,
+      "expected_world": [
+        0.001778,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    },
+    {
+      "name": "beyond_slack",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.027286,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 1,
+      "arc_in": 0.97,
+      "expected_snap_in": -0.09,
+      "expected_world": [
+        0,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    },
+    {
+      "name": "outside_engagement",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.0631,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 3,
+      "arc_in": 0,
+      "expected_snap_in": null,
+      "expected_world": [
+        0,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    },
+    {
+      "name": "already_in_contact",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.0255,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 0,
+      "arc_in": 0,
+      "expected_snap_in": 0,
+      "expected_world": [
+        0,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    }
   ]
 }
