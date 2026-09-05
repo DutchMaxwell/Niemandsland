@@ -1,0 +1,84 @@
+{
+  "payload_schema_version": 1,
+  "consent_schema_version": 1,
+  "deletion_code": "00000000000000000000000000000000",
+  "record_id": "example-record-0001",
+  "game_version": "0.3.12.0-alpha",
+  "build_hash": "example-build",
+  "core_abi": 1,
+  "rules_epoch": 3,
+  "training_use": false,
+  "brain": {
+    "engine": "classic",
+    "id": "classic",
+    "hash": ""
+  },
+  "game": {
+    "system_id": "gf",
+    "mission_id": "mission-01",
+    "scoring_id": "end-control",
+    "random_seed": 41001,
+    "layout_seed": 41002,
+    "dice_seed": 41003
+  },
+  "table": {
+    "width_inches": 72,
+    "height_inches": 48,
+    "terrain": [
+      {"type_id": "ruins", "x": 18, "y": 24, "rotation": 0}
+    ],
+    "objectives": [
+      {"type_id": "objective", "x": 36, "y": 24}
+    ]
+  },
+  "armies": [
+    {
+      "side": 1,
+      "book_id": "book-01",
+      "faction_id": "faction-01",
+      "units": [
+        {
+          "unit_id": "unit-01",
+          "profile_id": "profile-01",
+          "quality": 4,
+          "defense": 4,
+          "model_count": 5,
+          "loadout_ids": ["loadout-01"],
+          "rule_ids": ["rule-01"]
+        }
+      ]
+    },
+    {
+      "side": 2,
+      "book_id": "book-02",
+      "faction_id": "faction-02",
+      "units": [
+        {
+          "unit_id": "unit-02",
+          "profile_id": "profile-02",
+          "quality": 5,
+          "defense": 5,
+          "model_count": 3,
+          "loadout_ids": ["loadout-02"],
+          "rule_ids": []
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {"index": 0, "round": 1, "side": 1, "unit_id": "unit-01", "kind": "move", "from": [10, 10], "to": [14, 10], "target_id": "", "dice_faces": []},
+    {"index": 1, "round": 1, "side": 2, "unit_id": "unit-02", "kind": "shoot", "from": [54, 38], "to": [54, 38], "target_id": "unit-01", "dice_faces": [2, 5, 6]},
+    {"index": 2, "round": 2, "side": 1, "unit_id": "unit-01", "kind": "shoot", "from": [14, 10], "to": [14, 10], "target_id": "unit-02", "dice_faces": [4, 4]},
+    {"index": 3, "round": 2, "side": 2, "unit_id": "unit-02", "kind": "move", "from": [54, 38], "to": [50, 34], "target_id": "", "dice_faces": []},
+    {"index": 4, "round": 3, "side": 1, "unit_id": "unit-01", "kind": "charge", "from": [14, 10], "to": [20, 14], "target_id": "unit-02", "dice_faces": [6, 3]},
+    {"index": 5, "round": 3, "side": 2, "unit_id": "unit-02", "kind": "melee", "from": [20, 14], "to": [20, 14], "target_id": "unit-01", "dice_faces": [1, 5]}
+  ],
+  "rounds": 3,
+  "final": {
+    "vp": [3, 2],
+    "objective_owners": [1],
+    "outcome": "side-1"
+  },
+  "player_name": "must-never-appear",
+  "chat": "must-never-appear"
+}

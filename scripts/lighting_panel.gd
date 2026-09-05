@@ -4,6 +4,7 @@ extends Window
 
 var lighting_controller: Node
 var atmosphere_controller: Node = null
+var privacy_menu: PrivacyMenu = null
 
 # UI References
 var sliders: Dictionary = {}
@@ -88,6 +89,27 @@ func set_atmosphere_controller(atmosphere_ctrl: Node) -> void:
 	visibility_changed.connect(func() -> void:
 		if visible:
 			UiPolish.grab_first_focus.call_deferred(self))
+
+
+## Settings > Privacy & data > Help improve the computer opponent.
+func set_privacy_menu(menu: PrivacyMenu) -> void:
+	privacy_menu = menu
+	if _main_vbox == null:
+		return
+	var separator := HSeparator.new()
+	separator.name = "PrivacySeparator"
+	_main_vbox.add_child(separator)
+	var label := Label.new()
+	label.name = "PrivacyDataLabel"
+	label.text = privacy_menu.localized_text("settings_section")
+	label.add_theme_font_size_override("font_size", 16)
+	_main_vbox.add_child(label)
+	var button := Button.new()
+	button.name = "PrivacyDataButton"
+	button.text = privacy_menu.localized_text("heading")
+	button.pressed.connect(func() -> void:
+		privacy_menu.open_settings())
+	_main_vbox.add_child(button)
 
 
 func _build_ui() -> void:

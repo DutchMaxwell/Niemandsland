@@ -65,6 +65,7 @@ var _prompt_overlay: CanvasLayer = null
 # Lighting Controller
 var lighting_controller: Node = null
 var lighting_panel: Window = null
+var privacy_menu: PrivacyMenu = null
 var atmosphere_controller: AtmosphereController = null
 
 # Group rotation state
@@ -604,6 +605,10 @@ func _ready() -> void:
 	get_tree().root.add_child(lighting_panel)
 	lighting_panel.initialize(lighting_controller)
 	lighting_panel.hide()  # Start hidden
+	privacy_menu = load("res://scenes/privacy/privacy_menu.tscn").instantiate() as PrivacyMenu
+	get_tree().root.add_child(privacy_menu)
+	privacy_menu.hide()
+	lighting_panel.set_privacy_menu(privacy_menu)
 
 	# Apply UI theme to HUD
 	_apply_ui_theme()
@@ -2251,11 +2256,18 @@ func _solo_show_game_summary() -> void:
 	dlg.dialog_text = "%d rounds played.\n\n%s%s%s" % [SOLO_GAME_ROUNDS, obj_block, vp_block, verdict]
 	dlg.confirmed.connect(dlg.queue_free)
 	dlg.canceled.connect(dlg.queue_free)
+	dlg.confirmed.connect(_maybe_prompt_for_evaluation_sharing)
+	dlg.canceled.connect(_maybe_prompt_for_evaluation_sharing)
 	if ThemeManager != null:
 		dlg.theme = ThemeManager.get_current_theme()
 	dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 0)
 	add_child(dlg)
 	dlg.popup_centered()
+
+
+func _maybe_prompt_for_evaluation_sharing() -> void:
+	if privacy_menu != null:
+		privacy_menu.maybe_prompt_after_completed_game()
 
 
 func _solo_side_alive(pid: int) -> int:
