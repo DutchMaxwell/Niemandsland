@@ -254,6 +254,12 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			if not facet_applies(spr, int(fpd.get("range", 0))):
 				continue
 			fpd["rending"] = true
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Shred"):
+		var sp: Dictionary = (e as Dictionary).get("params", {})
+		for fp in profiles:
+			var fpd := fp as Dictionary
+			if facet_applies(sp, int(fpd.get("range", 0))):
+				fpd["shred"] = true
 	# Coverage wave: cover-ignore facet (unit-level "Ignores Cover when shooting" and kin — the
 	# Indirect primitive's cover_only alias form): ranged profiles save against uncovered Defense.
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
