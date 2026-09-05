@@ -260,6 +260,15 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # CondAp spec does not carry; Havocbound Boost needs an always-on leg +
     # the `upgrades` coupling the stamp pass does not read) — the #489
     # over-credit shape, declined.
+    # Royal Legion family (rules-wave3-royallegion, 2026-09-05): unit.rs
+    # ::royal_legion_family_of folds every carried Royal Legion-primitive
+    # entry's two live halves — `range_bonus_in` (the _shooting_range_bonus
+    # alias-max) and `charge_mod` (the move-band pass's flat rush fold,
+    # MOVE_PRIMITIVES carrying "Royal Legion") — and the primitive-NULL
+    # "Lustbound Boost Aura" rides its base through the raw-name expansion
+    # arm. `upgrades` stays unread: neither twin's band or range pass reads
+    # it either (the move_rule_mods precedent).
+    "Royal Legion": frozenset({"range_bonus_in", "charge_mod"}),
 }
 
 

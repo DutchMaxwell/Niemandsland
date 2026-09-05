@@ -573,6 +573,23 @@ pub struct UnitStatic {
     /// Reach", tutorial_board.nml:5423), so the raw-name arm is what makes this
     /// core independent of that expander rather than a second effect.
     pub versatile_reach_charge_in: Option<f64>,
+    /// The Royal Legion family (wave 3, epoch 6) — the class's two live halves
+    /// as the twins ship them: `range_bonus_in` (the
+    /// `solo_controller.gd:shooting_range_bonus` /
+    /// `list_to_profile.py::_shooting_range_bonus` alias-max) and `charge_mod`
+    /// (the move-band pass's flat per-name rush fold — MOVE_PRIMITIVES carries
+    /// "Royal Legion"). Census/evidence-only on this core (the accepted
+    /// `bounding` shape, PR #653): the charge half reaches the sim precomputed —
+    /// the band pass folds these same params into the profile `move_bands`
+    /// this core consumes as `state.bands` — so a live re-fold at the move seam
+    /// would double-count a recorded band. The Boost entries' `upgrades`
+    /// condition is read by nobody on this core — neither twin's band or range
+    /// pass reads it either, so the flat fold IS the shipped behaviour (the
+    /// `move_rule_mods` precedent). Epoch-gated: `EPOCH_6_TABLE_RULES` — a
+    /// record stamped `rules_epoch: 5` (the Gen-3 fleet's own window) predates
+    /// wave 3 and reads zeros.
+    pub royal_legion_range_in: f64,
+    pub royal_legion_charge_in: f64,
     /// `RulesRegistry.unit_rule_active(gu, "Re-Position Artillery")` — the
     /// "Utility Buff" movement primitive's registry gate (block B2).
     pub reposition_artillery_active: bool,
@@ -2222,6 +2239,58 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     if hit { Some(acc) } else { None }
 }
 
+/// The Royal Legion family (wave 3, epoch 6) — every carried Royal
+/// Legion-primitive entry's two live halves, folded the way the twins ship
+/// them: `range_bonus_in` takes the alias-MAX (`_shooting_range_bonus`'s
+/// `best`), `charge_mod` flat-folds per name (the move-band pass's per-name
+/// stack — MOVE_PRIMITIVES carries "Royal Legion"). The Boost entries'
+/// `upgrades` condition is read by nobody on this core — neither twin's band
+/// or range pass reads it either (the `move_rule_mods` precedent), so the
+/// flat fold IS the shipped behaviour. The primitive-NULL "Lustbound Boost
+/// Aura" (no params anyone reads) rides the import's aura expansion through
+/// its own raw-name arm — the `versatile_reach_charge_in` shape; an aura
+/// whose own entry IS primitive-bearing (aof's Royal Legion Boost Aura,
+/// every Increased Shooting Range Aura) was already folded under its own
+/// name and is skipped here. Rules-must-log: one `trace_rule` line per
+/// stamped unit. Epoch-gated: `EPOCH_6_TABLE_RULES` — a record stamped
+/// `rules_epoch: 5` (the Gen-3 fleet's own window) predates wave 3.
+fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (f64, f64) {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        return (0.0, 0.0);
+    }
+    let hits = rules_of_primitive(reg, p, "Royal Legion");
+    let map = reg.rules_for(&p.game_system);
+    let (mut range, mut charge) = (0.0_f64, 0.0_f64);
+    let mut folded: Vec<String> = Vec::new();
+    for hit in hits {
+        let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
+        range = range.max(e.param_f("range_bonus_in", 0.0));
+        charge += e.param_f("charge_mod", 0.0);
+        folded.push(hit.name);
+    }
+    for (aura, base) in [("Lustbound Boost Aura", "Lustbound Boost")] {
+        if !has_special_rule(&p.special_rules, aura) || folded.iter().any(|n| n == base) {
+            continue;
+        }
+        if let Some(e) = map.lookup(&p.faction_folder, aura) {
+            if e.primitive.as_deref() == Some("Royal Legion") {
+                continue;
+            }
+        }
+        let Some(e) = map.lookup(&p.faction_folder, base) else { continue };
+        range = range.max(e.param_f("range_bonus_in", 0.0));
+        charge += e.param_f("charge_mod", 0.0);
+        folded.push(base.to_string());
+    }
+    if !folded.is_empty() {
+        crate::sim::trace_rule(
+            "W3-royal-legion",
+            &folded.join(", "),
+            &format!("{}: +{:.0}\" shooting range, +{:.0}\" charge", p.name, range, charge),
+        );
+    }
+    (range, charge)
+}
 impl UnitStatic {
     /// The legacy epoch-0 build — every corpus recorded before
     /// `Knobs::rules_epoch` existed reads back that epoch, so this answers
@@ -2421,6 +2490,7 @@ impl UnitStatic {
         } else {
             Vec::new()
         };
+        let royal_legion = royal_legion_family_of(reg, p, rules_epoch);
 
         UnitStatic {
             ctx: ctx_for(reg, p, rules_epoch),
@@ -2452,6 +2522,8 @@ impl UnitStatic {
             is_hero: has_special_rule(&p.special_rules, "Hero"),
             bounding: bounding_of(reg, p),
             move_rule_mods: move_rule_mods_of(reg, p, rules_epoch),
+            royal_legion_range_in: royal_legion.0,
+            royal_legion_charge_in: royal_legion.1,
             versatile_reach_charge_in: if unit_rule_active(reg, p, "Versatile Reach")
                 || has_special_rule(&p.special_rules, "Versatile Reach Aura")
             {
@@ -4359,5 +4431,106 @@ mod tests {
             None,
             "epoch 0 is pre-port"
         );
+    }
+
+    /// The Royal Legion family (wave 3, epoch 6) — one carrier per name, each
+    /// next to a plain sibling in the SAME real faction block so the
+    /// (system, faction, name) lookup is real. Reads the rule at the literal
+    /// epoch 6 (present) and 5 (absent — the Gen-3 fleet's own stamping window
+    /// must never gain wave 3), so the test keeps meaning what it says after
+    /// the next epoch bump.
+    const ROYAL_LEGION_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "rl_unit":{"unit_id":"rl_unit","name":"Royal Legion Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"mummified_undead","special_rules":["Royal Legion"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_mummified":{"unit_id":"plain_mummified","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"mummified_undead","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "rl_boost_unit":{"unit_id":"rl_boost_unit","name":"Royal Legion Boost Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"mummified_undead","special_rules":["Royal Legion Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "rl_boost_aura_unit":{"unit_id":"rl_boost_aura_unit","name":"Royal Legion Boost Aura Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"mummified_undead","special_rules":["Royal Legion Boost Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "lustbound_unit":{"unit_id":"lustbound_unit","name":"Lustbound Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Lustbound"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "lustbound_boost_unit":{"unit_id":"lustbound_boost_unit","name":"Lustbound Boost Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Lustbound Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "lustbound_combo_unit":{"unit_id":"lustbound_combo_unit","name":"Lustbound Combo Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Lustbound","Lustbound Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "lustbound_boost_aura_unit":{"unit_id":"lustbound_boost_aura_unit","name":"Lustbound Boost Aura Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Lustbound Boost Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_lust_disciples":{"unit_id":"plain_lust_disciples","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "isr_aura_unit":{"unit_id":"isr_aura_unit","name":"Increased Shooting Range Aura Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"havoc_dwarves","special_rules":["Increased Shooting Range Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "isr_unit":{"unit_id":"isr_unit","name":"Increased Shooting Range Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":["Increased Shooting Range"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    fn royal_legion_halves(name: &str, rules_epoch: u32) -> (f64, f64) {
+        let header = read_act_header(ROYAL_LEGION_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let us = UnitStatic::build_for(
+            &mut reg,
+            header.profiles.get(name).expect(name),
+            rules_epoch,
+        );
+        (us.royal_legion_range_in, us.royal_legion_charge_in)
+    }
+
+    /// Royal Legion itself (aof mummified_undead): +4" range, +2" on Charge.
+    /// RED: the fields stay 0.
+    #[test]
+    fn royal_legion_stamps_range_and_charge_at_epoch_6() {
+        assert_eq!(royal_legion_halves("rl_unit", 6), (4.0, 2.0), "the entry's own range_bonus_in/charge_mod");
+        assert_eq!(royal_legion_halves("plain_mummified", 6), (0.0, 0.0), "no Royal Legion, no stamp");
+        assert_eq!(royal_legion_halves("rl_unit", 5), (0.0, 0.0), "epoch 5 is the Gen-3 fleet's window: none of wave 3");
+    }
+
+    /// Royal Legion Boost (aof mummified_undead) — the aof entry carries the
+    /// base magnitudes (4/2) under the Boost's own name. RED: the fields stay 0.
+    #[test]
+    fn royal_legion_boost_stamps_through_its_own_entry() {
+        assert_eq!(royal_legion_halves("rl_boost_unit", 6), (4.0, 2.0));
+        assert_eq!(royal_legion_halves("rl_boost_unit", 5), (0.0, 0.0));
+    }
+
+    /// Royal Legion Boost Aura — its aof entry is primitive-bearing (4/2)
+    /// under its own name, so the alias wave reaches it WITHOUT a raw-name arm.
+    #[test]
+    fn royal_legion_boost_aura_stamps_through_its_own_entry() {
+        assert_eq!(royal_legion_halves("rl_boost_aura_unit", 6), (4.0, 2.0));
+        assert_eq!(royal_legion_halves("rl_boost_aura_unit", 5), (0.0, 0.0));
+    }
+
+    /// Lustbound (aof lust_disciples) — the class's data alias, same 4/2
+    /// magnitudes. RED: the fields stay 0.
+    #[test]
+    fn lustbound_stamps_range_and_charge_at_epoch_6() {
+        assert_eq!(royal_legion_halves("lustbound_unit", 6), (4.0, 2.0));
+        assert_eq!(royal_legion_halves("plain_lust_disciples", 6), (0.0, 0.0), "no Lustbound, no stamp");
+        assert_eq!(royal_legion_halves("lustbound_unit", 5), (0.0, 0.0));
+    }
+
+    /// Lustbound Boost (aof lust_disciples): +8"/+4". The range half is the
+    /// `_shooting_range_bonus` alias-MAX (8 wins over the base's 4 — the
+    /// rule's own "instead of"), the charge half the band pass's flat per-name
+    /// SUM (2+4=6 — neither twin's pass reads `upgrades`, the move_rule_mods
+    /// precedent). RED: the fields stay 0.
+    #[test]
+    fn lustbound_boost_widens_both_halves_over_the_base() {
+        assert_eq!(royal_legion_halves("lustbound_boost_unit", 6), (8.0, 4.0));
+        assert_eq!(royal_legion_halves("lustbound_combo_unit", 6), (8.0, 6.0), "range takes the max, charge flat-folds per name — the loaders' own shape");
+        assert_eq!(royal_legion_halves("lustbound_boost_unit", 5), (0.0, 0.0));
+    }
+
+    /// Lustbound Boost Aura — primitive-NULL in every shipped block (BY
+    /// DESIGN: has_primitive false), so the alias wave cannot reach it; the
+    /// raw-name arm expands it to "Lustbound Boost" the way the import does.
+    #[test]
+    fn lustbound_boost_aura_expands_to_its_base() {
+        assert_eq!(royal_legion_halves("lustbound_boost_aura_unit", 6), (8.0, 4.0), "the base entry's own magnitudes through the expansion");
+        assert_eq!(royal_legion_halves("lustbound_boost_aura_unit", 5), (0.0, 0.0));
+    }
+
+    /// Increased Shooting Range (gf alien_hives) — range-only alias, +6", no
+    /// charge half. RED: the fields stay 0.
+    #[test]
+    fn increased_shooting_range_stamps_range_only() {
+        assert_eq!(royal_legion_halves("isr_unit", 6), (6.0, 0.0));
+        assert_eq!(royal_legion_halves("isr_unit", 5), (0.0, 0.0));
+    }
+
+    /// Increased Shooting Range Aura (aof havoc_dwarves) — its own entry is
+    /// primitive-bearing (6/0), so the alias wave reaches it under its own name.
+    #[test]
+    fn increased_shooting_range_aura_stamps_through_its_own_entry() {
+        assert_eq!(royal_legion_halves("isr_aura_unit", 6), (6.0, 0.0));
+        assert_eq!(royal_legion_halves("isr_aura_unit", 5), (0.0, 0.0));
     }
 }
