@@ -214,6 +214,18 @@ pub struct Ctx {
     /// the SHOOTING to-hit target only (`_solo_hit_mod_info`'s melee branch
     /// returns before that code runs, main.gd:5608-5648).
     pub growth_hit_mod: i64,
+    /// rules-wave3-growthmark (epoch 6) — the DEFENDER-side sister facets.
+    /// ZERO on every `ctx_of` like the attacker half above; only `sim::ctx_live`
+    /// folds them, and only behind `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`,
+    /// so a rules_epoch 5 record replays byte-exact. Read by the tray's
+    /// `save_batch` when THIS ctx is the DEFENDER.
+    /// Defensive Frenzy/Growth: +X to every Defense roll the bearer makes
+    /// (`defense_per_marker`/`defense_per_two` summed per `sim::growth_defense_of`).
+    pub growth_def_mod: i64,
+    /// Fortified Growth: the AP delta every unit attacking the bearer rides
+    /// with (negative — the `enemy_ap_per_two` ladder), floored at the hard 0
+    /// in `dice::save_batch`.
+    pub growth_fortify_ap: i64,
     // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
     // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
     // arrival stamp and folds it in, so the EV imagination stays blind to it
@@ -1718,11 +1730,24 @@ pub struct GrowthRule {
     pub name: String,
     pub per_round: bool,
     pub on_kill: bool,
+    /// rules-wave3-growthmark (epoch 6) — Regenerative Strength's own trigger:
+    /// +1 marker each time this unit IGNORES a wound.
+    pub on_ignore_wound: bool,
     pub max_markers: i64,
     pub ap_per_marker: i64,
     pub ap_per_two: i64,
     pub hit_per_marker: i64,
     pub hit_per_two: i64,
+    /// Defensive Frenzy/Growth: +X to this unit's Defense rolls per marker /
+    /// per two markers (`sim::growth_defense_of`, epoch 6).
+    pub defense_per_marker: i64,
+    pub defense_per_two: i64,
+    /// Fortified Growth: every unit attacking THIS one gets AP(X) per two
+    /// markers (defender-side, negative), epoch 6.
+    pub enemy_ap_per_two: i64,
+    /// Regenerative Strength: +X attacks with one melee weapon, X = markers,
+    /// epoch 6 (`sim::melee_parts`).
+    pub attacks_per_marker: i64,
 }
 
 /// Every "Growth Markers" entry the unit carries (own rules + item grants,
@@ -1750,15 +1775,22 @@ fn growth_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> 
             name: n,
             per_round: e.param_b("per_round"),
             on_kill: e.param_b("on_kill"),
+            on_ignore_wound: e.param_b("on_ignore_wound"),
             max_markers: e.param_i("max_markers", 4),
             ap_per_marker: e.param_i("ap_per_marker", 0),
             ap_per_two: e.param_i("ap_per_two", 0),
             hit_per_marker: e.param_i("hit_per_marker", 0),
             hit_per_two: e.param_i("hit_per_two", 0),
+            defense_per_marker: e.param_i("defense_per_marker", 0),
+            defense_per_two: e.param_i("defense_per_two", 0),
+            enemy_ap_per_two: e.param_i("enemy_ap_per_two", 0),
+            attacks_per_marker: e.param_i("attacks_per_marker", 0),
         };
-        if (g.ap_per_marker, g.ap_per_two, g.hit_per_marker, g.hit_per_two) == (0, 0, 0, 0) {
+        if (g.ap_per_marker, g.ap_per_two, g.hit_per_marker, g.hit_per_two,
+            g.defense_per_marker, g.defense_per_two, g.enemy_ap_per_two,
+            g.attacks_per_marker, g.on_ignore_wound) == (0, 0, 0, 0, 0, 0, 0, 0, false) {
             un.push(Unimplemented { rule: g.name.clone(), why:
-                "Growth Markers params carry no ap/hit facet — block B7 only consumes the attack-bonus facets (main.gd:4287/:5675-5680); defense_per_marker/defense_per_two/enemy_ap_per_two/on_ignore_wound are not read".into() });
+                "Growth Markers params carry no facet this port consumes — the attack facets (main.gd:4287/:5675-5680) and the epoch-6 wave (defense_per_marker/defense_per_two, enemy_ap_per_two, on_ignore_wound, attacks_per_marker) are read; min_ap/all_models/scope are not".into() });
         }
         out.push(g);
     }
@@ -3033,6 +3065,17 @@ mod tests {
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
 
+    /// One "Regenerative Strength" carrier (alien_hives: on_ignore_wound,
+    /// attacks_per_marker 1, scope one_melee_weapon) — the epoch-6 wave's
+    /// registry read.
+    const GROWTH_RS_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "rs_carrier":{"unit_id":"rs_carrier","name":"RS Carrier","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Regenerative Strength"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
     /// Five gf units chosen so the REGISTRY tells them apart, not a stub.
     /// `alien_hives` fields an `Infiltrate` entry (`min_enemy_dist_in: 3.0`) and
     /// NO `Repel Ambushers`; `eternal_dynasty` is the mirror image (a
@@ -3179,10 +3222,13 @@ mod tests {
         assert_eq!(out.len(), 1, "one entry per distinct name: {out:?}");
     }
 
-    /// The facet gate: a rule WITH an ap/hit facet is consumed silently; a
-    /// rule whose four facets are all zero is REPORTED as unimplemented.
-    /// Flipping the `==` to `!=` reports the facet-bearing rule instead and
-    /// stays silent about the defense-only one.
+    /// The facet gate: a rule WITH any consumed facet is consumed silently; a
+    /// rule whose facets are ALL unconsumed is REPORTED as unimplemented.
+    /// The rules-wave3-growthmark epoch-6 wave consumes the defense facets,
+    /// so the old "defense-only is reported" case (Defensive Growth) is now
+    /// consumed — the report shape is still exercised by the shared gate
+    /// above (the `==` on the nine-facet tuple); flipping it to `!=` reports
+    /// the facet-bearing rules instead and goes silent on a facetless one.
     #[test]
     fn a_growth_rule_with_no_attack_facet_is_reported_unimplemented() {
         let header = read_act_header(GROWTH_HEADER).expect("header");
@@ -3196,9 +3242,25 @@ mod tests {
         let outz = growth_of(&mut reg, pz, &mut un);
         assert_eq!(outz.len(), 1);
         assert!(
-            un.iter().any(|u| u.rule == "Defensive Growth"),
-            "the defense-only facets are reported: {un:?}"
+            outz[0].defense_per_two == 1 && un.iter().all(|u| u.rule != "Defensive Growth"),
+            "the epoch-6 wave consumes Defensive Growth's defense facet: {un:?}"
         );
+    }
+
+    /// rules-wave3-growthmark — `growth_of` reads the epoch-6 wave's own
+    /// params off the REAL registry: Regenerative Strength's
+    /// `on_ignore_wound` + `attacks_per_marker` (alien_hives, gf).
+    #[test]
+    fn growth_of_carries_the_regenerative_strength_params() {
+        let header = read_act_header(GROWTH_RS_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("rs_carrier").expect("carrier");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out.len(), 1, "one Growth Markers entry: {out:?}");
+        assert_eq!(out[0].name, "Regenerative Strength");
+        assert!(out[0].on_ignore_wound);
+        assert_eq!(out[0].attacks_per_marker, 1);
     }
 
     /// Block C (Versatile Reach) end to end through the REAL registry: the
