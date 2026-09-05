@@ -810,10 +810,15 @@ fn rule_on_all_models(p: &Profile, rule: &str) -> bool {
 fn stealth_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
+    // WAVE 3 aura grants (epoch 6): a granted Stealth base joins the scan.
+    let aura = aura_grant_names(reg, p);
     let map = reg.rules_for(&p.game_system);
-    for r in &p.special_rules {
+    for r in p.special_rules.iter().chain(aura.iter()) {
         let name = base_rule_name(r);
-        if name.is_empty() || name == "Stealth" || !rule_on_all_models(p, &name) {
+        if name.is_empty()
+            || name == "Stealth"
+            || (!rule_on_all_models(p, &name) && !aura.iter().any(|g| *g == name))
+        {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &name) else {
@@ -932,9 +937,11 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
     let mut out = Vec::new();
     let mut raws: Vec<&String> = p.special_rules.iter().collect();
     raws.extend(p.item_grants.iter());
+    // WAVE 3 aura grants (epoch 6): a granted base rule walks like a carried one.
+    let aura = aura_grant_names(reg, p);
     let map = reg.rules_for(&p.game_system);
     let mut seen: Vec<String> = Vec::new();
-    for raw in raws {
+    for raw in raws.into_iter().chain(aura.iter()) {
         let n = base_rule_name(raw);
         if n.is_empty() || seen.iter().any(|s| *s == n) {
             continue;
@@ -965,6 +972,60 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
     out
 }
 
+/// Rules-must-log: aura grants print one line under NML_TRACE_RULES=1.
+fn trace_rule(arm: &str, rule: &str, detail: &str) {
+    if std::env::var("NML_TRACE_RULES").as_deref() == Ok("1") {
+        eprintln!("[{arm}] {rule} — {detail}");
+    }
+}
+
+/// WAVE 3 "Boost Aura" family (rules-wave3-aura3): every "X Boost Aura"
+/// entry the unit carries whose registry row is an `Aura` primitive with a
+/// `grants` param hands the base rule to this unit, gated
+/// `rule_on(reg.rules_epoch, EPOCH_6_TABLE_RULES)` — the record epoch rides
+/// the registry, the struct every walk already receives. The import-time
+/// expansion (opr_army_manager.gd / list_to_profile.py) STAYS, the fallback:
+/// a name the unit already carries is never granted again, replay byte-exact.
+/// `trace` logs each actual grant — the walks recompute silently.
+fn aura_grant_pairs(reg: &mut Registries, p: &Profile, trace: bool) -> Vec<(String, String)> {
+    if !rule_on(reg.rules_epoch, EPOCH_6_TABLE_RULES) {
+        return Vec::new();
+    }
+    let map = reg.rules_for(&p.game_system);
+    let mut out: Vec<(String, String)> = Vec::new();
+    for r in p.special_rules.iter().chain(p.item_grants.iter()) {
+        let n = base_rule_name(r);
+        let Some(e) = map.lookup(&p.faction_folder, &n) else {
+            continue;
+        };
+        if e.primitive.as_deref() != Some("Aura") {
+            continue;
+        }
+        let g = e.param_s("grants").to_string();
+        if g.is_empty()
+            || out.iter().any(|(_, granted)| granted == &g)
+            || has_special_rule(&p.special_rules, &g)
+            || p.item_grants.iter().any(|ig| base_rule_name(ig) == g)
+        {
+            continue;
+        }
+        if trace {
+            trace_rule(
+                "aura",
+                &n,
+                &format!("grants '{g}' to unit '{}' — the aura entry's own param", p.name),
+            );
+        }
+        out.push((n, g));
+    }
+    out
+}
+
+/// The granted base rule names alone — the walk extensions' view.
+fn aura_grant_names(reg: &mut Registries, p: &Profile) -> Vec<String> {
+    aura_grant_pairs(reg, p, false).into_iter().map(|(_, g)| g).collect()
+}
+
 /// The capture-time registry reads that do NOT live on the profile — the ones
 /// `BattleSim.capture` (battle_sim.gd:1329/1332) and
 /// `AiActRecorder._stamp_gate_reads` (act_recorder.gd:251-256) take off the LIVE
@@ -989,6 +1050,8 @@ pub struct CaptureReads {
 /// resolves to the Banner primitive.
 fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
     let mut best = 0;
+    // WAVE 3 aura grants (epoch 6): a granted Banner base folds the same way.
+    let aura = aura_grant_names(reg, p);
     let map = reg.rules_for(&p.game_system);
     if has_special_rule(rules, "Banner") && (map.empty || map.has_primitive(&p.faction_folder, "Banner")) {
         best = best.max(match map.lookup(&p.faction_folder, "Banner") {
@@ -997,7 +1060,7 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
         });
     }
     let mut seen: Vec<String> = Vec::new();
-    for raw in rules {
+    for raw in rules.iter().chain(aura.iter()) {
         let n = base_rule_name(raw);
         if n.is_empty() || n == "Banner" || seen.iter().any(|s| *s == n) {
             continue;
@@ -1165,11 +1228,13 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
     // and the two thresholds are the table's per-entry reads, the fold is the
     // running MIN. Gated whole by `rule_on` — see the doc above.
     if rule_on(rules_epoch, EPOCH_3_TABLE_RULES) {
+        // WAVE 3 aura grants (epoch 6): a granted Regeneration base folds in.
+        let aura = aura_grant_names(reg, p);
         let map = reg.rules_for(&p.game_system);
         let mut raws: Vec<&String> = p.special_rules.iter().collect();
         raws.extend(p.item_grants.iter());
         let mut seen: Vec<String> = Vec::new();
-        for raw in raws {
+        for raw in raws.into_iter().chain(aura.iter()) {
             let n = base_rule_name(raw);
             if n.is_empty()
                 || seen.iter().any(|s| *s == n)
@@ -1187,7 +1252,10 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
             if e.primitive.as_deref() != Some("Regeneration") {
                 continue;
             }
-            if e.param_b("all_models") && !rule_on_all_models(p, &n) {
+            if e.param_b("all_models")
+                && !rule_on_all_models(p, &n)
+                && !aura.iter().any(|g| *g == n)
+            {
                 continue;
             }
             let normal = e.param_i("ignore_target", 0);
@@ -2306,6 +2374,16 @@ fn bounding_of(reg: &mut Registries, p: &Profile) -> Option<f64> {
             });
         }
     }
+    // WAVE 3 aura grants (epoch 6): an aura-granted Bounding base is
+    // evidence only, never a simulation input (see `UnitStatic.bounding`).
+    for g in aura_grant_names(reg, p) {
+        let map = reg.rules_for(&p.game_system);
+        if let Some(e) = map.lookup(&p.faction_folder, &g) {
+            if e.primitive.as_deref() == Some("Bounding") {
+                return Some(e.param_f("place_d3_plus", 1.0));
+            }
+        }
+    }
     None
 }
 
@@ -2461,6 +2539,12 @@ impl UnitStatic {
         // and a Borrowed cow keeps every earlier-epoch replay clone-free.
         let aura_leg = expand_aura_channel(p, rules_epoch);
         let p: &Profile = &aura_leg;
+        // The Boost-Aura-family walks (`aura_grant_pairs`/`aura_grant_names`)
+        // gate off the registry they already receive; 0 outside a build keeps
+        // the parse/capture paths inert.
+        reg.rules_epoch = rules_epoch;
+        // "Rules must log": each actual aura grant emits its one line per build.
+        let _ = aura_grant_pairs(reg, p, true);
         let mut unimplemented: Vec<Unimplemented> = Vec::new();
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
         stamp(reg, p, &mut shoot, &mut unimplemented);
@@ -4953,6 +5037,193 @@ mod tests {
             quickfast_bands("scurry_boost_unit", 5),
             Some(Bands { advance: 2.0, rush: 2.0 }),
             "epoch 5 (the recorder): the boost arm is off"
+        );
+    }
+
+    // ------------------ wave 3: the "Boost Aura" family (aura3) -------------
+
+    /// One UNEXPANDED profile per PORTED family name (only the aura name,
+    /// never the base): every assertion below is the aura read alone.
+    const AURA3_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "changebound_aura":{"unit_id":"changebound_aura","name":"Changebound Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"change_disciples","special_rules":["Changebound Boost Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "warbound_aura":{"unit_id":"warbound_aura","name":"Warbound Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"war_disciples","special_rules":["Warbound Boost Aura","Warbound"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plaguebound_aura":{"unit_id":"plaguebound_aura","name":"Plaguebound Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"plague_disciples","special_rules":["Plaguebound Boost Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "ferocious_aura":{"unit_id":"ferocious_aura","name":"Ferocious Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"orc_marauders","special_rules":["Ferocious Boost Aura","Ferocious"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "devout_aura":{"unit_id":"devout_aura","name":"Devout Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Devout Boost Aura","Devout"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "scrapper_aura":{"unit_id":"scrapper_aura","name":"Scrapper Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"jackals","special_rules":["Scrapper Boost Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "infected_aura":{"unit_id":"infected_aura","name":"Infected Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"infected_colonies","special_rules":["Infected Boost Aura","Infected"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "rapid_blink_aura":{"unit_id":"rapid_blink_aura","name":"Rapid Blink Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"elven_jesters","special_rules":["Rapid Blink Boost Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "clan_warrior_aura":{"unit_id":"clan_warrior_aura","name":"Clan Warrior Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"eternal_dynasty","special_rules":["Clan Warrior Boost Aura","Clan Warrior"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "hive_bond_aura":{"unit_id":"hive_bond_aura","name":"Hive Bond Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":["Hive Bond Boost Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// `.0` = rules_epoch 6 (the wave's gate), `.1` = rules_epoch 5 —
+    /// literal integers, never `CURRENT_RULES_EPOCH`, so the test keeps
+    /// meaning what it says after the next epoch bump.
+    fn aura_edges(reg: &mut Registries, p: &Profile) -> (UnitStatic, UnitStatic) {
+        (UnitStatic::build_for(reg, p, 6), UnitStatic::build_for(reg, p, 5))
+    }
+
+    /// Changebound Boost Aura -> the Stealth alias: -1 to hit against this unit.
+    #[test]
+    fn changebound_boost_aura_grants_the_stealth_alias_at_epoch6() {
+        let header = read_act_header(AURA3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("changebound_aura").expect("changebound_aura");
+        let (on, off) = aura_edges(&mut reg, p);
+        assert_eq!(
+            on.ctx.stealth_alias_penalty, 1,
+            "the aura entry's grants param reaches the Stealth alias walk at epoch 6"
+        );
+        assert_eq!(
+            off.ctx.stealth_alias_penalty, 0,
+            "rules_epoch 5 predates the wave: the grant never fires"
+        );
+    }
+
+    /// Warbound Boost Aura -> the Shred Boost's widened save-fail window.
+    #[test]
+    fn warbound_boost_aura_grants_the_shred_window_at_epoch6() {
+        let header = read_act_header(AURA3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("warbound_aura").expect("warbound_aura");
+        let (on, off) = aura_edges(&mut reg, p);
+        assert_eq!(
+            (on.shoot[0].shred_low, on.shoot[0].shred_over_in), (2, 9.0),
+            "the granted Warbound Boost's extra_wound_save_low/over_in"
+        );
+        assert_eq!(
+            off.shoot[0].shred_low, 1,
+            "rules_epoch 5: no boost — 1 is the base shred window"
+        );
+    }
+
+    /// Plaguebound Boost Aura -> the Regeneration alias MIN fold (regen_targets).
+    #[test]
+    fn plaguebound_boost_aura_grants_the_regen_target_at_epoch6() {
+        let header = read_act_header(AURA3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("plaguebound_aura").expect("plaguebound_aura");
+        let (on, off) = aura_edges(&mut reg, p);
+        assert_eq!(
+            on.ctx.regen_target, 5,
+            "the granted Plaguebound Boost's ignore_target 5 folds into the MIN"
+        );
+        assert_eq!(off.ctx.regen_target, 0, "rules_epoch 5: no grant, no regen");
+    }
+
+    /// Ferocious Boost Aura -> the plain auto-hit Boost's 5-6 surge.
+    #[test]
+    fn ferocious_boost_aura_grants_surge_low_at_epoch6() {
+        let header = read_act_header(AURA3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("ferocious_aura").expect("ferocious_aura");
+        let (on, off) = aura_edges(&mut reg, p);
+        assert_eq!(
+            (on.shoot[0].surge, on.shoot[0].surge_low, on.shoot[0].surge_over_in),
+            (true, 5, 9.0),
+            "the granted Ferocious Boost's surge_low 5 past 9\""
+        );
+        assert_eq!(
+            (off.shoot[0].surge, off.shoot[0].surge_low), (true, 6),
+            "rules_epoch 5: base surge from \"Ferocious\" only, 6 = no boost"
+        );
+    }
+
+    /// Devout Boost Aura -> the same 5-6 surge shape in blessed_sisters.
+    #[test]
+    fn devout_boost_aura_grants_surge_low_at_epoch6() {
+        let header = read_act_header(AURA3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("devout_aura").expect("devout_aura");
+        let (on, off) = aura_edges(&mut reg, p);
+        assert_eq!(
+            (on.shoot[0].surge, on.shoot[0].surge_low, on.shoot[0].surge_over_in),
+            (true, 5, 9.0),
+            "the granted Devout Boost's surge_low 5 past 9\""
+        );
+        assert_eq!(
+            (off.shoot[0].surge, off.shoot[0].surge_low), (true, 6),
+            "rules_epoch 5: base surge from \"Devout\" only"
+        );
+    }
+
+    /// Scrapper Boost Aura -> the Bane ladder's reroll_save_sixes.
+    #[test]
+    fn scrapper_boost_aura_grants_bane_at_epoch6() {
+        let header = read_act_header(AURA3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("scrapper_aura").expect("scrapper_aura");
+        let (on, off) = aura_edges(&mut reg, p);
+        assert!(
+            on.shoot[0].bane,
+            "the granted Scrapper Boost's reroll_save_sixes joins the Bane ladder"
+        );
+        assert!(
+            !off.shoot[0].bane,
+            "rules_epoch 5: the aura is a dead name the ladder skips"
+        );
+    }
+
+    /// Infected Boost Aura -> the same widened shred window in infected_colonies.
+    #[test]
+    fn infected_boost_aura_grants_the_shred_window_at_epoch6() {
+        let header = read_act_header(AURA3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("infected_aura").expect("infected_aura");
+        let (on, off) = aura_edges(&mut reg, p);
+        assert_eq!(
+            (on.shoot[0].shred_low, on.shoot[0].shred_over_in), (2, 9.0),
+            "the granted Infected Boost's save_fail_max 2 past 9\""
+        );
+        assert_eq!(off.shoot[0].shred_low, 1, "rules_epoch 5: no boost");
+    }
+
+    /// Rapid Blink Boost Aura -> the Bounding evidence stamp (D3+0).
+    #[test]
+    fn rapid_blink_boost_aura_grants_bounding_evidence_at_epoch6() {
+        let header = read_act_header(AURA3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("rapid_blink_aura").expect("rapid_blink_aura");
+        let (on, off) = aura_edges(&mut reg, p);
+        assert_eq!(
+            on.bounding, Some(0.0),
+            "the granted Rapid Blink Boost's place_d3_plus 0 — Some() marks the read"
+        );
+        assert_eq!(off.bounding, None, "rules_epoch 5: no grant, no evidence");
+    }
+
+    /// Clan Warrior Boost Aura -> the extra-attack-die Boost's 5-6 surge.
+    #[test]
+    fn clan_warrior_boost_aura_grants_surge_attack_low_at_epoch6() {
+        let header = read_act_header(AURA3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("clan_warrior_aura").expect("clan_warrior_aura");
+        let (on, off) = aura_edges(&mut reg, p);
+        assert_eq!(
+            (on.shoot[0].surge_attack, on.shoot[0].surge_attack_low), (true, 5),
+            "the granted Clan Warrior Boost's surge_low 5 on the extra-attack form"
+        );
+        assert_eq!(
+            (off.shoot[0].surge_attack, off.shoot[0].surge_attack_low), (true, 6),
+            "rules_epoch 5: base extra-attack from \"Clan Warrior\" only"
+        );
+    }
+
+    /// Hive Bond Boost Aura -> the Banner alias's capture morale bonus.
+    #[test]
+    fn hive_bond_boost_aura_grants_capture_morale_at_epoch6() {
+        let header = read_act_header(AURA3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("hive_bond_aura").expect("hive_bond_aura");
+        let _on = UnitStatic::build_for(&mut reg, p, 6);
+        assert_eq!(
+            capture_reads(&mut reg, p).morale_bonus, 2,
+            "the granted Hive Bond Boost's morale_bonus 2 (the capture path rides the same build epoch)"
+        );
+        let _off = UnitStatic::build_for(&mut reg, p, 5);
+        assert_eq!(
+            capture_reads(&mut reg, p).morale_bonus, 0,
+            "rules_epoch 5: no grant, no morale bonus"
         );
     }
 }

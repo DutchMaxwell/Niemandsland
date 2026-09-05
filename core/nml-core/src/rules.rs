@@ -268,6 +268,11 @@ pub struct Registries {
     /// (system, faction) -> BOOK-ORDERED spell list (spells_registry.gd:13-14:
     /// the committed order IS rule data, never sort it).
     spells: HashMap<String, HashMap<String, Vec<Spell>>>,
+    /// The RECORD epoch of the statics build currently running on this
+    /// registry — `UnitStatic::build_for` writes it from its own argument
+    /// (a field, not a widened signature), so the epoch-gated walks gate the
+    /// wave-3 aura grants. 0 outside a build: parse/capture stay inert.
+    pub(crate) rules_epoch: u32,
 }
 
 impl Registries {

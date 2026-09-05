@@ -1124,9 +1124,13 @@
     }
    },
    "Changebound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Changebound Boost",
+     "scope": "unit"
+    }
    },
    "Dangerous Terrain Debuff": {
     "primitive": "Utility Buff",
@@ -1513,9 +1517,13 @@
     }
    },
    "Harassing Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Harassing Boost",
+     "scope": "unit"
+    }
    },
    "Lacerate": {
     "primitive": "Lacerate",
@@ -2565,9 +2573,13 @@
     }
    },
    "Sturdy Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Sturdy Boost",
+     "scope": "unit"
+    }
    },
    "Swift": {
     "primitive": "Swift",
@@ -3327,9 +3339,13 @@
     }
    },
    "Mischievous Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Mischievous Boost",
+     "scope": "unit"
+    }
    },
    "Piercing Fighter": {
     "primitive": "Piercing Assault",
@@ -3728,9 +3744,13 @@
     }
    },
    "Havocbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Havocbound Boost",
+     "scope": "unit"
+    }
    },
    "Increased Shooting Range Aura": {
     "primitive": "Royal Legion",
@@ -3933,9 +3953,13 @@
     }
    },
    "Havocbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Havocbound Boost",
+     "scope": "unit"
+    }
    },
    "Precision Fighter Buff": {
     "primitive": "Utility Buff",
@@ -4106,9 +4130,13 @@
     }
    },
    "Highborn Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Highborn Boost",
+     "scope": "unit"
+    }
    },
    "Piercing Tag": {
     "primitive": "Piercing Tag",
@@ -4721,9 +4749,13 @@
     }
    },
    "Lustbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Lustbound Boost",
+     "scope": "unit"
+    }
    },
    "Melee Evasion": {
     "primitive": "Melee Evasion",
@@ -5323,9 +5355,13 @@
     }
    },
    "Ferocious Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ferocious Boost",
+     "scope": "unit"
+    }
    },
    "Hit & Run": {
     "primitive": "Hit & Run",
@@ -5778,9 +5814,13 @@
     }
    },
    "Plaguebound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Plaguebound Boost",
+     "scope": "unit"
+    }
    },
    "Precision Fighter Buff": {
     "primitive": "Utility Buff",
@@ -6102,9 +6142,13 @@
     }
    },
    "Scurry Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scurry Boost",
+     "scope": "unit"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -6212,9 +6256,13 @@
     }
    },
    "Changebound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Changebound Boost",
+     "scope": "unit"
+    }
    },
    "Fearless Aura": {
     "primitive": null,
@@ -6367,9 +6415,13 @@
     }
    },
    "Lustbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Lustbound Boost",
+     "scope": "unit"
+    }
    },
    "Melee Evasion": {
     "primitive": "Melee Evasion",
@@ -6586,9 +6638,13 @@
     }
    },
    "Plaguebound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Plaguebound Boost",
+     "scope": "unit"
+    }
    },
    "Precision Attacks Buff": {
     "primitive": "Utility Buff",
@@ -6862,9 +6918,13 @@
     }
    },
    "Warbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Warbound Boost",
+     "scope": "unit"
+    }
    }
   },
   "saurians": {
@@ -8103,9 +8163,13 @@
     }
    },
    "Warbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Warbound Boost",
+     "scope": "unit"
+    }
    }
   },
   "wood_elves": {

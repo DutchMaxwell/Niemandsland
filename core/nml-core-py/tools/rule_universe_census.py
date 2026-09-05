@@ -188,6 +188,11 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # generic DATA-ALIAS loop for `morale_bonus`, feeding `CaptureReads` —
     # Courageous is its first alias.
     "Banner": frozenset({"morale_bonus"}),
+    # Wave 3 "Boost Aura" family (rules-wave3-aura3): unit.rs::aura_grant_pairs
+    # reads `grants` off every "X Boost Aura" entry (epoch-6 gated) and hands
+    # the base rule to the unit directly; the import expansion stays, the
+    # fallback. `scope` documents the reach; only `grants` is consumed.
+    "Aura": frozenset({"grants"}),
     # Regeneration-family DATA-ALIAS wave (2026-09-03, rules-wave-regen):
     # unit.rs::regen_targets folds every carried entry whose primitive is
     # "Regeneration" into Ctx.regen_target / Ctx.regen_target_spell — the
@@ -732,7 +737,13 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
             where = mention_of(name, mentions)
             if where:
                 note = (note + "; " if note else "") + f"named in Rust docs ({where})"
-        primitives = sorted(mech["primitives"])
+        # the HIDDEN copy, not the raw map: the label must reflect the RED
+        # knob's discard, or the "X Aura" pass-2 below still sees a mapped
+        # entry and inherits its base's status instead of the UNMAPPED cap.
+        label_prims = set(mech["primitives"])
+        if hide and hide in label_prims:
+            label_prims.discard(hide)
+        primitives = sorted(label_prims)
         primitive_label = (
             "|".join(primitives)
             if primitives
