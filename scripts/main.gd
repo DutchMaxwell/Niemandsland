@@ -6072,7 +6072,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			var td_pick: Dictionary = {}
 			var td_ctx: Dictionary = {}
 			if m_takedown:
-				td_pick = await _solo_takedown_pick(striker, defender, str(profile.get("name", "?")))
+				td_pick = await _solo_takedown_pick(striker, defender, str(profile.get("name", "?")), true)
 				if not td_pick.is_empty():
 					td_ctx = _solo_takedown_context(striker, td_pick, 0.0, true,
 						charging and charge_from_in > AiCombatMath.LONG_RANGE_IN)
@@ -6732,7 +6732,7 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 ## when the chain has no living model — the shot then resolves against the unit exactly as before, so a
 ## wiped target can never strand the loop. The pick is unconditional now: it is a targeting decision, not
 ## a wound-distribution one, so it happens even when the shot ends up saving everything.
-func _solo_takedown_pick(attacker: GameUnit, target: GameUnit, weapon_name: String) -> Dictionary:
+func _solo_takedown_pick(attacker: GameUnit, target: GameUnit, weapon_name: String, melee: bool = false) -> Dictionary:
 	var pick: Dictionary = SoloController.attacker_pick_target(target)
 	if pick.is_empty():
 		return {}
@@ -6748,8 +6748,9 @@ func _solo_takedown_pick(attacker: GameUnit, target: GameUnit, weapon_name: Stri
 	if m == null or not m.is_alive:
 		return {}
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "Takedown (%s): targets the %s in %s — resolved as a unit of [1]" % [
-			weapon_name, _solo_model_label(owner, idx), owner.get_name()], true)
+		var rule_name := AiEv.takedown_rule_for_profile(attacker, 0 if melee else 1)
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): targets the %s in %s — resolved as a unit of [1]" % [
+			rule_name if not rule_name.is_empty() else "Takedown", weapon_name, _solo_model_label(owner, idx), owner.get_name()], true)
 	return {"unit": owner, "index": idx, "model": m}
 
 
@@ -16747,13 +16748,15 @@ func _solo_takedown_bonus_groups(unit: GameUnit, melee: bool) -> Array:
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Takedown"):
 			var ed := e as Dictionary
 			var n := str(ed["name"])
+			var sp: Dictionary = ed.get("params", {})
+			if int(sp.get("extra_attack_q", 0)) <= 0:
+				continue
 			if melee != n.ends_with("Strike"):
 				continue
 			var flag := "takedown_bonus_used_%s" % n
 			if bool(member.unit_properties.get(flag, false)):
 				continue
 			member.unit_properties[flag] = true
-			var sp: Dictionary = ed.get("params", {})
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s makes one extra attack at Quality %d+ with AP(%d), Deadly(3), Takedown (once per game)" % [

@@ -1347,6 +1347,10 @@ func _all_weapon_rules(unit: GameUnit) -> Array:
 			rules = (w as Dictionary).get("special_rules", [])
 		for r in rules:
 			out.append(r)
+		var reach := int((w as Object).get("range_value")) if w is Object else int((w as Dictionary).get("range_value", 0))
+		var takedown_name := AiEv.takedown_rule_for_profile(unit, reach)
+		if not takedown_name.is_empty() and not out.has(takedown_name):
+			out.append(takedown_name)
 	return out
 
 
