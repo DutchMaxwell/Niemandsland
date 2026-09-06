@@ -415,6 +415,7 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 	if bool(params.get("charge_only", false)) and not is_charging:
 		return 0
 	var over_in: float = float(params.get("over_in", LONG_RANGE_IN))
+	var within_in: float = float(params.get("within_in", 0.0))
 	# Gate "ranged_over_or_charge" (Slayer: "shoots at enemies over 9\" away, or when it charges"):
 	# an ADDITIONAL situational gate on top of the target-property condition. dist_in < 0 = unknown
 	# (a caller without range context) — conservative: the ranged leg never fires blind.
@@ -439,6 +440,10 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 		"ranged_over":
 			# Range-gated, no target property (Piercing Hunter: "shoots at enemies over 9\": AP(+1)").
 			return bonus if (not melee and dist_in > over_in) else 0
+		"ranged_within":
+			# Point-Blank Piercing: "shooting enemies within 12\"" — the cap is INCLUSIVE and an
+			# unknown distance (< 0) stays shut, mirroring core/nml-core/src/combat.rs:389 exactly.
+			return bonus if (not melee and within_in > 0.0 and dist_in >= 0.0 and dist_in <= within_in) else 0
 		_:
 			return 0
 

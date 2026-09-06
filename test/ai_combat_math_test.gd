@@ -301,6 +301,20 @@ func test_conditional_ap_range_gates() -> void:
 	assert_int(AiCombatMath.conditional_ap_bonus(sl, 1, 4, false, 12.0, false)).is_equal(0)
 
 
+func test_point_blank_piercing_ranged_within_boundary() -> void:
+	# Point-Blank Piercing (gf): AP(+1) when shooting enemies within 12" — the cap is INCLUSIVE
+	# (12.0" itself counts, mirroring core/nml-core/src/combat.rs:389), an unknown distance (-1)
+	# stays shut, melee never fires, and an unstamped within_in (0.0) is inert.
+	var pbp := {"ap_bonus": 1, "condition": "ranged_within", "within_in": 12.0}
+	assert_int(AiCombatMath.conditional_ap_bonus(pbp, 1, 4, false, 8.0, false)).is_equal(1)
+	assert_int(AiCombatMath.conditional_ap_bonus(pbp, 1, 4, false, 12.0, false)).is_equal(1)
+	assert_int(AiCombatMath.conditional_ap_bonus(pbp, 1, 4, false, 12.5, false)).is_equal(0)
+	assert_int(AiCombatMath.conditional_ap_bonus(pbp, 1, 4, false, 14.0, false)).is_equal(0)
+	assert_int(AiCombatMath.conditional_ap_bonus(pbp, 1, 4, false, -1.0, false)).is_equal(0)
+	assert_int(AiCombatMath.conditional_ap_bonus(pbp, 1, 4, false, 12.0, true)).is_equal(0)
+	assert_int(AiCombatMath.conditional_ap_bonus({"ap_bonus": 1, "condition": "ranged_within"}, 1, 4, false, 6.0, false)).is_equal(0)
+
+
 func test_shrouded_reach_penalty_and_floor() -> void:
 	# Ranged Shrouding: -6" to a min of 6" — 24" -> 18", 9" -> 6" (floored), and a reach already at or
 	# below the floor is untouched (the rule shortens, it never lengthens a 6"-or-less weapon).
