@@ -100,8 +100,8 @@ in the core number.
 
 ## 4. The 21 UNCLEAR verdicts
 
-Reproduced from `~/nml-mission/analysis/wave4_unclear/INDEX.md` (outside this worktree, not read
-directly by this job — the verdicts below are the ones supplied in the brief).
+Reproduced from the private research index (kept outside this repository); the
+verdicts below are the ones supplied in the brief.
 
 **PORT (18):** Bloodthirsty Fighter, Coordinate, Crossing Attack, Delayed Action, Extended Buff
 Range, Fatigue Debuff, Mind Control, Musician, Ranged Slayer, Re-Deployment, Reanimation, Reckless
