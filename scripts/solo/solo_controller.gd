@@ -758,7 +758,7 @@ func activation_payoff(unit: GameUnit) -> float:
 			if not melee.is_empty():
 				var their_melee := AiEv.stamp_sergeant(filter_limited(enemy, AiShooting.melee_profiles(_unit_weapons(enemy))), enemy)
 				var them2 := AiEv.ctx_for(enemy, false, 0)
-				score = maxf(score, minf(AiEv.charge_score(melee, us, their_melee, them2), pool_cap) * denial)
+				score = maxf(score, minf(AiEv.charge_score(melee, us, their_melee, them2, gap), pool_cap) * denial)
 	var obj := _nearest_uncontrolled_objective(centre, unit)
 	if obj != NO_OBJECTIVE:
 		var od := MoveIntent.distance_inches(centre, obj)
@@ -1233,7 +1233,8 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 					float(td["d"]) + target_range_penalty_in(hu))
 			else:
 				td["ev"] = AiEv.charge_score(our_melee, us,
-					AiEv.stamp_sergeant(filter_limited(hu, AiShooting.melee_profiles(_unit_weapons(hu))), hu), them)
+					AiEv.stamp_sergeant(filter_limited(hu, AiShooting.melee_profiles(_unit_weapons(hu))), hu), them,
+					nearest_melee_gap_in(ai_unit, hu))
 		var diff := active_difficulty()
 		if tied.size() == 1:
 			pass   # single candidate: EV computed for the log, selection trivial
@@ -1547,7 +1548,7 @@ func melee_futile_against(unit: GameUnit, target_unit: GameUnit) -> bool:
 		return false
 	var us := AiEv.ctx_for(unit, false, 0)
 	var them := AiEv.ctx_for(target_unit, majority_in_cover(target_unit), counter_models_of(target_unit))
-	return AiEv.melee_ev(our_melee, us, them, true) < FUTILE_CHARGE_EV
+	return AiEv.melee_ev(our_melee, us, them, true, nearest_melee_gap_in(unit, target_unit)) < FUTILE_CHARGE_EV
 
 
 ## The nearest living enemy this unit's melee CAN plausibly hurt (same exclusions as
@@ -1809,7 +1810,7 @@ func _act(unit: GameUnit) -> Dictionary:
 			var them := AiEv.ctx_for(target_unit, majority_in_cover(target_unit), counter_models_of(target_unit))
 			var our_melee: Array = AiEv.stamp_sergeant(filter_limited(unit, AiShooting.melee_profiles(weapons)), unit)
 			var their_melee: Array = AiEv.stamp_sergeant(filter_limited(target_unit, AiShooting.melee_profiles(_unit_weapons(target_unit))), target_unit)
-			var charge_ev := AiEv.charge_score(our_melee, us, their_melee, them)
+			var charge_ev := AiEv.charge_score(our_melee, us, their_melee, them, nearest_melee_gap_in(unit, target_unit))
 			var boosted: Array = []
 			for pr in AiEv.stamp_sergeant(filter_limited(unit, AiShooting.profiles_in_range(weapons, 0.0)), unit):
 				var bp := (pr as Dictionary).duplicate()
@@ -2912,7 +2913,7 @@ func charge_dangerous_toll(unit: GameUnit, target_unit: GameUnit, from: Vector3,
 		filter_limited(unit, AiShooting.melee_profiles(_unit_weapons(unit))), unit)
 	var their_melee: Array = AiEv.stamp_sergeant(
 		filter_limited(target_unit, AiShooting.melee_profiles(_unit_weapons(target_unit))), target_unit)
-	out["cev"] = AiEv.charge_score(our_melee, us, their_melee, them)
+	out["cev"] = AiEv.charge_score(our_melee, us, their_melee, them, nearest_melee_gap_in(unit, target_unit))
 	out["refused"] = float(out["toll"]) >= float(out["cev"])
 	return out
 
