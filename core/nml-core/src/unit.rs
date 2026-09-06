@@ -1701,9 +1701,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // to hit"), its OWN Evasive-primitive entry, behind the FROZEN
     // `EPOCH_7_TABLE_RULES`. The base entry's conditional Stealth alias leg
     // stands down so the two never stack.
-    let empyrean_spirit_boost = rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
-        && rule_on_all_models(p, "Empyrean Spirit")
-        && rule_on_all_models(p, "Empyrean Spirit Boost");
+    let empyrean_spirit_boost = false; // RED: the port removed
     // The Boost that is the reason `evasive` is on, if any — the dice seams'
     // rules-must-log name ("" = none). Epoch 6 before epoch 7: a carrier can
     // only ever hold one of these two (different systems and factions).
@@ -3049,8 +3047,8 @@ fn bounding_dice_count(e: &crate::rules::Entry) -> i64 {
 /// here would desync from the table; this stamp is the core's own per-entry
 /// read, never a simulation input.
 fn bounding_boost_dice_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> i64 {
-    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-        return 0;
+    if true || !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return 0; // RED: the port removed
     }
     let map = reg.rules_for(&p.game_system);
     let Some(e) = map
@@ -3445,9 +3443,7 @@ impl UnitStatic {
         // coupling, "If this model has Bestial"), so it rides the same seam
         // instead of a second mechanism. An epoch-6 record reads the base
         // 6s-only window and replays byte-exact.
-        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Bestial Boost");
-        }
+        // RED: the port removed
         // Shred wave 3 (rules-wave3-shred3): the family's per-face wound
         // amount is now READ off the carried Shred-primitive entry
         // (`extra_wound_per_save_one`) instead of hard-coded — the wave-1
