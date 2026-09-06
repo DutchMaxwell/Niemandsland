@@ -260,6 +260,19 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			var fpd := fp as Dictionary
 			if facet_applies(sp, int(fpd.get("range", 0))):
 				fpd["shred"] = true
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Bane"):
+		var name := str((e as Dictionary).get("name", ""))
+		var sp: Dictionary = (e as Dictionary).get("params", {})
+		if name.begins_with("Bane") or name.ends_with("Aura") \
+				or not bool(sp.get("reroll_save_sixes", false)):
+			continue
+		for fp in profiles:
+			var fpd := fp as Dictionary
+			if not facet_applies(sp, int(fpd.get("range", 0))):
+				continue
+			var existing_bypass := bool(fpd.get("bane", false)) and bool(fpd.get("bypass_regen", true))
+			fpd["bane"] = true
+			fpd["bypass_regen"] = existing_bypass or bool(sp.get("bypass_regen", false))
 	# Coverage wave: cover-ignore facet (unit-level "Ignores Cover when shooting" and kin — the
 	# Indirect primitive's cover_only alias form): ranged profiles save against uncovered Defense.
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
@@ -437,7 +450,7 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# — Regeneration family (5+ Regeneration / 6+ Self-Repair ignores; Bane/Rending/UNSTOPPABLE bypass
 	#   it — main.gd:6772/6852, W-P1 parity fix: the unstoppable flag was parsed but never read here.
 	#   Destructive does NOT bypass, so its wounds are reduced here too) —
-	if bool(def_ctx.get("regeneration", false)) and not (bane or bool(profile.get("rending", false)) \
+	if bool(def_ctx.get("regeneration", false)) and not ((bane and bool(profile.get("bypass_regen", true))) or bool(profile.get("rending", false)) \
 			or bool(profile.get("unstoppable", false))):
 		unsaved *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
 	return unsaved
