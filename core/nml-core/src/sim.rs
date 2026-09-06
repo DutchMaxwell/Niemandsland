@@ -26,7 +26,7 @@ use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
 use crate::rng::GodotRng;
 use crate::rules::Spell;
-use crate::spell::{cast_success_chance_base, official_pick_order, spell_damage_ev_of, spell_ev_of};
+use crate::spell::{cast_success_chance, official_pick_order, spell_damage_ev_of, spell_ev_of};
 use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
@@ -2782,6 +2782,40 @@ fn apply_cast_effect(
     mods.rush += scale * m.rush_in;
 }
 
+/// SEAM 1 (Utility Buff, docs/plans/UTILITY_BUFF_SEAMS_2026-09-05.md §1) —
+/// the live `casting_mod` net over the caster's own ledger (self plus its
+/// host, `mods::sum`'s own chain — Casting Buff/Debuff are never
+/// `beneficiary: "attackers"`, so this never needs the wider grant chain).
+/// GATED `rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES)`: a record stamped
+/// below epoch 6 (every recorded corpus today — MEASURED 2026-09-06 on
+/// gen3_bank_v2 + gen4_bank, 120 000 games, rules_epoch 5 throughout: 0
+/// casts either way, `hero_attach` off in all of them) must keep seeing
+/// exactly zero, so `cast_phase` still folds in the flat
+/// `cast_success_chance_base()` behaviour below the gate. Rules-must-log:
+/// each contributing record names itself under `NML_TRACE_RULES`.
+fn casting_net_of(statics: &[UnitStatic], state: &State, ci: usize, seams: Seams) -> i64 {
+    if !rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+        return 0;
+    }
+    let mut net = 0;
+    for u in [Some(ci), state.attached_to[ci]].into_iter().flatten() {
+        for r in &state.buffs[u] {
+            if mods::matches(r, mods::Role::Casting, false) {
+                net += r.casting_mod;
+                trace_rule(
+                    "cast",
+                    "Casting modifier",
+                    &format!(
+                        "{:+} to {}'s cast target (casting_net now {net})",
+                        r.casting_mod, statics[state.roster.profile[ci]].name
+                    ),
+                );
+            }
+        }
+    }
+    net
+}
+
 /// `BattleSim._cast_phase` battle_sim.gd:856-894 — after the move, before ANY
 /// attack, for EVERY activation (which is the whole point of NML-1069: the old
 /// site rode inside the shoot branch, so a melee caster never cast).
@@ -2819,7 +2853,7 @@ fn cast_phase(
     // hero part of that unit, so "buff myself" is the unit, not the hero.
     let caster_x = state.profile(ci).caster_value;
     let weight = 1.0 / 3.0;
-    let p_success = cast_success_chance_base();
+    let p_success = cast_success_chance(casting_net_of(statics, state, ci, seams));
     let mut cost: Option<i64> = None;
     for d3 in 1..=3i64 {
         let Some((idx, ti)) = pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los) else {
@@ -8989,6 +9023,56 @@ mod cast_fold_tests {
         cast_phase(&statics, &mut on, 0, &los, fold(), None);
         assert!(on.casts[1] < st.casts[1], "the hero paid for its own spell: {:?}", on.casts);
         assert_eq!(on.casts[0], 0, "the host's empty pool is untouched");
+    }
+
+    /// SEAM 1 (Utility Buff §1) — Casting Buff/Debuff's `casting_mod` net
+    /// shifts the landed cast EV only at `EPOCH_6_TABLE_RULES` and above; a
+    /// record stamped below it (every recorded corpus today) must keep
+    /// seeing the flat chance, buff or no buff. Target is unit 3 (`x=9"`,
+    /// the nearer of the two enemies to `si=0` at `x=0"` — `best_spell_
+    /// target`'s own tie-break), given a deep wound pool so it never dies
+    /// mid-walk and the same target/spell gets picked all three D3 faces.
+    #[test]
+    fn casting_buff_buffs_the_cast_attempt_at_epoch_6_and_not_below() {
+        let (mut st, statics) = host_and_caster_hero();
+        st.wounds[3] = vec![1000];
+        st.wound_frac[3] = 0.0;
+        let los = vec![true; st.units()];
+        let epoch6 = Seams { hero_attach: true, cast_fold: true, rules_epoch: EPOCH_6_TABLE_RULES, ..Seams::default() };
+        let epoch5 = Seams { hero_attach: true, cast_fold: true, rules_epoch: EPOCH_6_TABLE_RULES - 1, ..Seams::default() };
+        let live_mod = |casting_mod: i64| mods::LiveMod {
+            hit_mod: 0, casting_mod, morale_mod: 0,
+            grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false,
+        };
+        let damage = |s: &State| (1000 - s.wounds[3][0]) as f64 + s.wound_frac[3];
+
+        let mut baseline6 = st.clone();
+        cast_phase(&statics, &mut baseline6, 0, &los, epoch6, None);
+
+        // Casting Buff: `casting_mod +1` (rules_mechanics_aof.json:8091).
+        let mut buffed6 = st.clone();
+        buffed6.buffs[1].push(live_mod(1));
+        cast_phase(&statics, &mut buffed6, 0, &los, epoch6, None);
+        assert!(damage(&buffed6) > damage(&baseline6),
+            "epoch 6: Casting Buff raises the landed EV ({} vs baseline {})", damage(&buffed6), damage(&baseline6));
+
+        // Casting Debuff: `casting_mod -1` (rules_mechanics_aof.json:958).
+        let mut debuffed6 = st.clone();
+        debuffed6.buffs[1].push(live_mod(-1));
+        cast_phase(&statics, &mut debuffed6, 0, &los, epoch6, None);
+        assert!(damage(&debuffed6) < damage(&baseline6),
+            "epoch 6: Casting Debuff lowers the landed EV ({} vs baseline {})", damage(&debuffed6), damage(&baseline6));
+
+        // RED-below-epoch-6: the same buffed ledger, epoch 5 (the Gen-3/
+        // Gen-4 fleet's stamped window) — must match the epoch-5 baseline
+        // exactly, the buff riding the ledger inert.
+        let mut baseline5 = st.clone();
+        cast_phase(&statics, &mut baseline5, 0, &los, epoch5, None);
+        let mut buffed5 = st.clone();
+        buffed5.buffs[1].push(live_mod(1));
+        cast_phase(&statics, &mut buffed5, 0, &los, epoch5, None);
+        assert_eq!(damage(&buffed5), damage(&baseline5), "epoch 5: the buff must ride the ledger inert");
+        assert_eq!(damage(&baseline5), damage(&baseline6), "below the gate the chance is exactly the flat one");
     }
 
     /// DEFECT_LEDGER #33 — Animate Spirit and 4 siblings grant a rule and

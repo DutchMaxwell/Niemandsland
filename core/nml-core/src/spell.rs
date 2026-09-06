@@ -22,6 +22,21 @@ pub fn cast_success_chance_base() -> f64 {
     success_chance(CAST_BASE_TARGET.clamp(2, 6))
 }
 
+/// SEAM 1 — the cast target with a live `casting_mod` net folded in, the
+/// table's own fold (`main.gd:3416`: `base_target = clampi(base_target -
+/// casting_mod, 2, 6)`): a positive net (a friendly Casting Buff,
+/// `casting_mod +1`) LOWERS the target and so RAISES the chance; a negative
+/// net (Casting Debuff, `casting_mod -1`, or an enemy's "-X to casting
+/// rolls") raises the target and lowers the chance. `casting_net == 0`
+/// reduces to exactly `cast_success_chance_base()` — same constant, same
+/// clamp. The caller (`sim::cast_phase`) is the one that gates this behind
+/// `EPOCH_6_TABLE_RULES`, passing 0 below it — this function does not know
+/// about epochs.
+#[inline]
+pub fn cast_success_chance(casting_net: i64) -> f64 {
+    success_chance((CAST_BASE_TARGET - casting_net).clamp(2, 6))
+}
+
 /// `AiSpell.spell_facets` ai_spell.gd:130-167 — the knobs a spell's weapon-rule
 /// token list grants. Unknown tokens are a conservative no-op.
 #[derive(Debug, Clone, Copy, Default)]
@@ -215,5 +230,18 @@ mod tests {
         // a 2+ leg ignores 5/6 of them, leaving 5/6.
         assert!((carrier_unsaved - 5.0 / 6.0).abs() < 1e-9, "2+ ignores 5/6: {carrier_unsaved}");
         assert!((six_unsaved - 25.0 / 6.0).abs() < 1e-9, "6+ ignores 1/6: {six_unsaved}");
+    }
+
+    /// SEAM 1 — the pure arithmetic: `casting_net == 0` is the plain base
+    /// target (4+, `success_chance(4)`); a +1 net lowers it to 3+
+    /// (`success_chance(3)`), a -1 net raises it to 5+
+    /// (`success_chance(5)`), and the [2,6] clamp holds at either end.
+    #[test]
+    fn cast_success_chance_folds_the_casting_net_with_the_tables_own_sign() {
+        assert_eq!(cast_success_chance(0), cast_success_chance_base());
+        assert_eq!(cast_success_chance(1), success_chance(3));
+        assert_eq!(cast_success_chance(-1), success_chance(5));
+        assert_eq!(cast_success_chance(10), success_chance(2), "clamped at 2+, never below");
+        assert_eq!(cast_success_chance(-10), success_chance(6), "clamped at 6+, never above");
     }
 }
