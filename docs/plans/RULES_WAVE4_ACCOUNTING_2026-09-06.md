@@ -14,10 +14,9 @@ recording rather than smoothing over:
 - The census requires `--books <dir>`, a private army-book snapshot (89 books, `gf/`/`aof/`) that
   the tool loads at runtime and that is deliberately **never committed to this repo** (see the
   tool's own `PRIVATE-SAFE` comment).
-- This job runs inside a worktree sandbox scoped to `/home/andreaskesberg/.cache/nml-w4-6/wt`. Any
-  attempt to locate or read outside that root is refused by the tool layer itself — confirmed by a
-  blocked `find /` and a blocked `printenv` — independent of anything this brief says about staying
-  inside `ROOT`.
+- This job runs inside a worktree sandbox scoped to this job's own `$ROOT`. Any attempt to locate or
+  read outside that root is refused by the tool layer itself — confirmed by a blocked `find /` and a
+  blocked `printenv` — independent of anything this brief says about staying inside `ROOT`.
 - Net result: the private book snapshot is unreachable from this job, with or without permission.
   The checkpoint table below is the orchestrator's numbers, carried over **as reported, not
   independently verified**. A future accounting job needs either the books snapshot mounted inside
