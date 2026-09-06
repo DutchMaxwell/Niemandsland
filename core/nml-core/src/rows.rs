@@ -58,7 +58,7 @@ pub const RULE_VOCAB_PATH: &str = "data/encoder_rule_vocab_v1.json";
 /// RULE_VOCAB_VERSION` battle_sim.gd:131. The file is SHARED by the table and
 /// this crate, so a build that reads a version it was not written for refuses
 /// to slot anything at all rather than move every board row in silence.
-pub const RULE_VOCAB_VERSION: i64 = 5;
+pub const RULE_VOCAB_VERSION: i64 = 6;
 
 /// NML-1134 — the version a corpus was recorded under when its act header
 /// carries no `rule_vocab_version` at all. Every corpus cut before the stamp
@@ -105,7 +105,10 @@ impl Cell {
 }
 
 /// The committed append-only rule vocabulary — `BattleSim._load_vocab`
-/// battle_sim.gd:86-102. Unit slots 0-199, weapon 200+, spell 300+.
+/// battle_sim.gd:86-102. Unit slots 0-199, weapon 200-299, spell 300+, unit2
+/// (v6) a fourth trailing band at `300 + len(spell)` — for names `unit` ran
+/// out of room for, not a second unit band with different semantics; the
+/// rule-pair lookup falls back to it after `unit` (see `rule_pairs`).
 #[derive(Debug, Default)]
 pub struct RowVocab {
     /// False when the file was unreadable OR carried a version this build does
@@ -121,6 +124,7 @@ pub struct RowVocab {
     unit: HashMap<String, i64>,
     weapon: HashMap<String, i64>,
     spell: HashMap<String, i64>,
+    unit2: HashMap<String, i64>,
 }
 
 impl RowVocab {
@@ -202,6 +206,11 @@ impl RowVocab {
             }
             m
         };
+        // unit2's base is a FRESH offset after spell, not a reserved range like
+        // weapon's — spell has never carried a fixed cap, so the band start is
+        // read off the committed (uncut) spell array length, the same for
+        // every `want`.
+        let spell_len = v.get("spell").and_then(|x| x.as_array()).map_or(0, |a| a.len()) as i64;
         RowVocab {
             loaded: true,
             version: want,
@@ -209,6 +218,7 @@ impl RowVocab {
             unit: list("unit", 0),
             weapon: list("weapon", 200),
             spell: list("spell", 300),
+            unit2: list("unit2", 300 + spell_len),
         }
     }
 
@@ -318,7 +328,7 @@ impl RowEncoder {
             if name.is_empty() {
                 continue;
             }
-            match self.vocab.unit.get(&name) {
+            match self.vocab.unit.get(&name).or_else(|| self.vocab.unit2.get(&name)) {
                 Some(&slot) => {
                     let v = if rating > 0 { rating } else { 1 };
                     let e = vals.entry(slot).or_insert(0);
@@ -944,6 +954,76 @@ mod tests {
         }
         assert_eq!(v.unit.len(), 200, "unit band unchanged");
         assert_eq!(v.spell.len(), 463, "no spell name appended");
+    }
+
+    /// unit2 (v6, encoder-slot decision memo option c) — a FOURTH band, at a
+    /// fresh base after spell (300 + 463 = 763), for the 226 names the census
+    /// found `core_ported` but slotless in every other band. This is the
+    /// PREFIX test: it hardcodes the exact slot of the first and last
+    /// appended name, so a base-offset bug (unit2 landing on top of spell,
+    /// say) fails here loudly instead of silently colliding two bands.
+    #[test]
+    fn every_appended_v6_unit2_name_sits_at_its_slot() {
+        let v = RowVocab::load(&repo_root());
+        assert!(v.loaded, "{:?}", v.error);
+        assert_eq!(v.unit.len(), 200, "unit band unchanged");
+        assert_eq!(v.weapon.len(), 25, "weapon band unchanged");
+        assert_eq!(v.spell.len(), 463, "spell band unchanged -- unit2's base sits right after it");
+        assert_eq!(v.unit2.len(), 226, "226 slotless core_ported names appended");
+        assert_eq!(v.unit2.get("+1 to Defense"), Some(&763), "300 + spell.len() 463 = 763");
+        assert_eq!(v.unit2.get("Wild Veil Boost Aura"), Some(&988), "the last appended name");
+        assert_eq!(v.unit2.get("Warding"), Some(&983));
+        let mut slots: Vec<_> = v.unit2.values().copied().collect();
+        slots.sort_unstable();
+        slots.dedup();
+        assert_eq!(slots.len(), v.unit2.len(), "no name shares a slot");
+    }
+
+    /// unit2 (v6) — the append does not move a SINGLE slot any earlier
+    /// version already handed out: every name the v5 reading carries sits on
+    /// the identical slot under v6, in all three old bands. A v5-recorded
+    /// corpus depends on this exactly the way the v3/v4 tests above depend on
+    /// their own predecessor's slots staying put.
+    #[test]
+    fn the_v6_append_does_not_move_any_v5_slot() {
+        let now = RowVocab::load(&repo_root());
+        let old = RowVocab::for_version(&repo_root(), 5);
+        assert!(old.loaded, "{:?}", old.error);
+        assert_eq!(old.version, 5);
+        assert_eq!(old.unit.len(), now.unit.len(), "no unit name appended");
+        assert_eq!(old.weapon.len(), now.weapon.len(), "no weapon name appended");
+        assert_eq!(old.spell.len(), now.spell.len(), "no spell name appended");
+        assert!(old.unit2.is_empty(), "unit2 did not exist at v5");
+        assert_eq!(now.unit2.len(), 226);
+        for (name, slot) in &old.unit {
+            assert_eq!(now.unit.get(name), Some(slot), "slot of {name} moved");
+        }
+        for (name, slot) in &old.weapon {
+            assert_eq!(now.weapon.get(name), Some(slot), "slot of {name} moved");
+        }
+        for (name, slot) in &old.spell {
+            assert_eq!(now.spell.get(name), Some(slot), "slot of {name} moved");
+        }
+    }
+
+    /// unit2 (v6) — `rule_pairs` falls back to the new band: a unit whose
+    /// only non-flag rule is a unit2-only name resolves it to that slot and
+    /// collects nothing as unknown, exactly like a plain unit-band name would.
+    #[test]
+    fn a_unit2_only_rule_resolves_through_the_fallback_not_unknown() {
+        let (state, statics) = state_with("Warding");
+        let mut enc = RowEncoder::new(&repo_root());
+        let rows = enc.board_rows(&state, &statics);
+        // Fearless (unit slot 27), Tough(3) (114), Warding (unit2 slot 983,
+        // unrated -> 1) and the rifle's AP(1) (200): four pairs, ascending.
+        assert_eq!(rows[0][20], Cell::I(4), "four rule pairs");
+        assert_eq!(&rows[0][21..], &[
+            Cell::I(27), Cell::I(1),
+            Cell::I(114), Cell::I(3),
+            Cell::I(200), Cell::I(1),
+            Cell::I(983), Cell::I(1),
+        ], "Warding lands at its unit2 slot, ascending with the rest");
+        assert!(enc.unknown.is_empty(), "{:?}", enc.unknown);
     }
 
     /// NML-1144b — the LEGACY reading: a corpus recorded under version 4
