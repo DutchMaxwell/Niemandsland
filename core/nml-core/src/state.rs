@@ -348,6 +348,24 @@ pub struct Marker {
     pub destroyed_seq: i64,
 }
 
+/// The table controller shares eight small-base sidestep attempts per round.
+/// The arena reuses that controller across both seats, so this is one ledger.
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+pub struct SidestepBudget {
+    pub round: i64,
+    pub used: i64,
+}
+
+impl SidestepBudget {
+    pub(crate) fn available(self, round: i64) -> bool {
+        self.round != round || self.used < 8
+    }
+    pub(crate) fn spend(&mut self, round: i64) {
+        self.used = if self.round == round { self.used.max(0) + 1 } else { 1 };
+        self.round = round;
+    }
+}
+
 /// The dynamic layer. `#[derive(Clone)]` reproduces `BattleSim.clone_state`
 /// battle_sim.gd:463-505 exactly: positions/wounds/radii/mods/objectives/
 /// markers_meta/destroy_seq are deep, roster + profiles + mods_base + los + the
@@ -355,6 +373,7 @@ pub struct Marker {
 /// GDScript clone drops it, so every rollout node reads it as absent.
 #[derive(Debug, Clone)]
 pub struct State {
+    pub sidestep_budget: SidestepBudget,
     pub roster: Rc<Roster>,
     pub profiles: Rc<Profiles>,
     pub round: i64,

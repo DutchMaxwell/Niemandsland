@@ -12,7 +12,7 @@
 //!
 //! Epoch-6 charges share the table's contact-aware final gate and budgeted snap.
 //! Ordinary moves also run stall escalation and the gate-collapse ladder.
-//! Remaining Stage A gap: the boxed/sidestep escape for ordinary loose moves.
+//! Epoch-6 ordinary moves also use the table's bounded boxed/sidestep escape.
 //! The prewarm cache and regiment tray slide are outside this loose-model port.
 //!
 //! WALLS. `plan_unit_step` routes around `TerrainOverlay.get_wall_segments_world()`
@@ -63,7 +63,9 @@ pub struct Mover {
 /// What the charge move did.
 #[derive(Clone, Debug)]
 pub struct Landing {
-    /// False for legacy/charge results and the pending boxed continuation.
+    /// The small-base boxed probe consumed one controller-wide attempt.
+    pub sidestep_spent: bool,
+    /// False for legacy and charge results.
     pub shorten_covered: bool,
     pub movers: Vec<Mover>,
     /// Per-model resting place, WORLD metres, in `movers` order.
@@ -87,6 +89,10 @@ pub struct Landing {
 }
 
 impl Landing {
+    pub(crate) fn spend_sidestep(&self, state: &mut State) {
+        if self.sidestep_spent { state.sidestep_budget.spend(state.round); }
+    }
+
     /// Post-charge snap result: None when the stage is not entered.
     pub fn snap_charge(&mut self, state: &State, target: usize, rules_epoch: u32) -> Option<f64> {
         if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) { return None; }
@@ -359,6 +365,7 @@ fn spacing_zones(
 /// here instead of in a sixteen-parameter signature. `plan_once` (below) reads
 /// none of this as charge-specific, so a future non-charge caller builds one of
 /// these too — only `allow_contact` tells `build_call` which move it is.
+#[derive(Clone)]
 struct Move<'a> {
     rules_epoch: u32,
     state: &'a State,
@@ -560,6 +567,23 @@ fn external_discs(&self) -> Vec<super::gate::Disc> {
     out
 }
 
+/// `_has_lateral_room`: an eight-point perimeter probe around the original anchor.
+/// Own models move together; attached units are absent from the obstacle list.
+fn has_lateral_room(&self, reach_in: f64) -> bool {
+    if self.traversal { return true; }
+    let anchor = geom::div(self.pos.iter().fold([0.0; 3], |a, p| geom::add(a, *p)), self.pos.len() as f64);
+    let probe = reach_in * 0.5 * IN2M;
+    let others: Vec<V2> = (0..self.state.units()).filter(|&u|
+        u != self.si && self.state.attached_to[u].is_none())
+        .flat_map(|u| self.state.positions[u].iter().map(|p| [p[0] as f32, p[2] as f32])).collect();
+    (0..8).any(|k| {
+        let angle = std::f64::consts::TAU * k as f64 / 8.0;
+        let at = [(anchor[0] as f64 + angle.cos() * probe) as f32,
+            (anchor[2] as f64 + angle.sin() * probe) as f32];
+        others.iter().all(|p| g2::distance_to(at, *p) >= self.own_r_m + 0.5 * IN2M)
+    })
+}
+
 /// `_execute_move` :4813-4855 from the pass-1 plan onward — the p.11 cap
 /// re-plan, the distance-truth trim, the p.12 crossing flags and the retrace.
 /// The table runs ONE body here for a charge and for a plain move; everything
@@ -602,6 +626,8 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         }
     }
     // :4838-4847 — distance truth: no model's polyline may exceed the budget.
+    let granted_reach = reach; // freeze the post-p.11/stall band before the forward ladder
+    let mut sidestep_spent = false;
     let mut budget_in = reach; // `mut`: the ladder below may shorten it (:5075).
     let mut arc_in = 0.0f64;
     let mut dangerous: Vec<bool> = Vec::with_capacity(trails.len());
@@ -701,6 +727,56 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             }
             (planned, trails, budget_in, call) = (best_pos, best_trails, best_reach, best_call);
         }
+        // The forward lane being jammed does not reduce the legal lateral band.
+        let big = self.own_r_m >= 1.5 * IN2M;
+        if !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
+            && granted_reach >= 2.0 && achieved_in(&starts, &planned) < 1.0
+            && (big || state.sidestep_budget.available(state.round))
+            && self.has_lateral_room(granted_reach)
+        {
+            sidestep_spent = !big; // the table spends the attempt even if no candidate wins
+            let anchor = geom::div(self.pos.iter().fold([0.0; 3], |a, p| geom::add(a, *p)), self.pos.len() as f64);
+            let to_goal = [self.goal[0] - anchor[0], self.goal[2] - anchor[2]];
+            if g2::length(to_goal) > 0.001 {
+                let compare = super::gate::GateFlags { coherent_chain_in: chain, ..flags };
+                let mut best_ach = achieved_in(&starts, &planned);
+                let mut best_coherent = super::gate::coherent_placement(&planned, &radii_in, compare);
+                let angles: &[f64] = if big { &[35.0, 70.0, 110.0, 145.0, 180.0] } else { &[55.0, 110.0] };
+                for mag in angles {
+                    for side in [1.0, -1.0] {
+                        let angle = (mag * side).to_radians() as f32;
+                        let (sin, cos) = angle.sin_cos();
+                        let rotated = [to_goal[0] * cos - to_goal[1] * sin,
+                            to_goal[0] * sin + to_goal[1] * cos];
+                        let trial = Self { goal: clamp_to_bounds([anchor[0] + rotated[0],
+                            self.goal[1], anchor[2] + rotated[1]], self.half), ..self.clone() };
+                        let (mut p4, mut t4, c4) = trial.plan_once(granted_reach, avoid_diff, avoid_dang);
+                        for (i, leg) in t4.iter_mut().enumerate() {
+                            if g2::polyline_length(leg) * IN2M > granted_reach * IN2M + OVERLAP_EPS_M {
+                                *leg = g2::trim_polyline(leg, granted_reach);
+                                if let Some(fin) = leg.last() { p4[i] = *fin; }
+                            }
+                        }
+                        let caps4 = self.gate_caps(&t4, radii_m, granted_reach);
+                        let (p4, _) = super::gate::finalize_placement(&p4, &radii_in, &ext,
+                            &caps4, t.board_in(), Some(t), flags);
+                        let ach = achieved_in(&starts, &p4);
+                        let coherent = super::gate::coherent_placement(&p4, &radii_in, compare);
+                        if (coherent && !best_coherent) || (coherent == best_coherent && ach > best_ach + 0.005 / IN2M) {
+                            (planned, trails, call, budget_in) = (p4, t4, c4, granted_reach);
+                            (best_ach, best_coherent) = (ach, coherent);
+                        }
+                        if !big && best_coherent && best_ach >= 1.0 { break; }
+                    }
+                    if (big && best_ach >= 2.0) || (!big && best_coherent && best_ach >= 1.0) { break; }
+                }
+            }
+        }
+    }
+    // Dangerous follows the CHOSEN route, before the final retrace, as on the table.
+    if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
+        dangerous = trails.iter().enumerate().map(|(i, leg)|
+            !self.flying && leg_crosses(leg, radii_m.get(i).copied().unwrap_or(0.0), t, terrain::is_dangerous)).collect();
     }
     for (i, leg) in trails.iter_mut().enumerate() {
         // :5068-5071 — and THEN the trail is retraced to the endpoint, which is
@@ -718,7 +794,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             [w[0], self.pos[i][1], w[2]]
         })
         .collect();
-    Landing { shorten_covered: !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES),
+    Landing { sidestep_spent, shorten_covered: !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES),
         movers: self.movers.clone(), end, budget_in, arc_in, dangerous, call }
 }
 }
@@ -825,7 +901,7 @@ pub fn charge_move(
 /// destination the caller already picked instead of at a target's near face.
 /// `None` = the port declines and the caller keeps its rigid translation.
 ///
-/// NOT here: the boxed/sidestep escape :4960 (S8). `_finalize_placement`
+/// The boxed/sidestep escape :4960 (S8), `_finalize_placement`
 /// :6371, the stall escalation :4820 (S7) and the gate-collapse ladder :4890
 /// (S6) are all entered below. Epoch-6 charges share final placement but
 /// retain the table's exclusion from stall, ladder and boxed retries.
@@ -998,16 +1074,6 @@ pub fn plain_move(
         allow_contact: false,
     };
     let land = mv.execute(band_in, avoid_diff, &radii_m);
-    // Stage boundary: the table may next enter boxed escape for a >=2-inch
-    // band ending under 1 inch. Until that continuation is ported, preserve
-    // the previous result and explicitly decline shortening coverage there.
-    let starts: Vec<V2> = mv.pos.iter().map(|p| t.to_inch(*p)).collect();
-    let ends: Vec<V2> = land.end.iter().map(|p| t.to_inch(*p)).collect();
-    if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) && band_in >= 2.0
-        && achieved_in(&starts, &ends) < 1.0
-    {
-        return plain_move(state, t, si, dest, band_in, hero_attach, fast_planner, guard);
-    }
     Some(land)
 }
 }
@@ -1122,6 +1188,7 @@ mod tests {
             second_wind_used: vec![false; n],
             second_wind_round: -1,
             second_wind_uses: 0,
+            sidestep_budget: Default::default(),
             limited_used: vec![Vec::new(); n],
             piercing_tag_used: vec![false; n],
             piercing_tag_markers: vec![0; n],
@@ -1216,6 +1283,7 @@ mod tests {
         let st = two_unit_state(vec![away, away, away], vec![[1.0, 0.0, 0.0]]);
         let movers: Vec<Mover> = (0..3).map(|model| Mover { unit: 0, model }).collect();
         let land = |dang: Vec<bool>| Landing {
+            sidestep_spent: false,
             shorten_covered: false,
             movers: movers.clone(),
             end: vec![away; 3],

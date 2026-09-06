@@ -973,6 +973,7 @@ impl Core {
                     .collect(),
             ),
         );
+        m.insert("sidestep_spent".into(), Value::Bool(l.sidestep_spent));
         m.insert("shorten_covered".into(), Value::Bool(l.shorten_covered));
         m.insert("budget_in".into(), Value::from(l.budget_in));
         m.insert("arc_in".into(), Value::from(l.arc_in));

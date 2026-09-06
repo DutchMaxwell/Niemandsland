@@ -196,6 +196,8 @@ fn default_probe_r() -> f64 {
 
 #[derive(Deserialize)]
 pub(crate) struct PlainState {
+    #[serde(default)]
+    sidestep_budget: crate::state::SidestepBudget,
     round: i64,
     rounds_total: i64,
     #[serde(default)]
@@ -696,6 +698,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         second_wind_used: vec![false; n],
         second_wind_round: -1,
         second_wind_uses: 0,
+        sidestep_budget: plain.sidestep_budget,
         limited_used: vec![Vec::new(); n],
         // Wave 3 — the Piercing-Tag ledger keys are NOT recorded corpora
         // inputs: `AiActRecorder._ledger_of` stamps neither key today, so a
@@ -1001,6 +1004,9 @@ pub fn plain_of(st: &State) -> serde_json::Value {
         units.insert(st.roster.keys[i].clone(), Value::Object(u));
     }
     let mut out = Map::new();
+    if st.sidestep_budget.used > 0 {
+        out.insert("sidestep_budget".into(), serde_json::to_value(st.sidestep_budget).unwrap());
+    }
     out.insert("round".into(), st.round.into());
     out.insert("rounds_total".into(), st.rounds_total.into());
     out.insert("scoring".into(), Value::String(st.scoring.to_string()));

@@ -1,0 +1,10 @@
+{
+  "limit": 8,
+  "cases": ["recorded-144", "recorded-077"],
+  "probes": [
+    {"used": 0, "new_round": false},
+    {"used": 7, "new_round": false},
+    {"used": 8, "new_round": false},
+    {"used": 8, "new_round": true}
+  ]
+}
