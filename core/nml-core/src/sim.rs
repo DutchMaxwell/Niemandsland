@@ -1201,6 +1201,7 @@ fn tray_hit_and_run(
                 )
             });
             if let Some(land) = land {
+                land.spend_sidestep(next);
                 for (i, m) in land.movers.iter().enumerate() {
                     next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
                 }
@@ -3457,6 +3458,7 @@ fn consolidate_after_melee(next: &mut State, cover: Cover, seams: Seams, si: usi
         true,
         crate::mv::FAST_PLANNER_GUARD,
     ) {
+        land.spend_sidestep(next);
         for (i, m) in land.movers.iter().enumerate() {
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
         }
@@ -3611,6 +3613,7 @@ fn resolve_with(
         }
     }
     if let Some(land) = landing.as_ref() {
+        land.spend_sidestep(&mut next);
         moved = true;
         for (i, m) in land.movers.iter().enumerate() {
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
@@ -4526,6 +4529,7 @@ mod tests {
             second_wind_used: vec![false; 4],
             second_wind_round: -1,
             second_wind_uses: 0,
+            sidestep_budget: Default::default(),
             limited_used: vec![Vec::new(); 4],
             piercing_tag_used: vec![false; 4],
             piercing_tag_markers: vec![0; 4],

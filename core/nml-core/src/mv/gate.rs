@@ -107,6 +107,8 @@ pub struct GateReport {
 /// anything (:6392-6393, handed down from `_finalize_placement`).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GateFlags<'a> {
+    /// Optional chain limit for the boxed candidate comparison; zero keeps the existing ladder.
+    pub coherent_chain_in: f64,
     /// Some selects the charge arm; target centres/radii use the table contact test.
     pub charge_targets: Option<&'a [(geom::V3, f64)]>,
     /// Charge coherency is 6 inches for skirmish systems, otherwise 9.
@@ -309,10 +311,11 @@ fn config_coherent(cfg: &[Disc], max_chain: f64) -> bool {
 /// Shape-aware wrapper for the collapse ladder's start/end predicates. The
 /// footprint is geometry and therefore has no rules-epoch switch.
 pub(crate) fn coherent_placement(planned: &[V2], radii_in: &[f64], flags: GateFlags<'_>) -> bool {
+    let chain = if flags.coherent_chain_in > 0.0 { flags.coherent_chain_in } else { super::MAX_CHAIN_IN };
     if flags.shapes.iter().all(|s| *s == BaseShape::Round) {
         // The original ladder's round-only float32 predicates stay unchanged.
         return planned.len() <= 1 || (super::components_r(planned, radii_in).len() == 1
-            && super::max_edge_spread_r(planned, radii_in) <= super::MAX_CHAIN_IN);
+            && super::max_edge_spread_r(planned, radii_in) <= chain);
     }
     let cfg: Vec<Disc> = planned.iter().enumerate().map(|(i, p)| Disc {
         c: [p[0] as f64, p[1] as f64],
@@ -320,7 +323,7 @@ pub(crate) fn coherent_placement(planned: &[V2], radii_in: &[f64], flags: GateFl
         shape: flags.shapes.get(i).copied().unwrap_or_default(),
         ..Default::default()
     }).collect();
-    config_coherent(&cfg, super::MAX_CHAIN_IN)
+    config_coherent(&cfg, chain)
 }
 
 /// `_cap_gate_disp` :6360 — truncate one gate correction to the model's

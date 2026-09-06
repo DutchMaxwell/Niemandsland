@@ -20,6 +20,12 @@ fn pinned_charge_fixture_crosses_the_godot_move_boundary() {
     run_pin("charge_gates.json", "charge_snap");
 }
 
+#[test]
+#[ignore = "requires Godot 4.6 and the installed GDExtension manifest"]
+fn pinned_boxed_fixture_crosses_the_godot_move_boundary() {
+    run_pin("boxed_escape.json", "boxed_escape");
+}
+
 fn run_pin(pin_file: &str, capability: &str) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap();
     let result = Command::new("python3")

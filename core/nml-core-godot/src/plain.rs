@@ -437,6 +437,10 @@ pub fn build_state(
         second_wind_used: vec![false; n],
         second_wind_round: -1,
         second_wind_uses: 0,
+        sidestep_budget: nml_core::state::SidestepBudget {
+            round: dint(&sub_dict(plain, "sidestep_budget"), "round", 0),
+            used: dint(&sub_dict(plain, "sidestep_budget"), "used", 0),
+        },
         limited_used: vec![Vec::new(); n],
         // Wave 3 — the Piercing-Tag ledger keys start empty/false: the Godot
         // host never writes them (the recorder stamps neither key yet).
@@ -574,6 +578,12 @@ fn mods_out(m: &Mods) -> VarDictionary {
 pub fn plain_of(cap: &Captured) -> VarDictionary {
     let st = &cap.state;
     let mut out = VarDictionary::new();
+    if st.sidestep_budget.used > 0 {
+        let mut budget = VarDictionary::new();
+        budget.set("round", st.sidestep_budget.round);
+        budget.set("used", st.sidestep_budget.used);
+        out.set("sidestep_budget", &budget);
+    }
     out.set("round", st.round);
     out.set("rounds_total", st.rounds_total);
     let mut units = VarDictionary::new();
