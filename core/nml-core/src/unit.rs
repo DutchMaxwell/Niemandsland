@@ -503,6 +503,13 @@ pub struct ShootProfile {
     pub ignores_cover_alias: bool,
     pub limited: bool,
     pub takedown: bool,
+    /// Wave 4 (rules-wave4-renames): the UNIT-level Takedown-primitive NAME
+    /// whose facet stamped `takedown` onto this profile ("Takedown when
+    /// Shooting", the ranged facet — `stamp_takedown_named`), the
+    /// rules-must-log subject at the volley fold. Empty on a weapon's own
+    /// Takedown tag and on every record below `EPOCH_7_TABLE_RULES`, so
+    /// pre-wave replays log nothing and stay byte-identical.
+    pub takedown_rule: String,
     pub rules: Vec<String>,
     // --- stamped facets (ai_ev.gd:203-274) ---
     pub versatile_attack: bool,
@@ -600,6 +607,7 @@ impl ShootProfile {
             && self.ignores_cover_alias == o.ignores_cover_alias
             && self.limited == o.limited
             && self.takedown == o.takedown
+            && self.takedown_rule == o.takedown_rule
             && self.rules == o.rules
     }
 }
@@ -2990,6 +2998,15 @@ fn stamp_conditional_ap(reg: &mut Registries, p: &Profile, shoot: &mut [ShootPro
 ///     fired by dice.rs's melee fold with the real `charging`) — no
 ///     arithmetic delta; the arm NAMES that stamped spec so the strike logs
 ///     it (rules-must-log). Naming, never a second spec: two would double.
+///   * "Piercing Warrior" (wave 4, rules-wave4-renames — gf/havoc_brothers,
+///     aof/havoc_dwarves, aof/havoc_warriors): Havocbound's text word for
+///     word ("When this model shoots at enemies over 9\" away, or when it
+///     charges, its weapons get AP(+1)"), and the same entry shape
+///     (`condition: ranged_over_or_charge`, inert on the shared match) —
+///     so the same two printed legs, on_charge plus ranged_over at the
+///     entry's own over_in, on both arrays (the epoch-6 Havocbound arm's
+///     mechanism, born at 7 for this spelling). No Boost couples to it:
+///     "Havocbound Boost" `upgrades` the name "Havocbound" exactly.
 /// The dice folds log the named forms; the unnamed generic specs stay
 /// silent, so every earlier epoch's replay is byte-identical.
 fn stamp_conditional_ap_named(
@@ -3055,7 +3072,65 @@ fn stamp_conditional_ap_named(
                     }
                 }
             }
+            "Piercing Warrior" => {
+                for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+                    sp.cond_ap.push(CondAp {
+                        ap_bonus: ap,
+                        condition: "on_charge".into(),
+                        name: n.clone(),
+                        ..Default::default()
+                    });
+                    sp.cond_ap.push(CondAp {
+                        ap_bonus: ap,
+                        condition: "ranged_over".into(),
+                        over_in: e.param_f("over_in", LONG_RANGE_IN),
+                        name: n.clone(),
+                        ..Default::default()
+                    });
+                }
+            }
             _ => {}
+        }
+    }
+}
+
+/// Wave 4 (rules-wave4-renames) — the UNIT-level "Takedown when Shooting"
+/// (aof/saurians: "This model gets Takedown when shooting"), the table's
+/// `AiEv.takedown_rule_for_profile` ai_ev.gd:210-235: a carried Takedown-
+/// primitive entry WITHOUT an `extra_attack_q` (the once-per-game "Takedown
+/// Shot"/"Takedown Strike" bonus groups are a different mechanism — dice.rs's
+/// own NOT-PORTED note) flags every profile its facet reaches, so
+/// `shooting_only` keeps the melee array plain. Read BY NAME, never the
+/// primitive whole (#489), off the unit's own rules plus its item grants —
+/// the table's `unit_rules_of_primitive` universe. The flag routes to the
+/// EXISTING Takedown consumers (the resolve-first sort and the `unported`
+/// mark for the unit-of-[1] pick this port does not reproduce, dice.rs), and
+/// the name lands in `takedown_rule` so the volley fold logs it
+/// (rules-must-log). Called by `build_for` behind the FROZEN
+/// `EPOCH_7_TABLE_RULES` only — a record below 7 keeps the flag off and
+/// replays byte-exact.
+fn stamp_takedown_named(
+    reg: &mut Registries,
+    p: &Profile,
+    shoot: &mut [ShootProfile],
+    melee: &mut [ShootProfile],
+    name: &str,
+) {
+    if !has_exact_rule(&p.special_rules, name) && !has_exact_rule(&p.item_grants, name) {
+        return;
+    }
+    let map = reg.rules_for(&p.game_system);
+    let Some(e) = map.lookup(&p.faction_folder, name) else {
+        return;
+    };
+    if e.primitive.as_deref() != Some("Takedown") || e.param_i("extra_attack_q", 0) > 0 {
+        return;
+    }
+    let (melee_only, shooting_only) = (e.param_b("melee_only"), e.param_b("shooting_only"));
+    for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+        if facet_applies(melee_only, shooting_only, sp.range) {
+            sp.takedown = true;
+            sp.takedown_rule = name.to_string();
         }
     }
 }
@@ -3559,6 +3634,14 @@ impl UnitStatic {
         // it and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             stamp_conditional_ap_named(reg, p, &mut shoot, &mut melee);
+        }
+        // Wave 4 (rules-wave4-renames), gated on the FROZEN
+        // `EPOCH_7_TABLE_RULES`: "Takedown when Shooting" is Takedown's
+        // ranged facet under a unit-level name — see `stamp_takedown_named`.
+        // A record below epoch 7 keeps every profile's flag as the weapon
+        // tag alone set it and replays byte-exact.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            stamp_takedown_named(reg, p, &mut shoot, &mut melee, "Takedown when Shooting");
         }
         // Boostbases wave (rules-wave4-boostbases), gated on the FROZEN
         // `EPOCH_6_TABLE_RULES`: "Mischievous Boost" is the Bane family's
