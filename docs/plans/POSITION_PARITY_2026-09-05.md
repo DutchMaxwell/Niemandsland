@@ -105,6 +105,28 @@ stage, or nonfinite coordinate fails the instrument instead of manufacturing a
 parity result. Declined positions retain diagnostic deltas but never contribute
 to accepted equality or the accepted half-inch count.
 
+## Accepted non-equal endpoints — localisation
+
+An accepted position whose endpoints are not bit-equal is a difference, not a
+decline; on the shipped ports there are 152 of 156. `diag=1` traces the
+reference table's own gate, overlap-push and shorten calls,
+`endpoint_localisation.json` pins the first call of each for the outliers, and
+`mv::gate::endpoint_localisation` replays those through the same core functions
+on the table's own input, so each difference is attributed to ONE stage.
+
+| Class | Cases | Largest | Measured cause |
+| --- | ---: | ---: | --- |
+| Coordinate-space residue | 147 | 0.0000082 in | The core gate holds centres as f64 in the planner's INCH frame, the table as float32 world metres: a few float32 units in the last place. |
+| Shorten-amplified residue | 2 | 0.0000948 in | The same residue crossing a bisection branch of the whole-unit shorten. |
+| `recorded-128` | 1 | 0.0941212 in | Overlap push: 2 of 21 models end 0.048 in apart on identical input, then the shorten amplifies it. Shorten and the other gate passes replay exactly. |
+| `recorded-162` | 1 | 0.1223899 in | Pre-gate. The table's gate corrects nothing and the core gate replays it to 0.0000005 in, so the movement solver plans one of eleven models differently at the difficult-terrain cap. |
+| `recorded-037` | 1 | 0.7382609 in | Collapse-ladder rung. The table keeps the full 16 in rung (achieved 1.244 in) and rejects the 0.75 rung (1.387 in) on the 0.005 m margin; the core accepts it and reports `budget_in` 12. Its gate replays to 0.0000031 in. |
+
+None is table nondeterminism — three identical runs share one SHA. The residue
+needs the gate to carry the table's float32 world-metre frame, a port of its
+own; each outlier is an amplifier acting on that residue and is pinned so a
+later port can only shrink it.
+
 ## Stage A formula audit
 
 | Formula | Existing Rust implementation | Remaining gap / measurement |
