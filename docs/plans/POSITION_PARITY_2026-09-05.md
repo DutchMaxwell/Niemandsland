@@ -96,7 +96,7 @@ call. MOVE boundary failures are parse errors or caught panics. The search's
 | charge_final_placement | 0 | PR 3 (#730) |
 | charge_snap | 0 | PR 3 (#730) |
 | skirmish_chain | 0 | PR 6 (#750) |
-| coherency_hold | 9 (wide sweep) | PR 7 |
+| coherency_hold | 9 (wide sweep) | PR 7 (#755) |
 | parse_error | 0 | no observed failure |
 | caught_panic | 0 | no observed failure |
 
