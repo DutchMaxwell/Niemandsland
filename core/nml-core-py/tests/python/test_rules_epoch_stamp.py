@@ -64,12 +64,11 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 6 (wave 3's gate, acts::EPOCH_6_TABLE_RULES):
-    # explicit, not just dynamic — a fresh game now stamps 6, not 5. A record
-    # already stamped 5 (the Gen-3 recording fleet's own window, launched
-    # before wave 3's rule code existed) must never be mistaken for a fresh
-    # one.
-    assert nml_core.CURRENT_RULES_EPOCH == 6
+    # core rules epoch 7 (wave 4's gate, acts::EPOCH_7_TABLE_RULES):
+    # explicit, not just dynamic — a fresh game now stamps 7, not 6. A record
+    # already stamped 6 (recorded while wave 3 was the live epoch, before any
+    # wave-4 rule code existed) must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 7
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)
