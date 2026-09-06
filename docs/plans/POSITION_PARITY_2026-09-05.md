@@ -89,7 +89,7 @@ call. MOVE boundary failures are parse errors or caught panics. The search's
 | charge_final_placement | 0 | PR 3 (#730) |
 | charge_snap | 0 | PR 3 (#730) |
 | skirmish_chain | 0 | PR 6 (#750) |
-| coherency_hold | 0 | no observed case |
+| coherency_hold | 9 (wide sweep) | PR 7 (#755) |
 | parse_error | 0 | no observed failure |
 | caught_panic | 0 | no observed failure |
 
@@ -142,7 +142,7 @@ later port can only shrink it.
 | Charge rest / overlap / coherency | Epoch-6 uncapped contact-aware terrain rest, shaped overlap, coherency repair and wall clamp | No observed decline remains |
 | Charge snap | Shared footprint query, engagement reach, remaining arc budget, contact slack and residual rejection | Epoch-6 execution and diagnostic use the same snap |
 | Boxed escape | Epoch-6 room probe, granted-band rotation search, coherent-first choice and round budget | Compared against the acting unit's own chain |
-| Coherency hold | Core prefers coherent ladder rungs | Table holds if every rung tears an initially coherent unit |
+| Coherency hold | Epoch-6 hold: torn at every rung from a coherent start returns zero band and the start positions | Closed; exposed only by the wide sweep |
 | Walls | Both planners route around walls; core non-charge gate clamps crossings | Compare final per-model endpoints and separate formation results |
 | Charge corridor | Table declaration probe routes, trims, finalizes and probes contact | Stage A covers execution geometry; declaration/target selection is outside the fixed-action input |
 | Numeric conversions | Core explicitly models several Vector3 float32 roundings | 178 accepted non-equal positions, attributed per stage below |

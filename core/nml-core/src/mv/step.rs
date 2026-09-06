@@ -728,6 +728,18 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
                     break;
                 }
             }
+            // :4986-4999 — TORN AT EVERY REACH from a coherent start: movement
+            // may never CREATE a tear, so `_execute_move` returns 0 and the unit
+            // holds where it stands, publishing no path. A unit that already
+            // started torn keeps its best-effort move instead of freezing.
+            // It returns BEFORE the boxed reposition, so no sidestep attempt is
+            // spent, and it publishes no path, so no model can take a dangerous
+            // test for a move it never made.
+            if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) && !best_coherent && start_coherent {
+                return Landing { sidestep_spent: false, shorten_covered: true, budget_in: 0.0,
+                    movers: self.movers.clone(), end: self.pos.clone(), arc_in: 0.0,
+                    dangerous: vec![false; self.movers.len()], call: best_call };
+            }
             (planned, trails, budget_in, call) = (best_pos, best_trails, best_reach, best_call);
         }
         // The forward lane being jammed does not reduce the legal lateral band.
