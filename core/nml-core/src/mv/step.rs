@@ -669,7 +669,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         } else { super::MAX_CHAIN_IN };
         let flags = super::gate::GateFlags { shapes: &shapes,
             charge_targets: self.allow_contact.then_some(targets.as_slice()),
-            charge_chain_in: chain, ..self.gate_flags() };
+            chain_in: chain, ..self.gate_flags() };
         let caps = self.gate_caps(&trails, radii_m, budget_in);
         let (fixed, _rep) = super::gate::finalize_placement(
             &planned,

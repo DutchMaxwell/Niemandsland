@@ -82,6 +82,10 @@ pub const BASE_CONTACT_IN: f64 = 2.0;
 pub const COHERENCY_IN: f64 = 1.0;
 /// `MovementPlanner.MAX_CHAIN_IN` — movement_planner.gd:29.
 pub const MAX_CHAIN_IN: f64 = 9.0;
+/// `CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES` — coherency_checker.gd:18.
+/// The movement PLANNER has no skirmish branch and keeps `MAX_CHAIN_IN`; only
+/// the controller's placement gate and its ladder read this one.
+pub const SKIRMISH_CHAIN_IN: f64 = 6.0;
 /// `MovementPlanner.LINK_IN` — movement_planner.gd:30.
 pub const LINK_IN: f64 = BASE_CONTACT_IN + COHERENCY_IN;
 /// `MovementPlanner.SPREAD_IN` — movement_planner.gd:31.
