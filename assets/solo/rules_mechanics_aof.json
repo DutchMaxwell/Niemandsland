@@ -2667,9 +2667,13 @@
     }
    },
    "Spawn": {
-    "primitive": null,
+    "primitive": "Spawn",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 6,
+     "once_per_game": true
+    }
    },
    "Speed Debuff": {
     "primitive": "Utility Buff",
@@ -6757,9 +6761,12 @@
     }
    },
    "Split": {
-    "primitive": null,
+    "primitive": "Split",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 6
+    }
    },
    "Storm of Change": {
     "primitive": "Storm Attack",
@@ -7006,9 +7013,13 @@
     }
    },
    "Spawn": {
-    "primitive": null,
+    "primitive": "Spawn",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 6,
+     "once_per_game": true
+    }
    },
    "Storm of Lust": {
     "primitive": "Storm Attack",
@@ -7640,9 +7651,13 @@
     }
    },
    "Spawn": {
-    "primitive": null,
+    "primitive": "Spawn",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 6,
+     "once_per_game": true
+    }
    },
    "Steadfast": {
     "primitive": "Steadfast",
@@ -7848,6 +7863,17 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Shadowborn Boost"
+    }
+   },
+   "Shrouded": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_penalty_in": 4,
+     "floor_in": 6,
+     "melee_move_penalty_in": 2,
+     "melee_floor_in": 6
     }
    },
    "Strider Aura": {
@@ -8319,9 +8345,13 @@
     }
    },
    "Spawn": {
-    "primitive": null,
+    "primitive": "Spawn",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 6,
+     "once_per_game": true
+    }
    },
    "Stealth Aura": {
     "primitive": "Stealth",
@@ -8979,10 +9009,25 @@
      "extra_wound_per_save_one": 1
     }
    },
+   "Shrouded": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_penalty_in": 4,
+     "floor_in": 6,
+     "melee_move_penalty_in": 2,
+     "melee_floor_in": 6
+    }
+   },
    "Spawn": {
-    "primitive": null,
+    "primitive": "Spawn",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 6,
+     "once_per_game": true
+    }
    },
    "Speed Debuff": {
     "primitive": "Utility Buff",
