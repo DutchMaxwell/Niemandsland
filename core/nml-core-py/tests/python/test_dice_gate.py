@@ -213,6 +213,38 @@ def test_pos_verdict_buckets_equal_moved_and_unknown():
     assert gate.pos_verdict(missing, state(here, here), ("a", "b"), 0.5) == ("pos_unknown", None)
 
 
+#: PR #694's real boundary case (alien_hives_2000_vs_battle_brothers_2000_s29,
+#: act 27, key 1787920478.13486_2616204241): the port's and the table's recorded
+#: centroids, verbatim, in meters. Both sides intend EXACTLY half an inch.
+POS_BOUNDARY_PORT = (0.013602465391159058, 0.0, 0.16910098493099213)
+POS_BOUNDARY_TABLE = (0.026299268007278442, 0.0, 0.16938594728708267)
+
+
+def test_pos_verdict_tolerates_the_half_inch_float_hair_at_the_boundary():
+    """PR #694's real boundary case: the port's subtract/square/sum/sqrt/divide
+    chain lands the gap one floating-point hair OVER the tolerance —
+    0.500000000336482" vs tol 0.5" — and the exact comparison flipped the bucket
+    to `pos_moved_1in` on one machine alone. With `POS_EPS_IN` the verdict is
+    `pos_equal` again."""
+    port = {"units": {k: {"positions": [list(POS_BOUNDARY_PORT)]} for k in ("a", "b")}}
+    table = {"units": {k: {"positions": [list(POS_BOUNDARY_TABLE)]} for k in ("a", "b")}}
+    bucket, gap = gate.pos_verdict(port, table, ("a", "b"), 0.5)
+    assert bucket == "pos_equal"
+    assert gap == pytest.approx(0.500000000336482)
+
+
+def test_pos_epsilon_is_not_a_silent_widening_of_the_tolerance():
+    """The other side of the boundary: the next-closest gap in the PR #694 run,
+    0.5005514", sits ~500k epsilon-widths past `tol_in` and must still read
+    `pos_moved_1in` — the epsilon absorbs arithmetic hair, never a real move."""
+    here = {"units": {k: {"positions": [[0.0, 0.0, 0.0]]} for k in ("a", "b")}}
+    moved = {"units": {k: {"positions": [[0.5005514 * gate.INCH_M, 0.0, 0.0]]}
+                       for k in ("a", "b")}}
+    bucket, gap = gate.pos_verdict(moved, here, ("a", "b"), 0.5)
+    assert bucket == "pos_moved_1in"
+    assert gap == pytest.approx(0.5005514)
+
+
 # ---------------------------------------------------------------- the gate ---
 
 
