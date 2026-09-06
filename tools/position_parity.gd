@@ -15,6 +15,19 @@ class TableProbe extends SoloController:
 	var stages: Dictionary = {}
 	var gate_calls := 0
 	var shorten_calls := 0
+	## Diagnostic-only trace of the reference gate's inputs and outputs. Off by
+	## default; `diag=1` turns it on so a single divergent case can be localized
+	## to the planner, the gate, or the whole-unit shorten without guessing.
+	var trace := false
+	var gate_trace: Array = []
+	var shorten_trace: Array = []
+	var overlap_trace: Array = []
+
+	static func _trace_points(points: Array) -> Array:
+		var out: Array = []
+		for p in points:
+			out.append([(p as Vector3).x, (p as Vector3).y, (p as Vector3).z])
+		return out
 
 	func _table_half_extents() -> Vector2:
 		return board_in * IN2M * 0.5
@@ -27,6 +40,10 @@ class TableProbe extends SoloController:
 			stages["charge_final_placement"] = true
 		if CoherencyChecker.is_skirmish_system(unit) and models.size() > 1:
 			stages["skirmish_chain"] = true
+		if trace:
+			gate_trace.append({"in": _trace_points(planned_world),
+				"start": _trace_points(start_world), "contact": allow_contact,
+				"caps": caps.duplicate()})
 		for other in army_manager.get_all_game_units():
 			if other.is_destroyed() or unit_in_reserve(other):
 				continue
@@ -34,13 +51,29 @@ class TableProbe extends SoloController:
 				var shape := SeparationChecker.shape_for_model(model)
 				if shape != null and shape.kind != SeparationChecker.BaseShape.Kind.ROUND:
 					stages["base_shapes"] = true
-		return super._finalize_placement(unit, models, start_world, planned_world, allow_contact, target, caps)
+		var out: Array = super._finalize_placement(unit, models, start_world, planned_world,
+			allow_contact, target, caps)
+		if trace:
+			gate_trace[-1]["out"] = _trace_points(out)
+		return out
+
+	func _resolve_overlaps_world(models: Array, cfg: Array, external_obstacles: Array,
+			planned_world: Array = [], disp_caps_m: Array = []) -> void:
+		var before: Array = _trace_points(cfg) if trace else []
+		super._resolve_overlaps_world(models, cfg, external_obstacles, planned_world, disp_caps_m)
+		if trace:
+			overlap_trace.append({"in": before, "out": _trace_points(cfg),
+				"obstacles": external_obstacles.size()})
 
 	func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array,
 			obstacles: Array, max_chain: float) -> Array:
 		shorten_calls += 1
 		stages["whole_unit_shorten"] = true
-		return super._shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain)
+		var out: Array = super._shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain)
+		if trace:
+			shorten_trace.append({"in": _trace_points(cfg), "chain_in": max_chain,
+				"out": _trace_points(out)})
+		return out
 
 	func _has_lateral_room(unit: GameUnit, models: Array, positions: Array, reach_in: float) -> bool:
 		var room := super._has_lateral_room(unit, models, positions, reach_in)
@@ -63,6 +96,7 @@ func _run() -> void:
 	var fixture_path := "res://test/fixtures/position_parity/cases.json"
 	var out_path := ""
 	var limit := 0
+	var diag := false
 	for arg in OS.get_cmdline_user_args():
 		var kv := arg.split("=", true, 1)
 		if kv.size() != 2:
@@ -71,6 +105,7 @@ func _run() -> void:
 			"fixtures": fixture_path = kv[1]
 			"out": out_path = kv[1]
 			"limit": limit = int(kv[1])
+			"diag": diag = kv[1] == "1"
 	if not ClassDB.class_exists("NmlCore") or OS.get_environment("NML_CORE") != "1" \
 			or OS.get_environment("NML_CORE_MOVE") != "1" or out_path.is_empty():
 		printerr("POSITION_PARITY_ERROR: extension, both MOVE flags, and out= are required")
@@ -86,7 +121,7 @@ func _run() -> void:
 	for fixture in parsed["cases"]:
 		if limit > 0 and rows.size() >= limit:
 			break
-		var row := _one(fixture, core)
+		var row := _one(fixture, core, diag)
 		if row.is_empty():
 			quit(2)
 			return
@@ -104,12 +139,13 @@ func _run() -> void:
 	quit(0)
 
 
-func _one(f: Dictionary, core: Object) -> Dictionary:
+func _one(f: Dictionary, core: Object, diag: bool = false) -> Dictionary:
 	var board := Node3D.new()
 	root.add_child(board)
 	var army := FixtureArmy.new()
 	board.add_child(army)
 	var solo := TableProbe.new()
+	solo.trace = diag
 	board.add_child(solo)
 	solo.setup(army, null, null)
 	solo.board_in = Vector2(f["board_in"][0], f["board_in"][1])
@@ -212,6 +248,9 @@ func _one(f: Dictionary, core: Object) -> Dictionary:
 		"table_budget_in":solo.last_move_budget_in,"rust_budget_in":rust.get("budget_in",0.0),
 		"table_charge_gap_in":charge_gap,"table_snap_in":snap_in,
 		"rust_arc_in":rust.get("arc_in",0.0),"rust_snap_in":rust.get("snap_in",null)}
+	if diag:
+		row["diag"] = {"gate": solo.gate_trace, "shorten": solo.shorten_trace,
+			"overlap": solo.overlap_trace}
 	if f.has("formation_call"):
 		# The ordinary seam marshals JSON-widened cells back to integers before
 		# its corpus reader runs. Reuse that normalization, then obtain live vectors.

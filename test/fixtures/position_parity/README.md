@@ -40,6 +40,13 @@ formation path as before. No signature or environment default changes.
 For every recorded case a separate formation comparison also calls the ordinary
 seam and `MovementPlanner.plan_unit_step` with the original captured input.
 
+Adding `diag=1` to the Godot command makes the reference probe record the
+table's own final-placement, overlap-push and whole-unit-shorten calls (input,
+output, caps) into each row's `diag`. It is off by default and changes no
+measured value; `endpoint_localisation.json` is a verbatim slice of it, replayed
+by `mv::gate::endpoint_localisation` to attribute an accepted endpoint
+difference to a single stage.
+
 ## Coverage and equality
 
 The extension advertises implemented Stage A capabilities. The harness compares

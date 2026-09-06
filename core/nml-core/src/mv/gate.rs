@@ -833,3 +833,126 @@ mod shorten_tests {
             "recorded-003: whole-unit shorten differs from table by {worst:.9}in");
     }
 }
+
+/// Where the Stage A endpoints that the harness ACCEPTS still differ from the
+/// table. Each pinned case replays the reference table's own first gate,
+/// overlap and whole-unit-shorten call through this module with the table's own
+/// input, so a difference can be attributed to one stage instead of to the
+/// accumulated result. The bounds are measurements, not targets: they may only
+/// ever shrink.
+#[cfg(test)]
+mod endpoint_localisation {
+    use super::*;
+    use serde_json::Value;
+
+    fn conv(points: &Value, board: [f64; 2]) -> Vec<[f64; 2]> {
+        points.as_array().unwrap().iter()
+            .map(|p| [p[0].as_f64().unwrap() / IN2M + board[0] * 0.5,
+                      p[2].as_f64().unwrap() / IN2M + board[1] * 0.5])
+            .collect()
+    }
+
+    fn worst(got: &[[f64; 2]], want: &[[f64; 2]]) -> f64 {
+        assert_eq!(got.len(), want.len(), "model count");
+        got.iter().zip(want).map(|(a, b)| dist(*a, *b)).fold(0.0, f64::max)
+    }
+
+    fn shape_of(unit: &Value) -> BaseShape {
+        if unit["base_shape"] == "oval" {
+            BaseShape::Oval { w_mm: unit["base_w_mm"].as_f64().unwrap(),
+                d_mm: unit["base_d_mm"].as_f64().unwrap(), yaw: 0.0 }
+        } else {
+            BaseShape::Round
+        }
+    }
+
+    #[test]
+    fn accepted_non_equal_endpoints_are_localised_to_one_stage() {
+        let fixtures: Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/cases.json")).unwrap();
+        let pins: Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/endpoint_localisation.json")).unwrap();
+        // id, gate bound, overlap bound, shorten bound — inches, measured.
+        let bounds = [
+            ("recorded-037", 0.0000031, 0.0000023, 1e-9),
+            ("recorded-128", 0.1245122, 0.0482231, 1e-9),
+            ("recorded-162", 0.0000005, 1e-9, 1e-9),
+        ];
+        for (id, gate_bound, overlap_bound, shorten_bound) in bounds {
+            let pin = &pins["cases"][id];
+            let case = fixtures["cases"].as_array().unwrap().iter()
+                .find(|c| c["id"] == id).unwrap();
+            let board = [case["board_in"][0].as_f64().unwrap(),
+                         case["board_in"][1].as_f64().unwrap()];
+            let units: Vec<&Value> = case["units"].as_array().unwrap().iter().collect();
+            let unit_of = |key: &Value| *units.iter().find(|u| u["id"] == *key).unwrap();
+            let actor = unit_of(&case["action"]["unit"]);
+            let mut movers: Vec<&Value> = vec![actor];
+            movers.extend(actor["attached"].as_array().unwrap().iter().map(unit_of));
+            let mut radii = Vec::new();
+            let mut shapes = Vec::new();
+            for m in &movers {
+                for r in m["radii"].as_array().unwrap() {
+                    radii.push(r.as_f64().unwrap() / IN2M);
+                    shapes.push(shape_of(m));
+                }
+            }
+            // `_external_obstacle_shapes` :6676 — every other on-table unit.
+            let mut ext = Vec::new();
+            for u in &units {
+                if movers.iter().any(|m| m["id"] == u["id"])
+                    || u["dormant"] == true || u["aircraft"] == true {
+                    continue;
+                }
+                for (i, p) in u["positions"].as_array().unwrap().iter().enumerate() {
+                    ext.push(Disc {
+                        c: [p[0].as_f64().unwrap() / IN2M + board[0] * 0.5,
+                            p[2].as_f64().unwrap() / IN2M + board[1] * 0.5],
+                        r: u["radii"][i].as_f64().unwrap() / IN2M,
+                        shape: shape_of(u),
+                    });
+                }
+            }
+            let rule = |name: &str| actor["rules"].as_array().unwrap().iter()
+                .any(|r| r.as_str().unwrap_or("").starts_with(name));
+            let terrain = Terrain::build(&serde_json::from_value(case["terrain"].clone()).unwrap());
+            let gate = &pin["gate"];
+            let planned_in = conv(&gate["in"], board);
+            let planned: Vec<V2> = planned_in.iter().map(|p| [p[0] as f32, p[1] as f32]).collect();
+            let start_world: Vec<geom::V3> = gate["start"].as_array().unwrap().iter()
+                .map(|p| [p[0].as_f64().unwrap() as f32, p[1].as_f64().unwrap() as f32,
+                          p[2].as_f64().unwrap() as f32]).collect();
+            let caps: Vec<f64> = gate["caps"].as_array().unwrap().iter()
+                .map(|c| c.as_f64().unwrap() / IN2M).collect();
+            let flags = GateFlags { start_world: &start_world, rules_epoch: EPOCH_6_TABLE_RULES,
+                shapes: &shapes, flying: rule("Flying"), traversal: rule("Traversal") };
+            let (got, _) = finalize_placement(&planned, &radii, &ext, &caps, board,
+                Some(&terrain), flags);
+            let got: Vec<[f64; 2]> = got.iter().map(|p| [p[0] as f64, p[1] as f64]).collect();
+            let delta = worst(&got, &conv(&gate["out"], board));
+            assert!(delta <= gate_bound, "{id}: whole gate differs by {delta:.9}in (bound {gate_bound})");
+            // The overlap push, replayed on the table's own post-projection config.
+            let mut cfg: Vec<Disc> = conv(&pin["overlap"]["in"], board).iter().enumerate()
+                .map(|(i, c)| Disc { c: *c, r: radii[i], shape: shapes[i] }).collect();
+            let mut rep = GateReport { disp_in: vec![0.0; radii.len()],
+                capped: vec![false; radii.len()], bounds_in: 0.0,
+                pulled: vec![false; radii.len()], coherent: true,
+                reverted: vec![false; radii.len()] };
+            overlap_pass(&mut cfg, &planned_in, &caps, true, &ext, &mut rep);
+            let pushed: Vec<[f64; 2]> = cfg.iter().map(|d| d.c).collect();
+            let delta = worst(&pushed, &conv(&pin["overlap"]["out"], board));
+            assert!(delta <= overlap_bound,
+                "{id}: overlap push differs by {delta:.9}in (bound {overlap_bound})");
+            // The whole-unit shorten, replayed on the table's own input.
+            if let Some(shorten) = pin["shorten"].as_object() {
+                let cfg: Vec<Disc> = conv(&shorten["in"], board).iter().enumerate()
+                    .map(|(i, c)| Disc { c: *c, r: radii[i], shape: shapes[i] }).collect();
+                let out = shorten_to_legal(&start_world, &cfg, &ext, board, Some(&terrain));
+                let out: Vec<[f64; 2]> = out.iter().map(|d| d.c).collect();
+                let delta = worst(&out, &conv(&shorten["out"], board));
+                assert!(delta <= shorten_bound,
+                    "{id}: whole-unit shorten differs by {delta:.9}in (bound {shorten_bound})");
+            }
+        }
+    }
+}
