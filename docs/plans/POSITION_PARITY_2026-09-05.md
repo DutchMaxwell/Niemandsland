@@ -88,7 +88,7 @@ call. MOVE boundary failures are parse errors or caught panics. The search's
 | accepted non-equal endpoints (difference, not decline) | 178 | localised below |
 | charge_final_placement | 0 | PR 3 (#730) |
 | charge_snap | 0 | PR 3 (#730) |
-| skirmish_chain | 1 | PR 7 (proposed) |
+| skirmish_chain | 0 | PR 6 (#750) |
 | coherency_hold | 0 | no observed case |
 | parse_error | 0 | no observed failure |
 | caught_panic | 0 | no observed failure |
@@ -133,7 +133,7 @@ later port can only shrink it.
 | Formula | Existing Rust implementation | Remaining gap / measurement |
 | --- | --- | --- |
 | Formation coherency | `mv/form.rs`: radius-aware link graph, penalties, projections | Raw seam comparison plus final-stage deltas |
-| System chain limit | Charge gate selects 6 inches for skirmish, 9 otherwise | Non-charge skirmish remains a gap |
+| System chain limit | Both gate arms and the caller's ladder select 6 inches for a skirmish system, 9 otherwise, at the table epoch | Closed |
 | Base geometry | `State::base_shape` feeds shared `geom::pair_gap_m` in gates, ladder and snap | All charge and non-charge footprints covered |
 | Large bases | Recorded radii and footprints feed final corrections | Bounding-radius terrain rest matches the table |
 | Difficult terrain | `mv/cap.rs` trims polylines; `mv/step.rs` replans at cap | Compare per-model trim, unit replan, and Flying/Strider exemptions |
@@ -141,7 +141,7 @@ later port can only shrink it.
 | Non-charge final placement | `mv/gate.rs` includes epoch-6 shortening and table straggler repair | No observed shortening decline remains |
 | Charge rest / overlap / coherency | Epoch-6 uncapped contact-aware terrain rest, shaped overlap, coherency repair and wall clamp | No observed decline remains |
 | Charge snap | Shared footprint query, engagement reach, remaining arc budget, contact slack and residual rejection | Epoch-6 execution and diagnostic use the same snap |
-| Boxed escape | Epoch-6 room probe, granted-band rotation search, coherent-first choice and round budget | One non-charge skirmish case still declines for its separate chain gap |
+| Boxed escape | Epoch-6 room probe, granted-band rotation search, coherent-first choice and round budget | Compared against the acting unit's own chain |
 | Coherency hold | Core prefers coherent ladder rungs | Table holds if every rung tears an initially coherent unit |
 | Walls | Both planners route around walls; core non-charge gate clamps crossings | Compare final per-model endpoints and separate formation results |
 | Charge corridor | Table declaration probe routes, trims, finalizes and probes contact | Stage A covers execution geometry; declaration/target selection is outside the fixed-action input |

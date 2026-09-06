@@ -104,6 +104,10 @@ pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionar
         if action.kind == 3 {
             caps.push(&GString::from("charge_final_placement").to_variant());
             caps.push(&GString::from("charge_snap").to_variant());
+        }
+        // Both arms now measure the acting unit's chain, so the capability is
+        // no longer charge-only.
+        if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
             caps.push(&GString::from("skirmish_chain").to_variant());
         }
         if action.kind != 3 && rule_on(rules_epoch, EPOCH_6_TABLE_RULES)

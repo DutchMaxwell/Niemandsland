@@ -664,12 +664,15 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         let shapes: Vec<_> = self.movers.iter().map(|m| state.base_shape(m.unit)).collect();
         let targets: Vec<_> = self.ci.into_iter().flat_map(|ci| movers_of(state, ci))
             .map(|m| (pos_of(state, m), radius_of(state, m))).collect();
-        let chain = if matches!(state.profile(self.si).game_system.as_str(), "gff" | "aofs") {
-            6.0
-        } else { super::MAX_CHAIN_IN };
+        // `CoherencyChecker.is_skirmish_system` :64 — ONE answer per acting
+        // unit, read by both gate arms (:6491, :6503) and by the ladder's own
+        // coherency predicates (:4846, :4941, :4966).
+        let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
+            && matches!(state.profile(self.si).game_system.as_str(), "gff" | "aofs")
+        { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
         let flags = super::gate::GateFlags { shapes: &shapes,
             charge_targets: self.allow_contact.then_some(targets.as_slice()),
-            chain_in: chain, ..self.gate_flags() };
+            chain_in: chain, coherent_chain_in: chain, ..self.gate_flags() };
         let caps = self.gate_caps(&trails, radii_m, budget_in);
         let (fixed, _rep) = super::gate::finalize_placement(
             &planned,
@@ -738,7 +741,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             let anchor = geom::div(self.pos.iter().fold([0.0; 3], |a, p| geom::add(a, *p)), self.pos.len() as f64);
             let to_goal = [self.goal[0] - anchor[0], self.goal[2] - anchor[2]];
             if g2::length(to_goal) > 0.001 {
-                let compare = super::gate::GateFlags { coherent_chain_in: chain, ..flags };
+                let compare = flags; // the ladder already carries this unit's chain
                 let mut best_ach = achieved_in(&starts, &planned);
                 let mut best_coherent = super::gate::coherent_placement(&planned, &radii_in, compare);
                 let angles: &[f64] = if big { &[35.0, 70.0, 110.0, 145.0, 180.0] } else { &[55.0, 110.0] };

@@ -17,8 +17,8 @@
 //! wall clamp. GateFlags carries the original world positions and replay epoch.
 //!
 //! Remaining gap:
-//!   * non-charge skirmish's 6" chain (`CoherencyChecker` :18); charge gates
-//!     select the table's system-specific chain through GateFlags.
+//! Both gate arms and the caller's ladder select the acting unit's chain
+//! (`CoherencyChecker` :18) through GateFlags, at the table-rules epoch.
 //!
 //! THE BOUNDED FIXED POINT. There is no outer `repeat` in the table: the
 //! iteration lives INSIDE the passes and each bound is its own constant —
@@ -603,7 +603,10 @@ pub fn finalize_placement(
         })
         .collect();
     let charge = flags.charge_targets.is_some() && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES);
-    let max_chain = if charge && flags.chain_in > 0.0 {
+    // :6491 and :6503 read the SAME `is_skirmish_system(unit)` answer. The
+    // plain arm used to fall back to 9 inches, which kept a placement the table
+    // shortens away for a skirmish unit.
+    let max_chain = if flags.chain_in > 0.0 && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES) {
         flags.chain_in
     } else { super::MAX_CHAIN_IN };
     let capped = !charge && caps_in.len() == n;
@@ -648,10 +651,10 @@ pub fn finalize_placement(
     }
     if !charge && n > 1 && flags.start_world.len() == n
         && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES)
-        && !config_legal(&cfg, external, terrain)
+        && !config_legal(&cfg, external, terrain, max_chain)
     {
-        cfg = shorten_to_legal(flags.start_world, &cfg, external, board_in, terrain);
-        rep.coherent = config_coherent(&cfg, super::MAX_CHAIN_IN);
+        cfg = shorten_to_legal(flags.start_world, &cfg, external, board_in, terrain, max_chain);
+        rep.coherent = config_coherent(&cfg, max_chain);
     }
     clamp_gate_walls(&mut cfg, &goal, external, flags, terrain, &mut rep);
     let out = (0..n)
@@ -710,8 +713,8 @@ mod shape_tests {
 }
 
 /// The table's three final predicates, shared by each bisection probe.
-fn config_legal(cfg: &[Disc], external: &[Disc], terrain: Option<&Terrain>) -> bool {
-    config_coherent(cfg, super::MAX_CHAIN_IN)
+fn config_legal(cfg: &[Disc], external: &[Disc], terrain: Option<&Terrain>, chain: f64) -> bool {
+    config_coherent(cfg, chain)
         && (0..cfg.len()).all(|i| {
             (i + 1..cfg.len()).all(|j| edge(&cfg[i], &cfg[j]) >= -RESOLVE_EPS_IN)
                 && external.iter().all(|o| edge(&cfg[i], o) >= -RESOLVE_EPS_IN)
@@ -739,15 +742,15 @@ fn blend_from_start(start_world: &[geom::V3], cfg: &[Disc], factor: f64,
 /// the original start. The table assumes t=0 is legal and retains that fallback
 /// even for an invalid start; it does not search a different direction here.
 fn shorten_to_legal(start_world: &[geom::V3], cfg: &[Disc], external: &[Disc],
-                    board_in: [f64; 2], terrain: Option<&Terrain>) -> Vec<Disc> {
-    if config_legal(cfg, external, terrain) {
+                    board_in: [f64; 2], terrain: Option<&Terrain>, chain: f64) -> Vec<Disc> {
+    if config_legal(cfg, external, terrain, chain) {
         return cfg.to_vec();
     }
     let (mut lo, mut hi) = (0.0, 1.0);
     for _ in 0..16 {
         let mid = (lo + hi) * 0.5;
         let candidate = blend_from_start(start_world, cfg, mid, board_in);
-        if config_legal(&candidate, external, terrain) { lo = mid; } else { hi = mid; }
+        if config_legal(&candidate, external, terrain, chain) { lo = mid; } else { hi = mid; }
     }
     blend_from_start(start_world, cfg, lo, board_in)
 }
@@ -822,7 +825,8 @@ mod shorten_tests {
             .map(|v| body(v, [n(&v["center"][0]), n(&v["center"][1])])).collect();
         let plain: terrain::PlainTerrain = serde_json::from_value(pin["terrain"].clone()).unwrap();
         let terrain = Terrain::build(&plain);
-        let got = shorten_to_legal(&start, &cfg, &external, board, Some(&terrain));
+        let got = shorten_to_legal(&start, &cfg, &external, board, Some(&terrain),
+            crate::mv::MAX_CHAIN_IN);
         let mut worst = 0.0f64;
         for (i, d) in got.iter().enumerate() {
             let delta = [
@@ -950,7 +954,8 @@ mod endpoint_localisation {
             if let Some(shorten) = pin["shorten"].as_object() {
                 let cfg: Vec<Disc> = conv(&shorten["in"], board).iter().enumerate()
                     .map(|(i, c)| Disc { c: *c, r: radii[i], shape: shapes[i] }).collect();
-                let out = shorten_to_legal(&start_world, &cfg, &ext, board, Some(&terrain));
+                let out = shorten_to_legal(&start_world, &cfg, &ext, board, Some(&terrain),
+                    crate::mv::MAX_CHAIN_IN);
                 let out: Vec<[f64; 2]> = out.iter().map(|d| d.c).collect();
                 let delta = worst(&out, &conv(&shorten["out"], board));
                 assert!(delta <= shorten_bound,
