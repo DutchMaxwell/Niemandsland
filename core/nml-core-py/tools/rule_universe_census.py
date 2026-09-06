@@ -48,8 +48,8 @@ distinct rule name against the four layers that must know it:
      - a live rule GRANT's name does not need hand-listing, it is read off
      the `*::granted(state, i, "X")` call sites (consumed_grant_names).
      Skipping this reopens #489's bug for the next primitive.
-  4. encoder   - a slot in data/encoder_rule_vocab_v1.json (v5, unit band or
-                 weapon band).
+  4. encoder   - a slot in data/encoder_rule_vocab_v1.json (v6, unit band,
+                 weapon band or unit2 - the fourth trailing band).
 
 PRIVATE-SAFE: the books are read at runtime from wherever `--books` points;
 nothing about their content is baked into this file. Outputs carry rule names
@@ -530,10 +530,13 @@ def load_vocab(repo: Path) -> dict:
     try:
         data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
-        return {"unit": set(), "weapon": set()}
+        return {"unit": set(), "weapon": set(), "unit2": set()}
     return {
         "unit": set(data.get("unit") or []),
         "weapon": set(data.get("weapon") or []),
+        # v6: a fourth, trailing band for names `unit` had no room for - same
+        # semantics as `unit`, checked after it (rows.rs's rule_pairs fallback).
+        "unit2": set(data.get("unit2") or []),
     }
 
 
@@ -886,7 +889,9 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
         )
         band = (
             "unit" if name in vocab["unit"]
-            else ("weapon" if name in vocab["weapon"] else "")
+            else "weapon" if name in vocab["weapon"]
+            else "unit2" if name in vocab["unit2"]
+            else ""
         )
         return {
             "primitive": primitive_label,
@@ -1494,7 +1499,8 @@ def markdown_report(res: dict) -> str:
         " whose base is PORTED is live even though its own entry consumes"
         " nothing - counted on the separate aura-granted line, never folded"
         " into core-ported.",
-        "- Encoder: a slot in `data/encoder_rule_vocab_v1.json` (unit or weapon band).",
+        "- Encoder: a slot in `data/encoder_rule_vocab_v1.json` (unit, weapon or"
+        " unit2 band).",
         f"- N/A: census hygiene, not a porting target ({', '.join(sorted(NA_NAMES))}) -"
         f" excluded from the core-ported ratio's denominator, never counted"
         f" MISSING or as a faction offender.",
