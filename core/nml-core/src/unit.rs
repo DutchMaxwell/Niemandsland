@@ -388,6 +388,12 @@ pub struct CondAp {
     /// The extra situational gate (`"ranged_over_or_charge"`), "" for none.
     pub gate: String,
     pub over_in: f64,
+    /// Wave 4 (rules-wave4-condap): the `ranged_within` cap — "Point-Blank
+    /// Piercing"'s "when shooting enemies within 12\"". 0.0 on every spec the
+    /// generic pass stamps (`cond_ap_of` never reads it), so the registry's own
+    /// `ranged_within` spelling stays inert there; only `build_for`'s epoch-7
+    /// named arm sets it, and combat.rs's arm fires on nothing else.
+    pub within_in: f64,
     pub condition: String,
     pub threshold: i64,
     /// The rule NAME, for the rules-must-log line at the dice folds
@@ -2091,6 +2097,18 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
                 u_bane = true;
             }
         } else if rs.starts_with("Rending") {
+            // Wave 4 (rules-wave4-condap), gated on the FROZEN
+            // `EPOCH_7_TABLE_RULES`: "Rending in Melee" leaves the flat
+            // prefix read for the facet read below (its own entry's
+            // `melee_only`), and a striker's own "… Aura" spelling never
+            // fires by itself (main.gd:6540's rule, the Bane branch above) —
+            // the Aura-Channel fold has already granted its base. Below
+            // epoch 7 the prefix read stays: both arrays rend, byte-exact.
+            if rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
+                && (rs.ends_with("Aura") || base_rule_name(rs) == "Rending in Melee")
+            {
+                continue;
+            }
             u_rending = true;
         } else if rs.starts_with("Unstoppable") && !rs.contains(" in ") && !rs.contains(" when ") {
             u_unstop = true;
@@ -2138,11 +2156,30 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             u_bane |= !hit.melee_only && !hit.shooting_only;
         }
     }
+    // Wave 4 (rules-wave4-condap): "Rending in Melee" ("This model gets
+    // Rending in melee") read BY NAME off its own Rending-primitive entry —
+    // the facet pair (`melee_only`/`shooting_only`) is the live read, the
+    // table's ai_ev.gd:292-303 stamp re-stated; never the primitive whole
+    // (#489). Gated on the FROZEN `EPOCH_7_TABLE_RULES`, never the literal.
+    let mut melee_rending = false;
+    let mut shooting_rending = false;
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        for hit in rules_of_primitive(reg, p, "Rending") {
+            if hit.name != "Rending in Melee" {
+                continue;
+            }
+            melee_rending |= hit.melee_only;
+            shooting_rending |= hit.shooting_only;
+            u_rending |= !hit.melee_only && !hit.shooting_only;
+        }
+    }
     for sp in shoot.iter_mut() {
         sp.bane |= u_bane
             || (melee_bane && sp.range <= 0)
             || (shooting_bane && sp.range > 0);
-        sp.rending |= u_rending;
+        sp.rending |= u_rending
+            || (melee_rending && sp.range <= 0)
+            || (shooting_rending && sp.range > 0);
         sp.unstoppable_ev = sp.unstoppable || u_unstop;
     }
 }
@@ -2935,6 +2972,94 @@ fn stamp_conditional_ap(reg: &mut Registries, p: &Profile, shoot: &mut [ShootPro
     }
 }
 
+/// Wave 4 (rules-wave4-condap) — the conditional-AP family's three remaining
+/// printed shapes, read off the registry BY NAME (the census's own-token
+/// evidence; never the primitive whole, #489). Called by `build_for` behind
+/// the FROZEN `EPOCH_7_TABLE_RULES` only, AFTER the generic pass:
+///   * "Piercing Fighter" ("This model gets AP(+1) in melee"): the entry's
+///     `in_melee` spelling is inert on the shared match — the generic pass
+///     has stamped it unnamed at every epoch, so the match must keep
+///     answering 0 — and the named arm states the always leg on the MELEE
+///     array alone (the Havocbound Boost mechanism, facet-scoped);
+///   * "Point-Blank Piercing" ("AP(+1) when shooting enemies within 12\""):
+///     the entry's own `within_in` cap on the SHOOT array — combat.rs's
+///     `ranged_within` arm reads it, and the generic pass stamps 0.0;
+///   * "Melee Slayer" ("When this model charges, its weapons get AP(+2) if
+///     most models in the target have Tough(3) or higher") is live at every
+///     epoch off the generic pass (`cond_ap_of`'s charge_only + vs_tough_ge,
+///     fired by dice.rs's melee fold with the real `charging`) — no
+///     arithmetic delta; the arm NAMES that stamped spec so the strike logs
+///     it (rules-must-log). Naming, never a second spec: two would double.
+/// The dice folds log the named forms; the unnamed generic specs stay
+/// silent, so every earlier epoch's replay is byte-identical.
+fn stamp_conditional_ap_named(
+    reg: &mut Registries,
+    p: &Profile,
+    shoot: &mut [ShootProfile],
+    melee: &mut [ShootProfile],
+) {
+    let map = reg.rules_for(&p.game_system);
+    let mut seen: Vec<String> = Vec::new();
+    for raw in &p.special_rules {
+        let n = base_rule_name(raw);
+        if n.is_empty() || seen.iter().any(|s| *s == n) {
+            continue;
+        }
+        seen.push(n.clone());
+        let Some(e) = map.lookup(&p.faction_folder, &n) else {
+            continue;
+        };
+        let ap = e.param_i("ap_bonus", 0);
+        if ap <= 0 {
+            continue;
+        }
+        match n.as_str() {
+            "Piercing Fighter" => {
+                for sp in melee.iter_mut() {
+                    sp.cond_ap.push(CondAp {
+                        ap_bonus: ap,
+                        condition: "always".into(),
+                        name: n.clone(),
+                        ..Default::default()
+                    });
+                }
+            }
+            "Point-Blank Piercing" => {
+                let within_in = e.param_f("within_in", 0.0);
+                if within_in <= 0.0 {
+                    continue;
+                }
+                for sp in shoot.iter_mut() {
+                    sp.cond_ap.push(CondAp {
+                        ap_bonus: ap,
+                        condition: "ranged_within".into(),
+                        within_in,
+                        name: n.clone(),
+                        ..Default::default()
+                    });
+                }
+            }
+            "Melee Slayer" => {
+                let threshold = e.param_i("threshold", 0);
+                for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+                    for c in sp.cond_ap.iter_mut() {
+                        if c.name.is_empty()
+                            && c.charge_only
+                            && c.gate.is_empty()
+                            && c.condition == "vs_tough_ge"
+                            && c.ap_bonus == ap
+                            && c.threshold == threshold
+                        {
+                            c.name = n.clone();
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// `AiShooting.profiles_in_range` ai_shooting.gd:14-26 — the merged RANGED set,
 /// UNSTAMPED (the `AiEv.stamp_sergeant` pass belongs to `BattleSim._profiles_of`,
 /// not to this function). `UnitStatic::build` calls it at 0.0 and stamps after;
@@ -3353,8 +3478,8 @@ impl UnitStatic {
         // generic pass's unnamed specs keep every earlier epoch's replay
         // byte-identical. Wave 4 (rules-wave4-boostbases) ports "Havocbound
         // Boost" onto the same mechanism (the always leg + the `upgrades`
-        // coupling, above); Point-Blank Piercing (a `within_in` cap) stays
-        // listed needs-primitive, nothing invented (#489 discipline).
+        // coupling, above); Point-Blank Piercing (a `within_in` cap) is
+        // wave 4's condap arm below (epoch 7), not this block.
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
             let mut live: Vec<CondAp> = Vec::new();
             let map = reg.rules_for(&p.game_system);
@@ -3425,6 +3550,15 @@ impl UnitStatic {
                     sp.cond_ap.extend(live.iter().cloned());
                 }
             }
+        }
+        // Wave 4 (rules-wave4-condap), gated on the FROZEN
+        // `EPOCH_7_TABLE_RULES` (never the literal 7, never
+        // CURRENT_RULES_EPOCH): the conditional-AP family's three remaining
+        // printed shapes, read off the registry BY NAME — see
+        // `stamp_conditional_ap_named`. A record below epoch 7 runs none of
+        // it and replays byte-exact.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            stamp_conditional_ap_named(reg, p, &mut shoot, &mut melee);
         }
         // Boostbases wave (rules-wave4-boostbases), gated on the FROZEN
         // `EPOCH_6_TABLE_RULES`: "Mischievous Boost" is the Bane family's

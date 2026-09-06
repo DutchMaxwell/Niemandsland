@@ -954,3 +954,4 @@
 mod aura_channel;
 mod boost_aura_tail;
 mod boostbases2;
+mod condap;
