@@ -85,7 +85,7 @@ call. MOVE boundary failures are parse errors or caught panics. The search's
 | base_shapes | 0 | PR 1: non-charge; PR 3: charge |
 | whole_unit_shorten | 0 | PR 2: 56 closed; PR 4: 14 boxed continuations |
 | boxed_escape | 0 | PR 4 (#735) |
-| accepted non-equal endpoints (difference, not decline) | 178 | Later numeric investigation |
+| accepted non-equal endpoints (difference, not decline) | 178 | localised below |
 | charge_final_placement | 0 | PR 3 (#730) |
 | charge_snap | 0 | PR 3 (#730) |
 | skirmish_chain | 1 | PR 7 (proposed) |
@@ -108,7 +108,8 @@ to accepted equality or the accepted half-inch count.
 ## Accepted non-equal endpoints — localisation
 
 An accepted position whose endpoints are not bit-equal is a difference, not a
-decline; on the shipped ports there are 152 of 156. `diag=1` traces the
+decline; after the shape, shorten, charge and boxed-escape ports there are 178
+of 182 accepted. `diag=1` traces the
 reference table's own gate, overlap-push and shorten calls,
 `endpoint_localisation.json` pins the first call of each for the outliers, and
 `mv::gate::endpoint_localisation` replays those through the same core functions
@@ -116,8 +117,8 @@ on the table's own input, so each difference is attributed to ONE stage.
 
 | Class | Cases | Largest | Measured cause |
 | --- | ---: | ---: | --- |
-| Coordinate-space residue | 147 | 0.0000082 in | The core gate holds centres as f64 in the planner's INCH frame, the table as float32 world metres: a few float32 units in the last place. |
-| Shorten-amplified residue | 2 | 0.0000948 in | The same residue crossing a bisection branch of the whole-unit shorten. |
+| Coordinate-space residue | 171 | 0.0000082 in | The core gate holds centres as f64 in the planner's INCH frame, the table as float32 world metres: a few float32 units in the last place. |
+| Shorten-amplified residue | 4 | 0.0000948 in | The same residue crossing a bisection branch of the whole-unit shorten. |
 | `recorded-128` | 1 | 0.0941212 in | Overlap push: 2 of 21 models end 0.048 in apart on identical input, then the shorten amplifies it. Shorten and the other gate passes replay exactly. |
 | `recorded-162` | 1 | 0.1223899 in | Pre-gate. The table's gate corrects nothing and the core gate replays it to 0.0000005 in, so the movement solver plans one of eleven models differently at the difficult-terrain cap. |
 | `recorded-037` | 1 | 0.7382609 in | Collapse-ladder rung. The table keeps the full 16 in rung (achieved 1.244 in) and rejects the 0.75 rung (1.387 in) on the 0.005 m margin; the core accepts it and reports `budget_in` 12. Its gate replays to 0.0000031 in. |
@@ -144,7 +145,7 @@ later port can only shrink it.
 | Coherency hold | Core prefers coherent ladder rungs | Table holds if every rung tears an initially coherent unit |
 | Walls | Both planners route around walls; core non-charge gate clamps crossings | Compare final per-model endpoints and separate formation results |
 | Charge corridor | Table declaration probe routes, trims, finalizes and probes contact | Stage A covers execution geometry; declaration/target selection is outside the fixed-action input |
-| Numeric conversions | Core explicitly models several Vector3 float32 roundings | 178 accepted non-equal positions; investigate residuals before attributing cause |
+| Numeric conversions | Core explicitly models several Vector3 float32 roundings | 178 accepted non-equal positions, attributed per stage below |
 
 Generated cases enter both contact and no-contact charge gates; the 14-inch
 charge exposes exhausted snap slack. The difficult-terrain case grants 6 inches,
