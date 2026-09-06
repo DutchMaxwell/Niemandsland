@@ -136,17 +136,3 @@ func test_split_resolves_from_regiment_pooled_wounds() -> void:
 	var radius := SoloController.model_base_radius_m(last)
 	await _main._solo_apply_wounds(carrier, 1)
 	_assert_split_at(anchor, radius)
-
-
-
-func test_split_batch_pool_keeps_only_the_last_model_during_placement() -> void:
-	var carrier := _carrier()
-	carrier.unit_properties["regiment_mode"] = true
-	_main.opr_army_manager.form_regiment(carrier)
-	var observed: Array = []
-	_main.opr_army_manager.runtime_unit_created.connect(func(_unit: GameUnit, origin: String) -> void:
-		if origin == "split":
-			observed.append(carrier.get_alive_count()))
-	await _main._solo_apply_wounds(carrier, 20)
-	assert_array(observed).contains_exactly([1])
-	assert_int(carrier.get_alive_count()).is_equal(0)

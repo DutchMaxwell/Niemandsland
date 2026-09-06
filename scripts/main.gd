@@ -10884,13 +10884,9 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 			var remaining_pool := 0
 			for model in alive:
 				remaining_pool += int((model as ModelInstance).wounds_current)
-			var final_wounds: int = reg.wounds_taken + wounds
-			if not alive.is_empty() and wounds >= remaining_pool and _solo_combined_alive(target) == alive.size() \
-					and not _solo_split_rules(target).is_empty():
-				if alive.size() > 1:
-					opr_army_manager.apply_regiment_wounds(reg, reg.wounds_taken + remaining_pool - 1)
-				await _solo_split_from_last_model(target, target.get_alive_models()[0] as ModelInstance)
-			opr_army_manager.apply_regiment_wounds(reg, final_wounds)
+			if not alive.is_empty() and wounds >= remaining_pool and _solo_combined_alive(target) == alive.size():
+				await _solo_split_from_last_model(target, alive[0] as ModelInstance)
+			opr_army_manager.apply_regiment_wounds(reg, reg.wounds_taken + wounds)
 			return
 	var pid: int = int(target.unit_properties.get("player_id", 1))
 	var requested := wounds
@@ -17497,24 +17493,18 @@ func _solo_remove_dead_models(unit: GameUnit, died_models: Array[ModelInstance],
 			network_manager.broadcast_model_wounds(model)
 
 
-func _solo_split_rules(unit: GameUnit) -> Dictionary:
-	var rules := {}
+func _solo_split_from_last_model(unit: GameUnit, anchor: ModelInstance) -> void:
+	if unit == null or anchor.node == null or not is_instance_valid(anchor.node):
+		return
+	var resolved := {}
 	for value in [unit] + unit.get_attached_heroes():
 		var member := value as GameUnit
 		if member == null or not RulesRegistry.unit_rule_active(member, "Split"):
 			continue
 		for raw in member.get_special_rules():
 			var rule := str(raw)
-			if RulesRegistry.base_rule_name(rule) == "Split" and not rules.has(rule):
-				rules[rule] = member
-	return rules
-
-
-func _solo_split_from_last_model(unit: GameUnit, anchor: ModelInstance) -> void:
-	if unit == null or anchor.node == null or not is_instance_valid(anchor.node):
-		return
-	var rules := _solo_split_rules(unit)
-	for rule in rules:
-		var member := rules[rule] as GameUnit
-		var reach := float(RulesRegistry.unit_param(member, "Split", "place_in", 0))
-		await _solo_create_rule_unit(member, anchor, rule, reach, "split")
+			if RulesRegistry.base_rule_name(rule) != "Split" or resolved.has(rule):
+				continue
+			resolved[rule] = true
+			var reach := float(RulesRegistry.unit_param(member, "Split", "place_in", 0))
+			await _solo_create_rule_unit(member, anchor, rule, reach, "split")
