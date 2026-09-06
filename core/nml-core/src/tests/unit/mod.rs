@@ -953,3 +953,4 @@
 // fixtures every family shares stay here, in the module root.
 mod aura_channel;
 mod boost_aura_tail;
+mod boostbases2;
