@@ -925,7 +925,8 @@ mod endpoint_localisation {
             let caps: Vec<f64> = gate["caps"].as_array().unwrap().iter()
                 .map(|c| c.as_f64().unwrap() / IN2M).collect();
             let flags = GateFlags { start_world: &start_world, rules_epoch: EPOCH_6_TABLE_RULES,
-                shapes: &shapes, flying: rule("Flying"), traversal: rule("Traversal") };
+                shapes: &shapes, flying: rule("Flying"), traversal: rule("Traversal"),
+                ..Default::default() };
             let (got, _) = finalize_placement(&planned, &radii, &ext, &caps, board,
                 Some(&terrain), flags);
             let got: Vec<[f64; 2]> = got.iter().map(|p| [p[0] as f64, p[1] as f64]).collect();
