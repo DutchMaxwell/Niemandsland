@@ -53,3 +53,53 @@ fn assert_boxed_pin(id: &str) {
 fn boxed_escape_small_base_matches_the_table_pin() { assert_boxed_pin("recorded-144"); }
 #[test]
 fn boxed_escape_large_oval_matches_the_table_pin() { assert_boxed_pin("recorded-077"); }
+
+#[test]
+fn boxed_budget_and_round_reset_reach_the_simulator() {
+    use nml_core::{state::SidestepBudget, unit::{Ctx, UnitStatic}};
+    let fixtures: Value = serde_json::from_str(include_str!(
+        "../../../test/fixtures/position_parity/cases.json")).unwrap();
+    let budget: Value = serde_json::from_str(include_str!(
+        "../../../test/fixtures/position_parity/boxed_budget.json")).unwrap();
+    let limit = budget["limit"].as_i64().unwrap();
+    for id in budget["cases"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()) {
+        let fixture = fixtures["cases"].as_array().unwrap().iter().find(|c| c["id"] == id).unwrap();
+        let (mut base,actor,_,pin,tolerance) = pinned_move(id,6);
+        let terrain = Terrain::build(&serde_json::from_value(fixture["terrain"].clone()).unwrap());
+        let action: io::Action = serde_json::from_value(fixture["action"].clone()).unwrap();
+        let band = fixture["action"]["band_in"].as_f64().unwrap();
+        base.bands[actor].advance = band;
+        base.bands[actor].rush = band;
+        let statics: Vec<UnitStatic> = base.profiles.list.iter().map(|p| UnitStatic {
+            model_count:p.model_count, ctx:Ctx {models:p.model_count,tough:1,..Default::default()},
+            ..Default::default()
+        }).collect();
+        for probe in budget["probes"].as_array().unwrap() {
+            let mut state = base.clone();
+            let used = probe["used"].as_i64().unwrap();
+            let reset = probe["new_round"].as_bool().unwrap();
+            state.sidestep_budget = SidestepBudget {round:state.round,used};
+            if reset { state.round += 1; }
+            let left = if reset { limit } else { limit-used };
+            let big = id == "recorded-077";
+            let permitted = big || left > 0;
+            let spent = !big && permitted;
+            let got = MoveRules {rules_epoch:6}.plain_move(&state,&terrain,actor,
+                geom::to_f32(action.dest.unwrap()),band,true,true,nml_core::mv::FAST_PLANNER_GUARD).unwrap();
+            assert_eq!(got.sidestep_spent,spent,"{id}: {probe}");
+            let expected: Vec<geom::V3> = serde_json::from_value(pin["expected_world"].clone()).unwrap();
+            let delta = got.end.iter().zip(expected).map(|(a,b)|
+                geom::length(geom::sub(*a,b)) as f64 / nml_core::IN2M).fold(0.0f64,f64::max);
+            assert_eq!(delta <= tolerance,permitted,"{id}: {probe}: delta {delta}");
+            let resolved = nml_core::sim::resolve_on_board(&statics,&state,&action,&terrain,
+                io::Seams {movement:true,hero_attach:true,rules_epoch:6,..Default::default()}).unwrap();
+            for (m,end) in got.movers.iter().zip(&got.end) {
+                assert_eq!(resolved.positions[m.unit][m.model],geom::to_f64(*end),"{id}: {probe}");
+            }
+            let remaining = if resolved.sidestep_budget.round == resolved.round {
+                limit-resolved.sidestep_budget.used
+            } else { limit };
+            assert_eq!(remaining,left-i64::from(spent),"{id}: {probe}");
+        }
+    }
+}

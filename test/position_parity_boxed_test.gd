@@ -32,6 +32,8 @@ func _table_move(fixture: Dictionary) -> Dictionary:
 	var solo := Parity.TableProbe.new()
 	board.add_child(solo)
 	solo.setup(army,null,null)
+	solo._sidestep_budget = int(fixture.get("sidestep_budget_left",8))
+	if bool(fixture.get("reset_sidestep_budget",false)): solo.reset_round_claims()
 	solo.board_in = Vector2(fixture["board_in"][0],fixture["board_in"][1])
 	solo.prewarm_enabled = false
 	army.current_round = int(fixture["round"])
@@ -76,7 +78,7 @@ func _table_move(fixture: Dictionary) -> Dictionary:
 	var action: Dictionary = fixture["action"]
 	var actor: GameUnit = units[action["unit"]]
 	solo._move_toward(actor,Replay._vec3(action["dest"]),float(action["band_in"]),false)
-	var result := {"end":solo._positions_of(solo._moving_models(actor)),"budget_in":solo.last_move_budget_in}
+	var result := {"end":solo._positions_of(solo._moving_models(actor)),"budget_in":solo.last_move_budget_in,"sidestep_budget_left":solo._sidestep_budget}
 
 	for unit in units.values():
 		unit.unit_properties["attached_heroes"] = []
@@ -91,3 +93,32 @@ func _table_move(fixture: Dictionary) -> Dictionary:
 	SoloController._move_seam_env = int(previous[2])
 	SoloController._move_check_env = int(previous[3])
 	return result
+
+func test_boxed_budget_exhaustion_round_reset_and_large_base_exemption() -> void:
+	var budget: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
+		"res://test/fixtures/position_parity/boxed_budget.json"))
+	var pins: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
+		"res://test/fixtures/position_parity/boxed_escape.json"))
+	var corpus: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
+		"res://test/fixtures/position_parity/cases.json"))
+	for pin in pins["cases"]:
+		for probe in budget["probes"]:
+			var fixture: Dictionary = {}
+			for candidate in corpus["cases"]:
+				if candidate["id"] == pin["id"]: fixture = candidate.duplicate(true)
+			var left: int = int(budget["limit"])-int(probe["used"])
+			fixture["sidestep_budget_left"] = left
+			fixture["reset_sidestep_budget"] = bool(probe["new_round"])
+			if bool(probe["new_round"]):
+				fixture["round"] = int(fixture["round"])+1
+				left = int(budget["limit"])
+			var big: bool = pin["id"] == "recorded-077"
+			var allowed: bool = big or left > 0
+			var spent: bool = not big and allowed
+			var got := _table_move(fixture)
+			assert_int(int(got["sidestep_budget_left"])).is_equal(left-int(spent))
+			var delta := 0.0
+			for i in got["end"].size():
+				var p: Array = pin["expected_world"][i]
+				delta = maxf(delta,(got["end"][i] as Vector3).distance_to(Vector3(p[0],p[1],p[2])) / 0.0254)
+			assert_bool(delta <= float(pins["tolerance_in"])).is_equal(allowed)

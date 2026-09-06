@@ -6,7 +6,7 @@ import nml_core
 import pytest
 
 
-@pytest.mark.parametrize(('case_id', 'covered'), [('recorded-003', True), ('recorded-144', False)])
+@pytest.mark.parametrize(('case_id', 'covered'), [('recorded-003', True), ('recorded-144', True)])
 def test_whole_unit_shorten_uses_the_header_epoch(case_id, covered):
     root = Path(__file__).resolve().parents[4]
     fixtures = json.loads((root / 'test/fixtures/position_parity/cases.json').read_text())

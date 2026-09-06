@@ -110,9 +110,10 @@ pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionar
             && landing.as_ref().is_none_or(|land| land.shorten_covered)
         {
             caps.push(&GString::from("whole_unit_shorten").to_variant());
+            caps.push(&GString::from("boxed_escape").to_variant());
         }
     }
-    // Non-charge skirmish chains and boxed escape remain separate ports.
+    // Non-charge skirmish chains remain a separate port.
     out.set("stage_a_capabilities", &caps);
     Ok(out)
 }

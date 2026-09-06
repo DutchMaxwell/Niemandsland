@@ -53,7 +53,7 @@ fn resolved_endings(case_id: &str) -> Vec<Vec<nml_core::geom::V3>> {
             geom::to_f32(action.dest.unwrap()), case["action"]["band_in"].as_f64().unwrap(),
             true, true, nml_core::mv::FAST_PLANNER_GUARD).unwrap();
         if rules_epoch >= 6 {
-            assert_eq!(expected.shorten_covered, case_id != "recorded-144");
+            assert!(expected.shorten_covered);
         }
         let got = resolve_on_board(&statics, &state, &action, &terrain,
             Seams { movement:true, hero_attach:true, rules_epoch,
@@ -76,9 +76,9 @@ fn whole_unit_shorten_epoch_reaches_the_simulator_movement() {
 }
 
 #[test]
-fn whole_unit_shorten_defers_the_pending_boxed_escape() {
+fn whole_unit_shorten_continues_into_boxed_escape() {
     let endings = resolved_endings("recorded-144");
-    for end in &endings[1..] {
-        assert_eq!(*end, endings[0], "unported boxed continuation must keep the previous result");
-    }
+    assert_eq!(endings[0], endings[1]);
+    assert_eq!(endings[2], endings[3]);
+    assert_ne!(endings[1], endings[2], "the boxed continuation is now covered at epoch 6");
 }
