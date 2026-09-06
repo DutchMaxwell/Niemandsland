@@ -73,6 +73,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 REPO = Path(__file__).resolve().parents[3]
 SYSTEMS = ("gf", "aof")
@@ -115,7 +116,260 @@ NA_NAMES: dict[str, str] = {
 
 # Primitive -> the registry param keys a resolver on this core actually
 # reads for it (see the module docstring). Absent = trusted whole.
-CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
+#
+# Families whose primitive deliberately carries NO row - the note stays here,
+# where the next reader looking for the family will find it:
+# Piercing Hunter family wave (rules-wave3-piercehunt, 2026-09-05): the
+# three ported names (Piercing Hunter, Havocbound, Piercing Shooter) ride
+# their OWN tokens — unit.rs::build_for's epoch-6 named arm (frozen
+# EPOCH_6_TABLE_RULES) states each spelling literally and the dice folds
+# log the named forms. Deliberately NO CONSUMED_PARAM_KEYS row here: the
+# conditional-AP class's params are uniform across every entry
+# (ap_bonus/condition on all of them), so a row would over-credit the two
+# UNPORTED members (Point-Blank Piercing needs a `within_in` cap the
+# CondAp spec does not carry; Havocbound Boost needs an always-on leg +
+# the `upgrades` coupling the stamp pass does not read) — the #489
+# over-credit shape, declined.
+# Versatile Attack family wave (rules-wave3-versatile, 2026-09-05): the
+# three ported names (Watchborn, Vinci Tech, Vinci Tech Boost) ride their
+# OWN tokens — unit.rs::build_for's epoch-6 named arm (frozen
+# EPOCH_6_TABLE_RULES) states each spelling literally; Watchborn/Vinci
+# Tech are live at every epoch off the generic stamp pass (name only),
+# Vinci Tech Boost's both-arms form rides the same stamped channel and
+# the volley fold logs the named forms. Deliberately NO
+# CONSUMED_PARAM_KEYS row here: the resolver reads NO params (the
+# AP(+1)/+1/over-9 shape is the primitive's own fixed semantics, uniform
+# across every entry), so a row would be read-by-nobody evidence — and
+# it would over-credit the primitive's fifth member (Exotic Gear /
+# Exotic Gear Boost, aofs-only, outside this census universe) the #489
+# shape if the universe ever widens.
+
+
+class ConsumedParams(NamedTuple):
+    """One family's row: the primitive it keys, and the registry param keys a
+    resolver on this core reads for it. Rows live in `_CONSUMED_PARAM_ROWS`
+    below, one self-contained block per family, kept ALPHABETICAL by primitive
+    so that two family PRs in the same wave insert at DIFFERENT points in the
+    file instead of both appending to one shared tail - the append point that
+    cost wave 3 six to eight rebases per PR."""
+
+    primitive: str
+    keys: frozenset[str]
+
+
+def consumed_registry(rows: "tuple[ConsumedParams, ...]") -> dict[str, frozenset[str]]:
+    """Index the rows by primitive, refusing the two mistakes a bare dict
+    literal cannot catch: a DUPLICATE primitive (a dict literal silently keeps
+    the last row and drops the earlier family's keys, so a family would go
+    unread with nothing said) and a row OUT OF ALPHABETICAL ORDER (which
+    reopens the shared tail the ordering exists to avoid)."""
+    out: dict[str, frozenset[str]] = {}
+    for prev, row in zip((None,) + tuple(rows[:-1]), rows):
+        if row.primitive in out:
+            raise ValueError(
+                f"CONSUMED_PARAM_ROWS: duplicate primitive {row.primitive!r}")
+        if prev is not None and prev.primitive > row.primitive:
+            raise ValueError(
+                "CONSUMED_PARAM_ROWS out of alphabetical order:"
+                f" {prev.primitive!r} before {row.primitive!r}")
+        out[row.primitive] = row.keys
+    return out
+
+
+_CONSUMED_PARAM_ROWS: tuple[ConsumedParams, ...] = (
+    # Ambush family (rules-wave2-ambush, 2026-09-04): unit.rs
+    # ::ambush_family_of reads each name at its OWN literal, gated
+    # `rule_on(rules_epoch, 4)` — "Ambushing Piercing Shot"'s counts_as (+
+    # its name-literal arrival-round AP(+1), consumed by dice.rs's volley
+    # fold via sim::ctx_live), "Ambush Beacon"'s beacon_in and "Rapid
+    # Ambush"'s arrive_from_round (both consumed by the core-py
+    # arrival_reads export), "Ambush Re-Deployment"'s re_reserve/
+    # uses_per_game (stamped; the once-per-game withdraw beat is a future
+    # port). Without this row the primitive is trusted whole for every name
+    # under it — the #489 over-credit shape.
+    ConsumedParams("Ambush", frozenset({"counts_as", "beacon_in", "arrive_from_round", "re_reserve", "uses_per_game"})),
+    # Aura-Channel family wave (rules-wave3-aura1, 2026-09-05): unit.rs's
+    # apply_aura_channel (epoch-6 gated, EPOCH_6_TABLE_RULES) reads each
+    # "<X> Aura" entry's own `grants` base and folds it onto the unit and its
+    # attached heroes — the import twin's expansion (opr_army_manager.gd:2117 /
+    # list_to_profile.py:350) re-stated from the entry's own param, so the core
+    # no longer depends on an import-time rewrite it cannot see. The fold is
+    # idempotent with the import expansion by construction (append only when
+    # absent), so epoch-5 records (the recording fleet's stamp) replay
+    # byte-exact with the import fold alone. Without this row the primitive
+    # would be trusted whole for every name under it - the #489 over-credit
+    # shape.
+    ConsumedParams("Aura Channel", frozenset({"grants"})),
+    # Bane family port (rules-wave-bane, 2026-09-03): unit.rs
+    # ::stamp_unit_strikers' epoch-gated ladder mirrors main.gd's
+    # `_solo_striker_has_bane` — the Bane-prefixed names by scope suffix, and
+    # the DATA-ALIAS wave (Bestial, Mischievous, Scrapper — non-"Bane",
+    # non-"Aura") gated on the entry's own `reroll_save_sixes`. The Boost
+    # variants' 5-6 extension (reroll_save_low/reroll_save_from, over_in) is
+    # read by nobody on this core — those entries stay STAMPED.
+    ConsumedParams("Bane", frozenset({"reroll_save_sixes"})),
+    # Rung C data port: unit.rs's `banner_bonus_of` is the same kind of
+    # generic DATA-ALIAS loop for `morale_bonus`, feeding `CaptureReads` —
+    # Courageous is its first alias.
+    ConsumedParams("Banner", frozenset({"morale_bonus"})),
+    # NML-1152 B14 step 1: unit.rs::UnitStatic.bounding reads the named
+    # "Bounding" entry's own `place_d3_plus` (the DATA-alias family stays
+    # table-only, ported instead through the RECORDED `Action::traced` draw).
+    ConsumedParams("Bounding", frozenset({"place_d3_plus"})),
+    # Fortified-family wave (rules-wave3-fortified, 2026-09-05): unit.rs
+    # ::fortified_alias_of reads `incoming_ap_reduction` and `over_in` (the
+    # Boost-vs-gated shape split and the gated aliases' distance gate) off
+    # every carried Fortified-primitive entry behind EPOCH_6_TABLE_RULES.
+    ConsumedParams("Fortified", frozenset({"incoming_ap_reduction", "over_in"})),
+    # Block B7: `unit::growth_of` stamps `UnitStatic.growth` off every "Growth
+    # Markers" entry the unit carries, and `sim::growth_bonus_of` folds the
+    # AP/hit facets into the tray (main.gd:4287/:5675-5680). The
+    # rules-wave3-growthmark epoch-6 wave consumes the rest: the marker-gain
+    # triggers (`per_round`/`on_kill` were already read by
+    # `sim::growth_round_start`/`growth_on_kill`, `max_markers` caps them) and
+    # the four new facets — Defensive Frenzy/Growth's `defense_per_marker`/
+    # `defense_per_two` (sim::growth_defense_of -> dice.rs save target),
+    # Fortified Growth's `enemy_ap_per_two` (defender-side AP cut) and
+    # Regenerative Strength's `on_ignore_wound`/`attacks_per_marker`
+    # (sim::growth_on_ignore_wound / melee_parts). `min_ap`/`all_models`/
+    # `scope` stay unread on this core (the floor is the hard 0 every entry
+    # prints; the whole-unit gates are implicit in the marker fold), so a
+    # floor-only entry would still ride STAMPED.
+    ConsumedParams("Growth Markers", frozenset({"ap_per_marker", "ap_per_two", "hit_per_marker", "hit_per_two",
+            "per_round", "max_markers", "on_kill",
+            "defense_per_marker", "defense_per_two", "enemy_ap_per_two",
+            "on_ignore_wound", "attacks_per_marker"})),
+    # Ambush arrival S6: the twin's arrive_one leg reads `min_enemy_dist_in`
+    # (unit.rs:1553-1556 -> deployment.rs::arrive_one's own_ring_m), so the
+    # primitive is no longer trusted whole. Without this entry Surprise Attack
+    # (same primitive; its GF/AoF params carry no consumed key - the registry
+    # itself marks its arrival_strike "planned") rode the bare 'infiltrate'
+    # token to PORTED - the #489 over-credit shape, declined by the spec (§6).
+    ConsumedParams("Infiltrate", frozenset({"min_enemy_dist_in"})),
+    # Lacerate-family wave (rules-wave2-lacerate2, 2026-09-04): unit.rs
+    # ::stamp_unit_strikers' epoch-4 arm mirrors main.gd:6990-7001's unit-level
+    # coverage wave — every carried Lacerate-primitive entry whose params carry
+    # `bypass_regen` stamps the profile bane flag, facet-scoped by melee_only/
+    # shooting_only ("Ignores Regeneration" ungated, "… in Melee" melee-only).
+    # The plain "Lacerate" name keeps its own-token PORTED through the
+    # weapon-level literal read (unit.rs::base_profile) regardless of params.
+    ConsumedParams("Lacerate", frozenset({"bypass_regen", "melee_only", "shooting_only"})),
+    # Block B11: unit.rs::UnitStatic.quick_shot_active reads `shoot_after_rush` as a whole-unit gate for sim.rs's RUSH+shoot predicate.
+    ConsumedParams("Quick Shot", frozenset({"shoot_after_rush"})),
+    # Ranged-Shrouding family wave (rules-wave3-rangeshroud, 2026-09-05):
+    # unit.rs::ranged_shroud_params (epoch-6 arm) reads the carried entry's
+    # own `range_penalty_in`/`floor_in` off the literal name AND every alias
+    # whose primitive is "Ranged Shrouding" (Darkborn, Shadowborn, Wild Veil
+    # and their Boosts), mirroring SoloController.ranged_shroud_reach_in's
+    # coverage wave (solo_controller.gd:5651-5660). The melee half of the
+    # composite aliases was already consumed pre-wave by unit.rs
+    # ::melee_shroud_params' own alias walk (`move_penalty_in` on the
+    # Melee-Shrouding primitive, `melee_move_penalty_in`/`melee_floor_in` on
+    # the composite Ranged-Shrouding entries, `floor_in` as the fallback
+    # floor). Without this row the primitive is trusted whole for every name
+    # under it — the #489 over-credit shape.
+    ConsumedParams("Ranged Shrouding", frozenset(
+            {"range_penalty_in", "floor_in", "move_penalty_in", "melee_move_penalty_in", "melee_floor_in"}
+        )),
+    # Regeneration-family DATA-ALIAS wave (2026-09-03, rules-wave-regen):
+    # unit.rs::regen_targets folds every carried entry whose primitive is
+    # "Regeneration" into Ctx.regen_target / Ctx.regen_target_spell — the
+    # table's own coverage wave (main.gd:6637-6652,
+    # RulesRegistry.unit_rules_of_primitive(target, "Regeneration")). Reads
+    # `ignore_target` / `ignore_target_spell` off the entry and `all_models`
+    # as the whole-unit gate; `upgrades` / `uses_per_game` /
+    # `terrain_within_in` / `spell_only` are unread — the table's alias
+    # layer reads none of them either. Whole-by `rules_epoch >= 3`
+    # (acts::CURRENT_RULES_EPOCH). Without this row the primitive is trusted
+    # whole for the twelve names under it — the #489 over-credit shape.
+    ConsumedParams("Regeneration", frozenset({"ignore_target", "ignore_target_spell", "all_models"})),
+    # Block B10: unit.rs::regen_targets reads `ignore_target` (and the spell
+    # twin `ignore_target_spell`) off the whole-unit "Resistance" entry into
+    # Ctx.regen_target / Ctx.regen_target_spell — consumed by
+    # dice.rs::regen_batch, combat.rs's unsaved folds and spell.rs's
+    # spell-wound leg; `all_models` is the whole-unit gate itself.
+    ConsumedParams("Resistance", frozenset({"ignore_target", "ignore_target_spell", "all_models"})),
+    # Block B13: unit.rs::retaliate_hits_per_wound reads `hits_per_wound` into
+    # Ctx.retaliate_hits_per_wound (sim.rs::strike_phase lash-back). "rating"
+    # stays unread on this core (the shipped "X" string falls back to the
+    # rating itself).
+    ConsumedParams("Retaliate", frozenset({"hits_per_wound"})),
+    # Royal Legion family (rules-wave3-royallegion, 2026-09-05): unit.rs
+    # ::royal_legion_family_of folds every carried Royal Legion-primitive
+    # entry's two live halves — `range_bonus_in` (the _shooting_range_bonus
+    # alias-max) and `charge_mod` (the move-band pass's flat rush fold,
+    # MOVE_PRIMITIVES carrying "Royal Legion") — and the primitive-NULL
+    # "Lustbound Boost Aura" rides its base through the raw-name expansion
+    # arm. `upgrades` stays unread: neither twin's band or range pass reads
+    # it either (the move_rule_mods precedent).
+    ConsumedParams("Royal Legion", frozenset({"range_bonus_in", "charge_mod"})),
+    # Shot-Modifier family wave (rules-wave3-shotmod, 2026-09-05): unit.rs
+    # ::shot_modifier_runtime_of (epoch-6 arm) stamps the two RUNTIME-GATED
+    # shooting members BY NAME — Mobile Artillery (`requires_stationary`, the
+    # act-scope moved flag sim.rs stamps over the volley Ctx) and Grounded
+    # Precision (`terrain_within_in`, consumed off Ctx.in_cover at the volley
+    # AND melee seams, dice.rs). The static stamp arm's own reads
+    # (`hit_bonus`/`over_in`) are deliberately NOT listed: that arm is a NAME
+    # allowlist, so per-entry param evidence is not sufficient for it —
+    # listing them would over-credit Cyber-Eyes / Cyber-Eyes Boost (read by
+    # nobody) the exact #489 shape. Without this row the primitive is
+    # untracked for every name under it.
+    ConsumedParams("Shot Modifier", frozenset({"requires_stationary", "terrain_within_in"})),
+    # Shred-family wave: unit.rs::stamp's Shred data-alias arm (the table's
+    # main.gd:3001/:4355 `unit_rule_active(member, "Shred") or
+    # _solo_shred_facet_applies`) reads the scope pair per profile via
+    # facet_applies — that is what separates the scoped halves ("Shred in
+    # Melee"/"when Shooting") from the ungated aliases. The base wound
+    # amount IS consumed as of the shred3 wave (2026-09-05): unit.rs
+    # ::build_for's epoch-6 arm (`rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`,
+    # frozen) reads `extra_wound_per_save_one` off the entry — facet-scoped
+    # onto every shred_alias profile — and dice.rs::save_batch multiplies
+    # the per-face amount by it, so Warbound/Infected/Destroyer leave the
+    # STAMPED verdict their hard-coded +1 earned under the wave-1 alias.
+    # The Boost entries' widened save-fail
+    # window IS consumed as of the shred2 wave (2026-09-04): unit.rs::stamp's
+    # upgrades arm (6b) reads `save_fail_max` / `extra_wound_save_low` (one
+    # meaning, two key spellings) plus `over_in` off the entry, gating on the
+    # model also carrying the `upgrades` base rule, and dice.rs's volley
+    # consumes the window behind `rule_on(rules_epoch, 4)` past the entry's
+    # own `over_in` distance (melee never widens — no pre-charge gap).
+    ConsumedParams("Shred", frozenset({"melee_only", "shooting_only", "save_fail_max", "extra_wound_save_low", "over_in", "extra_wound_per_save_one"})),
+    # Rung C data port (AUDIT_armybook_flanks_2026-09-02.md): unit.rs's
+    # `stealth_alias_of` is a genuine per-entry DATA-ALIAS loop (scans every
+    # carried rule, keeps the best `hit_penalty` off any OTHER entry whose own
+    # primitive is "Stealth") — the same shape as Infiltrate/Bounding above,
+    # just never given a CONSUMED_PARAM_KEYS row before this port. Screened is
+    # its first alias to actually exist in the registry.
+    ConsumedParams("Stealth", frozenset({"hit_penalty"})),
+    # Storm Attack family (rules-wave3-stormattack, 2026-09-05): unit.rs
+    # ::storm_of reads each "Storm of X" entry's own params (dice/trigger_
+    # target/range_in/hits/facet) into UnitStatic.storm, consumed by sim.rs
+    # ::tray_storm_attack behind `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`.
+    # `uses_per_game` stays unlisted on purpose: the once-per-game is read
+    # from the structural `State.storm_used` flag, never from the param.
+    ConsumedParams("Storm Attack", frozenset({"dice", "trigger_target", "range_in", "hits", "facet"})),
+    # Block B6: unit.rs::stamp reads `extra_attack` to route a Surge entry
+    # into `surge_attack`/`surge_attack_low` (dice.rs::surge_attack_hits, both
+    # resolve functions). melee_only/shooting_only are the alias loop's own
+    # facet gate; the epoch-3 surge-gates port reads the plain auto-hit form's
+    # `within_in` (Point-Blank Surge, ai_ev.gd:228-231) and the Boosts'
+    # `over_in` (Devout/Ferocious/Lucky Boost, ai_ev.gd:243-244 -> dice.rs's
+    # epoch-gated surge block). `surge_low` is deliberately NOT listed: the
+    # resolver reads it only off `upgrades`-carrying entries, and the one
+    # upgrades-less carrier that prints it (Great Sergeant) is dead data in
+    # the TABLE's own stamp loop — listing it would over-credit that name's
+    # printed 5-6 form, the exact #489 shape. The bonus_hits_per_six-only
+    # names (Brutal, Devout, Lucky, Surge Mark, Surge when Shooting, Great
+    # Sergeant) stay UNREAD as params — the table reads no param of theirs, so
+    # neither does the twin — but the surge2 wave (2026-09-04) ports each BY
+    # NAME: unit.rs::build_for's epoch-4 named arm (rule_on(rules_epoch, 4),
+    # the literal) re-states the plain auto-hit facet the generic walk gives
+    # them, so the names reach the core through their own tokens. Without this
+    # entry "Surge" was TRUSTED WHOLE — PR #489's bug, reopened here until now.
+    ConsumedParams("Surge", frozenset({"extra_attack", "melee_only", "shooting_only", "within_in", "over_in"})),
+    # Block B12: unit.rs::unpredictable_shooting_params (via ctx_for) + dice.rs
+    # ::resolve_volley_with_tray read the shooting volley die's three params.
+    ConsumedParams("Unpredictable Shooter", frozenset({"ap_bonus", "hit_bonus", "low_roll_max"})),
     # mods.rs/sim.rs (#489): dice.rs sums hit_mod into to-hit (shoot+melee);
     # sim.rs sums morale_mod. def_mod/ap_mod/move_mod/range_bonus_in are
     # recorded, read by nothing on this core.
@@ -137,58 +391,7 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # target/needs_los/max_targets/once/beneficiary) are read only to shape
     # the pick, never the effect - listing one would flip all 16 while their
     # effects stay unread, the exact #489 shape this table exists to prevent.
-    "Utility Buff": frozenset({"hit_mod", "morale_mod", "casting_mod"}),
-    # Block B6: unit.rs::stamp reads `extra_attack` to route a Surge entry
-    # into `surge_attack`/`surge_attack_low` (dice.rs::surge_attack_hits, both
-    # resolve functions). melee_only/shooting_only are the alias loop's own
-    # facet gate; the epoch-3 surge-gates port reads the plain auto-hit form's
-    # `within_in` (Point-Blank Surge, ai_ev.gd:228-231) and the Boosts'
-    # `over_in` (Devout/Ferocious/Lucky Boost, ai_ev.gd:243-244 -> dice.rs's
-    # epoch-gated surge block). `surge_low` is deliberately NOT listed: the
-    # resolver reads it only off `upgrades`-carrying entries, and the one
-    # upgrades-less carrier that prints it (Great Sergeant) is dead data in
-    # the TABLE's own stamp loop — listing it would over-credit that name's
-    # printed 5-6 form, the exact #489 shape. The bonus_hits_per_six-only
-    # names (Brutal, Devout, Lucky, Surge Mark, Surge when Shooting, Great
-    # Sergeant) stay UNREAD as params — the table reads no param of theirs, so
-    # neither does the twin — but the surge2 wave (2026-09-04) ports each BY
-    # NAME: unit.rs::build_for's epoch-4 named arm (rule_on(rules_epoch, 4),
-    # the literal) re-states the plain auto-hit facet the generic walk gives
-    # them, so the names reach the core through their own tokens. Without this
-    # entry "Surge" was TRUSTED WHOLE — PR #489's bug, reopened here until now.
-    "Surge": frozenset({"extra_attack", "melee_only", "shooting_only", "within_in", "over_in"}),
-    # Block B7: `unit::growth_of` stamps `UnitStatic.growth` off every "Growth
-    # Markers" entry the unit carries, and `sim::growth_bonus_of` folds the
-    # AP/hit facets into the tray (main.gd:4287/:5675-5680). The
-    # rules-wave3-growthmark epoch-6 wave consumes the rest: the marker-gain
-    # triggers (`per_round`/`on_kill` were already read by
-    # `sim::growth_round_start`/`growth_on_kill`, `max_markers` caps them) and
-    # the four new facets — Defensive Frenzy/Growth's `defense_per_marker`/
-    # `defense_per_two` (sim::growth_defense_of -> dice.rs save target),
-    # Fortified Growth's `enemy_ap_per_two` (defender-side AP cut) and
-    # Regenerative Strength's `on_ignore_wound`/`attacks_per_marker`
-    # (sim::growth_on_ignore_wound / melee_parts). `min_ap`/`all_models`/
-    # `scope` stay unread on this core (the floor is the hard 0 every entry
-    # prints; the whole-unit gates are implicit in the marker fold), so a
-    # floor-only entry would still ride STAMPED.
-    "Growth Markers": frozenset({"ap_per_marker", "ap_per_two", "hit_per_marker", "hit_per_two",
-        "per_round", "max_markers", "on_kill",
-        "defense_per_marker", "defense_per_two", "enemy_ap_per_two",
-        "on_ignore_wound", "attacks_per_marker"}),
-    # Block B13: unit.rs::retaliate_hits_per_wound reads `hits_per_wound` into
-    # Ctx.retaliate_hits_per_wound (sim.rs::strike_phase lash-back). "rating"
-    # stays unread on this core (the shipped "X" string falls back to the
-    # rating itself).
-    "Retaliate": frozenset({"hits_per_wound"}),
-    # Block B12: unit.rs::unpredictable_shooting_params (via ctx_for) + dice.rs
-    # ::resolve_volley_with_tray read the shooting volley die's three params.
-    "Unpredictable Shooter": frozenset({"ap_bonus", "hit_bonus", "low_roll_max"}),
-    # Block B10: unit.rs::regen_targets reads `ignore_target` (and the spell
-    # twin `ignore_target_spell`) off the whole-unit "Resistance" entry into
-    # Ctx.regen_target / Ctx.regen_target_spell — consumed by
-    # dice.rs::regen_batch, combat.rs's unsaved folds and spell.rs's
-    # spell-wound leg; `all_models` is the whole-unit gate itself.
-    "Resistance": frozenset({"ignore_target", "ignore_target_spell", "all_models"}),
+    ConsumedParams("Utility Buff", frozenset({"hit_mod", "morale_mod", "casting_mod"})),
     # Block B9: deployment.rs::deploy_side reads the registry's `place_in`
     # (UnitSpec.place_in_m via list_to_profile.py:_deploy_flags — the table's
     # `unit_param(unit, "Vanguard", "place_in", 9.0)`, solo_controller.gd:9627)
@@ -197,174 +400,10 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # place_in; without this entry the primitive was TRUSTED WHOLE, so all
     # three names rode the bare 'vanguard' field token — PR #489's
     # over-credit shape, reopened by the #481 parity wave until now.
-    "Vanguard": frozenset({"place_in"}),
-    # NML-1152 B14 step 1: unit.rs::UnitStatic.bounding reads the named
-    # "Bounding" entry's own `place_d3_plus` (the DATA-alias family stays
-    # table-only, ported instead through the RECORDED `Action::traced` draw).
-    "Bounding": frozenset({"place_d3_plus"}),
-    # Block B11: unit.rs::UnitStatic.quick_shot_active reads `shoot_after_rush` as a whole-unit gate for sim.rs's RUSH+shoot predicate.
-    "Quick Shot": frozenset({"shoot_after_rush"}),
-    # Ambush arrival S6: the twin's arrive_one leg reads `min_enemy_dist_in`
-    # (unit.rs:1553-1556 -> deployment.rs::arrive_one's own_ring_m), so the
-    # primitive is no longer trusted whole. Without this entry Surprise Attack
-    # (same primitive; its GF/AoF params carry no consumed key - the registry
-    # itself marks its arrival_strike "planned") rode the bare 'infiltrate'
-    # token to PORTED - the #489 over-credit shape, declined by the spec (§6).
-    "Infiltrate": frozenset({"min_enemy_dist_in"}),
-    # Rung C data port (AUDIT_armybook_flanks_2026-09-02.md): unit.rs's
-    # `stealth_alias_of` is a genuine per-entry DATA-ALIAS loop (scans every
-    # carried rule, keeps the best `hit_penalty` off any OTHER entry whose own
-    # primitive is "Stealth") — the same shape as Infiltrate/Bounding above,
-    # just never given a CONSUMED_PARAM_KEYS row before this port. Screened is
-    # its first alias to actually exist in the registry.
-    "Stealth": frozenset({"hit_penalty"}),
-    # Rung C data port: unit.rs's `banner_bonus_of` is the same kind of
-    # generic DATA-ALIAS loop for `morale_bonus`, feeding `CaptureReads` —
-    # Courageous is its first alias.
-    "Banner": frozenset({"morale_bonus"}),
-    # Regeneration-family DATA-ALIAS wave (2026-09-03, rules-wave-regen):
-    # unit.rs::regen_targets folds every carried entry whose primitive is
-    # "Regeneration" into Ctx.regen_target / Ctx.regen_target_spell — the
-    # table's own coverage wave (main.gd:6637-6652,
-    # RulesRegistry.unit_rules_of_primitive(target, "Regeneration")). Reads
-    # `ignore_target` / `ignore_target_spell` off the entry and `all_models`
-    # as the whole-unit gate; `upgrades` / `uses_per_game` /
-    # `terrain_within_in` / `spell_only` are unread — the table's alias
-    # layer reads none of them either. Whole-by `rules_epoch >= 3`
-    # (acts::CURRENT_RULES_EPOCH). Without this row the primitive is trusted
-    # whole for the twelve names under it — the #489 over-credit shape.
-    "Regeneration": frozenset({"ignore_target", "ignore_target_spell", "all_models"}),
-    # Bane family port (rules-wave-bane, 2026-09-03): unit.rs
-    # ::stamp_unit_strikers' epoch-gated ladder mirrors main.gd's
-    # `_solo_striker_has_bane` — the Bane-prefixed names by scope suffix, and
-    # the DATA-ALIAS wave (Bestial, Mischievous, Scrapper — non-"Bane",
-    # non-"Aura") gated on the entry's own `reroll_save_sixes`. The Boost
-    # variants' 5-6 extension (reroll_save_low/reroll_save_from, over_in) is
-    # read by nobody on this core — those entries stay STAMPED.
-    "Bane": frozenset({"reroll_save_sixes"}),
-    # Shred-family wave: unit.rs::stamp's Shred data-alias arm (the table's
-    # main.gd:3001/:4355 `unit_rule_active(member, "Shred") or
-    # _solo_shred_facet_applies`) reads the scope pair per profile via
-    # facet_applies — that is what separates the scoped halves ("Shred in
-    # Melee"/"when Shooting") from the ungated aliases. The base wound
-    # amount IS consumed as of the shred3 wave (2026-09-05): unit.rs
-    # ::build_for's epoch-6 arm (`rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`,
-    # frozen) reads `extra_wound_per_save_one` off the entry — facet-scoped
-    # onto every shred_alias profile — and dice.rs::save_batch multiplies
-    # the per-face amount by it, so Warbound/Infected/Destroyer leave the
-    # STAMPED verdict their hard-coded +1 earned under the wave-1 alias.
-    # The Boost entries' widened save-fail
-    # window IS consumed as of the shred2 wave (2026-09-04): unit.rs::stamp's
-    # upgrades arm (6b) reads `save_fail_max` / `extra_wound_save_low` (one
-    # meaning, two key spellings) plus `over_in` off the entry, gating on the
-    # model also carrying the `upgrades` base rule, and dice.rs's volley
-    # consumes the window behind `rule_on(rules_epoch, 4)` past the entry's
-    # own `over_in` distance (melee never widens — no pre-charge gap).
-    "Shred": frozenset({"melee_only", "shooting_only", "save_fail_max", "extra_wound_save_low", "over_in", "extra_wound_per_save_one"}),
-    # Lacerate-family wave (rules-wave2-lacerate2, 2026-09-04): unit.rs
-    # ::stamp_unit_strikers' epoch-4 arm mirrors main.gd:6990-7001's unit-level
-    # coverage wave — every carried Lacerate-primitive entry whose params carry
-    # `bypass_regen` stamps the profile bane flag, facet-scoped by melee_only/
-    # shooting_only ("Ignores Regeneration" ungated, "… in Melee" melee-only).
-    # The plain "Lacerate" name keeps its own-token PORTED through the
-    # weapon-level literal read (unit.rs::base_profile) regardless of params.
-    "Lacerate": frozenset({"bypass_regen", "melee_only", "shooting_only"}),
-    # Ambush family (rules-wave2-ambush, 2026-09-04): unit.rs
-    # ::ambush_family_of reads each name at its OWN literal, gated
-    # `rule_on(rules_epoch, 4)` — "Ambushing Piercing Shot"'s counts_as (+
-    # its name-literal arrival-round AP(+1), consumed by dice.rs's volley
-    # fold via sim::ctx_live), "Ambush Beacon"'s beacon_in and "Rapid
-    # Ambush"'s arrive_from_round (both consumed by the core-py
-    # arrival_reads export), "Ambush Re-Deployment"'s re_reserve/
-    # uses_per_game (stamped; the once-per-game withdraw beat is a future
-    # port). Without this row the primitive is trusted whole for every name
-    # under it — the #489 over-credit shape.
-    "Ambush": frozenset({"counts_as", "beacon_in", "arrive_from_round", "re_reserve", "uses_per_game"}),
-    # Ranged-Shrouding family wave (rules-wave3-rangeshroud, 2026-09-05):
-    # unit.rs::ranged_shroud_params (epoch-6 arm) reads the carried entry's
-    # own `range_penalty_in`/`floor_in` off the literal name AND every alias
-    # whose primitive is "Ranged Shrouding" (Darkborn, Shadowborn, Wild Veil
-    # and their Boosts), mirroring SoloController.ranged_shroud_reach_in's
-    # coverage wave (solo_controller.gd:5651-5660). The melee half of the
-    # composite aliases was already consumed pre-wave by unit.rs
-    # ::melee_shroud_params' own alias walk (`move_penalty_in` on the
-    # Melee-Shrouding primitive, `melee_move_penalty_in`/`melee_floor_in` on
-    # the composite Ranged-Shrouding entries, `floor_in` as the fallback
-    # floor). Without this row the primitive is trusted whole for every name
-    # under it — the #489 over-credit shape.
-    "Ranged Shrouding": frozenset(
-        {"range_penalty_in", "floor_in", "move_penalty_in", "melee_move_penalty_in", "melee_floor_in"}
-    ),
-    # Piercing Hunter family wave (rules-wave3-piercehunt, 2026-09-05): the
-    # three ported names (Piercing Hunter, Havocbound, Piercing Shooter) ride
-    # their OWN tokens — unit.rs::build_for's epoch-6 named arm (frozen
-    # EPOCH_6_TABLE_RULES) states each spelling literally and the dice folds
-    # log the named forms. Deliberately NO CONSUMED_PARAM_KEYS row here: the
-    # conditional-AP class's params are uniform across every entry
-    # (ap_bonus/condition on all of them), so a row would over-credit the two
-    # UNPORTED members (Point-Blank Piercing needs a `within_in` cap the
-    # CondAp spec does not carry; Havocbound Boost needs an always-on leg +
-    # the `upgrades` coupling the stamp pass does not read) — the #489
-    # over-credit shape, declined.
-    # Royal Legion family (rules-wave3-royallegion, 2026-09-05): unit.rs
-    # ::royal_legion_family_of folds every carried Royal Legion-primitive
-    # entry's two live halves — `range_bonus_in` (the _shooting_range_bonus
-    # alias-max) and `charge_mod` (the move-band pass's flat rush fold,
-    # MOVE_PRIMITIVES carrying "Royal Legion") — and the primitive-NULL
-    # "Lustbound Boost Aura" rides its base through the raw-name expansion
-    # arm. `upgrades` stays unread: neither twin's band or range pass reads
-    # it either (the move_rule_mods precedent).
-    "Royal Legion": frozenset({"range_bonus_in", "charge_mod"}),
-    # Versatile Attack family wave (rules-wave3-versatile, 2026-09-05): the
-    # three ported names (Watchborn, Vinci Tech, Vinci Tech Boost) ride their
-    # OWN tokens — unit.rs::build_for's epoch-6 named arm (frozen
-    # EPOCH_6_TABLE_RULES) states each spelling literally; Watchborn/Vinci
-    # Tech are live at every epoch off the generic stamp pass (name only),
-    # Vinci Tech Boost's both-arms form rides the same stamped channel and
-    # the volley fold logs the named forms. Deliberately NO
-    # CONSUMED_PARAM_KEYS row here: the resolver reads NO params (the
-    # AP(+1)/+1/over-9 shape is the primitive's own fixed semantics, uniform
-    # across every entry), so a row would be read-by-nobody evidence — and
-    # it would over-credit the primitive's fifth member (Exotic Gear /
-    # Exotic Gear Boost, aofs-only, outside this census universe) the #489
-    # shape if the universe ever widens.
-    # Shot-Modifier family wave (rules-wave3-shotmod, 2026-09-05): unit.rs
-    # ::shot_modifier_runtime_of (epoch-6 arm) stamps the two RUNTIME-GATED
-    # shooting members BY NAME — Mobile Artillery (`requires_stationary`, the
-    # act-scope moved flag sim.rs stamps over the volley Ctx) and Grounded
-    # Precision (`terrain_within_in`, consumed off Ctx.in_cover at the volley
-    # AND melee seams, dice.rs). The static stamp arm's own reads
-    # (`hit_bonus`/`over_in`) are deliberately NOT listed: that arm is a NAME
-    # allowlist, so per-entry param evidence is not sufficient for it —
-    # listing them would over-credit Cyber-Eyes / Cyber-Eyes Boost (read by
-    # nobody) the exact #489 shape. Without this row the primitive is
-    # untracked for every name under it.
-    "Shot Modifier": frozenset({"requires_stationary", "terrain_within_in"}),
-    # Aura-Channel family wave (rules-wave3-aura1, 2026-09-05): unit.rs's
-    # apply_aura_channel (epoch-6 gated, EPOCH_6_TABLE_RULES) reads each
-    # "<X> Aura" entry's own `grants` base and folds it onto the unit and its
-    # attached heroes — the import twin's expansion (opr_army_manager.gd:2117 /
-    # list_to_profile.py:350) re-stated from the entry's own param, so the core
-    # no longer depends on an import-time rewrite it cannot see. The fold is
-    # idempotent with the import expansion by construction (append only when
-    # absent), so epoch-5 records (the recording fleet's stamp) replay
-    # byte-exact with the import fold alone. Without this row the primitive
-    # would be trusted whole for every name under it - the #489 over-credit
-    # shape.
-    "Aura Channel": frozenset({"grants"}),
-    # Fortified-family wave (rules-wave3-fortified, 2026-09-05): unit.rs
-    # ::fortified_alias_of reads `incoming_ap_reduction` and `over_in` (the
-    # Boost-vs-gated shape split and the gated aliases' distance gate) off
-    # every carried Fortified-primitive entry behind EPOCH_6_TABLE_RULES.
-    "Fortified": frozenset({"incoming_ap_reduction", "over_in"}),
-    # Storm Attack family (rules-wave3-stormattack, 2026-09-05): unit.rs
-    # ::storm_of reads each "Storm of X" entry's own params (dice/trigger_
-    # target/range_in/hits/facet) into UnitStatic.storm, consumed by sim.rs
-    # ::tray_storm_attack behind `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`.
-    # `uses_per_game` stays unlisted on purpose: the once-per-game is read
-    # from the structural `State.storm_used` flag, never from the param.
-    "Storm Attack": frozenset({"dice", "trigger_target", "range_in", "hits", "facet"}),
-}
+    ConsumedParams("Vanguard", frozenset({"place_in"})),
+)
+
+CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = consumed_registry(_CONSUMED_PARAM_ROWS)
 
 
 def base_rule_name(rule: str) -> str:
@@ -510,6 +549,26 @@ def move_primitives(repo: Path) -> set:
     return set(re.findall(r'"([^"]+)"', m.group(1)))
 
 
+def core_src_files(repo: Path) -> list[Path]:
+    """Every resolver-bearing .rs under core/nml-core/src, in a stable order.
+
+    Two exclusions, both of them "this file carries no resolver arm":
+      * `rules.rs` - the lookup/parser twin, only the data-driven lookup every
+        arm shares;
+      * anything under `src/tests/` - the per-family TEST modules, wired into
+        their owner with `#[cfg(test)] #[path = "tests/<owner>/mod.rs"]`. They
+        are test code that happens to live in `src`, and a test literal is not
+        a resolver arm (the same rule `scan_rust_file` applies to an inline
+        `#[cfg(test)]` block, which it cannot see across a file boundary).
+        Without this the wave-4 test split would have credited three names
+        outright - #489's over-credit shape, from a pure file move.
+    """
+    src = Path(repo) / "core" / "nml-core" / "src"
+    tests_dir = src / "tests"
+    return [p for p in sorted(src.rglob("*.rs"))
+            if p.name != "rules.rs" and tests_dir not in p.parents]
+
+
 GRANTED_CALL_RE = re.compile(r'granted\([^()\n]*"([^"\n]+)"[^()\n]*\)')
 
 
@@ -518,10 +577,7 @@ def consumed_grant_names(repo: Path) -> set[str]:
     core/nml-core/src (rules.rs excluded) - read off the Rust source, never
     hand-listed."""
     names: set[str] = set()
-    src = Path(repo) / "core" / "nml-core" / "src"
-    for path in sorted(src.rglob("*.rs")):
-        if path.name == "rules.rs":
-            continue
+    for path in core_src_files(repo):
         try:
             text = path.read_text()
         except OSError:
@@ -683,14 +739,11 @@ def scan_rust_file(path: Path) -> tuple[dict, list]:
 
 
 def scan_rust(repo: Path) -> tuple[dict, list]:
-    """All of core/nml-core/src except rules.rs - the lookup/parser twin has no
-    resolver arms, only the data-driven lookup every arm shares."""
+    """Every core source file `core_src_files` keeps - see it for the two
+    exclusions and why each one carries no resolver arm."""
     tokens: dict = {}
     comments: list = []
-    src = Path(repo) / "core" / "nml-core" / "src"
-    for path in sorted(src.rglob("*.rs")):
-        if path.name == "rules.rs":
-            continue
+    for path in core_src_files(repo):
         t, c = scan_rust_file(path)
         for k, v in t.items():
             tokens.setdefault(k, v)
