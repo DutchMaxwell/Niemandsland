@@ -71,7 +71,7 @@ Three names, three separate reasons, all found by reading rule text rather than 
 attempt:
 
 - **Sturdy** — the plan required a registry remap `Guarded → Shielded`. The remap is **wrong**: the
-  twin's own quoted rule text contradicts it (`scripts/main.gd:4658-4674`,
+  twin's own quoted rule text contradicts it (`scripts/main.gd:4658`ff,
   `scripts/solo/ai_combat_math.gd:89`). Decision: **no remap.** The plan's premise was wrong, not
   merely unachieved.
 - **Quick Readjustment** — **DESIGN, not a port.** #718 already declared it unportable: the core has
