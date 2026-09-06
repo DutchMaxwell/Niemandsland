@@ -17,8 +17,8 @@
 //! wall clamp. GateFlags carries the original world positions and replay epoch.
 //!
 //! Remaining gap:
-//!   * non-charge skirmish's 6" chain (`CoherencyChecker` :18); charge gates
-//!     select the table's system-specific chain through GateFlags.
+//! Both gate arms and the caller's ladder select the acting unit's chain
+//! (`CoherencyChecker` :18) through GateFlags, at the table-rules epoch.
 //!
 //! THE BOUNDED FIXED POINT. There is no outer `repeat` in the table: the
 //! iteration lives INSIDE the passes and each bound is its own constant —
@@ -111,8 +111,10 @@ pub struct GateFlags<'a> {
     pub coherent_chain_in: f64,
     /// Some selects the charge arm; target centres/radii use the table contact test.
     pub charge_targets: Option<&'a [(geom::V3, f64)]>,
-    /// Charge coherency is 6 inches for skirmish systems, otherwise 9.
-    pub charge_chain_in: f64,
+    /// The ACTING unit's coherency chain: 6 inches for a skirmish system,
+    /// otherwise 9. The table reads it on both arms of `_finalize_placement`
+    /// (:6491 charge, :6503 plain); zero keeps the 9 inch default.
+    pub chain_in: f64,
     /// Original world positions for the table whole-unit fallback. Empty disables it.
     pub start_world: &'a [geom::V3],
     /// Replays below the table-rules epoch retain the original gate.
@@ -601,8 +603,11 @@ pub fn finalize_placement(
         })
         .collect();
     let charge = flags.charge_targets.is_some() && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES);
-    let max_chain = if charge && flags.charge_chain_in > 0.0 {
-        flags.charge_chain_in
+    // :6491 and :6503 read the SAME `is_skirmish_system(unit)` answer. The
+    // plain arm used to fall back to 9 inches, which kept a placement the table
+    // shortens away for a skirmish unit.
+    let max_chain = if flags.chain_in > 0.0 && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES) {
+        flags.chain_in
     } else { super::MAX_CHAIN_IN };
     let capped = !charge && caps_in.len() == n;
     // (terrain) :6402-6412 — project every model out of forbidden rest ground
@@ -646,10 +651,10 @@ pub fn finalize_placement(
     }
     if !charge && n > 1 && flags.start_world.len() == n
         && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES)
-        && !config_legal(&cfg, external, terrain)
+        && !config_legal(&cfg, external, terrain, max_chain)
     {
-        cfg = shorten_to_legal(flags.start_world, &cfg, external, board_in, terrain);
-        rep.coherent = config_coherent(&cfg, super::MAX_CHAIN_IN);
+        cfg = shorten_to_legal(flags.start_world, &cfg, external, board_in, terrain, max_chain);
+        rep.coherent = config_coherent(&cfg, max_chain);
     }
     clamp_gate_walls(&mut cfg, &goal, external, flags, terrain, &mut rep);
     let out = (0..n)
@@ -708,8 +713,8 @@ mod shape_tests {
 }
 
 /// The table's three final predicates, shared by each bisection probe.
-fn config_legal(cfg: &[Disc], external: &[Disc], terrain: Option<&Terrain>) -> bool {
-    config_coherent(cfg, super::MAX_CHAIN_IN)
+fn config_legal(cfg: &[Disc], external: &[Disc], terrain: Option<&Terrain>, chain: f64) -> bool {
+    config_coherent(cfg, chain)
         && (0..cfg.len()).all(|i| {
             (i + 1..cfg.len()).all(|j| edge(&cfg[i], &cfg[j]) >= -RESOLVE_EPS_IN)
                 && external.iter().all(|o| edge(&cfg[i], o) >= -RESOLVE_EPS_IN)
@@ -737,15 +742,15 @@ fn blend_from_start(start_world: &[geom::V3], cfg: &[Disc], factor: f64,
 /// the original start. The table assumes t=0 is legal and retains that fallback
 /// even for an invalid start; it does not search a different direction here.
 fn shorten_to_legal(start_world: &[geom::V3], cfg: &[Disc], external: &[Disc],
-                    board_in: [f64; 2], terrain: Option<&Terrain>) -> Vec<Disc> {
-    if config_legal(cfg, external, terrain) {
+                    board_in: [f64; 2], terrain: Option<&Terrain>, chain: f64) -> Vec<Disc> {
+    if config_legal(cfg, external, terrain, chain) {
         return cfg.to_vec();
     }
     let (mut lo, mut hi) = (0.0, 1.0);
     for _ in 0..16 {
         let mid = (lo + hi) * 0.5;
         let candidate = blend_from_start(start_world, cfg, mid, board_in);
-        if config_legal(&candidate, external, terrain) { lo = mid; } else { hi = mid; }
+        if config_legal(&candidate, external, terrain, chain) { lo = mid; } else { hi = mid; }
     }
     blend_from_start(start_world, cfg, lo, board_in)
 }
@@ -820,7 +825,8 @@ mod shorten_tests {
             .map(|v| body(v, [n(&v["center"][0]), n(&v["center"][1])])).collect();
         let plain: terrain::PlainTerrain = serde_json::from_value(pin["terrain"].clone()).unwrap();
         let terrain = Terrain::build(&plain);
-        let got = shorten_to_legal(&start, &cfg, &external, board, Some(&terrain));
+        let got = shorten_to_legal(&start, &cfg, &external, board, Some(&terrain),
+            crate::mv::MAX_CHAIN_IN);
         let mut worst = 0.0f64;
         for (i, d) in got.iter().enumerate() {
             let delta = [
@@ -948,12 +954,82 @@ mod endpoint_localisation {
             if let Some(shorten) = pin["shorten"].as_object() {
                 let cfg: Vec<Disc> = conv(&shorten["in"], board).iter().enumerate()
                     .map(|(i, c)| Disc { c: *c, r: radii[i], shape: shapes[i] }).collect();
-                let out = shorten_to_legal(&start_world, &cfg, &ext, board, Some(&terrain));
+                let out = shorten_to_legal(&start_world, &cfg, &ext, board, Some(&terrain),
+                    crate::mv::MAX_CHAIN_IN);
                 let out: Vec<[f64; 2]> = out.iter().map(|d| d.c).collect();
                 let delta = worst(&out, &conv(&shorten["out"], board));
                 assert!(delta <= shorten_bound,
                     "{id}: whole-unit shorten differs by {delta:.9}in (bound {shorten_bound})");
             }
         }
+    }
+}
+
+/// The skirmish systems' 6" chain (`CoherencyChecker` :18) on the PLAIN gate
+/// arm, pinned on the fixture the Stage A harness measures that bucket with.
+#[cfg(test)]
+mod skirmish_chain {
+    use super::*;
+    use serde_json::Value;
+
+    /// `generated-skirmish-chain`'s acting unit: six 32 mm bases 1.7 in apart,
+    /// 7.24 in of EDGE spread — inside the 9 in chain, over the 6 in one.
+    fn pinned_line() -> (Vec<V2>, Vec<f64>, Vec<geom::V3>) {
+        let fixtures: Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/cases.json")).unwrap();
+        let case = fixtures["cases"].as_array().unwrap().iter()
+            .find(|c| c["id"] == "generated-skirmish-chain").unwrap();
+        let unit = &case["units"][0];
+        assert_eq!(unit["game_system"], "gff", "fixture must stay a skirmish system");
+        let board = [case["board_in"][0].as_f64().unwrap(),
+                     case["board_in"][1].as_f64().unwrap()];
+        let points = unit["positions"].as_array().unwrap();
+        let planned = points.iter()
+            .map(|p| [(p[0].as_f64().unwrap() / IN2M + board[0] * 0.5) as f32,
+                      (p[2].as_f64().unwrap() / IN2M + board[1] * 0.5) as f32])
+            .collect();
+        let world = points.iter()
+            .map(|p| [p[0].as_f64().unwrap() as f32, 0.0, p[2].as_f64().unwrap() as f32])
+            .collect();
+        let radii = unit["radii"].as_array().unwrap().iter()
+            .map(|r| r.as_f64().unwrap() / IN2M).collect();
+        (planned, radii, world)
+    }
+
+    #[test]
+    fn the_ladder_reads_the_acting_unit_chain() {
+        let (planned, radii, _) = pinned_line();
+        let shapes = vec![BaseShape::Round; planned.len()];
+        let flags = |chain| GateFlags { shapes: &shapes, coherent_chain_in: chain,
+            rules_epoch: EPOCH_6_TABLE_RULES, ..Default::default() };
+        assert!(coherent_placement(&planned, &radii, flags(0.0)), "9 in holds this spread");
+        assert!(!coherent_placement(&planned, &radii, flags(crate::mv::SKIRMISH_CHAIN_IN)),
+            "a skirmish unit is over-spread at 6 in");
+    }
+
+    #[test]
+    fn a_banded_skirmish_advance_collapses_to_the_start() {
+        // The reference table's own answer for this fixture: the unit is
+        // over-spread at every reach, the band leaves no slack for the
+        // straggler pull, so the whole-unit shorten falls back to t = 0.
+        let (start, radii, world) = pinned_line();
+        let shapes = vec![BaseShape::Round; start.len()];
+        let advanced: Vec<V2> = start.iter().map(|p| [p[0] + 6.0, p[1]]).collect();
+        // `SoloController.GATE_SLACK_EPS_IN` :159 — all a spent band leaves.
+        let caps = vec![0.05; start.len()];
+        let gate = |rules_epoch| {
+            let flags = GateFlags { start_world: &world, shapes: &shapes,
+                chain_in: crate::mv::SKIRMISH_CHAIN_IN, rules_epoch, ..Default::default() };
+            finalize_placement(&advanced, &radii, &[], &caps, [72.0, 48.0], None, flags).0
+        };
+        for (i, (got, want)) in gate(EPOCH_6_TABLE_RULES).iter().zip(&start).enumerate() {
+            let gap = ((got[0] as f64 - want[0] as f64).powi(2)
+                + (got[1] as f64 - want[1] as f64).powi(2)).sqrt();
+            assert!(gap < 0.0001, "model {i} must hold at its start: {gap:.6}in off");
+        }
+        // Replays below the table-rules epoch keep the 9 in chain and the move.
+        let below = gate(EPOCH_6_TABLE_RULES - 1);
+        assert!((below[0][0] as f64 - advanced[0][0] as f64).abs() < 0.0001,
+            "the earlier epoch must keep the full advance");
     }
 }
