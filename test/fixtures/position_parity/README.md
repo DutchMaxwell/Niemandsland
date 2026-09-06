@@ -5,7 +5,12 @@ movement band and fixed charge target. `AiPosition.solve`, target choice,
 activation search, damage, and defender pile-in are outside this measurement.
 
 `cases.json` contains one matched action from each of 168 paired solo game
-recordings, plus generated cases. Each record includes both armies' physical
+recordings, plus generated cases. The generated half sweeps base footprints and
+game systems, four board sizes, five terrain densities against each movement
+exemption, nine charge reaches with two charger widths, formation shapes and
+sizes, skirmish spreads, board edges, wall lanes and attached heroes. It is
+self-contained, so `--reuse-recorded <cases.json>` rebuilds only that half and
+the sweep stays reproducible without the recording corpus. Each record includes both armies' physical
 state, terrain/walls, board dimensions, the acting unit, and candidate target
 IDs. The converter joins action and movement recordings by round, unit name,
 and every moving model's starting position (maximum 0.0001 inch error). It
