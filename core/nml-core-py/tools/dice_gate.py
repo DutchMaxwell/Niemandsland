@@ -164,6 +164,14 @@ def both_equal(nx: dict, other: dict, keys, bump: int = 0) -> bool:
 #: (state.rs `plain_of`) is written in meters, `--pos-tol` is read in inches.
 INCH_M = 0.0254
 
+#: C-POS boundary epsilon (inches): the gap comparison is exact, and a distance
+#: meant to be EXACTLY `tol_in` can land one float hair over — PR #694 measured
+#: 0.500000000336482" against a 0.5" tol (3.36e-10" over), flipping `pos_equal`
+#: to `pos_moved_1in` on one machine alone. `pos_verdict` therefore compares
+#: against `tol_in + POS_EPS_IN`: ~3000x that hair, far below the next-closest
+#: real gap in the same run (0.5005514"), so it cannot mask a real move.
+POS_EPS_IN = 1e-9
+
 #: check C POS's own bucket order, mirroring `BUCKETS`'s "sum to the count".
 POS_BUCKETS = ("pos_equal", "pos_moved_1in", "pos_moved_3in", "pos_moved_far", "pos_unknown")
 
@@ -197,7 +205,7 @@ def pos_verdict(nx: dict, other: dict, keys, tol_in: float) -> tuple[str, float 
     if any(g is None for g in gaps):
         return "pos_unknown", None
     gap = max(gaps)
-    if gap <= tol_in:
+    if gap <= tol_in + POS_EPS_IN:
         return "pos_equal", gap
     if gap <= 1.0:
         return "pos_moved_1in", gap
