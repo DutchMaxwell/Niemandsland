@@ -4,44 +4,39 @@
   "measurement": {
     "cases": {
       "generated-charge-14": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.3118113926427277e-06,
-          1.0000017251805184
+          2.4933045304666356e-06
         ],
         "model_ids": [
           "u00:0",
           "u00:1"
         ],
-        "reasons": [
-          "charge_final_placement",
-          "charge_snap"
-        ],
+        "reasons": [],
         "tiers": [
           1,
-          2
+          1
         ]
       },
       "generated-charge-20": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.8477186526234342e-06,
-          0.9999996345384353
+          1.4666497238039032e-07
         ],
         "model_ids": [
           "u00:0",
           "u00:1"
         ],
-        "reasons": [
-          "charge_final_placement"
-        ],
+        "reasons": [],
         "tiers": [
           1,
-          2
+          1
         ]
       },
       "generated-charge-8": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.716669489126451e-06,
           7.333248619019516e-07
@@ -50,26 +45,21 @@
           "u00:0",
           "u00:1"
         ],
-        "reasons": [
-          "charge_final_placement",
-          "charge_snap"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1
         ]
       },
       "generated-charge-wall": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           8.83040068157215e-07
         ],
         "model_ids": [
           "u00:0"
         ],
-        "reasons": [
-          "charge_final_placement"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -1610,29 +1600,29 @@
         ]
       },
       "recorded-026": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
-          8.10183189680766,
-          5.169225809410258,
-          3.8281946109739806,
-          4.790154092003311,
-          1.5419007423634343,
-          6.674537318503604,
-          5.073600540729516,
-          3.6007005285220695,
-          0.39370258933310803,
+          7.503744633798282e-05,
+          2.346639558086245e-06,
+          1.6593247445233873e-06,
+          3.568512794010646e-06,
+          2.1152323129280283e-06,
+          6.204465733254592e-05,
+          4.729803239911178e-06,
+          1.3118113926427277e-06,
+          2.4188606908105844e-06,
           4.3999491714117096e-07,
-          3.877520505334398,
-          2.2552671934313158,
-          0.21096018489416712,
+          4.591339874249547e-06,
+          2.760459210565051e-06,
+          2.657227706837818e-06,
           3.7564561577251865e-06,
           5.811924833167992e-06,
-          3.8546328585801537,
-          0.9895696376222425,
+          1.319984751423513e-06,
+          2.485613145020229e-06,
           1.7646522313757e-06,
           3.433338978252902e-06,
           1.2094303454052922e-06,
-          1.5061751876778298
+          2.5947682402491413e-06
         ],
         "formation_tiers": [
           0,
@@ -1680,33 +1670,29 @@
           "u01:19",
           "u02:0"
         ],
-        "reasons": [
-          "base_shapes",
-          "charge_final_placement",
-          "charge_snap"
-        ],
+        "reasons": [],
         "tiers": [
-          2,
-          2,
-          2,
-          2,
-          2,
-          2,
-          2,
-          2,
-          1,
-          1,
-          2,
-          2,
           1,
           1,
           1,
-          2,
-          2,
           1,
           1,
           1,
-          2
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
         ]
       },
       "recorded-027": {
@@ -2021,28 +2007,28 @@
         ]
       },
       "recorded-033": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
-          1.0000005688655644,
-          1.6554720971345402,
-          2.3038465663049608,
+          8.296623722616936e-07,
+          1.9677170889640916e-06,
+          2.639969502847026e-06,
           9.838585444820458e-07,
           8.799898342823419e-07,
-          0.8700833062139338,
+          1.6133146961842936e-06,
           1.0266548066627324e-06,
           1.784256397005323e-06,
           9.533223204725371e-07,
-          1.0000016964758038,
+          1.495695112256314e-06,
           1.495695112256314e-06,
           9.188534183106252e-07,
-          0.999999158100994,
-          0.02561941123967502,
+          2.9332994476078064e-07,
+          7.333248619019516e-07,
           2.9433404140468893e-06,
-          0.39338778239133343,
-          0.999999665527699,
-          0.3937013286041741,
+          2.6236227852854553e-06,
+          5.288080782320071e-07,
+          2.6491202044716447e-06,
           2.9479294607961067e-06,
-          7.93716287144434
+          1.0576161564640142e-06
         ],
         "formation_tiers": [
           0,
@@ -2088,31 +2074,28 @@
           "u05:18",
           "u06:0"
         ],
-        "reasons": [
-          "base_shapes",
-          "charge_final_placement"
-        ],
+        "reasons": [],
         "tiers": [
-          2,
-          2,
-          2,
-          1,
-          1,
-          2,
           1,
           1,
           1,
-          2,
-          1,
-          1,
-          2,
           1,
           1,
           1,
-          2,
           1,
           1,
-          2
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
         ]
       },
       "recorded-034": {
@@ -2428,18 +2411,18 @@
         ]
       },
       "recorded-042": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           1.1733197790431226e-06,
           1.1733197790431226e-06,
-          8.000001682466696,
-          8.999886207587892,
-          8.000000723527858,
-          1.9998790097010983,
+          2.6236227852854553e-06,
+          1.1733197790431226e-06,
+          1.6593247445233873e-06,
+          1.1733197790431226e-06,
           2.346639558086245e-06,
           0.0,
-          9.99328198732483,
-          7.999998845010006
+          1.1733197790431226e-06,
+          1.1733197790431226e-06
         ],
         "formation_tiers": [
           0,
@@ -2465,21 +2448,18 @@
           "u10:8",
           "u10:9"
         ],
-        "reasons": [
-          "base_shapes",
-          "charge_final_placement"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
-          2,
-          2,
-          2,
-          2,
+          1,
+          1,
+          1,
+          1,
           1,
           0,
-          2,
-          2
+          1,
+          1
         ]
       },
       "recorded-043": {
@@ -3412,7 +3392,7 @@
         ]
       },
       "recorded-070": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           2.099922830792797e-06
         ],
@@ -3422,11 +3402,7 @@
         "model_ids": [
           "u19:0"
         ],
-        "reasons": [
-          "base_shapes",
-          "charge_final_placement",
-          "charge_snap"
-        ],
+        "reasons": [],
         "tiers": [
           1
         ]
@@ -4901,7 +4877,7 @@
         ]
       },
       "recorded-106": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           6.559056963213638e-07,
           2.9332994476078064e-07,
@@ -4920,11 +4896,7 @@
           "u07:2",
           "u08:0"
         ],
-        "reasons": [
-          "base_shapes",
-          "charge_final_placement",
-          "charge_snap"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
@@ -6151,13 +6123,13 @@
         ]
       },
       "recorded-136": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           5.534538328680821e-06,
           5.866598895215613e-07,
           1.4666497238039032e-07,
           2.351218371334009e-06,
-          1.0000015188350277,
+          1.1824508099777946e-06,
           1.8782280788625932e-06
         ],
         "formation_tiers": [
@@ -6176,16 +6148,13 @@
           "u10:4",
           "u11:0"
         ],
-        "reasons": [
-          "base_shapes",
-          "charge_final_placement"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
           1,
           1,
-          2,
+          1,
           1
         ]
       },
@@ -6334,11 +6303,11 @@
         ]
       },
       "recorded-141": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
           3.568512794010646e-06,
           1.4666497238039032e-06,
-          4.913104515383736,
+          3.344475944619297e-06,
           6.047151727026461e-07,
           1.76608013631443e-06,
           1.319984751423513e-06,
@@ -6362,15 +6331,11 @@
           "u05:5",
           "u06:0"
         ],
-        "reasons": [
-          "base_shapes",
-          "charge_final_placement",
-          "charge_snap"
-        ],
+        "reasons": [],
         "tiers": [
           1,
           1,
-          2,
+          1,
           1,
           1,
           1,
@@ -7435,17 +7400,17 @@
     },
     "summary": {
       "by_reason": {
-        "base_shapes": 7,
+        "base_shapes": 0,
         "boxed_escape": 16,
         "caught_panic": 0,
-        "charge_final_placement": 11,
-        "charge_snap": 6,
+        "charge_final_placement": 0,
+        "charge_snap": 0,
         "coherency_hold": 0,
         "parse_error": 0,
         "skirmish_chain": 1,
         "whole_unit_shorten": 14
       },
-      "declined": 27,
+      "declined": 16,
       "equal": 4,
       "formation": {
         "declined": 0,
@@ -7456,16 +7421,16 @@
       },
       "models": {
         "beyond_0.5in": 3,
-        "declined": 240,
-        "equal": 112,
+        "declined": 164,
+        "equal": 113,
         "n": 1302,
-        "within_0.5in": 1059
+        "within_0.5in": 1135
       },
       "n": 183,
-      "within_0.5in": 155
+      "within_0.5in": 166
     }
   },
-  "reason": "PR 2 ports epoch-6 whole-unit shortening and its table straggler repair; fourteen shortening declines remain at the pending boxed continuation with prior results preserved; original case values and thresholds are unchanged.",
+  "reason": "PR 3 ports epoch-6 charge final placement and budgeted snap using shared base footprints. Three identical fresh engine runs close charge_final_placement 11 -> 0, charge_snap 6 -> 0 and remaining base_shapes 7 -> 0; the fixture corpus is unchanged and no other decline bucket or raw model tier regresses.",
   "schema": 1,
-  "source_revision": "f9c804b6228efc4ebb076497742f213c873dfd95"
+  "source_revision": "16cd4d2d01ec419db3a9f15d9cc27a0d1cac6769"
 }

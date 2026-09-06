@@ -211,7 +211,7 @@ func _one(f: Dictionary, core: Object) -> Dictionary:
 		"shorten_calls":solo.shorten_calls,"timing_us":{"table":table_us,"rust":rust_us},
 		"table_budget_in":solo.last_move_budget_in,"rust_budget_in":rust.get("budget_in",0.0),
 		"table_charge_gap_in":charge_gap,"table_snap_in":snap_in,
-		"rust_arc_in":rust.get("arc_in",0.0)}
+		"rust_arc_in":rust.get("arc_in",0.0),"rust_snap_in":rust.get("snap_in",null)}
 	if f.has("formation_call"):
 		# The ordinary seam marshals JSON-widened cells back to integers before
 		# its corpus reader runs. Reuse that normalization, then obtain live vectors.

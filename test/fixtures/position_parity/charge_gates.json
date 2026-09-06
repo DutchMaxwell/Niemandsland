@@ -1,0 +1,203 @@
+{
+  "source_case": "generated-charge-14",
+  "fixture_sha256": "4beab23e743c790518d373fe7f5203d1fe64000ec361d4cac7a9373f6ed820b0",
+  "tolerance_in": 0.0001,
+  "cases": [
+    {
+      "id": "generated-charge-14",
+      "expected_world": [
+        [
+          0.30455636978149414,
+          0.0,
+          -0.012182235717773438
+        ],
+        [
+          0.3043062090873718,
+          0.0,
+          0.0372476689517498
+        ]
+      ],
+      "snap_in": -0.7730591027286109,
+      "charge_gap_in": 0.7730591027286109,
+      "budget_in": 12.0
+    },
+    {
+      "id": "recorded-136",
+      "expected_world": [
+        [
+          0.1441638469696045,
+          0.0,
+          0.07402980327606201
+        ],
+        [
+          0.19027161598205566,
+          0.0,
+          0.06861639022827148
+        ],
+        [
+          0.259674072265625,
+          0.0,
+          0.03412050008773804
+        ],
+        [
+          0.3023710250854492,
+          0.0,
+          0.03188884258270264
+        ],
+        [
+          0.3323960602283478,
+          0.0,
+          0.05727315694093704
+        ],
+        [
+          0.22104370594024658,
+          0.0,
+          0.055433690547943115
+        ]
+      ],
+      "snap_in": null,
+      "charge_gap_in": 3.7806559594597404,
+      "budget_in": 6.0
+    }
+  ],
+  "snap_probes": [
+    {
+      "name": "remaining_budget",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.0377,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 2,
+      "arc_in": 1,
+      "expected_snap_in": 0.5,
+      "expected_world": [
+        0.0127,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    },
+    {
+      "name": "exhausted_budget",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.0377,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 1,
+      "arc_in": 1,
+      "expected_snap_in": -0.5,
+      "expected_world": [
+        0,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    },
+    {
+      "name": "contact_slack",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.026778,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 1,
+      "arc_in": 0.97,
+      "expected_snap_in": 0.07,
+      "expected_world": [
+        0.001778,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    },
+    {
+      "name": "beyond_slack",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.027286,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 1,
+      "arc_in": 0.97,
+      "expected_snap_in": -0.09,
+      "expected_world": [
+        0,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    },
+    {
+      "name": "outside_engagement",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.0631,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 3,
+      "arc_in": 0,
+      "expected_snap_in": null,
+      "expected_world": [
+        0,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    },
+    {
+      "name": "already_in_contact",
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "target": [
+        0.0255,
+        0,
+        0
+      ],
+      "radius_m": 0.0125,
+      "band_in": 0,
+      "arc_in": 0,
+      "expected_snap_in": 0,
+      "expected_world": [
+        0,
+        0,
+        0
+      ],
+      "tolerance_in": 1e-05
+    }
+  ]
+}

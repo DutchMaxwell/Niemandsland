@@ -82,12 +82,12 @@ call. MOVE boundary failures are parse errors or caught panics. The search's
 
 | Decline reason / residual bucket | Measured positions | Closing PR |
 | --- | --- | --- |
-| base_shapes | 7 | PR 1: non-charge closed; charge-gate remainder |
+| base_shapes | 0 | PR 1: non-charge; PR 3: charge |
 | whole_unit_shorten | 14 | PR 2: 56 closed; boxed-continuation remainder |
-| boxed_escape | 16 | PR 3 (proposed) |
-| accepted non-equal endpoints (difference, not decline) | 152 | PR 4 (investigate first) |
-| charge_final_placement | 11 | PR 5 (proposed) |
-| charge_snap | 6 | PR 6 (proposed) |
+| boxed_escape | 16 | PR 4 (proposed) |
+| accepted non-equal endpoints (difference, not decline) | 163 | Later numeric investigation |
+| charge_final_placement | 0 | PR 3 (#730) |
+| charge_snap | 0 | PR 3 (#730) |
 | skirmish_chain | 1 | PR 7 (proposed) |
 | coherency_hold | 0 | no observed case |
 | parse_error | 0 | no observed failure |
@@ -98,7 +98,7 @@ Reason counts overlap: a charge can expose a gate skip and a missing snap.
 The aggregate declined count counts that position once. Shape coverage is
 conservative: a gate with any live non-round obstacle exposes the missing shape
 capability, even when the current result does not touch that obstacle.
-The inventory counts above reflect PR 2; the measurements above preserve PR 0.
+The inventory counts above reflect PR 3; the measurements above preserve PR 0.
 
 A missing extension, invalid reference rebuild, missing output/model, unexpected
 stage, or nonfinite coordinate fails the instrument instead of manufacturing a
@@ -110,19 +110,19 @@ to accepted equality or the accepted half-inch count.
 | Formula | Existing Rust implementation | Remaining gap / measurement |
 | --- | --- | --- |
 | Formation coherency | `mv/form.rs`: radius-aware link graph, penalties, projections | Raw seam comparison plus final-stage deltas |
-| System chain limit | `mv/gate.rs` and `mv/step.rs` use `MAX_CHAIN_IN` | Table selects 6 inches for skirmish, 9 otherwise |
-| Base geometry | `State::base_shape` feeds shared `geom::pair_gap_m` in the gate and ladder | Charge final-placement remains skipped |
+| System chain limit | Charge gate selects 6 inches for skirmish, 9 otherwise | Non-charge skirmish remains a gap |
+| Base geometry | `State::base_shape` feeds shared `geom::pair_gap_m` in gates, ladder and snap | All charge and non-charge footprints covered |
 | Large bases | Recorded radii and footprints feed final corrections | Bounding-radius terrain rest matches the table |
 | Difficult terrain | `mv/cap.rs` trims polylines; `mv/step.rs` replans at cap | Compare per-model trim, unit replan, and Flying/Strider exemptions |
 | Gate displacement budget | `mv/step.rs::gate_caps` computes remaining per-model caps | Compare corrections after table gate and retrace |
 | Non-charge final placement | `mv/gate.rs` includes epoch-6 shortening and table straggler repair | 14 shortening cases await boxed continuation |
-| Charge rest / overlap / coherency | Formation and shaped near-face aim exist | `mv/step.rs` skips the entire final-placement call when contact is allowed |
-| Charge snap | `Landing::remaining_in` records budget minus longest model arc | MOVE endpoints precede table snap; reserve slack/contact checks remain a gap |
+| Charge rest / overlap / coherency | Epoch-6 uncapped contact-aware terrain rest, shaped overlap, coherency repair and wall clamp | No observed decline remains |
+| Charge snap | Shared footprint query, engagement reach, remaining arc budget, contact slack and residual rejection | Epoch-6 execution and diagnostic use the same snap |
 | Boxed escape | Core stops after the forward gate-collapse ladder | Table can rotate goals when its lateral-room probe succeeds |
 | Coherency hold | Core prefers coherent ladder rungs | Table holds if every rung tears an initially coherent unit |
 | Walls | Both planners route around walls; core non-charge gate clamps crossings | Compare final per-model endpoints and separate formation results |
 | Charge corridor | Table declaration probe routes, trims, finalizes and probes contact | Stage A covers execution geometry; declaration/target selection is outside the fixed-action input |
-| Numeric conversions | Core explicitly models several Vector3 float32 roundings | 152 accepted non-equal positions; investigate residuals before attributing cause |
+| Numeric conversions | Core explicitly models several Vector3 float32 roundings | 163 accepted non-equal positions; investigate residuals before attributing cause |
 
 Generated cases enter both contact and no-contact charge gates; the 14-inch
 charge exposes exhausted snap slack. The difficult-terrain case grants 6 inches,
@@ -181,8 +181,8 @@ gap. Both tests read `cases.json` and `base_shapes.json`. Additional shared
 short-axis, long-axis and clear-contact probes exercise moving and obstacle
 ovals. No production GDScript or environment defaults change.
 
-Shape capability is advertised only for non-charge actions. Seven charge
-fixtures still encounter the skipped charge gate and retain their shape decline;
+PR 1 advertised shape capability only for non-charge actions. Seven charge
+fixtures retained their shape decline while the charge gate was skipped;
 that remainder belongs to the charge-final-placement port.
 
 PR 1's three complete runs agree: 183 positions, 4 equal, 97 within 0.5in,
@@ -196,3 +196,5 @@ Three-run SHA-256 (timing excluded):
 `ceed09f8894999d98de97000adb8ad702e98153b7075c71f4a980086dddae5ce`.
 
 PR 2 acceptance: [three runs, test evidence and the 14-case remainder](https://github.com/DutchMaxwell/Niemandsland/pull/724).
+
+PR 3 acceptance: [charge buckets closed, three runs and test evidence](https://github.com/DutchMaxwell/Niemandsland/pull/730).
