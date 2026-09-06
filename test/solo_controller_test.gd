@@ -287,6 +287,33 @@ func test_rule_detection_is_exact_and_rapid_ambush_is_the_only_alias() -> void:
 	assert_bool(SoloController.unit_has_ambush(plain)).is_true()
 
 
+## Surprise Attack (table PR): the book rule is stamped under the Infiltrate primitive in the SHIPPED
+## mechanics maps (gf/aof: "grants": "Infiltrate"; aofr: "counts_as": "Ambush" with its own 1" ring),
+## but the table gates matched the literal name — a Surprise Attack carrier was never set aside into
+## reserve and kept the plain Ambush 9" arrival ring. The alias lives in DATA; the gates resolve it.
+func test_surprise_attack_carrier_is_a_reserve_on_the_data_ring() -> void:
+	var sa := _unit(2, [Vector3.ZERO])
+	sa.unit_properties["special_rules"] = ["Surprise Attack"]
+	sa.unit_properties["game_system"] = "gf"
+	sa.unit_properties["faction_folder"] = "alien_hives"
+	assert_bool(SoloController.unit_has_ambush(sa)) \
+		.override_failure_message("Surprise Attack counts as having Infiltrate — the carrier is a reserve") \
+		.is_true()
+	var solo: SoloController = auto_free(SoloController.new())
+	assert_float(solo._reserve_min_enemy_dist_m(sa)) \
+		.override_failure_message("the Infiltrate ring is DATA — the carrier arrives over 3\", not the Ambush 9\"") \
+		.is_equal_approx(3.0 * INCH_M, 0.0005)
+	# The Regiments book stamps the same name as a direct Ambush alias with its OWN ring (1") — the
+	# ring must follow the entry, not the constant.
+	var reg := _unit(2, [Vector3.ZERO])
+	reg.unit_properties["special_rules"] = ["Surprise Attack"]
+	reg.unit_properties["game_system"] = "aofr"
+	reg.unit_properties["faction_folder"] = "goblins"
+	assert_float(solo._reserve_min_enemy_dist_m(reg)) \
+		.override_failure_message("aofr Surprise Attack: the registry's 1\" ring, read from the entry") \
+		.is_equal_approx(1.0 * INCH_M, 0.0005)
+
+
 ## Ambush Beacon (maintainer ruling): within 6" of the beacon MODEL every enemy distance restriction
 ## falls away. The pure predicate is the whole waiver — nearest beacon wins, 6" is inclusive.
 func test_beacon_cover_waives_inside_six_inches_only() -> void:

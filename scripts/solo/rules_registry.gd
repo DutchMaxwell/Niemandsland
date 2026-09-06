@@ -193,3 +193,15 @@ static func best_primitive_param(unit: GameUnit, primitive: String, key: String,
 		if best == null or ((v is float or v is int) and float(v) > float(best)):
 			best = v
 	return best if best != null else fallback
+
+
+## Whether an entry's params CLAIM its carrier belongs to the Ambush reserve family: an explicit
+## counts_as (Infiltrate, Infiltrate Aura, Rapid Ambush, aofr Surprise Attack) or a family grant
+## (gf/aof Surprise Attack → "grants": "Infiltrate"). The primitive stamp ALONE is not the claim —
+## Ambush Beacon / Rapid Ambush / Ambush Re-Deployment also stamp the Ambush primitive and deploy
+## NORMALLY, and a mechanics-only stamp (Ambushing Piercing Shot) must never stage a reserve.
+static func params_claim_ambush(params: Dictionary) -> bool:
+	if not str(params.get("counts_as", "")).is_empty():
+		return true
+	var grants := str(params.get("grants", ""))
+	return grants == "Ambush" or grants == "Infiltrate"

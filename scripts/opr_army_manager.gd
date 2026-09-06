@@ -331,8 +331,11 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 		# Re-Deployment", "Ambushing Piercing Shot" merely MENTION the word). The AI's real
 		# reserve decision never used it (`SoloController.unit_has_ambush` reads names, item
 		# grants and the registry's `counts_as`), so the lane now agrees with it.
+		# Infiltrate "counts as having Ambush" (Bug 26) — stage together; registry aliases of the
+		# family with a reserve claim (Surprise Attack, …) ride the same lane.
 		var is_ambush := _unit_has_rule(unit, "Ambush") \
-			or _unit_has_rule(unit, "Infiltrate")   # Infiltrate "counts as having Ambush" (Bug 26) — stage together
+			or _unit_has_rule(unit, "Infiltrate") \
+			or _unit_carries_ambush_alias(unit, army)
 		var is_scout := _unit_has_rule(unit, "Scout")
 		var spawn_pos: Vector3
 		if is_ambush:
@@ -1174,6 +1177,26 @@ static func _unit_has_rule(unit, rule: String) -> bool:
 		return false
 	for raw in unit.special_rules:
 		if str(raw).split("(")[0].strip_edges() == rule:
+			return true
+	return false
+
+
+## The lane-side twin of SoloController.unit_has_ambush's registry half, for the pre-GameUnit tray
+## staging: a rule whose mechanics-map entry (system = the unit's imported game system, faction =
+## the army's — the same keys the GameUnit stamp carries later) resolves to the Ambush/Infiltrate
+## primitive AND claims the reserve family (counts_as / grants) — e.g. Surprise Attack. A
+## mechanics-only stamp is NOT a claim, so the NML-1115 false positives stay in the main pack.
+## Map-absent or unstamped system → no alias, the literal-name gate alone decides (old behaviour).
+static func _unit_carries_ambush_alias(unit: OPRApiClient.OPRUnit, army: OPRApiClient.OPRArmy) -> bool:
+	if unit == null:
+		return false
+	var system := RulesRegistry.normalize_system(unit.game_system)
+	var faction: String = army.faction_folder if army != null else ""
+	for raw in unit.special_rules:
+		var entry := RulesRegistry.lookup(system, faction, RulesRegistry.base_rule_name(str(raw)))
+		var p: Variant = entry.get("primitive")
+		if p is String and (str(p) == "Ambush" or str(p) == "Infiltrate") \
+				and RulesRegistry.params_claim_ambush(entry.get("params", {}) as Dictionary):
 			return true
 	return false
 

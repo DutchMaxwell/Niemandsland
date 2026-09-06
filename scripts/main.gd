@@ -10572,6 +10572,14 @@ func _solo_log_ambush_variant_lines(unit: GameUnit, round_number: int, ai_side: 
 	if round_number < 2 and SoloController.unit_carries_rule(unit, SoloController.RULE_RAPID_AMBUSH):
 		_log_rule_event(BattleLog.Category.GENERAL,
 			"Rapid Ambush: %s arrives at the start of round 1 (base Ambush allows round 2+)" % unit.get_name(), ai_side)
+	# Rules-must-log: an ALIAS carrier (Surprise Attack, …) rides the family's reserve handling —
+	# name the ACTUAL book rule and the family word its registry entry claims. Plain Ambush /
+	# Infiltrate / Rapid Ambush keep their own lines above.
+	var claim: Dictionary = SoloController.reserve_alias_claim(unit)
+	if not claim.is_empty():
+		_log_rule_event(BattleLog.Category.GENERAL,
+			"%s: %s counts as having %s — set aside in reserve, arrives from round 2+" % [
+				str(claim["rule"]), unit.get_name(), str(claim["counts_as"])], ai_side)
 	# Transport cargo travels inside the hull and lands with it — including in round 1 behind Rapid
 	# Ambush. Rules-legal, but it must be visible that a whole package just appeared.
 	if opr_army_manager != null and opr_army_manager.has_method("transport_capacity") \
