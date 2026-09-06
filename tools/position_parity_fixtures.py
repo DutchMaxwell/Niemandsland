@@ -327,15 +327,118 @@ def generated():
             tags=["final_placement", "whole_unit_shorten", "gate_budget"],
         )
     )
+    # ---- Wide sweep -------------------------------------------------------
+    # The recorded games are one faction pair on one board size. These cases add
+    # the axes they never vary: base footprint, game system, board size, terrain
+    # density against each movement exemption, charge reach and charger width,
+    # formation shape, skirmish spread, board edges, wall lanes and attached
+    # heroes. Every case is a fixed action on a self-contained board, so the
+    # sweep is reproducible without the recording corpus.
+    shapes = [("round", 25, 25), ("round", 32, 32), ("round", 40, 40), ("round", 50, 50),
+              ("round", 60, 60), ("round", 90, 90), ("oval", 60, 35), ("oval", 75, 42),
+              ("oval", 90, 52), ("oval", 120, 92)]
+    boards, rulesets = [(72, 48), (48, 48), (44, 60), (36, 36)], ["", "Strider", "Flying", "Traversal"]
+
+    def line(key, pid, count, x, z, step=1.7, **kw):
+        return unit(key, pid, [(x + i * step, z) for i in range(count)], **kw)
+
+    for shape, w, d in shapes:
+        for system in ["gf", "gff"]:
+            span = max(1.7, w / 25.4 + 0.4)
+            out.append(case("faction-%s%dx%d-%s" % (shape, w, d, system),
+                [line("u00", 1, 3, 0, 0, span, shape=shape, width=w, depth=d, system=system),
+                 line("u01", 2, 3, 14, 0, span, system=system)],
+                band=6, dest=(6, 0), tags=["faction", "base_shapes", "coherency"]))
+    for board in boards:
+        edge = board[0] / 2.0 - 6.0
+        for kind, band, tag in [(1, 6, "advance"), (2, 12, "rush"), (3, 12, "charge")]:
+            c = case("board-%dx%d-%s" % (board[0], board[1], tag), kind=kind, band=band,
+                units=[line("u00", 1, 3, -edge, 0), line("u01", 2, 2, -edge + 10, 0)],
+                dest=(-edge + 10, 0), tags=["board_type", tag])
+            c["board_in"], c["terrain"]["cell_params"]["table_size_feet"] = list(board), \
+                [board[0] / 12.0, board[1] / 12.0]
+            out.append(c)
+    # Cell type 2/3/4 are difficult, dangerous and impassable; the exemptions
+    # (Strider, Flying, Traversal) must each meet the same board.
+    for density in range(1, 6):
+        cells = [[x, y, 2 + (x + y) % 3] for x in range(12, 12 + density * 2)
+                 for y in range(12, 12 + density * 2)]
+        for rule in rulesets:
+            out.append(case("terrain-d%d-%s" % (density, rule.lower() or "plain"),
+                [line("u00", 1, 3, 0, 0, rules=[rule] if rule else []), line("u01", 2, 2, 16, 0)],
+                kind=2, band=12, dest=(12, 0), cells=cells, tags=["terrain_cap",
+                "terrain_exemptions", "walls"], walls=[[[(2 + k) * IN2M, -6 * IN2M],
+                [(2 + k) * IN2M, 6 * IN2M]] for k in range(density)]))
+    for distance in [4, 6, 8, 10, 12, 14, 16, 18, 20]:
+        for count in [1, 3]:
+            out.append(case("charge-d%d-n%d" % (distance, count),
+                [line("u00", 1, count, 0, 0), line("u01", 2, 2, distance, 0)],
+                kind=3, band=12, dest=(distance, 0),
+                tags=["charge_final_placement", "charge_snap",
+                      "charge_contact" if distance <= 12 else "charge_no_contact"]))
+    for shape, w, d in shapes[5:]:
+        out.append(case("charge-%s%dx%d" % (shape, w, d),
+            [line("u00", 1, 2, 0, 0, 4.0, shape=shape, width=w, depth=d),
+             line("u01", 2, 2, 10, 0, 4.0, shape=shape, width=w, depth=d)],
+            kind=3, band=12, dest=(10, 0),
+            tags=["charge_final_placement", "base_shapes", "large_base"]))
+    for k, rule in enumerate(rulesets):
+        out.append(case("charge-terrain-%s" % (rule.lower() or "plain"),
+            [line("u00", 1, 2, 0, 0, rules=[rule] if rule else []), line("u01", 2, 2, 12, 0)],
+            kind=3, band=12, dest=(12, 0),
+            cells=[[x, y, 2] for x in range(15, 19) for y in range(14, 17)],
+            walls=[[[6 * IN2M, -8 * IN2M], [6 * IN2M, 8 * IN2M]]] if k % 2 else [],
+            tags=["charge_final_placement", "terrain_cap", "walls"]))
+    for cols, rows in [(2, 1), (3, 1), (5, 1), (4, 2), (5, 2), (2, 4), (1, 8)]:
+        for spread in [1.7, 2.6]:
+            out.append(case("formation-%dx%d-s%d" % (cols, rows, int(spread * 10)),
+                [unit("u00", 1, [(c * spread, r * spread) for r in range(rows)
+                 for c in range(cols)]), line("u01", 2, 2, 16, 0)], kind=2, band=12, dest=(10, 0),
+                tags=["coherency", "final_placement", "whole_unit_shorten"]))
+    for system in ["gff", "aofs"]:
+        for count in [2, 4, 6]:
+            for spread in [1.7, 2.4]:
+                out.append(case("skirmish-%s-n%d-s%d" % (system, count, int(spread * 10)),
+                    [line("u00", 1, count, 0, 0, spread, system=system),
+                     line("u01", 2, 2, 18, 0, system=system)],
+                    kind=2, band=12, dest=(12, 0), tags=["skirmish_chain", "coherency"]))
+    for name, x, z, dest in [("west", -33, 0, (-27, 0)), ("east", 33, 0, (27, 0)),
+                             ("north", 0, -21, (0, -15)), ("south", 0, 21, (0, 15)),
+                             ("corner-nw", -33, -21, (-27, -15)), ("corner-se", 33, 21, (27, 15))]:
+        out.append(case("edge-" + name, [line("u00", 1, 3, x, z), line("u01", 2, 1, 0, 0)],
+            kind=2, band=12, dest=dest, tags=["bounds", "final_placement"]))
+    for k in range(4):
+        out.append(case("wall-lane-%d" % k, [line("u00", 1, 3, 0, 0), line("u01", 2, 1, 16, 0)],
+            kind=2, band=12, dest=(12, 0),
+            walls=[[[(4 + k) * IN2M, -3 * IN2M], [(4 + k) * IN2M, 9 * IN2M]],
+                   [[(4 + k) * IN2M, -9 * IN2M], [(4 + k) * IN2M, -5 * IN2M]]],
+            tags=["walls", "final_placement"]))
+    for count in [1, 3, 5]:
+        for shape, w, d in [("round", 32, 32), ("oval", 60, 35)]:
+            host, hero = line("u00", 1, count, 0, 0), unit("u02", 1, [(-1.7, 0)], shape, w, d)
+            host["attached"], hero["attached_to"] = ["u02"], "u00"
+            out.append(case("hero-%s-n%d" % (shape, count),
+                [host, line("u01", 2, 2, 16, 0), hero], kind=2, band=12, dest=(10, 0),
+                tags=["attached", "coherency", "base_shapes"]))
     return out
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--corpus", type=Path, required=True)
+    parser.add_argument("--corpus", type=Path)
+    parser.add_argument("--reuse-recorded", type=Path, help="keep the recorded cases of this "
+                        "cases.json and rebuild only the generated ones")
     parser.add_argument("--out", type=Path, default=DEST)
     args = parser.parse_args()
-    recorded = convert(args.corpus)
+    # The generated half is self-contained, so the sweep can be regenerated
+    # without the recording corpus by reusing the checked-in recorded cases.
+    if args.reuse_recorded:
+        recorded = [c for c in json.loads(args.reuse_recorded.read_text())["cases"]
+                    if c["game"] is not None]
+    elif args.corpus:
+        recorded = convert(args.corpus)
+    else:
+        parser.error("--corpus or --reuse-recorded is required")
     if len(recorded) != 168:
         raise ValueError(f"expected 168 paired games, got {len(recorded)}")
     result = {

@@ -109,6 +109,9 @@ pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionar
         // no longer charge-only.
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
             caps.push(&GString::from("skirmish_chain").to_variant());
+            if action.kind != 3 {
+                caps.push(&GString::from("coherency_hold").to_variant());
+            }
         }
         if action.kind != 3 && rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
             && landing.as_ref().is_none_or(|land| land.shorten_covered)
