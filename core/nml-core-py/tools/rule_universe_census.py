@@ -125,11 +125,13 @@ NA_NAMES: dict[str, str] = {
 # EPOCH_6_TABLE_RULES) states each spelling literally and the dice folds
 # log the named forms. Deliberately NO CONSUMED_PARAM_KEYS row here: the
 # conditional-AP class's params are uniform across every entry
-# (ap_bonus/condition on all of them), so a row would over-credit the two
-# UNPORTED members (Point-Blank Piercing needs a `within_in` cap the
-# CondAp spec does not carry; Havocbound Boost needs an always-on leg +
-# the `upgrades` coupling the stamp pass does not read) — the #489
-# over-credit shape, declined.
+# (ap_bonus/condition on all of them), so a row would over-credit any
+# member the named arms do not state — the #489 over-credit shape,
+# declined. Wave 4 (rules-wave4-condap, epoch 7) ported the last two the
+# same way, BY NAME: Point-Blank Piercing (its own `within_in` cap, read by
+# unit.rs::stamp_conditional_ap_named into CondAp.within_in and consumed by
+# combat.rs's ranged_within arm) and, on the Piercing Assault primitive,
+# Piercing Fighter (the always leg on the melee array). Still no row.
 # Versatile Attack family wave (rules-wave3-versatile, 2026-09-05): the
 # three ported names (Watchborn, Vinci Tech, Vinci Tech Boost) ride their
 # OWN tokens — unit.rs::build_for's epoch-6 named arm (frozen

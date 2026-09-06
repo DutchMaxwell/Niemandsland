@@ -345,6 +345,8 @@ pub fn versatile_best_mode(hit_target: i64, defense: i64, ap: i64, bane: bool) -
 ///   * `vs_armor`     Disintegrate — target Defense <= threshold (a BETTER save)
 ///   * `on_charge`    Piercing Assault — charging only
 ///   * `ranged_over`  Piercing Hunter — shooting from beyond `over_in`
+///   * `ranged_within` Point-Blank Piercing — shooting from `within_in` or
+///     closer (wave 4; fires only on a spec whose `within_in` is set)
 /// `charge_only` is an extra gate on top of the condition (Melee Slayer), and the
 /// `ranged_over_or_charge` GATE (Slayer) adds "charging OR shot from over 9 in".
 /// `dist_in < 0` means the caller has no range context: the ranged legs stay shut.
@@ -376,6 +378,17 @@ pub fn conditional_ap_bonus(
         "vs_armor" if target_defense <= c.threshold => c.ap_bonus,
         "on_charge" if is_charging => c.ap_bonus,
         "ranged_over" if !melee && dist_in > c.over_in => c.ap_bonus,
+        // Wave 4 (rules-wave4-condap) — "Point-Blank Piercing"'s printed
+        // shape ("AP(+1) when shooting enemies within 12\""): the cap is
+        // inclusive, an unknown distance (< 0) stays shut like the ranged
+        // legs above. The generic pass stamps `within_in` 0.0 (it never
+        // reads the key), so the registry-spelled specs it has stamped at
+        // every epoch stay inert here; only unit.rs build_for's epoch-7
+        // named arm (the FROZEN `EPOCH_7_TABLE_RULES`) sets the cap, and
+        // every pre-epoch-7 replay stays byte-exact.
+        "ranged_within" if !melee && c.within_in > 0.0 && dist_in >= 0.0 && dist_in <= c.within_in => {
+            c.ap_bonus
+        }
         _ => 0,
     }
 }
