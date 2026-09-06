@@ -820,6 +820,13 @@ pub fn resolve_volley_with_tray(
         }
         if p.takedown {
             out.mark("takedown");
+            // Wave 4 (rules-wave4-renames): the UNIT-level name that stamped
+            // the flag ("Takedown when Shooting") names itself here
+            // (rules-must-log); a weapon's own Takedown tag carries no name
+            // and stays as silent as every earlier epoch logged it.
+            if !p.takedown_rule.is_empty() {
+                out.log.push(format!("{}: Takedown on {}'s volley", p.takedown_rule, sh.owner));
+            }
         }
         // --- `_solo_hits` :4404-4487 ---
         let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
