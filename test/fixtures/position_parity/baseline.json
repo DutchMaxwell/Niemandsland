@@ -194,14 +194,14 @@
         ]
       },
       "generated-skirmish-chain": {
-        "all_models_within": false,
+        "all_models_within": true,
         "delta_in": [
-          6.00000007415381,
-          6.000000807478672,
-          6.000001540803534,
-          5.9999983141741415,
-          5.999998900834031,
-          5.999999487493921
+          0.0,
+          7.333248619019516e-07,
+          1.4666497238039032e-06,
+          1.1733197790431226e-06,
+          5.866598895215613e-07,
+          0.0
         ],
         "model_ids": [
           "u00:0",
@@ -211,16 +211,14 @@
           "u00:4",
           "u00:5"
         ],
-        "reasons": [
-          "skirmish_chain"
-        ],
+        "reasons": [],
         "tiers": [
-          2,
-          2,
-          2,
-          2,
-          2,
-          2
+          0,
+          1,
+          1,
+          1,
+          1,
+          0
         ]
       },
       "generated-wall": {
@@ -7362,10 +7360,10 @@
         "charge_snap": 0,
         "coherency_hold": 0,
         "parse_error": 0,
-        "skirmish_chain": 1,
+        "skirmish_chain": 0,
         "whole_unit_shorten": 0
       },
-      "declined": 1,
+      "declined": 0,
       "equal": 4,
       "formation": {
         "declined": 0,
@@ -7376,16 +7374,16 @@
       },
       "models": {
         "beyond_0.5in": 3,
-        "declined": 6,
-        "equal": 130,
+        "declined": 0,
+        "equal": 132,
         "n": 1302,
-        "within_0.5in": 1293
+        "within_0.5in": 1299
       },
       "n": 183,
-      "within_0.5in": 181
+      "within_0.5in": 182
     }
   },
-  "reason": "PR 4 ports epoch-6 boxed escape with the table\u2019s granted-band search and shared round budget. Three identical fresh engine runs close boxed_escape 16 -> 0 and the overlapping whole_unit_shorten remainder 14 -> 0; unchanged fixture inputs, no other decline bucket or raw model tier regresses. The separate non-charge skirmish_chain decline remains.",
+  "reason": "PR 6 ports the acting unit's coherency chain to the plain gate arm, its whole-unit shorten and the collapse ladder; skirmish_chain closes 1 -> 0 and no other bucket or case value moves.",
   "schema": 1,
-  "source_revision": "0c0db13b3223846a16a63bfc5fdc01f8a41fc121"
+  "source_revision": "c500beb71d48895a2e52e39a5b075fec68659794"
 }
