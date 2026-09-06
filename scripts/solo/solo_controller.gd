@@ -9834,11 +9834,24 @@ const INFILTRATE_MIN_ENEMY_DIST_M := 0.0762   # Bug 26 (army-book Infiltrate, AP
 ## NML-937: the 3" is DATA now — v3.5.3's "may be deployed anywhere over 3\" away from enemy units"
 ## rides the registry's `min_enemy_dist_in`, so a book that ever moves the ring moves it here too.
 ## The constant stays as the fallback, which keeps a missing map byte-identical to the shipped 3".
+## Infiltrate-family ALIASES (Surprise Attack, "grants": "Infiltrate" in the maps) count too — and
+## an alias entry's own `min_enemy_dist_in` wins (aofr Surprise Attack: 1").
 func _reserve_min_enemy_dist_m(unit: GameUnit) -> float:
-	if unit == null or not unit.has_special_rule(RULE_INFILTRATE):
+	if unit == null or (not unit.has_special_rule(RULE_INFILTRATE) and not _carries_infiltrate_alias(unit)):
 		return AMBUSH_MIN_ENEMY_DIST_M
 	var fallback_in := INFILTRATE_MIN_ENEMY_DIST_M / INCHES_TO_METERS
-	return float(RulesRegistry.unit_param(unit, RULE_INFILTRATE, "min_enemy_dist_in", fallback_in)) * INCHES_TO_METERS
+	return float(RulesRegistry.best_primitive_param(unit, RULE_INFILTRATE, "min_enemy_dist_in", fallback_in)) * INCHES_TO_METERS
+
+
+## Whether `unit` carries a NON-literal registry alias under the Infiltrate primitive that claims the
+## reserve family (counts_as / grants) — e.g. Surprise Attack. A mechanics-only primitive stamp is
+## NOT a claim (NML-1115's false-positive lesson).
+static func _carries_infiltrate_alias(unit: GameUnit) -> bool:
+	for e in RulesRegistry.unit_rules_of_primitive(unit, RULE_INFILTRATE):
+		var ed := e as Dictionary
+		if str(ed["name"]) != RULE_INFILTRATE and RulesRegistry.params_claim_ambush(ed.get("params", {}) as Dictionary):
+			return true
+	return false
 
 
 ## Vanguard's forward push: candidate spots along the toward-table-centre line at 100/75/50/25% of the
@@ -10387,8 +10400,9 @@ func set_aside_human_ambush() -> Array:
 ##
 ## Wave 1 of the Ambush variants: the names are matched EXACTLY. has_special_rule matches by PREFIX,
 ## so an "Ambush Beacon" or "Ambush Re-Deployment" carrier passed this gate and was set aside off the
-## table although both deploy normally. Rapid Ambush is the one true alias — "counts as having
-## Ambush" — and only its arrival ROUND differs (ambush_earliest_round).
+## table although both deploy normally. Rapid Ambush and Surprise Attack are the true aliases —
+## "counts as having Ambush/Infiltrate" (the registry's claim decides, not the primitive stamp) —
+## and only the arrival ROUND differs (ambush_earliest_round).
 static func unit_has_ambush(gu: GameUnit) -> bool:
 	if gu == null:
 		return false
@@ -10396,12 +10410,36 @@ static func unit_has_ambush(gu: GameUnit) -> bool:
 			or unit_carries_rule(gu, RULE_RAPID_AMBUSH):
 		return true
 	# Coverage wave (resolver audit): Ambush DATA aliases ("counts_as": Ambushing Piercing Shot …).
+	# The CLAIM, not the primitive stamp alone: counts_as (Infiltrate, Infiltrate Aura, Rapid Ambush,
+	# aofr Surprise Attack) or a family grant (gf/aof Surprise Attack → "grants": "Infiltrate").
+	# Beacon / Re-Deployment / Ambushing Piercing Shot stamp the primitive without claiming the
+	# family and stay OUT — the wave-1 tests pin that.
 	for e in RulesRegistry.unit_rules_of_primitive(gu, RULE_AMBUSH) + RulesRegistry.unit_rules_of_primitive(gu, RULE_INFILTRATE):
 		var ed := e as Dictionary
 		if str(ed["name"]) != RULE_AMBUSH and str(ed["name"]) != RULE_INFILTRATE \
-				and not str((ed.get("params", {}) as Dictionary).get("counts_as", "")).is_empty():
+				and RulesRegistry.params_claim_ambush(ed.get("params", {}) as Dictionary):
 			return true
 	return false
+
+
+## The reserve-alias claim of `gu`, for the rules-must-log arrival line: {rule, counts_as} when `gu`
+## holds a NON-literal Ambush-family alias (Surprise Attack, …) — rule = the actual book name,
+## counts_as = the family word its registry entry claims. {} for literal-only or non-carriers.
+static func reserve_alias_claim(gu: GameUnit) -> Dictionary:
+	if gu == null:
+		return {}
+	for e in RulesRegistry.unit_rules_of_primitive(gu, RULE_AMBUSH) + RulesRegistry.unit_rules_of_primitive(gu, RULE_INFILTRATE):
+		var ed := e as Dictionary
+		if str(ed["name"]) == RULE_AMBUSH or str(ed["name"]) == RULE_INFILTRATE:
+			continue
+		var p := ed.get("params", {}) as Dictionary
+		if not RulesRegistry.params_claim_ambush(p):
+			continue
+		var family := str(p.get("counts_as", ""))
+		if family.is_empty():
+			family = str(p.get("grants", ""))
+		return {"rule": str(ed["name"]), "counts_as": family}
+	return {}
 
 
 ## Same item-grant-aware check for Scout (B9 scout phase).
