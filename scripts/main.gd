@@ -11026,7 +11026,6 @@ func _solo_apply_picked_wound(unit: GameUnit, mi: ModelInstance, pid: int) -> vo
 	if died:
 		var died_models: Array[ModelInstance] = [mi]
 		await _solo_remove_dead_models(unit, died_models, pid)
-		return
 	elif radial_menu_controller != null:
 		radial_menu_controller._update_wound_marker(mi)
 	if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
