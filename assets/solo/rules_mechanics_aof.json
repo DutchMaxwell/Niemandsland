@@ -2667,13 +2667,9 @@
     }
    },
    "Spawn": {
-    "primitive": "Spawn",
+    "primitive": null,
     "rated": true,
-    "book_version": "3.5.3",
-    "params": {
-     "place_in": 6,
-     "once_per_game": true
-    }
+    "book_version": "3.5.3"
    },
    "Speed Debuff": {
     "primitive": "Utility Buff",
@@ -7010,13 +7006,9 @@
     }
    },
    "Spawn": {
-    "primitive": "Spawn",
+    "primitive": null,
     "rated": true,
-    "book_version": "3.5.3",
-    "params": {
-     "place_in": 6,
-     "once_per_game": true
-    }
+    "book_version": "3.5.3"
    },
    "Storm of Lust": {
     "primitive": "Storm Attack",
@@ -7648,13 +7640,9 @@
     }
    },
    "Spawn": {
-    "primitive": "Spawn",
+    "primitive": null,
     "rated": true,
-    "book_version": "3.5.3",
-    "params": {
-     "place_in": 6,
-     "once_per_game": true
-    }
+    "book_version": "3.5.3"
    },
    "Steadfast": {
     "primitive": "Steadfast",
@@ -8342,13 +8330,9 @@
     }
    },
    "Spawn": {
-    "primitive": "Spawn",
+    "primitive": null,
     "rated": true,
-    "book_version": "3.5.3",
-    "params": {
-     "place_in": 6,
-     "once_per_game": true
-    }
+    "book_version": "3.5.3"
    },
    "Stealth Aura": {
     "primitive": "Stealth",
@@ -9018,13 +9002,9 @@
     }
    },
    "Spawn": {
-    "primitive": "Spawn",
+    "primitive": null,
     "rated": true,
-    "book_version": "3.5.3",
-    "params": {
-     "place_in": 6,
-     "once_per_game": true
-    }
+    "book_version": "3.5.3"
    },
    "Speed Debuff": {
     "primitive": "Utility Buff",
