@@ -588,3 +588,65 @@ def test_cli_prints_summary_and_writes_json(mini, tmp_path, capsys):
     data = json.loads(out_json.read_text())
     assert data["summary"]["total"] == 3
     assert set(data["rows"]) == {"Furious", "Furious Aura", "Off Book"}
+
+
+# --- the consumed-param registry's own guards (wave-4 layout refactor) -------
+# A bare dict literal cannot say "this primitive already has a row" or "this
+# row is out of order": it silently keeps the last row and drops the first
+# family's keys. Both guards are proved to FAIL here, not merely to pass on
+# the shipped table - a check that cannot fail is not a check.
+
+
+def test_consumed_registry_rejects_a_duplicate_primitive():
+    rows = (
+        census.ConsumedParams("Bane", frozenset({"reroll_save_sixes"})),
+        census.ConsumedParams("Bane", frozenset({"something_else"})),
+    )
+    with pytest.raises(ValueError, match="duplicate primitive 'Bane'"):
+        census.consumed_registry(rows)
+
+
+def test_consumed_registry_rejects_rows_out_of_alphabetical_order():
+    rows = (
+        census.ConsumedParams("Surge", frozenset({"extra_attack"})),
+        census.ConsumedParams("Bane", frozenset({"reroll_save_sixes"})),
+    )
+    with pytest.raises(ValueError, match="out of alphabetical order"):
+        census.consumed_registry(rows)
+
+
+def test_shipped_consumed_rows_are_sorted_and_index_to_the_same_table():
+    rows = census._CONSUMED_PARAM_ROWS
+    assert [r.primitive for r in rows] == sorted(r.primitive for r in rows)
+    assert census.consumed_registry(rows) == census.CONSUMED_PARAM_KEYS
+    # every family the wave-3 waves shipped still keys exactly one row
+    assert len({r.primitive for r in rows}) == len(rows)
+
+
+def test_split_out_test_module_under_src_tests_is_not_core_evidence(mini):
+    """The wave-4 test split moved every inline `#[cfg(test)] mod tests` into
+    its own file under `core/nml-core/src/tests/<owner>/`. Those files carry
+    no `#[cfg(test)]` marker of their own - the attribute sits on the `mod`
+    declaration in the owner - so `scan_rust_file`'s in-file skip cannot see
+    them, and the scan would credit every rule name a test happens to spell.
+    Measured on the real tree the day the split landed: core-ported 376 -> 379
+    and all-layers 165 -> 167, from a pure file move. RED first: drop the
+    `src/tests` exclusion and this test fails on `ghostmoved`."""
+    root, books = mini
+    split = root / "core" / "nml-core" / "src" / "tests" / "morale"
+    split.mkdir(parents=True)
+    (split / "mod.rs").write_text(
+        'use super::*;\n'
+        '#[test]\n'
+        'fn t() { assert_eq!("Ghostmoved".len(), 10); }\n')
+
+    kept = [p.name for p in census.core_src_files(root)]
+    assert "arm.rs" in kept and "morale.rs" in kept
+    assert "mod.rs" not in kept, "src/tests/** is test code that lives in src"
+    assert "rules.rs" not in kept
+
+    tokens, _comments = census.scan_rust(root)
+    assert "ghostmoved" not in tokens, (
+        "a literal in a split-out test module must not be core evidence"
+    )
+    assert census.census(books, root)["summary"]["core_ported"] == 1
