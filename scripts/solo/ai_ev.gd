@@ -177,6 +177,14 @@ static func _regen_target(unit: GameUnit) -> int:
 	return 0
 
 
+static func takedown_rule_for_profile(unit: GameUnit, profile_range: int) -> String:
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Takedown"):
+		var sp: Dictionary = (e as Dictionary).get("params", {})
+		if int(sp.get("extra_attack_q", 0)) <= 0 and facet_applies(sp, profile_range):
+			return str((e as Dictionary).get("name", ""))
+	return ""
+
+
 ## Stamp the Sergeant facet onto a unit's weapon profiles (wave 5, model-level rule): the FIRST profile
 ## with attacks gets "sergeant_attacks" = the bearer's own attack share (total attacks / alive models,
 ## min 1) — the pooled resolution's documented approximation of "when THIS model attacks". Gated by the
@@ -186,6 +194,15 @@ static func _regen_target(unit: GameUnit) -> int:
 static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 	if unit == null:
 		return profiles
+	for fp in profiles:
+		var fpd := fp as Dictionary
+		var takedown_name := takedown_rule_for_profile(unit, int(fpd.get("range", 0)))
+		if not takedown_name.is_empty():
+			fpd["takedown"] = true
+			var rules: Array = fpd.get("rules", []).duplicate()
+			if not rules.has(takedown_name):
+				rules.append(takedown_name)
+			fpd["rules"] = rules
 	# Versatile Attack (army-book, unit-level): flag every profile so the >9" AP(+1)/+1-to-hit mode
 	# choice reaches BOTH the EV metric and the dice path (one stamping, one truth — like Sergeant
 	# below). Unit-level approximation, mirroring Royal Legion: applied unit-wide when the unit carries
