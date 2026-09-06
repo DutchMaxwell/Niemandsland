@@ -301,7 +301,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 6;
+pub const CURRENT_RULES_EPOCH: u32 = 7;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -376,6 +376,31 @@ pub const EPOCH_5_TABLE_RULES: u32 = 5;
 /// 4). Every wave-3 call site must read THIS constant, not the literal `6`
 /// or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_6_TABLE_RULES: u32 = 6;
+
+/// WAVE 4 GATE (06.09.): reserved for wave 4's table-rule ports before any of
+/// them exist — the same shape as `EPOCH_3_TABLE_RULES`/`EPOCH_4_TABLE_RULES`/
+/// `EPOCH_5_TABLE_RULES`/`EPOCH_6_TABLE_RULES` above, a frozen epoch number
+/// instead of the moving `CURRENT_RULES_EPOCH` symbol, so wave 4's family
+/// ports (landing in later changes) read THIS constant from the day their
+/// gates are written and never drift when a later wave bumps
+/// `CURRENT_RULES_EPOCH` again.
+///
+/// `7`, not `6`: wave 3's ports are already merged and gated at
+/// `EPOCH_6_TABLE_RULES`, so `6` is the epoch every fresh recorder stamps
+/// TODAY — and wave 4's ports exist in none of those records. Freezing wave
+/// 4's gates at `6` (the epoch already live and being stamped) would repeat
+/// the WAVE 2 STAMPING-GAP INCIDENT that `EPOCH_5_TABLE_RULES` above had to
+/// correct for (PR #685, refined by PR #688) and that wave 3 avoided the same
+/// way: once a wave-4 family port landed gating on `rule_on(rules_epoch, 6)`,
+/// replaying a corpus recorded now against that code would silently start
+/// applying rules it was never recorded with. `7` instead excludes every
+/// record stamped `6` or below while still catching every fresh record from
+/// the moment wave 4's rules land — and this constant is reserved in the SAME
+/// change that bumps `CURRENT_RULES_EPOCH` to `7` (wave 4's plan §5 makes the
+/// bump W4-0, the first PR of the wave), so no window opens between the
+/// reservation and the first wave-4 rule landing. Every wave-4 call site must
+/// read THIS constant, not the literal `7` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_7_TABLE_RULES: u32 = 7;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -827,7 +852,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 mod tests {
     use super::{
         read_act_header, rule_on, MeleeReach, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
-        EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
+        EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -841,28 +866,28 @@ mod tests {
         assert!(!rule_on(0, CURRENT_RULES_EPOCH), "epoch 0 is before every future port");
     }
 
-    /// Wave 3 (epoch 5 -> 6): bumping the live epoch must NOT shift the six
+    /// Wave 4 (epoch 6 -> 7): bumping the live epoch must NOT shift the six
     /// families frozen at epoch 3. A record stamped `rules_epoch: 3` keeps
-    /// all six ON (`EPOCH_3_TABLE_RULES`) while getting none of wave 3's
-    /// rules yet (`EPOCH_6_TABLE_RULES`) — and a fresh header stamps the
+    /// all six ON (`EPOCH_3_TABLE_RULES`) while getting none of wave 4's
+    /// rules yet (`EPOCH_7_TABLE_RULES`) — and a fresh header stamps the
     /// new, bumped epoch.
     #[test]
-    fn epoch_6_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 6, "wave 3's gate bumps the live epoch to 6");
+    fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
+        assert_eq!(CURRENT_RULES_EPOCH, 7, "wave 4's gate bumps the live epoch to 7");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
             "a record at epoch 3 still replays with the six families ON"
         );
         assert!(
-            !rule_on(3, EPOCH_6_TABLE_RULES),
-            "a record at epoch 3 gets none of wave 3's rules"
+            !rule_on(3, EPOCH_7_TABLE_RULES),
+            "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":6}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":7}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 6"
+            "a fresh play_game() now stamps the bumped epoch, 7"
         );
     }
 
@@ -890,15 +915,46 @@ mod tests {
         );
     }
 
-    /// REGRESSION GUARD (05.09., wave 3's gate PR): bumping `CURRENT_RULES_EPOCH`
-    /// to 6 must not silently re-date any of the three constants frozen by
-    /// earlier waves. Each one keeps its own historical value forever, no
-    /// matter how many later waves move the live epoch on.
+    /// The WAVE 4 GATE's own reservation (06.09.): `EPOCH_7_TABLE_RULES` must
+    /// exclude every record stamped at the live epoch `6` — wave 3's ports are
+    /// already merged and gated at `EPOCH_6_TABLE_RULES`, so `6` is the epoch
+    /// fresh recorders stamp TODAY and wave 4's ports do not exist in any of
+    /// them. Freezing wave 4's gates at `6` would repeat the WAVE 2
+    /// STAMPING-GAP INCIDENT (`EPOCH_5_TABLE_RULES`, PR #685/#688) that wave 3
+    /// already had to avoid: a corpus recorded now would silently start
+    /// getting wave-4 rules the moment they land. Literal integers, never
+    /// `CURRENT_RULES_EPOCH`, so this stays true no matter how many later
+    /// waves bump the live epoch further.
+    #[test]
+    fn epoch_7_table_rules_excludes_records_stamped_at_the_live_epoch_6() {
+        assert_eq!(
+            EPOCH_7_TABLE_RULES, 7,
+            "wave 4's gates freeze one PAST today's live stamping epoch, not at it"
+        );
+        assert!(
+            !rule_on(6, EPOCH_7_TABLE_RULES),
+            "a record stamped rules_epoch:6 (today's stamping window) gets none of wave 4"
+        );
+        assert!(
+            rule_on(7, EPOCH_7_TABLE_RULES),
+            "a record stamped rules_epoch:7 (recorded after this gate) gets wave 4"
+        );
+        assert!(
+            rule_on(6, EPOCH_6_TABLE_RULES),
+            "the same record keeps every wave-3 rule it WAS recorded with"
+        );
+    }
+
+    /// REGRESSION GUARD (05.09., wave 3's gate PR; extended 06.09. by wave 4):
+    /// bumping `CURRENT_RULES_EPOCH` must not silently re-date any of the
+    /// constants frozen by earlier waves. Each one keeps its own historical
+    /// value forever, no matter how many later waves move the live epoch on.
     #[test]
     fn earlier_waves_frozen_epochs_never_move() {
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "wave 1's six families stay frozen at 3");
         assert_eq!(EPOCH_4_TABLE_RULES, 4, "Lacerate's own recording epoch stays frozen at 4");
         assert_eq!(EPOCH_5_TABLE_RULES, 5, "wave 2's remaining families stay frozen at 5");
+        assert_eq!(EPOCH_6_TABLE_RULES, 6, "wave 3's family ports stay frozen at 6");
     }
 
     /// The WAVE 2 STAMPING-GAP INCIDENT fix itself (04.09.): `EPOCH_5_TABLE_RULES`
