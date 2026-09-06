@@ -1,8 +1,236 @@
 {
   "boundary": "stage_a",
-  "fixture_sha256": "4beab23e743c790518d373fe7f5203d1fe64000ec361d4cac7a9373f6ed820b0",
+  "fixture_sha256": "0b5bb72ca31ea3ef2045d0fa3496b3738423574f85c4849e7de1670419cea62d",
   "measurement": {
     "cases": {
+      "generated-board-36x36-advance": {
+        "all_models_within": true,
+        "delta_in": [
+          6.731027484514252e-07,
+          3.2999618785587825e-07,
+          6.731027484514252e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-board-36x36-charge": {
+        "all_models_within": true,
+        "delta_in": [
+          7.89815047702232e-07,
+          5.288080782320071e-07,
+          2.9332994476078064e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-board-36x36-rush": {
+        "all_models_within": true,
+        "delta_in": [
+          6.047151727026461e-07,
+          6.731027484514252e-07,
+          2.074155930654234e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-board-44x60-advance": {
+        "all_models_within": true,
+        "delta_in": [
+          1.5033159668990007e-06,
+          1.027309352350304e-06,
+          1.9069971683847042e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-board-44x60-charge": {
+        "all_models_within": true,
+        "delta_in": [
+          8.799898342823419e-07,
+          1.579630095404464e-06,
+          5.866598895215613e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-board-44x60-rush": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1824508099777946e-06,
+          1.9069971683847042e-06,
+          1.579630095404464e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-board-48x48-advance": {
+        "all_models_within": true,
+        "delta_in": [
+          1.444947744157813e-06,
+          1.5033159668990007e-06,
+          8.433235911872443e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-board-48x48-charge": {
+        "all_models_within": true,
+        "delta_in": [
+          1.4666497238039032e-06,
+          1.8782280788625932e-06,
+          1.7599796685646839e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-board-48x48-rush": {
+        "all_models_within": true,
+        "delta_in": [
+          1.4666497238039032e-07,
+          8.433235911872443e-07,
+          1.1824508099777946e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-board-72x48-advance": {
+        "all_models_within": true,
+        "delta_in": [
+          8.433235911872443e-07,
+          1.5033159668990007e-06,
+          2.4935741206204714e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-board-72x48-charge": {
+        "all_models_within": false,
+        "delta_in": [
+          2.4830230225728256,
+          2.4830253692134927,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          2,
+          2,
+          0
+        ]
+      },
+      "generated-board-72x48-rush": {
+        "all_models_within": true,
+        "delta_in": [
+          2.351218371334009e-06,
+          2.4935741206204714e-06,
+          4.3999491714117096e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
       "generated-charge-14": {
         "all_models_within": true,
         "delta_in": [
@@ -40,6 +268,438 @@
         "delta_in": [
           1.716669489126451e-06,
           7.333248619019516e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-charge-d10-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          5.279951019688138e-06
+        ],
+        "model_ids": [
+          "u00:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1
+        ]
+      },
+      "generated-charge-d10-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          2.7672691643404104e-06,
+          2.506212146649894e-06,
+          5.279951019688138e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-charge-d12-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733738408325413e-06
+        ],
+        "model_ids": [
+          "u00:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1
+        ]
+      },
+      "generated-charge-d12-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          1.8782280788625932e-06,
+          1.4666497238039032e-06,
+          1.1733738408325413e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-charge-d14-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          1.3118113926427277e-06
+        ],
+        "model_ids": [
+          "u00:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1
+        ]
+      },
+      "generated-charge-d14-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          2.56139362605963e-06,
+          2.351218371334009e-06,
+          2.3466665894480014e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-charge-d16-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          2.4697375401750254e-06
+        ],
+        "model_ids": [
+          "u00:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1
+        ]
+      },
+      "generated-charge-d16-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          1.6083069819943313e-06,
+          1.3118113926427277e-06,
+          1.1733738408325413e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-charge-d18-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          9.166560773774395e-07
+        ],
+        "model_ids": [
+          "u00:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1
+        ]
+      },
+      "generated-charge-d18-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          2.453147040915042e-06,
+          2.692410993805701e-06,
+          4.7700742469579395e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-charge-d20-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          2.8477186526234342e-06
+        ],
+        "model_ids": [
+          "u00:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1
+        ]
+      },
+      "generated-charge-d20-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          2.692410993805701e-06,
+          1.5117879317566154e-06,
+          2.661540557520971e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-charge-d4-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1263501067970345e-08
+        ],
+        "model_ids": [
+          "u00:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1
+        ]
+      },
+      "generated-charge-d4-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          2.074155930654234e-06,
+          1.7103927972177412e-06,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-charge-d6-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733738408325413e-06
+        ],
+        "model_ids": [
+          "u00:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1
+        ]
+      },
+      "generated-charge-d6-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          1.4666497238039032e-06,
+          8.799898342823419e-07,
+          1.1733738408325413e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-charge-d8-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          1.7600157102189067e-06
+        ],
+        "model_ids": [
+          "u00:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1
+        ]
+      },
+      "generated-charge-d8-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          1.8782280788625932e-06,
+          1.4666497238039032e-06,
+          1.7600157102189067e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-charge-oval120x92": {
+        "all_models_within": true,
+        "delta_in": [
+          1.7599796685646839e-06,
+          2.0533096133254647e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-charge-oval60x35": {
+        "all_models_within": true,
+        "delta_in": [
+          2.4188606908105844e-06,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0
+        ]
+      },
+      "generated-charge-oval75x42": {
+        "all_models_within": true,
+        "delta_in": [
+          2.1152323129280283e-06,
+          9.790943209292719e-09
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-charge-oval90x52": {
+        "all_models_within": true,
+        "delta_in": [
+          2.506212146649894e-06,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0
+        ]
+      },
+      "generated-charge-round90x90": {
+        "all_models_within": true,
+        "delta_in": [
+          3.53216027262886e-06,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-charge-terrain-flying": {
+        "all_models_within": true,
+        "delta_in": [
+          1.6593247445233873e-06,
+          6.559056963213638e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-charge-terrain-plain": {
+        "all_models_within": true,
+        "delta_in": [
+          1.4666497238039032e-06,
+          2.4933045304666356e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-charge-terrain-strider": {
+        "all_models_within": true,
+        "delta_in": [
+          8.296623722616936e-07,
+          1.6593247445233873e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-charge-terrain-traversal": {
+        "all_models_within": true,
+        "delta_in": [
+          1.3836345821702052e-06,
+          2.9332994476078064e-07
         ],
         "model_ids": [
           "u00:0",
@@ -103,6 +763,500 @@
           1
         ]
       },
+      "generated-edge-corner-nw": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-edge-corner-se": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          4.837721381621169e-06,
+          2.6236227852854553e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-edge-east": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          4.69327911617249e-06,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-edge-north": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          0.0,
+          3.5199593371293677e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0,
+          1
+        ]
+      },
+      "generated-edge-south": {
+        "all_models_within": true,
+        "delta_in": [
+          1.6593247445233873e-06,
+          1.1733197790431226e-06,
+          3.710362925501766e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-edge-west": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-faction-oval120x92-gf": {
+        "all_models_within": true,
+        "delta_in": [
+          5.866598895215613e-07,
+          1.319984751423513e-06,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-oval120x92-gff": {
+        "all_models_within": true,
+        "delta_in": [
+          5.866598895215613e-07,
+          1.319984751423513e-06,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-oval60x35-gf": {
+        "all_models_within": true,
+        "delta_in": [
+          2.9332994476078064e-07,
+          5.279939005694052e-06,
+          5.279939005694052e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-oval60x35-gff": {
+        "all_models_within": true,
+        "delta_in": [
+          2.9332994476078064e-07,
+          5.279939005694052e-06,
+          5.279939005694052e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-oval75x42-gf": {
+        "all_models_within": true,
+        "delta_in": [
+          8.799898342823419e-07,
+          5.866598895215613e-07,
+          5.866598895215613e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-oval75x42-gff": {
+        "all_models_within": true,
+        "delta_in": [
+          8.799898342823419e-07,
+          5.866598895215613e-07,
+          5.866598895215613e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-oval90x52-gf": {
+        "all_models_within": true,
+        "delta_in": [
+          1.5104534122099953e-06,
+          2.4935741206204714e-06,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-oval90x52-gff": {
+        "all_models_within": true,
+        "delta_in": [
+          1.5104534122099953e-06,
+          2.4935741206204714e-06,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round25x25-gf": {
+        "all_models_within": true,
+        "delta_in": [
+          1.7599796685646839e-06,
+          5.866598895215613e-07,
+          5.279939005694052e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round25x25-gff": {
+        "all_models_within": true,
+        "delta_in": [
+          1.7599796685646839e-06,
+          5.866598895215613e-07,
+          5.279939005694052e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round32x32-gf": {
+        "all_models_within": true,
+        "delta_in": [
+          1.7599796685646839e-06,
+          5.866598895215613e-07,
+          5.279939005694052e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round32x32-gff": {
+        "all_models_within": true,
+        "delta_in": [
+          1.7599796685646839e-06,
+          5.866598895215613e-07,
+          5.279939005694052e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round40x40-gf": {
+        "all_models_within": true,
+        "delta_in": [
+          5.866598895215613e-07,
+          5.866598895215613e-07,
+          2.9332994476078064e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round40x40-gff": {
+        "all_models_within": true,
+        "delta_in": [
+          5.866598895215613e-07,
+          5.866598895215613e-07,
+          2.9332994476078064e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round50x50-gf": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          5.866598895215613e-07,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round50x50-gff": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          5.866598895215613e-07,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round60x60-gf": {
+        "all_models_within": true,
+        "delta_in": [
+          2.9332994476078064e-07,
+          5.279939005694052e-06,
+          5.279939005694052e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round60x60-gff": {
+        "all_models_within": true,
+        "delta_in": [
+          2.9332994476078064e-07,
+          5.279939005694052e-06,
+          5.279939005694052e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round90x90-gf": {
+        "all_models_within": true,
+        "delta_in": [
+          5.866598895215613e-07,
+          5.866598895215613e-07,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-faction-round90x90-gff": {
+        "all_models_within": true,
+        "delta_in": [
+          5.866598895215613e-07,
+          5.866598895215613e-07,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
       "generated-formation": {
         "all_models_within": true,
         "delta_in": [
@@ -117,6 +1271,542 @@
         ],
         "reasons": [],
         "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-formation-1x8-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          7.333248619019516e-07,
+          2.9332994476078064e-07,
+          5.866598895215613e-07,
+          5.866598895215613e-07,
+          0.0,
+          1.1733197790431226e-06,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5",
+          "u00:6",
+          "u00:7"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1,
+          1,
+          1,
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-formation-1x8-s26": {
+        "all_models_within": true,
+        "delta_in": [
+          1.3118113926427277e-06,
+          1.1824508099777946e-06,
+          1.1824508099777946e-06,
+          2.9332994476078064e-07,
+          3.547352429933384e-06,
+          5.866598895215613e-07,
+          1.4666497238039032e-06,
+          2.9332994476078064e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5",
+          "u00:6",
+          "u00:7"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-formation-2x1-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0
+        ]
+      },
+      "generated-formation-2x1-s26": {
+        "all_models_within": true,
+        "delta_in": [
+          1.7599796685646839e-06,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0
+        ]
+      },
+      "generated-formation-2x4-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          0.0,
+          1.76608013631443e-06,
+          1.319984751423513e-06,
+          1.3118113926427277e-06,
+          5.866598895215613e-07,
+          1.3118113926427277e-06,
+          5.866598895215613e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5",
+          "u00:6",
+          "u00:7"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-formation-2x4-s26": {
+        "all_models_within": true,
+        "delta_in": [
+          1.784256397005323e-06,
+          2.9332994476078064e-07,
+          1.2466522652333178e-06,
+          8.799898342823419e-07,
+          7.119296631558586e-07,
+          1.393317237613708e-06,
+          2.5947682402491413e-06,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5",
+          "u00:6",
+          "u00:7"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0
+        ]
+      },
+      "generated-formation-3x1-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          5.866598895215613e-07,
+          2.346639558086245e-06,
+          3.5199593371293677e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-formation-3x1-s26": {
+        "all_models_within": true,
+        "delta_in": [
+          1.7599796685646839e-06,
+          0.0,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0,
+          1
+        ]
+      },
+      "generated-formation-4x2-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          2.9332994476078064e-06,
+          2.1152323129280283e-06,
+          5.012424293299788e-06,
+          2.9332994476078064e-06,
+          2.4188606908105844e-06,
+          1.3118113926427277e-06,
+          4.729803239911178e-06,
+          2.4188606908105844e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5",
+          "u00:6",
+          "u00:7"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-formation-4x2-s26": {
+        "all_models_within": true,
+        "delta_in": [
+          2.56139362605963e-06,
+          1.8782280788625932e-06,
+          7.191071989106418e-06,
+          1.8782280788625932e-06,
+          9.533223204725371e-07,
+          1.1803170624166987e-06,
+          7.046027064713152e-06,
+          1.253106073324947e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5",
+          "u00:6",
+          "u00:7"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-formation-5x1-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          5.866598895215613e-07,
+          5.866598895215613e-07,
+          2.346639558086245e-06,
+          0.0,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          0,
+          1
+        ]
+      },
+      "generated-formation-5x1-s26": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          5.866598895215613e-07,
+          2.346639558086245e-06,
+          2.4935741206204714e-06,
+          1.444947744157813e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-formation-5x2-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          5.565544388252649e-06,
+          1.7599796685646839e-06,
+          2.9332994476078064e-06,
+          5.012424293299788e-06,
+          1.7599796685646839e-06,
+          5.312431244714885e-06,
+          5.866598895215613e-07,
+          2.4188606908105844e-06,
+          4.729803239911178e-06,
+          5.866598895215613e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5",
+          "u00:6",
+          "u00:7",
+          "u00:8",
+          "u00:9"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-formation-5x2-s26": {
+        "all_models_within": true,
+        "delta_in": [
+          9.68016594768926e-07,
+          1.253106073324947e-06,
+          4.8753695866356046e-06,
+          1.1824508099777946e-06,
+          8.799898342823419e-07,
+          2.1999745857058547e-06,
+          2.4124604729914965e-06,
+          5.949542835658868e-06,
+          1.2292764710042575e-06,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5",
+          "u00:6",
+          "u00:7",
+          "u00:8",
+          "u00:9"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-hero-oval-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          2.4935741206204714e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u02:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-hero-oval-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          0.0,
+          5.866598895215613e-06,
+          1.027309352350304e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u02:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-hero-oval-n5": {
+        "all_models_within": true,
+        "delta_in": [
+          2.346639558086245e-06,
+          1.1733197790431226e-06,
+          1.444947744157813e-06,
+          2.786875690070995e-06,
+          8.433235911872443e-07,
+          2.4935741206204714e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u02:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-hero-round-n1": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u02:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-hero-round-n3": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          0.0,
+          5.866598895215613e-06,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u02:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-hero-round-n5": {
+        "all_models_within": true,
+        "delta_in": [
+          1.3645558013696895e-06,
+          2.786875690070995e-06,
+          1.027309352350304e-06,
+          2.4935741206204714e-06,
+          1.444947744157813e-06,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u02:0"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
           1,
           1,
           1
@@ -193,6 +1883,138 @@
           1
         ]
       },
+      "generated-skirmish-aofs-n2-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1
+        ]
+      },
+      "generated-skirmish-aofs-n2-s24": {
+        "all_models_within": true,
+        "delta_in": [
+          2.346639558086245e-06,
+          3.5199593371293677e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-skirmish-aofs-n4-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          0.0,
+          5.866598895215613e-06,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-skirmish-aofs-n4-s24": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          4.69327911617249e-06,
+          1.1733197790431226e-06,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-skirmish-aofs-n6-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          7.333248619019516e-07,
+          1.4666497238039032e-06,
+          1.1733197790431226e-06,
+          5.866598895215613e-07,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1,
+          1,
+          1,
+          0
+        ]
+      },
+      "generated-skirmish-aofs-n6-s24": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          4.69327911617249e-06,
+          2.346639558086245e-06,
+          1.1733197790431226e-06,
+          1.9069971683847042e-06,
+          8.433235911872443e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
       "generated-skirmish-chain": {
         "all_models_within": true,
         "delta_in": [
@@ -221,6 +2043,518 @@
           0
         ]
       },
+      "generated-skirmish-gff-n2-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1
+        ]
+      },
+      "generated-skirmish-gff-n2-s24": {
+        "all_models_within": true,
+        "delta_in": [
+          2.346639558086245e-06,
+          3.5199593371293677e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1
+        ]
+      },
+      "generated-skirmish-gff-n4-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          0.0,
+          5.866598895215613e-06,
+          1.1733197790431226e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-skirmish-gff-n4-s24": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          4.69327911617249e-06,
+          1.1733197790431226e-06,
+          2.346639558086245e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-skirmish-gff-n6-s17": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          7.333248619019516e-07,
+          1.4666497238039032e-06,
+          1.1733197790431226e-06,
+          5.866598895215613e-07,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1,
+          1,
+          1,
+          0
+        ]
+      },
+      "generated-skirmish-gff-n6-s24": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1733197790431226e-06,
+          4.69327911617249e-06,
+          2.346639558086245e-06,
+          1.1733197790431226e-06,
+          1.9069971683847042e-06,
+          8.433235911872443e-07
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2",
+          "u00:3",
+          "u00:4",
+          "u00:5"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d1-flying": {
+        "all_models_within": true,
+        "delta_in": [
+          2.346639558086245e-06,
+          1.1733197790431226e-06,
+          4.69327911617249e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d1-plain": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-terrain-d1-strider": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-terrain-d1-traversal": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-terrain-d2-flying": {
+        "all_models_within": true,
+        "delta_in": [
+          2.346639558086245e-06,
+          1.1733197790431226e-06,
+          4.69327911617249e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d2-plain": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-terrain-d2-strider": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-terrain-d2-traversal": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-terrain-d3-flying": {
+        "all_models_within": true,
+        "delta_in": [
+          2.889895488315626e-06,
+          1.989303409873997e-06,
+          1.5530491410177562e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d3-plain": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          7.333248619019516e-07,
+          1.4666497238039032e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d3-strider": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-terrain-d3-traversal": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          7.333248619019516e-07,
+          1.4666497238039032e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d4-flying": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1784646894744794e-06,
+          2.4933045304666356e-06,
+          3.699476751646845e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d4-plain": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          1.782408514822087e-06,
+          1.4666497238039032e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d4-strider": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-terrain-d4-traversal": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          1.782408514822087e-06,
+          1.4666497238039032e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d5-flying": {
+        "all_models_within": true,
+        "delta_in": [
+          1.1784646894744794e-06,
+          2.4933045304666356e-06,
+          3.699476751646845e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d5-plain": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          7.333248619019516e-07,
+          1.4666497238039032e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d5-strider": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          7.333248619019516e-07,
+          1.4666497238039032e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1
+        ]
+      },
+      "generated-terrain-d5-traversal": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          7.333248619019516e-07,
+          1.4666497238039032e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          1,
+          1
+        ]
+      },
       "generated-wall": {
         "all_models_within": true,
         "delta_in": [
@@ -231,6 +2565,82 @@
         ],
         "reasons": [],
         "tiers": [
+          1
+        ]
+      },
+      "generated-wall-lane-0": {
+        "all_models_within": true,
+        "delta_in": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          0,
+          0,
+          0
+        ]
+      },
+      "generated-wall-lane-1": {
+        "all_models_within": true,
+        "delta_in": [
+          2.1152323129280283e-06,
+          1.6593247445233873e-06,
+          1.6593247445233873e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-wall-lane-2": {
+        "all_models_within": true,
+        "delta_in": [
+          2.9332994476078064e-07,
+          8.799898342823419e-07,
+          2.1999745857058547e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
+          1
+        ]
+      },
+      "generated-wall-lane-3": {
+        "all_models_within": true,
+        "delta_in": [
+          5.866598895215613e-07,
+          5.866598895215613e-07,
+          2.1152323129280283e-06
+        ],
+        "model_ids": [
+          "u00:0",
+          "u00:1",
+          "u00:2"
+        ],
+        "reasons": [],
+        "tiers": [
+          1,
+          1,
           1
         ]
       },
@@ -7364,7 +9774,7 @@
         "whole_unit_shorten": 0
       },
       "declined": 0,
-      "equal": 4,
+      "equal": 15,
       "formation": {
         "declined": 0,
         "equal": 168,
@@ -7373,17 +9783,17 @@
         "within_0.5in": 168
       },
       "models": {
-        "beyond_0.5in": 3,
+        "beyond_0.5in": 5,
         "declined": 0,
-        "equal": 132,
-        "n": 1302,
-        "within_0.5in": 1299
+        "equal": 195,
+        "n": 1702,
+        "within_0.5in": 1697
       },
-      "n": 183,
-      "within_0.5in": 182
+      "n": 304,
+      "within_0.5in": 302
     }
   },
-  "reason": "PR 6 ports the acting unit's coherency chain to the plain gate arm, its whole-unit shorten and the collapse ladder; skirmish_chain closes 1 -> 0 and no other bucket or case value moves.",
+  "reason": "PR 7 widens the fixture set by 121 generated positions (base footprints, game systems, board sizes, terrain densities against each movement exemption, charge reaches, formation shapes, skirmish spreads, board edges, wall lanes, attached heroes) and closes the coherency_hold bucket the sweep exposed; the 183 previous cases keep their values.",
   "schema": 1,
-  "source_revision": "c500beb71d48895a2e52e39a5b075fec68659794"
+  "source_revision": "bef020cf164c28dc2ada671d971962d5f9c33395"
 }

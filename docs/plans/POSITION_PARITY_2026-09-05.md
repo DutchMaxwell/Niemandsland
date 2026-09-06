@@ -70,6 +70,13 @@ Instrumented call totals in seconds (timing is not an equality metric):
 | 2 | 823.238358 | 9.403916 |
 | 3 | 817.494136 | 9.331275 |
 
+The wide sweep (PR 7) adds 121 generated positions across base footprints,
+game systems, board sizes, terrain densities against each movement exemption,
+charge reaches, formation shapes, skirmish spreads, board edges, wall lanes and
+attached heroes. On 304 positions and 1,702 moving models the harness measures
+`n=304 equal=15 within_0.5in=302 declined=0`; five models remain beyond half an
+inch, in `recorded-037` and `generated-board-72x48-charge`.
+
 The fixture README defines reproduction and strict equality (1e-9 inch).
 A one-inch mutation of the hold model fails the real baseline gate (exit 1);
 the original third-run report passes (exit 0). All 18 instrument tests pass.
@@ -89,7 +96,7 @@ call. MOVE boundary failures are parse errors or caught panics. The search's
 | charge_final_placement | 0 | PR 3 (#730) |
 | charge_snap | 0 | PR 3 (#730) |
 | skirmish_chain | 0 | PR 6 (#750) |
-| coherency_hold | 9 (wide sweep) | PR 7 (#755) |
+| coherency_hold | 9 (wide sweep) | PR 7 |
 | parse_error | 0 | no observed failure |
 | caught_panic | 0 | no observed failure |
 
