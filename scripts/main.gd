@@ -2010,7 +2010,7 @@ func _solo_both_ai_round_start(round_number: int) -> void:
 	await _reinforcement_arrivals(round_number)
 	for slot in [1, 2]:
 		_solo_set_active_side(slot)
-		await _solo_reinforcement_ai_offers()
+		_solo_reinforcement_ai_offers()
 
 
 ## The self-play twin of _solo_begin_rapid_ambush_round_one: with both sides on the AI, round 1's
@@ -6718,7 +6718,11 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 		battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d unsaved ×%d, no carry-over → %d wound%s dealt" % [
 			deadly_x, surviving, deadly_x, dealt, ("" if dealt == 1 else "s")], true)
 		_solo_rule_float(target, "Deadly(%d) → %d" % [deadly_x, dealt], Color(1.0, 0.5, 0.4))
-	await _solo_remove_dead_models(target, died_models, pid)
+	for m in died_models:
+		if m.node != null and is_instance_valid(m.node):
+			opr_army_manager.set_loose_model_dead(m.node, pid, true, target.unit_id)
+		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+			network_manager.broadcast_model_wounds(m)
 	return dealt
 
 
@@ -6842,11 +6846,12 @@ func _solo_land_takedown_wounds(target: GameUnit, weapon_name: String, pick: Dic
 			radial_menu_controller._update_wound_marker(m)
 		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 			network_manager.broadcast_model_wounds(m)
-	var died_models: Array[ModelInstance] = []
 	var on_died := func(m: ModelInstance) -> void:
-		died_models.append(m)
+		if m.node != null and is_instance_valid(m.node):
+			opr_army_manager.set_loose_model_dead(m.node, pid, true, owner.unit_id)
+		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+			network_manager.broadcast_model_wounds(m)
 	SoloController.apply_wounds_to_model(owner, int(pick.get("index", -1)), landed, on_changed, on_died)
-	await _solo_remove_dead_models(owner, died_models, pid)
 	if battle_log != null:
 		var killed: int = before - _solo_combined_alive(target)
 		battle_log.log_event(BattleLog.Category.COMBAT, "Takedown (%s): the %s of %s is %s" % [
@@ -10182,7 +10187,7 @@ func _solo_round_start(round_number: int) -> void:
 	await _reinforcement_arrivals(round_number)
 	# ...and only then does NACHTMAHR decide which of ITS carriers step off the table this round; a
 	# copy that just returned is never re-offered (it no longer has the rule).
-	await _solo_reinforcement_ai_offers()
+	_solo_reinforcement_ai_offers()
 
 
 # === Reinforcement (army-book v3.5.3) ==========================================================
@@ -10202,7 +10207,7 @@ func solo_begin_reinforcement(unit: GameUnit) -> void:
 				"Reinforcement: not now — %s" % reason, ai)
 		_show_toast("Reinforcement: %s" % reason)
 		return
-	await _reinforcement_sacrifice(unit)
+	_reinforcement_sacrifice(unit)
 
 
 ## "You may remove it from the table as destroyed." Every model dies through the SAME casualty seam
@@ -10231,7 +10236,7 @@ func _reinforcement_sacrifice(unit: GameUnit) -> void:
 	for m in unit.get_alive_models():
 		wounds += maxi((m as ModelInstance).wounds_current, 1)
 	if wounds > 0:
-		await _solo_wound_models(unit, wounds, pid)
+		_solo_wound_models(unit, wounds, pid)
 	# The unit left the table: its Shaken/Fatigue state goes with it (the copy arrives fresh).
 	unit.is_shaken = false
 	unit.is_fatigued = false
@@ -10264,7 +10269,7 @@ func _solo_reinforcement_ai_offers() -> void:
 			continue
 		if not SoloController.reinforcement_refusal(gu).is_empty():
 			continue
-		await _reinforcement_sacrifice(gu)
+		_reinforcement_sacrifice(gu)
 
 
 ## The round-start beat, immediately AFTER the Ambush arrivals ("at the beginning of the next round
@@ -10880,12 +10885,6 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 	if opr_army_manager.regiments.has(target.unit_id):
 		var reg = opr_army_manager.regiments[target.unit_id]
 		if reg != null:
-			var alive := target.get_alive_models()
-			var remaining_pool := 0
-			for model in alive:
-				remaining_pool += int((model as ModelInstance).wounds_current)
-			if not alive.is_empty() and wounds >= remaining_pool and _solo_combined_alive(target) == alive.size():
-				await _solo_split_from_last_model(target, alive[0] as ModelInstance)
 			opr_army_manager.apply_regiment_wounds(reg, reg.wounds_taken + wounds)
 			return
 	var pid: int = int(target.unit_properties.get("player_id", 1))
@@ -10897,16 +10896,14 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 	# UNCHANGED casualty_order (it already protects special weapons/heroes).
 	if _solo_wound_choice_matters(target, wounds):
 		wounds = await _solo_prompt_wound_allocation(target, wounds, pid)
-	var remaining := 0
-	if wounds > 0:
-		remaining = await _solo_wound_models(target, wounds, pid)
+	var remaining := _solo_wound_models(target, wounds, pid) if wounds > 0 else 0
 	# A joined hero is part of the unit and takes wounds LAST (defender-optimal, field-test lock).
 	if remaining > 0 and target.has_method("get_attached_heroes"):
 		for h in target.get_attached_heroes():
 			if remaining <= 0:
 				break
 			if h != null:
-				remaining = await _solo_wound_models(h, remaining, pid)
+				remaining = _solo_wound_models(h, remaining, pid)
 	if battle_log != null:
 		# Combined alive AND combined total: with a joined hero both numbers must count the same pool
 		# (the old own-models total printed impossible "(4/3)" shapes once the hero soaked the spill).
@@ -11003,7 +11000,7 @@ func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int) -> i
 					pu.get_name(), target.get_name()], false)
 			continue
 		left -= 1
-		await _solo_apply_picked_wound(pu, mi, pid)
+		_solo_apply_picked_wound(pu, mi, pid)
 		if left > 0:
 			_solo_deploy_ui_show(
 				"Allocate %d wound%s to %s — click a model per wound." % [left, ("" if left == 1 else "s"), target.get_name()],
@@ -11020,8 +11017,8 @@ func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int) -> i
 func _solo_apply_picked_wound(unit: GameUnit, mi: ModelInstance, pid: int) -> void:
 	var died := mi.apply_damage(1)
 	if died:
-		var died_models: Array[ModelInstance] = [mi]
-		await _solo_remove_dead_models(unit, died_models, pid)
+		if mi.node != null and is_instance_valid(mi.node):
+			opr_army_manager.set_loose_model_dead(mi.node, pid, true, unit.unit_id)
 	elif radial_menu_controller != null:
 		radial_menu_controller._update_wound_marker(mi)
 	if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
@@ -11062,12 +11059,12 @@ func _solo_wound_models(unit: GameUnit, wounds: int, pid: int) -> int:
 			radial_menu_controller._update_wound_marker(m)
 		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 			network_manager.broadcast_model_wounds(m)
-	var died_models: Array[ModelInstance] = []
 	var on_died := func(m: ModelInstance) -> void:
-		died_models.append(m)
-	var remaining := SoloController.apply_wounds_to_models(unit, wounds, on_changed, on_died)
-	await _solo_remove_dead_models(unit, died_models, pid)
-	return remaining
+		if m.node != null and is_instance_valid(m.node):
+			opr_army_manager.set_loose_model_dead(m.node, pid, true, unit.unit_id)
+		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+			network_manager.broadcast_model_wounds(m)
+	return SoloController.apply_wounds_to_models(unit, wounds, on_changed, on_died)
 
 
 func _capture_bug_report() -> void:
@@ -17395,8 +17392,6 @@ func _solo_create_rule_unit(carrier: GameUnit, anchor: ModelInstance, raw: Strin
 	var shape := _solo_rule_unit_shape(count, radius)
 	var zone := PlacementGhost.circle_zone(center, reach_in * 0.0254 + anchor_radius)
 	var blockers := _reinforcement_blockers(null)
-	if not anchor.is_alive:
-		blockers.append({"p": center, "r": anchor_radius})
 	var bounds := _table_rect().grow(-radius)
 	var positions := _solo_rule_unit_spots(shape, zone, blockers, bounds, center, reach_in)
 	if positions.is_empty():
@@ -17479,32 +17474,3 @@ func _solo_rule_unit_ghost(shape: Array, zone: Dictionary, blockers: Array, boun
 		await get_tree().process_frame
 	ghost.queue_free()
 	return chosen
-
-
-
-func _solo_remove_dead_models(unit: GameUnit, died_models: Array[ModelInstance], pid: int) -> void:
-	for model in died_models:
-		var combined := _solo_combat_unit(unit)
-		if model == died_models.back() and _solo_combined_alive(combined) == 0:
-			await _solo_split_from_last_model(combined, model)
-		if model.node != null and is_instance_valid(model.node):
-			opr_army_manager.set_loose_model_dead(model.node, pid, true, unit.unit_id)
-		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
-			network_manager.broadcast_model_wounds(model)
-
-
-func _solo_split_from_last_model(unit: GameUnit, anchor: ModelInstance) -> void:
-	if unit == null or anchor.node == null or not is_instance_valid(anchor.node):
-		return
-	var resolved := {}
-	for value in [unit] + unit.get_attached_heroes():
-		var member := value as GameUnit
-		if member == null or not RulesRegistry.unit_rule_active(member, "Split"):
-			continue
-		for raw in member.get_special_rules():
-			var rule := str(raw)
-			if RulesRegistry.base_rule_name(rule) != "Split" or resolved.has(rule):
-				continue
-			resolved[rule] = true
-			var reach := float(RulesRegistry.unit_param(member, "Split", "place_in", 0))
-			await _solo_create_rule_unit(member, anchor, rule, reach, "split")
