@@ -83,9 +83,9 @@ call. MOVE boundary failures are parse errors or caught panics. The search's
 | Decline reason / residual bucket | Measured positions | Closing PR |
 | --- | --- | --- |
 | base_shapes | 0 | PR 1: non-charge; PR 3: charge |
-| whole_unit_shorten | 14 | PR 2: 56 closed; boxed-continuation remainder |
-| boxed_escape | 16 | PR 4 (proposed) |
-| accepted non-equal endpoints (difference, not decline) | 163 | Later numeric investigation |
+| whole_unit_shorten | 0 | PR 2: 56 closed; PR 4: 14 boxed continuations |
+| boxed_escape | 0 | PR 4 (#735) |
+| accepted non-equal endpoints (difference, not decline) | 178 | Later numeric investigation |
 | charge_final_placement | 0 | PR 3 (#730) |
 | charge_snap | 0 | PR 3 (#730) |
 | skirmish_chain | 1 | PR 7 (proposed) |
@@ -98,7 +98,7 @@ Reason counts overlap: a charge can expose a gate skip and a missing snap.
 The aggregate declined count counts that position once. Shape coverage is
 conservative: a gate with any live non-round obstacle exposes the missing shape
 capability, even when the current result does not touch that obstacle.
-The inventory counts above reflect PR 3; the measurements above preserve PR 0.
+The inventory counts above reflect PR 4; the measurements above preserve PR 0.
 
 A missing extension, invalid reference rebuild, missing output/model, unexpected
 stage, or nonfinite coordinate fails the instrument instead of manufacturing a
@@ -115,14 +115,14 @@ to accepted equality or the accepted half-inch count.
 | Large bases | Recorded radii and footprints feed final corrections | Bounding-radius terrain rest matches the table |
 | Difficult terrain | `mv/cap.rs` trims polylines; `mv/step.rs` replans at cap | Compare per-model trim, unit replan, and Flying/Strider exemptions |
 | Gate displacement budget | `mv/step.rs::gate_caps` computes remaining per-model caps | Compare corrections after table gate and retrace |
-| Non-charge final placement | `mv/gate.rs` includes epoch-6 shortening and table straggler repair | 14 shortening cases await boxed continuation |
+| Non-charge final placement | `mv/gate.rs` includes epoch-6 shortening and table straggler repair | No observed shortening decline remains |
 | Charge rest / overlap / coherency | Epoch-6 uncapped contact-aware terrain rest, shaped overlap, coherency repair and wall clamp | No observed decline remains |
 | Charge snap | Shared footprint query, engagement reach, remaining arc budget, contact slack and residual rejection | Epoch-6 execution and diagnostic use the same snap |
-| Boxed escape | Core stops after the forward gate-collapse ladder | Table can rotate goals when its lateral-room probe succeeds |
+| Boxed escape | Epoch-6 room probe, granted-band rotation search, coherent-first choice and round budget | One non-charge skirmish case still declines for its separate chain gap |
 | Coherency hold | Core prefers coherent ladder rungs | Table holds if every rung tears an initially coherent unit |
 | Walls | Both planners route around walls; core non-charge gate clamps crossings | Compare final per-model endpoints and separate formation results |
 | Charge corridor | Table declaration probe routes, trims, finalizes and probes contact | Stage A covers execution geometry; declaration/target selection is outside the fixed-action input |
-| Numeric conversions | Core explicitly models several Vector3 float32 roundings | 163 accepted non-equal positions; investigate residuals before attributing cause |
+| Numeric conversions | Core explicitly models several Vector3 float32 roundings | 178 accepted non-equal positions; investigate residuals before attributing cause |
 
 Generated cases enter both contact and no-contact charge gates; the 14-inch
 charge exposes exhausted snap slack. The difficult-terrain case grants 6 inches,
@@ -196,5 +196,5 @@ Three-run SHA-256 (timing excluded):
 `ceed09f8894999d98de97000adb8ad702e98153b7075c71f4a980086dddae5ce`.
 
 PR 2 acceptance: [three runs, test evidence and the 14-case remainder](https://github.com/DutchMaxwell/Niemandsland/pull/724).
-
 PR 3 acceptance: [charge buckets closed, three runs and test evidence](https://github.com/DutchMaxwell/Niemandsland/pull/730).
+PR 4 acceptance: [boxed escape, shared budget probes and three runs](https://github.com/DutchMaxwell/Niemandsland/pull/735).
