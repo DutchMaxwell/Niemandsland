@@ -1,12 +1,5 @@
 extends GdUnitTestSuite
-## AIRCRAFT (GF Advanced Rules v3.5.1 special rule; AI plausibility wave 1) — system-scoped via the
-## RulesRegistry mechanics maps (the rule is printed in GF v3.5.1 only; verified against the official
-## PDFs: no Aircraft in AoF / AoFS / AoFR / GFF v3.5.1). Pins, per rulebook example:
-##   • the mandatory move: a straight line, the AI's fixed 30", flown in FULL — even Shaken;
-##   • lane legality: the whole straight move must fit on the table (no edge-shortening);
-##   • can never seize or contest an objective marker;
-##   • can never be charged (a melee-only enemy has no valid path to it at all);
-##   • units targeting an aircraft get -12" to their range (the aircraft's own guns are unaffected).
+## Aircraft consumers share the registry encoding across system maps.
 
 const IN2M := 0.0254
 
@@ -61,12 +54,12 @@ func _arm(u: GameUnit, weapons: Array) -> void:
 
 # === System scoping (the registry pattern: the rule fires only where the book fields it) ===
 
-func test_is_aircraft_fires_for_gf_and_not_for_fantasy_books() -> void:
+func test_is_aircraft_requires_the_named_rule_in_each_system() -> void:
 	var gf_air := _unit(1, [Vector3.ZERO], ["Aircraft", "Tough(6)"])
 	assert_bool(SoloController.is_aircraft(gf_air)).is_true()   # default system resolves to gf
 	var aof_air := _unit(1, [Vector3.ZERO], ["Aircraft"])
 	aof_air.unit_properties["game_system"] = "aof"
-	assert_bool(SoloController.is_aircraft(aof_air)).is_false() # AoF v3.5.1 prints no Aircraft rule
+	assert_bool(SoloController.is_aircraft(aof_air)).is_true()
 	var ground := _unit(1, [Vector3.ZERO], ["Fast"])
 	assert_bool(SoloController.is_aircraft(ground)).is_false()
 	assert_bool(SoloController.is_aircraft(null)).is_false()
@@ -227,3 +220,19 @@ func test_aircraft_move_record_carries_the_straight_lane() -> void:
 	assert_bool(bool(data.get("aircraft", false))).is_true()
 	assert_float(float(data.get("achieved_in", 0.0))).is_equal_approx(30.0, 0.1)
 	assert_float(float(data.get("band_in", 0.0))).is_equal_approx(30.0, 0.001)
+
+
+func test_aircraft_common_entries_select_the_real_flight_and_targeting_gates() -> void:
+	for system in ["gf", "gff", "aof", "aofr", "aofs"]:
+		var air := _unit(2, [Vector3(-0.45, 0, 0)], ["Aircraft"], "Aircraft Fixture")
+		air.unit_properties["game_system"] = system
+		_arm(air, [{"name": "Gun", "range": 24, "attacks": 4, "rules": []}])
+		var enemy := _unit(1, [Vector3(0.45, 0, 0)], [], "Target Fixture")
+		var controller := _controller([air, enemy])
+		assert_bool(SoloController.is_aircraft(air)).is_true()
+		assert_float(SoloController.target_range_penalty_in(air)).is_equal_approx(12.0, 0.001)
+		var start: Vector3 = (air.models[0] as ModelInstance).node.global_position
+		assert_object(controller.activate_next_ai_unit()).is_same(air)
+		assert_bool(bool(controller.last_report.get("aircraft", false))).is_true()
+		var finish: Vector3 = (air.models[0] as ModelInstance).node.global_position
+		assert_float(start.distance_to(finish) / IN2M).is_equal_approx(30.0, 0.1)
