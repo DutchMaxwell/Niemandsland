@@ -865,7 +865,7 @@ static func _safe_advance(state: Dictionary, key: String) -> Dictionary:
 		if u.source_type == "opr" and u.source_data is OPRApiClient.OPRUnit:
 			w = (u.source_data as OPRApiClient.OPRUnit).weapons
 		var bands := SoloController.sim_move_bands(u)
-		var charge_in := float(bands.get("rush", 12)) + BattleSim.CONTACT_IN
+		var charge_in := float(bands.get("charge", bands.get("rush", 12))) + BattleSim.CONTACT_IN
 		full.append({"positions": eu["positions"], "reach": maxf(
 			float(AiArchetype.max_range_inches(w)) + float(bands.get("advance", 6)),
 			charge_in) * BattleSim.IN2M})

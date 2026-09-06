@@ -231,7 +231,7 @@ static func spell_damage_ev(hits: int, def_ctx: Dictionary, facets: Dictionary =
 		unsaved += h * SIX_P
 	# Regeneration family, unless the facets bypass it (Bane / Lacerate / Disintegrate).
 	if bool(def_ctx.get("regeneration", false)) and not (bane or bool(facets.get("ignores_regen", false))):
-		unsaved *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", AiEv.REGENERATION_TARGET)))
+		unsaved *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target_spell", def_ctx.get("regen_target", AiEv.REGENERATION_TARGET))))
 	return unsaved
 
 

@@ -76,13 +76,14 @@ func base_radius_for_props(props: Dictionary) -> float:
 ## upstream text edit could change what the table plays without a commit. Aura- and item-granted
 ## rules still reach the bands, through the STRUCTURED path (`OPRArmyManager.expand_auras_of`
 ## stamps the granted rule NAME into special_rules).
-## Returns {"advance": int, "rush": int}, clamped at 0 so a heavy Slow can't go negative.
+## Returns advance, rush and charge distances, each clamped at zero.
 ## STATIC + pure (reads only `props`): so callers WITHOUT a live controller instance — the Solo AI when
 ## no MovementRangeController is injected — resolve Fast/Slow through this ONE band source instead of a
 ## hardcoded 6"/12" fallback (field-test finding 1: a Slow unit moved the full 6").
 static func move_bands_for_props(props: Dictionary) -> Dictionary:
 	var advance := OPR_ADVANCE_INCHES
 	var rush := OPR_RUSH_CHARGE_INCHES
+	var charge_extra := 0
 	# counted tracks WHICH BAND a rule already contributed, not just the rule name, so the registry
 	# pass fills exactly the band the name fallback left open (B10, test game 2).
 	var counted: Dictionary = {}  # rule base name -> {"advance": bool, "rush": bool} already applied
@@ -157,7 +158,9 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 		if not bool(done2.get("advance", false)):
 			advance += int(rp.get("advance_mod", 0))
 		if not bool(done2.get("rush", false)):
-			rush += int(rp.get("rush_mod", rp.get("charge_mod", 0)))
+			var rush_mod := int(rp.get("rush_mod", 0))
+			rush += rush_mod
+			charge_extra += int(rp.get("charge_mod", rush_mod)) - rush_mod
 		counted[base2] = {"advance": true, "rush": true}
 	# NML-006: active spell tokens with movement modifiers ('+2" advance / +4" rush', once) are stamped
 	# into props as "spell_move_mod" by the solo layer — read here so the AI's bands AND the human's
@@ -165,7 +168,7 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 	var spell_mod: Dictionary = props.get("spell_move_mod", {})
 	advance += int(spell_mod.get("advance", 0))
 	rush += int(spell_mod.get("rush", 0))
-	return {"advance": maxi(0, advance), "rush": maxi(0, rush)}
+	return {"advance": maxi(0, advance), "rush": maxi(0, rush), "charge": maxi(0, rush + charge_extra)}
 
 
 ## A rule's base name without its rating parenthetical: "Swift(3)" -> "Swift", "Fast" -> "Fast".
@@ -238,8 +241,11 @@ func _build_indicator(model_node: Node3D) -> void:
 
 	var root := Node3D.new()
 	root.name = ROOT_NODE_NAME
-	# Outer (Rush/Charge) first so the inner Advance band draws on top of it.
-	_add_band(root, props, int(bands["rush"]), base_color, RUSH_ALPHA, "Rush/Charge")
+	# Draw the charge and rush bands before the advance band.
+	var separate_charge := int(bands["charge"]) != int(bands["rush"])
+	if separate_charge:
+		_add_band(root, props, int(bands["charge"]), base_color, RUSH_ALPHA, "Charge")
+	_add_band(root, props, int(bands["rush"]), base_color, RUSH_ALPHA, "Rush" if separate_charge else "Rush/Charge")
 	_add_band(root, props, int(bands["advance"]), base_color, ADVANCE_ALPHA, "Advance")
 	# World-anchor the rings at the model's CURRENT spot instead of parenting them to the model,
 	# so they stay put while the player drags the mini toward a band edge to judge its reach.

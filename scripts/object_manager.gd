@@ -166,7 +166,7 @@ var _strict_cap_meters: float = 0.0
 
 # Movement cap: an opt-in limit so a dragged model/unit can't move further than its Advance or
 # Rush/Charge allowance. OFF = free drag (sandbox default). Set from the HUD "Movement" area.
-enum MovementCap { OFF, ADVANCE, RUSH }
+enum MovementCap { OFF, ADVANCE, RUSH, CHARGE }
 var _movement_cap: int = MovementCap.OFF
 var _movement_cap_meters: float = 0.0  # the active cap distance for the current drag (0 = no cap)
 
@@ -730,7 +730,7 @@ func _compute_movement_cap_meters() -> float:
 	if _is_reserve_placement(models[0]):
 		return 0.0
 	var bands: Dictionary = movement_range_controller.bands_for_model(models[0])
-	var inches: int = int(bands.get("rush", 12)) if _movement_cap == MovementCap.RUSH else int(bands.get("advance", 6))
+	var inches: int = _cap_band_inches(bands)
 	return float(inches) / METERS_TO_INCHES
 
 
@@ -757,11 +757,17 @@ func _compute_strict_cap_meters() -> float:
 
 
 ## The band distance (inches) the strict cap uses for the currently-selected action: the Advance
-## band when ADVANCE is picked, the Rush/Charge band for RUSH or the OFF fallback (max legal move).
+## band for ADVANCE, the selected RUSH or CHARGE band, or their maximum for OFF.
 func _cap_band_inches(bands: Dictionary) -> int:
 	if _movement_cap == MovementCap.ADVANCE:
 		return int(bands.get("advance", 6))
-	return int(bands.get("rush", 12))   # RUSH, or OFF -> fall back to the max legal move
+	var rush := int(bands.get("rush", 12))
+	var charge := int(bands.get("charge", rush))
+	if _movement_cap == MovementCap.RUSH:
+		return rush
+	if _movement_cap == MovementCap.CHARGE:
+		return charge
+	return maxi(rush, charge)
 
 
 ## Dragging a unit that is still in AMBUSH RESERVE onto the table is DEPLOYMENT, not a move — the

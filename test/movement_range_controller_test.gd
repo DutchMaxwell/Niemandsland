@@ -389,17 +389,13 @@ func test_move_bands_swift_name_fallback_cancels_slow() -> void:
 	assert_int(b["rush"]).is_equal(12)
 
 
-## Wave-4 Royal Legion (Mummified Undead army-book rule): "+4" range when shooting and moves +2" when
-## using Charge actions." The move parser must apply ONLY the +2" Charge (the Rush/Charge band), never the
-## +4" range — so a Royal Legion unit reads Advance 6", Rush/Charge 14".
 func test_move_bands_royal_legion_charge_bonus_only() -> void:
-	# REGISTRY data (aof mummified_undead: range_bonus_in 4, charge_mod 2) — the range half stays
-	# with SoloController.shooting_range_bonus, only the charge half rides the bands.
 	var b := _controller().move_bands_for_props({
 		"game_system": "aof", "faction_folder": "mummified_undead",
 		"special_rules": ["Royal Legion"]})
-	assert_int(b["advance"]).is_equal(6)    # +4" range is NOT a move modifier
-	assert_int(b["rush"]).is_equal(14)       # 12 + 2 (Charge shares the Rush/Charge band)
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(12)
+	assert_int(b["charge"]).is_equal(14)
 
 
 # === B10 (test game 2): movement-mod audit — partial parses must not eat a band ===
@@ -445,3 +441,23 @@ func test_bands_for_model_resolves_unit_via_parent_meta() -> void:
 	var b := c.bands_for_model(child)
 	assert_int(b["advance"]).is_equal(8)
 	assert_int(b["rush"]).is_equal(16)
+
+
+func test_reach_hunt_keeps_rush_and_charge_bands_distinct() -> void:
+	var covered := 0
+	for system in RulesRegistry.SYSTEMS:
+		var factions: Dictionary = RulesRegistry.map_for(system).get("factions", {})
+		for faction in factions:
+			if not factions[faction].has("Reach Hunt"):
+				continue
+			covered += 1
+			var props := {"game_system": system, "faction_folder": faction, "special_rules": ["Reach Hunt"]}
+			var bands := MovementRangeController.move_bands_for_props(props)
+			assert_int(bands["advance"]).is_equal(6)
+			assert_int(bands["rush"]).is_equal(12)
+			assert_int(bands.get("charge", -1)).is_equal(14)
+			props["special_rules"] = ["Fast", "Reach Hunt"]
+			bands = MovementRangeController.move_bands_for_props(props)
+			assert_int(bands["rush"]).is_equal(16)
+			assert_int(bands.get("charge", -1)).is_equal(18)
+	assert_int(covered).is_greater_equal(7)

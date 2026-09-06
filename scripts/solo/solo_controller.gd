@@ -753,7 +753,7 @@ func activation_payoff(unit: GameUnit) -> float:
 			var them := AiEv.ctx_for(enemy, majority_in_cover(enemy), 0)
 			score = maxf(score, minf(AiEv.shoot_ev(profiles, us, them, maxf(dist - advance, 0.0)), pool_cap) * denial)
 		var gap := nearest_melee_gap_in(unit, enemy)
-		if gap <= melee_shroud_charge_in(rush, enemy) and not is_aircraft(enemy):
+		if gap <= melee_shroud_charge_in(float(bands.get("charge", rush)), enemy) and not is_aircraft(enemy):
 			var melee := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.melee_profiles(weapons)), unit)
 			if not melee.is_empty():
 				var their_melee := AiEv.stamp_sergeant(filter_limited(enemy, AiShooting.melee_profiles(_unit_weapons(enemy))), enemy)
@@ -1348,6 +1348,10 @@ func _all_weapon_rules(unit: GameUnit) -> Array:
 			rules = (w as Dictionary).get("special_rules", [])
 		for r in rules:
 			out.append(r)
+		var reach := int((w as Object).get("range_value")) if w is Object else int((w as Dictionary).get("range_value", 0))
+		var takedown_name := AiEv.takedown_rule_for_profile(unit, reach)
+		if not takedown_name.is_empty() and not out.has(takedown_name):
+			out.append(takedown_name)
 	return out
 
 
@@ -1517,7 +1521,7 @@ func charge_candidate_illegal(unit: GameUnit, tgt: GameUnit, gap_in: float,
 	# (Musician-aware, "THE band truth for the LAB"), not the raw MRC band; a raw band
 	# silently dropped legal Musician/Teleport charges from the AI's imagination. The
 	# adoption re-gate stays the DICE truth for once-per-game boosts the sim cannot land.
-	var band := float(sim_move_bands(unit).get("rush", 12))
+	var band := float(sim_move_bands(unit).get("charge", 12))
 	if gap_in > melee_shroud_charge_in(band, tgt):
 		return true
 	return _charge_capped_by_difficult(unit, from, to, gap_in)
@@ -1639,8 +1643,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	if musician_in > 0.0:
 		advance += musician_in
 		rush += musician_in
-	# Charge shares the Rush band until a rule diverges them (Teleport grants +3" on Charge, +6" on Rush).
-	var charge_reach := rush
+	# Read the permanent charge band before applying activation bonuses.
+	var charge_reach := float(bands.get("charge", bands.get("rush", 12))) + musician_in
 	# Bounding (grill round 2 cut C — "when this unit is activated, you may place all models … anywhere
 	# fully within D3+1\" of their position"): valued as a move-band bonus on the WHOLE plan, so the EV
 	# solver, the decision tree and the executor all see the longer reach (documented simplification:
@@ -2728,7 +2732,8 @@ func _commander_close_order(unit: GameUnit, default_target: GameUnit, prev: Dict
 		return {"target": default_target, "continuity": "abort",
 			"why": "abort standing close order: target gone — re-adopt the nearest enemy"}
 	if default_target != null and default_target != pu:
-		var rush: float = float(move_bands_for_unit(unit, movement_range).get("rush", 12))
+		var bands: Dictionary = move_bands_for_unit(unit, movement_range)
+		var rush: float = float(bands.get("charge", bands.get("rush", 12)))
 		if nearest_melee_gap_in(unit, default_target) <= melee_shroud_charge_in(rush, default_target) \
 				and nearest_melee_gap_in(unit, pu) > melee_shroud_charge_in(rush, pu):
 			return {"target": default_target, "continuity": "abort",
@@ -5469,7 +5474,7 @@ func _unit_weapons(unit: GameUnit) -> Array:
 ## Robot Legions Slow unit advanced the full 6"). Static so it is unit-testable without a scene.
 static func move_bands_for_unit(unit: GameUnit, mrc: MovementRangeController) -> Dictionary:
 	if unit == null:
-		return {"advance": 6, "rush": 12}
+		return {"advance": 6, "rush": 12, "charge": 12}
 	if mrc != null:
 		for m in unit.get_alive_models():
 			var node := (m as ModelInstance).node
@@ -5512,6 +5517,7 @@ static func sim_move_bands(unit: GameUnit) -> Dictionary:
 	var bonus := musician_move_bonus_in(unit)
 	if bonus > 0.0:
 		bands["advance"] = float(bands.get("advance", 6)) + bonus
+		bands["charge"] = float(bands.get("charge", bands.get("rush", 12))) + bonus
 		bands["rush"] = float(bands.get("rush", 12)) + bonus
 	return bands
 
