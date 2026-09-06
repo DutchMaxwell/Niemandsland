@@ -24,6 +24,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
+    EPOCH_7_TABLE_RULES,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -142,6 +143,12 @@ pub struct Ctx {
     /// the FROZEN `EPOCH_6_TABLE_RULES` — pre-epoch corpora replay
     /// byte-exact.
     pub evasive_alias: bool,
+    /// Wave 4 (`rules-wave4-boostbases2`) — WHICH Boost is the reason
+    /// `evasive_alias` is on, so the dice seams name the RULE that fired
+    /// ("Machine-Fog Boost" at epoch 6, "Empyrean Spirit Boost" at epoch 7);
+    /// "" = no Boost. A `&'static str`, not a `String`: `Ctx` is `Copy` and
+    /// every name here is a literal in `ctx_for`'s own arms.
+    pub evasive_alias_name: &'static str,
     /// `Melee Evasion` — the melee twin of Evasive (ai_ev.gd:150).
     pub melee_evasion: bool,
     pub fortified: bool,
@@ -457,6 +464,11 @@ pub struct ShootProfile {
     /// widened window counts only past this centre distance, exactly 9" not
     /// "over" — same strict gate as every other over-9" read in this port.
     pub bane_over_in: f64,
+    /// Wave 4 (`rules-wave4-boostbases2`) — WHICH Bane Boost widened this
+    /// window, so the volley's rules-must-log line names the RULE that fired
+    /// ("Mischievous Boost" at epoch 6, "Bestial Boost" at epoch 7); "" = the
+    /// base 6s-only window.
+    pub bane_rule: &'static str,
     /// Wave 3 (`rules-wave3-shred3`): the family's per-face wound amount,
     /// read off the carried Shred-primitive entry's own
     /// `extra_wound_per_save_one` (`build_for`'s epoch-6 arm, gated
@@ -677,6 +689,14 @@ pub struct UnitStatic {
     /// `Action::traced` draw (`sim::bounding_bonus_in`) ports its value; this
     /// stamp is the named rule's own evidence, not a simulation input.
     pub bounding: Option<f64>,
+    /// Wave 4 (`rules-wave4-boostbases2`) — "Wave-Step Boost"'s own placement
+    /// DICE COUNT (`place_die: "2d3"` -> 2), stamped behind the FROZEN
+    /// `EPOCH_7_TABLE_RULES`; 0 = no Boost (the base entry's single die).
+    /// Same evidence-only standing as `bounding` above and as the move-band
+    /// family's `move_rule_mods`: the placement reaches this core precomputed
+    /// through the RECORDED `bounding_d3` faces, so this is the core's own
+    /// per-entry read, not a simulation input — see `bounding_boost_dice_of`.
+    pub bounding_dice: i64,
     /// The Quick/Fast move-band family — the named carriers' own registry
     /// params, summed the way BOTH band passes stack them (per rule NAME:
     /// `movement_range_controller.gd:164-188`'s `counted` dict,
@@ -1675,8 +1695,29 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // conditional alias leg stands down so the two never stack).
     let machine_fog_boost = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
         && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Machine-Fog Boost");
+    // Wave 4 (rules-wave4-boostbases2) — "Empyrean Spirit Boost" is the
+    // aof/ghostly_undead twin of the same shape: the printed unconditional
+    // form of Empyrean Spirit's own -1 ("enemies attacking them always get -1
+    // to hit"), its OWN Evasive-primitive entry, behind the FROZEN
+    // `EPOCH_7_TABLE_RULES`. The base entry's conditional Stealth alias leg
+    // stands down so the two never stack.
+    let empyrean_spirit_boost = rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
+        && rule_on_all_models(p, "Empyrean Spirit")
+        && rule_on_all_models(p, "Empyrean Spirit Boost");
+    // The Boost that is the reason `evasive` is on, if any — the dice seams'
+    // rules-must-log name ("" = none). Epoch 6 before epoch 7: a carrier can
+    // only ever hold one of these two (different systems and factions).
+    let evasive_boost = if machine_fog_boost {
+        "Machine-Fog Boost"
+    } else if empyrean_spirit_boost {
+        "Empyrean Spirit Boost"
+    } else {
+        ""
+    };
     let (stealth_alias_penalty, stealth_alias_over_in) = if machine_fog_boost {
         stealth_alias_of_excluding(reg, p, "Machine-Fog")
+    } else if empyrean_spirit_boost {
+        stealth_alias_of_excluding(reg, p, "Empyrean Spirit")
     } else {
         stealth_alias_of(reg, p)
     };
@@ -1785,8 +1826,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         stealth: rule_on_all_models(p, "Stealth"),
         stealth_alias_penalty,
         stealth_alias_over_in,
-        evasive: rule_on_all_models(p, "Evasive") || machine_fog_boost,
-        evasive_alias: machine_fog_boost,
+        evasive: rule_on_all_models(p, "Evasive") || !evasive_boost.is_empty(),
+        evasive_alias: !evasive_boost.is_empty(),
+        evasive_alias_name: evasive_boost,
         melee_evasion: rule_on_all_models(p, "Melee Evasion"),
         fortified: rule_on_all_models(p, "Fortified"),
         // WAVE 3 — stamped above, behind `EPOCH_6_TABLE_RULES`.
@@ -2938,6 +2980,93 @@ pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
     merge_identical(raw)
 }
 
+/// The Bane family's WIDENED save re-roll window, stamped off ONE named Boost
+/// entry: the entry's own `reroll_save_low` + `over_in`, and only when the
+/// model also carries the entry's `upgrades` base rule. Read BY NAME, never by
+/// iterating the shared primitive (the census's trusted-whole trap, #489) —
+/// the carry gate IS the port: a faction lookup alone would stamp every bane
+/// carrier in the faction, carried Boost or not. Stamped on the SHOOT array
+/// only: the volley consumes the window strictly past the entry's own
+/// `over_in` (dice.rs `save_batch`); the melee resolve never widens — no
+/// pre-charge gap (the shred2 precedent). Wave 3 calls it for "Mischievous
+/// Boost" (gf+aof goblins) behind `EPOCH_6_TABLE_RULES`, wave 4 for "Bestial
+/// Boost" (aof/beastmen) behind `EPOCH_7_TABLE_RULES`; each name states its
+/// own epoch at the call site, so neither can back-date the other.
+fn stamp_bane_boost(
+    reg: &mut Registries,
+    p: &Profile,
+    shoot: &mut [ShootProfile],
+    name: &'static str,
+) {
+    let map = reg.rules_for(&p.game_system);
+    let Some(e) = map
+        .lookup(&p.faction_folder, name)
+        .filter(|_| has_exact_rule(&p.special_rules, name))
+    else {
+        return;
+    };
+    let base = e.param_s("upgrades");
+    let low = e.param_i("reroll_save_low", 0);
+    if e.primitive.as_deref() != Some("Bane") || low <= 1 || !has_exact_rule(&p.special_rules, base)
+    {
+        return;
+    }
+    let over = e.param_f("over_in", 9.0);
+    for sp in shoot.iter_mut().filter(|sp| sp.bane) {
+        sp.bane_low = low;
+        sp.bane_over_in = over;
+        sp.bane_rule = name;
+    }
+}
+
+/// `SoloController.bounding_dice_count` (solo_controller.gd:1386-1396) — how
+/// many dice a Bounding placement rolls: an explicit `dice_count`, else the
+/// head of an "NdM" `place_die` ("2d3" -> 2), else one.
+fn bounding_dice_count(e: &crate::rules::Entry) -> i64 {
+    let explicit = e.param_i("dice_count", 0);
+    if explicit > 0 {
+        return explicit.max(1);
+    }
+    let pd = e.param_s("place_die").to_lowercase();
+    match pd.split_once('d') {
+        Some((head, _)) => head.trim().parse::<i64>().unwrap_or(1).max(1),
+        None => 1,
+    }
+}
+
+/// Wave 4 (rules-wave4-boostbases2) — "Wave-Step Boost"'s own placement dice
+/// count (aof/deep_sea_elves, `place_die: "2d3"` behind its own `upgrades`
+/// coupling, "If this model has Wave-Step"): 2d3 instead of the base entry's
+/// single D3. Read BY NAME behind the FROZEN `EPOCH_7_TABLE_RULES`; 0 = no
+/// Boost, the single-die base, so every earlier record reads zero.
+///
+/// EVIDENCE-ONLY, the accepted `bounding` shape (PR #653, see
+/// `UnitStatic::bounding`): the placement itself reaches this core
+/// PRECOMPUTED — the table draws one die per head and records every face
+/// (`AiActRecorder.traced("bounding_d3", faces, plus)`,
+/// solo_controller.gd:1685-1703), and `sim::bounding_bonus_in` sums whatever
+/// was recorded, so a 2d3 draw already replays exactly. Re-drawing the die
+/// here would desync from the table; this stamp is the core's own per-entry
+/// read, never a simulation input.
+fn bounding_boost_dice_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> i64 {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return 0;
+    }
+    let map = reg.rules_for(&p.game_system);
+    let Some(e) = map
+        .lookup(&p.faction_folder, "Wave-Step Boost")
+        .filter(|_| has_exact_rule(&p.special_rules, "Wave-Step Boost"))
+    else {
+        return 0;
+    };
+    if e.primitive.as_deref() != Some("Bounding")
+        || !has_exact_rule(&p.special_rules, e.param_s("upgrades"))
+    {
+        return 0;
+    }
+    bounding_dice_count(e)
+}
+
 /// Nimble is Bounding's word-for-word twin, own D3 reach vs Bounding's D3+1
 /// (AUDIT_armybook_flanks_2026-09-02.md rung C) — same named-carrier loop as
 /// `unpredictable_shooting_params` above.
@@ -3307,25 +3436,17 @@ impl UnitStatic {
         // never widens — no pre-charge gap (the shred2 precedent). Read BY
         // NAME, never by iterating the shared primitive (#489).
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            let map = reg.rules_for(&p.game_system);
-            // The carry gate IS the port: a faction lookup alone would stamp
-            // every goblin bane carrier, carried Boost or not.
-            if let Some(e) = map
-                .lookup(&p.faction_folder, "Mischievous Boost")
-                .filter(|_| has_exact_rule(&p.special_rules, "Mischievous Boost"))
-            {
-                let base = e.param_s("upgrades");
-                let low = e.param_i("reroll_save_low", 0);
-                if e.primitive.as_deref() == Some("Bane") && low > 1
-                    && has_exact_rule(&p.special_rules, base)
-                {
-                    let over = e.param_f("over_in", 9.0);
-                    for sp in shoot.iter_mut().filter(|sp| sp.bane) {
-                        sp.bane_low = low;
-                        sp.bane_over_in = over;
-                    }
-                }
-            }
+            stamp_bane_boost(reg, p, &mut shoot, "Mischievous Boost");
+        }
+        // Wave 4 (rules-wave4-boostbases2), gated on the FROZEN
+        // `EPOCH_7_TABLE_RULES`: "Bestial Boost" is the aof/beastmen twin of
+        // the arm above — the same Bane-primitive entry shape
+        // (`reroll_save_low: 5` + `over_in: 9` behind its own `upgrades`
+        // coupling, "If this model has Bestial"), so it rides the same seam
+        // instead of a second mechanism. An epoch-6 record reads the base
+        // 6s-only window and replays byte-exact.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            stamp_bane_boost(reg, p, &mut shoot, "Bestial Boost");
         }
         // Shred wave 3 (rules-wave3-shred3): the family's per-face wound
         // amount is now READ off the carried Shred-primitive entry
@@ -3498,6 +3619,7 @@ impl UnitStatic {
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
             bounding: bounding_of(reg, p),
+            bounding_dice: bounding_boost_dice_of(reg, p, rules_epoch),
             move_rule_mods: move_rule_mods_of(reg, p, rules_epoch),
             royal_legion_range_in: royal_legion.0,
             royal_legion_charge_in: royal_legion.1,

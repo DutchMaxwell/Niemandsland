@@ -640,9 +640,15 @@ pub fn resolve_volley_with_tray(
     // `over_in` gate, as first fired.
     let mut ma_fired: Vec<(&str, i64, f64)> = Vec::new();
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
-    // Wave 4 — "Machine-Fog Boost"'s once-per-volley rules-must-log flag
-    // (the defender-side alias marker, the alias_cover_logged shape).
-    let mut mfb_fired = false;
+    // Wave 4 — the evasive Boosts' once-per-volley rules-must-log flag (the
+    // defender-side alias marker, the alias_cover_logged shape); the RULE
+    // that fired is `def.evasive_alias_name` ("Machine-Fog Boost" at epoch 6,
+    // "Empyrean Spirit Boost" at epoch 7).
+    let mut evasive_boost_fired = false;
+    // Wave 4 — and the widened Bane window's own rule name, sticky once a
+    // weapon opened it ("Mischievous Boost" at epoch 6, "Bestial Boost" at
+    // epoch 7); "" = the base 6s-only window fired nothing.
+    let mut bane_rule = "";
     // Wave 3 — the Shielded-family alias's own rules-must-log flag: the +1
     // rode a family DATA alias rather than the literal name, one line per
     // volley below (`ShootResult.log` precedent).
@@ -750,10 +756,10 @@ pub fn resolve_volley_with_tray(
         if gp != 0 && gp_fired.iter().all(|(o, _)| *o != sh.owner) {
             gp_fired.push((sh.owner, gp));
         }
-        // Wave 4 — "Machine-Fog Boost" names itself once per volley: the
+        // Wave 4 — the evasive Boost names itself once per volley: the
         // unconditional -1 rode this weapon's to-hit sum (the defender-side
         // alias marker, Ctx::evasive_alias).
-        mfb_fired |= def.evasive_alias;
+        evasive_boost_fired |= def.evasive_alias;
         if p.unstoppable && m < 0 {
             m = 0;
         }
@@ -876,6 +882,9 @@ pub fn resolve_volley_with_tray(
         // save batches run on fresh results), so melee never widens — no
         // pre-charge gap (the shred2 precedent).
         out.bane_low = if p.bane_low > 1 && mod_dist_in > p.bane_over_in { p.bane_low } else { 0 };
+        if out.bane_low > 1 {
+            bane_rule = p.bane_rule;
+        }
         let on6 = if p.on6_ap > 0 {
             p.on6_ap
         } else if p.rending || p.destructive || att.rending_grant {
@@ -986,14 +995,17 @@ pub fn resolve_volley_with_tray(
     for (owner, hit) in &gp_fired {
         out.log.push(format!("Grounded Precision: {owner} — {hit:+} to hit (in terrain)"));
     }
-    // Wave 4 — the two Boostbases rules-must-log lines, once per volley.
-    if mfb_fired {
-        out.log
-            .push(format!("Machine-Fog Boost: {def_owner} — attackers get -1 to hit (always)"));
+    // Wave 4 — the two Boostbases rules-must-log lines, once per volley, each
+    // naming the RULE that fired (wave 3's two spellings and wave 4's two).
+    if evasive_boost_fired {
+        out.log.push(format!(
+            "{}: {def_owner} — attackers get -1 to hit (always)",
+            def.evasive_alias_name
+        ));
     }
     if out.bane_rerolled > 0 {
         out.log.push(format!(
-            "Mischievous Boost: {def_owner} — {} successful save(s) of 5-6 re-roll",
+            "{bane_rule}: {def_owner} — {} successful save(s) of 5-6 re-roll",
             out.bane_rerolled
         ));
     }
@@ -1260,8 +1272,8 @@ pub fn resolve_melee_with_tray(
     // Wave 3 — Grounded Precision's melee half names itself once per member
     // (rules-must-log, the volley's own flag shape).
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
-    // Wave 4 — "Machine-Fog Boost"'s once-per-melee rules-must-log flag.
-    let mut mfb_fired = false;
+    // Wave 4 — the evasive Boosts' once-per-melee rules-must-log flag.
+    let mut evasive_boost_fired = false;
     for sh in strikers {
         let gp = grounded_precision_mod(sh.att);
         if gp != 0 && gp_fired.iter().all(|(o, _)| *o != sh.owner) {
@@ -1283,7 +1295,7 @@ pub fn resolve_melee_with_tray(
                 out.mark("hazardous");
             }
             // Wave 4 — the unconditional -1 rode this strike's to-hit sum.
-            mfb_fired |= def.evasive_alias;
+            evasive_boost_fired |= def.evasive_alias;
             let target = melee_hit_target(p, sh.att, def, charging, uf_hit);
             let faces = tray.roll(n as usize);
             out.rolls.push(Roll {
@@ -1382,9 +1394,11 @@ pub fn resolve_melee_with_tray(
         out.log.push(format!("Grounded Precision: {owner} — {hit:+} to hit (in terrain)"));
     }
     // Wave 4 — the Boost's rules-must-log line, once per melee resolve.
-    if mfb_fired {
-        out.log
-            .push(format!("Machine-Fog Boost: {def_owner} — attackers get -1 to hit (always)"));
+    if evasive_boost_fired {
+        out.log.push(format!(
+            "{}: {def_owner} — attackers get -1 to hit (always)",
+            def.evasive_alias_name
+        ));
     }
     if shielded_alias_fired {
         out.log.push(format!(
