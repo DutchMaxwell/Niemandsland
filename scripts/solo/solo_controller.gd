@@ -5551,8 +5551,22 @@ static func morale_bonus_of(unit: GameUnit) -> int:
 			if str(ed["name"]) == "Banner":
 				continue
 			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
-	return best
+	return best + morale_rating_of(unit)
 
+
+
+static func morale_rating_of(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	var best := 0
+	for value in [unit] + unit.get_attached_heroes():
+		var member := value as GameUnit
+		if member == null or member.get_alive_count() == 0:
+			continue
+		for entry in RulesRegistry.unit_rules_of_primitive(member, "Morale"):
+			if str((entry.get("params", {}) as Dictionary).get("rating", "")) == "X":
+				best = maxi(best, int(entry.get("rating", 0)))
+	return best
 
 ## A1b-1 — NET of a unit's currently active spell/token modifiers, for BattleSim's snapshot.
 ## scripts/solo reads the DURABLE mirror (unit.unit_properties["spell_records"], main.gd:3530-3563)
