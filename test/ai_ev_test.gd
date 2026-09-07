@@ -479,15 +479,11 @@ func _boost_carrier(rules: Array) -> GameUnit:
 	u.unit_id = "bb1"
 	u.unit_properties = {"player_id": 2, "name": "BB", "quality": 4, "defense": 4,
 		"game_system": "aof", "faction_folder": "beastmen", "special_rules": rules}
-	var m := ModelInstance.new()
-	m.is_alive = true
-	u.models.append(m)
 	return u
 
 
 func test_bane_boost_window_reads_the_beastmen_boost_entry() -> void:
-	# Bestial Boost (aof/beastmen): reroll_save_low 5 past over_in 9, behind upgrades "Bestial" —
-	# the carrier must ALSO carry that base (the core's stamp_bane_boost carry gate).
+	# Bestial Boost (aof/beastmen): reroll_save_low 5 past over_in 9, behind upgrades "Bestial".
 	var win: Dictionary = AiEv.bane_boost_window(_boost_carrier(["Bestial", "Bestial Boost"]), true)
 	assert_int(int(win.get("low", 0))).is_equal(5)
 	assert_float(float(win.get("over_in", 0.0))).is_equal_approx(9.0, 0.0001)

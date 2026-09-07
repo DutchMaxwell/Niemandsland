@@ -363,6 +363,34 @@ static func blocks_with_bane(save_faces: Array, reroll_faces: Array, defense: in
 	return count_blocks(combined, defense, armor_piercing)
 
 
+## The WIDENED window's re-roll count (wave 4: "Bestial Boost" — `reroll_save_low: 5` past
+## `over_in: 9`): every unmodified 6 re-rolls (the base leg), and every face at or above `low` that
+## is ALSO a successful save re-rolls too — a face that already failed its save never re-rolls
+## (core twin: dice.rs blocks_with_bane_from). `low` 6 = the base leg, byte-identical to
+## bane_reroll_count / blocks_with_bane.
+static func bane_reroll_count_from(save_faces: Array, save_target: int, low: int) -> int:
+	var n := 0
+	for f in save_faces:
+		var face := int(f)
+		if face == UNMODIFIED_SIX or (face >= low and face >= save_target):
+			n += 1
+	return n
+
+
+static func blocks_with_bane_from(save_faces: Array, reroll_faces: Array, defense: int,
+		armor_piercing: int, low: int) -> int:
+	var combined: Array = []
+	var ri := 0
+	for f in save_faces:
+		var face := int(f)
+		if face == UNMODIFIED_SIX or (face >= low and face >= save_target(defense, armor_piercing)):
+			combined.append(int(reroll_faces[ri]) if ri < reroll_faces.size() else face)
+			ri += 1
+		else:
+			combined.append(face)
+	return count_blocks(combined, defense, armor_piercing)
+
+
 ## Blast(X) hits (GF Advanced Rules v3.5.1: "Ignores cover, and after resolving other special rules, each
 ## hit is multiplied by X, where X is up to as many hits as models in the target unit." — the rulebook's
 ## example: 2 hits with Blast(3) vs 2 models → each hit ×2 → 4 hits). The multiplier is min(X, target

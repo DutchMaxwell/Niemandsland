@@ -215,6 +215,26 @@ static func takedown_rule_for_profile(unit: GameUnit, profile_range: int) -> Str
 	return ""
 
 
+## The Bane family's WIDENED save re-roll window (wave 4: "Bestial Boost" / "Mischievous Boost" —
+## `reroll_save_low` + `over_in` behind `upgrades`): past the entry's over_in the defender re-rolls
+## its successful saves at reroll_save_low and up as well as its 6s. The carrier must ALSO carry the
+## entry's `upgrades` base rule (the core's stamp_bane_boost carry gate), and it is shooting-only —
+## `over9` is the caller's past-9" flag (the melee resolve always carries an unknown distance, so
+## false). Returns the applying entry's {low, over_in, rule}, or {} when the window does not apply.
+static func bane_boost_window(unit: GameUnit, over9: bool) -> Dictionary:
+	if unit == null or not over9:
+		return {}
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Bane"):
+		var ed := e as Dictionary
+		var p: Dictionary = ed.get("params", {})
+		var low := int(p.get("reroll_save_low", 0))
+		var base := str(p.get("upgrades", ""))
+		if low <= 1 or base.is_empty() or not has_exact_rule(unit, base):
+			continue
+		return {"low": low, "over_in": float(p.get("over_in", 9.0)), "rule": str(ed["name"])}
+	return {}
+
+
 ## Stamp the Sergeant facet onto a unit's weapon profiles (wave 5, model-level rule): the FIRST profile
 ## with attacks gets "sergeant_attacks" = the bearer's own attack share (total attacks / alive models,
 ## min 1) — the pooled resolution's documented approximation of "when THIS model attacks". Gated by the
