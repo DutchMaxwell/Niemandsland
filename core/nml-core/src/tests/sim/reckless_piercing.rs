@@ -143,6 +143,25 @@ use super::*;
         );
     }
 
+    /// BISECT: the dice fold alone -- a shooter whose Ctx already carries
+    /// `reckless_ap: 1` must raise the save target to 5.
+    #[test]
+    fn bisect_dice_fold_reckless_ap() {
+        let profiles = [ShootProfile { name: "R".into(), attacks: 8, count: 1, range: 24, ..Default::default() }];
+        let att = Ctx { quality: 2, reckless_ap: 1, ..Default::default() };
+        let def = Ctx { defense: 4, tough: 1, models: 1, ..Default::default() };
+        let strikers = [crate::dice::Shooter { profiles: &profiles, keep: &[0], attacks: &[8], att: &att, owner: "a" }];
+        let mut tray = Tray::seeded(11);
+        let out = crate::dice::resolve_volley_with_tray(
+            &strikers, &def, "b", 12.0, 12.0, false, false, false, false, &mut tray,
+        );
+        assert!(
+            out.rolls.iter().any(|r| r.kind == "defense" && r.target == 5),
+            "dice fold: {:#?}",
+            out.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
+        );
+    }
+
     /// Consumption, shooting leg -- the PROVEN `tag_volley` harness: a rifle
     /// carrier on the split line, the victim Defense 4. With the buff stamp
     /// on the shooter every spent save window runs at AP(1) (target 3), the
