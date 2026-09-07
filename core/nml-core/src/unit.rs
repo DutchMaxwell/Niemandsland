@@ -510,6 +510,12 @@ pub struct ShootProfile {
     /// Takedown tag and on every record below `EPOCH_7_TABLE_RULES`, so
     /// pre-wave replays log nothing and stay byte-identical.
     pub takedown_rule: String,
+    /// Wave 4 follow-up (port-takedown-strike): the ONCE-PER-GAME bonus
+    /// melee attack's own Quality ("Takedown Strike": one attack at Quality
+    /// 2+ with AP(2), Deadly(3), and Takedown — the table's synthetic bonus
+    /// group, main.gd:16756). 0 = the member's own Ctx quality (every
+    /// ordinary profile), so pre-wave behaviour is untouched.
+    pub extra_attack_q: i64,
     pub rules: Vec<String>,
     // --- stamped facets (ai_ev.gd:203-274) ---
     pub versatile_attack: bool,
@@ -608,6 +614,7 @@ impl ShootProfile {
             && self.limited == o.limited
             && self.takedown == o.takedown
             && self.takedown_rule == o.takedown_rule
+            && self.extra_attack_q == o.extra_attack_q
             && self.rules == o.rules
     }
 }
@@ -3218,6 +3225,60 @@ fn stamp_takedown_named(
     }
 }
 
+/// Wave 4 follow-up (port-takedown-strike) — the once-per-game bonus melee
+/// attack "Takedown Strike" (gf x5 / aof x7, primitive `Takedown` with
+/// `extra_attack_q: 2, ap: 2, uses_per_game: 1`; the printed text adds
+/// Deadly(3)): "Once per game, when it's this model's turn to attack in
+/// melee, it may make one attack at Quality 2+ with AP(2), Deadly(3), and
+/// Takedown." The table's `_solo_takedown_bonus_groups` main.gd:16756
+/// appends a synthetic single-attack group `{quality: extra_attack_q, ap,
+/// deadly: 3, takedown: true}`, joined into the strike groups at
+/// :6032-6034, spent once per game per bearer
+/// (`takedown_bonus_used_<name>`).
+///
+/// Here: the stamp APPENDS one synthetic melee profile carrying the entry's
+/// own params (`extra_attack_q` for the Quality override, `ap`, `deadly` at
+/// the table's own default of 3), `takedown: true` so the EXISTING Takedown
+/// landing path resolves it, and `limited: true` so the EXISTING
+/// `limited_used` once-per-game ledger spends it by name — the exact
+/// "limited_used shape" the dice.rs doc note asks for, never a flat
+/// always-on stamp (#489's over-credit). One bonus attack per bearer even
+/// if a book duplicates the rule (the append runs once). Behind the FROZEN
+/// `EPOCH_7_TABLE_RULES` only — a record below 7 keeps the melee array as
+/// the weapons built it and replays byte-exact.
+fn stamp_takedown_strike_named(
+    reg: &mut Registries,
+    p: &Profile,
+    melee: &mut Vec<ShootProfile>,
+    name: &str,
+) {
+    if !has_exact_rule(&p.special_rules, name) && !has_exact_rule(&p.item_grants, name) {
+        return;
+    }
+    let map = reg.rules_for(&p.game_system);
+    let Some(e) = map.lookup(&p.faction_folder, name) else {
+        return;
+    };
+    if e.primitive.as_deref() != Some("Takedown") {
+        return;
+    }
+    let q = e.param_i("extra_attack_q", 0);
+    if q <= 0 {
+        return; // the always-on Takedown family — `stamp_takedown_named`'s read
+    }
+    melee.push(ShootProfile {
+        name: name.to_string(),
+        attacks: 1,
+        count: 1,
+        ap: e.param_i("ap", 2),
+        deadly: e.param_i("deadly", 3),
+        takedown: true,
+        limited: true,
+        extra_attack_q: q,
+        ..Default::default()
+    });
+}
+
 /// `AiShooting.profiles_in_range` ai_shooting.gd:14-26 — the merged RANGED set,
 /// UNSTAMPED (the `AiEv.stamp_sergeant` pass belongs to `BattleSim._profiles_of`,
 /// not to this function). `UnitStatic::build` calls it at 0.0 and stamps after;
@@ -3725,6 +3786,14 @@ impl UnitStatic {
         // tag alone set it and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             stamp_takedown_named(reg, p, &mut shoot, &mut melee, "Takedown when Shooting");
+        }
+        // Wave 4 follow-up (port-takedown-strike), gated on the FROZEN
+        // `EPOCH_7_TABLE_RULES`: "Takedown Strike" is the once-per-game bonus
+        // melee attack under its own name — see `stamp_takedown_strike_named`.
+        // A record below epoch 7 keeps the melee array as the weapons built
+        // it and replays byte-exact.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            stamp_takedown_strike_named(reg, p, &mut melee, "Takedown Strike");
         }
         // Boostbases wave (rules-wave4-boostbases), gated on the FROZEN
         // `EPOCH_6_TABLE_RULES`: "Mischievous Boost" is the Bane family's

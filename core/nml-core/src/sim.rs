@@ -1864,6 +1864,13 @@ pub fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
     sc.attacks.clear();
     sc.fold.clear();
     for p in &us.melee {
+        // Wave 4 follow-up (port-takedown-strike) — the once-per-game bonus
+        // group is its OWN single attack that "never scales with the unit"
+        // (main.gd:16760-16761), so it skips the survivor scaling.
+        if p.extra_attack_q > 0 {
+            sc.attacks.push(p.attacks);
+            continue;
+        }
         sc.attacks.push(effective_attacks(p.attacks, alive, us.model_count));
     }
 }
