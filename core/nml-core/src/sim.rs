@@ -1830,6 +1830,12 @@ fn battery_chain_caster(
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
         return None;
     }
+    // The fold gate is `caster_of`'s own: with the fold off the rest of the
+    // resolver does not believe in the chain either (the cast_fold knob test
+    // pins "seam_cast alone still casts nothing").
+    if !(seams.cast_fold && seams.hero_attach) {
+        return None;
+    }
     std::iter::once(si)
         .chain(state.attached[si].iter().copied())
         .find(|&u| {

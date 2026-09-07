@@ -65,7 +65,9 @@ use super::*;
     }
 
     fn epoch(e: u32) -> Seams {
-        Seams { rules_epoch: e, ..Seams::default() }
+        // The fold gate is `caster_of`'s own — the battery leg rides it, so
+        // the tests turn the same two seams the cast fold needs on.
+        Seams { rules_epoch: e, cast_fold: true, hero_attach: true, ..Seams::default() }
     }
 
     fn logged_events(st: &State, needle: &str) -> bool {
