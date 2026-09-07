@@ -42,8 +42,9 @@ test contract. Use `--timeout 120` to change the per-scenario deadline. The
 driver chooses a free relay port unless `--port` is supplied and waits for at
 least 3500 MB of available memory before starting either Godot process.
 
-PR #665's activation-economy scenario is intentionally opt-in until that branch
-lands:
+The activation-economy scenario (#665, merged) is included by default since it
+landed; `--include-transport` remains accepted as a no-op flag for older
+invocation scripts. 11 checkpoints run in ~30 s on one machine.
 
 ```bash
 python test/mp/run_two_instance.py --run-dir reports/mp-two-instance-transport \

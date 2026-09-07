@@ -75,11 +75,28 @@ def free_port() -> int:
 
 
 def wait_for_port(port: int, timeout: float = 15.0) -> None:
+    """#675 item 7: probe the relay with a well-formed HTTP GET, not a bare TCP
+    connect. The websockets relay logs `ERROR opening handshake failed` for any
+    connection that never sends HTTP bytes; a plain GET gets a clean HTTP error
+    response (no error log) and tells us the listener is up just as well."""
     deadline = time.monotonic() + timeout
+    probe = (
+        b"GET / HTTP/1.1\r\n"
+        b"Host: 127.0.0.1\r\n"
+        b"User-Agent: mp-harness-port-probe\r\n"
+        b"Connection: close\r\n"
+        b"\r\n"
+    )
     while time.monotonic() < deadline:
         try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+            with socket.create_connection(("127.0.0.1", port), timeout=0.25) as sock:
+                sock.sendall(probe)
+                head = sock.recv(64)
+            if head.startswith(b"HTTP/"):
                 return
+            # A listener that answers non-HTTP bytes is still a listener on the
+            # port we own; treat it as up rather than spinning to the timeout.
+            return
         except OSError:
             time.sleep(0.05)
     raise HarnessFailure(f"relay did not listen on 127.0.0.1:{port} within {timeout:.0f}s")
