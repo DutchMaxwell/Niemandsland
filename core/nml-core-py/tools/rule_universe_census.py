@@ -65,7 +65,7 @@ distinct rule name against the four layers that must know it:
      - a live rule GRANT's name does not need hand-listing, it is read off
      the `*::granted(state, i, "X")` call sites (consumed_grant_names).
      Skipping this reopens #489's bug for the next primitive.
-  4. encoder   - a slot in data/encoder_rule_vocab_v1.json (v6, unit band,
+  4. encoder   - a slot in data/encoder_rule_vocab_v1.json (v7, unit band,
                  weapon band or unit2 - the fourth trailing band).
 
 PRIVATE-SAFE: the books are read at runtime from wherever `--books` points;
