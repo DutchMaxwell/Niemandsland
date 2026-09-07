@@ -26,10 +26,13 @@
 //! for the pull. Both loops also stop the moment a sweep moves nobody, so the
 //! gate terminates on any input, pathological configurations included.
 //!
-//! FRAME. The table gates in world METRES; this gates in the planner's INCH
-//! frame, where the endpoints already live, so a model the gate does not touch
-//! keeps its endpoint bit for bit instead of picking up a metre round trip.
-//! The geometry is scale-free; the four metre constants are converted once.
+//! FRAME. The table gates in float32 world METRES; this still gates in the
+//! planner's f64 INCH frame, where the endpoints already live, so a model the
+//! gate does not touch keeps its endpoint bit for bit instead of picking up a
+//! metre round trip. The geometry is scale-free; the four metre constants are
+//! converted once. `to_world_f32` / `from_world_f32` and `WorldDisc` carry the
+//! table's own frame in its own operation order; the passes move onto it one
+//! at a time (the endpoint-localisation ledger says which residue each closes).
 //!
 //! BASES. Overlap relaxation and coherency use the real footprint through the
 //! shared `geom::pair_gap_m`. Terrain rest, wall chords and the escape scan
@@ -50,18 +53,32 @@ pub struct Disc {
     pub shape: BaseShape,
 }
 
+/// `INCHES_TO_METERS` as the engine's `real_t`. `Vector2 * float` and
+/// `Vector2 / float` narrow the scalar to f32 BEFORE the operation, so the
+/// table never multiplies by 0.0254 — it multiplies by this.
+const IN2M_F32: f32 = IN2M as f32;
+
+/// `_table_half_extents` (position_parity.gd:33) — `board_in * IN2M * 0.5`,
+/// three float32 operations in that order on a `Vector2` board. A recorded
+/// board of 71.99999854 in narrows back to the 72 it was printed from.
+fn half_extents_f32(board_in: [f64; 2]) -> [f32; 2] {
+    [(board_in[0] as f32 * IN2M_F32) * 0.5, (board_in[1] as f32 * IN2M_F32) * 0.5]
+}
+
 /// `_plan_move` :6247 — a world point (x, z) into the planner's inch frame,
-/// exactly as the table computes it.
+/// `(Vector2(p.x, p.z) + off) / INCHES_TO_METERS`: a float32 add, THEN a
+/// float32 divide. Dividing first, or doing either in f64 and casting at the
+/// end, lands a float32 ULP off on a third of the recorded positions.
 pub fn from_world_f32(w: [f32; 2], board_in: [f64; 2]) -> [f32; 2] {
-    [(w[0] as f64 / IN2M + board_in[0] * 0.5) as f32,
-     (w[1] as f64 / IN2M + board_in[1] * 0.5) as f32]
+    let off = half_extents_f32(board_in);
+    [(w[0] + off[0]) / IN2M_F32, (w[1] + off[1]) / IN2M_F32]
 }
 
 /// `_plan_move` :6378 — the planner's inch point back into world metres,
-/// exactly as the table computes it.
+/// `(pi * INCHES_TO_METERS) - off`: a float32 multiply, THEN a float32 subtract.
 pub fn to_world_f32(p: [f32; 2], board_in: [f64; 2]) -> [f32; 2] {
-    [((p[0] as f64 - board_in[0] * 0.5) * IN2M) as f32,
-     ((p[1] as f64 - board_in[1] * 0.5) * IN2M) as f32]
+    let off = half_extents_f32(board_in);
+    [p[0] * IN2M_F32 - off[0], p[1] * IN2M_F32 - off[1]]
 }
 
 /// One base as the TABLE sees it: centre in float32 WORLD METRES (x, z) —
@@ -1187,7 +1204,9 @@ mod frame_tests {
                     let d = WorldDisc { c: w, r_m: n(&u["radii"][i]), shape }.to_disc(board);
                     let back = WorldDisc::from_disc(&d, board);
                     assert_eq!(back.shape, shape);
-                    assert_eq!(back.r_m, n(&u["radii"][i]));
+                    // The inch radius is not an exact carrier for the metre one:
+                    // 0.03 / IN2M * IN2M is one f64 ULP short. Metres stay the truth.
+                    assert!((back.r_m - n(&u["radii"][i])).abs() <= 1e-16, "{}", back.r_m);
                     worst = worst.max(((back.c[0] - w[0]) as f64).hypot((back.c[1] - w[1]) as f64));
                 }
             }
