@@ -182,8 +182,8 @@ use super::*;
             shot.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
         assert!(
-            !shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 4),
-            "no unstamped save window survives"
+            shot.rolls.iter().all(|r| r.kind != "defense" || r.target == 3 || r.count == 0),
+            "every spent save window runs at AP(1)"
         );
 
         // No stamp: the plain Defense-4 window.
