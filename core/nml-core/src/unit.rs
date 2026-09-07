@@ -713,6 +713,9 @@ pub struct UnitStatic {
     /// entry per "Storm of X" the unit bears, params off its own registry
     /// entry, empty below `EPOCH_6_TABLE_RULES`.
     pub storm: Vec<StormSpec>,
+    /// The Reanimation read (epoch 7) — the activation-trigger roll; `None`
+    /// below `rules_epoch` 7. See `reanimation_of`.
+    pub reanimation: Option<ReanimationSpec>,
     /// The Crossing Attack read (epoch 7) — the table's post-move
     /// pre-attack roll (`_solo_apply_crossing_attack`); `None` below
     /// `rules_epoch` 7. See `crossing_attack_of`.
@@ -2676,6 +2679,41 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
     None
 }
 
+/// One carried "Reanimation" — main.gd:953-957, the activation trigger
+/// (`_solo_try_reanimation` main.gd:4710): once per activation, BEFORE the
+/// action, roll as many dice as the unit could restore wounds; each 5+
+/// restores one model/wound. The base rule reaches profiles only through the
+/// aura ("Reanimation Aura" -> AURA_CHANNEL_NAMES; the epoch-6 fold grants
+/// "Reanimation" onto the unit and every attached hero).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReanimationSpec {
+    /// The entry's own `restore_target` — the table's `unit_param` read with
+    /// REANIMATION_TARGET as fallback (5, every book entry's value,
+    /// tools/rules_mechanics_export.py:76).
+    pub target: i64,
+}
+
+/// The Reanimation stamp (wave-4 follow-up, rules-reanimation): read BY NAME
+/// off the unit's own rule list — EXACT base name ("Reanimation" is a prefix
+/// of "Reanimation Aura", the confusion the gate must not make) — gated on
+/// the FROZEN `EPOCH_7_TABLE_RULES`; a record below 7 keeps `None`.
+fn reanimation_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<ReanimationSpec> {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return None;
+    }
+    let carried = p
+        .special_rules
+        .iter()
+        .chain(p.item_grants.iter())
+        .any(|r| base_rule_name(r) == "Reanimation");
+    if !carried {
+        return None;
+    }
+    reg.rules_for(&p.game_system)
+        .lookup(&p.faction_folder, "Reanimation")
+        .map(|e| ReanimationSpec { target: e.param_i("restore_target", 5) })
+}
+
 /// One carried "Mind Control" entry with the fatigue payload — the table's
 /// pre-attack slot main.gd:1070 (`_solo_apply_mind_control` :16997-17037).
 /// Only the "Fatigue Debuff" literal is stamped BY NAME (the #489
@@ -4197,6 +4235,7 @@ impl UnitStatic {
             ambush_family: ambush_family_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             storm: storm_of(reg, p, rules_epoch),
+            reanimation: reanimation_of(reg, p, rules_epoch),
             crossing_attack: crossing_attack_of(reg, p, rules_epoch),
             reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
