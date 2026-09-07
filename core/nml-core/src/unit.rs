@@ -3999,6 +3999,35 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
             );
         }
     }
+    // Wave 5 bounded stamp (rules-slow, epoch 7): "Slow" ("This model is
+    // slowed ... -2\" Advance ... -4\" Rush/Charge") — the entry's own
+    // `advance_mod`/`rush_mod` (-2/-4) onto BOTH bands, the loader twin's
+    // band fold (list_to_profile.py:537-543, the table's name fallback
+    // movement_range_controller.gd:116-121; the registry's `common` "Slow"
+    // entries carry exactly those params, gf+aof 3.5.1). Evidence-only
+    // standing like the rest of this fold (the accepted `bounding` shape,
+    // PR #653): the -2"/-4" reach the core precomputed inside the recorded
+    // `state.bands`, so a live re-fold at the move seam would double-count —
+    // the stamp is the core's own per-entry read, never a simulation input.
+    // No negation arm here: "Swift" is census hygiene (NA_NAMES — already
+    // folded into the loader's band pass before the core runs), and the
+    // loader twin's own band pass has no Swift leg either. Gated on the
+    // FROZEN `EPOCH_7_TABLE_RULES`, never the literal.
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && unit_rule_active(reg, p, "Slow") {
+        let map = reg.rules_for(&p.game_system);
+        if let Some(e) = map.lookup(&p.faction_folder, "Slow") {
+            let (adv, rsh) = (e.param_f("advance_mod", 0.0), e.param_f("rush_mod", e.param_f("charge_mod", 0.0)));
+            acc.advance += adv;
+            acc.rush += rsh;
+            hit = true;
+            crate::sim::trace_rule(
+                "move-bands",
+                "Slow",
+                &format!("{}: {adv}\" advance, {rsh}\" rush/charge", p.name),
+            );
+        }
+    }
+
     if hit { Some(acc) } else { None }
 }
 
