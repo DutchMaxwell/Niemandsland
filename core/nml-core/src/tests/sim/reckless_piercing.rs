@@ -161,6 +161,13 @@ use super::*;
         let mut b = UnitStatic { name: "b".into(), ..Default::default() };
         b.ctx.defense = 4;
         b.ctx.tough = 1;
+        b.ctx.models = 1;
+        // A one-model target: the fixture line carries a 3-model "b" —
+        // shrink it so the defender reads one alive model throughout.
+        st.alive[2] = 1;
+        st.wounds[2] = vec![1];
+        st.radii[2] = vec![IN2M];
+        st.positions[2] = vec![[5.0 * IN2M, 0.0, 0.0]];
         let statics = vec![a, UnitStatic { name: "ah".into(), ..Default::default() }, b, UnitStatic { name: "bh".into(), ..Default::default() }];
         let action = Action {
             kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()),
@@ -210,7 +217,7 @@ use super::*;
         st.alive = vec![1, 1];
         st.attached = Rc::new(vec![vec![], vec![]]);
         st.attached_to = Rc::new(vec![None, None]);
-        st.positions = vec![vec![[0.0, 0.0, 0.0]], vec![[4.0 * IN2M, 0.0, 0.0]]];
+        st.positions = vec![vec![[0.0, 0.0, 0.0]], vec![[2.0 * IN2M, 0.0, 0.0]]];
         st.wounds = vec![vec![1], vec![1]];
         st.radii = vec![vec![IN2M], vec![IN2M]];
         st.reckless_backfire_round[1] = 0;
