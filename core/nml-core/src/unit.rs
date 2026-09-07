@@ -3056,6 +3056,28 @@ fn stamp_conditional_ap_named(
                     });
                 }
             }
+            "Ranged Slayer" => {
+                // Wave 4 follow-up (rules-ranged-slayer): Slayer's printed
+                // shape with the charge leg deleted ("AP(+2) … over 9" away,
+                // if most models in the target have Tough(3)+"). The entry
+                // carries gate `ranged_over` but NO `condition` key, so the
+                // generic pass stays inert (cond_ap_of returns None) — this
+                // arm stamps the spec the family reads: vs_tough_ge + the
+                // shooting-only gate, on the SHOOT array alone. The aura
+                // ("Ranged Slayer Aura") grants the base via the epoch-6
+                // Aura-Channel fold, so the carrier rides the same spec.
+                for sp in shoot.iter_mut() {
+                    sp.cond_ap.push(CondAp {
+                        ap_bonus: ap,
+                        condition: "vs_tough_ge".into(),
+                        gate: e.param_s("gate").to_string(),
+                        over_in: e.param_f("over_in", LONG_RANGE_IN),
+                        threshold: e.param_i("threshold", 0),
+                        name: n.clone(),
+                        ..Default::default()
+                    });
+                }
+            }
             "Melee Slayer" => {
                 let threshold = e.param_i("threshold", 0);
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {
