@@ -880,6 +880,18 @@ pub struct UnitStatic {
     /// own params (`ambush_family_of`). Every field is its zero-value when the
     /// unit carries no such name or the record predates `rules_epoch` 4.
     pub ambush_family: AmbushFamily,
+    /// "Re-Deployment" (the deployment-phase redeploy: gf 13 + aof 2 carrier
+    /// factions): the entry's own `max_units` param, stamped per carrier.
+    /// The table reads it at `solo_controller.gd:9642` with fallback 2
+    /// (`RulesRegistry.unit_param(gu, "Re-Deployment", "max_units", 2)`).
+    /// 0 = unread. The re-place CHOICE itself stays table-side — an optional
+    /// player choice needs a core seam AND a policy this stamp deliberately
+    /// does not invent, the sibling "Ambush Re-Deployment" withdraw beat's
+    /// recorded decision (this struct's `re_reserve` doc, below `unit.rs`
+    /// `AmbushFamily`). The census's old core_note for the name cited
+    /// `deployment.rs:2382`, which is the Ambush VARIANT's doc — the plain
+    /// name had no core presence at all before this read.
+    pub re_deployment_max_units: i64,
     /// Ambush arrival S2 — `SoloController.repel_ambush_dist_m`
     /// (solo_controller.gd:9724-9727): the ring THIS unit projects onto enemy
     /// ambushers arriving near it, `0.0` without the rule. A defender's rule —
@@ -3049,6 +3061,24 @@ fn ambush_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ambu
     f
 }
 
+/// The deployment-phase "Re-Deployment" per-carrier read
+/// (`UnitStatic.re_deployment_max_units`): the entry's own `max_units`
+/// (`RulesRegistry.unit_param(gu, "Re-Deployment", "max_units", 2)`,
+/// solo_controller.gd:9642). Gated `rule_on(rules_epoch,
+/// EPOCH_7_TABLE_RULES)` — the epoch-7 frozen constants gate every new read.
+fn re_deployment_max_units_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> i64 {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return 0;
+    }
+    if !unit_rule_active(reg, p, "Re-Deployment") {
+        return 0;
+    }
+    match reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Re-Deployment") {
+        Some(e) => e.param_i("max_units", 2).max(0),
+        None => 2, // the table's own fallback (solo_controller.gd:9642)
+    }
+}
+
 /// One "Piercing Tag" registry entry the unit carries — wave 3's marker
 /// family (`_solo_apply_piercing_tag` main.gd:16999-17027, the three registry
 /// names that ride the "Piercing Tag" primitive). The table's resolver reads
@@ -4340,6 +4370,7 @@ impl UnitStatic {
                 0.0
             },
             ambush_family: ambush_family_of(reg, p, rules_epoch),
+            re_deployment_max_units: re_deployment_max_units_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             storm: storm_of(reg, p, rules_epoch),
             reanimation: reanimation_of(reg, p, rules_epoch),
