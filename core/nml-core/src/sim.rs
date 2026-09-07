@@ -617,7 +617,8 @@ pub(crate) fn tray_reanimation(
 /// counter exists and the table's burst arm is the audit-B open question, so
 /// the port fires only on a ROUND-1 activation — one act per unit per round
 /// makes that the first activation for every unit on the board at round start.
-/// Gate: FROZEN `EPOCH_7_TABLE_RULES`.pub(crate) fn tray_surprise_attack(
+/// Gate: FROZEN `EPOCH_7_TABLE_RULES`.
+pub(crate) fn tray_surprise_attack(
     statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
     tray: &mut Tray, shot: &mut ShootResult,
 ) {
