@@ -207,7 +207,11 @@ use super::*;
         let (mut st, mut statics) = rp_line(7, &[]);
         st.reckless_backfire_round[2] = 0;
         statics[0].melee = vec![gun("Blade", 64, 0)];
+        // A consistent ONE-model target: the fixture line carries three.
+        st.alive[2] = 1;
+        st.wounds[2] = vec![1];
         st.positions[2] = vec![[1.2 * IN2M, 0.0, 0.0]]; // base-edge contact
+        st.radii[2] = vec![IN2M];
         let mut tray = Tray::seeded(11);
         let mut shot = ShootResult::default();
         let seams = Seams { rules_epoch: 7, ..Seams::default() };
