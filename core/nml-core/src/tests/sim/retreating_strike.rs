@@ -135,6 +135,9 @@ use super::*;
     #[test]
     fn the_strike_fires_on_the_post_melee_hit_and_run_step() {
         let (mut st, statics) = rs_line(7, &["Harassing", "Retreating Strike(3)"]);
+        // Overlapping bases: after the 3" Hit & Run step the gap is ~2.0",
+        // safely inside the 3" reach whatever the f32 step rounding does.
+        st.positions[2] = vec![[1.0 * IN2M, 0.0, 0.0]];
         let charge = Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
             charge: Some("b".into()), patient: false, split: None, traced: None,
