@@ -107,8 +107,8 @@ use super::*;
             let out = strike(&us, &target());
             assert_eq!(
                 out.rolls.iter().filter(|r| r.kind == "attack" && r.owner == "att").count(),
-                1,
-                "epoch {epoch}: the blade's single strike slot only"
+                if epoch == 7 { 2 } else { 1 },
+                "epoch {epoch}: the blade's slot, plus the bonus group only at 7"
             );
             if epoch == 6 {
                 assert!(!logged(&out, "Takedown Strike"), "epoch 6: nothing fires, nothing logs");
