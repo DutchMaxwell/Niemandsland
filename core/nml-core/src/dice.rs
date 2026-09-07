@@ -1406,10 +1406,10 @@ pub fn resolve_melee_with_tray(
             // FIRST "defense" slot of the batch, never Bane's re-rolls: a 6
             // re-rolled into a 1 is not an unmodified 1), Bloodthirsty
             // Fighter's table counter read (main.gd:6505-6509).
-            let ones_ap = fresh_save_ones(out, idx_ap);
+            let ones_ap = fresh_save_ones(&out, idx_ap);
             let idx_rest = out.rolls.len();
             w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, sh.att.shred_grant, shred_alias_dice, 1, tray, &mut out);
-            let ones_rest = fresh_save_ones(out, idx_rest);
+            let ones_rest = fresh_save_ones(&out, idx_rest);
             // Wave 4 follow-up — Bloodthirsty Fighter (aof/war_disciples):
             // each unmodified 1 the DEFENDER rolled blocking this weapon pays
             // for ONE extra attack with the SAME weapon at the SAME to-hit
