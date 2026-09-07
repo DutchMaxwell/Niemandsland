@@ -706,6 +706,10 @@ pub struct UnitStatic {
     /// entry per "Storm of X" the unit bears, params off its own registry
     /// entry, empty below `EPOCH_6_TABLE_RULES`.
     pub storm: Vec<StormSpec>,
+    /// The Crossing Attack read (epoch 7) — the table's post-move
+    /// pre-attack roll (`_solo_apply_crossing_attack`); `None` below
+    /// `rules_epoch` 7. See `crossing_attack_of`.
+    pub crossing_attack: Option<CrossingAttackSpec>,
     /// The Reckless Piercing read (epoch 7) — the round AP stamp family
     /// (`reckless_piercing_of`); empty below `rules_epoch` 7.
     pub reckless_piercing: Vec<RecklessPiercingSpec>,
@@ -2627,6 +2631,44 @@ fn storm_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<StormSpe
         .collect()
 }
 
+/// One carried "Crossing Attack(X)" — main.gd:1081, the table's automation
+/// (`_solo_apply_crossing_attack` main.gd:17086-17130): once per activation,
+/// when the executed move trails pass through enemy units, pick the NEAREST
+/// crossed one and roll X dice; each `wound_target`+ is one DIRECT wound (no
+/// save; Regeneration applies — the text has no ignore clause).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CrossingAttackSpec {
+    /// The rule's own rating ("Crossing Attack(2)" -> 2, bare -> 1): the
+    /// table's `maxi(int(ed["rating"]), 1)`.
+    pub dice: i64,
+    pub wound_target: i64,
+}
+/// The Crossing Attack stamp (wave-4 follow-up, rules-crossing-attack): read
+/// BY NAME off the unit's own rule list (never the primitive whole, #489),
+/// gated on the FROZEN `EPOCH_7_TABLE_RULES` — a record below 7 keeps `None`
+/// and replays byte-exact. No aura couples to the name; the rule arrives via
+/// upgrade-package gains the import folds into the unit's rule list.
+fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<CrossingAttackSpec> {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return None;
+    }
+    let map = reg.rules_for(&p.game_system);
+    for raw in p.special_rules.iter().chain(p.item_grants.iter()) {
+        let n = base_rule_name(raw);
+        if n != "Crossing Attack" {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &n) else {
+            continue;
+        };
+        return Some(CrossingAttackSpec {
+            dice: rule_rating(raw, 0).max(1),
+            wound_target: e.param_i("wound_target", 6),
+        });
+    }
+    None
+}
+
 /// One carried "Mind Control" entry with the fatigue payload — the table's
 /// pre-attack slot main.gd:1070 (`_solo_apply_mind_control` :16997-17037).
 /// Only the "Fatigue Debuff" literal is stamped BY NAME (the #489
@@ -4086,6 +4128,7 @@ impl UnitStatic {
             ambush_family: ambush_family_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             storm: storm_of(reg, p, rules_epoch),
+            crossing_attack: crossing_attack_of(reg, p, rules_epoch),
             reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
             growth: growth_of(reg, p, &mut unimplemented),
