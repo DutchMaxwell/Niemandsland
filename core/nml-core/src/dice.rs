@@ -563,16 +563,13 @@ pub struct Shooter<'a> {
 ///     member (`_solo_nearest_model_gap_in` :4370-4386).
 ///   * The Takedown SHOT bonus groups (`_solo_takedown_bonus_groups`, appended
 ///     to the shot list at :3057-3062 before the sort) are absent: this port has
-///     no once-per-game ledger to spend. That group IS the family's "Takedown
-///     Shot" rule (resolver wave A, main.gd:3046-3086; its melee sibling
-///     "Takedown Strike" joins the strike groups at :6032-6034): a synthetic
-///     single-attack profile {ap, deadly, takedown} off the registry params at
-///     its OWN Quality (`extra_attack_q` — the tray's per-Shooter Ctx could
-///     carry that), spent once per game per bearer and name
-///     (`unit_properties["takedown_bonus_used_<name>"]`). NEEDS PRIMITIVE: a
-///     per-unit, per-name once-per-game ledger (the `limited_used` shape)
-///     before either name can port exactly — a flat always-on stamp would be
-///     the #489 over-credit.
+///     no ranged spend seam yet. That group IS the family's "Takedown Shot"
+///     rule (resolver wave A, main.gd:3046-3086). Its MELEE sibling "Takedown
+///     Strike" left this note in the wave-4 follow-up port: the stamp appends
+///     the synthetic limited melee profile (unit.rs
+///     `stamp_takedown_strike_named`) and the melee fold rolls it at its own
+///     Quality through the existing `limited_used` ledger — see that
+///     function's own doc.
 ///
 /// SORT STABILITY, the one caveat on the order below: Godot's `sort_custom`
 /// is an introsort whose quicksort half only engages above 16 elements
@@ -1118,7 +1115,12 @@ fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_h
     if att.fatigued {
         return UNMODIFIED_SIX;
     }
-    let base = thrust_to_hit(reliable_quality(att.quality, p.reliable), charging && (p.thrust || att.thrust_grant));
+    // Wave 4 follow-up (port-takedown-strike) — the synthetic bonus group
+    // strikes at its OWN Quality (main.gd:16772: `"quality": extra_attack_q`),
+    // never the member's; 0 = every ordinary profile, the Ctx quality as
+    // always.
+    let q = if p.extra_attack_q > 0 { p.extra_attack_q } else { att.quality };
+    let base = thrust_to_hit(reliable_quality(q, p.reliable), charging && (p.thrust || att.thrust_grant));
     // B2b: the melee half of `_solo_hit_mod_info` (:5637-5638) sums the same
     // two live nets into `mm` before the single clamp below.
     let mut m = melee_hit_modifier(def.evasive, def.melee_evasion) + uf_hit + att.hit_mod
@@ -1314,6 +1316,14 @@ pub fn resolve_melee_with_tray(
             }
             if p.counter {
                 out.mark("counter_strikes_first");
+            }
+            // Wave 4 follow-up — "Takedown Strike" names itself once per
+            // strike (rules-must-log, the table's own log line at
+            // main.gd:16780-16783).
+            if p.extra_attack_q > 0 {
+                out.log.push(format!(
+                    "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
+                    p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
             }
             if p.takedown {
                 out.mark("takedown");
