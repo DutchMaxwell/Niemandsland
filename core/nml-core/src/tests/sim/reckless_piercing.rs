@@ -223,7 +223,11 @@ use super::*;
         );
 
         // No backfire stamp: the plain Defense-4 window.
-        let (mut st0, statics) = rp_line(7, &[]);
+        let (mut st0, mut statics) = rp_line(7, &[]);
+        statics[0].melee = vec![gun("Blade", 64, 0)];
+        st0.alive[2] = 1;
+        st0.wounds[2] = vec![1];
+        st0.radii[2] = vec![IN2M];
         st0.positions[2] = vec![[1.2 * IN2M, 0.0, 0.0]];
         let mut tray0 = Tray::seeded(11);
         let mut shot0 = ShootResult::default();
