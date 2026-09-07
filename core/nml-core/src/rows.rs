@@ -964,8 +964,11 @@ mod tests {
     /// say) fails here loudly instead of silently colliding two bands.
     #[test]
     fn every_appended_v6_unit2_name_sits_at_its_slot() {
-        let v = RowVocab::load(&repo_root());
+        // Pinned to the V6 reading, not `load()`: since v7 appends to the
+        // same band (989-1000), the v6 pins must travel with their version.
+        let v = RowVocab::for_version(&repo_root(), 6);
         assert!(v.loaded, "{:?}", v.error);
+        assert_eq!(v.version, 6);
         assert_eq!(v.unit.len(), 200, "unit band unchanged");
         assert_eq!(v.weapon.len(), 25, "weapon band unchanged");
         assert_eq!(v.spell.len(), 463, "spell band unchanged -- unit2's base sits right after it");
@@ -986,10 +989,12 @@ mod tests {
     /// their own predecessor's slots staying put.
     #[test]
     fn the_v6_append_does_not_move_any_v5_slot() {
-        let now = RowVocab::load(&repo_root());
+        // The v6 reading, not `load()` — v7 appends after this band.
+        let now = RowVocab::for_version(&repo_root(), 6);
         let old = RowVocab::for_version(&repo_root(), 5);
         assert!(old.loaded, "{:?}", old.error);
         assert_eq!(old.version, 5);
+        assert_eq!(now.version, 6);
         assert_eq!(old.unit.len(), now.unit.len(), "no unit name appended");
         assert_eq!(old.weapon.len(), now.weapon.len(), "no weapon name appended");
         assert_eq!(old.spell.len(), now.spell.len(), "no spell name appended");
