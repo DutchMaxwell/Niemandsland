@@ -1132,6 +1132,22 @@ def _deploy_footprint_offsets(shapes: list[dict[str, Any]]) -> list[list[float]]
     ]
 
 
+def _transport_capacity_of_rules(rules: list[str]) -> int:
+    """TransportState.capacity_of_rules (transport_state.gd:64-77, reached
+    through opr_army_manager.gd:2870-2874 `transport_capacity`) — the X of the
+    unit's OWN "Transport(X)" rule string; 0 when the unit is no transport.
+    Registry params are ignored, exactly like the table's: the raw rule line
+    is the parse source, first match wins."""
+    for r in rules:
+        s = str(r).strip()
+        if s.startswith("Transport"):
+            open_at = s.find("(")
+            close_at = s.find(")")
+            if 0 <= open_at < close_at:
+                return max(0, int(s[open_at + 1 : close_at]))
+    return 0
+
+
 def deploy_unit_specs(
     data: dict[str, Any], faction: str, player: int
 ) -> tuple[list[dict[str, Any]], dict[str, tuple[str, int, int]]]:
@@ -1194,7 +1210,12 @@ def deploy_unit_specs(
                 # solo_controller.gd:9627's place_in in metres; None when the
                 # unit does not vanguard (the twin reads it only then).
                 "place_in_m": flags["vanguard_place_in_m"] if flags["vanguard"] else None,
-                "transport_capacity": 0,
+                # The table's transport_capacity(unit) (opr_army_manager.gd:2870),
+                # parsed off the unit's own rules — the seam deployment.rs:1052
+                # feeds transport_fill was dead (hard-coded 0) until the Transport
+                # port wired it; the wave-4 epoch gate lives at the record
+                # boundary (selfplay._gate_transport_fill), not here.
+                "transport_capacity": _transport_capacity_of_rules(u["special_rules"]),
                 "facing_rad": 0.0,
                 "model_shapes": shapes,
             }

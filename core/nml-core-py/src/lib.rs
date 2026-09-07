@@ -2677,6 +2677,10 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh
     // `play_game()` stamps. See `acts::rule_on`.
     m.add("CURRENT_RULES_EPOCH", nmlcore::CURRENT_RULES_EPOCH)?;
+    // The WAVE 4 GATE (06.09.), frozen: the epoch every wave-4 table-rule read
+    // keys on (see the module's `acts::EPOCH_7_TABLE_RULES` note). Exported so
+    // a py-side read's gate uses the same frozen constant, never the literal.
+    m.add("EPOCH_7_TABLE_RULES", nmlcore::EPOCH_7_TABLE_RULES)?;
     m.add("BUILD_COMMIT", BUILD_COMMIT)?;
     m.add("BUILD_DIRTY", env!("NML_BUILD_DIRTY") == "true")?;
     m.add("BUILD_INFO", to_py(m.py(), &build_info())?)?;
