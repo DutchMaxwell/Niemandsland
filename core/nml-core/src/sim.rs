@@ -887,12 +887,16 @@ fn caster_member(statics: &[UnitStatic], state: &State, u: usize, seams: Seams) 
 /// host), the kind's own filter, the printed range measured centre to centre
 /// (`MoveIntent.distance_inches` :16344) and sight when the params ask for it.
 ///
-/// NOT PORTED — Extended Buff Range (wave 4, :16326-16337): a candidate beyond
-/// the printed range that the relay clause would still make legal. That is its
-/// own rule with its own registry entry (`SoloController.ebr_relay_ok`), it is
-/// gated on the buffing hero carrying it, and no carrier of the six names in
-/// this block also carries it. A relayed pick this port refuses is the table
-/// buffing someone this twin does not.
+/// WAVE 4 FOLLOW-UP, Extended Buff Range (was NOT PORTED here through wave 4):
+/// a friendly candidate beyond the printed 12" pick range is still legal when
+/// the relay clause holds (:16473-16520, `SoloController.ebr_relay_ok`
+/// :892-895) — BOTH ends carry the rule, the relay unit has its Hero, and the
+/// base-edge link between relay and candidate is within the TARGET's own
+/// `relay_range_in`. Exactly ONE hop (the relay is the BUFFING hero's own
+/// unit, `_solo_combat_unit`); enemy-side picks and non-12" ranges are
+/// excluded by the same `ebr_open` bound the table prints. LOS is checked for
+/// relayed candidates too (:16489, the check sits AFTER the range gate). GATED
+/// `rule_on(rules_epoch, EPOCH_7_TABLE_RULES)` via the stamp.
 ///
 /// The sort is STABLE, so a value tie keeps roster order; the GDScript's
 /// `sort_custom` is an introsort and leaves ties unspecified — the same call
@@ -907,6 +911,13 @@ fn utility_targets(
     let own = state.player[bearer];
     let enemy = b.target == "enemy";
     let from = geom::centre(&state.positions[bearer]);
+    // The relay unit is the BUFFING hero's OWN unit (:16467, a joined hero
+    // relays through its host); the waiver opens only for friendly picks at
+    // the printed 12" pick range (:16469).
+    let relay = if seams.hero_attach { state.attached_to[bearer].unwrap_or(bearer) } else { bearer };
+    let ebr_open = rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES)
+        && b.target == "friendly"
+        && (b.range_in - EBR_PICK_RANGE_IN).abs() < 1e-6;
     let mut scored: Vec<(f64, usize)> = Vec::new();
     for u in 0..state.units() {
         if (state.player[u] == own) == enemy || state.alive[u] <= 0 || state.dormant[u] {
@@ -924,7 +935,12 @@ fn utility_targets(
         }
         let d = (geom::length(geom::sub(from, geom::centre(&state.positions[u]))) / IN2M as f32) as f64;
         if d > b.range_in {
-            continue;
+            // Extended Buff Range: the only way past the printed range is the
+            // relay clause (:16474-16484) — the relay itself is never its own
+            // extended target.
+            if !ebr_open || u == relay || !ebr_relay_ok(statics, state, relay, u, seams) {
+                continue;
+            }
         }
         if b.needs_los && !los_clear(state, bearer, u) {
             continue;
@@ -934,6 +950,78 @@ fn utility_targets(
     scored.sort_by(|a, c| c.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(b.max_targets.max(1) as usize);
     scored.into_iter().map(|(_, u)| u).collect()
+}
+
+/// `SoloController.EBR_PICK_RANGE_IN` :886 — the printed friendly pick range
+/// the waiver is bound to ("special rules that allow it to pick friendly
+/// units within 12\"").
+pub const EBR_PICK_RANGE_IN: f64 = 12.0;
+
+/// `SoloController.ebr_relay_ok` :892-895 + `_solo_ebr_relay_gap`
+/// main.gd:16527-16537 — the whole relay clause: the TARGET carries the rule
+/// itself (its own stamp), the relay unit carries it through any LIVING
+/// member (`unit_carries_ebr` :904-912), the relay satisfies the Hero clause
+/// (`ebr_relay_has_hero` :936-954), and the base-edge gap between the relay
+/// and the candidate is within the TARGET's own `relay_range_in`.
+fn ebr_relay_ok(
+    statics: &[UnitStatic],
+    state: &State,
+    relay: usize,
+    ti: usize,
+    seams: Seams,
+) -> bool {
+    let Some(params) = statics[state.roster.profile[ti]].ebr.as_ref() else { return false; };
+    let relay_carries = statics[state.roster.profile[relay]].ebr.is_some()
+        || (seams.hero_attach
+            && state.attached[relay].iter().any(|&h| {
+                state.alive[h] > 0 && statics[state.roster.profile[h]].ebr.is_some()
+            }));
+    if !relay_carries || !ebr_relay_has_hero(statics, state, relay, params.hero_link_in, seams) {
+        return false;
+    }
+    let gap = geom::edge_gap_in(
+        &state.positions[relay], &state.radii[relay], &state.positions[ti], &state.radii[ti],
+        DEFAULT_BASE_RADIUS_M,
+    );
+    gap <= params.relay_range_in
+}
+
+/// `SoloController.ebr_relay_has_hero` :936-954 — with `hero_link_in == 0`
+/// (the shipped GF/AoF entries) a living Hero must be IN the relay unit's own
+/// chain; a positive link (skirmish wording) accepts any friendly living Hero
+/// within that gap of the relay.
+fn ebr_relay_has_hero(
+    statics: &[UnitStatic],
+    state: &State,
+    relay: usize,
+    hero_link_in: f64,
+    seams: Seams,
+) -> bool {
+    let in_unit = statics[state.roster.profile[relay]].is_hero
+        || (seams.hero_attach
+            && state.attached[relay].iter().any(|&h| {
+                state.alive[h] > 0 && statics[state.roster.profile[h]].is_hero
+            }));
+    if in_unit || hero_link_in <= 0.0 {
+        return in_unit;
+    }
+    let pid = state.player[relay];
+    for u in 0..state.units() {
+        if u == relay || state.player[u] != pid || state.alive[u] <= 0 || state.dormant[u] {
+            continue;
+        }
+        if !statics[state.roster.profile[u]].is_hero {
+            continue;
+        }
+        let gap = geom::edge_gap_in(
+            &state.positions[relay], &state.radii[relay], &state.positions[u], &state.radii[u],
+            DEFAULT_BASE_RADIUS_M,
+        );
+        if gap <= hero_link_in {
+            return true;
+        }
+    }
+    false
 }
 
 /// `main._solo_consume_once_mods` :3823-3841 — one resolved exchange spends

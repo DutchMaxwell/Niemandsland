@@ -739,6 +739,9 @@ pub struct UnitStatic {
     /// The Retreating Strike read (epoch 7) — the Ravage-alias post-melee
     /// strike (`retreating_strikes_of`); empty below `rules_epoch` 7.
     pub retreating_strikes: Vec<RetreatingStrikeSpec>,
+    /// The Extended Buff Range carrier stamp (epoch 7) — `ebr_of`; None below
+    /// `rules_epoch` 7. Both relay ends answer through this flag.
+    pub ebr: Option<EbrStamp>,
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
@@ -2865,6 +2868,41 @@ fn retreating_strikes_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) ->
         .collect()
 }
 
+/// One "Extended Buff Range" carrier's own registry params — wave-4
+/// follow-up, epoch 7 (`SoloController.ebr_params_of` :959-966). The carrier
+/// flag rides the SAME struct: `ebr.is_some()` answers "this profile carries
+/// the rule", for the relay end and the target end alike.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EbrStamp {
+    /// `relay_range_in` — the 24" link between the two carriers.
+    pub relay_range_in: f64,
+    /// `hero_link_in` — 0.0 (GF/AoF/AoFR): the Hero must be IN the relay
+    /// unit; > 0 (skirmish wording): any friendly Hero within that gap.
+    pub hero_link_in: f64,
+}
+
+/// The Extended Buff Range stamp (wave-4 follow-up, epoch 7): the
+/// self-named primitive read BY NAME, gated on the FROZEN
+/// `EPOCH_7_TABLE_RULES` — a record below 7 must never carry it.
+fn ebr_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<EbrStamp> {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return None;
+    }
+    let map = reg.rules_for(&p.game_system);
+    let mut seen = std::collections::HashSet::new();
+    p.special_rules.iter().chain(p.item_grants.iter())
+        .filter_map(|raw| {
+            let n = base_rule_name(raw);
+            (n == "Extended Buff Range" && seen.insert(n.clone())).then_some(n)
+        })
+        .find_map(|n| map.lookup(&p.faction_folder, &n)
+            .filter(|e| e.primitive.as_deref() == Some("Extended Buff Range"))
+            .map(|e| EbrStamp {
+                relay_range_in: e.param_f("relay_range_in", 24.0),
+                hero_link_in: e.param_f("hero_link_in", 0.0),
+            }))
+}
+
 /// Every "Utility Buff" entry the unit carries, in `unit_rules_of_primitive`'s
 /// own order (own rules then item grants, each base name once — rules_registry
 /// .gd:155-176). The two printed defaults that differ between the arms are
@@ -4301,6 +4339,7 @@ impl UnitStatic {
             reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
             retreating_strikes: retreating_strikes_of(reg, p, rules_epoch),
+            ebr: ebr_of(reg, p, rules_epoch),
             growth: growth_of(reg, p, &mut unimplemented),
             piercing_tags: piercing_tags_of(reg, p, rules_epoch),
             unimplemented,
