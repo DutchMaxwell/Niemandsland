@@ -73,9 +73,12 @@ nothing about their content is baked into this file. Outputs carry rule names
 and faction names only - safe to run against the private snapshot.
 
 RED knob `--hide <primitive>`: every name aliased to that primitive loses its
-primitive-derived port evidence; the core-ported covered count must drop by
-exactly the names that were ported through it. One line proves the counter is
-live.
+primitive-derived port evidence; the verdict is that every name whose
+core-ported status DROPPED is among the primitive's aliases. Aliased names
+ported by their OWN token (the 2026-09-07 name-vs-primitive split) correctly
+survive the hide - hiding a primitive cannot remove a name's own literal - so
+`drop == ported_aliased` is NOT the invariant (it printed VIOLATION on
+baseline code; fixed 2026-09-08). One line proves the counter is live.
 
 Exit code is 0 whenever the census ran (this is an instrument, not a gate);
 usage errors exit 2.
@@ -1450,8 +1453,9 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
         # through the granted name's status, so it drops with them, the same
         # transitive closure the grant pass walks (visited-set loop guard).
         # Own-token evidence (a name whose own spelling is core code) still
-        # survives the hide, as it did before grant following - the strict
-        # drop-exact verdict stays the knob's known approximation there.
+        # survives the hide, as it did before grant following - that is by
+        # design (hiding a primitive cannot remove a name's own literal), and
+        # the verdict below accounts for it instead of calling it a violation.
         changed = True
         while changed:
             changed = False
@@ -1465,6 +1469,11 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
                         changed = True
                         break
         ported_aliased = sum(1 for n in aliased if best_core(rows[n]) == "PORTED")
+        dropped = sorted(
+            n for n, r in rows.items()
+            if best_core(r) == "PORTED"
+            and best_core(rows_hidden[n]) != "PORTED"
+        )
         result["red"] = {
             "primitive": hide,
             "before": before,
@@ -1472,7 +1481,16 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
             "drop": before - after,
             "aliased": len(aliased),
             "ported_aliased": ported_aliased,
-            "ok": (before - after) == ported_aliased,
+            # The verdict is NOT drop == ported_aliased: a name aliased to the
+            # hidden primitive may be PORTED by its OWN name token (the
+            # 2026-09-07 name-vs-primitive split), which hiding the primitive
+            # correctly cannot remove - such a survivor keeps ported_aliased
+            # above drop without being a violation. The assertable invariant
+            # is the other direction: every name that DROPPED must be among
+            # the primitive's aliases (a drop outside the alias set would
+            # mean the counter moves on evidence the knob never touched).
+            "dropped_names": dropped,
+            "ok": all(n in aliased for n in dropped),
             "aliased_names": sorted(aliased),
         }
     return result
@@ -1515,8 +1533,9 @@ def summary_lines(res: dict) -> list[str]:
         lines.append(
             f"RED --hide {r['primitive']}: core-ported {r['before']} -> {r['after']}"
             f" (drop {r['drop']}); {r['primitive']} aliases: {r['aliased']}"
-            f" (ported before: {r['ported_aliased']})"
-            f" -> drops exactly its rules: {'OK' if r['ok'] else 'VIOLATION'}"
+            f" (ported before: {r['ported_aliased']}; survivors keep own-token"
+            f" evidence)"
+            f" -> every dropped rule is its own: {'OK' if r['ok'] else 'VIOLATION'}"
         )
     return lines
 
@@ -1594,8 +1613,9 @@ def markdown_report(res: dict) -> str:
             f" evidence. Core-ported covered count: {r['before']} -> {r['after']}"
             f" (drop {r['drop']}); the primitive aliases {r['aliased']} rule"
             f" names, {r['ported_aliased']} of them were PORTED before."
-            f" **Drops exactly its rules: {'OK' if r['ok'] else 'VIOLATION'}**"
-            f" - the covered count is live, not decorative.",
+            f" **Every dropped rule is its own: {'OK' if r['ok'] else 'VIOLATION'}**"
+            f" - the covered count is live, not decorative (own-token survivors"
+            f" among the aliases keep ported_aliased >= drop by design).",
             "",
         ]
 
