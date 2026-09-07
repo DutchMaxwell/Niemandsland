@@ -1122,6 +1122,10 @@ fn axis_scale(start: f32, d: f32, limit: f32) -> f32 {
 /// `MEND_RANGE_IN`/`BREATH_RANGE_IN` precedent).
 pub const HIT_AND_RUN_MOVE_IN: f32 = 3.0;
 
+/// `Retreating Strike`'s reach: "within 3\" of enemy units" (main.gd:5864,
+/// the melee gap read) -- the same 3" as the Hit & Run step it rides.
+pub const RETREATING_STRIKE_REACH_IN: f64 = 3.0;
+
 /// BLOCK B5 — `SoloController.hit_and_run_move` solo_controller.gd:9649-9713,
 /// called main.gd:1083-1089 right after the ACTING unit's own shoot/melee
 /// resolves (`resolve_with`'s call site, right after the charge block). Ported
