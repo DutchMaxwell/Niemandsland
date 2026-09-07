@@ -3972,6 +3972,33 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
             );
         }
     }
+    // Grant-closed wave (rules-grant-missing, epoch 7): "Rapid Rush" ("This
+    // model moves +6\" when using Rush actions") — the entry's own `rush_mod`
+    // onto the rush band, the same flat per-name fold BOTH band passes ship
+    // (the table name pass's RAPID_RUSH_BONUS constant and its registry
+    // twin's `rush_mod`; movement_range_controller.gd counts per NAME, the
+    // import expansion appends the bare base the aura carries). Evidence-only
+    // standing like the rest of this fold (the accepted `bounding` shape, PR
+    // #653): the +6" reaches this core precomputed inside the RECORDED
+    // `state.bands` (battle_sim.gd:1650 -> io.rs:755-765), so a live re-fold
+    // at the move seam would double-count a recorded band — this stamp is
+    // the core's own per-entry read, never a simulation input. The "Rapid
+    // Rush Aura" entries carry only `grants`, so the aura needs no arm of
+    // its own: the census follows the grant. Gated on the FROZEN
+    // `EPOCH_7_TABLE_RULES`, never the literal.
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && unit_rule_active(reg, p, "Rapid Rush") {
+        let map = reg.rules_for(&p.game_system);
+        if let Some(e) = map.lookup(&p.faction_folder, "Rapid Rush") {
+            let rush = e.param_f("rush_mod", 0.0);
+            acc.rush += rush;
+            hit = true;
+            crate::sim::trace_rule(
+                "move-bands",
+                "Rapid Rush",
+                &format!("{}: +{rush}\" rush/charge", p.name),
+            );
+        }
+    }
     if hit { Some(acc) } else { None }
 }
 
