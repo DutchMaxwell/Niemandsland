@@ -134,7 +134,7 @@ use super::*;
     /// exactly 3.0" and the strike fires.
     #[test]
     fn the_strike_fires_on_the_post_melee_hit_and_run_step() {
-        let (mut st, statics) = rs_line(7, &["Hit & Run", "Retreating Strike(3)"]);
+        let (mut st, statics) = rs_line(7, &["Harassing", "Retreating Strike(3)"]);
         let charge = Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
             charge: Some("b".into()), patient: false, split: None, traced: None,
@@ -155,7 +155,7 @@ use super::*;
 
         // The shooting leg never strikes: a carrier that only SHOT and stepped
         // draws no ravage batch (main.gd:1096's `not can_shoot` gate).
-        let (st0, statics0) = rs_line(7, &["Hit & Run", "Retreating Strike(3)"]);
+        let (st0, statics0) = rs_line(7, &["Harassing", "Retreating Strike(3)"]);
         let shoot_act = Action {
             kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()),
             charge: None, patient: false, split: None, traced: None,
