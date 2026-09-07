@@ -228,6 +228,13 @@ fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
 }
 
+// DIAGNOSTIC (test builds only): a per-thread gate trace, switched on by the
+// test that wants it, printed to the process's stderr past the harness capture.
+#[cfg(test)]
+thread_local! { pub(crate) static TRACE: std::cell::Cell<bool> = std::cell::Cell::new(false); }
+#[cfg(test)]
+fn tr(s: String) { TRACE.with(|t| if t.get() { eprintln!("GT {s}"); }) }
+
 /// `SeparationResolver._travel_to_clear_along` separation_resolver.gd:156 — the
 /// shortest slide along unit direction `u` that clears every obstacle's
 /// bounding circle. `e`, its squared length and its dot product are float32
@@ -281,6 +288,7 @@ fn resolve_overlaps(s: &mut WorldDisc, obs: &[WorldDisc]) -> bool {
             res = [res[0] + axis[0] / l * ov, res[1] + axis[1] / l * ov];
             deepest = deepest.max(overlap);
         }
+        #[cfg(test)] { tr(format!("    iter deepest={deepest:.9} res={res:?} c={:?}", s.c)); }
         if deepest <= RESOLVE_EPS_IN {
             return moved(applied); // cleared inside the relaxation cap
         }
@@ -301,6 +309,7 @@ fn resolve_overlaps(s: &mut WorldDisc, obs: &[WorldDisc]) -> bool {
             best = (travel, u);
         }
     }
+    #[cfg(test)] { tr(format!("    escape travel={} u={:?}", best.0, best.1)); }
     if best.0 > 0.0 && best.0.is_finite() {
         let t = best.0 as f32;
         let step = [best.1[0] * t, best.1[1] * t];
@@ -490,6 +499,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
     let goal_w: Vec<[f32; 2]> = goal.iter().map(|g| world_pt(*g, board_in)).collect();
     let caps_m: Vec<f64> = caps_in.iter().map(|c| c * IN2M).collect();
     let slack = |i: usize, w: &[WorldDisc]| caps_m[i] - dist_f32(w[i].c, goal_w[i]) as f64;
+    #[cfg(test)] { for (i, d) in w.iter().enumerate() { tr(format!("push in {i} w={:?} r_m={} c={:?}", d.c, d.r_m, cfg[i].c)); } }
     for _ in 0..OVERLAP_GATE_PASSES {
         let mut order: Vec<usize> = (0..n).collect();
         if capped {
@@ -515,6 +525,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
             }
         }
         let mut moved = false;
+        #[cfg(test)] { tr(format!("pass order={order:?}")); }
         for i in order {
             if capped && slack(i, &w) <= OVERLAP_EPS_M {
                 continue; // band-frozen (:6825)
@@ -522,6 +533,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
             let mut obs: Vec<WorldDisc> = ext.clone();
             obs.extend((0..n).filter(|&j| j != i).map(|j| w[j]));
             let mut s = w[i];
+            #[cfg(test)] { tr(format!("  model {i} at {:?}", s.c)); }
             if resolve_overlaps(&mut s, &obs) {
                 moved = true;
                 if capped {
@@ -537,6 +549,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
                         rep.capped[i] = true;
                     }
                 }
+                #[cfg(test)] { tr(format!("  moved {i} {:?} -> {:?}", w[i].c, s.c)); }
                 w[i] = s;
                 cfg[i].c = [s.c[0] as f64 / IN2M + board_in[0] * 0.5,
                             s.c[1] as f64 / IN2M + board_in[1] * 0.5];
@@ -591,6 +604,7 @@ impl Pull<'_> {
                 return false;
             }
         }
+        #[cfg(test)] { tr(format!("nudge i={i} from={:?} to={:?} len={len} cand={:?}", cfg[i].c, to, cand)); }
         cfg[i].c = cand;
         rep.pulled[i] = true;
         true
@@ -622,6 +636,7 @@ impl Pull<'_> {
             // not change the nearest-neighbour or over-spread reads this pass.
             let snapshot = cfg.to_vec();
             let main = largest_component(&snapshot);
+            #[cfg(test)] { tr(format!("pull sweep main={main:?} overspread={}", overspread(&snapshot, max_chain))); }
             let mut moved = false;
             // (a) reconnect — nearest in-component neighbour by EDGE distance,
             // the FIRST winner on a tie (the component's own BFS order).
@@ -644,6 +659,7 @@ impl Pull<'_> {
                     ((nd - COH_LINK_IN * IN2M) / IN2M).min(COH_LINK_IN)
                 } else { (nd - COH_LINK_IN).min(COH_LINK_IN) };
                 let to = cfg[near].c;
+                #[cfg(test)] { tr(format!("pull i={i} near={near} nd={nd} len={len}")); }
                 moved |= self.nudge(cfg, i, to, len, rep);
             }
             // (b) over-spread — pull the model furthest from the centroid in.
@@ -759,6 +775,12 @@ pub fn finalize_placement(
         flags.chain_in
     } else { super::MAX_CHAIN_IN };
     let capped = !charge && caps_in.len() == n;
+    #[cfg(test)] {
+        tr(format!("gate n={n} charge={charge} capped={capped} ext={} chain={max_chain} flying={} board={board_in:?}", external.len(), flags.flying));
+        for (i, e) in external.iter().enumerate() { tr(format!("ext {i} c={:?} r={} shape={:?}", e.c, e.r, e.shape)); }
+        for i in 0..n { tr(format!("gate in {i} c={:?} r={} r_m={:?} shape={:?} start={:?} cap={:?}", cfg[i].c, cfg[i].r, flags.radii_m.get(i), cfg[i].shape, flags.start_world.get(i), caps_in.get(i))); }
+        if let Some(t) = flags.charge_targets { for (p, r) in t { tr(format!("target {p:?} r={r}")); } }
+    }
     // (terrain) :6402-6412 — project every model out of forbidden rest ground
     // BEFORE the overlap push, so the crowd resolves around spots that are
     // already legal. A projection costing MORE than the model's band slack is
@@ -788,7 +810,12 @@ pub fn finalize_placement(
     // neighbour's obstacle set, so the crowd walks around it), and each push is
     // truncated to the cap circle. Residual overlap between two capped models is
     // deliberately LEFT for the caller's ladder to settle at a shorter reach.
-    overlap_pass(&mut cfg, &goal, caps_in, capped, external, flags.radii_m, board_in, &mut rep);
+    #[cfg(test)] { for i in 0..n { tr(format!("gate proj {i} c={:?} capped={}", cfg[i].c, rep.capped[i])); } }
+    let _w = overlap_pass(&mut cfg, &goal, caps_in, capped, external, flags.radii_m, board_in, &mut rep);
+    #[cfg(test)] {
+        for i in 0..n { tr(format!("gate push {i} w={:?} c={:?}", _w[i].c, cfg[i].c)); }
+        tr(format!("gate coherent={} largest={:?} overspread={}", config_coherent(&cfg, max_chain), largest_component(&cfg), overspread(&cfg, max_chain)));
+    }
     // (coherency) :6444-6465 — PASS 4. The table keeps the full move when the
     // config is coherent AND overlap-free AND terrain-clear, and otherwise runs
     // the straggler repair before falling back to the whole-unit shorten. The
@@ -798,6 +825,7 @@ pub fn finalize_placement(
         let pull = Pull { max_chain, rules_epoch: flags.rules_epoch, goal: &goal, caps_in, capped,
             board_in, terrain, external, radii_m: flags.radii_m };
         rep.coherent = pull.run(&mut cfg, &mut rep);
+        #[cfg(test)] { tr(format!("gate after pull coherent={} pulled={:?}", rep.coherent, rep.pulled)); }
     }
     if !charge && n > 1 && flags.start_world.len() == n
         && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES)
@@ -807,6 +835,7 @@ pub fn finalize_placement(
         rep.coherent = config_coherent(&cfg, max_chain);
     }
     clamp_gate_walls(&mut cfg, &goal, external, flags, terrain, &mut rep);
+    #[cfg(test)] { for i in 0..n { tr(format!("gate out {i} c={:?} reverted={}", cfg[i].c, rep.reverted[i])); } }
     let out = (0..n)
         .map(|i| {
             rep.disp_in[i] = dist(cfg[i].c, goal[i]);
@@ -1342,5 +1371,53 @@ mod frame_tests {
         }
         // ~1 float32 ULP of a world metre at board scale; the inverse is not exact.
         assert!(worst <= 2.5e-7, "world -> inch -> world moved a centre by {worst:.3e} m");
+    }
+}
+
+// DIAGNOSTIC (test builds only) — replay recorded-026 with the gate trace on.
+#[cfg(test)]
+mod push_trace_026 {
+    use super::*;
+    use serde_json::{json, Value};
+    use std::{collections::HashMap, rc::Rc};
+
+    #[test]
+    fn trace_recorded_026_charge() {
+        let fixtures: Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/cases.json")).unwrap();
+        let case = fixtures["cases"].as_array().unwrap().iter()
+            .find(|c| c["id"] == "recorded-026").unwrap();
+        let mut profiles = crate::state::Profiles { list: vec![], index: HashMap::new() };
+        let mut units = serde_json::Map::new();
+        for spec in case["units"].as_array().unwrap() {
+            let key = spec["id"].as_str().unwrap().to_string();
+            let mut profile = spec.clone();
+            profile["unit_id"] = json!(key);
+            profile["name"] = json!(key);
+            profile["quality"] = json!(4);
+            profile["defense"] = json!(4);
+            profile["model_count"] = json!(spec["positions"].as_array().unwrap().len());
+            profile["special_rules"] = spec["rules"].clone();
+            profiles.index.insert(key.clone(), profiles.list.len());
+            profiles.list.push(serde_json::from_value(profile).unwrap());
+            let mut unit = spec.clone();
+            unit["alive"] = json!(spec["positions"].as_array().unwrap().len());
+            units.insert(key, unit);
+        }
+        let mut cache = crate::state::ProfileCache::new(Rc::new(profiles));
+        let state = crate::io::state_from_json(&json!({"units": units, "round": case["round"],
+            "rounds_total": 4}).to_string(), &mut cache, &mut None).unwrap();
+        let terrain = Terrain::build(&serde_json::from_value(case["terrain"].clone()).unwrap());
+        let actor = state.roster.index["u01"];
+        let target = state.roster.index["u17"];
+        TRACE.with(|t| t.set(true));
+        let mut land = crate::mv::step::MoveRules { rules_epoch: 6 }
+            .charge_move(&state, &terrain, actor, target, 16.0, true, true, 320).unwrap();
+        let snap = land.snap_charge(&state, target, 6);
+        TRACE.with(|t| t.set(false));
+        eprintln!("GT snap {snap:?} budget={} arc={}", land.budget_in, land.arc_in);
+        for (i, e) in land.end.iter().enumerate() {
+            eprintln!("GT end {i} {e:?}");
+        }
     }
 }

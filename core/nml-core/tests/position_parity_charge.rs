@@ -59,6 +59,18 @@ fn charge_base_shapes_matches_the_table_pin() {
     assert_endpoint_pin("recorded-136","base_shapes");
 }
 
+/// recorded-026 — a 21-model charge (20 x 25 mm round + a 40 mm hero) into a
+/// 20-model round-based unit, pinned on the table's own endpoints from the
+/// position-parity harness (`table_end`, identical over three runs). Its push
+/// is UNCAPPED (a charge passes no band caps, :6478), so this is the arm of
+/// `overlap_pass` the endpoint ledger's capped pins (037/128/162) never read.
+/// RED on parity-frame 3 (#771): models 0 and 5 land 0.0349 in and 0.2356 in
+/// off the table; the other nineteen sit within 7e-6 in (the f32 world ULP).
+#[test]
+fn charge_uncapped_push_matches_the_table_pin() {
+    assert_endpoint_pin("recorded-026","charge_uncapped_push");
+}
+
 #[test]
 fn charge_snap_reports_the_pinned_budget_rejection() {
     let (state,target,mut got,pin,tolerance) = pinned_charge("generated-charge-14",6);
