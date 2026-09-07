@@ -510,6 +510,13 @@ pub struct ShootProfile {
     /// Takedown tag and on every record below `EPOCH_7_TABLE_RULES`, so
     /// pre-wave replays log nothing and stay byte-identical.
     pub takedown_rule: String,
+    /// Wave 4 follow-up (port-bloodthirsty-fighter): the UNIT-level NAME of
+    /// the melee extra-attack rule stamped onto this profile ("Bloodthirsty
+    /// Fighter", melee_only — `stamp_bloodthirsty_named`), the rules-must-log
+    /// subject at the melee fold. Empty on every record below
+    /// `EPOCH_7_TABLE_RULES`, so pre-wave replays log nothing and stay
+    /// byte-identical.
+    pub bloodthirsty_rule: String,
     pub rules: Vec<String>,
     // --- stamped facets (ai_ev.gd:203-274) ---
     pub versatile_attack: bool,
@@ -608,6 +615,7 @@ impl ShootProfile {
             && self.limited == o.limited
             && self.takedown == o.takedown
             && self.takedown_rule == o.takedown_rule
+            && self.bloodthirsty_rule == o.bloodthirsty_rule
             && self.rules == o.rules
     }
 }
@@ -3135,6 +3143,39 @@ fn stamp_takedown_named(
     }
 }
 
+/// Wave 4 follow-up (port-bloodthirsty-fighter) — the UNIT-level
+/// "Bloodthirsty Fighter" (aof/war_disciples): for each unmodified 1 the
+/// DEFENDER rolls blocking this model's melee weapon, +1 extra attack with
+/// that weapon at the same to-hit target, pooled through normal saves and
+/// never chaining (the book's own `no_recursion` param; the table's
+/// `_solo_last_save_ones` main.gd:5969, counted at :6505-6509, consumed at
+/// :6162-6189 with the reset at :6184). The entry is primitive-self with
+/// `melee_only: true`, so the flag rides the MELEE array only. Read BY NAME,
+/// never the primitive whole (#489); the flag routes to the dice.rs melee
+/// fold's blocked-1s leg, and the name lands in `bloodthirsty_rule` for the
+/// rules-must-log line. Behind the FROZEN `EPOCH_7_TABLE_RULES` only — a
+/// record below 7 keeps the flag empty and replays byte-exact.
+fn stamp_bloodthirsty_named(
+    reg: &mut Registries,
+    p: &Profile,
+    melee: &mut [ShootProfile],
+    name: &str,
+) {
+    if !has_exact_rule(&p.special_rules, name) && !has_exact_rule(&p.item_grants, name) {
+        return;
+    }
+    let map = reg.rules_for(&p.game_system);
+    let Some(e) = map.lookup(&p.faction_folder, name) else {
+        return;
+    };
+    if !e.param_b("melee_only") {
+        return;
+    }
+    for sp in melee.iter_mut() {
+        sp.bloodthirsty_rule = name.to_string();
+    }
+}
+
 /// `AiShooting.profiles_in_range` ai_shooting.gd:14-26 — the merged RANGED set,
 /// UNSTAMPED (the `AiEv.stamp_sergeant` pass belongs to `BattleSim._profiles_of`,
 /// not to this function). `UnitStatic::build` calls it at 0.0 and stamps after;
@@ -3642,6 +3683,13 @@ impl UnitStatic {
         // tag alone set it and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             stamp_takedown_named(reg, p, &mut shoot, &mut melee, "Takedown when Shooting");
+        }
+        // Wave 4 follow-up (port-bloodthirsty-fighter), gated on the FROZEN
+        // `EPOCH_7_TABLE_RULES`: "Bloodthirsty Fighter" is the melee
+        // extra-attack rule under its own name — see `stamp_bloodthirsty_named`.
+        // A record below epoch 7 keeps the flag empty and replays byte-exact.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            stamp_bloodthirsty_named(reg, p, &mut melee, "Bloodthirsty Fighter");
         }
         // Boostbases wave (rules-wave4-boostbases), gated on the FROZEN
         // `EPOCH_6_TABLE_RULES`: "Mischievous Boost" is the Bane family's
