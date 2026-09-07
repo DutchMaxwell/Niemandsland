@@ -1526,6 +1526,7 @@ mod breath_score;
 mod buff_consumption_bridge;
 mod deathstrike;
 mod dest_side_arms;
+mod extended_buff_range;
 mod fatigue_debuff;
 mod fold_gate_fixture;
 mod growth_bonus_score;
