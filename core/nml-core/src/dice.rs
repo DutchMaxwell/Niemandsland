@@ -943,7 +943,12 @@ pub fn resolve_volley_with_tray(
             // after the pool zeroes (sim.rs). The melee fold never reads it —
             // the table's melee seams have no tag spend — and the EV
             // imagination stays blind, the table's own resolve-time spend.
-            + att.tag_ap_mod;
+            + att.tag_ap_mod
+            // Wave 4 follow-up — Reckless Piercing's round stamps
+            // (main.gd:9877): the chain's buff stamp and the TARGET's
+            // backfire stamp, epoch-7-gated at the sim seams that set
+            // `Ctx::reckless_ap`.
+            + att.reckless_ap;
         // Wave 2 — the "AP(+1) when shooting" mark's flat AP, off its
         // epoch-gated Ctx leg (`sim::ctx_live`).
         if att.pierce_shooting_grant {
@@ -1201,7 +1206,8 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 /// melee fold's own leg below), Sergeant, Blast,
 /// the Rending/Destructive/on-6 AP sub-batch, Thrust's charge AP, Bane's
 /// re-roll, Shred, the pooled Deadly multiplier and every Regeneration roll in
-/// its place.
+/// its place, and — wave-4 follow-up — Reckless Piercing's round AP stamp
+/// (main.gd:6017's `_solo_reckless_ap` fold, the `Ctx::reckless_ap` leg).
 ///
 /// FLAGGED per activation, never skipped in silence: `deadly` (the table lands
 /// Deadly per model with its OWN Regeneration roll on the raw unsaved count,
@@ -1222,8 +1228,7 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 ///   3. Retaliate (:6175), Deathstrike / Self-Destruct (:6198). (Bloodthirsty
 ///      Fighter left this list in the wave-4 follow-up port: the melee fold
 ///      rolls its blocked-1s extra attacks in place — see the leg above.)
-///   4. Reckless Piercing's round AP stamp (:5974), Versatile Attack's melee
-///      half (:6076), vs-target Marks, Takedown's unit-of-[1] pick, its melee
+///   4. Versatile Attack's melee half (:6076), vs-target Marks, Takedown's unit-of-[1] pick, its melee
 ///      bonus group ("Takedown Strike", main.gd:6032-6034 — see the shooting
 ///      leg's NEEDS PRIMITIVE note above: no once-per-game ledger to spend it
 ///      through) and Limited's once-per-game ledger.
@@ -1371,6 +1376,7 @@ pub fn resolve_melee_with_tray(
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
             let mut ap = p.ap + uf_ap + sh.att.growth_ap_mod
+                + sh.att.reckless_ap
                 + if charging && (p.thrust || sh.att.thrust_grant) { THRUST_AP_BONUS } else { 0 }
                 + if sh.att.pierce_melee_grant { 1 } else { 0 };
             // Rung I — the melee half of the same `cond_ap` fold, same
