@@ -79,6 +79,9 @@
             buffs: vec![Vec::new(); 4],
             vs_mark_round: vec![-1; 4],
             hit_and_run_round: vec![-1; 4],
+            reckless_rolled_round: vec![-1; 4],
+            reckless_ap_round: vec![-1; 4],
+            reckless_backfire_round: vec![-1; 4],
             growth_markers: vec![0; 4],
             growth_round: vec![-1; 4],
             second_wind_used: vec![false; 4],
@@ -1538,6 +1541,7 @@ mod mend;
 mod piercing_tag;
 mod plain_moves;
 mod quick_shot;
+mod reckless_piercing;
 mod reposition_artillery;
 mod retaliate;
 mod second_wind;

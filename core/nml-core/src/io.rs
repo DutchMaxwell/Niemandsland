@@ -693,6 +693,12 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         buffs: vec![Vec::new(); n],
         vs_mark_round: vec![-1; n],
         hit_and_run_round: vec![-1; n],
+        // Reckless Piercing's round stamps are NOT recorded corpora inputs
+        // either: the handler rolls and stamps live at the activation (see
+        // the piercing-tag note below), and no epoch-7 corpus exists yet.
+        reckless_rolled_round: vec![-1; n],
+        reckless_ap_round: vec![-1; n],
+        reckless_backfire_round: vec![-1; n],
         growth_markers: vec![0; n],
         growth_round: vec![-1; n],
         second_wind_used: vec![false; n],

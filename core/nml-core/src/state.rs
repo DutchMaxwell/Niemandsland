@@ -463,6 +463,15 @@ pub struct State {
     /// 9685), the once-per-ROUND stamp of the Hit & Run free move, -1 for
     /// never; the same shape as `vs_mark_round`.
     pub hit_and_run_round: Vec<i64>,
+    /// Wave 4 follow-up — Reckless Piercing's round-scoped stamps
+    /// (main.gd:16948-16967): `reckless_rolled_round` is the once-per-ROUND
+    /// roll gate, `reckless_ap_round` the buff stamp on the bearer's chain
+    /// (`unit_properties["reckless_ap_round"]`), `reckless_backfire_round`
+    /// the enemies'-AP stamp (`unit_properties["reckless_backfire_round"]`).
+    /// All -1 for never, the `vs_mark_round` shape.
+    pub reckless_rolled_round: Vec<i64>,
+    pub reckless_ap_round: Vec<i64>,
+    pub reckless_backfire_round: Vec<i64>,
     /// Block B7 — `unit_properties["growth_<rule>"]` (main.gd:16978), this
     /// unit's OWN marker count for its "Growth Markers" rule. A single counter
     /// per unit, not per rule name (see `unit::growth_of`'s own note).

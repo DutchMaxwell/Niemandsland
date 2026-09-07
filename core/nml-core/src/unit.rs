@@ -336,6 +336,12 @@ pub struct Ctx {
     /// same merge dice.rs's volley fold gives Piercing Growth's marker delta
     /// (main.gd:3124-3131 adds `tag_ap` to each `prof["ap"]`).
     pub tag_ap_mod: i64,
+    /// Wave 4 follow-up — Reckless Piercing's round AP stamp (main.gd:16968
+    /// `_solo_reckless_ap`): +1 while THIS unit attacks when its chain
+    /// carries the buff stamp, +1 more when the TARGET's chain carries the
+    /// backfire stamp. Set at the two attack seams (sim.rs), folded in both
+    /// AP merges (dice.rs volley + melee), gated epoch 7.
+    pub reckless_ap: i64,
     // --- Block C2 — the melee / charge leg of the Shot Modifier family,
     // `_solo_hit_mod_info`'s melee branch (main.gd:5658-5668): an entry is
     // kept when `all_attacks` OR `melee_only` OR (`when: "charge"` on a
@@ -700,6 +706,9 @@ pub struct UnitStatic {
     /// entry per "Storm of X" the unit bears, params off its own registry
     /// entry, empty below `EPOCH_6_TABLE_RULES`.
     pub storm: Vec<StormSpec>,
+    /// The Reckless Piercing read (epoch 7) — the round AP stamp family
+    /// (`reckless_piercing_of`); empty below `rules_epoch` 7.
+    pub reckless_piercing: Vec<RecklessPiercingSpec>,
     /// The Fatigue Debuff read (epoch 7) — the one "Mind Control" entry this
     /// core carries (`fatigue_debuff_of`); empty below `rules_epoch` 7.
     pub fatigue_debuff: Vec<FatigueDebuffSpec>,
@@ -1912,6 +1921,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_fortify_ap: 0,
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
+        reckless_ap: 0,
     }
 }
 
@@ -2648,6 +2658,44 @@ impl FatigueDebuffSpec {
             ..Default::default()
         }
     }
+}
+
+/// One carried "Reckless Piercing" entry — main.gd:16937-16971, the
+/// round-scoped AP stamp: at activation one die at `roll_target` gives the
+/// bearer's chain `ap_bonus` when attacking until round end, a 1 gives its
+/// enemies `backfire_ap` against it instead.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecklessPiercingSpec {
+    pub name: String,
+    pub roll_target: i64,
+    pub ap_bonus: i64,
+    pub backfire_ap: i64,
+}
+
+/// The Reckless Piercing stamp (wave-4 follow-up, epoch 7): the self-named
+/// primitive read BY NAME (the only carrier path is the "Reckless Piercing
+/// Aura" grant, which `apply_aura_channel` expands before this read), gated
+/// on the FROZEN `EPOCH_7_TABLE_RULES`.
+fn reckless_piercing_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<RecklessPiercingSpec> {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return Vec::new();
+    }
+    let map = reg.rules_for(&p.game_system);
+    let mut seen = std::collections::HashSet::new();
+    p.special_rules.iter().chain(p.item_grants.iter())
+        .filter_map(|raw| {
+            let n = base_rule_name(raw);
+            (n == "Reckless Piercing" && seen.insert(n.clone())).then_some(n)
+        })
+        .filter_map(|n| map.lookup(&p.faction_folder, &n)
+            .filter(|e| e.primitive.as_deref() == Some("Reckless Piercing")).map(|e| (n, e)))
+        .map(|(n, e)| RecklessPiercingSpec {
+            name: n,
+            roll_target: e.param_i("roll_target", 2),
+            ap_bonus: e.param_i("ap_bonus", 1),
+            backfire_ap: e.param_i("backfire_ap", 1),
+        })
+        .collect()
 }
 
 /// The Fatigue Debuff stamp (wave-4 follow-up, epoch 7): the one "Mind
@@ -4038,6 +4086,7 @@ impl UnitStatic {
             ambush_family: ambush_family_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             storm: storm_of(reg, p, rules_epoch),
+            reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
             growth: growth_of(reg, p, &mut unimplemented),
             piercing_tags: piercing_tags_of(reg, p, rules_epoch),

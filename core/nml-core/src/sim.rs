@@ -825,6 +825,50 @@ pub(crate) fn tray_fatigue_debuff(
     }
 }
 
+/// `main._solo_apply_reckless_piercing` main.gd:16937-16971, called at
+/// main.gd:1072 in the table's pre-attack order (between the Piercing Tag
+/// and the Storm Attack). ONE tray die per unit per ROUND (the
+/// `reckless_rolled_round` gate): at or over `roll_target` the bearer's
+/// chain gets `reckless_ap_round` (its weapons +AP until round end), on a
+/// 1 the chain gets `reckless_backfire_round` (enemies +AP against it).
+/// The table's `_solo_is_ai_unit` opt-in is not ported — the AI always
+/// rolls and so does this twin (selfplay stamps both slots AI, the
+/// `tray_piercing_tag` precedent). GATED `rule_on(rules_epoch,
+/// EPOCH_7_TABLE_RULES)`. The stamps are read by the attack seams below
+/// (`strike_phase` and the volley loop) through `Ctx::reckless_ap`.
+pub(crate) fn tray_reckless_piercing(
+    statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) { return; }
+    if next.alive[si] <= 0 || next.reckless_rolled_round[si] == next.round { return; }
+    let Some(spec) = statics[next.roster.profile[si]].reckless_piercing.first() else { return; };
+    next.reckless_rolled_round[si] = next.round;
+    let owner = statics[next.roster.profile[si]].name.clone();
+    let faces = tray.roll(1);
+    shot.rolls.push(crate::dice::Roll {
+        kind: "attack", count: 1, target: spec.roll_target,
+        faces: faces.clone(), owner,
+    });
+    let face = faces.first().map(|f| *f as i64).unwrap_or(1);
+    let buff = face >= spec.roll_target;
+    let mut chain = vec![si];
+    if seams.hero_attach { chain.extend(next.attached[si].iter().copied()); }
+    for cm in chain {
+        if buff { next.reckless_ap_round[cm] = next.round; }
+        else { next.reckless_backfire_round[cm] = next.round; }
+    }
+    if buff {
+        shot.log.push(format!(
+            "{}: {} rolls {} — weapons get AP(+1) until the end of the round",
+            spec.name, statics[next.roster.profile[si]].name, face));
+    } else {
+        shot.log.push(format!(
+            "{}: {} rolls a {} — enemies get AP(+1) against it until the end of the round",
+            spec.name, statics[next.roster.profile[si]].name, face));
+    }
+}
+
 /// Wave 3 — `main._solo_apply_piercing_tag` main.gd:16999-17027, the marker
 /// family's PLACEMENT half, in the table's own once-per-activation
 /// before-attacking slot right after the Utility Buffs (main.gd:1071; Mind
@@ -2242,6 +2286,11 @@ fn strike_phase(
         if att.instinctive_hit_bonus > 0 && instinctive_applies(next, *mi, ti) {
             att.hit_mod += att.instinctive_hit_bonus;
         }
+        // Reckless Piercing (epoch 7, main.gd:6017): the chain's buff stamp
+        // and the TARGET's backfire stamp both ride the +AP fold —
+        // `_solo_reckless_ap(attacker, target)`'s net read.
+        att.reckless_ap = (next.reckless_ap_round[*mi] == next.round) as i64
+            + (next.reckless_backfire_round[ti] == next.round) as i64;
     }
     let ut = &statics[next.roster.profile[ti]];
     let def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch);
@@ -3913,6 +3962,13 @@ fn resolve_with(
         tray_piercing_tag(statics, &mut next, si, seams, shot);
     }
 
+    // --- RECKLESS PIERCING (main.gd:1072, the table's own slot between the
+    // Piercing Tag and the Storm Attack) — tray path only, see
+    // `tray_reckless_piercing`.
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_reckless_piercing(statics, &mut next, si, seams, tray, shot);
+    }
+
     // --- STORM ATTACK (main.gd:1073, after Utility Buff in the table's own
     // pre-attack slot order), every action kind, tray path only. See
     // `tray_storm_attack`; no enemy in reach does not spend the burst.
@@ -4167,6 +4223,11 @@ fn resolve_with(
                                     att.hit_mod += att.instinctive_hit_bonus;
                                 }
                                 att.tag_ap_mod = tag_ap;
+                                // Reckless Piercing (epoch 7, main.gd:9877):
+                                // the chain's buff stamp and the TARGET's
+                                // backfire stamp — `_solo_reckless_ap`'s net.
+                                att.reckless_ap = (next.reckless_ap_round[*mi] == next.round) as i64
+                                    + (next.reckless_backfire_round[g.ti] == next.round) as i64;
                             }
                             // CLASS FIX (external review 03.09. item 3 / F9,
                             // `acts::rule_on`) — same gate as `strike_phase`'s
