@@ -111,6 +111,13 @@ The rule this establishes: **deduct a table gap from the claim that the table is
 the census.** The census measures the core honestly; "core knows the name" and "table can produce
 the name" are different questions, and a gap between them is a table-PR backlog item, not a defect
 in the core number.
+- **Vengeance, TC-023 picked-model edge (#790, appended 07.09. evening)** — an honest
+  core-side limitation, not a table gap: the table's TC-023 guard (`main.gd:5809-5813`) denies the
+  host squad's Vengeance markers when a Takedown strike resolves against a PICKED solo model inside
+  the marked chain; the core's resolution is unit-level (defender ctx is the unit's), so it has no
+  picked-model defender to guard — in that specific table scenario a replayed epoch-7 act could
+  diverge by the host's marker count. Rare shape; the replay gate catches it if a corpus ever
+  exercises it. (Source: the #790 merge-with-note review verdict, 07.09.)
 
 ## 4. The 21 UNCLEAR verdicts
 

@@ -10,6 +10,30 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The Solo panel has a mission selector, driven by the mission catalogue.** (#640)
 - **The mission catalogue reaches the AI twin.** The Python side can play the ten catalogue missions from `missions.json`
   (missions R1, default duel), and the twin sets deterministic mission-marker placements. (#623, #639)
+- **AI rules fidelity — thirteen more named rules ported to the fast core** (all behind the frozen epoch-7 gate).
+  CORE-side: Crossing Attack (any executed move through enemy units strikes them; #770), Retreating Strike (the
+  shared Ravage dice fire once per round on the post-melee move; #772), Extended Buff Range (relayed utility picks
+  through a radio/runner carrier; #773), Spell Accumulator (token battery casters may drain; #774), Reanimation with
+  its aura (a model stands back up at the activation step; #777), Delayed Action (the core can finally PASS — the
+  Pass Turn primitive per the #775 design; #778), Coordinate (the bearer hands its activation to a chosen friend;
+  #780), Mind Control's displacement arm (a failed morale test shifts the target up to 6"; #783), Transport (the
+  loader now parses the unit's own Transport(X) capacity, so the core fills transports; #787), Vengeance (a
+  marker-on-kill counter pays into the bearer's later attacks; #790), and the Re-Deployment param stamp (census
+  evidence; the optional re-place choice stays table-side; #781).
+- **The value net sees the rules it could not read.** Encoder vocabulary v7 appends the 12 core-ported names the
+  unit band had no room for (#786's blind set) to an open-ended unit2 band. (#789)
+
+### Fixed
+- **Ranged Slayer fired in the core but not on the table.** The table now resolves the range-gated
+  ("ranged_over") AP(+2) spec at the conditional-AP seams — the one gap of the table-side parity audit (#785). (#784)
+- **The census no longer counts a primitive literal as a rule-name read** (Mind Control un-flipped, then
+  honestly re-earned by its displacement port). (#782)
+
+### Internal
+- **The S5 (Reinforcement) seam, part 1:** `arrive_one` takes an arrival zone — the shared-signature change alone,
+  ahead of the mid-game unit-creation port (verdict corrected PORT → DESIGN in #779). (#788)
+- **Wave-4 docs:** the Delayed Action primitive design (#775), the table-side parity audit A (#785), the
+  encoder-slot gap memo (#786), and the 5 core-grant-missing auras classified (#791).
 
 ### Changed
 - **AI rules fidelity — named rules ported to the fast core.** Split fire (a volley per target group), Mend, Re-Position
