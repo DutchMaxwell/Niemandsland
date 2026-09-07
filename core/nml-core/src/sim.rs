@@ -2031,6 +2031,71 @@ fn growth_on_ignore_wound(
 /// context plus the snapshot's fatigue flag, which the EV layer is blind to and
 /// which turns the striker's to-hit into a flat unmodified 6 (p.9).
 #[inline]
+/// Wave 4 follow-up (port-spell-accumulator) — the EMPTY-POOL fallback half
+/// of the cast-phase read: at `EPOCH_7_TABLE_RULES` a chain caster that
+/// carries spells but holds NO tokens still counts as the acting caster, so
+/// the battery pool can pay for its spell; every earlier epoch keeps
+/// `caster_of`'s "no tokens, no cast" answer untouched.
+fn battery_chain_caster(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    seams: Seams,
+) -> Option<usize> {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+        return None;
+    }
+    // The fold gate is `caster_of`'s own: with the fold off the rest of the
+    // resolver does not believe in the chain either (the cast_fold knob test
+    // pins "seam_cast alone still casts nothing").
+    if !(seams.cast_fold && seams.hero_attach) {
+        return None;
+    }
+    std::iter::once(si)
+        .chain(state.attached[si].iter().copied())
+        .find(|&u| {
+            let s = &statics[state.roster.profile[u]];
+            state.alive[u] > 0 && s.is_caster && !s.spells.is_empty()
+        })
+}
+
+/// The rule's own lend radius ("within 12\"", solo_controller.gd:4503).
+const SPELL_ACCUMULATOR_REACH_IN: f64 = 12.0;
+
+/// Wave 4 follow-up (port-spell-accumulator) — the battery pool, gated on
+/// the frozen `EPOCH_7_TABLE_RULES` (see the call site's note).
+fn battery_pool(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    ci: usize,
+    seams: Seams,
+) -> Vec<(usize, i64)> {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+        return Vec::new();
+    }
+    let pid = state.player[si];
+    let mut found: Vec<(usize, f64, i64)> = Vec::new();
+    for u in 0..state.units() {
+        let s = &statics[state.roster.profile[u]];
+        if !s.spell_accumulator || s.is_caster {
+            continue;
+        }
+        if u == ci || state.attached[si].contains(&u) {
+            continue; // the caster's own chain is `caster_of`'s business
+        }
+        if state.player[u] != pid || state.alive[u] <= 0 || state.shaken[u] || state.casts[u] <= 0 {
+            continue;
+        }
+        let d = geom::dist_in(&state.positions[ci], &state.positions[u]);
+        if d <= SPELL_ACCUMULATOR_REACH_IN {
+            found.push((u, d, state.casts[u]));
+        }
+    }
+    found.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    found.into_iter().map(|(u, _, t)| (u, t)).collect()
+}
+
 fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize) -> Ctx {
     let mut c = ctx_of(us, state, i);
     c.fatigued = state.fatigued[i];
@@ -3119,10 +3184,25 @@ fn cast_phase(
     }
     // NML-1157: WHICH member of the chain casts. With `cast_fold` off this is
     // `si` under exactly the old four conditions, so nothing moves.
-    let Some(ci) = caster_of(statics, state, si, seams) else {
+    // Wave 4 follow-up (port-spell-accumulator) — the EMPTY-POOL fallback:
+    // at epoch 7 a chain caster with spells but no tokens still reaches the
+    // battery pool below; pre-epoch records keep the early return.
+    let ci = caster_of(statics, state, si, seams)
+        .or_else(|| battery_chain_caster(statics, state, si, seams));
+    let Some(ci) = ci else {
         return;
     };
-    let tokens = state.casts[ci];
+    // Wave 4 follow-up (port-spell-accumulator) — the battery pool
+    // (solo_controller.gd:4520-4548): every friendly, ALIVE, un-Shaken
+    // `Spell Accumulator` bearer of ANOTHER unit within the rule's own 12"
+    // joins the token pool, NEAREST first (the table's own sort). A battery
+    // is never a real caster ("is_caster() stays false", game_unit.gd:417),
+    // and the Shaken gate is the rule text's own "Friendly casters may only
+    // use this rule if this unit isn't Shaken" (NML-936).
+    let own = state.casts[ci];
+    let lenders = battery_pool(statics, state, si, ci, seams);
+    let tokens = own + lenders.iter().map(|(_, t)| *t).sum::<i64>();
+    let mut lend_log: Vec<String> = Vec::new();
     let pi = state.roster.profile[ci];
     let spells = statics[pi].spells.clone();
     // The PICK still starts from the host: `si` carries the models the buff
@@ -3142,7 +3222,27 @@ fn cast_phase(
         }
     }
     if let Some(c) = cost {
-        state.casts[ci] = (tokens - c).max(0);
+        // Wave 4 follow-up (port-spell-accumulator) — the spend order: the
+        // caster's OWN tokens first, then the batteries nearest-first; each
+        // battery's draw names itself (rules-must-log, the table's
+        // battery-join log).
+        let mut left = c;
+        let take_own = own.min(left);
+        left -= take_own;
+        state.casts[ci] = (own - take_own).max(0);
+        for (u, t) in &lenders {
+            if left <= 0 {
+                break;
+            }
+            let take = (*t).min(left);
+            left -= take;
+            state.casts[*u] = (state.casts[*u] - take).max(0);
+            let line = format!(
+                "Spell Accumulator: {} lends {} token(s) to {}",
+                statics[state.roster.profile[*u]].name, take, statics[state.roster.profile[ci]].name
+            );
+            lend_log.push(line.clone());
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line })));        }
     }
 }
 
