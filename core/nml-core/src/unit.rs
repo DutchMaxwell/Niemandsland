@@ -2887,7 +2887,16 @@ fn ambush_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ambu
 /// solo_controller.gd:9642). Gated `rule_on(rules_epoch,
 /// EPOCH_7_TABLE_RULES)` — the epoch-7 frozen constants gate every new read.
 fn re_deployment_max_units_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> i64 {
-    0 // RED (pre-fix): the read arm lands in the next commit
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return 0;
+    }
+    if !unit_rule_active(reg, p, "Re-Deployment") {
+        return 0;
+    }
+    match reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Re-Deployment") {
+        Some(e) => e.param_i("max_units", 2).max(0),
+        None => 2, // the table's own fallback (solo_controller.gd:9642)
+    }
 }
 
 /// One "Piercing Tag" registry entry the unit carries — wave 3's marker
