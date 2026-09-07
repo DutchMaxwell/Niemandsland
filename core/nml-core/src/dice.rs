@@ -1169,6 +1169,18 @@ fn grounded_precision_mod(att: &Ctx) -> i64 {
     }
 }
 
+/// Wave 4 follow-up (port-bloodthirsty-fighter) — the blocked-1s counter of
+/// ONE just-drawn save batch: the FIRST "defense" slot pushed at `idx` (the
+/// batch's own dice, before any Bane re-roll — a 6 re-rolled into a 1 is not
+/// an unmodified 1). `None` when the batch drew nothing (count 0).
+fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
+    out.rolls
+        .get(idx)
+        .filter(|r| r.kind == "defense")
+        .map(|r| r.faces.iter().filter(|&&f| f == 1).count() as i64)
+        .unwrap_or(0)
+}
+
 /// ONE melee strike phase on the tray — `main._solo_melee_strike_phase` :5941,
 /// in its own draw order (main.gd line in brackets):
 ///
@@ -1186,7 +1198,9 @@ fn grounded_precision_mod(att: &Ctx) -> i64 {
 /// PORTED: Reliable/Thrust/Evasive/Melee Evasion/Unstoppable on the to-hit, both
 /// variants of the Unpredictable die and both of its halves, Ravage, Furious's
 /// unmodified-6 bonus hits on the charge, Surge and its block-B6 extra-ATTACK-
-/// DIE siblings (Predator Fighter et al., `surge_attack_hits`), Sergeant, Blast,
+/// DIE siblings (Predator Fighter et al., `surge_attack_hits`), Bloodthirsty
+/// Fighter's blocked-1s extra attacks (`stamp_bloodthirsty_named`'s flag, the
+/// melee fold's own leg below), Sergeant, Blast,
 /// the Rending/Destructive/on-6 AP sub-batch, Thrust's charge AP, Bane's
 /// re-roll, Shred, the pooled Deadly multiplier and every Regeneration roll in
 /// its place.
@@ -1207,8 +1221,9 @@ fn grounded_precision_mod(att: &Ctx) -> i64 {
 ///      `striking_models_for` (:4331), the models within 2"; this port scales by
 ///      `alive`, as the EV path does. That is the melee twin of shooting's
 ///      per-model sighting and the largest die-COUNT class in the replay gate.
-///   3. Bloodthirsty Fighter's extra attacks off the defender's blocked 1s
-///      (:6123), Retaliate (:6175), Deathstrike / Self-Destruct (:6198).
+///   3. Retaliate (:6175), Deathstrike / Self-Destruct (:6198). (Bloodthirsty
+///      Fighter left this list in the wave-4 follow-up port: the melee fold
+///      rolls its blocked-1s extra attacks in place — see the leg above.)
 ///   4. Reckless Piercing's round AP stamp (:5974), Versatile Attack's melee
 ///      half (:6076), vs-target Marks, Takedown's unit-of-[1] pick, its melee
 ///      bonus group ("Takedown Strike", main.gd:6032-6034 — see the shooting
@@ -1395,8 +1410,58 @@ pub fn resolve_melee_with_tray(
             // 1 = the base shred window — melee NEVER widens: the Shred
             // Boost's charge half needs a pre-charge gap this port never
             // measured (see the NOT-PORTED list on resolve_melee_with_tray).
+            let idx_ap = out.rolls.len();
             let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, tray, &mut out);
+            // Wave 4 follow-up — the batch's OWN blocked unmodified 1s (the
+            // FIRST "defense" slot of the batch, never Bane's re-rolls: a 6
+            // re-rolled into a 1 is not an unmodified 1), Bloodthirsty
+            // Fighter's table counter read (main.gd:6505-6509).
+            let ones_ap = fresh_save_ones(&out, idx_ap);
+            let idx_rest = out.rolls.len();
             w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, sh.att.shred_grant, shred_alias_dice, 1, tray, &mut out);
+            let ones_rest = fresh_save_ones(&out, idx_rest);
+            // Wave 4 follow-up — Bloodthirsty Fighter (aof/war_disciples):
+            // each unmodified 1 the DEFENDER rolled blocking this weapon pays
+            // for ONE extra attack with the SAME weapon at the SAME to-hit
+            // target (`count_target`), pooled through normal saves at the
+            // batch's own AP, and NEVER chaining — the extras' own save 1s
+            // are consumed after this leg has moved on (the table's reset,
+            // main.gd:6184). The extra-attack leg is the melee Surge family's
+            // own shape (`surge_attack_hits`, the melee fold's sibling).
+            if !p.bloodthirsty_rule.is_empty() && hits > 0 {
+                let bt_ones = ones_ap + ones_rest;
+                if bt_ones > 0 {
+                    out.log.push(format!(
+                        "{}: {} blocked 1{} — {} rolls {} extra attack{}",
+                        p.bloodthirsty_rule, bt_ones, if bt_ones == 1 { "" } else { "s" },
+                        sh.owner, bt_ones, if bt_ones == 1 { "" } else { "s" }));
+                    let bt_faces = tray.roll(bt_ones as usize);
+                    out.rolls.push(Roll {
+                        kind: "attack",
+                        count: bt_ones,
+                        target: count_target,
+                        faces: bt_faces.clone(),
+                        owner: sh.owner.into(),
+                    });
+                    let mut bt_hits = faces_to_hits(&bt_faces, count_target as u8) as i64;
+                    if p.surge {
+                        bt_hits += sixes(&bt_faces);
+                        out.mark("surge_gates");
+                    }
+                    bt_hits += surge_attack_hits(p, &bt_faces, count_target, sh.owner, tray, &mut out.rolls);
+                    if bt_hits > 0 {
+                        // The table resolves the extras pooled with the same
+                        // effective AP (main.gd:6180-6182) — one batch, no
+                        // separate on-6 AP sub-batch, no Deadly special-case.
+                        let btw = save_batch(p, def, def_owner, bt_hits, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, tray, &mut out);
+                        if p.bane || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant {
+                            regen_proof += btw;
+                        } else {
+                            regenable += btw;
+                        }
+                    }
+                }
+            }
             if p.deadly > 0 {
                 out.mark("deadly");
             }

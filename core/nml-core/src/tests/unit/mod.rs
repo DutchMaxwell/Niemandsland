@@ -952,6 +952,7 @@
 // family adds ONE line to this ALPHABETICAL list plus its own file; the
 // fixtures every family shares stay here, in the module root.
 mod aura_channel;
+mod bloodthirsty_fighter;
 mod boost_aura_tail;
 mod boostbases2;
 mod condap;

@@ -510,6 +510,13 @@ pub struct ShootProfile {
     /// Takedown tag and on every record below `EPOCH_7_TABLE_RULES`, so
     /// pre-wave replays log nothing and stay byte-identical.
     pub takedown_rule: String,
+    /// Wave 4 follow-up (port-bloodthirsty-fighter): the UNIT-level NAME of
+    /// the melee extra-attack rule stamped onto this profile ("Bloodthirsty
+    /// Fighter", melee_only — `stamp_bloodthirsty_named`), the rules-must-log
+    /// subject at the melee fold. Empty on every record below
+    /// `EPOCH_7_TABLE_RULES`, so pre-wave replays log nothing and stay
+    /// byte-identical.
+    pub bloodthirsty_rule: String,
     /// Wave 4 follow-up (port-takedown-strike): the ONCE-PER-GAME bonus
     /// melee attack's own Quality ("Takedown Strike": one attack at Quality
     /// 2+ with AP(2), Deadly(3), and Takedown — the table's synthetic bonus
@@ -614,6 +621,7 @@ impl ShootProfile {
             && self.limited == o.limited
             && self.takedown == o.takedown
             && self.takedown_rule == o.takedown_rule
+            && self.bloodthirsty_rule == o.bloodthirsty_rule
             && self.extra_attack_q == o.extra_attack_q
             && self.rules == o.rules
     }
@@ -3225,6 +3233,39 @@ fn stamp_takedown_named(
     }
 }
 
+/// Wave 4 follow-up (port-bloodthirsty-fighter) — the UNIT-level
+/// "Bloodthirsty Fighter" (aof/war_disciples): for each unmodified 1 the
+/// DEFENDER rolls blocking this model's melee weapon, +1 extra attack with
+/// that weapon at the same to-hit target, pooled through normal saves and
+/// never chaining (the book's own `no_recursion` param; the table's
+/// `_solo_last_save_ones` main.gd:5969, counted at :6505-6509, consumed at
+/// :6162-6189 with the reset at :6184). The entry is primitive-self with
+/// `melee_only: true`, so the flag rides the MELEE array only. Read BY NAME,
+/// never the primitive whole (#489); the flag routes to the dice.rs melee
+/// fold's blocked-1s leg, and the name lands in `bloodthirsty_rule` for the
+/// rules-must-log line. Behind the FROZEN `EPOCH_7_TABLE_RULES` only — a
+/// record below 7 keeps the flag empty and replays byte-exact.
+fn stamp_bloodthirsty_named(
+    reg: &mut Registries,
+    p: &Profile,
+    melee: &mut [ShootProfile],
+    name: &str,
+) {
+    if !has_exact_rule(&p.special_rules, name) && !has_exact_rule(&p.item_grants, name) {
+        return;
+    }
+    let map = reg.rules_for(&p.game_system);
+    let Some(e) = map.lookup(&p.faction_folder, name) else {
+        return;
+    };
+    if !e.param_b("melee_only") {
+        return;
+    }
+    for sp in melee.iter_mut() {
+        sp.bloodthirsty_rule = name.to_string();
+    }
+}
+
 /// Wave 4 follow-up (port-takedown-strike) — the once-per-game bonus melee
 /// attack "Takedown Strike" (gf x5 / aof x7, primitive `Takedown` with
 /// `extra_attack_q: 2, ap: 2, uses_per_game: 1`; the printed text adds
@@ -3527,6 +3568,32 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
             );
         }
     }
+    // Wave 4 follow-up (rules-musician, epoch 7): "Musician" ("This model
+    // and its unit moves +1\" when using move actions") — the entry's own
+    // `move_bonus_in` onto BOTH bands, the table's `sim_move_bands`
+    // (solo_controller.gd:5515-5522) flat add, which the recorded
+    // `state.bands` (battle_sim.gd:1650 -> io.rs:755-765) already carries
+    // precomputed. Evidence-only standing like the rest of this fold (the
+    // accepted `bounding` shape, PR #653): this stamp is the core's own
+    // per-entry read, never a simulation input — a live re-fold at the move
+    // seam would double-count a recorded band. No Boost couples to the name
+    // ("Great Musician" is a separate Utility-Buff name, UTILITY_BUFF_SEAMS
+    // 2026-09-05 sec.2, not covered here). Gated on the FROZEN
+    // `EPOCH_7_TABLE_RULES`, never the literal.
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && unit_rule_active(reg, p, "Musician") {
+        let map = reg.rules_for(&p.game_system);
+        if let Some(e) = map.lookup(&p.faction_folder, "Musician") {
+            let bonus = e.param_f("move_bonus_in", 0.0);
+            acc.advance += bonus;
+            acc.rush += bonus;
+            hit = true;
+            crate::sim::trace_rule(
+                "move-bands",
+                "Musician",
+                &format!("{}: +{bonus}\" advance, +{bonus}\" rush/charge", p.name),
+            );
+        }
+    }
     if hit { Some(acc) } else { None }
 }
 
@@ -3786,6 +3853,13 @@ impl UnitStatic {
         // tag alone set it and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             stamp_takedown_named(reg, p, &mut shoot, &mut melee, "Takedown when Shooting");
+        }
+        // Wave 4 follow-up (port-bloodthirsty-fighter), gated on the FROZEN
+        // `EPOCH_7_TABLE_RULES`: "Bloodthirsty Fighter" is the melee
+        // extra-attack rule under its own name — see `stamp_bloodthirsty_named`.
+        // A record below epoch 7 keeps the flag empty and replays byte-exact.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            stamp_bloodthirsty_named(reg, p, &mut melee, "Bloodthirsty Fighter");
         }
         // Wave 4 follow-up (port-takedown-strike), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Takedown Strike" is the once-per-game bonus
