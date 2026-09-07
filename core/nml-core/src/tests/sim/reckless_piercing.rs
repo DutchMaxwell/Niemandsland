@@ -153,11 +153,11 @@ use super::*;
         let mut a = UnitStatic {
             name: "a".into(),
             model_count: 1,
-            shoot: vec![gun("Rifle", 6, 24)],
+            shoot: vec![gun("Rifle", 64, 24)],
             ..Default::default()
         };
         a.wounds_max = vec![1];
-        a.ctx.quality = 4;
+        a.ctx.quality = 2;
         let mut b = UnitStatic { name: "b".into(), ..Default::default() };
         b.ctx.defense = 4;
         b.ctx.tough = 1;
@@ -204,7 +204,7 @@ use super::*;
     fn the_backfire_stamp_hands_the_enemy_ap_in_melee() {
         // The `vr_charge_line` shape: charger "a" vs target "b" 2" apart --
         // one profile per slot, contact within the charge band.
-        let blade = ShootProfile { name: "Blade".into(), attacks: 8, count: 1, range: 0, ..Default::default() };
+        let blade = ShootProfile { name: "Blade".into(), attacks: 64, count: 1, range: 0, ..Default::default() };
         let profile: Profile = serde_json::from_str(r#"{"unit_id": "u", "name": "u"}"#).unwrap();
         let mut st = four_unit_line();
         st.roster = Rc::new(Roster {
@@ -222,7 +222,7 @@ use super::*;
         st.radii = vec![vec![IN2M], vec![IN2M]];
         st.reckless_backfire_round[1] = 0;
         let a = UnitStatic {
-            ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 1, ..Default::default() },
+            ctx: Ctx { quality: 2, defense: 4, tough: 1, models: 1, ..Default::default() },
             name: "a".into(),
             melee: vec![blade],
             model_count: 1,
