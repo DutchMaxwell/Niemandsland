@@ -301,6 +301,25 @@ func test_conditional_ap_range_gates() -> void:
 	assert_int(AiCombatMath.conditional_ap_bonus(sl, 1, 4, false, 12.0, false)).is_equal(0)
 
 
+func test_ranged_slayer_gate_only_ranged_over() -> void:
+	# Ranged Slayer (gf/aof 3.5.3): AP(+2) on shots over 9" — a GATE-ONLY spec. The mechanics map
+	# carries the range leg in "gate" ("ranged_over") with NO target-property "condition"
+	# (assets/solo/rules_mechanics_gf.json:2752), so the gate IS the condition, mirroring the
+	# core's named arm (core/nml-core/src/combat.rs:370). Melee, close shots and an unknown
+	# distance (-1) stay flat; the gate is strict (> 9"), 9.0" itself counts as close.
+	var rs := {"ap_bonus": 2, "threshold": 3, "gate": "ranged_over", "over_in": 9.0}
+	assert_int(AiCombatMath.conditional_ap_bonus(rs, 1, 4, false, 12.0, false)).is_equal(2)
+	assert_int(AiCombatMath.conditional_ap_bonus(rs, 1, 4, false, 9.0, false)).is_equal(0)
+	assert_int(AiCombatMath.conditional_ap_bonus(rs, 1, 4, false, 8.0, false)).is_equal(0)
+	assert_int(AiCombatMath.conditional_ap_bonus(rs, 1, 4, false, -1.0, false)).is_equal(0)
+	assert_int(AiCombatMath.conditional_ap_bonus(rs, 1, 4, false, 12.0, true)).is_equal(0)
+	# A Slayer-shaped spec WITH a target property keeps its own condition — the gate-only
+	# normalisation must not eat it (Slayer: vs Tough>=3, charged or over-9" shot).
+	var sl := {"ap_bonus": 2, "condition": "vs_tough_ge", "threshold": 3, "gate": "ranged_over_or_charge", "over_in": 9.0}
+	assert_int(AiCombatMath.conditional_ap_bonus(sl, 3, 4, false, 12.0, false)).is_equal(2)
+	assert_int(AiCombatMath.conditional_ap_bonus(sl, 1, 4, false, 12.0, false)).is_equal(0)
+
+
 func test_point_blank_piercing_ranged_within_boundary() -> void:
 	# Point-Blank Piercing (gf): AP(+1) when shooting enemies within 12" — the cap is INCLUSIVE
 	# (12.0" itself counts, mirroring core/nml-core/src/combat.rs:389), an unknown distance (-1)

@@ -357,7 +357,9 @@ static func stamp_conditional_ap(profiles: Array, unit: GameUnit) -> Array:
 	for r in unit.get_special_rules():
 		var base := RulesRegistry.base_rule_name(str((r as Dictionary).get("name", "")) if r is Dictionary else str(r))
 		var params: Dictionary = RulesRegistry.lookup(system, faction, base).get("params", {})
-		if params.has("condition"):
+		# "or gate": a GATE-ONLY spec (Ranged Slayer) carries its range leg in "gate" with no
+		# "condition" — the dice seam (main._solo_conditional_ap_parts) accepts the same shape.
+		if params.has("condition") or params.has("gate"):
 			unit_specs.append({"n": base, "p": params})
 	for p in profiles:
 		var profile := p as Dictionary
@@ -366,7 +368,7 @@ static func stamp_conditional_ap(profiles: Array, unit: GameUnit) -> Array:
 		for r in profile.get("rules", []):
 			var base := RulesRegistry.base_rule_name(str(r))
 			var params: Dictionary = RulesRegistry.lookup(system, faction, base).get("params", {})
-			if params.has("condition"):
+			if params.has("condition") or params.has("gate"):
 				specs.append(params)
 				seen[base] = true
 			# Crack: on-6-to-hit AP bonus (per-die), stamped for profile_ev's six-hits sub-batch.

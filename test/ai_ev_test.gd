@@ -280,6 +280,28 @@ func test_stamp_conditional_ap_marks_profiles_from_the_book() -> void:
 	assert_bool((profs[1] as Dictionary).has("cond_ap")).is_false()
 
 
+func test_stamp_conditional_ap_stamps_gate_only_ranged_slayer() -> void:
+	# Ranged Slayer (gf/dao_union) is a GATE-ONLY spec: the mechanics entry carries the range leg in
+	# "gate" ("ranged_over") with no target-property "condition" (assets/solo/rules_mechanics_gf.json).
+	# A unit carrying it must still get cond_ap stamped on every profile — the dice seam
+	# (main._solo_conditional_ap_parts) and this EV stamp share the same acceptance predicate.
+	var u := GameUnit.new()
+	u.unit_properties = {"player_id": 2, "name": "T", "game_system": "gf",
+		"faction_folder": "dao_union", "special_rules": ["Ranged Slayer"]}
+	var mi := ModelInstance.new(); mi.is_alive = true; u.models.append(mi)
+	var profs := [_mprof({"rules": []}), _mprof({"rules": []})]
+	AiEv.stamp_conditional_ap(profs, u)
+	# Failure-safe accessors: a missing stamp must fail the ASSERTS, not raise an engine-level
+	# runtime error (a headless debugger break kills the whole gdUnit run, not just this test).
+	var spec: Variant = (profs[0] as Dictionary).get("cond_ap", [])
+	var first: Dictionary = {}
+	if spec is Array and not (spec as Array).is_empty() and (spec as Array)[0] is Dictionary:
+		first = (spec as Array)[0]
+	assert_bool(first.is_empty()).is_false()
+	assert_int(int(first.get("ap_bonus", 0))).is_equal(2)
+	assert_bool((profs[1] as Dictionary).has("cond_ap")).is_true()
+
+
 func test_crack_on6_ap_raises_ev() -> void:
 	# Crack (AP(+2) on unmodified 6s), stamped as on6_ap: the expected six-hits save at the worse AP, so
 	# EV rises over a plain weapon. Rending's fixed +4 fallback is covered by the existing rending test.
