@@ -165,7 +165,7 @@ use super::*;
         );
 
         // No stamp: the plain Defense-4 window.
-        let (st0, statics) = tag_line("Piercing Tag", 0, 24.0);
+        let (st0, mut statics) = tag_line("Piercing Tag", 0, 24.0);
         statics[0].piercing_tags.clear();
         statics[0].shoot[0].attacks = 64;
         let (_, shot0) = tag_volley(&statics, &st0, Seams { rules_epoch: 7, ..Seams::default() });
@@ -196,7 +196,7 @@ use super::*;
         );
 
         // No backfire stamp: the plain Defense-4 window.
-        let (st0, statics) = rp_line(7, &[]);
+        let (mut st0, statics) = rp_line(7, &[]);
         st0.positions[2] = vec![[1.2 * IN2M, 0.0, 0.0]];
         let mut tray0 = Tray::seeded(11);
         let mut shot0 = ShootResult::default();
