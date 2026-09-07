@@ -61,3 +61,23 @@ func test_rending_in_melee_ranged_wounds_do_not_bypass_regeneration() -> void:
 func test_weapon_level_rending_still_bypasses() -> void:
 	var striker := _carrier([])
 	assert_bool(_main._solo_ignores_regen(striker, {"range": 0, "rules": ["Rending"]})).is_true()
+
+
+## CENSUS (#782 rule, the #805 review note): the bypass is gated on the NAME "Rending in Melee"
+## (the core's unit.rs:2261 read), never on the Rending primitive whole. A unit carrying a
+## DIFFERENT name that shares the primitive — "Rending when Shooting" — must not inherit the
+## melee bypass. On the #805 hunk it did not either, but the ranged leg DID fire on the table
+## (bypass_regen + shooting_only facet) while the core's named read ignores the name entirely —
+## that is the RED this suite pins.
+func test_rending_when_shooting_melee_wounds_do_not_bypass_regeneration() -> void:
+	var striker := _carrier(["Rending when Shooting"])
+	assert_bool(_main._solo_ignores_regen(striker, {"range": 0, "rules": []})) \
+		.override_failure_message("the bypass is name-gated to 'Rending in Melee'") \
+		.is_false()
+
+
+func test_rending_when_shooting_ranged_wounds_do_not_bypass_regeneration() -> void:
+	var striker := _carrier(["Rending when Shooting"])
+	assert_bool(_main._solo_ignores_regen(striker, {"range": 24, "rules": []})) \
+		.override_failure_message("core reads 'Rending in Melee' BY NAME — the twin name is not the claim") \
+		.is_false()
