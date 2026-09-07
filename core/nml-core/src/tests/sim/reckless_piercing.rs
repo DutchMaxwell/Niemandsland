@@ -193,33 +193,41 @@ use super::*;
     /// (main.gd:6017's fold).
     #[test]
     fn the_backfire_stamp_hands_the_enemy_ap_in_melee() {
-        let (mut st, _) = rp_line(7, &[]);
-        st.reckless_backfire_round[2] = 0;
-        let mut a = UnitStatic {
+        // The `vr_charge_line` shape: charger "a" vs target "b" 2" apart --
+        // one profile per slot, contact within the charge band.
+        let blade = ShootProfile { name: "Blade".into(), attacks: 8, count: 1, range: 0, ..Default::default() };
+        let profile: Profile = serde_json::from_str(r#"{"unit_id": "u", "name": "u"}"#).unwrap();
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster {
+            keys: vec!["a".into(), "b".into()],
+            index: ["a".to_string(), "b".to_string()].iter().enumerate().map(|(i, k)| (k.clone(), i)).collect(),
+            profile: vec![0, 1],
+        });
+        st.profiles = Rc::new(Profiles { list: vec![profile.clone(), profile], index: HashMap::new() });
+        st.player = vec![0, 1];
+        st.alive = vec![1, 1];
+        st.attached = Rc::new(vec![vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None]);
+        st.positions = vec![vec![[0.0, 0.0, 0.0]], vec![[4.0 * IN2M, 0.0, 0.0]]];
+        st.wounds = vec![vec![1], vec![1]];
+        st.radii = vec![vec![IN2M], vec![IN2M]];
+        st.reckless_backfire_round[1] = 0;
+        let a = UnitStatic {
+            ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 1, ..Default::default() },
             name: "a".into(),
+            melee: vec![blade],
             model_count: 1,
-            melee: vec![gun("Blade", 6, 0)],
+            wounds_max: vec![1],
             ..Default::default()
         };
-        a.wounds_max = vec![1];
-        a.ctx.quality = 4;
-        let mut b = UnitStatic { name: "b".into(), ..Default::default() };
-        b.ctx.defense = 4;
-        b.ctx.tough = 1;
-        // Movement reads every unit's base profile: all four roster slots
-        // must exist (the `buff_line` fixture's own note).
-        st.profiles = Rc::new(Profiles {
-            list: vec![st.profiles.list[0].clone(); 4],
-            index: HashMap::new(),
-        });
-        let statics = vec![a, UnitStatic { name: "ah".into(), ..Default::default() }, b, UnitStatic { name: "bh".into(), ..Default::default() }];
-        // A CHARGE needs contact: the fixture line sits 12" apart, the charge
-        // move brings the charger in (the `movement` seam is on in
-        // `run_action`, the table's own M4 port).
-        st.positions[1] = vec![];
-        st.positions[2] = vec![[3.0 * IN2M, 0.0, 0.0]];
-        st.radii[2] = vec![IN2M];
-        st.positions[3] = vec![];
+        let b = UnitStatic {
+            ctx: Ctx { defense: 4, tough: 1, models: 1, ..Default::default() },
+            name: "b".into(),
+            model_count: 1,
+            wounds_max: vec![1],
+            ..Default::default()
+        };
+        let statics = vec![a, b];
         let charge = Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
             charge: Some("b".into()), patient: false, split: None, traced: None,
@@ -227,7 +235,7 @@ use super::*;
         let (_, shot) = run_action(&st, &statics, &charge, 11, 7);
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
-            "backfire: the melee saves run at AP(1) — got {:#?}",
+            "backfire: the melee saves run at AP(1) -- got {:#?}",
             shot.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
     }
