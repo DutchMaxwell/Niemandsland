@@ -26,8 +26,11 @@ use std::rc::Rc;
 use serde_json::{json, Value};
 
 use crate::acts::{rule_on, Knobs, EPOCH_7_TABLE_RULES};
+use crate::deployment::{self, ArrivalZone, Occupied, Rect};
 use crate::io::Seams;
 use crate::menu::Candidate;
+use crate::rules::has_special_rule;
+use crate::terrain::Terrain;
 use crate::mission::{apply_destroy_step, playout_seize, vp_of, vp_score_round};
 use crate::rng::GodotRng;
 use crate::playout::{other_player, Policy};
@@ -403,6 +406,18 @@ impl<'a> Rollout<'a> {
                         return Ok((out, Stop::GameEnd));
                     }
                     turn = cross_round(self.statics(), &mut cur);
+                    // Wave 4 — the Reinforcement beat sits at the ROUND START,
+                    // after `cross_round`'s refresh exactly as the table runs
+                    // it after its own round reset (main.gd:10174-10191). It
+                    // does not touch `turn`: arriving and withdrawing are
+                    // deployment, not activations, so the opener the round
+                    // count just decided still opens.
+                    reinforcement_round_start(
+                        self.statics(),
+                        self.policy.terrain,
+                        self.policy.seams,
+                        &mut cur,
+                    );
                     continue;
                 }
             }
@@ -585,6 +600,192 @@ pub(crate) fn battleborn_recovery_roll(
 /// its only caller is the trainer's round loop (tools/core_selfplay.gd:192), so
 /// an imagined round INHERITS the last one's spell modifiers. That is the shipped
 /// behaviour, not an oversight of this port.
+/// PRIMITIVE "withdraw and recreate", wave 4 — S5, the seam the plan records
+/// as missing ("no seam; the core creates units only at deployment"). Its
+/// first book user is `Reinforcement`: "When a unit where all models have this
+/// rule is Shaken or fully destroyed, you may remove it from the table as
+/// destroyed and place a new copy of it fully within 12" of any table edge at
+/// the beginning of the next round after Ambushers have been deployed."
+///
+/// The table's round-start beat (`main._solo_round_start`, main.gd:10183-10191)
+/// in the core's ONLY round boundary, in the table's own order:
+///
+///   1. ARRIVALS first — the rule times itself AFTER the Ambushers (:10186),
+///      and `_reinforcement_arrivals` is awaited before anything else runs.
+///   2. WITHDRAWALS after (`_solo_reinforcement_ai_offers` :10191), which is
+///      what stops a copy that just came back from being offered again in the
+///      same breath.
+///
+/// WHY THE ROUND BOUNDARY AND NOT `resolve_with`. Neither half is an
+/// activation: on the table neither produces an act record, and
+/// `sim.rs::resolve_with` is the replay/parity path that applies exactly one
+/// recorded act. A replayed corpus therefore reads both halves out of the
+/// recorded state (the `reinforcement_used` ledger row and the dormant keys),
+/// never out of this driver — the `delayed_action` precedent, one beat over.
+///
+/// Gated on the FROZEN `EPOCH_7_TABLE_RULES`: a record below 7 crosses the
+/// round byte-identically to today.
+pub fn reinforcement_round_start(
+    statics: &[UnitStatic],
+    terrain: &Terrain,
+    seams: Seams,
+    cur: &mut State,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+        return;
+    }
+    reinforcement_arrivals(statics, terrain, cur);
+    reinforcement_withdrawals(statics, cur);
+}
+
+/// The table in WORLD METRES, centred on the origin, or `None` when the header
+/// carried no board at all (`terrain.board_in()` is then zero and there is no
+/// table to measure a 12" band against — the copy keeps its date, exactly as
+/// it does when the strip is full).
+fn table_rect(terrain: &Terrain) -> Option<Rect> {
+    let [w_in, d_in] = terrain.board_in();
+    if w_in <= 0.0 || d_in <= 0.0 {
+        return None;
+    }
+    let (w, d) = (w_in * crate::IN2M, d_in * crate::IN2M);
+    Some(Rect::new(-w / 2.0, -d / 2.0, w, d))
+}
+
+/// `_reinforcement_prefer_point` (main.gd:10404-10408): the point the automatic
+/// search sorts its candidate slots by — the owner's own back edge, so a copy
+/// comes back behind its own lines unless that edge is full. EVERY band stays
+/// legal; this only decides which legal slot is taken first, and it rides in
+/// through `arrive_one`'s `objectives`, whose score is exactly the distance to
+/// the nearest listed point.
+fn reinforcement_prefer(table: &Rect, player: i64) -> (f64, f64) {
+    let frac = if player == 1 { 0.05 } else { 0.95 };
+    (table.pos.0 + table.size.0 * 0.5, table.pos.1 + table.size.1 * frac)
+}
+
+/// `_reinforcement_blockers` (main.gd:10392-10402): every standing base a
+/// returning model may not overlap. A unit in reserve stands nowhere, so it
+/// projects nothing.
+fn live_bases(st: &State) -> Vec<Occupied> {
+    (0..st.units())
+        .filter(|&i| !st.dormant[i] && st.alive[i] > 0)
+        .flat_map(|i| {
+            st.positions[i]
+                .iter()
+                .zip(&st.radii[i])
+                .map(|(p, r)| Occupied { pos: (p[0], p[2]), radius: *r })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// Half 1 — every promised copy that is due lands, in registration order
+/// (`reinforcement_due`, solo_controller.gd:6041-6051, "stable order:
+/// registration order"). A copy with no legal spot KEEPS its date rather than
+/// evaporating (:6046, main.gd:10315-10320).
+///
+/// `reinforcement_used` is what marks a dormant unit as a Reinforcement
+/// promise rather than an ambusher waiting its turn — the two share
+/// `State.dormant`, and the plain Ambush arrival is not this driver's beat.
+fn reinforcement_arrivals(statics: &[UnitStatic], terrain: &Terrain, st: &mut State) {
+    let Some(table) = table_rect(terrain) else {
+        return;
+    };
+    let due: Vec<usize> = (0..st.units())
+        .filter(|&i| {
+            st.dormant[i]
+                && st.reinforcement_used[i]
+                && st.earliest_arrival_round[i] >= 0
+                && st.earliest_arrival_round[i] <= st.round
+        })
+        .collect();
+    if due.is_empty() {
+        return;
+    }
+    let mut occupied = live_bases(st);
+    for i in due {
+        let pi = st.roster.profile[i];
+        let band_m = statics[pi].reinforcement.within_in * crate::IN2M;
+        if band_m <= 0.0 {
+            continue;
+        }
+        let p = &st.profiles.list[pi];
+        let n = st.dormant_models[i].max(1) as usize;
+        let (base_r, radius) = (p.base_radius, deployment::deploy_footprint_radius(n, p.base_radius));
+        let footprint = deployment::deploy_footprint_offsets(n, p.base_radius, false);
+        // The p.13 difficult-terrain exemption the arrival branches on, the
+        // same two names `arrival_reads` reads (nml-core-py/src/lib.rs:1081).
+        let flying = has_special_rule(&p.special_rules, "Flying")
+            || has_special_rule(&p.special_rules, "Strider");
+        // NO enemy ring and NO beacon. The maintainer's pinned reading
+        // (solo_controller.gd:5970-5972): "The landing zone is LITERAL — 12" of
+        // ANY edge, the enemy's included. The book names a minimum distance
+        // from enemies for Ambush and deliberately does not here, so neither
+        // do we."
+        let spot = deployment::arrive_one(
+            &ArrivalZone::EdgeStrip { table, band_m },
+            &[reinforcement_prefer(&table, st.player[i])],
+            &mut occupied,
+            &[],
+            &[],
+            0.0,
+            terrain,
+            radius,
+            &footprint,
+            base_r,
+            flying,
+        );
+        if !spot.0.is_finite() {
+            continue; // the band is full — the promise keeps its date
+        }
+        let round = st.round;
+        deployment::arrive_unit(st, i, spot, round);
+    }
+}
+
+/// Half 2 — every eligible carrier steps off the table. Deterministic, no dice
+/// and no knob, exactly as NACHTMAHR plays it (`_solo_reinforcement_ai_offers`,
+/// main.gd:10262-10274): a Shaken or destroyed unit is worth far more as a
+/// fresh full-strength copy than as a marker, and the rule costs nothing.
+///
+/// TWO DECLARED SIMPLIFICATIONS, never silent:
+///   * A carrier with a JOINED HERO does not withdraw here. The table detaches
+///     the hero and leaves him standing (main.gd:10225-10235); the core has no
+///     detach transition at all — `attached_to` is written by the loader and
+///     by nothing else — so inventing one is a seam of its own. Refusing is
+///     the conservative direction: the rule fires less often, never wrongly.
+///   * The offer is not priced. The table takes it whenever the rule may fire,
+///     and so does this; there is no "is the copy worth more here" heuristic
+///     on either side to port.
+fn reinforcement_withdrawals(statics: &[UnitStatic], st: &mut State) {
+    for i in 0..st.units() {
+        if st.dormant[i] || st.reinforcement_used[i] {
+            continue;
+        }
+        let r = statics[st.roster.profile[i]].reinforcement;
+        // `once` is READ as the reason a spent unit never withdraws again. A
+        // hypothetical `once: false` entry (none ships) is declined outright
+        // rather than half-modelled: the core has ONE roster index for the
+        // original and its copy, so it has no second marker with which to tell
+        // "promise pending" from "promise spent" — the table keeps two
+        // (`reinforcement_due_round` and `reinforcement_spent`, main.gd:10253/
+        // :10344) because it has two GameUnits.
+        if r.within_in <= 0.0 || !r.once {
+            continue;
+        }
+        if !st.attached[i].is_empty() || st.attached_to[i].is_some() {
+            continue;
+        }
+        // "is Shaken or fully destroyed" — the offer stands for as long as the
+        // unit IS Shaken, not only in the round it became so (:5971).
+        if !st.shaken[i] && st.alive[i] > 0 {
+            continue;
+        }
+        let round = st.round;
+        deployment::withdraw_as_destroyed(st, i, round);
+        st.reinforcement_used[i] = true;
+    }
+}
+
 pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
     cur.round += 1;
     // `counts` is a Dictionary keyed by player id: insertion order is first

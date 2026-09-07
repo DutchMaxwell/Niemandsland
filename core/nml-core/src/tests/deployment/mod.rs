@@ -6,10 +6,15 @@
     use super::*;
     // Tests exercise "the current epoch" generically (bumped forward each
     // wave); production reads the FROZEN `EPOCH_7_TABLE_RULES` instead.
-    use crate::acts::{read_act_header, CURRENT_RULES_EPOCH};
-    use crate::io;
+    use crate::acts::{read_act_header, Knobs, CURRENT_RULES_EPOCH};
+    use crate::io::{self, Seams};
+    use crate::menu::Candidate;
+    use crate::playout::Policy;
+    use crate::rollout::{reinforcement_round_start, Rollout};
     use crate::rules::Registries;
+    use crate::sim::Scratch;
     use crate::state::{ProfileCache, State};
+    use crate::terrain::PlainTerrain;
     use crate::unit::UnitStatic;
 
     /// The checkout this crate lives in — mirrors `tests/rollout/mod.rs`.
@@ -29,6 +34,20 @@
     fn statics_of(st: &State, epoch: u32) -> Vec<UnitStatic> {
         let mut reg = Registries::new(&repo_root());
         st.profiles.list.iter().map(|p| UnitStatic::build_for(&mut reg, p, epoch)).collect()
+    }
+
+    /// A 6x4 ft board with no cells, no sandbox and no walls: `spot_blocked`
+    /// answers false everywhere, so the ZONE decides the spot and nothing else
+    /// does. The table extent is what the driver measures the 12" band
+    /// against, so it cannot be `Terrain::default()`.
+    fn empty_board() -> Terrain {
+        let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+            "cells": [], "sandbox": [], "walls": [],
+            "cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0,
+                            "grid_size_inches": 6.0, "inches_to_meters": crate::IN2M},
+        }))
+        .expect("plain terrain");
+        Terrain::build(&plain)
     }
 
     mod reinforcement;
