@@ -1,12 +1,15 @@
 extends GdUnitTestSuite
 ## E2E — the SELF-PLAY ARENA round loop resolves Coordinate (wave 4, GF/AoF Human Defense Force).
 ##
-## WHY THIS SUITE EXISTS. The live table resolves a Coordinate hand-over at the end of the BEARER's
-## activation (main `_solo_try_coordinate_ai`, called from the AI activation body): the receiver is
-## stamped `activated_via_coordinate` and activates IMMEDIATELY, riding the bearer's own beat. The
-## both-AI arena driver (`main._solo_run_both_ai_round`) is the loop every recorded corpus game is
-## played through — if it does not run the same seam, no recorded game can ever show a hand-over on
-## the table side and the core plays a rule the corpus never contains (table-parity audit B, 07.09.).
+## WHY THIS SUITE EXISTS. Table-parity audit B (07.09., off PR #780's own body) claimed the both-AI
+## arena driver never resolves a Coordinate hand-over — that the table resolves the rule only in
+## `_solo_after_activation` (the human-facing solo seam), so no recorded corpus game could ever show
+## a hand-over. That row is REFUTED, and this suite is the proof: the table's Coordinate resolution
+## lives in the AI activation body (`main._solo_activate_one_ai_body` → `_solo_try_coordinate_ai`,
+## main.gd:1114), which the arena driver reaches at main.gd:1935 — the SAME seam the live table
+## plays. Both tests below ran GREEN against unmodified main on the box (job
+## w3_20260907T183553Z_1058297_067f3e); they stay as the parity pin so the seam cannot silently
+## drift again, and as the instrument for audit B's correction.
 ##
 ## WHAT IS REAL vs CONSTRUCTED. Real: `scenes/main.tscn` with its real `_ready()`, the real
 ## OPRArmyManager and phase machine, the real SoloController and its Coordinate bookkeeping, the
@@ -86,16 +89,16 @@ func _count_activations(unit_name: String) -> int:
 
 # === the arena driver resolves the Coordinate hand-over ========================================
 
-## The core claim. P1 fields one Coordinate carrier against one plain P2 unit, with one friendly
+## The pin. P1 fields one Coordinate carrier against one plain P2 unit, with one friendly
 ## receiver right beside the carrier. The receiver is Shaken, so the seeded pick activates the
 ## carrier first (fresh units before Shaken idlers) and the driver must then run the SAME end-of-
 ## activation seam the live table runs: stamp the receiver `activated_via_coordinate` and activate
 ## it IMMEDIATELY, riding the carrier's own activation.
 ##
-## ROT: without the seam in the arena driver's activation loop the receiver is a Shaken idler the
+## Without the seam in the arena driver's activation loop the receiver would be a Shaken idler the
 ## round loop never picks (fresh units first, both pools empty after one activation each) — it
-## never activates, the stamp never lands and the rule line never appears (proven — table-parity
-## audit B, 07.09.).
+## would never activate, the stamp would never land and the rule line would never appear. This is
+## exactly the state audit B's row predicted; the box run shows the real driver does none of it.
 func test_the_arena_driver_resolves_a_coordinate_handover(timeout := 120000) -> void:
 	var carrier := _carrier(1, "Line Officer", P1_LINE)
 	var receiver := _register(1, "Line Troops", P1_LINE + Vector3(0.05, 0.0, 0.0))
@@ -153,10 +156,9 @@ func test_a_round_without_a_carrier_is_unchanged(timeout := 120000) -> void:
 		.override_failure_message("a plain unit carries the activated_via_coordinate stamp") \
 		.is_false()
 	var log_text := _log_text()
-	for e in _main.battle_log.entries():
-		assert_str(str((e as Dictionary)["text"])) \
-			.override_failure_message("a Coordinate rule line appeared in a carrierless round:\n%s" % log_text) \
-			.contains("Coordinate").is_false()
+	assert_bool(log_text.contains("Coordinate")) \
+		.override_failure_message("a Coordinate rule line appeared in a carrierless round:\n%s" % log_text) \
+		.is_false()
 	assert_int(last_side) \
 		.override_failure_message("round returned %d — the plain alternation did not settle last_side" % last_side) \
 		.is_equal(2)
