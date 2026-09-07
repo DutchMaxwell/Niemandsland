@@ -1423,8 +1423,8 @@ static func _below_half(su: Dictionary) -> bool:
 ## otherwise the quality target's fail chance, halved by the Fearless re-roll
 ## (advanced p.13), fails when it reaches 50% — Q4+ crowds break, Q3 elites and
 ## Fearless hold. Gap 18a: the Banner/attached-hero bonus rides in on the snapshot
-## (capture stamps it) — the default 0 keeps hand-built states byte-identical. Fear
-## and spell mods are still v0 gaps, noted for the parity wave.
+## (capture stamps it) — the default 0 keeps hand-built states byte-identical. Spell
+## mods are still a v0 gap, noted for the parity wave.
 static func _morale_fails_expected(su: Dictionary) -> bool:
 	if bool(su.get("shaken", false)):
 		return true
@@ -1453,10 +1453,13 @@ static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_
 
 ## Melee morale (p.10 via main.gd's flow): the side that dealt FEWER wounds
 ## tests (tie = nobody); an expected fail at/below half is a ROUT — the loser
-## leaves the board. Fear's comparison bonus is a v0 gap, noted.
+## leaves the board. Fear(X) counts as having dealt +X wounds for the COMPARISON
+## only (p.13; the same AiCombatMath.fear_adjusted_wounds the table path uses).
 static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionary, tu_before: int) -> void:
-	var dealt_by_su := tu_before - _wounds_left(tu)
-	var dealt_by_tu := su_before - _wounds_left(su)
+	var dealt_by_su := AiCombatMath.fear_adjusted_wounds(tu_before - _wounds_left(tu),
+		AiEv.unit_rating(su["unit"], "Fear"))
+	var dealt_by_tu := AiCombatMath.fear_adjusted_wounds(su_before - _wounds_left(su),
+		AiEv.unit_rating(tu["unit"], "Fear"))
 	if dealt_by_su == dealt_by_tu:
 		return
 	var loser: Dictionary = tu if dealt_by_su > dealt_by_tu else su
