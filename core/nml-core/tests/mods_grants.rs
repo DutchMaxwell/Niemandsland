@@ -101,6 +101,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         vengeance_markers: vec![0; 2],
         growth_round: vec![-1; 2],
         second_wind_used: vec![false; 2],
+        reinforcement_used: vec![false; 2],
         second_wind_round: -1,
         second_wind_uses: 0,
         sidestep_budget: Default::default(),

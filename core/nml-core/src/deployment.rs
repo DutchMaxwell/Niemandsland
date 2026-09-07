@@ -2478,6 +2478,47 @@ pub fn arrive_one(
 ///
 /// Arriving is DEPLOYMENT, not an activation — `activated` is deliberately not
 /// touched, so the unit can still act this round (:10121).
+/// S5, the seam the core has never had: a live unit leaves the table INTO
+/// reserve. `arrive_unit` below is its inverse, and the two disagree on
+/// exactly one thing — `arrive_unit` restores the strength a unit PARKED, this
+/// parks a FRESH one. That is the rule, not an oversight: Ambush
+/// Re-Deployment withdraws a damaged unit and gets the damaged unit back
+/// (:9951-9958), while Reinforcement removes the unit "as destroyed" and
+/// places "a new COPY of it" (main.gd:10303-10307 rebuilds the copy at full
+/// starting size from the original's own army-list entry).
+///
+/// The table has two GameUnits for this — the original stays off the table
+/// with a spent stamp, the copy is a new runtime unit — and the core has ONE
+/// roster index, so the copy comes back at the same index. `reinforcement_used`
+/// is what stands in for "the copy does not have the rule".
+///
+/// Shaken and Fatigue go with the unit that left (main.gd:10237-10240 clears
+/// both at the sacrifice): the copy arrives fresh, and a Shaken flag surviving
+/// the withdraw would return a unit already in the state that triggered it.
+/// `activated` is deliberately NOT touched — the withdraw is not an
+/// activation, exactly as the arrival is not one.
+pub fn withdraw_as_destroyed(st: &mut crate::state::State, i: usize, round_no: i64) {
+    let n = st.profiles.list[st.roster.profile[i]].model_count.max(1);
+    let mut wounds = st.profiles.list[st.roster.profile[i]].wounds_max.clone();
+    // A header that ships fewer `wounds_max` entries than models would hand
+    // `arrive_unit` a short wounds vector for a full-strength unit; pad with
+    // the last profiled model rather than returning a unit that cannot be
+    // indexed.
+    let fallback = wounds.last().copied().unwrap_or(1);
+    wounds.resize(n as usize, fallback);
+    st.dormant_models[i] = n;
+    st.dormant_wounds[i] = wounds;
+    st.positions[i] = Vec::new();
+    st.wounds[i] = Vec::new();
+    st.radii[i] = Vec::new();
+    st.alive[i] = 0;
+    st.shaken[i] = false;
+    st.fatigued[i] = false;
+    st.dormant[i] = true;
+    st.ambush_arrived_round[i] = -1;
+    st.earliest_arrival_round[i] = round_no + 1;
+}
+
 pub fn arrive_unit(st: &mut crate::state::State, i: usize, spot: (f64, f64), round_no: i64) {
     let n = st.dormant_models[i].max(0) as usize;
     let base_r = st.profiles.list[st.roster.profile[i]].base_radius;
@@ -2490,3 +2531,7 @@ pub fn arrive_unit(st: &mut crate::state::State, i: usize, spot: (f64, f64), rou
     st.earliest_arrival_round[i] = -1;
     st.ambush_arrived_round[i] = round_no;
 }
+
+#[cfg(test)]
+#[path = "tests/deployment/mod.rs"]
+mod family_tests;

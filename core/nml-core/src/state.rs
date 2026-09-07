@@ -511,6 +511,14 @@ pub struct State {
     /// 10474): per unit, ONCE per game — unlike every other ledger flag above,
     /// this never resets on a later round.
     pub second_wind_used: Vec<bool>,
+    /// Wave 4 — `unit_properties["reinforcement_spent"]` (main.gd:10344): the
+    /// S5 withdraw-and-recreate promise, kept ONCE per unit and never reset on
+    /// a later round, the `second_wind_used` shape. It is a per-UNIT flag and
+    /// not a static, because the table's copy is a different GameUnit that has
+    /// LOST the rule (`reinforcement_copy_rules`, solo_controller.gd:6055)
+    /// while the core has one roster index for both — the statics are per
+    /// PROFILE, so the two instances would share one.
+    pub reinforcement_used: Vec<bool>,
     /// `army_manager.rule_state["second_wind_round_uses"]` (solo_controller.
     /// gd:10401-10411): the army-wide (single `ai_slot` on the table) count of
     /// Second Winds granted in `second_wind_round`; -1 = never counted.

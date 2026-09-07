@@ -1208,6 +1208,7 @@ mod tests {
             vengeance_markers: vec![0; n],
             growth_round: vec![-1; n],
             second_wind_used: vec![false; n],
+            reinforcement_used: vec![false; n],
             second_wind_round: -1,
             second_wind_uses: 0,
             sidestep_budget: Default::default(),

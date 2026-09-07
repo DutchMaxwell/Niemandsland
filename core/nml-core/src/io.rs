@@ -203,6 +203,14 @@ pub(crate) struct PlainLedger {
     /// 10474), per unit, ONCE per game (no "round" derivation, unlike growth).
     #[serde(default)]
     second_wind_used: bool,
+    /// Wave 4 — `unit_properties["reinforcement_spent"]` (main.gd:10344), the
+    /// S5 withdraw-and-recreate promise, once per unit and never reset. Absent
+    /// from every corpus recorded before this key, and `false` there — so an
+    /// old act replays with the rule unspent, exactly as it did. Without the
+    /// row a replayed act would let a unit the TABLE already returned withdraw
+    /// a second time: the `#493`/`#498` divergence shape.
+    #[serde(default)]
+    reinforcement_used: bool,
     /// Wave 3 — the Storm Attack family's once-per-game flags (main.gd:17244
     /// writes `storm_used_<snake>`), recorded as the DISPLAY names whose flag
     /// stands (act_recorder.gd `_ledger_of`). Empty on every older corpus.
@@ -728,6 +736,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         vengeance_markers: vec![0; n],
         growth_round: vec![-1; n],
         second_wind_used: vec![false; n],
+        reinforcement_used: vec![false; n],
         second_wind_round: -1,
         second_wind_uses: 0,
         sidestep_budget: plain.sidestep_budget,
@@ -831,6 +840,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
             }
             st.vs_mark_round[ui] = ledger.vs_mark_round;
             st.second_wind_used[ui] = ledger.second_wind_used;
+            st.reinforcement_used[ui] = ledger.reinforcement_used;
             st.storm_used[ui] = ledger.storm_used.clone();
             st.growth_markers[ui] = ledger.growth;
             st.vengeance_markers[ui] = ledger.vengeance_markers;
