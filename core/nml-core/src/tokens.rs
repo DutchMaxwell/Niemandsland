@@ -940,6 +940,7 @@ mod tests {
         rep!(growth_markers);
         rep!(growth_round);
         rep!(second_wind_used);
+        rep!(reinforcement_used);
         big.attached = Rc::new((0..n).map(|_| Vec::new()).collect());
         big.attached_to = Rc::new((0..n).map(|_| None).collect());
         let mut enc = RowEncoder::new(&repo_root());

@@ -405,6 +405,11 @@ static func _stamp_gate_reads(state: Dictionary, plain: Dictionary) -> void:
 ##   second_wind_used   unit_properties["second_wind_used"] (solo_controller.gd:10474) — Second
 ##                       Wind's ONCE-per-game flag (block B8), the simplest ledger shape here:
 ##                       no round derivation, it never resets.
+##   reinforcement_used unit_properties["reinforcement_spent"] (main.gd:10344) — Reinforcement's
+##                       once-per-GAME promise, the second_wind_used shape (no round derivation,
+##                       it never resets). Recorded under the CORE's field name: the table keeps
+##                       the flag on the original and hands the copy a rules list without the
+##                       rule, while the core has one roster index for both.
 ##   activated_via_coordinate
 ##                      unit_properties["activated_via_coordinate"] (game_unit.gd:324) —
 ##                       Coordinate's anti-chain stamp, a bool the round reset erases, so it
@@ -425,6 +430,13 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 		ledger["delayed_action_round"] = dar
 	if bool(u.unit_properties.get("second_wind_used", false)):
 		ledger["second_wind_used"] = true
+	# Wave 4 — Reinforcement's once-per-game promise (main.gd:10344). Without it the core
+	# replays every act with the rule UNSPENT and could withdraw a unit the table has already
+	# brought back — the #493/#498 divergence shape, one seam over. The key is renamed to the
+	# core's own field: on the table the flag sits on the ORIGINAL, which stays off the table,
+	# while the core has one roster index for the original and its copy.
+	if bool(u.unit_properties.get("reinforcement_spent", false)):
+		ledger["reinforcement_used"] = true
 	# Wave 4 — Coordinate's anti-chain stamp (GameUnit.was_activated_via_coordinate,
 	# game_unit.gd:328). A BOOL, erased at the round reset, so its presence already
 	# means "this round"; the core folds it into its own round stamp. Without it a

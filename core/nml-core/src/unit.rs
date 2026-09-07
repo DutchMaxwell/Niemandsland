@@ -900,6 +900,10 @@ pub struct UnitStatic {
     /// own params (`ambush_family_of`). Every field is its zero-value when the
     /// unit carries no such name or the record predates `rules_epoch` 4.
     pub ambush_family: AmbushFamily,
+    /// Wave 4 — the S5 withdraw-and-recreate rule's two read params. Default
+    /// (`within_in == 0.0`) below `EPOCH_7_TABLE_RULES` and for every
+    /// non-carrier.
+    pub reinforcement: Reinforcement,
     /// "Re-Deployment" (the deployment-phase redeploy: gf 13 + aof 2 carrier
     /// factions): the entry's own `max_units` param, stamped per carrier.
     /// The table reads it at `solo_controller.gd:9642` with fallback 2
@@ -3094,6 +3098,48 @@ pub struct AmbushFamily {
     pub re_reserve_uses: i64,
 }
 
+/// `REINFORCEMENT_EDGE_IN` (solo_controller.gd:5981) — the landing band's
+/// depth when the registry entry carries no `within_in`. 12" in all four
+/// shipped books.
+pub const REINFORCEMENT_EDGE_IN: f64 = 12.0;
+
+/// `SoloController`'s Reinforcement block (solo_controller.gd:5963-6150): the
+/// two params of the mechanics entry the core reads. The other four
+/// (`trigger`, `redeploy`, `timing`, `no_objective_on_arrival`) are the shape
+/// of the seam itself and are answered by where the beat sits, not by a field.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Reinforcement {
+    /// `params.within_in` — the band's depth in inches. `0.0` means "not a
+    /// carrier", the `coordinate_range_in` shape: a carrier without a landing
+    /// zone cannot come back at all.
+    pub within_in: f64,
+    /// `params.once` — the promise is kept ONCE. The table keeps it twice
+    /// over: a spent stamp on the original (`reinforcement_spent`,
+    /// main.gd:10344) and a copy that no longer carries the rule
+    /// (`reinforcement_copy_rules` :6055). The core has one unit index for
+    /// both, so the flag is all it has.
+    pub once: bool,
+}
+
+/// `UnitStatic.reinforcement` — read BY NAME behind the FROZEN
+/// `EPOCH_7_TABLE_RULES`; a record below 7 keeps the default and never
+/// withdraws. `Grounded Reinforcement` and `Grounded Reinforcement Aura` are
+/// DIFFERENT rules under other primitives (`sim.rs:1837`, `unit.rs:2281`) —
+/// `unit_rule_active`'s exact-name match is what keeps them apart.
+fn reinforcement_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Reinforcement {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) || !unit_rule_active(reg, p, "Reinforcement") {
+        return Reinforcement::default();
+    }
+    let map = reg.rules_for(&p.game_system);
+    match map.lookup(&p.faction_folder, "Reinforcement") {
+        Some(e) => Reinforcement {
+            within_in: e.param_f("within_in", REINFORCEMENT_EDGE_IN),
+            once: e.param_b_or("once", true),
+        },
+        None => Reinforcement { within_in: REINFORCEMENT_EDGE_IN, once: true },
+    }
+}
+
 /// The Ambush family's per-profile read (`UnitStatic.ambush_family`): each
 /// name gated by `unit_rule_active` — the unit carries it AND the map fields
 /// it for this (system, faction) — with the entry's own params on top.
@@ -4450,6 +4496,7 @@ impl UnitStatic {
                 0.0
             },
             ambush_family: ambush_family_of(reg, p, rules_epoch),
+            reinforcement: reinforcement_of(reg, p, rules_epoch),
             re_deployment_max_units: re_deployment_max_units_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             storm: storm_of(reg, p, rules_epoch),
