@@ -1544,6 +1544,7 @@ mod quick_shot;
 mod reckless_piercing;
 mod reposition_artillery;
 mod retaliate;
+mod retreating_strike;
 mod second_wind;
 mod second_wind_score;
 mod split_fire;
