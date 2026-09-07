@@ -105,7 +105,7 @@ def test_census_matrix_red_knob_and_test_gate(mini):
     assert off_book["encoder_slot"] is False
     assert off_book["aura_live"] is False
 
-    tokens, _comments = census.scan_rust(root)
+    tokens, _name_tokens, _comments = census.scan_rust(root)
     assert "furious" in tokens
     assert "ghostrule" not in tokens, "a test-gated literal must not be evidence"
 
@@ -575,6 +575,68 @@ def test_universe_includes_common_json_core_rulebook_names(tmp_path):
     assert res["rows"]["Limited"]["per_system"]["gf"]["core"] == "MISSING"
 
 
+def test_primitive_literal_is_not_a_name_read(tmp_path):
+    """2026-09-07 (census-name-read fix): a string literal compared against
+    `.primitive` (`.primitive.as_deref() == Some("X")`, a `primitive:` field)
+    is PRIMITIVE-CLASS evidence, never a rule-NAME read. The Fatigue Debuff
+    port's `.filter(|e| e.primitive.as_deref() == Some("Mind Control"))`
+    (unit.rs:2826) must not credit the rule NAME "Mind Control" - the
+    thermometer must not measure its own mercury. A synthetic core snippet
+    whose ONLY occurrence of the name is a primitive literal must leave the
+    name uncounted (MISSING); a genuine name-token read (a literal compared
+    against a rule name) still counts PORTED."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
+        "common": {
+            "Mind Grab": {"primitive": "Mind Grab", "params": {}},
+            "Named Read": {"primitive": "Named Read", "params": {}},
+        },
+        "factions": {},
+    }))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    (root / "core/nml-core/src/arm.rs").write_text(
+        '// the Fatigue Debuff shape: a PRIMITIVE filter for a sister rule\n'
+        'fn fatigue_gate(entries: &[Entry]) -> usize {\n'
+        '    entries.iter()\n'
+        '        .filter(|e| e.primitive.as_deref() == Some("Mind Grab"))\n'
+        '        .count()\n'
+        '}\n'
+        '\n'
+        'fn named_gate(name: &str) -> bool {\n'
+        '    name == "Named Read"\n'
+        '}\n'
+    )
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [{"name": "Mind Grab"}, {"name": "Named Read"}],
+    }))
+    res = census.census(tmp_path / "books", root)
+    per = res["rows"]
+    assert per["Mind Grab"]["per_system"]["gf"]["core"] == "MISSING", (
+        "a .primitive comparison literal is not a rule-NAME read - the name"
+        " must stay uncounted"
+    )
+    assert per["Named Read"]["per_system"]["gf"]["core"] == "PORTED", (
+        "a literal compared against a rule name is a genuine name read -"
+        " control"
+    )
+    tokens, name_tokens, _comments = census.scan_rust(root)
+    assert "mind_grab" in tokens, (
+        "the primitive literal stays primitive-class evidence in the full"
+        " token map"
+    )
+    assert "mind_grab" not in name_tokens, (
+        "the primitive literal must not enter the name-read token map"
+    )
+    assert "named_read" in name_tokens
+    assert res["summary"]["core_ported"] == 1
+
+
 def test_cli_prints_summary_and_writes_json(mini, tmp_path, capsys):
     root, books = mini
     out_json = tmp_path / "out" / "census.json"
@@ -645,7 +707,7 @@ def test_split_out_test_module_under_src_tests_is_not_core_evidence(mini):
     assert "mod.rs" not in kept, "src/tests/** is test code that lives in src"
     assert "rules.rs" not in kept
 
-    tokens, _comments = census.scan_rust(root)
+    tokens, _name_tokens, _comments = census.scan_rust(root)
     assert "ghostmoved" not in tokens, (
         "a literal in a split-out test module must not be core evidence"
     )
