@@ -234,6 +234,20 @@ def _arena_roll_off(rng: "nml_core.Rng") -> list[list[int]]:
     return attempts
 
 
+def _gate_transport_fill(roster: list[dict[str, Any]], rules_epoch: int) -> None:
+    """The wave-4 frozen-constant gate over the loader's live Transport(X)
+    read (list_to_profile.deploy_unit_specs -> UnitSpec.transport_capacity):
+    a record stamped below `EPOCH_7_TABLE_RULES` replays the transport-free
+    seam — every capacity zeroed, deployment.rs::transport_fill draws nothing,
+    byte-identical to the pre-port code. This is `rule_on`'s loader-side leg:
+    the read lives py-side (the loader builds the UnitSpec), so the gate does
+    too, and the constant comes off `nml_core` — never the literal 7, so a
+    later epoch bump cannot silently re-arm old records."""
+    if rules_epoch < nml_core.EPOCH_7_TABLE_RULES:
+        for spec in roster:
+            spec["transport_capacity"] = 0
+
+
 def _deploy_arena(
     seed: int,
     units1: list[dict[str, Any]],
@@ -244,6 +258,7 @@ def _deploy_arena(
     objectives: list[list[float]],
     opener: int,
     interleave: bool = False,
+    rules_epoch: int = nml_core.CURRENT_RULES_EPOCH,
 ) -> tuple[list[list[list[float]]], list[list[list[float]]], set[str], list[list[Any]]]:
     """The table's pre-game through the step-7 binding: `deploy_side` per side
     with the per-side stream `seed + slot` (arena_match.gd:486-488 — the game
@@ -267,6 +282,7 @@ def _deploy_arena(
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         roster[slot], fold = deploy_unit_specs(data, _faction_from_path(path), int(slot))
+        _gate_transport_fill(roster[slot], rules_epoch)
         hero_fold.update(fold)
     objs2 = [[o[0], o[2]] for o in objectives]
     sequence: list[list[Any]] = []
@@ -2696,7 +2712,7 @@ def play_game(
         opener = 1 if roll_attempts[-1][0] >= roll_attempts[-1][1] else 2
         pos1, pos2, reserved, deploy_seq = _deploy_arena(
             seed, units1, units2, list_p1, list_p2, board, objectives, opener,
-            eff_deployment == "interleaved",
+            eff_deployment == "interleaved", rules_epoch=rules_epoch,
         )
     elif deploy_rng_seed is None:
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
