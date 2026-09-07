@@ -176,6 +176,7 @@ use super::*;
         let (_, shot) = run_action(&st, &statics, &action, 11, 7);
         eprintln!("RP-VOLLEY-DEBUG rolls: {:#?}", shot.rolls.iter().map(|r| (r.kind, r.target, r.count)).collect::<Vec<_>>());
         eprintln!("RP-VOLLEY-DEBUG log: {:#?}", shot.log);
+        assert!(shot.rolls.iter().any(|r| r.kind == "defense"), "no save batch at all");
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
             "stamped attacker: the saves run at AP(1) — got {:#?}",
@@ -242,6 +243,7 @@ use super::*;
             charge: Some("b".into()), patient: false, split: None, traced: None,
         };
         let (_, shot) = run_action(&st, &statics, &charge, 11, 7);
+        assert!(shot.rolls.iter().any(|r| r.kind == "defense"), "melee: no save batch at all");
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
             "backfire: the melee saves run at AP(1) -- got {:#?}",
