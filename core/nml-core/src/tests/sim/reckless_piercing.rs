@@ -60,6 +60,18 @@ use super::*;
         .unwrap()
     }
 
+    /// Consumption runs need their OWN action: the stamp tests ride HOLD
+    /// (the pre-attack slot fires on every kind), the volley leg shoots "b",
+    /// the melee leg charges it.
+    fn run_action(st: &State, statics: &[UnitStatic], action: &Action, seed: i64, rules_epoch: u32) -> (State, ShootResult) {
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(seed);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let seams = Seams { rules_epoch, movement: true, ..Seams::default() };
+        resolve_stochastic_tray_on_board(statics, st, action, &terrain, seams, &mut rng, &mut tray)
+            .unwrap()
+    }
+
     /// The stamp: the REAL registry entry (self-named primitive, params
     /// `roll_target: 2, ap_bonus: 1, backfire_ap: 1`) lands on the statics
     /// behind the FROZEN `EPOCH_7_TABLE_RULES` — present at 7, absent at 6.
@@ -149,7 +161,11 @@ use super::*;
         b.ctx.defense = 4;
         b.ctx.tough = 1;
         let statics = vec![a, UnitStatic { name: "ah".into(), ..Default::default() }, b, UnitStatic { name: "bh".into(), ..Default::default() }];
-        let (_, shot) = run_rp(&st, &statics, 11, 7);
+        let action = Action {
+            kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()),
+            charge: None, patient: false, split: None, traced: None,
+        };
+        let (_, shot) = run_action(&st, &statics, &action, 11, 7);
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
             "stamped attacker: the saves run at AP(1) — got {:#?}",
@@ -163,7 +179,7 @@ use super::*;
         // No stamp: the plain Defense-4 window.
         let (mut st0, _) = rp_line(7, &[]);
         st0.reckless_ap_round[0] = -1;
-        let (_, shot0) = run_rp(&st0, &statics, 11, 7);
+        let (_, shot0) = run_action(&st0, &statics, &action, 11, 7);
         assert!(
             shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 4)
                 && !shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
@@ -190,17 +206,18 @@ use super::*;
         b.ctx.defense = 4;
         b.ctx.tough = 1;
         let statics = vec![a, UnitStatic { name: "ah".into(), ..Default::default() }, b, UnitStatic { name: "bh".into(), ..Default::default() }];
+        // A CHARGE needs contact: the fixture line sits 12" apart, the charge
+        // move brings the charger in (the `movement` seam is on in
+        // `run_action`, the table's own M4 port).
+        st.positions[1] = vec![];
+        st.positions[2] = vec![[3.0 * IN2M, 0.0, 0.0]];
+        st.radii[2] = vec![IN2M];
+        st.positions[3] = vec![];
         let charge = Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
             charge: Some("b".into()), patient: false, split: None, traced: None,
         };
-        let terrain = crate::terrain::Terrain::default();
-        let mut tray = Tray::seeded(11);
-        let mut rng = crate::rng::GodotRng::new(0);
-        let (_, shot) = resolve_stochastic_tray_on_board(
-            &statics, &st, &charge, &terrain, Seams::default(), &mut rng, &mut tray,
-        )
-        .unwrap();
+        let (_, shot) = run_action(&st, &statics, &charge, 11, 7);
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
             "backfire: the melee saves run at AP(1) — got {:#?}",
