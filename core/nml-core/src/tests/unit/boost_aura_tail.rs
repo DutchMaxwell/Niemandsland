@@ -1839,6 +1839,16 @@ use super::*;
         );
         assert_eq!(
             wave3_static_of("Rapid Rush", "gf", "battle_brothers", 6).move_rule_mods,
+            None,
+            "epoch 6: granted, not read (byte-exact)"
+        );
+        assert_eq!(
+            wave3_static_of("", "gf", "battle_brothers", 7).move_rule_mods,
+            None,
+            "no rule, no band"
+        );
+    }
+
     /// "Slow" (gf+aof `common`, Slow primitive — wave-5 bounded stamp,
     /// rules-slow, epoch 7): "This model is slowed ... -2\" Advance, -4\"
     /// Rush/Charge". The named arm in `move_rule_mods_of` reads the entry's
@@ -1865,7 +1875,6 @@ use super::*;
             "epoch 6: granted, not read (byte-exact)"
         );
         assert_eq!(
-            wave3_static_of("", "gf", "battle_brothers", 7).move_rule_mods,
             wave3_static_of("", "gf", "robot_legions", 7).move_rule_mods,
             None,
             "no rule, no band"
