@@ -7026,6 +7026,16 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 				if not AiEv.facet_applies(p2, int(profile.get("range", 0))):
 					continue
 				return true
+		# Wave-4 family: the Rending aliases ("Rending in Melee" — entry bypass_regen + melee_only)
+		# sit on the MODEL too (direct or aura-granted). The Lacerate loop above never consulted
+		# them, so the entry's Regeneration bypass fired only when a weapon carried the name.
+		for e in RulesRegistry.unit_rules_of_primitive(attacker, "Rending"):
+			var edr := e as Dictionary
+			if str(edr["name"]) == "Rending":
+				continue
+			var pr: Dictionary = edr.get("params", {})
+			if bool(pr.get("bypass_regen", false)) and AiEv.facet_applies(pr, int(profile.get("range", 0))):
+				return true
 	# EXACT name (the Ferocious lesson): has_special_rule matches by PREFIX, so the plain-Unstoppable
 	# fallback also answered for "Unstoppable in Melee" / "Unstoppable when Shooting" — which is how
 	# both half-variants cut through Regeneration in BOTH halves no matter what their gate said — and
