@@ -6946,7 +6946,9 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 		var base := RulesRegistry.base_rule_name(str(r))
 		seen[base] = true
 		var params: Dictionary = RulesRegistry.lookup(system, faction, base).get("params", {})
-		if params.has("condition"):
+		# "or gate": a GATE-ONLY spec (Ranged Slayer) carries its range leg in "gate" with no
+		# "condition" — the EV stamp (AiEv.stamp_conditional_ap) accepts the same shape.
+		if params.has("condition") or params.has("gate"):
 			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee)
 			if b > 0:
 				parts.append({"name": base, "bonus": b})
@@ -6958,7 +6960,7 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			continue
 		seen[base] = true
 		var params: Dictionary = RulesRegistry.lookup(system, faction, base).get("params", {})
-		if params.has("condition"):
+		if params.has("condition") or params.has("gate"):
 			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee)
 			if b > 0:
 				parts.append({"name": base, "bonus": b})

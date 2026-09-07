@@ -416,6 +416,13 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 		return 0
 	var over_in: float = float(params.get("over_in", LONG_RANGE_IN))
 	var within_in: float = float(params.get("within_in", 0.0))
+	# Gate-only spec (Ranged Slayer, gf/dao_union 3.5.3): the mechanics map carries the whole range
+	# leg in "gate" ("ranged_over") with NO target-property "condition". The gate IS the condition
+	# then — mirroring the core's named arm (core/nml-core/src/combat.rs:370) — so the match below
+	# fires instead of falling through to 0.
+	var condition := str(params.get("condition", ""))
+	if condition.is_empty() and str(params.get("gate", "")) == "ranged_over":
+		condition = "ranged_over"
 	# Gate "ranged_over_or_charge" (Slayer: "shoots at enemies over 9\" away, or when it charges"):
 	# an ADDITIONAL situational gate on top of the target-property condition. dist_in < 0 = unknown
 	# (a caller without range context) — conservative: the ranged leg never fires blind.
@@ -423,7 +430,7 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 		if not (is_charging or (not melee and dist_in > over_in)):
 			return 0
 	var threshold: int = int(params.get("threshold", 0))
-	match str(params.get("condition", "")):
+	match condition:
 		"vs_tough_ge":
 			return bonus if target_tough >= threshold else 0
 		"vs_armor":
