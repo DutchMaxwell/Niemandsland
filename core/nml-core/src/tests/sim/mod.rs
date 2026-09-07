@@ -1542,6 +1542,7 @@ mod reposition_artillery;
 mod retaliate;
 mod second_wind;
 mod second_wind_score;
+mod spell_accumulator;
 mod split_fire;
 mod versatile_reach;
 mod weapons;

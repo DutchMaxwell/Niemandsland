@@ -673,6 +673,16 @@ pub struct UnitStatic {
     /// `get_caster_value()` (game_unit.gd:420) — the profile's `caster_value`
     /// IS that number.
     pub casts_per_round: i64,
+    /// Wave 4 follow-up (port-spell-accumulator) — the unit carries the
+    /// battery rule ("Casters from other friendly units within 12\" may spend
+    /// this model's accumulator tokens as if they were their own"), read BY
+    /// NAME behind the frozen `EPOCH_7_TABLE_RULES`. The static half of the
+    /// read only: the banking itself is `casts_per_round` (the loader maps
+    /// `Spell Accumulator(X)` onto `caster_value` exactly like the table's
+    /// `get_caster_value`, game_unit.gd:415-425) and the lending leg is
+    /// sim.rs's cast sub-phase. A battery is NEVER `is_caster` (the table's
+    /// own comment: "is_caster() stays false", game_unit.gd:417).
+    pub spell_accumulator: bool,
     /// `RulesRegistry.unit_rule_active(gu, "Battleborn" | "Steadfast")`
     /// (rules_registry.gd:136-142) — the two rules that clear Shaken for free at
     /// a round start (ai_planner.gd:493-495). Static per unit, so the registry
@@ -3977,6 +3987,12 @@ impl UnitStatic {
             spells,
             caster_group: has_special_rule(&p.special_rules, "Caster Group"),
             casts_per_round: p.caster_value,
+            // Wave 4 follow-up (port-spell-accumulator), gated on the FROZEN
+            // `EPOCH_7_TABLE_RULES`: a record below 7 keeps the flag off and
+            // replays byte-exact.
+            spell_accumulator: rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
+                && (has_special_rule(&p.special_rules, "Spell Accumulator")
+                    || has_special_rule(&p.item_grants, "Spell Accumulator")),
             battleborn_active: unit_rule_active(reg, p, "Battleborn"),
             steadfast_active: unit_rule_active(reg, p, "Steadfast"),
             // Battleborn family wave 3 (rules-wave3-battleborn): the four
