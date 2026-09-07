@@ -236,8 +236,8 @@ thread_local! { pub(crate) static TRACE: std::cell::Cell<bool> = std::cell::Cell
 fn tr(s: String) {
     use std::io::Write;
     TRACE.with(|t| if t.get() {
-        // Straight to the process's stderr, past libtest's capture of eprintln.
-        if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open("/dev/stderr") {
+        // A file, past libtest's capture and past the box log's tail window.
+        if let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open("/tmp/gt_026.log") {
             let _ = writeln!(f, "GT {s}");
         }
     })
@@ -1418,6 +1418,7 @@ mod push_trace_026 {
         let terrain = Terrain::build(&serde_json::from_value(case["terrain"].clone()).unwrap());
         let actor = state.roster.index["u01"];
         let target = state.roster.index["u17"];
+        let _ = std::fs::remove_file("/tmp/gt_026.log");
         TRACE.with(|t| t.set(true));
         let mut land = crate::mv::step::MoveRules { rules_epoch: 6 }
             .charge_move(&state, &terrain, actor, target, 16.0, true, true, 320).unwrap();
