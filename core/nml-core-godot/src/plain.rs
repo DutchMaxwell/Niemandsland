@@ -435,6 +435,7 @@ pub fn build_state(
         reckless_rolled_round: vec![-1; n],
         reckless_ap_round: vec![-1; n],
         reckless_backfire_round: vec![-1; n],
+        retreating_strike_round: vec![-1; n],
         growth_markers: vec![0; n],
         growth_round: vec![-1; n],
         second_wind_used: vec![false; n],

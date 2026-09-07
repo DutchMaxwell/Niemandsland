@@ -719,6 +719,9 @@ pub struct UnitStatic {
     /// The Fatigue Debuff read (epoch 7) — the one "Mind Control" entry this
     /// core carries (`fatigue_debuff_of`); empty below `rules_epoch` 7.
     pub fatigue_debuff: Vec<FatigueDebuffSpec>,
+    /// The Retreating Strike read (epoch 7) — the Ravage-alias post-melee
+    /// strike (`retreating_strikes_of`); empty below `rules_epoch` 7.
+    pub retreating_strikes: Vec<RetreatingStrikeSpec>,
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
@@ -2730,6 +2733,48 @@ fn fatigue_debuff_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec
         .collect()
 }
 
+/// One carried "Retreating Strike" entry — main.gd:5849-5877, the post-melee
+/// Hit & Run strike: `maxi(rating,1) x alive` direct-wound dice at the shared
+/// Ravage 6+, nearest enemy within the 3" melee gap, once per round.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RetreatingStrikeSpec {
+    pub name: String,
+    /// The RAW rule string's parsed rating — `Retreating Strike(3)` carries 3,
+    /// a bare name 0 (the handler's `maxi(.., 1)` floor applies).
+    pub rating: i64,
+    /// `trigger` — only "post_melee_move" is stamped; the plain Ravage dice
+    /// profile at the melee seam is the base rule's own read.
+    pub trigger: String,
+}
+
+/// The Retreating Strike stamp (wave-4 follow-up, epoch 7): the "Ravage"
+/// primitive entry whose `trigger` param is "post_melee_move", read BY NAME
+/// (the #489 rule — plain Ravage stays the melee seam's own read), gated on
+/// the FROZEN `EPOCH_7_TABLE_RULES`. The rating comes off the RAW rule
+/// string (`Retreating Strike(3)`), not the registry entry.
+fn retreating_strikes_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<RetreatingStrikeSpec> {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return Vec::new();
+    }
+    let map = reg.rules_for(&p.game_system);
+    let mut seen = std::collections::HashSet::new();
+    p.special_rules.iter().chain(p.item_grants.iter())
+        .filter_map(|raw| {
+            let n = base_rule_name(raw);
+            (n == "Retreating Strike" && seen.insert(n.clone()))
+                .then_some((raw.clone(), n))
+        })
+        .filter_map(|(raw, n)| map.lookup(&p.faction_folder, &n)
+            .filter(|e| e.primitive.as_deref() == Some("Ravage")).map(|e| (raw, e)))
+        .filter(|(_, e)| e.param_s("trigger") == "post_melee_move")
+        .map(|(raw, e)| RetreatingStrikeSpec {
+            name: base_rule_name(&raw),
+            rating: rule_rating(&raw, 0),
+            trigger: "post_melee_move".to_string(),
+        })
+        .collect()
+}
+
 /// Every "Utility Buff" entry the unit carries, in `unit_rules_of_primitive`'s
 /// own order (own rules then item grants, each base name once — rules_registry
 /// .gd:155-176). The two printed defaults that differ between the arms are
@@ -4157,6 +4202,7 @@ impl UnitStatic {
             storm: storm_of(reg, p, rules_epoch),
             reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
+            retreating_strikes: retreating_strikes_of(reg, p, rules_epoch),
             growth: growth_of(reg, p, &mut unimplemented),
             piercing_tags: piercing_tags_of(reg, p, rules_epoch),
             unimplemented,

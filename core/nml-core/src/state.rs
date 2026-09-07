@@ -472,6 +472,10 @@ pub struct State {
     pub reckless_rolled_round: Vec<i64>,
     pub reckless_ap_round: Vec<i64>,
     pub reckless_backfire_round: Vec<i64>,
+    /// Wave 4 follow-up — `unit_properties["retreating_strike_round"]`
+    /// (main.gd:5861/:5866): the once-per-ROUND stamp of the Retreating
+    /// Strike, per bearer, -1 for never; the `hit_and_run_round` shape.
+    pub retreating_strike_round: Vec<i64>,
     /// Block B7 — `unit_properties["growth_<rule>"]` (main.gd:16978), this
     /// unit's OWN marker count for its "Growth Markers" rule. A single counter
     /// per unit, not per rule name (see `unit::growth_of`'s own note).

@@ -82,6 +82,7 @@
             reckless_rolled_round: vec![-1; 4],
             reckless_ap_round: vec![-1; 4],
             reckless_backfire_round: vec![-1; 4],
+            retreating_strike_round: vec![-1; 4],
             growth_markers: vec![0; 4],
             growth_round: vec![-1; 4],
             second_wind_used: vec![false; 4],
