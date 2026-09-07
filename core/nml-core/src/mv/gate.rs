@@ -936,8 +936,8 @@ mod endpoint_localisation {
             "../../../../test/fixtures/position_parity/endpoint_localisation.json")).unwrap();
         // id, gate bound, overlap bound, shorten bound — inches, measured.
         let bounds = [
-            ("recorded-037", 0.0000031, 0.0000023, 1e-9),
-            ("recorded-128", 0.1245122, 0.0482231, 1e-9),
+            ("recorded-037", 0.0000031, 1e-9, 1e-9),
+            ("recorded-128", 0.1245122, 1e-9, 1e-9),
             ("recorded-162", 0.0000005, 1e-9, 1e-9),
         ];
         for (id, gate_bound, overlap_bound, shorten_bound) in bounds {
@@ -993,6 +993,7 @@ mod endpoint_localisation {
                 Some(&terrain), flags);
             let got: Vec<[f64; 2]> = got.iter().map(|p| [p[0] as f64, p[1] as f64]).collect();
             let delta = worst(&got, &conv(&gate["out"], board));
+            eprintln!("{id}: whole gate residue {delta:.9}in (bound {gate_bound})");
             assert!(delta <= gate_bound, "{id}: whole gate differs by {delta:.9}in (bound {gate_bound})");
             // The overlap push, replayed on the table's own post-projection config.
             let mut cfg: Vec<Disc> = conv(&pin["overlap"]["in"], board).iter().enumerate()
@@ -1004,6 +1005,7 @@ mod endpoint_localisation {
             overlap_pass(&mut cfg, &planned_in, &caps, true, &ext, &mut rep);
             let pushed: Vec<[f64; 2]> = cfg.iter().map(|d| d.c).collect();
             let delta = worst(&pushed, &conv(&pin["overlap"]["out"], board));
+            eprintln!("{id}: overlap push residue {delta:.9}in (bound {overlap_bound})");
             assert!(delta <= overlap_bound,
                 "{id}: overlap push differs by {delta:.9}in (bound {overlap_bound})");
             // The whole-unit shorten, replayed on the table's own input.
@@ -1014,6 +1016,7 @@ mod endpoint_localisation {
                     crate::mv::MAX_CHAIN_IN);
                 let out: Vec<[f64; 2]> = out.iter().map(|d| d.c).collect();
                 let delta = worst(&out, &conv(&shorten["out"], board));
+                eprintln!("{id}: whole-unit shorten residue {delta:.9}in (bound {shorten_bound})");
                 assert!(delta <= shorten_bound,
                     "{id}: whole-unit shorten differs by {delta:.9}in (bound {shorten_bound})");
             }
