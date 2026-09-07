@@ -736,6 +736,9 @@ pub struct UnitStatic {
     /// The Fatigue Debuff read (epoch 7) — the one "Mind Control" entry this
     /// core carries (`fatigue_debuff_of`); empty below `rules_epoch` 7.
     pub fatigue_debuff: Vec<FatigueDebuffSpec>,
+    /// The Mind Control read (epoch 7) — the displacement arm of the same
+    /// pre-attack slot (`mind_control_of`); empty below `rules_epoch` 7.
+    pub mind_control: Vec<MindControlSpec>,
     /// The Retreating Strike read (epoch 7) — the Ravage-alias post-melee
     /// strike (`retreating_strikes_of`); empty below `rules_epoch` 7.
     pub retreating_strikes: Vec<RetreatingStrikeSpec>,
@@ -2741,8 +2744,8 @@ fn reanimation_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option
 /// pre-attack slot main.gd:1070 (`_solo_apply_mind_control` :16997-17037).
 /// Only the "Fatigue Debuff" literal is stamped BY NAME (the #489
 /// trusted-whole rule: no `rules_of_primitive` loop over an untracked
-/// primitive — the family's OTHER carriers displace, a seam this core does
-/// not have), so the name is the entry's own and the params come off the
+/// primitive — the family's OTHER carriers ride the separate
+/// `mind_control_of` stamp), so the name is the entry's own and the params come off the
 /// SAME entry: `range_in` (printed default 18"), `needs_los` and `effect`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FatigueDebuffSpec {
@@ -2829,6 +2832,60 @@ fn fatigue_debuff_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec
             range_in: e.param_f("range_in", 18.0),
             needs_los: e.param_b_or("needs_los", true),
             effect: e.param_s("effect").to_string(),
+        })
+        .collect()
+}
+
+/// One carried "Mind Control" entry with the displacement payload — the
+/// SAME pre-attack slot's other arm (`_solo_apply_mind_control`
+/// :17031-17038): a Mind Control entry with no `effect` param whose failed
+/// morale test moves the target up to `move_in` in a straight line.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MindControlSpec {
+    pub name: String,
+    pub range_in: f64,
+    pub needs_los: bool,
+    /// `move_in` — the printed 6" straight-line shift (main.gd:17037).
+    pub move_in: f64,
+}
+
+impl MindControlSpec {
+    /// The pick rides the EXACT `utility_targets` scoring the table's
+    /// `_solo_utility_target(member, "enemy", range_in, needs_los)` makes
+    /// (main.gd:17011) — the Fatigue Debuff twin's pick, displacement payload.
+    pub fn as_pick(&self) -> UtilityBuff {
+        UtilityBuff {
+            name: self.name.clone(),
+            range_in: self.range_in,
+            target: "enemy".into(),
+            needs_los: self.needs_los,
+            max_targets: 1,
+            ..Default::default()
+        }
+    }
+}
+
+/// The Mind Control stamp (wave-4 follow-up, epoch 7): the displacement arm
+/// read BY NAME — the literal `Mind Control` entry the Fatigue Debuff stamp
+/// deliberately leaves open — gated on the FROZEN `EPOCH_7_TABLE_RULES`.
+fn mind_control_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<MindControlSpec> {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return Vec::new();
+    }
+    let map = reg.rules_for(&p.game_system);
+    let mut seen = std::collections::HashSet::new();
+    p.special_rules.iter().chain(p.item_grants.iter())
+        .filter_map(|raw| {
+            let n = base_rule_name(raw);
+            (n == "Mind Control" && seen.insert(n.clone())).then_some(n)
+        })
+        .filter_map(|n| map.lookup(&p.faction_folder, &n)
+            .filter(|e| e.primitive.as_deref() == Some("Mind Control")).map(|e| (n, e)))
+        .map(|(n, e)| MindControlSpec {
+            name: n,
+            range_in: e.param_f("range_in", 18.0),
+            needs_los: e.param_b_or("needs_los", true),
+            move_in: e.param_f("move_in", 6.0),
         })
         .collect()
 }
@@ -4346,6 +4403,7 @@ impl UnitStatic {
             crossing_attack: crossing_attack_of(reg, p, rules_epoch),
             reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
+            mind_control: mind_control_of(reg, p, rules_epoch),
             retreating_strikes: retreating_strikes_of(reg, p, rules_epoch),
             ebr: ebr_of(reg, p, rules_epoch),
             growth: growth_of(reg, p, &mut unimplemented),
