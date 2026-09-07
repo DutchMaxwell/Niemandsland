@@ -267,7 +267,11 @@ _CONSUMED_PARAM_ROWS: tuple[ConsumedParams, ...] = (
     # (same primitive; its GF/AoF params carry no consumed key - the registry
     # itself marks its arrival_strike "planned") rode the bare 'infiltrate'
     # token to PORTED - the #489 over-credit shape, declined by the spec (§6).
-    ConsumedParams("Infiltrate", frozenset({"min_enemy_dist_in"})),
+    # + wave-5 (rules-surprise-attack): unit.rs::surprise_attack_of reads the
+    # Surprise Attack burst's own params off the BY-NAME entry (the rating is
+    # the X, not a param), and stamp_profile's alias arm reads the ring via the
+    # Infiltrate param — the #761 table behaviour, unit.rs infiltration gate.
+    ConsumedParams("Infiltrate", frozenset({"min_enemy_dist_in", "range_in", "trigger_target", "ap", "needs_los"})),
     # Lacerate-family wave (rules-wave2-lacerate2, 2026-09-04): unit.rs
     # ::stamp_unit_strikers' epoch-4 arm mirrors main.gd:6990-7001's unit-level
     # coverage wave — every carried Lacerate-primitive entry whose params carry

@@ -609,6 +609,67 @@ pub(crate) fn tray_reanimation(
     }
 }
 
+/// "The first time this unit is activated, pick one enemy unit within 6\" in
+/// line of sight, and roll X dice. For each 2+ it takes one hit with AP(1)"
+/// (army-book Surprise Attack; the gf/aof registry entry's own params).
+/// Fires at the activation trigger BEFORE the action, next to Reanimation.
+/// FIRST-ACTIVATION latch, replay-stable form: no recorded per-unit activation
+/// counter exists and the table's burst arm is the audit-B open question, so
+/// the port fires only on a ROUND-1 activation — one act per unit per round
+/// makes that the first activation for every unit on the board at round start.
+/// Gate: FROZEN `EPOCH_7_TABLE_RULES`.pub(crate) fn tray_surprise_attack(
+    statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) { return; }
+    if next.alive[si] <= 0 || next.round != 1 { return; }
+    let pid = next.player[si];
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
+    for b in bearers {
+        if next.alive[b] <= 0 { continue; }
+        let Some(spec) = statics[next.roster.profile[b]].surprise_attack.clone() else { continue; };
+        let owner = statics[next.roster.profile[b]].name.clone();
+        surprise_strike(statics, state, next, b, seams, tray, shot, spec, owner, pid);
+    }
+}
+
+/// The burst body: pick one enemy (alive, un-reserved, unattached, within the
+/// rule's own range, in line of sight when the entry asks), roll the rating at
+/// `trigger_target`, each success one AP(1) hit — the Storm Attack port's
+/// descending pick (largest `combined_alive`, first-index tie-break).
+fn surprise_strike(
+    statics: &[UnitStatic], state: &State, next: &mut State, b: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult, spec: crate::unit::SurpriseAttackSpec, owner: String,
+    pid: i64,
+) {
+    let targets: Vec<usize> = (0..next.units())
+        .filter(|&ti| next.player[ti] != pid && next.alive[ti] > 0 && combined_alive(next, ti, seams) > 0 && !next.dormant[ti] && !(seams.hero_attach && next.attached_to[ti].is_some()))
+        .filter(|&ti| geom::edge_gap_in(&next.positions[b], &next.radii[b], &next.positions[ti], &next.radii[ti], DEFAULT_BASE_RADIUS_M) <= spec.range_in)
+        .filter(|&ti| !spec.needs_los || los_clear(state, b, ti))
+        .collect();
+    if targets.is_empty() { return; }
+    let mut best = targets[0];
+    for &t in targets.iter().skip(1) {
+        if combined_alive(next, t, seams) > combined_alive(next, best, seams) { best = t; }
+    }
+    let faces = tray.roll(spec.dice.max(1) as usize);
+    shot.rolls.push(crate::dice::Roll {
+        kind: "attack", count: spec.dice, target: spec.trigger,
+        faces: faces.clone(), owner: owner.clone(),
+    });
+    let successes = crate::dice::faces_to_hits(&faces, spec.trigger as u8) as i64;
+    shot.log.push(format!("Surprise Attack: {owner} strikes unawares — {successes} of {} dice hit", spec.dice));
+    let ut = &statics[next.roster.profile[best]];
+    let def = ctx_of(ut, next, best);
+    let (ab, wb) = (next.alive[best], wounds_left(next, best));
+    let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(successes, spec.ap, false, false, &def, &ut.name, tray));
+    land_wounds(next, best, landed);
+    if shooting_morale_trigger(next, ut, best, ab, wb) {
+        tray_morale(next, ut, best, false, seams.rules_epoch, tray, shot);
+    }
+}
+
 pub(crate) fn tray_crossing_attack(
     statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
     tray: &mut Tray, shot: &mut ShootResult,
@@ -4285,6 +4346,9 @@ fn resolve_with(
     // full-strength or Shaken carrier rolls nothing.
     if let Some((tray, shot)) = dice.as_mut() {
         tray_reanimation(statics, &mut next, si, seams, tray, shot);
+        // Surprise Attack (wave-5) — the same activation-trigger slot, the
+        // book's own "first time this unit is activated" beat; see above.
+        tray_surprise_attack(statics, state, &mut next, si, seams, tray, shot);
     }
 
     // --- move (battle_sim.gd:575-596) ---
