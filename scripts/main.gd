@@ -7034,12 +7034,14 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 				if not AiEv.facet_applies(p2, int(profile.get("range", 0))):
 					continue
 				return true
-		# Wave-4 family: the Rending aliases ("Rending in Melee" — entry bypass_regen + melee_only)
-		# sit on the MODEL too (direct or aura-granted). The Lacerate loop above never consulted
-		# them, so the entry's Regeneration bypass fired only when a weapon carried the name.
+		# Wave-4 family: "Rending in Melee" (entry bypass_regen + melee_only) sits on the MODEL too
+		# (direct or aura-granted). The Lacerate loop above never consulted them, so the entry's
+		# Regeneration bypass fired only when a weapon carried the name. Read BY NAME — the #782
+		# census rule and the core's named read (unit.rs:2261, #489: "never the primitive whole") —
+		# so a second name sharing the Rending primitive never silently inherits the bypass.
 		for e in RulesRegistry.unit_rules_of_primitive(attacker, "Rending"):
 			var edr := e as Dictionary
-			if str(edr["name"]) == "Rending":
+			if str(edr["name"]) != "Rending in Melee":
 				continue
 			var pr: Dictionary = edr.get("params", {})
 			if bool(pr.get("bypass_regen", false)) and AiEv.facet_applies(pr, int(profile.get("range", 0))):
