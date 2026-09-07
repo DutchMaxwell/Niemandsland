@@ -42,6 +42,18 @@ use super::*;
         st.casts = vec![0, 3, 0, 0];
         st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
         st.attached_to = Rc::new(vec![None, None, None, None]);
+        // Two profile slots — the caster host (0) and the battery (1): the
+        // statics vec is indexed BY PROFILE, so unit 1 must map to slot 1.
+        let mut list = st.profiles.list.clone();
+        let mut bat = list[0].clone();
+        bat.caster_value = 2;
+        list.push(bat);
+        st.profiles = Rc::new(crate::state::Profiles { list, index: Default::default() });
+        st.roster = Rc::new(crate::state::Roster {
+            keys: st.roster.keys.clone(),
+            index: st.roster.index.clone(),
+            profile: vec![0, 1, 0, 0],
+        });
         let mut caster = UnitStatic::default();
         caster.is_caster = true;
         caster.spells = vec![spell()];
