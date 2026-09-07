@@ -26,13 +26,14 @@
 //! for the pull. Both loops also stop the moment a sweep moves nobody, so the
 //! gate terminates on any input, pathological configurations included.
 //!
-//! FRAME. The table gates in float32 world METRES; this still gates in the
-//! planner's f64 INCH frame, where the endpoints already live, so a model the
-//! gate does not touch keeps its endpoint bit for bit instead of picking up a
-//! metre round trip. The geometry is scale-free; the four metre constants are
-//! converted once. `to_world_f32` / `from_world_f32` and `WorldDisc` carry the
-//! table's own frame in its own operation order; the passes move onto it one
-//! at a time (the endpoint-localisation ledger says which residue each closes).
+//! FRAME. The table gates in float32 world METRES; the passes here still hold
+//! the config in the planner's f64 INCH frame, where the endpoints already
+//! live, so a model the gate does not touch keeps its endpoint bit for bit
+//! instead of picking up a metre round trip. `to_world_f32` / `from_world_f32`
+//! and `WorldDisc` carry the table's own frame in its own operation order; the
+//! passes move onto it one at a time (the endpoint-localisation ledger says
+//! which residue each closes). The OVERLAP PUSH's inner solver runs on it
+//! (parity-frame 3, B1), entered and left through `overlap_pass`'s seam.
 //!
 //! BASES. Overlap relaxation and coherency use the real footprint through the
 //! shared `geom::pair_gap_m`. Terrain rest, wall chords and the escape scan
@@ -92,11 +93,21 @@ pub struct WorldDisc {
 }
 
 impl WorldDisc {
-    /// The gate's inch-frame disc in the table's frame. The centre came out
-    /// of the planner as f32, so the narrowing cast is exact.
+    /// The gate's inch-frame disc in the table's frame. An inch coordinate
+    /// that IS an f32 came out of the planner and is read in the table's own
+    /// order (`to_world_f32`, pinned bit for bit above). Any other was written
+    /// by f64 arithmetic — a pass moved it, or a world value came in through
+    /// `w / IN2M + board / 2` — and is read with ONE rounding, which inverts
+    /// that write exactly (28,548 fixture coordinates, 0 off). Narrowing such
+    /// a coordinate to f32 INCH first would put it on a third grid, 1.6-3x
+    /// coarser than the world's (docs/plans/PARITY_FRAME_PR3_DESIGN).
     pub fn from_disc(d: &Disc, board_in: [f64; 2]) -> WorldDisc {
-        WorldDisc { c: to_world_f32([d.c[0] as f32, d.c[1] as f32], board_in),
-            r_m: d.r * IN2M, shape: d.shape }
+        let read = |k: usize| if d.c[k] as f32 as f64 == d.c[k] {
+            to_world_f32([d.c[0] as f32, d.c[1] as f32], board_in)[k]
+        } else {
+            ((d.c[k] - board_in[k] * 0.5) * IN2M) as f32
+        };
+        WorldDisc { c: [read(0), read(1)], r_m: d.r * IN2M, shape: d.shape }
     }
 
     /// Back into the planner's inch frame, where the endpoints live.
@@ -106,6 +117,16 @@ impl WorldDisc {
     }
 }
 
+/// `_moving_shapes_at` :6780 — a config as the table's shapes, radii from the
+/// metre truth where the caller carries it (`GateFlags::radii_m`).
+fn world(cfg: &[Disc], radii_m: &[f64], board_in: [f64; 2]) -> Vec<WorldDisc> {
+    cfg.iter().enumerate().map(|(i, d)| {
+        let mut w = WorldDisc::from_disc(d, board_in);
+        if let Some(r) = radii_m.get(i) { w.r_m = *r; }
+        w
+    }).collect()
+}
+
 /// `SeparationResolver.RESOLVE_EPSILON_INCHES` separation_resolver.gd:46.
 const RESOLVE_EPS_IN: f64 = 0.01;
 /// `SeparationResolver.MAX_OVERLAP_ITERATIONS` separation_resolver.gd:55.
@@ -113,7 +134,7 @@ const MAX_OVERLAP_ITERS: usize = 24;
 /// `SeparationResolver.ESCAPE_SCAN_DIRECTIONS` separation_resolver.gd:59.
 const ESCAPE_DIRS: usize = 24;
 /// `SeparationZone.EPSILON_M` separation_zone.gd:44 — the concentric guard.
-const EPSILON_IN: f64 = 0.00001 / IN2M;
+const EPSILON_M: f64 = 0.00001;
 /// `SoloController.OVERLAP_GATE_PASSES` solo_controller.gd:149.
 const OVERLAP_GATE_PASSES: usize = 4;
 /// `SoloController.OVERLAP_EPS_M` solo_controller.gd:154 — sub-0.5 mm is noise.
@@ -183,6 +204,10 @@ pub struct GateFlags<'a> {
     /// `is_traversal(unit)` :5586 — may move THROUGH bases, so only the wall
     /// half of the clamp binds.
     pub traversal: bool,
+    /// The moving models' base radii in METRES, `model_base_radius_m`'s own
+    /// value: the inch radius is one f64 ULP short of it for some bases. Empty
+    /// falls back to `radii_in * IN2M`.
+    pub radii_m: &'a [f64],
 }
 
 fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
@@ -190,72 +215,85 @@ fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
 }
 
 /// `SeparationResolver._travel_to_clear_along` separation_resolver.gd:156 — the
-/// shortest slide along unit direction `u` that clears every obstacle.
-fn travel_to_clear(s: &Disc, obs: &[Disc], u: [f64; 2]) -> f64 {
+/// shortest slide along unit direction `u` that clears every obstacle's
+/// bounding circle. `e`, its squared length and its dot product are float32
+/// `Vector2` reads (:161-165); the quadratic is GDScript f64 (:167-169).
+fn travel_to_clear(s: &WorldDisc, obs: &[WorldDisc], u: [f32; 2]) -> f64 {
     let mut travel = 0.0f64;
     for o in obs {
-        let r_sum = s.r + o.r;
+        let r_sum = s.r_m + o.r_m;
         let e = [s.c[0] - o.c[0], s.c[1] - o.c[1]];
-        let sq = e[0] * e[0] + e[1] * e[1];
+        let sq = (e[0] * e[0] + e[1] * e[1]) as f64;
         if sq >= r_sum * r_sum {
             continue;
         }
-        let ed = e[0] * u[0] + e[1] * u[1];
+        let ed = (e[0] * u[0] + e[1] * u[1]) as f64;
         travel = travel.max(-ed + (ed * ed - sq + r_sum * r_sum).max(0.0).sqrt());
     }
     travel
 }
 
 /// `SeparationResolver.resolve_overlaps` separation_resolver.gd:98 for ONE item
-/// base: the summed-penetration relaxation, then `_escape_to_clear` (:136), the
-/// 24-ray scan that makes clearing a finite obstacle set guaranteed. Mutates
-/// `s`; returns whether its centre moved at all.
-fn resolve_overlaps(s: &mut Disc, obs: &[Disc]) -> bool {
+/// base, in the table's own float32 WORLD frame: the summed-penetration
+/// relaxation, then `_escape_to_clear` (:136), the 24-ray scan that makes
+/// clearing a finite obstacle set guaranteed. Every `Vector2` operation is a
+/// float32 one in the table's loop order — the resultant is SUMMED in f32
+/// (:113) and the scalar of every `Vector2 * float` is narrowed first (:113,
+/// :122, :148) — while every GDScript `float` (`overlap`, `deepest`, the
+/// travel) is f64. Summing in f64 and casting at the end is tidier and wrong:
+/// it left recorded-037's push 0.0000022 in off the table. Mutates `s`; returns
+/// the table's own "moved" (:6832), the applied translation's non-zero f32
+/// squared length.
+fn resolve_overlaps(s: &mut WorldDisc, obs: &[WorldDisc]) -> bool {
     if obs.is_empty() {
         return false;
     }
-    let start = s.c;
-    let mut relaxed = false;
+    let mut applied = [0.0f32, 0.0];
+    let moved = |a: [f32; 2]| a[0] * a[0] + a[1] * a[1] > 0.0;
     for _ in 0..MAX_OVERLAP_ITERS {
-        let (mut res, mut deepest) = ([0.0f64, 0.0], 0.0f64);
+        let (mut res, mut deepest) = ([0.0f32, 0.0], 0.0f64);
         for o in obs {
-            let overlap = -edge(s, o);
+            let overlap = -edge_w(s, o);
             if overlap <= RESOLVE_EPS_IN {
                 continue;
             }
             let mut axis = [s.c[0] - o.c[0], s.c[1] - o.c[1]];
-            if axis[0] * axis[0] + axis[1] * axis[1] < EPSILON_IN * EPSILON_IN {
+            if ((axis[0] * axis[0] + axis[1] * axis[1]) as f64) < EPSILON_M * EPSILON_M {
                 axis = [1.0, 0.0]; // concentric: Vector2.RIGHT, the stable escape
             }
+            // `Vector2::normalized` — the f32 length, then two f32 divisions.
             let l = (axis[0] * axis[0] + axis[1] * axis[1]).sqrt();
-            res = [
-                res[0] + axis[0] / l * overlap,
-                res[1] + axis[1] / l * overlap,
-            ];
+            let ov = overlap as f32;
+            res = [res[0] + axis[0] / l * ov, res[1] + axis[1] / l * ov];
             deepest = deepest.max(overlap);
         }
         if deepest <= RESOLVE_EPS_IN {
-            return relaxed; // cleared inside the relaxation cap
+            return moved(applied); // cleared inside the relaxation cap
         }
-        if (res[0] * res[0] + res[1] * res[1]).sqrt() < RESOLVE_EPS_IN {
+        if ((res[0] * res[0] + res[1] * res[1]).sqrt() as f64) < RESOLVE_EPS_IN {
             break; // symmetric wedge: straight to the escape scan (:118-121)
         }
-        s.c = [s.c[0] + res[0], s.c[1] + res[1]];
-        relaxed = true;
+        let step = [res[0] * IN2M_F32, res[1] * IN2M_F32];
+        s.c = [s.c[0] + step[0], s.c[1] + step[1]];
+        applied = [applied[0] + step[0], applied[1] + step[1]];
     }
-    let mut best = (f64::INFINITY, [0.0f64, 0.0]);
+    let mut best = (f64::INFINITY, [0.0f32, 0.0]);
     for k in 0..ESCAPE_DIRS {
+        // `TAU * k / float(24)` in f64; `Vector2(cos, sin)` narrows to f32.
         let ang = std::f64::consts::TAU * k as f64 / ESCAPE_DIRS as f64;
-        let u = [ang.cos(), ang.sin()];
+        let u = [ang.cos() as f32, ang.sin() as f32];
         let travel = travel_to_clear(s, obs, u);
         if travel < best.0 {
             best = (travel, u);
         }
     }
     if best.0 > 0.0 && best.0.is_finite() {
-        s.c = [s.c[0] + best.1[0] * best.0, s.c[1] + best.1[1] * best.0];
+        let t = best.0 as f32;
+        let step = [best.1[0] * t, best.1[1] * t];
+        s.c = [s.c[0] + step[0], s.c[1] + step[1]];
+        applied = [applied[0] + step[0], applied[1] + step[1]];
     }
-    s.c != start
+    moved(applied)
 }
 
 /// `SoloController._world_forbidden` :6790 — may this base REST here? Two
@@ -322,6 +360,15 @@ fn edge(a: &Disc, b: &Disc) -> f64 {
     let pos = |c: [f64; 2]| [(c[0] * IN2M) as f32, 0.0, (c[1] * IN2M) as f32];
     geom::pair_gap_m(pos(a.c), a.r * IN2M, a.shape,
         pos(b.c), b.r * IN2M, b.shape) / IN2M
+}
+
+/// `edge` in the table's own frame — `_edge_distance_meters` :290 on float32
+/// world centres and f64 radii, over `INCHES_TO_METERS` (:150). The overlap
+/// push reads this; the coherency predicates still read `edge` on the inch
+/// config (no verdict differs between the two on the recorded corpus).
+fn edge_w(a: &WorldDisc, b: &WorldDisc) -> f64 {
+    geom::pair_gap_m([a.c[0], 0.0, a.c[1]], a.r_m, a.shape,
+        [b.c[0], 0.0, b.c[1]], b.r_m, b.shape) / IN2M
 }
 
 /// `_config_overspread_world` :6650 — the widest EDGE-to-edge spread exceeds
@@ -396,12 +443,26 @@ fn cap_disp(cand: [f64; 2], goal: [f64; 2], cap: f64, i: usize, rep: &mut GateRe
     [goal[0] + off[0] / l * cap, goal[1] + off[1] / l * cap]
 }
 
-/// `_resolve_overlaps_world` :6716 — the slack-aware Gauss-Seidel push, its own
+/// `_resolve_overlaps_world` :6795 — the slack-aware Gauss-Seidel push, its own
 /// function because the table runs it TWICE: once as pass 2 and once more to
 /// clear whatever pass 4's inward pulls stacked (:6636).
+///
+/// THE SEAM (parity-frame 3, B1). The table builds its shapes once per call
+/// (:6800), every push moves them in float32 world metres, and only at the end
+/// are the centres written back (:6841). This holds the same world config `w`
+/// across all passes, so a centre the solver moved never round-trips through
+/// the inch frame between passes. The inch config `cfg` is the MIRROR (:6247
+/// order) the ordering, the band-frozen read and the cap truncation still work
+/// on; a cap that bites writes its inch result back into `w`. The cap circle
+/// itself moves onto the world frame in B2. Returns the world config the
+/// passes ended on — the push's own output, which the inch mirror quantises
+/// to the f32-inch grid (half an ULP is 1.9e-6 in at 32-64 in).
 fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bool,
-                external: &[Disc], rep: &mut GateReport) {
+                external: &[Disc], radii_m: &[f64], board_in: [f64; 2], rep: &mut GateReport)
+                -> Vec<WorldDisc> {
     let n = cfg.len();
+    let mut w = world(cfg, radii_m, board_in);
+    let ext = world(external, &[], board_in);
     for _ in 0..OVERLAP_GATE_PASSES {
         let mut order: Vec<usize> = (0..n).collect();
         if capped {
@@ -433,29 +494,33 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
             if capped && caps_in[i] - dist(cfg[i].c, goal[i]) <= OVERLAP_EPS_IN {
                 continue; // band-frozen (:6742)
             }
-            let mut obs: Vec<Disc> = external.to_vec();
-            obs.extend((0..n).filter(|&j| j != i).map(|j| cfg[j]));
-            let mut s = cfg[i];
+            let mut obs: Vec<WorldDisc> = ext.clone();
+            obs.extend((0..n).filter(|&j| j != i).map(|j| w[j]));
+            let mut s = w[i];
             if resolve_overlaps(&mut s, &obs) {
                 moved = true;
+                let p = from_world_f32(s.c, board_in);
+                cfg[i].c = [p[0] as f64, p[1] as f64];
                 if capped {
-                    let off = [s.c[0] - goal[i][0], s.c[1] - goal[i][1]];
+                    let off = [cfg[i].c[0] - goal[i][0], cfg[i].c[1] - goal[i][1]];
                     let l = (off[0] * off[0] + off[1] * off[1]).sqrt();
                     if l > caps_in[i] {
-                        s.c = [
+                        cfg[i].c = [
                             goal[i][0] + off[0] / l * caps_in[i],
                             goal[i][1] + off[1] / l * caps_in[i],
                         ];
                         rep.capped[i] = true;
+                        s.c = WorldDisc::from_disc(&cfg[i], board_in).c;
                     }
                 }
+                w[i] = s;
             }
-            cfg[i] = s;
         }
         if !moved {
             break;
         }
     }
+    w
 }
 
 /// Everything a pass-4 sweep needs that does not change between nudges: the RAW
@@ -470,6 +535,7 @@ struct Pull<'a> {
     board_in: [f64; 2],
     terrain: Option<&'a Terrain>,
     external: &'a [Disc],
+    radii_m: &'a [f64],
 }
 
 impl Pull<'_> {
@@ -566,7 +632,8 @@ impl Pull<'_> {
                 break;
             }
         }
-        overlap_pass(cfg, self.goal, self.caps_in, self.capped, self.external, rep);
+        overlap_pass(cfg, self.goal, self.caps_in, self.capped, self.external, self.radii_m,
+            self.board_in, rep);
         config_coherent(cfg, max_chain)
     }
 }
@@ -695,14 +762,15 @@ pub fn finalize_placement(
     // neighbour's obstacle set, so the crowd walks around it), and each push is
     // truncated to the cap circle. Residual overlap between two capped models is
     // deliberately LEFT for the caller's ladder to settle at a shorter reach.
-    overlap_pass(&mut cfg, &goal, caps_in, capped, external, &mut rep);
+    overlap_pass(&mut cfg, &goal, caps_in, capped, external, flags.radii_m, board_in, &mut rep);
     // (coherency) :6444-6465 — PASS 4. The table keeps the full move when the
     // config is coherent AND overlap-free AND terrain-clear, and otherwise runs
     // the straggler repair before falling back to the whole-unit shorten. The
     // repair itself returns at once on a coherent config. The whole-unit
     // fallback below also checks overlap and forbidden rest ground.
     if !config_coherent(&cfg, max_chain) {
-        let pull = Pull { max_chain, rules_epoch: flags.rules_epoch, goal: &goal, caps_in, capped, board_in, terrain, external };
+        let pull = Pull { max_chain, rules_epoch: flags.rules_epoch, goal: &goal, caps_in, capped,
+            board_in, terrain, external, radii_m: flags.radii_m };
         rep.coherent = pull.run(&mut cfg, &mut rep);
     }
     if !charge && n > 1 && flags.start_world.len() == n
@@ -936,9 +1004,9 @@ mod endpoint_localisation {
             "../../../../test/fixtures/position_parity/endpoint_localisation.json")).unwrap();
         // id, gate bound, overlap bound, shorten bound — inches, measured.
         let bounds = [
-            ("recorded-037", 0.0000031, 1e-9, 1e-9),
-            ("recorded-128", 0.1245122, 1e-9, 1e-9),
-            ("recorded-162", 0.0000005, 1e-9, 1e-9),
+            ("recorded-037", 0.00000304, 1e-9, 1e-9),
+            ("recorded-128", 0.0941167, 3e-7, 1e-9),
+            ("recorded-162", 0.00000046, 1e-9, 1e-9),
         ];
         for (id, gate_bound, overlap_bound, shorten_bound) in bounds {
             let pin = &pins["cases"][id];
@@ -951,11 +1019,12 @@ mod endpoint_localisation {
             let actor = unit_of(&case["action"]["unit"]);
             let mut movers: Vec<&Value> = vec![actor];
             movers.extend(actor["attached"].as_array().unwrap().iter().map(unit_of));
-            let mut radii = Vec::new();
+            let (mut radii, mut radii_m) = (Vec::new(), Vec::new());
             let mut shapes = Vec::new();
             for m in &movers {
                 for r in m["radii"].as_array().unwrap() {
                     radii.push(r.as_f64().unwrap() / IN2M);
+                    radii_m.push(r.as_f64().unwrap());
                     shapes.push(shape_of(m));
                 }
             }
@@ -988,7 +1057,7 @@ mod endpoint_localisation {
                 .map(|c| c.as_f64().unwrap() / IN2M).collect();
             let flags = GateFlags { start_world: &start_world, rules_epoch: EPOCH_6_TABLE_RULES,
                 shapes: &shapes, flying: rule("Flying"), traversal: rule("Traversal"),
-                ..Default::default() };
+                radii_m: &radii_m, ..Default::default() };
             let (got, _) = finalize_placement(&planned, &radii, &ext, &caps, board,
                 Some(&terrain), flags);
             let got: Vec<[f64; 2]> = got.iter().map(|p| [p[0] as f64, p[1] as f64]).collect();
@@ -1002,9 +1071,22 @@ mod endpoint_localisation {
                 capped: vec![false; radii.len()], bounds_in: 0.0,
                 pulled: vec![false; radii.len()], coherent: true,
                 reverted: vec![false; radii.len()] };
-            overlap_pass(&mut cfg, &planned_in, &caps, true, &ext, &mut rep);
-            let pushed: Vec<[f64; 2]> = cfg.iter().map(|d| d.c).collect();
-            let delta = worst(&pushed, &conv(&pin["overlap"]["out"], board));
+            let w = overlap_pass(&mut cfg, &planned_in, &caps, true, &ext, &radii_m, board, &mut rep);
+            // The push's own output is a world config; measure it in the
+            // table's frame (float32 against float32), and report the inch
+            // mirror the gate carries on separately (the f32-inch API floor).
+            let out_w: Vec<[f64; 2]> = pin["overlap"]["out"].as_array().unwrap().iter()
+                .map(|p| [p[0].as_f64().unwrap() as f32 as f64, p[2].as_f64().unwrap() as f32 as f64])
+                .collect();
+            let got_w: Vec<[f64; 2]> = w.iter().map(|d| [d.c[0] as f64, d.c[1] as f64]).collect();
+            for i in 0..got_w.len() {
+                let dw = dist(got_w[i], out_w[i]) / IN2M;
+                let dm = dist(cfg[i].c, conv(&pin["overlap"]["out"], board)[i]);
+                if dw > 1e-9 || dm > 1e-9 || rep.capped[i] {
+                    eprintln!("{id}:   model {i}: push residue world {dw:.9}in mirror {dm:.9}in capped={}", rep.capped[i]);
+                }
+            }
+            let delta = worst(&got_w, &out_w) / IN2M;
             eprintln!("{id}: overlap push residue {delta:.9}in (bound {overlap_bound})");
             assert!(delta <= overlap_bound,
                 "{id}: overlap push differs by {delta:.9}in (bound {overlap_bound})");
