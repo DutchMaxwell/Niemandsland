@@ -71,14 +71,14 @@ use super::*;
     #[test]
     fn the_real_registry_stamps_fatigue_debuff_at_epoch_seven_not_six() {
         let on = fatigue_bearer(7);
-        assert_eq!(on.mind_control.len(), 1, "epoch 7: the entry is stamped");
-        let s = &on.mind_control[0];
+        assert_eq!(on.fatigue_debuff.len(), 1, "epoch 7: the entry is stamped");
+        let s = &on.fatigue_debuff[0];
         assert_eq!(s.name, "Fatigue Debuff");
         assert_eq!(s.range_in, 18.0, "the printed pick range (main.gd:17011 default)");
         assert!(s.needs_los, "the needs_los param rides the entry");
         assert_eq!(s.effect, "fatigue");
         let off = fatigue_bearer(6);
-        assert!(off.mind_control.is_empty(), "epoch 6: the record predates the wave");
+        assert!(off.fatigue_debuff.is_empty(), "epoch 6: the record predates the wave");
     }
 
     /// The port: a failed morale test on the picked enemy (highest

@@ -693,8 +693,8 @@ pub struct UnitStatic {
     /// entry, empty below `EPOCH_6_TABLE_RULES`.
     pub storm: Vec<StormSpec>,
     /// The Fatigue Debuff read (epoch 7) — the one "Mind Control" entry this
-    /// core carries (`mind_control_of`); empty below `rules_epoch` 7.
-    pub mind_control: Vec<MindControlSpec>,
+    /// core carries (`fatigue_debuff_of`); empty below `rules_epoch` 7.
+    pub fatigue_debuff: Vec<FatigueDebuffSpec>,
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
@@ -2617,7 +2617,7 @@ fn storm_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<StormSpe
 /// not have), so the name is the entry's own and the params come off the
 /// SAME entry: `range_in` (printed default 18"), `needs_los` and `effect`.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MindControlSpec {
+pub struct FatigueDebuffSpec {
     pub name: String,
     pub range_in: f64,
     pub needs_los: bool,
@@ -2625,7 +2625,7 @@ pub struct MindControlSpec {
     pub effect: String,
 }
 
-impl MindControlSpec {
+impl FatigueDebuffSpec {
     /// The pick rides the EXACT `utility_targets` scoring the table's
     /// `_solo_utility_target(member, "enemy", range_in, needs_los)` makes
     /// (main.gd:17011): best alive+Tough enemy, centre-to-centre range, sight
@@ -2645,7 +2645,7 @@ impl MindControlSpec {
 /// The Fatigue Debuff stamp (wave-4 follow-up, epoch 7): the one "Mind
 /// Control" entry this core reads, gated on the FROZEN
 /// `EPOCH_7_TABLE_RULES` — a record below 7 must never carry it.
-fn mind_control_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<MindControlSpec> {
+fn fatigue_debuff_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<FatigueDebuffSpec> {
     if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
         return Vec::new();
     }
@@ -2658,7 +2658,7 @@ fn mind_control_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<M
         })
         .filter_map(|n| map.lookup(&p.faction_folder, &n)
             .filter(|e| e.primitive.as_deref() == Some("Mind Control")).map(|e| (n, e)))
-        .map(|(n, e)| MindControlSpec {
+        .map(|(n, e)| FatigueDebuffSpec {
             name: n,
             range_in: e.param_f("range_in", 18.0),
             needs_los: e.param_b_or("needs_los", true),
@@ -3942,7 +3942,7 @@ impl UnitStatic {
             ambush_family: ambush_family_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             storm: storm_of(reg, p, rules_epoch),
-            mind_control: mind_control_of(reg, p, rules_epoch),
+            fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
             growth: growth_of(reg, p, &mut unimplemented),
             piercing_tags: piercing_tags_of(reg, p, rules_epoch),
             unimplemented,

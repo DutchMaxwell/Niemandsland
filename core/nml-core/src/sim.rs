@@ -779,7 +779,7 @@ fn tray_vs_marks(
 /// the table's own pre-attack order (right after Utility Buffs, before the
 /// Piercing Tag). Per BEARER — the acting unit, then each attached hero, the
 /// table's members loop (:16979-16983) — the ONE stamped Mind Control entry
-/// ("Fatigue Debuff", `mind_control_of`) picks the best enemy within its
+/// ("Fatigue Debuff", `fatigue_debuff_of`) picks the best enemy within its
 /// range via the SAME `utility_targets` scoring the table's
 /// `_solo_utility_target(member, "enemy", ..)` makes, then rolls ONE die
 /// against the target's Quality on the real tray (:17012-17016).
@@ -790,7 +790,7 @@ fn tray_vs_marks(
 /// (:16999) is not ported for the same reason `tray_piercing_tag`'s is not:
 /// selfplay stamps both slots AI. GATED `rule_on(rules_epoch,
 /// EPOCH_7_TABLE_RULES)`.
-pub(crate) fn tray_mind_control(
+pub(crate) fn tray_fatigue_debuff(
     statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams,
     tray: &mut Tray, shot: &mut ShootResult,
 ) {
@@ -801,7 +801,7 @@ pub(crate) fn tray_mind_control(
     for bearer in bearers {
         if next.alive[bearer] <= 0 { continue; }
         let owner = statics[next.roster.profile[bearer]].name.clone();
-        for spec in &statics[next.roster.profile[bearer]].mind_control {
+        for spec in &statics[next.roster.profile[bearer]].fatigue_debuff {
             if spec.effect != "fatigue" { continue; }
             let pick = spec.as_pick();
             let Some(&ti) = utility_targets(statics, next, bearer, &pick, seams).first() else { continue; };
@@ -3900,9 +3900,9 @@ fn resolve_with(
 
     // --- MIND CONTROL / Fatigue Debuff (main.gd:1070, the table's own slot
     // between Utility Buffs and Piercing Tag) — tray path only, see
-    // `tray_mind_control`.
+    // `tray_fatigue_debuff`.
     if let Some((tray, shot)) = dice.as_mut() {
-        tray_mind_control(statics, &mut next, si, seams, tray, shot);
+        tray_fatigue_debuff(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- PIERCING TAG (main.gd:1071, the table's pre-attack slot right after
