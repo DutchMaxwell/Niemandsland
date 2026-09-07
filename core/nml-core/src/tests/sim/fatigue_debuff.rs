@@ -124,11 +124,9 @@ use super::*;
         let (st, statics) = fatigue_line(7);
         // Seed scan: the FIRST tray face must pass Quality 4; assert it so the
         // test is never blind to a tray change.
-        let mut seed = 0;
-        let face = (0..200)
+        let seed = (0..200)
             .find(|&s| Tray::seeded(s).roll(1)[0] >= 4)
-            .expect("some seed passes");
-        seed = face as i64;
+            .expect("some seed passes") as i64;
         let (next, shot) = run_fatigue(&st, &statics, seed, 7);
         let mc = shot
             .rolls
