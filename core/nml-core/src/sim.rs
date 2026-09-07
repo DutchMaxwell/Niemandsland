@@ -485,6 +485,117 @@ pub(crate) fn tray_breath_attack(
 /// `combined_alive`) takes the burst, repeatable; a destroyed target drops
 /// out. Wave-3 gate: a record stamped 5 never saw these rules in its
 /// recorder (`acts::EPOCH_6_TABLE_RULES`).
+/// `_solo_apply_crossing_attack` main.gd:17086-17130 (call site main.gd:1081,
+/// the pre-attack slot after Utility Buff/Storm): once per activation, when
+/// the executed move trails pass through enemy units, roll the rule's own
+/// rating against the NEAREST crossed enemy — each `wound_target`+ face is
+/// one direct wound (`land_wounds`, no save), exactly the table's
+/// `_solo_land_wounds(target, wounds, 0)`. The trails are the mover's own
+/// legs, `state` -> `next` per alive model (rigid translation or movement
+/// port alike), matched against alive enemy base discs the way
+/// `SoloController.trails_cross_unit_bases` (solo_controller.gd:8844-8863)
+/// does — pure segment-vs-disc geometry, no terrain input. Gate: the FROZEN
+/// `EPOCH_7_TABLE_RULES`; a record below 7 never rolls.
+pub(crate) fn tray_crossing_attack(
+    statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+        return;
+    }
+    let pid = next.player[si];
+    // The executed trails: one straight leg per alive model of the ACTING
+    // unit (`last_move_paths` is the activated unit's own move); a leg that
+    // moves nothing crosses nothing.
+    let legs: Vec<([f64; 2], [f64; 2])> = (0..next.positions[si].len())
+        .filter_map(|m| {
+            let a = state.positions.get(si)?.get(m)?;
+            let b = next.positions.get(si)?.get(m)?;
+            Some(([a[0], a[2]], [b[0], b[2]]))
+        })
+        .filter(|(a, b)| (b[0] - a[0]).hypot(b[1] - a[1]) > f64::EPSILON)
+        .collect();
+    if legs.is_empty() {
+        return;
+    }
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach {
+        bearers.extend(state.attached[si].iter().copied());
+    }
+    for b in bearers {
+        if next.alive[b] <= 0 {
+            continue;
+        }
+        let Some(spec) = statics[next.roster.profile[b]].crossing_attack.clone() else { continue };
+        // Alive, un-reserved, UNATTACHED enemies whose bases a trail touch,
+        // then the table's own pick: the crossed unit NEAREST the acting
+        // unit's centre (main.gd:17115-17118), first-index on a tie. The
+        // immutable `next` reads all end inside this block, before
+        // `land_wounds` borrows it mutably below.
+        let pick = {
+            // `trails_cross_unit_bases`' segment-vs-disc test, in the
+            // WORLD-METRE frame the state already carries (radii are metres
+            // too). Defined INSIDE the pick block: its `next` borrow must end
+            // before `land_wounds` borrows `next` mutably below.
+        let crosses = |ti: usize| -> bool {
+            (0..next.positions[ti].len()).any(|m| {
+                if next.wounds[ti].get(m).map(|&w| w <= 0).unwrap_or(false) {
+                    return false;
+                }
+                let c = &next.positions[ti][m];
+                let r = next.radii[ti].get(m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+                legs.iter().any(|&(a, b)| {
+                    let seg = [b[0] - a[0], b[1] - a[1]];
+                    let l2 = seg[0] * seg[0] + seg[1] * seg[1];
+                    let t = if l2 < 1e-9 { 0.0 } else {
+                        (((c[0] - a[0]) * seg[0] + (c[2] - a[1]) * seg[1]) / l2).clamp(0.0, 1.0)
+                    };
+                    let dx = a[0] + seg[0] * t - c[0];
+                    let dy = a[1] + seg[1] * t - c[2];
+                    dx * dx + dy * dy <= r * r
+                })
+            })
+        };
+
+            let crossed: Vec<usize> = (0..next.units())
+                .filter(|&ti| {
+                    next.player[ti] != pid && next.alive[ti] > 0 && !next.dormant[ti]
+                        && !(seams.hero_attach && next.attached_to[ti].is_some())
+                        && crosses(ti)
+                })
+                .collect();
+            if crossed.is_empty() {
+                continue;
+            }
+            let centre = geom::centre(&next.positions[si]);
+            let dist =
+                |ti: usize| geom::length(geom::sub(geom::centre(&next.positions[ti]), centre));
+            let target = crossed
+                .iter()
+                .copied()
+                .min_by(|&x, &y| dist(x).total_cmp(&dist(y)))
+                .expect("non-empty");
+            let tname = statics[next.roster.profile[target]].name.clone();
+            let owner = statics[next.roster.profile[b]].name.clone();
+            (target, tname, owner)
+        };
+        let (target, tname, owner) = pick;
+        let n = spec.dice.max(1) as usize;
+        let faces = tray.roll(n);
+        shot.rolls.push(crate::dice::Roll {
+            kind: "attack", count: n as i64, target: spec.wound_target,
+            faces: faces.clone(), owner: owner.clone(),
+        });
+        let wounds = faces.iter().filter(|&&f| f as i64 >= spec.wound_target).count() as i64;
+        shot.log.push(format!(
+            "Crossing Attack: {owner} crosses {tname} — {wounds} of {n} dice wound"
+        ));
+        if wounds > 0 {
+            land_wounds(next, target, wounds);
+        }
+    }
+}
+
 pub(crate) fn tray_storm_attack(
     statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams,
     tray: &mut Tray, shot: &mut ShootResult,
@@ -3981,6 +4092,13 @@ fn resolve_with(
     // `tray_storm_attack`; no enemy in reach does not spend the burst.
     if let Some((tray, shot)) = dice.as_mut() {
         tray_storm_attack(statics, &mut next, si, seams, tray, shot);
+    }
+
+    // --- CROSSING ATTACK (main.gd:1081, right after Storm in the table's own
+    // pre-attack order), every action kind with a tray — see
+    // `tray_crossing_attack`; no crossed enemy rolls nothing.
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_crossing_attack(statics, state, &mut next, si, seams, tray, shot);
     }
 
     // --- GROWTH MARKERS (main.gd:16984), the per-round tick lazily anchored
