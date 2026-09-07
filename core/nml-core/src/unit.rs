@@ -3507,6 +3507,32 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
             );
         }
     }
+    // Wave 4 follow-up (rules-musician, epoch 7): "Musician" ("This model
+    // and its unit moves +1\" when using move actions") — the entry's own
+    // `move_bonus_in` onto BOTH bands, the table's `sim_move_bands`
+    // (solo_controller.gd:5515-5522) flat add, which the recorded
+    // `state.bands` (battle_sim.gd:1650 -> io.rs:755-765) already carries
+    // precomputed. Evidence-only standing like the rest of this fold (the
+    // accepted `bounding` shape, PR #653): this stamp is the core's own
+    // per-entry read, never a simulation input — a live re-fold at the move
+    // seam would double-count a recorded band. No Boost couples to the name
+    // ("Great Musician" is a separate Utility-Buff name, UTILITY_BUFF_SEAMS
+    // 2026-09-05 sec.2, not covered here). Gated on the FROZEN
+    // `EPOCH_7_TABLE_RULES`, never the literal.
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && unit_rule_active(reg, p, "Musician") {
+        let map = reg.rules_for(&p.game_system);
+        if let Some(e) = map.lookup(&p.faction_folder, "Musician") {
+            let bonus = e.param_f("move_bonus_in", 0.0);
+            acc.advance += bonus;
+            acc.rush += bonus;
+            hit = true;
+            crate::sim::trace_rule(
+                "move-bands",
+                "Musician",
+                &format!("{}: +{bonus}\" advance, +{bonus}\" rush/charge", p.name),
+            );
+        }
+    }
     if hit { Some(acc) } else { None }
 }
 

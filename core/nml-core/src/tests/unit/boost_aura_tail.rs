@@ -1761,6 +1761,36 @@ use super::*;
         );
     }
 
+    /// "Musician" (gf+aof `common`, Musician primitive — wave-4 follow-up,
+    /// rules-musician, epoch 7): "This model and its unit moves +1\" when
+    /// using move actions". The named arm in `move_rule_mods_of` reads the
+    /// entry's own `move_bonus_in` onto BOTH bands (the table's
+    /// `sim_move_bands` solo_controller.gd:5515-5522 adds it to advance,
+    /// rush AND charge). Evidence-only standing like the whole family
+    /// (the accepted `bounding` shape, PR #653): the +1" reaches this core
+    /// precomputed inside the RECORDED `state.bands` (battle_sim.gd:1650 ->
+    /// io.rs:755-765), so a live re-fold would double-count — the stamp is
+    /// the core's own per-entry read, never a simulation input. PRESENT at
+    /// 7, ABSENT at 6 (byte-exact), ABSENT without the rule.
+    #[test]
+    fn musician_reads_one_inch_on_both_bands_at_epoch_7() {
+        assert_eq!(
+            wave3_static_of("Musician", "gf", "wormhole_daemons_of_change", 7).move_rule_mods,
+            Some(Bands { advance: 1.0, rush: 1.0 }),
+            "epoch 7: the entry's own move_bonus_in on both bands (RED before the fix)"
+        );
+        assert_eq!(
+            wave3_static_of("Musician", "gf", "wormhole_daemons_of_change", 6).move_rule_mods,
+            None,
+            "epoch 6: granted, not read (byte-exact)"
+        );
+        assert_eq!(
+            wave3_static_of("", "gf", "wormhole_daemons_of_change", 7).move_rule_mods,
+            None,
+            "no rule, no band"
+        );
+    }
+
     /// "Reinforced" PIN (NOT a port): its registry entry (Fortified
     /// primitive, the over-9"-gated form) is table-live through main.gd's
     /// own coverage wave, but the core's save batch sees no modifier
