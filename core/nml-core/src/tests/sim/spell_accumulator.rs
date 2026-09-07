@@ -20,7 +20,7 @@ use super::*;
         Spell {
             name: "bolt".into(),
             status: "modeled".into(),
-            threshold: 1,
+            threshold: 2,
             range_in: 18.0,
             target_count: 1,
             effect_kind: "damage".into(),
@@ -33,11 +33,15 @@ use super::*;
     }
 
     /// Unit 0 = a Caster host with an EMPTY token pool, unit 1 = the battery
-    /// 2" away holding 3 tokens, units 2/3 = enemies at 12"/9". The spell's
-    /// threshold (1) is affordable ONLY through the battery.
+    /// 2" away holding 3 tokens (a unit of its OWN — the joined-hero chain is
+    /// `caster_of`'s business, never a battery), units 2/3 = enemies at
+    /// 12"/9". The spell's threshold (2) is affordable ONLY through the
+    /// battery when the caster holds fewer than 2 of its own.
     fn caster_and_battery() -> (State, Vec<UnitStatic>) {
         let mut st = four_unit_line();
         st.casts = vec![0, 3, 0, 0];
+        st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None, None, None]);
         let mut caster = UnitStatic::default();
         caster.is_caster = true;
         caster.spells = vec![spell()];
