@@ -336,6 +336,32 @@ use super::*;
         );
     }
 
+    /// "Re-Deployment" (gf/battle_brothers, the deployment-phase redeploy):
+    /// the entry's own `max_units` 2 stamped at epoch 7 - the frozen
+    /// `EPOCH_7_TABLE_RULES` gate every new read; epoch 6 (pre-gate) and the
+    /// rule-less carrier stay 0. The re-place CHOICE itself stays table-side
+    /// (the field's doc; the sibling withdraw beat's recorded decision).
+    #[test]
+    fn a_re_deployment_carrier_stamps_its_max_units_at_epoch_7() {
+        assert_eq!(
+            wave3_static_of("Re-Deployment", "gf", "battle_brothers", 7)
+                .re_deployment_max_units,
+            2,
+            "the registry's own max_units"
+        );
+        assert_eq!(
+            wave3_static_of("Re-Deployment", "gf", "battle_brothers", 6)
+                .re_deployment_max_units,
+            0,
+            "the wave is epoch-gated: rules_epoch 6 is pre-gate, RED before the fix"
+        );
+        assert_eq!(
+            wave3_static_of("", "gf", "battle_brothers", 7).re_deployment_max_units,
+            0,
+            "no rule, no stamp"
+        );
+    }
+
     /// WIRING: the expansion reaches the static layer — a unit printed with
     /// ONLY "Fearless Aura" is fearless through `build_for` at epoch 6 (the
     /// core's own additive leg), NOT at epoch 5 (the gate is off there, the
