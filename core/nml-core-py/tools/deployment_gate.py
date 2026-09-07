@@ -223,6 +223,11 @@ def compare_dump(dump, roll, run, red_whole_side=False):
 # ALREADY-PORTED deploy_footprint_radius (solo_controller.gd:10258-10265, reused unchanged per
 # SPEC §3) computed by radius_of() below. Beacon geometry is out of scope (SPEC §2.5 decision 2)
 # — the fixture carries none, and every case here passes none.
+# WAVE 4 (S5 seam, part 1): the twin's first argument is now a `deployment::ArrivalZone`, and a trailing
+# `edge_band_m=None` selects which one. The nine positional arguments below therefore still mean exactly
+# what they meant — `zone` stays the plain rectangle this fixture was recorded against, which makes this
+# gate the proof that the zone parameter moved no arrival at all. A band depth (Reinforcement's 12") is a
+# different zone with no oracle here; it belongs to its own fixture on the day one is recorded.
 
 def radius_of(n_models, base_r):
     n = max(n_models, 1); cols = min(n, 5); rows = -(-n // cols)

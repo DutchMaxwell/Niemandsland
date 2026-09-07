@@ -2440,14 +2440,18 @@ fn no_terrain() -> Terrain {
 /// `deploy_footprint_radius`, computed by the caller, so the gate and the
 /// trainer hand in the same number.
 ///
-/// `board` and `beacons` are appended, never inserted, so the nine positional
-/// arguments `deployment_gate.py --arrival` passes keep meaning what they
-/// meant. `occupied` is BORROWED-and-returned rather than mutated in place:
+/// `board`, `beacons` and `edge_band_m` are appended, never inserted, so the
+/// nine positional arguments `deployment_gate.py --arrival` passes keep meaning
+/// what they meant. `edge_band_m` is the wave-4 arrival ZONE selector: `None`
+/// keeps `zone` a plain rectangle (every caller to date), a depth in metres
+/// makes it the table's 12" edge band, where the unit must stand fully within
+/// that many metres of some table edge (`deployment::ArrivalZone`).
+/// `occupied` is BORROWED-and-returned rather than mutated in place:
 /// the Rust side books the chosen spot into it (the table does that inside
 /// `_finish_reserve_arrival`), and the caller reads the booking back off the
 /// returned list so the next unit of the same alternating round sees it.
 #[pyfunction]
-#[pyo3(signature = (zone, objectives, occupied, enemies, own_ring_m, radius, footprint, base_r, flying, board=None, beacons=None))]
+#[pyo3(signature = (zone, objectives, occupied, enemies, own_ring_m, radius, footprint, base_r, flying, board=None, beacons=None, edge_band_m=None))]
 #[allow(clippy::too_many_arguments)]
 fn arrive_one(
     py: Python<'_>,
@@ -2462,6 +2466,7 @@ fn arrive_one(
     flying: bool,
     board: Option<PyRef<'_, Board>>,
     beacons: Option<&Bound<'_, PyAny>>,
+    edge_band_m: Option<f64>,
 ) -> PyResult<Py<PyAny>> {
     let z: [f64; 4] = json_of(zone, "zone")?;
     let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
@@ -2480,8 +2485,13 @@ fn arrive_one(
             &owned
         }
     };
+    let rect = Rect::new(z[0], z[1], z[2], z[3]);
+    let zone = match edge_band_m {
+        Some(band_m) => deployment::ArrivalZone::EdgeStrip { table: rect, band_m },
+        None => deployment::ArrivalZone::Rect(rect),
+    };
     let spot = deployment::arrive_one(
-        &Rect::new(z[0], z[1], z[2], z[3]),
+        &zone,
         &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
         &mut occ,
         &ene,

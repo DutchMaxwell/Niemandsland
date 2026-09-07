@@ -1708,10 +1708,16 @@ fn empty_board() -> Terrain {
     Terrain::build(&plain)
 }
 
-/// The whole table as the arrival zone (main.gd:10428-10431 — `table_size *
-/// 0.3048`, centred), 6x4 ft.
-fn arrival_zone() -> deployment::Rect {
+/// The whole table, 6x4 ft (main.gd:10428-10431 — `table_size * 0.3048`,
+/// centred).
+fn table_rect() -> deployment::Rect {
     deployment::Rect::new(-6.0 * 0.3048 / 2.0, -4.0 * 0.3048 / 2.0, 6.0 * 0.3048, 4.0 * 0.3048)
+}
+
+/// The whole table as the AMBUSH arrival zone — the plain-rectangle variant,
+/// which is what every arrival did before the zone parameter existed.
+fn arrival_zone() -> deployment::ArrivalZone {
+    deployment::ArrivalZone::Rect(table_rect())
 }
 
 /// One enemy model dead centre, on the single objective, so the objective-near
@@ -1827,8 +1833,10 @@ fn equal_scores_resolve_to_the_smallest_y_then_smallest_x() {
     let board = empty_board();
     let mut occ: Vec<deployment::Occupied> = Vec::new();
     let objs = [a, b];
-    let spot =
-        deployment::arrive_one(&zone, &objs, &mut occ, &[], &[], 0.0, &board, 0.0, &[], 0.0, false);
+    let spot = deployment::arrive_one(
+        &deployment::ArrivalZone::Rect(zone), &objs, &mut occ, &[], &[], 0.0, &board, 0.0, &[],
+        0.0, false,
+    );
     let earlier = if (a.1, a.0) < (b.1, b.0) { a } else { b };
     let later = if (a.1, a.0) < (b.1, b.0) { b } else { a };
     assert_eq!(spot, earlier, "first minimum in scan order wins, not {later:?}");
@@ -1887,6 +1895,92 @@ fn a_box_corner_outside_the_beacon_circle_is_rejected() {
         d >= deployment::AMBUSH_MIN_ENEMY_DIST_M + 0.015,
         "so the 9\" ring (plus the enemy's base) applied instead: {d}"
     );
+}
+
+// ---- the ARRIVAL ZONE (S5 seam, part 1) ---------------------------------
+// `arrive_one`'s first parameter grew from a bare `Rect` into an
+// `ArrivalZone`. These three pin what that may and may not do.
+
+/// THE PIN. A `Rect` zone must search exactly the rectangle the bare `&Rect`
+/// searched — so the ringed pass is rebuilt here BY HAND, out of `best_spot`
+/// plus the enemy rings, and compared against what `arrive_one` answers. A
+/// refactor that shifts the scan by a single cell fails on this line.
+#[test]
+fn a_rect_zone_searches_exactly_what_the_bare_rect_searched() {
+    let board = empty_board();
+    let ring = deployment::AMBUSH_MIN_ENEMY_DIST_M;
+    let enemies = centre_enemy(0.0);
+    let search: Vec<deployment::Occupied> = enemies
+        .iter()
+        .map(|e| deployment::Occupied {
+            pos: e.pos,
+            radius: ring.max(e.min_dist_m) + e.pad_m,
+        })
+        .collect();
+    let blocked = |p: (f64, f64)| deployment::spot_blocked(&board, p, false, 0.05, &[], 0.015);
+    let bare = deployment::best_spot(
+        &table_rect(), &[(0.0, 0.0)], &search, 0.05, &blocked, deployment::DEPLOY_SPOT_STEP_M,
+        &[], 0.015, f64::INFINITY,
+    );
+    let (spot, _) = arrive(&enemies, &[], ring);
+    assert!(bare.0.is_finite(), "the hand-built search answers at all: {bare:?}");
+    assert_eq!(spot, bare, "the zone parameter moved an arrival it must not move");
+}
+
+/// The strip is FOUR bands, not a rectangle with a hole. The base below sits
+/// 0.04 m short of the inner corner on BOTH axes: it is fully inside neither
+/// the left band nor the near one, so the table refuses it (:6089-6098) —
+/// while its distance to the inner rectangle is 0.057 m, more than its own
+/// radius, so a "clear of the middle" test would have waved it through.
+#[test]
+fn an_edge_strip_refuses_the_diagonal_corner_a_hole_would_admit() {
+    let table = table_rect();
+    let band = 12.0 * IN2M;
+    let zone = deployment::ArrivalZone::EdgeStrip { table, band_m: band };
+    let r = 0.05;
+    let gap = 0.04;
+    let corner = (table.pos.0 + band - gap, table.pos.1 + band - gap);
+    assert!(
+        gap.hypot(gap) > r,
+        "the fixture IS the corner case: {} m clear of the inner rect, over the {r} m base",
+        gap.hypot(gap)
+    );
+    assert!(!zone.admits(corner, r, &[], 0.0), "fully inside NO single band, so refused");
+    // The controls: one radius in from the left edge is fully inside the left
+    // band, and the table centre is inside none of the four.
+    assert!(zone.admits((table.pos.0 + r + 0.01, 0.0), r, &[], 0.0), "hard against the left edge");
+    assert!(!zone.admits((0.0, 0.0), r, &[], 0.0), "the middle of the table is no band");
+}
+
+/// The zone decides where the unit lands, on the same inputs. One objective in
+/// the table centre pulls the plain rectangle's scan straight to the middle;
+/// with the 12" band the very same call must answer inside a band instead.
+#[test]
+fn an_edge_strip_arrival_lands_inside_the_band() {
+    let board = empty_board();
+    let table = table_rect();
+    let band = 12.0 * IN2M;
+    let (r, obj) = (0.05, [(0.0, 0.0)]);
+    let mut occ: Vec<deployment::Occupied> = Vec::new();
+    let plain = deployment::arrive_one(
+        &arrival_zone(), &obj, &mut occ, &[], &[], 0.0, &board, r, &[], 0.015, false,
+    );
+    let mut occ2: Vec<deployment::Occupied> = Vec::new();
+    let strip = deployment::arrive_one(
+        &deployment::ArrivalZone::EdgeStrip { table, band_m: band }, &obj, &mut occ2, &[], &[],
+        0.0, &board, r, &[], 0.015, false,
+    );
+    let end = table.end();
+    let in_band = |p: (f64, f64)| {
+        (p.0 + r) - table.pos.0 <= band
+            || end.0 - (p.0 - r) <= band
+            || (p.1 + r) - table.pos.1 <= band
+            || end.1 - (p.1 - r) <= band
+    };
+    assert!(strip.0.is_finite(), "the band offers a spot: {strip:?}");
+    assert!(in_band(strip), "the copy stands within 12\" of an edge: {strip:?}");
+    assert!(!in_band(plain), "and the plain rectangle answered the middle: {plain:?}");
+    assert_eq!(occ2.len(), 1, "the spot is booked for the next arrival");
 }
 
 /// `arrive_unit` brings the unit back with the strength it PARKED. RED: read

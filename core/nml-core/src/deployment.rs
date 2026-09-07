@@ -2300,6 +2300,86 @@ fn rect_intersection(a: &Rect, b: &Rect) -> Rect {
     Rect::new(pos.0, pos.1, end.0 - pos.0, end.1 - pos.1)
 }
 
+/// WHERE an arriving unit may be put down. Until wave 4 this was one bare
+/// `&Rect` — the whole table for an Ambush arrival (main.gd:10428-10431) — and
+/// `Rect` is that parameter, byte for byte: `search_rect` hands the same
+/// rectangle to `best_spot` and `admits` never refuses a spot.
+///
+/// `EdgeStrip` is the second shape the table actually uses and a rectangle
+/// cannot express: "fully within 12\" of ANY table edge"
+/// (`SoloController.REINFORCEMENT_EDGE_IN`, solo_controller.gd:5981 — the same
+/// band `PlacementGhost.edge_strip_zone` draws for the human, :36/:80). It is
+/// deliberately NOT "the table minus its inner rectangle": the table's law is
+/// fully inside at least ONE of the four bands (`reinforcement_spot_in_strip`,
+/// :6089-6098), which is STRICTER at the corners — a base straddling the left
+/// band and the near band diagonally is fully inside neither, and the table
+/// refuses it while a hole-in-a-rect test would wave it through.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ArrivalZone {
+    /// Every caller before wave 4.
+    Rect(Rect),
+    /// `table` is the table rectangle, `band_m` the band's depth in metres.
+    EdgeStrip { table: Rect, band_m: f64 },
+}
+
+impl ArrivalZone {
+    /// The rectangle `best_spot` scans. The strip scans the WHOLE table and
+    /// rejects per spot, exactly as the table's own lattice does
+    /// (:6117-6120 walks the full rect and asks `reinforcement_spot_in_strip`
+    /// inside it) — a band is four rectangles, and scanning them separately
+    /// would change `best_spot`'s single y-outer/x-inner order, which is law.
+    pub fn search_rect(&self) -> &Rect {
+        match self {
+            ArrivalZone::Rect(r) => r,
+            ArrivalZone::EdgeStrip { table, .. } => table,
+        }
+    }
+
+    /// Whether `p` is a legal unit CENTRE for this shape. A rectangle admits
+    /// everything `best_spot` already offers — its own footprint margins keep
+    /// the unit inside the rect (:665-666), so this adds nothing and moves
+    /// nothing.
+    ///
+    /// The strip asks the table's question of EVERY model base
+    /// (`PlacementGhost.validate` :71-78 walks the shape), at `base_r` with a
+    /// model grid and at `radius` for a bare regiment tray — the same split
+    /// `spot_blocked` makes. Offsets add in f32 like the table's `p + off`.
+    pub fn admits(
+        &self,
+        p: (f64, f64),
+        radius: f64,
+        footprint: &[(f64, f64)],
+        base_r: f64,
+    ) -> bool {
+        match self {
+            ArrivalZone::Rect(_) => true,
+            ArrivalZone::EdgeStrip { table, band_m } => {
+                if footprint.is_empty() {
+                    return base_in_strip(p, radius, table, *band_m);
+                }
+                footprint.iter().all(|off| base_in_strip(v2_add(p, *off), base_r, table, *band_m))
+            }
+        }
+    }
+}
+
+/// `SoloController.reinforcement_spot_in_strip` (solo_controller.gd:6089-6098):
+/// a base of radius `r` centred at `p` stands FULLY on the table AND FULLY
+/// within `band_m` of at least one edge — "fully within m of edge E" being
+/// "the point of the base FARTHEST from E is still within m of E". Compared at
+/// f32, where Godot compares them.
+fn base_in_strip(p: (f64, f64), r: f64, table: &Rect, band_m: f64) -> bool {
+    let (px, pz, rr) = (p.0 as f32, p.1 as f32, r as f32);
+    let end = table.end();
+    let (x0, z0) = (table.pos.0 as f32, table.pos.1 as f32);
+    let (x1, z1) = (end.0 as f32, end.1 as f32);
+    if px - rr < x0 || px + rr > x1 || pz - rr < z0 || pz + rr > z1 {
+        return false; // a model may not hang off the table
+    }
+    let m = band_m as f32;
+    (px + rr) - x0 <= m || x1 - (px - rr) <= m || (pz + rr) - z0 <= m || z1 - (pz - rr) <= m
+}
+
 /// The arrival spot for ONE reserve unit, or `(INF, INF)` when the table has
 /// none right now — in which case the unit stays in reserve for a later round.
 /// On success the spot is booked into `occupied` (the table books it inside
@@ -2326,7 +2406,7 @@ fn rect_intersection(a: &Rect, b: &Rect) -> Rect {
 /// the spot alone.
 #[allow(clippy::too_many_arguments)]
 pub fn arrive_one(
-    zone: &Rect,
+    zone: &ArrivalZone,
     objectives: &[(f64, f64)],
     occupied: &mut Vec<Occupied>,
     enemies: &[ArrivalEnemy],
@@ -2338,9 +2418,15 @@ pub fn arrive_one(
     base_r: f64,
     flying: bool,
 ) -> (f64, f64) {
-    let blocked = |p: (f64, f64)| spot_blocked(board, p, flying, radius, footprint, base_r);
+    // The zone's own law rides INSIDE `blocked`, so it applies to both passes:
+    // a beacon circle may reach out of an edge strip, and a waiver on enemy
+    // DISTANCES is not a waiver on where the rule says the copy may stand.
+    let blocked = |p: (f64, f64)| {
+        !zone.admits(p, radius, footprint, base_r)
+            || spot_blocked(board, p, flying, radius, footprint, base_r)
+    };
     for b in beacons {
-        let bzone = rect_intersection(&beacon_box(b), zone);
+        let bzone = rect_intersection(&beacon_box(b), zone.search_rect());
         if bzone.size.0 <= 0.0 || bzone.size.1 <= 0.0 {
             continue;
         }
@@ -2354,9 +2440,10 @@ pub fn arrive_one(
         occupied.push(Occupied { pos: s, radius });
         return s;
     }
+    let rect = zone.search_rect();
     let spot = if enemies.is_empty() {
         best_spot(
-            zone, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
+            rect, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
             f64::INFINITY,
         )
     } else {
@@ -2365,7 +2452,7 @@ pub fn arrive_one(
             search.push(Occupied { pos: e.pos, radius: own_ring_m.max(e.min_dist_m) + e.pad_m });
         }
         best_spot(
-            zone, objectives, &search, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
+            rect, objectives, &search, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
             f64::INFINITY,
         )
     };
