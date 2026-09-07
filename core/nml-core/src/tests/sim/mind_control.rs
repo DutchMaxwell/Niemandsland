@@ -106,7 +106,7 @@ use super::*;
             .iter()
             .zip(after.iter())
             .map(|(a, b)| ((a[0] - b[0]).powi(2) + (a[2] - b[2]).powi(2)).sqrt())
-            .fold(f64::INFINITY, f64::max);
+            .fold(0.0_f64, f64::max);
         assert!(
             moved > 5.0 * IN2M,
             "the failed test moves the target up to 6\" straight away from the bearer — moved {moved:.3} m"
