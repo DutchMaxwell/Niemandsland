@@ -354,6 +354,28 @@ func test_melee_loser_above_half_is_shaken() -> void:
 	assert_bool(bool(v.get("shaken", false))).is_true()
 
 
+## Fear(X) in the melee COMPARISON (GF/AoF Advanced Rules v3.5.1 p.13, issue #634):
+## the same losing fight as above, but the defender carries Fear(2) — it counts
+## as having dealt 2 + its floored 0 wound, beats the charger's 1, and the
+## CHARGER (above half, Q4) is the one who tests and shakes. Wounds actually
+## removed never change (the 1 dead victim stays dead).
+func test_fear_counts_into_the_melee_won_comparison() -> void:
+	var brutes := _armed(2, [Vector3.ZERO], "Brutes", [{"name": "Fists", "range": 0}])
+	var pos: Array = []
+	for i in range(4):
+		pos.append(Vector3((8.0 + i) * IN2M, 0, 0))
+	var victims := _armed(1, pos, "Victims", [{"name": "Club", "range": 0, "attacks": 1}],
+		["Fear(2)"])
+	var next := BattleSim.resolve(_capture([brutes, victims]),
+		{"unit": "Brutes", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(8.0 * IN2M, 0, 0), "charge": "Victims"})
+	var v: Dictionary = next["units"]["Victims"]
+	assert_int(int(v["alive"])).is_equal(3)
+	assert_bool(bool(v.get("shaken", false))).is_false()
+	var b: Dictionary = next["units"]["Brutes"]
+	assert_bool(bool(b.get("shaken", false))).is_true()
+
+
 ## A wound-for-wound tie (here: 0 vs 0 — both clubs floor to nothing) tests
 ## nobody; the charge still fatigues the charger.
 func test_melee_tie_tests_nobody() -> void:
