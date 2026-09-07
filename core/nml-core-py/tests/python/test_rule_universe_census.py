@@ -126,6 +126,50 @@ def test_census_matrix_red_knob_and_test_gate(mini):
     assert red["ok"] is True
 
 
+def test_hide_ok_survivor_own_token(tmp_path):
+    """RED --hide with an own-token survivor: a name aliased to the hidden
+    primitive that is PORTED by its OWN name token (the 2026-09-07
+    name-vs-primitive split) must survive the hide - hiding the primitive
+    correctly cannot remove its own-token evidence. The knob's verdict is
+    therefore NOT `drop == ported_aliased` (that counted the survivor and
+    printed VIOLATION on baseline code): every name that DROPPED must be
+    among the primitive's aliases."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
+        "common": {
+            "Charge Bench": {"primitive": "Bane", "params": {"reroll_save_sixes": True}},
+            "Bane Saver": {"primitive": "Bane", "params": {"reroll_save_sixes": True}},
+        },
+        "factions": {},
+    }))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    # "Charge Bench" rides its OWN name literal; the Bane primitive token is
+    # only class evidence. "Bane Saver" has no own token - it drops with Bane.
+    (root / "core/nml-core/src/arm.rs").write_text(
+        'pub const B: &str = "Bane";\n'
+        'pub fn arm() -> bool { let name = "Charge Bench"; name == "Charge Bench" }\n')
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [{"name": "Charge Bench"}, {"name": "Bane Saver"}],
+    }))
+    res = census.census(tmp_path / "books", root, hide="Bane")
+    red = res["red"]
+    assert res["summary"]["core_ported"] == 2  # both PORTED before the hide
+    assert red["drop"] == 1  # only Bane Saver fell; Charge Bench rides its own token
+    assert red["ported_aliased"] == 2
+    assert red["ok"] is True, (
+        "the only dropped name is a Bane alias - own-token survivors are"
+        " expected, not a violation"
+    )
+    assert "Charge Bench" in red["aliased_names"]
+    assert "Bane Saver" in red["aliased_names"]
+
+
 def test_stamped_vs_ported_on_a_shared_primitive(tmp_path):
     """A shared "class" primitive (#489's Utility Buff shape): a resolver
     token for the PRIMITIVE stamps every entry, but only a param in
