@@ -155,12 +155,12 @@ use super::*;
         st.reckless_ap_round[0] = 0;
         let (_, shot) = tag_volley(&statics, &st, Seams { rules_epoch: 7, ..Seams::default() });
         assert!(
-            shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
+            shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 5),
             "stamped attacker: the saves run at AP(1) -- got {:#?}",
             shot.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
         assert!(
-            shot.rolls.iter().all(|r| r.kind != "defense" || r.target == 3 || r.count == 0),
+            shot.rolls.iter().all(|r| r.kind != "defense" || r.target == 5 || r.count == 0),
             "every spent save window runs at AP(1)"
         );
 
@@ -170,7 +170,8 @@ use super::*;
         statics[0].shoot[0].attacks = 64;
         let (_, shot0) = tag_volley(&statics, &st0, Seams { rules_epoch: 7, ..Seams::default() });
         assert!(
-            shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 4),
+            shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 4)
+                && !shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 5),
             "unstamped: the plain save -- got {:#?}",
             shot0.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
@@ -190,7 +191,7 @@ use super::*;
         let seams = Seams { rules_epoch: 7, ..Seams::default() };
         strike_phase(&statics, &mut st, 0, 2, true, seams, &mut tray, &mut shot);
         assert!(
-            shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
+            shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 5),
             "backfire: the melee saves run at AP(1) -- got {:#?}",
             shot.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
@@ -203,7 +204,7 @@ use super::*;
         strike_phase(&statics, &mut st0, 0, 2, true, seams, &mut tray0, &mut shot0);
         assert!(
             shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 4)
-                && !shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
+                && !shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 5),
             "unstamped melee: the plain save -- got {:#?}",
             shot0.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
