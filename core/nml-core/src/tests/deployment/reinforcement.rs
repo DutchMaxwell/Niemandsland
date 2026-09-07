@@ -35,6 +35,11 @@ use super::*;
         "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.02,
         "game_system":"gf","faction_folder":"ratmen_clans","special_rules":[],
         "item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]},
+      "p3_0_c":{"unit_id":"p3_0_c","name":"C","quality":4,"defense":3,"tough":1,
+        "wounds_max":[1,1,1,1,1],"model_count":5,"caster_value":0,"base_radius":0.22,
+        "game_system":"gf","faction_folder":"ratmen_clans","special_rules":[],
+        "item_grants":[],"attached_hero_rules":[],
         "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
 
     const PLAIN: &str = r#"{"round":1,"rounds_total":4,"scoring":"end","units":{
@@ -45,6 +50,27 @@ use super::*;
         "mods":{},"mods_base":{},"bands":{"advance":6.0,"rush":12.0},"ledger":{}},
       "p2_0_b":{"player":2,"alive":1,"wounds":[1],"radii":[0.02],
         "positions":[[1.0,0.0,0.0]],"in_cover":false,"shaken":false,"fatigued":false,
+        "activated":false,"casts":0,"morale_bonus":0,"aircraft":false,"dormant":false,
+        "ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":0.0,
+        "mods":{},"mods_base":{},"bands":{"advance":6.0,"rush":12.0}}}}"#;
+
+    /// The crowded variant of `PLAIN`: the same two units plus `p3_0_c`, five
+    /// wide friendly bases tiled along the owner's own back edge.
+    const CROWDED: &str = r#"{"round":1,"rounds_total":4,"scoring":"end","units":{
+      "p1_0_a":{"player":1,"alive":1,"wounds":[1],"radii":[0.02],
+        "positions":[[0.0,0.0,0.0]],"in_cover":false,"shaken":true,"fatigued":false,
+        "activated":false,"casts":0,"morale_bonus":0,"aircraft":false,"dormant":false,
+        "ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":0.0,
+        "mods":{},"mods_base":{},"bands":{"advance":6.0,"rush":12.0},"ledger":{}},
+      "p2_0_b":{"player":2,"alive":1,"wounds":[1],"radii":[0.02],
+        "positions":[[1.0,0.0,0.0]],"in_cover":false,"shaken":false,"fatigued":false,
+        "activated":false,"casts":0,"morale_bonus":0,"aircraft":false,"dormant":false,
+        "ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":0.0,
+        "mods":{},"mods_base":{},"bands":{"advance":6.0,"rush":12.0}},
+      "p3_0_c":{"player":1,"alive":5,"wounds":[1,1,1,1,1],"radii":[0.22,0.22,0.22,0.22,0.22],
+        "positions":[[-0.65,0.0,-0.38],[-0.325,0.0,-0.38],[0.0,0.0,-0.38],
+                     [0.325,0.0,-0.38],[0.65,0.0,-0.38]],
+        "in_cover":false,"shaken":false,"fatigued":false,
         "activated":false,"casts":0,"morale_bonus":0,"aircraft":false,"dormant":false,
         "ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":0.0,
         "mods":{},"mods_base":{},"bands":{"advance":6.0,"rush":12.0}}}}"#;
@@ -64,6 +90,19 @@ use super::*;
         let mut cache = ProfileCache::new(header.profiles);
         let mut roster = None;
         let st = io::state_from_json(&plain, &mut cache, &mut roster).expect("state");
+        let statics = statics_of(&st, epoch);
+        (st, statics)
+    }
+
+    /// The crowded fixture: the same board plus `p3_0_c`, five wide friendly
+    /// bases tiled along the owner's own back edge so the 12-inch band's near
+    /// strip has no free lattice point left (measured over `best_spot`'s own
+    /// 0.025 m scan grid, step `DEPLOY_SPOT_STEP_M`).
+    fn line_crowded(epoch: u32) -> (State, Vec<UnitStatic>) {
+        let header = read_act_header(HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let st = io::state_from_json(CROWDED, &mut cache, &mut roster).expect("state");
         let statics = statics_of(&st, epoch);
         (st, statics)
     }
@@ -191,6 +230,31 @@ use super::*;
     #[test]
     fn the_copy_arrives_within_twelve_inches_of_an_edge() {
         let (mut st, statics) = line(CURRENT_RULES_EPOCH);
+        let board = empty_board();
+        let i = idx(&st, "p1_0_a");
+        beat(&statics, &board, &mut st, 1);
+        assert!(st.dormant[i], "round 1: the carrier is Shaken, so it steps off");
+        beat(&statics, &board, &mut st, 2);
+        assert!(!st.dormant[i], "round 2: the promised copy is due and lands");
+        assert_eq!(st.alive[i], 3, "a new copy at full starting size");
+        assert_eq!(st.positions[i].len(), 3, "three model bases on the table");
+        for m in &st.positions[i] {
+            assert!(in_band((m[0], m[2]), 0.02), "model at {m:?} is outside the 12\" band");
+        }
+    }
+
+    /// 4b. THE BAND BINDS — the case test 4 cannot reach, because the table's
+    /// own prefer point already lies inside the band on an empty board. Here
+    /// the owner's back edge is crowded: five wide friendly bases tile the
+    /// near strip, so `best_spot`'s nearest FREE point to the prefer point is
+    /// the open midfield — OUTSIDE the 12-inch band. A plain-rectangle
+    /// arrival zone (what `ArrivalZone::admits` would allow if the strip
+    /// check were dropped) puts the copy there and this test FALLS; the real
+    /// `EdgeStrip` refuses the midfield and lands the copy in the side band
+    /// instead, fully inside the rule's 12 inches.
+    #[test]
+    fn the_copy_arrives_within_twelve_inches_when_the_back_edge_is_crowded() {
+        let (mut st, statics) = line_crowded(CURRENT_RULES_EPOCH);
         let board = empty_board();
         let i = idx(&st, "p1_0_a");
         beat(&statics, &board, &mut st, 1);
