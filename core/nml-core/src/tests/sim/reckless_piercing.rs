@@ -157,6 +157,7 @@ use super::*;
             ..Default::default()
         };
         a.wounds_max = vec![1];
+        a.ctx.quality = 4;
         let mut b = UnitStatic { name: "b".into(), ..Default::default() };
         b.ctx.defense = 4;
         b.ctx.tough = 1;
@@ -205,6 +206,12 @@ use super::*;
         let mut b = UnitStatic { name: "b".into(), ..Default::default() };
         b.ctx.defense = 4;
         b.ctx.tough = 1;
+        // Movement reads every unit's base profile: all four roster slots
+        // must exist (the `buff_line` fixture's own note).
+        st.profiles = Rc::new(Profiles {
+            list: vec![st.profiles.list[0].clone(); 4],
+            index: HashMap::new(),
+        });
         let statics = vec![a, UnitStatic { name: "ah".into(), ..Default::default() }, b, UnitStatic { name: "bh".into(), ..Default::default() }];
         // A CHARGE needs contact: the fixture line sits 12" apart, the charge
         // move brings the charger in (the `movement` seam is on in
