@@ -878,6 +878,11 @@ pub struct UnitStatic {
     /// shape below — one field instead of a bool beside a range, because a
     /// carrier without a reach cannot hand off anything.
     pub coordinate_range_in: f64,
+    /// Wave 4 follow-up — `RulesRegistry.unit_rule_active(gu, "Vengeance")`
+    /// (main.gd:5891): the carrier flag `sim::vengeance_on_kill` counts the
+    /// dead unit's START size from. Read at build time like every
+    /// `unit_rule_active` stamp, so the kill seam needs no registry of its own.
+    pub vengeance_active: bool,
     /// Ambush arrival S2 — `SoloController._reserve_min_enemy_dist_m`
     /// (solo_controller.gd:9617-9621): the ring an ARRIVING ambusher must keep
     /// from every enemy model. `0.0` means "not an infiltrator", i.e. the plain
@@ -4433,6 +4438,7 @@ impl UnitStatic {
             } else {
                 0.0
             },
+            vengeance_active: unit_rule_active(reg, p, "Vengeance"),
             infiltrate_min_enemy_dist_in: if has_special_rule(&p.special_rules, "Infiltrate") {
                 unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN)
             } else {

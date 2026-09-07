@@ -150,3 +150,25 @@ use crate::sim::{ctx_live, ctx_of, resolve_stochastic_tray_on_board, HOLD};
         );
         assert!(shot.log.iter().all(|l| !l.contains("Vengeance")), "no log line");
     }
+
+    /// The table bridge. `AiActRecorder._ledger_of` exports the marker pool
+    /// (`unit_properties["vengeance_markers"]`, main.gd:5898) and a replayed
+    /// act must read it back: markers the TABLE banked two activations ago
+    /// cannot silently vanish between acts (the #498 divergence shape, one
+    /// marker at a time).
+    #[test]
+    fn the_ledger_restores_markers_already_on_the_table() {
+        let plain = PLAIN.replace(
+            r#""p2_0_b":{"player":2,"#,
+            r#""p2_0_b":{"ledger":{"vengeance_markers":2},"player":2,"#,
+        );
+        let header = read_act_header(HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let st = io::state_from_json(&plain, &mut cache, &mut roster).expect("state");
+        let b = idx(&st, "p2_0_b");
+        assert_eq!(st.vengeance_markers[b], 2, "the table's marker pool survives the fold");
+        let statics = statics_of(&st, CURRENT_RULES_EPOCH);
+        assert_eq!(vs_hit(&st, &statics, b, CURRENT_RULES_EPOCH), 2,
+            "every attacker of the marked unit rides +2 to hit, straight off the ledger");
+    }

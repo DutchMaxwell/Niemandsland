@@ -501,6 +501,12 @@ pub struct State {
     /// once-per-round gate, `_solo_growth_round_start`) — the `hit_and_run_
     /// round` shape, -1 for never.
     pub growth_round: Vec<i64>,
+    /// Wave 4 follow-up — `unit_properties["vengeance_markers"]` (main.gd:
+    /// 5898): the Vengeance markers ON this unit, banked by the DESTROYER when
+    /// a Vengeance unit fully dies (`sim::vengeance_on_kill`, the
+    /// `growth_markers` shape). The markers sit on the chain HOST only
+    /// (main.gd:5897's `chain[0]`), so the fold reads the host slot.
+    pub vengeance_markers: Vec<i64>,
     /// Block B8 — `unit_properties["second_wind_used"]` (solo_controller.gd:
     /// 10474): per unit, ONCE per game — unlike every other ledger flag above,
     /// this never resets on a later round.
