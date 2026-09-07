@@ -670,7 +670,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
             && matches!(state.profile(self.si).game_system.as_str(), "gff" | "aofs")
         { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
-        let flags = super::gate::GateFlags { shapes: &shapes,
+        let flags = super::gate::GateFlags { shapes: &shapes, radii_m,
             charge_targets: self.allow_contact.then_some(targets.as_slice()),
             chain_in: chain, coherent_chain_in: chain, ..self.gate_flags() };
         let caps = self.gate_caps(&trails, radii_m, budget_in);
