@@ -50,6 +50,45 @@ pub struct Disc {
     pub shape: BaseShape,
 }
 
+/// `_plan_move` :6247 — a world point (x, z) into the planner's inch frame,
+/// exactly as the table computes it.
+pub fn from_world_f32(w: [f32; 2], board_in: [f64; 2]) -> [f32; 2] {
+    [(w[0] as f64 / IN2M + board_in[0] * 0.5) as f32,
+     (w[1] as f64 / IN2M + board_in[1] * 0.5) as f32]
+}
+
+/// `_plan_move` :6378 — the planner's inch point back into world metres,
+/// exactly as the table computes it.
+pub fn to_world_f32(p: [f32; 2], board_in: [f64; 2]) -> [f32; 2] {
+    [((p[0] as f64 - board_in[0] * 0.5) * IN2M) as f32,
+     ((p[1] as f64 - board_in[1] * 0.5) * IN2M) as f32]
+}
+
+/// One base as the TABLE sees it: centre in float32 WORLD METRES (x, z) —
+/// the `Vector3` every gate pass of `_finalize_placement` reads and writes —
+/// and the radius as `model_base_radius_m` hands it over (a GDScript float).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WorldDisc {
+    pub c: [f32; 2],
+    pub r_m: f64,
+    pub shape: BaseShape,
+}
+
+impl WorldDisc {
+    /// The gate's inch-frame disc in the table's frame. The centre came out
+    /// of the planner as f32, so the narrowing cast is exact.
+    pub fn from_disc(d: &Disc, board_in: [f64; 2]) -> WorldDisc {
+        WorldDisc { c: to_world_f32([d.c[0] as f32, d.c[1] as f32], board_in),
+            r_m: d.r * IN2M, shape: d.shape }
+    }
+
+    /// Back into the planner's inch frame, where the endpoints live.
+    pub fn to_disc(&self, board_in: [f64; 2]) -> Disc {
+        let p = from_world_f32(self.c, board_in);
+        Disc { c: [p[0] as f64, p[1] as f64], r: self.r_m / IN2M, shape: self.shape }
+    }
+}
+
 /// `SeparationResolver.RESOLVE_EPSILON_INCHES` separation_resolver.gd:46.
 const RESOLVE_EPS_IN: f64 = 0.01;
 /// `SeparationResolver.MAX_OVERLAP_ITERATIONS` separation_resolver.gd:55.
@@ -1031,5 +1070,129 @@ mod skirmish_chain {
         let below = gate(EPOCH_6_TABLE_RULES - 1);
         assert!((below[0][0] as f64 - advanced[0][0] as f64).abs() < 0.0001,
             "the earlier epoch must keep the full advance");
+    }
+}
+
+/// The table's frame operations, pinned on values the reference table itself
+/// printed. Every recorded case carries the acting unit's models in BOTH
+/// frames: `units[].positions` are the node positions (world metres) that
+/// `_plan_move` :6247 turned into the planner input `formation_call.model_pos`
+/// (inches), and `endpoint_localisation`'s `gate.in` is :6378's world output of
+/// the recorded `formation_call.planned` for every model the distance-truth
+/// trim (:4901) left alone. Both must agree BIT FOR BIT: the frame is the
+/// table's arithmetic, not an approximation of it. An f64 conversion cast at
+/// the end lands a float32 unit in the last place off on a third of them.
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+    use serde_json::Value;
+
+    fn n(v: &Value) -> f64 { v.as_f64().unwrap() }
+
+    fn fixtures() -> Value {
+        serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/cases.json")).unwrap()
+    }
+
+    fn board_of(case: &Value) -> [f64; 2] {
+        [n(&case["board_in"][0]), n(&case["board_in"][1])]
+    }
+
+    /// `_moving_models`: the actor's models, then each attached hero's.
+    fn mover_world(case: &Value) -> Vec<[f32; 2]> {
+        let units: Vec<&Value> = case["units"].as_array().unwrap().iter().collect();
+        let unit_of = |key: &Value| *units.iter().find(|u| u["id"] == *key).unwrap();
+        let actor = unit_of(&case["action"]["unit"]);
+        let mut movers = vec![actor];
+        movers.extend(actor["attached"].as_array().unwrap().iter().map(unit_of));
+        movers.iter().flat_map(|m| m["positions"].as_array().unwrap().iter()
+            .map(|p| [n(&p[0]) as f32, n(&p[2]) as f32])).collect()
+    }
+
+    #[test]
+    fn world_to_inch_reproduces_the_recorded_planner_input() {
+        let fixtures = fixtures();
+        let (mut total, mut off) = (0usize, Vec::new());
+        for case in fixtures["cases"].as_array().unwrap() {
+            let Some(call) = case.get("formation_call") else { continue };
+            let (board, world) = (board_of(case), mover_world(case));
+            let recorded = call["model_pos"].as_array().unwrap();
+            assert_eq!(world.len(), recorded.len(), "{}: mover count", case["id"]);
+            for (i, (w, q)) in world.iter().zip(recorded).enumerate() {
+                total += 1;
+                let want = [n(&q[0]) as f32, n(&q[1]) as f32];
+                let got = from_world_f32(*w, board);
+                if got != want {
+                    off.push(format!("{} model {i}: got {got:?} want {want:?}", case["id"]));
+                }
+            }
+        }
+        assert!(total >= 1000, "the recorded half must be present: {total} models");
+        assert!(off.is_empty(), "{} of {total} recorded planner inputs differ from \
+            world->inch; first: {}", off.len(), off[0]);
+    }
+
+    #[test]
+    fn inch_to_world_reproduces_the_table_gate_input() {
+        let fixtures = fixtures();
+        let pins: Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/endpoint_localisation.json")).unwrap();
+        let (mut total, mut off) = (0usize, Vec::new());
+        // recorded-162's first gate call is the 6 in difficult-terrain re-plan,
+        // not the recorded full-band call (the ledger's pre-gate stage).
+        for id in ["recorded-037", "recorded-128"] {
+            let case = fixtures["cases"].as_array().unwrap().iter()
+                .find(|c| c["id"] == id).unwrap();
+            let (board, call) = (board_of(case), &case["formation_call"]);
+            let band_in = n(&case["action"]["band_in"]);
+            let gate_in = pins["cases"][id]["gate"]["in"].as_array().unwrap();
+            let planned = call["planned"].as_array().unwrap();
+            assert_eq!(planned.len(), gate_in.len(), "{id}: model count");
+            let mut pinned = 0;
+            for (i, (p, g)) in planned.iter().zip(gate_in).enumerate() {
+                // :4901 — a leg longer than the budget is trimmed and its
+                // endpoint rewritten; only the untouched legs pin the frame.
+                let leg = call["trails"][i].as_array().unwrap();
+                let len_in: f64 = leg.windows(2).map(|w|
+                    (n(&w[1][0]) - n(&w[0][0])).hypot(n(&w[1][1]) - n(&w[0][1]))).sum();
+                if len_in * IN2M > band_in * IN2M + 0.0005 {
+                    continue;
+                }
+                pinned += 1;
+                let want = [n(&g[0]) as f32, n(&g[2]) as f32];
+                let got = to_world_f32([n(&p[0]) as f32, n(&p[1]) as f32], board);
+                if got != want {
+                    off.push(format!("{id} model {i}: got {got:?} want {want:?}"));
+                }
+            }
+            assert!(pinned >= 10, "{id}: only {pinned} untrimmed models");
+            total += pinned;
+        }
+        assert!(off.is_empty(), "{} of {total} gate inputs differ from inch->world; \
+            first: {}", off.len(), off[0]);
+    }
+
+    #[test]
+    fn world_disc_keeps_footprint_and_lands_within_one_ulp() {
+        let fixtures = fixtures();
+        let mut worst = 0.0f64;
+        for case in fixtures["cases"].as_array().unwrap() {
+            let board = board_of(case);
+            for u in case["units"].as_array().unwrap() {
+                let shape = if u["base_shape"] == "oval" {
+                    BaseShape::Oval { w_mm: n(&u["base_w_mm"]), d_mm: n(&u["base_d_mm"]), yaw: 0.0 }
+                } else { BaseShape::Round };
+                for (i, p) in u["positions"].as_array().unwrap().iter().enumerate() {
+                    let w = [n(&p[0]) as f32, n(&p[2]) as f32];
+                    let d = WorldDisc { c: w, r_m: n(&u["radii"][i]), shape }.to_disc(board);
+                    let back = WorldDisc::from_disc(&d, board);
+                    assert_eq!(back.shape, shape);
+                    assert_eq!(back.r_m, n(&u["radii"][i]));
+                    worst = worst.max(((back.c[0] - w[0]) as f64).hypot((back.c[1] - w[1]) as f64));
+                }
+            }
+        }
+        // ~1 float32 ULP of a world metre at board scale; the inverse is not exact.
+        assert!(worst <= 2.5e-7, "world -> inch -> world moved a centre by {worst:.3e} m");
     }
 }
