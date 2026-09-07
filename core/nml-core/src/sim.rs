@@ -497,6 +497,118 @@ pub(crate) fn tray_breath_attack(
 /// `SoloController.trails_cross_unit_bases` (solo_controller.gd:8844-8863)
 /// does — pure segment-vs-disc geometry, no terrain input. Gate: the FROZEN
 /// `EPOCH_7_TABLE_RULES`; a record below 7 never rolls.
+/// `_solo_try_reanimation` main.gd:4710-4757 + `_solo_resolve_reanimation`
+/// main.gd:4758-4830 + the automatic v1 spend (solo_controller.gd:5862-5918),
+/// fired at the TOP of `resolve_with` — the table's own trigger point
+/// (main.gd:953-957: activation-trigger rules run BEFORE the action).
+/// WOUND CURRENCY (main.gd:4683-4691): a dead casualty is its full
+/// wounds_max (land_wounds removed them from the FRONT of the arrays, so the
+/// first profile.wounds_max entries are the dead ones), a living wounded
+/// model its missing wounds; SHAKEN DOES NOT REANIMATE. Spend: living
+/// wounded first (heroes first, biggest gap), then casualties cheapest-first
+/// at one wound; a revive with no legal spot EXPIRES the success (v1) — one
+/// candidate spot, bases touching the nearest standing model away from the
+/// unit centre, clear of every other unit's bases. Chain: host + attached
+/// heroes. Gate: FROZEN `EPOCH_7_TABLE_RULES`.
+pub(crate) fn tray_reanimation(
+    statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult,
+) {
+    let Some(spec) = statics[next.roster.profile[si]].reanimation.clone() else { return };
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.shaken[si] {
+        return; // below-7 replays byte-exact; the Shaken activation stays idle (main.gd:4731)
+    }
+    let owner = statics[next.roster.profile[si]].name.clone();
+    let mut members: Vec<usize> = vec![si];
+    if seams.hero_attach {
+        members.extend(next.attached[si].iter().copied());
+    }
+    // The pool — WOUND CURRENCY, per member of the carrying chain.
+    let (mut gaps, mut dead) = (Vec::new(), Vec::new());
+    for &u in &members {
+        let (wm, w) = (&next.profile(u).wounds_max, &next.wounds[u]);
+        for (m, &cur) in w.iter().enumerate() {
+            if let Some(gap) = wm.get(m).map(|mx| mx - cur).filter(|g| *g > 0) {
+                gaps.push((u, m, gap));
+            }
+        }
+        for &cost in wm.iter().take(wm.len() - w.len()) {
+            dead.push((u, cost.max(1)));
+        }
+    }
+    let pool: i64 = gaps.iter().map(|g| g.2).sum::<i64>() + dead.iter().map(|d| d.1).sum::<i64>();
+    if pool <= 0 {
+        return;
+    }
+    let faces = tray.roll(pool as usize);
+    shot.rolls.push(crate::dice::Roll {
+        kind: "attack", count: pool, target: spec.target,
+        faces: faces.clone(), owner: owner.clone(),
+    });
+    let mut left = faces.iter().filter(|&&f| f as i64 >= spec.target).count() as i64;
+    shot.log.push(format!("Reanimation: {owner} rolls {pool} dice ({}) — {left} success(es)", spec.target));
+    // Phase A — living wounded: heroes first, biggest gap, index tie-break.
+    gaps.sort_by(|a, b| {
+        let h = |u: usize| statics[next.roster.profile[u]].is_hero as i8;
+        h(b.0).cmp(&h(a.0)).then(b.2.cmp(&a.2)).then(a.0.cmp(&b.0)).then(a.1.cmp(&b.1))
+    });
+    for &(u, m, gap) in &gaps {
+        if left <= 0 {
+            break;
+        }
+        let take = gap.min(left);
+        next.wounds[u][m] += take;
+        left -= take;
+    }
+    // Phase B — casualties back cheapest-first; a revive with no legal spot
+    // EXPIRES the success (v1, main.gd:4843). ONE candidate spot: bases
+    // touching the nearest standing model, away from the unit centre, clear
+    // of every other unit's bases.
+    dead.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(&b.0)));
+    for &(u, cost) in &dead {
+        if left <= 0 {
+            break;
+        }
+        if next.positions[u].is_empty() {
+            continue; // nothing stands to anchor a revive
+        }
+        let c = geom::centre(&next.positions[u]);
+        let (cx, cz) = (c[0] as f64, c[2] as f64);
+        let (mut ai, mut best) = (0usize, f64::INFINITY);
+        for (i, p) in next.positions[u].iter().enumerate() {
+            let d = (p[0] - cx).hypot(p[2] - cz);
+            if d < best {
+                best = d;
+                ai = i;
+            }
+        }
+        let a = next.positions[u][ai];
+        let a_r = next.radii[u].get(ai).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+        let (dx, dz) = (a[0] - cx, a[2] - cz);
+        let n = (dx * dx + dz * dz).sqrt();
+        let (ux, uz) = if n <= f64::EPSILON { (0.0, 0.0) } else { (dx / n, dz / n) };
+        let dist = a_r + DEFAULT_BASE_RADIUS_M + 0.002;
+        let spot = [a[0] + ux * dist, a[1], a[2] + uz * dist];
+        let clear = (0..next.units()).all(|ti| {
+            members.contains(&ti)
+                || next.positions[ti].iter().all(|p| {
+                    (p[0] - spot[0]).hypot(p[2] - spot[2]) > DEFAULT_BASE_RADIUS_M * 2.0 + 0.002
+                })
+        });
+        if !clear {
+            shot.log.push("Reanimation: 1 success but no placeable spot — coherency missing".into());
+            continue;
+        }
+        let back = cost.min(left).max(1);
+        next.wounds[u].insert(0, back);
+        next.positions[u].insert(0, spot);
+        next.radii[u].insert(0, DEFAULT_BASE_RADIUS_M);
+        next.alive[u] = next.positions[u].len() as i64;
+        left -= back;
+        shot.log.push(format!("Reanimation: 1 model restored ({back} wound(s) back)"));
+    }
+}
+
 pub(crate) fn tray_crossing_attack(
     statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
     tray: &mut Tray, shot: &mut ShootResult,
@@ -3930,6 +4042,13 @@ fn resolve_with(
     let was_shaken = next.shaken[si];
     let mut sc = Scratch::default();
     sc.rules_epoch = seams.rules_epoch; // wave-3 mark consumers read it off Scratch
+
+    // --- REANIMATION (main.gd:953-957), the activation trigger BEFORE the
+    // action — every action kind with a tray. See `tray_reanimation`; a
+    // full-strength or Shaken carrier rolls nothing.
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_reanimation(statics, &mut next, si, seams, tray, shot);
+    }
 
     // --- move (battle_sim.gd:575-596) ---
     // `SoloController.sim_move_bands(su["unit"])` is a pure read of the unit's
