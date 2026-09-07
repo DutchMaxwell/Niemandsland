@@ -1538,6 +1538,7 @@ mod mend;
 mod piercing_tag;
 mod plain_moves;
 mod quick_shot;
+mod reckless_piercing;
 mod reposition_artillery;
 mod retaliate;
 mod second_wind;
