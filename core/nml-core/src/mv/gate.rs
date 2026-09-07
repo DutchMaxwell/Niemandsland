@@ -1026,7 +1026,7 @@ mod endpoint_localisation {
         // id, gate bound, overlap bound, shorten bound — inches, measured.
         let bounds = [
             ("recorded-037", 0.00000304, 1e-9, 1e-9),
-            ("recorded-128", 1e-4, 1e-9, 1e-9),
+            ("recorded-128", 0.0000024, 1e-9, 1e-9),
             ("recorded-162", 0.00000046, 1e-9, 1e-9),
         ];
         // Straight to the process's stderr, past the harness capture, so a
