@@ -143,43 +143,20 @@ use super::*;
         );
     }
 
-    /// Consumption, shooting leg: the buff stamp lowers every save against
-    /// the stamped attacker's volley by the AP(+1) — Defense 4 saves on 3+,
-    /// not 4+ (main.gd:9877's `_solo_reckless_ap` fold).
+    /// Consumption, shooting leg -- the PROVEN `tag_volley` harness: a rifle
+    /// carrier on the split line, the victim Defense 4. With the buff stamp
+    /// on the shooter every spent save window runs at AP(1) (target 3), the
+    /// unstamped control replays the plain Defense-4 window (main.gd:9877).
     #[test]
     fn the_ap_stamp_lowers_the_volley_save_target() {
-        let (mut st, _) = rp_line(7, &[]);
+        let (mut st, mut statics) = tag_line("Piercing Tag", 0, 24.0);
+        statics[0].piercing_tags.clear();
+        statics[0].shoot[0].attacks = 64;
         st.reckless_ap_round[0] = 0;
-        let mut a = UnitStatic {
-            name: "a".into(),
-            model_count: 1,
-            shoot: vec![gun("Rifle", 64, 24)],
-            ..Default::default()
-        };
-        a.wounds_max = vec![1];
-        a.ctx.quality = 2;
-        let mut b = UnitStatic { name: "b".into(), ..Default::default() };
-        b.ctx.defense = 4;
-        b.ctx.tough = 1;
-        b.ctx.models = 1;
-        // A one-model target: the fixture line carries a 3-model "b" —
-        // shrink it so the defender reads one alive model throughout.
-        st.alive[2] = 1;
-        st.wounds[2] = vec![1];
-        st.radii[2] = vec![IN2M];
-        st.positions[2] = vec![[5.0 * IN2M, 0.0, 0.0]];
-        let statics = vec![a, UnitStatic { name: "ah".into(), ..Default::default() }, b, UnitStatic { name: "bh".into(), ..Default::default() }];
-        let action = Action {
-            kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()),
-            charge: None, patient: false, split: None, traced: None,
-        };
-        let (_, shot) = run_action(&st, &statics, &action, 11, 7);
-        eprintln!("RP-VOLLEY-DEBUG rolls: {:#?}", shot.rolls.iter().map(|r| (r.kind, r.target, r.count)).collect::<Vec<_>>());
-        eprintln!("RP-VOLLEY-DEBUG log: {:#?}", shot.log);
-        assert!(shot.rolls.iter().any(|r| r.kind == "defense"), "no save batch at all");
+        let (_, shot) = tag_volley(&statics, &st, Seams { rules_epoch: 7, ..Seams::default() });
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
-            "stamped attacker: the saves run at AP(1) — got {:#?}",
+            "stamped attacker: the saves run at AP(1) -- got {:#?}",
             shot.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
         assert!(
@@ -188,65 +165,46 @@ use super::*;
         );
 
         // No stamp: the plain Defense-4 window.
-        let (mut st0, _) = rp_line(7, &[]);
-        st0.reckless_ap_round[0] = -1;
-        let (_, shot0) = run_action(&st0, &statics, &action, 11, 7);
+        let (st0, statics) = tag_line("Piercing Tag", 0, 24.0);
+        statics[0].piercing_tags.clear();
+        statics[0].shoot[0].attacks = 64;
+        let (_, shot0) = tag_volley(&statics, &st0, Seams { rules_epoch: 7, ..Seams::default() });
         assert!(
-            shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 4)
-                && !shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
-            "unstamped: the plain save"
+            shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 4),
+            "unstamped: the plain save -- got {:#?}",
+            shot0.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
     }
 
-    /// Consumption, melee leg: the BACKFIRE stamp on the target hands every
-    /// enemy AP(+1) — the charge's saves run at Defense-3 too
-    /// (main.gd:6017's fold).
+    /// Consumption, melee leg -- `strike_phase` called directly on the
+    /// four-unit line with the charger in contact: the BACKFIRE stamp on the
+    /// target hands the attacker AP(+1), so the melee saves run at 3+
+    /// (main.gd:6017's `_solo_reckless_ap` fold).
     #[test]
     fn the_backfire_stamp_hands_the_enemy_ap_in_melee() {
-        // The `vr_charge_line` shape: charger "a" vs target "b" 2" apart --
-        // one profile per slot, contact within the charge band.
-        let blade = ShootProfile { name: "Blade".into(), attacks: 64, count: 1, range: 0, ..Default::default() };
-        let profile: Profile = serde_json::from_str(r#"{"unit_id": "u", "name": "u"}"#).unwrap();
-        let mut st = four_unit_line();
-        st.roster = Rc::new(Roster {
-            keys: vec!["a".into(), "b".into()],
-            index: ["a".to_string(), "b".to_string()].iter().enumerate().map(|(i, k)| (k.clone(), i)).collect(),
-            profile: vec![0, 1],
-        });
-        st.profiles = Rc::new(Profiles { list: vec![profile.clone(), profile], index: HashMap::new() });
-        st.player = vec![0, 1];
-        st.alive = vec![1, 1];
-        st.attached = Rc::new(vec![vec![], vec![]]);
-        st.attached_to = Rc::new(vec![None, None]);
-        st.positions = vec![vec![[0.0, 0.0, 0.0]], vec![[2.0 * IN2M, 0.0, 0.0]]];
-        st.wounds = vec![vec![1], vec![1]];
-        st.radii = vec![vec![IN2M], vec![IN2M]];
-        st.reckless_backfire_round[1] = 0;
-        let a = UnitStatic {
-            ctx: Ctx { quality: 2, defense: 4, tough: 1, models: 1, ..Default::default() },
-            name: "a".into(),
-            melee: vec![blade],
-            model_count: 1,
-            wounds_max: vec![1],
-            ..Default::default()
-        };
-        let b = UnitStatic {
-            ctx: Ctx { defense: 4, tough: 1, models: 1, ..Default::default() },
-            name: "b".into(),
-            model_count: 1,
-            wounds_max: vec![1],
-            ..Default::default()
-        };
-        let statics = vec![a, b];
-        let charge = Action {
-            kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
-            charge: Some("b".into()), patient: false, split: None, traced: None,
-        };
-        let (_, shot) = run_action(&st, &statics, &charge, 11, 7);
-        assert!(shot.rolls.iter().any(|r| r.kind == "defense"), "melee: no save batch at all");
+        let (mut st, statics) = rp_line(7, &[]);
+        st.reckless_backfire_round[2] = 0;
+        st.positions[2] = vec![[1.2 * IN2M, 0.0, 0.0]]; // base-edge contact
+        let mut tray = Tray::seeded(11);
+        let mut shot = ShootResult::default();
+        let seams = Seams { rules_epoch: 7, ..Seams::default() };
+        strike_phase(&statics, &mut st, 0, 2, true, seams, &mut tray, &mut shot);
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
             "backfire: the melee saves run at AP(1) -- got {:#?}",
             shot.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
+        );
+
+        // No backfire stamp: the plain Defense-4 window.
+        let (st0, statics) = rp_line(7, &[]);
+        st0.positions[2] = vec![[1.2 * IN2M, 0.0, 0.0]];
+        let mut tray0 = Tray::seeded(11);
+        let mut shot0 = ShootResult::default();
+        strike_phase(&statics, &mut st0, 0, 2, true, seams, &mut tray0, &mut shot0);
+        assert!(
+            shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 4)
+                && !shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
+            "unstamped melee: the plain save -- got {:#?}",
+            shot0.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
     }
