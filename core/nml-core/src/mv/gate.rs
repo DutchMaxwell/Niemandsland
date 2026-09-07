@@ -236,9 +236,12 @@ thread_local! { pub(crate) static TRACE: std::cell::Cell<bool> = std::cell::Cell
 fn tr(s: String) {
     use std::io::Write;
     TRACE.with(|t| if t.get() {
-        // A file, past libtest's capture and past the box log's tail window.
-        if let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open("/tmp/gt_026.log") {
-            let _ = writeln!(f, "GT {s}");
+        // Into the file NML_GATE_TRACE_FILE names — past libtest's capture and
+        // past the box log's tail window. Unset (the default): no output.
+        if let Some(path) = std::env::var_os("NML_GATE_TRACE_FILE") {
+            if let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open(path) {
+                let _ = writeln!(f, "GT {s}");
+            }
         }
     })
 }
@@ -1383,6 +1386,8 @@ mod frame_tests {
 }
 
 // DIAGNOSTIC (test builds only) — replay recorded-026 with the gate trace on.
+// Inert unless NML_GATE_TRACE_FILE names a file; then every gate input, push
+// iteration, escape, pull sweep and nudge of the case is appended to it.
 #[cfg(test)]
 mod push_trace_026 {
     use super::*;
@@ -1418,7 +1423,6 @@ mod push_trace_026 {
         let terrain = Terrain::build(&serde_json::from_value(case["terrain"].clone()).unwrap());
         let actor = state.roster.index["u01"];
         let target = state.roster.index["u17"];
-        let _ = std::fs::remove_file("/tmp/gt_026.log");
         TRACE.with(|t| t.set(true));
         let mut land = crate::mv::step::MoveRules { rules_epoch: 6 }
             .charge_move(&state, &terrain, actor, target, 16.0, true, true, 320).unwrap();
