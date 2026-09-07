@@ -3946,6 +3946,33 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
             );
         }
     }
+    // Grant-closed wave (rules-grant-missing, epoch 7): "Rapid Advance"
+    // ("This model moves +4\" when using Advance actions") — the entry's own
+    // `advance_mod` onto the advance band, the same flat per-name fold BOTH
+    // band passes ship (the table name pass's RAPID_ADVANCE_BONUS constant
+    // and its registry twin's `advance_mod`; movement_range_controller.gd
+    // counts per NAME, the import expansion appends the bare base the aura
+    // carries). Evidence-only standing like the rest of this fold (the
+    // accepted `bounding` shape, PR #653): the +4" reaches this core
+    // precomputed inside the RECORDED `state.bands` (battle_sim.gd:1650 ->
+    // io.rs:755-765), so a live re-fold at the move seam would double-count
+    // a recorded band — this stamp is the core's own per-entry read, never
+    // a simulation input. The "Rapid Advance Aura" entries carry only
+    // `grants`, so the aura needs no arm of its own: the census follows the
+    // grant. Gated on the FROZEN `EPOCH_7_TABLE_RULES`, never the literal.
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && unit_rule_active(reg, p, "Rapid Advance") {
+        let map = reg.rules_for(&p.game_system);
+        if let Some(e) = map.lookup(&p.faction_folder, "Rapid Advance") {
+            let advance = e.param_f("advance_mod", 0.0);
+            acc.advance += advance;
+            hit = true;
+            crate::sim::trace_rule(
+                "move-bands",
+                "Rapid Advance",
+                &format!("{}: +{advance}\" advance", p.name),
+            );
+        }
+    }
     // Wave 4 follow-up (rules-musician, epoch 7): "Musician" ("This model
     // and its unit moves +1\" when using move actions") — the entry's own
     // `move_bonus_in` onto BOTH bands, the table's `sim_move_bands`
