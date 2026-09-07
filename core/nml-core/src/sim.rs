@@ -20,7 +20,7 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES};
+use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
@@ -771,6 +771,56 @@ fn tray_vs_marks(
                 attackers: false,
                 once: true,
             });
+        }
+    }
+}
+
+/// `main._solo_apply_mind_control` :16997-17037, called at main.gd:1070 in
+/// the table's own pre-attack order (right after Utility Buffs, before the
+/// Piercing Tag). Per BEARER — the acting unit, then each attached hero, the
+/// table's members loop (:16979-16983) — the ONE stamped Mind Control entry
+/// ("Fatigue Debuff", `fatigue_debuff_of`) picks the best enemy within its
+/// range via the SAME `utility_targets` scoring the table's
+/// `_solo_utility_target(member, "enemy", ..)` makes, then rolls ONE die
+/// against the target's Quality on the real tray (:17012-17016).
+///
+/// NOT PORTED — the displacement arm: a Mind Control entry whose `effect` is
+/// not "fatigue" moves the target; that seam this core does not have (the
+/// stamp only carries the fatigue name). The `_solo_is_ai_unit` gate
+/// (:16999) is not ported for the same reason `tray_piercing_tag`'s is not:
+/// selfplay stamps both slots AI. GATED `rule_on(rules_epoch,
+/// EPOCH_7_TABLE_RULES)`.
+pub(crate) fn tray_fatigue_debuff(
+    statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) { return; }
+    if next.alive[si] <= 0 { return; }
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
+    for bearer in bearers {
+        if next.alive[bearer] <= 0 { continue; }
+        let owner = statics[next.roster.profile[bearer]].name.clone();
+        for spec in &statics[next.roster.profile[bearer]].fatigue_debuff {
+            if spec.effect != "fatigue" { continue; }
+            let pick = spec.as_pick();
+            let Some(&ti) = utility_targets(statics, next, bearer, &pick, seams).first() else { continue; };
+            let quality = statics[next.roster.profile[ti]].ctx.quality as i64;
+            let faces = tray.roll(1);
+            shot.rolls.push(crate::dice::Roll {
+                kind: "attack", count: 1, target: quality,
+                faces: faces.clone(), owner: owner.clone(),
+            });
+            let passed = faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
+            if passed { continue; }
+            // Fatigue Debuff (:17022-17025): the failed test fatigues the
+            // target AND its joined chain instead of displacing it.
+            let mut chain = vec![ti];
+            if seams.hero_attach { chain.extend(next.attached[ti].iter().copied()); }
+            for cm in chain { next.fatigued[cm] = true; }
+            shot.log.push(format!(
+                "{}: {} is FATIGUED (melee hits only on unmodified 6s)",
+                spec.name, statics[next.roster.profile[ti]].name));
         }
     }
 }
@@ -3846,6 +3896,13 @@ fn resolve_with(
     // Dice-free: no tray draw either way.
     if dice.is_some() {
         tray_utility_buff(statics, &mut next, si, seams, cover);
+    }
+
+    // --- MIND CONTROL / Fatigue Debuff (main.gd:1070, the table's own slot
+    // between Utility Buffs and Piercing Tag) — tray path only, see
+    // `tray_fatigue_debuff`.
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_fatigue_debuff(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- PIERCING TAG (main.gd:1071, the table's pre-attack slot right after
