@@ -472,3 +472,22 @@ func test_unstoppable_clamps_negative_hit_modifiers_in_ev() -> void:
 	var m_clamped: float = AiEv.profile_ev(_mprof({"unstoppable": true}), ATT, evasive, 0.0, true)
 	var m_free: float = AiEv.profile_ev(_mprof({"unstoppable": true}), ATT, plain_def, 0.0, true)
 	assert_float(m_clamped).is_equal_approx(m_free, 0.0001)
+
+
+func _boost_carrier(rules: Array) -> GameUnit:
+	var u := GameUnit.new()
+	u.unit_id = "bb1"
+	u.unit_properties = {"player_id": 2, "name": "BB", "quality": 4, "defense": 4,
+		"game_system": "aof", "faction_folder": "beastmen", "special_rules": rules}
+	return u
+
+
+func test_bane_boost_window_reads_the_beastmen_boost_entry() -> void:
+	# Bestial Boost (aof/beastmen): reroll_save_low 5 past over_in 9, behind upgrades "Bestial".
+	var win: Dictionary = AiEv.bane_boost_window(_boost_carrier(["Bestial", "Bestial Boost"]), true)
+	assert_int(int(win.get("low", 0))).is_equal(5)
+	assert_float(float(win.get("over_in", 0.0))).is_equal_approx(9.0, 0.0001)
+	assert_str(str(win.get("rule", ""))).is_equal("Bestial Boost")
+	# ROT: inside 9" never, and without the base rule never.
+	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial", "Bestial Boost"]), false)).is_empty()
+	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial Boost"]), true)).is_empty()
