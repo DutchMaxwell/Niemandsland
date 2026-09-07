@@ -193,6 +193,12 @@ pub(crate) struct PlainLedger {
     vs_mark_round: i64,
     #[serde(default)]
     growth: i64,
+    /// Wave 4 follow-up — `unit_properties["vengeance_markers"]` (main.gd:
+    /// 5898), the Vengeance marker pool ON the unit (the destroyer's bank).
+    /// Absent from every corpus recorded before this key, and `0` there — an
+    /// old act replays unmarked, exactly as it did.
+    #[serde(default)]
+    vengeance_markers: i64,
     /// Block B8 — `unit_properties["second_wind_used"]` (solo_controller.gd:
     /// 10474), per unit, ONCE per game (no "round" derivation, unlike growth).
     #[serde(default)]
@@ -719,6 +725,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         reckless_backfire_round: vec![-1; n],
         retreating_strike_round: vec![-1; n],
         growth_markers: vec![0; n],
+        vengeance_markers: vec![0; n],
         growth_round: vec![-1; n],
         second_wind_used: vec![false; n],
         second_wind_round: -1,
@@ -826,6 +833,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
             st.second_wind_used[ui] = ledger.second_wind_used;
             st.storm_used[ui] = ledger.storm_used.clone();
             st.growth_markers[ui] = ledger.growth;
+            st.vengeance_markers[ui] = ledger.vengeance_markers;
             // `growth_round` has no key of its own on the wire (see
             // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED
             // here from facts every act already carries. `_solo_growth_

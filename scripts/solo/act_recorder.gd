@@ -450,6 +450,13 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 		markers += int(u.unit_properties.get("growth_%s" % rn, 0))
 	if markers > 0:
 		ledger["growth"] = markers
+	# Wave 4 follow-up — Vengeance's marker pool ON the unit (main.gd:5898,
+	# banked by the destroyer when a Vengeance unit fully dies). Without it the
+	# core replays every act unmarked and the to-hit bonus vanishes between
+	# activations — the #498 divergence shape.
+	var vg := int(u.unit_properties.get("vengeance_markers", 0))
+	if vg > 0:
+		ledger["vengeance_markers"] = vg
 	return ledger
 
 

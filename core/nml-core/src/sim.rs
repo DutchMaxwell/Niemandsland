@@ -2053,6 +2053,17 @@ fn fold_min(have: i64, cand: i64) -> i64 {
 pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, melee: bool, rules_epoch: u32) -> Ctx {
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
+    // Wave 4 follow-up (port-vengeance) — "friendly units get +X to hit rolls
+    // when attacking that unit" (main.gd:5806-5817): the markers sit ON the
+    // unit its attackers hit, so this is the `vs_hit_mod` role itself, and
+    // both tray legs (dice.rs's volley fold and `melee_hit_target`'s single
+    // sum) already consume the field. The markers land on the chain HOST only
+    // (main.gd:5897's `chain[0]`), and `attached_to` answers the host. Gated
+    // on the FROZEN `EPOCH_7_TABLE_RULES`: a record below 7 keeps the sum
+    // byte-exact.
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        c.vs_hit_mod += state.vengeance_markers[state.attached_to[i].unwrap_or(i)];
+    }
     c.unstoppable_grant = mods::granted(state, i, "Unstoppable");
     // DEFECT_LEDGER #33 — a live "Furious" grant (a spell cast, same shape as
     // any other rule grant) reaches this round's melee exactly where the
@@ -2280,6 +2291,42 @@ fn growth_on_kill(statics: &[UnitStatic], next: &mut State, si: usize) {
     if next.growth_markers[si] < cap {
         next.growth_markers[si] += 1;
     }
+}
+
+/// Wave 4 follow-up (port-vengeance) — `_solo_vengeance_on_destroyed`
+/// main.gd:5884-5902: when a unit FULLY dies, the DESTROYER banks one marker
+/// per START model of every Vengeance-carrying chain member of the dead
+/// (main.gd:5893's `maxi(member.get_size(), 1)`; the static `model_count` is
+/// that start count). The markers sit on the destroyer's chain HOST
+/// (main.gd:5897's `chain[0]`), no cap — the book text has none, and the
+/// table caps nothing either. The bonus half is `ctx_live`'s vs-side fold
+/// above. The LOGGING RULE line rides the caller's `shot` (one line per
+/// placement, like the table's `_log_rule_event`).
+fn vengeance_on_kill(
+    statics: &[UnitStatic],
+    next: &mut State,
+    dead: usize,
+    killer: usize,
+    shot: &mut ShootResult,
+) {
+    let dead_host = next.attached_to[dead].unwrap_or(dead);
+    let mut markers = 0i64;
+    for m in std::iter::once(&dead_host).chain(next.attached[dead_host].iter()) {
+        let us = &statics[next.roster.profile[*m]];
+        if us.vengeance_active {
+            markers += us.model_count.max(1);
+        }
+    }
+    if markers <= 0 {
+        return;
+    }
+    let host = next.attached_to[killer].unwrap_or(killer);
+    next.vengeance_markers[host] += markers;
+    shot.log.push(format!(
+        "Vengeance: {} falls — {} marker(s) on {} (its enemies get +1 to hit per marker)",
+        statics[next.roster.profile[dead_host]].name, markers,
+        statics[next.roster.profile[host]].name
+    ));
 }
 
 /// rules-wave3-growthmark (epoch 6) — the defender-side facets' log lines.
@@ -4878,6 +4925,16 @@ fn resolve_with(
                             if alive_before_g > 0 && next.alive[g.ti] <= 0 {
                                 growth_on_kill(statics, &mut next, si);
                             }
+                            // Wave 4 follow-up (port-vengeance) — the volley's
+                            // wiped target banks its Vengeance markers on the
+                            // shooter (main.gd:3310/:10043), epoch-gated like
+                            // the fold.
+                            if rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES)
+                                && alive_before_g > 0
+                                && next.alive[g.ti] <= 0
+                            {
+                                vengeance_on_kill(statics, &mut next, g.ti, si, shot);
+                            }
                             // main.gd:3244 — the exchange spends its own
                             // once-mods BEFORE the post-volley morale test.
                             spend_exchange(&mut next, si, g.ti, false);
@@ -4961,6 +5018,16 @@ fn resolve_with(
                         growth_on_kill(statics, &mut next, si);
                     } else if next.alive[si] <= 0 && next.alive[ti] > 0 {
                         growth_on_kill(statics, &mut next, ti);
+                    }
+                    // Wave 4 follow-up (port-vengeance) — Vengeance at the
+                    // melee consolidation's own guards (main.gd:8226-8231):
+                    // win-by-wipe only, each direction credits the wiper.
+                    if rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+                        if next.alive[ti] <= 0 && next.alive[si] > 0 {
+                            vengeance_on_kill(statics, &mut next, ti, si, shot);
+                        } else if next.alive[si] <= 0 && next.alive[ti] > 0 {
+                            vengeance_on_kill(statics, &mut next, si, ti, shot);
+                        }
                     }
                 } else {
                     // The charger strikes: charging profiles, its OWN fatigue state
