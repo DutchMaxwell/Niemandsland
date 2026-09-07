@@ -1005,9 +1005,15 @@ mod endpoint_localisation {
         // id, gate bound, overlap bound, shorten bound — inches, measured.
         let bounds = [
             ("recorded-037", 0.00000304, 1e-9, 1e-9),
-            ("recorded-128", 0.0941167, 3e-7, 1e-9),
+            ("recorded-128", 1e-4, 1e-9, 1e-9),
             ("recorded-162", 0.00000046, 1e-9, 1e-9),
         ];
+        // Straight to the process's stderr, past the harness capture, so a
+        // GREEN box run still leaves every measured residue in its cargo log.
+        let say = |line: String| { use std::io::Write; let _ = writeln!(std::io::stderr(), "{line}"); };
+        // Every bound is measured before any is asserted: one run shows the
+        // whole ledger, not just the first row that fails.
+        let mut fails: Vec<String> = Vec::new();
         for (id, gate_bound, overlap_bound, shorten_bound) in bounds {
             let pin = &pins["cases"][id];
             let case = fixtures["cases"].as_array().unwrap().iter()
@@ -1061,9 +1067,18 @@ mod endpoint_localisation {
             let (got, _) = finalize_placement(&planned, &radii, &ext, &caps, board,
                 Some(&terrain), flags);
             let got: Vec<[f64; 2]> = got.iter().map(|p| [p[0] as f64, p[1] as f64]).collect();
-            let delta = worst(&got, &conv(&gate["out"], board));
-            eprintln!("{id}: whole gate residue {delta:.9}in (bound {gate_bound})");
-            assert!(delta <= gate_bound, "{id}: whole gate differs by {delta:.9}in (bound {gate_bound})");
+            let want = conv(&gate["out"], board);
+            for i in 0..got.len() {
+                let d = dist(got[i], want[i]);
+                if d > 1e-6 {
+                    say(format!("{id}:   model {i}: whole gate residue {d:.9}in"));
+                }
+            }
+            let delta = worst(&got, &want);
+            say(format!("{id}: whole gate residue {delta:.9}in (bound {gate_bound})"));
+            if delta > gate_bound {
+                fails.push(format!("{id}: whole gate differs by {delta:.9}in (bound {gate_bound})"));
+            }
             // The overlap push, replayed on the table's own post-projection config.
             let mut cfg: Vec<Disc> = conv(&pin["overlap"]["in"], board).iter().enumerate()
                 .map(|(i, c)| Disc { c: *c, r: radii[i], shape: shapes[i] }).collect();
@@ -1083,13 +1098,14 @@ mod endpoint_localisation {
                 let dw = dist(got_w[i], out_w[i]) / IN2M;
                 let dm = dist(cfg[i].c, conv(&pin["overlap"]["out"], board)[i]);
                 if dw > 1e-9 || dm > 1e-9 || rep.capped[i] {
-                    eprintln!("{id}:   model {i}: push residue world {dw:.9}in mirror {dm:.9}in capped={}", rep.capped[i]);
+                    say(format!("{id}:   model {i}: push residue world {dw:.9}in mirror {dm:.9}in capped={}", rep.capped[i]));
                 }
             }
             let delta = worst(&got_w, &out_w) / IN2M;
-            eprintln!("{id}: overlap push residue {delta:.9}in (bound {overlap_bound})");
-            assert!(delta <= overlap_bound,
-                "{id}: overlap push differs by {delta:.9}in (bound {overlap_bound})");
+            say(format!("{id}: overlap push residue {delta:.9}in (bound {overlap_bound})"));
+            if delta > overlap_bound {
+                fails.push(format!("{id}: overlap push differs by {delta:.9}in (bound {overlap_bound})"));
+            }
             // The whole-unit shorten, replayed on the table's own input.
             if let Some(shorten) = pin["shorten"].as_object() {
                 let cfg: Vec<Disc> = conv(&shorten["in"], board).iter().enumerate()
@@ -1098,11 +1114,13 @@ mod endpoint_localisation {
                     crate::mv::MAX_CHAIN_IN);
                 let out: Vec<[f64; 2]> = out.iter().map(|d| d.c).collect();
                 let delta = worst(&out, &conv(&shorten["out"], board));
-                eprintln!("{id}: whole-unit shorten residue {delta:.9}in (bound {shorten_bound})");
-                assert!(delta <= shorten_bound,
-                    "{id}: whole-unit shorten differs by {delta:.9}in (bound {shorten_bound})");
+                say(format!("{id}: whole-unit shorten residue {delta:.9}in (bound {shorten_bound})"));
+                if delta > shorten_bound {
+                    fails.push(format!("{id}: whole-unit shorten differs by {delta:.9}in (bound {shorten_bound})"));
+                }
             }
         }
+        assert!(fails.is_empty(), "{}", fails.join("\n"));
     }
 }
 
