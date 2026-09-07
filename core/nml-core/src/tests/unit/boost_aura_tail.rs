@@ -1817,6 +1817,38 @@ use super::*;
         );
     }
 
+    /// "Rapid Rush" (gf battle_brothers + aof chivalrous_kingdoms, Rapid Rush
+    /// primitive — grant-closed wave, epoch 7): "This model moves +6\" when
+    /// using Rush actions". The named arm in `move_rule_mods_of` reads the
+    /// entry's own `rush_mod` onto the rush band — the same flat per-name
+    /// fold BOTH band passes ship (the table name pass's RAPID_RUSH_BONUS
+    /// constant and its registry twin's `rush_mod`). Evidence-only standing
+    /// like the whole family (the accepted `bounding` shape, PR #653): the
+    /// +6" reaches this core precomputed inside the RECORDED `state.bands`,
+    /// so a live re-fold would double-count — the stamp is the core's own
+    /// per-entry read, never a simulation input. PRESENT at 7, ABSENT at 6
+    /// (byte-exact), ABSENT without the rule. Closes the "Rapid Rush Aura"
+    /// grant (the census follows the grant; the aura's own entry carries
+    /// only `grants`, so it needs no arm of its own).
+    #[test]
+    fn rapid_rush_stamps_its_own_rush_mod_at_epoch_7() {
+        assert_eq!(
+            wave3_static_of("Rapid Rush", "gf", "battle_brothers", 7).move_rule_mods,
+            Some(Bands { advance: 0.0, rush: 6.0 }),
+            "epoch 7: the entry's own rush_mod (RED before the fix)"
+        );
+        assert_eq!(
+            wave3_static_of("Rapid Rush", "gf", "battle_brothers", 6).move_rule_mods,
+            None,
+            "epoch 6: granted, not read (byte-exact)"
+        );
+        assert_eq!(
+            wave3_static_of("", "gf", "battle_brothers", 7).move_rule_mods,
+            None,
+            "no rule, no band"
+        );
+    }
+
     /// "Reinforced" PIN (NOT a port): its registry entry (Fortified
     /// primitive, the over-9"-gated form) is table-live through main.gd's
     /// own coverage wave, but the core's save batch sees no modifier
