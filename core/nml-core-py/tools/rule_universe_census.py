@@ -19,6 +19,23 @@ distinct rule name against the four layers that must know it:
                              primitive listed in CONSUMED_PARAM_KEYS) the
                              entry's own params include a consumed role. A
                              primitive not in that table is trusted whole;
+                             NAME read vs PRIMITIVE literal (2026-09-07): a
+                             name's own token counts only where a string
+                             literal is compared against a RULE NAME
+                             (base_rule_name, a registry name lookup, a
+                             `name == "X"` gate). A literal compared against
+                             `.primitive...` (`.primitive.as_deref() ==
+                             Some("X")`) or written in a `primitive:` field
+                             is primitive-CLASS evidence only - it feeds the
+                             prim_hit leg (STAMPED / PORTED-via-consumed),
+                             never the name's own token. Without this the
+                             Fatigue Debuff port's
+                             `.filter(|e| e.primitive.as_deref() ==
+                             Some("Mind Control"))` (unit.rs:2826) credited
+                             the rule NAME "Mind Control" - the criterion
+                             `meta.method.core_ported` was satisfied by a
+                             primitive literal, the thermometer measuring
+                             its own mercury.
                    STAMPED - the primitive token is there (the class is
                              recognised) but this entry's params map to none
                              of its consumed roles - stamped, read by nobody
@@ -596,23 +613,54 @@ def consumed_grant_names(repo: Path) -> set[str]:
 CFG_TEST_RE = re.compile(r"#\s*\[\s*cfg\s*\(\s*test")
 RAW_STR_RE = re.compile(r'r(#*)"')
 
+# PRIMITIVE-literal detection (2026-09-07): a string literal is a PRIMITIVE
+# literal when the word `primitive` occurs in the code immediately before it -
+# `.primitive.as_deref() == Some("X")`, `.primitive != Some("X")`,
+# `primitive: "X"` - with no statement/brace boundary and no comment between
+# (`;`, `{`, `}` and any `//` cut the backward window, so a doc comment
+# mentioning "primitive" on the line above cannot leak in and a rustfmt-wrapped
+# comparison still reads through). Such a literal is primitive-CLASS evidence
+# (it stays in `tokens` for the prim_hit leg) but never a rule-NAME read
+# (it stays out of `name_tokens`).
+PRIM_CTX_RE = re.compile(r"\bprimitive\b")
+PRIM_CTX_STOP_RE = re.compile(r"[;{}]|//")
+PRIM_CTX_WINDOW = 96
 
-def scan_rust_file(path: Path) -> tuple[dict, list]:
-    """One .rs file -> ({token: (relpath, line)}, [comment texts]).
 
-    Tokens are the lowercased identifiers of non-comment, non-test code plus
-    the snake forms of its string literals: a resolver arm shows up as the
-    primitive's name (a rules_of_primitive call site), a field, or a literal.
+def is_primitive_literal(text: str, at: int) -> bool:
+    """True if the literal opening at `at` is compared against `.primitive...`
+    or written in a `primitive:` field - see PRIM_CTX_RE above."""
+    window = text[max(0, at - PRIM_CTX_WINDOW):at]
+    cut = None
+    for cut in PRIM_CTX_STOP_RE.finditer(window):
+        pass
+    if cut is not None:
+        window = window[cut.end():]
+    return bool(PRIM_CTX_RE.search(window))
+
+
+def scan_rust_file(path: Path) -> tuple[dict, dict, list]:
+    """One .rs file -> ({token: (rel, line)}, {name token: (rel, line)},
+    [comment texts]).
+
+    `tokens` are the lowercased identifiers of non-comment, non-test code
+    plus the snake forms of ALL its string literals (primitive-comparison
+    literals included) - a resolver arm shows up as the primitive's name (a
+    rules_of_primitive call site), a field, or a literal; this map feeds the
+    prim_hit leg. `name_tokens` carry the identifiers plus the snake forms of
+    literals that are NOT primitive literals - the rule-NAME read evidence
+    (see PRIM_CTX_RE above; 2026-09-07).
     #[cfg(test)] regions are skipped - a test literal is not a resolver arm.
     Raw strings, // and (nested) /* */ comments are handled; single quotes
     (lifetimes, char literals) stay code, which can add a stray 1-char token
     at worst - no rule name is 1 char."""
     tokens: dict = {}
+    name_tokens: dict = {}
     comments: list = []
     try:
         text = path.read_text()
     except OSError:
-        return tokens, comments
+        return tokens, name_tokens, comments
     rel = path.relative_to(path.parents[3]).as_posix()
 
     i, n = 0, len(text)
@@ -623,12 +671,17 @@ def scan_rust_file(path: Path) -> tuple[dict, list]:
 
     def flush(end_line: int) -> None:
         if buf:
-            tokens.setdefault("".join(buf).lower(), (rel, end_line))
+            tok = "".join(buf).lower()
+            tokens.setdefault(tok, (rel, end_line))
+            name_tokens.setdefault(tok, (rel, end_line))
             buf.clear()
 
-    def record_literal(literal: str, at_line: int) -> None:
+    def record_literal(literal: str, at: int, at_line: int) -> None:
+        prim = is_primitive_literal(text, at)
         for variant in snake_variants(literal):
             tokens.setdefault(variant, (rel, at_line))
+            if not prim:
+                name_tokens.setdefault(variant, (rel, at_line))
 
     while i < n:
         c = text[i]
@@ -658,7 +711,7 @@ def scan_rust_file(path: Path) -> tuple[dict, list]:
                     elif text[j] == "\n":
                         line += 1
                     j += 1
-                record_literal(text[i + 1 : min(j, n)], line)
+                record_literal(text[i + 1 : min(j, n)], i, line)
                 i = j + 1
                 continue
             if c == "r":
@@ -667,7 +720,7 @@ def scan_rust_file(path: Path) -> tuple[dict, list]:
                     closer = '"' + m.group(1)
                     end = text.find(closer, m.end())
                     literal = text[m.end() : end if end >= 0 else n]
-                    record_literal(literal, line)
+                    record_literal(literal, i, line)
                     line += literal.count("\n")
                     i = (end + len(closer)) if end >= 0 else n
                     continue
@@ -740,20 +793,24 @@ def scan_rust_file(path: Path) -> tuple[dict, list]:
                 skip_depth = None
         i += 1
     flush(line)
-    return tokens, comments
+    return tokens, name_tokens, comments
 
 
-def scan_rust(repo: Path) -> tuple[dict, list]:
+def scan_rust(repo: Path) -> tuple[dict, dict, list]:
     """Every core source file `core_src_files` keeps - see it for the two
-    exclusions and why each one carries no resolver arm."""
+    exclusions and why each one carries no resolver arm. Returns
+    (tokens, name_tokens, comments) - see scan_rust_file for the split."""
     tokens: dict = {}
+    name_tokens: dict = {}
     comments: list = []
     for path in core_src_files(repo):
-        t, c = scan_rust_file(path)
+        t, nt, c = scan_rust_file(path)
         for k, v in t.items():
             tokens.setdefault(k, v)
+        for k, v in nt.items():
+            name_tokens.setdefault(k, v)
         comments.extend(c)
-    return tokens, comments
+    return tokens, name_tokens, comments
 
 
 def comment_index(comments: list) -> str:
@@ -798,8 +855,14 @@ def is_consumed(primitive: str, name: str, mech: dict, consumed_grants: set) -> 
 
 
 def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str | None,
-                     consumed_grants: set):
-    """(status, note) for one (name, system)."""
+                     consumed_grants: set, name_tokens: dict | None = None):
+    """(status, note) for one (name, system).
+
+    `tokens` is the primitive-class map (prim_hit leg); `name_tokens` the
+    rule-NAME read map (2026-09-07) - a `.primitive` comparison literal lives
+    in the former only, so it can never satisfy the name's own token. None
+    falls back to `tokens` (the pre-split behavior, kept for callers that
+    predate the split)."""
     if name in NA_NAMES:
         return "N/A", NA_NAMES[name]
     prims = set(mech.get("primitives", set()))
@@ -807,10 +870,11 @@ def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str |
     if hide and hide in prims:
         prims.discard(hide)
         variants -= snake_variants(hide)
+    read_tokens = tokens if name_tokens is None else name_tokens
     name_hit = None
     for v in sorted(variants):
-        if v in tokens:
-            name_hit = (v, tokens[v])
+        if v in read_tokens:
+            name_hit = (v, read_tokens[v])
             break
     # C-2 (AUDIT_armybook_flanks_2026-09-02.md sec.8): a primitive-token
     # match is only real alias evidence for a vetted CONSUMED_PARAM_KEYS
@@ -864,7 +928,8 @@ def build_universe(books: list[dict]) -> dict:
 
 
 def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
-                consumed_grants: set | None = None, grant_dead: str | None = None) -> dict:
+                consumed_grants: set | None = None, grant_dead: str | None = None,
+                name_tokens: dict | None = None) -> dict:
     rows = {}
     AURA_SUFFIX = " Aura"
 
@@ -872,7 +937,9 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
         mech = mechanics[s].get(
             name, {"primitives": set(), "entry": False, "cond_ap": False}
         )
-        status, note = core_status_for(name, mech, tokens, bands, hide, consumed_grants or set())
+        status, note = core_status_for(name, mech, tokens, bands, hide,
+                                       consumed_grants or set(),
+                                       name_tokens=name_tokens)
         if status == "MISSING":
             where = mention_of(name, mentions)
             if where:
@@ -1007,7 +1074,8 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
             st = gps["core"]
         elif gmech is not None and gmech["entry"]:
             st, _ = core_status_for(gname, gmech, tokens, bands, hide,
-                                    consumed_grants or set())
+                                    consumed_grants or set(),
+                                    name_tokens=name_tokens)
         else:
             return "MISSING"
         if st != "PORTED":
@@ -1292,14 +1360,14 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
     if not books:
         raise SystemExit(f"no books found under {books_dir}/gf|aof")
     mechanics = {s: load_mechanics(repo, s) for s in SYSTEMS}
-    tokens, comments = scan_rust(repo)
+    tokens, name_tokens, comments = scan_rust(repo)
     mentions = comment_index(comments)
     bands = move_primitives(repo)
     vocab = load_vocab(repo)
     consumed_grants = consumed_grant_names(repo)
     universe = build_universe(books)
     rows = build_rows(universe, mechanics, tokens, bands, vocab, mentions,
-                       consumed_grants=consumed_grants)
+                       consumed_grants=consumed_grants, name_tokens=name_tokens)
     summary = summarize(rows)
     result = {
         "meta": {
@@ -1316,7 +1384,12 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
             "tool": "core/nml-core-py/tools/rule_universe_census.py",
             "method": {
                 "walk": "specialRules[].name and rules[].name over every book JSON, recursive; base = name before '('",
-                "core_ported": "name token, or a CONSUMED_PARAM_KEYS-consumed primitive-param, in non-test core/nml-core/src code beyond rules.rs",
+                "core_ported": "a rule-NAME read (literal compared against a rule"
+                     " name / base_rule_name / a registry name lookup), or a"
+                     " CONSUMED_PARAM_KEYS-consumed primitive-param, in"
+                     " non-test core/nml-core/src code beyond rules.rs; a"
+                     " `.primitive` comparison literal is primitive-class"
+                     " evidence only, never a name read (2026-09-07)",
                 "core_grant_missing": "own evidence said PORTED, but the entry carries a grants param whose target does not itself resolve PORTED in the same system (transitive: visited set + MAX_GRANT_DEPTH; UNRESOLVED = not ported)",
                 "core_stamped": "primitive token present but this entry's params map to no CONSUMED_PARAM_KEYS role - recognised, not read",
                 "core_partial": "move-band pass primitive (list_to_profile.py:MOVE_PRIMITIVES) or conditional-AP entry param",
@@ -1334,7 +1407,7 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
     if hide:
         before = summary["core_ported"]
         rows_hidden = build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide,
-                                  consumed_grants)
+                                  consumed_grants, name_tokens=name_tokens)
         after = summarize(rows_hidden)["core_ported"]
         direct = {
             n for n, r in rows.items()
@@ -1481,8 +1554,12 @@ def markdown_report(res: dict) -> str:
         "- Registry/mechanics: the system's `rules_mechanics_<system>.json`,"
         " common + faction blocks. `primitive: null` = registered but"
         " unautomated (UNMAPPED-registered).",
-        f"- Core PORTED: name token, or a `CONSUMED_PARAM_KEYS`-consumed"
+        f"- Core PORTED: a rule-NAME read (literal compared against a rule"
+        f" name / base_rule_name / a registry name lookup), or a"
+        f" `CONSUMED_PARAM_KEYS`-consumed"
         f" registry-primitive param, in non-test `core/nml-core/src` code."
+        f" A `.primitive` comparison literal is primitive-class evidence"
+        f" only - it never reads PORTED by itself (2026-09-07)."
         f" STAMPED: the primitive token is there, but this entry's own"
         f" params map to no consumed role. PARTIAL: only the loader's"
         f" move-band pass (`MOVE_PRIMITIVES`) or the conditional-AP entry"

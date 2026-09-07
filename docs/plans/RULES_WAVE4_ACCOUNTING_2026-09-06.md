@@ -25,6 +25,20 @@ recording rather than smoothing over:
 That is the finding this section exists to state: not "the numbers match" or "the numbers differ,"
 but **"this job could not check."** Treat the table below accordingly.
 
+**Addendum 2026-09-07 (census-name-read fix) — the re-run happened, and it corrected the
+instrument first.** The private book snapshot was reachable from a fresh worktree, so the census
+was re-run at `origin/main` and again after a criterion fix to
+`core/nml-core-py/tools/rule_universe_census.py`. The fix: a `.primitive` comparison literal
+(`.primitive.as_deref() == Some("Mind Control")`, unit.rs:2826 — the Fatigue Debuff port's
+primitive filter for a sister rule) no longer satisfies the `core_ported` criterion's "name token
+in non-test core" leg; only a rule-NAME read (literal compared against a rule name /
+base_rule_name / a registry name lookup) or a CONSUMED_PARAM_KEYS-consumed primitive param does.
+Effect on the numbers: the "Mind Control" row flips PORTED → MISSING in both systems (its only
+non-test core occurrence was the primitive filter; sim.rs:1011 already states "NOT PORTED — the
+displacement arm"); no other row moved. Totals: core-ported 410/450 → **409/450**, all-layers
+400/452 → **399/452**. Any table row that credits "Mind Control" as core-ported should be read
+with this correction.
+
 ## 1. Census checkpoints (reported by the orchestrator)
 
 | checkpoint | core_ported | all_layers |
