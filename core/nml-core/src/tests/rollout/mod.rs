@@ -31,4 +31,5 @@
         st.profiles.list.iter().map(|p| UnitStatic::build_for(&mut reg, p, epoch)).collect()
     }
 
+    mod coordinate;
     mod delayed_action;

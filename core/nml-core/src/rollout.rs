@@ -31,11 +31,11 @@ use crate::menu::Candidate;
 use crate::mission::{apply_destroy_step, playout_seize, vp_of, vp_score_round};
 use crate::rng::GodotRng;
 use crate::playout::{other_player, Policy};
-use crate::score::score_with_variant;
-use crate::sim::{reply_threat, Scratch, Unsupported};
+use crate::score::{score_with, score_with_variant, NO_INCOMING};
+use crate::sim::{reply_threat, Scratch, Unsupported, DEFAULT_BASE_RADIUS_M};
 use crate::state::State;
 use crate::unit::UnitStatic;
-use crate::DISCOUNT;
+use crate::{geom, DISCOUNT};
 
 /// `AiPlanner.ROLLOUT_HORIZON_ROUNDS` ai_planner.gd:280.
 pub const ROLLOUT_HORIZON_ROUNDS: i64 = 2;
@@ -129,6 +129,86 @@ fn delayed_action_passer(
     best.map(|(i, _)| i)
 }
 
+/// PRIMITIVE "Coordinate", wave 4 — an ACTIVATION-ORDER effect, not a stat
+/// change (`main.gd:7954` classifies it exactly so): "At the end of this unit's
+/// activation, another friendly unit within 12\" that hasn't activated yet may
+/// be activated immediately. May not be used if this unit was activated via
+/// Coordinate." Word-identical in both snapshot books that carry it, and the
+/// table has shipped the whole flow since wave 4
+/// (`SoloController.coordinate_*`, solo_controller.gd:770-868, fired from
+/// `main._solo_after_activation` :1112). This is the SECOND user of the
+/// extra-activation family Second Wind opened (sim.rs block B8), but at a
+/// different moment: B8 fires when the ROUND would close, Coordinate fires at
+/// the end of the BEARER's own activation, mid-round, and hands to somebody
+/// else.
+///
+/// The friend that takes the hand-off, or `None`. All four of the table's gates
+/// are here — `coordinate_refusal` (:792) plus the range read:
+///   * DEAD — a bearer that did not survive its own activation hands nothing
+///     off (maintainer ruling, :778); `alive[bearer] <= 0` refuses.
+///   * CHAIN — "May not be used if this unit was activated via Coordinate", so
+///     at most TWO activations ever ride one hand-off (:780).
+///   * NONE — nobody legal within the reach.
+///   * The reach is the registry's own `range_in` (`coordinate_range_of` :803),
+///     measured BASE EDGE to base edge like `nearest_melee_gap_in` (:818-830),
+///     never centre to centre — a 12\" reading off a vehicle oval's centre is
+///     simply wrong.
+/// Reserves are invisible to it (`dormant`), the same exclusion the table's
+/// `is_eligible` already owns.
+///
+/// ONE DECLARED SIMPLIFICATION, in the `second_wind_candidate` manner (never
+/// silent): WHICH friend. The table picks the highest `activation_payoff`
+/// (`coordinate_candidate` :837-858), which runs the AI's own search tree; this
+/// bookkeeping layer has no such tree and picks by `alive`, the stand-in block
+/// B8 declared for `_plan_ev_of`. WHETHER to hand off is not a choice at all
+/// here — the book grants it unconditionally, so the greedy playout takes it
+/// whenever it is legal.
+///
+/// KNOWN GAP, stated plainly and inherited from B8: the table's own both-AI
+/// arena driver never calls `_solo_after_activation`, so no recorded arena game
+/// can show a table-side Coordinate hand-off. The fixture tests are this port's
+/// correctness proof.
+fn coordinate_receiver(
+    statics: &[UnitStatic],
+    state: &State,
+    bearer: usize,
+    seams: Seams,
+) -> Option<usize> {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+        return None;
+    }
+    let reach = statics[state.roster.profile[bearer]].coordinate_range_in;
+    if reach <= 0.0 || state.alive[bearer] <= 0 {
+        return None; // not a carrier, or it died in its own activation
+    }
+    if state.coordinate_via_round[bearer] == state.round {
+        return None; // the anti-chain clause
+    }
+    let player = state.player[bearer];
+    let mut best: Option<(usize, i64)> = None;
+    for i in 0..state.units() {
+        if i == bearer || state.dormant[i] || !state.can_activate(i, player, seams.hero_attach) {
+            continue;
+        }
+        if best.map_or(false, |(_, v)| state.alive[i] <= v) {
+            continue; // cheaper than the gap, so it goes first
+        }
+        let gap = geom::edge_gap_shaped_in(
+            &state.positions[bearer],
+            &state.radii[bearer],
+            state.base_shape(bearer),
+            &state.positions[i],
+            &state.radii[i],
+            state.base_shape(i),
+            DEFAULT_BASE_RADIUS_M,
+        );
+        if gap <= reach {
+            best = Some((i, state.alive[i]));
+        }
+    }
+    best.map(|(i, _)| i)
+}
+
 /// One rollout's whole configuration: the greedy policy plus the search knobs
 /// the recording ran with (`AiActRecorder._header_line`, act_recorder.gd:118-123).
 #[derive(Clone, Copy)]
@@ -181,6 +261,56 @@ impl<'a> Rollout<'a> {
         }
     }
 
+    /// Coordinate's own step: the activation `acted` just spent hands the turn
+    /// on to a friend in reach, IMMEDIATELY, off the same side's turn. `true`
+    /// when one fired.
+    ///
+    /// The receiver's own action is picked exactly as `policy_step`
+    /// (playout.rs:148-180) picks any other — the same candidate list, the same
+    /// leaf score, the same `rich` split by seat — but over ONE unit instead of
+    /// the whole pool, because the RULE names the unit and the greedy pick may
+    /// not overrule it. That is the core's shape of the table's
+    /// `coordinate_hand_off` (:864), which forces the next activation onto the
+    /// receiver by stamping `_peeked_unit` and bypassing the seeded section
+    /// draw: the rule names the unit, the D6 does not.
+    fn coordinate_hand_off(
+        &self,
+        cur: &mut State,
+        acted: &Candidate,
+        me: i64,
+        sc: &mut Scratch,
+    ) -> Result<bool, Unsupported> {
+        let Some(&bearer) = cur.roster.index.get(&acted.unit) else { return Ok(false) };
+        let Some(recv) = coordinate_receiver(self.statics(), cur, bearer, self.policy.seams) else {
+            return Ok(false);
+        };
+        let player = cur.player[bearer];
+        let rich = player == me;
+        let mut best: Option<Candidate> = None;
+        let mut best_s = f64::NEG_INFINITY;
+        for action in self.policy.policy_candidates(cur, recv, sc) {
+            let next = self.policy.resolve(cur, &action)?;
+            let s = if rich {
+                let incoming = reply_threat(self.statics(), &next, player);
+                score_with(&next, self.statics(), player, &incoming, self.policy.fit)
+            } else {
+                score_with(&next, self.statics(), player, NO_INCOMING, self.policy.fit)
+            };
+            if s > best_s {
+                best_s = s;
+                best = Some(action);
+            }
+        }
+        let Some(action) = best else { return Ok(false) };
+        let next = self.policy.resolve(cur, &action)?;
+        *cur = next;
+        // The anti-chain stamp lands on the RECEIVER, which is what the table
+        // does too (`mark_activated_via_coordinate`, game_unit.gd:323): a unit
+        // that took a hand-off may not pass one on in the same round.
+        cur.coordinate_via_round[recv] = cur.round;
+        Ok(true)
+    }
+
     /// `AiPlanner.rollout_boundaries` ai_planner.gd:365-397 — the state at every
     /// round boundary of the horizon (index 0 = end of the CURRENT round, last =
     /// the horizon end). `horizon_rounds <= 0` takes the knob.
@@ -207,6 +337,10 @@ impl<'a> Rollout<'a> {
         let horizon_rounds = if horizon_rounds <= 0 { self.horizon() } else { horizon_rounds };
         let mut out: Vec<State> = Vec::new();
         let mut cur = self.policy.resolve(state, first_action)?;
+        // The OPENER is an activation like any other, so its own end is a
+        // Coordinate trigger like any other. Skipping it here would make the
+        // rule invisible to exactly the pick the search is pricing.
+        self.coordinate_hand_off(&mut cur, first_action, me, sc)?;
         let mut turn = other_player(state, me);
         let mut rounds_left = horizon_rounds.max(1);
         // Evaluated ONCE, on the OPENING state's unit count and the OPENING
@@ -274,6 +408,13 @@ impl<'a> Rollout<'a> {
             }
             let a = a.expect("the dry branch returns above");
             cur = self.policy.resolve(&cur, &a)?;
+            // Coordinate: the extra activation rides the SAME turn, so the
+            // alternation below still flips exactly once. It IS an activation
+            // (unlike Delayed Action's pass), so it spends a `steps` of the
+            // seat's tail-cap budget.
+            if self.coordinate_hand_off(&mut cur, &a, me, sc)? {
+                steps += 1;
+            }
             turn = other_player(&cur, turn);
         }
         out.push(cur); // guard backstop only — a logic error, never the rule path

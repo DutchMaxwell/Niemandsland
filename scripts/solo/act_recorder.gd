@@ -405,6 +405,10 @@ static func _stamp_gate_reads(state: Dictionary, plain: Dictionary) -> void:
 ##   second_wind_used   unit_properties["second_wind_used"] (solo_controller.gd:10474) — Second
 ##                       Wind's ONCE-per-game flag (block B8), the simplest ledger shape here:
 ##                       no round derivation, it never resets.
+##   activated_via_coordinate
+##                      unit_properties["activated_via_coordinate"] (game_unit.gd:324) —
+##                       Coordinate's anti-chain stamp, a bool the round reset erases, so it
+##                       always means "this round".
 static func _ledger_of(u: GameUnit) -> Dictionary:
 	var ledger := {}
 	var buffs: Array = u.unit_properties.get("spell_records", [])
@@ -421,6 +425,13 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 		ledger["delayed_action_round"] = dar
 	if bool(u.unit_properties.get("second_wind_used", false)):
 		ledger["second_wind_used"] = true
+	# Wave 4 — Coordinate's anti-chain stamp (GameUnit.was_activated_via_coordinate,
+	# game_unit.gd:328). A BOOL, erased at the round reset, so its presence already
+	# means "this round"; the core folds it into its own round stamp. Without it a
+	# replayed act could hand off a second time in a round the table already closed
+	# — the #493/#498 divergence shape.
+	if u.was_activated_via_coordinate():
+		ledger["activated_via_coordinate"] = true
 	# Wave 3 — the Storm Attack family's once-per-game flags (main.gd:17244
 	# writes `storm_used_<snake>` per rule): recorded as the DISPLAY names
 	# whose flag stands, so the core's `State.storm_used` (per unit, the

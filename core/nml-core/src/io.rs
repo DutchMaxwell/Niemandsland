@@ -180,6 +180,15 @@ pub(crate) struct PlainLedger {
     /// exactly as it did.
     #[serde(default = "neg_one")]
     delayed_action_round: i64,
+    /// Wave 4 — `unit_properties["activated_via_coordinate"]`
+    /// (`GameUnit.mark_activated_via_coordinate`, game_unit.gd:323), the
+    /// anti-chain stamp of a unit that took its activation from somebody
+    /// else's Coordinate hand-off. A BOOL on the wire because that is what the
+    /// table keeps and erases per round; the fold below turns it into the
+    /// state's round stamp. Absent (and `false`) in every corpus recorded
+    /// before this key, which replays exactly as it did.
+    #[serde(default)]
+    activated_via_coordinate: bool,
     #[serde(default = "neg_one")]
     vs_mark_round: i64,
     #[serde(default)]
@@ -701,6 +710,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         vs_mark_round: vec![-1; n],
         hit_and_run_round: vec![-1; n],
         delayed_action_round: vec![-1; n],
+        coordinate_via_round: vec![-1; n],
         // Reckless Piercing's round stamps are NOT recorded corpora inputs
         // either: the handler rolls and stamps live at the activation (see
         // the piercing-tag note below), and no epoch-7 corpus exists yet.
@@ -807,6 +817,11 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
             }
             st.hit_and_run_round[ui] = ledger.hit_and_run_round;
             st.delayed_action_round[ui] = ledger.delayed_action_round;
+            // The table's bool is round-scoped by its own erase, so a stamp that
+            // is present at all belongs to the act's own round.
+            if ledger.activated_via_coordinate {
+                st.coordinate_via_round[ui] = st.round;
+            }
             st.vs_mark_round[ui] = ledger.vs_mark_round;
             st.second_wind_used[ui] = ledger.second_wind_used;
             st.storm_used[ui] = ledger.storm_used.clone();

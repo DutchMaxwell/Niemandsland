@@ -470,6 +470,16 @@ pub struct State {
     /// the reader compares against `State::round`, so a new round needs no
     /// sweep.
     pub delayed_action_round: Vec<i64>,
+    /// Wave 4 — `unit_properties["activated_via_coordinate"]`
+    /// (`GameUnit.mark_activated_via_coordinate`, game_unit.gd:323-329) as a
+    /// ROUND, -1 for never: the round in which this unit took its activation
+    /// from somebody else's Coordinate hand-off. The table keeps a bool and
+    /// erases it at the round reset (game_unit.gd:351, "a unit coordinated in
+    /// round 2 may hand off again in round 3"); a round stamp compared against
+    /// `State::round` self-clears instead, the `hit_and_run_round` shape, so no
+    /// sweep is needed. This is the rule's own anti-chain clause: "May not be
+    /// used if this unit was activated via Coordinate."
+    pub coordinate_via_round: Vec<i64>,
     /// Wave 4 follow-up — Reckless Piercing's round-scoped stamps
     /// (main.gd:16948-16967): `reckless_rolled_round` is the once-per-ROUND
     /// roll gate, `reckless_ap_round` the buff stamp on the bearer's chain
