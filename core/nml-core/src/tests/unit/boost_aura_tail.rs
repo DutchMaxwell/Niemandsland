@@ -1787,6 +1787,40 @@ use super::*;
         );
     }
 
+    /// "Rapid Advance" (gf eternal_dynasty/human_defense_force/robot_legions
+    /// + aof duchies_of_vinci/wood_elves, Rapid Advance primitive —
+    /// grant-closed wave, epoch 7): "This model moves +4\" when using
+    /// Advance actions". The named arm in `move_rule_mods_of` reads the
+    /// entry's own `advance_mod` onto the advance band — the same flat
+    /// per-name fold BOTH band passes ship (the table name pass's
+    /// RAPID_ADVANCE_BONUS constant and its registry twin's `advance_mod`).
+    /// Evidence-only standing like the whole family (the accepted `bounding`
+    /// shape, PR #653): the +4" reaches this core precomputed inside the
+    /// RECORDED `state.bands`, so a live re-fold would double-count — the
+    /// stamp is the core's own per-entry read, never a simulation input.
+    /// PRESENT at 7, ABSENT at 6 (byte-exact), ABSENT without the rule.
+    /// Closes the "Rapid Advance Aura" grant (the census follows the grant;
+    /// the aura's own entry carries only `grants`, so it needs no arm of
+    /// its own).
+    #[test]
+    fn rapid_advance_stamps_its_own_advance_mod_at_epoch_7() {
+        assert_eq!(
+            wave3_static_of("Rapid Advance", "gf", "robot_legions", 7).move_rule_mods,
+            Some(Bands { advance: 4.0, rush: 0.0 }),
+            "epoch 7: the entry's own advance_mod (RED before the fix)"
+        );
+        assert_eq!(
+            wave3_static_of("Rapid Advance", "gf", "robot_legions", 6).move_rule_mods,
+            None,
+            "epoch 6: granted, not read (byte-exact)"
+        );
+        assert_eq!(
+            wave3_static_of("", "gf", "robot_legions", 7).move_rule_mods,
+            None,
+            "no rule, no band"
+        );
+    }
+
     /// "Musician" (gf+aof `common`, Musician primitive — wave-4 follow-up,
     /// rules-musician, epoch 7): "This model and its unit moves +1\" when
     /// using move actions". The named arm in `move_rule_mods_of` reads the
