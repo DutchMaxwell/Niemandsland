@@ -390,6 +390,10 @@ pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
 }
 
 #[cfg(test)]
+#[path = "tests/rollout/mod.rs"]
+mod family_tests;
+
+#[cfg(test)]
 mod tests {
     use crate::rng::GodotRng;
     use crate::unit::UnitStatic;
