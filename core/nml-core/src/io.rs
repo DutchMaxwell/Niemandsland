@@ -173,6 +173,13 @@ pub(crate) struct PlainLedger {
     buffs: Vec<PlainBuff>,
     #[serde(default = "neg_one")]
     hit_and_run_round: i64,
+    /// Wave 4 — `unit_properties["delayed_action_round"]`
+    /// (`SoloController.delayed_action_stamp`, solo_controller.gd:7969), the
+    /// once-per-ROUND Pass Turn stamp. Absent from every corpus recorded before
+    /// this key, and `-1` there — so an old act replays with the pass unspent,
+    /// exactly as it did.
+    #[serde(default = "neg_one")]
+    delayed_action_round: i64,
     #[serde(default = "neg_one")]
     vs_mark_round: i64,
     #[serde(default)]
@@ -693,6 +700,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         buffs: vec![Vec::new(); n],
         vs_mark_round: vec![-1; n],
         hit_and_run_round: vec![-1; n],
+        delayed_action_round: vec![-1; n],
         // Reckless Piercing's round stamps are NOT recorded corpora inputs
         // either: the handler rolls and stamps live at the activation (see
         // the piercing-tag note below), and no epoch-7 corpus exists yet.
@@ -798,6 +806,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
                 });
             }
             st.hit_and_run_round[ui] = ledger.hit_and_run_round;
+            st.delayed_action_round[ui] = ledger.delayed_action_round;
             st.vs_mark_round[ui] = ledger.vs_mark_round;
             st.second_wind_used[ui] = ledger.second_wind_used;
             st.storm_used[ui] = ledger.storm_used.clone();

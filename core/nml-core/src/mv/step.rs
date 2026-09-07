@@ -1198,6 +1198,7 @@ mod tests {
             buffs: (0..n).map(|_| Vec::new()).collect(),
             vs_mark_round: vec![-1; n],
             hit_and_run_round: vec![-1; n],
+            delayed_action_round: vec![-1; n],
             reckless_rolled_round: vec![-1; n],
             reckless_ap_round: vec![-1; n],
             reckless_backfire_round: vec![-1; n],
