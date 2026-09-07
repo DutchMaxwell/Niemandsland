@@ -58,7 +58,7 @@ pub const RULE_VOCAB_PATH: &str = "data/encoder_rule_vocab_v1.json";
 /// RULE_VOCAB_VERSION` battle_sim.gd:131. The file is SHARED by the table and
 /// this crate, so a build that reads a version it was not written for refuses
 /// to slot anything at all rather than move every board row in silence.
-pub const RULE_VOCAB_VERSION: i64 = 6;
+pub const RULE_VOCAB_VERSION: i64 = 7;
 
 /// NML-1134 — the version a corpus was recorded under when its act header
 /// carries no `rule_vocab_version` at all. Every corpus cut before the stamp
