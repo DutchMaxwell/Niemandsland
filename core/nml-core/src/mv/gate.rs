@@ -468,10 +468,15 @@ fn cap_disp(cand: [f64; 2], goal: [f64; 2], cap: f64, i: usize, rep: &mut GateRe
 /// round-trips through the inch frame between passes; the slack order, the
 /// band-frozen read and the cap circle read that config and the RAW plan in
 /// the table's frame too (B2), so a capped model lands on the table's own
-/// float32 point. The inch config `cfg` is the MIRROR (:6247 order) written
-/// after every move for the passes downstream. Returns the world config the
-/// passes ended on — the push's own output, which the inch mirror quantises
-/// to the f32-inch grid (half an ULP is 1.9e-6 in at 32-64 in).
+/// float32 point. The inch config `cfg` is the MIRROR written after every
+/// move for the passes downstream: the world point's f64 preimage
+/// `w / IN2M + board / 2`, which `from_disc` inverts bit for bit, so every
+/// later world read sees this very point; narrowed ONCE at the output it is
+/// the nearest f32 inch, which lands on the table's point whenever the
+/// f32-inch grid holds one. (The `_plan_move` :6247 read, two float32
+/// roundings, lost the world point on every second moved model and the
+/// output on one in seven that had a preimage — a 200,000-point probe.)
+/// Returns the world config the passes ended on.
 fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bool,
                 external: &[Disc], radii_m: &[f64], board_in: [f64; 2], rep: &mut GateReport)
                 -> Vec<WorldDisc> {
@@ -533,8 +538,8 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
                     }
                 }
                 w[i] = s;
-                let p = from_world_f32(s.c, board_in);
-                cfg[i].c = [p[0] as f64, p[1] as f64];
+                cfg[i].c = [s.c[0] as f64 / IN2M + board_in[0] * 0.5,
+                            s.c[1] as f64 / IN2M + board_in[1] * 0.5];
             }
         }
         if !moved {
