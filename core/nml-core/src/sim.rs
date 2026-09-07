@@ -1096,9 +1096,8 @@ fn tray_vs_marks(
 /// `_solo_utility_target(member, "enemy", ..)` makes, then rolls ONE die
 /// against the target's Quality on the real tray (:17012-17016).
 ///
-/// NOT PORTED — the displacement arm: a Mind Control entry whose `effect` is
-/// not "fatigue" moves the target; that seam this core does not have (the
-/// stamp only carries the fatigue name). The `_solo_is_ai_unit` gate
+/// The DISPLACEMENT arm (an entry with no `effect` param) is its own tray
+/// function, `tray_mind_control` below. The `_solo_is_ai_unit` gate
 /// (:16999) is not ported for the same reason `tray_piercing_tag`'s is not:
 /// selfplay stamps both slots AI. GATED `rule_on(rules_epoch,
 /// EPOCH_7_TABLE_RULES)`.
@@ -1135,6 +1134,110 @@ pub(crate) fn tray_fatigue_debuff(
                 spec.name, statics[next.roster.profile[ti]].name));
         }
     }
+}
+
+/// `main._solo_apply_mind_control` :17031-17038, the DISPLACEMENT arm of the
+/// same pre-attack slot the `tray_fatigue_debuff` stamp shares: a "Mind
+/// Control" entry with no `effect` param whose failed morale test moves the
+/// target up to `move_in` in a straight line. The direction is the table's
+/// denial pick (:17031-17036) — away from the nearest objective the bearer's
+/// side does NOT control, measured from the target's centre (the AI pulls
+/// the holder off the marker it defends) — else away from the bearer. The
+/// shift is the shared board-clamped straight move (`clamp_move_to_board`)
+/// as ONE rigid translate, the target's joined chain folded with it
+/// (`_moving_models` :5442). GATED `rule_on(rules_epoch,
+/// EPOCH_7_TABLE_RULES)`.
+pub(crate) fn tray_mind_control(
+    statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult, cover: Cover,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.alive[si] <= 0 { return; }
+    let terrain = match cover {
+        Cover::Board(t) => Some(t),
+        Cover::Recorded(_) => None,
+    };
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
+    for bearer in bearers {
+        if next.alive[bearer] <= 0 { continue; }
+        for spec in &statics[next.roster.profile[bearer]].mind_control {
+            let pick = spec.as_pick();
+            let Some(&ti) = utility_targets(statics, next, bearer, &pick, seams).first() else { continue; };
+            let quality = statics[next.roster.profile[ti]].ctx.quality as i64;
+            let faces = tray.roll(1);
+            shot.rolls.push(crate::dice::Roll {
+                kind: "attack", count: 1, target: quality,
+                faces: faces.clone(), owner: statics[next.roster.profile[bearer]].name.clone(),
+            });
+            let passed = faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
+            if passed { continue; }
+            let from = geom::centre(&next.positions[ti]);
+            let goal = nearest_uncontrolled_objective(next, next.player[bearer], next.player[ti], from)
+                .unwrap_or(geom::centre(&next.positions[bearer]));
+            let away = geom::sub(from, goal);
+            let len = (away[0] * away[0] + away[2] * away[2]).sqrt();
+            if len < 1e-3 { continue; }
+            let dir = [away[0] / len, away[2] / len];
+            let dist_in = clamp_move_to_board(terrain, &next.positions[ti], dir, spec.move_in as f32);
+            if dist_in <= 0.0 { continue; }
+            let step_m = dist_in * IN2M as f32;
+            let mut chain = vec![ti];
+            if seams.hero_attach { chain.extend(next.attached[ti].iter().copied()); }
+            for cm in chain {
+                for p in next.positions[cm].iter_mut() {
+                    *p = [p[0] + (dir[0] * step_m) as f64, p[1], p[2] + (dir[1] * step_m) as f64];
+                }
+            }
+            shot.log.push(format!(
+                "{}: {} is moved {:.0}\" in a straight line (away from the marker)",
+                spec.name, statics[next.roster.profile[ti]].name, dist_in));
+        }
+    }
+}
+
+/// `SoloController._nearest_uncontrolled_objective` :7117-7178, the path the
+/// displacement arm takes (activating_unit=null: no round plan, no garrison;
+/// `spread` false — the core has no difficulty): among the markers the
+/// bearer's side does NOT control, a HOLDABLE one (no enemy within 3") ranks
+/// before a contested one, the nearer one wins within a tier. Control is the
+/// owner OR the strict majority of non-shaken, non-reserve, non-attached,
+/// non-aircraft units within 3" (`_units_controlling` :7288,
+/// OBJECTIVE_CONTROL_IN = 3.0). Owner 0 is the table's NEUTRAL (slots 1/2),
+/// never "side 0's own".
+fn nearest_uncontrolled_objective(next: &State, side: i64, foe: i64, from: V3) -> Option<V3> {
+    let mut best: Option<(i64, f32, V3)> = None;
+    for o in &next.objectives {
+        let pos = geom::to_f32(o.pos);
+        let own = units_controlling(next, side, pos);
+        let enemy = units_controlling(next, foe, pos);
+        if (o.owner != 0 && o.owner == side) || own > enemy { continue; }
+        let d = geom::length(geom::sub(pos, from));
+        let tier = (enemy == 0) as i64 * 2;
+        if best.is_none_or(|(bt, bd, _)| tier > bt || (tier == bt && d < bd)) {
+            best = Some((tier, d, pos));
+        }
+    }
+    best.map(|(_, _, pos)| pos)
+}
+
+/// `SoloController._units_controlling` :7288-7305 — the strict headcount at
+/// one marker: the side's own alive, non-shaken, non-reserve, non-attached,
+/// non-aircraft units with ANY alive model within the 3" control radius.
+fn units_controlling(next: &State, side: i64, obj: V3) -> i64 {
+    (0..next.units())
+        .filter(|&u| {
+            next.player[u] == side
+                && next.alive[u] > 0
+                && !next.shaken[u]
+                && !next.dormant[u]
+                && next.attached_to[u].is_none()
+                && !next.aircraft[u]
+                && next
+                    .positions[u]
+                    .iter()
+                    .any(|p| geom::length(geom::sub(geom::to_f32(*p), obj)) / IN2M as f32 <= 3.001)
+        })
+        .count() as i64
 }
 
 /// `main._solo_apply_reckless_piercing` main.gd:16937-16971, called at
@@ -1184,8 +1287,7 @@ pub(crate) fn tray_reckless_piercing(
 /// Wave 3 — `main._solo_apply_piercing_tag` main.gd:16999-17027, the marker
 /// family's PLACEMENT half, in the table's own once-per-activation
 /// before-attacking slot right after the Utility Buffs (main.gd:1071; Mind
-/// Control sits between them on the table and is a seam this core does not
-/// have). Per BEARER — the acting unit, then each attached hero, the table's
+/// Control sits between them on the table). Per BEARER — the acting unit, then each attached hero, the table's
 /// own members loop (:17005-17007) — every entry of the family the bearer
 /// carries fires at its own literal, ONCE PER GAME (the shared
 /// `piercing_tag_used` flag :17015/:17021 — one flag for all three names, set
@@ -4433,16 +4535,18 @@ fn resolve_with(
     }
 
     // --- MIND CONTROL / Fatigue Debuff (main.gd:1070, the table's own slot
-    // between Utility Buffs and Piercing Tag) — tray path only, see
-    // `tray_fatigue_debuff`.
+    // between Utility Buffs and Piercing Tag) — tray path only, the fatigue
+    // arm (`tray_fatigue_debuff`) and the displacement arm
+    // (`tray_mind_control`).
     if let Some((tray, shot)) = dice.as_mut() {
         tray_fatigue_debuff(statics, &mut next, si, seams, tray, shot);
+        tray_mind_control(statics, &mut next, si, seams, tray, shot, cover);
     }
 
     // --- PIERCING TAG (main.gd:1071, the table's pre-attack slot right after
-    // the Utility Buffs + Mind Control — Mind Control is a seam this core does
-    // not have), tray path only — see `tray_piercing_tag`. Dice-free: no tray
-    // draw either way (the marker count comes off the rule's rating).
+    // the Utility Buffs + Mind Control), tray path only — see
+    // `tray_piercing_tag`. Dice-free: no tray draw either way (the marker
+    // count comes off the rule's rating).
     if let Some((_, shot)) = dice.as_mut() {
         tray_piercing_tag(statics, &mut next, si, seams, shot);
     }

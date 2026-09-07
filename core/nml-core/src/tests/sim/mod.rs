@@ -1541,6 +1541,7 @@ mod instinctive;
 mod limited_weapons;
 mod mark_consumers;
 mod melee_reach_table;
+mod mind_control;
 mod mend;
 mod piercing_tag;
 mod plain_moves;
