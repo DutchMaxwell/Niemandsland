@@ -14,7 +14,8 @@ use std::rc::Rc;
 
 use crate::combat::{
     at_or_below_half, block_chance, effective_attacks, melee_ev, morale_target, shielded_defense,
-    shoot_ev, should_test_shooting_morale, shrouded_reach, ANGELIC_BLESSING_BOOST_TARGET_SPELL,
+    shoot_ev, should_test_shooting_morale, shrouded_reach, RAVAGE_WOUND_TARGET,
+    ANGELIC_BLESSING_BOOST_TARGET_SPELL,
     CURSED_UNDEAD_BOOST_TARGET, HOLD_THE_LINE_BOOST_MORALE_BONUS, SELF_REPAIR_BOOST_TARGET,
 };
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
@@ -1232,6 +1233,10 @@ fn axis_scale(start: f32, d: f32, limit: f32) -> f32 {
 /// `MEND_RANGE_IN`/`BREATH_RANGE_IN` precedent).
 pub const HIT_AND_RUN_MOVE_IN: f32 = 3.0;
 
+/// `Retreating Strike`'s reach: "within 3\" of enemy units" (main.gd:5864,
+/// the melee gap read) -- the same 3" as the Hit & Run step it rides.
+pub const RETREATING_STRIKE_REACH_IN: f64 = 3.0;
+
 /// BLOCK B5 — `SoloController.hit_and_run_move` solo_controller.gd:9649-9713,
 /// called main.gd:1083-1089 right after the ACTING unit's own shoot/melee
 /// resolves (`resolve_with`'s call site, right after the charge block). Ported
@@ -1337,6 +1342,61 @@ fn instinctive_applies(state: &State, from: usize, ti: usize) -> bool {
     true
 }
 
+/// `main._solo_retreating_strike` main.gd:5849-5877, called at main.gd:1097
+/// INSIDE the post-MELEE Hit & Run success branch (:1095-1097): once per
+/// round per bearer (the acting unit, then each attached hero -- the
+/// table's `_solo_joined_chain` loop with the per-member
+/// `retreating_strike_round` stamp), the nearest enemy within the 3" MELEE
+/// gap of the formation takes `maxi(rating,1) x alive` direct-wound dice at
+/// the shared Ravage 6+ (`AiCombatMath.RAVAGE_WOUND_TARGET`), rolled with
+/// the table's own "ravage" roll kind; wounds land with no save beyond the
+/// Regeneration batch the melee Ravage leg already applies.
+///
+/// NOT PORTED -- the table's second call site (main.gd:9494, the AI
+/// DEFENDER's post-melee step after the human's melee): this core has no
+/// defender-side Hit & Run seam (its HnR is the acting unit's own, above),
+/// so the defender's strike has nowhere to hang. The human's manual
+/// post-melee drag is untracked on the TABLE too -- the Versatile precedent.
+/// GATED `rule_on(rules_epoch, EPOCH_7_TABLE_RULES)`.
+pub(crate) fn tray_retreating_strike(
+    statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) { return; }
+    if next.alive[si] <= 0 { return; }
+    // The pick is the FORMATION's (main.gd:5863-5865 measure `unit` to the
+    // target), the dice are per MEMBER -- so the target is found once here.
+    let Some(ti) = nearest_enemy_of(next, si) else { return; };
+    let gap = geom::edge_gap_in(
+        &next.positions[si], &next.radii[si], &next.positions[ti], &next.radii[ti],
+        DEFAULT_BASE_RADIUS_M,
+    );
+    if gap > RETREATING_STRIKE_REACH_IN { return; }
+    let def_owner = statics[next.roster.profile[ti]].name.clone();
+    let def = ctx_live(ctx_of(&statics[next.roster.profile[ti]], next, ti), statics, next, ti, true, seams.rules_epoch);
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
+    for bearer in bearers {
+        if next.alive[bearer] <= 0 || next.retreating_strike_round[bearer] == next.round {
+            continue;
+        }
+        let Some(spec) = statics[next.roster.profile[bearer]].retreating_strikes.first() else { continue; };
+        next.retreating_strike_round[bearer] = next.round;
+        let dice = spec.rating.max(1) * next.alive[bearer];
+        if dice <= 0 { continue; }
+        let faces = tray.roll(dice as usize);
+        let w = faces.iter().filter(|&&f| f as i64 >= RAVAGE_WOUND_TARGET).count() as i64;
+        shot.rolls.push(crate::dice::Roll {
+            kind: "ravage", count: dice, target: RAVAGE_WOUND_TARGET,
+            faces: faces.clone(), owner: statics[next.roster.profile[bearer]].name.clone(),
+        });
+        let landed = crate::dice::regen_batch(w, &def, &def_owner, tray, &mut shot.rolls);
+        land_wounds(next, ti, landed);
+        shot.log.push(format!(
+            "{}: {} strikes while retreating -- {} dice -> {} wound(s) on {} (no save)",
+            spec.name, statics[next.roster.profile[bearer]].name, dice, w, def_owner));
+    }
+}
 /// Returns whether the unit actually moved — the caller logs the battle-log
 /// line on it (main.gd:1089).
 ///
@@ -4564,6 +4624,13 @@ fn resolve_with(
             };
             let (_, shot) = dice.as_mut().unwrap();
             shot.log.push(format!("{rule}: {} steps up to {band}\" after its attack", us.name));
+            // Retreating Strike (main.gd:1097, resolver wave A): the post-
+            // MELEE step may lash out -- the shooting leg never does.
+            if !shot_leg {
+                if let Some((tray, shot)) = dice.as_mut() {
+                    tray_retreating_strike(statics, &mut next, si, seams, tray, shot);
+                }
+            }
         }
     }
 

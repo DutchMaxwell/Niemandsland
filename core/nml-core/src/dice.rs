@@ -1035,7 +1035,7 @@ pub fn resolve_volley_with_tray(
 /// the volley tail because D1-B5's melee needs it three more times: Ravage lands
 /// at once (:6002), each Impact pool lands at once (:6337), and the strike phase
 /// pools its own (:6161).
-fn regen_batch(
+pub(crate) fn regen_batch(
     w: i64,
     def: &Ctx,
     def_owner: &str,

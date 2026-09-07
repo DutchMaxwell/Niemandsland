@@ -82,6 +82,7 @@
             reckless_rolled_round: vec![-1; 4],
             reckless_ap_round: vec![-1; 4],
             reckless_backfire_round: vec![-1; 4],
+            retreating_strike_round: vec![-1; 4],
             growth_markers: vec![0; 4],
             growth_round: vec![-1; 4],
             second_wind_used: vec![false; 4],
@@ -1544,6 +1545,7 @@ mod quick_shot;
 mod reckless_piercing;
 mod reposition_artillery;
 mod retaliate;
+mod retreating_strike;
 mod second_wind;
 mod second_wind_score;
 mod split_fire;
