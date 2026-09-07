@@ -171,7 +171,9 @@ use super::*;
         let (mut st, mut statics) = tag_line("Piercing Tag", 0, 24.0);
         statics[0].piercing_tags.clear();
         statics[0].shoot[0].attacks = 64;
+        // The handler stamps the whole joined chain -- hero included.
         st.reckless_ap_round[0] = 0;
+        st.reckless_ap_round[1] = 0;
         let (_, shot) = tag_volley(&statics, &st, Seams { rules_epoch: 7, ..Seams::default() });
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 5),
@@ -202,8 +204,9 @@ use super::*;
     /// (main.gd:6017's `_solo_reckless_ap` fold).
     #[test]
     fn the_backfire_stamp_hands_the_enemy_ap_in_melee() {
-        let (mut st, statics) = rp_line(7, &[]);
+        let (mut st, mut statics) = rp_line(7, &[]);
         st.reckless_backfire_round[2] = 0;
+        statics[0].melee = vec![gun("Blade", 64, 0)];
         st.positions[2] = vec![[1.2 * IN2M, 0.0, 0.0]]; // base-edge contact
         let mut tray = Tray::seeded(11);
         let mut shot = ShootResult::default();
