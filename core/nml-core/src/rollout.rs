@@ -25,7 +25,8 @@ use std::rc::Rc;
 
 use serde_json::{json, Value};
 
-use crate::acts::Knobs;
+use crate::acts::{rule_on, Knobs, EPOCH_7_TABLE_RULES};
+use crate::io::Seams;
 use crate::menu::Candidate;
 use crate::mission::{apply_destroy_step, playout_seize, vp_of, vp_score_round};
 use crate::rng::GodotRng;
@@ -59,6 +60,73 @@ pub enum Stop {
     /// The `(units + 2) * rounds_left` backstop ran out: a logic error in the
     /// policy, never the rule path.
     Guard,
+}
+
+/// PRIMITIVE "Pass Turn", wave 4 — its only book user is `Delayed Action`:
+/// "Once per round, if your opponent has more units left to activate than you,
+/// then this model's unit may pass its turn instead of activating (may still be
+/// activated later)." The table has shipped it since wave 5
+/// (`SoloController.delayed_action_*`, solo_controller.gd:7919-8114, applied by
+/// `main._solo_pass_turn` :1499); this is the same step in the core's own
+/// alternation, which until now could only ever SPEND an activation.
+///
+/// The carrier that should pass, or `None`. Both guards the table names are
+/// here, and they are what makes the step terminate:
+///   (a) STRICTLY more (`delayed_action_surplus` :7959). The condition is
+///       antisymmetric — `opp > own` for one side is `own >= opp` for the
+///       other — so it can never hold for both sides at once and two carriers
+///       cannot pass at each other forever.
+///   (b) ONCE PER ROUND, per CARRIER UNIT ("this model's unit", ruling 2 at
+///       :7943). A carrier already stamped in this round activates instead, so
+///       at most one pass per carrier per round exists at all.
+///
+/// TWO DECLARED SIMPLIFICATIONS, in the `second_wind_candidate` manner (never
+/// silent):
+///   * WHICH carrier. The table picks its most valuable un-activated unit when
+///     that unit carries the rule (`delayed_action_pass_choice` :8085, worth =
+///     points); this bookkeeping layer has no points and picks by `alive`, the
+///     same stand-in block B8 declared for `_plan_ev_of`.
+///   * WHETHER to pass. The table only passes when the prize stands inside an
+///     un-committed enemy's reach (`delayed_action_threatened` :8118 plus
+///     `_has_los`); the greedy playout passes whenever the RULE's own condition
+///     stands. The book text carries no threat clause — that half is the AI's
+///     taste, not the rule — so this is the rule minus a heuristic.
+///
+/// Symmetric by construction: the core has no `ai_slot`/`human_slot` split, so
+/// the step applies to whichever side holds the turn (the block-B8 FIRE GATE
+/// note, sim.rs).
+fn delayed_action_passer(
+    statics: &[UnitStatic],
+    state: &State,
+    player: i64,
+    seams: Seams,
+) -> Option<usize> {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+        return None;
+    }
+    let foe = other_player(state, player);
+    if foe == player {
+        return None; // one-sided state: nobody to hand the turn to
+    }
+    let (mut own, mut opp) = (0i64, 0i64);
+    let mut best: Option<(usize, i64)> = None;
+    for i in 0..state.units() {
+        if state.can_activate(i, player, seams.hero_attach) {
+            own += 1;
+            if statics[state.roster.profile[i]].delayed_action_active
+                && state.delayed_action_round[i] != state.round
+                && best.map_or(true, |(_, v)| state.alive[i] > v)
+            {
+                best = Some((i, state.alive[i]));
+            }
+        } else if state.can_activate(i, foe, seams.hero_attach) {
+            opp += 1;
+        }
+    }
+    if opp <= own {
+        return None; // guard (a): equality refuses, and that IS the guard
+    }
+    best.map(|(i, _)| i)
 }
 
 /// One rollout's whole configuration: the greedy policy plus the search knobs
@@ -145,10 +213,30 @@ impl<'a> Rollout<'a> {
         // rounds_left — it is a backstop against a policy that never goes dry,
         // not a per-round budget.
         let mut guard: i64 = (state.units() as i64 + 2) * rounds_left;
+        // Wave 4 — the backstop above is sized for ACTIVATIONS alone, and a
+        // pass spends a loop turn without spending one. A carrier-rich army
+        // would therefore hit `Stop::Guard` ("a logic error, never the rule
+        // path") ON the rule path. Guard (b) caps the passes of a round at one
+        // per carrier, so `units` per round is the exact headroom — added
+        // inside the epoch gate, so an `rules_epoch < 7` record keeps the
+        // byte-identical budget it replays with today.
+        if rule_on(self.policy.seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+            guard += state.units() as i64 * rounds_left;
+        }
         let tail_cap = self.tail_cap_for(me);
         let mut steps: i64 = 0;
         while guard > 0 {
             guard -= 1;
+            // "Pass Turn" — the acting side DECLINES instead of activating. The
+            // stamp is the only thing that moves: no unit is marked activated,
+            // which is the rule's own last clause ("may still be activated
+            // later"). `steps` is untouched too — a pass is not an activation,
+            // so it must not eat the seat's tail-cap budget.
+            if let Some(pi) = delayed_action_passer(self.statics(), &cur, turn, self.policy.seams) {
+                cur.delayed_action_round[pi] = cur.round;
+                turn = other_player(&cur, turn);
+                continue;
+            }
             if tail_cap > 0 && steps >= tail_cap {
                 // Truncated MID-ROUND: priced as it stands, with NO round-end
                 // bookkeeping at all (NML-1051) — no seize, no destroy step, no VP.

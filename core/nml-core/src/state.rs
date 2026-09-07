@@ -463,6 +463,13 @@ pub struct State {
     /// 9685), the once-per-ROUND stamp of the Hit & Run free move, -1 for
     /// never; the same shape as `vs_mark_round`.
     pub hit_and_run_round: Vec<i64>,
+    /// Wave 4 — `unit_properties["delayed_action_round"]`
+    /// (`SoloController.DELAYED_ACTION_STAMP`, solo_controller.gd:7950): the
+    /// round this carrier already spent its once-per-round Pass Turn in, -1 for
+    /// never. The `hit_and_run_round` shape, and it self-clears the same way —
+    /// the reader compares against `State::round`, so a new round needs no
+    /// sweep.
+    pub delayed_action_round: Vec<i64>,
     /// Wave 4 follow-up — Reckless Piercing's round-scoped stamps
     /// (main.gd:16948-16967): `reckless_rolled_round` is the once-per-ROUND
     /// roll gate, `reckless_ap_round` the buff stamp on the bearer's chain

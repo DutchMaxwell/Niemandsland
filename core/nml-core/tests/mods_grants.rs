@@ -91,6 +91,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         buffs: vec![Vec::new(), Vec::new()],
         vs_mark_round: vec![-1; 2],
         hit_and_run_round: vec![-1; 2],
+        delayed_action_round: vec![-1; 2],
         reckless_rolled_round: vec![-1; 2],
         reckless_ap_round: vec![-1; 2],
         reckless_backfire_round: vec![-1; 2],

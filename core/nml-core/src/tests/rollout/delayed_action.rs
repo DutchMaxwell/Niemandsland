@@ -136,3 +136,37 @@ use super::*;
             "epoch 6 knows no pass step: byte-identical to today's alternation"
         );
     }
+
+    /// Guard (b): "once per round" binds the CARRIER UNIT. A carrier already
+    /// stamped in THIS round activates instead of passing a second time — the
+    /// stamp is what keeps a round from looping on one unit.
+    #[test]
+    fn a_carrier_passes_at_most_once_per_round() {
+        let (mut st, statics) = pass_line(CURRENT_RULES_EPOCH);
+        let a = idx(&st, "p1_0_a");
+        st.delayed_action_round[a] = st.round;
+        let end = truncated(&st, &statics, CURRENT_RULES_EPOCH, 1);
+        assert!(end.activated[a], "the pass was already spent this round");
+    }
+
+    /// The table bridge. `AiActRecorder._ledger_of` exports the carrier's
+    /// `unit_properties["delayed_action_round"]`, and a replayed act must read it
+    /// back: a pass the TABLE already spent cannot come back to life on replay
+    /// (the #493/#498 divergence shape — an accumulating once-per-round flag
+    /// silently vanishing between activations).
+    #[test]
+    fn the_ledger_restores_a_pass_already_spent_on_the_table() {
+        let plain = PLAIN.replace(
+            r#""p1_0_a":{"player":1,"#,
+            r#""p1_0_a":{"ledger":{"delayed_action_round":2},"player":1,"#,
+        );
+        let header = read_act_header(HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let st = io::state_from_json(&plain, &mut cache, &mut roster).expect("state");
+        let a = idx(&st, "p1_0_a");
+        assert_eq!(st.delayed_action_round[a], 2, "the table's stamp survives the fold");
+        let statics = statics_of(&st, CURRENT_RULES_EPOCH);
+        let end = truncated(&st, &statics, CURRENT_RULES_EPOCH, 1);
+        assert!(end.activated[a], "the pass was spent on the table, not again here");
+    }

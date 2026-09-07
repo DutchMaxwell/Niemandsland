@@ -391,6 +391,11 @@ static func _stamp_gate_reads(state: Dictionary, plain: Dictionary) -> void:
 ##                       Run's once-per-round consumption flag (#493).
 ##   vs_mark_round      unit_properties["vs_mark_round"] (main.gd:16751) — Unstoppable Mark's
 ##                       once-per-round flag, the utility-buff bridge's enemy-side seam (#489).
+##   delayed_action_round  unit_properties[DELAYED_ACTION_STAMP] (solo_controller.gd:7969) —
+##                       Delayed Action's once-per-round Pass Turn stamp. Without it the core's
+##                       own pass step (rollout.rs) replays every act with the pass UNSPENT and
+##                       may grant a second one in a round this table already closed — the #493
+##                       shape, one layer over.
 ##   growth             sum of every "Growth Markers" rule's marker count the unit carries
 ##                       (unit_properties["growth_<rule>"], main.gd:16979) — a single
 ##                       counter, the training pool's own shape (#498: no bearer carries two
@@ -411,6 +416,9 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 	var vsm := int(u.unit_properties.get("vs_mark_round", -1))
 	if vsm != -1:
 		ledger["vs_mark_round"] = vsm
+	var dar := int(u.unit_properties.get(SoloController.DELAYED_ACTION_STAMP, -1))
+	if dar != -1:
+		ledger["delayed_action_round"] = dar
 	if bool(u.unit_properties.get("second_wind_used", false)):
 		ledger["second_wind_used"] = true
 	# Wave 3 — the Storm Attack family's once-per-game flags (main.gd:17244

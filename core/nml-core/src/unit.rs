@@ -837,6 +837,13 @@ pub struct UnitStatic {
     /// on every occurrence (verified), so sim.rs stands in a const for both,
     /// the `HIT_AND_RUN_MOVE_IN` precedent.
     pub second_wind_active: bool,
+    /// Wave 4 — the "Pass Turn" primitive's only user in the book snapshot:
+    /// `SoloController.delayed_action_member_of` (solo_controller.gd:7978).
+    /// Name-keyed here, where the table is primitive-keyed: `Delayed Action` is
+    /// measurably the sole Pass Turn entry in gf and aof, and the rulebook's
+    /// second user (Combat Hesitation, GF Advanced p.41) is not shipped — it
+    /// costs one `||` on the day it is, the `second_wind_active` precedent.
+    pub delayed_action_active: bool,
     /// Ambush arrival S2 — `SoloController._reserve_min_enemy_dist_m`
     /// (solo_controller.gd:9617-9621): the ring an ARRIVING ambusher must keep
     /// from every enemy model. `0.0` means "not an infiltrator", i.e. the plain
@@ -4184,6 +4191,7 @@ impl UnitStatic {
             second_wind_active: unit_rule_active(reg, p, "Second Wind")
                 || unit_rule_active(reg, p, "Inquisitorial Agent")
                 || unit_rule_active(reg, p, "Martial Prowess"),
+            delayed_action_active: unit_rule_active(reg, p, "Delayed Action"),
             infiltrate_min_enemy_dist_in: if has_special_rule(&p.special_rules, "Infiltrate") {
                 unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN)
             } else {
