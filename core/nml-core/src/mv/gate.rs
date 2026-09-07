@@ -233,7 +233,15 @@ fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
 #[cfg(test)]
 thread_local! { pub(crate) static TRACE: std::cell::Cell<bool> = std::cell::Cell::new(false); }
 #[cfg(test)]
-fn tr(s: String) { TRACE.with(|t| if t.get() { eprintln!("GT {s}"); }) }
+fn tr(s: String) {
+    use std::io::Write;
+    TRACE.with(|t| if t.get() {
+        // Straight to the process's stderr, past libtest's capture of eprintln.
+        if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open("/dev/stderr") {
+            let _ = writeln!(f, "GT {s}");
+        }
+    })
+}
 
 /// `SeparationResolver._travel_to_clear_along` separation_resolver.gd:156 — the
 /// shortest slide along unit direction `u` that clears every obstacle's
@@ -1414,10 +1422,10 @@ mod push_trace_026 {
         let mut land = crate::mv::step::MoveRules { rules_epoch: 6 }
             .charge_move(&state, &terrain, actor, target, 16.0, true, true, 320).unwrap();
         let snap = land.snap_charge(&state, target, 6);
-        TRACE.with(|t| t.set(false));
-        eprintln!("GT snap {snap:?} budget={} arc={}", land.budget_in, land.arc_in);
+        tr(format!("snap {snap:?} budget={} arc={}", land.budget_in, land.arc_in));
         for (i, e) in land.end.iter().enumerate() {
-            eprintln!("GT end {i} {e:?}");
+            tr(format!("end {i} {e:?}"));
         }
+        TRACE.with(|t| t.set(false));
     }
 }
