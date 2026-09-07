@@ -367,6 +367,14 @@ pub fn conditional_ap_bonus(
     if c.gate == "ranged_over_or_charge" && !(is_charging || (!melee && dist_in > c.over_in)) {
         return 0;
     }
+    // Wave 4 follow-up (rules-ranged-slayer) — "Ranged Slayer"'s gate, the
+    // Slayer family's shooting-only spelling ("AP(+2) … over 9" away", no
+    // charge leg). Fires only on the shooting array from beyond `over_in`
+    // with range context; the named arm at unit.rs::stamp_conditional_ap_named
+    // (FROZEN `EPOCH_7_TABLE_RULES`) is the only writer of this gate.
+    if c.gate == "ranged_over" && !(!melee && dist_in >= 0.0 && dist_in > c.over_in) {
+        return 0;
+    }
     match c.condition.as_str() {
         // Wave 4 (rules-wave4-boostbases) — "Havocbound Boost"'s always-on
         // spelling ("always gets AP(+1) … instead of only when …"): no gate.
