@@ -216,6 +216,56 @@ use super::*;
         assert!(!logged(&off, "Melee Slayer"), "epoch 6: unnamed, silent");
     }
 
+    /// "Ranged Slayer" (gf/dao_union, aof/chivalrous_kingdoms,
+    /// aof/duchies_of_vinci): "When this model shoots at enemies over 9\"
+    /// away, its weapons get AP(+2) if most models in the target have
+    /// Tough(3) or higher" — Slayer's printed shape with the charge leg
+    /// deleted. The named arm stamps a vs_tough_ge spec gated
+    /// `ranged_over` (shooting-only, never the charge leg), so the far
+    /// volley fires and the close volley and the strike stay shut. PRESENT
+    /// at 7, ABSENT at 6 (the registry entry's missing `condition` key
+    /// leaves the generic pass inert at every epoch, byte-exact).
+    #[test]
+    fn ranged_slayer_adds_ap_two_on_far_shots_at_epoch_7() {
+        let us = condap_unit("dao_union", &["Ranged Slayer"], 7);
+        let far = volley(&us, &target(3), 12.0);
+        assert_eq!(
+            save_targets(&far),
+            vec![6],
+            "epoch 7, 12\" vs Tough(3): AP(+2) (RED before the fix)"
+        );
+        assert!(
+            logged(&far, "Ranged Slayer: AP(+2) on att's volley"),
+            "rules-must-log: the volley names the rule (RED before the fix)"
+        );
+        let close = volley(&us, &target(3), 6.0);
+        assert_eq!(save_targets(&close), vec![4], "6\": inside the 9\" gate");
+        assert!(!logged(&close, "Ranged Slayer"), "nothing fired, nothing logs");
+        let soft = volley(&us, &target(2), 12.0);
+        assert_eq!(save_targets(&soft), vec![4], "vs Tough(2): below the threshold");
+        assert_eq!(
+            save_targets(&strike(&us, &target(3), true)),
+            vec![4],
+            "melee, even charging: the charge leg is deleted"
+        );
+
+        let us6 = condap_unit("dao_union", &["Ranged Slayer"], 6);
+        let off = volley(&us6, &target(3), 12.0);
+        assert_eq!(save_targets(&off), vec![4], "epoch 6: granted, not read");
+        assert!(!logged(&off, "Ranged Slayer"));
+
+        // The aura carrier: the epoch-6 Aura-Channel fold grants the base,
+        // the base's live handler fires on the carrier's own volley.
+        let aura = condap_unit("dao_union", &["Ranged Slayer Aura"], 7);
+        assert_eq!(
+            save_targets(&volley(&aura, &target(3), 12.0)),
+            vec![6],
+            "aura carrier: the granted base fires (RED before the fix)"
+        );
+        let plain = condap_unit("dao_union", &[], 7);
+        assert_eq!(save_targets(&volley(&plain, &target(3), 12.0)), vec![4], "no rule, no AP");
+    }
+
     /// The corpus floor, in one place: a record stamped BELOW
     /// `EPOCH_7_TABLE_RULES` sees none of this wave's four bases — the exact
     /// reading it had before the wave existed.
