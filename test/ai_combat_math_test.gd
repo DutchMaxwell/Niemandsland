@@ -184,6 +184,19 @@ func test_blocks_with_bane_respects_ap_on_the_reroll() -> void:
 	assert_int(AiCombatMath.blocks_with_bane([6, 6], [4, 5], 4, 1)).is_equal(1)
 
 
+func test_bane_reroll_count_from_widens_to_successful_fives() -> void:
+	# Base leg (low 6): byte-identical to bane_reroll_count — only the unmodified 6s.
+	assert_int(AiCombatMath.bane_reroll_count_from([6, 5, 3, 1], 5, 6)).is_equal(1)
+	# Widened (low 5, save on 5+): the 6 AND the successful 5 re-roll; a 5 that already failed its
+	# save (target 7, heavy AP) is not a success and never re-rolls.
+	assert_int(AiCombatMath.bane_reroll_count_from([6, 5, 3, 1], 5, 5)).is_equal(2)
+	assert_int(AiCombatMath.bane_reroll_count_from([6, 5], 7, 5)).is_equal(1)
+	# blocks_with_bane_from: the 6 and the 5 re-roll once ([1, 2] both fail), the 3 stays → 0 blocks.
+	assert_int(AiCombatMath.blocks_with_bane_from([6, 5, 3], [1, 2, 4], 4, 0, 5)).is_equal(0)
+	# low 6 = the base leg — byte-identical to blocks_with_bane.
+	assert_int(AiCombatMath.blocks_with_bane_from([6, 6, 3], [2, 5], 4, 0, 6)).is_equal(1)
+
+
 func test_expected_wounds() -> void:
 	# 6 attacks, hit on 4+ (1/2), target Def 4+ save fails on 1/2 → 6 × 0.5 × 0.5 = 1.5.
 	assert_float(AiCombatMath.expected_wounds(6, 4, 4, 0)).is_equal_approx(1.5, 0.0001)

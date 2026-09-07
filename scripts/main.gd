@@ -6510,15 +6510,23 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	var blocks: int
 	var reroll: Array = []
 	if bane:
-		var sixes: int = AiCombatMath.bane_reroll_count(save_faces)
+		# Widened re-roll window (wave 4: Bestial/Mischievous Boost — reroll_save_low past over_in,
+		# shooting only): the window's successful 5s+ re-roll beside the base 6s leg; low 6 = no boost.
+		var win: Dictionary = AiEv.bane_boost_window(striker, over9)
+		var bane_low: int = int(win.get("low", AiCombatMath.UNMODIFIED_SIX))
+		var sixes: int = AiCombatMath.bane_reroll_count_from(save_faces, base_defense + ap, bane_low)
 		if sixes > 0:
 			if battle_log != null:
 				var bane_name := _solo_bane_facet_name(striker, int(profile.get("range", 0)))
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense 6%s" % [
-					bane_name if not bane_name.is_empty() else "Bane", defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
+				if win.is_empty():
+					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense 6%s" % [
+						bane_name if not bane_name.is_empty() else "Bane", defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
+				else:
+					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense roll%s of %d+" % [
+						str(win["rule"]), defender.get_name(), sixes, ("" if sixes == 1 else "s"), bane_low], true)
 			reroll = await _solo_tray_roll(sixes, base_defense + ap, _solo_owner_label(defender), "defense",
 				"Defense re-roll (Bane) vs %s" % weapon_name)
-		blocks = AiCombatMath.blocks_with_bane(save_faces, reroll, base_defense, ap)
+		blocks = AiCombatMath.blocks_with_bane_from(save_faces, reroll, base_defense, ap, bane_low)
 	else:
 		blocks = AiCombatMath.count_blocks(save_faces, base_defense, ap)
 	# Shred (wave 5, army-book weapon rule): every unmodified Defense 1 deals +1 wound — counted on the
