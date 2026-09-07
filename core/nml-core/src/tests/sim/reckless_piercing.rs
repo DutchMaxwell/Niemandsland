@@ -167,6 +167,8 @@ use super::*;
             charge: None, patient: false, split: None, traced: None,
         };
         let (_, shot) = run_action(&st, &statics, &action, 11, 7);
+        eprintln!("RP-VOLLEY-DEBUG rolls: {:#?}", shot.rolls.iter().map(|r| (r.kind, r.target, r.count)).collect::<Vec<_>>());
+        eprintln!("RP-VOLLEY-DEBUG log: {:#?}", shot.log);
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 3),
             "stamped attacker: the saves run at AP(1) — got {:#?}",
