@@ -936,6 +936,7 @@ mod tests {
         rep!(vs_mark_round);
         rep!(hit_and_run_round);
         rep!(delayed_action_round);
+        rep!(coordinate_via_round);
         rep!(growth_markers);
         rep!(growth_round);
         rep!(second_wind_used);

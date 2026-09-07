@@ -654,6 +654,11 @@ pub const INFILTRATE_MIN_ENEMY_DIST_IN: f64 = 0.0762 / 0.0254;
 /// book's *"Enemy units using Ambush must be set up over 12\" away from this
 /// model's unit"*. An inch literal on the table too, so no such seam here.
 pub const REPEL_AMBUSHERS_DIST_IN: f64 = 12.0;
+/// `SoloController.COORDINATE_RANGE_IN` (solo_controller.gd:784) — the reach
+/// the hand-off falls back to when the registry entry carries no `range_in`.
+/// Both shipped entries do carry it (12.0), so this is the fallback only, the
+/// table's own `coordinate_range_of` shape.
+pub const COORDINATE_RANGE_IN: f64 = 12.0;
 
 /// The immutable per-unit closure of `resolve`/`reply_threat`.
 #[derive(Debug, Default)]
@@ -863,6 +868,13 @@ pub struct UnitStatic {
     /// second user (Combat Hesitation, GF Advanced p.41) is not shipped — it
     /// costs one `||` on the day it is, the `second_wind_active` precedent.
     pub delayed_action_active: bool,
+    /// Wave 4 — the reach of `Coordinate`'s hand-off in inches, off the
+    /// registry entry (`SoloController.coordinate_range_of`,
+    /// solo_controller.gd:803-806, `params.range_in`, 12" in both shipped
+    /// books). `0.0` means "not a carrier", the `infiltrate_min_enemy_dist_in`
+    /// shape below — one field instead of a bool beside a range, because a
+    /// carrier without a reach cannot hand off anything.
+    pub coordinate_range_in: f64,
     /// Ambush arrival S2 — `SoloController._reserve_min_enemy_dist_m`
     /// (solo_controller.gd:9617-9621): the ring an ARRIVING ambusher must keep
     /// from every enemy model. `0.0` means "not an infiltrator", i.e. the plain
@@ -4359,6 +4371,11 @@ impl UnitStatic {
                 || unit_rule_active(reg, p, "Inquisitorial Agent")
                 || unit_rule_active(reg, p, "Martial Prowess"),
             delayed_action_active: unit_rule_active(reg, p, "Delayed Action"),
+            coordinate_range_in: if unit_rule_active(reg, p, "Coordinate") {
+                unit_param_f(reg, p, "Coordinate", "range_in", COORDINATE_RANGE_IN)
+            } else {
+                0.0
+            },
             infiltrate_min_enemy_dist_in: if has_special_rule(&p.special_rules, "Infiltrate") {
                 unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN)
             } else {
