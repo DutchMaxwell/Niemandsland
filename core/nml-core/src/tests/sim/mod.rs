@@ -1553,6 +1553,7 @@ mod retreating_strike;
 mod second_wind;
 mod second_wind_score;
 mod spell_accumulator;
+mod spell_conduit;
 mod split_fire;
 mod versatile_reach;
 mod weapons;
