@@ -74,7 +74,7 @@ use super::*;
     #[test]
     fn an_ordinary_vr_charge_lands_exactly_like_a_non_carriers() {
         let (st, statics) = vr_charge_line(11.0);
-        let action = Action { dest: Some(st.positions[1][0]), ..vr_charge() };
+        let action = Action { dest: Some(st.positions[1][0]), ..vr_charge() teleport: None, };
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);
         let (plain, _) = resolve_stochastic_tray_on_board(
@@ -106,8 +106,7 @@ use super::*;
         statics[0].versatile_reach_charge_in = Some(2.0);
         let rush = Action {
             kind: RUSH, unit: "a".into(), dest: Some(st.positions[1][0]), shoot: None,
-            charge: Some("b".into()), patient: false, split: None, traced: None,
-        };
+            charge: Some("b".into()), patient: false, split: None, traced: None, teleport: None, };
         let next = vr_resolve(&st, &statics, &rush);
         let moved = (next.positions[0][0][0] - st.positions[0][0][0]).abs() / IN2M as f64;
         assert!(

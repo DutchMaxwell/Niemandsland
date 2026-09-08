@@ -760,6 +760,9 @@ pub struct UnitStatic {
     /// The Extended Buff Range carrier stamp (epoch 7) — `ebr_of`; None below
     /// `rules_epoch` 7. Both relay ends answer through this flag.
     pub ebr: Option<EbrStamp>,
+    /// The Teleport / Ethereal read (epoch 7) — the discretionary before-
+    /// attack reposition (`teleport_of`); None below `rules_epoch` 7.
+    pub teleport: Option<TeleportSpec>,
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
@@ -2762,6 +2765,50 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
     None
 }
 
+/// The Teleport / Ethereal read (design #816, PR 2 — core): the discretionary
+/// before-attack reposition. Carried by NAME — "Teleport" (the "Teleport Aura"
+/// grant has already folded the base in via `apply_aura_channel`), "Ethereal",
+/// or any DATA alias whose registry entry's primitive is "Teleport" — gated on
+/// the FROZEN `EPOCH_7_TABLE_RULES`; a record below 7 keeps `None` and replays
+/// byte-exact. The cap is keyed by the NAME (design §3): Teleport is 3" after
+/// Advance/Charge and 6" after Rush; every OTHER name of the primitive is the
+/// flat 6" of its text — Ethereal's 0.0 bonus params must never read as "no
+/// reposition" (`SoloController.teleport_cap_in`, PR 1's static).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TeleportSpec {
+    /// The carried rule NAME — the cap key and the log line's subject.
+    pub name: String,
+}
+
+/// The table's own cap static (solo_controller.gd:9986): 6" for any name but
+/// Teleport, or on a Rush; Teleport on Advance/Charge is 3".
+pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
+    if rule != "Teleport" || rush { 6.0 } else { 3.0 }
+}
+
+/// The stamp (`crossing_attack_of` pattern): the FIRST Teleport-primitive
+/// name the unit carries.
+fn teleport_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<TeleportSpec> {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return None;
+    }
+    let map = reg.rules_for(&p.game_system);
+    for raw in p.special_rules.iter().chain(p.item_grants.iter()) {
+        let n = base_rule_name(raw);
+        let e = map.lookup(&p.faction_folder, &n);
+        if n == "Teleport" && e.is_some() {
+            return Some(TeleportSpec { name: n });
+        }
+        if n == "Ethereal" {
+            return Some(TeleportSpec { name: n });
+        }
+        if e.filter(|e| e.primitive.as_deref() == Some("Teleport")).is_some() {
+            return Some(TeleportSpec { name: n });
+        }
+    }
+    None
+}
+
 /// One carried "Surprise Attack" — "Counts as having Infiltrate. The first
 /// time this unit is activated, pick one enemy unit within 6\" in line of
 /// sight, and roll X dice. For each 2+ it takes one hit with AP(1)." The
@@ -4757,6 +4804,7 @@ impl UnitStatic {
             mind_control: mind_control_of(reg, p, rules_epoch),
             retreating_strikes: retreating_strikes_of(reg, p, rules_epoch),
             ebr: ebr_of(reg, p, rules_epoch),
+            teleport: teleport_of(reg, p, rules_epoch),
             growth: growth_of(reg, p, &mut unimplemented),
             piercing_tags: piercing_tags_of(reg, p, rules_epoch),
             unimplemented,

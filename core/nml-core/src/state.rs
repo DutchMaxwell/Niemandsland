@@ -553,6 +553,13 @@ pub struct State {
     /// (sim.rs) is gated on this latch and on `EPOCH_7_TABLE_RULES`, so a
     /// record below 7 never carries the key.
     pub feats_used: Vec<Vec<String>>,
+    /// Wave 5 — Teleport / Ethereal (design #816, PR 2): `unit_properties
+    /// ["teleport_used_this_activation"]` (main.gd:17456 writes it, the beat
+    /// erases it at its own start — reset semantics, it refills every
+    /// activation). The act recorder's `teleport` ledger block (act_recorder.gd
+    /// `_ledger_of`) folds in here; `resolve_with` clears it at activation
+    /// start the way the table's erase does.
+    pub teleport_used: Vec<bool>,
 }
 
 impl State {

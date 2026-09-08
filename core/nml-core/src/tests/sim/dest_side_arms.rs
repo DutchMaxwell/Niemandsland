@@ -68,8 +68,7 @@ use super::*;
             charge: None,
             patient: false,
             split: None,
-            traced: None,
-        };
+            traced: None, teleport: None, };
         let mut rng = crate::rng::GodotRng::new(0);
         let seams = Seams { movement: true, ..Seams::default() };
         let next = resolve_stochastic_on_board(

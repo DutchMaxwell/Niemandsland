@@ -65,8 +65,7 @@ use super::*;
         let terrain = crate::terrain::Terrain::default();
         let charge = Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
-            charge: Some("b".into()), patient: false, split: None, traced: None,
-        };
+            charge: Some("b".into()), patient: false, split: None, traced: None, teleport: None, };
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);
         let (next, shot) = resolve_stochastic_tray_on_board(
