@@ -171,6 +171,11 @@ static func close() -> void:
 	_checked = false
 	_header_written = false
 	_count = 0
+	# The resolver closure binds its owner (main / the test suite). Leaving it in
+	# this static past that owner's death is the exit-134 heap-corruption class
+	# documented at the top of ai_planner_act_recorder_test.gd — release it HERE,
+	# where the writer stands, not at process teardown.
+	spawn_profile_resolver = Callable()
 
 
 ## 0a finding: pick.action.dest (and runner_up.action.dest) is a raw Vector3 —
