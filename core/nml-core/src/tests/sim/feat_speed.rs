@@ -33,7 +33,7 @@ use crate::io;
             base_w_mm: 0.0,
             base_d_mm: 0.0,
             game_system: "gf".into(),
-            faction_folder: "ratmen_clans".into(),
+            faction_folder: "orc_marauders".into(),
             item_grants: vec![],
             attached_hero_rules: vec![],
             move_bands: MoveBands::default(),
@@ -135,7 +135,7 @@ use crate::io;
     const HEADER: &str = r#"{"kind":"header","profiles":{
       "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":4,"tough":1,
         "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.02,
-        "game_system":"gf","faction_folder":"ratmen_clans","special_rules":["Speed Feat"],
+        "game_system":"gf","faction_folder":"orc_marauders","special_rules":["Speed Feat"],
         "item_grants":[],"attached_hero_rules":[],
         "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}},
       "knobs":{"rules_epoch":7}}"#;
