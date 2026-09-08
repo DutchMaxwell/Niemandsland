@@ -2802,7 +2802,6 @@ func _offer_spill_ghost(transport: GameUnit, unit: GameUnit) -> void:
 		func() -> void: state["done"] = true)
 	while not state["done"]:
 		await get_tree().process_frame
-	ghost.queue_free()
 	if (state["pos"] as Array).is_empty():
 		_transport_log("%s keeps its automatic formation beside the wreck" % str(unit.unit_properties.get("name", "unit")))
 		return
