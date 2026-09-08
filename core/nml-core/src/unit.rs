@@ -744,6 +744,9 @@ pub struct UnitStatic {
     /// The Fatigue Debuff read (epoch 7) — the one "Mind Control" entry this
     /// core carries (`fatigue_debuff_of`); empty below `rules_epoch` 7.
     pub fatigue_debuff: Vec<FatigueDebuffSpec>,
+    /// The Grounded Speed read (epoch 7) — the per-activation conditional
+    /// band (`grounded_speed_of`); None below `rules_epoch` 7.
+    pub grounded_speed: Option<GroundedSpeedSpec>,
     /// The Mind Control read (epoch 7) — the displacement arm of the same
     /// pre-attack slot (`mind_control_of`); empty below `rules_epoch` 7.
     pub mind_control: Vec<MindControlSpec>,
@@ -2794,6 +2797,53 @@ fn surprise_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
     None
 }
 
+/// One carried "Grounded Speed" — aof Volcanic Dwarves 3.5.3, the registry's
+/// own params (`rules_mechanics_aof.json:8470`): "+2\" on Advance, +4\" on
+/// Rush/Charge during this activation" while "most of them [the models] are
+/// within 1\" of terrain when activated" — a PER-ACTIVATION conditional band,
+/// so the condition is evaluated live at the move seam (sim.rs), never
+/// pre-folded into the recorded bands.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GroundedSpeedSpec {
+    pub advance_mod: i64,
+    pub rush_mod: i64,
+    /// The entry's own proximity ("within 1\" of terrain"), inches.
+    pub terrain_within_in: f64,
+}
+
+/// The Grounded Speed stamp (wave 5 (d), rules-grounded-speed): read BY NAME
+/// off the unit's own rule list, gated on the FROZEN `EPOCH_7_TABLE_RULES` —
+/// a record below 7 keeps `None` and replays byte-exact. The per-activation
+/// "most models within 1\" of terrain" condition is answered by the move seam
+/// from this core's own terrain picture (`terrain::base_in_terrain` with the
+/// base radius widened by `terrain_within_in`), the Fatigue Debuff tray (#764)
+/// being the nearest per-activation-read precedent.
+fn grounded_speed_of(
+    reg: &mut Registries,
+    p: &Profile,
+    rules_epoch: u32,
+) -> Option<GroundedSpeedSpec> {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return None;
+    }
+    let map = reg.rules_for(&p.game_system);
+    for raw in p.special_rules.iter().chain(p.item_grants.iter()) {
+        let n = base_rule_name(raw);
+        if n != "Grounded Speed" {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &n) else {
+            continue;
+        };
+        return Some(GroundedSpeedSpec {
+            advance_mod: e.param_i("advance_mod", 0),
+            rush_mod: e.param_i("rush_mod", 0),
+            terrain_within_in: e.param_f("terrain_within_in", 1.0),
+        });
+    }
+    None
+}
+
 /// One carried "Reanimation" — main.gd:953-957, the activation trigger
 /// (`_solo_try_reanimation` main.gd:4710): once per activation, BEFORE the
 /// action, roll as many dice as the unit could restore wounds; each 5+
@@ -4657,6 +4707,7 @@ impl UnitStatic {
             surprise_attack: surprise_attack_of(reg, p, rules_epoch),
             reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
+            grounded_speed: grounded_speed_of(reg, p, rules_epoch),
             mind_control: mind_control_of(reg, p, rules_epoch),
             retreating_strikes: retreating_strikes_of(reg, p, rules_epoch),
             ebr: ebr_of(reg, p, rules_epoch),
