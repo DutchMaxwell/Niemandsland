@@ -78,8 +78,10 @@ pub const HOLD: i64 = 0;
 pub const ADVANCE: i64 = 1;
 pub const RUSH: i64 = 2;
 pub const CHARGE: i64 = 3;
-/// Wave 5 (#816 PR 2): the menu's Reposition kind — replay keys on `Action::teleport`.
-pub const REPOSITION: i64 = 4;
+/// Wave 5 (#816 PR 2): the menu's Reposition kind — dice-free, no recorded
+/// corpus carries it (replay keys on `Action::teleport`); 5 stays clear of
+/// the GDScript `AiDecision.Action` block (0-4, KITE = 4) and the one-hot.
+pub const REPOSITION: i64 = 5;
 pub const TELEPORT_EV_MARGIN: f64 = 0.5; // the fixed "may" margin (design §5-2)
 
 /// Why a node could not be resolved by this port — reported by name with a
