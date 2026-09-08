@@ -216,6 +216,12 @@ pub(crate) struct PlainLedger {
     /// stands (act_recorder.gd `_ledger_of`). Empty on every older corpus.
     #[serde(default)]
     storm_used: Vec<String>,
+    /// Wave 5 group (b) — the once-per-game FEAT latch (the Storm Attack
+    /// shape): the DISPLAY names whose `speed_feat_used_<snake>` flag stands
+    /// (solo_controller.gd:1712), folded into `State.feats_used` so a later
+    /// act replays with the latch CLOSED. Empty on every older corpus.
+    #[serde(default)]
+    feats_used: Vec<String>,
     /// Wave 5 (PR 1's recorder): the `{"used", "to"}` block; `to` arrives as the `"(x, y)"` Vector2 string.
     #[serde(default)]
     teleport: Option<PlainTeleport>,
