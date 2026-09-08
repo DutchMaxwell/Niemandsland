@@ -16,12 +16,14 @@ const CONTROLLER := preload("res://scripts/solo/solo_controller.gd")
 
 ## A bare GameUnit with the given special-rule names — no map data (RulesRegistry answers from the
 ## unit's own rules when the system map is empty, the same read the band approximation uses).
-## The game_system deliberately has NO map file, so map_for returns {} and unit_rule_active
-## judges from the unit's own rules — a real system would deny Teleport to a faction-less unit.
+## NOTE: an unknown game_system would normalize to the DEFAULT system ("gf"), whose mechanics map
+## IS present and scopes Teleport to specific factions — so the bearer must carry a (system,
+## faction) pair whose map actually resolves the Teleport name; a name-only read would violate the
+## (system, faction, name) lookup invariant (rules fire only where the book fields them).
 func _bearer(rule_names: Array, props: Dictionary = {}) -> GameUnit:
 	var u := GameUnit.new()
 	u.unit_properties = {"player_id": 1, "name": "Teleporter", "special_rules": rule_names,
-		"game_system": "teleport-table-test-system"}
+		"game_system": "gf", "faction_folder": "wormhole_daemons_of_change"}
 	u.unit_properties.merge(props, true)
 	return u
 
