@@ -788,8 +788,7 @@ pub fn candidates_tuned(
             out.push(c);
         }
     }
-    // Wave 5 (#816 PR 2): ONE Reposition candidate per bearer, appended LAST
-    // (the W1 tail-growth precedent); the epoch-gated stamp gates it.
+    // Wave 5 (#816 PR 2): ONE Reposition candidate per bearer, appended LAST (the W1 tail-growth precedent).
     if let Some(spec) = statics[state.roster.profile[unit]].teleport.as_ref() {
         if let Some(to) = teleport_probe(
             state, unit, crate::unit::teleport_cap_in(&spec.name, false), Some(terrain),

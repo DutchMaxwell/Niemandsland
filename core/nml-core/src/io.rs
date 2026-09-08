@@ -295,8 +295,7 @@ pub struct Action {
     /// count and face stays port-computed. Absent = the act's one target.
     #[serde(default)]
     pub split: Option<Vec<SplitShot>>,
-    /// Wave 5 — the record's landing centroid (joined off the NEXT act's
-    /// ledger); None on a live rollout.
+    /// Wave 5 — the record's landing centroid (joined off the NEXT act's ledger).
     #[serde(default)]
     pub teleport: Option<[f64; 2]>,
     /// NML-1152 B14 step 1 (Bounding) — the table's own controller-seeded
