@@ -27,6 +27,21 @@ static var _header_written := false
 ## verbatim, the same key the twin's stamp carries.
 static var objectives_stamp: Dictionary = {}
 
+## Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): the export-time
+## resolver for the header's `spawn_profiles` map — main.gd wires it in _ready()
+## (_solo_spawn_profile_stamp). Contract: (carrier: GameUnit, raw: String) -> Dictionary,
+## the NAMED unit's profile in EXACTLY the `profiles` map's shape (BattleSim._unit_profile),
+## {} when the rule string is unparsable or the book lookup fails — the recorder never
+## falls back to the carrier's profile (that fallback IS the #823 fidelity break).
+static var spawn_profile_resolver: Callable = Callable()
+## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
+## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 8 by the epoch8 wave).
+## Bump it in the same change the core does; SPAWN_PROFILES_EPOCH below stays frozen.
+static var rules_epoch: int = 8
+## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
+## stamped below it writes no map, exactly like every record written before it.
+const SPAWN_PROFILES_EPOCH := 8
+
 static var _max := 5000
 static var _count := 0
 
@@ -156,6 +171,11 @@ static func close() -> void:
 	_checked = false
 	_header_written = false
 	_count = 0
+	# The resolver closure binds its owner (main / the test suite). Leaving it in
+	# this static past that owner's death is the exit-134 heap-corruption class
+	# documented at the top of ai_planner_act_recorder_test.gd — release it HERE,
+	# where the writer stands, not at process teardown.
+	spawn_profile_resolver = Callable()
 
 
 ## 0a finding: pick.action.dest (and runner_up.action.dest) is a raw Vector3 —
@@ -257,7 +277,55 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 	# run's header keeps exactly the keys it had before.
 	if not objectives_stamp.is_empty():
 		head["objectives"] = objectives_stamp
+	# Spawn PR 1/2: additive, and only when a living Spawn carrier exists at
+	# epoch >= 8 — every header written before this map (or without a Spawn
+	# carrier on the table) keeps exactly the keys and bytes it had (§3.1/§6).
+	var spawn_profiles := _spawn_profiles(state)
+	if not spawn_profiles.is_empty():
+		head["spawn_profiles"] = spawn_profiles
 	return head
+
+
+## Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): the NAMED copy's
+## profile rides the header so a record stays self-contained — the LOADER must never
+## resolve names from an army book (books are not part of a record), so the RECORDER
+## resolves at EXPORT time, before any Spawn beat has fired. One entry per
+## (state unit key, Spawn rule string) a living carrier carries: the unit itself and
+## every attached hero are carriers in their own right (main._solo_try_spawn's member
+## walk), the rule string read per MODEL the way the beat reads it. An unresolvable
+## entry is dropped LOUDLY (rules-must-log), never replaced by the carrier's profile.
+## Empty when the gate is closed (rules_epoch < SPAWN_PROFILES_EPOCH), no resolver is
+## wired, or no carrier exists — an empty result writes NO key at all, byte-identical.
+static func _spawn_profiles(state: Dictionary) -> Dictionary:
+	if rules_epoch < SPAWN_PROFILES_EPOCH or not spawn_profile_resolver.is_valid():
+		return {}
+	var out := {}
+	for key in state["units"]:
+		var carrier: GameUnit = (state["units"][key] as Dictionary)["unit"]
+		for raw in _spawn_rule_strings(carrier):
+			var stamp: Dictionary = spawn_profile_resolver.call(carrier, str(raw))
+			if stamp.is_empty():
+				push_warning("[recorder] spawn_profiles: '%s' on %s resolved to no profile — dropped, NOT substituted" % [str(raw), str(key)])
+				continue
+			out["spawn:%s:%s" % [str(key), str(raw)]] = stamp
+	if not out.is_empty():
+		print("[recorder] spawn_profiles: %d entries" % out.size())
+	return out
+
+
+## The distinct `Spawn(<name> [<n>])` rule strings any alive model of the carrier or
+## its attached heroes carries (a reserve carrier is skipped — the beat offers to
+## STANDING units only, main.gd's SoloController.unit_in_reserve gate).
+static func _spawn_rule_strings(carrier: GameUnit) -> Array:
+	var seen := {}
+	for value: GameUnit in [carrier] + (carrier.unit_properties.get("attached_heroes", []) as Array):
+		if value == null or bool(value.unit_properties.get("ambush_reserve", false)):
+			continue
+		for model in value.get_alive_models():
+			for raw in ((model as ModelInstance).properties.get("special_rules", []) as Array):
+				if RulesRegistry.base_rule_name(str(raw)) == "Spawn":
+					seen[str(raw)] = true
+	return seen.keys()
 
 
 ## Reaches the live TerrainOverlay the same way SoloController's terrain_type_at
