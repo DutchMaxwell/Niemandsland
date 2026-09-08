@@ -13,6 +13,7 @@ use super::*;
     // EPOCH_7_TABLE_RULES. The epoch literals here are 7/6, never
     // CURRENT_RULES_EPOCH.
 
+    use crate::acts::{EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
     use crate::rules::{Spell, SpellModifier};
 
     /// One 12" damage bolt, threshold 2 — the PR 1 fixture's damage spell.
@@ -243,4 +244,30 @@ use super::*;
         let next = run(&st, &statics, 7);
         assert_eq!(next.casts[0], 2, "a Shaken bearer is no origin");
         assert_eq!(damage(&next), 0.0);
+    }
+
+    /// The #838 epoch-8 ruling (the #831 call: a MENU change is a NEW frozen
+    /// gate): the whole Spell Conduit core read lives behind
+    /// `EPOCH_8_PLANNER_MENU`, so every epoch-7 record replays with the menu
+    /// it was recorded with. The menu builder yields NO cast-origin candidate
+    /// at `rules_epoch: 7`; at 8 exactly the eligible conduits.
+    #[test]
+    fn cast_origin_candidates_live_behind_the_epoch_8_planner_menu() {
+        // Flag stamped ON at 7, record at 7: the builder stays empty —
+        // nothing of #838 is live at epoch 7.
+        let (st7, statics7) = conduit_line(20.0, Some((12.0, true)), None, EPOCH_7_TABLE_RULES);
+        let seams7 = Seams { rules_epoch: EPOCH_7_TABLE_RULES, ..Seams::default() };
+        assert!(
+            cast_origins(&statics7, &st7, 0, seams7).is_empty(),
+            "RED: at rules_epoch 7 the menu builder must yield NO cast-origin candidate"
+        );
+
+        // Stamp and record at 8: exactly the eligible conduit, walk order.
+        let (st8, statics8) = conduit_line(20.0, Some((12.0, true)), None, EPOCH_8_PLANNER_MENU);
+        let seams8 = Seams { rules_epoch: EPOCH_8_PLANNER_MENU, ..Seams::default() };
+        assert_eq!(
+            cast_origins(&statics8, &st8, 0, seams8),
+            vec![(1, 1)],
+            "at rules_epoch 8 the eligible conduit is the only cast origin"
+        );
     }
