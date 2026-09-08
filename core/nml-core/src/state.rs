@@ -544,21 +544,9 @@ pub struct State {
     /// already fired this game (the recorder stamps them off the same flags,
     /// act_recorder.gd `_ledger_of`); never resets on a later round.
     pub storm_used: Vec<Vec<String>>,
-    /// Wave 5 group (b) — the once-per-game FEAT latch, the Storm Attack
-    /// shape: per unit, the DISPLAY names already declared this game
-    /// (`unit_properties["speed_feat_used_<snake>"]`, solo_controller.gd:1712;
-    /// the recorder stamps them off the same flags, act_recorder.gd
-    /// `_ledger_of`'s `feats_used` block). Never resets on a later round —
-    /// `uses_per_game` is once per GAME. The move seam's Speed Feat read
-    /// (sim.rs) is gated on this latch and on `EPOCH_7_TABLE_RULES`, so a
-    /// record below 7 never carries the key.
-    pub feats_used: Vec<Vec<String>>,
-    /// Wave 5 — Teleport / Ethereal (design #816, PR 2): `unit_properties
-    /// ["teleport_used_this_activation"]` (main.gd:17456 writes it, the beat
-    /// erases it at its own start — reset semantics, it refills every
-    /// activation). The act recorder's `teleport` ledger block (act_recorder.gd
-    /// `_ledger_of`) folds in here; `resolve_with` clears it at activation
-    /// start the way the table's erase does.
+    /// Wave 5 — `unit_properties["teleport_used_this_activation"]` (main.gd
+    /// :17456; the beat erases it at its start — reset semantics). The
+    /// recorder's `teleport` ledger block folds in here.
     pub teleport_used: Vec<bool>,
 }
 

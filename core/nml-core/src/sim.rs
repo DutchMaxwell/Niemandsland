@@ -78,12 +78,9 @@ pub const HOLD: i64 = 0;
 pub const ADVANCE: i64 = 1;
 pub const RUSH: i64 = 2;
 pub const CHARGE: i64 = 3;
-/// Wave 5 — Teleport / Ethereal (design #816, PR 2): the menu's Reposition
-/// candidate kind — a DICE-FREE reposition-only activation a live rollout may
-/// pick. No recorded corpus ever carries it (the table's beat rides inside a
-/// kind 0-3 act; the replay arm keys on `Action::teleport`, not the kind), and
-/// the GDScript planner normalizes its own kind 4 (KITE) to ADVANCE, so the
-/// value is free on this side.
+/// Wave 5 (design #816 PR 2): the menu's Reposition kind — a dice-free
+/// reposition-only act no recorded corpus ever carries (replay keys on
+/// `Action::teleport`); kind 4 is free (GDScript normalizes KITE to ADVANCE).
 pub const REPOSITION: i64 = 4;
 
 /// Why a node could not be resolved by this port — reported by name with a
@@ -1266,23 +1263,14 @@ pub(crate) fn tray_mind_control(
 }
 
 
-/// Design #816 PR 2 (core) — the Teleport / Ethereal before-attack beat, the
-/// port of `main._solo_apply_teleport` (PR 1's handler): AFTER the move and
-/// BEFORE the attack, once per activation (the entry clear above + one beat
-/// per resolve). The anchor is the POST-move centre. Two arms:
-/// * the REPLAY arm — `action.teleport` carries the record's landing centroid
-///   (the replay driver joins it off the NEXT act's `state_before` ledger,
-///   the same join `inject_split_aim` makes): the record decides, the
-///   formation lands byte-exact on it, the latch is set, the line is logged.
-/// * the LIVE arm — only a `REPOSITION` act (a live rollout's own pick): the
-///   bounded fixed candidate set (design §3, `SoloController.teleport_
-///   candidates`' three probes) scored with a self-carried EV heuristic (the
-///   table scores with `AiPosition._evaluate`, which this core does not port
-///   — the declared approximation, Block-B8 form), applied only when the best
-///   beats staying by `TELEPORT_EV_MARGIN` (the table's fixed margin).
-/// The cover of the repositioned unit is NOT re-probed (the table handler
-/// does not touch `in_cover` either) and no die is drawn — the draw order is
-/// untouched, so every tray tally below stays exactly where it was.
+/// Design #816 PR 2 — the Teleport/Ethereal beat (port of `main._
+/// solo_apply_teleport`): after the move, before the attack, once per
+/// activation (entry clear + one beat). REPLAY arm: `action.teleport` (joined
+/// off the next act's ledger, the `inject_split_aim` join) lands byte-exact.
+/// LIVE arm (`REPOSITION` acts only): the bounded three-probe set with a
+/// self-carried EV heuristic (the table's `AiPosition._evaluate` is not
+/// ported — declared approximation), take only past `TELEPORT_EV_MARGIN`.
+/// No die drawn, `in_cover` untouched — draw order and cover stay as-is.
 pub(crate) fn teleport_beat(
     statics: &[UnitStatic], next: &mut State, si: usize, action: &Action,
     seams: Seams, mut shot: Option<&mut ShootResult>, cover: Cover,
@@ -1342,9 +1330,8 @@ pub(crate) fn teleport_beat(
     true
 }
 
-/// One rigid translate of the unit's models (the joined heroes folded with
-/// them, `_moving_models`' list — the move arm's hero_attach leg, sim.rs
-/// NML-1073 M4-7 note) by the metre delta `(dx, dz)`.
+/// One rigid metre-delta translate of the unit's models, heroes folded
+/// (`_moving_models`).
 fn shift_chain(next: &mut State, si: usize, hero_attach: bool, dx: f32, dz: f32) {
     let mut chain = vec![si];
     if hero_attach {
@@ -1357,17 +1344,13 @@ fn shift_chain(next: &mut State, si: usize, hero_attach: bool, dx: f32, dz: f32)
     }
 }
 
-/// The probe policy (design §3, the table's `teleport_candidates`): stay,
-/// toward the nearest UNCONTROLLED objective clamped into the cap circle,
-/// away from the nearest enemy at the cap circle, and the first of 8 cap-
-/// circle bearings whose terrain gives cover (skipped headless — the table
-/// skips it the same way). Scores a self-carried EV heuristic at every probe
-/// (objective pull, threat escape, cover) and answers the best landing only
-/// when it beats STAYING by `TELEPORT_EV_MARGIN`; `None` = the "may" passes.
+/// The bounded probe set (design §3): objective clamp, away-from-threat,
+/// first cover bearing (skipped headless), scored by the heuristic above;
+/// answers the best landing only when it beats staying by the margin.
 pub(crate) const TELEPORT_EV_MARGIN: f64 = 0.5;
 
 pub(crate) fn teleport_probe(
-    next: &State, statics: &[UnitStatic], si: usize, cap_in: f64, terrain: Option<&Terrain>,
+    next: &State, _statics: &[UnitStatic], si: usize, cap_in: f64, terrain: Option<&Terrain>,
 ) -> Option<[f64; 2]> {
     let from = geom::centre(&next.positions[si]);
     let cap_m = (cap_in * IN2M as f32) as f64;
@@ -1415,10 +1398,6 @@ pub(crate) fn teleport_probe(
                 v += 2.0;
             }
         }
-        // The bearer must be a Teleport-primitive name for any of this to
-        // matter; a probe past the bearer's own shape is refused by the cap
-        // clamp above, never by the unit's model count.
-        let _ = statics;
         v
     };
     let stay = ev_at(from);
@@ -4995,12 +4974,8 @@ fn resolve_with(
         tray_storm_attack(statics, &mut next, si, seams, tray, shot);
     }
 
-    // --- TELEPORT / ETHEREAL (main.gd:1075, right after Surprise in the
-    // table's own pre-attack order; design #816 PR 2) — dice-free, so the
-    // beat runs on EVERY resolve arm; only the log line is tray-bound. The
-    // anchor is the POST-move position (the design's decision 1): the replay
-    // arm lands byte-exact on the record's centroid, the live arm probes the
-    // bounded fixed candidate set behind the fixed EV margin.
+    // --- TELEPORT / ETHEREAL (main.gd:1075, right after Surprise; design
+    // #816 PR 2) — dice-free, every arm; only the log line is tray-bound.
     match dice.as_mut() {
         Some((_, shot)) => teleport_beat(statics, &mut next, si, action, seams, Some(shot), cover),
         None => teleport_beat(statics, &mut next, si, action, seams, None, cover),
