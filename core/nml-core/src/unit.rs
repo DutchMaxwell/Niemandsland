@@ -2772,7 +2772,6 @@ pub struct TeleportSpec {
     pub name: String,
 }
 
-/// The table's cap static (`SoloController.teleport_cap_in`, PR 1).
 pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
     if rule != "Teleport" || rush { 6.0 } else { 3.0 }
 }

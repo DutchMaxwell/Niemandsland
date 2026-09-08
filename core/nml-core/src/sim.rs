@@ -78,8 +78,7 @@ pub const HOLD: i64 = 0;
 pub const ADVANCE: i64 = 1;
 pub const RUSH: i64 = 2;
 pub const CHARGE: i64 = 3;
-/// Wave 5 (design #816 PR 2): the menu's Reposition kind — dice-free, replay
-/// keys on `Action::teleport`; kind 4 is free (GDScript normalizes KITE).
+/// Wave 5 (#816 PR 2): the menu's Reposition kind — replay keys on `Action::teleport`.
 pub const REPOSITION: i64 = 4;
 /// The fixed "may" margin (design §5-2, `SoloController.TELEPORT_EV_MARGIN`).
 pub const TELEPORT_EV_MARGIN: f64 = 0.5;
@@ -1325,7 +1324,6 @@ pub(crate) fn teleport_probe(
             probes.push(geom::add(from, geom::mul(geom::normalized(away), cap_m)));
         }
     }
-
     if let Some(t) = terrain {
         for k in 0..8 {
             let a = std::f32::consts::TAU * (k as f32) / 8.0;
