@@ -10,7 +10,9 @@ The default run covers:
 - round-duration spell placement and expiry;
 - Fatigued status placement and round reset;
 - two round-start ticks of Piercing Growth;
-- the live LOS line and sight count over a human opponent.
+- the live LOS line and sight count over a human opponent;
+- co-op (#673): the AI-slot designation sync, the defender's owner being prompted for its
+  own saves while the resolver logs a "waiting for" line, and the faces routed back.
 
 The driver compares both peers after every step. A timeout, process crash,
 English or German GDScript parser/runtime error, wrong expected value, or peer
@@ -47,8 +49,8 @@ driver chooses a free relay port unless `--port` is supplied and waits for at
 least 3500 MB of available memory before starting either Godot process.
 
 The activation-economy transport scenario (#665, merged) passes and runs with
-`--include-transport`: two extra checkpoints (11 instead of the default 9) in
-~30 s on one machine. The default three-pass command stays at 9 checkpoints.
+`--include-transport`: two extra checkpoints (13 instead of the default 11) in
+~30 s on one machine. The default three-pass command stays at 11 checkpoints.
 
 ```bash
 python test/mp/run_two_instance.py --run-dir reports/mp-two-instance-transport \

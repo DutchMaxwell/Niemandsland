@@ -11,6 +11,9 @@ const HOST_LOS_UNIT := "mp2_los_host"
 const GUEST_LOS_UNIT := "mp2_los_guest"
 const CARGO_UNIT := "mp2_cargo"
 const TRANSPORT_UNIT := "mp2_transport"
+const AI_STRIKER_UNIT := "mp2_aistrike"
+const SAVE_DEFENDER_UNIT := "mp2_defend"
+const SAVE_WEAPON := "Harness Blade"
 const SPELL_NAME := "Harness Round Buff"
 const GROWTH_KEY := "growth_piercing_growth"
 
@@ -30,6 +33,7 @@ var _failed := false
 var _failure := ""
 var _room_code := ""
 var _los_result: Dictionary = {"visible": false, "label_visible": false, "text": ""}
+var _remote_save_faces: Array = []
 
 
 func _ready() -> void:
@@ -171,6 +175,22 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 		ok = _require_role("host", action)
 		if ok:
 			_main.radial_menu_controller._disembark_unit(_unit(CARGO_UNIT))
+	elif action == "designate_ai":
+		# #673: the production designation is the AI checkbox on the army import (a real import
+		# cannot run in the fixture) — the designation set + the production broadcast are what
+		# the checkpoint proves.
+		_main.solo_ai_slots = {3: true}
+		_main._solo_broadcast_ai_slots()
+	elif action == "remote_save_attack":
+		# #673: the host (slot 1) resolves an attack whose saves belong to the guest's unit —
+		# the exact production save-batch entry the melee/shooting resolver funnels into.
+		# Fire-and-forget: the batch stays in-flight (the driver watches the state file) until
+		# the owner's faces come back.
+		ok = _require_role("host", action)
+		if ok:
+			_run_remote_save_attack()
+	elif action == "confirm_save":
+		ok = _confirm_save_prompt()
 	elif action == "snapshot":
 		pass
 	elif action == "quit":
@@ -204,6 +224,8 @@ func _setup_fixture() -> bool:
 		[GUEST_LOS_UNIT, 2, "Guest Scout", Vector3(0.18, 0.0, 0.20)],
 		[CARGO_UNIT, 1, "Cargo", Vector3(-0.25, 0.0, 0.0)],
 		[TRANSPORT_UNIT, 1, "Carrier", Vector3(-0.18, 0.0, 0.0)],
+		[AI_STRIKER_UNIT, 3, "AI Striker", Vector3(0.30, 0.0, -0.25)],
+		[SAVE_DEFENDER_UNIT, 2, "Guest Guard", Vector3(0.42, 0.0, -0.25)],
 	]
 	var net_id := 9100
 	for spec in specs:
@@ -287,6 +309,34 @@ func _unit(unit_id: String) -> GameUnit:
 	return _main.opr_army_manager.get_game_unit_by_id(unit_id)
 
 
+## #673: the guest must answer the remote save prompt like a human would — the production
+## dialog (`_solo_prompt_saves`) is confirmed exactly as its Roll button would.
+func _run_remote_save_attack() -> void:
+	var faces: Array = await _main._solo_save_batch(_unit(AI_STRIKER_UNIT),
+		_unit(SAVE_DEFENDER_UNIT), SAVE_WEAPON, 3, 4, 0,
+		{"name": SAVE_WEAPON}, true, false)
+	_remote_save_faces = faces
+
+
+func _confirm_save_prompt() -> bool:
+	var dlg := _visible_save_prompt()
+	if dlg == null:
+		_failure = "no visible save prompt to confirm"
+		return false
+	dlg.confirmed.emit()
+	return true
+
+
+func _visible_save_prompt() -> ConfirmationDialog:
+	if _main == null:
+		return null
+	for child in _main.get_children():
+		if child is ConfirmationDialog and (child as ConfirmationDialog).visible \
+				and (child as ConfirmationDialog).title == "Incoming fire!":
+			return child
+	return null
+
+
 func _require_role(required: String, action: String) -> bool:
 	if _role == required:
 		return true
@@ -309,6 +359,9 @@ func _snapshot() -> Dictionary:
 		"round": int(_main.opr_army_manager.current_round) if _main != null else 0,
 		"units": {},
 		"los": _los_result.duplicate(true),
+		"ai_slots": [],
+		"remote_save_faces": _remote_save_faces,
+		"save_prompt_visible": false,
 		"battle_log_tail": [],
 	}
 	if nm != null:
@@ -320,6 +373,12 @@ func _snapshot() -> Dictionary:
 		slots.sort()
 		state.occupied_slots = slots
 	if _fixture_ready:
+		var ai_slots: Array = []
+		for slot in _main.solo_ai_slots:
+			ai_slots.append(int(slot))
+		ai_slots.sort()
+		state.ai_slots = ai_slots
+		state.save_prompt_visible = _visible_save_prompt() != null
 		var ids: Array = _main.opr_army_manager.game_units.keys()
 		ids.sort()
 		for unit_id in ids:
