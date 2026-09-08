@@ -2321,7 +2321,8 @@ func _act(unit: GameUnit) -> Dictionary:
 		_rule_note(report, "Traversal: may not end inside another unit — end stays clear", false)   # local clarification — no travel
 	report["can_shoot"] = (do_shoot or (quick_shot and action == AiDecision.Action.RUSH)) \
 		and shoot_range > 0 and d2 <= float(shoot_range) \
-		and (_has_los(unit, target_unit) or has_indirect_ranged(weapons))
+		and (_has_los(unit, target_unit) or has_indirect_ranged(weapons) \
+			or granted_indirect_of(unit))   # GH #325 — the shooter's own Indirect token
 	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
 		_rule_note(report, "Quick Shot: shoots after its Rush action", true)   # explains otherwise-impossible shots — travels
 	# POST-MOVE RETARGET (Bug 27/28): a HOLD/ADVANCE always MAY shoot (OPR) — so if the decided target is
@@ -7460,6 +7461,27 @@ static func has_indirect_ranged(weapons: Array) -> bool:
 		for r in rules:
 			if str(r).strip_edges().begins_with("Indirect"):
 				return true
+	return false
+
+
+## GH #325 — the shooter's OWN spell-token store grants Indirect ("Indirect when Shooting" —
+## Ancestral Guidance): the targeting-time seam reads the attacker's own `spell_records` mirror,
+## NOT a per-target bridge (the volley's target does not exist yet — the issue's chicken-egg).
+## An `beneficiary: "attackers"` record on the unit's own store names the units attacking IT,
+## never the unit itself; a melee-scoped grant stays out of the shooting read.
+static func granted_indirect_of(unit: GameUnit) -> bool:
+	if unit == null:
+		return false
+	for rd in (unit.unit_properties.get("spell_records", []) as Array):
+		var rec := rd as Dictionary
+		if str(rec.get("beneficiary", "")) == "attackers" or str(rec.get("scope", "")) == "melee":
+			continue
+		var base := RulesRegistry.base_rule_name(str(rec.get("grants_rule", "")))
+		var cut := base.find(" when ")
+		if cut >= 0:
+			base = base.substr(0, cut)
+		if base == "Indirect":
+			return true
 	return false
 
 

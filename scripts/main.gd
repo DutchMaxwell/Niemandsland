@@ -3147,6 +3147,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
 	# Unpredictable Fighter lives in the melee path): ONE die per volley for the whole unit —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
+	var granted_indirect: bool = SoloController.granted_indirect_of(attacker)   # GH #325 — own token
 	var upr_ap := 0
 	var upr_hit := 0
 	var upr_name := _solo_unpredictable_rule(attacker, false)
@@ -3170,7 +3171,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# the reach here too.
 		var sighted: int = _solo_sighted_count(member, target,
 			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
-			bool(profile.get("indirect", false)))
+			bool(profile.get("indirect", false)) or granted_indirect)   # GH #325
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
 		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
 		var attacks: int = int(volley_report["attacks"])
@@ -3216,7 +3217,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				mod_info = td_ctx["mod"] as Dictionary
 				shot_base = int(td_ctx["defense"])
 				shot_cover = int(td_ctx["covered"])
-		if moved and bool(profile.get("indirect", false)) \
+		if moved and (bool(profile.get("indirect", false)) or granted_indirect) \
 				and not bool(RulesRegistry.best_primitive_param(member, "Indirect", "no_moved_penalty", false)):
 			# Quick Readjustment (coverage wave): the bearer ignores the Indirect moved-penalty.
 			var indirect_mod: int = AiCombatMath.indirect_hit_modifier(true,
@@ -9133,7 +9134,8 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 	# in line of sight"): a unit with an Indirect ranged weapon waives the LOS test here;
 	# the range gate (incl. Aircraft/Shrouding shrink) stays fully in force. Mirrors the
 	# AI's unit-level legality gate, so both sides judge targets identically.
-	var indirect: bool = SoloController.has_indirect_ranged(_solo_all_weapons(attacker))
+	var indirect: bool = SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
+		or SoloController.granted_indirect_of(attacker)   # GH #325 — the shooter's own token
 	if rng_in <= 0 or _solo_sighted_count(attacker, target, rng_in, indirect) <= 0:
 		if dist > float(rng_in):
 			var why := ""
@@ -9941,6 +9943,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	var chosen_versatile: Dictionary = {}   # Bug 13: per-weapon Versatile choice, asked once per volley
 	# Unpredictable (generic, "when attacking"): the HUMAN's volley rolls the same visible die —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile (resolution-integrated, both sides automatic).
+	var h_granted_indirect: bool = SoloController.granted_indirect_of(attacker)   # GH #325 — own token
 	var upr_ap := 0
 	var upr_hit := 0
 	var upr_name := _solo_unpredictable_rule(attacker, false)
@@ -9995,7 +9998,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			# stamp the Entrenched gate reads — one truth for "moved this round".
 			var h_moved: bool = opr_army_manager != null \
 				and int(attacker.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round
-			if h_moved and bool(profile.get("indirect", false)) \
+			if h_moved and (bool(profile.get("indirect", false)) or h_granted_indirect) \
 					and not bool(RulesRegistry.best_primitive_param(group.get("member"), "Indirect", "no_moved_penalty", false)):
 				var ind_mod: int = AiCombatMath.indirect_hit_modifier(true,
 					int(RulesRegistry.unit_param(group.get("member"), "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
