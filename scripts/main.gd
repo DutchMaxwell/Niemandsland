@@ -14090,6 +14090,49 @@ func _start_pending_internet_game(is_internet_host: bool, relay_url: String, roo
 func _on_network_command(type: String, payload: Variant, _from_peer: int) -> void:
 	if type == "sync_game_state" and payload is Dictionary:
 		_rpc_sync_game_state(payload.get("state", {}))
+	elif type == "sync_ai_slots" and payload is Dictionary \
+			and (payload as Dictionary).get("slots") is Array:
+		_rpc_sync_ai_slots((payload as Dictionary)["slots"])
+
+
+## #673 co-op: the wire shape of the AI-slot designation sync — sorted player ids, one message
+## applied wholesale, so a cleared designation propagates exactly like a set one. Static + pure
+## for the unit test; sender and receive path both go through it (or its applier below).
+static func ai_slots_sync_payload(slots: Dictionary) -> Array:
+	var out: Array = []
+	for slot in slots:
+		out.append(int(slot))
+	out.sort()
+	return out
+
+
+## #673 co-op: adopt a synced designation WHOLESALE into `target` (clear first — a stale local
+## designation must not survive a sync that no longer carries it). Slots <= 0 are invalid and
+## dropped. Static + pure for the unit test.
+static func apply_ai_slots_sync(target: Dictionary, slots: Array) -> void:
+	target.clear()
+	for slot in slots:
+		var pid := int(slot)
+		if pid > 0:
+			target[pid] = true
+
+
+## #673 co-op: push the current designation to every peer. The designating client is the
+## authority (any_peer — a guest may designate its own co-op AI army); every other peer adopts
+## without re-broadcasting (the sender already reached everyone).
+func _solo_broadcast_ai_slots() -> void:
+	if network_manager == null or not network_manager.is_multiplayer_active():
+		return
+	network_manager.send_command("sync_ai_slots", {"slots": ai_slots_sync_payload(solo_ai_slots)}, 0)
+
+
+## Receive path (command channel, below @rpc — see _rpc_sync_game_state for the convention).
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_sync_ai_slots(slots: Array) -> void:
+	apply_ai_slots_sync(solo_ai_slots, slots)
+	_rebuild_roster()
+	_solo_sync_difficulty()
+	_refresh_solo_panel.call_deferred()
 
 
 ## Called on the host when a client requests the current game state.
@@ -14111,6 +14154,8 @@ func _request_game_state() -> void:
 func _sync_state_to_peer(peer_id: int) -> void:
 	var state = save_manager.serialize_game_state()  # includes army_names (for tray rebuild)
 	state["_host_version"] = network_manager.get_game_version()
+	# #673 co-op: late joiners adopt the host's (broadcast-synced) AI-slot designation on join.
+	state["solo_ai_slots"] = ai_slots_sync_payload(solo_ai_slots)
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
 	print("[StateSync] Sending state to peer %d: %d objects, %d game_units" % [peer_id, obj_count, unit_count])
@@ -14241,6 +14286,11 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 		_army_loading_overlay = null
 
 	print("Synced %d objects from host (counter=%d)" % [loaded_count, object_manager._object_counter])
+
+	# #673 co-op: a late joiner adopts the designation that rode the full-state push (the join
+	# happens after any import, so the @rpc broadcast was missed — this is the join-time catch-up).
+	if state.get("solo_ai_slots") is Array:
+		_rpc_sync_ai_slots(state["solo_ai_slots"])
 
 
 ## ============================================================================
@@ -14498,10 +14548,15 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_contro
 		_solo_show_toast("P%d is a connected human player — AI designation refused" % player_id)
 	# Solo (goal 001): remember the designation; the Solo panel + F11 read it. Re-importing the slot
 	# without the checkbox clears a stale designation.
+	var was_designated: bool = solo_ai_slots.has(player_id)
 	if ai_controlled:
 		solo_ai_slots[player_id] = true
 	else:
 		solo_ai_slots.erase(player_id)
+	# #673 co-op: the designation is per-client state — broadcast it on an actual CHANGE so the
+	# peers adopt it (and so the other clients' own imports never clobber a live designation).
+	if was_designated != ai_controlled:
+		_solo_broadcast_ai_slots()
 	_rebuild_roster()
 	_solo_sync_difficulty()   # give the AI slot its grade → position solver + knobs run (not the naive baseline)
 	_refresh_solo_panel.call_deferred()   # deferred: the synchronous army spawn below blocks first
