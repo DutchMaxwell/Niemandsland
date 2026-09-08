@@ -1272,9 +1272,7 @@ pub(crate) fn teleport_beat(
     dice: Option<&mut (&mut Tray, &mut ShootResult)>, cover: Cover,
 ) -> bool {
     let mut shot = dice.map(|(_, sh)| &mut **sh);
-    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.alive[si] <= 0 {
-        return false;
-    }
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.alive[si] <= 0 { return false; }
     let Some(spec) = statics[next.roster.profile[si]].teleport.as_ref() else { return false; };
     let cap_in = crate::unit::teleport_cap_in(&spec.name, false);
     // REPLAY: the record's centroid, no clamp; LIVE: the probe set (the
@@ -1289,9 +1287,7 @@ pub(crate) fn teleport_beat(
     let from = geom::centre(&next.positions[si]);
     let (dx, dz) = (to[0] as f32 - from[0], to[1] as f32 - from[2]);
     let mut chain = vec![si];
-    if seams.hero_attach {
-        chain.extend(next.attached[si].iter().copied()); // `_moving_models`
-    }
+    if seams.hero_attach { chain.extend(next.attached[si].iter().copied()); } // `_moving_models`
     for u in chain {
         for p in next.positions[u].iter_mut() {
             *p = [p[0] + dx as f64, p[1], p[2] + dz as f64];
@@ -1329,14 +1325,12 @@ pub(crate) fn teleport_probe(
             probes.push(geom::add(from, geom::mul(geom::normalized(away), cap_m)));
         }
     }
+
     if let Some(t) = terrain {
         for k in 0..8 {
             let a = std::f32::consts::TAU * (k as f32) / 8.0;
             let p = geom::add(from, [a.cos() * cap_m, 0.0, a.sin() * cap_m]);
-            if gives_cover(t.type_at(p)) {
-                probes.push(p);
-                break;
-            }
+            if gives_cover(t.type_at(p)) { probes.push(p); break; }
         }
     }
     // Self-carried EV: objective pull, threat escape, cover (the table's
@@ -1346,8 +1340,7 @@ pub(crate) fn teleport_probe(
         let thr = nearest_enemy(next, si)
             .map(|t| geom::length(geom::sub(geom::centre(&next.positions[t]), p)) as f64 / IN2M as f64)
             .map(|d| if d < 6.0 { -(6.0 - d) * 2.0 } else { 0.0 }).unwrap_or(0.0);
-        let cov = terrain.map(|t| gives_cover(t.type_at(p)) as i64 as f64 * 2.0).unwrap_or(0.0);
-        obj + thr + cov
+        obj + thr + terrain.map(|t| gives_cover(t.type_at(p)) as i64 as f64 * 2.0).unwrap_or(0.0)
     };
     let stay = ev_at(from);
     probes.iter().copied()
