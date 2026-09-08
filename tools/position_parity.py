@@ -26,6 +26,19 @@ FIXTURES = REPO / "test/fixtures/position_parity/cases.json"
 BASELINE = REPO / "test/fixtures/position_parity/baseline.json"
 EPS_IN = 1e-9
 IN2M = 0.0254
+# Float32 rounding is not a regression. Every endpoint crosses three grids
+# (f32 world metre, f64 inch, f32 inch), and a core change that keeps the
+# table's frame but rounds a moved centre one unit in the last place
+# differently -- the overlap push's inch mirror, parity-frame 4 -- shifts it
+# by a few float32 ULPs of the planner's INCH frame, the coarsest of the three.
+# Measured 2026-09-08 on the parity box over 304 positions (main 7b0a954a and
+# #776 b8593e40 against the bef020cf pin): every such shift is at most 0.4 ULP
+# of the board's f32 inch scale; a geometric change (a push order, a cap
+# circle, a shorten branch) is 72 ULPs or more. Four ULPs of that scale
+# (3.05e-5 in on a 72 in board) sit an order of magnitude from both. The
+# bit-equal count in the summary line keeps its 1e-9 in meaning; only the
+# regression gate reads the slack (docs/plans/PARITY_FP6_2026-09-08.md).
+ULP_SLACK = 4
 REASONS = (
     "parse_error",
     "caught_panic",
@@ -70,6 +83,17 @@ def distance(a, b, scale=IN2M):
 
 def tier(delta):
     return 0 if delta <= EPS_IN else (1 if delta <= 0.5 else 2)
+
+
+def ulp32(x):
+    """One float32 unit in the last place at magnitude |x|."""
+    x = abs(float(x))
+    return 2.0 ** (math.frexp(x)[1] - 24) if x else 2.0 ** -149
+
+
+def slack_in(board_in):
+    """The regression gate's allowance for float32 rounding, in inches."""
+    return ULP_SLACK * ulp32(max(board_in))
 
 
 def measure(fixtures, report):
@@ -172,6 +196,7 @@ def measure(fixtures, report):
             "delta_in": deltas,
             "tiers": ranks,
             "all_models_within": not reasons and all(r <= 1 for r in ranks),
+            "slack_in": slack_in(f["board_in"]),
         }
         if "formation" in row:
             formation = row["formation"]
@@ -236,13 +261,17 @@ def regressions(baseline, current, fixture_sha):
                 f'{key}: new decline {set(now["reasons"])-set(before["reasons"])}'
             )
         # Existing coverage gaps cannot hide an endpoint threshold regression.
+        # A model pinned bit-equal that now sits a few float32 ULPs off is
+        # still equal to this gate (the slack); half an inch is not.
+        slack = max(EPS_IN, now["slack_in"])
+        now_tiers = [0 if d <= slack else t for d, t in zip(now["delta_in"], now["tiers"])]
         if before["tiers"] and (
-            len(before["tiers"]) != len(now["tiers"])
-            or any(a > b for a, b in zip(now["tiers"], before["tiers"]))
+            len(before["tiers"]) != len(now_tiers)
+            or any(a > b for a, b in zip(now_tiers, before["tiers"]))
         ):
             errors.append(f"{key}: model endpoint bucket worsened")
         if not before["reasons"] and not now["reasons"]:
-            if any(a > b + EPS_IN for a, b in zip(now["delta_in"], before["delta_in"])):
+            if any(a > b + slack for a, b in zip(now["delta_in"], before["delta_in"])):
                 errors.append(f"{key}: accepted model delta increased")
         if "formation_tiers" in before:
             if (

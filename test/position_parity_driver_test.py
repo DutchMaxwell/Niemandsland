@@ -18,6 +18,7 @@ def example():
             {
                 "id": "one",
                 "action": {"unit": "u"},
+                "board_in": [72.0, 48.0],
                 "units": [{"id": "u", "positions": [[0, 0, 0]], "attached": []}],
             }
         ]
@@ -93,6 +94,47 @@ def test_incomplete_or_invalid_results_fail_closed(mutation):
         r["rows"][0]["table_end"] = [[0, 0]]
     with pytest.raises(ValueError):
         p.measure(f, r)
+
+
+def test_float32_rounding_of_a_pinned_delta_is_not_a_regression():
+    f, r = example()
+    r["rows"][0]["rust_end"][0][0] = 2 * p.IN2M
+    baseline = {"fixture_sha256": "same", "measurement": p.measure(f, r)}
+    # Two float32 ULPs of a world metre: what a moved centre picks up when the
+    # push's inch mirror rounds once instead of twice (parity-frame 4).
+    r["rows"][0]["rust_end"][0][0] += 2 * p.ulp32(1.0)
+    assert not p.regressions(baseline, p.measure(f, r), "same")
+
+
+def test_a_pinned_equal_model_one_ulp_off_keeps_its_bucket():
+    f, r = example()
+    r["rows"][0]["table_end"][0] = [0.5, 0.0, 0.25]
+    r["rows"][0]["rust_end"][0] = [0.5, 0.0, 0.25]
+    baseline = {"fixture_sha256": "same", "measurement": p.measure(f, r)}
+    assert baseline["measurement"]["cases"]["one"]["tiers"] == [0]
+    r["rows"][0]["rust_end"][0][0] += p.ulp32(0.5)
+    now = p.measure(f, r)
+    assert now["cases"]["one"]["tiers"] == [1]  # the summary still says not bit-equal
+    assert not p.regressions(baseline, now, "same")
+
+
+def test_a_real_move_still_regresses_past_the_slack():
+    f, r = example()
+    baseline = {"fixture_sha256": "same", "measurement": p.measure(f, r)}
+    r["rows"][0]["rust_end"][0][0] = 0.2 * p.IN2M
+    assert "one: accepted model delta increased" in p.regressions(
+        baseline, p.measure(f, r), "same"
+    )
+    r["rows"][0]["rust_end"][0][0] = 0.6 * p.IN2M
+    assert "one: model endpoint bucket worsened" in p.regressions(
+        baseline, p.measure(f, r), "same"
+    )
+
+
+def test_slack_is_four_float32_ulps_of_the_board_inch_scale():
+    assert p.slack_in([72.0, 48.0]) == 4 * 2.0**-17
+    assert p.slack_in([48.0, 144.0]) == 4 * 2.0**-16
+    assert p.slack_in([72.0, 48.0]) < 1e-4 < 0.2
 
 
 def test_fixture_drift_requires_an_explicit_reasoned_baseline_update():
