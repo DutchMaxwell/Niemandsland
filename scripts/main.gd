@@ -3149,7 +3149,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
 	var upr_ap := 0
 	var upr_hit := 0
-	var upr_name := _solo_unpredictable_rule(attacker, false)
+	var upr_name := _solo_unpredictable_rule(attacker, false, target)
 	if not upr_name.is_empty():
 		var upr_face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET, "AI (%s)" % attacker.get_name())
 		if not upr_face.is_empty():
@@ -5459,14 +5459,18 @@ func _solo_mend_pick(unit: GameUnit, bearers: Array) -> ModelInstance:
 ## The attack-die rule a striker benefits from ("" when none): the wave-4 MELEE-ONLY Unpredictable
 ## Fighter (Mummified) or the generic army-book Unpredictable ("when attacking" — shooting and melee,
 ## registry-gated the wave-5 way). Exact-match so neither rule fires the other, and never both.
-func _solo_unpredictable_rule(striker: GameUnit, melee: bool) -> String:
-	if melee and _solo_rule_on_all_models(striker, "Unpredictable Fighter"):
+func _solo_unpredictable_rule(striker: GameUnit, melee: bool, target: GameUnit = null) -> String:
+	# GH #325 — a spell-granted Unpredictable Fighter/Shooter (the bearer's attackers-side token)
+	# counts at this own read site, exactly where the printed rule does.
+	if melee and (_solo_rule_on_all_models(striker, "Unpredictable Fighter")
+			or AiSpell.granted_rules_of(striker, target, false).has("Unpredictable Fighter")):
 		return "Unpredictable Fighter"
 	if AiEv.has_exact_rule(striker, "Unpredictable") and RulesRegistry.unit_rule_active(striker, "Unpredictable"):
 		return "Unpredictable"
 	# Unpredictable Shooter (autonomous wave 2026-07-19): the SHOOTING-only half of the same die.
-	if not melee and AiEv.has_exact_rule(striker, "Unpredictable Shooter") \
-			and RulesRegistry.unit_rule_active(striker, "Unpredictable Shooter"):
+	if not melee and ((AiEv.has_exact_rule(striker, "Unpredictable Shooter") \
+			and RulesRegistry.unit_rule_active(striker, "Unpredictable Shooter"))
+			or AiSpell.granted_rules_of(striker, target, true).has("Unpredictable Shooter")):
 		return "Unpredictable Shooter"
 	return ""
 
@@ -6006,7 +6010,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	# 1-3 → AP(+1) on its melee weapons, 4-6 → +1 to hit (fatigue's unmodified-6-only overrides the +1).
 	var uf_ap := 0
 	var uf_hit := 0
-	var upr_rule := _solo_unpredictable_rule(striker, true)
+	var upr_rule := _solo_unpredictable_rule(striker, true, defender)
 	if not upr_rule.is_empty():
 		var uf_owner: String = ("AI (%s)" % striker.get_name()) if _solo_is_ai_unit(striker) else "You"
 		var uf_face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET, uf_owner)
@@ -6981,6 +6985,19 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee)
 			if b > 0:
 				parts.append({"name": base, "bonus": b})
+	# GH #325 — spell-granted conditional-AP rules (the defender's attackers-side token, e.g. Veil
+	# of Madness → Slayer) take the SAME registry-driven path: the lookup fires only where the
+	# striker's book actually fields the rule, deduped against the loops above.
+	for g in AiSpell.granted_rules_of(striker, defender, not melee):
+		var gname := str(g)
+		if seen.has(gname):
+			continue
+		seen[gname] = true
+		var gparams: Dictionary = RulesRegistry.lookup(system, faction, gname).get("params", {})
+		if gparams.has("condition") or gparams.has("gate"):
+			var gbonus := AiCombatMath.conditional_ap_bonus(gparams, d_tough, d_defense, charging, dist_in, melee)
+			if gbonus > 0:
+				parts.append({"name": gname, "bonus": gbonus})
 	return parts
 
 
@@ -8156,7 +8173,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	_solo_apply_vs_marks(unit, target, 0.0)
 	# Unwieldy (resolver wave A — "strikes last when charging"): the CHARGER's strikes swap behind
 	# the defender's strike-back; Counter and Impact keep their slots.
-	var charger_last: bool = _solo_unit_has_unwieldy(unit)
+	var charger_last: bool = _solo_unit_has_unwieldy(unit, target)
 	if charger_last and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Unwieldy: %s strikes last on the charge" % unit.get_name(), true)
 	for phase_slot in range(2):
@@ -9928,7 +9945,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile (resolution-integrated, both sides automatic).
 	var upr_ap := 0
 	var upr_hit := 0
-	var upr_name := _solo_unpredictable_rule(attacker, false)
+	var upr_name := _solo_unpredictable_rule(attacker, false, target)
 	if not upr_name.is_empty():
 		var upr_face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET, "You")
 		if not upr_face.is_empty():
@@ -10114,7 +10131,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
 	_solo_apply_vs_marks(attacker, target, 0.0)
 	# Unwieldy (resolver wave A): a charging Unwieldy unit strikes LAST — the AI's strike-back
 	# resolves first; Counter and Impact keep their slots.
-	var h_charger_last: bool = _solo_unit_has_unwieldy(attacker)
+	var h_charger_last: bool = _solo_unit_has_unwieldy(attacker, target)
 	if h_charger_last and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Unwieldy: %s strikes last on the charge" % attacker.get_name(), true)
 	var ai_struck: bool = ai_counter
@@ -16845,13 +16862,15 @@ func _solo_hazardous_self_wounds(owner_unit: GameUnit, profile: Dictionary, face
 
 ## Unwieldy (resolver wave A — "strikes last when charging"): any chain member carrying the rule
 ## makes the whole charging unit resolve its strikes AFTER the defender's strike-back.
-func _solo_unit_has_unwieldy(unit: GameUnit) -> bool:
+func _solo_unit_has_unwieldy(unit: GameUnit, defender: GameUnit = null) -> bool:
 	if unit == null:
 		return false
 	for m in _solo_joined_chain(unit):
 		if not RulesRegistry.unit_rules_of_primitive(m as GameUnit, "Unwieldy").is_empty():
 			return true
-	return false
+	# GH #325 — a charger granted Unwieldy by the defender's attackers-side token strikes last
+	# exactly like a printed carrier (melee-scoped read).
+	return AiSpell.granted_rules_of(unit, defender, false).has("Unwieldy")
 
 
 ## Deathstrike + Self-Destruct death-half (resolver wave A — "if this model is killed in melee,

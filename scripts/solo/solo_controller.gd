@@ -1865,8 +1865,10 @@ func _act(unit: GameUnit) -> Dictionary:
 		charge_corridor_blocked = not bool(charge_probe.get("reachable", true))
 	# Quick Shot (army-book, grill round 2 cut A: "may shoot after using Rush actions"): the unit's
 	# move-and-shoot band is its RUSH distance, so the tree, the solver and the post-move gates all
-	# measure the same working reach.
-	var quick_shot: bool = unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")
+	# measure the same working reach. GH #325 — a spell-granted Quick Shot (the target's
+	# attackers-side token, e.g. Combat Ecstasy) reaches the same seam via the shared query.
+	var quick_shot: bool = (unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
+		or AiSpell.granted_rules_of(unit, target_unit).has("Quick Shot")
 	# #321 rules-must-log: an in-range charge the futility floor refuses gets its own line — a unit
 	# standing next to an enemy and NOT charging must name why, or it reads as a stuck AI.
 	var charge_futile := melee_futile_against(unit, target_unit)
@@ -4102,7 +4104,8 @@ func _solve_position(unit: GameUnit, primary_target: GameUnit, weapons: Array, a
 		"toward": Vector2(naive_goal.x, naive_goal.z),
 		"advance_m": advance * INCHES_TO_METERS,
 		"rush_m": rush * INCHES_TO_METERS,
-		"quick_shot": unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot"),
+		"quick_shot": (unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
+			or AiSpell.granted_rules_of(unit, primary_target).has("Quick Shot"),   # GH #325 spell grant
 		"our_profiles": our_profiles, "our_ctx": our_ctx, "shoot_range_in": base_range_in,
 		"targets": targets, "threats": threats, "in_per_m": in_per_m, "is_shooter": is_shooter,
 		"objective": ({"pos": Vector2(obj_pos.x, obj_pos.z),
