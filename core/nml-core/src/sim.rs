@@ -1262,11 +1262,10 @@ pub(crate) fn tray_mind_control(
 }
 
 
-/// Design #816 PR 2 — the Teleport/Ethereal beat (port of `main._
-/// solo_apply_teleport`): after the move, before the attack, once per
-/// activation. REPLAY: `action.teleport` lands byte-exact (the record
-/// decides). LIVE (`REPOSITION` acts only): the bounded three-probe set,
-/// taken only past `TELEPORT_EV_MARGIN`. No die drawn, `in_cover` untouched.
+/// Design #816 PR 2 — the Teleport/Ethereal beat (`main._solo_apply_
+/// teleport`): after the move, before the attack, once per activation.
+/// REPLAY: byte-exact on the record's centroid; LIVE (`REPOSITION` only):
+/// the bounded three-probe set. No die drawn, `in_cover` untouched.
 pub(crate) fn teleport_beat(
     statics: &[UnitStatic], next: &mut State, si: usize, action: &Action,
     seams: Seams, mut shot: Option<&mut ShootResult>, cover: Cover,
@@ -1274,14 +1273,12 @@ pub(crate) fn teleport_beat(
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.alive[si] <= 0 {
         return false;
     }
-    let spec = statics[next.roster.profile[si]].teleport.clone().or_else(|| {
-        mods::granted(next, si, "Teleport") // the aura leg the statics miss
-            .then(|| crate::unit::TeleportSpec { name: "Teleport".into() })
-    });
-    let Some(spec) = spec else { return false; };
-    let cap_in = crate::unit::teleport_cap_in(&spec.name, false);
-    // The landing: REPLAY — the record's centroid, no clamp (the table
-    // validated the cap when it recorded); LIVE — the probe set, the
+    // The aura grant is already folded into the profile lists at build_for
+    // entry (`apply_aura_channel`), so the statics stamp is the whole read.
+    let Some(spec) = statics[next.roster.profile[si]].teleport.as_ref() else { return false; };
+    let spec_name = spec.name.clone();
+    let cap_in = crate::unit::teleport_cap_in(&spec_name, false);
+    // REPLAY: the record's centroid, no clamp; LIVE: the probe set, the
     // ADVANCE-band reading (a standalone Reposition act has no Rush context).
     let to = match action.teleport {
         Some(to) => to,
@@ -1309,15 +1306,14 @@ pub(crate) fn teleport_beat(
     if let Some(shot) = shot.as_deref_mut() {
         shot.log.push(format!(
             "{}: {} repositions within {:.0}\" — landing centroid ({:.2}, {:.2}) m",
-            spec.name, statics[next.roster.profile[si]].name, cap_in, to[0], to[1]));
+            spec_name, statics[next.roster.profile[si]].name, cap_in, to[0], to[1]));
     }
     true
 }
 
-/// The bounded probe set (design §3) — objective clamp, away-from-threat,
-/// first cover bearing (skipped headless) — scored by a self-carried EV
-/// heuristic (objective pull, threat escape, cover); the best landing only
-/// when it beats staying by the fixed margin.
+/// The bounded probe set (design §3): objective clamp, away-from-threat,
+/// first cover bearing, scored by a self-carried EV heuristic; the best
+/// landing only when it beats staying by the fixed margin.
 pub(crate) const TELEPORT_EV_MARGIN: f64 = 0.5;
 
 pub(crate) fn teleport_probe(
