@@ -1071,6 +1071,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	_solo_apply_piercing_tag(unit)
 	await _solo_apply_reckless_piercing(unit)
 	await _solo_apply_storm_attack(unit)
+	await _solo_apply_surprise_attack(unit)
 	if unit.is_destroyed():
 		return unit
 	# NML-002 Strafing (official text: "Once per activation, when this model moves through enemy
@@ -17370,6 +17371,75 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 					targets_in_reach.erase(tgt)
 					if targets_in_reach.is_empty():
 						break
+
+
+## Surprise Attack burst (army-book; audit D 2026-09-08 — the table arm of #810's core read).
+## Official text: "Counts as having Infiltrate. The first time this unit is activated, pick one
+## enemy unit within 6\" in line of sight, and roll X dice. For each 2+ it takes one hit with
+## AP(1)." The claim arm (reserve ride + the alias's own 1\" no-go ring) has been live since #761
+## (solo_controller.gd:9861-9876); the BURST arm was the audit-D GAP. The pick is the Storm Attack
+## descending pick (unit.rs:2762), static so it is testable without a board (the #1040 precedent);
+## range/LOS filtering stays at the board call site.
+static func surprise_attack_pick(candidates: Array) -> GameUnit:
+	var best: GameUnit = null
+	var best_alive := 0
+	for c in candidates:
+		var u := c as GameUnit
+		if u != null and SoloController.combined_alive(u) > best_alive:
+			best_alive = SoloController.combined_alive(u)
+			best = u
+	return best
+
+
+## The burst itself: the AI activation's before-attacking slot (the same slot Storm Attack uses,
+## main.gd:1073), once per game per bearer = the first-activation trigger; the claim arm's human
+## path is #761's manual reserve flow (the solo-automation pattern). Params ride the registry
+## entry (range_in/trigger_target/ap, the #810 census rows) with the book text as defaults.
+func _solo_apply_surprise_attack(unit: GameUnit) -> void:
+	if unit == null or opr_army_manager == null or solo_controller == null or not _solo_is_ai_unit(unit):
+		return
+	var bearers: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		bearers = bearers + unit.get_attached_heroes()
+	for b in bearers:
+		var bu := b as GameUnit
+		if bu == null or bu.get_alive_count() == 0 or not bu.has_special_rule("Surprise Attack"):
+			continue
+		if bool(bu.unit_properties.get("surprise_attack_used", false)):
+			continue
+		var range_in := float(RulesRegistry.unit_param(bu, "Surprise Attack", "range_in", 6.0))
+		var trigger := int(RulesRegistry.unit_param(bu, "Surprise Attack", "trigger_target", 2))
+		var ap := int(RulesRegistry.unit_param(bu, "Surprise Attack", "ap", 1))
+		var candidates: Array = []
+		for h in opr_army_manager.get_game_units_for_player(solo_controller.enemy_slot_of(bu)):
+			var hu := h as GameUnit
+			if hu == null or _solo_combined_alive(hu) <= 0 or SoloController.unit_in_reserve(hu):
+				continue
+			if _solo_nearest_model_gap_in(bu, hu, INF) <= range_in and _solo_has_los(bu, hu):
+				candidates.append(hu)
+		if candidates.is_empty():
+			continue
+		bu.unit_properties["surprise_attack_used"] = true
+		var dice := maxi(_solo_unit_rating(bu, "Surprise Attack"), 1)
+		var faces: Array = await _solo_tray_roll(dice, trigger, _solo_owner_label(bu), "attack",
+			"Surprise Attack hits: %d+" % trigger)
+		var hits := 0
+		for f in faces:
+			if int(f) >= trigger:
+				hits += 1
+		if battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT, "Surprise Attack: %s strikes unawares — %d of %d dice hit (AP(%d))" % [
+				bu.get_name(), hits, dice, ap], true)
+		if hits <= 0:
+			continue
+		var tgt := surprise_attack_pick(candidates)
+		var profile := {"name": "Surprise Attack", "ap": ap, "deadly": 0, "rules": []}
+		var alive_before: int = _solo_combined_alive(tgt)
+		var wounds_before: int = _solo_unit_wounds_now(tgt)
+		var w: int = await _solo_save_batch(bu, tgt, "Surprise Attack", hits,
+			_solo_defense_vs(tgt), ap, profile, not _solo_is_ai_unit(tgt), false, true, false)
+		await _solo_land_wounds(tgt, w, 0)
+		await _solo_shooting_morale(tgt, alive_before, _solo_owner_label(tgt), wounds_before)
 
 
 func _solo_try_spawn(unit: GameUnit) -> void:
