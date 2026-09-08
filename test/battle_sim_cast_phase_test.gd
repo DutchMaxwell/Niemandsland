@@ -290,9 +290,9 @@ func test_first_reachable_conduit_is_the_recorded_origin() -> void:
 ## 12" spell from the caster) must hold exactly like (b) — no token spent, no
 ## event, no damage. The conduit-free path is unchanged.
 func test_no_conduit_holds_the_out_of_range_cast() -> void:
-	var next := _hold(_conduit_state())
-	(next["units"] as Dictionary).erase("Banner")
-	next = _hold(next)
+	var state := _conduit_state()
+	(state["units"] as Dictionary).erase("Banner")   # no conduit on the table
+	var next := _hold(state)
 	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(1)
 	assert_array(next.get("cast_events", [])).is_empty()
 	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_equal(0.0)
