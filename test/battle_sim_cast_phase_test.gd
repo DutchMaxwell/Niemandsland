@@ -222,3 +222,83 @@ func test_seam_off_the_legacy_shoot_rider_still_casts() -> void:
 	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(0)
 	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_greater(0.0)
 	assert_array(next.get("cast_events", [])).is_empty()
+
+
+## ===== Spell Conduit PR 1 (design #824 §4, table-first) =====
+
+## The conduit fixture: the caster's ONLY legal enemy target sits beyond the
+## spell's 12" reach from the CASTER but inside it from a friendly conduit —
+## caster at 0, conduit at `conduit_gap` (default 10"), squad at 18".
+## alien_hives on every unit: the committed gf map resolves "Spell Conduit"
+## there, and Caster(1) + D3=1 starts the cycle at index 1 ("Overwhelming
+## Strike", damage, threshold 1, 12") — the same pick as (a).
+func _conduit_state(conduit_gap: float = 10.0, with_second: bool = false,
+		conduit_shaken: bool = false) -> Dictionary:
+	var units: Array = [
+		_unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "alien_hives", 1),
+	]
+	var banner := _unit(1, "Banner", [Vector3(conduit_gap * IN2M, 0, 0)],
+		["Spell Conduit"], "alien_hives")
+	banner.is_shaken = conduit_shaken
+	units.append(banner)
+	if with_second:
+		units.append(_unit(1, "Banner2", [Vector3(8.0 * IN2M, 0, 0)],
+			["Spell Conduit"], "alien_hives"))
+	var foes: Array = []
+	for i in range(4):
+		foes.append(Vector3((18.0 + float(i)) * IN2M, 0, 0))
+	units.append(_unit(2, "Squad", foes))
+	return _capture(units)
+
+
+## (i) THE RED CASE: a target reachable ONLY through the conduit. The caster is
+## 18" from the squad — outside the 12" spell — so today the sim holds; the
+## engine's spell_candidates (solo_controller.gd:4405-4434) already accepts the
+## conduit origin, and the SIM and the engine disagreed (the note's
+## divergence). The cast must be legal FROM THE CONDUIT, the event must record
+## the chosen origin (conduit unit id + position), and the rule's casting_mod
+## (+1) must lift the cast chance off the plain 4+ coin flip.
+func test_conduit_origin_reaches_a_target_the_caster_cannot() -> void:
+	var next := _hold(_conduit_state())
+	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(0)
+	var events: Array = next.get("cast_events", [])
+	assert_int(events.size()).is_equal(1)
+	var ev: Dictionary = events[0] if not events.is_empty() else {}
+	assert_str(str(ev.get("kind", ""))).is_equal("damage")
+	assert_str(str(ev.get("target", ""))).is_equal("Squad")
+	var origin: Dictionary = ev.get("origin", {}) if ev.has("origin") else {}
+	assert_str(str(origin.get("unit", ""))).is_equal("Banner")
+	assert_float(float(origin.get("position", Vector3.INF).x)).is_equal_approx(10.0 * IN2M, 0.001)
+	assert_float(float(ev.get("p_success", 0.0))).is_equal_approx(2.0 / 3.0, 0.001)
+	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_greater(0.0)
+
+
+## (ii) The official walk: two eligible conduits, the FIRST reachable one is
+## the chosen origin (the official pick order — no EV-shopping over origins).
+func test_first_reachable_conduit_is_the_recorded_origin() -> void:
+	var next := _hold(_conduit_state(10.0, true))
+	var events: Array = next.get("cast_events", [])
+	assert_int(events.size()).is_equal(1)
+	var ev: Dictionary = events[0] if not events.is_empty() else {}
+	assert_str(str((ev.get("origin", {}) as Dictionary).get("unit", ""))).is_equal("Banner")
+
+
+## (iii) NO conduit: the identical geometry (squad at 18", still out of the
+## 12" spell from the caster) must hold exactly like (b) — no token spent, no
+## event, no damage. The conduit-free path is unchanged.
+func test_no_conduit_holds_the_out_of_range_cast() -> void:
+	var next := _hold(_conduit_state())
+	(next["units"] as Dictionary).erase("Banner")
+	next = _hold(next)
+	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(1)
+	assert_array(next.get("cast_events", [])).is_empty()
+	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_equal(0.0)
+
+
+## (iv) The Shaken gate binds the CONDUIT (v3.5.3 param requires_not_shaken):
+## a Shaken conduit offers neither its position nor the +1 — the out-of-range
+## cast holds.
+func test_shaken_conduit_is_not_an_origin() -> void:
+	var next := _hold(_conduit_state(10.0, false, true))
+	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(1)
+	assert_array(next.get("cast_events", [])).is_empty()
