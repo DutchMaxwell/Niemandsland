@@ -45,6 +45,14 @@ pub fn is_dangerous(t: i32) -> bool {
     t == DANGEROUS
 }
 
+/// The untyped class — "within 1\" of terrain" with NO kind restriction
+/// (aof "Grounded Speed", `rules_mechanics_aof.json`'s own
+/// `terrain_within_in` proximity): any cell type but NONE.
+#[inline]
+pub fn is_any(t: i32) -> bool {
+    t != NONE
+}
+
 /// `TerrainRules.is_forbidden_rest` terrain_rules.gd:80-89 — the class a model
 /// may not END its move standing in. RUINS was struck off in 2026-07-16 (a
 /// model MAY stand in a ruin; only its WALL segments block) and DANGEROUS in

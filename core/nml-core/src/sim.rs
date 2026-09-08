@@ -4296,6 +4296,70 @@ fn shred_boost_active(rules_epoch: u32) -> bool {
     rule_on(rules_epoch, EPOCH_5_TABLE_RULES)
 }
 
+/// The Grounded Speed read (epoch 7) — the per-activation conditional band
+/// (aof "Grounded Speed", `rules_mechanics_aof.json`): "+2\" on Advance, +4\"
+/// on Rush/Charge during this activation" while MOST of the unit's models are
+/// within the entry's own `terrain_within_in` of terrain when activated. The
+/// condition is answered LIVE from the ACTIVATION-START picture — the
+/// pre-move `state.positions`/`state.radii` against `terrain::base_in_terrain`
+/// with the base radius widened by the rule's own proximity (the
+/// dangerous-terrain triggers' semantics, sim.rs:1927) over the untyped class
+/// `terrain::is_any` (the book text restricts no terrain kind) — so the core's
+/// own terrain picture answers it WITHOUT a new shared signature. An absent
+/// board reads false: the condition honestly fails without terrain. The bonus
+/// is added at `band_in` assembly, never pre-folded into the recorded bands
+/// (no double-count of `move_bands`); the log line is Bounding's
+/// (sim.rs:4313) shape.
+fn grounded_speed_bonus_in(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    cover: Cover,
+    rules_epoch: u32,
+    kind: i64,
+) -> f64 {
+    let Some(gs) = &statics[state.roster.profile[si]].grounded_speed else {
+        return 0.0;
+    };
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return 0.0;
+    }
+    let Cover::Board(t) = cover else {
+        return 0.0;
+    };
+    let models = state.positions[si].len();
+    if models == 0 {
+        return 0.0;
+    }
+    let near = state
+        .positions
+        .get(si)
+        .map(|ps| {
+            ps.iter()
+                .enumerate()
+                .filter(|(m, p)| {
+                    let r = state.radii[si].get(*m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M)
+                        + gs.terrain_within_in * IN2M;
+                    crate::terrain::base_in_terrain(
+                        crate::geom::to_f32(**p),
+                        r,
+                        t,
+                        crate::terrain::is_any,
+                    )
+                })
+                .count()
+        })
+        .unwrap_or(0);
+    if near * 2 <= models {
+        return 0.0;
+    }
+    (match kind {
+        ADVANCE => gs.advance_mod,
+        RUSH | CHARGE => gs.rush_mod,
+        _ => 0,
+    }) as f64
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_with(
     statics: &[UnitStatic],
@@ -4366,12 +4430,27 @@ fn resolve_with(
         statics, &next, si, kind, ci, bounding_in,
         seams.versatile_reach || rule_on(seams.rules_epoch, 1),
     );
+    // Grounded Speed (epoch 7) — the LIVE per-activation read: the majority
+    // condition sees the activation-START positions (`state`), never the
+    // landing (`next` after the move below).
+    let gs_in = grounded_speed_bonus_in(statics, state, si, cover, seams.rules_epoch, kind);
     let band_in = match kind {
         ADVANCE => next.bands[si].advance,
         RUSH | CHARGE => next.bands[si].rush,
         _ => 0.0,
     } + bounding_in
-        + vr_in;
+        + vr_in
+        + gs_in;
+    // NML-1152 B14 step 1 — rules-must-log: the live read names itself the
+    // one time it changes the band (Bounding's line above is the shape).
+    if gs_in != 0.0 {
+        if let Some((_, shot)) = dice.as_mut() {
+            shot.log.push(format!(
+                "Grounded Speed: {} \u{2014} +{gs_in:.0}\" band (most models within 1\" of terrain)",
+                statics[pi_s].name
+            ));
+        }
+    }
     // NML-1152 B14 step 1 — rules-must-log: the ONLY table die this port does
     // not draw itself, named here (dice.rs's `ShootResult.log` precedent) the
     // one time it changes the band.
