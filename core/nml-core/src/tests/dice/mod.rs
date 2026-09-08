@@ -392,6 +392,7 @@
 // fixtures every family shares stay here, in the module root.
 mod fortified;
 mod growth_markers;
+mod indirect_moved;
 mod melee_impact_order;
 mod morale_dice;
 mod rung_i_dice;
