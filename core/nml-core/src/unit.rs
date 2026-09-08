@@ -896,7 +896,10 @@ pub struct UnitStatic {
     /// `unit_rule_active` — a faction whose map fields no `Infiltrate` entry
     /// still arrives at the fallback ring, and the twin copies that. The value
     /// is `RulesRegistry.unit_param(unit, "Infiltrate", "min_enemy_dist_in",
-    /// …)` (`:9620`), so a book that moves the ring moves it here too.
+    /// …)` (`:9620`), so a book that moves the ring moves it here too. The
+    /// Surprise Attack alias (#761) rides this field too, gated on the FROZEN
+    /// `EPOCH_7_TABLE_RULES` and reading the ALIAS entry's own ring first
+    /// (`best_primitive_param` reading) — see the stamp arm.
     pub infiltrate_min_enemy_dist_in: f64,
     /// Ambush family (rules-wave2-ambush) — the four registry names that ride
     /// the "Ambush" primitive, each read at its OWN literal with the entry's
@@ -4554,14 +4557,24 @@ impl UnitStatic {
                 0.0
             },
             vengeance_active: unit_rule_active(reg, p, "Vengeance"),
-            infiltrate_min_enemy_dist_in: if has_special_rule(&p.special_rules, "Infiltrate")
-                || has_special_rule(&p.special_rules, "Surprise Attack")
-            {
-                // #761's alias arm: the table resolves the alias claim the same
-                // way — a Surprise Attack carrier's own entry carries no ring
-                // of its own in gf/aof, so the Infiltrate param (fallback 3")
-                // decides; a book that moves the ring moves it here too.
+            infiltrate_min_enemy_dist_in: if has_special_rule(&p.special_rules, "Infiltrate") {
                 unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN)
+            } else if rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
+                && has_special_rule(&p.special_rules, "Surprise Attack")
+            {
+                // #761's alias arm, the review-810 reading: the table resolves
+                // the alias via `best_primitive_param` — the alias entry's OWN
+                // `min_enemy_dist_in` wins (aofr Surprise Attack: 1"), the
+                // Infiltrate param (fallback 3") only when the entry carries
+                // none. Gated on the FROZEN `EPOCH_7_TABLE_RULES` like the
+                // burst arm: a record below 7 keeps ring 0.0 and replays
+                // byte-exact.
+                unit_param_f(
+                    reg, p,
+                    "Surprise Attack",
+                    "min_enemy_dist_in",
+                    unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN),
+                )
             } else {
                 0.0
             },

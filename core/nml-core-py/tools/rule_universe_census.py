@@ -269,9 +269,13 @@ _CONSUMED_PARAM_ROWS: tuple[ConsumedParams, ...] = (
     # token to PORTED - the #489 over-credit shape, declined by the spec (§6).
     # + wave-5 (rules-surprise-attack): unit.rs::surprise_attack_of reads the
     # Surprise Attack burst's own params off the BY-NAME entry (the rating is
-    # the X, not a param), and stamp_profile's alias arm reads the ring via the
-    # Infiltrate param — the #761 table behaviour, unit.rs infiltration gate.
-    ConsumedParams("Infiltrate", frozenset({"min_enemy_dist_in", "range_in", "trigger_target", "ap", "needs_los"})),
+    # the X, not a param). The burst keys (`range_in`, `trigger_target`, `ap`,
+    # `needs_los`) are read off the Surprise Attack entry, so they belong to
+    # the Surprise Attack row — not Infiltrate (the review-810 census note).
+    # stamp_profile's alias arm reads the ring (`min_enemy_dist_in`) via the
+    # Infiltrate param with the alias entry's OWN ring first (#761's
+    # `best_primitive_param` reading, unit.rs infiltration gate).
+    ConsumedParams("Infiltrate", frozenset({"min_enemy_dist_in"})),
     # Lacerate-family wave (rules-wave2-lacerate2, 2026-09-04): unit.rs
     # ::stamp_unit_strikers' epoch-4 arm mirrors main.gd:6990-7001's unit-level
     # coverage wave — every carried Lacerate-primitive entry whose params carry
@@ -393,6 +397,11 @@ _CONSUMED_PARAM_ROWS: tuple[ConsumedParams, ...] = (
     # them, so the names reach the core through their own tokens. Without this
     # entry "Surge" was TRUSTED WHOLE — PR #489's bug, reopened here until now.
     ConsumedParams("Surge", frozenset({"extra_attack", "melee_only", "shooting_only", "within_in", "over_in"})),
+    # wave-5 follow-up (review-810 census note): the burst keys are read off
+    # the BY-NAME "Surprise Attack" entry (unit.rs::surprise_attack_of), so
+    # they belong to this row — not to the Infiltrate row they were booked
+    # under when the port landed.
+    ConsumedParams("Surprise Attack", frozenset({"range_in", "trigger_target", "ap", "needs_los"})),
     # Block B12: unit.rs::unpredictable_shooting_params (via ctx_for) + dice.rs
     # ::resolve_volley_with_tray read the shooting volley die's three params.
     ConsumedParams("Unpredictable Shooter", frozenset({"ap_bonus", "hit_bonus", "low_roll_max"})),
