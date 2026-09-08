@@ -784,11 +784,13 @@ func _resolver(profile: OPRApiClient.OPRUnit) -> Callable:
 func _stamp_of(profile: OPRApiClient.OPRUnit) -> Dictionary:
 	var nodes: Array[Node3D] = []
 	for i in profile.size:
-		nodes.append(Node3D.new())
+		var n := Node3D.new()
+		add_child(n)
+		nodes.append(n)
 	var template := EquipmentDistributor.create_from_opr_unit(profile, nodes, 1, {})
 	var stamp := BattleSim._unit_profile(template)
 	for n in nodes:
-		(n as Node3D).free()
+		(n as Node3D).queue_free()
 	return stamp
 
 
@@ -820,9 +822,13 @@ func test_a_spawn_carrier_stamps_the_named_profile_into_the_header() -> void:
 	# from the carrier's (the #823 fidelity point), same serializer call.
 	var stamp := _stamp_of(profile)
 	stamp.erase("unit_id")   # the template's id is per-resolution
+	# the recorded value round-tripped through JSON.stringify/parse (the recorder's
+	# exact pipeline: ints read back as floats, typed arrays untyped) — compare
+	# over the SAME pipeline, not in-memory types.
+	var expected: Dictionary = JSON.parse_string(JSON.stringify(stamp, "", true, true))
 	var recorded: Dictionary = (sp[key] as Dictionary).duplicate()
 	recorded.erase("unit_id")
-	assert_dict(recorded).is_equal(stamp)
+	assert_dict(recorded).is_equal(expected)
 	assert_str(str(recorded["name"])).is_equal("Rat Swarm")
 	assert_int(int(recorded["model_count"])).is_equal(10)
 	assert_int(int(recorded["tough"])).is_equal(2)

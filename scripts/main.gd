@@ -17823,16 +17823,18 @@ func _solo_spawn_profile_stamp(carrier: GameUnit, raw: String) -> Dictionary:
 		return {}
 	# The template GameUnit the header profile reads off — the SAME constructor the
 	# import and the runtime path use, over `count` placeholder nodes (base-shape
-	# probes only, freed below; nothing is ever added to the table).
+	# probes only, freed below; nothing VISIBLE is ever added to the table).
 	var nodes: Array[Node3D] = []
 	for i in count:
-		nodes.append(Node3D.new())
+		var n := Node3D.new()
+		add_child(n)   # in the tree so the base-shape probe reads a real transform
+		nodes.append(n)
 	var template := EquipmentDistributor.create_from_opr_unit(profile, nodes, pid,
 		army.rule_descriptions if army != null else opr_army_manager.rule_descriptions)
 	template.unit_properties["faction_folder"] = RulesRegistry.faction_of_unit(carrier)
 	var stamp := BattleSim._unit_profile(template)
 	for n in nodes:
-		(n as Node3D).free()
+		(n as Node3D).queue_free()
 	return stamp
 
 
