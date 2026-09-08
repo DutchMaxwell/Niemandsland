@@ -4569,12 +4569,9 @@ impl UnitStatic {
                 // none. Gated on the FROZEN `EPOCH_7_TABLE_RULES` like the
                 // burst arm: a record below 7 keeps ring 0.0 and replays
                 // byte-exact.
-                unit_param_f(
-                    reg, p,
-                    "Surprise Attack",
-                    "min_enemy_dist_in",
-                    unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN),
-                )
+                let infiltrate_ring =
+                    unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN);
+                unit_param_f(reg, p, "Surprise Attack", "min_enemy_dist_in", infiltrate_ring)
             } else {
                 0.0
             },
