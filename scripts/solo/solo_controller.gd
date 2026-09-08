@@ -9972,6 +9972,113 @@ func hit_and_run_move(unit: GameUnit, after_shoot: bool = true) -> bool:
 	return moved
 
 
+# === Teleport / Ethereal — the before-attack reposition (design #816, PR 1, table side) =========
+# Official text (Teleport): "Once per activation, before attacking, you may place this model
+# anywhere fully within 3\" of its position when using Advance/Charge actions, or fully within
+# 6\" ... when using Rush actions." Common shape (design §1): dice-free discretionary
+# reposition, ONCE per activation, AFTER the move/charge and BEFORE the strike; the anchor is
+# the POST-MOVE position (coordinator decision on §5). The cap is keyed by NAME: every other
+# Teleport-primitive name (Ethereal) is flat 6" — its params carry 0.0 bonuses that must never
+# read as "no reposition".
+const TELEPORT_EV_MARGIN := 0.5   # the fixed "may" margin: take the reposition only when the
+#                                   best scored landing beats staying by at least this much
+
+static func teleport_cap_in(rule: String, rush: bool) -> float:
+	return 6.0 if rule != "Teleport" or rush else 3.0
+
+## The bearer's rule NAME (the #782 read): the base name first, then a Teleport-primitive DATA
+## alias (Ethereal). "" = the unit carries no teleport family name and never repositions.
+static func teleport_rule_name(unit: GameUnit) -> String:
+	if RulesRegistry.unit_rule_active(unit, "Teleport"):
+		return "Teleport"
+	for te in RulesRegistry.unit_rules_of_primitive(unit, "Teleport"):
+		if str((te as Dictionary)["name"]) != "Teleport":
+			return str((te as Dictionary)["name"])
+	return ""
+
+## PURE: the fixed probe set (design §3) around the post-move centre, every probe clamped to the
+## cap circle: toward the nearest objective, away from the nearest threat, and (into cover) the
+## first cap-circle bearing whose terrain gives cover. Probe 0 is "stay" — the margin scores
+## against it. `cover_at` invalid (headless) skips the cover probe.
+static func teleport_candidates(from: Vector2, cap_m: float, objective: Vector2, has_obj: bool,
+		threat: Vector2, has_threat: bool, cover_at: Callable) -> Array:
+	var out: Array = [from]
+	if has_obj:
+		out.append(from + (objective - from).limit_length(cap_m))
+	if has_threat:
+		out.append(from + (from - threat).normalized() * cap_m)
+	if cover_at.is_valid():
+		for k in range(8):
+			var p := from + Vector2.from_angle(TAU * float(k) / 8.0) * cap_m
+			if bool(cover_at.call(p)):
+				out.append(p)
+				break
+	return out
+
+## The policy probe (design §3, decisions 1-3): EV-score the candidate set with the SAME
+## move-EV terms the position solver ranks by (AiPosition._evaluate — shot EV, cover, exposure,
+## objective pull) and take the best only when it beats STAYING by TELEPORT_EV_MARGIN.
+## Refusals are NAMED (rules-must-log). Returns {rule, used, why} (+ "to": Vector2 metres).
+func teleport_decision(unit: GameUnit, rush: bool) -> Dictionary:
+	var rule := teleport_rule_name(unit)
+	if rule.is_empty():
+		return {"rule": "", "used": false, "why": "no Teleport/Ethereal name on the unit"}
+	if bool(unit.unit_properties.get("teleport_used_this_activation", false)):
+		return {"rule": rule, "used": false, "why": "latch set — once per activation"}
+	var cap_m := teleport_cap_in(rule, rush) * INCHES_TO_METERS
+	var centre := unit_centre(unit)
+	var from := Vector2(centre.x, centre.z)
+	var yy := centre.y
+	var own_r := _deploy_footprint_radius(unit)
+	var zones := _spacing_zones_world(unit, own_r, null)
+	var cover_at := func(pt: Vector2) -> bool:
+		return terrain_type_at.is_valid() \
+			and TerrainRules.gives_cover(int(terrain_type_at.call(Vector3(pt.x, yy, pt.y))))
+	# The existing placement-legality test, called as-is (no shared-signature change): table
+	# bounds, forbidden/wall terrain, and the live spacing zones (no overlap) — the SAME three
+	# checks _solve_position gates its candidate set with.
+	var legal_at := func(pt: Vector2) -> bool:
+		var w := Vector3(pt.x, yy, pt.y)
+		if _clamp_to_bounds(w).distance_to(w) > 0.0005 or _world_forbidden(w, own_r):
+			return false
+		for z in zones:
+			if ((z as Dictionary)["c"] as Vector2).distance_to(pt) < float((z as Dictionary)["r"]):
+				return false
+		return true
+	var obj := _nearest_uncontrolled_objective(centre, unit)
+	var enemy := _nearest_enemy_of(unit)
+	var thr := Vector2.INF
+	var threats: Array = []
+	if enemy != null:
+		var ec := unit_centre(enemy)
+		thr = Vector2(ec.x, ec.z)
+		threats = [{"centre": thr, "range_in": float(AiArchetype.max_range_inches(_unit_weapons(enemy)))}]
+	var obj2 := Vector2.INF
+	var objective: Dictionary = {}
+	if obj != NO_OBJECTIVE:
+		obj2 = Vector2(obj.x, obj.z)
+		objective = {"pos": obj2, "to_objective": true}
+	var toward := thr if thr != Vector2.INF else (obj2 if obj2 != Vector2.INF else from)
+	var los := func(_a: Vector2, _b: Vector2) -> bool: return true
+	var ev_at := func(pt: Vector2) -> Dictionary:
+		return AiPosition._evaluate(pt, from, toward, 1.0 / INCHES_TO_METERS, 0.0, false, [], {},
+			0.0, [], threats, objective, los, cover_at, Callable())
+	var stay: Dictionary = ev_at.call(from)
+	var best_score := float(stay["ev"]) + float(stay["loc"]) + TELEPORT_EV_MARGIN
+	var best := {}
+	for pt: Vector2 in teleport_candidates(from, cap_m, obj2, obj2 != Vector2.INF,
+			thr, thr != Vector2.INF, cover_at):
+		if pt == from or not bool(legal_at.call(pt)):
+			continue
+		var e: Dictionary = ev_at.call(pt)
+		if float(e["ev"]) + float(e["loc"]) > best_score:
+			best_score = float(e["ev"]) + float(e["loc"])
+			best = e
+	if best.is_empty():
+		return {"rule": rule, "used": false, "why": "no legal landing beats staying by the fixed margin"}
+	return {"rule": rule, "used": true, "to": best["pos"], "why": "EV margin met"}
+
+
 ## Repel Ambushers (army-book, grill round 2 cut B — official text: "Enemy units using Ambush must be
 ## set up over 12\" away from this model's unit."): the arrival no-go radius (metres) an ENEMY unit
 ## projects onto arriving Ambushers — 0 for a unit without the rule. Registry-tuned distance.
