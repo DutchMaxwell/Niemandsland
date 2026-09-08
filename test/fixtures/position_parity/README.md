@@ -64,7 +64,12 @@ universe exposes the missing shape capability, even if that base is distant.
 
 Per-model equality uses world-coordinate distance / 0.0254 <= 1e-9 inch.
 `within_0.5in` includes equality. A unit is equal/within only if **every** model
-qualifies and no stage declined. Raw per-model deltas remain in the report for
+qualifies and no stage declined. The regression gate alone allows `ULP_SLACK`
+(4) float32 units in the last place of the board's inch scale on top of a
+pinned delta (3.05e-5 inch on a 72-inch board), and a model pinned equal that
+lands inside that slack keeps its bucket: float32 rounding between the three
+frames a coordinate crosses is not a regression, a shorten branch or a moved
+cap circle still is (docs/plans/PARITY_FP6_2026-09-08.md). Raw per-model deltas remain in the report for
 declined positions; they do not inflate accepted parity. Model IDs and ordering
 must match exactly. Wall time is reported separately and excluded from both the
 baseline and determinism fingerprint.
