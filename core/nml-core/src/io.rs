@@ -217,14 +217,12 @@ pub(crate) struct PlainLedger {
     #[serde(default)]
     storm_used: Vec<String>,
     /// Wave 5 (PR 1's recorder): the `{"used", "to"}` reposition block; `to`
-    /// arrives as the `"(x, y)"` Vector2 string JSON.stringify writes. Absent
-    /// on every older corpus — replays with the latch unset, as it did.
+    /// arrives as the `"(x, y)"` Vector2 string. Absent on older corpora.
     #[serde(default)]
     teleport: Option<PlainTeleport>,
 }
 
-/// The `teleport` block; `to` is either a `[x, y]` pair or the table's
-/// `"(x, y)"` Vector2 string.
+/// The `teleport` block; `to` is a `[x, y]` pair or a `"(x, y)"` string.
 #[derive(Deserialize)]
 pub(crate) struct PlainTeleport {
     #[serde(default)]
@@ -299,8 +297,7 @@ pub struct Action {
     #[serde(default)]
     pub split: Option<Vec<SplitShot>>,
     /// Wave 5 — the record's landing centroid, joined by the replay driver
-    /// off the NEXT act's ledger (the act's own state predates the beat).
-    /// `None` on a live rollout — the resolve's probe policy decides.
+    /// off the NEXT act's ledger; None on a live rollout.
     #[serde(default)]
     pub teleport: Option<[f64; 2]>,
     /// NML-1152 B14 step 1 (Bounding) — the table's own controller-seeded
