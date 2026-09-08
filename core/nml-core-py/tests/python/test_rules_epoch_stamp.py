@@ -64,11 +64,11 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 7 (wave 4's gate, acts::EPOCH_7_TABLE_RULES):
-    # explicit, not just dynamic — a fresh game now stamps 7, not 6. A record
-    # already stamped 6 (recorded while wave 3 was the live epoch, before any
-    # wave-4 rule code existed) must never be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 7
+    # core rules epoch 8 (the planner-menu gate, acts::EPOCH_8_PLANNER_MENU):
+    # explicit, not just dynamic — a fresh game now stamps 8, not 7. A record
+    # already stamped 7 (recorded while wave 4 was the live epoch, before the
+    # #821 demotion existed) must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 8
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)
