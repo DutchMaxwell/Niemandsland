@@ -44,7 +44,7 @@ fn crossing_attack_rolls_through_crossed_enemies_at_epoch_7() {
     };
     let seams = Seams { rules_epoch: 7, ..Default::default() };
     let mut rng = GodotRng::new(1);
-    let mut tray = Tray::seeded(27);
+    let mut tray = Tray::seeded(5);
     let (next, shot) = resolve_stochastic_tray_on_board(
         &statics, &act.state, &action, &corpus.terrain, seams, &mut rng, &mut tray,
     )
