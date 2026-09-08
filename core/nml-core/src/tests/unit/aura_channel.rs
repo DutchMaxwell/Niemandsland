@@ -30,8 +30,23 @@ use super::*;
         assert!(!aura_static("", "dwarf_guilds", 6).ctx.unpredictable);
     }
 
+    /// "Sturdy" (gf/dwarf_guilds + aof/dwarves, the Guarded family's data
+    /// alias: "shot or charged from over 9" away -> +1 to defense rolls",
+    /// word-for-word Guarded's own effect): the ctx `guarded` flag fires at
+    /// epoch 7 - the frozen `EPOCH_7_TABLE_RULES` gate every new read; epoch
+    /// 6 (pre-gate) and the rule-less carrier stay false. The table resolves
+    /// the name through the same Guarded machinery (main.gd
+    /// `_solo_over9_defense_rule`'s data-alias branch), so the twin follows.
+    #[test]
+    fn a_sturdy_carrier_guards_at_epoch_7() {
+        assert!(aura_static("Sturdy", "dwarf_guilds", 7).ctx.guarded);
+        assert!(!aura_static("Sturdy", "dwarf_guilds", 6).ctx.guarded);
+        assert!(!aura_static("", "dwarf_guilds", 7).ctx.guarded);
+    }
+
     #[test]
     fn a_versatile_defense_aura_guards_its_unit_at_epoch_6() {
+
         assert!(aura_static("Versatile Defense Aura", "change_disciples", 6).ctx.guarded);
         assert!(!aura_static("Versatile Defense Aura", "change_disciples", 5).ctx.guarded);
         assert!(!aura_static("", "change_disciples", 6).ctx.guarded);

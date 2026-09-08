@@ -1944,7 +1944,18 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         fortified_alias_over_in,
         fortified_alias_over9: false,
         // Guarded OR Versatile Defense — ai_ev.gd:157-158.
-        guarded: rule_on_all_models(p, "Guarded") || rule_on_all_models(p, "Versatile Defense"),
+        // "Sturdy" (hygiene-wave follow-up): the Guarded family's DATA alias
+        // (gf dwarf_guilds + aof dwarves, primitive Guarded, params
+        // defense_bonus 1 / over_in 9 — word-for-word Guarded's effect). The
+        // table resolves it through the same Guarded machinery
+        // (main.gd `_solo_over9_defense_rule`'s data-alias branch), so the
+        // twin reads it BY NAME here, behind the frozen
+        // `EPOCH_7_TABLE_RULES` — the wave-4 accounting's "no remap" call
+        // stands: the registry primitive is untouched, only the name read
+        // joins this flag.
+        guarded: rule_on_all_models(p, "Guarded")
+            || rule_on_all_models(p, "Versatile Defense")
+            || (rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && rule_on_all_models(p, "Sturdy")),
         ranged_shrouding: ranged_shroud.is_some(),
         ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s[0]),
         ranged_shroud_floor_in: ranged_shroud.map_or(SHROUD_FLOOR_IN, |s| s[1]),
