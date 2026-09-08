@@ -837,7 +837,7 @@ func test_a_game_without_spawn_carriers_writes_no_spawn_profiles_key() -> void:
 	var state := _state()   # A and B carry no Spawn rule anywhere
 	_begin_hold(state)
 
-	var line := _dump_lines()[0]
+	var line: String = _dump_lines()[0]
 	var header := JSON.parse_string(line) as Dictionary
 	assert_bool(header.has("spawn_profiles")).is_false()
 	# byte-identity: the substring cannot hide anywhere in the serialized header

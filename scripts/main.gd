@@ -434,6 +434,11 @@ func _ready() -> void:
 	# no banding "segments".
 	get_viewport().use_debanding = true
 
+	# Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): the recorder
+	# resolves a Spawn rule's NAMED unit at EXPORT time through the table's book
+	# lookup — the same one the beat itself uses — so the record stays self-contained.
+	AiActRecorder.spawn_profile_resolver = _solo_spawn_profile_stamp
+
 	# Stamp the running version onto the HUD shortcuts label so it can never go stale — the version
 	# lives ONLY in application/config/version (single source of truth; see also startup_menu).
 	_apply_version_to_info_label()
@@ -17789,6 +17794,45 @@ func _solo_create_rule_unit(carrier: GameUnit, anchor: ModelInstance, raw: Strin
 		return false
 	_log_rule_event(BattleLog.Category.GENERAL, "%s: %s places %s [%d]" % [rule, carrier.get_name(), unit_name, count], _solo_is_ai_unit(carrier))
 	return true
+
+
+## Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): AiActRecorder's
+## export-time resolution of one Spawn rule string — the SAME regex, book lookup and
+## army source the beat uses (_solo_create_rule_unit), stamped through
+## BattleSim._unit_profile so the header's `spawn_profiles` value has EXACTLY the
+## shape of the `profiles` map. Runs at header-write time (the first activation),
+## BEFORE any beat has fired, so a record that later plays the beat already carries
+## its template. Deliberately NO await: the header write is synchronous — a book
+## still on the network suspends named_unit_profile, the call comes back without a
+## profile, and the entry is dropped LOUDLY (the recorder's warning), never
+## substituted with the carrier's profile.
+func _solo_spawn_profile_stamp(carrier: GameUnit, raw: String) -> Dictionary:
+	var pattern := RegEx.new()
+	pattern.compile("^[^(]+\\((.+) \\[(\\d+)\\]\\)$")
+	var match_value := pattern.search(raw)
+	if match_value == null or opr_army_manager == null:
+		return {}
+	var count := int(match_value.get_string(2))
+	var pid := int(carrier.unit_properties.get("player_id", 1))
+	var army: OPRApiClient.OPRArmy = opr_army_manager.armies.get(pid)
+	var profile: OPRApiClient.OPRUnit = opr_army_manager.api_client.named_unit_profile(
+		army.army_id if army != null else "", RulesRegistry.system_of_unit(carrier),
+		RulesRegistry.faction_of_unit(carrier), match_value.get_string(1), count)
+	if not (profile is OPRApiClient.OPRUnit):
+		return {}
+	# The template GameUnit the header profile reads off — the SAME constructor the
+	# import and the runtime path use, over `count` placeholder nodes (base-shape
+	# probes only, freed below; nothing is ever added to the table).
+	var nodes: Array[Node3D] = []
+	for i in count:
+		nodes.append(Node3D.new())
+	var template := EquipmentDistributor.create_from_opr_unit(profile, nodes, pid,
+		army.rule_descriptions if army != null else opr_army_manager.rule_descriptions)
+	template.unit_properties["faction_folder"] = RulesRegistry.faction_of_unit(carrier)
+	var stamp := BattleSim._unit_profile(template)
+	for n in nodes:
+		(n as Node3D).free()
+	return stamp
 
 
 func _solo_confirm_rule_unit(rule: String, unit_name: String, count: int) -> bool:
