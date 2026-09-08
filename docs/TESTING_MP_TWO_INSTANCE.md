@@ -14,9 +14,13 @@ The default run covers:
 
 The driver compares both peers after every step. A timeout, process crash,
 English or German GDScript parser/runtime error, wrong expected value, or peer
-divergence exits non-zero. Raw logs and snapshots remain in the requested run
-directory. Temporary `XDG_DATA_HOME` directories are separate for each peer and
-are removed on success and failure.
+divergence exits non-zero. After each run it also scans both peer logs for
+`[Relay] main loop stalled ...` warnings and fails a green run when any stall
+exceeds 15 s: the measured headless-load baseline is 10.5-10.8 s per green run,
+so a 5 s limit would be permanently red, while the relay drops peers near its
+30 s timeout — 15 s is the honest ceiling between the two. Raw logs and
+snapshots remain in the requested run directory. Temporary `XDG_DATA_HOME`
+directories are separate for each peer and are removed on success and failure.
 
 ## Run
 
@@ -42,9 +46,9 @@ test contract. Use `--timeout 120` to change the per-scenario deadline. The
 driver chooses a free relay port unless `--port` is supplied and waits for at
 least 3500 MB of available memory before starting either Godot process.
 
-The activation-economy scenario (#665, merged) is included by default since it
-landed; `--include-transport` remains accepted as a no-op flag for older
-invocation scripts. 11 checkpoints run in ~30 s on one machine.
+The activation-economy transport scenario (#665, merged) passes and runs with
+`--include-transport`: two extra checkpoints (11 instead of the default 9) in
+~30 s on one machine. The default three-pass command stays at 9 checkpoints.
 
 ```bash
 python test/mp/run_two_instance.py --run-dir reports/mp-two-instance-transport \
@@ -98,10 +102,15 @@ arrived.
   model CDN access, and import-state replication belong to the existing soak
   workloads and are intentionally excluded from this sub-five-minute gate.
 
-## Proposed CI step
+## CI step
 
-Workflow changes are intentionally separate. A Linux job with Godot 4.6 and the
-relay requirements installed can run:
+`.github/workflows/mp-two-instance.yml` runs the suite as its own advisory
+workflow job on every push to main and pull request (it is deliberately NOT on
+the required-checks list — a runner hiccup in a real-peer test must not block
+merges). The job installs Godot via the repo's setup-godot action and the relay
+requirements, imports the project once (`godot --headless --editor --quit`,
+without which a fresh checkout fails with `Parse Error: Identifier "UiMotion"
+not declared`), then runs:
 
 ```yaml
 - name: Two-instance multiplayer regressions
@@ -109,10 +118,6 @@ relay requirements installed can run:
     python test/mp/run_two_instance.py \
       --godot godot \
       --run-dir reports/mp-two-instance
-- name: Upload multiplayer artifacts
-  if: always()
-  uses: actions/upload-artifact@v4
-  with:
-    name: mp-two-instance
-    path: reports/mp-two-instance
 ```
+
+Logs and snapshots are uploaded as artifacts on every outcome.
