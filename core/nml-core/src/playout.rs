@@ -34,6 +34,10 @@ use crate::terrain::{self, Terrain};
 use crate::unit::UnitStatic;
 use crate::{geom, IN2M, Objective};
 
+/// The table half's own log line (#813, solo_controller.gd:2251) — the core's
+/// demotion trace rides the same words, so both layers log the same rule.
+const RUSH_DEMOTION_RULE: &str = "GF v3.5.1 p.7: a rush capped to the advance distance forfeits the shot for nothing — chose advances (demoted)";
+
 /// Everything an imagined activation needs that does not change during a
 /// rollout: the per-unit static closure, the board and the two A/B seams the
 /// recording ran with.
@@ -121,43 +125,52 @@ impl<'a> Policy<'a> {
             // #812 core half — GF v3.5.1 p.7: Rush forbids shooting, so a rush
             // whose EXECUTABLE distance (p.11 difficult cap, mv/step.rs:598)
             // cannot beat the advance band is dominated by advance + shoot.
+            // Table parity (#813 table half, solo_controller.gd:2239-2244):
+            // a Quick Shot carrier keeps the rush ("may shoot after using Rush
+            // actions" — the volley is not forfeited), and the demotion needs
+            // a legal target in range + LOS after the capped move — a capped
+            // rush with NO shot forfeits nothing and stays RUSH.
             // Epoch-gated like the rule ports (acts::rule_on), so every record
             // below EPOCH_7_TABLE_RULES replays its candidate menu byte-exact.
+            let quick_shot = self.statics[state.roster.profile[unit]].quick_shot_active
+                || crate::mods::granted(state, unit, "Quick Shot");
             if rule_on(self.seams.rules_epoch, EPOCH_7_TABLE_RULES)
+                && !quick_shot
                 && rush_dominated(state, self.terrain, unit, o.pos)
             {
-                if out.iter().any(|c| c.kind == ADVANCE && c.dest == Some(o.pos)) {
+                let shot = self
+                    .seams
+                    .moved_shoot
+                    .then(|| best_shoot(state, self.statics, unit, sc, self.tuning))
+                    .flatten();
+                if shot.is_some()
+                    && out.iter().any(|c| c.kind == ADVANCE && c.dest == Some(o.pos))
+                {
                     trace_rule(
                         "rollout",
-                        "GF v3.5.1 p.7 rush demotion",
+                        RUSH_DEMOTION_RULE,
                         &format!("{key}: rush to objective dropped — advance to the same goal exists"),
                     );
-                } else {
+                } else if let Some(e) = shot {
                     let mut c = Candidate::new(key, ADVANCE);
                     c.dest = Some(o.pos);
-                    // The shot rides only when the resolve can answer a moved
-                    // volley (the W1 seam); otherwise the demotion is the move
-                    // alone and the HOLD leg keeps the firing option.
-                    let shot = self
-                        .seams
-                        .moved_shoot
-                        .then(|| best_shoot(state, self.statics, unit, sc, self.tuning))
-                        .flatten();
+                    c.shoot = Some(state.key(e).to_string());
                     trace_rule(
                         "rollout",
-                        "GF v3.5.1 p.7 rush demotion",
+                        RUSH_DEMOTION_RULE,
                         &format!(
-                            "{key}: rush demoted to advance — capped to {:.1}\" — {}",
+                            "{key}: rush demoted to advance — capped to {:.1}\" — shot available ({})",
                             state.bands[unit].advance,
-                            match &shot {
-                                Some(e) => format!("shot available ({})", state.key(*e)),
-                                None => "no shot".to_string(),
-                            }
+                            state.key(e)
                         ),
                     );
-                    if let Some(e) = shot {
-                        c.shoot = Some(state.key(e).to_string());
-                    }
+                    out.push(c);
+                } else {
+                    // The table's own shape (solo_controller.gd:2243-2244):
+                    // no target in range + LOS after the capped move, no
+                    // demotion — the RUSH candidate stays on the menu.
+                    let mut c = Candidate::new(key, RUSH);
+                    c.dest = Some(o.pos);
                     out.push(c);
                 }
             } else {
