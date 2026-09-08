@@ -738,6 +738,10 @@ pub struct UnitStatic {
     /// The Surprise Attack read (wave-5, epoch 7) — the first-activation
     /// burst (`surprise_attack_of`); the alias arm rides `infiltrate_min_…`.
     pub surprise_attack: Option<SurpriseAttackSpec>,
+    /// The Speed Feat read (epoch 7) — the once-per-game move bonus for the
+    /// move seam (sim.rs), the latch living in `State.feats_used`, never
+    /// in statics. `None` below `rules_epoch` 7. See `speed_feat_of`.
+    pub speed_feat: Option<SpeedFeatSpec>,
     /// The Reckless Piercing read (epoch 7) — the round AP stamp family
     /// (`reckless_piercing_of`); empty below `rules_epoch` 7.
     pub reckless_piercing: Vec<RecklessPiercingSpec>,
@@ -2879,6 +2883,47 @@ fn reanimation_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option
         .map(|e| ReanimationSpec { target: e.param_i("restore_target", 5) })
 }
 
+/// One carried "Speed Feat" — the once-per-game move bonus, the latch's
+/// first reader (FEAT PR 1, docs/plans/FEAT_DESIGN_2026-09-08.md §4): the
+/// table's move pass spends it at `rounds_left <= 2`
+/// (solo_controller.gd:1704-1726) and rides `+advance_mod`/+`rush_mod` on
+/// that one activation's bands. The READ is a runtime state read — the
+/// latch lives in `State.feats_used`, never in statics (unit.rs:794's
+/// dead-data rule) — so this stamp carries only the entry's own params for
+/// the move seam, and NEVER touches `move_rule_mods`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpeedFeatSpec {
+    pub name: String,
+    pub advance_mod: f64,
+    pub rush_mod: f64,
+}
+
+/// The Speed Feat stamp (wave-5 group (b)): read BY NAME off the unit's own
+/// rule list (`crossing_attack_of`'s shape), gated on the FROZEN
+/// `EPOCH_7_TABLE_RULES` — a record below 7 keeps `None`, the statics are
+/// byte-identical, and the recorder's `feats_used` key cannot exist yet.
+fn speed_feat_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<SpeedFeatSpec> {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return None;
+    }
+    let map = reg.rules_for(&p.game_system);
+    for raw in p.special_rules.iter().chain(p.item_grants.iter()) {
+        let n = base_rule_name(raw);
+        if n != "Speed Feat" {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &n) else {
+            continue;
+        };
+        return Some(SpeedFeatSpec {
+            name: n,
+            // The table's own fallbacks (solo_controller.gd:1716-1717).
+            advance_mod: e.param_f("advance_mod", 2.0),
+            rush_mod: e.param_f("rush_mod", 2.0),
+        });
+    }
+    None
+}
 /// One carried "Mind Control" entry with the fatigue payload — the table's
 /// pre-attack slot main.gd:1070 (`_solo_apply_mind_control` :16997-17037).
 /// Only the "Fatigue Debuff" literal is stamped BY NAME (the #489
@@ -4705,6 +4750,7 @@ impl UnitStatic {
             reanimation: reanimation_of(reg, p, rules_epoch),
             crossing_attack: crossing_attack_of(reg, p, rules_epoch),
             surprise_attack: surprise_attack_of(reg, p, rules_epoch),
+            speed_feat: speed_feat_of(reg, p, rules_epoch),
             reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
             grounded_speed: grounded_speed_of(reg, p, rules_epoch),

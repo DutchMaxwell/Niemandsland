@@ -97,6 +97,7 @@
             piercing_tag_used: vec![false; 4],
             piercing_tag_markers: vec![0; 4],
             storm_used: vec![Vec::new(); 4],
+            feats_used: vec![Vec::new(); 4],
         }
     }
 
@@ -1530,6 +1531,7 @@ mod buff_consumption_bridge;
 mod deathstrike;
 mod dest_side_arms;
 mod extended_buff_range;
+mod feat_speed;
 mod fatigue_debuff;
 mod fold_gate_fixture;
 mod growth_bonus_score;

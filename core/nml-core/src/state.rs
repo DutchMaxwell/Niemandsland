@@ -544,6 +544,15 @@ pub struct State {
     /// already fired this game (the recorder stamps them off the same flags,
     /// act_recorder.gd `_ledger_of`); never resets on a later round.
     pub storm_used: Vec<Vec<String>>,
+    /// Wave 5 group (b) — the once-per-game FEAT latch, the Storm Attack
+    /// shape: per unit, the DISPLAY names already declared this game
+    /// (`unit_properties["speed_feat_used_<snake>"]`, solo_controller.gd:1712;
+    /// the recorder stamps them off the same flags, act_recorder.gd
+    /// `_ledger_of`'s `feats_used` block). Never resets on a later round —
+    /// `uses_per_game` is once per GAME. The move seam's Speed Feat read
+    /// (sim.rs) is gated on this latch and on `EPOCH_7_TABLE_RULES`, so a
+    /// record below 7 never carries the key.
+    pub feats_used: Vec<Vec<String>>,
 }
 
 impl State {

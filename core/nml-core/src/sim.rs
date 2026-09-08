@@ -4101,6 +4101,37 @@ fn versatile_reach_charge_in(
 }
 
 
+/// Speed Feat (FEAT PR 1) — the band bonus THIS move earns: `+advance_mod` on
+/// an ADVANCE, `+rush_mod` on a RUSH/CHARGE (the table's `advance += adv_b;
+/// rush += rush_b; charge_reach += rush_b`, solo_controller.gd:1718-1720).
+/// Every gate is the table's own spend condition, in its own order:
+/// epoch 7 (the frozen gate), a stamped bearer, the latch still open
+/// (`feats_used` — the recorder's key and the fold keep it open across acts),
+/// and the endgame window (`rounds_left <= 2`, the table's `_rounds_left()
+/// > 2: continue`). 0.0 otherwise — nothing else in this port reads the feat.
+fn speed_feat_band_in(
+    statics: &[UnitStatic], state: &State, si: usize, kind: i64, rules_epoch: u32,
+) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return 0.0;
+    }
+    let Some(spec) = &statics[state.roster.profile[si]].speed_feat else {
+        return 0.0;
+    };
+    if state.feats_used[si].iter().any(|n| n == &spec.name) {
+        return 0.0;
+    }
+    let rounds_left = (state.rounds_total - state.round + 1).max(1);
+    if rounds_left > 2 {
+        return 0.0;
+    }
+    match kind {
+        ADVANCE => spec.advance_mod,
+        RUSH | CHARGE => spec.rush_mod,
+        _ => 0.0,
+    }
+}
+
 // ------------------------- S10: destination-side leftovers ------------------
 
 /// S10-a — `AiPlanner.RETREAT_GOAL_IN` ai_planner.gd:11. The retreat
@@ -4434,13 +4465,34 @@ fn resolve_with(
     // condition sees the activation-START positions (`state`), never the
     // landing (`next` after the move below).
     let gs_in = grounded_speed_bonus_in(statics, state, si, cover, seams.rules_epoch, kind);
+    // FEAT PR 1 — Speed Feat, the once-per-game latch's first reader: the
+    // table's move pass spends it at `rounds_left <= 2` (solo_controller.gd:
+    // 1704-1726) and rides +advance/+rush on this one activation's bands, so
+    // a recorded endgame push replays at its recorded dest (the replay's own
+    // `state.bands` never carry the feat — the import's band pass skips
+    // `uses_per_game` entries, list_to_profile.py:567). Unspent + endgame +
+    // epoch 7 grants the bonus and stamps the latch; a later act sees the
+    // folded name and never grants again. Below `EPOCH_7_TABLE_RULES` the
+    // read is inert — an older record keeps every replay byte-identical.
+    let feat_in = speed_feat_band_in(statics, &next, si, kind, seams.rules_epoch);
+    if feat_in != 0.0 {
+        next.feats_used[si].push(
+            statics[pi_s]
+                .speed_feat
+                .as_ref()
+                .expect("granted ⇒ stamped")
+                .name
+                .clone(),
+        );
+    }
     let band_in = match kind {
         ADVANCE => next.bands[si].advance,
         RUSH | CHARGE => next.bands[si].rush,
         _ => 0.0,
     } + bounding_in
         + vr_in
-        + gs_in;
+        + gs_in
+        + feat_in;
     // NML-1152 B14 step 1 — rules-must-log: the live read names itself the
     // one time it changes the band (Bounding's line above is the shape).
     if gs_in != 0.0 {
@@ -4459,6 +4511,15 @@ fn resolve_with(
             shot.log.push(format!(
                 "Bounding: {} — +{bounding_in:.0}\" every move band this activation",
                 statics[pi_s].name
+            ));
+        }
+    }
+    if feat_in != 0.0 {
+        if let Some((_, shot)) = dice.as_mut() {
+            shot.log.push(format!(
+                "Speed Feat: {} — +{feat_in:.0}\" {} band this activation (once per game)",
+                statics[pi_s].name,
+                if kind == ADVANCE { "Advance" } else { "Rush" }
             ));
         }
     }
