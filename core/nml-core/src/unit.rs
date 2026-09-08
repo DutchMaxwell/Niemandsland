@@ -910,7 +910,9 @@ pub struct UnitStatic {
     /// (`within_in == 0.0`) below `EPOCH_7_TABLE_RULES` and for every
     /// non-carrier.
     pub reinforcement: Reinforcement,
-    /// RED stub — the field exists so the tests compile; it always reads 0.0.
+    /// Wave 4 — the S5 summon's two read params (`spawn_of`). Default
+    /// (`place_in == 0.0`) below `EPOCH_7_TABLE_RULES` and for every
+    /// non-carrier.
     pub spawn: Spawn,
     /// "Re-Deployment" (the deployment-phase redeploy: gf 13 + aof 2 carrier
     /// factions): the entry's own `max_units` param, stamped per carrier.
@@ -3198,11 +3200,43 @@ fn reinforcement_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Rein
     }
 }
 
-/// RED stub — the read is absent; every carrier reads as no carrier.
+/// `Spawn`'s reach when the registry entry carries no `place_in`. 6" in all
+/// nine shipped entries (gf 4 factions, aof 5).
+pub const SPAWN_PLACE_IN: f64 = 6.0;
+
+/// `UnitStatic.spawn` — the S5 summon's two read params, the same pair the
+/// table takes off the entry (`_solo_try_spawn`, main.gd:17399 `place_in`,
+/// `:17394` `once_per_game`). Default (`place_in == 0.0`) below
+/// `EPOCH_7_TABLE_RULES` and for every non-carrier.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Spawn {
+    /// `params.place_in` — the fresh copy lands fully within this many inches
+    /// of where the carrier stood. `0.0` means "not a carrier".
     pub place_in: f64,
+    /// `params.once_per_game` — the summon is offered ONCE. Read as the
+    /// reason a spent carrier never summons again; a hypothetical
+    /// `once_per_game: false` entry (none ships) is declined outright rather
+    /// than half-modelled, the same call Reinforcement's `once` makes.
     pub once_per_game: bool,
+}
+
+/// `UnitStatic.spawn` — read BY NAME behind the FROZEN
+/// `EPOCH_7_TABLE_RULES`, mirroring `reinforcement_of`. The table matches the
+/// name per member and model (`RulesRegistry.has_primitive`, main.gd:17380);
+/// the core's statics are per profile, so one read per profile is the same
+/// granularity `reinforcement_of` already uses.
+fn spawn_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Spawn {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) || !unit_rule_active(reg, p, "Spawn") {
+        return Spawn::default();
+    }
+    let map = reg.rules_for(&p.game_system);
+    match map.lookup(&p.faction_folder, "Spawn") {
+        Some(e) => Spawn {
+            place_in: e.param_f("place_in", SPAWN_PLACE_IN),
+            once_per_game: e.param_b_or("once_per_game", true),
+        },
+        None => Spawn { place_in: SPAWN_PLACE_IN, once_per_game: true },
+    }
 }
 
 /// The Ambush family's per-profile read (`UnitStatic.ambush_family`): each
@@ -4658,7 +4692,7 @@ impl UnitStatic {
             },
             ambush_family: ambush_family_of(reg, p, rules_epoch),
             reinforcement: reinforcement_of(reg, p, rules_epoch),
-            spawn: Spawn::default(),
+            spawn: spawn_of(reg, p, rules_epoch),
             re_deployment_max_units: re_deployment_max_units_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             storm: storm_of(reg, p, rules_epoch),

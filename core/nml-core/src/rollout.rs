@@ -418,6 +418,12 @@ impl<'a> Rollout<'a> {
                         self.policy.seams,
                         &mut cur,
                     );
+                    spawn_round_start(
+                        self.statics(),
+                        self.policy.terrain,
+                        self.policy.seams,
+                        &mut cur,
+                    );
                     continue;
                 }
             }
@@ -786,8 +792,116 @@ fn reinforcement_withdrawals(statics: &[UnitStatic], st: &mut State) {
     }
 }
 
-/// RED stub — the summon beat does not exist yet; nothing calls it.
-pub fn spawn_round_start(_statics: &[UnitStatic], _terrain: &Terrain, _seams: Seams, _st: &mut State) {}
+/// The summon half of the S5 seam — `Spawn` (gf 4 factions, aof 5, occ 9).
+/// The table's beat (`_solo_try_spawn`, main.gd:17375-17401): a standing
+/// carrier places a FRESH runtime unit, fully within the entry's `place_in`
+/// (6") of the anchor model, once per game per entry. The core rides the same
+/// withdraw-and-recreate machinery part 3 drives for Reinforcement:
+/// `withdraw_as_destroyed` parks the fresh full-strength copy, `arrive_one`
+/// finds the spot, `arrive_unit` puts it down, and `reinforcement_used` is
+/// the seam's shared once-per-game latch (a unit never ships both names).
+///
+/// THREE DECLARED SIMPLIFICATIONS, never silent:
+///   * TIMING. The table summons during the carrier's activation; the core's
+///     beat is the round boundary, the only non-activation beat there is
+///     (the part-3 precedent). One boundary late.
+///   * THE COPY'S PROFILE. The table builds the unit NAMED in the raw rule
+///     string with a profile fetched by name; the core's roster and header
+///     profiles are closed at load, so the copy is the carrier's OWN profile.
+///   * THE ZONE. The table's law is a CIRCLE of `place_in` around the anchor
+///     (`PlacementGhost.circle_zone`, main.gd:17435); `ArrivalZone` has no
+///     circle, so the beat scans the `place_in` SQUARE around the anchor,
+///     clamped to the table, with the anchor itself as the objective.
+pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams, st: &mut State) {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+        return;
+    }
+    let Some(table) = table_rect(terrain) else {
+        return;
+    };
+    for i in 0..st.units() {
+        if st.dormant[i] || st.alive[i] <= 0 || st.reinforcement_used[i] {
+            continue;
+        }
+        // The part-3 refusal, same reason: the core has no detach transition,
+        // so a carrier with a joined hero (or one attached to a host) declines.
+        if !st.attached[i].is_empty() || st.attached_to[i].is_some() {
+            continue;
+        }
+        let us = &statics[st.roster.profile[i]];
+        if us.spawn.place_in <= 0.0 || !us.spawn.once_per_game {
+            continue; // no entry reach, or a once-per-game the latch cannot model
+        }
+        let n_alive = st.positions[i].len();
+        if n_alive == 0 {
+            continue;
+        }
+        // The anchor: where the standing carrier's models centre. The table
+        // anchors on the ONE model that carries the raw entry (main.gd:17413);
+        // the unit centre is the same anchor at the port's granularity.
+        let (ax, az) = (
+            st.positions[i].iter().map(|p| p[0]).sum::<f64>() / n_alive as f64,
+            st.positions[i].iter().map(|p| p[2]).sum::<f64>() / n_alive as f64,
+        );
+        // The `place_in` SQUARE around the anchor, clamped to the table so a
+        // carrier standing near an edge never lands its copy off-table.
+        let band = us.spawn.place_in * crate::IN2M;
+        let (x0, z0) = ((ax - band).max(table.pos.0), (az - band).max(table.pos.1));
+        let (x1, z1) = (
+            (ax + band).min(table.pos.0 + table.size.0),
+            (az + band).min(table.pos.1 + table.size.1),
+        );
+        if x1 <= x0 || z1 <= z0 {
+            continue; // the clamp squeezed the square away — no legal zone at all
+        }
+        let n = st.profiles.list[st.roster.profile[i]].model_count.max(1) as usize;
+        let p = &st.profiles.list[st.roster.profile[i]];
+        let (base_r, radius) =
+            (p.base_radius, deployment::deploy_footprint_radius(n, p.base_radius));
+        let footprint = deployment::deploy_footprint_offsets(n, p.base_radius, false);
+        let flying = has_special_rule(&p.special_rules, "Flying")
+            || has_special_rule(&p.special_rules, "Strider");
+        // Occupancy BEFORE the withdraw: the standing carrier's own bases are
+        // blockers too (the table's `_reinforcement_blockers` walks every
+        // standing unit), so the copy cannot land on them — and
+        // `withdraw_as_destroyed` clears the positions it would read.
+        let mut occupied = live_bases(st);
+        let spot = deployment::arrive_one(
+            &ArrivalZone::Rect(Rect::new(x0, z0, x1 - x0, z1 - z0)),
+            &[(ax, az)],
+            &mut occupied,
+            &[],
+            &[],
+            0.0,
+            terrain,
+            radius,
+            &footprint,
+            base_r,
+            flying,
+        );
+        if !spot.0.is_finite() {
+            continue; // the square is full — a summon is never half-made
+        }
+        let round = st.round;
+        deployment::withdraw_as_destroyed(st, i, round);
+        st.reinforcement_used[i] = true;
+        deployment::arrive_unit(st, i, spot, round);
+        // Rules-must-log: one stderr line when NML_TRACE_RULES=1, the same
+        // shape `battleborn_recovery_roll` uses at this same beat.
+        crate::sim::trace_rule(
+            "round-start",
+            "Spawn",
+            &format!(
+                "{}: a fresh copy of {} models stands within {:.1}\" of ({:.2},{:.2})",
+                st.key(i),
+                n,
+                us.spawn.place_in,
+                ax,
+                az
+            ),
+        );
+    }
+}
 
 pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
     cur.round += 1;
