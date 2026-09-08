@@ -216,27 +216,15 @@ pub(crate) struct PlainLedger {
     /// stands (act_recorder.gd `_ledger_of`). Empty on every older corpus.
     #[serde(default)]
     storm_used: Vec<String>,
-    /// Wave 5 group (b) — the once-per-game FEAT latch (the Storm Attack
-    /// shape): the DISPLAY names whose `speed_feat_used_<snake>` flag stands
-    /// (solo_controller.gd:1712), folded into `State.feats_used` so a later
-    /// act replays with the latch CLOSED. Empty on every older corpus.
-    #[serde(default)]
-    feats_used: Vec<String>,
-    /// Wave 5 — Teleport / Ethereal (design #816, PR 1's recorder): the
-    /// before-attack reposition block `{"used": true, "to": <centroid>}` the
-    /// table's `_ledger_of` writes off `unit_properties["teleport_used_this_
-    /// activation"]` / `["teleport_to"]`. The `to` is the Vector2 the table
-    /// keeps — JSON.stringify renders a Godot Vector2 as its `"(x, y)"`
-    /// string (act_recorder.gd:161-163's own note), so the fold's reader
-    /// accepts BOTH that string and a plain `[x, y]` pair. Absent from every
-    /// corpus recorded before this key (all of them, below the epoch) — an
-    /// old act replays with the latch unset, exactly as it did.
+    /// Wave 5 (PR 1's recorder): the `{"used", "to"}` reposition block; `to`
+    /// arrives as the `"(x, y)"` Vector2 string JSON.stringify writes. Absent
+    /// on every older corpus — replays with the latch unset, as it did.
     #[serde(default)]
     teleport: Option<PlainTeleport>,
 }
 
-/// The record's `teleport` block — `{"used": bool, "to": [x, z]}` with the
-/// `to` arriving either as the pair or as the table's `"(x, y)"` string.
+/// The `teleport` block; `to` is either a `[x, y]` pair or the table's
+/// `"(x, y)"` Vector2 string.
 #[derive(Deserialize)]
 pub(crate) struct PlainTeleport {
     #[serde(default)]
@@ -244,37 +232,11 @@ pub(crate) struct PlainTeleport {
     to: Vec2Wire,
 }
 
-/// `f64` or `"(x, y)"` — the two shapes `to` takes on the wire.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
 enum Vec2Wire {
     Pair([f64; 2]),
-}
-
-impl<'de> Deserialize<'de> for Vec2Wire {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        struct V;
-        impl<'de> serde::de::Visitor<'de> for V {
-            type Value = Vec2Wire;
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str("[x, y] or a \"(x, y)\" vector string")
-            }
-            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
-                let x: f64 = a.next_element()?.ok_or_else(|| serde::de::Error::length_mismatch(2))?;
-                let y: f64 = a.next_element()?.ok_or_else(|| serde::de::Error::length_mismatch(2))?;
-                Ok(Vec2Wire::Pair([x, y]))
-            }
-            fn visit_str<E: serde::de::Error>(self, s: &str) -> Result<Self::Value, E> {
-                let inner = s.trim().trim_start_matches('(').trim_end_matches(')');
-                let mut it = inner.split(',');
-                let x = it.next().unwrap_or("").trim().parse::<f64>()
-                    .map_err(|_| serde::de::Error::custom("bad vector x"))?;
-                let y = it.next().unwrap_or("").trim().parse::<f64>()
-                    .map_err(|_| serde::de::Error::custom("bad vector y"))?;
-                Ok(Vec2Wire::Pair([x, y]))
-            }
-        }
-        d.deserialize_any(V)
-    }
+    Str(String),
 }
 
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
@@ -336,11 +298,9 @@ pub struct Action {
     /// count and face stays port-computed. Absent = the act's one target.
     #[serde(default)]
     pub split: Option<Vec<SplitShot>>,
-    /// Wave 5 — Teleport / Ethereal (design #816, PR 2): the record's landing
-    /// centroid, joined onto the act by the replay driver from the NEXT act's
-    /// `state_before` ledger (`{"teleport": {"to": ...}}` — the act line's
-    /// own state predates the beat, act_recorder.gd begin/finish). `None` on
-    /// a live rollout: the resolve's own probe policy decides then.
+    /// Wave 5 — the record's landing centroid, joined by the replay driver
+    /// off the NEXT act's ledger (the act's own state predates the beat).
+    /// `None` on a live rollout — the resolve's probe policy decides.
     #[serde(default)]
     pub teleport: Option<[f64; 2]>,
     /// NML-1152 B14 step 1 (Bounding) — the table's own controller-seeded

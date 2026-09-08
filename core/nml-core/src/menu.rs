@@ -791,15 +791,10 @@ pub fn candidates_tuned(
             out.push(c);
         }
     }
-    // Wave 5 — Teleport / Ethereal (design #816 PR 2): ONE Reposition
-    // candidate per bearer, appended LAST (the W1 tail-growth precedent: an
-    // OFF menu is byte-identical, an ON menu only grows at the tail). The
-    // stamp is the epoch gate — a profile below `EPOCH_7_TABLE_RULES` carries
-    // no `teleport`, so every pre-wave menu is untouched. The LATCH is NOT
-    // read here: the table's flag survives into the NEXT activation's state,
-    // and "once per activation" is enforced by the one beat per resolve.
-    // Cap/band: the ADVANCE-band reading (a standalone Reposition act has no
-    // Rush context; Ethereal's flat 6" is keyed by NAME in the cap static).
+    // Wave 5 (design #816 PR 2): ONE Reposition candidate per bearer,
+    // appended LAST (the W1 tail-growth precedent). The stamp is the epoch
+    // gate; the latch is not read here — one beat per resolve enforces
+    // once-per-activation. Band: the ADVANCE reading (no Rush context).
     if let Some(spec) = statics[state.roster.profile[unit]].teleport.as_ref() {
         if let Some(to) = teleport_probe(state, statics, unit,
             crate::unit::teleport_cap_in(&spec.name, false), Some(terrain))

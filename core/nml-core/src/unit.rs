@@ -760,8 +760,7 @@ pub struct UnitStatic {
     /// The Extended Buff Range carrier stamp (epoch 7) — `ebr_of`; None below
     /// `rules_epoch` 7. Both relay ends answer through this flag.
     pub ebr: Option<EbrStamp>,
-    /// The Teleport / Ethereal read (epoch 7) — the discretionary before-
-    /// attack reposition (`teleport_of`); None below `rules_epoch` 7.
+    /// The Teleport/Ethereal read (epoch 7) — `teleport_of`; None below 7.
     pub teleport: Option<TeleportSpec>,
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
@@ -2765,23 +2764,18 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
     None
 }
 
-/// The Teleport / Ethereal read (design #816, PR 2 — core): the discretionary
-/// before-attack reposition. Carried by NAME — "Teleport" (the "Teleport Aura"
-/// grant has already folded the base in via `apply_aura_channel`), "Ethereal",
-/// or any DATA alias whose registry entry's primitive is "Teleport" — gated on
-/// the FROZEN `EPOCH_7_TABLE_RULES`; a record below 7 keeps `None` and replays
-/// byte-exact. The cap is keyed by the NAME (design §3): Teleport is 3" after
-/// Advance/Charge and 6" after Rush; every OTHER name of the primitive is the
-/// flat 6" of its text — Ethereal's 0.0 bonus params must never read as "no
-/// reposition" (`SoloController.teleport_cap_in`, PR 1's static).
+/// The Teleport / Ethereal read (design #816 PR 2): carried by NAME ("Teleport"
+/// — the aura grant folded it in already; "Ethereal"; or a Teleport-primitive
+/// DATA alias), gated on the FROZEN `EPOCH_7_TABLE_RULES`. The cap is keyed by
+/// NAME: Teleport 3" Advance/Charge, 6" Rush; every other name flat 6" —
+/// Ethereal's 0.0 bonus params are never "no reposition".
 #[derive(Debug, Clone, PartialEq)]
 pub struct TeleportSpec {
     /// The carried rule NAME — the cap key and the log line's subject.
     pub name: String,
 }
 
-/// The table's own cap static (solo_controller.gd:9986): 6" for any name but
-/// Teleport, or on a Rush; Teleport on Advance/Charge is 3".
+/// The table's cap static (`SoloController.teleport_cap_in`, PR 1).
 pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
     if rule != "Teleport" || rush { 6.0 } else { 3.0 }
 }
