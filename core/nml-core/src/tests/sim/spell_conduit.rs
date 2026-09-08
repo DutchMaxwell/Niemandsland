@@ -78,6 +78,18 @@ use super::*;
     ) -> (State, Vec<UnitStatic>) {
         let mut st = four_unit_line();
         st.player = vec![0, 0, 1, 0];
+        // `statics` is indexed by PROFILE slot (the caster's own fixture
+        // precedent, `caster_and_battery`): four slots, one per unit.
+        st.profiles = Rc::new(Profiles {
+            list: (0..4).map(|_| st.profiles.list[0].clone()).collect(),
+            index: Default::default(),
+        });
+        let r = &*st.roster;
+        st.roster = Rc::new(Roster {
+            keys: r.keys.clone(),
+            index: r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect(),
+            profile: vec![0, 1, 2, 3],
+        });
         st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
         st.attached_to = Rc::new(vec![None, None, None, None]);
         st.positions[0] = vec![[0.0, 0.0, 0.0]];
