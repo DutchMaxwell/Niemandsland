@@ -469,6 +469,12 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 	var vg := int(u.unit_properties.get("vengeance_markers", 0))
 	if vg > 0:
 		ledger["vengeance_markers"] = vg
+	# Wave 4 — Teleport / Ethereal (design #816, PR 1): the discretionary before-attack
+	# reposition. A bare flag would leave the core's replay without the landing — so the
+	# block carries BOTH: the latch and the landing centroid the handler wrote. PR 2's
+	# replay applies the placement and re-arms the latch from these two keys.
+	if bool(u.unit_properties.get("teleport_used_this_activation", false)):
+		ledger["teleport"] = {"used": true, "to": u.unit_properties.get("teleport_to", Vector2.ZERO)}
 	return ledger
 
 

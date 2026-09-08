@@ -1072,6 +1072,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	await _solo_apply_reckless_piercing(unit)
 	await _solo_apply_storm_attack(unit)
 	await _solo_apply_surprise_attack(unit)
+	await _solo_apply_teleport(unit, report)   # design #816 PR 1: the before-attack reposition beat
 	if unit.is_destroyed():
 		return unit
 	# NML-002 Strafing (official text: "Once per activation, when this model moves through enemy
@@ -17440,6 +17441,49 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 			_solo_defense_vs(tgt), ap, profile, not _solo_is_ai_unit(tgt), false, true, false)
 		await _solo_land_wounds(tgt, w, 0)
 		await _solo_shooting_morale(tgt, alive_before, _solo_owner_label(tgt), wounds_before)
+
+
+## Teleport / Ethereal (design #816, PR 1 — table side): the BEFORE-ATTACK reposition beat, run
+## after the move/charge resolves and before shooting/melee, in the same once-per-activation
+## before-attacking slot the Storm Attack beat uses. AI side only (the human keeps the manual
+## drag). Clears the activation latch (reset semantics — it refills every activation), asks the
+## controller's EV-margin policy, and on a take: writes the record the act recorder folds
+## (used-flag + landing centroid), glides the RIGID formation to the new centroid (house rule:
+## nothing teleports-invisibly), and logs ONE line naming rule, band cap and landing centroid.
+func _solo_apply_teleport(unit: GameUnit, report: Dictionary) -> void:
+	if unit == null or solo_controller == null or not _solo_is_ai_unit(unit) or unit.is_destroyed():
+		return
+	unit.unit_properties.erase("teleport_used_this_activation")
+	var rush: bool = int(report.get("action", 0)) == AiDecision.Action.RUSH
+	var dec: Dictionary = solo_controller.teleport_decision(unit, rush)
+	var rule := str(dec.get("rule", ""))
+	if not bool(dec.get("used", false)):
+		if not rule.is_empty() and battle_log != null:
+			_log_rule_event(BattleLog.Category.GENERAL,
+				"%s: %s keeps its position — %s" % [unit.get_name(), rule, str(dec.get("why", ""))], true)
+		return
+	var to: Vector2 = dec.get("to", Vector2.ZERO)
+	var cap_in := SoloController.teleport_cap_in(rule, rush)
+	unit.unit_properties["teleport_used_this_activation"] = true
+	unit.unit_properties["teleport_to"] = to
+	var models: Array = solo_controller._moving_models(unit)
+	var centre: Vector3 = solo_controller.unit_centre(unit)
+	var delta: Vector3 = Vector3(to.x, 0.0, to.y) - Vector3(centre.x, 0.0, centre.z)
+	var paths: Array = []
+	for m in models:
+		var mi := m as ModelInstance
+		if mi == null or mi.node == null or not is_instance_valid(mi.node):
+			continue
+		var start: Vector3 = mi.node.global_position
+		mi.node.global_position = start + delta
+		paths.append({"model": mi, "path": [start, start + delta],
+			"radius_m": SoloController.model_base_radius_m(mi)})
+	solo_controller._broadcast_positions(unit)
+	await _solo_animate_move(paths, false)   # the glide IS the teleport's visible house-rule form
+	if battle_log != null:
+		_log_rule_event(BattleLog.Category.GENERAL,
+			"%s: %s repositions within %d\" — landing centroid (%.2f, %.2f) m" % [
+				unit.get_name(), rule, int(cap_in), to.x, to.y], true)
 
 
 func _solo_try_spawn(unit: GameUnit) -> void:
