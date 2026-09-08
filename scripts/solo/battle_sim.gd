@@ -1219,21 +1219,36 @@ static func _cast_phase(next: Dictionary, actor_key: String,
 	var spells := SpellsRegistry.spells_for_unit(u)
 	if spells.is_empty():
 		return {}
+	# Spell Conduit (design #824 §4 PR 1): the engine's origin walk
+	# (solo_controller.gd:4405-4414) — [caster] + eligible conduits — built ONCE
+	# per cast phase; range and LOS below are evaluated at the CHOSEN origin,
+	# the same walk spell_candidates runs on the real engine side.
+	var origins := _cast_origins(next, su)
 	var faces: Array = [1, 2, 3] if rng == null else [rng.randi_range(1, 3)]
 	var weight := 1.0 / float(faces.size())
-	var p_success := AiSpell.cast_success_chance(0, 0)
 	var event := {}
 	for d3 in faces:
-		var pick := _pick_cast(next, su, actor_key, spells, tokens, int(d3), u.get_caster_value())
+		var pick := _pick_cast(next, su, actor_key, spells, tokens, int(d3), u.get_caster_value(), origins)
 		if pick.is_empty():
 			continue
 		var entry: Dictionary = pick["entry"]
+		var origin: Dictionary = pick["origin"]
+		# The +1 rides the origin: the rule's casting_mod folds into the cast
+		# chance only when the cast is made THROUGH the conduit (design #824 §3).
+		var conduit_mod := int(origin.get("mod", 0))
+		var p_success := AiSpell.cast_success_chance(0, 0) if conduit_mod == 0 else \
+			AiSpell.cast_success_chance(0, 0, AiSpell.CAST_BASE_TARGET - conduit_mod)
 		_apply_cast_effect(next, str(pick["target"]), entry, weight * p_success, rng)
 		if event.is_empty():   # the FIRST face pays and names the attempt (see above)
 			event = {"spell": str(entry.get("name", "?")),
 				"kind": str((entry.get("effect", {}) as Dictionary).get("kind", "")),
 				"cost": int(entry.get("threshold", 0)), "target": str(pick["target"]),
 				"p_success": p_success}
+			# The recorder: the chosen origin rides the cast act (PR 2 replays it).
+			# Absent key = the caster's own position (every legacy byte unchanged).
+			if not bool(origin.get("is_caster", true)):
+				event["origin"] = {"unit": str(((origin["su"] as Dictionary)["unit"] as GameUnit).unit_id),
+					"position": _centre_of(origin["su"])}
 	if event.is_empty():
 		return {}
 	su["casts"] = maxi(tokens - int(event["cost"]), 0)
@@ -1246,7 +1261,7 @@ static func _cast_phase(next: Dictionary, actor_key: String,
 ## a buff takes the caster itself, damage/debuff need a living enemy in range
 ## with line of sight (the same sees()/_los_clear seam the shoot branch uses).
 static func _pick_cast(state: Dictionary, su: Dictionary, actor_key: String, spells: Array,
-		tokens: int, d3: int, caster_x: int) -> Dictionary:
+		tokens: int, d3: int, caster_x: int, origins: Array) -> Dictionary:
 	for idx in AiSpell.official_pick_order(spells.size(), d3, caster_x):
 		var entry := spells[int(idx)] as Dictionary
 		if str(entry.get("status", "unmodeled")) == "unmodeled":
@@ -1255,39 +1270,78 @@ static func _pick_cast(state: Dictionary, su: Dictionary, actor_key: String, spe
 			continue
 		var kind := str((entry.get("effect", {}) as Dictionary).get("kind", ""))
 		if kind == "buff":
-			return {"entry": entry, "target": actor_key}
+			return {"entry": entry, "target": actor_key, "origin": origins[0]}
 		if kind != "damage" and kind != "debuff":
 			continue   # an effect kind the sim has no arithmetic for is not castable here
-		var target_key := _best_spell_target(state, su, entry)
-		if target_key != "":
-			return {"entry": entry, "target": target_key}
+		var found := _best_spell_target(state, su, entry, origins)
+		if str(found["target"]) != "":
+			return {"entry": entry, "target": str(found["target"]), "origin": found["origin"]}
 	return {}
 
 
 ## The enemy unit a damage/debuff spell should land on: living, on the other
 ## side, within range_in of the caster with line of sight, best damage EV first
 ## and nearest on a tie (a debuff prices at 0, so it simply takes the nearest).
-static func _best_spell_target(state: Dictionary, su: Dictionary, entry: Dictionary) -> String:
+static func _best_spell_target(state: Dictionary, su: Dictionary, entry: Dictionary,
+		origins: Array) -> Dictionary:
 	var range_in := float(entry.get("range_in", 0))
 	var player := int(su.get("player", 0))
 	var best_key := ""
 	var best_ev := -1.0
 	var best_d := INF
+	var best_origin: Dictionary = origins[0]
 	for k in state["units"]:
 		var tu: Dictionary = state["units"][k]
 		if int(tu.get("player", 0)) == player or int(tu.get("alive", 0)) <= 0:
 			continue
-		if not sees(su, str(k)) or not _los_clear(state, su, tu):
+		# The official walk (spell_candidates, solo_controller.gd:4424-4432): a
+		# target is legal when the FIRST origin in walk order reaches it — and
+		# that first reachable origin is the cast's origin for this target.
+		for o in origins:
+			var osu: Dictionary = (o as Dictionary)["su"]
+			if not sees(osu, str(k)) or not _los_clear(state, osu, tu):
+				continue
+			var d := dist_in(osu["positions"], tu["positions"])
+			if d > range_in + CONTROL_EPS:
+				continue
+			var ev := _spell_damage_ev_of(entry, _ctx_of(tu))
+			if ev > best_ev + CONTROL_EPS or (absf(ev - best_ev) <= CONTROL_EPS and d < best_d):
+				best_ev = ev
+				best_d = d
+				best_key = str(k)
+				best_origin = o as Dictionary
+			break
+	return {"target": best_key, "origin": best_origin}
+
+
+## The Spell Conduit origin walk (design #824 §4 PR 1) — the same walk the
+## engine's spell_candidates runs (solo_controller.gd:4405-4414): [caster] plus
+## every friendly conduit bearer within the rule's OWN range_in of the caster,
+## gated on the rule's requires_not_shaken param (the gate binds the CONDUIT).
+## Distances on the sim's positions (dist_in, the sim's own range seam); the
+## name is read BY NAME through the registry (#782). With no conduit in range
+## the set is [caster] and every downstream path is byte-identical. Entries are
+## {su, mod, is_caster}: `mod` is the rule's casting_mod, folded into the cast
+## chance only when this origin is the chosen one.
+static func _cast_origins(state: Dictionary, su: Dictionary) -> Array:
+	var origins: Array = [{"su": su, "mod": 0, "is_caster": true}]
+	var player := int(su.get("player", 0))
+	for k in state["units"]:
+		var cu: Dictionary = state["units"][k]
+		if cu == su or int(cu.get("player", 0)) != player or int(cu.get("alive", 0)) <= 0:
 			continue
-		var d := dist_in(su["positions"], tu["positions"])
-		if d > range_in + CONTROL_EPS:
+		var entries := RulesRegistry.unit_rules_of_primitive(cu.get("unit") as GameUnit,
+			"Spell Conduit")
+		if entries.is_empty():
 			continue
-		var ev := _spell_damage_ev_of(entry, _ctx_of(tu))
-		if ev > best_ev + CONTROL_EPS or (absf(ev - best_ev) <= CONTROL_EPS and d < best_d):
-			best_ev = ev
-			best_d = d
-			best_key = str(k)
-	return best_key
+		var sp: Dictionary = (entries[0] as Dictionary).get("params", {})
+		if bool(sp.get("requires_not_shaken", true)) and bool(cu.get("shaken", false)):
+			continue
+		if dist_in(su["positions"], cu["positions"]) \
+				> float(sp.get("range_in", 12.0)) + CONTROL_EPS:
+			continue
+		origins.append({"su": cu, "mod": int(sp.get("casting_mod", 1)), "is_caster": false})
+	return origins
 
 
 ## Land one spell's effect. `scale` is the D3 weight x the 4+ cast chance:

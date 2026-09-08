@@ -226,16 +226,19 @@ func test_seam_off_the_legacy_shoot_rider_still_casts() -> void:
 
 ## ===== Spell Conduit PR 1 (design #824 §4, table-first) =====
 
-## The conduit fixture: the caster's ONLY legal enemy target sits beyond the
-## spell's 12" reach from the CASTER but inside it from a friendly conduit —
-## caster at 0, conduit at `conduit_gap` (default 10"), squad at 18".
-## alien_hives on every unit: the committed gf map resolves "Spell Conduit"
-## there, and Caster(1) + D3=1 starts the cycle at index 1 ("Overwhelming
-## Strike", damage, threshold 1, 12") — the same pick as (a).
+## The conduit fixture: the caster's ONLY legal enemy target sits beyond every
+## spell reach from the CASTER but inside the 12" damage spell from a friendly
+## conduit — caster at 0, conduit at `conduit_gap` (default 10"), squad at 20"
+## (beyond even the 18" debuff, and beyond the +CONTROL_EPS float guard). The
+## CASTER is robot_legions — with 1 token the affordable spells are the damage
+## "Piercing Bots" (12", cycle index 1, the D3=1 + Caster(1) start) and the 18"
+## debuff; its buffs cost 2 and 3, so an unreachable damage spell HOLDS instead
+## of falling through to a legal buff (the test-(b) discriminator). The CONDUIT
+## carries alien_hives: the committed gf map resolves "Spell Conduit" there.
 func _conduit_state(conduit_gap: float = 10.0, with_second: bool = false,
 		conduit_shaken: bool = false) -> Dictionary:
 	var units: Array = [
-		_unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "alien_hives", 1),
+		_unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "robot_legions", 1),
 	]
 	var banner := _unit(1, "Banner", [Vector3(conduit_gap * IN2M, 0, 0)],
 		["Spell Conduit"], "alien_hives")
@@ -246,13 +249,13 @@ func _conduit_state(conduit_gap: float = 10.0, with_second: bool = false,
 			["Spell Conduit"], "alien_hives"))
 	var foes: Array = []
 	for i in range(4):
-		foes.append(Vector3((18.0 + float(i)) * IN2M, 0, 0))
+		foes.append(Vector3((20.0 + float(i)) * IN2M, 0, 0))
 	units.append(_unit(2, "Squad", foes))
 	return _capture(units)
 
 
 ## (i) THE RED CASE: a target reachable ONLY through the conduit. The caster is
-## 18" from the squad — outside the 12" spell — so today the sim holds; the
+## 20" from the squad — outside every spell reach — so today the sim holds; the
 ## engine's spell_candidates (solo_controller.gd:4405-4434) already accepts the
 ## conduit origin, and the SIM and the engine disagreed (the note's
 ## divergence). The cast must be legal FROM THE CONDUIT, the event must record

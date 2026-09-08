@@ -4410,7 +4410,12 @@ func spell_candidates(unit: GameUnit, entry: Dictionary, own_slot: int, other_sl
 		if not (co.has_special_rule("Spell Conduit") \
 				or not RulesRegistry.unit_rules_of_primitive(co, "Spell Conduit").is_empty()):
 			continue
-		if nearest_melee_gap_in(unit, co) <= SPELL_ACCUMULATOR_REACH_IN:
+		# Design #824 §4 PR 1: the reach comes from the rule's OWN range_in param,
+		# not the shared hardcoded battery constant (same number today, a
+		# divergence the moment the registry value moves; fallback keeps the
+		# pre-map byte-identical behaviour).
+		if nearest_melee_gap_in(unit, co) <= float(RulesRegistry.unit_param(co,
+				"Spell Conduit", "range_in", SPELL_ACCUMULATOR_REACH_IN)):
 			origins.append(co)
 	var out: Array = []
 	for c in army_manager.get_game_units_for_player(pool_slot):
