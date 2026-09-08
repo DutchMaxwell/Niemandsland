@@ -55,11 +55,11 @@ use super::*;
     /// latch, and names rule, band cap and landing centroid (rules-must-log).
     #[test]
     fn replay_of_a_recorded_teleport_lands_on_the_recorded_centroid() {
-        let (st, statics) = tp_line(7);
+        let (st, statics) = tp_line(8);
         let from = geom::centre(&st.positions[0]);
         // 2" along +x — inside the 3" Advance cap. Metres on the wire.
         let to: [f64; 2] = [((from[0] + 2.0 * IN2M as f32)) as f64, from[2] as f64];
-        let (next, shot) = run_tp(&st, &statics, 7, Some(to));
+        let (next, shot) = run_tp(&st, &statics, 8, Some(to));
         let centre = geom::centre(&next.positions[0]);
         assert!(
             (centre[0] as f64 - to[0]).abs() < 1e-6 && (centre[2] as f64 - to[1]).abs() < 1e-6,
@@ -90,7 +90,7 @@ use super::*;
     /// pull toward the objective clamps to the 3" cap; Ethereal goes 6" flat.
     #[test]
     fn the_live_reposition_never_exceeds_the_cap() {
-        let (mut st, mut statics) = tp_line(7);
+        let (mut st, mut statics) = tp_line(8);
         // An objective 6" ahead of the bearer: the objective probe wants 6",
         // the 3" Advance cap clamps the landing.
         st.objectives = vec![crate::state::Objective {
@@ -105,7 +105,7 @@ use super::*;
         let mut rng = crate::rng::GodotRng::new(0);
         let next = resolve_stochastic_on_board(
             &statics, &st, &act, &crate::terrain::Terrain::default(),
-            Seams { rules_epoch: 7, ..Seams::default() }, &mut rng,
+            Seams { rules_epoch: 8, ..Seams::default() }, &mut rng,
         )
         .unwrap();
         let centre = geom::centre(&next.positions[0]);
@@ -126,10 +126,10 @@ use super::*;
     /// until the entry clear — asserted on the post-act latch.
     #[test]
     fn the_latch_is_once_per_activation_and_the_fold_carries_it() {
-        let (st, statics) = tp_line(7);
+        let (st, statics) = tp_line(8);
         let from = geom::centre(&st.positions[0]);
         let to: [f64; 2] = [((from[0] + 2.0 * IN2M as f32)) as f64, from[2] as f64];
-        let (next, _) = run_tp(&st, &statics, 7, Some(to));
+        let (next, _) = run_tp(&st, &statics, 8, Some(to));
         assert!(next.teleport_used[0], "taken this activation");
         // And the io fold: a record whose ledger carries the block folds the
         // latch in (the wire form the recorder writes: a Vector2 string).
@@ -157,7 +157,7 @@ use super::*;
     /// (4) a unit WITHOUT the name never repositions — recorded block or not.
     #[test]
     fn a_unit_without_the_name_never_repositions() {
-        let (st, statics) = tp_line(7);
+        let (st, statics) = tp_line(8);
         let from = geom::centre(&st.positions[0]);
         // Unit "b" (index 2) carries no Teleport — an act naming it with a
         // recorded block must move nothing.
@@ -168,7 +168,7 @@ use super::*;
         let mut rng = crate::rng::GodotRng::new(0);
         let (next, _) = resolve_stochastic_tray_on_board(
             &statics, &st, &act, &crate::terrain::Terrain::default(),
-            Seams { rules_epoch: 7, ..Seams::default() },
+            Seams { rules_epoch: 8, ..Seams::default() },
             &mut rng, &mut tray,
         )
         .unwrap();

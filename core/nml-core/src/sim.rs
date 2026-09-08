@@ -21,7 +21,7 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES};
+use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
@@ -1265,12 +1265,14 @@ pub(crate) fn tray_mind_control(
 
 
 /// #816 PR 2 — the Teleport/Ethereal beat; REPLAY byte-exact, LIVE 3 probes.
+/// Gated on `EPOCH_8_PLANNER_MENU` (#831's epoch-8 move): the epoch-7 corpus
+/// was recorded without the Reposition act, so below 8 the beat is a no-op.
 pub(crate) fn teleport_beat(
     statics: &[UnitStatic], next: &mut State, si: usize, action: &Action, seams: Seams,
     dice: Option<&mut (&mut Tray, &mut ShootResult)>, cover: Cover,
 ) -> bool {
     let mut shot = dice.map(|(_, sh)| &mut **sh);
-    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.alive[si] <= 0 { return false; }
+    if !rule_on(seams.rules_epoch, EPOCH_8_PLANNER_MENU) || next.alive[si] <= 0 { return false; }
     let Some(spec) = statics[next.roster.profile[si]].teleport.as_ref() else { return false; };
     let cap_in = crate::unit::teleport_cap_in(&spec.name, false);
     // REPLAY: the record's centroid, no clamp; LIVE: the probe set (the

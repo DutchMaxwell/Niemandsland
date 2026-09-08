@@ -788,7 +788,10 @@ pub fn candidates_tuned(
             out.push(c);
         }
     }
-    // Wave 5 (#816 PR 2): ONE Reposition candidate per bearer, appended LAST (the W1 tail-growth precedent).
+    // Wave 5 (#816 PR 2): ONE Reposition candidate per bearer, appended LAST (the W1
+    // tail-growth precedent). Gated on `EPOCH_8_PLANNER_MENU` by construction
+    // (#831's epoch-8 move): the spec read `teleport_of` is epoch-8-gated, so
+    // below 8 no bearer carries a spec and the menu is byte-exact unchanged.
     if let Some(spec) = statics[state.roster.profile[unit]].teleport.as_ref() {
         if let Some(to) = teleport_probe(
             state, unit, crate::unit::teleport_cap_in(&spec.name, false), Some(terrain),
