@@ -466,6 +466,42 @@ class Run:
         )
         self.checkpoint("los-human-target", states)
 
+        # #673 co-op: the AI-slot designation is synced, the defender's owner rolls its own
+        # saves, and the faces travel back to the resolving peer.
+        self.command("host", "designate_ai")
+        states = self.wait_condition(
+            "AI-slot designation synced to both peers",
+            lambda s: all(v.get("ai_slots") == [3] for v in s.values()),
+            diagnostic=lambda s: "ai_slots: " + repr({r: s[r].get("ai_slots") for r in s}),
+        )
+        self.checkpoint("ai-slot-synced", states)
+
+        self.command("host", "remote_save_attack")
+        states = self.wait_condition(
+            "save prompt open on the defender's owner while the resolver waits",
+            lambda s: s["guest"].get("save_prompt_visible") is True
+            and "Waiting for MP2-guest — defense saves vs Harness Blade"
+            in s["host"].get("battle_log_tail", []),
+            diagnostic=lambda s: "guest_prompt=%r host_tail=%r" % (
+                s["guest"].get("save_prompt_visible"), s["host"].get("battle_log_tail"),
+            ),
+        )
+        self.checkpoint("remote-save-prompt", states)
+
+        self.command("guest", "confirm_save")
+        states = self.wait_condition(
+            "save faces routed back to the resolving peer",
+            lambda s: s["host"].get("remote_save_wounds", -1) >= 0
+            and any(
+                "rolled their defense saves vs Harness Blade" in line
+                for line in s["host"].get("battle_log_tail", [])
+            ),
+            diagnostic=lambda s: "wounds=%r host_tail=%r" % (
+                s["host"].get("remote_save_wounds"), s["host"].get("battle_log_tail"),
+            ),
+        )
+        self.checkpoint("remote-saves-rolled", states)
+
         if self.args.include_transport:
             self.command("host", "embark")
             states = self.wait_condition(

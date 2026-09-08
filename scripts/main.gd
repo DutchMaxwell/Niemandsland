@@ -6511,7 +6511,14 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	_solo_takedown_solo = {}   # TC-023: window closed — everything below awaits
 	var save_faces: Array
 	if human_defends:
-		save_faces = await _solo_prompt_saves(striker, defender, weapon_name, count, base_defense, ap)
+		if _solo_i_own_unit(defender):
+			# Our own unit — the local prompt, unchanged (solo: always this path).
+			save_faces = await _solo_prompt_saves(striker, defender, weapon_name, count, base_defense, ap)
+		else:
+			# #673 co-op: the defender belongs to ANOTHER human — its owner rolls (their tray,
+			# their prompt); we hand the batch over, wait, and receive the faces back.
+			save_faces = await _solo_remote_save_batch(defender, striker.get_name(),
+				weapon_name, count, base_defense, ap)
 	else:
 		_solo_log_save_threshold(defender, base_defense, ap)
 		save_faces = await _solo_tray_roll(count, base_defense + ap, "AI (%s)" % defender.get_name(), "defense",
@@ -7316,6 +7323,79 @@ func _set_roll_purpose(text: String) -> void:
 		roll_purpose_label.text = text
 		roll_purpose_label.visible = not text.is_empty()
 
+
+# === #673 co-op: the defender's owner rolls its own saves ====================================
+# Resolver sends `request_saves` to the defender's owner, logs a waiting line, receives the
+# faces via `saves_rolled` — both over the command channel every other sync uses.
+
+## No-reply bound: a disconnect mid-volley must fall back to a visible auto-roll, not freeze
+## the whole attack resolution forever.
+const SOLO_REMOTE_SAVE_TIMEOUT_S := 120.0
+
+var _solo_remote_save_seq := 0
+var _solo_remote_save_waiters: Dictionary = {}   # request id -> {"faces": Array, "done": bool}
+
+## The no-reply path (vacant seat, timeout): a VISIBLE auto-roll instead of a hang — the same
+## tray roll the AI defends with, but logged, so nobody reads it as the owner's dice.
+func _solo_remote_save_fallback(defender: GameUnit, weapon_name: String, count: int,
+		base_defense: int, ap: int) -> Array:
+	_solo_log_save_threshold(defender, base_defense, ap)
+	return await _solo_tray_roll(count, base_defense + ap, "AI (%s)" % defender.get_name(),
+		"defense", "Defense save vs %s (owner absent — auto-rolled)" % weapon_name)
+
+## Resolver side: hand the save batch to the defender's owner and wait for the faces back.
+func _solo_remote_save_batch(defender: GameUnit, striker_name: String, weapon_name: String,
+		count: int, base_defense: int, ap: int) -> Array:
+	var owner_slot := unit_owner_slot(defender.unit_properties)
+	var owner_peer := _solo_peer_for_slot(owner_slot)
+	var owner_name: String = "player %d" % owner_slot
+	if network_manager != null and network_manager.player_names.has(owner_peer):
+		owner_name = str(network_manager.player_names[owner_peer])
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Waiting for %s — defense saves vs %s" % [owner_name, weapon_name], true)
+	if owner_peer == 0:
+		return await _solo_remote_save_fallback(defender, weapon_name, count, base_defense, ap)
+	_solo_remote_save_seq += 1
+	var req := _solo_remote_save_seq
+	_solo_remote_save_waiters[req] = {"faces": [], "done": false}
+	network_manager.send_command("request_saves", {
+		"req": req, "unit": defender.unit_id, "striker": striker_name, "weapon": weapon_name,
+		"hits": count, "defense": base_defense, "ap": ap,
+	}, owner_peer)
+	var waited := 0.0
+	while not bool((_solo_remote_save_waiters.get(req, {}) as Dictionary).get("done", false)) \
+			and waited < SOLO_REMOTE_SAVE_TIMEOUT_S:
+		await get_tree().create_timer(0.1).timeout
+		waited += 0.1
+	var reply: Dictionary = _solo_remote_save_waiters.get(req, {})
+	_solo_remote_save_waiters.erase(req)
+	if not bool(reply.get("done", false)):
+		return await _solo_remote_save_fallback(defender, weapon_name, count, base_defense, ap)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s rolled their defense saves vs %s" % [owner_name, weapon_name], true)
+	return reply.get("faces", [])
+
+## Owner side: a save request arrived — open OUR prompt (the defender is ours) and send the
+## faces back to the resolver. The tray roll here is a real roll (same sync as a local one).
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_request_saves(req: int, unit_id: String, striker_name: String, weapon_name: String,
+		hits: int, defense: int, ap: int, from_peer: int) -> void:
+	var defender := opr_army_manager.get_game_unit_by_id(unit_id)
+	if defender == null or not _solo_i_own_unit(defender):
+		return   # not ours (stale state) — the resolver's timeout fallback covers the loss
+	var attacker := GameUnit.new()
+	attacker.unit_properties = {"name": striker_name}
+	var faces: Array = await _solo_prompt_saves(attacker, defender, weapon_name, hits, defense, ap)
+	network_manager.send_command("saves_rolled", {"req": req, "faces": faces}, from_peer)
+
+## Resolver side: the owner's faces arrived — release the waiting batch.
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_saves_rolled(req: int, faces: Array) -> void:
+	if not _solo_remote_save_waiters.has(req):
+		return
+	_solo_remote_save_waiters[req] = {"faces": faces, "done": true}
 
 ## Save prompt (locked decision: prompt + auto-roll for speed): the human confirms and their save dice
 ## roll in the tray, attributed to "You". Returns the rolled faces.
@@ -8582,6 +8662,39 @@ func _solo_is_ai_unit(unit: GameUnit) -> bool:
 	if network_manager != null and network_manager.is_multiplayer_active():
 		return false
 	return solo_ai_slots.is_empty() and pid == _solo_ai_slot()
+
+
+## #673 co-op: the player slot that owns a unit — a PER-UNIT lookup, because co-op has TWO
+## humans plus one AI and a single `human_slot` int cannot model that.
+static func unit_owner_slot(props: Dictionary) -> int:
+	return int(props.get("player_id", 0))
+
+
+## #673 co-op: whether THIS peer is the unit's owner — the only peer allowed to roll its saves.
+## Solo (no MP session) is always "yes", so the save UX stays byte-identical.
+static func defender_owner_is_local(props: Dictionary, mp_active: bool, my_slot: int) -> bool:
+	if not mp_active:
+		return true
+	return unit_owner_slot(props) == my_slot
+
+
+func _solo_i_own_unit(unit: GameUnit) -> bool:
+	if unit == null:
+		return true
+	var mp_active: bool = network_manager != null and network_manager.is_multiplayer_active()
+	var my_slot: int = network_manager.get_my_player_slot() if mp_active else 0
+	return defender_owner_is_local(unit.unit_properties, mp_active, my_slot)
+
+
+## #673 co-op: the transport peer occupying `slot` (the host-authoritative peer_to_slot mirror),
+## 0 when nobody sits there (vacant seat — the resolver's fallback handles that).
+func _solo_peer_for_slot(slot: int) -> int:
+	if network_manager == null:
+		return 0
+	for peer in network_manager.peer_to_slot:
+		if int(network_manager.peer_to_slot[peer]) == slot:
+			return int(peer)
+	return 0
 
 
 ## Enter targeting mode (P8): the weapon range shows as a ring, the line of sight to the hovered enemy
@@ -14093,6 +14206,13 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 	elif type == "sync_ai_slots" and payload is Dictionary \
 			and (payload as Dictionary).get("slots") is Array:
 		_rpc_sync_ai_slots((payload as Dictionary)["slots"])
+	elif type == "request_saves" and payload is Dictionary:
+		var rq: Dictionary = payload
+		_rpc_request_saves(int(rq.get("req", 0)), str(rq.get("unit", "")), str(rq.get("striker", "")),
+			str(rq.get("weapon", "")), int(rq.get("hits", 0)), int(rq.get("defense", 0)),
+			int(rq.get("ap", 0)), _from_peer)
+	elif type == "saves_rolled" and payload is Dictionary:
+		_rpc_saves_rolled(int(payload.get("req", 0)), payload.get("faces", []))
 
 
 ## #673 co-op: the wire shape of the AI-slot designation sync — sorted player ids, one message
