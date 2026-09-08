@@ -80,8 +80,7 @@ pub const RUSH: i64 = 2;
 pub const CHARGE: i64 = 3;
 /// Wave 5 (#816 PR 2): the menu's Reposition kind — replay keys on `Action::teleport`.
 pub const REPOSITION: i64 = 4;
-/// The fixed "may" margin (design §5-2, `SoloController.TELEPORT_EV_MARGIN`).
-pub const TELEPORT_EV_MARGIN: f64 = 0.5;
+pub const TELEPORT_EV_MARGIN: f64 = 0.5; // the fixed "may" margin (design §5-2)
 
 /// Why a node could not be resolved by this port — reported by name with a
 /// count, never silently skipped.
@@ -1264,8 +1263,7 @@ pub(crate) fn tray_mind_control(
 
 
 /// Design #816 PR 2 — the Teleport/Ethereal beat: after the move, before the
-/// attack, once per activation. REPLAY: byte-exact on the record's centroid;
-/// LIVE (`REPOSITION` only): the bounded three-probe set. No die drawn.
+/// attack, once per activation; REPLAY byte-exact, LIVE the three probes.
 pub(crate) fn teleport_beat(
     statics: &[UnitStatic], next: &mut State, si: usize, action: &Action, seams: Seams,
     dice: Option<&mut (&mut Tray, &mut ShootResult)>, cover: Cover,
