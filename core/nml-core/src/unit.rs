@@ -380,6 +380,12 @@ pub struct Ctx {
     /// moved, so the Mobile Artillery bonus stays OFF (#489's direction:
     /// under-credit, never over-credit).
     pub moved_this_round: bool,
+    /// Wave 4 (port-quick-readjustment): the bearer ignores the Indirect
+    /// moved to-hit penalty — `no_moved_penalty: true` read off the NAME's
+    /// own registry entry (the table's `best_primitive_param(member,
+    /// "Indirect", "no_moved_penalty", false)` gate, main.gd:3221-3222),
+    /// stamped BY NAME in `ctx_for` behind the FROZEN `EPOCH_7_TABLE_RULES`.
+    pub quick_readjustment: bool,
 }
 
 /// One conditional-AP spec — the registry `params` block of a Shatter / Tear /
@@ -497,6 +503,12 @@ pub struct ShootProfile {
     /// unit. "" = none.
     pub shred_ones_owner: String,
     pub indirect: bool,
+    /// Wave 4 (port-quick-readjustment): this weapon's Indirect moved-penalty
+    /// magnitude — the registry `moved_hit_penalty` (the book's -1 to hit
+    /// after a move; main.gd:3223-3224's `unit_param(member, "Indirect",
+    /// "moved_hit_penalty", 1)`), stamped behind the FROZEN
+    /// `EPOCH_7_TABLE_RULES` in `build_for`; 0 = none (below the gate).
+    pub indirect_moved_hit_penalty: i64,
     /// The unit-level "Indirect when Shooting" stamp (`build_for`'s epoch-6
     /// named walk below) — set ALONGSIDE `indirect` so the volley log
     /// (dice.rs) can name the RULE, not the weapon tag, when its cover skip
@@ -1976,6 +1988,17 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         mobile_artillery_over_in,
         grounded_precision_hit,
         moved_this_round: true,
+        // Wave 4 (port-quick-readjustment) — the opt-out stamped off the
+        // NAME's own registry param (see Ctx::quick_readjustment), only
+        // where the name resolves through the Indirect primitive at all.
+        quick_readjustment: rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
+            && rules_of_primitive(reg, p, "Indirect")
+                .iter()
+                .any(|h| h.name == "Quick Readjustment")
+            && reg
+                .rules_for(&p.game_system)
+                .lookup(&p.faction_folder, "Quick Readjustment")
+                .is_some_and(|e| e.param_b_or("no_moved_penalty", false)),
         shielded: rule_on_all_models(p, "Shielded")
             || shielded_alias.as_ref().is_some_and(|(_, pending)| !*pending),
         shielded_alias: shielded_alias.map_or(ShieldedAlias::None, |(a, _)| a),
@@ -4621,6 +4644,26 @@ impl UnitStatic {
                         }
                     }
                     _ => {}
+                }
+            }
+        }
+
+        // Wave 4 (port-quick-readjustment) — the penalty leg: every ranged
+        // profile the Indirect facets reached takes the system's own
+        // `moved_hit_penalty` off the "Indirect" mechanics entry — the
+        // table's `unit_param(member, "Indirect", "moved_hit_penalty", 1)`
+        // (main.gd:3223-3224, the book's -1 to hit after a move), behind the
+        // FROZEN `EPOCH_7_TABLE_RULES`: a record below 7 replays untouched.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            let pen = reg
+                .rules_for(&p.game_system)
+                .lookup(&p.faction_folder, "Indirect")
+                .map_or(1, |e| e.param_i("moved_hit_penalty", 1));
+            if pen > 0 {
+                for sp in shoot.iter_mut() {
+                    if sp.indirect {
+                        sp.indirect_moved_hit_penalty = pen;
+                    }
                 }
             }
         }
