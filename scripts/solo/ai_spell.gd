@@ -465,6 +465,50 @@ static func attacker_grants_from_target(records: Array) -> PackedStringArray:
 	return out
 
 
+## GH #325 — the spell-granted rules THIS attacker carries for its next attack, from the two
+## stores the #313 record shape lives in (unit_properties["spell_records"], the NML-949 mirror):
+##   own store    — grants placed ON the attacker (friendly utility buffs, beneficiary "")
+##   target store — the bearer's `beneficiary: "attackers"` grants: everyone attacking THAT unit
+##                  gains the rule (Combat Ecstasy → Quick Shot, Veil of Madness → Slayer, …).
+## `shooting` scopes the read the way mods_for does ("melee"-scoped grants stay out of shooting
+## reads and vice versa). Base names (rating and " in "/" when " scope suffixes stripped),
+## deduped, placement order. This is the query the unit-level rules read at their OWN sites —
+## the flag bridge stays refusing these names (BRIDGE_FLAGS / spell_foresight_relentless_test),
+## because a profile flag would silently do nothing where a unit-level read is the truth.
+static func granted_rules_of(attacker: GameUnit, target: GameUnit = null, shooting: bool = true) -> PackedStringArray:
+	var out := PackedStringArray()
+	if attacker != null:
+		_granted_rules_into(out, attacker.unit_properties.get("spell_records", []), shooting, false)
+	if target != null and target != attacker:
+		_granted_rules_into(out, target.unit_properties.get("spell_records", []), shooting, true)
+	return out
+
+
+static func _granted_rules_into(out: PackedStringArray, records: Variant, shooting: bool, attackers_side: bool) -> void:
+	if records == null or typeof(records) != TYPE_ARRAY:
+		return
+	for rd in records:
+		if typeof(rd) != TYPE_DICTIONARY:
+			continue
+		var rec := rd as Dictionary
+		# attackers_side selects the reading, mirroring attacker_grants_from_target: an
+		# attackers-side record on the BEARER's own read must not self-benefit the bearer.
+		if (str(rec.get("beneficiary", "")) == "attackers") != attackers_side:
+			continue
+		var scope := str(rec.get("scope", ""))
+		if (scope == "shooting" and not shooting) or (scope == "melee" and shooting):
+			continue
+		var base := RulesRegistry.base_rule_name(str(rec.get("grants_rule", "")))
+		# "Bane in Melee" / "Indirect when Shooting" name the SAME rule — strip like bridge_flag_for.
+		var cut := base.find(" when ")
+		if cut < 0:
+			cut = base.find(" in ")
+		if cut >= 0:
+			base = base.substr(0, cut)
+		if not base.is_empty() and not out.has(base):
+			out.append(base)
+
+
 ## Interference tokens the OTHER side should spend against an announced cast worth `effect_value`
 ## to it (the same marginal calculus, mirrored: spend while the P-reduction per token times the
 ## effect's value exceeds the floor). `boost` is the caster side's already-committed boost.
