@@ -2767,10 +2767,7 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
 /// The Teleport/Ethereal read (#816 PR 2): by NAME, FROZEN `EPOCH_7_TABLE_
 /// RULES`-gated. Cap by NAME: Teleport 3"/6", others (Ethereal) flat 6".
 #[derive(Debug, Clone, PartialEq)]
-pub struct TeleportSpec {
-    /// The carried rule NAME — the cap key and the log subject.
-    pub name: String,
-}
+pub struct TeleportSpec { pub name: String } // the cap key and the log subject
 
 pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
     if rule != "Teleport" || rush { 6.0 } else { 3.0 }
