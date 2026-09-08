@@ -108,6 +108,7 @@ def _build_reranked_record(out_dir: Path) -> Path:
         dice_seed=4242, dice="table", deployment="arena",
         top_k=2, horizon=1, record_cands=True, record_aux=False,
         pool_value_fn={1: _invert_hook}, pool_value_w=math.inf,
+        rules_epoch=7,  # frozen epoch 7: pinned pre-#821 trajectory (rules epoch 8 = rush demotion in the menu)
     )
     rows = out["planner_positions"]
     assert any(r["cands"]["best"] != r["cands"]["played"] for r in rows), \
