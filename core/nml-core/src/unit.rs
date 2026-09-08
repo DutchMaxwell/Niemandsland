@@ -2764,12 +2764,11 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
     None
 }
 
-/// The Teleport/Ethereal read (design #816 PR 2): by NAME ("Teleport" — the
-/// aura grant folded it in; "Ethereal"; a Teleport-primitive alias), gated on
-/// the FROZEN `EPOCH_7_TABLE_RULES`. Cap by NAME: Teleport 3"/6", others flat 6".
+/// The Teleport/Ethereal read (#816 PR 2): by NAME, FROZEN `EPOCH_7_TABLE_
+/// RULES`-gated. Cap by NAME: Teleport 3"/6", others (Ethereal) flat 6".
 #[derive(Debug, Clone, PartialEq)]
 pub struct TeleportSpec {
-    /// The carried rule NAME — the cap key and the log line's subject.
+    /// The carried rule NAME — the cap key and the log subject.
     pub name: String,
 }
 

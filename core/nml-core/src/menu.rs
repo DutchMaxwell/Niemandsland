@@ -22,10 +22,7 @@ use serde::Deserialize;
 
 use crate::combat::{melee_ev, profile_ev, shoot_ev, SIX_P};
 use crate::geom::{self, V3};
-use crate::sim::{
-    ctx_of, melee_profiles_of, profiles_of, teleport_probe, Scratch, ADVANCE, CHARGE, HOLD,
-    REPOSITION, RUSH,
-};
+use crate::sim::{ctx_of, melee_profiles_of, profiles_of, teleport_probe, Scratch, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
 use crate::state::{State, Weapon};
 use crate::terrain::{gives_cover, Terrain};
 use crate::unit::{Ctx, ShootProfile, UnitStatic};
@@ -792,11 +789,11 @@ pub fn candidates_tuned(
         }
     }
     // Wave 5 (#816 PR 2): ONE Reposition candidate per bearer, appended LAST
-    // (the W1 tail-growth precedent); the epoch-gated stamp is the gate.
+    // (the W1 tail-growth precedent); the epoch-gated stamp gates it.
     if let Some(spec) = statics[state.roster.profile[unit]].teleport.as_ref() {
-        if let Some(to) = teleport_probe(state, statics, unit,
-            crate::unit::teleport_cap_in(&spec.name, false), Some(terrain))
-        {
+        if let Some(to) = teleport_probe(
+            state, unit, crate::unit::teleport_cap_in(&spec.name, false), Some(terrain),
+        ) {
             let mut c = Candidate::new(key, REPOSITION);
             c.dest = Some([to[0], state.positions[unit][0][1], to[1]]);
             out.push(c);

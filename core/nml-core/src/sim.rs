@@ -1268,26 +1268,22 @@ pub(crate) fn tray_mind_control(
 /// attack, once per activation. REPLAY: byte-exact on the record's centroid;
 /// LIVE (`REPOSITION` only): the bounded three-probe set. No die drawn.
 pub(crate) fn teleport_beat(
-    statics: &[UnitStatic], next: &mut State, si: usize, action: &Action,
-    seams: Seams, mut shot: Option<&mut ShootResult>, cover: Cover,
+    statics: &[UnitStatic], next: &mut State, si: usize, action: &Action, seams: Seams,
+    dice: Option<&mut (&mut Tray, &mut ShootResult)>, cover: Cover,
 ) -> bool {
+    let mut shot = dice.map(|(_, sh)| &mut **sh);
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.alive[si] <= 0 {
         return false;
     }
     let Some(spec) = statics[next.roster.profile[si]].teleport.as_ref() else { return false; };
-    let spec_name = spec.name.clone();
-    let cap_in = crate::unit::teleport_cap_in(&spec_name, false);
-    // REPLAY: the record's centroid, no clamp; LIVE: the probe set, the
-    // ADVANCE-band reading (a standalone Reposition act has no Rush context).
+    let cap_in = crate::unit::teleport_cap_in(&spec.name, false);
+    // REPLAY: the record's centroid, no clamp; LIVE: the probe set (the
+    // ADVANCE band — a standalone Reposition act has no Rush context).
     let to = match action.teleport {
         Some(to) => to,
-        None if action.kind == REPOSITION => {
-            let terrain = match cover {
-                Cover::Board(t) if t.is_valid() => Some(t),
-                _ => None,
-            };
-            teleport_probe(next, si, cap_in, terrain)?
-        }
+        None if action.kind == REPOSITION => teleport_probe(
+            next, si, cap_in,
+            match cover { Cover::Board(t) if t.is_valid() => Some(t), _ => None })?,
         None => return false,
     };
     let from = geom::centre(&next.positions[si]);
@@ -1305,14 +1301,13 @@ pub(crate) fn teleport_beat(
     if let Some(shot) = shot.as_deref_mut() {
         shot.log.push(format!(
             "{}: {} repositions within {:.0}\" — landing centroid ({:.2}, {:.2}) m",
-            spec_name, statics[next.roster.profile[si]].name, cap_in, to[0], to[1]));
+            spec.name, statics[next.roster.profile[si]].name, cap_in, to[0], to[1]));
     }
     true
 }
 
 /// The bounded probe set (design §3): objective clamp, away-from-threat,
-/// first cover bearing, scored by a self-carried EV heuristic; the best
-/// landing only when it beats staying by the fixed margin.
+/// first cover bearing, self-carried EV heuristic; best landing past margin.
 pub(crate) fn teleport_probe(
     next: &State, si: usize, cap_in: f64, terrain: Option<&Terrain>,
 ) -> Option<[f64; 2]> {
@@ -1344,8 +1339,8 @@ pub(crate) fn teleport_probe(
             }
         }
     }
-    // Self-carried EV: objective pull, threat escape, cover — the table
-    // scores with `AiPosition._evaluate`, which this core does not port.
+    // Self-carried EV: objective pull, threat escape, cover (the table's
+    // `AiPosition._evaluate` is not ported).
     let ev_at = |p: V3| -> f64 {
         let obj = obj_at(p).map(|o| -(geom::length(geom::sub(o, p)) as f64) / IN2M as f64).unwrap_or(0.0);
         let thr = nearest_enemy(next, si)
@@ -4541,8 +4536,7 @@ fn resolve_with(
     let mut next = state.clone();
     let was_shaken = next.shaken[si];
     let mut sc = Scratch::default();
-    // #816 PR 2 — the activation-start latch clear (the beat's own erase,
-    // main.gd:17456); the stamp refills every activation.
+    // #816 PR 2 — the activation-start latch clear (main.gd:17456's erase).
     next.teleport_used[si] = false;
     sc.rules_epoch = seams.rules_epoch; // wave-3 mark consumers read it off Scratch
 
@@ -4927,10 +4921,7 @@ fn resolve_with(
     }
 
     // --- TELEPORT / ETHEREAL (main.gd:1075, right after Surprise; #816 PR 2)
-    match dice.as_mut() {
-        Some((_, shot)) => teleport_beat(statics, &mut next, si, action, seams, Some(shot), cover),
-        None => teleport_beat(statics, &mut next, si, action, seams, None, cover),
-    }
+    teleport_beat(statics, &mut next, si, action, seams, dice.as_mut(), cover);
 
     // --- CROSSING ATTACK (main.gd:1081, right after Storm in the table's own
     // pre-attack order), every action kind with a tray — see

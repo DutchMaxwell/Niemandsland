@@ -545,8 +545,7 @@ pub struct State {
     /// act_recorder.gd `_ledger_of`); never resets on a later round.
     pub storm_used: Vec<Vec<String>>,
     /// Wave 5 — `unit_properties["teleport_used_this_activation"]` (main.gd
-    /// :17456; the beat erases it at its start — reset semantics). The
-    /// recorder's `teleport` ledger block folds in here.
+    /// :17456; the beat erases it at its start — reset semantics).
     pub teleport_used: Vec<bool>,
 }
 
