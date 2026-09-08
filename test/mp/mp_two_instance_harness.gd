@@ -268,13 +268,9 @@ func _hover_los() -> bool:
 	var point := camera.unproject_position(target_node.global_position + Vector3(0.0, 0.016, 0.0))
 	if _main._solo_pick_unit_at(point) != target:
 		return false
-	# The LOS helper uses SoloController's pure geometry helpers through an instance. Plain MP
-	# intentionally has no persistent solo controller, so lend it one for this audited UI seam only.
-	var temporary_controller := false
-	if _main.solo_controller == null:
-		_main.solo_controller = SoloController.new()
-		_main.add_child(_main.solo_controller)
-		temporary_controller = true
+	# No fabricated SoloController here (#675 item 1): a plain human-vs-human room has
+	# solo_controller == null, and the production hover path now draws the LOS line from pure
+	# geometry anyway. Lending one would fake the exact state this checkpoint must judge.
 	_main._solo_target_mode = {"unit": attacker, "melee": false}
 	_main._solo_update_los_line(point)
 	_los_result = {
@@ -282,10 +278,6 @@ func _hover_los() -> bool:
 		"label_visible": _main._solo_los_label != null and _main._solo_los_label.visible,
 		"text": _main._solo_los_label.text if _main._solo_los_label != null else "",
 	}
-	if temporary_controller:
-		var controller: Node = _main.solo_controller
-		_main.solo_controller = null
-		controller.queue_free()
 	return bool(_los_result.visible) and bool(_los_result.label_visible)
 
 

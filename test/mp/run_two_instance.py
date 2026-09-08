@@ -26,6 +26,12 @@ SCRIPT_ERROR_RE = re.compile(
     r"SCRIPT ERROR|SKRIPTFEHLER|Parse Error|Parser Error|Parser-Fehler|Skriptfehler",
     re.IGNORECASE,
 )
+STALL_RE = re.compile(r"\[Relay\] main loop stalled ([0-9.]+)\s*s")
+# #675 item 4: the guest's headless scene load blocks its main loop 10.5-10.8 s on EVERY green
+# run, so a 5 s hard limit would be permanently red. The assertion enforces the measured baseline
+# with headroom instead: 15 s sits ~40% above the worst measured stall and at half the relay's
+# 30 s peer timeout — the point where the warning itself says a drop becomes likely.
+STALL_LIMIT_S = 15.0
 MIN_AVAILABLE_MB = 3500
 
 
@@ -100,6 +106,16 @@ def wait_for_port(port: int, timeout: float = 15.0) -> None:
         except OSError:
             time.sleep(0.05)
     raise HarnessFailure(f"relay did not listen on 127.0.0.1:{port} within {timeout:.0f}s")
+
+
+def worst_stall_s(lines: list[str]) -> float:
+    """#675 item 4: the largest '[Relay] main loop stalled Ns' gap in a peer log (0.0 if none)."""
+    worst = 0.0
+    for line in lines:
+        match = STALL_RE.search(line)
+        if match:
+            worst = max(worst, float(match.group(1)))
+    return worst
 
 
 def kill_group(proc: subprocess.Popen | None) -> None:
@@ -488,6 +504,12 @@ class Run:
             fatal = client.fatal_log_line()
             if fatal and self.shutdown_failure is None:
                 self.shutdown_failure = f"{client.role}: script error in log: {fatal}"
+            stall = worst_stall_s(client.lines)
+            if stall > STALL_LIMIT_S and self.shutdown_failure is None:
+                self.shutdown_failure = (
+                    f"{client.role}: main-loop stall {stall:.1f}s exceeds the "
+                    f"{STALL_LIMIT_S:.0f}s baseline (relay drops peers near 30s)"
+                )
         kill_group(self.relay)
         if self.relay_log:
             self.relay_log.close()

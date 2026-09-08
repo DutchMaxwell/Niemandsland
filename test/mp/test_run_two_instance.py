@@ -43,6 +43,22 @@ class DriverHelpersTest(unittest.TestCase):
         self.assertIsNotNone(driver.SCRIPT_ERROR_RE.search("SCRIPT ERROR: invalid call"))
         self.assertIsNotNone(driver.SCRIPT_ERROR_RE.search("SKRIPTFEHLER: ungultiger Aufruf"))
 
+    def test_worst_stall_reads_the_relay_warning_and_enforces_the_baseline(self):
+        # #675 item 4: the measured guest baseline (10.5-10.8 s every green run) must stay GREEN
+        # under STALL_LIMIT_S; a bigger gap, and a log without any stall line, behave sanely.
+        self.assertEqual(driver.worst_stall_s(["MP2: guest joined room ABC234"]), 0.0)
+        lines = [
+            "Godot Engine v4.6.stable.official - https://godotengine.org",
+            "WARNING: [Relay] main loop stalled 10.8s \u2014 heartbeats delayed (can trigger a relay timeout)",
+            "WARNING: [Relay] main loop stalled 3.2s \u2014 heartbeats delayed (can trigger a relay timeout)",
+        ]
+        self.assertEqual(driver.worst_stall_s(lines), 10.8)
+        self.assertLessEqual(driver.worst_stall_s(lines), driver.STALL_LIMIT_S)
+        self.assertGreater(
+            driver.worst_stall_s(["WARNING: [Relay] main loop stalled 15.4s \u2014 heartbeats delayed"]),
+            driver.STALL_LIMIT_S,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

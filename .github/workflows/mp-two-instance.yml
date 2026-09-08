@@ -1,0 +1,52 @@
+# #675 item 3: the two-instance multiplayer regression suite (test/mp/run_two_instance.py)
+# runs two real headless Godot peers against a local relay. Deliberately its OWN job and
+# deliberately ADVISORY (not on the required-checks list): a real-peer test can flap on
+# runner hiccups, and a red advisory job is visible without blocking merges.
+name: MP two-instance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.6"
+
+jobs:
+  mp-two-instance:
+    name: Two-instance multiplayer regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install relay requirements
+        run: pip install -r relay/requirements.txt
+
+      # Fresh checkouts fail without a prior import ("Parse Error: Identifier "UiMotion"
+      # not declared") — the editor import generates .godot/ first.
+      - name: Import project (generates .godot/, compile-check)
+        run: godot --headless --editor --quit --path .
+
+      - name: Run two-instance multiplayer regressions
+        run: python test/mp/run_two_instance.py --godot godot --run-dir reports/mp-two-instance
+
+      - name: Upload multiplayer artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mp-two-instance
+          path: reports/mp-two-instance
