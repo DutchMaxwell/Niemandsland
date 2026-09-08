@@ -44,7 +44,7 @@ fn crossing_attack_rolls_through_crossed_enemies_at_epoch_7() {
     };
     let seams = Seams { rules_epoch: 7, ..Default::default() };
     let mut rng = GodotRng::new(1);
-    let mut tray = Tray::seeded(27);
+    let mut tray = Tray::seeded(5);
     let (next, shot) = resolve_stochastic_tray_on_board(
         &statics, &act.state, &action, &corpus.terrain, seams, &mut rng, &mut tray,
     )
@@ -58,8 +58,19 @@ fn crossing_attack_rolls_through_crossed_enemies_at_epoch_7() {
         .expect("the Crossing Attack roll is on the tray");
     let wounds = crossing.faces.iter().filter(|&&f| f >= 6).count() as i64;
     assert!(
+        wounds >= 1,
+        "the fixture must actually roll a 6 of {} dice: {:#?}",
+        crossing.faces.len(),
+        crossing.faces
+    );
+    assert!(
         shot.log.iter().any(|l| l.contains("Crossing Attack")),
         "rules-must-log: the roll names the rule"
+    );
+    assert!(
+        next.wounds[1][0] < 2,
+        "a 6 was rolled, so a direct wound IS landed — a roll-but-never-land impl falls: {:#?}",
+        next.wounds
     );
     assert_eq!(
         next.wounds[1][0],

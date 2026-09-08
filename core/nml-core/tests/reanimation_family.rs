@@ -57,8 +57,18 @@ fn reanimation_rolls_its_missing_wounds_at_activation_at_epoch_7() {
         .expect("the Reanimation roll is on the tray (RED before the fix)");
     let healed = roll.faces.iter().filter(|&&f| f >= 5).count() as i64;
     assert!(
+        healed >= 1,
+        "the fixture must actually hit 5+ (seed {}): {:#?}",
+        27, roll.faces
+    );
+    assert!(
         shot.log.iter().any(|l| l.contains("Reanimation")),
         "rules-must-log: the roll names the rule"
+    );
+    assert!(
+        next.wounds[0][0] > 1,
+        "a 5+ was rolled, so a wound IS restored — a roll-but-never-restore impl falls: {:#?}",
+        next.wounds
     );
     assert_eq!(next.wounds[0][0], 1 + healed, "each 5+ restores one wound");
 }
