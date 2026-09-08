@@ -2730,6 +2730,88 @@ func _on_transport_cargo_spilled(transport: GameUnit, spilled: Array) -> void:
 		# NML-957 step 6: this line stays LOCAL — both machines replay the spill through the
 		# wounds sync, so a broadcast copy would arrive twice on every screen (exclusion 1).
 		_transport_log(msg)
+	for u in spilled:
+		var unit := u as GameUnit
+		if unit == null or _is_ai_unit(unit) or DisplayServer.get_name() == "headless" \
+				or (network_manager != null and network_manager.is_multiplayer_active() \
+				and int(unit.unit_properties.get("player_id", 1)) != network_manager.get_my_player_slot()):
+			continue
+		await _offer_spill_ghost(transport, unit)
+
+
+## #210 — the wreck-spill reposition pass: the standard formation-at-cursor ghost after the auto
+## placement; ESC / right-click confirms the auto formation, a legal LMB drop repositions in the 6" ring.
+func _offer_spill_ghost(transport: GameUnit, unit: GameUnit) -> void:
+	if transport == null or unit == null or army_manager == null:
+		return
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain.append_array(unit.get_attached_heroes())
+	var nodes: Array = []
+	var shape: Array = []
+	for c in chain:
+		var member := c as GameUnit
+		if member == null:
+			continue
+		for m in member.get_alive_models():
+			var mi := m as ModelInstance
+			if mi.node == null or not is_instance_valid(mi.node):
+				continue
+			var sh := SeparationChecker.shape_for_model(mi)
+			nodes.append(mi.node)
+			shape.append({"r": (sh.bounding_radius() if sh != null else SeparationChecker.DEFAULT_BASE_RADIUS_M)})
+	if nodes.is_empty():
+		return
+	var t_model = null
+	for tm in transport.models:
+		if tm.node != null and is_instance_valid(tm.node):
+			t_model = tm
+			break
+	if t_model == null:
+		return
+	var anchor: Vector3 = t_model.node.global_position if t_model.is_alive or not t_model.node.has_meta("revive_transform") else (t_model.node.get_meta("revive_transform") as Transform3D).origin
+	var t_shape := SeparationChecker.shape_for_model(t_model)
+	var t_r: float = t_shape.bounding_radius() if t_shape != null else SeparationChecker.DEFAULT_BASE_RADIUS_M
+	var centroid := Vector3.ZERO
+	for n in nodes:
+		centroid += (n as Node3D).global_position
+	centroid /= float(nodes.size())
+	for i in nodes.size():
+		var n := nodes[i] as Node3D
+		(shape[i] as Dictionary)["off"] = Vector2(n.global_position.x - centroid.x, n.global_position.z - centroid.z)
+	var blockers: Array = []
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or chain.has(gu) or SoloController.unit_in_reserve(gu):
+			continue
+		for m2 in gu.get_alive_models():
+			var mi2 := m2 as ModelInstance
+			if mi2.node != null and is_instance_valid(mi2.node) and not bool(mi2.node.get_meta("embarked", false)):
+				var s2 := SeparationChecker.shape_for_model(mi2)
+				blockers.append({"p": mi2.node.global_position, "r": (s2.bounding_radius() if s2 != null else SeparationChecker.DEFAULT_BASE_RADIUS_M)})
+	var main_node := get_node_or_null("/root/Main")
+	var tsize: Vector2 = (main_node.table.table_size * 0.3048) if main_node != null and main_node.get("table") != null else Vector2(2000.0, 2000.0)
+	var bounds := Rect2(-tsize.x / 2.0, -tsize.y / 2.0, tsize.x, tsize.y)
+	var state := {"done": false, "pos": []}
+	var ghost := PlacementGhost.new()
+	add_child(ghost)
+	ghost.begin(shape, PlacementGhost.circle_zone(anchor, OPRArmyManager.DISEMBARK_ZONE_IN * 0.0254 + t_r), blockers, bounds,
+		func(positions: Array) -> void:
+			(state["pos"] as Array).assign(positions)
+			state["done"] = true,
+		func() -> void: state["done"] = true)
+	while not state["done"]:
+		await get_tree().process_frame
+	ghost.queue_free()
+	if (state["pos"] as Array).is_empty():
+		_transport_log("%s keeps its automatic formation beside the wreck" % str(unit.unit_properties.get("name", "unit")))
+		return
+	for i in mini(nodes.size(), (state["pos"] as Array).size()):
+		var n2 := nodes[i] as Node3D
+		n2.global_position = (state["pos"] as Array)[i] as Vector3
+		if network_manager != null and network_manager.is_multiplayer_active() and n2.has_meta("network_id"):
+			network_manager.broadcast_move(n2.get_meta("network_id"), n2.global_position)
+	_transport_log("%s re-forms beside the wreck" % str(unit.unit_properties.get("name", "unit")))
 
 
 ## Whether a unit belongs to the solo AI — asked through the same /root/Main hop
