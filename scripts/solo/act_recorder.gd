@@ -456,6 +456,23 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 			storm.append(rn)
 	if not storm.is_empty():
 		ledger["storm_used"] = storm
+	# Wave 5 group (b) — the once-per-game FEAT latch (FEAT PR 1). The Speed
+	# Feat family's spend flags (solo_controller.gd:1712 writes
+	# `speed_feat_used_<snake>` per rule): recorded as the DISPLAY names whose
+	# flag stands, the Storm Attack shape — the core's `State.feats_used` (per
+	# unit, the names already declared this game) matches the registry's own
+	# names without a snake-case round trip. `uses_per_game > 0` is the same
+	# predicate the spend itself scans.
+	var feats: Array = []
+	for e in RulesRegistry.unit_rules_of_primitive(u, "Quick"):
+		var fn := str((e as Dictionary)["name"])
+		var spq: Dictionary = (e as Dictionary).get("params", {})
+		if int(spq.get("uses_per_game", 0)) <= 0:
+			continue
+		if bool(u.unit_properties.get("speed_feat_used_%s" % fn.to_snake_case(), false)):
+			feats.append(fn)
+	if not feats.is_empty():
+		ledger["feats_used"] = feats
 	var markers := 0
 	for e in RulesRegistry.unit_rules_of_primitive(u, "Growth Markers"):
 		var rn := str((e as Dictionary)["name"]).to_snake_case()
