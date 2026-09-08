@@ -3410,6 +3410,13 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 					continue
 				casting_mod += int(sp.get("casting_mod", 1))
 				cast_mod_notes.append("%s %+d" % [str((e as Dictionary)["name"]), int(sp.get("casting_mod", 1))])
+				# Rules-must-log (#782): name the rule BY NAME, the conduit, and the
+				# origin the cast rides — the conduit's own position.
+				if battle_log != null and solo_controller != null:
+					_log_rule_event(BattleLog.Category.COMBAT,
+						"%s: %s casts as if standing at %s (%s)" % [
+							str((e as Dictionary)["name"]), caster.get_name(), cu.get_name(),
+							str(solo_controller.unit_centre(cu))], true)
 				found = true
 				break
 			if found:
