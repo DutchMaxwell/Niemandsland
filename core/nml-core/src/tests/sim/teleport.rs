@@ -188,3 +188,34 @@ use super::*;
         assert!(!next.teleport_used[0], "no latch below epoch 7");
         assert!(!shot.log.iter().any(|l| l.contains("Teleport")), "{:?}", shot.log);
     }
+
+    /// (6) the epoch-8 menu gate: a Teleport bearer at `rules_epoch: 7` gets
+    /// NO Reposition candidate from `candidates_tuned` — the epoch-7 corpus
+    /// was recorded without it — and at `rules_epoch: 8` exactly ONE,
+    /// appended LAST (the W1 tail-growth precedent).
+    #[test]
+    fn the_reposition_candidate_is_menu_gated_on_epoch_8() {
+        let menu_at = |epoch: u32| {
+            let (mut st, statics) = tp_line(epoch);
+            st.objectives = vec![crate::state::Objective {
+                pos: [st.positions[0][0][0] + 6.0 * IN2M, 0.0, 0.0],
+                owner: 0,
+            }];
+            crate::menu::candidates_tuned(
+                &st, &crate::terrain::Terrain::default(), &statics, 0,
+                &mut Scratch::default(), crate::menu::Tuning::default(),
+            )
+        };
+        let m7 = menu_at(7);
+        assert!(
+            !m7.iter().any(|c| c.kind == REPOSITION),
+            "epoch 7's menu carries no Reposition candidate (recorded without it), got {:?}",
+            m7.iter().filter(|c| c.kind == REPOSITION).map(|c| c.kind).collect::<Vec<_>>()
+        );
+        let m8 = menu_at(8);
+        assert_eq!(
+            m8.iter().filter(|c| c.kind == REPOSITION).count(), 1,
+            "exactly ONE Reposition candidate at epoch 8"
+        );
+        assert_eq!(m8.last().map(|c| c.kind), Some(REPOSITION), "appended LAST");
+    }
