@@ -712,7 +712,12 @@ pub fn resolve_volley_with_tray(
             continue; // main.gd:3163 — a silent weapon leaves before any die
         }
         // --- to-hit, `profile_ev` ai_ev.gd:335-370's shooting branch ---
-        let mut target = reliable_quality(att.quality, p.reliable);
+        // FEAT PR 2 — the once-per-game bonus shot strikes at its OWN
+        // Quality (main.gd:3100: `"quality": int(tgd.get("quality", 2))`),
+        // never the member's; 0 = every ordinary profile, the Ctx quality
+        // as always (the ranged twin of `melee_hit_target`'s override).
+        let q = if p.extra_attack_q > 0 { p.extra_attack_q } else { att.quality };
+        let mut target = reliable_quality(q, p.reliable);
         // Good Shot / Bad Shot / Targeting Visor (main.gd:5681-5701) — the
         // table's DICE path folds these in; `p.hit_bonus`/`p.hit_bonus_over9`
         // are this shot's own profile stamp (unit.rs::stamp_shot_modifier).
@@ -824,6 +829,14 @@ pub fn resolve_volley_with_tray(
             if !p.takedown_rule.is_empty() {
                 out.log.push(format!("{}: Takedown on {}'s volley", p.takedown_rule, sh.owner));
             }
+        }
+        // FEAT PR 2 — "Takedown Shot" names itself once per game
+        // (rules-must-log, the table's own log line at main.gd:17026-17028,
+        // the melee fold's Takedown Strike leg shape).
+        if p.extra_attack_q > 0 {
+            out.log.push(format!(
+                "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
+                p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
         }
         // --- `_solo_hits` :4404-4487 ---
         let mut hits = faces_to_hits(&faces, count_target as u8) as i64;

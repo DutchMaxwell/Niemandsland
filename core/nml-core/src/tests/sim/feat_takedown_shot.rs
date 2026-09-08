@@ -1,6 +1,4 @@
 use super::*;
-use crate::acts::read_act_header;
-use crate::io;
 
     // ------------------- wave 5 group (b): the Takedown Shot latch -----
 
@@ -102,7 +100,7 @@ use crate::io;
         assert_eq!(syn.extra_attack_q, 2, "the entry's own Quality");
         assert_eq!(syn.ap, 2, "the entry's own AP");
         assert_eq!(syn.deadly, 3, "the table's own Deadly(3) default");
-        assert!(s7.shoot.len() == 1, "no weapon of the bearer's own: the roll IS the bonus");
+        assert_eq!(s7.shoot.len(), 1, "no weapon of the bearer's own: the roll IS the bonus");
         let (st, statics) = ts_line(7);
         let (next, shot) = run_shoot(&st, &statics, 7);
         let atk = attack_rolls(&shot);

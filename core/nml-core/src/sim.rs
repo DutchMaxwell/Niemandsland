@@ -2544,7 +2544,15 @@ pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
             continue;
         }
         sc.keep.push(i);
-        sc.attacks.push(effective_attacks(p.attacks, alive, us.model_count));
+        // FEAT PR 2 — the once-per-game bonus shot is its OWN single attack
+        // that "never scales with the unit" (the melee fold's shape,
+        // `melee_profiles_of`'s extra_attack_q leg): it skips the survivor
+        // scaling.
+        sc.attacks.push(if p.extra_attack_q > 0 {
+            p.attacks
+        } else {
+            effective_attacks(p.attacks, alive, us.model_count)
+        });
     }
 }
 
@@ -2590,6 +2598,45 @@ fn mark_spent_limited(profiles: &[ShootProfile], keep: &[usize], used: &mut Vec<
         if p.limited && !used.iter().any(|n| n == &p.name) {
             used.push(p.name.clone());
         }
+    }
+}
+
+/// FEAT PR 2 — the Takedown Shot latch at the volley's parts seam, the
+/// #827 latch's second reader: a bearer whose `feats_used` already names
+/// the rule brings no synthetic shot (the replayed spend — the io fold's
+/// key closes the latch across acts); an unspent bearer spends it on the
+/// FIRST volley while unspent — policy (a) auto, exactly the table's group
+/// build (main.gd:17021-17024). The dice fold logs the fired shot (the
+/// `extra_attack_q` leg); this seam only moves the ledger. Frozen-gated —
+/// a record below `EPOCH_7_TABLE_RULES` never reaches the latch here.
+/// The stamp is DEFERRED: the caller collects the spenders and stamps them
+/// after the parts loop (the member iterator holds the state's borrow).
+fn takedown_shot_gate(
+    statics: &[UnitStatic],
+    state: &State,
+    mi: usize,
+    msc: &mut Scratch,
+    rules_epoch: u32,
+    spent: &mut Vec<usize>,
+) {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return;
+    }
+    let shoot = &statics[state.roster.profile[mi]].shoot;
+    let Some(pi) = shoot
+        .iter()
+        .position(|p| p.extra_attack_q > 0 && p.name == "Takedown Shot")
+    else {
+        return;
+    };
+    let Some(k) = msc.keep.iter().position(|&i| i == pi) else {
+        return;
+    };
+    if state.feats_used[mi].iter().any(|n| n == "Takedown Shot") {
+        msc.keep.remove(k);
+        msc.attacks.remove(k);
+    } else {
+        spent.push(mi);
     }
 }
 
@@ -2644,7 +2691,15 @@ pub fn member_profiles_of(
         let um = &statics[state.roster.profile[mi]];
         let set = if melee { &um.melee } else { &um.shoot };
         for p in set {
-            let a = effective_attacks(p.attacks, state.alive[mi], um.model_count);
+            // FEAT PR 2 — the ranged bonus shot never scales with the unit
+            // (`profiles_of`'s extra_attack_q leg); the EV layer prices the
+            // same single die the tray fires (the spent latch stays priced —
+            // the melee Limited precedent, EV drops nothing).
+            let a = if !melee && p.extra_attack_q > 0 {
+                p.attacks
+            } else {
+                effective_attacks(p.attacks, state.alive[mi], um.model_count)
+            };
             // MELEE has no range gate and `melee_ev` no `keep`, so its `attacks` must
             // stay parallel to the whole list; SHOOTING keeps `profiles_of`'s filter
             // and indexes the folded list through `keep`.
@@ -2784,7 +2839,11 @@ fn sighted_profiles_of(
             trace_rule("volley", "Increased Shooting Range Mark",
                 &format!("{} gains +{mark_range:.0}\" reach on {}", statics[state.roster.profile[mi]].name, statics[state.roster.profile[ti]].name));
         }
-        sc.attacks.push(bearer_scaled_attacks(p, state.alive[mi], us.model_count, seen));
+        sc.attacks.push(if p.extra_attack_q > 0 {
+            p.attacks
+        } else {
+            bearer_scaled_attacks(p, state.alive[mi], us.model_count, seen)
+        });
     }
 }
 
@@ -5018,6 +5077,7 @@ fn resolve_with(
                             }
                             let alive_before_g = next.alive[g.ti];
                             let wounds_before_g = wounds_left(&next, g.ti);
+                            let mut feat_spends: Vec<usize> = Vec::new();
                             let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
                             for &mi in std::iter::once(&si).chain(next.attached[si].iter()) {
                                 if next.alive[mi] <= 0 {
@@ -5051,6 +5111,14 @@ fn resolve_with(
                                     msc.keep = keep;
                                     msc.attacks = attacks;
                                 }
+                                // FEAT PR 2 — the latch's volley seam, AFTER
+                                // the split aims: the extra attack joins this
+                                // group exactly like the table's per-volley
+                                // append (main.gd:3097), spent once per game.
+                                takedown_shot_gate(
+                                    statics, &next, mi, &mut msc, seams.rules_epoch,
+                                    &mut feat_spends,
+                                );
                                 // Wave 3 — Mobile Artillery's stationary gate:
                                 // the act-scope `moved` flag is the twin of the
                                 // table's `moved_round == current_round` stamp
@@ -5059,6 +5127,14 @@ fn resolve_with(
                                 let mut att = ctx_live_vs(ctx_of(um, &next, mi), statics, &next, mi, g.ti, false, seams.rules_epoch);
                                 att.moved_this_round = moved;
                                 parts.push((mi, msc, att));
+                            }
+                            // FEAT PR 2 — the deferred stamp: the unspent
+                            // bearer's first volley closes its latch here, so
+                            // the next group's gate (and the next volley's)
+                            // sees the folded name — once per game, never
+                            // re-spent.
+                            for &mi in &feat_spends {
+                                next.feats_used[mi].push("Takedown Shot".to_string());
                             }
                             // Block C5 — Instinctive: the +1 reaches the
                             // shooting fold ONLY when THIS group's target is
