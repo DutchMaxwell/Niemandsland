@@ -1274,12 +1274,13 @@ pub(crate) fn teleport_beat(
     // REPLAY: the record's centroid, no clamp; LIVE: the probe set (the
     // ADVANCE band — a standalone Reposition act has no Rush context).
     let to = match action.teleport {
-        Some(to) => to,
+        Some(to) => Some(to),
         None if action.kind == REPOSITION => teleport_probe(
             next, si, cap_in,
-            match cover { Cover::Board(t) if t.is_valid() => Some(t), _ => None })?,
-        None => return false,
+            match cover { Cover::Board(t) if t.is_valid() => Some(t), _ => None }),
+        None => None,
     };
+    let Some(to) = to else { return false; };
     let from = geom::centre(&next.positions[si]);
     let (dx, dz) = (to[0] as f32 - from[0], to[1] as f32 - from[2]);
     let mut chain = vec![si];
@@ -1304,7 +1305,7 @@ pub(crate) fn teleport_probe(
     next: &State, si: usize, cap_in: f64, terrain: Option<&Terrain>,
 ) -> Option<[f64; 2]> {
     let from = geom::centre(&next.positions[si]);
-    let cap_m = cap_in * IN2M as f32;
+    let cap_m = cap_in * IN2M;
     let side = next.player[si];
     let foe = if side == 1 { 2 } else { 1 };
     let obj_at = |p: V3| nearest_uncontrolled_objective(next, side, foe, p);
@@ -1312,7 +1313,7 @@ pub(crate) fn teleport_probe(
     if let Some(obj) = obj_at(from) {
         let d = geom::sub(obj, from);
         if geom::length(d) > 0.001 {
-            probes.push(geom::add(from, geom::mul(geom::normalized(d), geom::length(d).min(cap_m))));
+            probes.push(geom::add(from, geom::mul(geom::normalized(d), (geom::length(d) as f64).min(cap_m))));
         }
     }
     if let Some(t) = nearest_enemy(next, si) {
@@ -1324,7 +1325,7 @@ pub(crate) fn teleport_probe(
     if let Some(t) = terrain {
         for k in 0..8 {
             let a = std::f32::consts::TAU * (k as f32) / 8.0;
-            let p = geom::add(from, [a.cos() * cap_m, 0.0, a.sin() * cap_m]);
+            let p = geom::add(from, [a.cos() * cap_m as f32, 0.0, a.sin() * cap_m as f32]);
             if gives_cover(t.type_at(p)) { probes.push(p); break; }
         }
     }

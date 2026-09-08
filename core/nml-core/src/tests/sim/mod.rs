@@ -784,7 +784,7 @@
     }
 
     fn advance_shoot(target: &str) -> Action {
-        Action { kind: ADVANCE, ..rush_shoot(target) teleport: None, }
+        Action { kind: ADVANCE, ..rush_shoot(target) }
     }
 
 

@@ -139,7 +139,7 @@ use super::*;
         let (st, statics) = buff_line();
         let terrain = crate::terrain::Terrain::default();
         let traced_advance = Action {
-            traced: Some(vec![TracedRoll { tag: "bounding_d3".into(), faces: vec![2], plus: 1 teleport: None, }]),
+            traced: Some(vec![TracedRoll { tag: "bounding_d3".into(), faces: vec![2], plus: 1 }]),
             ..advance_to(20.0)
         };
         let mut tray = Tray::seeded(11);

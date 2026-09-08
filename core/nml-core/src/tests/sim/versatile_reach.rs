@@ -74,7 +74,7 @@ use super::*;
     #[test]
     fn an_ordinary_vr_charge_lands_exactly_like_a_non_carriers() {
         let (st, statics) = vr_charge_line(11.0);
-        let action = Action { dest: Some(st.positions[1][0]), ..vr_charge() teleport: None, };
+        let action = Action { dest: Some(st.positions[1][0]), ..vr_charge() };
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);
         let (plain, _) = resolve_stochastic_tray_on_board(
