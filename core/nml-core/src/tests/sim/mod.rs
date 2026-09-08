@@ -1541,6 +1541,7 @@ mod half_primitives;
 mod hit_and_run;
 mod hit_and_run_boost_band;
 mod grounded_speed;
+mod teleport;
 mod hit_and_run_score;
 mod instinctive;
 mod limited_weapons;
