@@ -81,6 +81,8 @@ pub const CHARGE: i64 = 3;
 /// Wave 5 (design #816 PR 2): the menu's Reposition kind — dice-free, replay
 /// keys on `Action::teleport`; kind 4 is free (GDScript normalizes KITE).
 pub const REPOSITION: i64 = 4;
+/// The fixed "may" margin (design §5-2, `SoloController.TELEPORT_EV_MARGIN`).
+pub const TELEPORT_EV_MARGIN: f64 = 0.5;
 
 /// Why a node could not be resolved by this port — reported by name with a
 /// count, never silently skipped.
@@ -1311,8 +1313,6 @@ pub(crate) fn teleport_beat(
 /// The bounded probe set (design §3): objective clamp, away-from-threat,
 /// first cover bearing, scored by a self-carried EV heuristic; the best
 /// landing only when it beats staying by the fixed margin.
-pub(crate) const TELEPORT_EV_MARGIN: f64 = 0.5;
-
 pub(crate) fn teleport_probe(
     next: &State, si: usize, cap_in: f64, terrain: Option<&Terrain>,
 ) -> Option<[f64; 2]> {
@@ -1322,17 +1322,16 @@ pub(crate) fn teleport_probe(
     let foe = if side == 1 { 2 } else { 1 };
     let obj_at = |p: V3| nearest_uncontrolled_objective(next, side, foe, p);
     let mut probes: Vec<V3> = vec![from];
-    let push = |probes: &mut Vec<V3>, p: V3| probes.push(p);
     if let Some(obj) = obj_at(from) {
         let d = geom::sub(obj, from);
         if geom::length(d) > 0.001 {
-            push(&mut probes, geom::add(from, geom::mul(geom::normalized(d), geom::length(d).min(cap_m))));
+            probes.push(geom::add(from, geom::mul(geom::normalized(d), geom::length(d).min(cap_m))));
         }
     }
     if let Some(t) = nearest_enemy(next, si) {
         let away = geom::sub(from, geom::centre(&next.positions[t]));
         if geom::length(away) > 0.001 {
-            push(&mut probes, geom::add(from, geom::mul(geom::normalized(away), cap_m)));
+            probes.push(geom::add(from, geom::mul(geom::normalized(away), cap_m)));
         }
     }
     if let Some(t) = terrain {
@@ -1345,21 +1344,18 @@ pub(crate) fn teleport_probe(
             }
         }
     }
+    // Self-carried EV: objective pull, threat escape, cover — the table
+    // scores with `AiPosition._evaluate`, which this core does not port.
     let ev_at = |p: V3| -> f64 {
-        let obj_pull = obj_at(p)
-            .map(|o| -(geom::length(geom::sub(o, p)) as f64) / IN2M as f64)
-            .unwrap_or(0.0);
-        let threat = nearest_enemy(next, si)
+        let obj = obj_at(p).map(|o| -(geom::length(geom::sub(o, p)) as f64) / IN2M as f64).unwrap_or(0.0);
+        let thr = nearest_enemy(next, si)
             .map(|t| geom::length(geom::sub(geom::centre(&next.positions[t]), p)) as f64 / IN2M as f64)
-            .map(|d| if d < 6.0 { -(6.0 - d) * 2.0 } else { 0.0 })
-            .unwrap_or(0.0);
-        let cover = terrain.map(|t| gives_cover(t.type_at(p)) as i64 as f64 * 2.0).unwrap_or(0.0);
-        obj_pull + threat + cover
+            .map(|d| if d < 6.0 { -(6.0 - d) * 2.0 } else { 0.0 }).unwrap_or(0.0);
+        let cov = terrain.map(|t| gives_cover(t.type_at(p)) as i64 as f64 * 2.0).unwrap_or(0.0);
+        obj + thr + cov
     };
     let stay = ev_at(from);
-    probes
-        .iter()
-        .copied()
+    probes.iter().copied()
         .filter(|&p| p != from && geom::length(geom::sub(p, from)) as f64 / IN2M as f64 <= cap_in + 1e-3)
         .map(|p| (ev_at(p), p))
         .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
@@ -4545,9 +4541,8 @@ fn resolve_with(
     let mut next = state.clone();
     let was_shaken = next.shaken[si];
     let mut sc = Scratch::default();
-    // Teleport / Ethereal (design #816 PR 2) — the activation-start latch
-    // clear, the table's own beat-start erase (main.gd:17456): the stamp
-    // refills every activation.
+    // #816 PR 2 — the activation-start latch clear (the beat's own erase,
+    // main.gd:17456); the stamp refills every activation.
     next.teleport_used[si] = false;
     sc.rules_epoch = seams.rules_epoch; // wave-3 mark consumers read it off Scratch
 
