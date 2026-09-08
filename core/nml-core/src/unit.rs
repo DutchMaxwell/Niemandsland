@@ -2764,11 +2764,9 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
     None
 }
 
-/// The Teleport / Ethereal read (design #816 PR 2): carried by NAME ("Teleport"
-/// — the aura grant folded it in already; "Ethereal"; or a Teleport-primitive
-/// DATA alias), gated on the FROZEN `EPOCH_7_TABLE_RULES`. The cap is keyed by
-/// NAME: Teleport 3" Advance/Charge, 6" Rush; every other name flat 6" —
-/// Ethereal's 0.0 bonus params are never "no reposition".
+/// The Teleport/Ethereal read (design #816 PR 2): by NAME ("Teleport" — the
+/// aura grant folded it in; "Ethereal"; a Teleport-primitive alias), gated on
+/// the FROZEN `EPOCH_7_TABLE_RULES`. Cap by NAME: Teleport 3"/6", others flat 6".
 #[derive(Debug, Clone, PartialEq)]
 pub struct TeleportSpec {
     /// The carried rule NAME — the cap key and the log line's subject.

@@ -791,10 +791,8 @@ pub fn candidates_tuned(
             out.push(c);
         }
     }
-    // Wave 5 (design #816 PR 2): ONE Reposition candidate per bearer,
-    // appended LAST (the W1 tail-growth precedent). The stamp is the epoch
-    // gate; the latch is not read here — one beat per resolve enforces
-    // once-per-activation. Band: the ADVANCE reading (no Rush context).
+    // Wave 5 (#816 PR 2): ONE Reposition candidate per bearer, appended LAST
+    // (the W1 tail-growth precedent); the epoch-gated stamp is the gate.
     if let Some(spec) = statics[state.roster.profile[unit]].teleport.as_ref() {
         if let Some(to) = teleport_probe(state, statics, unit,
             crate::unit::teleport_cap_in(&spec.name, false), Some(terrain))
