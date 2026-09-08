@@ -1262,10 +1262,9 @@ pub(crate) fn tray_mind_control(
 }
 
 
-/// Design #816 PR 2 — the Teleport/Ethereal beat (`main._solo_apply_
-/// teleport`): after the move, before the attack, once per activation.
-/// REPLAY: byte-exact on the record's centroid; LIVE (`REPOSITION` only):
-/// the bounded three-probe set. No die drawn, `in_cover` untouched.
+/// Design #816 PR 2 — the Teleport/Ethereal beat: after the move, before the
+/// attack, once per activation. REPLAY: byte-exact on the record's centroid;
+/// LIVE (`REPOSITION` only): the bounded three-probe set. No die drawn.
 pub(crate) fn teleport_beat(
     statics: &[UnitStatic], next: &mut State, si: usize, action: &Action,
     seams: Seams, mut shot: Option<&mut ShootResult>, cover: Cover,
@@ -1273,8 +1272,6 @@ pub(crate) fn teleport_beat(
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.alive[si] <= 0 {
         return false;
     }
-    // The aura grant is already folded into the profile lists at build_for
-    // entry (`apply_aura_channel`), so the statics stamp is the whole read.
     let Some(spec) = statics[next.roster.profile[si]].teleport.as_ref() else { return false; };
     let spec_name = spec.name.clone();
     let cap_in = crate::unit::teleport_cap_in(&spec_name, false);
@@ -1292,12 +1289,12 @@ pub(crate) fn teleport_beat(
         None => return false,
     };
     let from = geom::centre(&next.positions[si]);
+    let (dx, dz) = (to[0] as f32 - from[0], to[1] as f32 - from[2]);
     let mut chain = vec![si];
     if seams.hero_attach {
-        chain.extend(next.attached[si].iter().copied());
+        chain.extend(next.attached[si].iter().copied()); // `_moving_models`
     }
     for u in chain {
-        let (dx, dz) = (to[0] as f32 - from[0], to[1] as f32 - from[2]);
         for p in next.positions[u].iter_mut() {
             *p = [p[0] + dx as f64, p[1], p[2] + dz as f64];
         }
@@ -1325,16 +1322,17 @@ pub(crate) fn teleport_probe(
     let foe = if side == 1 { 2 } else { 1 };
     let obj_at = |p: V3| nearest_uncontrolled_objective(next, side, foe, p);
     let mut probes: Vec<V3> = vec![from];
+    let push = |probes: &mut Vec<V3>, p: V3| probes.push(p);
     if let Some(obj) = obj_at(from) {
         let d = geom::sub(obj, from);
         if geom::length(d) > 0.001 {
-            probes.push(geom::add(from, geom::mul(geom::normalized(d), geom::length(d).min(cap_m))));
+            push(&mut probes, geom::add(from, geom::mul(geom::normalized(d), geom::length(d).min(cap_m))));
         }
     }
     if let Some(t) = nearest_enemy(next, si) {
         let away = geom::sub(from, geom::centre(&next.positions[t]));
         if geom::length(away) > 0.001 {
-            probes.push(geom::add(from, geom::mul(geom::normalized(away), cap_m)));
+            push(&mut probes, geom::add(from, geom::mul(geom::normalized(away), cap_m)));
         }
     }
     if let Some(t) = terrain {
