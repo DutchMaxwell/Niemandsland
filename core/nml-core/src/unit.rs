@@ -2780,23 +2780,16 @@ pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
     if rule != "Teleport" || rush { 6.0 } else { 3.0 }
 }
 
-/// The stamp (`crossing_attack_of` pattern): the FIRST Teleport-primitive
-/// name the unit carries.
+/// The stamp (`crossing_attack_of` pattern): the FIRST Teleport-primitive name.
 fn teleport_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<TeleportSpec> {
-    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-        return None;
-    }
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { return None; }
     let map = reg.rules_for(&p.game_system);
     for raw in p.special_rules.iter().chain(p.item_grants.iter()) {
         let n = base_rule_name(raw);
         let e = map.lookup(&p.faction_folder, &n);
-        if n == "Teleport" && e.is_some() {
-            return Some(TeleportSpec { name: n });
-        }
-        if n == "Ethereal" {
-            return Some(TeleportSpec { name: n });
-        }
-        if e.filter(|e| e.primitive.as_deref() == Some("Teleport")).is_some() {
+        if n == "Teleport" && e.is_some() || n == "Ethereal"
+            || e.filter(|e| e.primitive.as_deref() == Some("Teleport")).is_some()
+        {
             return Some(TeleportSpec { name: n });
         }
     }
