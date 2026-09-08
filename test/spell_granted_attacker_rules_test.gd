@@ -95,7 +95,8 @@ func test_melee_scoped_grant_stays_out_of_a_shooting_read() -> void:
 	# read, and vice versa.
 	var attacker := _unit()
 	var bearer := _bearer_with({"Unwieldy": "attackers"})
-	(bearer.unit_properties["spell_records"] as Array)[0]["scope"] = "melee"
+	var rec: Dictionary = (bearer.unit_properties["spell_records"] as Array)[0]
+	rec["scope"] = "melee"
 	assert_array(AiSpell.granted_rules_of(attacker, bearer, true)).is_empty()
 	assert_array(AiSpell.granted_rules_of(attacker, bearer, false)).contains_exactly(["Unwieldy"])
 
@@ -106,7 +107,7 @@ func test_melee_scoped_grant_stays_out_of_a_shooting_read() -> void:
 func test_unpredictable_pair_site_honours_the_bearers_grant() -> void:
 	# main.gd:_solo_unpredictable_rule — the melee-only Fighter leg and the shooting-only
 	# Shooter leg each fire from the bearer's token (Mob Frenzy shape, spells_mechanics_gf.json).
-	var main := auto_free(MainScript.new())
+	var main: Node3D = auto_free(MainScript.new())
 	var melee_attacker := _unit()
 	assert_str(main._solo_unpredictable_rule(melee_attacker, true, _bearer_with({"Unpredictable Fighter": "attackers"}))) \
 		.is_equal("Unpredictable Fighter")
@@ -121,7 +122,7 @@ func test_unpredictable_pair_site_honours_the_bearers_grant() -> void:
 func test_unwieldy_site_honours_the_bearers_grant() -> void:
 	# main.gd:_solo_unit_has_unwieldy — a charger granted Unwieldy by the defender's token
 	# strikes last exactly like a printed carrier.
-	var main := auto_free(MainScript.new())
+	var main: Node3D = auto_free(MainScript.new())
 	assert_bool(main._solo_unit_has_unwieldy(_unit(), _bearer_with({"Unwieldy": "attackers"}))).is_true()
 	assert_bool(main._solo_unit_has_unwieldy(_unit(), _unit())).is_false()
 
@@ -129,7 +130,7 @@ func test_unwieldy_site_honours_the_bearers_grant() -> void:
 func test_slayer_site_honours_the_bearers_grant() -> void:
 	# main.gd:_solo_conditional_ap_parts — Slayer's gate (dao_union book: AP(+2) when it shoots
 	# over 9" or charges, vs Tough 3+) fires for the granted rule under the same registry lookup.
-	var main := auto_free(MainScript.new())
+	var main: Node3D = auto_free(MainScript.new())
 	var striker := _unit("dao_union")
 	var defender := _bearer_with({"Slayer": "attackers"})
 	defender.unit_properties["special_rules"] = ["Tough(3)"]
