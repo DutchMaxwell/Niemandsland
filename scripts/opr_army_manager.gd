@@ -1152,21 +1152,11 @@ func _add_band_tint_quad(tray: Node3D, size: Vector2, local_pos: Vector3, color:
 
 ## One small flat band label parented under `tray` (tray-local pos). Lies flat (billboard off, -90°
 ## about X) with a FIXED orientation (no camera-follow), anchored at its bottom-left, with a dark outline.
-func _add_band_label(tray: Node3D, text: String, local_pos: Vector3) -> void:
-	var label := Label3D.new()
+func _add_band_label(tray: Node3D, text: String, local_pos: Vector3) -> Label3D:
+	var label := build_tray_group_header(tray, text)   # the shared flat-tag language (issue #340)
 	label.name = "AmbushScoutLabel_%s" % text
-	label.text = text
-	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # lie flat on the tray
-	label.font_size = BAND_LABEL_FONT_SIZE
-	label.outline_size = BAND_LABEL_OUTLINE_SIZE
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	label.modulate = Color.WHITE
-	label.outline_modulate = BAND_LABEL_OUTLINE_COLOR
-	label.pixel_size = BAND_LABEL_PIXEL_SIZE
-	label.rotation_degrees = Vector3(-90.0, 0.0, 0.0)  # flat, fixed orientation (no camera-follow)
 	label.position = local_pos
-	tray.add_child(label)
+	return label
 
 
 ## True if `unit` carries the literal special rule `rule` (e.g. "Scout"/"Ambush"). These rules are
@@ -1199,6 +1189,123 @@ static func _unit_carries_ambush_alias(unit: OPRApiClient.OPRUnit, army: OPRApiC
 				and RulesRegistry.params_claim_ambush(entry.get("params", {}) as Dictionary):
 			return true
 	return false
+
+
+# === Issue #340: the off-table tray grouped by arrival class (pure presentation) ===
+
+## The tray's staged units group by arrival class in this FIXED order, one live-count header per
+## class. Every rebuild re-reads the classes from the per-row flags the game already keeps
+## (ambush_reserve / embarked_in / reinforcement_due_round / the Scout rule) — no persistent
+## grouping state, so a unit whose class changes mid-game re-slots on the next rebuild. Headers
+## are plain flat Label3Ds (the band-label language): no collider, never selectable, so selection,
+## drag and ghost flows keep targeting unit rows only and MP replays + the AI twin never see the
+## grouping. The sort is the tray LIST (plan order drives the header slots); parked block slots
+## are untouched — their indices are MP-replay state (forced parking), a pure presentation must
+## not re-pack them.
+const TRAY_GROUP_CLASSES: Array[String] = ["Ambush", "Scout", "Transport cargo", "Reinforcement"]
+
+
+## The arrival class of `gu` by its per-row flags — "" when it is not staged off-table. `gu` must
+## be a live GameUnit (the tray's resident loop filters before this). First match wins:
+## Reinforcement (a due copy outranks all), Transport cargo (S1.5: cargo is never an independent
+## reserve), Ambush reserve, then a Scout carrier. Pure/static → unit-testable.
+static func arrival_class_of(gu: GameUnit) -> String:
+	if int(gu.unit_properties.get("reinforcement_due_round", -1)) > 0:
+		return "Reinforcement"
+	if gu.unit_properties.has("embarked_in"):
+		return "Transport cargo"
+	if SoloController.unit_in_reserve(gu):
+		return "Ambush"
+	if gu.has_special_rule("Scout"):
+		return "Scout"
+	return ""
+
+
+## The grouped tray plan for `units`: one entry per NON-EMPTY class, in the fixed class order,
+## each class's rows in a stable secondary sort on the existing row key (the unit_id the parking
+## grid already groups blocks by). Pure/static → unit-testable.
+static func tray_group_plan(units: Array) -> Array:
+	var grouped := {}
+	for cls in TRAY_GROUP_CLASSES:
+		grouped[cls] = []
+	for u in units:
+		var cls := arrival_class_of(u as GameUnit)
+		if not cls.is_empty():
+			(grouped[cls] as Array).append(u)
+	var plan: Array = []
+	for cls in TRAY_GROUP_CLASSES:
+		var rows: Array = grouped[cls]
+		if rows.is_empty():
+			continue
+		rows.sort_custom(func(a, b): return (a as GameUnit).unit_id < (b as GameUnit).unit_id)
+		plan.append({"class": cls, "count": rows.size(), "rows": rows})
+	return plan
+
+
+## One group header's plain label with its live count ("Ambush — 3"). Static → unit-testable.
+static func tray_group_label(cls: String, count: int) -> String:
+	return "%s — %d" % [cls, count]
+
+
+## The flat tray tag the band labels and the group headers share (issue #340): flat, fixed
+## orientation, dark outline — and NO collider, in NO group, so a header is never selectable and
+## a click can only ever land on a unit row. Static → unit-testable.
+static func build_tray_group_header(tray: Node3D, text: String) -> Label3D:
+	var label := Label3D.new()
+	label.text = text
+	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED  # lie flat on the tray
+	label.font_size = BAND_LABEL_FONT_SIZE
+	label.outline_size = BAND_LABEL_OUTLINE_SIZE
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	label.outline_modulate = BAND_LABEL_OUTLINE_COLOR
+	label.pixel_size = BAND_LABEL_PIXEL_SIZE
+	label.rotation_degrees = Vector3(-90.0, 0.0, 0.0)  # flat, fixed orientation (no camera-follow)
+	tray.add_child(label)
+	return label
+
+
+## Rebuild the tray's arrival-class grouping for `player_id`: re-classify every staged unit from
+## its flags and refresh the flat group headers along the tray's near edge, one slot per class in
+## the fixed order. Safe to call any time; a no-op without a tray.
+func rebuild_tray_groups(player_id: int) -> void:
+	if not army_trays.has(player_id) or not is_instance_valid(army_trays[player_id]):
+		return
+	var residents: Array = []
+	for u in get_game_units_for_player(player_id):
+		var cls := arrival_class_of(u as GameUnit)
+		if cls.is_empty() or (cls == "Scout" and not _anchor_off_table(u as GameUnit)):
+			continue   # a deployed Scout carrier stands ON the table — never a tray resident
+		residents.append(u)
+	var plan: Array = tray_group_plan(residents)
+	var tray: Node3D = army_trays[player_id]
+	for child in tray.get_children():
+		if str(child.name).begins_with("TrayGroupHeader"):
+			tray.remove_child(child)
+			child.queue_free()
+	var bounds: Vector2 = _get_tray_position_and_bounds(player_id).bounds
+	var gi := 0
+	for g in plan:
+		var label := _add_band_label(tray, tray_group_label(str(g["class"]), int(g["count"])),
+			Vector3(-bounds.x / 2.0 + 0.024 + (bounds.x - 0.024) / 4.0 * float(gi),
+				BAND_LABEL_Y, bounds.y / 2.0 - 0.012))
+		label.name = "TrayGroupHeader_%s" % str(g["class"])
+		gi += 1
+
+
+## Does `gu`'s alive anchor stand OFF the table (i.e. on its tray)? Same standard as main.gd's
+## deployment gate, table-rect based. A destroyed unit has no anchor and reads as off-table.
+func _anchor_off_table(gu: GameUnit) -> bool:
+	if table == null:
+		return true
+	var pts: Array = []
+	for m in gu.get_alive_models():
+		var node: Node3D = (m as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			pts.append(node.global_position)
+	var c: Vector3 = MoveIntent.anchor_of(pts)
+	var half: Vector2 = Vector2(table.table_size.x, table.table_size.y) * (0.3048 / 2.0)
+	return not Rect2(-half, half * 2.0).has_point(Vector2(c.x, c.z))
 
 
 ## Get tray position and bounds based on player ID and table size
@@ -3050,6 +3157,7 @@ func set_unit_embarked(unit: GameUnit, transport: GameUnit, embarked: bool,
 	else:
 		unit.unit_properties.erase("embark_return_spots")
 	unit_embark_changed.emit(unit, transport, embarked)
+	rebuild_tray_groups(pid)
 	return true
 
 
