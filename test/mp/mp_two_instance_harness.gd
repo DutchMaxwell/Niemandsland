@@ -213,6 +213,10 @@ func _setup_fixture() -> bool:
 	if _fixture_ready:
 		return true
 	_main.solo_ai_slots = {}
+	# The save scenario is the harness's first TRAY roll — seed the tray's own RNG here (the
+	# arena reseeds it only post-deploy, which never happens in the harness), or run 2's dice
+	# differ from run 1's and the determinism compare goes red.
+	_main.seed_tray_rng(int(_args.get("seed", "240904")))
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	_main._solo_batch = true
