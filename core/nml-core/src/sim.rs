@@ -1262,8 +1262,7 @@ pub(crate) fn tray_mind_control(
 }
 
 
-/// Design #816 PR 2 — the Teleport/Ethereal beat: after the move, before the
-/// attack, once per activation; REPLAY byte-exact, LIVE the three probes.
+/// #816 PR 2 — the Teleport/Ethereal beat; REPLAY byte-exact, LIVE 3 probes.
 pub(crate) fn teleport_beat(
     statics: &[UnitStatic], next: &mut State, si: usize, action: &Action, seams: Seams,
     dice: Option<&mut (&mut Tray, &mut ShootResult)>, cover: Cover,
