@@ -223,5 +223,11 @@ use crate::io;
         let (next, _) = run_move(&st, &statics, &move_of("p1_0_a", 9.0), 6);
         let x = next.positions[0][0][0];
         assert!((x - 6.0 * IN2M).abs() < 1e-6, "an epoch-6 record replays at the plain band: {x}");
-        assert!(next.feats_used[0].is_empty(), "and spends nothing");
+        // The folded key rides along INERTLY below the gate: the read is
+        // epoch-gated, so nothing spends it again and no replay byte moves.
+        assert_eq!(
+            next.feats_used[0],
+            vec!["Speed Feat".to_string()],
+            "the fold lands the key, the gate keeps it inert"
+        );
     }
