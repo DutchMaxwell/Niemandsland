@@ -910,6 +910,8 @@ pub struct UnitStatic {
     /// (`within_in == 0.0`) below `EPOCH_7_TABLE_RULES` and for every
     /// non-carrier.
     pub reinforcement: Reinforcement,
+    /// RED stub — the field exists so the tests compile; it always reads 0.0.
+    pub spawn: Spawn,
     /// "Re-Deployment" (the deployment-phase redeploy: gf 13 + aof 2 carrier
     /// factions): the entry's own `max_units` param, stamped per carrier.
     /// The table reads it at `solo_controller.gd:9642` with fallback 2
@@ -3196,6 +3198,13 @@ fn reinforcement_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Rein
     }
 }
 
+/// RED stub — the read is absent; every carrier reads as no carrier.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Spawn {
+    pub place_in: f64,
+    pub once_per_game: bool,
+}
+
 /// The Ambush family's per-profile read (`UnitStatic.ambush_family`): each
 /// name gated by `unit_rule_active` — the unit carries it AND the map fields
 /// it for this (system, faction) — with the entry's own params on top.
@@ -4649,6 +4658,7 @@ impl UnitStatic {
             },
             ambush_family: ambush_family_of(reg, p, rules_epoch),
             reinforcement: reinforcement_of(reg, p, rules_epoch),
+            spawn: Spawn::default(),
             re_deployment_max_units: re_deployment_max_units_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             storm: storm_of(reg, p, rules_epoch),
