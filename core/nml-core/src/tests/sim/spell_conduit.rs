@@ -166,8 +166,11 @@ use super::*;
         let next = run(&st, &statics, 7);
         let ctx = ctx_of(&statics[2], &st, 2);
         let ev = spell_damage_ev_of(&bolt(), &ctx);
-        let riden = (1.0 / 3.0) * cast_success_chance(1) * ev;
-        let flat = (1.0 / 3.0) * cast_success_chance(0) * ev;
+        // The expectation path walks all THREE D3 faces at weight 1/3 each,
+        // so the landed EV is the chance times the spell's EV (battle_sim.gd
+        // _cast_phase's own note) — with the rule's +1 riding the origin.
+        let riden = cast_success_chance(1) * ev;
+        let flat = cast_success_chance(0) * ev;
         assert!((damage(&next) - riden).abs() < 1e-9,
             "the landed EV is the +1-riden chance (the record's p_success): got {} want {}",
             damage(&next), riden);
@@ -209,7 +212,7 @@ use super::*;
         assert!(next_cond.cast_events.is_empty(), "no conduit rode the cast, nothing logs");
 
         let ctx = ctx_of(&s_cond[2], &st_cond, 2);
-        let flat = (1.0 / 3.0) * cast_success_chance(0) * spell_damage_ev_of(&bolt(), &ctx);
+        let flat = cast_success_chance(0) * spell_damage_ev_of(&bolt(), &ctx);
         assert!((damage(&next_cond) - flat).abs() < 1e-9, "the flat chance, not the +1");
 
         // And a bearer PAST the rule's own 12" reach is no origin at all.
