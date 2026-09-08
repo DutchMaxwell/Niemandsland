@@ -197,17 +197,22 @@ func test_the_solo_ai_path_is_unchanged(timeout := 120000) -> void:
 		.is_true()
 
 
-# === 3. Null solo_controller guard =================================================================
+# === 3. Null solo_controller fallback (#675 item 1) =================================================
 
-## THE CRASH THIS GUARDS AGAINST. #667 (the MP gate removal above) let a hovered unit of a
-## DIFFERENT player_id pass as a valid target without checking that solo_controller actually
-## exists. before_test's own setup order never hits this (it calls _ensure_solo_controller() while
+## THE HISTORY. #667 (the MP gate removal above) let a hovered unit of a DIFFERENT player_id pass
+## as a valid target, but a plain human-vs-human room never builds solo_controller, so the hover
+## crashed on solo_controller.unit_centre() — fixed 04.09. by HIDING the line while the controller
+## was null. #675 item 1 goes one step further: hiding was still dishonest, because the MP room's
+## hover LOS feedback stayed dead and the two-instance harness had to FABRICATE a controller to
+## fake it green. Every geometry the line needs is pure, so the fallback now DRAWS from
+## SoloController.alive_positions + MoveIntent.anchor_of without any controller instance.
+## before_test's own setup order never hits this (it calls _ensure_solo_controller() while
 ## network_manager is still the scene's real, not-yet-active one, so a controller gets built before
 ## _fake is wired in) — so here the suite re-runs the REAL gate (main.gd ~2289) with the fake,
 ## already-active MP net wired first: solo_ai_slots stays empty and network_manager.is_multiplayer_active()
 ## is already true, so _ensure_solo_controller bails out and leaves solo_controller null, exactly like
-## a genuine human-vs-human room. Hovering a different-player_id unit must not crash on
-## solo_controller.unit_centre() — it must draw nothing, same as any other invalid target.
+## a genuine human-vs-human room. Hovering a different-player_id unit must show the same live LOS
+## feedback without crashing and without summoning a controller.
 func test_hover_does_not_crash_with_a_null_solo_controller_in_a_human_vs_human_room(timeout := 120000) -> void:
 	if _main.solo_controller != null:
 		_main.solo_controller.queue_free()
@@ -232,11 +237,11 @@ func test_hover_does_not_crash_with_a_null_solo_controller_in_a_human_vs_human_r
 	_hover_target(attacker, pt)   # must not raise "Nonexistent function 'unit_centre' in base 'Nil'"
 
 	assert_object(_main.solo_controller) \
-		.override_failure_message("the guard must not summon a controller as a side effect") \
+		.override_failure_message("the fallback must not summon a controller as a side effect") \
 		.is_null()
-	assert_object(_main._solo_los_line) \
-		.override_failure_message("no LOS line node should be created while solo_controller is null") \
-		.is_null()
+	assert_bool(_line_shown()) \
+		.override_failure_message("the LOS line must draw from the pure-geometry fallback while solo_controller is null") \
+		.is_true()
 	assert_bool(_label_shown()) \
-		.override_failure_message("the sight-count label stays hidden alongside the line") \
-		.is_false()
+		.override_failure_message("the sight-count label shows alongside the fallback line") \
+		.is_true()

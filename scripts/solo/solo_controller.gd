@@ -9109,7 +9109,9 @@ func model_in_cover(m: ModelInstance) -> bool:
 	return TerrainRules.gives_cover(int(terrain_type_at.call((node as Node3D).global_position)))
 
 
-func alive_positions(unit: GameUnit) -> Array:
+## Pure given the unit: its alive models' world positions (static so the MP hover LOS path in
+## main.gd can read the same truth without a controller instance — #675 item 1).
+static func alive_positions(unit: GameUnit) -> Array:
 	var out: Array = []
 	for m in unit.get_alive_models():
 		var node := (m as ModelInstance).node

@@ -4163,7 +4163,7 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 ## Indirect: "may target enemies that are not in line of sight as if in line of sight") keeps the range
 ## gate but waives the sight test.
 func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ignore_los: bool = false) -> int:
-	if shooter == null or target == null or solo_controller == null:
+	if shooter == null or target == null:
 		return 0
 	var _prof_sight_t0 := BattleSim.prof_t0()   # NML-1072: LOS/sight computation
 	var target_positions: Array = []
@@ -4172,7 +4172,7 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 		target_members = target_members + target.get_attached_heroes()
 	for tm in target_members:
 		if tm != null:
-			target_positions.append_array(solo_controller.alive_positions(tm))
+			target_positions.append_array(SoloController.alive_positions(tm))
 	var los: Callable
 	if ignore_los:
 		los = func(_sp: Vector3, _tp: Vector3) -> bool: return true
@@ -4183,7 +4183,7 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 	# the ruler showed in range (~5" off between large bases). Extending the range by both units'
 	# base radii is the centre-space equivalent of subtracting them from every pair distance.
 	var edge_slack_m: float = _solo_unit_base_radius_m(shooter) + _solo_unit_base_radius_m(target)
-	var _sighted := SoloController.sighted_models(solo_controller.alive_positions(shooter), target_positions,
+	var _sighted := SoloController.sighted_models(SoloController.alive_positions(shooter), target_positions,
 		float(range_in) * MoveIntent.INCHES_TO_METERS + edge_slack_m, los)
 	BattleSim.prof_mark("sight", _prof_sight_t0)
 	return _sighted
@@ -9199,8 +9199,8 @@ func _solo_has_los(a: GameUnit, b: GameUnit) -> bool:
 	# since the elevation program: the unit's anchor carries its real standing height, so a unit up on
 	# a container roof looks over what a unit on the table cannot. Terrain only, as before — the
 	# per-model shooting truth is the one that also weighs other units' bases.
-	var ca: Vector3 = solo_controller.unit_centre(a)
-	var cb: Vector3 = solo_controller.unit_centre(b)
+	var ca: Vector3 = _los_unit_centre(a)
+	var cb: Vector3 = _los_unit_centre(b)
 	return VolumetricLos.has_los(
 		{"c": Vector2(ca.x, ca.z), "r": _solo_unit_base_radius_m(a), "y0": ca.y, "y1": ca.y + _solo_unit_los_height_m(a)},
 		{"c": Vector2(cb.x, cb.z), "r": _solo_unit_base_radius_m(b), "y0": cb.y, "y1": cb.y + _solo_unit_los_height_m(b),
@@ -9278,17 +9278,32 @@ func _solo_reach_note(attacker: GameUnit, hovered: GameUnit) -> String:
 		("Aircraft -12\"" if SoloController.target_range_penalty_in(hovered) > 0.0 else str(SoloController.ranged_shroud_spec(hovered).get("name", "Ranged Shrouding")))]
 
 
+## The unit centre the LOS line endpoints hang off. A plain human-vs-human room has no
+## SoloController instance, so the centre falls back to the same pure geometry the controller's
+## unit_centre() computes: alive model positions, the attached-hero fallback, MoveIntent anchor.
+func _los_unit_centre(unit: GameUnit) -> Vector3:
+	if solo_controller != null:
+		return solo_controller.unit_centre(unit)
+	var pts: Array = SoloController.alive_positions(unit)
+	if pts.is_empty() and unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			pts += SoloController.alive_positions(h as GameUnit)
+	return MoveIntent.anchor_of(pts)
+
+
 func _solo_update_los_line(screen_pos: Vector2) -> void:
 	var attacker: GameUnit = _solo_target_mode.get("unit")
 	var hovered := _solo_pick_unit_at(screen_pos)
 	# MP gate removal (audit row 3): a hovered unit is a target when it is the solo AI's OR — in a
 	# live multiplayer session — when it belongs to a DIFFERENT player than the attacker. The AI
 	# disjunct stays untouched, so solo behaviour is preserved unchanged.
-	# Null-controller guard: a pure human-vs-human room never builds solo_controller
-	# (_ensure_solo_controller bails early when solo_ai_slots is empty and MP is active — untouched
-	# here), so the non-AI-target disjunct above can pick a target while solo_controller is still
-	# null. Treat that as no valid target instead of crashing on unit_centre() below.
-	var is_valid_target: bool = hovered != null and attacker != null and solo_controller != null and (
+	# Null-controller fallback (was #667's hide-guard): a pure human-vs-human room never builds
+	# solo_controller (_ensure_solo_controller bails early when solo_ai_slots is empty and MP is
+	# active — untouched here), so the non-AI disjunct picks a target while solo_controller is still
+	# null. That target is VALID: every geometry the line needs comes from pure helpers
+	# (_los_unit_centre, SoloController.alive_positions), so MP hover draws the same live LOS
+	# feedback solo does — no controller instance summoned.
+	var is_valid_target: bool = hovered != null and attacker != null and (
 		_solo_is_ai_unit(hovered)
 		or (network_manager != null and network_manager.is_multiplayer_active()
 			and int(hovered.unit_properties.get("player_id", 0)) != int(attacker.unit_properties.get("player_id", 0))))
@@ -9321,8 +9336,8 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 				"count": _solo_hover_sighted_count(attacker, hovered)}
 		sighted = int(_solo_los_cache.get("count", 0))
 	var color := Color(0.2, 0.9, 0.3) if sighted > 0 else Color(0.95, 0.25, 0.2)
-	var from := solo_controller.unit_centre(attacker) + Vector3(0, 0.04, 0)
-	var to := solo_controller.unit_centre(hovered) + Vector3(0, 0.04, 0)
+	var from := _los_unit_centre(attacker) + Vector3(0, 0.04, 0)
+	var to := _los_unit_centre(hovered) + Vector3(0, 0.04, 0)
 	var im := _solo_los_line.mesh as ImmediateMesh
 	im.clear_surfaces()
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
