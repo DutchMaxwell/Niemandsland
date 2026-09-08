@@ -2231,6 +2231,28 @@ func _act(unit: GameUnit) -> Dictionary:
 			"candidates": [], "chosen": "HOLD and shoot in place",
 			"why": "kite would abandon a held objective under threat",
 			"data": {"final_round": _is_final_round()}})
+	# #812 TABLE HALF (GF v3.5.1 p.7): a RUSH whose executable budget is capped to the unit's Advance
+	# distance (p.11 difficult cap on the corridor toward the goal) forfeits the shot for ZERO extra
+	# inches — a dominated action. With a ranged weapon and a legal target in range + LOS after the
+	# capped move, demote to ADVANCE and take the volley. Quick Shot units keep the Rush (they may
+	# shoot after it); a Slow unit's Advance is shorter than the cap, so the Rush still gains ground.
+	if action == AiDecision.Action.RUSH and not quick_shot and shoot_range > 0 \
+			and goal_dist > DIFFICULT_MOVE_CAP_IN \
+			and reach_capped_by_difficult(unit, goal, goal_dist) \
+			and DIFFICULT_MOVE_CAP_IN <= advance \
+			and target_unit != null and enemy_dist - DIFFICULT_MOVE_CAP_IN <= float(shoot_range) \
+			and _has_los(unit, target_unit):
+		action = AiDecision.Action.ADVANCE
+		do_shoot = true
+		report["action"] = action
+		report["shoot"] = do_shoot
+		action_why = "rush demoted: capped to the advance distance"
+		record_decision({"kind": "action", "unit": unit.get_name(),
+			"rule": "GF v3.5.1 p.7: a rush capped to the advance distance forfeits the shot for nothing — chose advances (demoted)",
+			"candidates": [], "chosen": "advances (demoted)",
+			"why": "rush capped to advance distance",
+			"data": {"budget_in": DIFFICULT_MOVE_CAP_IN, "advance_in": advance,
+				"target": target_unit.get_name()}})
 	# P0 MENU-COVERAGE PROBE (NML-1009, env-gated NML_MENU_PROBE=1): the tree's
 	# activation is settled HERE — action, destination and victim are final and
 	# nothing has moved yet, so the board still matches what the planner would

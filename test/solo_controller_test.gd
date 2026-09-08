@@ -3410,3 +3410,80 @@ func test_commander_role_rederives_from_the_surviving_chain() -> void:
 	u.models[1].is_alive = false
 	# both Rifle bearers dead: the survivor is a melee body — the role flips
 	assert_int(solo._commander_role(u)).is_equal(SoloController.CmdRole.CLOSE_AND_FIGHT)
+
+
+# === #812 table half: a rush capped to the advance distance is demoted to advance + shoot ===
+
+## Hybrid shooter + close-combat loadout (melee strength beats the rifle → HYBRID), rifle 24".
+func _hybrid_shooter(pid: int, positions: Array) -> GameUnit:
+	var u := _unit(pid, positions)
+	var opr := OPRApiClient.OPRUnit.new()
+	var rifle := OPRApiClient.OPRWeapon.new()
+	rifle.name = "Rifle"
+	rifle.range_value = 24
+	rifle.attacks = 1
+	rifle.count = 1
+	var ccw := OPRApiClient.OPRWeapon.new()
+	ccw.name = "CCW"
+	ccw.range_value = 0
+	ccw.attacks = 2
+	ccw.count = 1
+	opr.weapons = [rifle, ccw]
+	u.source_type = "opr"
+	u.source_data = opr
+	for m in u.models:
+		(m as ModelInstance).properties["weapons"] = [{"name": "Rifle"}, {"name": "CCW"}]
+	return u
+
+
+func _difficult_ring(solo: SoloController) -> void:
+	# A forest ring 1.3"–9.8" out: any straight corridor from the unit crosses it → p.11 6" cap.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		var m: float = maxf(absf(p.x), absf(p.z))
+		return TerrainRules.TerrainType.FOREST if (m > 0.033 and m < 0.25) else TerrainRules.TerrainType.NONE
+
+
+func test_812_rush_capped_to_advance_distance_is_demoted_to_advance_and_shoot() -> void:
+	# The enemy sits 19.7" north (in rifle range NOW), an uncontrolled marker 10" north — beyond the
+	# Advance band (9") but inside the Rush band (15"), no enemy in the way. The tree RUSHES the marker
+	# and forfeits the shot — and the forest ring caps that rush at the 6" difficult budget, i.e. the
+	# same ground an Advance covers. GF v3.5.1 p.7: rush forbids shooting → advance + shoot instead.
+	var human := _unit(1, [Vector3(0, 0, 0.5)])   # 19.7" north — in rifle range, beyond the 12" charge
+	var ai := _hybrid_shooter(2, [Vector3(0, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	_difficult_ring(solo)
+	var objective := Vector3(0, 0, 0.254)
+	solo.objectives_provider = func() -> Array: return [objective]
+	solo.objective_owner_of = func(_i: int) -> int: return 0
+	var moved := solo.activate_next_ai_unit()
+	assert_object(moved).is_equal(ai)
+	# THE FIX: demoted to Advance, the shot survives.
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.ADVANCE)
+	assert_bool(bool(solo.last_report["shoot"])).is_true()
+	assert_bool(bool(solo.last_report["can_shoot"])).is_true()
+
+
+func test_812_rush_with_no_target_in_range_after_the_move_stays_a_rush() -> void:
+	# Same marker-and-forest shape, but the enemy is 35.4" out — even an uncapped rush leaves it far
+	# beyond the 24" rifle. No shot is on offer, so the rush to the marker is NOT dominated: no demotion.
+	var human := _unit(1, [Vector3(0, 0, 0.9)])
+	var ai := _hybrid_shooter(2, [Vector3(0, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	_difficult_ring(solo)
+	var objective := Vector3(0, 0, 0.254)
+	solo.objectives_provider = func() -> Array: return [objective]
+	solo.objective_owner_of = func(_i: int) -> int: return 0
+	var moved2 := solo.activate_next_ai_unit()
+	assert_object(moved2).is_equal(ai)
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
+	assert_bool(bool(solo.last_report["shoot"])).is_false()
