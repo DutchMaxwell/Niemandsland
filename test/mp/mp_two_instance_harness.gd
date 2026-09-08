@@ -33,7 +33,7 @@ var _failed := false
 var _failure := ""
 var _room_code := ""
 var _los_result: Dictionary = {"visible": false, "label_visible": false, "text": ""}
-var _remote_save_faces: Array = []
+var _remote_save_wounds := -1   # result of the in-flight remote save batch (-1 = none yet)
 
 
 func _ready() -> void:
@@ -312,10 +312,10 @@ func _unit(unit_id: String) -> GameUnit:
 ## #673: the guest must answer the remote save prompt like a human would — the production
 ## dialog (`_solo_prompt_saves`) is confirmed exactly as its Roll button would.
 func _run_remote_save_attack() -> void:
-	var faces: Array = await _main._solo_save_batch(_unit(AI_STRIKER_UNIT),
+	var wounds: int = await _main._solo_save_batch(_unit(AI_STRIKER_UNIT),
 		_unit(SAVE_DEFENDER_UNIT), SAVE_WEAPON, 3, 4, 0,
 		{"name": SAVE_WEAPON}, true, false)
-	_remote_save_faces = faces
+	_remote_save_wounds = wounds
 
 
 func _confirm_save_prompt() -> bool:
@@ -360,7 +360,7 @@ func _snapshot() -> Dictionary:
 		"units": {},
 		"los": _los_result.duplicate(true),
 		"ai_slots": [],
-		"remote_save_faces": _remote_save_faces,
+		"remote_save_wounds": _remote_save_wounds,
 		"save_prompt_visible": false,
 		"battle_log_tail": [],
 	}

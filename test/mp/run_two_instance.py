@@ -491,13 +491,13 @@ class Run:
         self.command("guest", "confirm_save")
         states = self.wait_condition(
             "save faces routed back to the resolving peer",
-            lambda s: len(s["host"].get("remote_save_faces", [])) == 3
+            lambda s: s["host"].get("remote_save_wounds", -1) >= 0
             and any(
                 "rolled their defense saves vs Harness Blade" in line
                 for line in s["host"].get("battle_log_tail", [])
             ),
-            diagnostic=lambda s: "faces=%r host_tail=%r" % (
-                s["host"].get("remote_save_faces"), s["host"].get("battle_log_tail"),
+            diagnostic=lambda s: "wounds=%r host_tail=%r" % (
+                s["host"].get("remote_save_wounds"), s["host"].get("battle_log_tail"),
             ),
         )
         self.checkpoint("remote-saves-rolled", states)
