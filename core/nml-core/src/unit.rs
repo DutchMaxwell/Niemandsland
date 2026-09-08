@@ -2781,16 +2781,11 @@ pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
 fn teleport_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<TeleportSpec> {
     if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { return None; }
     let map = reg.rules_for(&p.game_system);
-    for raw in p.special_rules.iter().chain(p.item_grants.iter()) {
-        let n = base_rule_name(raw);
-        let e = map.lookup(&p.faction_folder, &n);
-        if n == "Teleport" && e.is_some() || n == "Ethereal"
-            || e.filter(|e| e.primitive.as_deref() == Some("Teleport")).is_some()
-        {
-            return Some(TeleportSpec { name: n });
-        }
-    }
-    None
+    p.special_rules.iter().chain(p.item_grants.iter()).map(|raw| base_rule_name(raw))
+        .find(|n| (*n == "Teleport" && map.lookup(&p.faction_folder, n).is_some())
+            || *n == "Ethereal"
+            || map.lookup(&p.faction_folder, n).filter(|e| e.primitive.as_deref() == Some("Teleport")).is_some())
+        .map(|n| TeleportSpec { name: n })
 }
 
 /// One carried "Surprise Attack" — "Counts as having Infiltrate. The first
