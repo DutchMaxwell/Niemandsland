@@ -216,6 +216,12 @@ pub(crate) struct PlainLedger {
     /// stands (act_recorder.gd `_ledger_of`). Empty on every older corpus.
     #[serde(default)]
     storm_used: Vec<String>,
+    /// Wave 5 group (b) — the once-per-game FEAT latch (the Storm Attack
+    /// shape): the DISPLAY names whose `speed_feat_used_<snake>` flag stands
+    /// (solo_controller.gd:1712), folded into `State.feats_used` so a later
+    /// act replays with the latch CLOSED. Empty on every older corpus.
+    #[serde(default)]
+    feats_used: Vec<String>,
 }
 
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
@@ -750,6 +756,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         piercing_tag_used: vec![false; n],
         piercing_tag_markers: vec![0; n],
         storm_used: vec![Vec::new(); n],
+        feats_used: vec![Vec::new(); n],
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
             // Read the matrix in its own (key-sorted) order and STORE it in
             // roster order, so `_los_clear`'s port can index it with roster
@@ -842,6 +849,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
             st.second_wind_used[ui] = ledger.second_wind_used;
             st.reinforcement_used[ui] = ledger.reinforcement_used;
             st.storm_used[ui] = ledger.storm_used.clone();
+            st.feats_used[ui] = ledger.feats_used.clone();
             st.growth_markers[ui] = ledger.growth;
             st.vengeance_markers[ui] = ledger.vengeance_markers;
             // `growth_round` has no key of its own on the wire (see

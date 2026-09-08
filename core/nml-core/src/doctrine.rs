@@ -177,6 +177,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         limited_used: vec![Vec::new(); n],
         piercing_tag_used: vec![false; n], piercing_tag_markers: vec![0; n],
         storm_used: vec![Vec::new(); n],
+        feats_used: vec![Vec::new(); n],
     }
 }
 
