@@ -701,6 +701,14 @@ pub struct UnitStatic {
     /// sim.rs's cast sub-phase. A battery is NEVER `is_caster` (the table's
     /// own comment: "is_caster() stays false", game_unit.gd:417).
     pub spell_accumulator: bool,
+    /// Spell Conduit (design #824 §4 PR 2) — a friendly cast ORIGIN, read
+    /// BY NAME behind the frozen `EPOCH_7_TABLE_RULES`; the walk is sim.rs's
+    /// cast sub-phase. Params off the rule entry — the keys PR 1's twin
+    /// reads (battle_sim.gd `_cast_origins`). A conduit is never a caster.
+    pub spell_conduit: bool,
+    pub spell_conduit_reach_in: f64,
+    pub spell_conduit_casting_mod: i64,
+    pub spell_conduit_needs_steady: bool,
     /// `RulesRegistry.unit_rule_active(gu, "Battleborn" | "Steadfast")`
     /// (rules_registry.gd:136-142) — the two rules that clear Shaken for free at
     /// a round start (ai_planner.gd:493-495). Static per unit, so the registry
@@ -1260,6 +1268,23 @@ fn unit_param_f(reg: &mut Registries, p: &Profile, rule: &str, key: &str, fallba
     let map = reg.rules_for(&p.game_system);
     match map.lookup(&p.faction_folder, rule) {
         Some(e) => e.param_f(key, fallback),
+        None => fallback,
+    }
+}
+
+/// `unit_param_f`'s contract, one integer (resp. printed-bool) param.
+fn unit_param_i(reg: &mut Registries, p: &Profile, rule: &str, key: &str, fallback: i64) -> i64 {
+    let map = reg.rules_for(&p.game_system);
+    match map.lookup(&p.faction_folder, rule) {
+        Some(e) => e.param_i(key, fallback),
+        None => fallback,
+    }
+}
+
+fn unit_param_b_or(reg: &mut Registries, p: &Profile, rule: &str, key: &str, fallback: bool) -> bool {
+    let map = reg.rules_for(&p.game_system);
+    match map.lookup(&p.faction_folder, rule) {
+        Some(e) => e.param_b_or(key, fallback),
         None => fallback,
     }
 }
@@ -4664,6 +4689,16 @@ impl UnitStatic {
             spell_accumulator: rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
                 && (has_special_rule(&p.special_rules, "Spell Accumulator")
                     || has_special_rule(&p.item_grants, "Spell Accumulator")),
+            // Spell Conduit (design #824 §4 PR 2), frozen-gated: below
+            // epoch 7 every field stays inert and the replay is byte-exact.
+            spell_conduit: rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
+                && (has_special_rule(&p.special_rules, "Spell Conduit")
+                    || has_special_rule(&p.item_grants, "Spell Conduit")),
+            spell_conduit_reach_in: unit_param_f(reg, p, "Spell Conduit", "range_in", 12.0),
+            spell_conduit_casting_mod: unit_param_i(reg, p, "Spell Conduit", "casting_mod", 1),
+            spell_conduit_needs_steady: unit_param_b_or(
+                reg, p, "Spell Conduit", "requires_not_shaken", true,
+            ),
             battleborn_active: unit_rule_active(reg, p, "Battleborn"),
             steadfast_active: unit_rule_active(reg, p, "Steadfast"),
             // Battleborn family wave 3 (rules-wave3-battleborn): the four
