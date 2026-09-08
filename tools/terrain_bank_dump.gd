@@ -170,6 +170,19 @@ func _run() -> void:
 		print("[BANKV2] seed %d walls %d blockers %d boxes %d"
 			% [layout_seed, walls.size(), blockers.size(), boxes.size()])
 		ml.free()
+		# The overlay's own clears use queue_free() (terrain_overlay.gd:2710,
+		# :3574), which only lands when a frame is processed — but this seed
+		# loop is one synchronous pass inside a single deferred _run(), so no
+		# frame ever runs between seeds and every seed's wall/prop instances
+		# pile up (~5.7 MB each, #654). Free them immediately instead.
+		for inst in _ovl._object_instances:
+			if is_instance_valid(inst):
+				inst.free()
+		_ovl._object_instances.clear()
+		for inst in _ovl._wall_instances:
+			if is_instance_valid(inst):
+				inst.free()
+		_ovl._wall_instances.clear()
 		var f := FileAccess.open(out.path_join("board_%d.json" % layout_seed), FileAccess.WRITE)
 		if f == null:
 			printerr("[BANK] cannot write board_%d.json to %s" % [layout_seed, out])
