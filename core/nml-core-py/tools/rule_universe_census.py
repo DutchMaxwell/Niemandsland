@@ -87,6 +87,7 @@ usage errors exit 2.
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime
 import json
 import re
@@ -829,6 +830,89 @@ def scan_rust(repo: Path) -> tuple[dict, dict, list]:
     return tokens, name_tokens, comments
 
 
+# ---------------------------------------------------------------- loader scan
+# 2026-09-08: the detector was blind to LOADER-side reads - a rule read in the
+# python loader shows no name token in any .rs resolver (Transport counted
+# MISSING although #787's read -> UnitSpec.transport_capacity ->
+# deployment.rs::transport_fill has been live since 07.09). The loader is
+# scanned, but a BARE loader name token is NOT auto-credited: several loader
+# literals are census convention data or table-side reads the rust core never
+# consumes (e.g. "Teleport" in MOVE_PRIMITIVES / _rule_active - its core port
+# #831 is not on main; blind crediting would have flipped that PARTIAL row).
+# Credit runs through LOADER_NAME_ALIASES: each entry names the token its read
+# lives under, is verified against this scan, and records the porting PR.
+# Quick Readjustment deliberately has NO entry: #718 (05.09.) was "DECLARE,
+# not port" (own commit message, census delta +0) - no read exists anywhere.
+LOADER_NAME_ALIASES = {
+    # Transport (#787, merged 07.09.): _transport_capacity_of_rules parses the
+    # unit's own "Transport(X)" rule string into "transport_capacity". The bare
+    # "transport" token also occurs in the loader (VEHICLE_KEYWORDS vehicle-NAME
+    # classification), so the read's own field name is the cited evidence.
+    "Transport": ("transport_capacity",),
+}
+
+
+def loader_files(repo: Path) -> list[Path]:
+    """The loader module + same-dir siblings it imports (list_to_profile.py
+    imports only stdlib today, but the set must follow the loader)."""
+    py = Path(repo) / "core" / "nml-core-py" / "python"
+    entry = py / "list_to_profile.py"
+    out = []
+    try:
+        tree = ast.parse(entry.read_text())
+    except (OSError, SyntaxError):
+        return out
+    mods = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            mods.update(a.name.split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            mods.add(node.module.split(".")[0])
+    for m in sorted(mods):
+        sib = py / f"{m}.py"
+        if sib.exists():
+            out.append(sib)
+    out.append(entry)
+    return out
+
+
+def scan_python_file(path: Path, rel: str) -> dict:
+    """One .py file -> {token: (rel, line)} over its STRING CONSTANTS
+    (snake variants, first occurrence wins). Docstrings are skipped - they
+    document, they do not read (scan_rust_file's rule for rust comments);
+    identifiers too - the literal writing the field is the read."""
+    tokens: dict = {}
+    try:
+        tree = ast.parse(path.read_text())
+    except (OSError, SyntaxError):
+        return tokens
+    docs = set()
+    for node in ast.walk(tree):
+        if (isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
+                              ast.ClassDef)) and node.body):
+            first = node.body[0]
+            if (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
+                    and isinstance(first.value.value, str)):
+                docs.add(id(first.value))
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and id(node) not in docs):
+            for v in snake_variants(node.value):
+                tokens.setdefault(v, (rel, node.lineno))
+    return tokens
+
+
+def loader_tokens(repo: Path) -> dict:
+    """Every loader string-constant token - see LOADER_NAME_ALIASES for why a
+    bare hit never auto-credits."""
+    tokens: dict = {}
+    for path in loader_files(repo):
+        rel = path.relative_to(repo).as_posix()
+        for k, v in scan_python_file(path, rel).items():
+            tokens.setdefault(k, v)
+    return tokens
+
+
 def comment_index(comments: list) -> str:
     """One lowercase string of all Rust comments with (file:line) markers, so
     a doc-mention lookup is one substring search per rule name."""
@@ -871,14 +955,18 @@ def is_consumed(primitive: str, name: str, mech: dict, consumed_grants: set) -> 
 
 
 def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str | None,
-                     consumed_grants: set, name_tokens: dict | None = None):
+                     consumed_grants: set, name_tokens: dict | None = None,
+                     loader_tokens: dict | None = None):
     """(status, note) for one (name, system).
 
     `tokens` is the primitive-class map (prim_hit leg); `name_tokens` the
     rule-NAME read map (2026-09-07) - a `.primitive` comparison literal lives
     in the former only, so it can never satisfy the name's own token. None
     falls back to `tokens` (the pre-split behavior, kept for callers that
-    predate the split)."""
+    predate the split). `loader_tokens` is the loader string-constant map
+    (2026-09-08), consulted ONLY for LOADER_NAME_ALIASES entries - a bare
+    loader name token never auto-credits (see the alias block's Teleport
+    note), a registered alias is verified against the scan before it cites."""
     if name in NA_NAMES:
         return "N/A", NA_NAMES[name]
     prims = set(mech.get("primitives", set()))
@@ -888,10 +976,15 @@ def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str |
         variants -= snake_variants(hide)
     read_tokens = tokens if name_tokens is None else name_tokens
     name_hit = None
-    for v in sorted(variants):
-        if v in read_tokens:
-            name_hit = (v, read_tokens[v])
+    for v in sorted(LOADER_NAME_ALIASES.get(name, ())):
+        if loader_tokens and v in loader_tokens:
+            name_hit = (v, loader_tokens[v])
             break
+    if name_hit is None:
+        for v in sorted(variants):
+            if v in read_tokens:
+                name_hit = (v, read_tokens[v])
+                break
     # C-2 (AUDIT_armybook_flanks_2026-09-02.md sec.8): a primitive-token
     # match is only real alias evidence for a vetted CONSUMED_PARAM_KEYS
     # class - an untracked primitive's token is, as often as not, an
@@ -945,7 +1038,8 @@ def build_universe(books: list[dict]) -> dict:
 
 def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
                 consumed_grants: set | None = None, grant_dead: str | None = None,
-                name_tokens: dict | None = None) -> dict:
+                name_tokens: dict | None = None,
+                loader_tokens: dict | None = None) -> dict:
     rows = {}
     AURA_SUFFIX = " Aura"
 
@@ -955,7 +1049,8 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
         )
         status, note = core_status_for(name, mech, tokens, bands, hide,
                                        consumed_grants or set(),
-                                       name_tokens=name_tokens)
+                                       name_tokens=name_tokens,
+                                       loader_tokens=loader_tokens)
         if status == "MISSING":
             where = mention_of(name, mentions)
             if where:
@@ -1091,7 +1186,8 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
         elif gmech is not None and gmech["entry"]:
             st, _ = core_status_for(gname, gmech, tokens, bands, hide,
                                     consumed_grants or set(),
-                                    name_tokens=name_tokens)
+                                    name_tokens=name_tokens,
+                                    loader_tokens=loader_tokens)
         else:
             return "MISSING"
         if st != "PORTED":
@@ -1377,13 +1473,15 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
         raise SystemExit(f"no books found under {books_dir}/gf|aof")
     mechanics = {s: load_mechanics(repo, s) for s in SYSTEMS}
     tokens, name_tokens, comments = scan_rust(repo)
+    loader = loader_tokens(repo)
     mentions = comment_index(comments)
     bands = move_primitives(repo)
     vocab = load_vocab(repo)
     consumed_grants = consumed_grant_names(repo)
     universe = build_universe(books)
     rows = build_rows(universe, mechanics, tokens, bands, vocab, mentions,
-                       consumed_grants=consumed_grants, name_tokens=name_tokens)
+                      consumed_grants=consumed_grants, name_tokens=name_tokens,
+                      loader_tokens=loader)
     summary = summarize(rows)
     result = {
         "meta": {
