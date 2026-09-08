@@ -1739,6 +1739,27 @@ static func create_test_army(player_id: int = 1) -> OPRArmy:
 
 func named_unit_profile(book_id: String, system: String, faction: String,
 		unit_name: String, count: int) -> OPRUnit:
+	var book: Dictionary = _cached_book(book_id, system, faction)
+	if book.is_empty():
+		book = await _fetch_army_book(book_id, system)
+	return _parse_named_unit(book, system, unit_name, count)
+
+
+## Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): the SYNC twin
+## of named_unit_profile — same lookup ladder (cache, snapshot) MINUS the network
+## fetch: a miss answers null, and the caller drops the entry loudly instead of
+## blocking. Exists because the act recorder's header write is synchronous
+## (act_recorder.gd _header_line) and Godot forbids calling a coroutine un-awaited;
+## the async original keeps the fetch as its third ladder rung.
+func named_unit_profile_sync(book_id: String, system: String, faction: String,
+		unit_name: String, count: int) -> OPRUnit:
+	var book: Dictionary = _cached_book(book_id, system, faction)
+	return _parse_named_unit(book, system, unit_name, count)
+
+
+## The two non-network rungs of named_unit_profile's book ladder: faction match
+## off the book index when no id is given, then the cache, then the pinned snapshot.
+func _cached_book(book_id: String, system: String, faction: String) -> Dictionary:
 	if book_id.is_empty():
 		book_index_entry("", system)
 		var section: Dictionary = (_books_index as Dictionary).get(system, {})
@@ -1749,8 +1770,13 @@ func named_unit_profile(book_id: String, system: String, faction: String,
 	var book: Dictionary = _army_books.get(book_id, {})
 	if book.is_empty():
 		book = _snapshot_book(book_id, system)
-	if book.is_empty():
-		book = await _fetch_army_book(book_id, system)
+	return book
+
+
+## The shared tail of both named_unit_profile variants above — the definition
+## scan and the count stamping; never forked.
+func _parse_named_unit(book: Dictionary, system: String, unit_name: String,
+		count: int) -> OPRUnit:
 	for definition in book.get("units", []):
 		if str(definition.get("name", "")) == unit_name and count > 0:
 			var profile := _parse_unit_from_list({"id": definition["id"]}, book, system)

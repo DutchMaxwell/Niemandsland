@@ -17802,10 +17802,11 @@ func _solo_create_rule_unit(carrier: GameUnit, anchor: ModelInstance, raw: Strin
 ## BattleSim._unit_profile so the header's `spawn_profiles` value has EXACTLY the
 ## shape of the `profiles` map. Runs at header-write time (the first activation),
 ## BEFORE any beat has fired, so a record that later plays the beat already carries
-## its template. Deliberately NO await: the header write is synchronous — a book
-## still on the network suspends named_unit_profile, the call comes back without a
-## profile, and the entry is dropped LOUDLY (the recorder's warning), never
-## substituted with the carrier's profile.
+## its template. Deliberately NO await: the header write is synchronous, so the
+## resolution rides named_unit_profile_sync — the cache/snapshot rungs of the same
+## ladder, without the network fetch. A book that never landed answers null and
+## the entry is dropped LOUDLY (the recorder's warning), never substituted with
+## the carrier's profile.
 func _solo_spawn_profile_stamp(carrier: GameUnit, raw: String) -> Dictionary:
 	var pattern := RegEx.new()
 	pattern.compile("^[^(]+\\((.+) \\[(\\d+)\\]\\)$")
@@ -17815,7 +17816,7 @@ func _solo_spawn_profile_stamp(carrier: GameUnit, raw: String) -> Dictionary:
 	var count := int(match_value.get_string(2))
 	var pid := int(carrier.unit_properties.get("player_id", 1))
 	var army: OPRApiClient.OPRArmy = opr_army_manager.armies.get(pid)
-	var profile: OPRApiClient.OPRUnit = opr_army_manager.api_client.named_unit_profile(
+	var profile: OPRApiClient.OPRUnit = opr_army_manager.api_client.named_unit_profile_sync(
 		army.army_id if army != null else "", RulesRegistry.system_of_unit(carrier),
 		RulesRegistry.faction_of_unit(carrier), match_value.get_string(1), count)
 	if not (profile is OPRApiClient.OPRUnit):

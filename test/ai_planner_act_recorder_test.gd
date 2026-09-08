@@ -762,7 +762,7 @@ func _spawn_carrier(pid: int, uid: String) -> GameUnit:
 
 ## The profile `named_unit_profile` would hand back for the rule's name/count
 ## pair: a fresh OPRUnit with size = the bracketed model count.
-func _rat_swarm_profile() -> OPRApiClient.OPRUnit:
+func _rat_swarm_profile() -> OPRApiClient.OPRUnit:   # as named_unit_profile_sync hands one back
 	var opr := OPRApiClient.OPRUnit.new()
 	opr.name = "Rat Swarm"
 	opr.size = 10
