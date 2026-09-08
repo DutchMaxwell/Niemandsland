@@ -21,7 +21,10 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
+use crate::acts::{
+    rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
+    EPOCH_8_PLANNER_MENU,
+};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
@@ -3683,15 +3686,18 @@ fn casting_net_of(statics: &[UnitStatic], state: &State, ci: usize, seams: Seams
 /// cast-origin walk, PR 1's `battle_sim.gd _cast_origins` twin: every
 /// friendly ALIVE "Spell Conduit" bearer within the rule's OWN `range_in`
 /// of the CASTER, `requires_not_shaken` binding the CONDUIT; entries are
-/// (origin unit, the rule's `casting_mod`). Below the frozen
-/// EPOCH_7_TABLE_RULES the walk is empty — the set stays [caster].
+/// (origin unit, the rule's `casting_mod`). The gate is the FROZEN
+/// EPOCH_8_PLANNER_MENU — the #838 epoch-8 ruling (the #831 call: a MENU
+/// change is a NEW frozen gate), so every epoch-7 record replays with the
+/// menu it was recorded with and the walk below 8 is empty — the set stays
+/// [caster].
 fn cast_origins(
     statics: &[UnitStatic],
     state: &State,
     si: usize,
     seams: Seams,
 ) -> Vec<(usize, i64)> {
-    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+    if !rule_on(seams.rules_epoch, EPOCH_8_PLANNER_MENU) {
         return Vec::new();
     }
     let player = state.player[si];

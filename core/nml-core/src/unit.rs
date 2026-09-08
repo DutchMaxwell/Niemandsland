@@ -4713,9 +4713,11 @@ impl UnitStatic {
             spell_accumulator: rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
                 && (has_special_rule(&p.special_rules, "Spell Accumulator")
                     || has_special_rule(&p.item_grants, "Spell Accumulator")),
-            // Spell Conduit (design #824 §4 PR 2), frozen-gated: below
-            // epoch 7 every field stays inert and the replay is byte-exact.
-            spell_conduit: rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
+            // Spell Conduit (design #824 §4 PR 2), gated on the FROZEN
+            // `EPOCH_8_PLANNER_MENU` — the #838 epoch-8 ruling (a MENU change
+            // is a NEW frozen gate): below epoch 8 every field stays inert
+            // and the replay is byte-exact.
+            spell_conduit: rule_on(rules_epoch, EPOCH_8_PLANNER_MENU)
                 && (has_special_rule(&p.special_rules, "Spell Conduit")
                     || has_special_rule(&p.item_grants, "Spell Conduit")),
             spell_conduit_reach_in: unit_param_f(reg, p, "Spell Conduit", "range_in", 12.0),
