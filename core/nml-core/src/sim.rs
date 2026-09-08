@@ -1264,11 +1264,9 @@ pub(crate) fn tray_mind_control(
 
 /// Design #816 PR 2 — the Teleport/Ethereal beat (port of `main._
 /// solo_apply_teleport`): after the move, before the attack, once per
-/// activation. REPLAY arm: `action.teleport` lands byte-exact (the record
-/// decides). LIVE arm (`REPOSITION` acts only): the bounded three-probe set
-/// with a self-carried EV heuristic (the table's `AiPosition._evaluate` is
-/// not ported — declared approximation), taken only past the fixed margin.
-/// No die drawn, `in_cover` untouched.
+/// activation. REPLAY: `action.teleport` lands byte-exact (the record
+/// decides). LIVE (`REPOSITION` acts only): the bounded three-probe set,
+/// taken only past `TELEPORT_EV_MARGIN`. No die drawn, `in_cover` untouched.
 pub(crate) fn teleport_beat(
     statics: &[UnitStatic], next: &mut State, si: usize, action: &Action,
     seams: Seams, mut shot: Option<&mut ShootResult>, cover: Cover,
@@ -1281,61 +1279,45 @@ pub(crate) fn teleport_beat(
             .then(|| crate::unit::TeleportSpec { name: "Teleport".into() })
     });
     let Some(spec) = spec else { return false; };
-    let name = &statics[next.roster.profile[si]].name;
     let cap_in = crate::unit::teleport_cap_in(&spec.name, false);
-    let log = |shot: &mut ShootResult, to: [f64; 2]| {
-        shot.log.push(format!(
-            "{}: {} repositions within {:.0}\" — landing centroid ({:.2}, {:.2}) m",
-            spec.name, name, cap_in, to[0], to[1]));
-    };
-    // REPLAY: the record decides — land on the recorded centroid, no clamp
-    // (the table validated the cap when it recorded).
-    if let Some(to) = action.teleport {
-        let from = geom::centre(&next.positions[si]);
-        shift_chain(next, si, seams.hero_attach, to[0] as f32 - from[0], to[1] as f32 - from[2]);
-        next.teleport_used[si] = true;
-        if let Some(shot) = shot.as_deref_mut() {
-            log(shot, to);
+    // The landing: REPLAY — the record's centroid, no clamp (the table
+    // validated the cap when it recorded); LIVE — the probe set, the
+    // ADVANCE-band reading (a standalone Reposition act has no Rush context).
+    let to = match action.teleport {
+        Some(to) => to,
+        None if action.kind == REPOSITION => {
+            let terrain = match cover {
+                Cover::Board(t) if t.is_valid() => Some(t),
+                _ => None,
+            };
+            teleport_probe(next, si, cap_in, terrain)?
         }
-        return true;
-    }
-    if action.kind != REPOSITION {
-        return false;
-    }
-    // LIVE: the ADVANCE-band reading — a standalone Reposition act has no
-    // Rush context (design §3's band inheritance needs the activation's move).
-    let terrain = match cover {
-        Cover::Board(t) if t.is_valid() => Some(t),
-        _ => None,
+        None => return false,
     };
-    let Some(to) = teleport_probe(next, si, cap_in, terrain) else { return false; };
     let from = geom::centre(&next.positions[si]);
-    shift_chain(next, si, seams.hero_attach, to[0] as f32 - from[0], to[1] as f32 - from[2]);
-    next.teleport_used[si] = true;
-    if let Some(shot) = shot.as_deref_mut() {
-        log(shot, to);
-    }
-    true
-}
-
-/// One rigid metre-delta translate of the unit's models, heroes folded
-/// (`_moving_models`).
-fn shift_chain(next: &mut State, si: usize, hero_attach: bool, dx: f32, dz: f32) {
     let mut chain = vec![si];
-    if hero_attach {
+    if seams.hero_attach {
         chain.extend(next.attached[si].iter().copied());
     }
     for u in chain {
+        let (dx, dz) = (to[0] as f32 - from[0], to[1] as f32 - from[2]);
         for p in next.positions[u].iter_mut() {
             *p = [p[0] + dx as f64, p[1], p[2] + dz as f64];
         }
     }
+    next.teleport_used[si] = true;
+    if let Some(shot) = shot.as_deref_mut() {
+        shot.log.push(format!(
+            "{}: {} repositions within {:.0}\" — landing centroid ({:.2}, {:.2}) m",
+            spec.name, statics[next.roster.profile[si]].name, cap_in, to[0], to[1]));
+    }
+    true
 }
 
 /// The bounded probe set (design §3) — objective clamp, away-from-threat,
 /// first cover bearing (skipped headless) — scored by a self-carried EV
-/// heuristic (objective pull, threat escape, cover); answers the best
-/// landing only when it beats staying by the fixed margin.
+/// heuristic (objective pull, threat escape, cover); the best landing only
+/// when it beats staying by the fixed margin.
 pub(crate) const TELEPORT_EV_MARGIN: f64 = 0.5;
 
 pub(crate) fn teleport_probe(
@@ -1345,8 +1327,9 @@ pub(crate) fn teleport_probe(
     let cap_m = cap_in * IN2M as f32;
     let side = next.player[si];
     let foe = if side == 1 { 2 } else { 1 };
+    let obj_at = |p: V3| nearest_uncontrolled_objective(next, side, foe, p);
     let mut probes: Vec<V3> = vec![from];
-    if let Some(obj) = nearest_uncontrolled_objective(next, side, foe, from) {
+    if let Some(obj) = obj_at(from) {
         let d = geom::sub(obj, from);
         if geom::length(d) > 0.001 {
             probes.push(geom::add(from, geom::mul(geom::normalized(d), geom::length(d).min(cap_m))));
@@ -1369,28 +1352,21 @@ pub(crate) fn teleport_probe(
         }
     }
     let ev_at = |p: V3| -> f64 {
-        let mut v = 0.0;
-        if let Some(obj) = nearest_uncontrolled_objective(next, side, foe, p) {
-            v -= geom::length(geom::sub(obj, p)) as f64 / IN2M as f64;
-        }
-        if let Some(t) = nearest_enemy(next, si) {
-            let d = geom::length(geom::sub(geom::centre(&next.positions[t]), p)) as f64 / IN2M as f64;
-            if d < 6.0 {
-                v -= (6.0 - d) * 2.0;
-            }
-        }
-        if let Some(t) = terrain {
-            if gives_cover(t.type_at(p)) {
-                v += 2.0;
-            }
-        }
-        v
+        let obj_pull = obj_at(p)
+            .map(|o| -(geom::length(geom::sub(o, p)) as f64) / IN2M as f64)
+            .unwrap_or(0.0);
+        let threat = nearest_enemy(next, si)
+            .map(|t| geom::length(geom::sub(geom::centre(&next.positions[t]), p)) as f64 / IN2M as f64)
+            .map(|d| if d < 6.0 { -(6.0 - d) * 2.0 } else { 0.0 })
+            .unwrap_or(0.0);
+        let cover = terrain.map(|t| gives_cover(t.type_at(p)) as i64 as f64 * 2.0).unwrap_or(0.0);
+        obj_pull + threat + cover
     };
     let stay = ev_at(from);
     probes
         .iter()
         .copied()
-        .filter(|&p| geom::length(geom::sub(p, from)) as f64 / IN2M as f64 <= cap_in + 1e-3 && p != from)
+        .filter(|&p| p != from && geom::length(geom::sub(p, from)) as f64 / IN2M as f64 <= cap_in + 1e-3)
         .map(|p| (ev_at(p), p))
         .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
         .filter(|(v, _)| *v > stay + TELEPORT_EV_MARGIN)
