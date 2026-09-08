@@ -99,17 +99,19 @@ def test_an_item_granted_transport_fills_the_seam():
 
 def test_a_joined_hero_never_grants_the_host_capacity():
     """The spec is the HOST's — capacity_of_rules reads the host unit's own
-    rules (opr_army_manager.gd:2870-2874), never a folded hero's."""
+    rules (opr_army_manager.gd:2870-2874), never a folded hero's. The host
+    carries its OWN Transport(5), the joined hero Transport(9): the value
+    check pins 5 — the dead seam (0) and the hero fold (9) both fall."""
     data = {
         "gameSystem": "gf",
         "units": [
-            _selection("host", "Grunts", size=10),
+            _selection("host", "Grunts", size=10, rules=[{"name": "Transport", "label": "Transport(5)"}]),
             _selection(
                 "h", "Vradhez", join_to_unit="host", rules=[{"name": "Transport", "label": "Transport(9)"}]
             ),
         ],
     }
-    assert _spec_caps(data)["p1_0_host"] == 0
+    assert _spec_caps(data)["p1_0_host"] == 5
 
 
 def test_the_gate_keeps_a_pre_epoch7_record_transport_free():

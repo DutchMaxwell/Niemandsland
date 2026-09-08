@@ -110,6 +110,15 @@ use super::*;
     /// no second batch (main.gd:5861/:5866).
     #[test]
     fn the_strike_is_once_per_round_per_bearer() {
+        // Positive control first: an unstamped bearer in reach DOES strike,
+        // so the guard below falls under any impl that never fires.
+        let (st, statics) = rs_line(7, &["Retreating Strike(3)"]);
+        let control = run_rs_direct(&st, &statics, 7);
+        assert!(
+            control.rolls.iter().any(|r| r.kind == "ravage"),
+            "control: in reach the strike fires -- got {:#?}",
+            control.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
+        );
         let (mut st, statics) = rs_line(7, &["Retreating Strike(3)"]);
         st.retreating_strike_round[0] = 0;
         let shot = run_rs_direct(&st, &statics, 7);
@@ -120,6 +129,15 @@ use super::*;
     /// and the once-per-round is NOT spent (main.gd:5864-5865).
     #[test]
     fn no_enemy_in_reach_spends_nothing() {
+        // Positive control first: the same line in reach fires, so the
+        // negative below falls under any impl that never fires.
+        let (st, statics) = rs_line(7, &["Retreating Strike(3)"]);
+        let near = run_rs_direct(&st, &statics, 7);
+        assert!(
+            near.rolls.iter().any(|r| r.kind == "ravage"),
+            "control: in reach the strike fires -- got {:#?}",
+            near.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
+        );
         let (mut st, statics) = rs_line(7, &["Retreating Strike(3)"]);
         st.positions[2] = vec![[8.0 * IN2M, 0.0, 0.0]];
         let shot = run_rs_direct(&st, &statics, 7);

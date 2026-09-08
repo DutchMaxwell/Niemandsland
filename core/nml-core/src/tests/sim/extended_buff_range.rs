@@ -132,6 +132,15 @@ use super::*;
     /// relayed pick is refused (main.gd:16531-16532).
     #[test]
     fn the_target_must_carry_the_rule_itself() {
+        // Positive control first: with BOTH ends carrying, the relayed pick
+        // lands, so the guard below falls under any impl that never relays.
+        let (st, statics) = ebr_line(7, true, true);
+        let control = run_ebr(&st, &statics, 7);
+        assert!(
+            !control.buffs[2].is_empty(),
+            "control: both ends carry, the buff lands -- got {:#?}",
+            control.buffs.iter().map(|b| b.len()).collect::<Vec<_>>()
+        );
         let (st, statics) = ebr_line(7, true, false);
         let next = run_ebr(&st, &statics, 7);
         assert!(next.buffs[2].is_empty(), "no rule on the target: no relayed pick");
@@ -141,6 +150,15 @@ use super::*;
     /// refused even with both ends carrying (ebr_relay_ok's gap clause).
     #[test]
     fn the_relay_link_is_bounded_at_the_relay_range() {
+        // Positive control first: the same line INSIDE the 24" relay range
+        // relays, so the bounded-refusal below falls under a never-relay impl.
+        let (st, statics) = ebr_line(7, true, true);
+        let control = run_ebr(&st, &statics, 7);
+        assert!(
+            !control.buffs[2].is_empty(),
+            "control: inside the relay range the buff lands -- got {:#?}",
+            control.buffs.iter().map(|b| b.len()).collect::<Vec<_>>()
+        );
         let (mut st, statics) = ebr_line(7, true, true);
         st.positions[2] = vec![[30.0 * IN2M, 0.0, 0.0]];
         let next = run_ebr(&st, &statics, 7);
@@ -151,6 +169,15 @@ use super::*;
     /// hero's unit) -- a bare Hero without the radio reaches nobody.
     #[test]
     fn the_relay_itself_must_carry_the_rule() {
+        // Positive control first: with the radio on the relay the buff lands,
+        // so the guard below falls under any impl that never relays.
+        let (st, statics) = ebr_line(7, true, true);
+        let control = run_ebr(&st, &statics, 7);
+        assert!(
+            !control.buffs[2].is_empty(),
+            "control: the radio on the relay lands the buff -- got {:#?}",
+            control.buffs.iter().map(|b| b.len()).collect::<Vec<_>>()
+        );
         let (st, statics) = ebr_line(7, false, true);
         let next = run_ebr(&st, &statics, 7);
         assert!(next.buffs[2].is_empty(), "no radio on the relay: no relayed pick");
