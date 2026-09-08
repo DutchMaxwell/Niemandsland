@@ -92,8 +92,7 @@ use super::*;
             charge: Some("b".into()),
             patient: false,
             split: None,
-            traced: None,
-        };
+            traced: None, teleport: None, };
         let (_, plain) = run_buff(&st, &statics, &charge, 11);
         assert_eq!(plain.rolls[0].target, 4);
 

@@ -112,8 +112,7 @@ use super::*;
                 split_shot("host", "Rifle", "b"),
                 split_shot("hero", "Heavy Gun", "bh"),
             ]),
-            traced: None,
-        };
+            traced: None, teleport: None, };
         let terrain = crate::terrain::Terrain::default();
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);
@@ -169,8 +168,7 @@ use super::*;
 
         let pooled = Action {
             kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()),
-            charge: None, patient: false, split: None, traced: None,
-        };
+            charge: None, patient: false, split: None, traced: None, teleport: None, };
         let mut tray_a = Tray::seeded(11);
         let mut rng_a = crate::rng::GodotRng::new(0);
         let (_, shot_a) = resolve_stochastic_tray_on_board(
@@ -182,8 +180,7 @@ use super::*;
             kind: HOLD, unit: "a".into(), dest: None, shoot: Some("bh".into()),
             charge: None, patient: false,
             split: Some(vec![split_shot("host", "Rifle", "b")]),
-            traced: None,
-        };
+            traced: None, teleport: None, };
         let mut tray_b = Tray::seeded(11);
         let mut rng_b = crate::rng::GodotRng::new(0);
         let (_, shot_b) = resolve_stochastic_tray_on_board(

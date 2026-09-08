@@ -28,6 +28,7 @@ use crate::mods;
 use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{cast_success_chance, official_pick_order, spell_damage_ev_of, spell_ev_of};
+use crate::menu::nearest_enemy;
 use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
@@ -77,6 +78,13 @@ pub const HOLD: i64 = 0;
 pub const ADVANCE: i64 = 1;
 pub const RUSH: i64 = 2;
 pub const CHARGE: i64 = 3;
+/// Wave 5 — Teleport / Ethereal (design #816, PR 2): the menu's Reposition
+/// candidate kind — a DICE-FREE reposition-only activation a live rollout may
+/// pick. No recorded corpus ever carries it (the table's beat rides inside a
+/// kind 0-3 act; the replay arm keys on `Action::teleport`, not the kind), and
+/// the GDScript planner normalizes its own kind 4 (KITE) to ADVANCE, so the
+/// value is free on this side.
+pub const REPOSITION: i64 = 4;
 
 /// Why a node could not be resolved by this port — reported by name with a
 /// count, never silently skipped.
@@ -1257,7 +1265,173 @@ pub(crate) fn tray_mind_control(
     }
 }
 
-/// `SoloController._nearest_uncontrolled_objective` :7117-7178, the path the
+
+/// Design #816 PR 2 (core) — the Teleport / Ethereal before-attack beat, the
+/// port of `main._solo_apply_teleport` (PR 1's handler): AFTER the move and
+/// BEFORE the attack, once per activation (the entry clear above + one beat
+/// per resolve). The anchor is the POST-move centre. Two arms:
+/// * the REPLAY arm — `action.teleport` carries the record's landing centroid
+///   (the replay driver joins it off the NEXT act's `state_before` ledger,
+///   the same join `inject_split_aim` makes): the record decides, the
+///   formation lands byte-exact on it, the latch is set, the line is logged.
+/// * the LIVE arm — only a `REPOSITION` act (a live rollout's own pick): the
+///   bounded fixed candidate set (design §3, `SoloController.teleport_
+///   candidates`' three probes) scored with a self-carried EV heuristic (the
+///   table scores with `AiPosition._evaluate`, which this core does not port
+///   — the declared approximation, Block-B8 form), applied only when the best
+///   beats staying by `TELEPORT_EV_MARGIN` (the table's fixed margin).
+/// The cover of the repositioned unit is NOT re-probed (the table handler
+/// does not touch `in_cover` either) and no die is drawn — the draw order is
+/// untouched, so every tray tally below stays exactly where it was.
+pub(crate) fn teleport_beat(
+    statics: &[UnitStatic], next: &mut State, si: usize, action: &Action,
+    seams: Seams, mut shot: Option<&mut ShootResult>, cover: Cover,
+) -> bool {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.alive[si] <= 0 {
+        return false;
+    }
+    let spec = statics[next.roster.profile[si]]
+        .teleport
+        .clone()
+        .or_else(|| {
+            // The aura grant the statics read cannot see (a MOD buff granted
+            // the base name mid-game): the Quick Shot read's OR-leg (sim.rs
+            // `quick_shot_active`).
+            mods::granted(next, si, "Teleport")
+                .then(|| crate::unit::TeleportSpec { name: "Teleport".into() })
+        });
+    let Some(spec) = spec else { return false; };
+    // REPLAY: the record decides — land on the recorded centroid, no clamp
+    // (the table validated the cap when it recorded).
+    if let Some(to) = action.teleport {
+        let from = geom::centre(&next.positions[si]);
+        let dx = to[0] as f32 - from[0];
+        let dz = to[1] as f32 - from[2];
+        shift_chain(next, si, seams.hero_attach, dx, dz);
+        next.teleport_used[si] = true;
+        if let Some(shot) = shot.as_deref_mut() {
+            shot.log.push(format!(
+                "{}: {} repositions within {:.0}\" — landing centroid ({:.2}, {:.2}) m",
+                spec.name, statics[next.roster.profile[si]].name,
+                crate::unit::teleport_cap_in(&spec.name, false), to[0], to[1]));
+        }
+        return true;
+    }
+    if action.kind != REPOSITION {
+        return false;
+    }
+    // LIVE: the bounded probe policy. The band is the ADVANCE-band reading —
+    // a standalone Reposition act has no Rush context (design §3's band
+    // inheritance needs the activation's move; a kind-4 act IS the move).
+    let cap_in = crate::unit::teleport_cap_in(&spec.name, false);
+    let terrain = match cover {
+        Cover::Board(t) if t.is_valid() => Some(t),
+        _ => None,
+    };
+    let Some(to) = teleport_probe(next, statics, si, cap_in, terrain) else { return false; };
+    let from = geom::centre(&next.positions[si]);
+    let dx = (to[0] as f32) - from[0];
+    let dz = (to[1] as f32) - from[2];
+    shift_chain(next, si, seams.hero_attach, dx, dz);
+    next.teleport_used[si] = true;
+    if let Some(shot) = shot.as_deref_mut() {
+        shot.log.push(format!(
+            "{}: {} repositions within {:.0}\" — landing centroid ({:.2}, {:.2}) m",
+            spec.name, statics[next.roster.profile[si]].name, cap_in, to[0], to[1]));
+    }
+    true
+}
+
+/// One rigid translate of the unit's models (the joined heroes folded with
+/// them, `_moving_models`' list — the move arm's hero_attach leg, sim.rs
+/// NML-1073 M4-7 note) by the metre delta `(dx, dz)`.
+fn shift_chain(next: &mut State, si: usize, hero_attach: bool, dx: f32, dz: f32) {
+    let mut chain = vec![si];
+    if hero_attach {
+        chain.extend(next.attached[si].iter().copied());
+    }
+    for u in chain {
+        for p in next.positions[u].iter_mut() {
+            *p = [p[0] + dx as f64, p[1], p[2] + dz as f64];
+        }
+    }
+}
+
+/// The probe policy (design §3, the table's `teleport_candidates`): stay,
+/// toward the nearest UNCONTROLLED objective clamped into the cap circle,
+/// away from the nearest enemy at the cap circle, and the first of 8 cap-
+/// circle bearings whose terrain gives cover (skipped headless — the table
+/// skips it the same way). Scores a self-carried EV heuristic at every probe
+/// (objective pull, threat escape, cover) and answers the best landing only
+/// when it beats STAYING by `TELEPORT_EV_MARGIN`; `None` = the "may" passes.
+pub(crate) const TELEPORT_EV_MARGIN: f64 = 0.5;
+
+pub(crate) fn teleport_probe(
+    next: &State, statics: &[UnitStatic], si: usize, cap_in: f64, terrain: Option<&Terrain>,
+) -> Option<[f64; 2]> {
+    let from = geom::centre(&next.positions[si]);
+    let cap_m = (cap_in * IN2M as f32) as f64;
+    let side = next.player[si];
+    let foe = if side == 1 { 2 } else { 1 };
+    let mut probes: Vec<V3> = vec![from];
+    if let Some(obj) = nearest_uncontrolled_objective(next, side, foe, from) {
+        let d = geom::sub(obj, from);
+        let len = geom::length(d);
+        if len > 0.001 {
+            let step = geom::mul(geom::normalized(d), (len.min(cap_m as f32)) as f32);
+            probes.push(geom::add(from, step));
+        }
+    }
+    if let Some(t) = nearest_enemy(next, si) {
+        let away = geom::sub(from, geom::centre(&next.positions[t]));
+        let len = geom::length(away);
+        if len > 0.001 {
+            probes.push(geom::add(from, geom::mul(geom::normalized(away), cap_m as f32)));
+        }
+    }
+    if let Some(t) = terrain {
+        for k in 0..8 {
+            let a = std::f32::consts::TAU * (k as f32) / 8.0;
+            let p = geom::add(from, [a.cos() * cap_m as f32, 0.0, a.sin() * cap_m as f32]);
+            if gives_cover(t.type_at(p)) {
+                probes.push(p);
+                break;
+            }
+        }
+    }
+    let ev_at = |p: V3| -> f64 {
+        let mut v = 0.0;
+        if let Some(obj) = nearest_uncontrolled_objective(next, side, foe, p) {
+            v -= geom::length(geom::sub(obj, p)) as f64 / IN2M as f64;
+        }
+        if let Some(t) = nearest_enemy(next, si) {
+            let d = geom::length(geom::sub(geom::centre(&next.positions[t]), p)) as f64 / IN2M as f64;
+            if d < 6.0 {
+                v -= (6.0 - d) * 2.0;
+            }
+        }
+        if let Some(t) = terrain {
+            if gives_cover(t.type_at(p)) {
+                v += 2.0;
+            }
+        }
+        // The bearer must be a Teleport-primitive name for any of this to
+        // matter; a probe past the bearer's own shape is refused by the cap
+        // clamp above, never by the unit's model count.
+        let _ = statics;
+        v
+    };
+    let stay = ev_at(from);
+    probes
+        .iter()
+        .copied()
+        .filter(|&p| geom::length(geom::sub(p, from)) as f64 / IN2M as f64 <= cap_in + 1e-3)
+        .map(|p| (ev_at(p), p))
+        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+        .filter(|(v, p)| *v > stay + TELEPORT_EV_MARGIN && *p != from)
+        .map(|(_, p)| [p[0] as f64, p[2] as f64])
+}
+\n/// `SoloController._nearest_uncontrolled_objective` :7117-7178, the path the
 /// displacement arm takes (activating_unit=null: no round plan, no garrison;
 /// `spread` false — the core has no difficulty): among the markers the
 /// bearer's side does NOT control, a HOLDABLE one (no enemy within 3") ranks
@@ -4404,7 +4578,7 @@ fn resolve_with(
     mut dice: Option<(&mut Tray, &mut ShootResult)>,
 ) -> Result<State, Unsupported> {
     let kind = action.kind;
-    if kind != HOLD && kind != ADVANCE && kind != RUSH && kind != CHARGE {
+    if kind != HOLD && kind != ADVANCE && kind != RUSH && kind != CHARGE && kind != REPOSITION {
         return Err(Unsupported::ActionKind(kind));
     }
     let Some(&si) = state.roster.index.get(action.unit.as_str()) else {
@@ -4435,6 +4609,10 @@ fn resolve_with(
     let mut next = state.clone();
     let was_shaken = next.shaken[si];
     let mut sc = Scratch::default();
+    // Teleport / Ethereal (design #816 PR 2) — the activation-start latch
+    // clear, the table's own beat-start erase (main.gd:17456): the stamp
+    // refills every activation.
+    next.teleport_used[si] = false;
     sc.rules_epoch = seams.rules_epoch; // wave-3 mark consumers read it off Scratch
 
     // --- REANIMATION (main.gd:953-957), the activation trigger BEFORE the
@@ -4815,6 +4993,17 @@ fn resolve_with(
     // `tray_storm_attack`; no enemy in reach does not spend the burst.
     if let Some((tray, shot)) = dice.as_mut() {
         tray_storm_attack(statics, &mut next, si, seams, tray, shot);
+    }
+
+    // --- TELEPORT / ETHEREAL (main.gd:1075, right after Surprise in the
+    // table's own pre-attack order; design #816 PR 2) — dice-free, so the
+    // beat runs on EVERY resolve arm; only the log line is tray-bound. The
+    // anchor is the POST-move position (the design's decision 1): the replay
+    // arm lands byte-exact on the record's centroid, the live arm probes the
+    // bounded fixed candidate set behind the fixed EV margin.
+    match dice.as_mut() {
+        Some((_, shot)) => teleport_beat(statics, &mut next, si, action, seams, Some(shot), cover),
+        None => teleport_beat(statics, &mut next, si, action, seams, None, cover),
     }
 
     // --- CROSSING ATTACK (main.gd:1081, right after Storm in the table's own

@@ -298,8 +298,7 @@ impl Candidate {
             charge: self.charge.clone(),
             patient: self.patient,
             split: None,
-            traced: None,
-        }
+            traced: None, teleport: None, }
     }
 
     /// `{"unit": key, "kind": AiDecision.Action.HOLD}` — the bare hold.
