@@ -42,6 +42,30 @@ const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
     "item_grants":[],"attached_hero_rules":[],
     "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
 
+/// The same shooter, but a QUICK SHOT carrier (#782 rule — read by NAME
+/// through the registry: the rule line plus the faction's own primitive
+/// entry, exactly `UnitStatic::build_for`'s read). The table exempts these
+/// (`solo_controller.gd:2239` `not quick_shot`): "may shoot after using Rush
+/// actions" keeps the volley, so the rush is not dominated.
+const QUICK_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+  "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":1,
+    "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
+    "game_system":"gf","faction_folder":"goblin_reclaimers","special_rules":["Quick Shot"],
+    "item_grants":[],"attached_hero_rules":[],
+    "move_bands":{"advance":6.0,"rush":12.0},
+    "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+  "p2_0_x":{"unit_id":"p2_0_x","name":"X","quality":4,"defense":3,"tough":1,
+    "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
+    "game_system":"gf","faction_folder":"human_defense_force","special_rules":[],
+    "item_grants":[],"attached_hero_rules":[],
+    "move_bands":{"advance":6.0,"rush":12.0},
+    "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+  "p2_1_y":{"unit_id":"p2_1_y","name":"Y","quality":4,"defense":3,"tough":1,
+    "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
+    "game_system":"gf","faction_folder":"human_defense_force","special_rules":[],
+    "item_grants":[],"attached_hero_rules":[],
+    "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
+
 const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","objectives":[
   {"pos":[0.2032,0.0,0.0],"owner":1}],
   "units":{
@@ -65,10 +89,15 @@ const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","objectives":
 /// FOREST patch covers x 0..9", z 0..3" around the board centre — the base of
 /// the unit standing at [0,0,0] and the whole 8" line to the objective.
 fn menu(epoch: u32) -> Vec<Candidate> {
-    let header = read_act_header(HEADER).expect("header");
+    menu_h(HEADER, PLAIN, epoch)
+}
+
+/// The same menu over an arbitrary (header, board) fixture pair.
+fn menu_h(header: &str, plain: &str, epoch: u32) -> Vec<Candidate> {
+    let header = read_act_header(header).expect("header");
     let mut cache = ProfileCache::new(header.profiles);
     let mut roster = None;
-    let st = io::state_from_json(PLAIN, &mut cache, &mut roster).expect("state");
+    let st = io::state_from_json(plain, &mut cache, &mut roster).expect("state");
     let statics = statics_of(&st, epoch);
     let terrain = Terrain::build(&crate::terrain::PlainTerrain {
         cells: vec![
@@ -122,5 +151,30 @@ fn an_epoch_6_record_keeps_the_rush_candidate() {
     assert!(
         m.iter().any(|c| c.kind == RUSH),
         "epoch 6 knows no demotion: today's menu, byte for byte"
+    );
+}
+
+/// THE Quick Shot exemption (#782 rule, table `solo_controller.gd:2239`):
+/// a carrier's rush keeps the volley ("may shoot after using Rush actions"),
+/// so even a rush capped to the advance band stays on the menu.
+#[test]
+fn a_quick_shot_carrier_with_a_capped_rush_keeps_the_rush() {
+    let m = menu_h(QUICK_HEADER, PLAIN, CURRENT_RULES_EPOCH);
+    assert!(
+        m.iter().any(|c| c.kind == RUSH),
+        "the Quick Shot carrier's rush keeps the volley — no demotion"
+    );
+}
+
+/// THE table's own shape (`solo_controller.gd:2243-2244`): with the target
+/// out of range after the capped move (36\" — 6\" cap > 24\" rifle), the rush
+/// forfeits no shot — the RUSH stays, exactly like the table keeps it.
+#[test]
+fn a_capped_rush_without_a_target_in_range_keeps_the_rush() {
+    let far = PLAIN.replace("[[-0.2032,0.0,0.0]]", "[[-0.9144,0.0,0.0]]");
+    let m = menu_h(HEADER, &far, CURRENT_RULES_EPOCH);
+    assert!(
+        m.iter().any(|c| c.kind == RUSH),
+        "a capped rush with no shot keeps RUSH, like the table"
     );
 }
