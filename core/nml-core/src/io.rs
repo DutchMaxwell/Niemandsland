@@ -216,25 +216,18 @@ pub(crate) struct PlainLedger {
     /// stands (act_recorder.gd `_ledger_of`). Empty on every older corpus.
     #[serde(default)]
     storm_used: Vec<String>,
-    /// Wave 5 (PR 1's recorder): the `{"used", "to"}` reposition block; `to`
-    /// arrives as the `"(x, y)"` Vector2 string. Absent on older corpora.
+    /// Wave 5 (PR 1's recorder): the `{"used", "to"}` block; `to` arrives as the `"(x, y)"` Vector2 string.
     #[serde(default)]
     teleport: Option<PlainTeleport>,
 }
 
+/// The `teleport` block; `to` is a `[x, y]` pair or a `"(x, y)"` string.
 #[derive(Deserialize)]
-pub(crate) struct PlainTeleport {
-    #[serde(default)]
-    used: bool,
-    to: Vec2Wire,
-}
+pub(crate) struct PlainTeleport { #[serde(default)] used: bool, to: Vec2Wire }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
-enum Vec2Wire {
-    Pair([f64; 2]),
-    Str(String),
-}
+enum Vec2Wire { Pair([f64; 2]), Str(String) }
 
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
 /// `BattleSim.charge_illegal_plain` (battle_sim.gd:1563) reads for an absent key.
