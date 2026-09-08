@@ -197,6 +197,15 @@ use super::*;
     fn the_reposition_candidate_is_menu_gated_on_epoch_8() {
         let menu_at = |epoch: u32| {
             let (mut st, statics) = tp_line(epoch);
+            // dangerous_line's roster points 4 units at a 1-entry profiles.list
+            // (its sim paths never read state.profile); candidates_tuned's
+            // forces_hold read needs the slot, so fill it 4 wide.
+            let profile: crate::state::Profile =
+                serde_json::from_str(r#"{"unit_id":"a","name":"a"}"#).unwrap();
+            st.profiles = Rc::new(crate::state::Profiles {
+                list: vec![profile; 4],
+                index: HashMap::new(),
+            });
             st.objectives = vec![crate::state::Objective {
                 pos: [st.positions[0][0][0] + 6.0 * IN2M, 0.0, 0.0],
                 owner: 0,
