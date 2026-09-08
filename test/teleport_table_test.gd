@@ -45,14 +45,16 @@ func test_ethereal_cap_is_flat_6() -> void:
 # --- 4. second reposition in the same activation is refused -----------------------------------
 func test_latch_refuses_second_reposition() -> void:
 	var u := _bearer(["Teleport"], {"teleport_used_this_activation": true})
-	var dec := auto_free(CONTROLLER.new()).teleport_decision(u, false)
+	var ctl: SoloController = auto_free(CONTROLLER.new())
+	var dec: Dictionary = ctl.teleport_decision(u, false)
 	assert_bool(bool(dec.get("used", true))).is_false()
 	assert_str(str(dec.get("why", ""))).contains("once per activation")
 
 # --- 5. a unit WITHOUT the name never repositions ---------------------------------------------
 func test_unit_without_name_never_repositions() -> void:
 	var u := _bearer([])
-	var dec := auto_free(CONTROLLER.new()).teleport_decision(u, false)
+	var ctl: SoloController = auto_free(CONTROLLER.new())
+	var dec: Dictionary = ctl.teleport_decision(u, false)
 	assert_bool(bool(dec.get("used", true))).is_false()
 	assert_str(str(dec.get("rule", "x"))).is_empty()
 

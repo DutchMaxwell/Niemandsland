@@ -10070,7 +10070,7 @@ func teleport_decision(unit: GameUnit, rush: bool) -> Dictionary:
 			thr, thr != Vector2.INF, cover_at):
 		if pt == from or not bool(legal_at.call(pt)):
 			continue
-		var e := ev_at.call(pt)
+		var e: Dictionary = ev_at.call(pt)
 		if float(e["ev"]) + float(e["loc"]) > best_score:
 			best_score = float(e["ev"]) + float(e["loc"])
 			best = e
