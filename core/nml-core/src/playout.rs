@@ -18,18 +18,25 @@
 //!   * the build order of the candidate list is part of the contract, because
 //!     `_policy_step`'s tie-break is "first seen wins".
 
+use crate::acts::{rule_on, EPOCH_7_TABLE_RULES};
+use crate::gate;
 use crate::io::{Action, Seams};
 use crate::menu::{best_charge, best_shoot, safe_advance, Candidate, Tuning};
 use crate::fitted::Fitted;
 use crate::score::{score_with, NO_INCOMING};
 use crate::mv::reach::ReachIndex;
 use crate::sim::{
-    reply_threat, resolve_on_board_reach, Scratch, Unsupported, CHARGE, HOLD, RUSH,
+    reply_threat, resolve_on_board_reach, trace_rule, Scratch, Unsupported, ADVANCE, CHARGE, HOLD,
+    RUSH,
 };
 use crate::state::State;
-use crate::terrain::Terrain;
+use crate::terrain::{self, Terrain};
 use crate::unit::UnitStatic;
-use crate::{geom, Objective};
+use crate::{geom, IN2M, Objective};
+
+/// The table half's own log line (#813, solo_controller.gd:2251) — the core's
+/// demotion trace rides the same words, so both layers log the same rule.
+const RUSH_DEMOTION_RULE: &str = "GF v3.5.1 p.7: a rush capped to the advance distance forfeits the shot for nothing — chose advances (demoted)";
 
 /// Everything an imagined activation needs that does not change during a
 /// rollout: the per-unit static closure, the board and the two A/B seams the
@@ -115,9 +122,62 @@ impl<'a> Policy<'a> {
             }
         }
         if let Some(o) = dest {
-            let mut c = Candidate::new(key, RUSH);
-            c.dest = Some(o.pos);
-            out.push(c);
+            // #812 core half — GF v3.5.1 p.7: Rush forbids shooting, so a rush
+            // whose EXECUTABLE distance (p.11 difficult cap, mv/step.rs:598)
+            // cannot beat the advance band is dominated by advance + shoot.
+            // Table parity (#813 table half, solo_controller.gd:2239-2244):
+            // a Quick Shot carrier keeps the rush ("may shoot after using Rush
+            // actions" — the volley is not forfeited), and the demotion needs
+            // a legal target in range + LOS after the capped move — a capped
+            // rush with NO shot forfeits nothing and stays RUSH.
+            // Epoch-gated like the rule ports (acts::rule_on), so every record
+            // below EPOCH_7_TABLE_RULES replays its candidate menu byte-exact.
+            let quick_shot = self.statics[state.roster.profile[unit]].quick_shot_active
+                || crate::mods::granted(state, unit, "Quick Shot");
+            if rule_on(self.seams.rules_epoch, EPOCH_7_TABLE_RULES)
+                && !quick_shot
+                && rush_dominated(state, self.terrain, unit, o.pos)
+            {
+                let shot = self
+                    .seams
+                    .moved_shoot
+                    .then(|| best_shoot(state, self.statics, unit, sc, self.tuning))
+                    .flatten();
+                if shot.is_some()
+                    && out.iter().any(|c| c.kind == ADVANCE && c.dest == Some(o.pos))
+                {
+                    trace_rule(
+                        "rollout",
+                        RUSH_DEMOTION_RULE,
+                        &format!("{key}: rush to objective dropped — advance to the same goal exists"),
+                    );
+                } else if let Some(e) = shot {
+                    let mut c = Candidate::new(key, ADVANCE);
+                    c.dest = Some(o.pos);
+                    c.shoot = Some(state.key(e).to_string());
+                    trace_rule(
+                        "rollout",
+                        RUSH_DEMOTION_RULE,
+                        &format!(
+                            "{key}: rush demoted to advance — capped to {:.1}\" — shot available ({})",
+                            state.bands[unit].advance,
+                            state.key(e)
+                        ),
+                    );
+                    out.push(c);
+                } else {
+                    // The table's own shape (solo_controller.gd:2243-2244):
+                    // no target in range + LOS after the capped move, no
+                    // demotion — the RUSH candidate stays on the menu.
+                    let mut c = Candidate::new(key, RUSH);
+                    c.dest = Some(o.pos);
+                    out.push(c);
+                }
+            } else {
+                let mut c = Candidate::new(key, RUSH);
+                c.dest = Some(o.pos);
+                out.push(c);
+            }
         }
         // Counter-charges exist in the mental game too (diagnosis 07.08.):
         // without this a committed unit could never be punished in a rollout,
@@ -185,6 +245,32 @@ impl<'a> Policy<'a> {
         let a: Action = c.action();
         resolve_on_board_reach(self.statics, state, &a, self.terrain, self.seams, self.reach)
     }
+}
+
+/// #812 core half — is the RUSH to `dest` dominated by an advance? Two arms,
+/// both in INCHES (world positions are metres — `menu.rs:667` is the precedent):
+///   * the goal already lies inside the advance band, so both actions reach it
+///     and advance keeps the shot;
+///   * the route cannot avoid difficult ground (the unit stands in it, or the
+///     straight line crosses it), so `plain_move`'s p.11 cap (mv/step.rs:598)
+///     shortens the rush to `DIFFICULT_MOVE_CAP_IN` — an executable rush at or
+///     under the advance band. Strider/Flying are exempt via the recorded
+///     p.13 read (`state.charge_no_difficult`), the same exemption the move
+///     engine's `ignores_difficult` honours.
+fn rush_dominated(state: &State, terrain: &Terrain, unit: usize, dest: [f64; 3]) -> bool {
+    let centre = geom::centre(&state.positions[unit]);
+    let dist_in = geom::length(geom::sub(geom::to_f32(dest), centre)) as f64 / IN2M;
+    let advance_in = state.bands[unit].advance;
+    if dist_in <= advance_in + 1e-6 {
+        return true;
+    }
+    if state.charge_no_difficult[unit] || !terrain.is_valid() {
+        return false;
+    }
+    let probe_r = state.charge_probe_r[unit];
+    let capped = terrain::base_in_terrain(centre, probe_r, terrain, terrain::is_difficult)
+        || gate::crosses_difficult(centre, geom::to_f32(dest), probe_r, terrain);
+    capped && dist_in.min(gate::DIFFICULT_MOVE_CAP_IN) <= advance_in + 1e-6
 }
 
 /// `AiPlanner._other_player` ai_planner.gd:870-875 — the first unit of the other

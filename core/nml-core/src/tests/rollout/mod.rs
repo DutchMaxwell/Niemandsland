@@ -33,4 +33,5 @@
 
     mod coordinate;
     mod delayed_action;
+    mod rush_demotion;
     mod vengeance;
