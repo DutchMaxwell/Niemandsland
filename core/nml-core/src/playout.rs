@@ -18,7 +18,7 @@
 //!   * the build order of the candidate list is part of the contract, because
 //!     `_policy_step`'s tie-break is "first seen wins".
 
-use crate::acts::{rule_on, EPOCH_7_TABLE_RULES};
+use crate::acts::{rule_on, EPOCH_8_PLANNER_MENU};
 use crate::gate;
 use crate::io::{Action, Seams};
 use crate::menu::{best_charge, best_shoot, safe_advance, Candidate, Tuning};
@@ -131,10 +131,12 @@ impl<'a> Policy<'a> {
             // a legal target in range + LOS after the capped move — a capped
             // rush with NO shot forfeits nothing and stays RUSH.
             // Epoch-gated like the rule ports (acts::rule_on), so every record
-            // below EPOCH_7_TABLE_RULES replays its candidate menu byte-exact.
+            // below EPOCH_8_PLANNER_MENU replays its candidate menu byte-exact
+            // (#821 is a NEW frozen gate: the epoch-7 fixtures were recorded
+            // before the demotion existed and must keep their 109-wide menus).
             let quick_shot = self.statics[state.roster.profile[unit]].quick_shot_active
                 || crate::mods::granted(state, unit, "Quick Shot");
-            if rule_on(self.seams.rules_epoch, EPOCH_7_TABLE_RULES)
+            if rule_on(self.seams.rules_epoch, EPOCH_8_PLANNER_MENU)
                 && !quick_shot
                 && rush_dominated(state, self.terrain, unit, o.pos)
             {

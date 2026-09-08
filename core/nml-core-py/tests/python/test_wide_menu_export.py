@@ -104,6 +104,7 @@ def _build_wide_menu_record(out_dir: Path) -> tuple[Path, dict]:
         WIDE_SEED, str(P1), str(P2), gr.REPO, str(BANK), None,
         top_k=1, horizon=1, dice_seed=WIDE_SEED, dice="table", deployment="arena",
         menu_wide="table", record_cands=True, record_aux=False,
+        rules_epoch=7,  # frozen epoch 7: pinned pre-#821 trajectory (rules epoch 8 = rush demotion in the menu)
     )
     rows = out["planner_positions"]
     widths = [len(r["cands"]["list"]) for r in rows]

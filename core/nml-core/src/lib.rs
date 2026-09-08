@@ -51,6 +51,7 @@ pub use acts::{
     load_acts, read_act_header, read_acts, rule_on, vocab_version_of_header, Act, ActCorpus,
     ActHeader, ActStatics, ArbitrationRec, Expectation, Knobs, MeleeReach, PickRec, PolicyMode,
     RolloutValue, RunnerRec, Scored, Sighting, CURRENT_RULES_EPOCH, EPOCH_7_TABLE_RULES,
+    EPOCH_8_PLANNER_MENU,
 };
 pub use arbitration::{
     arbitrate, arbitrate_bent, full_playout, full_playout_bent, ArbBend, Arbitration,

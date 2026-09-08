@@ -301,7 +301,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 7;
+pub const CURRENT_RULES_EPOCH: u32 = 8;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -401,6 +401,19 @@ pub const EPOCH_6_TABLE_RULES: u32 = 6;
 /// reservation and the first wave-4 rule landing. Every wave-4 call site must
 /// read THIS constant, not the literal `7` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_7_TABLE_RULES: u32 = 7;
+
+/// The PLANNER MENU gate (#821, frozen at 8 on 08.09.): the rollout policy's
+/// rush demotion (playout.rs) — a rush capped to the advance band with a shot
+/// in range is demoted to an advance + shoot — is gated
+/// `rule_on(rules_epoch, EPOCH_8_PLANNER_MENU)`. #821 landed gating the same
+/// behaviour on `EPOCH_7_TABLE_RULES`, which shrank the epoch-7 fixtures'
+/// replayed menus (109 -> 97, seed 1) and turned main's python suite red: a
+/// menu change is a NEW frozen gate per the epoch contract, never a re-read of
+/// an older one. `8` excludes every record stamped 7 or below (the pre-#821
+/// corpora replay their 109-wide menus byte-exact) while fresh headers stamp
+/// `CURRENT_RULES_EPOCH == 8` and get the demotion. Every call site reads THIS
+/// constant, not the literal `8` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_8_PLANNER_MENU: u32 = 8;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -873,7 +886,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 7, "wave 4's gate bumps the live epoch to 7");
+        assert_eq!(CURRENT_RULES_EPOCH, 8, "epoch 8's gate (EPOCH_8_PLANNER_MENU) bumps the live epoch to 8");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -883,11 +896,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":7}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":8}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 7"
+            "a fresh play_game() now stamps the bumped epoch, 8"
         );
     }
 
