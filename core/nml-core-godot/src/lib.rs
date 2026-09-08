@@ -930,6 +930,7 @@ fn action_of(d: &VarDictionary) -> Action {
         d.get(k).map(|v| plain::text(&v)).filter(|s| !s.is_empty())
     };
     Action {
+        teleport: None,
         kind: d.get("kind").map(|v| plain::int(&v)).unwrap_or(-1),
         unit: d.get("unit").map(|v| plain::text(&v)).unwrap_or_default(),
         dest,
