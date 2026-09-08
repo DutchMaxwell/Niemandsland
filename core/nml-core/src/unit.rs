@@ -735,6 +735,9 @@ pub struct UnitStatic {
     /// pre-attack roll (`_solo_apply_crossing_attack`); `None` below
     /// `rules_epoch` 7. See `crossing_attack_of`.
     pub crossing_attack: Option<CrossingAttackSpec>,
+    /// The Surprise Attack read (wave-5, epoch 7) — the first-activation
+    /// burst (`surprise_attack_of`); the alias arm rides `infiltrate_min_…`.
+    pub surprise_attack: Option<SurpriseAttackSpec>,
     /// The Reckless Piercing read (epoch 7) — the round AP stamp family
     /// (`reckless_piercing_of`); empty below `rules_epoch` 7.
     pub reckless_piercing: Vec<RecklessPiercingSpec>,
@@ -893,7 +896,10 @@ pub struct UnitStatic {
     /// `unit_rule_active` — a faction whose map fields no `Infiltrate` entry
     /// still arrives at the fallback ring, and the twin copies that. The value
     /// is `RulesRegistry.unit_param(unit, "Infiltrate", "min_enemy_dist_in",
-    /// …)` (`:9620`), so a book that moves the ring moves it here too.
+    /// …)` (`:9620`), so a book that moves the ring moves it here too. The
+    /// Surprise Attack alias (#761) rides this field too, gated on the FROZEN
+    /// `EPOCH_7_TABLE_RULES` and reading the ALIAS entry's own ring first
+    /// (`best_primitive_param` reading) — see the stamp arm.
     pub infiltrate_min_enemy_dist_in: f64,
     /// Ambush family (rules-wave2-ambush) — the four registry names that ride
     /// the "Ambush" primitive, each read at its OWN literal with the entry's
@@ -2749,6 +2755,45 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
     None
 }
 
+/// One carried "Surprise Attack" — "Counts as having Infiltrate. The first
+/// time this unit is activated, pick one enemy unit within 6\" in line of
+/// sight, and roll X dice. For each 2+ it takes one hit with AP(1)." The
+/// gf/aof registry entry carries the burst's own params and the rating is
+/// the X; the pick is the Storm Attack port's descending pick (the table's
+/// own burst arm is the audit-B open question — this read is the book text).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SurpriseAttackSpec {
+    /// The rule's own rating ("Surprise Attack(2)" -> 2, bare -> 1): the X.
+    pub dice: i64,
+    pub range_in: f64,
+    pub trigger: i64,
+    pub ap: i64,
+    pub needs_los: bool,
+}
+
+/// The Surprise Attack stamp (wave-5, rules-surprise-attack): read BY NAME off
+/// the unit's own rule list, gated on the FROZEN `EPOCH_7_TABLE_RULES`; the
+/// alias arm is the `infiltrate_min_enemy_dist_in` gate in `stamp_profile`.
+fn surprise_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<SurpriseAttackSpec> {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return None;
+    }
+    let map = reg.rules_for(&p.game_system);
+    for raw in p.special_rules.iter().chain(p.item_grants.iter()) {
+        let n = base_rule_name(raw);
+        if n != "Surprise Attack" {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &n) else {
+            continue;
+        };
+        return Some(SurpriseAttackSpec { dice: rule_rating(raw, 0).max(1), range_in: e.param_f("range_in", 6.0),
+            trigger: e.param_i("trigger_target", 2), ap: e.param_i("ap", 1),
+            needs_los: e.param_b_or("needs_los", true) });
+    }
+    None
+}
+
 /// One carried "Reanimation" — main.gd:953-957, the activation trigger
 /// (`_solo_try_reanimation` main.gd:4710): once per activation, BEFORE the
 /// action, roll as many dice as the unit could restore wounds; each 5+
@@ -4581,6 +4626,19 @@ impl UnitStatic {
             vengeance_active: unit_rule_active(reg, p, "Vengeance"),
             infiltrate_min_enemy_dist_in: if has_special_rule(&p.special_rules, "Infiltrate") {
                 unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN)
+            } else if rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
+                && has_special_rule(&p.special_rules, "Surprise Attack")
+            {
+                // #761's alias arm, the review-810 reading: the table resolves
+                // the alias via `best_primitive_param` — the alias entry's OWN
+                // `min_enemy_dist_in` wins (aofr Surprise Attack: 1"), the
+                // Infiltrate param (fallback 3") only when the entry carries
+                // none. Gated on the FROZEN `EPOCH_7_TABLE_RULES` like the
+                // burst arm: a record below 7 keeps ring 0.0 and replays
+                // byte-exact.
+                let infiltrate_ring =
+                    unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN);
+                unit_param_f(reg, p, "Surprise Attack", "min_enemy_dist_in", infiltrate_ring)
             } else {
                 0.0
             },
@@ -4596,6 +4654,7 @@ impl UnitStatic {
             storm: storm_of(reg, p, rules_epoch),
             reanimation: reanimation_of(reg, p, rules_epoch),
             crossing_attack: crossing_attack_of(reg, p, rules_epoch),
+            surprise_attack: surprise_attack_of(reg, p, rules_epoch),
             reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
             mind_control: mind_control_of(reg, p, rules_epoch),
