@@ -557,6 +557,50 @@ def test_ethereal_cuts_the_bands_by_six_both_ways():
     }
 
 
+def test_swift_cancels_slow_in_the_bands():
+    """movement_range_controller.gd:95-109 — "Swift cancels Slow" by NAME on
+    the unit's rule line: a Slow unit that also carries Swift keeps the base
+    6"/12" bands, and the cancelled Slow still counts as filled, so the
+    registry pass cannot re-fold it either."""
+    assert _aof_profile("goblins", ["Slow", "Swift"])["move_bands"] == {
+        "advance": 6.0,
+        "rush": 12.0,
+    }
+
+
+def test_slow_without_swift_takes_the_fold():
+    """The control half of the Swift pair — the name pass's own Slow fold
+    (list_to_profile.py, the table's :116-121): -2"/-4" onto both bands when
+    no Swift rides along."""
+    assert _aof_profile("goblins", ["Slow"])["move_bands"] == {
+        "advance": 4.0,
+        "rush": 8.0,
+    }
+
+
+def test_swift_through_an_item_grant_cancels_slow_too():
+    """opr_api_client.gd:1031-1035 — an item's granted rules fold into
+    special_rules, so an item-granted Swift reaches the band pass the same
+    way a listed one does."""
+    sel = _selection("u", "Warrior", rules=[{"label": "Slow"}])
+    sel["loadout"] = [_item("Windrunner Charm", ["Swift"])]
+    prof = profiles_from_army_forge_json(
+        {"gameSystem": "aof", "units": [sel]}, "goblins", player=1
+    )["p1_0_u"]
+    assert "Swift" in prof["special_rules"]
+    assert prof["move_bands"] == {"advance": 6.0, "rush": 12.0}
+
+
+def test_swift_auras_chain_cancels_slow():
+    """_expand_auras runs BEFORE _unit_profile (profiles_from_army_forge_json),
+    so a "Swift Aura" carrier's chain lands the bare "Swift" on special_rules
+    before the band pass runs — the aura route cancels Slow exactly like the
+    listed name (the table's structured-path reading, move_bands_for_props'
+    docstring)."""
+    prof = _aof_profile("goblins", ["Slow", "Swift Aura"])
+    assert prof["move_bands"] == {"advance": 6.0, "rush": 12.0}
+
+
 def test_the_legacy_reading_skips_the_registry_passes(monkeypatch):
     """`LEGACY_CORE_SELFPLAY` replays the pre-NML-1108 loader — no registry
     pass on the bands, both dynamic fields hardcoded — so the M3-5
