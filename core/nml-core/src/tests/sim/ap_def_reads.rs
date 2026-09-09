@@ -104,7 +104,9 @@ use super::*;
             vec![UtilityBuff { def_mod: 1, ..ub("Defense Buff") }];
         // b's own rifle: unused while a acts, needed for the shoot-back leg.
         statics[2].shoot = vec![gun("Rifle", 64, 24)];
-        let (next, _) = run_reads(&st, &statics, &buff_action(Some("b")), 27, 7);
+        // The pick+record is DICE-FREE (the buff arm runs before any shot,
+        // main.gd's pre-attack slot): b stays untouched for the shoot-back.
+        let (next, _) = run_reads(&st, &statics, &buff_action(None), 27, 7);
         assert_eq!(next.buffs[0].len(), 1,
             "the bearer's defense row is spent by the exchange where it DEFENDS, not by its own attack (main.gd:3925)");
 
@@ -121,7 +123,7 @@ use super::*;
 
         // Epoch 6: the same pick records nothing (PR 1's all-zero guard), so
         // the shoot-back volley stays at the plain rung.
-        let (next6, _) = run_reads(&st, &statics, &buff_action(Some("b")), 27, 6);
+        let (next6, _) = run_reads(&st, &statics, &buff_action(None), 27, 6);
         let (_, plain6) = run_reads(&next6, &statics, &back, 27, 6);
         assert_eq!(save_target_of(&plain6), 4, "below 7 the row is not even recorded");
     }
@@ -133,9 +135,12 @@ use super::*;
     /// survive the exchange forever.
     #[test]
     fn once_rows_are_spent_by_the_first_exchange_exactly_like_hit_mod_rows() {
-        let (st, mut statics) = ap_rifle();
-        statics[2].wounds_max = vec![99, 99, 99]; // the target survives into the second exchange
+        let (st, statics) = ap_rifle();
         let mut deb = st.clone();
+        // Run 1's volley must not wipe the target before the second exchange:
+        // land_wounds spends the STATE's per-model wound capacity, so b's
+        // models bank 30 wounds each.
+        deb.wounds[2] = vec![30, 30, 30];
         deb.buffs[0].push(row(-1, 0, 0));
         deb.buffs[2].push(row(0, 0, -1));
 
