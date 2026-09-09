@@ -71,6 +71,7 @@ use super::*;
         let action = Action {
             kind: HOLD, unit: "a".into(), dest: None, shoot: None,
             charge: None, patient: false, split: None, traced: None,
+            teleport: None,
         };
         let terrain = crate::terrain::Terrain::default();
         let mut tray = Tray::seeded(11);
