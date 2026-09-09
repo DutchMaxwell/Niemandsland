@@ -29,7 +29,6 @@ use crate::combat::{
     conditional_ap_bonus, covered_defense, deadly_multiplier, fortified_ap, guarded_defense,
     impact_total_dice, melee_hit_modifier, modified_hit_target, reliable_quality, save_target,
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
-    BEST_HIT_TARGET,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
     IMPACT_HIT_TARGET, LONG_RANGE_IN, NO_RETREAT_SELF_WOUND_MAX, RAVAGE_WOUND_TARGET,
     RENDING_AP_BONUS, THRUST_AP_BONUS, UNMODIFIED_SIX,
