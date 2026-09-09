@@ -723,7 +723,8 @@
     fn fold_legs(rule: &str) -> (Vec<UnitStatic>, State) {
         let (mut st, statics) = buff_line();
         st.buffs[0].push(mods::LiveMod {
-            hit_mod: 0, casting_mod: 0, morale_mod: 0, grants_rule: Rc::from(rule),
+            hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
+            grants_rule: Rc::from(rule),
             scope: Rc::from(""), attackers: false, once: true,
         });
         (statics, st)
@@ -742,6 +743,9 @@
             hit_mod: 0,
             casting_mod: 0,
             morale_mod: 0,
+            ap_mod: 0,
+            def_mod: 0,
+            defense_mod: 0,
             grants_rule: Rc::from(rule),
             scope: Rc::from("shooting"),
             attackers: true,

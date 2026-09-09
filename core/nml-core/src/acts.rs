@@ -843,7 +843,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
         acts.push(Act {
             round: pa.round,
             player: pa.player,
-            state: state_of(pa.state, &eff, roster),
+            state: state_of(pa.state, &eff, roster, knobs.rules_epoch),
             pool: pa.pool,
             charge_illegal: pa.charge_illegal,
             charge_illegal_grid: pa.charge_illegal_grid,

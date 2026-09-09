@@ -2653,6 +2653,14 @@ pub struct UtilityBuff {
     pub hit_mod: i64,
     pub casting_mod: i64,
     pub morale_mod: i64,
+    /// `ap_mod` / `def_mod` / `defense_mod` — the seam 4 record shape (design
+    /// §4 step 1), parsed ONLY from `EPOCH_7_TABLE_RULES` on (below 7 the
+    /// fields stay 0 and the all-zero row keeps being dropped). NOT
+    /// `range_bonus_in` (documented NO, design §4(d) step 3) and NOT
+    /// `move_mod` (seam 2). The READS are PR 2 — nothing folds these yet.
+    pub ap_mod: i64,
+    pub def_mod: i64,
+    pub defense_mod: i64,
     pub grants_rule: String,
     pub scope: String,
     /// `beneficiary` — "attackers" on the Mark family: the record belongs to
@@ -2668,9 +2676,11 @@ pub struct UtilityBuff {
 /// the volley sight/range seams); the remaining 16 stay stamped-but-unconsumed
 /// (audited 2026-09-05: the grant-only names' nine granted names are read at
 /// no `mods::granted`/`granted_vs` call site, `casting_mod` is recorded but
-/// `Role::Casting` is never summed, and `defense_mod`/`ap_mod`/`move_mod`/
-/// `range_bonus_in` are not modeled on `UtilityBuff` — `record_buff` drops
-/// the all-zero row — their seams still do not exist on this core).
+/// `Role::Casting` is never summed, and `move_mod`/`range_bonus_in` are not
+/// modeled on `UtilityBuff` — `record_buff` drops the all-zero row (`ap_mod`/
+/// `def_mod`/`defense_mod` joined the record shape at `EPOCH_7_TABLE_RULES`,
+/// seam 4 step 1; their reads are PR 2) — their seams still do not exist on
+/// this core).
 const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Unwieldy Debuff",
     "Unpredictable Shooter Mark",
@@ -3195,21 +3205,31 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             hit_mod: e.param_i("hit_mod", 0),
             casting_mod: e.param_i("casting_mod", 0),
             morale_mod: e.param_i("morale_mod", 0),
+            // SEAM 4 step 1 (design §4(d), the FROZEN `EPOCH_7_TABLE_RULES`):
+            // the three ap/def knobs join the record shape — a row whose ONLY
+            // knob is one of these lands on `record_buff`'s ledger from epoch
+            // 7, below 7 they stay 0 so the row keeps being dropped and an old
+            // corpus's stamps are unchanged.
+            ap_mod: if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { e.param_i("ap_mod", 0) } else { 0 },
+            def_mod: if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { e.param_i("def_mod", 0) } else { 0 },
+            defense_mod: if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { e.param_i("defense_mod", 0) } else { 0 },
             grants_rule: e.param_s("grants_rule").to_string(),
             scope: e.param_s("scope").to_string(),
             beneficiary: e.param_s("beneficiary").to_string(),
             once: e.param_b_or("once", true),
         });
-        // The ledger models four knobs (hit / casting / morale / grant) and the
-        // movement arm. An entry whose whole effect is a knob it does NOT carry
-        // — `def_mod`, `defense_mod`, `ap_mod`, `move_mod`, `range_bonus_in` —
-        // would record an all-zero row that `record_buff` drops on the floor.
-        // Named here rather than skipped in silence.
+        // The ledger models seven knobs (hit / casting / morale / the three
+        // ap-def knobs from `EPOCH_7_TABLE_RULES` / grant) and the movement
+        // arm. An entry whose whole effect is a knob it does NOT carry —
+        // `move_mod`, `range_bonus_in` — would record an all-zero row that
+        // `record_buff` drops on the floor. Named here rather than skipped in
+        // silence.
         let b = out.last().expect("just pushed");
         if !b.vs_target && b.reposition_in <= 0.0 && b.grants_rule.is_empty()
-            && (b.hit_mod, b.casting_mod, b.morale_mod) == (0, 0, 0) {
+            && (b.hit_mod, b.casting_mod, b.morale_mod, b.ap_mod, b.def_mod, b.defense_mod)
+                == (0, 0, 0, 0, 0, 0) {
             un.push(Unimplemented { rule: b.name.clone(), why:
-                "Utility Buff params carry no hit/casting/morale mod and no grants_rule, so this resolver records nothing — main.gd:16534 builds the same three keys and _solo_record_spell_mod:3663 drops the all-zero row. If the rule works on the table it does so at a seam this port does not claim".into() });
+                "Utility Buff params carry no hit/casting/morale/ap/def mod and no grants_rule, so this resolver records nothing — main.gd:16534 builds the same three keys and _solo_record_spell_mod:3663 drops the all-zero row. If the rule works on the table it does so at a seam this port does not claim".into() });
         }
     }
     out

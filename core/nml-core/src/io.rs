@@ -16,6 +16,7 @@ use std::rc::Rc;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
+use crate::acts::{rule_on, EPOCH_7_TABLE_RULES};
 use crate::mods::LiveMod;
 use crate::state::{
     Bands, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, Roster, State,
@@ -140,9 +141,11 @@ pub(crate) struct PlainUnit {
 
 /// One `_solo_record_spell_mod` record (main.gd:3649-3670) as the table wrote it
 /// verbatim into `unit_properties["spell_records"]` — only the fields this core
-/// has a `LiveMod` consumer for are read; the rest (`spell`, `def_mod`,
-/// `range_in`, `advance_in`, `rush_in`, `granted_to`) are ignored by serde, not
-/// an error, so the table can grow the record without breaking this reader.
+/// has a `LiveMod` consumer for are read; the rest (`spell`, `range_in`,
+/// `advance_in`, `rush_in`, `granted_to`) are ignored by serde, not an error,
+/// so the table can grow the record without breaking this reader. The three
+/// ap/def knobs are read since seam 4 step 1 (epoch 7); `state_of`'s gate
+/// keeps a record stamped below 7 ignoring them.
 #[derive(Deserialize)]
 pub(crate) struct PlainBuff {
     #[serde(default)]
@@ -151,6 +154,12 @@ pub(crate) struct PlainBuff {
     casting_mod: i64,
     #[serde(default)]
     morale_mod: i64,
+    #[serde(default)]
+    ap_mod: i64,
+    #[serde(default)]
+    def_mod: i64,
+    #[serde(default)]
+    defense_mod: i64,
     #[serde(default)]
     grants_rule: String,
     #[serde(default)]
@@ -682,7 +691,17 @@ impl PlainState {
     }
 }
 
-pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> State {
+/// `rules_epoch` is the corpus's own stamp (`Header.seams.rules_epoch` /
+/// `ActHeader.knobs.rules_epoch`) — the reader gate on the three ap/def buff
+/// knobs keys on it. The single-state loader `state_from_json` carries NO
+/// header stamp and passes 0: a plain state read without its corpus keeps the
+/// pre-seam reading (PR 2 threads the epoch where the reads need it).
+pub(crate) fn state_of(
+    plain: PlainState,
+    profiles: &Rc<Profiles>,
+    roster: Rc<Roster>,
+    rules_epoch: u32,
+) -> State {
     let n = roster.keys.len();
     // Roster index -> its row/column in the KEY-SORTED matrix; see `los_positions`.
     let cap = los_positions(&roster.keys);
@@ -828,10 +847,19 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         // untouched too — proof 3's byte-identity turns on that.
         if let Some(ledger) = u.ledger {
             for b in ledger.buffs {
+                // SEAM 4 step 1 — the reader gate, the SAME one `record_buff`
+                // writes (design §4(c), the FROZEN `EPOCH_7_TABLE_RULES`): a
+                // record stamped below 7 keeps ignoring the three ap/def knobs
+                // (the row still lands — the fold has no all-zero guard — so
+                // today's reading is preserved byte-identically).
+                let epoch7 = rule_on(rules_epoch, EPOCH_7_TABLE_RULES);
                 st.buffs[ui].push(LiveMod {
                     hit_mod: b.hit_mod,
                     casting_mod: b.casting_mod,
                     morale_mod: b.morale_mod,
+                    ap_mod: if epoch7 { b.ap_mod } else { 0 },
+                    def_mod: if epoch7 { b.def_mod } else { 0 },
+                    defense_mod: if epoch7 { b.defense_mod } else { 0 },
                     grants_rule: Rc::from(b.grants_rule.as_str()),
                     scope: Rc::from(b.scope.as_str()),
                     attackers: b.beneficiary == "attackers",
@@ -922,9 +950,9 @@ pub fn read_nodes<R: BufRead>(reader: R, origin: &str) -> Result<NodeCorpus, Str
         let rb = roster_of(&pn.state_before, &profiles, &mut cache)?;
         let ra = roster_of(&pn.state_after, &profiles, &mut cache)?;
         nodes.push(Node {
-            state_before: state_of(pn.state_before, &profiles, rb),
+            state_before: state_of(pn.state_before, &profiles, rb, seams.rules_epoch),
             action: pn.action,
-            state_after: state_of(pn.state_after, &profiles, ra),
+            state_after: state_of(pn.state_after, &profiles, ra, seams.rules_epoch),
             score: pn.score,
             player: pn.player,
             cover_dest: pn.cover_dest,
@@ -953,7 +981,7 @@ pub fn state_from_json(
     let plain: PlainState = serde_json::from_str(text).map_err(|e| e.to_string())?;
     let roster = roster_of(&plain, profiles.base(), roster_cache)?;
     let eff = profiles.effective(&roster, &plain.dyn_profiles());
-    Ok(state_of(plain, &eff, roster))
+    Ok(state_of(plain, &eff, roster, 0))
 }
 
 /// The inverse of `state_from_json` (NML-1073 M3-2) — the plain form
