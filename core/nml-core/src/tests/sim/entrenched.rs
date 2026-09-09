@@ -8,9 +8,9 @@ use super::*;
     #[test]
     fn an_executed_move_stamps_moved_round_and_a_hold_never_does() {
         let (mut st, statics) = buff_line();
-        let mut prof = (*st.profiles).clone();
-        prof.list[0].move_bands.advance = 6.0;
-        st.profiles = Rc::new(prof);
+        let mut prof_list = st.profiles.list.clone();
+        prof_list[0].move_bands.advance = 6.0;
+        st.profiles = Rc::new(Profiles { list: prof_list, index: HashMap::new() });
         let terrain = crate::terrain::Terrain::default();
 
         // ADVANCE: the unit actually moves — the stamp lands.
