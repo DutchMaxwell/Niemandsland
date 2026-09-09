@@ -472,13 +472,15 @@ fn save_batch(
 /// is not split fire and no longer raises any flag.
 ///
 /// TO-HIT AND SAVE MODIFIERS with no field in the profile/context model:
-///   * Indirect's moved -1 (:3163-3169). Its faction-level opt-out is
-///     DECLARED, not ported (rules-wave3-indirect2): with no moved-penalty
-///     primitive in this profile/context model, the opt-out's `no_moved_penalty`
-///     param (the Indirect mechanics entry) has nothing to act on, so the core
-///     registers neither the penalty nor its opt-out — needs primitive:
-///     `moved_hit_penalty` (a firing-side to-hit modifier when the unit moved
-///     this activation) before either can be stamped.
+///   * Indirect's moved -1 (:3163-3169) — PORTED in the quick-readjustment
+///     wave: the weapon's `indirect_moved_hit_penalty` stamp (the registry
+///     `moved_hit_penalty`) folds -N into the to-hit sum whenever the
+///     shooter moved this activation (Ctx::moved_this_round), unless the
+///     unit carries "Quick Readjustment" (Ctx::quick_readjustment, the
+///     `no_moved_penalty` opt-out) — both behind the FROZEN
+///     `EPOCH_7_TABLE_RULES`. Still DECLARED, not ported: the GH #325
+///     GRANTED-INDIRECT leg of main.gd:3220's gate (`granted_indirect`) —
+///     no attacker-side granted-Indirect field reaches this fold.
 ///   * Spot markers, Reckless AP, `AiEv.stamp_conditional_ap`
 ///     (Shatter / Tear / Disintegrate). The Piercing tag PORTED in wave 3
 ///     (the marker pool + the `tag_ap_mod` fold above); vs-target Marks
@@ -637,6 +639,10 @@ pub fn resolve_volley_with_tray(
     // `over_in` gate, as first fired.
     let mut ma_fired: Vec<(&str, i64, f64)> = Vec::new();
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
+    // Wave 4 (port-quick-readjustment) — the moved-penalty legs' once-per-
+    // member rules-must-log flags (`ma_fired`'s shape).
+    let mut im_fired: Vec<&str> = Vec::new();
+    let mut qr_fired: Vec<&str> = Vec::new();
     // Wave 4 — the evasive Boosts' once-per-volley rules-must-log flag (the
     // defender-side alias marker, the alias_cover_logged shape); the RULE
     // that fired is `def.evasive_alias_name` ("Machine-Fog Boost" at epoch 6,
@@ -757,6 +763,27 @@ pub fn resolve_volley_with_tray(
         }
         if gp != 0 && gp_fired.iter().all(|(o, _)| *o != sh.owner) {
             gp_fired.push((sh.owner, gp));
+        }
+        // Wave 4 (port-quick-readjustment) — Indirect's moved to-hit penalty
+        // (main.gd:3220-3224): a shooter that moved this activation takes
+        // -`moved_hit_penalty` on every Indirect weapon, "Quick Readjustment"
+        // (`no_moved_penalty`) waives it. Inside the Unstoppable clamp below,
+        // like the table's own mod fold.
+        let im = indirect_moved_mod(att, p);
+        m += im;
+        if im != 0 && im_fired.iter().all(|o| *o != sh.owner) {
+            im_fired.push(sh.owner);
+            out.log.push(format!("Indirect moved {im}: {} shoots after moving", sh.owner));
+        }
+        if im == 0
+            && p.indirect_moved_hit_penalty > 0
+            && att.moved_this_round
+            && att.quick_readjustment
+            && qr_fired.iter().all(|o| *o != sh.owner)
+        {
+            qr_fired.push(sh.owner);
+            out.log.push(format!(
+                "Quick Readjustment: {} ignores the Indirect moved penalty", sh.owner));
         }
         // Wave 4 — the evasive Boost names itself once per volley: the
         // unconditional -1 rode this weapon's to-hit sum (the defender-side
@@ -1157,6 +1184,26 @@ fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_h
         m = 0;
     }
     modified_hit_target(base, m)
+}
+
+/// Wave 4 (port-quick-readjustment) — Indirect's moved to-hit penalty
+/// (main.gd:3220-3224): -`moved_hit_penalty` on every shot a MOVED shooter
+/// fires with an Indirect weapon (Ctx::moved_this_round, the act-scope flag
+/// sim.rs stamps at its volley site), unless the unit carries "Quick
+/// Readjustment" (Ctx::quick_readjustment, the `no_moved_penalty` opt-out).
+/// The magnitude rides the weapon static
+/// (ShootProfile::indirect_moved_hit_penalty, stamped behind the FROZEN
+/// `EPOCH_7_TABLE_RULES`); 0 = silent.
+fn indirect_moved_mod(att: &Ctx, p: &ShootProfile) -> i64 {
+    if p.indirect
+        && att.moved_this_round
+        && !att.quick_readjustment
+        && p.indirect_moved_hit_penalty > 0
+    {
+        -p.indirect_moved_hit_penalty
+    } else {
+        0
+    }
 }
 
 /// Mobile Artillery's volley leg (main.gd:5773-5779): +N to hit strictly
