@@ -64,12 +64,11 @@ use super::*;
     #[test]
     fn the_consolidation_move_counts_as_moving() {
         let (mut st, _statics) = buff_line();
-        // "b" wiped; a living far enemy gives the consolidation its goal.
+        // "b" wiped; the consolidation goal comes from a NEUTRAL objective
+        // (unit 3 is "b"'s attached hero, not a valid goal anchor).
         st.alive[2] = 0;
-        st.positions[3] = vec![[20.0 * IN2M, 0.0, 0.0]];
-        st.radii[3] = vec![IN2M];
-        st.wounds[3] = vec![1];
-        st.alive[3] = 1;
+        st.objectives =
+            vec![crate::state::Objective { pos: [3.0 * IN2M, 0.0, 0.0], owner: -1 }];
         let terrain = small_board();
         let seams = Seams { consolidate: true, rules_epoch: 7, ..Default::default() };
         let mut next = st.clone();
