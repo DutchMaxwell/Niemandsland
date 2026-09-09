@@ -1122,7 +1122,7 @@ pub fn plain_of(st: &State) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{los_positions, plain_of, state_from_json, units_in_capture_order};
+    use super::{los_positions, plain_of, read_nodes, state_from_json, units_in_capture_order};
     use crate::acts::read_act_header;
     use crate::state::ProfileCache;
 
@@ -1228,6 +1228,48 @@ mod tests {
         let mut cache = ProfileCache::new(header.profiles);
         let mut roster = None;
         state_from_json(plain, &mut cache, &mut roster).expect("state")
+    }
+
+    /// `p1_0_a` carries a ledger whose ONLY buff key is `def_mod` — the shape
+    /// `main._solo_record_spell_mod` (main.gd:3649-3670) writes for a Defense
+    /// Buff at the table, and exactly what serde IGNORED before seam 4 step 1.
+    const DEF_MOD_PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end",
+      "units":{
+        "p1_0_a":{"player":1,"alive":1,"wounds":[3],"radii":[0.016],
+          "positions":[[0.0,0.0,0.0]],"in_cover":false,"shaken":false,
+          "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+          "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+          "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},
+          "bands":{"advance":6.0,"rush":12.0},
+          "ledger":{"buffs":[{"def_mod":1}],"hit_and_run_round":2,"vs_mark_round":1,"growth":2}},
+        "p2_0_b":{"player":2,"alive":1,"wounds":[1],"radii":[0.016],
+          "positions":[[-0.254,0.0,0.0]],"in_cover":false,"shaken":false,
+          "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+          "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+          "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},
+          "bands":{"advance":6.0,"rush":12.0}}}}"#;
+
+    /// SEAM 4 step 1 — the reader gate (design §4(c), epoch 7): a recorded
+    /// `{"def_mod": 1}` row carries the knob ONLY from `seams.rules_epoch` 7;
+    /// below 7 the row still lands (the fold has no all-zero guard) but keeps
+    /// ignoring the knob — exactly today's reading, byte-identical. Asserted
+    /// through the record's own `Debug`: the READS are PR 2.
+    #[test]
+    fn a_recorded_def_mod_row_carries_only_from_epoch_7() {
+        for (epoch, carried) in [(7u32, true), (6, false)] {
+            // read_nodes is JSONL: the raw-string fixtures are compacted onto
+            // one line each, the way the recorder writes them.
+            let header = LEDGER_HEADER.replace(r#""knobs":{}"#,
+                &format!(r#""knobs":{{}},"seams":{{"rules_epoch":{epoch}}}"#))
+                .replace('\n', "");
+            let line = format!(r#"{{"state_before":{DEF_MOD_PLAIN},"action":{{"kind":0,"unit":"p1_0_a"}},"state_after":{DEF_MOD_PLAIN},"score":0.0,"player":1}}"#)
+                .replace('\n', "");
+            let corpus = read_nodes(std::io::Cursor::new(format!("{header}\n{line}\n")), "inline").expect("loads");
+            let rows = &corpus.nodes[0].state_before.buffs[0];
+            assert_eq!(rows.len(), 1, "epoch {epoch}: the recorded row lands");
+            let dbg = format!("{:?}", rows[0]);
+            assert_eq!(dbg.contains("def_mod: 1"), carried, "epoch {epoch}: {dbg}");
+        }
     }
 
     /// NML-1153 S1 RED/GREEN — the tray strength survives `plain -> State ->

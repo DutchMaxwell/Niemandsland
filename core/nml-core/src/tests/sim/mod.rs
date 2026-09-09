@@ -1525,6 +1525,7 @@
 // family PRs in the same wave never append to the same region. A new
 // family adds ONE line to this ALPHABETICAL list plus its own file; the
 // fixtures every family shares stay here, in the module root.
+mod ap_def_record;
 mod breath_attack;
 mod breath_score;
 mod buff_consumption_bridge;
