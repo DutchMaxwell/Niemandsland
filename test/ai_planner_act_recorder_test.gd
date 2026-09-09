@@ -703,6 +703,25 @@ func test_header_books_is_empty_for_an_unpinned_api_game() -> void:
 	OPRApiClient.reset_rule_text_stamp()
 
 
+## #638: the header stamps the RULES EPOCH the game played under, under the exact key the
+## core reads (`knobs.rules_epoch`, core/nml-core/src/acts.rs `read_act_header`). Without it
+## a replay reads `0` and takes the pre-epoch branch of every `rule_on` gate, which is why
+## the reference bundles replayed 200/200 through the LEGACY rules. The value must track the
+## recorder's own `rules_epoch` var (the GDScript mirror of `CURRENT_RULES_EPOCH`), not a
+## literal — a bump that forgets this key is exactly the defect.
+func test_header_stamps_the_rules_epoch_the_core_reads() -> void:
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	AiActRecorder.finish(AiActRecorder.begin(state, 1, pool, Callable()),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+
+	var knobs := (JSON.parse_string(_dump_lines()[0]) as Dictionary).get("knobs", {}) as Dictionary
+	assert_bool(knobs.has("rules_epoch")) \
+		.override_failure_message("the header must stamp knobs.rules_epoch (#638)").is_true()
+	assert_int(int(knobs.get("rules_epoch", -1))).is_equal(AiActRecorder.rules_epoch)
+	assert_int(int(knobs.get("rules_epoch", -1))).is_greater(0)
+
+
 ## NML-1152 step 10: state_before now carries a per-unit LEDGER — the table-side
 ## records (buffs, once-per-round flags, growth markers) `dice_gate.py` used to
 ## replay from a fresh, empty Rust `State` no matter what the table had already

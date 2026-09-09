@@ -272,7 +272,20 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# APPEND-ONLY, so an older version is a prefix of a newer one and a replay only has
 			# to truncate to it; a header WITHOUT this key predates the stamp and reads as
 			# version 2 (`nml_core.vocab_version_of_header`, core/nml-core/src/acts.rs).
-			"rule_vocab_version": BattleSim.RULE_VOCAB_VERSION}}
+			"rule_vocab_version": BattleSim.RULE_VOCAB_VERSION,
+			# #638: the RULES EPOCH this game played under. The core reads it from
+			# exactly this key (`read_act_header` -> `Knobs::rules_epoch`,
+			# core/nml-core/src/acts.rs) and an ABSENT key reads back as `0`, which
+			# puts a replay on the pre-epoch branch of every `rule_on` gate — the
+			# dangerous-terrain branch at core/nml-core/src/dice.rs (`0 < 3`) is the
+			# one that surfaced it: a replay of act 51 of a reference game reproduces
+			# byte-exact only when it is forced to `rules_epoch: 7`. The recorder has
+			# carried the number since the Spawn gate (`rules_epoch` above) but never
+			# stamped it, so every arena reference bundle recorded so far replays
+			# through the legacy branches and the gate's 200/200 proves the OLD rules.
+			# Additive: a header written before this key still parses and still reads
+			# `0`, so every older corpus keeps replaying exactly as it did.
+			"rules_epoch": rules_epoch}}
 	# D8a: additive, and only when the harness armed the rulebook generator — an unset
 	# run's header keeps exactly the keys it had before.
 	if not objectives_stamp.is_empty():
