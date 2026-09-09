@@ -122,17 +122,30 @@ MAX_GRANT_DEPTH = 8
 # these reads as "still to port", which is false for both: Unique is
 # list-building only (rules_registry.gd never reads it at runtime, so no
 # resolver arm will ever exist for it); Swift's whole effect (params:
-# {"negates": "Slow"}) is already baked into the move value the loader
-# computes per-unit BEFORE the core ever runs (list_to_profile.py's
-# move-band pass resolves Fast/Slow/Quick/... and their negations into one
-# static `mv` field - Swift is consumed there, not at runtime, so it is not
-# itself a MOVE_PRIMITIVES entry and would never earn PARTIAL either).
+# {"negates": "Slow"}) is the name-level Slow cancel in the loader's
+# move-band pass (list_to_profile.py:_move_bands, mirroring
+# movement_range_controller.gd:95-109 — a Swift(3)-stripped pre-scan skips
+# the Slow fold and marks the band filled; fixed 09.09.2026, before that the
+# pass had NO negation leg and this comment claimed one). Swift is consumed
+# there, at capture time, not at runtime, so it is not itself a
+# MOVE_PRIMITIVES entry and would never earn PARTIAL either.
 # Rank -1 so real evidence elsewhere always outranks N/A if this table and
 # reality ever disagree.
+# "Swift Aura" (params: {"grants": "Swift"}): stays GRANT-MISSING (the
+# strict ruling, 09.09.2026). The grant rule credits a carrier only when the
+# granted name resolves PORTED in the same system — N/A never does — and a
+# bare loader "Swift" token is not auto-credited either (see
+# LOADER_NAME_ALIASES: the loader scan skips docstrings/identifiers and a
+# string-constant hit proves nothing about WHERE the read lives). The
+# loader's own aura-expansion-to-_move_bands hop is real but invisible to
+# this instrument by construction; the cancellation is covered by the
+# loader's unit tests (test_list_to_profile.py, the Swift/Slow pair), not by
+# a census verdict.
 NA_NAMES: dict[str, str] = {
     "Unique": "list-building only, no in-game effect (not a porting target)",
-    "Swift": "already folded into the loader's move-band pass"
-             " (negates Slow before the core ever runs)",
+    "Swift": "negates Slow by name in the loader's move-band pass"
+             " (list_to_profile.py:_move_bands, the table's"
+             " movement_range_controller.gd:95-109)",
     "Sniper REMOVE": "list-building upgrade that strips the Sniper weapon"
                      " rule; the built list already carries the weapon"
                      " without it — no in-game effect (maintainer 09.09.)",

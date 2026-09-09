@@ -523,11 +523,21 @@ def _move_bands(
     advance = OPR_ADVANCE_INCHES
     rush = OPR_RUSH_CHARGE_INCHES
     counted: dict[str, dict[str, bool]] = {}
+    # movement_range_controller.gd:95-99 — Swift cancels Slow by NAME ("This
+    # model may ignore the Slow rule"); the rule pair is the whole measured
+    # effect of it. special_rules already carries every path here: an item's
+    # granted rules fold into the rule line (_selection_rules,
+    # opr_api_client.gd:1031-1035) and _expand_auras stamps "Swift Aura"'s
+    # bare base before _unit_profile runs — all three routes read below.
+    swift_by_name = any(_rule_base_name(str(r)) == "Swift" for r in special_rules)
     for r in special_rules:
         base = _rule_base_name(str(r))
         done = counted.get(base, {"advance": False, "rush": False})
         if done["advance"] and done["rush"]:
             continue
+        if base == "Slow" and swift_by_name:
+            counted[base] = {"advance": True, "rush": True}
+            continue  # Swift cancels Slow (name-level fallback)
         if base == "Fast":
             if not done["advance"]:
                 advance += FAST_ADVANCE_BONUS
