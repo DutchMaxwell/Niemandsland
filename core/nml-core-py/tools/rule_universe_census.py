@@ -133,6 +133,9 @@ NA_NAMES: dict[str, str] = {
     "Unique": "list-building only, no in-game effect (not a porting target)",
     "Swift": "already folded into the loader's move-band pass"
              " (negates Slow before the core ever runs)",
+    "Sniper REMOVE": "list-building upgrade that strips the Sniper weapon"
+                     " rule; the built list already carries the weapon"
+                     " without it — no in-game effect (maintainer 09.09.)",
 }
 
 # Primitive -> the registry param keys a resolver on this core actually
