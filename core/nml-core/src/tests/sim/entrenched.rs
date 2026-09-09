@@ -90,6 +90,7 @@ use super::*;
             scope: Rc::from(""),
             attackers: false,
             once: true,
+            name: Rc::from(""),
         }
     }
 
