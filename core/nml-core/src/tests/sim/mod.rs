@@ -79,6 +79,7 @@
             buffs: vec![Vec::new(); 4],
             vs_mark_round: vec![-1; 4],
             hit_and_run_round: vec![-1; 4],
+            moved_round: vec![-1; 4],
             delayed_action_round: vec![-1; 4],
             coordinate_via_round: vec![-1; 4],
             reckless_rolled_round: vec![-1; 4],
