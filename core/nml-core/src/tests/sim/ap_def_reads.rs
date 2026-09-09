@@ -15,11 +15,15 @@ use super::*;
 
     /// The buff line with the shooter's rifle at AP(1): the plain save target
     /// is `save_target(4, 1) == 5`, so one AP rung and one defense rung are
-    /// each visible as exactly one rung on rolls[1].
+    /// each visible as exactly one rung on rolls[1]. The bearer's own Defense
+    /// is pinned at 4 too — test (c) has the defender-side read exercised
+    /// back at it — and `b`'s models carry 99-wound bodies where a test needs
+    /// the target to survive into a second exchange.
     fn ap_rifle() -> (State, Vec<UnitStatic>) {
         let (mut st, mut statics) = buff_line();
         statics[0].shoot[0].ap = 1;
         statics[0].shoot[0].attacks = 64; // a save batch is guaranteed to follow
+        statics[0].ctx.defense = 4;
         (st, statics)
     }
 
@@ -87,24 +91,39 @@ use super::*;
     }
 
     /// Defense Buff (aof human_empire, `def_mod: +1`): "which gets +1 to
-    /// defense rolls" — the tray-recorded row raises the bearer's own save by
-    /// one rung (the roll bonus lowers the working rung, the Shielded shape),
-    /// read by the SAME activation's volley, then spent like every `once`.
+    /// defense rolls" — the tray-recorded row on the BEARER raises its own
+    /// save by one rung (the roll bonus lowers the working rung, the
+    /// Shielded shape). The bearer's own volley cannot show it — a unit
+    /// saves at its OWN rung only when it DEFENDS — so the read is exercised
+    /// by a second exchange where `b` shoots back at the buffed bearer, and
+    /// that same exchange spends the row on the defender leg (main.gd:3925).
     #[test]
     fn defense_buff_raises_the_bearers_save_by_one_rung_at_epoch_7() {
         let (st, mut statics) = ap_rifle();
         statics[0].utility_buffs =
             vec![UtilityBuff { def_mod: 1, ..ub("Defense Buff") }];
-        let (next, buffed) = run_reads(&st, &statics, &buff_action(Some("b")), 27, 7);
-        assert_eq!(save_target_of(&buffed), 4,
-            "RED before the fix: the recorded def_mod row lands but nothing reads it");
+        let (next, _) = run_reads(&st, &statics, &buff_action(Some("b")), 27, 7);
         assert_eq!(next.buffs[0].len(), 1,
             "the bearer's defense row is spent by the exchange where it DEFENDS, not by its own attack (main.gd:3925)");
 
-        // Epoch 6: the same pick records nothing (PR 1's all-zero guard) and
-        // the volley stays at the plain rung.
-        let (_, plain6) = run_reads(&st, &statics, &buff_action(Some("b")), 27, 6);
-        assert_eq!(save_target_of(&plain6), 5, "below 7 the row is not even recorded");
+        // The second exchange: b shoots back at the buffed bearer — a saves
+        // one rung better (Defense 4+ at AP(0), the row folding 4 -> 3).
+        let mut shoot_back = statics.clone();
+        shoot_back[2].shoot = vec![gun("Rifle", 64, 24)];
+        let back = Action {
+            kind: HOLD, unit: "b".into(), dest: None, shoot: Some("a".into()),
+            charge: None, patient: false, split: None, traced: None, teleport: None,
+        };
+        let (next2, buffed) = run_reads(&next, &shoot_back, &back, 27, 7);
+        assert_eq!(save_target_of(&buffed), 3,
+            "RED before the fix: the recorded def_mod row lands but nothing reads it");
+        assert!(next2.buffs[0].is_empty(), "the exchange where a DEFENDED spends it");
+
+        // Epoch 6: the same pick records nothing (PR 1's all-zero guard), so
+        // the shoot-back volley stays at the plain rung.
+        let (next6, _) = run_reads(&st, &statics, &buff_action(Some("b")), 27, 6);
+        let (_, plain6) = run_reads(&next6, &shoot_back, &back, 27, 6);
+        assert_eq!(save_target_of(&plain6), 4, "below 7 the row is not even recorded");
     }
 
     /// The `once` spend (`_solo_consume_once_mods` main.gd:3823-3841): the
@@ -114,7 +133,8 @@ use super::*;
     /// survive the exchange forever.
     #[test]
     fn once_rows_are_spent_by_the_first_exchange_exactly_like_hit_mod_rows() {
-        let (st, statics) = ap_rifle();
+        let (st, mut statics) = ap_rifle();
+        statics[2].wounds_max = vec![99, 99, 99]; // the target survives into the second exchange
         let mut deb = st.clone();
         deb.buffs[0].push(row(-1, 0, 0));
         deb.buffs[2].push(row(0, 0, -1));
