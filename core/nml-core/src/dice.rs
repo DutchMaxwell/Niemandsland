@@ -638,6 +638,8 @@ pub fn resolve_volley_with_tray(
     // member's owner, its hit bonus and (Mobile Artillery only) its own
     // `over_in` gate, as first fired.
     let mut ma_fired: Vec<(&str, i64, f64)> = Vec::new();
+    // Wave 4 (port-entrenched) — the stationary alias's rules-must-log flag.
+    let mut ent_fired = false;
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
     // Wave 4 (port-quick-readjustment) — the moved-penalty legs' once-per-
     // member rules-must-log flags (`ma_fired`'s shape).
@@ -730,10 +732,26 @@ pub fn resolve_volley_with_tray(
         // `def.stealth_alias_penalty`/`def.stealth_alias_over_in` are the
         // SAME dice path's Stealth data-alias leg (Changebound et al.,
         // main.gd:5588-5610/5698-5701) — `unit.rs::stealth_alias_of`.
+        // Wave 4 (port-entrenched) — resolve the effective pair in the CALLER
+        // (main.gd:5694-5702): stationary only while the target is UNMOVED,
+        // larger penalty wins; zero below the FROZEN gate.
+        let mut alias_pen = def.stealth_alias_penalty;
+        let mut alias_over = def.stealth_alias_over_in;
+        if def.stationary_alias_penalty > alias_pen && def.moved_round != def.round {
+            alias_pen = def.stationary_alias_penalty;
+            alias_over = def.stationary_alias_over_in;
+            if !ent_fired {
+                ent_fired = true;
+                out.log.push(format!(
+                    "[{}] -{alias_pen} to hit vs {def_owner}: unmoved this round",
+                    def.stationary_alias_name
+                ));
+            }
+        }
         let mut m = shooting_hit_modifier(
             mod_dist_in, att.artillery, def.stealth, def.artillery, def.evasive,
             p.hit_bonus, p.hit_bonus_over9,
-            def.stealth_alias_penalty, def.stealth_alias_over_in,
+            alias_pen, alias_over,
         )
             // B2b: the LIVE ledger's own nets — `_solo_hit_mod_info`
             // :5703-5709 adds the shooter's `_solo_spell_hit_mod` and the
