@@ -114,6 +114,25 @@ Rows were ordered longest-first by the measured duration of the same game on 202
 (the two bundles sum to 79.3 CPU-hours, and a 3150 s game that starts last adds its whole
 length to the wall clock), and balanced across the boxes to 26.4 / 26.4 / 26.3 CPU-hours.
 
+### What every record actually carries
+
+Checked on all 336 collected records, not on a sample:
+
+| | |
+|---|---|
+| `knobs.rules_epoch` = 8 | **336 / 336** |
+| `knobs.rule_vocab_version` = 7 | **336 / 336** |
+| `books.sha256` = `cc7d6c263371…` | **336 / 336** |
+| unreadable / truncated | **0** |
+
+Two records carry no `shots.jsonl`. Both are the known lazy-creation case, and both were
+checked rather than assumed: `mummified_undead_1000_vs_ossified_undead_1000` seeds 31 and
+32, 36 activations each, **zero** picks carrying a shoot key, `run.log` ending on the
+engine's normal exit. Two undead armies with nothing that shoots, so the shot recorder never
+had a first shot to create the file with.
+
+The bundles are `chmod a-w` after collection.
+
 ## 4. Replay floor
 
 `dice_gate.py --movement table`, run on each box against the games it recorded, on the
