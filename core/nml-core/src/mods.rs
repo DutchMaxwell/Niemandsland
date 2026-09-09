@@ -16,15 +16,23 @@ use crate::rules::base_rule_name;
 use crate::state::State;
 
 /// One `_solo_record_spell_mod` record (main.gd:3649-3670), reduced to the
-/// fields this core has a consumer for. `def_mod` / `range_in` / `advance_in` /
-/// `rush_in` are deliberately ABSENT: the table reads them at seams
-/// (`_solo_defense_parts`, the props stamps) this port has never had, and a
-/// field nothing reads is the very gap block B2b exists to close.
+/// fields this core has a consumer for. `range_in` / `advance_in` / `rush_in`
+/// are deliberately ABSENT: the table reads them at seams (`_solo_defense_
+/// parts`, the props stamps) this port has never had, and a field nothing
+/// reads is the very gap block B2b exists to close. `def_mod` / `defense_mod`
+/// / `ap_mod` are carried since seam 4 step 1 (epoch 7) — the RECORD shape
+/// only; their READS are step 2 (PR 2), so nothing here folds them yet.
 #[derive(Debug, Clone)]
 pub struct LiveMod {
     pub hit_mod: i64,
     pub casting_mod: i64,
     pub morale_mod: i64,
+    /// `ap_mod` — the attacker-side AP knob (Piercing Debuff, gf).
+    pub ap_mod: i64,
+    /// `def_mod` — Defense Buff's flat Defense shift (aof human_empire).
+    pub def_mod: i64,
+    /// `defense_mod` — Defense Debuff's flat Defense shift (aof/gf ratmen).
+    pub defense_mod: i64,
     /// `grants_rule` — the rule name the record hands the WHOLE joined chain
     /// (`_solo_apply_grant` main.gd:3730), "" for a plain modifier.
     pub grants_rule: Rc<str>,

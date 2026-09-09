@@ -912,7 +912,7 @@ pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: us
                 continue;
             }
             for ti in utility_targets(statics, next, bearer, b, seams) {
-                record_buff(next, ti, b);
+                record_buff(next, ti, b, seams.rules_epoch);
             }
         }
     }
@@ -923,19 +923,34 @@ pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: us
 /// modifier nor a grant never lands (:3653/:3663). `beneficiary` is hard-coded
 /// "" at the Utility-Buff call site (:16541), so these are always the bearer's
 /// own net, never an attackers-side one.
-fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff) {
-    if b.hit_mod == 0 && b.casting_mod == 0 && b.morale_mod == 0 && b.grants_rule.is_empty() {
+///
+/// SEAM 4 step 1 (design §4(c), the FROZEN `EPOCH_7_TABLE_RULES`): from epoch
+/// 7 the guard also accepts a row whose only knob is one of the three ap/def
+/// knobs — below 7 the row keeps being dropped, so the core's own serialized
+/// states replay byte-identical. Rules-must-log: a widened row names itself.
+fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff, rules_epoch: u32) {
+    let widened = rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
+        && (b.ap_mod, b.def_mod, b.defense_mod) != (0, 0, 0);
+    if b.hit_mod == 0 && b.casting_mod == 0 && b.morale_mod == 0 && b.grants_rule.is_empty()
+        && !widened
+    {
         return;
     }
     state.buffs[ti].push(mods::LiveMod {
         hit_mod: b.hit_mod,
         casting_mod: b.casting_mod,
         morale_mod: b.morale_mod,
+        ap_mod: b.ap_mod,
+        def_mod: b.def_mod,
+        defense_mod: b.defense_mod,
         grants_rule: Rc::from(b.grants_rule.as_str()),
         scope: Rc::from(b.scope.as_str()),
         attackers: b.beneficiary == "attackers",
         once: b.once,
     });
+    if widened {
+        trace_rule("utility-buff", &b.name, "ap/def row recorded (epoch 7)");
+    }
 }
 
 /// `RadialMenu._caster_member_of` radial_menu.gd:489-499 — the unit itself or
@@ -1146,6 +1161,9 @@ fn tray_vs_marks(
                 hit_mod: 0,
                 casting_mod: 0,
                 morale_mod: 0,
+                ap_mod: 0,
+                def_mod: 0,
+                defense_mod: 0,
                 grants_rule: Rc::from(base),
                 scope: Rc::from(""),
                 attackers: false,
@@ -3665,6 +3683,9 @@ fn apply_cast_effect(
             hit_mod: 0,
             casting_mod: 0,
             morale_mod: 0,
+            ap_mod: 0,
+            def_mod: 0,
+            defense_mod: 0,
             grants_rule: Rc::from(entry.grants_rule.as_str()),
             scope: Rc::from(""),
             attackers: entry.beneficiary == "attackers",
@@ -5840,7 +5861,7 @@ mod cast_fold_tests {
         let epoch6 = Seams { hero_attach: true, cast_fold: true, rules_epoch: EPOCH_6_TABLE_RULES, ..Seams::default() };
         let epoch5 = Seams { hero_attach: true, cast_fold: true, rules_epoch: EPOCH_6_TABLE_RULES - 1, ..Seams::default() };
         let live_mod = |casting_mod: i64| mods::LiveMod {
-            hit_mod: 0, casting_mod, morale_mod: 0,
+            hit_mod: 0, casting_mod, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
             grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false,
         };
         let damage = |s: &State| (1000 - s.wounds[3][0]) as f64 + s.wound_frac[3];
