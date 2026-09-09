@@ -935,6 +935,7 @@ mod tests {
         rep!(buffs);
         rep!(vs_mark_round);
         rep!(hit_and_run_round);
+        rep!(moved_round);
         rep!(delayed_action_round);
         rep!(coordinate_via_round);
         rep!(growth_markers);

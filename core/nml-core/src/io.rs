@@ -764,6 +764,7 @@ pub(crate) fn state_of(
         buffs: vec![Vec::new(); n],
         vs_mark_round: vec![-1; n],
         hit_and_run_round: vec![-1; n],
+        moved_round: vec![-1; n],
         delayed_action_round: vec![-1; n],
         coordinate_via_round: vec![-1; n],
         // Reckless Piercing's round stamps are NOT recorded corpora inputs

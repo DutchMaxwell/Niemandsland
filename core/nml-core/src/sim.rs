@@ -1950,6 +1950,7 @@ fn tray_hit_and_run(
                     next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
                 }
                 next.hit_and_run_round[si] = next.round;
+                next.moved_round[si] = next.round;
                 return true;
             }
         }
@@ -1975,6 +1976,7 @@ fn tray_hit_and_run(
         }
     }
     next.hit_and_run_round[si] = next.round;
+    next.moved_round[si] = next.round;
     true
 }
 
@@ -2228,6 +2230,9 @@ fn fold_min(have: i64, cand: i64) -> i64 {
 }
 
 pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, melee: bool, rules_epoch: u32) -> Ctx {
+    // Wave 4 (port-entrenched) — the volley's def build is `ctx_live` (5168).
+    c.moved_round = state.moved_round[i];
+    c.round = state.round;
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     // Wave 4 follow-up (port-vengeance) — "friendly units get +X to hit rolls
@@ -2261,6 +2266,16 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // is not one (tray_morale builds on ctx_of), so it carries its own fold
     // next to the same read below.
     c.no_retreat = c.no_retreat || mods::granted(state, i, "No Retreat");
+    // Wave 4 (port-entrenched) — the GRANT leg: a recorded "Entrenched Buff"
+    // (`_solo_apply_grant` overlay) feeds the SAME stationary read; the
+    // magnitudes are the entry's own (2 / 9). FROZEN `EPOCH_7_TABLE_RULES`.
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && mods::granted(state, i, "Entrenched")
+        && c.stationary_alias_penalty < 2
+    {
+        c.stationary_alias_penalty = 2;
+        c.stationary_alias_over_in = 9.0;
+        c.stationary_alias_name = "Entrenched";
+    }
     // WAVE 2 — the family's live-grant legs. Gated on `EPOCH_5_TABLE_RULES`
     // (frozen at 5, the stamping-gap fix): a rules_epoch below 5 replays
     // every pre-wave corpus untouched (spell grants included, Gen-2b's
@@ -4562,6 +4577,8 @@ fn consolidate_after_melee(next: &mut State, cover: Cover, seams: Seams, si: usi
         for (i, m) in land.movers.iter().enumerate() {
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
         }
+        // Wave 4 (port-entrenched) — consolidation counts as moving.
+        next.moved_round[winner] = next.round;
     }
 }
 
@@ -4836,6 +4853,8 @@ fn resolve_with(
     if let Some(land) = landing.as_ref() {
         land.spend_sidestep(&mut next);
         moved = true;
+        // Wave 4 (port-entrenched) — every EXECUTED move stamps (main.gd:7786).
+        next.moved_round[si] = next.round;
         for (i, m) in land.movers.iter().enumerate() {
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
         }
@@ -4859,6 +4878,7 @@ fn resolve_with(
         && !next.positions[si].is_empty()
     {
         moved = true;
+        next.moved_round[si] = next.round;
         let dest = geom::to_f32(action.dest.unwrap());
         let centre = geom::centre(&next.positions[si]);
         let mut delta = geom::sub(dest, centre);
