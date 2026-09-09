@@ -16,7 +16,7 @@ use std::rc::Rc;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
-use crate::acts::{rule_on, EPOCH_7_TABLE_RULES};
+use crate::acts::{rule_on, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::mods::LiveMod;
 use crate::state::{
     Bands, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, Roster, State,
@@ -619,6 +619,37 @@ pub(crate) fn roster_of(
     Ok(rc)
 }
 
+/// The optional `spawn_profiles` header map (SPAWN_DESIGN_2026-09-08 §3.1),
+/// indexed into the SAME immutable `Profiles` table the roster reads — the
+/// record's closed profile table simply carries the NAMED templates too.
+/// Absent = nothing to add. The whole read is gated on
+/// `EPOCH_8_PLANNER_MENU`: below the gate the map is ignored entirely, so an
+/// epoch-7 record replays byte-identically to before the gate existed.
+pub(crate) fn index_spawn_profiles(
+    _profiles: &mut Profiles,
+    _map: Option<Ordered<Profile>>,
+    _origin: &str,
+    _rules_epoch: u32,
+) -> Result<(), String> {
+    Ok(())
+}
+
+/// The load-time twin of `roster_of`'s unknown-key error (the ruling of
+/// record): at epoch >= 8 a STANDING unit carrying a parametrised
+/// `Spawn(<name> [<n>])` string MUST find its
+/// `spawn:<carrier_key>:<rule_string>` template in the header map, else the
+/// record is REFUSED at load. No silent fallback to the carrier's own
+/// profile — that fallback is exactly the #823 fidelity break. Deliberately
+/// over-strict (documented, not hidden): the loader cannot ask the rules
+/// registry whether the beat would really fire (no repo root here), so a
+/// record whose standing carrier could never act still demands its template.
+pub(crate) fn spawn_templates_of(
+    _plain: &PlainState,
+    _profiles: &Profiles,
+    _rules_epoch: u32,
+) -> Result<(), String> {
+    Ok(())
+}
 /// `(side, index)` of a recorder-shaped unit id `p<player>_<index>_<token>`, or
 /// `None` for an id this port did not shape.
 fn natural_key(id: &str) -> Option<(i64, i64)> {
@@ -935,6 +966,12 @@ pub(crate) fn state_of(
 #[derive(Deserialize)]
 struct Header {
     profiles: Ordered<Profile>,
+    /// S5 (SPAWN_DESIGN_2026-09-08 §3.1) — the recorder's resolved NAMED-unit
+    /// profiles, keyed `spawn:<carrier_key>:<rule_string>`, in the same unit
+    /// shape `profiles` uses. Optional: absent in every record written before
+    /// the map existed, and in every record with no Spawn carrier.
+    #[serde(default)]
+    spawn_profiles: Option<Ordered<Profile>>,
     #[serde(default)]
     seams: Seams,
 }
@@ -961,6 +998,7 @@ pub fn read_nodes<R: BufRead>(reader: R, origin: &str) -> Result<NodeCorpus, Str
         profiles.index.insert(k, profiles.list.len());
         profiles.list.push(p);
     }
+    index_spawn_profiles(&mut profiles, header.spawn_profiles, path, seams.rules_epoch)?;
     let profiles = Rc::new(profiles);
     let mut cache: Option<Rc<Roster>> = None;
     let mut nodes = Vec::new();
@@ -973,6 +1011,8 @@ pub fn read_nodes<R: BufRead>(reader: R, origin: &str) -> Result<NodeCorpus, Str
             serde_json::from_str(&line).map_err(|e| format!("{path}:{}: {e}", i + 2))?;
         let rb = roster_of(&pn.state_before, &profiles, &mut cache)?;
         let ra = roster_of(&pn.state_after, &profiles, &mut cache)?;
+        spawn_templates_of(&pn.state_before, &profiles, seams.rules_epoch)?;
+        spawn_templates_of(&pn.state_after, &profiles, seams.rules_epoch)?;
         nodes.push(Node {
             state_before: state_of(pn.state_before, &profiles, rb, seams.rules_epoch),
             action: pn.action,

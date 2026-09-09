@@ -31,9 +31,7 @@ use crate::combat::{
     RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
     SHROUD_RANGE_PENALTY_IN,
 };
-use crate::rules::{
-    base_rule_name, has_special_rule, rule_rating, unit_rating, Registries, Spell,
-};
+use crate::rules::{base_rule_name, has_special_rule, rule_rating, unit_rating, Registries, Spell};
 use crate::state::{Bands, Profile, Profiles, Weapon};
 
 /// The Shielded-family DATA-alias stamp (wave 3, `acts::EPOCH_6_TABLE_RULES`):
@@ -992,6 +990,10 @@ pub struct UnitStatic {
     /// (`within_in == 0.0`) below `EPOCH_7_TABLE_RULES` and for every
     /// non-carrier.
     pub reinforcement: Reinforcement,
+    /// Wave 4 — the S5 summon's two read params (`spawn_of`). Default
+    /// (`place_in == 0.0`) below `EPOCH_7_TABLE_RULES` and for every
+    /// non-carrier.
+    pub spawn: Spawn,
     /// "Re-Deployment" (the deployment-phase redeploy: gf 13 + aof 2 carrier
     /// factions): the entry's own `max_units` param, stamped per carrier.
     /// The table reads it at `solo_controller.gd:9642` with fallback 2
@@ -3529,6 +3531,48 @@ fn reinforcement_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Rein
     }
 }
 
+/// `Spawn`'s reach when the registry entry carries no `place_in`. 6" in all
+/// nine shipped entries (gf 4 factions, aof 5).
+pub const SPAWN_PLACE_IN: f64 = 6.0;
+
+/// `UnitStatic.spawn` — the S5 summon's read params, the same pair the
+/// table takes off the entry (`_solo_try_spawn`, main.gd:17399 `place_in`,
+/// `:17394` `once_per_game`). Default (`place_in == 0.0`) below
+/// `EPOCH_7_TABLE_RULES` and for every non-carrier.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Spawn {
+    /// `params.place_in` — the fresh copy lands fully within this many inches
+    /// of where the carrier stood. `0.0` means "not a carrier".
+    pub place_in: f64,
+    /// `params.once_per_game` — the summon is offered ONCE. Read as the
+    /// reason a spent carrier never summons again; a hypothetical
+    /// `once_per_game: false` entry (none ships) is declined outright rather
+    /// than half-modelled, the same call Reinforcement's `once` makes.
+    pub once_per_game: bool,
+    /// EPOCH 8 — the raw `Spawn(<name> [<n>])` string the carrier carries.
+    /// The header map's KEY half (`spawn:<carrier_key>:<raw>`); empty = the
+    /// bare name, which names no template and never mints one.
+    pub raw: String,
+    /// EPOCH 8 — the NAMED unit off the raw string: the template the record
+    /// header's `spawn_profiles` map ships and the beat mints. Never the
+    /// carrier's own profile — that fallback is the #823 fidelity break.
+    pub name: String,
+    /// EPOCH 8 — the bracketed model count off the raw string.
+    pub count: i64,
+}
+
+/// `UnitStatic.spawn` — read BY NAME behind the FROZEN
+/// `EPOCH_7_TABLE_RULES`, mirroring `reinforcement_of`. The table matches the
+/// name per member and model (`RulesRegistry.has_primitive`, main.gd:17380);
+/// the core's statics are per profile, so one read per profile is the same
+/// granularity `reinforcement_of` already uses. The NAMED target rides on top
+/// behind `EPOCH_8_PLANNER_MENU` (SPAWN_DESIGN_2026-09-08 §3.2(b)): below the
+/// gate a record reads no target at all, so nothing new is looked up.
+fn spawn_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Spawn {
+    let _ = (reg, p, rules_epoch);
+    Spawn::default()
+}
+
 /// The Ambush family's per-profile read (`UnitStatic.ambush_family`): each
 /// name gated by `unit_rule_active` — the unit carries it AND the map fields
 /// it for this (system, faction) — with the entry's own params on top.
@@ -5079,6 +5123,7 @@ impl UnitStatic {
             },
             ambush_family: ambush_family_of(reg, p, rules_epoch),
             reinforcement: reinforcement_of(reg, p, rules_epoch),
+            spawn: spawn_of(reg, p, rules_epoch),
             re_deployment_max_units: re_deployment_max_units_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             storm: storm_of(reg, p, rules_epoch),
