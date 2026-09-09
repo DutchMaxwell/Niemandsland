@@ -21,7 +21,10 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
+use crate::acts::{
+    rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
+    EPOCH_8_PLANNER_MENU,
+};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
@@ -3595,28 +3598,43 @@ fn best_spell_target(
     si: usize,
     entry: &Spell,
     los: &[bool],
-) -> Option<usize> {
+    origins: &[(usize, i64)],
+) -> Option<(usize, usize)> {
     let player = state.player[si];
-    let mut best: Option<usize> = None;
+    let mut best: Option<(usize, usize)> = None;
     let mut best_ev = -1.0f64;
     let mut best_d = f64::INFINITY;
     for ti in 0..state.units() {
         if state.player[ti] == player || state.alive[ti] <= 0 {
             continue;
         }
-        if !state.sees(si, state.key(ti)) || !los[ti] {
-            continue;
+        // The official walk (spell_candidates, PR 1's twin): the FIRST
+        // origin in walk order that reaches the target is the cast's
+        // origin for it — walk and break, no EV-shopping over origins.
+        let mut reach: Option<(usize, f64)> = None;
+        for &(ou, _) in origins {
+            let seen = if ou == si {
+                state.sees(si, state.key(ti)) && los[ti]
+            } else {
+                state.sees(ou, state.key(ti)) && state.los_clear(ou, ti)
+            };
+            if !seen {
+                continue;
+            }
+            let d = geom::dist_in(&state.positions[ou], &state.positions[ti]);
+            if d > entry.range_in + CONTROL_EPS {
+                continue;
+            }
+            reach = Some((ou, d));
+            break;
         }
-        let d = geom::dist_in(&state.positions[si], &state.positions[ti]);
-        if d > entry.range_in + CONTROL_EPS {
-            continue;
-        }
+        let Some((ou, d)) = reach else { continue; };
         let ut = &statics[state.roster.profile[ti]];
         let ev = spell_damage_ev_of(entry, &ctx_of(ut, state, ti));
         if ev > best_ev + CONTROL_EPS || ((ev - best_ev).abs() <= CONTROL_EPS && d < best_d) {
             best_ev = ev;
             best_d = d;
-            best = Some(ti);
+            best = Some((ti, ou));
         }
     }
     best
@@ -3634,20 +3652,21 @@ fn pick_cast(
     d3: i64,
     caster_x: i64,
     los: &[bool],
-) -> Option<(usize, usize)> {
+    origins: &[(usize, i64)],
+) -> Option<(usize, usize, usize)> {
     for idx in official_pick_order(spells.len(), d3, caster_x) {
         let entry = &spells[idx];
         if entry.status == "unmodeled" || entry.threshold > tokens {
             continue;
         }
         if entry.effect_kind == "buff" {
-            return Some((idx, si));
+            return Some((idx, si, origins[0].0)); // a buff takes the caster itself
         }
         if entry.effect_kind != "damage" && entry.effect_kind != "debuff" {
             continue; // an effect kind the sim has no arithmetic for
         }
-        if let Some(ti) = best_spell_target(statics, state, si, entry, los) {
-            return Some((idx, ti));
+        if let Some((ti, ou)) = best_spell_target(statics, state, si, entry, los, origins) {
+            return Some((idx, ti, ou));
         }
     }
     None
@@ -3743,6 +3762,42 @@ fn casting_net_of(statics: &[UnitStatic], state: &State, ci: usize, seams: Seams
     net
 }
 
+/// Spell Conduit (design #824 §4 PR 2) — the conduit half of the
+/// cast-origin walk, PR 1's `battle_sim.gd _cast_origins` twin: every
+/// friendly ALIVE "Spell Conduit" bearer within the rule's OWN `range_in`
+/// of the CASTER, `requires_not_shaken` binding the CONDUIT; entries are
+/// (origin unit, the rule's `casting_mod`). The gate is the FROZEN
+/// EPOCH_8_PLANNER_MENU — the #838 epoch-8 ruling (the #831 call: a MENU
+/// change is a NEW frozen gate), so every epoch-7 record replays with the
+/// menu it was recorded with and the walk below 8 is empty — the set stays
+/// [caster].
+fn cast_origins(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    seams: Seams,
+) -> Vec<(usize, i64)> {
+    if !rule_on(seams.rules_epoch, EPOCH_8_PLANNER_MENU) {
+        return Vec::new();
+    }
+    let player = state.player[si];
+    let mut found: Vec<(usize, i64)> = Vec::new();
+    for u in 0..state.units() {
+        let s = &statics[state.roster.profile[u]];
+        if !s.spell_conduit || u == si || state.player[u] != player || state.alive[u] <= 0 {
+            continue;
+        }
+        if s.spell_conduit_needs_steady && state.shaken[u] {
+            continue;
+        }
+        if geom::dist_in(&state.positions[si], &state.positions[u]) > s.spell_conduit_reach_in + CONTROL_EPS {
+            continue;
+        }
+        found.push((u, s.spell_conduit_casting_mod));
+    }
+    found
+}
+
 /// `BattleSim._cast_phase` battle_sim.gd:856-894 — after the move, before ANY
 /// attack, for EVERY activation (which is the whole point of NML-1069: the old
 /// site rode inside the shoot branch, so a melee caster never cast).
@@ -3795,12 +3850,30 @@ fn cast_phase(
     // hero part of that unit, so "buff myself" is the unit, not the hero.
     let caster_x = state.profile(ci).caster_value;
     let weight = 1.0 / 3.0;
-    let p_success = cast_success_chance(casting_net_of(statics, state, ci, seams));
+    // Spell Conduit (design #824 §4 PR 2) — the origin walk, built ONCE
+    // per cast phase (PR 1's battle_sim.gd `_cast_origins` twin); empty
+    // below the frozen gate, so the set is the caster alone.
+    let mut origins: Vec<(usize, i64)> = vec![(si, 0)];
+    origins.extend(cast_origins(statics, state, si, seams));
     let mut cost: Option<i64> = None;
     for d3 in 1..=3i64 {
-        let Some((idx, ti)) = pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los) else {
-            continue;
-        };
+        let Some((idx, ti, ou)) =
+            pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los, &origins)
+        else { continue; };
+        // The +1 rides the origin (design #824 §3): the conduit's
+        // casting_mod folds in only when THIS cast is made through it.
+        let origin_mod = origins.iter().find(|o| o.0 == ou).map_or(0, |o| o.1);
+        let p_success = cast_success_chance(casting_net_of(statics, state, ci, seams) + origin_mod);
+        if origin_mod != 0 {
+            // Rules-must-log (#782), the table's own line shape (main.gd
+            // `_solo_resolve_one_cast`).
+            let line = format!(
+                "Spell Conduit: {} casts as if standing at {} ({:+} to the cast target)",
+                statics[state.roster.profile[ci]].name, statics[state.roster.profile[ou]].name, origin_mod
+            );
+            trace_rule("cast", "Spell Conduit", &line);
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Conduit", "log": line })));
+        }
         apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success, rng.as_deref_mut());
         if cost.is_none() {
             cost = Some(spells[idx].threshold);
