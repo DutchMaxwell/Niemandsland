@@ -74,6 +74,7 @@ use super::*;
             patient: false,
             split: None,
             traced: None,
+            teleport: None,
         };
         let terrain = Terrain::default();
         let mut tray = Tray::seeded(7);
