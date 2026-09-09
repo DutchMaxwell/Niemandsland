@@ -3873,6 +3873,63 @@ fn stamp_takedown_strike_named(
     });
 }
 
+/// FEAT PR 2 (docs/plans/FEAT_DESIGN_2026-09-08.md §4) — the once-per-game
+/// bonus RANGED attack "Takedown Shot" (gf x2 — Human Inquisition, Ratmen
+/// Clans; primitive `Takedown` with `extra_attack_q: 2, ap: 2,
+/// uses_per_game: 1`; the printed text adds Deadly(3)): "Once per game,
+/// when this model shoots, it may make one extra attack at Quality 2+ with
+/// AP(2), Deadly(3), and Takedown." The table's `_solo_takedown_bonus_groups`
+/// main.gd:17005 appends a synthetic single-model shot `{quality:
+/// extra_attack_q, ap, deadly: 3, takedown: true, "reach": 9999.0}` to the
+/// volley (main.gd:3097/:10089), spent once per game per bearer
+/// (`takedown_bonus_used_<name>`).
+///
+/// Here: the stamp APPENDS one synthetic shoot profile carrying the entry's
+/// own params, at the table's own 9999 reach so no range gate refuses it,
+/// `takedown: true` so the EXISTING Takedown landing path resolves it —
+/// and NO `limited` flag: the once-per-game ledger is the #827 FEAT latch
+/// (`State.feats_used`), spent by the volley seam (sim.rs), not by the
+/// Limited shape. The latch lives in runtime state, never in statics
+/// (unit.rs:794's dead-data rule) — the stamp only carries the params.
+/// One bonus attack per bearer even if a book duplicates the rule (the
+/// append runs once). Behind the FROZEN `EPOCH_7_TABLE_RULES` only — a
+/// record below 7 keeps the shoot array as the weapons built it and
+/// replays byte-exact.
+fn stamp_takedown_shot_named(
+    reg: &mut Registries,
+    p: &Profile,
+    shoot: &mut Vec<ShootProfile>,
+    name: &str,
+) {
+    if !has_exact_rule(&p.special_rules, name) && !has_exact_rule(&p.item_grants, name) {
+        return;
+    }
+    let map = reg.rules_for(&p.game_system);
+    let Some(e) = map.lookup(&p.faction_folder, name) else {
+        return;
+    };
+    if e.primitive.as_deref() != Some("Takedown") {
+        return;
+    }
+    let q = e.param_i("extra_attack_q", 0);
+    if q <= 0 {
+        return; // the always-on Takedown family — `stamp_takedown_named`'s read
+    }
+    shoot.push(ShootProfile {
+        name: name.to_string(),
+        attacks: 1,
+        count: 1,
+        // The table's synthetic shot carries "reach": 9999.0 (main.gd:3101)
+        // — in range at any board distance, its own range gate never refuses.
+        range: 9999,
+        ap: e.param_i("ap", 2),
+        deadly: e.param_i("deadly", 3),
+        takedown: true,
+        extra_attack_q: q,
+        ..Default::default()
+    });
+}
+
 /// `AiShooting.profiles_in_range` ai_shooting.gd:14-26 — the merged RANGED set,
 /// UNSTAMPED (the `AiEv.stamp_sergeant` pass belongs to `BattleSim._profiles_of`,
 /// not to this function). `UnitStatic::build` calls it at 0.0 and stamps after;
@@ -4504,6 +4561,14 @@ impl UnitStatic {
         // it and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             stamp_takedown_strike_named(reg, p, &mut melee, "Takedown Strike");
+        }
+        // FEAT PR 2 (docs/plans/FEAT_DESIGN_2026-09-08.md §4), gated on the
+        // FROZEN `EPOCH_7_TABLE_RULES`: "Takedown Shot" is the once-per-game
+        // bonus RANGED attack under its own name — see
+        // `stamp_takedown_shot_named`. A record below epoch 7 keeps the
+        // shoot array as the weapons built it and replays byte-exact.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            stamp_takedown_shot_named(reg, p, &mut shoot, "Takedown Shot");
         }
         // Boostbases wave (rules-wave4-boostbases), gated on the FROZEN
         // `EPOCH_6_TABLE_RULES`: "Mischievous Boost" is the Bane family's

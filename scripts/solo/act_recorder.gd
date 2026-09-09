@@ -552,6 +552,18 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 			continue
 		if bool(u.unit_properties.get("speed_feat_used_%s" % fn.to_snake_case(), false)):
 			feats.append(fn)
+	# FEAT PR 2 — the Takedown family's spends ride the same ledger: the
+	# synthetic bonus groups' flags (main.gd:17021 writes
+	# `takedown_bonus_used_<name>` per rule, RAW display name — no snake
+	# round trip there), the Storm Attack shape, so the core's volley seam
+	# (sim.rs `takedown_shot_gate`) replays the volley with the latch CLOSED.
+	for e in RulesRegistry.unit_rules_of_primitive(u, "Takedown"):
+		var tn := str((e as Dictionary)["name"])
+		var spt: Dictionary = (e as Dictionary).get("params", {})
+		if int(spt.get("uses_per_game", 0)) <= 0:
+			continue
+		if bool(u.unit_properties.get("takedown_bonus_used_%s" % tn, false)):
+			feats.append(tn)
 	if not feats.is_empty():
 		ledger["feats_used"] = feats
 	var markers := 0
