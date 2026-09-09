@@ -390,8 +390,9 @@
 // family PRs in the same wave never append to the same region. A new
 // family adds ONE line to this ALPHABETICAL list plus its own file; the
 // fixtures every family shares stay here, in the module root.
-mod fortified;
-mod growth_markers;
+    mod entrenched;
+    mod fortified;
+    mod growth_markers;
 mod indirect_moved;
 mod melee_impact_order;
 mod morale_dice;

@@ -1529,6 +1529,7 @@ mod breath_score;
 mod buff_consumption_bridge;
 mod deathstrike;
 mod dest_side_arms;
+mod entrenched;
 mod extended_buff_range;
 mod feat_speed;
 mod feat_takedown_shot;
