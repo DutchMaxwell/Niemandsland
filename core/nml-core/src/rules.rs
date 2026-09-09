@@ -117,6 +117,38 @@ pub fn unit_rating(rules: &[String], rule_name: &str) -> i64 {
     0
 }
 
+/// The table's Spawn target regex (main.gd:17486-17491,
+/// `^[^(]+\((.+) \[(\d+)\]\)$`): `Spawn(Rat Swarm [10])` -> `("Rat Swarm", 10)`.
+/// `None` for the bare name, a malformed bracket, or a non-positive count —
+/// the table's beat never mints off the first two; a `Spawn(X [0])` string
+/// the regex WOULD match is read here as no target at all (a zero-model copy
+/// is not a summon), so it never demands a template either.
+pub fn spawn_rule_target(rule: &str) -> Option<(String, i64)> {
+    let s = rule.trim();
+    let open = s.find('(')?;
+    let inner = s[open + 1..].strip_suffix(')')?.trim();
+    let bracket = inner.rfind(" [")?;
+    let name = inner[..bracket].trim();
+    let count = inner[bracket + 2..].strip_suffix(']')?.trim().parse::<i64>().ok()?;
+    if name.is_empty() || count <= 0 {
+        return None;
+    }
+    Some((name.to_string(), count))
+}
+
+/// The ONE raw-Spawn reader for both `spawn_of` (the statics read) and the
+/// loader's template check: the FIRST parametrised `Spawn(<name> [<n>])`
+/// string in the list — the same first-match order the beat's own read uses,
+/// so the two can never disagree about which string names the template.
+pub fn spawn_target_rule(rules: &[String]) -> Option<(String, String, i64)> {
+    rules.iter().find_map(|r| {
+        if !rule_name_matches(r, "Spawn") {
+            return None;
+        }
+        spawn_rule_target(r).map(|(name, count)| (r.trim().to_string(), name, count))
+    })
+}
+
 /// GDScript's `int(String)`: leading integer prefix, 0 when there is none.
 fn gd_int(s: &str) -> i64 {
     let s = s.trim();

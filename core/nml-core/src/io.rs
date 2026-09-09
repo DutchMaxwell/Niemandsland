@@ -18,6 +18,7 @@ use serde::{Deserialize, Deserializer};
 
 use crate::acts::{rule_on, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::mods::LiveMod;
+use crate::rules::spawn_target_rule;
 use crate::state::{
     Bands, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, Roster, State,
 };
@@ -626,11 +627,24 @@ pub(crate) fn roster_of(
 /// `EPOCH_8_PLANNER_MENU`: below the gate the map is ignored entirely, so an
 /// epoch-7 record replays byte-identically to before the gate existed.
 pub(crate) fn index_spawn_profiles(
-    _profiles: &mut Profiles,
-    _map: Option<Ordered<Profile>>,
-    _origin: &str,
-    _rules_epoch: u32,
+    profiles: &mut Profiles,
+    map: Option<Ordered<Profile>>,
+    origin: &str,
+    rules_epoch: u32,
 ) -> Result<(), String> {
+    if !rule_on(rules_epoch, EPOCH_8_PLANNER_MENU) {
+        return Ok(());
+    }
+    let Some(map) = map else {
+        return Ok(());
+    };
+    for (k, p) in map.0 {
+        if profiles.index.contains_key(&k) {
+            return Err(format!("{origin}:1 spawn_profiles key {k} collides with a profile"));
+        }
+        profiles.index.insert(k, profiles.list.len());
+        profiles.list.push(p);
+    }
     Ok(())
 }
 
@@ -644,10 +658,27 @@ pub(crate) fn index_spawn_profiles(
 /// registry whether the beat would really fire (no repo root here), so a
 /// record whose standing carrier could never act still demands its template.
 pub(crate) fn spawn_templates_of(
-    _plain: &PlainState,
-    _profiles: &Profiles,
-    _rules_epoch: u32,
+    plain: &PlainState,
+    profiles: &Profiles,
+    rules_epoch: u32,
 ) -> Result<(), String> {
+    if !rule_on(rules_epoch, EPOCH_8_PLANNER_MENU) {
+        return Ok(());
+    }
+    for (k, u) in &plain.units.0 {
+        if u.alive <= 0 || u.dormant {
+            continue; // not standing — the beat's own carrier precondition
+        }
+        let Some(&pi) = profiles.index.get(k.as_str()) else {
+            continue; // roster_of refuses unknown keys on its own
+        };
+        if let Some((raw, _, _)) = spawn_target_rule(&profiles.list[pi].special_rules) {
+            let key = format!("spawn:{k}:{raw}");
+            if !profiles.index.contains_key(&key) {
+                return Err(format!("no spawn_profiles template for unit key {k} ({raw})"));
+            }
+        }
+    }
     Ok(())
 }
 /// `(side, index)` of a recorder-shaped unit id `p<player>_<index>_<token>`, or

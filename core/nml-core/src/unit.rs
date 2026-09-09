@@ -31,7 +31,10 @@ use crate::combat::{
     RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
     SHROUD_RANGE_PENALTY_IN,
 };
-use crate::rules::{base_rule_name, has_special_rule, rule_rating, unit_rating, Registries, Spell};
+use crate::rules::{
+    base_rule_name, has_special_rule, rule_rating, spawn_target_rule, unit_rating, Registries,
+    Spell,
+};
 use crate::state::{Bands, Profile, Profiles, Weapon};
 
 /// The Shielded-family DATA-alias stamp (wave 3, `acts::EPOCH_6_TABLE_RULES`):
@@ -3535,6 +3538,8 @@ fn reinforcement_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Rein
 /// nine shipped entries (gf 4 factions, aof 5).
 pub const SPAWN_PLACE_IN: f64 = 6.0;
 
+/// `Spawn`'s reach when the registry entry carries no `place_in`. 6" in all
+/// nine shipped entries (gf 4 factions, aof 5).
 /// `UnitStatic.spawn` — the S5 summon's read params, the same pair the
 /// table takes off the entry (`_solo_try_spawn`, main.gd:17399 `place_in`,
 /// `:17394` `once_per_game`). Default (`place_in == 0.0`) below
@@ -3569,8 +3574,23 @@ pub struct Spawn {
 /// behind `EPOCH_8_PLANNER_MENU` (SPAWN_DESIGN_2026-09-08 §3.2(b)): below the
 /// gate a record reads no target at all, so nothing new is looked up.
 fn spawn_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Spawn {
-    let _ = (reg, p, rules_epoch);
-    Spawn::default()
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) || !unit_rule_active(reg, p, "Spawn") {
+        return Spawn::default();
+    }
+    let map = reg.rules_for(&p.game_system);
+    let (place_in, once_per_game) = match map.lookup(&p.faction_folder, "Spawn") {
+        Some(e) => (e.param_f("place_in", SPAWN_PLACE_IN), e.param_b_or("once_per_game", true)),
+        None => (SPAWN_PLACE_IN, true),
+    };
+    let mut spawn = Spawn { place_in, once_per_game, ..Spawn::default() };
+    if rule_on(rules_epoch, EPOCH_8_PLANNER_MENU) {
+        if let Some((raw, name, count)) = spawn_target_rule(&p.special_rules) {
+            spawn.raw = raw;
+            spawn.name = name;
+            spawn.count = count;
+        }
+    }
+    spawn
 }
 
 /// The Ambush family's per-profile read (`UnitStatic.ambush_family`): each
