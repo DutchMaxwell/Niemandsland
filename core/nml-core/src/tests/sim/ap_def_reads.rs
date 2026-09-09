@@ -102,19 +102,19 @@ use super::*;
         let (st, mut statics) = ap_rifle();
         statics[0].utility_buffs =
             vec![UtilityBuff { def_mod: 1, ..ub("Defense Buff") }];
+        // b's own rifle: unused while a acts, needed for the shoot-back leg.
+        statics[2].shoot = vec![gun("Rifle", 64, 24)];
         let (next, _) = run_reads(&st, &statics, &buff_action(Some("b")), 27, 7);
         assert_eq!(next.buffs[0].len(), 1,
             "the bearer's defense row is spent by the exchange where it DEFENDS, not by its own attack (main.gd:3925)");
 
         // The second exchange: b shoots back at the buffed bearer — a saves
         // one rung better (Defense 4+ at AP(0), the row folding 4 -> 3).
-        let mut shoot_back = statics.clone();
-        shoot_back[2].shoot = vec![gun("Rifle", 64, 24)];
         let back = Action {
             kind: HOLD, unit: "b".into(), dest: None, shoot: Some("a".into()),
             charge: None, patient: false, split: None, traced: None, teleport: None,
         };
-        let (next2, buffed) = run_reads(&next, &shoot_back, &back, 27, 7);
+        let (next2, buffed) = run_reads(&next, &statics, &back, 27, 7);
         assert_eq!(save_target_of(&buffed), 3,
             "RED before the fix: the recorded def_mod row lands but nothing reads it");
         assert!(next2.buffs[0].is_empty(), "the exchange where a DEFENDED spends it");
@@ -122,7 +122,7 @@ use super::*;
         // Epoch 6: the same pick records nothing (PR 1's all-zero guard), so
         // the shoot-back volley stays at the plain rung.
         let (next6, _) = run_reads(&st, &statics, &buff_action(Some("b")), 27, 6);
-        let (_, plain6) = run_reads(&next6, &shoot_back, &back, 27, 6);
+        let (_, plain6) = run_reads(&next6, &statics, &back, 27, 6);
         assert_eq!(save_target_of(&plain6), 4, "below 7 the row is not even recorded");
     }
 
