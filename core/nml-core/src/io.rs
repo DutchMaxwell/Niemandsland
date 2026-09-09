@@ -141,13 +141,17 @@ pub(crate) struct PlainUnit {
 
 /// One `_solo_record_spell_mod` record (main.gd:3649-3670) as the table wrote it
 /// verbatim into `unit_properties["spell_records"]` — only the fields this core
-/// has a `LiveMod` consumer for are read; the rest (`spell`, `range_in`,
+/// has a `LiveMod` consumer for are read; the rest (`range_in`,
 /// `advance_in`, `rush_in`, `granted_to`) are ignored by serde, not an error,
 /// so the table can grow the record without breaking this reader. The three
 /// ap/def knobs are read since seam 4 step 1 (epoch 7); `state_of`'s gate
-/// keeps a record stamped below 7 ignoring them.
+/// keeps a record stamped below 7 ignoring them. `spell` (the record's own
+/// name) joined at seam 4 step 2 — rules-must-log names each firing record
+/// by it (main.gd:5560); no fold reads it.
 #[derive(Deserialize)]
 pub(crate) struct PlainBuff {
+    #[serde(default)]
+    spell: String,
     #[serde(default)]
     hit_mod: i64,
     #[serde(default)]
@@ -882,6 +886,7 @@ pub(crate) fn state_of(
                     scope: Rc::from(b.scope.as_str()),
                     attackers: b.beneficiary == "attackers",
                     once: b.duration == "once",
+                    name: Rc::from(b.spell.as_str()),
                 });
             }
             st.hit_and_run_round[ui] = ledger.hit_and_run_round;

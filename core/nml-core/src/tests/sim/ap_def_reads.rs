@@ -9,6 +9,7 @@ use super::*;
         mods::LiveMod {
             hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod, def_mod, defense_mod,
             grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true,
+            name: Rc::from(""),
         }
     }
 
@@ -80,8 +81,7 @@ use super::*;
         let mut deb = st.clone();
         deb.buffs[0].push(row(-1, 0, 0));
         deb.buffs[2].push(row(0, 0, -1));
-        let (_, both) = run_reads(&deb, &statics, &buff_action(Some("b")), 27, 6);
-        assert_eq!(save_target_of(&both), 5,
+        let (_, both) = run_reads(&deb, &statics, &buff_action(Some("b")), 27, 6);        assert_eq!(save_target_of(&both), 5,
             "below 7 the records stay inert: {:?} vs plain {:?}",
             save_target_of(&both), save_target_of(&plain));
     }
@@ -98,7 +98,8 @@ use super::*;
         let (next, buffed) = run_reads(&st, &statics, &buff_action(Some("b")), 27, 7);
         assert_eq!(save_target_of(&buffed), 4,
             "RED before the fix: the recorded def_mod row lands but nothing reads it");
-        assert!(next.buffs[0].is_empty(), "the once row is spent by the exchange");
+        assert_eq!(next.buffs[0].len(), 1,
+            "the bearer's defense row is spent by the exchange where it DEFENDS, not by its own attack (main.gd:3925)");
 
         // Epoch 6: the same pick records nothing (PR 1's all-zero guard) and
         // the volley stays at the plain rung.
