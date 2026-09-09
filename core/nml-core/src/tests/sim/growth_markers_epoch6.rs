@@ -23,11 +23,15 @@ use super::*;
     }
 
     /// rules-wave3-growthmark (epoch 6) — "Defensive Frenzy" PRESENT at
-    /// rules_epoch 6, ABSENT at 5: two banked markers lift the bearer's OWN
-    /// save target by 2. Same draws at both epochs (same seed), so the only
-    /// thing that can move the defense target is the rule gate.
+    /// rules_epoch 7, and from that epoch with the TABLE's direction
+    /// (issue #854): every defence part folds as
+    /// `base = clampi(base - bonus, 2, 6)` (main.gd:5510), so the ladder
+    /// LOWERS the save target — 2 banked markers turn a 4+ into a 2+. The
+    /// field's own sign stays positive (the log line prints "+N"); only the
+    /// save rung's fold flips. Same draws at both epochs (same seed), so the
+    /// only thing that can move the defense target is the rule gate.
     #[test]
-    fn defensive_frenzys_defense_ladder_applies_only_at_epoch_6() {
+    fn defensive_frenzys_defense_ladder_lowers_the_save_target_from_epoch_7() {
         let (mut st, mut statics) = buff_line();
         statics[2].growth = vec![GrowthRule {
             name: "Defensive Frenzy".into(),
@@ -38,15 +42,17 @@ use super::*;
         let terrain = crate::terrain::Terrain::default();
         let mut rng = crate::rng::GodotRng::new(0);
         let mut tray = Tray::seeded(27);
-        let (next6, shot6) = resolve_stochastic_tray_on_board(
+        let (next7, shot7) = resolve_stochastic_tray_on_board(
             &statics, &st, &buff_action(Some("b")), &terrain,
-            Seams { rules_epoch: 6, ..Default::default() }, &mut rng, &mut tray,
+            Seams { rules_epoch: 7, ..Default::default() }, &mut rng, &mut tray,
         )
         .unwrap();
-        assert_eq!(shot6.rolls[1].kind, "defense");
-        assert_eq!(shot6.rolls[1].target, 6, "2 markers x +1 on Defense 4+");
-        assert!(shot6.log.iter().any(|l| l.contains("Defensive Frenzy")),
-            "the LOGGING-RULE line: {:?}", shot6.log);
+        assert_eq!(shot7.rolls[1].kind, "defense");
+        // main.gd:5510 — `base = clampi(base - bonus, 2, 6)`: +2 LOWERS a 4+ to a 2+.
+        assert_eq!(shot7.rolls[1].target, 2,
+            "2 markers x +1 on Defense 4+ -> clampi(4 - 2, 2, 6) = 2 (main.gd:5510)");
+        assert!(shot7.log.iter().any(|l| l.contains("Defensive Frenzy")),
+            "the LOGGING-RULE line: {:?}", shot7.log);
 
         let mut rng = crate::rng::GodotRng::new(0);
         let mut tray = Tray::seeded(27);
@@ -59,14 +65,16 @@ use super::*;
         assert_eq!(shot5.rolls[1].target, 4, "rules_epoch 5 replays byte-exact");
         assert_eq!(next5.growth_markers[2], 2);
         assert!(shot5.log.iter().all(|l| !l.contains("Defensive")), "no log line");
-        assert_eq!(next6.growth_markers[2], next5.growth_markers[2]);
+        assert_eq!(next7.growth_markers[2], next5.growth_markers[2]);
     }
 
     /// rules-wave3-growthmark (epoch 6) — "Defensive Growth": +1 to Defense
     /// per TWO markers (3 banked markers = +1, not +3 — the ladder is
-    /// `markers / 2`), and the same epoch gate as its Frenzy sister.
+    /// `markers / 2`), and the same epoch gate as its Frenzy sister. From
+    /// epoch 7 the fold follows the table (issue #854, main.gd:5510): the
+    /// +1 LOWERS the save target, 4+ -> 3+.
     #[test]
-    fn defensive_growths_defense_per_two_applies_only_at_epoch_6() {
+    fn defensive_growths_defense_per_two_lowers_the_save_target_from_epoch_7() {
         let (mut st, mut statics) = buff_line();
         statics[2].growth = vec![GrowthRule {
             name: "Defensive Growth".into(),
@@ -77,14 +85,16 @@ use super::*;
         let terrain = crate::terrain::Terrain::default();
         let mut rng = crate::rng::GodotRng::new(0);
         let mut tray = Tray::seeded(27);
-        let (_, shot6) = resolve_stochastic_tray_on_board(
+        let (_, shot7) = resolve_stochastic_tray_on_board(
             &statics, &st, &buff_action(Some("b")), &terrain,
-            Seams { rules_epoch: 6, ..Default::default() }, &mut rng, &mut tray,
+            Seams { rules_epoch: 7, ..Default::default() }, &mut rng, &mut tray,
         )
         .unwrap();
-        assert_eq!(shot6.rolls[1].target, 5, "3 markers = 1 pair -> +1 on Defense 4+ (not +3)");
-        assert!(shot6.log.iter().any(|l| l.contains("Defensive Growth")),
-            "the LOGGING-RULE line: {:?}", shot6.log);
+        // main.gd:5510 — `base = clampi(base - bonus, 2, 6)`: +1 LOWERS a 4+ to a 3+.
+        assert_eq!(shot7.rolls[1].target, 3,
+            "3 markers = 1 pair -> clampi(4 - 1, 2, 6) = 3 (not +3; main.gd:5510)");
+        assert!(shot7.log.iter().any(|l| l.contains("Defensive Growth")),
+            "the LOGGING-RULE line: {:?}", shot7.log);
 
         let mut rng = crate::rng::GodotRng::new(0);
         let mut tray = Tray::seeded(27);
@@ -95,6 +105,76 @@ use super::*;
         .unwrap();
         assert_eq!(shot5.rolls[1].target, 4, "rules_epoch 5 replays byte-exact");
         assert!(shot5.log.iter().all(|l| !l.contains("Defensive")), "no log line");
+    }
+
+    /// Issue #854's frozen leg — BELOW epoch 7 the wave-3 (inverted) reading
+    /// replays byte-exact: the ladder still RAISES the save target, so the
+    /// epoch-7 flips in the two tests above can never touch an older record.
+    /// This is the epoch-6 twin of `defensive_frenzys_defense_ladder_lowers_
+    /// the_save_target_from_epoch_7` and its Growth sister.
+    #[test]
+    fn below_epoch_7_the_inverted_defence_fold_stays_frozen() {
+        let (mut st, mut statics) = buff_line();
+        statics[2].growth = vec![GrowthRule {
+            name: "Defensive Frenzy".into(),
+            on_kill: true, max_markers: 2, defense_per_marker: 1, ..Default::default()
+        }];
+        statics[0].shoot = vec![gun("Rifle", 20, 24)];
+        st.growth_markers[2] = 2;
+        let terrain = crate::terrain::Terrain::default();
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (_, shot6) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 6, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot6.rolls[1].target, 6,
+            "rules_epoch 6 replays byte-exact: 2 markers x +1 still RAISE a 4+ to a 6+");
+        assert!(shot6.log.iter().any(|l| l.contains("Defensive Frenzy")),
+            "the LOGGING-RULE line: {:?}", shot6.log);
+
+        statics[2].growth = vec![GrowthRule {
+            name: "Defensive Growth".into(),
+            per_round: true, max_markers: 4, defense_per_two: 1, ..Default::default()
+        }];
+        st.growth_markers[2] = 3;
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (_, shot6g) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 6, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot6g.rolls[1].target, 5,
+            "rules_epoch 6 replays byte-exact: 1 pair still RAISES a 4+ to a 5+");
+    }
+
+    /// Issue #854's clamp leg — the table folds into the 2..6 window
+    /// (main.gd:5510), so at epoch 7 a Defense 2+ bearer with one marker's
+    /// +1 STAYS a 2+. The clamp sits on the defence base BEFORE the AP add:
+    /// the table clamps the defence STAT only (`base - bonus`), the AP is
+    /// not part of the stat and rides `save_target`'s own `+ ap.max(0)`.
+    #[test]
+    fn the_defence_facet_clamps_at_the_tables_window() {
+        let (mut st, mut statics) = buff_line();
+        statics[2].growth = vec![GrowthRule {
+            name: "Defensive Frenzy".into(),
+            on_kill: true, max_markers: 2, defense_per_marker: 1, ..Default::default()
+        }];
+        statics[2].ctx.defense = 2;
+        statics[0].shoot = vec![gun("Rifle", 20, 24)];
+        st.growth_markers[2] = 1;
+        let terrain = crate::terrain::Terrain::default();
+        let mut rng = crate::rng::GodotRng::new(0);
+        let mut tray = Tray::seeded(27);
+        let (_, shot7) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: 7, ..Default::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot7.rolls[1].target, 2,
+            "clampi(2 - 1, 2, 6) = 2, not 1 — the 2..6 window floor holds (main.gd:5510)");
     }
 
     /// rules-wave3-growthmark (epoch 6) — "Fortified Growth": every unit

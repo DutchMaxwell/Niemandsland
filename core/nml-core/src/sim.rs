@@ -2394,6 +2394,16 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.growth_def_mod = dm;
         c.growth_fortify_ap = fa;
     }
+    // Issue #854 (wave 4) — the defence facet's SAVE-RUNG direction flips to
+    // the table's at the FROZEN `EPOCH_7_TABLE_RULES`: `dice::save_batch` then
+    // folds `clampi(defense - growth_def_mod, 2, 6)` like main.gd:5510. Below
+    // 7 the flag stays false and the wave-3 (inverted) reading replays
+    // byte-exact. Gated on `growth_def_mod != 0` exactly like the table's own
+    // `if bonus != 0` (main.gd:5509) — a bearerless defence stat is never
+    // clamped.
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && c.growth_def_mod != 0 {
+        c.growth_def_lowers = true;
+    }
     // Ambush family (rules-wave2-ambush): "Ambushing Piercing Shot" shoots
     // AP(+1) on the very round the unit arrives — `ambush_arrived_round` is
     // the stamp `arrive_unit`/`_finish_reserve_arrival` writes, and `!melee`
