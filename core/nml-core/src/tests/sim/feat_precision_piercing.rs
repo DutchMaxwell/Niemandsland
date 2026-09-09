@@ -153,8 +153,8 @@ use super::*;
             "rules-must-log: {:?}",
             shot.log
         );
-        // Second activation: base AP, no re-spend.
-        st.feats_used[0].push("Piercing Feat".to_string());
+        // Second activation: the spend holds in the state's latch — base AP.
+        assert_eq!(st.feats_used[0], vec!["Piercing Feat".to_string()]);
         let shot2 = strike(&mut st, &statics);
         assert!(
             shot2.rolls.iter().any(|r| r.kind == "defense" && r.target == 4)
@@ -162,7 +162,7 @@ use super::*;
             "base AP after the spend -- got {:#?}",
             shot2.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
-        assert_eq!(st.feats_used[0].len(), 1, "no re-spend");
+        assert_eq!(st.feats_used[0], vec!["Piercing Feat".to_string()], "no re-spend");
     }
 
     /// (c) — below epoch 7 nothing exists: a pre-folded latch key rides
