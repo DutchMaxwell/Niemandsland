@@ -3119,6 +3119,19 @@ fn strike_phase(
         // `_solo_reckless_ap(attacker, target)`'s net read.
         att.reckless_ap = (next.reckless_ap_round[*mi] == next.round) as i64
             + (next.reckless_backfire_round[ti] == next.round) as i64;
+        // FEAT PR 3 — the latch's melee read: "Piercing Feat" is
+        // `any_attack`, so a strike spends it exactly like a volley does
+        // (the strike-back's own call re-runs this seam per side).
+        if rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+            let uf = &statics[next.roster.profile[*mi]];
+            if uf.piercing_feat_ap > 0
+                && !next.feats_used[*mi].iter().any(|n| n == "Piercing Feat")
+            {
+                att.feat_ap_bonus += uf.piercing_feat_ap;
+                next.feats_used[*mi].push("Piercing Feat".to_string());
+                shot.log.push(format!("[feat] Piercing Feat spent by {}", uf.name));
+            }
+        }
     }
     let ut = &statics[next.roster.profile[ti]];
     let def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch);
@@ -5318,6 +5331,31 @@ fn resolve_with(
                                 // (main.gd:7650/:5773-5775) — a HOLD act never
                                 // moves, an ADVANCE/RUSH did.
                                 let mut att = ctx_live_vs(ctx_of(um, &next, mi), statics, &next, mi, g.ti, false, seams.rules_epoch);
+                                // FEAT PR 3 — the latch feats' volley read
+                                // (design §4 PRs 3+4): a bearer fires at its
+                                // FIRST qualifying attack while unspent —
+                                // policy (a) auto, zero candidates. The gate
+                                // reads the PRE-ACTIVATION snapshot (`state`),
+                                // so every group of THIS volley rides the
+                                // one-activation window; the spend closes the
+                                // latch once per feat name (one key per feat —
+                                // spending Precision never spends Speed Feat's).
+                                if rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+                                    if um.precision_feat_hit > 0 && !state.feats_used[mi].iter().any(|n| n == "Precision Feat") {
+                                        att.feat_hit_bonus += um.precision_feat_hit;
+                                        if !next.feats_used[mi].iter().any(|n| n == "Precision Feat") {
+                                            next.feats_used[mi].push("Precision Feat".to_string());
+                                            shot.log.push(format!("[feat] Precision Feat spent by {}", um.name));
+                                        }
+                                    }
+                                    if um.piercing_feat_ap > 0 && !state.feats_used[mi].iter().any(|n| n == "Piercing Feat") {
+                                        att.feat_ap_bonus += um.piercing_feat_ap;
+                                        if !next.feats_used[mi].iter().any(|n| n == "Piercing Feat") {
+                                            next.feats_used[mi].push("Piercing Feat".to_string());
+                                            shot.log.push(format!("[feat] Piercing Feat spent by {}", um.name));
+                                        }
+                                    }
+                                }
                                 att.moved_this_round = moved;
                                 parts.push((mi, msc, att));
                             }

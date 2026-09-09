@@ -747,6 +747,10 @@ pub fn resolve_volley_with_tray(
             // hit bonus, shooting only (`_solo_hit_mod_info`'s melee branch
             // returns before that code runs).
             + att.growth_hit_mod
+            // FEAT PR 3 — Precision Feat's once-per-game window (the volley
+            // seam stamps it while the #827 latch is open): the entry's own
+            // +1 to hit on EVERY shot of this activation.
+            + att.feat_hit_bonus
             // Unpredictable's 4-6 half (main.gd:3180): folded into the SAME
             // sum, BEFORE the Unstoppable clamp, like the melee leg.
             + upr_hit;
@@ -985,7 +989,12 @@ pub fn resolve_volley_with_tray(
             // (main.gd:9877): the chain's buff stamp and the TARGET's
             // backfire stamp, epoch-7-gated at the sim seams that set
             // `Ctx::reckless_ap`.
-            + att.reckless_ap;
+            + att.reckless_ap
+            // FEAT PR 3 — Piercing Feat's once-per-game window (the volley
+            // seam stamps it while the #827 latch is open): AP(+1) on every
+            // attack of this activation, the `any_attack` condition's own
+            // reading.
+            + att.feat_ap_bonus;
         // Wave 2 — the "AP(+1) when shooting" mark's flat AP, off its
         // epoch-gated Ctx leg (`sim::ctx_live`).
         if att.pierce_shooting_grant {
@@ -1447,6 +1456,9 @@ pub fn resolve_melee_with_tray(
             // shooting site's own note above).
             let mut ap = p.ap + uf_ap + sh.att.growth_ap_mod
                 + sh.att.reckless_ap
+                // FEAT PR 3 — Piercing Feat's once-per-game window, the melee
+                // half of the volley seam's stamp (see the volley fold above).
+                + sh.att.feat_ap_bonus
                 + if charging && (p.thrust || sh.att.thrust_grant) { THRUST_AP_BONUS } else { 0 }
                 + if sh.att.pierce_melee_grant { 1 } else { 0 };
             // Rung I — the melee half of the same `cond_ap` fold, same

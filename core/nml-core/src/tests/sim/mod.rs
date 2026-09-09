@@ -1530,6 +1530,7 @@ mod buff_consumption_bridge;
 mod deathstrike;
 mod dest_side_arms;
 mod extended_buff_range;
+mod feat_precision_piercing;
 mod feat_speed;
 mod feat_takedown_shot;
 mod fatigue_debuff;

@@ -342,6 +342,13 @@ pub struct Ctx {
     /// backfire stamp. Set at the two attack seams (sim.rs), folded in both
     /// AP merges (dice.rs volley + melee), gated epoch 7.
     pub reckless_ap: i64,
+    /// FEAT PR 3 — the once-per-game latch feats' ONE-ACTIVATION windows,
+    /// set by the resolve seams (volley / strike) while the bearer's #827
+    /// `feats_used` latch is still open, folded by the dice seams exactly
+    /// like `reckless_ap`. HARD 0 on `ctx_of`/`ctx_for`: the EV imagination
+    /// stays latch-blind (the Limited precedent, EV drops nothing).
+    pub feat_hit_bonus: i64,
+    pub feat_ap_bonus: i64,
     // --- Block C2 — the melee / charge leg of the Shot Modifier family,
     // `_solo_hit_mod_info`'s melee branch (main.gd:5658-5668): an entry is
     // kept when `all_attacks` OR `melee_only` OR (`when: "charge"` on a
@@ -762,6 +769,13 @@ pub struct UnitStatic {
     /// move seam (sim.rs), the latch living in `State.feats_used`, never
     /// in statics. `None` below `rules_epoch` 7. See `speed_feat_of`.
     pub speed_feat: Option<SpeedFeatSpec>,
+    /// FEAT PR 3 — the two aof latch feats' windows, read BY NAME off the
+    /// registry (the design's `hit_bonus: 1, all_attacks: true` /
+    /// `ap_bonus: 1, condition: any_attack`, both `uses_per_game: 1` —
+    /// the param the table's own resolver never reads). Zeros below
+    /// `rules_epoch` 7. See `feat_latch_stamps`.
+    pub precision_feat_hit: i64,
+    pub piercing_feat_ap: i64,
     /// The Reckless Piercing read (epoch 7) — the round AP stamp family
     /// (`reckless_piercing_of`); empty below `rules_epoch` 7.
     pub reckless_piercing: Vec<RecklessPiercingSpec>,
@@ -2069,6 +2083,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
         reckless_ap: 0,
+        feat_hit_bonus: 0,
+        feat_ap_bonus: 0,
     }
 }
 
@@ -3005,6 +3021,44 @@ fn speed_feat_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<
         });
     }
     None
+}
+
+/// FEAT PR 3 (docs/plans/FEAT_DESIGN_2026-09-08.md §3-4, PRs 3+4 folded by
+/// coordinator ruling) — the two aof once-per-game latch feats, stamped BY
+/// NAME (the #489 lesson): "Precision Feat" (ghostly_undead +
+/// ossified_undead, primitive `Shot Modifier`, params hit_bonus 1 /
+/// all_attacks true) and "Piercing Feat" (ogres, primitive
+/// `Piercing Assault`, params ap_bonus 1 / condition any_attack). Both
+/// carry `uses_per_game: 1` — dead data on the table's own resolver
+/// (`AiCombatMath.conditional_ap_bonus` ai_combat_math.gd:410-437 answers
+/// the four conditional-AP spellings and never reads it; `stamp_shot_modifier`
+/// above keeps Precision Feat OUT for exactly this reason) — so the stamp
+/// demands it: the params land only on a once-per-game entry, and the
+/// once-per-game ledger is the #827 FEAT latch, spent by the resolve seams
+/// (sim.rs), never by statics (unit.rs:794's dead-data rule). Gated on the
+/// FROZEN `EPOCH_7_TABLE_RULES`: a record below 7 keeps the zeros and
+/// replays byte-exact.
+fn feat_latch_stamps(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64) {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return (0, 0);
+    }
+    let map = reg.rules_for(&p.game_system);
+    let read = |name: &str, param: &str, primitive: &str| -> i64 {
+        if !has_exact_rule(&p.special_rules, name) && !has_exact_rule(&p.item_grants, name) {
+            return 0;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, name) else {
+            return 0;
+        };
+        if e.primitive.as_deref() != Some(primitive) || e.param_i("uses_per_game", 0) <= 0 {
+            return 0;
+        }
+        e.param_i(param, 0).max(0)
+    };
+    (
+        read("Precision Feat", "hit_bonus", "Shot Modifier"),
+        read("Piercing Feat", "ap_bonus", "Piercing Assault"),
+    )
 }
 /// One carried "Mind Control" entry with the fatigue payload — the table's
 /// pre-attack slot main.gd:1070 (`_solo_apply_mind_control` :16997-17037).
@@ -4940,6 +4994,8 @@ impl UnitStatic {
             crossing_attack: crossing_attack_of(reg, p, rules_epoch),
             surprise_attack: surprise_attack_of(reg, p, rules_epoch),
             speed_feat: speed_feat_of(reg, p, rules_epoch),
+            precision_feat_hit: feat_latch_stamps(reg, p, rules_epoch).0,
+            piercing_feat_ap: feat_latch_stamps(reg, p, rules_epoch).1,
             reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
             grounded_speed: grounded_speed_of(reg, p, rules_epoch),
