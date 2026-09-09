@@ -346,10 +346,28 @@ fn save_batch(
     // rung: the stamp already carries the negated roll sum (a "+1 to
     // defense rolls" text lowers the rung, the covered/Shielded shape) and
     // the floor is the clamp the Shielded fold uses. Zero below epoch 7.
-    let target = save_target(
-        (defense + def.growth_def_mod + def.defense_mod).max(BEST_HIT_TARGET),
-        (eff_ap + def.growth_fortify_ap).max(0),
-    );
+    //
+    // Issue #854 (wave 4, `growth_def_lowers` stamped behind the FROZEN
+    // `EPOCH_7_TABLE_RULES`) — the ladder's direction follows the table:
+    // every defence part folds as `base = clampi(base - bonus, 2, 6)`
+    // (main.gd:5510), so a "+1 to Defense rolls" LOWERS the target. The
+    // clamp sits BEFORE the AP add because the table clamps the defence
+    // STAT only (`base - bonus`); the AP is not part of the stat and rides
+    // `save_target`'s own `+ ap.max(0)` afterwards. #853's roll bonus is
+    // NOT part of the stat either — it folds onto the clamped base the way
+    // it folds onto the raw one, floored at `BEST_HIT_TARGET`. Below 7 the
+    // flag stays false and the wave-3 reading replays byte-exact.
+    let target = if def.growth_def_lowers {
+        save_target(
+            ((defense - def.growth_def_mod).clamp(2, 6) + def.defense_mod).max(BEST_HIT_TARGET),
+            (eff_ap + def.growth_fortify_ap).max(0),
+        )
+    } else {
+        save_target(
+            (defense + def.growth_def_mod + def.defense_mod).max(BEST_HIT_TARGET),
+            (eff_ap + def.growth_fortify_ap).max(0),
+        )
+    };
     let faces = tray.roll(count as usize);
     out.rolls.push(Roll {
         kind: "defense",

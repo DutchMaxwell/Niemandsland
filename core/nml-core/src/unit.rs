@@ -340,6 +340,16 @@ pub struct Ctx {
     /// with (negative — the `enemy_ap_per_two` ladder), floored at the hard 0
     /// in `dice::save_batch`.
     pub growth_fortify_ap: i64,
+    /// Issue #854 (wave 4) — the DICE-side DIRECTION of `growth_def_mod`.
+    /// The table folds every defence part as `base = clampi(base - bonus, 2, 6)`
+    /// (main.gd:5510), so from `EPOCH_7_TABLE_RULES` the save rung SUBTRACTS
+    /// the ladder and clamps it to the table's 2..6 window BEFORE the AP add;
+    /// below 7 the wave-3 (inverted) reading replays byte-exact. FALSE on
+    /// every `ctx_of` — only `sim::ctx_live` stamps it, next to the fold
+    /// above, so the EV imagination stays blind like every other live facet.
+    /// The mod's own sign stays POSITIVE: the "Defense rolls +N" log lines
+    /// name the ladder, not the fold.
+    pub growth_def_lowers: bool,
     // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
     // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
     // arrival stamp and folds it in, so the EV imagination stays blind to it
@@ -2161,6 +2171,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_hit_mod: 0,
         growth_def_mod: 0,
         growth_fortify_ap: 0,
+        growth_def_lowers: false,
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
         reckless_ap: 0,
