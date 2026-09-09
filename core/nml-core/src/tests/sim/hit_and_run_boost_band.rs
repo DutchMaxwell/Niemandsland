@@ -100,8 +100,7 @@ use super::*;
         let terrain = crate::terrain::Terrain::default();
         let charge = Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
-            charge: Some("b".into()), patient: false, split: None, traced: None,
-        };
+            charge: Some("b".into()), patient: false, split: None, traced: None, teleport: None, };
 
         // No bearer.
         let (st, statics) = buff_line();

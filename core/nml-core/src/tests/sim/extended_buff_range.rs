@@ -92,8 +92,7 @@ use super::*;
     fn run_ebr(st: &State, statics: &[UnitStatic], rules_epoch: u32) -> State {
         let action = Action {
             kind: HOLD, unit: "a".into(), dest: None, shoot: None,
-            charge: None, patient: false, split: None, traced: None,
-        };
+            charge: None, patient: false, split: None, traced: None, teleport: None, };
         let terrain = crate::terrain::Terrain::default();
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);

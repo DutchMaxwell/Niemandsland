@@ -29,6 +29,7 @@ fn run(epoch: u32) -> (nml_core::State, nml_core::dice::ShootResult) {
     let statics = nml_core::build_act_statics(&corpus, REPO);
     let act = &corpus.acts[0];
     let action = Action {
+        teleport: None,
         kind: nml_core::sim::HOLD,
         unit: "rean".into(),
         dest: None,

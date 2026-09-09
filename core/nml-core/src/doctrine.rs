@@ -171,7 +171,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         reckless_backfire_round: vec![-1; n],
         retreating_strike_round: vec![-1; n],
         growth_markers: vec![0; n], vengeance_markers: vec![0; n], growth_round: vec![-1; n],
-        second_wind_used: vec![false; n], reinforcement_used: vec![false; n],
+        second_wind_used: vec![false; n], reinforcement_used: vec![false; n], teleport_used: vec![false; n],
         second_wind_round: -1, second_wind_uses: 0,
         sidestep_budget: Default::default(),
         limited_used: vec![Vec::new(); n],

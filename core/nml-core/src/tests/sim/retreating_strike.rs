@@ -158,8 +158,7 @@ use super::*;
         st.positions[2] = vec![[1.0 * IN2M, 0.0, 0.0]];
         let charge = Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
-            charge: Some("b".into()), patient: false, split: None, traced: None,
-        };
+            charge: Some("b".into()), patient: false, split: None, traced: None, teleport: None, };
         let terrain = crate::terrain::Terrain::default();
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);
@@ -179,8 +178,7 @@ use super::*;
         let (st0, statics0) = rs_line(7, &["Harassing", "Retreating Strike(3)"]);
         let shoot_act = Action {
             kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()),
-            charge: None, patient: false, split: None, traced: None,
-        };
+            charge: None, patient: false, split: None, traced: None, teleport: None, };
         let mut tray0 = Tray::seeded(11);
         let mut rng0 = crate::rng::GodotRng::new(0);
         let (_, shot0) = resolve_stochastic_tray_on_board(

@@ -28,6 +28,7 @@ const CORPUS_ROUND2: &str = include_str!("fixtures/surprise_attack_round2.jsonl"
 
 fn hold() -> Action {
     Action {
+        teleport: None,
         kind: HOLD,
         unit: "mover".into(),
         dest: None,

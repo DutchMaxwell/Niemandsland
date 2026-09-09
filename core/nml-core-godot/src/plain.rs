@@ -383,6 +383,7 @@ pub fn build_state(
     });
     let prof_table = Rc::clone(&profiles);
     let mut st = State {
+        teleport_used: vec![false; roster.keys.len()],
         roster: Rc::clone(&roster),
         profiles,
         round: dint(plain, "round", 0),

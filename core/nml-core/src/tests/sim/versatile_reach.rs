@@ -106,8 +106,7 @@ use super::*;
         statics[0].versatile_reach_charge_in = Some(2.0);
         let rush = Action {
             kind: RUSH, unit: "a".into(), dest: Some(st.positions[1][0]), shoot: None,
-            charge: Some("b".into()), patient: false, split: None, traced: None,
-        };
+            charge: Some("b".into()), patient: false, split: None, traced: None, teleport: None, };
         let next = vr_resolve(&st, &statics, &rush);
         let moved = (next.positions[0][0][0] - st.positions[0][0][0]).abs() / IN2M as f64;
         assert!(

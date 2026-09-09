@@ -33,6 +33,7 @@ fn crossing_attack_rolls_through_crossed_enemies_at_epoch_7() {
     // read), so the shared statics closure is the right one.
     assert!(Rc::ptr_eq(&act.state.profiles, &corpus.profiles));
     let action = Action {
+        teleport: None,
         kind: ADVANCE,
         unit: "mover".into(),
         dest: Some([1.0, 0.0, 0.0]),

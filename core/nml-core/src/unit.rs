@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
-    EPOCH_7_TABLE_RULES,
+    EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -760,6 +760,8 @@ pub struct UnitStatic {
     /// The Extended Buff Range carrier stamp (epoch 7) — `ebr_of`; None below
     /// `rules_epoch` 7. Both relay ends answer through this flag.
     pub ebr: Option<EbrStamp>,
+    /// The Teleport/Ethereal read (epoch 8) — `teleport_of`; None below 8.
+    pub teleport: Option<TeleportSpec>,
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
@@ -2762,6 +2764,28 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
     None
 }
 
+/// The Teleport/Ethereal read (#816 PR 2): by NAME, `EPOCH_8_PLANNER_MENU`
+/// -gated (#831's epoch-8 move — the epoch-7 corpus was recorded without the
+/// Reposition candidate, so nothing of the port is live below 8). Cap by
+/// NAME: Teleport 3"/6", others (Ethereal) flat 6".
+#[derive(Debug, Clone, PartialEq)]
+pub struct TeleportSpec { pub name: String } // the cap key and the log subject
+
+pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
+    if rule != "Teleport" || rush { 6.0 } else { 3.0 }
+}
+
+/// The stamp (`crossing_attack_of` pattern): the FIRST Teleport-primitive name.
+fn teleport_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<TeleportSpec> {
+    if !rule_on(rules_epoch, EPOCH_8_PLANNER_MENU) { return None; }
+    let map = reg.rules_for(&p.game_system);
+    p.special_rules.iter().chain(p.item_grants.iter()).map(|raw| base_rule_name(raw))
+        .find(|n| (*n == "Teleport" && map.lookup(&p.faction_folder, n).is_some())
+            || *n == "Ethereal"
+            || map.lookup(&p.faction_folder, n).filter(|e| e.primitive.as_deref() == Some("Teleport")).is_some())
+        .map(|n| TeleportSpec { name: n })
+}
+
 /// One carried "Surprise Attack" — "Counts as having Infiltrate. The first
 /// time this unit is activated, pick one enemy unit within 6\" in line of
 /// sight, and roll X dice. For each 2+ it takes one hit with AP(1)." The
@@ -4757,6 +4781,7 @@ impl UnitStatic {
             mind_control: mind_control_of(reg, p, rules_epoch),
             retreating_strikes: retreating_strikes_of(reg, p, rules_epoch),
             ebr: ebr_of(reg, p, rules_epoch),
+            teleport: teleport_of(reg, p, rules_epoch),
             growth: growth_of(reg, p, &mut unimplemented),
             piercing_tags: piercing_tags_of(reg, p, rules_epoch),
             unimplemented,

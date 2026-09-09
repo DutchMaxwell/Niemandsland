@@ -44,6 +44,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         move_bands: MoveBands::default(),
     };
     let st = nml_core::State {
+        teleport_used: vec![false; 4],
         roster: Rc::new(Roster {
             keys: vec!["a".into(), "b".into()],
             index: HashMap::new(),

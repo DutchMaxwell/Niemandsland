@@ -81,8 +81,7 @@ use crate::sim::{ctx_live, ctx_of, resolve_stochastic_tray_on_board, HOLD};
             charge: None,
             patient: false,
             split: None,
-            traced: None,
-        };
+            traced: None, teleport: None, };
         let mut rng = GodotRng::new(0);
         let mut tray = Tray::seeded(9);
         resolve_stochastic_tray_on_board(

@@ -553,6 +553,10 @@ pub struct State {
     /// (sim.rs) is gated on this latch and on `EPOCH_7_TABLE_RULES`, so a
     /// record below 7 never carries the key.
     pub feats_used: Vec<Vec<String>>,
+    /// Wave 5 — `unit_properties["teleport_used_this_activation"]` (main.gd
+    /// :17456; the beat erases it at its start — reset semantics). The beat's
+    /// reads sit behind `EPOCH_8_PLANNER_MENU` (#831's epoch-8 move).
+    pub teleport_used: Vec<bool>,
 }
 
 impl State {

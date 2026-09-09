@@ -88,7 +88,7 @@
             growth_markers: vec![0; 4],
             vengeance_markers: vec![0; 4],
             growth_round: vec![-1; 4],
-            second_wind_used: vec![false; 4],
+            second_wind_used: vec![false; 4], teleport_used: vec![false; 4],
             reinforcement_used: vec![false; 4],
             second_wind_round: -1,
             second_wind_uses: 0,
@@ -176,7 +176,7 @@
     }
 
     fn storm_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None, }
     }
 
     fn run_storm(
@@ -545,8 +545,7 @@
             charge: None,
             patient: false,
             split: None,
-            traced: None,
-        };
+            traced: None, teleport: None, };
         let terrain = crate::terrain::Terrain::default();
         let mut tray = Tray::seeded(27);
         let mut rng = crate::rng::GodotRng::new(0);
@@ -611,7 +610,7 @@
     }
 
     fn mend_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None, }
     }
 
 
@@ -682,8 +681,7 @@
             charge: None,
             patient: false,
             split: None,
-            traced: None,
-        }
+            traced: None, teleport: None, }
     }
 
     /// Runs one fixture activation on a fresh tray and hands back the state and
@@ -782,8 +780,7 @@
             charge: None,
             patient: false,
             split: None,
-            traced: None,
-        }
+            traced: None, teleport: None, }
     }
 
     fn advance_shoot(target: &str) -> Action {
@@ -825,7 +822,7 @@
     }
 
     fn reposition_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None, }
     }
 
 
@@ -871,7 +868,7 @@
     }
 
     fn breath_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None, }
     }
 
 
@@ -908,8 +905,7 @@
             charge: None,
             patient: false,
             split: None,
-            traced: None,
-        }
+            traced: None, teleport: None, }
     }
 
     /// A lone 4-model unit (Tough 1, Quality 4+) — row 12 (`dangerous_end_morale`,
@@ -1009,8 +1005,7 @@
     fn vr_charge() -> Action {
         Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
-            charge: Some("b".into()), patient: false, split: None, traced: None,
-        }
+            charge: Some("b".into()), patient: false, split: None, traced: None, teleport: None, }
     }
 
     /// The seam-armed resolver run every VR charge test replays: the M4
@@ -1444,8 +1439,7 @@
                 charge: None,
                 patient: false,
                 split: None,
-                traced: None,
-            }
+                traced: None, teleport: None, }
         }
 
         fn centre_matrix(st: &State, terrain: &Terrain) -> Vec<bool> {
@@ -1541,6 +1535,7 @@ mod half_primitives;
 mod hit_and_run;
 mod hit_and_run_boost_band;
 mod grounded_speed;
+mod teleport;
 mod hit_and_run_score;
 mod instinctive;
 mod limited_weapons;

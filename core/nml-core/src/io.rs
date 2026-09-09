@@ -222,7 +222,18 @@ pub(crate) struct PlainLedger {
     /// act replays with the latch CLOSED. Empty on every older corpus.
     #[serde(default)]
     feats_used: Vec<String>,
+    /// Wave 5 (PR 1's recorder): the `{"used", "to"}` block; `to` arrives as the `"(x, y)"` Vector2 string.
+    #[serde(default)]
+    teleport: Option<PlainTeleport>,
 }
+
+/// The `teleport` block; `to` is a `[x, y]` pair or a `"(x, y)"` string.
+#[derive(Deserialize)]
+pub(crate) struct PlainTeleport { #[serde(default)] used: bool, to: Vec2Wire }
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum Vec2Wire { Pair([f64; 2]), Str(String) }
 
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
 /// `BattleSim.charge_illegal_plain` (battle_sim.gd:1563) reads for an absent key.
@@ -283,6 +294,9 @@ pub struct Action {
     /// count and face stays port-computed. Absent = the act's one target.
     #[serde(default)]
     pub split: Option<Vec<SplitShot>>,
+    /// Wave 5 — the record's landing centroid (joined off the NEXT act's ledger).
+    #[serde(default)]
+    pub teleport: Option<[f64; 2]>,
     /// NML-1152 B14 step 1 (Bounding) — the table's own controller-seeded
     /// placement roll(s) for THIS activation, joined on from `act_recorder.gd`'s
     /// `AiActRecorder.traced` line the same way `split` is joined from
@@ -757,6 +771,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         piercing_tag_markers: vec![0; n],
         storm_used: vec![Vec::new(); n],
         feats_used: vec![Vec::new(); n],
+        teleport_used: vec![false; n],
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
             // Read the matrix in its own (key-sorted) order and STORE it in
             // roster order, so `_los_clear`'s port can index it with roster
@@ -850,6 +865,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
             st.reinforcement_used[ui] = ledger.reinforcement_used;
             st.storm_used[ui] = ledger.storm_used.clone();
             st.feats_used[ui] = ledger.feats_used.clone();
+            st.teleport_used[ui] = ledger.teleport.as_ref().map(|t| t.used).unwrap_or(false);
             st.growth_markers[ui] = ledger.growth;
             st.vengeance_markers[ui] = ledger.vengeance_markers;
             // `growth_round` has no key of its own on the wire (see
