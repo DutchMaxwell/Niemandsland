@@ -950,6 +950,7 @@ fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff, rules_epoch: u32) 
         scope: Rc::from(b.scope.as_str()),
         attackers: b.beneficiary == "attackers",
         once: b.once,
+        name: Rc::from(b.name.as_str()),
     });
     if widened {
         trace_rule("utility-buff", &b.name, "ap/def row recorded (epoch 7)");
@@ -1112,13 +1113,15 @@ fn ebr_relay_has_hero(
 
 /// `main._solo_consume_once_mods` :3823-3841 — one resolved exchange spends
 /// every `once` record that was AVAILABLE to it: the attacker's own hit mods
-/// and rule grants, the defender's attackers-beneficiary mods and grants. The
-/// two roles this port has no seam for — the defender's "defense" and the
-/// shooter's "range" — are simply not in the ledger yet, so they cannot be
-/// spent either; that is the same gap, not a second one.
+/// and rule grants, the defender's attackers-beneficiary mods and grants.
+/// SEAM 4 step 2 adds the two knobs whose seams now exist: the shooter-side
+/// `ap_mod` (Piercing Debuff's "loses AP(+1) when attacking") and the
+/// defender's "defense" role (ai_spell.gd:352 — the `def_mod`/`defense_mod`
+/// roll-bonus pair). The "range"/"speed" roles stay absent — their seams do
+/// not exist yet, the same gap, not a second one.
 fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool) {
-    mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Grant], melee);
-    mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Grant, mods::Role::GrantVs], melee);
+    mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant], melee);
+    mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Defense, mods::Role::Grant, mods::Role::GrantVs], melee);
 }
 
 /// `main._solo_apply_vs_marks` :16738-16771 — the ENEMY-side half of the
@@ -1171,6 +1174,7 @@ fn tray_vs_marks(
                 scope: Rc::from(""),
                 attackers: false,
                 once: true,
+                name: Rc::from(b.name.as_str()),
             });
         }
     }
@@ -2245,6 +2249,24 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // byte-exact.
     if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
         c.vs_hit_mod += state.vengeance_markers[state.attached_to[i].unwrap_or(i)];
+    }
+    // SEAM 4 step 2 (design §4 step 2, the FROZEN `EPOCH_7_TABLE_RULES`) —
+    // the ledger's two new knobs, summed the way `hit_mod` is:
+    //   ap_mod — "loses AP(+1) when attacking" (Piercing Debuff): the
+    //     DEBUFFED unit's own attacks ride AP one lower, floored by the
+    //     existing `max(0)` at the dice save target.
+    //   defense_mod — the "+/-X to defense rolls" pair (Defense Buff's
+    //     `def_mod`, Defense Debuff's `defense_mod`, same axis): a ROLL
+    //     bonus, so the stamp carries the NEGATED sum and the save rung
+    //     folds `defense + defense_mod` — the covered/Shielded shape
+    //     (cover's own "+1 to Defense rolls" is `defense - 1`), floored at
+    //     `BEST_HIT_TARGET` in dice::save_batch. EV-only paths never call
+    //     ctx_live and stay blind; a record below 7 carries no knobs (the
+    //     PR 1 reader gate) and this fold is gated here as well.
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        let un = &statics[state.roster.profile[i]].name;
+        c.ap_mod = mods::sum_logged(state, i, mods::Role::Ap, melee, un, "AP", |r| r.ap_mod);
+        c.defense_mod = -mods::sum_logged(state, i, mods::Role::Defense, melee, un, "defense", |r| r.def_mod + r.defense_mod);
     }
     c.unstoppable_grant = mods::granted(state, i, "Unstoppable");
     // DEFECT_LEDGER #33 — a live "Furious" grant (a spell cast, same shape as
@@ -3737,6 +3759,7 @@ fn apply_cast_effect(
             scope: Rc::from(""),
             attackers: entry.beneficiary == "attackers",
             once: true,
+            name: Rc::from(""),
         });
     }
     let m = entry.modifier;
@@ -5994,6 +6017,7 @@ mod cast_fold_tests {
         let live_mod = |casting_mod: i64| mods::LiveMod {
             hit_mod: 0, casting_mod, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
             grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false,
+            name: Rc::from(""),
         };
         let damage = |s: &State| (1000 - s.wounds[3][0]) as f64 + s.wound_frac[3];
 

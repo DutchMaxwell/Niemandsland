@@ -45,11 +45,21 @@ pub struct LiveMod {
     /// `duration == "once"` — spent by the first exchange that could have used
     /// it (`_solo_consume_once_mods` main.gd:3823).
     pub once: bool,
+    /// The record's own name — the table's `spell` key (main.gd:3751), what
+    /// `_solo_log_defense_parts` names each contribution by (main.gd:5560).
+    /// SEAM 4 step 2: carried for the rules-must-log line only; no fold reads
+    /// it, and the census never counts it (it is the record's NAME key, not a
+    /// rule param).
+    pub name: Rc<str>,
 }
 
-/// `AiSpell.mods_for`'s `role` argument (ai_spell.gd:346-355). The two roles
-/// this port has no seam for yet — "defense" and "range"/"speed" — are absent
-/// for the same reason their fields are.
+/// `AiSpell.mods_for`'s `role` argument (ai_spell.gd:346-355). The "range"/
+/// "speed" roles this port has no seam for yet are absent for the same reason
+/// their fields are. `Defense` is the GDScript's own "defense" role
+/// (ai_spell.gd:352) — its record knob `def_mod` is a "+/-X to defense rolls"
+/// ROLL bonus, so `_solo_defense_vs` folds it `base - bonus` (main.gd:5510).
+/// `Ap` is the attacker-side family of "attacker_own" for the flat AP knob
+/// Piercing Debuff carries ("loses AP(+1) when attacking").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     AttackerOwn,
@@ -58,6 +68,8 @@ pub enum Role {
     Morale,
     Grant,
     GrantVs,
+    Ap,
+    Defense,
 }
 
 /// `AiSpell.mods_for` ai_spell.gd:364-400, one record.
@@ -74,6 +86,8 @@ pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
         Role::Morale => r.morale_mod != 0,
         Role::Grant => !r.attackers && !r.grants_rule.is_empty(),
         Role::GrantVs => r.attackers && !r.grants_rule.is_empty(),
+        Role::Ap => !r.attackers && r.ap_mod != 0,
+        Role::Defense => !r.attackers && (r.def_mod != 0 || r.defense_mod != 0),
     }
 }
 
@@ -85,6 +99,35 @@ pub fn sum(state: &State, i: usize, role: Role, melee: bool, f: impl Fn(&LiveMod
         for r in &state.buffs[u] {
             if matches(r, role, melee) {
                 total += f(r);
+            }
+        }
+    }
+    total
+}
+
+/// SEAM 4 step 2 — `sum` with the rules-must-log line on every FIRING record:
+/// `[utility-buff] <name> — <kind> <+/-n> on <unit>` (the trace_rule shape,
+/// NML_TRACE_RULES=1). `sum`'s own callers stay silent — the hit/casting/
+/// morale reads predate the logging rule and their parity is pinned without
+/// stderr.
+pub fn sum_logged(
+    state: &State,
+    i: usize,
+    role: Role,
+    melee: bool,
+    unit: &str,
+    kind: &str,
+    f: impl Fn(&LiveMod) -> i64,
+) -> i64 {
+    let mut total = 0;
+    for u in [Some(i), state.attached_to[i]].into_iter().flatten() {
+        for r in &state.buffs[u] {
+            if matches(r, role, melee) {
+                let v = f(r);
+                if v != 0 {
+                    total += v;
+                    crate::sim::trace_rule("utility-buff", &r.name, &format!("{kind} {v:+} on {unit}"));
+                }
             }
         }
     }

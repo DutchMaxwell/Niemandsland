@@ -342,7 +342,14 @@ fn save_batch(
     // fields are zero unless `sim::ctx_live` folded them behind
     // `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`, so pre-epoch corpora
     // replay byte-exact.
-    let target = save_target(defense + def.growth_def_mod, (eff_ap + def.growth_fortify_ap).max(0));
+    // SEAM 4 step 2 (epoch 7) — the ledger's `defense_mod` rides the SAME
+    // rung: the stamp already carries the negated roll sum (a "+1 to
+    // defense rolls" text lowers the rung, the covered/Shielded shape) and
+    // the floor is the clamp the Shielded fold uses. Zero below epoch 7.
+    let target = save_target(
+        (defense + def.growth_def_mod + def.defense_mod).max(BEST_HIT_TARGET),
+        (eff_ap + def.growth_fortify_ap).max(0),
+    );
     let faces = tray.roll(count as usize);
     out.rolls.push(Roll {
         kind: "defense",
@@ -1012,7 +1019,11 @@ pub fn resolve_volley_with_tray(
             // seam stamps it while the #827 latch is open): AP(+1) on every
             // attack of this activation, the `any_attack` condition's own
             // reading.
-            + att.feat_ap_bonus;
+            + att.feat_ap_bonus
+            // SEAM 4 step 2 (epoch 7) — Piercing Debuff's "loses AP(+1) when
+            // attacking": the DEBUFFED unit's own volley rides `ap_mod` one
+            // lower, floored like every AP sum by save_target's `max(0)`.
+            + att.ap_mod;
         // Wave 2 — the "AP(+1) when shooting" mark's flat AP, off its
         // epoch-gated Ctx leg (`sim::ctx_live`).
         if att.pierce_shooting_grant {
@@ -1477,6 +1488,10 @@ pub fn resolve_melee_with_tray(
                 // FEAT PR 3 — Piercing Feat's once-per-game window, the melee
                 // half of the volley seam's stamp (see the volley fold above).
                 + sh.att.feat_ap_bonus
+                // SEAM 4 step 2 (epoch 7) — the same `ap_mod` net's melee
+                // half; the charging/assault leg is this fold's own sum (the
+                // pierce-assault site below is the CONDITIONAL family).
+                + sh.att.ap_mod
                 + if charging && (p.thrust || sh.att.thrust_grant) { THRUST_AP_BONUS } else { 0 }
                 + if sh.att.pierce_melee_grant { 1 } else { 0 };
             // Rung I — the melee half of the same `cond_ap` fold, same

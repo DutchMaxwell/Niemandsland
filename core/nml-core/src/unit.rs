@@ -249,6 +249,21 @@ pub struct Ctx {
     /// `_solo_spell_hit_mod_vs(target, melee)` main.gd:3800 — the net every unit
     /// attacking THIS one gets (`beneficiary: "attackers"`).
     pub vs_hit_mod: i64,
+    /// SEAM 4 step 2 (epoch 7) — the ledger's attacker-side AP net: what THIS
+    /// unit's own attacks lose or gain, `ap + ap_mod` at the three pierce
+    /// sites (dice.rs shooting / melee / the charging melee leg), floored by
+    /// the same `max(0)` every AP sum already rides. Piercing Debuff ("loses
+    /// AP(+1) when attacking") lands here as -1. ZERO on every `ctx_of`.
+    pub ap_mod: i64,
+    /// SEAM 4 step 2 (epoch 7) — the ledger's DEFENDER-side rung delta: the
+    /// net of the record knobs `def_mod` (Defense Buff) and `defense_mod`
+    /// (Defense Debuff), both of whose texts say "+/-X to defense rolls" — a
+    /// ROLL bonus, so the rung folds `defense + defense_mod` with the stamp
+    /// carrying the NEGATED roll sum (the covered/Shielded shape: cover's
+    /// own "+1 to Defense rolls" is `defense - 1`). Floored at
+    /// `BEST_HIT_TARGET`, the clamp the Shielded fold uses. ZERO on every
+    /// `ctx_of`.
+    pub defense_mod: i64,
     /// A live `grants_rule: "Unstoppable"` on this unit's joined chain — the
     /// dynamic half of `_solo_ignores_regen`'s last line (main.gd:6941,
     /// `AiEv.has_exact_rule`). It reaches the Regeneration bypass and NOTHING
@@ -2125,6 +2140,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         instinctive_hit_bonus,
         hit_mod: 0,
         vs_hit_mod: 0,
+        ap_mod: 0,
+        defense_mod: 0,
         melee_hit_bonus,
         melee_hit_bonus_charge,
         unstoppable_grant: false,

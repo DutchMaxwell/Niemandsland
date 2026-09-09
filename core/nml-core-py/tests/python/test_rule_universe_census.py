@@ -179,7 +179,7 @@ def test_stamped_vs_ported_on_a_shared_primitive(tmp_path):
         (root / d).mkdir(parents=True)
     (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
         "common": {
-            "Buff Stamped": {"primitive": "Utility Buff", "params": {"def_mod": -1}},
+            "Buff Stamped": {"primitive": "Utility Buff", "params": {"move_mod": -1}},
             "Buff Consumed": {"primitive": "Utility Buff", "params": {"hit_mod": 1}},
         },
         "factions": {},

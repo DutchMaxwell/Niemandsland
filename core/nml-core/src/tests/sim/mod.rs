@@ -724,7 +724,7 @@
         st.buffs[0].push(mods::LiveMod {
             hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
             grants_rule: Rc::from(rule),
-            scope: Rc::from(""), attackers: false, once: true,
+            scope: Rc::from(""), attackers: false, once: true, name: Rc::from(""),
         });
         (statics, st)
     }
@@ -749,6 +749,7 @@
             scope: Rc::from("shooting"),
             attackers: true,
             once: true,
+            name: Rc::from(""),
         }
     }
 
@@ -1525,6 +1526,7 @@
 // family adds ONE line to this ALPHABETICAL list plus its own file; the
 // fixtures every family shares stay here, in the module root.
 mod ap_def_record;
+mod ap_def_reads;
 mod breath_attack;
 mod breath_score;
 mod buff_consumption_bridge;

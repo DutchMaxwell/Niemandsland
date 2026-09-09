@@ -421,13 +421,18 @@ _CONSUMED_PARAM_ROWS: tuple[ConsumedParams, ...] = (
     # grant-only entries' records land in the ledger (sim.rs::record_buff)
     # but their nine granted names (Dangerous/Difficult Terrain, Slow, Fast,
     # Swift, Entrenched, Rapid Advance, Rapid Rush, Rapid Charge) are read at
-    # NO granted()/granted_vs() call site; defense_mod/def_mod, ap_mod,
-    # move_mod and range_bonus_in are not modeled on unit.rs's UtilityBuff,
-    # so record_buff drops the all-zero row. The pick gates (range_in/
-    # target/needs_los/max_targets/once/beneficiary) are read only to shape
-    # the pick, never the effect - listing one would flip all 16 while their
-    # effects stay unread, the exact #489 shape this table exists to prevent.
-    ConsumedParams("Utility Buff", frozenset({"hit_mod", "morale_mod", "casting_mod"})),
+    # NO granted()/granted_vs() call site; move_mod and range_bonus_in are
+    # not modeled on unit.rs's UtilityBuff, so record_buff drops the
+    # all-zero row. SEAM 4 (PR 1 record shape, PR 2 the reads): ap_mod,
+    # def_mod and defense_mod are read at rules_epoch 7 — sim::ctx_live sums
+    # them (mods::Role::Ap / Role::Defense), dice.rs folds `ap + ap_mod` at
+    # the pierce sites and `defense + defense_mod` at the save rung.
+    # Piercing Debuff (gf), Defense Buff (aof), Defense Debuff (aof+gf): +3.
+    # The pick gates (range_in/target/needs_los/max_targets/once/beneficiary)
+    # are read only to shape the pick, never the effect - listing one would
+    # flip all 16 while their effects stay unread, the exact #489 shape this
+    # table exists to prevent.
+    ConsumedParams("Utility Buff", frozenset({"hit_mod", "morale_mod", "casting_mod", "ap_mod", "def_mod", "defense_mod"})),
     # Block B9: deployment.rs::deploy_side reads the registry's `place_in`
     # (UnitSpec.place_in_m via list_to_profile.py:_deploy_flags — the table's
     # `unit_param(unit, "Vanguard", "place_in", 9.0)`, solo_controller.gd:9627)

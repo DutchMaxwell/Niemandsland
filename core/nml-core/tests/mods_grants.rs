@@ -162,6 +162,7 @@ fn grant(rule: &str, scope: &str, once: bool) -> LiveMod {
         scope: scope.into(),
         attackers: false,
         once,
+        name: std::rc::Rc::from(""),
     }
 }
 
