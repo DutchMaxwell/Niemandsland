@@ -25,7 +25,7 @@ use std::rc::Rc;
 
 use serde_json::{json, Value};
 
-use crate::acts::{rule_on, Knobs, EPOCH_7_TABLE_RULES};
+use crate::acts::{rule_on, Knobs, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::deployment::{self, ArrivalZone, Occupied, Rect};
 use crate::io::Seams;
 use crate::menu::Candidate;
@@ -874,7 +874,11 @@ pub fn mint_template_slot(
 }
 /// The summon half of the S5 seam — `Spawn` (SPAWN_DESIGN_2026-09-08 §3.3).
 pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams, st: &mut State) {
-    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+    // ONE gate, the frozen EPOCH_8_PLANNER_MENU: the named-template beat is
+    // the seam 8 owns (a new unit in the rollout changes later menus) — a
+    // record below 8 crosses the boundary byte-identically, and nothing
+    // looks up a template it cannot have.
+    if !rule_on(seams.rules_epoch, EPOCH_8_PLANNER_MENU) {
         return;
     }
     let Some(table) = table_rect(terrain) else {
