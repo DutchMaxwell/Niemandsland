@@ -1041,8 +1041,11 @@ mod tests {
     /// pins that the v6 legacy reading carries NONE of the 12.
     #[test]
     fn every_appended_v7_unit2_name_sits_at_its_slot() {
-        let v = RowVocab::load(&repo_root());
+        // Pinned to the V7 reading, not `load()`: since v8 appends to the
+        // same band (1001-1016), the v7 pins must travel with their version.
+        let v = RowVocab::for_version(&repo_root(), 7);
         assert!(v.loaded, "{:?}", v.error);
+        assert_eq!(v.version, 7);
         assert_eq!(v.unit.len(), 200, "unit band unchanged");
         assert_eq!(v.weapon.len(), 25, "weapon band unchanged");
         assert_eq!(v.spell.len(), 463, "spell band unchanged");
@@ -1079,15 +1082,92 @@ mod tests {
     /// test above depends on its own predecessor's slots staying put.
     #[test]
     fn the_v7_append_does_not_move_any_v6_slot() {
-        let now = RowVocab::load(&repo_root());
+        // The v7 reading, not `load()` — v8 appends after this band.
+        let now = RowVocab::for_version(&repo_root(), 7);
         let old = RowVocab::for_version(&repo_root(), 6);
         assert!(old.loaded, "{:?}", old.error);
         assert_eq!(old.version, 6);
+        assert_eq!(now.version, 7);
         assert_eq!(old.unit.len(), now.unit.len(), "no unit name appended");
         assert_eq!(old.weapon.len(), now.weapon.len(), "no weapon name appended");
         assert_eq!(old.spell.len(), now.spell.len(), "no spell name appended");
         assert_eq!(old.unit2.len(), 226, "the v6 unit2 band as recorded");
         assert_eq!(now.unit2.len(), 238, "the 12 names appended after it");
+        for (name, slot) in &old.unit {
+            assert_eq!(now.unit.get(name), Some(slot), "slot of {name} moved");
+        }
+        for (name, slot) in &old.weapon {
+            assert_eq!(now.weapon.get(name), Some(slot), "slot of {name} moved");
+        }
+        for (name, slot) in &old.spell {
+            assert_eq!(now.spell.get(name), Some(slot), "slot of {name} moved");
+        }
+        for (name, slot) in &old.unit2 {
+            assert_eq!(now.unit2.get(name), Some(slot), "slot of {name} moved");
+        }
+    }
+
+    /// unit2 (v8, 10.09.) — the 16 names ported since v7 (the maintainer's
+    /// call: v8 lands BEFORE the Gen-7 export), appended at 1001-1016 (the
+    /// v7 band's 763-988 + 226 + 12) in ALPHABETICAL order as listed by the
+    /// brief. This is the PREFIX test: it hardcodes every appended name's
+    /// exact slot, so a base-offset bug (the append landing on top of 1000,
+    /// say) fails here loudly instead of silently colliding two bands — and
+    /// it also pins that the v7 legacy reading carries NONE of the 16.
+    #[test]
+    fn every_appended_v8_unit2_name_sits_at_its_slot() {
+        let v = RowVocab::load(&repo_root());
+        assert!(v.loaded, "{:?}", v.error);
+        assert_eq!(v.unit.len(), 200, "unit band unchanged");
+        assert_eq!(v.weapon.len(), 25, "weapon band unchanged");
+        assert_eq!(v.spell.len(), 463, "spell band unchanged");
+        assert_eq!(v.unit2.len(), 254, "238 v7 names + the 16 appended");
+        let old = RowVocab::for_version(&repo_root(), 7);
+        assert!(old.loaded, "{:?}", old.error);
+        for (slot, name) in [
+            (1001, "Defense Buff"),
+            (1002, "Defense Debuff"),
+            (1003, "Entrenched Buff"),
+            (1004, "Grounded Speed"),
+            (1005, "Piercing Debuff"),
+            (1006, "Piercing Feat"),
+            (1007, "Precision Feat"),
+            (1008, "Rapid Advance"),
+            (1009, "Rapid Rush"),
+            (1010, "Rapid Rush Aura"),
+            (1011, "Reinforcement"),
+            (1012, "Spawn"),
+            (1013, "Speed Feat"),
+            (1014, "Surprise Attack"),
+            (1015, "Teleport Aura"),
+            (1016, "Vengeance"),
+        ] {
+            assert_eq!(v.unit2.get(name), Some(&slot), "unit2 slot of {name}");
+            assert_eq!(old.unit2.get(name), None, "{name} had no slot under v7");
+        }
+        let mut slots: Vec<_> = v.unit2.values().copied().collect();
+        slots.sort_unstable();
+        slots.dedup();
+        assert_eq!(slots.len(), v.unit2.len(), "no name shares a slot");
+    }
+
+    /// unit2 (v8) — the append does not move a SINGLE slot any earlier
+    /// version already handed out: every name the v7 reading carries sits on
+    /// the identical slot under v8, in ALL FOUR bands. A v7-recorded corpus
+    /// (the Gen-6 shard export's `encoder_vocab_version` stamp) depends on
+    /// this exactly the way the v6 test above depends on its own
+    /// predecessor's slots staying put.
+    #[test]
+    fn the_v8_append_does_not_move_any_v7_slot() {
+        let now = RowVocab::load(&repo_root());
+        let old = RowVocab::for_version(&repo_root(), 7);
+        assert!(old.loaded, "{:?}", old.error);
+        assert_eq!(old.version, 7);
+        assert_eq!(old.unit.len(), now.unit.len(), "no unit name appended");
+        assert_eq!(old.weapon.len(), now.weapon.len(), "no weapon name appended");
+        assert_eq!(old.spell.len(), now.spell.len(), "no spell name appended");
+        assert_eq!(old.unit2.len(), 238, "the v7 unit2 band as recorded");
+        assert_eq!(now.unit2.len(), 254, "the 16 names appended after it");
         for (name, slot) in &old.unit {
             assert_eq!(now.unit.get(name), Some(slot), "slot of {name} moved");
         }
