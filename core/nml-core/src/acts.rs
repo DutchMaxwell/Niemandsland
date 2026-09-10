@@ -527,6 +527,12 @@ impl Default for Knobs {
 #[derive(Deserialize)]
 struct Header {
     profiles: Ordered<Profile>,
+    /// S5 (SPAWN_DESIGN_2026-09-08 §3.1) — the recorder's resolved NAMED-unit
+    /// profiles, keyed `spawn:<carrier_key>:<rule_string>`, same unit shape.
+    /// Optional; absent below the `EPOCH_8_PLANNER_MENU` gate and in every
+    /// record with no Spawn carrier.
+    #[serde(default)]
+    spawn_profiles: Option<Ordered<Profile>>,
     #[serde(default)]
     terrain: Option<PlainTerrain>,
     #[serde(default)]
@@ -792,10 +798,10 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
             header.knobs.eval_variant
         ));
     }
-    Ok(header_of(header))
+    header_of(header).map_err(|e| format!("act header: {e}"))
 }
 
-fn header_of(header: Header) -> ActHeader {
+fn header_of(header: Header) -> Result<ActHeader, String> {
     let terrain = match &header.terrain {
         Some(t) => Terrain::build(t),
         None => Terrain::absent(),
@@ -805,7 +811,13 @@ fn header_of(header: Header) -> ActHeader {
         profiles.index.insert(k, profiles.list.len());
         profiles.list.push(p);
     }
-    ActHeader { profiles: Rc::new(profiles), terrain, knobs: header.knobs }
+    crate::io::index_spawn_profiles(
+        &mut profiles,
+        header.spawn_profiles,
+        "",
+        header.knobs.rules_epoch,
+    )?;
+    Ok(ActHeader { profiles: Rc::new(profiles), terrain, knobs: header.knobs })
 }
 
 /// Reads `acts.jsonl` into the profile table, the board and the activations.
