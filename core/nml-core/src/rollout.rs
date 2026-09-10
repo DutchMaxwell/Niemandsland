@@ -418,6 +418,7 @@ impl<'a> Rollout<'a> {
                         self.policy.seams,
                         &mut cur,
                     );
+                    spawn_round_start(self.statics(), self.policy.terrain, self.policy.seams, &mut cur);
                     continue;
                 }
             }
@@ -872,16 +873,89 @@ pub fn mint_template_slot(
     j
 }
 /// The summon half of the S5 seam — `Spawn` (SPAWN_DESIGN_2026-09-08 §3.3).
-/// STUB (2b-2b RED): the beat is DECLARED — the wiring call site follows in
-/// GREEN — but does nothing yet, so the beat pins fail as ASSERTIONS (no
-/// copy minted), never as a compile error. GREEN fills the body from
-/// c441af08 on top of 2b-2a's mint.
-pub fn spawn_round_start(
-    _statics: &[UnitStatic],
-    _terrain: &Terrain,
-    _seams: Seams,
-    _cur: &mut State,
-) {
+pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams, st: &mut State) {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
+        return;
+    }
+    let Some(table) = table_rect(terrain) else {
+        return;
+    };
+    for i in 0..st.units() {
+        if st.dormant[i] || st.alive[i] <= 0 || st.reinforcement_used[i] {
+            continue;
+        }
+        // The part-3 refusal, same reason: the core has no detach transition,
+        // so a carrier with a joined hero (or one attached to a host) declines.
+        if !st.attached[i].is_empty() || st.attached_to[i].is_some() {
+            continue;
+        }
+        let us = &statics[st.roster.profile[i]];
+        if us.spawn.place_in <= 0.0 || !us.spawn.once_per_game || us.spawn.raw.is_empty() {
+            continue; // no reach, a latch the beat cannot model, or no template
+        }
+        // The template: part (a)'s map key, resolved off the record's own
+        // profile table. The loader REFUSES a record whose standing carrier
+        // lacks the entry (epoch >= 8), so a miss here is a pre-gate record
+        // replaying — skip, never a silent fallback to the carrier's profile.
+        let key = format!("spawn:{}:{}", st.key(i), us.spawn.raw);
+        let Some(&ti) = st.profiles.index.get(&key) else {
+            continue;
+        };
+        let p = &st.profiles.list[ti];
+        let n = us.spawn.count.max(1) as usize;
+        // The anchor: where the standing carrier's models centre. The table
+        // anchors on the ONE model that carries the raw entry (main.gd:17413);
+        // the unit centre is the same anchor at the port's granularity.
+        let n_alive = st.positions[i].len().max(1) as f64;
+        let (ax, az) = (
+            st.positions[i].iter().map(|q| q[0]).sum::<f64>() / n_alive,
+            st.positions[i].iter().map(|q| q[2]).sum::<f64>() / n_alive,
+        );
+        // The `place_in` CIRCLE around the anchor (`circle_zone`, main.gd:17505)
+        // with the anchor's own base radius folded into the reach; the search
+        // runs on the circle's table-clamped bounding square and every standing
+        // base blocks, the carrier's own included.
+        let radius_m = us.spawn.place_in * crate::IN2M + us.base_radius;
+        let footprint = deployment::deploy_footprint_offsets(n, p.base_radius, false);
+        let flying = has_special_rule(&p.special_rules, "Flying")
+            || has_special_rule(&p.special_rules, "Strider");
+        let mut occupied = live_bases(st);
+        let spot = deployment::arrive_one(
+            &ArrivalZone::Circle { center: (ax, az), radius_m, table },
+            &[(ax, az)],
+            &mut occupied,
+            &[],
+            &[],
+            0.0,
+            terrain,
+            deployment::deploy_footprint_radius(n, p.base_radius),
+            &footprint,
+            p.base_radius,
+            flying,
+        );
+        if !spot.0.is_finite() {
+            continue; // the circle is full — a summon is never half-made
+        }
+        let round = st.round;
+        let j = mint_template_slot(statics, st, i, ti, &us.spawn.raw);
+        deployment::arrive_unit(
+            st,
+            j,
+            spot,
+            round,
+            &crate::unit::UnitStatic { base_radius: p.base_radius, ..Default::default() },
+        );
+        st.reinforcement_used[i] = true;
+        // Rules-must-log: one stderr line when NML_TRACE_RULES=1.
+        crate::sim::trace_rule(
+            "round-start",
+            "Spawn",
+            &format!(
+                "{}: a fresh copy of {} models of {} ({}) stands within {:.1}\" of ({:.2},{:.2})",
+                st.key(i), n, p.name, key, us.spawn.place_in, ax, az
+            ),
+        );
+    }
 }
 
 pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
