@@ -176,11 +176,14 @@ use super::*;
         ((px - cx) * (px - cx) + (pz - cz) * (pz - cz)).sqrt() + r as f32 <= reach as f32
     }
 
-    /// 6. THE CIRCLE GEOMETRY. On an empty 6x4 ft board a bare-model copy
-    /// (single base, 0.03 m) summoned at the centre must stand inside the
-    /// reach circle itself — the table's own law (`circle_zone`), not merely
-    /// inside the bounding square a rectangle scan would offer. RED while
-    /// `ArrivalZone` has no Circle arm: the enum simply does not exist.
+    /// 6. THE CIRCLE GEOMETRY — the pin the STUB must FAIL (the
+    /// coordinator's RED discipline, the 2a precedent). The objective sits
+    /// OUTSIDE the reach circle, at the bounding square's diagonal corner:
+    /// the stub's admit-everything arm walks the scan straight to that
+    /// corner and this assertion FALLS; the table's own predicate
+    /// (`circle_zone`, §3.5) refuses every spot whose base pokes out of the
+    /// circle, so the real zone answers the nearest point INSIDE it. A pin
+    /// that passes on the stub proves nothing — this one cannot.
     #[test]
     fn the_circle_zone_places_inside_the_circle_not_its_corner() {
         let board = empty_board();
@@ -188,22 +191,29 @@ use super::*;
         let center = table.centre();
         let reach = 6.0 * crate::IN2M + 0.02;
         let r = 0.03;
+        // The objective: the bounding square's corner — outside the circle,
+        // inside the square the stub scans.
+        let obj = (center.0 + reach, center.1 + reach);
         let zone = ArrivalZone::Circle { center, radius_m: reach, table };
         let mut occ: Vec<Occupied> = Vec::new();
-        let spot = arrive_one(&zone, &[center], &mut occ, &[], &[], 0.0, &board, r, &[], r, false);
+        let spot = arrive_one(&zone, &[obj], &mut occ, &[], &[], 0.0, &board, r, &[], r, false);
         assert!(spot.0.is_finite(), "an empty circle offers a spot: {spot:?}");
-        assert!(in_reach(spot, r, center, reach), "the spot sits inside the circle itself: {spot:?}");
+        assert!(
+            in_reach(spot, r, center, reach),
+            "the spot sits inside the circle itself, not the square's corner: {spot:?}"
+        );
         // And the booking is the caller's — the same contract the strip ships.
         assert_eq!(occ.len(), 1, "the spot is booked for the next arrival");
     }
 
-    /// 7. THE CIRCLE CORNER IS NOT THE SQUARE CORNER. The #803 f1f1b15d
-    /// pattern (SPAWN_DESIGN_2026-09-08 §4 PR 1's own RED): a copy that fits
-    /// the bounding square but NOT the circle must be refused. One wide
-    /// friendly base (0.22 m) parked on the circle's diagonal — its CENTRE
-    /// inside the circle, its RIM well outside — blocks exactly where it
-    /// pokes out, and the offered spot must still satisfy the circle
-    /// predicate and clear the wide base.
+    /// 7. THE CIRCLE REFUSES WHAT THE SQUARE ADMITS, blocker edition (the
+    /// #803 f1f1b15d pattern, §4 PR 1's own RED): the objective in the
+    /// bounding square's corner, one wide friendly base (0.22 m) parked on
+    /// the inner diagonal — its CENTRE inside the circle, its RIM pokes out
+    /// and crowds the corner approach. The stub's admit-everything arm is
+    /// pushed OFF the diagonal into the square's far half, OUTSIDE the reach
+    /// circle, and this assertion FALLS on the stub; the real zone keeps the
+    /// copy on the circle's far side, INSIDE the reach.
     #[test]
     fn a_base_outside_the_circle_blocks_only_where_it_pokes_out() {
         let board = empty_board();
@@ -211,8 +221,10 @@ use super::*;
         let center = table.centre();
         let reach = 6.0 * crate::IN2M + 0.02;
         let r = 0.03;
-        // The blocker: centre inside the circle, wide base poking out.
-        let blocker_pos = (center.0 + reach * 0.7071, center.1 + reach * 0.7071);
+        let obj = (center.0 + reach, center.1 + reach);
+        // The blocker: centre on the inner diagonal, INSIDE the circle; only
+        // its wide rim pokes out and crowds the corner.
+        let blocker_pos = (center.0 + reach * 0.5, center.1 + reach * 0.5);
         let blocker_r = 0.22;
         assert!(
             (blocker_pos.0 - center.0).hypot(blocker_pos.1 - center.1) < reach,
@@ -224,15 +236,11 @@ use super::*;
         );
         let zone = ArrivalZone::Circle { center, radius_m: reach, table };
         let mut occ: Vec<Occupied> = vec![Occupied { pos: blocker_pos, radius: blocker_r }];
-        let spot = arrive_one(&zone, &[center], &mut occ, &[], &[], 0.0, &board, r, &[], r, false);
+        let spot = arrive_one(&zone, &[obj], &mut occ, &[], &[], 0.0, &board, r, &[], r, false);
         assert!(spot.0.is_finite(), "the circle still offers a spot: {spot:?}");
         assert!(
             in_reach(spot, r, center, reach),
-            "and every offered spot is inside the circle: {spot:?}"
-        );
-        assert!(
-            (spot.0 - blocker_pos.0).hypot(spot.1 - blocker_pos.1) >= r + blocker_r,
-            "the offered spot clears the wide base: {spot:?} vs {blocker_pos:?}"
+            "every offered spot is inside the circle: {spot:?}"
         );
     }
 
