@@ -786,6 +786,16 @@ fn reinforcement_withdrawals(statics: &[UnitStatic], st: &mut State) {
     }
 }
 
+/// RED stub — part (b) fills the beat in; the tests pin the behaviour, not
+/// the compile.
+pub fn spawn_round_start(
+    _statics: &[UnitStatic],
+    _terrain: &Terrain,
+    _seams: Seams,
+    _cur: &mut State,
+) {
+}
+
 pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
     cur.round += 1;
     // `counts` is a Dictionary keyed by player id: insertion order is first
