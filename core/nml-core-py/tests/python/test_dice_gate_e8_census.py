@@ -9,11 +9,12 @@ test: it runs wherever the corpus lives (`~/selfplay_out/qbg_ref_e8`, the gate
 host), replays every recorded CHARGE act with `movement=table`, and reports
 
   * `both_silent` count and the median recorded-vs-replayed CHARGER landing gap
-    of that bucket (the defect's own numbers — expect the median to fall below
-    0.5" once #857's executor fix is in),
-  * the melee dice-stream verdicts: a charge that fought before must fight
-    identically after, so every melee act whose recorded stream carries rolls
-    must replay them tuple-exact (the A-STREAM contract, charge acts only).
+    of that bucket (the defect's own numbers — the fix's job is to drive the
+    median from 2.940" toward < 0.5" without moving a single fought charge).
+
+The stream comparison is a survey number, not an assert: melee acts share
+their activation ordinal with later activations (the length confound every
+replay gate classifies), so a raw tuple compare parts on known-benign acts.
 
 The fixture parity pin lives on the Rust side
 (`core/nml-core/tests/charge857_fall_short.rs`); this is the corpus-wide census.
@@ -113,22 +114,24 @@ def centroid_gap(port: list, rec: list) -> float:
     return ((pc[0] - rc[0]) ** 2 + (pc[1] - rc[1]) ** 2) ** 0.5 / 0.0254
 
 
-@pytest.mark.timeout(3300)
-def test_the_e8_reference_census():
-    import nml_core
+needs_corpus = pytest.mark.skipif(
+    not CORPUS.is_dir() or _build_cannot_read_corpus(),
+    reason="needs the epoch-8 reference corpus qbg_ref_e8 and a vocab-7 build",
+)
 
-    try:
-        vocab = nml_core.rule_vocab_version()
-    except Exception:
-        vocab = -1
-    if not CORPUS.is_dir():
-        pytest.fail("error: E8 CENSUS PROBE corpus missing at %s (vocab=%s home=%s)" % (CORPUS, vocab, Path.home()))
+
+@pytest.mark.timeout(3300)
+@needs_corpus
+def test_the_e8_reference_census():
+    """The MEASUREMENT the PR quotes, kept as a running survey. The stream
+    comparison is deliberately NOT an assert: melee acts share their ordinal
+    with later activations (the length confound every replay gate classifies),
+    so a raw tuple compare parts on known-benign acts — 44/183 on unmodified
+    main, measured. The numbers this prints on a survey run are the defect's
+    vital signs: both_silent count and the bucket's median landing gap."""
     got = survey()
     med = statistics.median(got["gaps"]) if got["gaps"] else 0.0
-    # SURFACE THE CENSUS (temporary): the box gate only shows pytest failures,
-    # so the measurement rides a failure message until the PR quotes it.
-    pytest.fail(
-        "error: E8 CHARGE CENSUS games=%d melee_acts=%d both_silent=%d fought=%d "
-        "stream_equal=%d/%d both_silent_median_gap=%.3fin"
-        % (got["games"], got["melee_acts"], got["both_silent"], got["fought"],
-           got["stream_equal"], got["stream_acts"], med))
+    assert got["both_silent"] + got["fought"] == got["melee_acts"], (
+        "the census must classify every melee act: %r" % got)
+    assert got["melee_acts"] == 328 and got["games"] == 168, (
+        "the e8 reference's own composition moved: %r" % got)
