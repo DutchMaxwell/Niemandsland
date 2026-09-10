@@ -135,10 +135,11 @@ use super::*;
     /// strength the withdraw parked, which is the full one.
     #[test]
     fn the_parked_copy_returns_at_full_strength() {
-        let (mut st, _) = line(CURRENT_RULES_EPOCH);
+        let (mut st, statics) = line(CURRENT_RULES_EPOCH);
         let i = idx(&st, "p1_0_a");
         withdraw_as_destroyed(&mut st, i, 1);
-        arrive_unit(&mut st, i, (0.0, -0.5), 2);
+        let pi = st.roster.profile[i];
+        arrive_unit(&mut st, i, (0.0, -0.5), 2, &statics[pi]);
         assert_eq!(st.alive[i], 3, "three models back on the table");
         assert_eq!(st.wounds[i], vec![2, 2, 2], "unwounded, because the copy is new");
         assert!(!st.dormant[i] && st.earliest_arrival_round[i] == -1, "off the reserve books");

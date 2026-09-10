@@ -738,7 +738,7 @@ fn reinforcement_arrivals(statics: &[UnitStatic], terrain: &Terrain, st: &mut St
             continue; // the band is full — the promise keeps its date
         }
         let round = st.round;
-        deployment::arrive_unit(st, i, spot, round);
+        deployment::arrive_unit(st, i, spot, round, &statics[pi]);
     }
 }
 
