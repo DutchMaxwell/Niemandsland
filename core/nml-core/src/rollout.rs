@@ -786,6 +786,20 @@ fn reinforcement_withdrawals(statics: &[UnitStatic], st: &mut State) {
     }
 }
 
+/// STUB (2b-2a RED): the mint is DECLARED — its signature is the one the
+/// beat (2b-2b) will call — but the body does nothing yet, so the pin fails
+/// as an ASSERTION (no slot minted), never as a compile error. GREEN fills
+/// the body from c441af08.
+pub fn mint_template_slot(
+    _statics: &[UnitStatic],
+    _st: &mut State,
+    _carrier: usize,
+    _ti: usize,
+    _raw: &str,
+) -> usize {
+    0
+}
+
 pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
     cur.round += 1;
     // `counts` is a Dictionary keyed by player id: insertion order is first
