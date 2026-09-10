@@ -2,9 +2,10 @@
 """forge_mutants.py — ask a LOCAL model to kill ONE cargo-mutants survivor at a
 time. For each `missed.txt`-style survivor line: extract the enclosing Rust
 fn, fetch the mutant's unified diff (`cargo mutants --list --diff`), prompt a
-local Ollama model (default `JetBrains/mellum2-instruct-mxfp4_moe`,
-http://localhost:11434/api/generate) for exactly one `#[test]` fn, and decide
-by RUNNING THE MACHINE — never by reading the model's prose.
+local model (default `JetBrains/mellum2-instruct-mxfp4_moe`) for exactly one
+`#[test]` fn, and decide by RUNNING THE MACHINE — never by reading the model's
+prose. Transport: `--api ollama` (default, `/api/generate`) or `--api openai`
+(`<url>/v1/chat/completions`).
 
 ACCEPT rule, all four gates in order, any failure is a machine-checked REJECT:
   1. format — reply is exactly one ```rust block, exactly one fn, exactly one
@@ -20,11 +21,12 @@ Reject reasons: format, green_fail, not_killed, suite_broken, no_diff,
 patch_failed, error. The model's own opinion of its test never enters.
 
 Usage: forge_mutants.py --survivors missed.txt --crate core/nml-core --out OUT
-    [--limit N] [--apply] [--model NAME] [--dry-run] [--force-noop-diff]
+    [--limit N] [--apply] [--model NAME] [--api {ollama,openai}] [--url URL]
+    [--dry-run] [--force-noop-diff]
 --force-noop-diff is the RED proof: every target's "mutant diff" becomes a
 no-op, so gate 3 can never pass — proves the gate can actually fail.
 """
-import argparse, json, re, subprocess, sys, time, urllib.request
+import argparse, json, re, subprocess, sys, time, urllib.error, urllib.request
 from pathlib import Path
 
 TARGET_RE = re.compile(r'^(?P<file>\S+):(?P<line>\d+):(?P<col>\d+):\s*(?P<desc>.+)$')
@@ -172,12 +174,48 @@ def build_prompt(fn_name, fn_source, target, diff_text, sample, helpers):
               "<= 25 lines, house style, no prose, no comments explaining your reasoning."]
     return '\n'.join(parts)
 
+class ForgeAPIError(RuntimeError): pass
+
+
+def _request_json(url, payload):
+    req = urllib.request.Request(url, data=json.dumps(payload).encode(),
+                                 headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            status = getattr(resp, 'status', 200)
+            body = resp.read()
+    except urllib.error.HTTPError as e:
+        raise ForgeAPIError(f'HTTP {e.code} from {url}') from e
+    except urllib.error.URLError as e:
+        raise ForgeAPIError(f'connection to {url} failed: {e}') from e
+    try:
+        return json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise ForgeAPIError(f'non-JSON body from {url} (status {status})') from e
+
+
 def call_ollama(url, model, prompt):
-    payload = json.dumps({"model": model, "prompt": prompt, "stream": False,
-                           "options": {"num_ctx": 8192, "temperature": 0.2}}).encode()
-    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
-    with urllib.request.urlopen(req, timeout=300) as resp:
-        return json.loads(resp.read())
+    return _request_json(url, {"model": model, "prompt": prompt, "stream": False,
+                               "options": {"num_ctx": 8192, "temperature": 0.2}})
+
+
+def call_openai(base_url, model, prompt):
+    url = base_url.rstrip('/') + '/v1/chat/completions'
+    return _request_json(url, {"model": model,
+                               "messages": [{"role": "user", "content": prompt}],
+                               "stream": False, "temperature": 0})
+
+
+def extract_reply(data, api, url):
+    if api == 'openai':
+        try:
+            return data['choices'][0]['message']['content']
+        except (KeyError, IndexError, TypeError) as e:
+            raise ForgeAPIError(f'missing choices[0].message.content in JSON from {url}') from e
+    try:
+        return data['response']
+    except (KeyError, TypeError) as e:
+        raise ForgeAPIError(f'missing response in JSON from {url}') from e
 
 def extract_test(response_text):
     m = RUST_BLOCK_RE.search(response_text)
@@ -258,10 +296,16 @@ def process_target(n, t, crate_dir, out_dir, args, diffs):
         print(f'=== [{n}] {t["raw"]} ===\n{prompt}\n')
         return None
 
-    data = call_ollama(args.ollama_url, args.model, prompt)
-    base.update(prompt_tokens=data.get('prompt_eval_count'), eval_tokens=data.get('eval_count'),
-                seconds=data.get('total_duration', 0) / 1e9)
-    code, reason = extract_test(data.get('response', ''))
+    if args.api == 'openai':
+        data = call_openai(args.url, args.model, prompt)
+        usage = data.get('usage') or {}
+        base.update(prompt_tokens=usage.get('prompt_tokens'),
+                    eval_tokens=usage.get('completion_tokens'), seconds=None)
+    else:
+        data = call_ollama(args.url, args.model, prompt)
+        base.update(prompt_tokens=data.get('prompt_eval_count'), eval_tokens=data.get('eval_count'),
+                    seconds=data.get('total_duration', 0) / 1e9)
+    code, reason = extract_test(extract_reply(data, args.api, args.url))
     if reason:
         return {**base, 'reason': reason}
     original_text = Path(file_path).read_text()
@@ -290,7 +334,7 @@ def process_target(n, t, crate_dir, out_dir, args, diffs):
     except Exception as e:  # noqa: BLE001 — never leave the tree half-patched
         return reject(f'error: {e}')
 
-def main():
+def build_parser():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--survivors', required=True)
     ap.add_argument('--crate', default='core/nml-core')
@@ -298,11 +342,21 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--apply', action='store_true')
     ap.add_argument('--model', default='JetBrains/mellum2-instruct-mxfp4_moe')
-    ap.add_argument('--ollama-url', default='http://localhost:11434/api/generate')
+    ap.add_argument('--api', choices=('ollama', 'openai'), default='ollama',
+                    help='transport: ollama /api/generate (default), '
+                         'openai /v1/chat/completions')
+    ap.add_argument('--url', default='http://localhost:11434/api/generate',
+                    help='endpoint; for --api ollama the full /api/generate URL, '
+                         'for --api openai the base URL (gets /v1/chat/completions appended)')
+    ap.add_argument('--ollama-url', dest='url', default='http://localhost:11434/api/generate',
+                    help='deprecated alias for --url')
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--force-noop-diff', action='store_true',
                      help='RED proof: substitute a no-op diff for every target.')
-    args = ap.parse_args()
+    return ap
+
+def main():
+    args = build_parser().parse_args()
 
     crate_dir = Path(args.crate).resolve()
     out_dir = Path(args.out)
