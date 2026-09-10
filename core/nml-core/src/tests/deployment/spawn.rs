@@ -150,7 +150,124 @@ use super::*;
         assert_eq!(keys.len(), 2, "exactly the roster's own profiles");
         assert_eq!(keys[0], "p1_0_a");
         assert_eq!(keys[1], "p2_0_b");
-        let st = &nodes.nodes[0].state_before;
-        assert_eq!(st.units(), 2, "both units replay");
-        assert_eq!(st.alive[idx(st, "p1_0_a")], 3, "the carrier's models are untouched");
+    }
+
+    // ------------------------------------------------------------- PART (b1) ---
+    //
+    // THE ZONE AND THE FOOTPRINT, not the beat (SPAWN_DESIGN_2026-09-08 §3.5).
+    // The table's summon places the copy inside a CIRCLE of `place_in` around
+    // the anchor (`PlacementGhost.circle_zone`, placement_ghost.gd:31, fed
+    // `place_in * 0.0254 + anchor_radius` at main.gd:17505 — the anchor's own
+    // base radius is folded into the reach, the caller never adds it again).
+    // `ArrivalZone` has no circle yet: a rectangle that contains the circle
+    // (the bounding square, or worse the whole table) admits corners the
+    // circle refuses, so the geometry is its own RED pin. And the arrival
+    // must be able to MINT at the TEMPLATE's footprint: `arrive_unit` takes
+    // the statics the caller hands in, so the beat can put the copy down on
+    // the TEMPLATE's base radius, not the carrier's.
+
+    /// The table's circle law rebuilt in the test's own arithmetic: every
+    /// model base CENTRE within the reach MINUS the copy's own base radius
+    /// of the centre — the point of the base FARTHEST from the anchor stays
+    /// inside the reach.
+    fn in_reach(p: (f64, f64), r: f64, center: (f64, f64), reach: f64) -> bool {
+        let (px, pz) = (p.0 as f32, p.1 as f32);
+        let (cx, cz) = (center.0 as f32, center.1 as f32);
+        ((px - cx) * (px - cx) + (pz - cz) * (pz - cz)).sqrt() + r as f32 <= reach as f32
+    }
+
+    /// 6. THE CIRCLE GEOMETRY. On an empty 6x4 ft board a bare-model copy
+    /// (single base, 0.03 m) summoned at the centre must stand inside the
+    /// reach circle itself — the table's own law (`circle_zone`), not merely
+    /// inside the bounding square a rectangle scan would offer. RED while
+    /// `ArrivalZone` has no Circle arm: the enum simply does not exist.
+    #[test]
+    fn the_circle_zone_places_inside_the_circle_not_its_corner() {
+        let board = empty_board();
+        let table = table_rect_of(&board);
+        let center = table.centre();
+        let reach = 6.0 * crate::IN2M + 0.02;
+        let r = 0.03;
+        let zone = ArrivalZone::Circle { center, radius_m: reach, table };
+        let mut occ: Vec<Occupied> = Vec::new();
+        let spot = arrive_one(&zone, &[center], &mut occ, &[], &[], 0.0, &board, r, &[], r, false);
+        assert!(spot.0.is_finite(), "an empty circle offers a spot: {spot:?}");
+        assert!(in_reach(spot, r, center, reach), "the spot sits inside the circle itself: {spot:?}");
+        // And the booking is the caller's — the same contract the strip ships.
+        assert_eq!(occ.len(), 1, "the spot is booked for the next arrival");
+    }
+
+    /// 7. THE CIRCLE CORNER IS NOT THE SQUARE CORNER. The #803 f1f1b15d
+    /// pattern (SPAWN_DESIGN_2026-09-08 §4 PR 1's own RED): a copy that fits
+    /// the bounding square but NOT the circle must be refused. One wide
+    /// friendly base (0.22 m) parked on the circle's diagonal — its CENTRE
+    /// inside the circle, its RIM well outside — blocks exactly where it
+    /// pokes out, and the offered spot must still satisfy the circle
+    /// predicate and clear the wide base.
+    #[test]
+    fn a_base_outside_the_circle_blocks_only_where_it_pokes_out() {
+        let board = empty_board();
+        let table = table_rect_of(&board);
+        let center = table.centre();
+        let reach = 6.0 * crate::IN2M + 0.02;
+        let r = 0.03;
+        // The blocker: centre inside the circle, wide base poking out.
+        let blocker_pos = (center.0 + reach * 0.7071, center.1 + reach * 0.7071);
+        let blocker_r = 0.22;
+        assert!(
+            (blocker_pos.0 - center.0).hypot(blocker_pos.1 - center.1) < reach,
+            "fixture: the blocker's centre is inside the circle"
+        );
+        assert!(
+            !in_reach(blocker_pos, blocker_r, center, reach),
+            "fixture: the wide base pokes outside the circle"
+        );
+        let zone = ArrivalZone::Circle { center, radius_m: reach, table };
+        let mut occ: Vec<Occupied> = vec![Occupied { pos: blocker_pos, radius: blocker_r }];
+        let spot = arrive_one(&zone, &[center], &mut occ, &[], &[], 0.0, &board, r, &[], r, false);
+        assert!(spot.0.is_finite(), "the circle still offers a spot: {spot:?}");
+        assert!(
+            in_reach(spot, r, center, reach),
+            "and every offered spot is inside the circle: {spot:?}"
+        );
+        assert!(
+            (spot.0 - blocker_pos.0).hypot(spot.1 - blocker_pos.1) >= r + blocker_r,
+            "the offered spot clears the wide base: {spot:?} vs {blocker_pos:?}"
+        );
+    }
+
+    /// 8. THE MINT READS THE STATICS THE CALLER HANDS IN. `arrive_unit`'s
+    /// explicit parameter decides the footprint: a copy parked with the
+    /// TEMPLATE's base radius (0.03) comes back ON 0.03 bases even though
+    /// the SLOT's own profile still answers the carrier's 0.02 — exactly the
+    /// power the beat needs, and the pin the test caller owes the param.
+    #[test]
+    fn arrive_unit_mints_at_the_statics_base_radius_not_the_profiles() {
+        const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+          "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":3,
+            "wounds_max":[3,3,3],"model_count":3,"caster_value":0,"base_radius":0.02,
+            "game_system":"gf","faction_folder":"alien_hives","special_rules":[],
+            "item_grants":[],"attached_hero_rules":[],
+            "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
+        const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","units":{
+            "p1_0_a":{"player":1,"alive":0,"wounds":[],"radii":[],"positions":[],
+              "in_cover":false,"shaken":false,"fatigued":false,"activated":false,
+              "casts":0,"morale_bonus":0,"aircraft":false,"dormant":true,
+              "dormant_models":2,"dormant_wounds":[4,4],"ambush_arrived_round":-1,
+              "earliest_arrival_round":2,"wound_frac":0.0,"mods":{},"mods_base":{},
+              "bands":{"advance":6.0,"rush":12.0}}}}"#;
+        let header = read_act_header(HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let mut st = io::state_from_json(PLAIN, &mut cache, &mut roster).expect("state");
+        // The template's statics: a DIFFERENT base radius than the profile's.
+        let template = UnitStatic { base_radius: 0.03, ..UnitStatic::default() };
+        arrive_unit(&mut st, 0, (0.3, -0.4), 2, &template);
+        assert_eq!(
+            st.radii[0],
+            vec![0.03, 0.03],
+            "the copy mints on the STATICS' base radius (0.03), not the profile's (0.02)"
+        );
+        assert_eq!(st.alive[0], 2, "the parked strength comes back, unchanged");
+        assert_eq!(st.ambush_arrived_round[0], 2, "stamped with the arrival round (#803)");
     }

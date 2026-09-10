@@ -10,8 +10,7 @@
     use crate::io::{self, Seams};
     use crate::menu::Candidate;
     use crate::playout::Policy;
-    use crate::rollout::{reinforcement_round_start, Rollout};
-    use crate::rules::Registries;
+    use crate::rollout::{reinforcement_round_start, Rollout};    use crate::rules::Registries;
     use crate::sim::Scratch;
     use crate::state::{ProfileCache, State};
     use crate::terrain::PlainTerrain;
@@ -52,3 +51,13 @@
 
     mod reinforcement;
     mod spawn;
+
+    /// The 6x4 ft board's own rectangle, world metres — the table a circle
+    /// zone clamps its bounding square against (the driver's own read,
+    /// `rollout::table_rect`).
+    pub(crate) fn table_rect_of(board: &Terrain) -> crate::deployment::Rect {
+        let [w_in, d_in] = board.board_in();
+        assert!(w_in > 0.0 && d_in > 0.0, "the fixture board has a table");
+        let (w, d) = (w_in * crate::IN2M, d_in * crate::IN2M);
+        crate::deployment::Rect::new(-w / 2.0, -d / 2.0, w, d)
+    }
