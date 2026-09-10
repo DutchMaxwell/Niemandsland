@@ -213,6 +213,29 @@ def test_the_committed_rule_vocabulary_covers_the_whole_corpus():
     assert not unknown, f"rules outside the committed vocabulary: {sorted(unknown)}"
 
 
+def test_the_v7_legacy_reading_survives_the_v8_file():
+    """The Gen-6 shard reading (MANIFEST `encoder_vocab_version` "7") is intact.
+
+    `resolve_vocab_version` hands a v7-stamped corpus to the loader's legacy
+    reading: `legacy_lengths["7"]` truncates the committed lists. Under the v8
+    append that truncation must still BE the v7 vocabulary — byte-identical
+    lists, the 12 v7 unit2 names at 989-1000, none of the 16 v8 names in it.
+    """
+    vocab = json.loads((REPO / "data" / "encoder_rule_vocab_v1.json").read_text())
+    assert vocab["version"] == 8
+    assert nml_core.RULE_VOCAB_VERSION == 8
+    assert vocab["legacy_lengths"]["7"] == {"unit": 200, "weapon": 25, "spell": 463, "unit2": 238}
+    v7_unit2 = vocab["unit2"][: vocab["legacy_lengths"]["7"]["unit2"]]
+    assert v7_unit2[-12:] == [
+        "Re-Deployment", "Spell Accumulator", "Fatigue Debuff", "Ranged Slayer",
+        "Ranged Slayer Aura", "Coordinate", "Musician", "Reanimation",
+        "Reanimation Aura", "Reckless Piercing", "Reckless Piercing Aura",
+        "Retreating Strike",
+    ]
+    for name in ("Defense Buff", "Rapid Rush", "Spawn", "Vengeance"):
+        assert name not in v7_unit2, f"{name} must be v8-only"
+
+
 def test_red_the_legacy_prefix_reading_is_what_this_corpus_recorded():
     """The shim, pinned both ways on the unit that made it necessary.
 
