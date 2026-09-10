@@ -10,7 +10,8 @@
     use crate::io::{self, Seams};
     use crate::menu::Candidate;
     use crate::playout::Policy;
-    use crate::rollout::{reinforcement_round_start, Rollout};    use crate::rules::Registries;
+    use crate::rollout::{mint_template_slot, reinforcement_round_start, Rollout};
+    use crate::rules::Registries;
     use crate::sim::Scratch;
     use crate::state::{ProfileCache, State};
     use crate::terrain::PlainTerrain;

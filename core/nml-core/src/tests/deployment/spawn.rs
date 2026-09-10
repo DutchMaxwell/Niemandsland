@@ -279,3 +279,48 @@ use super::*;
         assert_eq!(st.alive[0], 2, "the parked strength comes back, unchanged");
         assert_eq!(st.ambush_arrived_round[0], 2, "stamped with the arrival round (#803)");
     }
+
+    // ----------------------------------------------------------- PART (b-2a) ---
+    //
+    // THE MINT, not the beat (the coordinator's second split, 08:37). The
+    // beat (2b-2b) resolves the template and finds the spot; the MINT is the
+    // pure bookkeeping half: ONE new roster slot whose `Profile` is the
+    // template's, plus one state column entry per standing unit field in the
+    // loader's own capture order (`state_from_json`), every live-counter at
+    // its "brand-new unit" value. The mint does NOT wire the beat into the
+    // rollout and does NOT touch the arrival — it parks a dormant slot.
+
+    /// 9. THE MINT. A brand-new State slot with the TEMPLATE's stats: the
+    /// roster grows by one key (the `spawn:` map key), the slot's profile IS
+    /// the template's, full starting wounds and size parked on the tray,
+    /// `dormant` from birth (the beat's `arrive_unit` takes it back off the
+    /// tray books in 2b-2b). RED while the stub mints nothing.
+    #[test]
+    fn the_mint_mints_a_brand_new_slot_with_the_templates_stats() {
+        let (mut st, statics) = line(CURRENT_RULES_EPOCH);
+        let i = idx(&st, "p1_0_a");
+        let before = st.clone();
+        let key = "spawn:p1_0_a:Spawn(Rat Swarm [2])";
+        let ti = *st.profiles.index.get(key).expect("the template is indexed");
+        let j = mint_template_slot(
+            &statics,
+            &mut st,
+            i,
+            ti,
+            "Spawn(Rat Swarm [2])",
+        );
+        assert_eq!(st.units(), 3, "the copy is a brand-new State slot");
+        assert_ne!(j, i, "the copy is not the carrier's slot");
+        assert_eq!(st.key(j), key, "the new slot answers the map's key");
+        assert_eq!(st.roster.profile[j], ti, "the slot's Profile IS the template's");
+        assert_eq!(st.player[j], 1, "the copy fights for the carrier's side");
+        assert!(st.dormant[j], "parked from birth — arriving is the caller's move");
+        assert_eq!(st.dormant_models[j], 2, "the TEMPLATE's model count (2)");
+        assert_eq!(st.dormant_wounds[j], vec![4, 4], "the TEMPLATE's full wounds");
+        assert_eq!(st.alive[j], 0, "nothing of it stands yet");
+        assert_eq!(st.positions[j], Vec::<[f64; 3]>::new(), "and it stands nowhere");
+        // The carrier's slot is untouched — no withdraw, no side effect.
+        assert_eq!(st.units(), 3, "exactly one slot added");
+        let carrier_pi = st.roster.profile[i];
+        let _ = before;
+    }

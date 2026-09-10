@@ -786,6 +786,91 @@ fn reinforcement_withdrawals(statics: &[UnitStatic], st: &mut State) {
     }
 }
 
+/// The mint itself: ONE new roster slot whose `Profile` is the template's,
+/// plus one state column entry per standing unit field — the loader's own
+/// capture order (`state_from_json`), every live-counter at its "brand-new
+/// unit" value. `raw` is the carrier's raw Spawn rule string — the map
+/// key's second half. The slot is parked `dormant` from birth: ARRIVING it
+/// (the spot, the #803 stamp) is `arrive_unit`'s move, the beat's (2b-2b),
+/// never the mint's.
+pub fn mint_template_slot(
+    statics: &[UnitStatic],
+    st: &mut State,
+    carrier: usize,
+    ti: usize,
+    raw: &str,
+) -> usize {
+    let p = &st.profiles.list[ti];
+    let key = format!("spawn:{}:{}", st.key(carrier), raw);
+    let j = st.units();
+    let mut index = st.roster.index.clone();
+    let mut profile = st.roster.profile.clone();
+    let mut keys = st.roster.keys.clone();
+    keys.push(key);
+    index.insert(keys[j].clone(), j);
+    profile.push(ti);
+    st.roster = Rc::new(crate::state::Roster { keys, index, profile });
+    let wounds = {
+        let mut w = p.wounds_max.clone();
+        let n = p.model_count.max(1) as usize;
+        let fallback = w.last().copied().unwrap_or(1);
+        w.resize(n, fallback);
+        w
+    };
+    st.player.push(st.player[carrier]);
+    st.alive.push(0);
+    st.activated.push(false);
+    st.shaken.push(false);
+    st.fatigued.push(false);
+    st.in_cover.push(false);
+    st.aircraft.push(false);
+    st.dormant.push(true); // `arrive_unit` takes it back off the tray books
+    st.dormant_models.push(p.model_count.max(1));
+    st.dormant_wounds.push(wounds);
+    st.casts.push(0);
+    st.morale_bonus.push(0);
+    st.ambush_arrived_round.push(-1);
+    st.earliest_arrival_round.push(-1);
+    st.wound_frac.push(0.0);
+    st.positions.push(Vec::new());
+    st.wounds.push(Vec::new());
+    st.radii.push(Vec::new());
+    st.mods.push(crate::state::Mods::default());
+    st.mods_base.push(Rc::new(crate::state::Mods::default()));
+    Rc::make_mut(&mut st.attached).push(Vec::new());
+    Rc::make_mut(&mut st.attached_to).push(None);
+    st.los.push(None);
+    let mb = p.move_bands;
+    st.bands.push(crate::state::Bands { advance: mb.advance, rush: mb.rush });
+    st.shroud.push(None);
+    st.charge_no_difficult.push(
+        crate::rules::has_special_rule(&p.special_rules, "Strider")
+            || crate::rules::has_special_rule(&p.special_rules, "Flying"),
+    );
+    st.charge_probe_r.push(p.base_radius.max(DEFAULT_BASE_RADIUS_M));
+    st.buffs.push(Vec::new());
+    st.vs_mark_round.push(-1);
+    st.hit_and_run_round.push(-1);
+    st.moved_round.push(-1);
+    st.delayed_action_round.push(-1);
+    st.coordinate_via_round.push(-1);
+    st.reckless_rolled_round.push(-1);
+    st.reckless_ap_round.push(-1);
+    st.reckless_backfire_round.push(-1);
+    st.retreating_strike_round.push(-1);
+    st.growth_markers.push(0);
+    st.vengeance_markers.push(0);
+    st.growth_round.push(-1);
+    st.second_wind_used.push(false);
+    st.reinforcement_used.push(false);
+    st.limited_used.push(Vec::new());
+    st.piercing_tag_used.push(false);
+    st.piercing_tag_markers.push(0);
+    st.storm_used.push(Vec::new());
+    st.feats_used.push(Vec::new());
+    st.teleport_used.push(false);
+    j
+}
 pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
     cur.round += 1;
     // `counts` is a Dictionary keyed by player id: insertion order is first
