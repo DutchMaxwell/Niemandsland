@@ -803,10 +803,13 @@ pub fn mint_template_slot(
     let p = &st.profiles.list[ti];
     let key = format!("spawn:{}:{}", st.key(carrier), raw);
     let j = st.units();
-    let roster = Rc::make_mut(&mut st.roster);
-    roster.keys.push(key);
-    roster.index.insert(roster.keys[j].clone(), j);
-    roster.profile.push(ti);
+    let mut index = st.roster.index.as_ref().clone();
+    let mut profile = st.roster.profile.clone();
+    let mut keys = st.roster.keys.clone();
+    keys.push(key);
+    index.insert(keys[j].clone(), j);
+    profile.push(ti);
+    st.roster = Rc::new(crate::state::Roster { keys, index, profile });
     let wounds = {
         let mut w = p.wounds_max.clone();
         let n = p.model_count.max(1) as usize;
