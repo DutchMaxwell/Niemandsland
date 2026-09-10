@@ -932,7 +932,7 @@ pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams
             deployment::deploy_footprint_radius(n, tp_base_radius),
             &footprint,
             tp_base_radius,
-            flying,
+            tp_flying,
         );
         if !spot.0.is_finite() {
             continue; // the circle is full — a summon is never half-made
