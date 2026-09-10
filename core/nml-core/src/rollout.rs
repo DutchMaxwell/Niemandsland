@@ -901,7 +901,10 @@ pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams
         let Some(&ti) = st.profiles.index.get(&key) else {
             continue;
         };
-        let p = &st.profiles.list[ti];
+        let tp_base_radius = st.profiles.list[ti].base_radius;
+        let tp_flying = has_special_rule(&st.profiles.list[ti].special_rules, "Flying")
+            || has_special_rule(&st.profiles.list[ti].special_rules, "Strider");
+        let tp_name = st.profiles.list[ti].name.clone();
         let n = us.spawn.count.max(1) as usize;
         // The anchor: where the standing carrier's models centre. The table
         // anchors on the ONE model that carries the raw entry (main.gd:17413);
@@ -916,9 +919,7 @@ pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams
         // runs on the circle's table-clamped bounding square and every standing
         // base blocks, the carrier's own included.
         let radius_m = us.spawn.place_in * crate::IN2M + us.base_radius;
-        let footprint = deployment::deploy_footprint_offsets(n, p.base_radius, false);
-        let flying = has_special_rule(&p.special_rules, "Flying")
-            || has_special_rule(&p.special_rules, "Strider");
+        let footprint = deployment::deploy_footprint_offsets(n, tp_base_radius, false);
         let mut occupied = live_bases(st);
         let spot = deployment::arrive_one(
             &ArrivalZone::Circle { center: (ax, az), radius_m, table },
@@ -928,9 +929,9 @@ pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams
             &[],
             0.0,
             terrain,
-            deployment::deploy_footprint_radius(n, p.base_radius),
+            deployment::deploy_footprint_radius(n, tp_base_radius),
             &footprint,
-            p.base_radius,
+            tp_base_radius,
             flying,
         );
         if !spot.0.is_finite() {
@@ -943,7 +944,7 @@ pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams
             j,
             spot,
             round,
-            &crate::unit::UnitStatic { base_radius: p.base_radius, ..Default::default() },
+            &crate::unit::UnitStatic { base_radius: tp_base_radius, ..Default::default() },
         );
         st.reinforcement_used[i] = true;
         // Rules-must-log: one stderr line when NML_TRACE_RULES=1.
@@ -952,7 +953,7 @@ pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams
             "Spawn",
             &format!(
                 "{}: a fresh copy of {} models of {} ({}) stands within {:.1}\" of ({:.2},{:.2})",
-                st.key(i), n, p.name, key, us.spawn.place_in, ax, az
+                st.key(i), n, tp_name, key, us.spawn.place_in, ax, az
             ),
         );
     }
