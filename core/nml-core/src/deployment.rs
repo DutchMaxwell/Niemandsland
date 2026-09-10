@@ -2320,12 +2320,12 @@ pub enum ArrivalZone {
     Rect(Rect),
     /// `table` is the table rectangle, `band_m` the band's depth in metres.
     EdgeStrip { table: Rect, band_m: f64 },
-    /// STUB (2b-1 RED): the summon shape is DECLARED but not yet read as a
-    /// circle — the stub answers its bounding square and admits everything
-    /// (a plain rectangle's law), so the geometry pins fail as ASSERTIONS
-    /// (a corner spot inside the square but outside the circle comes back),
-    /// never as a compile error. The GREEN commit turns the arm into the
-    /// table's own predicate (`circle_zone`, placement_ghost.gd:31).
+    /// The table's summon shape (SPAWN_DESIGN_2026-09-08 §3.5): a CIRCLE of
+    /// `radius_m` around a centre — `PlacementGhost.circle_zone`
+    /// (placement_ghost.gd:31) fed `place_in * 0.0254 + anchor_radius`
+    /// (main.gd:17505), so the anchor's own base radius rides in the radius
+    /// and the caller never adds it again. `table` is the board the search's
+    /// bounding square clamps against; the circle's ghost lives on a table.
     Circle { center: (f64, f64), radius_m: f64, table: Rect },
 }
 
@@ -2336,8 +2336,12 @@ impl ArrivalZone {
     /// inside it) — a band is four rectangles, and scanning them separately
     /// would change `best_spot`'s single y-outer/x-inner order, which is law.
     ///
-    /// STUB: the circle answers its table-clamped bounding square — the
-    /// GREEN commit keeps the clamp and adds the per-spot predicate.
+    /// The circle does the same: it scans its table-CLAMPED bounding square
+    /// and rejects per spot (§3.5, mirroring the strip) — scanning the
+    /// circle's four arcs separately would change `best_spot`'s single
+    /// y-outer/x-inner order, which is law. The clamp keeps the lattice on
+    /// the board; the inside-circle predicate below refuses the corner spots
+    /// the square would otherwise offer.
     pub fn search_rect(&self) -> Rect {
         match self {
             ArrivalZone::Rect(r) => *r,
@@ -2372,11 +2376,14 @@ impl ArrivalZone {
     ) -> bool {
         match self {
             ArrivalZone::Rect(_) => true,
-            // STUB: the circle arm admits everything, the rectangle's law —
-            // exactly the bug the geometry pins exist to catch (a base
-            // poking out of the circle is admitted, and the scan may land
-            // outside the circle itself).
-            ArrivalZone::Circle { .. } => true,
+            ArrivalZone::Circle { center, radius_m, .. } => {
+                if footprint.is_empty() {
+                    return base_in_circle(p, radius, *center, *radius_m);
+                }
+                footprint
+                    .iter()
+                    .all(|off| base_in_circle(v2_add(p, *off), base_r, *center, *radius_m))
+            }
             ArrivalZone::EdgeStrip { table, band_m } => {
                 if footprint.is_empty() {
                     return base_in_strip(p, radius, table, *band_m);
@@ -2385,6 +2392,20 @@ impl ArrivalZone {
             }
         }
     }
+}
+
+/// `PlacementGhost.circle_zone`'s test (placement_ghost.gd:31) as the spot
+/// search asks it (SPAWN_DESIGN_2026-09-08 §3.5): a base of radius `r`
+/// centred at `p` stands fully inside the circle when the point of the base
+/// FARTHEST from the centre — `|p - center| + r` — is still within
+/// `radius_m`. Compared at f32, where Godot compares them.
+fn base_in_circle(p: (f64, f64), r: f64, center: (f64, f64), radius_m: f64) -> bool {
+    let (px, pz) = (p.0 as f32, p.1 as f32);
+    let (cx, cz) = (center.0 as f32, center.1 as f32);
+    let m = radius_m as f32;
+    let dx = px - cx;
+    let dz = pz - cz;
+    (dx * dx + dz * dz).sqrt() + r as f32 <= m
 }
 
 /// `SoloController.reinforcement_spot_in_strip` (solo_controller.gd:6089-6098):
@@ -2544,11 +2565,12 @@ pub fn withdraw_as_destroyed(st: &mut crate::state::State, i: usize, round_no: i
 }
 
 /// Puts a parked unit back on the table at `spot`, in the round `round_no`.
-///
-/// STUB (2b-1 RED): the explicit `UnitStatic` parameter is DECLARED but the
-/// body still reads the base radius off the SLOT's own profile — exactly the
-/// bug the mint pin exists to catch (a copy mints on the carrier's base
-/// whatever the caller hands in). The GREEN commit reads `us.base_radius`.
+/// The STATICS ride in explicitly since the S5 template seam (SPAWN_DESIGN
+/// _2026-09-08 §3.3): the caller owns which profile's shape the unit comes
+/// back in — the Reinforcement path (the one production caller until the
+/// Spawn beat, 2b-2) hands the unit's own, the Spawn beat will hand the
+/// NAMED TEMPLATE's (`UnitStatic.base_radius` for the model bases; the
+/// wounds parked on the slot stay the caller's business).
 pub fn arrive_unit(
     st: &mut crate::state::State,
     i: usize,
@@ -2557,8 +2579,7 @@ pub fn arrive_unit(
     us: &crate::unit::UnitStatic,
 ) {
     let n = st.dormant_models[i].max(0) as usize;
-    let base_r = st.profiles.list[st.roster.profile[i]].base_radius;
-    let _ = us; // stub: ignored until the GREEN commit
+    let base_r = us.base_radius;
     st.positions[i] = place_unit_models(spot, n).into_iter().map(|(x, z)| [x, 0.0, z]).collect();
     st.wounds[i] = std::mem::take(&mut st.dormant_wounds[i]);
     st.radii[i] = vec![base_r; n];

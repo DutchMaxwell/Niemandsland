@@ -740,10 +740,9 @@ pub struct UnitStatic {
     pub wounds_max: Vec<i64>,
     pub quality: i64,
     pub fearless: bool,
-    /// STUB (2b-1 RED): `Profile.base_radius`, stamped here so the arrival
-    /// machinery can read the footprint off the STATICS the caller hands in
-    /// (`arrive_unit`'s explicit template parameter, 2b-2's mint). The stub
-    /// commits the field; the GREEN commit keeps the stamp.
+    /// `Profile.base_radius` — the S5 arrival machinery reads it off the
+    /// STATICS (`arrive_unit`'s explicit template parameter), so a copy mints
+    /// with the template's footprint, not the carrier's.
     pub base_radius: f64,
     pub is_caster: bool,
     pub spells: Vec<Spell>,
