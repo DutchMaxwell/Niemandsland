@@ -354,7 +354,7 @@ use super::*;
         );
         for m in &st.positions[j] {
             assert!(
-                in_reach(*m, 0.03, (0.0, 0.0), 6.0 * crate::IN2M + 0.02),
+                in_reach((m[0], m[2]), 0.03, (0.0, 0.0), 6.0 * crate::IN2M + 0.02),
                 "model at {m:?} is outside the 6\" reach of the anchor"
             );
         }
