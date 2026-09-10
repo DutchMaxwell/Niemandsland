@@ -2320,6 +2320,13 @@ pub enum ArrivalZone {
     Rect(Rect),
     /// `table` is the table rectangle, `band_m` the band's depth in metres.
     EdgeStrip { table: Rect, band_m: f64 },
+    /// STUB (2b-1 RED): the summon shape is DECLARED but not yet read as a
+    /// circle — the stub answers its bounding square and admits everything
+    /// (a plain rectangle's law), so the geometry pins fail as ASSERTIONS
+    /// (a corner spot inside the square but outside the circle comes back),
+    /// never as a compile error. The GREEN commit turns the arm into the
+    /// table's own predicate (`circle_zone`, placement_ghost.gd:31).
+    Circle { center: (f64, f64), radius_m: f64, table: Rect },
 }
 
 impl ArrivalZone {
@@ -2328,10 +2335,22 @@ impl ArrivalZone {
     /// (:6117-6120 walks the full rect and asks `reinforcement_spot_in_strip`
     /// inside it) — a band is four rectangles, and scanning them separately
     /// would change `best_spot`'s single y-outer/x-inner order, which is law.
-    pub fn search_rect(&self) -> &Rect {
+    ///
+    /// STUB: the circle answers its table-clamped bounding square — the
+    /// GREEN commit keeps the clamp and adds the per-spot predicate.
+    pub fn search_rect(&self) -> Rect {
         match self {
-            ArrivalZone::Rect(r) => r,
-            ArrivalZone::EdgeStrip { table, .. } => table,
+            ArrivalZone::Rect(r) => *r,
+            ArrivalZone::EdgeStrip { table, .. } => *table,
+            ArrivalZone::Circle { center, radius_m, table } => {
+                let r = *radius_m;
+                let (x0, z0) = ((center.0 - r).max(table.pos.0), (center.1 - r).max(table.pos.1));
+                let (x1, z1) = (
+                    (center.0 + r).min(table.pos.0 + table.size.0),
+                    (center.1 + r).min(table.pos.1 + table.size.1),
+                );
+                Rect::new(x0, z0, (x1 - x0).max(0.0), (z1 - z0).max(0.0))
+            }
         }
     }
 
@@ -2353,6 +2372,11 @@ impl ArrivalZone {
     ) -> bool {
         match self {
             ArrivalZone::Rect(_) => true,
+            // STUB: the circle arm admits everything, the rectangle's law —
+            // exactly the bug the geometry pins exist to catch (a base
+            // poking out of the circle is admitted, and the scan may land
+            // outside the circle itself).
+            ArrivalZone::Circle { .. } => true,
             ArrivalZone::EdgeStrip { table, band_m } => {
                 if footprint.is_empty() {
                     return base_in_strip(p, radius, table, *band_m);
@@ -2426,7 +2450,7 @@ pub fn arrive_one(
             || spot_blocked(board, p, flying, radius, footprint, base_r)
     };
     for b in beacons {
-        let bzone = rect_intersection(&beacon_box(b), zone.search_rect());
+        let bzone = rect_intersection(&beacon_box(b), &zone.search_rect());
         if bzone.size.0 <= 0.0 || bzone.size.1 <= 0.0 {
             continue;
         }
@@ -2443,7 +2467,7 @@ pub fn arrive_one(
     let rect = zone.search_rect();
     let spot = if enemies.is_empty() {
         best_spot(
-            rect, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
+            &rect, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
             f64::INFINITY,
         )
     } else {
@@ -2452,7 +2476,7 @@ pub fn arrive_one(
             search.push(Occupied { pos: e.pos, radius: own_ring_m.max(e.min_dist_m) + e.pad_m });
         }
         best_spot(
-            rect, objectives, &search, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
+            &rect, objectives, &search, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
             f64::INFINITY,
         )
     };
@@ -2519,9 +2543,22 @@ pub fn withdraw_as_destroyed(st: &mut crate::state::State, i: usize, round_no: i
     st.earliest_arrival_round[i] = round_no + 1;
 }
 
-pub fn arrive_unit(st: &mut crate::state::State, i: usize, spot: (f64, f64), round_no: i64) {
+/// Puts a parked unit back on the table at `spot`, in the round `round_no`.
+///
+/// STUB (2b-1 RED): the explicit `UnitStatic` parameter is DECLARED but the
+/// body still reads the base radius off the SLOT's own profile — exactly the
+/// bug the mint pin exists to catch (a copy mints on the carrier's base
+/// whatever the caller hands in). The GREEN commit reads `us.base_radius`.
+pub fn arrive_unit(
+    st: &mut crate::state::State,
+    i: usize,
+    spot: (f64, f64),
+    round_no: i64,
+    us: &crate::unit::UnitStatic,
+) {
     let n = st.dormant_models[i].max(0) as usize;
     let base_r = st.profiles.list[st.roster.profile[i]].base_radius;
+    let _ = us; // stub: ignored until the GREEN commit
     st.positions[i] = place_unit_models(spot, n).into_iter().map(|(x, z)| [x, 0.0, z]).collect();
     st.wounds[i] = std::mem::take(&mut st.dormant_wounds[i]);
     st.radii[i] = vec![base_r; n];

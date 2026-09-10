@@ -740,6 +740,11 @@ pub struct UnitStatic {
     pub wounds_max: Vec<i64>,
     pub quality: i64,
     pub fearless: bool,
+    /// STUB (2b-1 RED): `Profile.base_radius`, stamped here so the arrival
+    /// machinery can read the footprint off the STATICS the caller hands in
+    /// (`arrive_unit`'s explicit template parameter, 2b-2's mint). The stub
+    /// commits the field; the GREEN commit keeps the stamp.
+    pub base_radius: f64,
     pub is_caster: bool,
     pub spells: Vec<Spell>,
     /// `GameUnit.has_special_rule("Caster Group")` — the round-start refill
@@ -5041,6 +5046,7 @@ impl UnitStatic {
             wounds_max: p.wounds_max.clone(),
             quality: p.quality,
             fearless: has_special_rule(&p.special_rules, "Fearless"),
+            base_radius: p.base_radius,
             is_caster,
             spells,
             caster_group: has_special_rule(&p.special_rules, "Caster Group"),
