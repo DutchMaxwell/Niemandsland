@@ -803,7 +803,7 @@ pub fn mint_template_slot(
     let p = &st.profiles.list[ti];
     let key = format!("spawn:{}:{}", st.key(carrier), raw);
     let j = st.units();
-    let mut index = st.roster.index.as_ref().clone();
+    let mut index = st.roster.index.clone();
     let mut profile = st.roster.profile.clone();
     let mut keys = st.roster.keys.clone();
     keys.push(key);
