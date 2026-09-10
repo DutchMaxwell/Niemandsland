@@ -786,6 +786,18 @@ fn reinforcement_withdrawals(statics: &[UnitStatic], st: &mut State) {
     }
 }
 
+/// The summon half of the S5 seam — `Spawn` (SPAWN_DESIGN_2026-09-08 §3.3).
+/// STUB (2b-2 RED): the beat is DECLARED at the core's real round boundary
+/// (the wiring call site follows in GREEN) but does nothing yet — the beat
+/// pins fail as ASSERTIONS (no copy minted), never as a compile error.
+pub fn spawn_round_start(
+    _statics: &[UnitStatic],
+    _terrain: &Terrain,
+    _seams: Seams,
+    _cur: &mut State,
+) {
+}
+
 pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
     cur.round += 1;
     // `counts` is a Dictionary keyed by player id: insertion order is first
