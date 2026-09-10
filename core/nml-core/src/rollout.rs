@@ -871,6 +871,19 @@ pub fn mint_template_slot(
     st.teleport_used.push(false);
     j
 }
+/// The summon half of the S5 seam — `Spawn` (SPAWN_DESIGN_2026-09-08 §3.3).
+/// STUB (2b-2b RED): the beat is DECLARED — the wiring call site follows in
+/// GREEN — but does nothing yet, so the beat pins fail as ASSERTIONS (no
+/// copy minted), never as a compile error. GREEN fills the body from
+/// c441af08 on top of 2b-2a's mint.
+pub fn spawn_round_start(
+    _statics: &[UnitStatic],
+    _terrain: &Terrain,
+    _seams: Seams,
+    _cur: &mut State,
+) {
+}
+
 pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
     cur.round += 1;
     // `counts` is a Dictionary keyed by player id: insertion order is first
