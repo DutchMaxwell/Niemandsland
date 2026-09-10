@@ -463,8 +463,10 @@ use super::*;
         assert!(!st.reinforcement_used[i], "nor stamps a flag no epoch-7 corpus carries");
     }
 
-    /// 13. NO NAME, NO SUMMON. A unit without the name — even on a board where
-    /// a copy would fit — spawns nothing and is not the template's reader.
+    /// 13. NO NAME, NO SUMMON. A unit without the name is not the template's
+    /// reader: the beat never reads a latch on it, never mints under ITS key.
+    /// (The carrier in the same fixture legitimately spawns — that is pin
+    /// 9's business; this pins the PLAIN unit's columns.)
     #[test]
     fn a_unit_without_the_name_spawns_nothing() {
         let (mut st, statics) = line(CURRENT_RULES_EPOCH);
@@ -473,7 +475,9 @@ use super::*;
         let before = st.clone();
         beat(&statics, &board, &mut st, 1);
         assert_eq!(st.positions[j], before.positions[j], "the plain unit stands still");
-        assert_eq!(st.units(), before.units(), "and no copy appeared");
+        assert_eq!(st.units(), before.units() + 1, "the only copy mints under the CARRIER's key");
+        let k = idx(&st, "spawn:p1_0_a:Spawn(Rat Swarm [2])");
+        assert_ne!(k, j, "no slot was minted for the plain unit");
         assert!(!st.reinforcement_used[j], "no latch was spent on it");
     }
 
