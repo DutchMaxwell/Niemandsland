@@ -162,6 +162,15 @@ jobs:
           test -f build/linux/libnml_core_godot.so || {
             echo "::error::libnml_core_godot.so did not land next to the exported executable"; exit 1; }
 
+      # The debug-symbol file is a build artifact only; it must never leak into what players
+      # download (export dir here, release zips in the tag-gated release job below).
+      - name: Guard - no debug symbols in the export
+        run: |
+          if find build/linux -name '*.debug' -print -quit | grep -q .; then
+            echo "::error::a debug-symbol file landed in the export directory"; exit 1
+          fi
+          echo "OK: no .debug file in build/linux"
+
       - name: Smoke-run the exported Linux build
         run: |
           set -o pipefail
@@ -290,6 +299,13 @@ jobs:
           rcodesign sign "$APP_BUNDLE"
           rm dist/macos/$EXPORT_NAME.zip
           (cd dist/macos/bundle && zip -qry "../$EXPORT_NAME.zip" .)
+
+      - name: Guard - no debug symbols in the release tree
+        run: |
+          if find dist -name '*.debug' -print -quit | grep -q .; then
+            echo "::error::a debug-symbol file landed in the release dist tree"; exit 1
+          fi
+          echo "OK: no .debug file in dist"
 
       - name: Package per-platform zips
         run: |
