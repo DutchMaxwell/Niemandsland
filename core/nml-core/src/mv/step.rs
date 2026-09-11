@@ -26,7 +26,7 @@ use crate::geom::{self, V3};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
-use crate::acts::{rule_on, EPOCH_6_TABLE_RULES};
+use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 
 use super::cost::{CellSet, Grid, Zone};
 use super::entry::plan_unit_step_call;
@@ -1026,7 +1026,31 @@ pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
         guard,
         allow_contact: true,
     };
-    Some(ch.execute(band_in, avoid_diff, &radii_m))
+    let land = ch.execute(band_in, avoid_diff, &radii_m);
+    // #857. The table RE-GATES a charge whose executable corridor cannot reach
+    // base contact within the band to a RUSH (`charge_illegal_why` :1473 ->
+    // `charge_path_probe` :8764) and then runs `_move_toward` toward the target
+    // centre. Mirror it at the epoch that added the probe: a charge that ends
+    // SHORT of the engage ring rides the plain approach vector, not the
+    // contact-aimed one. A charge that reaches the ring is untouched.
+    if rule_on(self.rules_epoch, EPOCH_8_PLANNER_MENU) {
+        let to = movers_of(state, ci);
+        let mut closest = f64::INFINITY;
+        for (i, m) in land.movers.iter().enumerate() {
+            let p = land.end[i];
+            let (rc, sc) = (radius_of(state, *m), state.base_shape(m.unit));
+            for e in &to {
+                let gap = geom::pair_gap_m(p, rc, sc, pos_of(state, *e),
+                    radius_of(state, *e), state.base_shape(e.unit)) / IN2M;
+                if gap < closest { closest = gap; }
+            }
+        }
+        if closest > crate::sim::MELEE_ENGAGE_IN {
+            return self.plain_move(state, t, si, unit_centre(state, ci),
+                band_in, hero_attach, fast_planner, guard);
+        }
+    }
+    Some(land)
 }
 
 #[allow(clippy::too_many_arguments)]
