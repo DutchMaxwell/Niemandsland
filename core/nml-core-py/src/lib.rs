@@ -63,7 +63,7 @@ use nmlcore::rollout::Rollout;
 use nmlcore::sight;
 use nmlcore::sim::Scratch;
 use nmlcore::state::{Marker, ProfileCache, Roster};
-use nmlcore::rows::{Cell, RowEncoder};
+use nmlcore::rows::{Cell, RowEncoder, RowVocab};
 use nmlcore::unit::{StaticsCache, UnitStatic};
 use nmlcore::{
     geom, io, mission, reply_threat, resolve_on_board, resolve_stochastic_on_board,
@@ -716,6 +716,19 @@ impl Core {
         let text = json_text(header)?;
         let ActHeader { profiles, terrain, knobs } = nmlcore::read_act_header(&text)
             .map_err(|e| Unsupported::new_err(e))?;
+        // Validate the requested vocabulary before replacing any active
+        // header state. A rejected header must leave the previous core usable.
+        let vocab = if self.rows.vocab.version != knobs.rule_vocab_version || !self.rows.vocab.loaded {
+            let next = RowVocab::for_version(&self.repo_root, knobs.rule_vocab_version);
+            if !next.loaded {
+                return Err(Unsupported::new_err(
+                    next.error.clone().unwrap_or_else(|| "rule vocab unreadable".into()),
+                ));
+            }
+            Some(next)
+        } else {
+            None
+        };
         self.profiles = Some(ProfileCache::new(profiles));
         self.reg = Some(Registries::new(&self.repo_root));
         // The statics closures are built under THIS record's rule set —
@@ -731,11 +744,8 @@ impl Core {
         // was recorded under — `knobs.rule_vocab_version`, absent meaning the
         // pre-stamp version 2. A version the committed file cannot serve is an
         // error HERE, not a silently different row later.
-        self.rows.set_vocab_version(&self.repo_root, self.knobs.rule_vocab_version);
-        if !self.rows.vocab.loaded {
-            return Err(Unsupported::new_err(
-                self.rows.vocab.error.clone().unwrap_or_else(|| "rule vocab unreadable".into()),
-            ));
+        if let Some(vocab) = vocab {
+            self.rows.vocab = vocab;
         }
         Ok(())
     }
