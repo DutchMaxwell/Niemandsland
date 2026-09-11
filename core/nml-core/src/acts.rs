@@ -301,7 +301,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 8;
+pub const CURRENT_RULES_EPOCH: u32 = 9;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -414,6 +414,22 @@ pub const EPOCH_7_TABLE_RULES: u32 = 7;
 /// `CURRENT_RULES_EPOCH == 8` and get the demotion. Every call site reads THIS
 /// constant, not the literal `8` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_8_PLANNER_MENU: u32 = 8;
+
+/// The MARK-FAMILY gate (#870, frozen at 9 on 11.09.): #870 flipped ten
+/// registry entries from `vs_marked` to `vs_target` — Rapid Charge Mark (aof/aofr
+/// dark_elves, gff city_runners), Piercing Fighting Mark (aof/aofr goblins, gff
+/// berserker_clans), Slayer Mark (aofs hidden_syndicates, gff worker_unions),
+/// Piercing Shooting Mark (gf dao_union), Unpredictable Shooter Mark (gf
+/// goblin_reclaimers) — so the Godot table finally grants them. The Rust core
+/// reads the same registry files, and its grant (`sim::tray_vs_marks`) had no
+/// epoch gate — a replay of a game recorded BEFORE the fix would receive grants
+/// the table never gave, and pre-fix recordings all stamp `rules_epoch: 8`, so
+/// the core could not tell old from new. `9` (one past every pre-fix stamp, and
+/// the value `CURRENT_RULES_EPOCH` is bumped to in the same change) excludes
+/// those records — they replay as they were recorded — while fresh headers get
+/// the five. Every call site reads THIS constant, not the literal `9` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_9_MARK_FAMILY: u32 = 9;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -898,7 +914,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 8, "epoch 8's gate (EPOCH_8_PLANNER_MENU) bumps the live epoch to 8");
+        assert_eq!(CURRENT_RULES_EPOCH, 9, "epoch 9's gate (EPOCH_9_MARK_FAMILY) bumps the live epoch to 9");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -908,11 +924,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":8}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":9}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 8"
+            "a fresh play_game() now stamps the bumped epoch, 9"
         );
     }
 

@@ -200,6 +200,7 @@ var unit_card: UnitCard = null
 var unit_dock: UnitDock = null
 var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
+var game_record_collector: GameRecordCollector = null   # in-memory opt-in game record (PR B1, local only)
 var _tutorial_mode: bool = false              # guided tutorial: set from the startup-menu flag, drives _start_tutorial
 var _tutorial_director: TutorialDirector = null
 var _tutorial_start_lesson: String = ""       # chapter-picker lesson id ("" = assessment/resume flow)
@@ -764,6 +765,9 @@ func _ready() -> void:
 
 	# Battle Log — after the managers + radial controller exist, wire the collector to the central seams.
 	_setup_battle_log()
+
+	# Opt-in game record (PR B1): same central seams, in memory only, no disk and no network.
+	_setup_game_record_collector()
 
 	# The intro is started AFTER the table size is chosen (on dialog confirm, see below),
 	# so the size chooser never overlaps the cinematic. Loaded/joined games skip the
@@ -12341,6 +12345,22 @@ func _setup_battle_log() -> void:
 		radial_menu_controller.unit_activated.connect(_on_solo_human_activated)
 
 
+## Opt-in game record (PR B1): build the in-memory collector and tap the same central seams as the
+## Battle Log (local + remote derive the same record). Nothing is written to disk, nothing is networked.
+func _setup_game_record_collector() -> void:
+	game_record_collector = GameRecordCollector.new()
+	game_record_collector.name = "GameRecordCollector"
+	add_child(game_record_collector)
+	game_record_collector.bind(self)
+	if opr_army_manager != null:
+		opr_army_manager.round_advanced.connect(game_record_collector.on_round_advanced)
+		opr_army_manager.armies_cleared.connect(game_record_collector.reset)
+	if object_manager != null:
+		object_manager.selection_dropped.connect(game_record_collector.on_selection_dropped)
+	if network_manager != null and network_manager.has_signal("remote_round_advanced"):
+		network_manager.remote_round_advanced.connect(func() -> void: game_record_collector.on_round_advanced(opr_army_manager.current_round))
+
+
 ## Export the Battle Log to a shareable user:// file (Battle Log panel Export button OR the F8 hotkey). When
 ## the dev "AI reasoning" toggle is on the AI's structured decision records are ALREADY interleaved into the
 ## log (via _solo_flush_dev); any still-buffered (not-yet-flushed) records are ALSO rendered into a trailing
@@ -12395,6 +12415,8 @@ func _log_battle_activation(gu, _remote: bool) -> void:
 				who = _peer_display_name(int(p))
 				break
 	battle_log.on_unit_activated(gu.get_name(), who, is_ai, reason)
+	if game_record_collector != null:
+		game_record_collector.on_unit_activated(gu)   # PR B1: same funnel as the Battle Log
 
 
 func _on_battle_log_dead(node, dead: bool) -> void:
@@ -12685,6 +12707,8 @@ func _battle_log_unit_name(node: Node3D) -> String:
 func _log_battle_dice(player_name: String, faces: Array, context: Dictionary) -> void:
 	if battle_log == null or faces.is_empty():
 		return
+	if game_record_collector != null:
+		game_record_collector.on_dice_rolled(faces, context)   # PR B1: observed dice faces
 	var kind := _next_roll_kind   # consume-on-log (Bug 16): exactly ONE line carries the save wording
 	_next_roll_kind = "attack"
 	var target: int = int(context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE))

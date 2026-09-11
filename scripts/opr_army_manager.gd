@@ -17,6 +17,8 @@ signal round_advanced(round_number: int)
 ## react to "play has begun": the move-trail chalk gate, the Start-Game / Ready UI, and (host-side) the
 ## MP both-ready transition. Carries the new GamePhase value.
 signal game_phase_changed(phase: int)
+## New-table reset seam (Clear Table / save load / remote clear / resize): every game transition in a session passes here.
+signal armies_cleared
 ## Pooled regiment wounds changed (single Battle-Log seam — local radial/card edits AND the remote apply
 ## both run through apply_regiment_wounds). delta is negative when wounds were healed.
 signal regiment_wounds_applied(unit_name: String, delta: int, remaining: int, pool: int)
@@ -2362,6 +2364,7 @@ func clear_all() -> void:
 	unit_to_game_unit.clear()
 	game_units.clear()
 	army_trays.clear()
+	armies_cleared.emit()
 	_scene_cache.clear()  # release parsed PackedScenes; rebuilt lazily on next spawn
 	current_round = 1
 	game_phase = GamePhase.DEPLOYMENT  # a fresh/cleared table is back in deployment
