@@ -94,6 +94,21 @@ func test_recorded_dice_faces_equal_the_tray(timeout := 120000) -> void:
 
 ## The privacy boundary: the record may carry stable identifiers but the built payload must contain
 ## neither a unit display name nor a player name.
+## Fix 2: one record per game. Game 1 leaves actions in the collector; starting game 2 (Clear
+## Table -> redeploy -> Start) must start from an empty record with no trace of game 1's actions.
+func test_second_game_starts_with_an_empty_record(timeout := 120000) -> void:
+	_main._log_battle_activation(_register(1, "unit-g1", "Private GameOne", Vector3(-0.30, 0.0, 0.20)), false)
+	assert_int(_main.game_record_collector.action_count()).is_greater(0)
+	_main._do_clear_all()
+	await E2EBoot.settle(get_tree())
+	_main.opr_army_manager.start_game()
+	await E2EBoot.settle(get_tree())
+	var record: Dictionary = _main.game_record_collector.build_record()
+	assert_int(_main.game_record_collector.action_count()).override_failure_message("second game must start with 0 actions").is_equal(0)
+	assert_str(str(record["actions"])).override_failure_message("second game record leaked game-1 actions").not_contains("unit-g1")
+	await E2EBoot.settle(get_tree())
+
+
 func test_payload_built_from_the_record_has_no_display_names(timeout := 120000) -> void:
 	_main._log_battle_activation(_register(1, "unit-secret", "Very Secret Warband", Vector3(-0.30, 0.0, 0.20)), false)
 	_main._next_roll_owner = "Very Secret Player"   # the real roll seam stamps the roller's name
