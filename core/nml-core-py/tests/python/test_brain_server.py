@@ -42,7 +42,12 @@ def server():
 def post(server, body, headers=None):
     req = Request("http://127.0.0.1:%d/" % server.server_port,
                   json.dumps(body).encode(), {"Content-Type": "application/json", **(headers or {})})
-    return urlopen(req, timeout=2)
+    try:
+        return urlopen(req, timeout=2)
+    except HTTPError as response:
+        # Error assertions inspect only the status; release the response now.
+        response.close()
+        raise
 
 
 def test_dummy_batch_and_metadata(server):
