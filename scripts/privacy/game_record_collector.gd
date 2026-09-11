@@ -4,6 +4,8 @@ extends Node
 ## BattleLog uses: move (per-model from->to), activation, dice faces, round advance, final VP.
 ## No disk, no network; SharedRecordBuilder still filters the payload (assets/privacy/example_record.json).
 const NOT_RECORDED := ["charge declarations", "shooting shooter and weapon", "which models fire", "wound-allocation choice", "modal decisions (saves, strike-back, interference, casts)", "human spell casts", "morale choices", "objective seizes in plain multiplayer", "turn structure in human-vs-human games"]
+const FEET_TO_METERS: float = 0.3048
+const INCHES_TO_METERS: float = 0.0254
 var _main = null
 var _actions: Array = []
 var _rounds: int = 1
@@ -21,6 +23,12 @@ func action_count() -> int:
 	return _actions.size()
 
 
+func reset() -> void:
+	_actions.clear()
+	_rounds = 1
+	_current_round = 1
+
+
 func on_unit_activated(gu) -> void:
 	if gu != null:
 		_append("activate", _unit_id(gu), _side(gu), _unit_pos(gu), [], "", [])
@@ -33,7 +41,7 @@ func on_selection_dropped(moves: Array) -> void:
 			continue
 		var a: Vector3 = mv.get("from", Vector3.ZERO)
 		var b: Vector3 = mv.get("to", Vector3.ZERO)
-		_append("move", _unit_id(gu), _side(gu), [a.x, a.z], [b.x, b.z], "", [])
+		_append("move", _unit_id(gu), _side(gu), _table_inches(a), _table_inches(b), "", [])
 
 
 func on_dice_rolled(faces: Array, _context: Dictionary) -> void:
@@ -110,5 +118,28 @@ func _unit_pos(gu) -> Array:
 	for model in gu.models:
 		var mi := model as ModelInstance
 		if mi != null and mi.is_alive and mi.node != null and is_instance_valid(mi.node):
-			return [mi.node.global_position.x, mi.node.global_position.z]
+			return _table_inches(mi.node.global_position)
 	return []
+
+
+## Fix 1: the table corner in world metres, read from the table node (never assumed) — centre minus
+## half the size, wherever the table sits.
+func _table_corner_m() -> Vector3:
+	if _main == null or _main.table == null:
+		return Vector3.ZERO
+	var t = _main.table
+	var size_m := Vector3(t.table_size.x * FEET_TO_METERS, 0.0, t.table_size.y * FEET_TO_METERS)
+	var center: Vector3 = t.global_position if t.is_inside_tree() else t.position
+	return center - size_m / 2.0
+
+
+## World position -> [x_inches, z_inches] from the table corner, rounded to 0.01 in.
+func _table_inches(pos: Vector3) -> Array:
+	if _main == null or _main.table == null:
+		return [pos.x, pos.z]
+	var corner := _table_corner_m()
+	return [_inches((pos.x - corner.x) / INCHES_TO_METERS), _inches((pos.z - corner.z) / INCHES_TO_METERS)]
+
+
+func _inches(v: float) -> float:
+	return round(v * 100.0) / 100.0

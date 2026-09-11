@@ -12354,6 +12354,7 @@ func _setup_game_record_collector() -> void:
 	game_record_collector.bind(self)
 	if opr_army_manager != null:
 		opr_army_manager.round_advanced.connect(game_record_collector.on_round_advanced)
+		opr_army_manager.armies_cleared.connect(game_record_collector.reset)
 	if object_manager != null:
 		object_manager.selection_dropped.connect(game_record_collector.on_selection_dropped)
 	if network_manager != null and network_manager.has_signal("remote_round_advanced"):
