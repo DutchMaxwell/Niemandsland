@@ -178,3 +178,50 @@ use super::*;
         let (_, plain) = run_buff(&used, &statics, &buff_action(Some("b")), 13);
         assert_eq!(regen_rolls(&plain), 1);
     }
+
+    /// EPOCH 9 MARK FAMILY (#870, 11.09.): the five Mark names #870 flipped
+    /// from `vs_marked` to `vs_target` — Rapid Charge Mark, Piercing Fighting
+    /// Mark, Slayer Mark, Piercing Shooting Mark, Unpredictable Shooter Mark —
+    /// now fire as grants, but only for records stamped `rules_epoch: 9` or
+    /// later. A Piercing Fighting Mark bearer attacking in range marks at 9
+    /// and stays silent at 8 (the epoch the pre-fix corpora stamp); a
+    /// pre-#870 Unstoppable Mark bearer fires at BOTH.
+    #[test]
+    fn epoch_9_mark_family_grants_from_nine_and_pre_870_marks_always_fire() {
+        let (st, mut statics) = buff_line();
+        statics[0].utility_buffs = vec![
+            UtilityBuff { vs_target: true, needs_los: true, range_in: 18.0, ..ub("Piercing Fighting Mark") }
+        ];
+        let (next8, _) = run_buff_epoch(&st, &statics, &buff_action(Some("b")), 13, 8);
+        assert_eq!(next8.vs_mark_round[0], -1, "#870's grant must not fire at rules_epoch 8");
+        let (next9, _) = run_buff_epoch(&st, &statics, &buff_action(Some("b")), 13, 9);
+        assert_eq!(next9.vs_mark_round[0], st.round, "the grant fires from rules_epoch 9");
+
+        let (st2, mut statics2) = buff_line();
+        statics2[0].utility_buffs = vec![
+            UtilityBuff { vs_target: true, needs_los: true, range_in: 18.0, ..ub("Unstoppable Mark") }
+        ];
+        let (next8u, _) = run_buff_epoch(&st2, &statics2, &buff_action(Some("b")), 13, 8);
+        assert_eq!(next8u.vs_mark_round[0], st2.round, "Unstoppable predates #870: fires at 8 too");
+        let (next9u, _) = run_buff_epoch(&st2, &statics2, &buff_action(Some("b")), 13, 9);
+        assert_eq!(next9u.vs_mark_round[0], st2.round, "Unstoppable still fires at 9");
+    }
+
+    /// `run_buff` with the record's OWN `rules_epoch` (the `Seams::default()`
+    /// path rides epoch 0, which is what the pre-class-fix corpora stamp).
+    fn run_buff_epoch(
+        st: &State,
+        statics: &[UnitStatic],
+        action: &Action,
+        seed: i64,
+        epoch: u32,
+    ) -> (State, ShootResult) {
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(seed);
+        let mut rng = crate::rng::GodotRng::new(0);
+        resolve_stochastic_tray_on_board(
+            statics, st, action, &terrain,
+            Seams { rules_epoch: epoch, ..Seams::default() }, &mut rng, &mut tray,
+        )
+        .unwrap()
+    }
