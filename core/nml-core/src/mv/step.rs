@@ -1045,7 +1045,12 @@ pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
                 if gap < closest { closest = gap; }
             }
         }
-        if closest > crate::sim::MELEE_ENGAGE_IN {
+        // `charge_snap_fits_unit_budget` :8783 — the probe demands the residual
+        // still fits the move budget the charge left over, not just the ring.
+        let remaining = land.remaining_in();
+        if closest > crate::sim::MELEE_ENGAGE_IN
+            || closest > remaining + crate::sim::BASE_CONTACT_EPSILON_IN
+        {
             return self.plain_move(state, t, si, unit_centre(state, ci),
                 band_in, hero_attach, fast_planner, guard);
         }
