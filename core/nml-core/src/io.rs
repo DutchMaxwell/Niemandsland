@@ -16,7 +16,9 @@ use std::rc::Rc;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
+use crate::acts::{rule_on, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::mods::LiveMod;
+use crate::rules::spawn_target_rule;
 use crate::state::{
     Bands, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, Roster, State,
 };
@@ -140,17 +142,29 @@ pub(crate) struct PlainUnit {
 
 /// One `_solo_record_spell_mod` record (main.gd:3649-3670) as the table wrote it
 /// verbatim into `unit_properties["spell_records"]` — only the fields this core
-/// has a `LiveMod` consumer for are read; the rest (`spell`, `def_mod`,
-/// `range_in`, `advance_in`, `rush_in`, `granted_to`) are ignored by serde, not
-/// an error, so the table can grow the record without breaking this reader.
+/// has a `LiveMod` consumer for are read; the rest (`range_in`,
+/// `advance_in`, `rush_in`, `granted_to`) are ignored by serde, not an error,
+/// so the table can grow the record without breaking this reader. The three
+/// ap/def knobs are read since seam 4 step 1 (epoch 7); `state_of`'s gate
+/// keeps a record stamped below 7 ignoring them. `spell` (the record's own
+/// name) joined at seam 4 step 2 — rules-must-log names each firing record
+/// by it (main.gd:5560); no fold reads it.
 #[derive(Deserialize)]
 pub(crate) struct PlainBuff {
+    #[serde(default)]
+    spell: String,
     #[serde(default)]
     hit_mod: i64,
     #[serde(default)]
     casting_mod: i64,
     #[serde(default)]
     morale_mod: i64,
+    #[serde(default)]
+    ap_mod: i64,
+    #[serde(default)]
+    def_mod: i64,
+    #[serde(default)]
+    defense_mod: i64,
     #[serde(default)]
     grants_rule: String,
     #[serde(default)]
@@ -217,12 +231,25 @@ pub(crate) struct PlainLedger {
     #[serde(default)]
     storm_used: Vec<String>,
     /// Wave 5 group (b) — the once-per-game FEAT latch (the Storm Attack
-    /// shape): the DISPLAY names whose `speed_feat_used_<snake>` flag stands
-    /// (solo_controller.gd:1712), folded into `State.feats_used` so a later
-    /// act replays with the latch CLOSED. Empty on every older corpus.
+    /// shape): the DISPLAY names whose `speed_feat_used_<snake>` /
+    /// `takedown_bonus_used_<snake>` flag stands (solo_controller.gd:1712,
+    /// main.gd:17021 — FEAT PR 2 adds the Takedown family), folded into
+    /// `State.feats_used` so a later act replays with the latch CLOSED.
+    /// Empty on every older corpus.
     #[serde(default)]
     feats_used: Vec<String>,
+    /// Wave 5 (PR 1's recorder): the `{"used", "to"}` block; `to` arrives as the `"(x, y)"` Vector2 string.
+    #[serde(default)]
+    teleport: Option<PlainTeleport>,
 }
+
+/// The `teleport` block; `to` is a `[x, y]` pair or a `"(x, y)"` string.
+#[derive(Deserialize)]
+pub(crate) struct PlainTeleport { #[serde(default)] used: bool, to: Vec2Wire }
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum Vec2Wire { Pair([f64; 2]), Str(String) }
 
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
 /// `BattleSim.charge_illegal_plain` (battle_sim.gd:1563) reads for an absent key.
@@ -283,6 +310,9 @@ pub struct Action {
     /// count and face stays port-computed. Absent = the act's one target.
     #[serde(default)]
     pub split: Option<Vec<SplitShot>>,
+    /// Wave 5 — the record's landing centroid (joined off the NEXT act's ledger).
+    #[serde(default)]
+    pub teleport: Option<[f64; 2]>,
     /// NML-1152 B14 step 1 (Bounding) — the table's own controller-seeded
     /// placement roll(s) for THIS activation, joined on from `act_recorder.gd`'s
     /// `AiActRecorder.traced` line the same way `split` is joined from
@@ -590,6 +620,67 @@ pub(crate) fn roster_of(
     Ok(rc)
 }
 
+/// The optional `spawn_profiles` header map (SPAWN_DESIGN_2026-09-08 §3.1),
+/// indexed into the SAME immutable `Profiles` table the roster reads — the
+/// record's closed profile table simply carries the NAMED templates too.
+/// Absent = nothing to add. The whole read is gated on
+/// `EPOCH_8_PLANNER_MENU`: below the gate the map is ignored entirely, so an
+/// epoch-7 record replays byte-identically to before the gate existed.
+pub(crate) fn index_spawn_profiles(
+    profiles: &mut Profiles,
+    map: Option<Ordered<Profile>>,
+    origin: &str,
+    rules_epoch: u32,
+) -> Result<(), String> {
+    if !rule_on(rules_epoch, EPOCH_8_PLANNER_MENU) {
+        return Ok(());
+    }
+    let Some(map) = map else {
+        return Ok(());
+    };
+    for (k, p) in map.0 {
+        if profiles.index.contains_key(&k) {
+            return Err(format!("{origin}:1 spawn_profiles key {k} collides with a profile"));
+        }
+        profiles.index.insert(k, profiles.list.len());
+        profiles.list.push(p);
+    }
+    Ok(())
+}
+
+/// The load-time twin of `roster_of`'s unknown-key error (the ruling of
+/// record): at epoch >= 8 a STANDING unit carrying a parametrised
+/// `Spawn(<name> [<n>])` string MUST find its
+/// `spawn:<carrier_key>:<rule_string>` template in the header map, else the
+/// record is REFUSED at load. No silent fallback to the carrier's own
+/// profile — that fallback is exactly the #823 fidelity break. Deliberately
+/// over-strict (documented, not hidden): the loader cannot ask the rules
+/// registry whether the beat would really fire (no repo root here), so a
+/// record whose standing carrier could never act still demands its template.
+pub(crate) fn spawn_templates_of(
+    plain: &PlainState,
+    profiles: &Profiles,
+    rules_epoch: u32,
+) -> Result<(), String> {
+    if !rule_on(rules_epoch, EPOCH_8_PLANNER_MENU) {
+        return Ok(());
+    }
+    for (k, u) in &plain.units.0 {
+        if u.alive <= 0 || u.dormant {
+            continue; // not standing — the beat's own carrier precondition
+        }
+        let Some(&pi) = profiles.index.get(k.as_str()) else {
+            continue; // roster_of refuses unknown keys on its own
+        };
+        if let Some((raw, _, _)) = spawn_target_rule(&profiles.list[pi].special_rules) {
+            let key = format!("spawn:{k}:{raw}");
+            if !profiles.index.contains_key(&key) {
+                return Err(format!("no spawn_profiles template for unit key {k} ({raw})"));
+            }
+        }
+    }
+    Ok(())
+}
 /// `(side, index)` of a recorder-shaped unit id `p<player>_<index>_<token>`, or
 /// `None` for an id this port did not shape.
 fn natural_key(id: &str) -> Option<(i64, i64)> {
@@ -682,7 +773,17 @@ impl PlainState {
     }
 }
 
-pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> State {
+/// `rules_epoch` is the corpus's own stamp (`Header.seams.rules_epoch` /
+/// `ActHeader.knobs.rules_epoch`) — the reader gate on the three ap/def buff
+/// knobs keys on it. The single-state loader `state_from_json` carries NO
+/// header stamp and passes 0: a plain state read without its corpus keeps the
+/// pre-seam reading (PR 2 threads the epoch where the reads need it).
+pub(crate) fn state_of(
+    plain: PlainState,
+    profiles: &Rc<Profiles>,
+    roster: Rc<Roster>,
+    rules_epoch: u32,
+) -> State {
     let n = roster.keys.len();
     // Roster index -> its row/column in the KEY-SORTED matrix; see `los_positions`.
     let cap = los_positions(&roster.keys);
@@ -729,6 +830,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         buffs: vec![Vec::new(); n],
         vs_mark_round: vec![-1; n],
         hit_and_run_round: vec![-1; n],
+        moved_round: vec![-1; n],
         delayed_action_round: vec![-1; n],
         coordinate_via_round: vec![-1; n],
         // Reckless Piercing's round stamps are NOT recorded corpora inputs
@@ -757,6 +859,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         piercing_tag_markers: vec![0; n],
         storm_used: vec![Vec::new(); n],
         feats_used: vec![Vec::new(); n],
+        teleport_used: vec![false; n],
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
             // Read the matrix in its own (key-sorted) order and STORE it in
             // roster order, so `_los_clear`'s port can index it with roster
@@ -828,14 +931,24 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         // untouched too — proof 3's byte-identity turns on that.
         if let Some(ledger) = u.ledger {
             for b in ledger.buffs {
+                // SEAM 4 step 1 — the reader gate, the SAME one `record_buff`
+                // writes (design §4(c), the FROZEN `EPOCH_7_TABLE_RULES`): a
+                // record stamped below 7 keeps ignoring the three ap/def knobs
+                // (the row still lands — the fold has no all-zero guard — so
+                // today's reading is preserved byte-identically).
+                let epoch7 = rule_on(rules_epoch, EPOCH_7_TABLE_RULES);
                 st.buffs[ui].push(LiveMod {
                     hit_mod: b.hit_mod,
                     casting_mod: b.casting_mod,
                     morale_mod: b.morale_mod,
+                    ap_mod: if epoch7 { b.ap_mod } else { 0 },
+                    def_mod: if epoch7 { b.def_mod } else { 0 },
+                    defense_mod: if epoch7 { b.defense_mod } else { 0 },
                     grants_rule: Rc::from(b.grants_rule.as_str()),
                     scope: Rc::from(b.scope.as_str()),
                     attackers: b.beneficiary == "attackers",
                     once: b.duration == "once",
+                    name: Rc::from(b.spell.as_str()),
                 });
             }
             st.hit_and_run_round[ui] = ledger.hit_and_run_round;
@@ -850,6 +963,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
             st.reinforcement_used[ui] = ledger.reinforcement_used;
             st.storm_used[ui] = ledger.storm_used.clone();
             st.feats_used[ui] = ledger.feats_used.clone();
+            st.teleport_used[ui] = ledger.teleport.as_ref().map(|t| t.used).unwrap_or(false);
             st.growth_markers[ui] = ledger.growth;
             st.vengeance_markers[ui] = ledger.vengeance_markers;
             // `growth_round` has no key of its own on the wire (see
@@ -883,6 +997,12 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
 #[derive(Deserialize)]
 struct Header {
     profiles: Ordered<Profile>,
+    /// S5 (SPAWN_DESIGN_2026-09-08 §3.1) — the recorder's resolved NAMED-unit
+    /// profiles, keyed `spawn:<carrier_key>:<rule_string>`, in the same unit
+    /// shape `profiles` uses. Optional: absent in every record written before
+    /// the map existed, and in every record with no Spawn carrier.
+    #[serde(default)]
+    spawn_profiles: Option<Ordered<Profile>>,
     #[serde(default)]
     seams: Seams,
 }
@@ -909,6 +1029,7 @@ pub fn read_nodes<R: BufRead>(reader: R, origin: &str) -> Result<NodeCorpus, Str
         profiles.index.insert(k, profiles.list.len());
         profiles.list.push(p);
     }
+    index_spawn_profiles(&mut profiles, header.spawn_profiles, path, seams.rules_epoch)?;
     let profiles = Rc::new(profiles);
     let mut cache: Option<Rc<Roster>> = None;
     let mut nodes = Vec::new();
@@ -921,10 +1042,12 @@ pub fn read_nodes<R: BufRead>(reader: R, origin: &str) -> Result<NodeCorpus, Str
             serde_json::from_str(&line).map_err(|e| format!("{path}:{}: {e}", i + 2))?;
         let rb = roster_of(&pn.state_before, &profiles, &mut cache)?;
         let ra = roster_of(&pn.state_after, &profiles, &mut cache)?;
+        spawn_templates_of(&pn.state_before, &profiles, seams.rules_epoch)?;
+        spawn_templates_of(&pn.state_after, &profiles, seams.rules_epoch)?;
         nodes.push(Node {
-            state_before: state_of(pn.state_before, &profiles, rb),
+            state_before: state_of(pn.state_before, &profiles, rb, seams.rules_epoch),
             action: pn.action,
-            state_after: state_of(pn.state_after, &profiles, ra),
+            state_after: state_of(pn.state_after, &profiles, ra, seams.rules_epoch),
             score: pn.score,
             player: pn.player,
             cover_dest: pn.cover_dest,
@@ -953,7 +1076,7 @@ pub fn state_from_json(
     let plain: PlainState = serde_json::from_str(text).map_err(|e| e.to_string())?;
     let roster = roster_of(&plain, profiles.base(), roster_cache)?;
     let eff = profiles.effective(&roster, &plain.dyn_profiles());
-    Ok(state_of(plain, &eff, roster))
+    Ok(state_of(plain, &eff, roster, 0))
 }
 
 /// The inverse of `state_from_json` (NML-1073 M3-2) — the plain form
@@ -1122,7 +1245,7 @@ pub fn plain_of(st: &State) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{los_positions, plain_of, state_from_json, units_in_capture_order};
+    use super::{los_positions, plain_of, read_nodes, state_from_json, units_in_capture_order};
     use crate::acts::read_act_header;
     use crate::state::ProfileCache;
 
@@ -1228,6 +1351,48 @@ mod tests {
         let mut cache = ProfileCache::new(header.profiles);
         let mut roster = None;
         state_from_json(plain, &mut cache, &mut roster).expect("state")
+    }
+
+    /// `p1_0_a` carries a ledger whose ONLY buff key is `def_mod` — the shape
+    /// `main._solo_record_spell_mod` (main.gd:3649-3670) writes for a Defense
+    /// Buff at the table, and exactly what serde IGNORED before seam 4 step 1.
+    const DEF_MOD_PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end",
+      "units":{
+        "p1_0_a":{"player":1,"alive":1,"wounds":[3],"radii":[0.016],
+          "positions":[[0.0,0.0,0.0]],"in_cover":false,"shaken":false,
+          "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+          "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+          "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},
+          "bands":{"advance":6.0,"rush":12.0},
+          "ledger":{"buffs":[{"def_mod":1}],"hit_and_run_round":2,"vs_mark_round":1,"growth":2}},
+        "p2_0_b":{"player":2,"alive":1,"wounds":[1],"radii":[0.016],
+          "positions":[[-0.254,0.0,0.0]],"in_cover":false,"shaken":false,
+          "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+          "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+          "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},
+          "bands":{"advance":6.0,"rush":12.0}}}}"#;
+
+    /// SEAM 4 step 1 — the reader gate (design §4(c), epoch 7): a recorded
+    /// `{"def_mod": 1}` row carries the knob ONLY from `seams.rules_epoch` 7;
+    /// below 7 the row still lands (the fold has no all-zero guard) but keeps
+    /// ignoring the knob — exactly today's reading, byte-identical. Asserted
+    /// through the record's own `Debug`: the READS are PR 2.
+    #[test]
+    fn a_recorded_def_mod_row_carries_only_from_epoch_7() {
+        for (epoch, carried) in [(7u32, true), (6, false)] {
+            // read_nodes is JSONL: the raw-string fixtures are compacted onto
+            // one line each, the way the recorder writes them.
+            let header = LEDGER_HEADER.replace(r#""knobs":{}"#,
+                &format!(r#""knobs":{{}},"seams":{{"rules_epoch":{epoch}}}"#))
+                .replace('\n', "");
+            let line = format!(r#"{{"state_before":{DEF_MOD_PLAIN},"action":{{"kind":0,"unit":"p1_0_a"}},"state_after":{DEF_MOD_PLAIN},"score":0.0,"player":1}}"#)
+                .replace('\n', "");
+            let corpus = read_nodes(std::io::Cursor::new(format!("{header}\n{line}\n")), "inline").expect("loads");
+            let rows = &corpus.nodes[0].state_before.buffs[0];
+            assert_eq!(rows.len(), 1, "epoch {epoch}: the recorded row lands");
+            let dbg = format!("{:?}", rows[0]);
+            assert_eq!(dbg.contains("def_mod: 1"), carried, "epoch {epoch}: {dbg}");
+        }
     }
 
     /// NML-1153 S1 RED/GREEN — the tray strength survives `plain -> State ->

@@ -90,6 +90,7 @@ use crate::io;
             patient: false,
             split: None,
             traced: None,
+            teleport: None,
         }
     }
 
@@ -173,6 +174,7 @@ use crate::io;
             patient: false,
             split: None,
             traced: None,
+            teleport: None,
         }
     }
 

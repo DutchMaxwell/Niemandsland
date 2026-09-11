@@ -44,6 +44,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         move_bands: MoveBands::default(),
     };
     let st = nml_core::State {
+        teleport_used: vec![false; 4],
         roster: Rc::new(Roster {
             keys: vec!["a".into(), "b".into()],
             index: HashMap::new(),
@@ -91,6 +92,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         buffs: vec![Vec::new(), Vec::new()],
         vs_mark_round: vec![-1; 2],
         hit_and_run_round: vec![-1; 2],
+        moved_round: vec![-1; 2],
         delayed_action_round: vec![-1; 2],
         coordinate_via_round: vec![-1; 2],
         reckless_rolled_round: vec![-1; 2],
@@ -153,10 +155,14 @@ fn grant(rule: &str, scope: &str, once: bool) -> LiveMod {
         hit_mod: 0,
         casting_mod: 0,
         morale_mod: 0,
+        ap_mod: 0,
+        def_mod: 0,
+        defense_mod: 0,
         grants_rule: rule.into(),
         scope: scope.into(),
         attackers: false,
         once,
+        name: std::rc::Rc::from(""),
     }
 }
 

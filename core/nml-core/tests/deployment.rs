@@ -2005,7 +2005,8 @@ fn arrive_unit_rebuilds_the_parked_strength_not_a_fresh_one() {
     let mut cache = nml_core::state::ProfileCache::new(header.profiles);
     let mut roster = None;
     let mut st = nml_core::io::state_from_json(PLAIN, &mut cache, &mut roster).expect("state");
-    deployment::arrive_unit(&mut st, 0, (0.3, -0.4), 2);
+    let us = nml_core::unit::UnitStatic { base_radius: 0.02, ..Default::default() };
+    deployment::arrive_unit(&mut st, 0, (0.3, -0.4), 2, &us);
     assert_eq!(st.alive[0], 3);
     assert_eq!(st.wounds[0], vec![2, 3, 3], "the DAMAGED model stays damaged");
     assert_eq!(st.radii[0], vec![0.02, 0.02, 0.02]);

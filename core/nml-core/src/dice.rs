@@ -342,7 +342,32 @@ fn save_batch(
     // fields are zero unless `sim::ctx_live` folded them behind
     // `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`, so pre-epoch corpora
     // replay byte-exact.
-    let target = save_target(defense + def.growth_def_mod, (eff_ap + def.growth_fortify_ap).max(0));
+    // SEAM 4 step 2 (epoch 7) — the ledger's `defense_mod` rides the SAME
+    // rung: the stamp already carries the negated roll sum (a "+1 to
+    // defense rolls" text lowers the rung, the covered/Shielded shape) and
+    // the floor is the clamp the Shielded fold uses. Zero below epoch 7.
+    //
+    // Issue #854 (wave 4, `growth_def_lowers` stamped behind the FROZEN
+    // `EPOCH_7_TABLE_RULES`) — the ladder's direction follows the table:
+    // every defence part folds as `base = clampi(base - bonus, 2, 6)`
+    // (main.gd:5510), so a "+1 to Defense rolls" LOWERS the target. The
+    // clamp sits BEFORE the AP add because the table clamps the defence
+    // STAT only (`base - bonus`); the AP is not part of the stat and rides
+    // `save_target`'s own `+ ap.max(0)` afterwards. #853's roll bonus is
+    // NOT part of the stat either — it folds onto the clamped base the way
+    // it folds onto the raw one, floored at `BEST_HIT_TARGET`. Below 7 the
+    // flag stays false and the wave-3 reading replays byte-exact.
+    let target = if def.growth_def_lowers {
+        save_target(
+            ((defense - def.growth_def_mod).clamp(2, 6) + def.defense_mod).max(BEST_HIT_TARGET),
+            (eff_ap + def.growth_fortify_ap).max(0),
+        )
+    } else {
+        save_target(
+            (defense + def.growth_def_mod + def.defense_mod).max(BEST_HIT_TARGET),
+            (eff_ap + def.growth_fortify_ap).max(0),
+        )
+    };
     let faces = tray.roll(count as usize);
     out.rolls.push(Roll {
         kind: "defense",
@@ -472,13 +497,15 @@ fn save_batch(
 /// is not split fire and no longer raises any flag.
 ///
 /// TO-HIT AND SAVE MODIFIERS with no field in the profile/context model:
-///   * Indirect's moved -1 (:3163-3169). Its faction-level opt-out is
-///     DECLARED, not ported (rules-wave3-indirect2): with no moved-penalty
-///     primitive in this profile/context model, the opt-out's `no_moved_penalty`
-///     param (the Indirect mechanics entry) has nothing to act on, so the core
-///     registers neither the penalty nor its opt-out — needs primitive:
-///     `moved_hit_penalty` (a firing-side to-hit modifier when the unit moved
-///     this activation) before either can be stamped.
+///   * Indirect's moved -1 (:3163-3169) — PORTED in the quick-readjustment
+///     wave: the weapon's `indirect_moved_hit_penalty` stamp (the registry
+///     `moved_hit_penalty`) folds -N into the to-hit sum whenever the
+///     shooter moved this activation (Ctx::moved_this_round), unless the
+///     unit carries "Quick Readjustment" (Ctx::quick_readjustment, the
+///     `no_moved_penalty` opt-out) — both behind the FROZEN
+///     `EPOCH_7_TABLE_RULES`. Still DECLARED, not ported: the GH #325
+///     GRANTED-INDIRECT leg of main.gd:3220's gate (`granted_indirect`) —
+///     no attacker-side granted-Indirect field reaches this fold.
 ///   * Spot markers, Reckless AP, `AiEv.stamp_conditional_ap`
 ///     (Shatter / Tear / Disintegrate). The Piercing tag PORTED in wave 3
 ///     (the marker pool + the `tag_ap_mod` fold above); vs-target Marks
@@ -636,7 +663,13 @@ pub fn resolve_volley_with_tray(
     // member's owner, its hit bonus and (Mobile Artillery only) its own
     // `over_in` gate, as first fired.
     let mut ma_fired: Vec<(&str, i64, f64)> = Vec::new();
+    // Wave 4 (port-entrenched) — the stationary alias's rules-must-log flag.
+    let mut ent_fired = false;
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
+    // Wave 4 (port-quick-readjustment) — the moved-penalty legs' once-per-
+    // member rules-must-log flags (`ma_fired`'s shape).
+    let mut im_fired: Vec<&str> = Vec::new();
+    let mut qr_fired: Vec<&str> = Vec::new();
     // Wave 4 — the evasive Boosts' once-per-volley rules-must-log flag (the
     // defender-side alias marker, the alias_cover_logged shape); the RULE
     // that fired is `def.evasive_alias_name` ("Machine-Fog Boost" at epoch 6,
@@ -712,17 +745,38 @@ pub fn resolve_volley_with_tray(
             continue; // main.gd:3163 — a silent weapon leaves before any die
         }
         // --- to-hit, `profile_ev` ai_ev.gd:335-370's shooting branch ---
-        let mut target = reliable_quality(att.quality, p.reliable);
+        // FEAT PR 2 — the once-per-game bonus shot strikes at its OWN
+        // Quality (main.gd:3100: `"quality": int(tgd.get("quality", 2))`),
+        // never the member's; 0 = every ordinary profile, the Ctx quality
+        // as always (the ranged twin of `melee_hit_target`'s override).
+        let q = if p.extra_attack_q > 0 { p.extra_attack_q } else { att.quality };
+        let mut target = reliable_quality(q, p.reliable);
         // Good Shot / Bad Shot / Targeting Visor (main.gd:5681-5701) — the
         // table's DICE path folds these in; `p.hit_bonus`/`p.hit_bonus_over9`
         // are this shot's own profile stamp (unit.rs::stamp_shot_modifier).
         // `def.stealth_alias_penalty`/`def.stealth_alias_over_in` are the
         // SAME dice path's Stealth data-alias leg (Changebound et al.,
         // main.gd:5588-5610/5698-5701) — `unit.rs::stealth_alias_of`.
+        // Wave 4 (port-entrenched) — resolve the effective pair in the CALLER
+        // (main.gd:5694-5702): stationary only while the target is UNMOVED,
+        // larger penalty wins; zero below the FROZEN gate.
+        let mut alias_pen = def.stealth_alias_penalty;
+        let mut alias_over = def.stealth_alias_over_in;
+        if def.stationary_alias_penalty > alias_pen && def.moved_round != def.round {
+            alias_pen = def.stationary_alias_penalty;
+            alias_over = def.stationary_alias_over_in;
+            if !ent_fired {
+                ent_fired = true;
+                out.log.push(format!(
+                    "[{}] -{alias_pen} to hit vs {def_owner}: unmoved this round",
+                    def.stationary_alias_name
+                ));
+            }
+        }
         let mut m = shooting_hit_modifier(
             mod_dist_in, att.artillery, def.stealth, def.artillery, def.evasive,
             p.hit_bonus, p.hit_bonus_over9,
-            def.stealth_alias_penalty, def.stealth_alias_over_in,
+            alias_pen, alias_over,
         )
             // B2b: the LIVE ledger's own nets — `_solo_hit_mod_info`
             // :5703-5709 adds the shooter's `_solo_spell_hit_mod` and the
@@ -736,6 +790,10 @@ pub fn resolve_volley_with_tray(
             // hit bonus, shooting only (`_solo_hit_mod_info`'s melee branch
             // returns before that code runs).
             + att.growth_hit_mod
+            // FEAT PR 3 — Precision Feat's once-per-game window (the volley
+            // seam stamps it while the #827 latch is open): the entry's own
+            // +1 to hit on EVERY shot of this activation.
+            + att.feat_hit_bonus
             // Unpredictable's 4-6 half (main.gd:3180): folded into the SAME
             // sum, BEFORE the Unstoppable clamp, like the melee leg.
             + upr_hit;
@@ -752,6 +810,27 @@ pub fn resolve_volley_with_tray(
         }
         if gp != 0 && gp_fired.iter().all(|(o, _)| *o != sh.owner) {
             gp_fired.push((sh.owner, gp));
+        }
+        // Wave 4 (port-quick-readjustment) — Indirect's moved to-hit penalty
+        // (main.gd:3220-3224): a shooter that moved this activation takes
+        // -`moved_hit_penalty` on every Indirect weapon, "Quick Readjustment"
+        // (`no_moved_penalty`) waives it. Inside the Unstoppable clamp below,
+        // like the table's own mod fold.
+        let im = indirect_moved_mod(att, p);
+        m += im;
+        if im != 0 && im_fired.iter().all(|o| *o != sh.owner) {
+            im_fired.push(sh.owner);
+            out.log.push(format!("Indirect moved {im}: {} shoots after moving", sh.owner));
+        }
+        if im == 0
+            && p.indirect_moved_hit_penalty > 0
+            && att.moved_this_round
+            && att.quick_readjustment
+            && qr_fired.iter().all(|o| *o != sh.owner)
+        {
+            qr_fired.push(sh.owner);
+            out.log.push(format!(
+                "Quick Readjustment: {} ignores the Indirect moved penalty", sh.owner));
         }
         // Wave 4 — the evasive Boost names itself once per volley: the
         // unconditional -1 rode this weapon's to-hit sum (the defender-side
@@ -824,6 +903,14 @@ pub fn resolve_volley_with_tray(
             if !p.takedown_rule.is_empty() {
                 out.log.push(format!("{}: Takedown on {}'s volley", p.takedown_rule, sh.owner));
             }
+        }
+        // FEAT PR 2 — "Takedown Shot" names itself once per game
+        // (rules-must-log, the table's own log line at main.gd:17026-17028,
+        // the melee fold's Takedown Strike leg shape).
+        if p.extra_attack_q > 0 {
+            out.log.push(format!(
+                "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
+                p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
         }
         // --- `_solo_hits` :4404-4487 ---
         let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
@@ -945,7 +1032,16 @@ pub fn resolve_volley_with_tray(
             // (main.gd:9877): the chain's buff stamp and the TARGET's
             // backfire stamp, epoch-7-gated at the sim seams that set
             // `Ctx::reckless_ap`.
-            + att.reckless_ap;
+            + att.reckless_ap
+            // FEAT PR 3 — Piercing Feat's once-per-game window (the volley
+            // seam stamps it while the #827 latch is open): AP(+1) on every
+            // attack of this activation, the `any_attack` condition's own
+            // reading.
+            + att.feat_ap_bonus
+            // SEAM 4 step 2 (epoch 7) — Piercing Debuff's "loses AP(+1) when
+            // attacking": the DEBUFFED unit's own volley rides `ap_mod` one
+            // lower, floored like every AP sum by save_target's `max(0)`.
+            + att.ap_mod;
         // Wave 2 — the "AP(+1) when shooting" mark's flat AP, off its
         // epoch-gated Ctx leg (`sim::ctx_live`).
         if att.pierce_shooting_grant {
@@ -1144,6 +1240,26 @@ fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_h
         m = 0;
     }
     modified_hit_target(base, m)
+}
+
+/// Wave 4 (port-quick-readjustment) — Indirect's moved to-hit penalty
+/// (main.gd:3220-3224): -`moved_hit_penalty` on every shot a MOVED shooter
+/// fires with an Indirect weapon (Ctx::moved_this_round, the act-scope flag
+/// sim.rs stamps at its volley site), unless the unit carries "Quick
+/// Readjustment" (Ctx::quick_readjustment, the `no_moved_penalty` opt-out).
+/// The magnitude rides the weapon static
+/// (ShootProfile::indirect_moved_hit_penalty, stamped behind the FROZEN
+/// `EPOCH_7_TABLE_RULES`); 0 = silent.
+fn indirect_moved_mod(att: &Ctx, p: &ShootProfile) -> i64 {
+    if p.indirect
+        && att.moved_this_round
+        && !att.quick_readjustment
+        && p.indirect_moved_hit_penalty > 0
+    {
+        -p.indirect_moved_hit_penalty
+    } else {
+        0
+    }
 }
 
 /// Mobile Artillery's volley leg (main.gd:5773-5779): +N to hit strictly
@@ -1387,6 +1503,13 @@ pub fn resolve_melee_with_tray(
             // shooting site's own note above).
             let mut ap = p.ap + uf_ap + sh.att.growth_ap_mod
                 + sh.att.reckless_ap
+                // FEAT PR 3 — Piercing Feat's once-per-game window, the melee
+                // half of the volley seam's stamp (see the volley fold above).
+                + sh.att.feat_ap_bonus
+                // SEAM 4 step 2 (epoch 7) — the same `ap_mod` net's melee
+                // half; the charging/assault leg is this fold's own sum (the
+                // pierce-assault site below is the CONDITIONAL family).
+                + sh.att.ap_mod
                 + if charging && (p.thrust || sh.att.thrust_grant) { THRUST_AP_BONUS } else { 0 }
                 + if sh.att.pierce_melee_grant { 1 } else { 0 };
             // Rung I — the melee half of the same `cond_ap` fold, same

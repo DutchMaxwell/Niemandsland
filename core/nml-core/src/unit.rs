@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
-    EPOCH_7_TABLE_RULES,
+    EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -32,7 +32,8 @@ use crate::combat::{
     SHROUD_RANGE_PENALTY_IN,
 };
 use crate::rules::{
-    base_rule_name, has_special_rule, rule_rating, unit_rating, Registries, Spell,
+    base_rule_name, has_special_rule, rule_rating, spawn_target_rule, unit_rating, Registries,
+    Spell,
 };
 use crate::state::{Bands, Profile, Profiles, Weapon};
 
@@ -133,6 +134,15 @@ pub struct Ctx {
     /// The alias's own `over_in` gate (0.0 = unconditional for shooting, the
     /// same `gate <= 0.0` reading `_solo_hit_mod_info` uses, main.gd:5602).
     pub stealth_alias_over_in: f64,
+    /// Wave 4 (port-entrenched) — the alias walk's SPLIT, stationary half:
+    /// the best `hit_penalty` among the defender's Stealth-primitive names
+    /// with `requires_stationary: true` (main.gd:5699-5702); 0 = none.
+    pub stationary_alias_penalty: i64,
+    /// The stationary alias's own `over_in` gate (0.0 = unconditional).
+    pub stationary_alias_over_in: f64,
+    /// WHICH stationary name drove the pair (rules-must-log); Entrenched is
+    /// the split's only member in any registry. "" = none.
+    pub stationary_alias_name: &'static str,
     pub evasive: bool,
     /// Wave 4 (`rules-wave4-boostbases`) — "Machine-Fog Boost" is the reason
     /// `evasive` is on: the printed unconditional form of Machine-Fog's own
@@ -240,6 +250,21 @@ pub struct Ctx {
     /// `_solo_spell_hit_mod_vs(target, melee)` main.gd:3800 — the net every unit
     /// attacking THIS one gets (`beneficiary: "attackers"`).
     pub vs_hit_mod: i64,
+    /// SEAM 4 step 2 (epoch 7) — the ledger's attacker-side AP net: what THIS
+    /// unit's own attacks lose or gain, `ap + ap_mod` at the three pierce
+    /// sites (dice.rs shooting / melee / the charging melee leg), floored by
+    /// the same `max(0)` every AP sum already rides. Piercing Debuff ("loses
+    /// AP(+1) when attacking") lands here as -1. ZERO on every `ctx_of`.
+    pub ap_mod: i64,
+    /// SEAM 4 step 2 (epoch 7) — the ledger's DEFENDER-side rung delta: the
+    /// net of the record knobs `def_mod` (Defense Buff) and `defense_mod`
+    /// (Defense Debuff), both of whose texts say "+/-X to defense rolls" — a
+    /// ROLL bonus, so the rung folds `defense + defense_mod` with the stamp
+    /// carrying the NEGATED roll sum (the covered/Shielded shape: cover's
+    /// own "+1 to Defense rolls" is `defense - 1`). Floored at
+    /// `BEST_HIT_TARGET`, the clamp the Shielded fold uses. ZERO on every
+    /// `ctx_of`.
+    pub defense_mod: i64,
     /// A live `grants_rule: "Unstoppable"` on this unit's joined chain — the
     /// dynamic half of `_solo_ignores_regen`'s last line (main.gd:6941,
     /// `AiEv.has_exact_rule`). It reaches the Regeneration bypass and NOTHING
@@ -316,6 +341,16 @@ pub struct Ctx {
     /// with (negative — the `enemy_ap_per_two` ladder), floored at the hard 0
     /// in `dice::save_batch`.
     pub growth_fortify_ap: i64,
+    /// Issue #854 (wave 4) — the DICE-side DIRECTION of `growth_def_mod`.
+    /// The table folds every defence part as `base = clampi(base - bonus, 2, 6)`
+    /// (main.gd:5510), so from `EPOCH_7_TABLE_RULES` the save rung SUBTRACTS
+    /// the ladder and clamps it to the table's 2..6 window BEFORE the AP add;
+    /// below 7 the wave-3 (inverted) reading replays byte-exact. FALSE on
+    /// every `ctx_of` — only `sim::ctx_live` stamps it, next to the fold
+    /// above, so the EV imagination stays blind like every other live facet.
+    /// The mod's own sign stays POSITIVE: the "Defense rolls +N" log lines
+    /// name the ladder, not the fold.
+    pub growth_def_lowers: bool,
     // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
     // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
     // arrival stamp and folds it in, so the EV imagination stays blind to it
@@ -342,6 +377,13 @@ pub struct Ctx {
     /// backfire stamp. Set at the two attack seams (sim.rs), folded in both
     /// AP merges (dice.rs volley + melee), gated epoch 7.
     pub reckless_ap: i64,
+    /// FEAT PR 3 — the once-per-game latch feats' ONE-ACTIVATION windows,
+    /// set by the resolve seams (volley / strike) while the bearer's #827
+    /// `feats_used` latch is still open, folded by the dice seams exactly
+    /// like `reckless_ap`. HARD 0 on `ctx_of`/`ctx_for`: the EV imagination
+    /// stays latch-blind (the Limited precedent, EV drops nothing).
+    pub feat_hit_bonus: i64,
+    pub feat_ap_bonus: i64,
     // --- Block C2 — the melee / charge leg of the Shot Modifier family,
     // `_solo_hit_mod_info`'s melee branch (main.gd:5658-5668): an entry is
     // kept when `all_attacks` OR `melee_only` OR (`when: "charge"` on a
@@ -380,6 +422,17 @@ pub struct Ctx {
     /// moved, so the Mobile Artillery bonus stays OFF (#489's direction:
     /// under-credit, never over-credit).
     pub moved_this_round: bool,
+    /// Wave 4 (port-quick-readjustment): the bearer ignores the Indirect
+    /// moved to-hit penalty — `no_moved_penalty: true` read off the NAME's
+    /// own registry entry (the table's `best_primitive_param(member,
+    /// "Indirect", "no_moved_penalty", false)` gate, main.gd:3221-3222),
+    /// stamped BY NAME in `ctx_for` behind the FROZEN `EPOCH_7_TABLE_RULES`.
+    pub quick_readjustment: bool,
+    /// Wave 4 (port-entrenched) — `State::moved_round` (-1 = never) and
+    /// `State::round`, stamped by `ctx_live`; the stationary alias reads
+    /// only while they differ (main.gd:5700-5701). Template default -1.
+    pub moved_round: i64,
+    pub round: i64,
 }
 
 /// One conditional-AP spec — the registry `params` block of a Shatter / Tear /
@@ -497,6 +550,12 @@ pub struct ShootProfile {
     /// unit. "" = none.
     pub shred_ones_owner: String,
     pub indirect: bool,
+    /// Wave 4 (port-quick-readjustment): this weapon's Indirect moved-penalty
+    /// magnitude — the registry `moved_hit_penalty` (the book's -1 to hit
+    /// after a move; main.gd:3223-3224's `unit_param(member, "Indirect",
+    /// "moved_hit_penalty", 1)`), stamped behind the FROZEN
+    /// `EPOCH_7_TABLE_RULES` in `build_for`; 0 = none (below the gate).
+    pub indirect_moved_hit_penalty: i64,
     /// The unit-level "Indirect when Shooting" stamp (`build_for`'s epoch-6
     /// named walk below) — set ALONGSIDE `indirect` so the volley log
     /// (dice.rs) can name the RULE, not the weapon tag, when its cover skip
@@ -681,6 +740,10 @@ pub struct UnitStatic {
     pub wounds_max: Vec<i64>,
     pub quality: i64,
     pub fearless: bool,
+    /// `Profile.base_radius` — the S5 arrival machinery reads it off the
+    /// STATICS (`arrive_unit`'s explicit template parameter), so a copy mints
+    /// with the template's footprint, not the carrier's.
+    pub base_radius: f64,
     pub is_caster: bool,
     pub spells: Vec<Spell>,
     /// `GameUnit.has_special_rule("Caster Group")` — the round-start refill
@@ -701,6 +764,14 @@ pub struct UnitStatic {
     /// sim.rs's cast sub-phase. A battery is NEVER `is_caster` (the table's
     /// own comment: "is_caster() stays false", game_unit.gd:417).
     pub spell_accumulator: bool,
+    /// Spell Conduit (design #824 §4 PR 2) — a friendly cast ORIGIN, read
+    /// BY NAME behind the frozen `EPOCH_7_TABLE_RULES`; the walk is sim.rs's
+    /// cast sub-phase. Params off the rule entry — the keys PR 1's twin
+    /// reads (battle_sim.gd `_cast_origins`). A conduit is never a caster.
+    pub spell_conduit: bool,
+    pub spell_conduit_reach_in: f64,
+    pub spell_conduit_casting_mod: i64,
+    pub spell_conduit_needs_steady: bool,
     /// `RulesRegistry.unit_rule_active(gu, "Battleborn" | "Steadfast")`
     /// (rules_registry.gd:136-142) — the two rules that clear Shaken for free at
     /// a round start (ai_planner.gd:493-495). Static per unit, so the registry
@@ -742,6 +813,13 @@ pub struct UnitStatic {
     /// move seam (sim.rs), the latch living in `State.feats_used`, never
     /// in statics. `None` below `rules_epoch` 7. See `speed_feat_of`.
     pub speed_feat: Option<SpeedFeatSpec>,
+    /// FEAT PR 3 — the two aof latch feats' windows, read BY NAME off the
+    /// registry (the design's `hit_bonus: 1, all_attacks: true` /
+    /// `ap_bonus: 1, condition: any_attack`, both `uses_per_game: 1` —
+    /// the param the table's own resolver never reads). Zeros below
+    /// `rules_epoch` 7. See `feat_latch_stamps`.
+    pub precision_feat_hit: i64,
+    pub piercing_feat_ap: i64,
     /// The Reckless Piercing read (epoch 7) — the round AP stamp family
     /// (`reckless_piercing_of`); empty below `rules_epoch` 7.
     pub reckless_piercing: Vec<RecklessPiercingSpec>,
@@ -760,6 +838,8 @@ pub struct UnitStatic {
     /// The Extended Buff Range carrier stamp (epoch 7) — `ebr_of`; None below
     /// `rules_epoch` 7. Both relay ends answer through this flag.
     pub ebr: Option<EbrStamp>,
+    /// The Teleport/Ethereal read (epoch 8) — `teleport_of`; None below 8.
+    pub teleport: Option<TeleportSpec>,
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
@@ -917,6 +997,10 @@ pub struct UnitStatic {
     /// (`within_in == 0.0`) below `EPOCH_7_TABLE_RULES` and for every
     /// non-carrier.
     pub reinforcement: Reinforcement,
+    /// Wave 4 — the S5 summon's two read params (`spawn_of`). Default
+    /// (`place_in == 0.0`) below `EPOCH_7_TABLE_RULES` and for every
+    /// non-carrier.
+    pub spawn: Spawn,
     /// "Re-Deployment" (the deployment-phase redeploy: gf 13 + aof 2 carrier
     /// factions): the entry's own `max_units` param, stamped per carrier.
     /// The table reads it at `solo_controller.gd:9642` with fallback 2
@@ -1155,6 +1239,42 @@ fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> 
     (best_penalty, best_over_in)
 }
 
+/// Wave 4 (port-entrenched) — `stealth_alias_of_excluding` SPLIT by
+/// `requires_stationary`: true keeps the flagged entries (Entrenched),
+/// false only the unconditional ones, below the FROZEN gate never called.
+fn stealth_alias_split_walk(
+    reg: &mut Registries, p: &Profile, skip: &str, want_stationary: bool,
+) -> (i64, f64) {
+    let mut best_penalty = 0;
+    let mut best_over_in = 0.0;
+    let map = reg.rules_for(&p.game_system);
+    for r in &p.special_rules {
+        let name = base_rule_name(r);
+        if name.is_empty() || name == "Stealth" || name == skip || !rule_on_all_models(p, &name) {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &name) else {
+            continue;
+        };
+        if e.primitive.as_deref() != Some("Stealth") {
+            continue;
+        }
+        if e.param_b_or("requires_stationary", false) != want_stationary {
+            continue;
+        }
+        let pen = e.param_i("hit_penalty", 0);
+        if pen > best_penalty {
+            best_penalty = pen;
+            best_over_in = e.param_f("over_in", 0.0);
+        }
+    }
+    (best_penalty, best_over_in)
+}
+
+/// The split's SIBLING fn — the `requires_stationary` members only.
+fn stationary_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64) {
+    stealth_alias_split_walk(reg, p, "", true)
+}
 /// Battleborn family wave 3 (rules-wave3-battleborn) — main.gd
 /// `:_solo_round_start_recovery_rule`'s generic Battleborn-primitive alias
 /// layer, stamped BY NAME: each die-roll recover alias the unit carries
@@ -1260,6 +1380,23 @@ fn unit_param_f(reg: &mut Registries, p: &Profile, rule: &str, key: &str, fallba
     let map = reg.rules_for(&p.game_system);
     match map.lookup(&p.faction_folder, rule) {
         Some(e) => e.param_f(key, fallback),
+        None => fallback,
+    }
+}
+
+/// `unit_param_f`'s contract, one integer (resp. printed-bool) param.
+fn unit_param_i(reg: &mut Registries, p: &Profile, rule: &str, key: &str, fallback: i64) -> i64 {
+    let map = reg.rules_for(&p.game_system);
+    match map.lookup(&p.faction_folder, rule) {
+        Some(e) => e.param_i(key, fallback),
+        None => fallback,
+    }
+}
+
+fn unit_param_b_or(reg: &mut Registries, p: &Profile, rule: &str, key: &str, fallback: bool) -> bool {
+    let map = reg.rules_for(&p.game_system);
+    match map.lookup(&p.faction_folder, rule) {
+        Some(e) => e.param_b_or(key, fallback),
         None => fallback,
     }
 }
@@ -1834,13 +1971,21 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         ""
     };
-    let (stealth_alias_penalty, stealth_alias_over_in) = if machine_fog_boost {
-        stealth_alias_of_excluding(reg, p, "Machine-Fog")
-    } else if empyrean_spirit_boost {
-        stealth_alias_of_excluding(reg, p, "Empyrean Spirit")
-    } else {
-        stealth_alias_of(reg, p)
-    };
+    // Wave 4 (port-entrenched) — below the FROZEN gate the OLD unconditional
+    // fold stays byte-identical; AT 7 the walk splits (main.gd:5694-5702).
+    let (stealth_alias_penalty, stealth_alias_over_in, stationary_alias_penalty, stationary_alias_over_in) =
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            let skip = if machine_fog_boost { "Machine-Fog" }
+                else if empyrean_spirit_boost { "Empyrean Spirit" } else { "" };
+            let (ap, ao) = stealth_alias_split_walk(reg, p, skip, false);
+            let (sp, so) = stationary_alias_of(reg, p);
+            (ap, ao, sp, so)
+        } else {
+            let (ap, ao) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog") }
+                else if empyrean_spirit_boost { stealth_alias_of_excluding(reg, p, "Empyrean Spirit") }
+                else { stealth_alias_of(reg, p) };
+            (ap, ao, 0, 0.0)
+        };
     // WAVE 3 — the family's DATA-ALIAS amounts, gated on the FROZEN
     // `EPOCH_6_TABLE_RULES`: an `rules_epoch: 5` record (the Gen-3 fleet's
     // window) reads zeros and replays byte-exact; the stamp IS the gate.
@@ -1946,6 +2091,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         stealth: rule_on_all_models(p, "Stealth"),
         stealth_alias_penalty,
         stealth_alias_over_in,
+        stationary_alias_penalty,
+        stationary_alias_over_in,
+        stationary_alias_name: if stationary_alias_penalty > 0 { "Entrenched" } else { "" },
         evasive: rule_on_all_models(p, "Evasive") || !evasive_boost.is_empty(),
         evasive_alias: !evasive_boost.is_empty(),
         evasive_alias_name: evasive_boost,
@@ -1976,6 +2124,20 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         mobile_artillery_over_in,
         grounded_precision_hit,
         moved_this_round: true,
+        // Wave 4 (port-entrenched) — the table's own default (never moved).
+        moved_round: -1,
+        round: 0,
+        // Wave 4 (port-quick-readjustment) — the opt-out stamped off the
+        // NAME's own registry param (see Ctx::quick_readjustment), only
+        // where the name resolves through the Indirect primitive at all.
+        quick_readjustment: rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
+            && rules_of_primitive(reg, p, "Indirect")
+                .iter()
+                .any(|h| h.name == "Quick Readjustment")
+            && reg
+                .rules_for(&p.game_system)
+                .lookup(&p.faction_folder, "Quick Readjustment")
+                .is_some_and(|e| e.param_b_or("no_moved_penalty", false)),
         shielded: rule_on_all_models(p, "Shielded")
             || shielded_alias.as_ref().is_some_and(|(_, pending)| !*pending),
         shielded_alias: shielded_alias.map_or(ShieldedAlias::None, |(a, _)| a),
@@ -1997,6 +2159,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         instinctive_hit_bonus,
         hit_mod: 0,
         vs_hit_mod: 0,
+        ap_mod: 0,
+        defense_mod: 0,
         melee_hit_bonus,
         melee_hit_bonus_charge,
         unstoppable_grant: false,
@@ -2016,9 +2180,12 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_hit_mod: 0,
         growth_def_mod: 0,
         growth_fortify_ap: 0,
+        growth_def_lowers: false,
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
         reckless_ap: 0,
+        feat_hit_bonus: 0,
+        feat_ap_bonus: 0,
     }
 }
 
@@ -2653,6 +2820,14 @@ pub struct UtilityBuff {
     pub hit_mod: i64,
     pub casting_mod: i64,
     pub morale_mod: i64,
+    /// `ap_mod` / `def_mod` / `defense_mod` — the seam 4 record shape (design
+    /// §4 step 1), parsed ONLY from `EPOCH_7_TABLE_RULES` on (below 7 the
+    /// fields stay 0 and the all-zero row keeps being dropped). NOT
+    /// `range_bonus_in` (documented NO, design §4(d) step 3) and NOT
+    /// `move_mod` (seam 2). The READS are PR 2 — nothing folds these yet.
+    pub ap_mod: i64,
+    pub def_mod: i64,
+    pub defense_mod: i64,
     pub grants_rule: String,
     pub scope: String,
     /// `beneficiary` — "attackers" on the Mark family: the record belongs to
@@ -2668,9 +2843,11 @@ pub struct UtilityBuff {
 /// the volley sight/range seams); the remaining 16 stay stamped-but-unconsumed
 /// (audited 2026-09-05: the grant-only names' nine granted names are read at
 /// no `mods::granted`/`granted_vs` call site, `casting_mod` is recorded but
-/// `Role::Casting` is never summed, and `defense_mod`/`ap_mod`/`move_mod`/
-/// `range_bonus_in` are not modeled on `UtilityBuff` — `record_buff` drops
-/// the all-zero row — their seams still do not exist on this core).
+/// `Role::Casting` is never summed, and `move_mod`/`range_bonus_in` are not
+/// modeled on `UtilityBuff` — `record_buff` drops the all-zero row (`ap_mod`/
+/// `def_mod`/`defense_mod` joined the record shape at `EPOCH_7_TABLE_RULES`,
+/// seam 4 step 1; their reads are PR 2) — their seams still do not exist on
+/// this core).
 const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Unwieldy Debuff",
     "Unpredictable Shooter Mark",
@@ -2760,6 +2937,28 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
         });
     }
     None
+}
+
+/// The Teleport/Ethereal read (#816 PR 2): by NAME, `EPOCH_8_PLANNER_MENU`
+/// -gated (#831's epoch-8 move — the epoch-7 corpus was recorded without the
+/// Reposition candidate, so nothing of the port is live below 8). Cap by
+/// NAME: Teleport 3"/6", others (Ethereal) flat 6".
+#[derive(Debug, Clone, PartialEq)]
+pub struct TeleportSpec { pub name: String } // the cap key and the log subject
+
+pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
+    if rule != "Teleport" || rush { 6.0 } else { 3.0 }
+}
+
+/// The stamp (`crossing_attack_of` pattern): the FIRST Teleport-primitive name.
+fn teleport_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<TeleportSpec> {
+    if !rule_on(rules_epoch, EPOCH_8_PLANNER_MENU) { return None; }
+    let map = reg.rules_for(&p.game_system);
+    p.special_rules.iter().chain(p.item_grants.iter()).map(|raw| base_rule_name(raw))
+        .find(|n| (*n == "Teleport" && map.lookup(&p.faction_folder, n).is_some())
+            || *n == "Ethereal"
+            || map.lookup(&p.faction_folder, n).filter(|e| e.primitive.as_deref() == Some("Teleport")).is_some())
+        .map(|n| TeleportSpec { name: n })
 }
 
 /// One carried "Surprise Attack" — "Counts as having Infiltrate. The first
@@ -2923,6 +3122,44 @@ fn speed_feat_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<
         });
     }
     None
+}
+
+/// FEAT PR 3 (docs/plans/FEAT_DESIGN_2026-09-08.md §3-4, PRs 3+4 folded by
+/// coordinator ruling) — the two aof once-per-game latch feats, stamped BY
+/// NAME (the #489 lesson): "Precision Feat" (ghostly_undead +
+/// ossified_undead, primitive `Shot Modifier`, params hit_bonus 1 /
+/// all_attacks true) and "Piercing Feat" (ogres, primitive
+/// `Piercing Assault`, params ap_bonus 1 / condition any_attack). Both
+/// carry `uses_per_game: 1` — dead data on the table's own resolver
+/// (`AiCombatMath.conditional_ap_bonus` ai_combat_math.gd:410-437 answers
+/// the four conditional-AP spellings and never reads it; `stamp_shot_modifier`
+/// above keeps Precision Feat OUT for exactly this reason) — so the stamp
+/// demands it: the params land only on a once-per-game entry, and the
+/// once-per-game ledger is the #827 FEAT latch, spent by the resolve seams
+/// (sim.rs), never by statics (unit.rs:794's dead-data rule). Gated on the
+/// FROZEN `EPOCH_7_TABLE_RULES`: a record below 7 keeps the zeros and
+/// replays byte-exact.
+fn feat_latch_stamps(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64) {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        return (0, 0);
+    }
+    let map = reg.rules_for(&p.game_system);
+    let read = |name: &str, param: &str, primitive: &str| -> i64 {
+        if !has_exact_rule(&p.special_rules, name) && !has_exact_rule(&p.item_grants, name) {
+            return 0;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, name) else {
+            return 0;
+        };
+        if e.primitive.as_deref() != Some(primitive) || e.param_i("uses_per_game", 0) <= 0 {
+            return 0;
+        }
+        e.param_i(param, 0).max(0)
+    };
+    (
+        read("Precision Feat", "hit_bonus", "Shot Modifier"),
+        read("Piercing Feat", "ap_bonus", "Piercing Assault"),
+    )
 }
 /// One carried "Mind Control" entry with the fatigue payload — the table's
 /// pre-attack slot main.gd:1070 (`_solo_apply_mind_control` :16997-17037).
@@ -3195,21 +3432,31 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             hit_mod: e.param_i("hit_mod", 0),
             casting_mod: e.param_i("casting_mod", 0),
             morale_mod: e.param_i("morale_mod", 0),
+            // SEAM 4 step 1 (design §4(d), the FROZEN `EPOCH_7_TABLE_RULES`):
+            // the three ap/def knobs join the record shape — a row whose ONLY
+            // knob is one of these lands on `record_buff`'s ledger from epoch
+            // 7, below 7 they stay 0 so the row keeps being dropped and an old
+            // corpus's stamps are unchanged.
+            ap_mod: if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { e.param_i("ap_mod", 0) } else { 0 },
+            def_mod: if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { e.param_i("def_mod", 0) } else { 0 },
+            defense_mod: if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { e.param_i("defense_mod", 0) } else { 0 },
             grants_rule: e.param_s("grants_rule").to_string(),
             scope: e.param_s("scope").to_string(),
             beneficiary: e.param_s("beneficiary").to_string(),
             once: e.param_b_or("once", true),
         });
-        // The ledger models four knobs (hit / casting / morale / grant) and the
-        // movement arm. An entry whose whole effect is a knob it does NOT carry
-        // — `def_mod`, `defense_mod`, `ap_mod`, `move_mod`, `range_bonus_in` —
-        // would record an all-zero row that `record_buff` drops on the floor.
-        // Named here rather than skipped in silence.
+        // The ledger models seven knobs (hit / casting / morale / the three
+        // ap-def knobs from `EPOCH_7_TABLE_RULES` / grant) and the movement
+        // arm. An entry whose whole effect is a knob it does NOT carry —
+        // `move_mod`, `range_bonus_in` — would record an all-zero row that
+        // `record_buff` drops on the floor. Named here rather than skipped in
+        // silence.
         let b = out.last().expect("just pushed");
         if !b.vs_target && b.reposition_in <= 0.0 && b.grants_rule.is_empty()
-            && (b.hit_mod, b.casting_mod, b.morale_mod) == (0, 0, 0) {
+            && (b.hit_mod, b.casting_mod, b.morale_mod, b.ap_mod, b.def_mod, b.defense_mod)
+                == (0, 0, 0, 0, 0, 0) {
             un.push(Unimplemented { rule: b.name.clone(), why:
-                "Utility Buff params carry no hit/casting/morale mod and no grants_rule, so this resolver records nothing — main.gd:16534 builds the same three keys and _solo_record_spell_mod:3663 drops the all-zero row. If the rule works on the table it does so at a seam this port does not claim".into() });
+                "Utility Buff params carry no hit/casting/morale/ap/def mod and no grants_rule, so this resolver records nothing — main.gd:16534 builds the same three keys and _solo_record_spell_mod:3663 drops the all-zero row. If the rule works on the table it does so at a seam this port does not claim".into() });
         }
     }
     out
@@ -3289,6 +3536,65 @@ fn reinforcement_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Rein
         },
         None => Reinforcement { within_in: REINFORCEMENT_EDGE_IN, once: true },
     }
+}
+
+/// `Spawn`'s reach when the registry entry carries no `place_in`. 6" in all
+/// nine shipped entries (gf 4 factions, aof 5).
+pub const SPAWN_PLACE_IN: f64 = 6.0;
+
+/// `Spawn`'s reach when the registry entry carries no `place_in`. 6" in all
+/// nine shipped entries (gf 4 factions, aof 5).
+/// `UnitStatic.spawn` — the S5 summon's read params, the same pair the
+/// table takes off the entry (`_solo_try_spawn`, main.gd:17399 `place_in`,
+/// `:17394` `once_per_game`). Default (`place_in == 0.0`) below
+/// `EPOCH_7_TABLE_RULES` and for every non-carrier.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Spawn {
+    /// `params.place_in` — the fresh copy lands fully within this many inches
+    /// of where the carrier stood. `0.0` means "not a carrier".
+    pub place_in: f64,
+    /// `params.once_per_game` — the summon is offered ONCE. Read as the
+    /// reason a spent carrier never summons again; a hypothetical
+    /// `once_per_game: false` entry (none ships) is declined outright rather
+    /// than half-modelled, the same call Reinforcement's `once` makes.
+    pub once_per_game: bool,
+    /// EPOCH 8 — the raw `Spawn(<name> [<n>])` string the carrier carries.
+    /// The header map's KEY half (`spawn:<carrier_key>:<raw>`); empty = the
+    /// bare name, which names no template and never mints one.
+    pub raw: String,
+    /// EPOCH 8 — the NAMED unit off the raw string: the template the record
+    /// header's `spawn_profiles` map ships and the beat mints. Never the
+    /// carrier's own profile — that fallback is the #823 fidelity break.
+    pub name: String,
+    /// EPOCH 8 — the bracketed model count off the raw string.
+    pub count: i64,
+}
+
+/// `UnitStatic.spawn` — read BY NAME behind the FROZEN
+/// `EPOCH_7_TABLE_RULES`, mirroring `reinforcement_of`. The table matches the
+/// name per member and model (`RulesRegistry.has_primitive`, main.gd:17380);
+/// the core's statics are per profile, so one read per profile is the same
+/// granularity `reinforcement_of` already uses. The NAMED target rides on top
+/// behind `EPOCH_8_PLANNER_MENU` (SPAWN_DESIGN_2026-09-08 §3.2(b)): below the
+/// gate a record reads no target at all, so nothing new is looked up.
+fn spawn_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Spawn {
+    if !rule_on(rules_epoch, EPOCH_7_TABLE_RULES) || !unit_rule_active(reg, p, "Spawn") {
+        return Spawn::default();
+    }
+    let map = reg.rules_for(&p.game_system);
+    let (place_in, once_per_game) = match map.lookup(&p.faction_folder, "Spawn") {
+        Some(e) => (e.param_f("place_in", SPAWN_PLACE_IN), e.param_b_or("once_per_game", true)),
+        None => (SPAWN_PLACE_IN, true),
+    };
+    let mut spawn = Spawn { place_in, once_per_game, ..Spawn::default() };
+    if rule_on(rules_epoch, EPOCH_8_PLANNER_MENU) {
+        if let Some((raw, name, count)) = spawn_target_rule(&p.special_rules) {
+            spawn.raw = raw;
+            spawn.name = name;
+            spawn.count = count;
+        }
+    }
+    spawn
 }
 
 /// The Ambush family's per-profile read (`UnitStatic.ambush_family`): each
@@ -3844,6 +4150,63 @@ fn stamp_takedown_strike_named(
         deadly: e.param_i("deadly", 3),
         takedown: true,
         limited: true,
+        extra_attack_q: q,
+        ..Default::default()
+    });
+}
+
+/// FEAT PR 2 (docs/plans/FEAT_DESIGN_2026-09-08.md §4) — the once-per-game
+/// bonus RANGED attack "Takedown Shot" (gf x2 — Human Inquisition, Ratmen
+/// Clans; primitive `Takedown` with `extra_attack_q: 2, ap: 2,
+/// uses_per_game: 1`; the printed text adds Deadly(3)): "Once per game,
+/// when this model shoots, it may make one extra attack at Quality 2+ with
+/// AP(2), Deadly(3), and Takedown." The table's `_solo_takedown_bonus_groups`
+/// main.gd:17005 appends a synthetic single-model shot `{quality:
+/// extra_attack_q, ap, deadly: 3, takedown: true, "reach": 9999.0}` to the
+/// volley (main.gd:3097/:10089), spent once per game per bearer
+/// (`takedown_bonus_used_<name>`).
+///
+/// Here: the stamp APPENDS one synthetic shoot profile carrying the entry's
+/// own params, at the table's own 9999 reach so no range gate refuses it,
+/// `takedown: true` so the EXISTING Takedown landing path resolves it —
+/// and NO `limited` flag: the once-per-game ledger is the #827 FEAT latch
+/// (`State.feats_used`), spent by the volley seam (sim.rs), not by the
+/// Limited shape. The latch lives in runtime state, never in statics
+/// (unit.rs:794's dead-data rule) — the stamp only carries the params.
+/// One bonus attack per bearer even if a book duplicates the rule (the
+/// append runs once). Behind the FROZEN `EPOCH_7_TABLE_RULES` only — a
+/// record below 7 keeps the shoot array as the weapons built it and
+/// replays byte-exact.
+fn stamp_takedown_shot_named(
+    reg: &mut Registries,
+    p: &Profile,
+    shoot: &mut Vec<ShootProfile>,
+    name: &str,
+) {
+    if !has_exact_rule(&p.special_rules, name) && !has_exact_rule(&p.item_grants, name) {
+        return;
+    }
+    let map = reg.rules_for(&p.game_system);
+    let Some(e) = map.lookup(&p.faction_folder, name) else {
+        return;
+    };
+    if e.primitive.as_deref() != Some("Takedown") {
+        return;
+    }
+    let q = e.param_i("extra_attack_q", 0);
+    if q <= 0 {
+        return; // the always-on Takedown family — `stamp_takedown_named`'s read
+    }
+    shoot.push(ShootProfile {
+        name: name.to_string(),
+        attacks: 1,
+        count: 1,
+        // The table's synthetic shot carries "reach": 9999.0 (main.gd:3101)
+        // — in range at any board distance, its own range gate never refuses.
+        range: 9999,
+        ap: e.param_i("ap", 2),
+        deadly: e.param_i("deadly", 3),
+        takedown: true,
         extra_attack_q: q,
         ..Default::default()
     });
@@ -4481,6 +4844,14 @@ impl UnitStatic {
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             stamp_takedown_strike_named(reg, p, &mut melee, "Takedown Strike");
         }
+        // FEAT PR 2 (docs/plans/FEAT_DESIGN_2026-09-08.md §4), gated on the
+        // FROZEN `EPOCH_7_TABLE_RULES`: "Takedown Shot" is the once-per-game
+        // bonus RANGED attack under its own name — see
+        // `stamp_takedown_shot_named`. A record below epoch 7 keeps the
+        // shoot array as the weapons built it and replays byte-exact.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            stamp_takedown_shot_named(reg, p, &mut shoot, "Takedown Shot");
+        }
         // Boostbases wave (rules-wave4-boostbases), gated on the FROZEN
         // `EPOCH_6_TABLE_RULES`: "Mischievous Boost" is the Bane family's
         // widened save re-roll window — the entry's own `reroll_save_low` +
@@ -4625,6 +4996,26 @@ impl UnitStatic {
             }
         }
 
+        // Wave 4 (port-quick-readjustment) — the penalty leg: every ranged
+        // profile the Indirect facets reached takes the system's own
+        // `moved_hit_penalty` off the "Indirect" mechanics entry — the
+        // table's `unit_param(member, "Indirect", "moved_hit_penalty", 1)`
+        // (main.gd:3223-3224, the book's -1 to hit after a move), behind the
+        // FROZEN `EPOCH_7_TABLE_RULES`: a record below 7 replays untouched.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            let pen = reg
+                .rules_for(&p.game_system)
+                .lookup(&p.faction_folder, "Indirect")
+                .map_or(1, |e| e.param_i("moved_hit_penalty", 1));
+            if pen > 0 {
+                for sp in shoot.iter_mut() {
+                    if sp.indirect {
+                        sp.indirect_moved_hit_penalty = pen;
+                    }
+                }
+            }
+        }
+
         let is_caster = has_special_rule(&p.special_rules, "Caster")
             || has_special_rule(&p.special_rules, "Caster Group");
         let spells = if is_caster {
@@ -4654,6 +5045,7 @@ impl UnitStatic {
             wounds_max: p.wounds_max.clone(),
             quality: p.quality,
             fearless: has_special_rule(&p.special_rules, "Fearless"),
+            base_radius: p.base_radius,
             is_caster,
             spells,
             caster_group: has_special_rule(&p.special_rules, "Caster Group"),
@@ -4664,6 +5056,18 @@ impl UnitStatic {
             spell_accumulator: rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
                 && (has_special_rule(&p.special_rules, "Spell Accumulator")
                     || has_special_rule(&p.item_grants, "Spell Accumulator")),
+            // Spell Conduit (design #824 §4 PR 2), gated on the FROZEN
+            // `EPOCH_8_PLANNER_MENU` — the #838 epoch-8 ruling (a MENU change
+            // is a NEW frozen gate): below epoch 8 every field stays inert
+            // and the replay is byte-exact.
+            spell_conduit: rule_on(rules_epoch, EPOCH_8_PLANNER_MENU)
+                && (has_special_rule(&p.special_rules, "Spell Conduit")
+                    || has_special_rule(&p.item_grants, "Spell Conduit")),
+            spell_conduit_reach_in: unit_param_f(reg, p, "Spell Conduit", "range_in", 12.0),
+            spell_conduit_casting_mod: unit_param_i(reg, p, "Spell Conduit", "casting_mod", 1),
+            spell_conduit_needs_steady: unit_param_b_or(
+                reg, p, "Spell Conduit", "requires_not_shaken", true,
+            ),
             battleborn_active: unit_rule_active(reg, p, "Battleborn"),
             steadfast_active: unit_rule_active(reg, p, "Steadfast"),
             // Battleborn family wave 3 (rules-wave3-battleborn): the four
@@ -4744,6 +5148,7 @@ impl UnitStatic {
             },
             ambush_family: ambush_family_of(reg, p, rules_epoch),
             reinforcement: reinforcement_of(reg, p, rules_epoch),
+            spawn: spawn_of(reg, p, rules_epoch),
             re_deployment_max_units: re_deployment_max_units_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             storm: storm_of(reg, p, rules_epoch),
@@ -4751,12 +5156,15 @@ impl UnitStatic {
             crossing_attack: crossing_attack_of(reg, p, rules_epoch),
             surprise_attack: surprise_attack_of(reg, p, rules_epoch),
             speed_feat: speed_feat_of(reg, p, rules_epoch),
+            precision_feat_hit: feat_latch_stamps(reg, p, rules_epoch).0,
+            piercing_feat_ap: feat_latch_stamps(reg, p, rules_epoch).1,
             reckless_piercing: reckless_piercing_of(reg, p, rules_epoch),
             fatigue_debuff: fatigue_debuff_of(reg, p, rules_epoch),
             grounded_speed: grounded_speed_of(reg, p, rules_epoch),
             mind_control: mind_control_of(reg, p, rules_epoch),
             retreating_strikes: retreating_strikes_of(reg, p, rules_epoch),
             ebr: ebr_of(reg, p, rules_epoch),
+            teleport: teleport_of(reg, p, rules_epoch),
             growth: growth_of(reg, p, &mut unimplemented),
             piercing_tags: piercing_tags_of(reg, p, rules_epoch),
             unimplemented,

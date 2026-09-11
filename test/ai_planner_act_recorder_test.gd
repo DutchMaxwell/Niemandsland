@@ -64,6 +64,8 @@ func before_test() -> void:
 	AiActRecorder._stream = null
 	AiActRecorder._header_written = false
 	AiActRecorder._count = 0
+	AiActRecorder.spawn_profile_resolver = Callable()
+	AiActRecorder.rules_epoch = AiActRecorder.SPAWN_PROFILES_EPOCH
 	AiPlanner.trace = {}
 
 
@@ -701,6 +703,25 @@ func test_header_books_is_empty_for_an_unpinned_api_game() -> void:
 	OPRApiClient.reset_rule_text_stamp()
 
 
+## #638: the header stamps the RULES EPOCH the game played under, under the exact key the
+## core reads (`knobs.rules_epoch`, core/nml-core/src/acts.rs `read_act_header`). Without it
+## a replay reads `0` and takes the pre-epoch branch of every `rule_on` gate, which is why
+## the reference bundles replayed 200/200 through the LEGACY rules. The value must track the
+## recorder's own `rules_epoch` var (the GDScript mirror of `CURRENT_RULES_EPOCH`), not a
+## literal — a bump that forgets this key is exactly the defect.
+func test_header_stamps_the_rules_epoch_the_core_reads() -> void:
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	AiActRecorder.finish(AiActRecorder.begin(state, 1, pool, Callable()),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+
+	var knobs := (JSON.parse_string(_dump_lines()[0]) as Dictionary).get("knobs", {}) as Dictionary
+	assert_bool(knobs.has("rules_epoch")) \
+		.override_failure_message("the header must stamp knobs.rules_epoch (#638)").is_true()
+	assert_int(int(knobs.get("rules_epoch", -1))).is_equal(AiActRecorder.rules_epoch)
+	assert_int(int(knobs.get("rules_epoch", -1))).is_greater(0)
+
+
 ## NML-1152 step 10: state_before now carries a per-unit LEDGER — the table-side
 ## records (buffs, once-per-round flags, growth markers) `dice_gate.py` used to
 ## replay from a fresh, empty Rust `State` no matter what the table had already
@@ -733,3 +754,126 @@ func test_ledger_carries_a_units_buffs_and_growth_markers_the_other_stays_empty(
 	assert_bool((units["B"] as Dictionary).has("ledger")).is_true()
 	assert_bool(((units["B"] as Dictionary)["ledger"] as Dictionary).is_empty()).is_true()
 
+## ===== Spawn PR 1/2 (docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1) =====
+## The header ships the NAMED copy's profile under `spawn_profiles`: one entry
+## per (state unit key, Spawn rule string) a living carrier (unit or attached
+## hero — main._solo_try_spawn's member walk) carries, keyed
+## `spawn:<carrier_key>:<rule_string>`, valued by the SAME serializer call the
+## `profiles` map uses. Absent entirely when no Spawn carrier exists or the
+## record sits below the epoch — byte-identical headers either way. The
+## resolution itself is the recorder's export-time job (a record must stay
+## self-contained; NO fallback to the carrier's profile — that is exactly the
+## #823 fidelity break).
+
+const _SPAWN_RULE := "Spawn(Rat Swarm [10])"
+
+
+## A carrier the way main.gd's beat sees one: per-MODEL rule strings (the beat
+## reads model.properties, not the unit), one alive model each.
+func _spawn_carrier(pid: int, uid: String) -> GameUnit:
+	var u := _armed(pid, [Vector3.ZERO], uid)
+	u.unit_properties["game_system"] = "gf"
+	u.unit_properties["faction_folder"] = "rat_kingdoms"
+	for m in u.models:
+		(m as ModelInstance).properties["special_rules"] = [_SPAWN_RULE]
+	return u
+
+
+## The profile `named_unit_profile` would hand back for the rule's name/count
+## pair: a fresh OPRUnit with size = the bracketed model count.
+func _rat_swarm_profile() -> OPRApiClient.OPRUnit:   # as named_unit_profile_sync hands one back
+	var opr := OPRApiClient.OPRUnit.new()
+	opr.name = "Rat Swarm"
+	opr.size = 10
+	opr.quality = 4
+	opr.defense = 3
+	opr.special_rules = ["Tough(2)"]
+	opr.base_size_round = 25
+	return opr
+
+
+## The resolver double mirrors main.gd's export-time contract: (carrier, raw) ->
+## the NAMED unit's profile stamped through BattleSim._unit_profile, over a
+## throwaway template GameUnit (placeholder nodes for the shape probe, freed).
+func _resolver(profile: OPRApiClient.OPRUnit) -> Callable:
+	return func(_carrier: GameUnit, _raw: String) -> Dictionary:
+		return _stamp_of(profile)
+
+
+func _stamp_of(profile: OPRApiClient.OPRUnit) -> Dictionary:
+	var nodes: Array[Node3D] = []
+	for i in profile.size:
+		var n := Node3D.new()
+		add_child(n)
+		nodes.append(n)
+	var template := EquipmentDistributor.create_from_opr_unit(profile, nodes, 1, {})
+	var stamp := BattleSim._unit_profile(template)
+	for n in nodes:
+		(n as Node3D).queue_free()
+	return stamp
+
+
+func _spawn_state() -> Dictionary:
+	var state := _state()
+	(state["units"]["B"] as Dictionary)["unit"] = _spawn_carrier(2, "B")
+	return state
+
+
+func _begin_hold(state: Dictionary) -> void:
+	AiActRecorder.finish(AiActRecorder.begin(state, 1,
+		[(state["units"]["A"] as Dictionary)["unit"]], Callable()),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+
+
+func test_a_spawn_carrier_stamps_the_named_profile_into_the_header() -> void:
+	var profile := _rat_swarm_profile()
+	AiActRecorder.spawn_profile_resolver = _resolver(profile)
+	var state := _spawn_state()
+	_begin_hold(state)
+
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	assert_bool(header.has("spawn_profiles")).is_true()
+	var sp := header["spawn_profiles"] as Dictionary
+	assert_int(sp.size()).is_equal(1)
+	var key := "spawn:B:%s" % _SPAWN_RULE
+	assert_bool(sp.has(key)).is_true()
+	# the value is the profiles-map shape of the NAMED unit — a DIFFERENT profile
+	# from the carrier's (the #823 fidelity point), same serializer call.
+	var stamp := _stamp_of(profile)
+	stamp.erase("unit_id")   # the template's id is per-resolution
+	# the recorded value round-tripped through JSON.stringify/parse (the recorder's
+	# exact pipeline: ints read back as floats, typed arrays untyped) — compare
+	# over the SAME pipeline, not in-memory types.
+	var expected: Dictionary = JSON.parse_string(JSON.stringify(stamp, "", true, true))
+	var recorded: Dictionary = (sp[key] as Dictionary).duplicate()
+	recorded.erase("unit_id")
+	assert_dict(recorded).is_equal(expected)
+	assert_str(str(recorded["name"])).is_equal("Rat Swarm")
+	assert_int(int(recorded["model_count"])).is_equal(10)
+	assert_int(int(recorded["tough"])).is_equal(2)
+	# carrier A carries no Spawn and the copy is NOT the carrier's profile
+	assert_bool(sp.has("spawn:A:%s" % _SPAWN_RULE)).is_false()
+	var a_name := str(((header["profiles"] as Dictionary)["A"] as Dictionary)["name"])
+	assert_str(str(recorded["name"])).is_not_equal(a_name)
+
+
+func test_a_game_without_spawn_carriers_writes_no_spawn_profiles_key() -> void:
+	AiActRecorder.spawn_profile_resolver = _resolver(_rat_swarm_profile())
+	var state := _state()   # A and B carry no Spawn rule anywhere
+	_begin_hold(state)
+
+	var line: String = _dump_lines()[0]
+	var header := JSON.parse_string(line) as Dictionary
+	assert_bool(header.has("spawn_profiles")).is_false()
+	# byte-identity: the substring cannot hide anywhere in the serialized header
+	assert_str(line).not_contains("spawn_profiles")
+
+
+func test_an_epoch7_record_writes_no_spawn_profiles_key() -> void:
+	AiActRecorder.rules_epoch = 7
+	AiActRecorder.spawn_profile_resolver = _resolver(_rat_swarm_profile())
+	var state := _spawn_state()
+	_begin_hold(state)
+
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	assert_bool(header.has("spawn_profiles")).is_false()

@@ -65,7 +65,7 @@ distinct rule name against the four layers that must know it:
      - a live rule GRANT's name does not need hand-listing, it is read off
      the `*::granted(state, i, "X")` call sites (consumed_grant_names).
      Skipping this reopens #489's bug for the next primitive.
-  4. encoder   - a slot in data/encoder_rule_vocab_v1.json (v7, unit band,
+  4. encoder   - a slot in data/encoder_rule_vocab_v1.json (v8, unit band,
                  weapon band or unit2 - the fourth trailing band).
 
 PRIVATE-SAFE: the books are read at runtime from wherever `--books` points;
@@ -87,6 +87,7 @@ usage errors exit 2.
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime
 import json
 import re
@@ -121,17 +122,33 @@ MAX_GRANT_DEPTH = 8
 # these reads as "still to port", which is false for both: Unique is
 # list-building only (rules_registry.gd never reads it at runtime, so no
 # resolver arm will ever exist for it); Swift's whole effect (params:
-# {"negates": "Slow"}) is already baked into the move value the loader
-# computes per-unit BEFORE the core ever runs (list_to_profile.py's
-# move-band pass resolves Fast/Slow/Quick/... and their negations into one
-# static `mv` field - Swift is consumed there, not at runtime, so it is not
-# itself a MOVE_PRIMITIVES entry and would never earn PARTIAL either).
+# {"negates": "Slow"}) is the name-level Slow cancel in the loader's
+# move-band pass (list_to_profile.py:_move_bands, mirroring
+# movement_range_controller.gd:95-109 — a Swift(3)-stripped pre-scan skips
+# the Slow fold and marks the band filled; fixed 09.09.2026, before that the
+# pass had NO negation leg and this comment claimed one). Swift is consumed
+# there, at capture time, not at runtime, so it is not itself a
+# MOVE_PRIMITIVES entry and would never earn PARTIAL either.
 # Rank -1 so real evidence elsewhere always outranks N/A if this table and
 # reality ever disagree.
+# "Swift Aura" (params: {"grants": "Swift"}): stays GRANT-MISSING (the
+# strict ruling, 09.09.2026). The grant rule credits a carrier only when the
+# granted name resolves PORTED in the same system — N/A never does — and a
+# bare loader "Swift" token is not auto-credited either (see
+# LOADER_NAME_ALIASES: the loader scan skips docstrings/identifiers and a
+# string-constant hit proves nothing about WHERE the read lives). The
+# loader's own aura-expansion-to-_move_bands hop is real but invisible to
+# this instrument by construction; the cancellation is covered by the
+# loader's unit tests (test_list_to_profile.py, the Swift/Slow pair), not by
+# a census verdict.
 NA_NAMES: dict[str, str] = {
     "Unique": "list-building only, no in-game effect (not a porting target)",
-    "Swift": "already folded into the loader's move-band pass"
-             " (negates Slow before the core ever runs)",
+    "Swift": "negates Slow by name in the loader's move-band pass"
+             " (list_to_profile.py:_move_bands, the table's"
+             " movement_range_controller.gd:95-109)",
+    "Sniper REMOVE": "list-building upgrade that strips the Sniper weapon"
+                     " rule; the built list already carries the weapon"
+                     " without it — no in-game effect (maintainer 09.09.)",
 }
 
 # Primitive -> the registry param keys a resolver on this core actually
@@ -420,13 +437,18 @@ _CONSUMED_PARAM_ROWS: tuple[ConsumedParams, ...] = (
     # grant-only entries' records land in the ledger (sim.rs::record_buff)
     # but their nine granted names (Dangerous/Difficult Terrain, Slow, Fast,
     # Swift, Entrenched, Rapid Advance, Rapid Rush, Rapid Charge) are read at
-    # NO granted()/granted_vs() call site; defense_mod/def_mod, ap_mod,
-    # move_mod and range_bonus_in are not modeled on unit.rs's UtilityBuff,
-    # so record_buff drops the all-zero row. The pick gates (range_in/
-    # target/needs_los/max_targets/once/beneficiary) are read only to shape
-    # the pick, never the effect - listing one would flip all 16 while their
-    # effects stay unread, the exact #489 shape this table exists to prevent.
-    ConsumedParams("Utility Buff", frozenset({"hit_mod", "morale_mod", "casting_mod"})),
+    # NO granted()/granted_vs() call site; move_mod and range_bonus_in are
+    # not modeled on unit.rs's UtilityBuff, so record_buff drops the
+    # all-zero row. SEAM 4 (PR 1 record shape, PR 2 the reads): ap_mod,
+    # def_mod and defense_mod are read at rules_epoch 7 — sim::ctx_live sums
+    # them (mods::Role::Ap / Role::Defense), dice.rs folds `ap + ap_mod` at
+    # the pierce sites and `defense + defense_mod` at the save rung.
+    # Piercing Debuff (gf), Defense Buff (aof), Defense Debuff (aof+gf): +3.
+    # The pick gates (range_in/target/needs_los/max_targets/once/beneficiary)
+    # are read only to shape the pick, never the effect - listing one would
+    # flip all 16 while their effects stay unread, the exact #489 shape this
+    # table exists to prevent.
+    ConsumedParams("Utility Buff", frozenset({"hit_mod", "morale_mod", "casting_mod", "ap_mod", "def_mod", "defense_mod"})),
     # Block B9: deployment.rs::deploy_side reads the registry's `place_in`
     # (UnitSpec.place_in_m via list_to_profile.py:_deploy_flags — the table's
     # `unit_param(unit, "Vanguard", "place_in", 9.0)`, solo_controller.gd:9627)
@@ -829,6 +851,89 @@ def scan_rust(repo: Path) -> tuple[dict, dict, list]:
     return tokens, name_tokens, comments
 
 
+# ---------------------------------------------------------------- loader scan
+# 2026-09-08: the detector was blind to LOADER-side reads - a rule read in the
+# python loader shows no name token in any .rs resolver (Transport counted
+# MISSING although #787's read -> UnitSpec.transport_capacity ->
+# deployment.rs::transport_fill has been live since 07.09). The loader is
+# scanned, but a BARE loader name token is NOT auto-credited: several loader
+# literals are census convention data or table-side reads the rust core never
+# consumes (e.g. "Teleport" in MOVE_PRIMITIVES / _rule_active - its core port
+# #831 is not on main; blind crediting would have flipped that PARTIAL row).
+# Credit runs through LOADER_NAME_ALIASES: each entry names the token its read
+# lives under, is verified against this scan, and records the porting PR.
+# Quick Readjustment deliberately has NO entry: #718 (05.09.) was "DECLARE,
+# not port" (own commit message, census delta +0) - no read exists anywhere.
+LOADER_NAME_ALIASES = {
+    # Transport (#787, merged 07.09.): _transport_capacity_of_rules parses the
+    # unit's own "Transport(X)" rule string into "transport_capacity". The bare
+    # "transport" token also occurs in the loader (VEHICLE_KEYWORDS vehicle-NAME
+    # classification), so the read's own field name is the cited evidence.
+    "Transport": ("transport_capacity",),
+}
+
+
+def loader_files(repo: Path) -> list[Path]:
+    """The loader module + same-dir siblings it imports (list_to_profile.py
+    imports only stdlib today, but the set must follow the loader)."""
+    py = Path(repo) / "core" / "nml-core-py" / "python"
+    entry = py / "list_to_profile.py"
+    out = []
+    try:
+        tree = ast.parse(entry.read_text())
+    except (OSError, SyntaxError):
+        return out
+    mods = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            mods.update(a.name.split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            mods.add(node.module.split(".")[0])
+    for m in sorted(mods):
+        sib = py / f"{m}.py"
+        if sib.exists():
+            out.append(sib)
+    out.append(entry)
+    return out
+
+
+def scan_python_file(path: Path, rel: str) -> dict:
+    """One .py file -> {token: (rel, line)} over its STRING CONSTANTS
+    (snake variants, first occurrence wins). Docstrings are skipped - they
+    document, they do not read (scan_rust_file's rule for rust comments);
+    identifiers too - the literal writing the field is the read."""
+    tokens: dict = {}
+    try:
+        tree = ast.parse(path.read_text())
+    except (OSError, SyntaxError):
+        return tokens
+    docs = set()
+    for node in ast.walk(tree):
+        if (isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
+                              ast.ClassDef)) and node.body):
+            first = node.body[0]
+            if (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
+                    and isinstance(first.value.value, str)):
+                docs.add(id(first.value))
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and id(node) not in docs):
+            for v in snake_variants(node.value):
+                tokens.setdefault(v, (rel, node.lineno))
+    return tokens
+
+
+def loader_tokens(repo: Path) -> dict:
+    """Every loader string-constant token - see LOADER_NAME_ALIASES for why a
+    bare hit never auto-credits."""
+    tokens: dict = {}
+    for path in loader_files(repo):
+        rel = path.relative_to(repo).as_posix()
+        for k, v in scan_python_file(path, rel).items():
+            tokens.setdefault(k, v)
+    return tokens
+
+
 def comment_index(comments: list) -> str:
     """One lowercase string of all Rust comments with (file:line) markers, so
     a doc-mention lookup is one substring search per rule name."""
@@ -871,14 +976,18 @@ def is_consumed(primitive: str, name: str, mech: dict, consumed_grants: set) -> 
 
 
 def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str | None,
-                     consumed_grants: set, name_tokens: dict | None = None):
+                     consumed_grants: set, name_tokens: dict | None = None,
+                     loader_tokens: dict | None = None):
     """(status, note) for one (name, system).
 
     `tokens` is the primitive-class map (prim_hit leg); `name_tokens` the
     rule-NAME read map (2026-09-07) - a `.primitive` comparison literal lives
     in the former only, so it can never satisfy the name's own token. None
     falls back to `tokens` (the pre-split behavior, kept for callers that
-    predate the split)."""
+    predate the split). `loader_tokens` is the loader string-constant map
+    (2026-09-08), consulted ONLY for LOADER_NAME_ALIASES entries - a bare
+    loader name token never auto-credits (see the alias block's Teleport
+    note), a registered alias is verified against the scan before it cites."""
     if name in NA_NAMES:
         return "N/A", NA_NAMES[name]
     prims = set(mech.get("primitives", set()))
@@ -888,10 +997,15 @@ def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str |
         variants -= snake_variants(hide)
     read_tokens = tokens if name_tokens is None else name_tokens
     name_hit = None
-    for v in sorted(variants):
-        if v in read_tokens:
-            name_hit = (v, read_tokens[v])
+    for v in sorted(LOADER_NAME_ALIASES.get(name, ())):
+        if loader_tokens and v in loader_tokens:
+            name_hit = (v, loader_tokens[v])
             break
+    if name_hit is None:
+        for v in sorted(variants):
+            if v in read_tokens:
+                name_hit = (v, read_tokens[v])
+                break
     # C-2 (AUDIT_armybook_flanks_2026-09-02.md sec.8): a primitive-token
     # match is only real alias evidence for a vetted CONSUMED_PARAM_KEYS
     # class - an untracked primitive's token is, as often as not, an
@@ -945,7 +1059,8 @@ def build_universe(books: list[dict]) -> dict:
 
 def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
                 consumed_grants: set | None = None, grant_dead: str | None = None,
-                name_tokens: dict | None = None) -> dict:
+                name_tokens: dict | None = None,
+                loader_tokens: dict | None = None) -> dict:
     rows = {}
     AURA_SUFFIX = " Aura"
 
@@ -955,7 +1070,8 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
         )
         status, note = core_status_for(name, mech, tokens, bands, hide,
                                        consumed_grants or set(),
-                                       name_tokens=name_tokens)
+                                       name_tokens=name_tokens,
+                                       loader_tokens=loader_tokens)
         if status == "MISSING":
             where = mention_of(name, mentions)
             if where:
@@ -1091,7 +1207,8 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
         elif gmech is not None and gmech["entry"]:
             st, _ = core_status_for(gname, gmech, tokens, bands, hide,
                                     consumed_grants or set(),
-                                    name_tokens=name_tokens)
+                                    name_tokens=name_tokens,
+                                    loader_tokens=loader_tokens)
         else:
             return "MISSING"
         if st != "PORTED":
@@ -1377,13 +1494,15 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
         raise SystemExit(f"no books found under {books_dir}/gf|aof")
     mechanics = {s: load_mechanics(repo, s) for s in SYSTEMS}
     tokens, name_tokens, comments = scan_rust(repo)
+    loader = loader_tokens(repo)
     mentions = comment_index(comments)
     bands = move_primitives(repo)
     vocab = load_vocab(repo)
     consumed_grants = consumed_grant_names(repo)
     universe = build_universe(books)
     rows = build_rows(universe, mechanics, tokens, bands, vocab, mentions,
-                       consumed_grants=consumed_grants, name_tokens=name_tokens)
+                      consumed_grants=consumed_grants, name_tokens=name_tokens,
+                      loader_tokens=loader)
     summary = summarize(rows)
     result = {
         "meta": {

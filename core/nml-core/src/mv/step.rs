@@ -952,6 +952,8 @@ pub(crate) fn snap_charge_state(self, state: &mut State, si: usize, ci: usize,
     for m in from {
         state.positions[m.unit][m.model] = geom::to_f64(geom::add(pos_of(state, m), delta));
     }
+    // Wave 4 (port-entrenched) — the engage snap is an EXECUTED move.
+    state.moved_round[si] = state.round;
     Some(snap)
 }
 
@@ -1198,6 +1200,7 @@ mod tests {
             buffs: (0..n).map(|_| Vec::new()).collect(),
             vs_mark_round: vec![-1; n],
             hit_and_run_round: vec![-1; n],
+            moved_round: vec![-1; n],
             delayed_action_round: vec![-1; n],
             coordinate_via_round: vec![-1; n],
             reckless_rolled_round: vec![-1; n],
@@ -1207,7 +1210,7 @@ mod tests {
             growth_markers: vec![0; n],
             vengeance_markers: vec![0; n],
             growth_round: vec![-1; n],
-            second_wind_used: vec![false; n],
+            second_wind_used: vec![false; n], teleport_used: vec![false; n],
             reinforcement_used: vec![false; n],
             second_wind_round: -1,
             second_wind_uses: 0,

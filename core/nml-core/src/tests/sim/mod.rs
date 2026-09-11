@@ -79,6 +79,7 @@
             buffs: vec![Vec::new(); 4],
             vs_mark_round: vec![-1; 4],
             hit_and_run_round: vec![-1; 4],
+            moved_round: vec![-1; 4],
             delayed_action_round: vec![-1; 4],
             coordinate_via_round: vec![-1; 4],
             reckless_rolled_round: vec![-1; 4],
@@ -88,7 +89,7 @@
             growth_markers: vec![0; 4],
             vengeance_markers: vec![0; 4],
             growth_round: vec![-1; 4],
-            second_wind_used: vec![false; 4],
+            second_wind_used: vec![false; 4], teleport_used: vec![false; 4],
             reinforcement_used: vec![false; 4],
             second_wind_round: -1,
             second_wind_uses: 0,
@@ -176,7 +177,7 @@
     }
 
     fn storm_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None, }
     }
 
     fn run_storm(
@@ -545,8 +546,7 @@
             charge: None,
             patient: false,
             split: None,
-            traced: None,
-        };
+            traced: None, teleport: None, };
         let terrain = crate::terrain::Terrain::default();
         let mut tray = Tray::seeded(27);
         let mut rng = crate::rng::GodotRng::new(0);
@@ -611,7 +611,7 @@
     }
 
     fn mend_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None, }
     }
 
 
@@ -682,8 +682,7 @@
             charge: None,
             patient: false,
             split: None,
-            traced: None,
-        }
+            traced: None, teleport: None, }
     }
 
     /// Runs one fixture activation on a fresh tray and hands back the state and
@@ -723,8 +722,9 @@
     fn fold_legs(rule: &str) -> (Vec<UnitStatic>, State) {
         let (mut st, statics) = buff_line();
         st.buffs[0].push(mods::LiveMod {
-            hit_mod: 0, casting_mod: 0, morale_mod: 0, grants_rule: Rc::from(rule),
-            scope: Rc::from(""), attackers: false, once: true,
+            hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
+            grants_rule: Rc::from(rule),
+            scope: Rc::from(""), attackers: false, once: true, name: Rc::from(""),
         });
         (statics, st)
     }
@@ -742,10 +742,14 @@
             hit_mod: 0,
             casting_mod: 0,
             morale_mod: 0,
+            ap_mod: 0,
+            def_mod: 0,
+            defense_mod: 0,
             grants_rule: Rc::from(rule),
             scope: Rc::from("shooting"),
             attackers: true,
             once: true,
+            name: Rc::from(""),
         }
     }
 
@@ -782,8 +786,7 @@
             charge: None,
             patient: false,
             split: None,
-            traced: None,
-        }
+            traced: None, teleport: None, }
     }
 
     fn advance_shoot(target: &str) -> Action {
@@ -825,7 +828,7 @@
     }
 
     fn reposition_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None, }
     }
 
 
@@ -871,7 +874,7 @@
     }
 
     fn breath_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None, }
     }
 
 
@@ -908,8 +911,7 @@
             charge: None,
             patient: false,
             split: None,
-            traced: None,
-        }
+            traced: None, teleport: None, }
     }
 
     /// A lone 4-model unit (Tough 1, Quality 4+) — row 12 (`dangerous_end_morale`,
@@ -1009,8 +1011,7 @@
     fn vr_charge() -> Action {
         Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
-            charge: Some("b".into()), patient: false, split: None, traced: None,
-        }
+            charge: Some("b".into()), patient: false, split: None, traced: None, teleport: None, }
     }
 
     /// The seam-armed resolver run every VR charge test replays: the M4
@@ -1444,8 +1445,7 @@
                 charge: None,
                 patient: false,
                 split: None,
-                traced: None,
-            }
+                traced: None, teleport: None, }
         }
 
         fn centre_matrix(st: &State, terrain: &Terrain) -> Vec<bool> {
@@ -1525,13 +1525,18 @@
 // family PRs in the same wave never append to the same region. A new
 // family adds ONE line to this ALPHABETICAL list plus its own file; the
 // fixtures every family shares stay here, in the module root.
+mod ap_def_record;
+mod ap_def_reads;
 mod breath_attack;
 mod breath_score;
 mod buff_consumption_bridge;
 mod deathstrike;
 mod dest_side_arms;
+mod entrenched;
 mod extended_buff_range;
+mod feat_precision_piercing;
 mod feat_speed;
+mod feat_takedown_shot;
 mod fatigue_debuff;
 mod fold_gate_fixture;
 mod growth_bonus_score;
@@ -1541,6 +1546,7 @@ mod half_primitives;
 mod hit_and_run;
 mod hit_and_run_boost_band;
 mod grounded_speed;
+mod teleport;
 mod hit_and_run_score;
 mod instinctive;
 mod limited_weapons;
@@ -1558,6 +1564,7 @@ mod retreating_strike;
 mod second_wind;
 mod second_wind_score;
 mod spell_accumulator;
+mod spell_conduit;
 mod split_fire;
 mod versatile_reach;
 mod weapons;

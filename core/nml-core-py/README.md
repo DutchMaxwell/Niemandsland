@@ -225,15 +225,29 @@ GAMES still diverge; act-level equality is what this rung claims.
 ## Mutant-killing test forge (`tools/forge_mutants.py`)
 
 Zero-cloud-token harness: for each `cargo-mutants` survivor line
-(`missed.txt` format), it asks a LOCAL Ollama model for one `#[test]` fn and
+(`missed.txt` format), it asks a LOCAL model for one `#[test]` fn and
 accepts it only when the MACHINE proves the kill — spliced in, green on the
 original code, red with the mutant's diff applied, and the mutant reverted
 before a full-suite sanity pass. No cloud tokens, no trusting the model's
 opinion of its own test.
 
+The transport is selectable. `--api ollama` (the default) POSTs Ollama's
+`/api/generate` and reads the reply from `response`; `--api openai` POSTs
+`<url>/v1/chat/completions` and reads `choices[0].message.content`. `--url`
+is the endpoint in both cases — the full URL for Ollama, the base for the
+OpenAI-compatible case. The old `--ollama-url` still works as a deprecated
+alias for `--url`. A non-200, a non-JSON body or a reply missing its key
+raises with the called URL in the message instead of scoring an empty reply.
+
 ```sh
+# Ollama (default transport), as before
 python3 tools/forge_mutants.py --survivors missed.txt --crate core/nml-core \
     --out ~/selfplay_out/forge_run --limit 20 --apply
+
+# llama.cpp / llama-server, OpenAI-compatible
+python3 tools/forge_mutants.py --survivors missed.txt --crate core/nml-core \
+    --out ~/selfplay_out/forge_run --limit 20 --apply \
+    --api openai --url http://localhost:8080 --model qwen3-8b
 ```
 
 `--dry-run` builds prompts without calling the model; `--force-noop-diff` is

@@ -25,7 +25,7 @@ use std::rc::Rc;
 
 use serde_json::{json, Value};
 
-use crate::acts::{rule_on, Knobs, EPOCH_7_TABLE_RULES};
+use crate::acts::{rule_on, Knobs, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::deployment::{self, ArrivalZone, Occupied, Rect};
 use crate::io::Seams;
 use crate::menu::Candidate;
@@ -418,6 +418,7 @@ impl<'a> Rollout<'a> {
                         self.policy.seams,
                         &mut cur,
                     );
+                    spawn_round_start(self.statics(), self.policy.terrain, self.policy.seams, &mut cur);
                     continue;
                 }
             }
@@ -738,7 +739,7 @@ fn reinforcement_arrivals(statics: &[UnitStatic], terrain: &Terrain, st: &mut St
             continue; // the band is full — the promise keeps its date
         }
         let round = st.round;
-        deployment::arrive_unit(st, i, spot, round);
+        deployment::arrive_unit(st, i, spot, round, &statics[pi]);
     }
 }
 
@@ -783,6 +784,182 @@ fn reinforcement_withdrawals(statics: &[UnitStatic], st: &mut State) {
         let round = st.round;
         deployment::withdraw_as_destroyed(st, i, round);
         st.reinforcement_used[i] = true;
+    }
+}
+
+/// The mint itself: ONE new roster slot whose `Profile` is the template's,
+/// plus one state column entry per standing unit field — the loader's own
+/// capture order (`state_from_json`), every live-counter at its "brand-new
+/// unit" value. `raw` is the carrier's raw Spawn rule string — the map
+/// key's second half. The slot is parked `dormant` from birth: ARRIVING it
+/// (the spot, the #803 stamp) is `arrive_unit`'s move, the beat's (2b-2b),
+/// never the mint's.
+pub fn mint_template_slot(
+    statics: &[UnitStatic],
+    st: &mut State,
+    carrier: usize,
+    ti: usize,
+    raw: &str,
+) -> usize {
+    let p = &st.profiles.list[ti];
+    let key = format!("spawn:{}:{}", st.key(carrier), raw);
+    let j = st.units();
+    let mut index = st.roster.index.clone();
+    let mut profile = st.roster.profile.clone();
+    let mut keys = st.roster.keys.clone();
+    keys.push(key);
+    index.insert(keys[j].clone(), j);
+    profile.push(ti);
+    st.roster = Rc::new(crate::state::Roster { keys, index, profile });
+    let wounds = {
+        let mut w = p.wounds_max.clone();
+        let n = p.model_count.max(1) as usize;
+        let fallback = w.last().copied().unwrap_or(1);
+        w.resize(n, fallback);
+        w
+    };
+    st.player.push(st.player[carrier]);
+    st.alive.push(0);
+    st.activated.push(false);
+    st.shaken.push(false);
+    st.fatigued.push(false);
+    st.in_cover.push(false);
+    st.aircraft.push(false);
+    st.dormant.push(true); // `arrive_unit` takes it back off the tray books
+    st.dormant_models.push(p.model_count.max(1));
+    st.dormant_wounds.push(wounds);
+    st.casts.push(0);
+    st.morale_bonus.push(0);
+    st.ambush_arrived_round.push(-1);
+    st.earliest_arrival_round.push(-1);
+    st.wound_frac.push(0.0);
+    st.positions.push(Vec::new());
+    st.wounds.push(Vec::new());
+    st.radii.push(Vec::new());
+    st.mods.push(crate::state::Mods::default());
+    st.mods_base.push(Rc::new(crate::state::Mods::default()));
+    Rc::make_mut(&mut st.attached).push(Vec::new());
+    Rc::make_mut(&mut st.attached_to).push(None);
+    st.los.push(None);
+    let mb = p.move_bands;
+    st.bands.push(crate::state::Bands { advance: mb.advance, rush: mb.rush });
+    st.shroud.push(None);
+    st.charge_no_difficult.push(
+        crate::rules::has_special_rule(&p.special_rules, "Strider")
+            || crate::rules::has_special_rule(&p.special_rules, "Flying"),
+    );
+    st.charge_probe_r.push(p.base_radius.max(DEFAULT_BASE_RADIUS_M));
+    st.buffs.push(Vec::new());
+    st.vs_mark_round.push(-1);
+    st.hit_and_run_round.push(-1);
+    st.moved_round.push(-1);
+    st.delayed_action_round.push(-1);
+    st.coordinate_via_round.push(-1);
+    st.reckless_rolled_round.push(-1);
+    st.reckless_ap_round.push(-1);
+    st.reckless_backfire_round.push(-1);
+    st.retreating_strike_round.push(-1);
+    st.growth_markers.push(0);
+    st.vengeance_markers.push(0);
+    st.growth_round.push(-1);
+    st.second_wind_used.push(false);
+    st.reinforcement_used.push(false);
+    st.limited_used.push(Vec::new());
+    st.piercing_tag_used.push(false);
+    st.piercing_tag_markers.push(0);
+    st.storm_used.push(Vec::new());
+    st.feats_used.push(Vec::new());
+    st.teleport_used.push(false);
+    j
+}
+/// The summon half of the S5 seam — `Spawn` (SPAWN_DESIGN_2026-09-08 §3.3).
+pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams, st: &mut State) {
+    // ONE gate, the frozen EPOCH_8_PLANNER_MENU: the named-template beat is
+    // the seam 8 owns (a new unit in the rollout changes later menus) — a
+    // record below 8 crosses the boundary byte-identically, and nothing
+    // looks up a template it cannot have.
+    if !rule_on(seams.rules_epoch, EPOCH_8_PLANNER_MENU) {
+        return;
+    }
+    let Some(table) = table_rect(terrain) else {
+        return;
+    };
+    for i in 0..st.units() {
+        if st.dormant[i] || st.alive[i] <= 0 || st.reinforcement_used[i] {
+            continue;
+        }
+        // The part-3 refusal, same reason: the core has no detach transition,
+        // so a carrier with a joined hero (or one attached to a host) declines.
+        if !st.attached[i].is_empty() || st.attached_to[i].is_some() {
+            continue;
+        }
+        let us = &statics[st.roster.profile[i]];
+        if us.spawn.place_in <= 0.0 || !us.spawn.once_per_game || us.spawn.raw.is_empty() {
+            continue; // no reach, a latch the beat cannot model, or no template
+        }
+        // The template: part (a)'s map key, resolved off the record's own
+        // profile table. The loader REFUSES a record whose standing carrier
+        // lacks the entry (epoch >= 8), so a miss here is a pre-gate record
+        // replaying — skip, never a silent fallback to the carrier's profile.
+        let key = format!("spawn:{}:{}", st.key(i), us.spawn.raw);
+        let Some(&ti) = st.profiles.index.get(&key) else {
+            continue;
+        };
+        let tp_base_radius = st.profiles.list[ti].base_radius;
+        let tp_flying = has_special_rule(&st.profiles.list[ti].special_rules, "Flying")
+            || has_special_rule(&st.profiles.list[ti].special_rules, "Strider");
+        let tp_name = st.profiles.list[ti].name.clone();
+        let n = us.spawn.count.max(1) as usize;
+        // The anchor: where the standing carrier's models centre. The table
+        // anchors on the ONE model that carries the raw entry (main.gd:17413);
+        // the unit centre is the same anchor at the port's granularity.
+        let n_alive = st.positions[i].len().max(1) as f64;
+        let (ax, az) = (
+            st.positions[i].iter().map(|q| q[0]).sum::<f64>() / n_alive,
+            st.positions[i].iter().map(|q| q[2]).sum::<f64>() / n_alive,
+        );
+        // The `place_in` CIRCLE around the anchor (`circle_zone`, main.gd:17505)
+        // with the anchor's own base radius folded into the reach; the search
+        // runs on the circle's table-clamped bounding square and every standing
+        // base blocks, the carrier's own included.
+        let radius_m = us.spawn.place_in * crate::IN2M + us.base_radius;
+        let footprint = deployment::deploy_footprint_offsets(n, tp_base_radius, false);
+        let mut occupied = live_bases(st);
+        let spot = deployment::arrive_one(
+            &ArrivalZone::Circle { center: (ax, az), radius_m, table },
+            &[(ax, az)],
+            &mut occupied,
+            &[],
+            &[],
+            0.0,
+            terrain,
+            deployment::deploy_footprint_radius(n, tp_base_radius),
+            &footprint,
+            tp_base_radius,
+            tp_flying,
+        );
+        if !spot.0.is_finite() {
+            continue; // the circle is full — a summon is never half-made
+        }
+        let round = st.round;
+        let j = mint_template_slot(statics, st, i, ti, &us.spawn.raw);
+        deployment::arrive_unit(
+            st,
+            j,
+            spot,
+            round,
+            &crate::unit::UnitStatic { base_radius: tp_base_radius, ..Default::default() },
+        );
+        st.reinforcement_used[i] = true;
+        // Rules-must-log: one stderr line when NML_TRACE_RULES=1.
+        crate::sim::trace_rule(
+            "round-start",
+            "Spawn",
+            &format!(
+                "{}: a fresh copy of {} models of {} ({}) stands within {:.1}\" of ({:.2},{:.2})",
+                st.key(i), n, tp_name, key, us.spawn.place_in, ax, az
+            ),
+        );
     }
 }
 

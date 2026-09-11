@@ -179,7 +179,7 @@ def test_stamped_vs_ported_on_a_shared_primitive(tmp_path):
         (root / d).mkdir(parents=True)
     (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
         "common": {
-            "Buff Stamped": {"primitive": "Utility Buff", "params": {"def_mod": -1}},
+            "Buff Stamped": {"primitive": "Utility Buff", "params": {"move_mod": -1}},
             "Buff Consumed": {"primitive": "Utility Buff", "params": {"hit_mod": 1}},
         },
         "factions": {},
@@ -756,3 +756,68 @@ def test_split_out_test_module_under_src_tests_is_not_core_evidence(mini):
         "a literal in a split-out test module must not be core evidence"
     )
     assert census.census(books, root)["summary"]["core_ported"] == 1
+
+
+def test_loader_scan_records_literals_skips_docstrings(tmp_path):
+    """The 2026-09-08 loader scan: string constants carry the loader's read
+    evidence (a docstring documents, it does not read - the same rule
+    scan_rust_file applies to rust comments)."""
+    p = tmp_path / "loader.py"
+    p.write_text(
+        '"""Transport lives in this docstring - documentation only.\n"""\n'
+        'VEHICLE_KEYWORDS = ("transport",)\n'
+        'spec = {"transport_capacity": x}\n')
+    rel = "core/nml-core-py/python/loader.py"
+    got = census.scan_python_file(p, rel)
+    assert got["transport"] == (rel, 3)
+    assert got["transport_capacity"] == (rel, 4)
+    assert "transport_lives_in_this_docstring_documentation_only" not in got
+
+
+def test_loader_alias_credits_transport_bare_loader_token_never(tmp_path):
+    """A bare loader name token never auto-credits (VEHICLE_KEYWORDS is
+    vehicle-NAME classification, MOVE_PRIMITIVES is census convention data,
+    and table-side reads like Teleport's `_rule_active` must not outrun the
+    core port). Credit runs through LOADER_NAME_ALIASES only: the alias is
+    verified against the scan and cites the read's own file:line."""
+    mech = {"primitives": set(), "entry": False, "cond_ap": False}
+    bare = tmp_path / "bare.py"
+    bare.write_text('VEHICLE_KEYWORDS = ("transport",)\n')
+    st, note = census.core_status_for(
+        "Transport", mech, {}, set(), None, set(), name_tokens={},
+        loader_tokens=census.scan_python_file(bare, "l/bare.py"))
+    assert st == "MISSING", "a bare 'transport' literal must not credit"
+
+    full = tmp_path / "list_to_profile.py"
+    full.write_text('spec = {"transport_capacity": x}\n')
+    st, note = census.core_status_for(
+        "Transport", mech, {}, set(), None, set(), name_tokens={},
+        loader_tokens=census.scan_python_file(full, "l/list_to_profile.py"))
+    assert st == "PORTED"
+    assert note == "name token 'transport_capacity' at l/list_to_profile.py:1"
+
+
+def test_loader_alias_flips_transport_through_census(mini):
+    """End to end: #787's Transport read lives in the loader
+    (list_to_profile.py: 'transport_capacity' -> UnitSpec ->
+    deployment.rs::transport_fill), so Transport reads PORTED through the
+    registered alias, and no other row moves."""
+    root, books = mini
+    (root / "core" / "nml-core-py" / "python" / "list_to_profile.py").write_text(
+        'MOVE_PRIMITIVES = ("Fast", "Slow", "Quick")\n'
+        'spec = {"transport_capacity": x}\n')
+    book = books / "gf" / "book_a.json"
+    data = json.loads(book.read_text())
+    data["specialRules"].append({"name": "Transport(8)"})
+    book.write_text(json.dumps(data))
+
+    rows = census.census(books, root)["rows"]
+    ps = rows["Transport"]["per_system"]["gf"]
+    assert ps["core"] == "PORTED"
+    assert ps["core_note"] == (
+        "name token 'transport_capacity' at "
+        "core/nml-core-py/python/list_to_profile.py:2")
+    # no blind loader credit: the bare MOVE_PRIMITIVES/VEHICLE_KEYWORDS-style
+    # literals changed nothing else - Furious still cites its rust token
+    assert rows["Furious"]["per_system"]["gf"]["core_note"] == (
+        "name token 'furious' at core/nml-core/src/arm.rs:1")
