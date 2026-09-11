@@ -356,3 +356,42 @@ func test_the_ai_side_still_buffs_and_now_also_sends(timeout := 120000) -> void:
 	assert_int(_mod_frames(friend).size()) \
 		.override_failure_message("the AI's record stayed local (sent: %s)" % str(_fake.sent)) \
 		.is_greater_equal(1)
+
+
+# === 6. Great Musician (#846): a move-only Utility Buff ==========================================
+
+## The AoF "Great Musician" Utility Buff's only knob is `move_mod: 1`. The record builder copied just
+## hit/casting/morale, so its record came out all-zero and the guard dropped it — dead data. It now
+## maps onto the advance/rush bands ("moves +1\" when using move actions") and the "once" duration
+## spends it with the next executed move.
+func test_great_musician_move_mod_reaches_the_bands_once(timeout := 120000) -> void:
+	var giver := _reg(1, "Great Musician", [_at(0.0)], ["Hero", "Great Musician"])
+	giver.unit_properties["game_system"] = "aof"
+	giver.unit_properties["faction_folder"] = "ogres"
+	var friend := _reg(1, "Ogre Warriors", _line(6.0), [])
+	friend.unit_properties["game_system"] = "aof"
+	friend.unit_properties["faction_folder"] = "ogres"
+
+	_main._solo_apply_utility_buffs(giver)
+
+	assert_int(_mods_on(friend).size()) \
+		.override_failure_message("Great Musician is still dead data — no record was written") \
+		.is_equal(1)
+	var rec: Dictionary = (_mods_on(friend)[0] as Dictionary) if not _mods_on(friend).is_empty() else {}
+	assert_int(int(rec.get("advance_in", 0))) \
+		.override_failure_message("the +1\" move modifier was dropped from the record") \
+		.is_equal(1)
+	assert_int(int(rec.get("rush_in", 0))).is_equal(1)
+	assert_dict(friend.unit_properties.get("spell_move_mod", {})) \
+		.override_failure_message("the +1\" never reached the movement bands") \
+		.is_equal({"advance": 1, "rush": 1})
+
+	# "once (next time the effect would apply)": the next executed move spends it.
+	_main._solo_spend_once_kind(friend, ["speed"])
+
+	assert_int(_mods_on(friend).size()) \
+		.override_failure_message("the move buff did not spend on the executed move") \
+		.is_equal(0)
+	assert_dict(friend.unit_properties.get("spell_move_mod", {})) \
+		.override_failure_message("the spent buff left its band stamp behind") \
+		.is_empty()
