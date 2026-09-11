@@ -134,7 +134,7 @@ jobs:
       - name: Dormant check (extension installed vs manifest moved away)
         run: |
           set -euo pipefail
-          NML_OBJECTIVE_DOCTRINE=style NML_DORMANT_STAMPS=/tmp/stamps_installed.json \
+          NML_DORMANT_STAMPS=/tmp/stamps_installed.json \
             godot --headless --path . -s res://tools/core_dormant_check.gd 2>&1 | tee /tmp/dormant_installed.log
           mv core/nml_core.gdextension /tmp/nml_core.gdextension.moved
           NML_DORMANT_STAMPS=/tmp/stamps_absent.json \
