@@ -27,13 +27,13 @@ func test_collector_names_the_not_recorded_intents() -> void:
 ## loaded CI box does not flake, while a real allocation-heavy regression still trips it.
 ## A real Table node off the world origin plus a bare main stub that answers the move seam.
 func _table_fixture() -> Array:
-	var table := load("res://scripts/table.gd").new()
+	var table = load("res://scripts/table.gd").new()
 	table.table_size = Vector2(6, 4)
 	table.position = Vector3(1.5, 0.0, 0.75)
 	var main_src := GDScript.new()
 	main_src.source_code = "extends RefCounted\nvar table = null\nvar opr_army_manager = null\nvar terrain_overlay = null\nvar _solo_mission_id = \"\"\nvar unit = null\nfunc _trail_unit_of(_n):\n\treturn unit\n"
 	main_src.reload()
-	var main := main_src.new()
+	var main = main_src.new()
 	main.table = table
 	var gu := GameUnit.new()
 	gu.unit_id = "corner-probe"
@@ -48,7 +48,7 @@ func _table_fixture() -> Array:
 ## at a non-zero world position — proving the origin is read from the table node, not assumed.
 func test_table_corners_record_in_inches_from_the_corner() -> void:
 	var pair: Array = _table_fixture()
-	var collector := _collector()
+	var collector = _collector()
 	collector.bind(pair[0])
 	var table = pair[1]
 	var half := Vector3(table.table_size.x * 0.3048 / 2.0, 0.0, table.table_size.y * 0.3048 / 2.0)
