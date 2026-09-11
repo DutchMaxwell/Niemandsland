@@ -1,8 +1,8 @@
 name: Build core extension
-description: "Builds the optional Rust NmlCore GDExtension and installs its manifest; only 'linux' is wired."
+description: "Builds the optional Rust NmlCore GDExtension for Linux or Windows and installs its manifest."
 inputs:
   target:
-    description: "Target platform to build for. Only 'linux' is wired."
+    description: "Target platform to build for: 'linux' or 'windows'."
     required: true
 runs:
   using: composite
@@ -16,14 +16,26 @@ runs:
     - name: Build NmlCore extension
       shell: bash
       run: |
-        if [ "${{ inputs.target }}" != "linux" ]; then
-          echo "::error::build-core-extension target '${{ inputs.target }}' is not wired yet"; exit 1
-        fi
-        RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$GITHUB_WORKSPACE=/workspace --remap-path-prefix=$HOME=/build" \
-          cargo build --release --manifest-path core/nml-core-godot/Cargo.toml
+        case "${{ inputs.target }}" in
+          linux)
+            RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$GITHUB_WORKSPACE=/workspace --remap-path-prefix=$HOME=/build" \
+              cargo build --release --manifest-path core/nml-core-godot/Cargo.toml ;;
+          windows)
+            # Cross-build on the ubuntu runner. The DLL must not import the MinGW
+            # runtime (libgcc_s / libstdc++ / libwinpthread) a player machine lacks;
+            # export-windows asserts that with objdump.
+            rustup target add x86_64-pc-windows-gnu
+            sudo apt-get update
+            sudo apt-get install -y mingw-w64
+            RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$GITHUB_WORKSPACE=/workspace --remap-path-prefix=$HOME=/build" \
+              cargo build --release --target x86_64-pc-windows-gnu --manifest-path core/nml-core-godot/Cargo.toml ;;
+          *)
+            echo "::error::build-core-extension target '${{ inputs.target }}' is unknown"; exit 1 ;;
+        esac
         touch core/target/.gdignore
     - name: Strip shipped library, keep debug symbols, guard size and paths
       id: strip
+      if: inputs.target == 'linux'
       shell: bash
       run: |
         LIB=core/target/release/libnml_core_godot.so
@@ -43,10 +55,50 @@ runs:
           echo "::error::shipped library still embeds $PATHS /home/ path(s)"; exit 1
         fi
     - name: Upload debug symbols
+      if: inputs.target == 'linux'
       uses: actions/upload-artifact@v4
       with:
         name: nml-core-debug-${{ steps.strip.outputs.build_id }}
         path: core/target/release/libnml_core_godot.so.debug
+        retention-days: 90
+        if-no-files-found: error
+    - name: Strip shipped DLL, keep debug symbols, guard size and paths
+      id: stripwin
+      if: inputs.target == 'windows'
+      shell: bash
+      run: |
+        if ! command -v x86_64-w64-mingw32-strip >/dev/null 2>&1; then
+          echo "::error::x86_64-w64-mingw32-strip not found"; exit 1
+        fi
+        DLL=core/target/x86_64-pc-windows-gnu/release/nml_core_godot.dll
+        x86_64-w64-mingw32-objcopy --only-keep-debug "$DLL" "$DLL.debug"
+        x86_64-w64-mingw32-strip --strip-unneeded "$DLL"
+        x86_64-w64-mingw32-objcopy --add-gnu-debuglink="$DLL.debug" "$DLL"
+        ID=$(sha256sum "$DLL" | cut -c1-16)
+        echo "id=$ID" >> "$GITHUB_OUTPUT"
+        SIZE=$(stat -c %s "$DLL")
+        PATHS=$(strings -a "$DLL" | grep -c /home/ || true)
+        ENTRY=$(x86_64-w64-mingw32-objdump -p "$DLL" | grep -c gdext_rust_init || true)
+        echo "Shipped DLL: $DLL — $SIZE bytes, /home/ paths: $PATHS, gdext_rust_init count: $ENTRY"
+        x86_64-w64-mingw32-objdump -p "$DLL" | grep -iE "debug directory|codeview|rsds" || true
+        if [ "$SIZE" -gt 20971520 ]; then
+          echo "::error::shipped DLL is $SIZE bytes — over the 20 MB budget"; exit 1
+        fi
+        if [ "$PATHS" -ne 0 ]; then
+          echo "::error::shipped DLL still embeds $PATHS /home/ path(s)"; exit 1
+        fi
+        if [ "$ENTRY" -eq 0 ]; then
+          echo "::error::gdext_rust_init did not survive the strip"; exit 1
+        fi
+    # A PE file has no GNU build-id note, so this artifact is keyed by the stripped
+    # DLL's sha256; it differs in name from the Linux one and both are uploaded in a
+    # single release-job run.
+    - name: Upload Windows debug symbols
+      if: inputs.target == 'windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: nml-core-debug-windows-${{ steps.stripwin.outputs.id }}
+        path: core/target/x86_64-pc-windows-gnu/release/nml_core_godot.dll.debug
         retention-days: 90
         if-no-files-found: error
     - name: Install GDExtension manifest
