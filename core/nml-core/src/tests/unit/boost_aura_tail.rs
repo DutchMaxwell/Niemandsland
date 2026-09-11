@@ -1564,38 +1564,10 @@ use super::*;
             Some(Bands { advance: 0.0, rush: 8.0 }),
             "aura + expanded base, the loaders' per-name stack"
         );
-assert_eq!(
-            wave3_static_of("", "gf", "robot_legions", 7).move_rule_mods,
-            None,
-            "no rule, no band"
-        );
-    }
-
-    /// "Swift" cancels the Slow stamp by name (maintainer 11.09.2026): a unit
-    /// carrying Slow AND Swift folds nothing at 7; a Slow + "Swift Aura"
-    /// carrier folds nothing either, because the Aura-Channel fold grants
-    /// Swift to the unit (and its heroes) BEFORE the stamp — the granted name
-    /// lands in `special_rules` (apply_aura_channel, EPOCH_6_TABLE_RULES), so
-    /// `unit_rule_active(reg, p, "Swift")` resolves. A Slow-only unit keeps
-    /// the flat -2"/-4" fold. dwarf_guilds fields Swift and Swift Aura in the
-    /// real gf registry (the twins' own faction); Slow resolves through the
-    /// `common` fallback, exactly like the pin above (robot_legions).
-    #[test]
-    fn swift_cancels_the_slow_stamp_at_epoch_7() {
         assert_eq!(
-            quickfast_bands("swift_cancel_slow_unit", 7),
+            quickfast_bands("rapid_charge_expanded_unit", 0),
             None,
-            "epoch 7: carried Swift cancels the Slow fold (RED before the fix)"
-        );
-        assert_eq!(
-            quickfast_bands("swift_aura_cancel_slow_unit", 7),
-            None,
-            "epoch 7: Swift Aura's grant folds Swift in and cancels the Slow fold (RED before the fix)"
-        );
-        assert_eq!(
-            quickfast_bands("slow_only_unit", 7),
-            Some(Bands { advance: -2.0, rush: -4.0 }),
-            "epoch 7: a Slow-only unit keeps the flat -2/-4 fold"
+            "epoch 0 is pre-port"
         );
     }
 
@@ -1940,6 +1912,34 @@ assert_eq!(
             wave3_static_of("", "gf", "robot_legions", 7).move_rule_mods,
             None,
             "no rule, no band"
+        );
+    }
+
+    /// "Swift" cancels the Slow stamp by name (maintainer 11.09.2026): a unit
+    /// carrying Slow AND Swift folds nothing at 7; a Slow + "Swift Aura"
+    /// carrier folds nothing either, because the Aura-Channel fold grants
+    /// Swift to the unit (and its heroes) BEFORE the stamp — the granted name
+    /// lands in `special_rules` (apply_aura_channel, EPOCH_6_TABLE_RULES), so
+    /// `unit_rule_active(reg, p, "Swift")` resolves. A Slow-only unit keeps
+    /// the flat -2"/-4" fold. dwarf_guilds fields Swift and Swift Aura in the
+    /// real gf registry (the twins' own faction); Slow resolves through the
+    /// `common` fallback, exactly like the pin above (robot_legions).
+    #[test]
+    fn swift_cancels_the_slow_stamp_at_epoch_7() {
+        assert_eq!(
+            quickfast_bands("swift_cancel_slow_unit", 7),
+            None,
+            "epoch 7: carried Swift cancels the Slow fold (RED before the fix)"
+        );
+        assert_eq!(
+            quickfast_bands("swift_aura_cancel_slow_unit", 7),
+            None,
+            "epoch 7: Swift Aura's grant folds Swift in and cancels the Slow fold (RED before the fix)"
+        );
+        assert_eq!(
+            quickfast_bands("slow_only_unit", 7),
+            Some(Bands { advance: -2.0, rush: -4.0 }),
+            "epoch 7: a Slow-only unit keeps the flat -2/-4 fold"
         );
     }
 
