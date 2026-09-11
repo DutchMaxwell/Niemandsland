@@ -1,4 +1,5 @@
 use super::*;
+use std::rc::Rc;
 
     // --------------------------------------------------- Spawn (wave 4, S5) ---
     //
@@ -416,6 +417,46 @@ use super::*;
         let carrier_pi = st.roster.profile[i];
         let _ = before;
     }
+    #[test]
+    fn minting_a_spawn_preserves_existing_directional_sight_answers() {
+        let (mut st, statics) = line(CURRENT_RULES_EPOCH);
+        st.los_pairs = Some(Rc::new(vec![true, true, false, true]));
+        let parent = st.clone();
+        let carrier = idx(&st, "p1_0_a");
+        let template = st.profiles.index["spawn:p1_0_a:Spawn(Rat Swarm [2])"];
+        mint_template_slot(&statics, &mut st, carrier, template, "Spawn(Rat Swarm [2])");
+        for i in 0..parent.units() {
+            for j in 0..parent.units() {
+                assert_eq!(st.los_clear(i, j), parent.los_clear(i, j),
+                    "minting a new slot changed sight from {i} to {j}");
+            }
+        }
+        assert_eq!(parent.los_pairs.as_ref().unwrap().len(), 4,
+            "a sibling rollout retains its original sight matrix");
+    }
+
+    #[test]
+    fn a_new_spawn_slot_can_be_queried_and_serialized_with_captured_sight() {
+        for captured in [false, true] {
+            let (mut st, statics) = line(CURRENT_RULES_EPOCH);
+            if captured {
+                st.los_pairs = Some(Rc::new(vec![true; st.units() * st.units()]));
+            }
+            let carrier = idx(&st, "p1_0_a");
+            let template = st.profiles.index["spawn:p1_0_a:Spawn(Rat Swarm [2])"];
+            let born = mint_template_slot(&statics, &mut st, carrier, template, "Spawn(Rat Swarm [2])");
+            assert!(st.dormant[born]);
+            for other in 0..st.units() {
+                assert!(st.los_clear(born, other), "dormant pairs use the unblocked default");
+                assert!(st.los_clear(other, born));
+            }
+            let plain = crate::io::plain_of(&st);
+            assert_eq!(plain["units"].as_object().unwrap().len(), 3);
+            assert_eq!(plain.get("los_pairs").is_some(), captured,
+                "minting does not enable an absent sight seam");
+        }
+    }
+
     // ------------------------------------------------------------- PART (b) ---
     //
     // THE BEAT (SPAWN_DESIGN_2026-09-08 §3.3/§3.4/§3.5, PR 2b). The round
