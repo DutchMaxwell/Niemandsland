@@ -16941,8 +16941,12 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 			var ai_side := _solo_is_ai_unit(unit)
 			for t in picks:
 				var tgt := t as GameUnit
+				# #846 Great Musician: the family's move-only knob (`move_mod`) rides the same
+				# advance_in/rush_in record fields every "speed" spell read already consumes, so the
+				# +1" lands on Advance/Rush (and Charge off Rush) with no new record key or core seam.
+				var move_mod := int(sp.get("move_mod", 0))
 				var modifier := {"hit_mod": int(sp.get("hit_mod", 0)), "casting_mod": int(sp.get("casting_mod", 0)),
-					"morale_mod": int(sp.get("morale_mod", 0))}
+					"morale_mod": int(sp.get("morale_mod", 0)), "advance_in": move_mod, "rush_in": move_mod}
 				# Wave 4 recon find: the buff data carries its own scope ("shooting"/"melee" —
 				# Precision Shooter/Fighter Buff) and AiSpell.mods_for honours it, but this record
 				# hard-coded "" — a shooting-only +1 silently applied in melee too.
@@ -16955,6 +16959,7 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 					if modifier["hit_mod"] != 0: bits.append("%+d to hit" % modifier["hit_mod"])
 					if modifier["casting_mod"] != 0: bits.append("%+d casting" % modifier["casting_mod"])
 					if modifier["morale_mod"] != 0: bits.append("%+d morale" % modifier["morale_mod"])
+					if move_mod != 0: bits.append("%+d\" move" % move_mod)
 					if not str(sp.get("grants_rule", "")).is_empty(): bits.append("grants %s" % str(sp.get("grants_rule", "")))
 					_log_rule_event(BattleLog.Category.COMBAT, "%s: %s → %s (%s, once)" % [
 						n, member.get_name(), tgt.get_name(), ", ".join(bits)], ai_side)
