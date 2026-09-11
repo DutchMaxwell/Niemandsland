@@ -84,7 +84,7 @@ static func state_phi(board: Array, side: int) -> Array:
 	for r in board:
 		var row: Array = r
 		var c0 := int(float(row[0]))
-		var p := 0 if c0 == 3 else (1 if c0 == side else 2)
+		var p := 2 if c0 == 3 else (1 if c0 == side else 0)
 		for j in range(mini(PHI_FIXED, row.size())):
 			(pools[p] as Array)[j] += float(row[j])
 		n[p] += 1.0
