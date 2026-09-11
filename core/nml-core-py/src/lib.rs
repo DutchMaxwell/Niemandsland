@@ -1771,6 +1771,9 @@ impl Core {
         if let Some(f) = self.net.as_ref() {
             f.set_source_qd(Some((quality, defense)));
         }
+        if let Some(p) = self.policy_net.as_ref() {
+            p.set_source_qd(Some((quality, defense)));
+        }
     }
 
     /// Drop the legacy column-10/11 override — back to the profile's own
@@ -1779,6 +1782,9 @@ impl Core {
         self.rows.source_qd = None;
         if let Some(f) = self.net.as_ref() {
             f.set_source_qd(None);
+        }
+        if let Some(p) = self.policy_net.as_ref() {
+            p.set_source_qd(None);
         }
     }
 
