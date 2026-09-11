@@ -89,6 +89,72 @@ use super::*;
         )
     }
 
+    /// The same synthetic carrier through the activation-record loader.
+    fn act_corpus(epoch: u32, with_map: bool, state: &str) -> String {
+        let map = if with_map {
+            format!(r#", "spawn_profiles":{{{TEMPLATE}}}"#)
+        } else {
+            String::new()
+        };
+        format!(
+            "{{\"kind\":\"header\",\"knobs\":{{\"rules_epoch\":{epoch}}},\"profiles\":{{{CARRIER},{ENEMY}}}{map}}}\n\
+             {{\"round\":1,\"player\":1,\"state\":{state}}}\n"
+        )
+    }
+
+    #[test]
+    fn act_spawn_standing_carrier_requires_template_from_epoch_8() {
+        for epoch in [8, CURRENT_RULES_EPOCH] {
+            let text = act_corpus(epoch, false, PLAIN);
+            let err = crate::acts::read_acts(text.as_bytes(), "spawn-act")
+                .expect_err("a standing Spawn carrier requires its named template");
+            assert!(err.contains("spawn_profiles"), "epoch {epoch}: {err}");
+            assert!(err.contains("p1_0_a"), "epoch {epoch}: {err}");
+            assert!(err.contains("Spawn(Rat Swarm [2])"), "epoch {epoch}: {err}");
+        }
+    }
+
+    #[test]
+    fn act_spawn_matching_template_loads_the_named_profile() {
+        let text = act_corpus(8, true, PLAIN);
+        let corpus = crate::acts::read_acts(text.as_bytes(), "spawn-act").unwrap();
+        assert_eq!(corpus.acts.len(), 1);
+        let ti = corpus.profiles.index["spawn:p1_0_a:Spawn(Rat Swarm [2])"];
+        assert_eq!(corpus.profiles.list[ti].name, "Rat Swarm");
+        assert_eq!(corpus.profiles.list[ti].model_count, 2);
+        assert_eq!(corpus.acts[0].state.roster.keys.len(), 2,
+            "the template is not a deployed unit");
+    }
+
+    #[test]
+    fn act_spawn_before_epoch_8_preserves_the_original_profile_table() {
+        for with_map in [false, true] {
+            let text = act_corpus(7, with_map, PLAIN);
+            let corpus = crate::acts::read_acts(text.as_bytes(), "spawn-act").unwrap();
+            assert_eq!(corpus.acts.len(), 1);
+            assert_eq!(corpus.profiles.list.len(), 2);
+            assert!(!corpus.profiles.index.contains_key("spawn:p1_0_a:Spawn(Rat Swarm [2])"));
+        }
+    }
+
+    #[test]
+    fn act_spawn_dead_or_dormant_carriers_do_not_require_a_template() {
+        for dormant in [false, true] {
+            let mut plain: serde_json::Value = serde_json::from_str(PLAIN).unwrap();
+            let carrier = &mut plain["units"]["p1_0_a"];
+            carrier["dormant"] = serde_json::json!(dormant);
+            if !dormant {
+                carrier["alive"] = serde_json::json!(0);
+                for field in ["positions", "wounds", "radii"] {
+                    carrier[field] = serde_json::json!([]);
+                }
+            }
+            let text = act_corpus(8, false, &plain.to_string());
+            let corpus = crate::acts::read_acts(text.as_bytes(), "spawn-act").unwrap();
+            assert_eq!(corpus.acts.len(), 1);
+        }
+    }
+
     /// 1. THE READ, and its epoch gates. `place_in` and `once_per_game` come
     /// off the shipped registry entry through the production path; below
     /// `EPOCH_7_TABLE_RULES` the carrier reads as no carrier at all. The

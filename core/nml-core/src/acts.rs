@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 use serde::Deserialize;
 
-use crate::io::{roster_of, state_of, Ordered, PlainState};
+use crate::io::{roster_of, spawn_templates_of, state_of, Ordered, PlainState};
 use crate::menu::Candidate;
 use crate::state::{Profile, ProfileCache, Profiles, Roster, State};
 use crate::terrain::{PlainTerrain, Terrain};
@@ -867,6 +867,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
         let pa: PlainAct =
             serde_json::from_str(&line).map_err(|e| format!("{path}:{}: {e}", i + 2))?;
         let roster = roster_of(&pa.state, &profiles, &mut cache)?;
+        spawn_templates_of(&pa.state, &profiles, knobs.rules_epoch)?;
         let eff = profile_cache.effective(&roster, &pa.state.dyn_profiles());
         acts.push(Act {
             round: pa.round,
