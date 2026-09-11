@@ -4550,22 +4550,34 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // PR #653): the -2"/-4" reach the core precomputed inside the recorded
     // `state.bands`, so a live re-fold at the move seam would double-count —
     // the stamp is the core's own per-entry read, never a simulation input.
-    // No negation arm here: "Swift" is census hygiene (NA_NAMES — already
-    // folded into the loader's band pass before the core runs), and the
-    // loader twin's own band pass has no Swift leg either. Gated on the
-    // FROZEN `EPOCH_7_TABLE_RULES`, never the literal.
+    // Swift arm (maintainer 11.09.2026): "Swift" cancels the fold by name —
+    // the twins ship the pair (table `move_bands_for_props`
+    // scripts/movement_range_controller.gd:92-109, loader `_move_bands`
+    // core/nml-core-py/python/list_to_profile.py:525-536), and Swift Aura's
+    // Aura-Channel fold grants Swift to the unit and its heroes BEFORE this
+    // stamp, so `unit_rule_active(reg, p, "Swift")` resolves for both. The
+    // cancel is itself traced (a rule that fires silently is not shipped).
+    // Gated on the FROZEN `EPOCH_7_TABLE_RULES`, never the literal.
     if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && unit_rule_active(reg, p, "Slow") {
-        let map = reg.rules_for(&p.game_system);
-        if let Some(e) = map.lookup(&p.faction_folder, "Slow") {
-            let (adv, rsh) = (e.param_f("advance_mod", 0.0), e.param_f("rush_mod", e.param_f("charge_mod", 0.0)));
-            acc.advance += adv;
-            acc.rush += rsh;
-            hit = true;
+        if unit_rule_active(reg, p, "Swift") {
             crate::sim::trace_rule(
                 "move-bands",
-                "Slow",
-                &format!("{}: {adv}\" advance, {rsh}\" rush/charge", p.name),
+                "Swift",
+                &format!("{}: cancels Slow", p.name),
             );
+        } else {
+            let map = reg.rules_for(&p.game_system);
+            if let Some(e) = map.lookup(&p.faction_folder, "Slow") {
+                let (adv, rsh) = (e.param_f("advance_mod", 0.0), e.param_f("rush_mod", e.param_f("charge_mod", 0.0)));
+                acc.advance += adv;
+                acc.rush += rsh;
+                hit = true;
+                crate::sim::trace_rule(
+                    "move-bands",
+                    "Slow",
+                    &format!("{}: {adv}\" advance, {rsh}\" rush/charge", p.name),
+                );
+            }
         }
     }
 

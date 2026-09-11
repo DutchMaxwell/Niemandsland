@@ -303,20 +303,18 @@ def test_unmapped_registered_aura_never_ported_by_token_sharing(tmp_path):
 
 def test_na_names_excluded_from_ported_denominator(tmp_path):
     """SPEC_block_C_next_2026-09-02.md's census-hygiene bullet: Unique
-    (list-building only) and Swift (already folded into the loader's
-    move-band pass) must land in the N/A class, never MISSING, and the
-    core-ported ratio's own denominator must exclude them - a stale
-    denominator would silently count them as still-unported. "Swift Aura"
-    rides the same N/A verdict through the existing aura-inherits-base pass,
-    with no NA_NAMES entry of its own."""
+    (list-building only) must land in the N/A class, never MISSING, and the
+    core-ported ratio's own denominator must exclude it - a stale
+    denominator would silently count it as still-unported. Swift is a core
+    read since 11.09.2026 (the Slow stamp's Swift arm in unit.rs
+    `move_rule_mods_of`) and Swift Aura follows the strict grant rule, so
+    neither belongs to N/A anymore - only Unique does."""
     root = tmp_path / "repo"
     for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
         (root / d).mkdir(parents=True)
     (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
         "common": {
             "Unique": {"primitive": None, "params": {}},
-            "Swift": {"primitive": "Swift", "params": {"negates": "Slow"}},
-            "Swift Aura": {"primitive": None, "params": {}},
             "Furious": {"primitive": "Furious", "params": {}},
         },
         "factions": {},
@@ -329,28 +327,17 @@ def test_na_names_excluded_from_ported_denominator(tmp_path):
     (books / "book_a.json").write_text(json.dumps({
         "name": "Test Faction", "gameSystem": "gf",
         "specialRules": [
-            {"name": "Unique"}, {"name": "Swift"}, {"name": "Swift Aura"},
-            {"name": "Furious"},
+            {"name": "Unique"}, {"name": "Furious"},
         ],
     }))
     res = census.census(tmp_path / "books", root)
     rows = res["rows"]
     assert rows["Unique"]["per_system"]["gf"]["core"] == "N/A"
-    assert rows["Swift"]["per_system"]["gf"]["core"] == "N/A"
-    assert rows["Swift Aura"]["per_system"]["gf"]["core"] == "N/A", (
-        "an aura inherits its base's N/A verdict without its own NA_NAMES entry"
-    )
-    assert rows["Swift Aura"]["per_system"]["gf"]["aura_live"] is False, (
-        "N/A outranks the aura pass - an N/A base is never live"
-    )
     assert rows["Furious"]["per_system"]["gf"]["core"] == "PORTED"
 
     s = res["summary"]
-    assert s["total"] == 4
-    # Unique, Swift and the inherited Swift Aura all land in N/A - the
-    # inheritance adds its own row to the count, it just needs no NA_NAMES
-    # entry of its own to get there.
-    assert s["core_na"] == 3
+    assert s["total"] == 2
+    assert s["core_na"] == 1
     assert s["core_ported_denominator"] == 1
     assert s["core_ported"] == 1
     assert s["core_missing"] == 0, "no N/A name may count as MISSING"
@@ -358,11 +345,11 @@ def test_na_names_excluded_from_ported_denominator(tmp_path):
     lines = census.summary_lines(res)
     ported_line = next(l for l in lines if "core-ported" in l)
     assert "1/1" in ported_line
-    assert "N/A: 3 excluded from 1" in ported_line
+    assert "N/A: 1 excluded from 1" in ported_line
 
     offenders = res["offenders"]
     assert offenders[0]["occ_unported"] == 0, (
-        "Unique/Swift/Swift Aura must never count as unported offenders"
+        "Unique must never count as an unported offender"
     )
 
 
@@ -442,9 +429,9 @@ def test_grant_follow_aura_counts_only_if_granted_rule_ported(tmp_path):
                                 "params": {"grants": "Good Boost"}},
             "Dead Boost Aura": {"primitive": "Aura Channel",
                                 "params": {"grants": "Dead Boost"}},
-            "Swift": {"primitive": None, "params": {}},
-            "Swift Aura": {"primitive": "Aura Channel",
-                           "params": {"grants": "Swift"}},
+            "Unique": {"primitive": None, "params": {}},
+            "Unique Aura": {"primitive": "Aura Channel",
+                            "params": {"grants": "Unique"}},
         },
         "factions": {},
     }))
@@ -461,7 +448,7 @@ def test_grant_follow_aura_counts_only_if_granted_rule_ported(tmp_path):
         "specialRules": [
             {"name": "Good Boost"}, {"name": "Dead Boost"},
             {"name": "Good Boost Aura"}, {"name": "Dead Boost Aura"},
-            {"name": "Swift"}, {"name": "Swift Aura"},
+            {"name": "Unique"}, {"name": "Unique Aura"},
         ],
     }))
     res = census.census(tmp_path / "books", root)
@@ -474,13 +461,13 @@ def test_grant_follow_aura_counts_only_if_granted_rule_ported(tmp_path):
         f"granted rule MISSING - the aura must flip, got {dead['core']}"
     )
     assert "params.grants 'Dead Boost' resolves MISSING" in dead["core_note"]
-    hygiene = per["Swift Aura"]["per_system"]["gf"]
+    hygiene = per["Unique Aura"]["per_system"]["gf"]
     assert hygiene["core"] == "GRANT-MISSING", (
         "an N/A grant target is not PORTED - the strict rule flips the aura"
     )
     assert per["Good Boost"]["per_system"]["gf"]["core"] == "PORTED"
     assert per["Dead Boost"]["per_system"]["gf"]["core"] == "MISSING"
-    assert per["Swift"]["per_system"]["gf"]["core"] == "N/A"
+    assert per["Unique"]["per_system"]["gf"]["core"] == "N/A"
 
     s = res["summary"]
     assert s["core_grant_missing"] == 2

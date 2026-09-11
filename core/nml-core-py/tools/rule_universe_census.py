@@ -1311,9 +1311,9 @@ def summarize(rows: dict) -> dict:
         ),
     }
     # The ported/unported ratio's own denominator: total minus the N/A
-    # (census-hygiene) names, so 212/442 with 2 N/A names reads 212/440,
-    # never 212/442 - a stale denominator would silently count Unique and
-    # Swift as still-unported.
+    # (census-hygiene) names, so 212/442 with 1 N/A name reads 212/441,
+    # never 212/442 - a stale denominator would silently count Unique as
+    # still-unported.
     summary["core_ported_denominator"] = summary["total"] - summary["core_na"]
     by_system = {}
     for s in SYSTEMS:
