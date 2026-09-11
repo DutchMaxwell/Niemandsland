@@ -32,8 +32,9 @@
 //! instead of picking up a metre round trip. `to_world_f32` / `from_world_f32`
 //! and `WorldDisc` carry the table's own frame in its own operation order; the
 //! passes move onto it one at a time (the endpoint-localisation ledger says
-//! which residue each closes). The OVERLAP PUSH's inner solver runs on it
-//! (parity-frame 3, B1), entered and left through `overlap_pass`'s seam.
+//! which residue each closes). The OVERLAP PUSH runs on it whole — the inner
+//! solver (parity-frame 3, B1) and the pass order, the band-frozen read and
+//! the cap circle around it (parity-frame 4, B2) — through `overlap_pass`.
 //!
 //! BASES. Overlap relaxation and coherency use the real footprint through the
 //! shared `geom::pair_gap_m`. Terrain rest, wall chords and the escape scan
@@ -102,12 +103,7 @@ impl WorldDisc {
     /// a coordinate to f32 INCH first would put it on a third grid, 1.6-3x
     /// coarser than the world's (docs/plans/PARITY_FRAME_PR3_DESIGN).
     pub fn from_disc(d: &Disc, board_in: [f64; 2]) -> WorldDisc {
-        let read = |k: usize| if d.c[k] as f32 as f64 == d.c[k] {
-            to_world_f32([d.c[0] as f32, d.c[1] as f32], board_in)[k]
-        } else {
-            ((d.c[k] - board_in[k] * 0.5) * IN2M) as f32
-        };
-        WorldDisc { c: [read(0), read(1)], r_m: d.r * IN2M, shape: d.shape }
+        WorldDisc { c: world_pt(d.c, board_in), r_m: d.r * IN2M, shape: d.shape }
     }
 
     /// Back into the planner's inch frame, where the endpoints live.
@@ -115,6 +111,23 @@ impl WorldDisc {
         let p = from_world_f32(self.c, board_in);
         Disc { c: [p[0] as f64, p[1] as f64], r: self.r_m / IN2M, shape: self.shape }
     }
+}
+
+/// One inch-frame point in the table's frame, by `from_disc`'s rule.
+fn world_pt(p: [f64; 2], board_in: [f64; 2]) -> [f32; 2] {
+    let read = |k: usize| if p[k] as f32 as f64 == p[k] {
+        to_world_f32([p[0] as f32, p[1] as f32], board_in)[k]
+    } else {
+        ((p[k] - board_in[k] * 0.5) * IN2M) as f32
+    };
+    [read(0), read(1)]
+}
+
+/// `Vector2::distance_to` — `sqrt((x-p.x)*(x-p.x) + (y-p.y)*(y-p.y))` in
+/// float32; `(a - b).length()` is the same five operations.
+fn dist_f32(a: [f32; 2], b: [f32; 2]) -> f32 {
+    let d = [a[0] - b[0], a[1] - b[1]];
+    (d[0] * d[0] + d[1] * d[1]).sqrt()
 }
 
 /// `_moving_shapes_at` :6780 — a config as the table's shapes, radii from the
@@ -138,7 +151,8 @@ const EPSILON_M: f64 = 0.00001;
 /// `SoloController.OVERLAP_GATE_PASSES` solo_controller.gd:149.
 const OVERLAP_GATE_PASSES: usize = 4;
 /// `SoloController.OVERLAP_EPS_M` solo_controller.gd:154 — sub-0.5 mm is noise.
-const OVERLAP_EPS_IN: f64 = 0.0005 / IN2M;
+const OVERLAP_EPS_M: f64 = 0.0005;
+const OVERLAP_EPS_IN: f64 = OVERLAP_EPS_M / IN2M;
 /// `SoloController.BOUNDS_MARGIN_M` solo_controller.gd:16 — a hair inside.
 const BOUNDS_MARGIN_IN: f64 = 0.02 / IN2M;
 /// `SoloController.TERRAIN_OUT_STEP_M` :151 — the projection's ring spacing.
@@ -447,28 +461,39 @@ fn cap_disp(cand: [f64; 2], goal: [f64; 2], cap: f64, i: usize, rep: &mut GateRe
 /// function because the table runs it TWICE: once as pass 2 and once more to
 /// clear whatever pass 4's inward pulls stacked (:6636).
 ///
-/// THE SEAM (parity-frame 3, B1). The table builds its shapes once per call
-/// (:6800), every push moves them in float32 world metres, and only at the end
-/// are the centres written back (:6841). This holds the same world config `w`
-/// across all passes, so a centre the solver moved never round-trips through
-/// the inch frame between passes. The inch config `cfg` is the MIRROR (:6247
-/// order) the ordering, the band-frozen read and the cap truncation still work
-/// on; a cap that bites writes its inch result back into `w`. The cap circle
-/// itself moves onto the world frame in B2. Returns the world config the
-/// passes ended on — the push's own output, which the inch mirror quantises
-/// to the f32-inch grid (half an ULP is 1.9e-6 in at 32-64 in).
+/// THE SEAM (parity-frame 3 B1, 4 B2). The table builds its shapes once per
+/// call (:6800), every push moves them in float32 world metres, and only at
+/// the end are the centres written back (:6841). This holds the same world
+/// config `w` across all passes, so a centre the solver moved never
+/// round-trips through the inch frame between passes; the slack order, the
+/// band-frozen read and the cap circle read that config and the RAW plan in
+/// the table's frame too (B2), so a capped model lands on the table's own
+/// float32 point. The inch config `cfg` is the MIRROR written after every
+/// move for the passes downstream: the world point's f64 preimage
+/// `w / IN2M + board / 2`, which `from_disc` inverts bit for bit, so every
+/// later world read sees this very point; narrowed ONCE at the output it is
+/// the nearest f32 inch, which lands on the table's point whenever the
+/// f32-inch grid holds one. (The `_plan_move` :6247 read, two float32
+/// roundings, lost the world point on every second moved model and the
+/// output on one in seven that had a preimage — a 200,000-point probe.)
+/// Returns the world config the passes ended on.
 fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bool,
                 external: &[Disc], radii_m: &[f64], board_in: [f64; 2], rep: &mut GateReport)
                 -> Vec<WorldDisc> {
     let n = cfg.len();
     let mut w = world(cfg, radii_m, board_in);
     let ext = world(external, &[], board_in);
+    // `planned_world` (:6824, never rewritten) and `disp_caps_m` as
+    // `_gate_disp_caps_m` :6431 hands them over: the inch value times
+    // INCHES_TO_METERS, a GDScript float. `rem` :6815 is that float minus a
+    // float32 `distance_to`.
+    let goal_w: Vec<[f32; 2]> = goal.iter().map(|g| world_pt(*g, board_in)).collect();
+    let caps_m: Vec<f64> = caps_in.iter().map(|c| c * IN2M).collect();
+    let slack = |i: usize, w: &[WorldDisc]| caps_m[i] - dist_f32(w[i].c, goal_w[i]) as f64;
     for _ in 0..OVERLAP_GATE_PASSES {
         let mut order: Vec<usize> = (0..n).collect();
         if capped {
-            let rem: Vec<f64> = (0..n)
-                .map(|i| caps_in[i] - dist(cfg[i].c, goal[i]))
-                .collect();
+            let rem: Vec<f64> = (0..n).map(|i| slack(i, &w)).collect();
             // `order.sort_custom` :6737. Hand-rolled (insertion, stable, n is a
             // unit's model count) because that comparator's epsilon tie-break is
             // not a strict total order and Rust's own sort may panic on one.
@@ -477,7 +502,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
                 let mut j = a;
                 while j > 0 && {
                     let w = order[j - 1];
-                    if (rem[v] - rem[w]).abs() > OVERLAP_EPS_IN {
+                    if (rem[v] - rem[w]).abs() > OVERLAP_EPS_M {
                         rem[v] > rem[w]
                     } else {
                         v < w
@@ -491,29 +516,30 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
         }
         let mut moved = false;
         for i in order {
-            if capped && caps_in[i] - dist(cfg[i].c, goal[i]) <= OVERLAP_EPS_IN {
-                continue; // band-frozen (:6742)
+            if capped && slack(i, &w) <= OVERLAP_EPS_M {
+                continue; // band-frozen (:6825)
             }
             let mut obs: Vec<WorldDisc> = ext.clone();
             obs.extend((0..n).filter(|&j| j != i).map(|j| w[j]));
             let mut s = w[i];
             if resolve_overlaps(&mut s, &obs) {
                 moved = true;
-                let p = from_world_f32(s.c, board_in);
-                cfg[i].c = [p[0] as f64, p[1] as f64];
                 if capped {
-                    let off = [cfg[i].c[0] - goal[i][0], cfg[i].c[1] - goal[i][1]];
+                    // `_cap_gate_disp` on the shape (:6836-6839): a float32
+                    // `off`, its float32 length widened against the f64 cap,
+                    // then `normalized() * float(cap)` — two float32 divides,
+                    // the cap narrowed, two multiplies, two adds.
+                    let off = [s.c[0] - goal_w[i][0], s.c[1] - goal_w[i][1]];
                     let l = (off[0] * off[0] + off[1] * off[1]).sqrt();
-                    if l > caps_in[i] {
-                        cfg[i].c = [
-                            goal[i][0] + off[0] / l * caps_in[i],
-                            goal[i][1] + off[1] / l * caps_in[i],
-                        ];
+                    if l as f64 > caps_m[i] {
+                        let cap = caps_m[i] as f32;
+                        s.c = [goal_w[i][0] + off[0] / l * cap, goal_w[i][1] + off[1] / l * cap];
                         rep.capped[i] = true;
-                        s.c = WorldDisc::from_disc(&cfg[i], board_in).c;
                     }
                 }
                 w[i] = s;
+                cfg[i].c = [s.c[0] as f64 / IN2M + board_in[0] * 0.5,
+                            s.c[1] as f64 / IN2M + board_in[1] * 0.5];
             }
         }
         if !moved {
@@ -1005,9 +1031,15 @@ mod endpoint_localisation {
         // id, gate bound, overlap bound, shorten bound — inches, measured.
         let bounds = [
             ("recorded-037", 0.00000304, 1e-9, 1e-9),
-            ("recorded-128", 0.0941167, 3e-7, 1e-9),
+            ("recorded-128", 0.0000024, 1e-9, 1e-9),
             ("recorded-162", 0.00000046, 1e-9, 1e-9),
         ];
+        // Straight to the process's stderr, past the harness capture, so a
+        // GREEN box run still leaves every measured residue in its cargo log.
+        let say = |line: String| { use std::io::Write; let _ = writeln!(std::io::stderr(), "{line}"); };
+        // Every bound is measured before any is asserted: one run shows the
+        // whole ledger, not just the first row that fails.
+        let mut fails: Vec<String> = Vec::new();
         for (id, gate_bound, overlap_bound, shorten_bound) in bounds {
             let pin = &pins["cases"][id];
             let case = fixtures["cases"].as_array().unwrap().iter()
@@ -1061,9 +1093,18 @@ mod endpoint_localisation {
             let (got, _) = finalize_placement(&planned, &radii, &ext, &caps, board,
                 Some(&terrain), flags);
             let got: Vec<[f64; 2]> = got.iter().map(|p| [p[0] as f64, p[1] as f64]).collect();
-            let delta = worst(&got, &conv(&gate["out"], board));
-            eprintln!("{id}: whole gate residue {delta:.9}in (bound {gate_bound})");
-            assert!(delta <= gate_bound, "{id}: whole gate differs by {delta:.9}in (bound {gate_bound})");
+            let want = conv(&gate["out"], board);
+            for i in 0..got.len() {
+                let d = dist(got[i], want[i]);
+                if d > 1e-6 {
+                    say(format!("{id}:   model {i}: whole gate residue {d:.9}in"));
+                }
+            }
+            let delta = worst(&got, &want);
+            say(format!("{id}: whole gate residue {delta:.9}in (bound {gate_bound})"));
+            if delta > gate_bound {
+                fails.push(format!("{id}: whole gate differs by {delta:.9}in (bound {gate_bound})"));
+            }
             // The overlap push, replayed on the table's own post-projection config.
             let mut cfg: Vec<Disc> = conv(&pin["overlap"]["in"], board).iter().enumerate()
                 .map(|(i, c)| Disc { c: *c, r: radii[i], shape: shapes[i] }).collect();
@@ -1083,13 +1124,14 @@ mod endpoint_localisation {
                 let dw = dist(got_w[i], out_w[i]) / IN2M;
                 let dm = dist(cfg[i].c, conv(&pin["overlap"]["out"], board)[i]);
                 if dw > 1e-9 || dm > 1e-9 || rep.capped[i] {
-                    eprintln!("{id}:   model {i}: push residue world {dw:.9}in mirror {dm:.9}in capped={}", rep.capped[i]);
+                    say(format!("{id}:   model {i}: push residue world {dw:.9}in mirror {dm:.9}in capped={}", rep.capped[i]));
                 }
             }
             let delta = worst(&got_w, &out_w) / IN2M;
-            eprintln!("{id}: overlap push residue {delta:.9}in (bound {overlap_bound})");
-            assert!(delta <= overlap_bound,
-                "{id}: overlap push differs by {delta:.9}in (bound {overlap_bound})");
+            say(format!("{id}: overlap push residue {delta:.9}in (bound {overlap_bound})"));
+            if delta > overlap_bound {
+                fails.push(format!("{id}: overlap push differs by {delta:.9}in (bound {overlap_bound})"));
+            }
             // The whole-unit shorten, replayed on the table's own input.
             if let Some(shorten) = pin["shorten"].as_object() {
                 let cfg: Vec<Disc> = conv(&shorten["in"], board).iter().enumerate()
@@ -1098,11 +1140,13 @@ mod endpoint_localisation {
                     crate::mv::MAX_CHAIN_IN);
                 let out: Vec<[f64; 2]> = out.iter().map(|d| d.c).collect();
                 let delta = worst(&out, &conv(&shorten["out"], board));
-                eprintln!("{id}: whole-unit shorten residue {delta:.9}in (bound {shorten_bound})");
-                assert!(delta <= shorten_bound,
-                    "{id}: whole-unit shorten differs by {delta:.9}in (bound {shorten_bound})");
+                say(format!("{id}: whole-unit shorten residue {delta:.9}in (bound {shorten_bound})"));
+                if delta > shorten_bound {
+                    fails.push(format!("{id}: whole-unit shorten differs by {delta:.9}in (bound {shorten_bound})"));
+                }
             }
         }
+        assert!(fails.is_empty(), "{}", fails.join("\n"));
     }
 }
 
