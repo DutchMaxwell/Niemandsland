@@ -1,8 +1,8 @@
 name: Build core extension
-description: "Builds the optional Rust NmlCore GDExtension and installs its manifest; only 'linux' is wired."
+description: "Builds the optional Rust NmlCore GDExtension for Linux or Windows and installs its manifest."
 inputs:
   target:
-    description: "Target platform to build for. Only 'linux' is wired."
+    description: "Target platform to build for: 'linux' or 'windows'."
     required: true
 runs:
   using: composite
@@ -16,10 +16,20 @@ runs:
     - name: Build NmlCore extension
       shell: bash
       run: |
-        if [ "${{ inputs.target }}" != "linux" ]; then
-          echo "::error::build-core-extension target '${{ inputs.target }}' is not wired yet"; exit 1
-        fi
-        cargo build --release --manifest-path core/nml-core-godot/Cargo.toml
+        case "${{ inputs.target }}" in
+          linux)
+            cargo build --release --manifest-path core/nml-core-godot/Cargo.toml ;;
+          windows)
+            # Cross-build on the ubuntu runner. The DLL must not import the MinGW
+            # runtime (libgcc_s / libstdc++ / libwinpthread) a player machine lacks;
+            # export-windows asserts that with objdump.
+            rustup target add x86_64-pc-windows-gnu
+            sudo apt-get update
+            sudo apt-get install -y mingw-w64
+            cargo build --release --target x86_64-pc-windows-gnu --manifest-path core/nml-core-godot/Cargo.toml ;;
+          *)
+            echo "::error::build-core-extension target '${{ inputs.target }}' is unknown"; exit 1 ;;
+        esac
         touch core/target/.gdignore
     - name: Install GDExtension manifest
       shell: bash

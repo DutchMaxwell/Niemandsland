@@ -190,6 +190,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Cross-build the Windows DLL before the import, so the Windows preset can
+      # carry it; mingw-w64 also provides the objdump used for the import check.
+      - name: Build core extension (NmlCore)
+        uses: ./.github/actions/build-core-extension
+        with:
+          target: windows
+
       - name: Setup Godot (with export templates)
         uses: ./.github/actions/setup-godot
         with:
@@ -206,6 +213,22 @@ jobs:
         run: |
           mkdir -v -p build/windows
           godot --headless --verbose --export-release "Windows Desktop" build/windows/$EXPORT_NAME.exe
+
+      - name: Verify the extension DLL shipped next to the executable
+        run: |
+          ls -l build/windows
+          test -f build/windows/nml_core_godot.dll || {
+            echo "::error::nml_core_godot.dll did not land next to the exported executable"; exit 1; }
+
+      # The runner cannot start the .exe, so prove the DLL's imports instead: only
+      # Windows system libraries, never the MinGW runtime a player would lack.
+      - name: Verify the DLL imports only Windows system libraries
+        run: |
+          x86_64-w64-mingw32-objdump -p build/windows/nml_core_godot.dll | grep "DLL Name:"
+          if x86_64-w64-mingw32-objdump -p build/windows/nml_core_godot.dll | grep -iE "libgcc_s|libstdc\+\+|libwinpthread"; then
+            echo "::error::the DLL imports a MinGW runtime a player would lack"; exit 1
+          fi
+          echo "OK: no MinGW runtime imports"
 
       - name: Upload Windows Artifact
         continue-on-error: true
@@ -245,12 +268,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Same build as export-linux: only the Linux preset filter admits the manifest,
-      # so the Windows and macOS exports stay unchanged.
-      - name: Build core extension (NmlCore)
+      # Build both libraries before the import: the Linux and Windows presets now
+      # both admit the manifest, so each export carries its own library.
+      - name: Build core extension (NmlCore, linux)
         uses: ./.github/actions/build-core-extension
         with:
           target: linux
+      - name: Build core extension (NmlCore, windows)
+        uses: ./.github/actions/build-core-extension
+        with:
+          target: windows
 
       - name: Setup Godot (with export templates)
         uses: ./.github/actions/setup-godot
