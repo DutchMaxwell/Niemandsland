@@ -62,6 +62,45 @@ runs:
         path: core/target/release/libnml_core_godot.so.debug
         retention-days: 90
         if-no-files-found: error
+    - name: Strip shipped DLL, keep debug symbols, guard size and paths
+      id: stripwin
+      if: inputs.target == 'windows'
+      shell: bash
+      run: |
+        if ! command -v x86_64-w64-mingw32-strip >/dev/null 2>&1; then
+          echo "::error::x86_64-w64-mingw32-strip not found"; exit 1
+        fi
+        DLL=core/target/x86_64-pc-windows-gnu/release/nml_core_godot.dll
+        x86_64-w64-mingw32-objcopy --only-keep-debug "$DLL" "$DLL.debug"
+        x86_64-w64-mingw32-strip --strip-unneeded "$DLL"
+        x86_64-w64-mingw32-objcopy --add-gnu-debuglink="$DLL.debug" "$DLL"
+        ID=$(sha256sum "$DLL" | cut -c1-16)
+        echo "id=$ID" >> "$GITHUB_OUTPUT"
+        SIZE=$(stat -c %s "$DLL")
+        PATHS=$(strings -a "$DLL" | grep -c /home/ || true)
+        ENTRY=$(x86_64-w64-mingw32-objdump -p "$DLL" | grep -c gdext_rust_init || true)
+        echo "Shipped DLL: $DLL — $SIZE bytes, /home/ paths: $PATHS, gdext_rust_init count: $ENTRY"
+        x86_64-w64-mingw32-objdump -p "$DLL" | grep -iE "debug directory|codeview|rsds" || true
+        if [ "$SIZE" -gt 20971520 ]; then
+          echo "::error::shipped DLL is $SIZE bytes — over the 20 MB budget"; exit 1
+        fi
+        if [ "$PATHS" -ne 0 ]; then
+          echo "::error::shipped DLL still embeds $PATHS /home/ path(s)"; exit 1
+        fi
+        if [ "$ENTRY" -eq 0 ]; then
+          echo "::error::gdext_rust_init did not survive the strip"; exit 1
+        fi
+    # A PE file has no GNU build-id note, so this artifact is keyed by the stripped
+    # DLL's sha256; it differs in name from the Linux one and both are uploaded in a
+    # single release-job run.
+    - name: Upload Windows debug symbols
+      if: inputs.target == 'windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: nml-core-debug-windows-${{ steps.stripwin.outputs.id }}
+        path: core/target/x86_64-pc-windows-gnu/release/nml_core_godot.dll.debug
+        retention-days: 90
+        if-no-files-found: error
     - name: Install GDExtension manifest
       shell: bash
       run: bash core/install_gdextension.sh

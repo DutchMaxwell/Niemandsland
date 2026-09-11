@@ -229,6 +229,15 @@ jobs:
           test -f build/windows/nml_core_godot.dll || {
             echo "::error::nml_core_godot.dll did not land next to the exported executable"; exit 1; }
 
+      # The debug-symbol file is a build artifact only; it must never leak into what players
+      # download (export dir here, release zips in the tag-gated release job below).
+      - name: Guard - no debug symbols in the export
+        run: |
+          if find build/windows -name '*.debug' -print -quit | grep -q .; then
+            echo "::error::a debug-symbol file landed in the export directory"; exit 1
+          fi
+          echo "OK: no .debug file in build/windows"
+
       # The runner cannot start the .exe, so prove the DLL's imports instead: only
       # Windows system libraries, never the MinGW runtime a player would lack.
       - name: Verify the DLL imports only Windows system libraries
