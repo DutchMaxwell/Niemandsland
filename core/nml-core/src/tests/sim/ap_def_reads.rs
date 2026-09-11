@@ -20,7 +20,7 @@ use super::*;
     /// back at it — and `b`'s models carry 99-wound bodies where a test needs
     /// the target to survive into a second exchange.
     fn ap_rifle() -> (State, Vec<UnitStatic>) {
-        let (mut st, mut statics) = buff_line();
+        let (st, mut statics) = buff_line();
         statics[0].shoot[0].ap = 1;
         statics[0].shoot[0].attacks = 64; // a save batch is guaranteed to follow
         statics[0].ctx.defense = 4;

@@ -486,7 +486,7 @@ use super::*;
     /// that notices.
     #[test]
     fn the_round_boundary_runs_the_beat() {
-        let (mut st, statics) = line(CURRENT_RULES_EPOCH);
+        let (st, statics) = line(CURRENT_RULES_EPOCH);
         let board = empty_board();
         let i = idx(&st, "p1_0_a");
         let roll = Rollout::new(

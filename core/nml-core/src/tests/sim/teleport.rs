@@ -40,7 +40,7 @@ use super::*;
     fn run_tp(st: &State, statics: &[UnitStatic], rules_epoch: u32, to: Option<[f64; 2]>) -> (State, ShootResult) {
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);
-        let mut act = crate::io::Action { kind: ADVANCE, unit: "a".into(), dest: None,
+        let act = crate::io::Action { kind: ADVANCE, unit: "a".into(), dest: None,
             shoot: None, charge: None, patient: false, split: None, traced: None, teleport: to };
         resolve_stochastic_tray_on_board(
             statics, st, &act, &crate::terrain::Terrain::default(),
