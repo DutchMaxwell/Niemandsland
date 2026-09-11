@@ -90,8 +90,8 @@ both — walker keywords no longer win the tie-break by accident.
 
 **Not automated (named, not hidden)** — the battle log opens every game with the AI rule
 inventory, and any rule name the automation does not resolve is named per unit rather than
-hidden behind an "…". The last three holdouts of the automation campaign — the unit-creating
-rules (**Spawn**, **Split**) and the movement rule (**Traversal**) — resolve since `0.3.11.0`.
+hidden behind an "…". **Traversal** resolves since `0.3.11.0`. The unit-creating rules
+**Spawn** and **Split** now have real-table resolvers on `main`, added after that release.
 A small army-book flavour residue remains without effect (three aura families and a few
 conditional-AP legs, tracked on the board as NML-931); a standing guard test pins the healed
 set so no future book ships a dead grant unnoticed.
