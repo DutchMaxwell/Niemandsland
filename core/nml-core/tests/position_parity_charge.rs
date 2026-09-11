@@ -55,6 +55,20 @@ fn charge_final_placement_matches_the_table_pin() {
 }
 
 #[test]
+fn charge_contact_fan_preserves_the_tables_model_assignments() {
+    assert_endpoint_pin("generated-board-72x48-charge", "charge_contact_fan");
+}
+
+#[test]
+fn charge_contact_fan_keeps_the_legacy_assignment_before_epoch_6() {
+    let (_, _, old, _, _) = pinned_charge("generated-board-72x48-charge", 0);
+    let (_, _, before, _, _) = pinned_charge("generated-board-72x48-charge", 5);
+    assert_eq!(old.end, before.end);
+    assert!(before.end[0][2] < -0.02, "legacy model 0 remains on the negative flank");
+    assert!(before.end[1][2] > 0.02, "legacy model 1 remains on the positive flank");
+}
+
+#[test]
 fn charge_base_shapes_matches_the_table_pin() {
     assert_endpoint_pin("recorded-136","base_shapes");
 }
@@ -142,4 +156,14 @@ fn charge_gate_and_snap_epochs_reach_the_simulator() {
         assert_eq!(endings[2],endings[3]);
         assert_ne!(endings[1],endings[2]);
     }
+}
+
+#[test]
+fn long_single_model_charge_preserves_the_table_endpoint() {
+    assert_endpoint_pin("generated-charge-d18-n1", "long_charge");
+}
+
+#[test]
+fn long_multi_model_charge_preserves_the_table_endpoints() {
+    assert_endpoint_pin("generated-charge-d18-n3", "long_charge");
 }

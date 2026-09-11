@@ -327,6 +327,17 @@ fn fine_cells(
     out
 }
 
+/// Every position in a table-era planner call uses the same float32 frame.
+/// Mixing slot centres with differently rounded obstacle centres can change
+/// the route even when the two centres are only one ULP apart.
+fn planner_point(p: V3, t: &Terrain, rules_epoch: u32) -> V2 {
+    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        super::gate::from_world_f32([p[0], p[2]], t.board_in())
+    } else {
+        t.to_inch(p)
+    }
+}
+
 /// `_spacing_zones_world` :5232, already in the planner's inch frame: one circle
 /// per alive model of every OTHER on-table unit. The charge target and its
 /// attached heroes get a BODY-ONLY zone (no 1" buffer) — a charge may end in
@@ -339,6 +350,7 @@ fn spacing_zones(
     si: usize,
     ci: Option<usize>,
     own_r_m: f64,
+    rules_epoch: u32,
 ) -> Vec<Zone> {
     let member = |u: usize, host: usize| u == host || state.attached_to[u] == Some(host);
     let mut zones = Vec::new();
@@ -351,7 +363,7 @@ fn spacing_zones(
         for m in 0..state.positions[gu].len() {
             let r = radius_of(state, Mover { unit: gu, model: m });
             zones.push(Zone {
-                c: t.to_inch(pos_of(state, Mover { unit: gu, model: m })),
+                c: planner_point(pos_of(state, Mover { unit: gu, model: m }), t, rules_epoch),
                 r: (r + buffer_m + own_r_m) / IN2M,
             });
         }
@@ -403,8 +415,13 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
     let (state, t, si, ci) = (self.state, self.t, self.si, self.ci);
     let (movers, own_r_m) = (&self.movers, self.own_r_m);
     let board = t.board_in();
-    let mpos: Vec<V2> = movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
-    let mdelta: V2 = [(delta_world[0] as f64 / IN2M) as f32, (delta_world[2] as f64 / IN2M) as f32];
+    let mpos: Vec<V2> = movers.iter()
+        .map(|m| planner_point(pos_of(state, *m), t, self.rules_epoch)).collect();
+    let mdelta: V2 = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
+        [delta_world[0] / IN2M as f32, delta_world[2] / IN2M as f32]
+    } else {
+        [(delta_world[0] as f64 / IN2M) as f32, (delta_world[2] as f64 / IN2M) as f32]
+    };
     let radii: Vec<f64> = movers.iter().map(|m| radius_of(state, *m) / IN2M).collect();
     let (grid, avoid_cells) = terrain_cells(t, board, avoid_diff, avoid_dang);
     let margin_in = own_r_m / IN2M + terrain::CELL_IN;
@@ -425,7 +442,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
         (0..state.positions[c].len())
             .map(|m| {
                 let mv = Mover { unit: c, model: m };
-                (t.to_inch(pos_of(state, mv)), radius_of(state, mv) / IN2M)
+                (planner_point(pos_of(state, mv), t, self.rules_epoch), radius_of(state, mv) / IN2M)
             })
             .collect()
     });
@@ -449,7 +466,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
         opts: CallOpts {
             radii,
             clearance: own_r_m / IN2M + super::CLEARANCE_EPS_IN,
-            zones: spacing_zones(state, t, si, ci, own_r_m),
+            zones: spacing_zones(state, t, si, ci, own_r_m, self.rules_epoch),
             avoid_cells,
             avoid_fine,
             forbid_cells,
@@ -464,7 +481,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
             // plain move sends neither, so `allowance()` falls back to the
             // straight delta length (io.rs:512).
             charge_allowance: ci.map(|_| reach_in),
-            charge_goal: ci.map(|c| t.to_inch(unit_centre(state, c))),
+            charge_goal: ci.map(|c| planner_point(unit_centre(state, c), t, self.rules_epoch)),
             charge_tgt_bases: tgt_bases,
             charge_slots,
         },
@@ -526,6 +543,34 @@ fn gate_flags(&self) -> super::gate::GateFlags<'_> {
         start_world: &self.pos, rules_epoch: self.rules_epoch, ..Default::default() }
 }
 
+/// The table trims the world trail after planning, before any placement gate.
+/// Its float32 metre interpolation can select a different contact relaxation
+/// from an inch-frame cut. Preserve the historical inch cut before epoch 6.
+fn trim_to_band(&self, leg: &mut Vec<V2>, reach_in: f64) -> Option<V2> {
+    if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
+        let board = self.t.board_in();
+        let world: Vec<V2> = leg.iter()
+            .map(|p| super::gate::to_world_f32(*p, board)).collect();
+        let budget_m = reach_in * IN2M;
+        if g2::polyline_length(&world) <= budget_m + OVERLAP_EPS_M {
+            return None;
+        }
+        let cut = g2::trim_polyline(&world, budget_m);
+        // Nearest inch-grid representation of each trimmed world point. The
+        // add-then-divide planner input conversion would round twice here.
+        *leg = cut.iter().map(|p| [
+            (p[0] as f64 / IN2M + board[0] * 0.5) as f32,
+            (p[1] as f64 / IN2M + board[1] * 0.5) as f32,
+        ]).collect();
+    } else {
+        if g2::polyline_length(leg) * IN2M <= reach_in * IN2M + OVERLAP_EPS_M {
+            return None;
+        }
+        *leg = g2::trim_polyline(leg, reach_in);
+    }
+    leg.last().copied()
+}
+
 fn gate_caps(&self, trails: &[Vec<V2>], radii_m: &[f64], reach_in: f64) -> Vec<f64> {
     trails
         .iter()
@@ -536,7 +581,16 @@ fn gate_caps(&self, trails: &[Vec<V2>], radii_m: &[f64], reach_in: f64) -> Vec<f
             if !self.ignores_difficult && leg_crosses(leg, r, self.t, terrain::is_difficult) {
                 budget = budget.min(DIFFICULT_MOVE_CAP_IN);
             }
-            (budget - g2::polyline_length(leg)).max(0.0) + GATE_SLACK_EPS_IN
+            // `_gate_disp_caps_m` measures the routed world trail, then
+            // converts that length to inches before computing the remainder.
+            let walked = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
+                let world: Vec<V2> = leg.iter()
+                    .map(|p| super::gate::to_world_f32(*p, self.t.board_in())).collect();
+                g2::polyline_length(&world) / IN2M
+            } else {
+                g2::polyline_length(leg)
+            };
+            (budget - walked).max(0.0) + GATE_SLACK_EPS_IN
         })
         .collect()
 }
@@ -632,13 +686,8 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
     let mut arc_in = 0.0f64;
     let mut dangerous: Vec<bool> = Vec::with_capacity(trails.len());
     for (i, leg) in trails.iter_mut().enumerate() {
-        if g2::polyline_length(leg) * IN2M > budget_in * IN2M + OVERLAP_EPS_M {
-            *leg = g2::trim_polyline(leg, budget_in);
-            if let Some(fin) = leg.last() {
-                if i < planned.len() {
-                    planned[i] = *fin;
-                }
-            }
+        if let Some(fin) = self.trim_to_band(leg, budget_in) {
+            if i < planned.len() { planned[i] = fin; }
         }
         // :5051 — the p.12 crossing flag is read HERE, on the routed trail, and
         // not after the retrace below: the table counts the cells the model
@@ -702,13 +751,8 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
                 let r3 = budget_in * frac;
                 let (mut p3, mut t3, c3) = self.plan_once(r3, avoid_diff, avoid_dang);
                 for (i, leg) in t3.iter_mut().enumerate() {
-                    if g2::polyline_length(leg) * IN2M > r3 * IN2M + OVERLAP_EPS_M {
-                        *leg = g2::trim_polyline(leg, r3);
-                        if let Some(fin) = leg.last() {
-                            if i < p3.len() {
-                                p3[i] = *fin;
-                            }
-                        }
+                    if let Some(fin) = self.trim_to_band(leg, r3) {
+                        if i < p3.len() { p3[i] = fin; }
                     }
                 }
                 let caps3 = self.gate_caps(&t3, radii_m, r3);
@@ -767,9 +811,8 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
                             self.goal[1], anchor[2] + rotated[1]], self.half), ..self.clone() };
                         let (mut p4, mut t4, c4) = trial.plan_once(granted_reach, avoid_diff, avoid_dang);
                         for (i, leg) in t4.iter_mut().enumerate() {
-                            if g2::polyline_length(leg) * IN2M > granted_reach * IN2M + OVERLAP_EPS_M {
-                                *leg = g2::trim_polyline(leg, granted_reach);
-                                if let Some(fin) = leg.last() { p4[i] = *fin; }
+                            if let Some(fin) = self.trim_to_band(leg, granted_reach) {
+                                p4[i] = fin;
                             }
                         }
                         let caps4 = self.gate_caps(&t4, radii_m, granted_reach);

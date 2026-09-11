@@ -467,7 +467,24 @@ pub(crate) fn coherent_placement(planned: &[V2], radii_in: &[f64], flags: GateFl
 
 /// `_cap_gate_disp` :6360 — truncate one gate correction to the model's
 /// band-slack circle around its RAW planned endpoint, marking it when it bit.
-fn cap_disp(cand: [f64; 2], goal: [f64; 2], cap: f64, i: usize, rep: &mut GateReport) -> [f64; 2] {
+fn cap_disp(cand: [f64; 2], goal: [f64; 2], cap: f64, i: usize, rep: &mut GateReport,
+            board: [f64; 2], rules_epoch: u32) -> [f64; 2] {
+    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        // `_cap_gate_disp` reads Vector2 world offsets. An inch-space cap
+        // can move a point by one world ULP and change a shortening probe.
+        let (at, origin) = (world_pt(cand, board), world_pt(goal, board));
+        let off = [at[0] - origin[0], at[1] - origin[1]];
+        let len = (off[0] * off[0] + off[1] * off[1]).sqrt();
+        if len as f64 <= cap * IN2M {
+            return cand;
+        }
+        rep.capped[i] = true;
+        let cap_m = (cap * IN2M) as f32;
+        let end = [origin[0] + off[0] / len * cap_m,
+                   origin[1] + off[1] / len * cap_m];
+        return [end[0] as f64 / IN2M + board[0] * 0.5,
+                end[1] as f64 / IN2M + board[1] * 0.5];
+    }
     let off = [cand[0] - goal[0], cand[1] - goal[1]];
     let l = (off[0] * off[0] + off[1] * off[1]).sqrt();
     if l <= cap {
@@ -610,7 +627,8 @@ impl Pull<'_> {
             cand = project_out_forbidden(cand, cfg[i].r, t, b);
         }
         if self.capped {
-            cand = cap_disp(cand, self.goal[i], self.caps_in[i], i, rep);
+            cand = cap_disp(cand, self.goal[i], self.caps_in[i], i, rep,
+                self.board_in, self.rules_epoch);
             if dist(cand, cfg[i].c) <= OVERLAP_EPS_IN {
                 return false;
             }
