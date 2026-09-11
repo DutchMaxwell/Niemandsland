@@ -1,0 +1,54 @@
+name: Build core extension
+description: "Builds the optional Rust NmlCore GDExtension and installs its manifest; only 'linux' is wired."
+inputs:
+  target:
+    description: "Target platform to build for. Only 'linux' is wired."
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+    - name: Cache cargo
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: core
+    - name: Build NmlCore extension
+      shell: bash
+      run: |
+        if [ "${{ inputs.target }}" != "linux" ]; then
+          echo "::error::build-core-extension target '${{ inputs.target }}' is not wired yet"; exit 1
+        fi
+        RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$GITHUB_WORKSPACE=/workspace --remap-path-prefix=$HOME=/build" \
+          cargo build --release --manifest-path core/nml-core-godot/Cargo.toml
+        touch core/target/.gdignore
+    - name: Strip shipped library, keep debug symbols, guard size and paths
+      id: strip
+      shell: bash
+      run: |
+        LIB=core/target/release/libnml_core_godot.so
+        DEBUG="$LIB.debug"
+        objcopy --only-keep-debug "$LIB" "$DEBUG"
+        strip --strip-unneeded "$LIB"
+        objcopy --add-gnu-debuglink="$DEBUG" "$LIB"
+        BUILD_ID=$(readelf -n "$LIB" | awk '/Build ID/ {print $3; exit}')
+        echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+        SIZE=$(stat -c %s "$LIB")
+        PATHS=$(strings "$LIB" | grep -c /home/ || true)
+        echo "Shipped library: $LIB — $SIZE bytes, /home/ paths: $PATHS, build-id: $BUILD_ID"
+        if [ "$SIZE" -gt 20971520 ]; then
+          echo "::error::shipped library is $SIZE bytes — over the 20 MB budget"; exit 1
+        fi
+        if [ "$PATHS" -ne 0 ]; then
+          echo "::error::shipped library still embeds $PATHS /home/ path(s)"; exit 1
+        fi
+    - name: Upload debug symbols
+      uses: actions/upload-artifact@v4
+      with:
+        name: nml-core-debug-${{ steps.strip.outputs.build_id }}
+        path: core/target/release/libnml_core_godot.so.debug
+        retention-days: 90
+        if-no-files-found: error
+    - name: Install GDExtension manifest
+      shell: bash
+      run: bash core/install_gdextension.sh

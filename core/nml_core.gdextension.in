@@ -7,9 +7,14 @@
 ; LINUX x86_64 ONLY for now — the .so is built by hand with
 ;   cargo build --release --manifest-path core/nml-core-godot/Cargo.toml
 ; (F7: that lands in the one workspace target dir, core/target/release)
-; and is NOT committed. A Windows .dll (and a macOS .dylib) is a CI/packaging
-; question and stays out until the core ships — rule R3 keeps the release
-; pipeline independent of the Rust job.
+; and is NOT committed.
+;
+; Maintainer decision 11.09.2026 (coreship): the extension now SHIPS inside the
+; Linux game export, DORMANT — its presence alone changes no game byte. Both
+; wake-up seams (BattleSim.core_enabled() for the search/move seams, the
+; NML_OBJECTIVE_DOCTRINE rung for placement) stay behind their explicit env
+; opt-in, and no difficulty preset arms them by default. macOS stays out for this
+; work; the Windows .dll follows in its own change.
 ;
 ; THIS FILE IS A TEMPLATE, not the live manifest. Godot only loads files
 ; literally named *.gdextension, so this .in copy is inert on a plain checkout.
