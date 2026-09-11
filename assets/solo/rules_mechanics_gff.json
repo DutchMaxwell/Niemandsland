@@ -1540,7 +1540,7 @@
      "range_in": 18,
      "scope": "melee",
      "target": "enemy",
-     "vs_marked": true
+     "vs_target": true
     }
    },
    "Precision Fighter Aura": {
@@ -2688,7 +2688,7 @@
      "once": true,
      "range_in": 18,
      "target": "enemy",
-     "vs_marked": true
+     "vs_target": true
     }
    },
    "Repel Ambushers": {
@@ -10384,7 +10384,7 @@
      "once": true,
      "range_in": 18,
      "target": "enemy",
-     "vs_marked": true
+     "vs_target": true
     }
    },
    "Strider Aura": {

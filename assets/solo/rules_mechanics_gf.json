@@ -2725,7 +2725,7 @@
      "range_in": 18,
      "scope": "shooting",
      "target": "enemy",
-     "vs_marked": true
+     "vs_target": true
     }
    },
    "Precision Hunter": {
@@ -4390,7 +4390,7 @@
      "range_in": 18,
      "scope": "shooting",
      "target": "enemy",
-     "vs_marked": true
+     "vs_target": true
     }
    },
    "Vanguard": {
