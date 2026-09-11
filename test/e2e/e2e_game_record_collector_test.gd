@@ -52,7 +52,8 @@ func _activation_lines() -> int:
 
 func _recorded_actions(kind: String) -> Array:
 	var out: Array = []
-	for a in _main.game_record_collector.build_record()["actions"]:
+	var record: Dictionary = _main.game_record_collector.build_record()
+	for a in record["actions"]:
 		if str((a as Dictionary).get("kind", "")) == kind:
 			out.append(a)
 	return out
@@ -63,7 +64,7 @@ func _recorded_actions(kind: String) -> Array:
 func test_record_actions_match_battle_log_activations(timeout := 120000) -> void:
 	assert_that(_main.game_record_collector).override_failure_message("main built no game record collector").is_not_null()
 	var before := _activation_lines()
-	var before_actions := _main.game_record_collector.action_count()
+	var before_actions: int = _main.game_record_collector.action_count()
 	_main._log_battle_activation(_register(1, "unit-a", "Private Alpha", Vector3(-0.30, 0.0, 0.20)), false)
 	_main._log_battle_activation(_register(2, "unit-b", "Private Beta", Vector3(0.30, 0.0, -0.20)), false)
 	_main._log_battle_activation(_register(1, "unit-c", "Private Gamma", Vector3(-0.20, 0.0, 0.30)), false)
@@ -78,14 +79,15 @@ func test_record_actions_match_battle_log_activations(timeout := 120000) -> void
 ## Observed dice faces are read off the real tray; the collector must reproduce exactly the faces
 ## BattleLog reports for the same roll.
 func test_recorded_dice_faces_equal_the_tray(timeout := 120000) -> void:
-	var faces := [2, 5, 6]
+	var faces: Array[int] = [2, 5, 6]
+	var no_tags: Array[int] = []
 	_main.dice_roller_control.show_faces(faces)
-	_main._add_dice_log_entry("You", faces, {DiceRules.CTX_TARGET: DiceRules.TARGET_NONE}, [])
+	_main._add_dice_log_entry("You", faces, {DiceRules.CTX_TARGET: DiceRules.TARGET_NONE}, no_tags)
 	var recorded: Array = []
 	for a in _recorded_actions("roll"):
 		recorded.append_array((a as Dictionary).get("dice_faces", []))
 	var tray: Array = []
-	var per := _main.dice_roller_control.per_dice_result()
+	var per: Dictionary = _main.dice_roller_control.per_dice_result()
 	for i in range(faces.size()):
 		tray.append(int(per["die_%d" % i]))
 	assert_array(recorded).override_failure_message("recorded %s, tray reported %s" % [str(recorded), str(tray)]).is_equal(tray)
@@ -96,8 +98,10 @@ func test_recorded_dice_faces_equal_the_tray(timeout := 120000) -> void:
 ## neither a unit display name nor a player name.
 func test_payload_built_from_the_record_has_no_display_names(timeout := 120000) -> void:
 	_main._log_battle_activation(_register(1, "unit-secret", "Very Secret Warband", Vector3(-0.30, 0.0, 0.20)), false)
-	_main.dice_roller_control.show_faces([1, 2])
-	_main._add_dice_log_entry("Very Secret Player", [1, 2], {DiceRules.CTX_TARGET: DiceRules.TARGET_NONE}, [])
+	var faces: Array[int] = [1, 2]
+	var no_tags: Array[int] = []
+	_main.dice_roller_control.show_faces(faces)
+	_main._add_dice_log_entry("Very Secret Player", faces, {DiceRules.CTX_TARGET: DiceRules.TARGET_NONE}, no_tags)
 	var payload := SharedRecordBuilder.build(_main.game_record_collector.build_record()).get_string_from_utf8()
 	assert_str(payload).not_contains("Very Secret Warband")
 	assert_str(payload).not_contains("Very Secret Player")

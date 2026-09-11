@@ -4,13 +4,13 @@ extends Node
 ## BattleLog uses: move (per-model from->to), activation, dice faces, round advance, final VP.
 ## No disk, no network; SharedRecordBuilder still filters the payload (assets/privacy/example_record.json).
 const NOT_RECORDED := ["charge declarations", "shooting shooter and weapon", "which models fire", "wound-allocation choice", "modal decisions (saves, strike-back, interference, casts)", "human spell casts", "morale choices", "objective seizes in plain multiplayer", "turn structure in human-vs-human games"]
-var _main: Node = null
+var _main = null
 var _actions: Array = []
 var _rounds: int = 1
 var _current_round: int = 1
 
 
-func bind(main: Node) -> void:
+func bind(main) -> void:
 	_main = main
 	if main.opr_army_manager != null:
 		_rounds = maxi(1, main.opr_army_manager.current_round)
