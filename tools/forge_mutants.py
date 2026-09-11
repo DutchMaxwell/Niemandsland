@@ -128,6 +128,21 @@ def parse_list_diff_output(text):
             'desc': m['desc'], 'diff': text[m.end():end].strip('\n')}
     return entries
 
+def workspace_prefix(crate_dir):
+    """Since core/Cargo.toml (03.09.2026) the crate is a workspace MEMBER: cargo-mutants names files
+    relative to the workspace root ("nml-core/src/x.rs") while survivors, crate_dir and
+    module_path_of speak crate-relative ("src/x.rs"). Returns the member's path below the workspace
+    root ("nml-core"), or "" when the crate is its own root. Without this every target of a
+    workspace crate ends as no_diff -- a harness that can only say no (found 11.09.2026)."""
+    proc = subprocess.run(['cargo', 'metadata', '--no-deps', '--format-version', '1'],
+                          cwd=crate_dir, capture_output=True, text=True, timeout=60)
+    try:
+        root = Path(json.loads(proc.stdout)['workspace_root']).resolve()
+        rel = str(Path(crate_dir).resolve().relative_to(root))
+    except (ValueError, KeyError, json.JSONDecodeError):
+        return ''
+    return '' if rel == '.' else rel
+
 def build_diffs_cache(crate_dir, targets, out_dir):
     """One `--list --diff` call per FILE (grouped), not per target — cached
     to <out>/diffs.json so a slow crate only pays this once."""
@@ -135,12 +150,22 @@ def build_diffs_cache(crate_dir, targets, out_dir):
     for t in targets:
         by_file.setdefault(t['file'], []).append(t)
     cache = {}
+    prefix = workspace_prefix(crate_dir)
     for file, ts in by_file.items():
         pattern = '|'.join(re.escape(t['desc']) for t in ts)
+        ws_file = f'{prefix}/{file}' if prefix and not file.startswith(prefix + '/') else file
         proc = subprocess.run(
-            ['cargo', 'mutants', '--list', '--diff', '-F', pattern, '--file', file],
+            ['cargo', 'mutants', '--list', '--diff', '-F', pattern, '--file', ws_file],
             cwd=crate_dir, capture_output=True, text=True, timeout=120)
         entries = parse_list_diff_output(proc.stdout)
+        if prefix:
+            cut = len(prefix) + 1
+            entries = {((k[0][cut:] if k[0].startswith(prefix + '/') else k[0]), k[1], k[2]):
+                       {**v, 'diff': v['diff'].replace(f'--- {prefix}/', '--- ', 1)}
+                       for k, v in entries.items()}
+            # the diff's own header names the workspace path too; patch -p0 runs in crate_dir,
+            # so it must name the crate-relative file or gate 3 ends in patch_failed (found by
+            # the positive control 11.09.2026).
         for t in ts:
             key = (t['file'], t['line'], t['col'])
             if key in entries:
