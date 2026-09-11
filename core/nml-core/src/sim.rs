@@ -23,7 +23,7 @@ use crate::sight;
 use crate::geom::{self, V3};
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
-    EPOCH_8_PLANNER_MENU,
+    EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -1154,6 +1154,21 @@ fn tray_vs_marks(
         let pb = next.roster.profile[bearer];
         for b in &statics[pb].utility_buffs {
             if !b.vs_target || next.vs_mark_round[bearer] == next.round || dist_in > b.range_in {
+                continue;
+            }
+            // EPOCH 9 MARK FAMILY (#870, 11.09.): the five names #870 flipped
+            // from `vs_marked` to `vs_target` (Rapid Charge, Piercing Fighting,
+            // Slayer, Piercing Shooting, Unpredictable Shooter) are NEW grants —
+            // a record stamped before epoch 9 (every pre-fix corpus) must
+            // replay as it was recorded, so it fires only at `EPOCH_9_MARK_FAMILY`
+            // and above. Every other Mark is untouched.
+            if (b.name == "Rapid Charge Mark"
+                || b.name == "Piercing Fighting Mark"
+                || b.name == "Slayer Mark"
+                || b.name == "Piercing Shooting Mark"
+                || b.name == "Unpredictable Shooter Mark")
+                && !rule_on(seams.rules_epoch, EPOCH_9_MARK_FAMILY)
+            {
                 continue;
             }
             // NML-936 (:16758): the printed rule picks "within 18\" IN LINE OF
