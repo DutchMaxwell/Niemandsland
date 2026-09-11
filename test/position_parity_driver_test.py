@@ -131,6 +131,20 @@ def test_a_real_move_still_regresses_past_the_slack():
     )
 
 
+def test_a_model_moving_far_in_the_forgiving_direction_is_reported():
+    f, r = example()
+    r["rows"][0]["rust_end"][0][0] = 0.03 * p.IN2M
+    baseline = {"fixture_sha256": "same", "measurement": p.measure(f, r)}
+    r["rows"][0]["rust_end"][0][0] = 0.0
+    now = p.measure(f, r)
+    # A forgiving move is information, not a failure: the gate stays silent.
+    assert not p.regressions(baseline, now, "same")
+    # ... but the movement beyond the slack must be named, with its sign.
+    assert p.moved_beyond_slack(baseline, now) == pytest.approx(
+        [("one", 0, -0.03)]
+    )
+
+
 def test_slack_is_four_float32_ulps_of_the_board_inch_scale():
     assert p.slack_in([72.0, 48.0]) == 4 * 2.0**-17
     assert p.slack_in([48.0, 144.0]) == 4 * 2.0**-16
