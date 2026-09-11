@@ -396,24 +396,32 @@ def is_rule_roll(r: dict, only_rule: str, prev: dict | None = None) -> bool:
     return int(r.get("count", 0)) == count and int(r.get("target", 0)) == target
 
 
-def inject_split_aim(head: dict, shots: list[dict], action: dict, units: dict) -> tuple[dict, bool]:
+def inject_split_aim(head: dict, shots: list[dict], action: dict,
+                     units: dict) -> tuple[dict, bool, bool]:
     """NML-1150, the gap PR #488 could only bucket, now filled: `split_aim`
     (`shoot_replay_gate.py`, imported not copied) folds the sidecar's
     per-weapon target names onto this act's own `action`. An act that already
     carries `action.split`, or one `split_aim` cannot cover (no shots.jsonl
     line under this ordinal, every entry ambiguous or stale, or every shot
     already agrees with the recorded `shoot` key — nothing to inject), comes
-    back UNCHANGED — `split_unrecorded` below then judges it on the raw dice
-    shape, exactly as it did before this existed."""
+    back UNCHANGED.
+
+    Returns `(action, aimed, aligned)`. `aligned` (#847) means the sidecar
+    fired every shot at the act's OWN recorded `shoot` key: a single-target
+    VOLLEY, not a split, which the port's pooled branch resolves — so
+    `split_unrecorded` must not confound it. A one-target `split` is NOT
+    injected (that would route the twin down a different branch). `aimed`
+    stays the count of acts a `split` was really injected for."""
     if action.get("split"):
-        return action, False
-    aim, _, _ = split_aim(head, shots, action["shoot"], units)
+        return action, False, False
+    aim, why, _ = split_aim(head, shots, action["shoot"], units)
     if aim is None:
-        return action, False
-    return dict(action, split=aim), True
+        return action, False, why == "aligned"
+    return dict(action, split=aim), True, False
 
 
-def split_unrecorded(cls: str, block: list[dict], action: dict) -> bool:
+def split_unrecorded(cls: str, block: list[dict], action: dict,
+                     aligned: bool = False) -> bool:
     """NML-1150 GAP: a shooting act's recorded dice carry MORE THAN ONE raw
     "attack"-shaped roll (`is_rule_roll`'s own shape read — `roll_kind ==
     "attack"`, distinct from "defense" and the seven named special-rule
@@ -423,8 +431,13 @@ def split_unrecorded(cls: str, block: list[dict], action: dict) -> bool:
     branch, `plan.as_deref().unwrap_or(&pooled)`) still pools every shot at
     the ONE recorded target, so B and C can never agree there — bucketed as
     confounded, the same reason `--only-rule` already skips B/C for a shape-
-    confounded act. An act that DOES carry `action.split` is untouched."""
-    return (cls == "shooting" and not action.get("split")
+    confounded act. An act that DOES carry `action.split` is untouched.
+
+    `aligned` (#847) is `inject_split_aim`'s "every shot already at this act's
+    own `shoot` key" verdict: a single-target volley, not a split, and the
+    pooled branch is the right comparison. `stale` and `uncovered` aims come
+    back `aligned=False` and stay confounded exactly as before."""
+    return (cls == "shooting" and not action.get("split") and not aligned
             and sum(1 for r in block if r.get("roll_kind") == "attack") > 1)
 
 
@@ -444,7 +457,8 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
     chk = dict.fromkeys(("stream_ok", "rolls", "tally", "tally_equal", "tally_red",
                          "next", "next_equal", "next_red", "mend_rolls", "mend_rolls_equal",
                          "mend_rolls_clean", "mend_rolls_clean_equal", "confounded",
-                         "split_unrecorded", "split_aimed", "pos", "ledger_acts") + POS_BUCKETS, 0)
+                         "split_unrecorded", "split_aimed", "split_aligned", "pos",
+                         "ledger_acts") + POS_BUCKETS, 0)
     if only_rule:
         grid["mend"] = dict.fromkeys(BUCKETS + ("acts",), 0)
     first = {"stream": "", "tally": "", "next": ""}
@@ -538,13 +552,15 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                         is_rule_roll(block[i], only_rule, block[i - 1] if i else None)
                         for i in range(len(block)))):
                     continue
+            aligned = False   # #847: only a shooting act can be an aligned volley
             if cls == "shooting":
                 # NML-1150: aim from shots.jsonl BEFORE the confound check
                 # below, so an act this can aim never falls into the
                 # split_unrecorded fallback at all.
-                action, aimed = inject_split_aim(head, shots.get(k, []), action,
-                                                  act["state"]["units"])
+                action, aimed, aligned = inject_split_aim(head, shots.get(k, []), action,
+                                                           act["state"]["units"])
                 chk["split_aimed"] += aimed
+                chk["split_aligned"] += aligned
             grid[cls]["acts"] += 1
             # NML-1152 step 10: does THIS act's state_before carry NON-EMPTY
             # ledger content (act_recorder.gd's `_ledger_of`) for at least one
@@ -552,7 +568,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
             # corpus predating this schema) both read False here alike.
             if any(u.get("ledger") for u in act["state"]["units"].values()):
                 chk["ledger_acts"] += 1
-            split_confound = split_unrecorded(cls, block, action)
+            split_confound = split_unrecorded(cls, block, action, aligned)
             chk["split_unrecorded"] += split_confound
             tray = nml_core.Tray(seed)
             if burn[i0]:
@@ -675,9 +691,10 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
               "(median gap %s\")"
               % (chk["pos_equal"], chk["pos"], pos_tol,
                  ("%.3f" % pos_median) if pos_gaps else "n/a"))
-    print("  AIM     : %d/%d shooting acts split-aimed from shots.jsonl (%d unaimed -> "
-          "split_unrecorded)"
-          % (chk["split_aimed"], grid["shooting"]["acts"], chk["split_unrecorded"]))
+    print("  AIM     : %d/%d shooting acts split-aimed from shots.jsonl, %d aligned "
+          "single-target (%d unaimed -> split_unrecorded)"
+          % (chk["split_aimed"], grid["shooting"]["acts"], chk["split_aligned"],
+             chk["split_unrecorded"]))
     print("  SPLIT   : %d/%d shooting acts split-unrecorded (corpus predates action.split) "
           "— B/C skipped"
           % (chk["split_unrecorded"], grid["shooting"]["acts"]))
