@@ -162,21 +162,22 @@ def test_inject_split_aim_reuses_split_aim_and_leaves_covered_or_aligned_acts_al
     shots = [{"member": "m1", "weapon": "w1", "target": "Squad B"}]
     action = {"shoot": "u1"}
 
-    aimed_action, aimed = gate.inject_split_aim(head, shots, action, units)
+    aimed_action, aimed, aligned = gate.inject_split_aim(head, shots, action, units)
     assert aimed is True
+    assert aligned is False
     assert aimed_action["split"] == [{"member": "m1", "weapon": "w1", "target": "u2"}]
     assert action == {"shoot": "u1"}, "the input action is never mutated in place"
 
     pre_split = {"shoot": "u1", "split": [{"target": "u2"}]}
-    same, aimed2 = gate.inject_split_aim(head, shots, pre_split, units)
+    same, aimed2, _ = gate.inject_split_aim(head, shots, pre_split, units)
     assert (same, aimed2) == (pre_split, False)
 
-    uncovered, aimed3 = gate.inject_split_aim(head, [], action, units)
+    uncovered, aimed3, _ = gate.inject_split_aim(head, [], action, units)
     assert (uncovered, aimed3) == (action, False)
 
     aligned_shots = [{"member": "m1", "weapon": "w1", "target": "Squad A"}]
-    aligned, aimed4 = gate.inject_split_aim(head, aligned_shots, action, units)
-    assert (aligned, aimed4) == (action, False)
+    aligned_act, aimed4, aligned4 = gate.inject_split_aim(head, aligned_shots, action, units)
+    assert (aligned_act, aimed4, aligned4) == (action, False, True)
 
 
 def test_split_unrecorded_flags_a_multi_attack_shooting_act_with_no_split_field():
@@ -190,6 +191,30 @@ def test_split_unrecorded_flags_a_multi_attack_shooting_act_with_no_split_field(
     one_attack = [{"roll_kind": "attack"}, {"roll_kind": "defense"}]
     assert gate.split_unrecorded("shooting", one_attack, {}) is False
     assert gate.split_unrecorded("melee", two_attacks, {}) is False
+
+
+def test_aligned_aim_is_a_single_target_volley_not_a_split_confound():
+    """#847: two attack rolls under one shooting ordinal and no `action.split`
+    is a single-target volley, not a split, when the sidecar fired every shot
+    at the act's own `shoot` key — so B and C must run. `uncovered`, `stale`
+    and a genuine re-aim keep their old verdicts."""
+    head = {"profiles": {"u1": {"name": "A"}, "u2": {"name": "B"}}}
+    units = {"u1": {"alive": 3}, "u2": {"alive": 3}}
+    dead = {"u1": {"alive": 3}, "u2": {"alive": 0}}
+    block = [{"roll_kind": "attack"}, {"roll_kind": "attack"}]
+    action = {"shoot": "u1"}
+    at_self = [{"member": "m", "weapon": "w", "target": "A"}]
+    at_other = [{"member": "m", "weapon": "w", "target": "B"}]
+    _, aimed, aligned = gate.inject_split_aim(head, at_self, action, units)
+    assert (aimed, aligned) == (False, True)
+    assert gate.split_unrecorded("shooting", block, action, aligned) is False
+    assert gate.split_unrecorded("shooting", block, action,
+                                 gate.inject_split_aim(head, [], action, units)[2]) is True
+    assert gate.split_unrecorded("shooting", block, action,
+                                 gate.inject_split_aim(head, at_other, action, dead)[2]) is True
+    reaimed, aimed2, aligned2 = gate.inject_split_aim(head, at_other, action, units)
+    assert (aimed2, aligned2) == (True, False)
+    assert gate.split_unrecorded("shooting", block, reaimed, aligned2) is False
 
 
 def test_pos_verdict_buckets_equal_moved_and_unknown():
