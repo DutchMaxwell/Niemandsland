@@ -289,6 +289,28 @@ def regressions(baseline, current, fixture_sha):
     return errors
 
 
+def moved_beyond_slack(baseline, current):
+    """Models whose accepted delta moved further than the slack, either way.
+
+    Information, not failures: a move towards the recorded position is as
+    interesting as one away from it (issue #850), so the signed delta
+    (now - before, inches) is reported and nothing is raised.
+    """
+    old = baseline["measurement"]
+    if old["cases"].keys() != current["cases"].keys():
+        return []
+    moved = []
+    for key, now in current["cases"].items():
+        before = old["cases"][key]
+        if now["model_ids"] != before["model_ids"]:
+            continue
+        slack = max(EPS_IN, now["slack_in"])
+        for i, (a, b) in enumerate(zip(now["delta_in"], before["delta_in"])):
+            if abs(a - b) > slack:
+                moved.append((key, i, a - b))
+    return moved
+
+
 def available_mb():
     return next(
         int(line.split()[1]) // 1024
@@ -438,9 +460,10 @@ def main():
         }
         args.baseline.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n")
     else:
-        failures = regressions(
-            json.loads(args.baseline.read_text()), measured, fixture_sha
-        )
+        baseline = json.loads(args.baseline.read_text())
+        failures = regressions(baseline, measured, fixture_sha)
+        for key, model_index, delta in moved_beyond_slack(baseline, measured):
+            print(f"MOVED: {key} model {model_index} moved {delta:+g} in")
         if failures:
             for error in failures:
                 print("REGRESSION:", error)
