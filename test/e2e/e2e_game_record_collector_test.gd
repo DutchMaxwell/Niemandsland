@@ -76,13 +76,11 @@ func test_record_actions_match_battle_log_activations(timeout := 120000) -> void
 	await E2EBoot.settle(get_tree())
 
 
-## Observed dice faces are read off the real tray; the collector must reproduce exactly the faces
-## BattleLog reports for the same roll.
+## Observed dice faces are read off the real tray through the real roll seam (show_faces emits
+## roll_finnished, which logs the roll); the collector must reproduce exactly those faces.
 func test_recorded_dice_faces_equal_the_tray(timeout := 120000) -> void:
 	var faces: Array[int] = [2, 5, 6]
-	var no_tags: Array[int] = []
 	_main.dice_roller_control.show_faces(faces)
-	_main._add_dice_log_entry("You", faces, {DiceRules.CTX_TARGET: DiceRules.TARGET_NONE}, no_tags)
 	var recorded: Array = []
 	for a in _recorded_actions("roll"):
 		recorded.append_array((a as Dictionary).get("dice_faces", []))
@@ -98,10 +96,9 @@ func test_recorded_dice_faces_equal_the_tray(timeout := 120000) -> void:
 ## neither a unit display name nor a player name.
 func test_payload_built_from_the_record_has_no_display_names(timeout := 120000) -> void:
 	_main._log_battle_activation(_register(1, "unit-secret", "Very Secret Warband", Vector3(-0.30, 0.0, 0.20)), false)
+	_main._next_roll_owner = "Very Secret Player"   # the real roll seam stamps the roller's name
 	var faces: Array[int] = [1, 2]
-	var no_tags: Array[int] = []
 	_main.dice_roller_control.show_faces(faces)
-	_main._add_dice_log_entry("Very Secret Player", faces, {DiceRules.CTX_TARGET: DiceRules.TARGET_NONE}, no_tags)
 	var payload := SharedRecordBuilder.build(_main.game_record_collector.build_record()).get_string_from_utf8()
 	assert_str(payload).not_contains("Very Secret Warband")
 	assert_str(payload).not_contains("Very Secret Player")
