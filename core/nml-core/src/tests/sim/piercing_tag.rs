@@ -62,7 +62,7 @@ use super::*;
         assert!(!next.piercing_tag_used[2], "only the TAGGER's flag moves — the victim carries no rule");
 
         let s5 = Seams { rules_epoch: 5, ..Seams::default() };
-        let (next5, shot5) = tag_volley(&statics, &st, s5);
+        let (_, shot5) = tag_volley(&statics, &st, s5);
         assert_eq!(shot5.rolls[1].target, 4, "epoch 5: no markers, the plain save");
         assert!(shot5.log.iter().all(|l| !l.contains("Piercing")));
     }
@@ -85,7 +85,7 @@ use super::*;
         assert_eq!(next.piercing_tag_markers[2], 0);
 
         let s5 = Seams { rules_epoch: 5, ..Seams::default() };
-        let (next5, shot5) = tag_volley(&statics, &st, s5);
+        let (_, shot5) = tag_volley(&statics, &st, s5);
         assert_eq!(shot5.rolls[1].target, 4, "epoch 5: no markers, the plain save");
         assert!(shot5.log.iter().all(|l| !l.contains("Piercing")));
     }

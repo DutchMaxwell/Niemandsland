@@ -296,7 +296,7 @@
             .replace("\"special_rules\":[]", &format!("\"special_rules\":{special}"))
             .replace("\"attached_hero_rules\":[]", &format!("\"attached_hero_rules\":{heroes}"));
         let header = read_act_header(&tpl).expect("header");
-        let mut reg = Registries::new(&repo_root());
+        let _reg = Registries::new(&repo_root());
         let p = header.profiles.get("carrier").expect("carrier");
         expand_aura_channel(p, epoch).into_owned()
     }

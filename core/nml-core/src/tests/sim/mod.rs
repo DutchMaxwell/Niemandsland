@@ -579,7 +579,6 @@
         let mut st = four_unit_line();
         // Players 0/0/1/1 in the base fixture — `t` must be FRIENDLY.
         st.player = vec![0, 0, 0, 1];
-        let r = &*st.roster;
         st.roster = Rc::new(crate::state::Roster {
             keys: vec!["a".into(), "ah".into(), "t".into(), "f".into()],
             index: ["a", "ah", "t", "f"]

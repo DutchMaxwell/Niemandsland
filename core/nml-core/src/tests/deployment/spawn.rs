@@ -347,7 +347,6 @@ use super::*;
         assert_eq!(st.positions[j], Vec::<[f64; 3]>::new(), "and it stands nowhere");
         // The carrier's slot is untouched — no withdraw, no side effect.
         assert_eq!(st.units(), 3, "exactly one slot added");
-        let carrier_pi = st.roster.profile[i];
         let _ = before;
     }
     // ------------------------------------------------------------- PART (b) ---
