@@ -118,34 +118,17 @@ GRANT_PARAM_KEY = "grants"
 MAX_GRANT_DEPTH = 8
 
 # Names that are census hygiene, not porting targets (SPEC_block_C_next_
-# 2026-09-02.md's "Census hygiene, not ports" bullet). A MISSING verdict on
-# these reads as "still to port", which is false for both: Unique is
-# list-building only (rules_registry.gd never reads it at runtime, so no
-# resolver arm will ever exist for it); Swift's whole effect (params:
-# {"negates": "Slow"}) is the name-level Slow cancel in the loader's
-# move-band pass (list_to_profile.py:_move_bands, mirroring
-# movement_range_controller.gd:95-109 — a Swift(3)-stripped pre-scan skips
-# the Slow fold and marks the band filled; fixed 09.09.2026, before that the
-# pass had NO negation leg and this comment claimed one). Swift is consumed
-# there, at capture time, not at runtime, so it is not itself a
-# MOVE_PRIMITIVES entry and would never earn PARTIAL either.
+# 2026-09-02.md's "Census hygiene, not ports" bullet): Unique is
+# list-building only and "Sniper REMOVE" strips a weapon the built list
+# already carries, so a MISSING verdict on them reads "still to port",
+# which is false. Swift is a core read — the Slow stamp's Swift arm in
+# unit.rs `move_rule_mods_of` cancels the Slow fold by name — and Swift
+# Aura follows the strict grant rule, crediting a `grants` carrier only
+# when the granted name resolves PORTED in the same system.
 # Rank -1 so real evidence elsewhere always outranks N/A if this table and
 # reality ever disagree.
-# "Swift Aura" (params: {"grants": "Swift"}): stays GRANT-MISSING (the
-# strict ruling, 09.09.2026). The grant rule credits a carrier only when the
-# granted name resolves PORTED in the same system — N/A never does — and a
-# bare loader "Swift" token is not auto-credited either (see
-# LOADER_NAME_ALIASES: the loader scan skips docstrings/identifiers and a
-# string-constant hit proves nothing about WHERE the read lives). The
-# loader's own aura-expansion-to-_move_bands hop is real but invisible to
-# this instrument by construction; the cancellation is covered by the
-# loader's unit tests (test_list_to_profile.py, the Swift/Slow pair), not by
-# a census verdict.
 NA_NAMES: dict[str, str] = {
     "Unique": "list-building only, no in-game effect (not a porting target)",
-    "Swift": "negates Slow by name in the loader's move-band pass"
-             " (list_to_profile.py:_move_bands, the table's"
-             " movement_range_controller.gd:95-109)",
     "Sniper REMOVE": "list-building upgrade that strips the Sniper weapon"
                      " rule; the built list already carries the weapon"
                      " without it — no in-game effect (maintainer 09.09.)",
@@ -1328,9 +1311,9 @@ def summarize(rows: dict) -> dict:
         ),
     }
     # The ported/unported ratio's own denominator: total minus the N/A
-    # (census-hygiene) names, so 212/442 with 2 N/A names reads 212/440,
-    # never 212/442 - a stale denominator would silently count Unique and
-    # Swift as still-unported.
+    # (census-hygiene) names, so 212/442 with 1 N/A name reads 212/441,
+    # never 212/442 - a stale denominator would silently count Unique as
+    # still-unported.
     summary["core_ported_denominator"] = summary["total"] - summary["core_na"]
     by_system = {}
     for s in SYSTEMS:
