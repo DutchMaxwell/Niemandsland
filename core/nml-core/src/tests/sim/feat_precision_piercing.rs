@@ -130,7 +130,7 @@ use super::*;
     #[test]
     fn piercing_ap_plus_one_once_then_base() {
         let seams = Seams { rules_epoch: 7, ..Seams::default() };
-        let mut strike = |st: &mut State, statics: &[UnitStatic]| {
+        let strike = |st: &mut State, statics: &[UnitStatic]| {
             let mut tray = Tray::seeded(11);
             let mut shot = ShootResult::default();
             strike_phase(statics, st, 0, 2, true, seams, &mut tray, &mut shot);

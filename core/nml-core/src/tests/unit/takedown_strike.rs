@@ -85,7 +85,7 @@ use super::*;
         assert!(
             out.rolls.iter().any(|r| r.kind == "attack" && r.target == 2),
             "epoch 7: the bonus attack rolls at Quality 2+ (RED before the port): {:?}",
-            out.rolls.iter().map(|r| (r.kind.clone(), r.target)).collect::<Vec<_>>()
+            out.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
         assert!(
             logged(&out, "Takedown Strike"),
