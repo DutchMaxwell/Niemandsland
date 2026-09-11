@@ -113,6 +113,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Build the optional Rust core extension BEFORE the import, so the import sees
+      # core/nml_core.gdextension + its .so and the Linux export carries them.
+      - name: Build core extension (NmlCore)
+        uses: ./.github/actions/build-core-extension
+        with:
+          target: linux
+
       - name: Setup Godot (with export templates)
         uses: ./.github/actions/setup-godot
         with:
@@ -122,6 +129,23 @@ jobs:
       - name: Import project (generates .godot/)
         run: godot --headless --editor --quit --path .
 
+      # Dormant proof: installed -> class PRESENT + core_enabled FALSE; manifest moved
+      # away -> class ABSENT. Both stamp sections must be byte-identical.
+      - name: Dormant check (extension installed vs manifest moved away)
+        run: |
+          set -euo pipefail
+          NML_DORMANT_STAMPS=/tmp/stamps_installed.json \
+            godot --headless --path . -s res://tools/core_dormant_check.gd 2>&1 | tee /tmp/dormant_installed.log
+          mv core/nml_core.gdextension /tmp/nml_core.gdextension.moved
+          NML_DORMANT_STAMPS=/tmp/stamps_absent.json \
+            godot --headless --path . -s res://tools/core_dormant_check.gd 2>&1 | tee /tmp/dormant_absent.log
+          mv /tmp/nml_core.gdextension.moved core/nml_core.gdextension
+          grep 'NML_DORMANT_CHECK ' /tmp/dormant_installed.log > /tmp/installed.marker
+          grep 'NML_DORMANT_CHECK ' /tmp/dormant_absent.log > /tmp/absent.marker
+          python3 -c 'import json; a=json.loads(open("/tmp/installed.marker").read().split("NML_DORMANT_CHECK ",1)[1]); b=json.loads(open("/tmp/absent.marker").read().split("NML_DORMANT_CHECK ",1)[1]); assert a["class_present"] and a["core_enabled"] is False, a; assert b["class_present"] is False, b; print("installed %s/%s absent %s" % (a["class_present"], a["core_enabled"], b["class_present"]))'
+          diff /tmp/stamps_installed.json /tmp/stamps_absent.json
+          echo "OK: the two stamp sections are byte-identical — the extension is dormant"
+
       - name: Stamp build hash
         run: sed -i "/^config\/version=/a config/build_hash=\"${GITHUB_SHA::7}\"" project.godot
 
@@ -129,6 +153,23 @@ jobs:
         run: |
           mkdir -v -p build/linux
           godot --headless --verbose --export-release "Linux" build/linux/$EXPORT_NAME.x86_64
+
+      # Godot copies the manifest's shared object flat next to the executable; the
+      # runtime loader falls back to the exe dir when the res:// path does not exist.
+      - name: Verify the extension library shipped next to the executable
+        run: |
+          ls -l build/linux
+          test -f build/linux/libnml_core_godot.so || {
+            echo "::error::libnml_core_godot.so did not land next to the exported executable"; exit 1; }
+
+      - name: Smoke-run the exported Linux build
+        run: |
+          set -o pipefail
+          timeout 30 build/linux/$EXPORT_NAME.x86_64 --headless > /tmp/exported_run.log 2>&1 || true
+          if grep -iE "GDExtension|SCRIPT ERROR|Parse Error" /tmp/exported_run.log; then
+            echo "::error::the exported build reported an extension/script/parse error"; exit 1
+          fi
+          echo "OK: exported build started with no GDExtension/script/parse errors"
 
       # Best-effort: a failed artifact upload (e.g. the account's Actions artifact-storage
       # quota is full) must not red-fail the export job. Releases use the self-contained
@@ -203,6 +244,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Same build as export-linux: only the Linux preset filter admits the manifest,
+      # so the Windows and macOS exports stay unchanged.
+      - name: Build core extension (NmlCore)
+        uses: ./.github/actions/build-core-extension
+        with:
+          target: linux
 
       - name: Setup Godot (with export templates)
         uses: ./.github/actions/setup-godot

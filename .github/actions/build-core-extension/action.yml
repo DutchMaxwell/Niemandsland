@@ -1,0 +1,26 @@
+name: Build core extension
+description: "Builds the optional Rust NmlCore GDExtension and installs its manifest; only 'linux' is wired."
+inputs:
+  target:
+    description: "Target platform to build for. Only 'linux' is wired."
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+    - name: Cache cargo
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: core
+    - name: Build NmlCore extension
+      shell: bash
+      run: |
+        if [ "${{ inputs.target }}" != "linux" ]; then
+          echo "::error::build-core-extension target '${{ inputs.target }}' is not wired yet"; exit 1
+        fi
+        cargo build --release --manifest-path core/nml-core-godot/Cargo.toml
+        touch core/target/.gdignore
+    - name: Install GDExtension manifest
+      shell: bash
+      run: bash core/install_gdextension.sh
