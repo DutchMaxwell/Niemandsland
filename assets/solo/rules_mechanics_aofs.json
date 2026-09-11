@@ -4157,7 +4157,7 @@
      "once": true,
      "range_in": 18,
      "target": "enemy",
-     "vs_marked": true
+     "vs_target": true
     }
    },
    "Takedown Strike": {

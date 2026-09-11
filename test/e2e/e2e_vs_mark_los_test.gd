@@ -304,3 +304,29 @@ func test_an_aircraft_target_is_visible_from_inside_the_container() -> void:
 			"hides an Aircraft behind terrain too: main.gd _solo_has_los builds its target cylinder without " +
 			"the is_aircraft flag.") \
 		.is_true()
+
+
+# =====================================================================================
+# #845 — the Rapid Charge Mark registry gate key.
+# =====================================================================================
+# _solo_apply_vs_marks is gated on params["vs_target"] (main.gd:17162) and
+# _solo_apply_utility_buffs skips that same key (main.gd:16906); every other Mark the consumer
+# handles carries it. The Dark Elves entry shipped "vs_marked" instead — a key no code path
+# reads — so the mark was dead on the table. This drives the REAL aof/dark_elves registry entry
+# (no synthetic injection) and pins the book's own outcome: the bearer marks the enemy and is
+# granted the base rule "Rapid Charge" (name minus " Mark") against that attack.
+func test_the_real_rapid_charge_mark_grants_rapid_charge() -> void:
+	var bearer := E2EBoot.make_unit(_main, 1, "Bearer", [Vector3(-0.3, 0, 0)])
+	bearer.unit_properties["game_system"] = "aof"
+	bearer.unit_properties["faction_folder"] = "dark_elves"
+	bearer.unit_properties["special_rules"] = ["Rapid Charge Mark"]
+	var target := E2EBoot.make_unit(_main, 2, "Target", [Vector3(0.3, 0, 0)])
+	target.unit_properties["game_system"] = "aof"
+	target.unit_properties["faction_folder"] = "dark_elves"
+	_main.opr_army_manager.current_round = 1
+	_main._solo_apply_vs_marks(bearer, target, 6.0)
+	var granted := _granted_rules(bearer)
+	assert_array(granted) \
+		.override_failure_message(("#845 — Rapid Charge Mark never fired (granted: %s). The registry " +
+			"gate key must be vs_target like every other Mark the consumer reads.") % str(granted)) \
+		.contains(["Rapid Charge"])
