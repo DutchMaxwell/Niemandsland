@@ -83,7 +83,7 @@ impl PolicyNet {
             ));
         }
         if self.w1.len() != self.state_dim + self.act_dim
-            || self.w1.first().map_or(0, |r| r.len()) != self.hidden
+            || self.w1.iter().any(|row| row.len() != self.hidden)
             || self.b1.len() != self.hidden
             || self.w2.len() != self.hidden
         {

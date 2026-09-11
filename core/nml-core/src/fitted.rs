@@ -141,6 +141,18 @@ impl Net {
         if self.unit_w1.len() != self.canon_width() || self.unit_b1.len() != self.unit_b2.len() {
             return Err("encoder net rejected: unit layer does not match the canonical row".into());
         }
+        let unit_width = self.unit_b1.len();
+        let head_width = self.head_b1.len();
+        let matrix_matches = |matrix: &[Vec<f64>], rows: usize, columns: usize| {
+            matrix.len() == rows && matrix.iter().all(|row| row.len() == columns)
+        };
+        if !matrix_matches(&self.unit_w1, self.canon_width(), unit_width)
+            || !matrix_matches(&self.unit_w2, unit_width, unit_width)
+            || !matrix_matches(&self.head_w1, 3 * unit_width + 3 + self.keys.len(), head_width)
+            || self.head_w2.len() != head_width
+        {
+            return Err("encoder net rejected: layer shapes disagree".into());
+        }
         if self.keys.len() != self.mu.len() || self.keys.len() != self.sd.len() {
             return Err("encoder net rejected: keys/mu/sd disagree".into());
         }
