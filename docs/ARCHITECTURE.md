@@ -178,6 +178,17 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
 - `grass_field.gd`, `atmospheric_clouds.gd`, `cinematic_intro.gd`, `model_info_popup.gd`,
   `opr_stats_tooltip.gd`, `selection_spill_light.gd`.
 
+## Rust rules core (optional)
+
+`core/` is a Cargo workspace — `nml-core` (the rules port), `nml-core-godot` (the optional Godot
+extension) and `nml-core-py` (Python bindings) — used for fast look-ahead and training. Godot
+loads it only as an optional GDExtension (`core/nml_core.gdextension.in`, installed by
+`core/install_gdextension.sh`), and the extension ships dormant inside the Linux and Windows
+exports: its presence changes no game behaviour until the Rust planner is switched on. Without
+the built library, or with the switch off (`BattleSim.core_enabled()`), the GDScript engine runs
+unchanged. See [`DEV_BRAIN_BRIDGE.md`](DEV_BRAIN_BRIDGE.md) for the developer-only evaluator
+bridge.
+
 ## Save format (`.nml`)
 
 `save_manager.gd` serializes the full table: objects, `GameUnit`/`ModelInstance`
@@ -273,5 +284,5 @@ GPU, recent log files) and scrubs room codes, file paths and player names before
 
 ## Tests
 
-gdUnit4 suites in `test/`; Python tests in `relay/` and in `core/nml-core-py/tests/python/` (56 pytest files, run by CI: `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900`).
+gdUnit4 suites in `test/`; Python tests in `relay/` and in `core/nml-core-py/tests/python/` (78 pytest files, run by CI: `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900`); the Rust workspace tests run in `.github/workflows/rust.yml`.
 Runner commands in [`DEVELOPMENT.md`](DEVELOPMENT.md).

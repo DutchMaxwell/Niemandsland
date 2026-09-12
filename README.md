@@ -171,7 +171,10 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 ```
 Niemandsland/
 ├── scenes/            # startup_menu.tscn (main), main.tscn, dialogs
-├── scripts/           # ~150 GDScript files, incl. scripts/solo/ (see docs/ARCHITECTURE.md)
+├── core/              # Rust rules core (Cargo workspace: nml-core, the optional
+│                      # Godot extension nml-core-godot, Python bindings nml-core-py)
+├── scripts/           # ~175 GDScript files, incl. scripts/solo/ (see docs/ARCHITECTURE.md)
+├── tools/             # developer and CI tools
 ├── addons/            # gdUnit4 (tests)
 ├── test/              # gdUnit4 test suites
 ├── assets/            # models, miniatures, terrain, UI
