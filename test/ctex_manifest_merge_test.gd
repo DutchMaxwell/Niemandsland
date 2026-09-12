@@ -21,18 +21,20 @@ func test_catalogue_is_populated() -> void:
 
 
 func test_every_entry_keeps_complete_legacy_fields() -> void:
+	var models := _models()
 	var bad := 0
-	for key in _models():
-		var e: Dictionary = _models()[key]
+	for key in models:
+		var e: Dictionary = models[key]
 		if str(e.get("url", "")).is_empty() or str(e.get("sha256", "")).is_empty() or int(e.get("size", 0)) <= 0:
 			bad += 1
 	assert_int(bad).is_equal(0)
 
 
 func test_every_entry_has_a_complete_ctex_block() -> void:
+	var models := _models()
 	var incomplete := 0
-	for key in _models():
-		var c: Dictionary = _models()[key].get("ctex", {})
+	for key in models:
+		var c: Dictionary = models[key].get("ctex", {})
 		var tex: Dictionary = c.get("textures", {})
 		if c.is_empty() or not c.has("mesh") or not c.has("godot_version") \
 				or not c.has("size_class") or not tex.has("albedo"):
@@ -42,9 +44,10 @@ func test_every_entry_has_a_complete_ctex_block() -> void:
 
 func test_legacy_url_is_never_the_stripped_ctex_mesh() -> void:
 	# The critical old-client safety invariant: a legacy sha must differ from its ctex.mesh sha.
+	var models := _models()
 	var unsafe := 0
-	for key in _models():
-		var e: Dictionary = _models()[key]
+	for key in models:
+		var e: Dictionary = models[key]
 		var mesh_sha := str(e.get("ctex", {}).get("mesh", {}).get("sha256", ""))
 		if mesh_sha != "" and mesh_sha == str(e.get("sha256", "")):
 			unsafe += 1
