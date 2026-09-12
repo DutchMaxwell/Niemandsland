@@ -870,6 +870,19 @@ pub fn mint_template_slot(
     st.storm_used.push(Vec::new());
     st.feats_used.push(Vec::new());
     st.teleport_used.push(false);
+    if let Some(old) = st.los_pairs.as_ref() {
+        // The roster grew, so every captured row now has a different stride.
+        // Preserve existing answers and the parent's shared snapshot. The new
+        // slot is dormant: its pairs use sight_matrix's unblocked default;
+        // the caller still owns the next activation's sight restamp.
+        let side = j + 1;
+        let mut expanded = vec![true; side * side];
+        for row in 0..j {
+            expanded[row * side..row * side + j]
+                .copy_from_slice(&old[row * j..(row + 1) * j]);
+        }
+        st.los_pairs = Some(Rc::new(expanded));
+    }
     j
 }
 /// The summon half of the S5 seam — `Spawn` (SPAWN_DESIGN_2026-09-08 §3.3).

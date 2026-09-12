@@ -1087,6 +1087,7 @@ pub fn state_from_json_with_epoch(
 ) -> Result<State, String> {
     let plain: PlainState = serde_json::from_str(text).map_err(|e| e.to_string())?;
     let roster = roster_of(&plain, profiles.base(), roster_cache)?;
+    spawn_templates_of(&plain, profiles.base(), rules_epoch)?;
     let eff = profiles.effective(&roster, &plain.dyn_profiles());
     Ok(state_of(plain, &eff, roster, rules_epoch))
 }
