@@ -206,6 +206,8 @@ pub struct GateFlags<'a> {
     /// otherwise 9. The table reads it on both arms of `_finalize_placement`
     /// (:6491 charge, :6503 plain); zero keeps the 9 inch default.
     pub chain_in: f64,
+    /// Exact world endpoints after trimming. Empty keeps the inch-input seam.
+    pub planned_world: &'a [geom::V3],
     /// Original world positions for the table whole-unit fallback. Empty disables it.
     pub start_world: &'a [geom::V3],
     /// Replays below the table-rules epoch retain the original gate.
@@ -613,6 +615,7 @@ impl Pull<'_> {
     /// all: the band leaves no room, and the caller's ladder settles the model
     /// at a shorter reach. Returns whether the model actually moved.
     fn nudge(&self, cfg: &mut [Disc], i: usize, to: [f64; 2], len: f64, rep: &mut GateReport) -> bool {
+        let table_rules = rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES);
         let d = [to[0] - cfg[i].c[0], to[1] - cfg[i].c[1]];
         let l = (d[0] * d[0] + d[1] * d[1]).sqrt();
         if l < OVERLAP_EPS_IN || len <= OVERLAP_EPS_IN {
@@ -623,6 +626,24 @@ impl Pull<'_> {
             (cfg[i].c[0] + d[0] / l * step).clamp(BOUNDS_MARGIN_IN, b[0] - BOUNDS_MARGIN_IN),
             (cfg[i].c[1] + d[1] / l * step).clamp(BOUNDS_MARGIN_IN, b[1] - BOUNDS_MARGIN_IN),
         ];
+        if table_rules {
+            // Vector2 subtraction/length use f32. GDScript then widens each
+            // component for the scalar expression; Vector3 narrows the result.
+            let from = world_pt(cfg[i].c, b);
+            let target = world_pt(to, b);
+            let delta = [target[0] - from[0], target[1] - from[1]];
+            let distance = (delta[0] * delta[0] + delta[1] * delta[1]).sqrt() as f64;
+            if distance < OVERLAP_EPS_M { return false; }
+            let step_m = (len * IN2M).min(distance);
+            let end = [
+                (from[0] as f64 + delta[0] as f64 / distance * step_m) as f32,
+                (from[1] as f64 + delta[1] as f64 / distance * step_m) as f32,
+            ];
+            cand = [
+                (end[0] as f64 / IN2M + b[0] * 0.5).clamp(BOUNDS_MARGIN_IN, b[0] - BOUNDS_MARGIN_IN),
+                (end[1] as f64 / IN2M + b[1] * 0.5).clamp(BOUNDS_MARGIN_IN, b[1] - BOUNDS_MARGIN_IN),
+            ];
+        }
         if let Some(t) = self.terrain {
             cand = project_out_forbidden(cand, cfg[i].r, t, b);
         }
@@ -694,9 +715,23 @@ impl Pull<'_> {
             // (b) over-spread — pull the model furthest from the centroid in.
             if overspread(if table_rules { &snapshot } else { cfg }, max_chain) {
                 let sum = |k: usize| cfg.iter().map(|d| d.c[k]).sum::<f64>() / n as f64;
-                let c = [sum(0), sum(1)];
+                let mut c = [sum(0), sum(1)];
+                if table_rules {
+                    let mut sum_world = [0.0f32; 2];
+                    for disc in cfg.iter() {
+                        let p = world_pt(disc.c, self.board_in);
+                        sum_world[0] += p[0]; sum_world[1] += p[1];
+                    }
+                    c = [
+                        (sum_world[0] / n as f32) as f64 / IN2M + self.board_in[0] * 0.5,
+                        (sum_world[1] / n as f32) as f64 / IN2M + self.board_in[1] * 0.5,
+                    ];
+                }
                 // `_furthest_from_world` :6672 keeps the FIRST strict maximum.
-                let far = (1..n).fold(0, |b, i| if dist(cfg[i].c, c) > dist(cfg[b].c, c) { i } else { b });
+                let distance = |i: usize| if table_rules {
+                    dist_f32(world_pt(cfg[i].c, self.board_in), world_pt(c, self.board_in)) as f64
+                } else { dist(cfg[i].c, c) };
+                let far = (1..n).fold(0, |b, i| if distance(i) > distance(b) { i } else { b });
                 moved |= self.nudge(cfg, far, c, COH_LINK_IN, rep);
             }
             if !moved {
@@ -781,7 +816,16 @@ pub fn finalize_placement(
     // (bounds) :6383-6390 — clamp per axis FIRST, so every later correction
     // starts from a legal configuration. The cap circles below stay anchored on
     // the RAW plan (`planned_world` is never rewritten, :6373).
-    let goal: Vec<[f64; 2]> = planned.iter().map(|p| [p[0] as f64, p[1] as f64]).collect();
+    let goal: Vec<[f64; 2]> = if flags.planned_world.len() == n
+        && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES)
+    {
+        flags.planned_world.iter().map(|p| [
+            p[0] as f64 / IN2M + board_in[0] * 0.5,
+            p[2] as f64 / IN2M + board_in[1] * 0.5,
+        ]).collect()
+    } else {
+        planned.iter().map(|p| [p[0] as f64, p[1] as f64]).collect()
+    };
     let mut cfg: Vec<Disc> = (0..n)
         .map(|i| {
             let c = [

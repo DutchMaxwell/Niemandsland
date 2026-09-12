@@ -167,3 +167,25 @@ fn long_single_model_charge_preserves_the_table_endpoint() {
 fn long_multi_model_charge_preserves_the_table_endpoints() {
     assert_endpoint_pin("generated-charge-d18-n3", "long_charge");
 }
+
+#[test]
+fn trimmed_charge_endpoints_survive_coherency_repair() {
+    // Same sub-grid precision allowance as the recorded-069 shorten pin.
+    // The world trim -> inch endpoint -> gate round trip used to amplify
+    // a few float ULPs into a 0.2356 inch closing-overlap difference.
+    let tolerance = 3.0517578125e-5;
+    // This stage-A oracle invokes the pre-epoch-8 charge path. Epoch 8 adds
+    // the intentional failed-charge -> plain approach gate (#857), covered
+    // separately by charge857_fall_short.rs.
+    for epoch in [6, 7] {
+        let (state, target, mut landing, pin, _) = pinned_charge("recorded-026", epoch);
+        landing.snap_charge(&state, target, epoch);
+        let expected: Vec<geom::V3> = serde_json::from_value(pin["expected_world"].clone()).unwrap();
+        assert_eq!(landing.end.len(), expected.len());
+        for (i, (got, want)) in landing.end.iter().zip(expected).enumerate() {
+            let delta = geom::length(geom::sub(*got, want)) as f64 / nml_core::IN2M;
+            assert!(delta <= tolerance,
+                "recorded-026 model {i} epoch {epoch}: {delta:.9}in > {tolerance:.9}in");
+        }
+    }
+}

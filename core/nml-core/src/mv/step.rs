@@ -543,10 +543,17 @@ fn gate_flags(&self) -> super::gate::GateFlags<'_> {
         start_world: &self.pos, rules_epoch: self.rules_epoch, ..Default::default() }
 }
 
-/// The table trims the world trail after planning, before any placement gate.
-/// Its float32 metre interpolation can select a different contact relaxation
-/// from an inch-frame cut. Preserve the historical inch cut before epoch 6.
-fn trim_to_band(&self, leg: &mut Vec<V2>, reach_in: f64) -> Option<V2> {
+/// The gate starts from the planner's world endpoints; trimming may replace them.
+fn world_endpoints(&self, planned: &[V2]) -> Vec<V3> {
+    planned.iter().enumerate().map(|(i, p)| {
+        let [x, z] = super::gate::to_world_f32(*p, self.t.board_in());
+        [x, self.pos[i][1], z]
+    }).collect()
+}
+
+/// Trim in the table's world frame and retain both inch and world endpoints.
+/// The historical inch cut remains unchanged before epoch 6.
+fn trim_to_band(&self, leg: &mut Vec<V2>, reach_in: f64) -> Option<(V2, V2)> {
     if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
         let board = self.t.board_in();
         let world: Vec<V2> = leg.iter()
@@ -562,13 +569,14 @@ fn trim_to_band(&self, leg: &mut Vec<V2>, reach_in: f64) -> Option<V2> {
             (p[0] as f64 / IN2M + board[0] * 0.5) as f32,
             (p[1] as f64 / IN2M + board[1] * 0.5) as f32,
         ]).collect();
+        return Some((*leg.last()?, *cut.last()?));
     } else {
         if g2::polyline_length(leg) * IN2M <= reach_in * IN2M + OVERLAP_EPS_M {
             return None;
         }
         *leg = g2::trim_polyline(leg, reach_in);
     }
-    leg.last().copied()
+    leg.last().copied().map(|p| (p, super::gate::to_world_f32(p, self.t.board_in())))
 }
 
 fn gate_caps(&self, trails: &[Vec<V2>], radii_m: &[f64], reach_in: f64) -> Vec<f64> {
@@ -685,9 +693,13 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
     let mut budget_in = reach; // `mut`: the ladder below may shorten it (:5075).
     let mut arc_in = 0.0f64;
     let mut dangerous: Vec<bool> = Vec::with_capacity(trails.len());
+    let mut planned_world = self.world_endpoints(&planned);
     for (i, leg) in trails.iter_mut().enumerate() {
-        if let Some(fin) = self.trim_to_band(leg, budget_in) {
-            if i < planned.len() { planned[i] = fin; }
+        if let Some((fin, world)) = self.trim_to_band(leg, budget_in) {
+            if i < planned.len() {
+                planned[i] = fin;
+                planned_world[i] = [world[0], self.pos[i][1], world[1]];
+            }
         }
         // :5051 — the p.12 crossing flag is read HERE, on the routed trail, and
         // not after the retrace below: the table counts the cells the model
@@ -720,6 +732,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             && matches!(state.profile(self.si).game_system.as_str(), "gff" | "aofs")
         { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
         let flags = super::gate::GateFlags { shapes: &shapes, radii_m,
+            planned_world: &planned_world,
             charge_targets: self.allow_contact.then_some(targets.as_slice()),
             chain_in: chain, coherent_chain_in: chain, ..self.gate_flags() };
         let caps = self.gate_caps(&trails, radii_m, budget_in);
@@ -750,15 +763,19 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             for frac in [0.75, 0.5, 0.25] {
                 let r3 = budget_in * frac;
                 let (mut p3, mut t3, c3) = self.plan_once(r3, avoid_diff, avoid_dang);
+                let mut world3 = self.world_endpoints(&p3);
                 for (i, leg) in t3.iter_mut().enumerate() {
-                    if let Some(fin) = self.trim_to_band(leg, r3) {
-                        if i < p3.len() { p3[i] = fin; }
+                    if let Some((fin, world)) = self.trim_to_band(leg, r3) {
+                        if i < p3.len() {
+                            p3[i] = fin;
+                            world3[i] = [world[0], self.pos[i][1], world[1]];
+                        }
                     }
                 }
                 let caps3 = self.gate_caps(&t3, radii_m, r3);
                 let (p3, _rep3) =
                     super::gate::finalize_placement(&p3, &radii_in, &ext, &caps3, t.board_in(),
-                        Some(t), flags);
+                        Some(t), super::gate::GateFlags { planned_world: &world3, ..flags });
                 let a3 = achieved_in(&starts, &p3);
                 let c3ok = super::gate::coherent_placement(&p3, &radii_in, flags);
                 // Lexicographic tie-break, same as the table: coherent beats
@@ -810,14 +827,17 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
                         let trial = Self { goal: clamp_to_bounds([anchor[0] + rotated[0],
                             self.goal[1], anchor[2] + rotated[1]], self.half), ..self.clone() };
                         let (mut p4, mut t4, c4) = trial.plan_once(granted_reach, avoid_diff, avoid_dang);
+                        let mut world4 = self.world_endpoints(&p4);
                         for (i, leg) in t4.iter_mut().enumerate() {
-                            if let Some(fin) = self.trim_to_band(leg, granted_reach) {
+                            if let Some((fin, world)) = self.trim_to_band(leg, granted_reach) {
                                 p4[i] = fin;
+                                world4[i] = [world[0], self.pos[i][1], world[1]];
                             }
                         }
                         let caps4 = self.gate_caps(&t4, radii_m, granted_reach);
                         let (p4, _) = super::gate::finalize_placement(&p4, &radii_in, &ext,
-                            &caps4, t.board_in(), Some(t), flags);
+                            &caps4, t.board_in(), Some(t),
+                            super::gate::GateFlags { planned_world: &world4, ..flags });
                         let ach = achieved_in(&starts, &p4);
                         let coherent = super::gate::coherent_placement(&p4, &radii_in, compare);
                         if (coherent && !best_coherent) || (coherent == best_coherent && ach > best_ach + 0.005 / IN2M) {
