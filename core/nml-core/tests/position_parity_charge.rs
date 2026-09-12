@@ -55,8 +55,34 @@ fn charge_final_placement_matches_the_table_pin() {
 }
 
 #[test]
+fn charge_contact_fan_preserves_the_tables_model_assignments() {
+    assert_endpoint_pin("generated-board-72x48-charge", "charge_contact_fan");
+}
+
+#[test]
+fn charge_contact_fan_keeps_the_legacy_assignment_before_epoch_6() {
+    let (_, _, old, _, _) = pinned_charge("generated-board-72x48-charge", 0);
+    let (_, _, before, _, _) = pinned_charge("generated-board-72x48-charge", 5);
+    assert_eq!(old.end, before.end);
+    assert!(before.end[0][2] < -0.02, "legacy model 0 remains on the negative flank");
+    assert!(before.end[1][2] > 0.02, "legacy model 1 remains on the positive flank");
+}
+
+#[test]
 fn charge_base_shapes_matches_the_table_pin() {
     assert_endpoint_pin("recorded-136","base_shapes");
+}
+
+/// recorded-026 — a 21-model charge (20 x 25 mm round + a 40 mm hero) into a
+/// 20-model round-based unit, pinned on the table's own endpoints from the
+/// position-parity harness (`table_end`, identical over three runs). Its push
+/// is UNCAPPED (a charge passes no band caps, :6478), so this is the arm of
+/// `overlap_pass` the endpoint ledger's capped pins (037/128/162) never read.
+/// RED on parity-frame 3 (#771): models 0 and 5 land 0.0349 in and 0.2356 in
+/// off the table; the other nineteen sit within 7e-6 in (the f32 world ULP).
+#[test]
+fn charge_uncapped_push_matches_the_table_pin() {
+    assert_endpoint_pin("recorded-026","charge_uncapped_push");
 }
 
 #[test]
@@ -129,5 +155,37 @@ fn charge_gate_and_snap_epochs_reach_the_simulator() {
         assert_eq!(endings[0],endings[1]);
         assert_eq!(endings[2],endings[3]);
         assert_ne!(endings[1],endings[2]);
+    }
+}
+
+#[test]
+fn long_single_model_charge_preserves_the_table_endpoint() {
+    assert_endpoint_pin("generated-charge-d18-n1", "long_charge");
+}
+
+#[test]
+fn long_multi_model_charge_preserves_the_table_endpoints() {
+    assert_endpoint_pin("generated-charge-d18-n3", "long_charge");
+}
+
+#[test]
+fn trimmed_charge_endpoints_survive_coherency_repair() {
+    // Same sub-grid precision allowance as the recorded-069 shorten pin.
+    // The world trim -> inch endpoint -> gate round trip used to amplify
+    // a few float ULPs into a 0.2356 inch closing-overlap difference.
+    let tolerance = 3.0517578125e-5;
+    // This stage-A oracle invokes the pre-epoch-8 charge path. Epoch 8 adds
+    // the intentional failed-charge -> plain approach gate (#857), covered
+    // separately by charge857_fall_short.rs.
+    for epoch in [6, 7] {
+        let (state, target, mut landing, pin, _) = pinned_charge("recorded-026", epoch);
+        landing.snap_charge(&state, target, epoch);
+        let expected: Vec<geom::V3> = serde_json::from_value(pin["expected_world"].clone()).unwrap();
+        assert_eq!(landing.end.len(), expected.len());
+        for (i, (got, want)) in landing.end.iter().zip(expected).enumerate() {
+            let delta = geom::length(geom::sub(*got, want)) as f64 / nml_core::IN2M;
+            assert!(delta <= tolerance,
+                "recorded-026 model {i} epoch {epoch}: {delta:.9}in > {tolerance:.9}in");
+        }
     }
 }

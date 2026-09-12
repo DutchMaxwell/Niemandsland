@@ -206,6 +206,8 @@ pub struct GateFlags<'a> {
     /// otherwise 9. The table reads it on both arms of `_finalize_placement`
     /// (:6491 charge, :6503 plain); zero keeps the 9 inch default.
     pub chain_in: f64,
+    /// Exact world endpoints after trimming. Empty keeps the inch-input seam.
+    pub planned_world: &'a [geom::V3],
     /// Original world positions for the table whole-unit fallback. Empty disables it.
     pub start_world: &'a [geom::V3],
     /// Replays below the table-rules epoch retain the original gate.
@@ -226,6 +228,24 @@ pub struct GateFlags<'a> {
 
 fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
+}
+
+// DIAGNOSTIC (test builds only): a per-thread gate trace, switched on by the
+// test that wants it, printed to the process's stderr past the harness capture.
+#[cfg(test)]
+thread_local! { pub(crate) static TRACE: std::cell::Cell<bool> = std::cell::Cell::new(false); }
+#[cfg(test)]
+fn tr(s: String) {
+    use std::io::Write;
+    TRACE.with(|t| if t.get() {
+        // Into the file NML_GATE_TRACE_FILE names — past libtest's capture and
+        // past the box log's tail window. Unset (the default): no output.
+        if let Some(path) = std::env::var_os("NML_GATE_TRACE_FILE") {
+            if let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open(path) {
+                let _ = writeln!(f, "GT {s}");
+            }
+        }
+    })
 }
 
 /// `SeparationResolver._travel_to_clear_along` separation_resolver.gd:156 — the
@@ -281,6 +301,7 @@ fn resolve_overlaps(s: &mut WorldDisc, obs: &[WorldDisc]) -> bool {
             res = [res[0] + axis[0] / l * ov, res[1] + axis[1] / l * ov];
             deepest = deepest.max(overlap);
         }
+        #[cfg(test)] { tr(format!("    iter deepest={deepest:.9} res={res:?} c={:?}", s.c)); }
         if deepest <= RESOLVE_EPS_IN {
             return moved(applied); // cleared inside the relaxation cap
         }
@@ -301,6 +322,7 @@ fn resolve_overlaps(s: &mut WorldDisc, obs: &[WorldDisc]) -> bool {
             best = (travel, u);
         }
     }
+    #[cfg(test)] { tr(format!("    escape travel={} u={:?}", best.0, best.1)); }
     if best.0 > 0.0 && best.0.is_finite() {
         let t = best.0 as f32;
         let step = [best.1[0] * t, best.1[1] * t];
@@ -447,7 +469,24 @@ pub(crate) fn coherent_placement(planned: &[V2], radii_in: &[f64], flags: GateFl
 
 /// `_cap_gate_disp` :6360 — truncate one gate correction to the model's
 /// band-slack circle around its RAW planned endpoint, marking it when it bit.
-fn cap_disp(cand: [f64; 2], goal: [f64; 2], cap: f64, i: usize, rep: &mut GateReport) -> [f64; 2] {
+fn cap_disp(cand: [f64; 2], goal: [f64; 2], cap: f64, i: usize, rep: &mut GateReport,
+            board: [f64; 2], rules_epoch: u32) -> [f64; 2] {
+    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        // `_cap_gate_disp` reads Vector2 world offsets. An inch-space cap
+        // can move a point by one world ULP and change a shortening probe.
+        let (at, origin) = (world_pt(cand, board), world_pt(goal, board));
+        let off = [at[0] - origin[0], at[1] - origin[1]];
+        let len = (off[0] * off[0] + off[1] * off[1]).sqrt();
+        if len as f64 <= cap * IN2M {
+            return cand;
+        }
+        rep.capped[i] = true;
+        let cap_m = (cap * IN2M) as f32;
+        let end = [origin[0] + off[0] / len * cap_m,
+                   origin[1] + off[1] / len * cap_m];
+        return [end[0] as f64 / IN2M + board[0] * 0.5,
+                end[1] as f64 / IN2M + board[1] * 0.5];
+    }
     let off = [cand[0] - goal[0], cand[1] - goal[1]];
     let l = (off[0] * off[0] + off[1] * off[1]).sqrt();
     if l <= cap {
@@ -490,6 +529,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
     let goal_w: Vec<[f32; 2]> = goal.iter().map(|g| world_pt(*g, board_in)).collect();
     let caps_m: Vec<f64> = caps_in.iter().map(|c| c * IN2M).collect();
     let slack = |i: usize, w: &[WorldDisc]| caps_m[i] - dist_f32(w[i].c, goal_w[i]) as f64;
+    #[cfg(test)] { for (i, d) in w.iter().enumerate() { tr(format!("push in {i} w={:?} r_m={} c={:?}", d.c, d.r_m, cfg[i].c)); } }
     for _ in 0..OVERLAP_GATE_PASSES {
         let mut order: Vec<usize> = (0..n).collect();
         if capped {
@@ -515,6 +555,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
             }
         }
         let mut moved = false;
+        #[cfg(test)] { tr(format!("pass order={order:?}")); }
         for i in order {
             if capped && slack(i, &w) <= OVERLAP_EPS_M {
                 continue; // band-frozen (:6825)
@@ -522,6 +563,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
             let mut obs: Vec<WorldDisc> = ext.clone();
             obs.extend((0..n).filter(|&j| j != i).map(|j| w[j]));
             let mut s = w[i];
+            #[cfg(test)] { tr(format!("  model {i} at {:?}", s.c)); }
             if resolve_overlaps(&mut s, &obs) {
                 moved = true;
                 if capped {
@@ -537,6 +579,7 @@ fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bo
                         rep.capped[i] = true;
                     }
                 }
+                #[cfg(test)] { tr(format!("  moved {i} {:?} -> {:?}", w[i].c, s.c)); }
                 w[i] = s;
                 cfg[i].c = [s.c[0] as f64 / IN2M + board_in[0] * 0.5,
                             s.c[1] as f64 / IN2M + board_in[1] * 0.5];
@@ -572,6 +615,7 @@ impl Pull<'_> {
     /// all: the band leaves no room, and the caller's ladder settles the model
     /// at a shorter reach. Returns whether the model actually moved.
     fn nudge(&self, cfg: &mut [Disc], i: usize, to: [f64; 2], len: f64, rep: &mut GateReport) -> bool {
+        let table_rules = rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES);
         let d = [to[0] - cfg[i].c[0], to[1] - cfg[i].c[1]];
         let l = (d[0] * d[0] + d[1] * d[1]).sqrt();
         if l < OVERLAP_EPS_IN || len <= OVERLAP_EPS_IN {
@@ -582,15 +626,35 @@ impl Pull<'_> {
             (cfg[i].c[0] + d[0] / l * step).clamp(BOUNDS_MARGIN_IN, b[0] - BOUNDS_MARGIN_IN),
             (cfg[i].c[1] + d[1] / l * step).clamp(BOUNDS_MARGIN_IN, b[1] - BOUNDS_MARGIN_IN),
         ];
+        if table_rules {
+            // Vector2 subtraction/length use f32. GDScript then widens each
+            // component for the scalar expression; Vector3 narrows the result.
+            let from = world_pt(cfg[i].c, b);
+            let target = world_pt(to, b);
+            let delta = [target[0] - from[0], target[1] - from[1]];
+            let distance = (delta[0] * delta[0] + delta[1] * delta[1]).sqrt() as f64;
+            if distance < OVERLAP_EPS_M { return false; }
+            let step_m = (len * IN2M).min(distance);
+            let end = [
+                (from[0] as f64 + delta[0] as f64 / distance * step_m) as f32,
+                (from[1] as f64 + delta[1] as f64 / distance * step_m) as f32,
+            ];
+            cand = [
+                (end[0] as f64 / IN2M + b[0] * 0.5).clamp(BOUNDS_MARGIN_IN, b[0] - BOUNDS_MARGIN_IN),
+                (end[1] as f64 / IN2M + b[1] * 0.5).clamp(BOUNDS_MARGIN_IN, b[1] - BOUNDS_MARGIN_IN),
+            ];
+        }
         if let Some(t) = self.terrain {
             cand = project_out_forbidden(cand, cfg[i].r, t, b);
         }
         if self.capped {
-            cand = cap_disp(cand, self.goal[i], self.caps_in[i], i, rep);
+            cand = cap_disp(cand, self.goal[i], self.caps_in[i], i, rep,
+                self.board_in, self.rules_epoch);
             if dist(cand, cfg[i].c) <= OVERLAP_EPS_IN {
                 return false;
             }
         }
+        #[cfg(test)] { tr(format!("nudge i={i} from={:?} to={:?} len={len} cand={:?}", cfg[i].c, to, cand)); }
         cfg[i].c = cand;
         rep.pulled[i] = true;
         true
@@ -622,6 +686,7 @@ impl Pull<'_> {
             // not change the nearest-neighbour or over-spread reads this pass.
             let snapshot = cfg.to_vec();
             let main = largest_component(&snapshot);
+            #[cfg(test)] { tr(format!("pull sweep main={main:?} overspread={}", overspread(&snapshot, max_chain))); }
             let mut moved = false;
             // (a) reconnect — nearest in-component neighbour by EDGE distance,
             // the FIRST winner on a tie (the component's own BFS order).
@@ -644,14 +709,29 @@ impl Pull<'_> {
                     ((nd - COH_LINK_IN * IN2M) / IN2M).min(COH_LINK_IN)
                 } else { (nd - COH_LINK_IN).min(COH_LINK_IN) };
                 let to = cfg[near].c;
+                #[cfg(test)] { tr(format!("pull i={i} near={near} nd={nd} len={len}")); }
                 moved |= self.nudge(cfg, i, to, len, rep);
             }
             // (b) over-spread — pull the model furthest from the centroid in.
             if overspread(if table_rules { &snapshot } else { cfg }, max_chain) {
                 let sum = |k: usize| cfg.iter().map(|d| d.c[k]).sum::<f64>() / n as f64;
-                let c = [sum(0), sum(1)];
+                let mut c = [sum(0), sum(1)];
+                if table_rules {
+                    let mut sum_world = [0.0f32; 2];
+                    for disc in cfg.iter() {
+                        let p = world_pt(disc.c, self.board_in);
+                        sum_world[0] += p[0]; sum_world[1] += p[1];
+                    }
+                    c = [
+                        (sum_world[0] / n as f32) as f64 / IN2M + self.board_in[0] * 0.5,
+                        (sum_world[1] / n as f32) as f64 / IN2M + self.board_in[1] * 0.5,
+                    ];
+                }
                 // `_furthest_from_world` :6672 keeps the FIRST strict maximum.
-                let far = (1..n).fold(0, |b, i| if dist(cfg[i].c, c) > dist(cfg[b].c, c) { i } else { b });
+                let distance = |i: usize| if table_rules {
+                    dist_f32(world_pt(cfg[i].c, self.board_in), world_pt(c, self.board_in)) as f64
+                } else { dist(cfg[i].c, c) };
+                let far = (1..n).fold(0, |b, i| if distance(i) > distance(b) { i } else { b });
                 moved |= self.nudge(cfg, far, c, COH_LINK_IN, rep);
             }
             if !moved {
@@ -736,7 +816,16 @@ pub fn finalize_placement(
     // (bounds) :6383-6390 — clamp per axis FIRST, so every later correction
     // starts from a legal configuration. The cap circles below stay anchored on
     // the RAW plan (`planned_world` is never rewritten, :6373).
-    let goal: Vec<[f64; 2]> = planned.iter().map(|p| [p[0] as f64, p[1] as f64]).collect();
+    let goal: Vec<[f64; 2]> = if flags.planned_world.len() == n
+        && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES)
+    {
+        flags.planned_world.iter().map(|p| [
+            p[0] as f64 / IN2M + board_in[0] * 0.5,
+            p[2] as f64 / IN2M + board_in[1] * 0.5,
+        ]).collect()
+    } else {
+        planned.iter().map(|p| [p[0] as f64, p[1] as f64]).collect()
+    };
     let mut cfg: Vec<Disc> = (0..n)
         .map(|i| {
             let c = [
@@ -759,6 +848,12 @@ pub fn finalize_placement(
         flags.chain_in
     } else { super::MAX_CHAIN_IN };
     let capped = !charge && caps_in.len() == n;
+    #[cfg(test)] {
+        tr(format!("gate n={n} charge={charge} capped={capped} ext={} chain={max_chain} flying={} board={board_in:?}", external.len(), flags.flying));
+        for (i, e) in external.iter().enumerate() { tr(format!("ext {i} c={:?} r={} shape={:?}", e.c, e.r, e.shape)); }
+        for i in 0..n { tr(format!("gate in {i} c={:?} r={} r_m={:?} shape={:?} start={:?} cap={:?}", cfg[i].c, cfg[i].r, flags.radii_m.get(i), cfg[i].shape, flags.start_world.get(i), caps_in.get(i))); }
+        if let Some(t) = flags.charge_targets { for (p, r) in t { tr(format!("target {p:?} r={r}")); } }
+    }
     // (terrain) :6402-6412 — project every model out of forbidden rest ground
     // BEFORE the overlap push, so the crowd resolves around spots that are
     // already legal. A projection costing MORE than the model's band slack is
@@ -788,7 +883,12 @@ pub fn finalize_placement(
     // neighbour's obstacle set, so the crowd walks around it), and each push is
     // truncated to the cap circle. Residual overlap between two capped models is
     // deliberately LEFT for the caller's ladder to settle at a shorter reach.
-    overlap_pass(&mut cfg, &goal, caps_in, capped, external, flags.radii_m, board_in, &mut rep);
+    #[cfg(test)] { for i in 0..n { tr(format!("gate proj {i} c={:?} capped={}", cfg[i].c, rep.capped[i])); } }
+    let _w = overlap_pass(&mut cfg, &goal, caps_in, capped, external, flags.radii_m, board_in, &mut rep);
+    #[cfg(test)] {
+        for i in 0..n { tr(format!("gate push {i} w={:?} c={:?}", _w[i].c, cfg[i].c)); }
+        tr(format!("gate coherent={} largest={:?} overspread={}", config_coherent(&cfg, max_chain), largest_component(&cfg), overspread(&cfg, max_chain)));
+    }
     // (coherency) :6444-6465 — PASS 4. The table keeps the full move when the
     // config is coherent AND overlap-free AND terrain-clear, and otherwise runs
     // the straggler repair before falling back to the whole-unit shorten. The
@@ -798,6 +898,7 @@ pub fn finalize_placement(
         let pull = Pull { max_chain, rules_epoch: flags.rules_epoch, goal: &goal, caps_in, capped,
             board_in, terrain, external, radii_m: flags.radii_m };
         rep.coherent = pull.run(&mut cfg, &mut rep);
+        #[cfg(test)] { tr(format!("gate after pull coherent={} pulled={:?}", rep.coherent, rep.pulled)); }
     }
     if !charge && n > 1 && flags.start_world.len() == n
         && rule_on(flags.rules_epoch, EPOCH_6_TABLE_RULES)
@@ -807,6 +908,7 @@ pub fn finalize_placement(
         rep.coherent = config_coherent(&cfg, max_chain);
     }
     clamp_gate_walls(&mut cfg, &goal, external, flags, terrain, &mut rep);
+    #[cfg(test)] { for i in 0..n { tr(format!("gate out {i} c={:?} reverted={}", cfg[i].c, rep.reverted[i])); } }
     let out = (0..n)
         .map(|i| {
             rep.disp_in[i] = dist(cfg[i].c, goal[i]);
@@ -1342,5 +1444,55 @@ mod frame_tests {
         }
         // ~1 float32 ULP of a world metre at board scale; the inverse is not exact.
         assert!(worst <= 2.5e-7, "world -> inch -> world moved a centre by {worst:.3e} m");
+    }
+}
+
+// DIAGNOSTIC (test builds only) — replay recorded-026 with the gate trace on.
+// Inert unless NML_GATE_TRACE_FILE names a file; then every gate input, push
+// iteration, escape, pull sweep and nudge of the case is appended to it.
+#[cfg(test)]
+mod push_trace_026 {
+    use super::*;
+    use serde_json::{json, Value};
+    use std::{collections::HashMap, rc::Rc};
+
+    #[test]
+    fn trace_recorded_026_charge() {
+        let fixtures: Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/cases.json")).unwrap();
+        let case = fixtures["cases"].as_array().unwrap().iter()
+            .find(|c| c["id"] == "recorded-026").unwrap();
+        let mut profiles = crate::state::Profiles { list: vec![], index: HashMap::new() };
+        let mut units = serde_json::Map::new();
+        for spec in case["units"].as_array().unwrap() {
+            let key = spec["id"].as_str().unwrap().to_string();
+            let mut profile = spec.clone();
+            profile["unit_id"] = json!(key);
+            profile["name"] = json!(key);
+            profile["quality"] = json!(4);
+            profile["defense"] = json!(4);
+            profile["model_count"] = json!(spec["positions"].as_array().unwrap().len());
+            profile["special_rules"] = spec["rules"].clone();
+            profiles.index.insert(key.clone(), profiles.list.len());
+            profiles.list.push(serde_json::from_value(profile).unwrap());
+            let mut unit = spec.clone();
+            unit["alive"] = json!(spec["positions"].as_array().unwrap().len());
+            units.insert(key, unit);
+        }
+        let mut cache = crate::state::ProfileCache::new(Rc::new(profiles));
+        let state = crate::io::state_from_json(&json!({"units": units, "round": case["round"],
+            "rounds_total": 4}).to_string(), &mut cache, &mut None).unwrap();
+        let terrain = Terrain::build(&serde_json::from_value(case["terrain"].clone()).unwrap());
+        let actor = state.roster.index["u01"];
+        let target = state.roster.index["u17"];
+        TRACE.with(|t| t.set(true));
+        let mut land = crate::mv::step::MoveRules { rules_epoch: 6 }
+            .charge_move(&state, &terrain, actor, target, 16.0, true, true, 320).unwrap();
+        let snap = land.snap_charge(&state, target, 6);
+        tr(format!("snap {snap:?} budget={} arc={}", land.budget_in, land.arc_in));
+        for (i, e) in land.end.iter().enumerate() {
+            tr(format!("end {i} {e:?}"));
+        }
+        TRACE.with(|t| t.set(false));
     }
 }
