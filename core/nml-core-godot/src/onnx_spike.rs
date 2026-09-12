@@ -5,6 +5,9 @@
 //! `run` returns `(value, member_values)`; `member_values` is flat row-major
 //! `[rows, members]` exactly as the graph emits it.
 
+#[cfg(all(feature = "onnx-tract", feature = "onnx-ort"))]
+compile_error!("enable exactly one of the onnx-tract / onnx-ort features");
+
 /// One static batch: six flat float32 buffers in token-contract layout.
 pub struct Batch {
     pub units: Vec<f32>,      // [rows, 24, 72]
