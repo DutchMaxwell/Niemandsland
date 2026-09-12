@@ -1,5 +1,7 @@
 # Encoder-slot gap — the 12 ported names the value net cannot see (07.09.2026)
 
+> **Historical / superseded snapshot** — kept for the reasoning. Its measurements are a point-in-time view, not current state; see [`../../PROJECT_STATUS.md`](../../PROJECT_STATUS.md) for the live picture.
+
 Measured at `6b7da754` (origin/main, 2026-09-07) with a live run of
 `core/nml-core-py/tools/rule_universe_census.py` against the private book snapshot (89 books).
 This is the follow-up to the 06.09. slot decision (option c, the `unit2` trailing band shipped
