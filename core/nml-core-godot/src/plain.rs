@@ -255,6 +255,7 @@ pub fn profile_of(d: &VarDictionary) -> Profile {
             advance: dnum(&bands, "advance", 0.0),
             // `_presence` reads `bands.get("rush", 12)` (ai_mission_eval.gd:610).
             rush: dnum(&bands, "rush", 12.0),
+            ..Default::default()
         },
     }
 }
@@ -518,10 +519,10 @@ pub fn build_state(
         // `SoloController.sim_move_bands` call, exactly as `io::state_of` does —
         // a defaulted 6"/12" would answer for a Slow unit the profile reads as 4"/8".
         st.bands.push(match u.get("bands").and_then(|v| v.try_to::<VarDictionary>().ok()) {
-            Some(b) => Bands { advance: dnum(&b, "advance", 6.0), rush: dnum(&b, "rush", 12.0) },
+            Some(b) => Bands { advance: dnum(&b, "advance", 6.0), rush: dnum(&b, "rush", 12.0), ..Default::default() },
             None => {
                 let mb = prof_table.list[roster.profile[st.bands.len()]].move_bands;
-                Bands { advance: mb.advance, rush: mb.rush }
+                Bands { advance: mb.advance, rush: mb.rush, ..Default::default() }
             }
         });
         // `_melee_shroud_charge_in_plain` (battle_sim.gd:1572) takes the pair only

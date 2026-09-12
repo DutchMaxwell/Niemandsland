@@ -98,6 +98,11 @@ pub struct MoveBands {
     /// the 12" fallback lives in that default, not in the caller.
     #[serde(default = "twelve")]
     pub rush: f64,
+    /// The profile's distinct charge reach — `Some(val)` when the profile's
+    /// `move_bands` carries a `charge` key, `None` when it does not (every
+    /// charge seam falls back to `rush`). Same shape as `Bands::charge`.
+    #[serde(default)]
+    pub charge: Option<f64>,
 }
 
 fn twelve() -> f64 {
@@ -106,7 +111,7 @@ fn twelve() -> f64 {
 
 impl Default for MoveBands {
     fn default() -> Self {
-        MoveBands { advance: 0.0, rush: 12.0 }
+        MoveBands { advance: 0.0, rush: 12.0, charge: None }
     }
 }
 
@@ -128,11 +133,19 @@ pub struct Bands {
     pub advance: f64,
     #[serde(default = "twelve")]
     pub rush: f64,
+    /// The table's distinct `bands["charge"]` reach (the `charge_only`
+    /// move-band rules: "Rapid Charge", "Rapid Charge Aura" — the ONLY two the
+    /// 12.09. census measured). `Some(val)` = a distinct charge reach every
+    /// charge seam reads as `charge.unwrap_or(rush)`; `None` = the key is
+    /// absent, fall back to `rush`. `Some(0.0)` is an explicit zero reach and
+    /// must survive a serialise/parse round trip.
+    #[serde(default)]
+    pub charge: Option<f64>,
 }
 
 impl Default for Bands {
     fn default() -> Self {
-        Bands { advance: 6.0, rush: 12.0 }
+        Bands { advance: 6.0, rush: 12.0, charge: None }
     }
 }
 

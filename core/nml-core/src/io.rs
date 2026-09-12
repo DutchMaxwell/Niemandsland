@@ -913,7 +913,7 @@ pub(crate) fn state_of(
         // call (battle_sim.gd:1471) is the closest reading there is.
         st.bands.push(u.bands.unwrap_or_else(|| {
             let mb = st.profiles.list[st.roster.profile[ui]].move_bands;
-            Bands { advance: mb.advance, rush: mb.rush }
+            Bands { advance: mb.advance, rush: mb.rush, charge: mb.charge }
         }));
         // `_melee_shroud_charge_in_plain` (battle_sim.gd:1572) takes the pair only
         // when the recorded array holds BOTH numbers; anything shorter is "absent".
@@ -1187,7 +1187,16 @@ pub fn plain_of(st: &State) -> serde_json::Value {
             }
             u.insert("los".into(), Value::Object(m));
         }
-        u.insert("bands".into(), serde_json::to_value(st.bands[i]).unwrap_or(Value::Null));
+        let mut bm = serde_json::Map::new();
+        bm.insert("advance".into(), st.bands[i].advance.into());
+        bm.insert("rush".into(), st.bands[i].rush.into());
+        // `Some(0.0)` (an explicit zero reach) is a REAL value and must
+        // survive the round trip; `None` writes NO key, so an old record's
+        // bands dict stays byte-identical.
+        if let Some(c) = st.bands[i].charge {
+            bm.insert("charge".into(), c.into());
+        }
+        u.insert("bands".into(), Value::Object(bm));
         if let Some(s) = st.shroud[i] {
             u.insert("shroud".into(), Value::Array(vec![s[0].into(), s[1].into()]));
         }

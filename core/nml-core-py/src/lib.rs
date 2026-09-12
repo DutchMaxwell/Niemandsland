@@ -51,7 +51,9 @@ use pyo3::types::{PyDict, PyList};
 
 use serde_json::{Map, Value};
 
-use nmlcore::acts::{ActHeader, ActStatics, Knobs, MeleeReach, PolicyMode, Sighting};
+use nmlcore::acts::{
+    rule_on, ActHeader, ActStatics, EPOCH_10_CHARGE_BAND, Knobs, MeleeReach, PolicyMode, Sighting,
+};
 use nmlcore::arbitration::Arbitration;
 use nmlcore::deployment::{self, Placement, Rect, SettleUnit, SideDeploy, UnitSpec};
 use nmlcore::menu::{candidates_tuned, Candidate, Tuning};
@@ -895,7 +897,14 @@ impl Core {
             &self.terrain,
             si,
             ci,
-            st.bands[si].rush,
+            // The table's charge band (`bands.get("charge", rush)`,
+            // solo_controller.gd:1647) reads from EPOCH_10_CHARGE_BAND on; below
+            // it the pre-port reading stays `rush` so old records replay exactly.
+            if rule_on(self.knobs.rules_epoch, EPOCH_10_CHARGE_BAND) {
+                st.bands[si].charge.unwrap_or(st.bands[si].rush)
+            } else {
+                st.bands[si].rush
+            },
             self.knobs.hero_attach,
             true,
             nmlcore::mv::FAST_PLANNER_GUARD,
