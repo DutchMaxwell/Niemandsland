@@ -8,6 +8,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   GODOT_VERSION: "4.6"
   EXPORT_NAME: Niemandsland
@@ -28,8 +32,9 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
-          # Negation-only filter: evaluated against all changed files, true when at
-          # least one falls OUTSIDE core/**, tools/*.py or docs/** (i.e. NOT core-only).
+          predicate-quantifier: 'every'
+          # Negation-only filter: with `every`, a changed file matches when it falls
+          # outside ALL of core/**, tools/*.py and docs/** (i.e. NOT core-only).
           filters: |
             not_core_only:
               - '!core/**'
@@ -39,6 +44,7 @@ jobs:
   test:
     name: gdUnit4 Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: changes
     if: ${{ github.event_name != 'pull_request' || needs.changes.outputs.not_core_only == 'true' }}
     steps:

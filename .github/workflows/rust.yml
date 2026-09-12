@@ -10,10 +10,15 @@ on:
   # tag pushes (rust.yml itself has no tag trigger — tags don't touch main/PR).
   workflow_call:
 
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   rust:
     name: Build and test core crates
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Blocking since 2026-09-03: the core crates drive the training corpus,
     # the fidelity gates and the promoted AI player, so a red build or test
     # here is a red workflow (external review 03.09., item 2).
