@@ -1,0 +1,14 @@
+# Pinned so every machine and every CI run compiles the three core crates with
+# the SAME rustc. Before this file the toolchain was whatever `stable` happened
+# to be that day, which makes a red CI run impossible to reproduce locally.
+#
+# It lives at the REPO root on purpose: rustup resolves this file from the
+# CURRENT directory upward, and CI invokes cargo from the repo root with
+# `--manifest-path core/...`. A copy under core/ would be ignored by exactly
+# those commands.
+#
+# Raising it is a deliberate act: bump the version here, run the full workspace
+# suite plus a box gate, and say so in the PR body.
+[toolchain]
+channel = "1.98.0"
+components = ["clippy", "rustfmt"]
