@@ -291,8 +291,8 @@ The forward-looking work now lives in [`docs/ROADMAP.md`](docs/ROADMAP.md); see 
 
 The forward-looking plan and the feature-request pipeline now live in
 [`docs/ROADMAP.md`](docs/ROADMAP.md) (single source) — see its **Next** and **Ideas**
-sections (Age of Fantasy + Regiments, MP 3+ hardening, selectable AI difficulty grades,
-co-op against the AI, transports stage 2, the remaining rule-resolver waves, …).
+sections (Age of Fantasy + Regiments, MP 3+ hardening, UX polish, solo rules coverage
+and Rust-core parity, …).
 
 ## Out of scope (by design)
 
@@ -309,9 +309,14 @@ table behaves exactly as before. The legacy AI system + battle simulator (~5500 
 removed and was **not** revived — today's solo engine (`scripts/solo/`) was written from
 scratch against OPR's official Solo & Co-Op ruleset, deterministic and explainable by design.
 
-**Not in this release, but planned:** co-op (two or more humans sharing a side against the AI) —
-solo is single-player today; it sits in **Next** in [`docs/ROADMAP.md`](docs/ROADMAP.md).
-Still out of scope by design: campaigns/ladders, and any AI that learns or calls out to a service.
+**Not in this release:** co-op (two or more people in one multiplayer room against an
+AI-controlled army). A first version is on `main`: the AI designation now reaches every
+player, and each player rolls saves for their own units (#835, #836).
+Still out of scope: campaigns and ladders. A trained computer opponent is planned as an
+optional, clearly labelled choice next to the Classic AI, which is planned to stay in every
+build (see [`docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md`](docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md)).
+Sharing game records with the developer will only ever be opt-in and is off by default (see
+[`docs/PRIVACY_DATA_SHARING.md`](docs/PRIVACY_DATA_SHARING.md)).
 
 ## Not built (despite older docs)
 
@@ -322,8 +327,8 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Known issues
 
-- **Solo is alpha.** One difficulty grade only (full strength); solo is single-player
-  (co-op vs the AI is not built); the rules listed under *Not automated* above must be
+- **Solo is alpha.** One difficulty grade only (full strength); co-op against the AI is
+  not in a release yet; the rules listed under *Not automated* above must be
   applied by hand; all solo UI is English-only.
 - Dice can occasionally jitter at miniature scale (mitigated by the scaled-SubViewport
   dice approach; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#scaling)).
@@ -338,7 +343,7 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: **~2,270 tests green** across **234 suites** in `test/` (incl. `coherency_checker`,
+gdUnit4: about **2,875 test functions** across **327 suites** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`, `network_manager` /
 `network_version_handshake`, `dice_rules`, `player_identity`, the movement/spacing
 suites `separation_checker` / `separation_resolver` / `separation_zone`, `move_ledger` /
@@ -347,9 +352,10 @@ suites — `solo_controller`, `turn_manager`, `movement_planner`, `ai_decision` 
 `ai_targeting` / `ai_position` / `ai_round_planner` / `ai_combat_math` / `ai_spell`,
 `rules_registry`, `spells_registry`, `terrain_rules`, `sight_fan`, `volumetric_los`,
 `los_volumes`, `transport_state` / `transport_embark`, `autosave_controller`). The
-**end-to-end layer** (`test/e2e/`, **54 suites**)
+**end-to-end layer** (`test/e2e/`, **85 suites**)
 boots the real `scenes/main.tscn` and drives the real menu / deployment-gate / click-ownership
-/ battle-log-export / AI-path-label flows that unit tests skip. Python: `relay/test_relay_server.py`
-(67 green). How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the
+/ battle-log-export / AI-path-label flows that unit tests skip. Python: the nml-core-py bindings
+suite (**78 pytest files**) and `relay/test_relay_server.py` (67 green); the Rust workspace tests
+run in `.github/workflows/rust.yml`. How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the
 solo / movement / MP / tutorial paths is solid; some older gameplay scripts are still
 untested.
