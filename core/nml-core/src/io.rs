@@ -1073,6 +1073,19 @@ pub fn state_from_json(
     profiles: &mut ProfileCache,
     roster_cache: &mut Option<Rc<Roster>>,
 ) -> Result<State, String> {
+    state_from_json_at_epoch(text, profiles, roster_cache, 0)
+}
+
+/// `state_from_json` with the header's own `knobs.rules_epoch`, so a
+/// standalone state import is held to the same Spawn template contract
+/// `read_acts` enforces. Baseline callers use the no-epoch form above; the
+/// Python `state_of` binding is the one production caller that has a header.
+pub fn state_from_json_at_epoch(
+    text: &str,
+    profiles: &mut ProfileCache,
+    roster_cache: &mut Option<Rc<Roster>>,
+    rules_epoch: u32,
+) -> Result<State, String> {
     let plain: PlainState = serde_json::from_str(text).map_err(|e| e.to_string())?;
     let roster = roster_of(&plain, profiles.base(), roster_cache)?;
     spawn_templates_of(&plain, profiles.base(), rules_epoch)?;

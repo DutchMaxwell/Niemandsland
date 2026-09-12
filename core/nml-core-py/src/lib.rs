@@ -1131,7 +1131,7 @@ impl Core {
         let text = json_text(plain)?;
         let profiles = self.profiles.as_mut().ok_or_else(Core::no_header)?;
         let mut cache = self.roster.take();
-        let st = io::state_from_json(&text, profiles, &mut cache)
+        let st = io::state_from_json_at_epoch(&text, profiles, &mut cache, self.knobs.rules_epoch)
             .map_err(|e| Unsupported::new_err(e))?;
         self.roster = cache;
         // The `prof` blocks are kept as they came, not re-derived — see the
