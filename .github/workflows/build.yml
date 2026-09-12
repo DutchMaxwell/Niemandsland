@@ -5,7 +5,9 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
-    branches: [main]
+    # PROOF ONLY on the temporary ci-fastlane-proof branch: let PRs whose base is this
+    # branch trigger the workflow. Never part of the deliverable.
+    branches: [main, ci-fastlane-proof]
   workflow_dispatch:
 
 env:
