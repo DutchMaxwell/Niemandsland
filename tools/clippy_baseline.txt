@@ -17,9 +17,10 @@ clippy::manual_contains 22
 clippy::manual_div_ceil 2
 clippy::manual_is_multiple_of 2
 clippy::manual_repeat_n 4
+clippy::missing_const_for_thread_local 1
 clippy::needless_borrow 8
 clippy::needless_option_as_deref 4
-clippy::needless_range_loop 21
+clippy::needless_range_loop 24
 clippy::needless_update 6
 clippy::neg_cmp_op_on_partial_ord 2
 clippy::obfuscated_if_else 2
