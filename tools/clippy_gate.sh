@@ -34,8 +34,18 @@ cd "$ROOT/core" || { echo "clippy_gate: no core/ workspace"; exit 1; }
 # full rebuild) and measure from a known state every time.
 "$CARGO" clean -p nml-core -p nml-core-godot -p nml-core-py >/dev/null 2>&1
 
-current=$("$CARGO" clippy --workspace --all-targets --message-format json 2>/dev/null \
-  | python3 -c '
+# `approx_constant` and `erasing_op` are correctness-group lints, deny by
+# default. Uncapped, clippy therefore hard-errors after the first crate and the
+# measurement covers only what job scheduling happened to finish first: measured
+# 12.09.2026, the same tree read 98 findings (lib target only) on one runner and
+# 355 (lib+tests) on another. Cap lint levels for the measurement so every
+# target compiles; the parser counts capped findings identically, and the exit
+# status then means exactly one thing -- a real compile error.
+raw=$(mktemp)
+"$CARGO" clippy --workspace --all-targets --message-format json -- --cap-lints warn \
+  >"$raw" 2>/dev/null
+clippy_rc=$?
+current=$(python3 -c '
 import json,sys,collections
 c=collections.Counter()
 for line in sys.stdin:
@@ -50,7 +60,18 @@ for line in sys.stdin:
     if not code: continue
     c[code]+=1
 for k in sorted(c): print(f"{k} {c[k]}")
-')
+' <"$raw")
+rm -f "$raw"
+
+# The JSON parser above sees whatever cargo managed to emit, so a failed clippy
+# run yields a partial count -- which can only ever look BETTER than the truth.
+# Refuse instead of comparing it.
+if [ "$clippy_rc" -ne 0 ]; then
+  echo "clippy_gate: cargo clippy exited $clippy_rc -- the workspace did not compile"
+  echo "clippy_gate: cleanly, so the diagnostics are a partial measurement."
+  echo "clippy_gate: refusing to compare."
+  exit 1
+fi
 
 if [ -z "$current" ]; then
   echo "clippy_gate: clippy produced no parsable findings -- the INSTRUMENT is broken, not the code."
@@ -76,6 +97,16 @@ for line in open(sys.argv[1]):
 cur={}
 for line in """$current""".strip().split("\n"):
     k,v=line.rsplit(" ",1); cur[k]=int(v)
+# A total that collapsed relative to the baseline cannot be a real cleanup of
+# this size -- it means clippy measured only part of the workspace (warm target,
+# aborted run). Counts can only go up from a partial read, never down, so a
+# large drop is the one shape that can silently hide new findings.
+btot=sum(base.values()); ctot=sum(cur.values())
+if ctot * 10 < btot * 9:
+    print(f"clippy_gate: measurement suspiciously small: {ctot} findings vs {btot} baseline")
+    print("clippy_gate: (warm target/incomplete clippy run) -- re-run with a clean target dir,")
+    print("clippy_gate: or --record if the drop is deliberate")
+    sys.exit(3)
 bad=[]
 for k,v in sorted(cur.items()):
     b=base.get(k,0)
