@@ -377,3 +377,5 @@ preparation.
 <sub>Maintainer/agent note: this file is the curated backlog and the single
 forward-looking source. The agent reads it at the start of a session, implements the
 top **Now / Next** item, and moves it to **Shipped** with a PR link on merge.</sub>
+
+<!-- temporary fast-lane red-green proof: docs-only change, never merged -->
