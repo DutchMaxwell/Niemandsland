@@ -1943,6 +1943,39 @@ use super::*;
         );
     }
 
+    /// "Fast" (gf+aof `common`, Fast primitive — rules-fast-static, epoch 7):
+    /// "Moves +2\" when using Advance, and +4\" when using Rush/Charge". The
+    /// named arm in `move_rule_mods_of` reads the entry's own
+    /// `advance_mod`/`rush_mod` (+2/+4) onto BOTH bands — the same flat
+    /// per-name fold both band passes ship (list_to_profile.py:531-536, the
+    /// table's name pass movement_range_controller.gd:110-115). Evidence-only
+    /// standing like the whole family (the accepted `bounding` shape, PR
+    /// #653): the +2"/+4" reach this core precomputed inside the RECORDED
+    /// `state.bands` (battle_sim.gd:1650 -> io.rs:755-765), so a live re-fold
+    /// would double-count — the stamp is the core's own per-entry read, never
+    /// a simulation input. The honest replacement for the soft
+    /// `StyleLabel::Fast` name-token credit at doctrine.rs:29
+    /// (UTILITY_SEAM2_SEAM3_SEMANTICS sec.2.2). PRESENT at 7, ABSENT at 6
+    /// (byte-exact), ABSENT without the rule.
+    #[test]
+    fn fast_static_stamp_matches_the_loader_band_fold_at_epoch_7() {
+        assert_eq!(
+            wave3_static_of("Fast", "gf", "robot_legions", 7).move_rule_mods,
+            Some(Bands { advance: 2.0, rush: 4.0, ..Default::default() }),
+            "epoch 7: the entry's own advance_mod/rush_mod on both bands (RED before the fix)"
+        );
+        assert_eq!(
+            wave3_static_of("Fast", "gf", "robot_legions", 6).move_rule_mods,
+            None,
+            "epoch 6: not read (byte-exact)"
+        );
+        assert_eq!(
+            wave3_static_of("", "gf", "robot_legions", 7).move_rule_mods,
+            None,
+            "no rule, no band"
+        );
+    }
+
     /// "Reinforced" PIN (NOT a port): its registry entry (Fortified
     /// primitive, the over-9"-gated form) is table-live through main.gd's
     /// own coverage wave, but the core's save batch sees no modifier
