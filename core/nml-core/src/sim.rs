@@ -4405,6 +4405,10 @@ fn bounding_bonus_in(action: &Action) -> f64 {
 /// reading — 2.25 % of the Gen-0 corpus was recorded before this rule existed
 /// (INVESTIGATION_gen0_replay_drift_2026-09-03.md) and no longer replays
 /// byte-identical without this gate.
+// The 8th argument (rules_epoch) is the EPOCH_10_CHARGE_BAND spelling of the
+// table's charge reach; bundling the arguments would touch every parity call
+// site for no runtime gain, so the lint is silenced here deliberately.
+#[allow(clippy::too_many_arguments)]
 fn versatile_reach_charge_in(
     statics: &[UnitStatic], state: &State, si: usize, kind: i64,
     ci: Option<usize>, bounding_in: f64, versatile_reach: bool, rules_epoch: u32,
