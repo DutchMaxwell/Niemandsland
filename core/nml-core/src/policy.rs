@@ -22,6 +22,9 @@ use crate::IN2M;
 /// The only schema this build reads — `netlab/policy_train.py:export`.
 pub const POLICY_SCHEMA: &str = "policy_net/1";
 
+/// Three 22-column pools, their shares, actor columns and the side one-hot.
+const STATE_PHI_WIDTH: usize = 3 * 22 + 3 + 22 + 2;
+
 /// `net["selftest"]`: the phi row, the per-candidate action vectors and the
 /// logits the trainer computed — recomputed here at load time.
 #[derive(Debug, Deserialize)]
@@ -83,7 +86,7 @@ impl PolicyNet {
             ));
         }
         if self.w1.len() != self.state_dim + self.act_dim
-            || self.w1.first().map_or(0, |r| r.len()) != self.hidden
+            || self.w1.iter().any(|row| row.len() != self.hidden)
             || self.b1.len() != self.hidden
             || self.w2.len() != self.hidden
         {
@@ -331,7 +334,7 @@ pub fn state_phi(board: &[Vec<f64>], side: i64, actor_row: i64) -> Vec<f64> {
         }
         n[p] += 1.0;
     }
-    let mut phi: Vec<f64> = Vec::with_capacity(3 * FIXED + 3 + FIXED + 2);
+    let mut phi: Vec<f64> = Vec::with_capacity(STATE_PHI_WIDTH);
     for p in 0..3 {
         for j in 0..FIXED {
             phi.push(pools[p * FIXED + j] / n[p].max(1.0));
@@ -367,6 +370,12 @@ pub struct Policy {
 
 impl Policy {
     pub fn new(net: PolicyNet, repo_root: &str) -> Result<Policy, String> {
+        if net.state_dim != STATE_PHI_WIDTH {
+            return Err(format!(
+                "policy net rejected: state width {} — this encoder produces {STATE_PHI_WIDTH}",
+                net.state_dim
+            ));
+        }
         let enc = RowEncoder::for_version(repo_root, rows::RULE_VOCAB_VERSION);
         if !enc.vocab.loaded {
             return Err(enc.vocab.error.clone().unwrap_or_else(|| {

@@ -141,13 +141,45 @@ impl Net {
         if self.unit_w1.len() != self.canon_width() || self.unit_b1.len() != self.unit_b2.len() {
             return Err("encoder net rejected: unit layer does not match the canonical row".into());
         }
+        let unit_width = self.unit_b1.len();
+        let head_width = self.head_b1.len();
+        let matrix_matches = |matrix: &[Vec<f64>], rows: usize, columns: usize| {
+            matrix.len() == rows && matrix.iter().all(|row| row.len() == columns)
+        };
+        if !matrix_matches(&self.unit_w1, self.canon_width(), unit_width)
+            || !matrix_matches(&self.unit_w2, unit_width, unit_width)
+            || !matrix_matches(&self.head_w1, 3 * unit_width + 3 + self.keys.len(), head_width)
+            || self.head_w2.len() != head_width
+        {
+            return Err("encoder net rejected: layer shapes disagree".into());
+        }
         if self.keys.len() != self.mu.len() || self.keys.len() != self.sd.len() {
             return Err("encoder net rejected: keys/mu/sd disagree".into());
+        }
+        if self.slots.values().any(|&dense| dense >= self.slots.len()) {
+            return Err("encoder net rejected: slot index outside the canonical row".into());
         }
         let st = self
             .selftest
             .as_ref()
             .ok_or("encoder net rejected: selftest block missing")?;
+        if st.features.len() != self.keys.len() {
+            return Err("encoder net rejected: selftest features disagree with keys".into());
+        }
+        for row in &st.board {
+            let valid = if row.first().copied() == Some(3.0) {
+                row.len() >= 4
+            } else if row.len() >= 21 {
+                let pairs = row[20];
+                pairs.is_finite() && pairs >= 0.0 && pairs.fract() == 0.0
+                    && pairs <= ((row.len() - 21) / 2) as f64
+            } else {
+                false
+            };
+            if !valid {
+                return Err("encoder net rejected: selftest board row is incomplete".into());
+            }
+        }
         let got = self.forward(&st.board, st.side, &self.standardise(&st.features));
         if (got - st.expected).abs() > 1e-4 {
             return Err(format!(
