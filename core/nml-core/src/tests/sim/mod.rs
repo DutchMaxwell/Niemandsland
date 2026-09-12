@@ -579,7 +579,6 @@
         let mut st = four_unit_line();
         // Players 0/0/1/1 in the base fixture — `t` must be FRIENDLY.
         st.player = vec![0, 0, 0, 1];
-        let r = &*st.roster;
         st.roster = Rc::new(crate::state::Roster {
             keys: vec!["a".into(), "ah".into(), "t".into(), "f".into()],
             index: ["a", "ah", "t", "f"]
@@ -700,7 +699,7 @@
     /// WAVE 3 fixture — the buff line with an AP(1) rifle on the shooter and,
     /// when `with_alias`, Guardian's own stamp on the 12"-away target "b".
     fn fortified_line(with_alias: bool) -> (State, Vec<UnitStatic>) {
-        let (mut st, mut statics) = buff_line();
+        let (st, mut statics) = buff_line();
         statics[0].shoot[0].ap = 1;
         statics[0].shoot[0].attacks = 64; // a save batch is guaranteed to follow
         if with_alias {

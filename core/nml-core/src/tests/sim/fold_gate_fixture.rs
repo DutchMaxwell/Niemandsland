@@ -41,7 +41,7 @@ use super::*;
             "rules_epoch 4 (Gen-2b's stamping-gap window) replays the Gen-0 set, RED before the fix"
         );
         let (statics, st) = fold_legs("Self-Repair Boost");
-        let mut regen6 = Ctx { regeneration: true, regen_target: 6, regen_target_spell: 6, ..statics[0].ctx.clone() };
+        let regen6 = Ctx { regeneration: true, regen_target: 6, regen_target_spell: 6, ..statics[0].ctx.clone() };
         let mixed = ctx_live(regen6, &statics, &st, 0, false, 5);
         assert_eq!(mixed.regen_target, 5, "the running MIN picks the granted 5+");
         assert_eq!(mixed.regen_target_spell, 5);

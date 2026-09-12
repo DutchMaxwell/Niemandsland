@@ -347,7 +347,6 @@ use super::*;
         assert_eq!(st.positions[j], Vec::<[f64; 3]>::new(), "and it stands nowhere");
         // The carrier's slot is untouched — no withdraw, no side effect.
         assert_eq!(st.units(), 3, "exactly one slot added");
-        let carrier_pi = st.roster.profile[i];
         let _ = before;
     }
     // ------------------------------------------------------------- PART (b) ---
@@ -487,7 +486,7 @@ use super::*;
     /// that notices.
     #[test]
     fn the_round_boundary_runs_the_beat() {
-        let (mut st, statics) = line(CURRENT_RULES_EPOCH);
+        let (st, statics) = line(CURRENT_RULES_EPOCH);
         let board = empty_board();
         let i = idx(&st, "p1_0_a");
         let roll = Rollout::new(
