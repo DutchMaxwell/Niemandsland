@@ -1457,7 +1457,7 @@ use super::*;
     fn agile_stamps_its_own_advance_and_rush_mods() {
         assert_eq!(
             quickfast_bands("agile_unit", CURRENT_RULES_EPOCH),
-            Some(Bands { advance: 1.0, rush: 2.0 })
+            Some(Bands { advance: 1.0, rush: 2.0, ..Default::default() })
         );
         assert_eq!(
             quickfast_bands("plain_dark_elf_raiders", CURRENT_RULES_EPOCH),
@@ -1473,7 +1473,7 @@ use super::*;
     fn highborn_stamps_the_quick_primitive_bands() {
         assert_eq!(
             quickfast_bands("highborn_unit", CURRENT_RULES_EPOCH),
-            Some(Bands { advance: 2.0, rush: 2.0 })
+            Some(Bands { advance: 2.0, rush: 2.0, ..Default::default() })
         );
         assert_eq!(
             quickfast_bands("plain_high_elf_fleets", CURRENT_RULES_EPOCH),
@@ -1489,7 +1489,7 @@ use super::*;
     fn quick_stamps_its_own_entry_params() {
         assert_eq!(
             quickfast_bands("quick_unit", CURRENT_RULES_EPOCH),
-            Some(Bands { advance: 2.0, rush: 2.0 })
+            Some(Bands { advance: 2.0, rush: 2.0, ..Default::default() })
         );
         assert_eq!(
             quickfast_bands("plain_goblin_reclaimers", CURRENT_RULES_EPOCH),
@@ -1505,7 +1505,7 @@ use super::*;
     fn scurry_stamps_its_own_entry_params() {
         assert_eq!(
             quickfast_bands("scurry_unit", CURRENT_RULES_EPOCH),
-            Some(Bands { advance: 2.0, rush: 2.0 })
+            Some(Bands { advance: 2.0, rush: 2.0, ..Default::default() })
         );
         assert_eq!(
             quickfast_bands("plain_ratmen_clans", CURRENT_RULES_EPOCH),
@@ -1522,7 +1522,7 @@ use super::*;
     fn rapid_charge_stamps_fast_rush_mod_only() {
         assert_eq!(
             quickfast_bands("rapid_charge_unit", CURRENT_RULES_EPOCH),
-            Some(Bands { advance: 0.0, rush: 4.0 })
+            Some(Bands { advance: 0.0, rush: 4.0, ..Default::default() })
         );
         assert_eq!(
             quickfast_bands("plain_wormhole_daemons_of_war", CURRENT_RULES_EPOCH),
@@ -1543,7 +1543,7 @@ use super::*;
     fn rapid_charge_aura_stamps_own_entry_and_stacks_the_expansion() {
         assert_eq!(
             quickfast_bands("rapid_charge_aura_unit", CURRENT_RULES_EPOCH),
-            Some(Bands { advance: 0.0, rush: 4.0 }),
+            Some(Bands { advance: 0.0, rush: 4.0, ..Default::default() }),
             "the aura entry's own rush_mod"
         );
         assert_eq!(
@@ -1561,7 +1561,7 @@ use super::*;
     fn rapid_charge_aura_plus_expanded_base_stacks_like_the_loaders() {
         assert_eq!(
             quickfast_bands("rapid_charge_expanded_unit", CURRENT_RULES_EPOCH),
-            Some(Bands { advance: 0.0, rush: 8.0 }),
+            Some(Bands { advance: 0.0, rush: 8.0, ..Default::default() }),
             "aura + expanded base, the loaders' per-name stack"
         );
         assert_eq!(
@@ -1654,12 +1654,12 @@ use super::*;
     fn highborn_boost_stamps_its_own_entry_over_the_epoch6_gate() {
         assert_eq!(
             quickfast_bands("highborn_boost_unit", 6),
-            Some(Bands { advance: 6.0, rush: 6.0 }),
+            Some(Bands { advance: 6.0, rush: 6.0, ..Default::default() }),
             "Highborn 2/2 + Highborn Boost 4/4, the loaders' per-name stack"
         );
         assert_eq!(
             quickfast_bands("highborn_boost_unit", 5),
-            Some(Bands { advance: 2.0, rush: 2.0 }),
+            Some(Bands { advance: 2.0, rush: 2.0, ..Default::default() }),
             "epoch 5 (the recorder): the boost arm is off"
         );
         assert_eq!(
@@ -1678,12 +1678,12 @@ use super::*;
     fn scurry_boost_stamps_its_own_entry_over_the_epoch6_gate() {
         assert_eq!(
             quickfast_bands("scurry_boost_unit", 6),
-            Some(Bands { advance: 6.0, rush: 6.0 }),
+            Some(Bands { advance: 6.0, rush: 6.0, ..Default::default() }),
             "Scurry 2/2 + Scurry Boost 4/4, the loaders' per-name stack"
         );
         assert_eq!(
             quickfast_bands("scurry_boost_unit", 5),
-            Some(Bands { advance: 2.0, rush: 2.0 }),
+            Some(Bands { advance: 2.0, rush: 2.0, ..Default::default() }),
             "epoch 5 (the recorder): the boost arm is off"
         );
     }
@@ -1772,7 +1772,7 @@ use super::*;
     fn reach_hunt_charges_two_inches_further_at_epoch_6_not_5() {
         assert_eq!(
             wave3_static_of("Reach Hunt", "aof", "lust_disciples", 6).move_rule_mods,
-            Some(Bands { advance: 0.0, rush: 2.0 }),
+            Some(Bands { advance: 0.0, rush: 2.0, ..Default::default() }),
             "the entry's own charge_mod"
         );
         assert_eq!(
@@ -1806,7 +1806,7 @@ use super::*;
     fn rapid_advance_stamps_its_own_advance_mod_at_epoch_7() {
         assert_eq!(
             wave3_static_of("Rapid Advance", "gf", "robot_legions", 7).move_rule_mods,
-            Some(Bands { advance: 4.0, rush: 0.0 }),
+            Some(Bands { advance: 4.0, rush: 0.0, ..Default::default() }),
             "epoch 7: the entry's own advance_mod (RED before the fix)"
         );
         assert_eq!(
@@ -1836,7 +1836,7 @@ use super::*;
     fn musician_reads_one_inch_on_both_bands_at_epoch_7() {
         assert_eq!(
             wave3_static_of("Musician", "gf", "wormhole_daemons_of_change", 7).move_rule_mods,
-            Some(Bands { advance: 1.0, rush: 1.0 }),
+            Some(Bands { advance: 1.0, rush: 1.0, ..Default::default() }),
             "epoch 7: the entry's own move_bonus_in on both bands (RED before the fix)"
         );
         assert_eq!(
@@ -1868,7 +1868,7 @@ use super::*;
     fn rapid_rush_stamps_its_own_rush_mod_at_epoch_7() {
         assert_eq!(
             wave3_static_of("Rapid Rush", "gf", "battle_brothers", 7).move_rule_mods,
-            Some(Bands { advance: 0.0, rush: 6.0 }),
+            Some(Bands { advance: 0.0, rush: 6.0, ..Default::default() }),
             "epoch 7: the entry's own rush_mod (RED before the fix)"
         );
         assert_eq!(
@@ -1900,7 +1900,7 @@ use super::*;
     fn slow_stamps_minus_two_minus_four_on_both_bands_at_epoch_7() {
         assert_eq!(
             wave3_static_of("Slow", "gf", "robot_legions", 7).move_rule_mods,
-            Some(Bands { advance: -2.0, rush: -4.0 }),
+            Some(Bands { advance: -2.0, rush: -4.0, ..Default::default() }),
             "epoch 7: the entry's own advance_mod/rush_mod on both bands (RED before the fix)"
         );
         assert_eq!(
@@ -1938,7 +1938,7 @@ use super::*;
         );
         assert_eq!(
             quickfast_bands("slow_only_unit", 7),
-            Some(Bands { advance: -2.0, rush: -4.0 }),
+            Some(Bands { advance: -2.0, rush: -4.0, ..Default::default() }),
             "epoch 7: a Slow-only unit keeps the flat -2/-4 fold"
         );
     }

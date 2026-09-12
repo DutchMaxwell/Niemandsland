@@ -842,7 +842,7 @@ pub fn mint_template_slot(
     Rc::make_mut(&mut st.attached_to).push(None);
     st.los.push(None);
     let mb = p.move_bands;
-    st.bands.push(crate::state::Bands { advance: mb.advance, rush: mb.rush });
+    st.bands.push(crate::state::Bands { advance: mb.advance, rush: mb.rush, charge: None });
     st.shroud.push(None);
     st.charge_no_difficult.push(
         crate::rules::has_special_rule(&p.special_rules, "Strider")

@@ -301,7 +301,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 9;
+pub const CURRENT_RULES_EPOCH: u32 = 10;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -430,6 +430,20 @@ pub const EPOCH_8_PLANNER_MENU: u32 = 8;
 /// the five. Every call site reads THIS constant, not the literal `9` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_9_MARK_FAMILY: u32 = 9;
+
+/// The CHARGE-BAND gate (12.09., #879/#880 wave): the core's `Bands` gains a
+/// distinct `charge` reach (the table's `bands["charge"]`, the `charge_only`
+/// move-band rules — the 12.09. census measured exactly two names, "Rapid
+/// Charge" and "Rapid Charge Aura"). Every recorded corpus was played by a
+/// table that ALREADY gave those units their distinct charge reach while the
+/// core replayed them with the plain rush band, so making the charge seams
+/// read the band CHANGES how existing records replay — toward the table, but
+/// it changes them. `10` (one past every pre-port stamp, and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change) excludes those
+/// records — they replay exactly as they were recorded — while fresh headers
+/// get the band. Every call site reads THIS constant, not the literal `10` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_10_CHARGE_BAND: u32 = 10;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -915,7 +929,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 9, "epoch 9's gate (EPOCH_9_MARK_FAMILY) bumps the live epoch to 9");
+        assert_eq!(CURRENT_RULES_EPOCH, 10, "epoch 10's gate (EPOCH_10_CHARGE_BAND) bumps the live epoch to 10");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -925,11 +939,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":9}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":10}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 9"
+            "a fresh play_game() now stamps the bumped epoch, 10"
         );
     }
 

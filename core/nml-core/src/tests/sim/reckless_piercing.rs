@@ -60,18 +60,6 @@ use super::*;
         .unwrap()
     }
 
-    /// Consumption runs need their OWN action: the stamp tests ride HOLD
-    /// (the pre-attack slot fires on every kind), the volley leg shoots "b",
-    /// the melee leg charges it.
-    fn run_action(st: &State, statics: &[UnitStatic], action: &Action, seed: i64, rules_epoch: u32) -> (State, ShootResult) {
-        let terrain = crate::terrain::Terrain::default();
-        let mut tray = Tray::seeded(seed);
-        let mut rng = crate::rng::GodotRng::new(0);
-        let seams = Seams { rules_epoch, movement: true, ..Seams::default() };
-        resolve_stochastic_tray_on_board(statics, st, action, &terrain, seams, &mut rng, &mut tray)
-            .unwrap()
-    }
-
     /// The stamp: the REAL registry entry (self-named primitive, params
     /// `roll_target: 2, ap_bonus: 1, backfire_ap: 1`) lands on the statics
     /// behind the FROZEN `EPOCH_7_TABLE_RULES` — present at 7, absent at 6.

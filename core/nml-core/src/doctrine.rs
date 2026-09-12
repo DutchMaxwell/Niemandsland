@@ -138,7 +138,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
     let alive: Vec<i64> = profs.iter().map(|p| p.model_count.max(1)).collect();
     let wounds: Vec<Vec<i64>> = profs.iter().map(|p| p.wounds_max.clone()).collect();
     let radii: Vec<Vec<f64>> = profs.iter().map(|p| vec![radius_in(p) * IN2M; p.model_count.max(1) as usize]).collect();
-    let bands: Vec<Bands> = profs.iter().map(|p| Bands { advance: p.move_bands.advance, rush: p.move_bands.rush }).collect();
+    let bands: Vec<Bands> = profs.iter().map(|p| Bands { advance: p.move_bands.advance, rush: p.move_bands.rush, charge: p.move_bands.charge }).collect();
     State {
         roster: Rc::new(Roster { keys, index: idx.clone(), profile: (0..n).collect() }),
         profiles: Rc::new(Profiles { list: profs, index: idx }),

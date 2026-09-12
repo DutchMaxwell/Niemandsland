@@ -23,7 +23,7 @@ use crate::sight;
 use crate::geom::{self, V3};
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
-    EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY,
+    EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -36,9 +36,9 @@ use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
 use crate::terrain::{base_in_terrain, gives_cover, is_dangerous, Terrain};
-use crate::unit::{Ctx, PiercingTagEntry, ShieldedAlias, UnitStatic, ShootProfile, StormFacet, UtilityBuff};
+use crate::unit::{Ctx, ShieldedAlias, UnitStatic, ShootProfile, StormFacet, UtilityBuff};
 #[cfg(test)]
-use crate::unit::GrowthRule;
+use crate::unit::{GrowthRule, PiercingTagEntry};
 use crate::{CONTROL_EPS, IN2M};
 
 /// `BattleSim.CONTACT_IN` battle_sim.gd:725 — the charge's contact ring. No
@@ -4407,13 +4407,20 @@ fn bounding_bonus_in(action: &Action) -> f64 {
 /// byte-identical without this gate.
 fn versatile_reach_charge_in(
     statics: &[UnitStatic], state: &State, si: usize, kind: i64,
-    ci: Option<usize>, bounding_in: f64, versatile_reach: bool,
+    ci: Option<usize>, bounding_in: f64, versatile_reach: bool, rules_epoch: u32,
 ) -> f64 {
     if kind != CHARGE || !versatile_reach { return 0.0; }
     let us = &statics[state.roster.profile[si]];
     let (Some(bonus), Some(ti)) = (us.versatile_reach_charge_in, ci) else { return 0.0 };
     if us.melee.is_empty() { return 0.0; } // solo_controller.gd:1791
-    let band = state.bands[si].rush + bounding_in; // = the table's `charge_reach`
+    // = the table's `charge_reach` (solo_controller.gd:1647). The distinct
+    // charge band reads from `EPOCH_10_CHARGE_BAND` on; below it the pre-port
+    // reading stays `rush`, so every existing corpus replays byte-exact.
+    let band = if rule_on(rules_epoch, EPOCH_10_CHARGE_BAND) {
+        state.bands[si].charge.unwrap_or(state.bands[si].rush) + bounding_in
+    } else {
+        state.bands[si].rush + bounding_in
+    };
     let gap = geom::edge_gap_in(
         &state.positions[si], &state.radii[si],
         &state.positions[ti], &state.radii[ti],
@@ -4787,6 +4794,7 @@ fn resolve_with(
     let vr_in = versatile_reach_charge_in(
         statics, &next, si, kind, ci, bounding_in,
         seams.versatile_reach || rule_on(seams.rules_epoch, 1),
+        seams.rules_epoch,
     );
     // Grounded Speed (epoch 7) — the LIVE per-activation read: the majority
     // condition sees the activation-START positions (`state`), never the
@@ -4814,7 +4822,15 @@ fn resolve_with(
     }
     let band_in = match kind {
         ADVANCE => next.bands[si].advance,
-        RUSH | CHARGE => next.bands[si].rush,
+        RUSH => next.bands[si].rush,
+        // CHARGE reads the table's distinct `charge` band from
+        // `EPOCH_10_CHARGE_BAND` on (solo_controller.gd:1647); below it the
+        // pre-port reading stays `rush`, so existing corpora replay byte-exact.
+        CHARGE => if rule_on(seams.rules_epoch, EPOCH_10_CHARGE_BAND) {
+            next.bands[si].charge.unwrap_or(next.bands[si].rush)
+        } else {
+            next.bands[si].rush
+        },
         _ => 0.0,
     } + bounding_in
         + vr_in

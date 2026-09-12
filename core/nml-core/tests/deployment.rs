@@ -1390,7 +1390,7 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
         // adjacency), i.e. the table's finish repair CAN re-place tray models
         // (UNSURE-(b) scope: erased for units that later deploy, persistent
         // only for ambush rows — the snapshot stays the pre-repair state).
-        let tray_rows = |slot: &str, placed: &std::collections::HashSet<String>| -> Vec<([f32; 2], f64)> {
+        let tray_rows = |slot: &str, _placed: &std::collections::HashSet<String>| -> Vec<([f32; 2], f64)> {
             d["sides"][slot]["tray_models"]
                 .as_array().unwrap().iter()
                 .flat_map(|r| {

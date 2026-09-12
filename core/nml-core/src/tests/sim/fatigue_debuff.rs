@@ -36,7 +36,7 @@ use super::*;
     /// 18", with LOS on the open line): the exact fixture shape `storm_line`
     /// uses, one model per side.
     fn fatigue_line(rules_epoch: u32) -> (State, Vec<UnitStatic>) {
-        let (mut st, _) = storm_line("Storm of Change", "wormhole_daemons_of_change", rules_epoch);
+        let (st, _) = storm_line("Storm of Change", "wormhole_daemons_of_change", rules_epoch);
         let bearer = fatigue_bearer(rules_epoch);
         let mut b = UnitStatic { name: "b".into(), ..Default::default() };
         b.ctx.quality = 4;

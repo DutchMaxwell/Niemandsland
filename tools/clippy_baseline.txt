@@ -1,0 +1,36 @@
+# clippy findings per lint code on this commit. Regenerate deliberately:
+#   tools/clippy_gate.sh --record
+clippy::approx_constant 2
+clippy::bool_assert_comparison 2
+clippy::clone_on_copy 3
+clippy::collapsible_match 2
+clippy::doc_lazy_continuation 165
+clippy::doc_overindented_list_items 8
+clippy::double_parens 4
+clippy::empty_line_after_doc_comments 1
+clippy::erasing_op 1
+clippy::field_reassign_with_default 4
+clippy::identity_op 1
+clippy::if_same_then_else 2
+clippy::iter_cloned_collect 1
+clippy::manual_contains 22
+clippy::manual_div_ceil 2
+clippy::manual_is_multiple_of 2
+clippy::manual_repeat_n 4
+clippy::needless_option_as_deref 4
+clippy::needless_range_loop 16
+clippy::needless_update 6
+clippy::neg_cmp_op_on_partial_ord 2
+clippy::obfuscated_if_else 2
+clippy::rc_clone_in_vec_init 2
+clippy::redundant_locals 2
+clippy::too_many_arguments 22
+clippy::unnecessary_cast 43
+clippy::unnecessary_map_or 7
+clippy::unnecessary_unwrap 4
+clippy::useless_format 1
+dead_code 11
+noop_method_call 1
+unused_imports 1
+unused_mut 10
+unused_variables 13

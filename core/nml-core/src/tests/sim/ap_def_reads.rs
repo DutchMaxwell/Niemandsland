@@ -20,7 +20,7 @@ use super::*;
     /// back at it — and `b`'s models carry 99-wound bodies where a test needs
     /// the target to survive into a second exchange.
     fn ap_rifle() -> (State, Vec<UnitStatic>) {
-        let (mut st, mut statics) = buff_line();
+        let (st, mut statics) = buff_line();
         statics[0].shoot[0].ap = 1;
         statics[0].shoot[0].attacks = 64; // a save batch is guaranteed to follow
         statics[0].ctx.defense = 4;
@@ -144,7 +144,7 @@ use super::*;
         deb.buffs[0].push(row(-1, 0, 0));
         deb.buffs[2].push(row(0, 0, -1));
 
-        let (next, first) = run_reads(&deb, &statics, &buff_action(Some("b")), 27, 7);
+        let (next, _) = run_reads(&deb, &statics, &buff_action(Some("b")), 27, 7);
         assert!(next.buffs[0].is_empty() && next.buffs[2].is_empty(),
             "RED before the fix: the rows ride the ledger past their exchange ({:?})",
             next.buffs.iter().map(|b| b.len()).collect::<Vec<_>>());

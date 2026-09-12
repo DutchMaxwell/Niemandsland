@@ -56,7 +56,7 @@ pub fn charge_illegal_tuned(
     if state.aircraft[victim] {
         return true;
     }
-    let band = state.bands[attacker].rush;
+    let band = state.bands[attacker].charge.unwrap_or(state.bands[attacker].rush);
     if gap_in > melee_shroud_charge_in(band, state, victim) {
         return true;
     }

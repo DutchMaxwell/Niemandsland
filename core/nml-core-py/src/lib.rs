@@ -51,7 +51,9 @@ use pyo3::types::{PyDict, PyList};
 
 use serde_json::{Map, Value};
 
-use nmlcore::acts::{ActHeader, ActStatics, Knobs, MeleeReach, PolicyMode, Sighting};
+use nmlcore::acts::{
+    rule_on, ActHeader, ActStatics, EPOCH_10_CHARGE_BAND, Knobs, MeleeReach, PolicyMode, Sighting,
+};
 use nmlcore::arbitration::Arbitration;
 use nmlcore::deployment::{self, Placement, Rect, SettleUnit, SideDeploy, UnitSpec};
 use nmlcore::menu::{candidates_tuned, Candidate, Tuning};
@@ -63,7 +65,7 @@ use nmlcore::rollout::Rollout;
 use nmlcore::sight;
 use nmlcore::sim::Scratch;
 use nmlcore::state::{Marker, ProfileCache, Roster};
-use nmlcore::rows::{Cell, RowEncoder};
+use nmlcore::rows::{Cell, RowEncoder, RowVocab};
 use nmlcore::unit::{StaticsCache, UnitStatic};
 use nmlcore::{
     geom, io, mission, reply_threat, resolve_on_board, resolve_stochastic_on_board,
@@ -716,6 +718,19 @@ impl Core {
         let text = json_text(header)?;
         let ActHeader { profiles, terrain, knobs } = nmlcore::read_act_header(&text)
             .map_err(|e| Unsupported::new_err(e))?;
+        // Validate the requested vocabulary before replacing any active
+        // header state. A rejected header must leave the previous core usable.
+        let vocab = if self.rows.vocab.version != knobs.rule_vocab_version || !self.rows.vocab.loaded {
+            let next = RowVocab::for_version(&self.repo_root, knobs.rule_vocab_version);
+            if !next.loaded {
+                return Err(Unsupported::new_err(
+                    next.error.clone().unwrap_or_else(|| "rule vocab unreadable".into()),
+                ));
+            }
+            Some(next)
+        } else {
+            None
+        };
         self.profiles = Some(ProfileCache::new(profiles));
         self.reg = Some(Registries::new(&self.repo_root));
         // The statics closures are built under THIS record's rule set —
@@ -731,11 +746,8 @@ impl Core {
         // was recorded under — `knobs.rule_vocab_version`, absent meaning the
         // pre-stamp version 2. A version the committed file cannot serve is an
         // error HERE, not a silently different row later.
-        self.rows.set_vocab_version(&self.repo_root, self.knobs.rule_vocab_version);
-        if !self.rows.vocab.loaded {
-            return Err(Unsupported::new_err(
-                self.rows.vocab.error.clone().unwrap_or_else(|| "rule vocab unreadable".into()),
-            ));
+        if let Some(vocab) = vocab {
+            self.rows.vocab = vocab;
         }
         Ok(())
     }
@@ -885,7 +897,14 @@ impl Core {
             &self.terrain,
             si,
             ci,
-            st.bands[si].rush,
+            // The table's charge band (`bands.get("charge", rush)`,
+            // solo_controller.gd:1647) reads from EPOCH_10_CHARGE_BAND on; below
+            // it the pre-port reading stays `rush` so old records replay exactly.
+            if rule_on(self.knobs.rules_epoch, EPOCH_10_CHARGE_BAND) {
+                st.bands[si].charge.unwrap_or(st.bands[si].rush)
+            } else {
+                st.bands[si].rush
+            },
             self.knobs.hero_attach,
             true,
             nmlcore::mv::FAST_PLANNER_GUARD,
@@ -1131,7 +1150,7 @@ impl Core {
         let text = json_text(plain)?;
         let profiles = self.profiles.as_mut().ok_or_else(Core::no_header)?;
         let mut cache = self.roster.take();
-        let st = io::state_from_json_at_epoch(&text, profiles, &mut cache, self.knobs.rules_epoch)
+        let st = io::state_from_json_with_epoch(&text, profiles, &mut cache, self.knobs.rules_epoch)
             .map_err(|e| Unsupported::new_err(e))?;
         self.roster = cache;
         // The `prof` blocks are kept as they came, not re-derived — see the
@@ -1761,6 +1780,9 @@ impl Core {
         if let Some(f) = self.net.as_ref() {
             f.set_source_qd(Some((quality, defense)));
         }
+        if let Some(p) = self.policy_net.as_ref() {
+            p.set_source_qd(Some((quality, defense)));
+        }
     }
 
     /// Drop the legacy column-10/11 override — back to the profile's own
@@ -1769,6 +1791,9 @@ impl Core {
         self.rows.source_qd = None;
         if let Some(f) = self.net.as_ref() {
             f.set_source_qd(None);
+        }
+        if let Some(p) = self.policy_net.as_ref() {
+            p.set_source_qd(None);
         }
     }
 

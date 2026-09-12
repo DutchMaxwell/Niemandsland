@@ -22,7 +22,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust toolchain
+        # rust-toolchain.toml at the repo root pins the exact rustc; this step
+        # only makes sure rustup is present so that pin can be honoured.
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -30,6 +34,13 @@ jobs:
           # F7: the three core crates are ONE Cargo workspace now — one
           # workspace root, one target dir. Cache the workspace, not each crate.
           workspaces: core
+
+      - name: Clippy — no NEW findings
+        # Differential on purpose, never `-D warnings`: main carries findings
+        # whose "fix" would change parity-critical constants (see the header of
+        # tools/clippy_gate.sh). This fails only when a lint code's count rises
+        # or a new code appears, and it refuses to pass on an empty measurement.
+        run: bash tools/clippy_gate.sh
 
       - name: Test nml-core
         run: cargo test --manifest-path core/nml-core/Cargo.toml --release

@@ -43,7 +43,7 @@ planned and where ideas go. For what already works see
   64 steps / 11 chapters**, the **sight & range fan** (`F`), **autosave** (#139), **battle-log export
   and copy**, and base-edge-to-base-edge measurement everywhere. There is exactly **one difficulty**
   (full strength); selectable grades are backlog, not shipped. Full detail under **Recently shipped**.
-  Next: alpha feedback on solo, **resolver waves B + C**, and the MP-first Beta (see Next). _L_
+  Next: alpha feedback on solo, **rule-coverage validation**, and the MP-first Beta (see Next). _L_
 - **Guided tutorial — course expanded in `0.3.10.0-alpha`.** Event-gated guided play on the real table
   (coach-mark spotlight overlay; steps advance on real signals, never a "Next" button). The course now
   runs **64 steps across 11 chapters**: camera & table · selecting · moving/rotating/arranging ·
@@ -82,30 +82,15 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   **Remaining:** the coherency visualizer still needs sharpening (highlight the models that are outside
   X″ of a neighbour, not just the unit-level verdict). Deeper post-Alpha resilience / accessibility /
   onboarding items live in **Ideas**. _S–M_
-- **Solo rules automation — resolver waves B + C** — `0.3.10.0-alpha` automates hundreds of rules; the
-  families that need their own resolver step are honestly still manual, and the per-unit battle-log
-  notice names them. The complete remainder is **three rule names** (everything else in the books is
-  modeled — plain *Re-Deployment*, *Grounded Reinforcement*, *Reanimation*, *Reinforcement*,
-  *Caster Group*, *Spell Accumulator*, all three Ambush variants and the wave-4 pair included):
-  - **Wave B — caster economy + unit creation:** **Spawn**, **Split**. These
-    create, return or
-    re-point units, so they touch the AI's round plan, not just the dice. **Reanimation** shipped:
-    models and wounds return on activation (one die per missing wound, 5+, coherency-gated);
-    **Reinforcement** shipped: a unit where every model carries the rule can be pulled off the table
-    as destroyed while Shaken or once fully destroyed, and a full-strength copy returns within 12″ of
-    any table edge at the start of the next round (after Ambush arrivals), unable to seize or contest
-    objectives that round and stripped of the rule. **Caster Group** and **Spell Accumulator** were
-    bridged into the registry — their engine code had shipped long before the data said so.
-    **Extended Buff Range shipped** (wave 4): a Hero's
-    within-12″ buff rules reach a friendly carrier up to 24″ away (base edge to base edge) through
-    exactly one relay hop, spells excluded, every application and refusal logged. _M–L_
-  - **Wave C — movement / deployment:** **Traversal**. **Delayed Action shipped** (wave 5): the new "Pass Turn" primitive — once per round a carrier may pass the turn while the opponent has strictly more units left, every pass and refusal logged. The three
-    **Ambush variants shipped** (wave 1): *Ambush Beacon* waives every enemy distance restriction
-    within 6″ of the beacon model, *Rapid Ambush* arrives from round 1 as a round-start beat, and
-    *Ambush Re-Deployment* takes a unit off the table once per game and brings it back exactly one
-    round later. **Coordinate shipped** (wave 4): the hand-off activates an un-activated friend
-    within 12″ immediately, never chains past two activations, and leaves the alternation ledger
-    untouched. _M_
+- **Solo rules automation — coverage and core parity.** **Spawn** and **Split** now have
+  real-table resolvers on `main`; **Traversal** shipped in `0.3.11.0`. These implementations
+  are no longer pending resolver waves.
+  See [`PROJECT_STATUS.md`](../PROJECT_STATUS.md) for table coverage and its remaining limitations.
+  Rust-core fidelity remains separate work: Spawn's activation timing and per-model carrier
+  handling still differ from the table ([Spawn design](plans/SPAWN_DESIGN_2026-09-08.md)), and
+  movement endpoints are checked by the [position-parity gate](../test/fixtures/position_parity/README.md).
+  A table implementation alone does not establish equivalent core behavior. _M_
+
 ### Alpha-feedback batch (accepted 2026-07-01) — sorted Now vs soon
 
 > **✅ Shipped in `0.3.7.2-alpha`:** dice-log live-scroll, deployment-zone colour flip, cursor/avatar

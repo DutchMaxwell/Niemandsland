@@ -35,7 +35,7 @@ use super::*;
     /// `1·6 = 6`), whose save batch then signs the wrong name.
     #[test]
     fn the_breath_score_uses_one_minus_block_never_one_over_block() {
-        let (mut st, mut statics) = breath_scorer_line();
+        let (mut st, statics) = breath_scorer_line();
         st.alive[1] = 2;
         st.alive[2] = 1;
         assert_eq!(breath_save_owner(&statics, &mut st), "Alpha");
