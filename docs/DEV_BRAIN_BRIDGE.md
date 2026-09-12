@@ -75,7 +75,7 @@ through a game. Restart/new game when changing the model.
 One POST to `/`, `Content-Type: application/json`, per activation's leaf batch:
 
 ```json
-{"schema":1,"core_commit":"0123456789abcdef0123456789abcdef01234567","rules_epoch":6,"side":2,"leaves":["<full policy_tokens dictionary described above>"]}
+{"schema":1,"core_commit":"0123456789abcdef0123456789abcdef01234567","rules_epoch":<compiled epoch>,"side":2,"leaves":["<full policy_tokens dictionary described above>"]}
 ```
 
 The string placeholder above stands for the full dictionary, not a literal
@@ -87,8 +87,9 @@ it does not invoke the scorer. Example response for one leaf:
 ```
 
 `core_commit` uses the extension's build identity (explicit `NML_BUILD_COMMIT`
-before build, else Git HEAD, else `unknown`). `rules_epoch` identifies the
-compiled rule epoch. These fields describe the caller; the generic server
+before build, else Git HEAD, else `unknown`). `rules_epoch` identifies the compiled rule epoch —
+the `CURRENT_RULES_EPOCH` the extension was built with; `<compiled epoch>` in the example above
+is a placeholder, not a literal value. These fields describe the caller; the generic server
 validates their shape, **not model compatibility**. The private adapter owner
 must choose a compatible model/token vocabulary. This bridge does not certify
 that model training and table rules match.

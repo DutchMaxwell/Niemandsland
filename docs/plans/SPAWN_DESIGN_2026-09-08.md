@@ -1,10 +1,12 @@
 # Spawn — the named-profile loader seam (design note for review-7's HOLD on #823)
 
+> **Historical / superseded snapshot** — kept for the reasoning. Its measurements are a point-in-time view, not current state; see [`../../PROJECT_STATUS.md`](../../PROJECT_STATUS.md) for the live picture.
+
 Date: 2026-09-08. Scope: DESIGN only, no production code. Names covered: **Spawn**
 (book occ 9: gf 4 factions, aof 5; every shipped entry `{"place_in": 6,
 "once_per_game": true}`, `primitive: "Spawn"`, `rated: true`). Template:
 `docs/plans/REINFORCEMENT_DESIGN_2026-09-07.md`, `docs/plans/FEAT_DESIGN_2026-09-08.md`.
-Resolves the review-7 HOLD on PR #823 (§2 of `REVIEW_821_823_2026-09-08`): #823 ported
+Resolves the review-7 HOLD on PR #823: #823 ported
 the S5 seam but substituted a copy of the BEARER's profile for the NAMED unit, which
 the rollout reading of the rule cannot honestly accept — the table's summon CREATES a
 second, different unit, not a clone of the carrier.

@@ -2,8 +2,8 @@
 
 Niemandsland is an **alpha**. This is the honest, player-facing list of what is intentionally
 not there yet and what to watch for. The full done / in-progress / planned breakdown is in
-[`../PROJECT_STATUS.md`](../PROJECT_STATUS.md); the release plan is in
-[`ROAD_TO_ALPHA.md`](ROAD_TO_ALPHA.md).
+[`../PROJECT_STATUS.md`](../PROJECT_STATUS.md); the forward-looking plan is in
+[`ROADMAP.md`](ROADMAP.md).
 
 ## By design (not bugs)
 
@@ -16,7 +16,7 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **Solo against NACHTMAHR is the exception.** When an army is AI-controlled the game does
   resolve activations, dice, wounds, morale, terrain effects and hundreds of special rules for
   both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: one
-  difficulty (full strength), single-player only (no co-op), English-only UI, and a small residue
+  difficulty (full strength), co-op against the AI is not in a release yet, English-only UI, and a small residue
   of special rules is still manual — the battle log names any rule it applies (or asks for
   manual handling).
 - **OPR army data is loaded live, not bundled.** Army import calls the **Army Forge API** at
