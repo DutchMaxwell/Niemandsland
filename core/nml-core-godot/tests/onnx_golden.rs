@@ -50,12 +50,12 @@ fn make_batch(leaves: &[Value], b: usize) -> Batch {
         glob: vec![0.0; b * G_D],
     };
     for (i, leaf) in leaves.iter().enumerate() {
-        copy(&mut batch.units[i * U_N * U_D..], &numbers(&leaf["units"]));
-        copy(&mut batch.units_mask[i * U_N..], &numbers(&leaf["units_mask"]));
-        copy(&mut batch.objs[i * O_N * D..], &numbers(&leaf["objs"]));
-        copy(&mut batch.objs_mask[i * O_N..], &numbers(&leaf["objs_mask"]));
-        copy(&mut batch.terr[i * T_N * D..], &numbers(&leaf["terr"]));
-        copy(&mut batch.glob[i * G_D..], &numbers(&leaf["glob"]));
+        copy(&mut batch.units[i * U_N * U_D..(i + 1) * U_N * U_D], &numbers(&leaf["units"]));
+        copy(&mut batch.units_mask[i * U_N..(i + 1) * U_N], &numbers(&leaf["units_mask"]));
+        copy(&mut batch.objs[i * O_N * D..(i + 1) * O_N * D], &numbers(&leaf["objs"]));
+        copy(&mut batch.objs_mask[i * O_N..(i + 1) * O_N], &numbers(&leaf["objs_mask"]));
+        copy(&mut batch.terr[i * T_N * D..(i + 1) * T_N * D], &numbers(&leaf["terr"]));
+        copy(&mut batch.glob[i * G_D..(i + 1) * G_D], &numbers(&leaf["glob"]));
     }
     batch
 }
