@@ -91,7 +91,7 @@ Reports are written to `reports/` (git-ignored).
 > e2e test, **prove it can go red** (make it fail against the un-fixed behaviour first), so a
 > green run actually means something.
 
-**Python** — the relay's tests, and the nml-core-py bindings suite: `core/nml-core-py/tests/python/` holds 56 pytest files, run by CI as `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900` (the offline asset pipeline lives in a separate private repo and has no tests here):
+**Python** — the relay's tests, and the nml-core-py bindings suite: `core/nml-core-py/tests/python/` holds 78 pytest files, run by CI as `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900` (the offline asset pipeline lives in a separate private repo and has no tests here):
 
 ```bash
 cd relay && python -m pytest                       # WebSocket relay (base + churn/soak)
@@ -147,7 +147,10 @@ relay/.venv/bin/python test/mp/run_soak.py \
 
 `.github/workflows/build.yml` builds Linux + Windows exports, runs the gdUnit4 suites, and runs
 the relay pytest (`relay-tests` job) on Godot 4.6 — keep it in sync with `project.godot`'s engine
-version. The timing-sensitive headless 2-client soak + fault matrix run in
+version. `.github/workflows/rust.yml` builds and tests the Rust workspace and the nml-core-py
+pytest suite; it is blocking and also gates every release tag.
+`.github/workflows/mp-two-instance.yml` runs two real Godot peers against a local relay (advisory).
+The timing-sensitive headless 2-client soak + fault matrix run in
 `.github/workflows/mp-nightly.yml` (nightly + on demand) to keep the push path fast and non-flaky.
 
 ## Release checklist
