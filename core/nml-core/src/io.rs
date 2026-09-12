@@ -775,9 +775,8 @@ impl PlainState {
 
 /// `rules_epoch` is the corpus's own stamp (`Header.seams.rules_epoch` /
 /// `ActHeader.knobs.rules_epoch`) — the reader gate on the three ap/def buff
-/// knobs keys on it. The single-state loader `state_from_json` carries NO
-/// header stamp and passes 0: a plain state read without its corpus keeps the
-/// pre-seam reading (PR 2 threads the epoch where the reads need it).
+/// knobs keys on it. The compatibility loader `state_from_json` passes 0;
+/// `state_from_json_with_epoch` carries the caller's explicit header stamp.
 pub(crate) fn state_of(
     plain: PlainState,
     profiles: &Rc<Profiles>,
@@ -1068,15 +1067,28 @@ pub fn read_nodes<R: BufRead>(reader: R, origin: &str) -> Result<NodeCorpus, Str
 /// used the same way, as `read_acts`. A caller that skipped `ProfileCache` here
 /// would replay every activation on the DEPLOYMENT reading, which is exactly
 /// the staleness M2-5b removed.
+/// This compatibility entry point reads epoch 0. Callers with a stamped
+/// header should use `state_from_json_with_epoch`.
 pub fn state_from_json(
     text: &str,
     profiles: &mut ProfileCache,
     roster_cache: &mut Option<Rc<Roster>>,
 ) -> Result<State, String> {
+    state_from_json_with_epoch(text, profiles, roster_cache, 0)
+}
+
+/// Reads one plain state under its header's rule epoch, including the
+/// epoch-gated ledger fields used by the activation and node readers.
+pub fn state_from_json_with_epoch(
+    text: &str,
+    profiles: &mut ProfileCache,
+    roster_cache: &mut Option<Rc<Roster>>,
+    rules_epoch: u32,
+) -> Result<State, String> {
     let plain: PlainState = serde_json::from_str(text).map_err(|e| e.to_string())?;
     let roster = roster_of(&plain, profiles.base(), roster_cache)?;
     let eff = profiles.effective(&roster, &plain.dyn_profiles());
-    Ok(state_of(plain, &eff, roster, 0))
+    Ok(state_of(plain, &eff, roster, rules_epoch))
 }
 
 /// The inverse of `state_from_json` (NML-1073 M3-2) — the plain form
@@ -1393,6 +1405,28 @@ mod tests {
             let dbg = format!("{:?}", rows[0]);
             assert_eq!(dbg.contains("def_mod: 1"), carried, "epoch {epoch}: {dbg}");
         }
+    }
+
+    #[test]
+    fn standalone_state_import_preserves_the_stamped_buff_epoch() {
+        let plain = DEF_MOD_PLAIN.replace(
+            r#"{"def_mod":1}"#,
+            r#"{"hit_mod":1,"ap_mod":-1,"def_mod":1,"defense_mod":-2}"#,
+        );
+        let header = read_act_header(LEDGER_HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        for epoch in [0, 6, 7, crate::CURRENT_RULES_EPOCH, 0] {
+            let state = super::state_from_json_with_epoch(&plain, &mut cache, &mut roster, epoch)
+                .expect("state");
+            let row = &state.buffs[0][0];
+            assert_eq!(row.hit_mod, 1, "existing buffs survive at every epoch");
+            let expected = if epoch >= 7 { (-1, 1, -2) } else { (0, 0, 0) };
+            assert_eq!((row.ap_mod, row.def_mod, row.defense_mod), expected, "epoch {epoch}");
+        }
+        let legacy = state_from_json(&plain, &mut cache, &mut roster).expect("legacy state");
+        let row = &legacy.buffs[0][0];
+        assert_eq!((row.hit_mod, row.ap_mod, row.def_mod, row.defense_mod), (1, 0, 0, 0));
     }
 
     /// NML-1153 S1 RED/GREEN — the tray strength survives `plain -> State ->
