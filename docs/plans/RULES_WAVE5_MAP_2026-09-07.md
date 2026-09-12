@@ -1,5 +1,7 @@
 # The wave-5 map — what is left after 07.09.'s ports (07.09.2026, for the next grill)
 
+> **Historical / superseded snapshot** — kept for the reasoning. Its measurements are a point-in-time view, not current state; see [`../../PROJECT_STATUS.md`](../../PROJECT_STATUS.md) for the live picture.
+
 Measured at `623b8a3d` (origin/main) with one run of `core/nml-core-py/tools/rule_universe_census.py`
 against the private army-book snapshot (89 books). Census at main:
 

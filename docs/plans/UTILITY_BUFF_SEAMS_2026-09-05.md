@@ -1,5 +1,7 @@
 # Utility Buff: the four runtime seams behind sixteen unported names
 
+> **Historical / superseded snapshot** — kept for the reasoning. Its measurements are a point-in-time view, not current state; see [`../../PROJECT_STATUS.md`](../../PROJECT_STATUS.md) for the live picture.
+
 Design analysis, 2026-09-05. Follow-up to PR #694 ("Utility Buff family — 18 names
 ported"; the census moved by 2) and the #708 closure audit, which examined the
 sixteen remaining names and found every one **NOT READ — deliberately**, with no

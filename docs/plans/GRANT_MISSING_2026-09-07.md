@@ -1,5 +1,7 @@
 # The 5 "core-grant-missing" auras — what they are and what closes them (07.09.2026)
 
+> **Historical / superseded snapshot** — kept for the reasoning. Its measurements are a point-in-time view, not current state; see [`../../PROJECT_STATUS.md`](../../PROJECT_STATUS.md) for the live picture.
+
 Measured at `f728b24d` (origin/main, 2026-09-07) with a live run of
 `core/nml-core-py/tools/rule_universe_census.py` against the private book snapshot (89 books).
 
