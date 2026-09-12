@@ -66,6 +66,7 @@ var _prompt_overlay: CanvasLayer = null
 var lighting_controller: Node = null
 var lighting_panel: Window = null
 var privacy_menu: PrivacyMenu = null
+var after_game_card: AfterGameCard = null
 var atmosphere_controller: AtmosphereController = null
 
 # Group rotation state
@@ -614,6 +615,10 @@ func _ready() -> void:
 	privacy_menu = load("res://scenes/privacy/privacy_menu.tscn").instantiate() as PrivacyMenu
 	get_tree().root.add_child(privacy_menu)
 	privacy_menu.hide()
+	after_game_card = AfterGameCard.new()
+	after_game_card.name = "AfterGameCard"
+	get_tree().root.add_child(after_game_card)
+	after_game_card.hide()
 	lighting_panel.set_privacy_menu(privacy_menu)
 
 	# Apply UI theme to HUD
@@ -2260,6 +2265,9 @@ func _solo_show_game_summary() -> void:
 			_log_rule_event(BattleLog.Category.GENERAL, "Mission VP (decides) — %s: %d · %s: %d" % [
 				side_a_label, vp_a, side_b_label, vp_b], true)
 		_log_rule_event(BattleLog.Category.GENERAL, verdict, true)
+	if privacy_menu != null and game_record_collector != null:
+		privacy_menu.set_last_game_record(game_record_collector.build_record())
+		game_record_collector.reset()
 	var dlg := AcceptDialog.new()
 	dlg.title = "Game over"
 	var obj_block: String = ("Objectives held:\n  %s: %d\n  %s: %d\n  Neutral: %d\n\n" % [
@@ -2281,8 +2289,12 @@ func _solo_show_game_summary() -> void:
 
 
 func _maybe_prompt_for_evaluation_sharing() -> void:
-	if privacy_menu != null:
-		privacy_menu.maybe_prompt_after_completed_game()
+	if privacy_menu == null:
+		return
+	if privacy_menu.maybe_prompt_after_completed_game():
+		return
+	if privacy_menu.evaluation_sharing_enabled() and privacy_menu.has_last_game_record() and after_game_card != null:
+		after_game_card.open_for(privacy_menu)
 
 
 func _solo_side_alive(pid: int) -> int:

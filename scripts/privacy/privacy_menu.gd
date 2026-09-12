@@ -5,6 +5,7 @@ extends Window
 
 const FIXTURE_PATH := "res://assets/privacy/example_record.json"
 const EXPORT_PATH := "user://shared_records/example.json"
+const LAST_GAME_EXPORT_PATH := "user://shared_records/last_game.json"
 const Builder := preload("res://scripts/privacy/shared_record_builder.gd")
 const Store := preload("res://scripts/privacy/consent_store.gd")
 
@@ -18,10 +19,12 @@ const COPY := {
 		"no_thanks": "No thanks",
 		"review": "Review details",
 		"example": "EXAMPLE — not your last game",
+		"last_game": "Your last game's data",
 		"allow_evaluation": "Allow evaluation sharing",
 		"withdraw": "Withdraw evaluation sharing",
 		"allow_training": "Allow use for training",
 		"save": "Save example locally",
+		"save_last": "Save last game locally",
 		"close": "Close",
 		"settings_section": "PRIVACY & DATA:",
 		"deletion_code": "Deletion code",
@@ -29,6 +32,7 @@ const COPY := {
 		"create_failed": "Could not create %s",
 		"write_failed": "Could not write %s",
 		"saved": "Saved exact example bytes to %s",
+		"saved_last": "Saved your last game's exact bytes to %s",
 		"fields": "Fields in the record:\n• payload_schema_version — payload format number\n• consent_schema_version — consent wording version\n• deletion_code — random installation deletion code\n• record_id — random record identifier\n• game_version and build_hash — public game build\n• core_abi and rules_epoch — rules-engine versions\n• training_use — whether separate training permission was given\n• brain.engine, brain.id and brain.hash — public opponent version, or Classic\n• game.system_id, mission_id and scoring_id — public rules identifiers\n• game.random_seed, layout_seed and dice_seed — game seeds when known\n• table.width_inches and height_inches — table size\n• table.terrain — type identifiers, coordinates and rotations\n• table.objectives — type identifiers, coordinates and owner numbers\n• armies — side, book and faction identifiers\n• armies.units — stable unit/profile identifiers, numeric quality, defense and model count, plus loadout/rule identifiers\n• actions — ordered index, round, side, stable unit/action/target identifiers, coordinates, observed dice faces and numeric score\n• rounds — completed round count\n• final.vp, objective_owners and outcome — final numeric score and result\n• payload_sha256 — integrity hash of all preceding fields",
 		"never": "Never collected in this record:\nPlayer, army or unit display names; chat or battle-log prose; room codes; multiplayer identity tokens; account, platform, device or IP identifiers; save files; screenshots; timestamps; file paths; host names; hardware inventory; unrelated diagnostics.",
 		"destination": "Destination: to be published by the maintainer",
@@ -49,10 +53,12 @@ const COPY := {
 		"no_thanks": "Nein, danke",
 		"review": "Details prüfen",
 		"example": "BEISPIEL — nicht deine letzte Partie",
+		"last_game": "Daten deiner letzten Partie",
 		"allow_evaluation": "Auswertung erlauben",
 		"withdraw": "Auswertung nicht mehr erlauben",
 		"allow_training": "Nutzung fürs Training erlauben",
 		"save": "Beispiel lokal speichern",
+		"save_last": "Letzte Partie lokal speichern",
 		"close": "Schließen",
 		"settings_section": "DATENSCHUTZ & DATEN:",
 		"deletion_code": "Löschcode",
@@ -60,6 +66,7 @@ const COPY := {
 		"create_failed": "%s konnte nicht angelegt werden",
 		"write_failed": "%s konnte nicht geschrieben werden",
 		"saved": "Die exakten Beispieldaten wurden unter %s gespeichert",
+		"saved_last": "Die exakten Daten deiner letzten Partie wurden unter %s gespeichert",
 		"fields": "Felder im Datensatz:\n• payload_schema_version — Nummer des Datenformats\n• consent_schema_version — Version dieser Einwilligung\n• deletion_code — zufälliger Löschcode dieser Installation\n• record_id — zufällige Kennung des Datensatzes\n• game_version und build_hash — öffentliche Spielversion\n• core_abi und rules_epoch — Versionen der Regel-Engine\n• training_use — ob die getrennte Trainingsfreigabe erteilt wurde\n• brain.engine, brain.id und brain.hash — öffentliche Gegnerversion oder Classic\n• game.system_id, mission_id und scoring_id — öffentliche Regelkennungen\n• game.random_seed, layout_seed und dice_seed — bekannte Spiel-Zufallswerte\n• table.width_inches und height_inches — Tischgröße\n• table.terrain — Typkennungen, Koordinaten und Drehungen\n• table.objectives — Typkennungen, Koordinaten und Besitznummern\n• armies — Seite sowie Buch- und Fraktionskennungen\n• armies.units — stabile Einheiten-/Profilkennungen, Zahlenwerte und Ausrüstungs-/Regelkennungen\n• actions — Reihenfolge, Runde, Seite, stabile Aktions-/Einheiten-/Zielkennungen, Koordinaten, beobachtete Würfelaugen und Zahlenwert\n• rounds — Zahl abgeschlossener Runden\n• final.vp, objective_owners und outcome — Endstand und Ergebnis\n• payload_sha256 — Prüfsumme aller vorherigen Felder",
 		"never": "Niemals in diesem Datensatz erhoben:\nAnzeige-Namen von Spielern, Armeen oder Einheiten; Chat oder Schlachtprosa; Raumcodes; Mehrspieler-Identitätsschlüssel; Konto-, Plattform-, Geräte- oder IP-Kennungen; Spielstände; Bildschirmfotos; Zeitstempel; Dateipfade; Rechnernamen; Hardwaredaten; sonstige Diagnosen.",
 		"destination": "Ziel: wird vom Betreiber veröffentlicht",
@@ -79,6 +86,8 @@ var _training_toggle: CheckButton
 var _allow_button: Button
 var _status: Label
 var _preview: TextEdit
+var _last_game_record: Dictionary = {}
+var _last_preview: TextEdit = null
 
 
 func _ready() -> void:
@@ -119,6 +128,25 @@ func maybe_prompt_after_completed_game() -> bool:
 	return true
 
 
+## PR B2: the real last game. The record is deep-copied because main.gd resets the collector right
+## after handing it over, and reset() clears the collector's action array IN PLACE.
+func set_last_game_record(record: Dictionary) -> void:
+	_last_game_record = record.duplicate(true)
+
+
+func has_last_game_record() -> bool:
+	return not _last_game_record.is_empty()
+
+
+func evaluation_sharing_enabled() -> bool:
+	return _store.evaluation_sharing
+
+
+func open_details() -> void:
+	_show_details()
+	popup_centered()
+
+
 func example_bytes() -> PackedByteArray:
 	var parsed = JSON.parse_string(FileAccess.get_file_as_string(FIXTURE_PATH))
 	if parsed is not Dictionary:
@@ -129,23 +157,45 @@ func example_bytes() -> PackedByteArray:
 	return Builder.build(record)
 
 
+## Same allowlist path as example_bytes(): the menu adds deletion code and training flag, nothing else.
+func last_game_bytes() -> PackedByteArray:
+	if _last_game_record.is_empty():
+		return PackedByteArray()
+	var record := _last_game_record.duplicate(true)
+	record["deletion_code"] = _store.deletion_code
+	record["training_use"] = _store.training_use
+	return Builder.build(record)
+
+
 func save_example_locally(path: String = EXPORT_PATH) -> String:
-	var bytes := example_bytes()
+	if not _write_record_bytes(example_bytes(), path):
+		return ""
+	_set_status(_t("saved") % path)
+	return path
+
+
+func save_last_game_locally(path: String = LAST_GAME_EXPORT_PATH) -> String:
+	if not _write_record_bytes(last_game_bytes(), path):
+		return ""
+	_set_status(_t("saved_last") % path)
+	return path
+
+
+func _write_record_bytes(bytes: PackedByteArray, path: String) -> bool:
 	if bytes.is_empty():
 		_set_status(_t("build_failed"))
-		return ""
+		return false
 	var error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
 	if error != OK and error != ERR_ALREADY_EXISTS:
 		_set_status(_t("create_failed") % path.get_base_dir())
-		return ""
+		return false
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		_set_status(_t("write_failed") % path)
-		return ""
+		return false
 	file.store_buffer(bytes)
 	file.close()
-	_set_status(_t("saved") % path)
-	return path
+	return true
 
 
 func _locale() -> String:
@@ -226,6 +276,19 @@ func _show_details() -> void:
 		_t("destination"), _t("controller"), _t("processor"), _t("purposes"),
 		_t("recipients"), _t("retention"), _t("withdrawal"), _t("contact")]))
 	_content.add_child(_label("%s: %s" % [_t("deletion_code"), _store.deletion_code]))
+	_last_preview = null
+	if has_last_game_record():
+		_content.add_child(_label(_t("last_game"), true))
+		_last_preview = TextEdit.new()
+		_last_preview.name = "LastGamePreview"
+		_last_preview.editable = false
+		_last_preview.custom_minimum_size = Vector2(0, 240)
+		_last_preview.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+		_last_preview.text = last_game_bytes().get_string_from_utf8()
+		_content.add_child(_last_preview)
+		var save_last_button := _button(_t("save_last"), func() -> void: save_last_game_locally())
+		save_last_button.name = "SaveLastButton"
+		_content.add_child(save_last_button)
 	_content.add_child(_label(_t("example"), true))
 	_preview = TextEdit.new()
 	_preview.name = "ExamplePreview"
@@ -265,6 +328,8 @@ func _on_allow_or_withdraw() -> void:
 	_sync_consent_controls()
 	if _preview != null:
 		_preview.text = example_bytes().get_string_from_utf8()
+	if _last_preview != null:
+		_last_preview.text = last_game_bytes().get_string_from_utf8()
 
 
 func _on_training_toggled(pressed: bool) -> void:
@@ -272,6 +337,8 @@ func _on_training_toggled(pressed: bool) -> void:
 		_store.set_consent(true, pressed)
 		if _preview != null:
 			_preview.text = example_bytes().get_string_from_utf8()
+		if _last_preview != null:
+			_last_preview.text = last_game_bytes().get_string_from_utf8()
 
 
 func _sync_consent_controls() -> void:

@@ -79,3 +79,20 @@ func test_per_action_cost_is_negligible() -> void:
 	var per_action := float(elapsed) / float(count)
 	assert_float(per_action).override_failure_message("measured %.2f us/action over %d actions" % [per_action, count]).is_less(250.0)
 	collector.free()
+
+
+## PR B2: main.gd hands the record to the menu and resets the collector; reset must leave no actions
+## and no round counter behind for the next game.
+func test_reset_clears_actions_and_round_counters() -> void:
+	var collector = _collector()
+	var gu := GameUnit.new()
+	gu.unit_id = "u-reset"
+	gu.unit_properties = {"player_id": 1}
+	collector.on_unit_activated(gu)
+	collector.on_round_advanced(4)
+	assert_int(collector.action_count()).is_equal(1)
+	collector.reset()
+	assert_int(collector.action_count()).override_failure_message("reset() must empty the action list").is_equal(0)
+	var record: Dictionary = collector.build_record()
+	assert_int(int(record["rounds"])).is_equal(1)
+	collector.free()
