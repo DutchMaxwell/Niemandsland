@@ -625,7 +625,7 @@ pub fn features(
             if state.player[j] == state.player[i] || state.alive[j] <= 0 {
                 continue;
             }
-            let oreach = state.bands[j].rush + CONTACT_IN;
+            let oreach = state.bands[j].charge.unwrap_or(state.bands[j].rush) + CONTACT_IN;
             if geom::dist_in(&state.positions[i], &state.positions[j]) <= oreach {
                 exposed = true;
                 if rich {

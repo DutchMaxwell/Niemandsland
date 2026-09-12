@@ -4374,7 +4374,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     }
     // zero-banded, NOT `Bands::default()` — those serde defaults are the
     // 6"/12" OPR fallback, not zero.
-    let (mut acc, mut hit) = (Bands { advance: 0.0, rush: 0.0 }, false);
+    let (mut acc, mut hit) = (Bands { advance: 0.0, rush: 0.0, ..Default::default() }, false);
     for name in [
         "Agile",
         "Highborn",
