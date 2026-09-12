@@ -5,9 +5,6 @@
 //! `run` returns `(value, member_values)`; `member_values` is flat row-major
 //! `[rows, members]` exactly as the graph emits it.
 
-#[cfg(all(feature = "onnx-tract", feature = "onnx-ort"))]
-compile_error!("enable exactly one of the onnx-tract / onnx-ort features");
-
 /// One static batch: six flat float32 buffers in token-contract layout.
 pub struct Batch {
     pub units: Vec<f32>,      // [rows, 24, 72]
@@ -58,19 +55,11 @@ mod imp {
                 tensor(&[b, 16], &batch.glob)?,
             ];
             let outputs = self.plan.run(inputs).map_err(err)?;
-            let value = outputs[0]
-                .to_plain_array_view::<f32>()
-                .map_err(err)?
-                .iter()
-                .copied()
-                .collect();
-            let member_values = outputs[1]
-                .to_plain_array_view::<f32>()
-                .map_err(err)?
-                .iter()
-                .copied()
-                .collect();
-            Ok((value, member_values))
+            let out = |i: usize| -> Result<Vec<f32>, String> {
+                let view = outputs[i].to_plain_array_view::<f32>().map_err(err)?;
+                Ok(view.iter().copied().collect())
+            };
+            Ok((out(0)?, out(1)?))
         }
     }
 
