@@ -33,7 +33,8 @@ planned and where ideas go. For what already works see
 - **`0.3.10.0-alpha` shipped — the solo update.** The headline is **NACHTMAHR**, the built-in
   opponent: a rules-based, deterministic game AI (no LLM, no neural net) that runs entirely offline and
   plays the official OPR solo decision trees. Mark any imported army as AI-controlled, or let the **AI
-  Opponent** button bring one of NACHTMAHR's own pre-built lists (every faction, 1000–3000 pts, fetched
+  Opponent** button bring one of NACHTMAHR's own pre-built lists (every Grimdark Future faction,
+  1000–3000 pts, fetched
   from the asset CDN at runtime with an offline cache — the lists are never in this repo). Around it: the
   click-guided rulebook **deployment flow** (roll-off → table edge → alternating placement → scout band →
   Ambush / Infiltrate / Vanguard reserves), **Shoot / Fight / Cast** for the human player through the
@@ -269,7 +270,7 @@ about ([#170](../../issues/170)); draggable deployment control box ([#159](../..
 opponent (rules-based, deterministic, fully offline; one difficulty, full strength) with alternating
 activations, its own objective-marker scoring, round plans and look-ahead activation ordering, and a
 battle log that explains every decision; the **AI Opponent** button (NACHTMAHR brings its own list —
-every faction, 1000–3000 pts, CDN-delivered at runtime, guarded out of the public repo by a CI check,
+every Grimdark Future faction, 1000–3000 pts, CDN-delivered at runtime, guarded out of the public repo by a CI check,
 [#150](../../pull/150)); the click-guided **deployment flow** (roll-off → edge → alternating placement →
 scout band) with full **Ambush / Infiltrate / Vanguard / Re-Deployment** reserve handling; **Shoot /
 Fight / Cast** from the radial menu with a live line-of-sight ray, range rings and real tray dice, the

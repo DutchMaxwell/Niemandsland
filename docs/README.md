@@ -24,6 +24,8 @@ Start with the repo entry points: [`../README.md`](../README.md) (project overvi
 |---|---|---|
 | [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md) | On-demand 3D models + terrain via Cloudflare R2 | Live |
 | [`ATMOSPHERE.md`](ATMOSPHERE.md) | Lighting + audio ambience | Reference |
+| [`PRIVACY_DATA_SHARING.md`](PRIVACY_DATA_SHARING.md) | What optional game-record sharing would contain; today nothing is sent | Local only |
+| [`TESTING_MP_TWO_INSTANCE.md`](TESTING_MP_TWO_INSTANCE.md) | Two real Godot peers against a local relay | Reference |
 | [`UPDATE_CHECK.md`](UPDATE_CHECK.md) | In-app update checker | Live |
 | [`REGIMENTS.md`](REGIMENTS.md) | Age of Fantasy: Regiments movement trays | Reference |
 
@@ -33,6 +35,13 @@ Start with the repo entry points: [`../README.md`](../README.md) (project overvi
 |---|---|---|
 | [`SOLO_AI_PLAN.md`](SOLO_AI_PLAN.md) | NACHTMAHR solo opponent — design & implementation plan | Shipped (v1) |
 | [`SOLO_AI_RULES_COVERAGE.md`](SOLO_AI_RULES_COVERAGE.md) | Which OPR special rules the solo AI resolves automatically | Reference |
+| [`DEV_BRAIN_BRIDGE.md`](DEV_BRAIN_BRIDGE.md) | Developer-only bridge from the Rust search to a local evaluator | Developer only |
+
+## Snapshots
+
+| Doc | Contents | Status |
+|---|---|---|
+| [`plans/`](plans/) | Dated design notes and audits; each is a snapshot at its date | Snapshots |
 
 ## Tools
 

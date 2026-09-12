@@ -7,10 +7,16 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Privacy & data settings (local only).** A consent screen, off by default, explains optional
+  game-record sharing, previews an example record and can save it locally; nothing is sent. An
+  in-memory collector for the opt-in path is on `main`, still local-only (see
+  `docs/PRIVACY_DATA_SHARING.md`). (#876)
+- **The off-table tray groups reserves by arrival class**, with headers and counts. (#832)
+- **Wreck spill shows a formation ghost at the cursor** after the automatic placement. (#828)
 - **The Solo panel has a mission selector, driven by the mission catalogue.** (#640)
 - **The mission catalogue reaches the AI twin.** The Python side can play the ten catalogue missions from `missions.json`
   (missions R1, default duel), and the twin sets deterministic mission-marker placements. (#623, #639)
-- **AI rules fidelity — thirteen more named rules ported to the fast core** (all behind the frozen epoch-7 gate).
+- **AI rules fidelity — thirteen more named rules ported to the fast core** (all behind a frozen epoch gate).
   CORE-side: Crossing Attack (any executed move through enemy units strikes them; #770), Retreating Strike (the
   shared Ravage dice fire once per round on the post-melee move; #772), Extended Buff Range (relayed utility picks
   through a radio/runner carrier; #773), Spell Accumulator (token battery casters may drain; #774), Reanimation with
@@ -24,18 +30,37 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   unit band had no room for (#786's blind set) to an open-ended unit2 band. (#789)
 
 ### Fixed
+- **Co-op multiplayer against the AI:** the AI designation reaches every player, and the owner of an
+  attacked unit rolls its own saves. (#835, #836)
+- **Spell-granted rules apply where they act** — Quick Shot, Rapid Charge, Slayer, Unwieldy, Piercing
+  Fighter, Unpredictable and Indirect. (#829, #833)
+- **Fear(X) counts in the melee-won comparison.** (#809)
+- **Bestial Boost, Rending in Melee, Surprise Attack's first-activation burst, Rapid Charge Mark and
+  Great Musician's +1" move now apply on the table.** (#804, #805, #811, #819, #870, #871)
+- **AI:** a Rush capped to the Advance distance is demoted to Advance + shoot. (#813, #821)
+- **A short charge lands on the table's approach vector.** (#875)
 - **Ranged Slayer fired in the core but not on the table.** The table now resolves the range-gated
   ("ranged_over") AP(+2) spec at the conditional-AP seams — the one gap of the table-side parity audit (#785). (#784)
 - **The census no longer counts a primitive literal as a rule-name read** (Mind Control un-flipped, then
   honestly re-earned by its displacement port). (#782)
-
-### Internal
-- **The S5 (Reinforcement) seam, part 1:** `arrive_one` takes an arrival zone — the shared-signature change alone,
-  ahead of the mid-game unit-creation port (verdict corrected PORT → DESIGN in #779). (#788)
-- **Wave-4 docs:** the Delayed Action primitive design (#775), the table-side parity audit A (#785), the
-  encoder-slot gap memo (#786), and the 5 core-grant-missing auras classified (#791).
+- **The Solo arena's both-AI round loop grants Second Wind.** (#503)
 
 ### Changed
+- **Rules epochs 8–10.** The planner's rush demotion moved behind a new frozen gate (epoch 8, #837)
+  and every record header now stamps the epoch (#844); the Mark grants switched on by #870 apply
+  from epoch 9 (#878); the core reads the table's distinct CHARGE band behind `EPOCH_10_CHARGE_BAND`
+  (epoch 10, #882).
+- **More named rules ported to the fast core:** Spawn (named templates and the round-boundary
+  arrival), Teleport and Ethereal, Spell Conduit, the once-per-game feats (Speed, Takedown Shot,
+  Precision, Piercing), Sturdy, Surprise Attack, Grounded Speed, the Rapid Rush and Rapid Advance
+  grants, Reinforcement's round-start driver, Entrenched, Growth Markers' defence facet, Swift and
+  Swift Aura negating Slow, the Indirect to-hit penalty, and the Utility Buff AP/Defense reads;
+  encoder vocabulary v8. (#792, #793, #797, #800, #803, #808, #810, #818, #827, #831, #838, #839,
+  #841, #842, #843, #848, #852, #853, #856, #859, #860, #861, #862, #864, #865, #879)
+- **The optional Rust rules core ships dormant in the Linux and Windows exports.** CI builds the
+  extension and places it in the exports; game behaviour is unchanged until the Rust planner is
+  switched on. macOS stays out for now, and the release job waits for the Rust workspace checks.
+  (#873, #874)
 - **AI rules fidelity — named rules ported to the fast core.** Split fire (a volley per target group), Mend, Re-Position
   Artillery and the Utility Buff bridge, Breath Attack, Shot Modifier with melee leg and flat / over-9" siblings, Hit &
   Run (incl. Fighter + Shooter), natural-6 extra attack dice, Growth Markers, Second Wind, Vanguard, Resistance,
@@ -60,10 +85,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   cast; a combat intent aimed at a joined hero fights its HOST; Unstoppable follows the table's dice path; the over-9"
   modifier gate measures centre-to-centre; an absent knob key reads as OFF. (#492, #495, #502, #601–#602, #605)
 
-### Fixed
-- **The Solo arena's both-AI round loop grants Second Wind.** (#503)
-
 ### Internal
+- **The S5 (Reinforcement) seam, part 1:** `arrive_one` takes an arrival zone — the shared-signature change alone,
+  ahead of the mid-game unit-creation port (verdict corrected PORT → DESIGN in #779). (#788)
+- **Wave-4 docs:** the Delayed Action primitive design (#775), the table-side parity audit A (#785), the
+  encoder-slot gap memo (#786), and the 5 core-grant-missing auras classified (#791).
 - **Training and self-play.** The outcome gate replays whole recorded games from the deployment on the table's dice
   tape; fitted, residual and blend eval modes; the policy-net steps (candidate dump, outcome rows, Rust loader; ORDER
   mode with policy gate and holdout); expert-iteration and value-net seams (trace.cands, aux targets, cand_logits_fn,
@@ -78,7 +104,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   per-candidate scores; the ambush ARRIVAL gate with corpus oracle; deployment_gate interleave_order;
   charge_landing_census; outcome_gate --knobs shipped|legacy; replays honour every stamped knob. (#477–#478, #488,
   #490–#491, #494, #500, #506, #516–#517, #520, #568, #570, #572, #574, #580, #585, #596, #603–#604, #607, #611, #614,
-  #632, #636)
+  #632, #636, #796, #840, #858, #869, #877)
 - **The game narrator.** Prose + board SVG + dice trail analysis mode; --stats with advance+shoot, morale-test and
   Limited counts; the reserve metric reads dormant/arrival fields; labels fixed (unsaved honours Blast/Deadly, contact
   = melee dice only, the count-1 morale die is a morale test, dangerous-terrain tests are not attack dice); arena
@@ -86,8 +112,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **Tests and CI.** Mutant-killing tests for the block-B rule functions and the mv solver; the forge_mutants test forge;
   a CI fast lane for core-only PRs; the nml-core-py pytest suite runs in the core job; the core crates job is blocking,
   not advisory; monkeypatched globals restored for a green pytest run; mission.rs scoring arms pinned; digests
-  re-pinned after the dangerous-end-morale port. (#504, #508, #513, #526, #613, #617, #622, #628, #645)
-- **Docs.** Stale charge_contact_slots comments corrected. (#518)
+  re-pinned after the dangerous-end-morale port. (#504, #508, #513, #526, #613, #617, #622, #628, #645, #798,
+  #801, #815, #817, #830, #834, #849, #851, #855, #866, #867, #868, #880, #881, #883, #884)
+- **Core input validation.** Network weight dimensions and Spawn templates are validated on import.
+  (#886, #887)
+- **Docs.** Stale charge_contact_slots comments corrected. (#518) The current-vs-released rule-resolver
+  wording was clarified. (#885)
 
 ## [0.3.12.0-alpha] — 2026-08-06
 
