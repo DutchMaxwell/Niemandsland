@@ -7,16 +7,21 @@ const FIXTURE_PATH := "res://assets/privacy/example_record.json"
 const GOLDEN_PATH := "res://test/fixtures/privacy/example_record.canonical.json"
 const TEST_STORE := "user://test_privacy_m10/privacy.json"
 const TEST_EXPORT := "user://test_shared_records/example.json"
+const CARD_PATH := "res://scripts/privacy/after_game_card.gd"
+const COLLECTOR_PATH := "res://scripts/privacy/game_record_collector.gd"
+const TEST_LAST_EXPORT := "user://test_shared_records/last_game.json"
 
 
 func before_test() -> void:
 	_remove_file(TEST_STORE)
 	_remove_file(TEST_EXPORT)
+	_remove_file(TEST_LAST_EXPORT)
 
 
 func after_test() -> void:
 	_remove_file(TEST_STORE)
 	_remove_file(TEST_EXPORT)
+	_remove_file(TEST_LAST_EXPORT)
 
 
 func _remove_file(path: String) -> void:
@@ -154,7 +159,7 @@ func test_privacy_scripts_contain_no_transport_apis() -> void:
 	if not _require(BUILDER_PATH) or not _require(STORE_PATH):
 		return
 	var forbidden := ["HTTP" + "Request", "HTTP" + "Client", "Stream" + "Peer", "Web" + "Socket", "ENet", "Network" + "Manager"]
-	for path in [BUILDER_PATH, STORE_PATH, "res://scripts/privacy/privacy_menu.gd"]:
+	for path in [BUILDER_PATH, STORE_PATH, "res://scripts/privacy/privacy_menu.gd", CARD_PATH, COLLECTOR_PATH]:
 		if not _require(path):
 			continue
 		var source := FileAccess.get_file_as_string(path)
@@ -237,3 +242,166 @@ func test_press_review_details_keeps_button_alive_for_feedback() -> void:
 	assert_bool(menu.find_child("ExamplePreview", true, false) is TextEdit).is_true()
 	assert_bool(_load_json(TEST_STORE).get("prompt_seen", false)).is_true()
 	menu.queue_free()
+
+
+func _missing_methods(object: Object, methods: Array) -> Array:
+	var missing: Array = []
+	for method: String in methods:
+		if not object.has_method(method):
+			missing.append(method)
+	return missing
+
+
+## PR B2: the real last game's preview must be built by the SAME allowlist path as the example and
+## export exactly the bytes it shows. The in-place reset() of the collector (main.gd hands the
+## record over and resets right after) must not empty the menu's copy.
+func test_last_game_preview_equals_local_export_bytes() -> void:
+	if not _require(MENU_SCENE):
+		return
+	var menu = load(MENU_SCENE).instantiate()
+	add_child(menu)
+	menu.set_store_path_for_tests(TEST_STORE)
+	var missing := _missing_methods(menu, ["set_last_game_record", "has_last_game_record", "last_game_bytes", "save_last_game_locally"])
+	assert_array(missing).override_failure_message("privacy_menu.gd is missing %s" % str(missing)).is_empty()
+	if not missing.is_empty():
+		menu.queue_free()
+		return
+	var record := _load_json(FIXTURE_PATH)
+	menu.set_last_game_record(record)
+	assert_bool(menu.has_last_game_record()).is_true()
+	var preview: PackedByteArray = menu.last_game_bytes()
+	assert_bool(preview.is_empty()).is_false()
+	menu._show_details()
+	var shown := menu.find_child("LastGamePreview", true, false) as TextEdit
+	assert_that(shown).override_failure_message("details page is missing LastGamePreview").is_not_null()
+	if shown != null:
+		assert_str(shown.text).is_equal(preview.get_string_from_utf8())
+	assert_str(menu.save_last_game_locally(TEST_LAST_EXPORT)).is_equal(TEST_LAST_EXPORT)
+	assert_array(FileAccess.get_file_as_bytes(TEST_LAST_EXPORT)).is_equal(preview)
+	(record["actions"] as Array).clear()
+	assert_array(menu.last_game_bytes()).override_failure_message(
+		"last game bytes followed the collector's in-place reset").is_equal(preview)
+	menu.queue_free()
+
+
+func test_last_game_wording_and_details_require_a_record() -> void:
+	if not _require(MENU_SCENE):
+		return
+	var menu_script = load("res://scripts/privacy/privacy_menu.gd")
+	assert_str(menu_script.text_for("en", "last_game")).is_equal("Your last game's data")
+	assert_str(menu_script.text_for("de", "last_game")).is_equal("Daten deiner letzten Partie")
+	assert_str(menu_script.text_for("en", "save_last")).is_equal("Save last game locally")
+	assert_str(menu_script.text_for("de", "save_last")).is_equal("Letzte Partie lokal speichern")
+	assert_str(menu_script.text_for("en", "saved_last")).is_equal("Saved your last game's exact bytes to %s")
+	assert_str(menu_script.text_for("de", "saved_last")).is_equal("Die exakten Daten deiner letzten Partie wurden unter %s gespeichert")
+	var menu = load(MENU_SCENE).instantiate()
+	add_child(menu)
+	menu.set_store_path_for_tests(TEST_STORE)
+	menu._show_details()
+	assert_that(menu.find_child("LastGamePreview", true, false)).override_failure_message(
+		"without a record the details page must not show a last game").is_null()
+	var example := menu.find_child("ExamplePreview", true, false) as TextEdit
+	assert_that(example).is_not_null()
+	if example != null:
+		assert_str(example.text).is_equal(menu.example_bytes().get_string_from_utf8())
+	if not menu.has_method("set_last_game_record"):
+		menu.queue_free()
+		return
+	menu.set_last_game_record(_load_json(FIXTURE_PATH))
+	menu._show_details()
+	assert_that(menu.find_child("LastGamePreview", true, false)).override_failure_message(
+		"with a record the details page must show LastGamePreview").is_not_null()
+	var heading := false
+	var expected: String = menu.localized_text("last_game")
+	for label in menu.find_children("*", "Label", true, false):
+		if (label as Label).text == expected:
+			heading = true
+	assert_bool(heading).override_failure_message("details page lacks the %s heading" % expected).is_true()
+	menu.queue_free()
+
+
+func test_after_game_card_wording() -> void:
+	if not _require(CARD_PATH):
+		return
+	var card_script = load(CARD_PATH)
+	assert_str(card_script.text_for("en", "card_title")).is_equal("Share this game?")
+	assert_str(card_script.text_for("de", "card_title")).is_equal("Diese Partie teilen?")
+	assert_str(card_script.text_for("en", "keep_private")).is_equal("Keep private")
+	assert_str(card_script.text_for("de", "keep_private")).is_equal("Privat behalten")
+	assert_str(card_script.text_for("en", "preview")).is_equal("Preview")
+	assert_str(card_script.text_for("de", "preview")).is_equal("Vorschau")
+	assert_str(card_script.text_for("en", "save_locally")).is_equal("Save locally")
+	assert_str(card_script.text_for("de", "save_locally")).is_equal("Lokal speichern")
+
+
+func test_after_game_card_waits_for_consent_and_a_record() -> void:
+	if not _require(MENU_SCENE) or not _require(CARD_PATH):
+		return
+	var menu = load(MENU_SCENE).instantiate()
+	add_child(menu)
+	menu.set_store_path_for_tests(TEST_STORE)
+	var missing := _missing_methods(menu, ["set_last_game_record", "has_last_game_record", "evaluation_sharing_enabled", "should_show_after_game_card", "last_game_bytes"])
+	assert_array(missing).override_failure_message("privacy_menu.gd is missing %s" % str(missing)).is_empty()
+	if not missing.is_empty():
+		menu.queue_free()
+		return
+	menu.set_last_game_record(_load_json(FIXTURE_PATH))
+	assert_bool(menu.should_show_after_game_card()).override_failure_message(
+		"card must not be offered while evaluation sharing is off").is_false()
+	var store = load(STORE_PATH).new(TEST_STORE)
+	store.load_from_disk()
+	store.set_consent(true, false)
+	menu.set_store_path_for_tests(TEST_STORE)
+	assert_bool(menu.evaluation_sharing_enabled()).is_true()
+	assert_bool(menu.should_show_after_game_card()).override_failure_message(
+		"card must be offered when sharing is on and a record exists").is_true()
+	var card = load(CARD_PATH).new()
+	add_child(card)
+	assert_bool(card.has_method("open_for")).override_failure_message("after_game_card.gd is missing open_for()").is_true()
+	if not card.has_method("open_for"):
+		menu.queue_free()
+		card.queue_free()
+		return
+	card.export_path = TEST_LAST_EXPORT
+	card.open_for(menu)
+	assert_bool(card.visible).is_true()
+	var keep := card.find_child("KeepPrivateButton", true, false) as Button
+	assert_that(keep).override_failure_message("card is missing KeepPrivateButton").is_not_null()
+	if keep != null:
+		assert_bool(keep.has_focus()).override_failure_message("Keep private must have focus when the card opens").is_true()
+	for node in card.find_children("*", "Button", true, false):
+		assert_str((node as Button).text).override_failure_message("the card must have no Share button (M12)").not_contains("Share")
+	# Keep private and closing the window write nothing to the export directory.
+	if keep != null:
+		keep.pressed.emit()
+	assert_bool(card.visible).is_false()
+	assert_bool(FileAccess.file_exists(TEST_LAST_EXPORT)).override_failure_message(
+		"dismissing the card must not write any file").is_false()
+	card.open_for(menu)
+	card.close_requested.emit()
+	assert_bool(card.visible).is_false()
+	assert_bool(FileAccess.file_exists(TEST_LAST_EXPORT)).is_false()
+	# Save locally writes exactly the previewed bytes and names the path.
+	card.open_for(menu)
+	var save_button := card.find_child("SaveLocallyButton", true, false) as Button
+	assert_that(save_button).is_not_null()
+	if save_button != null:
+		save_button.pressed.emit()
+	assert_bool(FileAccess.file_exists(TEST_LAST_EXPORT)).is_true()
+	assert_array(FileAccess.get_file_as_bytes(TEST_LAST_EXPORT)).is_equal(menu.last_game_bytes())
+	var status := card.find_child("CardStatus", true, false) as Label
+	assert_that(status).is_not_null()
+	if status != null:
+		assert_str(status.text).contains(TEST_LAST_EXPORT)
+	# Preview hands over to the details page and gets out of the way.
+	card.open_for(menu)
+	var preview_button := card.find_child("PreviewButton", true, false) as Button
+	if preview_button != null:
+		preview_button.pressed.emit()
+	assert_bool(card.visible).is_false()
+	assert_bool(menu.visible).is_true()
+	var forbidden_classes := ["HTTPRequest", "HTTPClient", "StreamPeer", "WebSocketPeer", "ENetMultiplayerPeer"]
+	assert_array(_find_classes(card, forbidden_classes)).is_empty()
+	assert_array(_find_classes(menu, forbidden_classes)).is_empty()
+	menu.queue_free()
+	card.queue_free()
