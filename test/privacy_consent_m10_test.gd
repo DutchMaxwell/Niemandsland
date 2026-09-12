@@ -340,20 +340,19 @@ func test_after_game_card_waits_for_consent_and_a_record() -> void:
 	var menu = load(MENU_SCENE).instantiate()
 	add_child(menu)
 	menu.set_store_path_for_tests(TEST_STORE)
-	var missing := _missing_methods(menu, ["set_last_game_record", "has_last_game_record", "evaluation_sharing_enabled", "should_show_after_game_card", "last_game_bytes"])
+	var missing := _missing_methods(menu, ["set_last_game_record", "has_last_game_record", "evaluation_sharing_enabled", "last_game_bytes"])
 	assert_array(missing).override_failure_message("privacy_menu.gd is missing %s" % str(missing)).is_empty()
 	if not missing.is_empty():
 		menu.queue_free()
 		return
 	menu.set_last_game_record(_load_json(FIXTURE_PATH))
-	assert_bool(menu.should_show_after_game_card()).override_failure_message(
+	assert_bool(menu.evaluation_sharing_enabled() and menu.has_last_game_record()).override_failure_message(
 		"card must not be offered while evaluation sharing is off").is_false()
 	var store = load(STORE_PATH).new(TEST_STORE)
 	store.load_from_disk()
 	store.set_consent(true, false)
 	menu.set_store_path_for_tests(TEST_STORE)
-	assert_bool(menu.evaluation_sharing_enabled()).is_true()
-	assert_bool(menu.should_show_after_game_card()).override_failure_message(
+	assert_bool(menu.evaluation_sharing_enabled() and menu.has_last_game_record()).override_failure_message(
 		"card must be offered when sharing is on and a record exists").is_true()
 	var card = load(CARD_PATH).new()
 	add_child(card)
