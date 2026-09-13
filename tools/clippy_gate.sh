@@ -45,6 +45,7 @@ raw=$(mktemp)
 "$CARGO" clippy --workspace --all-targets --message-format json -- --cap-lints warn \
   >"$raw" 2>/dev/null
 clippy_rc=$?
+if [ "$clippy_rc" -ne 0 ]; then grep -m 12 '"level":"error"' "$raw" || true; fi
 current=$(python3 -c '
 import json,sys,collections
 c=collections.Counter()
@@ -68,7 +69,6 @@ rm -f "$raw"
 # Refuse instead of comparing it.
 if [ "$clippy_rc" -ne 0 ]; then
   echo "clippy_gate: cargo clippy exited $clippy_rc -- the workspace did not compile"
-  grep -m 12 '"level":"error"' "$raw" || true
   echo "clippy_gate: cleanly, so the diagnostics are a partial measurement."
   echo "clippy_gate: refusing to compare."
   exit 1
