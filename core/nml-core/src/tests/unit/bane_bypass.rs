@@ -24,7 +24,7 @@ use super::*;
         assert!(us.shoot[0].bane, "the alias re-rolls the defender's sixes");
         let mut prof = us.shoot[0].clone();
         prof.attacks = 24;
-        let mut tray = Tray::seeded(27);
+        let mut tray = crate::dice::Tray::seeded(27);
         let out = crate::dice::resolve_shooting_with_tray(
             &[prof], &[0], &[24], &att, &def, 12.0, &mut tray,
         );
@@ -40,7 +40,7 @@ use super::*;
         assert!(us.shoot[0].bane);
         let mut prof = us.shoot[0].clone();
         prof.attacks = 24;
-        let mut tray = Tray::seeded(27);
+        let mut tray = crate::dice::Tray::seeded(27);
         let out = crate::dice::resolve_shooting_with_tray(
             &[prof], &[0], &[24], &att, &def, 12.0, &mut tray,
         );
