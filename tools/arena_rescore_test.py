@@ -92,6 +92,66 @@ def test_old_sign_test_discards_ties_that_carry_signal(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# F10: a crashed run must not produce a full-looking receipt
+# ---------------------------------------------------------------------------
+def _write_plan(d, rows, name="plan.tsv"):
+    """The runner writes its intended slice set BEFORE the first game:
+    one game per data row (plan.tsv for the E-B runner, pairs.tsv for the
+    token A/B runner)."""
+    with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
+        for i in range(rows):
+            fh.write("1000\t2000\t1\tarmyA\tarmyB\n")
+
+
+def test_crashed_run_is_refused_not_scored(tmp_path, capsys):
+    """Take a completed run, delete most result files (a crash), re-score:
+    the receipt must be REFUSED, not a normal-looking score (F10)."""
+    d = synth_run(tmp_path, pw=0.35, pd=0.30, K=10, seed=5)
+    _write_plan(d, 40)
+    for f in sorted(os.listdir(d)):
+        if f.endswith(".json") and "d2003" not in f:
+            os.remove(os.path.join(d, f))
+    rc = ar.main([d, "--net", NET])
+    out = capsys.readouterr().out
+    assert rc != 0, "today a crashed run scores like a finished one"
+    assert "PARTIAL 1/40" in out
+    assert "REFUSED" in out
+
+
+def test_allow_partial_stamps_the_receipt(tmp_path, capsys):
+    d = synth_run(tmp_path, pw=0.35, pd=0.30, K=10, seed=5)
+    _write_plan(d, 40)
+    for f in sorted(os.listdir(d)):
+        if f.endswith(".json") and "d2003" not in f:
+            os.remove(os.path.join(d, f))
+    rc = ar.main([d, "--net", NET, "--allow-partial"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "PARTIAL 1/40" in out
+
+
+def test_complete_run_states_expected_and_scored(tmp_path, capsys):
+    """expected-vs-scored is on EVERY receipt, not only on a shortfall."""
+    d = synth_run(tmp_path, pw=0.35, pd=0.30, K=10, seed=5)
+    _write_plan(d, 40)
+    rc = ar.main([d, "--net", NET])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "expected 40" in out and "scored 40" in out
+    assert "PARTIAL" not in out
+
+
+def test_pairs_tsv_plan_is_recognized(tmp_path, capsys):
+    """The token A/B runner writes its plan as pairs.tsv."""
+    d = synth_run(tmp_path, pw=0.35, pd=0.30, K=10, seed=5)
+    _write_plan(d, 40, name="pairs.tsv")
+    os.remove(os.path.join(d, "arena_" + NET + "_vs_" + OPP + "_s1000_d2000.json"))
+    rc = ar.main([d, "--net", NET])
+    out = capsys.readouterr().out
+    assert rc != 0 and "PARTIAL 39/40" in out
+
+
+# ---------------------------------------------------------------------------
 # Block construction
 # ---------------------------------------------------------------------------
 def test_seats_paired_within_block(tmp_path):
