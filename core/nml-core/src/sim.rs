@@ -24,7 +24,7 @@ use crate::geom::{self, V3};
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
-    EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
+    EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -230,6 +230,42 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
         }
     }
     state.alive[ti] = state.positions[ti].len() as i64;
+}
+
+/// Deadly(X) landing PER MODEL — the table's `SoloController.apply_deadly_wounds`
+/// (solo_controller.gd:8333-8352, GF v3.5.1 p.14 "no carry-over", audit
+/// 2026-09-13 §2.1): each unsaved wound goes to the alive model with the MOST
+/// remaining wounds (ties keep the array order, the table's strict `>`), deals
+/// X capped at that model's remaining wounds, and the surplus is WASTED —
+/// nothing spills onto the next model. Returns the wounds actually dealt (the
+/// table's `dealt`).
+pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64) -> i64 {
+    let x = deadly_x.max(1);
+    let mut dealt = 0i64;
+    for _ in 0..unsaved.max(0) {
+        if state.wounds[ti].is_empty() {
+            break; // unit wiped — the remaining Deadly wounds are wasted
+        }
+        let mut best = 0usize;
+        for (i, w) in state.wounds[ti].iter().enumerate() {
+            if *w > state.wounds[ti][best] {
+                best = i;
+            }
+        }
+        let take = x.min(state.wounds[ti][best]);
+        dealt += take;
+        state.wounds[ti][best] -= take;
+        if state.wounds[ti][best] <= 0 {
+            state.wounds[ti].remove(best);
+            state.positions[ti].remove(best);
+            // radii stay aligned with positions or the base-edge measure lies.
+            if !state.radii[ti].is_empty() {
+                state.radii[ti].remove(best);
+            }
+        }
+    }
+    state.alive[ti] = state.positions[ti].len() as i64;
+    dealt
 }
 
 /// `_solo_tray_roll(model_count, 6, ...)` main.gd:7030 — the tray's SUCCESS
@@ -3284,7 +3320,7 @@ fn strike_phase(
     // own: on from the current rules epoch onward, pre-port corpora replay
     // byte-exact (dice.rs::save_batch's gate).
     let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
-    let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, tray);
+    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), tray);
     // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
     // here; the gated aliases never reach a melee save batch, exactly the
     // table's own `dist_in: -1.0` read, main.gd:6119).
@@ -3297,10 +3333,13 @@ fn strike_phase(
         let melee = &statics[next.roster.profile[*mi]].melee;
         mark_spent_limited(melee, &sc.keep, &mut next.limited_used[*mi]);
     }
-    let caused = r.caused;
+    let mut caused = r.caused;
     // rules-wave3-growthmark (epoch 6) — Regenerative Strength: wounds this
-    // strike IGNORED (Regeneration's own count) bank the bearer a marker.
-    let ignored = r.caused - r.wounds;
+    // strike IGNORED (Regeneration's own count) bank the bearer a marker. The
+    // Deadly groups' raw tally rides `caused` but lands separately below, so
+    // it is not an ignored wound.
+    let ignored = r.caused - r.wounds - r.deadly_tally;
+    let raw_deadly = r.deadly_tally;
     let w = shot.absorb(r);
     // B13: the table measures the lash-back on wounds actually TAKEN — the
     // wound-POOL difference (`_solo_retaliate_hits` :4570, NML-937), snapshotted
@@ -3314,6 +3353,18 @@ fn strike_phase(
     // this phase.
     let alive_before = next.alive[ti];
     land_wounds(next, ti, w);
+    // Audit 2026-09-13 §2.1 — Deadly lands PER MODEL with no carry-over (the
+    // table's `apply_deadly_wounds`, solo_controller.gd:8333), and the melee
+    // tally is the DEALT count so the multiply still decides who wins
+    // (main.gd:6190-6191).
+    let mut dealt = 0i64;
+    for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
+        let d = land_deadly_wounds(next, ti, post, dx);
+        dealt += d;
+        shot.log.push(format!(
+            "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
+    }
+    caused = caused - raw_deadly + dealt;
     // rules-wave3-growthmark (epoch 6) — the ignore-wound marker AFTER the
     // landing: a bearer that ignored some of these wounds banks for them.
     if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
@@ -3326,7 +3377,7 @@ fn strike_phase(
     // so retaliation wounds can never re-trigger anyone's Retaliate.
     let mut retaliated = 0i64;
     let taken = pool_before - wounds_left(next, ti);
-    if w > 0 && taken > 0 && def.retaliate_hits_per_wound > 0 && next.alive[si] > 0 {
+    if taken > 0 && def.retaliate_hits_per_wound > 0 && next.alive[si] > 0 {
         let hits = def.retaliate_hits_per_wound * taken;
         shot.log.push(format!("Retaliate: {} lashes back — {} hits", ut.name, hits));
         let su = &statics[next.roster.profile[si]];
@@ -5563,7 +5614,7 @@ fn resolve_with(
                             // CLASS FIX (external review 03.09. item 3 / F9,
                             // `acts::rule_on`) — same gate as `strike_phase`'s
                             // melee half above.
-                            let r = crate::dice::resolve_volley_with_tray(
+                            let r = crate::dice::resolve_volley_leg(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d,
                                 seams.cond_ap_dice || rule_on(seams.rules_epoch, 1),
@@ -5575,6 +5626,10 @@ fn resolve_with(
                                 // The Shred Boost's widened save-fail window —
                                 // see `shred_boost_active`'s doc above.
                                 shred_boost_active(seams.rules_epoch),
+                                // Audit 2026-09-13 §2.1 — the Deadly gate's leg
+                                // pick: per-model landing from
+                                // `EPOCH_14_DEADLY_LANDING`, pool multiply below.
+                                rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
                                 tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a
@@ -5598,9 +5653,21 @@ fn resolve_with(
                             // rules-wave3-growthmark (epoch 6) — the wounds
                             // this volley IGNORED, before `absorb` consumes
                             // the result (Regenerative Strength's trigger).
-                            let ignored = r.caused - r.wounds;
+                            // The Deadly groups' raw tally rides `caused` but
+                            // lands separately below — not an ignored wound.
+                            let ignored = r.caused - r.wounds - r.deadly_tally;
                             let w = shot.absorb(r);
                             land_wounds(&mut next, g.ti, w);
+                            // Audit 2026-09-13 §2.1 — Deadly lands PER MODEL
+                            // with no carry-over (the table's
+                            // `apply_deadly_wounds`, solo_controller.gd:8333):
+                            // each unsaved wound ×X on the model with the most
+                            // remaining wounds, capped there, surplus wasted.
+                            for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
+                                let d = land_deadly_wounds(&mut next, g.ti, post, dx);
+                                shot.log.push(format!(
+                                    "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
+                            }
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
                             if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
