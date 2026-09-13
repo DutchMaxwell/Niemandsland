@@ -69,9 +69,11 @@ def test_ledger_emits_the_census_distinct_names(books, capsys):
 
 def test_audited_diff_buckets_and_exit_code(books, tmp_path, capsys):
     """(b) A hand-written audited file with one deliberate typo produces
-    exactly 2 AUDITED, 1 UNKNOWN and the rest UNAUDITED, with every bucket's
-    full names printed; (c) the exit code is 1 in that case and 0 when
-    UNAUDITED and UNKNOWN are both empty."""
+    exactly 2 AUDITED, 1 UNKNOWN and the rest of the universe UNAUDITED (3
+    rows - the diff is system-scoped, so Furious audited in aof leaves
+    gf/Furious unaudited), with every bucket's full names printed; (c) the
+    exit code is 1 in that case and 0 when UNAUDITED and UNKNOWN are both
+    empty."""
     audited = tmp_path / "audited.tsv"
     audited.write_text(
         "# wave 1 audit - hand-written\n"
@@ -84,11 +86,12 @@ def test_audited_diff_buckets_and_exit_code(books, tmp_path, capsys):
     assert rc == 1
     out = capsys.readouterr().out.splitlines()
     assert "AUDITED: 2" in out
-    assert "UNAUDITED: 2" in out
+    assert "UNAUDITED: 3" in out
     assert "UNKNOWN: 1" in out
     assert "gf\tFuroius" in out, "the UNKNOWN name must be listed in full"
     assert "gf\tOff Book" in out, "the UNAUDITED names must be listed in full"
     assert "gf\tFurious Aura" in out
+    assert "aof\tFurious" in out, "auditing a name in aof does not audit gf"
 
     complete = tmp_path / "complete.tsv"
     complete.write_text(
