@@ -68,6 +68,7 @@ rm -f "$raw"
 # Refuse instead of comparing it.
 if [ "$clippy_rc" -ne 0 ]; then
   echo "clippy_gate: cargo clippy exited $clippy_rc -- the workspace did not compile"
+  grep -m 12 '"level":"error"' "$raw" || true
   echo "clippy_gate: cleanly, so the diagnostics are a partial measurement."
   echo "clippy_gate: refusing to compare."
   exit 1

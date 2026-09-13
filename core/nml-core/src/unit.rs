@@ -2208,12 +2208,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // `min(bearers, alive)` fold. Pre-port records keep the hard 0 and
         // replay byte-exact.
         counter_models: if rule_on(rules_epoch, CURRENT_RULES_EPOCH) {
-            p.weapons
-                .iter()
-                .filter(|w| w.range <= 0.0 && weapon_has(w, "Counter"))
-                .map(|w| w.count.max(1))
-                .sum::<i64>()
-                .min(p.model_count.max(0))
+            p.weapons.iter().filter(|w| w.range <= 0.0 && weapon_has(w, "Counter")).map(|w| w.count.max(1)).sum::<i64>().min(p.model_count.max(0))
         } else {
             0
         },
