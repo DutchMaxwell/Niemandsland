@@ -84,6 +84,16 @@ func _granted_rules(member: GameUnit) -> Array:
 	return out
 
 
+## The granted rule names in `member`'s chain that are scoped to ATTACKERS (#845 option (b):
+## a Mark's record lands here, on the marked enemy, not on the bearer).
+func _attacker_records(member: GameUnit) -> Array:
+	var out: Array = []
+	for m in _main._solo_mods_of_chain(member):
+		if str((m as Dictionary).get("beneficiary", "")) == "attackers":
+			out.append(str((m as Dictionary).get("grants_rule", "")))
+	return out
+
+
 func _log_text() -> String:
 	var text := ""
 	for e in _main.battle_log.entries():
@@ -107,10 +117,10 @@ func test_a_mark_still_reaches_a_target_in_the_open() -> void:
 	var target: GameUnit = pair[1]
 	_main.opr_army_manager.current_round = 1
 	_main._solo_apply_vs_marks(bearer, target, 6.0)
-	var granted := _granted_rules(bearer)
+	var granted := _attacker_records(target)
 	assert_array(granted) \
-		.override_failure_message("control fixture: an UNBLOCKED Mark within range must still land (granted: %s)" %
-			str(granted)) \
+		.override_failure_message("control fixture: an UNBLOCKED Mark within range must still land on the " +
+			"TARGET (#845 option (b); attacker-side records: %s)" % str(granted)) \
 		.contains(["Bane"])
 
 
@@ -123,10 +133,10 @@ func test_a_mark_does_not_reach_a_target_behind_a_wall() -> void:
 	_main.opr_army_manager.current_round = 1
 	# 6" — well inside the rule's 18" range, so ONLY line of sight can refuse it.
 	_main._solo_apply_vs_marks(bearer, target, 6.0)
-	var granted := _granted_rules(bearer)
+	var granted := _attacker_records(target)
 	assert_array(granted) \
 		.override_failure_message("NML-936 — Bane Mark landed on a target BEHIND A WALL (no LOS gate in " +
-			"_solo_apply_vs_marks; the once-mod chain now grants: %s)" % str(granted)) \
+			"_solo_apply_vs_marks; the target's attacker-side records now read: %s)" % str(granted)) \
 		.not_contains(["Bane"])
 	assert_str(_log_text()) \
 		.override_failure_message("NML-936 — no logged line refuses the Mark for lack of sight (log:\n%s)" % _log_text()) \
@@ -307,15 +317,17 @@ func test_an_aircraft_target_is_visible_from_inside_the_container() -> void:
 
 
 # =====================================================================================
-# #845 — the Rapid Charge Mark registry gate key.
+# #845 option (b) — attacker-side Marks land on the TARGET.
 # =====================================================================================
 # _solo_apply_vs_marks is gated on params["vs_target"] (main.gd:17162) and
 # _solo_apply_utility_buffs skips that same key (main.gd:16906); every other Mark the consumer
 # handles carries it. The Dark Elves entry shipped "vs_marked" instead — a key no code path
 # reads — so the mark was dead on the table. This drives the REAL aof/dark_elves registry entry
-# (no synthetic injection) and pins the book's own outcome: the bearer marks the enemy and is
-# granted the base rule "Rapid Charge" (name minus " Mark") against that attack.
-func test_the_real_rapid_charge_mark_grants_rapid_charge() -> void:
+# (no synthetic injection) and pins the book's own outcome: the bearer marks the enemy, the
+# base rule "Rapid Charge" (name minus " Mark") is recorded on the TARGET with
+# beneficiary "attackers", a friendly unit attacking that target gains it, and the bearer
+# itself gains nothing live.
+func test_the_real_rapid_charge_mark_lands_on_the_target() -> void:
 	var bearer := E2EBoot.make_unit(_main, 1, "Bearer", [Vector3(-0.3, 0, 0)])
 	bearer.unit_properties["game_system"] = "aof"
 	bearer.unit_properties["faction_folder"] = "dark_elves"
@@ -323,10 +335,46 @@ func test_the_real_rapid_charge_mark_grants_rapid_charge() -> void:
 	var target := E2EBoot.make_unit(_main, 2, "Target", [Vector3(0.3, 0, 0)])
 	target.unit_properties["game_system"] = "aof"
 	target.unit_properties["faction_folder"] = "dark_elves"
+	var ally := E2EBoot.make_unit(_main, 1, "Ally", [Vector3(0.0, 0, 0.3)])
+	_main.opr_army_manager.game_units[target.unit_id] = target   # the NML-949 mirror walks the manager
 	_main.opr_army_manager.current_round = 1
 	_main._solo_apply_vs_marks(bearer, target, 6.0)
-	var granted := _granted_rules(bearer)
-	assert_array(granted) \
-		.override_failure_message(("#845 — Rapid Charge Mark never fired (granted: %s). The registry " +
-			"gate key must be vs_target like every other Mark the consumer reads.") % str(granted)) \
+	var on_target := _attacker_records(target)
+	assert_array(on_target) \
+		.override_failure_message("#845 option (b) — the Rapid Charge Mark's attackers-side record must " +
+			"land on the TARGET (target records: %s). The registry gate key stays vs_target." % str(on_target)) \
 		.contains(["Rapid Charge"])
+	assert_bool(bearer.has_special_rule("Rapid Charge")) \
+		.override_failure_message("#845 option (b) — the bearer itself must gain nothing live from carrying " +
+			"the Mark; the grant belongs to units acting against the marked enemy") \
+		.is_false()
+	assert_bool(AiSpell.granted_rules_of(ally, target, false).has("Rapid Charge")) \
+		.override_failure_message("#845 option (b) — a friendly unit acting against the marked enemy must " +
+			"read Rapid Charge off the TARGET's record") \
+		.is_true()
+
+
+func test_the_real_furious_mark_lands_on_the_target_and_arms_a_charger() -> void:
+	var bearer := E2EBoot.make_unit(_main, 1, "Bearer", [Vector3(-0.3, 0, 0)])
+	bearer.unit_properties["game_system"] = "aof"
+	bearer.unit_properties["faction_folder"] = "ossified_undead"
+	bearer.unit_properties["special_rules"] = ["Furious Mark"]
+	var target := E2EBoot.make_unit(_main, 2, "Target", [Vector3(0.3, 0, 0)])
+	target.unit_properties["game_system"] = "aof"
+	target.unit_properties["faction_folder"] = "ossified_undead"
+	var ally := E2EBoot.make_unit(_main, 1, "Ally", [Vector3(0.0, 0, 0.3)])
+	_main.opr_army_manager.current_round = 1
+	_main._solo_apply_vs_marks(bearer, target, 6.0)
+	var on_target := _attacker_records(target)
+	assert_array(on_target) \
+		.override_failure_message("#845 option (b) — the Furious Mark's attackers-side record must land on " +
+			"the TARGET (target records: %s)" % str(on_target)) \
+		.contains(["Furious"])
+	var profile := _main._solo_bridge_granted_flags(ally, {}, target)
+	assert_bool(bool(profile.get("furious", false))) \
+		.override_failure_message("#845 option (b) — a friendly charger must gain Furious from the target's " +
+			"attackers-side record at the charge-damage bridge (profile: %s)" % str(profile)) \
+		.is_true()
+	assert_bool(bearer.has_special_rule("Furious")) \
+		.override_failure_message("#845 option (b) — the bearer itself must gain nothing live") \
+		.is_false()
