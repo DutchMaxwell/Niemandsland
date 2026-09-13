@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use tract_onnx::prelude::*;
 
 const SCHEMA: &str = "1";
-const TOKEN_SCHEMA: &str = "units24x72,objs6x12,terr18x12,glob16,vocab226,bag8";
+const TOKEN_SCHEMA: &str = "units24x90,objs6x12,terr18x12,glob16,vocab1017,bag17";
 const VALUE_HEAD: &str = "margin";
 const SELFTEST_LABEL: &str = "standin-v2x2";
 const SELFTEST_JSON: &str = include_str!("onnx_selftest.json");

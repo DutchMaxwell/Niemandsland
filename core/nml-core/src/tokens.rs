@@ -39,7 +39,7 @@ pub const N_TERR: usize = 18;
 /// dynamically per batch — see the RED/GREEN test's module docstring for
 /// the read-only verification).
 pub const N_CAND: usize = 160;
-pub const F_U: usize = 72;
+pub const F_U: usize = 90;
 pub const F_O: usize = 12;
 pub const F_T: usize = 12;
 pub const F_G: usize = 16;
@@ -48,9 +48,12 @@ pub const F_C: usize = 40;
 /// bucket — the divisor the unit token's rule-bag slot ids are read against.
 const VOCAB_N: f32 = 226.0;
 /// How many `RowEncoder::rule_pairs` (slot, rating) pairs the bag keeps —
-/// F_u's "+16" bucket is `BAG_PAIRS` pairs of 2 numbers, ascending by slot
+/// F_u's "+34" bucket is `BAG_PAIRS` pairs of 2 numbers, ascending by slot
 /// (the same order `rule_pairs` already builds), zero-padded past the end.
-const BAG_PAIRS: usize = 8;
+/// 17 is the smallest bag that carries every pair for >= 95 % of live units
+/// (RULE_BAG_SIZING_2026-09-13: worst case 19 pairs, p99 15) and the first
+/// that lets a caster's 6-spell book past the 13 worst-case non-spell pairs.
+const BAG_PAIRS: usize = 17;
 
 /// One position's export — `Core.policy_tokens` (nml-core-py/src/lib.rs).
 #[derive(Debug)]
@@ -98,8 +101,8 @@ fn b(v: bool) -> f32 {
     v as i64 as f32
 }
 
-/// The unit token, `F_u = 72` — DESIGN §8.1 "Unit token". 70 fields, zero
-/// padded to 72. Field groups, source cited once per group:
+/// The unit token, `F_u = 90` — DESIGN §8.1 "Unit token". 88 fields, zero
+/// padded to 90. Field groups, source cited once per group:
 /// * geometry (7) — centroid `geom::centre` (`geom.rs:73`) over
 ///   `state.positions[i]` (`state.rs:384`); `base_radius` `state.rs:59`;
 ///   `is_oval` `state.rs:196-202`; `model_count` `state.rs:52`.
@@ -116,7 +119,7 @@ fn b(v: bool) -> f32 {
 /// * live modifiers (6) — `Mods` `state.rs:311-326`.
 /// * per-game ledgers (6) — `state.rs:433-449` (`vs_mark_round` ..
 ///   `second_wind_used`), `is_attached`/`n_attached` `state.rs:398-399`.
-/// * rules (6+16) — `FLAG_RULES` `rows.rs:51-52` verbatim, plus the rule-bag
+/// * rules (6+34) — `FLAG_RULES` `rows.rs:51-52` verbatim, plus the rule-bag
 ///   (see `rule_bag`).
 /// * role (2) — `can_activate` `state.rs:475`; `is_the_acting_unit` is
 ///   `cands[0].unit` (every candidate of one position shares its actor).
@@ -204,21 +207,23 @@ fn unit_token(
     for (k, r) in FLAG_RULES.iter().enumerate() {
         t[46 + k] = b(has_special_rule(&p.special_rules, r));
     }
-    t[52..68].copy_from_slice(&rule_bag(rows, p, us));
-    t[68] = b(state.can_activate(i, state.player[i], false));
-    t[69] = b(acting_roster_idx == Some(i));
+    t[52..86].copy_from_slice(&rule_bag(rows, p, us));
+    t[86] = b(state.can_activate(i, state.player[i], false));
+    t[87] = b(acting_roster_idx == Some(i));
     t
 }
 
-/// The "+16" of the rules bucket: up to `BAG_PAIRS` (slot, rating) pairs off
+/// The "+34" of the rules bucket: up to `BAG_PAIRS` (slot, rating) pairs off
 /// `RowEncoder::rule_pairs` (rows.rs:290-321, the same `RowVocab` the row
 /// encoder builds — no second vocabulary), ascending by slot, as
-/// `(slot / VOCAB_N, rating / 6)`. A trained `nn.Embedding(226, 16)` reads
-/// these pairs at train time (DESIGN §8.1); the export cannot bake trained
-/// weights, so it hands the model the sparse indices instead of a vector.
-fn rule_bag(rows: &mut RowEncoder, p: &crate::state::Profile, us: &UnitStatic) -> [f32; 16] {
+/// `(slot / VOCAB_N, rating / 6)`. A trained `nn.Embedding(1017, 16)` reads
+/// these pairs at train time (DESIGN §8.1; `token_policy.RULE_VOCAB` — the
+/// id space is 0..1016 since the vocab-1017 fix, the encode scale stays 226);
+/// the export cannot bake trained weights, so it hands the model the sparse
+/// indices instead of a vector.
+fn rule_bag(rows: &mut RowEncoder, p: &crate::state::Profile, us: &UnitStatic) -> [f32; 34] {
     let pairs = rows.rule_pairs(p, us);
-    let mut out = [0f32; 16];
+    let mut out = [0f32; 34];
     for (k, pair) in pairs.chunks(2).take(BAG_PAIRS).enumerate() {
         out[2 * k] = pair[0] as f32 / VOCAB_N;
         out[2 * k + 1] = pair[1] as f32 / 6.0;
@@ -744,8 +749,8 @@ mod tests {
         }
         let bag_a = {
             let pairs = enc.rule_pairs(state.profile(0), &statics[0]);
-            let mut out = [0f32; 16];
-            for (k, pr) in pairs.chunks(2).take(8).enumerate() {
+            let mut out = [0f32; 34];
+            for (k, pr) in pairs.chunks(2).take(BAG_PAIRS).enumerate() {
                 out[2 * k] = pr[0] as f32 / VOCAB_N;
                 out[2 * k + 1] = pr[1] as f32 / 6.0;
             }
@@ -754,10 +759,10 @@ mod tests {
         for (k, &w) in bag_a.iter().enumerate() {
             near(a[52 + k], w, &format!("unit A rule-bag col {k}"));
         }
-        near(a[68], 1.0, "unit A can_activate");
-        near(a[69], 1.0, "unit A is_the_acting_unit");
-        near(a[70], 0.0, "unit A pad 70");
-        near(a[71], 0.0, "unit A pad 71");
+        near(a[86], 1.0, "unit A can_activate");
+        near(a[87], 1.0, "unit A is_the_acting_unit");
+        near(a[88], 0.0, "unit A pad 88");
+        near(a[89], 0.0, "unit A pad 89");
 
         // Unit B (row 1): the other side, a single model, already activated.
         let (sev_b, mev_b) = unit_sev_mev(state.profile(1), &statics[0], &def);
@@ -776,8 +781,8 @@ mod tests {
         for (k, &w) in want_b.iter().enumerate() {
             near(b[k], w, &format!("unit B col {k}"));
         }
-        near(b[68], 0.0, "unit B can_activate (already activated)");
-        near(b[69], 0.0, "unit B is_the_acting_unit");
+        near(b[86], 0.0, "unit B can_activate (already activated)");
+        near(b[87], 0.0, "unit B is_the_acting_unit");
 
         // Objectives.
         assert_eq!(t.objs.len(), N_OBJ);
@@ -861,18 +866,20 @@ mod tests {
     }
 
     /// §8.1's own field-count check: the design's group totals for the unit
-    /// token (7+11+10+6+6+6+22+2) and the candidate token (9+4+5+2+4+6+3+1)
+    /// token (7+11+10+6+6+6+40+2) and the candidate token (9+4+5+2+4+6+3+1)
     /// both land on the raw width this builder actually fills.
     #[test]
     fn group_totals_match_design_8_1() {
-        assert_eq!(7 + 11 + 10 + 6 + 6 + 6 + 22 + 2, 70);
+        assert_eq!(7 + 11 + 10 + 6 + 6 + 6 + 40 + 2, 88);
         assert_eq!(9 + 4 + 5 + 2 + 4 + 6 + 3 + 1, 34);
     }
 
     /// The measured worst-case unit (RULE_BAG_SIZING_2026-09-13): `Vradhez`,
     /// gf/alien_hives — 12 rated unit rules + `Caster(2)` = 13 non-spell
     /// pairs, plus the whole 6-spell alien_hives book the registries give
-    /// every caster = 19 pairs. Only the bag's first 8 places fit them now.
+    /// every caster = 19 pairs. At the old `BAG_PAIRS = 8` only 8 fit and no
+    /// spell reached the bag; the widened 17-place bag keeps 17 pairs, spells
+    /// included.
     const VRADHEZ_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
       "vradhez":{"unit_id":"vradhez","name":"Vradhez","quality":4,"defense":3,"tough":3,
         "wounds_max":[3],"model_count":1,"caster_value":2,"base_radius":0.02,
