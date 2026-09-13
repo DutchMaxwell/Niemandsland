@@ -265,14 +265,45 @@ func ensure_models(unit_specs: Array) -> void:
 
 # === ctex (compressed-texture) delivery ===
 
+## F17 delivery counters — the ctex gate's two failure buckets, kept SEPARATE. A fleet-wide
+## incompatibility (every bake stale after one engine bump) must be countable, not collapse into
+## the same empty result as "this unit has no manifest entry". Counted per get_ctex_entry() call
+## (prefetch and spawn each evaluate the gate once, so a unit can appear in both totals).
+var ctex_no_entry_count := 0
+var ctex_incompatible_bake_count := 0
+
+
+## Which gate outcome applies to a unit's ctex delivery (F17): "ok" — usable ctex block;
+## "no_entry" — the manifest has no ctex block for this unit; "incompatible_bake" — a block
+## EXISTS but was baked for a DIFFERENT engine major.minor (.ctex is engine-version-coupled).
+## Keeping "incompatible_bake" distinct from "no_entry" is what makes a fleet-wide version
+## mismatch loud and countable instead of indistinguishable from business as usual.
+func get_ctex_gate_status(faction: String, unit_name: String) -> String:
+	var ctex: Dictionary = _entry(faction, unit_name).get("ctex", {})
+	if ctex.is_empty():
+		return "no_entry"
+	if not CtexLoader.ctex_compatible(str(ctex.get("godot_version", ""))):
+		return "incompatible_bake"
+	return "ok"
+
+
 ## A unit's ctex block IF it is USABLE by this loader, else {} (→ caller uses the legacy raw-GLB url).
 ## Usable := baked for this engine version (.ctex is engine-version-coupled) AND a downloadable albedo
 ## in the form this loader supports (today: textures.albedo). This ONE guard gates both decision
 ## points (prefetch + spawn), so an unknown/unsupported ctex shape (e.g. the contract-v1 `materials`
-## form) degrades to the legacy path — NEVER to nothing. Keep it as forward-compat.
+## form) degrades to the legacy path — NEVER to nothing. Keep it as forward-compat. The two failure
+## buckets are counted separately (F17) and an incompatible bake warns per lookup.
 func get_ctex_entry(faction: String, unit_name: String) -> Dictionary:
 	var ctex: Dictionary = _entry(faction, unit_name).get("ctex", {})
-	if ctex.is_empty() or not CtexLoader.ctex_compatible(str(ctex.get("godot_version", ""))):
+	if ctex.is_empty():
+		ctex_no_entry_count += 1
+		return {}
+	if not CtexLoader.ctex_compatible(str(ctex.get("godot_version", ""))):
+		ctex_incompatible_bake_count += 1
+		var vi: Dictionary = Engine.get_version_info()
+		push_warning("ctex: INCOMPATIBLE BAKE %s (bake godot %s != engine %d.%d) — legacy raw-GLB fallback" % [
+			make_key(faction, unit_name), str(ctex.get("godot_version", "")),
+			int(vi.get("major", 0)), int(vi.get("minor", 0))])
 		return {}
 	if not _ctex_block_usable(ctex):
 		return {}
