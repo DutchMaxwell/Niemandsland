@@ -32,6 +32,12 @@ fn golden() -> Value {
 }
 
 fn corpus() -> ActCorpus {
+    // The stand-in's golden leaves were captured with the ACTS_25 legacy pin
+    // (`core/nml-core/tests/common/mod.rs`, the generator's
+    // `set_legacy_no_cond_ap(True)`), and the pin has to be set before
+    // `build_act_statics` stamps `UnitStatic`. Without it the fixture's
+    // pre-NML-1103 AP pricing is not what the replay prices.
+    nml_core::unit::LEGACY_NO_COND_AP.store(true, std::sync::atomic::Ordering::Relaxed);
     let path = format!("{ROOT}/core/nml-core/tests/fixtures/acts_25.jsonl");
     nml_core::load_acts(&path).expect("acts_25.jsonl")
 }
@@ -52,12 +58,14 @@ struct Recorder<'a> {
     rows: RefCell<RowEncoder>,
     hero_attach: bool,
     kept: RefCell<Vec<Tokens>>,
+    calls: RefCell<Vec<usize>>,
 }
 
 impl LeafValue for Recorder<'_> {
     fn value(&self, leaves: &[&State], side: i64) -> Result<Vec<f64>, Unsupported> {
         let mut rows = self.rows.borrow_mut();
         let mut kept = self.kept.borrow_mut();
+        self.calls.borrow_mut().push(leaves.len());
         for state in leaves {
             kept.push(tokens::build(state, side, self.statics, self.terrain, &mut rows,
                 &[], -1, self.hero_attach, false)?);
@@ -66,21 +74,36 @@ impl LeafValue for Recorder<'_> {
     }
 }
 
-/// The two-act corpus replay, one recorder instance for both acts.
-fn record(corpus: &ActCorpus, statics: &[UnitStatic]) -> Vec<Tokens> {
+/// The two-act corpus replay, one recorder instance for both acts. Returns the
+/// tokens in hand-out order plus the leaf count of each `value()` call. The
+/// golden capture kept at most 48 leaves (`onnx_export.py:229` `keep=48`), so
+/// the first 48 are the fixture's real leaves and the tail (if the replay hands
+/// out more) is beyond the fixture by construction.
+fn record(corpus: &ActCorpus, statics: &[UnitStatic]) -> (Vec<Tokens>, Vec<usize>) {
     let rec = Recorder {
         statics,
         terrain: &corpus.terrain,
         rows: RefCell::new(RowEncoder::new(ROOT)),
         hero_attach: corpus.knobs.hero_attach,
         kept: RefCell::new(Vec::new()),
+        calls: RefCell::new(Vec::new()),
     };
     for act in &corpus.acts[..2] {
         plan_with_leaf_value(&act.state, &corpus.terrain, statics, &corpus.knobs,
             &act.statics, act.player, None, Some(&rec), 1.0)
             .unwrap_or_else(|e| panic!("act {}: {e:?}", act.round));
     }
-    rec.kept.into_inner()
+    (rec.kept.into_inner(), rec.calls.into_inner())
+}
+
+/// The recorder's hand-out order sliced the way the fixture keeps it.
+fn real_tokens<'a>(all: &'a [Tokens], calls: &[usize]) -> &'a [Tokens] {
+    assert_eq!(calls.len(), 2, "one leaf batch per activation");
+    assert_eq!(calls[0], 26, "act0 must hand out 26 leaves");
+    assert!(calls[1] >= 22, "act1 must hand out at least the 22 the fixture kept");
+    assert_eq!(all.len(), calls.iter().sum::<usize>(), "the calls and the kept tokens disagree");
+    assert!(all.len() >= REAL_LEAVES, "the replay handed out {} leaves, fewer than 48", all.len());
+    &all[..REAL_LEAVES]
 }
 
 /// The golden expected values, sliced for the leaves handed in this call.
@@ -116,14 +139,15 @@ fn expected_member_values(golden: &Value) -> Vec<Vec<f64>> {
         .collect()
 }
 
-/// Proof 1 — the corpus replay rebuilds exactly the 48 real leaves, 26 + 22.
+/// Proof 1 — the corpus replay rebuilds the 48 real leaves, 26 + 22.
 #[test]
 fn real_leaves_rebuild_in_hand_out_order() {
     let golden = golden();
     let provenance: Value = serde_json::from_slice(&fixture("provenance_standin-v2x2.json")).unwrap();
     let corpus = corpus();
     let statics = nml_core::build_act_statics(&corpus, ROOT);
-    let tokens = record(&corpus, &statics);
+    let (all, calls) = record(&corpus, &statics);
+    let tokens = real_tokens(&all, &calls);
 
     let sourced = |act: &str| {
         golden["leaves"].as_array().unwrap().iter()
@@ -133,8 +157,8 @@ fn real_leaves_rebuild_in_hand_out_order() {
     assert_eq!(sourced("act0"), 26);
     assert_eq!(sourced("act1"), 22);
     assert_eq!(provenance["verify"]["real_leaves"].as_u64().unwrap() as usize, REAL_LEAVES);
-    assert_eq!(tokens.len(), REAL_LEAVES, "the replay must hand out exactly the 48 real leaves");
-    eprintln!("ONNX_HOOK proof=tokens leaves={} act0=26 act1=22", tokens.len());
+    assert_eq!(tokens.len(), REAL_LEAVES);
+    eprintln!("ONNX_HOOK proof=tokens leaves={} calls={calls:?}", tokens.len());
 }
 
 /// Proof 2 — every one of the six tensors is bit-identical to the golden leaf.
@@ -143,8 +167,8 @@ fn real_leaf_tokens_match_the_golden_bit_exactly() {
     let golden = golden();
     let corpus = corpus();
     let statics = nml_core::build_act_statics(&corpus, ROOT);
-    let tokens = record(&corpus, &statics);
-    assert_eq!(tokens.len(), REAL_LEAVES);
+    let (all, calls) = record(&corpus, &statics);
+    let tokens = real_tokens(&all, &calls);
 
     for (i, token) in tokens.iter().enumerate() {
         let json = token.to_json();
@@ -162,7 +186,8 @@ fn real_leaf_values_and_members_match_the_golden_within_tolerance() {
     let golden = golden();
     let corpus = corpus();
     let statics = nml_core::build_act_statics(&corpus, ROOT);
-    let tokens = record(&corpus, &statics);
+    let (all, calls) = record(&corpus, &statics);
+    let tokens = real_tokens(&all, &calls);
     let brain = standin();
     let act = &corpus.acts[0];
     let hook = OnnxHook {
@@ -174,7 +199,7 @@ fn real_leaf_values_and_members_match_the_golden_within_tolerance() {
         opener_seat: act.statics.opener_seat,
     };
 
-    let (values, members) = hook.run_tokens(&tokens).expect("tract runs the 48 real leaves");
+    let (values, members) = hook.run_tokens(tokens).expect("tract runs the 48 real leaves");
     assert_eq!(values.len(), tokens.len());
     assert_eq!(members.len(), tokens.len() * brain.members());
     assert_eq!(brain.members(), 2);
