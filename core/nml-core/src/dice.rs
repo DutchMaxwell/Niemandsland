@@ -26,7 +26,7 @@
 //! `randi_range(1, 6)` on it.
 
 use crate::combat::{
-    conditional_ap_bonus, covered_defense, deadly_multiplier, fortified_ap, guarded_defense,
+    conditional_ap_bonus, covered_defense, fortified_ap, guarded_defense,
     impact_total_dice, melee_hit_modifier, modified_hit_target, reliable_quality, save_target,
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
@@ -147,9 +147,20 @@ pub struct ShootResult {
     /// it — its save batches run on fresh results, the base window.
     pub bane_low: i64,
     /// How many saves the WIDENED window added to the re-roll batches (the
-    /// successful 5s the base 6s leg would never have touched) — the volley
+    /// successful 5s the base 6s-only leg would never have touched) — the volley
     /// turns a non-zero count into the one rules-must-log line.
     pub bane_rerolled: i64,
+    /// Audit 2026-09-13 §2.1 — the volley's Deadly groups, `(post-regeneration
+    /// unsaved, X)` per weapon: Regeneration draws on the RAW unsaved count
+    /// (the table's own roll inside `_solo_land_deadly_wounds`, main.gd:6762),
+    /// the landing then multiplies PER MODEL with no carry-over
+    /// (`SoloController.apply_deadly_wounds`, solo_controller.gd:8333). Empty
+    /// on every non-Deadly activation; the landing sites drain it.
+    pub deadly_groups: Vec<(i64, i64)>,
+    /// The same groups' PRE-regeneration raw unsaved count — the shooting
+    /// tally keeps it (`total_caused += w`, main.gd:3318) while the landing
+    /// uses the group's post-regeneration count.
+    pub deadly_tally: i64,
 }
 
 impl ShootResult {
@@ -174,6 +185,8 @@ impl ShootResult {
         self.log.extend(other.log);
         self.fortified_fired = self.fortified_fired || other.fortified_fired;
         self.bane_rerolled += other.bane_rerolled;
+        self.deadly_groups.extend(other.deadly_groups);
+        self.deadly_tally += other.deadly_tally;
         for u in other.unported {
             self.mark(u);
         }
@@ -294,7 +307,8 @@ fn shred_faces(faces: &[u8], reroll: &[u8], low: i64, target: i64) -> i64 {
 
 /// `main._solo_save_batch` :6385-6483 — ONE batch for the whole defender (not
 /// per model), Fortified first, then the dice, then Bane's re-roll of the
-/// unmodified 6s, then Shred and the pooled Deadly multiplier.
+/// unmodified 6s, then Shred — the pool stays RAW (the Deadly multiply is the
+/// landing's, audit 2026-09-13 §2.1).
 ///
 /// `shred_alias_dice` is the Shred-FAMILY epoch gate
 /// (`sim.rs` passes `rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES)`): the
@@ -415,8 +429,11 @@ fn save_batch(
     } else {
         0
     };
-    let mult = if p.deadly > 0 { deadly_multiplier(p.deadly, def.tough.max(1)) } else { 1 };
-    unsaved * mult + shred
+    // Audit 2026-09-13 §2.1 — the pool stays RAW: the Deadly multiply happens
+    // PER MODEL at the landing (sim::land_deadly_wounds, the table's
+    // `apply_deadly_wounds`), never here against the unit's printed Tough, and
+    // the overkill never carries onto the next model.
+    unsaved + shred
 }
 
 /// ONE shooting activation resolved on the tray, in the TABLE's draw order
@@ -439,8 +456,8 @@ fn save_batch(
 /// extra-ATTACK-DIE Surge siblings (Bloodborn / Primal /
 /// Predator / Clan Warrior and their book aliases, `surge_attack_hits`), Blast,
 /// the Rending/Destructive/on-6 AP sub-batch, Fortified, Shielded/Guarded/Cover
-/// on the save target, Bane's re-roll, Shred, the pooled Deadly multiplier and
-/// the pooled Regeneration roll.
+/// on the save target, Bane's re-roll, Shred, the per-model Deadly groups
+/// (audit 2026-09-13 §2.1) and the pooled Regeneration roll.
 ///
 /// NOT PORTED. Nothing here is a silent skip: everything the trainer's own
 /// profile model can SEE is flagged per activation in `unported`; everything
@@ -453,9 +470,10 @@ fn save_batch(
 ///     flags nothing; every pre-epoch record keeps the ungated read, and the
 ///     MELEE leg (whose gates are no-ops at dist 0) keeps the mark.
 ///   * `hazardous`   — Hazardous wounds the FIRER on its natural 1s (:16555).
-///   * `deadly`      — the table lands Deadly per model with its OWN
-///     Regeneration roll on the RAW unsaved count (:6634), not the pooled one
-///     this port uses, so the regen roll's die count moves.
+///   * `deadly`      — LEGACY FLAG (audit 2026-09-13 §2.1): the landing now
+///     mirrors the table per model (`sim::land_deadly_wounds`) with its OWN
+///     Regeneration roll on the RAW unsaved count (:6762); the flag stays on
+///     so every pre-fix corpus replays under the same tolerance.
 ///   * `takedown`    — resolved "as a unit of [1]" against a picked model, with
 ///     that model's own Defense (:3155).
 ///   * `strafing`    — the table splits a Strafing weapon per model (:2918).
@@ -1078,9 +1096,6 @@ pub fn resolve_volley_with_tray(
         }
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_dice, shred_low, tray, &mut out);
         w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, att.shred_grant, shred_alias_dice, shred_low, tray, &mut out);
-        if p.deadly > 0 {
-            out.mark("deadly");
-        }
         // `_solo_ignores_regen` :6927-6933 — Bane / Rending (and Unstoppable,
         // ai_ev.gd:433) cut through Regeneration; everything else is poolable.
         // B2b: `_solo_ignores_regen`'s last line (main.gd:6941) also answers
@@ -1089,7 +1104,19 @@ pub fn resolve_volley_with_tray(
         // `bane`: the Bane-primitive aliases (Bestial, Mischievous, Scrapper,
         // Vicious) re-roll sixes but carry no Regeneration clause, so they
         // never join this proof. Pre-port records stamp both flags alike.
-        if p.bypass_regen || p.rending || p.unstoppable || att.rending_grant || att.unstoppable_grant {
+        // Audit 2026-09-13 §2.1 — a Deadly weapon's share is its OWN group: its
+        // Regeneration roll draws on the RAW unsaved count (the table's roll
+        // inside `_solo_land_deadly_wounds`, main.gd:6762), the landing
+        // multiplies PER MODEL with no carry-over (`apply_deadly_wounds`,
+        // solo_controller.gd:8333). The tally keeps the raw count
+        // (`total_caused += w`, main.gd:3318).
+        let ignores_regen = p.bypass_regen || p.rending || p.unstoppable || att.rending_grant || att.unstoppable_grant;
+        if p.deadly > 0 {
+            out.mark("deadly");
+            let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
+            out.deadly_groups.push((post, p.deadly.max(1)));
+            out.deadly_tally += w;
+        } else if ignores_regen {
             regen_proof += w;
         } else {
             regenable += w;
@@ -1131,7 +1158,7 @@ pub fn resolve_volley_with_tray(
             shielded_defense(def.defense, true)
         ));
     }
-    out.caused = regen_proof + regenable;
+    out.caused = regen_proof + regenable + out.deadly_tally;
     out.wounds = regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
     out
 }
@@ -1333,13 +1360,15 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 /// Fighter's blocked-1s extra attacks (`stamp_bloodthirsty_named`'s flag, the
 /// melee fold's own leg below), Sergeant, Blast,
 /// the Rending/Destructive/on-6 AP sub-batch, Thrust's charge AP, Bane's
-/// re-roll, Shred, the pooled Deadly multiplier and every Regeneration roll in
+/// re-roll, Shred, the per-model Deadly groups (audit 2026-09-13 §2.1) and every
+/// Regeneration roll in
 /// its place, and — wave-4 follow-up — Reckless Piercing's round AP stamp
 /// (main.gd:6017's `_solo_reckless_ap` fold, the `Ctx::reckless_ap` leg).
 ///
-/// FLAGGED per activation, never skipped in silence: `deadly` (the table lands
-/// Deadly per model with its OWN Regeneration roll on the raw unsaved count,
-/// :6120, so the regen die count moves), `takedown`, `hazardous`,
+/// FLAGGED per activation, never skipped in silence: `deadly` (LEGACY FLAG,
+/// audit 2026-09-13 §2.1 — the landing now mirrors the table per model with its
+/// OWN Regeneration roll on the raw unsaved count; kept on so pre-fix corpora
+/// replay under the same tolerance), `takedown`, `hazardous`,
 /// `surge_gates`, and `counter_strikes_first` (a defender Counter weapon runs a
 /// whole EXTRA strike phase before Impact, :8058).
 ///
@@ -1591,20 +1620,26 @@ pub fn resolve_melee_with_tray(
                     if bt_hits > 0 {
                         // The table resolves the extras pooled with the same
                         // effective AP (main.gd:6180-6182) — one batch, no
-                        // separate on-6 AP sub-batch, no Deadly special-case.
+                        // separate on-6 AP sub-batch, no Deadly special-case:
+                        // they join the weapon's own batch, and on a Deadly
+                        // weapon its per-model group below.
                         let btw = save_batch(p, def, def_owner, bt_hits, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, tray, &mut out);
-                        if p.bypass_regen || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant {
-                            regen_proof += btw;
-                        } else {
-                            regenable += btw;
-                        }
+                        w += btw;
                     }
                 }
             }
+            // Audit 2026-09-13 §2.1 — a Deadly weapon's share is its OWN group:
+            // its Regeneration roll draws on the RAW unsaved count (the table's
+            // roll inside `_solo_land_deadly_wounds`, main.gd:6762), the landing
+            // multiplies PER MODEL with no carry-over (`apply_deadly_wounds`,
+            // solo_controller.gd:8333). The tally keeps the raw count.
+            let ignores_regen = p.bypass_regen || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant;
             if p.deadly > 0 {
                 out.mark("deadly");
-            }
-            if p.bypass_regen || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant {
+                let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
+                out.deadly_groups.push((post, p.deadly.max(1)));
+                out.deadly_tally += w;
+            } else if ignores_regen {
                 regen_proof += w;
             } else {
                 regenable += w;
@@ -1628,7 +1663,7 @@ pub fn resolve_melee_with_tray(
             shielded_defense(def.defense, true)
         ));
     }
-    out.caused += regen_proof + regenable;
+    out.caused += regen_proof + regenable + out.deadly_tally;
     out.wounds += regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
     out
 }
