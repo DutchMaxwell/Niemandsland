@@ -45,7 +45,6 @@ raw=$(mktemp)
 "$CARGO" clippy --workspace --all-targets --message-format json -- --cap-lints warn \
   >"$raw" 2>/dev/null
 clippy_rc=$?
-if [ "$clippy_rc" -ne 0 ]; then grep -m 12 '"level":"error"' "$raw" || true; fi
 current=$(python3 -c '
 import json,sys,collections
 c=collections.Counter()

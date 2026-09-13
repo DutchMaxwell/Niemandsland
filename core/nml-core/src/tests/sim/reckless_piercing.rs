@@ -203,7 +203,7 @@ use super::*;
         let mut tray = Tray::seeded(11);
         let mut shot = ShootResult::default();
         let seams = Seams { rules_epoch: 7, ..Seams::default() };
-        strike_phase(&statics, &mut st, 0, 2, true, seams, &mut tray, &mut shot);
+        strike_phase(&statics, &mut st, 0, 2, true, seams, &mut tray, &mut shot, StrikeSet::All);
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 5),
             "backfire: the melee saves run at AP(1) -- got {:#?}",
@@ -219,7 +219,7 @@ use super::*;
         st0.positions[2] = vec![[1.2 * IN2M, 0.0, 0.0]];
         let mut tray0 = Tray::seeded(11);
         let mut shot0 = ShootResult::default();
-        strike_phase(&statics, &mut st0, 0, 2, true, seams, &mut tray0, &mut shot0);
+        strike_phase(&statics, &mut st0, 0, 2, true, seams, &mut tray0, &mut shot0, StrikeSet::All);
         assert!(
             shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 4)
                 && !shot0.rolls.iter().any(|r| r.kind == "defense" && r.target == 5),
