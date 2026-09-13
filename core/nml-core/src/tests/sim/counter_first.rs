@@ -55,7 +55,7 @@ use super::*;
             "the charge melee must roll at all"
         );
         assert_eq!(
-            (shot.rolls[0].kind.as_str(), shot.rolls[0].owner.as_str()),
+            (shot.rolls[0].kind, shot.rolls[0].owner.as_str()),
             ("attack", "Defender"),
             "the counter pre-phase strikes before Impact — its hit roll opens the stream"
         );
