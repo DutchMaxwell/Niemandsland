@@ -1116,8 +1116,9 @@ mod tests {
     /// it also pins that the v7 legacy reading carries NONE of the 16.
     #[test]
     fn every_appended_v8_unit2_name_sits_at_its_slot() {
-        let v = RowVocab::load(&repo_root());
+        let v = RowVocab::for_version(&repo_root(), 8);
         assert!(v.loaded, "{:?}", v.error);
+        assert_eq!(v.version, 8);
         assert_eq!(v.unit.len(), 200, "unit band unchanged");
         assert_eq!(v.weapon.len(), 25, "weapon band unchanged");
         assert_eq!(v.spell.len(), 463, "spell band unchanged");
@@ -1159,7 +1160,8 @@ mod tests {
     /// predecessor's slots staying put.
     #[test]
     fn the_v8_append_does_not_move_any_v7_slot() {
-        let now = RowVocab::load(&repo_root());
+        let now = RowVocab::for_version(&repo_root(), 8);
+        assert_eq!(now.version, 8);
         let old = RowVocab::for_version(&repo_root(), 7);
         assert!(old.loaded, "{:?}", old.error);
         assert_eq!(old.version, 7);
@@ -1180,6 +1182,83 @@ mod tests {
         for (name, slot) in &old.unit2 {
             assert_eq!(now.unit2.get(name), Some(slot), "slot of {name} moved");
         }
+    }
+
+    /// unit2 (v9, 13.09.) — every name the census measures as `core_ported`
+    /// but still slotless after v8, appended in ALPHABETICAL order after the
+    /// v8 band. The PREFIX test: it hardcodes every appended name's exact
+    /// slot, so a base-offset bug fails here loudly instead of silently
+    /// colliding two bands — and it pins that the v8 legacy reading carries
+    /// NONE of them.
+    #[test]
+    fn every_appended_v9_unit2_name_sits_at_its_slot() {
+        let v = RowVocab::load(&repo_root());
+        assert!(v.loaded, "{:?}", v.error);
+        assert_eq!(v.unit.len(), 200, "unit band unchanged");
+        assert_eq!(v.weapon.len(), 25, "weapon band unchanged");
+        assert_eq!(v.spell.len(), 463, "spell band unchanged");
+        assert_eq!(v.unit2.len(), 262, "254 v8 names + the 8 appended");
+        let old = RowVocab::for_version(&repo_root(), 8);
+        assert!(old.loaded, "{:?}", old.error);
+        for (slot, name) in [
+            (1017, "Rapid Advance Buff"),
+            (1018, "Rapid Charge Mark"),
+            (1019, "Rapid Rush Buff"),
+            (1020, "Speed Buff"),
+            (1021, "Speed Debuff"),
+            (1022, "Swift"),
+            (1023, "Swift Aura"),
+            (1024, "Swift Buff"),
+        ] {
+            assert_eq!(v.unit2.get(name), Some(&slot), "unit2 slot of {name}");
+            assert_eq!(old.unit2.get(name), None, "{name} had no slot under v8");
+        }
+        let mut slots: Vec<_> = v.unit2.values().copied().collect();
+        slots.sort_unstable();
+        slots.dedup();
+        assert_eq!(slots.len(), v.unit2.len(), "no name shares a slot");
+    }
+
+    /// unit2 (v9) — the append moves NO slot any earlier version handed
+    /// out: every name the v8 reading carries sits on the identical slot
+    /// under v9, in ALL FOUR bands. A v8-recorded corpus depends on this.
+    #[test]
+    fn the_v9_append_does_not_move_any_v8_slot() {
+        let now = RowVocab::load(&repo_root());
+        let old = RowVocab::for_version(&repo_root(), 8);
+        assert!(old.loaded, "{:?}", old.error);
+        assert_eq!(old.version, 8);
+        assert_eq!(old.unit.len(), now.unit.len(), "no unit name appended");
+        assert_eq!(old.weapon.len(), now.weapon.len(), "no weapon name appended");
+        assert_eq!(old.spell.len(), now.spell.len(), "no spell name appended");
+        assert_eq!(old.unit2.len(), 254, "the v8 unit2 band as recorded");
+        assert_eq!(now.unit2.len(), 262, "the 8 names appended after it");
+        for (name, slot) in &old.unit2 {
+            assert_eq!(now.unit2.get(name), Some(slot), "slot of {name} moved");
+        }
+    }
+
+    /// The point of the whole PR, stated behaviourally: a unit carrying
+    /// "Swift Aura" lands on a slot instead of vanishing into `unknown`,
+    /// so the value net can see the rule the core already plays.
+    /// (`UnitStatic::build` does not run the import's aura expansion, so
+    /// the profile carries "Swift Aura" and not "Swift" — this pins the
+    /// AURA name's own slot, which is what the census counts.)
+    #[test]
+    fn a_swift_aura_unit_lands_on_its_unit2_slot_not_in_unknown() {
+        let (state, statics) = state_with("Swift Aura");
+        let mut enc = RowEncoder::new(&repo_root());
+        let rows = enc.board_rows(&state, &statics);
+        // Fearless (unit slot 27), Tough(3) (114), the rifle's AP(1) (200)
+        // and Swift Aura (unit2 slot 1023, unrated -> 1): four pairs, ascending.
+        assert_eq!(rows[0][20], Cell::I(4), "four rule pairs");
+        assert_eq!(&rows[0][21..], &[
+            Cell::I(27), Cell::I(1),
+            Cell::I(114), Cell::I(3),
+            Cell::I(200), Cell::I(1),
+            Cell::I(1023), Cell::I(1),
+        ], "Swift Aura lands at its unit2 slot, ascending with the rest");
+        assert!(enc.unknown.is_empty(), "{:?}", enc.unknown);
     }
 
     /// NML-1144b — the LEGACY reading: a corpus recorded under version 4
