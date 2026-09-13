@@ -13,7 +13,6 @@ const TOKEN_SCHEMA: &str = "units24x72,objs6x12,terr18x12,glob16,vocab226,bag8";
 const VALUE_HEAD: &str = "margin";
 const SELFTEST_LABEL: &str = "standin-v2x2";
 const SELFTEST_JSON: &str = include_str!("onnx_selftest.json");
-/// Flattened lengths of the six token tensors, in input order.
 const DIMS: [usize; 6] = [24 * 72, 24, 6 * 12, 6, 18 * 12, 16];
 
 pub struct Batch {
@@ -72,7 +71,6 @@ fn numbers(value: &Value, out: &mut Vec<f32>) {
 }
 
 impl Brain {
-    /// Mirrors the spike's `imp::run`; flat row-major `(value, member_values)`.
     pub fn run(&self, batch: &Batch) -> Result<(Vec<f32>, Vec<f32>), Unsupported> {
         let b = batch.units.len() / DIMS[0];
         let tensor = |shape: &[usize], data: &[f32]| Tensor::from_shape(shape, data)
@@ -86,29 +84,31 @@ impl Brain {
         Ok((value, members))
     }
 
-    /// Runs the embedded one-leaf golden; `value` and every member row at 1e-5.
+    /// Replays the embedded golden leaf as row 0 of a zero-padded `static_batch`.
     fn check_selftest(&self, golden: &Value) -> Result<(), Unsupported> {
         let leaf = &golden["leaves"][0];
-        let mut batch = Batch { units: vec![], units_mask: vec![], objs: vec![],
-            objs_mask: vec![], terr: vec![], glob: vec![] };
+        let b = self.static_batch;
+        let mut batch = Batch { units: vec![0.0; b * DIMS[0]], units_mask: vec![0.0; b * DIMS[1]], objs: vec![0.0; b * DIMS[2]],
+            objs_mask: vec![0.0; b * DIMS[3]], terr: vec![0.0; b * DIMS[4]], glob: vec![0.0; b * DIMS[5]] };
         for (key, len, out) in [
             ("units", DIMS[0], &mut batch.units), ("units_mask", DIMS[1], &mut batch.units_mask),
             ("objs", DIMS[2], &mut batch.objs), ("objs_mask", DIMS[3], &mut batch.objs_mask),
             ("terr", DIMS[4], &mut batch.terr), ("glob", DIMS[5], &mut batch.glob),
         ] {
-            numbers(&leaf[key], out);
-            if out.len() != len { return Err(decline("onnx: selftest shape")); }
+            let mut row = Vec::new(); numbers(&leaf[key], &mut row);
+            if row.len() != len { return Err(decline("onnx: selftest shape")); }
+            out[..len].copy_from_slice(&row);
         }
         let (value, members) = self.run(&batch)?;
         let tolerance = golden["tolerance"].as_f64().unwrap_or(0.0) as f32;
         let (mut want_value, mut want_members) = (Vec::new(), Vec::new());
         numbers(&golden["expected"]["value"], &mut want_value);
         numbers(&golden["expected"]["member_values"], &mut want_members);
-        if value.len() != want_value.len() || members.len() != want_members.len() {
+        if value.len() != b || members.len() != b * self.members || want_value.is_empty() || want_value.len() > b || want_members.len() != want_value.len() * self.members {
             return Err(decline("onnx: selftest shape"));
         }
         let off = |got: &[f32], want: &[f32]| got.iter().zip(want).any(|(g, w)| (g - w).abs() > tolerance);
-        if off(&value, &want_value) || off(&members, &want_members) {
+        if off(&value[..want_value.len()], &want_value) || off(&members[..want_members.len()], &want_members) {
             return Err(decline("onnx: selftest value"));
         }
         Ok(())

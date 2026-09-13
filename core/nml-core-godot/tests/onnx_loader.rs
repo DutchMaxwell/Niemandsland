@@ -75,8 +75,10 @@ fn onnx_loader_selftest_and_sha256() {
     assert_eq!(brain.static_batch(), 32);
 
     let leaf = 48; // synthetic:u01-o0-bag0
-    let batch = make_batch(std::slice::from_ref(&golden["leaves"][leaf]), 1);
+    let static_batch = golden["static_batch"].as_u64().unwrap() as usize;
+    let batch = make_batch(std::slice::from_ref(&golden["leaves"][leaf]), static_batch);
     let (value, member_values) = brain.run(&batch).expect("leaf run");
+    assert_eq!(value.len(), static_batch);
     let tolerance = golden["tolerance"].as_f64().unwrap() as f32;
     let expected_value = numbers(&golden["expected"]["value"])[leaf];
     assert!(
@@ -90,9 +92,9 @@ fn onnx_loader_selftest_and_sha256() {
         .iter()
         .map(|m| numbers(m)[leaf])
         .collect();
-    assert_eq!(member_values.len(), expected_members.len());
-    for (got, want) in member_values.iter().zip(&expected_members) {
-        assert!((got - want).abs() <= tolerance, "member {got} off golden {want}");
+    assert_eq!(member_values.len(), static_batch * brain.members());
+    for (m, want) in expected_members.iter().enumerate() {
+        assert!((member_values[m] - want).abs() <= tolerance, "member {m} off golden {want}");
     }
 
     // RED: one flipped byte at len/2 must decline on the SHA-256 check.
