@@ -211,6 +211,19 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 		# takes one of those off this table replays a deployment-time reading.
 		profiles[str(key)] = BattleSim._unit_profile(
 			(state["units"][key] as Dictionary)["unit"])
+	var reg_system := ""
+	for key in profiles:
+		var gs := str((profiles[key] as Dictionary).get("game_system", ""))
+		if not gs.is_empty():
+			reg_system = gs
+			break
+	# F12 (analysis/SILENT_FAILURES_2026-09-13.md): WHICH mechanics registry
+	# answered this game's lookups, and whether it loaded at all — the same
+	# silence the core's rules_for ends in when its file is missing or
+	# unparseable. The first unit's game_system picks the map ("" folds to
+	# DEFAULT_SYSTEM exactly as every lookup did).
+	var reg_slug := RulesRegistry.normalize_system(reg_system)
+	var reg_state := RulesRegistry.registry_state(reg_slug)
 	var head := {"kind": "header", "profiles": profiles, "terrain": _terrain_line(terrain_cb, school_world),
 		# NML-1126: rule-TEXT provenance for THIS game. The special-rule descriptions the
 		# description-driven move modifiers read (movement_range_controller.gd) are fetched
@@ -233,6 +246,13 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 		"books": {"source": OPRApiClient.rule_text_source,
 			"sha256": OPRApiClient.snapshot_sha256,
 			"generated": OPRApiClient.snapshot_generated},
+		# F12: the mechanics-registry stamp, next to the rule-text stamp above —
+		# the sha names the file that answered, the slug which one, and the flag
+		# whether it loaded at all. sha256 "" + registry_empty true = nothing
+		# answered, the F12 reading. Additive: new keys only.
+		"registry_sha": str(reg_state.get("sha256", "")),
+		"registry_empty": bool(reg_state.get("empty", true)),
+		"registry_system": reg_slug,
 		"knobs": {"top_k": AiPlanner.top_k_default(), "horizon": AiPlanner.horizon(),
 			"tail_cap_p1": AiPlanner._tail_cap_for(1), "tail_cap_p2": AiPlanner._tail_cap_for(2),
 			"imagined_round_end": AiPlanner.imagined_round_end_enabled(),

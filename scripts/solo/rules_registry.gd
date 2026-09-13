@@ -24,11 +24,30 @@ const MAP_PATH_TEMPLATE: String = "res://assets/solo/rules_mechanics_%s.json"
 ## is probed once, not per lookup).
 static var _cache: Dictionary = {}
 
+## F12 (analysis/SILENT_FAILURES_2026-09-13.md) — per-system load provenance: the sha256 of the
+## file bytes that ANSWERED and whether it loaded at all. A missing or unparseable map answers
+## every lookup with the fallback for the whole run in silence; this is the record that says so.
+static var _state: Dictionary = {}
+
+## TEST SEAM — system slug -> path, so a test can point the loader at a missing or unparseable
+## file (res:// itself cannot be written in CI). Empty in production, always.
+static var map_path_override: Dictionary = {}
+
+## F12: the fold onto the default is a decision, not a given — counted per distinct input,
+## with a one-line warning naming the input, never in silence.
+static var _fold_counts: Dictionary = {}
+
 
 ## A known system slug, or DEFAULT_SYSTEM for anything unknown/empty (pre-import units, tests).
 static func normalize_system(system: String) -> String:
 	var s := system.strip_edges().to_lower()
-	return s if SYSTEMS.has(s) else DEFAULT_SYSTEM
+	if SYSTEMS.has(s):
+		return s
+	_fold_counts[s] = int(_fold_counts.get(s, 0)) + 1
+	if int(_fold_counts[s]) == 1:
+		push_warning("RulesRegistry.normalize_system: unrecognised system \"%s\" folded to \"%s\""
+			% [system, DEFAULT_SYSTEM])
+	return DEFAULT_SYSTEM
 
 
 ## The full mechanics map of a system ({} when the asset is missing — every reader falls back).
@@ -37,7 +56,7 @@ static func map_for(system: String) -> Dictionary:
 	if _cache.has(s):
 		return _cache[s]
 	var parsed: Dictionary = {}
-	var path := MAP_PATH_TEMPLATE % s
+	var path: String = map_path_override.get(s, MAP_PATH_TEMPLATE % s)
 	if FileAccess.file_exists(path):
 		var f := FileAccess.open(path, FileAccess.READ)
 		if f != null:
@@ -45,12 +64,27 @@ static func map_for(system: String) -> Dictionary:
 			if data is Dictionary:
 				parsed = data
 	_cache[s] = parsed
+	# F12: record WHICH file answered and whether it loaded — see `_state`.
+	_state[s] = {"sha256": FileAccess.get_sha256(path) if not parsed.is_empty() else "",
+		"empty": parsed.is_empty()}
 	return parsed
 
 
 ## Clear the cache (tests / a future hot-reload seam).
 static func reset_cache() -> void:
 	_cache = {}
+	_state = {}
+
+
+## F12 provenance of the map that answered for `system`: {"sha256": <hex or "">,
+## "empty": <true when nothing loaded>}. Probes the map once if never read —
+## the exact state a corpus header stamps so "played on the wrong rulebook"
+## is askable of every recorded game.
+static func registry_state(system: String) -> Dictionary:
+	var s := normalize_system(system)
+	if not _state.has(s):
+		map_for(s)
+	return _state.get(s, {"sha256": "", "empty": true})
 
 
 ## THE lookup: the mechanics entry for `rule_name` — the faction's own entry first, then the system's

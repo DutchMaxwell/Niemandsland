@@ -67,6 +67,10 @@ func before_test() -> void:
 	AiActRecorder.spawn_profile_resolver = Callable()
 	AiActRecorder.rules_epoch = AiActRecorder.SPAWN_PROFILES_EPOCH
 	AiPlanner.trace = {}
+	# F12: a test that failed mid-way must not leave a redirected registry path
+	# or a poisoned map cache behind for the next test in this suite.
+	RulesRegistry.map_path_override.clear()
+	RulesRegistry.reset_cache()
 
 
 func after_test() -> void:
