@@ -634,12 +634,10 @@ pub struct Shooter<'a> {
 /// shots differently from the table's. Nothing in the reference corpus is that
 /// wide, and the gate would show it as a `kind`/`count` part.
 ///
-/// DEADLY'S TWO LEGS (audit 2026-09-13 §2.1, `EPOCH_14_DEADLY_LANDING`): the
-/// body is one; the flag splits only the Deadly share. This wrapper is the
-/// LEGACY leg — the pool carries the multiply against the unit's printed Tough
-/// and the landing spills, byte-exact for every corpus recorded at 13 or
-/// below. sim.rs's two call sites pick the leg by
-/// `rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING)`.
+/// DEADLY'S TWO LEGS (audit 2026-09-13 §2.1, `EPOCH_14_DEADLY_LANDING`): this wrapper is the
+/// LEGACY leg (the pool carries the multiply against the unit's printed Tough, verbatim, and the
+/// landing spills — byte-exact for every corpus recorded at 13 or below); `resolve_volley_leg(.., true)`
+/// is the 14+ per-model leg. sim.rs's call sites pick by `rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING)`.
 pub fn resolve_volley_with_tray(
     shooters: &[Shooter<'_>],
     def: &Ctx,
@@ -655,6 +653,8 @@ pub fn resolve_volley_with_tray(
     resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, tray)
 }
 
+// The leg split adds one gate-bool to the resolver's existing pack.
+#[allow(clippy::too_many_arguments)]
 pub fn resolve_volley_leg(
     shooters: &[Shooter<'_>],
     def: &Ctx,
@@ -1420,12 +1420,10 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 ///      gap — melee resolves the base 1s window only. The shooting half of
 ///      the Boost IS ported (the volley's `shred_boost_dice` gate), the
 ///      table's own Surge-Boost precedent is shooting-only too.
-/// The `EPOCH_14_DEADLY_LANDING` gate's melee leg split (audit 2026-09-13
-/// §2.1): `resolve_melee_with_tray` below is the LEGACY leg — the pool carries
-/// the Deadly multiply verbatim and the landing spills, byte-exact for every
-/// corpus recorded at 13 or below. `deadly_per_model = true` is the 14+ leg —
-/// the pool stays RAW, the share becomes its own group and the landing
-/// multiplies PER MODEL with no carry-over.
+///
+/// DEADLY'S TWO LEGS (audit 2026-09-13 §2.1, `EPOCH_14_DEADLY_LANDING`): `resolve_melee_with_tray`
+/// below is the LEGACY leg (pool multiply verbatim); `resolve_melee_leg(.., true)` is the 14+
+/// per-model leg — sim.rs's call site picks by `rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING)`.
 pub fn resolve_melee_with_tray(
     strikers: &[Shooter<'_>],
     def: &Ctx,
@@ -1438,6 +1436,8 @@ pub fn resolve_melee_with_tray(
     resolve_melee_leg(strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice, false, tray)
 }
 
+// The leg split adds one gate-bool to the resolver's existing pack.
+#[allow(clippy::too_many_arguments)]
 pub fn resolve_melee_leg(
     strikers: &[Shooter<'_>],
     def: &Ctx,
