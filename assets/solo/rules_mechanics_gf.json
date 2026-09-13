@@ -3216,7 +3216,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "beneficiary": "attackers"
     }
    },
    "Regeneration Buff": {
@@ -8495,7 +8496,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "beneficiary": "attackers"
     }
    },
    "Quick": {

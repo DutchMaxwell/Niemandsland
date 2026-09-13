@@ -35,10 +35,11 @@ static var objectives_stamp: Dictionary = {}
 ## falls back to the carrier's profile (that fallback IS the #823 fidelity break).
 static var spawn_profile_resolver: Callable = Callable()
 ## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
-## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 14 by the Deadly
-## per-model landing port, EPOCH_14_DEADLY_LANDING; 13 was #921's).
+## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 15 by the
+## Precision-marks beneficiary side fix, EPOCH_15_MARK_BENEFICIARY; 14 was the
+## Deadly per-model landing port, 13 was #921's).
 ## Bump it in the same change the core does; SPAWN_PROFILES_EPOCH below stays frozen.
-static var rules_epoch: int = 14
+static var rules_epoch: int = 15
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
 const SPAWN_PROFILES_EPOCH := 8
