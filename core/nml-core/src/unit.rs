@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
-    EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF,
+    EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -50,6 +50,11 @@ pub enum ShieldedAlias {
     None,
     PlusOneToDefense,
     SturdyBoost,
+    /// Audit 2026-09-13 §2.4's skirmish half: the Guarded family's other two
+    /// base names (gf "Safety Gear", aofs "Tenacious") and their Boosts ride
+    /// the same machinery — the Boost replaces the base's over-9" condition.
+    SafetyGearBoost,
+    TenaciousBoost,
     /// The terrain-conditional kind: its `terrain_within_in` gates the +1 on
     /// the majority-in-cover answer (`_solo_majority_in_cover`), which is
     /// live state — the static stamp leaves `shielded` off and
@@ -64,8 +69,18 @@ impl ShieldedAlias {
             Self::None => "",
             Self::PlusOneToDefense => "+1 to Defense",
             Self::SturdyBoost => "Sturdy Boost",
+            Self::SafetyGearBoost => "Safety Gear Boost",
+            Self::TenaciousBoost => "Tenacious Boost",
             Self::GroundedReinforcement => "Grounded Reinforcement",
         }
+    }
+
+    /// The Sturdy-kind Boosts — the alias whose +1 REPLACES the Guarded
+    /// family's over-9" gate instead of stacking with it (audit §2.4). The
+    /// dice folds suppress `guarded` while one of these supplied the shielded
+    /// half; the terrain-conditional Grounded Reinforcement never suppresses.
+    pub fn is_sturdy_kind(self) -> bool {
+        matches!(self, Self::SturdyBoost | Self::SafetyGearBoost | Self::TenaciousBoost)
     }
 }
 
@@ -194,6 +209,13 @@ pub struct Ctx {
     /// `ctx_for` (static carriers) plus `sim::ctx_live` (granted names and
     /// the terrain clause on the live in_cover answer).
     pub shielded_alias: ShieldedAlias,
+    /// Audit 2026-09-13 §2.4 — the Sturdy-kind Boost REPLACES the Guarded
+    /// family's over-9" gate. The answer is stamped HERE (true only when a
+    /// Sturdy-kind alias supplied the shielded half AND the record is at
+    /// `EPOCH_13_WHO_WINS`), not inferred from `shielded_alias` at resolve
+    /// time — an epoch-12 corpus carries `shielded_alias: SturdyBoost` too,
+    /// and its dice must keep the old stacked reading byte-exact.
+    pub sturdy_boost_gates_guarded: bool,
     pub in_cover: bool,
     /// `AiEv.ctx_for`'s third argument, which `BattleSim._ctx_of` never passes
     /// (battle_sim.gd:702) — always 0 in the sim, modelled for `impact_ev`.
@@ -483,6 +505,15 @@ pub struct ShootProfile {
     pub surge: bool,
     pub rending: bool,
     pub bane: bool,
+    /// The REGEN-BYPASS half of the Bane family, kept APART from `bane`:
+    /// `bane` drives only the defender's unmodified-6 re-roll, while the
+    /// Regeneration bypass (`dice.rs`'s regen split, `combat.rs`'s EV twin)
+    /// reads this flag — the printed Bane ("Ignores Regeneration") and the
+    /// Lacerate family's own `bypass_regen` entries set it, the Bane-primitive
+    /// DATA-ALIAS wave (Bestial/Mischievous/Scrapper/Vicious, whose book text
+    /// carries no Regeneration clause) does not. Pre-epoch records stamp both
+    /// flags identically, so every old corpus replays byte-exact.
+    pub bypass_regen: bool,
     pub thrust: bool,
     /// The WEAPON's own "Unstoppable" rule, exact name — `_has_rule(w,
     /// "Unstoppable")` ai_shooting.gd:132, the table's DICE path (to-hit clamp
@@ -1703,18 +1734,36 @@ fn shielded_alias_of(
         ("Sturdy Boost", ShieldedAlias::SturdyBoost),
         ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement),
     ];
+    // Audit 2026-09-13 §2.4's skirmish half — "Safety Gear Boost" (gff) and
+    // "Tenacious Boost" (aofs) join the wave at the CURRENT epoch only, so
+    // every record below it replays byte-exact. `check` is the wave-3 entry
+    // read each name shares (the alias list's own body, lifted).
+    const ALIASES_13: [(&str, ShieldedAlias); 2] = [
+        ("Safety Gear Boost", ShieldedAlias::SafetyGearBoost),
+        ("Tenacious Boost", ShieldedAlias::TenaciousBoost),
+    ];
     let map = reg.rules_for(&p.game_system);
-    for (name, alias) in ALIASES {
+    let check = |name: &str, alias: ShieldedAlias| -> Option<(ShieldedAlias, bool)> {
         if !rule_on_all_models(p, name) {
-            continue;
+            return None;
         }
-        let Some(e) = map.lookup(&p.faction_folder, name) else {
-            continue;
-        };
+        let e = map.lookup(&p.faction_folder, name)?;
         if e.primitive.as_deref() != Some("Shielded") || e.param_i("defense_bonus", 0) <= 0 {
-            continue;
+            return None;
         }
-        return Some((alias, e.param_f("terrain_within_in", 0.0) > 0.0));
+        Some((alias, e.param_f("terrain_within_in", 0.0) > 0.0))
+    };
+    for (name, alias) in ALIASES {
+        if let Some(found) = check(name, alias) {
+            return Some(found);
+        }
+    }
+    if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
+        for (name, alias) in ALIASES_13 {
+            if let Some(found) = check(name, alias) {
+                return Some(found);
+            }
+        }
     }
     None
 }
@@ -2116,7 +2165,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // joins this flag.
         guarded: rule_on_all_models(p, "Guarded")
             || rule_on_all_models(p, "Versatile Defense")
-            || (rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && rule_on_all_models(p, "Sturdy")),
+            || (rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && rule_on_all_models(p, "Sturdy"))
+            || (rule_on(rules_epoch, EPOCH_13_WHO_WINS)
+                && (rule_on_all_models(p, "Safety Gear") || rule_on_all_models(p, "Tenacious"))),
         ranged_shrouding: ranged_shroud.is_some(),
         ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s[0]),
         ranged_shroud_floor_in: ranged_shroud.map_or(SHROUD_FLOOR_IN, |s| s[1]),
@@ -2141,15 +2192,36 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         shielded: rule_on_all_models(p, "Shielded")
             || shielded_alias.as_ref().is_some_and(|(_, pending)| !*pending),
         shielded_alias: shielded_alias.map_or(ShieldedAlias::None, |(a, _)| a),
+        // §2.4 — see the Ctx field's doc: the suppression rides a STAMPED
+        // flag, gated at the FROZEN `EPOCH_13_WHO_WINS`, never inferred at
+        // resolve time (an epoch-12 record carries the same alias).
+        sturdy_boost_gates_guarded: rule_on(rules_epoch, EPOCH_13_WHO_WINS)
+            && shielded_alias.as_ref().is_some_and(|(a, _)| a.is_sturdy_kind()),
         in_cover: false,
-        // HARD 0, and it stays 0: `BattleSim._ctx_of` never passes
+        // Audit 2026-09-13 §2.2 — see `counter_models` below: the bearer read
+        // joins at the CURRENT epoch, the live alive-scaling rides
+        // `sim::ctx_of`, and the COUNTER_ONLY pre-phase runs in
+        // `sim::tray_charge` (main.gd:8268-8274). Pre-port records keep the
+        // hard 0 the comment below describes and replay byte-exact.
+        // HARD 0 below the CURRENT epoch, and it stays 0 there: `BattleSim._ctx_of` never passes
         // `AiEv.ctx_for`'s third argument either (battle_sim.gd:702,
         // ai_ev.gd:135). The table counts the DEFENDER's alive models whose
         // melee weapons carry Counter (`SoloController.counter_models_of`), a
         // per-MODEL loadout read the capture does not carry — so Counter's
         // Impact reduction is inert in this port, and `resolve_melee_with_tray`
         // raises `counter_strikes_first` whenever it would have mattered.
-        counter_models: 0,
+        // Audit 2026-09-13 §2.2 — the Counter Impact cut joins the ctx at the
+        // CURRENT epoch: the bearer count of the unit's Counter melee weapons
+        // (the capture's weapon `count` sums, min the model count — exactly
+        // `SoloController.counter_models_of` solo_controller.gd:7556-7581's
+        // per-unit shape). The live alive-scaling rides `sim::ctx_of`'s
+        // `min(bearers, alive)` fold. Pre-port records keep the hard 0 and
+        // replay byte-exact.
+        counter_models: if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
+            p.weapons.iter().filter(|w| w.range <= 0.0 && weapon_has(w, "Counter")).map(|w| w.count.max(1)).sum::<i64>().min(p.model_count.max(0))
+        } else {
+            0
+        },
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
         regen_target_spell: regen_targets.1,
@@ -2370,6 +2442,16 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     let mut u_bane = false;
     let mut melee_bane = false;
     let mut shooting_bane = false;
+    // Audit 2026-09-13 §2.3 — the regen-bypass half, its OWN flag: only the
+    // printed Bane prefix, Rending, Unstoppable and the Lacerate entries'
+    // own `bypass_regen` set it. The Bane-primitive ALIASES (Bestial,
+    // Mischievous, Scrapper, Vicious — book text with no Regeneration clause)
+    // keep stamping `bane` for the sixes re-roll alone. Pre-port records
+    // stamp both flags identically (the alias leg folds into `u_bypass`
+    // there), so every old corpus replays byte-exact.
+    let mut u_bypass = false;
+    let mut melee_bypass = false;
+    let mut shooting_bypass = false;
     let mut u_rending = false;
     let mut u_unstop = false;
     for r in &p.special_rules {
@@ -2381,13 +2463,17 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             if table_ladder && !rs.starts_with("Lacerate") {
                 if rs.starts_with("Bane in Melee") {
                     melee_bane = true;
+                    melee_bypass = true;
                 } else if rs.starts_with("Bane when Shooting") {
                     shooting_bane = true;
+                    shooting_bypass = true;
                 } else {
                     u_bane = true; // plain "Bane", "Bane Mark", "… Buff"
+                    u_bypass = true;
                 }
             } else {
                 u_bane = true;
+                u_bypass = true;
             }
         } else if rs.starts_with("Rending") {
             // Wave 4 (rules-wave4-condap), gated on the FROZEN
@@ -2403,8 +2489,10 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
                 continue;
             }
             u_rending = true;
+            u_bypass = true;
         } else if rs.starts_with("Unstoppable") && !rs.contains(" in ") && !rs.contains(" when ") {
             u_unstop = true;
+            u_bypass = true;
         }
     }
     if table_ladder {
@@ -2428,6 +2516,14 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
                 );
             }
             u_bane |= hit.reroll_save_sixes;
+            // §2.3 — below the CURRENT epoch only: the old flat read made the
+            // alias's `bane` the regen-bypass test too, so the pre-port
+            // corpora fold it into the bypass half identically. At the
+            // CURRENT epoch the alias stops bypassing (the book and the
+            // entry's own `bypass_regen: false` both say so).
+            if !rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
+                u_bypass |= hit.reroll_save_sixes;
+            }
         }
     }
     // Lacerate family (rules-wave2-lacerate2): main.gd:6990-7001's unit-level
@@ -2447,6 +2543,9 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             melee_bane |= hit.melee_only;
             shooting_bane |= hit.shooting_only;
             u_bane |= !hit.melee_only && !hit.shooting_only;
+            melee_bypass |= hit.melee_only;
+            shooting_bypass |= hit.shooting_only;
+            u_bypass |= !hit.melee_only && !hit.shooting_only;
         }
     }
     // Wave 4 (rules-wave4-condap): "Rending in Melee" ("This model gets
@@ -2470,6 +2569,9 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         sp.bane |= u_bane
             || (melee_bane && sp.range <= 0)
             || (shooting_bane && sp.range > 0);
+        sp.bypass_regen |= u_bypass
+            || (melee_bypass && sp.range <= 0)
+            || (shooting_bypass && sp.range > 0);
         sp.rending |= u_rending
             || (melee_rending && sp.range <= 0)
             || (shooting_rending && sp.range > 0);

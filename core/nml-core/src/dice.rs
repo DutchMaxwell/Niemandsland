@@ -987,7 +987,13 @@ pub fn resolve_volley_with_tray(
         // Defense, in main.gd's own order: Shielded, then Guarded (over 9"),
         // then Cover — which Blast / Indirect / Ignores Cover skip (:3221).
         let mut base = shielded_defense(def.defense, def.shielded);
-        base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN);
+        // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost REPLACES the base
+        // rule's over-9" condition ("always ... instead of only when shot or
+        // charged from over 9\" away"): while one of its aliases supplied the
+        // shielded half, the guarded leg's MAX reading is already on the
+        // table, so the second -1 must not stack (the Fortified pair's shape
+        // at :329-333).
+        base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded);
         shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
         let save_def = if p.blast > 1 || p.indirect || p.ignores_cover {
             base
@@ -1079,7 +1085,11 @@ pub fn resolve_volley_with_tray(
         // ai_ev.gd:433) cut through Regeneration; everything else is poolable.
         // B2b: `_solo_ignores_regen`'s last line (main.gd:6941) also answers
         // for a LIVE "Unstoppable" grant — the Unstoppable Mark seam.
-        if p.bane || p.rending || p.unstoppable || att.rending_grant || att.unstoppable_grant {
+        // Audit 2026-09-13 §2.3 — the regen split reads the BYPASS flag, not
+        // `bane`: the Bane-primitive aliases (Bestial, Mischievous, Scrapper,
+        // Vicious) re-roll sixes but carry no Regeneration clause, so they
+        // never join this proof. Pre-port records stamp both flags alike.
+        if p.bypass_regen || p.rending || p.unstoppable || att.rending_grant || att.unstoppable_grant {
             regen_proof += w;
         } else {
             regenable += w;
@@ -1583,7 +1593,7 @@ pub fn resolve_melee_with_tray(
                         // effective AP (main.gd:6180-6182) — one batch, no
                         // separate on-6 AP sub-batch, no Deadly special-case.
                         let btw = save_batch(p, def, def_owner, bt_hits, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, tray, &mut out);
-                        if p.bane || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant {
+                        if p.bypass_regen || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant {
                             regen_proof += btw;
                         } else {
                             regenable += btw;
@@ -1594,7 +1604,7 @@ pub fn resolve_melee_with_tray(
             if p.deadly > 0 {
                 out.mark("deadly");
             }
-            if p.bane || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant {
+            if p.bypass_regen || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant {
                 regen_proof += w;
             } else {
                 regenable += w;

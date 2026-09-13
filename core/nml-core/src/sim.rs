@@ -22,8 +22,9 @@ use crate::combat::{
 use crate::sight;
 use crate::geom::{self, V3};
 use crate::acts::{
-    rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
-    EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND, EPOCH_12_MOVE_BUFF,
+    rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
+    EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
+    EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -2243,6 +2244,11 @@ fn shooting_morale_trigger(
 pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
     let mut c = us.ctx;
     c.models = state.alive[i];
+    // Audit 2026-09-13 §2.2 — the Impact cut counts the ALIVE Counter
+    // bearers (`counter_models_of`'s `mini(bearers, alive)`): the static
+    // stamp carries the full-strength bearer count, this fold trims it as
+    // models die. Pre-port records carry 0 and stay 0.
+    c.counter_models = c.counter_models.min(state.alive[i].max(0));
     c.in_cover = state.in_cover[i];
     c
 }
@@ -3173,6 +3179,17 @@ fn fortified_log_name(statics: &[UnitStatic], state: &State, ti: usize, over9: b
         .map(String::from)
 }
 
+/// Audit 2026-09-13 §2.2 — the strike phase's weapon set, the table's
+/// `SoloStrike` filter (main.gd:4683): the COUNTER_ONLY pre-phase strikes
+/// the Counter weapons alone, the strike-back that follows it only the
+/// NON-counter rest (:8315), and every other slot stays ALL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StrikeSet {
+    All,
+    CounterOnly,
+    NonCounter,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn strike_phase(
     statics: &[UnitStatic],
@@ -3183,8 +3200,24 @@ fn strike_phase(
     seams: Seams,
     tray: &mut Tray,
     shot: &mut ShootResult,
+    set: StrikeSet,
 ) -> (i64, i64) {
     let mut parts = melee_parts(statics, next, si, ti, seams);
+    if set != StrikeSet::All {
+        let want_counter = set == StrikeSet::CounterOnly;
+        for (mi, sc, _) in parts.iter_mut() {
+            let melee = &statics[next.roster.profile[*mi]].melee;
+            let mut k = 0;
+            while k < sc.keep.len() {
+                if melee[sc.keep[k]].counter != want_counter {
+                    sc.keep.remove(k);
+                    sc.attacks.remove(k);
+                } else {
+                    k += 1;
+                }
+            }
+        }
+    }
     // Block C5 — Instinctive: the +1 reaches the melee fold ONLY when the
     // attacked unit IS the closest enemy (main.gd:5670-5673), per member
     // carrying it — the pick itself is never constrained.
@@ -3446,19 +3479,37 @@ fn tray_charge(
         // Impact, and strips Impact dice with it.
         shot.mark("counter_strikes_first");
     }
-    let mut by_su = impact_phase(statics, next, si, ti, tray, shot);
+    // Audit 2026-09-13 §2.2, strike-order half — main.gd:8268-8274: at the
+    // CURRENT epoch the defender's Counter weapons run a whole COUNTER_ONLY
+    // strike phase BEFORE Impact, counted into the defender's tally; only
+    // the NON-counter weapons remain for the normal strike-back slot
+    // (:8315). Below the epoch the core keeps its marker-only reading.
+    let counter_first = rule_on(seams.rules_epoch, EPOCH_13_WHO_WINS)
+        && statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter);
+    let mut by_su = 0;
+    let mut by_tu = 0;
+    if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
+        let (c, rc) = strike_phase(statics, next, ti, si, false, seams, tray, shot, StrikeSet::CounterOnly);
+        by_tu += c;
+        by_su += rc;
+    }
+    // main.gd:8276's alive gate — a counter phase that wiped the charger
+    // closes the card, nothing left to roll.
+    if next.alive[si] > 0 && next.alive[ti] > 0 {
+        by_su += impact_phase(statics, next, si, ti, tray, shot);
+    }
     // main.gd:8035 — the charger's Mark lands after Impact and before the
     // strikes, measured at 0" (the two units are in base contact).
     tray_vs_marks(statics, next, si, ti, 0.0, seams);
-    let mut by_tu = 0;
     let charger_last = charger_strikes_last(statics, next, si, seams);
+    let strike_back_set = if counter_first { StrikeSet::NonCounter } else { StrikeSet::All };
     for slot in 0..2 {
         if (slot == 0) != charger_last {
             // :8079 — the charger strikes only while BOTH sides still stand;
             // an Impact pool that wiped the defender ends the melee here.
             if next.alive[si] > 0 && next.alive[ti] > 0 {
                 // B13: the defender's lash-back credits ITS OWN tally (by_tu).
-                let (c, rc) = strike_phase(statics, next, si, ti, true, seams, tray, shot);
+                let (c, rc) = strike_phase(statics, next, si, ti, true, seams, tray, shot, StrikeSet::All);
                 by_su += c;
                 by_tu += rc;
                 next.fatigued[si] = true;
@@ -3466,7 +3517,7 @@ fn tray_charge(
         } else if next.alive[ti] > 0 && next.alive[si] > 0 {
             // :8100 — and so does the strike-back, in both directions.
             // B13: the strike-back's lash-back credits the charger's tally.
-            let (c, rc) = strike_phase(statics, next, ti, si, false, seams, tray, shot);
+            let (c, rc) = strike_phase(statics, next, ti, si, false, seams, tray, shot, strike_back_set);
             by_tu += c;
             by_su += rc;
             next.fatigued[ti] = true;

@@ -113,7 +113,7 @@ use super::*;
     /// a Bane weapon's wounds bypass Regeneration entirely (:6927-6933).
     #[test]
     fn bane_draws_its_re_roll_after_the_save_batch_and_bypasses_regeneration() {
-        let p = [ShootProfile { bane: true, ..rifle(8) }];
+        let p = [ShootProfile { bane: true, bypass_regen: true, ..rifle(8) }];
         let mut tray = Tray::seeded(27);
         let def = Ctx { regeneration: true, regen_target: 5, ..defender(4, 8) };
         let out = resolve_shooting_with_tray(&p, &[0], &[8], &shooter(2), &def, 12.0, &mut tray);

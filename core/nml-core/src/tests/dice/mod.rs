@@ -405,6 +405,7 @@ mod shot_modifier_runtime;
 mod shred_alias;
 mod shred_boost;
 mod shred_per_save_one;
+mod sturdy_boost;
 mod stealth_alias;
 mod surge_extra_attack;
 mod surge_gates;

@@ -1256,7 +1256,7 @@
         let (mut st, statics) = instinctive_line(third_at);
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot);
+        strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot, StrikeSet::All);
         shot.rolls
             .iter()
             .find(|r| r.kind == "attack" && r.owner == "Striker")
@@ -1531,6 +1531,7 @@ mod ap_def_reads;
 mod breath_attack;
 mod breath_score;
 mod buff_consumption_bridge;
+mod counter_first;
 mod deathstrike;
 mod dest_side_arms;
 mod entrenched;
