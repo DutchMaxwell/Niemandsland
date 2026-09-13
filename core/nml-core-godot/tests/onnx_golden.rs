@@ -221,7 +221,8 @@ fn onnx_golden_spike() {
 
     // (e) RED: one flipped byte in the middle of the file.
     let mut corrupted = onnx.clone();
-    corrupted[corrupted.len() / 2] ^= 0xff;
+    let flip_at = corrupted.len() / 2;
+    corrupted[flip_at] ^= 0xff;
     let red = match load(&corrupted) {
         Err(_) => "ok",
         Ok(brain) => {
