@@ -169,11 +169,14 @@ def run_shard(idx: int, games: list, lists: str, out_dir: str, id_of: dict, core
 def _worker(task_q, done_q, lists, out_dir, corpus, core_check) -> None:
     # id_of: corpus-GLOBAL game index, stable across --limit/--sample-every.
     id_of = {p.name: i for i, p in enumerate(sorted(Path(corpus).glob("gen0_s*_d*.json")))}
+    base = core_check.mismatches  # forked state: report only this worker's own delta
     for idx, games in iter(task_q.get, None):
         try:
-            done_q.put(run_shard(idx, games, lists, out_dir, id_of, core_check))
+            done_q.put(dict(run_shard(idx, games, lists, out_dir, id_of, core_check),
+                            core_mismatches=core_check.mismatches - base))
         except SystemExit as exc:
-            done_q.put({"games": 0, "exit_code": exc.code})
+            done_q.put({"games": 0, "exit_code": exc.code,
+                        "core_mismatches": core_check.mismatches - base})
             return
 
 
@@ -198,7 +201,7 @@ def main() -> int:
     a = ap.parse_args()
     out_dir = Path(a.out)
     games, shards, todo = discover_shards(a.corpus, out_dir, a.shard_size, a.sample_every, a.limit)
-    core_check = gr.CoreIdentityCheck(a.require_same_core)
+    core_check = gr.CoreIdentityCheck(a.require_same_core, a.allow_unknown_core)
     # Preflight in the parent: warn once for the run and refuse before any
     # outputs or workers exist (also checks a resumed, already-exported corpus).
     for game in games:
@@ -211,7 +214,8 @@ def main() -> int:
         # Nothing to replay (a rerun over a finished corpus): the night
         # chain's sentinel must still land, or a re-launch after completion
         # hangs it forever.
-        (out_dir / "STATUS").write_text("DONE games=0/0 rate=0.000/s elapsed=0.0s core_commit=%s\n" % core_check.running)
+        (out_dir / "STATUS").write_text("DONE games=0/0 rate=0.000/s elapsed=0.0s core_commit=%s core_mismatches=%d\n"
+                                        % (core_check.running, core_check.mismatches))
         return 0
     ctx = mp.get_context("fork")
     task_q, done_q = ctx.Queue(), ctx.Queue()
@@ -223,14 +227,15 @@ def main() -> int:
     total_games = sum(len(g) for _, g in todo)
     t0, done_games, last_status = time.time(), 0, 0.0
     exit_code = 0
+    core_mismatches = core_check.mismatches  # parent preflight; workers report their delta
 
     def write_status(done=False):
         rate = done_games / max(time.time() - t0, 1e-9)
         (out_dir / "status.json").write_text(json.dumps({"games_done": done_games, "games_total": total_games,
             "rate_games_per_s": round(rate, 3), "elapsed_s": round(time.time() - t0, 1)}))
         # The night chain's sentinel: a line starting "DONE" in plain STATUS.
-        (out_dir / "STATUS").write_text("%s games=%d/%d rate=%.3f/s elapsed=%.1fs core_commit=%s\n"
-            % ("REFUSED" if exit_code else "DONE" if done else "RUNNING", done_games, total_games, rate, time.time() - t0, core_check.running))
+        (out_dir / "STATUS").write_text("%s games=%d/%d rate=%.3f/s elapsed=%.1fs core_commit=%s core_mismatches=%d\n"
+            % ("REFUSED" if exit_code else "DONE" if done else "RUNNING", done_games, total_games, rate, time.time() - t0, core_check.running, core_mismatches))
 
     write_status()
     while any(p.is_alive() for p in procs) or not done_q.empty():
@@ -238,6 +243,7 @@ def main() -> int:
             result = done_q.get(timeout=5)
             done_games += result["games"]
             exit_code = result.get("exit_code", 0) or exit_code
+            core_mismatches += result.get("core_mismatches", 0)
         except Exception:
             pass
         if time.time() - last_status > 120:
@@ -245,8 +251,8 @@ def main() -> int:
             last_status = time.time()
     [p.join() for p in procs]
     write_status(done=True)
-    print("[SHARDS] %s: %d games in %.1fs core_commit=%s"
-          % ("refused" if exit_code else "done", done_games, time.time() - t0, core_check.running))
+    print("[SHARDS] %s: %d games in %.1fs core_commit=%s core_mismatches=%d"
+          % ("refused" if exit_code else "done", done_games, time.time() - t0, core_check.running, core_mismatches))
     return exit_code
 
 
