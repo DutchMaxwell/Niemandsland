@@ -71,6 +71,8 @@ Listens on port `8765`. Point the game's internet-lobby relay URL at
 cd relay && python -m pytest        # pytest.ini sets asyncio_mode=auto
 ```
 
+`python soak_50_rooms.py --seconds 30` runs the 50-room / 100-peer room-cost soak (CPU, RSS, msg/s).
+
 ## Deploy
 
 **Docker:**
