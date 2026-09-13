@@ -39,6 +39,8 @@ mod positioncall;
 mod plain;
 mod brain_transport;
 mod brain;
+#[cfg(any(feature = "onnx-tract", feature = "onnx-ort"))]
+pub mod onnx_spike;
 
 use plain::Captured;
 

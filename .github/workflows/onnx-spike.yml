@@ -1,0 +1,261 @@
+name: ONNX runtime spike
+
+# The tract arm is the chosen ONNX arm (decision 2026-09-13): its golden steps
+# are hard gates. The ort arm stays in-tree behind the off-by-default feature
+# and remains measurement-only: a runtime that cannot build, load or match is a
+# RESULT there, the measurement steps are continue-on-error and only the gate
+# step fails a job, and only when no result line was printed.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'core/nml-core-godot/**'
+      - '.github/workflows/onnx-spike.yml'
+
+concurrency:
+  group: onnx-spike-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ORT_VERSION: "1.28.0"
+  ORT_LINUX_SHA256: "a3e1b79d7bb1bf09696ce675f49e4064e6c81f6202b8225624fff0e93f8d6407"
+  ORT_WIN_SHA256: "abef733dacbe2f571547a7150b479b5cb9cc0df22f96c24983a42cadb1b4f8bc"
+  REMAP: "--remap-path-prefix=/home/runner/.cargo=/cargo --remap-path-prefix=/home/runner/work=/workspace --remap-path-prefix=/home/runner=/build"
+
+jobs:
+  linux-tract:
+    name: linux tract (golden + size)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: Golden vectors (tract)
+        run: |
+          set -o pipefail
+          cargo test --release --manifest-path core/nml-core-godot/Cargo.toml \
+            --features onnx-tract --test onnx_golden -- --nocapture 2>&1 | tee spike-linux-tract.log
+      - name: Build, strip, size (tract)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          RUSTFLAGS="$REMAP" cargo build --release --manifest-path core/nml-core-godot/Cargo.toml \
+            --features onnx-tract 2>&1 | tee size-linux-tract.log
+          LIB=core/target/release/libnml_core_godot.so
+          objcopy --only-keep-debug "$LIB" "$LIB.debug"
+          strip --strip-unneeded "$LIB"
+          objcopy --add-gnu-debuglink="$LIB.debug" "$LIB"
+          SIZE=$(stat -c %s "$LIB")
+          echo "ONNX_SIZE runtime=tract os=linux stripped_bytes=$SIZE baseline=5888696 runtime_lib_bytes=0 shipped_total=$SIZE" | tee -a size-linux-tract.log
+      - name: Upload resolved Cargo.lock (aux)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock
+          path: core/Cargo.lock
+          if-no-files-found: error
+      - name: Gate on result lines
+        run: |
+          cat spike-linux-tract.log size-linux-tract.log 2>/dev/null || true
+          grep -qE '^ONNX_SPIKE runtime=tract ' spike-linux-tract.log \
+            || { echo "::error::no ONNX_SPIKE line for tract/linux"; exit 1; }
+          grep -qE '^ONNX_SIZE runtime=tract ' size-linux-tract.log \
+            || { echo "::error::no ONNX_SIZE line for tract/linux"; exit 1; }
+
+  linux-ort:
+    name: linux ort (golden + size)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: Fetch ONNX Runtime (linux-x64)
+        run: |
+          set -euo pipefail
+          curl -sSL -o ort-linux.tgz \
+            "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-${ORT_VERSION}.tgz"
+          echo "${ORT_LINUX_SHA256}  ort-linux.tgz" | sha256sum -c -
+          tar xzf ort-linux.tgz
+          DYLIB="$PWD/onnxruntime-linux-x64-${ORT_VERSION}/lib/libonnxruntime.so.${ORT_VERSION}"
+          test -f "$DYLIB"
+          echo "NML_ORT_DYLIB=$DYLIB" >> "$GITHUB_ENV"
+      - name: Golden vectors (ort)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          cargo test --release --manifest-path core/nml-core-godot/Cargo.toml \
+            --features onnx-ort --test onnx_golden -- --nocapture 2>&1 | tee spike-linux-ort.log
+      - name: Build, strip, size (ort)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          RUSTFLAGS="$REMAP" cargo build --release --manifest-path core/nml-core-godot/Cargo.toml \
+            --features onnx-ort 2>&1 | tee size-linux-ort.log
+          LIB=core/target/release/libnml_core_godot.so
+          objcopy --only-keep-debug "$LIB" "$LIB.debug"
+          strip --strip-unneeded "$LIB"
+          objcopy --add-gnu-debuglink="$LIB.debug" "$LIB"
+          SIZE=$(stat -c %s "$LIB")
+          RUNTIME=$(stat -c %s "$NML_ORT_DYLIB")
+          echo "ONNX_SIZE runtime=ort os=linux stripped_bytes=$SIZE baseline=5888696 runtime_lib_bytes=$RUNTIME shipped_total=$((SIZE + RUNTIME))" | tee -a size-linux-ort.log
+      - name: Gate on result lines
+        run: |
+          cat spike-linux-ort.log size-linux-ort.log 2>/dev/null || true
+          grep -qE '^ONNX_SPIKE runtime=ort ' spike-linux-ort.log \
+            || { echo "::error::no ONNX_SPIKE line for ort/linux"; exit 1; }
+          grep -qE '^ONNX_SIZE runtime=ort ' size-linux-ort.log \
+            || { echo "::error::no ONNX_SIZE line for ort/linux"; exit 1; }
+
+  windows-size-tract:
+    name: windows tract (cross size)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: MinGW toolchain
+        run: |
+          rustup target add x86_64-pc-windows-gnu
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64
+      - name: Build, strip, size (tract, cross)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          RUSTFLAGS="$REMAP" cargo build --release --target x86_64-pc-windows-gnu \
+            --manifest-path core/nml-core-godot/Cargo.toml --features onnx-tract 2>&1 | tee size-win-tract.log
+          DLL=core/target/x86_64-pc-windows-gnu/release/nml_core_godot.dll
+          x86_64-w64-mingw32-objcopy --only-keep-debug "$DLL" "$DLL.debug"
+          x86_64-w64-mingw32-strip --strip-unneeded "$DLL"
+          x86_64-w64-mingw32-objcopy --add-gnu-debuglink="$DLL.debug" "$DLL"
+          SIZE=$(stat -c %s "$DLL")
+          echo "ONNX_SIZE runtime=tract os=windows stripped_bytes=$SIZE baseline=14333313 runtime_lib_bytes=0 shipped_total=$SIZE" | tee -a size-win-tract.log
+          x86_64-w64-mingw32-objdump -p "$DLL" | grep "DLL Name:" | tee -a size-win-tract.log
+      - name: Gate on result lines
+        run: |
+          cat size-win-tract.log 2>/dev/null || true
+          grep -qE '^ONNX_SIZE runtime=tract ' size-win-tract.log \
+            || { echo "::error::no ONNX_SIZE line for tract/windows"; exit 1; }
+
+  windows-size-ort:
+    name: windows ort (cross size)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: MinGW toolchain
+        run: |
+          rustup target add x86_64-pc-windows-gnu
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 unzip
+      - name: Fetch ONNX Runtime (win-x64)
+        run: |
+          set -euo pipefail
+          curl -sSL -o ort-win.zip \
+            "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-win-x64-${ORT_VERSION}.zip"
+          echo "${ORT_WIN_SHA256}  ort-win.zip" | sha256sum -c -
+          unzip -q ort-win.zip -d ort-runtime
+      - name: Build, strip, size (ort, cross)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          RUSTFLAGS="$REMAP" cargo build --release --target x86_64-pc-windows-gnu \
+            --manifest-path core/nml-core-godot/Cargo.toml --features onnx-ort 2>&1 | tee size-win-ort.log
+          DLL=core/target/x86_64-pc-windows-gnu/release/nml_core_godot.dll
+          x86_64-w64-mingw32-objcopy --only-keep-debug "$DLL" "$DLL.debug"
+          x86_64-w64-mingw32-strip --strip-unneeded "$DLL"
+          x86_64-w64-mingw32-objcopy --add-gnu-debuglink="$DLL.debug" "$DLL"
+          SIZE=$(stat -c %s "$DLL")
+          RUNTIME_LIB=$(find ort-runtime -name onnxruntime.dll | head -1)
+          RUNTIME=$(stat -c %s "$RUNTIME_LIB")
+          echo "ONNX_SIZE runtime=ort os=windows stripped_bytes=$SIZE baseline=14333313 runtime_lib_bytes=$RUNTIME shipped_total=$((SIZE + RUNTIME))" | tee -a size-win-ort.log
+          x86_64-w64-mingw32-objdump -p "$DLL" | grep "DLL Name:" | tee -a size-win-ort.log
+      - name: Gate on result lines
+        run: |
+          cat size-win-ort.log 2>/dev/null || true
+          grep -qE '^ONNX_SIZE runtime=ort ' size-win-ort.log \
+            || { echo "::error::no ONNX_SIZE line for ort/windows"; exit 1; }
+
+  windows-tract:
+    name: windows tract (golden)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: MinGW on PATH and windows-gnu target
+        shell: bash
+        run: |
+          echo "C:/msys64/mingw64/bin" >> "$GITHUB_PATH"
+          rustup target add x86_64-pc-windows-gnu
+      - name: Golden vectors (tract, windows-gnu)
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --release --target x86_64-pc-windows-gnu \
+            --manifest-path core/nml-core-godot/Cargo.toml \
+            --features onnx-tract --test onnx_golden -- --nocapture 2>&1 | tee spike-win-tract.log
+      - name: Gate on result lines
+        shell: bash
+        run: |
+          cat spike-win-tract.log 2>/dev/null || true
+          grep -qE '^ONNX_SPIKE runtime=tract ' spike-win-tract.log \
+            || { echo "::error::no ONNX_SPIKE line for tract/windows"; exit 1; }
+
+  windows-ort:
+    name: windows ort (golden)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: MinGW on PATH and windows-gnu target
+        shell: bash
+        run: |
+          echo "C:/msys64/mingw64/bin" >> "$GITHUB_PATH"
+          rustup target add x86_64-pc-windows-gnu
+      - name: Fetch ONNX Runtime (win-x64)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/microsoft/onnxruntime/releases/download/v$env:ORT_VERSION/onnxruntime-win-x64-$env:ORT_VERSION.zip"
+          Invoke-WebRequest -Uri $url -OutFile ort-win.zip
+          $actual = (Get-FileHash ort-win.zip -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne "$env:ORT_WIN_SHA256") { Write-Error "sha256 mismatch: $actual"; exit 1 }
+          Expand-Archive -Path ort-win.zip -DestinationPath ort-runtime -Force
+          $dll = (Get-ChildItem ort-runtime -Recurse -Filter onnxruntime.dll | Select-Object -First 1).FullName
+          if (-not $dll) { Write-Error "onnxruntime.dll not found"; exit 1 }
+          "NML_ORT_DYLIB=$dll" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Golden vectors (ort, windows-gnu)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --release --target x86_64-pc-windows-gnu \
+            --manifest-path core/nml-core-godot/Cargo.toml \
+            --features onnx-ort --test onnx_golden -- --nocapture 2>&1 | tee spike-win-ort.log
+      - name: Gate on result lines
+        shell: bash
+        run: |
+          cat spike-win-ort.log 2>/dev/null || true
+          grep -qE '^ONNX_SPIKE runtime=ort ' spike-win-ort.log \
+            || { echo "::error::no ONNX_SPIKE line for ort/windows"; exit 1; }
