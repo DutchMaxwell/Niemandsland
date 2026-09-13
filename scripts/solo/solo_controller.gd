@@ -753,7 +753,10 @@ func activation_payoff(unit: GameUnit) -> float:
 			var them := AiEv.ctx_for(enemy, majority_in_cover(enemy), 0)
 			score = maxf(score, minf(AiEv.shoot_ev(profiles, us, them, maxf(dist - advance, 0.0)), pool_cap) * denial)
 		var gap := nearest_melee_gap_in(unit, enemy)
-		if gap <= melee_shroud_charge_in(float(bands.get("charge", rush)), enemy) and not is_aircraft(enemy):
+		# #845 option (b): an enemy carrying the attackers-side Rapid Charge grant is in charge
+		# range for the lookahead at the extended band too (the same fold _act performs).
+		var enemy_band := float(bands.get("charge", rush)) + rapid_charge_reach_bonus_in(unit, enemy)
+		if gap <= melee_shroud_charge_in(enemy_band, enemy) and not is_aircraft(enemy):
 			var melee := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.melee_profiles(weapons)), unit)
 			if not melee.is_empty():
 				var their_melee := AiEv.stamp_sergeant(filter_limited(enemy, AiShooting.melee_profiles(_unit_weapons(enemy))), enemy)
@@ -1474,7 +1477,9 @@ func charge_illegal_why(unit: GameUnit, tgt: GameUnit, band_in: float) -> String
 	if is_aircraft(tgt):
 		return "aircraft cannot be charged"
 	var gap := nearest_melee_gap_in(unit, tgt)
-	var band := melee_shroud_charge_in(band_in, tgt)
+	# #845 option (b): the target's attackers-side Rapid Charge grant (Mark record) extends the
+	# band for THIS charge by the granting rule's own rush_mod.
+	var band := melee_shroud_charge_in(band_in + rapid_charge_reach_bonus_in(unit, tgt), tgt)
 	if gap > band:
 		return "out of charge band (%.1f\" > %.1f\")" % [gap, band]
 	if _charge_capped_by_difficult(unit, unit_centre(unit), unit_centre(tgt), gap):
@@ -1521,7 +1526,9 @@ func charge_candidate_illegal(unit: GameUnit, tgt: GameUnit, gap_in: float,
 	# (Musician-aware, "THE band truth for the LAB"), not the raw MRC band; a raw band
 	# silently dropped legal Musician/Teleport charges from the AI's imagination. The
 	# adoption re-gate stays the DICE truth for once-per-game boosts the sim cannot land.
-	var band := float(sim_move_bands(unit).get("charge", 12))
+	# #845 option (b): the target's attackers-side Rapid Charge grant extends the imagined
+	# charge's reach by the granting rule's own rush_mod.
+	var band := float(sim_move_bands(unit).get("charge", 12)) + rapid_charge_reach_bonus_in(unit, tgt)
 	if gap_in > melee_shroud_charge_in(band, tgt):
 		return true
 	return _charge_capped_by_difficult(unit, from, to, gap_in)
@@ -1842,6 +1849,14 @@ func _act(unit: GameUnit) -> Dictionary:
 					"data": {"shoot_range_in": shoot_range}})
 	# Melee Shrouding on the TARGET shortens the working charge band (-3" to a min. of 6") — every
 	# charge gate below measures against this target, so the denial folds into the band once, here.
+	# #845 option (b): a target carrying the attackers-side Rapid Charge grant (Mark record) first
+	# extends THIS charge's reach by the granting rule's own registry rush_mod — target-aware, so
+	# the shared bands and the human's UI rings never move.
+	var rcm_bonus := rapid_charge_reach_bonus_in(unit, target_unit)
+	if rcm_bonus > 0.0:
+		charge_reach += rcm_bonus
+		_rule_note(report, "Rapid Charge: %s gains %+.0f\" charge reach against the marked %s" % [
+			unit.get_name(), rcm_bonus, target_unit.get_name()], true)   # dice-less reach grant — travels
 	var charge_band := melee_shroud_charge_in(charge_reach, target_unit)
 	if charge_band < charge_reach and charge_gap <= charge_reach and charge_gap > charge_band:
 		_rule_note(report, "Melee Shrouding: %s denies the charge — band %.0f\" instead of %.0f\" (gap %.1f\")" % [
@@ -2759,8 +2774,12 @@ func _commander_close_order(unit: GameUnit, default_target: GameUnit, prev: Dict
 	if default_target != null and default_target != pu:
 		var bands: Dictionary = move_bands_for_unit(unit, movement_range)
 		var rush: float = float(bands.get("charge", bands.get("rush", 12)))
-		if nearest_melee_gap_in(unit, default_target) <= melee_shroud_charge_in(rush, default_target) \
-				and nearest_melee_gap_in(unit, pu) > melee_shroud_charge_in(rush, pu):
+		# #845 option (b): an enemy carrying the attackers-side Rapid Charge grant is in charge
+		# range at the extended band (per-target, the same fold _act performs).
+		var fresh_band := rush + rapid_charge_reach_bonus_in(unit, default_target)
+		var standing_band := rush + rapid_charge_reach_bonus_in(unit, pu)
+		if nearest_melee_gap_in(unit, default_target) <= melee_shroud_charge_in(fresh_band, default_target) \
+				and nearest_melee_gap_in(unit, pu) > melee_shroud_charge_in(standing_band, pu):
 			return {"target": default_target, "continuity": "abort",
 				"why": "abort standing close order: a certain charge on a nearer enemy beats closing on the far one"}
 	return {"target": pu, "continuity": "continue",
@@ -5720,6 +5739,22 @@ static func ranged_shroud_reach_in(reach_in: float, target: GameUnit) -> float:
 	if spec.is_empty():
 		return reach_in
 	return AiCombatMath.shrouded_reach(reach_in, float(spec["range_penalty_in"]), float(spec["floor_in"]))
+
+
+## #845 option (b) — the ONE-charge reach bonus a friendly unit gets against a TARGET carrying an
+## attackers-side "Rapid Charge" grant (the Mark's record on the marked enemy): the granting rule's
+## own registry `rush_mod` for the CHARGER's book, never a literal 4. 0.0 when the target carries
+## none. Target-aware only: callers fold it into the one charge's working reach, never into the
+## permanent bands / the shared spell_move_mod stamp / the human UI rings.
+static func rapid_charge_reach_bonus_in(unit: GameUnit, target: GameUnit) -> float:
+	if unit == null or target == null:
+		return 0.0
+	var records: Array = target.unit_properties.get("spell_records", [])
+	if not AiSpell.attacker_grants_from_target(records).has("Rapid Charge"):
+		return 0.0
+	var system := RulesRegistry.system_of_unit(unit)
+	var faction := RulesRegistry.faction_of_unit(unit)
+	return float(RulesRegistry.lookup(system, faction, "Rapid Charge").get("params", {}).get("rush_mod", 0))
 
 
 ## Melee Shrouding (army-book: "-3\" movement to a min. of 6\" when trying to charge units where all
