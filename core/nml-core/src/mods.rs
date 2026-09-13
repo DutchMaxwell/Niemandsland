@@ -183,11 +183,21 @@ pub fn solo_move_grants(state: &State, i: usize, rules_epoch: u32) -> Vec<&'stat
         return Vec::new();
     }
     let mut out = Vec::new();
-    if granted(state, i, "Slow") { out.push("Slow"); }
-    if granted(state, i, "Fast") { out.push("Fast"); }
-    if granted(state, i, "Swift") { out.push("Swift"); }
-    if granted(state, i, "Rapid Advance") { out.push("Rapid Advance"); }
-    if granted(state, i, "Rapid Rush") { out.push("Rapid Rush"); }
+    if granted(state, i, "Slow") {
+        out.push("Slow");
+    }
+    if granted(state, i, "Fast") {
+        out.push("Fast");
+    }
+    if granted(state, i, "Swift") {
+        out.push("Swift");
+    }
+    if granted(state, i, "Rapid Advance") {
+        out.push("Rapid Advance");
+    }
+    if granted(state, i, "Rapid Rush") {
+        out.push("Rapid Rush");
+    }
     out
 }
 
