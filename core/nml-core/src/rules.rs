@@ -13,6 +13,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use serde_json::Value;
 
@@ -21,12 +22,36 @@ const SYSTEMS: [&str; 5] = ["gf", "gff", "aof", "aofs", "aofr"];
 const DEFAULT_SYSTEM: &str = "gf";
 const COMMON: &str = "common";
 
+/// F12 (analysis/SILENT_FAILURES_2026-09-13.md): an unrecognised system used to
+/// fold onto `"gf"` in silence — a typo'd `game_system` played the wrong book
+/// and said nothing. Count the folds per distinct input and name the input once
+/// on stderr; the fold itself is unchanged (recording the fact is this step).
+fn note_folded_system(input: &str) -> usize {
+    static FOLDS: OnceLock<Mutex<HashMap<String, usize>>> = OnceLock::new();
+    let mut folds = FOLDS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap();
+    let count = folds
+        .entry(input.to_string())
+        .and_modify(|c| *c += 1)
+        .or_insert(1);
+    if *count == 1 {
+        eprintln!(
+            "rules: unrecognised system {:?} folded to \"{}\"",
+            input, DEFAULT_SYSTEM
+        );
+    }
+    *count
+}
+
 /// `RulesRegistry.normalize_system` rules_registry.gd:28-30.
 pub fn normalize_system(system: &str) -> String {
     let s = system.trim().to_lowercase();
     if SYSTEMS.contains(&s.as_str()) {
         s
     } else {
+        note_folded_system(&s);
         DEFAULT_SYSTEM.to_string()
     }
 }
@@ -472,5 +497,17 @@ mod tests {
         assert!(has_special_rule(&["Relentless (spell)".into()], "Relentless"));
         assert!(rule_name_matches("Tough(3)", "Tough"));
         assert!(!rule_name_matches("Toughness", "Tough"));
+    }
+
+    #[test]
+    fn folded_systems_are_counted_not_silent() {
+        // F12: the fold onto "gf" says so — a per-input count (the one-line
+        // warning is the eprintln in note_folded_system) and an unchanged fold.
+        // Distinct input on purpose: tests run in parallel and share the map.
+        assert_eq!(note_folded_system("zz-f12-unknown"), 1, "the fold is named");
+        assert_eq!(note_folded_system("zz-f12-unknown"), 2, "and counted");
+        assert_eq!(normalize_system("ZZ-F12-UNKNOWN "), "gf", "fold unchanged");
+        assert_eq!(note_folded_system("zz-f12-unknown"), 4, "as \"zz-f12-unknown\"");
+        assert_eq!(normalize_system("gf"), "gf");
     }
 }
