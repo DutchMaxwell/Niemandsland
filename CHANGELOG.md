@@ -46,17 +46,20 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The Solo arena's both-AI round loop grants Second Wind.** (#503)
 
 ### Changed
-- **Rules epochs 8–10.** The planner's rush demotion moved behind a new frozen gate (epoch 8, #837)
+- **Rules epochs 8–11.** The planner's rush demotion moved behind a new frozen gate (epoch 8, #837)
   and every record header now stamps the epoch (#844); the Mark grants switched on by #870 apply
   from epoch 9 (#878); the core reads the table's distinct CHARGE band behind `EPOCH_10_CHARGE_BAND`
-  (epoch 10, #882).
+  (epoch 10, #882); the SOLO move-grant evidence reads land at epoch 11 (#898).
 - **More named rules ported to the fast core:** Spawn (named templates and the round-boundary
   arrival), Teleport and Ethereal, Spell Conduit, the once-per-game feats (Speed, Takedown Shot,
   Precision, Piercing), Sturdy, Surprise Attack, Grounded Speed, the Rapid Rush and Rapid Advance
   grants, Reinforcement's round-start driver, Entrenched, Growth Markers' defence facet, Swift and
   Swift Aura negating Slow, the Indirect to-hit penalty, and the Utility Buff AP/Defense reads;
-  encoder vocabulary v8. (#792, #793, #797, #800, #803, #808, #810, #818, #827, #831, #838, #839,
-  #841, #842, #843, #848, #852, #853, #856, #859, #860, #861, #862, #864, #865, #879)
+  encoder vocabulary v9 — #908 appended the eight core-ported names that still had no encoder slot
+  (`unit2` slots 1017–1024), which is the layer that actually binds coverage: 447 of 452 names now
+  have a slot, against 446 of 450 ported to the core. (#792, #793, #797, #800, #803, #808, #810,
+  #818, #827, #831, #838, #839,
+  #841, #842, #843, #848, #852, #853, #856, #859, #860, #861, #862, #864, #865, #879, #908)
 - **The optional Rust rules core ships dormant in the Linux and Windows exports.** CI builds the
   extension and places it in the exports; game behaviour is unchanged until the Rust planner is
   switched on. macOS stays out for now, and the release job waits for the Rust workspace checks.

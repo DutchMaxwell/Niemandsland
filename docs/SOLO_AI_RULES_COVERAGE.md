@@ -1246,3 +1246,12 @@ separate wave and are listed in `KNOWN_OPEN` in the test: **Thrust in Melee** (9
 exactly_three`, fails if one of them starts resolving, which forces the list to be kept honest.
 
 Every registry entry in all five system maps must identify an implemented table primitive, except `Unique` and `Sniper REMOVE` (both list-building only). `Aura Channel` entries must name a mapped base in `params.grants`; import expansion remains the single grant path. `test/rules_registry_test.gd` checks the shrinking allow-list and expanded-roster hashes. Measure the current book snapshot with `python3 core/nml-core-py/tools/rule_universe_census.py --books "$BOOKS" --repo . --out-json /tmp/rule-census.json --out-md /tmp/rule-census.md`; assess null and missing entries separately, and require both gap columns to contain only the documented exceptions.
+
+> **Read the scope before you report the result.** The rule above is stated over **all five** system
+> maps, but the census named in the same paragraph walks **two**: `SYSTEMS = ("gf", "aof")` in
+> `core/nml-core-py/tools/rule_universe_census.py`. A contributor who runs that command, sees clean
+> gap columns and reports five-system compliance has measured GrimDark Future and Age of Fantasy
+> only — Firefight, Skirmish and Regiments were never walked. **Clean gap columns are evidence for
+> `gf` and `aof` and for nothing else.** Say which systems you measured when you report a number, and
+> treat a claim about the other three as unmeasured until the census covers them. (An instrument that
+> cannot see the thing it certifies is the failure mode this project has been bitten by before.)
