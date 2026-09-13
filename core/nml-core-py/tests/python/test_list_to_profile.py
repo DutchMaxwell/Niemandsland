@@ -209,13 +209,15 @@ def test_an_items_name_and_its_rules_reach_the_rule_line():
 def test_a_per_model_item_stays_off_the_rule_line_and_keeps_its_tough():
     """An item only a SUBSET of the models carry is per-model equipment: its
     name never joins the unit rule line, and a Tough(X) it grants must not buff
-    the whole squad (:803-813). Its other rules still apply unit-wide."""
+    the whole squad (:803-813). An ALL-MODELS rule it grants (Shielded, §2A.12)
+    stays off too — one shield of five does not make the unit Shielded. Its
+    item_grants record is unchanged (the hover cascade still reads it)."""
     sel = _selection("u", "Squad", size=5)
     sel["loadout"] = [_item("Weapon Team", ["Tough(3)", "Shielded"], count=1)]
     prof = profiles_from_army_forge_json(
         {"gameSystem": "gf", "units": [sel]}, "test_faction", player=1
     )["p1_0_u"]
-    assert prof["special_rules"] == ["Shielded"]
+    assert prof["special_rules"] == []
     assert prof["tough"] == 1
     assert prof["item_grants"] == ["Tough(3)", "Shielded"]
 
