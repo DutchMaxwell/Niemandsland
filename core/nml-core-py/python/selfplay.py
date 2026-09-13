@@ -2041,6 +2041,7 @@ def play_game(
     eval_variant_player: int = 0,
     eval_variant: int = 0,
     record_aux: bool = False,
+    record_final_state: bool = False,
     cap_share: float = 0.0,
     cap_top_k: int = 6,
     cap_horizon: int = 2,
@@ -2282,6 +2283,11 @@ def play_game(
     every `rounds_log` entry and on the result beside `objectives`. Opt-in
     because `result_digest` hashes `rounds_log`: a default game must stay
     byte-identical to every corpus written before the flag existed.
+
+    `record_final_state` (planner week-1 determinism probe) stamps the game-end
+    `State.plain()` fingerprint as `final_state_hash` (`final_state_digest`).
+    Opt-in for the `record_aux` reason and no other: `result_digest` hashes the
+    whole result, so a default call must not grow a key.
 
     `cap_share` (playout-cap randomization, same step) generalises the
     per-SEAT second core to per-ACTIVATION: when > 0, one extra core built
@@ -2961,6 +2967,9 @@ def play_game(
         # Expert-iteration step 2: the AUX targets at game end, `record_aux`
         # only (rounds_log, and so the digest, must not move by default).
         **(_aux_alive_wounds(state, profiles) if record_aux else {}),
+        # Planner week-1 determinism probe: the game-end state fingerprint,
+        # `record_final_state` only (same no-default-move rule).
+        **({"final_state_hash": final_state_digest(state)} if record_final_state else {}),
         "vp": {"p1": int(vp[0]), "p2": int(vp[1])},
         "scoring": eff_scoring,
         "winner": winner,
@@ -3006,6 +3015,20 @@ def without_core_build_stamp(result: dict) -> dict:
         else:
             del body["prescreen"]
     return body
+
+
+def final_state_digest(state) -> str:
+    """Planner week-1 determinism probe — a SHA-256 over the game-end
+    `State.plain()`: the state the RULES care about (per-unit player/alive/
+    flags/wounds/positions/radii/mods/attachments/LOS), never presentation.
+
+    Canonical like `result_digest` (recursively sorted keys, Python's own
+    float repr), so two states meaning the same game hash the same regardless
+    of the dict order the crate or the seam produced. A caller gets the hash
+    through `play_game(..., record_final_state=True)["final_state_hash"]`.
+    """
+    canonical = json.dumps(state.plain(), sort_keys=True, ensure_ascii=True, allow_nan=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def result_digest(result: dict) -> str:
