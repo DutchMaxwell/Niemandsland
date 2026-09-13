@@ -92,6 +92,37 @@ jobs:
             echo "::error::gdUnit executed $EXECUTED suite(s) but $FILE_COUNT *_test.gd file(s) exist under test/ — some suite(s) never ran"; exit 1
           fi
 
+  # Guard for the sharded gdUnit4 test job: recompute the same deterministic
+  # round-robin file list the shards use, sum the five shard sizes, and fail if
+  # they do not add up to every *_test.gd under test/ — this catches a future
+  # test directory that quietly falls outside every shard.
+  shards-coverage:
+    name: Shards cover every suite
+    runs-on: ubuntu-latest
+    needs: [changes]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify the five shards cover every *_test.gd suite
+        run: |
+          set -euo pipefail
+          TOTAL=$(find test -name '*_test.gd' | LC_ALL=C sort | wc -l)
+          SUM=0
+          # RED: stride 6 is deliberately wrong (the matrix has 5 shards) — this
+          # guard job is expected to FAIL on this commit as the red evidence.
+          for shard in 0 1 2 3 4; do
+            N=$(find test -name '*_test.gd' | LC_ALL=C sort | awk -v shard="$shard" -v stride=6 '(NR-1) % stride == shard' | wc -l)
+            echo "shard $shard: $N suite(s)"
+            SUM=$((SUM + N))
+          done
+          echo "*_test.gd files on disk: $TOTAL | summed shard sizes: $SUM"
+          if [ "$SUM" -ne "$TOTAL" ]; then
+            echo "::error::the five shards cover only $SUM of $TOTAL *_test.gd suites — some suites fall outside every shard"
+            exit 1
+          fi
+          echo "OK: the five shards cover every *_test.gd suite"
+
   relay-tests:
     name: Relay tests
     runs-on: ubuntu-latest
