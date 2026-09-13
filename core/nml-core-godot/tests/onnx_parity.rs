@@ -172,7 +172,7 @@ fn onnx_parity_pinned_corpus() {
 
     let count = receipt["corpus"]["count"].as_u64().unwrap() as usize;
     let seed = receipt["corpus"]["seed"].as_u64().unwrap();
-    let tolerance = 1e-8_f32;
+    let tolerance = receipt["tolerance"].as_f64().unwrap() as f32;
     assert!(count >= 10_000, "corpus {count} is under 10,000 positions");
 
     let leaves: Vec<Leaf> = golden["leaves"]
