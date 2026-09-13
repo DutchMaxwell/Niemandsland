@@ -92,7 +92,7 @@ use super::*;
         Action {
             kind: ADVANCE,
             unit: unit.into(),
-            dest: Some([x_in * IN2M as f64, 0.0, 0.0]),
+            dest: Some([x_in * IN2M, 0.0, 0.0]),
             shoot: None,
             charge: None,
             patient: false,
