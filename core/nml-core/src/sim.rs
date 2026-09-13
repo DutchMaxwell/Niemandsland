@@ -24,7 +24,7 @@ use crate::geom::{self, V3};
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
-    EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
+    EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -3320,7 +3320,7 @@ fn strike_phase(
     // own: on from the current rules epoch onward, pre-port corpora replay
     // byte-exact (dice.rs::save_batch's gate).
     let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
-    let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, tray);
+    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), tray);
     // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
     // here; the gated aliases never reach a melee save batch, exactly the
     // table's own `dist_in: -1.0` read, main.gd:6119).
@@ -5614,7 +5614,7 @@ fn resolve_with(
                             // CLASS FIX (external review 03.09. item 3 / F9,
                             // `acts::rule_on`) — same gate as `strike_phase`'s
                             // melee half above.
-                            let r = crate::dice::resolve_volley_with_tray(
+                            let r = crate::dice::resolve_volley_leg(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d,
                                 seams.cond_ap_dice || rule_on(seams.rules_epoch, 1),
@@ -5627,6 +5627,10 @@ fn resolve_with(
                                 // see `shred_boost_active`'s doc above.
                                 shred_boost_active(seams.rules_epoch),
                                 tray,
+                                // Audit 2026-09-13 §2.1 — the Deadly gate's leg
+                                // pick: per-model landing from
+                                // `EPOCH_14_DEADLY_LANDING`, pool multiply below.
+                                rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
                             );
                             // WAVE 3, rules-must-log — the arm lowered a
                             // save target; the volley is the one leg whose

@@ -26,7 +26,7 @@
 //! `randi_range(1, 6)` on it.
 
 use crate::combat::{
-    conditional_ap_bonus, covered_defense, fortified_ap, guarded_defense,
+    conditional_ap_bonus, covered_defense, deadly_multiplier, fortified_ap, guarded_defense,
     impact_total_dice, melee_hit_modifier, modified_hit_target, reliable_quality, save_target,
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
@@ -307,8 +307,10 @@ fn shred_faces(faces: &[u8], reroll: &[u8], low: i64, target: i64) -> i64 {
 
 /// `main._solo_save_batch` :6385-6483 — ONE batch for the whole defender (not
 /// per model), Fortified first, then the dice, then Bane's re-roll of the
-/// unmodified 6s, then Shred — the pool stays RAW (the Deadly multiply is the
-/// landing's, audit 2026-09-13 §2.1).
+/// unmodified 6s, then Shred — the pool's Deadly shape is the
+/// `EPOCH_14_DEADLY_LANDING` gate's two legs: below 14 the multiply against
+/// the unit's printed Tough rides the pool (verbatim), from 14 the pool stays
+/// RAW and the landing multiplies per model (audit 2026-09-13 §2.1).
 ///
 /// `shred_alias_dice` is the Shred-FAMILY epoch gate
 /// (`sim.rs` passes `rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES)`): the
@@ -331,6 +333,7 @@ fn save_batch(
     shred_grant: bool,
     shred_alias_dice: bool,
     shred_low: i64,
+    deadly_per_model: bool,
     tray: &mut Tray,
     out: &mut ShootResult,
 ) -> i64 {
@@ -429,11 +432,18 @@ fn save_batch(
     } else {
         0
     };
-    // Audit 2026-09-13 §2.1 — the pool stays RAW: the Deadly multiply happens
-    // PER MODEL at the landing (sim::land_deadly_wounds, the table's
-    // `apply_deadly_wounds`), never here against the unit's printed Tough, and
-    // the overkill never carries onto the next model.
-    unsaved + shred
+    // Audit 2026-09-13 §2.1 — BOTH LEGS of the `EPOCH_14_DEADLY_LANDING` gate.
+    // Below 14 (every pre-14 recording): the pool carries the multiply against
+    // the unit's printed Tough, verbatim, and the landing spills. From 14 on:
+    // the pool stays RAW — the multiply happens PER MODEL at the landing
+    // (sim::land_deadly_wounds, the table's `apply_deadly_wounds`), and the
+    // overkill never carries onto the next model.
+    if deadly_per_model {
+        unsaved + shred
+    } else {
+        let mult = if p.deadly > 0 { deadly_multiplier(p.deadly, def.tough.max(1)) } else { 1 };
+        unsaved * mult + shred
+    }
 }
 
 /// ONE shooting activation resolved on the tray, in the TABLE's draw order
@@ -470,10 +480,10 @@ fn save_batch(
 ///     flags nothing; every pre-epoch record keeps the ungated read, and the
 ///     MELEE leg (whose gates are no-ops at dist 0) keeps the mark.
 ///   * `hazardous`   — Hazardous wounds the FIRER on its natural 1s (:16555).
-///   * `deadly`      — LEGACY FLAG (audit 2026-09-13 §2.1): the landing now
-///     mirrors the table per model (`sim::land_deadly_wounds`) with its OWN
-///     Regeneration roll on the RAW unsaved count (:6762); the flag stays on
-///     so every pre-fix corpus replays under the same tolerance.
+///   * `deadly`      — the activation carried a Deadly weapon; the landing's
+///     shape is the `EPOCH_14_DEADLY_LANDING` gate's (per model with no
+///     carry-over from 14 on, the pooled multiply below — audit 2026-09-13
+///     §2.1).
 ///   * `takedown`    — resolved "as a unit of [1]" against a picked model, with
 ///     that model's own Defense (:3155).
 ///   * `strafing`    — the table splits a Strafing weapon per model (:2918).
@@ -623,6 +633,13 @@ pub struct Shooter<'a> {
 /// stable ALWAYS, so a volley of more than 16 shots may order its equal-priority
 /// shots differently from the table's. Nothing in the reference corpus is that
 /// wide, and the gate would show it as a `kind`/`count` part.
+///
+/// DEADLY'S TWO LEGS (audit 2026-09-13 §2.1, `EPOCH_14_DEADLY_LANDING`): the
+/// body is one; the flag splits only the Deadly share. This wrapper is the
+/// LEGACY leg — the pool carries the multiply against the unit's printed Tough
+/// and the landing spills, byte-exact for every corpus recorded at 13 or
+/// below. sim.rs's two call sites pick the leg by
+/// `rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING)`.
 pub fn resolve_volley_with_tray(
     shooters: &[Shooter<'_>],
     def: &Ctx,
@@ -633,6 +650,22 @@ pub fn resolve_volley_with_tray(
     surge_gates: bool,
     shred_alias_dice: bool,
     shred_boost_dice: bool,
+    tray: &mut Tray,
+) -> ShootResult {
+    resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, tray)
+}
+
+pub fn resolve_volley_leg(
+    shooters: &[Shooter<'_>],
+    def: &Ctx,
+    def_owner: &str,
+    dist_in: f64,
+    mod_dist_in: f64,
+    cond_ap_dice: bool,
+    surge_gates: bool,
+    shred_alias_dice: bool,
+    shred_boost_dice: bool,
+    deadly_per_model: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -1094,8 +1127,8 @@ pub fn resolve_volley_with_tray(
                 ap += conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, false, mod_dist_in, false);
             }
         }
-        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_dice, shred_low, tray, &mut out);
-        w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, att.shred_grant, shred_alias_dice, shred_low, tray, &mut out);
+        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
+        w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
         // `_solo_ignores_regen` :6927-6933 — Bane / Rending (and Unstoppable,
         // ai_ev.gd:433) cut through Regeneration; everything else is poolable.
         // B2b: `_solo_ignores_regen`'s last line (main.gd:6941) also answers
@@ -1104,15 +1137,18 @@ pub fn resolve_volley_with_tray(
         // `bane`: the Bane-primitive aliases (Bestial, Mischievous, Scrapper,
         // Vicious) re-roll sixes but carry no Regeneration clause, so they
         // never join this proof. Pre-port records stamp both flags alike.
-        // Audit 2026-09-13 §2.1 — a Deadly weapon's share is its OWN group: its
-        // Regeneration roll draws on the RAW unsaved count (the table's roll
-        // inside `_solo_land_deadly_wounds`, main.gd:6762), the landing
-        // multiplies PER MODEL with no carry-over (`apply_deadly_wounds`,
-        // solo_controller.gd:8333). The tally keeps the raw count
-        // (`total_caused += w`, main.gd:3318).
+        // Audit 2026-09-13 §2.1 — on the 14+ leg a Deadly weapon's share is its
+        // OWN group: its Regeneration roll draws on the RAW unsaved count (the
+        // table's roll inside `_solo_land_deadly_wounds`, main.gd:6762), the
+        // landing multiplies PER MODEL with no carry-over
+        // (`apply_deadly_wounds`, solo_controller.gd:8333). The tally keeps the
+        // raw count (`total_caused += w`, main.gd:3318). The legacy leg keeps
+        // the pool multiply verbatim and lands through `land_wounds` as before.
         let ignores_regen = p.bypass_regen || p.rending || p.unstoppable || att.rending_grant || att.unstoppable_grant;
         if p.deadly > 0 {
             out.mark("deadly");
+        }
+        if deadly_per_model && p.deadly > 0 {
             let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
             out.deadly_groups.push((post, p.deadly.max(1)));
             out.deadly_tally += w;
@@ -1215,7 +1251,7 @@ pub fn retaliate_saves_with_tray(
     let save_def = shielded_defense(def.defense, def.shielded);
     let mut sub = ShootResult::default();
     let unsaved =
-        save_batch(&ShootProfile::default(), def, def_owner, hits, save_def, 0, false, false, 1, tray, &mut sub);
+        save_batch(&ShootProfile::default(), def, def_owner, hits, save_def, 0, false, false, 1, false, tray, &mut sub);
     rolls.extend(sub.rolls);
     let landed = regen_batch(unsaved, def, def_owner, tray, rolls);
     (unsaved, landed)
@@ -1365,10 +1401,9 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 /// its place, and — wave-4 follow-up — Reckless Piercing's round AP stamp
 /// (main.gd:6017's `_solo_reckless_ap` fold, the `Ctx::reckless_ap` leg).
 ///
-/// FLAGGED per activation, never skipped in silence: `deadly` (LEGACY FLAG,
-/// audit 2026-09-13 §2.1 — the landing now mirrors the table per model with its
-/// OWN Regeneration roll on the raw unsaved count; kept on so pre-fix corpora
-/// replay under the same tolerance), `takedown`, `hazardous`,
+/// FLAGGED per activation, never skipped in silence: `deadly` (the landing's
+/// shape is the `EPOCH_14_DEADLY_LANDING` gate's — per model from 14 on, the
+/// pooled multiply below, audit 2026-09-13 §2.1), `takedown`, `hazardous`,
 /// `surge_gates`, and `counter_strikes_first` (a defender Counter weapon runs a
 /// whole EXTRA strike phase before Impact, :8058).
 ///
@@ -1395,6 +1430,12 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 ///      gap — melee resolves the base 1s window only. The shooting half of
 ///      the Boost IS ported (the volley's `shred_boost_dice` gate), the
 ///      table's own Surge-Boost precedent is shooting-only too.
+/// The `EPOCH_14_DEADLY_LANDING` gate's melee leg split (audit 2026-09-13
+/// §2.1): `resolve_melee_with_tray` below is the LEGACY leg — the pool carries
+/// the Deadly multiply verbatim and the landing spills, byte-exact for every
+/// corpus recorded at 13 or below. `deadly_per_model = true` is the 14+ leg —
+/// the pool stays RAW, the share becomes its own group and the landing
+/// multiplies PER MODEL with no carry-over.
 pub fn resolve_melee_with_tray(
     strikers: &[Shooter<'_>],
     def: &Ctx,
@@ -1402,6 +1443,19 @@ pub fn resolve_melee_with_tray(
     charging: bool,
     cond_ap_dice: bool,
     shred_alias_dice: bool,
+    tray: &mut Tray,
+) -> ShootResult {
+    resolve_melee_leg(strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice, false, tray)
+}
+
+pub fn resolve_melee_leg(
+    strikers: &[Shooter<'_>],
+    def: &Ctx,
+    def_owner: &str,
+    charging: bool,
+    cond_ap_dice: bool,
+    shred_alias_dice: bool,
+    deadly_per_model: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -1579,14 +1633,14 @@ pub fn resolve_melee_with_tray(
             // Boost's charge half needs a pre-charge gap this port never
             // measured (see the NOT-PORTED list on resolve_melee_with_tray).
             let idx_ap = out.rolls.len();
-            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, tray, &mut out);
+            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
             // Wave 4 follow-up — the batch's OWN blocked unmodified 1s (the
             // FIRST "defense" slot of the batch, never Bane's re-rolls: a 6
             // re-rolled into a 1 is not an unmodified 1), Bloodthirsty
             // Fighter's table counter read (main.gd:6505-6509).
             let ones_ap = fresh_save_ones(&out, idx_ap);
             let idx_rest = out.rolls.len();
-            w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, sh.att.shred_grant, shred_alias_dice, 1, tray, &mut out);
+            w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
             let ones_rest = fresh_save_ones(&out, idx_rest);
             // Wave 4 follow-up — Bloodthirsty Fighter (aof/war_disciples):
             // each unmodified 1 the DEFENDER rolled blocking this weapon pays
@@ -1623,19 +1677,26 @@ pub fn resolve_melee_with_tray(
                         // separate on-6 AP sub-batch, no Deadly special-case:
                         // they join the weapon's own batch, and on a Deadly
                         // weapon its per-model group below.
-                        let btw = save_batch(p, def, def_owner, bt_hits, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, tray, &mut out);
+                        let btw = save_batch(p, def, def_owner, bt_hits, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
                         w += btw;
                     }
                 }
             }
-            // Audit 2026-09-13 §2.1 — a Deadly weapon's share is its OWN group:
-            // its Regeneration roll draws on the RAW unsaved count (the table's
-            // roll inside `_solo_land_deadly_wounds`, main.gd:6762), the landing
-            // multiplies PER MODEL with no carry-over (`apply_deadly_wounds`,
-            // solo_controller.gd:8333). The tally keeps the raw count.
+            // Audit 2026-09-13 §2.3 — the regen split reads the BYPASS flag, not
+            // `bane`: the Bane-primitive aliases re-roll sixes but carry no
+            // Regeneration clause, so they never join this proof.
+            // Audit 2026-09-13 §2.1 — on the 14+ leg a Deadly weapon's share is
+            // its OWN group: its Regeneration roll draws on the RAW unsaved
+            // count (the table's roll inside `_solo_land_deadly_wounds`,
+            // main.gd:6762), the landing multiplies PER MODEL with no carry-over
+            // (`apply_deadly_wounds`, solo_controller.gd:8333). The tally keeps
+            // the raw count. The legacy leg keeps the pool multiply verbatim
+            // and lands through `land_wounds` as before.
             let ignores_regen = p.bypass_regen || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant;
             if p.deadly > 0 {
                 out.mark("deadly");
+            }
+            if deadly_per_model && p.deadly > 0 {
                 let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
                 out.deadly_groups.push((post, p.deadly.max(1)));
                 out.deadly_tally += w;
@@ -1730,7 +1791,7 @@ pub fn resolve_impact_pool_with_tray(
     // "Impact is not a weapon": no Deadly, no Bane, no Shred — a bare profile
     // carrying only the pool's AP, exactly as :6325 builds it.
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, false, 1, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, false, 1, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out
@@ -1756,7 +1817,7 @@ pub fn resolve_breath_attack_with_tray(
         return out;
     }
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, false, 1, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, false, 1, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out
@@ -1775,7 +1836,7 @@ pub fn resolve_storm_hits_with_tray(
     let mut out = ShootResult::default();
     if hits <= 0 { return out; }
     let bare = ShootProfile { ap, bane, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, shred_grant, false, 1, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, shred_grant, false, 1, false, tray, &mut out);
     out.caused = w;
     out.wounds = if bane { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
     out

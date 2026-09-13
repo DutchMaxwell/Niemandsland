@@ -65,8 +65,9 @@ use super::*;
         )
     }
 
-    /// One HOLD+shoot activation on the tray path (the `run_shoot` shape).
-    fn run_shoot(st: &State, statics: &[UnitStatic], seed: i64) -> (State, ShootResult) {
+    /// One HOLD+shoot activation on the tray path (the `run_shoot` shape); the
+    /// epoch picks the Deadly gate's leg (14 = per model, 13 = pooled legacy).
+    fn run_shoot(st: &State, statics: &[UnitStatic], seed: i64, rules_epoch: u32) -> (State, ShootResult) {
         let action = Action {
             kind: HOLD,
             unit: "a".into(),
@@ -81,18 +82,19 @@ use super::*;
         let terrain = Terrain::default();
         let mut tray = Tray::seeded(seed);
         let mut rng = GodotRng::new(0);
-        let seams = Seams { rules_epoch: 7, ..Seams::default() };
+        let seams = Seams { rules_epoch, ..Seams::default() };
         resolve_stochastic_tray_on_board(statics, st, &action, &terrain, seams, &mut rng, &mut tray)
             .unwrap()
     }
 
-    /// The audit board on the tray. Seed 2 draws [5, 4] on the attack roll
-    /// (Quality 2+ -> 2 hits) and [1, 3] on the save batch (target 6 -> both
-    /// fail): exactly 2 unsaved wounds into the Deadly(3) weapon.
+    /// The audit board on the tray, at `EPOCH_14_DEADLY_LANDING`. Seed 2 draws
+    /// [5, 4] on the attack roll (Quality 2+ -> 2 hits) and [1, 3] on the save
+    /// batch (target 6 -> both fail): exactly 2 unsaved wounds into the
+    /// Deadly(3) weapon.
     #[test]
     fn deadly_wounds_do_not_carry_onto_the_next_model() {
         let (st, statics) = deadly_line();
-        let (next, shot) = run_shoot(&st, &statics, 2);
+        let (next, shot) = run_shoot(&st, &statics, 2, 14);
         // The stream: one attack roll of 2 at Quality 2+, one save batch of 2
         // at Defense 4 + AP(2) = 6 — exactly the two draws, nothing pooled.
         let atk: Vec<_> = shot.rolls.iter().filter(|r| r.kind == "attack" && r.owner == "a").collect();
@@ -130,6 +132,30 @@ use super::*;
         assert!(
             shot.log.iter().any(|l| l.contains("Deadly(3): 2 unsaved ×3") && l.contains("no carry-over")),
             "the Deadly landing names itself: {:?}",
+            shot.log
+        );
+    }
+
+    /// THE OLD LEG, pinned (the gate discipline): the same board at epoch 13 —
+    /// one below the gate — keeps the POOL multiply verbatim. The 2 unsaved
+    /// become 6 pooled wounds and `land_wounds` spills them: the unit is wiped
+    /// and the tally is the multiplied 6. Same seed, same stream — only the
+    /// leg differs.
+    #[test]
+    fn at_epoch_13_the_pool_multiply_still_wipes_the_unit() {
+        let (st, statics) = deadly_line();
+        let (next, shot) = run_shoot(&st, &statics, 2, 13);
+        assert_eq!(shot.caused, 6, "2 unsaved × Deadly(3), the pooled tally");
+        assert_eq!(
+            (shot.rolls[0].count, shot.rolls[1].count),
+            (2, 2),
+            "the stream is identical on both legs: {:?}",
+            shot.rolls
+        );
+        assert_eq!(next.alive[2], 0, "the legacy leg wipes the unit: wounds {:?}", next.wounds);
+        assert!(
+            !shot.log.iter().any(|l| l.contains("no carry-over")),
+            "the legacy leg has no Deadly landing line: {:?}",
             shot.log
         );
     }
