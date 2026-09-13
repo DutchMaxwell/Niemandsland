@@ -42,11 +42,15 @@ jobs:
               - '!docs/**'
 
   test:
-    name: gdUnit4 Tests
+    name: gdUnit4 Tests (shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: changes
     if: ${{ github.event_name != 'pull_request' || needs.changes.outputs.not_core_only == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,19 +63,32 @@ jobs:
       - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path .
 
+      # Each shard builds its own deterministic slice of the suite: sort every
+      # *_test.gd under test/ (recursive, LC_ALL=C), then take every 5th entry
+      # starting at the shard index (round-robin). Round-robin — not contiguous
+      # blocks — spreads the slow test/e2e suites evenly across the five runners.
       - name: Run gdUnit4 tests
         run: |
           set -o pipefail
+          find test -name '*_test.gd' | LC_ALL=C sort > /tmp/all_suites.txt
+          awk -v shard=${{ matrix.shard }} -v stride=5 '(NR-1) % stride == shard' /tmp/all_suites.txt > /tmp/shard_suites.txt
+          echo "shard ${{ matrix.shard }}: $(wc -l < /tmp/shard_suites.txt) suite(s) of $(wc -l < /tmp/all_suites.txt) total"
+          ARGS=()
+          while IFS= read -r suite; do
+            ARGS+=(-a "res://${suite}")
+          done < /tmp/shard_suites.txt
           godot --headless --path . \
             -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
-            --ignoreHeadlessMode -c -a res://test 2>&1 | tee gdunit_output.log
+            --ignoreHeadlessMode -c "${ARGS[@]}" 2>&1 | tee gdunit_output.log
 
       # gdUnit prints "No test cases found, abort test run!" and exits 0 when a test file
       # fails to PARSE (syntax error) instead of failing to assert — a broken suite would
       # otherwise be a silent green on this gate, which every export/release job depends on.
       # A count check is cheap and can't be fooled by a parse error: fail if gdUnit reports
-      # zero test cases, never prints its final summary, or executed fewer suites than there
-      # are *_test.gd files on disk (recursive, includes test/e2e, test/mp, ...).
+      # zero test cases, never prints its final summary, or executed fewer suites than THIS
+      # shard's round-robin slice of the *_test.gd files on disk (recursive, includes
+      # test/e2e, test/mp, ...). The "Shards cover every suite" job proves the five
+      # shard slices together still cover every file.
       - name: Verify gdUnit executed the full suite
         run: |
           CLEAN=$(sed -r 's/\x1b\[[0-9;]*m//g' gdunit_output.log)
@@ -85,12 +102,41 @@ jobs:
           fi
 
           EXECUTED=$(grep -oP 'Executed test suites: \(\K[0-9]+' <<< "$CLEAN" | head -1)
-          FILE_COUNT=$(find test -name '*_test.gd' | wc -l)
-          echo "gdUnit executed suites: ${EXECUTED:-<none>} | *_test.gd files on disk: $FILE_COUNT"
+          FILE_COUNT=$(find test -name '*_test.gd' | LC_ALL=C sort | awk -v shard=${{ matrix.shard }} -v stride=5 '(NR-1) % stride == shard' | wc -l)
+          echo "gdUnit executed suites: ${EXECUTED:-<none>} | this shard's *_test.gd files: $FILE_COUNT"
 
           if [ -z "$EXECUTED" ] || [ "$EXECUTED" -lt "$FILE_COUNT" ]; then
-            echo "::error::gdUnit executed $EXECUTED suite(s) but $FILE_COUNT *_test.gd file(s) exist under test/ — some suite(s) never ran"; exit 1
+            echo "::error::gdUnit executed $EXECUTED suite(s) but shard ${{ matrix.shard }} owns $FILE_COUNT *_test.gd file(s) — some suite(s) never ran"; exit 1
           fi
+
+  # Guard for the sharded gdUnit4 test job: recompute the same deterministic
+  # round-robin file list the shards use, sum the five shard sizes, and fail if
+  # they do not add up to every *_test.gd under test/ — this catches a future
+  # test directory that quietly falls outside every shard.
+  shards-coverage:
+    name: Shards cover every suite
+    runs-on: ubuntu-latest
+    needs: [changes]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify the five shards cover every *_test.gd suite
+        run: |
+          set -euo pipefail
+          TOTAL=$(find test -name '*_test.gd' | LC_ALL=C sort | wc -l)
+          SUM=0
+          for shard in 0 1 2 3 4; do
+            N=$(find test -name '*_test.gd' | LC_ALL=C sort | awk -v shard="$shard" -v stride=5 '(NR-1) % stride == shard' | wc -l)
+            echo "shard $shard: $N suite(s)"
+            SUM=$((SUM + N))
+          done
+          echo "*_test.gd files on disk: $TOTAL | summed shard sizes: $SUM"
+          if [ "$SUM" -ne "$TOTAL" ]; then
+            echo "::error::the five shards cover only $SUM of $TOTAL *_test.gd suites — some suites fall outside every shard"
+            exit 1
+          fi
+          echo "OK: the five shards cover every *_test.gd suite"
 
   relay-tests:
     name: Relay tests
