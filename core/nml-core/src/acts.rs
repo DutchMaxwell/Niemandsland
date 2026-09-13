@@ -476,6 +476,17 @@ pub const EPOCH_11_RAPID_CHARGE_MARK: u32 = 11;
 /// constant, not the literal `12` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_12_MOVE_BUFF: u32 = 12;
 
+/// The unit.rs who-wins wave (audit 2026-09-13 §2.2–§2.4) — Counter's both
+/// halves (`Ctx::counter_models`, the tray's COUNTER_ONLY pre-phase), the
+/// Bane aliases' regen-bypass split (`ShootProfile::bypass_regen`) and the
+/// Sturdy-kind Boost's gate replacement all read THIS frozen value, so a
+/// later epoch bump cannot re-date what these gates mean. `13` is one past
+/// every existing stamp, and the value `CURRENT_RULES_EPOCH` is bumped to in
+/// the same change, so every corpus recorded at 12 or below replays
+/// byte-exact. Every call site reads THIS constant, not the literal `13` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_13_WHO_WINS: u32 = 13;
+
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
 /// `since_epoch: 1` as `knob || rule_on(rules_epoch, 1)` at their call sites,

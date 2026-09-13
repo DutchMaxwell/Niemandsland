@@ -22,9 +22,9 @@ use crate::combat::{
 use crate::sight;
 use crate::geom::{self, V3};
 use crate::acts::{
-    rule_on, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
+    rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
-    EPOCH_12_MOVE_BUFF,
+    EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -3484,7 +3484,7 @@ fn tray_charge(
     // strike phase BEFORE Impact, counted into the defender's tally; only
     // the NON-counter weapons remain for the normal strike-back slot
     // (:8315). Below the epoch the core keeps its marker-only reading.
-    let counter_first = rule_on(seams.rules_epoch, CURRENT_RULES_EPOCH)
+    let counter_first = rule_on(seams.rules_epoch, EPOCH_13_WHO_WINS)
         && statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter);
     let mut by_su = 0;
     let mut by_tu = 0;

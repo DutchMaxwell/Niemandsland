@@ -23,8 +23,8 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::acts::{
-    rule_on, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES,
-    EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF,
+    rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
+    EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -1751,7 +1751,7 @@ fn shielded_alias_of(
             return Some(found);
         }
     }
-    if rule_on(rules_epoch, CURRENT_RULES_EPOCH) {
+    if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
         for (name, alias) in ALIASES_13 {
             if let Some(found) = check(name, alias) {
                 return Some(found);
@@ -2159,7 +2159,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         guarded: rule_on_all_models(p, "Guarded")
             || rule_on_all_models(p, "Versatile Defense")
             || (rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && rule_on_all_models(p, "Sturdy"))
-            || (rule_on(rules_epoch, CURRENT_RULES_EPOCH)
+            || (rule_on(rules_epoch, EPOCH_13_WHO_WINS)
                 && (rule_on_all_models(p, "Safety Gear") || rule_on_all_models(p, "Tenacious"))),
         ranged_shrouding: ranged_shroud.is_some(),
         ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s[0]),
@@ -2205,7 +2205,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // per-unit shape). The live alive-scaling rides `sim::ctx_of`'s
         // `min(bearers, alive)` fold. Pre-port records keep the hard 0 and
         // replay byte-exact.
-        counter_models: if rule_on(rules_epoch, CURRENT_RULES_EPOCH) {
+        counter_models: if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
             p.weapons.iter().filter(|w| w.range <= 0.0 && weapon_has(w, "Counter")).map(|w| w.count.max(1)).sum::<i64>().min(p.model_count.max(0))
         } else {
             0
@@ -2509,7 +2509,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             // corpora fold it into the bypass half identically. At the
             // CURRENT epoch the alias stops bypassing (the book and the
             // entry's own `bypass_regen: false` both say so).
-            if !rule_on(rules_epoch, CURRENT_RULES_EPOCH) {
+            if !rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
                 u_bypass |= hit.reroll_save_sixes;
             }
         }
