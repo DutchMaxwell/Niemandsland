@@ -64,12 +64,12 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 10 (the charge-band gate, acts::EPOCH_10_CHARGE_BAND):
-    # explicit, not just dynamic — a fresh game now stamps 10, not 9. A record
-    # already stamped 9 (recorded while epoch 9 was the live epoch, before the
-    # #879/#880 charge band gained its epoch gate) must never be mistaken for a
-    # fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 10
+    # core rules epoch 11 (the solo-grant-reads gate, acts::EPOCH_11_SOLO_GRANT_READS):
+    # explicit, not just dynamic — a fresh game now stamps 11, not 10. A record
+    # already stamped 10 (recorded while epoch 10 was the live epoch, before the
+    # census rows 1-5 move-grant reads gained their epoch gate) must never be
+    # mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 11
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)

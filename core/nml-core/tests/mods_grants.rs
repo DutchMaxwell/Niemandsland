@@ -632,3 +632,20 @@ fn a_melee_exchange_against_a_granted_alias_defender_saves_one_better_from_epoch
         "epoch 5: the raw melee save target"
     );
 }
+
+/// The census rows 1-5 family (`mods::solo_move_grants`): the Slow/Fast/Swift/
+/// Rapid Advance/Rapid Rush grant reads are EVIDENCE-ONLY and epoch-paired —
+/// `EPOCH_11_SOLO_GRANT_READS` is on at 11, while a record stamped 10 (the
+/// recording fleet's live epoch) reads nothing, exactly as it always replayed.
+/// The read never folds: the recorded dynamic band already carries the grant.
+#[test]
+fn the_solo_move_grant_family_reads_only_from_epoch_11() {
+    let (mut st, _statics) = two_units();
+    st.buffs[0].push(grant("Slow", "", true));
+    st.buffs[0].push(grant("Fast", "", true));
+    assert!(
+        nml_core::mods::solo_move_grants(&st, 0, 10).is_empty(),
+        "epoch 10 must stay blind (the recording fleet stamps 10)"
+    );
+    assert_eq!(nml_core::mods::solo_move_grants(&st, 0, 11), vec!["Slow", "Fast"]);
+}

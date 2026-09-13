@@ -12,6 +12,7 @@
 
 use std::rc::Rc;
 
+use crate::acts::{rule_on, EPOCH_11_SOLO_GRANT_READS};
 use crate::rules::base_rule_name;
 use crate::state::State;
 
@@ -170,6 +171,24 @@ fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
                 && base_rule_name(&r.grants_rule) == rule
         })
     })
+}
+
+/// CENSUS rows 1-5 (maintainer decision 13.09., semantics §11.2): the SOLO
+/// move-grant family as EVIDENCE-ONLY accessor reads. The recorded dynamic
+/// band already carries each grant (movement_range_controller.gd:83-135), so
+/// nothing here folds (semantics §2(a)); the caller logs. Gate:
+/// `EPOCH_11_SOLO_GRANT_READS` — a rules_epoch below 11 reads nothing.
+pub fn solo_move_grants(state: &State, i: usize, rules_epoch: u32) -> Vec<&'static str> {
+    if !rule_on(rules_epoch, EPOCH_11_SOLO_GRANT_READS) {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    if granted(state, i, "Slow") { out.push("Slow"); }
+    if granted(state, i, "Fast") { out.push("Fast"); }
+    if granted(state, i, "Swift") { out.push("Swift"); }
+    if granted(state, i, "Rapid Advance") { out.push("Rapid Advance"); }
+    if granted(state, i, "Rapid Rush") { out.push("Rapid Rush"); }
+    out
 }
 
 /// `_solo_spend_once_mods` main.gd:3844-3869 — every `once` record on the unit

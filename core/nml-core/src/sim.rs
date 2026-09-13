@@ -2313,6 +2313,12 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.stationary_alias_over_in = 9.0;
         c.stationary_alias_name = "Entrenched";
     }
+    // CENSUS rows 1-5 (evidence-only, non-folding — semantics §11.2/§12):
+    // exercise the recorded grant ledger and log; the recorded band carries
+    // the effect, so this must never fold.
+    for name in mods::solo_move_grants(state, i, rules_epoch) {
+        trace_rule("solo-grant", name, &format!("recorded band carries it (evidence-only), unit {i}"));
+    }
     // WAVE 2 — the family's live-grant legs. Gated on `EPOCH_5_TABLE_RULES`
     // (frozen at 5, the stamping-gap fix): a rules_epoch below 5 replays
     // every pre-wave corpus untouched (spell grants included, Gen-2b's
