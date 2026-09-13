@@ -445,6 +445,16 @@ pub const EPOCH_9_MARK_FAMILY: u32 = 9;
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_10_CHARGE_BAND: u32 = 10;
 
+/// The SOLO move-grant read gate (13.09., census rows 1-5): the evidence-only
+/// accessor reads of the Slow/Fast/Swift/Rapid Advance/Rapid Rush grants. The
+/// reads are trace-only and fold nothing (the recorded dynamic band already
+/// carries each grant — semantics §2(a)/§12), but a record below `11` still
+/// sees nothing, exactly like it never saw those reads. `11` is one past every
+/// pre-port stamp and the value `CURRENT_RULES_EPOCH` is bumped to in the same
+/// change. Every call site reads THIS constant, not the literal `11` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_11_SOLO_GRANT_READS: u32 = 11;
+
 /// #845 option (b), 13.09.: a vs-target Mark's attacker-side grant now LIVES ON THE MARKED
 /// ENEMY (the record's `beneficiary` is `"attackers"` on the target, with no live overlay on
 /// the bearer) and the table's charge seams read a target's "Rapid Charge" grant for the
@@ -937,7 +947,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 11, "epoch 11's gate (EPOCH_11_RAPID_CHARGE_MARK) bumps the live epoch to 11");
+        assert_eq!(CURRENT_RULES_EPOCH, 11, "epoch 11's gates (EPOCH_11_SOLO_GRANT_READS, EPOCH_11_RAPID_CHARGE_MARK) bump the live epoch to 11");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),

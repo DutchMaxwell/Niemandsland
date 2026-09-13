@@ -36,7 +36,7 @@ static var objectives_stamp: Dictionary = {}
 static var spawn_profile_resolver: Callable = Callable()
 ## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
 ## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 11 by the
-## #845 option (b) target-side Marks wave).
+## #845 option (b) target-side Marks wave and the solo move-grant reads).
 ## Bump it in the same change the core does; SPAWN_PROFILES_EPOCH below stays frozen.
 static var rules_epoch: int = 11
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
