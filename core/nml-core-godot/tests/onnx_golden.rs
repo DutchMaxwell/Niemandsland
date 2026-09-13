@@ -226,31 +226,28 @@ fn onnx_golden_spike() {
     let red = match load(&corrupted) {
         Err(_) => "ok",
         Ok(brain) => {
-            let mut worst = 0.0_f32;
+            let mut detected = false;
             for (bi, batch) in batches.iter().enumerate() {
                 let (value, member_values) = match brain.run(batch) {
                     Ok(out) => out,
                     Err(_) => {
-                        worst = f32::INFINITY;
+                        detected = true;
                         break;
                     }
                 };
-                for i in 0..batch_rows(bi, leaves.len(), static_batch) {
-                    let idx = bi * static_batch + i;
-                    worst = worst.max((value[i] - expected_value[idx]).abs());
-                    for (m, expected_member) in expected_members.iter().enumerate() {
-                        worst =
-                            worst.max((member_values[i * members + m] - expected_member[idx]).abs());
-                    }
+                if bits(&value) != first_pass[bi].0 || bits(&member_values) != first_pass[bi].1 {
+                    detected = true;
+                    break;
                 }
             }
-            if worst > tolerance {
+            if detected {
                 "ok"
             } else {
                 "missed"
             }
         }
     };
+    assert_eq!(red, "ok", "one-byte flip at {flip_at} was not caught by the exact compare");
 
     #[cfg(feature = "onnx-ort")]
     println!(

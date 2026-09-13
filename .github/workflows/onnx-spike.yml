@@ -1,9 +1,10 @@
 name: ONNX runtime spike
 
-# Spike only: measures the two candidate ONNX runtimes behind the off-by-default
-# `onnx-tract` / `onnx-ort` features of core/nml-core-godot. A runtime that cannot
-# build, load or match is a RESULT: the measurement steps are continue-on-error
-# and only the gate step fails a job, and only when no result line was printed.
+# The tract arm is the chosen ONNX arm (decision 2026-09-13): its golden steps
+# are hard gates. The ort arm stays in-tree behind the off-by-default feature
+# and remains measurement-only: a runtime that cannot build, load or match is a
+# RESULT there, the measurement steps are continue-on-error and only the gate
+# step fails a job, and only when no result line was printed.
 
 on:
   workflow_dispatch:
@@ -34,7 +35,6 @@ jobs:
         with:
           workspaces: core
       - name: Golden vectors (tract)
-        continue-on-error: true
         run: |
           set -o pipefail
           cargo test --release --manifest-path core/nml-core-godot/Cargo.toml \
@@ -206,7 +206,6 @@ jobs:
           echo "C:/msys64/mingw64/bin" >> "$GITHUB_PATH"
           rustup target add x86_64-pc-windows-gnu
       - name: Golden vectors (tract, windows-gnu)
-        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
