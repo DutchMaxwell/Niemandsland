@@ -27,6 +27,8 @@ The relay counts how much it is used — the project keeps **no client telemetry
 room metadata is the only usage signal. Everything is **anonymous and aggregate**: totals, peaks and
 coarse histograms only — **never** IPs, room codes or player identities.
 
+See [`PRIVACY.md`](PRIVACY.md) for the data map, the IP retention bound and the `delete_data` endpoint.
+
 Counters (in `Stats`): rooms created, games played (rooms that reached ≥2 peers), peer connections,
 server starts, join failures by reason (`room_full` / `room_not_found` / `server_full` /
 `already_in_room` / `bad_code_format`), peak concurrent rooms & peers, a room-lifetime histogram
