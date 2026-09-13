@@ -39,6 +39,11 @@ use super::*;
     /// pre-attack pick lands on "b" and nowhere else.
     fn great_musician_line(rules_epoch: u32) -> (State, Vec<UnitStatic>) {
         let (mut st, _) = storm_line("Great Musician", "ogres", rules_epoch);
+        // Movement reads every unit's base profile; all four indices exist.
+        st.profiles = Rc::new(Profiles {
+            list: vec![st.profiles.list[0].clone(); 4],
+            index: HashMap::new(),
+        });
         st.player = vec![0, 0, 0, 0];
         st.positions[2] = vec![[5.0 * IN2M, 0.0, 0.0]];
         st.radii[2] = vec![IN2M];
