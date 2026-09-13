@@ -3772,6 +3772,11 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 		"rush_in": int(modifier.get("rush_in", 0)),
 		"grants_rule": grants, "scope": str(effect.get("scope", "")),
 		"beneficiary": str(effect.get("beneficiary", "")), "duration": str(effect.get("duration", "round"))}
+	# #845 option (b): a vs-target Mark's record carries NO live overlay of its own — its
+	# grant is read target-aware by whoever attacks the marked unit. Only the Marks set this,
+	# so every existing spell record keeps its exact shape.
+	if bool(effect.get("no_live_grant", false)):
+		rec["no_live_grant"] = true
 	if rec["hit_mod"] == 0 and rec["def_mod"] == 0 and rec["casting_mod"] == 0 \
 			and rec["morale_mod"] == 0 and rec["range_in"] == 0 and rec["advance_in"] == 0 \
 			and rec["rush_in"] == 0 and grants.is_empty():
@@ -3842,6 +3847,10 @@ const SOLO_SPELL_GRANT_SUFFIX := " (spell)"
 func _solo_apply_grant(tu: GameUnit, rec: Dictionary) -> void:
 	var rule := str(rec.get("grants_rule", ""))
 	if rule.is_empty():
+		return
+	# #845 option (b): a record flagged `no_live_grant` (the vs-target Marks) is read
+	# target-aware by the attack seams and must NOT self-buff its holder's joined chain.
+	if bool(rec.get("no_live_grant", false)):
 		return
 	var granted_to: Array = []
 	for u in _solo_joined_chain(tu):
@@ -17187,9 +17196,11 @@ func _solo_self_destruct_post_melee(unit: GameUnit, enemy: GameUnit) -> void:
 ## vs-target Marks (resolver wave A — "once per activation, before attacking, pick one enemy unit
 ## within 18\" in line of sight, which friendly units gets <Rule> against once"): the pick IS the
 ## attack target (the one enemy the bearer is about to fight — the rule's natural use), and the
-## mark is consumed by this very attack: the base rule ("<Name> Mark" minus " Mark") lands on the
-## attacker as a once-grant through the NML-006 overlay, so every existing reader honours it and
-## the once-mod consumption revokes it after the exchange. Symmetric: both volley paths + melee.
+## mark is consumed by this very attack. #845 option (b): the base rule ("<Name> Mark" minus
+## " Mark") is recorded ON THE MARKED ENEMY with beneficiary "attackers" and no live overlay, so
+## every friendly attack against that enemy reads it target-aware (the bearer included, but only
+## against the marked enemy) and the once-mod consumption clears it after the exchange.
+## Symmetric: both volley paths + melee.
 func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) -> void:
 	if attacker == null or target == null or opr_army_manager == null:
 		return
@@ -17220,10 +17231,13 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 			member.unit_properties["vs_mark_round"] = opr_army_manager.current_round
 			var base := n.trim_suffix(" Mark")
 			if battle_log != null:
-				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s marks %s — %s applies to this attack" % [
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s marks %s — friendly units attacking it gain %s (once)" % [
 					n, member.get_name(), target.get_name(), base], true)
-			_solo_record_spell_mod(attacker, n, {"grants_rule": base, "scope": "", "beneficiary": "",
-				"duration": "once"})
+			# #845 option (b): the record lands on the MARKED ENEMY (beneficiary "attackers") and
+			# carries no live overlay — the target-aware readers serve any friendly attacker, the
+			# bearer only while it acts against this enemy. The once-consumption spends it after.
+			_solo_record_spell_mod(target, n, {"grants_rule": base, "scope": "", "beneficiary": "attackers",
+				"duration": "once", "no_live_grant": true})
 
 
 ## Reckless Piercing (resolver wave A — "when activated, you may roll one die. On a 2+ their

@@ -455,6 +455,14 @@ pub const EPOCH_10_CHARGE_BAND: u32 = 10;
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_11_SOLO_GRANT_READS: u32 = 11;
 
+/// #845 option (b), 13.09.: a vs-target Mark's attacker-side grant now LIVES ON THE MARKED
+/// ENEMY (the record's `beneficiary` is `"attackers"` on the target, with no live overlay on
+/// the bearer) and the table's charge seams read a target's "Rapid Charge" grant for the
+/// friendly charger's one charge. TABLE-only port: no core replay path consumes this constant
+/// yet, it is the reservation that lets the next port gate on it without re-dating records
+/// recorded at epoch 10 or below. Every table-side reader/writer names #845 in its comment.
+pub const EPOCH_11_RAPID_CHARGE_MARK: u32 = 11;
+
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
 /// `since_epoch: 1` as `knob || rule_on(rules_epoch, 1)` at their call sites,
@@ -939,7 +947,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 11, "epoch 11's gate (EPOCH_11_SOLO_GRANT_READS) bumps the live epoch to 11");
+        assert_eq!(CURRENT_RULES_EPOCH, 11, "epoch 11's gates (EPOCH_11_SOLO_GRANT_READS, EPOCH_11_RAPID_CHARGE_MARK) bump the live epoch to 11");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
