@@ -11,8 +11,12 @@ the full change history is in `git log`.
 **Solo mode — a full game against NACHTMAHR** — mark any imported army as AI-controlled
 (checkbox at import, or later in the solo panel), or press **AI Opponent** and let
 NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). NACHTMAHR is a
-**game AI in the classic sense: rule-based, deterministic, fully offline** — no machine
-learning, no language model, no network call; the same inputs produce the same decisions.
+**game AI in the classic sense: rule-based and deterministic** — no machine learning, no language
+model, and **every decision is made offline**: the same inputs produce the same decisions, and
+nothing about a turn leaves the machine. One qualification, because "no network call" was too broad:
+if you let NACHTMAHR bring **its own** list, that list is fetched from the asset CDN the first time
+and cached (see below), so the very first use of **AI Opponent** needs a connection. Your own
+imported armies, and every decision NACHTMAHR makes, need none.
 **Exactly one difficulty ships: full strength** (`scripts/solo/solo_difficulty.gd` — every
 legacy grade name resolves to NACHTMAHR; selectable grades are a roadmap item). The match
 runs the rulebook flow end to end: roll-off → the winner picks a table edge and deploys
@@ -55,8 +59,14 @@ automatically for both sides: the core combat set (Deadly, Blast, Takedown, Coun
 Fear, Rending, Furious, Relentless …), the modifier families (Stealth / Evasive / Shielded /
 Fortified / Guarded, the conditional-AP family, the "X Aura" variants) and the behaviour rules
 (Aircraft, Strider / Flying terrain, Hit & Run, Retaliate, Strafing, Re-Deployment, Vanguard,
-Bounding, Teleport …) — **100 % coverage over the bundled opponent lists, >91 % playable
-book-wide**. **Every applied rule writes its own battle-log line** (a silently-correct rule
+Bounding, Teleport …) — **100 % coverage over the bundled opponent lists**, and book-wide
+**446 of 452 rule names (98.7 %) resolve at every layer**: registry, table mechanics, Rust core and
+the value encoder. Measured 2026-09-13 with `core/nml-core-py/tools/rule_universe_census.py`; two of
+the six remaining (`Unique`, `Sniper REMOVE`) are not table primitives at all.
+**That figure is GrimDark Future and Age of Fantasy only** — the census walks those two book
+families (`SYSTEMS = ("gf", "aof")`), so Firefight, Skirmish and Regiments have registry entries and
+**no measured coverage number**. The registry itself loads per system for all five.
+**Every applied rule writes its own battle-log line** (a silently-correct rule
 reads like a broken one), and any rule the automation does *not* cover is named per unit in the
 log. Measurement has a single truth: shooting gates, charge reach, melee reach, spell range and
 objective control all measure **base edge to base edge** like the ruler, and line of sight is

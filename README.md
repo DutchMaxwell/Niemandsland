@@ -23,12 +23,19 @@ Fantasy). Built in Godot.
 What the code actually does today:
 
 - **Solo mode vs NACHTMAHR** — play a whole game against the built-in opponent. NACHTMAHR is a
-  rules-based, deterministic game AI (no LLM, no neural net) that runs entirely offline; it plays
-  by the official OPR solo decision trees and never cheats. Mark an imported army as AI-controlled,
+  rules-based, deterministic game AI (no LLM, no neural net) that decides entirely offline; it plays
+  by the official OPR solo decision trees and never cheats. *(You will find an ONNX model loader, a
+  batched evaluator and an ONNX CI workflow in this repo. They are behind non-default cargo features
+  — `default = []` in `core/nml-core-godot/Cargo.toml` — exercised only by a spike workflow, never
+  built into an export, and no `.gd` file references them. A trained opponent is planned as an
+  optional, clearly labelled choice **next to** the Classic AI, not as a replacement; see
+  `PROJECT_STATUS.md`.)* Mark an imported army as AI-controlled,
   or let NACHTMAHR bring one of its own pre-built lists (fetched at runtime, cached locally).
   Deployment is a click-guided rulebook flow (roll-off, alternating placement, scouts, ambush
   arrivals), and you shoot, fight and cast through the radial menu with real dice in the tray.
-  Hundreds of special rules resolve automatically across all five systems, and **every applied
+  Hundreds of special rules resolve automatically across all five systems — the coverage has been
+  measured for GrimDark Future and Age of Fantasy (446 of 452 rule names at every layer); Firefight,
+  Skirmish and Regiments load the same registry but carry no measured figure yet. **Every applied
   rule writes its own battle-log line** — the remaining uncovered special rules are a small
   residue, and the battle log names any rule it applies (or asks for manual handling) per unit, so
   you can apply the rest by hand. When your unit takes wounds and the choice matters (Tough models,

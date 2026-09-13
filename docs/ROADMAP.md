@@ -39,7 +39,9 @@ planned and where ideas go. For what already works see
   click-guided rulebook **deployment flow** (roll-off → table edge → alternating placement → scout band →
   Ambush / Infiltrate / Vanguard reserves), **Shoot / Fight / Cast** for the human player through the
   radial menu with real tray dice for both sides, **hundreds of special rules resolved automatically**
-  across all five systems (100% over the bundled opponent lists, >91% playable book-wide) with a
+  across all five systems (100% over the bundled opponent lists; book-wide, 446 of 452 rule names —
+  98.7% — resolve at every layer, **measured for GrimDark Future and Age of Fantasy only**, since the
+  census walks those two book families) with a
   battle-log line per applied rule, **transports stage 1** (save format 1.7), the **tutorial course at
   64 steps / 11 chapters**, the **sight & range fan** (`F`), **autosave** (#139), **battle-log export
   and copy**, and base-edge-to-base-edge measurement everywhere. There is exactly **one difficulty**
