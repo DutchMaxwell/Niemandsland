@@ -1185,6 +1185,41 @@ pub fn plain_move(
     let land = mv.execute(band_in, avoid_diff, &radii_m);
     Some(land)
 }
+
+/// PR6 instrument, test-only probe. `_plan_move` (solo_controller.gd:5228) is
+/// one pure planning pass; this returns `plan_once`'s INCH `Vec<V2>` for the
+/// Stage A pin. The game never calls it.
+#[doc(hidden)]
+#[allow(clippy::too_many_arguments)]
+pub fn plan_once_probe(
+    self, state: &State, t: &Terrain, si: usize, dest: V3, hero_attach: bool,
+    fast_planner: bool, guard: i64, reach_in: f64, avoid_diff: bool, avoid_dang: bool,
+) -> Option<Vec<V2>> {
+    let board = t.board_in();
+    if !t.is_valid() || board[0] <= 0.0 || board[1] <= 0.0 {
+        return None;
+    }
+    let half = [board[0] * 0.5 * IN2M, board[1] * 0.5 * IN2M];
+    let mut movers = movers_of(state, si);
+    if !hero_attach {
+        movers.retain(|m| m.unit == si);
+    }
+    if movers.is_empty() {
+        return None;
+    }
+    let pos: Vec<V3> = movers.iter().map(|m| pos_of(state, *m)).collect();
+    let own_r_m = movers.iter().fold(DEFAULT_BASE_RADIUS_M, |a, m| a.max(radius_of(state, *m)));
+    let rules = &state.profile(si).special_rules;
+    let flying = rules.iter().any(|r| r == "Flying");
+    let mv = Move {
+        rules_epoch: self.rules_epoch, state, t, si, ci: None, movers, pos,
+        goal: clamp_to_bounds(dest, half), own_r_m, avoid_dang, flying,
+        traversal: rules.iter().any(|r| r == "Traversal"),
+        ignores_difficult: flying || rules.iter().any(|r| r == "Strider"),
+        half, fast_planner, guard, allow_contact: false,
+    };
+    Some(mv.plan_once(reach_in, avoid_diff, avoid_dang).0)
+}
 }
 
 #[cfg(test)]
