@@ -220,6 +220,26 @@ def test_a_per_model_item_stays_off_the_rule_line_and_keeps_its_tough():
     assert prof["item_grants"] == ["Tough(3)", "Shielded"]
 
 
+WOLF_BROTHERS_LIST = (
+    Path(__file__).resolve().parents[4] / "test" / "fixtures" / "wolf_brothers_3000.json"
+)
+
+
+def test_a_per_model_combat_shield_does_not_arm_the_whole_unit():
+    """§2A.12 (Shielded fidelity audit) — the real shipped list
+    wolf_brothers_3000.json: "Wolf Veteran Assault Brothers" is THREE models,
+    one of which carries a Combat Shield (count 1). Shielded's own text is
+    "Units where ALL MODELS have this rule get +1 to defense" — one shield of
+    three must not put Shielded on the unit's rule line (where
+    rule_on_all_models would arm the whole unit at 2+ defense). The unit's
+    Detachment Banner is the control: its Courage Aura keeps folding (an aura
+    is unit-wide by its own text and feeds _expand_auras)."""
+    prof = profiles_from_list(WOLF_BROTHERS_LIST, player=1)["p1_1_Zva7oXHgx"]
+    assert prof["name"] == "Wolf Veteran Assault Brothers"
+    assert "Shielded" not in prof["special_rules"]
+    assert "Courage" in prof["special_rules"]
+
+
 def test_an_item_that_grants_a_weapon_loses_that_name_from_the_rule_line():
     """`_granted_weapons_of_item` (:775-781): a Weapon Team's autocannon is a
     weapon, not a profile-less rule, so the table erases its name again."""
