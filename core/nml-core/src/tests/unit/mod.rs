@@ -396,6 +396,19 @@
         (us.shoot[0].bane, us.melee[0].bane)
     }
 
+    /// The same template as `bane_stamp_of`, but the WHOLE `UnitStatic` — the
+    /// regen-bypass tests resolve the stamped profiles through the dice fold.
+    fn bane_unit_of(rule: &str, system: &str, faction: &str, epoch: u32) -> UnitStatic {
+        let tpl = BANE_HEADER
+            .replace("\"Bane in Melee\"", &format!("\"{rule}\""))
+            .replace("\"game_system\":\"gf\"", &format!("\"game_system\":\"{system}\""))
+            .replace("\"faction_folder\":\"robot_legions\"", &format!("\"faction_folder\":\"{faction}\""));
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        UnitStatic::build_for(&mut reg, p, epoch)
+    }
+
     /// Block B6, end to end through the REAL registry: `saurian_starhost/gf`'s
     /// "Primal" (`Surge`, `extra_attack: true`, no melee_only/shooting_only)
     /// reaches BOTH ranged and melee profiles, and "Primal Boost" moves
@@ -955,9 +968,11 @@
 // family adds ONE line to this ALPHABETICAL list plus its own file; the
 // fixtures every family shares stay here, in the module root.
 mod aura_channel;
+mod bane_bypass;
 mod bloodthirsty_fighter;
 mod boost_aura_tail;
 mod boostbases2;
 mod condap;
+mod counter_models;
 mod renames;
 mod takedown_strike;

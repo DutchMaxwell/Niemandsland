@@ -1531,6 +1531,7 @@ mod ap_def_reads;
 mod breath_attack;
 mod breath_score;
 mod buff_consumption_bridge;
+mod counter_first;
 mod deathstrike;
 mod dest_side_arms;
 mod entrenched;
