@@ -370,7 +370,7 @@ func test_the_real_furious_mark_lands_on_the_target_and_arms_a_charger() -> void
 		.override_failure_message("#845 option (b) — the Furious Mark's attackers-side record must land on " +
 			"the TARGET (target records: %s)" % str(on_target)) \
 		.contains(["Furious"])
-	var profile := _main._solo_bridge_granted_flags(ally, {}, target)
+	var profile: Dictionary = _main._solo_bridge_granted_flags(ally, {}, target)
 	assert_bool(bool(profile.get("furious", false))) \
 		.override_failure_message("#845 option (b) — a friendly charger must gain Furious from the target's " +
 			"attackers-side record at the charge-damage bridge (profile: %s)" % str(profile)) \
