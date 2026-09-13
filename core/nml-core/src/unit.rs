@@ -1740,9 +1740,7 @@ fn shielded_alias_of(
         if !rule_on_all_models(p, name) {
             return None;
         }
-        let Some(e) = map.lookup(&p.faction_folder, name) else {
-            return None;
-        };
+        let e = map.lookup(&p.faction_folder, name)?;
         if e.primitive.as_deref() != Some("Shielded") || e.param_i("defense_bonus", 0) <= 0 {
             return None;
         }
