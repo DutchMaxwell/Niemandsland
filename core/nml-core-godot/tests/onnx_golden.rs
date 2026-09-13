@@ -228,7 +228,13 @@ fn onnx_golden_spike() {
         Ok(brain) => {
             let mut worst = 0.0_f32;
             for (bi, batch) in batches.iter().enumerate() {
-                let Ok((value, member_values)) = brain.run(batch) else { break };
+                let (value, member_values) = match brain.run(batch) {
+                    Ok(out) => out,
+                    Err(_) => {
+                        worst = f32::INFINITY;
+                        break;
+                    }
+                };
                 for i in 0..batch_rows(bi, leaves.len(), static_batch) {
                     let idx = bi * static_batch + i;
                     worst = worst.max((value[i] - expected_value[idx]).abs());
