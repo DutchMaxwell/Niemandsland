@@ -83,7 +83,7 @@ fn record(corpus: &ActCorpus, statics: &[UnitStatic]) -> (Vec<Tokens>, Vec<usize
     let rec = Recorder {
         statics,
         terrain: &corpus.terrain,
-        rows: RefCell::new(RowEncoder::new(ROOT)),
+        rows: RefCell::new(RowEncoder::for_version(ROOT, corpus.knobs.rule_vocab_version)),
         hero_attach: corpus.knobs.hero_attach,
         kept: RefCell::new(Vec::new()),
         calls: RefCell::new(Vec::new()),
@@ -161,6 +161,26 @@ fn real_leaves_rebuild_in_hand_out_order() {
     eprintln!("ONNX_HOOK proof=tokens leaves={} calls={calls:?}", tokens.len());
 }
 
+/// Compares one token tensor with the golden at f32 precision, recursing
+/// through the nested arrays of the token contract. The golden stores
+/// shortest-f32 decimals and `to_json` promotes the same f32 to f64, so serde
+/// `Value` equality at f64 can never hold.
+fn assert_tensor_f32_eq(got: &Value, want: &Value, ctx: &str) {
+    match (got, want) {
+        (Value::Array(g), Value::Array(w)) => {
+            assert_eq!(g.len(), w.len(), "{ctx}: arrays of different length");
+            for (j, (gv, wv)) in g.iter().zip(w).enumerate() {
+                assert_tensor_f32_eq(gv, wv, &format!("{ctx}[{j}]"));
+            }
+        }
+        (Value::Number(_), Value::Number(_)) => {
+            let (g, w) = (got.as_f64().unwrap() as f32, want.as_f64().unwrap() as f32);
+            assert_eq!(g, w, "{ctx}: f32 {g} vs {w}");
+        }
+        _ => panic!("{ctx}: expected nested numbers, got {got} vs {want}"),
+    }
+}
+
 /// Proof 2 — every one of the six tensors is bit-identical to the golden leaf.
 #[test]
 fn real_leaf_tokens_match_the_golden_bit_exactly() {
@@ -173,7 +193,8 @@ fn real_leaf_tokens_match_the_golden_bit_exactly() {
     for (i, token) in tokens.iter().enumerate() {
         let json = token.to_json();
         for key in ["units", "units_mask", "objs", "objs_mask", "terr", "glob"] {
-            assert_eq!(json[key], golden["leaves"][i][key], "leaf {i} tensor {key}");
+            assert_tensor_f32_eq(&json[key], &golden["leaves"][i][key],
+                &format!("leaf {i} tensor {key}"));
         }
     }
     eprintln!("ONNX_HOOK proof=token_identity leaves={} tensors=6 status=bit_exact", tokens.len());
@@ -194,7 +215,7 @@ fn real_leaf_values_and_members_match_the_golden_within_tolerance() {
         brain: &brain,
         statics: &statics,
         terrain: &corpus.terrain,
-        rows: RefCell::new(RowEncoder::new(ROOT)),
+        rows: RefCell::new(RowEncoder::for_version(ROOT, corpus.knobs.rule_vocab_version)),
         hero_attach: corpus.knobs.hero_attach,
         opener_seat: act.statics.opener_seat,
     };
@@ -238,7 +259,7 @@ fn onnx_pick_equals_the_golden_oracle_pick_on_act0() {
         brain: &brain,
         statics: &statics,
         terrain: &corpus.terrain,
-        rows: RefCell::new(RowEncoder::new(ROOT)),
+        rows: RefCell::new(RowEncoder::for_version(ROOT, corpus.knobs.rule_vocab_version)),
         hero_attach: corpus.knobs.hero_attach,
         opener_seat: false,
     };
