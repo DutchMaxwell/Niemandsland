@@ -520,7 +520,12 @@ pub fn profile_ev(
         defense = covered_defense(defense, def.in_cover);
     }
     if !melee {
-        defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN);
+        // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost replaces the gate; a
+        // MAX over the two readings, never a second -1 (the dice fold's twin).
+        defense = guarded_defense(
+            defense,
+            def.guarded && dist_in > LONG_RANGE_IN && !def.shielded_alias.is_sturdy_kind(),
+        );
     }
     // NML-1103 — target-property conditional AP (ai_ev.gd:412-417): Shatter,
     // Tear, Disintegrate, Melee Slayer, Piercing Assault, Piercing Hunter. The
@@ -546,7 +551,7 @@ pub fn profile_ev(
     // ai_ev.gd:434-435 reads the SAME EV-imagination `unstoppable` key
     // `_profiles_of` stamps (the unit-level prefix scan) here too — EV/tray
     // split, found by #489 caveat 4.
-    if def.regeneration && !(bane || p.rending || p.unstoppable_ev) {
+    if def.regeneration && !(p.bypass_regen || p.rending || p.unstoppable_ev) {
         unsaved *= 1.0 - success_chance(def.regen_target);
     }
     unsaved

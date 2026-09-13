@@ -301,7 +301,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 12;
+pub const CURRENT_RULES_EPOCH: u32 = 13;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -960,7 +960,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 12, "epoch 12's gate (EPOCH_12_MOVE_BUFF) bumps the live epoch to 12");
+        assert_eq!(CURRENT_RULES_EPOCH, 13, "epoch 13's gate (the unit.rs who-wins wave) bumps the live epoch to 13");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
