@@ -95,8 +95,15 @@ func test_marker_positions_modes() -> void:
 	var sg := MissionCatalog.get_mission("seize_ground")
 	var q := MissionCatalog.marker_positions(sg, style)
 	assert_int(q.size()).is_equal(4)
-	assert_that(q[0]).is_equal(Vector2(-18.0, -12.0))
-	assert_that(q[3]).is_equal(Vector2(18.0, 12.0))
+	# Book (GF Advanced Rules v3.5.1 p.25/26): quarter the NON-deployment zone
+	# area (audit §2.11) — front_line's zones end at z = ±12, so the band is
+	# z in [-12, 12] and the centres are (±18, ±6); the old ±12 sat on the
+	# deployment line.
+	assert_that(q[0]).is_equal(Vector2(-18.0, -6.0))
+	assert_that(q[3]).is_equal(Vector2(18.0, 6.0))
+	# Property, not just literals: every marker's z strictly inside the band.
+	for c in q:
+		assert_float(absf((c as Vector2).y)).is_less(12.0)
 	var bt := MissionCatalog.get_mission("breakthrough")
 	var z := MissionCatalog.marker_positions(bt, style)
 	assert_int(z.size()).is_equal(2)
