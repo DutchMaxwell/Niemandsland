@@ -158,6 +158,7 @@ fn grant(rule: &str, scope: &str, once: bool) -> LiveMod {
         ap_mod: 0,
         def_mod: 0,
         defense_mod: 0,
+        move_mod: 0,
         grants_rule: rule.into(),
         scope: scope.into(),
         attackers: false,

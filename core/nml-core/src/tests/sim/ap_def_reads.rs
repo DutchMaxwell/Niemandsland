@@ -7,6 +7,7 @@ use super::*;
     /// three seam-4 names prints "once (next time the effect would apply)".
     fn row(ap_mod: i64, def_mod: i64, defense_mod: i64) -> mods::LiveMod {
         mods::LiveMod {
+            move_mod: 0,
             hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod, def_mod, defense_mod,
             grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true,
             name: Rc::from(""),

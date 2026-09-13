@@ -148,7 +148,13 @@ pub(crate) struct PlainUnit {
 /// ap/def knobs are read since seam 4 step 1 (epoch 7); `state_of`'s gate
 /// keeps a record stamped below 7 ignoring them. `spell` (the record's own
 /// name) joined at seam 4 step 2 — rules-must-log names each firing record
-/// by it (main.gd:5560); no fold reads it.
+/// by it (main.gd:5560); no fold reads it. `advance_in`/`rush_in` STAY
+/// ignored on purpose — the anti-double-count rule of the Great Musician
+/// port (epoch 12): the table's move knob is already inside the recorded
+/// `State.bands` (battle_sim.gd:1707 -> SoloController.sim_move_bands ->
+/// move_bands_for_props), so a table-loaded `LiveMod` must carry
+/// `move_mod == 0` by construction and only the core's own rows add a
+/// delta. No field is parsed for them here, ever.
 #[derive(Deserialize)]
 pub(crate) struct PlainBuff {
     #[serde(default)]
@@ -943,6 +949,11 @@ pub(crate) fn state_of(
                     ap_mod: if epoch7 { b.ap_mod } else { 0 },
                     def_mod: if epoch7 { b.def_mod } else { 0 },
                     defense_mod: if epoch7 { b.defense_mod } else { 0 },
+                    // The Great Musician port's anti-double-count rule: a
+                    // table-loaded row NEVER carries the move knob — the
+                    // table's `advance_in`/`rush_in` are unparsed above and
+                    // their inches already ride the recorded `bands`.
+                    move_mod: 0,
                     grants_rule: Rc::from(b.grants_rule.as_str()),
                     scope: Rc::from(b.scope.as_str()),
                     attackers: b.beneficiary == "attackers",

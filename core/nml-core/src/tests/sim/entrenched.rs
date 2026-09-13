@@ -86,6 +86,7 @@ use super::*;
         mods::LiveMod {
             hit_mod: 0, casting_mod: 0, morale_mod: 0,
             ap_mod: 0, def_mod: 0, defense_mod: 0,
+            move_mod: 0,
             grants_rule: Rc::from("Entrenched"),
             scope: Rc::from(""),
             attackers: false,

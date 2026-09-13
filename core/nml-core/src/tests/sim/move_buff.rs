@@ -151,3 +151,16 @@ use super::*;
             "an epoch-11 record replays at the plain band: {x}"
         );
     }
+
+    /// The stamp itself, off the REAL registry: aof/ogres fields the entry —
+    /// `move_mod` parsed ONLY from `EPOCH_12_MOVE_BUFF` on; below it stays 0
+    /// and the all-zero row keeps being dropped.
+    #[test]
+    fn the_real_registry_stamps_the_move_knob_at_epoch_12_not_11() {
+        let on = great_musician_bearer(12);
+        assert_eq!(on.utility_buffs.len(), 1, "the entry is stamped at epoch 12");
+        assert_eq!(on.utility_buffs[0].name, "Great Musician");
+        assert_eq!(on.utility_buffs[0].move_mod, 1, "the entry's own move_mod");
+        let off = great_musician_bearer(11);
+        assert_eq!(off.utility_buffs[0].move_mod, 0, "below the gate the knob stays 0");
+    }

@@ -431,7 +431,15 @@ _CONSUMED_PARAM_ROWS: tuple[ConsumedParams, ...] = (
     # are read only to shape the pick, never the effect - listing one would
     # flip all 16 while their effects stay unread, the exact #489 shape this
     # table exists to prevent.
-    ConsumedParams("Utility Buff", frozenset({"hit_mod", "morale_mod", "casting_mod", "ap_mod", "def_mod", "defense_mod"})),
+    # SEAM 2 (the Great Musician port, epoch 12): sim.rs::live_move_bonus_in
+    # sums mods::Role::Speed into the move seam's band, gated
+    # rule_on(rules_epoch, EPOCH_12_MOVE_BUFF) - the move-only knob joins the
+    # consumed set IN THE SAME DIFF as its reader (the standing rule above).
+    # move_mod is carried by exactly one registry name (Great Musician, aof
+    # factions ogres and plague_disciples, plus aofr), so this key flips ONE
+    # name and not sixteen. NOT range_bonus_in: that knob is still unread and
+    # is the #489 over-credit shape.
+    ConsumedParams("Utility Buff", frozenset({"hit_mod", "morale_mod", "casting_mod", "ap_mod", "def_mod", "defense_mod", "move_mod"})),
     # Block B9: deployment.rs::deploy_side reads the registry's `place_in`
     # (UnitSpec.place_in_m via list_to_profile.py:_deploy_flags — the table's
     # `unit_param(unit, "Vanguard", "place_in", 9.0)`, solo_controller.gd:9627)
