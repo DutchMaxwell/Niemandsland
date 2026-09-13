@@ -23,6 +23,7 @@ pub struct Batch {
 
 pub struct Brain {
     plan: Arc<TypedRunnableModel>, members: usize, static_batch: usize,
+    label: String, sha256: String,
 }
 
 fn decline(reason: &'static str) -> Unsupported { Unsupported::LeafValueBridge(reason) }
@@ -44,8 +45,8 @@ fn check_metadata(map: &HashMap<String, String>) -> Result<(usize, usize, String
 
 /// `bytes` -> SHA-256 -> parse once -> metadata -> session -> embedded self-test.
 pub fn load(bytes: &[u8], expected_sha256: Option<&str>) -> Result<Brain, Unsupported> {
+    let actual = format!("{:x}", Sha256::digest(bytes));
     if let Some(expected) = expected_sha256 {
-        let actual = format!("{:x}", Sha256::digest(bytes));
         let expected = expected.strip_prefix("0x").or_else(|| expected.strip_prefix("0X")).unwrap_or(expected);
         if !actual.eq_ignore_ascii_case(expected) { return Err(decline("onnx: sha256 mismatch")); }
     }
@@ -57,8 +58,8 @@ pub fn load(bytes: &[u8], expected_sha256: Option<&str>) -> Result<Brain, Unsupp
         .model_for_proto_model(&proto).map_err(|_| decline("onnx: session"))?
         .into_optimized().map_err(|_| decline("onnx: session"))?
         .into_runnable().map_err(|_| decline("onnx: session"))?;
-    let brain = Brain { plan, members, static_batch };
-    if label == SELFTEST_LABEL {
+    let brain = Brain { plan, members, static_batch, label, sha256: actual };
+    if brain.label == SELFTEST_LABEL {
         let golden: Value = serde_json::from_str(SELFTEST_JSON).map_err(|_| decline("onnx: selftest shape"))?;
         brain.check_selftest(&golden)?;
     }
@@ -116,6 +117,28 @@ impl Brain {
 
     pub fn members(&self) -> usize { self.members }
     pub fn static_batch(&self) -> usize { self.static_batch }
+    pub fn label(&self) -> &str { &self.label }
+    pub fn sha256(&self) -> &str { &self.sha256 }
+}
+
+pub struct Arm { pub brain: Brain, pub weight: f64 }
+
+pub fn arm_from(developer: bool, url_set: bool, path: &str, sha256: &str, w: &str) -> Option<Result<Arm, String>> {
+    if path.is_empty() { return None; }
+    Some((|| {
+        if !developer { return Err(decline("onnx: DeveloperOnly")); }
+        if url_set { return Err(decline("onnx: NML_BRAIN_URL set")); }
+        let weight: f64 = if w.is_empty() { 1.0 } else { w.parse().map_err(|_| decline("onnx: weight"))? };
+        if !weight.is_finite() || weight <= 0.0 { return Err(decline("onnx: weight")); }
+        let bytes = std::fs::read(path).map_err(|_| decline("onnx: brain path"))?;
+        Ok(Arm { brain: load(&bytes, (!sha256.is_empty()).then_some(sha256))?, weight })
+    })().map_err(|e: Unsupported| format!("{e:?}")))
+}
+
+pub fn arm_from_env(developer: bool) -> Option<Result<Arm, String>> {
+    let var = |key: &str| std::env::var(key).unwrap_or_default();
+    arm_from(developer, !var("NML_BRAIN_URL").is_empty(), &var("NML_NEURAL_BRAIN_PATH"),
+        &var("NML_NEURAL_BRAIN_SHA256"), &var("NML_NEURAL_BRAIN_W"))
 }
 
 #[cfg(test)]

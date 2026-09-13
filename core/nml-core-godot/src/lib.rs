@@ -111,6 +111,8 @@ pub struct NmlCore {
     dropped: Vec<String>,
     header: Option<GameHeader>,
     brain: Option<Result<brain::Client, String>>,
+    #[cfg(feature = "onnx-tract")]
+    onnx_arm: Option<Result<onnx::Arm, String>>,
 }
 
 #[godot_api]
@@ -304,10 +306,22 @@ impl NmlCore {
     #[func]
     fn set_game_header(&mut self, header: VarDictionary) -> bool {
         self.last_error.clear();
-        self.brain = brain::Client::from_env(godot::classes::Os::singleton().is_debug_build());
+        let debug = godot::classes::Os::singleton().is_debug_build();
+        self.brain = brain::Client::from_env(debug);
         if let Some(Ok(client)) = &self.brain {
             godot_print!("brain: {} {} at {}, w={}", client.identity["name"].as_str().unwrap(),
                 client.identity["hash"].as_str().unwrap(), client.url, client.weight);
+        }
+        #[cfg(feature = "onnx-tract")]
+        {
+            let arm = onnx::arm_from_env(debug);
+            match &arm {
+                Some(Err(reason)) => godot_print!("onnx brain declined: {reason}"),
+                Some(Ok(arm)) => godot_print!("onnx brain: {} {} w={}", arm.brain.label(),
+                    &arm.brain.sha256()[..12.min(arm.brain.sha256().len())], arm.weight),
+                None => {}
+            }
+            self.onnx_arm = arm;
         }
         let profiles = plain::profiles_of_header(&plain::sub_dict(&header, "profiles"));
         if profiles.list.is_empty() {
@@ -715,6 +729,21 @@ impl NmlCore {
             hero_attach: knobs.hero_attach, opener_seat: act.opener_seat,
         });
         let before = client.map(|c| (c.batches.get(), c.micros.get()));
+        #[cfg(feature = "onnx-tract")]
+        let onnx_arm = self.onnx_arm.as_ref().map(Result::as_ref).transpose()?;
+        #[cfg(feature = "onnx-tract")]
+        let onnx_hook = onnx_arm.map(|arm| onnx::OnnxHook {
+            brain: &arm.brain, statics: &unit_statics, terrain: &h.terrain,
+            rows: std::cell::RefCell::new(nml_core::rows::RowEncoder::new(&root)),
+            hero_attach: knobs.hero_attach, opener_seat: act.opener_seat,
+            batches: std::cell::Cell::new(0), micros: std::cell::Cell::new(0),
+        });
+        let leaf_value = hook.as_ref().map(|h| h as &dyn nml_core::plan::LeafValue);
+        #[cfg(feature = "onnx-tract")]
+        let leaf_value = onnx_hook.as_ref().map(|h| h as &dyn nml_core::plan::LeafValue).or(leaf_value);
+        let leaf_weight = client.map_or(0.0, |c| c.weight);
+        #[cfg(feature = "onnx-tract")]
+        let leaf_weight = leaf_weight + onnx_arm.map_or(0.0, |a| a.weight);
         let pick = nml_core::plan::plan_with_leaf_value(
             &cap.state,
             &h.terrain,
@@ -723,8 +752,8 @@ impl NmlCore {
             &act,
             player,
             Some(sig),
-            hook.as_ref().map(|h| h as &dyn nml_core::plan::LeafValue),
-            client.map_or(0.0, |c| c.weight),
+            leaf_value,
+            leaf_weight,
         )
         .map_err(|u| format!("{u:?}"))?;
         let mut out = pick_out(&pick, &cap, sig);
@@ -738,6 +767,21 @@ impl NmlCore {
             info.set("batches", (client.batches.get() - batches) as i64);
             info.set("batch_us", (client.micros.get() - micros) as i64);
             out.set("brain", &info);
+        }
+        #[cfg(feature = "onnx-tract")]
+        {
+            if let (Some(arm), Some(batch)) = (onnx_arm, onnx_hook.as_ref()) {
+                if batch.batches.get() == 0 {
+                    return Err("LeafValueBridge(NotConsumed)".into());
+                }
+                let mut info = VarDictionary::new();
+                info.set("runtime", &GString::from("tract"));
+                info.set("name", &GString::from(arm.brain.label()));
+                info.set("hash", &GString::from(arm.brain.sha256()));
+                info.set("batches", batch.batches.get() as i64);
+                info.set("batch_us", batch.micros.get() as i64);
+                out.set("brain", &info);
+            }
         }
         Ok(out)
     }

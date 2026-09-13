@@ -218,6 +218,7 @@ fn real_leaf_values_and_members_match_the_golden_within_tolerance() {
         rows: RefCell::new(RowEncoder::for_version(ROOT, corpus.knobs.rule_vocab_version)),
         hero_attach: corpus.knobs.hero_attach,
         opener_seat: act.statics.opener_seat,
+        batches: Cell::new(0), micros: Cell::new(0),
     };
 
     let (values, members) = hook.run_tokens(tokens).expect("tract runs the 48 real leaves");
@@ -262,6 +263,7 @@ fn onnx_pick_equals_the_golden_oracle_pick_on_act0() {
         rows: RefCell::new(RowEncoder::for_version(ROOT, corpus.knobs.rule_vocab_version)),
         hero_attach: corpus.knobs.hero_attach,
         opener_seat: false,
+        batches: Cell::new(0), micros: Cell::new(0),
     };
     let expected = expected_values(&golden);
     let oracle = Oracle { expected: &expected, cursor: Cell::new(0) };

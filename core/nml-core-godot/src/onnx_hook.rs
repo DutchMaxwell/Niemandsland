@@ -10,7 +10,8 @@ use nml_core::state::State;
 use nml_core::terrain::Terrain;
 use nml_core::tokens::{self, Tokens, F_G, F_O, F_T, F_U, N_OBJ, N_TERR, N_UNITS};
 use nml_core::unit::UnitStatic;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::time::Instant;
 use super::onnx::{Batch, Brain};
 
 pub struct OnnxHook<'a> {
@@ -20,6 +21,8 @@ pub struct OnnxHook<'a> {
     pub rows: RefCell<RowEncoder>,
     pub hero_attach: bool,
     pub opener_seat: bool,
+    pub batches: Cell<u64>,
+    pub micros: Cell<u64>,
 }
 
 impl OnnxHook<'_> {
@@ -65,11 +68,15 @@ impl OnnxHook<'_> {
 
 impl LeafValue for OnnxHook<'_> {
     fn value(&self, leaves: &[&State], side: i64) -> Result<Vec<f64>, Unsupported> {
+        let started = Instant::now();
         let mut rows = self.rows.borrow_mut();
         let tokens = leaves.iter().map(|state| {
             tokens::build(state, side, self.statics, self.terrain, &mut rows,
                 &[], -1, self.hero_attach, self.opener_seat)
         }).collect::<Result<Vec<_>, _>>()?;
-        Ok(self.run_tokens(&tokens)?.0.into_iter().map(f64::from).collect())
+        let values = self.run_tokens(&tokens)?.0.into_iter().map(f64::from).collect();
+        self.batches.set(self.batches.get() + 1);
+        self.micros.set(self.micros.get() + started.elapsed().as_micros() as u64);
+        Ok(values)
     }
 }
