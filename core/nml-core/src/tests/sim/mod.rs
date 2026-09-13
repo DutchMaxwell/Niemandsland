@@ -722,6 +722,7 @@
         let (mut st, statics) = buff_line();
         st.buffs[0].push(mods::LiveMod {
             hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
+            move_mod: 0,
             grants_rule: Rc::from(rule),
             scope: Rc::from(""), attackers: false, once: true, name: Rc::from(""),
         });
@@ -744,6 +745,7 @@
             ap_mod: 0,
             def_mod: 0,
             defense_mod: 0,
+            move_mod: 0,
             grants_rule: Rc::from(rule),
             scope: Rc::from("shooting"),
             attackers: true,
@@ -1553,6 +1555,7 @@ mod mark_consumers;
 mod melee_reach_table;
 mod mind_control;
 mod mend;
+mod move_buff;
 mod piercing_tag;
 mod plain_moves;
 mod quick_shot;

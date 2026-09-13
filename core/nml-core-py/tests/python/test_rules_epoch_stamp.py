@@ -64,13 +64,12 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 11 (acts::EPOCH_11_SOLO_GRANT_READS, the solo move-grant
-    # reads gate, and acts::EPOCH_11_RAPID_CHARGE_MARK, #845 option (b)):
-    # explicit, not just dynamic — a fresh game now stamps 11, not 10. A record
-    # already stamped 10 (recorded while epoch 10 was the live epoch, before the
-    # census rows 1-5 move-grant reads gained their epoch gate and the #845 table
-    # wave gained its epoch reservation) must never be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 11
+    # core rules epoch 12 (acts::EPOCH_12_MOVE_BUFF, the Great Musician
+    # move-knob gate): explicit, not just dynamic — a fresh game now stamps
+    # 12, not 11. A record already stamped 11 (recorded while epoch 11 was
+    # the live epoch, before the move-only Utility-Buff knob gained its epoch
+    # gate) must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 12
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)

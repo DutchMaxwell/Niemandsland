@@ -18,11 +18,17 @@ use crate::state::State;
 
 /// One `_solo_record_spell_mod` record (main.gd:3649-3670), reduced to the
 /// fields this core has a consumer for. `range_in` / `advance_in` / `rush_in`
-/// are deliberately ABSENT: the table reads them at seams (`_solo_defense_
-/// parts`, the props stamps) this port has never had, and a field nothing
-/// reads is the very gap block B2b exists to close. `def_mod` / `defense_mod`
-/// / `ap_mod` are carried since seam 4 step 1 (epoch 7) — the RECORD shape
-/// only; their READS are step 2 (PR 2), so nothing here folds them yet.
+/// are deliberately ABSENT — and `advance_in`/`rush_in` must STAY absent: the
+/// table's own move knob (`advance_in`/`rush_in`, main.gd:16980) rides the
+/// recorded bands themselves (battle_sim.gd:1707 -> SoloController.sim_move_
+/// bands -> move_bands_for_props), so a table-loaded row arrives with its
+/// inches already folded into `State.bands`. The core's own move delta
+/// (`move_mod` below) is written ONLY on rows this core recorded during its
+/// own playout, which is what keeps a replay from double-counting. A field
+/// nothing reads is the very gap block B2b exists to close. `def_mod` /
+/// `defense_mod` / `ap_mod` are carried since seam 4 step 1 (epoch 7) — the
+/// RECORD shape only; their READS are step 2 (PR 2), so nothing here folds
+/// them yet.
 #[derive(Debug, Clone)]
 pub struct LiveMod {
     pub hit_mod: i64,
@@ -34,6 +40,14 @@ pub struct LiveMod {
     pub def_mod: i64,
     /// `defense_mod` — Defense Debuff's flat Defense shift (aof/gf ratmen).
     pub defense_mod: i64,
+    /// `move_mod` — Great Musician's `+1"` on move actions. NON-ZERO ONLY on
+    /// a row THIS core recorded (`sim::record_buff`): `io::PlainBuff`
+    /// deliberately leaves the table's `advance_in`/`rush_in` unparsed,
+    /// because the recorded `State.bands` already carry them
+    /// (battle_sim.gd:1707 -> SoloController.sim_move_bands ->
+    /// move_bands_for_props). Parsing them here would double-count every
+    /// replay.
+    pub move_mod: i64,
     /// `grants_rule` — the rule name the record hands the WHOLE joined chain
     /// (`_solo_apply_grant` main.gd:3730), "" for a plain modifier.
     pub grants_rule: Rc<str>,
@@ -54,13 +68,14 @@ pub struct LiveMod {
     pub name: Rc<str>,
 }
 
-/// `AiSpell.mods_for`'s `role` argument (ai_spell.gd:346-355). The "range"/
-/// "speed" roles this port has no seam for yet are absent for the same reason
-/// their fields are. `Defense` is the GDScript's own "defense" role
+/// `AiSpell.mods_for`'s `role` argument (ai_spell.gd:346-355). The "range"
+/// role this port has no seam for yet is absent for the same reason its
+/// field is. `Defense` is the GDScript's own "defense" role
 /// (ai_spell.gd:352) — its record knob `def_mod` is a "+/-X to defense rolls"
 /// ROLL bonus, so `_solo_defense_vs` folds it `base - bonus` (main.gd:5510).
 /// `Ap` is the attacker-side family of "attacker_own" for the flat AP knob
-/// Piercing Debuff carries ("loses AP(+1) when attacking").
+/// Piercing Debuff carries ("loses AP(+1) when attacking"). `Speed` is the
+/// GDScript's own "speed" role (the Great Musician port, epoch 12).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     AttackerOwn,
@@ -71,6 +86,7 @@ pub enum Role {
     GrantVs,
     Ap,
     Defense,
+    Speed,
 }
 
 /// `AiSpell.mods_for` ai_spell.gd:364-400, one record.
@@ -89,6 +105,12 @@ pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
         Role::GrantVs => r.attackers && !r.grants_rule.is_empty(),
         Role::Ap => !r.attackers && r.ap_mod != 0,
         Role::Defense => !r.attackers && (r.def_mod != 0 || r.defense_mod != 0),
+        // NO `attackers` filter — this mirrors `AiSpell.mods_for`'s "speed"
+        // arm exactly (ai_spell.gd:396-398, which appends regardless of
+        // `beneficiary`). The Utility-Buff call site hard-codes
+        // `beneficiary: ""` (main.gd:16541) so the two readings cannot
+        // diverge in practice; match the GDScript anyway.
+        Role::Speed => r.move_mod != 0,
     }
 }
 

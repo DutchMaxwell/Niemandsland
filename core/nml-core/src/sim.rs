@@ -23,7 +23,7 @@ use crate::sight;
 use crate::geom::{self, V3};
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
-    EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
+    EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND, EPOCH_12_MOVE_BUFF,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -931,11 +931,16 @@ pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: us
 /// 7 the guard also accepts a row whose only knob is one of the three ap/def
 /// knobs — below 7 the row keeps being dropped, so the core's own serialized
 /// states replay byte-identical. Rules-must-log: a widened row names itself.
+/// The MOVE-BUFF knob (`EPOCH_12_MOVE_BUFF`) widens the guard the same way:
+/// from epoch 12 a row whose only knob is `move_mod` lands — and the knob is
+/// carried ONLY on such a row, which is what `mods::LiveMod::move_mod`'s
+/// non-zero contract rests on.
 fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff, rules_epoch: u32) {
     let widened = rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
         && (b.ap_mod, b.def_mod, b.defense_mod) != (0, 0, 0);
+    let move_row = rule_on(rules_epoch, EPOCH_12_MOVE_BUFF) && b.move_mod != 0;
     if b.hit_mod == 0 && b.casting_mod == 0 && b.morale_mod == 0 && b.grants_rule.is_empty()
-        && !widened
+        && !widened && !move_row
     {
         return;
     }
@@ -946,6 +951,7 @@ fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff, rules_epoch: u32) 
         ap_mod: b.ap_mod,
         def_mod: b.def_mod,
         defense_mod: b.defense_mod,
+        move_mod: b.move_mod,
         grants_rule: Rc::from(b.grants_rule.as_str()),
         scope: Rc::from(b.scope.as_str()),
         attackers: b.beneficiary == "attackers",
@@ -954,6 +960,9 @@ fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff, rules_epoch: u32) 
     });
     if widened {
         trace_rule("utility-buff", &b.name, "ap/def row recorded (epoch 7)");
+    }
+    if move_row {
+        trace_rule("utility-buff", &b.name, &format!("move row recorded: +{}\" on move actions (epoch 12)", b.move_mod));
     }
 }
 
@@ -1185,6 +1194,7 @@ fn tray_vs_marks(
                 ap_mod: 0,
                 def_mod: 0,
                 defense_mod: 0,
+                move_mod: 0,
                 grants_rule: Rc::from(base),
                 scope: Rc::from(""),
                 attackers: false,
@@ -3786,6 +3796,7 @@ fn apply_cast_effect(
             ap_mod: 0,
             def_mod: 0,
             defense_mod: 0,
+            move_mod: 0,
             grants_rule: Rc::from(entry.grants_rule.as_str()),
             scope: Rc::from(""),
             attackers: entry.beneficiary == "attackers",
@@ -4472,6 +4483,20 @@ fn speed_feat_band_in(
     }
 }
 
+/// Great Musician — the LIVE per-activation band bonus off this unit's own
+/// ledger (self plus host, `mods::sum`'s chain, the same one every other
+/// Utility-Buff read walks). Gated `EPOCH_12_MOVE_BUFF`. Only rows this core
+/// recorded carry a non-zero `move_mod` (see `mods::LiveMod`), so a replayed
+/// corpus's already-folded `state.bands` are never added to twice — the
+/// `speed_feat_band_in` asymmetry, written down.
+fn live_move_bonus_in(state: &State, statics: &[UnitStatic], i: usize, rules_epoch: u32) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_12_MOVE_BUFF) {
+        return 0.0;
+    }
+    mods::sum_logged(state, i, mods::Role::Speed, false,
+        &statics[state.roster.profile[i]].name, "move", |r| r.move_mod) as f64
+}
+
 // ------------------------- S10: destination-side leftovers ------------------
 
 /// S10-a — `AiPlanner.RETREAT_GOAL_IN` ai_planner.gd:11. The retreat
@@ -4820,6 +4845,11 @@ fn resolve_with(
     // folded name and never grants again. Below `EPOCH_7_TABLE_RULES` the
     // read is inert — an older record keeps every replay byte-identical.
     let feat_in = speed_feat_band_in(statics, &next, si, kind, seams.rules_epoch);
+    // The Great Musician port: the LIVE move-knob read, folded AFTER the
+    // `match kind` so ADVANCE, RUSH and CHARGE all receive it — which is what
+    // `move_bands_for_props` does (rush += spell; charge = rush + charge_extra,
+    // movement_range_controller.gd:168-170).
+    let buff_in = live_move_bonus_in(&next, statics, si, seams.rules_epoch);
     if feat_in != 0.0 {
         next.feats_used[si].push(
             statics[pi_s]
@@ -4845,7 +4875,8 @@ fn resolve_with(
     } + bounding_in
         + vr_in
         + gs_in
-        + feat_in;
+        + feat_in
+        + buff_in;
     // NML-1152 B14 step 1 — rules-must-log: the live read names itself the
     // one time it changes the band (Bounding's line above is the shape).
     if gs_in != 0.0 {
@@ -6067,6 +6098,7 @@ mod cast_fold_tests {
         let epoch5 = Seams { hero_attach: true, cast_fold: true, rules_epoch: EPOCH_6_TABLE_RULES - 1, ..Seams::default() };
         let live_mod = |casting_mod: i64| mods::LiveMod {
             hit_mod: 0, casting_mod, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
+            move_mod: 0,
             grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false,
             name: Rc::from(""),
         };
