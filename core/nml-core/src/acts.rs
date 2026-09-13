@@ -301,7 +301,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 12;
+pub const CURRENT_RULES_EPOCH: u32 = 14;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -475,6 +475,18 @@ pub const EPOCH_11_RAPID_CHARGE_MARK: u32 = 11;
 /// recorded at 11 or below replays byte-exact. Every call site reads THIS
 /// constant, not the literal `12` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_12_MOVE_BUFF: u32 = 12;
+
+/// The DEADLY LANDING gate (audit 2026-09-13 §2.1): the core's dice path stops
+/// multiplying Deadly at the POOL level against the unit's printed Tough and
+/// lands it PER MODEL with no carry-over — the book's own shape (GF v3.5.1
+/// p.14) and the table's (`SoloController.apply_deadly_wounds`,
+/// solo_controller.gd:8333). Below 14 the pool multiply is kept VERBATIM
+/// (`dice.rs` `save_batch`'s legacy leg, the landing spilling as before), so
+/// every corpus recorded at 13 or below replays byte-exact. `14` is one past
+/// every existing stamp (13 = #921's gate), and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
+/// reads THIS constant, not the literal `14` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_14_DEADLY_LANDING: u32 = 14;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -960,7 +972,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 12, "epoch 12's gate (EPOCH_12_MOVE_BUFF) bumps the live epoch to 12");
+        assert_eq!(CURRENT_RULES_EPOCH, 14, "epoch 14's gate (EPOCH_14_DEADLY_LANDING) bumps the live epoch to 14");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -970,11 +982,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":12}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":14}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 12"
+            "a fresh play_game() now stamps the bumped epoch, 14"
         );
     }
 

@@ -64,12 +64,12 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 12 (acts::EPOCH_12_MOVE_BUFF, the Great Musician
-    # move-knob gate): explicit, not just dynamic — a fresh game now stamps
-    # 12, not 11. A record already stamped 11 (recorded while epoch 11 was
-    # the live epoch, before the move-only Utility-Buff knob gained its epoch
-    # gate) must never be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 12
+    # core rules epoch 14 (acts::EPOCH_14_DEADLY_LANDING, the Deadly per-model
+    # landing; 13 was #921's): explicit, not just dynamic — a fresh game now
+    # stamps 14, not 13. A record already stamped 13 (recorded while epoch 13
+    # was the live epoch, before the Deadly landing gained its epoch gate)
+    # must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 14
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)
