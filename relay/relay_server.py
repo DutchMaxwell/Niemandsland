@@ -55,6 +55,9 @@ RATE_LIMIT_MESSAGES_PER_SECOND = 2000
 # A legitimate reconnect storm behind one NAT (guest churns peer 3,4,5...) must not trip a
 # second 4429 ("Too many connections from this IP") and turn a transient blip into a dead room.
 MAX_CONNECTIONS_PER_IP = 10
+# Upper bound on how long a peer IP may be kept in memory (it is never written to disk or logged);
+# a client can erase it earlier with the delete_data control message.
+IP_RETENTION_DAYS = 30
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 30 chars, no ambiguous 0/O/1/I/L
 CODE_LENGTH = 6  # 30^6 = 729,000,000 possibilities
 HOST_REJOIN_WINDOW_SECONDS = 20  # keep a room alive this long after the host drops, so they can rejoin
@@ -353,6 +356,17 @@ class RelayServer:
             await self._handle_list_rooms(websocket)
         elif msg_type == "get_stats":
             await self._handle_get_stats(websocket)
+        elif msg_type == "delete_data":
+            # Privacy: erase this caller's IP from every in-memory record. Anonymous routing
+            # (peer id / room code) is untouched, so the game connection stays up.
+            if peer is None:
+                await websocket.send(json.dumps({"type": "error", "reason": "no_data"}))
+                return
+            self.ip_connection_counts.pop(ip, None)
+            for existing_peer in self.connections.values():
+                if existing_peer.ip_address == ip:
+                    existing_peer.ip_address = ""
+            await websocket.send(json.dumps({"type": "data_deleted"}))
         elif msg_type == "heartbeat":
             if peer:
                 peer.last_heartbeat = time.monotonic()
@@ -406,7 +420,7 @@ class RelayServer:
             "code": code,
             "peer_id": 1,
         }))
-        logger.info("Room %s created by %s", code, ip)
+        logger.info("Room %s created", code)
 
     async def _handle_join_room(
         self, websocket: ServerConnection, code: str, ip: str, token: str = ""
@@ -479,7 +493,7 @@ class RelayServer:
                     }))
                 except websockets.exceptions.ConnectionClosed:
                     pass
-            logger.info("Host rejoined room %s from %s", code, ip)
+            logger.info("Host rejoined room %s", code)
             return
 
         if len(room.peers) >= MAX_PEERS_PER_ROOM:
@@ -546,7 +560,7 @@ class RelayServer:
                 except websockets.exceptions.ConnectionClosed:
                     pass
 
-        logger.info("Peer %d joined room %s from %s", peer_id, code, ip)
+        logger.info("Peer %d joined room %s", peer_id, code)
 
     async def _handle_list_rooms(self, websocket: ServerConnection) -> None:
         """Reply with the joinable public rooms for the room browser.
