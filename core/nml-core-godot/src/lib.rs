@@ -43,6 +43,8 @@ mod brain;
 pub mod onnx_spike;
 #[cfg(feature = "onnx-tract")]
 pub mod onnx;
+#[cfg(feature = "onnx-tract")]
+pub mod onnx_hook;
 
 use plain::Captured;
 
