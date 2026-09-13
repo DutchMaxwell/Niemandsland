@@ -88,10 +88,27 @@ static func marker_positions(mission: Dictionary, deployment_style: Dictionary,
 	var mode := str((mission.get("markers", {}) as Dictionary).get("placement", "alternate"))
 	match mode:
 		"quarter_centres":
-			return [Vector2(-table_w_in / 4.0, -table_d_in / 4.0),
-				Vector2(table_w_in / 4.0, -table_d_in / 4.0),
-				Vector2(-table_w_in / 4.0, table_d_in / 4.0),
-				Vector2(table_w_in / 4.0, table_d_in / 4.0)]
+			# Book (GF Advanced Rules v3.5.1 p.25 "Seize Ground", p.26 "Domination"):
+			# "Divide the NON-deployment zone area of the table into 4 equal
+			# quarters" — the band between the zones, not the whole table
+			# (RULE_FIDELITY_AUDIT_2026-09-13 §2.11). front_line's zones end at
+			# z = ±12, so the band is z in [-12, 12] and the centres are
+			# (±18, ±6); the old (±18, ±12) sat on each deployment line.
+			var lo := -table_d_in / 2.0
+			var hi := table_d_in / 2.0
+			for pk in ["1", "2"]:
+				var polys: Variant = (deployment_style.get("zones", {}) as Dictionary).get(pk)
+				if polys is Array and not (polys as Array).is_empty():
+					for xz in (polys as Array)[0]:
+						if pk == "1":
+							lo = maxf(lo, float(xz[1]))
+						else:
+							hi = minf(hi, float(xz[1]))
+			var depth := hi - lo
+			return [Vector2(-table_w_in / 4.0, lo + depth / 4.0),
+				Vector2(table_w_in / 4.0, lo + depth / 4.0),
+				Vector2(-table_w_in / 4.0, lo + 3.0 * depth / 4.0),
+				Vector2(table_w_in / 4.0, lo + 3.0 * depth / 4.0)]
 		"deploy_zone_centres", "deploy_zone_front":
 			# 'deploy_zone_front' (Breakthrough/Headquarters): zone centre
 			# across the width, but a fixed distance from the player's table

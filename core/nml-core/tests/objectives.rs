@@ -196,8 +196,14 @@ fn quarter_centre_markers_pass_is_legal() {
 
 #[test]
 fn seize_ground_and_domination_use_quarter_centres() {
+    // Book (GF Advanced Rules v3.5.1 p.25 "Seize Ground", p.26 "Domination"):
+    // "Divide the non-deployment zone area of the table into 4 equal quarters,
+    // and place one marker at the center of each." front_line's non-deployment
+    // band is z in [-12, 12], so the centres are (±18, ±6) — RULE_FIDELITY_AUDIT
+    // 2026-09-13 §2.11. The previous pin (±18, ±12) ENCODED the bug (markers on
+    // the deployment lines); correcting it is part of the fix, not a weakening.
     let got = objectives::marker_positions("quarter_centres", 12.0, &front_line_style(), 72.0, 48.0);
-    assert_eq!(got, vec![(-18.0, -12.0), (18.0, -12.0), (-18.0, 12.0), (18.0, 12.0)]);
+    assert_eq!(got, vec![(-18.0, -6.0), (18.0, -6.0), (-18.0, 6.0), (18.0, 6.0)]);
 }
 
 #[test]
