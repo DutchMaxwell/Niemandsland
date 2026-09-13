@@ -993,7 +993,7 @@ pub fn resolve_volley_with_tray(
         // shielded half, the guarded leg's MAX reading is already on the
         // table, so the second -1 must not stack (the Fortified pair's shape
         // at :329-333).
-        base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN && !def.shielded_alias.is_sturdy_kind());
+        base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded);
         shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
         let save_def = if p.blast > 1 || p.indirect || p.ignores_cover {
             base

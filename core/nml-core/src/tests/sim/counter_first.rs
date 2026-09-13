@@ -46,7 +46,7 @@ use super::*;
         st.wounds[1] = vec![1; 3];
         st.radii[1] = vec![IN2M; 3];
 
-        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Default::default() };
+        let seams = Seams { rules_epoch: crate::acts::EPOCH_13_WHO_WINS, ..Default::default() };
         let mut tray = Tray::seeded(27);
         let mut shot = ShootResult::default();
         tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot);
@@ -58,5 +58,58 @@ use super::*;
             (shot.rolls[0].kind, shot.rolls[0].owner.as_str()),
             ("attack", "Defender"),
             "the counter pre-phase strikes before Impact — its hit roll opens the stream"
+        );
+    }
+
+    /// The OLD leg, epoch 12 (the gate's own constant, `EPOCH_13_WHO_WINS`):
+    /// the tray replays the pre-fix order — Impact opens the stream, the
+    /// charger strikes before the defender, no COUNTER_ONLY phase exists.
+    #[test]
+    fn at_epoch_12_impact_still_opens_the_stream_and_the_counter_phase_never_runs() {
+        let profile: Profile = serde_json::from_str(r#"{"unit_id":"u","name":"u"}"#).unwrap();
+        let statics = vec![
+            UnitStatic {
+                ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 5, impact: 1, ..Default::default() },
+                name: "Charger".into(),
+                melee: vec![ShootProfile { name: "Blade".into(), attacks: 1, count: 1, range: 0, ..Default::default() }],
+                model_count: 5,
+                wounds_max: vec![1; 5],
+                ..Default::default()
+            },
+            UnitStatic {
+                ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 3, counter_models: 3, ..Default::default() },
+                name: "Defender".into(),
+                melee: vec![ShootProfile { name: "Reaver".into(), attacks: 1, count: 1, range: 0, counter: true, ..Default::default() }],
+                model_count: 3,
+                wounds_max: vec![1; 3],
+                ..Default::default()
+            },
+        ];
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster { keys: vec!["a".into(), "b".into()], index: HashMap::new(), profile: vec![0, 1] });
+        st.profiles = Rc::new(Profiles { list: vec![profile.clone(), profile], index: HashMap::new() });
+        st.player = vec![0, 1];
+        st.alive = vec![5, 3];
+        st.attached = Rc::new(vec![vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None]);
+        st.positions[0] = (1..=5).map(|i| [i as f64 * IN2M, 0.0, 0.0]).collect();
+        st.wounds[0] = vec![1; 5];
+        st.radii[0] = vec![IN2M; 5];
+        st.positions[1] = vec![[0.0, 0.0, 0.0]; 3];
+        st.wounds[1] = vec![1; 3];
+        st.radii[1] = vec![IN2M; 3];
+
+        let seams = Seams { rules_epoch: 12, ..Default::default() };
+        let mut tray = Tray::seeded(27);
+        let mut shot = ShootResult::default();
+        tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot);
+        assert!(
+            !shot.rolls.is_empty(),
+            "the charge melee must roll at all"
+        );
+        assert_eq!(
+            (shot.rolls[0].kind, shot.rolls[0].owner.as_str()),
+            ("attack", "Charger"),
+            "epoch 12 replays the old order: the charger's Impact pool opens the stream"
         );
     }

@@ -209,6 +209,13 @@ pub struct Ctx {
     /// `ctx_for` (static carriers) plus `sim::ctx_live` (granted names and
     /// the terrain clause on the live in_cover answer).
     pub shielded_alias: ShieldedAlias,
+    /// Audit 2026-09-13 §2.4 — the Sturdy-kind Boost REPLACES the Guarded
+    /// family's over-9" gate. The answer is stamped HERE (true only when a
+    /// Sturdy-kind alias supplied the shielded half AND the record is at
+    /// `EPOCH_13_WHO_WINS`), not inferred from `shielded_alias` at resolve
+    /// time — an epoch-12 corpus carries `shielded_alias: SturdyBoost` too,
+    /// and its dice must keep the old stacked reading byte-exact.
+    pub sturdy_boost_gates_guarded: bool,
     pub in_cover: bool,
     /// `AiEv.ctx_for`'s third argument, which `BattleSim._ctx_of` never passes
     /// (battle_sim.gd:702) — always 0 in the sim, modelled for `impact_ev`.
@@ -2185,6 +2192,11 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         shielded: rule_on_all_models(p, "Shielded")
             || shielded_alias.as_ref().is_some_and(|(_, pending)| !*pending),
         shielded_alias: shielded_alias.map_or(ShieldedAlias::None, |(a, _)| a),
+        // §2.4 — see the Ctx field's doc: the suppression rides a STAMPED
+        // flag, gated at the FROZEN `EPOCH_13_WHO_WINS`, never inferred at
+        // resolve time (an epoch-12 record carries the same alias).
+        sturdy_boost_gates_guarded: rule_on(rules_epoch, EPOCH_13_WHO_WINS)
+            && shielded_alias.as_ref().is_some_and(|(a, _)| a.is_sturdy_kind()),
         in_cover: false,
         // Audit 2026-09-13 §2.2 — see `counter_models` below: the bearer read
         // joins at the CURRENT epoch, the live alive-scaling rides

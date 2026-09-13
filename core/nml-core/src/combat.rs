@@ -522,7 +522,7 @@ pub fn profile_ev(
     if !melee {
         // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost replaces the gate; a
         // MAX over the two readings, never a second -1 (the dice fold's twin).
-        defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN && !def.shielded_alias.is_sturdy_kind());
+        defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded);
     }
     // NML-1103 — target-property conditional AP (ai_ev.gd:412-417): Shatter,
     // Tear, Disintegrate, Melee Slayer, Piercing Assault, Piercing Hunter. The

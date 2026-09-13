@@ -23,10 +23,24 @@ use super::*;
         let header = read_act_header(COUNTER_HEADER).expect("header");
         let mut reg = Registries::new(&repo_root());
         let p = header.profiles.get("carrier").expect("carrier");
-        let us = UnitStatic::build_for(&mut reg, p, CURRENT_RULES_EPOCH);
+        let us = UnitStatic::build_for(&mut reg, p, crate::acts::EPOCH_13_WHO_WINS);
         assert!(us.melee[0].counter, "the weapon rule stamps the melee flag");
         assert_eq!(
             us.ctx.counter_models, 5,
             "5 bearers of a Counter melee weapon: the Impact cut counts them"
+        );
+    }
+
+    /// The OLD leg, epoch 12 (the stamp's own gate, `EPOCH_13_WHO_WINS`):
+    /// the hard 0 the old comment swore by — the Impact cut stays inert.
+    #[test]
+    fn at_epoch_12_counter_models_stays_the_hard_zero() {
+        let header = read_act_header(COUNTER_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        let us = UnitStatic::build_for(&mut reg, p, 12);
+        assert_eq!(
+            us.ctx.counter_models, 0,
+            "epoch 12 replays the inert port: the Impact cut reads 0"
         );
     }

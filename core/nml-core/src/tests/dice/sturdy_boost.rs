@@ -14,6 +14,7 @@ use super::*;
             shielded: true,
             shielded_alias: crate::unit::ShieldedAlias::SturdyBoost,
             guarded: true,
+            sturdy_boost_gates_guarded: true,
             ..defender(4, 5)
         };
         let mut tray = Tray::seeded(27);
@@ -34,6 +35,7 @@ use super::*;
             shielded: true,
             shielded_alias: crate::unit::ShieldedAlias::SturdyBoost,
             guarded: true,
+            sturdy_boost_gates_guarded: true,
             ..defender(4, 5)
         };
         let mut tray = Tray::seeded(27);
@@ -41,4 +43,47 @@ use super::*;
             &[ap_rifle(64)], &[0], &[64], &shooter(4), &def, 9.0, &mut tray,
         );
         assert_eq!(out.rolls[1].target, 4, "one +1 at close range too");
+    }
+
+    /// The OLD leg, epoch 12 (the stamp's own gate, `EPOCH_13_WHO_WINS`): a
+    /// record whose alias already supplied the shielded half keeps the
+    /// STACKED reading — the dice fold must not re-date it.
+    #[test]
+    fn at_epoch_12_the_boost_still_stacks_with_its_base() {
+        let def = Ctx {
+            shielded: true,
+            shielded_alias: crate::unit::ShieldedAlias::SturdyBoost,
+            guarded: true,
+            sturdy_boost_gates_guarded: false,
+            ..defender(4, 5)
+        };
+        let mut tray = Tray::seeded(27);
+        let out = resolve_shooting_with_tray(
+            &[ap_rifle(64)], &[0], &[64], &shooter(4), &def, 12.0, &mut tray,
+        );
+        assert_eq!(
+            out.rolls[1].target, 3,
+            "epoch 12 replays the old stack: shielded -1 then guarded -1"
+        );
+    }
+
+    /// The stamp wiring itself: a Sturdy Boost carrier stamps the gate flag
+    /// at 13, not at 12 — the pair the dice fold reads.
+    #[test]
+    fn the_gate_flag_stamps_at_thirteen_not_twelve() {
+        let tpl = r#"{"kind":"header","knobs":{},"profiles":{
+          "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
+            "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+            "base_radius":0.016,"game_system":"gf","faction_folder":"dwarf_guilds",
+            "special_rules":["Sturdy","Sturdy Boost"],"item_grants":[],
+            "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+            "weapons":[{"name":"Blade","range":0,"attacks":1,"count":1,"rules":[]}]}}}"#;
+        let header = read_act_header(tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        let on = UnitStatic::build_for(&mut reg, p, 13);
+        assert!(on.ctx.sturdy_boost_gates_guarded, "epoch 13: the Boost replaces the gate");
+        let mut reg = Registries::new(&repo_root());
+        let off = UnitStatic::build_for(&mut reg, p, 12);
+        assert!(!off.ctx.sturdy_boost_gates_guarded, "epoch 12 replays the old stack");
     }

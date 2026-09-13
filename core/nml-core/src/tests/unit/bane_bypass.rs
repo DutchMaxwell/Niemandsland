@@ -20,7 +20,7 @@ use super::*;
             ..Default::default()
         };
         // Bestial (aof/beastmen): bane stamped (the sixes re-roll) ...
-        let us = bane_unit_of("Bestial", "aof", "beastmen", CURRENT_RULES_EPOCH);
+        let us = bane_unit_of("Bestial", "aof", "beastmen", crate::acts::EPOCH_13_WHO_WINS);
         assert!(us.shoot[0].bane, "the alias re-rolls the defender's sixes");
         let mut prof = us.shoot[0].clone();
         prof.attacks = 24;
@@ -36,7 +36,7 @@ use super::*;
             out.caused, out.wounds
         );
         // Plain "Bane" (gf/robot_legions): the printed rule — bypass stays.
-        let us = bane_unit_of("Bane", "gf", "robot_legions", CURRENT_RULES_EPOCH);
+        let us = bane_unit_of("Bane", "gf", "robot_legions", crate::acts::EPOCH_13_WHO_WINS);
         assert!(us.shoot[0].bane);
         let mut prof = us.shoot[0].clone();
         prof.attacks = 24;
@@ -47,5 +47,30 @@ use super::*;
         assert_eq!(
             out.wounds, out.caused,
             "the printed Bane ignores Regeneration — every unsaved wound lands"
+        );
+    }
+
+    /// The OLD leg, epoch 12 (the fold's own gate, `EPOCH_13_WHO_WINS`): the
+    /// alias's `bane` was the regen-bypass test too — Bestial still skips the
+    /// defender's regen dice, byte-exact with the pre-port corpora.
+    #[test]
+    fn at_epoch_12_bestial_still_bypasses_regeneration() {
+        let att = Ctx { quality: 2, models: 1, ..Default::default() };
+        let def = Ctx {
+            defense: 4, tough: 1, models: 1,
+            regeneration: true, regen_target: 5,
+            ..Default::default()
+        };
+        let us = bane_unit_of("Bestial", "aof", "beastmen", 12);
+        assert!(us.shoot[0].bane);
+        let mut prof = us.shoot[0].clone();
+        prof.attacks = 24;
+        let mut tray = crate::dice::Tray::seeded(27);
+        let out = crate::dice::resolve_shooting_with_tray(
+            &[prof], &[0], &[24], &att, &def, 12.0, &mut tray,
+        );
+        assert_eq!(
+            out.wounds, out.caused,
+            "epoch 12 replays the old flat read: the alias bypasses Regeneration"
         );
     }
