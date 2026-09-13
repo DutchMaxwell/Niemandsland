@@ -877,3 +877,64 @@ func test_an_epoch7_record_writes_no_spawn_profiles_key() -> void:
 
 	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
 	assert_bool(header.has("spawn_profiles")).is_false()
+
+## ===== F12 (analysis/SILENT_FAILURES_2026-09-13.md): WHICH rulebook answered =====
+## An unreadable or unparseable rules_mechanics_<system>.json makes every lookup
+## answer the fallback for the whole run IN SILENCE (rules.rs:335-338 -> :230-232;
+## only unit.rs:1369/1587 branch on `.empty`, neither refuses). The header records
+## books.sha256 and rule_text_source but NOTHING about the mechanics registry, so
+## no recorded corpus can be asked whether this ever happened. RED today: the
+## header writes none of the registry keys, whatever the registry did.
+
+func test_header_records_which_registry_answered() -> void:
+	RulesRegistry.reset_cache()
+	var state := _state()
+	_begin_hold(state)
+
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	assert_bool(header.has("registry_sha")).is_true()
+	assert_bool(header.has("registry_empty")).is_true()
+	assert_bool(header.has("registry_system")).is_true()
+	# the committed gf map IS readable, so a healthy game stamps loaded + a digest
+	assert_bool(bool(header.get("registry_empty", true))).is_false()
+	assert_str(str(header.get("registry_sha", ""))).is_not_equal("")
+	assert_str(str(header.get("registry_system", ""))).is_equal("gf")
+	RulesRegistry.reset_cache()
+
+
+func test_header_records_a_missing_registry_as_empty() -> void:
+	RulesRegistry.reset_cache()
+	RulesRegistry.map_path_override["gf"] = "res://assets/solo/rules_mechanics_missing.json"
+	var probed := RulesRegistry.registry_state("gf")
+	assert_bool(bool(probed.get("empty", false))).is_true()
+	assert_str(str(probed.get("sha256", "x"))).is_equal("")
+
+	var state := _state()
+	_begin_hold(state)
+
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	assert_bool(bool(header.get("registry_empty", false))).is_true()
+	assert_str(str(header.get("registry_sha", "x"))).is_equal("")
+	assert_str(str(header.get("registry_system", "x"))).is_equal("gf")
+	RulesRegistry.map_path_override.clear()
+	RulesRegistry.reset_cache()
+
+
+func test_header_records_an_unparseable_registry_as_empty() -> void:
+	RulesRegistry.reset_cache()
+	var broken := FileAccess.open("user://rules_mechanics_broken.json", FileAccess.WRITE)
+	broken.store_string("{\"common\": {")
+	broken.close()
+	RulesRegistry.map_path_override["gf"] = "user://rules_mechanics_broken.json"
+	var probed := RulesRegistry.registry_state("gf")
+	assert_bool(bool(probed.get("empty", false))).is_true()
+	assert_str(str(probed.get("sha256", "x"))).is_equal("")
+
+	var state := _state()
+	_begin_hold(state)
+
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	assert_bool(bool(header.get("registry_empty", false))).is_true()
+	assert_str(str(header.get("registry_sha", "x"))).is_equal("")
+	RulesRegistry.map_path_override.clear()
+	RulesRegistry.reset_cache()
