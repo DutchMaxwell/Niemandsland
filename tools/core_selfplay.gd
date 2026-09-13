@@ -536,11 +536,19 @@ func _units_from_list(path: String, player: int) -> Array:
 	# v1c (v5.1): the registry resolves spell books via faction_folder +
 	# game_system — factory lists carry the faction in their FILENAME
 	# ({faction}_{points}.json); the table reads it off the army book, which
-	# costs a network round trip this harness must not take.
+	# costs a network round trip this harness must not take. NML-1152: the
+	# boxes store lists FLAT at {system}_{faction}_{points}.json, so the stem
+	# can still carry the system prefix — strip it, or the slug keys no spell
+	# book ("gf_rebel_guerrillas" vs spells_mechanics_gf.json's
+	# "rebel_guerrillas") and every caster resolves zero spells, silently.
 	var faction := path.get_file().get_basename()
 	var us := faction.rfind("_")
 	if us > 0:
 		faction = faction.substr(0, us)
+	var system := RulesRegistry.normalize_system(
+			str((data as Dictionary).get("gameSystem", "")))
+	if faction.begins_with(system + "_"):
+		faction = faction.substr(system.length() + 1)
 	var client := OPRApiClient.new()
 	var army: OPRApiClient.OPRArmy = client.build_army_offline(data as Dictionary)
 	client.free()

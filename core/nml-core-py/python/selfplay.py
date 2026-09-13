@@ -169,7 +169,9 @@ def load_army(path: str | Path, player: int) -> list[dict[str, Any]]:
     order and therefore the capture order the whole state is indexed by."""
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
-    profiles = profiles_from_army_forge_json(data, _faction_from_path(path), player)
+    profiles = profiles_from_army_forge_json(
+        data, _faction_from_path(path, str(data.get("gameSystem", ""))), player
+    )
     return list(profiles.values())
 
 
@@ -281,7 +283,9 @@ def _deploy_arena(
     for slot, path in (("1", list_p1), ("2", list_p2)):
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        roster[slot], fold = deploy_unit_specs(data, _faction_from_path(path), int(slot))
+        roster[slot], fold = deploy_unit_specs(
+            data, _faction_from_path(path, str(data.get("gameSystem", ""))), int(slot)
+        )
         _gate_transport_fill(roster[slot], rules_epoch)
         hero_fold.update(fold)
     objs2 = [[o[0], o[2]] for o in objectives]

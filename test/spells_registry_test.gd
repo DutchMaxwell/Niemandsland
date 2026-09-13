@@ -32,6 +32,20 @@ func test_lookup_is_system_and_faction_scoped() -> void:
 	assert_bool(SpellsRegistry.spells_for("aof", "").is_empty()).is_true()
 
 
+func test_an_unresolvable_faction_is_counted_and_warned_once() -> void:
+	# The silence this replaces let a flat-list slug (`gf_battle_brothers`) key
+	# no book for three corpus generations. A PRESENT map with no entry for the
+	# faction must be counted, once per (system, faction) — never a bare [],
+	# uncommented answer.
+	SpellsRegistry.reset_cache()
+	var before := SpellsRegistry.missing_faction_warnings
+	assert_bool(SpellsRegistry.spells_for("gf", "gf_battle_brothers").is_empty()).is_true()
+	assert_int(SpellsRegistry.missing_faction_warnings).is_equal(before + 1)
+	SpellsRegistry.spells_for("gf", "gf_battle_brothers")
+	assert_int(SpellsRegistry.missing_faction_warnings).is_equal(before + 1)
+	SpellsRegistry.reset_cache()
+
+
 func test_spell_lists_diverge_across_systems_for_the_same_faction() -> void:
 	# THE cross-system divergence proof (the wave-6 §0 invariant, measured on the source data: 77 of
 	# 82 books published for 2+ systems carry parameter-divergent spell lists). Alien Hives' first
