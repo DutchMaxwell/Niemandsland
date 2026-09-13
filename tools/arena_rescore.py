@@ -19,6 +19,13 @@
 #
 # Usage:
 #   python3 tools/arena_rescore.py <dir> [<dir> ...] [--net GRADE] [--json OUT]
+#
+# F10 (SILENT_FAILURES_2026-09-13): a crashed A/B and a finished A/B used to
+# produce the same receipt. The runner writes its intended slice set (plan.tsv
+# or pairs.tsv, one game per data row) before the first game; the scorer now
+# compares games expected vs games scored on every receipt and, on a shortfall,
+# refuses by default. --allow-partial stamps the receipt "PARTIAL m/n" so it
+# can never be quoted as a full result.
 
 from __future__ import annotations
 
@@ -134,6 +141,26 @@ def shuffle_blocks(run, seed: int):
     return out
 
 
+PLAN_BASENAMES = ("plan.tsv", "pairs.tsv")
+
+
+def expected_games(dirs) -> int | None:
+    # Games the plan intended: sum the data rows of the plan file(s) the
+    # runner wrote before the first game. None = no plan in any dir.
+    total = 0
+    found = False
+    for d in dirs:
+        d = os.path.expanduser(d)
+        for bn in PLAN_BASENAMES:
+            p = os.path.join(d, bn)
+            if os.path.isfile(p):
+                found = True
+                with open(p, "r", encoding="utf-8") as fh:
+                    total += sum(1 for line in fh if line.split("\t")[0].strip().isdigit())
+                break
+    return total if found else None
+
+
 def format_run(name: str, st: dict) -> str:
     if st.get("K", 0) == 0:
         return name + ": no games"
@@ -150,6 +177,8 @@ def main(argv=None) -> int:
     ap.add_argument("--net", default="token_value_v2", help="grade label of the arm under test")
     ap.add_argument("--shuffle", type=int, default=None,
                     help="placebo: permute per-game winners with this RNG seed")
+    ap.add_argument("--allow-partial", action="store_true",
+                    help="score a shortfall anyway, stamped PARTIAL scored/expected")
     args = ap.parse_args(argv)
 
     run = load_run(args.dirs, net=args.net)
@@ -158,7 +187,18 @@ def main(argv=None) -> int:
     name = "+".join(os.path.basename(d.rstrip("/")) for d in args.dirs)
     if args.shuffle is not None:
         name += f" [shuffled:{args.shuffle}]"
-    print(format_run(name, st))
+    expected = expected_games(args.dirs)
+    got = st.get("n", 0)
+    exp_s = str(expected) if expected is not None else "unknown (no plan file)"
+    receipt = format_run(name, st) + f"  |  games expected {exp_s}, scored {got}"
+    if expected is not None and got < expected:
+        receipt += f"  |  PARTIAL {got}/{expected}"
+        if not args.allow_partial:
+            receipt += "  |  REFUSED: run is incomplete (plan expects %d); " \
+                       "--allow-partial to stamp anyway" % expected
+            print(receipt)
+            return 2
+    print(receipt)
     if run["collisions"]:
         print(f"WARNING: {len(run['collisions'])} seed(s) in >1 dir: {run['collisions'][:10]}")
     return 0 if st.get("K", 0) else 1
