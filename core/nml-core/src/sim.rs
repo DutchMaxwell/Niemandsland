@@ -5576,11 +5576,11 @@ fn resolve_with(
                                 // The Shred Boost's widened save-fail window —
                                 // see `shred_boost_active`'s doc above.
                                 shred_boost_active(seams.rules_epoch),
-                                tray,
                                 // Audit 2026-09-13 §2.1 — the Deadly gate's leg
                                 // pick: per-model landing from
                                 // `EPOCH_14_DEADLY_LANDING`, pool multiply below.
                                 rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
+                                tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a
                             // save target; the volley is the one leg whose
