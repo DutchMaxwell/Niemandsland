@@ -23,6 +23,14 @@ const MAP_PATH_TEMPLATE: String = "res://assets/solo/spells_mechanics_%s.json"
 ## is probed once, not per lookup).
 static var _cache: Dictionary = {}
 
+## Count of (system, faction) pairs that failed to resolve against a PRESENT
+## map, and the pairs already warned about — the silence this counter replaces
+## is what let three corpus generations record a game without magic. A missing
+## MAP (no data at all) is not counted; a missing FACTION in a present map is a
+## slug or data bug.
+static var missing_faction_warnings: int = 0
+static var _warned_missing: Dictionary = {}
+
 
 ## The full spell map of a system ({} when the asset is missing — every reader falls back).
 static func map_for(system: String) -> Dictionary:
@@ -44,16 +52,32 @@ static func map_for(system: String) -> Dictionary:
 ## Clear the cache (tests / a future hot-reload seam).
 static func reset_cache() -> void:
 	_cache = {}
+	_warned_missing = {}
+	missing_faction_warnings = 0
 
 
 ## THE lookup: the BOOK-ORDERED spell entries of (system, faction). [] when the map or faction is
-## unknown (the caller's conservative fallback: no automated casting for that faction).
+## unknown (the caller's conservative fallback: no automated casting for that faction). A PRESENT map
+## with no entry for `faction`, however, is loud: the key cannot resolve, and a caster of that faction
+## is about to play without a spell book — count it and warn once per (system, faction).
 static func spells_for(system: String, faction: String) -> Array:
 	var m := map_for(system)
 	if m.is_empty() or faction.is_empty():
 		return []
+	var s := RulesRegistry.normalize_system(system)
 	var factions: Dictionary = m.get("factions", {})
-	var fmap: Dictionary = factions.get(faction, {})
+	if not factions.has(faction):
+		var key := "%s/%s" % [s, faction]
+		if not _warned_missing.has(key):
+			_warned_missing[key] = true
+			missing_faction_warnings += 1
+			push_warning(
+					"SpellsRegistry: no spell book for faction '%s' in system '%s' — "
+					% [faction, s]
+					+ "a caster of this faction resolves ZERO spells. Check the "
+					+ "list filename slug (system prefix?) and the spell map.")
+		return []
+	var fmap: Dictionary = factions[faction]
 	return fmap.get("spells", [])
 
 

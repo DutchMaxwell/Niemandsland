@@ -74,6 +74,26 @@ func test_magic_init_books_resolved_zero_without_a_committed_spell_map() -> void
 	cs.free()
 
 
+## (a2) The boxes store lists FLAT (`gf_<faction>_<pts>.json`), so the stem
+## still carries the system prefix. The loader must strip it: the old reading
+## produced `gf_battle_brothers`, which keys no book, and every recorded game
+## had books_resolved = 0. The caster must resolve its six-spell book again.
+func test_a_flat_system_prefixed_filename_resolves_its_spell_book() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	_seq += 1
+	var path := "user://gf_battle_brothers_%d.json" % _seq
+	var fa := FileAccess.open(path, FileAccess.WRITE)
+	fa.store_string(JSON.stringify({"gameSystem": "gf", "units": [
+		_unit_spec("Wizard", 1, [{"name": "Caster", "rating": 2, "label": "Caster(2)"}])]}))
+	fa.close()
+	var units: Array = cs._units_from_list(path, 1)
+	var gu := units[0] as GameUnit
+	assert_str(str(gu.unit_properties.get("faction_folder", ""))).is_equal("battle_brothers")
+	var magic: Dictionary = cs._magic_init(units, [])
+	assert_int(int((magic["books_resolved"] as Dictionary)["p1"])).is_equal(1)
+	cs.free()
+
+
 ## (c) Tally: a positive token delta across the played apply is exactly one
 ## cast event, counted with its cost.
 func test_magic_tally_counts_a_positive_delta_as_one_cast() -> void:

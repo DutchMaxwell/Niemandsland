@@ -684,3 +684,44 @@ def test_deploy_base_groups_folds_attached_heroes_onto_their_host():
     assert heroes_of["host"][0]["base"] == {
         "is_oval": False, "width_mm": 40, "depth_mm": 40,
     }
+
+
+# === faction slug + loud spell-book resolution (spell-slug fix) ================
+#
+# The boxes store lists FLAT (`/root/ai_lists_flat/gf_<faction>_<pts>.json`),
+# not in the canonical `<faction>_<pts>.json` layout. The loader derived the
+# faction from the stem up to the last underscore and so produced
+# `gf_rebel_guerrillas`, which keys no book in `spells_mechanics_gf.json`
+# (`rebel_guerrillas` does), and `spells_for` answered with an empty list and no
+# word. Every recorded game had `magic.books_resolved = 0`.
+
+
+def _a_caster() -> dict:
+    return {"gameSystem": "gf", "units": [
+        _selection("caster", "Adept",
+                   rules=[{"name": "Caster", "rating": 2, "label": "Caster(2)"}])]}
+
+
+def test_a_flat_style_filename_resolves_the_faction_and_its_spell_book(tmp_path):
+    """A list at `gf_battle_brothers_1000.json` must hand the spell registry the
+    slug `battle_brothers`, the key the committed gf map fields six spells
+    under — not `gf_battle_brothers`, which resolves nothing."""
+    path = tmp_path / "gf_battle_brothers_1000.json"
+    path.write_text(json.dumps(_a_caster()), encoding="utf-8")
+    prof = profiles_from_list(path, player=1)["p1_0_caster"]
+    assert prof["caster_value"] == 2
+    factions = json.loads(
+        (list_to_profile.REGISTRY_DIR / "spells_mechanics_gf.json").read_text(
+            encoding="utf-8"
+        )
+    )["factions"]
+    assert prof["faction_folder"] in factions
+    assert len(factions[prof["faction_folder"]]["spells"]) == 6
+
+
+def test_an_unresolvable_spell_book_is_loud_not_silent():
+    """A caster whose faction keys no book must not resolve to a bare empty
+    list. The loader counts them and warns, naming the faction — the silence
+    is what let three corpus generations record a game without magic."""
+    with pytest.warns(UserWarning, match="zero spell books"):
+        profiles_from_army_forge_json(_a_caster(), "no_such_faction", player=1)

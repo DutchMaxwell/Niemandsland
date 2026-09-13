@@ -87,6 +87,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -947,13 +948,78 @@ def _caster_value(special_rules: list[str], alive_count: int) -> int:
     return 0
 
 
-def _faction_from_path(path: str | Path) -> str:
+def _faction_from_path(path: str | Path, game_system: str = "") -> str:
     """core_selfplay.gd:_units_from_list — the faction is the list
     FILENAME up to its last underscore ("robot_legions_1000" ->
-    "robot_legions"; a name with no underscore stays whole)."""
+    "robot_legions"; a name with no underscore stays whole).
+
+    The boxes store lists FLAT at `<system>_<faction>_<points>.json`, so the
+    stem can still carry the game-system prefix. Strip it: the spell maps key
+    factions by bare slug (`rebel_guerrillas`), and `gf_rebel_guerrillas`
+    resolved zero books silently. `game_system` is the list's own
+    `gameSystem`; without it every known system prefix is tried."""
     stem = Path(path).stem
     us = stem.rfind("_")
-    return stem[:us] if us > 0 else stem
+    slug = stem[:us] if us > 0 else stem
+    system = game_system.strip().lower()
+    prefixes = (system,) if system in REGISTRY_SYSTEMS else REGISTRY_SYSTEMS
+    for prefix in prefixes:
+        if slug.startswith(prefix + "_"):
+            return slug[len(prefix) + 1:]
+    return slug
+
+
+#: The committed spell maps, parsed once per system — the Python mirror of
+#: SpellsRegistry.map_for / RulesRegistry.map_for.
+_SPELL_MAPS: dict[str, dict[str, Any]] = {}
+
+
+def spells_for(system: str, faction: str) -> list[dict[str, Any]]:
+    """SpellsRegistry.spells_for — the faction's BOOK-ORDERED spell entries,
+    [] when the map or faction is unknown."""
+    s = system.strip().lower()
+    if s not in REGISTRY_SYSTEMS:
+        s = REGISTRY_DEFAULT_SYSTEM
+    if s not in _SPELL_MAPS:
+        try:
+            _SPELL_MAPS[s] = json.loads(
+                (REGISTRY_DIR / ("spells_mechanics_%s.json" % s)).read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (OSError, ValueError):
+            _SPELL_MAPS[s] = {}
+    return list((_SPELL_MAPS[s].get("factions", {}).get(faction, {}) or {}).get(
+        "spells", []))
+
+
+def _warn_unresolved_spell_books(profiles: dict[str, dict[str, Any]],
+                                 system: str) -> None:
+    """A CASTER whose faction yields no spell book used to resolve to a bare
+    empty list with no complaint — the silence that fed three corpus
+    generations a game without magic. Count the casters per faction and warn,
+    naming each faction: a key that does not resolve is a slug or map bug, not
+    an empty book."""
+    missing: dict[str, int] = {}
+    for p in profiles.values():
+        if int(p.get("caster_value", 0)) <= 0:
+            continue
+        faction = str(p.get("faction_folder", ""))
+        if spells_for(system, faction):
+            continue
+        missing[faction] = missing.get(faction, 0) + 1
+    if missing:
+        total = sum(missing.values())
+        names = ", ".join(
+            "'%s' (%d)" % (f, n) for f, n in sorted(missing.items())
+        )
+        warnings.warn(
+            "list_to_profile: %d caster(s) resolved zero spell books in "
+            "system '%s' — faction(s) %s. A spell-book key that does not "
+            "resolve is a slug or data bug, not an empty book."
+            % (total, system, names),
+            UserWarning, stacklevel=3,
+        )
 
 
 #: NML-1152 step 6c — the bundled model manifest's `base_mm` specs
@@ -1396,7 +1462,9 @@ def profiles_from_army_forge_json(
     # `base_mm` entries; digest-neutral by construction then.
     _apply_manifest_base_overrides(built, faction)
     _expand_auras(built)
-    return {u["unit_id"]: _unit_profile(u, faction, game_system) for u in built}
+    profiles = {u["unit_id"]: _unit_profile(u, faction, game_system) for u in built}
+    _warn_unresolved_spell_books(profiles, game_system)
+    return profiles
 
 
 def selections_from_army_forge_json(
@@ -1424,4 +1492,6 @@ def profiles_from_list(path: str | Path, player: int) -> dict[str, dict[str, Any
     reproduces an act-corpus header's "profiles" dict field for field."""
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
-    return profiles_from_army_forge_json(data, _faction_from_path(path), player)
+    return profiles_from_army_forge_json(
+        data, _faction_from_path(path, str(data.get("gameSystem", ""))), player
+    )
