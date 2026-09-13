@@ -869,6 +869,56 @@ mod tests {
         assert_eq!(9 + 4 + 5 + 2 + 4 + 6 + 3 + 1, 34);
     }
 
+    /// The measured worst-case unit (RULE_BAG_SIZING_2026-09-13): `Vradhez`,
+    /// gf/alien_hives — 12 rated unit rules + `Caster(2)` = 13 non-spell
+    /// pairs, plus the whole 6-spell alien_hives book the registries give
+    /// every caster = 19 pairs. Only the bag's first 8 places fit them now.
+    const VRADHEZ_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "vradhez":{"unit_id":"vradhez","name":"Vradhez","quality":4,"defense":3,"tough":3,
+        "wounds_max":[3],"model_count":1,"caster_value":2,"base_radius":0.02,
+        "game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Hero","Strider","Tough(3)","Hive Bond","Combat Mutations",
+          "Piercing Growth","Combat Bio-Engineer","Furious Aura","Winged Breed",
+          "Ambush","Flying","Furious","Caster(2)"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    const VRADHEZ_STATE: &str = r#"{"round":1,"rounds_total":4,"scoring":"end",
+      "objectives":[{"pos":[0.0,0.0,0.0],"owner":1}],
+      "units":{
+        "vradhez":{"player":1,"alive":1,"wounds":[3],"radii":[0.02],
+          "positions":[[0.254,0.0,0.0]],
+          "in_cover":false,"shaken":false,"fatigued":false,"activated":false,
+          "casts":2,"morale_bonus":0,"aircraft":false,"dormant":false,
+          "ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":0.0,
+          "mods":{},"mods_base":{},"bands":{"advance":6.0,"rush":12.0}}}}"#;
+
+    /// RED (bag 8): the worst-case unit must land >= 17 pairs in the bag, and
+    /// a caster's spell (slot >= 300) must be among them — at 8 places the 13
+    /// non-spell pairs push every spell out of the bag.
+    #[test]
+    fn worst_case_unit_gets_17_pairs_and_its_spells() {
+        let header = read_act_header(VRADHEZ_HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let state = state_from_json(VRADHEZ_STATE, &mut cache, &mut roster).expect("state");
+        let mut reg = Registries::new(&repo_root());
+        let statics: Vec<UnitStatic> =
+            state.profiles.list.iter().map(|p| UnitStatic::build(&mut reg, p)).collect();
+        let mut enc = RowEncoder::new(&repo_root());
+        let p = state.profile(0);
+        let pairs = enc.rule_pairs(p, &statics[0]);
+        assert!(enc.unknown.is_empty(), "unknown rules: {:?}", enc.unknown);
+        assert_eq!(pairs.len() / 2, 19, "Vradhez encodes 19 pairs");
+        let bag = rule_bag(&mut enc, p, &statics[0]);
+        let n = bag.chunks(2).filter(|pr| pr[1] != 0.0).count();
+        assert!(n >= 17, "only {n} of 19 pairs land in the bag, need >= 17");
+        assert!(
+            bag.chunks(2).any(|pr| pr[0] >= 300.0 / VOCAB_N),
+            "no spell slot (>= 300) reached the bag"
+        );
+    }
+
     /// RED: dropping the side-2 mirror (or transposing x/z) must fail this.
     #[test]
     fn side_2_mirrors_every_coordinate() {
