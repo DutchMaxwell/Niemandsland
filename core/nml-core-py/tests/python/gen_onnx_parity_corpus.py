@@ -50,7 +50,7 @@ MIX2 = 0xA5A5A5A5A5A5A5A5
 INPUT_NAMES = ["units", "units_mask", "objs", "objs_mask", "terr", "glob"]
 OUTPUT_NAMES = ["value", "member_values"]
 SHAPES = {
-    "units": (24, 72), "units_mask": (24,), "objs": (6, 12),
+    "units": (24, 90), "units_mask": (24,), "objs": (6, 12),
     "objs_mask": (6,), "terr": (18, 12), "glob": (16,),
 }
 SPEC = ("corpus v1: 0..59 = golden leaves in order; p>=60 mixes two base leaves "
@@ -95,7 +95,7 @@ def row_of(leaves, p: int, seed: int = SEED):
     units, units_mask, objs, objs_mask, terr, glob = [], [], [], [], [], []
     for r in range(24):
         src = la if pick(p, 1, r, seed) else lb
-        units += src[0][r * 72:(r + 1) * 72]
+        units += src[0][r * 90:(r + 1) * 90]
         units_mask.append(src[1][r])
     for r in range(6):
         src = la if pick(p, 2, r, seed) else lb
@@ -190,7 +190,7 @@ def main():
             "base_leaves": len(leaves),
             "spec": SPEC,
             "input_sha256": digest,
-            "input_bytes": args.count * (24 * 72 + 24 + 6 * 12 + 6 + 18 * 12 + 16) * 4,
+            "input_bytes": args.count * (24 * 90 + 24 + 6 * 12 + 6 + 18 * 12 + 16) * 4,
         },
         "reference": {
             "runtime": "onnxruntime",

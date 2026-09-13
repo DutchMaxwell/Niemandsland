@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use std::time::Instant;
 
 const U_N: usize = 24;
-const U_D: usize = 72;
+const U_D: usize = 90;
 const O_N: usize = 6;
 const D: usize = 12;
 const T_N: usize = 18;

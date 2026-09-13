@@ -8,7 +8,7 @@ is reviewable in the public repo without the private lab.
 This test pins the fixture contract itself, stdlib only:
 
   * the `.onnx` sha256 is the hash the provenance attests for both exports;
-  * every golden leaf carries the fixed token shapes -- units 24x72 (+24
+  * every golden leaf carries the fixed token shapes -- units 24x90 (+24
     mask), objs 6x12 (+6), terr 18x12, glob 16;
   * every `expected` value is finite and in [-1, 1] (the value head's tanh
     range), with two member lists of one value per leaf;
@@ -29,9 +29,9 @@ PROVENANCE = FIXTURES / "provenance_standin-v2x2.json"
 ONNX = FIXTURES / "standin-v2x2.onnx"
 
 # The export contract mirrors `core/nml-core/src/tokens.rs:26-28`
-# (N_UNITS=24, N_OBJ=6, N_TERR=18) and `:42-45` (F_U=72, F_O=12, F_T=12,
+# (N_UNITS=24, N_OBJ=6, N_TERR=18) and `:42-45` (F_U=90, F_O=12, F_T=12,
 # F_G=16). A shape drift here is a red test, not a fixture edit.
-N_UNITS, F_U = 24, 72
+N_UNITS, F_U = 24, 90
 N_OBJ, F_O = 6, 12
 N_TERR, F_T = 18, 12
 F_G = 16
