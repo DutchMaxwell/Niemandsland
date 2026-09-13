@@ -114,6 +114,9 @@ def test_replay_cli_core_gate(tiny_record, stamp, strict, tool):
         assert ("REFUSED" if refused else "WARN") in output
         if not refused:
             assert output.count("WARN") == 1
+        if tool == "shards" and not refused:
+            status = (bank / "shards" / "STATUS").read_text()
+            assert ("core_mismatches=2" if not matching else "core_mismatches=0") in status
     if not refused:
         assert "core_commit=" + running in output
     if matching:
@@ -126,6 +129,38 @@ def test_core_gate_accepts_legacy_stamp(prescreen, capsys):
     CoreIdentityCheck(True).check(
         {"prescreen": prescreen, "core_commit": nml_core.BUILD_COMMIT}, "legacy.json")
     assert capsys.readouterr().err == ""
+
+
+def test_unverifiable_running_core_refuses_by_default(monkeypatch, capsys):
+    from core_identity import CoreIdentityCheck
+    monkeypatch.setattr(nml_core, "BUILD_COMMIT", "unknown", raising=False)
+    with pytest.raises(SystemExit) as exc:
+        CoreIdentityCheck().check({"prescreen": {"core_commit": "a" * 40}}, "box.json")
+    assert exc.value.code == 3
+    err = capsys.readouterr().err
+    assert "running=unknown" in err
+    assert "allow-unknown-core" in err
+
+
+def test_unknown_core_opt_out_warns_and_names_what_it_disabled(monkeypatch, capsys):
+    from core_identity import CoreIdentityCheck
+    monkeypatch.setattr(nml_core, "BUILD_COMMIT", "unknown", raising=False)
+    CoreIdentityCheck(allow_unknown_core=True).check(
+        {"prescreen": {"core_commit": "a" * 40}}, "box.json")
+    err = capsys.readouterr().err
+    assert "WARN" in err
+    assert "allow-unknown-core" in err
+    assert "running=unknown" in err
+
+
+def test_repeated_mismatches_are_counted_not_suppressed(monkeypatch, capsys):
+    from core_identity import CoreIdentityCheck
+    monkeypatch.setattr(nml_core, "BUILD_COMMIT", "a" * 40, raising=False)
+    check = CoreIdentityCheck()
+    for _ in range(3):
+        check.check({"prescreen": {"core_commit": "b" * 40}}, "g.json")
+    assert check.mismatches == 3
+    assert capsys.readouterr().err.count("WARN") == 1
 
 
 def test_core_gate_prescreen_takes_precedence(capsys):

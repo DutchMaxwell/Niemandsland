@@ -192,7 +192,7 @@ def main() -> int:
     ap.add_argument("--dice-offset", type=int, default=0, help="RED: must diverge")
     add_core_argument(ap)
     a = ap.parse_args()
-    core_check = CoreIdentityCheck(a.require_same_core)
+    core_check = CoreIdentityCheck(a.require_same_core, a.allow_unknown_core)
     print("[REPLAY] module=%s dice_offset=%d core_commit=%s"
           % (nml_core.__file__, a.dice_offset, core_check.running))
     out = []
