@@ -10,7 +10,7 @@ compile_error!("enable exactly one of the onnx-tract / onnx-ort features");
 
 /// One static batch: six flat float32 buffers in token-contract layout.
 pub struct Batch {
-    pub units: Vec<f32>,      // [rows, 24, 72]
+    pub units: Vec<f32>,      // [rows, 24, 90]
     pub units_mask: Vec<f32>, // [rows, 24]
     pub objs: Vec<f32>,       // [rows, 6, 12]
     pub objs_mask: Vec<f32>,  // [rows, 6]
@@ -19,7 +19,7 @@ pub struct Batch {
 }
 
 fn rows(batch: &Batch) -> usize {
-    batch.units.len() / (24 * 72)
+    batch.units.len() / (24 * 90)
 }
 
 #[cfg(feature = "onnx-tract")]
@@ -50,7 +50,7 @@ mod imp {
                 Tensor::from_shape(shape, data).map(TValue::from).map_err(err)
             };
             let inputs = tvec![
-                tensor(&[b, 24, 72], &batch.units)?,
+                tensor(&[b, 24, 90], &batch.units)?,
                 tensor(&[b, 24], &batch.units_mask)?,
                 tensor(&[b, 6, 12], &batch.objs)?,
                 tensor(&[b, 6], &batch.objs_mask)?,
@@ -113,7 +113,7 @@ mod imp {
             let mut session = self.session.lock().map_err(|e| e.to_string())?;
             let outputs = session
                 .run(ort::inputs![
-                    "units" => tensor(vec![b, 24, 72], &batch.units)?,
+                    "units" => tensor(vec![b, 24, 90], &batch.units)?,
                     "units_mask" => tensor(vec![b, 24], &batch.units_mask)?,
                     "objs" => tensor(vec![b, 6, 12], &batch.objs)?,
                     "objs_mask" => tensor(vec![b, 6], &batch.objs_mask)?,

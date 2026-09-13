@@ -103,7 +103,7 @@ def test_policy_tokens_shapes_on_a_real_replayed_position():
         tr = got["trace"]
         best_idx = tr["scored"][tr["best_idx"]]["idx"]
         toks = core.policy_tokens(state, act["player"], tr["cands"], best_idx)
-        assert len(toks["units"]) == 24 and len(toks["units"][0]) == 72
+        assert len(toks["units"]) == 24 and len(toks["units"][0]) == 90
         assert len(toks["units_mask"]) == 24
         assert len(toks["objs"]) == 6 and len(toks["objs"][0]) == 12
         assert len(toks["terr"]) == 18 and len(toks["terr"][0]) == 12
