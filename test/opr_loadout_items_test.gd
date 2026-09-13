@@ -32,6 +32,25 @@ func test_subset_tool_becomes_per_model_equipment() -> void:
 	assert_array(unit.special_rules).contains(["Spell Conduit"])
 
 
+func test_a_per_model_combat_shield_does_not_arm_the_whole_unit() -> void:
+	## §2A.12 — the same shipped-list fixture the Python loader test uses
+	## (wolf_brothers_3000.json): "Wolf Veteran Assault Brothers" is 3 models,
+	## one Combat Shield (count 1). Shielded is an ALL-MODELS rule, so its grant
+	## must stay off the unit rule line; the banner's Courage Aura is the control
+	## (unit-wide by its own text, feeds _expand_auras).
+	var data: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string("res://test/fixtures/wolf_brothers_3000.json"))
+	var wolf: Dictionary = {}
+	for u in data["units"]:
+		if str(u.get("name", "")) == "Wolf Veteran Assault Brothers":
+			wolf = u
+	assert_dict(wolf).is_not_empty()
+	var unit := _parse(wolf)
+	assert_bool("Combat Shield" in unit.special_rules).is_false()
+	assert_bool("Shielded" in unit.special_rules).is_false()
+	assert_bool("Courage Aura" in unit.special_rules).is_true()
+
+
 func test_unit_wide_tool_stays_a_special_rule() -> void:
 	var unit := _parse({
 		"name": "Assault Grunts", "size": 10, "quality": 5, "defense": 5,

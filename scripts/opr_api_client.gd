@@ -906,6 +906,18 @@ static func _set_oval_base(unit: OPRUnit, width_mm: int, depth_mm: int) -> void:
 	unit.base_from_tough = true
 
 
+## Fidelity audit wave 2, §2A.12 — rules whose OWN book text quantifies over ALL
+## models: Shielded reads "Units where ALL MODELS have this rule get +1 to
+## defense rolls". An item only a subset of the models carries cannot satisfy
+## that quantifier, so its grant must never fold onto the unit's rule line (the
+## Python port list_to_profile.py keeps the same constant verbatim);
+## rule_on_all_models (unit.rs:1167-1174) re-reads the flat rule line and would
+## otherwise arm the whole unit. Auras, relay rules (Spell Conduit, Extended
+## Buff Range) and unit-wide tools are NOT in this family — their own text or
+## the aura pass applies them unit-wide from a single carrier.
+const ALL_MODELS_RULES: Array[String] = ["Shielded"]
+
+
 ## Parse a unit from TTS API response
 func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUnit:
 	var unit = OPRUnit.new()
@@ -1023,9 +1035,11 @@ func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUn
 		# carried by a subset (weapon-team / special weapon) must not buff the base squad's
 		# wounds. Its Tough rides on the equipment_items entry and is applied to the carrier
 		# model only by EquipmentDistributor; folding it unit-wide here caused the squad-wide
-		# Tough bug.
+		# Tough bug. §2A.12: an ALL-MODELS rule (Shielded — "units where ALL models have this
+		# rule") is likewise withheld from a subset item's grants; one shield of three must
+		# not arm the whole unit via rule_on_all_models.
 		for granted_rule in granted:
-			if per_model and granted_rule.begins_with("Tough("):
+			if per_model and (granted_rule.begins_with("Tough(") or granted_rule in ALL_MODELS_RULES):
 				continue
 			if granted_rule not in unit.special_rules:
 				unit.special_rules.append(granted_rule)

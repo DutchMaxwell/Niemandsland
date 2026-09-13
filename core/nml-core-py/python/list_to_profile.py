@@ -128,6 +128,17 @@ _REGISTRY_CACHE: dict[str, dict] = {}
 #: carries no such keys (its advance_bonus_in/rush_bonus_in are read elsewhere, by
 #: _max_activation_advance_bonus_in below), so it is unaffected by riding this pass.
 MOVE_PRIMITIVES = ("Fast", "Slow", "Quick", "Rapid Advance", "Rapid Rush", "Royal Legion", "Teleport")
+
+#: Fidelity audit wave 2, §2A.12 — rules whose OWN book text quantifies over ALL
+#: models: Shielded reads "Units where ALL MODELS have this rule get +1 to
+#: defense rolls". An item only a subset of the models carries cannot satisfy
+#: that quantifier, so its grant must never fold onto the unit's rule line
+#: (opr_api_client.gd keeps the same ALL_MODELS_RULES constant verbatim);
+#: rule_on_all_models (unit.rs:1167-1174) re-reads the flat rule line and would
+#: otherwise arm the whole unit. Auras, relay rules (Spell Conduit, Extended
+#: Buff Range) and unit-wide tools are NOT in this family — their own text or
+#: the aura pass applies them unit-wide from a single carrier.
+ALL_MODELS_RULES = ("Shielded",)
 #: solo_controller.gd:5435 — the byte-identical fallback when the map is absent.
 ROYAL_LEGION_RANGE_BONUS_IN = 4
 #: solo_controller.gd:5563 — the Teleport family's default placement distance.
@@ -325,7 +336,10 @@ def _selection_rules(ud: dict[str, Any]) -> tuple[list[str], dict[str, list[str]
         if not per_model and name and name not in rules:
             rules.append(name)
         for g in granted:
-            if per_model and g.startswith("Tough("):
+            # §2A.12: Tough(X) is a per-model stat and an all-models rule
+            # (ALL_MODELS_RULES) is unit-wide only when EVERY model carries it —
+            # neither may ride a subset item onto the unit rule line.
+            if per_model and (g.startswith("Tough(") or g in ALL_MODELS_RULES):
                 continue
             if g not in rules:
                 rules.append(g)

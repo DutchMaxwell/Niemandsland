@@ -209,15 +209,37 @@ def test_an_items_name_and_its_rules_reach_the_rule_line():
 def test_a_per_model_item_stays_off_the_rule_line_and_keeps_its_tough():
     """An item only a SUBSET of the models carry is per-model equipment: its
     name never joins the unit rule line, and a Tough(X) it grants must not buff
-    the whole squad (:803-813). Its other rules still apply unit-wide."""
+    the whole squad (:803-813). An ALL-MODELS rule it grants (Shielded, §2A.12)
+    stays off too — one shield of five does not make the unit Shielded. Its
+    item_grants record is unchanged (the hover cascade still reads it)."""
     sel = _selection("u", "Squad", size=5)
     sel["loadout"] = [_item("Weapon Team", ["Tough(3)", "Shielded"], count=1)]
     prof = profiles_from_army_forge_json(
         {"gameSystem": "gf", "units": [sel]}, "test_faction", player=1
     )["p1_0_u"]
-    assert prof["special_rules"] == ["Shielded"]
+    assert prof["special_rules"] == []
     assert prof["tough"] == 1
     assert prof["item_grants"] == ["Tough(3)", "Shielded"]
+
+
+WOLF_BROTHERS_LIST = (
+    Path(__file__).resolve().parents[4] / "test" / "fixtures" / "wolf_brothers_3000.json"
+)
+
+
+def test_a_per_model_combat_shield_does_not_arm_the_whole_unit():
+    """§2A.12 (Shielded fidelity audit) — the real shipped list
+    wolf_brothers_3000.json: "Wolf Veteran Assault Brothers" is THREE models,
+    one of which carries a Combat Shield (count 1). Shielded's own text is
+    "Units where ALL MODELS have this rule get +1 to defense" — one shield of
+    three must not put Shielded on the unit's rule line (where
+    rule_on_all_models would arm the whole unit at 2+ defense). The unit's
+    Detachment Banner is the control: its Courage Aura keeps folding (an aura
+    is unit-wide by its own text and feeds _expand_auras)."""
+    prof = profiles_from_list(WOLF_BROTHERS_LIST, player=1)["p1_1_Zva7oXHgx"]
+    assert prof["name"] == "Wolf Veteran Assault Brothers"
+    assert "Shielded" not in prof["special_rules"]
+    assert "Courage" in prof["special_rules"]
 
 
 def test_an_item_that_grants_a_weapon_loses_that_name_from_the_rule_line():
