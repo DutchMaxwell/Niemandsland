@@ -42,6 +42,9 @@ import pytest
 import nml_core
 
 REPO_ROOT = str(Path(__file__).resolve().parents[4])
+#: `Path` form of the repo root — `test_the_v7_legacy_reading_survives_the_v8_file`
+#: and its v9 mirror read the committed vocabulary off the filesystem.
+REPO = Path(REPO_ROOT)
 ORACLE = Path(
     os.environ.get("NML_ORACLE_DIR", str(Path.home() / "selfplay_out" / "m3_oracle_v2"))
 )
@@ -213,17 +216,17 @@ def test_the_committed_rule_vocabulary_covers_the_whole_corpus():
     assert not unknown, f"rules outside the committed vocabulary: {sorted(unknown)}"
 
 
-def test_the_v7_legacy_reading_survives_the_v8_file():
+def test_the_v7_legacy_reading_survives_the_v9_file():
     """The Gen-6 shard reading (MANIFEST `encoder_vocab_version` "7") is intact.
 
     `resolve_vocab_version` hands a v7-stamped corpus to the loader's legacy
-    reading: `legacy_lengths["7"]` truncates the committed lists. Under the v8
+    reading: `legacy_lengths["7"]` truncates the committed lists. Under the v9
     append that truncation must still BE the v7 vocabulary — byte-identical
     lists, the 12 v7 unit2 names at 989-1000, none of the 16 v8 names in it.
     """
     vocab = json.loads((REPO / "data" / "encoder_rule_vocab_v1.json").read_text())
-    assert vocab["version"] == 8
-    assert nml_core.RULE_VOCAB_VERSION == 8
+    assert vocab["version"] == 9
+    assert nml_core.RULE_VOCAB_VERSION == 9
     assert vocab["legacy_lengths"]["7"] == {"unit": 200, "weapon": 25, "spell": 463, "unit2": 238}
     v7_unit2 = vocab["unit2"][: vocab["legacy_lengths"]["7"]["unit2"]]
     assert v7_unit2[-12:] == [
@@ -234,6 +237,25 @@ def test_the_v7_legacy_reading_survives_the_v8_file():
     ]
     for name in ("Defense Buff", "Rapid Rush", "Spawn", "Vengeance"):
         assert name not in v7_unit2, f"{name} must be v8-only"
+
+
+def test_the_v8_legacy_reading_survives_the_v9_file():
+    """The v8 shard reading (MANIFEST `encoder_vocab_version` "8") is intact.
+
+    `resolve_vocab_version` hands a v8-stamped corpus to the loader's legacy
+    reading: `legacy_lengths["8"]` truncates the committed lists. Under the v9
+    append that truncation must still BE the v8 vocabulary — the 16 v8 unit2
+    names at 1001-1016, none of the v9 names in it.
+    """
+    vocab = json.loads((REPO / "data" / "encoder_rule_vocab_v1.json").read_text())
+    assert vocab["version"] == 9
+    assert nml_core.RULE_VOCAB_VERSION == 9
+    assert vocab["legacy_lengths"]["8"] == {"unit": 200, "weapon": 25, "spell": 463, "unit2": 254}
+    v8_unit2 = vocab["unit2"][: vocab["legacy_lengths"]["8"]["unit2"]]
+    assert v8_unit2[-2:] == ["Teleport Aura", "Vengeance"]
+    for name in ("Rapid Advance Buff", "Rapid Charge Mark", "Rapid Rush Buff",
+                 "Speed Buff", "Speed Debuff", "Swift", "Swift Aura", "Swift Buff"):
+        assert name not in v8_unit2, f"{name} must be v9-only"
 
 
 def test_red_the_legacy_prefix_reading_is_what_this_corpus_recorded():
