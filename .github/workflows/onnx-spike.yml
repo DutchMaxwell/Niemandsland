@@ -38,7 +38,7 @@ jobs:
         run: |
           set -o pipefail
           cargo test --release --manifest-path core/nml-core-godot/Cargo.toml \
-            --features onnx-tract --test onnx_golden -- --nocapture 2>&1 | tee spike-linux-tract.log
+            --features onnx-tract --test onnx_golden --test onnx_loader -- --nocapture 2>&1 | tee spike-linux-tract.log
       - name: Build, strip, size (tract)
         continue-on-error: true
         run: |
@@ -211,7 +211,7 @@ jobs:
           set -o pipefail
           cargo test --release --target x86_64-pc-windows-gnu \
             --manifest-path core/nml-core-godot/Cargo.toml \
-            --features onnx-tract --test onnx_golden -- --nocapture 2>&1 | tee spike-win-tract.log
+            --features onnx-tract --test onnx_golden --test onnx_loader -- --nocapture 2>&1 | tee spike-win-tract.log
       - name: Gate on result lines
         shell: bash
         run: |

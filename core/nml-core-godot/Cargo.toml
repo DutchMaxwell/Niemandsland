@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-onnx-tract = ["dep:tract-onnx"]
+onnx-tract = ["dep:tract-onnx", "dep:sha2"]
 onnx-ort = ["dep:ort"]
 
 [dependencies]
@@ -22,9 +22,12 @@ nml-core = { path = "../nml-core" }
 # Spike arms, off by default. ort links nothing at build time (load-dynamic);
 # the official ONNX Runtime 1.28.0 library is loaded from NML_ORT_DYLIB.
 tract-onnx = { version = "=0.23.7", optional = true }
+sha2 = { version = "0.10", optional = true }
 ort = { version = "=2.0.0-rc.13", optional = true, default-features = false, features = ["load-dynamic", "std"] }
 
 [dev-dependencies]
+# The optional [dependencies] sha2 is the loader's copy (tract feature only); this
+# dev copy keeps the untouched ort golden target compiling under --features onnx-ort.
 sha2 = "0.10"
 
 [build-dependencies]
