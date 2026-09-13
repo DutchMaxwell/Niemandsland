@@ -233,8 +233,20 @@ pub struct Knobs {
     /// `CURRENT_RULES_EPOCH`. See `rule_on` and `CURRENT_RULES_EPOCH`: a
     /// future rule port that has no legacy reading should NOT add another
     /// boolean knob like `cond_ap_dice`/`versatile_reach` above — it should
-    /// gate on `rule_on(rules_epoch, CURRENT_RULES_EPOCH)` and bump the
-    /// constant in the same change.
+    /// bump `CURRENT_RULES_EPOCH`, define a NEW frozen `EPOCH_<n>_<NAME>`
+    /// constant equal to the new number, and gate on
+    /// `rule_on(rules_epoch, EPOCH_<n>_<NAME>)`.
+    ///
+    /// **Never gate on `CURRENT_RULES_EPOCH` itself.** It is the LIVE symbol:
+    /// the next wave bumps it, and every gate written against it silently
+    /// re-points at the new number, so records stamped with the epoch the gate
+    /// was born in fall back to the pre-port behaviour. That is not a theory —
+    /// it happened at epoch 4 (see the WAVE 2 paragraph on
+    /// `CURRENT_RULES_EPOCH` below, which had to freeze six call sites onto
+    /// `EPOCH_3_TABLE_RULES`) and again on 2026-09-13, when a rules wave landed
+    /// six fresh `rule_on(rules_epoch, CURRENT_RULES_EPOCH)` gates because THIS
+    /// comment still recommended the pattern its own history section records as
+    /// a defect.
     #[serde(default)]
     pub rules_epoch: u32,
 }
