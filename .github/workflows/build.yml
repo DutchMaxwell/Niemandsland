@@ -9,7 +9,17 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # PRs: one group per branch — a newer push cancels the older run, the head is
+  # what gets merged. push / workflow_dispatch: one group PER COMMIT, so a merge
+  # never cancels the queued run of the merge before it.
+  # Measured 2026-09-13: five main runs were cancelled exactly that way in one
+  # evening (70dd886b, 9a5dea52, 86ec1fce, 95f6b397, f8741028). The newest main
+  # commit with a completed green build run was four merges behind the tip, and
+  # 70dd886b — the merge carrying the rule-bag widening 8 -> 17 together with the
+  # re-minted golden fixture — had no gdUnit verdict at all. A green board that no
+  # run stands behind. Sharding the gdUnit job (#923) is what makes one run per
+  # main commit affordable.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
