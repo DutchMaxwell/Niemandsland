@@ -179,7 +179,10 @@ def test_stamped_vs_ported_on_a_shared_primitive(tmp_path):
         (root / d).mkdir(parents=True)
     (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
         "common": {
-            "Buff Stamped": {"primitive": "Utility Buff", "params": {"move_mod": -1}},
+            # `range_bonus_in` is the documented-NO knob (still unread at any
+            # epoch); `move_mod` JOINED the consumed set at the Great
+            # Musician port (epoch 12), so it no longer proves STAMPED.
+            "Buff Stamped": {"primitive": "Utility Buff", "params": {"range_bonus_in": -1.0}},
             "Buff Consumed": {"primitive": "Utility Buff", "params": {"hit_mod": 1}},
         },
         "factions": {},
