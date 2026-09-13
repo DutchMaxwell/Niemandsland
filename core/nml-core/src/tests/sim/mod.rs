@@ -1532,6 +1532,7 @@ mod breath_attack;
 mod breath_score;
 mod buff_consumption_bridge;
 mod counter_first;
+mod deadly_landing;
 mod deathstrike;
 mod dest_side_arms;
 mod entrenched;
