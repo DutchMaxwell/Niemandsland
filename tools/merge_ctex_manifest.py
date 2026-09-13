@@ -27,6 +27,7 @@ def main(argv: list) -> int:
     added = 0
     missing: list = []
     unsafe: list = []
+    allow_missing = "--allow-missing" in argv
     for key, entry in models.items():
         patch = patches.get(key)
         if patch is None or "ctex" not in patch:
@@ -41,6 +42,14 @@ def main(argv: list) -> int:
     if unsafe:
         print("ABORT — legacy url == ctex.mesh (would break old clients) for:", unsafe[:10])
         return 1
+    missing_prefixes = sorted({key.split("/")[0] for key in missing})
+    if missing_prefixes:
+        if not allow_missing:
+            print("ABORT — %d manifest entries (%d prefixes) have no ctex patch: %s" % (
+                len(missing), len(missing_prefixes), ", ".join(missing_prefixes)))
+            return 1
+        print("WARNING — waiving missing ctex patches (--allow-missing) for prefixes: %s" % (
+            ", ".join(missing_prefixes)))
     with open(manifest_path, "w") as fo:
         json.dump(man, fo, indent=2, ensure_ascii=False)
         fo.write("\n")
