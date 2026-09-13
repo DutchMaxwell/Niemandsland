@@ -1022,6 +1022,46 @@ def _warn_unresolved_spell_books(profiles: dict[str, dict[str, Any]],
         )
 
 
+def _warn_unresolved_rule_names(profiles: dict[str, dict[str, Any]],
+                                system: str) -> None:
+    """The rules-side counterpart of `_warn_unresolved_spell_books`: rule
+    lookups keyed by a faction that does not exist in
+    `rules_mechanics_<system>.json` used to resolve to bare empty entries
+    with no complaint — the silence that let the faction-slug bug strip
+    24.6 % of all rule instances. Count the units per faction and warn,
+    naming each faction. A unit that carries no rule names has nothing to
+    find and stays quiet; so does a checkout whose map asset is missing,
+    exactly as `_rule_active` degrades there."""
+    if not _registry_map(system):
+        return
+    missing: dict[str, int] = {}
+    for p in profiles.values():
+        names: list[str] = []
+        for raw in list(p.get("special_rules", [])) + list(p.get("item_grants", [])):
+            n = _rule_base_name(str(raw))
+            if n and n not in names:
+                names.append(n)
+        if not names:
+            continue
+        faction = str(p.get("faction_folder", ""))
+        if any(_registry_entry(system, faction, n) for n in names):
+            continue
+        missing[faction] = missing.get(faction, 0) + 1
+    if missing:
+        total = sum(missing.values())
+        names_str = ", ".join(
+            "'%s' (%d)" % (f, n) for f, n in sorted(missing.items())
+        )
+        warnings.warn(
+            "list_to_profile: %d unit(s) carried rule names that resolved "
+            "zero rule entries in system '%s' — faction(s) %s. A rule key "
+            "that does not resolve is a slug or data bug, not an empty "
+            "rule set."
+            % (total, system, names_str),
+            UserWarning, stacklevel=3,
+        )
+
+
 #: NML-1152 step 6c — the bundled model manifest's `base_mm` specs
 #: (model_library.gd:127-134), keyed `faction/normalized unit name`
 #: (make_key :100-109). Loaded once; a missing/malformed file means no
@@ -1464,6 +1504,7 @@ def profiles_from_army_forge_json(
     _expand_auras(built)
     profiles = {u["unit_id"]: _unit_profile(u, faction, game_system) for u in built}
     _warn_unresolved_spell_books(profiles, game_system)
+    _warn_unresolved_rule_names(profiles, game_system)
     return profiles
 
 

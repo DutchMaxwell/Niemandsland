@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
@@ -725,3 +726,43 @@ def test_an_unresolvable_spell_book_is_loud_not_silent():
     is what let three corpus generations record a game without magic."""
     with pytest.warns(UserWarning, match="zero spell books"):
         profiles_from_army_forge_json(_a_caster(), "no_such_faction", player=1)
+
+
+# === loud rules resolution (rules-slug fix, second half) ========================
+#
+# The SAME faction-slug bug also keyed rule lookups into
+# `rules_mechanics_<system>.json` with a faction that does not exist there:
+# `rules_for` answered empty entries and no word, and 24.6 % of all rule
+# instances vanished from three corpus generations in silence. The rules path
+# gets the counterpart of the spell-book warning: a faction whose units carry
+# rule names and resolve NONE of them is loud; a faction whose units carry no
+# rule names has nothing to find and stays quiet.
+
+
+def _a_list_with_rule_names() -> dict:
+    return {"gameSystem": "gf", "units": [
+        _selection("grunts", "Grunts", rules=[{"name": "Not A Rule"}])]}
+
+
+def _a_list_without_rule_names() -> dict:
+    return {"gameSystem": "gf", "units": [_selection("grunts", "Grunts")]}
+
+
+def test_a_list_whose_rule_names_resolve_to_zero_entries_is_loud_not_silent():
+    """A unit whose rule names key no entry in rules_mechanics_gf.json must
+    not resolve to bare empty entries. The loader counts them and warns,
+    naming the faction — the rules-side silence of the faction-slug bug."""
+    with pytest.warns(UserWarning, match="zero rule entries"):
+        profiles_from_army_forge_json(
+            _a_list_with_rule_names(), "no_such_faction", player=1
+        )
+
+
+def test_a_faction_whose_units_carry_no_rule_names_stays_silent():
+    """Nothing to find is not did-not-find-it: a faction whose units carry no
+    rule names at all must not trip the unresolved-rules warning."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        profiles_from_army_forge_json(
+            _a_list_without_rule_names(), "no_such_faction", player=1
+        )
