@@ -280,13 +280,8 @@ pub fn marker_positions(
     table_w_in: f64,
     table_d_in: f64,
 ) -> Vec<(f64, f64)> {
-    match placement {
-        "quarter_centres" => vec![
-            (-table_w_in / 4.0, -table_d_in / 4.0),
-            (table_w_in / 4.0, -table_d_in / 4.0),
-            (-table_w_in / 4.0, table_d_in / 4.0),
-            (table_w_in / 4.0, table_d_in / 4.0),
-        ],
+    let out: Vec<(f64, f64)> = match placement {
+        "quarter_centres" => quarter_band_centres(style, table_w_in, table_d_in),
         "deploy_zone_centres" | "deploy_zone_front" => {
             let mut out = Vec::new();
             for pk in ["1", "2"] {
@@ -320,5 +315,49 @@ pub fn marker_positions(
         }
         "table_centre" => vec![(0.0, 0.0)],
         _ => Vec::new(),
+    };
+    // Audit §2.11 class-killer: the catalog may never again return a marker the
+    // book's legality gate rejects. Checked for `quarter_centres` only —
+    // `deploy_zone_front` legitimately sits ON the zone front by the book.
+    if placement == "quarter_centres" {
+        let zones = zones_of_style(style);
+        let cells = Cells::from_pairs(&[], 30);
+        for (i, &(x, z)) in out.iter().enumerate() {
+            let others: Vec<(i64, i64)> = out
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(_, &(a, b))| (a as i64, b as i64))
+                .collect();
+            assert!(
+                is_legal(x as i64, z as i64, &others, &zones, &cells),
+                "marker ({x},{z}) is illegal — audit 2.11"
+            );
+        }
     }
+    out
+}
+
+/// `quarter_centres`, RULE_FIDELITY_AUDIT_2026-09-13 §2.11. The book (GF Advanced
+/// Rules v3.5.1 p.25 "Seize Ground", p.26 "Domination", identical wording) says
+/// "Divide the NON-DEPLOYMENT ZONE AREA of the table into 4 equal quarters, and
+/// place one marker at the center of each" — the band between the zones, not the
+/// whole table. front_line's zones end at z = ±12, so the band is z in [-12, 12]
+/// and the centres are (±18, ±6); the old whole-table quarters (±18, ±12) sat
+/// exactly on each player's deployment line.
+fn quarter_band_centres(style: &Value, table_w_in: f64, table_d_in: f64) -> Vec<(f64, f64)> {
+    let (mut lo, mut hi) = (-table_d_in / 2.0, table_d_in / 2.0);
+    for (pk, from_side_1) in [("1", true), ("2", false)] {
+        let first = style.get("zones").and_then(|z| z.get(pk)).and_then(|v| v.as_array())
+            .and_then(|a| a.first()).and_then(|p| p.as_array());
+        if let Some(first) = first {
+            for p in first.iter().filter_map(|p| p.as_array()).filter(|p| p.len() >= 2) {
+                let z = p[1].as_f64().unwrap_or(0.0);
+                if from_side_1 { lo = lo.max(z); } else { hi = hi.min(z); }
+            }
+        }
+    }
+    let (depth, half_w) = (hi - lo, table_w_in / 4.0);
+    vec![(-half_w, lo + depth / 4.0), (half_w, lo + depth / 4.0),
+        (-half_w, lo + 3.0 * depth / 4.0), (half_w, lo + 3.0 * depth / 4.0)]
 }
