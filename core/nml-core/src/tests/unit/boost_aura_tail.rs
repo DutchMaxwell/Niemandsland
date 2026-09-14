@@ -595,9 +595,10 @@ use super::*;
     }
 
     /// "Scrapper Boost" (gf/jackals) — the gf entry carries `reroll_save_sixes`
-    /// alongside its un-read 5-6 extension, so the wave joins it too (the
-    /// reroll_save_low/over_in params stay read by nobody — the Boost's own
-    /// documented gap).
+    /// alongside its 5-6 extension, so the wave joins it too (the Boost's own
+    /// widened window rides its own epoch-30 named arm since the
+    /// `reroll_save_from` reader landed — see the integration test in
+    /// `tests/boost_bases_family.rs`).
     #[test]
     fn scrapper_boost_joins_through_the_coverage_wave() {
         assert_eq!(

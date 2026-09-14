@@ -11,6 +11,7 @@
 //! the inverted ladder — already ported by its family's wave, PRESENT at 5
 //! through the generic stamp, and covered there.
 
+use nml_core::acts::{EPOCH_27_TERRAIN_DEBUFF, EPOCH_30_SCRAPPER_BOOST};
 use nml_core::dice::{resolve_volley_with_tray, Shooter, Tray};
 use nml_core::state::{MoveBands, Profile, Weapon};
 use nml_core::unit::{CondAp, Ctx, ShootProfile, UnitStatic};
@@ -260,5 +261,94 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
     assert!(
         !base_shot.log.iter().any(|l| l.contains("Machine-Fog Boost")),
         "nothing fired, nothing logs"
+    );
+}
+
+/// "Scrapper Boost" (gf/jackals): the Bane family's third widened re-roll
+/// window — the entry's own `reroll_save_from: 5` + `over_in: 9`, behind the
+/// `upgrades` coupling ("If this model has Scrapper") — the same shape
+/// "Mischievous Boost" stamps through `reroll_save_low`
+/// (DEAD_PARAM_TRIAGE_2026-09-14 dead-knob row 1: `reroll_save_from` had no
+/// reader anywhere, so the bearer re-rolled fewer saves than the book
+/// gives). The volley consumes it strictly past 9": successful unmodified
+/// saves of 5-6 re-roll, and the firing names itself (rules-must-log).
+/// PRESENT at EPOCH_30_SCRAPPER_BOOST, ABSENT at the epoch immediately
+/// below the bump — pinned to the highest frozen constant present at
+/// push time (`EPOCH_27_TERRAIN_DEBUFF`); RE-POINT to the frozen epoch-29
+/// constant once the strafing leg's name lands, per the wave protocol.
+/// The base "Scrapper" carrier keeps the 6s-only window either way.
+#[test]
+fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
+    let us = build_at("gf", "jackals", &["Scrapper", "Scrapper Boost"], EPOCH_30_SCRAPPER_BOOST);
+    let p = [us.shoot[0].clone()];
+    let att = Ctx { quality: 4, ..Default::default() };
+    let def = Ctx { defense: 5, models: 1, tough: 1, ..Default::default() };
+    let strikers = [Shooter { profiles: &p, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
+    // The mischievous test's seed: 30 hits at 4+, then 3 fives and 6 sixes
+    // among the saves.
+    let mut t30 = Tray::seeded(27);
+    let on = resolve_volley_with_tray(
+        &strikers, &def, "Target", 12.0, 12.0, true, false, false, false, &mut t30,
+    );
+    let saves = &on.rolls[1];
+    assert_eq!(saves.kind, "defense", "rolls[1] is the save batch");
+    let fives = saves.faces.iter().filter(|&&f| f == 5).count();
+    let sixes = saves.faces.iter().filter(|&&f| f == 6).count();
+    assert!(fives > 0 && sixes > 0, "this seed must land both faces or the test is blind");
+    let rerolls = &on.rolls[2];
+    assert_eq!(
+        rerolls.count as usize,
+        fives + sixes,
+        "epoch 30, 12\": every successful 5-6 re-rolls (the widened window, RED before the fix)"
+    );
+    assert!(
+        on.log.iter().any(|l| l.contains("Scrapper Boost")),
+        "rules-must-log: the widened window names itself (RED before the fix)"
+    );
+
+    // Exactly 9" is not "over": the base 6s-only window.
+    let mut t9 = Tray::seeded(27);
+    let at9 = resolve_volley_with_tray(
+        &strikers, &def, "Target", 9.0, 9.0, true, false, false, false, &mut t9,
+    );
+    let sixes9 = at9.rolls[1].faces.iter().filter(|&&f| f == 6).count() as i64;
+    assert_eq!(at9.rolls[2].count, sixes9, "exactly 9\" stays shut");
+
+    // The old leg — the epoch immediately below the bump: the record predates
+    // the wave, the base 6s-only window, byte-exact ("Scrapper" itself baned
+    // since the bane wave; only the WIDENED window is epoch-30 born).
+    let us_old = build_at("gf", "jackals", &["Scrapper", "Scrapper Boost"], EPOCH_27_TERRAIN_DEBUFF);
+    let p_old = [us_old.shoot[0].clone()];
+    let strikers_old = [Shooter { profiles: &p_old, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
+    let mut t_old = Tray::seeded(27);
+    let off = resolve_volley_with_tray(
+        &strikers_old, &def, "Target", 12.0, 12.0, true, false, false, false, &mut t_old,
+    );
+    assert_eq!(
+        off.rolls[2].count as usize,
+        sixes,
+        "below the bump: the base 6s-only window, byte-exact"
+    );
+    assert!(
+        !off.log.iter().any(|l| l.contains("Scrapper Boost")),
+        "below the bump: the widened window is not born yet"
+    );
+
+    // Without the Boost the base carrier keeps the 6s-only window.
+    let base = build_at("gf", "jackals", &["Scrapper"], EPOCH_30_SCRAPPER_BOOST);
+    let pb = [base.shoot[0].clone()];
+    let strikers_b = [Shooter { profiles: &pb, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
+    let mut tb = Tray::seeded(27);
+    let without = resolve_volley_with_tray(
+        &strikers_b, &def, "Target", 12.0, 12.0, true, false, false, false, &mut tb,
+    );
+    assert_eq!(
+        without.rolls[2].count as usize,
+        sixes,
+        "no Boost: only the 6s re-roll, the base window"
+    );
+    assert!(
+        !without.log.iter().any(|l| l.contains("Scrapper Boost")),
+        "no widened window fired, nothing logs"
     );
 }
