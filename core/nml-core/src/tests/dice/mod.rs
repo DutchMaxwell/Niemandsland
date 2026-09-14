@@ -390,7 +390,8 @@
 // family PRs in the same wave never append to the same region. A new
 // family adds ONE line to this ALPHABETICAL list plus its own file; the
 // fixtures every family shares stay here, in the module root.
-    mod entrenched;
+    mod clan_warrior;
+mod entrenched;
     mod fortified;
     mod gate_only_rows;
     mod growth_markers;

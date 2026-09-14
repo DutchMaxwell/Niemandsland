@@ -1007,7 +1007,7 @@ pub fn deploy_place_id(
         // push below — the frozen constant, never CURRENT_RULES_EPOCH (#928).
         let v = if rule_on(rules_epoch, EPOCH_16_FREE_PLACEMENT) {
             vanguard_free_place(
-                spot, occupied, objectives, &blocked, radius, footprint, base_r, walls, push_m,
+                spot, occupied, objectives, &blocked, radius, footprint, base_r, walls, push_m * 0.5,
                 board,
             )
         } else {
