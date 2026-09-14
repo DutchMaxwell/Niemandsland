@@ -169,6 +169,21 @@ use super::*;
         );
     }
 
+    /// The third leg: a table record BELOW 19 is unchanged either way — both
+    /// gates (the fold's epoch gate and the pre-fold arm) sit above its
+    /// stamp, the grant stays evidence-only and the bands stay printed.
+    #[test]
+    fn a_table_recorded_fast_below_epoch_19_stays_printed() {
+        let printed = 6.0;
+        let (st, statics) = granted_line("ogres", 18, &["Fast"]);
+        let (landed, _) = run_move_prefolded(&st, &statics, &move_of(ADVANCE, "a", 20.0), 18);
+        let x = landed.positions[0][0][0];
+        assert!(
+            (x - printed * IN2M).abs() < 1e-6,
+            "an epoch-18 table record replays at the printed band: {x}"
+        );
+    }
+
     /// The epoch twin: a record stamped 18 (every corpus recorded up to
     /// today's live epoch, #932's window included) keeps replaying the
     /// evidence-only read — printed band, grant unchanged.

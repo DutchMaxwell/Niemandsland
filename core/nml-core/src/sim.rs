@@ -4607,6 +4607,12 @@ fn live_move_bonus_in(state: &State, statics: &[UnitStatic], i: usize, rules_epo
         &statics[state.roster.profile[i]].name, "move", |r| r.move_mod) as f64
 }
 
+thread_local! {
+    /// The once-per-game latch of the `bands_prefolded` trace line: printed
+    /// on the FIRST move act the replay-aware arm turns off, never again.
+    static PREFOLD_NOTE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// EPOCH_19_MOVE_GRANTS_FOLD — the SOLO move-grant family folded for REAL.
 /// The census read (`ctx_live`'s `solo_move_grants` loop) stays evidence-only
 /// below the gate; from 19 a live grant of Slow, Fast, Swift, Rapid Advance
@@ -4623,10 +4629,28 @@ fn live_move_bonus_in(state: &State, statics: &[UnitStatic], i: usize, rules_epo
 /// Slow, and so does a PRINTED Swift. `kind` picks the band the way Speed
 /// Feat does: `advance_mod` on an ADVANCE, `rush_mod` on a RUSH/CHARGE —
 /// the charge inherits the rush band (movement_range_controller.gd:170-187).
+///
+/// The REPLAY-AWARE arm: `bands_prefolded` marks a header that carried
+/// `"books"` — a TABLE recording (`act_recorder.gd:266-268`; no writer in
+/// `core/nml-core/src` emits the key) — whose recorded `bands` already fold
+/// every grant (`battle_sim.gd:1707 -> move_bands_for_props`), so this
+/// function returns 0.0 and names the arm once per game on stderr; a fresh
+/// core sim has no `books`, the flag is false, the delta folds as before.
+/// The trace line fires the first time the arm does.
 fn solo_move_grant_delta_in(
     statics: &[UnitStatic], state: &State, si: usize, kind: i64, rules_epoch: u32,
+    bands_prefolded: bool,
 ) -> f64 {
     if !rule_on(rules_epoch, EPOCH_19_MOVE_GRANTS_FOLD) {
+        return 0.0;
+    }
+    if bands_prefolded {
+        // One trace line the first time the arm fires for this game — the
+        // fold is off, the recorded bands carry the grants.
+        if !PREFOLD_NOTE.with(std::cell::Cell::get) {
+            PREFOLD_NOTE.set(true);
+            trace_rule("move-bands", "prefold", "recorded bands carry the grants, live delta off");
+        }
         return 0.0;
     }
     let us = &statics[state.roster.profile[si]];
@@ -5032,7 +5056,9 @@ fn resolve_with(
     // EPOCH_19 — the granted SOLO move family, folded for real at the spend
     // (see `solo_move_grant_delta_in`): the same live read the census loop
     // below only logs below the gate.
-    let grant_in = solo_move_grant_delta_in(statics, &next, si, kind, seams.rules_epoch);
+    let grant_in = solo_move_grant_delta_in(
+        statics, &next, si, kind, seams.rules_epoch, seams.bands_prefolded,
+    );
     if feat_in != 0.0 {
         next.feats_used[si].push(
             statics[pi_s]
