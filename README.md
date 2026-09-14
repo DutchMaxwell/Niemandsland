@@ -235,3 +235,10 @@ MIT — see [`LICENSE`](LICENSE). UI fonts (Inter, Orbitron, Source Code Pro) un
 and [Phosphor](https://phosphoricons.com) icons (MIT); dice are our own MIT implementation.
 Full third-party attributions in
 [`THIRD_PARTY.md`](THIRD_PARTY.md).
+
+## Not affiliated / responsible
+
+Niemandsland is a free, non-profit, open-source fan project (MIT code, CC-BY-SA generated
+assets). It is not affiliated with, endorsed by, or sponsored by OnePageRules. It bundles no OPR
+rules text, files, art or marks; the rules are OPR's, available free at onepagerules.com, and army
+lists come from OPR's Army Forge. Responsible: Andreas Kesberg, privacy@niemandsland.xyz.

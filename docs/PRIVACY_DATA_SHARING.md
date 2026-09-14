@@ -30,6 +30,17 @@ Player, army and unit display names; chat; battle-log prose; room codes; multipl
 - Exact purposes and lawful basis for evaluation and separately for training.
 - Raw/quarantine retention and the deletion/tombstoning policy for derived fixtures and future corpora.
 - Withdrawal and deletion-request route, privacy-notice/imprint URL, and supervisory-authority route.
-- A reviewed decision, with legal advice, about records already used in trained or published models.
+- A reviewed decision, with legal advice, about records already used in trained or published models — the maintainer's decision (2026-09-13): no legal review, because no user record has ever been uploaded (no send path exists).
 
-Until those facts, a collector, and a separately reviewed per-game veto milestone all exist, the product remains local-only and sends nothing.
+The maintainer published these facts on 2026-09-14; the in-game privacy screen shows the same facts in English and German:
+
+- **Destination:** a storage bucket operated by the maintainer of Niemandsland (Cloudflare R2, object storage). Records are uploaded only after you switch sharing on, and only for the games you choose.
+- **Controller (the person responsible under the GDPR):** Andreas Kesberg, privacy@niemandsland.xyz.
+- **Processor and hosting:** Cloudflare, Inc. (R2 object storage) for shared records; Fly.io, Inc., region Frankfurt (fra), for the multiplayer relay. The relay processes your IP address and a per-install reconnect token to route your game; neither is written to a log, and the retention bound is 30 days.
+- **Recipients:** nobody but the maintainer. Records are not sold, not shared with third parties, and never used for advertising.
+- **Retention:** shared records are kept until you request deletion with your deletion code, or until the maintainer retires the evaluation corpus; relay connection data at most 30 days.
+- **Withdrawal:** available on the in-game privacy screen at any time and stops future sharing immediately. Deletion request: send your deletion code (shown on that screen) to privacy@niemandsland.xyz; every record carrying it is deleted.
+- **Contact and privacy notice:** privacy@niemandsland.xyz; the full notice is this document. **Supervisory authority:** the data-protection authority of the German federal state of the controller (see bfdi.bund.de for the list).
+- **Lawful basis:** consent (Art. 6(1)(a) GDPR), separately for evaluation and for training, revocable here.
+
+Until a collector and a separately reviewed per-game veto milestone exist, the product remains local-only and sends nothing.
