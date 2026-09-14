@@ -1,5 +1,5 @@
 use super::*;
-use crate::acts::EPOCH_38_WATCHBORN_LATCH;
+use crate::acts::EPOCH_39_MORALE_RATING;
 use crate::rng::GodotRng;
 
     // ---------------- Steadfast round-start recovery (sweep H, epoch 40) ---
@@ -29,7 +29,7 @@ use crate::rng::GodotRng;
     //
     // The NEW leg (from `EPOCH_40_STEADFAST_ROLL`): the seeded die decides.
     // The OLD leg (at the frozen epoch immediately below the bump —
-    // `EPOCH_38_WATCHBORN_LATCH` after the 15:3x rebase, re-pointed by its frozen
+    // `EPOCH_39_MORALE_RATING` after the 15:3x rebase, re-pointed by its frozen
     // constant at rebase): the wave-3 free clear every recorded corpus
     // replays, no die at all.
 
@@ -95,7 +95,7 @@ use crate::rng::GodotRng;
     /// every recorded corpus replays. Green before and after the port.
     #[test]
     fn the_pregate_epoch_37_leg_clears_the_shaken_steadfast_unit_for_free() {
-        let (mut st, statics, i) = shaken_steadfast(EPOCH_38_WATCHBORN_LATCH);
+        let (mut st, statics, i) = shaken_steadfast(EPOCH_39_MORALE_RATING);
         round_start_refresh(&statics, &mut st, i);
         assert!(!st.shaken[i], "below the gate the free clear stands");
     }
