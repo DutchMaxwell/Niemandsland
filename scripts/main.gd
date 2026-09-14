@@ -7063,7 +7063,8 @@ func _solo_conditional_ap(profile: Dictionary, striker: GameUnit, defender: Game
 
 ## The NAMED contributions of the conditional-AP family against THIS defender — [{name, bonus}] with
 ## only the rules whose condition actually fired. One truth for the sum AND the transparency log
-## (maintainer live-test lesson: a silent AP jump reads as a bug; see the Fortified line).
+## (maintainer live-test lesson: a silent AP jump reads as a bug; see the Fortified line). The
+## "always" family (Havocbound Boost) pays unconditionally and replaces its base's conditional legs.
 func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender: GameUnit, charging: bool,
 		dist_in: float = -1.0, melee: bool = false) -> Array:
 	if striker == null or defender == null:
@@ -7074,6 +7075,20 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 	var d_defense := int(defender.unit_properties.get("defense", 4))
 	var parts: Array = []
 	var seen := {}
+	# The "always" family (Havocbound Boost, GF/AoF 3.5.3: "always gets AP(+1) ... instead of only
+	# when ..."): the table twin of the sim's epoch-6 named arm (core/nml-core/src/unit.rs:5444-5515;
+	# the "always" fold combat.rs:402-407). The Boost REPLACES its base's two conditional legs --
+	# collect the replaced base names once off the striker's own rules, presence-based exactly like
+	# the sim's havoc_boosted (unit.rs:5452-5456), so the walk knows before it reaches either name.
+	var replaced := {}
+	for r in striker.get_special_rules():
+		var rb := RulesRegistry.base_rule_name(str((r as Dictionary).get("name", "")) if r is Dictionary else str(r))
+		if rb.is_empty() or replaced.has(rb):
+			continue
+		var rparams: Dictionary = RulesRegistry.lookup(system, faction, rb).get("params", {})
+		var upgrades := str(rparams.get("upgrades", ""))
+		if bool(rparams.get("always", false)) and not upgrades.is_empty():
+			replaced[upgrades] = true
 	for r in profile.get("rules", []):
 		var base := RulesRegistry.base_rule_name(str(r))
 		seen[base] = true
@@ -7092,6 +7107,16 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			continue
 		seen[base] = true
 		var params: Dictionary = RulesRegistry.lookup(system, faction, base).get("params", {})
+		# The always leg ("Havocbound Boost"): unconditional +ap_bonus at ANY distance, charging or
+		# not, melee or not -- gated on the printed "If this model has <upgrades>" coupling the sim
+		# checks with has_exact_rule (unit.rs:5499-5510). The trace names the rule (rules-must-log).
+		if bool(params.get("always", false)):
+			var ap_bonus := int(params.get("ap_bonus", 0))
+			if ap_bonus > 0 and _unit_carries_base_rule(striker, str(params.get("upgrades", ""))):
+				parts.append({"name": base, "bonus": ap_bonus})
+			continue
+		if replaced.has(base):
+			continue   # its conditional legs are replaced -- the always leg above pays instead
 		if params.has("condition") or params.has("gate"):
 			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee)
 			if b > 0:
@@ -7110,6 +7135,18 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			if gbonus > 0:
 				parts.append({"name": gname, "bonus": gbonus})
 	return parts
+
+
+## Whether the unit carries `rule` as its BASE name -- the table twin of the sim's has_exact_rule
+## (core/nml-core/src/unit.rs:1329-1331): the printed "If this model has <rule>" coupling.
+func _unit_carries_base_rule(unit: GameUnit, rule: String) -> bool:
+	if unit == null or rule.is_empty():
+		return false
+	for r in unit.get_special_rules():
+		var rn := str((r as Dictionary).get("name", "")) if r is Dictionary else str(r)
+		if RulesRegistry.base_rule_name(rn) == rule:
+			return true
+	return false
 
 
 ## The on-6-to-hit AP bonus a weapon grants (the hits that roll an unmodified 6 save at a worse AP).
