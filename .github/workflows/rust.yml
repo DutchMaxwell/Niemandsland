@@ -102,8 +102,14 @@ jobs:
       - name: Run nml-core-py pytest suite
         run: PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900
 
-      - name: tools pytest (wiring proof — RED, real invocation follows)
-        run: python3 -m pytest tools/does_not_exist.py -q --timeout 600
+      - name: tools pytest
+        # The tools/ suite has no CI home otherwise: the merge-gate checker
+        (#934/#938), the arena re-scorer (#905) and the ctex manifest merger
+        # were tested only when a human remembered. pytest/pytest-timeout are
+        # installed by the "Install Python build/test deps" step above.
+        # Known-broken tests are skipped by marker in tools/conftest.py with
+        # the reason in the skip string.
+        run: python3 -m pytest tools -q --timeout 600
 
       - name: needs_lists Python subset (only if the private fixtures are staged)
         # The suite above silently @needs_lists-skips 62 tests whenever the terrain
