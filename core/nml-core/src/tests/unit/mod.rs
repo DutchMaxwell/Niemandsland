@@ -975,5 +975,6 @@ mod boost_aura_tail;
 mod boostbases2;
 mod condap;
 mod counter_models;
+mod disintegrate_regen;
 mod renames;
 mod takedown_strike;
