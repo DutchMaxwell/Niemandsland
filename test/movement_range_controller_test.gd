@@ -398,6 +398,90 @@ func test_move_bands_royal_legion_charge_bonus_only() -> void:
 	assert_int(b["charge"]).is_equal(14)
 
 
+# === Grounded Speed (aof volcanic_dwarves; registry `Fast | advance_mod=2, rush_mod=4,
+# terrain_within_in=1`): the CONDITIONAL band. The core answers it per activation — the
+# majority of the unit's models within the entry's own 1" of terrain, over the twin query
+# (core terrain::base_in_terrain <-> TerrainRules.base_in_terrain, sim.rs
+# grounded_speed_bonus_in). The table's band pass must answer the SAME verdict, from the
+# activation context riding in props ("activation_board" — the spell_move_mod precedent:
+# the pure pass needs no new plumbing). In the open: the printed bands only. ===
+
+func _grounded_props() -> Dictionary:
+	return {"game_system": "aof", "faction_folder": "volcanic_dwarves",
+		"special_rules": ["Grounded Speed"]}
+
+func _board(positions: Array, sample: Callable) -> Dictionary:
+	return {"positions": positions, "terrain_at": sample}
+
+func test_move_bands_grounded_speed_in_the_open_stays_printed() -> void:
+	# A ruin zone beyond the base ring's reach (widened base + 1" proximity tops out at
+	# x = 0.016 + 0.0254 = 0.0414 m): the open — no bonus.
+	var open_sampler := func(p: Vector3) -> int: return TerrainRules.TerrainType.RUINS if p.x > 1.0 else TerrainRules.TerrainType.NONE
+	var props := _grounded_props()
+	props["activation_board"] = _board([Vector3(0.0, 0.0, 0.0)], open_sampler)
+	var b := _controller().move_bands_for_props(props)
+	assert_int(b["advance"]) \
+		.override_failure_message("Grounded Speed moved the advance band in the open (the flat registry pass)") \
+		.is_equal(6)
+	assert_int(b["rush"]) \
+		.override_failure_message("Grounded Speed moved the rush band in the open (the flat registry pass)") \
+		.is_equal(12)
+	assert_int(b["charge"]).is_equal(12)
+
+
+func test_move_bands_grounded_speed_within_1in_of_terrain_gets_bonus() -> void:
+	# The base EDGE plus the rule's own 1" proximity reaches the ruin cell (ring x = 0.0414
+	# >= 0.04) while the bare base (0.016) would not — the widened ring is what triggers.
+	var ruin_sampler := func(p: Vector3) -> int: return TerrainRules.TerrainType.RUINS if p.x >= 0.04 else TerrainRules.TerrainType.NONE
+	var props := _grounded_props()
+	props["activation_board"] = _board([Vector3(0.0, 0.0, 0.0)], ruin_sampler)
+	var b := _controller().move_bands_for_props(props)
+	assert_int(b["advance"]) \
+		.override_failure_message("Grounded Speed within 1\" of terrain must add +2\"") \
+		.is_equal(8)
+	assert_int(b["rush"]).is_equal(16)
+	assert_int(b["charge"]).is_equal(16)
+
+
+func test_move_bands_grounded_speed_majority_of_models_decides() -> void:
+	# Core parity: the MAJORITY of the unit's models within terrain flips the band — 1 of 2
+	# does not (sim.rs: near * 2 <= models -> no bonus).
+	var ruin_sampler := func(p: Vector3) -> int: return TerrainRules.TerrainType.RUINS if p.x >= 0.08 else TerrainRules.TerrainType.NONE
+	var props := _grounded_props()
+	props["activation_board"] = _board(
+		[Vector3(0.0, 0.0, 0.0), Vector3(0.12, 0.0, 0.0)], ruin_sampler)
+	var b := _controller().move_bands_for_props(props)
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(12)
+
+
+func test_move_bands_grounded_speed_absent_board_reads_false() -> void:
+	# No board context (headless callers, the recorder): the condition honestly fails —
+	# printed bands, exactly the core's absent-board semantics.
+	var b := _controller().move_bands_for_props(_grounded_props())
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(12)
+
+
+func test_move_bands_grounded_speed_band_trace_names_rule_and_verdict() -> void:
+	# Rules-must-log: the band trace names the rule and the terrain verdict — the pass
+	# writes it into the activation_board (dicts are by-reference), so any caller can log it.
+	var ruin_sampler := func(p: Vector3) -> int: return TerrainRules.TerrainType.RUINS if p.x >= 0.04 else TerrainRules.TerrainType.NONE
+	var near := _grounded_props()
+	near["activation_board"] = _board([Vector3(0.0, 0.0, 0.0)], ruin_sampler)
+	_controller().move_bands_for_props(near)
+	assert_str(near["activation_board"].get("band_trace", "")) \
+		.override_failure_message("the band trace must name the rule and the terrain verdict") \
+		.is_equal("Grounded Speed: within 1\" of terrain -> +2\"/+4\"")
+	var open_sampler := func(p: Vector3) -> int: return TerrainRules.TerrainType.RUINS if p.x > 1.0 else TerrainRules.TerrainType.NONE
+	var open_props := _grounded_props()
+	open_props["activation_board"] = _board([Vector3(0.0, 0.0, 0.0)], open_sampler)
+	_controller().move_bands_for_props(open_props)
+	assert_str(open_props["activation_board"].get("band_trace", "")) \
+		.override_failure_message("the open's no-bonus verdict must be traced too") \
+		.is_equal("Grounded Speed: in the open -> no bonus")
+
+
 # === B10 (test game 2): movement-mod audit — partial parses must not eat a band ===
 func test_move_bands_fast_partial_description_fills_missing_band() -> void:
 	# A Fast description whose rush half is unparseable used to mark the WHOLE rule counted and
