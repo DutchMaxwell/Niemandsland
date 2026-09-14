@@ -26,6 +26,7 @@ use crate::acts::{
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
     EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
     EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS,
+    EPOCH_32_STRAFING,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -718,17 +719,20 @@ fn surprise_strike(
     }
 }
 
-pub(crate) fn tray_crossing_attack(
-    statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
-    tray: &mut Tray, shot: &mut ShootResult,
-) {
-    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
-        return;
-    }
+/// The move-through seam's shared pick — the shape `tray_crossing_attack` and
+/// `tray_strafing` both need: the ACTING unit's executed trails (one straight
+/// leg per alive model, `state` -> `next`; `last_move_paths` is the activated
+/// unit's own move, a leg that moves nothing crosses nothing) matched against
+/// alive, un-reserved, UNATTACHED enemies — `trails_cross_unit_bases`'
+/// segment-vs-disc test (solo_controller.gd:8844-8863) in the WORLD-METRE frame
+/// the state already carries (radii are metres too) — then the table's own
+/// pick: the crossed unit NEAREST the acting unit's centre (main.gd:17115-17118
+/// for the Crossing Attack, main.gd:3000-3004 for Strafing), first index on a
+/// tie. `None` = nothing crossed (or nothing moved).
+fn crossed_enemy_of(
+    statics: &[UnitStatic], state: &State, next: &State, si: usize, seams: Seams,
+) -> Option<(usize, String)> {
     let pid = next.player[si];
-    // The executed trails: one straight leg per alive model of the ACTING
-    // unit (`last_move_paths` is the activated unit's own move); a leg that
-    // moves nothing crosses nothing.
     let legs: Vec<([f64; 2], [f64; 2])> = (0..next.positions[si].len())
         .filter_map(|m| {
             let a = state.positions.get(si)?.get(m)?;
@@ -737,7 +741,37 @@ pub(crate) fn tray_crossing_attack(
         })
         .filter(|(a, b)| (b[0] - a[0]).hypot(b[1] - a[1]) > f64::EPSILON)
         .collect();
-    if legs.is_empty() {
+    let crosses = |ti: usize| -> bool {
+        (0..next.positions[ti].len()).any(|m| {
+            if next.wounds[ti].get(m).map(|&w| w <= 0).unwrap_or(false) { return false; }
+            let c = &next.positions[ti][m];
+            let r = next.radii[ti].get(m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+            legs.iter().any(|&(a, b)| {
+                let seg = [b[0] - a[0], b[1] - a[1]];
+                let t = (((c[0] - a[0]) * seg[0] + (c[2] - a[1]) * seg[1])
+                    / (seg[0] * seg[0] + seg[1] * seg[1])).clamp(0.0, 1.0);
+                let (dx, dy) = (a[0] + seg[0] * t - c[0], a[1] + seg[1] * t - c[2]);
+                dx * dx + dy * dy <= r * r
+            })
+        })
+    };
+    let crossed: Vec<usize> = (0..next.units())
+        .filter(|&ti| {
+            next.player[ti] != pid && next.alive[ti] > 0 && !next.dormant[ti]
+                && !(seams.hero_attach && next.attached_to[ti].is_some()) && crosses(ti)
+        })
+        .collect();
+    let centre = geom::centre(&next.positions[si]);
+    let dist = |ti: usize| geom::length(geom::sub(geom::centre(&next.positions[ti]), centre));
+    let target = crossed.iter().copied().min_by(|&x, &y| dist(x).total_cmp(&dist(y)))?;
+    Some((target, statics[next.roster.profile[target]].name.clone()))
+}
+
+pub(crate) fn tray_crossing_attack(
+    statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
         return;
     }
     let mut bearers: Vec<usize> = vec![si];
@@ -749,59 +783,13 @@ pub(crate) fn tray_crossing_attack(
             continue;
         }
         let Some(spec) = statics[next.roster.profile[b]].crossing_attack.clone() else { continue };
-        // Alive, un-reserved, UNATTACHED enemies whose bases a trail touch,
-        // then the table's own pick: the crossed unit NEAREST the acting
-        // unit's centre (main.gd:17115-17118), first-index on a tie. The
-        // immutable `next` reads all end inside this block, before
-        // `land_wounds` borrows it mutably below.
-        let pick = {
-            // `trails_cross_unit_bases`' segment-vs-disc test, in the
-            // WORLD-METRE frame the state already carries (radii are metres
-            // too). Defined INSIDE the pick block: its `next` borrow must end
-            // before `land_wounds` borrows `next` mutably below.
-        let crosses = |ti: usize| -> bool {
-            (0..next.positions[ti].len()).any(|m| {
-                if next.wounds[ti].get(m).map(|&w| w <= 0).unwrap_or(false) {
-                    return false;
-                }
-                let c = &next.positions[ti][m];
-                let r = next.radii[ti].get(m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
-                legs.iter().any(|&(a, b)| {
-                    let seg = [b[0] - a[0], b[1] - a[1]];
-                    let l2 = seg[0] * seg[0] + seg[1] * seg[1];
-                    let t = if l2 < 1e-9 { 0.0 } else {
-                        (((c[0] - a[0]) * seg[0] + (c[2] - a[1]) * seg[1]) / l2).clamp(0.0, 1.0)
-                    };
-                    let dx = a[0] + seg[0] * t - c[0];
-                    let dy = a[1] + seg[1] * t - c[2];
-                    dx * dx + dy * dy <= r * r
-                })
-            })
+        let owner = statics[next.roster.profile[b]].name.clone();
+        // Alive, un-reserved, UNATTACHED enemies whose bases an executed trail
+        // touches, then the table's own pick — the shared
+        // `crossed_enemy_of` read above (main.gd:17115-17118).
+        let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, seams) else {
+            continue;
         };
-
-            let crossed: Vec<usize> = (0..next.units())
-                .filter(|&ti| {
-                    next.player[ti] != pid && next.alive[ti] > 0 && !next.dormant[ti]
-                        && !(seams.hero_attach && next.attached_to[ti].is_some())
-                        && crosses(ti)
-                })
-                .collect();
-            if crossed.is_empty() {
-                continue;
-            }
-            let centre = geom::centre(&next.positions[si]);
-            let dist =
-                |ti: usize| geom::length(geom::sub(geom::centre(&next.positions[ti]), centre));
-            let target = crossed
-                .iter()
-                .copied()
-                .min_by(|&x, &y| dist(x).total_cmp(&dist(y)))
-                .expect("non-empty");
-            let tname = statics[next.roster.profile[target]].name.clone();
-            let owner = statics[next.roster.profile[b]].name.clone();
-            (target, tname, owner)
-        };
-        let (target, tname, owner) = pick;
         let n = spec.dice.max(1) as usize;
         let faces = tray.roll(n);
         shot.rolls.push(crate::dice::Roll {
@@ -815,6 +803,120 @@ pub(crate) fn tray_crossing_attack(
         if wounds > 0 {
             land_wounds(next, target, wounds);
         }
+    }
+}
+
+/// NML-002 STRAFING (14.09., sweep row `Strafing`, TABLE-ONLY): "Once per
+/// activation, when this model moves through enemy units, pick one of them and
+/// attack it with this weapon as if it was shooting. This weapon may only be
+/// used in this way." The table resolves it at main.gd:1092-1096
+/// (`_solo_apply_strafing` main.gd:2964-3007), AFTER Teleport and BEFORE the
+/// Crossing Attack in the pre-attack slot order; the registry carries
+/// `Strafing {move_through_attack: true, weapon_only: true}`. The core only
+/// ever stamped the flag (unit.rs:1130) and marked the fold (dice.rs:945-946)
+/// — no move-through seam existed, so a strafing aircraft flew past in silence.
+/// The port mirrors the table beat by beat:
+///   * TRIGGER — the EXECUTED move's trails (`last_move_paths`): one straight
+///     leg per alive model of the acting unit, `state` -> `next`, exactly
+///     `tray_crossing_attack`'s legs; a leg that moves nothing crosses nothing
+///     (the table's own empty-path early-out, main.gd:2965).
+///   * CROSSING TEST — `SoloController.trails_cross_unit_bases`
+///     (solo_controller.gd:8844-8863): segment-vs-disc per ALIVE enemy model,
+///     the same test `tray_crossing_attack` mirrors, in the state's
+///     world-metre frame.
+///   * PICK — the crossed enemy NEAREST the acting unit's centre
+///     (main.gd:3000-3004), first index on a tie.
+///   * ATTACK — ONE shooting exchange with ONLY the Strafing profiles
+///     (`UnitStatic::strafe_shoot`, the unit + its joined heroes at their own
+///     Quality/alive scaling), through the shared volley resolver
+///     `resolve_volley_leg` — the same fold the normal volley runs, the same
+///     tail (spent Limited marks, absorb, land, Deadly's per-model leg, the
+///     post-volley morale die). `moved_this_round = true`: the table passes
+///     `moved` (main.gd:3007). Once per activation by construction — the slot
+///     runs once per resolve. `weapon_only` needs no seam of its own: the
+///     import's Strafing filter (unit.rs::profiles_in_range) already keeps the
+///     weapon out of every normal volley.
+///   * REPLAY — io.rs's act record carries no strafe field of its own (the
+///     act's `shoot` key is the planner's pick); the strafe is DERIVED here at
+///     the table's own slot, so a `dice="table"` replay consumes the same tray
+///     faces at the same point of the stream — the recorded outcome is
+///     honoured by the seam itself. Gate: the FROZEN `EPOCH_32_STRAFING`.
+pub(crate) fn tray_strafing(
+    statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
+    tray: &mut Tray, shot: &mut ShootResult,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_32_STRAFING) || next.alive[si] <= 0 { return; }
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach { bearers.extend(state.attached[si].iter().copied()); }
+    // The chain's carriers (main.gd:2967-2985): the unit + its joined heroes,
+    // each firing its OWN Strafing profiles at its own Quality. No carrier, no
+    // strafe — the table's `shots.is_empty()` early-out (main.gd:2986-2987).
+    if !bearers.iter().any(|&b| next.alive[b] > 0
+        && !statics[next.roster.profile[b]].strafe_shoot.is_empty()) { return; }
+    // The crossing test and the table's pick — the shared `crossed_enemy_of`
+    // read (the table's `trails_cross_unit_bases` test, main.gd:3000-3004).
+    let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, seams) else { return; };
+    // Rules-must-log — ONE line per strafe, the table's own log line
+    // (main.gd:3005-3006).
+    shot.log.push(format!("Strafing: {} passes over {tname} — attacks it as if shooting (once per activation)",
+        statics[next.roster.profile[si]].name));
+    // ONE shooting exchange, ONLY the Strafing profiles, through the shared
+    // volley resolver — main.gd:3007's `_solo_resolve_ai_volley(unit, target,
+    // shots, true)`: one centre-to-centre distance (main.gd:3133), the
+    // defender's live context, the members at their own Quality.
+    let d = geom::centre_dist_in(&next.positions[si], &next.positions[target]);
+    let ut = &statics[next.roster.profile[target]];
+    let def = ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch);
+    let (alive_before, wounds_before) = (next.alive[target], wounds_left(next, target));
+    // Per member (host first, then each alive attached hero): the Strafing
+    // profiles in range, survivor-scaled — `profiles_of`'s shape over
+    // `strafe_shoot`.
+    let parts: Vec<(usize, Vec<usize>, Vec<i64>, Ctx)> = bearers.iter().filter_map(|&b| {
+        if next.alive[b] <= 0 { return None; }
+        let um = &statics[next.roster.profile[b]];
+        // Per member (host first, then each alive attached hero): the Strafing
+        // profiles in range, survivor-scaled — `profiles_of`'s shape over
+        // `strafe_shoot`.
+        let (keep, attacks): (Vec<usize>, Vec<i64>) = um.strafe_shoot.iter().enumerate()
+            .filter(|(_, p)| (p.range as f64) >= d)
+            .map(|(i, p)| (i, effective_attacks(p.attacks, next.alive[b], um.model_count)))
+            .unzip();
+        if keep.is_empty() { return None; }
+        // The table passes `moved=true` for the strafe volley (main.gd:3007) —
+        // the Indirect moved-penalty fold reads it.
+        let mut att = ctx_live_vs(ctx_of(um, next, b), statics, next, b, target, false, seams.rules_epoch);
+        att.moved_this_round = true;
+        Some((b, keep, attacks, att))
+    }).collect();
+    let shooters: Vec<crate::dice::Shooter> = parts.iter()
+        .map(|(b, keep, attacks, att)| crate::dice::Shooter {
+            profiles: &statics[next.roster.profile[*b]].strafe_shoot, keep, attacks, att,
+            owner: &statics[next.roster.profile[*b]].name,
+        }).collect();
+    // The SAME gate pack the normal volley's `resolve_volley_leg` call passes
+    // (sim.rs's shoot branch) — the strafe is "as if shooting".
+    let r = crate::dice::resolve_volley_leg(
+        &shooters, &def, &ut.name, d, d,
+        seams.cond_ap_dice || rule_on(seams.rules_epoch, 1),
+        rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES),
+        rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES),
+        shred_boost_active(seams.rules_epoch),
+        rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
+        tray,
+    );
+    // The volley tail, the shoot branch's own shape: spent Limited marks,
+    // absorb, land, Deadly's per-model leg, the post-volley morale die — so
+    // the tray stream stays the table's own order.
+    for (b, keep, _, _) in &parts {
+        mark_spent_limited(&statics[next.roster.profile[*b]].strafe_shoot, keep, &mut next.limited_used[*b]);
+    }
+    land_wounds(next, target, shot.absorb(r));
+    for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
+        let dl = land_deadly_wounds(next, target, post, dx);
+        shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
+    }
+    if shooting_morale_trigger(next, ut, target, alive_before, wounds_before) {
+        tray_morale(next, ut, target, false, seams.rules_epoch, tray, shot);
     }
 }
 
@@ -5551,6 +5653,14 @@ fn resolve_with(
 
     // --- TELEPORT / ETHEREAL (main.gd:1075, right after Surprise; #816 PR 2)
     teleport_beat(statics, &mut next, si, action, seams, dice.as_mut(), cover);
+
+    // --- STRAFING (main.gd:1096, right after Teleport and BEFORE the Crossing
+    // Attack in the table's own pre-attack slot order), every action kind with
+    // a tray — see `tray_strafing`; no move trail, no carrier, no crossed
+    // enemy rolls nothing.
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_strafing(statics, state, &mut next, si, seams, tray, shot);
+    }
 
     // --- CROSSING ATTACK (main.gd:1081, right after Storm in the table's own
     // pre-attack order), every action kind with a tray — see
