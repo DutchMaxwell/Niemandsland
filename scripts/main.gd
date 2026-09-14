@@ -5720,6 +5720,16 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			if ev_n != "Evasive" and _solo_rule_on_all_models(target, ev_n):
 				evasive = true
 				break
+	# STANDALONE_SWEEP_E — the Boost's named stand-down (the core's named gate, unit.rs:2176-2200):
+	# "Empyrean Spirit Boost" is the UNCONDITIONAL form of Empyrean Spirit's own -1 ("enemies
+	# attacking them always get -1 to hit") — it REPLACES the base's over-9" Stealth alias
+	# (one -1 at any range), it does not add a second one.
+	var empyrean_boost: bool = _solo_rule_on_all_models(target, "Empyrean Spirit") \
+			and _solo_rule_on_all_models(target, "Empyrean Spirit Boost")
+	var evasive_note := "Evasive -1"
+	if empyrean_boost:
+		# Rules-must-log: the applied rule names itself once — never the stood-down base next to it.
+		evasive_note = "Empyrean Spirit Boost: -1 to hit (base Evasive stood down)"
 	# Coverage wave: the Stealth-family DATA alias that applies to THIS attack — Changebound /
 	# Machine-Fog ("shot or charged from over 9\"" → applies_charged), Grounded Stealth (terrain-
 	# conditional; majority-in-cover approximation). At most one alias fires (rule effects of one
@@ -5730,6 +5740,10 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		var ed := e as Dictionary
 		var n := str(ed["name"])
 		if n == "Stealth" or not _solo_rule_on_all_models(target, n):
+			continue
+		# The stand-down: the Boost's unconditional Evasive replaces the base's own conditional
+		# alias — the two never stack (the core's named gate skips the same name, unit.rs:2199-2201).
+		if empyrean_boost and n == "Empyrean Spirit":
 			continue
 		var p2: Dictionary = ed.get("params", {})
 		var terr_in := float(p2.get("terrain_within_in", 0.0))
@@ -5754,7 +5768,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 					melee_evasion = true
 					break
 		var mm: int = AiCombatMath.melee_hit_modifier(evasive, melee_evasion)
-		var base_note: String = ("Melee Evasion -1" if melee_evasion and not evasive else "Evasive -1") if mm != 0 else ""
+		var base_note: String = ("Melee Evasion -1" if melee_evasion and not evasive else evasive_note) if mm != 0 else ""
 		if alias_pen > 0 and mm == 0:
 			mm = -alias_pen
 			base_note = "%s -%d" % [alias_name, alias_pen]
@@ -5811,7 +5825,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	elif target_artillery:
 		notes.append("Artillery target: no -2 (within 9\")")   # #224 sweep
 	if evasive:
-		notes.append("Evasive -1")
+		notes.append(evasive_note)
 	# Coverage wave — growth markers (Precision Growth): +1 to hit per two markers.
 	if shooter_member != null:
 		var gab := _solo_growth_attack_bonus(shooter_member)
