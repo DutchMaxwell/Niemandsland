@@ -1,4 +1,9 @@
 use super::*;
+// The interference port (epoch 51) split the chance fold into
+// cast_success_chance_vs and left this family's call sites on the 2-arg
+// delegate — resolve it HERE instead of through the glob chain, whose sim.rs
+// import this port dropped.
+use crate::spell::cast_success_chance;
 
     // --- Spell Conduit PR 2 (design #824 §4, core: candidate + replay) ---
     //

@@ -343,8 +343,6 @@ pub struct Knobs {
 /// `46` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_46_DISINTEGRATE_REGEN: u32 = 46;
 
-pub const CURRENT_RULES_EPOCH: u32 = 50;
-
 /// The SURGE LOW window gate (14.09., STANDALONE_SWEEP_F_2026-09-14 row
 /// `Great Sergeant`, DIVERGES on both layers vs the book): the registry
 /// prints the plain auto-hit form with a widened window — `Surge |
@@ -367,6 +365,8 @@ pub const CURRENT_RULES_EPOCH: u32 = 50;
 /// change. Every call site reads THIS constant, not the literal `50` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_50_SURGE_LOW: u32 = 50;
+
+pub const CURRENT_RULES_EPOCH: u32 = 51;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -911,6 +911,30 @@ pub const EPOCH_44_SURGE_MARK: u32 = 44;
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
 /// reads THIS constant, not the literal `48` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_48_CASTER_BOOST: u32 = 48;
+
+/// The CASTER INTERFERENCE gate (14.09., analysis/CASTER_SEAM_2026-09-14.md
+/// row 2, DIVERGES by reading): the OPPOSING side's casters holding spell
+/// tokens within the `Caster` rule's `aura_in` (18") in line of sight of the
+/// caster's unit may spend them to LOWER the announced cast one step per
+/// token (ai_spell.gd:105-107, `cast_target`'s own +`maxi(interference, 0)`
+/// fold), paid before the roll alongside the boost (solo_controller.gd:
+/// 4377-4397, one try per spell), the spend policy `plan_interference`'s
+/// deterministic mirrored marginal-EV calculus (ai_spell.gd:518-527 — the
+/// boost calculus without the coin-flip clause, priced at the cast's own EV,
+/// so an unpriced cast draws no counter). The table auto-plans it in both-AI
+/// (:4379-4386) and prompts the human at resolve time otherwise (main.gd:
+/// 3474-3478); the core had no reader anywhere, so the sim never priced
+/// cast-vs-counterplay. From 49 the cast sub-phase builds the interference
+/// pool (`sim::interference_pool`, the boost pool's opposing-side mirror),
+/// plans the spend in the same one-shot plan as the boost and pays it in the
+/// same order the threshold rides, one rules-must-log line per interfered
+/// cast. Below 51 the pool is empty and every recorded game replays
+/// byte-exact. `49` is one past every epoch present at write time (48 =
+/// `EPOCH_48_CASTER_BOOST`, #966; 47 = `EPOCH_47_RENDING_SHOOTING_AURA`,
+/// #968; 46 = `EPOCH_46_DISINTEGRATE_REGEN`, #967), and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
+/// reads THIS constant, not the literal `49` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_51_CASTER_INTERFERENCE: u32 = 51;
 
 /// The RENDING SHOOTING AURA gate (14.09., sweep G — row `Rending when
 /// Shooting Aura`, TABLE-ONLY): the Utility-Buff aura's own grant
@@ -1463,7 +1487,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 50, "the live epoch is 50 (EPOCH_50_SURGE_LOW, one past the casterinterf reservation at the rebase; the newest gate constant bumps it per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 51, "the live epoch is 51 (the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1473,11 +1497,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":50}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":51}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 50"
+            "a fresh play_game() now stamps the bumped epoch, 51"
         );
     }
 

@@ -29,6 +29,7 @@ use crate::acts::{
     EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS, EPOCH_32_STRAFING,
     EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA, EPOCH_38_WATCHBORN_LATCH,
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
+    EPOCH_51_CASTER_INTERFERENCE,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -36,8 +37,8 @@ use crate::mods;
 use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{
-    boost_value_of, cast_success_chance, official_pick_order, plan_boost, spell_damage_ev_of,
-    spell_ev_of, CASTER_BOOST_AURA_IN, CAST_BASE_TARGET,
+    boost_value_of, cast_success_chance_vs, official_pick_order, plan_boost, plan_interference,
+    spell_damage_ev_of, spell_ev_of, CASTER_BOOST_AURA_IN, CAST_BASE_TARGET,
 };
 use crate::menu::nearest_enemy;
 use crate::state::State;
@@ -2976,6 +2977,25 @@ fn caster_boost_pool(
     found.into_iter().map(|(u, _, t)| (u, t)).collect()
 }
 
+
+/// The cast's own EV — the damage EV the core can compute, 0.0 for
+/// everything else: the table's `chosen_ev` (solo_controller.gd:4345), the
+/// one number BOTH token economies price the attempt at (the boost values
+/// LANDING it through `boost_value_of`, the interference PREVENTING it
+/// raw — the table hands the same `chosen_ev` to both planners).
+fn cast_ev_of(
+    statics: &[UnitStatic],
+    state: &State,
+    entry: &Spell,
+    ti: usize,
+) -> f64 {
+    if entry.effect_kind == "damage" {
+        spell_damage_ev_of(entry, &ctx_of(&statics[state.roster.profile[ti]], state, ti))
+    } else {
+        0.0
+    }
+}
+
 /// Wave 6 (port-caster-boost) — the boost plan, pure (the spend happens in
 /// the payment block): own leftover FIRST (solo_controller.gd:4336-4342),
 /// then the helper pool; `plan_boost`'s marginal-EV calculus prices the
@@ -2993,17 +3013,58 @@ fn plan_caster_boost(
     helpers: &[(usize, i64)],
 ) -> (i64, i64, i64) {
     let own_left = (own - entry.threshold).max(0);
-    let ev = if entry.effect_kind == "damage" {
-        spell_damage_ev_of(entry, &ctx_of(&statics[state.roster.profile[ti]], state, ti))
-    } else {
-        0.0
-    };
+    let ev = cast_ev_of(statics, state, entry, ti);
     let boost = plan_boost(
         boost_value_of(ev),
         own_left + helpers.iter().map(|(_, t)| *t).sum::<i64>(),
     );
     let own_draw = boost.min(own_left);
     (boost, own_draw, boost - own_draw)
+}
+
+/// Wave 6 (port-caster-interference) — the INTERFERENCE pool, the boost
+/// pool's opposing-side mirror (`_aura_casters(human_slot, unit, null)`,
+/// solo_controller.gd:4378): every caster and `Spell Accumulator` battery of
+/// the OPPOSING player holding tokens within the `Caster` rule's `aura_in`
+/// (18") in line of sight of the caster's unit (:4606) — the battery on its
+/// OWN 12" reach (:4565, :4604), a Shaken battery refused (NML-936,
+/// :4596-4601), nearest-first (the table's own sort, :4609). No own-front
+/// entry here: a caster never sits in the OPPOSING pool (the flipped player
+/// check excludes its whole side). Gated on the frozen
+/// `EPOCH_51_CASTER_INTERFERENCE`.
+fn interference_pool(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    ci: usize,
+    los: &[bool],
+    seams: Seams,
+) -> Vec<(usize, i64)> {
+    if !rule_on(seams.rules_epoch, EPOCH_51_CASTER_INTERFERENCE) { return Vec::new(); }
+    let pid = state.player[si];
+    let mut found: Vec<(usize, f64, i64)> = Vec::new();
+    for u in 0..state.units() {
+        let s = &statics[state.roster.profile[u]];
+        if u == ci || state.player[u] == pid || state.alive[u] <= 0 || state.casts[u] <= 0 {
+            continue;
+        }
+        // casters and batteries only (:4594); NML-936 (:4596-4601) refuses
+        // only the BATTERY's spending — a Shaken real caster still spends
+        // its own tokens, the walk mirrors the table exactly there.
+        if !s.is_caster && !s.spell_accumulator { continue; }
+        if !s.is_caster && state.shaken[u] { continue; }
+        let d = geom::dist_in(&state.positions[ci], &state.positions[u]);
+        let reach = if s.is_caster { CASTER_BOOST_AURA_IN } else { SPELL_ACCUMULATOR_REACH_IN };
+        if d > reach {
+            continue;
+        }
+        // "in line of sight of the caster's unit" (:4606): the caster's own
+        // unit needs no check (the table's `cu != caster_unit` guard).
+        if u != si && !state.attached[si].contains(&u) && !los[u] { continue; }
+        found.push((u, d, state.casts[u]));
+    }
+    found.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    found.into_iter().map(|(u, _, t)| (u, t)).collect()
 }
 
 fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize) -> Ctx {
@@ -4400,6 +4461,11 @@ fn cast_phase(
     // leftover joins the plan below, the FIRST source). Empty below the
     // frozen `EPOCH_48_CASTER_BOOST`.
     let helpers = caster_boost_pool(statics, state, si, ci, los, seams);
+    // Wave 6 (port-caster-interference) — the OPPOSING casters' counter
+    // pool, read ONCE with the boost purse (solo_controller.gd:4378-4386,
+    // the both-AI auto-plan; empty below the frozen
+    // `EPOCH_51_CASTER_INTERFERENCE`).
+    let enemies = interference_pool(statics, state, si, ci, los, seams);
     let mut lend_log: Vec<String> = Vec::new();
     let pi = state.roster.profile[ci];
     let spells = statics[pi].spells.clone();
@@ -4414,10 +4480,11 @@ fn cast_phase(
     let mut origins: Vec<(usize, i64)> = vec![(si, 0)];
     origins.extend(cast_origins(statics, state, si, seams));
     let mut cost: Option<i64> = None;
-    // Wave 6 (port-caster-boost) — (boost, own draw, helper draw, final
+    // Wave 6 (port-caster-boost, port-caster-interference) — (boost, own
+    // draw, helper draw, interference, post-boost target, final roll
     // target), planned ONCE at the first face that produces a pick (the
     // face that names the attempt and pays for it, like the threshold).
-    let mut boost_plan: Option<(i64, i64, i64, i64)> = None;
+    let mut boost_plan: Option<(i64, i64, i64, i64, i64, i64)> = None;
     for d3 in 1..=3i64 {
         let Some((idx, ti, ou)) =
             pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los, &origins)
@@ -4429,17 +4496,31 @@ fn cast_phase(
         // Wave 6 (port-caster-boost) — the boost plan lands at the FIRST
         // pick; the purse was read once before the loop, so later faces
         // shop with (and roll with) the attempt's one boost decision.
-        let boost = boost_plan
+        let plan = boost_plan
             .get_or_insert_with(|| {
                 let (b, o, h) = if rule_on(seams.rules_epoch, EPOCH_48_CASTER_BOOST) {
                     plan_caster_boost(statics, state, &spells[idx], ti, own, &helpers)
                 } else {
                     (0, 0, 0)
                 };
-                (b, o, h, (CAST_BASE_TARGET - casting_net - b).clamp(2, 6))
-            })
-            .0;
-        let p_success = cast_success_chance(casting_net, boost);
+                // Wave 6 (port-caster-interference) — the counter plans
+                // AGAINST the committed boost, at the cast's own EV (an
+                // unpriced cast draws no counter, ai_spell.gd:518-527).
+                let i = if rule_on(seams.rules_epoch, EPOCH_51_CASTER_INTERFERENCE) {
+                    plan_interference(
+                        cast_ev_of(statics, state, &spells[idx], ti),
+                        enemies.iter().map(|(_, t)| *t).sum(),
+                        b,
+                    )
+                } else {
+                    0
+                };
+                (b, o, h, i,
+                    (CAST_BASE_TARGET - casting_net - b).clamp(2, 6),
+                    (CAST_BASE_TARGET - casting_net - b + i).clamp(2, 6))
+            });
+        let boost = plan.0;
+        let p_success = cast_success_chance_vs(casting_net, boost, plan.3);
         if origin_mod != 0 {
             // Rules-must-log (#782), the table's own line shape (main.gd
             // `_solo_resolve_one_cast`).
@@ -4483,7 +4564,7 @@ fn cast_phase(
         // nearest-first — the table pays threshold + boost before the roll,
         // one try per spell (solo_controller.gd:4387-4395). Rules-must-log:
         // one line per cast that spent tokens (the brief's shape).
-        if let Some((boost, bown, bhelp, target)) = boost_plan.filter(|p| p.0 > 0) {
+        if let Some((boost, bown, bhelp, _, target, _)) = boost_plan.filter(|p| p.0 > 0) {
             state.casts[ci] = (state.casts[ci] - bown).max(0);
             let mut bleft = bhelp;
             for (u, t) in &helpers {
@@ -4495,6 +4576,30 @@ fn cast_phase(
                 state.casts[*u] = (state.casts[*u] - take).max(0);
             }
             let line = format!("Caster: {} tokens spent (own {}, helpers {}), target 4+ -> {}+", boost, bown, boost - bown, target);
+            trace_rule("cast", "Caster", &line);
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
+        }
+        // Wave 6 (port-caster-interference) — the OPPOSING casters' tokens
+        // ride the same payment block, AFTER the boost (the table spends
+        // boost_sources then interference_sources, all before the roll,
+        // solo_controller.gd:4387-4397). Rules-must-log: one line per
+        // interfered cast (the brief's own line shape).
+        if let Some((_, _, _, inter, itarget, ifinal)) = boost_plan.filter(|p| p.3 > 0) {
+            let mut ileft = inter;
+            let mut from: Vec<&str> = Vec::new();
+            for (u, t) in &enemies {
+                if ileft <= 0 {
+                    break;
+                }
+                let take = (*t).min(ileft);
+                ileft -= take;
+                state.casts[*u] = (state.casts[*u] - take).max(0);
+                from.push(statics[state.roster.profile[*u]].name.as_str());
+            }
+            let line = format!(
+                "Caster: interference {} tokens from {}, target {}+ -> {}+",
+                inter, from.join(", "), itarget, ifinal
+            );
             trace_rule("cast", "Caster", &line);
             state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
         }
