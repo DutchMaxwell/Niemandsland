@@ -1561,6 +1561,7 @@ mod mend;
 mod move_buff;
 mod move_grants;
 mod piercing_tag;
+mod place_d3;
 mod plain_moves;
 mod quick_shot;
 mod reckless_piercing;
