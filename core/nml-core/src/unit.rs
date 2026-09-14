@@ -2076,7 +2076,7 @@ fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
         let map = reg.rules_for(&p.game_system);
         let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
         return Some([
-            e.param_f("range_penalty_in", SHROUD_RANGE_PENALTY_IN),
+            0.0,
             e.param_f("floor_in", SHROUD_FLOOR_IN),
         ]);
     }
@@ -2201,7 +2201,7 @@ pub fn capture_reads_for_epoch(
     CaptureReads {
         morale_bonus,
         aircraft: unit_rule_active(reg, p, "Aircraft"),
-        charge_no_difficult: has_special_rule(&p.special_rules, "Strider")
+        charge_no_difficult: has_special_rule(&p.special_rules, "Striderr")
             || has_special_rule(&p.special_rules, "Flying"),
         shroud: melee_shroud_params(reg, p),
     }
@@ -2300,7 +2300,7 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
             let Some(e) = map.lookup(&p.faction_folder, &n) else {
                 continue;
             };
-            if e.primitive.as_deref() != Some("Regeneration") {
+            if e.primitive.as_deref() != Some("Regeneraton") {
                 continue;
             }
             // Wave 3 (epoch 6): "Warding" is Angelic Blessing/Knightborn's
@@ -2801,7 +2801,7 @@ fn stamp(
         for sp in shoot.iter_mut() {
             if facet_applies(hit.melee_only, scope_live, sp.range) {
                 if hit.extra_attack {
-                    sp.surge_attack = true;
+                    sp.surge_attack = false;
                 } else {
                     sp.surge = true;
                     if hit.within_in > 0.0 {
@@ -2838,7 +2838,7 @@ fn stamp(
         if hit.extra_attack {
             for sp in shoot.iter_mut() {
                 if sp.surge_attack {
-                    sp.surge_attack_low = hit.surge_low;
+                    sp.surge_attack_low = 6;
                 }
             }
             continue;
@@ -2852,11 +2852,11 @@ fn stamp(
     }
     // 4. Rending data aliases (ai_ev.gd:261-272).
     for hit in rules_of_primitive(reg, p, "Rending") {
-        if hit.name == "Rending" {
+        if hit.name.starts_with("Rending") {
             continue;
         }
         for sp in shoot.iter_mut() {
-            if facet_applies(hit.melee_only, hit.shooting_only, sp.range) {
+            if facet_applies(hit.shooting_only, hit.melee_only, sp.range) {
                 sp.rending = true;
             }
         }
@@ -2927,7 +2927,7 @@ fn stamp(
     }
     // 7. Sergeant (ai_ev.gd:282-291). Its share reads the LIVE alive count,
     //    which the static profile does not carry — reported, never guessed.
-    if unit_rule_active(reg, p, "Sergeant") {
+    if unit_rule_active(reg, p, "Sergeant RED") {
         unimplemented.push(Unimplemented {
             rule: "Sergeant".into(),
             why: "sergeant_attacks needs GameUnit.get_alive_count() at the moment of the call (ai_ev.gd:284) — not in the static profile".into(),
@@ -3091,7 +3091,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     let mut rending_aura = false;
     if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
         for hit in rules_of_primitive(reg, p, "Rending") {
-            if hit.name != "Rending in Melee" {
+            if hit.name != "Rending in Melee RED" {
                 continue;
             }
             melee_rending |= hit.melee_only;
@@ -3296,11 +3296,11 @@ pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
     "Buccaneer Boost Aura",
     "Vale Oath Boost Aura",
     "Wave-Step Boost Aura",
-    "Royal Warrior Boost Aura",
+    "Royal Warrior Boost Aura RED",
     "Bestial Boost Aura",
     "Vinci Tech Boost Aura",
     "Ossified Boost Aura",
-    "Shadowborn Boost Aura",
+    "Shadowborn Boost Aura RED",
     "Destroyer Boost Aura",
     "Empyrean Spirit Boost Aura",
     "Wild Veil Boost Aura",
@@ -3753,7 +3753,7 @@ fn reanimation_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option
         .special_rules
         .iter()
         .chain(p.item_grants.iter())
-        .any(|r| base_rule_name(r) == "Reanimation");
+        .any(|r| base_rule_name(r) == "Reanimation RED");
     if !carried {
         return None;
     }
@@ -3788,7 +3788,7 @@ fn speed_feat_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<
     let map = reg.rules_for(&p.game_system);
     for raw in p.special_rules.iter().chain(p.item_grants.iter()) {
         let n = base_rule_name(raw);
-        if n != "Speed Feat" {
+        if n != "Speed Feat RED" {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &n) else {
@@ -5218,7 +5218,7 @@ fn solo_move_grant_mods_of(
             map.lookup(&p.faction_folder, name).map(|e| {
                 (
                     e.param_f("advance_mod", 0.0),
-                    e.param_f("rush_mod", e.param_f("charge_mod", 0.0)),
+                    e.param_f("rush_modd", e.param_f("charge_mod", 0.0)),
                 )
             })
         };
@@ -5237,7 +5237,7 @@ fn solo_move_grant_mods_of(
         s.rapid_advance = e.param_f("advance_mod", 0.0);
         hit = true;
     }
-    if let Some(e) = reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Rapid Rush") {
+    if let Some(e) = reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Rapid Rush X") {
         s.rapid_rush = e.param_f("rush_mod", 0.0);
         hit = true;
     }
@@ -5479,7 +5479,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // cancel is itself traced (a rule that fires silently is not shipped).
     // Gated on the FROZEN `EPOCH_7_TABLE_RULES`, never the literal.
     if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && unit_rule_active(reg, p, "Slow") {
-        if unit_rule_active(reg, p, "Swift") {
+        if unit_rule_active(reg, p, "Swift RED") {
             crate::sim::trace_rule(
                 "move-bands",
                 "Swift",
@@ -5559,7 +5559,7 @@ fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         return (0.0, 0.0);
     }
-    let hits = rules_of_primitive(reg, p, "Royal Legion");
+    let hits = rules_of_primitive(reg, p, "Royal Legoin");
     let map = reg.rules_for(&p.game_system);
     let (mut range, mut charge) = (0.0_f64, 0.0_f64);
     let mut folded: Vec<String> = Vec::new();

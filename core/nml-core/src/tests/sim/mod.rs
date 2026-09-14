@@ -1599,6 +1599,7 @@ mod strafing;
 mod terrain_debuff;
 mod traversal;
 mod unstoppable_aura;
+mod utility_move_buff_pins;
 mod versatile_reach;
 mod watchborn_latch;
 mod weapons;
