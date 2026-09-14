@@ -343,7 +343,30 @@ pub struct Knobs {
 /// `46` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_46_DISINTEGRATE_REGEN: u32 = 46;
 
-pub const CURRENT_RULES_EPOCH: u32 = 48;
+pub const CURRENT_RULES_EPOCH: u32 = 50;
+
+/// The SURGE LOW window gate (14.09., STANDALONE_SWEEP_F_2026-09-14 row
+/// `Great Sergeant`, DIVERGES on both layers vs the book): the registry
+/// prints the plain auto-hit form with a widened window — `Surge |
+/// bonus_hits_per_six=1, surge_low=5` (aof ogres / plague_disciples; aofr
+/// too) — but BOTH stamp loops read `surge_low` only off `upgrades`
+/// carriers (unit.rs `stamp`'s block 3b, ai_ev.gd's Boost loop), so the
+/// printed 5-6 was dead data and the folds paid the natural 6s alone (the
+/// table's board picture and the sim agreed on the same wrong read, so no
+/// replay diverged — this is a book-fidelity fix, not a divergence one).
+/// From 50 the plain Surge aliases stamp the entry's printed `surge_low`
+/// (default 6 — an alias without the param stays a 6s rule) plus the
+/// sentinel `surge_over_in` -1.0 (the entry prints no distance gate, melee
+/// 0.0" included; the Boost's own default stays 9.0 in block 3b), and the
+/// dice consumers pay the successful unmodified 5s behind their existing
+/// strict `dist > surge_over_in` gate. Below 50 nothing stamps and every
+/// recorded game replays byte-exact. `50` is one past every epoch present
+/// at the rebase (49 in flight by the casterinterf leg; 48 =
+/// `EPOCH_48_CASTER_BOOST`, #966; 47 = `EPOCH_47_RENDING_SHOOTING_AURA`,
+/// #968), and the value `CURRENT_RULES_EPOCH` is bumped to in the same
+/// change. Every call site reads THIS constant, not the literal `50` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_50_SURGE_LOW: u32 = 50;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -1440,7 +1463,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 48, "the live epoch is 48 (EPOCH_48_CASTER_BOOST renumbered to CURRENT+1 at the rebase; the newest gate constant bumps it per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 50, "the live epoch is 50 (EPOCH_50_SURGE_LOW, one past the casterinterf reservation at the rebase; the newest gate constant bumps it per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1450,11 +1473,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":48}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":50}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 48"
+            "a fresh play_game() now stamps the bumped epoch, 50"
         );
     }
 

@@ -314,6 +314,18 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 				fpd["surge"] = true
 				if float(sp.get("within_in", 0.0)) > 0.0:
 					fpd["surge_within_in"] = float(sp.get("within_in", 0.0))
+				# EPOCH_50_SURGE_LOW (sweep F, row "Great Sergeant"): the entry's own printed low
+				# window — `surge_low` was read only off `upgrades` carriers (the Boost loop
+				# below), so the plain auto-hit entry's printed 5-6 stayed dead data and the
+				# dice path (main.gd:4532-4543) paid the natural 6s alone. From 50 the alias
+				# stamps its printed window (default 6) plus the ungated sentinel over_in (-1:
+				# the entry prints no distance gate, melee 0.0" included — the consumer's strict
+				# `dist_in > surge_over_in` opens; the Boost's own 9.0 default stays in its
+				# loop below). Below the gate nothing is stamped and every recorded corpus
+				# replays byte-exact.
+				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_50_SURGE_LOW:
+					fpd["surge_low"] = int(sp.get("surge_low", 6))
+					fpd["surge_over_in"] = float(sp.get("over_in", -1.0))
 	# EPOCH_44_SURGE_MARK (sweep C, row "Surge Mark"): the entry left the Surge
 	# primitive — it is a vs_target Utility Buff now (the Precision marks'
 	# #929 family), placed at the attack seam (_solo_apply_vs_marks) and

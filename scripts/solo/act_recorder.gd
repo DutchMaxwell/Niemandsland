@@ -109,13 +109,23 @@ const EPOCH_27_TERRAIN_DEBUFF := 27
 ## the frozen `EPOCH_35_UNSTOPPABLE_MELEE` (acts.rs); this mirror never
 ## re-dates itself.
 const EPOCH_35_UNSTOPPABLE_MELEE := 35
+## The frozen gate of the SURGE LOW window (epoch 50, the sweep F fix — row
+## `Great Sergeant`): "each unmodified hit roll of 5 or 6" — the plain
+## auto-hit entry's printed `surge_low: 5` widens the bonus to the 5s, the
+## ungated sentinel over_in (-1) opens the consumers' distance gate at every
+## reach, melee 0.0" included. Below it the entry replays the 6s-only read
+## every recorded game was stamped with. The core's own gate reads the
+## frozen `EPOCH_50_SURGE_LOW` (acts.rs); this mirror never re-dates itself.
+const EPOCH_50_SURGE_LOW := 50
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
 ## Bumped to 48 in the same diff as the core's EPOCH_48_CASTER_BOOST (wave 6
 ## 2026-09-14, CASTER_SEAM row 1 — the cast sub-phase spends boost tokens like
 ## the table; the leg's earlier reservation 45 was renumbered to CURRENT+1 at
-## the rebase per the epoch rules).
-static var rules_epoch: int = 48
+## the rebase per the epoch rules). Bumped to 50 in the same diff as the
+## core's EPOCH_50_SURGE_LOW (sweep F 2026-09-14, row `Great Sergeant` — the
+## printed 5-6 window is no longer dead data on the table's stamp loop).
+static var rules_epoch: int = 50
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
