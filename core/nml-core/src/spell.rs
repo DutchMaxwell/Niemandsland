@@ -8,7 +8,8 @@
 //! DAMAGE spells only, unit-level tokens — the EV helpers here keep the
 //! no-boost v0 reading (`cast_success_chance_base`), while the cast
 //! sub-phase itself (sim::cast_phase) spends boost tokens from
-//! `EPOCH_48_CASTER_BOOST` on. Interference is a separate brief.
+//! `EPOCH_48_CASTER_BOOST` on, and the OPPOSING casters' interference from
+//! `EPOCH_51_CASTER_INTERFERENCE` (the pool's opposing-side mirror).
 
 use crate::combat::{block_chance, deadly_multiplier, success_chance, SIX_P};
 use crate::rules::Spell;
@@ -61,17 +62,39 @@ pub fn cast_success_chance_base() -> f64 {
 /// reduces to exactly `cast_success_chance_base()` — same constant, same
 /// clamp. The caller (`sim::cast_phase`) is the one that gates the boost
 /// behind its frozen epoch, passing 0 below it — this function does not
-/// know about epochs.
+/// know about epochs. The interference term rides
+/// `cast_success_chance_vs`'s third argument (wave 6,
+/// `EPOCH_51_CASTER_INTERFERENCE`).
 #[inline]
 pub fn cast_success_chance(casting_net: i64, boost_tokens: i64) -> f64 {
+    cast_success_chance_vs(casting_net, boost_tokens, 0)
+}
+
+/// SEAM 2 (wave 6, port-caster-interference, `EPOCH_51_CASTER_INTERFERENCE`)
+/// — the same fold with the INTERFERENCE term, the table's own
+/// (`AiSpell.cast_target` ai_spell.gd:102-107): +1 per enemy token ONTO the
+/// target (`maxi(interference_tokens, 0)`), one step lower per token for the
+/// caster, never past the [2,6] clamp. The caller (`sim::cast_phase`) is the
+/// one that gates the counter behind its frozen epoch, passing 0 below it —
+/// this function does not know about epochs, like the boost term.
+#[inline]
+pub fn cast_success_chance_vs(
+    casting_net: i64,
+    boost_tokens: i64,
+    interference_tokens: i64,
+) -> f64 {
     success_chance(
-        (CAST_BASE_TARGET - casting_net - boost_tokens.max(0) * CASTER_BOOST_PER_TOKEN).clamp(2, 6),
+        (CAST_BASE_TARGET - casting_net - boost_tokens.max(0) * CASTER_BOOST_PER_TOKEN
+            + interference_tokens.max(0))
+        .clamp(2, 6),
     )
 }
 
-/// `AiSpell.plan_boost` ai_spell.gd:328-339, ported as-is (no interference in
-/// the core yet, so the default `interference_tokens: 0` is the only shape the
-/// cast sub-phase calls): spend while the NEXT token's marginal EV — the
+/// `AiSpell.plan_boost` ai_spell.gd:328-339, ported as-is (the caster side
+/// plans its boost BLIND to the counter — the table's own call shape,
+/// solo_controller.gd:4363, `plan_boost(boost_value, boost_pool)` with the
+/// interference argument defaulted; `plan_interference` plans against the
+/// committed boost afterwards): spend while the NEXT token's marginal EV — the
 /// chance gain times the effect's value — beats `TOKEN_VALUE_EPS`, with the
 /// COIN-FLIP CLAUSE dropping the floor to zero while the cast sits at or under
 /// `COIN_FLIP_P`. The [2,6] clamp naturally stops the spend once the roll
@@ -88,6 +111,32 @@ pub fn plan_boost(effect_value: f64, available: i64) -> i64 {
         boost += 1;
     }
     boost
+}
+
+/// `AiSpell.plan_interference` ai_spell.gd:518-527, ported as-is — the
+/// OPPOSING casters' deterministic counter-spend against an announced cast
+/// worth `effect_value` TO THE CASTER (the same `chosen_ev` the boost priced,
+/// solo_controller.gd:4384 — the value of PREVENTING it is the value of
+/// landing it), with `boost` the caster side's already-committed boost:
+/// spend while the P-reduction per token times the effect's value beats
+/// `TOKEN_VALUE_EPS`. The mirror of `plan_boost` WITHOUT the coin-flip
+/// clause — the floor never drops on this side (the table's own asymmetry:
+/// the clause prices a HELD boost token against a future cast of the same
+/// caster, and a counter token has no such future cast of its own). Priced
+/// at the cast's own raw EV, so an unpriced cast draws no counter — and the
+/// [2,6] clamp stops the spend at 6+.
+pub fn plan_interference(effect_value: f64, available: i64, boost: i64) -> i64 {
+    let mut inter = 0i64;
+    while inter < available {
+        let gain = (cast_success_chance_vs(0, boost, inter)
+            - cast_success_chance_vs(0, boost, inter + 1))
+            * effect_value.max(0.0);
+        if gain <= TOKEN_VALUE_EPS {
+            break;
+        }
+        inter += 1;
+    }
+    inter
 }
 
 /// `AiSpell.boost_value_of` ai_spell.gd:344-345 — the value plan_boost prices

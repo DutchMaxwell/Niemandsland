@@ -125,7 +125,11 @@ const EPOCH_50_SURGE_LOW := 50
 ## the rebase per the epoch rules). Bumped to 50 in the same diff as the
 ## core's EPOCH_50_SURGE_LOW (sweep F 2026-09-14, row `Great Sergeant` — the
 ## printed 5-6 window is no longer dead data on the table's stamp loop).
-static var rules_epoch: int = 50
+## Bumped to 49 in the same diff as the core's EPOCH_51_CASTER_INTERFERENCE
+## (wave 6 2026-09-14, CASTER_SEAM row 2 — the OPPOSING casters within 18" LoS
+## spend tokens to lower the announced cast one step per token, paid before
+## the roll; the boost pool's opposing-side mirror).
+static var rules_epoch: int = 51
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

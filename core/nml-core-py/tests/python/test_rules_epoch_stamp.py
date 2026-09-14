@@ -64,15 +64,14 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 50 (acts::EPOCH_50_SURGE_LOW, sweep F row `Great
-    # Sergeant`: the plain auto-hit entry's printed 5-6 window is no longer
-    # dead data — both stamp loops read the entry's surge_low from 50; 48 was
-    # #966's Caster-Boost leg, 47 #968's Rending-Aura leg, 46 #967's
-    # Disintegrate leg, 44 #958's Surge Mark pick; the casterinterf leg's
-    # reservation 49 was still in flight at the rebase): explicit, not just
-    # dynamic — a fresh game now stamps 50, not 48. A record already stamped
-    # 48 must never be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 50
+    # core rules epoch 51 (acts::EPOCH_51_CASTER_INTERFERENCE, wave 6
+    # CASTER_SEAM row 2: the OPPOSING casters within 18" LoS spend tokens to
+    # lower the announced cast one step per token, paid before the roll, the
+    # table's deterministic plan_interference calculus; 48 was #966's
+    # Caster-Boost leg, 47 #968's Rending-Aura leg, 46 #967's Disintegrate
+    # leg): explicit, not just dynamic — a fresh game now stamps 49, not 48.
+    # A record already stamped 48 must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 51
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)
