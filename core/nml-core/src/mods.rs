@@ -180,6 +180,29 @@ pub fn granted_vs(state: &State, target: usize, rule: &str) -> bool {
     chain_grant(state, target, rule, true)
 }
 
+/// EPOCH 23 INERT MARKS — the exact-string twin of `granted`: the Piercing
+/// marks' `grants_rule` values ("AP(+1) in melee" / "AP(+1) when shooting")
+/// name the EFFECT, not a registry rule, so `base_rule_name`'s split at the
+/// first '(' would shred both to "AP" and the base-name read could never
+/// match them. Same joined-chain walk, same attackers-side split, full-string
+/// comparison.
+pub fn granted_exact(state: &State, i: usize, rule: &str) -> bool {
+    chain_grant_exact(state, i, rule, false)
+}
+
+fn chain_grant_exact(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
+    let mut who: Vec<usize> = vec![i];
+    if let Some(h) = state.attached_to[i] {
+        who.push(h);
+    }
+    who.extend(state.attached[i].iter().copied());
+    who.iter().any(|&u| {
+        state.buffs[u]
+            .iter()
+            .any(|r| r.attackers == attackers && !r.grants_rule.is_empty() && &*r.grants_rule == rule)
+    })
+}
+
 fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
     let mut who: Vec<usize> = vec![i];
     if let Some(h) = state.attached_to[i] {

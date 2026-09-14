@@ -35,18 +35,20 @@ static var objectives_stamp: Dictionary = {}
 ## falls back to the carrier's profile (that fallback IS the #823 fidelity break).
 static var spawn_profile_resolver: Callable = Callable()
 ## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
-## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 17 by the
-## Surge-when-Shooting scope fix, EPOCH_17_SURGE_SCOPE; 16 was the
-## Vanguard/Drakesworn/Fanatic free-placement fix, 15 was the Precision-marks
-## beneficiary side fix, 14 was the Deadly per-model landing port, 13 was
-## #921's).
-## The mirror now HOLDS BELOW EPOCH_19_MOVE_GRANTS_FOLD on purpose (PR #935):
+## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 23 by the
+## Piercing-marks inert-grant fix, EPOCH_23_INERT_MARKS; 22 was #932's Screened
+## melee leg, 19 was #935's
+## move-grant fold; 17 was the Surge-when-Shooting scope fix, 16 the
+## free-placement fix, 15 the beneficiary side fix).
+## The mirror HOLDS BELOW EPOCH_19_MOVE_GRANTS_FOLD on purpose (PR #935):
 ## the core's epoch-19 fold adds the granted move family LIVE at the spend,
 ## while these recordings' bands already carry every grant
-## (battle_sim.gd:1707 -> move_bands_for_props). A recording stamped 19 would
-## replay with the fold ON and double-count every granted inch. Bump this
-## mirror only together with the fold's own retirement of the recorded-band
-## premise; SPAWN_PROFILES_EPOCH below stays frozen.
+## (battle_sim.gd:1707 -> move_bands_for_props). A recording stamped 19+
+## would replay with the fold ON and double-count every granted inch. Bump
+## this mirror only together with the fold's own retirement of the
+## recorded-band premise. The epoch-23 table fix above is NOT gated on this
+## mirror (it reads the mark's own grants_rule), so holding at 17 costs it
+## nothing; SPAWN_PROFILES_EPOCH below stays frozen.
 static var rules_epoch: int = 17
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
