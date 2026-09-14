@@ -2044,4 +2044,25 @@ use super::*;
             Some(Bands { advance: -6.0, rush: -6.0, ..Default::default() }),
             "epoch 25: the printed rule's own advance_mod/rush_mod on both bands (RED before the fix)"
         );
+        assert_eq!(
+            wave3_static_of("Ethereal", "aof", "ghostly_undead", EPOCH_23_INERT_MARKS)
+                .move_rule_mods,
+            None,
+            "epoch 23 (the frozen pre-bump pin): granted, not read (byte-exact)"
+        );
+        assert_eq!(
+            wave3_static_of("Ethereal", "aof", "shadow_stalkers", 25).move_rule_mods,
+            Some(Bands { advance: -6.0, rush: -6.0, ..Default::default() }),
+            "epoch 25: the second Ethereal-printing faction folds the same -6/-6"
+        );
+        assert_eq!(
+            wave3_static_of("Teleport", "aof", "vampiric_undead", 25).move_rule_mods,
+            None,
+            "epoch 25: the real Teleport rule shares the primitive with NO band mods — stays out"
+        );
+        assert_eq!(
+            wave3_static_of("", "aof", "ghostly_undead", 25).move_rule_mods,
+            None,
+            "no rule, no band"
+        );
     }
