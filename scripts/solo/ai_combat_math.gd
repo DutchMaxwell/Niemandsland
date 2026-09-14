@@ -517,18 +517,21 @@ static func deadly_wounds_dealt(unsaved: int, deadly_x: int, toughs: Array) -> i
 ## faces: original non-6 faces plus, when Bane forced re-rolls, the re-roll faces that replaced the 6s
 ## (a re-roll is itself an unmodified roll; a 6 that was re-rolled into a 1 both fails and shreds).
 ## These extra wounds are NOT Deadly-multiplied (they come from the save step, not the weapon's unsaved
-## wounds — documented reading, mirrored in the EV metric).
-static func shred_bonus_wounds(save_faces: Array, reroll_faces: Array = []) -> int:
-	var ones := 0
+## wounds — documented reading, mirrored in the EV metric). Destroyer Boost (the core's dice.rs
+## shred_faces twin): `low` widens the save-fail window (1 = the base 1s-only window) and a face
+## inside the window still only counts when the save FAILED — a 1 always fails, a higher face only
+## strictly under `save_target`.
+static func shred_bonus_wounds(save_faces: Array, reroll_faces: Array = [], low: int = 1, save_target: int = 0) -> int:
+	var wounds := 0
 	var ri := 0
 	for f in save_faces:
-		if int(f) == UNMODIFIED_SIX and ri < reroll_faces.size():
-			if int(reroll_faces[ri]) == UNMODIFIED_ONE:
-				ones += 1
+		var g := int(f)
+		if g == UNMODIFIED_SIX and ri < reroll_faces.size():
+			g = int(reroll_faces[ri])
 			ri += 1
-		elif int(f) == UNMODIFIED_ONE:
-			ones += 1
-	return ones
+		if g <= low and (g == UNMODIFIED_ONE or g < save_target):
+			wounds += 1
+	return wounds
 
 
 ## Sergeant bonus hits (wave 5, OPR core v3.5.1 MODEL-level rule: when this model attacks, unmodified
