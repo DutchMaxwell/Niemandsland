@@ -74,6 +74,65 @@ def test_bump_at_or_below_previous_epoch_is_refused(tmp_path):
     ) in r.stdout
 
 
+def test_epoch_bump_without_mirror_catchup_is_refused(tmp_path):
+    """Hole 3 (rule 6): the core bumps to 33 but the recorder mirror stays at 27."""
+    r = run_checker(
+        tmp_path,
+        """\
+        diff --git a/core/nml-core/src/acts.rs b/core/nml-core/src/acts.rs
+        --- a/core/nml-core/src/acts.rs
+        +++ b/core/nml-core/src/acts.rs
+        @@ -10,7 +10,9 @@
+        -pub const CURRENT_RULES_EPOCH: u32 = 32;
+        +pub const CURRENT_RULES_EPOCH: u32 = 33;
+        +pub const EPOCH_33_NEXT_FIX: u32 = 33;
+        +fn next_fix_at_epoch_33_and_epoch_32_still_replays() {
+        +    let s = Seams { rules_epoch: 32, .. };
+        +    assert_eq!(surge_stamp_of("X", "gf", "faction", 33), 1);
+        +}
+        diff --git a/scripts/solo/act_recorder.gd b/scripts/solo/act_recorder.gd
+        --- a/scripts/solo/act_recorder.gd
+        +++ b/scripts/solo/act_recorder.gd
+        @@ -48,2 +48,3 @@
+        +## Mirror note: no catch-up in this PR.
+        +static var rules_epoch: int = 27
+        """,
+    )
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert (
+        "rule 6: core epoch 33 bumped but the recorder mirror (act_recorder.gd) is not 33"
+        " and no 'MIRROR HOLD:' reason is in the diff"
+    ) in r.stdout
+
+
+def test_epoch_bump_with_mirror_hold_marker_is_accepted(tmp_path):
+    """The #935 pattern: a literal 'MIRROR HOLD:' reason lets the mirror lag."""
+    r = run_checker(
+        tmp_path,
+        """\
+        diff --git a/core/nml-core/src/acts.rs b/core/nml-core/src/acts.rs
+        --- a/core/nml-core/src/acts.rs
+        +++ b/core/nml-core/src/acts.rs
+        @@ -10,7 +10,9 @@
+        -pub const CURRENT_RULES_EPOCH: u32 = 32;
+        +pub const CURRENT_RULES_EPOCH: u32 = 33;
+        +pub const EPOCH_33_NEXT_FIX: u32 = 33;
+        +fn next_fix_at_epoch_33_and_epoch_32_still_replays() {
+        +    let s = Seams { rules_epoch: 32, .. };
+        +    assert_eq!(surge_stamp_of("X", "gf", "faction", 33), 1);
+        +}
+        diff --git a/scripts/solo/act_recorder.gd b/scripts/solo/act_recorder.gd
+        --- a/scripts/solo/act_recorder.gd
+        +++ b/scripts/solo/act_recorder.gd
+        @@ -48,2 +48,3 @@
+        +## MIRROR HOLD: the mirror lags one epoch while the splitprof PR lands.
+        +static var rules_epoch: int = 27
+        """,
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "epoch-gate: OK" in r.stdout
+
+
 def test_diff_without_any_epoch_symbol_still_passes(tmp_path):
     """The 'nothing to check' path must stay for diffs that touch no epoch symbol."""
     r = run_checker(
