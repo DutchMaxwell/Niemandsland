@@ -1576,6 +1576,7 @@ mod retreating_strike;
     mod self_destruct;
 mod second_wind;
 mod second_wind_score;
+mod surge_mark;
 mod spell_accumulator;
 mod spell_conduit;
 mod split_fire;

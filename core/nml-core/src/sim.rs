@@ -22,12 +22,13 @@ use crate::combat::{
 use crate::sight;
 use crate::geom::{self, V3};
 use crate::acts::{
-    rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
-    EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
-    EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
-    EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS,
-    EPOCH_32_STRAFING, EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA,
-    EPOCH_38_WATCHBORN_LATCH, EPOCH_41_SELF_DESTRUCT_SURVIVORS,
+    rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES,
+    EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU,
+    EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND, EPOCH_12_MOVE_BUFF,
+    EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING, EPOCH_19_MOVE_GRANTS_FOLD,
+    EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS, EPOCH_32_STRAFING,
+    EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA, EPOCH_38_WATCHBORN_LATCH,
+    EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -1341,6 +1342,15 @@ fn tray_vs_marks(
             } else {
                 base.to_string()
             };
+            // EPOCH 44 SURGE MARK — rules-must-log, the placement half: the
+            // pick names itself the one time the mark lands (the consumption
+            // half logs at the dice folds). Trace-gated like every other
+            // core-side seam line.
+            if b.name == "Surge Mark" {
+                trace_rule("mark", &b.name, &format!(
+                    "{} marks {} — friendly units attacking it gain {} (once)",
+                    statics[pb].name, statics[next.roster.profile[ti]].name, grant));
+            }
             next.buffs[si].push(mods::LiveMod {
                 hit_mod: 0,
                 casting_mod: 0,
@@ -2551,6 +2561,14 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                 c.pierce_melee_grant || mods::granted_exact(state, i, "AP(+1) in melee");
         }
         c.pierce_assault_grant = mods::granted(state, i, "Piercing Assault");
+        // EPOCH 44 SURGE MARK — the mark's once-grant ("Surge", placed by
+        // `tray_vs_marks` at the attack seam, spent with the exchange) rides
+        // the same attacker-side read the Primal Boost grant uses; the spell
+        // casts' "Surge" grants sit in the ATTACKERS-side net (`granted_vs`),
+        // so they stay unread exactly as before. Gated: below 38 no such
+        // record can exist (the entry replays the recorded self-Surge stamp).
+        c.surge_mark_grant =
+            rule_on(rules_epoch, EPOCH_44_SURGE_MARK) && mods::granted(state, i, "Surge");
         c.unpredictable_shooting =
             c.unpredictable_shooting || mods::granted(state, i, "Unpredictable Shooter");
         // The Regeneration-primitive boosts: the granted entry's printed

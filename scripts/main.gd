@@ -4543,10 +4543,20 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 			bonus += surge_fives
 			if bonus > 0 and battle_log != null:
 				# #193 rules-must-log: this was the LAST silent on-6 branch — a "2 hits" tray that
-				# resolves as "3 hits" reads broken, not Surge.
-				battle_log.log_event(BattleLog.Category.COMBAT, "Surge: +%d hit%s (unmodified %s)" % [
-					bonus, ("" if bonus == 1 else "s"), ("6s" if surge_fives == 0 else "5-6s")], true)
-				_solo_rule_float(target, "Surge +%d" % bonus)
+				# resolves as "3 hits" reads broken, not Surge. EPOCH 38 SURGE MARK: the bridge
+				# (_solo_bridge_granted_flags) folds the marked target's once-grant into THIS
+				# profile flag and tags the source — the mark's own consumption names itself.
+				var surge_src := str(profile.get("_surge_from_spell", ""))
+				if surge_src == "Surge Mark":
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"Surge Mark: +%d hit%s (unmodified 6s) against the marked %s (once)" % [
+							bonus, ("" if bonus == 1 else "s"),
+							(target.get_name() if target != null else "target")], true)
+					_solo_rule_float(target, "Surge Mark +%d" % bonus)
+				else:
+					battle_log.log_event(BattleLog.Category.COMBAT, "Surge: +%d hit%s (unmodified %s)" % [
+						bonus, ("" if bonus == 1 else "s"), ("6s" if surge_fives == 0 else "5-6s")], true)
+					_solo_rule_float(target, "Surge +%d" % bonus)
 			hits += bonus
 	# Coverage wave: the extra-ATTACK form (Bloodborn/Clan Warrior/Primal/Predator Fighter — "for
 	# each unmodified 6 to hit, roll +1 attack; doesn't apply to newly generated attacks"): the
