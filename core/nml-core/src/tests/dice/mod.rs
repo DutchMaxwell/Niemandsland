@@ -397,6 +397,7 @@
     mod heavy_impact;
 mod indirect_moved;
 mod melee_impact_order;
+mod relentless_thrust;
 mod morale_dice;
 mod morale_rating;
 mod rung_i_dice;

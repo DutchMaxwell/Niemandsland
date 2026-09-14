@@ -71,3 +71,52 @@ use super::*;
         let s = axis_scale(8.0, 9.0, 10.0);
         assert!((8.0 + 9.0 * s - 10.0).abs() < 1e-4, "scale {s} overshoots the edge");
     }
+
+    // --- TEST WAVE (2026-09-14, D-PROOF) — the rule's NUMBER pin: the EXACT
+    // name read (`unit_rule_active`'s own literal, gf battle_brothers) stamps
+    // `reposition_artillery_active` through the REAL `build_for`, and the
+    // stamp forces the artillery EXACTLY 9" toward the not-yet-activated
+    // enemy, dice-free.
+
+    /// The bearer built by name: "Re-Position Artillery" in gf
+    /// battle_brothers stamps the flag; without the name the same carrier
+    /// stays mute — and the flag is what forces the 9" move.
+    #[test]
+    fn reposition_artillery_read_by_name_forces_the_nine_inch_move() {
+        let terrain = crate::terrain::Terrain::default();
+        let mut reg = crate::rules::Registries::new(&repo_root());
+        let (st, mut statics) = reposition_line();
+        let built = UnitStatic::build_for(
+            &mut reg,
+            &boost_carrier("gf", "battle_brothers", &["Re-Position Artillery"]),
+            crate::acts::CURRENT_RULES_EPOCH,
+        );
+        assert!(built.reposition_artillery_active, "the exact name is registry-backed");
+        statics[0] = built;
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &reposition_action(), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(shot.rolls.is_empty(), "Re-Position Artillery is dice-free");
+        let g_pos = next.positions[1][0];
+        assert!((g_pos[0] - 13.0 * IN2M).abs() < 1e-6, "the 9\" forced move: {g_pos:?}");
+
+        // The no-rule carrier of the same faction: flag off, no move.
+        let (st2, mut statics2) = reposition_line();
+        let bare = UnitStatic::build_for(
+            &mut reg,
+            &boost_carrier("gf", "battle_brothers", &[]),
+            crate::acts::CURRENT_RULES_EPOCH,
+        );
+        assert!(!bare.reposition_artillery_active);
+        statics2[0] = bare;
+        let mut tray2 = Tray::seeded(7);
+        let mut rng2 = crate::rng::GodotRng::new(0);
+        let (next2, _) = resolve_stochastic_tray_on_board(
+            &statics2, &st2, &reposition_action(), &terrain, Seams::default(), &mut rng2, &mut tray2,
+        )
+        .unwrap();
+        assert_eq!(next2.positions[1][0], st2.positions[1][0], "no rule, no move");
+    }
