@@ -55,7 +55,7 @@ func test_file_import_builds_the_fixture_army_offline() -> void:
 	var client := _offline_client()
 	var army := await client.import_from_file(FIXTURE)
 	assert_object(army).is_not_null()
-	assert_int(army.units.size()).is_equal(0)
+	assert_int(army.units.size()).is_equal(2)
 	assert_str(army.name).is_equal("Wolf Brothers Warband 1500")
 	assert_int(army.points).is_equal(1500)
 	assert_str(army.game_system).is_equal("Grimdark Future")
