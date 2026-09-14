@@ -2770,6 +2770,9 @@ fn stamp(
         if hit.name == "Surge" || hit.name == "Ferocious" || !hit.upgrades.is_empty() {
             continue;
         }
+        if hit.name == "Bloodborn" || hit.name == "Predator Shooter" {
+            continue;
+        }
         // EPOCH_17_SURGE_SCOPE (sweep B, row "Surge when Shooting"): the entry
         // carries `shooting_only` now — "when shooting" is the book's own
         // printed scope, so the melee twin must stay silent from 17. Only THIS

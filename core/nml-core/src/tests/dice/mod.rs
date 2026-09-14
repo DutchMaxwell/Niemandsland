@@ -392,6 +392,7 @@
 // fixtures every family shares stay here, in the module root.
     mod entrenched;
     mod fortified;
+    mod gate_only_rows;
     mod growth_markers;
 mod indirect_moved;
 mod melee_impact_order;
