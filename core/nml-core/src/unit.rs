@@ -897,6 +897,17 @@ pub struct UnitStatic {
     /// through the RECORDED `bounding_d3` faces, so this is the core's own
     /// per-entry read, not a simulation input — see `bounding_boost_dice_of`.
     pub bounding_dice: i64,
+    /// EPOCH_24_PLACE_D3 — the activation placement's own read: the family
+    /// member the table's band pass picks (solo_controller.gd:1660-1687 — the
+    /// named `Bounding` rule first, else the primitive's DATA-alias family
+    /// (Wolfborn, Rapid Blink, …) scanned in rule order, longest reach
+    /// `dice*2 + plus` wins). None below the gate. UNLIKE `bounding` /
+    /// `bounding_dice` above this IS a simulation input: in a FRESH core sim
+    /// (no recorded `bounding_d3` trace) the core rolls the dice itself
+    /// (`solo_controller.gd:1692`'s `_draw_traced(1, 3, ..)` twin, the seeded
+    /// stream) and performs the placement before the move; a RECORDED act
+    /// replays the table's own band-bonus model byte-exact and never hops.
+    pub bounding_place: Option<PlaceSpec>,
     /// The Quick/Fast move-band family — the named carriers' own registry
     /// params, summed the way BOTH band passes stack them (per rule NAME:
     /// `movement_range_controller.gd:164-188`'s `counted` dict,
@@ -4515,6 +4526,62 @@ fn bounding_of(reg: &mut Registries, p: &Profile) -> Option<f64> {
     None
 }
 
+/// EPOCH_24_PLACE_D3 — one `Bounding`-primitive carrier's placement read:
+/// the rule name the table logs, the dice count and the flat `place_d3_plus`.
+#[derive(Debug, Default, PartialEq)]
+pub struct PlaceSpec {
+    /// The rule name the table logs ("Bounding", "Wolfborn", "Rapid Blink").
+    pub name: String,
+    /// `bounding_dice_count` — the entry's `dice_count`, else the head of an
+    /// "NdM" `place_die`, else one.
+    pub dice: i64,
+    /// `place_d3_plus` — 1.0 default for the named rule, 0.0 for an alias.
+    pub plus: f64,
+}
+
+/// EPOCH_24_PLACE_D3 — the activation placement's own read, the table's own
+/// pick (solo_controller.gd:1660-1687): `unit_rule_active(.., "Bounding")`
+/// takes the named entry (`place_d3_plus` default 1, `bounding_dice_count`
+/// dice); otherwise the `Bounding` primitive's DATA-alias family (Wolfborn,
+/// Rapid Blink, Wave-Step, …) is scanned in rule order and the LONGEST reach
+/// wins (`dice * 2 + plus` — the dice's average faces), so a unit carrying
+/// both a base alias and its Boost uses the UPGRADE. None below the gate —
+/// below 24 the placement reaches the core only through the RECORDED
+/// `bounding_d3` trace, byte-exact.
+fn bounding_place_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<PlaceSpec> {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_24_PLACE_D3) {
+        return None;
+    }
+    // Borrow order: `unit_rule_active` and `rules_of_primitive` both take
+    // `&mut reg`; the map borrow starts only after both have returned.
+    let named = unit_rule_active(reg, p, "Bounding");
+    let hits = rules_of_primitive(reg, p, "Bounding");
+    let map = reg.rules_for(&p.game_system);
+    if named {
+        let (dice, plus) = match map.lookup(&p.faction_folder, "Bounding") {
+            Some(e) => (bounding_dice_count(e), e.param_f("place_d3_plus", 1.0)),
+            None => (1, 1.0),
+        };
+        return Some(PlaceSpec { name: "Bounding".into(), dice, plus });
+    }
+    let mut best: Option<PlaceSpec> = None;
+    let mut best_reach = -1.0f64;
+    for hit in hits {
+        if hit.name == "Bounding" {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
+        let dice = bounding_dice_count(e);
+        let plus = e.param_f("place_d3_plus", 0.0);
+        let reach = dice as f64 * 2.0 + plus;
+        if reach > best_reach {
+            best_reach = reach;
+            best = Some(PlaceSpec { name: hit.name.clone(), dice, plus });
+        }
+    }
+    best
+}
+
 /// The SOLO move-grant family's own registry params (`EPOCH_19_MOVE_GRANTS_FOLD`),
 /// stamped per profile exactly the way `move_rule_mods_of` stamps the printed
 /// carriers: the table's band pass (movement_range_controller.gd:126-150)
@@ -5365,6 +5432,7 @@ impl UnitStatic {
             is_hero: has_special_rule(&p.special_rules, "Hero"),
             bounding: bounding_of(reg, p),
             bounding_dice: bounding_boost_dice_of(reg, p, rules_epoch),
+            bounding_place: bounding_place_of(reg, p, rules_epoch),
             move_rule_mods: move_rule_mods_of(reg, p, rules_epoch),
             solo_move_grant_mods: solo_move_grant_mods_of(reg, p, rules_epoch),
             royal_legion_range_in: royal_legion.0,

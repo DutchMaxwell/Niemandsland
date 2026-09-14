@@ -313,7 +313,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 23;
+pub const CURRENT_RULES_EPOCH: u32 = 24;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -596,6 +596,23 @@ pub const EPOCH_22_SCREENED_MELEE: u32 = 22;
 /// change. Every call site reads THIS constant, not the literal `23` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_23_INERT_MARKS: u32 = 23;
+
+/// The D3" ACTIVATION PLACEMENT gate (14.09., sweep C rows Wave-Step/Wolfborn
+/// + sweep B row Rapid Blink — the `Bounding {place_d3 ..}` primitive): the
+/// book's "When this unit is activated, you may place all models with this
+/// rule in it anywhere fully within D3\" of their position." The table rolls
+/// the die at the activation's head on its seeded stream
+/// (solo_controller.gd:1688-1710) and values it as a move-band bonus; the
+/// core replayed that band only through the RECORDED `bounding_d3` trace
+/// (`sim::bounding_bonus_in`), so every fresh core-simulated game never
+/// hopped and the carrier's reach ran short by up to the roll. From 24 a
+/// FRESH sim (an act with no recorded `bounding_d3` trace) rolls its own
+/// dice from the seeded stream and re-places the carrier BEFORE the move
+/// with #930's free-placement scan (`deployment::vanguard_free_place`,
+/// radius = the rolled inches). Below 24 the trace replay stays the whole
+/// effect, byte-exact. Every call site reads THIS constant, not the literal
+/// `24` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_24_PLACE_D3: u32 = 24;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -1081,7 +1098,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 23, "epoch 23's gate (EPOCH_23_INERT_MARKS) bumps the live epoch to 23, one past #932's 22 (21 and 20 left free)");
+        assert_eq!(CURRENT_RULES_EPOCH, 24, "epoch 24's gate (EPOCH_24_PLACE_D3) bumps the live epoch to 24, one past #936's 23 (21 and 20 left free)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),

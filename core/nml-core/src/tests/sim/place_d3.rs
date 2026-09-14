@@ -79,16 +79,69 @@ use super::*;
     /// roll is 1..=3, the scan only takes a strictly closer legal spot.
     #[test]
     fn at_epoch_24_a_wolfborn_activation_hops_before_the_move() {
-        let (st, statics) = hop_line(24);
-        let (next, shot) = run_hop(&st, &statics, 24);
+        let (st, statics) = hop_line(crate::acts::EPOCH_24_PLACE_D3);
+        let (next, shot) = run_hop(&st, &statics, crate::acts::EPOCH_24_PLACE_D3);
         let moved_in = (next.positions[0][0][0] - st.positions[0][0][0]) / IN2M;
         assert!(
-            moved_in > 6.0 && moved_in < 9.5,
+            moved_in > 6.5 && moved_in < 9.5,
             "the hop joined the move: {moved_in}\" (band 6\" + up to 3\" of D3)"
         );
         assert!(
             shot.log.iter().any(|l| l.contains("Wolfborn") && l.contains("rolled")),
             "rules-must-log: one trace line naming the rule and the rolled distance, got {:?}",
+            shot.log
+        );
+    }
+
+    /// The OLD leg, pinned to the epoch immediately below the bump —
+    /// EPOCH_23_INERT_MARKS (#936 landed mid-flight, so the pin moved from 22
+    /// to 23 exactly as the brief's rebase rule asks): a fresh-sim Wolfborn
+    /// activation does NOT hop — the ADVANCE is the plain 6\" band to the
+    /// digit (every recorded corpus's reading), and nothing logs. Below the
+    /// gate the stamp is `None`, the trace replay stays the whole effect.
+    #[test]
+    fn at_epoch_23_a_wolfborn_activation_stays_on_its_plain_band() {
+        let (st, statics) = hop_line(crate::acts::EPOCH_23_INERT_MARKS);
+        let (next, shot) = run_hop(&st, &statics, crate::acts::EPOCH_23_INERT_MARKS);
+        let moved_in = (next.positions[0][0][0] - st.positions[0][0][0]) / IN2M;
+        assert!((moved_in - 6.0).abs() < 1e-6, "plain band only: {moved_in}\"");
+        assert!(
+            !shot.log.iter().any(|l| l.contains("placed")),
+            "no hop below the gate: {:?}",
+            shot.log
+        );
+    }
+
+    /// The replay law at the NEW epoch: a RECORDED act (the table's own
+    /// `bounding_d3` trace) replays the table's band-bonus model byte-exact —
+    /// the trace's faces grow the band (6\" + 2\"), there is NO second hop and
+    /// no placement log, exactly what every recorded table game printed.
+    #[test]
+    fn a_recorded_trace_replays_the_band_bonus_at_epoch_24_without_a_hop() {
+        use crate::io::TracedRoll;
+        let (st, statics) = hop_line(crate::acts::EPOCH_24_PLACE_D3);
+        let act = crate::io::Action {
+            traced: Some(vec![TracedRoll { tag: "bounding_d3".into(), faces: vec![2], plus: 0 }]),
+            ..advance_to(20.0)
+        };
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &act, &crate::terrain::Terrain::default(),
+            Seams { rules_epoch: crate::acts::EPOCH_24_PLACE_D3, ..Seams::default() },
+            &mut rng, &mut tray,
+        )
+        .unwrap();
+        let moved_in = (next.positions[0][0][0] - st.positions[0][0][0]) / IN2M;
+        assert!((moved_in - 8.0).abs() < 1e-6, "band 6\" + the recorded 2\": {moved_in}\"");
+        assert!(
+            shot.log.iter().any(|l| l.contains("+2")),
+            "the table's own band model logs: {:?}",
+            shot.log
+        );
+        assert!(
+            !shot.log.iter().any(|l| l.contains("placed")),
+            "a recorded act never hops: {:?}",
             shot.log
         );
     }

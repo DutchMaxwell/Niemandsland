@@ -4543,6 +4543,89 @@ fn bounding_bonus_in(action: &Action) -> f64 {
         .unwrap_or(0.0)
 }
 
+/// EPOCH_24_PLACE_D3 — the D3" activation placement's hop, the FRESH-sim arm
+/// of `bounding_bonus_in` above (a recorded act replays the table's own
+/// band-bonus model byte-exact and never reaches here): the caller gates on
+/// the frozen constant, a move kind and no recorded `bounding_d3` trace, and
+/// this rolls the carrier's dice from the SEEDED stream (one `randi_range(1,
+/// 3)` per die — `solo_controller.gd:1692`'s `_draw_traced(1, 3, ..)` twin)
+/// and re-places the whole unit BEFORE the move with #930's free-placement
+/// scan (`deployment::vanguard_free_place` — radius = the rolled inches,
+/// admissible = the base fully within and not overlapping, the same scan law
+/// and deterministic strict-`<` nearest-objective tie-break, so Wave-Step /
+/// Wolfborn / Rapid Blink and the Vanguard family share one mechanism). The
+/// table's AI never declines the placement (:1688 fires unconditionally), so
+/// the core takes it whenever the scan finds a strictly closer legal spot —
+/// the scan is the only decline. No board or no seeded stream: no hop — a
+/// placement needs a table and a die. Returns the rules-must-log line when
+/// the unit actually moved.
+fn place_d3_hop(
+    next: &mut State,
+    si: usize,
+    cover: Cover,
+    spec: &crate::unit::PlaceSpec,
+    mut rng: Option<&mut GodotRng>,
+) -> Option<String> {
+    let Some(rng) = rng else { return None };
+    let Cover::Board(t) = cover else { return None };
+    if next.alive.get(si).copied().unwrap_or(0) <= 0 || next.positions[si].is_empty() {
+        return None;
+    }
+    let mut faces = Vec::with_capacity(spec.dice.max(1) as usize);
+    for _ in 0..spec.dice.max(1) {
+        faces.push(rng.randi_range(1, 3));
+    }
+    let reach_in = faces.iter().sum::<i64>() as f64 + spec.plus;
+    if reach_in <= 0.0 {
+        return None;
+    }
+    // The unit as ONE disc (the placement moves all models together): the
+    // centroid and the widest model's radius; every other live unit is one
+    // disc too (its centroid, its widest radius).
+    let centre_of = |ps: &[[f64; 3]]| -> (f64, f64) {
+        let n = ps.len().max(1) as f64;
+        (
+            ps.iter().map(|p| p[0]).sum::<f64>() / n,
+            ps.iter().map(|p| p[2]).sum::<f64>() / n,
+        )
+    };
+    let widest = |radii: &[f64]| {
+        radii.iter().copied().fold(0.0f64, f64::max).max(DEFAULT_BASE_RADIUS_M)
+    };
+    let own_r = widest(&next.radii[si]);
+    let occupied: Vec<crate::deployment::Occupied> = next
+        .positions
+        .iter()
+        .enumerate()
+        .filter(|(j, ps)| *j != si && !ps.is_empty())
+        .map(|(j, ps)| crate::deployment::Occupied {
+            pos: centre_of(ps),
+            radius: widest(&next.radii[j]),
+        })
+        .collect();
+    let objectives: Vec<(f64, f64)> =
+        next.objectives.iter().map(|o| (o.pos[0], o.pos[2])).collect();
+    let spot = centre_of(&next.positions[si]);
+    let blocked = |p: (f64, f64)| crate::deployment::spot_blocked(t, p, false, own_r, &[], own_r);
+    let dest = crate::deployment::vanguard_free_place(
+        spot, &occupied, &objectives, &blocked, own_r, &[], own_r, t.walls_in(),
+        reach_in * t.in2m(), t,
+    );
+    if dest == spot {
+        return None;
+    }
+    let (dx, dz) = (dest.0 - spot.0, dest.1 - spot.1);
+    for m in next.positions[si].iter_mut() {
+        m[0] += dx;
+        m[2] += dz;
+    }
+    let hop_in = dx.hypot(dz) / t.in2m();
+    Some(format!(
+        "{}: on activation the unit is placed within D3\" of its position — rolled {reach_in:.0}\" — a {hop_in:.2}\" hop before its move",
+        spec.name
+    ))
+}
+
 /// Versatile Reach (solo_controller.gd:1781-1827) — the CHARGE half of the
 /// per-activation "pick one". The ACTION is the witness: at the table the
 /// charge execution (:2213) is reachable with a gap in the unlock ring only if
@@ -5020,6 +5103,25 @@ fn resolve_with(
         tray_surprise_attack(statics, state, &mut next, si, seams, tray, shot);
     }
 
+    // --- EPOCH_24_PLACE_D3 — the D3" activation placement, BEFORE the move
+    // (the table rolls it at the activation's head, solo_controller.gd:1688-
+    // 1710). A RECORDED act carries the table's own `bounding_d3` trace and
+    // replays the table's band-bonus model byte-exact (`bounding_bonus_in`
+    // above) — the hop is the FRESH arm: no recorded die, so the core rolls
+    // its own from the seeded stream and re-places the carrier. Below the
+    // gate every corpus replays the plain reading, byte-exact.
+    let hop_log = if rule_on(seams.rules_epoch, crate::acts::EPOCH_24_PLACE_D3)
+        && bounding_bonus_in(action) == 0.0
+        && matches!(kind, ADVANCE | RUSH | CHARGE)
+    {
+        statics[pi_s]
+            .bounding_place
+            .as_ref()
+            .and_then(|spec| place_d3_hop(&mut next, si, cover, spec, rng.as_deref_mut()))
+    } else {
+        None
+    };
+
     // --- move (battle_sim.gd:575-596) ---
     // `SoloController.sim_move_bands(su["unit"])` is a pure read of the unit's
     // rules (bands + the Musician bonus, solo_controller.gd:4966-4982), flattened
@@ -5105,6 +5207,13 @@ fn resolve_with(
                 "Bounding: {} — +{bounding_in:.0}\" every move band this activation",
                 statics[pi_s].name
             ));
+        }
+    }
+    // EPOCH_24_PLACE_D3 — rules-must-log: ONE trace line per hop, naming the
+    // rule and the rolled distance (`place_d3_hop` above).
+    if let Some(line) = hop_log {
+        if let Some((_, shot)) = dice.as_mut() {
+            shot.log.push(line);
         }
     }
     if feat_in != 0.0 {
