@@ -4550,24 +4550,25 @@ fn bounding_bonus_in(action: &Action) -> f64 {
 /// this rolls the carrier's dice from the SEEDED stream (one `randi_range(1,
 /// 3)` per die — `solo_controller.gd:1692`'s `_draw_traced(1, 3, ..)` twin)
 /// and re-places the whole unit BEFORE the move with #930's free-placement
-/// scan (`deployment::vanguard_free_place` — radius = the rolled inches,
-/// admissible = the base fully within and not overlapping, the same scan law
-/// and deterministic strict-`<` nearest-objective tie-break, so Wave-Step /
-/// Wolfborn / Rapid Blink and the Vanguard family share one mechanism). The
-/// table's AI never declines the placement (:1688 fires unconditionally), so
-/// the core takes it whenever the scan finds a strictly closer legal spot —
-/// the scan is the only decline. No board or no seeded stream: no hop — a
-/// placement needs a table and a die. Returns the rules-must-log line when
-/// the unit actually moved.
+/// scan (`deployment::vanguard_free_place`, radius = the rolled inches,
+/// admissible = fully within and not overlapping, the same deterministic
+/// strict-`<` tie-break — Wave-Step/Wolfborn/Rapid Blink and the Vanguard
+/// family share one mechanism). The table's AI never declines (:1688 fires
+/// unconditionally), so the core takes it whenever the scan finds a strictly
+/// closer legal spot — the scan is the only decline. No board or no seeded
+/// stream: no hop. Returns the rules-must-log line when the unit moved.
 fn place_d3_hop(
     next: &mut State,
     si: usize,
     cover: Cover,
     spec: &crate::unit::PlaceSpec,
-    mut rng: Option<&mut GodotRng>,
+    rng: Option<&mut GodotRng>,
 ) -> Option<String> {
-    let Some(rng) = rng else { return None };
-    let Cover::Board(t) = cover else { return None };
+    let rng = rng?;
+    let t = match cover {
+        Cover::Board(t) => t,
+        _ => return None,
+    };
     if next.alive.get(si).copied().unwrap_or(0) <= 0 || next.positions[si].is_empty() {
         return None;
     }
@@ -4576,18 +4577,13 @@ fn place_d3_hop(
         faces.push(rng.randi_range(1, 3));
     }
     let reach_in = faces.iter().sum::<i64>() as f64 + spec.plus;
-    if reach_in <= 0.0 {
-        return None;
-    }
+    if reach_in <= 0.0 { return None; }
     // The unit as ONE disc (the placement moves all models together): the
     // centroid and the widest model's radius; every other live unit is one
     // disc too (its centroid, its widest radius).
     let centre_of = |ps: &[[f64; 3]]| -> (f64, f64) {
         let n = ps.len().max(1) as f64;
-        (
-            ps.iter().map(|p| p[0]).sum::<f64>() / n,
-            ps.iter().map(|p| p[2]).sum::<f64>() / n,
-        )
+        (ps.iter().map(|p| p[0]).sum::<f64>() / n, ps.iter().map(|p| p[2]).sum::<f64>() / n)
     };
     let widest = |radii: &[f64]| {
         radii.iter().copied().fold(0.0f64, f64::max).max(DEFAULT_BASE_RADIUS_M)
@@ -4599,8 +4595,7 @@ fn place_d3_hop(
         .enumerate()
         .filter(|(j, ps)| *j != si && !ps.is_empty())
         .map(|(j, ps)| crate::deployment::Occupied {
-            pos: centre_of(ps),
-            radius: widest(&next.radii[j]),
+            pos: centre_of(ps), radius: widest(&next.radii[j]),
         })
         .collect();
     let objectives: Vec<(f64, f64)> =
@@ -5129,11 +5124,9 @@ fn resolve_with(
 
     // --- EPOCH_24_PLACE_D3 — the D3" activation placement, BEFORE the move
     // (the table rolls it at the activation's head, solo_controller.gd:1688-
-    // 1710). A RECORDED act carries the table's own `bounding_d3` trace and
-    // replays the table's band-bonus model byte-exact (`bounding_bonus_in`
-    // above) — the hop is the FRESH arm: no recorded die, so the core rolls
-    // its own from the seeded stream and re-places the carrier. Below the
-    // gate every corpus replays the plain reading, byte-exact.
+    // 1710). A RECORDED act replays the table's band-bonus model byte-exact
+    // (`bounding_bonus_in` above) — the hop is the FRESH arm. Below the gate
+    // every corpus replays the plain reading, byte-exact.
     let hop_log = if rule_on(seams.rules_epoch, crate::acts::EPOCH_24_PLACE_D3)
         && bounding_bonus_in(action) == 0.0
         && matches!(kind, ADVANCE | RUSH | CHARGE)

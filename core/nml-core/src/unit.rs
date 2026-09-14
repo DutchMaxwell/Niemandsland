@@ -901,13 +901,12 @@ pub struct UnitStatic {
     /// EPOCH_24_PLACE_D3 — the activation placement's own read: the family
     /// member the table's band pass picks (solo_controller.gd:1660-1687 — the
     /// named `Bounding` rule first, else the primitive's DATA-alias family
-    /// (Wolfborn, Rapid Blink, …) scanned in rule order, longest reach
-    /// `dice*2 + plus` wins). None below the gate. UNLIKE `bounding` /
-    /// `bounding_dice` above this IS a simulation input: in a FRESH core sim
-    /// (no recorded `bounding_d3` trace) the core rolls the dice itself
-    /// (`solo_controller.gd:1692`'s `_draw_traced(1, 3, ..)` twin, the seeded
-    /// stream) and performs the placement before the move; a RECORDED act
-    /// replays the table's own band-bonus model byte-exact and never hops.
+    /// scanned in rule order, longest reach `dice*2 + plus` wins). None below
+    /// the gate. UNLIKE `bounding` / `bounding_dice` above this IS a
+    /// simulation input: in a FRESH core sim (no recorded `bounding_d3`
+    /// trace) the core rolls the dice itself and performs the placement
+    /// before the move; a RECORDED act replays the table's band model
+    /// byte-exact and never hops.
     pub bounding_place: Option<PlaceSpec>,
     /// The Quick/Fast move-band family — the named carriers' own registry
     /// params, summed the way BOTH band passes stack them (per rule NAME:
