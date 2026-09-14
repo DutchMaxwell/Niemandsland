@@ -2025,3 +2025,23 @@ use super::*;
             );
         }
     }
+
+    /// "Ethereal" (aof ghostly_undead, Teleport primitive — rules-ethereal-bands,
+    /// epoch 25): "Once per activation, before attacking, place this model
+    /// anywhere fully within 6\" of its position. This model moves -6\" when
+    /// using Advance, and -6\" when using Rush/Charge." The band leg is
+    /// table-only today (the primitive pass
+    /// movement_range_controller.gd:142-164, "Teleport" in the allowlist via
+    /// NML-1121) while the core's `move_rule_mods_of` fold never spends the
+    /// entry's `advance_mod`/`rush_mod` (-6/-6). The fold must ride the
+    /// PRINTED NAME (the #489 lesson): the real "Teleport" rule shares the
+    /// primitive with NO band mods and must stay out. Gate ON at 25 (RED
+    /// before the fix).
+    #[test]
+    fn ethereal_prints_minus_six_on_both_bands_at_epoch_25() {
+        assert_eq!(
+            wave3_static_of("Ethereal", "aof", "ghostly_undead", 25).move_rule_mods,
+            Some(Bands { advance: -6.0, rush: -6.0, ..Default::default() }),
+            "epoch 25: the printed rule's own advance_mod/rush_mod on both bands (RED before the fix)"
+        );
+    }
