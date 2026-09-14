@@ -499,6 +499,26 @@ mod tests {
         assert!(!rule_name_matches("Toughness", "Tough"));
     }
 
+    /// SPLIT step 1: a parametrised `Split(<name> [<n>])` string names a
+    /// template exactly like a Spawn string does — the recorder stamps it
+    /// under `spawn:<carrier>:<Split string>` and the loader must demand it.
+    /// RED while `spawn_target_rule` matches only "Spawn".
+    #[test]
+    fn split_strings_name_a_template_like_spawn_does() {
+        assert_eq!(
+            spawn_target_rule(&["Split(Goblin Mob [4])".into()]),
+            Some(("Split(Goblin Mob [4])".to_string(), "Goblin Mob".to_string(), 4))
+        );
+        // The historical read keeps its FIRST-match order: a carrier with both
+        // strings names the SPAWN template, exactly as every loaded record
+        // read it — no existing record resolves a different string.
+        assert_eq!(
+            spawn_target_rule(&["Split(Goblin Mob [4])".into(), "Spawn(Rat Swarm [2])".into()])
+                .map(|(raw, _, _)| raw),
+            Some("Spawn(Rat Swarm [2])".to_string())
+        );
+    }
+
     #[test]
     fn folded_systems_are_counted_not_silent() {
         // F12: the fold onto "gf" says so — a per-input count (the one-line

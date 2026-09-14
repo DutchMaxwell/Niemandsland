@@ -587,6 +587,61 @@ use std::rc::Rc;
         assert!(!st.reinforcement_used[j], "no latch was spent on it");
     }
 
+    // ------------------------------------------------------- SPLIT (step 1) ---
+    //
+    // The Split family (gf 2: "when fully destroyed, place a new unit of X
+    // within 6\"") rides the SAME named-template contract Spawn rides
+    // (SPAWN_DESIGN_2026-09-08 §3.1): the RECORDER stamps the named copy's
+    // profile into the header map under `spawn:<carrier_key>:<Split string>`,
+    // and `spawn_target_rule` (rules.rs:168-175) must NAME the `Split` base
+    // name, so `index_spawn_profiles` (io.rs:643-663) feeds a map the loader
+    // actually demands. No simulation change yet — the profile is merely
+    // available for the casualty seam (step 2, sim.rs).
+
+    /// The Split twin of the Spawn fixture: same shape, the carrier's rule
+    /// string is `Split(Goblin Mob [4])`, the named template a FOUR-model unit.
+    const SPLIT_CARRIER: &str = r#""p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":2,"wounds_max":[2,2,2],"model_count":3,"caster_value":0,"base_radius":0.02,"game_system":"gf","faction_folder":"wormhole_daemons_of_change","special_rules":["Split(Goblin Mob [4])"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}"#;
+    const SPLIT_TEMPLATE: &str = r#""spawn:p1_0_a:Split(Goblin Mob [4])":{"unit_id":"spawn:p1_0_a:Split(Goblin Mob [4])","name":"Goblin Mob","quality":4,"defense":3,"tough":1,"wounds_max":[3,3,3,3],"model_count":4,"caster_value":0,"base_radius":0.03,"game_system":"gf","faction_folder":"wormhole_daemons_of_change","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}"#;
+
+    /// The act-corpus twin of `act_corpus`, over the Split fixture.
+    fn split_corpus(epoch: u32, with_map: bool, state: &str) -> String {
+        let map = if with_map {
+            format!(r#", "spawn_profiles":{{{SPLIT_TEMPLATE}}}"#)
+        } else {
+            String::new()
+        };
+        format!(
+            "{{\"kind\":\"header\",\"knobs\":{{\"rules_epoch\":{epoch}}},\"profiles\":{{{SPLIT_CARRIER},{ENEMY}}}{map}}}\n\
+             {{\"round\":1,\"player\":1,\"state\":{state}}}\n"
+        )
+    }
+
+    /// THE CONTRACT, both ends at once. A standing `Split(<name> [<n>])`
+    /// carrier is a template carrier exactly like a Spawn carrier: at epoch
+    /// >= 8 the load REFUSES a record whose header ships no
+    /// `spawn:p1_0_a:Split(Goblin Mob [4])` template — the same loud
+    /// never-a-silent-fallback ruling of record (io.rs:665-673, the #823
+    /// break) — and a header that ships the template exposes it through the
+    /// SAME `index_spawn_profiles` read (io.rs:643-663). RED while
+    /// `spawn_target_rule` (rules.rs:168-175) matches only "Spawn": the Split
+    /// record loads template-less and no template is ever demanded.
+    #[test]
+    fn act_split_standing_carrier_requires_and_exposes_its_template_from_epoch_8() {
+        for epoch in [8, CURRENT_RULES_EPOCH] {
+            let err = crate::acts::read_acts(split_corpus(epoch, false, PLAIN).as_bytes(), "split-act")
+                .expect_err("a standing Split carrier requires its named template");
+            assert!(err.contains("spawn_profiles"), "epoch {epoch}: {err}");
+            assert!(err.contains("p1_0_a"), "epoch {epoch}: {err}");
+            assert!(err.contains("Split(Goblin Mob [4])"), "epoch {epoch}: {err}");
+            let corpus = crate::acts::read_acts(split_corpus(epoch, true, PLAIN).as_bytes(), "split-act")
+                .expect("the Split template loads");
+            assert_eq!(corpus.acts.len(), 1);
+            let ti = corpus.profiles.index["spawn:p1_0_a:Split(Goblin Mob [4])"];
+            assert_eq!(corpus.profiles.list[ti].name, "Goblin Mob", "the NAMED unit's profile");
+            assert_eq!(corpus.profiles.list[ti].model_count, 4, "and its own shape");
+        }
+    }
+
     /// 14. THE WIRING, not the rule: the beat has to run at the core's REAL
     /// round boundary, not only where a test calls it. RED: leave
     /// `spawn_round_start` out of `rollout_traced` and this is the only test
