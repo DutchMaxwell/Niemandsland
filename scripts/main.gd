@@ -7159,6 +7159,22 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 			var pr: Dictionary = edr.get("params", {})
 			if bool(pr.get("bypass_regen", false)) and AiEv.facet_applies(pr, int(profile.get("range", 0))):
 				return true
+		# Sweep E (2026-09-14): "Bane in Melee" / "Bane in Melee Buff" sit on the MODEL too (gf
+		# common / human_defense_force), and every arm above reads only the weapon's printed
+		# rules or other primitives — the table granted the Regeneration heal the core refuses
+		# (unit.rs:2519, the melee-scoped arm at 2549-2551). The melee scope IS the name
+		# (main.gd:6672's ladder; the entries carry no melee_only param), so the prefix read
+		# never touches plain "Bane" (the #489 lesson) or "Bane when Shooting", and a ranged
+		# profile stays Regeneration-able. Rules-must-log: the refusal names the rule.
+		for e in RulesRegistry.unit_rules_of_primitive(attacker, "Bane"):
+			var edb := e as Dictionary
+			if not str(edb["name"]).begins_with("Bane in Melee"):
+				continue
+			var pb: Dictionary = edb.get("params", {})
+			if bool(pb.get("bypass_regen", false)) and int(profile.get("range", 0)) <= 0:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s: Regeneration ignored" % str(edb["name"]), _solo_is_ai_unit(attacker))
+				return true
 	# EXACT name (the Ferocious lesson): has_special_rule matches by PREFIX, so the plain-Unstoppable
 	# fallback also answered for "Unstoppable in Melee" / "Unstoppable when Shooting" — which is how
 	# both half-variants cut through Regeneration in BOTH halves no matter what their gate said — and
