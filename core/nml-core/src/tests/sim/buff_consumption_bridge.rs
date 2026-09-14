@@ -207,6 +207,27 @@ use super::*;
         assert_eq!(next9u.vs_mark_round[0], st2.round, "Unstoppable still fires at 9");
     }
 
+    /// EPOCH 34 UNSTOPPABLE MARK — the CLAMP half: the once-grant a mark
+    /// leaves on its bearer ("Unstoppable", the mark's base name) must count
+    /// like the weapon's own `p.unstoppable` at the to-hit clamp, so an
+    /// Evasive (-1 to hit) target is hit at the unmodified Quality 4+ at
+    /// rules_epoch 34. DIVERGES on main: the clamp reads the weapon flag
+    /// only (`dice.rs:890`/`:1329`), the penalty bites and the volley rolls
+    /// 5+ — while the table's bridged clamp (`main.gd:3254`/:6138/:10192)
+    /// rolls 4+ on the same marked attack.
+    #[test]
+    fn granted_unstoppable_mark_hits_an_evasive_target_at_the_unmodified_quality() {
+        let (st, mut statics) = buff_line();
+        statics[0].utility_buffs =
+            vec![UtilityBuff { vs_target: true, needs_los: true, range_in: 18.0, ..ub("Unstoppable Mark") }];
+        statics[2].ctx.evasive = true;
+        let (next, marked) = run_buff_epoch(&st, &statics, &buff_action(Some("b")), 13, 34);
+        assert_eq!(marked.rolls[0].target, 4, "the granted mark ignores the Evasive -1");
+        // "once": the exchange that used the grant spends it — the same
+        // once-record the Regeneration bypass reads (shared consumption).
+        assert!(next.buffs.iter().all(|v| v.is_empty()), "the exchange spends the grant");
+    }
+
     /// `run_buff` with the record's OWN `rules_epoch` (the `Seams::default()`
     /// path rides epoch 0, which is what the pre-class-fix corpora stamp).
     fn run_buff_epoch(
