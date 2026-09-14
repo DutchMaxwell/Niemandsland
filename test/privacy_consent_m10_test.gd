@@ -212,12 +212,14 @@ func test_example_is_shipped_and_preview_is_nonempty() -> void:
 	menu.queue_free()
 
 
-func test_german_maintainer_placeholders_are_localized() -> void:
+func test_privacy_facts_are_published_in_both_languages() -> void:
 	var menu_script = load("res://scripts/privacy/privacy_menu.gd")
 	for key in ["destination", "controller", "processor", "recipients", "retention", "withdrawal", "contact"]:
-		assert_str(menu_script.text_for("de", key)).contains("wird vom Betreiber veröffentlicht")
-		assert_str(menu_script.text_for("de", key)).not_contains("to be published by the maintainer")
-		assert_str(menu_script.text_for("en", key)).contains("to be published by the maintainer")
+		assert_str(menu_script.text_for("en", key)).not_contains("to be published")
+		assert_str(menu_script.text_for("de", key)).not_contains("to be published")
+		assert_str(menu_script.text_for("de", key)).not_contains("wird vom Betreiber veröffentlicht")
+	assert_str(menu_script.text_for("en", "controller")).contains("privacy@niemandsland.xyz")
+	assert_str(menu_script.text_for("de", "controller")).contains("privacy@niemandsland.xyz")
 
 
 func test_press_review_details_keeps_button_alive_for_feedback() -> void:

@@ -475,7 +475,8 @@ func _on_credits_pressed() -> void:
 		+ "UI icons: Phosphor Icons (MIT).\n" \
 		+ "Engine: Godot Engine (MIT).\n\n" \
 		+ "OnePageRules army data is loaded at runtime via the Army Forge API; it is not bundled.\n\n" \
-		+ "Full details: THIRD_PARTY.md in the project repository."
+		+ "Full details: THIRD_PARTY.md in the project repository.\n\n" \
+		+ "Niemandsland is a free, non-profit, open-source fan project (MIT code, CC-BY-SA generated assets). It is not affiliated with, endorsed by, or sponsored by OnePageRules. It bundles no OPR rules text, files, art or marks; the rules are OPR's, available free at onepagerules.com, and army lists come from OPR's Army Forge. Responsible: Andreas Kesberg, privacy@niemandsland.xyz."
 	scroll.add_child(body)
 	dialog.add_child(scroll)
 	add_child(dialog)
