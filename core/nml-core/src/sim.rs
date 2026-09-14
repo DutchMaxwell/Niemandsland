@@ -25,6 +25,7 @@ use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
     EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
+    EPOCH_19_MOVE_GRANTS_FOLD,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -2367,9 +2368,14 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     }
     // CENSUS rows 1-5 (evidence-only, non-folding — semantics §11.2/§12):
     // exercise the recorded grant ledger and log; the recorded band carries
-    // the effect, so this must never fold.
-    for name in mods::solo_move_grants(state, i, rules_epoch) {
-        trace_rule("solo-grant", name, &format!("recorded band carries it (evidence-only), unit {i}"));
+    // the effect, so this must never fold. From `EPOCH_19_MOVE_GRANTS_FOLD`
+    // the family folds for real at the move spend (`solo_move_grant_delta_in`),
+    // so the "recorded band carries it" line would lie there — the fold's own
+    // trace names every firing grant instead.
+    if !rule_on(rules_epoch, EPOCH_19_MOVE_GRANTS_FOLD) {
+        for name in mods::solo_move_grants(state, i, rules_epoch) {
+            trace_rule("solo-grant", name, &format!("recorded band carries it (evidence-only), unit {i}"));
+        }
     }
     // WAVE 2 — the family's live-grant legs. Gated on `EPOCH_5_TABLE_RULES`
     // (frozen at 5, the stamping-gap fix): a rules_epoch below 5 replays
@@ -4599,6 +4605,75 @@ fn live_move_bonus_in(state: &State, statics: &[UnitStatic], i: usize, rules_epo
         &statics[state.roster.profile[i]].name, "move", |r| r.move_mod) as f64
 }
 
+/// EPOCH_19_MOVE_GRANTS_FOLD — the SOLO move-grant family folded for REAL.
+/// The census read (`ctx_live`'s `solo_move_grants` loop) stays evidence-only
+/// below the gate; from 19 a live grant of Slow, Fast, Swift, Rapid Advance
+/// or Rapid Rush moves the unit at the one point the core spends a move
+/// budget: this delta joins the per-activation `band_in` accumulation next
+/// to Bounding/Grounded Speed/Speed Feat/Great Musician. A band recompute
+/// was rejected, not chosen: the recorded games' `state.bands` already fold
+/// every grant, so a recompute would double-count exactly the corpora the
+/// epoch gate keeps byte-exact. The numbers are the registry's own
+/// (`unit.rs::solo_move_grant_mods_of`, the table band pass's
+/// `advance_mod`/`rush_mod`), never inches; a name the profile already
+/// PRINTS is skipped (the loader's band fold already spent it, the table's
+/// overlay never re-grants, main.gd:3858); granted Swift cancels a granted
+/// Slow, and so does a PRINTED Swift. `kind` picks the band the way Speed
+/// Feat does: `advance_mod` on an ADVANCE, `rush_mod` on a RUSH/CHARGE —
+/// the charge inherits the rush band (movement_range_controller.gd:170-187).
+fn solo_move_grant_delta_in(
+    statics: &[UnitStatic], state: &State, si: usize, kind: i64, rules_epoch: u32,
+) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_19_MOVE_GRANTS_FOLD) {
+        return 0.0;
+    }
+    let us = &statics[state.roster.profile[si]];
+    let Some(stamp) = us.solo_move_grant_mods.as_ref() else {
+        return 0.0;
+    };
+    let un = &us.name;
+    // The kind split is Speed Feat's own: `advance_mod` on an ADVANCE,
+    // `rush_mod` on a RUSH/CHARGE (the charge inherits the rush band),
+    // nothing on the non-move kinds.
+    let (adv_kind, moving) = match kind {
+        ADVANCE => (true, true),
+        RUSH | CHARGE => (false, true),
+        _ => (false, false),
+    };
+    if !moving {
+        return 0.0;
+    }
+    // Rules-must-log: every firing grant names itself the one time it moves
+    // the band (the static band pass's own trace shape). A name whose faction
+    // registry fields no entry spends 0.0 and stays silent.
+    let band = if adv_kind { "advance" } else { "rush/charge" };
+    let fire = |name: &'static str, v: f64| {
+        if v != 0.0 {
+            trace_rule("move-bands", name, &format!("{un}: {v:+}\" {band} from a live grant"));
+        }
+        v
+    };
+    let mut d = 0.0;
+    if mods::granted(state, si, "Fast") && !stamp.fast_printed {
+        d += fire("Fast", if adv_kind { stamp.fast_advance } else { stamp.fast_rush });
+    }
+    if mods::granted(state, si, "Rapid Advance") && !stamp.rapid_advance_printed {
+        d += fire("Rapid Advance", stamp.rapid_advance);
+    }
+    if mods::granted(state, si, "Rapid Rush") && !stamp.rapid_rush_printed {
+        d += fire("Rapid Rush", stamp.rapid_rush);
+    }
+    let slow = mods::granted(state, si, "Slow") && !stamp.slow_printed;
+    if slow {
+        if mods::granted(state, si, "Swift") || stamp.swift_printed {
+            trace_rule("move-bands", "Swift", &format!("{un}: cancels the granted Slow"));
+        } else {
+            d += fire("Slow", if adv_kind { stamp.slow_advance } else { stamp.slow_rush });
+        }
+    }
+    d
+}
+
 // ------------------------- S10: destination-side leftovers ------------------
 
 /// S10-a — `AiPlanner.RETREAT_GOAL_IN` ai_planner.gd:11. The retreat
@@ -4952,6 +5027,10 @@ fn resolve_with(
     // `move_bands_for_props` does (rush += spell; charge = rush + charge_extra,
     // movement_range_controller.gd:168-170).
     let buff_in = live_move_bonus_in(&next, statics, si, seams.rules_epoch);
+    // EPOCH_19 — the granted SOLO move family, folded for real at the spend
+    // (see `solo_move_grant_delta_in`): the same live read the census loop
+    // below only logs below the gate.
+    let grant_in = solo_move_grant_delta_in(statics, &next, si, kind, seams.rules_epoch);
     if feat_in != 0.0 {
         next.feats_used[si].push(
             statics[pi_s]
@@ -4978,7 +5057,8 @@ fn resolve_with(
         + vr_in
         + gs_in
         + feat_in
-        + buff_in;
+        + buff_in
+        + grant_in;
     // NML-1152 B14 step 1 — rules-must-log: the live read names itself the
     // one time it changes the band (Bounding's line above is the shape).
     if gs_in != 0.0 {

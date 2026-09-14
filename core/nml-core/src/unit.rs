@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
-    EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE,
+    EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE, EPOCH_19_MOVE_GRANTS_FOLD,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -914,6 +914,9 @@ pub struct UnitStatic {
     /// answer, and stamping them flat would claim coverage the core does
     /// not have (#489's over-credit shape).
     pub move_rule_mods: Option<Bands>,
+    /// The SOLO move-grant family's own registry params — see
+    /// `SoloMoveGrantMods`. `None` below `EPOCH_19_MOVE_GRANTS_FOLD`.
+    pub solo_move_grant_mods: Option<SoloMoveGrantMods>,
     /// Versatile Reach (solo_controller.gd:1787-1789) — `Some(charge_bonus_in)`
     /// when the unit carries the rule, i.e. the CHARGE half of the per-activation
     /// "pick one". The `range_bonus_in` half is NOT stamped: this core models no
@@ -4502,6 +4505,86 @@ fn bounding_of(reg: &mut Registries, p: &Profile) -> Option<f64> {
     None
 }
 
+/// The SOLO move-grant family's own registry params (`EPOCH_19_MOVE_GRANTS_FOLD`),
+/// stamped per profile exactly the way `move_rule_mods_of` stamps the printed
+/// carriers: the table's band pass (movement_range_controller.gd:126-150)
+/// spends these same `advance_mod`/`rush_mod` numbers (`charge_mod` fallback)
+/// by NAME, and the live fold (`sim.rs`, the `band_in` accumulation) spends
+/// them the moment the ledger grants one of the five names. Swift carries no
+/// inches — it cancels a granted Slow by name, the read at the fold. The
+/// `*_printed` flags carry `unit_rule_active`'s answer per name: a PRINTED
+/// carrier's numbers already reached this core inside the profile
+/// `move_bands` (the loader's band fold), and the table's own overlay never
+/// re-grants a rule the unit already has (main.gd:3858) — the fold skips a
+/// granted name the profile prints, the twins' per-name dedupe. `None` below
+/// `EPOCH_19_MOVE_GRANTS_FOLD`: every corpus recorded before the fold reads
+/// `None` and replays byte-exact; a fresh `play_game()` (epoch 19) carries
+/// the numbers.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SoloMoveGrantMods {
+    pub fast_advance: f64,
+    pub fast_rush: f64,
+    pub slow_advance: f64,
+    pub slow_rush: f64,
+    pub rapid_advance: f64,
+    pub rapid_rush: f64,
+    pub fast_printed: bool,
+    pub slow_printed: bool,
+    pub swift_printed: bool,
+    pub rapid_advance_printed: bool,
+    pub rapid_rush_printed: bool,
+}
+
+fn solo_move_grant_mods_of(
+    reg: &mut Registries, p: &Profile, rules_epoch: u32,
+) -> Option<SoloMoveGrantMods> {
+    if !rule_on(rules_epoch, EPOCH_19_MOVE_GRANTS_FOLD) {
+        return None;
+    }
+    // The borrow trap the Highborn Boost block documents below: each name's
+    // registry read is scoped to its own statement, `unit_rule_active` needs
+    // the borrow free.
+    let (mut s, mut hit) = (SoloMoveGrantMods::default(), false);
+    for (name, fast) in [("Fast", true), ("Slow", false)] {
+        let params = {
+            let map = reg.rules_for(&p.game_system);
+            map.lookup(&p.faction_folder, name).map(|e| {
+                (
+                    e.param_f("advance_mod", 0.0),
+                    e.param_f("rush_mod", e.param_f("charge_mod", 0.0)),
+                )
+            })
+        };
+        if let Some((adv, rsh)) = params {
+            if fast {
+                s.fast_advance = adv;
+                s.fast_rush = rsh;
+            } else {
+                s.slow_advance = adv;
+                s.slow_rush = rsh;
+            }
+            hit = true;
+        }
+    }
+    if let Some(e) = reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Rapid Advance") {
+        s.rapid_advance = e.param_f("advance_mod", 0.0);
+        hit = true;
+    }
+    if let Some(e) = reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Rapid Rush") {
+        s.rapid_rush = e.param_f("rush_mod", 0.0);
+        hit = true;
+    }
+    // The printed-name dedupe flags — `unit_rule_active`'s answer per name.
+    // Swift never mints the stamp alone: it has no inches, the cancel is the
+    // fold's own name read.
+    s.fast_printed = unit_rule_active(reg, p, "Fast");
+    s.slow_printed = unit_rule_active(reg, p, "Slow");
+    s.swift_printed = unit_rule_active(reg, p, "Swift");
+    s.rapid_advance_printed = unit_rule_active(reg, p, "Rapid Advance");
+    s.rapid_rush_printed = unit_rule_active(reg, p, "Rapid Rush");
+    if hit { Some(s) } else { None }
+}
+
 /// The Quick/Fast move-band family's own per-entry param read — a named-
 /// carrier loop credited by each name's OWN literal, never by a shared
 /// primitive token (the census's trusted-whole trap, #489; the bare `fast`
@@ -5273,6 +5356,7 @@ impl UnitStatic {
             bounding: bounding_of(reg, p),
             bounding_dice: bounding_boost_dice_of(reg, p, rules_epoch),
             move_rule_mods: move_rule_mods_of(reg, p, rules_epoch),
+            solo_move_grant_mods: solo_move_grant_mods_of(reg, p, rules_epoch),
             royal_legion_range_in: royal_legion.0,
             royal_legion_charge_in: royal_legion.1,
             versatile_reach_charge_in: if unit_rule_active(reg, p, "Versatile Reach")

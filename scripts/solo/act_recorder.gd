@@ -40,7 +40,13 @@ static var spawn_profile_resolver: Callable = Callable()
 ## Vanguard/Drakesworn/Fanatic free-placement fix, 15 was the Precision-marks
 ## beneficiary side fix, 14 was the Deadly per-model landing port, 13 was
 ## #921's).
-## Bump it in the same change the core does; SPAWN_PROFILES_EPOCH below stays frozen.
+## The mirror now HOLDS BELOW EPOCH_19_MOVE_GRANTS_FOLD on purpose (PR #935):
+## the core's epoch-19 fold adds the granted move family LIVE at the spend,
+## while these recordings' bands already carry every grant
+## (battle_sim.gd:1707 -> move_bands_for_props). A recording stamped 19 would
+## replay with the fold ON and double-count every granted inch. Bump this
+## mirror only together with the fold's own retirement of the recorded-band
+## premise; SPAWN_PROFILES_EPOCH below stays frozen.
 static var rules_epoch: int = 17
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.

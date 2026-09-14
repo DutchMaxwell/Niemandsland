@@ -1559,6 +1559,7 @@ mod melee_reach_table;
 mod mind_control;
 mod mend;
 mod move_buff;
+mod move_grants;
 mod piercing_tag;
 mod plain_moves;
 mod quick_shot;

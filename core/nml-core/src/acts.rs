@@ -313,7 +313,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 17;
+pub const CURRENT_RULES_EPOCH: u32 = 19;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -554,6 +554,29 @@ pub const EPOCH_16_FREE_PLACEMENT: u32 = 16;
 /// the value `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call
 /// site reads THIS constant, not the literal `17` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_17_SURGE_SCOPE: u32 = 17;
+
+/// The MOVE-GRANTS FOLD gate (14.09., the wave-6 defect, PR #935): the SOLO
+/// move-grant family (`mods::solo_move_grants` — Slow, Fast, Swift, Rapid
+/// Advance, Rapid Rush) was EVIDENCE-ONLY in the core — `sim.rs`'s ctx_live
+/// logged the name and moved nobody. That is true in one mode and false in
+/// the other: replaying a recorded table game, the recorded bands already
+/// carry every grant (battle_sim.gd:1707 -> `move_bands_for_props`); in a
+/// FRESH core-simulated game there is none — `Profile.move_bands` is built
+/// from the rules a unit PRINTS (the loader's band pass), never from the ones
+/// a spell or aura grants mid-game, so self-play moved every granted move
+/// rule at the bare printed band. From 19 the family folds for real, LIVE, at
+/// the point the core spends a move budget (`sim.rs`'s `band_in`
+/// accumulation, the per-activation delta next to Grounded Speed/Speed
+/// Feat/Great Musician) — a live delta at the spend, not a band recompute,
+/// because a recompute would double-count exactly the recorded games the
+/// epoch gate keeps byte-exact. The registry params the fold spends are
+/// stamped per profile (`unit.rs::solo_move_grant_mods_of`), the same
+/// `advance_mod`/`rush_mod` numbers the table's band pass reads. Below 19
+/// every corpus replays the evidence-only read it was recorded with. `19` is
+/// one past #932's 18, and the value `CURRENT_RULES_EPOCH` is bumped to in
+/// the same change. Every call site reads THIS constant, not the literal `19`
+/// or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_19_MOVE_GRANTS_FOLD: u32 = 19;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -1039,7 +1062,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 17, "epoch 17's gate (EPOCH_17_SURGE_SCOPE) bumps the live epoch to 17, one past EPOCH_16_FREE_PLACEMENT");
+        assert_eq!(CURRENT_RULES_EPOCH, 19, "epoch 19's gate (EPOCH_19_MOVE_GRANTS_FOLD) bumps the live epoch to 19, one past #932's 18");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1049,11 +1072,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":17}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":19}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 17"
+            "a fresh play_game() now stamps the bumped epoch, 19"
 
         );
     }
