@@ -1015,6 +1015,50 @@ fn vanguard_off_deploys_in_place_without_events() {
     assert!(sd.events.is_empty(), "no Vanguard, no log line: {:?}", sd.events);
 }
 
+/// EPOCH_16 (sweeps A/C — one defect under three names, rows Vanguard/Drakesworn/
+/// Fanatic): the printed text is "After this model is deployed, it may be placed
+/// anywhere fully within 9\" of its position" — a FREE choice. With a legal spot
+/// toward a BACKWARD objective (behind the zone, off the forward line) the free
+/// choice must be able to take it; the current code runs a directional PUSH toward
+/// the table centre instead and can never step sideways or backwards (RED).
+#[test]
+fn vanguard_free_choice_leaves_the_forward_line() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let specs = vec![UnitSpec {
+        key: "vanguard_bearer".into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        vanguard: true,
+        place_in_m: Some(deployment::VANGUARD_PLACE_M),
+        model_shapes: vec![deployment::ModelShape {
+            is_oval: false,
+            w_mm: 32,
+            d_mm: 32,
+            tough: 1,
+            n: 1,
+        }],
+        ..Default::default()
+    }];
+    // Narrow zone at the table's south edge (y in [-0.6, -0.3]); the objective
+    // sits BEHIND it at (0, -0.66) — the exact direction the push refuses.
+    // Section-independent: every third's objective-near spot is the zone's
+    // y = -0.584 scan row (the row nearest the objective), only x differs, and
+    // the x remainder costs at most one 0.025 scan step of reach.
+    let zone = deployment::Rect::new(-0.15, -0.6, 0.30, 0.3);
+    let objs = vec![(0.0_f64, -0.66_f64)];
+    let sd = deployment::deploy_side(&specs, &zone, &objs, &board, 7);
+    assert_eq!(sd.placements.len(), 1);
+    let p = &sd.placements[0];
+    let d_obj = (p.spot.0 * p.spot.0 + (p.spot.1 + 0.66) * (p.spot.1 + 0.66)).sqrt();
+    assert!(p.spot.1 < -0.5, "free choice steps back toward the objective: {p:?}");
+    assert!(d_obj < 0.15, "within reach of the backward objective: {p:?} d={d_obj}");
+}
+
 // ==== NML-1152 step 5b — THE FIRST REAL PARITY NUMBER ====
 //
 // For every unit of the 100 dumps the twin runs the table's placement from the

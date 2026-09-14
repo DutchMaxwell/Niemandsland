@@ -1735,6 +1735,35 @@ func test_vanguard_pushes_forward_out_of_the_deploy_zone() -> void:
 	assert_bool(c.z < 0.3 - 0.01).is_true()   # left the zone toward the enemy side (9" = 0.2286 m)
 
 
+## EPOCH_16 Vanguard free placement (sweeps A/C — one defect under three names): the printed text is
+## "After this model is deployed, it may be placed anywhere fully within 9\" of its position", so
+## with a legal spot toward a BACKWARD objective (behind the zone, off the forward line) the free
+## choice must be able to take it — the old directional push shoves the unit toward the table
+## centre instead and can never step sideways or backwards.
+func test_vanguard_free_choice_leaves_the_forward_line() -> void:
+	var vg := _unit(2, [Vector3(0, 0, 0.5)])
+	vg.unit_properties["special_rules"] = ["Vanguard"]
+	vg.unit_properties["game_system"] = "gf"
+	vg.unit_properties["faction_folder"] = "dark_elf_raiders"   # a book that fields Vanguard (registry gate)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {vg.unit_id: vg}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# Zone strip at the table's south edge (z in [0.3, 0.6]); the objective sits BEHIND it at
+	# (0, 0.66) — the exact direction the push refuses. Section-independent: every third's
+	# objective-near spot is the zone's z = 0.584 scan row, only x differs.
+	var zone := Rect2(Vector2(-0.15, 0.3), Vector2(0.30, 0.3))
+	var objs: Array = [Vector2(0.0, 0.66)]
+	var no_block := func(_p: Vector2) -> bool: return false
+	var res: Dictionary = solo.deploy_army(zone, objs, no_block, no_block, 7)
+	assert_int(int(res["deployed"])).is_equal(1)
+	var c := solo.unit_centre(vg)
+	var d := Vector2(c.x, c.z).distance_to(Vector2(0.0, 0.66))
+	assert_bool(c.z > 0.5).override_failure_message("free choice steps back toward the objective: %s" % [c]).is_true()
+	assert_float(d).override_failure_message("within reach of the backward objective: d=%f c=%s" % [d, c]).is_less(0.15)
+
+
 ## Maintainer policy (2026-07-19): every applied special rule surfaces in the battle log. The
 ## controller's report carries `rule_notes`; main prints them. Teleport is the reference case —
 ## active on the acting unit → exactly one note naming the band bonuses. G5 (NML-963): a note
