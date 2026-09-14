@@ -1006,8 +1006,16 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0, state := {}) -> 
 			u_bane = true
 		elif rs.begins_with("Rending"):
 			u_rending = true
-		elif rs.begins_with("Unstoppable") and not rs.contains(" in ") and not rs.contains(" when "):
-			u_unstop = true
+		elif rs.begins_with("Unstoppable"):
+			if not rs.contains(" in ") and not rs.contains(" when "):
+				u_unstop = true
+			elif melee and rs == "Unstoppable in Melee" \
+					and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_35_UNSTOPPABLE_MELEE:
+				# Sweep C 2026-09-14, row `Unstoppable in Melee` — the clamp
+				# half. The profile set above is already the MELEE imagination
+				# (`melee` built it), so the clamp rides the same flag the
+				# melee EV fold reads; the shooting imagination stays silent.
+				u_unstop = true
 	var out: Array = []
 	# NML-1103: the conditional-AP family (Shatter / Tear / Disintegrate / Crack / Melee Slayer /
 	# Piercing Assault / Piercing Hunter) is AP that exists only against a target property. The

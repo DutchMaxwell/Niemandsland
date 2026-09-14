@@ -26,7 +26,7 @@ use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
     EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE, EPOCH_19_MOVE_GRANTS_FOLD,
-    EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST,
+    EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST, EPOCH_35_UNSTOPPABLE_MELEE,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -2504,6 +2504,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     let mut shooting_bypass = false;
     let mut u_rending = false;
     let mut u_unstop = false;
+    let mut u_unstop_melee = false;
     for r in &p.special_rules {
         let rs = r.trim();
         if rs.starts_with("Bane") || rs.starts_with("Lacerate") {
@@ -2540,9 +2541,26 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             }
             u_rending = true;
             u_bypass = true;
-        } else if rs.starts_with("Unstoppable") && !rs.contains(" in ") && !rs.contains(" when ") {
-            u_unstop = true;
-            u_bypass = true;
+        } else if rs.starts_with("Unstoppable") {
+            if !rs.contains(" in ") && !rs.contains(" when ") {
+                u_unstop = true;
+                u_bypass = true;
+            } else if rule_on(rules_epoch, EPOCH_35_UNSTOPPABLE_MELEE)
+                && rs == "Unstoppable in Melee"
+            {
+                // Sweep C (14.09., row `Unstoppable in Melee`) — the clamp
+                // half: the book's "ignore all negative to-hit modifiers"
+                // rides the MELEE profiles' own `unstoppable` flag below, so
+                // `melee_hit_target`'s clamp reads it and the volley fold
+                // never sees a melee profile. The Regeneration half stays the
+                // Lacerate alias's own `bypass_regen` (melee_only) above.
+                u_unstop_melee = true;
+                trace_rule(
+                    "strikers",
+                    rs,
+                    &format!("{}: melee to-hit modifiers clamp (Unstoppable in Melee)", p.name),
+                );
+            }
         }
     }
     if table_ladder {
@@ -2625,6 +2643,14 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         sp.rending |= u_rending
             || (melee_rending && sp.range <= 0)
             || (shooting_rending && sp.range > 0);
+        // Sweep C — EPOCH_35_UNSTOPPABLE_MELEE: the "Unstoppable in Melee"
+        // clamp stamps the MELEE profiles' own flag (dice.rs's melee fold
+        // reads `unstoppable`; a melee profile never reaches the volley fold,
+        // so the shooting clamp cannot see it). `unstoppable_ev` follows the
+        // same split for the EV imagination's melee fold.
+        if rule_on(rules_epoch, EPOCH_35_UNSTOPPABLE_MELEE) && u_unstop_melee && sp.range <= 0 {
+            sp.unstoppable = true;
+        }
         sp.unstoppable_ev = sp.unstoppable || u_unstop;
     }
 }

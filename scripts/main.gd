@@ -6144,10 +6144,21 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			# paths do (GF v3.5.1 p.15 "this weapon" — both halves). Fatigue is not a
 			# modifier (unmodified-6-only) and stays above the clamp.
 			var m_mod: int = int(p_mod.get("mod", 0)) + uf_hit
-			if bool(profile.get("unstoppable", false)) and m_mod < 0:
+			# Sweep C 2026-09-14, row `Unstoppable in Melee` — the clamp half of the
+			# Lacerate-scoped name reaches the MELEE strike only, from the frozen
+			# EPOCH_35_UNSTOPPABLE_MELEE: the volley clamps (:3259/:10197) keep
+			# reading the plain weapon flag, and the Regeneration half stays the
+			# Lacerate alias's own bypass (main.gd:7106).
+			var weapon_unstop: bool = bool(profile.get("unstoppable", false))
+			var name_unstop: bool = not weapon_unstop \
+				and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_35_UNSTOPPABLE_MELEE \
+				and AiEv.has_exact_rule(striker, "Unstoppable in Melee")
+			if (weapon_unstop or name_unstop) and m_mod < 0:
 				m_mod = 0
 				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"Unstoppable in Melee: negative to-hit modifiers ignored"
+						if name_unstop else "Unstoppable: negative to-hit modifiers ignored", true)
 			var to_hit: int = 6 if fatigued else AiCombatMath.modified_hit_target(
 				AiCombatMath.thrust_to_hit(strike_quality, bool(profile.get("thrust", false))), m_mod)
 			# Versatile Attack (army-book): on a charge from over 9" the AI picks the EV-better of +1 to hit

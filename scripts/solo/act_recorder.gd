@@ -45,7 +45,9 @@ static var spawn_profile_resolver: Callable = Callable()
 ## lifts it back to 32 and makes the gate refuse the next drift unless a diff
 ## carries a `MIRROR HOLD:` reason. SPAWN_PROFILES_EPOCH below stays frozen.
 ## Bumped to 34 in the same diff as the core's EPOCH_34_UNSTOPPABLE_MARK (#951).
-static var rules_epoch: int = 34
+## Bumped to 35 in the same diff as the core's EPOCH_35_UNSTOPPABLE_MELEE
+## (sweep C 2026-09-14, row `Unstoppable in Melee`).
+static var rules_epoch: int = 35
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the
@@ -65,6 +67,15 @@ const EPOCH_17_SURGE_SCOPE := 17
 ## The core's own gate reads the frozen `EPOCH_27_TERRAIN_DEBUFF` (acts.rs);
 ## this mirror never re-dates itself.
 const EPOCH_27_TERRAIN_DEBUFF := 27
+## The frozen gate of the Unstoppable-in-Melee CLAMP (epoch 35, sweep C — row
+## `Unstoppable in Melee`): "This model gets Unstoppable in melee." ignores all
+## negative to-hit modifiers on its MELEE attacks — the table's melee strike
+## clamp reads the name exactly, while the volley clamps keep the plain weapon
+## flag. Below it the name fires only its Regeneration half (its Lacerate
+## alias), exactly what every recorded game played. The core's own gate reads
+## the frozen `EPOCH_35_UNSTOPPABLE_MELEE` (acts.rs); this mirror never
+## re-dates itself.
+const EPOCH_35_UNSTOPPABLE_MELEE := 35
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
 const SPAWN_PROFILES_EPOCH := 8
