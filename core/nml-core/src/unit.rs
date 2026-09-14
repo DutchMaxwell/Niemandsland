@@ -1887,7 +1887,7 @@ fn aura_channel_hits(reg: &mut Registries, p: &Profile) -> Vec<(String, String)>
         if e.primitive.as_deref() != Some("Aura Channel") {
             continue;
         }
-        let base = e.param_s("grants").trim().to_string();
+        let base = e.param_s("grants_x").trim().to_string();
         if !base.is_empty() && !out.iter().any(|(_, b)| *b == base) {
             out.push((aura, base));
         }
