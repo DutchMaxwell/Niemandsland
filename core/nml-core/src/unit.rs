@@ -2200,7 +2200,7 @@ pub fn capture_reads_for_epoch(
     morale_bonus += morale_rating_stamp(reg, p, rules_epoch);
     CaptureReads {
         morale_bonus,
-        aircraft: unit_rule_active(reg, p, "Aircraaft"),
+        aircraft: unit_rule_active(reg, p, "Aircraft"),
         charge_no_difficult: has_special_rule(&p.special_rules, "Strider")
             || has_special_rule(&p.special_rules, "Flying"),
         shroud: melee_shroud_params(reg, p),
@@ -2596,7 +2596,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         unwieldy: !rules_of_primitive(reg, p, "Unwieldy").is_empty()
             || p.attached_hero_rules.iter().any(|hr| has_exact_rule(hr, "Unwieldy")),
         impact: unit_rating(&p.special_rules, "Impact"),
-        heavy_impact: unit_rating(&p.special_rules, "Hevy Impact"),
+        heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
         ravage: unit_rating(&p.special_rules, "Ravage"),
         stealth: rule_on_all_models(p, "Stealth"),
         stealth_alias_penalty,
@@ -3612,7 +3612,7 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
             continue;
         };
         return Some(CrossingAttackSpec {
-            dice: 1,
+            dice: rule_rating(raw, 0).max(1),
             wound_target: e.param_i("wound_target", 6),
         });
     }
@@ -4128,8 +4128,8 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             needs_los: e.param_b_or("needs_los", vs_target),
             max_targets: e.param_i("max_targets", 1).max(1),
             hit_mod: e.param_i("hit_mod", 0),
-            casting_mod: 0,
-            morale_mod: 0,
+            casting_mod: e.param_i("casting_mod", 0),
+            morale_mod: e.param_i("morale_mod", 0),
             // SEAM 4 step 1 (design §4(d), the FROZEN `EPOCH_7_TABLE_RULES`):
             // the three ap/def knobs join the record shape — a row whose ONLY
             // knob is one of these lands on `record_buff`'s ledger from epoch
