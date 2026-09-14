@@ -4,6 +4,7 @@
     // acts.rs.
     use crate::acts::CURRENT_RULES_EPOCH;
     use crate::acts::read_act_header;
+    use crate::acts::EPOCH_23_INERT_MARKS;
     use crate::rules::Registries;
 
     /// The checkout this crate lives in — mirrors `rows.rs`'s own helper.
