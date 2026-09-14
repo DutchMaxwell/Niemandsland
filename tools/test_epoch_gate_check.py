@@ -133,6 +133,35 @@ def test_epoch_bump_with_mirror_hold_marker_is_accepted(tmp_path):
     assert "epoch-gate: OK" in r.stdout
 
 
+def test_two_integers_in_a_row_are_both_pinned(tmp_path):
+    """Hole 4 (rule 3 false alarm): the positional scanner ate the delimiter, so the second of
+    two integers in a row (`run_buff_epoch(.., 13, 33);`) was never pinned -- the gate refused
+    a PR whose old leg WAS pinned at 33."""
+    r = run_checker(
+        tmp_path,
+        """\
+        diff --git a/core/nml-core/src/acts.rs b/core/nml-core/src/acts.rs
+        --- a/core/nml-core/src/acts.rs
+        +++ b/core/nml-core/src/acts.rs
+        @@ -10,7 +10,9 @@
+        -pub const CURRENT_RULES_EPOCH: u32 = 33;
+        +pub const CURRENT_RULES_EPOCH: u32 = 34;
+        +pub const EPOCH_34_NEXT_FIX: u32 = 34;
+        +fn next_fix_still_replays() {
+        +    run_buff_epoch(&st, &statics, &charge, 13, 33);
+        +}
+        diff --git a/scripts/solo/act_recorder.gd b/scripts/solo/act_recorder.gd
+        --- a/scripts/solo/act_recorder.gd
+        +++ b/scripts/solo/act_recorder.gd
+        @@ -48,2 +48,3 @@
+        +static var rules_epoch: int = 34
+        """,
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "epoch-gate: OK" in r.stdout
+    assert "rule 3" not in r.stdout
+
+
 def test_diff_without_any_epoch_symbol_still_passes(tmp_path):
     """The 'nothing to check' path must stay for diffs that touch no epoch symbol."""
     r = run_checker(
