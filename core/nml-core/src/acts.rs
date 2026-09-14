@@ -313,7 +313,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 17;
+pub const CURRENT_RULES_EPOCH: u32 = 20;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -554,6 +554,25 @@ pub const EPOCH_16_FREE_PLACEMENT: u32 = 16;
 /// the value `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call
 /// site reads THIS constant, not the literal `17` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_17_SURGE_SCOPE: u32 = 17;
+
+/// The TERRAIN DEBUFF gate (14.09., sweep A — rows `Dangerous Terrain Debuff`
+/// / `Difficult Terrain Debuff`, `STANDALONE_SWEEP_A_2026-09-14.md`): both
+/// layers announce the debuff — the table's log even appends a dead
+/// `Dangerous Terrain (spell)` rule to the marked unit — but no reader ever
+/// treated a unit-level terrain rule as a hazard. The once-per-move Dangerous
+/// test and the movement cost keyed on the CELL a unit crossed, never on a
+/// rule the unit carried, so the marked enemy walked open ground unwounded
+/// and at full speed. From 20 the core folds the grant the same way it folds
+/// a cell, through the ONE `mods::granted_terrain_debuff` reader:
+/// `sim::dangerous_dice` ORs a granted "Dangerous Terrain" into the per-model
+/// trigger, `mv::step`'s p.11 cap and `mv::cost::terrain_cost_at` (carried on
+/// the move call's own debuff knobs) consult a granted "Difficult Terrain"
+/// the way they consult the cell. Below 20 the grant is inert — every
+/// recorded game replays unchanged. `20` is one past every existing stamp,
+/// and the value `CURRENT_RULES_EPOCH` is bumped to in the same change. Every
+/// call site reads THIS constant, not the literal `20` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_20_TERRAIN_DEBUFF: u32 = 20;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -1039,7 +1058,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 17, "epoch 17's gate (EPOCH_17_SURGE_SCOPE) bumps the live epoch to 17, one past EPOCH_16_FREE_PLACEMENT");
+        assert_eq!(CURRENT_RULES_EPOCH, 20, "epoch 20's gate (EPOCH_20_TERRAIN_DEBUFF) bumps the live epoch to 20, one past EPOCH_17_SURGE_SCOPE");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1049,11 +1068,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":17}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":20}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 17"
+            "a fresh play_game() now stamps the bumped epoch, 20"
 
         );
     }

@@ -35,13 +35,13 @@ static var objectives_stamp: Dictionary = {}
 ## falls back to the carrier's profile (that fallback IS the #823 fidelity break).
 static var spawn_profile_resolver: Callable = Callable()
 ## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
-## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 17 by the
-## Surge-when-Shooting scope fix, EPOCH_17_SURGE_SCOPE; 16 was the
-## Vanguard/Drakesworn/Fanatic free-placement fix, 15 was the Precision-marks
-## beneficiary side fix, 14 was the Deadly per-model landing port, 13 was
-## #921's).
+## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 20 by the
+## terrain-debuff fix, EPOCH_20_TERRAIN_DEBUFF; 17 was the Surge-when-Shooting
+## scope fix, 16 was the Vanguard/Drakesworn/Fanatic free-placement fix, 15
+## was the Precision-marks beneficiary side fix, 14 was the Deadly per-model
+## landing port, 13 was #921's).
 ## Bump it in the same change the core does; SPAWN_PROFILES_EPOCH below stays frozen.
-static var rules_epoch: int = 17
+static var rules_epoch: int = 20
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the
@@ -53,6 +53,14 @@ const EPOCH_16_FREE_PLACEMENT := 16
 ## unscooped walk every corpus was recorded with. The core's own gate reads the
 ## frozen `EPOCH_17_SURGE_SCOPE` (acts.rs); this mirror never re-dates itself.
 const EPOCH_17_SURGE_SCOPE := 17
+## The frozen gate of the unit-level terrain debuffs (epoch 20, the sweep A
+## fix — rows `Dangerous Terrain Debuff` / `Difficult Terrain Debuff`): a rule
+## the unit CARRIES bites the same way the cell it crosses does — the
+## once-per-move Dangerous test (p.12) and the p.11 difficult cap / cost.
+## Below it the debuff is inert, exactly what every recorded game played.
+## The core's own gate reads the frozen `EPOCH_20_TERRAIN_DEBUFF` (acts.rs);
+## this mirror never re-dates itself.
+const EPOCH_20_TERRAIN_DEBUFF := 20
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
 const SPAWN_PROFILES_EPOCH := 8

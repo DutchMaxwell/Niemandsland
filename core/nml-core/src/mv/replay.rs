@@ -121,6 +121,8 @@ impl ReplaySearch {
                 zones: &self.zones,
                 avoid_cells: &call.opts.avoid_cells,
                 avoid_fine: empty_cells(),
+                dangerous_debuff: call.opts.dangerous_debuff,
+                difficult_debuff: call.opts.difficult_debuff,
             },
             reach_closest: self.reach_closest,
         }

@@ -4889,6 +4889,12 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		return 0
 	var flying: bool = unit.has_special_rule("Flying")
 	var ignores_difficult: bool = flying or unit.has_special_rule("Strider")
+	# EPOCH_20_TERRAIN_DEBUFF (sweep A, rows Dangerous/Difficult Terrain Debuff): a rule the
+	# unit CARRIES bites the same way the cell it crosses does — the once-per-move Dangerous
+	# test (p.12) and the p.11 difficult cap. Below the gate the debuff stays inert.
+	var debuffs_on: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_20_TERRAIN_DEBUFF
+	var difficult_debuff: bool = debuffs_on and _chain_has_special_rule(unit, "Difficult Terrain")
+	var dangerous_debuff: bool = debuffs_on and _chain_has_special_rule(unit, "Dangerous Terrain")
 	var reach := inches
 	var own_r_m := _move_base_radius_m(models)   # base radius for the EDGE-AWARE destination-terrain tests (finding 6)
 	# Coherency baseline at activation START (coherency batch): MOVEMENT must never CREATE a tear —
@@ -4912,7 +4918,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	for m in models:
 		trail_radii_m.append(model_base_radius_m(m as ModelInstance))
 	var new_positions := _plan_move(unit, models, positions, goal, reach, allow_contact, avoid, avoid_dangerous, trails, charge_target)
-	if not ignores_difficult and _trails_cross_difficult(trails, trail_radii_m):
+	if not ignores_difficult and (_trails_cross_difficult(trails, trail_radii_m) or difficult_debuff):
 		# The actual route enters difficult terrain → the 6" cap applies (p.11); re-plan through it so the
 		# budget math and the drawn corridor agree. Dangerous is STILL routed around on this pass.
 		reach = minf(inches, DIFFICULT_MOVE_CAP_IN)
@@ -4933,7 +4939,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		var t2: Array = []
 		var p2 := _plan_move(unit, models, positions, goal, reach, allow_contact, false, false, t2, charge_target)
 		var r2 := reach
-		if not ignores_difficult and _trails_cross_difficult(t2, trail_radii_m):
+		if not ignores_difficult and (_trails_cross_difficult(t2, trail_radii_m) or difficult_debuff):
 			r2 = minf(inches, DIFFICULT_MOVE_CAP_IN)
 			t2 = []
 			p2 = _plan_move(unit, models, positions, goal, r2, allow_contact, false, false, t2, charge_target)
@@ -5150,7 +5156,9 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	if not flying:
 		var cross_flags := _dangerous_trail_flags(trails, trail_radii_m)
 		for i in range(models.size()):
-			var affected: bool = (i < cross_flags.size() and bool(cross_flags[i]))
+			# EPOCH_20_TERRAIN_DEBUFF: the carried rule is a hazard the cells never are —
+			# the debuffed unit counts as being in Dangerous Terrain whatever it walks.
+			var affected: bool = dangerous_debuff or (i < cross_flags.size() and bool(cross_flags[i]))
 			if not affected and terrain_type_at.is_valid():
 				var p0: Vector3 = positions[i]
 				# Edge-aware (2026-07-22): standing with the base EDGE in the minefield counts.
@@ -5282,6 +5290,20 @@ func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float, rad
 		# Edge-aware via the single containment predicate (finding 6): a base whose EDGE lands in dangerous
 		# terrain by any amount is IN it, so the dangerous-terrain routing/test triggers.
 		if TerrainRules.base_in_terrain((p as Vector3) + delta, radius_m, terrain_type_at, TerrainRules.is_dangerous):
+			return true
+	return false
+
+
+## EPOCH_20_TERRAIN_DEBUFF (sweep A) — the granted-terrain-debuff read over the JOINED chain
+## (host + attached heroes), the same walk the core's `mods::granted` chain read does: a debuff
+## cast on ANY member of the moving formation marks the whole move.
+func _chain_has_special_rule(unit: GameUnit, rule: String) -> bool:
+	if unit == null:
+		return false
+	if unit.has_special_rule(rule):
+		return true
+	for h in unit.get_attached_heroes():
+		if h is GameUnit and (h as GameUnit).has_special_rule(rule):
 			return true
 	return false
 
@@ -6323,6 +6345,13 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	var own_r_m := _move_base_radius_m(models)
 	var opts := {"clearance": own_r_m / INCHES_TO_METERS + CLEARANCE_EPS_IN,
 		"board_y_in": board_y_in}   # the planner's second axis; without it every bound would be square
+	# EPOCH_20_TERRAIN_DEBUFF (sweep A): the carried terrain debuffs ride the SAME opts the
+	# planner reads cells from — _terrain_cost_at prices them exactly like a Dangerous/Difficult cell.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_20_TERRAIN_DEBUFF:
+		if _chain_has_special_rule(unit, "Dangerous Terrain"):
+			opts["dangerous_debuff"] = true
+		if _chain_has_special_rule(unit, "Difficult Terrain"):
+			opts["difficult_debuff"] = true
 	var zones_in: Array = []
 	for z in _spacing_zones_world(unit, own_r_m, charge_target if allow_contact else null):
 		var zd := z as Dictionary
@@ -8861,7 +8890,11 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 	for model in models:
 		radii_m.append(model_base_radius_m(model as ModelInstance))
 	var effective_band := band_in
-	if not ignores_difficult and _trails_cross_difficult(trails, radii_m):
+	# EPOCH_20_TERRAIN_DEBUFF: the charge runs the same p.11 cap a carried Difficult
+	# Terrain rule earns as the crossing trigger does (the core's charge_move shares the cap).
+	if not ignores_difficult and (_trails_cross_difficult(trails, radii_m)
+			or (AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_20_TERRAIN_DEBUFF
+				and _chain_has_special_rule(unit, "Difficult Terrain"))):
 		effective_band = minf(band_in, DIFFICULT_MOVE_CAP_IN)
 		trails = []
 		planned = _plan_move(unit, models, positions, goal, effective_band, true,

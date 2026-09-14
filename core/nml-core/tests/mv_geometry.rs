@@ -116,6 +116,8 @@ impl Oracle {
             zones: &self.zones,
             avoid_cells: &self.avoid_cells,
             avoid_fine: &self.fine,
+            dangerous_debuff: false,
+            difficult_debuff: false,
         }
     }
     fn opts_clearance(&self, clearance: f64) -> StepOpts<'_> {
@@ -124,6 +126,8 @@ impl Oracle {
             zones: &self.zones,
             avoid_cells: &self.avoid_cells,
             avoid_fine: &self.fine,
+            dangerous_debuff: false,
+            difficult_debuff: false,
         }
     }
 }
@@ -378,6 +382,8 @@ fn string_pull_cost_census(c: &MoveCorpus, s: f64) -> (usize, usize, usize, usiz
                 zones: &zones,
                 avoid_cells: &call.opts.avoid_cells,
                 avoid_fine: oracles[ci].opts().avoid_fine,
+                dangerous_debuff: call.opts.dangerous_debuff,
+                difficult_debuff: call.opts.difficult_debuff,
             };
             for m in 0..idx.len().saturating_sub(1) {
                 let (i0, i1) = (idx[m], idx[m + 1]);
@@ -614,7 +620,7 @@ fn geometry_primitives_mirror_godot() {
     let mut avoid = CellSet::new();
     avoid.insert((0, 0));
     let none = no_cells();
-    let o = StepOpts { clearance: 0.0, zones: &[], avoid_cells: &avoid, avoid_fine: &none };
+    let o = StepOpts { clearance: 0.0, zones: &[], avoid_cells: &avoid, avoid_fine: &none, dangerous_debuff: false, difficult_debuff: false };
     assert_eq!(nml_core::mv::terrain_cost_at([0.5, 0.5], &empty, &o), 1.0);
     // with a grid, that same avoided cell is a hard block.
     let mut grid: Grid = Grid::new();

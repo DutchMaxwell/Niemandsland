@@ -12,7 +12,7 @@
 
 use std::rc::Rc;
 
-use crate::acts::{rule_on, EPOCH_11_SOLO_GRANT_READS};
+use crate::acts::{rule_on, EPOCH_11_SOLO_GRANT_READS, EPOCH_20_TERRAIN_DEBUFF};
 use crate::rules::base_rule_name;
 use crate::state::State;
 
@@ -178,6 +178,19 @@ pub fn granted(state: &State, i: usize, rule: &str) -> bool {
 /// attackers-side grants.
 pub fn granted_vs(state: &State, target: usize, rule: &str) -> bool {
     chain_grant(state, target, rule, true)
+}
+
+/// STANDALONE_SWEEP_A_2026-09-14, rows `Dangerous Terrain Debuff` /
+/// `Difficult Terrain Debuff` — the unit-level terrain debuffs. The hazard
+/// the debuff promises is a property of the UNIT, not of the ground it
+/// crosses, so the readers that used to consult only the CELL — the
+/// once-per-move Dangerous test (`sim::dangerous_dice`), the p.11 cap and the
+/// movement cost (`mv::step` / `mv::cost`, carried on the move call's own
+/// debuff knobs) — fold the grant through the SAME `granted()` chain read
+/// every other granted base rule rides. Gate: `EPOCH_20_TERRAIN_DEBUFF` — a
+/// rules_epoch below 20 reads nothing.
+pub fn granted_terrain_debuff(state: &State, i: usize, rule: &str, rules_epoch: u32) -> bool {
+    rule_on(rules_epoch, EPOCH_20_TERRAIN_DEBUFF) && granted(state, i, rule)
 }
 
 fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {

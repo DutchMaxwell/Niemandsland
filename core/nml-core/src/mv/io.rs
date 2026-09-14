@@ -183,6 +183,14 @@ pub struct CallOpts {
     pub avoid_fine: CellSet,
     pub forbid_cells: CellSet,
     pub board_y_in: f64,
+    /// STANDALONE_SWEEP_A_2026-09-14, rows `Dangerous Terrain Debuff` /
+    /// `Difficult Terrain Debuff` — the moving unit's granted terrain debuffs
+    /// (the FROZEN `EPOCH_20_TERRAIN_DEBUFF`, folded by `mods::granted_
+    /// terrain_debuff` before the call is built). `mv::cost` prices a carried
+    /// debuff the way it prices the cell; false on every call recorded before
+    /// the gate, so old corpora replay byte-exact.
+    pub dangerous_debuff: bool,
+    pub difficult_debuff: bool,
     pub difficult_cap_in: Option<f64>,
     pub zones_rest_only: bool,
     pub charge_allowance: Option<f64>,
@@ -214,6 +222,10 @@ struct PlainOpts {
     forbid_cells: Vec<[i64; 2]>,
     #[serde(default)]
     board_y_in: f64,
+    #[serde(default)]
+    dangerous_debuff: bool,
+    #[serde(default)]
+    difficult_debuff: bool,
     #[serde(default)]
     difficult_cap_in: Option<f64>,
     #[serde(default)]
@@ -452,6 +464,8 @@ fn call_of(pc: PlainCall, header: &MoveHeader, path: &str, ln: usize) -> Result<
         avoid_fine: cells_of(&o.avoid_fine),
         forbid_cells: cells_of(&o.forbid_cells),
         board_y_in: o.board_y_in,
+        dangerous_debuff: o.dangerous_debuff,
+        difficult_debuff: o.difficult_debuff,
         difficult_cap_in: o.difficult_cap_in,
         zones_rest_only: o.zones_rest_only,
         charge_allowance: o.charge_allowance,

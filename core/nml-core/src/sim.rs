@@ -2152,6 +2152,14 @@ pub(crate) fn dangerous_dice(
     }
     // `base_in_terrain` on this board — both halves of the trigger use it.
     let in_dang = |p: &[f64; 3], r: f64| base_in_terrain(geom::to_f32(*p), r, t, is_dangerous);
+    // STANDALONE_SWEEP_A_2026-09-14, row `Dangerous Terrain Debuff` — the
+    // FROZEN `EPOCH_20_TERRAIN_DEBUFF`: the granted "Dangerous Terrain" the
+    // unit CARRIES is a hazard the cell consults never see. It rides the same
+    // trigger and the same flying guard a crossing does; below 20 the grant
+    // reads nothing, so every recorded game replays.
+    let debuffed = |st: &State, u: usize| {
+        mods::granted_terrain_debuff(st, u, "Dangerous Terrain", seams.rules_epoch)
+    };
     let radius = |st: &State, u: usize, m: usize| {
         st.radii[u].get(m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M)
     };
@@ -2177,7 +2185,7 @@ pub(crate) fn dangerous_dice(
     let mut dice = 0;
     for (u, m, crossed) in movers {
         let Some(p0) = state.positions[u].get(m) else { continue };
-        if !crossed && !in_dang(p0, radius(state, u, m)) {
+        if !crossed && !in_dang(p0, radius(state, u, m)) && !debuffed(state, u) {
             continue;
         }
         // `wounds_max` is the FULL model list and `positions` only the survivors;

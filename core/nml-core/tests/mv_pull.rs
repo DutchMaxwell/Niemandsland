@@ -136,7 +136,7 @@ fn no_cells() -> CellSet {
 }
 
 fn opts<'a>(zones: &'a [Zone], none: &'a CellSet) -> StepOpts<'a> {
-    StepOpts { clearance: 0.0, zones, avoid_cells: none, avoid_fine: none }
+    StepOpts { clearance: 0.0, zones, avoid_cells: none, avoid_fine: none, dangerous_debuff: false, difficult_debuff: false }
 }
 
 /// Two 3" cells of Dangerous ground on the diagonal only — cell (1,1) is the

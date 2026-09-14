@@ -67,6 +67,8 @@ fn main() {
                 zones: &zones_of[*ci],
                 avoid_cells: &call.opts.avoid_cells,
                 avoid_fine: &empty,
+                dangerous_debuff: call.opts.dangerous_debuff,
+                difficult_debuff: call.opts.difficult_debuff,
             };
             if black_box(step_blocked(*a, *b, &call.walls, &o)) {
                 hits += 1;
@@ -85,6 +87,8 @@ fn main() {
                 zones: &zones_of[*ci],
                 avoid_cells: &call.opts.avoid_cells,
                 avoid_fine: &empty,
+                dangerous_debuff: call.opts.dangerous_debuff,
+                difficult_debuff: call.opts.difficult_debuff,
             };
             acc += black_box(segment_cost(*a, *b, &call.grid, &o));
         }
