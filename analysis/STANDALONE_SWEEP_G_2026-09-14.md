@@ -62,7 +62,7 @@ Scrapper Boost	gff jackals	Bane; upgrades=Scrapper, reroll_save_from=5, over_in=
 Scurry	gff/aof ratmen	Quick; advance_mod=2, rush_mod=2	unit.rs:4725 (named carrier in move_rule_mods_of)	movement_range_controller.gd:126-131 (Quick name pass) + 153 (Quick-primitive registry pass)	DERIVES
 
 ## Verdict counts
-CORRECT 20 | DERIVES 31 | TABLE-ONLY 2 | CORE-ONLY 0 | DIVERGES 0 | INERT 0 | N/A 0 — 53/53 measured, 0 NOT REACHED.
+CORRECT 17 | DERIVES 34 | TABLE-ONLY 2 | CORE-ONLY 0 | DIVERGES 0 | INERT 0 | N/A 0 — 53/53 measured, 0 NOT REACHED.
 
 ## The three rows I would fix first
 1. Morale (TABLE-ONLY) — core never reads the Morale primitive at all (morale math sums only Banner-family morale_bonus, unit.rs:1651-1672/1829-1831), while the table adds the rating to every morale test (solo_controller.gd:5642-5653 -> main.gd:8586). A player in core-driven games sees rated-morale units rout where the table holds them; it also silently skews any parity/planner expectations. Fix: read the Morale-primitive rating into the core morale test.
