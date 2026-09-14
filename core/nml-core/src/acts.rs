@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 25;
+pub const CURRENT_RULES_EPOCH: u32 = 26;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -607,22 +607,25 @@ pub const EPOCH_22_SCREENED_MELEE: u32 = 22;
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_23_INERT_MARKS: u32 = 23;
 
-/// The Ethereal band leg (`rules-ethereal-bands`, epoch 25): an
-/// "Ethereal"-PRINTING profile's registry entry carries the
-/// `advance_mod`/`rush_mod` (-6/-6) the table's primitive pass spends
-/// (movement_range_controller.gd:142-164, "Teleport" in the allowlist via
-/// NML-1121) — the core's `move_rule_mods_of` fold spends the same numbers
-/// from this epoch on, riding the PRINTED NAME (the #489 lesson): the real
-/// "Teleport" rule shares the primitive with NO band mods and must stay out
-/// of the arm. Evidence-only standing like the rest of the fold (the
-/// accepted `bounding` shape, PR #653) — the -6"/-6" reach fresh records
-/// precomputed inside the RECORDED `state.bands`, so this stamp is the
-/// core's own per-entry read, never a simulation input. `25` is one past
-/// every existing stamp (23 = #936's pierce marks, 24 held by `placed3` in
-/// flight), and the value `CURRENT_RULES_EPOCH` is bumped to in the same
-/// change. Every call site reads THIS constant, not the literal `25` or
-/// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
+
+/// The D3" ACTIVATION PLACEMENT gate (14.09., sweep C rows Wave-Step/Wolfborn
+/// plus sweep B row Rapid Blink — the `Bounding {place_d3 ..}` primitive): the
+/// book's "When this unit is activated, you may place all models with this
+/// rule in it anywhere fully within D3\" of their position." The table rolls
+/// the die at the activation's head on its seeded stream
+/// (solo_controller.gd:1688-1710) and values it as a move-band bonus; the
+/// core replayed that band only through the RECORDED `bounding_d3` trace
+/// (`sim::bounding_bonus_in`), so every fresh core-simulated game never
+/// hopped and the carrier's reach ran short by up to the roll. From 26 a
+/// FRESH sim (an act with no recorded `bounding_d3` trace) rolls its own
+/// dice from the seeded stream and re-places the carrier BEFORE the move
+/// with #930's free-placement scan (`deployment::vanguard_free_place`,
+/// radius = the rolled inches). Below 26 the trace replay stays the whole
+/// effect, byte-exact. Renumbered from the reserved 24 at rebase (#941's
+/// 25 landed first) per the epoch rules. Every call site reads THIS
+/// constant, not the literal `26` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_26_PLACE_D3: u32 = 26;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -1124,7 +1127,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 25, "epoch 25's gate (EPOCH_25_ETHEREAL_BANDS) bumps the live epoch to 25, past #936's 23 (24 held by placed3, in flight)");
+assert_eq!(CURRENT_RULES_EPOCH, 26, "epoch 26's gate (EPOCH_26_PLACE_D3) bumps the live epoch to 26, past #941's 25 (24 was held by this PR in flight, renumbered at rebase)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1134,11 +1137,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":25}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":26}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 25"
+            "a fresh play_game() now stamps the bumped epoch, 26"
         );
     }
 
