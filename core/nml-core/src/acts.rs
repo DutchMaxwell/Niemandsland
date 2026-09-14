@@ -313,7 +313,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 15;
+pub const CURRENT_RULES_EPOCH: u32 = 16;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -524,6 +524,21 @@ pub const EPOCH_14_DEADLY_LANDING: u32 = 14;
 /// in the same change. Every call site reads THIS constant, not the literal
 /// `15` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_15_MARK_BENEFICIARY: u32 = 15;
+
+/// The FREE PLACEMENT gate (14.09., the sweeps A/C defect — one bug under three
+/// names, rows `Vanguard`/`Drakesworn`/`Fanatic`): all three books print
+/// "After this model is deployed, it may be placed anywhere fully within 9\" of
+/// its position" and all three carry the registry primitive
+/// `Vanguard {place_in: 9}`, yet both layers ran a directional PUSH toward the
+/// table centre (`deployment::vanguard_push` / `solo_controller.gd
+/// _vanguard_push`) — the model could never step sideways or backwards. From 16
+/// the move is the rule's FREE choice within the radius
+/// (`deployment::vanguard_free_place` / `solo_controller.gd
+/// _vanguard_free_place`); below 16 every corpus replays the directional push
+/// it was recorded with. `16` is one past every existing stamp, and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site reads
+/// THIS constant, not the literal `16` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_16_FREE_PLACEMENT: u32 = 16;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at

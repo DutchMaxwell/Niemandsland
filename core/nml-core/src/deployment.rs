@@ -6,6 +6,7 @@
 //! 2 `randi_range(1, 6)` draws per attempt, ties re-roll, cap 100 — trace kept because
 //! the attempt count is data-dependent (the gate compares the FULL attempt list).
 
+use crate::acts::{rule_on, EPOCH_16_FREE_PLACEMENT};
 use crate::rng::GodotRng;
 use std::collections::HashMap;
 use crate::terrain::{CONTAINER, DANGEROUS, RUINS, Terrain};
@@ -564,6 +565,21 @@ pub const VANGUARD_PLACE_M: f64 = 9.0 * 0.0254;
 pub const VANGUARD_RULE_TEXT: &str =
     "Vanguard: after deploying, the unit may be placed within 9\" — pushed toward the enemy side";
 
+/// The table's `rule` text of the Vanguard FREE placement line (epoch 16,
+/// `EPOCH_16_FREE_PLACEMENT`): the book's own words, verbatim — the sweeps'
+/// defect quote. The old `VANGUARD_RULE_TEXT` stays for the epoch-15 leg.
+pub const VANGUARD_FREE_RULE_TEXT: &str =
+    "Vanguard: after deploying, the unit may be placed anywhere fully within 9\" of its position";
+
+/// The free placement's table-bound margin — the table's own movement law
+/// (`solo_controller.gd:16 BOUNDS_MARGIN_M`, `_clamp_to_bounds` clamps the
+/// centre to the half extents minus this). The epoch-16 free scan is the first
+/// placement that can walk off the table (the ladder is zone-bound, the
+/// directional push goes centre-ward), so the bound rides the same law instead
+/// of a new one. Core reads the bound off `Terrain::board_in()`, the table off
+/// `_table_half_extents()`.
+pub const VANGUARD_BOUNDS_MARGIN_M: f64 = 0.02;
+
 /// Godot `Rect2` at the real_t boundary: construction and `end`/`get_center`
 /// narrow to f32; the scan arithmetic between boundaries runs f64.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -796,6 +812,9 @@ fn deploy_spot_clear(
 /// table centre at 100/75/50/25 % of the 9" placement (`push_m` — the
 /// registry's place_in, 9.0 in the corpus), first legal candidate wins; the
 /// pushed spot MAY leave the zone. Vector2·scalar narrows the scalar to f32.
+/// THE EPOCH-15 LEG (`EPOCH_16_FREE_PLACEMENT`): every corpus recorded before
+/// the free-placement fix replays through this directional push, byte-exactly
+/// as recorded.
 #[allow(clippy::too_many_arguments)]
 pub fn vanguard_push(
     spot: (f64, f64),
@@ -824,6 +843,71 @@ pub fn vanguard_push(
         }
     }
     spot
+}
+
+/// The epoch-16 Vanguard FREE placement (`EPOCH_16_FREE_PLACEMENT`,
+/// solo_controller.gd `_vanguard_free_place` — the sweeps A/C fix): the rule's
+/// "may be placed anywhere fully within 9\" of its position" as a free choice,
+/// not the directional push. THE SCAN LAW (the table mirrors it line-for-line,
+/// every float boundary included, or recorded games diverge): 0.025 m
+/// candidates (`DEPLOY_SPOT_STEP_M`) over the disc's bounding box — built with
+/// the scalar ctor so the f64 arithmetic narrows at the same `Rect2` ctor the
+/// table's `Rect2(...)` hits; `x` restarting per row from the same expression,
+/// repeated `+= step` in f64, `<= end + SCAN_EPS` bounds, candidates narrowed
+/// like the `Vector2` ctor, y-outer/x-inner — `best_spot`'s own scan law
+/// (:645-688). Admissible = the base fits the radius (`v2_dist + base_r <=
+/// push_m + SCAN_EPS` — "fully within" honest), the centre stays on the table
+/// (the repo's movement-bound law, `VANGUARD_BOUNDS_MARGIN_M`) and
+/// `deploy_spot_clear` passes. The CURRENT spot is seeded FIRST with its own
+/// score; a candidate wins on a STRICT `<` of `nearest_objective_distance`
+/// (first minimum in scan order) — so the unit only moves when a legal spot is
+/// strictly closer to the nearest objective, and core and table pick the same
+/// spot from the same state.
+#[allow(clippy::too_many_arguments)]
+pub fn vanguard_free_place(
+    spot: (f64, f64),
+    occupied: &[Occupied],
+    objectives: &[(f64, f64)],
+    blocked: &dyn Fn((f64, f64)) -> bool,
+    radius: f64,
+    footprint: &[(f64, f64)],
+    base_r: f64,
+    walls: &[WallSeg],
+    push_m: f64,
+    board: &Terrain,
+) -> (f64, f64) {
+    let (in2m, board_in) = (board.in2m(), board.board_in());
+    let (hx, hy) = (
+        board_in[0] * in2m * 0.5 - VANGUARD_BOUNDS_MARGIN_M,
+        board_in[1] * in2m * 0.5 - VANGUARD_BOUNDS_MARGIN_M,
+    );
+    let bounds = Rect::new(spot.0 - push_m, spot.1 - push_m, 2.0 * push_m, 2.0 * push_m);
+    let mut best = spot;
+    let mut best_score = nearest_objective_distance(spot, objectives, &bounds);
+    let end = bounds.end();
+    let mut y = bounds.pos.1;
+    while y <= end.1 + SCAN_EPS {
+        let mut x = bounds.pos.0;
+        while x <= end.0 + SCAN_EPS {
+            let p = (x as f32 as f64, y as f32 as f64);
+            if p.0 >= -hx
+                && p.0 <= hx
+                && p.1 >= -hy
+                && p.1 <= hy
+                && v2_dist(p, spot) + base_r <= push_m + SCAN_EPS
+                && deploy_spot_clear(p, occupied, blocked, radius, footprint, base_r, walls)
+            {
+                let score = nearest_objective_distance(p, objectives, &bounds);
+                if score < best_score {
+                    best_score = score;
+                    best = p;
+                }
+            }
+            x += DEPLOY_SPOT_STEP_M;
+        }
+        y += DEPLOY_SPOT_STEP_M;
+    }
+    best
 }
 
 /// How the ladder landed: the spot, which rung produced it (0 = section scan,
@@ -865,6 +949,7 @@ pub fn deploy_place_id(
     flying: bool,
     vanguard: bool,
     push_m: f64,
+    rules_epoch: u32,
 ) -> PlaceOutcome {
     let blocked =
         |p: (f64, f64)| spot_blocked(board, p, flying, radius, footprint, base_r);
@@ -900,7 +985,16 @@ pub fn deploy_place_id(
     }
     if vanguard {
         pushed_from = spot;
-        let v = vanguard_push(spot, zone, occupied, &blocked, radius, footprint, base_r, walls, push_m);
+        // EPOCH_16_FREE_PLACEMENT: the free choice from 16, the directional
+        // push below — the frozen constant, never CURRENT_RULES_EPOCH (#928).
+        let v = if rule_on(rules_epoch, EPOCH_16_FREE_PLACEMENT) {
+            vanguard_free_place(
+                spot, occupied, objectives, &blocked, radius, footprint, base_r, walls, push_m,
+                board,
+            )
+        } else {
+            vanguard_push(spot, zone, occupied, &blocked, radius, footprint, base_r, walls, push_m)
+        };
         if v != spot {
             spot = v;
             pushed = true;
@@ -1106,6 +1200,7 @@ fn deploy_place_next(
     objectives: &[(f64, f64)],
     board: &Terrain,
     walls: &[WallSeg],
+    rules_epoch: u32,
 ) {
     let s = &specs[i];
     let (zone, section, forward_y) = (q.zone, q.section_of[i], q.forward_y);
@@ -1129,7 +1224,7 @@ fn deploy_place_next(
     let push_m = s.place_in_m.unwrap_or(VANGUARD_PLACE_M);
     let o = deploy_place_id(
         &unit_zone, &sec, fwd, objectives, &mut q.occupied, board, walls,
-        radius, &s.footprint, base_r, s.ignores_terrain, s.vanguard, push_m,
+        radius, &s.footprint, base_r, s.ignores_terrain, s.vanguard, push_m, rules_epoch,
     );
     q.out.placements.push(Placement {
         key: s.key.clone(),
@@ -1143,12 +1238,29 @@ fn deploy_place_next(
     // event per Vanguard push, `chosen` the ACTUAL distance — the table's
     // `spot.distance_to(v_spot) / INCHES_TO_METERS`, the f32 v2_dist law.
     if o.pushed {
+        // The epoch-aware log law: from `EPOCH_16_FREE_PLACEMENT` the event is
+        // the book's own free-placement words with the ACTUAL repositioning
+        // distance; below, the directional-push texts the corpus was recorded
+        // with, verbatim.
+        let free = rule_on(rules_epoch, EPOCH_16_FREE_PLACEMENT);
         q.out.events.push(DeployEvent {
             kind: "deploy".into(),
             unit: s.key.clone(),
-            rule: VANGUARD_RULE_TEXT.into(),
-            chosen: format!("+{:.1}\" forward", v2_dist(o.pushed_from, o.spot) / 0.0254),
-            why: "vanguard forward placement".into(),
+            rule: if free {
+                VANGUARD_FREE_RULE_TEXT.into()
+            } else {
+                VANGUARD_RULE_TEXT.into()
+            },
+            chosen: if free {
+                format!("{:.1}\" repositioned", v2_dist(o.pushed_from, o.spot) / 0.0254)
+            } else {
+                format!("+{:.1}\" forward", v2_dist(o.pushed_from, o.spot) / 0.0254)
+            },
+            why: if free {
+                "vanguard free placement".into()
+            } else {
+                "vanguard forward placement".into()
+            },
             data: DeployEventData { x_m: o.spot.0, z_m: o.spot.1 },
         });
     }
@@ -1168,12 +1280,13 @@ pub fn deploy_side(
     objectives: &[(f64, f64)],
     board: &Terrain,
     seed_value: i64,
+    rules_epoch: u32,
 ) -> SideDeploy {
     let mut q = deploy_begin(specs, zone, seed_value);
     let walls = board.walls_world_m();
     let order: Vec<usize> = q.main.iter().chain(q.scouts.iter()).copied().collect();
     for i in order {
-        deploy_place_next(&mut q, specs, i, objectives, board, walls);
+        deploy_place_next(&mut q, specs, i, objectives, board, walls, rules_epoch);
     }
     // The FINISH (deploy_finish, solo_controller.gd:9180-9188) is NOT run
     // here — step 6d split placement from the finish so the caller drives the
@@ -1221,6 +1334,7 @@ pub fn deploy_interleaved(
     seed1: i64,
     seed2: i64,
     first: i64,
+    rules_epoch: u32,
 ) -> InterleavedDeploy {
     let walls = board.walls_world_m();
     let specs = [specs1, specs2];
@@ -1238,7 +1352,7 @@ pub fn deploy_interleaved(
                 }
                 let i = if scouts { q[k].scouts[cur[k]] } else { q[k].main[cur[k]] };
                 cur[k] += 1;
-                deploy_place_next(&mut q[k], specs[k], i, objectives, board, walls);
+                deploy_place_next(&mut q[k], specs[k], i, objectives, board, walls, rules_epoch);
                 sequence.push((k as i64 + 1, specs[k][i].key.clone()));
                 placed = true;
             }

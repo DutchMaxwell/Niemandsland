@@ -35,11 +35,17 @@ static var objectives_stamp: Dictionary = {}
 ## falls back to the carrier's profile (that fallback IS the #823 fidelity break).
 static var spawn_profile_resolver: Callable = Callable()
 ## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
-## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 15 by the
-## Precision-marks beneficiary side fix, EPOCH_15_MARK_BENEFICIARY; 14 was the
-## Deadly per-model landing port, 13 was #921's).
+## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 16 by the
+## Vanguard/Drakesworn/Fanatic free-placement fix, EPOCH_16_FREE_PLACEMENT;
+## 15 was the Precision-marks beneficiary side fix, 14 was the Deadly
+## per-model landing port, 13 was #921's).
 ## Bump it in the same change the core does; SPAWN_PROFILES_EPOCH below stays frozen.
-static var rules_epoch: int = 15
+static var rules_epoch: int = 16
+## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
+## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
+## Below it the recorded directional push replays. The core's own gate reads the
+## frozen `EPOCH_16_FREE_PLACEMENT` (acts.rs); this mirror never re-dates itself.
+const EPOCH_16_FREE_PLACEMENT := 16
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
 const SPAWN_PROFILES_EPOCH := 8

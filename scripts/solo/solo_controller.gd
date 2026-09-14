@@ -9461,22 +9461,36 @@ func _deploy_place_id(id: int) -> GameUnit:
 		spot_why = "terrain-choked — clearest (least-blocked) ground in the zone"
 	_place_unit_at(unit, spot)
 	_deploy_zone_of[unit] = zone   # containment for the cleanup (Bug 8)
-	# Vanguard (wahl-wave follow-up — official text: "After this model is deployed, it may be
-	# placed anywhere fully within 9\" of its position."): push forward toward the table centre
-	# (the enemy side — the deploy doctrine's forward-edge pressure), longest legal step first
-	# (terrain / own-army overlap / wall-bisect checked); the pushed spot MAY leave the deploy
-	# zone — that is the rule's point. Enemy-model overlap is not checked (deployment separation
-	# makes it moot in practice — documented edge).
+	# Vanguard (sweeps A/C — official text: "After this model is deployed, it may be
+	# placed anywhere fully within 9\" of its position."): from EPOCH_16_FREE_PLACEMENT
+	# the placement is the rule's FREE choice within the radius (_vanguard_free_place —
+	# the pushed spot may leave the deploy zone, and may now also step sideways or
+	# backwards); below the gate the corpus's recorded directional push toward the
+	# table centre replays (_vanguard_push). Terrain / own-army overlap / wall-bisect
+	# are checked either way; enemy-model overlap is not (deployment separation makes
+	# it moot in practice — documented edge).
 	if RulesRegistry.unit_rule_active(unit, "Vanguard") \
 			or not RulesRegistry.unit_rules_of_primitive(unit, "Vanguard").is_empty():
-		var v_spot := _vanguard_push(unit, spot, zone, occupied, terrain_only, radius, footprint, base_r)
+		var v_spot: Vector2
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_16_FREE_PLACEMENT:
+			var push_m := float(RulesRegistry.unit_param(unit, "Vanguard", "place_in", 9.0)) * INCHES_TO_METERS
+			v_spot = _vanguard_free_place(spot, objectives, occupied, terrain_only, radius, footprint, base_r, push_m)
+		else:
+			v_spot = _vanguard_push(unit, spot, zone, occupied, terrain_only, radius, footprint, base_r)
 		if v_spot != spot:
 			_place_unit_at(unit, v_spot)
-			_deploy_zone_of.erase(unit)   # the pushed spot MAY legally leave the zone
+			_deploy_zone_of.erase(unit)   # the placed spot MAY legally leave the zone
+			var free := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_16_FREE_PLACEMENT
+			var rule_text := "Vanguard: after deploying, the unit may be placed anywhere fully within 9\" of its position"
+			var chosen := "%.1f\" repositioned" % (spot.distance_to(v_spot) / INCHES_TO_METERS)
+			var why := "vanguard free placement"
+			if not free:
+				rule_text = "Vanguard: after deploying, the unit may be placed within 9\" — pushed toward the enemy side"
+				chosen = "+%.1f\" forward" % (spot.distance_to(v_spot) / INCHES_TO_METERS)
+				why = "vanguard forward placement"
 			record_decision({"kind": "deploy", "unit": unit.get_name(), "unit_id": id,
-				"rule": "Vanguard: after deploying, the unit may be placed within 9\" — pushed toward the enemy side",
-				"candidates": [], "chosen": "+%.1f\" forward" % (spot.distance_to(v_spot) / INCHES_TO_METERS),
-				"why": "vanguard forward placement",
+				"rule": rule_text,
+				"candidates": [], "chosen": chosen, "why": why,
 				"data": {"x_m": v_spot.x, "z_m": v_spot.y}})
 			spot = v_spot
 	record_decision({"kind": "deploy", "unit": unit.get_name(), "unit_id": id,
@@ -9958,6 +9972,57 @@ func _vanguard_push(unit: GameUnit, spot: Vector2, zone: Rect2, occupied: Array,
 		if _deploy_spot_clear(cand, occupied, blocked, radius, footprint, base_r):
 			return cand
 	return spot
+
+
+## The EPOCH_16 Vanguard FREE placement (sweeps A/C fix — "After this model is deployed, it may
+## be placed anywhere fully within 9\" of its position"): a FREE choice within the radius, not
+## the directional push toward the table centre (that law stays for the recorded corpora below
+## the gate). THE SCAN LAW — the core's `vanguard_free_place` (deployment.rs) mirrored
+## line-for-line, every float boundary included, or recorded games diverge: 0.025 m candidates
+## over the disc's bounding box (scalar-ctor `Rect2` so the f64 arithmetic narrows at the same
+## boundary, repeated `+= step` in f64, `<= end + 0.0001` bounds, candidates narrowed like the
+## `Vector2` ctor, y-outer/x-inner — `best_spot`'s own scan law). Admissible = the base fits the
+## radius (`distance_to + base_r <= push_m + 0.0001` — "fully within" honest), the centre stays
+## on the table (the repo's own movement-bound law: half extents minus BOUNDS_MARGIN_M), and
+## `_deploy_spot_clear` passes. The CURRENT spot is scored FIRST; a candidate wins on a STRICT
+## `<` of the nearest-objective distance (first minimum in scan order) — the unit only moves
+## when a legal spot is strictly closer to the nearest objective.
+func _vanguard_free_place(spot: Vector2, objectives: Array, occupied: Array, blocked: Callable,
+		radius: float, footprint: Array, base_r: float, push_m: float) -> Vector2:
+	var half := _table_half_extents()
+	var hx: float = half.x - BOUNDS_MARGIN_M
+	var hy: float = half.y - BOUNDS_MARGIN_M
+	var bounds := Rect2(spot.x - push_m, spot.y - push_m, 2.0 * push_m, 2.0 * push_m)
+	var best := spot
+	var best_score := _vanguard_objective_dist(spot, objectives, bounds)
+	var end := bounds.end
+	var y: float = bounds.position.y
+	while y <= end.y + 0.0001:
+		var x: float = bounds.position.x
+		while x <= end.x + 0.0001:
+			var cand := Vector2(x, y)
+			if absf(cand.x) <= hx and absf(cand.y) <= hy \
+					and cand.distance_to(spot) + base_r <= push_m + 0.0001 \
+					and _deploy_spot_clear(cand, occupied, blocked, radius, footprint, base_r):
+				var score := _vanguard_objective_dist(cand, objectives, bounds)
+				if score < best_score:
+					best_score = score
+					best = cand
+			x += 0.025
+		y += 0.025
+	return best
+
+
+## The free placement's score: the nearest objective's table-plane distance
+## (Vector2.distance_to, the f32 law), the bounding box's centre when no
+## objective exists — the core's `nearest_objective_distance` verbatim.
+func _vanguard_objective_dist(p: Vector2, objectives: Array, bounds: Rect2) -> float:
+	if objectives.is_empty():
+		return p.distance_to(bounds.get_center())
+	var best_d := INF
+	for o in objectives:
+		best_d = minf(best_d, p.distance_to(o as Vector2))
+	return best_d
 
 
 ## Whether a deploy spot is legal for a unit's footprint: clear of the occupied rings, every model of
