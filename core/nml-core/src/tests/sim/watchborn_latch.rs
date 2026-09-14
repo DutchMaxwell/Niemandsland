@@ -4,7 +4,7 @@ use super::*;
 
 /// Watchborn-shaped fixture: a single-model shooter "a" (Quality 4) with TWO
 /// versatile rifles over 9" from two single-model targets — "b" (plain
-/// Defense 3, whose EV-best is decisively +1 to hit) and "c" (Shielded
+/// Defense 5, whose EV-best is decisively +1 to hit) and "c" (Shielded
 /// Defense 4, whose own EV-best is AP(+1)). One act per unit per round makes
 /// the round stamp the activation latch, so the two split volleys are two
 /// volleys of ONE activation.
@@ -53,7 +53,7 @@ fn watchborn_volley_line() -> (State, Vec<UnitStatic>) {
             ..Default::default()
         },
         UnitStatic {
-            ctx: Ctx { defense: 3, tough: 1, models: 1, ..Default::default() },
+            ctx: Ctx { defense: 5, tough: 1, models: 1, ..Default::default() },
             name: "Plain".into(),
             model_count: 1,
             wounds_max: vec![1],
@@ -81,12 +81,12 @@ fn watchborn_split_action() -> Action {
         patient: false,
         split: Some(vec![
             crate::io::SplitShot {
-                member: "a".into(),
+                member: "Watchborn".into(),
                 weapon: "Rifle A".into(),
                 target: "b".into(),
             },
             crate::io::SplitShot {
-                member: "a".into(),
+                member: "Watchborn".into(),
                 weapon: "Rifle B".into(),
                 target: "c".into(),
             },
@@ -212,7 +212,7 @@ fn a_charge_over_nine_inches_carries_the_pick_into_the_melee_fold() {
             ..Default::default()
         },
         UnitStatic {
-            ctx: Ctx { defense: 3, tough: 1, models: 1, ..Default::default() },
+            ctx: Ctx { defense: 5, tough: 1, models: 1, ..Default::default() },
             name: "Target".into(),
             model_count: 1,
             wounds_max: vec![1],
@@ -242,7 +242,7 @@ fn a_charge_over_nine_inches_carries_the_pick_into_the_melee_fold() {
         strike_targets,
         vec![3],
         "the charge is the activation's first eligible attack: its EV-best vs plain \
-         Defense 4 is +1 to hit, and the picked bonus reaches the MELEE dice fold (3+); \
+         Defense 5 is +1 to hit, and the picked bonus reaches the MELEE dice fold (3+); \
          full report log: {:?}; all rolls: {:?}",
         new_leg.log,
         new_leg.rolls.iter().map(|r| (r.kind, r.count, r.target)).collect::<Vec<_>>(),
