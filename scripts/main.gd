@@ -6655,16 +6655,43 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		blocks = AiCombatMath.count_blocks(save_faces, base_defense, ap)
 	# Shred (wave 5, army-book weapon rule): every unmodified Defense 1 deals +1 wound — counted on the
 	# FINAL faces (after Bane's re-rolls), NOT Deadly-multiplied (save-step wounds, documented reading).
+	# Destroyer Boost (the Shred UPGRADE family — the table twin of the core's upgrades-gated stamp,
+	# unit.rs stamp arm 6b `shred_low`/`shred_over_in`, consumed at dice.rs:1056-1060): when the striker
+	# ALSO carries the entry's `upgrades` base rule and the volley is past the entry's `over_in`, the
+	# window widens to the entry's `save_fail_max` (`extra_wound_save_low` is the Warbound spelling —
+	# the core's `.max()` twin). Shooting only: the melee resolve passes over9=false, so melee never
+	# widens (the core's no-pre-charge-gap shape).
 	var shred_extra := 0
 	if bool(profile.get("shred", false)):
-		shred_extra = AiCombatMath.shred_bonus_wounds(save_faces, reroll)
+		var boost_rule := ""
+		var boost_low := 1
+		var boost_over_in := 0.0
+		if over9:
+			for e in RulesRegistry.unit_rules_of_primitive(striker, "Shred"):
+				var ed := e as Dictionary
+				var ep: Dictionary = ed.get("params", {})
+				var low := maxi(int(ep.get("save_fail_max", 0)), int(ep.get("extra_wound_save_low", 0)))
+				var base := str(ep.get("upgrades", ""))
+				if low <= 1 or base.is_empty() or not AiEv.has_exact_rule(striker, base):
+					continue
+				boost_low = low
+				boost_rule = str(ed.get("name", ""))
+				boost_over_in = float(ep.get("over_in", 9.0))
+		if boost_low > 1:
+			shred_extra = AiCombatMath.shred_bonus_wounds(save_faces, reroll, boost_low, base_defense + ap)
+		else:
+			shred_extra = AiCombatMath.shred_bonus_wounds(save_faces, reroll)
 		if shred_extra > 0 and battle_log != null:
 			var shred_name := _solo_shred_facet_name(striker, int(profile.get("range", 0)))
 			if shred_name.is_empty():
 				shred_name = "Shred"
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d Defense roll%s of 1 → +%d wound%s" % [
-				shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
-			_solo_rule_float(defender, "%s +%d" % [shred_name, shred_extra], Color(1.0, 0.5, 0.4))
+			if boost_low > 1:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: Shred on failed saves of 1-%d (over %s\") — %d extra wound%s" % [
+					boost_rule, boost_low, str(boost_over_in).trim_suffix(".0"), shred_extra, ("" if shred_extra == 1 else "s")], true)
+			else:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d Defense roll%s of 1 → +%d wound%s" % [
+					shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
+			_solo_rule_float(defender, "%s +%d" % [(boost_rule if boost_low > 1 else shred_name), shred_extra], Color(1.0, 0.5, 0.4))
 	var unsaved := maxi(0, count - blocks)
 	# apply_deadly=false (Bug: Deadly no-carry-over): return the RAW unsaved count so the caller can
 	# apply Deadly per-model (each ×X, capped at one model, no spill). The pooled deadly_multiplier path
