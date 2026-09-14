@@ -249,6 +249,16 @@ pub struct Knobs {
     /// a defect.
     #[serde(default)]
     pub rules_epoch: u32,
+    /// The replay-aware half of `EPOCH_19_MOVE_GRANTS_FOLD`: the header
+    /// carried `"books"` — a TABLE recording (`act_recorder.gd:266-268`
+    /// writes it unconditionally; no writer in `core/nml-core/src` does) — so
+    /// the record's `bands` already fold every move grant
+    /// (`battle_sim.gd:1707 -> move_bands_for_props`) and the fold's live
+    /// delta stays off (`sim::solo_move_grant_delta_in`). Default OFF: every
+    /// core-written record and every fixture predates the key. See
+    /// `Header::books` and `header_of`.
+    #[serde(default)]
+    pub bands_prefolded: bool,
 }
 
 /// The current rule-set generation (see `Knobs`/`Seams::rules_epoch`, `rule_on`).
@@ -702,6 +712,7 @@ impl Default for Knobs {
             cond_ap_dice: false,
             versatile_reach: false,
             rules_epoch: 0,
+            bands_prefolded: false,
         }
     }
 }
@@ -719,6 +730,17 @@ struct Header {
     terrain: Option<PlainTerrain>,
     #[serde(default)]
     knobs: Knobs,
+    /// The TABLE recorder's books block (`act_recorder.gd:266-268` — written
+    /// unconditionally inside the always-written header dict; no writer in
+    /// `core/nml-core/src` emits it, the core's own header shape is
+    /// `rows.rs:679`). The PRESENCE is the signal, the value opaque on
+    /// purpose: `books` present ⇒ recorded by the table ⇒ the record's
+    /// `bands` already carry every grant (`battle_sim.gd:1707 ->
+    /// move_bands_for_props`), so the replay-aware
+    /// `sim::solo_move_grant_delta_in` adds nothing. Read once in
+    /// `header_of` into `Knobs::bands_prefolded`.
+    #[serde(default)]
+    books: Option<serde_json::Value>,
 }
 
 /// One entry of `trace.scored` — `AiPlanner.plan_with_rollout` ai_planner.gd:
@@ -984,6 +1006,10 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
 }
 
 fn header_of(header: Header) -> Result<ActHeader, String> {
+    // `books` present ⇒ a table recording ⇒ the recorded bands carry every
+    // grant (see `Header::books`). Core-written records and every fixture
+    // have no `books`, so the flag reads back `false` there.
+    let bands_prefolded = header.books.is_some();
     let terrain = match &header.terrain {
         Some(t) => Terrain::build(t),
         None => Terrain::absent(),
@@ -999,7 +1025,7 @@ fn header_of(header: Header) -> Result<ActHeader, String> {
         "",
         header.knobs.rules_epoch,
     )?;
-    Ok(ActHeader { profiles: Rc::new(profiles), terrain, knobs: header.knobs })
+    Ok(ActHeader { profiles: Rc::new(profiles), terrain, knobs: Knobs { bands_prefolded, ..header.knobs } })
 }
 
 /// Reads `acts.jsonl` into the profile table, the board and the activations.
@@ -1282,5 +1308,32 @@ mod tests {
         let head = r#"{"kind":"header","profiles":{},"knobs":{"melee_reach":"table"}}"#;
         let header = read_act_header(head).expect("a stamped melee_reach parses");
         assert_eq!(header.knobs.melee_reach, MeleeReach::Table);
+    }
+
+    /// The replay-aware half of `EPOCH_19_MOVE_GRANTS_FOLD`: a header WITH
+    /// `"books"` is a TABLE recording (`act_recorder.gd:266-268`), so its
+    /// recorded `bands` already fold every grant — the header stamps
+    /// `bands_prefolded` and the fold's live delta stays off.
+    #[test]
+    fn a_books_header_stamps_bands_prefolded() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":19},"books":{"source":"table","sha256":"x","generated":"y"}}"#;
+        let header = read_act_header(head).expect("a header with books parses");
+        assert!(
+            header.knobs.bands_prefolded,
+            "books present ⇒ a table recording ⇒ the recorded bands are pre-folded"
+        );
+    }
+
+    /// The same header WITHOUT `"books"` — the core's own header shape
+    /// (`rows.rs:679`, no writer in `core/nml-core/src` emits the key) —
+    /// stays `bands_prefolded: false`: bands fresh, the fold applies.
+    #[test]
+    fn a_core_written_header_stays_unprefolded() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":19}}"#;
+        let header = read_act_header(head).expect("the core's own header shape parses");
+        assert!(
+            !header.knobs.bands_prefolded,
+            "no books ⇒ core-written ⇒ bands fresh, the live delta folds"
+        );
     }
 }

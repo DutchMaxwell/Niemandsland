@@ -697,6 +697,10 @@ impl Core {
             // `rules_epoch` in the header, `acts::CURRENT_RULES_EPOCH` for a
             // fresh one.
             rules_epoch: self.knobs.rules_epoch,
+            // The replay-aware half of `EPOCH_19_MOVE_GRANTS_FOLD` — a
+            // header with `"books"` is a table recording whose bands are
+            // pre-folded; see `Knobs::bands_prefolded`.
+            bands_prefolded: self.knobs.bands_prefolded,
         }
     }
 
