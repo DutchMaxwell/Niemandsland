@@ -598,7 +598,7 @@ pub const EPOCH_22_SCREENED_MELEE: u32 = 22;
 pub const EPOCH_23_INERT_MARKS: u32 = 23;
 
 /// The D3" ACTIVATION PLACEMENT gate (14.09., sweep C rows Wave-Step/Wolfborn
-/// + sweep B row Rapid Blink — the `Bounding {place_d3 ..}` primitive): the
+/// plus sweep B row Rapid Blink — the `Bounding {place_d3 ..}` primitive): the
 /// book's "When this unit is activated, you may place all models with this
 /// rule in it anywhere fully within D3\" of their position." The table rolls
 /// the die at the activation's head on its seeded stream
@@ -606,12 +606,11 @@ pub const EPOCH_23_INERT_MARKS: u32 = 23;
 /// core replayed that band only through the RECORDED `bounding_d3` trace
 /// (`sim::bounding_bonus_in`), so every fresh core-simulated game never
 /// hopped and the carrier's reach ran short by up to the roll. From 24 a
-/// FRESH sim (an act with no recorded `bounding_d3` trace) rolls its own
-/// dice from the seeded stream and re-places the carrier BEFORE the move
-/// with #930's free-placement scan (`deployment::vanguard_free_place`,
-/// radius = the rolled inches). Below 24 the trace replay stays the whole
-/// effect, byte-exact. Every call site reads THIS constant, not the literal
-/// `24` or `CURRENT_RULES_EPOCH`.
+/// FRESH sim (no recorded `bounding_d3` trace) rolls its own dice from the
+/// seeded stream and re-places the carrier BEFORE the move with #930's
+/// free-placement scan (radius = the rolled inches). Below 24 the trace
+/// replay stays the whole effect, byte-exact. Call sites read THIS constant,
+/// never the literal `24` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_24_PLACE_D3: u32 = 24;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
