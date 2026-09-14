@@ -8,7 +8,7 @@
 //! DAMAGE spells only, unit-level tokens — the EV helpers here keep the
 //! no-boost v0 reading (`cast_success_chance_base`), while the cast
 //! sub-phase itself (sim::cast_phase) spends boost tokens from
-//! `EPOCH_45_CASTER_BOOST` on. Interference is a separate brief.
+//! `EPOCH_48_CASTER_BOOST` on. Interference is a separate brief.
 
 use crate::combat::{block_chance, deadly_multiplier, success_chance, SIX_P};
 use crate::rules::Spell;
@@ -55,7 +55,7 @@ pub fn cast_success_chance_base() -> f64 {
 /// `casting_mod +1`) LOWERS the target and so RAISES the chance; a negative
 /// net (Casting Debuff, `casting_mod -1`, or an enemy's "-X to casting
 /// rolls") raises the target and lowers the chance. The second argument is
-/// the BOOST term (`EPOCH_45_CASTER_BOOST`, sim::cast_phase): +1 per spent
+/// the BOOST term (`EPOCH_48_CASTER_BOOST`, sim::cast_phase): +1 per spent
 /// token off the target (`AiSpell.cast_target`'s own fold, ai_spell.gd:105-
 /// 107), never below the [2,6] clamp. `casting_net == 0, boost_tokens == 0`
 /// reduces to exactly `cast_success_chance_base()` — same constant, same

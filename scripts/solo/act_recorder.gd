@@ -111,7 +111,11 @@ const EPOCH_27_TERRAIN_DEBUFF := 27
 const EPOCH_35_UNSTOPPABLE_MELEE := 35
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
-static var rules_epoch: int = 47
+## Bumped to 48 in the same diff as the core's EPOCH_48_CASTER_BOOST (wave 6
+## 2026-09-14, CASTER_SEAM row 1 — the cast sub-phase spends boost tokens like
+## the table; the leg's earlier reservation 45 was renumbered to CURRENT+1 at
+## the rebase per the epoch rules).
+static var rules_epoch: int = 48
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
