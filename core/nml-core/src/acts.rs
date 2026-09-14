@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 26;
+pub const CURRENT_RULES_EPOCH: u32 = 27;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -619,13 +619,30 @@ pub const EPOCH_23_INERT_MARKS: u32 = 23;
 /// trigger, `mv::step`'s p.11 cap and `mv::cost::terrain_cost_at` (carried on
 /// the move call's own debuff knobs) consult a granted "Difficult Terrain"
 /// the way they consult the cell. Below 26 the grant is inert — every
-/// recorded game replays unchanged. `26` is one past every existing stamp (25 = the ethereal bands leg, 24 = the
-/// placed3 activation leg, 23 = `EPOCH_23_INERT_MARKS`, 19 = #935's fold — 24
-/// and 25 reserved in flight, PRs #940 and #941), and the value
-/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every
-/// call site reads THIS constant, not the literal `26` or
+/// recorded game replays unchanged. `27` is one past every existing stamp
+/// (26 is reserved in flight by the placed3 activation leg, PR #940; 25 =
+/// `EPOCH_25_ETHEREAL_BANDS`, 23 = `EPOCH_23_INERT_MARKS`, 19 = #935's
+/// fold), and the value `CURRENT_RULES_EPOCH` is bumped to in the same
+/// change. Every call site reads THIS constant, not the literal `27` or
 /// `CURRENT_RULES_EPOCH`.
-pub const EPOCH_26_TERRAIN_DEBUFF: u32 = 26;
+pub const EPOCH_27_TERRAIN_DEBUFF: u32 = 27;
+
+/// The Ethereal band leg (`rules-ethereal-bands`, epoch 25): an
+/// "Ethereal"-PRINTING profile's registry entry carries the
+/// `advance_mod`/`rush_mod` (-6/-6) the table's primitive pass spends
+/// (movement_range_controller.gd:142-164, "Teleport" in the allowlist via
+/// NML-1121) — the core's `move_rule_mods_of` fold spends the same numbers
+/// from this epoch on, riding the PRINTED NAME (the #489 lesson): the real
+/// "Teleport" rule shares the primitive with NO band mods and must stay out
+/// of the arm. Evidence-only standing like the rest of the fold (the
+/// accepted `bounding` shape, PR #653) — the -6"/-6" reach fresh records
+/// precomputed inside the RECORDED `state.bands`, so this stamp is the
+/// core's own per-entry read, never a simulation input. `25` is one past
+/// every existing stamp (23 = #936's pierce marks, 24 held by `placed3` in
+/// flight), and the value `CURRENT_RULES_EPOCH` is bumped to in the same
+/// change. Every call site reads THIS constant, not the literal `25` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -1127,7 +1144,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 26, "epoch 26's gate (EPOCH_26_TERRAIN_DEBUFF) bumps the live epoch to 26, one past the in-flight 24 (#940) and 25 (#941) reservations");
+        assert_eq!(CURRENT_RULES_EPOCH, 27, "epoch 27's gate (EPOCH_27_TERRAIN_DEBUFF) bumps the live epoch to 27, one past #940's 26 placement leg (25 = #941's ethereal bands)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1137,11 +1154,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":26}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":27}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 26"
+            "a fresh play_game() now stamps the bumped epoch, 27"
         );
     }
 

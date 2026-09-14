@@ -12,7 +12,7 @@
 
 use std::rc::Rc;
 
-use crate::acts::{rule_on, EPOCH_11_SOLO_GRANT_READS, EPOCH_26_TERRAIN_DEBUFF};
+use crate::acts::{rule_on, EPOCH_11_SOLO_GRANT_READS, EPOCH_27_TERRAIN_DEBUFF};
 use crate::rules::base_rule_name;
 use crate::state::State;
 
@@ -187,10 +187,10 @@ pub fn granted_vs(state: &State, target: usize, rule: &str) -> bool {
 /// once-per-move Dangerous test (`sim::dangerous_dice`), the p.11 cap and the
 /// movement cost (`mv::step` / `mv::cost`, carried on the move call's own
 /// debuff knobs) — fold the grant through the SAME `granted()` chain read
-/// every other granted base rule rides. Gate: `EPOCH_26_TERRAIN_DEBUFF` — a
-/// rules_epoch below 26 reads nothing.
+/// every other granted base rule rides. Gate: `EPOCH_27_TERRAIN_DEBUFF` — a
+/// rules_epoch below 27 reads nothing.
 pub fn granted_terrain_debuff(state: &State, i: usize, rule: &str, rules_epoch: u32) -> bool {
-    rule_on(rules_epoch, EPOCH_26_TERRAIN_DEBUFF) && granted(state, i, rule)
+    rule_on(rules_epoch, EPOCH_27_TERRAIN_DEBUFF) && granted(state, i, rule)
 }
 
 /// EPOCH 23 INERT MARKS — the exact-string twin of `granted`: the Piercing

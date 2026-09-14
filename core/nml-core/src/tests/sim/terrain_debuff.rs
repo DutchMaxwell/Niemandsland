@@ -46,7 +46,7 @@ use super::*;
         })
     }
 
-    /// The dangerous debuff's NEW leg, epoch literals 26/19 (NOT
+    /// The dangerous debuff's NEW leg, epoch literals 27/19 (NOT
     /// `CURRENT_RULES_EPOCH`): a unit carrying the granted "Dangerous Terrain
     /// (spell)" rule — ONLY via the recorded grant, no dangerous cell anywhere
     /// on the board — takes its once-per-move dangerous test when it advances
@@ -62,7 +62,7 @@ use super::*;
         let mut rng = crate::rng::GodotRng::new(0);
         let (_next, shot) = resolve_stochastic_tray_on_board(
             &statics, &st, &advance_to(6.0), &t,
-            Seams { rules_epoch: 26, ..Seams::default() }, &mut rng, &mut tray,
+            Seams { rules_epoch: 27, ..Seams::default() }, &mut rng, &mut tray,
         )
         .unwrap();
         let a_rolls: Vec<&crate::dice::Roll> =
@@ -76,12 +76,12 @@ use super::*;
         assert_eq!(a_rolls[0].count, 4, "one die per model: {:?}", shot.rolls);
     }
 
-    /// The OLD leg, epoch 19 (one below the debuff's own gate 26): a record
+    /// The OLD leg, epoch 19 (one below the debuff's own gate 27): a record
     /// stamped before the fix replays unchanged — the grant stays inert on
     /// open ground, no dangerous test is drawn, byte for byte what every
     /// recorded game played like.
     #[test]
-    fn below_epoch_26_the_dangerous_debuff_stays_inert() {
+    fn below_epoch_27_the_dangerous_debuff_stays_inert() {
         let (mut st, statics) = dangerous_line();
         st.buffs[0] = vec![terrain_grant("Dangerous Terrain (spell)")];
         let t = open_board();
@@ -99,7 +99,7 @@ use super::*;
         );
     }
 
-    /// The difficult debuff's NEW leg, epoch literals 26/19: a unit carrying
+    /// The difficult debuff's NEW leg, epoch literals 27/19: a unit carrying
     /// the granted "Difficult Terrain (spell)" rule moves as if in difficult
     /// terrain — the p.11 cap ("may not move more than 6\"") bites the same
     /// way it bites for a unit whose ROUTE crossed a difficult cell. Before
@@ -123,7 +123,7 @@ use super::*;
         let mut rng = crate::rng::GodotRng::new(0);
         let (next, _shot) = resolve_stochastic_tray_on_board(
             &statics, &st, &advance_to(12.0), &t,
-            Seams { movement: true, rules_epoch: 26, ..Seams::default() }, &mut rng, &mut tray,
+            Seams { movement: true, rules_epoch: 27, ..Seams::default() }, &mut rng, &mut tray,
         )
         .unwrap();
         let moved_in = (next.positions[0][0][0] - st.positions[0][0][0]) / IN2M;
@@ -136,7 +136,7 @@ use super::*;
     /// The OLD leg, epoch 19: the full band stands — the debuff must not
     /// re-date the uncapped move every recorded game made.
     #[test]
-    fn below_epoch_26_the_difficult_debuff_leaves_the_full_band() {
+    fn below_epoch_27_the_difficult_debuff_leaves_the_full_band() {
         let (mut st, statics) = dangerous_line();
         // The movement-seam path reads every unit's recorded profile (see the
         // NEW leg above).

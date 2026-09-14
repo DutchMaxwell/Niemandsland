@@ -26,6 +26,7 @@ use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
     EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE, EPOCH_19_MOVE_GRANTS_FOLD,
+    EPOCH_25_ETHEREAL_BANDS,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -4841,6 +4842,42 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
                     &format!("{}: {adv}\" advance, {rsh}\" rush/charge", p.name),
                 );
             }
+        }
+    }
+
+    // Wave "ghost bands" (rules-ethereal-bands, epoch 25): "Ethereal" ("This
+    // model moves -6\" when using Advance, and -6\" when using Rush/Charge")
+    // prints the Teleport primitive, and its registry entry carries the
+    // `advance_mod`/`rush_mod` (-6/-6) the table's primitive pass spends
+    // (movement_range_controller.gd:142-164, "Teleport" in the allowlist via
+    // NML-1121; charge inherits the rush band the same pass's `charge_mod`
+    // fallback does). The fold rides the PRINTED NAME — the #489 lesson: the
+    // real "Teleport" rule shares the primitive with NO band mods (only
+    // `advance_bonus_in`/`rush_bonus_in`) and must stay out of this arm, so
+    // a primitive-token gate would either miss Ethereal's numbers or
+    // over-credit Teleport. Evidence-only standing like the rest of this
+    // fold (the accepted `bounding` shape, PR #653): the -6"/-6" reach this
+    // core precomputed inside the RECORDED `state.bands` (battle_sim.gd:1650
+    // -> io.rs:755-765), so a live re-fold at the move seam would
+    // double-count a recorded band — this stamp is the core's own per-entry
+    // read, never a simulation input. Rules-must-log: the band trace names
+    // the printed rule once per profile. Gated on the FROZEN
+    // `EPOCH_25_ETHEREAL_BANDS`, never the literal.
+    if rule_on(rules_epoch, EPOCH_25_ETHEREAL_BANDS) && unit_rule_active(reg, p, "Ethereal") {
+        let map = reg.rules_for(&p.game_system);
+        if let Some(e) = map.lookup(&p.faction_folder, "Ethereal") {
+            let (adv, rsh) = (
+                e.param_f("advance_mod", 0.0),
+                e.param_f("rush_mod", e.param_f("charge_mod", 0.0)),
+            );
+            acc.advance += adv;
+            acc.rush += rsh;
+            hit = true;
+            crate::sim::trace_rule(
+                "move-bands",
+                "Ethereal",
+                &format!("Ethereal: {adv}\" advance / {rsh}\" rush from the printed rule"),
+            );
         }
     }
 

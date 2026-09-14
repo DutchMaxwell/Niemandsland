@@ -2167,9 +2167,9 @@ pub(crate) fn dangerous_dice(
     // `base_in_terrain` on this board — both halves of the trigger use it.
     let in_dang = |p: &[f64; 3], r: f64| base_in_terrain(geom::to_f32(*p), r, t, is_dangerous);
     // STANDALONE_SWEEP_A_2026-09-14, row `Dangerous Terrain Debuff` — the
-    // FROZEN `EPOCH_26_TERRAIN_DEBUFF`: the granted "Dangerous Terrain" the
+    // FROZEN `EPOCH_27_TERRAIN_DEBUFF`: the granted "Dangerous Terrain" the
     // unit CARRIES is a hazard the cell consults never see. It rides the same
-    // trigger and the same flying guard a crossing does; below 26 the grant
+    // trigger and the same flying guard a crossing does; below 27 the grant
     // reads nothing, so every recorded game replays.
     let debuffed = |st: &State, u: usize| {
         mods::granted_terrain_debuff(st, u, "Dangerous Terrain", seams.rules_epoch)
