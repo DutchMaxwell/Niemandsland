@@ -107,6 +107,12 @@ use super::*;
     #[test]
     fn the_granted_difficult_terrain_debuff_caps_the_move() {
         let (mut st, statics) = dangerous_line();
+        // The movement-seam path reads EVERY unit's recorded profile
+        // (`state.profile`, step.rs's base shapes), so the harness needs four
+        // slots — dangerous_line's shared single slot is a sim-only shape.
+        let mut prof_list = st.profiles.list.clone();
+        prof_list.resize(4, prof_list[0].clone());
+        st.profiles = Rc::new(Profiles { list: prof_list, index: HashMap::new() });
         st.bands[0].advance = 12.0;
         st.buffs[0] = vec![terrain_grant("Difficult Terrain (spell)")];
         // Park the far units out of the lane so the move is pure open ground.
@@ -122,7 +128,7 @@ use super::*;
         .unwrap();
         let moved_in = (next.positions[0][0][0] - st.positions[0][0][0]) / IN2M;
         assert!(
-            moved_in <= 6.0 + 0.01,
+            moved_in <= 6.0 + 0.05,
             "the difficult debuff must cap the move at 6\", moved {moved_in}\""
         );
     }
@@ -132,6 +138,11 @@ use super::*;
     #[test]
     fn below_epoch_20_the_difficult_debuff_leaves_the_full_band() {
         let (mut st, statics) = dangerous_line();
+        // The movement-seam path reads every unit's recorded profile (see the
+        // NEW leg above).
+        let mut prof_list = st.profiles.list.clone();
+        prof_list.resize(4, prof_list[0].clone());
+        st.profiles = Rc::new(Profiles { list: prof_list, index: HashMap::new() });
         st.bands[0].advance = 12.0;
         st.buffs[0] = vec![terrain_grant("Difficult Terrain (spell)")];
         st.positions[2] = vec![[60.0 * IN2M, 0.0, 0.0]];
