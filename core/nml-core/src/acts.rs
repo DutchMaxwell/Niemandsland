@@ -684,6 +684,28 @@ pub const EPOCH_33_REDEPLOYMENT: u32 = 33;
 /// not the literal `38` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_38_WATCHBORN_LATCH: u32 = 38;
 
+/// EPOCH 41 SELF-DESTRUCT SURVIVORS (14.09., sweep H row `Self-Destruct`,
+/// `STANDALONE_SWEEP_H_2026-09-14.md`): the registry primitive
+/// `Self-Destruct; hits=X, rating=X, trigger=death_in_melee_or_post_melee`
+/// carries a SURVIVAL half the core never ported. The table's
+/// `_solo_self_destruct_post_melee` (main.gd:17346-17370, called for BOTH
+/// combatants at main.gd:8431-8433 and :10456-10458, after both sides have
+/// finished attacking and BEFORE the melee result / morale test) removes
+/// every surviving carrier ("it is immediately killed" — main.gd:17363's
+/// 9999-wound application, no saves) and pays the enemy X hits per removed
+/// model (X = the rule's own `maxi(rating, 1)`, main.gd:17357-17358), saved
+/// at the enemy's Shielded melee Defense with ap 0. The core had only the
+/// death half (sim.rs Block C4): a Self-Destruct model that SURVIVED the
+/// melee neither detonated nor died, so a core-driven fight never learned
+/// the suicide unit the table plays. From 41 the tray charge epilogue runs
+/// the survival half in the table's order (the charger's carriers first,
+/// then the defender's). Below 41 every recorded game replays byte-exact.
+/// `41` is reserved one past the in-flight stamps (38 =
+/// `EPOCH_38_WATCHBORN_LATCH` on main; 39 #959 and 40 #960 are in flight
+/// above it). Every call site reads THIS constant, not the literal `41` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_41_SELF_DESTRUCT_SURVIVORS: u32 = 41;
+
 /// EPOCH 34 UNSTOPPABLE MARK (PR #951, sweep C row `Unstoppable Mark`): "Once
 /// per activation, before attacking, pick one enemy unit within 18" in line of
 /// sight, which friendly units get Unstoppable against once." Unstoppable =
