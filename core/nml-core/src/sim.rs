@@ -1311,6 +1311,10 @@ fn tray_vs_marks(
             if !b.vs_target || next.vs_mark_round[bearer] == next.round || dist_in > b.range_in {
                 continue;
             }
+            // DELIBERATE RED BREAK (test wave, Rending Mark) — the name-match drops.
+            if b.name == "Rending Mark" { continue; }
+            // DELIBERATE RED BREAK (test wave, Unpredictable Fighter Mark) — the name-match drops.
+            if b.name == "Unpredictable Fighter Mark" { continue; }
             // EPOCH 9 MARK FAMILY (#870, 11.09.): the five names #870 flipped
             // from `vs_marked` to `vs_target` (Rapid Charge, Piercing Fighting,
             // Slayer, Piercing Shooting, Unpredictable Shooter) are NEW grants —
@@ -2720,7 +2724,8 @@ pub fn ctx_live_vs(
     c.rending_grant = c.rending_grant || mods::granted_vs(state, target, "Rending");
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
     c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
-    c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
+    // DELIBERATE RED BREAK (test wave, Shred Mark) — the vs-grant read is out.
+    // c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
     c
 }
 

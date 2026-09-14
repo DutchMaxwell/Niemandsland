@@ -1560,6 +1560,7 @@ mod instinctive;
 mod limited_weapons;
 mod mark_beneficiary;
 mod mark_consumers;
+mod vs_grant_marks;
 mod melee_reach_table;
 mod mind_control;
 mod mend;

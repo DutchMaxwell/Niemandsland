@@ -1008,7 +1008,7 @@ pub fn resolve_volley_leg(
         }
         // --- `_solo_hits` :4404-4487 ---
         let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
-        if (p.relentless || att.relentless_grant) && mod_dist_in > LONG_RANGE_IN {
+        if p.relentless && mod_dist_in > LONG_RANGE_IN {
             hits += sixes(&faces);
         }
         if p.surge {
