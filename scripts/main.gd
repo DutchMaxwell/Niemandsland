@@ -6687,7 +6687,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 				shred_name = "Shred"
 			if boost_low > 1:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: Shred on failed saves of 1-%d (over %s\") — %d extra wound%s" % [
-					boost_rule, boost_low, str(boost_over_in), shred_extra, ("" if shred_extra == 1 else "s")], true)
+					boost_rule, boost_low, str(boost_over_in).trim_suffix(".0"), shred_extra, ("" if shred_extra == 1 else "s")], true)
 			else:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d Defense roll%s of 1 → +%d wound%s" % [
 					shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
