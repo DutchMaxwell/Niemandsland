@@ -871,7 +871,7 @@ pub(crate) fn tray_strafing(
     // Per member (host first, then each alive attached hero): the Strafing
     // profiles in range, survivor-scaled — `profiles_of`'s shape over
     // `strafe_shoot`.
-    let mut parts: Vec<(usize, Vec<usize>, Vec<i64>, Ctx)> = bearers.iter().filter_map(|&b| {
+    let parts: Vec<(usize, Vec<usize>, Vec<i64>, Ctx)> = bearers.iter().filter_map(|&b| {
         if next.alive[b] <= 0 { return None; }
         let um = &statics[next.roster.profile[b]];
         // Per member (host first, then each alive attached hero): the Strafing
