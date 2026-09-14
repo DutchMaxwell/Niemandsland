@@ -981,6 +981,7 @@ mod disintegrate_regen;
 mod fortified_aura;
 mod grounded_protection;
 mod mentioned2a_statics;
+mod mentioned2_pins;
 mod mentioned_pins;
 mod rending_shooting_aura;
 mod renames;
