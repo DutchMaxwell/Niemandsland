@@ -537,8 +537,10 @@ pub fn imagined_round_end(cur: &mut State) {
 /// false): from 40 the unit rolls the recovery die instead, at the REAL
 /// round boundary the playout books (`battleborn_recovery_roll` right after
 /// this refresh, arbitration.rs:247-251), the same stream the table's
-/// `_solo_tray_roll` draws. The plain "Battleborn" half is the wave-3
-/// reading and stands untouched.
+/// `_solo_tray_roll` draws. Sweep E row Battleborn — the plain "Battleborn"
+/// half follows from the FROZEN `EPOCH_43_BATTLEBORN_ROLL`
+/// (`battleborn_recovery_rolls` false): from 43 it rides the same die leg,
+/// its OWN `recover_target` stamped by the alias stamp's plain-name arm.
 ///
 /// The GDScript bails after the first two writes when the snapshot carries no
 /// `GameUnit` (`if gu == null: return`); this port always has the unit's static
@@ -555,7 +557,7 @@ pub(crate) fn round_start_refresh(statics: &[UnitStatic], state: &mut State, i: 
         state.casts[i] = (state.casts[i] + us.casts_per_round).min(CASTER_POINTS_CAP);
     }
     if state.shaken[i]
-        && (us.battleborn_active
+        && ((!us.battleborn_recovery_rolls && us.battleborn_active)
             || (!us.steadfast_recovery_rolls
                 && (us.steadfast_active || crate::mods::granted(state, i, "Steadfast"))))
     {
@@ -576,7 +578,9 @@ pub(crate) fn round_start_refresh(statics: &[UnitStatic], state: &mut State, i: 
 /// row Steadfast: from the FROZEN `EPOCH_40_STEADFAST_ROLL` the plain
 /// "Steadfast" entry rides this same leg (the alias stamp's own arm), the
 /// die the table's `_solo_tray_roll(1, target, ..)` draws, one line per roll
-/// in the trace below.
+/// in the trace below. Sweep E row Battleborn: from the FROZEN
+/// `EPOCH_43_BATTLEBORN_ROLL` the plain "Battleborn" entry rides it too
+/// (the alias stamp's plain-name arm, lowest-wins with the four aliases).
 pub(crate) fn battleborn_recovery_roll(
     statics: &[UnitStatic],
     state: &mut State,

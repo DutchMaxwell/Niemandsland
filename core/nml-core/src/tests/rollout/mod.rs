@@ -31,6 +31,7 @@
         st.profiles.list.iter().map(|p| UnitStatic::build_for(&mut reg, p, epoch)).collect()
     }
 
+    mod battleborn;
     mod coordinate;
     mod delayed_action;
     mod rush_demotion;
