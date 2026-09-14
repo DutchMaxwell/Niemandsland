@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
-    EPOCH_15_MARK_BENEFICIARY,
+    EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -2297,8 +2297,17 @@ fn stamp(
         if hit.name == "Surge" || hit.name == "Ferocious" || !hit.upgrades.is_empty() {
             continue;
         }
+        // EPOCH_17_SURGE_SCOPE (sweep B, row "Surge when Shooting"): the entry
+        // carries `shooting_only` now — "when shooting" is the book's own
+        // printed scope, so the melee twin must stay silent from 17. Only THIS
+        // name's scope is epoch-gated: every other `shooting_only` entry
+        // (Predator Shooter et al.) was honoured at every epoch and keeps its
+        // reading; below 17 "Surge when Shooting" replays the unscooped walk
+        // every corpus was recorded with.
+        let scope_live = hit.shooting_only
+            && (hit.name != "Surge when Shooting" || rule_on(rules_epoch, EPOCH_17_SURGE_SCOPE));
         for sp in shoot.iter_mut() {
-            if facet_applies(hit.melee_only, hit.shooting_only, sp.range) {
+            if facet_applies(hit.melee_only, scope_live, sp.range) {
                 if hit.extra_attack {
                     sp.surge_attack = true;
                 } else {
@@ -4884,8 +4893,13 @@ impl UnitStatic {
                     "Brutal" | "Great Sergeant" | "Devout" | "Surge when Shooting" | "Lucky" | "Surge Mark"
                 )
             }) {
+                // EPOCH_17_SURGE_SCOPE: "Surge when Shooting" is the only name
+                // of the six that carries `shooting_only` (sweep B) — honoured
+                // from 17, the unscooped walk below (the corpus replay).
+                let scope_live =
+                    hit.shooting_only && rule_on(rules_epoch, EPOCH_17_SURGE_SCOPE);
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {
-                    if facet_applies(hit.melee_only, hit.shooting_only, sp.range) {
+                    if facet_applies(hit.melee_only, scope_live, sp.range) {
                         sp.surge = true;
                     }
                 }

@@ -219,6 +219,30 @@ func test_effect_predator_shooter_no_longer_spawns_its_extra_attack_in_melee() -
 		.override_failure_message("a shooting-only Surge still fires in melee").is_false()
 
 
+func test_effect_surge_when_shooting_leaves_melee_at_epoch_17_but_replays_below() -> void:
+	# Sweep B (STANDALONE_SWEEP_B_2026-09-14): the book prints "This model gets Surge when shooting",
+	# yet the entry carried no scope, so the bonus also folded into every melee. From the scope epoch
+	# the shooting profile keeps the facet and the melee twin stays silent; below it the entry replays
+	# the unscooped walk every corpus was recorded with (the epoch-16 leg).
+	var u := _unit_with(["Surge when Shooting"], "gf", "dwarf_guilds")
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_17_SURGE_SCOPE
+	var shoot := _shoot_profile()
+	var melee := _melee_profile()
+	AiEv.stamp_sergeant([shoot, melee], u)
+	assert_bool(bool(shoot.get("surge", false))) \
+		.override_failure_message("the shooting profile lost its bonus").is_true()
+	assert_bool(bool(melee.get("surge", false))) \
+		.override_failure_message("a shooting-only Surge still fires in melee at the scope epoch").is_false()
+	AiActRecorder.rules_epoch = 16   # the OLD leg: the corpus replay
+	var shoot16 := _shoot_profile()
+	var melee16 := _melee_profile()
+	AiEv.stamp_sergeant([shoot16, melee16], u)
+	assert_bool(bool(shoot16.get("surge", false)) and bool(melee16.get("surge", false))) \
+		.override_failure_message("epoch 16 must replay the unscooped walk, both facets").is_true()
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
+
+
 # --- the standing net ----------------------------------------------------------------------------
 
 func test_no_aura_grants_a_rule_that_resolves_nowhere() -> void:

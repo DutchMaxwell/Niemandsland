@@ -313,7 +313,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 16;
+pub const CURRENT_RULES_EPOCH: u32 = 17;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -539,6 +539,21 @@ pub const EPOCH_15_MARK_BENEFICIARY: u32 = 15;
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site reads
 /// THIS constant, not the literal `16` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_16_FREE_PLACEMENT: u32 = 16;
+
+/// The SURGE SCOPE gate (14.09., sweep B — row `Surge when Shooting`,
+/// `STANDALONE_SWEEP_B_2026-09-14.md`): the book prints "This model gets Surge
+/// when shooting", yet the registry entry (`gf`/`gff` common) carried no scope
+/// key, so both layers stamped `surge` onto the bearer's MELEE profiles too —
+/// +1 hit per unmodified 6 with every melee weapon, in table play and core
+/// sims alike. The entry now carries `shooting_only: true` (the registry's own
+/// convention — `Predator Shooter`, the `scope`-carrying Utility Buffs); from
+/// 17 the core honours it (unit.rs stamp block 3 and build_for's named walk)
+/// and the table's alias loop does the same (ai_ev.gd's Surge loop, the
+/// recorder's frozen mirror). Below 17 the entry replays the unscooped walk
+/// every corpus was recorded with. `17` is one past every existing stamp, and
+/// the value `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call
+/// site reads THIS constant, not the literal `17` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_17_SURGE_SCOPE: u32 = 17;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -1024,7 +1039,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 16, "epoch 16's gate (EPOCH_16_FREE_PLACEMENT) bumps the live epoch to 16, one past EPOCH_15_MARK_BENEFICIARY");
+        assert_eq!(CURRENT_RULES_EPOCH, 17, "epoch 17's gate (EPOCH_17_SURGE_SCOPE) bumps the live epoch to 17, one past EPOCH_16_FREE_PLACEMENT");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1034,11 +1049,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":16}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":17}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 16"
+            "a fresh play_game() now stamps the bumped epoch, 17"
 
         );
     }

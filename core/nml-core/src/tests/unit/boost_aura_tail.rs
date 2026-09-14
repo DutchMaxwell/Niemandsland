@@ -1336,6 +1336,39 @@ use super::*;
         assert_eq!(surge_stamp_of("", "gf", "dwarf_guilds", 4), (false, false), "no rule, no surge");
     }
 
+    /// RED (the scope wave, sweep B — `STANDALONE_SWEEP_B_2026-09-14`, row
+    /// "Surge when Shooting"): the defect itself. The book prints "This model
+    /// gets Surge when shooting", yet the registry entry carried no scope, so
+    /// both layers stamped `surge` onto the bearer's MELEE profiles too — the
+    /// melee fold rolled +1 hit per unmodified 6 every melee. From the scope
+    /// epoch the shooting profile keeps the facet and the melee twin loses it.
+    #[test]
+    fn surge_when_shooting_leaves_the_melee_profiles_at_epoch_17() {
+        assert_eq!(
+            surge_stamp_of("Surge when Shooting", "gf", "dwarf_guilds", 17),
+            (true, false),
+            "the printed scope: shooting keeps the bonus, melee must not roll it"
+        );
+    }
+
+    /// The OLD leg of the same gate: below the scope epoch the entry replays
+    /// the unscooped walk every corpus was recorded with — the melee bonus
+    /// still fires there. GREEN on the defect commit by design; it pins the
+    /// epoch-16 replay against the scope change.
+    #[test]
+    fn surge_when_shooting_still_stamps_melee_below_epoch_17() {
+        assert_eq!(
+            surge_stamp_of("Surge when Shooting", "gf", "dwarf_guilds", 16),
+            (true, true),
+            "epoch 16 replays the unscooped walk the corpora were recorded with"
+        );
+        assert_eq!(
+            surge_stamp_of("Surge when Shooting", "gf", "dwarf_guilds", 3),
+            (true, true),
+            "epoch 3 replays the pre-wave generic walk, unchanged"
+        );
+    }
+
     /// "Lucky" (aof/halflings): Lucky-Boost's own base, the plain auto-hit
     /// facet on BOTH profiles, same three rows.
     #[test]
