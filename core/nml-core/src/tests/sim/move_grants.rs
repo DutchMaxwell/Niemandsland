@@ -99,6 +99,25 @@ use super::*;
             .unwrap()
     }
 
+    /// The replay-aware twin of `run_move`: `bands_prefolded` marks a header
+    /// that carried `"books"` — a TABLE recording (`act_recorder.gd:266-268`
+    /// writes it unconditionally; no writer in `core/nml-core/src` does).
+    /// `books` present ⇒ the record's `bands` already fold every grant
+    /// (battle_sim.gd:1707 -> move_bands_for_props).
+    fn run_move_prefolded(
+        st: &State,
+        statics: &[UnitStatic],
+        action: &Action,
+        rules_epoch: u32,
+    ) -> (State, ShootResult) {
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let seams = Seams { rules_epoch, bands_prefolded: true, ..Seams::default() };
+        resolve_stochastic_tray_on_board(statics, st, action, &terrain, seams, &mut rng, &mut tray)
+            .unwrap()
+    }
+
     fn move_of(kind: i64, unit: &str, x_in: f64) -> Action {
         Action {
             kind,
@@ -130,6 +149,23 @@ use super::*;
         assert!(
             (x - (printed + advance_mod) * IN2M).abs() < 1e-6,
             "the granted Fast rides +2\" on the advance band: {x}"
+        );
+    }
+
+    /// RED first — the replay-aware half of the fold. A TABLE record stamped
+    /// 19+ carries `"books"` in its header, so its recorded `bands` ALREADY
+    /// carry every grant (`battle_sim.gd:1707 -> move_bands_for_props`); the
+    /// live delta at the move spend would count every granted inch twice.
+    /// `bands_prefolded` (the header's `books` present) must return 0.0.
+    #[test]
+    fn a_table_recorded_fast_adds_nothing_at_epoch_19() {
+        let printed = 6.0;
+        let (st, statics) = granted_line("ogres", 19, &["Fast"]);
+        let (landed, _) = run_move_prefolded(&st, &statics, &move_of(ADVANCE, "a", 20.0), 19);
+        let x = landed.positions[0][0][0];
+        assert!(
+            (x - printed * IN2M).abs() < 1e-6,
+            "the recorded bands already carry the granted Fast, the advance stays printed: {x}"
         );
     }
 
