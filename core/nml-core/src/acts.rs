@@ -313,7 +313,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 19;
+pub const CURRENT_RULES_EPOCH: u32 = 21;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -577,6 +577,26 @@ pub const EPOCH_17_SURGE_SCOPE: u32 = 17;
 /// the same change. Every call site reads THIS constant, not the literal `19`
 /// or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_19_MOVE_GRANTS_FOLD: u32 = 19;
+
+/// The INERT MARKS gate (14.09., MARK_FAMILY_SWEEP_2026-09-14 finding 1 — the
+/// two #870 vs_target marks whose grant lands but never folds): Piercing
+/// Fighting Mark (`aof`/`aofr` goblins, `gff` berserker_clans) and Piercing
+/// Shooting Mark (`gf` dao_union) carry the entry's own `grants_rule`
+/// ("AP(+1) in melee" / "AP(+1) when shooting"), but `tray_vs_marks` pushed
+/// the mark's once-grant under the BASE name ("Piercing Fighting") and the
+/// only grant readers ask for the `grants_rule` strings — so both layers
+/// stamped and spent the mark and nothing folded. From 21 the grant rides the
+/// entry's own string and `ctx_live` reads it with the exact-string twin
+/// (`mods::granted_exact`); below 21 the base name rides and every corpus
+/// replays the recorded inert mark. The two Precision-family Registry entries
+/// with undefined/underdetermined effect data (`Precision Tag`'s `hit_mod:
+/// "Y"` placeholder, `Precision Target`'s missing `beneficiary` +
+/// `uses_per_game` seam) are deliberately NOT wired — no book text on disk.
+/// `21` is one past every existing stamp (18/19 are held by other in-flight
+/// waves), and the value `CURRENT_RULES_EPOCH` is bumped to in the same
+/// change. Every call site reads THIS constant, not the literal `21` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_21_INERT_MARKS: u32 = 21;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -1062,7 +1082,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 19, "epoch 19's gate (EPOCH_19_MOVE_GRANTS_FOLD) bumps the live epoch to 19, one past #932's 18");
+        assert_eq!(CURRENT_RULES_EPOCH, 21, "epoch 21's gate (EPOCH_21_INERT_MARKS) bumps the live epoch to 21, one past #935's 19 (18 was #932's, 20 left free)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),

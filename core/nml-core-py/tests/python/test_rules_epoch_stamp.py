@@ -64,11 +64,12 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 19 (acts::EPOCH_19_MOVE_GRANTS_FOLD, the move-grant
-    # fold; 18 is #932's reservation, 17 was the Surge-when-Shooting scope
-    # fix): explicit, not just dynamic — a fresh game now stamps 19, not 18.
-    # A record already stamped 18 must never be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 19
+    # core rules epoch 21 (acts::EPOCH_21_INERT_MARKS, the Piercing-marks
+    # inert-grant fix; 19 was #935's move-grant fold, 18 is #932's
+    # reservation, 17 was the Surge-when-Shooting scope fix): explicit, not
+    # just dynamic — a fresh game now stamps 21, not 19. A record already
+    # stamped 19 must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 21
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)

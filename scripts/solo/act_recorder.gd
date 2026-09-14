@@ -35,19 +35,18 @@ static var objectives_stamp: Dictionary = {}
 ## falls back to the carrier's profile (that fallback IS the #823 fidelity break).
 static var spawn_profile_resolver: Callable = Callable()
 ## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
-## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 17 by the
-## Surge-when-Shooting scope fix, EPOCH_17_SURGE_SCOPE; 16 was the
-## Vanguard/Drakesworn/Fanatic free-placement fix, 15 was the Precision-marks
-## beneficiary side fix, 14 was the Deadly per-model landing port, 13 was
-## #921's).
-## The mirror now HOLDS BELOW EPOCH_19_MOVE_GRANTS_FOLD on purpose (PR #935):
-## the core's epoch-19 fold adds the granted move family LIVE at the spend,
-## while these recordings' bands already carry every grant
-## (battle_sim.gd:1707 -> move_bands_for_props). A recording stamped 19 would
-## replay with the fold ON and double-count every granted inch. Bump this
-## mirror only together with the fold's own retirement of the recorded-band
-## premise; SPAWN_PROFILES_EPOCH below stays frozen.
-static var rules_epoch: int = 17
+## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 21 by the
+## Piercing-marks inert-grant fix, EPOCH_21_INERT_MARKS; 19 was #935's
+## move-grant fold — the mirror now HOLDS BELOW IT on purpose: the core's
+## epoch-19 fold adds the granted move family LIVE at the spend, while these
+## recordings' bands already carry every grant (battle_sim.gd:1707 ->
+## move_bands_for_props), so a recording stamped 19+ would replay with the
+## fold ON and double-count every granted inch; 17 was the Surge-when-Shooting
+## scope fix, 16 was the free-placement fix, 15 the beneficiary side fix).
+## The inert-marks fix (epoch 21) carries NO recorded-band premise of its own
+## — the mirror follows the core again — and SPAWN_PROFILES_EPOCH stays
+## frozen.
+static var rules_epoch: int = 21
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the
