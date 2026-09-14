@@ -98,6 +98,8 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         reckless_rolled_round: vec![-1; 2],
         reckless_ap_round: vec![-1; 2],
         reckless_backfire_round: vec![-1; 2],
+        versatile_pick_round: vec![-1; 2],
+        versatile_pick_mode: vec![0; 2],
         retreating_strike_round: vec![-1; 2],
         growth_markers: vec![0; 2],
         vengeance_markers: vec![0; 2],

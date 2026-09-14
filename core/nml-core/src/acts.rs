@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 37;
+pub const CURRENT_RULES_EPOCH: u32 = 38;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -664,6 +664,25 @@ pub const EPOCH_32_STRAFING: u32 = 32;
 /// rules). Every call site reads THIS constant, not the literal `33` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_33_REDEPLOYMENT: u32 = 33;
+/// The WATCHBORN LATCH gate (14.09., sweep row `Watchborn`, BOTH layers; the
+/// `Versatile Attack`/`Versatile Reach` `pick_one` pair, book text: "When this
+/// unit is activated, pick one effect: until the end of the activation, when
+/// shooting or charging enemies over 9" away, gets AP(+1) or +1 to hit").
+/// Both layers re-decided PER VOLLEY before (the AI took the EV-best mode per
+/// shot, the human was re-prompted for every volley) and the core's melee dice
+/// fold had NO versatile leg at all — a core-simulated Watchborn charge fought
+/// without the bonus its own planner (`combat::profile_ev`'s `!melee ||
+/// charging` leg) counted on. From 38 the pick is made ONCE per activation:
+/// the first eligible attack decides by EV, the stamp lives on the State's
+/// per-unit round latch (one act per unit per round) on the core and on
+/// `unit_properties["versatile_pick_round"]` on the table, and every later
+/// volley/charge of the activation reuses it. Below 38 every recorded game
+/// replays byte-exact. `38` is one past every existing stamp at rebase time
+/// (36 was this gate's first reservation, renumbered at rebase when #957's
+/// 37 landed first, per the epoch rules; 37 =
+/// `EPOCH_37_UNSTOPPABLE_AURA`, #957). Every call site reads THIS constant,
+/// not the literal `38` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_38_WATCHBORN_LATCH: u32 = 38;
 
 /// EPOCH 34 UNSTOPPABLE MARK (PR #951, sweep C row `Unstoppable Mark`): "Once
 /// per activation, before attacking, pick one enemy unit within 18" in line of
@@ -1256,7 +1275,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 37, "epoch 37's gate (EPOCH_37_UNSTOPPABLE_AURA) bumps the live epoch to 37, one past #953's Unstoppable-in-Melee leg 35 (34 = #951's Unstoppable-Mark leg, 32 = EPOCH_32_STRAFING, #947; 33 = #946's re-deployment leg; 36 is reserved in flight by the watchborn leg)");
+        assert_eq!(CURRENT_RULES_EPOCH, 38, "epoch 38's gate (EPOCH_38_WATCHBORN_LATCH) bumps the live epoch to 38, one past #957's Unstoppable-Aura leg 37 (36 = EPOCH_38_WATCHBORN_LATCH's reservation, renumbered from 36 at rebase per the epoch rules; 35 = #953's Unstoppable-in-Melee leg, 34 = #951's Unstoppable-Mark leg)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1266,11 +1285,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":37}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":38}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 37"
+            "a fresh play_game() now stamps the bumped epoch, 38"
         );
     }
 

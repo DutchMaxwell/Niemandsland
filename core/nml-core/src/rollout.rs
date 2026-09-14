@@ -858,6 +858,8 @@ pub fn mint_template_slot(
     st.reckless_rolled_round.push(-1);
     st.reckless_ap_round.push(-1);
     st.reckless_backfire_round.push(-1);
+    st.versatile_pick_round.push(-1);
+    st.versatile_pick_mode.push(0);
     st.retreating_strike_round.push(-1);
     st.growth_markers.push(0);
     st.vengeance_markers.push(0);

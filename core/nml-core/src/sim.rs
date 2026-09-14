@@ -27,6 +27,7 @@ use crate::acts::{
     EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
     EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS,
     EPOCH_32_STRAFING, EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA,
+    EPOCH_38_WATCHBORN_LATCH,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -3467,6 +3468,30 @@ fn strike_phase(
             ));
         }
     }
+    // EPOCH_38_WATCHBORN_LATCH — the melee half: a charge from over 9" is an
+    // eligible attack, so the latch decides here when the activation has not
+    // picked yet, and a pick made by an earlier volley reaches the dice fold.
+    if charging
+        && rule_on(seams.rules_epoch, EPOCH_38_WATCHBORN_LATCH)
+        && charge_from_in > crate::combat::LONG_RANGE_IN
+    {
+        for (mi, _, att) in parts.iter_mut() {
+            let prof36 = statics[next.roster.profile[*mi]].melee.iter().find(|p| p.versatile_attack);
+            if prof36.is_none() && !att.versatile_grant {
+                continue;
+            }
+            let (vh, va, vl) = versatile_latch(next, statics, *mi,
+                crate::combat::thrust_to_hit(
+                    crate::combat::reliable_quality(att.quality,
+                        prof36.map(|p| p.reliable).unwrap_or(false)),
+                    (prof36.is_some() && prof36.unwrap().thrust) || att.thrust_grant,
+                ),
+                &def, prof36, &mut shot.log);
+            att.versatile_pick_hit = vh;
+            att.versatile_pick_ap = va;
+            att.versatile_latched = vl;
+        }
+    }
     let members: Vec<crate::dice::Shooter<'_>> = parts
         .iter()
         .map(|(mi, sc, att)| {
@@ -4510,6 +4535,48 @@ struct SplitGroup {
     /// table aimed at THIS group, in build order. `None` = the pooled plan:
     /// every kept weapon fires, no narrowing.
     weapons: Option<HashMap<usize, Vec<usize>>>,
+}
+
+/// EPOCH_38_WATCHBORN_LATCH — Versatile Attack's once-per-ACTIVATION pick.
+/// Book (the `Versatile Attack`/`Versatile Reach` `pick_one` pair): the FIRST
+/// eligible attack of the activation decides by EV — the same
+/// `versatile_best_mode` chooser the planner folds — and the stamp lives on
+/// the State's per-unit round latch (one act per unit per round makes the
+/// round comparison the activation latch, the `hit_and_run_round` shape), so
+/// every later volley/charge of the activation reuses it. Rules-must-log: one
+/// line per activation naming the pick. Returns the latched
+/// `(hit_mod, ap_mod)` and whether a pick is latched for this activation.
+fn versatile_latch(
+    next: &mut State,
+    statics: &[UnitStatic],
+    mi: usize,
+    hit_target: i64,
+    def: &Ctx,
+    prof: Option<&ShootProfile>,
+    log: &mut Vec<String>,
+) -> (i64, i64, bool) {
+    if next.versatile_pick_round[mi] == next.round {
+        let mode = next.versatile_pick_mode[mi];
+        return ((mode == 1) as i64, (mode == 2) as i64, true);
+    }
+    let (ap, bane, rule_name) = match prof {
+        Some(p) => (p.ap, p.bane, if p.versatile_name.is_empty() { "Versatile Attack" } else { p.versatile_name.as_str() }),
+        None => (0, false, "Versatile Attack"),
+    };
+    let (hit_mod, ap_mod) = crate::combat::versatile_best_mode(
+        hit_target,
+        shielded_defense(def.defense, def.shielded),
+        ap,
+        bane,
+    );
+    next.versatile_pick_round[mi] = next.round;
+    next.versatile_pick_mode[mi] = if ap_mod > 0 { 2 } else { 1 };
+    log.push(format!(
+        "{rule_name}: {} picks {} for this activation",
+        statics[next.roster.profile[mi]].name,
+        if ap_mod > 0 { "AP(+1)" } else { "+1 to hit" }
+    ));
+    (hit_mod, ap_mod, true)
 }
 
 /// Folds `action.split` onto the state, or answers `None` when the activation
@@ -5990,6 +6057,21 @@ fn resolve_with(
                                 // backfire stamp — `_solo_reckless_ap`'s net.
                                 att.reckless_ap = (next.reckless_ap_round[*mi] == next.round) as i64
                                     + (next.reckless_backfire_round[g.ti] == next.round) as i64;
+                                // EPOCH_38_WATCHBORN_LATCH — the FIRST eligible volley decides.
+                                if rule_on(seams.rules_epoch, EPOCH_38_WATCHBORN_LATCH)
+                                    && g.mod_d > crate::combat::LONG_RANGE_IN
+                                {
+                                    let prof36 = statics[next.roster.profile[*mi]].shoot.iter().find(|p| p.versatile_attack);
+                                    if prof36.is_some() || att.versatile_grant {
+                                        let (vh, va, vl) = versatile_latch(&mut next, statics, *mi,
+                                            crate::combat::reliable_quality(att.quality,
+                                                prof36.map(|p| p.reliable).unwrap_or(false)),
+                                            &def, prof36, &mut shot.log);
+                                        att.versatile_pick_hit = vh;
+                                        att.versatile_pick_ap = va;
+                                        att.versatile_latched = vl;
+                                    }
+                                }
                             }
                             // CLASS FIX (external review 03.09. item 3 / F9,
                             // `acts::rule_on`) — same gate as `strike_phase`'s

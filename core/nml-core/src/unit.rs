@@ -357,6 +357,15 @@ pub struct Ctx {
     pub surge_grant: bool,
     /// A live `grants_rule: "Versatile Attack"` — the shoot-arm flag fold.
     pub versatile_grant: bool,
+    /// EPOCH_38_WATCHBORN_LATCH — the activation's LATCHED Versatile pick,
+    /// stamped by `sim::versatile_latch` at the FIRST eligible attack of the
+    /// activation and read by both dice folds (the volley pick's melee twin)
+    /// and the EV planner (`combat::profile_ev`). ZERO/false on every
+    /// `ctx_of` — only a 36+ sim stamp sets it, so every earlier epoch's
+    /// replay is byte-identical.
+    pub versatile_pick_hit: i64,
+    pub versatile_pick_ap: i64,
+    pub versatile_latched: bool,
     /// A live `grants_rule: "AP(+1) when shooting"` (Piercing Shooting Mark).
     pub pierce_shooting_grant: bool,
     /// A live `grants_rule: "AP(+1) in melee"` (Piercing Fighting Mark).
@@ -2306,6 +2315,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         slayer_grant: false,
         surge_grant: false,
         versatile_grant: false,
+        versatile_pick_hit: 0,
+        versatile_pick_ap: 0,
+        versatile_latched: false,
         pierce_shooting_grant: false,
         pierce_melee_grant: false,
         pierce_assault_grant: false,

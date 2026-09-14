@@ -3266,18 +3266,23 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if upr_ap > 0:
 			profile = profile.duplicate()
 			profile["ap"] = int(profile.get("ap", 0)) + upr_ap   # Unpredictable AP(+1) leg (never mutate source)
-		# Versatile Attack (army-book): over 9" apply the EV-better of +1 to hit or AP(+1) for this volley
-		# — the SAME chooser AiEv.profile_ev uses, so the AI's plan and the real dice pick the same mode.
-		# Shooting facet only (the melee/charge >9" facet needs the pre-charge distance — tracked follow-up).
+		# Versatile Attack (army-book): over 9" apply the EV-better of +1 to hit or AP(+1)
+		# — the SAME chooser AiEv.profile_ev uses, so the AI's plan and the real dice pick the
+		# same mode. EPOCH_38_WATCHBORN_LATCH: ONE pick per ACTIVATION — the first eligible
+		# volley decides, every later volley/charge of the activation reuses the latch.
 		if bool(profile.get("versatile_attack", false)) and dist_in > AiCombatMath.LONG_RANGE_IN:
-			var vm: Dictionary = AiEv.versatile_best_mode(to_hit, shot_base, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
+			var vm: Dictionary = _solo_versatile_latch_read(member)
+			var fresh: bool = vm.is_empty()
+			if fresh:
+				vm = AiEv.versatile_best_mode(to_hit, shot_base, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
+				_solo_versatile_latch_write(member, vm)
 			to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
 			if int(vm.get("ap", 0)) > 0:
 				profile = profile.duplicate()
 				profile["ap"] = int(profile.get("ap", 0)) + int(vm.get("ap", 0))
-			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s at long range" % [
-					"AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
+			if battle_log != null and fresh:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
+					member.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 		_solo_log_hit_mod(mod_info, target, to_hit)
 		var shooter_name: String = member.get_name()
 		var faces: Array = await _solo_tray_roll(attacks, to_hit, "AI (%s)" % shooter_name, "attack",
@@ -6161,18 +6166,24 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 						if name_unstop else "Unstoppable: negative to-hit modifiers ignored", true)
 			var to_hit: int = 6 if fatigued else AiCombatMath.modified_hit_target(
 				AiCombatMath.thrust_to_hit(strike_quality, bool(profile.get("thrust", false))), m_mod)
-			# Versatile Attack (army-book): on a charge from over 9" the AI picks the EV-better of +1 to hit
-			# or AP(+1) for this weapon — the SAME chooser as the shooting facet + the EV metric. Fatigue
+			# Versatile Attack (army-book): on a charge from over 9" the EV-better of +1 to hit
+			# or AP(+1) — the SAME chooser as the shooting facet + the EV metric. Fatigue
 			# (unmodified-6-only) overrides the +1-to-hit part; the AP(+1) part still folds in below.
+			# EPOCH_38_WATCHBORN_LATCH: the charge REUSES the activation's latched pick (an earlier
+			# volley decided it); an un-latched charge is the first eligible attack and decides.
 			var v_ap := 0
 			if bool(profile.get("versatile_attack", false)) and charging and charge_from_in > AiCombatMath.LONG_RANGE_IN:
-				var vm: Dictionary = AiEv.versatile_best_mode(to_hit, _solo_defense_vs(strike_unit, AiCombatMath.HIT_SOURCE_MELEE), int(profile.get("ap", 0)), bool(profile.get("bane", false)))
+				var vm: Dictionary = _solo_versatile_latch_read(striker)
+				var fresh: bool = vm.is_empty()
+				if fresh:
+					vm = AiEv.versatile_best_mode(to_hit, _solo_defense_vs(strike_unit, AiCombatMath.HIT_SOURCE_MELEE), int(profile.get("ap", 0)), bool(profile.get("bane", false)))
+					_solo_versatile_latch_write(striker, vm)
 				if not fatigued:
 					to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
 				v_ap = int(vm.get("ap", 0))
-				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s on the charge" % [
-						"AP(+1)" if v_ap > 0 else "+1 to hit"], true)
+				if battle_log != null and fresh:
+					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
+						striker.get_name(), "AP(+1)" if v_ap > 0 else "+1 to hit"], true)
 			if not fatigued:
 				_solo_log_hit_mod(p_mod, strike_unit, to_hit)
 			var roll_owner: String = ("AI (%s)" % str(group.get("name", "?"))) if _solo_is_ai_unit(striker) else "You"
@@ -10047,6 +10058,27 @@ func _solo_prompt_versatile(weapon_name: String, recommended: Dictionary) -> Dic
 	return {"ap": 0, "hit_mod": 1} if rec_ap else {"ap": 1, "hit_mod": 0}
 
 
+## EPOCH_38_WATCHBORN_LATCH — the book's once-per-ACTIVATION pick ("When this
+## unit is activated, pick one effect ... until the end of the activation").
+## The latch mirrors the core's per-unit State stamp onto the unit: one act per
+## unit per round makes the round comparison the activation latch (the
+## `moved_round` shape), so every later volley/charge of the activation reuses
+## the FIRST eligible attack's answer. Empty when not latched this round.
+func _solo_versatile_latch_read(unit: GameUnit) -> Dictionary:
+	if unit == null or opr_army_manager == null:
+		return {}
+	if int(unit.unit_properties.get("versatile_pick_round", -1)) != opr_army_manager.current_round:
+		return {}
+	return unit.unit_properties.get("versatile_pick", {})
+
+
+func _solo_versatile_latch_write(unit: GameUnit, vm: Dictionary) -> void:
+	if unit == null or opr_army_manager == null:
+		return
+	unit.unit_properties["versatile_pick_round"] = opr_army_manager.current_round
+	unit.unit_properties["versatile_pick"] = vm
+
+
 ## #231 (rules-must-log) — the TARGET-SIDE reach shrinks of a volley, named on the log: Aircraft
 ## (-12", GF v3.5.1) and Ranged Shrouding (-6" min 6"). The rule lines alone are not enough — a
 ## weapon that quietly stops rolling dice reads as a bug (transparency wave #224), so the weapons
@@ -10202,7 +10234,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
 	var spot_hit: int = await _solo_offer_spot_markers(attacker, target)
 	await _solo_stage_phase("Declaration")
-	var chosen_versatile: Dictionary = {}   # Bug 13: per-weapon Versatile choice, asked once per volley
+	# EPOCH_38_WATCHBORN_LATCH — the Versatile choice latches on the unit per
+	# activation (_solo_versatile_latch_read/write); no per-volley dict here.
 	# Unpredictable (generic, "when attacking"): the HUMAN's volley rolls the same visible die —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile (resolution-integrated, both sides automatic).
 	var h_granted_indirect: bool = SoloController.granted_indirect_of(attacker)   # GH #325 — own token
@@ -10287,20 +10320,24 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			# Versatile Attack applies to the HUMAN's volley too (xhigh review find: the profiles are stamped
 			# and every other modeled rule auto-applies here, but this path never read the flag — the player's
 			# own Versatile units were cheated of their buff). Bug 13 (field test): the mode is the PLAYER's
-			# choice — the EV pick only pre-labels the recommended button; asked once per weapon per volley.
+			# choice — the EV pick only pre-labels the recommended button. EPOCH_38_WATCHBORN_LATCH:
+			# asked ONCE per activation (the first eligible volley) on the unit's latch, not per weapon
+			# per volley — every later volley/charge of this activation reuses the answer.
 			if bool(profile.get("versatile_attack", false)) and dist > AiCombatMath.LONG_RANGE_IN:
 				var pname := str(profile.get("name", "?"))
-				if not chosen_versatile.has(pname):
+				var vm: Dictionary = _solo_versatile_latch_read(attacker)
+				var fresh: bool = vm.is_empty()
+				if fresh:
 					var rec: Dictionary = AiEv.versatile_best_mode(to_hit, shot_base, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
-					chosen_versatile[pname] = await _solo_prompt_versatile(pname, rec)
-				var vm: Dictionary = chosen_versatile[pname]
+					vm = await _solo_prompt_versatile(pname, rec)
+					_solo_versatile_latch_write(attacker, vm)
 				to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
 				if int(vm.get("ap", 0)) > 0:
 					profile = profile.duplicate()
 					profile["ap"] = int(profile.get("ap", 0)) + int(vm.get("ap", 0))
-				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s at long range" % [
-						"AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
+				if battle_log != null and fresh:
+					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
+						attacker.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 			_solo_log_hit_mod(p_mod, target, to_hit)
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You", "attack",
 				"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])

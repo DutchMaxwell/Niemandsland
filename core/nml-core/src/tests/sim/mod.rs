@@ -85,6 +85,8 @@
             reckless_rolled_round: vec![-1; 4],
             reckless_ap_round: vec![-1; 4],
             reckless_backfire_round: vec![-1; 4],
+            versatile_pick_round: vec![-1; 4],
+            versatile_pick_mode: vec![0; 4],
             retreating_strike_round: vec![-1; 4],
             growth_markers: vec![0; 4],
             vengeance_markers: vec![0; 4],
@@ -1579,4 +1581,5 @@ mod strafing;
 mod terrain_debuff;
 mod unstoppable_aura;
 mod versatile_reach;
+mod watchborn_latch;
 mod weapons;
