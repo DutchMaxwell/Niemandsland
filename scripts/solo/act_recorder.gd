@@ -64,10 +64,10 @@ static var spawn_profile_resolver: Callable = Callable()
 ## Bumped to 43 in the same diff as the core's EPOCH_43_BATTLEBORN_ROLL
 ## (sweep E 2026-09-14, row `Battleborn` — the plain name joins the die leg).
 ## to 44 with the core's EPOCH_44_SURGE_MARK (#958, sweep C row `Surge Mark`
-## — the once-per-activation pick); to 44 with the core's
-## EPOCH_44_CASTER_BOOST (wave 6 2026-09-14, CASTER_SEAM row 1 — the cast
+## — the once-per-activation pick); to 45 with the core's
+## EPOCH_45_CASTER_BOOST (wave 6 2026-09-14, CASTER_SEAM row 1 — the cast
 ## sub-phase spends boost tokens like the table).
-static var rules_epoch: int = 44
+static var rules_epoch: int = 45
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the

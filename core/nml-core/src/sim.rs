@@ -28,7 +28,7 @@ use crate::acts::{
     EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING, EPOCH_19_MOVE_GRANTS_FOLD,
     EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS, EPOCH_32_STRAFING,
     EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA, EPOCH_38_WATCHBORN_LATCH,
-    EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_44_CASTER_BOOST,
+    EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_45_CASTER_BOOST,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -2941,7 +2941,7 @@ fn battery_pool(
 /// the table exactly there). Nearest-first, the table's own sort (:4609).
 /// The caster's OWN leftover tokens are the FIRST boost source and are NOT
 /// collected here (solo_controller.gd:4336-4342, the plan site's business).
-/// Gated on the frozen `EPOCH_44_CASTER_BOOST`.
+/// Gated on the frozen `EPOCH_45_CASTER_BOOST`.
 fn caster_boost_pool(
     statics: &[UnitStatic],
     state: &State,
@@ -2950,7 +2950,7 @@ fn caster_boost_pool(
     los: &[bool],
     seams: Seams,
 ) -> Vec<(usize, i64)> {
-    if !rule_on(seams.rules_epoch, EPOCH_44_CASTER_BOOST) { return Vec::new(); }
+    if !rule_on(seams.rules_epoch, EPOCH_45_CASTER_BOOST) { return Vec::new(); }
     let pid = state.player[si];
     let mut found: Vec<(usize, f64, i64)> = Vec::new();
     for u in 0..state.units() {
@@ -2980,7 +2980,7 @@ fn caster_boost_pool(
 /// (:4345-4349) — the damage EV the core can compute, the unpriced stand-in
 /// for everything else. The draw mirrors `_draw_aura_tokens`' own-front
 /// order. Returns (boost, own draw, helper draw); the caller folds the final
-/// roll target and owns the frozen `EPOCH_44_CASTER_BOOST` gate.
+/// roll target and owns the frozen `EPOCH_45_CASTER_BOOST` gate.
 fn plan_caster_boost(
     statics: &[UnitStatic],
     state: &State,
@@ -4393,7 +4393,7 @@ fn cast_phase(
     let tokens = own + lenders.iter().map(|(_, t)| *t).sum::<i64>();
     // Wave 6 (port-caster-boost) — the boost pool's helper half (the own
     // leftover joins the plan below, the FIRST source). Empty below the
-    // frozen `EPOCH_44_CASTER_BOOST`.
+    // frozen `EPOCH_45_CASTER_BOOST`.
     let helpers = caster_boost_pool(statics, state, si, ci, los, seams);
     let mut lend_log: Vec<String> = Vec::new();
     let pi = state.roster.profile[ci];
@@ -4426,7 +4426,7 @@ fn cast_phase(
         // shop with (and roll with) the attempt's one boost decision.
         let boost = boost_plan
             .get_or_insert_with(|| {
-                let (b, o, h) = if rule_on(seams.rules_epoch, EPOCH_44_CASTER_BOOST) {
+                let (b, o, h) = if rule_on(seams.rules_epoch, EPOCH_45_CASTER_BOOST) {
                     plan_caster_boost(statics, state, &spells[idx], ti, own, &helpers)
                 } else {
                     (0, 0, 0)

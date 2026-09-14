@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 44;
+pub const CURRENT_RULES_EPOCH: u32 = 45;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -856,17 +856,17 @@ pub const EPOCH_44_SURGE_MARK: u32 = 44;
 /// paid BEFORE the roll, one try per spell (:4387-4395), the spend policy
 /// `plan_boost`'s marginal-EV calculus (ai_spell.gd:328-339). The core's
 /// `cast_phase` rolled a flat 4+ and never spent a token on the boost, so
-/// the net learned spells as coin flips. From 44 the cast sub-phase builds
+/// the net learned spells as coin flips. From 45 the cast sub-phase builds
 /// the boost pool (`sim::caster_boost_pool`), plans the spend
 /// (`sim::plan_caster_boost`), folds the boost into `spell::
 /// cast_success_chance`'s second argument and pays it in the same order the
-/// threshold rides. Below 44 the pool is empty, the plan is zeros and every
-/// recorded game replays byte-exact. `44` is one past every existing stamp
-/// (43 = `EPOCH_43_BATTLEBORN_ROLL`, #964; 41 = #963's self-destruct leg; 42
-/// reserved in flight by the surge-mark leg), and the value
+/// threshold rides. Below 45 the pool is empty, the plan is zeros and every
+/// recorded game replays byte-exact. `45` is one past every existing stamp
+/// (44 = `EPOCH_44_SURGE_MARK`, #958; 43 = #964's Battleborn leg; 41 =
+/// #963's self-destruct leg; 42 never used), and the value
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
-/// reads THIS constant, not the literal `44` or `CURRENT_RULES_EPOCH`.
-pub const EPOCH_44_CASTER_BOOST: u32 = 44;
+/// reads THIS constant, not the literal `45` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_45_CASTER_BOOST: u32 = 45;
 
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
@@ -1402,7 +1402,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 44, "epoch 44's gate (EPOCH_44_CASTER_BOOST) bumps the live epoch to 44, one past #964's Battleborn leg 43 (41 = #963's selfdestruct leg, 42 reserved in flight by the surge-mark leg)");
+        assert_eq!(CURRENT_RULES_EPOCH, 45, "epoch 45's gate (EPOCH_45_CASTER_BOOST) bumps the live epoch to 45, one past #958's Surge-Mark leg 44 (43 = #964's Battleborn leg, 41 = #963's selfdestruct leg; 42 never used)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1412,11 +1412,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":44}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":45}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 44"
+            "a fresh play_game() now stamps the bumped epoch, 45"
         );
     }
 

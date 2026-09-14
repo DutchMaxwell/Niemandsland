@@ -64,14 +64,14 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 44 (acts::EPOCH_44_CASTER_BOOST, wave 6 CASTER_SEAM
+    # core rules epoch 45 (acts::EPOCH_45_CASTER_BOOST, wave 6 CASTER_SEAM
     # row 1: the cast sub-phase spends boost tokens like the table — own
     # leftover first, then casters/batteries in 18" LoS, +1 per token,
-    # clamped [2,6]; 43 was #964's Battleborn roll leg, 41 #963's
-    # selfdestruct survival half, 44 also #958's Surge Mark pick): explicit,
-    # not just dynamic — a fresh game now stamps 44, not 43. A record
-    # already stamped 43 must never be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 44
+    # clamped [2,6]; 44 was #958's Surge Mark pick, 43 #964's Battleborn
+    # roll leg, 41 #963's selfdestruct survival half): explicit, not just
+    # dynamic — a fresh game now stamps 45, not 44. A record already
+    # stamped 44 must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 45
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)

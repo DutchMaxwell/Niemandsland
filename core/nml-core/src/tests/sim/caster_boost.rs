@@ -107,21 +107,22 @@ use super::*;
             .any(|e| e["log"].as_str().map(|l| l.contains(needle)).unwrap_or(false))
     }
 
-    /// THE BOTH-LEGS TEST. NEW leg — epoch 44: both leftovers go to the
+    /// THE BOTH-LEGS TEST. NEW leg — epoch 45: both leftovers go to the
     /// boost (own first, no helpers in reach), the roll lifts 4+ -> 2+
-    /// (p 1/2 -> 5/6), the purse 2 -> 0. OLD leg — epoch 43: the pool is
-    /// never read, the purse is untouched, the roll stays the flat 4+.
-    /// RED before the port: the 44 leg still rolls the flat 4+ and keeps
+    /// (p 1/2 -> 5/6), the purse 2 -> 0. OLD leg — epoch 44 (the epoch
+    /// immediately below this bump at rebase time): the pool is never
+    /// read, the purse is untouched, the roll stays the flat 4+.
+    /// RED before the port: the 45 leg still rolls the flat 4+ and keeps
     /// every token.
     #[test]
-    fn two_leftover_tokens_cast_at_2plus_at_epoch_44_and_flat_at_epoch_43() {
-        // epoch 44.
+    fn two_leftover_tokens_cast_at_2plus_at_epoch_45_and_flat_at_epoch_44() {
+        // epoch 45.
         let (mut st, statics) = lone_caster();
         let los = vec![true; st.units()];
-        cast_phase(&statics, &mut st, 0, &los, epoch(44), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(45), None);
         assert_eq!(
             st.casts[0], 0,
-            "epoch 44: the leftovers pay for the boost (RED before the port): {:?}",
+            "epoch 45: the leftovers pay for the boost (RED before the port): {:?}",
             st.casts
         );
         // three 1/3-weight faces at 5/6 on a 1/2-EV spell: 5/12 expected
@@ -129,11 +130,23 @@ use super::*;
         // the walk's own remainder).
         assert!(
             (st.wound_frac[3] - 5.0 / 12.0).abs() < 1e-9,
-            "epoch 44: the cast resolves at 2+ (RED before the port): {}",
+            "epoch 45: the cast resolves at 2+ (RED before the port): {}",
             st.wound_frac[3]
         );
 
-        // epoch 43.
+        // epoch 44 — the OLD leg, the epoch immediately below this bump at
+        // rebase time (a #958-surge-mark-stamped record replays byte-exact).
+        let (mut st, statics) = lone_caster();
+        let los = vec![true; st.units()];
+        cast_phase(&statics, &mut st, 0, &los, epoch(44), None);
+        assert_eq!(st.casts[0], 2, "epoch 44: the purse is untouched");
+        assert!(
+            (st.wound_frac[3] - 0.25).abs() < 1e-9,
+            "epoch 44: the flat 4+ cast, p 1/2: {}",
+            st.wound_frac[3]
+        );
+
+        // epoch 43 — the same old reading one epoch lower still.
         let (mut st, statics) = lone_caster();
         let los = vec![true; st.units()];
         cast_phase(&statics, &mut st, 0, &los, epoch(43), None);
@@ -141,18 +154,6 @@ use super::*;
         assert!(
             (st.wound_frac[3] - 0.25).abs() < 1e-9,
             "epoch 43: the flat 4+ cast, p 1/2: {}",
-            st.wound_frac[3]
-        );
-
-        // epoch 40 — the same old reading one epoch lower: a record stamped
-        // at the pre-boost live epoch replays byte-exact too.
-        let (mut st, statics) = lone_caster();
-        let los = vec![true; st.units()];
-        cast_phase(&statics, &mut st, 0, &los, epoch(40), None);
-        assert_eq!(st.casts[0], 2, "epoch 40: the purse is untouched");
-        assert!(
-            (st.wound_frac[3] - 0.25).abs() < 1e-9,
-            "epoch 40: the flat 4+ cast, p 1/2: {}",
             st.wound_frac[3]
         );
     }
@@ -164,7 +165,7 @@ use super::*;
     fn the_boost_cast_logs_its_token_split_and_target() {
         let (mut st, statics) = lone_caster();
         let los = vec![true; st.units()];
-        cast_phase(&statics, &mut st, 0, &los, epoch(44), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(45), None);
         assert!(
             logged(&st, "Caster: 2 tokens spent (own 2, helpers 0), target 4+ -> 2+"),
             "the boost line names the split and the target: {:?}",
@@ -183,7 +184,7 @@ use super::*;
     fn the_boost_draws_the_own_leftover_before_the_battery() {
         let (mut st, statics) = caster_and_battery();
         let los = vec![true; st.units()];
-        cast_phase(&statics, &mut st, 0, &los, epoch(44), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(45), None);
         assert_eq!(st.casts[0], 0, "the caster's own leftover goes first");
         assert_eq!(st.casts[1], 1, "the battery covers the remainder: {:?}", st.casts);
         assert!(
@@ -200,7 +201,7 @@ use super::*;
         let (mut st, statics) = caster_and_battery();
         st.shaken[1] = true;
         let los = vec![true; st.units()];
-        cast_phase(&statics, &mut st, 0, &los, epoch(44), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(45), None);
         assert_eq!(st.casts[0], 0, "the own leftover still boosts");
         assert_eq!(st.casts[1], 2, "the Shaken battery keeps every token");
         assert!(
@@ -219,7 +220,7 @@ use super::*;
         let (mut st, statics) = caster_and_battery();
         st.positions[1] = vec![[15.0 * IN2M, 0.0, 0.0]];
         let los = vec![true; st.units()];
-        cast_phase(&statics, &mut st, 0, &los, epoch(44), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(45), None);
         assert_eq!(st.casts[1], 2, "a battery past its own 12\" never lends boost");
         assert_eq!(st.casts[0], 0, "the caster still boosts from its own leftover");
 
@@ -233,7 +234,7 @@ use super::*;
             ..UnitStatic::default()
         };
         let los = vec![true; st.units()];
-        cast_phase(&statics, &mut st, 0, &los, epoch(44), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(45), None);
         assert_eq!(st.casts[1], 1, "a caster helper inside the aura joins the pool");
     }
 
@@ -243,7 +244,7 @@ use super::*;
     fn a_helper_without_line_of_sight_is_out_of_the_boost_pool() {
         let (mut st, statics) = caster_and_battery();
         let los = vec![true, false, true, true];
-        cast_phase(&statics, &mut st, 0, &los, epoch(44), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(45), None);
         assert_eq!(st.casts[1], 2, "no LoS, no lend");
         assert_eq!(st.casts[0], 0, "the own leftover still boosts");
     }
@@ -255,6 +256,6 @@ use super::*;
         let (mut st, statics) = lone_caster();
         st.casts[0] = 10;
         let los = vec![true; st.units()];
-        cast_phase(&statics, &mut st, 0, &los, epoch(44), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(45), None);
         assert_eq!(st.casts[0], 8, "two tokens lift 4+ -> 2+, the clamp ends the spend");
     }
