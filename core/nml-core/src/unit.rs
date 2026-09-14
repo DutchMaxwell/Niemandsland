@@ -30,6 +30,7 @@ use crate::acts::{
     EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST, EPOCH_35_UNSTOPPABLE_MELEE,
     EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL, EPOCH_43_BATTLEBORN_ROLL,
     EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
+    EPOCH_50_SURGE_LOW,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -2551,6 +2552,25 @@ fn stamp(
         // every corpus was recorded with.
         let scope_live = hit.shooting_only
             && (hit.name != "Surge when Shooting" || rule_on(rules_epoch, EPOCH_17_SURGE_SCOPE));
+        // EPOCH_50_SURGE_LOW (sweep F, row "Great Sergeant"): the entry's own
+        // printed low window — `surge_low: 5` on the plain auto-hit form was
+        // dead data in BOTH stamp loops (this walk and the table's alias loop
+        // read `surge_low` only off `upgrades` carriers, block 3b), so only
+        // the natural 6s ever paid. From 50 the alias reads its printed
+        // window off the entry — `surge_low` default 6 (an alias without the
+        // param stays a 6s rule; the PrimitiveHit field's 5 default is the
+        // Boost reader's) — and stamps the sentinel `over_in` -1.0 ("no
+        // printed distance gate", the Piercing Shooter -1 bound): the
+        // consumers' strict `dist > surge_over_in` gate opens at every
+        // distance, melee 0.0" included. Below 50 the stamp is silent and
+        // every recorded corpus replays byte-exact.
+        let printed_low = if rule_on(rules_epoch, EPOCH_50_SURGE_LOW) {
+            let map = reg.rules_for(&p.game_system);
+            map.lookup(&p.faction_folder, &hit.name)
+                .map(|e| (e.param_i("surge_low", 6), e.param_f("over_in", -1.0)))
+        } else {
+            None
+        };
         for sp in shoot.iter_mut() {
             if facet_applies(hit.melee_only, scope_live, sp.range) {
                 if hit.extra_attack {
@@ -2560,7 +2580,20 @@ fn stamp(
                     if hit.within_in > 0.0 {
                         sp.surge_within_in = hit.within_in;
                     }
+                    if let Some((low, over)) = printed_low {
+                        if low < 6 {
+                            sp.surge_low = low;
+                            sp.surge_over_in = over;
+                        }
+                    }
                 }
+            }
+        }
+        if let Some((low, _)) = printed_low {
+            if low < 6 {
+                // Rules-must-log: the widened window names its threshold
+                // ("Great Sergeant: Surge on 5+"), the move-band folds' shape.
+                trace_rule("surge", &hit.name, &format!("Surge on {low}+"));
             }
         }
     }

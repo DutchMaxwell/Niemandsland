@@ -1690,6 +1690,17 @@ pub fn resolve_melee_leg(
             if p.surge {
                 hits += sixes(&faces);
                 out.mark("surge_gates");
+                // EPOCH_50 SURGE LOW — the volley fold's twin (:996-1007): the
+                // entry's own printed low window (Great Sergeant's "5 or 6")
+                // pays its successful unmodified 5s in melee too. Melee
+                // resolves at 0.0" (main.gd:6103), so the strict
+                // `dist > surge_over_in` gate opens ONLY for the ungated
+                // sentinel (-1.0) the named walk stamps from
+                // `EPOCH_50_SURGE_LOW` — the Boost's 9.0 stays shut here,
+                // exactly like the table (main.gd:4539 at dist 0.0).
+                if p.surge_low < 6 && p.surge_over_in < 0.0 {
+                    hits += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                }
             }
             // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
             // is melee-only, so this is the branch it actually fires on).
