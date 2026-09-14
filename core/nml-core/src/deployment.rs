@@ -6,7 +6,7 @@
 //! 2 `randi_range(1, 6)` draws per attempt, ties re-roll, cap 100 — trace kept because
 //! the attempt count is data-dependent (the gate compares the FULL attempt list).
 
-use crate::acts::{rule_on, EPOCH_16_FREE_PLACEMENT};
+use crate::acts::{rule_on, EPOCH_16_FREE_PLACEMENT, EPOCH_28_REDEPLOYMENT};
 use crate::rng::GodotRng;
 use std::collections::HashMap;
 use crate::terrain::{CONTAINER, DANGEROUS, RUINS, Terrain};
@@ -61,6 +61,19 @@ pub struct UnitSpec {
     /// `vanguard`; the gate's dump back-fill omits the key.
     #[serde(default)]
     pub place_in_m: Option<f64>,
+    /// `RulesRegistry.unit_rule_active(gu, "Re-Deployment")` (solo_controller.gd:9774)
+    /// derived py-side like `vanguard`; serde-default so every pre-port spec dict
+    /// (the gate's fixtures) replays unchanged.
+    #[serde(default)]
+    pub re_deploy: bool,
+    /// The registry entry's own `max_units` — `RulesRegistry.unit_param(gu,
+    /// "Re-Deployment", "max_units", 2)` (solo_controller.gd:9778) via
+    /// list_to_profile.py's `_rules_of_primitive`, the same read the
+    /// `UnitStatic.re_deployment_max_units` stamp (unit.rs:1067) folds; `None`
+    /// = the table's 2 fallback. Read ONCE from the FIRST carrier, exactly
+    /// like the table's `carriers[0]` read.
+    #[serde(default)]
+    pub re_deploy_max_units: Option<i64>,
     pub transport_capacity: i64,
     /// The deploy yaw (the model node's `global_rotation.y`; 0.0 corpus-wide).
     pub facing_rad: f64,
@@ -111,10 +124,15 @@ pub struct DeployEvent {
 }
 
 /// The table's `data` dict of the Vanguard deploy line: the pushed spot.
+/// The Re-Deployment line's dict carries the re-place gain too
+/// (`{"gain_in": snappedf(gain_in, 0.1)}`, solo_controller.gd:9812) —
+/// `0.0` for the Vanguard events that predate the field (serde-default).
 #[derive(Debug, Clone, PartialEq, Default, serde::Deserialize, serde::Serialize)]
 pub struct DeployEventData {
     pub x_m: f64,
     pub z_m: f64,
+    #[serde(default)]
+    pub gain_in: f64,
 }
 
 /// `SoloController.roll_off` with the trace kept (fallback winner 1 after the cap).
@@ -1365,6 +1383,150 @@ pub fn deploy_interleaved(
     InterleavedDeploy { side1: q1.out, side2: q2.out, sequence }
 }
 
+// ==== Re-Deployment (STANDALONE_SWEEP, epoch 28) ====
+//
+// GF v3.5.1 p.15: "After all other units are deployed (excluding units that
+// were set aside), you may remove up to two friendly units from the table and
+// deploy them again." The table executes it at the game-start transition —
+// `redeployment_pass()` (solo_controller.gd:9762-9816), invoked from
+// main.gd:1165-1174 — right after the opponent's final setup is down, exactly
+// the moment this twin's caller reaches once BOTH sides are deployed. The
+// core only stamped `re_deployment_max_units` (unit.rs:1067) and never
+// re-placed anyone; from `EPOCH_28_REDEPLOYMENT` this pass mirrors the
+// table's pass line for line. Below it the carrier stays where it first
+// stood — every recorded game replays unchanged.
+
+/// `REDEPLOY_MIN_GAIN_IN` (solo_controller.gd:9754): re-place only when the
+/// new spot is at least this much nearer a marker.
+pub const REDEPLOY_MIN_GAIN_IN: f64 = 3.0;
+
+/// The record_decision rule text (solo_controller.gd:9810).
+pub const REDEPLOY_RULE_TEXT: &str = "Re-Deployment: after all other units are deployed, remove up to two friendly units and deploy them again";
+
+/// One re-placed carrier: the `[{unit, gain_in}]` row the table's pass
+/// returns (solo_controller.gd:9813), plus the side (1|2) and both spots.
+#[derive(Debug, Clone, PartialEq, Default, serde::Deserialize, serde::Serialize)]
+pub struct Redeployed {
+    pub side: i64,
+    pub key: String,
+    pub from: (f64, f64),
+    pub to: (f64, f64),
+    pub gain_in: f64,
+}
+
+/// The pass's outcome: one `record_decision`-shaped event per re-placed unit
+/// (the rules-must-log law) beside the re-place rows.
+#[derive(Debug, Clone, PartialEq, Default, serde::Deserialize, serde::Serialize)]
+pub struct RedeployPass {
+    pub re_placed: Vec<Redeployed>,
+    pub events: Vec<DeployEvent>,
+}
+
+/// The table's `redeployment_pass` (solo_controller.gd:9762-9816) after BOTH
+/// sides are deployed — the same game-start counter-deploy moment
+/// (main.gd:1165-1174). Carrier filter (:9768-9777): list order, alive
+/// (`model_count > 0`), not in reserve (`!ambush`), not attached (attached
+/// heroes never enter the spec list — deploy_begin :9340-9347 folds them
+/// into the host), the rule active (`re_deploy`), a recorded deploy zone (a
+/// placement exists). `max_units` read ONCE from the FIRST carrier (:9778).
+/// Per carrier: `best_spot` over the RECORDED zone (the side zone; a scout's
+/// the extended 12" band — `_deploy_place_id` rebinds it before :9496 stores
+/// it) at the table's 0.025 m step (:9800), the Strider/Flying blocked law
+/// (:9788-9789), the CURRENT post-deploy occupied truth of every OTHER
+/// on-table unit, both sides (:9792-9799), the VANGUARD scan's own
+/// deterministic tie-break (strict `<`, first minimum in scan order). Gain
+/// law (:9803-9806): a spot only wins when >= `REDEPLOY_MIN_GAIN_IN` nearer
+/// the nearest objective (`_nearest_objective_dist_m`, :9819-9824). The
+/// re-place moves the placement (spot + fixed-grid models, `_place_unit_at`
+/// :9808) and logs the record_decision line (:9809-9812) — one trace line
+/// per re-placed unit, the gain snapped to 0.1" in `data.gain_in`. The core
+/// has no human slot: both sides run the book's "may", slots in list order
+/// (side 1 then side 2), a later scan seeing the earlier re-place's NEW
+/// position — the table's per-carrier rebuild (:9794) sees the same truth.
+#[allow(clippy::too_many_arguments)]
+pub fn redeployment_pass(
+    specs1: &[UnitSpec], specs2: &[UnitSpec], side1: &mut SideDeploy, side2: &mut SideDeploy,
+    zone1: &Rect, zone2: &Rect, objectives: &[(f64, f64)], board: &Terrain, rules_epoch: u32,
+) -> RedeployPass {
+    let mut out = RedeployPass::default();
+    if !rule_on(rules_epoch, EPOCH_28_REDEPLOYMENT) { return out; } // below: the choice stays table-side
+    let specs = [specs1, specs2];
+    let zones = [*zone1, *zone2];
+    let sides = [side1, side2];
+    // The post-deploy truth every scan measures against (:9793-9799): every
+    // placed unit of BOTH sides, centre + unit-max radius (the
+    // `_deploy_footprint_radius(ou)` of :9799, the FIXED-cols twin).
+    let mut occ: Vec<(usize, String, Occupied)> = Vec::new();
+    for side in 0..2 {
+        for p in &sides[side].placements {
+            if let Some(s) = specs[side].iter().find(|s| s.key == p.key) {
+                let br = deploy_base_radius_of(s);
+                let n = s.model_count.max(0) as usize;
+                occ.push((side, p.key.clone(), Occupied { pos: p.spot, radius: deploy_footprint_radius(n, br) }));
+            }
+        }
+    }
+    for side in 0..2 {
+        let zone = &zones[side];
+        // (solo_controller.gd:9768-9777) — list order, the five filters.
+        let carriers: Vec<usize> = specs[side].iter().enumerate().filter_map(|(i, s)| {
+            let placed = sides[side].placements.iter().any(|p| p.key == s.key);
+            (s.re_deploy && s.model_count > 0 && !s.ambush && placed).then_some(i)
+        }).collect();
+        if carriers.is_empty() { continue; }
+        let max_units = specs[side][carriers[0]].re_deploy_max_units.unwrap_or(2); // (:9778)
+        let mut moved = 0usize;
+        for &ci in &carriers {
+            if moved >= max_units { break; } // (:9780-9782)
+            let s = &specs[side][ci];
+            let idx = match sides[side].placements.iter().position(|p| p.key == s.key) { Some(i) => i, None => continue };
+            let cur = sides[side].placements[idx].spot;
+            // The zone of record (:9784): the side zone; a scout's the extended
+            // 12" band (:9432-9435 rebinds it before :9496 stores it).
+            let end = zone.end();
+            let forward_y = if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 };
+            let zone_of = if s.scout { scout_extended_zone(zone, forward_y) } else { *zone };
+            let base_r = deploy_base_radius_of(s);
+            let n = s.model_count.max(0) as usize;
+            let radius = deploy_footprint_radius(n, base_r);
+            // Strider/Flying pick the flying blocked law (:9788-9789); the twin
+            // binds the board once — :9790-9791's invalid-Callable fallback has
+            // no twin counterpart.
+            let blocked = |p: (f64, f64)| spot_blocked(board, p, s.ignores_terrain, radius, &s.footprint, base_r);
+            // Occupied = every OTHER on-table unit, both sides, CURRENT truth
+            // (:9792-9799), the carrier itself excluded.
+            let occ_view: Vec<Occupied> = occ.iter().filter(|(os, ok, _)| !(os == &side && ok == &s.key)).map(|(_, _, o)| *o).collect();
+            // The table's scan (:9800): step 0.025 (DEPLOY_SPOT_STEP_M), probe =
+            // the unit-max radius (folded into the closure like
+            // deploy_place_id), no forward bias — #930's `vanguard_free_place`
+            // scan law with its own deterministic tie-break (strict `<`, first
+            // minimum in scan order).
+            let spot = best_spot(&zone_of, objectives, &occ_view, radius, &blocked, DEPLOY_SPOT_STEP_M, &s.footprint, base_r, f64::INFINITY);
+            if spot.0.is_infinite() { continue; }
+            // (:9819-9824) `_nearest_objective_dist_m`: f32 distance at the
+            // Vector2 boundary; (:9804-9806) the 3" gain gate.
+            let nd = |p: (f64, f64)| objectives.iter().map(|o| v2_dist(p, *o)).fold(f64::INFINITY, f64::min);
+            let gain_in = (nd(cur) - nd(spot)) / 0.0254;
+            if gain_in < REDEPLOY_MIN_GAIN_IN { continue; }
+            // `_place_unit_at` (:9808): spot AND the fixed-grid models move.
+            let pl = &mut sides[side].placements[idx];
+            pl.spot = spot;
+            pl.models = place_unit_models(spot, n);
+            for o in occ.iter_mut() { if o.0 == side && o.1 == s.key { o.2.pos = spot; } }
+            // `snappedf(gain_in, 0.1)` (:9812) — Godot's nearest-multiple snap.
+            let gain_snapped = (gain_in / 0.1 + 0.5).floor() * 0.1;
+            sides[side].events.push(DeployEvent {
+                kind: "deploy".into(), unit: s.key.clone(), rule: REDEPLOY_RULE_TEXT.into(),
+                chosen: format!("re-placed {:.1}\" nearer a marker", gain_in),
+                why: "counter-deploy at game start".into(),
+                data: DeployEventData { x_m: spot.0, z_m: spot.1, gain_in: gain_snapped },
+            });
+            out.re_placed.push(Redeployed { side: side as i64 + 1, key: s.key.clone(), from: cur, to: spot, gain_in });
+            moved += 1;
+        }
+    }
+    out
+}
 // ---- the SETTLE pass (NML-1152 step 6b): `deploy_finish` →
 // `_resolve_deploy_overlaps` (solo_controller.gd:9497-9577), 4 Gauss-Seidel
 // sweeps over every on-table unit: (a) separate the unit's OWN bases to

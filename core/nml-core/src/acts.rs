@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 32;
+pub const CURRENT_RULES_EPOCH: u32 = 33;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -647,6 +647,23 @@ pub const EPOCH_27_TERRAIN_DEBUFF: u32 = 27;
 /// landed first) per the epoch rules. Every call site reads THIS constant,
 /// not the literal `32` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_32_STRAFING: u32 = 32;
+/// The RE-DEPLOYMENT gate (14.09., STANDALONE_SWEEP row "Re-Deployment",
+/// TABLE-ONLY; GF v3.5.1 p.15: "After all other units are deployed (excluding
+/// units that were set aside), you may remove up to two friendly units from
+/// the table and deploy them again."). The table re-places up to two carriers
+/// at the game-start transition (`solo_controller.gd:9762-9816
+/// redeployment_pass`, invoked from main.gd:1165-1174); the core only stamped
+/// `re_deployment_max_units` (`unit.rs:1067`) and never re-placed anyone —
+/// every core-simulated game answered the opponent's final setup with the
+/// deployment it made blind. From 33 `deployment::redeployment_pass` runs at
+/// the same moment (after both sides are deployed) with the table's own scan.
+/// Below 33 the carrier stays where it first stood — every recorded game
+/// replays unchanged. `33` is one past every existing stamp (32 =
+/// `EPOCH_32_STRAFING`, #947; 31 reserved in flight, 28 was this
+/// leg's first reservation, renumbered twice at rebase per the epoch
+/// rules). Every call site reads THIS constant, not the literal `33` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_33_REDEPLOYMENT: u32 = 33;
 
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
@@ -1182,7 +1199,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 32, "epoch 32's gate (EPOCH_32_STRAFING) bumps the live epoch to 32, one past the scrapper leg's 30 (30 = EPOCH_30_SCRAPPER_BOOST, #945) and the re-deployment leg's reserved 31 (27 = #933's terrain debuff)");
+        assert_eq!(CURRENT_RULES_EPOCH, 33, "epoch 33's gate (EPOCH_33_REDEPLOYMENT) bumps the live epoch to 33, one past #947's 32 strafing leg (31 reserved in flight, 28 was this leg's first reservation)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1192,11 +1209,12 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":32}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":33}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 32"
+            "a fresh play_game() now stamps the bumped epoch, 33"
+        );
         );
     }
 
