@@ -43,7 +43,7 @@ func _controller(units: Array) -> SoloController:
 	return solo
 
 
-func _ready(solo: SoloController, bu: GameUnit) -> bool:
+func _burst_ready(solo: SoloController, bu: GameUnit) -> bool:
 	# The missing-marker default makes every test below FAIL while the seam does not
 	# exist yet — a parse-error-free red that flips green with the fix.
 	if not solo.has_method("surprise_attack_bearer_ready"):
@@ -54,7 +54,7 @@ func _ready(solo: SoloController, bu: GameUnit) -> bool:
 func test_human_bearer_on_its_first_activation_is_ready() -> void:
 	var bu := _bearer(1, "human_bearer")
 	var solo := _controller([bu])
-	assert_bool(_ready(solo, bu)).override_failure_message(
+	assert_bool(_burst_ready(solo, bu)).override_failure_message(
 		"the human's Surprise Attack bearer never fires its first-activation burst — "
 		+ "the table gate is AI-only (main.gd _solo_is_ai_unit)").is_true()
 
@@ -64,22 +64,22 @@ func test_ai_bearer_on_its_first_activation_is_ready_too() -> void:
 	# re-introduce a seat split.
 	var bu := _bearer(2, "ai_bearer")
 	var solo := _controller([bu])
-	assert_bool(_ready(solo, bu)).is_true()
+	assert_bool(_burst_ready(solo, bu)).is_true()
 
 
 func test_the_once_per_game_latch_stops_the_second_activation() -> void:
 	var bu := _bearer(1, "human_bearer", 3, true)
 	var solo := _controller([bu])
-	assert_bool(_ready(solo, bu)).is_false()
+	assert_bool(_burst_ready(solo, bu)).is_false()
 
 
 func test_a_dead_bearer_is_never_ready() -> void:
 	var bu := _bearer(1, "dead_bearer", 0)
 	var solo := _controller([bu])
-	assert_bool(_ready(solo, bu)).is_false()
+	assert_bool(_burst_ready(solo, bu)).is_false()
 
 
 func test_a_unit_without_the_rule_is_never_ready() -> void:
 	var bu := _bearer(1, "plain_unit", 3, false, false)
 	var solo := _controller([bu])
-	assert_bool(_ready(solo, bu)).is_false()
+	assert_bool(_burst_ready(solo, bu)).is_false()
