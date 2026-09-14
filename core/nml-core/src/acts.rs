@@ -400,6 +400,27 @@ pub const EPOCH_54_DEFENSE_RATING: u32 = 54;
 /// (charging-scoped AP, forced displacement) still skip. Below 51 the kind
 /// filter stands and every recorded corpus replays byte-exact.
 pub const EPOCH_52_UTILITY_SPELLS: u32 = 52;
+/// The GROUNDED PROTECTION gate (14.09., STANDALONE_SWEEP_F_2026-09-14 row
+/// `Grounded Protection`, DIVERGES on both layers vs the book): the registry
+/// entry `Regeneration | ignore_target=5, all_models=true,
+/// terrain_within_in=1` (aof volcanic_dwarves / wood_elves; aofr, aofs) — the
+/// "within 1 inch of terrain" condition is the rule's whole point, and BOTH
+/// layers read `all_models` + `ignore_target` only (unit.rs `regen_targets`'s
+/// alias wave, the table's `_solo_regen_pick` walk), so the protection
+/// applied in the open too. From 55 the alias wave's terrain-gated entries
+/// (`terrain_within_in > 0`) hold their target ASIDE on `Ctx::regen_pending`
+/// (below 56 the recorded flat fold replays byte-exact), and `sim::ctx_live`
+/// resolves it per save moment on the snapshot's own `in_cover` — the
+/// Shielded family's terrain-pending resolution, the table's
+/// `_solo_majority_in_cover` gate in `_solo_regen_pick` is the twin. Both
+/// verdicts trace (rules-must-log). `55` is one past every epoch present at
+/// the rebase (54 = `EPOCH_54_DEFENSE_RATING`, #976; 53 the fortifiedaura
+/// leg in flight; 52 = `EPOCH_52_UTILITY_SPELLS`, #975; the reservation 52
+/// lost two renumber races and moved to CURRENT+1 per the epoch rules), and
+/// the value `CURRENT_RULES_EPOCH` is bumped to in the same change. Every
+/// call site reads THIS constant, not the literal `55` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_56_GROUNDED_PROTECTION: u32 = 56;
 
 /// The FORTIFIED AURA gate (14.09., sweep F — row `Fortified Aura`): the
 /// aofs/gff aura entries ("Fortified Aura", "Guardian Boost Aura") are
@@ -426,7 +447,7 @@ pub const EPOCH_52_UTILITY_SPELLS: u32 = 52;
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_55_FORTIFIED_AURA: u32 = 55;
 
-pub const CURRENT_RULES_EPOCH: u32 = 55;
+pub const CURRENT_RULES_EPOCH: u32 = 56;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -1547,7 +1568,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 55, "the live epoch is 55 (EPOCH_55_FORTIFIED_AURA, CURRENT+1 at the rebase — the gate refuses any new constant below the live epoch; the newest gate constant bumps it per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 56, "the live epoch is 56 (the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1557,11 +1578,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":55}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":56}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 55"
+            "a fresh play_game() now stamps the bumped epoch, 56"
         );
     }
 

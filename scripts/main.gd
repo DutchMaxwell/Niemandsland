@@ -6829,6 +6829,12 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 	var pick := _solo_regen_pick(target, from_spell)
 	_solo_takedown_solo = {}
 	var regen_target: int = int(pick.get("target", 0))
+	# Rules-must-log: the regen trace names the verdict (the Grounded
+	# Protection family's within-1" condition — fired or refused). Logged
+	# before the roll so the open's refusal is visible where no roll happens.
+	var trace := str(pick.get("trace", ""))
+	if not trace.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s — %s" % [target.get_name(), trace], true)
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
 	var faces: Array = await _solo_tray_roll(wounds, regen_target, _solo_owner_label(target), "regeneration",
@@ -6885,7 +6891,11 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 			best_name = "resistance"
 	# Coverage wave (2026-07-23): DATA aliases of the family (Plaguebound/Protected 6+, Knightborn
 	# 6+/4+ vs spells, …) via the generic primitive layer — all_models entries require the whole
-	# unit to carry the rule, exactly like Self-Repair.
+	# unit to carry the rule, exactly like Self-Repair. Grounded Protection's condition (sweep F
+	# 2026-09-14): an entry with `terrain_within_in > 0` folds ONLY on the same majority-in-cover
+	# read its Shielded twin answers (main.gd:5588) — and the verdict is traced (rules-must-log).
+	var best_terr := 0.0
+	var open_refused := ""
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Regeneration"):
 		var ed := e as Dictionary
 		var n := str(ed["name"])
@@ -6894,12 +6904,23 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 		var params: Dictionary = ed.get("params", {})
 		if bool(params.get("all_models", false)) and not _solo_rule_on_all_models(target, n):
 			continue
+		var terr_in := float(params.get("terrain_within_in", 0.0))
+		if terr_in > 0.0 and not _solo_majority_in_cover(target):
+			if open_refused.is_empty():
+				open_refused = n
+			continue
 		var key2 := "ignore_target_spell" if from_spell else "ignore_target"
 		var tgt := int(params.get(key2, params.get("ignore_target", 0)))
 		if tgt > 0 and (best == 0 or tgt < best):
 			best = tgt
 			best_name = n
-	return {"target": best, "name": best_name}
+			best_terr = terr_in
+	var trace := ""
+	if best_name != "" and best_terr > 0.0:
+		trace = "%s: within %d\" of terrain -> Regeneration %d+" % [best_name, int(best_terr), best]
+	elif open_refused != "":
+		trace = "%s: in the open -> no Regeneration" % open_refused
+	return {"target": best, "name": best_name, "trace": trace}
 
 
 ## Banner's morale-test bonus for a unit — gap 18a: the body now lives in

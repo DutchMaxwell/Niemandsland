@@ -64,18 +64,16 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 55 (acts::EPOCH_55_FORTIFIED_AURA, sweep F row
-    # `Fortified Aura`: the aofs/gff aura entries' lost_if_bearer_killed and
-    # max_picks are read on both layers — a fallen bearer stands the squad's
-    # AP(-1) down, the pick cap refuses the 4th pick; 54 was #976's
-    # Defense-rating leg, 52 #975's utility-kind leg, 51 #972's
-    # caster-interference leg, 50 #973's Surge leg, 48 #966's Caster-Boost
-    # leg, 47 #968's Rending-Aura leg, 46 #967's Disintegrate leg; the first
-    # rebase took 53, the second rebase's window landed 52 and 54, so the
-    # gate's rule moves the number to CURRENT+1): explicit, not just
-    # dynamic — a fresh game now stamps 55, not 54.
-    # A record already stamped 54 must never be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 55
+    # core rules epoch 56 (acts::EPOCH_56_GROUNDED_PROTECTION, sweep F row
+    # `Grounded Protection`: the alias fold holds the terrain-gated target
+    # aside and sim::ctx_live resolves it per save moment on the snapshot's
+    # in_cover; 54 was #976's Defense-Rating leg, 52 #975's Utility-Spells
+    # leg, 51 #972's Caster-Interference leg, 50 #973's Surge-Low leg, 48
+    # #966's Caster-Boost leg, 47 #968's Rending-Aura leg, 46 #967's
+    # Disintegrate leg): explicit, not just dynamic — a fresh game now stamps
+    # 55, not 54. A record already stamped 54 must never be mistaken for a
+    # fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 56
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)

@@ -117,6 +117,15 @@ const EPOCH_35_UNSTOPPABLE_MELEE := 35
 ## every recorded game was stamped with. The core's own gate reads the
 ## frozen `EPOCH_50_SURGE_LOW` (acts.rs); this mirror never re-dates itself.
 const EPOCH_50_SURGE_LOW := 50
+## The frozen gate of the GROUNDED PROTECTION fold (epoch 56, the sweep F fix
+## — row `Grounded Protection`): `Regeneration | ignore_target=5,
+## all_models=true, terrain_within_in=1` — the alias fold holds the
+## terrain-gated target aside and the save-moment verdict (majority within
+## 1" of terrain, the Shielded twin's read) resolves it. Below it the alias
+## replays the flat 5+ fold every recorded game was stamped with. The core's
+## own gate reads the frozen `EPOCH_56_GROUNDED_PROTECTION` (acts.rs); this
+## mirror never re-dates itself.
+const EPOCH_56_GROUNDED_PROTECTION := 56
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
 ## Bumped to 48 in the same diff as the core's EPOCH_48_CASTER_BOOST (wave 6
@@ -137,7 +146,12 @@ const EPOCH_50_SURGE_LOW := 50
 ## lost_if_bearer_killed/max_picks are read on both layers; renumbered
 ## 53 -> 55 at the second rebase, the gate refuses any new constant below
 ## the live epoch).
-static var rules_epoch: int = 55
+## core's EPOCH_54_DEFENSE_RATING (sweep E 2026-09-14, row `Defense` — the
+## Shielded walk takes the bonus from the rule's rating), then to 55 in the
+## same diff as the core's EPOCH_56_GROUNDED_PROTECTION (sweep F 2026-09-14,
+## row `Grounded Protection` — the within-1" verdict is no longer dead data
+## on the Regeneration fold).
+static var rules_epoch: int = 56
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
