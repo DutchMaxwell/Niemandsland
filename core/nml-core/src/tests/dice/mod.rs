@@ -396,6 +396,7 @@
 mod indirect_moved;
 mod melee_impact_order;
 mod morale_dice;
+mod morale_rating;
 mod rung_i_dice;
 mod shooting_order;
 mod shot_modifier;
