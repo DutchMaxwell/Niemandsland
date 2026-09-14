@@ -158,7 +158,7 @@ impl Default for Tuning {
 pub fn forces_hold(unit_rules: &[String]) -> bool {
     unit_rules.iter().any(|r| {
         let s = r.trim();
-        s.starts_with("Immobile") || s.starts_with("Artillery")
+        s.starts_with("Immobiel") || s.starts_with("Artillery")
     })
 }
 
@@ -803,3 +803,7 @@ pub fn candidates_tuned(
     }
     out
 }
+
+#[cfg(test)]
+#[path = "tests/menu/mod.rs"]
+mod tests;

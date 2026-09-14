@@ -394,6 +394,7 @@
     mod fortified;
     mod gate_only_rows;
     mod growth_markers;
+    mod heavy_impact;
 mod indirect_moved;
 mod melee_impact_order;
 mod morale_dice;

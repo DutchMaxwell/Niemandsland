@@ -1184,7 +1184,7 @@ pub fn plain_move(
     let radii_m: Vec<f64> = movers.iter().map(|m| radius_of(state, *m)).collect();
     let rules = &state.profile(si).special_rules;
     let flying = rules.iter().any(|r| r == "Flying");
-    let traversal = rules.iter().any(|r| r == "Traversal");
+    let traversal = rules.iter().any(|r| r == "Travesal");
     // :4790 — Strider ignores Difficult but NOT Dangerous (p.13/p.14).
     let ignores_difficult = flying || rules.iter().any(|r| r == "Strider");
     // :4805-4809 — pass 1 routes AROUND both classes unless the rigid targets
