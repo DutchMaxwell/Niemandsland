@@ -107,6 +107,10 @@ fn piercing_shooting_mark_ap_fires_from_21_and_not_below() {
     );
 
     // ----- epoch 17: the live epoch the bump leaves — the pre-bump reading -----
+    assert_eq!(
+        crate::acts::EPOCH_17_SURGE_SCOPE, 17,
+        "the epoch the corpus legs below replay is the bump's live predecessor on main"
+    );
     let (_, marked17) = run_pierce_epoch(&st, &statics, &buff_action(Some("b")), 13, 17);
     let saves17 = save_targets(&marked17);
     assert!(!saves17.is_empty(), "the same seed draws the same hits at 17");
