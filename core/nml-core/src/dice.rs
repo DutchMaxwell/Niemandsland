@@ -1303,7 +1303,7 @@ fn melee_hit_target(
     charge_from_in: f64, screened_melee: bool,
 ) -> (i64, bool) {
     if att.fatigued {
-        return UNMODIFIED_SIX;
+        return (UNMODIFIED_SIX, false);
     }
     // Wave 4 follow-up (port-takedown-strike) — the synthetic bonus group
     // strikes at its OWN Quality (main.gd:16772: `"quality": extra_attack_q`),
