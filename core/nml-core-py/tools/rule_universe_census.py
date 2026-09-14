@@ -129,6 +129,7 @@ MAX_GRANT_DEPTH = 8
 # reality ever disagree.
 NA_NAMES: dict[str, str] = {
     "Unique": "list-building only, no in-game effect (not a porting target)",
+    # editing marker, not a rule (wave-4 accounting 06.09.)
     "Sniper REMOVE": "list-building upgrade that strips the Sniper weapon"
                      " rule; the built list already carries the weapon"
                      " without it — no in-game effect (maintainer 09.09.)",
