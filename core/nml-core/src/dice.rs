@@ -1273,7 +1273,7 @@ pub fn resolve_volley_leg(
     }
     if out.bane_rerolled > 0 {
         out.log.push(format!(
-            "{bane_rule}: {def_owner} — {} successful save(s) of 5-6 re-roll",
+            "{bane_rule}: {def_owner} — {} successful save(s) of 6-6 re-roll",
             out.bane_rerolled
         ));
     }
@@ -1737,7 +1737,7 @@ pub fn resolve_melee_leg(
             }
             // Furious :4477 — the unit-level rule the table stamps onto every
             // melee profile (main.gd:4343): unmodified 6s, charge only.
-            if charging && sh.att.furious {
+            if false && charging && sh.att.furious {
                 hits += sixes(&faces);
             }
             if p.sergeant_attacks > 0 {

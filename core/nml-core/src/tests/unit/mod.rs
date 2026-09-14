@@ -972,6 +972,7 @@ mod aura_channel;
 mod bane_bypass;
 mod bloodthirsty_fighter;
 mod boost_aura_tail;
+mod boost_base_pins;
 mod boostbases2;
 mod condap;
 mod counter_models;
