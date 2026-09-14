@@ -21,6 +21,7 @@ use super::*;
         let (st, mut statics) = vr_charge_line(8.5);
         statics[1].ctx.stealth_alias_penalty = 1;
         statics[1].ctx.stealth_alias_over_in = 9.0;
+        statics[1].ctx.stealth_alias_applies_charged = true;
         (st, statics)
     }
 

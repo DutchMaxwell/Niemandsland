@@ -49,7 +49,7 @@ use super::*;
         let seams = Seams { rules_epoch: crate::acts::EPOCH_13_WHO_WINS, ..Default::default() };
         let mut tray = Tray::seeded(27);
         let mut shot = ShootResult::default();
-        tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot);
+        tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0);
         assert!(
             !shot.rolls.is_empty(),
             "the charge melee must roll at all"
@@ -102,7 +102,7 @@ use super::*;
         let seams = Seams { rules_epoch: 12, ..Default::default() };
         let mut tray = Tray::seeded(27);
         let mut shot = ShootResult::default();
-        tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot);
+        tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0);
         assert!(
             !shot.rolls.is_empty(),
             "the charge melee must roll at all"

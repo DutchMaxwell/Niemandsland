@@ -62,11 +62,11 @@ use super::*;
         p.reliable = true;
         p.thrust = true;
         let att = Ctx { quality: 5, models: 1, ..Default::default() };
-        assert_eq!(melee_hit_target(&p, &att, &defender(4, 1), true, 0), 2,
+        assert_eq!(melee_hit_target(&p, &att, &defender(4, 1), true, 0, 0.0, false), 2,
                    "Reliable 2+, and Thrust cannot go below the 2+ floor");
         let tired = Ctx { fatigued: true, ..att };
-        assert_eq!(melee_hit_target(&p, &tired, &defender(4, 1), true, 0), 6);
-        assert_eq!(melee_hit_target(&p, &tired, &defender(4, 1), true, 1), 6,
+        assert_eq!(melee_hit_target(&p, &tired, &defender(4, 1), true, 0, 0.0, false), 6);
+        assert_eq!(melee_hit_target(&p, &tired, &defender(4, 1), true, 1, 0.0, false), 6,
                    "Unpredictable's +1 must not turn a fatigued 6 into a 5");
     }
 
@@ -80,14 +80,14 @@ use super::*;
         p.unstoppable = true;
         let att = Ctx { quality: 6, models: 1, ..Default::default() };
         let evasive = Ctx { evasive: true, ..defender(4, 1) };
-        assert_eq!(melee_hit_target(&p, &att, &evasive, false, 1), 6,
+        assert_eq!(melee_hit_target(&p, &att, &evasive, false, 1, 0.0, false), 6,
                    "the sum is 0, so the target stays the unmodified Quality");
         // RED: the two-step form the port used before.
         let two_step = modified_hit_target(
             modified_hit_target(6, { let m = -1i64; if m < 0 { 0 } else { m } }), 1);
         assert_eq!(two_step, 5, "clamping twice is one target too generous");
         let plain = Ctx { quality: 6, models: 1, ..Default::default() };
-        assert_eq!(melee_hit_target(&blade(1), &plain, &evasive, false, 0), 6,
+        assert_eq!(melee_hit_target(&blade(1), &plain, &evasive, false, 0, 0.0, false), 6,
                    "without Unstoppable the -1 still cannot push past the 6+ ceiling");
     }
 
