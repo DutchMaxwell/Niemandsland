@@ -915,7 +915,12 @@ pub fn resolve_volley_leg(
             // stamped only under the frozen EPOCH_6_TABLE_RULES gate): BOTH
             // arms instead of the pick. The flag rides the same stamp the
             // generic buff rides, so a pre-epoch-6 record keeps the pick.
-            let (hit_mod, ap_mod) = if p.versatile_both {
+            // EPOCH_38_WATCHBORN_LATCH — a latched activation pick rides the
+            // Ctx (sim::versatile_latch): ONE pick per activation, no
+            // per-volley re-decision; the pick line was logged at the stamp.
+            let (hit_mod, ap_mod) = if att.versatile_latched {
+                (att.versatile_pick_hit, att.versatile_pick_ap)
+            } else if p.versatile_both {
                 (1, 1)
             } else {
                 versatile_best_mode(
@@ -929,8 +934,10 @@ pub fn resolve_volley_leg(
             target = modified_hit_target(target, hit_mod);
             // Rules-must-log — only the wave-3 NAMED family forms log (the
             // named arm's stamp); the generic stamps stay silent, so every
-            // earlier epoch's replay is byte-identical.
-            if !p.versatile_name.is_empty() {
+            // earlier epoch's replay is byte-identical. At 36 the latched
+            // activation already named its pick at the stamp — once per
+            // activation, never per volley.
+            if !p.versatile_name.is_empty() && !att.versatile_latched {
                 let what = if p.versatile_both {
                     "AP(+1) and +1 to hit"
                 } else if ap_mod > 0 {
@@ -1613,7 +1620,13 @@ pub fn resolve_melee_leg(
             }
             // Wave 4 — the unconditional -1 rode this strike's to-hit sum.
             evasive_boost_fired |= def.evasive_alias;
-            let (target, unstop_grant_clamped) = melee_hit_target(
+            // EPOCH_38_WATCHBORN_LATCH — the melee half the planner already
+            // counted (`profile_ev`'s `!melee || charging` leg): the latched
+            // pick reaches the melee fold for charges from over 9", the
+            // volley fold's pick read mirrored. Fatigue keeps the
+            // unmodified-6 target (main.gd:6159's order); the AP half folds.
+            let mut versatile_ap = 0;
+            let (mut target, unstop_grant_clamped) = melee_hit_target(
                 p, sh.att, def, charging, uf_hit, charge_from_in, screened_melee,
             );
             // EPOCH 34 UNSTOPPABLE MARK — the melee clamp half's rules-must-log
@@ -1621,6 +1634,16 @@ pub fn resolve_melee_leg(
             if unstop_grant_clamped {
                 out.log.push(format!(
                     "Unstoppable: {} — negative to-hit modifiers ignored (once)", sh.owner));
+            }
+            if sh.att.versatile_latched
+                && charging
+                && charge_from_in > LONG_RANGE_IN
+                && (p.versatile_attack || sh.att.versatile_grant)
+            {
+                if !sh.att.fatigued {
+                    target = modified_hit_target(target, sh.att.versatile_pick_hit);
+                }
+                versatile_ap = sh.att.versatile_pick_ap;
             }
             let faces = tray.roll(n as usize);
             out.rolls.push(Roll {
@@ -1673,7 +1696,7 @@ pub fn resolve_melee_leg(
             shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
-            let mut ap = p.ap + uf_ap + sh.att.growth_ap_mod
+            let mut ap = p.ap + uf_ap + versatile_ap + sh.att.growth_ap_mod
                 + sh.att.reckless_ap
                 // FEAT PR 3 — Piercing Feat's once-per-game window, the melee
                 // half of the volley seam's stamp (see the volley fold above).

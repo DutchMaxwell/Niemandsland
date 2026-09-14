@@ -852,6 +852,8 @@ pub(crate) fn state_of(
         reckless_rolled_round: vec![-1; n],
         reckless_ap_round: vec![-1; n],
         reckless_backfire_round: vec![-1; n],
+        versatile_pick_round: vec![-1; n],
+        versatile_pick_mode: vec![0; n],
         retreating_strike_round: vec![-1; n],
         growth_markers: vec![0; n],
         vengeance_markers: vec![0; n],

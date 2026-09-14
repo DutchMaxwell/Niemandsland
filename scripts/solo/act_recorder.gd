@@ -49,7 +49,10 @@ static var spawn_profile_resolver: Callable = Callable()
 ## (sweep C 2026-09-14, row `Unstoppable in Melee`).
 ## Bumped to 37 in the same diff as the core's EPOCH_37_UNSTOPPABLE_AURA
 ## (sweep C 2026-09-14, row `Unstoppable when Shooting Aura`).
-static var rules_epoch: int = 37
+## Bumped to 38 in the same diff as the core's EPOCH_38_WATCHBORN_LATCH
+## (sweep C 2026-09-14, row `Watchborn` — one versatile pick per activation;
+## renumbered from the reserved 36 at rebase per the epoch rules).
+static var rules_epoch: int = 38
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the

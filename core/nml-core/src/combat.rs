@@ -500,10 +500,16 @@ pub fn profile_ev(
     let mut versatile_ap = 0;
     if p.versatile_attack && dist_in > LONG_RANGE_IN && (!melee || charging) {
         let choose_def = shielded_defense(def.defense, def.shielded);
-        // Wave 3 — the "Vinci Tech Boost" form (`pick_one: false`, stamped
-        // only under the frozen EPOCH_6_TABLE_RULES gate): BOTH arms instead
-        // of the pick, the same stamped flag the volley fold reads.
-        let (hit_mod, ap_mod) = if p.versatile_both {
+        // EPOCH_38_WATCHBORN_LATCH — a latched activation pick rides the Ctx
+        // (sim::versatile_latch): the EV reuses the FIRST eligible attack's
+        // pick instead of re-deciding per imagined attack.
+        let (hit_mod, ap_mod) = if att.versatile_latched {
+            (att.versatile_pick_hit, att.versatile_pick_ap)
+        } else if p.versatile_both {
+            // Wave 3 — the "Vinci Tech Boost" form (`pick_one: false`,
+            // stamped only under the frozen EPOCH_6_TABLE_RULES gate): BOTH
+            // arms instead of the pick, the same stamped flag the volley
+            // fold reads.
             (1, 1)
         } else {
             versatile_best_mode(target, choose_def, p.ap, p.bane)

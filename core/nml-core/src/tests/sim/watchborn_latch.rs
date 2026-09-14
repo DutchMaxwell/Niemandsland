@@ -1,6 +1,6 @@
 use super::*;
 
-// ---------------------- EPOCH_36_WATCHBORN_LATCH: one pick per ACTIVATION ---
+// ---------------------- EPOCH_38_WATCHBORN_LATCH: one pick per ACTIVATION ---
 
 /// Watchborn-shaped fixture: a single-model shooter "a" (Quality 4) with TWO
 /// versatile rifles over 9" from two single-model targets — "b" (plain
@@ -115,16 +115,16 @@ fn watchborn_run(
 /// The book (the `Versatile Attack`/`Versatile Reach` pair): "When this unit
 /// is activated, pick one effect ... until the end of the activation" — ONE
 /// pick per activation, so the second volley of the same activation rides the
-/// first pick even where its own EV-best differs. At 36 the recorded roll
+/// first pick even where its own EV-best differs. At 38 the recorded roll
 /// targets prove it: both volleys roll the first pick's +1-to-hit target (3+)
 /// and the activation names the pick exactly once. RED against the per-volley
 /// re-decision: the shielded second volley re-decides to AP(+1) and rolls 4+.
 #[test]
-fn two_volleys_of_one_activation_keep_one_pick_at_36() {
+fn two_volleys_of_one_activation_keep_one_pick_at_38() {
     let (st, statics) = watchborn_volley_line();
     let act = watchborn_split_action();
 
-    let new_leg = watchborn_run(&st, &statics, &act, 36);
+    let new_leg = watchborn_run(&st, &statics, &act, crate::acts::EPOCH_38_WATCHBORN_LATCH);
     let picks: Vec<&String> = new_leg.log.iter().filter(|l| l.contains("picks")).collect();
     assert_eq!(picks.len(), 1, "rules-must-log: ONE pick line per activation, got {picks:?}");
     let volley_targets: Vec<i64> = new_leg
@@ -140,7 +140,7 @@ fn two_volleys_of_one_activation_keep_one_pick_at_36() {
          and the shielded second volley REUSES it — no per-volley re-decision"
     );
 
-    let old_leg = watchborn_run(&st, &statics, &act, crate::acts::EPOCH_33_REDEPLOYMENT);
+    let old_leg = watchborn_run(&st, &statics, &act, crate::acts::EPOCH_37_UNSTOPPABLE_AURA);
     let old_targets: Vec<i64> = old_leg
         .rolls
         .iter()
@@ -223,7 +223,7 @@ fn a_charge_over_nine_inches_carries_the_pick_into_the_melee_fold() {
         teleport: None,
     };
 
-    let new_leg = watchborn_run(&st, &statics, &act, 36);
+    let new_leg = watchborn_run(&st, &statics, &act, crate::acts::EPOCH_38_WATCHBORN_LATCH);
     let strike_targets: Vec<i64> = new_leg
         .rolls
         .iter()
@@ -237,7 +237,7 @@ fn a_charge_over_nine_inches_carries_the_pick_into_the_melee_fold() {
          Defense 4 is +1 to hit, and the picked bonus reaches the MELEE dice fold (3+)"
     );
 
-    let old_leg = watchborn_run(&st, &statics, &act, crate::acts::EPOCH_33_REDEPLOYMENT);
+    let old_leg = watchborn_run(&st, &statics, &act, crate::acts::EPOCH_37_UNSTOPPABLE_AURA);
     let old_targets: Vec<i64> = old_leg
         .rolls
         .iter()

@@ -506,6 +506,19 @@ pub struct State {
     pub reckless_rolled_round: Vec<i64>,
     pub reckless_ap_round: Vec<i64>,
     pub reckless_backfire_round: Vec<i64>,
+    /// EPOCH_38_WATCHBORN_LATCH — `unit_properties["versatile_pick_round"]`
+    /// (the table's own per-unit round stamp): the round this unit made its
+    /// once-per-ACTIVATION Versatile pick, -1 for never. One act per unit per
+    /// round makes the round comparison the activation latch — the
+    /// `hit_and_run_round` shape, no sweep needed. Read by the volley fold,
+    /// the melee fold's versatile leg and the EV planner (`combat::profile_ev`)
+    /// through the latched pick `sim::versatile_latch` stamps into the
+    /// member's `Ctx`.
+    pub versatile_pick_round: Vec<i64>,
+    /// The latched pick of `versatile_pick_round`: 0 = none, 1 = +1 to hit,
+    /// 2 = AP(+1) — the EV-best mode the FIRST eligible attack of the
+    /// activation decided, reused by every later volley/charge of it.
+    pub versatile_pick_mode: Vec<i64>,
     /// Wave 4 follow-up — `unit_properties["retreating_strike_round"]`
     /// (main.gd:5861/:5866): the once-per-ROUND stamp of the Retreating
     /// Strike, per bearer, -1 for never; the `hit_and_run_round` shape.
