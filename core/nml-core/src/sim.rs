@@ -1102,7 +1102,7 @@ fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff, rules_epoch: u32) 
         scope: Rc::from(b.scope.as_str()),
         attackers: b.beneficiary == "attackers",
         once: b.once,
-        name: Rc::from(b.name.as_str()),
+        name: Rc::from(""),
     });
     if widened {
         trace_rule("utility-buff", &b.name, "ap/def row recorded (epoch 7)");

@@ -1538,6 +1538,7 @@ mod caster_boost;
 mod caster_interference;
 mod casting_debuff;
 mod courage_buff;
+mod utility_buff_family;
 mod utility_spells;
 mod counter_first;
 mod crossing_attack;
