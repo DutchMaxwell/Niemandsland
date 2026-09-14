@@ -133,21 +133,21 @@ use super::*;
         let mut st_aura = st.clone();
         st_aura.buffs[0][0].scope = Rc::from("shooting");
 
-        let at_37 = ctx_live(statics[0].ctx.clone(), &statics, &st_aura, 0, false, 37);
+        let at_37 = ctx_live(statics[0].ctx, &statics, &st_aura, 0, false, 37);
         assert!(at_37.unstoppable_aura, "the aura record arms the SHOOTING clamp");
         assert!(!at_37.unstoppable_mark, "the aura record does not arm the mark stamp");
         assert!(!at_37.unstoppable_regen_melee, "the aura record does not answer melee Regeneration");
-        let at_37_melee = ctx_live(statics[0].ctx.clone(), &statics, &st_aura, 0, true, 37);
+        let at_37_melee = ctx_live(statics[0].ctx, &statics, &st_aura, 0, true, 37);
         assert!(!at_37_melee.unstoppable_mark, "the aura record does not arm the MELEE clamp");
 
-        let at_34 = ctx_live(statics[0].ctx.clone(), &statics, &st_aura, 0, false, 34);
+        let at_34 = ctx_live(statics[0].ctx, &statics, &st_aura, 0, false, 34);
         assert!(!at_34.unstoppable_aura, "below 37 the aura stamp does not exist");
         assert!(at_34.unstoppable_mark, "below 37 the mark stamp is the scope-blind union");
 
-        let at_37_unscoped = ctx_live(statics[0].ctx.clone(), &statics, &st, 0, false, 37);
+        let at_37_unscoped = ctx_live(statics[0].ctx, &statics, &st, 0, false, 37);
         assert!(!at_37_unscoped.unstoppable_aura, "an unscoped record is not the aura");
         assert!(at_37_unscoped.unstoppable_mark, "an unscoped record arms the mark stamp");
         assert!(at_37_unscoped.unstoppable_regen_melee, "an unscoped record answers melee Regeneration");
-        let at_34_unscoped = ctx_live(statics[0].ctx.clone(), &statics, &st, 0, false, 34);
+        let at_34_unscoped = ctx_live(statics[0].ctx, &statics, &st, 0, false, 34);
         assert!(at_34_unscoped.unstoppable_regen_melee, "below 37 the melee answer is the union");
     }
