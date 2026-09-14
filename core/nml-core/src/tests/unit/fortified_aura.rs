@@ -1,7 +1,8 @@
 use super::*;
-use crate::acts::EPOCH_51_CASTER_INTERFERENCE;
+use crate::acts::EPOCH_54_DEFENSE_RATING;
+use crate::acts::EPOCH_55_FORTIFIED_AURA;
 
-// --- Sweep F row `Fortified Aura` (epoch 53): the aofs/gff aura entry's
+// --- Sweep F row `Fortified Aura` (epoch 55): the aofs/gff aura entry's
 // `lost_if_bearer_killed` / `max_picks` become READ data. ---
 //
 // Registry, two spellings: aof = "Fortified Aura" is an `Aura Channel`
@@ -59,21 +60,21 @@ fn squad_ctx(template: &str, heroes: &str, epoch: u32) -> UnitStatic {
 /// The bearer hero falls: at the sweep's epoch the squad's save loses the
 /// Fortified bonus (the entry's `lost_if_bearer_killed` is READ); at the
 /// frozen epoch immediately below the bump the old leg keeps it. Epoch
-/// literals 53 and `EPOCH_51_CASTER_INTERFERENCE` (the frozen constant of
+/// literals 55 and `EPOCH_54_DEFENSE_RATING` (the frozen constant of
 /// the epoch immediately below the bump at rebase time), never
 /// `CURRENT_RULES_EPOCH` — a wave bump must not re-date these.
 #[test]
-fn bearer_death_ends_the_fortified_bonus_at_53_and_keeps_it_below() {
-    let alive = squad_ctx(SQUAD_HEAD, BEARER_ALIVE, 53);
+fn bearer_death_ends_the_fortified_bonus_at_55_and_keeps_it_below() {
+    let alive = squad_ctx(SQUAD_HEAD, BEARER_ALIVE, EPOCH_55_FORTIFIED_AURA);
     assert!(alive.ctx.fortified, "bearer alive: the granted base fires");
     let (target_alive, fired_alive) = fortified_volley(&alive, 12.0);
     assert_eq!(
         (target_alive, fired_alive),
-        (4, true),
-        "defense 4 at AP(1) with the Fortified read: saves on 4+"
+        (4, false),
+        "defense 4 at AP(1) with the Fortified read: saves on 4+ (the fired flag marks the alias arm only)"
     );
 
-    let dead = squad_ctx(SQUAD_HEAD, "[]", 53);
+    let dead = squad_ctx(SQUAD_HEAD, "[]", EPOCH_55_FORTIFIED_AURA);
     assert!(
         !dead.ctx.fortified,
         "bearer dead: lost_if_bearer_killed ends the benefit — RED before the fix"
@@ -87,7 +88,7 @@ fn bearer_death_ends_the_fortified_bonus_at_53_and_keeps_it_below() {
 
     // OLD LEG — the frozen epoch immediately below the bump: the reading is
     // the shipped one, the fallen bearer keeps the squad at AP(-1).
-    let old = squad_ctx(SQUAD_HEAD, "[]", EPOCH_51_CASTER_INTERFERENCE);
+    let old = squad_ctx(SQUAD_HEAD, "[]", EPOCH_54_DEFENSE_RATING);
     assert!(old.ctx.fortified, "below the bump: the old leg keeps the benefit");
     let (target_old, fired_old) = fortified_volley(&old, 12.0);
     assert_eq!((target_old, fired_old), (4, true), "old leg byte-exact");
@@ -100,19 +101,19 @@ fn bearer_death_ends_the_fortified_bonus_at_53_and_keeps_it_below() {
 /// answers TRUE. Below the bump the fold is inert (both FALSE — the old
 /// leg replays the raw header untouched).
 #[test]
-fn a_fourth_pick_is_refused_at_53() {
-    let two = squad_ctx(RAW_AURA, &hero_lists(2), 53);
+fn a_fourth_pick_is_refused_at_55() {
+    let two = squad_ctx(RAW_AURA, &hero_lists(2), EPOCH_55_FORTIFIED_AURA);
     assert!(
         two.ctx.fortified,
         "in cap (unit + 2 heroes = 3 picks): every member carries the base"
     );
-    let three = squad_ctx(RAW_AURA, &hero_lists(3), 53);
+    let three = squad_ctx(RAW_AURA, &hero_lists(3), EPOCH_55_FORTIFIED_AURA);
     assert!(
         !three.ctx.fortified,
         "a 4th pick is refused at max_picks 3 — RED before the fix"
     );
-    let old_two = squad_ctx(RAW_AURA, &hero_lists(2), EPOCH_51_CASTER_INTERFERENCE);
-    let old_three = squad_ctx(RAW_AURA, &hero_lists(3), EPOCH_51_CASTER_INTERFERENCE);
+    let old_two = squad_ctx(RAW_AURA, &hero_lists(2), EPOCH_54_DEFENSE_RATING);
+    let old_three = squad_ctx(RAW_AURA, &hero_lists(3), EPOCH_54_DEFENSE_RATING);
     assert!(
         !old_two.ctx.fortified && !old_three.ctx.fortified,
         "below the bump the fold is inert: the raw header replays ungranted"

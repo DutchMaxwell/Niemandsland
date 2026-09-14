@@ -30,7 +30,7 @@ use crate::acts::{
     EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST, EPOCH_35_UNSTOPPABLE_MELEE,
     EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL, EPOCH_43_BATTLEBORN_ROLL,
     EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
-    EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING,
+    EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -1570,7 +1570,19 @@ struct FortifiedAlias {
     alias_ap: i64,
     alias_over_in: f64,
     alias_name: String,
+    /// Sweep F row `Fortified Aura` (epoch 55) — the aofs/gff aura entries
+    /// ("Fortified Aura", "Guardian Boost Aura") ride the boost arm (their
+    /// `over_in` is absent, so 0.0); their OWN knobs, read off the entry.
+    aura_expand: bool,
+    max_picks: i64,
+    lost_if_bearer_killed: bool,
 }
+
+/// The aofs/gff aura entry's name — the `Fortified`-primitive entry with the
+/// `aura_expand` knobs (aof's same-named entry is an `Aura Channel` and
+/// carries none, so both reads below pass through unchanged there).
+const FORTIFIED_AURA_RULE: &str = "Fortified Aura";
+const FORTIFIED_AURA_BASE: &str = "Fortified";
 
 fn fortified_alias_of(reg: &mut Registries, p: &Profile) -> FortifiedAlias {
     let mut out = FortifiedAlias::default();
@@ -1590,6 +1602,15 @@ fn fortified_alias_of(reg: &mut Registries, p: &Profile) -> FortifiedAlias {
         }
         let ap = e.param_i("incoming_ap_reduction", 1);
         let over_in = e.param_f("over_in", 0.0);
+        // Sweep F row `Fortified Aura` (epoch 55) — the aura entry's own
+        // knobs, read wherever the entry resolves (the boost arm is where
+        // the aofs/gff auras land: no `over_in`).
+        if e.param_b("aura_expand") {
+            out.aura_expand = true;
+            out.max_picks = out.max_picks.max(e.param_i("max_picks", 0));
+            out.lost_if_bearer_killed =
+                out.lost_if_bearer_killed || e.param_b("lost_if_bearer_killed");
+        }
         if over_in <= 0.0 {
             if ap > out.boost_ap {
                 out.boost_ap = ap;
@@ -1602,6 +1623,93 @@ fn fortified_alias_of(reg: &mut Registries, p: &Profile) -> FortifiedAlias {
         }
     }
     out
+}
+
+/// Sweep F row `Fortified Aura` (epoch 55) — the bearer-liveness half of
+/// `lost_if_bearer_killed`, read behind the FROZEN gate: when the unit's
+/// (system, faction) fields the `aura_expand` + `lost_if_bearer_killed`
+/// `Fortified` entry, the bare base on this profile is aura-sourced, and a
+/// benefit without a living bearer is lost. The bearer is the unit itself
+/// (a carrier's own list) or an alive attached hero (`ProfileDyn` keeps
+/// ALIVE heroes only, so a fallen bearer's list is gone exactly when the
+/// table's chain read loses him). Every other shape answers true.
+fn fortified_aura_bearer_live(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, EPOCH_55_FORTIFIED_AURA) {
+        return true;
+    }
+    let e = match reg.rules_for(&p.game_system).lookup(&p.faction_folder, FORTIFIED_AURA_RULE) {
+        Some(e) => e,
+        None => return true,
+    };
+    if e.primitive.as_deref() != Some("Fortified")
+        || !e.param_b("aura_expand")
+        || !e.param_b("lost_if_bearer_killed")
+    {
+        return true;
+    }
+    if has_exact_rule(&p.special_rules, FORTIFIED_AURA_RULE)
+        || p.item_grants.iter().any(|r| base_rule_name(r) == FORTIFIED_AURA_RULE)
+    {
+        return true;
+    }
+    let live = p
+        .attached_hero_rules
+        .iter()
+        .any(|hr| hr.iter().any(|r| base_rule_name(r) == FORTIFIED_AURA_RULE));
+    if !live {
+        crate::sim::trace_rule(
+            "fortified-aura",
+            &p.name,
+            "Fortified Aura: bearer killed -> benefit lost",
+        );
+    }
+    live
+}
+
+/// Sweep F row `Fortified Aura` (epoch 55) — the core's own `aura_expand`
+/// leg for the aofs/gff spelling, chained after the Aura-Channel fold (a
+/// raw header carrying the aura entries resolves like an import-expanded
+/// one, the `expand_aura_channel` precedent). The chain's members (the
+/// unit, then each attached hero's list — the loader's own grant order)
+/// receive the granted base up to the entry's `max_picks`; the pick past
+/// the cap is REFUSED (the book's "up to 3 picked units"). Idempotent with
+/// the import expansion: an already-granted member is not a pick.
+fn apply_fortified_aura_picks(reg: &mut Registries, p: &mut Profile, rules_epoch: u32) {
+    if !rule_on(rules_epoch, EPOCH_55_FORTIFIED_AURA) {
+        return;
+    }
+    let e = match reg.rules_for(&p.game_system).lookup(&p.faction_folder, FORTIFIED_AURA_RULE) {
+        Some(e) => e,
+        None => return,
+    };
+    if e.primitive.as_deref() != Some("Fortified") || !e.param_b("aura_expand") {
+        return;
+    }
+    let max_picks = e.param_i("max_picks", 0).max(0);
+    if max_picks <= 0 {
+        return;
+    }
+    let mut picks: Vec<String> = Vec::new();
+    if !p.special_rules.iter().any(|r| r == FORTIFIED_AURA_BASE)
+        && (picks.len() as i64) < max_picks
+    {
+        p.special_rules.push(FORTIFIED_AURA_BASE.to_string());
+        picks.push(p.name.clone());
+    }
+    for hero in p.attached_hero_rules.iter_mut() {
+        if hero.iter().any(|r| r == FORTIFIED_AURA_BASE) || (picks.len() as i64) >= max_picks {
+            continue;
+        }
+        hero.push(FORTIFIED_AURA_BASE.to_string());
+        picks.push(format!("hero #{}", picks.len()));
+    }
+    if !picks.is_empty() {
+        crate::sim::trace_rule(
+            "fortified-aura",
+            &p.name,
+            &format!("Fortified Aura: {} picks -> {}", picks.len(), picks.join(", ")),
+        );
+    }
 }
 
 /// `RulesRegistry.unit_rule_active` rules_registry.gd:132-137 — the unit carries
@@ -2463,7 +2571,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         evasive_alias: !evasive_boost.is_empty(),
         evasive_alias_name: evasive_boost,
         melee_evasion: rule_on_all_models(p, "Melee Evasion"),
-        fortified: rule_on_all_models(p, "Fortified"),
+        fortified: rule_on_all_models(p, "Fortified")
+            && fortified_aura_bearer_live(reg, p, rules_epoch),
         // WAVE 3 — stamped above, behind `EPOCH_6_TABLE_RULES`.
         fortified_boost_ap,
         fortified_alias_ap,
@@ -5481,6 +5590,10 @@ impl UnitStatic {
         // Shadowing `p` keeps every existing read site untouched.
         let mut p = p.clone();
         apply_aura_channel(reg, &mut p, rules_epoch);
+        // Sweep F row `Fortified Aura` (epoch 55) — the aofs/gff aura
+        // spelling's own fold: capped grants + the trace line, after the
+        // Aura-Channel fold so both additive legs see disjoint names.
+        apply_fortified_aura_picks(reg, &mut p, rules_epoch);
         let p = &p;
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
         stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch);
