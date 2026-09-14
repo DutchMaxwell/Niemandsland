@@ -3671,6 +3671,18 @@ fn tray_morale(
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
         + if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Hold the Line Boost") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
     ctx.no_retreat = ctx.no_retreat || mods::granted(state, i, "No Retreat");
+    // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
+    // that adds the rating names it, once per drawn die. A Shaken auto-fail
+    // draws no die and adds nothing, so it stays silent.
+    if us.ctx.morale_rating > 0 && !state.shaken[i] {
+        shot.log.push(format!(
+            "[Morale({})] {}: +{} to the morale test (passes on {}+)",
+            us.ctx.morale_rating,
+            us.name,
+            us.ctx.morale_rating,
+            morale_target(ctx.quality, ctx.morale_bonus)
+        ));
+    }
     // main.gd:8303 — the test die spends the morale once-mods it just used.
     // Placed after the call because `ctx` already carries the target it built.
     let (outcome, r) = crate::dice::resolve_morale_with_tray(
