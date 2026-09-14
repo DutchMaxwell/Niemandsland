@@ -1577,5 +1577,6 @@ mod spell_conduit;
 mod split_fire;
 mod strafing;
 mod terrain_debuff;
+mod unstoppable_aura;
 mod versatile_reach;
 mod weapons;
