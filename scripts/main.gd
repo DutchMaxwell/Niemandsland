@@ -17129,8 +17129,16 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 				# advance_in/rush_in record fields every "speed" spell read already consumes, so the
 				# +1" lands on Advance/Rush (and Charge off Rush) with no new record key or core seam.
 				var move_mod := int(sp.get("move_mod", 0))
+				# Defense Buff / Defense Debuff (STANDALONE_SWEEP_E): the registry spells the same
+				# knob twice — the friendly row `def_mod`, the enemy row `defense_mod` — and core
+				# folds both onto ONE axis (sim.rs record_buff + ledger: `r.def_mod + r.defense_mod`).
+				# The record carries the roll-bonus sign the save rung already consumes
+				# (_solo_defense_parts -> DEF_PART_TOKEN: working Defense -= bonus), so the debuff
+				# lands on the ENEMY pick's own Defense and the buff on the friendly one.
+				var def_mod := int(sp.get("def_mod", 0)) + int(sp.get("defense_mod", 0))
 				var modifier := {"hit_mod": int(sp.get("hit_mod", 0)), "casting_mod": int(sp.get("casting_mod", 0)),
-					"morale_mod": int(sp.get("morale_mod", 0)), "advance_in": move_mod, "rush_in": move_mod}
+					"morale_mod": int(sp.get("morale_mod", 0)), "def_mod": def_mod,
+					"advance_in": move_mod, "rush_in": move_mod}
 				# Wave 4 recon find: the buff data carries its own scope ("shooting"/"melee" —
 				# Precision Shooter/Fighter Buff) and AiSpell.mods_for honours it, but this record
 				# hard-coded "" — a shooting-only +1 silently applied in melee too.
@@ -17147,6 +17155,7 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 					if modifier["hit_mod"] != 0: bits.append("%+d to hit" % modifier["hit_mod"])
 					if modifier["casting_mod"] != 0: bits.append("%+d casting" % modifier["casting_mod"])
 					if modifier["morale_mod"] != 0: bits.append("%+d morale" % modifier["morale_mod"])
+					if modifier["def_mod"] != 0: bits.append("%+d Defense" % modifier["def_mod"])
 					if move_mod != 0: bits.append("%+d\" move" % move_mod)
 					if not str(sp.get("grants_rule", "")).is_empty(): bits.append("grants %s" % str(sp.get("grants_rule", "")))
 					_log_rule_event(BattleLog.Category.COMBAT, "%s: %s → %s (%s, once)" % [
