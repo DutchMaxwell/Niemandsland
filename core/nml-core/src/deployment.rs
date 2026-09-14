@@ -1515,7 +1515,7 @@ pub fn redeployment_pass(
             for o in occ.iter_mut() { if o.0 == side && o.1 == s.key { o.2.pos = spot; } }
             // `snappedf(gain_in, 0.1)` (:9812) — Godot's nearest-multiple snap.
             let gain_snapped = (gain_in / 0.1 + 0.5).floor() * 0.1;
-            sides[side].events.push(DeployEvent {
+            out.events.push(DeployEvent {
                 kind: "deploy".into(), unit: s.key.clone(), rule: REDEPLOY_RULE_TEXT.into(),
                 chosen: format!("re-placed {:.1}\" nearer a marker", gain_in),
                 why: "counter-deploy at game start".into(),
