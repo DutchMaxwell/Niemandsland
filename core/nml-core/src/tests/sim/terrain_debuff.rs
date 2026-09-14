@@ -89,7 +89,7 @@ use super::*;
         let mut rng = crate::rng::GodotRng::new(0);
         let (_next, shot) = resolve_stochastic_tray_on_board(
             &statics, &st, &advance_to(6.0), &t,
-            Seams { rules_epoch: 19, ..Seams::default() }, &mut rng, &mut tray,
+            Seams { rules_epoch: crate::acts::EPOCH_26_PLACE_D3, ..Seams::default() }, &mut rng, &mut tray,
         )
         .unwrap();
         assert!(
@@ -152,7 +152,7 @@ use super::*;
         let mut rng = crate::rng::GodotRng::new(0);
         let (next, _shot) = resolve_stochastic_tray_on_board(
             &statics, &st, &advance_to(12.0), &t,
-            Seams { movement: true, rules_epoch: 19, ..Seams::default() }, &mut rng, &mut tray,
+            Seams { movement: true, rules_epoch: crate::acts::EPOCH_26_PLACE_D3, ..Seams::default() }, &mut rng, &mut tray,
         )
         .unwrap();
         let moved_in = (next.positions[0][0][0] - st.positions[0][0][0]) / IN2M;
