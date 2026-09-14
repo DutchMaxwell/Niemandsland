@@ -1472,6 +1472,11 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# once-per-activation Utility Buff (round-stamped, so a unit that already bought it at the
 	# attack door is untouched).
 	await _solo_apply_utility_buffs(gu)
+	# Surprise Attack burst: YOUR bearer's first activation fires it too (STANDALONE_SWEEP_D
+	# 2026-09-14 — the burst lived only in the AI activation body). Same once-per-game latch
+	# (`surprise_attack_used`) and same descending auto pick the AI path uses; one log line
+	# names the rule either way.
+	await _solo_apply_surprise_attack(gu)
 	# Ambush Re-Deployment: YOUR unit's activation ends here (the activation marker IS the declaration),
 	# so this is where the once-per-game "may" is offered — before the AI answers with its reply.
 	await _solo_try_ambush_redeploy(gu)
@@ -17702,21 +17707,22 @@ static func surprise_attack_pick(candidates: Array) -> GameUnit:
 	return best
 
 
-## The burst itself: the AI activation's before-attacking slot (the same slot Storm Attack uses,
-## main.gd:1073), once per game per bearer = the first-activation trigger; the claim arm's human
-## path is #761's manual reserve flow (the solo-automation pattern). Params ride the registry
-## entry (range_in/trigger_target/ap, the #810 census rows) with the book text as defaults.
+## The burst itself: the before-attacking slot in the AI activation body (main.gd:1088, the same
+## slot Storm Attack uses) AND the human activation's tail — once per game per bearer = the
+## first-activation trigger, SEAT-AGNOSTIC since the human-burst fix (STANDALONE_SWEEP_D
+## 2026-09-14: the burst used to live in the AI body only, so the human's identical bearer never
+## struck). Params ride the registry entry (range_in/trigger_target/ap, the #810 census rows) with
+## the book text as defaults; the target is the descending auto pick for BOTH seats (v1 — no
+## click prompt for a once-per-activation enemy pick exists on the table yet).
 func _solo_apply_surprise_attack(unit: GameUnit) -> void:
-	if unit == null or opr_army_manager == null or solo_controller == null or not _solo_is_ai_unit(unit):
+	if unit == null or opr_army_manager == null or solo_controller == null:
 		return
 	var bearers: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		bearers = bearers + unit.get_attached_heroes()
 	for b in bearers:
 		var bu := b as GameUnit
-		if bu == null or bu.get_alive_count() == 0 or not bu.has_special_rule("Surprise Attack"):
-			continue
-		if bool(bu.unit_properties.get("surprise_attack_used", false)):
+		if not solo_controller.surprise_attack_bearer_ready(bu):
 			continue
 		var range_in := float(RulesRegistry.unit_param(bu, "Surprise Attack", "range_in", 6.0))
 		var trigger := int(RulesRegistry.unit_param(bu, "Surprise Attack", "trigger_target", 2))
