@@ -1535,6 +1535,7 @@ mod breath_score;
 mod buff_consumption_bridge;
 mod caster_boost;
 mod caster_interference;
+mod utility_spells;
 mod counter_first;
 mod deadly_landing;
 mod deathstrike;

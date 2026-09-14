@@ -124,12 +124,14 @@ const EPOCH_50_SURGE_LOW := 50
 ## the table; the leg's earlier reservation 45 was renumbered to CURRENT+1 at
 ## the rebase per the epoch rules). Bumped to 50 in the same diff as the
 ## core's EPOCH_50_SURGE_LOW (sweep F 2026-09-14, row `Great Sergeant` — the
-## printed 5-6 window is no longer dead data on the table's stamp loop).
-## Bumped to 49 in the same diff as the core's EPOCH_51_CASTER_INTERFERENCE
-## (wave 6 2026-09-14, CASTER_SEAM row 2 — the OPPOSING casters within 18" LoS
-## spend tokens to lower the announced cast one step per token, paid before
-## the roll; the boost pool's opposing-side mirror).
-static var rules_epoch: int = 51
+## printed 5-6 window is no longer dead data on the table's stamp loop), then
+## to 51 with the core's EPOCH_51_CASTER_INTERFERENCE (wave 6 2026-09-14,
+## CASTER_SEAM row 2 — the OPPOSING casters within 18" LoS spend tokens to
+## lower the announced cast one step per token, paid before the roll; the
+## boost pool's opposing-side mirror), then to 52 with the core's
+## EPOCH_52_UTILITY_SPELLS (CASTER_SEAM row 5 + port 3 — the cast sub-phase
+## maps the expressible utility-kind spell archetypes).
+static var rules_epoch: int = 52
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

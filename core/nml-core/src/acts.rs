@@ -366,7 +366,19 @@ pub const EPOCH_46_DISINTEGRATE_REGEN: u32 = 46;
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_50_SURGE_LOW: u32 = 50;
 
-pub const CURRENT_RULES_EPOCH: u32 = 51;
+pub const CURRENT_RULES_EPOCH: u32 = 52;
+
+/// The UTILITY-KIND SPELL gate (14.09., CASTER_SEAM_2026-09-14.md row 5 +
+/// port 3): the cast sub-phase's pick refused every non-damage/debuff kind
+/// ("an effect kind the sim has no arithmetic for"), so all 56 castable
+/// utility instances across the five spells_mechanics maps burned their pick
+/// and tokens for nothing. From 52 `pick_cast` picks the MAPPED archetypes
+/// (`spell::utility_archetype_of` — the terrain-hazard grants, the
+/// fatigue-on-failed-morale flag and the attacker-side AP records, 47 of the
+/// 56 instances) and `apply_cast_effect` stamps them; the 7 unmapped ones
+/// (charging-scoped AP, forced displacement) still skip. Below 51 the kind
+/// filter stands and every recorded corpus replays byte-exact.
+pub const EPOCH_52_UTILITY_SPELLS: u32 = 52;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -1487,7 +1499,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 51, "the live epoch is 51 (the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
+assert_eq!(CURRENT_RULES_EPOCH, 52, "the live epoch is 52 (EPOCH_52_UTILITY_SPELLS; the newest gate constant bumps it per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1497,11 +1509,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":51}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":52}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 51"
+            "a fresh play_game() now stamps the bumped epoch, 52"
         );
     }
 

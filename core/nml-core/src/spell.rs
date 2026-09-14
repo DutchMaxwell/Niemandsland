@@ -314,6 +314,73 @@ pub fn official_pick_order(list_size: usize, d3: i64, caster_x: i64) -> Vec<usiz
     (0..list_size).map(|i| (start + i) % list_size).collect()
 }
 
+/// EPOCH 52 UTILITY SPELLS (CASTER_SEAM_2026-09-14.md row 5 + port 3) — one
+/// utility-kind spell archetype the sim has an arithmetic for. The committed
+/// maps carry every utility instance as the bare `{"kind": "utility"}` (the
+/// export grammar parsed the assignment clause but no effect shape), so the
+/// mapping keys on the exact spell NAME; the effects were grouped off the
+/// pinned army-book texts. 47 of the 56 castable instances land; the 9 that
+/// stay skipped (Berserker Frenzy, Furious Frenzy, Coordinated Aggression,
+/// Deep Hypnosis, Seductive Invocation) have no read side in this sim.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UtilityArchetype {
+    /// "counts as being in Difficult/Dangerous Terrain once (next time the
+    /// effect would apply)" — the unit-level terrain-debuff grant the move
+    /// path already folds (`mods::granted_terrain_debuff`, EPOCH_27).
+    TerrainHazard { dangerous: bool },
+    /// "must take a morale test. If failed, it becomes fatigued" — the flag
+    /// `tray_fatigue_debuff` writes on the tray; the expectation path stamps
+    /// it at cast success (the Quality die is not re-rolled here, the same
+    /// land-whole shape every spell grant rides).
+    FatigueOnFailedMorale,
+    /// the target's OWN attacks gain/lose flat AP ("get/lose AP(+1) ... once")
+    /// — a `Role::Ap` ledger record, folded by `ctx_live`'s ap_mod net and
+    /// dice's `att.ap_mod`.
+    ApOwn { ap: i64, scope: &'static str },
+}
+
+impl UtilityArchetype {
+    /// The friendly-utility pick takes the caster's unit (the buff
+    /// convention); the enemy-utility pick takes the nearest enemy (a utility
+    /// prices at EV 0, the debuff convention).
+    pub fn friendly(self) -> bool {
+        matches!(self, UtilityArchetype::ApOwn { ap: 1.., .. })
+    }
+
+    /// The rules-must-log line's archetype label.
+    pub fn label(self) -> &'static str {
+        match self {
+            UtilityArchetype::TerrainHazard { dangerous: false } => "difficult-terrain mark",
+            UtilityArchetype::TerrainHazard { dangerous: true } => "dangerous-terrain mark",
+            UtilityArchetype::FatigueOnFailedMorale => "fatigue",
+            UtilityArchetype::ApOwn { .. } => "attacker-side AP record",
+        }
+    }
+}
+
+/// The per-effect table (exact spell-name comparison, the committed map's own
+/// spellings). `None` = the kind filter keeps skipping the name.
+pub fn utility_archetype_of(name: &str) -> Option<UtilityArchetype> {
+    match name {
+        "Aura of Pestilence" | "Desert Storm" => {
+            Some(UtilityArchetype::TerrainHazard { dangerous: false })
+        }
+        "Cursed Stride" | "Summoned Vipers" => {
+            Some(UtilityArchetype::TerrainHazard { dangerous: true })
+        }
+        "Terrifying Fury" | "Searing Heat" => Some(UtilityArchetype::FatigueOnFailedMorale),
+        // "Pick up to three friendly units within 12", which get AP(+1) in
+        // melee once ..." / "... get AP(1) when attacking once ..." (the
+        // committed map carries the book's own "Psy-Emowerment" spelling).
+        "Elemental Form" => Some(UtilityArchetype::ApOwn { ap: 1, scope: "melee" }),
+        "Psy-Emowerment" | "Psy-Empowerment" => Some(UtilityArchetype::ApOwn { ap: 1, scope: "" }),
+        // "Pick up to three enemy units within 18", which loses AP(1) when
+        // shooting once ..." — the Piercing Debuff shape.
+        "Corrode Weapons" => Some(UtilityArchetype::ApOwn { ap: -1, scope: "shooting" }),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
