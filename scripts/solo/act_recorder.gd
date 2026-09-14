@@ -35,8 +35,9 @@ static var objectives_stamp: Dictionary = {}
 ## falls back to the carrier's profile (that fallback IS the #823 fidelity break).
 static var spawn_profile_resolver: Callable = Callable()
 ## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
-## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 21 by the
-## Piercing-marks inert-grant fix, EPOCH_21_INERT_MARKS; 19 was #935's
+## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 23 by the
+## Piercing-marks inert-grant fix, EPOCH_23_INERT_MARKS; 22 was #932's Screened
+## melee leg, 19 was #935's
 ## move-grant fold; 17 was the Surge-when-Shooting scope fix, 16 the
 ## free-placement fix, 15 the beneficiary side fix).
 ## The mirror HOLDS BELOW EPOCH_19_MOVE_GRANTS_FOLD on purpose (PR #935):
@@ -45,7 +46,7 @@ static var spawn_profile_resolver: Callable = Callable()
 ## (battle_sim.gd:1707 -> move_bands_for_props). A recording stamped 19+
 ## would replay with the fold ON and double-count every granted inch. Bump
 ## this mirror only together with the fold's own retirement of the
-## recorded-band premise. The epoch-21 table fix above is NOT gated on this
+## recorded-band premise. The epoch-23 table fix above is NOT gated on this
 ## mirror (it reads the mark's own grants_rule), so holding at 17 costs it
 ## nothing; SPAWN_PROFILES_EPOCH below stays frozen.
 static var rules_epoch: int = 17

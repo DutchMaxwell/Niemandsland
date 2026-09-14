@@ -25,7 +25,7 @@ use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
     EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
-    EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_22_SCREENED_MELEE, EPOCH_21_INERT_MARKS,
+    EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -1225,13 +1225,13 @@ fn tray_vs_marks(
             }
             next.vs_mark_round[bearer] = next.round;
             let base = b.name.strip_suffix(" Mark").unwrap_or(b.name.as_str());
-            // EPOCH 21 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14 finding 1):
+            // EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14 finding 1):
             // the grant the mark hands the attacker is the entry's own
             // `grants_rule` ("AP(+1) in melee" / "AP(+1) when shooting"), not
             // the base name — the base name is read by nobody, so the mark was
-            // stamped and spent for nothing. Below 21 the base name rides and
+            // stamped and spent for nothing. Below 23 the base name rides and
             // every corpus replays the recorded inert mark.
-            let grant = if rule_on(seams.rules_epoch, EPOCH_21_INERT_MARKS)
+            let grant = if rule_on(seams.rules_epoch, EPOCH_23_INERT_MARKS)
                 && !b.grants_rule.is_empty()
             {
                 b.grants_rule.clone()
@@ -2400,13 +2400,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.versatile_grant = mods::granted(state, i, "Versatile Attack");
         c.pierce_shooting_grant = mods::granted(state, i, "AP(+1) when shooting");
         c.pierce_melee_grant = mods::granted(state, i, "AP(+1) in melee");
-        // EPOCH 21 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14 finding 1): the
+        // EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14 finding 1): the
         // two Piercing marks' once-grants ride `tray_vs_marks` with the
         // entry's own `grants_rule` string — which the base-name reads above
-        // can never match (`base_rule_name` splits at the '('). Below 21 the
+        // can never match (`base_rule_name` splits at the '('). Below 23 the
         // grant keeps the base name and stays inert: every corpus replays the
         // recorded no-op.
-        if rule_on(rules_epoch, EPOCH_21_INERT_MARKS) {
+        if rule_on(rules_epoch, EPOCH_23_INERT_MARKS) {
             c.pierce_shooting_grant = c.pierce_shooting_grant
                 || mods::granted_exact(state, i, "AP(+1) when shooting");
             c.pierce_melee_grant =

@@ -584,18 +584,18 @@ pub const EPOCH_22_SCREENED_MELEE: u32 = 22;
 /// ("AP(+1) in melee" / "AP(+1) when shooting"), but `tray_vs_marks` pushed
 /// the mark's once-grant under the BASE name ("Piercing Fighting") and the
 /// only grant readers ask for the `grants_rule` strings — so both layers
-/// stamped and spent the mark and nothing folded. From 21 the grant rides the
+/// stamped and spent the mark and nothing folded. From 23 the grant rides the
 /// entry's own string and `ctx_live` reads it with the exact-string twin
-/// (`mods::granted_exact`); below 21 the base name rides and every corpus
+/// (`mods::granted_exact`); below 23 the base name rides and every corpus
 /// replays the recorded inert mark. The two Precision-family Registry entries
 /// with undefined/underdetermined effect data (`Precision Tag`'s `hit_mod:
 /// "Y"` placeholder, `Precision Target`'s missing `beneficiary` +
 /// `uses_per_game` seam) are deliberately NOT wired — no book text on disk.
-/// `21` is one past every existing stamp (18/19 are held by other in-flight
-/// waves), and the value `CURRENT_RULES_EPOCH` is bumped to in the same
-/// change. Every call site reads THIS constant, not the literal `21` or
+/// `23` is one past every existing stamp (22 = #932's Screened melee leg,
+/// 19 = #935's fold), and the value `CURRENT_RULES_EPOCH` is bumped to in the same
+/// change. Every call site reads THIS constant, not the literal `23` or
 /// `CURRENT_RULES_EPOCH`.
-pub const EPOCH_21_INERT_MARKS: u32 = 21;
+pub const EPOCH_23_INERT_MARKS: u32 = 23;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -1082,7 +1082,7 @@ mod tests {
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
         assert_eq!(CURRENT_RULES_EPOCH, 22, "epoch 22's gate (EPOCH_22_SCREENED_MELEE) bumps the live epoch to 22, one past EPOCH_19_MOVE_GRANTS_FOLD");
-        assert_eq!(CURRENT_RULES_EPOCH, 21, "epoch 21's gate (EPOCH_21_INERT_MARKS) bumps the live epoch to 21, one past #935's 19 (18 was #932's, 20 left free)");
+        assert_eq!(CURRENT_RULES_EPOCH, 23, "epoch 23's gate (EPOCH_23_INERT_MARKS) bumps the live epoch to 23, one past #932's 22 (21 and 20 left free)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1098,11 +1098,11 @@ mod tests {
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
             "a fresh play_game() now stamps the bumped epoch, 22"
 
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":21}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":23}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 21"
+            "a fresh play_game() now stamps the bumped epoch, 23"
         );
     }
 

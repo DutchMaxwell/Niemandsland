@@ -180,7 +180,7 @@ pub fn granted_vs(state: &State, target: usize, rule: &str) -> bool {
     chain_grant(state, target, rule, true)
 }
 
-/// EPOCH 21 INERT MARKS — the exact-string twin of `granted`: the Piercing
+/// EPOCH 23 INERT MARKS — the exact-string twin of `granted`: the Piercing
 /// marks' `grants_rule` values ("AP(+1) in melee" / "AP(+1) when shooting")
 /// name the EFFECT, not a registry rule, so `base_rule_name`'s split at the
 /// first '(' would shred both to "AP" and the base-name read could never

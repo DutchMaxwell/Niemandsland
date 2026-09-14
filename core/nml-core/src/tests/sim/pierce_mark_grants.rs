@@ -1,6 +1,6 @@
 use super::*;
 
-// ------------- EPOCH 21 INERT MARKS — the two Piercing marks' grants must fold -------------
+// ------------- EPOCH 23 INERT MARKS — the two Piercing marks' grants must fold -------------
 
 /// MARK_FAMILY_SWEEP_2026-09-14, INERT row (finding 1): the #870 vs_target
 /// marks Piercing Fighting Mark / Piercing Shooting Mark land their once-grant
@@ -17,7 +17,7 @@ use super::*;
 /// exists: the epoch-9 once-grant (`tray_vs_marks`) and the two AP folds off
 /// `Ctx::pierce_melee_grant` / `Ctx::pierce_shooting_grant`. The link between
 /// them is missing. These tests pin the board leg at the frozen
-/// `EPOCH_21_INERT_MARKS`: at 21 the mark's exchange saves one rung harder;
+/// `EPOCH_23_INERT_MARKS`: at 23 the mark's exchange saves one rung harder;
 /// at 20 (and every epoch below) the corpus keeps the recorded inert mark.
 ///
 /// The carrier is `buff_line`'s shooter with the mark hand-stamped exactly as
@@ -74,25 +74,25 @@ fn run_pierce_epoch(
 }
 
 /// Shooting leg (gf dao_union's Piercing Shooting Mark, "AP(+1) when
-/// shooting"): the volley's save batch rides AP(+1) from 21 on, never below.
+/// shooting"): the volley's save batch rides AP(+1) from 23 on, never below.
 /// Seed 13's first four hit faces at 4+ are [4,3,6,6] — three hits, so the
 /// save batch ALWAYS draws (the buff_consumption_bridge seed-13 precedent).
 #[test]
 fn piercing_shooting_mark_ap_fires_from_21_and_not_below() {
     let (st, statics) = pierce_line("Piercing Shooting Mark", "AP(+1) when shooting", "shooting");
 
-    // ----- epoch 21: the fix — the granted AP reaches the volley's saves -----
-    let (next21, marked21) = run_pierce_epoch(&st, &statics, &buff_action(Some("b")), 13, 21);
+    // ----- epoch 23: the fix — the granted AP reaches the volley's saves -----
+    let (next23, marked23) = run_pierce_epoch(&st, &statics, &buff_action(Some("b")), 13, 23);
     assert_eq!(
-        next21.vs_mark_round[0],
+        next23.vs_mark_round[0],
         st.round,
         "the mark fired at the attack seam"
     );
-    let saves21 = save_targets(&marked21);
+    let saves21 = save_targets(&marked23);
     assert!(!saves21.is_empty(), "seed 13 lands hits, the save batch draws");
     assert!(
         saves21.iter().all(|&t| t == 5),
-        "at 21 every save rides AP(+1): defense 4 saves at 5+, got {:?}",
+        "at 23 every save rides AP(+1): defense 4 saves at 5+, got {:?}",
         saves21
     );
 
@@ -102,24 +102,24 @@ fn piercing_shooting_mark_ap_fires_from_21_and_not_below() {
     assert!(!saves20.is_empty(), "the same seed draws the same hits at 20");
     assert!(
         saves20.iter().all(|&t| t == 4),
-        "below 21 the mark is spent for nothing, as recorded: got {:?}",
+        "below 23 the mark is spent for nothing, as recorded: got {:?}",
         saves20
     );
 
-    // ----- epoch 19: the LIVE predecessor epoch of this bump (#935's move-
+    // ----- epoch 22: the LIVE predecessor epoch of this bump (#932's Screened melee leg —
     // grants fold, 18 was #932's reservation) — the pre-bump reading by name,
     // and every smaller epoch replays byte-identically with it.
     assert_eq!(
-        crate::acts::EPOCH_19_MOVE_GRANTS_FOLD, 19,
+        crate::acts::EPOCH_22_SCREENED_MELEE, 22,
         "the live epoch the corpus legs below replay is this bump's predecessor"
     );
-    let (_, marked19) = run_pierce_epoch(&st, &statics, &buff_action(Some("b")), 13, 19);
-    let saves19 = save_targets(&marked19);
-    assert!(!saves19.is_empty(), "the same seed draws the same hits at 19");
+    let (_, marked22) = run_pierce_epoch(&st, &statics, &buff_action(Some("b")), 13, 22);
+    let saves22 = save_targets(&marked22);
+    assert!(!saves22.is_empty(), "the same seed draws the same hits at 22");
     assert!(
-        saves19.iter().all(|&t| t == 4),
-        "epoch 19 replays the recorded inert mark exactly: got {:?}",
-        saves19
+        saves22.iter().all(|&t| t == 4),
+        "epoch 22 replays the recorded inert mark exactly: got {:?}",
+        saves22
     );
 }
 
@@ -149,18 +149,18 @@ fn piercing_fighting_mark_ap_fires_from_21_and_not_below() {
         teleport: None,
     };
 
-    // ----- epoch 21: the fix — the granted AP reaches the strikes' saves -----
-    let (next21, struck21) = run_pierce_epoch(&st, &statics, &charge, 11, 21);
-    assert_eq!(next21.vs_mark_round[0], st.round, "the mark fired on the charge");
-    let saves21 = save_targets(&struck21);
+    // ----- epoch 23: the fix — the granted AP reaches the strikes' saves -----
+    let (next23, struck23) = run_pierce_epoch(&st, &statics, &charge, 11, 23);
+    assert_eq!(next23.vs_mark_round[0], st.round, "the mark fired on the charge");
+    let saves21 = save_targets(&struck23);
     assert!(!saves21.is_empty(), "seed 11 carries 17 hits at 3+ — the strike saves draw");
     assert!(
-        struck21.rolls.iter().any(|r| r.kind == "attack" && r.target == 4),
+        struck23.rolls.iter().any(|r| r.kind == "attack" && r.target == 4),
         "the charge strikes at the bare Quality 4+ — the mark's +1 is AP only"
     );
     assert!(
         saves21.iter().all(|&t| t == 5),
-        "at 21 every strike save rides AP(+1): defense 4 saves at 5+, got {:?}",
+        "at 23 every strike save rides AP(+1): defense 4 saves at 5+, got {:?}",
         saves21
     );
 
@@ -170,18 +170,18 @@ fn piercing_fighting_mark_ap_fires_from_21_and_not_below() {
     assert!(!saves20.is_empty(), "the same seed draws the strike saves at 20");
     assert!(
         saves20.iter().all(|&t| t == 4),
-        "below 21 the mark is stamped and spent for nothing, as recorded: got {:?}",
+        "below 23 the mark is stamped and spent for nothing, as recorded: got {:?}",
         saves20
     );
 
-    // ----- epoch 19: the LIVE predecessor epoch of this bump (#935) — the
+    // ----- epoch 22: the LIVE predecessor epoch of this bump (#932) — the
     // pre-bump reading; every smaller epoch replays identically with it.
-    let (_, struck19) = run_pierce_epoch(&st, &statics, &charge, 11, 19);
-    let saves19 = save_targets(&struck19);
-    assert!(!saves19.is_empty(), "the same seed draws the strike saves at 19");
+    let (_, struck22) = run_pierce_epoch(&st, &statics, &charge, 11, 22);
+    let saves22 = save_targets(&struck22);
+    assert!(!saves22.is_empty(), "the same seed draws the strike saves at 22");
     assert!(
-        saves19.iter().all(|&t| t == 4),
-        "epoch 19 replays the recorded inert mark exactly: got {:?}",
-        saves19
+        saves22.iter().all(|&t| t == 4),
+        "epoch 22 replays the recorded inert mark exactly: got {:?}",
+        saves22
     );
 }

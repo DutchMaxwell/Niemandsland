@@ -6449,7 +6449,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: AP(+%d) against %s" % [
 				str((cp as Dictionary)["name"]), int((cp as Dictionary)["bonus"]), defender.get_name()], true)
-	# EPOCH 21 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14): the Piercing
+	# EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14): the Piercing
 	# Fighting/Shooting Mark's attackers-side grant — the mark's once-record on
 	# THIS defender (beneficiary "attackers", the entry's own scope) names
 	# "AP(+1) in melee" / "AP(+1) when shooting"; the exchange's save AP folds
@@ -17252,7 +17252,7 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 				continue
 			member.unit_properties["vs_mark_round"] = opr_army_manager.current_round
 			var base := n.trim_suffix(" Mark")
-			# EPOCH 21 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14): the entry's own
+			# EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14): the entry's own
 			# grants_rule ("AP(+1) in melee" / "AP(+1) when shooting") is the rule
 			# the mark hands the attackers — the base name has no reader in either
 			# layer, so the mark was stamped and spent for nothing. Entries without
