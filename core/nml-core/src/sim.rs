@@ -4647,7 +4647,7 @@ fn solo_move_grant_delta_in(
     // the band (the static band pass's own trace shape). A name whose faction
     // registry fields no entry spends 0.0 and stays silent.
     let band = if adv_kind { "advance" } else { "rush/charge" };
-    let mut fire = |name: &'static str, v: f64| {
+    let fire = |name: &'static str, v: f64| {
         if v != 0.0 {
             trace_rule("move-bands", name, &format!("{un}: {v:+}\" {band} from a live grant"));
         }
