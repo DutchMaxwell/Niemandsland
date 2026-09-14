@@ -570,6 +570,14 @@ pub struct Seams {
     /// `acts::CURRENT_RULES_EPOCH`.
     #[serde(default)]
     pub rules_epoch: u32,
+    /// `Knobs::bands_prefolded` — the replay-aware half of
+    /// `EPOCH_19_MOVE_GRANTS_FOLD`: the header carried `"books"` (a TABLE
+    /// recording, `act_recorder.gd:266-268`), so the record's `bands` already
+    /// fold every move grant and `sim::solo_move_grant_delta_in` returns 0.0
+    /// at the spend. Default OFF: every core-written record and fixture
+    /// predates the key.
+    #[serde(default)]
+    pub bands_prefolded: bool,
 }
 
 impl Node {
