@@ -1483,11 +1483,18 @@
     }
    },
    "Surge Mark": {
-    "primitive": "Surge",
+    "primitive": "Utility Buff",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bonus_hits_per_six": 1
+     "beneficiary": "attackers",
+     "grants_rule": "Surge",
+     "max_targets": 1,
+     "needs_los": true,
+     "once": true,
+     "range_in": 18,
+     "target": "enemy",
+     "vs_target": true
     }
    },
    "Tear": {

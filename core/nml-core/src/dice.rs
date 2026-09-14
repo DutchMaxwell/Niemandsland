@@ -1020,6 +1020,21 @@ pub fn resolve_volley_leg(
         if att.surge_grant {
             hits += surge_attack_hits(&primal_boost_grant_profile(), &faces, count_target, sh.owner, tray, &mut out.rolls);
         }
+        // EPOCH 44 SURGE MARK — the mark's once-grant ("Surge", placed by
+        // `tray_vs_marks` at the attack seam, spent with the exchange) reads
+        // against the marked target ONLY: +1 hit per unmodified 6, the plain
+        // auto-hit form. Rules-must-log: the grant names itself when it fires.
+        // Below 44 no such record exists (the recorded self-Surge replays
+        // through `p.surge` alone).
+        if att.surge_mark_grant {
+            let mark_sixes = sixes(&faces);
+            if mark_sixes > 0 {
+                hits += mark_sixes;
+                out.log.push(format!(
+                    "Surge Mark: {} — +{} bonus hit{} on unmodified 6s against the marked target (once)",
+                    sh.owner, mark_sixes, if mark_sixes == 1 { "" } else { "s" }));
+            }
+        }
         // `AiCombatMath.sergeant_bonus_hits` :493-494 — the bearer's unmodified
         // 6s, capped at its own attack share. The EV path values this
         // (combat.rs:339-342); the dice path must not be the poorer twin, even
@@ -1667,6 +1682,18 @@ pub fn resolve_melee_leg(
             // Wave 2 — a granted "Primal Boost", the same low-surge form.
             if sh.att.surge_grant {
                 hits += surge_attack_hits(&primal_boost_grant_profile(), &faces, count_target, sh.owner, tray, &mut out.rolls);
+            }
+            // EPOCH 44 SURGE MARK — the strike fold's twin of the volley leg
+            // above: the mark's once-grant adds +1 hit per unmodified 6
+            // against the marked target only, named once when it fires.
+            if sh.att.surge_mark_grant {
+                let mark_sixes = sixes(&faces);
+                if mark_sixes > 0 {
+                    hits += mark_sixes;
+                    out.log.push(format!(
+                        "Surge Mark: {} — +{} bonus hit{} on unmodified 6s against the marked target (once)",
+                        sh.owner, mark_sixes, if mark_sixes == 1 { "" } else { "s" }));
+                }
             }
             // Furious :4477 — the unit-level rule the table stamps onto every
             // melee profile (main.gd:4343): unmodified 6s, charge only.

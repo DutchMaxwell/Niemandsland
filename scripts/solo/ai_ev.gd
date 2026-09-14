@@ -314,6 +314,16 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 				fpd["surge"] = true
 				if float(sp.get("within_in", 0.0)) > 0.0:
 					fpd["surge_within_in"] = float(sp.get("within_in", 0.0))
+	# EPOCH_44_SURGE_MARK (sweep C, row "Surge Mark"): the entry left the Surge
+	# primitive — it is a vs_target Utility Buff now (the Precision marks'
+	# #929 family), placed at the attack seam (_solo_apply_vs_marks) and
+	# consumed by _solo_hits against the marked target only, once. Below the
+	# gate every corpus replays the permanent self-Surge the alias loop
+	# stamped, read BY NAME off the flipped entry.
+	if RulesRegistry.unit_rule_active(unit, "Surge Mark") \
+			and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_44_SURGE_MARK:
+		for fp in profiles:
+			(fp as Dictionary)["surge"] = true
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Surge"):
 		var ed := e as Dictionary
 		var sp: Dictionary = ed.get("params", {})

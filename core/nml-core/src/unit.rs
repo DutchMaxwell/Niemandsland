@@ -23,11 +23,13 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::acts::{
-    rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
-    EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
+    rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES,
+    EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
+    EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
     EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE, EPOCH_19_MOVE_GRANTS_FOLD,
     EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST, EPOCH_35_UNSTOPPABLE_MELEE,
     EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL, EPOCH_43_BATTLEBORN_ROLL,
+    EPOCH_44_SURGE_MARK,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -393,6 +395,14 @@ pub struct Ctx {
     pub pierce_melee_grant: bool,
     /// A live `grants_rule: "Piercing Assault"` — AP(+1) while charging.
     pub pierce_assault_grant: bool,
+    // --- EPOCH 44 SURGE MARK (sweep C row `Surge Mark`). ---
+    /// A live `grants_rule: "Surge"` from the Surge Mark itself (`tray_vs_marks`
+    /// places it at the attack seam, the exchange spends it): the two Surge
+    /// folds add one hit per unmodified 6 against the marked target ONLY.
+    /// Zero on every `ctx_of`; only `sim::ctx_live` folds the ledger's
+    /// once-record, and only from the FROZEN `EPOCH_44_SURGE_MARK` (below 44
+    /// the entry replays the recorded permanent self-Surge instead).
+    pub surge_mark_grant: bool,
     // --- Wave 3 "Utility Buff" marks (epoch-gated `acts::rule_on(.., 6)`). ---
     /// A live attackers-side `grants_rule: "Indirect"` on this unit (Indirect
     /// Mark) — whoever SHOOTS at it may waive the sight test. Zero on every
@@ -2459,6 +2469,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         pierce_shooting_grant: false,
         pierce_melee_grant: false,
         pierce_assault_grant: false,
+        surge_mark_grant: false,
         indirect_mark: false,
         range_mark_in: 0.0,
         growth_ap_mod: 0,
@@ -3770,6 +3781,13 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         // are NEW behaviour — a record below rules_epoch 5 (Gen-2b's
         // stamping-gap window at 4 included) must never carry them.
         if !rule_on(rules_epoch, EPOCH_5_TABLE_RULES) && WAVE2_UTILITY_BUFF_RULES.contains(&n.as_str()) {
+            continue;
+        }
+        // EPOCH_44_SURGE_MARK: the flipped Surge Mark entry is NEW mark data —
+        // below the gate it reads as ABSENT (no utility-buff record, the mark
+        // seam never fires), so every recorded corpus replays its own
+        // stamp-only self-Surge (the stamp's name-based fallback leg).
+        if n == "Surge Mark" && !rule_on(rules_epoch, EPOCH_44_SURGE_MARK) {
             continue;
         }
         let vs_target = e.param_b("vs_target");
@@ -5318,23 +5336,26 @@ impl UnitStatic {
         // Surge family wave 2 (rules-wave2-surge2), gated on
         // `EPOCH_5_TABLE_RULES` (frozen at 5, never the literal 4 or the
         // CURRENT_RULES_EPOCH symbol) so a wave-3 bump cannot re-date the
-        // reading: the six bonus-hits-per-six names are the
+        // reading: the five bonus-hits-per-six names are the
         // plain auto-hit form's own aliases (ai_ev.gd's alias loop stamps each
         // exactly like block 3 above; `bonus_hits_per_six` is read by table
-        // and twin alike, and Great Sergeant's printed 5-6 / Surge Mark's
-        // once-per-activation pick are dead data in the table's own stamp
-        // loop). The named walk states that facet BY NAME — the census's
-        // own-token evidence — while the wave-2 gate keeps every epoch-3
-        // replay on the generic walk alone.
+        // and twin alike, and Great Sergeant's printed 5-6 is dead data in the
+        // table's own stamp loop). The named walk states that facet BY NAME —
+        // the census's own-token evidence — while the wave-2 gate keeps every
+        // epoch-3 replay on the generic walk alone. "Surge Mark" LEFT the
+        // family at `EPOCH_44_SURGE_MARK`: the entry is a vs_target Utility
+        // Buff now, placed by `tray_vs_marks` and consumed by the Surge folds
+        // against the marked target only, so the walk no longer carries the
+        // name — the flipped registry cannot answer the Surge primitive.
         if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
             for hit in rules_of_primitive(reg, p, "Surge").into_iter().filter(|hit| {
                 matches!(
                     hit.name.as_str(),
-                    "Brutal" | "Great Sergeant" | "Devout" | "Surge when Shooting" | "Lucky" | "Surge Mark"
+                    "Brutal" | "Great Sergeant" | "Devout" | "Surge when Shooting" | "Lucky"
                 )
             }) {
                 // EPOCH_17_SURGE_SCOPE: "Surge when Shooting" is the only name
-                // of the six that carries `shooting_only` (sweep B) — honoured
+                // of the walk that carries `shooting_only` (sweep B) — honoured
                 // from 17, the unscooped walk below (the corpus replay).
                 let scope_live =
                     hit.shooting_only && rule_on(rules_epoch, EPOCH_17_SURGE_SCOPE);
@@ -5343,6 +5364,20 @@ impl UnitStatic {
                         sp.surge = true;
                     }
                 }
+            }
+        }
+        // EPOCH_44_SURGE_MARK — the OLD leg: below the gate every recorded
+        // corpus replays the permanent self-Surge the old Surge-alias entry
+        // stamped on EVERY profile at EVERY epoch (the generic walk, both
+        // arrays). The flipped registry carries the name under the Utility
+        // Buff primitive, so no Surge-primitive walk can see it anymore —
+        // this leg reads it BY NAME, the lookup shape `unit_rule_active`
+        // already answers.
+        if !rule_on(rules_epoch, EPOCH_44_SURGE_MARK)
+            && unit_rule_active(reg, p, "Surge Mark")
+        {
+            for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+                sp.surge = true;
             }
         }
         // Piercing Hunter family wave 3 (rules-wave3-piercehunt), gated on

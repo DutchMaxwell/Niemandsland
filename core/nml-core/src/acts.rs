@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 43;
+pub const CURRENT_RULES_EPOCH: u32 = 44;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -828,6 +828,23 @@ pub const EPOCH_40_STEADFAST_ROLL: u32 = 40;
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_43_BATTLEBORN_ROLL: u32 = 43;
 
+/// EPOCH 44 SURGE MARK (sweep C row `Surge Mark`, PR #958): "Once per
+/// activation, before attacking, pick one enemy unit within 18" in line of
+/// sight, which friendly units get Surge against once." The registry modelled
+/// the name as a plain Surge alias, so both layers made the bearer a permanent
+/// extra-hits machine against everyone (melee and shooting, every attack, the
+/// whole game) and no enemy was ever marked — the printed pick was dead data.
+/// From 44 the entry is a vs_target mark like its siblings (the Precision
+/// marks #929, the Piercing marks #936): the attack seam (`tray_vs_marks`)
+/// places it, `ctx_live` stamps the once-grant ("Surge") into
+/// `Ctx::surge_mark_grant`, the two Surge folds read it against the marked
+/// target only, and the exchange spends it. Below 44 the entry replays the
+/// recorded permanent self-Surge (the stamp's own name-based fallback leg) and
+/// the mark reads as absent. `44` is one past every existing stamp (43 =
+/// `EPOCH_40_STEADFAST_ROLL`, #960; 39 = `EPOCH_39_MORALE_RATING`, #959; 38 =
+/// `EPOCH_38_WATCHBORN_LATCH`, #955). Every call site reads THIS constant,
+/// not the literal `41` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_44_SURGE_MARK: u32 = 44;
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
 /// The D3" ACTIVATION PLACEMENT gate (14.09., sweep C rows Wave-Step/Wolfborn
@@ -1362,7 +1379,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 43, "epoch 43's gate (EPOCH_43_BATTLEBORN_ROLL) bumps the live epoch to 43, one past #963's selfdestruct leg 41 (42 reserved in flight by the surge-mark leg)");
+        assert_eq!(CURRENT_RULES_EPOCH, 44, "epoch 44's gate (EPOCH_44_SURGE_MARK) bumps the live epoch to 44, one past #964's Battleborn leg 43 (renumbered 38/39/41 -> 44 at rebase; 42 never used)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1372,11 +1389,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":43}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":44}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 43"
+            "a fresh play_game() now stamps the bumped epoch, 44"
         );
     }
 

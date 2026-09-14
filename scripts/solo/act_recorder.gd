@@ -63,7 +63,11 @@ static var spawn_profile_resolver: Callable = Callable()
 ## surviving carrier detonates after the melee and pays X hits).
 ## Bumped to 43 in the same diff as the core's EPOCH_43_BATTLEBORN_ROLL
 ## (sweep E 2026-09-14, row `Battleborn` — the plain name joins the die leg).
-static var rules_epoch: int = 43
+## row `Morale` — the table's morale_bonus_of already folds the rating); to
+## 40 with the core's EPOCH_40_STEADFAST_ROLL (sweep H 2026-09-14, row
+## `Steadfast`); to 44 with the core's EPOCH_44_SURGE_MARK (#958, sweep C
+## row `Surge Mark` — the once-per-activation pick).
+static var rules_epoch: int = 44
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the
@@ -75,6 +79,13 @@ const EPOCH_16_FREE_PLACEMENT := 16
 ## unscooped walk every corpus was recorded with. The core's own gate reads the
 ## frozen `EPOCH_17_SURGE_SCOPE` (acts.rs); this mirror never re-dates itself.
 const EPOCH_17_SURGE_SCOPE := 17
+## The frozen gate of the SURGE MARK (epoch 44, the sweep C fix, #958): "Once
+## per activation, before attacking, pick one enemy unit within 18\" in line of
+## sight, which friendly units get Surge against once." Below it the entry
+## replays the permanent self-Surge every recorded game was stamped with. The
+## core's own gate reads the frozen `EPOCH_44_SURGE_MARK` (acts.rs); this
+## mirror never re-dates itself.
+const EPOCH_44_SURGE_MARK := 44
 ## The frozen gate of the unit-level terrain debuffs (epoch 27, the sweep A
 ## fix — rows `Dangerous Terrain Debuff` / `Difficult Terrain Debuff`): a rule
 ## the unit CARRIES bites the same way the cell it crosses does — the
