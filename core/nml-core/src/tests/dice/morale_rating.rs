@@ -31,18 +31,23 @@ use crate::unit::capture_reads_for_epoch;
     }
 
     /// The capture twin's stamp, by epoch: below 39 the pre-port reading
-    /// (Banner-only), at 39 the table's one number. 35 is the live stamp this
-    /// wave moves off of; 38 is the epoch immediately below the bump at
-    /// rebase time — both pinned so the OLD leg survives whichever epochs
-    /// land first.
+    /// (Banner-only), at 39 the table's one number. 35 is the stamp this wave
+    /// moved off of; 37 is the epoch immediately below the bump at rebase
+    /// time; 38 the reserved leg — all pinned so the OLD leg survives
+    /// whichever epochs land first.
     #[test]
-    fn the_capture_twin_folds_the_rating_at_39_not_below_38_and_not_at_35() {
+    fn the_capture_twin_folds_the_rating_at_39_not_below_38_not_at_35_not_at_37() {
         let p = morale_profile();
         let mut reg = Registries::new(&repo_root());
         let e35 = capture_reads_for_epoch(&mut reg, &p, 35).morale_bonus;
         assert_eq!(
             e35, 0,
             "epoch 35 (the live stamp): the rating is NOT folded — every recorded game replays"
+        );
+        let e37 = capture_reads_for_epoch(&mut reg, &p, 37).morale_bonus;
+        assert_eq!(
+            e37, 0,
+            "epoch 37: still the pre-port reading (EPOCH_39_MORALE_RATING is frozen)"
         );
         let e38 = capture_reads_for_epoch(&mut reg, &p, 38).morale_bonus;
         assert_eq!(
