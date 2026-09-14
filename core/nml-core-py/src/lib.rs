@@ -52,7 +52,8 @@ use pyo3::types::{PyDict, PyList};
 use serde_json::{Map, Value};
 
 use nmlcore::acts::{
-    rule_on, ActHeader, ActStatics, EPOCH_10_CHARGE_BAND, Knobs, MeleeReach, PolicyMode, Sighting,
+    rule_on, ActHeader, ActStatics, CURRENT_RULES_EPOCH, EPOCH_10_CHARGE_BAND, Knobs, MeleeReach,
+    PolicyMode, Sighting,
 };
 use nmlcore::arbitration::Arbitration;
 use nmlcore::deployment::{self, Placement, Rect, SettleUnit, SideDeploy, UnitSpec};
@@ -2415,6 +2416,7 @@ fn write_back(
 /// `board` = a Board carrying the bank v2 prop layer (`set_bank_props`).
 /// Returns `SideDeploy` as a plain dict.
 #[pyfunction]
+#[pyo3(signature = (units, zone, objectives, board, seed_value, rules_epoch=None))]
 fn deploy_side(
     py: Python<'_>,
     units: &Bound<'_, PyAny>,
@@ -2422,16 +2424,20 @@ fn deploy_side(
     objectives: &Bound<'_, PyAny>,
     board: PyRef<'_, Board>,
     seed_value: i64,
+    rules_epoch: Option<u32>,
 ) -> PyResult<Py<PyAny>> {
     let specs: Vec<UnitSpec> = json_of(units, "units")?;
     let z: [f64; 4] = json_of(zone, "zone")?;
     let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
+    // The record's rules epoch: the trainer's fresh runs ride the live stamp,
+    // a replay pins the corpus's own (e.g. 15 for the recorded pregame dumps).
     let sd = deployment::deploy_side(
         &specs,
         &Rect::new(z[0], z[1], z[2], z[3]),
         &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
         &board.inner,
         seed_value,
+        rules_epoch.unwrap_or(CURRENT_RULES_EPOCH),
     );
     to_py(py, &serde_json::to_value(&sd).map_err(|e| Unsupported::new_err(e.to_string()))?)
 }
@@ -2557,6 +2563,7 @@ fn place_models(py: Python<'_>, spot: (f64, f64), n: usize) -> PyResult<Py<PyAny
 /// `placement_sequence`, and the one the interleave gate compares.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
+#[pyo3(signature = (units1, units2, zone1, zone2, objectives, board, seed1, seed2, first, rules_epoch=None))]
 fn deploy_interleaved(
     py: Python<'_>,
     units1: &Bound<'_, PyAny>,
@@ -2568,6 +2575,7 @@ fn deploy_interleaved(
     seed1: i64,
     seed2: i64,
     first: i64,
+    rules_epoch: Option<u32>,
 ) -> PyResult<Py<PyAny>> {
     let specs1: Vec<UnitSpec> = json_of(units1, "units1")?;
     let specs2: Vec<UnitSpec> = json_of(units2, "units2")?;
@@ -2584,6 +2592,7 @@ fn deploy_interleaved(
         seed1,
         seed2,
         first,
+        rules_epoch.unwrap_or(CURRENT_RULES_EPOCH),
     );
     to_py(py, &serde_json::to_value(&out).map_err(|e| Unsupported::new_err(e.to_string()))?)
 }

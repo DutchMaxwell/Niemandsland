@@ -313,7 +313,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 15;
+pub const CURRENT_RULES_EPOCH: u32 = 16;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -524,6 +524,21 @@ pub const EPOCH_14_DEADLY_LANDING: u32 = 14;
 /// in the same change. Every call site reads THIS constant, not the literal
 /// `15` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_15_MARK_BENEFICIARY: u32 = 15;
+
+/// The FREE PLACEMENT gate (14.09., the sweeps A/C defect — one bug under three
+/// names, rows `Vanguard`/`Drakesworn`/`Fanatic`): all three books print
+/// "After this model is deployed, it may be placed anywhere fully within 9\" of
+/// its position" and all three carry the registry primitive
+/// `Vanguard {place_in: 9}`, yet both layers ran a directional PUSH toward the
+/// table centre (`deployment::vanguard_push` / `solo_controller.gd
+/// _vanguard_push`) — the model could never step sideways or backwards. From 16
+/// the move is the rule's FREE choice within the radius
+/// (`deployment::vanguard_free_place` / `solo_controller.gd
+/// _vanguard_free_place`); below 16 every corpus replays the directional push
+/// it was recorded with. `16` is one past every existing stamp, and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site reads
+/// THIS constant, not the literal `16` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_16_FREE_PLACEMENT: u32 = 16;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -1009,7 +1024,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 15, "epoch 15's gate (EPOCH_15_MARK_BENEFICIARY) bumps the live epoch to 15, one past EPOCH_14_DEADLY_LANDING");
+        assert_eq!(CURRENT_RULES_EPOCH, 16, "epoch 16's gate (EPOCH_16_FREE_PLACEMENT) bumps the live epoch to 16, one past EPOCH_15_MARK_BENEFICIARY");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1019,11 +1034,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":15}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":16}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 15"
+            "a fresh play_game() now stamps the bumped epoch, 16"
 
         );
     }

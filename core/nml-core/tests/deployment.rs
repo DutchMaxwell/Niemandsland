@@ -927,7 +927,7 @@ fn vanguard_push_is_logged_like_the_table() {
     }];
     let zone = deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048);
     let objs = vec![(0.0_f64, 0.0_f64)];
-    let sd = deployment::deploy_side(&specs, &zone, &objs, &board, 7);
+    let sd = deployment::deploy_side(&specs, &zone, &objs, &board, 7, 15);
     assert_eq!(sd.placements.len(), 1);
     let p = &sd.placements[0];
     assert!(p.vanguard_pushed, "the push fired: {p:?}");
@@ -971,8 +971,8 @@ fn vanguard_place_in_param_scales_the_push() {
     }];
     let zone = deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048);
     let objs = vec![(0.0_f64, 0.0_f64)];
-    let sd9 = deployment::deploy_side(&mk(Some(deployment::VANGUARD_PLACE_M)), &zone, &objs, &board, 7);
-    let sd45 = deployment::deploy_side(&mk(Some(4.5 * 0.0254)), &zone, &objs, &board, 7);
+    let sd9 = deployment::deploy_side(&mk(Some(deployment::VANGUARD_PLACE_M)), &zone, &objs, &board, 7, 15);
+    let sd45 = deployment::deploy_side(&mk(Some(4.5 * 0.0254)), &zone, &objs, &board, 7, 15);
     assert!(sd45.placements[0].vanguard_pushed, "the 4.5\" push fired");
     // same seed → same ladder spot; the 4.5" push lands 4.5" short of the 9" one
     let d9 = sd9.placements[0].spot.1;
@@ -1010,9 +1010,104 @@ fn vanguard_off_deploys_in_place_without_events() {
     }];
     let zone = deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048);
     let objs = vec![(0.0_f64, 0.0_f64)];
-    let sd = deployment::deploy_side(&specs, &zone, &objs, &board, 7);
+    let sd = deployment::deploy_side(&specs, &zone, &objs, &board, 7, 15);
     assert!(!sd.placements[0].vanguard_pushed);
     assert!(sd.events.is_empty(), "no Vanguard, no log line: {:?}", sd.events);
+}
+
+/// EPOCH_16 (sweeps A/C — one defect under three names, rows Vanguard/Drakesworn/
+/// Fanatic): the printed text is "After this model is deployed, it may be placed
+/// anywhere fully within 9\" of its position" — a FREE choice. With a legal spot
+/// toward a BACKWARD objective (behind the zone, off the forward line) the free
+/// choice must be able to take it; the current code runs a directional PUSH toward
+/// the table centre instead and can never step sideways or backwards (RED).
+#[test]
+fn vanguard_free_choice_leaves_the_forward_line() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let specs = vec![UnitSpec {
+        key: "vanguard_bearer".into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        vanguard: true,
+        place_in_m: Some(deployment::VANGUARD_PLACE_M),
+        model_shapes: vec![deployment::ModelShape {
+            is_oval: false,
+            w_mm: 32,
+            d_mm: 32,
+            tough: 1,
+            n: 1,
+        }],
+        ..Default::default()
+    }];
+    // Narrow zone at the table's south edge (y in [-0.6, -0.3]); the objective
+    // sits BEHIND it at (0, -0.66) — the exact direction the push refuses.
+    // Section-independent: every third's objective-near spot is the zone's
+    // y = -0.584 scan row (the row nearest the objective), only x differs, and
+    // the x remainder costs at most one 0.025 scan step of reach.
+    let zone = deployment::Rect::new(-0.15, -0.6, 0.30, 0.3);
+    let objs = vec![(0.0_f64, -0.66_f64)];
+    // The EPOCH-16 LEG: the free choice. (The epoch-15 leg — the directional
+    // push still happening — is the test below.)
+    let sd = deployment::deploy_side(&specs, &zone, &objs, &board, 7, 16);
+    assert_eq!(sd.placements.len(), 1);
+    let p = &sd.placements[0];
+    let d_obj = (p.spot.0 * p.spot.0 + (p.spot.1 + 0.66) * (p.spot.1 + 0.66)).sqrt();
+    assert!(p.spot.1 < -0.5, "free choice steps back toward the objective: {p:?}");
+    assert!(d_obj < 0.15, "within reach of the backward objective: {p:?} d={d_obj}");
+    // the epoch-aware log law: the book's own words, direction-neutral distance
+    assert_eq!(sd.events.len(), 1, "one deploy event: {:?}", sd.events);
+    assert_eq!(sd.events[0].rule, deployment::VANGUARD_FREE_RULE_TEXT);
+    assert_eq!(sd.events[0].why, "vanguard free placement");
+    assert!(
+        sd.events[0].chosen.ends_with("\" repositioned"),
+        "the direction-neutral chosen law: {:?}", sd.events[0].chosen
+    );
+}
+
+/// The EPOCH-15 LEG: below `EPOCH_16_FREE_PLACEMENT` the corpus's recorded
+/// directional push still happens, byte-exactly — the same backward-objective
+/// scenario shoves the unit TOWARD the table centre, away from the objective,
+/// and the log line keeps the recorded texts.
+#[test]
+fn vanguard_epoch_15_still_pushes_forward() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let specs = vec![UnitSpec {
+        key: "vanguard_bearer".into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        vanguard: true,
+        place_in_m: Some(deployment::VANGUARD_PLACE_M),
+        model_shapes: vec![deployment::ModelShape {
+            is_oval: false,
+            w_mm: 32,
+            d_mm: 32,
+            tough: 1,
+            n: 1,
+        }],
+        ..Default::default()
+    }];
+    let zone = deployment::Rect::new(-0.15, -0.6, 0.30, 0.3);
+    let objs = vec![(0.0_f64, -0.66_f64)];
+    let sd = deployment::deploy_side(&specs, &zone, &objs, &board, 7, 15);
+    let p = &sd.placements[0];
+    let d_obj = (p.spot.0 * p.spot.0 + (p.spot.1 + 0.66) * (p.spot.1 + 0.66)).sqrt();
+    assert!(p.vanguard_pushed, "the push fired: {p:?}");
+    assert!(p.spot.1 > -0.5, "shoved toward the table centre, off the backward line: {p:?}");
+    assert!(d_obj > 0.3, "away from the backward objective: {p:?} d={d_obj}");
+    assert_eq!(sd.events.len(), 1, "one deploy event: {:?}", sd.events);
+    assert_eq!(sd.events[0].rule, deployment::VANGUARD_RULE_TEXT);
+    assert_eq!(sd.events[0].why, "vanguard forward placement");
+    assert_eq!(sd.events[0].chosen, "+9.0\" forward", "the recorded chosen law");
 }
 
 // ==== NML-1152 step 5b — THE FIRST REAL PARITY NUMBER ====
@@ -1131,7 +1226,7 @@ fn spot_search_replays_every_fixture_unit() {
                 let sec = deployment::section_rect(&zone, u["section"].as_i64().unwrap());
                 let out = deployment::deploy_place_id(
                     &zone, &sec, forward_y, &objs, &mut occupied, &bs.board, &bs.walls,
-                    radius, &fp, base_r, flying, vanguard, deployment::VANGUARD_PLACE_M,
+                    radius, &fp, base_r, flying, vanguard, deployment::VANGUARD_PLACE_M, 15,
                 );
                 let spot_t = out.spot;
                 twin_mark_total += out.bisect_marks as usize;
@@ -1352,8 +1447,9 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
         };
         let (specs1, zone1) = build("1");
         let (specs2, zone2) = build("2");
-        let mut sd1 = deployment::deploy_side(&specs1, &zone1, &objs, board, d["sides"]["1"]["seed_value"].as_i64().unwrap());
-        let mut sd2 = deployment::deploy_side(&specs2, &zone2, &objs, board, d["sides"]["2"]["seed_value"].as_i64().unwrap());
+        // The corpus was recorded at epoch 15 — the directional-push leg, byte-exact.
+        let mut sd1 = deployment::deploy_side(&specs1, &zone1, &objs, board, d["sides"]["1"]["seed_value"].as_i64().unwrap(), 15);
+        let mut sd2 = deployment::deploy_side(&specs2, &zone2, &objs, board, d["sides"]["2"]["seed_value"].as_i64().unwrap(), 15);
         // draw-phase integrity, pinned END-TO-END here: order, sections,
         // fills, reserved, flag laws.
         let assert_draws = |slot: &str, sd: &deployment::SideDeploy| {
@@ -2067,7 +2163,7 @@ fn deployment_alternates_one_unit_per_player() {
     let objs = vec![(0.0_f64, 0.0_f64)];
 
     let won_by_1 = deployment::deploy_interleaved(
-        &specs1, &specs2, &zone1, &zone2, &objs, &board, 7, 8, 1);
+        &specs1, &specs2, &zone1, &zone2, &objs, &board, 7, 8, 1, 15);
     let slots: Vec<i64> = won_by_1.sequence.iter().map(|(s, _)| *s).collect();
     // mains 3 vs 4 -> 1,2,1,2,1,2 then side 2 alone; scouts 1 each -> 1,2
     assert_eq!(slots, vec![1, 2, 1, 2, 1, 2, 2, 1, 2], "winner first, strictly alternating: {:?}", won_by_1.sequence);
@@ -2080,14 +2176,14 @@ fn deployment_alternates_one_unit_per_player() {
 
     // The roll-off's other outcome: side 2 opens and keeps the priority.
     let won_by_2 = deployment::deploy_interleaved(
-        &specs1, &specs2, &zone1, &zone2, &objs, &board, 7, 8, 2);
+        &specs1, &specs2, &zone1, &zone2, &objs, &board, 7, 8, 2, 15);
     let slots2: Vec<i64> = won_by_2.sequence.iter().map(|(s, _)| *s).collect();
     assert_eq!(slots2, vec![2, 1, 2, 1, 2, 1, 2, 2, 1], "the other winner deploys first: {:?}", won_by_2.sequence);
 
     // REORDER ONLY: each side's placements are exactly deploy_side's, in the
     // same per-side order, at the same spots — for BOTH roll-off outcomes.
-    let whole1 = deployment::deploy_side(&specs1, &zone1, &objs, &board, 7);
-    let whole2 = deployment::deploy_side(&specs2, &zone2, &objs, &board, 8);
+    let whole1 = deployment::deploy_side(&specs1, &zone1, &objs, &board, 7, 15);
+    let whole2 = deployment::deploy_side(&specs2, &zone2, &objs, &board, 8, 15);
     for (tag, got) in [("winner 1", &won_by_1), ("winner 2", &won_by_2)] {
         assert_eq!(got.side1, whole1, "{tag}: side 1 unchanged by the interleave");
         assert_eq!(got.side2, whole2, "{tag}: side 2 unchanged by the interleave");
