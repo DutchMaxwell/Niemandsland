@@ -106,18 +106,20 @@ fn piercing_shooting_mark_ap_fires_from_21_and_not_below() {
         saves20
     );
 
-    // ----- epoch 17: the live epoch the bump leaves — the pre-bump reading -----
+    // ----- epoch 19: the LIVE predecessor epoch of this bump (#935's move-
+    // grants fold, 18 was #932's reservation) — the pre-bump reading by name,
+    // and every smaller epoch replays byte-identically with it.
     assert_eq!(
-        crate::acts::EPOCH_17_SURGE_SCOPE, 17,
-        "the epoch the corpus legs below replay is the bump's live predecessor on main"
+        crate::acts::EPOCH_19_MOVE_GRANTS_FOLD, 19,
+        "the live epoch the corpus legs below replay is this bump's predecessor"
     );
-    let (_, marked17) = run_pierce_epoch(&st, &statics, &buff_action(Some("b")), 13, 17);
-    let saves17 = save_targets(&marked17);
-    assert!(!saves17.is_empty(), "the same seed draws the same hits at 17");
+    let (_, marked19) = run_pierce_epoch(&st, &statics, &buff_action(Some("b")), 13, 19);
+    let saves19 = save_targets(&marked19);
+    assert!(!saves19.is_empty(), "the same seed draws the same hits at 19");
     assert!(
-        saves17.iter().all(|&t| t == 4),
-        "epoch 17 replays the recorded inert mark exactly: got {:?}",
-        saves17
+        saves19.iter().all(|&t| t == 4),
+        "epoch 19 replays the recorded inert mark exactly: got {:?}",
+        saves19
     );
 }
 
@@ -151,7 +153,7 @@ fn piercing_fighting_mark_ap_fires_from_21_and_not_below() {
     let (next21, struck21) = run_pierce_epoch(&st, &statics, &charge, 11, 21);
     assert_eq!(next21.vs_mark_round[0], st.round, "the mark fired on the charge");
     let saves21 = save_targets(&struck21);
-    assert!(!saves21.is_empty(), "17 seed-11 hits at 3+ — the strike saves draw");
+    assert!(!saves21.is_empty(), "seed 11 carries 17 hits at 3+ — the strike saves draw");
     assert!(
         struck21.rolls.iter().any(|r| r.kind == "attack" && r.target == 4),
         "the charge strikes at the bare Quality 4+ — the mark's +1 is AP only"
@@ -172,13 +174,14 @@ fn piercing_fighting_mark_ap_fires_from_21_and_not_below() {
         saves20
     );
 
-    // ----- epoch 17: the live epoch the bump leaves — the pre-bump reading -----
-    let (_, struck17) = run_pierce_epoch(&st, &statics, &charge, 11, 17);
-    let saves17 = save_targets(&struck17);
-    assert!(!saves17.is_empty(), "the same seed draws the strike saves at 17");
+    // ----- epoch 19: the LIVE predecessor epoch of this bump (#935) — the
+    // pre-bump reading; every smaller epoch replays identically with it.
+    let (_, struck19) = run_pierce_epoch(&st, &statics, &charge, 11, 19);
+    let saves19 = save_targets(&struck19);
+    assert!(!saves19.is_empty(), "the same seed draws the strike saves at 19");
     assert!(
-        saves17.iter().all(|&t| t == 4),
-        "epoch 17 replays the recorded inert mark exactly: got {:?}",
-        saves17
+        saves19.iter().all(|&t| t == 4),
+        "epoch 19 replays the recorded inert mark exactly: got {:?}",
+        saves19
     );
 }
