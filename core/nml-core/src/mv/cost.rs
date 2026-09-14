@@ -55,7 +55,7 @@ pub struct StepOpts<'a> {
     pub avoid_fine: &'a CellSet,
     /// STANDALONE_SWEEP_A_2026-09-14, rows `Dangerous Terrain Debuff` /
     /// `Difficult Terrain Debuff` — the moving unit's granted terrain debuffs
-    /// (the FROZEN `EPOCH_20_TERRAIN_DEBUFF`). The carried rule prices the
+    /// (the FROZEN `EPOCH_26_TERRAIN_DEBUFF`). The carried rule prices the
     /// same way the cell does: Dangerous first, then Difficult, exactly the
     /// cell order below. False on every call recorded before the gate.
     pub dangerous_debuff: bool,

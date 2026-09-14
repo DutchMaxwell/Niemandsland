@@ -1279,7 +1279,7 @@ static func _terrain_cost_at(p: Vector2, grid: Dictionary, opts: Dictionary) -> 
 		return INF
 	if (opts.get("avoid_fine", {}) as Dictionary).has(TerrainRules.cell_of(p, PLAN_CELL_IN)):
 		return INF   # base-radius-inflated: within clearance of avoided terrain (edge-aware routing)
-	# EPOCH_20_TERRAIN_DEBUFF (sweep A): the carried terrain debuffs price exactly like the
+	# EPOCH_26_TERRAIN_DEBUFF (sweep A): the carried terrain debuffs price exactly like the
 	# cell does — Dangerous first, then Difficult (the core's mv::cost order, and the
 	# call's own knobs: recorded calls carry them, old corpora default to false).
 	if bool(opts.get("dangerous_debuff", false)):

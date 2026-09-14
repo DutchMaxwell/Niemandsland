@@ -249,6 +249,16 @@ pub struct Knobs {
     /// a defect.
     #[serde(default)]
     pub rules_epoch: u32,
+    /// The replay-aware half of `EPOCH_19_MOVE_GRANTS_FOLD`: the header
+    /// carried `"books"` — a TABLE recording (`act_recorder.gd:266-268`
+    /// writes it unconditionally; no writer in `core/nml-core/src` does) — so
+    /// the record's `bands` already fold every move grant
+    /// (`battle_sim.gd:1707 -> move_bands_for_props`) and the fold's live
+    /// delta stays off (`sim::solo_move_grant_delta_in`). Default OFF: every
+    /// core-written record and every fixture predates the key. See
+    /// `Header::books` and `header_of`.
+    #[serde(default)]
+    pub bands_prefolded: bool,
 }
 
 /// The current rule-set generation (see `Knobs`/`Seams::rules_epoch`, `rule_on`).
@@ -313,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 20;
+pub const CURRENT_RULES_EPOCH: u32 = 26;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -555,6 +565,47 @@ pub const EPOCH_16_FREE_PLACEMENT: u32 = 16;
 /// site reads THIS constant, not the literal `17` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_17_SURGE_SCOPE: u32 = 17;
 
+pub const EPOCH_19_MOVE_GRANTS_FOLD: u32 = 19;
+
+/// The SCREENED MELEE gate (14.09., sweep B — row `Screened`): the army-book
+/// entries aliased to the Stealth primitive with `applies_charged: true`
+/// (Screened, Changebound, Machine-Fog, Empyrean Spirit, Gloom-Mist) print
+/// "When units where all models have this rule are shot or charged from over
+/// 9\" away, enemy units get -1 to hit rolls" — yet the core folded the
+/// Stealth DATA-alias pair (`stealth_alias_penalty`/`stealth_alias_over_in`)
+/// on the shooting path only: `melee_hit_modifier`'s signature had nowhere to
+/// put it, so a charge launched from over 9" rolled unpenalised hits in every
+/// core-simulated game. From 22 the dice melee fold
+/// (`dice.rs::melee_hit_target` through `resolve_melee_leg`'s
+/// `screened_melee` gate) applies the alias's own `hit_penalty` when the
+/// strike is a charge from over the alias's `over_in`, measured the table's
+/// own way (`geom::centre_dist_in` on the pre-move snapshot — the
+/// `report["charge_from_in"]` measure). Below 22 the fold never sees the
+/// alias, so every corpus recorded at 19 or less replays byte-exact. `22` is
+/// one past every existing stamp, and the value `CURRENT_RULES_EPOCH` is
+/// bumped to in the same change. Every call site reads THIS constant, not the
+/// literal `22` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_22_SCREENED_MELEE: u32 = 22;
+
+/// The INERT MARKS gate (14.09., MARK_FAMILY_SWEEP_2026-09-14 finding 1 — the
+/// two #870 vs_target marks whose grant lands but never folds): Piercing
+/// Fighting Mark (`aof`/`aofr` goblins, `gff` berserker_clans) and Piercing
+/// Shooting Mark (`gf` dao_union) carry the entry's own `grants_rule`
+/// ("AP(+1) in melee" / "AP(+1) when shooting"), but `tray_vs_marks` pushed
+/// the mark's once-grant under the BASE name ("Piercing Fighting") and the
+/// only grant readers ask for the `grants_rule` strings — so both layers
+/// stamped and spent the mark and nothing folded. From 23 the grant rides the
+/// entry's own string and `ctx_live` reads it with the exact-string twin
+/// (`mods::granted_exact`); below 23 the base name rides and every corpus
+/// replays the recorded inert mark. The two Precision-family Registry entries
+/// with undefined/underdetermined effect data (`Precision Tag`'s `hit_mod:
+/// "Y"` placeholder, `Precision Target`'s missing `beneficiary` +
+/// `uses_per_game` seam) are deliberately NOT wired — no book text on disk.
+/// `23` is one past every existing stamp (22 = #932's Screened melee leg,
+/// 19 = #935's fold), and the value `CURRENT_RULES_EPOCH` is bumped to in the same
+/// change. Every call site reads THIS constant, not the literal `23` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_23_INERT_MARKS: u32 = 23;
 /// The TERRAIN DEBUFF gate (14.09., sweep A — rows `Dangerous Terrain Debuff`
 /// / `Difficult Terrain Debuff`, `STANDALONE_SWEEP_A_2026-09-14.md`): both
 /// layers announce the debuff — the table's log even appends a dead
@@ -562,17 +613,19 @@ pub const EPOCH_17_SURGE_SCOPE: u32 = 17;
 /// treated a unit-level terrain rule as a hazard. The once-per-move Dangerous
 /// test and the movement cost keyed on the CELL a unit crossed, never on a
 /// rule the unit carried, so the marked enemy walked open ground unwounded
-/// and at full speed. From 20 the core folds the grant the same way it folds
+/// and at full speed. From 26 the core folds the grant the same way it folds
 /// a cell, through the ONE `mods::granted_terrain_debuff` reader:
 /// `sim::dangerous_dice` ORs a granted "Dangerous Terrain" into the per-model
 /// trigger, `mv::step`'s p.11 cap and `mv::cost::terrain_cost_at` (carried on
 /// the move call's own debuff knobs) consult a granted "Difficult Terrain"
-/// the way they consult the cell. Below 20 the grant is inert — every
-/// recorded game replays unchanged. `20` is one past every existing stamp,
-/// and the value `CURRENT_RULES_EPOCH` is bumped to in the same change. Every
-/// call site reads THIS constant, not the literal `20` or
+/// the way they consult the cell. Below 26 the grant is inert — every
+/// recorded game replays unchanged. `26` is one past every existing stamp (25 = the ethereal bands leg, 24 = the
+/// placed3 activation leg, 23 = `EPOCH_23_INERT_MARKS`, 19 = #935's fold — 24
+/// and 25 reserved in flight, PRs #940 and #941), and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every
+/// call site reads THIS constant, not the literal `26` or
 /// `CURRENT_RULES_EPOCH`.
-pub const EPOCH_20_TERRAIN_DEBUFF: u32 = 20;
+pub const EPOCH_26_TERRAIN_DEBUFF: u32 = 26;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -679,6 +732,7 @@ impl Default for Knobs {
             cond_ap_dice: false,
             versatile_reach: false,
             rules_epoch: 0,
+            bands_prefolded: false,
         }
     }
 }
@@ -696,6 +750,17 @@ struct Header {
     terrain: Option<PlainTerrain>,
     #[serde(default)]
     knobs: Knobs,
+    /// The TABLE recorder's books block (`act_recorder.gd:266-268` — written
+    /// unconditionally inside the always-written header dict; no writer in
+    /// `core/nml-core/src` emits it, the core's own header shape is
+    /// `rows.rs:679`). The PRESENCE is the signal, the value opaque on
+    /// purpose: `books` present ⇒ recorded by the table ⇒ the record's
+    /// `bands` already carry every grant (`battle_sim.gd:1707 ->
+    /// move_bands_for_props`), so the replay-aware
+    /// `sim::solo_move_grant_delta_in` adds nothing. Read once in
+    /// `header_of` into `Knobs::bands_prefolded`.
+    #[serde(default)]
+    books: Option<serde_json::Value>,
 }
 
 /// One entry of `trace.scored` — `AiPlanner.plan_with_rollout` ai_planner.gd:
@@ -961,6 +1026,10 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
 }
 
 fn header_of(header: Header) -> Result<ActHeader, String> {
+    // `books` present ⇒ a table recording ⇒ the recorded bands carry every
+    // grant (see `Header::books`). Core-written records and every fixture
+    // have no `books`, so the flag reads back `false` there.
+    let bands_prefolded = header.books.is_some();
     let terrain = match &header.terrain {
         Some(t) => Terrain::build(t),
         None => Terrain::absent(),
@@ -976,7 +1045,7 @@ fn header_of(header: Header) -> Result<ActHeader, String> {
         "",
         header.knobs.rules_epoch,
     )?;
-    Ok(ActHeader { profiles: Rc::new(profiles), terrain, knobs: header.knobs })
+    Ok(ActHeader { profiles: Rc::new(profiles), terrain, knobs: Knobs { bands_prefolded, ..header.knobs } })
 }
 
 /// Reads `acts.jsonl` into the profile table, the board and the activations.
@@ -1058,7 +1127,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 20, "epoch 20's gate (EPOCH_20_TERRAIN_DEBUFF) bumps the live epoch to 20, one past EPOCH_17_SURGE_SCOPE");
+        assert_eq!(CURRENT_RULES_EPOCH, 26, "epoch 26's gate (EPOCH_26_TERRAIN_DEBUFF) bumps the live epoch to 26, one past the in-flight 24 (#940) and 25 (#941) reservations");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1068,12 +1137,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":20}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":26}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 20"
-
+            "a fresh play_game() now stamps the bumped epoch, 26"
         );
     }
 
@@ -1260,5 +1328,32 @@ mod tests {
         let head = r#"{"kind":"header","profiles":{},"knobs":{"melee_reach":"table"}}"#;
         let header = read_act_header(head).expect("a stamped melee_reach parses");
         assert_eq!(header.knobs.melee_reach, MeleeReach::Table);
+    }
+
+    /// The replay-aware half of `EPOCH_19_MOVE_GRANTS_FOLD`: a header WITH
+    /// `"books"` is a TABLE recording (`act_recorder.gd:266-268`), so its
+    /// recorded `bands` already fold every grant — the header stamps
+    /// `bands_prefolded` and the fold's live delta stays off.
+    #[test]
+    fn a_books_header_stamps_bands_prefolded() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":19},"books":{"source":"table","sha256":"x","generated":"y"}}"#;
+        let header = read_act_header(head).expect("a header with books parses");
+        assert!(
+            header.knobs.bands_prefolded,
+            "books present ⇒ a table recording ⇒ the recorded bands are pre-folded"
+        );
+    }
+
+    /// The same header WITHOUT `"books"` — the core's own header shape
+    /// (`rows.rs:679`, no writer in `core/nml-core/src` emits the key) —
+    /// stays `bands_prefolded: false`: bands fresh, the fold applies.
+    #[test]
+    fn a_core_written_header_stays_unprefolded() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":19}}"#;
+        let header = read_act_header(head).expect("the core's own header shape parses");
+        assert!(
+            !header.knobs.bands_prefolded,
+            "no books ⇒ core-written ⇒ bands fresh, the live delta folds"
+        );
     }
 }

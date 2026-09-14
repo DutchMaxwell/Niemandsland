@@ -1280,7 +1280,10 @@ pub fn retaliate_saves_with_tray(
 /// bonus. This is deliberately NOT `profile_ev`'s melee branch, which drops
 /// Reliable (ai_ev.gd:336-341) and would roll a Reliable weapon at the unit's
 /// plain Quality: a recorded target the port could never match.
-fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_hit: i64) -> i64 {
+fn melee_hit_target(
+    p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_hit: i64,
+    charge_from_in: f64, screened_melee: bool,
+) -> i64 {
     if att.fatigued {
         return UNMODIFIED_SIX;
     }
@@ -1292,7 +1295,21 @@ fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_h
     let base = thrust_to_hit(reliable_quality(q, p.reliable), charging && (p.thrust || att.thrust_grant));
     // B2b: the melee half of `_solo_hit_mod_info` (:5637-5638) sums the same
     // two live nets into `mm` before the single clamp below.
-    let mut m = melee_hit_modifier(def.evasive, def.melee_evasion) + uf_hit + att.hit_mod
+    // EPOCH_22_SCREENED_MELEE (sweep B, row `Screened`) — the Stealth
+    // DATA-alias's CHARGE leg (`applies_charged`, main.gd:5729) reaches the
+    // melee fold through `screened_melee`: below the gate the caller passes
+    // false and the alias pair stays 0, byte-exact. `charge_from_in` is the
+    // pre-charge unit-centre distance the caller measured (0.0 for the
+    // strike-back and the counter phases).
+    let alias_pen = if screened_melee { def.stealth_alias_penalty } else { 0 };
+    let mut m = melee_hit_modifier(
+        def.evasive,
+        def.melee_evasion,
+        alias_pen,
+        def.stealth_alias_over_in,
+        def.stealth_alias_applies_charged,
+        charge_from_in,
+    ) + uf_hit + att.hit_mod
         + def.vs_hit_mod;
     // Block C2 — the melee branch's Shot Modifier loop (main.gd:5658-5668):
     // `melee_only` names on every strike, `when: "charge"` names only on one.
@@ -1427,7 +1444,10 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 ///   5. Guarded / Versatile Defense's charged-from-over-9" +1 Defense (:5948)
 ///      and the Shred Boost's charge half (the widened 1-2 window "when it
 ///      charges enemies over 9" away"): the port never measured a pre-charge
-///      gap — melee resolves the base 1s window only. The shooting half of
+///      gap for those legs — melee resolves the base 1s window only. (The
+///      Screened-family charge leg does see one since
+///      `EPOCH_22_SCREENED_MELEE`: `resolve_melee_leg`'s `charge_from_in`.)
+///      The shooting half of
 ///      the Boost IS ported (the volley's `shred_boost_dice` gate), the
 ///      table's own Surge-Boost precedent is shooting-only too.
 ///
@@ -1443,10 +1463,15 @@ pub fn resolve_melee_with_tray(
     shred_alias_dice: bool,
     tray: &mut Tray,
 ) -> ShootResult {
-    resolve_melee_leg(strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice, false, tray)
+    resolve_melee_leg(
+        strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice,
+        false, 0.0, false, tray,
+    )
 }
 
-// The leg split adds one gate-bool to the resolver's existing pack.
+// The leg split adds one gate-bool to the resolver's existing pack;
+// EPOCH_22_SCREENED_MELEE adds the gate and the pre-charge distance the
+// alias's charge leg folds on.
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_melee_leg(
     strikers: &[Shooter<'_>],
@@ -1456,8 +1481,14 @@ pub fn resolve_melee_leg(
     cond_ap_dice: bool,
     shred_alias_dice: bool,
     deadly_per_model: bool,
+    charge_from_in: f64,
+    screened_melee: bool,
     tray: &mut Tray,
 ) -> ShootResult {
+    // The alias's charged leg fires on the CHARGER's strikes only — a
+    // strike-back or counter phase rides 0.0, which never clears the
+    // alias's `over_in` gate (the table's `charged_ok and melee` reading).
+    let charge_from_in = if charging { charge_from_in } else { 0.0 };
     let mut out = ShootResult::default();
     // Wave 3 — the Shielded-family alias's rules-must-log flag, the volley
     // fold's melee twin (Shielded is the whole melee Defense ladder here).
@@ -1542,7 +1573,9 @@ pub fn resolve_melee_leg(
             }
             // Wave 4 — the unconditional -1 rode this strike's to-hit sum.
             evasive_boost_fired |= def.evasive_alias;
-            let target = melee_hit_target(p, sh.att, def, charging, uf_hit);
+            let target = melee_hit_target(
+                p, sh.att, def, charging, uf_hit, charge_from_in, screened_melee,
+            );
             let faces = tray.roll(n as usize);
             out.rolls.push(Roll {
                 kind: "attack",

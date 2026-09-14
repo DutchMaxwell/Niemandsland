@@ -64,15 +64,13 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 20 (acts::EPOCH_20_TERRAIN_DEBUFF, the terrain-debuff
-    # fix; 17 was the Surge-when-Shooting scope fix, 16 was the
-    # Vanguard/Drakesworn/Fanatic free-placement fix, 15 was the
-    # Precision-marks beneficiary side fix, 14 was the Deadly per-model
-    # landing, 13 was #921's): explicit, not just dynamic — a fresh game now
-    # stamps 20, not 17. A record already stamped 17 (recorded while epoch 17
-    # was the live epoch, before the terrain-debuff gate existed) must never
-    # be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 20
+    # core rules epoch 26 (acts::EPOCH_26_TERRAIN_DEBUFF, the terrain-debuff
+    # fix; 25 and 24 are the in-flight #941 ethereal and #940 placed3
+    # reservations, 23 was #936's Piercing-marks inert-grant fix, 22 #932's
+    # Screened melee leg, 19 #935's move-grant fold): explicit, not just
+    # dynamic — a fresh game now stamps 26, not 23. A record already stamped
+    # 23 must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 26
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)

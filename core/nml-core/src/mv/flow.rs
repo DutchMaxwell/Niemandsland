@@ -88,7 +88,7 @@ pub struct FlowOpts<'a> {
     /// `opts["board_y_in"]` (#215).
     pub board_y_in: f64,
     /// STANDALONE_SWEEP_A_2026-09-14 — the moving unit's granted terrain
-    /// debuffs (`EPOCH_20_TERRAIN_DEBUFF`), priced by `mv::cost::terrain_cost_
+    /// debuffs (`EPOCH_26_TERRAIN_DEBUFF`), priced by `mv::cost::terrain_cost_
     /// at` the way it prices the cell.
     pub dangerous_debuff: bool,
     pub difficult_debuff: bool,

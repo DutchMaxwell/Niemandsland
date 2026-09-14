@@ -6449,7 +6449,25 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: AP(+%d) against %s" % [
 				str((cp as Dictionary)["name"]), int((cp as Dictionary)["bonus"]), defender.get_name()], true)
-	var ap: int = int(profile.get("ap", 0)) + cond_ap
+	# EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14): the Piercing
+	# Fighting/Shooting Mark's attackers-side grant — the mark's once-record on
+	# THIS defender (beneficiary "attackers", the entry's own scope) names
+	# "AP(+1) in melee" / "AP(+1) when shooting"; the exchange's save AP folds
+	# it, and the once-consumption spends it with the exchange. Impact runs
+	# before _solo_apply_vs_marks, so an impact batch sees no record — the same
+	# order the core's tray_vs_marks seam keeps (after Impact, before strikes).
+	var pierce_grant_ap := 0
+	for rd in AiSpell.mods_for(_solo_mods_of_chain(defender), "grant", melee):
+		if str((rd as Dictionary).get("beneficiary", "")) != "attackers":
+			continue
+		var grant_rule := str((rd as Dictionary).get("grants_rule", ""))
+		if (melee and grant_rule == "AP(+1) in melee") or (not melee and grant_rule == "AP(+1) when shooting"):
+			pierce_grant_ap += 1
+	if pierce_grant_ap > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Piercing Mark: friendly attackers get AP(+%d) against %s (once)" % [
+				pierce_grant_ap, defender.get_name()], true)
+	var ap: int = int(profile.get("ap", 0)) + cond_ap + pierce_grant_ap
 	# Rending (GF/AoF v3.5.1 p.14) AND the army-book Destructive (wave 4) BOTH upgrade the unmodified-6-to-
 	# hit hits to AP(+4); they share AiCombatMath.rending_ap_hits (one math). The only difference is
 	# downstream: Rending bypasses Regeneration (via _solo_ignores_regen), Destructive does not.
@@ -17234,13 +17252,22 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 				continue
 			member.unit_properties["vs_mark_round"] = opr_army_manager.current_round
 			var base := n.trim_suffix(" Mark")
+			# EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14): the entry's own
+			# grants_rule ("AP(+1) in melee" / "AP(+1) when shooting") is the rule
+			# the mark hands the attackers — the base name has no reader in either
+			# layer, so the mark was stamped and spent for nothing. Entries without
+			# a grants_rule keep the base name exactly as before; the entry's own
+			# scope rides too, so the AP grant reads only in its own phase.
+			var grant := str(sp.get("grants_rule", base))
+			if grant.is_empty():
+				grant = base
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s marks %s — friendly units attacking it gain %s (once)" % [
-					n, member.get_name(), target.get_name(), base], true)
+					n, member.get_name(), target.get_name(), grant], true)
 			# #845 option (b): the record lands on the MARKED ENEMY (beneficiary "attackers") and
 			# carries no live overlay — the target-aware readers serve any friendly attacker, the
 			# bearer only while it acts against this enemy. The once-consumption spends it after.
-			_solo_record_spell_mod(target, n, {"grants_rule": base, "scope": "", "beneficiary": "attackers",
+			_solo_record_spell_mod(target, n, {"grants_rule": grant, "scope": str(sp.get("scope", "")), "beneficiary": "attackers",
 				"duration": "once", "no_live_grant": true})
 
 

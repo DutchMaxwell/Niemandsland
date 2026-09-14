@@ -12,7 +12,7 @@
 
 use std::rc::Rc;
 
-use crate::acts::{rule_on, EPOCH_11_SOLO_GRANT_READS, EPOCH_20_TERRAIN_DEBUFF};
+use crate::acts::{rule_on, EPOCH_11_SOLO_GRANT_READS, EPOCH_26_TERRAIN_DEBUFF};
 use crate::rules::base_rule_name;
 use crate::state::State;
 
@@ -187,10 +187,33 @@ pub fn granted_vs(state: &State, target: usize, rule: &str) -> bool {
 /// once-per-move Dangerous test (`sim::dangerous_dice`), the p.11 cap and the
 /// movement cost (`mv::step` / `mv::cost`, carried on the move call's own
 /// debuff knobs) — fold the grant through the SAME `granted()` chain read
-/// every other granted base rule rides. Gate: `EPOCH_20_TERRAIN_DEBUFF` — a
-/// rules_epoch below 20 reads nothing.
+/// every other granted base rule rides. Gate: `EPOCH_26_TERRAIN_DEBUFF` — a
+/// rules_epoch below 26 reads nothing.
 pub fn granted_terrain_debuff(state: &State, i: usize, rule: &str, rules_epoch: u32) -> bool {
-    rule_on(rules_epoch, EPOCH_20_TERRAIN_DEBUFF) && granted(state, i, rule)
+    rule_on(rules_epoch, EPOCH_26_TERRAIN_DEBUFF) && granted(state, i, rule)
+}
+
+/// EPOCH 23 INERT MARKS — the exact-string twin of `granted`: the Piercing
+/// marks' `grants_rule` values ("AP(+1) in melee" / "AP(+1) when shooting")
+/// name the EFFECT, not a registry rule, so `base_rule_name`'s split at the
+/// first '(' would shred both to "AP" and the base-name read could never
+/// match them. Same joined-chain walk, same attackers-side split, full-string
+/// comparison.
+pub fn granted_exact(state: &State, i: usize, rule: &str) -> bool {
+    chain_grant_exact(state, i, rule, false)
+}
+
+fn chain_grant_exact(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
+    let mut who: Vec<usize> = vec![i];
+    if let Some(h) = state.attached_to[i] {
+        who.push(h);
+    }
+    who.extend(state.attached[i].iter().copied());
+    who.iter().any(|&u| {
+        state.buffs[u]
+            .iter()
+            .any(|r| r.attackers == attackers && !r.grants_rule.is_empty() && &*r.grants_rule == rule)
+    })
 }
 
 fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
@@ -211,8 +234,12 @@ fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
 /// CENSUS rows 1-5 (maintainer decision 13.09., semantics §11.2): the SOLO
 /// move-grant family as EVIDENCE-ONLY accessor reads. The recorded dynamic
 /// band already carries each grant (movement_range_controller.gd:83-135), so
-/// nothing here folds (semantics §2(a)); the caller logs. Gate:
-/// `EPOCH_11_SOLO_GRANT_READS` — a rules_epoch below 11 reads nothing.
+/// nothing here folds (semantics §2(a)); the caller logs. From
+/// `EPOCH_19_MOVE_GRANTS_FOLD` the family folds for real at the move spend
+/// (`sim.rs::solo_move_grant_delta_in`) and this accessor's caller stays
+/// silent — a FRESH core-simulated game has no recorded band to carry the
+/// grant. Gate: `EPOCH_11_SOLO_GRANT_READS` — a rules_epoch below 11 reads
+/// nothing.
 pub fn solo_move_grants(state: &State, i: usize, rules_epoch: u32) -> Vec<&'static str> {
     if !rule_on(rules_epoch, EPOCH_11_SOLO_GRANT_READS) {
         return Vec::new();

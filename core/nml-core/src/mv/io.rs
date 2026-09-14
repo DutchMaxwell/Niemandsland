@@ -185,7 +185,7 @@ pub struct CallOpts {
     pub board_y_in: f64,
     /// STANDALONE_SWEEP_A_2026-09-14, rows `Dangerous Terrain Debuff` /
     /// `Difficult Terrain Debuff` — the moving unit's granted terrain debuffs
-    /// (the FROZEN `EPOCH_20_TERRAIN_DEBUFF`, folded by `mods::granted_
+    /// (the FROZEN `EPOCH_26_TERRAIN_DEBUFF`, folded by `mods::granted_
     /// terrain_debuff` before the call is built). `mv::cost` prices a carried
     /// debuff the way it prices the cell; false on every call recorded before
     /// the gate, so old corpora replay byte-exact.

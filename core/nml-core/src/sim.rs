@@ -25,6 +25,7 @@ use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
     EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
+    EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -1224,6 +1225,19 @@ fn tray_vs_marks(
             }
             next.vs_mark_round[bearer] = next.round;
             let base = b.name.strip_suffix(" Mark").unwrap_or(b.name.as_str());
+            // EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14 finding 1):
+            // the grant the mark hands the attacker is the entry's own
+            // `grants_rule` ("AP(+1) in melee" / "AP(+1) when shooting"), not
+            // the base name — the base name is read by nobody, so the mark was
+            // stamped and spent for nothing. Below 23 the base name rides and
+            // every corpus replays the recorded inert mark.
+            let grant = if rule_on(seams.rules_epoch, EPOCH_23_INERT_MARKS)
+                && !b.grants_rule.is_empty()
+            {
+                b.grants_rule.clone()
+            } else {
+                base.to_string()
+            };
             next.buffs[si].push(mods::LiveMod {
                 hit_mod: 0,
                 casting_mod: 0,
@@ -1232,7 +1246,7 @@ fn tray_vs_marks(
                 def_mod: 0,
                 defense_mod: 0,
                 move_mod: 0,
-                grants_rule: Rc::from(base),
+                grants_rule: Rc::from(grant),
                 scope: Rc::from(""),
                 attackers: false,
                 once: true,
@@ -2153,9 +2167,9 @@ pub(crate) fn dangerous_dice(
     // `base_in_terrain` on this board — both halves of the trigger use it.
     let in_dang = |p: &[f64; 3], r: f64| base_in_terrain(geom::to_f32(*p), r, t, is_dangerous);
     // STANDALONE_SWEEP_A_2026-09-14, row `Dangerous Terrain Debuff` — the
-    // FROZEN `EPOCH_20_TERRAIN_DEBUFF`: the granted "Dangerous Terrain" the
+    // FROZEN `EPOCH_26_TERRAIN_DEBUFF`: the granted "Dangerous Terrain" the
     // unit CARRIES is a hazard the cell consults never see. It rides the same
-    // trigger and the same flying guard a crossing does; below 20 the grant
+    // trigger and the same flying guard a crossing does; below 26 the grant
     // reads nothing, so every recorded game replays.
     let debuffed = |st: &State, u: usize| {
         mods::granted_terrain_debuff(st, u, "Dangerous Terrain", seams.rules_epoch)
@@ -2375,9 +2389,14 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     }
     // CENSUS rows 1-5 (evidence-only, non-folding — semantics §11.2/§12):
     // exercise the recorded grant ledger and log; the recorded band carries
-    // the effect, so this must never fold.
-    for name in mods::solo_move_grants(state, i, rules_epoch) {
-        trace_rule("solo-grant", name, &format!("recorded band carries it (evidence-only), unit {i}"));
+    // the effect, so this must never fold. From `EPOCH_19_MOVE_GRANTS_FOLD`
+    // the family folds for real at the move spend (`solo_move_grant_delta_in`),
+    // so the "recorded band carries it" line would lie there — the fold's own
+    // trace names every firing grant instead.
+    if !rule_on(rules_epoch, EPOCH_19_MOVE_GRANTS_FOLD) {
+        for name in mods::solo_move_grants(state, i, rules_epoch) {
+            trace_rule("solo-grant", name, &format!("recorded band carries it (evidence-only), unit {i}"));
+        }
     }
     // WAVE 2 — the family's live-grant legs. Gated on `EPOCH_5_TABLE_RULES`
     // (frozen at 5, the stamping-gap fix): a rules_epoch below 5 replays
@@ -2389,6 +2408,18 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.versatile_grant = mods::granted(state, i, "Versatile Attack");
         c.pierce_shooting_grant = mods::granted(state, i, "AP(+1) when shooting");
         c.pierce_melee_grant = mods::granted(state, i, "AP(+1) in melee");
+        // EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14 finding 1): the
+        // two Piercing marks' once-grants ride `tray_vs_marks` with the
+        // entry's own `grants_rule` string — which the base-name reads above
+        // can never match (`base_rule_name` splits at the '('). Below 23 the
+        // grant keeps the base name and stays inert: every corpus replays the
+        // recorded no-op.
+        if rule_on(rules_epoch, EPOCH_23_INERT_MARKS) {
+            c.pierce_shooting_grant = c.pierce_shooting_grant
+                || mods::granted_exact(state, i, "AP(+1) when shooting");
+            c.pierce_melee_grant =
+                c.pierce_melee_grant || mods::granted_exact(state, i, "AP(+1) in melee");
+        }
         c.pierce_assault_grant = mods::granted(state, i, "Piercing Assault");
         c.unpredictable_shooting =
             c.unpredictable_shooting || mods::granted(state, i, "Unpredictable Shooter");
@@ -3241,6 +3272,7 @@ fn strike_phase(
     si: usize,
     ti: usize,
     charging: bool,
+    charge_from_in: f64,
     seams: Seams,
     tray: &mut Tray,
     shot: &mut ShootResult,
@@ -3328,7 +3360,7 @@ fn strike_phase(
     // own: on from the current rules epoch onward, pre-port corpora replay
     // byte-exact (dice.rs::save_batch's gate).
     let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
-    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), tray);
+    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), tray);
     // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
     // here; the gated aliases never reach a melee save batch, exactly the
     // table's own `dist_in: -1.0` read, main.gd:6119).
@@ -3532,6 +3564,7 @@ fn tray_charge(
     seams: Seams,
     tray: &mut Tray,
     shot: &mut ShootResult,
+    charge_from_in: f64,
 ) -> Option<usize> {
     if statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter) {
         // :8055-8059 — a Counter weapon runs a WHOLE extra strike phase before
@@ -3548,7 +3581,7 @@ fn tray_charge(
     let mut by_su = 0;
     let mut by_tu = 0;
     if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
-        let (c, rc) = strike_phase(statics, next, ti, si, false, seams, tray, shot, StrikeSet::CounterOnly);
+        let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly);
         by_tu += c;
         by_su += rc;
     }
@@ -3568,7 +3601,7 @@ fn tray_charge(
             // an Impact pool that wiped the defender ends the melee here.
             if next.alive[si] > 0 && next.alive[ti] > 0 {
                 // B13: the defender's lash-back credits ITS OWN tally (by_tu).
-                let (c, rc) = strike_phase(statics, next, si, ti, true, seams, tray, shot, StrikeSet::All);
+                let (c, rc) = strike_phase(statics, next, si, ti, true, charge_from_in, seams, tray, shot, StrikeSet::All);
                 by_su += c;
                 by_tu += rc;
                 next.fatigued[si] = true;
@@ -3576,7 +3609,7 @@ fn tray_charge(
         } else if next.alive[ti] > 0 && next.alive[si] > 0 {
             // :8100 — and so does the strike-back, in both directions.
             // B13: the strike-back's lash-back credits the charger's tally.
-            let (c, rc) = strike_phase(statics, next, ti, si, false, seams, tray, shot, strike_back_set);
+            let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set);
             by_tu += c;
             by_su += rc;
             next.fatigued[ti] = true;
@@ -4607,6 +4640,99 @@ fn live_move_bonus_in(state: &State, statics: &[UnitStatic], i: usize, rules_epo
         &statics[state.roster.profile[i]].name, "move", |r| r.move_mod) as f64
 }
 
+thread_local! {
+    /// The once-per-game latch of the `bands_prefolded` trace line: printed
+    /// on the FIRST move act the replay-aware arm turns off, never again.
+    static PREFOLD_NOTE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// EPOCH_19_MOVE_GRANTS_FOLD — the SOLO move-grant family folded for REAL.
+/// The census read (`ctx_live`'s `solo_move_grants` loop) stays evidence-only
+/// below the gate; from 19 a live grant of Slow, Fast, Swift, Rapid Advance
+/// or Rapid Rush moves the unit at the one point the core spends a move
+/// budget: this delta joins the per-activation `band_in` accumulation next
+/// to Bounding/Grounded Speed/Speed Feat/Great Musician. A band recompute
+/// was rejected, not chosen: the recorded games' `state.bands` already fold
+/// every grant, so a recompute would double-count exactly the corpora the
+/// epoch gate keeps byte-exact. The numbers are the registry's own
+/// (`unit.rs::solo_move_grant_mods_of`, the table band pass's
+/// `advance_mod`/`rush_mod`), never inches; a name the profile already
+/// PRINTS is skipped (the loader's band fold already spent it, the table's
+/// overlay never re-grants, main.gd:3858); granted Swift cancels a granted
+/// Slow, and so does a PRINTED Swift. `kind` picks the band the way Speed
+/// Feat does: `advance_mod` on an ADVANCE, `rush_mod` on a RUSH/CHARGE —
+/// the charge inherits the rush band (movement_range_controller.gd:170-187).
+///
+/// The REPLAY-AWARE arm: `bands_prefolded` marks a header that carried
+/// `"books"` — a TABLE recording (`act_recorder.gd:266-268`; no writer in
+/// `core/nml-core/src` emits the key) — whose recorded `bands` already fold
+/// every grant (`battle_sim.gd:1707 -> move_bands_for_props`), so this
+/// function returns 0.0 and names the arm once per game on stderr; a fresh
+/// core sim has no `books`, the flag is false, the delta folds as before.
+/// The trace line fires the first time the arm does.
+fn solo_move_grant_delta_in(
+    statics: &[UnitStatic], state: &State, si: usize, kind: i64, rules_epoch: u32,
+    bands_prefolded: bool,
+) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_19_MOVE_GRANTS_FOLD) {
+        return 0.0;
+    }
+    if bands_prefolded {
+        // One trace line the first time the arm fires for this game — the
+        // fold is off, the recorded bands carry the grants.
+        if !PREFOLD_NOTE.with(std::cell::Cell::get) {
+            PREFOLD_NOTE.set(true);
+            trace_rule("move-bands", "prefold", "recorded bands carry the grants, live delta off");
+        }
+        return 0.0;
+    }
+    let us = &statics[state.roster.profile[si]];
+    let Some(stamp) = us.solo_move_grant_mods.as_ref() else {
+        return 0.0;
+    };
+    let un = &us.name;
+    // The kind split is Speed Feat's own: `advance_mod` on an ADVANCE,
+    // `rush_mod` on a RUSH/CHARGE (the charge inherits the rush band),
+    // nothing on the non-move kinds.
+    let (adv_kind, moving) = match kind {
+        ADVANCE => (true, true),
+        RUSH | CHARGE => (false, true),
+        _ => (false, false),
+    };
+    if !moving {
+        return 0.0;
+    }
+    // Rules-must-log: every firing grant names itself the one time it moves
+    // the band (the static band pass's own trace shape). A name whose faction
+    // registry fields no entry spends 0.0 and stays silent.
+    let band = if adv_kind { "advance" } else { "rush/charge" };
+    let fire = |name: &'static str, v: f64| {
+        if v != 0.0 {
+            trace_rule("move-bands", name, &format!("{un}: {v:+}\" {band} from a live grant"));
+        }
+        v
+    };
+    let mut d = 0.0;
+    if mods::granted(state, si, "Fast") && !stamp.fast_printed {
+        d += fire("Fast", if adv_kind { stamp.fast_advance } else { stamp.fast_rush });
+    }
+    if mods::granted(state, si, "Rapid Advance") && !stamp.rapid_advance_printed {
+        d += fire("Rapid Advance", stamp.rapid_advance);
+    }
+    if mods::granted(state, si, "Rapid Rush") && !stamp.rapid_rush_printed {
+        d += fire("Rapid Rush", stamp.rapid_rush);
+    }
+    let slow = mods::granted(state, si, "Slow") && !stamp.slow_printed;
+    if slow {
+        if mods::granted(state, si, "Swift") || stamp.swift_printed {
+            trace_rule("move-bands", "Swift", &format!("{un}: cancels the granted Slow"));
+        } else {
+            d += fire("Slow", if adv_kind { stamp.slow_advance } else { stamp.slow_rush });
+        }
+    }
+    d
+}
+
 // ------------------------- S10: destination-side leftovers ------------------
 
 /// S10-a — `AiPlanner.RETREAT_GOAL_IN` ai_planner.gd:11. The retreat
@@ -4960,6 +5086,12 @@ fn resolve_with(
     // `move_bands_for_props` does (rush += spell; charge = rush + charge_extra,
     // movement_range_controller.gd:168-170).
     let buff_in = live_move_bonus_in(&next, statics, si, seams.rules_epoch);
+    // EPOCH_19 — the granted SOLO move family, folded for real at the spend
+    // (see `solo_move_grant_delta_in`): the same live read the census loop
+    // below only logs below the gate.
+    let grant_in = solo_move_grant_delta_in(
+        statics, &next, si, kind, seams.rules_epoch, seams.bands_prefolded,
+    );
     if feat_in != 0.0 {
         next.feats_used[si].push(
             statics[pi_s]
@@ -4986,7 +5118,8 @@ fn resolve_with(
         + vr_in
         + gs_in
         + feat_in
-        + buff_in;
+        + buff_in
+        + grant_in;
     // NML-1152 B14 step 1 — rules-must-log: the live read names itself the
     // one time it changes the band (Bounding's line above is the shape).
     if gs_in != 0.0 {
@@ -5766,7 +5899,15 @@ fn resolve_with(
                 // (`tray_morale`) — no morale draw is left standing, verified by
                 // replay.
                 if let Some((tray, shot)) = dice.as_mut() {
-                    if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot) {
+                    // EPOCH_22_SCREENED_MELEE — the pre-charge gap, measured the
+                    // table's own way: unit-centre to unit-centre on the
+                    // PRE-move snapshot (`report["charge_from_in"]`,
+                    // solo_controller.gd:2329; `geom::centre_dist_in` is the
+                    // NML-1152 over-9" modifier measure). `state` still holds
+                    // the pre-move positions the charge move started from.
+                    let charge_from_in =
+                        geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
+                    if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot, charge_from_in) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.

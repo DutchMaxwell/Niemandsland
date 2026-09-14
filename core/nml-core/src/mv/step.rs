@@ -411,7 +411,7 @@ struct Move<'a> {
 
 impl Move<'_> {
     /// STANDALONE_SWEEP_A_2026-09-14, row `Difficult Terrain Debuff` — the
-    /// FROZEN `EPOCH_20_TERRAIN_DEBUFF`: the granted "Difficult Terrain" the
+    /// FROZEN `EPOCH_26_TERRAIN_DEBUFF`: the granted "Difficult Terrain" the
     /// unit CARRIES caps its move the same way the p.11 cell consult does.
     fn difficult_debuff(&self) -> bool {
         crate::mods::granted_terrain_debuff(
