@@ -31,6 +31,16 @@ const SQUAD_HEAD: &str = r#"{"kind":"header","knobs":{},"profiles":{
 
 const BEARER_ALIVE: &str = "[[\"Fortified Aura\",\"Fortified\"]]";
 
+/// The plain control: the same squad, the aura-granted base stripped.
+const SQUAD_PLAIN: &str = r#"{"kind":"header","knobs":{},"profiles":{
+  "squad":{"unit_id":"squad","name":"Squad","quality":4,"defense":4,"tough":1,
+    "wounds_max":[1],"model_count":5,"caster_value":0,"base_radius":0.016,
+    "game_system":"aofs","faction_folder":"duchies_of_vinci",
+    "special_rules":[],"item_grants":[],
+    "attached_hero_rules":[],
+    "move_bands":{"advance":6.0,"rush":12.0},
+    "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":1,"rules":[]}]}}}"#;
+
 /// The raw aofs spelling: NO import grants anywhere — the core's own
 /// `aura_expand` fold is the only grant leg, so the pick cap is observable
 /// straight off `build_for`'s all-models read (one ungranted member
@@ -65,25 +75,32 @@ fn squad_ctx(template: &str, heroes: &str, epoch: u32) -> UnitStatic {
 /// `CURRENT_RULES_EPOCH` — a wave bump must not re-date these.
 #[test]
 fn bearer_death_ends_the_fortified_bonus_at_55_and_keeps_it_below() {
+    // The plain control: the SAME squad stripped of the granted base — the
+    // save seam's own baseline, no absolute arithmetic to re-date.
+    let plain = squad_ctx(SQUAD_PLAIN, "[]", EPOCH_55_FORTIFIED_AURA);
+    assert!(!plain.ctx.fortified, "no granted base, no benefit");
+    let (target_plain, fired_plain) = fortified_volley(&plain, 12.0);
+    assert!(!fired_plain, "no Fortified family data, no arm fires");
+
     let alive = squad_ctx(SQUAD_HEAD, BEARER_ALIVE, EPOCH_55_FORTIFIED_AURA);
     assert!(alive.ctx.fortified, "bearer alive: the granted base fires");
     let (target_alive, fired_alive) = fortified_volley(&alive, 12.0);
     assert_eq!(
-        (target_alive, fired_alive),
-        (4, false),
-        "defense 4 at AP(1) with the Fortified read: saves on 4+ (the fired flag marks the alias arm only)"
+        target_alive, target_plain - 1,
+        "bearer alive: exactly the printed AP(-1) on top of the plain save"
     );
+    assert!(!fired_alive, "the fired flag marks the ALIAS arm only");
 
     let dead = squad_ctx(SQUAD_HEAD, "[]", EPOCH_55_FORTIFIED_AURA);
     assert!(
         !dead.ctx.fortified,
-        "bearer dead: lost_if_bearer_killed ends the benefit — RED before the fix"
+        "bearer dead: lost_if_bearer_killed ends the benefit"
     );
     let (target_dead, fired_dead) = fortified_volley(&dead, 12.0);
     assert_eq!(
         (target_dead, fired_dead),
-        (3, false),
-        "the squad's save falls back to the raw AP(1): saves on 3+"
+        (target_plain, fired_plain),
+        "bearer dead: the save falls back to the plain baseline — the benefit is gone"
     );
 
     // OLD LEG — the frozen epoch immediately below the bump: the reading is
@@ -91,7 +108,10 @@ fn bearer_death_ends_the_fortified_bonus_at_55_and_keeps_it_below() {
     let old = squad_ctx(SQUAD_HEAD, "[]", EPOCH_54_DEFENSE_RATING);
     assert!(old.ctx.fortified, "below the bump: the old leg keeps the benefit");
     let (target_old, fired_old) = fortified_volley(&old, 12.0);
-    assert_eq!((target_old, fired_old), (4, true), "old leg byte-exact");
+    assert_eq!(
+        target_old, target_alive,
+        "below the bump: byte-exact with the bearer-alive reading"
+    );
 }
 
 /// The pick cap: the raw-header chain (bearer unit + N heroes, all carrying
