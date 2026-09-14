@@ -79,3 +79,22 @@ use crate::unit::capture_reads_for_epoch;
         assert_eq!(r39.rolls[0].target, 2, "39: Quality 4 - 2 = the 2+ target");
         assert_eq!(out39, Morale::Passed, "the same die 3 now passes");
     }
+
+    /// The GREEN split pin: the statics carry the rating SEPARATELY for the
+    /// rules-must-log line (`sim::tray_morale`), while the EV ctx keeps the
+    /// table's own Banner-only reading (ai_ev.gd:142-143) — only the ROLLED
+    /// test adds the rating, through the capture stamp.
+    #[test]
+    fn the_ctx_stamp_carries_the_rating_split_for_the_log_line() {
+        let p = morale_profile();
+        let mut reg = Registries::new(&repo_root());
+        let us38 = UnitStatic::build_for(&mut reg, &p, 38);
+        assert_eq!(us38.ctx.morale_rating, 0, "38: no split below the gate");
+        assert_eq!(us38.ctx.morale_bonus, 0, "and the EV stamp stays banner-only");
+        let us39 = UnitStatic::build_for(&mut reg, &p, 39);
+        assert_eq!(us39.ctx.morale_rating, 2, "39: the split rides the statics");
+        assert_eq!(
+            us39.ctx.morale_bonus, 0,
+            "the EV ctx keeps the banner-only reading (ai_ev.gd:142-143)"
+        );
+    }

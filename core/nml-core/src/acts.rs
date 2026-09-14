@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 38;
+pub const CURRENT_RULES_EPOCH: u32 = 39;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -740,6 +740,22 @@ pub const EPOCH_35_UNSTOPPABLE_MELEE: u32 = 35;
 /// reserved in flight by the watchborn leg). Every call site reads THIS constant, not the
 /// literal `37` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_37_UNSTOPPABLE_AURA: u32 = 37;
+/// The MORALE RATING gate (14.09., STANDALONE_SWEEP_G row `Morale`,
+/// TABLE-ONLY): `Morale` with rating X adds +X to its morale tests — the
+/// registry primitive `Morale; rating=X`, the value the raw rule string's
+/// own `Morale(2)`. The table folds it into the SAME number as the Banner
+/// family's bonus (`morale_bonus_of` = Banner best-of over unit + heroes
+/// PLUS `morale_rating_of`'s rating best-of, solo_controller.gd:5638, the
+/// walk :5642-5653; consumed at main.gd:8586; stamped as one dict value,
+/// battle_sim.gd:1598). The core's capture twin read the Banner half only,
+/// so every core-driven Morale carrier tested X too low. From 39 the twin
+/// folds the rating into the SAME `morale_bonus` stamp and the rolled test
+/// names it (rules-must-log). Below 39 every recorded game replays
+/// byte-exact. One past every epoch in flight at stamping (35 on main; 36,
+/// 37, 38 reserved); the value `CURRENT_RULES_EPOCH` is bumped to in the
+/// same change. Call sites read THIS constant, never the literal or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_39_MORALE_RATING: u32 = 39;
 
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 

@@ -27,6 +27,7 @@ use crate::acts::{
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
     EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE, EPOCH_19_MOVE_GRANTS_FOLD,
     EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST, EPOCH_35_UNSTOPPABLE_MELEE,
+    EPOCH_39_MORALE_RATING,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -94,6 +95,12 @@ pub struct Ctx {
     pub quality: i64,
     pub defense: i64,
     pub morale_bonus: i64,
+    /// The Morale(X) primitive's own rating, STAMP-ONLY
+    /// (`EPOCH_39_MORALE_RATING`): the split the rules-must-log line names
+    /// (`sim::tray_morale`). Every math read rides `morale_bonus` — the ONE
+    /// number the table writes (battle_sim.gd:1598) — this field never
+    /// joins it.
+    pub morale_rating: i64,
     pub tough: i64,
     pub models: i64,
     pub artillery: bool,
@@ -1705,6 +1712,43 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
     best
 }
 
+/// `SoloController.morale_rating_of` solo_controller.gd:5642-5653, over one
+/// member's rule list: every rule whose entry resolves to the "Morale"
+/// primitive with `params.rating == "X"` folds its own parsed rating
+/// (`Morale(2)` -> 2, rules_registry.gd:215) into the MAX, each base name
+/// once. One member, like `banner_bonus_of`.
+fn morale_rating_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
+    let map = reg.rules_for(&p.game_system);
+    let mut best = 0;
+    let mut seen: Vec<String> = Vec::new();
+    for raw in rules {
+        let n = base_rule_name(raw);
+        if !n.is_empty() && !seen.iter().any(|s| *s == n) {
+            seen.push(n.clone());
+            if let Some(e) = map.lookup(&p.faction_folder, &n) {
+                if e.primitive.as_deref() == Some("Morale") && e.param_s("rating") == "X" {
+                    best = best.max(rule_rating(raw, 0));
+                }
+            }
+        }
+    }
+    best
+}
+
+/// The rating best-of over the profile and its attached heroes, gated on
+/// `EPOCH_39_MORALE_RATING` — the fold `capture_reads_for_epoch` adds to the
+/// stamp and `ctx_for` splits out for the log line.
+fn morale_rating_stamp(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> i64 {
+    if !rule_on(rules_epoch, EPOCH_39_MORALE_RATING) {
+        return 0;
+    }
+    let mut best = morale_rating_of(reg, p, &p.special_rules);
+    for hero in &p.attached_hero_rules {
+        best = best.max(morale_rating_of(reg, p, hero));
+    }
+    best
+}
+
 /// `AiActRecorder._melee_shroud_params` act_recorder.gd:276-295 — the named rule
 /// first, then the DATA aliases of the two Shrouding primitives, in that order.
 fn melee_shroud_params(reg: &mut Registries, p: &Profile) -> Option<[f64; 2]> {
@@ -1859,6 +1903,9 @@ pub fn capture_reads_for_epoch(
     for hero in &p.attached_hero_rules {
         morale_bonus = morale_bonus.max(banner_bonus_of(reg, p, hero));
     }
+    // EPOCH_39_MORALE_RATING — the rating joins the SAME stamp, the table's
+    // own shape: `morale_bonus_of` ADDS the two best-ofs (solo_controller.gd:5638).
+    morale_bonus += morale_rating_stamp(reg, p, rules_epoch);
     CaptureReads {
         morale_bonus,
         aircraft: unit_rule_active(reg, p, "Aircraft"),
@@ -2064,6 +2111,11 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         0
     };
+    // EPOCH_39_MORALE_RATING — the split the rules-must-log line reads. The
+    // EV `morale_bonus` above keeps the table's own Banner-only reading
+    // (ai_ev.gd:142-143); the ROLLED test adds the rating through the
+    // capture stamp, and this field only names it.
+    let morale_rating = morale_rating_stamp(reg, p, rules_epoch);
     // Wave 4 — "Machine-Fog Boost": the printed unconditional form of
     // Machine-Fog's own -1 (folds into `evasive`, below; the base entry's
     // conditional alias leg stands down so the two never stack).
@@ -2173,6 +2225,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
         morale_bonus,
+        morale_rating,
         tough: unit_rating(&p.special_rules, "Tough").max(1),
         models: 1, // placeholder; `_ctx_of` always writes the snapshot's alive
         artillery: has_special_rule(&p.special_rules, "Artillery"),

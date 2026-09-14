@@ -1023,7 +1023,10 @@ impl Core {
         let base = profiles.base();
         let mut out = Map::new();
         for p in &base.list {
-            let r = nmlcore::capture_reads(reg, p);
+            // The header's own epoch: a fresh game rides the live stamp (the
+            // table's capture, battle_sim.gd:1598, always folds the Morale
+            // rating), a replay keeps its corpus's own reading.
+            let r = nmlcore::capture_reads_for_epoch(reg, p, self.knobs.rules_epoch);
             let mut m = Map::new();
             m.insert("morale_bonus".into(), r.morale_bonus.into());
             m.insert("aircraft".into(), r.aircraft.into());
