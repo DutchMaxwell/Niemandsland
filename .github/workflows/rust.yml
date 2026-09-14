@@ -102,6 +102,9 @@ jobs:
       - name: Run nml-core-py pytest suite
         run: PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900
 
+      - name: tools pytest (wiring proof — RED, real invocation follows)
+        run: python3 -m pytest tools/does_not_exist.py -q --timeout 600
+
       - name: needs_lists Python subset (only if the private fixtures are staged)
         # The suite above silently @needs_lists-skips 62 tests whenever the terrain
         # bank + 1000pt army lists are absent -- true for every public PR today, so
