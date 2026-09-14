@@ -845,6 +845,29 @@ pub const EPOCH_43_BATTLEBORN_ROLL: u32 = 43;
 /// `EPOCH_38_WATCHBORN_LATCH`, #955). Every call site reads THIS constant,
 /// not the literal `41` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_44_SURGE_MARK: u32 = 44;
+
+/// The CASTER BOOST gate (14.09., analysis/CASTER_SEAM_2026-09-14.md row 1,
+/// DIVERGES 16:1x by reading): the table's caster spends spell tokens on the
+/// cast roll — the caster's OWN leftover tokens are the FIRST boost source
+/// (solo_controller.gd:4336-4342), then friendly casters and Spell
+/// Accumulator batteries within the `Caster` rule's `aura_in` (18") in line
+/// of sight (:4565-4625, the battery on its own 12" reach, a Shaken battery
+/// refused per NML-936), +1 per token, clamped [2,6] (ai_spell.gd:105-107),
+/// paid BEFORE the roll, one try per spell (:4387-4395), the spend policy
+/// `plan_boost`'s marginal-EV calculus (ai_spell.gd:328-339). The core's
+/// `cast_phase` rolled a flat 4+ and never spent a token on the boost, so
+/// the net learned spells as coin flips. From 44 the cast sub-phase builds
+/// the boost pool (`sim::caster_boost_pool`), plans the spend
+/// (`sim::plan_caster_boost`), folds the boost into `spell::
+/// cast_success_chance`'s second argument and pays it in the same order the
+/// threshold rides. Below 44 the pool is empty, the plan is zeros and every
+/// recorded game replays byte-exact. `44` is one past every existing stamp
+/// (43 = `EPOCH_43_BATTLEBORN_ROLL`, #964; 41 = #963's self-destruct leg; 42
+/// reserved in flight by the surge-mark leg), and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
+/// reads THIS constant, not the literal `44` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_44_CASTER_BOOST: u32 = 44;
+
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
 /// The D3" ACTIVATION PLACEMENT gate (14.09., sweep C rows Wave-Step/Wolfborn
@@ -1379,7 +1402,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 44, "epoch 44's gate (EPOCH_44_SURGE_MARK) bumps the live epoch to 44, one past #964's Battleborn leg 43 (renumbered 38/39/41 -> 44 at rebase; 42 never used)");
+        assert_eq!(CURRENT_RULES_EPOCH, 44, "epoch 44's gate (EPOCH_44_CASTER_BOOST) bumps the live epoch to 44, one past #964's Battleborn leg 43 (41 = #963's selfdestruct leg, 42 reserved in flight by the surge-mark leg)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),

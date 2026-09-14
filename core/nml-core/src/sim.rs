@@ -28,14 +28,17 @@ use crate::acts::{
     EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING, EPOCH_19_MOVE_GRANTS_FOLD,
     EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS, EPOCH_32_STRAFING,
     EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA, EPOCH_38_WATCHBORN_LATCH,
-    EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK,
+    EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_44_CASTER_BOOST,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
 use crate::rng::GodotRng;
 use crate::rules::Spell;
-use crate::spell::{cast_success_chance, official_pick_order, spell_damage_ev_of, spell_ev_of};
+use crate::spell::{
+    boost_value_of, cast_success_chance, official_pick_order, plan_boost, spell_damage_ev_of,
+    spell_ev_of, CASTER_BOOST_AURA_IN, CAST_BASE_TARGET,
+};
 use crate::menu::nearest_enemy;
 use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
@@ -2929,6 +2932,75 @@ fn battery_pool(
     found.into_iter().map(|(u, _, t)| (u, t)).collect()
 }
 
+/// Wave 6 (port-caster-boost) — the BOOST pool's helper half: every friendly
+/// caster and `Spell Accumulator` battery holding tokens within the Caster
+/// rule's `aura_in` (18", registry read solo_controller.gd:4568, fallback
+/// ai_spell.gd:33) in line of sight of the caster's unit (:4606) — the
+/// battery on its OWN 12" reach (:4565, :4604), a Shaken battery refused
+/// (NML-936, :4596-4601; a Shaken real caster still lends, the walk mirrors
+/// the table exactly there). Nearest-first, the table's own sort (:4609).
+/// The caster's OWN leftover tokens are the FIRST boost source and are NOT
+/// collected here (solo_controller.gd:4336-4342, the plan site's business).
+/// Gated on the frozen `EPOCH_44_CASTER_BOOST`.
+fn caster_boost_pool(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    ci: usize,
+    los: &[bool],
+    seams: Seams,
+) -> Vec<(usize, i64)> {
+    if !rule_on(seams.rules_epoch, EPOCH_44_CASTER_BOOST) { return Vec::new(); }
+    let pid = state.player[si];
+    let mut found: Vec<(usize, f64, i64)> = Vec::new();
+    for u in 0..state.units() {
+        let s = &statics[state.roster.profile[u]];
+        if u == ci || state.player[u] != pid || state.alive[u] <= 0 || state.casts[u] <= 0 {
+            continue;
+        }
+        // casters and batteries only (:4594); NML-936 (:4596-4601) refuses
+        // only the BATTERY's lending — a Shaken real caster still lends.
+        if !s.is_caster && !s.spell_accumulator { continue; }
+        if !s.is_caster && state.shaken[u] { continue; }
+        let d = geom::dist_in(&state.positions[ci], &state.positions[u]);
+        if d > (if s.is_caster { CASTER_BOOST_AURA_IN } else { SPELL_ACCUMULATOR_REACH_IN }) { continue; }
+        // "in line of sight of the caster's unit" (:4606): the caster's own
+        // unit needs no check (the table's `cu != caster_unit` guard).
+        if u != si && !state.attached[si].contains(&u) && !los[u] { continue; }
+        found.push((u, d, state.casts[u]));
+    }
+    found.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    found.into_iter().map(|(u, _, t)| (u, t)).collect()
+}
+
+/// Wave 6 (port-caster-boost) — the boost plan, pure (the spend happens in
+/// the payment block): own leftover FIRST (solo_controller.gd:4336-4342),
+/// then the helper pool; `plan_boost`'s marginal-EV calculus prices the
+/// attempt (ai_spell.gd:328-339) at the table's `boost_value_of` value
+/// (:4345-4349) — the damage EV the core can compute, the unpriced stand-in
+/// for everything else. The draw mirrors `_draw_aura_tokens`' own-front
+/// order. Returns (boost, own draw, helper draw); the caller folds the final
+/// roll target and owns the frozen `EPOCH_44_CASTER_BOOST` gate.
+fn plan_caster_boost(
+    statics: &[UnitStatic],
+    state: &State,
+    entry: &Spell,
+    ti: usize,
+    own: i64,
+    helpers: &[(usize, i64)],
+) -> (i64, i64, i64) {
+    let own_left = (own - entry.threshold).max(0);
+    let ev = (entry.effect_kind == "damage")
+        .then(|| spell_damage_ev_of(entry, &ctx_of(&statics[state.roster.profile[ti]], state, ti)))
+        .unwrap_or(0.0);
+    let boost = plan_boost(
+        boost_value_of(ev),
+        own_left + helpers.iter().map(|(_, t)| *t).sum::<i64>(),
+    );
+    let own_draw = boost.min(own_left);
+    (boost, own_draw, boost - own_draw)
+}
+
 fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize) -> Ctx {
     let mut c = ctx_of(us, state, i);
     c.fatigued = state.fatigued[i];
@@ -4319,6 +4391,10 @@ fn cast_phase(
     let own = state.casts[ci];
     let lenders = battery_pool(statics, state, si, ci, seams);
     let tokens = own + lenders.iter().map(|(_, t)| *t).sum::<i64>();
+    // Wave 6 (port-caster-boost) — the boost pool's helper half (the own
+    // leftover joins the plan below, the FIRST source). Empty below the
+    // frozen `EPOCH_44_CASTER_BOOST`.
+    let helpers = caster_boost_pool(statics, state, si, ci, los, seams);
     let mut lend_log: Vec<String> = Vec::new();
     let pi = state.roster.profile[ci];
     let spells = statics[pi].spells.clone();
@@ -4333,6 +4409,10 @@ fn cast_phase(
     let mut origins: Vec<(usize, i64)> = vec![(si, 0)];
     origins.extend(cast_origins(statics, state, si, seams));
     let mut cost: Option<i64> = None;
+    // Wave 6 (port-caster-boost) — (boost, own draw, helper draw, final
+    // target), planned ONCE at the first face that produces a pick (the
+    // face that names the attempt and pays for it, like the threshold).
+    let mut boost_plan: Option<(i64, i64, i64, i64)> = None;
     for d3 in 1..=3i64 {
         let Some((idx, ti, ou)) =
             pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los, &origins)
@@ -4340,7 +4420,21 @@ fn cast_phase(
         // The +1 rides the origin (design #824 §3): the conduit's
         // casting_mod folds in only when THIS cast is made through it.
         let origin_mod = origins.iter().find(|o| o.0 == ou).map_or(0, |o| o.1);
-        let p_success = cast_success_chance(casting_net_of(statics, state, ci, seams) + origin_mod, 0);
+        let casting_net = casting_net_of(statics, state, ci, seams) + origin_mod;
+        // Wave 6 (port-caster-boost) — the boost plan lands at the FIRST
+        // pick; the purse was read once before the loop, so later faces
+        // shop with (and roll with) the attempt's one boost decision.
+        let boost = boost_plan
+            .get_or_insert_with(|| {
+                let (b, o, h) = if rule_on(seams.rules_epoch, EPOCH_44_CASTER_BOOST) {
+                    plan_caster_boost(statics, state, &spells[idx], ti, own, &helpers)
+                } else {
+                    (0, 0, 0)
+                };
+                (b, o, h, (CAST_BASE_TARGET - casting_net - b).clamp(2, 6))
+            })
+            .0;
+        let p_success = cast_success_chance(casting_net, boost);
         if origin_mod != 0 {
             // Rules-must-log (#782), the table's own line shape (main.gd
             // `_solo_resolve_one_cast`).
@@ -4377,7 +4471,28 @@ fn cast_phase(
                 statics[state.roster.profile[*u]].name, take, statics[state.roster.profile[ci]].name
             );
             lend_log.push(line.clone());
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line })));        }
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line })));
+        }
+        // Wave 6 (port-caster-boost) — the BOOST tokens ride the same spend
+        // order: the caster's own leftover first, then the helpers
+        // nearest-first — the table pays threshold + boost before the roll,
+        // one try per spell (solo_controller.gd:4387-4395). Rules-must-log:
+        // one line per cast that spent tokens (the brief's shape).
+        if let Some((boost, bown, bhelp, target)) = boost_plan.filter(|p| p.0 > 0) {
+            state.casts[ci] = (state.casts[ci] - bown).max(0);
+            let mut bleft = bhelp;
+            for (u, t) in &helpers {
+                if bleft <= 0 {
+                    break;
+                }
+                let take = (*t).min(bleft);
+                bleft -= take;
+                state.casts[*u] = (state.casts[*u] - take).max(0);
+            }
+            let line = format!("Caster: {} tokens spent (own {}, helpers {}), target 4+ -> {}+", boost, bown, boost - bown, target);
+            trace_rule("cast", "Caster", &line);
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
+        }
     }
 }
 
