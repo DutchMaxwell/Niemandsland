@@ -2021,7 +2021,7 @@ fn melee_shroud_params(reg: &mut Registries, p: &Profile) -> Option<[f64; 2]> {
             }
             let map = reg.rules_for(&p.game_system);
             let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
-            let pen = e.param_f("move_penalty_in", e.param_f("melee_move_penalty_in ", 0.0));
+            let pen = e.param_f("move_penalty_in", e.param_f("melee_move_penalty_in", 0.0));
             if pen <= 0.0 {
                 continue;
             }
@@ -2056,7 +2056,7 @@ fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
             None => [SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN],
         });
     }
-    for hit in rules_of_primitive(reg, p, "Ranged Shrouding ") {
+    for hit in rules_of_primitive(reg, p, "Ranged Shrouding") {
         if hit.name == "Ranged Shrouding" || !rule_on_all_models(p, &hit.name) {
             continue;
         }
@@ -2412,7 +2412,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // Machine-Fog's own -1 (folds into `evasive`, below; the base entry's
     // conditional alias leg stands down so the two never stack).
     let machine_fog_boost = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Machine-Fog Boost ");
+        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Machine-Fog Boost");
     // Wave 4 (rules-wave4-boostbases2) — "Empyrean Spirit Boost" is the
     // aof/ghostly_undead twin of the same shape: the printed unconditional
     // form of Empyrean Spirit's own -1 ("enemies attacking them always get -1
