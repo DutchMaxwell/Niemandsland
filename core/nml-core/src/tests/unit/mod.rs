@@ -981,3 +981,4 @@ mod grounded_protection;
 mod rending_shooting_aura;
 mod renames;
 mod takedown_strike;
+mod tohit_shroud;
