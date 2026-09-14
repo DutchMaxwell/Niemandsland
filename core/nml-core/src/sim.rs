@@ -4340,7 +4340,7 @@ fn cast_phase(
         // The +1 rides the origin (design #824 §3): the conduit's
         // casting_mod folds in only when THIS cast is made through it.
         let origin_mod = origins.iter().find(|o| o.0 == ou).map_or(0, |o| o.1);
-        let p_success = cast_success_chance(casting_net_of(statics, state, ci, seams) + origin_mod);
+        let p_success = cast_success_chance(casting_net_of(statics, state, ci, seams) + origin_mod, 0);
         if origin_mod != 0 {
             // Rules-must-log (#782), the table's own line shape (main.gd
             // `_solo_resolve_one_cast`).
