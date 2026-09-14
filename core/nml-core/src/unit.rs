@@ -770,6 +770,12 @@ pub struct UnitStatic {
     /// Merged + stamped MELEE profiles (range 0) — `AiShooting.melee_profiles`
     /// ai_shooting.gd:44-56, the set `_profiles_of(su, true)` builds.
     pub melee: Vec<ShootProfile>,
+    /// NML-002 Strafing — `AiShooting.strafing_profiles` ai_shooting.gd:30-39:
+    /// the unit's Strafing weapon profiles, UNMERGED, fired ONLY through the
+    /// move-through trigger (`sim::tray_strafing`). The normal volley never
+    /// sees them: `profiles_in_range`'s Strafing filter (ai_shooting.gd:20-21)
+    /// IS `weapon_only` ("This weapon may only be used in this way").
+    pub strafe_shoot: Vec<ShootProfile>,
     /// WAVE 3 — the Fortified family's own registry names as carried (unit.rs
     /// ::fortified_alias_of, gated `EPOCH_6_TABLE_RULES`), for the
     /// rules-must-log line the volley/melee orchestrators push. "" = none.
@@ -4423,6 +4429,26 @@ pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
     merge_identical(raw)
 }
 
+/// `AiShooting.strafing_profiles` ai_shooting.gd:30-39 — the NML-002 move-through
+/// trigger's OWN set: every weapon carrying "Strafing", one profile per weapon,
+/// NO merge_identical (the table's function does not merge) and NO range gate
+/// (the trigger's reach test happens at the volley, not at the build). Mirrors
+/// the table exactly; consumed by `sim::tray_strafing` alone.
+pub(crate) fn strafing_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
+    let mut raw: Vec<ShootProfile> = Vec::new();
+    for w in weapons {
+        if !weapon_has(w, "Strafing") {
+            continue;
+        }
+        let attacks = w.attacks.max(0) * w.count.max(1);
+        if attacks <= 0 {
+            continue;
+        }
+        raw.push(base_profile(w, attacks, w.range as i64));
+    }
+    raw
+}
+
 /// The Bane family's WIDENED save re-roll window, stamped off ONE named Boost
 /// entry: the entry's own widening param (`widening` — `reroll_save_low` for
 /// "Mischievous Boost"/"Bestial Boost", `reroll_save_from` for "Scrapper
@@ -5053,6 +5079,11 @@ impl UnitStatic {
         stamp_shot_modifier(reg, p, &mut shoot);
 
         let mut melee = melee_profiles(&p.weapons);
+        // NML-002 Strafing — the move-through trigger's own array, stamped
+        // UNGATED and UNSTAMPED: the table builds it raw off the weapons
+        // (`AiShooting.strafing_profiles`, main.gd:2976-2985) and the
+        // once-per-activation volley reads it exactly as built.
+        let strafe_shoot = strafing_profiles(&p.weapons);
         // The same stamping runs on the melee array (`_profiles_of(su, true)`
         // battle_sim.gd:719-720 takes the identical path); a rule the port
         // cannot model is reported ONCE, not once per array.
@@ -5444,6 +5475,7 @@ impl UnitStatic {
             fortified_boost_name: fa.boost_name,
             shoot,
             melee,
+            strafe_shoot,
             model_count: p.model_count,
             wounds_max: p.wounds_max.clone(),
             quality: p.quality,

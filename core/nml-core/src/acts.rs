@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 30;
+pub const CURRENT_RULES_EPOCH: u32 = 32;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -626,6 +626,27 @@ pub const EPOCH_23_INERT_MARKS: u32 = 23;
 /// change. Every call site reads THIS constant, not the literal `27` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_27_TERRAIN_DEBUFF: u32 = 27;
+
+/// The STRAFING gate (14.09., sweep row `Strafing`, TABLE-ONLY): the book's
+/// "Once per activation, when this model moves through enemy units, pick one
+/// of them and attack it with this weapon as if it was shooting. This weapon
+/// may only be used in this way." The table resolves it at main.gd:1092-1097
+/// (`_solo_apply_strafing` main.gd:2964-3007) and the registry carries
+/// `Strafing {move_through_attack: true, weapon_only: true}`, but the core
+/// only ever stamped the weapon flag (unit.rs:1130) and marked the volley fold
+/// (dice.rs:945-946) — no move-through seam existed, so a strafing aircraft
+/// flew past in silence and the net never learned to overfly anything. From 32
+/// the core resolves ONE shooting exchange through the shared volley resolver
+/// (`sim::tray_strafing`) when the executed move's trails cross an enemy unit
+/// (the table's `trails_cross_unit_bases` segment-vs-disc test, the NEAREST
+/// crossed enemy as the pick, main.gd:3000-3004). Below 32 the slot is inert —
+/// every recorded game replays byte-exact. `32` is one past every existing
+/// stamp (30 = `EPOCH_30_SCRAPPER_BOOST`, #945; 31 is reserved in flight by
+/// the re-deployment leg), and the value `CURRENT_RULES_EPOCH` is bumped to in
+/// the same change. Renumbered from the reserved 29 at rebase (#945's 30
+/// landed first) per the epoch rules. Every call site reads THIS constant,
+/// not the literal `32` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_32_STRAFING: u32 = 32;
 
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
@@ -1161,7 +1182,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 30, "epoch 30's gate (EPOCH_30_SCRAPPER_BOOST) bumps the live epoch to 30, one past the strafing leg's reserved 29 and the re-deployment leg's reserved 28 (27 = #933's terrain debuff)");
+        assert_eq!(CURRENT_RULES_EPOCH, 32, "epoch 32's gate (EPOCH_32_STRAFING) bumps the live epoch to 32, one past the scrapper leg's 30 (30 = EPOCH_30_SCRAPPER_BOOST, #945) and the re-deployment leg's reserved 31 (27 = #933's terrain debuff)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1171,11 +1192,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":30}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":32}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 30"
+            "a fresh play_game() now stamps the bumped epoch, 32"
         );
     }
 
