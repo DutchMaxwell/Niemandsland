@@ -617,8 +617,8 @@ use std::rc::Rc;
     }
 
     /// THE CONTRACT, both ends at once. A standing `Split(<name> [<n>])`
-    /// carrier is a template carrier exactly like a Spawn carrier: at epoch
-    /// >= 8 the load REFUSES a record whose header ships no
+    /// carrier is a template carrier exactly like a Spawn carrier: from
+    /// epoch 8 up, the load REFUSES a record whose header ships no
     /// `spawn:p1_0_a:Split(Goblin Mob [4])` template — the same loud
     /// never-a-silent-fallback ruling of record (io.rs:665-673, the #823
     /// break) — and a header that ships the template exposes it through the
