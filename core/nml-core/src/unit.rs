@@ -29,7 +29,7 @@ use crate::acts::{
     EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE, EPOCH_19_MOVE_GRANTS_FOLD,
     EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST, EPOCH_35_UNSTOPPABLE_MELEE,
     EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL, EPOCH_43_BATTLEBORN_ROLL,
-    EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN,
+    EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -2828,6 +2828,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     // (#489). Gated on the FROZEN `EPOCH_7_TABLE_RULES`, never the literal.
     let mut melee_rending = false;
     let mut shooting_rending = false;
+    let mut rending_aura = false;
     if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
         for hit in rules_of_primitive(reg, p, "Rending") {
             if hit.name != "Rending in Melee" {
@@ -2838,6 +2839,31 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             u_rending |= !hit.melee_only && !hit.shooting_only;
         }
     }
+    // STANDALONE_SWEEP_G row `Rending when Shooting Aura` — the Utility-Buff
+    // aura's OWN grant, read at the FROZEN `EPOCH_47_RENDING_SHOOTING_AURA`
+    // (below 47 the aura replays stamped-but-unconsumed, byte-exact): the
+    // carried entry names its `grants_rule` and the profiles its `scope`
+    // gives it, the table's ai_ev.gd:330-341 granted-or-direct stamp. Read
+    // BY NAME, never the Utility-Buff primitive whole (#489's trap).
+    if rule_on(rules_epoch, EPOCH_47_RENDING_SHOOTING_AURA) {
+        let map = reg.rules_for(&p.game_system);
+        let mut seen: Vec<String> = Vec::new();
+        for raw in &p.special_rules {
+            let n = base_rule_name(raw);
+            if n != "Rending when Shooting Aura" || seen.contains(&n) { continue; }
+            seen.push(n.clone());
+            let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+            if e.primitive.as_deref() != Some("Utility Buff")
+                || base_rule_name(e.param_s("grants_rule")) != "Rending" { continue; }
+            match e.param_s("scope") {
+                "shooting" => shooting_rending = true,
+                "melee" => melee_rending = true,
+                "" => u_rending = true,
+                _ => continue,
+            }
+            rending_aura = true;
+        }
+    }
     for sp in shoot.iter_mut() {
         sp.bane |= u_bane
             || (melee_bane && sp.range <= 0)
@@ -2845,9 +2871,14 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         sp.bypass_regen |= u_bypass
             || (melee_bypass && sp.range <= 0)
             || (shooting_bypass && sp.range > 0);
+        let rending_before = sp.rending;
         sp.rending |= u_rending
             || (melee_rending && sp.range <= 0)
             || (shooting_rending && sp.range > 0);
+        // Rules-must-log: one line per profile that received the grant.
+        if rending_aura && shooting_rending && sp.range > 0 && !rending_before {
+            trace_rule("rending-aura", "Rending when Shooting Aura", "shooting gains Rending");
+        }
         // Sweep C — EPOCH_35_UNSTOPPABLE_MELEE: the "Unstoppable in Melee"
         // clamp stamps the MELEE profiles' own flag (dice.rs's melee fold
         // reads `unstoppable`; a melee profile never reaches the volley fold,

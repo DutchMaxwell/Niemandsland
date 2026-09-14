@@ -323,7 +323,27 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 46;
+/// EPOCH 46 DISINTEGRATE REGEN (14.09., sweep E row `Disintegrate`): the
+/// core's Regeneration split now refuses the heal for wounds of a weapon
+/// whose Disintegrate entry carries `bypass_regen: true` (gf
+/// blessed_sisters: `{ap_bonus: 2, condition: vs_armor, threshold: 3,
+/// bypass_regen: true}`), the same scope the table applies —
+/// `_solo_ignores_regen`'s registry-driven WEAPON-rule arm
+/// (main.gd:7121-7137): the carrying weapon's own profiles, both reaches,
+/// facet-checked. The cond-ap stamp routes it (`unit.rs` — the entry's
+/// `bypass_regen` rides the `CondAp` spec, the weapon-rules loop stamps the
+/// rule NAME onto `ShootProfile::regen_bypass_rule` behind this gate), and
+/// the two dice folds read it on the SAME seam the Bane family uses
+/// (`dice.rs`'s `ignores_regen` union), logging the refusal the
+/// Bane-in-Melee arm's way (main.gd:7175-7176). Below 46 the field stamps
+/// empty and every recorded game replays byte-exact. `46` is one past every
+/// existing stamp (44 = `EPOCH_44_SURGE_MARK`, #958; 45 reserved in flight
+/// by the casterboost leg), and the value `CURRENT_RULES_EPOCH` is bumped to
+/// in the same change. Every call site reads THIS constant, not the literal
+/// `46` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_46_DISINTEGRATE_REGEN: u32 = 46;
+
+pub const CURRENT_RULES_EPOCH: u32 = 47;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -846,25 +866,22 @@ pub const EPOCH_43_BATTLEBORN_ROLL: u32 = 43;
 /// not the literal `41` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_44_SURGE_MARK: u32 = 44;
 
-/// EPOCH 46 DISINTEGRATE REGEN (14.09., sweep E row `Disintegrate`): the
-/// core's Regeneration split now refuses the heal for wounds of a weapon
-/// whose Disintegrate entry carries `bypass_regen: true` (gf
-/// blessed_sisters: `{ap_bonus: 2, condition: vs_armor, threshold: 3,
-/// bypass_regen: true}`), the same scope the table applies —
-/// `_solo_ignores_regen`'s registry-driven WEAPON-rule arm
-/// (main.gd:7121-7137): the carrying weapon's own profiles, both reaches,
-/// facet-checked. The cond-ap stamp routes it (`unit.rs` — the entry's
-/// `bypass_regen` rides the `CondAp` spec, the weapon-rules loop stamps the
-/// rule NAME onto `ShootProfile::regen_bypass_rule` behind this gate), and
-/// the two dice folds read it on the SAME seam the Bane family uses
-/// (`dice.rs`'s `ignores_regen` union), logging the refusal the
-/// Bane-in-Melee arm's way (main.gd:7175-7176). Below 46 the field stamps
-/// empty and every recorded game replays byte-exact. `46` is one past every
-/// existing stamp (44 = `EPOCH_44_SURGE_MARK`, #958; 45 reserved in flight
-/// by the casterboost leg), and the value `CURRENT_RULES_EPOCH` is bumped to
-/// in the same change. Every call site reads THIS constant, not the literal
-/// `46` or `CURRENT_RULES_EPOCH`.
-pub const EPOCH_46_DISINTEGRATE_REGEN: u32 = 46;
+/// The RENDING SHOOTING AURA gate (14.09., sweep G — row `Rending when
+/// Shooting Aura`, TABLE-ONLY): the Utility-Buff aura's own grant
+/// (`grants_rule: "Rending"`, `scope: "shooting"`, the bearer itself at
+/// `range_in` 0) is stamped but consumed by nobody, so a core sim never gave
+/// the bearer's SHOOTING profiles the wound-6 AP(+4) or the Regeneration
+/// bypass the table stamps (ai_ev.gd:330-341 granted-or-direct,
+/// main.gd:7104's bypass). From 47 `unit.rs::stamp_unit_strikers`'s
+/// granted-or-direct Rending read consumes the aura's own entry: the
+/// `grants_rule` lands on the profiles its `scope` names, one trace line per
+/// profile that received the grant. Below 47 the aura replays
+/// stamped-but-unconsumed, exactly as the sweep measured it. `47` is one past
+/// every epoch reserved in flight at write time (44 the surge-mark leg, 45
+/// the caster-boost leg, 46 the disintegrate leg), and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
+/// reads THIS constant, not the literal `47` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_47_RENDING_SHOOTING_AURA: u32 = 47;
 
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
@@ -1400,7 +1417,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 46, "epoch 46's gate (EPOCH_46_DISINTEGRATE_REGEN) bumps the live epoch to 46, one past the casterboost leg 45 still in flight (44 = EPOCH_44_SURGE_MARK, #958)");
+        assert_eq!(CURRENT_RULES_EPOCH, 47, "the live epoch is 47 (the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1410,11 +1427,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":46}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":47}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 46"
+            "a fresh play_game() now stamps the bumped epoch, 47"
         );
     }
 
