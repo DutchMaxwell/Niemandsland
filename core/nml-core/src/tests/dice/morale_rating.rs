@@ -36,22 +36,22 @@ use crate::unit::capture_reads_for_epoch;
     /// rebase time — both pinned so the OLD leg survives whichever epochs
     /// land first.
     #[test]
-    fn the_capture_twin_folds_the_rating_from_39_not_below() {
+    fn the_capture_twin_folds_the_rating_at_39_not_below_38_and_not_at_35() {
         let p = morale_profile();
-        let stamp = |epoch: u32| {
-            let mut reg = Registries::new(&repo_root());
-            capture_reads_for_epoch(&mut reg, &p, epoch).morale_bonus
-        };
+        let mut reg = Registries::new(&repo_root());
+        let e35 = capture_reads_for_epoch(&mut reg, &p, 35).morale_bonus;
         assert_eq!(
-            stamp(35), 0,
+            e35, 0,
             "epoch 35 (the live stamp): the rating is NOT folded — every recorded game replays"
         );
+        let e38 = capture_reads_for_epoch(&mut reg, &p, 38).morale_bonus;
         assert_eq!(
-            stamp(38), 0,
+            e38, 0,
             "epoch 38: still the pre-port reading (EPOCH_39_MORALE_RATING is frozen)"
         );
+        let e39 = capture_reads_for_epoch(&mut reg, &p, 39).morale_bonus;
         assert_eq!(
-            stamp(39), 2,
+            e39, 2,
             "epoch 39: Morale(2) rides the SAME morale_bonus stamp the table's morale_bonus_of writes (battle_sim.gd:1598)"
         );
     }
