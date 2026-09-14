@@ -139,8 +139,8 @@ fn piercing_fighting_mark_ap_fires_from_21_and_not_below() {
     let saves21 = save_targets(&struck21);
     assert!(!saves21.is_empty(), "17 seed-11 hits at 3+ — the strike saves draw");
     assert!(
-        struck21.rolls.iter().any(|r| r.kind == "attack" && r.target == 3),
-        "the charge strikes at 3+ (the charging hit leg is untouched)"
+        struck21.rolls.iter().any(|r| r.kind == "attack" && r.target == 4),
+        "the charge strikes at the bare Quality 4+ — the mark's +1 is AP only"
     );
     assert!(
         saves21.iter().all(|&t| t == 5),
