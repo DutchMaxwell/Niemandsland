@@ -29,7 +29,7 @@ use crate::acts::{
     EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS, EPOCH_32_STRAFING,
     EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA, EPOCH_38_WATCHBORN_LATCH,
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
-    EPOCH_51_CASTER_INTERFERENCE,
+    EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -4266,6 +4266,7 @@ fn pick_cast(
     caster_x: i64,
     los: &[bool],
     origins: &[(usize, i64)],
+    rules_epoch: u32,
 ) -> Option<(usize, usize, usize)> {
     for idx in official_pick_order(spells.len(), d3, caster_x) {
         let entry = &spells[idx];
@@ -4274,6 +4275,24 @@ fn pick_cast(
         }
         if entry.effect_kind == "buff" {
             return Some((idx, si, origins[0].0)); // a buff takes the caster itself
+        }
+        if entry.effect_kind == "utility" {
+            // EPOCH_52_UTILITY_SPELLS: the MAPPED utility archetypes are
+            // picked and stamped below; every other name still skips ("an
+            // effect kind the sim has no arithmetic for").
+            let Some(a) = crate::spell::utility_archetype_of(&entry.name) else {
+                continue;
+            };
+            if !rule_on(rules_epoch, EPOCH_52_UTILITY_SPELLS) {
+                continue;
+            }
+            if a.friendly() {
+                return Some((idx, si, origins[0].0)); // a friendly utility takes the caster's unit
+            }
+            if let Some((ti, ou)) = best_spell_target(statics, state, si, entry, los, origins) {
+                return Some((idx, ti, ou)); // EV 0 -> the nearest enemy, like a debuff
+            }
+            continue;
         }
         if entry.effect_kind != "damage" && entry.effect_kind != "debuff" {
             continue; // an effect kind the sim has no arithmetic for
@@ -4297,6 +4316,10 @@ fn apply_cast_effect(
     scale: f64,
     rng: Option<&mut GodotRng>,
 ) {
+    if entry.effect_kind == "utility" {
+        apply_utility_effect(statics, state, ti, entry, scale);
+        return;
+    }
     if entry.effect_kind == "damage" {
         let ut = &statics[state.roster.profile[ti]];
         let ev = spell_damage_ev_of(entry, &ctx_of(ut, state, ti));
@@ -4341,6 +4364,61 @@ fn apply_cast_effect(
     mods.range_in += scale * m.range_in;
     mods.advance += scale * m.advance_in;
     mods.rush += scale * m.rush_in;
+}
+
+/// SEAM 5 (Utility SPELLS, CASTER_SEAM_2026-09-14.md row 5 + port 3) — the
+/// mapped utility-kind cast lands (`spell::utility_archetype_of`, the frozen
+/// `EPOCH_52_UTILITY_SPELLS`; the PICK already refused the unmapped names and
+/// the below-51 epochs, so an entry here is an applied one). Grants and flags
+/// land whole at cast success — the DEFECT_LEDGER #33 shape — and one
+/// rules-must-log line names each applied effect.
+fn apply_utility_effect(
+    statics: &[UnitStatic],
+    state: &mut State,
+    ti: usize,
+    entry: &Spell,
+    scale: f64,
+) {
+    let Some(a) = crate::spell::utility_archetype_of(&entry.name) else {
+        return;
+    };
+    if scale <= 0.0 {
+        return;
+    }
+    match a {
+        crate::spell::UtilityArchetype::TerrainHazard { dangerous } => {
+            let rule: &'static str =
+                if dangerous { "Dangerous Terrain" } else { "Difficult Terrain" };
+            state.buffs[ti].push(mods::LiveMod {
+                hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0,
+                def_mod: 0, defense_mod: 0, move_mod: 0,
+                grants_rule: Rc::from(rule),
+                scope: Rc::from(""),
+                attackers: false,
+                once: true,
+                name: Rc::from(entry.name.as_str()),
+            });
+        }
+        crate::spell::UtilityArchetype::FatigueOnFailedMorale => {
+            state.fatigued[ti] = true;
+        }
+        crate::spell::UtilityArchetype::ApOwn { ap, scope } => {
+            state.buffs[ti].push(mods::LiveMod {
+                hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: ap,
+                def_mod: 0, defense_mod: 0, move_mod: 0,
+                grants_rule: Rc::from(""),
+                scope: Rc::from(scope),
+                attackers: false,
+                once: true,
+                name: Rc::from(entry.name.as_str()),
+            });
+        }
+    }
+    trace_rule(
+        "cast",
+        &format!("Spell {}", entry.name),
+        &format!("{} applied to {}", a.label(), statics[state.roster.profile[ti]].name),
+    );
 }
 
 /// SEAM 1 (Utility Buff, docs/plans/UTILITY_BUFF_SEAMS_2026-09-05.md §1) —
@@ -4487,7 +4565,7 @@ fn cast_phase(
     let mut boost_plan: Option<(i64, i64, i64, i64, i64, i64)> = None;
     for d3 in 1..=3i64 {
         let Some((idx, ti, ou)) =
-            pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los, &origins)
+            pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los, &origins, seams.rules_epoch)
         else { continue; };
         // The +1 rides the origin (design #824 §3): the conduit's
         // casting_mod folds in only when THIS cast is made through it.
