@@ -61,8 +61,6 @@ for line in sys.stdin:
     c[code]+=1
 for k in sorted(c): print(f"{k} {c[k]}")
 ' <"$raw")
-rm -f "$raw"
-
 # The JSON parser above sees whatever cargo managed to emit, so a failed clippy
 # run yields a partial count -- which can only ever look BETTER than the truth.
 # Refuse instead of comparing it.
@@ -70,8 +68,40 @@ if [ "$clippy_rc" -ne 0 ]; then
   echo "clippy_gate: cargo clippy exited $clippy_rc -- the workspace did not compile"
   echo "clippy_gate: cleanly, so the diagnostics are a partial measurement."
   echo "clippy_gate: refusing to compare."
+  # ...and PRINT what broke. The refusal used to be the whole message because `$raw`
+  # was deleted a few lines above it, so every compile failure reached the author as
+  # "the workspace did not compile" and nothing else. On 2026-09-13/14 that cost three
+  # separate diagnosis rounds -- once the lead had to find a swapped pair of arguments
+  # by reading the signature and all four call sites by hand, because CI would not say.
+  echo "clippy_gate: --- first 40 rustc error lines (this is the actual failure) ---"
+  python3 -c '
+import json, sys
+n = 0
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    line = line.strip()
+    if not line.startswith("{"):
+        continue
+    try:
+        m = json.loads(line)
+    except Exception:
+        continue
+    msg = m.get("message")
+    if not isinstance(msg, dict) or msg.get("level") != "error":
+        continue
+    rendered = msg.get("rendered") or msg.get("message") or ""
+    for l in str(rendered).rstrip().splitlines():
+        print("  " + l)
+        n += 1
+        if n >= 40:
+            print("  ... (truncated at 40 lines)")
+            sys.exit(0)
+' "$raw" || echo "clippy_gate: (no structured rustc errors in the raw output)"
+  echo "clippy_gate: --- end ---"
+  rm -f "$raw"
   exit 1
 fi
+
+rm -f "$raw"
 
 if [ -z "$current" ]; then
   echo "clippy_gate: clippy produced no parsable findings -- the INSTRUMENT is broken, not the code."

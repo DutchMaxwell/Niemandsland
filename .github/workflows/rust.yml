@@ -43,6 +43,18 @@ jobs:
         with:
           components: clippy
 
+      - name: Epoch gate — a rules epoch bump must prove BOTH legs
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The PR diff comes from the API, not from git: the checkout is shallow and a
+          # three-dot diff needs a merge base the runner does not have.
+          gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
+            -H "Accept: application/vnd.github.v3.diff" > /tmp/pr.diff
+          wc -l < /tmp/pr.diff
+          python3 tools/epoch_gate_check.py /tmp/pr.diff
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
