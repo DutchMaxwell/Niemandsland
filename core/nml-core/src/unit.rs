@@ -898,7 +898,7 @@ pub struct UnitStatic {
     /// through the RECORDED `bounding_d3` faces, so this is the core's own
     /// per-entry read, not a simulation input — see `bounding_boost_dice_of`.
     pub bounding_dice: i64,
-    /// EPOCH_24_PLACE_D3 — the activation placement's own read: the family
+    /// EPOCH_26_PLACE_D3 — the activation placement's own read: the family
     /// member the table's band pass picks (solo_controller.gd:1660-1687 — the
     /// named `Bounding` rule first, else the primitive's DATA-alias family
     /// scanned in rule order, longest reach `dice*2 + plus` wins). None below
@@ -4526,7 +4526,7 @@ fn bounding_of(reg: &mut Registries, p: &Profile) -> Option<f64> {
     None
 }
 
-/// EPOCH_24_PLACE_D3 — one `Bounding`-primitive carrier's placement read:
+/// EPOCH_26_PLACE_D3 — one `Bounding`-primitive carrier's placement read:
 /// the rule name the table logs, the dice count and the flat `place_d3_plus`.
 #[derive(Debug, Default, PartialEq)]
 pub struct PlaceSpec {
@@ -4539,17 +4539,17 @@ pub struct PlaceSpec {
     pub plus: f64,
 }
 
-/// EPOCH_24_PLACE_D3 — the activation placement's own read, the table's own
+/// EPOCH_26_PLACE_D3 — the activation placement's own read, the table's own
 /// pick (solo_controller.gd:1660-1687): `unit_rule_active(.., "Bounding")`
 /// takes the named entry (`place_d3_plus` default 1, `bounding_dice_count`
 /// dice); otherwise the `Bounding` primitive's DATA-alias family (Wolfborn,
 /// Rapid Blink, Wave-Step, …) is scanned in rule order and the LONGEST reach
 /// wins (`dice * 2 + plus` — the dice's average faces), so a unit carrying
 /// both a base alias and its Boost uses the UPGRADE. None below the gate —
-/// below 24 the placement reaches the core only through the RECORDED
+/// below 26 the placement reaches the core only through the RECORDED
 /// `bounding_d3` trace, byte-exact.
 fn bounding_place_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<PlaceSpec> {
-    if !rule_on(rules_epoch, crate::acts::EPOCH_24_PLACE_D3) {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_26_PLACE_D3) {
         return None;
     }
     // Borrow order: `unit_rule_active` and `rules_of_primitive` both take

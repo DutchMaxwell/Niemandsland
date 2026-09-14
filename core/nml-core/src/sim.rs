@@ -4543,7 +4543,7 @@ fn bounding_bonus_in(action: &Action) -> f64 {
         .unwrap_or(0.0)
 }
 
-/// EPOCH_24_PLACE_D3 — the D3" activation placement's hop, the FRESH-sim arm
+/// EPOCH_26_PLACE_D3 — the D3" activation placement's hop, the FRESH-sim arm
 /// of `bounding_bonus_in` above (a recorded act replays the table's own
 /// band-bonus model byte-exact and never reaches here): the caller gates on
 /// the frozen constant, a move kind and no recorded `bounding_d3` trace, and
@@ -4566,7 +4566,7 @@ fn place_d3_hop(
 ) -> Option<String> {
     let rng = rng?;
     let t = match cover {
-        Cover::Board(t) => t,
+        Cover::Board(t) if t.is_valid() => t,
         _ => return None,
     };
     if next.alive.get(si).copied().unwrap_or(0) <= 0 || next.positions[si].is_empty() {
@@ -5122,12 +5122,12 @@ fn resolve_with(
         tray_surprise_attack(statics, state, &mut next, si, seams, tray, shot);
     }
 
-    // --- EPOCH_24_PLACE_D3 — the D3" activation placement, BEFORE the move
+    // --- EPOCH_26_PLACE_D3 — the D3" activation placement, BEFORE the move
     // (the table rolls it at the activation's head, solo_controller.gd:1688-
     // 1710). A RECORDED act replays the table's band-bonus model byte-exact
     // (`bounding_bonus_in` above) — the hop is the FRESH arm. Below the gate
     // every corpus replays the plain reading, byte-exact.
-    let hop_log = if rule_on(seams.rules_epoch, crate::acts::EPOCH_24_PLACE_D3)
+    let hop_log = if rule_on(seams.rules_epoch, crate::acts::EPOCH_26_PLACE_D3)
         && bounding_bonus_in(action) == 0.0
         && matches!(kind, ADVANCE | RUSH | CHARGE)
     {
@@ -5228,7 +5228,7 @@ fn resolve_with(
             ));
         }
     }
-    // EPOCH_24_PLACE_D3 — rules-must-log: ONE trace line per hop, naming the
+    // EPOCH_26_PLACE_D3 — rules-must-log: ONE trace line per hop, naming the
     // rule and the rolled distance (`place_d3_hop` above).
     if let Some(line) = hop_log {
         if let Some((_, shot)) = dice.as_mut() {
