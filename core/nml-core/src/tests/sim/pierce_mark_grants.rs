@@ -105,6 +105,16 @@ fn piercing_shooting_mark_ap_fires_from_21_and_not_below() {
         "below 21 the mark is spent for nothing, as recorded: got {:?}",
         saves20
     );
+
+    // ----- epoch 17: the live epoch the bump leaves — the pre-bump reading -----
+    let (_, marked17) = run_pierce_epoch(&st, &statics, &buff_action(Some("b")), 13, 17);
+    let saves17 = save_targets(&marked17);
+    assert!(!saves17.is_empty(), "the same seed draws the same hits at 17");
+    assert!(
+        saves17.iter().all(|&t| t == 4),
+        "epoch 17 replays the recorded inert mark exactly: got {:?}",
+        saves17
+    );
 }
 
 /// Melee leg (aof goblins' Piercing Fighting Mark, "AP(+1) in melee"): the
@@ -156,5 +166,15 @@ fn piercing_fighting_mark_ap_fires_from_21_and_not_below() {
         saves20.iter().all(|&t| t == 4),
         "below 21 the mark is stamped and spent for nothing, as recorded: got {:?}",
         saves20
+    );
+
+    // ----- epoch 17: the live epoch the bump leaves — the pre-bump reading -----
+    let (_, struck17) = run_pierce_epoch(&st, &statics, &charge, 11, 17);
+    let saves17 = save_targets(&struck17);
+    assert!(!saves17.is_empty(), "the same seed draws the strike saves at 17");
+    assert!(
+        saves17.iter().all(|&t| t == 4),
+        "epoch 17 replays the recorded inert mark exactly: got {:?}",
+        saves17
     );
 }
