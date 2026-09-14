@@ -64,15 +64,12 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 40 (acts::EPOCH_40_STEADFAST_ROLL, sweep H row
-    # `Steadfast`: the round-start Shaken recovery rolls the seeded die like
-    # the table instead of clearing it free; 37 was #957's Unstoppable-Aura
-    # scope split, 34 #951's Unstoppable-Mark clamp half, 33 #946's
-    # re-deployment leg, 27 #933's terrain-debuff leg, 25 #941's ethereal
-    # bands fix, 23 #936's Piercing-marks inert-grant fix): explicit, not
-    # just dynamic — a fresh game now stamps 40, not 37. A record already
-    # stamped 37 must never be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 40
+    # core rules epoch 41 (acts::EPOCH_41_SELF_DESTRUCT_SURVIVORS, sweep H row
+    # `Self-Destruct`: the survival half — every surviving carrier detonates
+    # after the melee and pays the enemy X hits; 40 was #960's Steadfast
+    # round-start recovery die, 39 #959's Morale-rating leg): explicit, not
+    # just dynamic — a fresh game now stamps 41, not 40.
+    assert nml_core.CURRENT_RULES_EPOCH == 41
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)

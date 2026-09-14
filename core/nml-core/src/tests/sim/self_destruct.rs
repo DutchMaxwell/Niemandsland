@@ -85,16 +85,17 @@
         );
     }
 
-    /// (b) OLD leg, the epoch immediately below the bump, pinned by its frozen
-    /// constant: the tray replays the death-half-only reading — the untouched
+    /// (b) OLD leg, the epoch immediately below the bump (40, pinned by its
+    /// frozen constant, re-pointed from the pre-rebase 38 pin per the epoch
+    /// rules): the tray replays the death-half-only reading — the untouched
     /// survivors stay on the board, nothing detonates, the enemy never rolls.
     /// RED on the new leg is the defect: in a core-driven fight a surviving
     /// Self-Destruct model neither detonates nor dies.
     #[test]
-    fn at_epoch_38_a_surviving_self_destruct_unit_stays_on_the_board() {
+    fn at_epoch_40_a_surviving_self_destruct_unit_stays_on_the_board() {
         let (mut st, statics) = suicide_duel();
         let seams = Seams {
-            rules_epoch: crate::acts::EPOCH_38_WATCHBORN_LATCH,
+            rules_epoch: crate::acts::EPOCH_40_STEADFAST_ROLL,
             ..Default::default()
         };
         let mut tray = Tray::seeded(2);

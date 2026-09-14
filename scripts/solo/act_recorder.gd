@@ -58,7 +58,10 @@ static var spawn_profile_resolver: Callable = Callable()
 ## (sweep C 2026-09-14, row `Unstoppable when Shooting Aura`). Bumped to 40
 ## in the same diff as the core's EPOCH_40_STEADFAST_ROLL (sweep H
 ## 2026-09-14, row `Steadfast`).
-static var rules_epoch: int = 40
+## Bumped to 41 in the same diff as the core's EPOCH_41_SELF_DESTRUCT_SURVIVORS
+## (sweep H 2026-09-14, row `Self-Destruct` — the survival half: every
+## surviving carrier detonates after the melee and pays X hits).
+static var rules_epoch: int = 41
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the

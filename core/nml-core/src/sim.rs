@@ -27,7 +27,7 @@ use crate::acts::{
     EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
     EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS,
     EPOCH_32_STRAFING, EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA,
-    EPOCH_38_WATCHBORN_LATCH,
+    EPOCH_38_WATCHBORN_LATCH, EPOCH_41_SELF_DESTRUCT_SURVIVORS,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -3643,6 +3643,58 @@ fn impact_phase(
     caused
 }
 
+/// Block C4 — the SURVIVAL half of `Self-Destruct` (`_solo_self_destruct_post_melee`
+/// main.gd:17346-17370, called for BOTH combatants at main.gd:8431-8433 and
+/// :10456-10458): after both sides have finished attacking, every surviving
+/// carrier of `ui` is removed — "it is immediately killed", the table applies
+/// 9999 wounds with NO saves (main.gd:17363) — and the enemy takes X hits per
+/// removed model, X = the rule's own `maxi(rating, 1)` read off the alive count
+/// BEFORE the removal (main.gd:17351-17358). The hits save at the enemy's
+/// Shielded-adjusted melee Defense with ap 0 — the same `retaliate_saves_with_tray`
+/// the death half and Retaliate use (main.gd:17366-17369) — and land through
+/// `land_wounds` alone, never through another strike phase. NO tally credit:
+/// the table's melee score (main.gd:8436-8437) is tallied from the strike
+/// phases only, so the detonation cannot move the who-wins comparison or the
+/// loser's morale. No Shaken/Routed read: the table gates only on the member's
+/// alive count (main.gd:17351-17352) and runs the half BEFORE the melee
+/// result / morale test, so a Shaken carrier still detonates. EPOCH_41 gate:
+/// below 41 every recorded game replays byte-exact.
+fn self_destruct_post_melee(
+    statics: &[UnitStatic],
+    next: &mut State,
+    ui: usize,
+    enemy: usize,
+    seams: Seams,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_41_SELF_DESTRUCT_SURVIVORS) {
+        return;
+    }
+    let ut = &statics[next.roster.profile[ui]];
+    if ut.ctx.self_destruct_rating <= 0 {
+        return;
+    }
+    let alive = next.alive[ui];
+    if alive <= 0 {
+        return;
+    }
+    let hits = ut.ctx.self_destruct_rating * alive;
+    shot.log.push(format!(
+        "Self-Destruct: {alive} surviving models detonate, {hits} hits to {}",
+        statics[next.roster.profile[enemy]].name
+    ));
+    land_wounds(next, ui, 9999); // main.gd:17363 — "it is immediately killed", no saves
+    if next.alive[enemy] > 0 {
+        let eu = &statics[next.roster.profile[enemy]];
+        let ectx = ctx_of(eu, next, enemy);
+        let (_, landed) = crate::dice::retaliate_saves_with_tray(
+            hits, &ectx, &eu.name, tray, &mut shot.rolls,
+        );
+        land_wounds(next, enemy, landed);
+    }
+}
+
 /// `main._solo_morale_test` :8305 on the played path — the tray twin of
 /// `morale_fails_expected`, with No Retreat's self-wounds landed regen-free
 /// ("can't be ignored") and the Rout half clearing the unit off the board
@@ -3781,6 +3833,11 @@ fn tray_charge(
             next.fatigued[ti] = true;
         }
     }
+    // Block C4 — the survival half, the table's own order (main.gd:8431-8433):
+    // the charger's carriers detonate first, then the defender's — AFTER both
+    // sides have finished attacking, BEFORE the melee result / morale test.
+    self_destruct_post_melee(statics, next, si, ti, seams, tray, shot);
+    self_destruct_post_melee(statics, next, ti, si, seams, tray, shot);
     let a = by_su + statics[next.roster.profile[si]].ctx.fear;
     let b = by_tu + statics[next.roster.profile[ti]].ctx.fear;
     if a == b {

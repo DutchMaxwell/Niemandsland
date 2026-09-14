@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 40;
+pub const CURRENT_RULES_EPOCH: u32 = 41;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -700,10 +700,10 @@ pub const EPOCH_38_WATCHBORN_LATCH: u32 = 38;
 /// the suicide unit the table plays. From 41 the tray charge epilogue runs
 /// the survival half in the table's order (the charger's carriers first,
 /// then the defender's). Below 41 every recorded game replays byte-exact.
-/// `41` is reserved one past the in-flight stamps (38 =
-/// `EPOCH_38_WATCHBORN_LATCH` on main; 39 #959 and 40 #960 are in flight
-/// above it). Every call site reads THIS constant, not the literal `41` or
-/// `CURRENT_RULES_EPOCH`.
+/// `41` is one past every existing stamp at rebase time (40 =
+/// `EPOCH_40_STEADFAST_ROLL`, #960; 39 = `EPOCH_39_MORALE_RATING`, #959;
+/// 38 = `EPOCH_38_WATCHBORN_LATCH`, #955). Every call site reads THIS
+/// constant, not the literal `41` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_41_SELF_DESTRUCT_SURVIVORS: u32 = 41;
 
 /// EPOCH 34 UNSTOPPABLE MARK (PR #951, sweep C row `Unstoppable Mark`): "Once
@@ -1337,7 +1337,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 40, "epoch 40's gate (EPOCH_40_STEADFAST_ROLL) bumps the live epoch to 40, one past #957's Unstoppable-Aura leg 37 (35 = EPOCH_35_UNSTOPPABLE_MELEE, #953; 36 is reserved in flight by the watchborn leg, 38-39 by the surge-mark and morale legs)");
+        assert_eq!(CURRENT_RULES_EPOCH, 41, "epoch 41's gate (EPOCH_41_SELF_DESTRUCT_SURVIVORS) bumps the live epoch to 41, one past #960's Steadfast leg 40 (39 = #959's Morale-rating leg; 38 = EPOCH_38_WATCHBORN_LATCH, #955)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1347,11 +1347,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":40}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":41}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 40"
+            "a fresh play_game() now stamps the bumped epoch, 41"
         );
     }
 
