@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""Tests for tools/epoch_gate_check.py.
+
+The gate's whole job is to refuse half-proven rules PRs, so these tests feed it the
+byte-exact unified diffs of the two holes found on 2026-09-14 by reading the source:
+a PR that adds a NEW `EPOCH_<n>_<NAME>` constant WITHOUT bumping `CURRENT_RULES_EPOCH`
+(the old code printed "nothing to check" and gated nothing), and a PR whose bump is at
+or below the live epoch (a stale branch rebased carelessly). A diff that touches no
+epoch symbol at all must still pass untouched.
+
+Run:  python3 -m pytest tools/test_epoch_gate_check.py
+"""
+
+import importlib.util
+import os
+import subprocess
+import sys
+import textwrap
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_CHECKER = os.path.join(_HERE, "epoch_gate_check.py")
+
+
+def run_checker(tmp_path, diff_text):
+    diff = tmp_path / "pr.diff"
+    diff.write_text(textwrap.dedent(diff_text))
+    return subprocess.run(
+        [sys.executable, _CHECKER, str(diff)], capture_output=True, text=True
+    )
+
+
+def test_new_epoch_constant_without_bump_is_refused(tmp_path):
+    """Hole 1: an EPOCH constant lands with no CURRENT_RULES_EPOCH bump at all."""
+    r = run_checker(
+        tmp_path,
+        """\
+        diff --git a/core/nml-core/src/rules.rs b/core/nml-core/src/rules.rs
+        --- a/core/nml-core/src/rules.rs
+        +++ b/core/nml-core/src/rules.rs
+        @@ -10,2 +10,4 @@
+        +pub const EPOCH_23_LATE_FIX: u32 = 23;
+        +
+        """,
+    )
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert (
+        "rule 4: a new EPOCH_<n> constant was added without bumping CURRENT_RULES_EPOCH"
+        " - a rules fix landing below the live epoch gates nothing"
+    ) in r.stdout
+
+
+def test_bump_at_or_below_previous_epoch_is_refused(tmp_path):
+    """Hole 2: a stale rebase sets CURRENT_RULES_EPOCH to 18 while main already lives at 19."""
+    r = run_checker(
+        tmp_path,
+        """\
+        diff --git a/core/nml-core/src/rules.rs b/core/nml-core/src/rules.rs
+        --- a/core/nml-core/src/rules.rs
+        +++ b/core/nml-core/src/rules.rs
+        @@ -10,7 +10,9 @@
+        -pub const CURRENT_RULES_EPOCH: u32 = 19;
+        +pub const CURRENT_RULES_EPOCH: u32 = 18;
+        +pub const EPOCH_18_STALE_REBASE: u32 = 18;
+        +fn stale_rebase_at_epoch_18_and_epoch_19_still_replays() {
+        +    let s = Seams { rules_epoch: 19, .. };
+        +    assert_eq!(surge_stamp_of("X", "gf", "faction", 18), 1);
+        +}
+        """,
+    )
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert (
+        "rule 5: CURRENT_RULES_EPOCH 18 is not above the previous 19"
+        " - renumber to the live epoch + 1 at rebase"
+    ) in r.stdout
+
+
+def test_diff_without_any_epoch_symbol_still_passes(tmp_path):
+    """The 'nothing to check' path must stay for diffs that touch no epoch symbol."""
+    r = run_checker(
+        tmp_path,
+        """\
+        diff --git a/docs/notes.md b/docs/notes.md
+        --- a/docs/notes.md
+        +++ b/docs/notes.md
+        @@ -1,2 +1,3 @@
+         old line
+        +a new line about nothing epochy
+        """,
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "nothing to check" in r.stdout
