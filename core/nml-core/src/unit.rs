@@ -29,7 +29,7 @@ use crate::acts::{
     EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE, EPOCH_19_MOVE_GRANTS_FOLD,
     EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST, EPOCH_35_UNSTOPPABLE_MELEE,
     EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL, EPOCH_43_BATTLEBORN_ROLL,
-    EPOCH_44_SURGE_MARK,
+    EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -559,6 +559,15 @@ pub struct CondAp {
     /// pre-wave behaviour logs nothing and old replays stay byte-identical —
     /// only the wave-3 named forms carry it (Piercing Hunter family).
     pub name: String,
+    /// EPOCH 46 DISINTEGRATE REGEN — the entry's Regeneration bypass and its
+    /// melee/shooting facet (`bypass_regen` / `melee_only` /
+    /// `shooting_only`, the table's weapon-rule arm reads the same three
+    /// params, main.gd:7133-7137). Data only: `profile_ev` never reads them,
+    /// and the only behavioural reader is the cond-ap stamp's gated
+    /// `regen_bypass_rule` leg below.
+    pub bypass_regen: bool,
+    pub melee_only: bool,
+    pub shooting_only: bool,
 }
 
 /// One merged, stamped weapon profile — `AiShooting._profile` ai_shooting.gd:90-152
@@ -591,6 +600,19 @@ pub struct ShootProfile {
     /// carries no Regeneration clause) does not. Pre-epoch records stamp both
     /// flags identically, so every old corpus replays byte-exact.
     pub bypass_regen: bool,
+    /// EPOCH 46 DISINTEGRATE REGEN — the registry-driven Regeneration bypass
+    /// of a WEAPON-rule cond-ap entry ("Disintegrate", gf blessed_sisters:
+    /// `bypass_regen: true`): the rule NAME whose entry carries the bypass,
+    /// stamped onto the carrying weapon's profiles ONLY (the table's arm
+    /// reads the weapon's own rules, main.gd:7121-7137; a unit-level spec
+    /// rides no weapon), the entry's facet checked against the array's own
+    /// reach. The dice folds' regen split reads it on the Bane family's seam
+    /// (`dice.rs`'s `ignores_regen` union) and logs the refusal the
+    /// Bane-in-Melee arm's way. Gated at the STAMP behind the FROZEN
+    /// `EPOCH_46_DISINTEGRATE_REGEN`, so below 46 the field stamps empty and
+    /// every earlier replay is byte-exact. `profile_ev` reads neither this
+    /// nor `CondAp::bypass_regen` — the imagination stays blind.
+    pub regen_bypass_rule: String,
     pub thrust: bool,
     /// The WEAPON's own "Unstoppable" rule, exact name — `_has_rule(w,
     /// "Unstoppable")` ai_shooting.gd:132, the table's DICE path (to-hit clamp
@@ -4224,6 +4246,9 @@ fn cond_ap_of(reg: &mut Registries, p: &Profile, base: &str) -> (Option<CondAp>,
             over_in: e.param_f("over_in", LONG_RANGE_IN),
             condition: e.param_s("condition").to_string(),
             threshold: e.param_i("threshold", 0),
+            bypass_regen: e.param_b("bypass_regen"),
+            melee_only: e.param_b("melee_only"),
+            shooting_only: e.param_b("shooting_only"),
             ..Default::default()
         }),
         on6,
@@ -4254,7 +4279,12 @@ pub static LEGACY_NO_COND_AP: AtomicBool = AtomicBool::new(false);
 /// the MODEL-level members of the family (Slayer / Piercing Hunter: "when this
 /// model shoots…") sit on the UNIT and are stamped onto every profile, deduped
 /// against the weapon's own rules BY NAME.
-fn stamp_conditional_ap(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile]) {
+fn stamp_conditional_ap(
+    reg: &mut Registries,
+    p: &Profile,
+    rules_epoch: u32,
+    shoot: &mut [ShootProfile],
+) {
     if LEGACY_NO_COND_AP.load(Ordering::Relaxed) {
         return; // frozen-corpus replay — see the flag's own note
     }
@@ -4272,6 +4302,18 @@ fn stamp_conditional_ap(reg: &mut Registries, p: &Profile, shoot: &mut [ShootPro
             let base = base_rule_name(r);
             let (spec, on6) = cond_ap_of(reg, p, &base);
             if let Some(c) = spec {
+                // EPOCH 46 DISINTEGRATE REGEN — the table's weapon-rule arm
+                // (main.gd:7133-7137): the entry's own `bypass_regen`, the
+                // facet checked against THIS array's reach, the rule NAME
+                // carried for the refusal line. Gated at the STAMP behind the
+                // frozen constant, so every pre-46 record stamps an empty
+                // field and replays its silent heal.
+                if rule_on(rules_epoch, EPOCH_46_DISINTEGRATE_REGEN)
+                    && c.bypass_regen
+                    && facet_applies(c.melee_only, c.shooting_only, sp.range)
+                {
+                    sp.regen_bypass_rule = base.clone();
+                }
                 sp.cond_ap.push(c);
                 seen.push(base);
             }
@@ -5300,7 +5342,7 @@ impl UnitStatic {
         let p = &p;
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
         stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch);
-        stamp_conditional_ap(reg, p, &mut shoot);
+        stamp_conditional_ap(reg, p, rules_epoch, &mut shoot);
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
         stamp_shot_modifier(reg, p, &mut shoot);
 
@@ -5315,7 +5357,7 @@ impl UnitStatic {
         // cannot model is reported ONCE, not once per array.
         let mut melee_unimpl: Vec<Unimplemented> = Vec::new();
         stamp(reg, p, &mut melee, &mut melee_unimpl, rules_epoch);
-        stamp_conditional_ap(reg, p, &mut melee);
+        stamp_conditional_ap(reg, p, rules_epoch, &mut melee);
         stamp_unit_strikers(reg, p, &mut melee, rules_epoch);
         // Lacerate+Counter wave, epoch-gated (`acts::rule_on`, epoch 3): the
         // Counter DATA aliases live on the MODEL — the table's strike-first

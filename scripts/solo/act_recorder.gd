@@ -66,8 +66,10 @@ static var spawn_profile_resolver: Callable = Callable()
 ## row `Morale` — the table's morale_bonus_of already folds the rating); to
 ## 40 with the core's EPOCH_40_STEADFAST_ROLL (sweep H 2026-09-14, row
 ## `Steadfast`); to 44 with the core's EPOCH_44_SURGE_MARK (#958, sweep C
-## row `Surge Mark` — the once-per-activation pick).
-static var rules_epoch: int = 44
+## row `Surge Mark` — the once-per-activation pick); to 46 with the core's
+## EPOCH_46_DISINTEGRATE_REGEN (sweep E 2026-09-14, row `Disintegrate` — the
+## Regeneration heal refused the way the table refuses it).
+static var rules_epoch: int = 46
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the

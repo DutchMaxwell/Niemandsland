@@ -54,8 +54,9 @@ use super::*;
 
     /// The old-leg pin — the frozen constant of the epoch immediately below
     /// the bump AT REBASE TIME (re-pointed at every rebase, never the live
-    /// symbol).
-    const OLD_EPOCH: u32 = crate::acts::EPOCH_43_BATTLEBORN_ROLL;
+    /// symbol; 44 is `EPOCH_44_SURGE_MARK`'s own landed leg, 45 the
+    /// casterboost leg still in flight).
+    const OLD_EPOCH: u32 = crate::acts::EPOCH_44_SURGE_MARK;
 
     /// EPOCH 46 DISINTEGRATE REGEN — a Regeneration unit wounded by a weapon
     /// whose Disintegrate entry carries `bypass_regen: true` gets NO
@@ -67,7 +68,7 @@ use super::*;
     /// Bane-in-Melee arm's own line, main.gd:7175-7176).
     #[test]
     fn disintegrate_refuses_the_regeneration_roll_at_46_and_below_still_rolls() {
-        let new = disintegrate_volley(&disintegrate_carrier(24, 46), false);
+        let new = disintegrate_volley(&disintegrate_carrier(24, crate::acts::EPOCH_46_DISINTEGRATE_REGEN), false);
         assert!(
             new.caused > 0,
             "fixture seed no longer wounds — pick another"
@@ -99,7 +100,7 @@ use super::*;
     /// carrying Disintegrate refuses the heal as well.
     #[test]
     fn disintegrate_refuses_the_regeneration_roll_in_melee() {
-        let new = disintegrate_volley(&disintegrate_carrier(0, 46), true);
+        let new = disintegrate_volley(&disintegrate_carrier(0, crate::acts::EPOCH_46_DISINTEGRATE_REGEN), true);
         assert!(
             new.caused > 0,
             "fixture seed no longer wounds — pick another"

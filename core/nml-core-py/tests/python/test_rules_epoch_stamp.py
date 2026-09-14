@@ -64,14 +64,17 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 44 (acts::EPOCH_44_SURGE_MARK, the Surge Mark's
-    # once-per-activation pick; 39 was #959's Morale(X) rating, 38 #955's
-    # Watchborn latch, 37 #957's Unstoppable-Aura leg, 34 #951's
+    # core rules epoch 46 (acts::EPOCH_46_DISINTEGRATE_REGEN, sweep E row
+    # `Disintegrate`: a weapon whose Disintegrate entry carries bypass_regen
+    # refuses the Regeneration heal the way the table does; 45 is the
+    # casterboost leg in flight, 44 #958's Surge Mark pick, 43 #964's
+    # Battleborn roll, 41 #963's selfdestruct survival half, 40 #960's
+    # Steadfast roll, 37 #957's Unstoppable-Aura scope split, 34 #951's
     # Unstoppable-Mark clamp half, 33 #946's re-deployment leg, 27 #933's
-    # terrain-debuff leg): explicit, not just dynamic — a fresh game now
-    # stamps 40, not 39. A record already stamped 39 must never be mistaken
-    # for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 44
+    # terrain-debuff leg, 25 #941's ethereal bands fix):
+    # explicit, not just dynamic — a fresh game now stamps 46, not 41. A
+    # record already stamped 41 must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 46
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)
