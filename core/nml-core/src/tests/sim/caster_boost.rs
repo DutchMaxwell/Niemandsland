@@ -15,6 +15,14 @@ use super::*;
 
     use crate::rules::{Spell, SpellModifier};
 
+    /// A Defense-4 static for the spell's EV (the target's save rung).
+    fn def4() -> UnitStatic {
+        UnitStatic {
+            ctx: crate::unit::Ctx { defense: 4, ..Default::default() },
+            ..UnitStatic::default()
+        }
+    }
+
     fn spell() -> Spell {
         Spell {
             name: "bolt".into(),
@@ -44,17 +52,13 @@ use super::*;
         st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
         st.attached_to = Rc::new(vec![None, None, None, None]);
         st.wounds = vec![vec![1], vec![1], vec![9], vec![9]];
-        let def4 = UnitStatic {
-            ctx: crate::unit::Ctx { defense: 4, ..Default::default() },
-            ..UnitStatic::default()
-        };
         let caster = UnitStatic {
             is_caster: true,
             spells: vec![spell()],
             casts_per_round: 2,
             ..UnitStatic::default()
         };
-        (st, vec![caster, UnitStatic::default(), def4, def4])
+        (st, vec![caster, UnitStatic::default(), def4(), def4()])
     }
 
     fn epoch(e: u32) -> Seams {
