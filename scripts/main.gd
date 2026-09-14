@@ -7166,7 +7166,55 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 				"%s: %s — Regeneration is ignored (once)" % [from_mark, attacker.get_name()],
 				_solo_is_ai_unit(attacker))
 		return true
-	return attacker != null and AiEv.has_exact_rule(attacker, "Unstoppable")
+	if attacker == null:
+		return false
+	var shooting := int(profile.get("range", 0)) > 0
+	if not shooting:
+		# EPOCH 37 UNSTOPPABLE AURA — the melee half: a printed rule (no
+		# " (spell)" suffix — has_exact_rule's base-name read cannot tell the
+		# overlay from the print) or a live record whose scope is NOT
+		# "shooting"; the "Unstoppable when Shooting" aura's overlay stops
+		# answering here.
+		for r in attacker.get_special_rules():
+			var s := (str((r as Dictionary).get("name", "")) if r is Dictionary else str(r)).strip_edges()
+			if s.get_slice("(", 0).strip_edges() == "Unstoppable" and not s.ends_with(" (spell)"):
+				return true
+		return _solo_chain_grants_unstoppable(attacker, false)
+	# The shooting half: the exact-name gate plus the live records — the aura
+	# carrier's own record never became an overlay (`_solo_apply_grant` skips a
+	# unit whose own rule prefix-matches the grant: "Unstoppable when Shooting
+	# Aura" begins with "Unstoppable"), and the record is what knows the grant.
+	if AiEv.has_exact_rule(attacker, "Unstoppable"):
+		return true
+	return _solo_chain_grants_unstoppable(attacker, true)
+
+
+## EPOCH 37 UNSTOPPABLE AURA — any live record on `attacker`'s joined chain
+## handing "Unstoppable" (base name, " when "/" in " scope suffixes stripped)
+## whose record scope fits `shooting` (an unscoped record fits both halves).
+## The table's twin of the core's `mods::granted_in_scope`; attackers-side
+## records are never the bearer's own grants (main.gd:3652).
+func _solo_chain_grants_unstoppable(attacker: GameUnit, shooting: bool) -> bool:
+	for m in _solo_joined_chain(attacker):
+		var gu := m as GameUnit
+		if gu == null:
+			continue
+		for rd in gu.unit_properties.get(SOLO_SPELL_RECORDS_KEY, []):
+			var rec := rd as Dictionary
+			if str(rec.get("beneficiary", "")) == "attackers":
+				continue
+			var scope := str(rec.get("scope", ""))
+			if (scope == "shooting" and not shooting) or (scope == "melee" and shooting):
+				continue
+			var base := RulesRegistry.base_rule_name(str(rec.get("grants_rule", "")))
+			var cut := base.find(" when ")
+			if cut < 0:
+				cut = base.find(" in ")
+			if cut >= 0:
+				base = base.substr(0, cut)
+			if base == "Unstoppable":
+				return true
+	return false
 
 
 ## The unit's per-model Tough value (majority) parsed from its special rules; 1 when it has no Tough.
@@ -17097,6 +17145,40 @@ func _solo_bridge_granted_flags(unit: GameUnit, profile: Dictionary, target: Gam
 			if out == profile:
 				out = profile.duplicate()
 			out[flag] = true
+	# EPOCH 37 UNSTOPPABLE AURA — the own-store "Unstoppable" grant arms the
+	# to-hit clamp like the weapon's own flag (the #951 mark leg bridged the
+	# TARGET side; the aura sits on the BEARER's own store). Read from the live
+	# records, never the suffix-marked overlay: the record carries the entry's
+	# scope, so the shooting-scoped aura folds at the shooting seam only and an
+	# unscoped grant at both — has_special_rule's prefix would answer for the
+	# aura (and for "Unstoppable in Melee") at every seam alike. No
+	# `_unstoppable_from_spell` tag on this path: the tag answers
+	# _solo_ignores_regen unconditionally, and the aura's Regeneration half
+	# must stay shooting-only.
+	var bridge_shooting := int(out.get("range", 0)) > 0
+	for m in _solo_joined_chain(unit):
+		var gu := m as GameUnit
+		if gu == null or bool(out.get("unstoppable", false)):
+			break
+		for rd in gu.unit_properties.get(SOLO_SPELL_RECORDS_KEY, []):
+			var rec := rd as Dictionary
+			if str(rec.get("beneficiary", "")) == "attackers":
+				continue
+			var scope := str(rec.get("scope", ""))
+			if (scope == "shooting" and not bridge_shooting) \
+					or (scope == "melee" and bridge_shooting):
+				continue
+			var grant_base := RulesRegistry.base_rule_name(str(rec.get("grants_rule", "")))
+			var grant_cut := grant_base.find(" when ")
+			if grant_cut < 0:
+				grant_cut = grant_base.find(" in ")
+			if grant_cut >= 0:
+				grant_base = grant_base.substr(0, grant_cut)
+			if grant_base == "Unstoppable":
+				if out == profile:
+					out = profile.duplicate()
+				out["unstoppable"] = true
+				break
 	if target != null and _solo_spell_mods.has(target.get_instance_id()):
 		var records := _solo_spell_mods[target.get_instance_id()] as Array
 		for rule_name in AiSpell.attacker_grants_from_target(records):

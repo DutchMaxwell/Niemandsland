@@ -26,7 +26,7 @@ use crate::acts::{
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
     EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
     EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS,
-    EPOCH_32_STRAFING, EPOCH_34_UNSTOPPABLE_MARK,
+    EPOCH_32_STRAFING, EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -2465,7 +2465,28 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // exchange like the Regeneration half — one record, never twice), but
     // gated: below 34 the to-hit clamps stay `p.unstoppable`-only and every
     // recorded corpus replays its own clamp-blind rolls.
-    c.unstoppable_mark = c.unstoppable_grant && rule_on(rules_epoch, EPOCH_34_UNSTOPPABLE_MARK);
+    // EPOCH 37 UNSTOPPABLE AURA — from 37 the mark's stamp reads the MELEE
+    // half of the grant (`""`/`"melee"` scopes): the shooting-scoped aura
+    // record stops feeding the mark stamp, so it can no longer arm the MELEE
+    // clamp (or log the mark's "(once)" line) through the scope-blind union.
+    c.unstoppable_mark = if rule_on(rules_epoch, EPOCH_37_UNSTOPPABLE_AURA) {
+        mods::granted_in_scope(state, i, "Unstoppable", false)
+    } else {
+        c.unstoppable_grant && rule_on(rules_epoch, EPOCH_34_UNSTOPPABLE_MARK)
+    };
+    // EPOCH 37 UNSTOPPABLE AURA — the aura's own two stamps, both gated so a
+    // pre-37 record replays byte-exact: `unstoppable_aura` is the
+    // SHOOTING-scoped part (arms the SHOOTING clamp, names the SHOOTING
+    // Regeneration line), `unstoppable_regen_melee` is the melee Regeneration
+    // read's final answer (the scope-blind union below 37, the melee half from
+    // 37 — the shooting-scoped aura stops bypassing melee Regeneration).
+    c.unstoppable_aura = rule_on(rules_epoch, EPOCH_37_UNSTOPPABLE_AURA)
+        && mods::granted_shooting_scoped(state, i, "Unstoppable");
+    c.unstoppable_regen_melee = if rule_on(rules_epoch, EPOCH_37_UNSTOPPABLE_AURA) {
+        mods::granted_in_scope(state, i, "Unstoppable", false)
+    } else {
+        c.unstoppable_grant
+    };
     // DEFECT_LEDGER #33 — a live "Furious" grant (a spell cast, same shape as
     // any other rule grant) reaches this round's melee exactly where the
     // static special-rule scan (`unit::ctx_for`) already sets it, and stays

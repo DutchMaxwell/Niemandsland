@@ -312,6 +312,26 @@ pub struct Ctx {
     /// by nothing else. False on every `ctx_of` and on every hand-built test
     /// context.
     pub unstoppable_mark: bool,
+    /// EPOCH 37 UNSTOPPABLE AURA — the SHOOTING-SCOPED part of the live
+    /// "Unstoppable" grant (the "Unstoppable when Shooting" aura's records
+    /// carry `scope: "shooting"`): stamped ONLY from
+    /// `EPOCH_37_UNSTOPPABLE_AURA` (`sim::ctx_live`, via
+    /// `mods::granted_shooting_scoped`) so every pre-37 corpus replays its
+    /// rolls. Arms the SHOOTING to-hit clamp exactly where the weapon's own
+    /// `p.unstoppable` and #951's `unstoppable_mark` are, names the SHOOTING
+    /// Regeneration log line, and is read by NOTHING on the melee side — the
+    /// melee clamp and the melee Regeneration read stay out of a
+    /// shooting-scoped grant. False on every `ctx_of` and on every hand-built
+    /// test context.
+    pub unstoppable_aura: bool,
+    /// EPOCH 37 UNSTOPPABLE AURA — the MELEE Regeneration read's answer:
+    /// below 37 the scope-blind `unstoppable_grant` union (the recorded leak
+    /// replays byte-exact), from 37 only a grant whose record is NOT
+    /// shooting-scoped (`""` / `"melee"` — `mods::granted_in_scope(..,
+    /// false)`), so the shooting-scoped aura stops cutting through melee
+    /// Regeneration. Read by the melee fold's `ignores_regen` and by nothing
+    /// else. False on every `ctx_of`.
+    pub unstoppable_regen_melee: bool,
     /// A live `grants_rule: "Rending"` on this unit's joined chain — the
     /// rending leg of `_solo_bridge_granted_flags` (main.gd:16576-16589),
     /// which folds granted rending into the striker's roll flags. Read by the
@@ -2277,6 +2297,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         melee_hit_bonus_charge,
         unstoppable_grant: false,
         unstoppable_mark: false,
+        unstoppable_aura: false,
+        unstoppable_regen_melee: false,
         rending_grant: false,
         thrust_grant: false,
         relentless_grant: false,

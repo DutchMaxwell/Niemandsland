@@ -216,7 +216,37 @@ fn chain_grant_exact(state: &State, i: usize, rule: &str, attackers: bool) -> bo
     })
 }
 
-fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
+/// EPOCH 37 UNSTOPPABLE AURA — the scope-aware twin of `granted`: the record's
+/// own `scope` decides the half, the way the table's
+/// `AiSpell._granted_rules_into` (ai_spell.gd:490-512) reads it. A record with
+/// no scope answers BOTH halves; a "shooting"/"melee"-scoped record answers
+/// only its own — so the "Unstoppable when Shooting" aura stops reaching the
+/// melee reads through the scope-blind walk. Same joined-chain walk, same
+/// base-name match, same attackers-side split.
+pub fn granted_in_scope(state: &State, i: usize, rule: &str, shooting: bool) -> bool {
+    chain_grant_where(state, i, rule, false, |s| {
+        s.is_empty() || (s == "shooting") == shooting
+    })
+}
+
+/// EPOCH 37 UNSTOPPABLE AURA — the SHOOTING-SCOPED part of a grant: only
+/// records whose scope names "shooting" answer. The aura's own read at the
+/// SHOOTING to-hit clamp (the unscoped mark grant arms it through #951's
+/// `unstoppable_mark` instead), so an aura record and a mark record on the same
+/// bearer each name their own rules-must-log line.
+pub fn granted_shooting_scoped(state: &State, i: usize, rule: &str) -> bool {
+    chain_grant_where(state, i, rule, false, |s| s == "shooting")
+}
+
+/// The chain walk behind the scope-aware grant reads: `scope_ok` filters each
+/// record by its own `scope` ("", "melee", "shooting" — `LiveMod::scope`).
+fn chain_grant_where(
+    state: &State,
+    i: usize,
+    rule: &str,
+    attackers: bool,
+    scope_ok: impl Fn(&str) -> bool,
+) -> bool {
     let mut who: Vec<usize> = vec![i];
     if let Some(h) = state.attached_to[i] {
         who.push(h);
@@ -227,8 +257,13 @@ fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
             r.attackers == attackers
                 && !r.grants_rule.is_empty()
                 && base_rule_name(&r.grants_rule) == rule
+                && scope_ok(&r.scope)
         })
     })
+}
+
+fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
+    chain_grant_where(state, i, rule, attackers, |_| true)
 }
 
 /// CENSUS rows 1-5 (maintainer decision 13.09., semantics §11.2): the SOLO
