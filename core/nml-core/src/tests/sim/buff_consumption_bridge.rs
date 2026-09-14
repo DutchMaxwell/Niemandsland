@@ -233,7 +233,7 @@ use super::*;
         // "once": the exchange that used the grant spends it — the same
         // once-record the Regeneration bypass reads (shared consumption).
         assert!(next.buffs.iter().all(|v| v.is_empty()), "the exchange spends the grant");
-        let (_, old) = run_buff_epoch(&st, &statics, &buff_action(Some("b")), 13, 33);
+        let (_, old) = run_buff_epoch(&st, &statics, &buff_action(Some("b")), 13, crate::acts::EPOCH_33_REDEPLOYMENT);
         assert_eq!(old.rolls[0].target, 5, "below 34 the clamp stays p.unstoppable-only");
         assert!(old.log.iter().all(|l| !l.contains("Unstoppable")), "no grant, no line");
     }
@@ -269,7 +269,7 @@ use super::*;
             "rules-must-log: {:?}",
             marked.log
         );
-        let (_, old) = run_buff_epoch(&st, &statics, &charge, 13, 33);
+        let (_, old) = run_buff_epoch(&st, &statics, &charge, 13, crate::acts::EPOCH_33_REDEPLOYMENT);
         assert_eq!(old.rolls[0].target, 5, "below 34 the clamp stays p.unstoppable-only");
     }
 
