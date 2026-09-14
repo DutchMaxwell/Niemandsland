@@ -198,8 +198,12 @@ fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
 /// CENSUS rows 1-5 (maintainer decision 13.09., semantics §11.2): the SOLO
 /// move-grant family as EVIDENCE-ONLY accessor reads. The recorded dynamic
 /// band already carries each grant (movement_range_controller.gd:83-135), so
-/// nothing here folds (semantics §2(a)); the caller logs. Gate:
-/// `EPOCH_11_SOLO_GRANT_READS` — a rules_epoch below 11 reads nothing.
+/// nothing here folds (semantics §2(a)); the caller logs. From
+/// `EPOCH_19_MOVE_GRANTS_FOLD` the family folds for real at the move spend
+/// (`sim.rs::solo_move_grant_delta_in`) and this accessor's caller stays
+/// silent — a FRESH core-simulated game has no recorded band to carry the
+/// grant. Gate: `EPOCH_11_SOLO_GRANT_READS` — a rules_epoch below 11 reads
+/// nothing.
 pub fn solo_move_grants(state: &State, i: usize, rules_epoch: u32) -> Vec<&'static str> {
     if !rule_on(rules_epoch, EPOCH_11_SOLO_GRANT_READS) {
         return Vec::new();
