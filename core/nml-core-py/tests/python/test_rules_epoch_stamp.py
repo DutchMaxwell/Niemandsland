@@ -64,16 +64,13 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 38 (acts::EPOCH_38_WATCHBORN_LATCH, the Watchborn
-    # latch: one versatile pick per activation on both layers and the melee
-    # dice half it was missing; 37 was #957's Unstoppable-Aura leg, 34 #951's
-    # Unstoppable-Mark clamp half, 33 #946's re-deployment leg, 27 #933's
-    # terrain-debuff leg, 25 #941's ethereal bands fix, 23 #936's
-    # Piercing-marks inert-grant fix): explicit, not just dynamic — a
-    # fresh game now stamps 38, not 37. A record already stamped 37 must
-    # never be mistaken for a fresh one (renumbered from the reserved 36 at
-    # rebase per the epoch rules).
-    assert nml_core.CURRENT_RULES_EPOCH == 38
+    # core rules epoch 39 (acts::EPOCH_39_MORALE_RATING, the Morale(X) rating
+    # folded into the core's morale test; 38 was #955's Watchborn latch, 37
+    # #957's Unstoppable-Aura leg, 34 #951's Unstoppable-Mark clamp half,
+    # 33 #946's re-deployment leg, 27 #933's terrain-debuff leg): explicit,
+    # not just dynamic — a fresh game now stamps 39, not 38. A record already
+    # stamped 38 must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 39
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)
