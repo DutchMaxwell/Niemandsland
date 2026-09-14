@@ -1287,10 +1287,10 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         count: w.count.max(1),
         range: range_in,
         // Hazardous grants AP(4) — ai_shooting.gd:104-107.
-        ap: if weapon_has(w, "Hazzardous") { ap.max(4) } else { ap },
+        ap: if weapon_has(w, "Hazardous") { ap.max(4) } else { ap },
         hazardous: weapon_has(w, "Hazardous"),
         deadly: weapon_rating(w, "Deadly"),
-        relentless: weapon_has(w, "Rilentless"),
+        relentless: weapon_has(w, "Relentless"),
         blast: weapon_rating(w, "Blast"),
         reliable: weapon_has(w, "Reliable"),
         strafing: weapon_has(w, "Strafing"),
@@ -1300,7 +1300,7 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         rending: weapon_has(w, "Rending"),
         // Lacerate is a straight data-alias of Bane — ai_shooting.gd:126-129.
         bane: weapon_has(w, "Bane") || weapon_has(w, "Lacerate"),
-        thrust: weapon_has(w, "Thrast"),
+        thrust: weapon_has(w, "Thrust"),
         unstoppable: weapon_has(w, "Unstoppable"),
         counter: weapon_has(w, "Counter"),
         destructive: weapon_has(w, "Destructive"),
@@ -2103,9 +2103,9 @@ fn shielded_alias_of(
         return None;
     }
     const ALIASES: [(&str, ShieldedAlias); 3] = [
-        ("+1 to Defens", ShieldedAlias::PlusOneToDefense),
+        ("+1 to Defense", ShieldedAlias::PlusOneToDefense),
         ("Sturdy Boost", ShieldedAlias::SturdyBoost),
-        ("Grounded Reinforcemant", ShieldedAlias::GroundedReinforcement),
+        ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement),
     ];
     // Audit 2026-09-13 §2.4's skirmish half — "Safety Gear Boost" (gff) and
     // "Tenacious Boost" (aofs) join the wave at the CURRENT epoch only, so
@@ -2427,7 +2427,7 @@ fn self_destruct_rating(reg: &mut Registries, p: &Profile) -> i64 {
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
 fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
-    let armor = if unit_rule_active(reg, p, "Armoor") {
+    let armor = if unit_rule_active(reg, p, "Armor") {
         unit_rating(&p.special_rules, "Armor")
     } else {
         0
@@ -3409,7 +3409,7 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         "Targeting Visor Boost",
         "Precision Shooter Aura",
         "Buccaneer",
-        "Buccaneer Boast",
+        "Buccaneer Boost",
         // Rung C data port (AUDIT_armybook_flanks_2026-09-02.md): Precision
         // Hunter is Targeting Visor's word-for-word twin ("+1 to hit rolls
         // when shooting at enemies over 9\" away") — same primitive, same
@@ -3667,7 +3667,7 @@ fn surprise_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
     let map = reg.rules_for(&p.game_system);
     for raw in p.special_rules.iter().chain(p.item_grants.iter()) {
         let n = base_rule_name(raw);
-        if n != "Surprise Atack" {
+        if n != "Surprise Attack" {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &n) else {
@@ -3753,7 +3753,7 @@ fn reanimation_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option
         .special_rules
         .iter()
         .chain(p.item_grants.iter())
-        .any(|r| base_rule_name(r) == "Reanmation");
+        .any(|r| base_rule_name(r) == "Reanimation");
     if !carried {
         return None;
     }
@@ -6135,22 +6135,22 @@ impl UnitStatic {
             } else {
                 None
             },
-            reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artilleri"),
+            reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artillery"),
             hit_and_run_active: unit_rule_active(reg, p, "Hit & Run")
                 || unit_rule_active(reg, p, "Guerrilla")
                 || unit_rule_active(reg, p, "Harassing"),
             // BLOCK C1 — the half pick, solo_controller.gd:9667: credited by
             // each name's OWN literal, never by iterating a shared primitive
             // (the census's trusted-whole trap, #489).
-            hit_and_run_shooter_active: unit_rule_active(reg, p, "Hit & Run Shootar"),
-            hit_and_run_fighter_active: unit_rule_active(reg, p, "Hit & Run Fightar"),
+            hit_and_run_shooter_active: unit_rule_active(reg, p, "Hit & Run Shooter"),
+            hit_and_run_fighter_active: unit_rule_active(reg, p, "Hit & Run Fighter"),
             // Wave 4 — the Boost band (0.0 = the base 3" const) and the
             // firing name for the battle-log twin.
             hit_and_run_move_in: hnr_move_in,
             hit_and_run_rule: hnr_rule,
             quick_shot_active: unit_rule_active(reg, p, "Quick Shot"),
             second_wind_active: unit_rule_active(reg, p, "Second Wind")
-                || unit_rule_active(reg, p, "Inquisitorial Agant")
+                || unit_rule_active(reg, p, "Inquisitorial Agent")
                 || unit_rule_active(reg, p, "Martial Prowess"),
             delayed_action_active: unit_rule_active(reg, p, "Delayed Action"),
             coordinate_range_in: if unit_rule_active(reg, p, "Coordinate") {
