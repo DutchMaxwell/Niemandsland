@@ -1723,7 +1723,7 @@ fn morale_rating_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 
     let mut seen: Vec<String> = Vec::new();
     for raw in rules {
         let n = base_rule_name(raw);
-        if !n.is_empty() && !seen.iter().any(|s| *s == n) {
+        if !n.is_empty() && !seen.contains(&n) {
             seen.push(n.clone());
             if let Some(e) = map.lookup(&p.faction_folder, &n) {
                 if e.primitive.as_deref() == Some("Morale") && e.param_s("rating") == "X" {
