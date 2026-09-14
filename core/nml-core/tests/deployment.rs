@@ -1437,6 +1437,8 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
                         ignores_terrain: if g.is_null() { false } else { g["ignores_terrain"].as_bool().unwrap() },
                         vanguard: if g.is_null() { false } else { g["vanguard_pushed"].as_bool().unwrap() },
                         place_in_m: None,
+                        re_deploy: false,
+                        re_deploy_max_units: None,
                         transport_capacity: 0,
                         facing_rad: if g.is_null() { 0.0 } else { g["facing_rad"].as_f64().unwrap() },
                         model_shapes,
@@ -2429,5 +2431,5 @@ fn redeployment_pass_skips_when_the_gain_is_below_three_inches() {
     );
     assert!(out.re_placed.is_empty(), "no 3\" gain, no re-place: {:?}", out.re_placed);
     assert!(out.events.is_empty(), "no trace line without a re-place: {:?}", out.events);
-    assert_eq!(side1.placements[0].spot, (0.0, -0.584), "already optimal: {p:?}");
+    assert_eq!(side1.placements[0].spot, (0.0, -0.584), "already optimal: {:?}", side1.placements[0].spot);
 }
