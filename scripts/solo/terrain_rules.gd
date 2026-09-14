@@ -122,6 +122,49 @@ static func base_in_terrain(centre, radius: float, sample_type: Callable, class_
 	return false
 
 
+## The untyped terrain class for the Grounded Speed verdict — ANY painted cell counts (the
+## core's terrain::is_any; the book text restricts no terrain kind). Plain predicate: the
+## band pass answers its class through base_in_terrain_id, which applies this directly —
+## never constructed as a Callable, because a method/lambda reference inside a static
+## function crashed Godot 4.6 with signal 11 at the gdUnit scanner teardown.
+static func is_any(t: int) -> bool:
+	return t != TerrainType.NONE
+
+
+## The class ids base_in_terrain_id answers — the id-rail precedent (PathCheck below) keeps
+## a class check Callable-free in static contexts.
+enum TerrainClass { ANY }
+
+
+## base_in_terrain with the class picked by ID instead of a class-check Callable: the same
+## centre + 16-sample perimeter geometry, the predicate applied DIRECTLY inside this file.
+## The Callable-taking base_in_terrain above stays the twin query for its existing callers;
+## the two ring walks must stay in step.
+static func base_in_terrain_id(centre, radius: float, sample_type: Callable, class_id: int) -> bool:
+	if not sample_type.is_valid():
+		return false
+	if _class_matches(class_id, int(sample_type.call(centre))):
+		return true
+	if radius <= 0.0:
+		return false
+	var is3 := centre is Vector3
+	for k in range(BASE_RING_SAMPLES):
+		var ang := TAU * float(k) / float(BASE_RING_SAMPLES)
+		var edge = (centre + Vector3(cos(ang) * radius, 0.0, sin(ang) * radius)) if is3 \
+			else (centre + Vector2(cos(ang) * radius, sin(ang) * radius))
+		if _class_matches(class_id, int(sample_type.call(edge))):
+			return true
+	return false
+
+
+static func _class_matches(class_id: int, t: int) -> bool:
+	match class_id:
+		TerrainClass.ANY:
+			return is_any(t)
+		_:
+			return false
+
+
 # === Grid lookup ===
 
 ## NML-001 (Shelf-Terrain-Welle) — pure OBB-Mathematik für frei platzierte Terrain-Stücke

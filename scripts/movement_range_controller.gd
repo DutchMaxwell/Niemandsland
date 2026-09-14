@@ -49,12 +49,15 @@ const LABEL_OUTLINE: int = 6
 # === Private variables ===
 
 var _active: Dictionary = {}  # model_node (Node3D) -> true while its indicator is shown
+var _terrain_at := Callable() # the live overlay's type-at-point query, found once by node name
 
 # === Public: pure logic (unit-tested) ===
 
 ## Base edge radius (metres) for a unit's props — round bases use half the round size, oval
 ## bases the averaged radius (same approximation as the range rings); empty props → 32 mm.
-func base_radius_for_props(props: Dictionary) -> float:
+## STATIC + pure (reads only `props`): the static band pass (`_grounded_in_terrain`) reads it
+## for the board's per-model fallback radius.
+static func base_radius_for_props(props: Dictionary) -> float:
 	if props.get("base_is_oval", false) or props.get("base_is_square", false):
 		var w: float = float(props.get("base_width_mm", 0))
 		var d: float = float(props.get("base_depth_mm", 0))
@@ -155,9 +158,19 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 		var rp: Dictionary = entry.get("params", {})
 		if int(rp.get("uses_per_game", 0)) > 0:
 			continue   # once-per-game feats (Speed Feat) never ride the permanent bands
-		if not bool(done2.get("advance", false)):
+		# Grounded Speed (sweep F 2026-09-14): a terrain-gated entry (`terrain_within_in` > 0) adds
+		# its mods ONLY while the unit is within that proximity of terrain AT ACTIVATION — the same
+		# verdict the core answers (sim.rs grounded_speed_bonus_in) over the table's twin query
+		# TerrainRules.base_in_terrain_id (named the twin at terrain.rs:597; the class "any cell
+		# but NONE" is the core's terrain::is_any, answered directly — no Callable in this static
+		# pass: both Callable shapes crashed Godot 4.6 at the gdUnit teardown). No board context
+		# (headless callers, the recorder) reads FALSE: the condition honestly fails, printed bands.
+		var in_terrain := true
+		if float(rp.get("terrain_within_in", 0.0)) > 0.0:
+			in_terrain = _grounded_in_terrain(props, rp, base2)
+		if not bool(done2.get("advance", false)) and in_terrain:
 			advance += int(rp.get("advance_mod", 0))
-		if not bool(done2.get("rush", false)):
+		if not bool(done2.get("rush", false)) and in_terrain:
 			var rush_mod := int(rp.get("rush_mod", 0))
 			rush += rush_mod
 			charge_extra += int(rp.get("charge_mod", rush_mod)) - rush_mod
@@ -176,6 +189,40 @@ static func _rule_base_name(rule: String) -> String:
 	return rule.split("(")[0].strip_edges()
 
 
+## The terrain verdict for a registry entry gated on `terrain_within_in` (the Grounded Speed
+## family): the MAJORITY of the unit's models — the board's activation positions, each base
+## radius widened by the entry's own proximity — within ANY terrain at activation, over the
+## table's own query TerrainRules.base_in_terrain_id (the twin the core mirrors, terrain.rs:597;
+## the untyped class "any cell but NONE" is applied directly as TerrainRules.is_any through the
+## id-rail — no Callable is constructed in this static pass: both a lambda and a static-method
+## Callable here crashed Godot 4.6 with signal 11 at the gdUnit scanner teardown). A valid
+## verdict is TRACED into the board dict ("band_trace": "<rule>: within 1\" of terrain ->
+## +2\"/+4\"" / "…in the open -> no bonus") for the caller's rules-must-log; no board context
+## reads false and stays untraced.
+static func _grounded_in_terrain(props: Dictionary, rp: Dictionary, rule_name: String) -> bool:
+	var board: Dictionary = props.get("activation_board", {})
+	var sample_v: Variant = board.get("terrain_at")
+	var sample: Callable = sample_v if sample_v is Callable else Callable()
+	if not sample.is_valid():
+		return false
+	var positions: Array = board.get("positions", [])
+	if positions.is_empty():
+		return false
+	var prox_m := float(rp.get("terrain_within_in", 0.0)) * INCHES_TO_METERS
+	var near := 0
+	var radii: Array = board.get("radii", [])
+	for i in range(positions.size()):
+		var radius := float(radii[i]) if i < radii.size() else base_radius_for_props(props)
+		if TerrainRules.base_in_terrain_id(positions[i], radius + prox_m, sample, TerrainRules.TerrainClass.ANY):
+			near += 1
+	if near * 2 > positions.size():
+		board["band_trace"] = "%s: within %d\" of terrain -> +%d\"/+%d\"" % [rule_name,
+			int(rp.get("terrain_within_in", 0.0)), int(rp.get("advance_mod", 0)), int(rp.get("rush_mod", 0))]
+		return true
+	board["band_trace"] = "%s: in the open -> no bonus" % rule_name
+	return false
+
+
 ## The Advance/Rush bands (inches) for a model NODE — resolves its effective props (base upgrade +
 ## movement rules + auras) then computes the bands. Public entry for callers like the movement cap.
 ## B10: an unresolvable node is NAMED loudly instead of silently moving at the bare 6"/12" bands.
@@ -183,7 +230,7 @@ func bands_for_model(model_node: Node3D) -> Dictionary:
 	var props := _props_of(model_node)
 	if props.is_empty():
 		push_warning("bands_for_model: no GameUnit resolved for '%s' — bare 6\"/12\" OPR bands in effect" % model_node.name)
-	return move_bands_for_props(props)
+	return _activation_bands(model_node, props)
 
 
 ## Outer radius (metres) of a band = base edge radius + the band distance.
@@ -234,9 +281,53 @@ func active_count() -> int:
 
 # === Private ===
 
+## The band computation WITH the per-activation board context: the model's current spot
+## (activation start — the rings are shown before the player drags) against the live overlay
+## sampler, so a terrain-gated band rule (Grounded Speed) answers the verdict the core answers
+## (sim.rs grounded_speed_bonus_in). No overlay -> no board -> the verdict honestly reads false.
+func _activation_bands(model_node: Node3D, props: Dictionary) -> Dictionary:
+	var sample := _terrain_sampler()
+	if sample.is_valid():
+		props["activation_board"] = {"positions": [model_node.global_position], "terrain_at": sample}
+	var bands := move_bands_for_props(props)
+	_flush_band_trace(props)
+	return bands
+
+
+## The verdict trace into the battle log (main's _log_rule_event — the radial-menu climb),
+## then wiped so the next model's evaluation starts clean. Silent without the channel.
+func _flush_band_trace(props: Dictionary) -> void:
+	var board: Dictionary = props.get("activation_board", {})
+	var trace := str(board.get("band_trace", ""))
+	board.erase("band_trace")
+	if trace.is_empty():
+		return
+	var unit := str(props.get("name", ""))
+	var msg := trace if unit.is_empty() else "%s — %s" % [unit, trace]
+	var n: Node = self
+	while n != null and not n.has_method("_log_rule_event"):
+		n = n.get_parent()
+	if n != null:
+		n._log_rule_event(BattleLog.Category.MOVEMENT, msg, false)
+
+
+## The live overlay's type-at-point query, found once by node name (main owns the node; an
+## injection would touch main.gd — this builder's brief leaves main.gd to its neighbours).
+## Invalid without an overlay (headless/tests): the caller skips the board stamp.
+func _terrain_sampler() -> Callable:
+	if _terrain_at.is_valid():
+		return _terrain_at
+	if not is_inside_tree():
+		return Callable()
+	var overlay: Node = get_tree().root.find_child("TerrainOverlay", true, false)
+	if overlay != null and overlay.has_method("get_terrain_at_world_position"):
+		_terrain_at = Callable(overlay, "get_terrain_at_world_position")
+	return _terrain_at
+
+
 func _build_indicator(model_node: Node3D) -> void:
 	var props := _props_of(model_node)
-	var bands := move_bands_for_props(props)
+	var bands := _activation_bands(model_node, props)
 	var base_color := color_for_props(props)
 
 	var root := Node3D.new()
