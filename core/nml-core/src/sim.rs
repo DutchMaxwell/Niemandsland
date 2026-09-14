@@ -2963,7 +2963,10 @@ fn caster_boost_pool(
         if !s.is_caster && !s.spell_accumulator { continue; }
         if !s.is_caster && state.shaken[u] { continue; }
         let d = geom::dist_in(&state.positions[ci], &state.positions[u]);
-        if d > (if s.is_caster { CASTER_BOOST_AURA_IN } else { SPELL_ACCUMULATOR_REACH_IN }) { continue; }
+        let reach = if s.is_caster { CASTER_BOOST_AURA_IN } else { SPELL_ACCUMULATOR_REACH_IN };
+        if d > reach {
+            continue;
+        }
         // "in line of sight of the caster's unit" (:4606): the caster's own
         // unit needs no check (the table's `cu != caster_unit` guard).
         if u != si && !state.attached[si].contains(&u) && !los[u] { continue; }
@@ -2990,9 +2993,11 @@ fn plan_caster_boost(
     helpers: &[(usize, i64)],
 ) -> (i64, i64, i64) {
     let own_left = (own - entry.threshold).max(0);
-    let ev = (entry.effect_kind == "damage")
-        .then(|| spell_damage_ev_of(entry, &ctx_of(&statics[state.roster.profile[ti]], state, ti)))
-        .unwrap_or(0.0);
+    let ev = if entry.effect_kind == "damage" {
+        spell_damage_ev_of(entry, &ctx_of(&statics[state.roster.profile[ti]], state, ti))
+    } else {
+        0.0
+    };
     let boost = plan_boost(
         boost_value_of(ev),
         own_left + helpers.iter().map(|(_, t)| *t).sum::<i64>(),
