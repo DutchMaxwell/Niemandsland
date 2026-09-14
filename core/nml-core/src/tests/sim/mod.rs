@@ -1571,7 +1571,9 @@ mod reckless_piercing;
 mod reposition_artillery;
 mod retaliate;
 mod retreating_strike;
-mod screened_melee;
+    mod screened_melee;
+
+    mod self_destruct;
 mod second_wind;
 mod second_wind_score;
 mod spell_accumulator;

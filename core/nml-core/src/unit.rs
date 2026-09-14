@@ -271,6 +271,20 @@ pub struct Ctx {
     /// phase. Read only by `sim::strike_phase`, which takes NO tally credit
     /// from it (main.gd:6174 never touches `_solo_retaliate_credit`).
     pub death_hits_per_kill: i64,
+    /// Block C4 — the SURVIVAL half of `Self-Destruct` (`_solo_self_destruct_post_melee`
+    /// main.gd:17346-17370, called for BOTH combatants at main.gd:8431-8433 and
+    /// :10456-10458, after both sides have finished attacking and BEFORE the melee
+    /// result / morale test): the rule's own `maxi(rating, 1)` — the hits the ENEMY
+    /// takes per surviving model once the melee ends, the carrier itself removed
+    /// first ("it is immediately killed", main.gd:17363's 9999-wound application,
+    /// no saves). Registry-gated (`unit_rule_active`), 0 when the unit carries no
+    /// Self-Destruct. Deathstrike has NO survival half — the table's loop names
+    /// only "Self-Destruct" (main.gd:17354) — so unlike `death_hits_per_kill` this
+    /// is a single-literal read, not a sum. The attached-hero facet of the table's
+    /// chain loop is not ported, the same host-level fidelity the death half's
+    /// stamp carries. Read only by `sim::tray_charge`'s epilogue, gated by the
+    /// frozen `EPOCH_41_SELF_DESTRUCT_SURVIVORS`.
+    pub self_destruct_rating: i64,
     /// Block C5 — `Instinctive`'s carried +1 (`_solo_instinctive_mod`
     /// main.gd:5774-5799): `param_i("hit_bonus", 1)` off the unit's
     /// registry-gated "Instinctive" entry, 0 when it carries none. NOT folded
@@ -2119,6 +2133,19 @@ fn death_hits_per_kill(reg: &mut Registries, p: &Profile) -> i64 {
     hits
 }
 
+/// Block C4 — the survival half's stamp, `_solo_self_destruct_post_melee`
+/// main.gd:17346-17370: the rule's own `maxi(rating, 1)` off a registry-gated
+/// "Self-Destruct" entry — 0 when the unit carries none. The table's per-member
+/// loop names ONLY "Self-Destruct" (main.gd:17354): Deathstrike dies in melee
+/// and pays there, it never detonates after surviving, so this is the single
+/// literal read and not `death_hits_per_kill`'s two-literal sum.
+fn self_destruct_rating(reg: &mut Registries, p: &Profile) -> i64 {
+    if !unit_rule_active(reg, p, "Self-Destruct") {
+        return 0;
+    }
+    unit_rating(&p.special_rules, "Self-Destruct").max(1)
+}
+
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
 fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
@@ -2375,6 +2402,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         death_hits_per_kill: death_hits_per_kill(reg, p),
+        self_destruct_rating: self_destruct_rating(reg, p),
         instinctive_hit_bonus,
         hit_mod: 0,
         vs_hit_mod: 0,

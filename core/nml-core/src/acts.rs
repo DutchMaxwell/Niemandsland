@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 40;
+pub const CURRENT_RULES_EPOCH: u32 = 41;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -683,6 +683,28 @@ pub const EPOCH_33_REDEPLOYMENT: u32 = 33;
 /// `EPOCH_37_UNSTOPPABLE_AURA`, #957). Every call site reads THIS constant,
 /// not the literal `38` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_38_WATCHBORN_LATCH: u32 = 38;
+
+/// EPOCH 41 SELF-DESTRUCT SURVIVORS (14.09., sweep H row `Self-Destruct`,
+/// `STANDALONE_SWEEP_H_2026-09-14.md`): the registry primitive
+/// `Self-Destruct; hits=X, rating=X, trigger=death_in_melee_or_post_melee`
+/// carries a SURVIVAL half the core never ported. The table's
+/// `_solo_self_destruct_post_melee` (main.gd:17346-17370, called for BOTH
+/// combatants at main.gd:8431-8433 and :10456-10458, after both sides have
+/// finished attacking and BEFORE the melee result / morale test) removes
+/// every surviving carrier ("it is immediately killed" — main.gd:17363's
+/// 9999-wound application, no saves) and pays the enemy X hits per removed
+/// model (X = the rule's own `maxi(rating, 1)`, main.gd:17357-17358), saved
+/// at the enemy's Shielded melee Defense with ap 0. The core had only the
+/// death half (sim.rs Block C4): a Self-Destruct model that SURVIVED the
+/// melee neither detonated nor died, so a core-driven fight never learned
+/// the suicide unit the table plays. From 41 the tray charge epilogue runs
+/// the survival half in the table's order (the charger's carriers first,
+/// then the defender's). Below 41 every recorded game replays byte-exact.
+/// `41` is one past every existing stamp at rebase time (40 =
+/// `EPOCH_40_STEADFAST_ROLL`, #960; 39 = `EPOCH_39_MORALE_RATING`, #959;
+/// 38 = `EPOCH_38_WATCHBORN_LATCH`, #955). Every call site reads THIS
+/// constant, not the literal `41` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_41_SELF_DESTRUCT_SURVIVORS: u32 = 41;
 
 /// EPOCH 34 UNSTOPPABLE MARK (PR #951, sweep C row `Unstoppable Mark`): "Once
 /// per activation, before attacking, pick one enemy unit within 18" in line of
@@ -1315,7 +1337,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 40, "epoch 40's gate (EPOCH_40_STEADFAST_ROLL) bumps the live epoch to 40, one past #957's Unstoppable-Aura leg 37 (35 = EPOCH_35_UNSTOPPABLE_MELEE, #953; 36 is reserved in flight by the watchborn leg, 38-39 by the surge-mark and morale legs)");
+        assert_eq!(CURRENT_RULES_EPOCH, 41, "epoch 41's gate (EPOCH_41_SELF_DESTRUCT_SURVIVORS) bumps the live epoch to 41, one past #960's Steadfast leg 40 (39 = #959's Morale-rating leg; 38 = EPOCH_38_WATCHBORN_LATCH, #955)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1325,11 +1347,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":40}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":41}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 40"
+            "a fresh play_game() now stamps the bumped epoch, 41"
         );
     }
 
