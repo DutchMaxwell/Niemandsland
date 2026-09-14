@@ -499,6 +499,16 @@ static func unit_in_reserve(u: GameUnit) -> bool:
 	return u != null and bool(u.unit_properties.get("ambush_reserve", false))
 
 
+## Surprise Attack, the first-activation latch (STANDALONE_SWEEP_D 2026-09-14 — the human seat):
+## a living bearer that has not burst yet is READY, whatever seat it belongs to. The once-per-game
+## `surprise_attack_used` stamp (main.gd writes it when the burst resolves) IS the "first time this
+## unit is activated" trigger; the seat never gates it — the core fires the burst for both seats
+## (sim.rs:5128-5132) and the table must read the same.
+func surprise_attack_bearer_ready(bu: GameUnit) -> bool:
+	return bu != null and bu.get_alive_count() > 0 and bu.has_special_rule("Surprise Attack") \
+		and not bool(bu.unit_properties.get("surprise_attack_used", false))
+
+
 func mark_activated(unit) -> void:
 	var u := unit as GameUnit
 	if u != null:
