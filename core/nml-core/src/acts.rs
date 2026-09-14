@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 34;
+pub const CURRENT_RULES_EPOCH: u32 = 35;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -682,6 +682,27 @@ pub const EPOCH_33_REDEPLOYMENT: u32 = 33;
 /// is reserved in flight by #946). Every call site reads THIS constant, not
 /// the literal `34` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_34_UNSTOPPABLE_MARK: u32 = 34;
+
+/// The UNSTOPPABLE-IN-MELEE CLAMP gate (14.09., sweep C — row `Unstoppable in
+/// Melee`, `STANDALONE_SWEEP_C_2026-09-14.md`): the book's "This model gets
+/// Unstoppable in melee." carries BOTH halves of Unstoppable — ignore all
+/// negative to-hit modifiers AND ignore the target's Regeneration — but the
+/// registry models the name as `Lacerate {bypass_regen, melee_only}` and the
+/// unit-level Unstoppable stamp (`unit.rs::stamp_unit_strikers`) skipped every
+/// name containing " in ", exactly as the table's point-sim stamp does
+/// (battle_sim.gd). Only the Regeneration cut-through ever fired; the melee
+/// strike ate the Evasive -1 and every moved penalty the book told it to
+/// ignore. From 35 the stamp accepts the "Unstoppable in Melee" name for the
+/// MELEE profiles (the clamp READ at the melee hit fold, dice.rs
+/// `melee_hit_target`, reads the profile's own `unstoppable` flag — a melee
+/// profile never reaches the volley fold, so the scoping rides the profile
+/// split and the clamp sites themselves stay untouched). Below 35 the name
+/// keeps firing its Regeneration half alone — every recorded game replays
+/// byte-exact. `35` is one past every existing stamp (34 =
+/// `EPOCH_34_UNSTOPPABLE_MARK`, #951; 33 = `EPOCH_33_REDEPLOYMENT`), and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
+/// reads THIS constant, not the literal `35` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_35_UNSTOPPABLE_MELEE: u32 = 35;
 
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
@@ -1217,7 +1238,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 34, "epoch 34's gate (EPOCH_34_UNSTOPPABLE_MARK) bumps the live epoch to 34, one past the strafing leg's 32 (32 = EPOCH_32_STRAFING, #947) and #946's re-deployment leg 33");
+        assert_eq!(CURRENT_RULES_EPOCH, 35, "epoch 35's gate (EPOCH_35_UNSTOPPABLE_MELEE) bumps the live epoch to 35, one past #951's Unstoppable-Mark leg 34 (32 = EPOCH_32_STRAFING, #947; 33 = #946's re-deployment leg)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1227,11 +1248,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":34}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":35}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 34"
+            "a fresh play_game() now stamps the bumped epoch, 35"
         );
     }
 
