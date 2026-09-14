@@ -6,7 +6,7 @@
 //! 2 `randi_range(1, 6)` draws per attempt, ties re-roll, cap 100 — trace kept because
 //! the attempt count is data-dependent (the gate compares the FULL attempt list).
 
-use crate::acts::{rule_on, EPOCH_16_FREE_PLACEMENT, EPOCH_28_REDEPLOYMENT};
+use crate::acts::{rule_on, EPOCH_16_FREE_PLACEMENT, EPOCH_31_REDEPLOYMENT};
 use crate::rng::GodotRng;
 use std::collections::HashMap;
 use crate::terrain::{CONTAINER, DANGEROUS, RUINS, Terrain};
@@ -1383,7 +1383,7 @@ pub fn deploy_interleaved(
     InterleavedDeploy { side1: q1.out, side2: q2.out, sequence }
 }
 
-// ==== Re-Deployment (STANDALONE_SWEEP, epoch 28) ====
+// ==== Re-Deployment (STANDALONE_SWEEP, epoch 31) ====
 //
 // GF v3.5.1 p.15: "After all other units are deployed (excluding units that
 // were set aside), you may remove up to two friendly units from the table and
@@ -1392,7 +1392,7 @@ pub fn deploy_interleaved(
 // main.gd:1165-1174 — right after the opponent's final setup is down, exactly
 // the moment this twin's caller reaches once BOTH sides are deployed. The
 // core only stamped `re_deployment_max_units` (unit.rs:1067) and never
-// re-placed anyone; from `EPOCH_28_REDEPLOYMENT` this pass mirrors the
+// re-placed anyone; from `EPOCH_31_REDEPLOYMENT` this pass mirrors the
 // table's pass line for line. Below it the carrier stays where it first
 // stood — every recorded game replays unchanged.
 
@@ -1449,7 +1449,7 @@ pub fn redeployment_pass(
     zone1: &Rect, zone2: &Rect, objectives: &[(f64, f64)], board: &Terrain, rules_epoch: u32,
 ) -> RedeployPass {
     let mut out = RedeployPass::default();
-    if !rule_on(rules_epoch, EPOCH_28_REDEPLOYMENT) { return out; } // below: the choice stays table-side
+    if !rule_on(rules_epoch, EPOCH_31_REDEPLOYMENT) { return out; } // below: the choice stays table-side
     let specs = [specs1, specs2];
     let zones = [*zone1, *zone2];
     let sides = [side1, side2];

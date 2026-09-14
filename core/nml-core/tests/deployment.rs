@@ -2206,7 +2206,7 @@ fn deployment_alternates_one_unit_per_player() {
 // The twin's `deployment::redeployment_pass` runs at the SAME moment (after
 // both sides are deployed) with the table's own scan law.
 
-/// The NEW leg — at `EPOCH_28_REDEPLOYMENT` a carrier whose recorded deploy
+/// The NEW leg — at `EPOCH_31_REDEPLOYMENT` a carrier whose recorded deploy
 /// zone offers a spot >= 3" closer to the nearest objective RE-PLACES there:
 /// the placement (spot + fixed-grid models) moves, the occupied truth of a
 /// later carrier's scan sees the NEW position, and the table's own
@@ -2261,7 +2261,7 @@ fn redeployment_pass_replaces_carrier_toward_objective_at_epoch_28() {
     });
     let out = deployment::redeployment_pass(
         &[mk("redeploy_bearer")], &[mk("anchor")], &mut side1, &mut side2,
-        &zone_s, &zone_n, &objs, &board, nml_core::acts::EPOCH_28_REDEPLOYMENT,
+        &zone_s, &zone_n, &objs, &board, nml_core::acts::EPOCH_31_REDEPLOYMENT,
     );
     assert_eq!(out.re_placed.len(), 1, "the carrier re-places: {:?}", out.re_placed);
     let r = &out.re_placed[0];
@@ -2290,12 +2290,12 @@ fn redeployment_pass_replaces_carrier_toward_objective_at_epoch_28() {
 }
 
 
-/// The OLD leg — pinned at `EPOCH_27_TERRAIN_DEBUFF` (27): below the gate the
+/// The OLD leg — pinned at `EPOCH_30_SCRAPPER_BOOST` (30): below the gate the
 /// re-place CHOICE stays table-side (deployment.rs only stamps the param,
 /// unit.rs:1067). The identical scenario at the LIVE predecessor's epoch
 /// keeps every placement byte-exact — spot, models, and no trace line.
 #[test]
-fn redeployment_pass_at_epoch_27_stays_table_side() {
+fn redeployment_pass_at_epoch_30_stays_table_side() {
     let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
         "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
     }))
@@ -2334,7 +2334,7 @@ fn redeployment_pass_at_epoch_27_stays_table_side() {
     });
     let out = deployment::redeployment_pass(
         &[mk("redeploy_bearer")], &[mk("anchor")], &mut side1, &mut side2,
-        &zone_s, &zone_n, &objs, &board, 27,
+        &zone_s, &zone_n, &objs, &board, 30,
     );
     assert!(out.re_placed.is_empty(), "no re-place below the gate: {:?}", out.re_placed);
     assert!(out.events.is_empty(), "no trace line below the gate: {:?}", out.events);
@@ -2385,7 +2385,7 @@ fn redeployment_pass_caps_at_max_units_read_from_the_first_carrier() {
     let mut side2 = deployment::SideDeploy::default();
     let out = deployment::redeployment_pass(
         &specs1, &[], &mut side1, &mut side2, &zone_s, &zone_n, &objs, &board,
-        nml_core::acts::EPOCH_28_REDEPLOYMENT,
+        nml_core::acts::EPOCH_31_REDEPLOYMENT,
     );
     assert_eq!(out.re_placed.len(), 1, "the cap is 1: {:?}", out.re_placed);
     assert_eq!(out.re_placed[0].key, "c1", "list order: the first carrier wins");
@@ -2427,7 +2427,7 @@ fn redeployment_pass_skips_when_the_gain_is_below_three_inches() {
     let mut side2 = deployment::SideDeploy::default();
     let out = deployment::redeployment_pass(
         &[carrier], &[], &mut side1, &mut side2, &zone_s, &zone_n, &objs, &board,
-        nml_core::acts::EPOCH_28_REDEPLOYMENT,
+        nml_core::acts::EPOCH_31_REDEPLOYMENT,
     );
     assert!(out.re_placed.is_empty(), "no 3\" gain, no re-place: {:?}", out.re_placed);
     assert!(out.events.is_empty(), "no trace line without a re-place: {:?}", out.events);
