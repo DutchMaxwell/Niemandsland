@@ -4153,7 +4153,8 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		# -6" floored at 6" — per CANDIDATE, so a ground target stays reachable while the aircraft
 		# or shrouded unit next to it may not be.
 		var eff_range: int = int(SoloController.effective_shoot_reach_in(max_range, hu))
-		if _solo_sighted_count(attacker, hu, eff_range, bool(profile.get("indirect", false))) <= 0:
+		if _solo_sighted_count(attacker, hu, eff_range, bool(profile.get("indirect", false)) \
+				or _solo_target_grants_indirect(hu)) <= 0:   # wave 6 — the Indirect Mark's once-grant
 			continue   # no model of the shooter has range + LOS → not a valid target (p.8; Indirect waives LOS)
 		var dist := MoveIntent.distance_inches(from, solo_controller.unit_centre(hu))
 		var in_cover := _solo_majority_in_cover(hu)
@@ -4415,6 +4416,9 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		# generic primitive layer — same facet, same dice.
 		var member_shred: bool = RulesRegistry.unit_rule_active(member, "Shred") \
 			or _solo_shred_facet_applies(member, 0)
+		# Wave 6 — the Indirect Mark's once-grant on the TARGET: the per-model sight count below
+		# would otherwise scale this volley to zero before the profile bridge could matter.
+		var mark_indirect: bool = not melee and enemy != null and _solo_target_grants_indirect(enemy)
 		for p in profiles:
 			var prof := (p as Dictionary).duplicate()
 			# Wave 5 Limited (core v3.5.1: once per game): an expended profile no longer fights.
@@ -4443,7 +4447,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			if not melee:
 				count = _solo_sighted_count(member, enemy,
 					int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)) + float(range_bonus), enemy)),
-					bool(prof.get("indirect", false))) if enemy != null else member.get_alive_count()
+					bool(prof.get("indirect", false)) or mark_indirect) if enemy != null else member.get_alive_count()
 			# X2 (test game 2, B15): a dead bearer's weapon dies with it. Special weapons (fewer copies
 			# than models) are pinned to specific models by EquipmentDistributor — fire per-copy attacks
 			# × LIVING bearers (capped by the reach/sight count) instead of the unit-wide alive/max
@@ -9318,7 +9322,8 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 	# the range gate (incl. Aircraft/Shrouding shrink) stays fully in force. Mirrors the
 	# AI's unit-level legality gate, so both sides judge targets identically.
 	var indirect: bool = SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
-		or SoloController.granted_indirect_of(attacker)   # GH #325 — the shooter's own token
+		or SoloController.granted_indirect_of(attacker) \
+		or _solo_target_grants_indirect(target)   # wave 6 — the Indirect Mark's once-grant on the target
 	if rng_in <= 0 or _solo_sighted_count(attacker, target, rng_in, indirect) <= 0:
 		if dist > float(rng_in):
 			var why := ""
@@ -10110,7 +10115,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if battle_log != null:
 		var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
 		var total := _solo_combined_alive(attacker)
-		var log_indirect: bool = SoloController.has_indirect_ranged(_solo_all_weapons(attacker))
+		var log_indirect: bool = SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
+			or _solo_target_grants_indirect(target)   # wave 6 — the Indirect Mark's once-grant
 		# #182 — rules-must-log: when the volley is only legal BECAUSE of Indirect, say so
 		# (the old line read "0/N with line of sight" over a perfectly legal barrage).
 		if log_indirect and _solo_sighted_count(attacker, target, rng_in) <= 0:
@@ -17274,6 +17280,29 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 			# bearer only while it acts against this enemy. The once-consumption spends it after.
 			_solo_record_spell_mod(target, n, {"grants_rule": grant, "scope": str(sp.get("scope", "")), "beneficiary": "attackers",
 				"duration": "once", "no_live_grant": true})
+
+
+## Indirect Mark (wave 6) — the mark-family consumer (the #936 twin of the Piercing-Mark grant
+## read, main.gd:6465-6470): the mark's once-record on the TARGET (beneficiary "attackers", the
+## entry's own scope) names "Indirect", so friendly attackers' shooting at THIS target is
+## Indirect ONCE — the LOS waiver at the targeting-time gates here; cover ignored, moved -1 and
+## the volley's per-model sight waiver ride the profile bridge (AiSpell.BRIDGE_FLAGS "indirect").
+## The once-record is spent with the exchange (_solo_consume_once_mods) and its consumption is
+## logged (rules-must-log). The way the core consumes the mark:
+## mods::granted_vs(state, ti, "Indirect") — volley sight seam + AI targeting gate (EPOCH_6).
+func _solo_target_grants_indirect(target: GameUnit) -> bool:
+	if target == null:
+		return false
+	for rd in AiSpell.mods_for(_solo_mods_of_chain(target), "grant", false):
+		if str((rd as Dictionary).get("beneficiary", "")) != "attackers":
+			continue
+		var base := RulesRegistry.base_rule_name(str((rd as Dictionary).get("grants_rule", "")))
+		var cut := base.find(" when ")
+		if cut >= 0:
+			base = base.substr(0, cut)
+		if base == "Indirect":
+			return true
+	return false
 
 
 ## Reckless Piercing (resolver wave A — "when activated, you may roll one die. On a 2+ their

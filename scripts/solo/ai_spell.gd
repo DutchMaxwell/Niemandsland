@@ -408,13 +408,16 @@ static func mods_for(records: Array, role: String, melee: bool, source: String =
 ## negative-modifier clamp — all read from the per-volley profile in main.gd). REFUSED on purpose:
 ##   Quick Shot / Slayer / Rapid Charge / Unwieldy / Piercing Fighter / Unpredictable * — unit-level
 ##     rules with their own read paths; a flag would silently do nothing.
-##   Indirect — read at TARGETING time (sighting/cover), before the volley's target is committed;
-##     bridging it per-target is a chicken-egg and needs its own seam.
+##   Indirect — BRIDGED since the Indirect-Mark consumer (wave 6): the mark's once-record persists
+##     on the marked enemy after the pick, so the volley's target-committed bridge is no chicken-egg;
+##     the targeting-time gates read it target-aware instead (main.gd _solo_target_grants_indirect /
+##     SoloController.grants_indirect_to_attackers).
 ## Scope suffixes ("Bane in Melee", "X when Shooting") name the same rule and map identically —
 ## the flag's own reader gates melee/shooting anyway.
 const BRIDGE_FLAGS := {
 	"Relentless": "relentless", "Furious": "furious", "Rending": "rending",
 	"Surge": "surge", "Bane": "bane", "Shred": "shred", "Unstoppable": "unstoppable",
+	"Indirect": "indirect",
 }
 
 
