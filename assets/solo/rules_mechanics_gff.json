@@ -859,7 +859,8 @@
    "rated": false,
    "book_version": "3.5.1",
    "params": {
-    "bonus_hits_per_six": 1
+    "bonus_hits_per_six": 1,
+    "shooting_only": true
    }
   },
   "Takedown": {

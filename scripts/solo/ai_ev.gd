@@ -283,11 +283,23 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 		var sp: Dictionary = ed.get("params", {})
 		if not str(sp.get("upgrades", "")).is_empty():
 			continue   # upgrade entries (Devout Boost) ride the base facet below, never stamp alone
+		# EPOCH_17_SURGE_SCOPE (sweep B, row "Surge when Shooting"): the entry
+		# carries `shooting_only` now — the book's own printed scope, so the
+		# melee twin stays silent from 17. Only THIS name's scope is
+		# epoch-gated: every other `shooting_only` entry (Predator Shooter et
+		# al.) was honoured at every epoch and keeps its reading; below 17 the
+		# entry replays the unscooped walk every corpus was recorded with.
+		var scope: Dictionary = sp
+		if n == "Surge when Shooting" and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_17_SURGE_SCOPE:
+			var masked: Dictionary = sp.duplicate()
+			masked.erase("shooting_only")
+			masked.erase("melee_only")
+			scope = masked
 		for fp in profiles:
 			var fpd := fp as Dictionary
 			# Dead-aura wave: the shooting half of the gate was missing here, so "Predator Shooter"
 			# (Surge, shooting_only) also spawned its extra attack in melee.
-			if not facet_applies(sp, int(fpd.get("range", 0))):
+			if not facet_applies(scope, int(fpd.get("range", 0))):
 				continue
 			if bool(sp.get("extra_attack", false)):
 				fpd["surge_attack"] = true
