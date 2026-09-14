@@ -1215,7 +1215,6 @@ mod tests {
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
             "a fresh play_game() now stamps the bumped epoch, 33"
         );
-        );
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must
