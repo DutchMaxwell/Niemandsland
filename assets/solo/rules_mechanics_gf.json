@@ -6495,7 +6495,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "hit_penalty": 1,
+     "hit_penalty": 0,
      "over_in": 9,
      "applies_charged": true
     }

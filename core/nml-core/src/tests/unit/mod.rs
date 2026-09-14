@@ -980,3 +980,4 @@ mod fortified_aura;
 mod rending_shooting_aura;
 mod renames;
 mod takedown_strike;
+mod tohit_shroud;
