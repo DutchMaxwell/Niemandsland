@@ -343,7 +343,7 @@ pub struct Knobs {
 /// `46` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_46_DISINTEGRATE_REGEN: u32 = 46;
 
-pub const CURRENT_RULES_EPOCH: u32 = 47;
+pub const CURRENT_RULES_EPOCH: u32 = 48;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -865,6 +865,29 @@ pub const EPOCH_43_BATTLEBORN_ROLL: u32 = 43;
 /// `EPOCH_38_WATCHBORN_LATCH`, #955). Every call site reads THIS constant,
 /// not the literal `41` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_44_SURGE_MARK: u32 = 44;
+
+/// The CASTER BOOST gate (14.09., analysis/CASTER_SEAM_2026-09-14.md row 1,
+/// DIVERGES 16:1x by reading): the table's caster spends spell tokens on the
+/// cast roll — the caster's OWN leftover tokens are the FIRST boost source
+/// (solo_controller.gd:4336-4342), then friendly casters and Spell
+/// Accumulator batteries within the `Caster` rule's `aura_in` (18") in line
+/// of sight (:4565-4625, the battery on its own 12" reach, a Shaken battery
+/// refused per NML-936), +1 per token, clamped [2,6] (ai_spell.gd:105-107),
+/// paid BEFORE the roll, one try per spell (:4387-4395), the spend policy
+/// `plan_boost`'s marginal-EV calculus (ai_spell.gd:328-339). The core's
+/// `cast_phase` rolled a flat 4+ and never spent a token on the boost, so
+/// the net learned spells as coin flips. From 48 the cast sub-phase builds
+/// the boost pool (`sim::caster_boost_pool`), plans the spend
+/// (`sim::plan_caster_boost`), folds the boost into `spell::
+/// cast_success_chance`'s second argument and pays it in the same order the
+/// threshold rides. Below 48 the pool is empty, the plan is zeros and every
+/// recorded game replays byte-exact. `48` is one past every epoch present at
+/// the rebase (47 = `EPOCH_47_RENDING_SHOOTING_AURA`, #968; 46 =
+/// `EPOCH_46_DISINTEGRATE_REGEN`, #967; the leg's earlier reservation 45 was
+/// renumbered to CURRENT+1 per the epoch rules), and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
+/// reads THIS constant, not the literal `48` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_48_CASTER_BOOST: u32 = 48;
 
 /// The RENDING SHOOTING AURA gate (14.09., sweep G — row `Rending when
 /// Shooting Aura`, TABLE-ONLY): the Utility-Buff aura's own grant
@@ -1417,7 +1440,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 47, "the live epoch is 47 (the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 48, "the live epoch is 48 (EPOCH_48_CASTER_BOOST renumbered to CURRENT+1 at the rebase; the newest gate constant bumps it per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1427,11 +1450,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":47}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":48}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 47"
+            "a fresh play_game() now stamps the bumped epoch, 48"
         );
     }
 

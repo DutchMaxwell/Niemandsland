@@ -5,8 +5,10 @@
 //! (:205-235).
 //!
 //! Scope is the GDScript's own v0 scope, quoted at battle_sim.gd:760-765:
-//! DAMAGE spells only, unit-level tokens, no boost, no interference — so the
-//! cast chance is always `AiSpell.cast_success_chance(0, 0)` = 0.5.
+//! DAMAGE spells only, unit-level tokens — the EV helpers here keep the
+//! no-boost v0 reading (`cast_success_chance_base`), while the cast
+//! sub-phase itself (sim::cast_phase) spends boost tokens from
+//! `EPOCH_48_CASTER_BOOST` on. Interference is a separate brief.
 
 use crate::combat::{block_chance, deadly_multiplier, success_chance, SIX_P};
 use crate::rules::Spell;
@@ -14,6 +16,31 @@ use crate::unit::Ctx;
 
 /// `AiSpell.CAST_BASE_TARGET` ai_spell.gd:28.
 pub const CAST_BASE_TARGET: i64 = 4;
+
+/// The boost/interference aura the registry's `Caster` entry carries
+/// (`aura_in=18`, gf common): the table reads it per caster unit
+/// (solo_controller.gd:4568) with `AiSpell.AURA_RANGE_IN` as the fallback
+/// (ai_spell.gd:30-33). The core has no per-record read yet — the shipped
+/// value is the constant.
+pub const CASTER_BOOST_AURA_IN: f64 = 18.0;
+
+/// The registry `Caster` entry's `boost_per_token=1` (gf common): +1 to the
+/// cast roll per token spent (ai_spell.gd:105-107, the table's own fold).
+pub const CASTER_BOOST_PER_TOKEN: i64 = 1;
+
+/// `AiSpell.TOKEN_VALUE_EPS` ai_spell.gd:38 — the marginal expected wounds a
+/// boost token must buy before the deterministic token economy spends it.
+pub const TOKEN_VALUE_EPS: f64 = 0.05;
+
+/// `AiSpell.COIN_FLIP_P` ai_spell.gd:41 — at or below this cast chance the
+/// boost economy drops its opportunity-cost floor (see `plan_boost`).
+pub const COIN_FLIP_P: f64 = 0.5;
+
+/// `AiSpell.UNPRICED_EFFECT_VALUE` ai_spell.gd:51 — the stand-in value of an
+/// effect the EV chain cannot price (a "castable"-status spell, or in the
+/// core a buff/debuff pick with no damage arithmetic): strictly positive,
+/// small enough to stay under the token floor's break-even.
+pub const UNPRICED_EFFECT_VALUE: f64 = 0.01;
 
 /// `AiSpell.cast_success_chance(0, 0)` ai_spell.gd:112-113 with no tokens on
 /// either side — `cast_target` then reduces to the plain base target.
@@ -27,14 +54,50 @@ pub fn cast_success_chance_base() -> f64 {
 /// casting_mod, 2, 6)`): a positive net (a friendly Casting Buff,
 /// `casting_mod +1`) LOWERS the target and so RAISES the chance; a negative
 /// net (Casting Debuff, `casting_mod -1`, or an enemy's "-X to casting
-/// rolls") raises the target and lowers the chance. `casting_net == 0`
+/// rolls") raises the target and lowers the chance. The second argument is
+/// the BOOST term (`EPOCH_48_CASTER_BOOST`, sim::cast_phase): +1 per spent
+/// token off the target (`AiSpell.cast_target`'s own fold, ai_spell.gd:105-
+/// 107), never below the [2,6] clamp. `casting_net == 0, boost_tokens == 0`
 /// reduces to exactly `cast_success_chance_base()` — same constant, same
-/// clamp. The caller (`sim::cast_phase`) is the one that gates this behind
-/// `EPOCH_6_TABLE_RULES`, passing 0 below it — this function does not know
-/// about epochs.
+/// clamp. The caller (`sim::cast_phase`) is the one that gates the boost
+/// behind its frozen epoch, passing 0 below it — this function does not
+/// know about epochs.
 #[inline]
-pub fn cast_success_chance(casting_net: i64) -> f64 {
-    success_chance((CAST_BASE_TARGET - casting_net).clamp(2, 6))
+pub fn cast_success_chance(casting_net: i64, boost_tokens: i64) -> f64 {
+    success_chance(
+        (CAST_BASE_TARGET - casting_net - boost_tokens.max(0) * CASTER_BOOST_PER_TOKEN).clamp(2, 6),
+    )
+}
+
+/// `AiSpell.plan_boost` ai_spell.gd:328-339, ported as-is (no interference in
+/// the core yet, so the default `interference_tokens: 0` is the only shape the
+/// cast sub-phase calls): spend while the NEXT token's marginal EV — the
+/// chance gain times the effect's value — beats `TOKEN_VALUE_EPS`, with the
+/// COIN-FLIP CLAUSE dropping the floor to zero while the cast sits at or under
+/// `COIN_FLIP_P`. The [2,6] clamp naturally stops the spend once the roll
+/// cannot improve.
+pub fn plan_boost(effect_value: f64, available: i64) -> i64 {
+    let mut boost = 0i64;
+    while boost < available {
+        let p_now = cast_success_chance(0, boost);
+        let gain = (cast_success_chance(0, boost + 1) - p_now) * effect_value.max(0.0);
+        let floor_now: f64 = if p_now <= COIN_FLIP_P { 0.0 } else { TOKEN_VALUE_EPS };
+        if gain <= floor_now {
+            break;
+        }
+        boost += 1;
+    }
+    boost
+}
+
+/// `AiSpell.boost_value_of` ai_spell.gd:344-345 — the value plan_boost prices
+/// a chosen cast at: its computed EV, or the unpriced stand-in above.
+pub fn boost_value_of(effect_value: f64) -> f64 {
+    if effect_value > 0.0 {
+        effect_value
+    } else {
+        UNPRICED_EFFECT_VALUE
+    }
 }
 
 /// `AiSpell.spell_facets` ai_spell.gd:130-167 — the knobs a spell's weapon-rule
@@ -238,10 +301,43 @@ mod tests {
     /// (`success_chance(5)`), and the [2,6] clamp holds at either end.
     #[test]
     fn cast_success_chance_folds_the_casting_net_with_the_tables_own_sign() {
-        assert_eq!(cast_success_chance(0), cast_success_chance_base());
-        assert_eq!(cast_success_chance(1), success_chance(3));
-        assert_eq!(cast_success_chance(-1), success_chance(5));
-        assert_eq!(cast_success_chance(10), success_chance(2), "clamped at 2+, never below");
-        assert_eq!(cast_success_chance(-10), success_chance(6), "clamped at 6+, never above");
+        assert_eq!(cast_success_chance(0, 0), cast_success_chance_base());
+        assert_eq!(cast_success_chance(1, 0), success_chance(3));
+        assert_eq!(cast_success_chance(-1, 0), success_chance(5));
+        assert_eq!(cast_success_chance(10, 0), success_chance(2), "clamped at 2+, never below");
+        assert_eq!(cast_success_chance(-10, 0), success_chance(6), "clamped at 6+, never above");
     }
-}
+
+    /// Wave 6 (port-caster-boost) — the boost term rides the SAME fold with
+    /// the table's own sign (+1 per token LOWERS the target, ai_spell.gd:
+    /// 105-107), the [2,6] clamp stops it, and zero tokens reduce to the
+    /// no-boost reading.
+    #[test]
+    fn cast_success_chance_folds_the_boost_term_one_per_token() {
+        assert_eq!(cast_success_chance(0, 1), success_chance(3));
+        assert_eq!(cast_success_chance(0, 2), success_chance(2));
+        assert_eq!(cast_success_chance(0, 10), success_chance(2), "clamped at 2+, never below");
+        assert_eq!(cast_success_chance(1, 1), success_chance(2));
+        assert_eq!(cast_success_chance(0, 0), cast_success_chance_base());
+    }
+
+    /// Wave 6 (port-caster-boost) — `plan_boost` ported as-is: an unpriced
+    /// effect (value 0) buys exactly ONE token (the coin-flip clause), a fat
+    /// spell rides the ordinary floor until the [2,6] clamp stops it, and a
+    /// thin spell stops under the floor above the coin flip.
+    #[test]
+    fn plan_boost_ports_the_tables_marginal_ev_calculus() {
+        // the table's own worked shape: an unpriced cast buys exactly the one
+        // token that lifts it out of the coin flip, never a second
+        // (ai_spell.gd:43-51).
+        assert_eq!(plan_boost(boost_value_of(0.0), 6), 1);
+        // EV 1/2: both tokens' marginal EV (1/12 each) beat the floor (the
+        // first via the coin-flip clause), the clamp stops at 2+.
+        assert_eq!(plan_boost(0.5, 2), 2);
+        assert_eq!(plan_boost(0.5, 10), 2, "the [2,6] clamp ends the spend");
+        // EV 1/36: the first token is the coin-flip clause's, the second
+        // (1/36 < TOKEN_VALUE_EPS above the flip) stays held.
+        assert_eq!(plan_boost(1.0 / 36.0, 6), 1);
+        // no tokens, no spend.
+        assert_eq!(plan_boost(100.0, 0), 0);
+    }}
