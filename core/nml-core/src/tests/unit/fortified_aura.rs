@@ -27,7 +27,7 @@ const SQUAD_HEAD: &str = r#"{"kind":"header","knobs":{},"profiles":{
     "special_rules":["Fortified"],"item_grants":[],
     "attached_hero_rules":__HEROES__,
     "move_bands":{"advance":6.0,"rush":12.0},
-    "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":1,"rules":[]}]}}}"#;
+    "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":1,"rules":["AP(1)"]}]}}}"#;
 
 const BEARER_ALIVE: &str = "[[\"Fortified Aura\",\"Fortified\"]]";
 
@@ -39,7 +39,7 @@ const SQUAD_PLAIN: &str = r#"{"kind":"header","knobs":{},"profiles":{
     "special_rules":[],"item_grants":[],
     "attached_hero_rules":[],
     "move_bands":{"advance":6.0,"rush":12.0},
-    "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":1,"rules":[]}]}}}"#;
+    "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":1,"rules":["AP(1)"]}]}}}"#;
 
 /// The raw aofs spelling: NO import grants anywhere — the core's own
 /// `aura_expand` fold is the only grant leg, so the pick cap is observable
@@ -52,7 +52,7 @@ const RAW_AURA: &str = r#"{"kind":"header","knobs":{},"profiles":{
     "special_rules":["Fortified Aura"],"item_grants":[],
     "attached_hero_rules":__HEROES__,
     "move_bands":{"advance":6.0,"rush":12.0},
-    "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":1,"rules":[]}]}}}"#;
+    "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":1,"rules":["AP(1)"]}]}}}"#;
 
 fn hero_lists(n: usize) -> String {
     let one = "[\"Fortified Aura\"]".to_string();
