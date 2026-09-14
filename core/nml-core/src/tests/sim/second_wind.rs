@@ -92,3 +92,43 @@ use super::*;
         st.activated[2] = true; // "b" enters round 1 already-activated, unused
         assert_eq!(second_wind_candidate(&statics, &st, st.player[0]), Some(2));
     }
+
+    // --- TEST WAVE (2026-09-14, D-PROOF) — the alias's NUMBER pin: the
+    // EXACT name read (`unit_rule_active`'s own literal, gf
+    // human_inquisition) stamps `second_wind_active` through the REAL
+    // `build_for`, and the stamp earns exactly ONE grant per game.
+
+    /// "Inquisitorial Agent" (gf/human_inquisition, primitive Second Wind):
+    /// the alias carrier re-opens its own activation when the round closes,
+    /// the uses counter lands on 1, and the once-per-game gate refuses a
+    /// second grant.
+    #[test]
+    fn an_inquisitorial_agent_carrier_earns_its_one_second_wind_by_name() {
+        let mut reg = crate::rules::Registries::new(&repo_root());
+        let built = UnitStatic::build_for(
+            &mut reg,
+            &boost_carrier("gf", "human_inquisition", &["Inquisitorial Agent"]),
+            crate::acts::CURRENT_RULES_EPOCH,
+        );
+        assert!(built.second_wind_active, "the exact name is registry-backed");
+        let bare = UnitStatic::build_for(
+            &mut reg,
+            &boost_carrier("gf", "human_inquisition", &[]),
+            crate::acts::CURRENT_RULES_EPOCH,
+        );
+        assert!(!bare.second_wind_active, "no name, no carrier");
+
+        let (mut st, mut statics) = buff_line();
+        statics[0] = UnitStatic { name: "a".into(), model_count: 2, wounds_max: vec![1, 1], ..built };
+        st.activated = vec![false, true, true, true];
+        st.fatigued[0] = true;
+        let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
+        assert!(!next.activated[0], "the agent re-opens its own activation");
+        assert!(!next.fatigued[0], "the re-opened activation clears fatigue");
+        assert!(next.second_wind_used[0]);
+        assert_eq!(next.second_wind_uses, 1, "uses_per_game 1: the first grant");
+        assert!(
+            second_wind_candidate(&statics, &next, next.player[0]).is_none(),
+            "once per GAME: the spent carrier is never picked again"
+        );
+    }
