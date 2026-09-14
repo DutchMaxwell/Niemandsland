@@ -159,6 +159,12 @@ pub struct Ctx {
     /// WHICH stationary name drove the pair (rules-must-log); Entrenched is
     /// the split's only member in any registry. "" = none.
     pub stationary_alias_name: &'static str,
+    /// The best non-stationary Stealth alias's own `applies_charged` (Screened
+    /// et al.'s charge leg switch — the army-book text: "shot or charged from
+    /// over 9\" away"). Only the melee to-hit fold consults it, and only
+    /// through `resolve_melee_leg`'s `screened_melee` gate
+    /// (`EPOCH_22_SCREENED_MELEE`); the shooting leg never reads it.
+    pub stealth_alias_applies_charged: bool,
     pub evasive: bool,
     /// Wave 4 (`rules-wave4-boostbases`) — "Machine-Fog Boost" is the reason
     /// `evasive` is on: the printed unconditional form of Machine-Fog's own
@@ -1242,7 +1248,7 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
 /// reaches this static layer, and there is no majority-in-cover read at
 /// build time either — both stay unimplemented, like the rest of this
 /// crate's documented gaps (dice.rs:317-330).
-fn stealth_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64) {
+fn stealth_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64, bool) {
     stealth_alias_of_excluding(reg, p, "")
 }
 
@@ -1250,9 +1256,10 @@ fn stealth_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64) {
 /// signature rule prescribes: "Machine-Fog Boost" (wave 4) REPLACES its base
 /// entry's conditional alias leg with an unconditional evasive fold, and the
 /// two must never stack. `skip` "" = the plain walk, byte-exact.
-fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> (i64, f64) {
+fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> (i64, f64, bool) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
+    let mut best_applies_charged = false;
     let map = reg.rules_for(&p.game_system);
     for r in &p.special_rules {
         let name = base_rule_name(r);
@@ -1269,19 +1276,20 @@ fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> 
         if pen > best_penalty {
             best_penalty = pen;
             best_over_in = e.param_f("over_in", 0.0);
+            best_applies_charged = e.param_b_or("applies_charged", false);
         }
     }
-    (best_penalty, best_over_in)
+    (best_penalty, best_over_in, best_applies_charged)
 }
-
 /// Wave 4 (port-entrenched) — `stealth_alias_of_excluding` SPLIT by
 /// `requires_stationary`: true keeps the flagged entries (Entrenched),
 /// false only the unconditional ones, below the FROZEN gate never called.
 fn stealth_alias_split_walk(
     reg: &mut Registries, p: &Profile, skip: &str, want_stationary: bool,
-) -> (i64, f64) {
+) -> (i64, f64, bool) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
+    let mut best_applies_charged = false;
     let map = reg.rules_for(&p.game_system);
     for r in &p.special_rules {
         let name = base_rule_name(r);
@@ -1301,13 +1309,14 @@ fn stealth_alias_split_walk(
         if pen > best_penalty {
             best_penalty = pen;
             best_over_in = e.param_f("over_in", 0.0);
+            best_applies_charged = e.param_b_or("applies_charged", false);
         }
     }
-    (best_penalty, best_over_in)
+    (best_penalty, best_over_in, best_applies_charged)
 }
 
 /// The split's SIBLING fn — the `requires_stationary` members only.
-fn stationary_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64) {
+fn stationary_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64, bool) {
     stealth_alias_split_walk(reg, p, "", true)
 }
 /// Battleborn family wave 3 (rules-wave3-battleborn) — main.gd
@@ -2026,18 +2035,18 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     };
     // Wave 4 (port-entrenched) — below the FROZEN gate the OLD unconditional
     // fold stays byte-identical; AT 7 the walk splits (main.gd:5694-5702).
-    let (stealth_alias_penalty, stealth_alias_over_in, stationary_alias_penalty, stationary_alias_over_in) =
+    let (stealth_alias_penalty, stealth_alias_over_in, stealth_alias_applies_charged, stationary_alias_penalty, stationary_alias_over_in) =
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             let skip = if machine_fog_boost { "Machine-Fog" }
                 else if empyrean_spirit_boost { "Empyrean Spirit" } else { "" };
-            let (ap, ao) = stealth_alias_split_walk(reg, p, skip, false);
-            let (sp, so) = stationary_alias_of(reg, p);
-            (ap, ao, sp, so)
+            let (ap, ao, ac) = stealth_alias_split_walk(reg, p, skip, false);
+            let (sp, so, _) = stationary_alias_of(reg, p);
+            (ap, ao, ac, sp, so)
         } else {
-            let (ap, ao) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog") }
+            let (ap, ao, ac) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog") }
                 else if empyrean_spirit_boost { stealth_alias_of_excluding(reg, p, "Empyrean Spirit") }
                 else { stealth_alias_of(reg, p) };
-            (ap, ao, 0, 0.0)
+            (ap, ao, ac, 0, 0.0)
         };
     // WAVE 3 — the family's DATA-ALIAS amounts, gated on the FROZEN
     // `EPOCH_6_TABLE_RULES`: an `rules_epoch: 5` record (the Gen-3 fleet's
@@ -2144,6 +2153,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         stealth: rule_on_all_models(p, "Stealth"),
         stealth_alias_penalty,
         stealth_alias_over_in,
+        stealth_alias_applies_charged,
         stationary_alias_penalty,
         stationary_alias_over_in,
         stationary_alias_name: if stationary_alias_penalty > 0 { "Entrenched" } else { "" },

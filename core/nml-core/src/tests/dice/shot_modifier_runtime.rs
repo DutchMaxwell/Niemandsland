@@ -66,7 +66,7 @@ use super::*;
             shoot.log
         );
         assert_eq!(
-            melee_hit_target(&us.melee[0], &in_terrain, &defender(4, 5), false, 0), 3,
+            melee_hit_target(&us.melee[0], &in_terrain, &defender(4, 5), false, 0, 0.0, false), 3,
             "all_attacks reaches the melee seam too (main.gd:5698-5713)");
         let p = [us.melee[0].clone()];
         let mut t_melee = Tray::seeded(27);
@@ -82,7 +82,7 @@ use super::*;
 
         let in_open = Ctx { in_cover: false, ..us.ctx };
         assert_eq!(
-            melee_hit_target(&us.melee[0], &in_open, &defender(4, 5), false, 0), 4,
+            melee_hit_target(&us.melee[0], &in_open, &defender(4, 5), false, 0, 0.0, false), 4,
             "the terrain gate: no +1 in the open");
         let mut t_open = Tray::seeded(27);
         let out_open = resolve_shooting_with_tray(
@@ -93,6 +93,6 @@ use super::*;
         assert_eq!(us5.ctx.grounded_precision_hit, 0, "epoch 5 keeps the pre-port reading");
         let in_terrain5 = Ctx { in_cover: true, ..us5.ctx };
         assert_eq!(
-            melee_hit_target(&us5.melee[0], &in_terrain5, &defender(4, 5), false, 0), 4,
+            melee_hit_target(&us5.melee[0], &in_terrain5, &defender(4, 5), false, 0, 0.0, false), 4,
             "and no fold fires below the gate");
     }

@@ -14,7 +14,7 @@ use super::*;
         st.wounds[1] = vec![1, 3, 1]; // seed 9 lands 4: exactly the outer two die
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot, StrikeSet::All);
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut shot, StrikeSet::All);
         assert_eq!(st.alive[1], 1, "fixture: exactly the two outer models die");
         let lash = shot.rolls.last().expect("the dying-models save batch");
         assert_eq!((lash.kind, lash.count, lash.owner.as_str()), ("defense", 4, "Striker"));
@@ -37,7 +37,7 @@ use super::*;
         st.wounds[1] = vec![5, 1, 1]; // 4 wounds soak into the first model
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot, StrikeSet::All);
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut shot, StrikeSet::All);
         assert_eq!(st.alive[1], 3, "fixture: 3 wounds soak, no model dies");
         assert_eq!(credit, 0, "nothing to credit");
         assert!(shot.log.iter().all(|l| !l.contains("dying models")), "nothing logged");
@@ -56,7 +56,7 @@ use super::*;
         statics[1].ctx.death_hits_per_kill = 2;
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot, StrikeSet::All);
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut shot, StrikeSet::All);
         assert!(shot.rolls.iter().any(|r| r.kind == "defense" && r.owner == "Striker"),
             "fixture: the lash DID fire (pools [1,1,1] lose all three models)");
         assert!(wounds_left(&st, 0) < 3, "the lash landed on the striker");

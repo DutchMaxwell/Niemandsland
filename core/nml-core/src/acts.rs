@@ -313,7 +313,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 21;
+pub const CURRENT_RULES_EPOCH: u32 = 23;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -555,28 +555,27 @@ pub const EPOCH_16_FREE_PLACEMENT: u32 = 16;
 /// site reads THIS constant, not the literal `17` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_17_SURGE_SCOPE: u32 = 17;
 
-/// The MOVE-GRANTS FOLD gate (14.09., the wave-6 defect, PR #935): the SOLO
-/// move-grant family (`mods::solo_move_grants` — Slow, Fast, Swift, Rapid
-/// Advance, Rapid Rush) was EVIDENCE-ONLY in the core — `sim.rs`'s ctx_live
-/// logged the name and moved nobody. That is true in one mode and false in
-/// the other: replaying a recorded table game, the recorded bands already
-/// carry every grant (battle_sim.gd:1707 -> `move_bands_for_props`); in a
-/// FRESH core-simulated game there is none — `Profile.move_bands` is built
-/// from the rules a unit PRINTS (the loader's band pass), never from the ones
-/// a spell or aura grants mid-game, so self-play moved every granted move
-/// rule at the bare printed band. From 19 the family folds for real, LIVE, at
-/// the point the core spends a move budget (`sim.rs`'s `band_in`
-/// accumulation, the per-activation delta next to Grounded Speed/Speed
-/// Feat/Great Musician) — a live delta at the spend, not a band recompute,
-/// because a recompute would double-count exactly the recorded games the
-/// epoch gate keeps byte-exact. The registry params the fold spends are
-/// stamped per profile (`unit.rs::solo_move_grant_mods_of`), the same
-/// `advance_mod`/`rush_mod` numbers the table's band pass reads. Below 19
-/// every corpus replays the evidence-only read it was recorded with. `19` is
-/// one past #932's 18, and the value `CURRENT_RULES_EPOCH` is bumped to in
-/// the same change. Every call site reads THIS constant, not the literal `19`
-/// or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_19_MOVE_GRANTS_FOLD: u32 = 19;
+
+/// The SCREENED MELEE gate (14.09., sweep B — row `Screened`): the army-book
+/// entries aliased to the Stealth primitive with `applies_charged: true`
+/// (Screened, Changebound, Machine-Fog, Empyrean Spirit, Gloom-Mist) print
+/// "When units where all models have this rule are shot or charged from over
+/// 9\" away, enemy units get -1 to hit rolls" — yet the core folded the
+/// Stealth DATA-alias pair (`stealth_alias_penalty`/`stealth_alias_over_in`)
+/// on the shooting path only: `melee_hit_modifier`'s signature had nowhere to
+/// put it, so a charge launched from over 9" rolled unpenalised hits in every
+/// core-simulated game. From 22 the dice melee fold
+/// (`dice.rs::melee_hit_target` through `resolve_melee_leg`'s
+/// `screened_melee` gate) applies the alias's own `hit_penalty` when the
+/// strike is a charge from over the alias's `over_in`, measured the table's
+/// own way (`geom::centre_dist_in` on the pre-move snapshot — the
+/// `report["charge_from_in"]` measure). Below 22 the fold never sees the
+/// alias, so every corpus recorded at 19 or less replays byte-exact. `22` is
+/// one past every existing stamp, and the value `CURRENT_RULES_EPOCH` is
+/// bumped to in the same change. Every call site reads THIS constant, not the
+/// literal `22` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_22_SCREENED_MELEE: u32 = 22;
 
 /// The INERT MARKS gate (14.09., MARK_FAMILY_SWEEP_2026-09-14 finding 1 — the
 /// two #870 vs_target marks whose grant lands but never folds): Piercing
@@ -1082,6 +1081,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
+        assert_eq!(CURRENT_RULES_EPOCH, 22, "epoch 22's gate (EPOCH_22_SCREENED_MELEE) bumps the live epoch to 22, one past EPOCH_19_MOVE_GRANTS_FOLD");
         assert_eq!(CURRENT_RULES_EPOCH, 21, "epoch 21's gate (EPOCH_21_INERT_MARKS) bumps the live epoch to 21, one past #935's 19 (18 was #932's, 20 left free)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
@@ -1092,6 +1092,12 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":22}}"#;
+        let header = read_act_header(head).expect("a fresh-epoch header parses");
+        assert_eq!(
+            header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
+            "a fresh play_game() now stamps the bumped epoch, 22"
+
         let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":21}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(

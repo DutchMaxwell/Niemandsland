@@ -25,7 +25,7 @@ use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
     EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
-    EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_21_INERT_MARKS,
+    EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_22_SCREENED_MELEE, EPOCH_21_INERT_MARKS,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -3264,6 +3264,7 @@ fn strike_phase(
     si: usize,
     ti: usize,
     charging: bool,
+    charge_from_in: f64,
     seams: Seams,
     tray: &mut Tray,
     shot: &mut ShootResult,
@@ -3351,7 +3352,7 @@ fn strike_phase(
     // own: on from the current rules epoch onward, pre-port corpora replay
     // byte-exact (dice.rs::save_batch's gate).
     let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
-    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), tray);
+    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), tray);
     // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
     // here; the gated aliases never reach a melee save batch, exactly the
     // table's own `dist_in: -1.0` read, main.gd:6119).
@@ -3555,6 +3556,7 @@ fn tray_charge(
     seams: Seams,
     tray: &mut Tray,
     shot: &mut ShootResult,
+    charge_from_in: f64,
 ) -> Option<usize> {
     if statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter) {
         // :8055-8059 — a Counter weapon runs a WHOLE extra strike phase before
@@ -3571,7 +3573,7 @@ fn tray_charge(
     let mut by_su = 0;
     let mut by_tu = 0;
     if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
-        let (c, rc) = strike_phase(statics, next, ti, si, false, seams, tray, shot, StrikeSet::CounterOnly);
+        let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly);
         by_tu += c;
         by_su += rc;
     }
@@ -3591,7 +3593,7 @@ fn tray_charge(
             // an Impact pool that wiped the defender ends the melee here.
             if next.alive[si] > 0 && next.alive[ti] > 0 {
                 // B13: the defender's lash-back credits ITS OWN tally (by_tu).
-                let (c, rc) = strike_phase(statics, next, si, ti, true, seams, tray, shot, StrikeSet::All);
+                let (c, rc) = strike_phase(statics, next, si, ti, true, charge_from_in, seams, tray, shot, StrikeSet::All);
                 by_su += c;
                 by_tu += rc;
                 next.fatigued[si] = true;
@@ -3599,7 +3601,7 @@ fn tray_charge(
         } else if next.alive[ti] > 0 && next.alive[si] > 0 {
             // :8100 — and so does the strike-back, in both directions.
             // B13: the strike-back's lash-back credits the charger's tally.
-            let (c, rc) = strike_phase(statics, next, ti, si, false, seams, tray, shot, strike_back_set);
+            let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set);
             by_tu += c;
             by_su += rc;
             next.fatigued[ti] = true;
@@ -5863,7 +5865,15 @@ fn resolve_with(
                 // (`tray_morale`) — no morale draw is left standing, verified by
                 // replay.
                 if let Some((tray, shot)) = dice.as_mut() {
-                    if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot) {
+                    // EPOCH_22_SCREENED_MELEE — the pre-charge gap, measured the
+                    // table's own way: unit-centre to unit-centre on the
+                    // PRE-move snapshot (`report["charge_from_in"]`,
+                    // solo_controller.gd:2329; `geom::centre_dist_in` is the
+                    // NML-1152 over-9" modifier measure). `state` still holds
+                    // the pre-move positions the charge move started from.
+                    let charge_from_in =
+                        geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
+                    if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot, charge_from_in) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.

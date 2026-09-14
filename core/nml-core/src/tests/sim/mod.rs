@@ -1256,7 +1256,7 @@
         let (mut st, statics) = instinctive_line(third_at);
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot, StrikeSet::All);
+        strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut shot, StrikeSet::All);
         shot.rolls
             .iter()
             .find(|r| r.kind == "attack" && r.owner == "Striker")
@@ -1568,6 +1568,7 @@ mod reckless_piercing;
 mod reposition_artillery;
 mod retaliate;
 mod retreating_strike;
+mod screened_melee;
 mod second_wind;
 mod second_wind_score;
 mod spell_accumulator;

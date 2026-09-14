@@ -191,11 +191,34 @@ pub fn thrust_to_hit(quality: i64, is_charging: bool) -> i64 {
 }
 
 /// `AiCombatMath.melee_hit_modifier` :248-249 — Evasive OR Melee Evasion costs
-/// the striker 1 to hit; the two never stack.
+/// the striker 1 to hit; the two never stack. The Stealth DATA-alias's CHARGE
+/// leg (Screened et al., `applies_charged: true` — main.gd:5729's `charged_ok`)
+/// rides the SAME "at most one" precedence: it fires only when Evasive/Melee
+/// Evasion did not already fire, and only when the strike is a charge measured
+/// from over the alias's own `over_in` (main.gd:5729's strict `dist_in > gate`,
+/// no `gate <= 0.0` escape — the shooting leg's unconditional reading is
+/// `shot_ok`'s alone). `charge_from_in` is the pre-charge unit-centre distance
+/// (`geom::centre_dist_in` on the pre-move snapshot — the table's
+/// `report["charge_from_in"]`, solo_controller.gd:2329); 0.0 = not a charge or
+/// unmeasured (the table's own human-charge precedent), which never fires.
+/// The caller gates the alias below `EPOCH_22_SCREENED_MELEE` by zeroing
+/// `stealth_alias_penalty`.
 #[inline]
-pub fn melee_hit_modifier(target_evasive: bool, target_melee_evasion: bool) -> i64 {
+pub fn melee_hit_modifier(
+    target_evasive: bool,
+    target_melee_evasion: bool,
+    stealth_alias_penalty: i64,
+    stealth_alias_over_in: f64,
+    stealth_alias_applies_charged: bool,
+    charge_from_in: f64,
+) -> i64 {
     if target_evasive || target_melee_evasion {
         -EVASIVE_HIT_PENALTY
+    } else if stealth_alias_applies_charged
+        && stealth_alias_penalty > 0
+        && charge_from_in > stealth_alias_over_in
+    {
+        -stealth_alias_penalty
     } else {
         0
     }
@@ -436,7 +459,18 @@ pub fn profile_ev(
             target = 6;
         } else {
             target = thrust_to_hit(att.quality, charging && p.thrust);
-            let mut melee_mod = melee_hit_modifier(def.evasive, def.melee_evasion);
+            // The Stealth data-alias pair rides the fold, but the EV
+            // imagination measures NO pre-charge gap (ai_ev.gd:442's melee
+            // branch has no alias leg either) — charge_from_in stays 0.0,
+            // which never clears the alias's `over_in` gate.
+            let mut melee_mod = melee_hit_modifier(
+                def.evasive,
+                def.melee_evasion,
+                def.stealth_alias_penalty,
+                def.stealth_alias_over_in,
+                def.stealth_alias_applies_charged,
+                0.0,
+            );
             // EV/tray split (found by #489, caveat 4): `p.unstoppable_ev` folds
             // in the unit-level prefix scan the EV imagination itself does
             // (ai_ev.gd:347, `stamp_unit_strikers`); the tray reads the plain
