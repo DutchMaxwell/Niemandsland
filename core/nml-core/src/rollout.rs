@@ -532,6 +532,14 @@ pub fn imagined_round_end(cur: &mut State) {
 /// and fatigue clear (p.9), spell tokens refill, and Battleborn/Steadfast clears
 /// Shaken for free.
 ///
+/// Sweep H row Steadfast — the Steadfast halves of that free clear stand only
+/// BELOW the FROZEN `EPOCH_40_STEADFAST_ROLL` (`steadfast_recovery_rolls`
+/// false): from 40 the unit rolls the recovery die instead, at the REAL
+/// round boundary the playout books (`battleborn_recovery_roll` right after
+/// this refresh, arbitration.rs:247-251), the same stream the table's
+/// `_solo_tray_roll` draws. The plain "Battleborn" half is the wave-3
+/// reading and stands untouched.
+///
 /// The GDScript bails after the first two writes when the snapshot carries no
 /// `GameUnit` (`if gu == null: return`); this port always has the unit's static
 /// closure, so that early return has no counterpart — a state without a profile
@@ -548,8 +556,8 @@ pub(crate) fn round_start_refresh(statics: &[UnitStatic], state: &mut State, i: 
     }
     if state.shaken[i]
         && (us.battleborn_active
-            || us.steadfast_active
-            || crate::mods::granted(state, i, "Steadfast"))
+            || (!us.steadfast_recovery_rolls
+                && (us.steadfast_active || crate::mods::granted(state, i, "Steadfast"))))
     {
         state.shaken[i] = false;
     }
@@ -564,7 +572,11 @@ pub(crate) fn round_start_refresh(statics: &[UnitStatic], state: &mut State, i: 
 /// `GodotRng` answers the real tray roll; the planner's imagined refresh
 /// (`round_start_refresh`, `cross_round`) never rolls — GDScript's
 /// `AiPlanner._round_start_refresh` knows neither the aliases nor a die, so
-/// the rollout keeps the free-clear Battleborn/Steadfast arm alone.
+/// the rollout keeps the free-clear Battleborn/Steadfast arm alone. Sweep H
+/// row Steadfast: from the FROZEN `EPOCH_40_STEADFAST_ROLL` the plain
+/// "Steadfast" entry rides this same leg (the alias stamp's own arm), the
+/// die the table's `_solo_tray_roll(1, target, ..)` draws, one line per roll
+/// in the trace below.
 pub(crate) fn battleborn_recovery_roll(
     statics: &[UnitStatic],
     state: &mut State,
