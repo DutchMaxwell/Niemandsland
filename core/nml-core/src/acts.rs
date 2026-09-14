@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 41;
+pub const CURRENT_RULES_EPOCH: u32 = 43;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -802,6 +802,31 @@ pub const EPOCH_39_MORALE_RATING: u32 = 39;
 /// change. Every call site reads THIS constant, not the literal `40` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_40_STEADFAST_ROLL: u32 = 40;
+
+/// The BATTLEBORN ROLL gate (14.09., sweep E — row `Battleborn`): the plain
+/// "Battleborn" entry (the registry `Battleborn; recover_target=4` entry,
+/// gf/battle_brothers — the TUTORIAL faction) rode the wave-3 FREE clear:
+/// `round_start_refresh` wiped Shaken the moment `battleborn_active` read
+/// true, no die, and the die-roll alias stamp listed only the four
+/// "Honor Code"/"Vale Oath"/"Vale Oath Boost"/"Unmovable" aliases (plus
+/// "Steadfast" from 40) — never the plain name — while the table's own
+/// round-start beat (`_solo_battleborn_recovery`) rolls the REAL tray die
+/// for it exactly as for the aliases: `_solo_tray_roll(1, target, ..)`'s
+/// seeded `randi_range(1, 6)` per Shaken eligible unit, read back by
+/// `AiCombatMath.battleborn_recovers(face, target)` — so the unit stays
+/// Shaken half the time. From 43 the plain entry joins the aliases: the
+/// alias stamp resolves its OWN `recover_target` (the four-alias arm's
+/// shape, lowest-wins), the free clear stands only below 43
+/// (`battleborn_recovery_rolls` false), and the die leg
+/// (`battleborn_recovery_roll`, arbitration.rs) rolls the seeded face the
+/// table's `_solo_tray_roll` draws. Below 43 the free clear stays and every
+/// recorded game replays byte-exact. `43` is one past every existing stamp
+/// (41 = `EPOCH_41_SELF_DESTRUCT_SURVIVORS`, #963; 42 reserved in flight by
+/// the surge-mark leg), and the value `CURRENT_RULES_EPOCH` is bumped to in
+/// the same change. Every
+/// call site reads THIS constant, not the literal `43` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_43_BATTLEBORN_ROLL: u32 = 43;
 
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
@@ -1337,7 +1362,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 41, "epoch 41's gate (EPOCH_41_SELF_DESTRUCT_SURVIVORS) bumps the live epoch to 41, one past #960's Steadfast leg 40 (39 = #959's Morale-rating leg; 38 = EPOCH_38_WATCHBORN_LATCH, #955)");
+        assert_eq!(CURRENT_RULES_EPOCH, 43, "epoch 43's gate (EPOCH_43_BATTLEBORN_ROLL) bumps the live epoch to 43, one past #963's selfdestruct leg 41 (42 reserved in flight by the surge-mark leg)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1347,11 +1372,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":41}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":43}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 41"
+            "a fresh play_game() now stamps the bumped epoch, 43"
         );
     }
 

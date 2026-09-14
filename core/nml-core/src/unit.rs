@@ -27,7 +27,7 @@ use crate::acts::{
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
     EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE, EPOCH_19_MOVE_GRANTS_FOLD,
     EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST, EPOCH_35_UNSTOPPABLE_MELEE,
-    EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL,
+    EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL, EPOCH_43_BATTLEBORN_ROLL,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -886,11 +886,13 @@ pub struct UnitStatic {
     /// `recover_target` off the unit's die-roll recover aliases ("Honor Code",
     /// "Vale Oath", "Vale Oath Boost", "Unmovable" — main.gd
     /// `:_solo_round_start_recovery_rule`'s generic Battleborn-primitive alias
-    /// layer, rolled by `:_solo_battleborn_recovery`) and, from the FROZEN
-    /// `EPOCH_40_STEADFAST_ROLL`, the plain "Steadfast" entry the same picker's
-    /// second arm resolves (sweep H row Steadfast). 0 = the unit rolls no
-    /// recovery die at a round start. Static per unit, so the registry answers
-    /// once here and the round-start leg reads the number only.
+    /// layer, rolled by `:_solo_battleborn_recovery`), the plain "Steadfast"
+    /// entry from the FROZEN `EPOCH_40_STEADFAST_ROLL` (sweep H row
+    /// Steadfast) and the plain "Battleborn" entry itself from the FROZEN
+    /// `EPOCH_43_BATTLEBORN_ROLL` (sweep E row Battleborn). 0 = the unit
+    /// rolls no recovery die at a round start. Static per unit, so the
+    /// registry answers once here and the round-start leg reads the number
+    /// only.
     pub battleborn_recover_target: u32,
     /// Sweep H row Steadfast — the round-start Shaken clear for a Steadfast
     /// unit stays FREE only below the FROZEN `EPOCH_40_STEADFAST_ROLL`; from
@@ -899,6 +901,14 @@ pub struct UnitStatic {
     /// stream the table's `_solo_tray_roll` draws). Below 40 the flag reads
     /// false and every recorded corpus replays its free clear byte-exact.
     pub steadfast_recovery_rolls: bool,
+    /// Sweep E row Battleborn — the round-start Shaken clear for a plain
+    /// "Battleborn" unit stays FREE only below the FROZEN
+    /// `EPOCH_43_BATTLEBORN_ROLL`; from 43 the unit rolls the recovery die
+    /// instead (`battleborn_recovery_roll` off `battleborn_recover_target`'s
+    /// plain-name arm, the same seeded stream the table's `_solo_tray_roll`
+    /// draws). Below 43 the flag reads false and every recorded corpus
+    /// replays its free clear byte-exact.
+    pub battleborn_recovery_rolls: bool,
     /// `RulesRegistry.unit_rule_active(gu, "Mend")` main.gd:5236 — the heal
     /// primitive's registry gate; the import folds item-granted rules into
     /// `special_rules` (opr_api_client.gd:261-263), so a Paternal Bond item
@@ -1420,6 +1430,13 @@ fn stationary_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64, bool) {
 /// what this arm ports — its OWN `recover_target` riding the same
 /// lowest-wins merge. Below 40 the list stays the wave-3 four, a Steadfast
 /// unit keeps target 0 and the free clear it was recorded with.
+///
+/// Sweep E row Battleborn: from the FROZEN `EPOCH_43_BATTLEBORN_ROLL` the
+/// plain "Battleborn" entry joins them the same way — the table's picker
+/// resolves the plain name FIRST (main.gd `_solo_round_start_recovery_rule`'s
+/// first arm), so its OWN `recover_target` rides the same lowest-wins merge.
+/// Below 43 a Battleborn carrier keeps target 0 and the free clear it was
+/// recorded with.
 fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> u32 {
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         return 0;
@@ -1442,6 +1459,21 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
     }
     if rule_on(rules_epoch, EPOCH_40_STEADFAST_ROLL) && carried("Steadfast") {
         let target = match reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Steadfast") {
+            Some(e) => e.param_i("recover_target", 0),
+            None => 0,
+        };
+        if target > 0 && (best == 0 || (target as u32) < best) {
+            best = target as u32;
+        }
+    }
+    // Sweep E row Battleborn: from the FROZEN `EPOCH_43_BATTLEBORN_ROLL` the
+    // plain "Battleborn" entry rides the same stamp — the table's picker
+    // resolves the plain name FIRST (main.gd
+    // `_solo_round_start_recovery_rule`'s first arm), its OWN `recover_target`
+    // in the same lowest-wins merge. Below 43 the arm stays closed and a
+    // Battleborn carrier keeps target 0.
+    if rule_on(rules_epoch, EPOCH_43_BATTLEBORN_ROLL) && carried("Battleborn") {
+        let target = match reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Battleborn") {
             Some(e) => e.param_i("recover_target", 0),
             None => 0,
         };
@@ -5688,6 +5720,13 @@ impl UnitStatic {
             // stamp's own arm). A record below 40 keeps `false` and replays
             // the free-clear reading byte-exact.
             steadfast_recovery_rolls: rule_on(rules_epoch, EPOCH_40_STEADFAST_ROLL),
+            // Sweep E row Battleborn — the free-clear gate flag: the round-start
+            // Shaken clear for a plain "Battleborn" unit stays free only BELOW
+            // the FROZEN `EPOCH_43_BATTLEBORN_ROLL`; from 43 the playout rolls
+            // the die instead (rollout.rs `battleborn_recovery_roll` off the
+            // alias stamp's plain-name arm). A record below 43 keeps `false`
+            // and replays the free-clear reading byte-exact.
+            battleborn_recovery_rolls: rule_on(rules_epoch, EPOCH_43_BATTLEBORN_ROLL),
             // Battleborn family wave 3 (rules-wave3-battleborn): the four
             // die-roll recover aliases ride the Battleborn primitive; each
             // alias is stamped BY NAME (the census's own-token evidence,
@@ -5698,7 +5737,10 @@ impl UnitStatic {
             // the literal or `CURRENT_RULES_EPOCH`) so an epoch-5 corpus
             // replay stays byte-exact; from the FROZEN
             // `EPOCH_40_STEADFAST_ROLL` the plain "Steadfast" entry rides the
-            // same stamp (sweep H row Steadfast, its OWN `recover_target`).
+            // same stamp (sweep H row Steadfast, its OWN `recover_target`),
+            // and from the FROZEN `EPOCH_43_BATTLEBORN_ROLL` the plain
+            // "Battleborn" entry joins it the same way (sweep E row
+            // Battleborn).
             battleborn_recover_target: battleborn_recover_target_of(reg, p, rules_epoch),
             mend_active: unit_rule_active(reg, p, "Mend"),
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),

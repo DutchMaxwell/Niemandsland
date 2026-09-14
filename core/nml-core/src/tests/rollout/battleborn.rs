@@ -1,4 +1,5 @@
 use super::*;
+use crate::acts::{EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_43_BATTLEBORN_ROLL};
 use crate::rng::GodotRng;
 
     // ---------------- Battleborn round-start recovery (sweep E, epoch 43) --
@@ -70,11 +71,11 @@ use crate::rng::GodotRng;
         // with a 4.
         assert_eq!(GodotRng::new(8).randi_range(1, 6), 3, "seed 8 forces the 3");
         assert_eq!(GodotRng::new(1).randi_range(1, 6), 4, "seed 1 forces the 4");
-        let (mut st, statics, i) = shaken_battleborn(43);
+        let (mut st, statics, i) = shaken_battleborn(EPOCH_43_BATTLEBORN_ROLL);
         round_start_refresh(&statics, &mut st, i);
         battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(8));
         assert!(st.shaken[i], "face 3 misses the 4+ recovery: the unit stays Shaken");
-        let (mut st, statics, i) = shaken_battleborn(43);
+        let (mut st, statics, i) = shaken_battleborn(EPOCH_43_BATTLEBORN_ROLL);
         round_start_refresh(&statics, &mut st, i);
         battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(1));
         assert!(!st.shaken[i], "face 4 reaches the 4+ recovery");
@@ -94,7 +95,7 @@ use crate::rng::GodotRng;
             // a fresh `GodotRng` at the same seed answers the same stream,
             // and the round-start refresh draws nothing before the die.
             let face = GodotRng::new(seed).randi_range(1, 6);
-            let (mut st, statics, i) = shaken_battleborn(43);
+            let (mut st, statics, i) = shaken_battleborn(EPOCH_43_BATTLEBORN_ROLL);
             round_start_refresh(&statics, &mut st, i);
             battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(seed));
             if face <= 3 {
@@ -111,12 +112,14 @@ use crate::rng::GodotRng;
         assert!(low > 0 && high > 0, "both die halves must occur across the seeds");
     }
 
-    /// The OLD leg: at the frozen epoch immediately below the bump the same
-    /// Shaken unit recovers WITHOUT a die — the wave-3 free-clear reading
-    /// every recorded corpus replays. Green before and after the port.
+    /// The OLD leg: at the frozen epoch immediately below the bump
+    /// (`EPOCH_41_SELF_DESTRUCT_SURVIVORS` after the 16:4x rebase —
+    /// re-pointed by its frozen constant at rebase) the same Shaken unit
+    /// recovers WITHOUT a die — the wave-3 free-clear reading every
+    /// recorded corpus replays. Green before and after the port.
     #[test]
     fn the_pregate_leg_clears_the_shaken_battleborn_unit_for_free() {
-        let (mut st, statics, i) = shaken_battleborn(42);
+        let (mut st, statics, i) = shaken_battleborn(EPOCH_41_SELF_DESTRUCT_SURVIVORS);
         round_start_refresh(&statics, &mut st, i);
         assert!(!st.shaken[i], "below the gate the free clear stands");
     }

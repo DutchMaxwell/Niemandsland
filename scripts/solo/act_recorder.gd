@@ -61,7 +61,9 @@ static var spawn_profile_resolver: Callable = Callable()
 ## Bumped to 41 in the same diff as the core's EPOCH_41_SELF_DESTRUCT_SURVIVORS
 ## (sweep H 2026-09-14, row `Self-Destruct` — the survival half: every
 ## surviving carrier detonates after the melee and pays X hits).
-static var rules_epoch: int = 41
+## Bumped to 43 in the same diff as the core's EPOCH_43_BATTLEBORN_ROLL
+## (sweep E 2026-09-14, row `Battleborn` — the plain name joins the die leg).
+static var rules_epoch: int = 43
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the
