@@ -52,6 +52,7 @@
 
     mod reinforcement;
     mod spawn;
+    mod vanguard_free;
 
     /// The 6x4 ft board's own rectangle, world metres — the table a circle
     /// zone clamps its bounding square against (the driver's own read,
