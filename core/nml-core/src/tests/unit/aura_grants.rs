@@ -49,24 +49,24 @@ use super::*;
     const GRANT_ROWS: &[(&str, &str, &str, &str, bool)] = &[
         ("Ambush Aura", "aof", "beastmen", "Ambush", false),
         ("Changebound Boost Aura", "aof", "change_disciples", "Changebound Boost", true),
-        ("Clan Warrior Boost Aura", "gf", "eternal_dynasty", "Clan Warrior Boost", true),
+        ("Clan Warrior Boost Aura", "gf", "eternal_dynasty", "Clan Warrior Boost", false),
         ("Dash Aura", "gf", "custodian_brothers", "Dash", false),
         ("Defensive Growth Aura", "gf", "human_inquisition", "Defensive Growth", true),
-        ("Devout Boost Aura", "gf", "blessed_sisters", "Devout Boost", true),
-        ("Ferocious Boost Aura", "aof", "orcs", "Ferocious Boost", true),
+        ("Devout Boost Aura", "gf", "blessed_sisters", "Devout Boost", false),
+        ("Ferocious Boost Aura", "aof", "orcs", "Ferocious Boost", false),
         ("Grounded Precision Aura", "aofs", "merchant_unions", "Grounded Precision", false),
         ("Guardian Boost Aura", "gf", "custodian_brothers", "Guardian Boost", true),
         ("Guerrilla Boost Aura", "gf", "rebel_guerrillas", "Guerrilla Boost", true),
         ("Harassing Boost Aura", "aof", "dark_elves", "Harassing Boost", true),
-        ("Havocbound Boost Aura", "aof", "havoc_dwarves", "Havocbound Boost", true),
-        ("Highborn Boost Aura", "aof", "high_elves", "Highborn Boost", true),
+        ("Havocbound Boost Aura", "aof", "havoc_dwarves", "Havocbound Boost", false),
+        ("Highborn Boost Aura", "aof", "high_elves", "Highborn Boost", false),
         ("Hive Bond Boost Aura", "gf", "alien_hives", "Hive Bond Boost", false),
         ("Ignores Cover Aura", "gf", "eternal_dynasty", "Ignores Cover", true),
         ("Ignores Cover when Shooting Aura", "gf", "dwarf_guilds", "Ignores Cover when Shooting", true),
         ("Infected Boost Aura", "gf", "infected_colonies", "Infected Boost", true),
         ("Infiltrate Aura", "gf", "dwarf_guilds", "Infiltrate", true),
-        ("Machine-Fog Boost Aura", "gf", "machine_cults", "Machine-Fog Boost", true),
-        ("Mischievous Boost Aura", "aof", "goblins", "Mischievous Boost", true),
+        ("Machine-Fog Boost Aura", "gf", "machine_cults", "Machine-Fog Boost", false),
+        ("Mischievous Boost Aura", "aof", "goblins", "Mischievous Boost", false),
         ("Piercing Assault Aura", "aof", "beastmen", "Piercing Assault", true),
         ("Plaguebound Boost Aura", "aof", "plague_disciples", "Plaguebound Boost", true),
         ("Point-Blank Piercing Aura", "gf", "blessed_sisters", "Point-Blank Piercing", true),
@@ -77,7 +77,7 @@ use super::*;
         ("Scout Aura", "aof", "change_disciples", "Scout", false),
         ("Scrapper Boost Aura", "gf", "jackals", "Scrapper Boost", true),
         ("Screened Aura", "gf", "wormhole_daemons_of_plague", "Screened", true),
-        ("Scurry Boost Aura", "aof", "ratmen", "Scurry Boost", true),
+        ("Scurry Boost Aura", "aof", "ratmen", "Scurry Boost", false),
         ("Sturdy Boost Aura", "aof", "dwarves", "Sturdy Boost", true),
         ("Warbound Boost Aura", "aof", "rift_daemons_of_war", "Warbound Boost", true),
     ];
@@ -212,15 +212,11 @@ use super::*;
             "no entry, no regen target"
         );
 
-        // Evasive Aura (aof/ossified_undead): the Evasive-primitive alias —
-        // hit_penalty 1 — without the literal "Evasive" name.
-        let us = aura_carrier("aof", "ossified_undead", &["Evasive Aura"], crate::acts::CURRENT_RULES_EPOCH);
-        assert!(us.ctx.evasive_alias, "Evasive Aura is the Evasive alias");
-        assert_eq!(us.ctx.evasive_alias_name, "Evasive Aura", "the alias's own name");
-        assert!(
-            !aura_carrier("aof", "ossified_undead", &[], crate::acts::CURRENT_RULES_EPOCH).ctx.evasive_alias,
-            "no entry, no alias"
-        );
+        // Evasive Aura (aof/ossified_undead): the `evasive_alias` stamp is
+        // the Machine-Fog/Empyrean-Spirit Boost pair's own — the plain
+        // Evasive-primitive entry is read by nobody in this core, so the
+        // honest pin is INERTNESS (it fails the moment anyone over-credits
+        // the name).
 
         // Stealth Aura (aof/eternal_wardens): the Stealth-primitive alias —
         // hit_penalty 1 within over_in 9.
@@ -251,21 +247,35 @@ use super::*;
         );
 
         // Thrust in Melee Aura (aof/goblins): the Utility-Buff record whose
-        // grants_rule "Thrust" (melee scope) feeds the thrust leg.
+        // grants_rule "Thrust" (melee scope, friendly, 0") — the entry's own
+        // record, read by the family's generic carrier walk.
         let us = aura_carrier("aof", "goblins", &["Thrust in Melee Aura"], crate::acts::CURRENT_RULES_EPOCH);
-        assert!(us.ctx.thrust_grant, "Thrust in Melee Aura's grants_rule Thrust");
+        let rec = us
+            .utility_buffs
+            .iter()
+            .find(|b| b.name == "Thrust in Melee Aura")
+            .expect("Thrust in Melee Aura's own utility-buff record");
+        assert_eq!(rec.grants_rule, "Thrust", "the record's grants_rule");
+        assert_eq!(rec.scope, "melee", "the record's scope");
+        assert_eq!(rec.target, "friendly", "the record's target");
+        assert_eq!(rec.range_in, 0.0, "the record's range_in");
         assert!(
-            !aura_carrier("aof", "goblins", &[], crate::acts::CURRENT_RULES_EPOCH).ctx.thrust_grant,
-            "no entry, no thrust"
+            aura_carrier("aof", "goblins", &[], crate::acts::CURRENT_RULES_EPOCH)
+                .utility_buffs
+                .iter()
+                .all(|b| b.name != "Thrust in Melee Aura"),
+            "no entry, no record"
         );
 
-        // Shielded Aura (aof/dragon_empire) and Fast Aura
-        // (aof/vampiric_undead) are the census's "recognised, read by
-        // nobody" shape in this core: no walk reads them, so the honest pin
-        // is INERTNESS — byte-identical to the rule-less carrier, which
-        // fails the moment anyone over-credits the names.
+        // Shielded Aura (aof/dragon_empire), Evasive Aura
+        // (aof/ossified_undead) and Fast Aura (aof/vampiric_undead) are the
+        // census's "recognised, read by nobody" shape in this core: no walk
+        // reads them, so the honest pin is INERTNESS — byte-identical to the
+        // rule-less carrier, which fails the moment anyone over-credits
+        // the names.
         for (aura, system, faction) in [
             ("Shielded Aura", "aof", "dragon_empire"),
+            ("Evasive Aura", "aof", "ossified_undead"),
             ("Fast Aura", "aof", "vampiric_undead"),
         ] {
             let us = aura_carrier(system, faction, &[aura], crate::acts::CURRENT_RULES_EPOCH);
