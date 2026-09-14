@@ -1184,7 +1184,22 @@ pub fn resolve_volley_leg(
         // (`apply_deadly_wounds`, solo_controller.gd:8333). The tally keeps the
         // raw count (`total_caused += w`, main.gd:3318). The legacy leg keeps
         // the pool multiply verbatim and lands through `land_wounds` as before.
-        let ignores_regen = p.bypass_regen || p.rending || p.unstoppable || att.rending_grant || att.unstoppable_grant;
+        // EPOCH 46 DISINTEGRATE REGEN — the registry-driven weapon-rule
+        // bypass joins the SAME seam the Bane family uses (`_solo_ignores_regen`'s
+        // registry arm, main.gd:7133-7137): the stamp carries the rule NAME,
+        // so an empty field is the pre-46 silence, replay-exact.
+        let disintegrate_regen = !p.regen_bypass_rule.is_empty();
+        let ignores_regen = p.bypass_regen
+            || p.rending
+            || p.unstoppable
+            || att.rending_grant
+            || att.unstoppable_grant
+            || disintegrate_regen;
+        // Rules-must-log: the refusal names the rule — the table's
+        // Bane-in-Melee arm's own line (main.gd:7175-7176).
+        if disintegrate_regen && w > 0 {
+            out.log.push(format!("{}: Regeneration ignored", p.regen_bypass_rule));
+        }
         // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the Regeneration half:
         // the granted mark names itself the one time its bypass is the reason
         // this weapon's wounds skip the regen pool. Gated with the clamp half
@@ -1826,7 +1841,21 @@ pub fn resolve_melee_leg(
             // the union (recorded leak replays), from 37 only a grant whose
             // record is NOT shooting-scoped — the "Unstoppable when Shooting"
             // aura stops cutting through melee Regeneration.
-            let ignores_regen = p.bypass_regen || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_regen_melee;
+            // EPOCH 46 DISINTEGRATE REGEN — the melee fold's twin of the
+            // volley seam: the registry-driven weapon-rule bypass joins the
+            // SAME union (the table's arm is reach-blind, main.gd:7133-7137).
+            let disintegrate_regen = !p.regen_bypass_rule.is_empty();
+            let ignores_regen = p.bypass_regen
+                || p.rending
+                || p.unstoppable
+                || sh.att.rending_grant
+                || sh.att.unstoppable_regen_melee
+                || disintegrate_regen;
+            // Rules-must-log: the refusal names the rule, the volley fold's
+            // twin (main.gd:7175-7176).
+            if disintegrate_regen && w > 0 {
+                out.log.push(format!("{}: Regeneration ignored", p.regen_bypass_rule));
+            }
             // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the melee Regeneration
             // half, the volley fold's twin: the granted mark names itself the
             // one time its bypass is the reason this weapon's wounds skip the
