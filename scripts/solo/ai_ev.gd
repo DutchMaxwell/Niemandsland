@@ -362,6 +362,17 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 				var fpd := fp as Dictionary
 				if int(fpd.get("range", 0)) > 0:
 					fpd["ignores_cover"] = true
+	# "Indirect when Shooting" (unit-level name, gf/aof books: "This model gets Indirect when
+	# shooting"): stamp the PLAIN `indirect` facet on the ranged profiles — the table mirror of the
+	# core's unit.rs build_for epoch-6 walk (unit.rs:5119-5138), which the save gate, EV and sight
+	# waiver already read. The weapon-level "Indirect" tag keeps its own read (AiShooting._profile);
+	# this is the unit-level half, gated by (system, faction, name) — NEVER the bare Indirect
+	# primitive token, whose other entries keep their own scopes (the cover_only alias above).
+	if RulesRegistry.unit_rule_active(unit, "Indirect when Shooting"):
+		for fp in profiles:
+			var fpd := fp as Dictionary
+			if int(fpd.get("range", 0)) > 0:
+				fpd["indirect"] = true
 	if not RulesRegistry.unit_rule_active(unit, "Sergeant"):
 		return profiles
 	var alive: int = maxi(unit.get_alive_count(), 1)
