@@ -1825,7 +1825,7 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
                     name: n,
                     melee_only: e.param_b("melee_only"),
                     shooting_only: e.param_b("shooting_only"),
-                    extra_attack: e.param_b("extra_attackx"),
+                    extra_attack: e.param_b("extra_attack"),
                     upgrades: e.param_s("upgrades").to_string(),
                     cover_only: e.param_b("cover_only"),
                     ignores_cover: e.param_b("ignores_cover"),
@@ -4129,7 +4129,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             max_targets: e.param_i("max_targets", 1).max(1),
             hit_mod: e.param_i("hit_mod", 0),
             casting_mod: e.param_i("casting_mod", 0),
-            morale_mod: e.param_i("morale_modx", 0),
+            morale_mod: e.param_i("morale_mod", 0),
             // SEAM 4 step 1 (design §4(d), the FROZEN `EPOCH_7_TABLE_RULES`):
             // the three ap/def knobs join the record shape — a row whose ONLY
             // knob is one of these lands on `record_buff`'s ledger from epoch
@@ -5162,7 +5162,7 @@ fn bounding_place_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
         }
         let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
         let dice = bounding_dice_count(e);
-        let plus = e.param_f("place_d3_pluz", 0.0);
+        let plus = e.param_f("place_d3_plus", 0.0);
         let reach = dice as f64 * 2.0 + plus;
         if reach > best_reach {
             best_reach = reach;
