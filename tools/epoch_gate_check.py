@@ -15,7 +15,11 @@ Rules enforced, all derived from incidents in this repo:
      pre-bump behaviour is asserted and not merely hoped for. Both the struct-literal form
      (`rules_epoch: 12`) and the positional form (`build_for(.., 12)`) count -- the lead's own
      grep missed the positional form once and dispatched an agent to build tests that existed.
-  4. The diff must add at least one test that pins the NEW epoch, by constant or by number.
+   4. The diff must add at least one test that pins the NEW epoch, by constant or by number.
+   5. A diff that adds a NEW `EPOCH_<n>_<NAME>` constant WITHOUT bumping `CURRENT_RULES_EPOCH` is
+      refused (reported as "rule 4") -- a rules fix landing below the live epoch gates nothing.
+   6. `CURRENT_RULES_EPOCH` must move UP (reported as "rule 5") -- a stale rebase re-dates the gate.
+
 
 Usage: epoch_gate_check.py <diff-file>   (reads a unified diff; exit 1 on refusal)
 """
@@ -79,11 +83,24 @@ def main(path):
             old_epoch = int(m.group(1))
 
     if new_epoch is None:
+        if any(CONST_RE.match(l) for l in added):
+            print("epoch-gate: REFUSED")
+            print(
+                "::error::epoch-gate: rule 4: a new EPOCH_<n> constant was added without bumping "
+                "CURRENT_RULES_EPOCH - a rules fix landing below the live epoch gates nothing"
+            )
+            return 1
         print("epoch-gate: no CURRENT_RULES_EPOCH bump in this diff - nothing to check.")
         return 0
     print(f"epoch-gate: bump {old_epoch} -> {new_epoch}")
 
     fails = []
+
+    if old_epoch is not None and new_epoch <= old_epoch:
+        fails.append(
+            f"rule 5: CURRENT_RULES_EPOCH {new_epoch} is not above the previous {old_epoch} - "
+            "renumber to the live epoch + 1 at rebase"
+        )
 
     consts = {int(m.group(1)): m.group(3) for m in (CONST_RE.match(l) for l in added) if m}
     if new_epoch not in consts:
