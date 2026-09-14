@@ -282,3 +282,121 @@ use super::*;
         let slayer = condap_unit("blood_prime_brothers", &["Melee Slayer"], 6);
         assert!(slayer.melee[0].cond_ap.iter().all(|c| c.name.is_empty()), "epoch 6: unnamed");
     }
+
+    // --- TEST WAVE test_condap (2026-09-14, D-PROOF) — the weapon-rule
+    // members' number pins: Crack / Shatter / Tear. Read off the REAL
+    // registry entries (each name's own (system, faction) block) through
+    // the dice folds' save targets at CURRENT_RULES_EPOCH, plus the
+    // spell-token fold's facet numbers. The generic-pass specs carry no
+    // name, so the folds deliberately log nothing for them — no trace
+    // line to assert.
+
+    /// The weapon-rule carrier: the SAME gf template, but the rule prints
+    /// on BOTH weapons (the books' own shape for Crack / Shatter / Tear —
+    /// the disintegrate fixture's shape), so the per-weapon pass in
+    /// `stamp_conditional_ap` reads it. An empty rule prints nothing.
+    fn condap_weapon_unit(faction: &str, rule: &str, epoch: u32) -> UnitStatic {
+        let tpl = CONDAP_HEADER
+            .replace(
+                "\"faction_folder\":\"robot_legions\"",
+                &format!("\"faction_folder\":\"{faction}\""),
+            )
+            .replace("\"rules\":[]", &format!("\"rules\":[\"{rule}\"]"));
+        let header = read_act_header(&tpl).expect("CONDAP_HEADER parses");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        UnitStatic::build_for(&mut reg, p, epoch)
+    }
+
+    /// "Crack" (gf, five books — human_defense_force prints it): "On
+    /// unmodified results of 6 to hit, those hits get AP(+2)." The sixes
+    /// batch of the SAME volley saves two steps harder than the plain
+    /// batch (Defense 4: sixes at 6, the rest at 4), the blade stamps the
+    /// same, and the spell-token fold carries the same 2. The WITHOUT leg
+    /// is the volley's own plain batch and the no-rule carrier.
+    #[test]
+    fn crack_gives_its_unmodified_sixes_ap_two_at_the_current_epoch() {
+        let us = condap_weapon_unit("human_defense_force", "Crack", CURRENT_RULES_EPOCH);
+        let on = volley(&us, &target(1), 12.0);
+        assert_eq!(
+            save_targets(&on),
+            vec![6, 4],
+            "epoch 55: the unmodified 6s save at AP(+2), the rest of the same volley at plain AP"
+        );
+        assert_eq!(
+            save_targets(&strike(&us, &target(1), false)),
+            vec![6, 4],
+            "melee: the blade's sixes pay the same AP(+2)"
+        );
+        assert_eq!(
+            crate::spell::spell_facets(&["Crack".to_string()]).on6_ap,
+            2,
+            "the spell-token fold carries the same AP(+2)"
+        );
+        let plain = condap_weapon_unit("human_defense_force", "", CURRENT_RULES_EPOCH);
+        assert_eq!(
+            save_targets(&volley(&plain, &target(1), 12.0)),
+            vec![4],
+            "no rule, no AP"
+        );
+    }
+
+    /// "Shatter" (gf, fourteen books — prime_brothers prints it): "Against
+    /// units where most models have Tough(3) or higher, this weapon gets
+    /// AP(+2)." Tough(3) pays (Defense 4 saves at 6), Tough(2) does not
+    /// (plain 4), the blade pays too, and the spell-token fold carries
+    /// the same 2.
+    #[test]
+    fn shatter_adds_ap_two_against_tough_three_up_at_the_current_epoch() {
+        let us = condap_weapon_unit("prime_brothers", "Shatter", CURRENT_RULES_EPOCH);
+        assert_eq!(
+            save_targets(&volley(&us, &target(3), 12.0)),
+            vec![6],
+            "epoch 55: vs Tough(3) the volley saves at AP(+2)"
+        );
+        assert_eq!(
+            save_targets(&volley(&us, &target(2), 12.0)),
+            vec![4],
+            "vs Tough(2): below the threshold, plain AP"
+        );
+        assert_eq!(
+            save_targets(&strike(&us, &target(3), false)),
+            vec![6],
+            "melee: the blade pays against the same target class"
+        );
+        assert_eq!(
+            crate::spell::spell_facets(&["Shatter".to_string()]).ap_vs_tough3,
+            2,
+            "the spell-token fold carries the same AP(+2)"
+        );
+    }
+
+    /// "Tear" (gf, ten books — orc_marauders prints it): "Against units
+    /// where most models have Tough(9) or higher, this weapon gets
+    /// AP(+4)." Tough(9) pays (Defense 4 saves at 8), Tough(8) does not
+    /// (plain 4), the blade pays too, and the spell-token fold carries
+    /// the same 4.
+    #[test]
+    fn tear_adds_ap_four_against_tough_nine_up_at_the_current_epoch() {
+        let us = condap_weapon_unit("orc_marauders", "Tear", CURRENT_RULES_EPOCH);
+        assert_eq!(
+            save_targets(&volley(&us, &target(9), 12.0)),
+            vec![8],
+            "epoch 55: vs Tough(9) the volley saves at AP(+4)"
+        );
+        assert_eq!(
+            save_targets(&volley(&us, &target(8), 12.0)),
+            vec![4],
+            "vs Tough(8): below the threshold, plain AP"
+        );
+        assert_eq!(
+            save_targets(&strike(&us, &target(9), false)),
+            vec![8],
+            "melee: the blade pays against the same target class"
+        );
+        assert_eq!(
+            crate::spell::spell_facets(&["Tear".to_string()]).ap_vs_tough9,
+            4,
+            "the spell-token fold carries the same AP(+4)"
+        );
+    }

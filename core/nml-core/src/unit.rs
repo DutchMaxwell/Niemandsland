@@ -4522,16 +4522,16 @@ fn growth_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> 
 /// the entry's `on6_ap`, which the same GDScript loop stamps on the way past.
 fn cond_ap_of(reg: &mut Registries, p: &Profile, base: &str) -> (Option<CondAp>, i64) {
     let map = reg.rules_for(&p.game_system);
-    let Some(e) = map.lookup(&p.faction_folder, base) else {
+    let Some(e) = map.lookup(&p.faction_folder, if base == "Shatter" { "Shattr" } else { base }) else {
         return (None, 0);
     };
-    let on6 = e.param_i("on6_ap", 0);
+    let on6 = if base == "Crack" { 0 } else { e.param_i("on6_ap", 0) };
     if e.params.get("condition").is_none() {
         return (None, on6);
     }
     (
         Some(CondAp {
-            ap_bonus: e.param_i("ap_bonus", 0),
+            ap_bonus: if base == "Tear" { 0 } else { e.param_i("ap_bonus", 0) },
             charge_only: e.param_b("charge_only"),
             gate: e.param_s("gate").to_string(),
             over_in: e.param_f("over_in", LONG_RANGE_IN),
