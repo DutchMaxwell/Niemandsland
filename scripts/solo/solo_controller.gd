@@ -1176,7 +1176,8 @@ func best_shoot_target_now(ai_unit: GameUnit) -> GameUnit:
 		var d := MoveIntent.distance_inches(from, unit_centre(hu))
 		if d > float(reach):
 			continue
-		if not indirect and not _has_los(ai_unit, hu):
+		if not indirect and not _has_los(ai_unit, hu) \
+				and not grants_indirect_to_attackers(hu):   # wave 6 — the Indirect Mark's once-grant
 			continue
 		var them := AiEv.ctx_for(hu, majority_in_cover(hu), counter_models_of(hu))
 		var ev: float = AiEv.shoot_ev(profiles, us, them, d) if not profiles.is_empty() else (100.0 - d)
@@ -2349,7 +2350,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	report["can_shoot"] = (do_shoot or (quick_shot and action == AiDecision.Action.RUSH)) \
 		and shoot_range > 0 and d2 <= float(shoot_range) \
 		and (_has_los(unit, target_unit) or has_indirect_ranged(weapons) \
-			or granted_indirect_of(unit))   # GH #325 — the shooter's own Indirect token
+			or granted_indirect_of(unit)   # GH #325 — the shooter's own Indirect token
+			or grants_indirect_to_attackers(target_unit))   # wave 6 — the Indirect Mark's once-grant
 	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
 		_rule_note(report, "Quick Shot: shoots after its Rush action", true)   # explains otherwise-impossible shots — travels
 	# POST-MOVE RETARGET (Bug 27/28): a HOLD/ADVANCE always MAY shoot (OPR) — so if the decided target is
@@ -7552,6 +7554,29 @@ static func granted_indirect_of(unit: GameUnit) -> bool:
 	for rd in (unit.unit_properties.get("spell_records", []) as Array):
 		var rec := rd as Dictionary
 		if str(rec.get("beneficiary", "")) == "attackers" or str(rec.get("scope", "")) == "melee":
+			continue
+		var base := RulesRegistry.base_rule_name(str(rec.get("grants_rule", "")))
+		var cut := base.find(" when ")
+		if cut >= 0:
+			base = base.substr(0, cut)
+		if base == "Indirect":
+			return true
+	return false
+
+
+## Indirect Mark (wave 6) — the mark-family consumer the pick was missing: the once-record
+## `_solo_apply_vs_marks` lands on the MARKED ENEMY (beneficiary "attackers", the entry's own
+## scope) names "Indirect", so every friendly unit's shooting at THIS target is Indirect — the
+## LOS waiver at the targeting seams here, the volley facets (cover ignored, moved -1, per-model
+## sight waiver) ride the profile bridge (AiSpell.BRIDGE_FLAGS). Target-aware mirror of
+## `granted_indirect_of`'s own-store read, reading the durable NML-949 mirror; the way the core
+## consumes the mark (`mods::granted_vs(state, ti, "Indirect")`, sim.rs AI targeting gate).
+static func grants_indirect_to_attackers(target: GameUnit) -> bool:
+	if target == null:
+		return false
+	for rd in (target.unit_properties.get("spell_records", []) as Array):
+		var rec := rd as Dictionary
+		if str(rec.get("beneficiary", "")) != "attackers" or str(rec.get("scope", "")) == "melee":
 			continue
 		var base := RulesRegistry.base_rule_name(str(rec.get("grants_rule", "")))
 		var cut := base.find(" when ")

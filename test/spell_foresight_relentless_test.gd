@@ -83,14 +83,21 @@ func test_bridge_flag_covers_every_flag_shaped_family_member() -> void:
 	assert_str(AiSpell.bridge_flag_for("Bane in Melee")).is_equal("bane")
 	assert_str(AiSpell.bridge_flag_for("Shred")).is_equal("shred")
 	assert_str(AiSpell.bridge_flag_for("Unstoppable")).is_equal("unstoppable")
+	# Wave 6 (STANDALONE_SWEEP Indirect Mark): the mark's attackers-side once-record on the
+	# TARGET names "Indirect" — the bridge stamps the plain indirect facet on the volley
+	# profiles of any friendly attacker against the marked enemy (the same facet weapon-level
+	# Indirect rides). Scope-suffixed spell grants ("Indirect when Shooting") map identically.
+	assert_str(AiSpell.bridge_flag_for("Indirect")).is_equal("indirect")
+	assert_str(AiSpell.bridge_flag_for("Indirect when Shooting")).is_equal("indirect")
 
 
 func test_bridge_flag_refuses_rules_with_other_read_paths() -> void:
 	# These family members are NOT profile flags in the attack path (unit-level rules, targeting-
 	# time reads). Bridging them as flags would silently do nothing — the honest answer is "":
 	# they stay visibly unfixed until their own seam lands (follow-up issue).
+	# (Indirect left this list in wave 6: its mark-consumer seam landed — see above.)
 	for name in ["Quick Shot", "Slayer", "Rapid Charge", "Unwieldy", "Piercing Fighter",
-			"Unpredictable Fighter", "Unpredictable Shooter", "Indirect", "Indirect when Shooting", ""]:
+			"Unpredictable Fighter", "Unpredictable Shooter", ""]:
 		assert_str(AiSpell.bridge_flag_for(name)).is_equal("")
 
 
