@@ -297,12 +297,21 @@ pub struct Ctx {
     pub defense_mod: i64,
     /// A live `grants_rule: "Unstoppable"` on this unit's joined chain — the
     /// dynamic half of `_solo_ignores_regen`'s last line (main.gd:6941,
-    /// `AiEv.has_exact_rule`). It reaches the Regeneration bypass and NOTHING
-    /// else, because the table's dice path bridges `profile["unstoppable"]`
-    /// only from the TARGET's attackers-side records (`_solo_bridge_granted_
-    /// flags` :16576-16589 folds relentless/furious/rending from the attacker,
-    /// never unstoppable).
+    /// `AiEv.has_exact_rule`). It reaches the Regeneration bypass and — from
+    /// `EPOCH_34_UNSTOPPABLE_MARK`, via `unstoppable_mark` below — the
+    /// to-hit clamps, because the table's dice path bridges
+    /// `profile["unstoppable"]` from the TARGET's attackers-side records too
+    /// (`_solo_bridge_granted_flags`, NML-987), so the two layers must agree.
     pub unstoppable_grant: bool,
+    /// EPOCH 34 UNSTOPPABLE MARK — the mark's CLAMP half: the SAME live
+    /// `"Unstoppable"` grant `unstoppable_grant` carries, stamped ONLY from
+    /// `EPOCH_34_UNSTOPPABLE_MARK` (`sim::ctx_live`) so every pre-34 corpus
+    /// replays the recorded clamp-blind rolls. Read by the two to-hit clamps
+    /// exactly where the weapon's own `p.unstoppable` is (dice.rs's volley
+    /// fold and `melee_hit_target`), by the two Regeneration log lines, and
+    /// by nothing else. False on every `ctx_of` and on every hand-built test
+    /// context.
+    pub unstoppable_mark: bool,
     /// A live `grants_rule: "Rending"` on this unit's joined chain — the
     /// rending leg of `_solo_bridge_granted_flags` (main.gd:16576-16589),
     /// which folds granted rending into the striker's roll flags. Read by the
@@ -2267,6 +2276,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         melee_hit_bonus,
         melee_hit_bonus_charge,
         unstoppable_grant: false,
+        unstoppable_mark: false,
         rending_grant: false,
         thrust_grant: false,
         relentless_grant: false,

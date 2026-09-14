@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 33;
+pub const CURRENT_RULES_EPOCH: u32 = 34;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -664,6 +664,24 @@ pub const EPOCH_32_STRAFING: u32 = 32;
 /// rules). Every call site reads THIS constant, not the literal `33` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_33_REDEPLOYMENT: u32 = 33;
+
+/// EPOCH 34 UNSTOPPABLE MARK (PR #951, sweep C row `Unstoppable Mark`): "Once
+/// per activation, before attacking, pick one enemy unit within 18" in line of
+/// sight, which friendly units get Unstoppable against once." Unstoppable =
+/// ignore all negative to-hit modifiers AND ignore the target's Regeneration.
+/// The once-grant's REGENERATION half reached the core's regen split since B2b
+/// (`dice.rs`'s `att.unstoppable_grant`), but the two TO-HIT clamps read the
+/// weapon's own `p.unstoppable` only — the "ignores all negative modifiers"
+/// half never fired for a granted mark, while the table's bridge folds the
+/// mark into the profile flag and its clamp works. From 34 `ctx_live` stamps
+/// the grant into `Ctx::unstoppable_mark` and the clamps read it like the
+/// weapon flag (one record, spent once per attack sequence — the Regeneration
+/// half's consumption is shared, never doubled). Below 34 the clamps stay
+/// `p.unstoppable`-only and every recorded corpus replays its own rolls.
+/// `34` is one past every existing stamp (32 = `EPOCH_32_STRAFING`, #947; 33
+/// is reserved in flight by #946). Every call site reads THIS constant, not
+/// the literal `34` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_34_UNSTOPPABLE_MARK: u32 = 34;
 
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
@@ -1199,7 +1217,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 33, "epoch 33's gate (EPOCH_33_REDEPLOYMENT) bumps the live epoch to 33, one past #947's 32 strafing leg (31 reserved in flight, 28 was this leg's first reservation)");
+        assert_eq!(CURRENT_RULES_EPOCH, 34, "epoch 34's gate (EPOCH_34_UNSTOPPABLE_MARK) bumps the live epoch to 34, one past the strafing leg's 32 (32 = EPOCH_32_STRAFING, #947) and #946's re-deployment leg 33");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1209,11 +1227,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":33}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":34}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 33"
+            "a fresh play_game() now stamps the bumped epoch, 34"
         );
     }
 

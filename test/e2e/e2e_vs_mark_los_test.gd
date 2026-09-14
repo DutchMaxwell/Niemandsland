@@ -378,3 +378,53 @@ func test_the_real_furious_mark_lands_on_the_target_and_arms_a_charger() -> void
 	assert_bool(bearer.has_special_rule("Furious")) \
 		.override_failure_message("#845 option (b) — the bearer itself must gain nothing live") \
 		.is_false()
+
+
+# =====================================================================================
+# EPOCH 34 UNSTOPPABLE MARK — the mark's REGENERATION half on the TABLE.
+# =====================================================================================
+# _solo_apply_vs_marks records the base rule "Unstoppable" on the TARGET with
+# beneficiary "attackers"; _solo_bridge_granted_flags folds it into the
+# profile's `unstoppable` flag for the to-hit clamp and tags the fold with
+# `_unstoppable_from_spell`. _solo_ignores_regen reads the SAME tag, so the
+# once-grant cuts through the Regeneration of a Tough-regenerating block
+# exactly where the clamp fires — one record, spent once per attack sequence
+# (_solo_consume_once_mods), never twice.
+func _inject_unstoppable_mark_map() -> void:
+	RulesRegistry.reset_cache()
+	RulesRegistry._cache["gf"] = {"factions": {"testfac": {
+		"Unstoppable Mark": {"primitive": "Utility Buff", "params": {"vs_target": true, "range_in": 18.0}},
+	}}, "common": {}}
+
+
+func test_an_unstoppable_mark_cuts_through_the_targets_regeneration() -> void:
+	_inject_unstoppable_mark_map()
+	var pair := _bearer_and_target()
+	var bearer: GameUnit = pair[0]
+	var target: GameUnit = pair[1]
+	bearer.unit_properties["special_rules"] = ["Unstoppable Mark"]
+	target.unit_properties["special_rules"] = ["Regeneration"]
+	var ally := E2EBoot.make_unit(_main, 1, "Ally", [Vector3(0.0, 0, 0.3)])
+	ally.unit_properties["game_system"] = "gf"
+	ally.unit_properties["faction_folder"] = "testfac"
+	# CONTROL: before the mark lands, the ally has no Unstoppable of its own.
+	assert_bool(_main._solo_ignores_regen(ally, _main._solo_bridge_granted_flags(ally, {}, target))) \
+		.override_failure_message("control: no mark on the target, no Regeneration bypass") \
+		.is_false()
+	_main.opr_army_manager.game_units[target.unit_id] = target   # the NML-949 mirror walks the manager
+	_main.opr_army_manager.current_round = 1
+	_main._solo_apply_vs_marks(bearer, target, 6.0)
+	var profile: Dictionary = _main._solo_bridge_granted_flags(ally, {}, target)
+	assert_bool(bool(profile.get("unstoppable", false))) \
+		.override_failure_message("the marked target's attackers-side record must bridge the " +
+			"unstoppable flag for the clamp (profile: %s)" % str(profile)) \
+		.is_true()
+	assert_bool(_main._solo_ignores_regen(ally, profile)) \
+		.override_failure_message("EPOCH 34 — the mark's Regeneration half must fire where the " +
+			"clamp half fires: the bridged fold's trace answers _solo_ignores_regen (profile: %s)" % str(profile)) \
+		.is_true()
+	# The once-consumption is SHARED: spending the exchange retires BOTH halves.
+	_main._solo_consume_once_mods(ally, target, false)
+	assert_bool(_main._solo_ignores_regen(ally, _main._solo_bridge_granted_flags(ally, {}, target))) \
+		.override_failure_message("the spent mark must not bypass Regeneration a second time") \
+		.is_false()

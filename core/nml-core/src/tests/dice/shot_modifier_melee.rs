@@ -12,10 +12,10 @@ use super::*;
         let us = c2_static("good_fighter");
         let def = defender(4, 5);
         assert_eq!(
-            melee_hit_target(&us.melee[0], &us.ctx, &def, false, 0, 0.0, false), 3,
+            melee_hit_target(&us.melee[0], &us.ctx, &def, false, 0, 0.0, false).0, 3,
             "Good Fighter +1 on a plain melee strike: Quality 4+ -> 3+");
         assert_eq!(
-            melee_hit_target(&us.melee[0], &us.ctx, &def, true, 0, 0.0, false), 3,
+            melee_hit_target(&us.melee[0], &us.ctx, &def, true, 0, 0.0, false).0, 3,
             "melee_only carries no charge gate: the charge strikes at 3+ too");
         let mut tray = Tray::seeded(27);
         let volley = resolve_shooting_with_tray(
@@ -34,10 +34,10 @@ use super::*;
         let us = c2_static("charge_aura");
         let def = defender(4, 5);
         assert_eq!(
-            melee_hit_target(&us.melee[0], &us.ctx, &def, false, 0, 0.0, false), 4,
+            melee_hit_target(&us.melee[0], &us.ctx, &def, false, 0, 0.0, false).0, 4,
             "when: \"charge\" without a charge is no bonus at all");
         assert_eq!(
-            melee_hit_target(&us.melee[0], &us.ctx, &def, true, 0, 0.0, false), 3,
+            melee_hit_target(&us.melee[0], &us.ctx, &def, true, 0, 0.0, false).0, 3,
             "and on the charge it is exactly +1");
     }
 
@@ -49,8 +49,8 @@ use super::*;
     fn a_plain_unit_stays_byte_identical_on_target_and_faces() {
         let us = c2_static("plain");
         let def = defender(4, 5);
-        assert_eq!(melee_hit_target(&us.melee[0], &us.ctx, &def, false, 0, 0.0, false), 4);
-        assert_eq!(melee_hit_target(&us.melee[0], &us.ctx, &def, true, 0, 0.0, false), 4);
+        assert_eq!(melee_hit_target(&us.melee[0], &us.ctx, &def, false, 0, 0.0, false).0, 4);
+        assert_eq!(melee_hit_target(&us.melee[0], &us.ctx, &def, true, 0, 0.0, false).0, 4);
         let p = [us.melee[0].clone()];
         let mut tray = Tray::seeded(27);
         let strikers = [striker(&p, &[0], &[2], &us.ctx)];

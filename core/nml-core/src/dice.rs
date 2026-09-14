@@ -887,7 +887,17 @@ pub fn resolve_volley_leg(
         // unconditional -1 rode this weapon's to-hit sum (the defender-side
         // alias marker, Ctx::evasive_alias).
         evasive_boost_fired |= def.evasive_alias;
-        if p.unstoppable && m < 0 {
+        // EPOCH 34 UNSTOPPABLE MARK — the granted mark's CLAMP half: the
+        // once-grant the mark seam leaves on the bearer (`ctx_live`'s
+        // `unstoppable_mark`) counts like the weapon's own `p.unstoppable`,
+        // the same grant the Regeneration split below already reads. The
+        // rules-must-log line names the grant the one time the clamp actually
+        // bites for it; a weapon's own flag stays silent as before.
+        if (p.unstoppable || att.unstoppable_mark) && m < 0 {
+            if att.unstoppable_mark {
+                out.log.push(format!(
+                    "Unstoppable: {} — negative to-hit modifiers ignored (once)", sh.owner));
+            }
             m = 0;
         }
         target = modified_hit_target(target, m);
@@ -1145,6 +1155,14 @@ pub fn resolve_volley_leg(
         // raw count (`total_caused += w`, main.gd:3318). The legacy leg keeps
         // the pool multiply verbatim and lands through `land_wounds` as before.
         let ignores_regen = p.bypass_regen || p.rending || p.unstoppable || att.rending_grant || att.unstoppable_grant;
+        // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the Regeneration half:
+        // the granted mark names itself the one time its bypass is the reason
+        // this weapon's wounds skip the regen pool. Gated with the clamp half
+        // (the stamp), so every pre-34 corpus replays its silent bypass.
+        if ignores_regen && att.unstoppable_mark && w > 0 {
+            out.log.push(format!(
+                "Unstoppable: {} — ignores {}'s Regeneration (once)", sh.owner, def_owner));
+        }
         if p.deadly > 0 {
             out.mark("deadly");
         }
@@ -1283,9 +1301,9 @@ pub fn retaliate_saves_with_tray(
 fn melee_hit_target(
     p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_hit: i64,
     charge_from_in: f64, screened_melee: bool,
-) -> i64 {
+) -> (i64, bool) {
     if att.fatigued {
-        return UNMODIFIED_SIX;
+        return (UNMODIFIED_SIX, false);
     }
     // Wave 4 follow-up (port-takedown-strike) — the synthetic bonus group
     // strikes at its OWN Quality (main.gd:16772: `"quality": extra_attack_q`),
@@ -1326,10 +1344,15 @@ fn melee_hit_target(
     // read (Ctx::in_cover), inside the same Unstoppable clamp as the C2
     // bonuses above.
     m += grounded_precision_mod(att);
-    if p.unstoppable && m < 0 {
-        m = 0;
+    // EPOCH 34 UNSTOPPABLE MARK — the melee clamp half, the volley fold's
+    // twin: the granted mark (`ctx_live`'s `unstoppable_mark`) counts like
+    // the weapon's own `p.unstoppable`. The bool return carries "the GRANT
+    // did the clamping" to the caller, which owns the rules-must-log line
+    // (this function has no report of its own).
+    if (p.unstoppable || att.unstoppable_mark) && m < 0 {
+        return (modified_hit_target(base, 0), att.unstoppable_mark);
     }
-    modified_hit_target(base, m)
+    (modified_hit_target(base, m), false)
 }
 
 /// Wave 4 (port-quick-readjustment) — Indirect's moved to-hit penalty
@@ -1573,9 +1596,15 @@ pub fn resolve_melee_leg(
             }
             // Wave 4 — the unconditional -1 rode this strike's to-hit sum.
             evasive_boost_fired |= def.evasive_alias;
-            let target = melee_hit_target(
+            let (target, unstop_grant_clamped) = melee_hit_target(
                 p, sh.att, def, charging, uf_hit, charge_from_in, screened_melee,
             );
+            // EPOCH 34 UNSTOPPABLE MARK — the melee clamp half's rules-must-log
+            // line, the volley fold's twin (the weapon's own flag stays silent).
+            if unstop_grant_clamped {
+                out.log.push(format!(
+                    "Unstoppable: {} — negative to-hit modifiers ignored (once)", sh.owner));
+            }
             let faces = tray.roll(n as usize);
             out.rolls.push(Roll {
                 kind: "attack",
@@ -1726,6 +1755,14 @@ pub fn resolve_melee_leg(
             // the raw count. The legacy leg keeps the pool multiply verbatim
             // and lands through `land_wounds` as before.
             let ignores_regen = p.bypass_regen || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant;
+            // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the melee Regeneration
+            // half, the volley fold's twin: the granted mark names itself the
+            // one time its bypass is the reason this weapon's wounds skip the
+            // regen pool. Gated with the clamp half, replay-exact below 34.
+            if ignores_regen && sh.att.unstoppable_mark && w > 0 {
+                out.log.push(format!(
+                    "Unstoppable: {} — ignores {}'s Regeneration (once)", sh.owner, def_owner));
+            }
             if p.deadly > 0 {
                 out.mark("deadly");
             }
