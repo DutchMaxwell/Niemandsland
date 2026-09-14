@@ -140,11 +140,16 @@ pub fn shooting_hit_modifier(
 }
 
 /// `AiCombatMath.shielded_defense` :254-255 / `covered_defense` :261-262 /
-/// `guarded_defense` :276-277 — all three are the same floored -1.
+/// `guarded_defense` :276-277 — all three are the same floored -1. The second
+/// argument is the Shielded GROUP's working bonus, not a bool: the +1 kinds
+/// pass `SHIELDED_DEFENSE_BONUS` and the Defense(X) rating kind
+/// (`acts::EPOCH_54_DEFENSE_RATING`) its own rating — the group's parts fold
+/// as one sum on the table (main.gd:5552-5559). Callers read the number off
+/// `Ctx::shielded_bonus`, never off the bare `shielded` bool. 0 = no fold.
 #[inline]
-pub fn shielded_defense(defense: i64, is_shielded: bool) -> i64 {
-    if is_shielded {
-        (defense - SHIELDED_DEFENSE_BONUS).max(BEST_HIT_TARGET)
+pub fn shielded_defense(defense: i64, bonus: i64) -> i64 {
+    if bonus > 0 {
+        (defense - bonus).max(BEST_HIT_TARGET)
     } else {
         defense
     }
@@ -499,7 +504,7 @@ pub fn profile_ev(
     // --- Versatile Attack (ai_ev.gd:361-368) ---
     let mut versatile_ap = 0;
     if p.versatile_attack && dist_in > LONG_RANGE_IN && (!melee || charging) {
-        let choose_def = shielded_defense(def.defense, def.shielded);
+        let choose_def = shielded_defense(def.defense, def.shielded_bonus());
         // EPOCH_38_WATCHBORN_LATCH — a latched activation pick rides the Ctx
         // (sim::versatile_latch): the EV reuses the FIRST eligible attack's
         // pick instead of re-deciding per imagined attack.
@@ -555,7 +560,7 @@ pub fn profile_ev(
     // --- saves: Shielded, then Cover, then Guarded (ai_ev.gd:403-411) ---
     // Cover and Guarded are SHOOTING-only reads: melee EV always values at
     // dist 0, so the charge halves of both live in the dice path only.
-    let mut defense = shielded_defense(def.defense, def.shielded);
+    let mut defense = shielded_defense(def.defense, def.shielded_bonus());
     if !melee && p.blast <= 1 && !p.indirect && !p.ignores_cover {
         defense = covered_defense(defense, def.in_cover);
     }
@@ -659,7 +664,7 @@ pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
         return 0.0;
     }
     let p_hit = success_chance(IMPACT_HIT_TARGET);
-    let defense = shielded_defense(def.defense, def.shielded);
+    let defense = shielded_defense(def.defense, def.shielded_bonus());
     let mut wounds = dice as f64 * p_hit * (1.0 - block_chance(defense, 0, false))
         + heavy_dice as f64 * p_hit * (1.0 - block_chance(defense, 1, false));
     if def.regeneration {

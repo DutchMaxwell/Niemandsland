@@ -366,7 +366,27 @@ pub const EPOCH_46_DISINTEGRATE_REGEN: u32 = 46;
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_50_SURGE_LOW: u32 = 50;
 
-pub const CURRENT_RULES_EPOCH: u32 = 52;
+/// The Defense(X) rating gate (14.09., STANDALONE_SWEEP_E_2026-09-14 row
+/// `Defense`, TABLE-ONLY): the registry's Shielded-family rating entry — gf
+/// common `Defense | primitive Shielded, defense_bonus_from_rating` (aofs/
+/// aof/aofr/gff too) — drives the table's Shielded coverage read off the
+/// rule's own rating (main.gd:5577-5593, `maxi(rating, 0)`), so the printed
+/// Defense(X) saves X better against non-spell hits on the table. The core's
+/// Shielded-alias walk listed only the five +1 names and no code read
+/// `defense_bonus_from_rating`, so the sim gave a Defense(X) carrier nothing.
+/// From 54 `unit.rs::shielded_alias_of` reads the entry BY NAME (the #489
+/// lesson — never the bare primitive) and stamps the rating kind
+/// (`ShieldedAlias::DefenseRating` plus the number on `Ctx::shielded_rating`),
+/// folding +X into the SAME floored non-spell-only seam the five aliases use
+/// (`combat::shielded_defense` through `Ctx::shielded_bonus`), with the
+/// rules-must-log line naming the rating ("Defense(X): +X Defense vs
+/// non-spell hits"). Below 54 the walk keeps its five-name answer and every
+/// recorded game replays byte-exact. `54` is one past every epoch present at
+/// the rebase (51 casterinterf landed #972; 52 groundedprot, 53 fortifiedaura
+/// in flight; 50 = `EPOCH_50_SURGE_LOW`, #973), and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
+/// reads THIS constant, not the literal `54` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_54_DEFENSE_RATING: u32 = 54;
 
 /// The UTILITY-KIND SPELL gate (14.09., CASTER_SEAM_2026-09-14.md row 5 +
 /// port 3): the cast sub-phase's pick refused every non-damage/debuff kind
@@ -379,6 +399,8 @@ pub const CURRENT_RULES_EPOCH: u32 = 52;
 /// (charging-scoped AP, forced displacement) still skip. Below 51 the kind
 /// filter stands and every recorded corpus replays byte-exact.
 pub const EPOCH_52_UTILITY_SPELLS: u32 = 52;
+
+pub const CURRENT_RULES_EPOCH: u32 = 54;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -1499,7 +1521,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-assert_eq!(CURRENT_RULES_EPOCH, 52, "the live epoch is 52 (EPOCH_52_UTILITY_SPELLS; the newest gate constant bumps it per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 54, "the live epoch is 54 (the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1509,11 +1531,11 @@ assert_eq!(CURRENT_RULES_EPOCH, 52, "the live epoch is 52 (EPOCH_52_UTILITY_SPEL
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":52}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":54}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 52"
+            "a fresh play_game() now stamps the bumped epoch, 54"
         );
     }
 

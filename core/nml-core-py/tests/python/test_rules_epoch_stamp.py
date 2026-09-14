@@ -64,14 +64,16 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 51 (acts::EPOCH_51_CASTER_INTERFERENCE, wave 6
-    # CASTER_SEAM row 2: the OPPOSING casters within 18" LoS spend tokens to
-    # lower the announced cast one step per token, paid before the roll, the
-    # table's deterministic plan_interference calculus; 48 was #966's
-    # Caster-Boost leg, 47 #968's Rending-Aura leg, 46 #967's Disintegrate
-    # leg): explicit, not just dynamic — a fresh game now stamps 49, not 48.
-    # A record already stamped 48 must never be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 51
+    # core rules epoch 54 (acts::EPOCH_54_DEFENSE_RATING, sweep E row
+    # `Defense`: the Shielded walk reads the family's rating kind BY NAME and
+    # folds +X at the non-spell-only seam — main.gd:5577's coverage read;
+    # 50 was #973's Surge Low leg, 48 #966's Caster-Boost leg, 47 #968's
+    # Rending-Aura leg, 46 #967's Disintegrate leg, 44 #958's Surge Mark pick;
+    # 51 was #972's Caster-Interference leg, 52 groundedprot / 53 fortifiedaura
+    # were still in flight at the rebase): explicit, not just dynamic — a
+    # fresh game now stamps 54, not 51. A record already stamped 51 must
+    # never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 54
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)

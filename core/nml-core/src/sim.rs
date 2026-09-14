@@ -491,7 +491,7 @@ pub(crate) fn tray_breath_attack(
         }
         let ut = &statics[next.roster.profile[ti]];
         let def = ctx_of(ut, next, ti);
-        let sdef = shielded_defense(def.defense, def.shielded);
+        let sdef = shielded_defense(def.defense, def.shielded_bonus());
         let alive_t = combined_alive(next, ti, seams);
         let score = (BREATH_BLAST.min(alive_t) as f64) * (1.0 - block_chance(sdef, BREATH_AP, false));
         if score > best {
@@ -4955,7 +4955,7 @@ fn versatile_latch(
     };
     let (hit_mod, ap_mod) = crate::combat::versatile_best_mode(
         hit_target,
-        shielded_defense(def.defense, def.shielded),
+        shielded_defense(def.defense, def.shielded_bonus()),
         ap,
         bane,
     );

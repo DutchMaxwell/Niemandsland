@@ -199,6 +199,24 @@ fn sixes(faces: &[u8]) -> i64 {
     faces.iter().filter(|&&f| f == 6).count() as i64
 }
 
+/// The Shielded-family alias's rules-must-log line, the volley and melee
+/// resolves' shared twin: the +1 kinds name the rule and the floored rung
+/// ("{name}: {owner} — +1 to defense rolls (saves on N+)"), while the rating
+/// kind (`acts::EPOCH_54_DEFENSE_RATING`) names its own number —
+/// "Defense(X): +X Defense vs non-spell hits" — exactly the clause the
+/// table's Shielded part prints (main.gd:5594-5597).
+fn shielded_alias_line(def: &Ctx, def_owner: &str) -> String {
+    if def.shielded_alias == ShieldedAlias::DefenseRating {
+        let x = def.shielded_rating;
+        return format!("Defense({x}): +{x} Defense vs non-spell hits");
+    }
+    format!(
+        "{}: {def_owner} — +1 to defense rolls (saves on {}+)",
+        def.shielded_alias.name(),
+        shielded_defense(def.defense, def.shielded_bonus())
+    )
+}
+
 /// Block B6 — the extra-ATTACK-DIE form of the "unmodified 6 to hit" family
 /// (Bloodborn / Clan Warrior / Primal / Predator / Royal Warrior / Crazed /
 /// Psychotic and their book aliases, `unit.rs::stamp`'s `surge_attack` /
@@ -925,7 +943,7 @@ pub fn resolve_volley_leg(
             } else {
                 versatile_best_mode(
                     target,
-                    shielded_defense(def.defense, def.shielded),
+                    shielded_defense(def.defense, def.shielded_bonus()),
                     p.ap + upr_ap,
                     p.bane,
                 )
@@ -1077,7 +1095,7 @@ pub fn resolve_volley_leg(
         let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
         // Defense, in main.gd's own order: Shielded, then Guarded (over 9"),
         // then Cover — which Blast / Indirect / Ignores Cover skip (:3221).
-        let mut base = shielded_defense(def.defense, def.shielded);
+        let mut base = shielded_defense(def.defense, def.shielded_bonus());
         // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost REPLACES the base
         // rule's over-9" condition ("always ... instead of only when shot or
         // charged from over 9\" away"): while one of its aliases supplied the
@@ -1260,11 +1278,7 @@ pub fn resolve_volley_leg(
         ));
     }
     if shielded_alias_fired {
-        out.log.push(format!(
-            "{}: {def_owner} — +1 to defense rolls (saves on {}+)",
-            def.shielded_alias.name(),
-            shielded_defense(def.defense, true)
-        ));
+        out.log.push(shielded_alias_line(def, def_owner));
     }
     out.caused = regen_proof + regenable + out.deadly_tally;
     out.wounds = regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
@@ -1320,7 +1334,7 @@ pub fn retaliate_saves_with_tray(
     if hits <= 0 {
         return (0, 0);
     }
-    let save_def = shielded_defense(def.defense, def.shielded);
+    let save_def = shielded_defense(def.defense, def.shielded_bonus());
     let mut sub = ShootResult::default();
     let unsaved =
         save_batch(&ShootProfile::default(), def, def_owner, hits, save_def, 0, false, false, 1, false, tray, &mut sub);
@@ -1745,7 +1759,7 @@ pub fn resolve_melee_leg(
             let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
             // Melee reads neither Cover nor Guarded (`profile_ev` keeps both on
             // the shooting side); Shielded is the whole Defense ladder here.
-            let save_def = shielded_defense(def.defense, def.shielded);
+            let save_def = shielded_defense(def.defense, def.shielded_bonus());
             shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
@@ -1900,11 +1914,7 @@ pub fn resolve_melee_leg(
         ));
     }
     if shielded_alias_fired {
-        out.log.push(format!(
-            "{}: {def_owner} — +1 to defense rolls (saves on {}+)",
-            def.shielded_alias.name(),
-            shielded_defense(def.defense, true)
-        ));
+        out.log.push(shielded_alias_line(def, def_owner));
     }
     out.caused += regen_proof + regenable + out.deadly_tally;
     out.wounds += regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
@@ -1973,7 +1983,7 @@ pub fn resolve_impact_pool_with_tray(
     // "Impact is not a weapon": no Deadly, no Bane, no Shred — a bare profile
     // carrying only the pool's AP, exactly as :6325 builds it.
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, false, 1, false, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus()), ap, false, false, 1, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out
@@ -1999,7 +2009,7 @@ pub fn resolve_breath_attack_with_tray(
         return out;
     }
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, false, 1, false, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus()), ap, false, false, 1, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out
@@ -2018,7 +2028,7 @@ pub fn resolve_storm_hits_with_tray(
     let mut out = ShootResult::default();
     if hits <= 0 { return out; }
     let bare = ShootProfile { ap, bane, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, shred_grant, false, 1, false, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus()), ap, shred_grant, false, 1, false, tray, &mut out);
     out.caused = w;
     out.wounds = if bane { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
     out
