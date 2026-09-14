@@ -7137,6 +7137,20 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 	# fallback also answered for "Unstoppable in Melee" / "Unstoppable when Shooting" — which is how
 	# both half-variants cut through Regeneration in BOTH halves no matter what their gate said — and
 	# for "Unstoppable Mark", a mark that is put on the ENEMY and never was the bearer's own rule.
+	# EPOCH 34 UNSTOPPABLE MARK — the mark's REGENERATION half: the bridge
+	# (_solo_bridge_granted_flags) folds the marked target's attackers-side
+	# "Unstoppable" record into the profile's `unstoppable` flag for the
+	# to-hit clamp and tags the fold `_unstoppable_from_spell`. The SAME tag
+	# answers here, so both halves of the once-grant fire together and the
+	# once-consumption stays shared — the record is spent once per attack
+	# sequence (_solo_consume_once_mods), never twice.
+	var from_mark := str(profile.get("_unstoppable_from_spell", ""))
+	if not from_mark.is_empty() and attacker != null:
+		if battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT,
+				"%s: %s — Regeneration is ignored (once)" % [from_mark, attacker.get_name()],
+				_solo_is_ai_unit(attacker))
+		return true
 	return attacker != null and AiEv.has_exact_rule(attacker, "Unstoppable")
 
 

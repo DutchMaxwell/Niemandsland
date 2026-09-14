@@ -26,7 +26,7 @@ use crate::acts::{
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND,
     EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING,
     EPOCH_19_MOVE_GRANTS_FOLD, EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS,
-    EPOCH_32_STRAFING,
+    EPOCH_32_STRAFING, EPOCH_34_UNSTOPPABLE_MARK,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -2460,6 +2460,12 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.defense_mod = -mods::sum_logged(state, i, mods::Role::Defense, melee, un, "defense", |r| r.def_mod + r.defense_mod);
     }
     c.unstoppable_grant = mods::granted(state, i, "Unstoppable");
+    // EPOCH 34 UNSTOPPABLE MARK — the mark's CLAMP half rides the SAME
+    // once-grant ("Unstoppable", the mark's base name, spent with the
+    // exchange like the Regeneration half — one record, never twice), but
+    // gated: below 34 the to-hit clamps stay `p.unstoppable`-only and every
+    // recorded corpus replays its own clamp-blind rolls.
+    c.unstoppable_mark = c.unstoppable_grant && rule_on(rules_epoch, EPOCH_34_UNSTOPPABLE_MARK);
     // DEFECT_LEDGER #33 — a live "Furious" grant (a spell cast, same shape as
     // any other rule grant) reaches this round's melee exactly where the
     // static special-rule scan (`unit::ctx_for`) already sets it, and stays

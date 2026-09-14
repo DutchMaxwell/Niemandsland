@@ -44,7 +44,8 @@ static var spawn_profile_resolver: Callable = Callable()
 ## let the mirror drift to 27 — PR #950 (rule 6 in tools/epoch_gate_check.py)
 ## lifts it back to 32 and makes the gate refuse the next drift unless a diff
 ## carries a `MIRROR HOLD:` reason. SPAWN_PROFILES_EPOCH below stays frozen.
-static var rules_epoch: int = 33
+## Bumped to 34 in the same diff as the core's EPOCH_34_UNSTOPPABLE_MARK (#951).
+static var rules_epoch: int = 34
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the

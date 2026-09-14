@@ -211,10 +211,11 @@ use super::*;
     /// leaves on its bearer ("Unstoppable", the mark's base name) must count
     /// like the weapon's own `p.unstoppable` at the to-hit clamp, so an
     /// Evasive (-1 to hit) target is hit at the unmodified Quality 4+ at
-    /// rules_epoch 34. DIVERGES on main: the clamp reads the weapon flag
-    /// only (`dice.rs:890`/`:1329`), the penalty bites and the volley rolls
-    /// 5+ — while the table's bridged clamp (`main.gd:3254`/:6138/:10192)
-    /// rolls 4+ on the same marked attack.
+    /// rules_epoch 34. DIVERGED on main: the clamp read the weapon flag only
+    /// (`dice.rs:890`), the penalty bit and the volley rolled 5+ — while the
+    /// table's bridged clamp (`main.gd:3254`) rolled 4+ on the same marked
+    /// attack. The old leg is pinned at 33, the epoch immediately below the
+    /// bump.
     #[test]
     fn granted_unstoppable_mark_hits_an_evasive_target_at_the_unmodified_quality() {
         let (st, mut statics) = buff_line();
@@ -223,9 +224,53 @@ use super::*;
         statics[2].ctx.evasive = true;
         let (next, marked) = run_buff_epoch(&st, &statics, &buff_action(Some("b")), 13, 34);
         assert_eq!(marked.rolls[0].target, 4, "the granted mark ignores the Evasive -1");
+        // Rules-must-log: the clamp half names the grant the one time it bites.
+        assert!(
+            marked.log.iter().any(|l| l.contains("Unstoppable") && l.contains("to-hit")),
+            "rules-must-log: {:?}",
+            marked.log
+        );
         // "once": the exchange that used the grant spends it — the same
         // once-record the Regeneration bypass reads (shared consumption).
         assert!(next.buffs.iter().all(|v| v.is_empty()), "the exchange spends the grant");
+        let (_, old) = run_buff_epoch(&st, &statics, &buff_action(Some("b")), 13, 33);
+        assert_eq!(old.rolls[0].target, 5, "below 34 the clamp stays p.unstoppable-only");
+        assert!(old.log.iter().all(|l| !l.contains("Unstoppable")), "no grant, no line");
+    }
+
+    /// EPOCH 34 UNSTOPPABLE MARK — the CLAMP half, MELEE leg: the same
+    /// charge, the same Evasive -1, the unmodified 4+ at 34 and the modified
+    /// 5+ at 33 (the old leg's pin).
+    #[test]
+    fn granted_unstoppable_mark_strikes_an_evasive_target_at_the_unmodified_quality_in_melee() {
+        let (mut st, mut statics) = buff_line();
+        st.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0]];
+        st.radii[2] = vec![IN2M];
+        st.wounds[2] = vec![1];
+        st.alive[2] = 1;
+        statics[2].model_count = 1;
+        statics[2].wounds_max = vec![1];
+        statics[2].ctx.evasive = true;
+        statics[0].utility_buffs =
+            vec![UtilityBuff { vs_target: true, needs_los: true, range_in: 18.0, ..ub("Unstoppable Mark") }];
+        let charge = Action {
+            kind: CHARGE,
+            unit: "a".into(),
+            dest: None,
+            shoot: None,
+            charge: Some("b".into()),
+            patient: false,
+            split: None,
+            traced: None, teleport: None, };
+        let (_, marked) = run_buff_epoch(&st, &statics, &charge, 13, 34);
+        assert_eq!(marked.rolls[0].target, 4, "the granted mark ignores the Evasive -1 in melee");
+        assert!(
+            marked.log.iter().any(|l| l.contains("Unstoppable") && l.contains("to-hit")),
+            "rules-must-log: {:?}",
+            marked.log
+        );
+        let (_, old) = run_buff_epoch(&st, &statics, &charge, 13, 33);
+        assert_eq!(old.rolls[0].target, 5, "below 34 the clamp stays p.unstoppable-only");
     }
 
     /// `run_buff` with the record's OWN `rules_epoch` (the `Seams::default()`
