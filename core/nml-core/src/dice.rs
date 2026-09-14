@@ -893,10 +893,18 @@ pub fn resolve_volley_leg(
         // the same grant the Regeneration split below already reads. The
         // rules-must-log line names the grant the one time the clamp actually
         // bites for it; a weapon's own flag stays silent as before.
-        if (p.unstoppable || att.unstoppable_mark) && m < 0 {
+        if (p.unstoppable || att.unstoppable_mark || att.unstoppable_aura) && m < 0 {
             if att.unstoppable_mark {
                 out.log.push(format!(
                     "Unstoppable: {} — negative to-hit modifiers ignored (once)", sh.owner));
+            }
+            // EPOCH 37 UNSTOPPABLE AURA — rules-must-log, the clamp half: the
+            // aura names itself the one time the clamp bites for it. The
+            // melee fold never reads `unstoppable_aura`, so the line fires on
+            // the shooting side only.
+            if att.unstoppable_aura {
+                out.log.push(format!(
+                    "Unstoppable: {} — negative to-hit modifiers ignored (aura)", sh.owner));
             }
             m = 0;
         }
@@ -1162,6 +1170,15 @@ pub fn resolve_volley_leg(
         if ignores_regen && att.unstoppable_mark && w > 0 {
             out.log.push(format!(
                 "Unstoppable: {} — ignores {}'s Regeneration (once)", sh.owner, def_owner));
+        }
+        // EPOCH 37 UNSTOPPABLE AURA — rules-must-log, the Regeneration half on
+        // the shooting side: the aura names itself the one time its bypass is
+        // the reason this weapon's wounds skip the regen pool. The melee half
+        // never fires from 37 (the melee read answers only non-shooting
+        // scopes), so there is no melee twin.
+        if ignores_regen && att.unstoppable_aura && w > 0 {
+            out.log.push(format!(
+                "Unstoppable: {} — ignores {}'s Regeneration (aura)", sh.owner, def_owner));
         }
         if p.deadly > 0 {
             out.mark("deadly");
@@ -1754,7 +1771,12 @@ pub fn resolve_melee_leg(
             // (`apply_deadly_wounds`, solo_controller.gd:8333). The tally keeps
             // the raw count. The legacy leg keeps the pool multiply verbatim
             // and lands through `land_wounds` as before.
-            let ignores_regen = p.bypass_regen || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant;
+            // EPOCH 37 UNSTOPPABLE AURA — the melee half's final answer, not
+            // the scope-blind union: below 37 `unstoppable_regen_melee` IS
+            // the union (recorded leak replays), from 37 only a grant whose
+            // record is NOT shooting-scoped — the "Unstoppable when Shooting"
+            // aura stops cutting through melee Regeneration.
+            let ignores_regen = p.bypass_regen || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_regen_melee;
             // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the melee Regeneration
             // half, the volley fold's twin: the granted mark names itself the
             // one time its bypass is the reason this weapon's wounds skip the

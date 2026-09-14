@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 35;
+pub const CURRENT_RULES_EPOCH: u32 = 37;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -703,6 +703,24 @@ pub const EPOCH_34_UNSTOPPABLE_MARK: u32 = 34;
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
 /// reads THIS constant, not the literal `35` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_35_UNSTOPPABLE_MELEE: u32 = 35;
+
+/// EPOCH 37 UNSTOPPABLE AURA (14.09., sweep C row `Unstoppable when Shooting
+/// Aura`): the book's "This model and its unit get Unstoppable when shooting."
+/// is a Utility Buff carrying `{grants_rule: "Unstoppable", scope: "shooting"}`,
+/// but the grant overlay read its records scope-blind on both layers — the
+/// aura-granted "Unstoppable" cut through Regeneration in MELEE too, and its
+/// clamp half reached the core only through #951's scope-blind mark stamp,
+/// logging "(once)" for a persistent grant. From 37 `ctx_live` splits the live
+/// "Unstoppable" grant by the record's own scope: `Ctx::unstoppable_aura` (the
+/// shooting-scoped part) arms the SHOOTING to-hit clamp and names the SHOOTING
+/// Regeneration line, `Ctx::unstoppable_regen_melee` answers the melee
+/// Regeneration read only for records that are NOT shooting-scoped, and the
+/// mark's clamp stamp reads the melee half. Below 37 every read stays
+/// scope-blind and every recorded corpus replays its own rolls. `37` is one
+/// past every existing stamp (35 = `EPOCH_35_UNSTOPPABLE_MELEE`, #953; 36 is
+/// reserved in flight by the watchborn leg). Every call site reads THIS constant, not the
+/// literal `37` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_37_UNSTOPPABLE_AURA: u32 = 37;
 
 pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 
@@ -1238,7 +1256,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 35, "epoch 35's gate (EPOCH_35_UNSTOPPABLE_MELEE) bumps the live epoch to 35, one past #951's Unstoppable-Mark leg 34 (32 = EPOCH_32_STRAFING, #947; 33 = #946's re-deployment leg)");
+        assert_eq!(CURRENT_RULES_EPOCH, 37, "epoch 37's gate (EPOCH_37_UNSTOPPABLE_AURA) bumps the live epoch to 37, one past #953's Unstoppable-in-Melee leg 35 (34 = #951's Unstoppable-Mark leg, 32 = EPOCH_32_STRAFING, #947; 33 = #946's re-deployment leg; 36 is reserved in flight by the watchborn leg)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),

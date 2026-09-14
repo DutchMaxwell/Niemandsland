@@ -36,7 +36,8 @@ use super::*;
     /// DIVERGED on main: the grant overlay is scope-blind on both layers, so the
     /// melee strike clamped its negatives and cut through Regeneration while the
     /// shooting clamp logged "(once)" for a persistent aura. The old leg is
-    /// pinned at 34, the epoch immediately below the bump: the recorded
+    /// pinned at 35 (EPOCH_35_UNSTOPPABLE_MELEE, re-pointed when #953 landed
+    /// first at the rebase), the epoch immediately below the bump: the recorded
     /// behavior — the scope-blind union arms both clamps and bypasses melee
     /// Regeneration — replays exactly.
     #[test]
@@ -101,12 +102,12 @@ use super::*;
         // the recorded behavior replays — the scope-blind union arms BOTH
         // clamps and the melee Regeneration bypass leaks. ---
         let (_, old_shot) = run_aura_epoch(
-            &st, &statics, &buff_action(Some("b")), 13, crate::acts::EPOCH_34_UNSTOPPABLE_MARK);
+            &st, &statics, &buff_action(Some("b")), 13, crate::acts::EPOCH_35_UNSTOPPABLE_MELEE);
         assert_eq!(
             old_shot.rolls[0].target, 4,
             "below 37 the scope-blind union arms the shooting clamp (recorded)");
         let (old_next, old_strike) = run_aura_epoch(
-            &mst, &mstatics, &charge, 13, crate::acts::EPOCH_34_UNSTOPPABLE_MARK);
+            &mst, &mstatics, &charge, 13, crate::acts::EPOCH_35_UNSTOPPABLE_MELEE);
         assert_eq!(
             old_strike.rolls[0].target, 4,
             "below 37 the melee clamp leaks (recorded)");
@@ -116,4 +117,37 @@ use super::*;
                 regen_rolls(&old_strike), 0,
                 "below 37 the melee Regeneration bypass leaks (recorded)");
         }
+    }
+
+    /// EPOCH 37 UNSTOPPABLE AURA — the STAMP split, dice-free: `ctx_live` over
+    /// `fold_legs`' hand-pushed record answers per half. A shooting-scoped
+    /// record arms `unstoppable_aura` (the SHOOTING clamp) and leaves the mark
+    /// stamp and the melee Regeneration answer FALSE; the unscoped record (the
+    /// mark's shape) arms the mark stamp and the melee Regeneration answer and
+    /// leaves `unstoppable_aura` FALSE. At 34 the union replays: the mark stamp
+    /// IS the scope-blind grant (which is how the aura leaked into melee), and
+    /// the melee Regeneration answer is the union.
+    #[test]
+    fn the_aura_stamp_splits_the_grant_by_scope() {
+        let (statics, st) = fold_legs("Unstoppable");
+        let mut st_aura = st.clone();
+        st_aura.buffs[0][0].scope = Rc::from("shooting");
+
+        let at_37 = ctx_live(statics[0].ctx.clone(), &statics, &st_aura, 0, false, 37);
+        assert!(at_37.unstoppable_aura, "the aura record arms the SHOOTING clamp");
+        assert!(!at_37.unstoppable_mark, "the aura record does not arm the mark stamp");
+        assert!(!at_37.unstoppable_regen_melee, "the aura record does not answer melee Regeneration");
+        let at_37_melee = ctx_live(statics[0].ctx.clone(), &statics, &st_aura, 0, true, 37);
+        assert!(!at_37_melee.unstoppable_mark, "the aura record does not arm the MELEE clamp");
+
+        let at_34 = ctx_live(statics[0].ctx.clone(), &statics, &st_aura, 0, false, 34);
+        assert!(!at_34.unstoppable_aura, "below 37 the aura stamp does not exist");
+        assert!(at_34.unstoppable_mark, "below 37 the mark stamp is the scope-blind union");
+
+        let at_37_unscoped = ctx_live(statics[0].ctx.clone(), &statics, &st, 0, false, 37);
+        assert!(!at_37_unscoped.unstoppable_aura, "an unscoped record is not the aura");
+        assert!(at_37_unscoped.unstoppable_mark, "an unscoped record arms the mark stamp");
+        assert!(at_37_unscoped.unstoppable_regen_melee, "an unscoped record answers melee Regeneration");
+        let at_34_unscoped = ctx_live(statics[0].ctx.clone(), &statics, &st, 0, false, 34);
+        assert!(at_34_unscoped.unstoppable_regen_melee, "below 37 the melee answer is the union");
     }
