@@ -388,6 +388,7 @@ pub const EPOCH_50_SURGE_LOW: u32 = 50;
 /// reads THIS constant, not the literal `54` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_54_DEFENSE_RATING: u32 = 54;
 
+
 /// The UTILITY-KIND SPELL gate (14.09., CASTER_SEAM_2026-09-14.md row 5 +
 /// port 3): the cast sub-phase's pick refused every non-damage/debuff kind
 /// ("an effect kind the sim has no arithmetic for"), so all 56 castable
@@ -400,7 +401,32 @@ pub const EPOCH_54_DEFENSE_RATING: u32 = 54;
 /// filter stands and every recorded corpus replays byte-exact.
 pub const EPOCH_52_UTILITY_SPELLS: u32 = 52;
 
-pub const CURRENT_RULES_EPOCH: u32 = 54;
+/// The FORTIFIED AURA gate (14.09., sweep F — row `Fortified Aura`): the
+/// aofs/gff aura entries ("Fortified Aura", "Guardian Boost Aura") are
+/// themselves `Fortified`-primitive entries whose `lost_if_bearer_killed`
+/// and `max_picks` were read by nobody — a fallen bearer left the squad at
+/// AP(-1) for ever and the 3-pick cap never bound, on the table AND in the
+/// sim. From 55 the base read (`ctx.fortified`) is demoted while no bearer
+/// lives (the unit itself or an alive attached hero carrying the aura
+/// name — a dead hero's list leaves `ProfileDyn.attached_hero_rules`, so
+/// the statics rebuild sees the loss exactly when the table does), and the
+/// core's own `aura_expand` fold grants the chain capped at `max_picks`,
+/// refusing the pick past it; both trace under `NML_TRACE_RULES=1`
+/// (`Fortified Aura: N picks -> <units>` / `Fortified Aura: bearer killed
+/// -> benefit lost`). The aof spelling (`Aura Channel`, `grants`) carries
+/// no knobs and is untouched. Below 55 nothing demotes and every recorded
+/// game replays byte-exact. `55` is CURRENT+1 at the second rebase (the
+/// first rebase took 53 one past every epoch then present, but the rebase
+/// window then landed 52 = `EPOCH_52_UTILITY_SPELLS`, #975, and 54 =
+/// `EPOCH_54_DEFENSE_RATING`, #976, skipping 53 — the gate refuses any new
+/// constant below the live epoch, so the number moves to 55; 51 =
+/// `EPOCH_51_CASTER_INTERFERENCE`, #972; 50 = `EPOCH_50_SURGE_LOW`, #973),
+/// and the value `CURRENT_RULES_EPOCH` is bumped to in the same change.
+/// Every call site reads THIS constant, not the literal `55` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_55_FORTIFIED_AURA: u32 = 55;
+
+pub const CURRENT_RULES_EPOCH: u32 = 55;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -1521,7 +1547,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 54, "the live epoch is 54 (the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 55, "the live epoch is 55 (EPOCH_55_FORTIFIED_AURA, CURRENT+1 at the rebase — the gate refuses any new constant below the live epoch; the newest gate constant bumps it per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1531,11 +1557,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":54}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":55}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 54"
+            "a fresh play_game() now stamps the bumped epoch, 55"
         );
     }
 

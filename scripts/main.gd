@@ -281,6 +281,10 @@ var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, ou
 # _solo_apply_regeneration — so no await can ever observe it. Never widen a window across an await:
 # every attack in the game shares those functions, and a leaked flag would rewrite an unrelated save.
 var _solo_takedown_solo: Dictionary = {}     # {unit, index, model} or {}
+## Sweep F row `Fortified Aura` (epoch 55) — the loss line's once-guard: the
+## demotion is a STATE, logged on the first save batch it bites, cleared
+## while a bearer is alive again (a revived bearer re-projects the aura).
+var _solo_fortified_aura_loss_logged: Dictionary = {}
 var _solo_deploy_fsm: Dictionary = {}        # click-driven deployment machine (side/main/scout/done — maintainer flow 2026-07-23)
 var _solo_deploy_ui: CanvasLayer = null      # the deployment hand-over panel (label + up to two buttons)
 var _solo_deploy_ui_label: Label = null
@@ -6479,6 +6483,53 @@ func _solo_deadly_wounds(w: int, profile: Dictionary, target: GameUnit) -> int:
 	return w
 
 
+## Sweep F row `Fortified Aura` (epoch 55): the aofs/gff aura entries
+## ("Fortified Aura", "Guardian Boost Aura" — primitive `Fortified` with
+## `aura_expand`, `max_picks`, `lost_if_bearer_killed`) must END the family's
+## AP(-1) when the bearer is killed. The save seam consults this pure helper
+## for both its reads — the exact-name "Fortified" branch and the
+## Fortified-primitive alias walk — `source_rule` naming the rule whose
+## benefit is at stake. Returns "" while the benefit is live (not
+## aura-sourced, no aura entry in this book, or a living bearer), else the
+## DEAD aura entry's name so the seam's rules-must-log line can say so.
+## Aura-sourced = the import expansion's own provenance
+## (`unit_properties["aura_granted"]`, the Reanimation-wave stamp): a rule
+## the unit owns itself is never demoted. The bearer is any ALIVE chain
+## member (the defender itself, or an attached hero) carrying the aura name.
+static func fortified_aura_dead_bearer(defender: GameUnit, source_rule: String) -> String:
+	var aura_name := source_rule + " Aura"
+	var entry := RulesRegistry.lookup(RulesRegistry.system_of_unit(defender),
+		RulesRegistry.faction_of_unit(defender), aura_name)
+	if str(entry.get("primitive", "")) != "Fortified":
+		return ""
+	var params: Dictionary = entry.get("params", {}) as Dictionary
+	if not (bool(params.get("aura_expand", false)) and bool(params.get("lost_if_bearer_killed", false))):
+		return ""
+	if not (defender.unit_properties.get("aura_granted", []) as Array).has(source_rule):
+		return ""
+	if AiEv.has_exact_rule(defender, aura_name):
+		return ""
+	if defender.has_method("get_attached_heroes"):
+		for h in defender.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0 and AiEv.has_exact_rule(hero, aura_name):
+				return ""
+	return aura_name
+
+
+## The loss line's once-guard (rules-must-log): the demotion is a STATE —
+## logged on the first save batch it bites, never per batch. The seam clears
+## the guard while a bearer is alive again.
+func _solo_fortified_aura_loss_log(defender: GameUnit, aura_name: String) -> void:
+	var key := defender.get_instance_id()
+	if bool(_solo_fortified_aura_loss_logged.get(key, false)):
+		return
+	_solo_fortified_aura_loss_logged[key] = true
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s: bearer killed -> benefit lost" % aura_name, true)
+
+
 ## Roll the defender's saves for one weapon profile's `hits` and return the wounds caused, applying the two
 ## "unmodified 6" weapon rules that act on the SAVE step: Rending (GF/AoF v3.5.1 p.14 — the unmodified
 ## 6-to-hit among `to_hit_faces` save at AP(+4), resolved as a separate harder batch) and the striker's
@@ -6571,14 +6622,22 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	# its own marker one. The base rule needs its EXACT name; the alias loop below keeps naming the
 	# family members it means.
 	if AiEv.has_exact_rule(defender, "Fortified") and _solo_rule_on_all_models(defender, "Fortified"):
-		var ap_before := ap
-		ap = AiCombatMath.fortified_ap(ap, true)
-		# Maintainer live-test finding: the silent reduction read as "rule not working" — say it
-		# whenever it actually changes the save target.
-		if ap < ap_before and battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Fortified: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+" % [
-				defender.get_name(), ap, ap_before, base_defense + ap], true)
-			_solo_rule_float(defender, "Fortified AP(%d)" % ap, Color(0.55, 0.85, 1.0))
+		# Sweep F row `Fortified Aura` (epoch 55): the aofs/gff aura entry's
+		# `lost_if_bearer_killed` is READ — a fallen bearer stands the
+		# granted AP(-1) down (rules-must-log), a living one keeps it.
+		var dead_aura := fortified_aura_dead_bearer(defender, "Fortified")
+		if dead_aura.is_empty():
+			_solo_fortified_aura_loss_logged.erase(defender.get_instance_id())
+			var ap_before := ap
+			ap = AiCombatMath.fortified_ap(ap, true)
+			# Maintainer live-test finding: the silent reduction read as "rule not working" — say it
+			# whenever it actually changes the save target.
+			if ap < ap_before and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Fortified: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+" % [
+					defender.get_name(), ap, ap_before, base_defense + ap], true)
+				_solo_rule_float(defender, "Fortified AP(%d)" % ap, Color(0.55, 0.85, 1.0))
+		else:
+			_solo_fortified_aura_loss_log(defender, dead_aura)
 	else:
 		# Coverage wave: Fortified-family DATA aliases (Guardian, Primeborn — the over-9"-gated
 		# form: "shot or charged from over 9\" away → hits count as AP(-1), min AP(0)").
@@ -6591,6 +6650,16 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			if gate_in > 0.0 and not over9:
 				continue
 			if not _solo_rule_on_all_models(defender, n):
+				continue
+			# Sweep F row `Fortified Aura` (epoch 55): the walk's aofs/gff
+			# members ("Guardian Boost" granted from "Guardian Boost Aura")
+			# die with their bearer — the next independent entry may still
+			# apply, so `continue`, not `break`.
+			var dead_aura := fortified_aura_dead_bearer(defender, n)
+			if dead_aura.is_empty():
+				_solo_fortified_aura_loss_logged.erase(defender.get_instance_id())
+			else:
+				_solo_fortified_aura_loss_log(defender, dead_aura)
 				continue
 			var apb := ap
 			ap = AiCombatMath.fortified_ap(ap, true)

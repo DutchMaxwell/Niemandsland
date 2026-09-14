@@ -130,15 +130,14 @@ const EPOCH_50_SURGE_LOW := 50
 ## lower the announced cast one step per token, paid before the roll; the
 ## boost pool's opposing-side mirror), then to 52 with the core's
 ## EPOCH_52_UTILITY_SPELLS (CASTER_SEAM row 5 + port 3 — the cast sub-phase
-## maps the expressible utility-kind spell archetypes).
-## printed 5-6 window is no longer dead data on the table's stamp loop).
-## Bumped to 49 in the same diff as the core's EPOCH_51_CASTER_INTERFERENCE
-## (wave 6 2026-09-14, CASTER_SEAM row 2 — the OPPOSING casters within 18" LoS
-## spend tokens to lower the announced cast one step per token, paid before
-## the roll; the boost pool's opposing-side mirror). Bumped to 54 in the same
-## diff as the core's EPOCH_54_DEFENSE_RATING (sweep E 2026-09-14, row
-## `Defense` — the Shielded walk takes the bonus from the rule's rating).
-static var rules_epoch: int = 54
+## maps the expressible utility-kind spell archetypes), then to 54 with the
+## core's EPOCH_54_DEFENSE_RATING (#976 — the Shielded walk's Defense(X)
+## rating), then to 55 with the core's EPOCH_55_FORTIFIED_AURA (sweep F
+## 2026-09-14, row `Fortified Aura` — the aofs/gff aura entries'
+## lost_if_bearer_killed/max_picks are read on both layers; renumbered
+## 53 -> 55 at the second rebase, the gate refuses any new constant below
+## the live epoch).
+static var rules_epoch: int = 55
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
