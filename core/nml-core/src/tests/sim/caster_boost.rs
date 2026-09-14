@@ -54,6 +54,19 @@ use super::*;
         // mid-walk (a dead nearest enemy would flip the later faces onto
         // the next unit and scramble the wound arithmetic).
         st.wounds = vec![vec![1], vec![1], vec![9], vec![9]];
+        // The per-unit statics are read THROUGH the roster profile (the
+        // core's own lookup, `statics[roster.profile[u]]`): every unit must
+        // point at its own slot, or the Defense-4 enemies read the caster's
+        // default ctx (defense 0) and the spell's EV halves to 1/6 — the
+        // boost's marginal calculus then buys one token, not two.
+        let mut list = st.profiles.list.clone();
+        list.extend_from_slice(&[list[0].clone(), list[0].clone(), list[0].clone()]);
+        st.profiles = Rc::new(crate::state::Profiles { list, index: Default::default() });
+        st.roster = Rc::new(crate::state::Roster {
+            keys: st.roster.keys.clone(),
+            index: st.roster.index.clone(),
+            profile: vec![0, 1, 2, 3],
+        });
         let caster = UnitStatic {
             is_caster: true,
             spells: vec![spell()],
@@ -74,12 +87,15 @@ use super::*;
         st.attached_to = Rc::new(vec![None, None, None, None]);
         st.wounds = vec![vec![1], vec![1], vec![9], vec![9]];
         let mut list = st.profiles.list.clone();
-        list.push(list[0].clone());
+        // Four profile slots for the four units (see `lone_caster`): the
+        // enemies' Defense-4 ctx only reaches the EV walk through the
+        // roster profile.
+        list.extend_from_slice(&[list[0].clone(), list[0].clone(), list[0].clone()]);
         st.profiles = Rc::new(crate::state::Profiles { list, index: Default::default() });
         st.roster = Rc::new(crate::state::Roster {
             keys: st.roster.keys.clone(),
             index: st.roster.index.clone(),
-            profile: vec![0, 1, 0, 0],
+            profile: vec![0, 1, 2, 3],
         });
         let caster = UnitStatic {
             is_caster: true,
