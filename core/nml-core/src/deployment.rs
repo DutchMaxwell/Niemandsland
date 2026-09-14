@@ -1279,7 +1279,7 @@ fn deploy_place_next(
             } else {
                 "vanguard forward placement".into()
             },
-            data: DeployEventData { x_m: o.spot.0, z_m: o.spot.1 },
+            data: DeployEventData { x_m: o.spot.0, z_m: o.spot.1, gain_in: 0.0 },
         });
     }
 }
@@ -1474,7 +1474,7 @@ pub fn redeployment_pass(
             (s.re_deploy && s.model_count > 0 && !s.ambush && placed).then_some(i)
         }).collect();
         if carriers.is_empty() { continue; }
-        let max_units = specs[side][carriers[0]].re_deploy_max_units.unwrap_or(2); // (:9778)
+        let max_units = specs[side][carriers[0]].re_deploy_max_units.unwrap_or(2) as usize; // (:9778)
         let mut moved = 0usize;
         for &ci in &carriers {
             if moved >= max_units { break; } // (:9780-9782)
