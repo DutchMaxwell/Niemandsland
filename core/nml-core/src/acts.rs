@@ -1024,7 +1024,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 15, "epoch 15's gate (EPOCH_15_MARK_BENEFICIARY) bumps the live epoch to 15, one past EPOCH_14_DEADLY_LANDING");
+        assert_eq!(CURRENT_RULES_EPOCH, 16, "epoch 16's gate (EPOCH_16_FREE_PLACEMENT) bumps the live epoch to 16, one past EPOCH_15_MARK_BENEFICIARY");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1034,11 +1034,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":15}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":16}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 15"
+            "a fresh play_game() now stamps the bumped epoch, 16"
 
         );
     }
