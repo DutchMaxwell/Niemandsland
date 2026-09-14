@@ -960,6 +960,12 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // 0, the same Gen-0/Gen-1 rule set the in-game AI search has always
         // read — `act_recorder.gd` would need to stamp it for this to move.
         rules_epoch: dint(d, "rules_epoch", dflt.rules_epoch as i64) as u32,
+        // The replay-aware half of `EPOCH_19_MOVE_GRANTS_FOLD` (`Knobs::
+        // bands_prefolded`). No recorder writes a `books` key into the
+        // header dict yet, so an absent one answers `Knobs::default()` = OFF,
+        // matching every seam above; `header_of` stamps it for a header that
+        // carries `books`.
+        bands_prefolded: dflag(d, "bands_prefolded"),
     }
 }
 
