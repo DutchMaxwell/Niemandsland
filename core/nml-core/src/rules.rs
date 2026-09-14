@@ -165,12 +165,26 @@ pub fn spawn_rule_target(rule: &str) -> Option<(String, i64)> {
 /// loader's template check: the FIRST parametrised `Spawn(<name> [<n>])`
 /// string in the list — the same first-match order the beat's own read uses,
 /// so the two can never disagree about which string names the template.
+/// SPLIT step 1: the `Split(<name> [<n>])` family rides the SAME template
+/// seam — a standing Split carrier must find its `spawn:` template like a
+/// Spawn carrier does (io.rs `spawn_templates_of`). SPAWN FIRST: the
+/// historical first-match order is preserved verbatim for any record that
+/// carries a Spawn string, so every existing record resolves the template it
+/// always did; a Split string answers only when no Spawn string does.
 pub fn spawn_target_rule(rules: &[String]) -> Option<(String, String, i64)> {
     rules.iter().find_map(|r| {
         if !rule_name_matches(r, "Spawn") {
             return None;
         }
         spawn_rule_target(r).map(|(name, count)| (r.trim().to_string(), name, count))
+    })
+    .or_else(|| {
+        rules.iter().find_map(|r| {
+            if !rule_name_matches(r, "Split") {
+                return None;
+            }
+            spawn_rule_target(r).map(|(name, count)| (r.trim().to_string(), name, count))
+        })
     })
 }
 

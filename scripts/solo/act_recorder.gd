@@ -375,9 +375,13 @@ static func _spawn_profiles(state: Dictionary) -> Dictionary:
 	return out
 
 
-## The distinct `Spawn(<name> [<n>])` rule strings any alive model of the carrier or
-## its attached heroes carries (a reserve carrier is skipped — the beat offers to
-## STANDING units only, main.gd's SoloController.unit_in_reserve gate).
+## The distinct `Spawn(<name> [<n>])` / `Split(<name> [<n>])` rule strings any
+## alive model of the carrier or its attached heroes carries (a reserve carrier
+## is skipped — the beat offers to STANDING units only, main.gd's
+## SoloController.unit_in_reserve gate). SPLIT step 1: the Split family rides
+## the SAME template seam — the named copy's profile must reach the header
+## under `spawn:<carrier>:<Split string>`, or the core can never know X and a
+## silent name-match fallback is the #823 fidelity break.
 static func _spawn_rule_strings(carrier: GameUnit) -> Array:
 	var seen := {}
 	for value: GameUnit in [carrier] + (carrier.unit_properties.get("attached_heroes", []) as Array):
@@ -385,7 +389,8 @@ static func _spawn_rule_strings(carrier: GameUnit) -> Array:
 			continue
 		for model in value.get_alive_models():
 			for raw in ((model as ModelInstance).properties.get("special_rules", []) as Array):
-				if RulesRegistry.base_rule_name(str(raw)) == "Spawn":
+				var base := RulesRegistry.base_rule_name(str(raw))
+				if base == "Spawn" or base == "Split":
 					seen[str(raw)] = true
 	return seen.keys()
 
