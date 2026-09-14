@@ -30,12 +30,12 @@ use crate::acts::{
     EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST, EPOCH_35_UNSTOPPABLE_MELEE,
     EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL, EPOCH_43_BATTLEBORN_ROLL,
     EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
-    EPOCH_50_SURGE_LOW,
+    EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
-    RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
-    SHROUD_RANGE_PENALTY_IN,
+    RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHIELDED_DEFENSE_BONUS,
+    SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN,
 };
 use crate::rules::{
     base_rule_name, has_special_rule, rule_rating, spawn_target_rule, unit_rating, Registries,
@@ -66,6 +66,14 @@ pub enum ShieldedAlias {
     /// live state — the static stamp leaves `shielded` off and
     /// `sim::ctx_live` folds it beside the granted names.
     GroundedReinforcement,
+    /// Sweep E row `Defense` (`acts::EPOCH_54_DEFENSE_RATING`) — the family's
+    /// RATING kind: the gf-common entry `Defense | primitive Shielded,
+    /// defense_bonus_from_rating` takes the bonus off the rule's own rating
+    /// (main.gd:5577-5593's `maxi(rating, 0)`), so the printed Defense(X)
+    /// folds +X at the same non-spell-only seam the +1 kinds ride. The number
+    /// itself stamps beside the alias on `Ctx::shielded_rating`; this variant
+    /// only answers WHICH kind, never the magnitude.
+    DefenseRating,
 }
 
 impl ShieldedAlias {
@@ -78,6 +86,7 @@ impl ShieldedAlias {
             Self::SafetyGearBoost => "Safety Gear Boost",
             Self::TenaciousBoost => "Tenacious Boost",
             Self::GroundedReinforcement => "Grounded Reinforcement",
+            Self::DefenseRating => "Defense",
         }
     }
 
@@ -227,6 +236,13 @@ pub struct Ctx {
     /// `ctx_for` (static carriers) plus `sim::ctx_live` (granted names and
     /// the terrain clause on the live in_cover answer).
     pub shielded_alias: ShieldedAlias,
+    /// Sweep E row `Defense` (`acts::EPOCH_54_DEFENSE_RATING`) — the rating
+    /// kind's own number, STAMP-ONLY like `morale_rating`: the +1 kinds and
+    /// the literal keep 0 and the fold reads `Ctx::shielded_bonus`'s
+    /// `SHIELDED_DEFENSE_BONUS`. The table's `maxi(rating, 0)`
+    /// (main.gd:5592) rides here; the walk only stamps it for a
+    /// `DefenseRating` carrier whose rating parsed > 0.
+    pub shielded_rating: i64,
     /// Audit 2026-09-13 §2.4 — the Sturdy-kind Boost REPLACES the Guarded
     /// family's over-9" gate. The answer is stamped HERE (true only when a
     /// Sturdy-kind alias supplied the shielded half AND the record is at
@@ -533,6 +549,26 @@ pub struct Ctx {
     /// only while they differ (main.gd:5700-5701). Template default -1.
     pub moved_round: i64,
     pub round: i64,
+}
+
+impl Ctx {
+    /// The Shielded group's working bonus — the defense-parts seam's own
+    /// magnitude (main.gd:5552-5559 folds the group's parts as ONE sum, and
+    /// every +1 kind contributes exactly `SHIELDED_DEFENSE_BONUS`). 0 = no
+    /// shielded half (`shielded` off); the literal and the five aliases pass
+    /// the +1; the rating kind (`EPOCH_54_DEFENSE_RATING`) passes its own
+    /// stamped rating, so the printed Defense(X) lowers the rung by X, never
+    /// by 1. The fold itself is `combat::shielded_defense` — every call site
+    /// reads THIS, never the bare `shielded` bool.
+    pub fn shielded_bonus(&self) -> i64 {
+        if !self.shielded {
+            return 0;
+        }
+        match self.shielded_alias {
+            ShieldedAlias::DefenseRating => self.shielded_rating,
+            _ => SHIELDED_DEFENSE_BONUS,
+        }
+    }
 }
 
 /// One conditional-AP spec — the registry `params` block of a Shatter / Tear /
@@ -1958,6 +1994,18 @@ fn shielded_alias_of(
         ("Safety Gear Boost", ShieldedAlias::SafetyGearBoost),
         ("Tenacious Boost", ShieldedAlias::TenaciousBoost),
     ];
+    // Sweep E row `Defense` (`acts::EPOCH_54_DEFENSE_RATING`) — the RATING
+    // kind: the gf-common entry `Defense | primitive Shielded,
+    // defense_bonus_from_rating` (aofs/aof/aofr/gff too) rides main.gd:5577-
+    // 5593's coverage read, `maxi(rating, 0)` off the rule's own rating, so
+    // the printed Defense(X) folds +X at the same non-spell-only seam as the
+    // five +1 aliases. Read BY NAME, never by iterating the shared primitive
+    // (the #489 lesson); the walk runs LAST so a carrier of any older alias
+    // keeps today's answer at every epoch, and a rating that parses to 0 (the
+    // bare name — the table's `sh_bonus > 0` gate) stamps nothing. The
+    // magnitude itself stamps beside the alias in `ctx_for`
+    // (`Ctx::shielded_rating`).
+    const ALIASES_54: [(&str, ShieldedAlias); 1] = [("Defense", ShieldedAlias::DefenseRating)];
     let map = reg.rules_for(&p.game_system);
     let check = |name: &str, alias: ShieldedAlias| -> Option<(ShieldedAlias, bool)> {
         if !rule_on_all_models(p, name) {
@@ -1969,6 +2017,18 @@ fn shielded_alias_of(
         }
         Some((alias, e.param_f("terrain_within_in", 0.0) > 0.0))
     };
+    let check_rating = |name: &str, alias: ShieldedAlias| -> Option<(ShieldedAlias, bool)> {
+        if !rule_on_all_models(p, name) {
+            return None;
+        }
+        let e = map.lookup(&p.faction_folder, name)?;
+        if e.primitive.as_deref() != Some("Shielded")
+            || !e.param_b_or("defense_bonus_from_rating", false)
+        {
+            return None;
+        }
+        (unit_rating(&p.special_rules, name) > 0).then_some((alias, false))
+    };
     for (name, alias) in ALIASES {
         if let Some(found) = check(name, alias) {
             return Some(found);
@@ -1977,6 +2037,13 @@ fn shielded_alias_of(
     if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
         for (name, alias) in ALIASES_13 {
             if let Some(found) = check(name, alias) {
+                return Some(found);
+            }
+        }
+    }
+    if rule_on(rules_epoch, EPOCH_54_DEFENSE_RATING) {
+        for (name, alias) in ALIASES_54 {
+            if let Some(found) = check_rating(name, alias) {
                 return Some(found);
             }
         }
@@ -2338,6 +2405,16 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     let (mobile_artillery_hit, mobile_artillery_over_in, grounded_precision_hit) =
         shot_modifier_runtime_of(reg, p, rules_epoch);
     let shielded_alias = shielded_alias_of(reg, p, rules_epoch);
+    // EPOCH_54_DEFENSE_RATING — the rating kind's magnitude rides the SAME
+    // stamp (`Ctx::shielded_rating`): the table's `maxi(rating, 0)` off the
+    // rule's own rating (main.gd:5592). The walk already proved the rating
+    // parses > 0, so the re-read answers the same number here.
+    let shielded_rating =
+        if shielded_alias.as_ref().is_some_and(|(a, _)| *a == ShieldedAlias::DefenseRating) {
+            unit_rating(&p.special_rules, "Defense")
+        } else {
+            0
+        };
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -2431,6 +2508,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         shielded: rule_on_all_models(p, "Shielded")
             || shielded_alias.as_ref().is_some_and(|(_, pending)| !*pending),
         shielded_alias: shielded_alias.map_or(ShieldedAlias::None, |(a, _)| a),
+        shielded_rating,
         // §2.4 — see the Ctx field's doc: the suppression rides a STAMPED
         // flag, gated at the FROZEN `EPOCH_13_WHO_WINS`, never inferred at
         // resolve time (an epoch-12 record carries the same alias).
