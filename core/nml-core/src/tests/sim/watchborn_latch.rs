@@ -4,9 +4,10 @@ use super::*;
 
 /// Watchborn-shaped fixture: a single-model shooter "a" (Quality 4) with TWO
 /// versatile rifles over 9" from two single-model targets — "b" (plain
-/// Defense 4) and "c" (Shielded Defense 4, so its own EV-best is AP(+1)).
-/// One act per unit per round makes the round stamp the activation latch, so
-/// the two split volleys are two volleys of ONE activation.
+/// Defense 3, whose EV-best is decisively +1 to hit) and "c" (Shielded
+/// Defense 4, whose own EV-best is AP(+1)). One act per unit per round makes
+/// the round stamp the activation latch, so the two split volleys are two
+/// volleys of ONE activation.
 fn watchborn_volley_line() -> (State, Vec<UnitStatic>) {
     let rifle = |name: &str| ShootProfile {
         name: name.into(),
@@ -52,7 +53,7 @@ fn watchborn_volley_line() -> (State, Vec<UnitStatic>) {
             ..Default::default()
         },
         UnitStatic {
-            ctx: Ctx { defense: 4, tough: 1, models: 1, ..Default::default() },
+            ctx: Ctx { defense: 3, tough: 1, models: 1, ..Default::default() },
             name: "Plain".into(),
             model_count: 1,
             wounds_max: vec![1],
@@ -126,7 +127,14 @@ fn two_volleys_of_one_activation_keep_one_pick_at_38() {
 
     let new_leg = watchborn_run(&st, &statics, &act, crate::acts::EPOCH_38_WATCHBORN_LATCH);
     let picks: Vec<&String> = new_leg.log.iter().filter(|l| l.contains("picks")).collect();
-    assert_eq!(picks.len(), 1, "rules-must-log: ONE pick line per activation, got {picks:?}");
+    assert_eq!(
+        picks.len(),
+        1,
+        "rules-must-log: ONE pick line per activation, got {picks:?}; full log: {:?}; \
+         all rolls: {:?}",
+        new_leg.log,
+        new_leg.rolls.iter().map(|r| (r.kind, r.count, r.target)).collect::<Vec<_>>(),
+    );
     let volley_targets: Vec<i64> = new_leg
         .rolls
         .iter()
@@ -204,7 +212,7 @@ fn a_charge_over_nine_inches_carries_the_pick_into_the_melee_fold() {
             ..Default::default()
         },
         UnitStatic {
-            ctx: Ctx { defense: 4, tough: 1, models: 1, ..Default::default() },
+            ctx: Ctx { defense: 3, tough: 1, models: 1, ..Default::default() },
             name: "Target".into(),
             model_count: 1,
             wounds_max: vec![1],
