@@ -323,7 +323,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 27;
+pub const CURRENT_RULES_EPOCH: u32 = 30;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -646,6 +646,20 @@ pub const EPOCH_25_ETHEREAL_BANDS: u32 = 25;
 /// 25 landed first) per the epoch rules. Every call site reads THIS
 /// constant, not the literal `26` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_26_PLACE_D3: u32 = 26;
+
+/// The SCRAPPER BOOST gate (14.09., DEAD_PARAM_TRIAGE_2026-09-14 dead-knob
+/// row 1): `gf` `Scrapper Boost` carries `reroll_save_from: 5` — the Bane
+/// family's widened save re-roll window (successful saves of 5-6 re-roll
+/// strictly past the entry's `over_in`, exactly "Mischievous Boost"'s
+/// epoch-6 shape) — but no reader anywhere opened it: the stamp reads
+/// `reroll_save_low` only, so the bearer re-rolled fewer saves than the
+/// book gives. From 30 the widening stamps through the same seam under its
+/// own param name; below 30 the bearer keeps the base 6s-only window,
+/// byte-exact. `30` is one past every existing stamp (29 = the strafing
+/// leg's, 28 = the re-deployment leg's, both reserved in flight), and the
+/// value `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call
+/// site reads THIS constant, not the literal `30` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_30_SCRAPPER_BOOST: u32 = 30;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -1147,7 +1161,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 27, "epoch 27's gate (EPOCH_27_TERRAIN_DEBUFF) bumps the live epoch to 27, one past #940's 26 placement leg (25 = #941's ethereal bands)");
+        assert_eq!(CURRENT_RULES_EPOCH, 30, "epoch 30's gate (EPOCH_30_SCRAPPER_BOOST) bumps the live epoch to 30, one past the strafing leg's reserved 29 and the re-deployment leg's reserved 28 (27 = #933's terrain debuff)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1157,11 +1171,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":27}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":30}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 27"
+            "a fresh play_game() now stamps the bumped epoch, 30"
         );
     }
 
