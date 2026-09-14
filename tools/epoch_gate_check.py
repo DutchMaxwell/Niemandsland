@@ -67,7 +67,7 @@ def epochs_pinned(added_lines, max_epoch):
         # either in a test context or mentions epoch/build_for/stamp explicitly.
         if ("epoch" in low or "build_for" in low or "_of(" in low
                 or "deploy_side" in low or "assert" in low or "let " in low):
-            for m in re.finditer(r",\s*(\d+)\s*[,)]", line):
+            for m in re.finditer(r",\s*(\d+)\s*(?=[,)])", line):
                 v = int(m.group(1))
                 if 1 <= v <= max_epoch:
                     out.add(v)
