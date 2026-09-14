@@ -165,12 +165,26 @@ pub fn spawn_rule_target(rule: &str) -> Option<(String, i64)> {
 /// loader's template check: the FIRST parametrised `Spawn(<name> [<n>])`
 /// string in the list — the same first-match order the beat's own read uses,
 /// so the two can never disagree about which string names the template.
+/// SPLIT step 1: the `Split(<name> [<n>])` family rides the SAME template
+/// seam — a standing Split carrier must find its `spawn:` template like a
+/// Spawn carrier does (io.rs `spawn_templates_of`). SPAWN FIRST: the
+/// historical first-match order is preserved verbatim for any record that
+/// carries a Spawn string, so every existing record resolves the template it
+/// always did; a Split string answers only when no Spawn string does.
 pub fn spawn_target_rule(rules: &[String]) -> Option<(String, String, i64)> {
     rules.iter().find_map(|r| {
         if !rule_name_matches(r, "Spawn") {
             return None;
         }
         spawn_rule_target(r).map(|(name, count)| (r.trim().to_string(), name, count))
+    })
+    .or_else(|| {
+        rules.iter().find_map(|r| {
+            if !rule_name_matches(r, "Split") {
+                return None;
+            }
+            spawn_rule_target(r).map(|(name, count)| (r.trim().to_string(), name, count))
+        })
     })
 }
 
@@ -497,6 +511,26 @@ mod tests {
         assert!(has_special_rule(&["Relentless (spell)".into()], "Relentless"));
         assert!(rule_name_matches("Tough(3)", "Tough"));
         assert!(!rule_name_matches("Toughness", "Tough"));
+    }
+
+    /// SPLIT step 1: a parametrised `Split(<name> [<n>])` string names a
+    /// template exactly like a Spawn string does — the recorder stamps it
+    /// under `spawn:<carrier>:<Split string>` and the loader must demand it.
+    /// RED while `spawn_target_rule` matches only "Spawn".
+    #[test]
+    fn split_strings_name_a_template_like_spawn_does() {
+        assert_eq!(
+            spawn_target_rule(&["Split(Goblin Mob [4])".into()]),
+            Some(("Split(Goblin Mob [4])".to_string(), "Goblin Mob".to_string(), 4))
+        );
+        // The historical read keeps its FIRST-match order: a carrier with both
+        // strings names the SPAWN template, exactly as every loaded record
+        // read it — no existing record resolves a different string.
+        assert_eq!(
+            spawn_target_rule(&["Split(Goblin Mob [4])".into(), "Spawn(Rat Swarm [2])".into()])
+                .map(|(raw, _, _)| raw),
+            Some("Spawn(Rat Swarm [2])".to_string())
+        );
     }
 
     #[test]

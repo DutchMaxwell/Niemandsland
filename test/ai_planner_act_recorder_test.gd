@@ -882,6 +882,34 @@ func test_an_epoch7_record_writes_no_spawn_profiles_key() -> void:
 	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
 	assert_bool(header.has("spawn_profiles")).is_false()
 
+
+## ===== SPLIT step 1: the Split family rides the SAME template seam =====
+## The collector must pick a `Split(<name> [<n>])` string exactly like a
+## `Spawn(<name> [<n>])` string, so `_solo_spawn_profile_stamp` resolves the
+## named copy's profile into the header under `spawn:<carrier>:<Split string>`
+## — without it the core can never know X and a silent name-match fallback is
+## the #823 fidelity break. RED while the filter matches only "Spawn".
+
+func test_the_collector_picks_a_split_rule_string() -> void:
+	var u := _armed(2, [Vector3.ZERO], "B")
+	for m in u.models:
+		(m as ModelInstance).properties["special_rules"] = ["Split(Hatchlings [3])"]
+	assert_array(AiActRecorder._spawn_rule_strings(u)).contains_exactly(["Split(Hatchlings [3])"])
+
+
+func test_a_split_carrier_stamps_the_named_profile_into_the_header() -> void:
+	AiActRecorder.spawn_profile_resolver = _resolver(_rat_swarm_profile())
+	var state := _spawn_state()
+	for m in ((state["units"]["B"] as Dictionary)["unit"] as GameUnit).models:
+		(m as ModelInstance).properties["special_rules"] = ["Split(Hatchlings [3])"]
+	_begin_hold(state)
+
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	assert_bool(header.has("spawn_profiles")).is_true()
+	var sp := header["spawn_profiles"] as Dictionary
+	assert_int(sp.size()).is_equal(1)
+	assert_bool(sp.has("spawn:B:Split(Hatchlings [3])")).is_true()
+
 ## ===== F12 (analysis/SILENT_FAILURES_2026-09-13.md): WHICH rulebook answered =====
 ## An unreadable or unparseable rules_mechanics_<system>.json makes every lookup
 ## answer the fallback for the whole run IN SILENCE (rules.rs:335-338 -> :230-232;
