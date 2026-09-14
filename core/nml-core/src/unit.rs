@@ -31,6 +31,7 @@ use crate::acts::{
     EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL, EPOCH_43_BATTLEBORN_ROLL,
     EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
+    EPOCH_56_GROUNDED_PROTECTION,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -262,6 +263,18 @@ pub struct Ctx {
     /// unit repeats `regen_target`, so spell.rs's leg is byte-identical for
     /// non-carriers.
     pub regen_target_spell: i64,
+    /// EPOCH 56 GROUNDED PROTECTION — the Regeneration family's
+    /// terrain-conditional kind (`terrain_within_in > 0`, e.g. Grounded
+    /// Protection, aof volcanic_dwarves): the target the alias fold HELD
+    /// ASIDE instead of folding flat. 0 = none. Resolved per save moment in
+    /// `sim::ctx_live` on the snapshot's own `in_cover` — the Shielded
+    /// family's terrain-pending resolution (the `c.in_cover` read, sim.rs's
+    /// wave-3 block). Below 52 the value folds flat (recorded behaviour) and
+    /// stays 0 here.
+    pub regen_pending: i64,
+    /// The pending kind's SPELL-wound twin (the entry's `ignore_target_spell`,
+    /// defaulting to its `ignore_target` like every alias fold).
+    pub regen_pending_spell: i64,
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
@@ -2213,12 +2226,19 @@ pub fn capture_reads_for_epoch(
 /// Grounded Protection, Regeneration Buff, Self-Repair Boost. Whole-unit
 /// entries (`all_models`) gate on every model like Self-Repair; the three
 /// named forms above stay the one truth (main.gd:6639-6641) and are skipped.
-/// `uses_per_game`, `terrain_within_in`, `upgrades` and `spell_only` are
-/// unread — the table's own alias layer reads none of them either
-/// (main.gd:6643-6650). EPOCH-GATED (`acts::rule_on`): new behaviour, so
-/// epoch 0/2 corpora replay byte-exact and epoch CURRENT_RULES_EPOCH (= 3)
-/// folds the aliases in.
-fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64) {
+/// `uses_per_game` and `upgrades` are unread — the table's own alias layer
+/// reads neither either (main.gd:6643-6650). EPOCH-GATED (`acts::rule_on`):
+/// new behaviour, so epoch 0/2 corpora replay byte-exact and epoch
+/// CURRENT_RULES_EPOCH (= 3) folds the aliases in.
+///
+/// EPOCH 56 GROUNDED PROTECTION: from 52 an entry carrying
+/// `terrain_within_in > 0` (the condition IS the rule — Grounded Protection)
+/// holds its target ASIDE instead of folding flat — `(pending,
+/// pending_spell)` as the tuple's tail, resolved per save moment in
+/// `sim::ctx_live` on the snapshot's own `in_cover` (the Shielded family's
+/// terrain-pending shape, `shielded_alias_of`'s own bool). Below 52 the
+/// recorded flat fold replays and the tail stays zeros.
+fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64, i64, i64) {
     let base = if has_special_rule(&p.special_rules, "Regeneration")
         || has_special_rule(&p.special_rules, "Medical Training")
     {
@@ -2236,7 +2256,7 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
     } else {
         0
     };
-    let mut picked = (base, base);
+    let mut picked = (base, base, 0i64, 0i64);
     if rule_on_all_models(p, "Resistance") && unit_rule_active(reg, p, "Resistance") {
         let map = reg.rules_for(&p.game_system);
         let e = map.lookup(&p.faction_folder, "Resistance");
@@ -2252,6 +2272,8 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
         picked = (
             if most_generous(rs) { rs } else { base },
             if most_generous(rs_spell) { rs_spell } else { base },
+            0,
+            0,
         );
     }
     // The DATA-ALIAS wave itself (main.gd:6642-6652): the carrier walk is
@@ -2300,6 +2322,22 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
             }
             let normal = e.param_i("ignore_target", 0);
             let spell = e.param_i("ignore_target_spell", normal);
+            // EPOCH 56 GROUNDED PROTECTION — `terrain_within_in > 0` makes the
+            // condition the rule's whole point: hold the target ASIDE (the
+            // tuple's pending tail) for `sim::ctx_live`'s per-save-moment
+            // resolution on the snapshot's `in_cover` — the Shielded family's
+            // terrain-pending shape. Below 52 the flat fold replays unchanged.
+            if rule_on(rules_epoch, EPOCH_56_GROUNDED_PROTECTION)
+                && e.param_f("terrain_within_in", 0.0) > 0.0
+            {
+                if normal > 0 && (picked.2 == 0 || normal < picked.2) {
+                    picked.2 = normal;
+                }
+                if spell > 0 && (picked.3 == 0 || spell < picked.3) {
+                    picked.3 = spell;
+                }
+                continue;
+            }
             if normal > 0 && (picked.0 == 0 || normal < picked.0) {
                 picked.0 = normal;
             }
@@ -2651,6 +2689,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
         regen_target_spell: regen_targets.1,
+        regen_pending: regen_targets.2,
+        regen_pending_spell: regen_targets.3,
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         death_hits_per_kill: death_hits_per_kill(reg, p),

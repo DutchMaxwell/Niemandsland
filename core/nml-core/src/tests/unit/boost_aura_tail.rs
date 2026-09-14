@@ -855,10 +855,19 @@ use super::*;
     #[test]
     fn grounded_protection_ignores_on_5_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        // EPOCH 56 GROUNDED PROTECTION: from 55 the terrain-gated target is
+        // HELD ASIDE (the pending tail — the ctx_live resolution answers the
+        // `terrain_within_in` verdict per save moment); the recorded flat
+        // fold replays below 52, pinned at the predecessor constant.
         assert_eq!(
-            regen_pair_at(&header, "grounded", CURRENT_RULES_EPOCH),
+            regen_pair_at(&header, "grounded", crate::acts::EPOCH_56_GROUNDED_PROTECTION),
+            (0, 0),
+            "the within-1\" condition is the rule's whole point — the stamp must not fold it flat"
+        );
+        assert_eq!(
+            regen_pair_at(&header, "grounded", crate::acts::EPOCH_51_CASTER_INTERFERENCE),
             (5, 5),
-            "terrain_within_in is the table's own unread param, mirrored"
+            "below 56 the recorded reading replays"
         );
         assert_eq!(regen_pair_at(&header, "grounded", 0), (0, 0), "epoch 0 replays legacy");
     }

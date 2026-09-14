@@ -29,7 +29,7 @@ use crate::acts::{
     EPOCH_22_SCREENED_MELEE, EPOCH_23_INERT_MARKS, EPOCH_32_STRAFING,
     EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA, EPOCH_38_WATCHBORN_LATCH,
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
-    EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS,
+    EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -2633,6 +2633,26 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                     c.shielded_alias = alias;
                 }
             }
+        }
+    }
+    // EPOCH 56 GROUNDED PROTECTION (sweep F 2026-09-14, row `Grounded
+    // Protection`): the Regeneration family's terrain-conditional kind. The
+    // alias wave holds the entry's target aside (unit.rs `regen_targets`'s
+    // pending tail); THIS is the resolution — per save moment, on the
+    // snapshot's own `in_cover`, the same live read the Shielded family's
+    // terrain-pending kind answers in the block above. In the open there is
+    // no fold and no roll. Rules-must-log: both verdicts trace, the regen
+    // trace names the rule and its verdict. Gated on the FROZEN constant,
+    // never `CURRENT_RULES_EPOCH`.
+    if rule_on(rules_epoch, EPOCH_56_GROUNDED_PROTECTION) && c.regen_pending > 0 {
+        let unit = &statics[state.roster.profile[i]].name;
+        if c.in_cover {
+            c.regeneration = true;
+            c.regen_target = fold_min(c.regen_target, c.regen_pending);
+            c.regen_target_spell = fold_min(c.regen_target_spell, c.regen_pending_spell);
+            trace_rule("grounded-protection", unit, "within 1\" of terrain -> Regeneration (the held-aside fold resolves)");
+        } else {
+            trace_rule("grounded-protection", unit, "in the open -> no Regeneration (the fold holds)");
         }
     }
     // WAVE 3 — the Fortified family's live-grant leg, gated on the FROZEN
