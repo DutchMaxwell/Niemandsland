@@ -321,7 +321,7 @@ use super::*;
         assert_eq!(
             save_targets(&on),
             vec![6, 4],
-            "epoch 55: the unmodified 6s save at AP(+2), the rest of the same volley at plain AP"
+            "at CURRENT_RULES_EPOCH: the unmodified 6s save at AP(+2), the rest of the same volley at plain AP"
         );
         assert_eq!(
             save_targets(&strike(&us, &target(1), false)),
@@ -352,7 +352,7 @@ use super::*;
         assert_eq!(
             save_targets(&volley(&us, &target(3), 12.0)),
             vec![6],
-            "epoch 55: vs Tough(3) the volley saves at AP(+2)"
+            "at CURRENT_RULES_EPOCH: vs Tough(3) the volley saves at AP(+2)"
         );
         assert_eq!(
             save_targets(&volley(&us, &target(2), 12.0)),
@@ -382,7 +382,7 @@ use super::*;
         assert_eq!(
             save_targets(&volley(&us, &target(9), 12.0)),
             vec![8],
-            "epoch 55: vs Tough(9) the volley saves at AP(+4)"
+            "at CURRENT_RULES_EPOCH: vs Tough(9) the volley saves at AP(+4)"
         );
         assert_eq!(
             save_targets(&volley(&us, &target(8), 12.0)),
