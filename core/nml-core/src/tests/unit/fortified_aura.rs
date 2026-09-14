@@ -107,7 +107,8 @@ fn bearer_death_ends_the_fortified_bonus_at_55_and_keeps_it_below() {
     // the shipped one, the fallen bearer keeps the squad at AP(-1).
     let old = squad_ctx(SQUAD_HEAD, "[]", EPOCH_54_DEFENSE_RATING);
     assert!(old.ctx.fortified, "below the bump: the old leg keeps the benefit");
-    let (target_old, fired_old) = fortified_volley(&old, 12.0);
+    // the fired flag is the alias arm's own report, unread here by design
+    let (target_old, _fired_old) = fortified_volley(&old, 12.0);
     assert_eq!(
         target_old, target_alive,
         "below the bump: byte-exact with the bearer-alive reading"
