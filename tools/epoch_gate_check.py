@@ -19,6 +19,10 @@ Rules enforced, all derived from incidents in this repo:
    5. A diff that adds a NEW `EPOCH_<n>_<NAME>` constant WITHOUT bumping `CURRENT_RULES_EPOCH` is
       refused (reported as "rule 4") -- a rules fix landing below the live epoch gates nothing.
    6. `CURRENT_RULES_EPOCH` must move UP (reported as "rule 5") -- a stale rebase re-dates the gate.
+   7. When the bump is to N, the GDScript recorder mirror `scripts/solo/act_recorder.gd` must set
+      `static var rules_epoch: int = N` in the SAME diff (reported as "rule 6"), or the diff carries a
+      literal `MIRROR HOLD:` reason (the #935 pattern). A core-only port that skips the mirror leaves
+      table recordings stamping a stale epoch, which replays with every newer gate OFF (2026-09-14).
 
 
 Usage: epoch_gate_check.py <diff-file>   (reads a unified diff; exit 1 on refusal)
@@ -30,6 +34,8 @@ CONST_RE = re.compile(r"^\+\s*pub const EPOCH_(\d+)_([A-Z0-9_]+)\s*:\s*u32\s*=\s
 CURRENT_RE = re.compile(r"^\+\s*pub const CURRENT_RULES_EPOCH\s*:\s*u32\s*=\s*(\d+)\s*;")
 CURRENT_OLD_RE = re.compile(r"^-\s*pub const CURRENT_RULES_EPOCH\s*:\s*u32\s*=\s*(\d+)\s*;")
 LIVE_GATE_RE = re.compile(r"^\+(?![^\n]*//).*rule_on\s*\([^,]+,\s*CURRENT_RULES_EPOCH\s*\)")
+MIRROR_RE = re.compile(r"^\+\s*static var rules_epoch\s*:\s*int\s*=\s*(\d+)")
+MIRROR_HOLD_RE = re.compile(r"MIRROR HOLD:\s*\S")
 
 
 def epochs_pinned(added_lines, max_epoch):
@@ -100,6 +106,14 @@ def main(path):
         fails.append(
             f"rule 5: CURRENT_RULES_EPOCH {new_epoch} is not above the previous {old_epoch} - "
             "renumber to the live epoch + 1 at rebase"
+        )
+
+    mirrored = [int(m.group(1)) for m in (MIRROR_RE.match(l) for l in added) if m]
+    held = any(MIRROR_HOLD_RE.search(l) for l in added)
+    if new_epoch not in mirrored and not held:
+        fails.append(
+            f"rule 6: core epoch {new_epoch} bumped but the recorder mirror (act_recorder.gd) "
+            f"is not {new_epoch} and no 'MIRROR HOLD:' reason is in the diff"
         )
 
     consts = {int(m.group(1)): m.group(3) for m in (CONST_RE.match(l) for l in added) if m}

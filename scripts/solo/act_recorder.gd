@@ -35,19 +35,16 @@ static var objectives_stamp: Dictionary = {}
 ## falls back to the carrier's profile (that fallback IS the #823 fidelity break).
 static var spawn_profile_resolver: Callable = Callable()
 ## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
-## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 27 by the
-## terrain-debuff fix, EPOCH_27_TERRAIN_DEBUFF; 26 is reserved in flight by
-## the #940 placed3 leg, 25 is #941's ethereal bands fix, 23 was #936's
-## Piercing-marks inert-grant fix, 22 #932's Screened melee leg, 19 #935's
-## move-grant fold).
-## The mirror HOLDS below `EPOCH_19_MOVE_GRANTS_FOLD` is RETIRED (PR #939):
-## the fold is replay-aware now — a header carrying the `books` key (written
-## unconditionally by THIS recorder) sets `bands_prefolded` in the core and
-## the live move-grant delta is skipped, so a recording stamped 19+ can no
-## longer double-count the granted inches. The mirror follows the core again;
-## bump it in the same change the core does. SPAWN_PROFILES_EPOCH below stays
-## frozen.
-static var rules_epoch: int = 27
+## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs). The mirror equals the core
+## again and MUST move in the SAME diff as any core bump: the #935 hold that
+## once justified a lag is RETIRED — #939 made the move-grant fold replay-aware
+## (`bands_prefolded`: a header carrying the `books` key, which THIS recorder
+## writes unconditionally, sets it, so a 19+ stamp can no longer double-count
+## the granted inches). The core-only ports #945 (epoch 30) and #947 (epoch 32)
+## let the mirror drift to 27 — PR #950 (rule 6 in tools/epoch_gate_check.py)
+## lifts it back to 32 and makes the gate refuse the next drift unless a diff
+## carries a `MIRROR HOLD:` reason. SPAWN_PROFILES_EPOCH below stays frozen.
+static var rules_epoch: int = 32
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the
