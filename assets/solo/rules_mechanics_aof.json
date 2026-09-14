@@ -2349,7 +2349,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "beneficiary": "attackers"
     }
    },
    "Precision Spotter": {
@@ -4465,7 +4466,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "beneficiary": "attackers"
     }
    },
    "Quick Shot": {
@@ -4723,7 +4725,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "beneficiary": "attackers"
     }
    },
    "Precision Shooter Buff": {

@@ -16995,9 +16995,13 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 				# Wave 4 recon find: the buff data carries its own scope ("shooting"/"melee" —
 				# Precision Shooter/Fighter Buff) and AiSpell.mods_for honours it, but this record
 				# hard-coded "" — a shooting-only +1 silently applied in melee too.
+				# EPOCH 15 MARK BENEFICIARY: the record passes the entry's own beneficiary through —
+				# the Precision marks' "beneficiary": "attackers" makes the +1 feed whoever ATTACKS
+				# the marked unit (_solo_spell_hit_mod_vs, both legs), never the marked unit's own
+				# rolls. Entries without the key record "" exactly as before.
 				_solo_record_spell_mod(tgt, n, {"modifier": modifier,
 					"grants_rule": str(sp.get("grants_rule", "")), "scope": str(sp.get("scope", "")),
-					"beneficiary": "",
+					"beneficiary": str(sp.get("beneficiary", "")),
 					"duration": ("once" if bool(sp.get("once", true)) else "round")})
 				if battle_log != null:
 					var bits: PackedStringArray = []

@@ -2392,7 +2392,8 @@
      "target": "enemy",
      "once": true,
      "needs_los": true,
-     "max_targets": 4
+     "max_targets": 4,
+     "beneficiary": "attackers"
     }
    },
    "Precision Spotter": {
@@ -2930,7 +2931,8 @@
      "target": "enemy",
      "once": true,
      "needs_los": true,
-     "max_targets": 4
+     "max_targets": 4,
+     "beneficiary": "attackers"
     }
    },
    "Precision Fighter Aura": {
@@ -4680,7 +4682,8 @@
      "target": "enemy",
      "once": true,
      "needs_los": true,
-     "max_targets": 4
+     "max_targets": 4,
+     "beneficiary": "attackers"
     }
    },
    "Precision Shooter Buff": {
@@ -8325,7 +8328,8 @@
      "target": "enemy",
      "once": true,
      "needs_los": true,
-     "max_targets": 4
+     "max_targets": 4,
+     "beneficiary": "attackers"
     }
    },
    "Relentless Aura": {

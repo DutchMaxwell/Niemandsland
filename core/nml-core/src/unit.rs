@@ -25,6 +25,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
+    EPOCH_15_MARK_BENEFICIARY,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -3529,6 +3530,17 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             "" => "friendly",
             s => s,
         };
+        // EPOCH 15 MARK BENEFICIARY (the Precision-marks wrong-side fix): the
+        // two Precision marks' `beneficiary: "attackers"` is NEW registry data
+        // (the aofs ap_mod variant rides the same gate under its own name).
+        // Below the gate the key reads as ABSENT, so the record lands in the
+        // marked unit's own net — the wrong side every corpus recorded at 14 or
+        // below was stamped with. gf dao_union's `Piercing Shooting Mark`
+        // already carried the key since #870 and stays ungated. Computed BEFORE
+        // the push — `name: n` below moves the name into the stamp.
+        let mark_beneficiary_new = n == "Precision Fighting Mark"
+            || n == "Precision Shooting Mark"
+            || (n == "Piercing Shooting Mark" && p.game_system == "aofs");
         out.push(UtilityBuff {
             name: n,
             vs_target,
@@ -3556,7 +3568,14 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             move_mod: if rule_on(rules_epoch, EPOCH_12_MOVE_BUFF) { e.param_i("move_mod", 0) } else { 0 },
             grants_rule: e.param_s("grants_rule").to_string(),
             scope: e.param_s("scope").to_string(),
-            beneficiary: e.param_s("beneficiary").to_string(),
+            // EPOCH 15 MARK BENEFICIARY — see `mark_beneficiary_new` above.
+            beneficiary: if mark_beneficiary_new
+                && !rule_on(rules_epoch, EPOCH_15_MARK_BENEFICIARY)
+            {
+                String::new()
+            } else {
+                e.param_s("beneficiary").to_string()
+            },
             once: e.param_b_or("once", true),
         });
         // The ledger models eight knobs (hit / casting / morale / the three

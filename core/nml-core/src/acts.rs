@@ -313,7 +313,7 @@ pub struct Knobs {
 /// true` and gets every wave-2 family. Every wave from here on must check,
 /// before reusing a just-reserved epoch number for its gates, whether any
 /// corpus was already stamped with it in the reservation window.
-pub const CURRENT_RULES_EPOCH: u32 = 14;
+pub const CURRENT_RULES_EPOCH: u32 = 15;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -510,6 +510,20 @@ pub const EPOCH_13_WHO_WINS: u32 = 13;
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
 /// reads THIS constant, not the literal `14` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_14_DEADLY_LANDING: u32 = 14;
+
+/// The MARK BENEFICIARY gate (14.09., the Precision-marks wrong-side fix):
+/// the `Precision Fighting Mark` / `Precision Shooting Mark` entries (plus the
+/// aofs ap_mod variant, registry-named `Piercing Shooting Mark`, furious_
+/// tribes) gain the family's own `beneficiary: "attackers"` key — the +1 (or
+/// AP(+1)) feeds the rolls made AGAINST the marked unit (`mods::Role::VsTarget`,
+/// table `_solo_spell_hit_mod_vs`) instead of the marked unit's own rolls, the
+/// side MARK_FAMILY_SWEEP_2026-09-14 measured in both layers. Below `15` the
+/// key reads as absent (`unit.rs utility_buffs_of`), so every corpus recorded
+/// at 14 or below replays the wrong side it was recorded with. `15` is one
+/// past every existing stamp, and the value `CURRENT_RULES_EPOCH` is bumped to
+/// in the same change. Every call site reads THIS constant, not the literal
+/// `15` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_15_MARK_BENEFICIARY: u32 = 15;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -995,7 +1009,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 14, "epoch 14's gate (EPOCH_14_DEADLY_LANDING) bumps the live epoch to 14, one past EPOCH_13_WHO_WINS");
+        assert_eq!(CURRENT_RULES_EPOCH, 15, "epoch 15's gate (EPOCH_15_MARK_BENEFICIARY) bumps the live epoch to 15, one past EPOCH_14_DEADLY_LANDING");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1005,11 +1019,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":14}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":15}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 14"
+            "a fresh play_game() now stamps the bumped epoch, 15"
 
         );
     }
