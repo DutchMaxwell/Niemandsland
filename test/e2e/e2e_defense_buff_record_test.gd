@@ -60,9 +60,9 @@ func _inject_registry() -> void:
 	}}, "common": {}}
 
 
-func _reg(pid: int, unit_name: String, pos: Vector3, system: String, faction: String,
+func _reg(pid: int, unit_name: String, positions: Array, system: String, faction: String,
 		rules: Array) -> GameUnit:
-	var u := E2EBoot.make_unit(_main, pid, unit_name, [pos])
+	var u := E2EBoot.make_unit(_main, pid, unit_name, positions)
 	u.unit_properties["game_system"] = system
 	u.unit_properties["faction_folder"] = faction
 	u.unit_properties["special_rules"] = rules
@@ -85,8 +85,12 @@ func _log_text() -> String:
 
 func test_the_defense_buffs_record_carries_def_mod() -> void:
 	_inject_registry()
-	var giver := _reg(1, "Marshal", Vector3.ZERO, "aof", "human_empire", ["Defense Buff"])
-	var friend := _reg(1, "Line Infantry", Vector3(6.0 * INCH, 0, 0), "aof", "human_empire", [])
+	var giver := _reg(1, "Marshal", [Vector3.ZERO], "aof", "human_empire", ["Defense Buff"])
+	# Three models: the pick's value proxy (alive + tough) may legally choose the
+	# buffing hero itself, so the receiver has to strictly out-value it.
+	var friend := _reg(1, "Line Infantry",
+		[Vector3(6.0 * INCH, 0, 0), Vector3(6.0 * INCH, 0, 1.2 * INCH), Vector3(6.0 * INCH, 0, 2.4 * INCH)],
+		"aof", "human_empire", [])
 
 	_main._solo_apply_utility_buffs(giver)
 
@@ -108,8 +112,8 @@ func test_the_defense_buffs_record_carries_def_mod() -> void:
 
 func test_the_defense_debuffs_record_lands_on_the_enemy() -> void:
 	_inject_registry()
-	var giver := _reg(1, "Plague Priest", Vector3.ZERO, "gf", "ratmen_clans", ["Defense Debuff"])
-	var foe := _reg(2, "Stormwind", Vector3(10.0 * INCH, 0, 0), "gf", "ratmen_clans", [])
+	var giver := _reg(1, "Plague Priest", [Vector3.ZERO], "gf", "ratmen_clans", ["Defense Debuff"])
+	var foe := _reg(2, "Stormwind", [Vector3(10.0 * INCH, 0, 0)], "gf", "ratmen_clans", [])
 
 	_main._solo_apply_utility_buffs(giver)
 
@@ -133,8 +137,8 @@ func test_the_defense_debuffs_record_lands_on_the_enemy() -> void:
 
 func test_the_announce_line_names_the_delta() -> void:
 	_inject_registry()
-	var giver := _reg(1, "Marshal", Vector3.ZERO, "aof", "human_empire", ["Defense Buff"])
-	_reg(1, "Line Infantry", Vector3(6.0 * INCH, 0, 0), "aof", "human_empire", [])
+	var giver := _reg(1, "Marshal", [Vector3.ZERO], "aof", "human_empire", ["Defense Buff"])
+	_reg(1, "Line Infantry", [Vector3(6.0 * INCH, 0, 0)], "aof", "human_empire", [])
 
 	_main._solo_apply_utility_buffs(giver)
 
