@@ -1437,6 +1437,8 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
                         ignores_terrain: if g.is_null() { false } else { g["ignores_terrain"].as_bool().unwrap() },
                         vanguard: if g.is_null() { false } else { g["vanguard_pushed"].as_bool().unwrap() },
                         place_in_m: None,
+                        re_deploy: false,
+                        re_deploy_max_units: None,
                         transport_capacity: 0,
                         facing_rad: if g.is_null() { 0.0 } else { g["facing_rad"].as_f64().unwrap() },
                         model_shapes,
@@ -2188,4 +2190,246 @@ fn deployment_alternates_one_unit_per_player() {
         assert_eq!(got.side1, whole1, "{tag}: side 1 unchanged by the interleave");
         assert_eq!(got.side2, whole2, "{tag}: side 2 unchanged by the interleave");
     }
+}
+
+// ==== STANDALONE_SWEEP row "Re-Deployment" — the game-start re-place ====
+//
+// GF v3.5.1 p.15: "After all other units are deployed (excluding units that
+// were set aside), you may remove up to two friendly units from the table and
+// deploy them again." The table executes it at the game-start transition —
+// `redeployment_pass()` (solo_controller.gd:9762-9816), invoked from
+// main.gd:1165-1174 — re-placing up to `max_units` carriers whose recorded
+// deploy zone now offers a spot >= 3" (`REDEPLOY_MIN_GAIN_IN`,
+// solo_controller.gd:9754) nearer the nearest objective. The core only
+// stamped `re_deployment_max_units` (unit.rs:1067) and never re-placed
+// anyone: in every core-simulated game the army stays where it first stood.
+// The twin's `deployment::redeployment_pass` runs at the SAME moment (after
+// both sides are deployed) with the table's own scan law.
+
+/// The NEW leg — at `EPOCH_33_REDEPLOYMENT` a carrier whose recorded deploy
+/// zone offers a spot >= 3" closer to the nearest objective RE-PLACES there:
+/// the placement (spot + fixed-grid models) moves, the occupied truth of a
+/// later carrier's scan sees the NEW position, and the table's own
+/// record_decision line (solo_controller.gd:9809-9812) is written with the
+/// gain in inches.
+#[test]
+fn redeployment_pass_replaces_carrier_toward_objective_at_epoch_28() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let mk = |key: &str| UnitSpec {
+        key: key.into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        re_deploy: key == "redeploy_bearer",
+        re_deploy_max_units: Some(2),
+        model_shapes: vec![deployment::ModelShape {
+            is_oval: false,
+            w_mm: 32,
+            d_mm: 32,
+            tough: 1,
+            n: 1,
+        }],
+        ..Default::default()
+    };
+    let zone_s = deployment::Rect::new(-0.15, -0.6, 0.30, 0.30);
+    let zone_n = deployment::Rect::new(-0.15, 0.3, 0.30, 0.30);
+    // One marker south of side 1's zone: the carrier first stands at the zone's
+    // y = -0.35 row (9.2" short of it), and the zone itself offers the y = -0.584
+    // scan row — the 3"-gain rule is met with room to spare.
+    let objs = vec![(0.0_f64, -0.66_f64)];
+    let mut side1 = deployment::SideDeploy::default();
+    side1.placements.push(deployment::Placement {
+        key: "redeploy_bearer".into(),
+        section: 2,
+        scout: false,
+        spot: (0.0, -0.35),
+        vanguard_pushed: false,
+        models: deployment::place_unit_models((0.0, -0.35), 1),
+    });
+    let mut side2 = deployment::SideDeploy::default();
+    side2.placements.push(deployment::Placement {
+        key: "anchor".into(),
+        section: 2,
+        scout: false,
+        spot: (0.5, 0.5),
+        vanguard_pushed: false,
+        models: deployment::place_unit_models((0.5, 0.5), 1),
+    });
+    let out = deployment::redeployment_pass(
+        &[mk("redeploy_bearer")], &[mk("anchor")], &mut side1, &mut side2,
+        &zone_s, &zone_n, &objs, &board, nml_core::acts::EPOCH_33_REDEPLOYMENT,
+    );
+    assert_eq!(out.re_placed.len(), 1, "the carrier re-places: {:?}", out.re_placed);
+    let r = &out.re_placed[0];
+    assert_eq!(r.side, 1);
+    assert_eq!(r.key, "redeploy_bearer");
+    assert_eq!(r.from, (0.0, -0.35));
+    assert!(r.to.1 <= -0.5, "re-placed toward the marker: {r:?}");
+    assert!(r.gain_in >= deployment::REDEPLOY_MIN_GAIN_IN, "gain in inches: {r:?}");
+    // the placement itself moved: spot AND the fixed-grid models rebuilt.
+    let p = &side1.placements[0];
+    assert_eq!(p.spot, r.to, "the placement carries the new spot");
+    assert_eq!(p.models, deployment::place_unit_models(r.to, 1), "models rebuilt on the place grid");
+    // the table's record_decision line, verbatim shape (solo_controller.gd:9809-9812)
+    assert_eq!(out.events.len(), 1, "one trace line per re-placed unit: {:?}", out.events);
+    let e = &out.events[0];
+    assert_eq!(e.kind, "deploy");
+    assert_eq!(e.unit, "redeploy_bearer");
+    assert_eq!(e.rule, deployment::REDEPLOY_RULE_TEXT);
+    assert_eq!(e.why, "counter-deploy at game start");
+    assert!(
+        e.chosen.starts_with("re-placed ") && e.chosen.ends_with("\" nearer a marker"),
+        "the table's chosen law: {:?}", e.chosen
+    );
+    assert!(e.data.gain_in >= deployment::REDEPLOY_MIN_GAIN_IN, "the gain rides the data dict");
+    assert_eq!((e.data.x_m, e.data.z_m), r.to, "data = the new spot");
+}
+
+
+/// The OLD leg — pinned at `EPOCH_32_STRAFING` (32): below the gate the
+/// re-place CHOICE stays table-side (deployment.rs only stamps the param,
+/// unit.rs:1067). The identical scenario at the LIVE predecessor's epoch
+/// keeps every placement byte-exact — spot, models, and no trace line.
+#[test]
+fn redeployment_pass_at_epoch_32_stays_table_side() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let mk = |key: &str| UnitSpec {
+        key: key.into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        re_deploy: key == "redeploy_bearer",
+        re_deploy_max_units: Some(2),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 1 }],
+        ..Default::default()
+    };
+    let zone_s = deployment::Rect::new(-0.15, -0.6, 0.30, 0.30);
+    let zone_n = deployment::Rect::new(-0.15, 0.3, 0.30, 0.30);
+    let objs = vec![(0.0_f64, -0.66_f64)];
+    let mut side1 = deployment::SideDeploy::default();
+    side1.placements.push(deployment::Placement {
+        key: "redeploy_bearer".into(),
+        section: 2,
+        scout: false,
+        spot: (0.0, -0.35),
+        vanguard_pushed: false,
+        models: deployment::place_unit_models((0.0, -0.35), 1),
+    });
+    let mut side2 = deployment::SideDeploy::default();
+    side2.placements.push(deployment::Placement {
+        key: "anchor".into(),
+        section: 2,
+        scout: false,
+        spot: (0.5, 0.5),
+        vanguard_pushed: false,
+        models: deployment::place_unit_models((0.5, 0.5), 1),
+    });
+    let out = deployment::redeployment_pass(
+        &[mk("redeploy_bearer")], &[mk("anchor")], &mut side1, &mut side2,
+        &zone_s, &zone_n, &objs, &board, 32,
+    );
+    assert!(out.re_placed.is_empty(), "no re-place below the gate: {:?}", out.re_placed);
+    assert!(out.events.is_empty(), "no trace line below the gate: {:?}", out.events);
+    assert_eq!(side1.placements[0].spot, (0.0, -0.35), "the carrier stays where it first stood");
+    assert_eq!(
+        side1.placements[0].models,
+        deployment::place_unit_models((0.0, -0.35), 1),
+        "models untouched"
+    );
+    assert_eq!(side2.placements[0].spot, (0.5, 0.5), "side 2 untouched");
+}
+
+/// `max_units` is read ONCE from the FIRST carrier (solo_controller.gd:9778)
+/// and caps the loop in list order (:9780-9782): two carriers, cap 1 — only
+/// the first re-places, the second stands.
+#[test]
+fn redeployment_pass_caps_at_max_units_read_from_the_first_carrier() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let mk = |key: &str| UnitSpec {
+        key: key.into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        re_deploy: true,
+        re_deploy_max_units: Some(1),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 1 }],
+        ..Default::default()
+    };
+    let specs1 = vec![mk("c1"), mk("c2")];
+    let zone_s = deployment::Rect::new(-0.15, -0.6, 0.30, 0.30);
+    let zone_n = deployment::Rect::new(-0.15, 0.3, 0.30, 0.30);
+    let objs = vec![(0.0_f64, -0.66_f64)];
+    let mut side1 = deployment::SideDeploy::default();
+    for k in ["c1", "c2"] {
+        side1.placements.push(deployment::Placement {
+            key: k.into(),
+            section: 2,
+            scout: false,
+            spot: (0.0, -0.35),
+            vanguard_pushed: false,
+            models: deployment::place_unit_models((0.0, -0.35), 1),
+        });
+    }
+    let mut side2 = deployment::SideDeploy::default();
+    let out = deployment::redeployment_pass(
+        &specs1, &[], &mut side1, &mut side2, &zone_s, &zone_n, &objs, &board,
+        nml_core::acts::EPOCH_33_REDEPLOYMENT,
+    );
+    assert_eq!(out.re_placed.len(), 1, "the cap is 1: {:?}", out.re_placed);
+    assert_eq!(out.re_placed[0].key, "c1", "list order: the first carrier wins");
+    assert_eq!(side1.placements[1].spot, (0.0, -0.35), "c2 stands: {out:?}");
+    assert_eq!(out.events.len(), 1, "one trace line per re-placed unit");
+}
+
+/// The gain rule (:9806): a carrier ALREADY standing on the recorded zone's
+/// objective-near row finds no spot >= 3" nearer and STANDS — no event.
+#[test]
+fn redeployment_pass_skips_when_the_gain_is_below_three_inches() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let carrier = UnitSpec {
+        key: "redeploy_bearer".into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        re_deploy: true,
+        re_deploy_max_units: Some(2),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 1 }],
+        ..Default::default()
+    };
+    let zone_s = deployment::Rect::new(-0.15, -0.6, 0.30, 0.30);
+    let zone_n = deployment::Rect::new(-0.15, 0.3, 0.30, 0.30);
+    let objs = vec![(0.0_f64, -0.66_f64)];
+    let mut side1 = deployment::SideDeploy::default();
+    side1.placements.push(deployment::Placement {
+        key: "redeploy_bearer".into(),
+        section: 2,
+        scout: false,
+        spot: (0.0, -0.584),
+        vanguard_pushed: false,
+        models: deployment::place_unit_models((0.0, -0.584), 1),
+    });
+    let mut side2 = deployment::SideDeploy::default();
+    let out = deployment::redeployment_pass(
+        &[carrier], &[], &mut side1, &mut side2, &zone_s, &zone_n, &objs, &board,
+        nml_core::acts::EPOCH_33_REDEPLOYMENT,
+    );
+    assert!(out.re_placed.is_empty(), "no 3\" gain, no re-place: {:?}", out.re_placed);
+    assert!(out.events.is_empty(), "no trace line without a re-place: {:?}", out.events);
+    assert_eq!(side1.placements[0].spot, (0.0, -0.584), "already optimal: {:?}", side1.placements[0].spot);
 }
