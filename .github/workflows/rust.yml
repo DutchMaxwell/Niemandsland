@@ -104,7 +104,7 @@ jobs:
 
       - name: tools pytest
         # The tools/ suite has no CI home otherwise: the merge-gate checker
-        (#934/#938), the arena re-scorer (#905) and the ctex manifest merger
+        # (#934/#938), the arena re-scorer (#905) and the ctex manifest merger
         # were tested only when a human remembered. pytest/pytest-timeout are
         # installed by the "Install Python build/test deps" step above.
         # Known-broken tests are skipped by marker in tools/conftest.py with
