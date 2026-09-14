@@ -53,6 +53,13 @@ pub struct StepOpts<'a> {
     /// per-model option dicts (movement_planner.gd:1091) DO NOT carry this key,
     /// so it is empty on every edge the flow's Theta* evaluates.
     pub avoid_fine: &'a CellSet,
+    /// STANDALONE_SWEEP_A_2026-09-14, rows `Dangerous Terrain Debuff` /
+    /// `Difficult Terrain Debuff` — the moving unit's granted terrain debuffs
+    /// (the FROZEN `EPOCH_27_TERRAIN_DEBUFF`). The carried rule prices the
+    /// same way the cell does: Dangerous first, then Difficult, exactly the
+    /// cell order below. False on every call recorded before the gate.
+    pub dangerous_debuff: bool,
+    pub difficult_debuff: bool,
 }
 
 /// An empty cell set, for callers that have no `avoid_*` sets.
@@ -64,7 +71,14 @@ pub fn empty_cells() -> &'static CellSet {
 impl<'a> StepOpts<'a> {
     /// Walls-and-zones only — the legacy `opts = {}` shape plus a clearance.
     pub fn new(clearance: f64, zones: &'a [Zone]) -> Self {
-        StepOpts { clearance, zones, avoid_cells: empty_cells(), avoid_fine: empty_cells() }
+        StepOpts {
+            clearance,
+            zones,
+            avoid_cells: empty_cells(),
+            avoid_fine: empty_cells(),
+            dangerous_debuff: false,
+            difficult_debuff: false,
+        }
     }
 }
 
@@ -175,10 +189,10 @@ pub fn terrain_cost_at(p: V2, grid: &Grid, opts: &StepOpts) -> f64 {
     if opts.avoid_fine.contains(&cell_of(p, PLAN_CELL_IN)) {
         return f64::INFINITY;
     }
-    if is_dangerous(t) {
+    if opts.dangerous_debuff || is_dangerous(t) {
         return DANGEROUS_COST_MULT;
     }
-    if is_difficult(t) {
+    if opts.difficult_debuff || is_difficult(t) {
         return DIFFICULT_COST_MULT;
     }
     1.0

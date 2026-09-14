@@ -410,10 +410,34 @@ struct Move<'a> {
 }
 
 impl Move<'_> {
+    /// STANDALONE_SWEEP_A_2026-09-14, row `Difficult Terrain Debuff` — the
+    /// FROZEN `EPOCH_27_TERRAIN_DEBUFF`: the granted "Difficult Terrain" the
+    /// unit CARRIES caps its move the same way the p.11 cell consult does.
+    fn difficult_debuff(&self) -> bool {
+        crate::mods::granted_terrain_debuff(
+            self.state, self.si, "Difficult Terrain", self.rules_epoch,
+        )
+    }
+
+    /// STANDALONE_SWEEP_A_2026-09-14 — the granted terrain debuffs, handed to
+    /// the move call's own knobs so `mv::cost`'s cell pricing consults the
+    /// carried rule the way it consults the cell.
+    fn terrain_debuffs(&self) -> (bool, bool) {
+        (
+            crate::mods::granted_terrain_debuff(
+                self.state, self.si, "Dangerous Terrain", self.rules_epoch,
+            ),
+            crate::mods::granted_terrain_debuff(
+                self.state, self.si, "Difficult Terrain", self.rules_epoch,
+            ),
+        )
+    }
+
 /// `_plan_positions` :6136 — one `plan_unit_step` call, inputs only.
 fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dang: bool) -> MoveCall {
     let (state, t, si, ci) = (self.state, self.t, self.si, self.ci);
     let (movers, own_r_m) = (&self.movers, self.own_r_m);
+    let (dang_debuff, diff_debuff) = self.terrain_debuffs();
     let board = t.board_in();
     let mpos: Vec<V2> = movers.iter()
         .map(|m| planner_point(pos_of(state, *m), t, self.rules_epoch)).collect();
@@ -471,6 +495,8 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
             avoid_fine,
             forbid_cells,
             board_y_in: board[1],
+            dangerous_debuff: dang_debuff,
+            difficult_debuff: diff_debuff,
             difficult_cap_in: if self.ignores_difficult {
                 None
             } else {
@@ -659,7 +685,9 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
     let (mut planned, mut trails, mut call) = self.plan_once(reach, avoid_diff, avoid_dang);
     // :4816-4820 — the ROUTE entered difficult terrain, so p.11 caps the whole
     // move at 6" and it is re-planned THROUGH (dangerous is still avoided).
-    if !self.ignores_difficult && trails_cross_difficult(&trails, radii_m, t) {
+    if !self.ignores_difficult
+        && (trails_cross_difficult(&trails, radii_m, t) || self.difficult_debuff())
+    {
         reach = band_in.min(DIFFICULT_MOVE_CAP_IN);
         let re = self.plan_once(reach, false, avoid_dang);
         planned = re.0;
@@ -678,7 +706,9 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
     {
         let (mut p2, mut t2, mut c2) = self.plan_once(reach, false, false);
         let mut r2 = reach;
-        if !self.ignores_difficult && trails_cross_difficult(&t2, radii_m, t) {
+        if !self.ignores_difficult
+            && (trails_cross_difficult(&t2, radii_m, t) || self.difficult_debuff())
+        {
             r2 = band_in.min(DIFFICULT_MOVE_CAP_IN);
             (p2, t2, c2) = self.plan_once(r2, false, false);
         }

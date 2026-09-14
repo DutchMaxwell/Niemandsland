@@ -156,7 +156,7 @@ fn tie_board() -> (Vec<Wall>, Grid, Vec<Zone>, V2, V2, V2) {
 
 fn tie_opts<'a>(zones: &'a [Zone], fine: &'a CellSet) -> ThetaOpts<'a> {
     ThetaOpts {
-        step: StepOpts { clearance: 0.0, zones, avoid_cells: fine, avoid_fine: fine },
+        step: StepOpts { clearance: 0.0, zones, avoid_cells: fine, avoid_fine: fine, dangerous_debuff: false, difficult_debuff: false },
         reach_closest: false,
     }
 }

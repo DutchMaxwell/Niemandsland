@@ -35,21 +35,19 @@ static var objectives_stamp: Dictionary = {}
 ## falls back to the carrier's profile (that fallback IS the #823 fidelity break).
 static var spawn_profile_resolver: Callable = Callable()
 ## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
-## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 23 by the
-## Piercing-marks inert-grant fix, EPOCH_23_INERT_MARKS; 22 was #932's Screened
-## melee leg, 19 was #935's
-## move-grant fold; 17 was the Surge-when-Shooting scope fix, 16 the
-## free-placement fix, 15 the beneficiary side fix).
-## The mirror HOLDS BELOW EPOCH_19_MOVE_GRANTS_FOLD on purpose (PR #935):
-## the core's epoch-19 fold adds the granted move family LIVE at the spend,
-## while these recordings' bands already carry every grant
-## (battle_sim.gd:1707 -> move_bands_for_props). A recording stamped 19+
-## would replay with the fold ON and double-count every granted inch. Bump
-## this mirror only together with the fold's own retirement of the
-## recorded-band premise. The epoch-23 table fix above is NOT gated on this
-## mirror (it reads the mark's own grants_rule), so holding at 17 costs it
-## nothing; SPAWN_PROFILES_EPOCH below stays frozen.
-static var rules_epoch: int = 17
+## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs, bumped to 27 by the
+## terrain-debuff fix, EPOCH_27_TERRAIN_DEBUFF; 26 is reserved in flight by
+## the #940 placed3 leg, 25 is #941's ethereal bands fix, 23 was #936's
+## Piercing-marks inert-grant fix, 22 #932's Screened melee leg, 19 #935's
+## move-grant fold).
+## The mirror HOLDS below `EPOCH_19_MOVE_GRANTS_FOLD` is RETIRED (PR #939):
+## the fold is replay-aware now — a header carrying the `books` key (written
+## unconditionally by THIS recorder) sets `bands_prefolded` in the core and
+## the live move-grant delta is skipped, so a recording stamped 19+ can no
+## longer double-count the granted inches. The mirror follows the core again;
+## bump it in the same change the core does. SPAWN_PROFILES_EPOCH below stays
+## frozen.
+static var rules_epoch: int = 27
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the
@@ -61,6 +59,14 @@ const EPOCH_16_FREE_PLACEMENT := 16
 ## unscooped walk every corpus was recorded with. The core's own gate reads the
 ## frozen `EPOCH_17_SURGE_SCOPE` (acts.rs); this mirror never re-dates itself.
 const EPOCH_17_SURGE_SCOPE := 17
+## The frozen gate of the unit-level terrain debuffs (epoch 27, the sweep A
+## fix — rows `Dangerous Terrain Debuff` / `Difficult Terrain Debuff`): a rule
+## the unit CARRIES bites the same way the cell it crosses does — the
+## once-per-move Dangerous test (p.12) and the p.11 difficult cap / cost.
+## Below it the debuff is inert, exactly what every recorded game played.
+## The core's own gate reads the frozen `EPOCH_27_TERRAIN_DEBUFF` (acts.rs);
+## this mirror never re-dates itself.
+const EPOCH_27_TERRAIN_DEBUFF := 27
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
 const SPAWN_PROFILES_EPOCH := 8

@@ -87,6 +87,11 @@ pub struct FlowOpts<'a> {
     pub avoid_cells: &'a CellSet,
     /// `opts["board_y_in"]` (#215).
     pub board_y_in: f64,
+    /// STANDALONE_SWEEP_A_2026-09-14 — the moving unit's granted terrain
+    /// debuffs (`EPOCH_27_TERRAIN_DEBUFF`), priced by `mv::cost::terrain_cost_
+    /// at` the way it prices the cell.
+    pub dangerous_debuff: bool,
+    pub difficult_debuff: bool,
     /// `opts["charge_allowance"]` (:1039) — absent means the straight delta length.
     pub charge_allowance: Option<f64>,
     /// `opts["charge_goal"]` (:1096) — BOTH this and `allow_contact` arm the charge branch.
@@ -106,6 +111,8 @@ impl<'a> FlowOpts<'a> {
             zones_rest_only: call.opts.zones_rest_only,
             avoid_cells: &call.opts.avoid_cells,
             board_y_in: call.opts.board_y_in,
+            dangerous_debuff: call.opts.dangerous_debuff,
+            difficult_debuff: call.opts.difficult_debuff,
             charge_allowance: call.opts.charge_allowance,
             charge_goal: call.opts.charge_goal,
             charge_tgt_bases: &call.opts.charge_tgt_bases,
@@ -327,6 +334,8 @@ pub fn plan_sequential_flow(
                 zones: &czones,
                 avoid_cells: opts.avoid_cells,
                 avoid_fine: empty_cells(),
+                dangerous_debuff: opts.dangerous_debuff,
+                difficult_debuff: opts.difficult_debuff,
             };
             let coi = ThetaOpts { step: cstep, reach_closest: true };
             let (croute, pops) = theta_star_traced_bent(
@@ -368,6 +377,8 @@ pub fn plan_sequential_flow(
             zones: &zones,
             avoid_cells: opts.avoid_cells,
             avoid_fine: empty_cells(),
+            dangerous_debuff: opts.dangerous_debuff,
+            difficult_debuff: opts.difficult_debuff,
         };
         let oi = ThetaOpts { step, reach_closest: false };
         let (route, pops) =
@@ -431,6 +442,8 @@ pub fn plan_sequential_flow(
         zones: &base,
         avoid_cells: opts.avoid_cells,
         avoid_fine: empty_cells(),
+        dangerous_debuff: opts.dangerous_debuff,
+        difficult_debuff: opts.difficult_debuff,
     };
     if !allow_contact
         && n >= 2
@@ -554,6 +567,8 @@ pub fn pull_into_placed(
         zones: other_zones,
         avoid_cells,
         avoid_fine: empty_cells(),
+        dangerous_debuff: false,
+        difficult_debuff: false,
     };
     let target = result[near_i];
     let mut cur = pos;

@@ -238,6 +238,14 @@ fn opts_dict(o: &nml_core::mv::CallOpts) -> VarDictionary {
     d.set("avoid_fine", &cell_dict(&o.avoid_fine));
     d.set("forbid_cells", &cell_dict(&o.forbid_cells));
     d.set("board_y_in", o.board_y_in);
+    // STANDALONE_SWEEP_A_2026-09-14 — the moving unit's granted terrain
+    // debuffs; the planner's `_terrain_cost_at` prices them like the cell.
+    if o.dangerous_debuff {
+        d.set("dangerous_debuff", true);
+    }
+    if o.difficult_debuff {
+        d.set("difficult_debuff", true);
+    }
     // The optional keys are set only where the controller sets them
     // (solo_controller.gd:5986-6040) — key PRESENCE is part of the shape.
     if let Some(v) = o.difficult_cap_in {
