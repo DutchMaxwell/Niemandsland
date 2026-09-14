@@ -1571,5 +1571,6 @@ mod second_wind_score;
 mod spell_accumulator;
 mod spell_conduit;
 mod split_fire;
+mod terrain_debuff;
 mod versatile_reach;
 mod weapons;
