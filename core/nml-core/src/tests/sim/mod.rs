@@ -1528,6 +1528,7 @@
 // family PRs in the same wave never append to the same region. A new
 // family adds ONE line to this ALPHABETICAL list plus its own file; the
 // fixtures every family shares stay here, in the module root.
+mod aircraft;
 mod ap_def_record;
 mod ap_def_reads;
 mod breath_attack;
@@ -1535,8 +1536,11 @@ mod breath_score;
 mod buff_consumption_bridge;
 mod caster_boost;
 mod caster_interference;
+mod casting_debuff;
+mod courage_buff;
 mod utility_spells;
 mod counter_first;
+mod crossing_attack;
 mod deadly_landing;
 mod deathstrike;
 mod dest_side_arms;
@@ -1586,6 +1590,7 @@ mod spell_conduit;
 mod split_fire;
 mod strafing;
 mod terrain_debuff;
+mod traversal;
 mod unstoppable_aura;
 mod versatile_reach;
 mod watchborn_latch;

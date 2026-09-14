@@ -803,3 +803,7 @@ pub fn candidates_tuned(
     }
     out
 }
+
+#[cfg(test)]
+#[path = "tests/menu/mod.rs"]
+mod tests;
