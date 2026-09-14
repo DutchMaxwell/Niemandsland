@@ -216,8 +216,9 @@ static func takedown_rule_for_profile(unit: GameUnit, profile_range: int) -> Str
 
 
 ## The Bane family's WIDENED save re-roll window (wave 4: "Bestial Boost" / "Mischievous Boost" —
-## `reroll_save_low` + `over_in` behind `upgrades`): past the entry's over_in the defender re-rolls
-## its successful saves at reroll_save_low and up as well as its 6s. The carrier must ALSO carry the
+## `reroll_save_low` + `over_in` behind `upgrades`; wave 6: "Scrapper Boost" — the same window under
+## its own param spelling `reroll_save_from`): past the entry's over_in the defender re-rolls
+## its successful saves at the widened window and up as well as its 6s. The carrier must ALSO carry the
 ## entry's `upgrades` base rule (the core's stamp_bane_boost carry gate), and it is shooting-only —
 ## `over9` is the caller's past-9" flag (the melee resolve always carries an unknown distance, so
 ## false). Returns the applying entry's {low, over_in, rule}, or {} when the window does not apply.
@@ -228,6 +229,11 @@ static func bane_boost_window(unit: GameUnit, over9: bool) -> Dictionary:
 		var ed := e as Dictionary
 		var p: Dictionary = ed.get("params", {})
 		var low := int(p.get("reroll_save_low", 0))
+		if low <= 1:
+			# "Scrapper Boost" carries the widening under its own param name
+			# (the core's stamp_bane_boost twin reads it behind
+			# EPOCH_30_SCRAPPER_BOOST); 0 = no widened window.
+			low = int(p.get("reroll_save_from", 0))
 		var base := str(p.get("upgrades", ""))
 		if low <= 1 or base.is_empty() or not has_exact_rule(unit, base):
 			continue

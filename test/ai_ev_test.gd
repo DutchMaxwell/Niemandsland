@@ -491,3 +491,25 @@ func test_bane_boost_window_reads_the_beastmen_boost_entry() -> void:
 	# ROT: inside 9" never, and without the base rule never.
 	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial", "Bestial Boost"]), false)).is_empty()
 	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial Boost"]), true)).is_empty()
+
+
+func _scrapper_carrier(rules: Array) -> GameUnit:
+	var u := GameUnit.new()
+	u.unit_id = "bb2"
+	u.unit_properties = {"player_id": 2, "name": "BB2", "quality": 4, "defense": 4,
+		"game_system": "gf", "faction_folder": "jackals", "special_rules": rules}
+	return u
+
+
+func test_bane_boost_window_reads_the_scrapper_boost_entry() -> void:
+	# Scrapper Boost (gf/jackals): reroll_save_from 5 past over_in 9, behind
+	# upgrades "Scrapper" — the widening under its own param spelling (the
+	# core stamps it behind EPOCH_30_SCRAPPER_BOOST; DEAD_PARAM_TRIAGE
+	# 2026-09-14 dead-knob row 1).
+	var win: Dictionary = AiEv.bane_boost_window(_scrapper_carrier(["Scrapper", "Scrapper Boost"]), true)
+	assert_int(int(win.get("low", 0))).is_equal(5)
+	assert_float(float(win.get("over_in", 0.0))).is_equal_approx(9.0, 0.0001)
+	assert_str(str(win.get("rule", ""))).is_equal("Scrapper Boost")
+	# ROT: inside 9" never, and without the base rule never.
+	assert_dict(AiEv.bane_boost_window(_scrapper_carrier(["Scrapper", "Scrapper Boost"]), false)).is_empty()
+	assert_dict(AiEv.bane_boost_window(_scrapper_carrier(["Scrapper Boost"]), true)).is_empty()

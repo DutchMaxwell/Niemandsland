@@ -26,7 +26,7 @@ use crate::acts::{
     rule_on, EPOCH_3_TABLE_RULES, EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_12_MOVE_BUFF, EPOCH_13_WHO_WINS,
     EPOCH_15_MARK_BENEFICIARY, EPOCH_17_SURGE_SCOPE, EPOCH_19_MOVE_GRANTS_FOLD,
-    EPOCH_25_ETHEREAL_BANDS,
+    EPOCH_25_ETHEREAL_BANDS, EPOCH_30_SCRAPPER_BOOST,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -4424,22 +4424,27 @@ pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
 }
 
 /// The Bane family's WIDENED save re-roll window, stamped off ONE named Boost
-/// entry: the entry's own `reroll_save_low` + `over_in`, and only when the
-/// model also carries the entry's `upgrades` base rule. Read BY NAME, never by
-/// iterating the shared primitive (the census's trusted-whole trap, #489) —
-/// the carry gate IS the port: a faction lookup alone would stamp every bane
-/// carrier in the faction, carried Boost or not. Stamped on the SHOOT array
-/// only: the volley consumes the window strictly past the entry's own
-/// `over_in` (dice.rs `save_batch`); the melee resolve never widens — no
-/// pre-charge gap (the shred2 precedent). Wave 3 calls it for "Mischievous
-/// Boost" (gf+aof goblins) behind `EPOCH_6_TABLE_RULES`, wave 4 for "Bestial
-/// Boost" (aof/beastmen) behind `EPOCH_7_TABLE_RULES`; each name states its
-/// own epoch at the call site, so neither can back-date the other.
+/// entry: the entry's own widening param (`widening` — `reroll_save_low` for
+/// "Mischievous Boost"/"Bestial Boost", `reroll_save_from` for "Scrapper
+/// Boost", the same window under its own param spelling) + `over_in`, and
+/// only when the model also carries the entry's `upgrades` base rule. Read
+/// BY NAME, never by iterating the shared primitive (the census's
+/// trusted-whole trap, #489) — the carry gate IS the port: a faction lookup
+/// alone would stamp every bane carrier in the faction, carried Boost or
+/// not. Stamped on the SHOOT array only: the volley consumes the window
+/// strictly past the entry's own `over_in` (dice.rs `save_batch`); the melee
+/// resolve never widens — no pre-charge gap (the shred2 precedent). Wave 3
+/// calls it for "Mischievous Boost" (gf+aof goblins) behind
+/// `EPOCH_6_TABLE_RULES`, wave 4 for "Bestial Boost" (aof/beastmen) behind
+/// `EPOCH_7_TABLE_RULES`, and the Scrapper Boost wave for "Scrapper Boost"
+/// (gf/jackals) behind `EPOCH_30_SCRAPPER_BOOST`; each name states its own
+/// epoch at the call site, so neither can back-date the other.
 fn stamp_bane_boost(
     reg: &mut Registries,
     p: &Profile,
     shoot: &mut [ShootProfile],
     name: &'static str,
+    widening: &'static str,
 ) {
     let map = reg.rules_for(&p.game_system);
     let Some(e) = map
@@ -4449,7 +4454,7 @@ fn stamp_bane_boost(
         return;
     };
     let base = e.param_s("upgrades");
-    let low = e.param_i("reroll_save_low", 0);
+    let low = e.param_i(widening, 0);
     if e.primitive.as_deref() != Some("Bane") || low <= 1 || !has_exact_rule(&p.special_rules, base)
     {
         return;
@@ -5245,7 +5250,7 @@ impl UnitStatic {
         // never widens — no pre-charge gap (the shred2 precedent). Read BY
         // NAME, never by iterating the shared primitive (#489).
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Mischievous Boost");
+            stamp_bane_boost(reg, p, &mut shoot, "Mischievous Boost", "reroll_save_low");
         }
         // Wave 4 (rules-wave4-boostbases2), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Bestial Boost" is the aof/beastmen twin of
@@ -5255,7 +5260,22 @@ impl UnitStatic {
         // instead of a second mechanism. An epoch-6 record reads the base
         // 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Bestial Boost");
+            stamp_bane_boost(reg, p, &mut shoot, "Bestial Boost", "reroll_save_low");
+        }
+        // Wave 6 (rules-wave6-scrapper), gated on the FROZEN
+        // `EPOCH_30_SCRAPPER_BOOST`: "Scrapper Boost" (gf/jackals) is the Bane
+        // family's third widened save re-roll window — the entry's own
+        // `reroll_save_from: 5` + `over_in: 9` behind its own `upgrades`
+        // coupling ("If this model has Scrapper"), the same shape the
+        // Mischievous (epoch 6) and Bestial (epoch 7) Boosts stamp through
+        // `reroll_save_low` (DEAD_PARAM_TRIAGE_2026-09-14 dead-knob row 1:
+        // the param had no reader anywhere, so the bearer re-rolled fewer
+        // saves than the book gives). Stamped on the SHOOT array only: melee
+        // never widens — no pre-charge gap (the shred2 precedent). Read BY
+        // NAME, never by iterating the shared primitive. A record below
+        // epoch 30 reads the base 6s-only window and replays byte-exact.
+        if rule_on(rules_epoch, EPOCH_30_SCRAPPER_BOOST) {
+            stamp_bane_boost(reg, p, &mut shoot, "Scrapper Boost", "reroll_save_from");
         }
         // Shred wave 3 (rules-wave3-shred3): the family's per-face wound
         // amount is now READ off the carried Shred-primitive entry
