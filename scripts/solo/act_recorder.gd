@@ -63,11 +63,17 @@ static var spawn_profile_resolver: Callable = Callable()
 ## surviving carrier detonates after the melee and pays X hits).
 ## Bumped to 43 in the same diff as the core's EPOCH_43_BATTLEBORN_ROLL
 ## (sweep E 2026-09-14, row `Battleborn` — the plain name joins the die leg).
+## row `Morale` — the table's morale_bonus_of already folds the rating); to
+## 40 with the core's EPOCH_40_STEADFAST_ROLL (sweep H 2026-09-14, row
+## `Steadfast`); to 44 with the core's EPOCH_44_SURGE_MARK (#958, sweep C
+## row `Surge Mark` — the once-per-activation pick); to 46 with the core's
+## EPOCH_46_DISINTEGRATE_REGEN (sweep E 2026-09-14, row `Disintegrate` — the
+## Regeneration heal refused the way the table refuses it).
+## (sweep E 2026-09-14, row `Battleborn` — the plain name joins the die leg);
 ## to 44 with the core's EPOCH_44_SURGE_MARK (#958, sweep C row `Surge Mark`
-## — the once-per-activation pick); to 45 with the core's
-## EPOCH_45_CASTER_BOOST (wave 6 2026-09-14, CASTER_SEAM row 1 — the cast
-## sub-phase spends boost tokens like the table).
-static var rules_epoch: int = 45
+## — the once-per-activation pick); to 47 with the core's
+## EPOCH_47_RENDING_SHOOTING_AURA (sweep G 2026-09-14, row `Rending when
+## Shooting Aura` — the aura's grants_rule lands on the shooting profiles).
 ## The frozen gate of the Vanguard FREE placement (epoch 16, the sweeps A/C fix):
 ## "anywhere fully within 9\"" is a free choice, not a push toward the enemy.
 ## Below it the recorded directional push replays. The core's own gate reads the
@@ -105,6 +111,7 @@ const EPOCH_27_TERRAIN_DEBUFF := 27
 const EPOCH_35_UNSTOPPABLE_MELEE := 35
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
+static var rules_epoch: int = 47
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

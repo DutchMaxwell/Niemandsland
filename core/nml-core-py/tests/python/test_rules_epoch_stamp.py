@@ -64,14 +64,16 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 45 (acts::EPOCH_45_CASTER_BOOST, wave 6 CASTER_SEAM
-    # row 1: the cast sub-phase spends boost tokens like the table — own
-    # leftover first, then casters/batteries in 18" LoS, +1 per token,
-    # clamped [2,6]; 44 was #958's Surge Mark pick, 43 #964's Battleborn
-    # roll leg, 41 #963's selfdestruct survival half): explicit, not just
-    # dynamic — a fresh game now stamps 45, not 44. A record already
-    # stamped 44 must never be mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 45
+    # core rules epoch 47 (acts::EPOCH_47_RENDING_SHOOTING_AURA, sweep G row
+    # `Rending when Shooting Aura`: the Utility-Buff aura's grants_rule lands
+    # on the bearer's shooting profiles; 44 was #958's Surge Mark pick, 43
+    # #964's Battleborn roll, 41 #963's selfdestruct survival half, 40 #960's
+    # Steadfast roll, 37 #957's Unstoppable-Aura scope split, 34 #951's
+    # Unstoppable-Mark clamp half, 33 #946's re-deployment leg, 27 #933's
+    # terrain-debuff leg, 25 #941's ethereal bands fix): explicit, not just
+    # dynamic — a fresh game now stamps 47, not 44. A record already stamped
+    # 44 must never be mistaken for a fresh one.
+    assert nml_core.CURRENT_RULES_EPOCH == 47
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)
