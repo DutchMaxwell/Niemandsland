@@ -68,7 +68,8 @@ impl LeafValue for OnnxHook<'_> {
         let mut rows = self.rows.borrow_mut();
         let tokens = leaves.iter().map(|state| {
             tokens::build(state, side, self.statics, self.terrain, &mut rows,
-                &[], -1, self.hero_attach, self.opener_seat)
+                &[], -1, self.hero_attach, self.opener_seat,
+                nml_core::acts::CURRENT_RULES_EPOCH)
         }).collect::<Result<Vec<_>, _>>()?;
         Ok(self.run_tokens(&tokens)?.0.into_iter().map(f64::from).collect())
     }

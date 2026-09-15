@@ -59,7 +59,8 @@ impl LeafValue for Hook<'_> {
         let mut rows = self.rows.borrow_mut();
         let batch = leaves.iter().map(|state| {
             nml_core::tokens::build(state, side, self.statics, self.terrain, &mut rows,
-                &[], -1, self.hero_attach, self.opener_seat).map(|t| t.to_json())
+                &[], -1, self.hero_attach, self.opener_seat,
+                nml_core::acts::CURRENT_RULES_EPOCH).map(|t| t.to_json())
         }).collect::<Result<Vec<_>, _>>()?;
         let response = exchange(&self.client.url, self.client.timeout_ms, &request(side, batch))?;
         if response["brain"] != self.client.identity { return Err(decline("BrainChanged")); }

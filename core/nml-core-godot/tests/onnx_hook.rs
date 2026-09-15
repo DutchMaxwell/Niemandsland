@@ -68,7 +68,7 @@ impl LeafValue for Recorder<'_> {
         self.calls.borrow_mut().push(leaves.len());
         for state in leaves {
             kept.push(tokens::build(state, side, self.statics, self.terrain, &mut rows,
-                &[], -1, self.hero_attach, false)?);
+                &[], -1, self.hero_attach, false, nml_core::acts::CURRENT_RULES_EPOCH)?);
         }
         Ok(vec![0.0; leaves.len()])
     }

@@ -39,11 +39,19 @@ pub const N_TERR: usize = 18;
 /// dynamically per batch — see the RED/GREEN test's module docstring for
 /// the read-only verification).
 pub const N_CAND: usize = 160;
-pub const F_U: usize = 90;
+/// Wave-6 splice (BRIEF_vocab3 / EV_VOCAB_2026-09-15): the design's 88 fields
+/// gain the three columns past the old padding — t[88]/t[89] the CARRIED
+/// terrain debuffs, t[90] the chain host's vengeance markers. The width-90
+/// export (t[88]/t[89] zero pads) is `TOKEN_VOCAB_VERSION` 1.
+pub const F_U: usize = 91;
 pub const F_O: usize = 12;
 pub const F_T: usize = 12;
 pub const F_G: usize = 16;
 pub const F_C: usize = 40;
+/// The token export's own stamp (`Tokens::to_json`/`tokens_dict`): 1 = the
+/// width-90 row, 2 = the terrain-debuff/vengeance splice. A separate axis
+/// from `RowEncoder::rule_vocab_version` — one stamp per vocabulary family.
+pub const TOKEN_VOCAB_VERSION: u32 = 2;
 /// `RowVocab` (rows.rs:107-152) unit(200) + weapon(25) slots + one overflow
 /// bucket — the divisor the unit token's rule-bag slot ids are read against.
 const VOCAB_N: f32 = 226.0;
@@ -101,8 +109,10 @@ fn b(v: bool) -> f32 {
     v as i64 as f32
 }
 
-/// The unit token, `F_u = 90` — DESIGN §8.1 "Unit token". 88 fields, zero
-/// padded to 90. Field groups, source cited once per group:
+/// The unit token, `F_u = 91` — DESIGN §8.1 "Unit token". 88 fields, then the
+/// wave-6 splice (t[88]/t[89] the CARRIED terrain debuffs, t[90] vengeance;
+/// the splice test names the readers). Field groups, source cited once per
+/// group:
 /// * geometry (7) — centroid `geom::centre` (`geom.rs:73`) over
 ///   `state.positions[i]` (`state.rs:384`); `base_radius` `state.rs:59`;
 ///   `is_oval` `state.rs:196-202`; `model_count` `state.rs:52`.
@@ -133,6 +143,7 @@ fn unit_token(
     def: &Ctx,
     rows: &mut RowEncoder,
     acting_roster_idx: Option<usize>,
+    _rules_epoch: u32,
 ) -> [f32; F_U] {
     let p = state.profile(i);
     let c = geom::centre(&state.positions[i]);
@@ -540,6 +551,7 @@ pub fn build(
     best: i64,
     hero_attach: bool,
     opener_seat: bool,
+    rules_epoch: u32,
 ) -> Result<Tokens, Unsupported> {
     let live: Vec<usize> = (0..state.units()).filter(|&i| state.alive[i] > 0).collect();
     if live.len() > N_UNITS {
@@ -560,6 +572,7 @@ pub fn build(
         .map(|&i| {
             unit_token(
                 state, i, side, statics, &statics[state.roster.profile[i]], &def, rows, acting,
+                rules_epoch,
             )
         })
         .collect();
@@ -729,7 +742,7 @@ mod tests {
         let cands = cands_fixture();
         let mut enc = RowEncoder::new(&repo_root());
         let def = neutral_defender();
-        let t = build(&state, 1, &statics, &terrain, &mut enc, &cands, 2, false, true).expect("build");
+        let t = build(&state, 1, &statics, &terrain, &mut enc, &cands, 2, false, true, crate::acts::CURRENT_RULES_EPOCH).expect("build");
 
         assert_eq!(t.units.len(), N_UNITS);
         assert_eq!(t.units_mask, {
@@ -875,11 +888,45 @@ mod tests {
 
     /// §8.1's own field-count check: the design's group totals for the unit
     /// token (7+11+10+6+6+6+40+2) and the candidate token (9+4+5+2+4+6+3+1)
-    /// both land on the raw width this builder actually fills.
+    /// both land on the raw width this builder actually fills — plus the
+    /// wave-6 splice riding past the design's 88.
     #[test]
     fn group_totals_match_design_8_1() {
         assert_eq!(7 + 11 + 10 + 6 + 6 + 6 + 40 + 2, 88);
         assert_eq!(9 + 4 + 5 + 2 + 4 + 6 + 3 + 1, 34);
+        assert_eq!(F_U, 88 + 3, "the splice is exactly three columns past 88");
+    }
+
+    /// The wave-6 splice — the three columns past the design's 88. t[88]/t[89]
+    /// read the CARRIED terrain debuffs through `mods::granted_terrain_debuff`
+    /// (`EPOCH_27_TERRAIN_DEBUFF`-gated: at epoch 26 both grants are live on
+    /// the unit and still read 0 — the same gate-consistent absence the sim's
+    /// own readers model), t[90] re-derives the chain HOST's vengeance markers
+    /// (min 3, /3, not epoch-gated — the ledger predates the gate).
+    #[test]
+    fn terrain_debuff_and_vengeance_columns() {
+        let (mut st, statics) = fixture();
+        let grant = |rule: &str| crate::mods::LiveMod {
+            hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0,
+            defense_mod: 0, move_mod: 0,
+            grants_rule: Rc::from(rule), scope: Rc::from(""), attackers: false,
+            once: false, name: Rc::from(""),
+        };
+        st.buffs[0] = vec![grant("Difficult Terrain"), grant("Dangerous Terrain")];
+        st.vengeance_markers[0] = 2;
+        let terrain = terrain_fixture();
+        let mut enc = RowEncoder::new(&repo_root());
+        let t = build(&st, 1, &statics, &terrain, &mut enc, &[], -1, false, false,
+            crate::acts::CURRENT_RULES_EPOCH).unwrap();
+        assert_eq!(t.units[0].len(), 91);
+        near(t.units[0][88], 1.0, "A carries the Difficult Terrain debuff");
+        near(t.units[0][89], 1.0, "A carries the Dangerous Terrain debuff");
+        near(t.units[0][90], 2.0 / 3.0, "host vengeance 2 of the max 3, /3");
+        let t26 = build(&st, 1, &statics, &terrain, &mut enc, &[], -1, false, false,
+            crate::acts::EPOCH_27_TERRAIN_DEBUFF - 1).unwrap();
+        near(t26.units[0][88], 0.0, "epoch 26: the Difficult grant reads nothing");
+        near(t26.units[0][89], 0.0, "epoch 26: the Dangerous grant reads nothing");
+        near(t26.units[0][90], 2.0 / 3.0, "vengeance is not epoch-gated");
     }
 
     /// The measured worst-case unit (RULE_BAG_SIZING_2026-09-13): `Vradhez`,
@@ -941,8 +988,8 @@ mod tests {
         let terrain = terrain_fixture();
         let cands = cands_fixture();
         let mut enc = RowEncoder::new(&repo_root());
-        let t1 = build(&state, 1, &statics, &terrain, &mut enc, &cands, 2, false, false).expect("side1");
-        let t2 = build(&state, 2, &statics, &terrain, &mut enc, &cands, 2, false, false).expect("side2");
+        let t1 = build(&state, 1, &statics, &terrain, &mut enc, &cands, 2, false, false, crate::acts::CURRENT_RULES_EPOCH).expect("side1");
+        let t2 = build(&state, 2, &statics, &terrain, &mut enc, &cands, 2, false, false, crate::acts::CURRENT_RULES_EPOCH).expect("side2");
         near(t1.units[0][0], -t2.units[0][0], "unit A cx mirrors");
         near(t1.units[0][7], 1.0, "A is mine at side1");
         near(t2.units[0][7], 0.0, "A is theirs at side2");
@@ -1011,7 +1058,7 @@ mod tests {
         big.attached = Rc::new((0..n).map(|_| Vec::new()).collect());
         big.attached_to = Rc::new((0..n).map(|_| None).collect());
         let mut enc = RowEncoder::new(&repo_root());
-        match build(&big, 1, &statics, &terrain, &mut enc, &cands, 0, false, false) {
+        match build(&big, 1, &statics, &terrain, &mut enc, &cands, 0, false, false, crate::acts::CURRENT_RULES_EPOCH) {
             Err(Unsupported::TooManyUnits(25)) => {}
             other => panic!("expected TooManyUnits(25), got {other:?}"),
         }
@@ -1021,7 +1068,7 @@ mod tests {
         // `objective_token`'s own note).
         let mut many_objs = base.clone();
         many_objs.objectives = (0..7).map(|_| many_objs.objectives[0]).collect();
-        match build(&many_objs, 1, &statics, &terrain, &mut enc, &cands, 0, false, false) {
+        match build(&many_objs, 1, &statics, &terrain, &mut enc, &cands, 0, false, false, crate::acts::CURRENT_RULES_EPOCH) {
             Err(Unsupported::TooManyObjectives(7)) => {}
             other => panic!("expected TooManyObjectives(7), got {other:?}"),
         }
@@ -1029,7 +1076,7 @@ mod tests {
         // N_CAND + 1 candidates on the original state.
         let many_cands: Vec<Candidate> =
             (0..N_CAND + 1).map(|_| Candidate::new("p1_0_a", HOLD)).collect();
-        match build(&base, 1, &statics, &terrain, &mut enc, &many_cands, 0, false, false) {
+        match build(&base, 1, &statics, &terrain, &mut enc, &many_cands, 0, false, false, crate::acts::CURRENT_RULES_EPOCH) {
             Err(Unsupported::TooManyCandidates(n)) if n == N_CAND + 1 => {}
             other => panic!("expected TooManyCandidates({}), got {other:?}", N_CAND + 1),
         }
