@@ -5880,9 +5880,9 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	var art_shooter_bonus: int = AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS
 	var art_target_pen: int = AiCombatMath.ARTILLERY_TARGET_HIT_PENALTY
 	if attacker_artillery:
-		art_shooter_bonus = int(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_hit_bonus", ARTILLERY_SHOOTER_HIT_BONUS))
+		art_shooter_bonus = int(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_hit_bonus", AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS))
 	if target_artillery:
-		art_target_pen = int(RulesRegistry.unit_param(target, "Artillery", "target_hit_penalty", ARTILLERY_TARGET_HIT_PENALTY))
+		art_target_pen = int(RulesRegistry.unit_param(target, "Artillery", "target_hit_penalty", AiCombatMath.ARTILLERY_TARGET_HIT_PENALTY))
 	var mod: int = AiCombatMath.shooting_hit_modifier(dist_in, attacker_artillery, stealth, target_artillery, evasive, art_shooter_bonus, art_target_pen)
 	var notes: PackedStringArray = []
 	var over_nine: bool = dist_in > AiCombatMath.LONG_RANGE_IN
