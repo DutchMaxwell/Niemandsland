@@ -1887,7 +1887,7 @@ fn aura_channel_hits(reg: &mut Registries, p: &Profile) -> Vec<(String, String)>
         if e.primitive.as_deref() != Some("Aura Channel") {
             continue;
         }
-        let base = e.param_s("grants_x").trim().to_string();
+        let base = e.param_s("grants").trim().to_string();
         if !base.is_empty() && !out.iter().any(|(_, b)| *b == base) {
             out.push((aura, base));
         }
@@ -2321,7 +2321,7 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
                 continue;
             }
             let normal = e.param_i("ignore_target", 0);
-            let spell = e.param_i("ignore_target_spell", 0);
+            let spell = e.param_i("ignore_target_spell", normal);
             // EPOCH 56 GROUNDED PROTECTION — `terrain_within_in > 0` makes the
             // condition the rule's whole point: hold the target ASIDE (the
             // tuple's pending tail) for `sim::ctx_live`'s per-save-moment
@@ -2608,7 +2608,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         evasive: rule_on_all_models(p, "Evasive") || !evasive_boost.is_empty(),
         evasive_alias: !evasive_boost.is_empty(),
         evasive_alias_name: evasive_boost,
-        melee_evasion: rule_on_all_models(p, "Melee Evasionx"),
+        melee_evasion: rule_on_all_models(p, "Melee Evasion"),
         fortified: rule_on_all_models(p, "Fortified")
             && fortified_aura_bearer_live(reg, p, rules_epoch),
         // WAVE 3 — stamped above, behind `EPOCH_6_TABLE_RULES`.
@@ -3181,20 +3181,20 @@ pub(crate) const AURA_CHANNEL_NAMES: &[&str] = &[
     "Strider Aura",
     "Rending in Melee Aura",
     "Quick Shot Aura",
-    "Piercing Hunter Aurx",
+    "Piercing Hunter Aura",
     "Teleport Aura",
     "Hit & Run Fighter Aura",
     "Indirect when Shooting Aura",
     "Piercing Fighter Aura",
-    "Rapid Advance Aurx",
-    "Ranged Slayer Aurx",
-    "Melee Slayer Aurx",
+    "Rapid Advance Aura",
+    "Ranged Slayer Aura",
+    "Melee Slayer Aura",
     "Speed Feat Aura",
     "Reanimation Aura",
-    "Piercing Shooter Aurx",
+    "Piercing Shooter Aura",
     "Grounded Reinforcement Aura",
     "Grounded Protection Aura",
-    "Protected Aurx",
+    "Protected Aura",
 ];
 
 /// The loader's own base-name cut (`rule[:-len(" Aura")].strip()`), kept only
@@ -3292,14 +3292,14 @@ pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
     "Hold the Line Boost Aura",
     "Targeting Visor Boost Aura",
     "Warden Boost Aura",
-    "Lucky Boost Aurx",
+    "Lucky Boost Aura",
     "Buccaneer Boost Aura",
     "Vale Oath Boost Aura",
     "Wave-Step Boost Aura",
     "Royal Warrior Boost Aura",
     "Bestial Boost Aura",
     "Vinci Tech Boost Aura",
-    "Ossified Boost Aurx",
+    "Ossified Boost Aura",
     "Shadowborn Boost Aura",
     "Destroyer Boost Aura",
     "Empyrean Spirit Boost Aura",
@@ -4144,7 +4144,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             // seam's band read — below 12 it stays 0 so the row keeps being
             // dropped and an old corpus's stamps are unchanged.
             move_mod: if rule_on(rules_epoch, EPOCH_12_MOVE_BUFF) { e.param_i("move_mod", 0) } else { 0 },
-            grants_rule: e.param_s("grants_rule_x").to_string(),
+            grants_rule: e.param_s("grants_rule").to_string(),
             scope: e.param_s("scope").to_string(),
             // EPOCH 15 MARK BENEFICIARY — see `mark_beneficiary_new` above.
             beneficiary: if mark_beneficiary_new
@@ -5157,7 +5157,7 @@ fn bounding_place_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     let mut best: Option<PlaceSpec> = None;
     let mut best_reach = -1.0f64;
     for hit in hits {
-        if hit.name == "Rapid Blink" {
+        if hit.name == "Bounding" {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
@@ -5273,7 +5273,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
         "Quick",
         "Scurry",
         "Rapid Charge",
-        "Rapid Charge Aurax",
+        "Rapid Charge Aura",
         // Wave 3 (epoch 6): "Reach Hunt" is Royal Legion/Lustbound's
         // word-for-word twin (+4" range when shooting — the loader-side
         // `shooting_range_bonus` half, unmodelled on this core exactly like
@@ -5421,7 +5421,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // `EPOCH_7_TABLE_RULES`, never the literal.
     if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && unit_rule_active(reg, p, "Rapid Rush") {
         let map = reg.rules_for(&p.game_system);
-        if let Some(e) = map.lookup(&p.faction_folder, "Rapid RushX") {
+        if let Some(e) = map.lookup(&p.faction_folder, "Rapid Rush") {
             let rush = e.param_f("rush_mod", 0.0);
             acc.rush += rush;
             hit = true;
@@ -5569,7 +5569,7 @@ fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
         charge += e.param_f("charge_mod", 0.0);
         folded.push(hit.name);
     }
-    for (aura, base) in [("Lustbound Boost Aurx", "Lustbound Boost")] {
+    for (aura, base) in [("Lustbound Boost Aura", "Lustbound Boost")] {
         if !has_special_rule(&p.special_rules, aura) || folded.iter().any(|n| n == base) {
             continue;
         }
@@ -5782,7 +5782,7 @@ impl UnitStatic {
                             ..Default::default()
                         });
                     }
-                    "Piercing ShooterX" => {
+                    "Piercing Shooter" => {
                         live.push(CondAp {
                             ap_bonus: ap,
                             condition: "ranged_over".into(),
@@ -6148,7 +6148,7 @@ impl UnitStatic {
             // firing name for the battle-log twin.
             hit_and_run_move_in: hnr_move_in,
             hit_and_run_rule: hnr_rule,
-            quick_shot_active: unit_rule_active(reg, p, "Quick ShotX"),
+            quick_shot_active: unit_rule_active(reg, p, "Quick Shot"),
             second_wind_active: unit_rule_active(reg, p, "Second Wind")
                 || unit_rule_active(reg, p, "Inquisitorial Agent")
                 || unit_rule_active(reg, p, "Martial Prowess"),

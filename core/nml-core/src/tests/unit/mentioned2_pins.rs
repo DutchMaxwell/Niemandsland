@@ -294,8 +294,8 @@ use super::*;
 
     /// "Rapid Charge Aura" (gf/alien_hives, Fast primitive, charge_only,
     /// rush_mod 4): the row's own entry rides the per-name carrier list —
-    /// +4" rush/charge only, no advance half; epoch 5 (below the wave-3
-    /// gate) and epoch 0 (below the port) keep the band None.
+    /// +4" rush/charge only, no advance half; epoch 0 (below the fold's own
+    /// `EPOCH_3_TABLE_RULES` gate) keeps the band None.
     #[test]
     fn a_rapid_charge_aura_extends_the_charge_band_by_four_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
@@ -304,8 +304,7 @@ use super::*;
             Some(Bands { advance: 0.0, rush: 4.0, ..Default::default() }),
             "the aura entry's own rush_mod, charge-only"
         );
-        assert_eq!(quickfast_bands("rapid_charge_aura_unit", 5), None, "epoch 5: the wave-3 gate is OFF");
-        assert_eq!(quickfast_bands("rapid_charge_aura_unit", 0), None, "epoch 0 is pre-port");
+        assert_eq!(quickfast_bands("rapid_charge_aura_unit", 0), None, "epoch 0 is pre-port (the fold's own gate, EPOCH_3_TABLE_RULES)");
     }
 
     /// "Rapid Charge Mark" (aof/dark_elves, Utility Buff primitive,
