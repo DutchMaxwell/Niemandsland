@@ -32,6 +32,7 @@ use crate::acts::{
     EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
+    EPOCH_61_PRECISION_MARKERS,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -3541,6 +3542,23 @@ pub struct UtilityBuff {
     /// (main.gd:3652).
     pub beneficiary: String,
     pub once: bool,
+    /// The PRECISION MARKERS trio's own shape (`EPOCH_61_PRECISION_MARKERS`):
+    /// `bonus` — "per_removed_marker" (Spotter/Tag: each marker an attacking
+    /// friendly unit removes is +1 to hit) or "per_placed_marker" (Target:
+    /// EVERY friendly attack on the marked unit gets +markers, no removal —
+    /// the book text has no removal clause). "" = not a marker entry.
+    /// `markers` — the count one placement adds: the carried rule string's
+    /// rating ("Precision Tag(2)"), else the entry's own `markers` param,
+    /// else 1 (the PiercingTagEntry precedent, main.gd:17022's
+    /// `maxi(rule_rating(raw), 1)`). `place_roll` — Spotter's 4+ die, 0 = no
+    /// roll (Tag/Target auto-place). `uses_per_game` — 1 on Tag/Target, 0 =
+    /// once per activation (Spotter). Parsed ONLY from 59 on; below it the
+    /// fields stay default and the placeholder rows keep reporting
+    /// Unimplemented, byte-exact.
+    pub bonus: String,
+    pub markers: i64,
+    pub place_roll: i64,
+    pub uses_per_game: i64,
 }
 
 /// The twelve "Utility Buff" names the wave-2 port reads at runtime, stamped
@@ -4158,6 +4176,25 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         let mark_beneficiary_new = n == "Precision Fighting Mark"
             || n == "Precision Shooting Mark"
             || (n == "Piercing Shooting Mark" && p.game_system == "aofs");
+        // EPOCH 59 PRECISION MARKERS — the trio's real shape (the placeholders
+        // were dead data before). Below the gate the fields stay default, so
+        // every pre-59 corpus replays its recorded Unimplemented row.
+        let precision = rule_on(rules_epoch, EPOCH_61_PRECISION_MARKERS)
+            && matches!(
+                n.as_str(),
+                "Precision Spotter" | "Precision Tag" | "Precision Target"
+            );
+        let (bonus, markers, place_roll, uses_per_game) = if precision {
+            let rating = rule_rating(raw, 0);
+            (
+                e.param_s("bonus").to_string(),
+                if rating > 0 { rating } else { e.param_i("markers", 1) }.max(1),
+                e.param_i("place_roll", 0),
+                e.param_i("uses_per_game", 0),
+            )
+        } else {
+            (String::new(), 0, 0, 0)
+        };
         out.push(UtilityBuff {
             name: n,
             vs_target,
@@ -4194,15 +4231,21 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
                 e.param_s("beneficiary").to_string()
             },
             once: e.param_b_or("once", true),
+            bonus,
+            markers,
+            place_roll,
+            uses_per_game,
         });
         // The ledger models eight knobs (hit / casting / morale / the three
         // ap-def knobs from `EPOCH_7_TABLE_RULES` / the move knob from
         // `EPOCH_12_MOVE_BUFF` / grant) and the movement arm. An entry whose
         // whole effect is a knob it does NOT carry — `range_bonus_in` — would
         // record an all-zero row that `record_buff` drops on the floor. Named
-        // here rather than skipped in silence.
+        // here rather than skipped in silence. The PRECISION MARKERS trio is
+        // not one of them: its effect rides the marker pools and the
+        // attackers-side record, stamped from `EPOCH_61_PRECISION_MARKERS`.
         let b = out.last().expect("just pushed");
-        if !b.vs_target && b.reposition_in <= 0.0 && b.grants_rule.is_empty()
+        if !b.vs_target && b.reposition_in <= 0.0 && b.grants_rule.is_empty() && b.bonus.is_empty()
             && (b.hit_mod, b.casting_mod, b.morale_mod, b.ap_mod, b.def_mod, b.defense_mod, b.move_mod)
                 == (0, 0, 0, 0, 0, 0, 0) {
             un.push(Unimplemented { rule: b.name.clone(), why:

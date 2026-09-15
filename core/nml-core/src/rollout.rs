@@ -885,6 +885,10 @@ pub fn mint_template_slot(
     st.limited_used.push(Vec::new());
     st.piercing_tag_used.push(false);
     st.piercing_tag_markers.push(0);
+    st.spot_markers.push(0);
+    st.tag_markers.push(0);
+    st.spot_round.push(-1);
+    st.precision_used.push(Vec::new());
     st.storm_used.push(Vec::new());
     st.feats_used.push(Vec::new());
     st.teleport_used.push(false);

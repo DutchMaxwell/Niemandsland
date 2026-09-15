@@ -1087,6 +1087,8 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	await _solo_apply_utility_buffs(unit)
 	await _solo_apply_mind_control(unit)
 	_solo_apply_piercing_tag(unit)
+	_solo_apply_precision_tag(unit)
+	_solo_apply_precision_target(unit)
 	await _solo_apply_reckless_piercing(unit)
 	await _solo_apply_storm_attack(unit)
 	await _solo_apply_surprise_attack(unit)
@@ -3117,6 +3119,7 @@ func _solo_shot_priority(shot: Dictionary) -> int:
 func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array, moved: bool = false) -> void:
 	_solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
 	var ai_spot_hit := _solo_consume_spot_markers(target)   # wave B: markers removed for +X
+	var ai_tag_hit := _solo_consume_tag_markers(target)   # Precision Tag: same removal mapping, +1 per marker
 	# RESOLVE-FIRST ORDER (GF v3.5.1 p.14): "Takedown attacks must be resolved before other weapons" and
 	# "Hits from Deadly must be resolved first." With no-carry-over + the single-model Takedown pick, the
 	# order changes which models die, so sort each volley: Takedown, then Deadly, then the rest (stable).
@@ -3259,6 +3262,9 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if ai_spot_hit != 0:
 			mod_info = {"mod": int(mod_info.get("mod", 0)) + ai_spot_hit,
 				"note": _solo_join_note(str(mod_info.get("note", "")), "Spotted +%d" % ai_spot_hit)}
+		if ai_tag_hit != 0:
+			mod_info = {"mod": int(mod_info.get("mod", 0)) + ai_tag_hit,
+				"note": _solo_join_note(str(mod_info.get("note", "")), "Tagged +%d" % ai_tag_hit)}
 		var ai_mod: int = int(mod_info.get("mod", 0)) + upr_hit
 		if bool(profile.get("unstoppable", false)) and ai_mod < 0:
 			ai_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
@@ -3827,7 +3833,8 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s on %s is ACTIVE: %s%s — %s" % [
 			spell_name, tu.get_name(), ", ".join(parts),
 			(" (%s only)" % rec["scope"]) if not str(rec["scope"]).is_empty() else "",
-			("applies ONCE" if str(rec["duration"]) == "once" else "until end of round")], true)
+			("applies ONCE" if str(rec["duration"]) == "once" \
+				else ("for the rest of the game" if str(rec["duration"]) == "game" else "until end of round"))], true)
 	_solo_mirror_spell_state()   # NML-949: durable half of the record kept in step
 
 
@@ -4033,7 +4040,10 @@ func _solo_expire_spell_tokens() -> void:
 		for rd in (_solo_spell_mods[key] as Array):
 			# Maintainer rules check (31.07.): apply-once effects persist across rounds until
 			# they fire (their own consumption removes them) — only round-scoped ones expire.
-			if str((rd as Dictionary).get("duration", "")) == "once":
+			# Wave 6: duration "game" persists for the whole game the same way (Precision
+			# Target's +X — the text has no removal clause and no round bound).
+			if str((rd as Dictionary).get("duration", "")) == "once" \
+					or str((rd as Dictionary).get("duration", "")) == "game":
 				keep.append(rd)
 				continue
 			_solo_revoke_grant(rd as Dictionary)
@@ -10059,10 +10069,11 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 
 
 ## NML-216 wave B — Precision Spotter (army book): "Once per activation, pick one enemy
-## unit within 36\" and in line of sight of this model and roll one die, on a 4+ place a
-## marker on it." V1 auto-picks the NEAREST spottable enemy for both sides (logged; pick
-## agency is a noted refinement). Markers live on the target; the next friendly volley
-## consumes them for +X to hit ("Friendly units may remove markers ... to get +X").
+## unit within 30\" and in line of sight of this model and roll one die, on a 4+ place a
+## marker on it." (PRECISION_TEXT_2026-09-15 §3 — the 3.5.3 books say 30", the old 36"
+## read was DAO Union 3.5.2 and is one book version stale.) V1 auto-picks the NEAREST
+## spottable enemy for both sides (logged; pick agency is a noted refinement). Markers
+## live on the target; the next friendly volley consumes them for +X to hit.
 func _solo_try_precision_spot(unit: GameUnit) -> void:
 	if unit == null or solo_controller == null or opr_army_manager == null:
 		return
@@ -10078,9 +10089,12 @@ func _solo_try_precision_spot(unit: GameUnit) -> void:
 			break
 	if not bearer:
 		return
+	# Once per activation — the radial path stamps on the pick (solo_begin_spot); the AI
+	# arm stamps HERE, so a re-activated carrier (Martial Prowess) does not roll twice.
+	unit.unit_properties["spotted_round"] = opr_army_manager.current_round
 	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
 	var best: GameUnit = null
-	var best_d := 36.0
+	var best_d := 30.0
 	for e in opr_army_manager.get_all_game_units():
 		var eu := e as GameUnit
 		if eu == null or eu.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu):
@@ -10160,8 +10174,8 @@ func _solo_offer_spot_markers(attacker: GameUnit, target: GameUnit) -> int:
 
 
 ## Spotter UX (maintainer 31.07.): Precision Spotter is a RADIAL action with the player's
-## own target pick (book: "pick one enemy unit within 36\" and in line of sight of this
-## model and roll one die, on a 4+ place a marker on it") — once per activation,
+## own target pick (book, 3.5.3: "pick one enemy unit within 30\" and in line of sight of
+## this model and roll one die, on a 4+ place a marker on it") — once per activation,
 ## round-stamped. Candidates get pulse rings; the click rolls in the tray.
 func solo_begin_spot(unit: GameUnit) -> void:
 	if unit == null:
@@ -10186,9 +10200,9 @@ func solo_begin_spot(unit: GameUnit) -> void:
 			continue
 		if int(eu.unit_properties.get("player_id", 0)) == own_pid:
 			continue
-		if solo_controller.nearest_melee_gap_in(unit, eu) <= 36.0:
+		if solo_controller.nearest_melee_gap_in(unit, eu) <= 30.0:
 			# NML-967: per-model shooting truth, not the unit-centre-only _solo_has_los.
-			if _solo_sighted_count(unit, eu, 36) > 0:
+			if _solo_sighted_count(unit, eu, 30) > 0:
 				cands.append(eu)
 			elif blocked_eu == null:
 				blocked_eu = eu
@@ -10196,7 +10210,7 @@ func solo_begin_spot(unit: GameUnit) -> void:
 		if battle_log != null:
 			var why: String = _solo_los_refusal_detail(unit, blocked_eu) if blocked_eu != null else ""
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"%s: no enemy within 36\" line of sight to spot%s" % [unit.get_name(), why])
+				"%s: no enemy within 30\" line of sight to spot%s" % [unit.get_name(), why])
 		return
 	var rings: Array = []
 	for cu in cands:
@@ -10216,7 +10230,7 @@ func _solo_spot_click(target: GameUnit) -> void:
 	if not (_solo_target_mode.get("spot_valid", []) as Array).has(target):
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"%s is not spottable (side, 36\" range or line of sight)" % target.get_name())
+				"%s is not spottable (side, 30\" range or line of sight)" % target.get_name())
 		return
 	_solo_end_targeting()
 	if opr_army_manager != null:
@@ -10468,6 +10482,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
 	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
 	var spot_hit: int = await _solo_offer_spot_markers(attacker, target)
+	var tag_hit: int = _solo_consume_tag_markers(target)   # Precision Tag: the spot pool's +1-per-removal twin
 	await _solo_stage_phase("Declaration")
 	# EPOCH_38_WATCHBORN_LATCH — the Versatile choice latches on the unit per
 	# activation (_solo_versatile_latch_read/write); no per-volley dict here.
@@ -10540,6 +10555,9 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if spot_hit != 0:
 				p_mod = {"mod": int(p_mod.get("mod", 0)) + spot_hit,
 					"note": _solo_join_note(str(p_mod.get("note", "")), "Spotted +%d" % spot_hit)}
+			if tag_hit != 0:
+				p_mod = {"mod": int(p_mod.get("mod", 0)) + tag_hit,
+					"note": _solo_join_note(str(p_mod.get("note", "")), "Tagged +%d" % tag_hit)}
 			var h_mod: int = int(p_mod.get("mod", 0)) + upr_hit
 			if bool(profile.get("unstoppable", false)) and h_mod < 0:
 				h_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
@@ -17849,6 +17867,93 @@ func _solo_spend_piercing_tag(target: GameUnit) -> int:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"Piercing Tag: %d marker%s spent — +AP(%d) on this volley" % [markers, ("" if markers == 1 else "s"), markers], true)
 	return markers
+
+
+## Precision Tag (PRECISION_TEXT_2026-09-15 §4 — "Once per game, during this model's activation, pick one
+## enemy unit within 24\" and in line of sight of it, and place X markers on it. When attacking, friendly
+## units may remove markers from their target before rolling to hit to get +Y to hit rolls, where Y is the
+## number of removed markers."): the AI tags the TOUGHEST enemy (the _solo_apply_piercing_tag shape); the
+## next friendly volley spends every marker for +1 to hit each (see _solo_consume_tag_markers).
+func _solo_apply_precision_tag(unit: GameUnit) -> void:
+	if solo_controller == null or unit == null or not _solo_is_ai_unit(unit):
+		return
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0:
+			continue
+		if bool(member.unit_properties.get("precision_tag_used", false)):
+			continue
+		for e in RulesRegistry.unit_rules_of_primitive(member, "Precision Tag"):
+			var ed := e as Dictionary
+			if bool(member.unit_properties.get("precision_tag_used", false)):
+				break
+			var sp: Dictionary = ed.get("params", {})
+			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)))
+			if tgt == null:
+				continue
+			member.unit_properties["precision_tag_used"] = true
+			var markers: int = maxi(int(ed.get("rating", 0)), 1)
+			tgt.unit_properties["tag_markers"] = int(tgt.unit_properties.get("tag_markers", 0)) + markers
+			_sync_unit_property(tgt, "tag_markers", int(tgt.unit_properties["tag_markers"]))   # NML-927: the count rides the wire
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"Precision Tag: %s places %d marker%s on %s — friendly attackers may remove them for +1 to hit each" % [
+					member.get_name(), markers, ("" if markers == 1 else "s"), tgt.get_name()], true)
+			_solo_rule_float(tgt, "Tagged +%d!" % markers)
+
+
+## Precision Target (PRECISION_TEXT_2026-09-15 §5 — "Once per game, during this model's activation, pick one
+## enemy unit within 18\" and in line of sight of it, and place X markers on it. Friendly units get +X to hit
+## rolls when attacking it."): the bonus rides ONE PERSISTENT attackers-side mod record on the target —
+## every friendly volley AND strike folds it (_solo_spell_hit_mod_vs, both legs), nothing is ever spent
+## (the text has no removal clause). duration "game": _solo_consume_once_mods spends "once" records only,
+## and the round-end expiry keeps "game" rows too.
+func _solo_apply_precision_target(unit: GameUnit) -> void:
+	if solo_controller == null or unit == null or not _solo_is_ai_unit(unit):
+		return
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0:
+			continue
+		if bool(member.unit_properties.get("precision_target_used", false)):
+			continue
+		for e in RulesRegistry.unit_rules_of_primitive(member, "Precision Target"):
+			var ed := e as Dictionary
+			if bool(member.unit_properties.get("precision_target_used", false)):
+				break
+			var sp: Dictionary = ed.get("params", {})
+			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 18.0)), bool(sp.get("needs_los", true)))
+			if tgt == null:
+				continue
+			member.unit_properties["precision_target_used"] = true
+			var markers: int = maxi(int(ed.get("rating", 0)), 1)
+			_solo_record_spell_mod(tgt, "Precision Target", {
+				"modifier": {"hit_mod": markers},
+				"beneficiary": "attackers",
+				"duration": "game"})
+			_solo_rule_float(tgt, "Targeted +%d!" % markers)
+
+
+## Spend every Precision-Tag marker on the target for +X to hit on THIS volley (the AI spends all at once —
+## the spot pool's own headless policy, main.gd:10113). Returns the bonus.
+func _solo_consume_tag_markers(target: GameUnit) -> int:
+	if target == null:
+		return 0
+	var tm := int(target.unit_properties.get("tag_markers", 0))
+	if tm <= 0:
+		return 0
+	_sync_unit_property(target, "tag_markers", null)
+	if battle_log != null:
+		_log_rule_event(BattleLog.Category.COMBAT,
+			"Precision Tag: %d marker%s removed — +%d to hit this volley" % [tm, ("" if tm == 1 else "s"), tm], true)
+	_solo_rule_float(target, "Markers spent +%d" % tm)
+	return tm
 
 
 ## Coverage wave — Crossing Attack(X) ("once per activation, when this model moves through enemy

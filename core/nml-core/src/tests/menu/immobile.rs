@@ -116,6 +116,10 @@ use super::*;
             limited_used: vec![Vec::new(); n],
             piercing_tag_used: vec![false; n],
             piercing_tag_markers: vec![0; n],
+            spot_markers: vec![0; n],
+            tag_markers: vec![0; n],
+            spot_round: vec![-1; n],
+            precision_used: vec![Vec::new(); n],
             storm_used: vec![Vec::new(); n],
             feats_used: vec![Vec::new(); n],
         }

@@ -459,6 +459,8 @@ pub fn build_state(
         // host never writes them (the recorder stamps neither key yet).
         piercing_tag_used: vec![false; n],
         piercing_tag_markers: vec![0; n],
+        spot_markers: vec![0; n], tag_markers: vec![0; n], spot_round: vec![-1; n], precision_used: vec![Vec::new(); n],
+        // Precision marker trio (epoch 61): the same fresh-game shape doctrine.rs:181-183 builds.
         storm_used: vec![Vec::new(); n],
         feats_used: vec![Vec::new(); n],
         los_pairs,
