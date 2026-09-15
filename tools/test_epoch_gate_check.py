@@ -8,6 +8,11 @@ a PR that adds a NEW `EPOCH_<n>_<NAME>` constant WITHOUT bumping `CURRENT_RULES_
 or below the live epoch (a stale branch rebased carelessly). A diff that touches no
 epoch symbol at all must still pass untouched.
 
+Since the #972 lesson (a renumber 49 -> 51 at rebase left literal pins running below
+the new gate) the gate's own tests also pin the pin rule: a leg is PROVEN only by the
+frozen constant or a test name carrying the epoch; bare literals still count in the
+census but a literal-only leg is refused.
+
 Run:  python3 -m pytest tools/test_epoch_gate_check.py
 """
 
@@ -133,33 +138,77 @@ def test_epoch_bump_with_mirror_hold_marker_is_accepted(tmp_path):
     assert "epoch-gate: OK" in r.stdout
 
 
-def test_two_integers_in_a_row_are_both_pinned(tmp_path):
-    """Hole 4 (rule 3 false alarm): the positional scanner ate the delimiter, so the second of
-    two integers in a row (`run_buff_epoch(.., 13, 33);`) was never pinned -- the gate refused
-    a PR whose old leg WAS pinned at 33."""
-    r = run_checker(
-        tmp_path,
-        """\
-        diff --git a/core/nml-core/src/acts.rs b/core/nml-core/src/acts.rs
-        --- a/core/nml-core/src/acts.rs
-        +++ b/core/nml-core/src/acts.rs
-        @@ -10,7 +10,9 @@
-        -pub const CURRENT_RULES_EPOCH: u32 = 33;
-        +pub const CURRENT_RULES_EPOCH: u32 = 34;
-        +pub const EPOCH_34_NEXT_FIX: u32 = 34;
-        +fn next_fix_still_replays() {
-        +    run_buff_epoch(&st, &statics, &charge, 13, 33);
-        +}
-        diff --git a/scripts/solo/act_recorder.gd b/scripts/solo/act_recorder.gd
-        --- a/scripts/solo/act_recorder.gd
-        +++ b/scripts/solo/act_recorder.gd
-        @@ -48,2 +48,3 @@
-        +static var rules_epoch: int = 34
-        """,
-    )
+def bump_diff(old, new, const_name, pin_lines, mirror=True):
+    """A standard epoch-bump diff: bump old -> new, the new frozen constant, one test fn
+    carrying the given pin lines. The mirror section is included only when mirror=True
+    (rule 6 needs it for the diff to pass at all)."""
+    out = [
+        "diff --git a/core/nml-core/src/acts.rs b/core/nml-core/src/acts.rs",
+        "--- a/core/nml-core/src/acts.rs",
+        "+++ b/core/nml-core/src/acts.rs",
+        "@@ -10,7 +10,9 @@",
+        f"-pub const CURRENT_RULES_EPOCH: u32 = {old};",
+        f"+pub const CURRENT_RULES_EPOCH: u32 = {new};",
+        f"+pub const EPOCH_{new}_{const_name}: u32 = {new};",
+        "+fn renumbered_still_replays() {",
+    ] + [f"+{l}" for l in pin_lines] + ["+}"]
+    if mirror:
+        out += [
+            "diff --git a/scripts/solo/act_recorder.gd b/scripts/solo/act_recorder.gd",
+            "--- a/scripts/solo/act_recorder.gd",
+            "+++ b/scripts/solo/act_recorder.gd",
+            "@@ -48,2 +48,3 @@",
+            f"+static var rules_epoch: int = {new}",
+        ]
+    return "\n".join(out) + "\n"
+
+
+def test_two_integers_in_a_row_are_both_counted_but_literal_only_is_refused(tmp_path):
+    """#954 restated after #972: the lookahead keeps BOTH integers of `.., 13, 33)` in the
+    census, and the census no longer PROVES a leg. The pin-it message -- not the "no added
+    test pins" one -- is the proof that 33 was seen at all."""
+    r = run_checker(tmp_path, bump_diff(33, 34, "NEXT_FIX", [
+        "    run_buff_epoch(&st, &statics, &charge, 13, 33);",
+    ], mirror=False))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "rule 3" in r.stdout
+    assert "pin it by its frozen constant" in r.stdout
+    assert "run_buff_epoch" in r.stdout  # the message names the line, 33 was SEEN
+    assert "no added test pins epoch" not in r.stdout
+
+
+def test_literal_only_old_leg_is_refused(tmp_path):
+    """#972: the old leg pinned only by a bare struct literal -- a renumber leaves the pin
+    below the new gate. Refuse, name the line, say to pin it by its frozen constant."""
+    r = run_checker(tmp_path, bump_diff(32, 33, "NEXT_FIX", [
+        "    let s = Seams { rules_epoch: 32, .. };",
+    ], mirror=False))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "rule 3" in r.stdout
+    assert "pin it by its frozen constant" in r.stdout
+    assert "rules_epoch: 32" in r.stdout  # the message names the offending line
+
+
+def test_constant_old_leg_is_accepted(tmp_path):
+    """The pin that MOVES: the old leg read through its frozen constant survives a renumber."""
+    r = run_checker(tmp_path, bump_diff(32, 33, "NEXT_FIX", [
+        "    let s = Seams { rules_epoch: EPOCH_32_PRIOR_FIX, .. };",
+    ]))
     assert r.returncode == 0, r.stdout + r.stderr
     assert "epoch-gate: OK" in r.stdout
-    assert "rule 3" not in r.stdout
+
+
+def test_bare_epoch_call_literal_is_refused(tmp_path):
+    """The #972 shape `epoch(49)`: the census must SEE the bare integer (first argument,
+    no comma in front) and the legs must not ACCEPT it."""
+    r = run_checker(tmp_path, bump_diff(49, 50, "RENUMBER", [
+        "    assert_eq!(epoch(49), 1);",
+        "    assert_eq!(epoch(50), 0);",
+    ], mirror=False))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "rule 3" in r.stdout
+    assert "pin it by its frozen constant" in r.stdout
+    assert "epoch(49)" in r.stdout  # the message names the line
 
 
 def test_diff_without_any_epoch_symbol_still_passes(tmp_path):

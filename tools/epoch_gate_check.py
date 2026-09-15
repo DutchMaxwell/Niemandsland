@@ -12,10 +12,11 @@ Rules enforced, all derived from incidents in this repo:
      bump, silently re-dating every gate written against it; it cost this repo an incident at
      epoch 4 and a repeat on 2026-09-13 (#921), and `acts.rs` has said so since #928.
   3. The diff must add at least one test that pins the OLD epoch (`<n-1>` or lower), so the
-     pre-bump behaviour is asserted and not merely hoped for. Both the struct-literal form
-     (`rules_epoch: 12`) and the positional form (`build_for(.., 12)`) count -- the lead's own
-     grep missed the positional form once and dispatched an agent to build tests that existed.
-   4. The diff must add at least one test that pins the NEW epoch, by constant or by number.
+      pre-bump behaviour is asserted and not merely hoped for. Since #972 the pin must MOVE
+      with a renumber: only the frozen constant or a test name carrying the epoch proves
+      the leg; a bare literal (`rules_epoch: 12`, `epoch(49)`) still counts in the census
+      but the #972 renumber left such pins silently running below the new gate.
+   4. Same for the NEW leg: pin by constant or test name; a bare literal is refused alike.
    5. A diff that adds a NEW `EPOCH_<n>_<NAME>` constant WITHOUT bumping `CURRENT_RULES_EPOCH` is
       refused (reported as "rule 4") -- a rules fix landing below the live epoch gates nothing.
    6. `CURRENT_RULES_EPOCH` must move UP (reported as "rule 5") -- a stale rebase re-dates the gate.
@@ -39,30 +40,30 @@ MIRROR_HOLD_RE = re.compile(r"MIRROR HOLD:\s*\S")
 
 
 def epochs_pinned(added_lines, max_epoch):
-    """Every epoch number the added lines pin.
+    """Census of the epoch numbers the added lines pin, split by PIN FORM.
 
-    Four forms, all of which occur in this repo and three of which a naive
-    `rules_epoch: <n>` grep misses -- the lead's own grep missed the positional one on
-    2026-09-14 and dispatched an agent to write tests that already existed:
-      a) struct literal   `Seams { rules_epoch: 12, .. }`
-      b) positional arg   `build_for(&mut reg, p, 12)`, `deploy_side(.., 7, 15)`,
-                          `surge_stamp_of("X", "gf", "faction", 16)`
-      c) the test's NAME  `at_epoch_12_...`, `..._below_epoch_17`, `..._epoch_15_still_...`
-      d) the frozen constant `EPOCH_<n>_<NAME>`
-    (b) is only counted on lines that are plainly test calls, to keep dice counts and board
-    coordinates out of the result.
+    Four forms occur in this repo, three of which a naive `rules_epoch: <n>` grep misses:
+      a) struct literal   `Seams { rules_epoch: 12, .. }`             -> bare literal
+      b) positional arg   `build_for(.., 12)`, `epoch(49)` first arg  -> bare literal
+      c) the test's NAME  `..._at_epoch_12`, `..._below_epoch_17`     -> strong pin
+      d) the frozen constant `EPOCH_<n>_<NAME>`                       -> strong pin
+    A bare literal still COUNTS, but since #972 it no longer PROVES a leg: a renumber
+    moves the gate and leaves the literal below it; only (c)/(d) move with the constant.
+    Returns (strong, literal): epoch -> one naming line each. (b) counts only on plainly
+    test-call lines, and the #954 lookahead keeps BOTH of two integers in a row.
     """
-    out = set()
+    strong = {}
+    literal = {}
     for line in added_lines:
         low = line.lower()
         for m in re.finditer(r"rules_epoch\s*:\s*(\d+)", line):
-            out.add(int(m.group(1)))
+            literal.setdefault(int(m.group(1)), line)
         for m in re.finditer(r"\bEPOCH_(\d+)_[A-Z0-9_]+", line):
-            out.add(int(m.group(1)))
+            strong.setdefault(int(m.group(1)), line)
         for m in re.finditer(r"fn\s+[a-z0-9_]*epoch_?(\d+)[a-z0-9_]*\s*\(", low):
-            out.add(int(m.group(1)))
+            strong.setdefault(int(m.group(1)), line)
         for m in re.finditer(r"fn\s+[a-z0-9_]*?(?:at|below|above|from)_(\d+)[a-z0-9_]*\s*\(", low):
-            out.add(int(m.group(1)))
+            strong.setdefault(int(m.group(1)), line)
         # positional: a bare integer that could be an epoch, in a call, on a line that is
         # either in a test context or mentions epoch/build_for/stamp explicitly.
         if ("epoch" in low or "build_for" in low or "_of(" in low
@@ -70,8 +71,13 @@ def epochs_pinned(added_lines, max_epoch):
             for m in re.finditer(r",\s*(\d+)\s*(?=[,)])", line):
                 v = int(m.group(1))
                 if 1 <= v <= max_epoch:
-                    out.add(v)
-    return out
+                    literal.setdefault(v, line)
+            # the #972 shape `epoch(49)`: first argument, no comma in front of it.
+            for m in re.finditer(r"\b[a-z0-9_]*epoch[a-z0-9_]*\s*\(\s*(\d+)\s*[,)]", low):
+                v = int(m.group(1))
+                if 1 <= v <= max_epoch:
+                    literal.setdefault(v, line)
+    return strong, literal
 
 
 def main(path):
@@ -133,20 +139,40 @@ def main(path):
             "EPOCH_<n>_<NAME> instead. First: %s" % (len(live), live[0].strip()[:110])
         )
 
-    pinned = epochs_pinned(added, new_epoch)
+    strong, literal = epochs_pinned(added, new_epoch)
     # Rule 3 asks for the epoch IMMEDIATELY below the bump, not "any small number". The loose
     # reading let every test file pass on an unrelated literal; all five rules PRs of 2026-09-13/14
     # pin their exact predecessor, so the tight reading is both correct and achievable.
-    old_leg = {old_epoch} & pinned if old_epoch is not None else set()
-    new_leg = {e for e in pinned if e >= new_epoch}
+    # Since #972 the pin must also MOVE with a renumber: a bare literal counts in the
+    # census but proves nothing; only the frozen constant or the test name pins a leg.
+    old_leg = {old_epoch} & set(strong) if old_epoch is not None else set()
+    old_leg_literal = {old_epoch} & set(literal) if old_epoch is not None else set()
+    new_leg = {e for e in strong if e >= new_epoch}
+    new_leg_literal = {e for e in literal if e >= new_epoch}
     if not old_leg:
-        fails.append(
-            f"rule 3: no added test pins epoch {old_epoch}, the one immediately below the bump. "
-            "The OLD leg is unproven, so nothing asserts that already recorded games still replay "
-            "unchanged. Add a test that runs at {old} and asserts the PRE-bump outcome by value.".format(old=old_epoch)
-        )
+        if old_leg_literal:
+            fails.append(
+                f"rule 3: epoch {old_epoch} is pinned only by a bare literal "
+                f"({literal[old_epoch].strip()[:110]}) -- a renumber silently leaves it below "
+                f"the gate (#972), so pin it by its frozen constant (EPOCH_{old_epoch}_<NAME>) "
+                "or name the test with the epoch."
+            )
+        else:
+            fails.append(
+                f"rule 3: no added test pins epoch {old_epoch}, the one immediately below the bump. "
+                "The OLD leg is unproven, so nothing asserts that already recorded games still replay "
+                "unchanged. Add a test that runs at {old} and asserts the PRE-bump outcome by value.".format(old=old_epoch)
+            )
     if not new_leg and not any(f"EPOCH_{new_epoch}_" in l for l in added):
-        fails.append(f"rule 4: no added test pins epoch {new_epoch} or its constant.")
+        if new_leg_literal:
+            fails.append(
+                f"rule 4: epoch {min(new_leg_literal)} is pinned only by a bare literal "
+                f"({literal[min(new_leg_literal)].strip()[:110]}) -- a renumber silently leaves "
+                f"it below the gate (#972), so pin it by its frozen constant "
+                f"(EPOCH_{new_epoch}_<NAME>) or name the test with the epoch."
+            )
+        else:
+            fails.append(f"rule 4: no added test pins epoch {new_epoch} or its constant.")
 
     if fails:
         print("epoch-gate: REFUSED")
