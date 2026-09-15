@@ -9,17 +9,26 @@ extends GdUnitTestSuite
 ## (core/nml-core/src/acts.rs), answering "duel" for every header written
 ## before the key existed.
 ##
-## The id's source is the arena selector's env door (`NML_MISSION`,
-## tools/arena_match.gd), validated against the same catalog the selector
-## validates against (MissionCatalog.mission_ids). The recorder cannot read
-## main.gd's `_solo_mission_id` (stay-out file), so a mission chosen through
-## the table UI still stamps the catalog default "duel" — flagged in the PR,
-## not silently lost: "duel" is what those games were before this key.
+## The id's sources, in order: the table's setter (AiActRecorder.set_mission,
+## armed by main.gd's _solo_apply_mission_if_chosen), the arena selector's env
+## door (`NML_MISSION`, tools/arena_match.gd), the catalog default "duel" —
+## every stamp validated against the same catalog the selector validates
+## against (MissionCatalog.mission_ids). before_test/after_test close the
+## recorder so each test starts from fresh statics (the same fresh-file
+## contract a game end gives the real recorder).
 
 const IN2M := 0.0254
 
 
+func before_test() -> void:
+	# close() resets the recorder's cached statics — INCLUDING the mission id
+	# (fresh-file contract) — so a test arms only what it asserts.
+	AiActRecorder.close()
+	OS.set_environment("NML_MISSION", "")
+
+
 func after_test() -> void:
+	AiActRecorder.close()
 	OS.set_environment("NML_MISSION", "")
 
 
@@ -62,12 +71,11 @@ func _state() -> Dictionary:
 	return state
 
 
-## The env door: the arena selector writes its catalog-validated choice here,
-## the recorder mirrors it into the header — id plus the catalog's family and
-## scoring, the same fields `tools/arena_match.gd`'s own `_mission_stamp`
-## builds for the battle log.
-func test_the_header_stamps_the_env_chosen_mission() -> void:
-	OS.set_environment("NML_MISSION", "Domination")   # the arena lower-cases; so do we
+## The table path: main.gd arms the setter from the selector's choice; the
+## stamp carries id + the catalog's family and scoring — the same fields the
+## core's Mission struct (acts.rs) reads back.
+func test_the_table_choice_stamps_the_header() -> void:
+	AiActRecorder.set_mission("Domination")   # the setter lower-cases, like the arena door
 	var m: Dictionary = AiActRecorder._header_line(_state(), Callable()).get("mission", {})
 	assert_str(str(m.get("id", ""))).override_failure_message("header stamp 'id'").is_equal("domination")
 	assert_str(str(m.get("family", ""))).override_failure_message("header stamp 'family'").is_equal("progressive")
@@ -78,11 +86,21 @@ func test_the_header_stamps_the_env_chosen_mission() -> void:
 ## omitted, because an absent key would mean "predates the stamp" to every
 ## reader (the same reading `ActHeader::mission_id` gives old recordings).
 func test_an_unchosen_mission_stamps_the_catalog_default() -> void:
-	OS.set_environment("NML_MISSION", "")
 	var m: Dictionary = AiActRecorder._header_line(_state(), Callable()).get("mission", {})
 	assert_str(str(m.get("id", ""))).override_failure_message("header stamp 'id'").is_equal("duel")
 	assert_str(str(m.get("family", ""))).override_failure_message("header stamp 'family'").is_equal("face_off")
 	assert_str(str(m.get("scoring", ""))).override_failure_message("header stamp 'scoring'").is_equal("end")
+
+
+## The env door: when the table chose nothing, the recorder reads the same
+## NML_MISSION the arena selector writes (strip + lower), so a headless arena
+## game and a table game stamp identically.
+func test_the_env_door_fills_in_when_the_table_chose_nothing() -> void:
+	OS.set_environment("NML_MISSION", "Domination")
+	var m: Dictionary = AiActRecorder._header_line(_state(), Callable()).get("mission", {})
+	assert_str(str(m.get("id", ""))).override_failure_message("header stamp 'id'").is_equal("domination")
+	assert_str(str(m.get("family", ""))).override_failure_message("header stamp 'family'").is_equal("progressive")
+	assert_str(str(m.get("scoring", ""))).override_failure_message("header stamp 'scoring'").is_equal("round_vp")
 
 
 ## An unknown id cannot reach the recorder through the arena (it FATALs
@@ -92,3 +110,5 @@ func test_an_unknown_env_id_falls_back_to_duel() -> void:
 	OS.set_environment("NML_MISSION", "not_a_mission")
 	var m: Dictionary = AiActRecorder._header_line(_state(), Callable()).get("mission", {})
 	assert_str(str(m.get("id", ""))).override_failure_message("header stamp 'id'").is_equal("duel")
+	assert_str(str(m.get("family", ""))).override_failure_message("header stamp 'family'").is_equal("face_off")
+	assert_str(str(m.get("scoring", ""))).override_failure_message("header stamp 'scoring'").is_equal("end")
