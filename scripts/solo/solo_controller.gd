@@ -1158,7 +1158,7 @@ func best_shoot_target_now(ai_unit: GameUnit) -> GameUnit:
 	var base_range: int = AiArchetype.max_range_inches(weapons) + shooting_range_bonus(ai_unit)
 	if base_range <= 0:
 		return null
-	var indirect: bool = has_indirect_ranged(weapons)
+	var indirect: bool = has_indirect_ranged(weapons) and indirect_ignores_los(ai_unit)
 	var from := unit_centre(ai_unit)
 	var profiles := AiEv.stamp_sergeant(filter_limited(ai_unit, AiShooting.profiles_in_range(weapons, 0.0)), ai_unit)
 	var us := AiEv.ctx_for(ai_unit, majority_in_cover(ai_unit), counter_models_of(ai_unit))
@@ -2041,7 +2041,7 @@ func _act(unit: GameUnit) -> Dictionary:
 			"why": "plan enforcement", "data": {"obj_dist_in": obj_dist}})
 	# Relentless / Indirect overlay (Solo & Co-Op AI overlays; Indirect is wave 5): a Relentless or
 	# Indirect ranged weapon with an enemy in range → Hold and shoot. The record names the trigger.
-	var hold_rule := hold_and_shoot_rule(weapons, shoot_range > 0 and enemy_dist <= float(shoot_range))
+	var hold_rule := hold_and_shoot_rule(weapons, shoot_range > 0 and enemy_dist <= float(shoot_range), unit)
 	if not hold_rule.is_empty():
 		action = AiDecision.Action.HOLD
 		do_shoot = true
@@ -2049,7 +2049,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	# Immobile / Artillery (GF/AoF v3.5.1 p.13): "may only use Hold actions" — the tree's move is overridden
 	# to HOLD unconditionally; the unit still shoots when a target is in range (Artillery solo overlay p.57:
 	# "If they are in range of enemies, they always use Hold and shoot"; can_shoot re-gates on range + LOS).
-	if forces_hold(unit.get_special_rules()):
+	if forces_hold(unit.get_special_rules()) and hold_only_param(unit):
 		action = AiDecision.Action.HOLD
 		do_shoot = shoot_range > 0
 		action_why = "Immobile/Artillery hold-only"
@@ -2103,7 +2103,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		# NML-1020 (parity-workflow bycatch): the hook just adopted a plan OVER the
 		# tree's Immobile/Artillery override — the book allows Hold ONLY (p.13 /
 		# solo p.57). Re-gate here: the shot survives, the move dies loudly.
-		if forces_hold(unit.get_special_rules()) and action != AiDecision.Action.HOLD:
+		if forces_hold(unit.get_special_rules()) and hold_only_param(unit) and action != AiDecision.Action.HOLD:
 			action = AiDecision.Action.HOLD
 			do_shoot = shoot_range > 0
 			solver_used = false
@@ -2349,7 +2349,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		_rule_note(report, "Traversal: may not end inside another unit — end stays clear", false)   # local clarification — no travel
 	report["can_shoot"] = (do_shoot or (quick_shot and action == AiDecision.Action.RUSH)) \
 		and shoot_range > 0 and d2 <= float(shoot_range) \
-		and (_has_los(unit, target_unit) or has_indirect_ranged(weapons) \
+		and (_has_los(unit, target_unit) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)) \
 			or granted_indirect_of(unit)   # GH #325 — the shooter's own Indirect token
 			or grants_indirect_to_attackers(target_unit))   # wave 6 — the Indirect Mark's once-grant
 	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
@@ -2490,7 +2490,7 @@ func _act_aircraft(unit: GameUnit, report: Dictionary) -> Dictionary:
 	report["dist_in"] = d2
 	report["shoot"] = shoot_range > 0
 	report["can_shoot"] = shoot_range > 0 and d2 <= float(shoot_range) \
-		and (_has_los(unit, target_unit) or has_indirect_ranged(weapons))
+		and (_has_los(unit, target_unit) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)))
 	# Post-move retarget for the strafing aircraft too (Bug 27/28): after the mandatory straight run its
 	# decided target may be out of arc — fire on whatever it CAN now reach.
 	if not bool(report["can_shoot"]) and shoot_range > 0 and best_shoot_target_now(unit) != null:
@@ -2876,7 +2876,7 @@ func _commander_ranged_hold(unit: GameUnit, target: GameUnit, weapons: Array, ac
 	var held: int = _current_round() - since + 1
 	# Does the unit have a REAL shot from HERE right now (range + LOS, or Indirect waives LOS)?
 	var has_shot: bool = shoot_range > 0.0 and enemy_dist <= shoot_range \
-			and (_has_los(unit, target) or has_indirect_ranged(weapons))
+			and (_has_los(unit, target) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)))
 	if not has_shot:
 		# Abort the hold-fire order for this activation: no target in range/LOS → let the tree reposition.
 		record_decision({"kind": "commander", "unit": unit.get_name(),
@@ -7507,7 +7507,7 @@ static func _seg_dist(a: Vector2, b: Vector2, p: Vector2) -> float:
 ## or, wave 5, Indirect — ranged weapon has an enemy in range always uses Hold and shoots instead of
 ## manoeuvring). Returns the triggering rule name ("" when none) so the decision record names WHICH rule
 ## overrode the tree.
-static func hold_and_shoot_rule(weapons: Array, enemy_in_range: bool) -> String:
+static func hold_and_shoot_rule(weapons: Array, enemy_in_range: bool, unit: GameUnit = null) -> String:
 	if not enemy_in_range:
 		return ""
 	for w in weapons:
@@ -7519,7 +7519,10 @@ static func hold_and_shoot_rule(weapons: Array, enemy_in_range: bool) -> String:
 			var s := str(r).strip_edges()
 			if s.begins_with("Relentless"):
 				return "Relentless"
-			if s.begins_with("Indirect"):
+			# The Indirect trigger's hold_and_shoot param (dead-parameter fold, twin of #1006):
+			# with no unit in scope (the pre-wave-5 callers/tests) the recorded true stands.
+			if s.begins_with("Indirect") and (unit == null \
+					or bool(RulesRegistry.unit_param(unit, "Indirect", "hold_and_shoot", true))):
 				return "Indirect"
 	return ""
 
@@ -7599,6 +7602,40 @@ static func forces_hold(unit_rules: Array) -> bool:
 	return false
 
 
+## Dead-parameter fold (the table twin of core #1006): the registry-driven halves of the
+## Immobile/Artillery menu gate, the Indirect LOS waiver and the Counter strike-first gate.
+## Each fallback equals the old hard-coded constant, so a real-book replay is byte-identical.
+## The menu gate's twin of core menu.rs (`forces_hold && hold_only.unwrap_or(true)`) — the
+## name-driven forces_hold stays the gate's first half, the entry's param is the second.
+static func hold_only_param(unit: GameUnit) -> bool:
+	if unit == null:
+		return true
+	for r in unit.get_special_rules():
+		var s := str(r).strip_edges()
+		if s.begins_with("Immobile"):
+			return bool(RulesRegistry.unit_param(unit, "Immobile", "hold_only", true))
+		if s.begins_with("Artillery"):
+			return bool(RulesRegistry.unit_param(unit, "Artillery", "hold_only", true))
+	return true
+
+
+## The Indirect LOS-waiver half: the entry's ignores_los param (default true) gates the
+## WEAPON-INDIRECT term only — spell/mark grants stay unconditional (core:
+## `(p.indirect && indirect_ignores_los.unwrap_or(true)) || mark_indirect`).
+static func indirect_ignores_los(unit: GameUnit) -> bool:
+	if unit == null:
+		return true
+	return bool(RulesRegistry.unit_param(unit, "Indirect", "ignores_los", true))
+
+
+## The Counter strike-first half (core `strikes_first.unwrap_or(true)`): the entry can opt a
+## Counter weapon OUT of the strike-first slot (default true = strikes first when charged).
+static func counter_strikes_first(unit: GameUnit) -> bool:
+	if unit == null:
+		return true
+	return bool(RulesRegistry.unit_param(unit, "Counter", "strikes_first", true))
+
+
 ## Whether a unit fights with Counter (GF/AoF v3.5.1 p.13) — a Counter melee weapon among `melee_profiles`
 ## (AiShooting.melee_profiles output), or the rule granted unit-wide in `unit_rules`. Input to the official
 ## Counter activation-order overlay (solo rules p.57: Counter units activate after all other friendly
@@ -7632,7 +7669,9 @@ static func counter_models_of(unit: GameUnit) -> int:
 		if alive <= 0:
 			continue
 		if member.has_special_rule("Counter"):
-			total += alive
+			# The per-model Impact cut is the entry's param (dead-parameter fold, twin of #1006);
+			# the shipped 1 replays the recorded "-1 per model" byte-identically.
+			total += alive * int(RulesRegistry.unit_param(member, "Counter", "impact_reduction_per_model", 1))
 			continue
 		var weapons: Array = []
 		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
@@ -7646,7 +7685,7 @@ static func counter_models_of(unit: GameUnit) -> int:
 				if str(r).strip_edges().begins_with("Counter"):
 					bearers += maxi(int((w as Object).count) if (w as Object).get("count") != null else 1, 1)
 					break
-		total += mini(bearers, alive)
+		total += mini(bearers, alive) * int(RulesRegistry.unit_param(member, "Counter", "impact_reduction_per_model", 1))
 	return total
 
 

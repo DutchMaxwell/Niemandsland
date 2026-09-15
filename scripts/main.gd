@@ -4470,7 +4470,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			if not melee:
 				count = _solo_sighted_count(member, enemy,
 					int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)) + float(range_bonus), enemy)),
-					bool(prof.get("indirect", false)) or mark_indirect) if enemy != null else member.get_alive_count()
+					bool(prof.get("indirect", false)) and SoloController.indirect_ignores_los(member) or mark_indirect) if enemy != null else member.get_alive_count()
 			# X2 (test game 2, B15): a dead bearer's weapon dies with it. Special weapons (fewer copies
 			# than models) are pinned to specific models by EquipmentDistributor — fire per-copy attacks
 			# × LIVING bearers (capped by the reach/sight count) instead of the unit-wide alive/max
@@ -5875,16 +5875,24 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	var attacker_artillery: bool = shooter_member != null and shooter_member.has_special_rule("Artillery")
 	var stealth: bool = _solo_rule_on_all_models(target, "Stealth")
 	var target_artillery: bool = target.has_special_rule("Artillery")
-	var mod: int = AiCombatMath.shooting_hit_modifier(dist_in, attacker_artillery, stealth, target_artillery, evasive)
+	# The Artillery magnitudes are the entries' params (dead-parameter fold, twin of #1006): the
+	# fallback is the recorded constant, so a real-book replay is byte-identical.
+	var art_shooter_bonus: int = AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS
+	var art_target_pen: int = AiCombatMath.ARTILLERY_TARGET_HIT_PENALTY
+	if attacker_artillery:
+		art_shooter_bonus = int(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_hit_bonus", ARTILLERY_SHOOTER_HIT_BONUS))
+	if target_artillery:
+		art_target_pen = int(RulesRegistry.unit_param(target, "Artillery", "target_hit_penalty", ARTILLERY_TARGET_HIT_PENALTY))
+	var mod: int = AiCombatMath.shooting_hit_modifier(dist_in, attacker_artillery, stealth, target_artillery, evasive, art_shooter_bonus, art_target_pen)
 	var notes: PackedStringArray = []
 	var over_nine: bool = dist_in > AiCombatMath.LONG_RANGE_IN
 	if attacker_artillery and over_nine:
-		notes.append("Artillery +1")
+		notes.append("Artillery +%d" % art_shooter_bonus)
 	elif attacker_artillery:
 		# #224 (transparency wave stage 1 — rules-must-log covers NON-application too): the
 		# +1 is range-conditional (GF v3.5.1 p.13 "over 9\" away"); two testers independently
 		# read the silent short-range case as a missing rule.
-		notes.append("Artillery: no +1 (target within 9\")")
+		notes.append("Artillery: no +%d (target within 9\")" % art_shooter_bonus)
 	if stealth and over_nine:
 		notes.append("Stealth -1")
 	elif stealth:
@@ -5893,9 +5901,9 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		mod -= alias_pen
 		notes.append("%s -%d" % [alias_name, alias_pen])
 	if target_artillery and over_nine:
-		notes.append("Artillery target -2")
+		notes.append("Artillery target -%d" % art_target_pen)
 	elif target_artillery:
-		notes.append("Artillery target: no -2 (within 9\")")   # #224 sweep
+		notes.append("Artillery target: no -%d (within 9\")" % art_target_pen)   # #224 sweep
 	if evasive:
 		notes.append(evasive_note)
 	# Coverage wave — growth markers (Precision Growth): +1 to hit per two markers.
@@ -8635,7 +8643,9 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# still gets the one strike-back choice. `_defender_is_ai` drives both the strike-back and every save UX.
 	var defender_is_ai: bool = _solo_is_ai_unit(target)
 	var strike_back := -1   # -1 = not yet asked, 0 = declined, 1 = strikes
-	var counter_first: bool = _solo_has_counter(target)
+	# The strike-first half of the Counter gate is the entry's param (dead-parameter fold, twin of
+	# #1006, core `strikes_first.unwrap_or(true)`); the recorded true replays byte-identically.
+	var counter_first: bool = _solo_has_counter(target) and SoloController.counter_strikes_first(target)
 	if counter_first and _solo_combined_alive(target) > 0:
 		strike_back = 1 if defender_is_ai or await _solo_confirm_strike_back(target, unit, true) else 0
 		if strike_back == 1:
@@ -9664,7 +9674,10 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 	# in line of sight"): a unit with an Indirect ranged weapon waives the LOS test here;
 	# the range gate (incl. Aircraft/Shrouding shrink) stays fully in force. Mirrors the
 	# AI's unit-level legality gate, so both sides judge targets identically.
-	var indirect: bool = SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
+	# The weapon-indirect term is the entry's ignores_los param (dead-parameter fold, twin of
+	# #1006); spell/mark grants stay unconditional — they are not weapon Indirect.
+	var indirect: bool = (SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
+		and SoloController.indirect_ignores_los(attacker)) \
 		or SoloController.granted_indirect_of(attacker) \
 		or _solo_target_grants_indirect(target)   # wave 6 — the Indirect Mark's once-grant on the target
 	if rng_in <= 0 or _solo_sighted_count(attacker, target, rng_in, indirect) <= 0:
@@ -9922,7 +9935,8 @@ func _solo_hover_sighted_count(attacker: GameUnit, hovered: GameUnit) -> int:
 		return _solo_combined_alive(attacker) if legal.has(hovered) else 0
 	var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
 	return _solo_sighted_count(attacker, hovered, rng_in,
-		SoloController.has_indirect_ranged(_solo_all_weapons(attacker)))
+		SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
+			and SoloController.indirect_ignores_los(attacker))
 
 
 ## Resolve the player's declared attack — the mirror of the AI flow: your groups (unit + heroes, own
@@ -10483,7 +10497,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if battle_log != null:
 		var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
 		var total := _solo_combined_alive(attacker)
-		var log_indirect: bool = SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
+		var log_indirect: bool = (SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
+			and SoloController.indirect_ignores_los(attacker)) \
 			or _solo_target_grants_indirect(target)   # wave 6 — the Indirect Mark's once-grant
 		# #182 — rules-must-log: when the volley is only legal BECAUSE of Indirect, say so
 		# (the old line read "0/N with line of sight" over a perfectly legal barrage).
@@ -10679,8 +10694,9 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
 			attacker.get_name(), target.get_name()], true)
 	await _solo_stage_phase("Charge")
 	# — Counter (GF/AoF v3.5.1 p.13 "Strikes first with this weapon when charged"): before your attacks,
-	#   including Impact (Counter's Impact reduction presumes the counter-strike precedes it) —
-	var ai_counter: bool = _solo_has_counter(target)
+	#   including Impact (Counter's Impact reduction presumes the counter-strike precedes it); the
+	#   strike-first half is the entry's param (dead-parameter fold, twin of #1006)
+	var ai_counter: bool = _solo_has_counter(target) and SoloController.counter_strikes_first(target)
 	if ai_counter:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "Counter: %s strikes first" % target.get_name(), true)

@@ -11,10 +11,11 @@ extends GdUnitTestSuite
 const IN2M := 0.0254
 
 
-func _unit_with(rules: Array, system: String, faction: String, id: String = "T", n: int = 3) -> GameUnit:
+func _unit_with(rules: Array, system: String, faction: String, id: String = "T", n: int = 3,
+		pid: int = 2) -> GameUnit:
 	var u: GameUnit = auto_free(GameUnit.new())
 	u.unit_id = id
-	u.unit_properties = {"player_id": 2, "name": id, "quality": 4, "defense": 4,
+	u.unit_properties = {"player_id": pid, "name": id, "quality": 4, "defense": 4,
 		"special_rules": rules, "game_system": system, "faction_folder": faction}
 	var od := OPRApiClient.OPRUnit.new()
 	var w := OPRApiClient.OPRWeapon.new()
@@ -56,8 +57,8 @@ func _inject(system: String, name: String, primitive: String, params: Dictionary
 
 
 func _state_with(rules: Array, system: String, faction: String) -> Dictionary:
-	var gun := _unit_with(rules, system, faction, "Gun", 2)
-	var foe := _unit_with([], system, faction, "Foe", 2)
+	var gun := _unit_with(rules, system, faction, "Gun", 2, 1)
+	var foe := _unit_with([], system, faction, "Foe", 2, 2)
 	for i in range(2):
 		(foe.models[i] as ModelInstance).node.global_position = Vector3(float(i) * IN2M, 0, 10.0 * IN2M)
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
@@ -132,8 +133,9 @@ func test_artillery_hit_params_reach_the_hit_modifier() -> void:
 	# The Artillery magnitudes are entry params (core twin: shooter_hit_bonus /
 	# target_hit_penalty). Over 9", a fixture pair (+2 shooter, -3 target) nets -1;
 	# without params the recorded +1 / -2 constants replay.
-	var got: Variant = AiCombatMath.call("shooting_hit_modifier", 12.0, true, false, true, false, 2, 3)
-	assert_int(int(got) if got != null else -999) \
+	# A direct 7-arg call (the fold's full signature) is the RED half — pre-fold the
+	# suite cannot even parse it; post-fold the entry magnitudes must land.
+	assert_int(AiCombatMath.shooting_hit_modifier(12.0, true, false, true, false, 2, 3)) \
 		.override_failure_message("entry magnitudes (+2 shooter, -3 target) must reach the modifier") \
 		.is_equal(-1)
 	assert_int(AiCombatMath.shooting_hit_modifier(12.0, true, false, true, false)) \
