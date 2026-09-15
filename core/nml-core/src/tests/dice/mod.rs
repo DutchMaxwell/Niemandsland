@@ -415,5 +415,6 @@ mod stealth_alias;
 mod surge_extra_attack;
 mod surge_gates;
 mod surge_low_gate;
+mod surge_param;
 mod unpredictable_shooter;
 mod unstoppable_melee;
