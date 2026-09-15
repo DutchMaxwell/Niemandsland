@@ -146,3 +146,108 @@ use super::*;
             shot.log
         );
     }
+
+    // ---- TEST WAVE (2026-09-15, D-PROOF part 2 chunk 2) — "Rapid Blink"'s
+    // own NUMBER pins (gf/elven_jesters, the `Bounding {place_d3_plus: 0}`
+    // DATA-alias): the placement read stamps the alias's own PlaceSpec —
+    // ONE die, plus 0.0 — the activation hops the plain 6" band by the
+    // rolled D3, the log names the rule, and a below-gate epoch stays on
+    // the plain band.
+
+    /// The carrier: a gf/elven_jesters profile whose ONLY rule is "Rapid
+    /// Blink" (the `Bounding {place_d3_plus: 0}` alias, gf 3.5.3), read off
+    /// the REAL registry. The REAL `build_for` product, at `epoch`.
+    fn rapid_blink(epoch: u32) -> UnitStatic {
+        let p = Profile {
+            unit_id: "a".into(),
+            name: "a".into(),
+            quality: 4,
+            defense: 4,
+            tough: 1,
+            wounds_max: vec![1],
+            model_count: 1,
+            weapons: vec![],
+            special_rules: vec!["Rapid Blink".into()],
+            caster_value: 0,
+            base_radius: 0.0,
+            base_shape: String::new(),
+            base_w_mm: 0.0,
+            base_d_mm: 0.0,
+            game_system: "gf".into(),
+            faction_folder: "elven_jesters".into(),
+            item_grants: vec![],
+            attached_hero_rules: vec![],
+            move_bands: MoveBands { advance: 6.0, rush: 12.0, charge: None },
+        };
+        let mut reg = crate::rules::Registries::new(&repo_root());
+        UnitStatic::build_for(&mut reg, &p, epoch)
+    }
+
+    /// The hop line: the SAME corridor `hop_line` builds, but with the
+    /// Rapid Blink carrier in slot 0.
+    fn blink_line(epoch: u32) -> (State, Vec<UnitStatic>) {
+        let (mut st, _) = dangerous_line();
+        for j in 1..4 {
+            st.positions[j] = vec![];
+            st.radii[j] = vec![];
+            st.wounds[j] = vec![];
+            st.alive[j] = 0;
+        }
+        st.objectives = vec![crate::state::Objective {
+            pos: [10.0 * IN2M, 0.0, 0.0],
+            owner: 0,
+        }];
+        (st, vec![rapid_blink(epoch), UnitStatic { name: "ah".into(), ..Default::default() },
+            UnitStatic { name: "b".into(), ..Default::default() },
+            UnitStatic { name: "bh".into(), ..Default::default() }])
+    }
+
+    /// The placement read's own numbers: one die (no `dice_count`, no
+    /// `place_die`), plus 0.0 (the alias's own `place_d3_plus`), under the
+    /// rule's EXACT name.
+    #[test]
+    fn rapid_blink_stamps_its_own_place_spec_at_the_current_epoch() {
+        let (_, statics) = blink_line(crate::acts::CURRENT_RULES_EPOCH);
+        let spec = statics[0].bounding_place.as_ref().expect("the alias stamps its placement read");
+        assert_eq!(spec.name, "Rapid Blink", "the rule name the table logs");
+        assert_eq!(spec.dice, 1, "one D3");
+        assert_eq!(spec.plus, 0.0, "the alias's own place_d3_plus: 0");
+    }
+
+    /// At the CURRENT epoch a fresh-sim Rapid Blink activation hops the unit
+    /// toward the objective BEFORE the move — the ADVANCE lands past the
+    /// plain 6" band (band + the rolled D3 inches), and the hop names the
+    /// rule (rules-must-log). The roll is 1..=3, the scan takes a strictly
+    /// closer legal spot only, so 6.5"-9.5" covers every face.
+    #[test]
+    fn at_the_current_epoch_a_rapid_blink_activation_hops_before_the_move() {
+        let (st, statics) = blink_line(crate::acts::CURRENT_RULES_EPOCH);
+        let (next, shot) = run_hop(&st, &statics, crate::acts::CURRENT_RULES_EPOCH);
+        let moved_in = (next.positions[0][0][0] - st.positions[0][0][0]) / IN2M;
+        assert!(
+            moved_in > 6.5 && moved_in < 9.5,
+            "the hop joined the move: {moved_in}\" (band 6\" + up to 3\" of D3)"
+        );
+        assert!(
+            shot.log.iter().any(|l| l.contains("Rapid Blink") && l.contains("rolled")),
+            "rules-must-log: one trace line naming the rule and the rolled distance, got {:?}",
+            shot.log
+        );
+    }
+
+    /// Below the gate (EPOCH_25_ETHEREAL_BANDS) a fresh-sim Rapid Blink
+    /// activation does NOT hop — the ADVANCE is the plain 6" band to the
+    /// digit, and the placement read is `None`.
+    #[test]
+    fn at_epoch_25_a_rapid_blink_activation_stays_on_its_plain_band() {
+        let (st, statics) = blink_line(crate::acts::EPOCH_25_ETHEREAL_BANDS);
+        assert!(statics[0].bounding_place.is_none(), "below the gate the placement read is None");
+        let (next, shot) = run_hop(&st, &statics, crate::acts::EPOCH_25_ETHEREAL_BANDS);
+        let moved_in = (next.positions[0][0][0] - st.positions[0][0][0]) / IN2M;
+        assert!((moved_in - 6.0).abs() < 1e-6, "plain band only: {moved_in}\"");
+        assert!(
+            !shot.log.iter().any(|l| l.contains("placed")),
+            "no hop below the gate: {:?}",
+            shot.log
+        );
+    }
