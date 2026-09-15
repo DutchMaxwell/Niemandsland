@@ -128,3 +128,44 @@ use super::*;
             shot2.log
         );
     }
+
+    /// `timing: end_of_activation` (the dead-params recount, gf row): the
+    /// Dash move never rides the SHOOT leg — a hold-and-shoot activation
+    /// pays no hop, grants no band, logs no Dash line. The move beat stays
+    /// the move leg's own (the two band tests above).
+    fn dash_hold_line(epoch: u32) -> (State, Vec<UnitStatic>) {
+        let (mut st, mut statics) = dash_line(epoch);
+        statics[0].shoot = vec![gun("Rifle", 1, 24)];
+        st.positions[2] = vec![[12.0 * IN2M, 0.0, 0.0]];
+        st.radii[2] = vec![IN2M];
+        st.wounds[2] = vec![1];
+        st.alive[2] = 1;
+        statics[2] = UnitStatic {
+            name: "b".into(),
+            model_count: 1,
+            wounds_max: vec![1],
+            ctx: Ctx { defense: 4, tough: 1, models: 1, ..Default::default() },
+            ..Default::default()
+        };
+        (st, statics)
+    }
+
+    #[test]
+    fn a_dash_shoot_leg_never_pays_the_dash_move() {
+        let (st, statics) = dash_hold_line(crate::acts::CURRENT_RULES_EPOCH);
+        let (next, shot) = run_dash(&st, &statics, &buff_action(Some("b")));
+        assert_eq!(
+            next.positions[0][0], st.positions[0][0],
+            "the shoot-only activation never moves the Dash carrier"
+        );
+        assert!(
+            shot.log.iter().all(|l| !l.contains("Dash")),
+            "no Dash move is granted before shooting: {:?}",
+            shot.log
+        );
+        assert!(
+            shot.rolls.iter().any(|r| r.owner == "a"),
+            "the volley still fired from the standing start: {:?}",
+            shot.rolls
+        );
+    }
