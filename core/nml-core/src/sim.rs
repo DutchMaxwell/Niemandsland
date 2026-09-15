@@ -2017,7 +2017,7 @@ fn has_shoot_target(statics: &[UnitStatic], state: &State, arty: usize) -> bool 
     if max_range <= 0.0 {
         return false;
     }
-    let indirect = us.shoot.iter().any(|p| p.indirect);
+    let indirect = us.shoot.iter().any(|p| p.indirect && p.indirect_ignores_los.unwrap_or(true));
     let pid = state.player[arty];
     for e in 0..state.units() {
         if state.player[e] == pid || state.alive[e] <= 0 || state.dormant[e] {
@@ -3607,7 +3607,7 @@ fn sighted_profiles_of(
         // Indirect (GF v3.5.1) "may target enemies that are not in line of
         // sight as if in line of sight": the range gate stays, the sight test
         // goes (main.gd:4136-4138).
-        let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach, p.indirect || mark_indirect);
+        let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach, (p.indirect && p.indirect_ignores_los.unwrap_or(true)) || mark_indirect);
         // Rules-must-log: the mark fires only where it changes the volley.
         if mark_indirect && !p.indirect && seen > 0 {
             trace_rule("volley", "Indirect Mark",
@@ -4164,7 +4164,7 @@ fn tray_charge(
     charge_from_in: f64,
     cover: Cover,
 ) -> Option<usize> {
-    if statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter) {
+    if statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter && p.counter_strikes_first.unwrap_or(true)) {
         // :8055-8059 — a Counter weapon runs a WHOLE extra strike phase before
         // Impact, and strips Impact dice with it.
         shot.mark("counter_strikes_first");
@@ -4175,7 +4175,10 @@ fn tray_charge(
     // the NON-counter weapons remain for the normal strike-back slot
     // (:8315). Below the epoch the core keeps its marker-only reading.
     let counter_first = rule_on(seams.rules_epoch, EPOCH_13_WHO_WINS)
-        && statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter);
+        && statics[next.roster.profile[ti]]
+            .melee
+            .iter()
+            .any(|p| p.counter && p.counter_strikes_first.unwrap_or(true));
     let mut by_su = 0;
     let mut by_tu = 0;
     if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {

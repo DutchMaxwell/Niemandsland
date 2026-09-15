@@ -102,6 +102,7 @@ pub fn modified_hit_target(base_target: i64, roll_mod: i64) -> i64 {
 /// skipped whenever the literal Stealth flag already fired over 9" — no
 /// double-dip, exactly the table's `not (stealth and over_nine)` guard.
 #[inline]
+#[allow(clippy::too_many_arguments)]
 pub fn shooting_hit_modifier(
     dist_in: f64,
     attacker_artillery: bool,
@@ -112,18 +113,20 @@ pub fn shooting_hit_modifier(
     shot_hit_bonus_over9: i64,
     stealth_alias_penalty: i64,
     stealth_alias_over_in: f64,
+    artillery_shooter_hit_bonus: i64,
+    artillery_target_hit_penalty: i64,
 ) -> i64 {
     let mut m = 0;
     let over_nine = dist_in > LONG_RANGE_IN;
     if over_nine {
         if attacker_artillery {
-            m += ARTILLERY_SHOOTER_HIT_BONUS;
+            m += artillery_shooter_hit_bonus;
         }
         if target_stealth {
             m -= STEALTH_HIT_PENALTY;
         }
         if target_artillery {
-            m -= ARTILLERY_TARGET_HIT_PENALTY;
+            m -= artillery_target_hit_penalty;
         }
         m += shot_hit_bonus_over9;
     }
@@ -505,6 +508,8 @@ pub fn profile_ev(
         // bearer's own buff/debuff ±N, 0 on every ctx_of-built ctx.
         let mut shoot_mod = shooting_hit_modifier(
             dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0, 0, 0.0,
+            att.artillery_shooter_hit_bonus.unwrap_or(ARTILLERY_SHOOTER_HIT_BONUS),
+            def.artillery_target_hit_penalty.unwrap_or(ARTILLERY_TARGET_HIT_PENALTY),
         ) + att.hit_mod;
         // EV/tray split (found by #489, caveat 4) — see the melee branch above.
         if p.unstoppable_ev && shoot_mod < 0 {
@@ -666,7 +671,8 @@ pub fn ravage_ev(att: &Ctx, def: &Ctx) -> f64 {
 /// GDScript's, not a specialisation of it.
 pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
     let models = att.models.max(0);
-    let counter = def.counter_models;
+    let counter =
+        def.counter_models.saturating_mul(def.counter_impact_per_model.unwrap_or(1));
     let heavy_raw = att.heavy_impact * models;
     let heavy_cut = counter.min(heavy_raw);
     let heavy_dice = heavy_raw - heavy_cut;

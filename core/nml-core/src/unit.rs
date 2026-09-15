@@ -118,6 +118,14 @@ pub struct Ctx {
     pub tough: i64,
     pub models: i64,
     pub artillery: bool,
+    /// The Artillery hit modifiers' own registry params (`shooter_hit_bonus`
+    /// / `target_hit_penalty`, dead-parameter recount 2026-09-15): the
+    /// shipped entry answers exactly the `ARTILLERY_SHOOTER_HIT_BONUS` /
+    /// `ARTILLERY_TARGET_HIT_PENALTY` constants the folds hard-coded before
+    /// this read. `None` = no entry (or below `EPOCH_7_TABLE_RULES`) — the
+    /// folds keep the constants, the recorded values.
+    pub artillery_shooter_hit_bonus: Option<i64>,
+    pub artillery_target_hit_penalty: Option<i64>,
     pub furious: bool,
     pub fearless: bool,
     /// `Fear(X)` — the melee WINNER comparison and nothing else
@@ -264,6 +272,10 @@ pub struct Ctx {
     /// `AiEv.ctx_for`'s third argument, which `BattleSim._ctx_of` never passes
     /// (battle_sim.gd:702) — always 0 in the sim, modelled for `impact_ev`.
     pub counter_models: i64,
+    /// Dead-parameter recount 2026-09-15 (family 1) — the Counter entry's
+    /// `impact_reduction_per_model` (registry default 1, stamped behind the
+    /// FROZEN `EPOCH_13_WHO_WINS` with `counter_models`).
+    pub counter_impact_per_model: Option<i64>,
     pub regeneration: bool,
     pub regen_target: i64,
     /// Block B10 — the SPELL-wound twin (`main._solo_regen_pick`'s
@@ -681,6 +693,12 @@ pub struct ShootProfile {
     /// alone; `combat.rs` (the EV port) reads `unstoppable_ev`.
     pub unstoppable: bool,
     pub counter: bool,
+    /// The Counter mark's own switch — the registry `strikes_first`
+    /// (dead-parameter recount 2026-09-15), the table's
+    /// `unit_param(member, "Counter", "strikes_first", true)`
+    /// (main.gd:4457). `None` = no entry (or below `EPOCH_7_TABLE_RULES`):
+    /// the folds keep the mark, the recorded constant.
+    pub counter_strikes_first: Option<bool>,
     pub destructive: bool,
     pub shred: bool,
     /// A unit-level Shred-FAMILY rule — the plain name or any carried
@@ -745,6 +763,11 @@ pub struct ShootProfile {
     /// "moved_hit_penalty", 1)`), stamped behind the FROZEN
     /// `EPOCH_7_TABLE_RULES` in `build_for`; 0 = none (below the gate).
     pub indirect_moved_hit_penalty: i64,
+    /// The Indirect sight waiver's own switch — the registry `ignores_los`
+    /// (dead-parameter recount 2026-09-15). `None` = no entry (or below
+    /// `EPOCH_7_TABLE_RULES`): the folds keep the waiver, the recorded
+    /// constant.
+    pub indirect_ignores_los: Option<bool>,
     /// The unit-level "Indirect when Shooting" stamp (`build_for`'s epoch-6
     /// named walk below) — set ALONGSIDE `indirect` so the volley log
     /// (dice.rs) can name the RULE, not the weapon tag, when its cover skip
@@ -1037,6 +1060,12 @@ pub struct UnitStatic {
     /// move seam (sim.rs), the latch living in `State.feats_used`, never
     /// in statics. `None` below `rules_epoch` 7. See `speed_feat_of`.
     pub speed_feat: Option<SpeedFeatSpec>,
+    /// The forces_hold menu gate's own switch — the carried Immobile/
+    /// Artillery entry's `hold_only` (dead-parameter recount 2026-09-15).
+    /// `None` = no carried name with an entry (or below
+    /// `EPOCH_6_TABLE_RULES`): the menu keeps the gate, the recorded
+    /// constant. Read only by `menu::candidates_tuned` — never recorded.
+    pub hold_only: Option<bool>,
     /// FEAT PR 3 — the two aof latch feats' windows, read BY NAME off the
     /// registry (the design's `hit_bonus: 1, all_attacks: true` /
     /// `ap_bonus: 1, condition: any_attack`, both `uses_per_game: 1` —
@@ -2607,6 +2636,19 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         } else {
             0
         };
+    // The Artillery hit modifiers' own params (dead-parameter recount
+    // 2026-09-15), behind the FROZEN `EPOCH_7_TABLE_RULES` like the
+    // neighbouring Indirect param read: below 7 the Options stay None and
+    // every earlier replay keeps the constants byte-exact.
+    let artillery_entry = if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+        reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Artillery")
+    } else {
+        None
+    };
+    let artillery_shooter_hit_bonus =
+        artillery_entry.as_ref().map(|e| e.param_i("shooter_hit_bonus", 1));
+    let artillery_target_hit_penalty =
+        artillery_entry.as_ref().map(|e| e.param_i("target_hit_penalty", 2));
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -2615,6 +2657,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         tough: unit_rating(&p.special_rules, "Tough").max(1),
         models: 1, // placeholder; `_ctx_of` always writes the snapshot's alive
         artillery: has_special_rule(&p.special_rules, "Artillery"),
+        artillery_shooter_hit_bonus,
+        artillery_target_hit_penalty,
         furious: has_special_rule(&p.special_rules, "Furious"),
         fearless: has_special_rule(&p.special_rules, "Fearless"),
         fear: unit_rating(&p.special_rules, "Fear"),
@@ -2736,6 +2780,14 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
             p.weapons.iter().filter(|w| w.range <= 0.0 && weapon_has(w, "Counter")).map(|w| w.count.max(1)).sum::<i64>().min(p.model_count.max(0))
         } else {
             0
+        },
+        // The reduction's per-model magnitude — the same gate, the registry's
+        // own `impact_reduction_per_model` (dead-parameter recount
+        // 2026-09-15); the shipped entry answers the 1 the folds assumed.
+        counter_impact_per_model: if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
+            reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Counter").map(|e| e.param_i("impact_reduction_per_model", 1))
+        } else {
+            None
         },
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
@@ -5778,6 +5830,24 @@ impl UnitStatic {
                 sp.counter = true;
             }
         }
+        // Dead-parameter recount 2026-09-15 (family 1) — the mark's own
+        // switch, the table's `unit_param(member, "Counter", "strikes_first",
+        // true)` (main.gd:4457), stamped behind the FROZEN
+        // `EPOCH_7_TABLE_RULES`: below 7 the field stays None and every
+        // earlier replay keeps the mark byte-exact.
+        if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
+            let strikes_first = reg
+                .rules_for(&p.game_system)
+                .lookup(&p.faction_folder, "Counter")
+                .map(|e| e.param_b_or("strikes_first", true));
+            if let Some(sf) = strikes_first {
+                for sp in melee.iter_mut() {
+                    if sp.counter {
+                        sp.counter_strikes_first = Some(sf);
+                    }
+                }
+            }
+        }
         // Surge family wave 2 (rules-wave2-surge2), gated on
         // `EPOCH_5_TABLE_RULES` (frozen at 5, never the literal 4 or the
         // CURRENT_RULES_EPOCH symbol) so a wave-3 bump cannot re-date the
@@ -6126,15 +6196,25 @@ impl UnitStatic {
         // (main.gd:3223-3224, the book's -1 to hit after a move), behind the
         // FROZEN `EPOCH_7_TABLE_RULES`: a record below 7 replays untouched.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-            let pen = reg
+            let entry = reg
                 .rules_for(&p.game_system)
-                .lookup(&p.faction_folder, "Indirect")
-                .map_or(1, |e| e.param_i("moved_hit_penalty", 1));
+                .lookup(&p.faction_folder, "Indirect");
+            let pen = entry.as_ref().map_or(1, |e| e.param_i("moved_hit_penalty", 1));
             if pen > 0 {
                 for sp in shoot.iter_mut() {
                     if sp.indirect {
                         sp.indirect_moved_hit_penalty = pen;
                     }
+                }
+            }
+            // Dead-parameter recount 2026-09-15 (family 3) — the waiver's own
+            // switch, the entry's `ignores_los`; the shipped entry answers
+            // the true every fold assumed, so replays stay byte-exact.
+            let ignores_los =
+                entry.as_ref().map_or(true, |e| e.param_b_or("ignores_los", true));
+            for sp in shoot.iter_mut() {
+                if sp.indirect {
+                    sp.indirect_ignores_los = Some(ignores_los);
                 }
             }
         }
@@ -6157,11 +6237,32 @@ impl UnitStatic {
     // behind the same FROZEN `EPOCH_6_TABLE_RULES` gate (the sim fold reads
     // the field, the rules-must-log line reads the name).
     let (hnr_move_in, hnr_rule) = hit_and_run_boost_of(reg, p, rules_epoch);
+        // Dead-parameter recount 2026-09-15 (family 2) — the forces_hold
+        // gate's own switch, the carried Immobile/Artillery entry's
+        // `hold_only`, behind the FROZEN `EPOCH_6_TABLE_RULES`. `None` = no
+        // carried name with a registry entry — the menu keeps the recorded
+        // constant.
+        let hold_only = if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+            ["Immobile", "Artillery"].iter().find_map(|n| {
+                if has_special_rule(&p.special_rules, n)
+                    || has_special_rule(&p.item_grants, n)
+                {
+                    reg.rules_for(&p.game_system)
+                        .lookup(&p.faction_folder, n)
+                        .map(|e| e.param_b_or("hold_only", true))
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        };
         UnitStatic {
             ctx: ctx_for(reg, p, rules_epoch),
             name: p.name.clone(),
             fortified_alias_name: fa.alias_name,
             fortified_boost_name: fa.boost_name,
+            hold_only,
             shoot,
             melee,
             strafe_shoot,
