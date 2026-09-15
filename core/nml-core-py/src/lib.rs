@@ -187,6 +187,7 @@ struct PyLeafValue<'a> {
     rows: RefCell<&'a mut RowEncoder>,
     hero_attach: bool,
     opener_seat: bool,
+    rules_epoch: u32,
     err: RefCell<Option<PyErr>>,
 }
 
@@ -200,7 +201,7 @@ impl LeafValue for PyLeafValue<'_> {
         };
         for st in leaves {
             let t = nmlcore::tokens::build(st, side, self.statics, self.terrain, &mut rows,
-                &[], -1, self.hero_attach, self.opener_seat)?;
+                &[], -1, self.hero_attach, self.opener_seat, self.rules_epoch)?;
             to_py(py, &t.to_json()).and_then(|d| batch.append(d)).map_err(&park)?;
         }
         self.fun.call1((batch, side)).and_then(|o| o.extract::<Vec<f64>>()).map_err(&park)
@@ -1312,6 +1313,7 @@ impl Core {
         let hook = leaf_value_fn.map(|f| PyLeafValue {
             fun: f, statics: &statics, terrain: &self.terrain, rows,
             hero_attach: seams.hero_attach, opener_seat: act.opener_seat,
+            rules_epoch: self.knobs.rules_epoch,
             err: RefCell::new(None),
         });
         search.leaf_value = hook.as_ref().map(|h| h as &dyn LeafValue);
@@ -1769,6 +1771,7 @@ impl Core {
             best,
             hero_attach,
             opener_seat,
+            self.knobs.rules_epoch,
         )
         .map_err(declined)?;
         Ok(tokens_dict(py, t)?.into_any().unbind())
