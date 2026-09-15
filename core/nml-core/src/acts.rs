@@ -483,13 +483,12 @@ pub const CURRENT_RULES_EPOCH: u32 = 60;
 /// terrain-gated kind (`Ctx::stealth_alias_near_terrain`), and the table's
 /// alias walk replaces the cover-cell read with the same predicate over the
 /// #969 id-rail. Below 57 the alias folds unconditionally (the core's old
-/// read) and every recorded game replays byte-exact. `57` is one past every
-/// epoch present at the push (56 = `EPOCH_56_GROUNDED_PROTECTION`, #974),
+/// read) and every recorded game replays byte-exact. `60` is one past every
+/// epoch present at the push (58 = `EPOCH_58_PRECISION_DEBUFF` on main, 59 = Precision Markers in flight),
 /// and the value `CURRENT_RULES_EPOCH` is bumped to in the same change.
-/// Every call site reads THIS constant, not the literal `57` or
+/// Every call site reads THIS constant, not the literal `60` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_60_GROUNDED_STEALTH: u32 = 60;
-pub const CURRENT_RULES_EPOCH: u32 = 60;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
