@@ -721,7 +721,9 @@ impl Core {
     /// mechanics assets under `repo_root`.
     fn set_header(&mut self, header: &Bound<'_, PyAny>) -> PyResult<()> {
         let text = json_text(header)?;
-        let ActHeader { profiles, terrain, knobs } = nmlcore::read_act_header(&text)
+        // `mission` stays unread here — the Python seam replays SEARCHES, not
+        // grading; `ActHeader::mission_id` is the reader's door (acts.rs).
+        let ActHeader { profiles, terrain, knobs, .. } = nmlcore::read_act_header(&text)
             .map_err(|e| Unsupported::new_err(e))?;
         // Validate the requested vocabulary before replacing any active
         // header state. A rejected header must leave the previous core usable.

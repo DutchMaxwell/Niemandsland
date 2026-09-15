@@ -1265,6 +1265,12 @@ struct Header {
     /// `header_of` into `Knobs::bands_prefolded`.
     #[serde(default)]
     books: Option<serde_json::Value>,
+    /// Wave 6 — the table's mission stamp (`act_recorder.gd`: id + catalog
+    /// family + scoring, from the arena selector's `NML_MISSION`). Optional:
+    /// every header recorded before the stamp existed and the core's own
+    /// header shape parse as `None`.
+    #[serde(default)]
+    mission: Option<Mission>,
 }
 
 /// One entry of `trace.scored` — `AiPlanner.plan_with_rollout` ai_planner.gd:
@@ -1501,6 +1507,19 @@ pub struct ActCorpus {
     pub acts: Vec<Act>,
 }
 
+/// The header's mission stamp — `act_recorder.gd` writes id + the catalog's
+/// family and scoring from the arena selector's `NML_MISSION`. Only `id` is
+/// required when the block is present: a stamp without one is a malformed
+/// record and refuses the whole header, loudly.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Mission {
+    pub id: String,
+    #[serde(default)]
+    pub family: String,
+    #[serde(default)]
+    pub scoring: String,
+}
+
 /// The header line's three products — the profile table, the board and the
 /// search knobs. Factored out of `read_acts` so a caller that never sees the
 /// file (the Python seam, NML-1073 M3-1) builds them from the SAME code path
@@ -1510,6 +1529,19 @@ pub struct ActHeader {
     pub profiles: Rc<Profiles>,
     pub terrain: Terrain,
     pub knobs: Knobs,
+    /// The stamped mission, or `None` for every header written before the
+    /// stamp existed (and the core's own header shape). Read `mission_id()`,
+    /// not this field, when you need an id to grade by.
+    pub mission: Option<Mission>,
+}
+
+impl ActHeader {
+    /// The stamped mission id, or "duel" — the fallback the table stamps for
+    /// a game that chose no mission, and what every header recorded before
+    /// the stamp existed reads as.
+    pub fn mission_id(&self) -> &str {
+        self.mission.as_ref().map(|m| m.id.as_str()).unwrap_or("duel")
+    }
 }
 
 /// Parses one act-corpus header line (`{"kind":"header", ...}`).
@@ -1549,7 +1581,12 @@ fn header_of(header: Header) -> Result<ActHeader, String> {
         "",
         header.knobs.rules_epoch,
     )?;
-    Ok(ActHeader { profiles: Rc::new(profiles), terrain, knobs: Knobs { bands_prefolded, ..header.knobs } })
+    Ok(ActHeader {
+        profiles: Rc::new(profiles),
+        terrain,
+        knobs: Knobs { bands_prefolded, ..header.knobs },
+        mission: header.mission,
+    })
 }
 
 /// Reads `acts.jsonl` into the profile table, the board and the activations.
@@ -1566,7 +1603,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
         .next()
         .ok_or_else(|| format!("{path}: empty file"))?
         .map_err(|e| e.to_string())?;
-    let ActHeader { profiles, terrain, knobs } =
+    let ActHeader { profiles, terrain, knobs, .. } =
         read_act_header(&head).map_err(|e| format!("{path}:1 {e}"))?;
     // NML-1073 M2-5b: the header table is the DEPLOYMENT reading. Every act
     // carries its own reading of the fields a live game rewrites, and the state
@@ -1859,5 +1896,28 @@ mod tests {
             !header.knobs.bands_prefolded,
             "no books ⇒ core-written ⇒ bands fresh, the live delta folds"
         );
+    }
+
+    /// Wave 6 mission stamp — a header WITH `"mission"` carries the id
+    /// through to `ActHeader::mission_id()`. The table stamps id + catalog
+    /// family + scoring (`act_recorder.gd`, from `NML_MISSION` and the same
+    /// catalog the arena selector validated); the core only needs the id.
+    #[test]
+    fn a_stamped_mission_id_parses_through() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{},"mission":{"id":"domination","family":"progressive","scoring":"round_vp"}}"#;
+        let header = read_act_header(head).expect("a header with mission parses");
+        assert_eq!(header.mission_id(), "domination");
+    }
+
+    /// Every header recorded before this key existed — and the core's own
+    /// header shape — reads as the table's fallback: "duel", the mission
+    /// `core_selfplay.gd`/`solo_selfplay.gd` hard-code. Absent stays absent
+    /// on the struct (`Option::None`); only the helper answers the fallback.
+    #[test]
+    fn an_absent_mission_reads_as_duel() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{}}"#;
+        let header = read_act_header(head).expect("no mission key still parses");
+        assert!(header.mission.is_none());
+        assert_eq!(header.mission_id(), "duel");
     }
 }

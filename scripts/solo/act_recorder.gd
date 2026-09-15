@@ -34,6 +34,14 @@ static var objectives_stamp: Dictionary = {}
 ## {} when the rule string is unparsable or the book lookup fails — the recorder never
 ## falls back to the carrier's profile (that fallback IS the #823 fidelity break).
 static var spawn_profile_resolver: Callable = Callable()
+## Wave 6 D-MISSIONS: the mission the TABLE chose for this game — main.gd's
+## _solo_apply_mission_if_chosen arms it (the stay-out file writes exactly this
+## one line) before any early return, so an empty choice RESETS the stamp. The
+## header carries the mission stamp UNCONDITIONALLY: empty here falls back to
+## the arena selector's env door (`NML_MISSION`, tools/arena_match.gd), then to
+## the catalog default "duel" — never an absent key, because absence reads as
+## "predates the stamp" (ActHeader::mission_id, core/nml-core/src/acts.rs).
+static var mission_id: String = ""
 ## The rules epoch THIS recorder stamps for — the GDScript mirror of the core's
 ## CURRENT_RULES_EPOCH (core/nml-core/src/acts.rs). The mirror equals the core
 ## again and MUST move in the SAME diff as any core bump: the #935 hold that
@@ -305,6 +313,19 @@ static func close() -> void:
 	# documented at the top of ai_planner_act_recorder_test.gd — release it HERE,
 	# where the writer stands, not at process teardown.
 	spawn_profile_resolver = Callable()
+	# D-MISSIONS: the fresh-file contract — a later begin() must not inherit the
+	# previous game's mission. The table re-arms this every game; the arena's env
+	# door re-reads the environment on the same fallback path.
+	mission_id = ""
+
+
+## D-MISSIONS: the table's write seam — main.gd calls this once per game
+## (_solo_apply_mission_if_chosen), "" included, so a game started without a
+## mission resets rather than inherits. Lower-cased like the arena's env door
+## (tools/arena_match.gd) so both doors read the same vocabulary; validation
+## happens at stamp time against MissionCatalog.mission_ids.
+static func set_mission(id: String) -> void:
+	mission_id = str(id).strip_edges().to_lower()
 
 
 ## 0a finding: pick.action.dest (and runner_up.action.dest) is a raw Vector3 —
@@ -445,7 +466,32 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 	var spawn_profiles := _spawn_profiles(state)
 	if not spawn_profiles.is_empty():
 		head["spawn_profiles"] = spawn_profiles
+	# D-MISSIONS: the mission stamp, written UNCONDITIONALLY — an absent key
+	# would read as "predates the stamp" to every reader (the same reading
+	# ActHeader::mission_id gives old recordings). Format addition like
+	# `books`: a new key, readers built before it parse the header unchanged.
+	# Field names are the core's own (`id`/`family`/`scoring`, the Mission
+	# struct in acts.rs) — NOT the arena result file's "name".
+	head["mission"] = _mission_stamp()
 	return head
+
+
+## D-MISSIONS: the header's mission stamp — {id, family, scoring}. Sources in
+## order: the table's setter (mission_id), the arena selector's env door
+## (`NML_MISSION`, strip + lower, the same read tools/arena_match.gd makes),
+## then the catalog default "duel" — an id the catalog does not know falls
+## back, never to an empty string or a dropped key. family/scoring ride along
+## from the catalog so a reader grades without re-opening it (get_mission's
+## own DUEL fallback covers a missing catalog file).
+static func _mission_stamp() -> Dictionary:
+	var mid := mission_id
+	if mid.is_empty():
+		mid = OS.get_environment("NML_MISSION").strip_edges().to_lower()
+	if not MissionCatalog.mission_ids().has(mid):
+		mid = "duel"
+	var m := MissionCatalog.get_mission(mid)
+	return {"id": mid, "family": str(m.get("family", "face_off")),
+		"scoring": str(m.get("scoring", "end"))}
 
 
 ## Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): the NAMED copy's

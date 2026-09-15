@@ -2424,6 +2424,10 @@ func _ensure_solo_controller() -> void:
 ## selector's default) is a no-op on purpose: SoloController's live statics and the hand-placed
 ## overlay objectives stay exactly what today's table already does — byte-identical.
 func _solo_apply_mission_if_chosen() -> void:
+	# D-MISSIONS: the recorder learns the table's choice BEFORE the early
+	# return — an empty choice RESETS the stamp (the fresh-file contract
+	# closes on every game end; the next game must not inherit this one).
+	AiActRecorder.set_mission(_solo_mission_id)
 	if _solo_mission_id.is_empty():
 		return
 	var mission := MissionCatalog.get_mission(_solo_mission_id)
