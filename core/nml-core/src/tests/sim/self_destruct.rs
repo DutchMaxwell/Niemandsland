@@ -69,7 +69,7 @@
         };
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0);
+        tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0, Cover::Recorded(None));
         assert_eq!(st.alive[1], 0, "every surviving carrier is removed — the unit detonated");
         let lash = shot.rolls.last().expect("the detonation save batch");
         assert_eq!(
@@ -100,7 +100,7 @@
         };
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0);
+        tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0, Cover::Recorded(None));
         assert_eq!(st.alive[1], 3, "no survival half below the gate — the survivors stay");
         assert!(shot.log.iter().all(|l| !l.contains("detonate")), "nothing logged");
         assert!(shot.rolls.is_empty(), "the unarmed melee rolls nothing at all");
