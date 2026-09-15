@@ -31,7 +31,7 @@ use crate::acts::{
     EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL, EPOCH_43_BATTLEBORN_ROLL,
     EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
-    EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF,
+    EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -186,6 +186,14 @@ pub struct Ctx {
     /// through `resolve_melee_leg`'s `screened_melee` gate
     /// (`EPOCH_22_SCREENED_MELEE`); the shooting leg never reads it.
     pub stealth_alias_applies_charged: bool,
+    /// D-STEALTH (15.09., `EPOCH_60_GROUNDED_STEALTH`) — the winning alias is
+    /// the terrain-conditional kind (`terrain_within_in > 0`, Grounded
+    /// Stealth): the def builds AND the per-model within-1" read on the
+    /// target into the alias gate (`sim::stealth_alias_terrain_gate`),
+    /// book wording instead of the table's cover-cell approximation.
+    /// Default false, stamped in `ctx_for` behind the FROZEN gate — a record
+    /// below 57 replays the old unconditional fold byte-exact.
+    pub stealth_alias_near_terrain: bool,
     pub evasive: bool,
     /// Wave 4 (`rules-wave4-boostbases`) — "Machine-Fog Boost" is the reason
     /// `evasive` is on: the printed unconditional form of Machine-Fog's own
@@ -1421,10 +1429,13 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
 /// `p.special_rules` only — item-granted rules already reach it through the
 /// import's fold (the `mend_active` precedent). `terrain_within_in`
 /// (Grounded Stealth / Machine-Fog's cover gate) and `requires_stationary`
-/// (Entrenched) are NOT modelled: no per-call "moved this round" state
+/// (Entrenched) were NOT modelled: no per-call "moved this round" state
 /// reaches this static layer, and there is no majority-in-cover read at
 /// build time either — both stay unimplemented, like the rest of this
-/// crate's documented gaps (dice.rs:317-330).
+/// crate's documented gaps (dice.rs:317-330). D-STEALTH (epoch 60) closed
+/// the terrain half: the split walk now also reports the terrain-gated kind
+/// (`Ctx::stealth_alias_near_terrain`) and the def builds resolve the
+/// per-model read live; `requires_stationary` still is.
 fn stealth_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64, bool) {
     stealth_alias_of_excluding(reg, p, "")
 }
@@ -1463,10 +1474,11 @@ fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> 
 /// false only the unconditional ones, below the FROZEN gate never called.
 fn stealth_alias_split_walk(
     reg: &mut Registries, p: &Profile, skip: &str, want_stationary: bool,
-) -> (i64, f64, bool) {
+) -> (i64, f64, bool, bool) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
     let mut best_applies_charged = false;
+    let mut best_terrain_gated = false;
     let map = reg.rules_for(&p.game_system);
     for r in &p.special_rules {
         let name = base_rule_name(r);
@@ -1487,14 +1499,25 @@ fn stealth_alias_split_walk(
             best_penalty = pen;
             best_over_in = e.param_f("over_in", 0.0);
             best_applies_charged = e.param_b_or("applies_charged", false);
+            best_terrain_gated = e.param_f("terrain_within_in", 0.0) > 0.0;
         }
     }
-    (best_penalty, best_over_in, best_applies_charged)
+    (best_penalty, best_over_in, best_applies_charged, best_terrain_gated)
 }
+
+/// The terrain-conditional Stealth alias's own proximity, in inches —
+/// `terrain_within_in` on every Grounded Stealth entry the registries field
+/// today (aofs hidden_syndicates, gf/gff machine_cults all carry 1). The
+/// split walk returns only the GATE (`terrain_within_in > 0`), so the def
+/// builds' per-model read widens the base radius by THIS frozen number; a
+/// future entry with a different proximity would need the inches carried
+/// past the walk — named follow-up, not a silent guess.
+pub(crate) const STEALTH_ALIAS_TERRAIN_WITHIN_IN: f64 = 1.0;
 
 /// The split's SIBLING fn — the `requires_stationary` members only.
 fn stationary_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64, bool) {
-    stealth_alias_split_walk(reg, p, "", true)
+    let (pen, over, charged, _) = stealth_alias_split_walk(reg, p, "", true);
+    (pen, over, charged)
 }
 /// Battleborn family wave 3 (rules-wave3-battleborn) — main.gd
 /// `:_solo_round_start_recovery_rule`'s generic Battleborn-primitive alias
@@ -2472,18 +2495,18 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     };
     // Wave 4 (port-entrenched) — below the FROZEN gate the OLD unconditional
     // fold stays byte-identical; AT 7 the walk splits (main.gd:5694-5702).
-    let (stealth_alias_penalty, stealth_alias_over_in, stealth_alias_applies_charged, stationary_alias_penalty, stationary_alias_over_in) =
+    let (stealth_alias_penalty, stealth_alias_over_in, stealth_alias_applies_charged, stealth_alias_near_terrain, stationary_alias_penalty, stationary_alias_over_in) =
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             let skip = if machine_fog_boost { "Machine-Fog" }
                 else if empyrean_spirit_boost { "Empyrean Spirit" } else { "" };
-            let (ap, ao, ac) = stealth_alias_split_walk(reg, p, skip, false);
+            let (ap, ao, ac, near) = stealth_alias_split_walk(reg, p, skip, false);
             let (sp, so, _) = stationary_alias_of(reg, p);
-            (ap, ao, ac, sp, so)
+            (ap, ao, ac, near, sp, so)
         } else {
             let (ap, ao, ac) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog") }
                 else if empyrean_spirit_boost { stealth_alias_of_excluding(reg, p, "Empyrean Spirit") }
                 else { stealth_alias_of(reg, p) };
-            (ap, ao, ac, 0, 0.0)
+            (ap, ao, ac, false, 0, 0.0)
         };
     // WAVE 3 — the family's DATA-ALIAS amounts, gated on the FROZEN
     // `EPOCH_6_TABLE_RULES`: an `rules_epoch: 5` record (the Gen-3 fleet's
@@ -2602,6 +2625,11 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         stealth_alias_penalty,
         stealth_alias_over_in,
         stealth_alias_applies_charged,
+        // D-STEALTH — the terrain gate rides the FROZEN `EPOCH_60_GROUNDED_STEALTH`:
+        // below 57 the stamp stays false and the def builds never consult a
+        // terrain read (the old unconditional fold replays byte-exact).
+        stealth_alias_near_terrain: rule_on(rules_epoch, EPOCH_60_GROUNDED_STEALTH)
+            && stealth_alias_near_terrain,
         stationary_alias_penalty,
         stationary_alias_over_in,
         stationary_alias_name: if stationary_alias_penalty > 0 { "Entrenched" } else { "" },

@@ -468,8 +468,27 @@ pub const EPOCH_55_FORTIFIED_AURA: u32 = 55;
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
 /// reads THIS constant, not the literal `58` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_58_PRECISION_DEBUFF: u32 = 58;
-
-pub const CURRENT_RULES_EPOCH: u32 = 58;
+pub const CURRENT_RULES_EPOCH: u32 = 60;
+/// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
+/// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
+/// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
+/// machine_cults) reads the book wording: the -1 to be hit applies only
+/// while the target actually stands in/at terrain — per model within the
+/// entry's own proximity of ANY terrain — not the table's
+/// majority-in-cover-CELL approximation, and not the unconditional alias
+/// fold the core carried until now (the table keyed the same gate on the
+/// cover-cell read). From 57 the def builds AND the per-model within-1"
+/// read into the alias gate (sim.rs, both legs); `unit.rs
+/// stealth_alias_split_walk` also returns whether the winning entry is the
+/// terrain-gated kind (`Ctx::stealth_alias_near_terrain`), and the table's
+/// alias walk replaces the cover-cell read with the same predicate over the
+/// #969 id-rail. Below 57 the alias folds unconditionally (the core's old
+/// read) and every recorded game replays byte-exact. `60` is one past every
+/// epoch present at the push (58 = `EPOCH_58_PRECISION_DEBUFF` on main, 59 = Precision Markers in flight),
+/// and the value `CURRENT_RULES_EPOCH` is bumped to in the same change.
+/// Every call site reads THIS constant, not the literal `60` or
+/// `CURRENT_RULES_EPOCH`.
+pub const EPOCH_60_GROUNDED_STEALTH: u32 = 60;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -1590,7 +1609,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 58, "the live epoch is 58 (EPOCH_58_PRECISION_DEBUFF; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 60, "the live epoch is 60 (EPOCH_60_GROUNDED_STEALTH; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1600,11 +1619,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":58}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":60}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 58"
+            "a fresh play_game() now stamps the bumped epoch, 60"
         );
     }
 

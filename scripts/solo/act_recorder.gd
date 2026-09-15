@@ -154,7 +154,11 @@ const EPOCH_56_GROUNDED_PROTECTION := 56
 ## EPOCH_58_PRECISION_DEBUFF (precision text sweep 15.09., row
 ## `Precision Debuff` — the once-per-activation -1 to-hit debuff is gated
 ## and the record fold names itself on both layers).
-static var rules_epoch: int = 58
+## on the Regeneration fold), then to 57 with the core's
+## EPOCH_60_GROUNDED_STEALTH (D-STEALTH 15.09. — Grounded Stealth's -1 to be
+## hit reads the per-model within-1" terrain predicate on both layers; the
+## table's cover-cell approximation is dropped).
+static var rules_epoch: int = 60
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

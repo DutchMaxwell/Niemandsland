@@ -1258,7 +1258,7 @@
         let (mut st, statics) = instinctive_line(third_at);
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut shot, StrikeSet::All);
+        strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut shot, StrikeSet::All, Cover::Recorded(None));
         shot.rolls
             .iter()
             .find(|r| r.kind == "attack" && r.owner == "Striker")

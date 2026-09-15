@@ -133,7 +133,7 @@ use super::*;
         let strike = |st: &mut State, statics: &[UnitStatic]| {
             let mut tray = Tray::seeded(11);
             let mut shot = ShootResult::default();
-            strike_phase(statics, st, 0, 2, true, 0.0, seams, &mut tray, &mut shot, StrikeSet::All);
+            strike_phase(statics, st, 0, 2, true, 0.0, seams, &mut tray, &mut shot, StrikeSet::All, Cover::Recorded(None));
             shot
         };
         let (mut st, mut statics) = fp_line(7, "ogres", &["Piercing Feat"]);

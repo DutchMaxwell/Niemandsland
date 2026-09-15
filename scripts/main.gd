@@ -5716,6 +5716,46 @@ static func _solo_join_note(a: String, b: String) -> String:
 	return "%s, %s" % [a, b] if not b.is_empty() else a
 
 
+## D-STEALTH (decided 15.09.) — the Stealth family's terrain-conditional alias gate (Grounded
+## Stealth): a strict majority of the unit's ALIVE models stands within the entry's own
+## `terrain_within_in` of ANY terrain — per model the board's own query TerrainRules.
+## base_in_terrain_id with the base radius widened by the proximity, class ANY applied directly
+## through the #969 id-rail (no Callable for the class; the sampler Callable arrives FROM the
+## caller — an instance context builds it, no Callable is constructed inside this static, the
+## crash note on terrain_rules.gd holds). The same per-model predicate the core's def builds
+## answer (sim.rs `stealth_alias_terrain_gate`) and the Grounded Speed family's verdict shape —
+## NOT the majority-in-cover-CELL approximation this gate used to consult. An invalid sampler
+## (no board) reads false: the condition honestly fails without terrain.
+static func _solo_stealth_alias_in_terrain(unit: GameUnit, terr_in: float, sample: Callable) -> bool:
+	if unit == null or not sample.is_valid() or terr_in <= 0.0:
+		return false
+	var models: Array = unit.get_alive_models()
+	if models.is_empty():
+		return false
+	var prox_m: float = terr_in * SoloController.INCHES_TO_METERS
+	var near := 0
+	for m in models:
+		var node: Node3D = (m as ModelInstance).node
+		if node == null or not is_instance_valid(node):
+			continue
+		if TerrainRules.base_in_terrain_id(node.global_position,
+				SoloController.model_base_radius_m(m) + prox_m, sample, TerrainRules.TerrainClass.ANY):
+			near += 1
+	return near * 2 > models.size()
+
+
+## The sampler the terrain-conditional Stealth alias reads: the SAME injected truth every other
+## solo terrain read uses (solo_controller.terrain_type_at, wired to the overlay in
+## _ensure_solo_controller), falling back to the overlay directly. No board reads an invalid
+## Callable — the static's honest-false shape.
+func _solo_terrain_sampler() -> Callable:
+	if solo_controller != null and solo_controller.terrain_type_at.is_valid():
+		return solo_controller.terrain_type_at
+	if terrain_overlay != null and terrain_overlay.has_method("get_terrain_at_world_position"):
+		return Callable(terrain_overlay, "get_terrain_at_world_position")
+	return Callable()
+
+
 ## Net to-hit roll modifier for one attack + its reasons (for the battle log): Stealth (−1, shot >9"),
 ## Artillery (+1 shooting >9" / −2 shot at >9") and Evasive (−1, any attack) — GF/AoF v3.5.1 p.13/14 +
 ## the army-book Evasive text. Returns {"mod": int, "note": String}; the math is the tested
@@ -5746,7 +5786,8 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		evasive_note = "Empyrean Spirit Boost: -1 to hit (base Evasive stood down)"
 	# Coverage wave: the Stealth-family DATA alias that applies to THIS attack — Changebound /
 	# Machine-Fog ("shot or charged from over 9\"" → applies_charged), Grounded Stealth (terrain-
-	# conditional; majority-in-cover approximation). At most one alias fires (rule effects of one
+	# conditional; D-STEALTH: the per-model within-1\" predicate, the cover-cell approximation
+	# dropped). At most one alias fires (rule effects of one
 	# family don't stack with Stealth's own -1 — best single penalty).
 	var alias_pen := 0
 	var alias_name := ""
@@ -5761,7 +5802,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			continue
 		var p2: Dictionary = ed.get("params", {})
 		var terr_in := float(p2.get("terrain_within_in", 0.0))
-		if terr_in > 0.0 and not _solo_majority_in_cover(target):
+		if terr_in > 0.0 and not _solo_stealth_alias_in_terrain(target, terr_in, _solo_terrain_sampler()):
 			continue
 		# Entrenched-family: only while the unit has NOT moved this round (moved_round stamp).
 		if bool(p2.get("requires_stationary", false)) \

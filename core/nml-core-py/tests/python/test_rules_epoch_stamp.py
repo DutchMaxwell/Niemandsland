@@ -64,16 +64,7 @@ def test_record_cands_stamps_the_epoch_actually_used():
     default = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                             record_cands=True, **FAST)
     assert default["knobs"]["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH
-    # core rules epoch 58 (acts::EPOCH_58_PRECISION_DEBUFF, precision text
-    # sweep row `Precision Debuff`: the once-per-activation -1 to-hit debuff
-    # is gated at the stamp and the record fold names itself; 56 was #974's
-    # Grounded-Protection leg, 54 #976's Defense-Rating leg, 52 #975's
-    # Utility-Spells leg, 51 #972's Caster-Interference leg, 50 #973's
-    # Surge-Low leg, 48 #966's Caster-Boost leg, 47 #968's Rending-Aura leg,
-    # 46 #967's Disintegrate leg): explicit, not just dynamic — a fresh game
-    # now stamps 58, not 56. A record already stamped 56 must never be
-    # mistaken for a fresh one.
-    assert nml_core.CURRENT_RULES_EPOCH == 58
+    assert nml_core.CURRENT_RULES_EPOCH == 60
 
     legacy = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                            record_cands=True, rules_epoch=0, **FAST)

@@ -849,7 +849,7 @@ pub(crate) fn tray_crossing_attack(
 ///     honoured by the seam itself. Gate: the FROZEN `EPOCH_32_STRAFING`.
 pub(crate) fn tray_strafing(
     statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
-    tray: &mut Tray, shot: &mut ShootResult,
+    tray: &mut Tray, shot: &mut ShootResult, cover: Cover,
 ) {
     if !rule_on(seams.rules_epoch, EPOCH_32_STRAFING) || next.alive[si] <= 0 { return; }
     let mut bearers: Vec<usize> = vec![si];
@@ -872,7 +872,11 @@ pub(crate) fn tray_strafing(
     // defender's live context, the members at their own Quality.
     let d = geom::centre_dist_in(&next.positions[si], &next.positions[target]);
     let ut = &statics[next.roster.profile[target]];
-    let def = ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch);
+    let mut def = ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch);
+    // D-STEALTH — the strafe volley reads the defender's live context the
+    // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
+    // the def build carries the same terrain gate.
+    stealth_alias_terrain_gate(statics, next, target, cover, &mut def);
     let (alive_before, wounds_before) = (next.alive[target], wounds_left(next, target));
     // Per member (host first, then each alive attached hero): the Strafing
     // profiles in range, survivor-scaled — `profiles_of`'s shape over
@@ -3594,6 +3598,7 @@ fn strike_phase(
     tray: &mut Tray,
     shot: &mut ShootResult,
     set: StrikeSet,
+    cover: Cover,
 ) -> (i64, i64) {
     let mut parts = melee_parts(statics, next, si, ti, seams);
     if set != StrikeSet::All {
@@ -3638,7 +3643,10 @@ fn strike_phase(
         }
     }
     let ut = &statics[next.roster.profile[ti]];
-    let def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch);
+    let mut def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch);
+    // D-STEALTH — the def build's terrain gate (the melee leg consumes the
+    // same closed alias the shooting fold does).
+    stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
     // rules-wave3-growthmark (epoch 6) — the LOGGING-RULE lines for the
     // defender-side facets this strike is about to fold.
     if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
@@ -3961,6 +3969,7 @@ fn tray_morale(
 /// counting as +X dealt for this comparison only and never for the wounds
 /// applied (:8110-8112). `None` on a tie, which is what the table means by
 /// "nobody tests".
+#[allow(clippy::too_many_arguments)]
 fn tray_charge(
     statics: &[UnitStatic],
     next: &mut State,
@@ -3970,6 +3979,7 @@ fn tray_charge(
     tray: &mut Tray,
     shot: &mut ShootResult,
     charge_from_in: f64,
+    cover: Cover,
 ) -> Option<usize> {
     if statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter) {
         // :8055-8059 — a Counter weapon runs a WHOLE extra strike phase before
@@ -3986,7 +3996,7 @@ fn tray_charge(
     let mut by_su = 0;
     let mut by_tu = 0;
     if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
-        let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly);
+        let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
         by_tu += c;
         by_su += rc;
     }
@@ -4006,7 +4016,7 @@ fn tray_charge(
             // an Impact pool that wiped the defender ends the melee here.
             if next.alive[si] > 0 && next.alive[ti] > 0 {
                 // B13: the defender's lash-back credits ITS OWN tally (by_tu).
-                let (c, rc) = strike_phase(statics, next, si, ti, true, charge_from_in, seams, tray, shot, StrikeSet::All);
+                let (c, rc) = strike_phase(statics, next, si, ti, true, charge_from_in, seams, tray, shot, StrikeSet::All, cover);
                 by_su += c;
                 by_tu += rc;
                 next.fatigued[si] = true;
@@ -4014,7 +4024,7 @@ fn tray_charge(
         } else if next.alive[ti] > 0 && next.alive[si] > 0 {
             // :8100 — and so does the strike-back, in both directions.
             // B13: the strike-back's lash-back credits the charger's tally.
-            let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set);
+            let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set, cover);
             by_tu += c;
             by_su += rc;
             next.fatigued[ti] = true;
@@ -5689,6 +5699,68 @@ fn grounded_speed_bonus_in(
     }) as f64
 }
 
+/// The Grounded Stealth read (`EPOCH_60_GROUNDED_STEALTH`, D-STEALTH
+/// 15.09.) — the Stealth family's terrain-conditional alias gate, resolved
+/// LIVE at the def build (shooting AND melee): the alias applies only while
+/// the TARGET actually stands in/at terrain — per model
+/// `terrain::base_in_terrain` with the base radius widened by the alias's
+/// proximity (`unit::STEALTH_ALIAS_TERRAIN_WITHIN_IN`), class
+/// `terrain::is_any` (the book text restricts no terrain kind) — the SAME
+/// per-model read Grounded Speed's verdict answers, and the majority fold
+/// the family's unit-level shape keeps (`near * 2 > models`, the fold the
+/// table's replaced majority-in-cover-CELL approximation had). An armed
+/// alias whose read fails is stood down here (the penalty zeroed), so both
+/// the shooting and the melee fold consume a closed gate.
+/// Rules-must-log: both verdicts trace, the trace names the rule and the
+/// verdict. `Cover::Recorded` replays read false = gate closed (records
+/// below 57 never consult this read at all — the stamp is gated).
+fn stealth_alias_terrain_gate(
+    statics: &[UnitStatic],
+    state: &State,
+    ti: usize,
+    cover: Cover,
+    def: &mut Ctx,
+) {
+    if !def.stealth_alias_near_terrain {
+        return;
+    }
+    let unit = &statics[state.roster.profile[ti]].name;
+    let open = match cover {
+        // A replayed node carries no board: the read is honest false and the
+        // gate closes.
+        Cover::Recorded(_) => true,
+        Cover::Board(t) => {
+            let models = state.positions.get(ti).map(|ps| ps.len()).unwrap_or(0);
+            let near = state
+                .positions
+                .get(ti)
+                .map(|ps| {
+                    ps.iter()
+                        .enumerate()
+                        .filter(|(m, p)| {
+                            let r = state.radii[ti].get(*m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M)
+                                + crate::unit::STEALTH_ALIAS_TERRAIN_WITHIN_IN * IN2M;
+                            crate::terrain::base_in_terrain(
+                                crate::geom::to_f32(**p),
+                                r,
+                                t,
+                                crate::terrain::is_any,
+                            )
+                        })
+                        .count()
+                })
+                .unwrap_or(0);
+            near * 2 <= models
+        }
+    };
+    if open {
+        def.stealth_alias_penalty = 0;
+        trace_rule("grounded-stealth", unit, "in the open -> no -1 to hit (the gate holds)");
+    } else {
+        trace_rule("grounded-stealth", unit, "within 1\" of terrain -> -1 to hit");
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_with(
     statics: &[UnitStatic],
@@ -6174,7 +6246,7 @@ fn resolve_with(
     // a tray — see `tray_strafing`; no move trail, no carrier, no crossed
     // enemy rolls nothing.
     if let Some((tray, shot)) = dice.as_mut() {
-        tray_strafing(statics, state, &mut next, si, seams, tray, shot);
+        tray_strafing(statics, state, &mut next, si, seams, tray, shot, cover);
     }
 
     // --- CROSSING ATTACK (main.gd:1081, right after Storm in the table's own
@@ -6367,7 +6439,11 @@ fn resolve_with(
                                 ));
                             }
                             let ut_g = &statics[next.roster.profile[g.ti]];
-                            let def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch);
+                            let mut def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch);
+                            // D-STEALTH — the def build's terrain gate: the alias
+                            // applies only while the TARGET stands within 1" of
+                            // terrain (per model, the majority fold).
+                            stealth_alias_terrain_gate(statics, &next, g.ti, cover, &mut def);
                             // rules-wave3-growthmark (epoch 6) — the volley's
                             // LOGGING-RULE lines, named after the entry that
                             // carried the facet (the two Defensive names share
@@ -6649,7 +6725,7 @@ fn resolve_with(
                     // the pre-move positions the charge move started from.
                     let charge_from_in =
                         geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
-                    if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot, charge_from_in) {
+                    if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot, charge_from_in, cover) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
