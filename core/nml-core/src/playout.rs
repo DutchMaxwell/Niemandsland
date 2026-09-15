@@ -138,7 +138,7 @@ impl<'a> Policy<'a> {
                 || crate::mods::granted(state, unit, "Quick Shot");
             if rule_on(self.seams.rules_epoch, EPOCH_8_PLANNER_MENU)
                 && !quick_shot
-                && rush_dominated(state, self.terrain, unit, o.pos)
+                && rush_dominated(state, self.statics, self.terrain, unit, o.pos)
             {
                 let shot = self
                     .seams
@@ -157,12 +157,14 @@ impl<'a> Policy<'a> {
                     let mut c = Candidate::new(key, ADVANCE);
                     c.dest = Some(o.pos);
                     c.shoot = Some(state.key(e).to_string());
+                    // evmove — the demotion's own band read is the LIVE one,
+                    // the same `rush_dominated` fold priced the decision with.
+                    let (advance_in, _) = crate::sim::live_bands_of(self.statics, state, unit);
                     trace_rule(
                         "rollout",
                         RUSH_DEMOTION_RULE,
                         &format!(
-                            "{key}: rush demoted to advance — capped to {:.1}\" — shot available ({})",
-                            state.bands[unit].advance,
+                            "{key}: rush demoted to advance — capped to {advance_in:.1}\" — shot available ({})",
                             state.key(e)
                         ),
                     );
@@ -259,10 +261,14 @@ impl<'a> Policy<'a> {
 ///     under the advance band. Strider/Flying are exempt via the recorded
 ///     p.13 read (`state.charge_no_difficult`), the same exemption the move
 ///     engine's `ignores_difficult` honours.
-fn rush_dominated(state: &State, terrain: &Terrain, unit: usize, dest: [f64; 3]) -> bool {
+fn rush_dominated(
+    state: &State, statics: &[UnitStatic], terrain: &Terrain, unit: usize, dest: [f64; 3],
+) -> bool {
     let centre = geom::centre(&state.positions[unit]);
     let dist_in = geom::length(geom::sub(geom::to_f32(dest), centre)) as f64 / IN2M;
-    let advance_in = state.bands[unit].advance;
+    // evmove — the LIVE advance band: the static band plus the granted solo
+    // family's delta (`sim::live_bands_of`), the band the real move spends.
+    let (advance_in, _) = crate::sim::live_bands_of(statics, state, unit);
     if dist_in <= advance_in + 1e-6 {
         return true;
     }

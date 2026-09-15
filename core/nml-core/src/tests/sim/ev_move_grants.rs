@@ -63,12 +63,18 @@ use super::*;
     /// Fresh-game fixture: the statics are built at CURRENT_RULES_EPOCH, never
     /// a stamped number.
     fn granted_pair(faction: &str, grants: &[&str], gap_in: f64) -> (State, Vec<UnitStatic>) {
+        granted_pair_at(faction, grants, gap_in, crate::acts::CURRENT_RULES_EPOCH)
+    }
+
+    fn granted_pair_at(
+        faction: &str, grants: &[&str], gap_in: f64, rules_epoch: u32,
+    ) -> (State, Vec<UnitStatic>) {
         let p = bearer_profile(faction);
         let mut reg = crate::rules::Registries::new(&repo_root());
         // Two builds off the SAME profile+registry: identical stamps, and
         // `UnitStatic` carries no Clone for a reason (its fields are stamped).
-        let bearer_a = UnitStatic::build_for(&mut reg, &p, crate::acts::CURRENT_RULES_EPOCH);
-        let bearer_b = UnitStatic::build_for(&mut reg, &p, crate::acts::CURRENT_RULES_EPOCH);
+        let bearer_a = UnitStatic::build_for(&mut reg, &p, rules_epoch);
+        let bearer_b = UnitStatic::build_for(&mut reg, &p, rules_epoch);
         let enemy_ctx = Ctx { quality: 4, defense: 4, tough: 1, models: 1, ..Default::default() };
         let mut st = four_unit_line();
         st.roster = Rc::new(Roster {
@@ -120,14 +126,14 @@ use super::*;
     /// rules_mechanics_aof.json, common "Fast": advance_mod 2, rush_mod 4.
     #[test]
     fn a_live_fast_grant_widens_the_gate_s_charge_band() {
-        let (st, _statics) = granted_pair("ogres", &["Fast"], 13.0);
+        let (st, statics) = granted_pair("ogres", &["Fast"], 13.0);
         let t = crate::terrain::Terrain::default();
         assert!(
-            !crate::gate::charge_illegal(&st, &t, 0, 2, 13.0, None, None),
+            !crate::gate::charge_illegal_tuned(&st, &statics, &t, 0, 2, 13.0, None, None, true),
             "the granted Fast rides +4\" on the charge band: 16\" covers the 13\" gap"
         );
         assert!(
-            crate::gate::charge_illegal(&st, &t, 1, 3, 13.0, None, None),
+            crate::gate::charge_illegal_tuned(&st, &statics, &t, 1, 3, 13.0, None, None, true),
             "the ungranted twin still prices its printed 12\" band"
         );
     }
@@ -169,11 +175,11 @@ use super::*;
         let (st, statics) = granted_pair("dwarves", &["Slow"], 10.0);
         let t = crate::terrain::Terrain::default();
         assert!(
-            crate::gate::charge_illegal(&st, &t, 0, 2, 10.0, None, None),
+            crate::gate::charge_illegal_tuned(&st, &statics, &t, 0, 2, 10.0, None, None, true),
             "the granted Slow rides -4\" on the charge band: 8\" cannot cover 10\""
         );
         assert!(
-            !crate::gate::charge_illegal(&st, &t, 1, 3, 10.0, None, None),
+            !crate::gate::charge_illegal_tuned(&st, &statics, &t, 1, 3, 10.0, None, None, true),
             "the ungranted twin still covers 10\" with its printed 12\" band"
         );
         let (a, b) = token_band_columns(&st, &statics);
@@ -189,4 +195,30 @@ use super::*;
             Some(3),
             "the ungranted twin takes the same 10\" gap"
         );
+    }
+
+    /// The seam itself: A's pair is printed + the granted delta, B's the
+    /// printed band — in one state, off identical statics.
+    #[test]
+    fn live_bands_of_answers_printed_plus_the_granted_delta() {
+        let (st, statics) = granted_pair("ogres", &["Fast"], 13.0);
+        assert_eq!(crate::sim::live_bands_of(&statics, &st, 0), (8.0, 16.0));
+        assert_eq!(crate::sim::live_bands_of(&statics, &st, 1), (6.0, 12.0));
+        let (st, statics) = granted_pair("dwarves", &["Slow"], 10.0);
+        assert_eq!(crate::sim::live_bands_of(&statics, &st, 0), (4.0, 8.0));
+        assert_eq!(crate::sim::live_bands_of(&statics, &st, 1), (6.0, 12.0));
+    }
+
+    /// The replay-safety leg — the EV twin of `move_grants.rs`'s epoch gate:
+    /// a fixture whose statics are built BELOW the fold reads the printed
+    /// bands through the same helper, grant or no grant (the stamp is None).
+    #[test]
+    fn a_pre_fold_fixture_reads_printed_bands_through_the_seam() {
+        let (st, statics) = granted_pair_at("ogres", &["Fast"], 13.0, 18);
+        assert_eq!(
+            crate::sim::live_bands_of(&statics, &st, 0),
+            (6.0, 12.0),
+            "an epoch-18 fixture replays at the printed band"
+        );
+        assert_eq!(crate::sim::live_bands_of(&statics, &st, 1), (6.0, 12.0));
     }

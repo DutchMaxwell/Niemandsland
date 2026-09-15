@@ -643,7 +643,7 @@ pub fn features(
         let eligible = can_hold_marker(state, i, state.round);
         let threat = incoming.get(i).copied().unwrap_or(0.0);
         for o in &state.objectives {
-            f[side(PRESENCE_MINE, mine)] += presence(state, i, o.pos, threat);
+            f[side(PRESENCE_MINE, mine)] += presence(state, statics, i, o.pos, threat);
             if eligible
                 && !state.activated[i]
                 && control_gap_in(state, i, o.pos) <= OBJECTIVE_CONTROL_IN + rush

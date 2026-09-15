@@ -280,8 +280,10 @@ pub fn best_shoot(
 ///
 /// Sight is NOT re-probed at the destination: `sees`/`los_pairs` are recorded
 /// per unit PAIR, not per point, so the post-advance answer does not exist in
-/// the state. The advance band is the state's own `bands[i].advance` — the
-/// GDScript adds `max_activation_advance_bonus_in` (Bounding/Quick/Teleport) on
+/// the state. The advance band is the LIVE one (`sim::live_bands_of`): the
+/// state's own `bands[i].advance` plus the granted solo family's delta, the
+/// band the real move spends. The GDScript adds
+/// `max_activation_advance_bonus_in` (Bounding/Quick/Teleport) on
 /// top, which this crate does not model at all; the effect is a slightly
 /// TIGHTER gate than the table's, i.e. this never offers a shot the GDScript
 /// would refuse.
@@ -296,7 +298,10 @@ pub fn advance_shoots(
     tuning: Tuning,
 ) -> Vec<usize> {
     let us = &statics[state.roster.profile[i]];
-    let advance_in = state.bands[i].advance;
+    // evmove — the LIVE advance band: the state's own static band plus the
+    // granted solo family's delta (`sim::live_bands_of`, quiet), so the
+    // optimistic gap prices the granted band the real move will spend.
+    let (advance_in, _) = crate::sim::live_bands_of(statics, state, i);
     let mut out = Vec::new();
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
         if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
@@ -381,6 +386,7 @@ pub fn best_charge(
         if tuning.charge_gate
             && crate::gate::charge_illegal_tuned(
                 state,
+                statics,
                 terrain,
                 i,
                 e,
@@ -451,6 +457,7 @@ pub fn nearest_chargeable(
         }
         if crate::gate::charge_illegal_tuned(
             state,
+            statics,
             terrain,
             i,
             e,

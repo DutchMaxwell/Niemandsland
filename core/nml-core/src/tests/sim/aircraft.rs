@@ -82,13 +82,14 @@ use crate::rules::Registries;
         let mut st = four_unit_line();
         let t = crate::terrain::Terrain::default();
         st.aircraft[2] = true;
+        let statics: Vec<UnitStatic> = (0..4).map(|_| UnitStatic::default()).collect();
         assert!(
-            crate::gate::charge_illegal(&st, &t, 0, 2, 5.0, None, None),
+            crate::gate::charge_illegal(&st, &statics, &t, 0, 2, 5.0, None, None),
             "the gate refuses the aircraft at a 5\" gap"
         );
         st.aircraft[2] = false;
         assert!(
-            !crate::gate::charge_illegal(&st, &t, 0, 2, 5.0, None, None),
+            !crate::gate::charge_illegal(&st, &statics, &t, 0, 2, 5.0, None, None),
             "the same 5\" gap is legal against a ground unit"
         );
     }

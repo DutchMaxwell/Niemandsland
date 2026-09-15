@@ -66,7 +66,9 @@ pub fn can_hold_marker(state: &State, i: usize, round_no: i64) -> bool {
 /// VERBATIM out of `presence` — same order, same comparisons, same saturation —
 /// so `presence` below is unchanged to the bit and variant 1 can ask the same
 /// reachability question without a second, drifting copy of it.
-fn activations_needed(state: &State, i: usize, obj_pos: [f64; 3]) -> Option<i64> {
+fn activations_needed(
+    state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3],
+) -> Option<i64> {
     if state.alive[i] <= 0 {
         return None;
     }
@@ -85,7 +87,9 @@ fn activations_needed(state: &State, i: usize, obj_pos: [f64; 3]) -> Option<i64>
     // carries (io.rs falls back to the profile's copy of the same call when a
     // corpus predates the per-activation stamp). Reading the profile directly
     // would answer 12" for a unit that picked up a `Slow` aura mid-game.
-    let rush = state.bands[i].rush;
+    // evmove — and the granted solo family's delta rides the same read
+    // (`sim::live_bands_of`, quiet): a Slow/Fast grant moves the reach.
+    let (_, rush) = crate::sim::live_bands_of(statics, state, i);
     // An empty position array gives d = INF; the cast then saturates at i64::MAX
     // and `needed > moves_left` drops the unit — the same answer GDScript's
     // int(ceil(INF)) path produces.
@@ -108,8 +112,10 @@ fn activations_needed(state: &State, i: usize, obj_pos: [f64; 3]) -> Option<i64>
 
 /// `AiMissionEval._presence` ai_mission_eval.gd:591-617 — one unit's projected
 /// hold strength at one marker, discounted per future activation still needed.
-pub fn presence(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
-    let Some(needed) = activations_needed(state, i, obj_pos) else {
+pub fn presence(
+    state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], threat: f64,
+) -> f64 {
+    let Some(needed) = activations_needed(state, statics, i, obj_pos) else {
         return 0.0;
     };
     let mut strength = 0.0f64;
@@ -121,12 +127,14 @@ pub fn presence(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 
 
 /// `AiMissionEval._objective_p` ai_mission_eval.gd:415-431 — the soft control
 /// ratio at one marker; an unreachable marker keeps its owner (seize rule).
-fn objective_p(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+fn objective_p(
+    state: &State, statics: &[UnitStatic], obj_index: usize, player: i64, incoming: Incoming,
+) -> f64 {
     let obj = state.objectives[obj_index];
     let mut mine = 0.0f64;
     let mut theirs = 0.0f64;
     for i in 0..state.units() {
-        let p = presence(state, i, obj.pos, threat_of(incoming, i));
+        let p = presence(state, statics, i, obj.pos, threat_of(incoming, i));
         if state.player[i] == player {
             mine += p;
         } else {
@@ -160,7 +168,9 @@ fn is_destroy_mission(state: &State) -> bool {
 }
 
 /// `AiMissionEval._score_hand` ai_mission_eval.gd:356-407.
-pub fn score_hand(state: &State, player: i64, incoming: Incoming) -> f64 {
+pub fn score_hand(
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
+) -> f64 {
     if state.objectives.is_empty() {
         return 0.5;
     }
@@ -183,7 +193,7 @@ pub fn score_hand(state: &State, player: i64, incoming: Incoming) -> f64 {
                 }
                 continue;
             }
-            let pctrl = objective_p(state, i, player, incoming);
+            let pctrl = objective_p(state, statics, i, player, incoming);
             if ob == player {
                 deff = 1.0 - pctrl;
             } else {
@@ -194,14 +204,17 @@ pub fn score_hand(state: &State, player: i64, incoming: Incoming) -> f64 {
     }
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        total += objective_p(state, i, player, incoming);
+        total += objective_p(state, statics, i, player, incoming);
     }
     total / state.objectives.len() as f64
 }
 
 /// `AiMissionEval.score` ai_mission_eval.gd:344-354 with `fit_mode == false`.
+/// The doctrine arm — an EMPTY statics slice keeps its signature, and the
+/// helper's `.get` guard reads the static band there: the synth states carry
+/// no buffs, so nothing could fold anyway.
 pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
-    score_hand(state, player, incoming)
+    score_hand(state, &[], player, incoming)
 }
 
 /// Variant 1's per-unit half — the probability that unit `i` is one of the
@@ -213,8 +226,10 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 /// so the `needed > moves_left` drop answers `None`. `survive` is the same
 /// `incoming` reply threat `presence` subtracts, read as "will any model of
 /// this unit still be standing" instead of "how much strength is left".
-fn hold_p(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
-    let Some(needed) = activations_needed(state, i, obj_pos) else {
+fn hold_p(
+    state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], threat: f64,
+) -> f64 {
+    let Some(needed) = activations_needed(state, statics, i, obj_pos) else {
         return 0.0;
     };
     let mut strength = 0.0f64;
@@ -238,12 +253,14 @@ fn hold_p(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
 /// COUNT difference. `A(1-B) - B(1-A)` collapses to `A - B`, which is why mass
 /// cancels here exactly the way `mission_winner` (mission.rs:247-257) cancels
 /// it. Same [0, 1] scale as `objective_p`, 0.5 = level.
-fn objective_own(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+fn objective_own(
+    state: &State, statics: &[UnitStatic], obj_index: usize, player: i64, incoming: Incoming,
+) -> f64 {
     let obj = state.objectives[obj_index];
     let mut mine_absent = 1.0f64;
     let mut theirs_absent = 1.0f64;
     for i in 0..state.units() {
-        let q = hold_p(state, i, obj.pos, threat_of(incoming, i)).clamp(0.0, 1.0);
+        let q = hold_p(state, statics, i, obj.pos, threat_of(incoming, i)).clamp(0.0, 1.0);
         if state.player[i] == player {
             mine_absent *= 1.0 - q;
         } else {
@@ -269,20 +286,22 @@ fn objective_own(state: &State, obj_index: usize, player: i64, incoming: Incomin
 /// priced by `playout_seize`'s own verdict where it counts. The destroy /
 /// sabotage branch is NOT this rung's business and is handed back to variant 0
 /// whole.
-fn score_hand_majority(state: &State, player: i64, incoming: Incoming) -> f64 {
+fn score_hand_majority(
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
+) -> f64 {
     if state.objectives.is_empty() {
         return 0.5;
     }
     if !state.markers_meta.is_empty() && is_destroy_mission(state) {
-        return score_hand(state, player, incoming);
+        return score_hand(state, statics, player, incoming);
     }
     let total_rounds = state.rounds_total.max(1) as f64;
     let left = (state.rounds_total - state.round).max(0) as f64;
     let w = (1.0 - left / total_rounds).clamp(0.0, 1.0);
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        let share = objective_p(state, i, player, incoming);
-        let own = objective_own(state, i, player, incoming);
+        let share = objective_p(state, statics, i, player, incoming);
+        let own = objective_own(state, statics, i, player, incoming);
         total += (1.0 - w) * share + w * own;
     }
     total / state.objectives.len() as f64
@@ -294,10 +313,12 @@ fn score_hand_majority(state: &State, player: i64, incoming: Incoming) -> f64 {
 /// here. Arm 1 (ledger row 7) is the marker term above; every value past the
 /// registered arms is refused by `acts::read_act_header` before a header is
 /// ever played, so the fallback arm is an invariant, not a live path.
-pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
+pub fn score_hand_variant(
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, eval_variant: i64,
+) -> f64 {
     match eval_variant {
-        0 => score_hand(state, player, incoming),
-        1 => score_hand_majority(state, player, incoming),
+        0 => score_hand(state, statics, player, incoming),
+        1 => score_hand_majority(state, statics, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
@@ -348,17 +369,17 @@ pub fn score_with_variant(
     eval_variant: i64,
 ) -> f64 {
     let Some(fit) = fit else {
-        return score_hand_variant(state, player, incoming, eval_variant);
+        return score_hand_variant(state, statics, player, incoming, eval_variant);
     };
     match fit.mode {
         FitMode::Residual => combine_residual(
-            score_hand_variant(state, player, incoming, eval_variant),
+            score_hand_variant(state, statics, player, incoming, eval_variant),
             fit.score_fit(state, statics, player, incoming),
             fit.scale,
         ),
         FitMode::Blend => {
             let fb = fit.blend;
-            (1.0 - fb) * score_hand_variant(state, player, incoming, eval_variant)
+            (1.0 - fb) * score_hand_variant(state, statics, player, incoming, eval_variant)
                 + fb * fit.score_fit(state, statics, player, incoming)
         }
     }
@@ -400,8 +421,8 @@ mod tests {
         let mut cache = ProfileCache::new(header.profiles);
         let mut roster = None;
         let state = state_from_json(PLAIN, &mut cache, &mut roster).expect("state");
-        let direct = score_hand(&state, 1, NO_INCOMING);
-        let via_seam = score_hand_variant(&state, 1, NO_INCOMING, 0);
+        let direct = score_hand(&state, &[], 1, NO_INCOMING);
+        let via_seam = score_hand_variant(&state, &[], 1, NO_INCOMING, 0);
         assert_eq!(direct, via_seam, "variant 0 must be byte-identical to the direct call");
         assert_eq!(direct, 0.5, "no objectives -> score_hand's trivial branch");
     }
@@ -485,8 +506,8 @@ mod tests {
             4,
         );
         let inc = threat_on_p2(&light, 3.0);
-        let old = score_hand_variant(&light, 1, &inc, 0);
-        let new = score_hand_variant(&light, 1, &inc, 1);
+        let old = score_hand_variant(&light, &[], 1, &inc, 0);
+        let new = score_hand_variant(&light, &[], 1, &inc, 1);
         assert_eq!(old, 0.5, "the frozen eval's mass share on a contested marker");
         assert!((new - 0.75).abs() < 1e-12, "variant 1 prices presence, got {new}");
 
@@ -500,8 +521,8 @@ mod tests {
             4,
         );
         let inc = threat_on_p2(&heavy, 3.0);
-        let old_heavy = score_hand_variant(&heavy, 1, &inc, 0);
-        let new_heavy = score_hand_variant(&heavy, 1, &inc, 1);
+        let old_heavy = score_hand_variant(&heavy, &[], 1, &inc, 0);
+        let new_heavy = score_hand_variant(&heavy, &[], 1, &inc, 1);
         assert!(old_heavy > old, "the frozen eval pays for mass: {old} -> {old_heavy}");
         assert!(
             (new_heavy - new).abs() < 1e-12,
@@ -535,12 +556,12 @@ mod tests {
             4,
         );
         assert_eq!(
-            score_hand_variant(&shaken, 1, NO_INCOMING, 1),
+            score_hand_variant(&shaken, &[], 1, NO_INCOMING, 1),
             0.0,
             "a shaken holder cannot hold: the owner keeps the marker"
         );
         assert_eq!(
-            score_hand_variant(&steady, 1, NO_INCOMING, 1),
+            score_hand_variant(&steady, &[], 1, NO_INCOMING, 1),
             1.0,
             "the same unit, unshaken, seizes it"
         );
@@ -560,9 +581,9 @@ mod tests {
         let early = marker_state(&units(), 0, 1);
         let late = marker_state(&units(), 0, 4);
         let inc = threat_on_p2(&early, 3.0);
-        let share = score_hand_variant(&early, 1, &inc, 0);
-        let blended = score_hand_variant(&early, 1, &inc, 1);
-        let decided = score_hand_variant(&late, 1, &inc, 1);
+        let share = score_hand_variant(&early, &[], 1, &inc, 0);
+        let blended = score_hand_variant(&early, &[], 1, &inc, 1);
+        let decided = score_hand_variant(&late, &[], 1, &inc, 1);
         assert!(
             share < blended && blended < decided,
             "round 1 must sit between the share {share} and the verdict {decided}, got {blended}"

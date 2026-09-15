@@ -65,7 +65,12 @@ fn grid_gaps() -> Vec<f64> {
 
 /// G1 over one act; returns (checks, mismatches). `honour_no_difficult` is true
 /// for the gate itself and false for the red proof.
-fn gate_pass(act: &Act, terrain: &nml_core::Terrain, honour_no_difficult: bool) -> (usize, usize) {
+fn gate_pass(
+    act: &Act,
+    statics: &[nml_core::unit::UnitStatic],
+    terrain: &nml_core::Terrain,
+    honour_no_difficult: bool,
+) -> (usize, usize) {
     let (mut n, mut bad) = (0usize, 0usize);
     let gaps = grid_gaps();
     // BTreeMap so a failure reports the same pair first on every run.
@@ -77,6 +82,7 @@ fn gate_pass(act: &Act, terrain: &nml_core::Terrain, honour_no_difficult: bool) 
         for (g, &w) in gaps.iter().zip(want) {
             let got = gate::charge_illegal_tuned(
                 &act.state,
+                statics,
                 terrain,
                 ai,
                 vi,
@@ -99,8 +105,9 @@ fn g1_the_pure_charge_gate_reproduces_the_recorded_gap_grid() {
     let c = corpus();
     assert_eq!(c.acts.len(), 23, "the fixture is the whole 23-activation recording");
     let (mut n, mut bad) = (0usize, 0usize);
+    let statics = build_act_statics(&c, REPO);
     for act in &c.acts {
-        let (an, ab) = gate_pass(act, &c.terrain, true);
+        let (an, ab) = gate_pass(act, &statics, &c.terrain, true);
         n += an;
         bad += ab;
     }
@@ -112,6 +119,7 @@ fn g1_the_pure_charge_gate_reproduces_the_recorded_gap_grid() {
 #[test]
 fn g1b_the_pure_charge_gate_reproduces_the_root_pair_matrix() {
     let c = corpus();
+    let statics = build_act_statics(&c, REPO);
     let (mut n, mut bad) = (0usize, 0usize);
     for act in &c.acts {
         let rows: BTreeMap<&String, &bool> = act.charge_illegal.iter().collect();
@@ -126,7 +134,7 @@ fn g1b_the_pure_charge_gate_reproduces_the_root_pair_matrix() {
                 &act.state.positions[vi],
             ) - nml_core::CONTACT_IN)
                 .max(0.0);
-            let got = gate::charge_illegal(&act.state, &c.terrain, ai, vi, gap, None, None);
+            let got = gate::charge_illegal(&act.state, &statics, &c.terrain, ai, vi, gap, None, None);
             n += 1;
             if got != want {
                 bad += 1;
@@ -281,9 +289,10 @@ fn the_cover_bonus_is_load_bearing() {
 #[test]
 fn the_strider_exemption_is_load_bearing() {
     let c = corpus();
+    let statics = build_act_statics(&c, REPO);
     let (mut n, mut bad) = (0usize, 0usize);
     for act in &c.acts {
-        let (an, ab) = gate_pass(act, &c.terrain, false);
+        let (an, ab) = gate_pass(act, &statics, &c.terrain, false);
         n += an;
         bad += ab;
     }

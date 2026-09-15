@@ -5558,9 +5558,12 @@ thread_local! {
 /// function returns 0.0 and names the arm once per game on stderr; a fresh
 /// core sim has no `books`, the flag is false, the delta folds as before.
 /// The trace line fires the first time the arm does.
+/// `trace` — the spend fold logs (true); the EV read through `live_bands_of`
+/// passes false: the imagination never logs, the one real move does.
+#[allow(clippy::too_many_arguments)] // the fold's own kind split reads one arg per band axis
 fn solo_move_grant_delta_in(
     statics: &[UnitStatic], state: &State, si: usize, kind: i64, rules_epoch: u32,
-    bands_prefolded: bool,
+    bands_prefolded: bool, trace: bool,
 ) -> f64 {
     if !rule_on(rules_epoch, EPOCH_19_MOVE_GRANTS_FOLD) {
         return 0.0;
@@ -5595,7 +5598,7 @@ fn solo_move_grant_delta_in(
     // registry fields no entry spends 0.0 and stays silent.
     let band = if adv_kind { "advance" } else { "rush/charge" };
     let fire = |name: &'static str, v: f64| {
-        if v != 0.0 {
+        if trace && v != 0.0 {
             trace_rule("move-bands", name, &format!("{un}: {v:+}\" {band} from a live grant"));
         }
         v
@@ -5613,12 +5616,45 @@ fn solo_move_grant_delta_in(
     let slow = mods::granted(state, si, "Slow") && !stamp.slow_printed;
     if slow {
         if mods::granted(state, si, "Swift") || stamp.swift_printed {
-            trace_rule("move-bands", "Swift", &format!("{un}: cancels the granted Slow"));
+            if trace {
+                trace_rule("move-bands", "Swift", &format!("{un}: cancels the granted Slow"));
+            }
         } else {
             d += fire("Slow", if adv_kind { stamp.slow_advance } else { stamp.slow_rush });
         }
     }
     d
+}
+
+/// evmove — the move bands the EVALUATOR reads: the static band plus the
+/// granted solo family's delta, quiet (`trace=false`) — the seam behind
+/// menu.rs's gap math, the playout's rush demotion, gate.rs's charge band,
+/// score.rs's reachability and tokens.rs's band columns
+/// (EV_GRANT_BLINDNESS_2026-09-15, family 1: bands gate every action). The
+/// epoch gate is the stamp itself — `solo_move_grant_mods` is None below
+/// EPOCH_19_MOVE_GRANTS_FOLD and wherever no registry entry carries numbers,
+/// exactly where the spend fold answers 0.0 — so a pre-fold corpus reads its
+/// static bands unchanged and the EV arm gains no epoch of its own.
+pub fn live_bands_of(statics: &[UnitStatic], state: &State, i: usize) -> (f64, f64) {
+    let b = &state.bands[i];
+    // The stamp-first gate: an EMPTY statics slice (score()'s doctrine arm)
+    // and every pre-fold or number-less profile answer the static bands here,
+    // before the spend fold's own `statics[...]` index is ever reached.
+    if statics
+        .get(state.roster.profile[i])
+        .and_then(|us| us.solo_move_grant_mods.as_ref())
+        .is_none()
+    {
+        return (b.advance, b.rush);
+    }
+    (
+        b.advance + solo_move_grant_delta_in(
+            statics, state, i, ADVANCE, EPOCH_19_MOVE_GRANTS_FOLD, false, false,
+        ),
+        b.rush + solo_move_grant_delta_in(
+            statics, state, i, RUSH, EPOCH_19_MOVE_GRANTS_FOLD, false, false,
+        ),
+    )
 }
 
 // ------------------------- S10: destination-side leftovers ------------------
@@ -6057,7 +6093,7 @@ fn resolve_with(
     // (see `solo_move_grant_delta_in`): the same live read the census loop
     // below only logs below the gate.
     let grant_in = solo_move_grant_delta_in(
-        statics, &next, si, kind, seams.rules_epoch, seams.bands_prefolded,
+        statics, &next, si, kind, seams.rules_epoch, seams.bands_prefolded, true,
     );
     if feat_in != 0.0 {
         next.feats_used[si].push(

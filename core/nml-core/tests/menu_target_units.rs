@@ -150,7 +150,7 @@ fn green_target_units_offers_the_charge_the_unit_can_reach() {
             )
             .max(0.0);
             assert!(
-                !gate::charge_illegal(&act.state, &c.terrain, ai, vi, gap, None, None),
+                !gate::charge_illegal(&act.state, &statics, &c.terrain, ai, vi, gap, None, None),
                 "act unit {key}: the reachable candidate {} sits at {gap:.2}\" and the gate refuses it",
                 charges[1]
             );
