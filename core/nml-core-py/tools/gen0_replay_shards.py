@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gen0_replay_one as gr, selfplay  # noqa: E402
+import nml_core  # noqa: E402
 
 OUT_DEFAULT = os.path.expanduser("~/selfplay_out/gen0_shards")
 RAGGED = {"units": 72, "objs": 12, "terr": 12, "cands": 40}  # §8.1 token widths
@@ -160,7 +161,14 @@ def run_shard(idx: int, games: list, lists: str, out_dir: str, id_of: dict, core
                                      # Gen-1 recorder fix: how many exported rows used the
                                      # promoted-player label ("played") vs the hand argmax
                                      # fallback ("best") — 0 played on a pure Gen-0 shard.
-                                     "label_kinds": label_kinds}, indent=2))
+                                     "label_kinds": label_kinds,
+                                     # Wave-6 splice stamp: the token-vocab family the
+                                     # rows were built at (tokens.rs `TOKEN_VOCAB_VERSION`;
+                                     # 1 = width-90 pads, 2 = t[88]/t[89]/t[90] filled).
+                                     # The MANIFEST's rule-vocab `encoder_vocab_version`
+                                     # is a different axis, written farm-side.
+                                     "token_vocab_version":
+                                         nml_core.BUILD_INFO.get("token_vocab_version")}, indent=2))
     os.replace(tmp_npz, npz_p)
     os.replace(tmp_json, json_p)
     return {"shard": idx, "games": len(games), "positions": len(rows)}

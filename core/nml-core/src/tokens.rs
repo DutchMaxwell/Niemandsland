@@ -143,7 +143,7 @@ fn unit_token(
     def: &Ctx,
     rows: &mut RowEncoder,
     acting_roster_idx: Option<usize>,
-    _rules_epoch: u32,
+    rules_epoch: u32,
 ) -> [f32; F_U] {
     let p = state.profile(i);
     let c = geom::centre(&state.positions[i]);
@@ -225,6 +225,14 @@ fn unit_token(
     t[52..86].copy_from_slice(&rule_bag(rows, p, us));
     t[86] = b(state.can_activate(i, state.player[i], false));
     t[87] = b(acting_roster_idx == Some(i));
+    // Wave-4 vocab c — the three columns the pads were held for (EV_VOCAB
+    // families 6+7): the CARRIED terrain debuffs ride the same granted chain
+    // every other granted base rule does, epoch-gated at
+    // `EPOCH_27_TERRAIN_DEBUFF`; the vengeance count is the chain HOST's
+    // (attached models inherit it), min 3, /3, not epoch-gated.
+    t[88] = b(crate::mods::granted_terrain_debuff(state, i, "Difficult Terrain", rules_epoch));
+    t[89] = b(crate::mods::granted_terrain_debuff(state, i, "Dangerous Terrain", rules_epoch));
+    t[90] = (state.vengeance_markers[state.attached_to[i].unwrap_or(i)].min(3) as f64 / 3.0) as f32;
     t
 }
 

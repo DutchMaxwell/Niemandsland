@@ -2711,6 +2711,7 @@ fn build_info() -> Value {
         "commit": BUILD_COMMIT,
         "dirty": env!("NML_BUILD_DIRTY") == "true",
         "rules_epoch": nmlcore::CURRENT_RULES_EPOCH,
+        "token_vocab_version": nmlcore::tokens::TOKEN_VOCAB_VERSION,
         "crate_version": env!("CARGO_PKG_VERSION"),
         "build_time_utc": env!("NML_BUILD_TIME_UTC"),
     })
