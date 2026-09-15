@@ -457,10 +457,10 @@ static func solo_combat_items(game_unit: GameUnit = null) -> Array[RadialMenuIte
 	if game_unit != null and _caster_member_of(game_unit) != null:
 		out.append(RadialMenuItem.new("solo_cast", "Cast", "✦", true, "Cast a spell — pick it, pick a target, boost, auto-resolved"))
 	# Spotter UX (maintainer 31.07.): Precision Spotter is a radial action — the player picks
-	# the target (book: "pick one enemy unit within 36\" and in line of sight"), 4+ marks it.
+	# the target (book 3.5.3: "pick one enemy unit within 30\" and in line of sight"), 4+ marks it.
 	if game_unit != null and _spotter_member_of(game_unit) != null:
 		out.append(RadialMenuItem.new("solo_spot", "Spot", "◎", true,
-			"Precision Spotter: pick an enemy within 36\" line of sight — on 4+ a marker lands; attackers may remove markers for +1 to hit each"))
+			"Precision Spotter: pick an enemy within 30\" line of sight — on 4+ a marker lands; attackers may remove markers for +1 to hit each"))
 	# Delayed Action (wave 5) — the "Pass Turn" primitive. Offered on every carrier, NEVER hidden when
 	# the condition happens to fail: an entry that vanishes reads like a missing rule, so an illegal
 	# pass is refused in the battle log with the measured counts instead (#224 transparency doctrine).

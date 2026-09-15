@@ -99,6 +99,10 @@
             limited_used: vec![Vec::new(); 4],
             piercing_tag_used: vec![false; 4],
             piercing_tag_markers: vec![0; 4],
+            spot_markers: vec![0; 4],
+            tag_markers: vec![0; 4],
+            spot_round: vec![-1; 4],
+            precision_used: vec![Vec::new(); 4],
             storm_used: vec![Vec::new(); 4],
             feats_used: vec![Vec::new(); 4],
         }
@@ -1576,6 +1580,7 @@ mod mentioned2a_buffs;
 mod mind_control;
 mod mend;
 mod pierce_mark_grants;
+mod precision_markers;
 mod move_buff;
 mod move_grants;
 mod piercing_tag;

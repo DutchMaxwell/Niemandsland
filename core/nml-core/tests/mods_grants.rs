@@ -112,6 +112,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         limited_used: vec![Vec::new(); 2],
         piercing_tag_used: vec![false; 2],
         piercing_tag_markers: vec![0; 2],
+        spot_markers: vec![0; 2], tag_markers: vec![0; 2], spot_round: vec![-1; 2], precision_used: vec![Vec::new(); 2],
         storm_used: vec![Vec::new(); 2],
         feats_used: vec![Vec::new(); 2],
     };

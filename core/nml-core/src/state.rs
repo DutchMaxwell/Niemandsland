@@ -587,6 +587,25 @@ pub struct State {
     /// :17456; the beat erases it at its start — reset semantics). The beat's
     /// reads sit behind `EPOCH_8_PLANNER_MENU` (#831's epoch-8 move).
     pub teleport_used: Vec<bool>,
+    /// Wave 6 (`EPOCH_61_PRECISION_MARKERS`) — `unit_properties["spot_markers"]
+    /// (main.gd:10067): the Precision Spotter marker pool ON this unit, added
+    /// by a spotter's 4+ placement, spent whole by the next friendly volley
+    /// (+1 to hit per marker, main.gd:3119 AI / :10429 human, shooting only).
+    pub spot_markers: Vec<i64>,
+    /// `unit_properties["tag_markers"]`: the Precision Tag pool ON this unit —
+    /// the Spotter pool's once-per-game sister (X markers per placement, same
+    /// +1-per-removed removal mapping).
+    pub tag_markers: Vec<i64>,
+    /// `unit_properties["spotted_round"]` (main.gd:10182): the round this
+    /// unit's Precision Spotter last fired (the once-per-ACTIVATION gate) —
+    /// the `vs_mark_round` shape, -1 for never.
+    pub spot_round: Vec<i64>,
+    /// The Precision family's once-per-GAME latches (the `feats_used` shape):
+    /// per unit, the DISPLAY names already spent — "Precision Tag" /
+    /// "Precision Target" (`unit_properties["precision_tag_used"]` /
+    /// `["precision_target_used"]`, the recorder stamps them off the same
+    /// flags, act_recorder.gd `_ledger_of`). Never resets on a later round.
+    pub precision_used: Vec<Vec<String>>,
 }
 
 impl State {

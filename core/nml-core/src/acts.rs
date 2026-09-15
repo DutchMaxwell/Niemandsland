@@ -447,6 +447,28 @@ pub const EPOCH_56_GROUNDED_PROTECTION: u32 = 56;
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_55_FORTIFIED_AURA: u32 = 55;
 
+/// The PRECISION MARKERS gate (15.09., PRECISION_TEXT_2026-09-15 §3-§5 — the
+/// trio's book text IS on disk, lifting the "no book text" blocker the
+/// `EPOCH_23_INERT_MARKS` note names): the three placeholder "Utility Buff"
+/// entries — Precision Spotter, Precision Tag, Precision Target — carried
+/// `hit_mod: "X"`/`"Y"` placeholders nobody could read. From 61 they carry the
+/// real shape (`bonus: "per_removed_marker" | "per_placed_marker"` plus
+/// `markers`, the carried rule string's rating overriding the default 1) and
+/// `unit.rs::utility_buffs_of` stamps it; placement is
+/// `sim::tray_precision_markers` (Spotter: once per activation, 4+ on the
+/// tray, 30", pool `State::spot_markers`; Tag: once per game, 24", pool
+/// `State::tag_markers`; Target: once per game, 18", a PERSISTENT
+/// attackers-side record — +markers for EVERY friendly attack, no spending,
+/// the book text has no removal clause), consumption the volley's
+/// (`sim::precision_markers_spend`, take-all — the table's own headless
+/// policy). Below 61 the placeholders parse as hit_mod 0 and every recorded
+/// game replays byte-exact. `61` is one past every epoch present at the
+/// rebase (57 stealthbuild and 58 precisiondebuff in flight; 56 =
+/// `EPOCH_56_GROUNDED_PROTECTION`, #976), and the value `CURRENT_RULES_EPOCH`
+/// is bumped to in the same change. Every call site reads THIS constant, not
+/// the literal `61` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_61_PRECISION_MARKERS: u32 = 61;
+
 /// The PRECISION DEBUFF gate (15.09., the precision text sweep — row
 /// `Precision Debuff`; gf Infected Colonies / Alien Hives, aof Deep-Sea
 /// Elves / Dragon Empire / Kingdom of Angels / High Elves, word-identical
@@ -468,7 +490,7 @@ pub const EPOCH_55_FORTIFIED_AURA: u32 = 55;
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
 /// reads THIS constant, not the literal `58` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_58_PRECISION_DEBUFF: u32 = 58;
-pub const CURRENT_RULES_EPOCH: u32 = 60;
+pub const CURRENT_RULES_EPOCH: u32 = 61;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1609,7 +1631,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 60, "the live epoch is 60 (EPOCH_60_GROUNDED_STEALTH; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 61, "the live epoch is 61 (EPOCH_61_PRECISION_MARKERS; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1619,11 +1641,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":60}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":61}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 60"
+            "a fresh play_game() now stamps the bumped epoch, 61"
         );
     }
 

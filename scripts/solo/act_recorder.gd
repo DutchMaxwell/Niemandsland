@@ -126,6 +126,15 @@ const EPOCH_50_SURGE_LOW := 50
 ## own gate reads the frozen `EPOCH_56_GROUNDED_PROTECTION` (acts.rs); this
 ## mirror never re-dates itself.
 const EPOCH_56_GROUNDED_PROTECTION := 56
+## The frozen gate of the PRECISION MARKERS trio (epoch 61, wave 6 2026-09-15 —
+## PRECISION_TEXT_2026-09-15 §3-§5): Precision Spotter (once per activation,
+## 4+ on the tray, 30", the spot_markers pool), Precision Tag (once per game,
+## 24", the tag_markers pool, +1 to hit per removed marker) and Precision
+## Target (once per game, 18", a duration-"game" attackers-side mod record —
+## +X for EVERY friendly attack, never spent). Below it the three placeholder
+## entries carry no marker params at all. The core's own gate reads the frozen
+## `EPOCH_61_PRECISION_MARKERS` (acts.rs); this mirror never re-dates itself.
+const EPOCH_61_PRECISION_MARKERS := 61
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
 ## Bumped to 48 in the same diff as the core's EPOCH_48_CASTER_BOOST (wave 6
@@ -158,7 +167,8 @@ const EPOCH_56_GROUNDED_PROTECTION := 56
 ## EPOCH_60_GROUNDED_STEALTH (D-STEALTH 15.09. — Grounded Stealth's -1 to be
 ## hit reads the per-model within-1" terrain predicate on both layers; the
 ## table's cover-cell approximation is dropped).
-static var rules_epoch: int = 60
+## on the Regeneration fold).
+static var rules_epoch: int = 61
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
@@ -650,6 +660,28 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 	var vsm := int(u.unit_properties.get("vs_mark_round", -1))
 	if vsm != -1:
 		ledger["vs_mark_round"] = vsm
+	# Wave 6 — the PRECISION MARKERS trio (`EPOCH_61_PRECISION_MARKERS`): the
+	# two marker pools ON the unit (Spotter's `spot_markers`, Tag's
+	# `tag_markers`), the spotter's once-per-activation round stamp, and the
+	# once-per-game latches recorded as the DISPLAY names whose flag stands
+	# (the storm_used shape — the core's `State.precision_used` matches the
+	# registry's own names without a snake-case round trip).
+	var sm := int(u.unit_properties.get("spot_markers", 0))
+	if sm > 0:
+		ledger["spot_markers"] = sm
+	var tm := int(u.unit_properties.get("tag_markers", 0))
+	if tm > 0:
+		ledger["tag_markers"] = tm
+	var sr := int(u.unit_properties.get("spotted_round", -1))
+	if sr != -1:
+		ledger["spot_round"] = sr
+	var pu: Array = []
+	if bool(u.unit_properties.get("precision_tag_used", false)):
+		pu.append("Precision Tag")
+	if bool(u.unit_properties.get("precision_target_used", false)):
+		pu.append("Precision Target")
+	if not pu.is_empty():
+		ledger["precision_used"] = pu
 	var dar := int(u.unit_properties.get(SoloController.DELAYED_ACTION_STAMP, -1))
 	if dar != -1:
 		ledger["delayed_action_round"] = dar

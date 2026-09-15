@@ -219,6 +219,23 @@ pub(crate) struct PlainLedger {
     /// old act replays unmarked, exactly as it did.
     #[serde(default)]
     vengeance_markers: i64,
+    /// Wave 6 (`EPOCH_61_PRECISION_MARKERS`) — `unit_properties["spot_markers"]
+    /// (main.gd:10067) and `["tag_markers"]`: the Precision Spotter/Tag marker
+    /// pools ON the unit. Absent from every corpus recorded before this key,
+    /// and `0` there — an old act replays unmarked, exactly as it did.
+    #[serde(default)]
+    spot_markers: i64,
+    #[serde(default)]
+    tag_markers: i64,
+    /// `unit_properties["spotted_round"]` (main.gd:10182) — the spotter's
+    /// once-per-ACTIVATION round stamp; `-1` (absent) on every older corpus.
+    #[serde(default = "neg_one")]
+    spot_round: i64,
+    /// The Precision family's once-per-game latches (the `storm_used` shape):
+    /// the DISPLAY names whose `precision_tag_used`/`precision_target_used`
+    /// flag stands (act_recorder.gd `_ledger_of`). Empty on every older corpus.
+    #[serde(default)]
+    precision_used: Vec<String>,
     /// Block B8 — `unit_properties["second_wind_used"]` (solo_controller.gd:
     /// 10474), per unit, ONCE per game (no "round" derivation, unlike growth).
     #[serde(default)]
@@ -857,6 +874,10 @@ pub(crate) fn state_of(
         retreating_strike_round: vec![-1; n],
         growth_markers: vec![0; n],
         vengeance_markers: vec![0; n],
+        spot_markers: vec![0; n],
+        tag_markers: vec![0; n],
+        spot_round: vec![-1; n],
+        precision_used: vec![Vec::new(); n],
         growth_round: vec![-1; n],
         second_wind_used: vec![false; n],
         reinforcement_used: vec![false; n],
@@ -986,6 +1007,10 @@ pub(crate) fn state_of(
             st.teleport_used[ui] = ledger.teleport.as_ref().map(|t| t.used).unwrap_or(false);
             st.growth_markers[ui] = ledger.growth;
             st.vengeance_markers[ui] = ledger.vengeance_markers;
+            st.spot_markers[ui] = ledger.spot_markers;
+            st.tag_markers[ui] = ledger.tag_markers;
+            st.spot_round[ui] = ledger.spot_round;
+            st.precision_used[ui] = ledger.precision_used.clone();
             // `growth_round` has no key of its own on the wire (see
             // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED
             // here from facts every act already carries. `_solo_growth_

@@ -1064,7 +1064,8 @@
     "rated": true,
     "book_version": "3.5.3",
     "params": {
-     "hit_mod": "Y",
+     "bonus": "per_removed_marker",
+     "markers": 1,
      "range_in": 24,
      "target": "enemy",
      "needs_los": true,
@@ -2329,7 +2330,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "hit_mod": "X",
+     "bonus": "per_removed_marker",
+     "markers": 1,
      "range_in": 30,
      "target": "enemy",
      "needs_los": true,
@@ -7362,7 +7364,8 @@
     "rated": true,
     "book_version": "3.5.3",
     "params": {
-     "hit_mod": "X",
+     "bonus": "per_placed_marker",
+     "markers": 1,
      "range_in": 18,
      "target": "enemy",
      "needs_los": true,
@@ -7600,7 +7603,8 @@
     "rated": true,
     "book_version": "3.5.3",
     "params": {
-     "hit_mod": "X",
+     "bonus": "per_placed_marker",
+     "markers": 1,
      "range_in": 18,
      "target": "enemy",
      "needs_los": true,

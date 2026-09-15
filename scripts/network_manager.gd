@@ -80,6 +80,7 @@ const SLOT_RESERVED_PEER: int = 0
 ## is a deliberate act — it says "this number is rules-relevant, invisible, and both tables need it".
 const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"spot_markers",     # Precision Spotter marks (int). The token on the table is a plain boolean.
+	"tag_markers",      # Precision Tag marks (int) — the Spotter pool's once-per-game sister.
 	"spell_move_mod",   # {advance, rush} — the NET spell movement delta the move bands read.
 	"spell_range_mod",  # int — the NET spell shooting-range delta every volley/plan site reads.
 ]

@@ -30,6 +30,7 @@ use crate::acts::{
     EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA, EPOCH_38_WATCHBORN_LATCH,
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
+    EPOCH_61_PRECISION_MARKERS,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -1756,6 +1757,188 @@ fn piercing_tag_spend(next: &mut State, ti: usize, rules_epoch: u32) -> i64 {
     let markers = next.piercing_tag_markers[ti].max(0);
     next.piercing_tag_markers[ti] = 0;
     markers
+}
+
+/// Wave 6 — the PRECISION MARKERS family's PLACEMENT half
+/// (`EPOCH_61_PRECISION_MARKERS`), the `_solo_apply_piercing_tag` twin for the
+/// to-hit markers. Spotter (main.gd:1127, END of activation): NEAREST enemy in
+/// 30"/LOS, one tray roll, 4+ places a marker on `State::spot_markers`, once
+/// per activation (`State::spot_round`). Tag (TOUGHEST pick, 24"): `markers`
+/// (the rule string's rating, default 1) onto `State::tag_markers`, once per
+/// game (`State::precision_used`). Target: the same pick at 18", the bonus
+/// rides ONE PERSISTENT attackers-beneficiary record (hit_mod = markers,
+/// `once: false`) — EVERY friendly attack folds it on BOTH legs via
+/// `vs_hit_mod`, nothing is ever spent (the book text has no removal clause).
+/// Rules-must-log on every placement. GATED on the FROZEN constant.
+fn tray_precision_markers(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    seams: Seams,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
+    spot: bool,
+) {
+    if !rule_on(seams.rules_epoch, EPOCH_61_PRECISION_MARKERS) {
+        return;
+    }
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach {
+        bearers.extend(next.attached[si].iter().copied());
+    }
+    for &bearer in &bearers {
+        if next.alive[bearer] <= 0 {
+            continue;
+        }
+        let pb = next.roster.profile[bearer];
+        for b in &statics[pb].utility_buffs {
+            if b.bonus.is_empty() {
+                continue;
+            }
+            // TWO table slots: the Spotter fires at the END of the activation
+            // (main.gd:1127, `spot == true`), Tag/Target in the pre-attack
+            // slot right after the Piercing Tag (main.gd:1089-1090, `spot ==
+            // false`) — the tag's own activation's volley may spend it.
+            if (b.place_roll > 0) != spot {
+                continue;
+            }
+            if b.uses_per_game > 0 {
+                if next.precision_used[bearer].contains(&b.name) {
+                    continue;
+                }
+            } else if next.spot_round[bearer] == next.round {
+                continue;
+            }
+            let owner = statics[pb].name.clone();
+            if b.place_roll > 0 {
+                // SPOTTER — the table's own auto-spot pick (main.gd:10043-10052):
+                // the NEAREST enemy within the entry's range in sight.
+                let Some(ti) = nearest_precision_target(next, bearer, b, seams) else { continue; };
+                next.spot_round[bearer] = next.round;
+                let face = tray.roll(1).first().copied().unwrap_or(1) as i64;
+                let tn = statics[next.roster.profile[ti]].name.clone();
+                if face < b.place_roll {
+                    shot.log.push(format!(
+                        "Precision Spotter: {} misses the mark on {} (needed {}+)",
+                        owner, tn, b.place_roll));
+                    continue;
+                }
+                next.spot_markers[ti] += b.markers;
+                shot.log.push(format!(
+                    "Precision Spotter: {} marks {} ({} marker{} — attackers may remove markers for +1 to hit each)",
+                    owner, tn, b.markers, if b.markers == 1 { "" } else { "s" }));
+            } else {
+                // TAG / TARGET — the piercing twins' TOUGHEST-enemy pick.
+                let probe = UtilityBuff {
+                    name: b.name.clone(),
+                    target: "enemy".into(),
+                    range_in: b.range_in,
+                    needs_los: b.needs_los,
+                    max_targets: 1,
+                    ..UtilityBuff::default()
+                };
+                let Some(ti) = utility_targets(statics, next, bearer, &probe, seams).into_iter().next() else { continue; };
+                next.precision_used[bearer].push(b.name.clone());
+                let tn = statics[next.roster.profile[ti]].name.clone();
+                if b.bonus == "per_placed_marker" {
+                    // TARGET — the +X is a PERSISTENT record: every friendly
+                    // attack against the marked unit folds it (both legs,
+                    // `vs_hit_mod`), nothing is ever spent.
+                    next.buffs[ti].push(mods::LiveMod {
+                        hit_mod: b.markers,
+                        casting_mod: 0,
+                        morale_mod: 0,
+                        ap_mod: 0,
+                        def_mod: 0,
+                        defense_mod: 0,
+                        move_mod: 0,
+                        grants_rule: Rc::from(""),
+                        scope: Rc::from(""),
+                        attackers: true,
+                        once: false,
+                        name: Rc::from(b.name.as_str()),
+                    });
+                    shot.log.push(format!(
+                        "Precision Target: {} places {} marker{} on {} — friendly units get +{} to hit against it",
+                        owner, b.markers, if b.markers == 1 { "" } else { "s" }, tn, b.bonus));
+                } else {
+                    next.tag_markers[ti] += b.markers;
+                    shot.log.push(format!(
+                        "Precision Tag: {} places {} marker{} on {} — friendly attackers may remove markers for +1 to hit each",
+                        owner, b.markers, if b.markers == 1 { "" } else { "s" }, tn));
+                }
+            }
+        }
+    }
+}
+
+/// The Spotter arm's own pick (main.gd:10043-10052): the NEAREST living enemy
+/// within the entry's range, sight-gated by the entry's `needs_los` — the
+/// exclusions are `utility_targets`'s own (dormant, joined).
+fn nearest_precision_target(
+    next: &State,
+    bearer: usize,
+    b: &crate::unit::UtilityBuff,
+    seams: Seams,
+) -> Option<usize> {
+    let own = next.player[bearer];
+    let from = geom::centre(&next.positions[bearer]);
+    let mut best: Option<(f64, usize)> = None;
+    for u in 0..next.units() {
+        if next.player[u] == own || next.alive[u] <= 0 || next.dormant[u] {
+            continue;
+        }
+        if seams.hero_attach && next.attached_to[u].is_some() {
+            continue;
+        }
+        let d = (geom::length(geom::sub(from, geom::centre(&next.positions[u]))) / IN2M as f32) as f64;
+        if d > b.range_in {
+            continue;
+        }
+        if b.needs_los && !los_clear(next, bearer, u) {
+            continue;
+        }
+        if best.is_none_or(|(bd, _)| d < bd) {
+            best = Some((d, u));
+        }
+    }
+    best.map(|(_, u)| u)
+}
+
+/// The PRECISION family's consumption half, the volley seam's — the twin of
+/// `piercing_tag_spend` above: the marked target's pools spend EVERY marker on
+/// THIS volley for +1 to hit per marker (main.gd:3119 AI / :10429 human,
+/// shooting only — the melee seams never call it), once per group. The
+/// Precision TARGET record is NOT here: it is persistent (`once: false`),
+/// folds through `vs_hit_mod` on both legs, and the book text has no removal
+/// clause. GATED on the FROZEN constant; below it both pools read empty.
+fn precision_markers_spend(
+    next: &mut State,
+    ti: usize,
+    rules_epoch: u32,
+    log: &mut Vec<String>,
+) -> i64 {
+    if !rule_on(rules_epoch, EPOCH_61_PRECISION_MARKERS) {
+        return 0;
+    }
+    let mut total = 0;
+    let spot = next.spot_markers[ti].max(0);
+    if spot > 0 {
+        next.spot_markers[ti] = 0;
+        total += spot;
+        log.push(format!(
+            "Precision Spotter: {spot} marker{} removed — +{spot} to hit this volley",
+            if spot == 1 { "" } else { "s" }));
+    }
+    let tag = next.tag_markers[ti].max(0);
+    if tag > 0 {
+        next.tag_markers[ti] = 0;
+        total += tag;
+        log.push(format!(
+            "Precision Tag: {tag} marker{} removed — +{tag} to hit this volley",
+            if tag == 1 { "" } else { "s" }));
+    }
+    total
 }
 
 /// `tray_charge`'s strike-order leg: the static Unwieldy flag, or — wave 2
@@ -6224,6 +6407,15 @@ fn resolve_with(
         tray_piercing_tag(statics, &mut next, si, seams, shot);
     }
 
+    // --- PRECISION MARKERS — TAG/TARGET (main.gd:1089-1090, the pre-attack
+    // slot right after the Piercing Tag), tray path only — see
+    // `tray_precision_markers`. The Tag draws nothing (the count is the
+    // rating); the Spotter does NOT run here — its beat is the activation's
+    // END (main.gd:1127).
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_precision_markers(statics, &mut next, si, seams, tray, shot, false);
+    }
+
     // --- RECKLESS PIERCING (main.gd:1072, the table's own slot between the
     // Piercing Tag and the Storm Attack) — tray path only, see
     // `tray_reckless_piercing`.
@@ -6438,6 +6630,10 @@ fn resolve_with(
                                     "Piercing Tag: {tag_ap} marker{s} spent — +AP({tag_ap}) on this volley"
                                 ));
                             }
+                            // Wave 6 — Precision Spotter/Tag: the marked
+                            // target's pools spend EVERY marker on THIS
+                            // volley (+1 to hit per marker), once per group.
+                            let precision_hit = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let mut def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch);
                             // D-STEALTH — the def build's terrain gate: the alias
@@ -6549,6 +6745,11 @@ fn resolve_with(
                                     att.hit_mod += att.instinctive_hit_bonus;
                                 }
                                 att.tag_ap_mod = tag_ap;
+                                // Wave 6 — the Precision pools' +1-per-marker
+                                // rides the SAME attacker-side net the
+                                // instinctive bonus folds into (both legs
+                                // read `att.hit_mod` at the roll).
+                                att.hit_mod += precision_hit;
                                 // Reckless Piercing (epoch 7, main.gd:9877):
                                 // the chain's buff stamp and the TARGET's
                                 // backfire stamp — `_solo_reckless_ap`'s net.
@@ -6850,6 +7051,14 @@ fn resolve_with(
                 }
             }
         }
+    }
+
+    // --- PRECISION MARKERS — SPOTTER (main.gd:1127, the END-of-activation
+    // beat — the spot fires after every attack of this activation, so its
+    // marker lands for the NEXT friendly attack) — tray path only, see
+    // `tray_precision_markers`; the 4+ is a real tray draw.
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_precision_markers(statics, &mut next, si, seams, tray, shot, true);
     }
 
     // --- shaken recovery (battle_sim.gd:648-650) ---
