@@ -291,3 +291,58 @@ use super::*;
         )
         .unwrap()
     }
+
+    /// TEST WAVE (part 2, chunk 3 of 4; D-PROOF) — "Slayer Mark" through the
+    /// REAL registry: aofs/hidden_syndicates' own entry is a `vs_target` mark
+    /// (beneficiary "attackers", grants "Slayer", 18", `needs_los`, up to 4
+    /// targets), so the ATTACK seam records the once-grant on the striker's
+    /// ledger — the numbers pinned here are the entry's own, read by the
+    /// exact name at `CURRENT_RULES_EPOCH`.
+    fn slayer_carrier() -> UnitStatic {
+        let tpl = r#"{"kind":"header","knobs":{},"profiles":{
+          "carrier":{"unit_id":"a","name":"a","quality":4,
+            "defense":4,"tough":1,"wounds_max":[1,1],"model_count":2,"caster_value":0,
+            "base_radius":0.016,"game_system":"aofs","faction_folder":"hidden_syndicates",
+            "special_rules":["Slayer Mark"],"item_grants":[],
+            "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+            "weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+        let header = crate::acts::read_act_header(tpl).expect("slayer carrier header");
+        let mut reg = crate::rules::Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        UnitStatic::build_for(&mut reg, p, crate::acts::CURRENT_RULES_EPOCH)
+    }
+
+    #[test]
+    fn slayer_mark_hands_the_striker_a_once_slayer_grant_from_nine() {
+        let (st, mut statics) = buff_line();
+        statics[0] = slayer_carrier();
+        // The entry's own shape, by the EXACT name — a renamed mark fails here.
+        let ub = statics[0]
+            .utility_buffs
+            .first()
+            .expect("the mark IS read off the registry");
+        assert_eq!(ub.name, "Slayer Mark", "the entry's own name");
+        assert!(ub.vs_target, "the attack-seam kind");
+        assert!(ub.needs_los, "the printed in-line-of-sight gate");
+        assert_eq!(ub.range_in, 18.0, "the printed 18\" pick range");
+        assert_eq!(ub.max_targets, 4, "the aofs block's own max_targets");
+        assert_eq!(ub.grants_rule, "Slayer", "the entry's own grant");
+        assert_eq!(ub.beneficiary, "attackers", "the attackers-side beneficiary");
+        // The mark fires from `EPOCH_9_MARK_FAMILY` and stays silent below it
+        // (the #870 family's own epoch shape, on this name's real entry).
+        let (next9, _) = run_buff_epoch(&st, &statics, &buff_action(Some("b")), 13, 9);
+        assert_eq!(next9.vs_mark_round[0], st.round, "the grant fires from rules_epoch 9");
+        let (next8, _) = run_buff_epoch(&st, &statics, &buff_action(Some("b")), 13, 8);
+        assert_eq!(next8.vs_mark_round[0], -1, "#870's grant must not fire at rules_epoch 8");
+        // At the current epoch the once-grant rides the exchange and is spent
+        // by it — the same consumption the Unstoppable mark pins.
+        let (next, _) = run_buff_epoch(
+            &st, &statics, &buff_action(Some("b")), 13, crate::acts::CURRENT_RULES_EPOCH,
+        );
+        assert_eq!(next.vs_mark_round[0], st.round, "the mark fired this round");
+        assert!(
+            next.buffs.iter().all(|v| v.is_empty()),
+            "the exchange spends the once-grant: {:?}",
+            next.buffs
+        );
+    }
