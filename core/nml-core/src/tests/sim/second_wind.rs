@@ -173,9 +173,13 @@ use super::*;
 
         // ceil(carriers / army_cap_fraction): four LIVING carriers on one
         // side -> cap 2 per round. The first two grants go, the third is
-        // refused even though carriers are still eligible and unused.
+        // refused even though carriers are still eligible and unused. The
+        // fixture's joined heroes detach first — `attached_to` carriers are
+        // never counted (`second_wind_candidate` skips every joined hero).
         let (mut st4, mut statics4) = buff_line();
         st4.player = vec![0, 0, 0, 0];
+        st4.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
+        st4.attached_to = Rc::new(vec![None, None, None, None]);
         st4.alive[3] = 1; // "bh" joins the side alive — the fourth carrier
         st4.wounds[3] = vec![1];
         st4.radii[3] = vec![IN2M];

@@ -1600,11 +1600,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":56}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":58}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 56"
+            "a fresh play_game() now stamps the bumped epoch, 58"
         );
     }
 
