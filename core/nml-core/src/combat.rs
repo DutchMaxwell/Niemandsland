@@ -437,8 +437,13 @@ pub fn conditional_ap_bonus(
 /// the merged profile (battle_sim.gd:738-739), passed in rather than stored so
 /// the immutable profile table can be shared across every rollout node.
 ///
-/// Not modelled, and not reachable from this call site (with the GDScript line
-/// that would produce it): `spell_hit_mod` (:331 — `_ctx_of` never sets it).
+/// Not modelled: the Shot Modifier / Stealth-alias keys (see the shooting
+/// branch — the EV imagination stays blind to those, like the GDScript).
+/// The Wave-6 spell-hit net IS modelled: `att.hit_mod` joins the same
+/// net-modifier composition ai_ev.gd:468-470 builds (`spell_hit_mod`, "0
+/// when absent, so the pre-spell EV is byte-identical"). It reaches this
+/// function only through `sim::ctx_live`, which the EV arms now call; every
+/// `ctx_of`-built ctx carries 0 and prices byte-identically.
 ///
 /// NML-1103: `cond_ap` (:412) IS modelled now — `BattleSim._profiles_of` stamps
 /// it (battle_sim.gd:927), so the twin stamps it too (`unit::stamp_conditional_ap`).
@@ -468,6 +473,10 @@ pub fn profile_ev(
             // imagination measures NO pre-charge gap (ai_ev.gd:442's melee
             // branch has no alias leg either) — charge_from_in stays 0.0,
             // which never clears the alias's `over_in` gate.
+            // The Wave-6 spell-hit net (ai_ev.gd:482): the bearer's own
+            // buff/debuff ±N composes into the SAME net-modifier sum the
+            // clamp then sees, exactly like the GDScript's `+ spell_mod`.
+            // 0 on every ctx_of-built ctx, so the pre-swap EV is unchanged.
             let mut melee_mod = melee_hit_modifier(
                 def.evasive,
                 def.melee_evasion,
@@ -475,7 +484,7 @@ pub fn profile_ev(
                 def.stealth_alias_over_in,
                 def.stealth_alias_applies_charged,
                 0.0,
-            );
+            ) + att.hit_mod;
             // EV/tray split (found by #489, caveat 4): `p.unstoppable_ev` folds
             // in the unit-level prefix scan the EV imagination itself does
             // (ai_ev.gd:347, `stamp_unit_strikers`); the tray reads the plain
@@ -491,10 +500,12 @@ pub fn profile_ev(
         // Targeting Visor) OR the Stealth data-alias family (ai_ev.gd:151's
         // `ctx_for` reads only the literal "Stealth" name too) — the EV
         // imagination stays blind to both, like Mend; only the tray path
-        // (dice.rs) supplies non-zero values.
+        // (dice.rs) supplies non-zero values. The Wave-6 spell-hit net is
+        // the one modifier it does fold (ai_ev.gd:493's `+ spell_mod`): the
+        // bearer's own buff/debuff ±N, 0 on every ctx_of-built ctx.
         let mut shoot_mod = shooting_hit_modifier(
             dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0, 0, 0.0,
-        );
+        ) + att.hit_mod;
         // EV/tray split (found by #489, caveat 4) — see the melee branch above.
         if p.unstoppable_ev && shoot_mod < 0 {
             shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.

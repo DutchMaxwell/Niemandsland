@@ -155,12 +155,12 @@ use super::*;
         let (st, statics) = granted_pair("ogres", &["Fast"], 13.0);
         let t = crate::terrain::Terrain::default();
         assert_eq!(
-            crate::menu::best_charge(&st, &t, &statics, 0, &mut Scratch::default(), crate::menu::Tuning::default()),
+            crate::menu::best_charge(&st, &t, &statics, 0, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH),
             Some(2),
             "the granted unit's charge on e1 enters the menu"
         );
         assert_eq!(
-            crate::menu::best_charge(&st, &t, &statics, 1, &mut Scratch::default(), crate::menu::Tuning::default()),
+            crate::menu::best_charge(&st, &t, &statics, 1, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH),
             None,
             "the ungranted twin cannot reach either enemy"
         );
@@ -186,12 +186,12 @@ use super::*;
         assert!(a[28] < b[28], "advance column: slowed {} vs bare {}", a[28], b[28]);
         assert!(a[29] < b[29], "rush column: slowed {} vs bare {}", a[29], b[29]);
         assert_eq!(
-            crate::menu::best_charge(&st, &t, &statics, 0, &mut Scratch::default(), crate::menu::Tuning::default()),
+            crate::menu::best_charge(&st, &t, &statics, 0, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH),
             None,
             "the slowed unit's 8\" band cannot reach the 10\" target"
         );
         assert_eq!(
-            crate::menu::best_charge(&st, &t, &statics, 1, &mut Scratch::default(), crate::menu::Tuning::default()),
+            crate::menu::best_charge(&st, &t, &statics, 1, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH),
             Some(3),
             "the ungranted twin takes the same 10\" gap"
         );

@@ -20,9 +20,13 @@
 
 use serde::Deserialize;
 
+use crate::acts::CURRENT_RULES_EPOCH;
 use crate::combat::{melee_ev, profile_ev, shoot_ev, SIX_P};
 use crate::geom::{self, V3};
-use crate::sim::{ctx_of, melee_profiles_of, profiles_of, teleport_probe, Scratch, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
+use crate::sim::{
+    ctx_of, ctx_live, melee_profiles_of, profiles_of, teleport_probe, Scratch, ADVANCE, CHARGE,
+    HOLD, REPOSITION, RUSH,
+};
 use crate::state::{State, Weapon};
 use crate::terrain::{gives_cover, Terrain};
 use crate::unit::{Ctx, ShootProfile, UnitStatic};
@@ -232,12 +236,22 @@ fn gap_m(a: &[[f64; 3]], offset: V3, b: &[[f64; 3]]) -> f64 {
 /// `Tuning::shoot_los` for why the GDScript needs no such switch and the
 /// trainer does. NML-1157's `target_units` rides the same `Tuning`: both menu
 /// legs ask ONE object which targets are legal to name.
+///
+/// The EV arms price the LIVE unit (families 2-4 of the blindness report,
+/// 15.09.): the root choice ctx is built through `ctx_live`, so a live
+/// utility-buff knob, combat grant or Shielded-family defense grant on
+/// EITHER side is priced, not stamped over. `rules_epoch` rides
+/// `CURRENT_RULES_EPOCH` at every shipping caller — the EV is not replayed
+/// by recorded games, and a captured state's ledger is always empty
+/// (`State::buffs` is deliberately not serialised), so the fold is a no-op
+/// on every corpus and no frozen gate is needed.
 pub fn best_shoot(
     state: &State,
     statics: &[UnitStatic],
     i: usize,
     sc: &mut Scratch,
     tuning: Tuning,
+    rules_epoch: u32,
 ) -> Option<usize> {
     let us = &statics[state.roster.profile[i]];
     let mut best = None;
@@ -249,8 +263,8 @@ pub fn best_shoot(
         let ut = &statics[state.roster.profile[e]];
         let d = geom::dist_in(&state.positions[i], &state.positions[e]);
         profiles_of(us, state.alive[i], d, sc);
-        let att = ctx_of(us, state, i);
-        let def = ctx_of(ut, state, e);
+        let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        let def = ctx_live(ctx_of(ut, state, e), statics, state, e, false, rules_epoch);
         let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
         if ev > best_ev {
             best_ev = ev;
@@ -290,12 +304,18 @@ pub fn best_shoot(
 ///
 /// Capture order, first-wins, one entry per enemy — the same iteration every
 /// other leg of this menu uses.
+///
+/// The root ctx prices through `ctx_live` like every other EV arm (families
+/// 2-4 of the blindness report): the imagined part of this leg is the
+/// post-advance DISTANCE only — the unit ctx is the root state's, ledger
+/// included.
 pub fn advance_shoots(
     state: &State,
     statics: &[UnitStatic],
     i: usize,
     sc: &mut Scratch,
     tuning: Tuning,
+    rules_epoch: u32,
 ) -> Vec<usize> {
     let us = &statics[state.roster.profile[i]];
     // evmove — the LIVE advance band: the state's own static band plus the
@@ -309,8 +329,11 @@ pub fn advance_shoots(
         }
         let d = (geom::dist_in(&state.positions[i], &state.positions[e]) - advance_in).max(0.0);
         profiles_of(us, state.alive[i], d, sc);
-        let att = ctx_of(us, state, i);
-        let def = ctx_of(&statics[state.roster.profile[e]], state, e);
+        let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        let def = ctx_live(
+            ctx_of(&statics[state.roster.profile[e]], state, e),
+            statics, state, e, false, rules_epoch,
+        );
         if shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d) > 0.0 {
             out.push(e);
         }
@@ -356,6 +379,10 @@ fn charge_score(
 /// verdict inside the (5.75", 6.25"] window. The GDScript dropped that
 /// subtraction at both menu sites (ai_planner.gd:1029-1030, :1303-1304); this
 /// twin follows it.
+///
+/// The charge EV prices the LIVE root ctx like every other arm (families
+/// 2-4 of the blindness report) — a granted Furious, Shielded-family
+/// defense or utility-buff knob on either side moves the score.
 pub fn best_charge(
     state: &State,
     terrain: &Terrain,
@@ -363,6 +390,7 @@ pub fn best_charge(
     i: usize,
     sc: &mut Scratch,
     tuning: Tuning,
+    rules_epoch: u32,
 ) -> Option<usize> {
     let us_static = &statics[state.roster.profile[i]];
     if us_static.melee.is_empty() {
@@ -399,8 +427,8 @@ pub fn best_charge(
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
-        let us = ctx_of(us_static, state, i);
-        let them = ctx_of(ut, state, e);
+        let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
+        let them = ctx_live(ctx_of(ut, state, e), statics, state, e, true, rules_epoch);
         if melee_ev(&us_static.melee, &our_attacks, &us, &them, true) < FUTILE_CHARGE_EV {
             continue;
         }
@@ -426,6 +454,9 @@ pub fn best_charge(
 /// the gate "reachable" would not mean anything — `charge_illegal_tuned`
 /// (`gate.rs:47`) is what carries the rush band, Melee Shrouding and the p.11
 /// difficult corridor.
+///
+/// The futile bar prices the LIVE root ctx like every other arm (families
+/// 2-4 of the blindness report).
 pub fn nearest_chargeable(
     state: &State,
     terrain: &Terrain,
@@ -433,6 +464,7 @@ pub fn nearest_chargeable(
     i: usize,
     sc: &mut Scratch,
     tuning: Tuning,
+    rules_epoch: u32,
 ) -> Option<usize> {
     let us_static = &statics[state.roster.profile[i]];
     if us_static.melee.is_empty() {
@@ -440,7 +472,7 @@ pub fn nearest_chargeable(
     }
     melee_profiles_of(us_static, state.alive[i], sc);
     let our_attacks = sc.attacks.clone();
-    let us = ctx_of(us_static, state, i);
+    let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
     let mut best = None;
     let mut best_gap = f64::INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
@@ -468,7 +500,10 @@ pub fn nearest_chargeable(
         ) {
             continue;
         }
-        let them = ctx_of(&statics[state.roster.profile[e]], state, e);
+        let them = ctx_live(
+            ctx_of(&statics[state.roster.profile[e]], state, e),
+            statics, state, e, true, rules_epoch,
+        );
         if melee_ev(&us_static.melee, &our_attacks, &us, &them, true) < FUTILE_CHARGE_EV {
             continue;
         }
@@ -726,6 +761,11 @@ fn charge_at(state: &State, key: &str, e: usize) -> Candidate {
 
 /// The same menu with the parity `Tuning` exposed — see `Tuning`. Shipping code
 /// calls `candidates`/`candidates_in`; only the red proofs pass anything else.
+///
+/// The EV arms inside run at `CURRENT_RULES_EPOCH` (families 2-4 of the
+/// blindness report): the EV is not replayed by recorded games and a
+/// captured state's grant ledger is always empty, so every recorded menu
+/// replays byte-exact. See `best_shoot`.
 pub fn candidates_tuned(
     state: &State,
     terrain: &Terrain,
@@ -736,7 +776,7 @@ pub fn candidates_tuned(
 ) -> Vec<Candidate> {
     let key = state.key(unit);
     let mut out = vec![Candidate::new(key, HOLD)];
-    if let Some(e) = best_shoot(state, statics, unit, sc, tuning) {
+    if let Some(e) = best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH) {
         let mut c = Candidate::new(key, HOLD);
         c.shoot = Some(state.key(e).to_string());
         out.push(c);
@@ -751,7 +791,8 @@ pub fn candidates_tuned(
         c.dest = Some(o.pos);
         out.push(c);
     }
-    let scored = best_charge(state, terrain, statics, unit, sc, tuning);
+    let scored =
+        best_charge(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH);
     if let Some(e) = scored {
         out.push(charge_at(state, key, e));
     }
@@ -759,7 +800,9 @@ pub fn candidates_tuned(
     // when it is a different unit from the best-scoring one, so a menu never
     // carries the same charge twice.
     if tuning.target_units {
-        if let Some(e) = nearest_chargeable(state, terrain, statics, unit, sc, tuning) {
+        if let Some(e) =
+            nearest_chargeable(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH)
+        {
             if Some(e) != scored {
                 out.push(charge_at(state, key, e));
             }
@@ -788,7 +831,7 @@ pub fn candidates_tuned(
     // is the imitation label the policy corpus trains on. The count is one per
     // shootable enemy and the search's `top_k` bounds what any of them cost.
     if tuning.wide_shoot {
-        for e in advance_shoots(state, statics, unit, sc, tuning) {
+        for e in advance_shoots(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH) {
             let mut c = Candidate::new(key, ADVANCE);
             c.dest = Some(geom::to_f64(geom::centre(&state.positions[e])));
             c.shoot = Some(state.key(e).to_string());

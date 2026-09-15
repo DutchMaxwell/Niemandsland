@@ -105,7 +105,9 @@ impl<'a> Policy<'a> {
             return vec![Candidate::hold(key)];
         }
         let mut hold = Candidate::hold(key);
-        if let Some(e) = best_shoot(state, self.statics, unit, sc, self.tuning) {
+        if let Some(e) =
+            best_shoot(state, self.statics, unit, sc, self.tuning, self.seams.rules_epoch)
+        {
             hold.shoot = Some(state.key(e).to_string());
         }
         let mut out = vec![hold];
@@ -143,7 +145,11 @@ impl<'a> Policy<'a> {
                 let shot = self
                     .seams
                     .moved_shoot
-                    .then(|| best_shoot(state, self.statics, unit, sc, self.tuning))
+                    .then(|| {
+                        best_shoot(
+                            state, self.statics, unit, sc, self.tuning, self.seams.rules_epoch,
+                        )
+                    })
                     .flatten();
                 if shot.is_some()
                     && out.iter().any(|c| c.kind == ADVANCE && c.dest == Some(o.pos))
@@ -186,7 +192,9 @@ impl<'a> Policy<'a> {
         // Counter-charges exist in the mental game too (diagnosis 07.08.):
         // without this a committed unit could never be punished in a rollout,
         // so early commitment looked free.
-        if let Some(e) = best_charge(state, self.terrain, self.statics, unit, sc, self.tuning) {
+        if let Some(e) = best_charge(
+            state, self.terrain, self.statics, unit, sc, self.tuning, self.seams.rules_epoch,
+        ) {
             let mut c = Candidate::new(key, CHARGE);
             c.dest = Some(geom::to_f64(geom::centre(&state.positions[e])));
             c.charge = Some(state.key(e).to_string());

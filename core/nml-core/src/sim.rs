@@ -22,7 +22,7 @@ use crate::combat::{
 use crate::sight;
 use crate::geom::{self, V3};
 use crate::acts::{
-    rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES,
+    rule_on, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES,
     EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU,
     EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND, EPOCH_12_MOVE_BUFF,
     EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING, EPOCH_19_MOVE_GRANTS_FOLD,
@@ -4948,6 +4948,11 @@ fn caster_of(statics: &[UnitStatic], state: &State, si: usize, seams: Seams) -> 
 /// spell_ev_of(...)["ev"]` — battle_sim.gd:1016-1017, "magic is part of the
 /// reply". Returns (ev, spell token cost); `reply_threat` discards the cost,
 /// `resolve`'s shoot branch spends it.
+///
+/// The priced pair is the LIVE root ctx (families 2-4 of the blindness
+/// report): `rules_epoch` rides `CURRENT_RULES_EPOCH` from `reply_threat` —
+/// the EV is not replayed by recorded games and a captured ledger is always
+/// empty, so no frozen gate is needed.
 fn volley_ev(
     statics: &[UnitStatic],
     state: &State,
@@ -4955,12 +4960,13 @@ fn volley_ev(
     ti: usize,
     d: f64,
     sc: &mut Scratch,
+    rules_epoch: u32,
 ) -> (f64, i64) {
     let us = &statics[state.roster.profile[si]];
     let ut = &statics[state.roster.profile[ti]];
     profiles_of(us, state.alive[si], d, sc);
-    let att = ctx_of(us, state, si);
-    let def = ctx_of(ut, state, ti);
+    let att = ctx_live(ctx_of(us, state, si), statics, state, si, false, rules_epoch);
+    let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, false, rules_epoch);
     let shooting = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
     let (sp_ev, sp_cost) = spell_ev_of(us.is_caster, &us.spells, state.casts[si], &def, d);
     (shooting + sp_ev, sp_cost)
@@ -4970,11 +4976,17 @@ fn volley_ev(
 /// valued as a CHARGE and with `si`'s own fatigue state: the magnitude
 /// `AiMissionEval.features` reads for `my_melee_in`/`their_melee_in` when the
 /// feature wave is on (ai_mission_eval.gd:544).
+///
+/// The priced pair is the LIVE root ctx (families 2-4 of the blindness
+/// report), folded at `CURRENT_RULES_EPOCH`: the EV is not replayed by
+/// recorded games and a captured ledger is always empty, so no frozen gate
+/// is needed and the public signature stays as it is.
 pub fn melee_threat(statics: &[UnitStatic], state: &State, si: usize, ti: usize) -> f64 {
     let us = &statics[state.roster.profile[si]];
     let ut = &statics[state.roster.profile[ti]];
-    let att = ctx_of_melee(us, state, si);
-    let def = ctx_of(ut, state, ti);
+    let att =
+        ctx_live(ctx_of_melee(us, state, si), statics, state, si, true, CURRENT_RULES_EPOCH);
+    let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, true, CURRENT_RULES_EPOCH);
     let mut sc = Scratch::default();
     melee_profiles_of(us, state.alive[si], &mut sc);
     melee_ev(&us.melee, &sc.attacks, &att, &def, true)
@@ -4989,6 +5001,9 @@ pub fn melee_threat(statics: &[UnitStatic], state: &State, si: usize, ti: usize)
 /// reply), capture-time sight lines, already-activated enemies still count.
 /// The strict `>` and the `best_ev = 0.0` start are load-bearing: a pairing
 /// worth exactly nothing never becomes the pick, so no entry is written.
+///
+/// Each volley prices the LIVE root ctx (families 2-4 of the blindness
+/// report) — see `volley_ev`.
 pub fn reply_threat(statics: &[UnitStatic], state: &State, player: i64) -> Vec<f64> {
     let n = state.units();
     let mut incoming = vec![0.0f64; n];
@@ -5008,7 +5023,7 @@ pub fn reply_threat(statics: &[UnitStatic], state: &State, player: i64) -> Vec<f
                 continue;
             }
             let d = geom::dist_in(&state.positions[e], &state.positions[m]);
-            let (ev, _) = volley_ev(statics, state, e, m, d, &mut sc);
+            let (ev, _) = volley_ev(statics, state, e, m, d, &mut sc, CURRENT_RULES_EPOCH);
             if ev > best_ev {
                 best_ev = ev;
                 best_key = Some(m);
