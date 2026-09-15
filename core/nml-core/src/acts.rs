@@ -447,7 +447,29 @@ pub const EPOCH_56_GROUNDED_PROTECTION: u32 = 56;
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_55_FORTIFIED_AURA: u32 = 55;
 
-pub const CURRENT_RULES_EPOCH: u32 = 56;
+/// The PRECISION DEBUFF gate (15.09., the precision text sweep — row
+/// `Precision Debuff`; gf Infected Colonies / Alien Hives, aof Deep-Sea
+/// Elves / Dragon Empire / Kingdom of Angels / High Elves, word-identical
+/// text, registry numeric in all five maps: `Utility Buff | hit_mod: -1,
+/// range_in: 18, target: "enemy", once, needs_los`). The generic
+/// utility-buff seam (`unit.rs::utility_buffs_of` -> `sim.rs
+/// tray_utility_buff` -> `record_buff`, the #961 seam) stamps ANY
+/// primitive-resolving entry from epoch 5 on, so this row rode UNGATED at
+/// every epoch before it: from 58 the name is read explicitly — below 58
+/// the entry stamps NOTHING (no utility-buff stamp, no record on any
+/// ledger) and every corpus recorded before the bump replays byte-exact;
+/// from 58 the seam's own enemy pick (best value inside the printed 18" in
+/// line of sight) + record fold carry the once `hit_mod: -1` row, and the
+/// fold names itself (`rules-must-log`: "Precision Debuff: -1 to hit on
+/// <unit> until end of round"; the table's `_solo_apply_utility_buffs`
+/// battle-log line is the twin). `58` is one past every epoch present at
+/// the rebase (57 in flight by the stealthbuild leg; 56 =
+/// `EPOCH_56_GROUNDED_PROTECTION`, #974), and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
+/// reads THIS constant, not the literal `58` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_58_PRECISION_DEBUFF: u32 = 58;
+
+pub const CURRENT_RULES_EPOCH: u32 = 58;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -1568,7 +1590,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 56, "the live epoch is 56 (the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 58, "the live epoch is 58 (EPOCH_58_PRECISION_DEBUFF; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),

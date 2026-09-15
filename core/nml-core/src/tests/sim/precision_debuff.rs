@@ -57,11 +57,12 @@ use super::*;
 
     /// The debuffed enemy's OWN shooting context, folded live off the state —
     /// the read `dice.rs` adds `att.hit_mod` from (`_solo_hit_mod_info`'s
-    /// core twin).
+    /// core twin). ctx_live indexes `state.roster.profile[i]` into the
+    /// statics slice, so the WHOLE fixture's slice rides, not a one-unit one.
     fn attacker_ctx(st: &crate::state::State, statics: &[UnitStatic], i: usize, epoch: u32) -> Ctx {
         crate::sim::ctx_live(
             crate::sim::ctx_of(&statics[i], st, i),
-            std::slice::from_ref(&statics[i]), st, i, false, epoch,
+            statics, st, i, false, epoch,
         )
     }
 

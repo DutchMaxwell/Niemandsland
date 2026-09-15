@@ -17354,6 +17354,15 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 					if not str(sp.get("grants_rule", "")).is_empty(): bits.append("grants %s" % str(sp.get("grants_rule", "")))
 					_log_rule_event(BattleLog.Category.COMBAT, "%s: %s → %s (%s, once)" % [
 						n, member.get_name(), tgt.get_name(), ", ".join(bits)], ai_side)
+				# EPOCH_58_PRECISION_DEBUFF (precision text sweep 15.09.): the
+				# debuff's own rules-must-log line — the generic announce reads
+				# "X → Y (-1 to hit, once)", but the book's effect is the
+				# VICTIM's next attack roll, so this line names the -1, the
+				# victim and the lifetime, the way the core's fold trace does
+				# (sim.rs tray_utility_buff).
+				if n == "Precision Debuff" and modifier["hit_mod"] != 0:
+					_log_rule_event(BattleLog.Category.COMBAT,
+						"%s: %+d to hit on %s until end of round" % [n, modifier["hit_mod"], tgt.get_name()], ai_side)
 				# Rules-must-log: the reach that only existed because of the relay gets its own line.
 				if relays.has(tgt) and battle_log != null:
 					var info: Dictionary = relays[tgt]

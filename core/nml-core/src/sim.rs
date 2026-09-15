@@ -1062,6 +1062,17 @@ pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: us
             }
             for ti in utility_targets(statics, next, bearer, b, seams) {
                 record_buff(next, ti, b, seams.rules_epoch);
+                // EPOCH_58_PRECISION_DEBUFF — the fold's rules-must-log line
+                // (`trace_rule`, the ap/def + move-row shape): the debuff
+                // rides the victim's own net, so the line names the -1, the
+                // victim and the lifetime the book prints. The row can only
+                // exist from the stamp gate (`unit.rs::utility_buffs_of`),
+                // so the trace needs no epoch check of its own.
+                if b.name == "Precision Debuff" && b.hit_mod != 0 {
+                    trace_rule("utility-buff", &b.name, &format!(
+                        "{:+} to hit on {} until end of round",
+                        b.hit_mod, statics[next.roster.profile[ti]].name));
+                }
             }
         }
     }
@@ -2209,7 +2220,7 @@ fn tray_hit_and_run(
 /// after this port — can show a real table-side "Second Wind" firing; see the
 /// PR body for the empirical confirmation. The Rust fixture tests below are
 /// this port's correctness proof.
-const SECOND_WIND_CAP_FRACTION: i64 = 4;
+const SECOND_WIND_CAP_FRACTION: i64 = 3;
 
 fn second_wind_candidate(statics: &[UnitStatic], state: &State, player: i64) -> Option<usize> {
     let mut carriers = 0i64;
