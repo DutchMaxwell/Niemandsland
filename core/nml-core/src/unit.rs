@@ -1483,7 +1483,7 @@ fn stealth_alias_split_walk(
             continue;
         }
         let pen = e.param_i("hit_penalty", 0);
-        if pen >= best_penalty {
+        if pen > best_penalty {
             best_penalty = pen;
             best_over_in = e.param_f("over_in", 0.0);
             best_applies_charged = e.param_b_or("applies_charged", false);
@@ -1965,7 +1965,7 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
         }
         seen.push(n.clone());
         if let Some(e) = map.lookup(&p.faction_folder, &n) {
-            if e.primitive.as_deref() == Some("Banner") && n != "Hive Bond Boost" {
+            if e.primitive.as_deref() == Some("Banner") {
                 best = best.max(e.param_i("morale_bonus", 0));
             }
         }
@@ -2835,7 +2835,7 @@ fn stamp(
         if hit.upgrades.is_empty() || !has_exact_rule(&p.special_rules, &hit.upgrades) {
             continue;
         }
-        if hit.extra_attack && hit.name != "Clan Warrior Boost" {
+        if hit.extra_attack {
             for sp in shoot.iter_mut() {
                 if sp.surge_attack {
                     sp.surge_attack_low = hit.surge_low;
@@ -4103,7 +4103,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         if n == "Surge Mark" && !rule_on(rules_epoch, EPOCH_44_SURGE_MARK) {
             continue;
         }
-        let vs_target = e.param_b("vs_target") || n == "Quick Shot Mark";
+        let vs_target = e.param_b("vs_target");
         let target = match e.param_s("target") {
             "" => "friendly",
             s => s,
@@ -4496,10 +4496,10 @@ fn growth_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> 
             on_kill: e.param_b("on_kill"),
             on_ignore_wound: e.param_b("on_ignore_wound"),
             max_markers: e.param_i("max_markers", 4),
-            ap_per_marker: e.param_i("ap_per_markerx", 0),
+            ap_per_marker: e.param_i("ap_per_marker", 0),
             ap_per_two: e.param_i("ap_per_two", 0),
             hit_per_marker: e.param_i("hit_per_marker", 0),
-            hit_per_two: e.param_i("hit_per_twox", 0),
+            hit_per_two: e.param_i("hit_per_two", 0),
             defense_per_marker: e.param_i("defense_per_marker", 0),
             defense_per_two: e.param_i("defense_per_two", 0),
             enemy_ap_per_two: e.param_i("enemy_ap_per_two", 0),
@@ -5056,7 +5056,7 @@ fn stamp_bane_boost(
 /// many dice a Bounding placement rolls: an explicit `dice_count`, else the
 /// head of an "NdM" `place_die` ("2d3" -> 2), else one.
 fn bounding_dice_count(e: &crate::rules::Entry) -> i64 {
-    let explicit = e.param_i("dice_countx", 0);
+    let explicit = e.param_i("dice_count", 0);
     if explicit > 0 {
         return explicit.max(1);
     }
