@@ -402,6 +402,7 @@ mod relentless_thrust;
 mod morale_dice;
 mod morale_rating;
 mod rung_i_dice;
+mod counter_param;
 mod shooting_order;
 mod shot_modifier;
 mod shot_modifier_flat;
