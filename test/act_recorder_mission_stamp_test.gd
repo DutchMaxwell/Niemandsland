@@ -75,7 +75,16 @@ func _state() -> Dictionary:
 ## stamp carries id + the catalog's family and scoring — the same fields the
 ## core's Mission struct (acts.rs) reads back.
 func test_the_table_choice_stamps_the_header() -> void:
-	AiActRecorder.set_mission("Domination")   # the setter lower-cases, like the arena door
+	# Dynamic dispatch keeps this file PARSING pre-fix: a direct AiActRecorder.set_mission()
+	# reference is a parse-time error (static analysis on the class), which would mask the
+	# behavioral reds this suite exists to prove. has_method() records a clean assertion
+	# failure instead — the same seam pattern solo_arena_test uses for rule_text_refused.
+	var rec: Object = load("res://scripts/solo/act_recorder.gd")
+	assert_bool(rec.has_method("set_mission")).override_failure_message(
+		"AiActRecorder.set_mission() not implemented yet (pre-fix RED)").is_true()
+	if not rec.has_method("set_mission"):
+		return
+	rec.call("set_mission", "Domination")   # the setter lower-cases, like the arena door
 	var m: Dictionary = AiActRecorder._header_line(_state(), Callable()).get("mission", {})
 	assert_str(str(m.get("id", ""))).override_failure_message("header stamp 'id'").is_equal("domination")
 	assert_str(str(m.get("family", ""))).override_failure_message("header stamp 'family'").is_equal("progressive")
