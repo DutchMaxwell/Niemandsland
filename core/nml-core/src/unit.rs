@@ -6211,7 +6211,7 @@ impl UnitStatic {
             // switch, the entry's `ignores_los`; the shipped entry answers
             // the true every fold assumed, so replays stay byte-exact.
             let ignores_los =
-                entry.as_ref().map_or(true, |e| e.param_b_or("ignores_los", true));
+                entry.as_ref().is_none_or(|e| e.param_b_or("ignores_los", true));
             for sp in shoot.iter_mut() {
                 if sp.indirect {
                     sp.indirect_ignores_los = Some(ignores_los);

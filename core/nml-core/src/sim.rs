@@ -2423,7 +2423,7 @@ fn second_wind_candidate(statics: &[UnitStatic], state: &State, player: i64) -> 
         if state.second_wind_used[i] || !state.activated[i] {
             continue;
         }
-        if best.map_or(true, |(_, v)| state.alive[i] > v) {
+        if best.is_none_or(|(_, v)| state.alive[i] > v) {
             best = Some((i, state.alive[i]));
         }
     }
