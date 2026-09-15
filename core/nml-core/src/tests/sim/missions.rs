@@ -66,7 +66,7 @@ fn owned_markers() -> Vec<Marker> {
 /// no VP at all.
 fn book_round_end(
     st: &mut State,
-    owners: &mut Vec<i64>,
+    owners: &mut [i64],
     vp: &mut [i64; 2],
     flavour: &serde_json::Value,
     memo: &mut serde_json::Map<String, serde_json::Value>,
