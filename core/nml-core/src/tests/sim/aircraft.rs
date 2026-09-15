@@ -92,3 +92,23 @@ use crate::rules::Registries;
             "the same 5\" gap is legal against a ground unit"
         );
     }
+
+    /// cannot_seize: the referee's marker-eligibility read drops an Aircraft
+    /// outright — the same marker is holdable for the ground twin. The
+    /// `cannot_seize` param of the gf Aircraft entry, keyed by the stamped
+    /// flag (`score::can_hold_marker`, battle_sim.gd:297-302 — the read
+    /// mission.rs awards markers through).
+    #[test]
+    fn an_aircraft_cannot_seize_a_marker() {
+        let mut st = four_unit_line();
+        st.aircraft[2] = true;
+        assert!(
+            !crate::score::can_hold_marker(&st, 2, 0),
+            "the Aircraft never holds or seizes a marker"
+        );
+        st.aircraft[2] = false;
+        assert!(
+            crate::score::can_hold_marker(&st, 2, 0),
+            "the ground twin holds the very same marker"
+        );
+    }

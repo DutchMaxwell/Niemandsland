@@ -1565,6 +1565,7 @@ mod grounded_reinforcement;
 mod grounded_speed;
 mod teleport;
 mod hit_and_run_score;
+mod immobile;
 mod instinctive;
 mod limited_weapons;
 mod mark_beneficiary;
