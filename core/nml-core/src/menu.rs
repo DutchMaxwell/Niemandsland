@@ -398,6 +398,10 @@ pub fn best_charge(
     }
     melee_profiles_of(us_static, state.alive[i], sc);
     let our_attacks = sc.attacks.clone();
+    // EV_VOCAB_2026-09-15 §4: a live Dangerous Terrain debuff prices the
+    // dice/6 expectation of its own movement into the charge — the loss is
+    // per-unit constant, so it rides BOTH the futile bar and the score.
+    let (_, danger_loss) = crate::sim::terrain_debuff_folds(statics, state, i);
     let centre_us = geom::centre(&state.positions[i]);
     let mut best = None;
     let mut best_score = f64::NEG_INFINITY;
@@ -429,11 +433,13 @@ pub fn best_charge(
         let ut = &statics[state.roster.profile[e]];
         let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
         let them = ctx_live(ctx_of(ut, state, e), statics, state, e, true, rules_epoch);
-        if melee_ev(&us_static.melee, &our_attacks, &us, &them, true) < FUTILE_CHARGE_EV {
+        let raw = melee_ev(&us_static.melee, &our_attacks, &us, &them, true);
+        if raw - danger_loss < FUTILE_CHARGE_EV {
             continue;
         }
         melee_profiles_of(ut, state.alive[e], sc);
-        let s = charge_score(&us_static.melee, &our_attacks, &us, &ut.melee, &sc.attacks, &them);
+        let s = charge_score(&us_static.melee, &our_attacks, &us, &ut.melee, &sc.attacks, &them)
+            - danger_loss;
         if s > best_score {
             best_score = s;
             best = Some(e);

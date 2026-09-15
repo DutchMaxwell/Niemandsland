@@ -5650,26 +5650,97 @@ fn solo_move_grant_delta_in(
 /// EPOCH_19_MOVE_GRANTS_FOLD and wherever no registry entry carries numbers,
 /// exactly where the spend fold answers 0.0 — so a pre-fold corpus reads its
 /// static bands unchanged and the EV arm gains no epoch of its own.
+///
+/// Blindness family 6 (EV_VOCAB_2026-09-15 §4) rides the same seam: the
+/// carried "Difficult Terrain" debuff caps BOTH bands exactly where
+/// `mv::step::execute` caps the real move (`reach = band_in.min(
+/// DIFFICULT_MOVE_CAP_IN)`, mv/step.rs:691) — after the grant delta, on
+/// every arm, the early static one included.
 pub fn live_bands_of(statics: &[UnitStatic], state: &State, i: usize) -> (f64, f64) {
     let b = &state.bands[i];
     // The stamp-first gate: an EMPTY statics slice (score()'s doctrine arm)
     // and every pre-fold or number-less profile answer the static bands here,
     // before the spend fold's own `statics[...]` index is ever reached.
-    if statics
+    let (advance, rush) = if statics
         .get(state.roster.profile[i])
         .and_then(|us| us.solo_move_grant_mods.as_ref())
         .is_none()
     {
-        return (b.advance, b.rush);
+        (b.advance, b.rush)
+    } else {
+        (
+            b.advance + solo_move_grant_delta_in(
+                statics, state, i, ADVANCE, EPOCH_19_MOVE_GRANTS_FOLD, false, false,
+            ),
+            b.rush + solo_move_grant_delta_in(
+                statics, state, i, RUSH, EPOCH_19_MOVE_GRANTS_FOLD, false, false,
+            ),
+        )
+    };
+    let (difficult, _) = terrain_debuff_folds(statics, state, i);
+    if difficult {
+        (
+            advance.min(crate::gate::DIFFICULT_MOVE_CAP_IN),
+            rush.min(crate::gate::DIFFICULT_MOVE_CAP_IN),
+        )
+    } else {
+        (advance, rush)
     }
-    (
-        b.advance + solo_move_grant_delta_in(
-            statics, state, i, ADVANCE, EPOCH_19_MOVE_GRANTS_FOLD, false, false,
-        ),
-        b.rush + solo_move_grant_delta_in(
-            statics, state, i, RUSH, EPOCH_19_MOVE_GRANTS_FOLD, false, false,
-        ),
-    )
+}
+
+/// Blindness family 6 (EV_VOCAB_2026-09-15 §4) — the EV twin of the move
+/// engine's own terrain-debuff reads: what a unit CARRYING a live
+/// Difficult/Dangerous Terrain debuff (`mods::granted_terrain_debuff`) does
+/// to its own priced movement. Answers `(difficult_cap, danger_loss)`: the
+/// difficult flag caps the band read where `mv::step::execute` caps the real
+/// move (mv/step.rs:691); the dangerous loss is the `dangerous_dice`
+/// expectation — one `max(1, wounds_max)` die per alive mover
+/// (dangerous_dice:2514-2526), wound on a 1 of the d6 tray the spend path
+/// rolls (sim.rs:6381, `dangerous_wounds` counts 1s), so `dice / 6`. Flying
+/// and Strider ignore difficult ground (p.11, mv/step.rs:1189), but only
+/// Flying tests for nothing on the dangerous roll — Strider dodges the
+/// difficult cap, never the dangerous dice (mv/step.rs:1188, the
+/// dangerous_dice guard at :2479 and the `!flying` avoidance gates at
+/// :1101/:1194 all agree). The ignore flags read the LIVE profile's
+/// special rules exactly where those sites read them (`state.profile(si)`);
+/// the charge arm's `charge_no_difficult` honour knob is a per-activation
+/// table decision, not a unit property, so the band read does not model it.
+///
+/// The epoch rides EPOCH_27_TERRAIN_DEBUFF itself — the read fires exactly
+/// when the rule exists, and since `State::buffs` is never serialised every
+/// replay answers `(false, 0.0)` here regardless (menu.rs:240-247 doctrine):
+/// the EV arms gain no epoch of their own.
+pub(crate) fn terrain_debuff_folds(
+    statics: &[UnitStatic], state: &State, si: usize,
+) -> (bool, f64) {
+    let Some(us) = statics.get(state.roster.profile[si]) else {
+        return (false, 0.0);
+    };
+    let sr = state.profile(si).special_rules.as_slice();
+    let flying = sr.iter().any(|r| r == "Flying");
+    let strider = sr.iter().any(|r| r == "Strider");
+    let difficult = !(flying || strider)
+        && mods::granted_terrain_debuff(
+            state, si, "Difficult Terrain", crate::acts::EPOCH_27_TERRAIN_DEBUFF,
+        );
+    let danger_loss = if flying
+        || !mods::granted_terrain_debuff(
+            state, si, "Dangerous Terrain", crate::acts::EPOCH_27_TERRAIN_DEBUFF,
+        )
+    {
+        0.0
+    } else {
+        // `wounds_max` is the FULL model list and `positions` only the
+        // survivors — the tail — exactly dangerous_dice's own counting; on a
+        // charge every alive model moves, so every one of them rolls.
+        let w = &us.wounds_max;
+        let off = w.len().saturating_sub(state.positions[si].len());
+        let dice: i64 = (0..state.positions[si].len())
+            .map(|m| w.get(off + m).copied().unwrap_or(1).max(1))
+            .sum();
+        dice as f64 / 6.0
+    };
+    (difficult, danger_loss)
 }
 
 // ------------------------- S10: destination-side leftovers ------------------
