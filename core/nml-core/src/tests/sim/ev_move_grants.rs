@@ -117,7 +117,8 @@ use super::*;
     fn token_band_columns(st: &State, statics: &[UnitStatic]) -> ([f32; crate::tokens::F_U], [f32; crate::tokens::F_U]) {
         let terrain = crate::terrain::Terrain::default();
         let mut enc = crate::rows::RowEncoder::new(&repo_root());
-        let t = crate::tokens::build(st, 0, statics, &terrain, &mut enc, &[], -1, false, false).unwrap();
+        let t = crate::tokens::build(st, 0, statics, &terrain, &mut enc, &[], -1, false, false,
+            crate::acts::CURRENT_RULES_EPOCH).unwrap();
         (t.units[0], t.units[1])
     }
 

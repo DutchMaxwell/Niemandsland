@@ -68,7 +68,7 @@ impl LeafValue for Recorder<'_> {
         self.calls.borrow_mut().push(leaves.len());
         for state in leaves {
             kept.push(tokens::build(state, side, self.statics, self.terrain, &mut rows,
-                &[], -1, self.hero_attach, false)?);
+                &[], -1, self.hero_attach, false, nml_core::acts::CURRENT_RULES_EPOCH)?);
         }
         Ok(vec![0.0; leaves.len()])
     }
@@ -193,8 +193,31 @@ fn real_leaf_tokens_match_the_golden_bit_exactly() {
     for (i, token) in tokens.iter().enumerate() {
         let json = token.to_json();
         for key in ["units", "units_mask", "objs", "objs_mask", "terr", "glob"] {
-            assert_tensor_f32_eq(&json[key], &golden["leaves"][i][key],
-                &format!("leaf {i} tensor {key}"));
+            if key != "units" {
+                assert_tensor_f32_eq(&json[key], &golden["leaves"][i][key],
+                    &format!("leaf {i} tensor {key}"));
+                continue;
+            }
+            // The splice rides past the v1 contract: the live row is F_U 91,
+            // the golden leaf is the v1 export (90). The v1 projection — the
+            // first 88 design fields verbatim, the v1 pads zero — must be
+            // bit-identical to the golden row, and the splice columns the v1
+            // row never carried must read exactly zero on this pre-ledger
+            // corpus (no `ledger` key on any unit).
+            let got = json["units"].as_array().unwrap();
+            let want = golden["leaves"][i]["units"].as_array().unwrap();
+            let v1 = want[0].as_array().unwrap().len();
+            assert_eq!(got.len(), want.len(), "leaf {i} units rows");
+            for (r, (g, w)) in got.iter().zip(want).enumerate() {
+                let row = g.as_array().unwrap();
+                assert!(row.len() > v1, "leaf {i} units[{r}]: no splice columns past the v1 width");
+                assert_tensor_f32_eq(&Value::Array(row[..v1].to_vec()), w,
+                    &format!("leaf {i} units[{r}] (v1 view)"));
+                for (k, col) in row[v1..].iter().enumerate() {
+                    assert_eq!(col.as_f64().unwrap() as f32, 0.0,
+                        "leaf {i} units[{r}][{}] (splice col) must read 0", v1 + k);
+                }
+            }
         }
     }
     eprintln!("ONNX_HOOK proof=token_identity leaves={} tensors=6 status=bit_exact", tokens.len());
