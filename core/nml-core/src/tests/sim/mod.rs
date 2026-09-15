@@ -1570,6 +1570,7 @@ mod mark_beneficiary;
 mod mark_consumers;
 mod vs_grant_marks;
 mod melee_reach_table;
+mod mentioned2a_buffs;
 mod mind_control;
 mod mend;
 mod pierce_mark_grants;

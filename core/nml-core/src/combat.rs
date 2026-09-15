@@ -65,7 +65,7 @@ pub const RESISTANCE_TARGET_SPELL: i64 = 2;
 pub const SELF_REPAIR_BOOST_TARGET: i64 = 5;
 pub const CURSED_UNDEAD_BOOST_TARGET: i64 = 5;
 pub const ANGELIC_BLESSING_BOOST_TARGET_SPELL: i64 = 2;
-pub const HOLD_THE_LINE_BOOST_MORALE_BONUS: i64 = 2;
+pub const HOLD_THE_LINE_BOOST_MORALE_BONUS: i64 = 3;
 
 #[inline]
 fn clampi(v: i64, lo: i64, hi: i64) -> i64 {

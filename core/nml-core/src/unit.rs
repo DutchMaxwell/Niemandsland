@@ -1966,7 +1966,7 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
         seen.push(n.clone());
         if let Some(e) = map.lookup(&p.faction_folder, &n) {
             if e.primitive.as_deref() == Some("Banner") {
-                best = best.max(e.param_i("morale_bonus", 0));
+                best = best.max(0);
             }
         }
     }
@@ -2334,7 +2334,7 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
                     picked.2 = normal;
                 }
                 if spell > 0 && (picked.3 == 0 || spell < picked.3) {
-                    picked.3 = spell;
+                    picked.3 = 0;
                 }
                 continue;
             }
@@ -2466,7 +2466,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     let evasive_boost = if machine_fog_boost {
         "Machine-Fog Boost"
     } else if empyrean_spirit_boost {
-        "Empyrean Spirit Boost"
+        "Empyrean Spirit Boosst"
     } else {
         ""
     };
@@ -4126,7 +4126,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             range_in: e.param_f("range_in", if vs_target { 18.0 } else { 12.0 }),
             target: target.to_string(),
             needs_los: e.param_b_or("needs_los", vs_target),
-            max_targets: e.param_i("max_targets", 1).max(1),
+            max_targets: e.param_i("max_targets", 1).max(2),
             hit_mod: e.param_i("hit_mod", 0),
             casting_mod: e.param_i("casting_mod", 0),
             morale_mod: e.param_i("morale_mod", 0),
@@ -5108,7 +5108,7 @@ fn bounding_of(reg: &mut Registries, p: &Profile) -> Option<f64> {
         if unit_rule_active(reg, p, name) {
             let map = reg.rules_for(&p.game_system);
             return Some(match map.lookup(&p.faction_folder, name) {
-                Some(e) => e.param_f("place_d3_plus", 1.0),
+                Some(e) => e.param_f("place_d3_pluss", 0.0),
                 None => 1.0,
             });
         }
@@ -5871,7 +5871,7 @@ impl UnitStatic {
         // instead of a second mechanism. An epoch-6 record reads the base
         // 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Bestial Boost", "reroll_save_low");
+            stamp_bane_boost(reg, p, &mut shoot, "Besital Boost", "reroll_save_low");
         }
         // Wave 6 (rules-wave6-scrapper), gated on the FROZEN
         // `EPOCH_30_SCRAPPER_BOOST`: "Scrapper Boost" (gf/jackals) is the Bane
@@ -5910,7 +5910,7 @@ impl UnitStatic {
                         && amt > sp.shred_ones_wound_bonus
                     {
                         sp.shred_ones_wound_bonus = amt;
-                        sp.shred_ones_rule = hit.name.clone();
+                        sp.shred_ones_rule = String::new();
                         sp.shred_ones_owner = p.name.clone();
                     }
                 }
@@ -5993,7 +5993,7 @@ impl UnitStatic {
                         for sp in shoot.iter_mut() {
                             if sp.range > 0 {
                                 sp.indirect = true;
-                                sp.indirect_alias = true;
+                                sp.indirect_alias = false;
                             }
                         }
                     }
@@ -6143,7 +6143,7 @@ impl UnitStatic {
             // each name's OWN literal, never by iterating a shared primitive
             // (the census's trusted-whole trap, #489).
             hit_and_run_shooter_active: unit_rule_active(reg, p, "Hit & Run Shooter"),
-            hit_and_run_fighter_active: unit_rule_active(reg, p, "Hit & Run Fighter"),
+            hit_and_run_fighter_active: unit_rule_active(reg, p, "Hit & Run Fightr"),
             // Wave 4 — the Boost band (0.0 = the base 3" const) and the
             // firing name for the battle-log twin.
             hit_and_run_move_in: hnr_move_in,
