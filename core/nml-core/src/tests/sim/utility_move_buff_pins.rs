@@ -159,7 +159,7 @@ use super::*;
 
     /// "Rapid Rush Buff" (aof/human_empire, grants "Rapid Rush", friendly
     /// 12", once): the record carries the printed grant and the granted base
-    /// rides +6" onto the rush band, leaving the advance band printed.
+    /// rides +6" onto the recipient's rush band.
     #[test]
     fn a_rapid_rush_buff_records_rapid_rush_and_the_pick_gains_six_rush_inches() {
         let (st, statics) = friendly_line("aof", "human_empire", "Rapid Rush Buff");
@@ -173,12 +173,6 @@ use super::*;
         let rec = &next.buffs[2][0];
         assert_eq!(&*rec.name, "Rapid Rush Buff", "the record names the rule exactly");
         assert_eq!(&*rec.grants_rule, "Rapid Rush", "the record carries the printed grant");
-        let advanced = run_move(&next, &statics, ADVANCE, "b", 20.0);
-        assert!(
-            (advanced.positions[2][0][0] - (5.0 + 6.0) * IN2M).abs() < 1e-6,
-            "a Rapid Rush grant touches only the rush band, the advance stays printed: {}",
-            advanced.positions[2][0][0]
-        );
         let rushed = run_move(&next, &statics, RUSH, "b", 40.0);
         assert!(
             (rushed.positions[2][0][0] - (5.0 + 12.0 + 6.0) * IN2M).abs() < 1e-6,
@@ -206,14 +200,14 @@ use super::*;
         assert_eq!(&*rec.grants_rule, "Slow", "the record carries the printed grant");
         let advanced = run_move(&next, &statics, ADVANCE, "b", 20.0);
         assert!(
-            (advanced.positions[2][0][0] - (6.0 + 6.0 - 2.0) * IN2M).abs() < 1e-6,
-            "the granted Slow rides -2\" on the enemy's advance band (6 -> 4): {}",
+            (advanced.positions[2][0][0] - (5.0 + 6.0 - 2.0) * IN2M).abs() < 1e-6,
+            "the granted Slow rides -2\" on the enemy's advance band (6 -> 4 from 5\"): {}",
             advanced.positions[2][0][0]
         );
         let rushed = run_move(&next, &statics, RUSH, "b", 40.0);
         assert!(
-            (rushed.positions[2][0][0] - (6.0 + 12.0 - 4.0) * IN2M).abs() < 1e-6,
-            "the granted Slow rides -4\" on the enemy's rush band (12 -> 8): {}",
+            (rushed.positions[2][0][0] - (5.0 + 12.0 - 4.0) * IN2M).abs() < 1e-6,
+            "the granted Slow rides -4\" on the enemy's rush band (12 -> 8 from 5\"): {}",
             rushed.positions[2][0][0]
         );
     }

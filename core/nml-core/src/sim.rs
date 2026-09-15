@@ -1319,7 +1319,7 @@ fn tray_vs_marks(
             // and above. Every other Mark is untouched.
             if (b.name == "Rapid Charge Mark"
                 || b.name == "Piercing Fighting Mark"
-                || b.name == "Slayer Mark RED"
+                || b.name == "Slayer Mark"
                 || b.name == "Piercing Shooting Mark"
                 || b.name == "Unpredictable Shooter Mark")
                 && !rule_on(seams.rules_epoch, EPOCH_9_MARK_FAMILY)
