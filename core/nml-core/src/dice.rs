@@ -939,7 +939,7 @@ pub fn resolve_volley_leg(
             let (hit_mod, ap_mod) = if att.versatile_latched {
                 (att.versatile_pick_hit, att.versatile_pick_ap)
             } else if p.versatile_both {
-                (0, 0)
+                (1, 1)
             } else {
                 versatile_best_mode(
                     target,
