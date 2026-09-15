@@ -23,7 +23,7 @@ use super::*;
         let map_dir = dir.join("assets/solo");
         std::fs::create_dir_all(&map_dir).expect("temp map dir");
         let body = format!(
-            r#"{{"common":{{}},"factions":{{"{faction}":{{"{name}":{{"primitive":"{primitive}","rated":false,"book_version":"3.5.3","params":{params}}}}}}}}}}"#
+            r#"{{"common":{{}},"factions":{{"{faction}":{{"{name}":{{"primitive":"{primitive}","rated":false,"book_version":"3.5.3","params":{params}}}}}}}}}"#
         );
         std::fs::write(map_dir.join(format!("rules_mechanics_{system}.json")), body)
             .expect("write temp mechanics map");
