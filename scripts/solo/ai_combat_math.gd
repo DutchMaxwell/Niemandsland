@@ -226,17 +226,20 @@ static func modified_hit_target(base_target: int, roll_mod: int) -> int:
 ## Net to-hit ROLL modifier for a SHOOTING attack from the attacker-/target-side special rules (stacking —
 ## GF/AoF v3.5.1 "Rules Priority & Stacking": different rules stack). Inputs are the pre-evaluated rule
 ## conditions; `dist_in` gates the over-9" rules (Artillery both sides p.13, Stealth p.14; exactly 9" is
-## not "over"). Evasive (army-book rule) has no range condition. Negative = harder to hit.
+## not "over"). Evasive (army-book rule) has no range condition. Negative = harder to hit. The Artillery
+## magnitudes are the entries' params (dead-parameter fold, twin of #1006); the defaults are the recorded
+## constants, so the no-arg callers replay byte-identically.
 static func shooting_hit_modifier(dist_in: float, attacker_artillery: bool, target_stealth: bool,
-		target_artillery: bool, target_evasive: bool) -> int:
+		target_artillery: bool, target_evasive: bool, shooter_hit_bonus: int = ARTILLERY_SHOOTER_HIT_BONUS,
+		target_hit_penalty: int = ARTILLERY_TARGET_HIT_PENALTY) -> int:
 	var mod := 0
 	if dist_in > LONG_RANGE_IN:
 		if attacker_artillery:
-			mod += ARTILLERY_SHOOTER_HIT_BONUS
+			mod += shooter_hit_bonus
 		if target_stealth:
 			mod -= STEALTH_HIT_PENALTY
 		if target_artillery:
-			mod -= ARTILLERY_TARGET_HIT_PENALTY
+			mod -= target_hit_penalty
 	if target_evasive:
 		mod -= EVASIVE_HIT_PENALTY
 	return mod

@@ -1059,8 +1059,11 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	if shoot != "":
 		out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": shoot})
 	# NML-1020 lab half: Immobile/Artillery may only Hold (p.13/p.57) — the menu
-	# for carriers ends here, so no playout can ever imagine them moving.
-	if SoloController.forces_hold((su["unit"] as GameUnit).get_special_rules()):
+	# for carriers ends here, so no playout can ever imagine them moving. The
+	# entry's hold_only param is the second half of the gate (dead-parameter fold,
+	# twin of #1006); hold_only = false reopens the moves on main's tree too.
+	if SoloController.forces_hold((su["unit"] as GameUnit).get_special_rules()) \
+			and SoloController.hold_only_param(su["unit"] as GameUnit):
 		return out
 	for o in state["objectives"]:
 		out.append({"unit": key, "kind": AiDecision.Action.RUSH,
@@ -1099,7 +1102,8 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 	var su: Dictionary = state["units"][key]
 	# NML-1020 lab half: the base menu is already hold-only for Immobile/
 	# Artillery — the wide builder must not append moves back.
-	if SoloController.forces_hold((su["unit"] as GameUnit).get_special_rules()):
+	if SoloController.forces_hold((su["unit"] as GameUnit).get_special_rules()) \
+			and SoloController.hold_only_param(su["unit"] as GameUnit):
 		return out
 	var seen_shoot := {}
 	var seen_charge := {}
