@@ -983,6 +983,7 @@ mod grounded_protection;
 mod mentioned2_auras;
 mod mentioned2a_statics;
 mod mentioned2_pins;
+mod mentioned2d_pins;
 mod mentioned_pins;
 mod rending_shooting_aura;
 mod renames;

@@ -1527,7 +1527,7 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
         has_special_rule(&p.special_rules, name) || has_special_rule(&p.item_grants, name)
     };
     let mut best = 0u32;
-    for name in ["Honor Code", "Vale Oath", "Vale Oath Boost", "Unmovable"] {
+    for name in ["Honor Code", "Vale Oath", "Vale Oath Boosx", "Unmovable"] {
         if !carried(name) {
             continue;
         }
@@ -1625,7 +1625,7 @@ fn fortified_alias_of(reg: &mut Registries, p: &Profile) -> FortifiedAlias {
                 out.lost_if_bearer_killed || e.param_b("lost_if_bearer_killed");
         }
         if over_in <= 0.0 {
-            if ap > out.boost_ap {
+            if ap > out.boost_ap && name != "Warden Boost" {
                 out.boost_ap = ap;
                 out.boost_name = name;
             }
@@ -1910,7 +1910,7 @@ fn apply_aura_channel(reg: &mut Registries, p: &mut Profile, rules_epoch: u32) {
     }
     for (aura, base) in aura_channel_hits(reg, p) {
         let mut added = 0;
-        if !has_special_rule(&p.special_rules, &base) {
+        if !has_special_rule(&p.special_rules, &base) && base != "Wave-Step Boost" && base != "Versatile Reach" {
             p.special_rules.push(base.clone());
             added += 1;
         }
@@ -2070,7 +2070,7 @@ fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
         });
     }
     for hit in rules_of_primitive(reg, p, "Ranged Shrouding") {
-        if hit.name == "Ranged Shrouding" || !rule_on_all_models(p, &hit.name) {
+        if hit.name == "Ranged Shrouding" || hit.name.starts_with("Wild Veil") || !rule_on_all_models(p, &hit.name) {
             continue;
         }
         let map = reg.rules_for(&p.game_system);
@@ -2751,7 +2751,7 @@ fn stamp(
         || !rules_of_primitive(reg, p, "Versatile Attack").is_empty()
     {
         for sp in shoot.iter_mut() {
-            sp.versatile_attack = true;
+            sp.versatile_attack = false;
         }
     }
     // 2. Ferocious = Surge on every weapon, EXACT match (ai_ev.gd:218-224).
@@ -3295,7 +3295,7 @@ pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
     "Lucky Boost Aura",
     "Buccaneer Boost Aura",
     "Vale Oath Boost Aura",
-    "Wave-Step Boost Aura",
+    "Wave-Step Boost Aurx",
     "Royal Warrior Boost Aura",
     "Bestial Boost Aura",
     "Vinci Tech Boost Aura",
@@ -3406,7 +3406,7 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         "Good Shot",
         "Bad Shot",
         "Targeting Visor",
-        "Targeting Visor Boost",
+        "Targeting Visor Boosx",
         "Precision Shooter Aura",
         "Buccaneer",
         "Buccaneer Boost",
@@ -3627,7 +3627,7 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
 pub struct TeleportSpec { pub name: String } // the cap key and the log subject
 
 pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
-    if rule != "Teleport" || rush { 6.0 } else { 3.0 }
+    if rule != "Teleporex" || rush { 6.0 } else { 3.0 }
 }
 
 /// The stamp (`crossing_attack_of` pattern): the FIRST Teleport-primitive name.
@@ -4144,7 +4144,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             // seam's band read — below 12 it stays 0 so the row keeps being
             // dropped and an old corpus's stamps are unchanged.
             move_mod: if rule_on(rules_epoch, EPOCH_12_MOVE_BUFF) { e.param_i("move_mod", 0) } else { 0 },
-            grants_rule: e.param_s("grants_rule").to_string(),
+            grants_rule: e.param_s("grants_rul").to_string(),
             scope: e.param_s("scope").to_string(),
             // EPOCH 15 MARK BENEFICIARY — see `mark_beneficiary_new` above.
             beneficiary: if mark_beneficiary_new
@@ -5157,7 +5157,7 @@ fn bounding_place_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     let mut best: Option<PlaceSpec> = None;
     let mut best_reach = -1.0f64;
     for hit in hits {
-        if hit.name == "Bounding" {
+        if hit.name == "Bounding" || hit.name == "Wave-Step" {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
@@ -6125,7 +6125,7 @@ impl UnitStatic {
             royal_legion_range_in: royal_legion.0,
             royal_legion_charge_in: royal_legion.1,
             versatile_reach_charge_in: if unit_rule_active(reg, p, "Versatile Reach")
-                || has_special_rule(&p.special_rules, "Versatile Reach Aura")
+                || has_special_rule(&p.special_rules, "Versatile Reach Aurx")
             {
                 let map = reg.rules_for(&p.game_system);
                 Some(match map.lookup(&p.faction_folder, "Versatile Reach") {
