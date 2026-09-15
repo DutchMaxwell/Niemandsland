@@ -789,7 +789,9 @@ pub fn candidates_tuned(
     }
     // NML-1020 lab half: Immobile/Artillery may only Hold (p.13/p.57) — the menu
     // for carriers ends here, so no playout can ever imagine them moving.
-    if forces_hold(&state.profile(unit).special_rules) {
+    if forces_hold(&state.profile(unit).special_rules)
+        && statics[state.roster.profile[unit]].hold_only.unwrap_or(true)
+    {
         return out;
     }
     for o in &state.objectives {

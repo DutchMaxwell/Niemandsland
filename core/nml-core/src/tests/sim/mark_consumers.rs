@@ -144,5 +144,81 @@ use super::*;
             "R=24 shrouded+marked: max(24-6,6)+6=24\" reach covers the 22\" gap");
         let shroud_only24 = run_marked(&st, &statics, 6, &[]);
         assert!(shroud_only24.rolls.iter().all(|r| r.kind != "attack"),
-            "R=24 shrouded, unmarked: floors to 18\" — the 22\" gap is out of reach");
+            "R=24 shrouded+marked: max(24-6,6)+6=24\" reach covers the 22\" gap");
+    }
+
+    // ------------- Dead-parameter recount 2026-09-15, family 4: the
+    // Indirect entry's own `ignores_los` READ -----------------------------
+
+    /// The same fixture-registry shape as the dice-side counter wave: one
+    /// temp repo root, one "Indirect" entry under the fixture faction.
+    fn counterfam_registry(tag: &str, name: &str, params: &str) -> String {
+        let dir = std::env::temp_dir()
+            .join(format!("nml_counterfam_{}_{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let map_dir = dir.join("assets/solo");
+        std::fs::create_dir_all(&map_dir).expect("temp map dir");
+        let body = format!(
+            r#"{{"common":{{}},"factions":{{"testfac":{{"{name}":{{"primitive":"{name}","rated":false,"book_version":"3.5.3","params":{params}}}}}}}}}"#
+        );
+        std::fs::write(map_dir.join("rules_mechanics_gf.json"), body)
+            .expect("write temp mechanics map");
+        dir.to_string_lossy().into_owned()
+    }
+
+    /// One 24" Indirect MORTAR: the WEAPON's own rule, not the wave-3 mark,
+    /// is the caller here — the entry's `ignores_los` decides whether the
+    /// blocked a(0) -> b(2) sight (the same pair the mark waives above)
+    /// waives for the profile. On main the profile flag alone fires, so the
+    /// second leg cannot go dark (RED).
+    #[test]
+    fn indirect_entrys_ignores_los_switch_gates_the_profile_waiver() {
+        const IND_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+          "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
+            "defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+            "base_radius":0.016,"game_system":"gf","faction_folder":"testfac",
+            "special_rules":[],"item_grants":[],
+            "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+            "weapons":[{"name":"Mortar","range":24,"attacks":1,"count":1,"ap":0,
+              "rules":["Indirect"]}]}}}"#;
+        let mortar = |tag: &str, params: &str| {
+            let root = counterfam_registry(tag, "Indirect", params);
+            let parsed = crate::acts::read_act_header(IND_HEADER).expect("header parses");
+            let mut reg = crate::rules::Registries::new(&root);
+            let p = parsed.profiles.get("carrier").expect("carrier");
+            crate::unit::UnitStatic::build_for(&mut reg, p, 7)
+        };
+        fn run_sighting(st: &State, statics: &[UnitStatic], act: &Action) -> ShootResult {
+            let seams = Seams { sighting: true, rules_epoch: 7, ..Default::default() };
+            let terrain = crate::terrain::Terrain::default();
+            let mut tray = Tray::seeded(11);
+            let mut rng = crate::rng::GodotRng::new(0);
+            crate::sim::resolve_stochastic_tray_on_board(
+                statics, st, act, &terrain, seams, &mut rng, &mut tray,
+            )
+            .unwrap()
+            .1
+        }
+        let (mut st, mut statics) = buff_line();
+        let mut dark = vec![true; 16];
+        dark[2] = false; // los_pairs[0*4+2] — a does not see b, but sees bh
+        st.los_pairs = Some(Rc::new(dark));
+        st.alive[3] = 1;
+        st.positions[3] = vec![[6.0 * IN2M, 0.0, 0.0]];
+        st.radii[3] = vec![IN2M];
+        st.wounds[3] = vec![1];
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        statics[0].shoot = mortar("ind1", "{}").shoot.clone();
+        let mut act = buff_action(Some("bh"));
+        act.split = Some(vec![crate::io::SplitShot {
+            member: "a".into(), weapon: "Mortar".into(), target: "b".into(),
+        }]);
+        let on = run_sighting(&st, &statics, &act);
+        assert!(on.rolls.iter().any(|r| r.kind == "attack" && r.count == 1),
+            "the default entry keeps the recorded profile waiver");
+        statics[0].shoot = mortar("ind0", r#"{"ignores_los":false}"#).shoot.clone();
+        let off = run_sighting(&st, &statics, &act);
+        assert!(off.rolls.iter().all(|r| r.kind != "attack"),
+            "off rolls: {:?} — the entry's ignores_los:false must darken the profile waiver — on main it cannot (RED)", off.rolls);
     }

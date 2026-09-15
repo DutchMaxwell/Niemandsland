@@ -846,6 +846,8 @@ pub fn resolve_volley_leg(
             mod_dist_in, att.artillery, def.stealth, def.artillery, def.evasive,
             p.hit_bonus, p.hit_bonus_over9,
             alias_pen, alias_over,
+            att.artillery_shooter_hit_bonus.unwrap_or(crate::combat::ARTILLERY_SHOOTER_HIT_BONUS),
+            def.artillery_target_hit_penalty.unwrap_or(crate::combat::ARTILLERY_TARGET_HIT_PENALTY),
         )
             // B2b: the LIVE ledger's own nets — `_solo_hit_mod_info`
             // :5703-5709 adds the shooter's `_solo_spell_hit_mod` and the
@@ -1645,7 +1647,7 @@ pub fn resolve_melee_leg(
             if n <= 0 {
                 continue;
             }
-            if p.counter {
+            if p.counter && p.counter_strikes_first.unwrap_or(true) {
                 out.mark("counter_strikes_first");
             }
             // Wave 4 follow-up — "Takedown Strike" names itself once per
@@ -1930,18 +1932,24 @@ pub fn resolve_melee_leg(
 /// stripping the HEAVY dice first, defender-optimal (`_solo_charge_impact`
 /// :6292-6303). A fatigued charger rolls nothing at all (p.13).
 ///
-/// `def.counter_models` is hard 0 in this port (see `unit.rs`), so the Counter
-/// reduction is inert here — `resolve_melee_with_tray` raises
-/// `counter_strikes_first` for the activations where it would have bitten.
+/// Defender-side reduction: the Counter entry's
+/// `impact_reduction_per_model` (dead-parameter recount 2026-09-15,
+/// family 1) scales `def.counter_models` — hard 1 pre-EPOCH_13 via
+/// `unwrap_or(1)` keeps every earlier replay byte-exact. Stripping the
+/// HEAVY dice first, defender-optimal (`_solo_charge_impact`
+/// :6292-6303). A fatigued charger rolls nothing at all (p.13).
 pub fn impact_pools(att: &Ctx, def: &Ctx) -> [(i64, i64); 2] {
     if att.fatigued {
         return [(0, 0), (0, 0)];
     }
     let models = att.models.max(0);
     let heavy_raw = att.heavy_impact * models;
-    let heavy_cut = def.counter_models.min(heavy_raw);
+    let cut = def
+        .counter_models
+        .saturating_mul(def.counter_impact_per_model.unwrap_or(1));
+    let heavy_cut = cut.min(heavy_raw);
     [
-        (impact_total_dice(att.impact, models, def.counter_models - heavy_cut), 0),
+        (impact_total_dice(att.impact, models, cut - heavy_cut), 0),
         (heavy_raw - heavy_cut, HEAVY_IMPACT_AP),
     ]
 }
