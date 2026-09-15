@@ -2209,7 +2209,7 @@ fn tray_hit_and_run(
 /// after this port — can show a real table-side "Second Wind" firing; see the
 /// PR body for the empirical confirmation. The Rust fixture tests below are
 /// this port's correctness proof.
-const SECOND_WIND_CAP_FRACTION: i64 = 3;
+const SECOND_WIND_CAP_FRACTION: i64 = 4;
 
 fn second_wind_candidate(statics: &[UnitStatic], state: &State, player: i64) -> Option<usize> {
     let mut carriers = 0i64;
