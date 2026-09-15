@@ -132,3 +132,70 @@ use super::*;
             "once per GAME: the spent carrier is never picked again"
         );
     }
+
+    /// D-PROOF (2026-09-15) — "Martial Prowess" (gf dark_elf_raiders,
+    /// primitive Second Wind, params `uses_per_game: 1, army_cap_fraction: 3`
+    /// — rules_mechanics_gf.json:3135): the EXACT name read stamps the
+    /// carrier through the REAL `build_for`, `uses_per_game` stays 1 (a
+    /// spent carrier is never picked again), and the army cap is
+    /// `ceil(carriers / army_cap_fraction)` — FOUR carriers give 2 grants per
+    /// round, the THIRD is refused. The cap half is the deliberately-broken
+    /// read's pin: mistyping `SECOND_WIND_CAP_FRACTION` moves THIS fixture's
+    /// cap (ceil(4/4) = 1) while every 2-carrier pin stays at 1 either way.
+    #[test]
+    fn a_martial_prowess_carrier_gets_one_grant_per_game_and_ceil_carriers_over_3_per_round() {
+        let mut reg = crate::rules::Registries::new(&repo_root());
+        let built = UnitStatic::build_for(
+            &mut reg,
+            &boost_carrier("gf", "dark_elf_raiders", &["Martial Prowess"]),
+            crate::acts::CURRENT_RULES_EPOCH,
+        );
+        assert!(built.second_wind_active, "the exact name is registry-backed");
+        let bare = UnitStatic::build_for(
+            &mut reg,
+            &boost_carrier("gf", "dark_elf_raiders", &[]),
+            crate::acts::CURRENT_RULES_EPOCH,
+        );
+        assert!(!bare.second_wind_active, "no name, no carrier");
+
+        // uses_per_game 1: the bearer re-opens its own activation once, the
+        // grant is spent, and the SAME carrier is never picked again.
+        let (mut st, mut statics) = buff_line();
+        statics[0] = UnitStatic { name: "a".into(), model_count: 2, wounds_max: vec![1, 1], ..built };
+        st.activated = vec![false, true, true, true];
+        st.fatigued[0] = true;
+        let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
+        assert!(next.second_wind_used[0], "the grant is spent by its own activation");
+        assert!(
+            second_wind_candidate(&statics, &next, next.player[0]).is_none(),
+            "uses_per_game 1: the spent carrier is never picked again"
+        );
+
+        // ceil(carriers / army_cap_fraction): four LIVING carriers on one
+        // side -> cap 2 per round. The first two grants go, the third is
+        // refused even though carriers are still eligible and unused. The
+        // fixture's joined heroes detach first — `attached_to` carriers are
+        // never counted (`second_wind_candidate` skips every joined hero).
+        let (mut st4, mut statics4) = buff_line();
+        st4.player = vec![0, 0, 0, 0];
+        st4.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
+        st4.attached_to = Rc::new(vec![None, None, None, None]);
+        st4.alive[3] = 1; // "bh" joins the side alive — the fourth carrier
+        st4.wounds[3] = vec![1];
+        st4.radii[3] = vec![IN2M];
+        st4.positions[3] = vec![[9.0 * IN2M, 0.0, 0.0]];
+        for s in statics4.iter_mut() {
+            s.second_wind_active = true;
+        }
+        st4.activated = vec![true, true, true, true];
+        let picked = second_wind_candidate(&statics4, &st4, 0)
+            .expect("four carriers, cap 2: a candidate exists");
+        spend_second_wind(&mut st4, picked);
+        let picked2 = second_wind_candidate(&statics4, &st4, 0)
+            .expect("ceil(4 / 3) = 2: the second grant goes");
+        spend_second_wind(&mut st4, picked2);
+        assert!(
+            second_wind_candidate(&statics4, &st4, 0).is_none(),
+            "ceil(4 / 3) = 2 — the third grant is refused this round"
+        );
+    }

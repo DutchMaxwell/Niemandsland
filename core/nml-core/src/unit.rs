@@ -31,7 +31,7 @@ use crate::acts::{
     EPOCH_39_MORALE_RATING, EPOCH_40_STEADFAST_ROLL, EPOCH_43_BATTLEBORN_ROLL,
     EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
-    EPOCH_56_GROUNDED_PROTECTION,
+    EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -4101,6 +4101,17 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         // seam never fires), so every recorded corpus replays its own
         // stamp-only self-Surge (the stamp's name-based fallback leg).
         if n == "Surge Mark" && !rule_on(rules_epoch, EPOCH_44_SURGE_MARK) {
+            continue;
+        }
+        // EPOCH_58_PRECISION_DEBUFF (the precision text sweep, 15.09.): the
+        // enemy-target -1-to-hit debuff is NEW behaviour — below the gate the
+        // entry reads as ABSENT (no utility-buff stamp, no record on any
+        // ledger), so every corpus recorded before the bump replays
+        // byte-exact; from 58 the seam's own enemy pick + record fold carry
+        // the once row and the fold names itself (the tray_utility_buff
+        // trace). The seam otherwise rode this row ungated at every epoch —
+        // the gate is what pins "unchanged below 58".
+        if n == "Precision Debuff" && !rule_on(rules_epoch, EPOCH_58_PRECISION_DEBUFF) {
             continue;
         }
         let vs_target = e.param_b("vs_target");

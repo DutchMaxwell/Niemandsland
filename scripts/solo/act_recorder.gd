@@ -150,8 +150,11 @@ const EPOCH_56_GROUNDED_PROTECTION := 56
 ## Shielded walk takes the bonus from the rule's rating), then to 55 in the
 ## same diff as the core's EPOCH_56_GROUNDED_PROTECTION (sweep F 2026-09-14,
 ## row `Grounded Protection` — the within-1" verdict is no longer dead data
-## on the Regeneration fold).
-static var rules_epoch: int = 56
+## on the Regeneration fold), then to 58 with the core's
+## EPOCH_58_PRECISION_DEBUFF (precision text sweep 15.09., row
+## `Precision Debuff` — the once-per-activation -1 to-hit debuff is gated
+## and the record fold names itself on both layers).
+static var rules_epoch: int = 58
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
