@@ -128,6 +128,7 @@ fn unit_token(
     state: &State,
     i: usize,
     side: i64,
+    statics: &[UnitStatic],
     us: &UnitStatic,
     def: &Ctx,
     rows: &mut RowEncoder,
@@ -153,7 +154,10 @@ fn unit_token(
         rmax = rmax.max(w.range as i64);
         atk += w.attacks * w.count.max(1);
     }
-    let bands = &state.bands[i];
+    // evmove — the band columns carry the LIVE bands: the static bands plus
+    // the granted solo family's delta (`sim::live_bands_of`, quiet) — same
+    // two columns, no vocabulary change, the bands the real move spends.
+    let (live_advance, live_rush) = crate::sim::live_bands_of(statics, state, i);
     let sh = state.shroud[i].unwrap_or([0.0, 0.0]);
     let mo = state.mods[i];
 
@@ -186,8 +190,8 @@ fn unit_token(
     t[25] = (p.caster_value as f64 / 3.0) as f32;
     t[26] = b(us.is_hero);
     t[27] = b(us.ctx.fearless);
-    t[28] = (bands.advance / 6.0) as f32;
-    t[29] = (bands.rush / 12.0) as f32;
+    t[28] = (live_advance / 6.0) as f32;
+    t[29] = (live_rush / 12.0) as f32;
     t[30] = (state.charge_probe_r[i] / IN2M) as f32;
     t[31] = sh[0] as f32;
     t[32] = sh[1] as f32;
@@ -553,7 +557,11 @@ pub fn build(
 
     let mut units: Vec<[f32; F_U]> = live
         .iter()
-        .map(|&i| unit_token(state, i, side, &statics[state.roster.profile[i]], &def, rows, acting))
+        .map(|&i| {
+            unit_token(
+                state, i, side, statics, &statics[state.roster.profile[i]], &def, rows, acting,
+            )
+        })
         .collect();
     let mut units_mask = vec![1u8; units.len()];
     units.resize(N_UNITS, [0.0; F_U]);

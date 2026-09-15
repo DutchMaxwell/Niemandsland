@@ -868,8 +868,11 @@ impl Core {
                 let gap = (geom::dist_in(&st.positions[a], &st.positions[v])
                     - nmlcore::CONTACT_IN)
                     .max(0.0);
+                // An EMPTY statics slice: the capture matrix instruments the
+                // recorded gate (its corpora carry no live grants), so the
+                // helper's `.get` guard reads the static band — today's read.
                 let bad =
-                    nmlcore::charge_illegal(st, &self.terrain, a, v, gap, None, None);
+                    nmlcore::charge_illegal(st, &[], &self.terrain, a, v, gap, None, None);
                 m.insert(format!("{}|{}", st.key(a), st.key(v)), bad.into());
             }
         }

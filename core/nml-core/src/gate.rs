@@ -13,6 +13,7 @@ use crate::combat::shrouded_reach;
 use crate::geom::{self, V3};
 use crate::state::State;
 use crate::terrain::{base_in_terrain, is_difficult, Terrain, CELL_IN};
+use crate::unit::UnitStatic;
 
 /// `SoloController.DIFFICULT_MOVE_CAP_IN` solo_controller.gd:63.
 pub const DIFFICULT_MOVE_CAP_IN: f64 = 6.0;
@@ -21,13 +22,14 @@ pub const INCHES_TO_METERS: f64 = 0.0254;
 /// The half-cell detour `_corridor_forced_through` probes on either side —
 /// solo_controller.gd:2761 / battle_sim.gd:1585.
 pub const CORRIDOR_DETOUR_IN: f64 = 4.0;
-
 /// `BattleSim.charge_illegal_plain` battle_sim.gd:1547-1568.
 ///
 /// `from`/`to` default to the pair's own snapshot centres when `None`, exactly
 /// as the GDScript's `Vector3.INF` sentinel does (:1566-1567).
+#[allow(clippy::too_many_arguments)] // the table's own call shape, plus the statics the fold reads
 pub fn charge_illegal(
     state: &State,
+    statics: &[UnitStatic],
     terrain: &Terrain,
     attacker: usize,
     victim: usize,
@@ -35,7 +37,7 @@ pub fn charge_illegal(
     from: Option<V3>,
     to: Option<V3>,
 ) -> bool {
-    charge_illegal_tuned(state, terrain, attacker, victim, gap_in, from, to, true)
+    charge_illegal_tuned(state, statics, terrain, attacker, victim, gap_in, from, to, true)
 }
 
 /// Same gate with the p.13 Strider/Flying exemption switchable — `honour_no_difficult`
@@ -45,6 +47,7 @@ pub fn charge_illegal(
 #[allow(clippy::too_many_arguments)]
 pub fn charge_illegal_tuned(
     state: &State,
+    statics: &[UnitStatic],
     terrain: &Terrain,
     attacker: usize,
     victim: usize,
@@ -56,7 +59,13 @@ pub fn charge_illegal_tuned(
     if state.aircraft[victim] {
         return true;
     }
-    let band = state.bands[attacker].charge.unwrap_or(state.bands[attacker].rush);
+    // evmove — the LIVE charge band: the spend fold's own shape (`sim.rs`'s
+    // `band_in` accumulation) — `charge.unwrap_or(rush)` plus the RUSH-kind
+    // delta, the charge inheriting the rush band (movement_range_controller
+    // .gd:170-187), so a granted Fast/Slow/Rapid Rush prices the gate.
+    let bands = &state.bands[attacker];
+    let (_, rush_in) = crate::sim::live_bands_of(statics, state, attacker);
+    let band = bands.charge.map_or(rush_in, |c| c + rush_in - bands.rush);
     if gap_in > melee_shroud_charge_in(band, state, victim) {
         return true;
     }
