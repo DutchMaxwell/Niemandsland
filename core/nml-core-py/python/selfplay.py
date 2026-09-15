@@ -91,6 +91,7 @@ from list_to_profile import (
     deploy_unit_specs,
     profiles_from_army_forge_json,
     selections_from_army_forge_json,
+    spawn_profiles_from_list,
 )
 
 
@@ -2307,6 +2308,14 @@ def play_game(
         raise ValueError("empty army (%s / %s)" % (list_p1, list_p2))
     units = units1 + units2
     profiles = {u["unit_id"]: u for u in units}
+    # SPLIT step 2 (D-SPLIT, decided 15.09.): the fresh sim's header carries
+    # the Split child templates the core demands at load (io.rs:1111
+    # `spawn_templates_of`) — the separate `spawn_profiles` map #949's replay
+    # reader indexes (acts.rs:header_of -> io.rs:index_spawn_profiles). The
+    # key is only written when a list fields a Split carrier, so every header
+    # today stays byte-identical.
+    spawn_profiles = spawn_profiles_from_list(list_p1, 1)
+    spawn_profiles.update(spawn_profiles_from_list(list_p2, 2))
     # D4: derived BEFORE the header, because `attached_hero_rules` is a PROFILE
     # field the crate reads out of it (state.rs:71). "off" touches neither the
     # profiles nor the capture, so it stays byte-identical.
@@ -2445,7 +2454,10 @@ def play_game(
     # game must say so (NML-1147a). The crate's knob struct ignores the key.
     if eff_deployment != "zone":
         knobs["deployment"] = eff_deployment
-    core.set_header({"profiles": profiles, "terrain": terrain, "knobs": knobs})
+    header = {"profiles": profiles, "terrain": terrain, "knobs": knobs}
+    if spawn_profiles:
+        header["spawn_profiles"] = spawn_profiles
+    core.set_header(header)
     # NML-1130 (PR #448, NML-1103): conditional AP (Shatter/Tear/Disintegrate/
     # Melee Slayer/Piercing Assault/Piercing Hunter) counted the corrected way.
     # `cond_ap=None` (the default) leaves `LEGACY_NO_COND_AP` exactly as the
@@ -2491,9 +2503,8 @@ def play_game(
         # board and one dice stream — a STRENGTH A/B, the way `menu_los` is.
         d_menu_wide = eff_deep_menu_wide
         deep_core.set_header(
-            {"profiles": profiles, "terrain": terrain,
-             "knobs": dict(knobs, top_k=d_top_k, horizon=d_horizon, menu_los=d_menu_los,
-                           menu_wide=d_menu_wide)}
+            {**header, "knobs": dict(knobs, top_k=d_top_k, horizon=d_horizon,
+                                     menu_los=d_menu_los, menu_wide=d_menu_wide)}
         )
         if legacy_source_qd:
             deep_core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
@@ -2531,8 +2542,7 @@ def play_game(
         if net is not None:
             ev_core.load_net(str(net), blend=fit_blend, mode=fit_mode)
         ev_core.set_header(
-            {"profiles": profiles, "terrain": terrain,
-             "knobs": dict(knobs, eval_variant=eval_variant)}
+            {**header, "knobs": dict(knobs, eval_variant=eval_variant)}
         )
         if legacy_source_qd:
             ev_core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
@@ -2553,8 +2563,7 @@ def play_game(
         if net is not None:
             cap_core.load_net(str(net), blend=fit_blend, mode=fit_mode)
         cap_core.set_header(
-            {"profiles": profiles, "terrain": terrain,
-             "knobs": dict(knobs, top_k=cap_top_k, horizon=cap_horizon)}
+            {**header, "knobs": dict(knobs, top_k=cap_top_k, horizon=cap_horizon)}
         )
         if legacy_source_qd:
             cap_core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
