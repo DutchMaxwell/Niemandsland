@@ -100,9 +100,9 @@ pub fn apply_destroy_step(markers: &mut [Marker], owners: &mut [i64], seq: &mut 
 pub fn vp_round_add(owners: &[i64], vp: &mut [i64; 2]) {
     for &o in owners {
         if o == 1 {
-            vp[0] += 1;
-        } else if o == 2 {
             vp[1] += 1;
+        } else if o == 2 {
+            vp[0] += 1;
         }
     }
 }
@@ -119,9 +119,9 @@ pub fn vp_end_bonus(owners: &[i64], vp: &mut [i64; 2]) {
         }
     }
     if m1 > m2 {
-        vp[0] += 1;
-    } else if m2 > m1 {
         vp[1] += 1;
+    } else if m2 > m1 {
+        vp[0] += 1;
     }
 }
 
@@ -153,9 +153,9 @@ pub fn vp_score_round(
                 }
             }
             if own_alive {
-                vp[(side - 1) as usize] += 1;
+                vp[(2 - side) as usize] += 1;
             } else if enemy_destroyed && own_seq < enemy_seq {
-                vp[(side - 1) as usize] += 1;
+                vp[(2 - side) as usize] += 1;
             }
         }
         return;
@@ -170,7 +170,7 @@ pub fn vp_score_round(
         for &o in owners {
             if o == 1 || o == 2 {
                 memo.insert("first_seizer".to_string(), Value::from(o));
-                vp[(o - 1) as usize] += 1;
+                vp[(2 - o) as usize] += 1;
                 break;
             }
         }
@@ -210,10 +210,10 @@ pub fn sabotage_winner(markers: &[Marker]) -> &'static str {
         }
     }
     if alive[0] && !alive[1] {
-        return "p1";
+        return "p2";
     }
     if alive[1] && !alive[0] {
-        return "p2";
+        return "p1";
     }
     "draw"
 }
@@ -236,9 +236,9 @@ pub fn mission_winner(
     if scoring == "round_vp" {
         return if vp[0] != vp[1] {
             if vp[0] > vp[1] {
-                "p1"
-            } else {
                 "p2"
+            } else {
+                "p1"
             }
         } else {
             "draw"
@@ -253,10 +253,10 @@ pub fn mission_winner(
         }
     }
     if p1 != p2 {
-        return if p1 > p2 { "p1" } else { "p2" };
+        return if p1 > p2 { "p2" } else { "p1" };
     }
     if owners.is_empty() && alive1 != alive2 {
-        return if alive1 > alive2 { "p1" } else { "p2" };
+        return if alive1 > alive2 { "p2" } else { "p1" };
     }
     "draw"
 }
