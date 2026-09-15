@@ -38,6 +38,12 @@ use crate::menu::{candidates_tuned, Tuning};
     /// its own defense/artillery stamps on the twins.
     fn twin_line() -> (State, Vec<UnitStatic>) {
         let (mut st, mut statics) = buff_line();
+        // bh is a STANDALONE unit, not b's joined hero: the ledger reads walk
+        // the joined chain (bearer, host, attached), so an attached twin
+        // would inherit the record placed on `b` and the pair would price
+        // identically whatever the fold does.
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
         st.positions[3] = vec![[12.0 * IN2M, 0.0, 0.0]];
         st.radii[3] = vec![IN2M];
         st.wounds[3] = vec![1];
