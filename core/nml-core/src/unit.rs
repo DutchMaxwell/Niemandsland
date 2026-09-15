@@ -771,6 +771,10 @@ pub struct ShootProfile {
     /// `EPOCH_7_TABLE_RULES`, so pre-wave replays log nothing and stay
     /// byte-identical.
     pub bloodthirsty_rule: String,
+    /// The blocked-1s leg's per-one extra-attack count (the entry's own
+    /// `extra_attack_per_enemy_save_one` — dead-parameter recount 2026-09-15,
+    /// family 2). 1 = the constant the leg hard-coded before this read.
+    pub extra_attack_per_enemy_save_one: i64,
     /// Wave 4 follow-up (port-takedown-strike): the ONCE-PER-GAME bonus
     /// melee attack's own Quality ("Takedown Strike": one attack at Quality
     /// 2+ with AP(2), Deadly(3), and Takedown — the table's synthetic bonus
@@ -842,6 +846,12 @@ pub struct ShootProfile {
     /// centre distance — melee resolves at 0.0, so a Boost NEVER fires its 5s
     /// in melee, exactly the table's own reading.
     pub surge_over_in: f64,
+    /// The plain auto-hit Surge fold's per-six bonus (the registry's
+    /// `bonus_hits_per_six`, stamped from the Surge-primitive entries' own
+    /// param — dead-parameter recount 2026-09-15, family 2). 1 = the constant
+    /// the fold hard-coded before this read; every shipped row prints 1, so
+    /// every recorded replay is unchanged.
+    pub bonus_hits_per_six: i64,
 }
 
 impl ShootProfile {
@@ -1321,6 +1331,12 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         // main.gd's own default ("no boost yet") — see both fields' docs.
         surge_attack_low: 6,
         surge_low: 6,
+        // The plain Surge fold's per-six bonus and Bloodthirsty Fighter's
+        // per-blocked-1 extra — 1 = the constants both folds hard-coded
+        // before the param reads (the folds' `.max(1)` keeps every
+        // Default-built profile on the recorded value too).
+        bonus_hits_per_six: 1,
+        extra_attack_per_enemy_save_one: 1,
         // The base shred window ("no boost") — see `shred_low`'s doc.
         shred_low: 1,
         ..Default::default()
@@ -1804,6 +1820,11 @@ struct PrimitiveHit {
     /// Primal Boost et al.'s own `surge_low` param — read only when
     /// `extra_attack` is also set (`unit.rs::stamp`'s block 3b).
     surge_low: i64,
+    /// The plain auto-hit Surge fold's per-six bonus (`bonus_hits_per_six` —
+    /// every shipped Surge-family row prints 1, the constant the fold
+    /// hard-coded before this read; dead-parameter recount 2026-09-15,
+    /// family 2). 1 = the recorded constant.
+    bonus_hits_per_six: i64,
     /// The Bane family's coverage-wave gate (main.gd:6553-6560) — an alias
     /// with `reroll_save_sixes` re-rolls the defender's sixes.
     reroll_save_sixes: bool,
@@ -1854,6 +1875,7 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
                     cover_only: e.param_b("cover_only"),
                     ignores_cover: e.param_b("ignores_cover"),
                     surge_low: e.param_i("surge_low", 5),
+                    bonus_hits_per_six: e.param_i("bonus_hits_per_six", 1),
                     reroll_save_sixes: e.param_b("reroll_save_sixes"),
                     bypass_regen: e.param_b("bypass_regen"),
                     within_in: e.param_f("within_in", 0.0),
@@ -2833,6 +2855,7 @@ fn stamp(
                     sp.surge_attack = true;
                 } else {
                     sp.surge = true;
+                    sp.bonus_hits_per_six = hit.bonus_hits_per_six;
                     if hit.within_in > 0.0 {
                         sp.surge_within_in = hit.within_in;
                     }
@@ -4911,6 +4934,9 @@ fn stamp_bloodthirsty_named(
     }
     for sp in melee.iter_mut() {
         sp.bloodthirsty_rule = name.to_string();
+        // The entry's own per-one count (dead-parameter recount 2026-09-15,
+        // family 2) — 1 replays the recorded one-extra-attack-per-blocked-1.
+        sp.extra_attack_per_enemy_save_one = e.param_i("extra_attack_per_enemy_save_one", 1);
     }
 }
 
@@ -5781,6 +5807,7 @@ impl UnitStatic {
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {
                     if facet_applies(hit.melee_only, scope_live, sp.range) {
                         sp.surge = true;
+                        sp.bonus_hits_per_six = hit.bonus_hits_per_six;
                     }
                 }
             }

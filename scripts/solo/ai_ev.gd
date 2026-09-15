@@ -312,6 +312,10 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 				fpd["surge_attack_rule"] = n
 			else:
 				fpd["surge"] = true
+				# The entry's own per-six bonus (dead-parameter recount 2026-09-15,
+				# family 2): every shipped row prints 1, the constant the fold
+				# hard-coded before this read.
+				fpd["bonus_hits_per_six"] = int(sp.get("bonus_hits_per_six", 1))
 				if float(sp.get("within_in", 0.0)) > 0.0:
 					fpd["surge_within_in"] = float(sp.get("within_in", 0.0))
 				# EPOCH_50_SURGE_LOW (sweep F, row "Great Sergeant"): the entry's own printed low

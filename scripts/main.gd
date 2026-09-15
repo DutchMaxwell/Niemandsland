@@ -4548,7 +4548,10 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		# Devout-Boost upgrade (successful unmodified 5s count too when engaging from over 9").
 		var within := float(profile.get("surge_within_in", 0.0))
 		if within <= 0.0 or dist_in <= within:
-			var bonus: int = AiCombatMath.surge_bonus_hits(faces)
+			# The entry's own per-six bonus (dead-parameter recount 2026-09-15,
+			# family 2): every shipped row prints 1, so the recorded
+			# +1-per-six replay is unchanged.
+			var bonus: int = AiCombatMath.surge_bonus_hits(faces) * int(profile.get("bonus_hits_per_six", 1))
 			var surge_fives: int = 0
 			if int(profile.get("surge_low", 6)) < 6 and dist_in > float(profile.get("surge_over_in", 0.0)):
 				for f in faces:
@@ -6320,16 +6323,23 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			_solo_last_save_ones = 0
 			if bt_ones > 0 and hits > 0:
 				var bt_name := ""
+				var bt_per_one := 1
 				for bte in RulesRegistry.unit_rules_of_primitive(group.get("member"), "Bloodthirsty Fighter"):
 					bt_name = str((bte as Dictionary)["name"])
+					# The entry's own per-one count (dead-parameter recount 2026-09-15,
+					# family 2): every shipped row prints 1, so the recorded
+					# one-extra-attack replay is unchanged.
+					bt_per_one = maxi(int(((bte as Dictionary).get("params", {}) as Dictionary)
+						.get("extra_attack_per_enemy_save_one", 1)), 1)
 					break
 				if not bt_name.is_empty():
+					var bt_n: int = bt_ones * bt_per_one
 					if battle_log != null:
 						battle_log.log_event(BattleLog.Category.COMBAT,
 							"%s: %d blocked 1%s — %s rolls %d extra attack%s with %s" % [
 							bt_name, bt_ones, ("" if bt_ones == 1 else "s"), str(group.get("name", "?")),
-							bt_ones, ("" if bt_ones == 1 else "s"), str(profile.get("name", "?"))], true)
-					var bt_faces: Array = await _solo_tray_roll(bt_ones, to_hit, roll_owner)
+							bt_n, ("" if bt_n == 1 else "s"), str(profile.get("name", "?"))], true)
+					var bt_faces: Array = await _solo_tray_roll(bt_n, to_hit, roll_owner)
 					var bt_hits: int = await _solo_hits(bt_faces, to_hit, profile, 0.0, defender, charging, _solo_owner_label(striker))
 					if bt_hits > 0:
 						# Extra attacks resolve pooled (no Deadly/Takedown special-casing — the aof
