@@ -1018,7 +1018,7 @@ pub fn resolve_volley_leg(
                 // distance; a Boost adds successful unmodified 5s only PAST
                 // `surge_over_in` — melee (0.0) never qualifies.
                 if p.surge_within_in <= 0.0 || mod_dist_in <= p.surge_within_in {
-                    hits += sixes(&faces);
+                    hits += sixes(&faces) * p.bonus_hits_per_six.max(1);
                     if p.surge_low < 6 && mod_dist_in > p.surge_over_in {
                         hits += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
                     }
@@ -1026,7 +1026,7 @@ pub fn resolve_volley_leg(
             } else {
                 // LEGACY REPLAY ONLY — the ungated read, kept for every
                 // pre-epoch record (epoch < 3), plus its divergence counter.
-                hits += sixes(&faces);
+                hits += sixes(&faces) * p.bonus_hits_per_six.max(1);
                 out.mark("surge_gates");
             }
         }
@@ -1702,7 +1702,7 @@ pub fn resolve_melee_leg(
             let count_target = if p.precise { modified_hit_target(target, 1) } else { target };
             let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
             if p.surge {
-                hits += sixes(&faces);
+                hits += sixes(&faces) * p.bonus_hits_per_six.max(1);
                 out.mark("surge_gates");
                 // EPOCH_50 SURGE LOW — the volley fold's twin (:996-1007): the
                 // entry's own printed low window (Great Sergeant's "5 or 6")
@@ -1822,21 +1822,25 @@ pub fn resolve_melee_leg(
             if !p.bloodthirsty_rule.is_empty() && hits > 0 {
                 let bt_ones = ones_ap + ones_rest;
                 if bt_ones > 0 {
+                    // The entry's own per-one count (`extra_attack_per_enemy_save_one`,
+                    // dead-parameter recount 2026-09-15, family 2) — 1 replays
+                    // the recorded one-extra-attack-per-blocked-1 byte-exact.
+                    let bt_extra = bt_ones * p.extra_attack_per_enemy_save_one.max(1);
                     out.log.push(format!(
                         "{}: {} blocked 1{} — {} rolls {} extra attack{}",
                         p.bloodthirsty_rule, bt_ones, if bt_ones == 1 { "" } else { "s" },
-                        sh.owner, bt_ones, if bt_ones == 1 { "" } else { "s" }));
-                    let bt_faces = tray.roll(bt_ones as usize);
+                        sh.owner, bt_extra, if bt_extra == 1 { "" } else { "s" }));
+                    let bt_faces = tray.roll(bt_extra as usize);
                     out.rolls.push(Roll {
                         kind: "attack",
-                        count: bt_ones,
+                        count: bt_extra,
                         target: count_target,
                         faces: bt_faces.clone(),
                         owner: sh.owner.into(),
                     });
                     let mut bt_hits = faces_to_hits(&bt_faces, count_target as u8) as i64;
                     if p.surge {
-                        bt_hits += sixes(&bt_faces);
+                        bt_hits += sixes(&bt_faces) * p.bonus_hits_per_six.max(1);
                         out.mark("surge_gates");
                     }
                     bt_hits += surge_attack_hits(p, &bt_faces, count_target, sh.owner, tray, &mut out.rolls);
