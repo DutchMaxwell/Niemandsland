@@ -44,6 +44,12 @@ pub const N_CAND: usize = 160;
 /// terrain debuffs, t[90] the chain host's vengeance markers. The width-90
 /// export (t[88]/t[89] zero pads) is `TOKEN_VOCAB_VERSION` 1.
 pub const F_U: usize = 91;
+/// The v1 layout the splice rode past: the design's 88 unit fields, then the
+/// two pads the width-90 export carried at t[88]/t[89]. A v1-width consumer
+/// (the stand-in net, TOKEN_SCHEMA "units24x90") must be fed the v1
+/// projection — fields verbatim, pads back to zero, t[90] dropped.
+pub const DESIGN_FIELDS: usize = 88;
+pub const V1_UNITS: usize = 90;
 pub const F_O: usize = 12;
 pub const F_T: usize = 12;
 pub const F_G: usize = 16;

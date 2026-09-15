@@ -3,6 +3,7 @@
 //! `Unsupported::LeafValueBridge` (`brain.rs:9`), one static reason each.
 
 use nml_core::sim::Unsupported;
+use nml_core::tokens::V1_UNITS as UNITS_IN;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -13,7 +14,7 @@ const TOKEN_SCHEMA: &str = "units24x90,objs6x12,terr18x12,glob16,vocab1017,bag17
 const VALUE_HEAD: &str = "margin";
 const SELFTEST_LABEL: &str = "standin-v2x2";
 const SELFTEST_JSON: &str = include_str!("onnx_selftest.json");
-const DIMS: [usize; 6] = [24 * 90, 24, 6 * 12, 6, 18 * 12, 16];
+const DIMS: [usize; 6] = [24 * UNITS_IN, 24, 6 * 12, 6, 18 * 12, 16];
 
 pub struct Batch {
     pub units: Vec<f32>, pub units_mask: Vec<f32>, // [rows,24,90] / [rows,24]
@@ -75,7 +76,7 @@ impl Brain {
         let b = batch.units.len() / DIMS[0];
         let tensor = |shape: &[usize], data: &[f32]| Tensor::from_shape(shape, data)
             .map(TValue::from).map_err(|_| decline("onnx: run"));
-        let inputs = tvec![tensor(&[b, 24, 90], &batch.units)?, tensor(&[b, 24], &batch.units_mask)?,
+        let inputs = tvec![tensor(&[b, 24, UNITS_IN], &batch.units)?, tensor(&[b, 24], &batch.units_mask)?,
             tensor(&[b, 6, 12], &batch.objs)?, tensor(&[b, 6], &batch.objs_mask)?,
             tensor(&[b, 18, 12], &batch.terr)?, tensor(&[b, 16], &batch.glob)?];
         let outputs = self.plan.run(inputs).map_err(|_| decline("onnx: run"))?;

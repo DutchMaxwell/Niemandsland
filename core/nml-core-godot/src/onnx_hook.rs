@@ -8,7 +8,7 @@ use nml_core::rows::RowEncoder;
 use nml_core::sim::Unsupported;
 use nml_core::state::State;
 use nml_core::terrain::Terrain;
-use nml_core::tokens::{self, Tokens, F_G, F_O, F_T, F_U, N_OBJ, N_TERR, N_UNITS};
+use nml_core::tokens::{self, Tokens, DESIGN_FIELDS, F_G, F_O, F_T, N_OBJ, N_TERR, N_UNITS, V1_UNITS};
 use nml_core::unit::UnitStatic;
 use std::cell::RefCell;
 use super::onnx::{Batch, Brain};
@@ -32,14 +32,22 @@ impl OnnxHook<'_> {
         let mut values = Vec::with_capacity(tokens.len());
         let mut member_values = Vec::with_capacity(tokens.len() * members);
         for chunk in tokens.chunks(width) {
+            // The v1 projection (`tokens::V1_UNITS`): the stand-in's input
+            // contract is the width-90 export, so each 91-wide row is fed as
+            // its first 88 design fields only. t[88]/t[89] stay the v1 pads
+            // (the buffer is zeroed — the v1 net keeps its trained-zero
+            // semantics even when a live ledger carries the grants), t[90]
+            // drops. A vocab-2 net is a future loader with its own schema.
             let mut batch = Batch {
-                units: vec![0.0; width * N_UNITS * F_U], units_mask: vec![0.0; width * N_UNITS],
+                units: vec![0.0; width * N_UNITS * V1_UNITS], units_mask: vec![0.0; width * N_UNITS],
                 objs: vec![0.0; width * N_OBJ * F_O], objs_mask: vec![0.0; width * N_OBJ],
                 terr: vec![0.0; width * N_TERR * F_T], glob: vec![0.0; width * F_G],
             };
             for (i, t) in chunk.iter().enumerate() {
-                let units = i * N_UNITS * F_U..(i + 1) * N_UNITS * F_U;
-                batch.units[units].copy_from_slice(t.units.as_flattened());
+                for (j, row) in t.units.iter().enumerate() {
+                    let d = i * N_UNITS * V1_UNITS + j * V1_UNITS;
+                    batch.units[d..d + DESIGN_FIELDS].copy_from_slice(&row[..DESIGN_FIELDS]);
+                }
                 let units_mask = i * N_UNITS..(i + 1) * N_UNITS;
                 for (dst, &src) in batch.units_mask[units_mask].iter_mut().zip(&t.units_mask) {
                     *dst = f32::from(src);
