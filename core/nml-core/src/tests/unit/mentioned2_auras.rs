@@ -153,6 +153,27 @@ use super::*;
         );
     }
 
+    /// "Predator Shooter Aura" (gf/ratmen_clans): the Aura-Channel grant
+    /// reaches the Surge stamp #982 pinned for the printed base — the
+    /// shooting facet arms, the melee facet stays shut (`shooting_only`);
+    /// no aura, or the aura below the frozen `EPOCH_6_TABLE_RULES`, keeps
+    /// both inert.
+    #[test]
+    fn a_predator_shooter_aura_arms_the_surge_shooting_only_at_the_current_epoch() {
+        let e = crate::acts::CURRENT_RULES_EPOCH;
+        let us = pin_unit("gf", "ratmen_clans", &["Predator Shooter Aura"], e);
+        assert!(us.shoot[0].surge_attack, "the granted base arms the shooting surge facet");
+        assert!(!us.melee[0].surge_attack, "shooting_only: the blade's melee facet stays shut");
+        assert!(
+            !pin_unit("gf", "ratmen_clans", &[], e).shoot[0].surge_attack,
+            "no aura, no surge"
+        );
+        assert!(
+            !pin_unit("gf", "ratmen_clans", &["Predator Shooter Aura"], 5).shoot[0].surge_attack,
+            "epoch 5: the aura gate is OFF (EPOCH_6_TABLE_RULES) — RED before the break"
+        );
+    }
+
     /// The Shadowborn shroud family (aof/shadow_stalkers): the base and its
     /// Boost stamp the Ranged-Shrouding alias numbers (-4"/-8" range to a 6"
     /// floor) on the ctx and the melee-move shroud pair on the capture twin;

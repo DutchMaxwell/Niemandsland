@@ -212,6 +212,18 @@ func test_registry_primitive_gaps_match_the_explicit_allow_list() -> void:
 					found[name] = true
 	assert_array(found.keys()).contains_exactly_in_any_order(allowed.keys())
 
+## D-PROOF 15.09. — the editing-marker half of the same walk: no registry
+## NAME may carry an editing marker (the "Sniper REMOVE" defect shipped in
+## all five maps until today's delete; the fixture keeps only real rules).
+func test_no_registry_name_carries_an_editing_marker() -> void:
+	RulesRegistry.reset_cache()
+	for system in RulesRegistry.SYSTEMS:
+		var data := RulesRegistry.map_for(system)
+		var sections: Array = [data.get("common", {})] + data.get("factions", {}).values()
+		for section in sections:
+			for name in section:
+				assert_str(name).not_contains("REMOVE")
+
 
 func test_expanded_roster_rule_hashes_are_unchanged(
 		do_skip := OS.get_environment("NML_AURA_ROSTER_ROOT").is_empty(),

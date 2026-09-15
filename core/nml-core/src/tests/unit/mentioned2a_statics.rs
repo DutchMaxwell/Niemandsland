@@ -267,6 +267,27 @@
         );
     }
 
+    // ---------------------------------------------- Empyrean Spirit (base) ---
+    // The row's own number WITHOUT the Boost: the base entry's conditional
+    // alias -1 rides the over-9" gate — beyond it the volley to-hits at 5+,
+    // inside it (and rule-less) at the plain 4+; the unconditional evasive
+    // fold is the Boost's job (the test above), never the base's.
+    #[test]
+    fn an_empyrean_spirit_alias_penalizes_the_volley_only_over_nine_inches() {
+        let e = crate::acts::CURRENT_RULES_EPOCH;
+        let us = carrier("aof", "ghostly_undead", &["Empyrean Spirit"], e);
+        assert_eq!(us.ctx.stealth_alias_penalty, 1, "the base's conditional -1");
+        assert_eq!(us.ctx.stealth_alias_over_in, 9.0, "the printed over-9\" gate");
+        assert!(!us.ctx.evasive, "the unconditional fold is the Boost's job");
+        assert_eq!(incoming_volley(&us, 12.0).rolls[0].target, 5, "over 9\": 4+ becomes 5+");
+        assert_eq!(incoming_volley(&us, 6.0).rolls[0].target, 4, "within 9\": the alias stands down");
+        assert_eq!(
+            incoming_volley(&carrier("aof", "ghostly_undead", &[], e), 12.0).rolls[0].target,
+            4,
+            "no rule, no penalty"
+        );
+    }
+
     // ---------------------------------------- Grounded Reinforcement Aura ----
     // The aura hands "Grounded Reinforcement" (Shielded defense_bonus 1,
     // terrain_within_in 1): the alias kind is stamped and the +1 stays
