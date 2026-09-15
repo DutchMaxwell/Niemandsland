@@ -828,11 +828,6 @@
     "rush_mod": -4
    }
   },
-  "Sniper REMOVE": {
-   "primitive": null,
-   "rated": false,
-   "book_version": "3.5.1"
-  },
   "Stealth": {
    "primitive": "Stealth",
    "rated": false,
