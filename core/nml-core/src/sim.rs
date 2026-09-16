@@ -42,6 +42,7 @@ use crate::spell::{
     spell_damage_ev_of, spell_ev_of, CASTER_BOOST_AURA_IN, CAST_BASE_TARGET,
 };
 use crate::menu::nearest_enemy;
+use crate::cast_move_ev::movement_cast_gain;
 use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
@@ -3250,8 +3251,21 @@ fn modifier_cast_ev_of(
     // the chain (ai_spell.gd:250-252) — a morale-only modifier prices 0.0.
     let hit = m.hit_mod as i64;
     let dm = m.def_mod as i64;
+    // D-MAGIC step 4 — the MOVEMENT fields price the usage they move: the
+    // absolute charge/shoot usage value of the unit that receives the
+    // modifier (the bearer for a buff, the target for a debuff), with
+    // minus without the spell's fields. A buff ADDS usage, a debuff
+    // REMOVES it — both help the caster's side, so both legs price the
+    // same absolute gain. `beneficiary == "attackers"` folds the whole
+    // modifier onto the ACTIVATING unit's one attack (the table's
+    // `_modifier_delta` verbatim) — no movement term there.
+    let move_gain = if m.advance_in != 0.0 || m.rush_in != 0.0 || m.range_in != 0.0 {
+        movement_cast_gain(statics, state, ti, m)
+    } else {
+        0.0
+    };
     if hit == 0 && dm == 0 {
-        return 0.0;
+        return move_gain;
     }
     match entry.effect_kind.as_str() {
         "buff" => {
@@ -3280,7 +3294,7 @@ fn modifier_cast_ev_of(
             } else {
                 0.0
             };
-            hit_leg + def_leg
+            hit_leg + def_leg + move_gain
         }
         "debuff" => {
             if entry.beneficiary == "attackers" {
@@ -3300,7 +3314,7 @@ fn modifier_cast_ev_of(
                 let d = geom::dist_in(&state.positions[ti], &state.positions[our]);
                 let sh = modifier_delta_of(statics, state, ti, our, hit, dm, true, d, false);
                 let ml = modifier_delta_of(statics, state, ti, our, hit, dm, false, 0.0, true);
-                -(sh.max(ml))
+                -(sh.max(ml)) + move_gain
             }
         }
         _ => 0.0,

@@ -85,7 +85,7 @@ pub fn charge_illegal_tuned(
 /// `BattleSim._melee_shroud_charge_in_plain` battle_sim.gd:1572-1576 — an absent
 /// pair means the victim carries no rule of the family, so the reach is the raw
 /// band.
-fn melee_shroud_charge_in(rush_in: f64, state: &State, victim: usize) -> f64 {
+pub(crate) fn melee_shroud_charge_in(rush_in: f64, state: &State, victim: usize) -> f64 {
     match state.shroud[victim] {
         None => rush_in,
         Some([pen, floor]) => shrouded_reach(rush_in, pen, floor),

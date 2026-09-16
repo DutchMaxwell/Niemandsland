@@ -942,7 +942,7 @@ pub const REPEL_AMBUSHERS_DIST_IN: f64 = 12.0;
 pub const COORDINATE_RANGE_IN: f64 = 12.0;
 
 /// The immutable per-unit closure of `resolve`/`reply_threat`.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct UnitStatic {
     pub ctx: Ctx,
     /// `Profile.name` — `GameUnit.get_name()`, which is what `_solo_tray_roll`
@@ -5278,7 +5278,7 @@ fn bounding_of(reg: &mut Registries, p: &Profile) -> Option<f64> {
 
 /// EPOCH_26_PLACE_D3 — one `Bounding`-primitive carrier's placement read:
 /// the rule name the table logs, the dice count and the flat `place_d3_plus`.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct PlaceSpec {
     /// The rule name the table logs ("Bounding", "Wolfborn", "Rapid Blink").
     pub name: String,
