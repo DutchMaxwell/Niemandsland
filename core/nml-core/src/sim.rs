@@ -4756,6 +4756,16 @@ fn apply_cast_effect(
             once: true,
             name: Rc::from(""),
         });
+        // Rules-must-log: the landing names the granted rule, like the utility pushes.
+        trace_rule(
+            "cast",
+            &format!("Spell {} grant", entry.name),
+            &format!(
+                "{} granted to {} until the first exchange spends it",
+                entry.grants_rule,
+                statics[state.roster.profile[ti]].name
+            ),
+        );
     }
     let m = entry.modifier;
     if !m.present {
