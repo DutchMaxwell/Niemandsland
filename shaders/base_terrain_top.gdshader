@@ -34,6 +34,8 @@ uniform float roughness_value : hint_range(0.0, 1.0) = 0.9;
 uniform bool has_texture = false;             // false until a biome/fallback texture is bound
 uniform vec3 fallback_color = vec3(0.2, 0.35, 0.2);
 
+#include "res://shaders/grassland_surface.gdshaderinc"
+
 // Rim shading is a CONTACT-SHADOW HINT only, not a readability vignette: it is zero across the
 // centre (which must read identical to the board) and only a thin outer band is touched.
 // vignette_strength = max darkening at the very rim; vignette_start = the rim_t where shading
@@ -73,9 +75,17 @@ void fragment() {
 	// Same micro colour variation as the table so the window blends seamlessly. Uses the SAME
 	// detail UV (plane_uv * detail_tiling == the table's UV * detail_tiling at this world point).
 	vec2 duv = plane_uv * detail_tiling;
+	float surface_roughness = roughness_value;
 	if (has_texture) {
 		float h = texture(detail_height, duv).r;
-		base_col *= 1.0 + (h - 0.5) * 2.0 * detail_albedo_strength;
+		float albedo_mod = 1.0 + (h - 0.5) * 2.0 * detail_albedo_strength;
+		if (use_grassland_surface) {
+			vec4 surface = grassland_surface(macro_uv, base_col);
+			base_col = surface.rgb * mix(1.0, albedo_mod, 0.35);
+			surface_roughness = surface.a;
+		} else {
+			base_col *= albedo_mod;
+		}
 	}
 
 	// Contact-shadow hint toward the rim only (zero across the centre).
@@ -83,12 +93,12 @@ void fragment() {
 	base_col *= 1.0 - v * vignette_strength;
 
 	ALBEDO = base_col;
-	ROUGHNESS = roughness_value;
+	ROUGHNESS = surface_roughness;
 	METALLIC = 0.0;
 
 	// Match the table's tangent-space detail relief so the base catches the same sun glints.
 	// The fan mesh carries a world-aligned tangent (+X) — see BaseDecor._top_mesh.
 	vec3 n = texture(detail_normal, duv).xyz;
 	NORMAL_MAP = n;
-	NORMAL_MAP_DEPTH = detail_normal_strength;
+	NORMAL_MAP_DEPTH = detail_normal_strength * (use_grassland_surface ? 0.85 : 1.0);
 }

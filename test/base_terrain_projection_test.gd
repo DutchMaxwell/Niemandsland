@@ -86,3 +86,23 @@ func test_base_top_matches_the_ground_detail_relief() -> void:
 	var table: TableScript = auto_free(TableScript.new())
 	var mat := table.get_base_top_material()
 	assert_float(mat.get_shader_parameter("detail_normal_strength")).is_equal_approx(TableScript.DETAIL_NORMAL_STRENGTH, 0.0001)
+
+
+func test_surface_material_tracks_biome_switch_on_board_and_existing_bases() -> void:
+	var table: TableScript = auto_free(TableScript.new())
+	table._default_texture = preload("res://assets/terrain/table_surface_default.png")
+	var base := table.get_base_top_material()
+	for biome_name in ["temperate_grassland", "arid_desert", "temperate_grassland"]:
+		table.biome = biome_name
+		var ground := table._build_ground_material() as ShaderMaterial
+		var enabled: bool = biome_name == "temperate_grassland"
+		assert_object(table.get_base_top_material()).is_same(base)
+		assert_that(ground.get_shader_parameter("use_grassland_surface")).is_equal(enabled)
+		assert_that(base.get_shader_parameter("use_grassland_surface")).is_equal(enabled)
+		assert_object(ground.get_shader_parameter("grassland_albedo")).is_not_null()
+		assert_object(base.get_shader_parameter("grassland_albedo")) \
+			.is_same(ground.get_shader_parameter("grassland_albedo"))
+		assert_object(ground.get_shader_parameter("grassland_coverage")).is_same(GrassField.coverage_texture())
+		assert_object(base.get_shader_parameter("grassland_coverage")) \
+			.is_same(ground.get_shader_parameter("grassland_coverage"))
+		assert_float(base.get_shader_parameter("coverage_extent_m")).is_equal(GrassField.COVERAGE_EXTENT_M)

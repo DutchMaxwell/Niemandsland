@@ -16,6 +16,8 @@ uniform float detail_normal_strength : hint_range(0.0, 1.0) = 0.35;
 uniform float detail_albedo_strength : hint_range(0.0, 0.5) = 0.12;
 uniform float roughness_value : hint_range(0.0, 1.0) = 0.9;
 
+#include "res://shaders/grassland_surface.gdshaderinc"
+
 void fragment() {
 	// Centre-crop the battlemap to the table: scale 1 shows the whole 6x4 image, <1 a
 	// centred crop. Clamp keeps samples inside the image for any table size.
@@ -29,10 +31,15 @@ void fragment() {
 	ALBEDO = base * albedo_mod;
 
 	ROUGHNESS = roughness_value;
+	if (use_grassland_surface) {
+		vec4 surface = grassland_surface(macro_uv, base);
+		ALBEDO = surface.rgb * mix(1.0, albedo_mod, 0.35);
+		ROUGHNESS = surface.a;
+	}
 	METALLIC = 0.0;
 
 	// Tangent-space detail normal for fine surface relief that catches the sun.
 	vec3 n = texture(detail_normal, duv).xyz;
 	NORMAL_MAP = n;
-	NORMAL_MAP_DEPTH = detail_normal_strength;
+	NORMAL_MAP_DEPTH = detail_normal_strength * (use_grassland_surface ? 0.85 : 1.0);
 }
