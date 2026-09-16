@@ -1540,6 +1540,7 @@ mod breath_score;
 mod buff_consumption_bridge;
 mod caster_boost;
 mod caster_interference;
+mod cast_kind;
 mod casting_debuff;
 mod courage_buff;
 mod utility_buff_family;
