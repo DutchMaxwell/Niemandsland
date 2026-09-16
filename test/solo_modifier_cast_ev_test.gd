@@ -92,7 +92,10 @@ func test_hit_plus_def_buff_sums_both_roles() -> void:
 func test_debuff_keeps_the_whole_modifier_fold() -> void:
 	# -1 to hit debuff ON the human-side target: its best attack into OUR 9" unit drops
 	# 2.0 -> 4/3, so the cast is worth +2/3 (unchanged by the patch — pin against drift).
-	var target := _armed(1, [Vector3.ZERO], "Target", [{"name": "CCW", "range": 0}])
+	# The target needs a ranged attack into our 9" unit: a CCW-only target at 9" prices its melee
+	# leg 0.0 (the table's empty-melee quirk, kept verbatim), which pinned 0 instead of 2/3.
+	var target := _armed(1, [Vector3.ZERO], "Target",
+		[{"name": "Rifle", "range": 24, "attacks": 8}, {"name": "CCW", "range": 0}])
 	var ours := _armed(2, [Vector3(9.0 * IN2M, 0, 0)], "Ours",
 		[{"name": "Rifle", "range": 24, "attacks": 8}, {"name": "CCW", "range": 0}])
 	var caster := _armed(2, [Vector3(18.0 * IN2M, 0, 0)], "Caster",
