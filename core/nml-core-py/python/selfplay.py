@@ -2861,6 +2861,14 @@ def play_game(
             **({"menu_targets": True} if menu_targets else {}),
             **({"hero_last": True} if hero_last else {}),
             **({"cast_fold": True} if cast_fold else {}),
+            # D-MAGIC A/B: the cast SUB-PHASE switch the game actually played —
+            # read off the header knobs (`dict(TRAINER_KNOBS, ...)` above, the
+            # crate's `cast: self.knobs.seam_cast`), not a constant. Stamped
+            # only when ON, the `mission` idiom above: a default game writes
+            # the identical object it wrote before this stamp existed, so no
+            # digest and no existing record moves — and a bank is verifiable
+            # by its own headers (the record tells the truth).
+            **({"seam_cast": True} if knobs["seam_cast"] else {}),
             "hero_attach": hero_attach,
             "dice": eff_dice,
             "charge_landing": charge_landing,
