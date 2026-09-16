@@ -4525,8 +4525,25 @@ func _spell_ev_for(unit: GameUnit, _member: GameUnit, entry: Dictionary, cand: G
 			# Our attackers gain the effect against the target: proxy = the ACTIVATING unit's own
 			# attack into that target (the nearest attacker the AI controls this activation).
 			return _modifier_delta(unit, cand, effect)
-		# The penalty lands on the target's own attacks: value = how much WORSE its attack gets.
-		return -_modifier_value_on_attack(cand, effect, true)
+		# The penalty lands on the target's OWN attacks. D-MAGIC step 2c: the hit/grant leg picks
+		# the mode by BASELINE (max over modes of baseline minus same-mode malus); a `def_mod`
+		# debuff lands on the DEFENDER of that attack (= our unit), so folding it there priced a
+		# good debuff NEGATIVE — the bug class #1014 fixed for buffs. It is priced from OUR side
+		# instead (our nearest unit's attack INTO the target, target's defense worsened) and
+		# summed with the hit leg.
+		var modifier: Dictionary = effect.get("modifier", {})
+		var hit_effect := effect
+		if modifier.has("def_mod"):
+			hit_effect = effect.duplicate()
+			var m := (hit_effect["modifier"] as Dictionary).duplicate()
+			m.erase("def_mod")
+			hit_effect["modifier"] = m
+		var value := _debuff_value_on_target_attack(cand, hit_effect)
+		if modifier.has("def_mod"):
+			var def_effect := effect.duplicate()
+			def_effect["modifier"] = {"def_mod": modifier["def_mod"]}
+			value += _debuff_value_on_target_defense(cand, def_effect)
+		return value
 	return 0.0
 
 
@@ -4604,6 +4621,59 @@ func _modifier_value_on_defense(cand: GameUnit, effect: Dictionary, flip_sides: 
 	var melee_delta := AiSpell.spell_modifier_delta(melee, att, def_ctx, effect, false, 0.0, true) \
 		if not melee.is_empty() else 0.0
 	return maxf(-shoot_delta, -melee_delta)
+
+
+## D-MAGIC step 2c: how much WORSE the TARGET's own attack (its hit/grant leg) gets from `effect`
+## — the max over the target's USABLE attack modes of (its baseline EV into our nearest unit minus
+## the SAME mode's EV with the malus), i.e. pick the mode by baseline, then take that mode's delta
+## (for a hit malus the deltas scale with the baseline, so this is also the max delta). The old
+## maxf(shoot_delta, melee_delta) was built for BUFFS (best improvement); for a debuff's negative
+## deltas it picks the mode that LOSES LEAST, and an empty ranged mode's hard-coded 0.0 masked the
+## melee leg (a CCW-only target priced -0.0 at any gap). An empty ranged mode is not a mode; the
+## melee mode only counts when the target can actually strike ("Who Can Strike",
+## striking_models_for). BOTH modes unusable (e.g. a CCW-only target out of strike reach) is
+## legitimately 0.0 — a target that cannot attack us cannot be made worse.
+func _debuff_value_on_target_attack(cand: GameUnit, effect: Dictionary) -> float:
+	var nearest := _nearest_enemy_by_slot(cand, true)
+	if nearest == null:
+		return 0.0
+	var best := MoveIntent.distance_inches(unit_centre(cand), unit_centre(nearest))
+	var weapons := _unit_weapons(cand)
+	var att := AiEv.ctx_for(cand, false, 0)
+	var def_ctx := AiEv.ctx_for(nearest, majority_in_cover(nearest), 0)
+	var value := -INF
+	var ranged := AiEv.stamp_sergeant(filter_limited(cand, AiShooting.profiles_in_range(weapons, best)), cand)
+	if not ranged.is_empty():
+		value = maxf(value, -AiSpell.spell_modifier_delta(ranged, att, def_ctx, effect, true, best, false))
+	var melee := AiEv.stamp_sergeant(filter_limited(cand, AiShooting.melee_profiles(weapons)), cand)
+	if not melee.is_empty() and striking_models_for(cand, nearest) > 0:
+		value = maxf(value, -AiSpell.spell_modifier_delta(melee, att, def_ctx, effect, false, 0.0, true))
+	return 0.0 if value == -INF else value
+
+
+## D-MAGIC step 2c: the DEFENSE-ROLE leg of a `def_mod` DEBUFF — the mirror of #1014's def-buff
+## leg. The malus lands on the DEFENDER of the target's attack (= our unit), so it must be priced
+## from OUR side: our nearest unit's attack INTO the target with the target's defense worsened
+## (the `def_mod` term in AiSpell.spell_modifier_delta), sign = caster gain. Mode = the one with
+## the larger damage gain (the def-buff leg's maxf(-shoot, -melee), sign-flipped); an empty mode
+## is not a mode, and the melee mode only counts when our unit can actually strike the target
+## ("Who Can Strike", striking_models_for). Both modes unusable → 0.0.
+func _debuff_value_on_target_defense(cand: GameUnit, effect: Dictionary) -> float:
+	var striker := _nearest_enemy_by_slot(cand, true)
+	if striker == null:
+		return 0.0
+	var best := MoveIntent.distance_inches(unit_centre(striker), unit_centre(cand))
+	var weapons := _unit_weapons(striker)
+	var att := AiEv.ctx_for(striker, false, 0)
+	var def_ctx := AiEv.ctx_for(cand, majority_in_cover(cand), 0)
+	var value := -INF
+	var ranged := AiEv.stamp_sergeant(filter_limited(striker, AiShooting.profiles_in_range(weapons, best)), striker)
+	if not ranged.is_empty():
+		value = maxf(value, AiSpell.spell_modifier_delta(ranged, att, def_ctx, effect, true, best, false))
+	var melee := AiEv.stamp_sergeant(filter_limited(striker, AiShooting.melee_profiles(weapons)), striker)
+	if not melee.is_empty() and striking_models_for(striker, cand) > 0:
+		value = maxf(value, AiSpell.spell_modifier_delta(melee, att, def_ctx, effect, false, 0.0, true))
+	return 0.0 if value == -INF else value
 
 
 ## The caster units of `slot` holding spell tokens within the 18" boost/interference aura of
