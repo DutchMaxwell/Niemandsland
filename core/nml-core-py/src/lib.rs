@@ -2737,6 +2737,11 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh
     // `play_game()` stamps. See `acts::rule_on`.
     m.add("CURRENT_RULES_EPOCH", nmlcore::CURRENT_RULES_EPOCH)?;
+    // 16.09. (window 32): the token layout constants, so python tests and the netlab
+    // read the core's window instead of pinning 24 by hand.
+    m.add("N_UNITS", nmlcore::tokens::N_UNITS)?;
+    m.add("V1_ROWS", nmlcore::tokens::V1_ROWS)?;
+    m.add("F_U", nmlcore::tokens::F_U)?;
     // The WAVE 4 GATE (06.09.), frozen: the epoch every wave-4 table-rule read
     // keys on (see the module's `acts::EPOCH_7_TABLE_RULES` note). Exported so
     // a py-side read's gate uses the same frozen constant, never the literal.

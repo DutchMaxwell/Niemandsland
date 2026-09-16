@@ -14,7 +14,7 @@ use nml_core::unit::UnitStatic;
 use nml_core::ActCorpus;
 use nml_core_godot::onnx::{load, Brain};
 use nml_core_godot::onnx_hook::OnnxHook;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::cell::{Cell, RefCell};
 
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -193,6 +193,21 @@ fn real_leaf_tokens_match_the_golden_bit_exactly() {
     for (i, token) in tokens.iter().enumerate() {
         let json = token.to_json();
         for key in ["units", "units_mask", "objs", "objs_mask", "terr", "glob"] {
+            if key == "units_mask" {
+                // 16.09. (window 32): the core mask is N_UNITS long, the golden
+                // leaf's is the v1 window; the first V1_ROWS entries must match
+                // bit-exactly and every row past the window must be masked out
+                // on this <= 24-unit corpus.
+                let got = json[key].as_array().unwrap();
+                let want = golden["leaves"][i][key].as_array().unwrap();
+                assert_eq!(got.len(), tokens::N_UNITS, "leaf {i} units_mask rows");
+                assert_eq!(want.len(), tokens::V1_ROWS, "golden leaf {i} units_mask rows");
+                assert_tensor_f32_eq(&Value::Array(got[..tokens::V1_ROWS].to_vec()), &json!(want),
+                    &format!("leaf {i} tensor units_mask (v1 window)"));
+                assert!(got[tokens::V1_ROWS..].iter().all(|m| m.as_f64().unwrap() == 0.0),
+                    "leaf {i}: rows past the v1 window must be masked out");
+                continue;
+            }
             if key != "units" {
                 assert_tensor_f32_eq(&json[key], &golden["leaves"][i][key],
                     &format!("leaf {i} tensor {key}"));
@@ -207,7 +222,12 @@ fn real_leaf_tokens_match_the_golden_bit_exactly() {
             let got = json["units"].as_array().unwrap();
             let want = golden["leaves"][i]["units"].as_array().unwrap();
             let v1 = want[0].as_array().unwrap().len();
-            assert_eq!(got.len(), want.len(), "leaf {i} units rows");
+            assert_eq!(got.len(), tokens::N_UNITS, "leaf {i} units rows (core window)");
+            assert_eq!(want.len(), tokens::V1_ROWS, "golden leaf {i} units rows (v1 window)");
+            for row in &got[tokens::V1_ROWS..] {
+                assert!(row.as_array().unwrap().iter().all(|c| c.as_f64().unwrap() == 0.0),
+                    "leaf {i}: rows past the v1 window must be zero pads");
+            }
             for (r, (g, w)) in got.iter().zip(want).enumerate() {
                 let row = g.as_array().unwrap();
                 assert!(row.len() > v1, "leaf {i} units[{r}]: no splice columns past the v1 width");
@@ -300,4 +320,42 @@ fn onnx_pick_equals_the_golden_oracle_pick_on_act0() {
         "pick action differs from the golden oracle");
     eprintln!("ONNX_HOOK proof=decision_identity unit={} oracle_leaves={} status=equal",
         onnx.unit_key, oracle.cursor.get());
+}
+
+/// 16.09. (window 32): the core hands out `tokens::N_UNITS` = 32 rows; the v1
+/// export's contract is `units24x90`. The hook projects the first `V1_ROWS`
+/// rows and REFUSES a token set with more live units (the caller falls back
+/// to the hand planner, as it did when the core itself refused at 24). RED
+/// before the row window: the batch layout was `N_UNITS` rows and tract
+/// declined the shape instead of naming the cause.
+#[test]
+fn v1_row_window_refuses_25_live_units_and_runs_24() {
+    let corpus = corpus();
+    let statics = nml_core::build_act_statics(&corpus, ROOT);
+    let (all, calls) = record(&corpus, &statics);
+    let real = real_tokens(&all, &calls);
+    let brain = standin();
+    let act = &corpus.acts[0];
+    let hook = OnnxHook {
+        brain: &brain,
+        statics: &statics,
+        terrain: &corpus.terrain,
+        rows: RefCell::new(RowEncoder::for_version(ROOT, corpus.knobs.rule_vocab_version)),
+        hero_attach: corpus.knobs.hero_attach,
+        opener_seat: act.statics.opener_seat,
+    };
+    assert_eq!(real[0].units.len(), tokens::N_UNITS, "the core window is N_UNITS rows");
+    assert!(tokens::N_UNITS > tokens::V1_ROWS);
+
+    let mut wide = real[0].clone();
+    for (i, m) in wide.units_mask.iter_mut().enumerate() { *m = u8::from(i < tokens::V1_ROWS + 1); }
+    match hook.run_tokens(std::slice::from_ref(&wide)) {
+        Err(Unsupported::TooManyUnits(n)) => assert_eq!(n, tokens::V1_ROWS + 1),
+        other => panic!("25 live units must be refused by the v1 window, got {:?}", other.map(|v| v.0.len())),
+    }
+
+    let mut full = real[0].clone();
+    for (i, m) in full.units_mask.iter_mut().enumerate() { *m = u8::from(i < tokens::V1_ROWS); }
+    let (values, _) = hook.run_tokens(std::slice::from_ref(&full)).expect("24 live units run through the v1 window");
+    assert_eq!(values.len(), 1);
 }

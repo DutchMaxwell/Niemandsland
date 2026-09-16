@@ -8,16 +8,17 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use tract_onnx::prelude::*;
+use nml_core::tokens::V1_ROWS;
 
 const SCHEMA: &str = "1";
 const TOKEN_SCHEMA: &str = "units24x90,objs6x12,terr18x12,glob16,vocab1017,bag17";
 const VALUE_HEAD: &str = "margin";
 const SELFTEST_LABEL: &str = "standin-v2x2";
 const SELFTEST_JSON: &str = include_str!("onnx_selftest.json");
-const DIMS: [usize; 6] = [24 * UNITS_IN, 24, 6 * 12, 6, 18 * 12, 16];
+const DIMS: [usize; 6] = [V1_ROWS * UNITS_IN, V1_ROWS, 6 * 12, 6, 18 * 12, 16];   // 16.09.: the v1 export keeps its 24-row window (`tokens::V1_ROWS`); the core window is wider
 
 pub struct Batch {
-    pub units: Vec<f32>, pub units_mask: Vec<f32>, // [rows,24,90] / [rows,24]
+    pub units: Vec<f32>, pub units_mask: Vec<f32>, // [rows,V1_ROWS=24,90] / [rows,24]
     pub objs: Vec<f32>, pub objs_mask: Vec<f32>,   // [rows,6,12] / [rows,6]
     pub terr: Vec<f32>, pub glob: Vec<f32>,        // [rows,18,12] / [rows,16]
 }
@@ -76,7 +77,7 @@ impl Brain {
         let b = batch.units.len() / DIMS[0];
         let tensor = |shape: &[usize], data: &[f32]| Tensor::from_shape(shape, data)
             .map(TValue::from).map_err(|_| decline("onnx: run"));
-        let inputs = tvec![tensor(&[b, 24, UNITS_IN], &batch.units)?, tensor(&[b, 24], &batch.units_mask)?,
+        let inputs = tvec![tensor(&[b, V1_ROWS, UNITS_IN], &batch.units)?, tensor(&[b, V1_ROWS], &batch.units_mask)?,
             tensor(&[b, 6, 12], &batch.objs)?, tensor(&[b, 6], &batch.objs_mask)?,
             tensor(&[b, 18, 12], &batch.terr)?, tensor(&[b, 16], &batch.glob)?];
         let outputs = self.plan.run(inputs).map_err(|_| decline("onnx: run"))?;

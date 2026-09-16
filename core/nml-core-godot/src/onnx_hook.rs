@@ -8,7 +8,7 @@ use nml_core::rows::RowEncoder;
 use nml_core::sim::Unsupported;
 use nml_core::state::State;
 use nml_core::terrain::Terrain;
-use nml_core::tokens::{self, Tokens, DESIGN_FIELDS, F_G, F_O, F_T, N_OBJ, N_TERR, N_UNITS, V1_UNITS};
+use nml_core::tokens::{self, Tokens, DESIGN_FIELDS, F_G, F_O, F_T, N_OBJ, N_TERR, V1_ROWS, V1_UNITS};
 use nml_core::unit::UnitStatic;
 use std::cell::RefCell;
 use super::onnx::{Batch, Brain};
@@ -38,18 +38,29 @@ impl OnnxHook<'_> {
             // (the buffer is zeroed — the v1 net keeps its trained-zero
             // semantics even when a live ledger carries the grants), t[90]
             // drops. A vocab-2 net is a future loader with its own schema.
+            // 16.09. (window 32): the core now hands out `tokens::N_UNITS` = 32
+            // rows; the v1 export's contract is `units24x90`. Project the first
+            // `V1_ROWS` rows and REFUSE a token set with more live units — the
+            // caller falls back to the hand planner exactly as it did when the
+            // core itself refused at 24. Never truncate a board.
+            for t in chunk {
+                let live = t.units_mask.iter().map(|&m| usize::from(m)).sum::<usize>();
+                if live > V1_ROWS {
+                    return Err(Unsupported::TooManyUnits(live));
+                }
+            }
             let mut batch = Batch {
-                units: vec![0.0; width * N_UNITS * V1_UNITS], units_mask: vec![0.0; width * N_UNITS],
+                units: vec![0.0; width * V1_ROWS * V1_UNITS], units_mask: vec![0.0; width * V1_ROWS],
                 objs: vec![0.0; width * N_OBJ * F_O], objs_mask: vec![0.0; width * N_OBJ],
                 terr: vec![0.0; width * N_TERR * F_T], glob: vec![0.0; width * F_G],
             };
             for (i, t) in chunk.iter().enumerate() {
-                for (j, row) in t.units.iter().enumerate() {
-                    let d = i * N_UNITS * V1_UNITS + j * V1_UNITS;
+                for (j, row) in t.units.iter().take(V1_ROWS).enumerate() {
+                    let d = i * V1_ROWS * V1_UNITS + j * V1_UNITS;
                     batch.units[d..d + DESIGN_FIELDS].copy_from_slice(&row[..DESIGN_FIELDS]);
                 }
-                let units_mask = i * N_UNITS..(i + 1) * N_UNITS;
-                for (dst, &src) in batch.units_mask[units_mask].iter_mut().zip(&t.units_mask) {
+                let units_mask = i * V1_ROWS..(i + 1) * V1_ROWS;
+                for (dst, &src) in batch.units_mask[units_mask].iter_mut().zip(t.units_mask.iter().take(V1_ROWS)) {
                     *dst = f32::from(src);
                 }
                 let objs = i * N_OBJ * F_O..(i + 1) * N_OBJ * F_O;

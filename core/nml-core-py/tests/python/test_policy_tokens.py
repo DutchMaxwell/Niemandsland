@@ -103,15 +103,17 @@ def test_policy_tokens_shapes_on_a_real_replayed_position():
         tr = got["trace"]
         best_idx = tr["scored"][tr["best_idx"]]["idx"]
         toks = core.policy_tokens(state, act["player"], tr["cands"], best_idx)
-        assert len(toks["units"]) == 24 and len(toks["units"][0]) == 91
-        assert len(toks["units_mask"]) == 24
+        # 16.09. (window 32): the row window is the core's `N_UNITS` (24 -> 32), read
+        # from the module instead of pinned by hand; the width stays F_U = 91.
+        assert len(toks["units"]) == nml_core.N_UNITS and len(toks["units"][0]) == nml_core.F_U
+        assert len(toks["units_mask"]) == nml_core.N_UNITS
         assert len(toks["objs"]) == 6 and len(toks["objs"][0]) == 12
         assert len(toks["terr"]) == 18 and len(toks["terr"][0]) == 12
         assert len(toks["glob"]) == 16
         assert len(toks["cands"]) == 160 and len(toks["cands"][0]) == 40
         assert len(toks["actor"]) == 160 and len(toks["target"]) == 160
         n_live_units = sum(toks["units_mask"])
-        assert 0 < n_live_units <= 24
+        assert 0 < n_live_units <= nml_core.N_UNITS
         assert sum(1 for m in toks["units_mask"] if m) == n_live_units
         n_cands = sum(toks["cands_mask"])
         assert 0 < n_cands == len(tr["cands"])
