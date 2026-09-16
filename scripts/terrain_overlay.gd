@@ -351,6 +351,7 @@ var _ruin_panel_hole_rects: Dictionary = {}  # panel name -> Array[Rect2] interi
 ## objects are kept so fallback trees can upgrade to textured ones once cached.
 var _trees_library: TreesLibrary = null
 var _tree_panel_materials: Dictionary = {}
+var _tree_ground_material: ShaderMaterial = null
 var _tree_fetch_started := false
 var _last_objects: Array = []
 var _last_obj_table_size := Vector2.ZERO
@@ -2992,6 +2993,7 @@ func _create_textured_tree(obj: Dictionary) -> Node3D:
 				model.position.y = -aabb.position.y * fit
 				var model_root := Node3D.new()
 				model_root.add_child(model)
+				_add_tree_ground_cover(model_root)
 				model_root.rotation.y = facing
 				return model_root
 			model.free()
@@ -3027,8 +3029,33 @@ func _create_textured_tree(obj: Dictionary) -> Node3D:
 		cap_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		root.add_child(cap_instance)
 
+	_add_tree_ground_cover(root)
 	root.rotation.y = facing
 	return root
+
+
+## Thin, feathered leaf litter for grassland trees placed directly on the table.
+## Grouped sandbox forests already have a ground pad and leave table size unset.
+func _add_tree_ground_cover(root: Node3D) -> void:
+	if _prop_theme != "" or _last_obj_table_size == Vector2.ZERO:
+		return
+	var bounds := _model_space_aabb(root)
+	var diameter := clampf(maxf(bounds.size.x, bounds.size.z) * 0.90, 0.055, 0.14)
+	if _tree_ground_material == null:
+		_tree_ground_material = ShaderMaterial.new()
+		_tree_ground_material.shader = preload("res://shaders/tree_ground_cover.gdshader")
+		_tree_ground_material.set_shader_parameter("litter_tex", preload("res://assets/sandbox_forest_floor.webp"))
+	_tree_ground_material.set_shader_parameter("table_half_extent", _last_obj_table_size * 0.3048 * 0.5)
+	var patch := MeshInstance3D.new()
+	patch.name = "TreeGroundCover"
+	var plane := PlaneMesh.new()
+	plane.size = Vector2.ONE * diameter
+	patch.mesh = plane
+	patch.material_override = _tree_ground_material
+	patch.position = Vector3(bounds.get_center().x, 0.0003, bounds.get_center().z)
+	patch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	patch.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	root.add_child(patch)
 
 
 ## Combined local-space AABB of all meshes under `node` (transforms accumulated), used
