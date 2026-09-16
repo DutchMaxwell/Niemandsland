@@ -3201,15 +3201,19 @@ fn caster_boost_pool(
 /// one number BOTH token economies price the attempt at (the boost values
 /// LANDING it through `boost_value_of`, the interference PREVENTING it
 /// raw — the table hands the same `chosen_ev` to both planners).
-fn cast_ev_of(
+pub(crate) fn cast_ev_of(
     statics: &[UnitStatic],
     state: &State,
+    si: usize,
     entry: &Spell,
     ti: usize,
 ) -> f64 {
     if entry.effect_kind == "damage" {
         spell_damage_ev_of(entry, &ctx_of(&statics[state.roster.profile[ti]], state, ti))
     } else {
+        // D-MAGIC step 2, commit 1 (RED): the signature now carries the
+        // caster's unit; the modifier legs themselves land in commit 2.
+        let _ = si;
         0.0
     }
 }
@@ -3222,16 +3226,17 @@ fn cast_ev_of(
 /// for everything else. The draw mirrors `_draw_aura_tokens`' own-front
 /// order. Returns (boost, own draw, helper draw); the caller folds the final
 /// roll target and owns the frozen `EPOCH_48_CASTER_BOOST` gate.
-fn plan_caster_boost(
+pub(crate) fn plan_caster_boost(
     statics: &[UnitStatic],
     state: &State,
+    si: usize,
     entry: &Spell,
     ti: usize,
     own: i64,
     helpers: &[(usize, i64)],
 ) -> (i64, i64, i64) {
     let own_left = (own - entry.threshold).max(0);
-    let ev = cast_ev_of(statics, state, entry, ti);
+    let ev = cast_ev_of(statics, state, si, entry, ti);
     let boost = plan_boost(
         boost_value_of(ev),
         own_left + helpers.iter().map(|(_, t)| *t).sum::<i64>(),
@@ -4809,7 +4814,7 @@ fn cast_phase(
         let plan = boost_plan
             .get_or_insert_with(|| {
                 let (b, o, h) = if rule_on(seams.rules_epoch, EPOCH_48_CASTER_BOOST) {
-                    plan_caster_boost(statics, state, &spells[idx], ti, own, &helpers)
+                    plan_caster_boost(statics, state, si, &spells[idx], ti, own, &helpers)
                 } else {
                     (0, 0, 0)
                 };
@@ -4818,7 +4823,7 @@ fn cast_phase(
                 // unpriced cast draws no counter, ai_spell.gd:518-527).
                 let i = if rule_on(seams.rules_epoch, EPOCH_51_CASTER_INTERFERENCE) {
                     plan_interference(
-                        cast_ev_of(statics, state, &spells[idx], ti),
+                        cast_ev_of(statics, state, si, &spells[idx], ti),
                         enemies.iter().map(|(_, t)| *t).sum(),
                         b,
                     )
