@@ -1543,6 +1543,7 @@ mod caster_interference;
 mod cast_ev;
 mod cast_kind;
 mod casting_debuff;
+mod casting_mod;
 mod courage_buff;
 mod utility_buff_family;
 mod utility_spells;

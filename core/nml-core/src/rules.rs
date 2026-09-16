@@ -318,14 +318,19 @@ pub struct Spell {
     pub grants_rule: String,
 }
 
-/// The six `effect.modifier` fields `BattleSim._apply_cast_effect` reads
+/// The `effect.modifier` fields `BattleSim._apply_cast_effect` reads
 /// (battle_sim.gd:976-982); everything else in that dict is a no-op there.
+/// `casting_mod` rides along parsed (the catalogue's 18 debuff rows carry it)
+/// but only from epoch 62 does `apply_cast_effect` WRITE it into the target's
+/// `Mods.casting` snapshot slot — below 62 the field parses and then sits
+/// inert, so every earlier record replays byte-exact.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SpellModifier {
     pub present: bool,
     pub hit_mod: f64,
     pub def_mod: f64,
     pub morale_mod: f64,
+    pub casting_mod: f64,
     pub range_in: f64,
     pub advance_in: f64,
     pub rush_in: f64,
@@ -481,6 +486,7 @@ fn modifier_of(m: Option<&Value>) -> SpellModifier {
         hit_mod: f("hit_mod"),
         def_mod: f("def_mod"),
         morale_mod: f("morale_mod"),
+        casting_mod: f("casting_mod"),
         range_in: f("range_in"),
         advance_in: f("advance_in"),
         rush_in: f("rush_in"),

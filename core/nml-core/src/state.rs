@@ -317,7 +317,7 @@ impl Roster {
 
 /// Per-unit modifier snapshot — `mods` is per clone, `mods_base` is the
 /// capture-time reading and is never written (battle_sim.gd:475-479).
-/// All six are FLOATS, not integers: `BattleSim._apply_cast_effect`
+/// All are FLOATS, not integers: `BattleSim._apply_cast_effect`
 /// (battle_sim.gd:976-982) adds `landed * modifier`, and `landed` is the D3
 /// weight times the cast chance — a third of a half. A snapshot that has never
 /// been cast on carries plain `0`, which is why the M1-2 port could type the
@@ -330,6 +330,13 @@ pub struct Mods {
     pub def: f64,
     #[serde(default)]
     pub morale: f64,
+    /// The cast-roll snapshot slot (epoch 62): `apply_cast_effect` writes the
+    /// scaled spell `casting_mod` here, `casting_net_of` folds the ROUNDED
+    /// reading into the cast target — mirror of the unit-rule ledger's
+    /// `LiveMod.casting_mod` (EPOCH_6), for the spell-side debuff family.
+    /// Written only from epoch 62 on; earlier records carry plain 0.
+    #[serde(default)]
+    pub casting: f64,
     #[serde(default)]
     pub range_in: f64,
     #[serde(default)]

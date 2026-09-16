@@ -469,6 +469,31 @@ pub const EPOCH_55_FORTIFIED_AURA: u32 = 55;
 /// the literal `61` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_61_PRECISION_MARKERS: u32 = 61;
 
+/// The CASTING MOD SNAPSHOT gate (16.09., D-MAGIC step 3): the spell-side
+/// `effect.modifier.casting_mod` family (18 catalogue rows across gf/aof/
+/// aofr/aofs/gff — "Sky Blaze", "Hex" & kin, kind "debuff", word-identical
+/// text, registry numeric everywhere) finally lands in the CORE imagination.
+/// Until now `modifier_of` dropped the field: a landed casting debuff priced
+/// at EV 0 was still picked (best_spell_target accepts ev 0 > -1) but the
+/// "scaled stamp on the target's mods" wrote NOTHING a cast roll could read.
+/// From 62 the generic modifier arm writes `scale * casting_mod` into the NEW
+/// `Mods.casting` snapshot slot (gated write: io.rs's `mods` record export
+/// must stay byte-exact below the gate), and `casting_net_of` folds the
+/// ROUNDED snapshot reading into the cast target next to the EPOCH_6
+/// unit-rule ledger — the table's own round-at-read shape
+/// (ai_spell.gd:105-130: `casting_net = round(mods.casting)`). A landed
+/// debuff can never see its own caster (the snapshot walk reads only the
+/// caster's own chain), so there is no self-feedback loop. Below 62 the slot
+/// is never written and the fold adds nothing — every recorded corpus
+/// replays byte-exact. `62` is one past every epoch present at the rebase
+/// (61 = `EPOCH_61_PRECISION_MARKERS`), and the value `CURRENT_RULES_EPOCH`
+/// is bumped to in the same change. Every call site reads THIS constant, not
+/// the literal `62` or `CURRENT_RULES_EPOCH`. MIRROR HOLD: core-only PR —
+/// `battle_sim.gd` has no casting snapshot slot yet, so bumping
+/// `act_recorder.gd` here would stamp new table recordings 62 while their
+/// replay never had the behaviour; the mirror bumps with the table-side port.
+pub const EPOCH_62_CASTING_MOD: u32 = 62;
+
 /// The PRECISION DEBUFF gate (15.09., the precision text sweep — row
 /// `Precision Debuff`; gf Infected Colonies / Alien Hives, aof Deep-Sea
 /// Elves / Dragon Empire / Kingdom of Angels / High Elves, word-identical
@@ -490,7 +515,7 @@ pub const EPOCH_61_PRECISION_MARKERS: u32 = 61;
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
 /// reads THIS constant, not the literal `58` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_58_PRECISION_DEBUFF: u32 = 58;
-pub const CURRENT_RULES_EPOCH: u32 = 61;
+pub const CURRENT_RULES_EPOCH: u32 = 62;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1668,7 +1693,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 61, "the live epoch is 61 (EPOCH_61_PRECISION_MARKERS; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 62, "the live epoch is 62 (EPOCH_62_CASTING_MOD; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1678,11 +1703,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":61}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":62}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 61"
+            "a fresh play_game() now stamps the bumped epoch, 62"
         );
     }
 
