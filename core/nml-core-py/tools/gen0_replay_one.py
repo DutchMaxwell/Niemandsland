@@ -38,7 +38,13 @@ G = {"dice": 0, "rows": [], "i": 0, "cmp": 0, "ok": 0, "hand": 0}
 KNOBS = dict(selfplay.LEGACY_FIDELITY_KNOBS, sidecars=False, hero_attach="table",
              dice="table", charge_landing="table", sighting="model", cond_ap=True,
              objectives="rulebook", deployment="arena", engage_fold=True,
-             versatile_reach=False)
+             versatile_reach=False,
+             # Gen-8 (16.09.): `replay_knobs` forwards ONLY keys pinned here, so a
+             # record's `mission` stamp was dropped and every non-duel mission
+             # replayed as a duel (3,502 of 4,350 games diverged at seq 0, "menu
+             # width"). The recorder stamps `mission` only when != "duel", so the
+             # pin IS the recorder's default; a silent record keeps replaying a duel.
+             mission="duel")
 
 
 def replay_knobs(kn: dict, prescreen: dict | None = None, record: dict | None = None) -> dict:
