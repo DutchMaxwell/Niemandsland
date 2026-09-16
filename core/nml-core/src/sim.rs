@@ -30,7 +30,7 @@ use crate::acts::{
     EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA, EPOCH_38_WATCHBORN_LATCH,
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
-    EPOCH_61_PRECISION_MARKERS,
+    EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -4707,6 +4707,7 @@ fn apply_cast_effect(
     ti: usize,
     entry: &Spell,
     scale: f64,
+    seams: Seams,
     rng: Option<&mut GodotRng>,
 ) {
     if entry.effect_kind == "utility" {
@@ -4752,6 +4753,12 @@ fn apply_cast_effect(
     if entry.beneficiary != "attackers" {
         mods.hit += scale * m.hit_mod;
         mods.def += scale * m.def_mod;
+        // EPOCH_62_CASTING_MOD: the debuff's cast-roll shift lands in its own
+        // snapshot slot (gated — the `mods` record export must stay
+        // byte-exact below the gate); `casting_net_of` folds it at read.
+        if rule_on(seams.rules_epoch, EPOCH_62_CASTING_MOD) {
+            mods.casting += scale * m.casting_mod;
+        }
     }
     mods.morale += scale * m.morale_mod;
     mods.range_in += scale * m.range_in;
@@ -4840,6 +4847,22 @@ fn casting_net_of(statics: &[UnitStatic], state: &State, ci: usize, seams: Seams
                     &format!(
                         "{:+} to {}'s cast target (casting_net now {net})",
                         r.casting_mod, statics[state.roster.profile[ci]].name
+                    ),
+                );
+            }
+        }
+        // EPOCH_62_CASTING_MOD: the spell-side snapshot slot joins the ledger
+        // walk — ROUNDED at read, the table's own shape (ai_spell.gd:105-130).
+        if rule_on(seams.rules_epoch, EPOCH_62_CASTING_MOD) {
+            let m = state.mods[u].casting.round() as i64;
+            if m != 0 {
+                net += m;
+                trace_rule(
+                    "cast",
+                    "Casting modifier",
+                    &format!(
+                        "{:+} to {}'s cast target (casting_net now {net})",
+                        m, statics[state.roster.profile[ci]].name
                     ),
                 );
             }
@@ -5007,7 +5030,7 @@ fn cast_phase(
             trace_rule("cast", "Spell Conduit", &line);
             state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Conduit", "log": line, "kind": spells[idx].effect_kind })));
         }
-        apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success, rng.as_deref_mut());
+        apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success, seams, rng.as_deref_mut());
         if cost.is_none() {
             cost = Some(spells[idx].threshold);
             cast_kind = &spells[idx].effect_kind;
@@ -7733,7 +7756,7 @@ mod cast_fold_tests {
     fn a_furious_grant_reaches_this_rounds_melee_and_is_spent_by_it() {
         let (mut st, statics) = host_and_caster_hero();
         let grant = Spell { effect_kind: "buff".into(), grants_rule: "Furious".into(), ..spell() };
-        apply_cast_effect(&statics, &mut st, 0, &grant, 1.0, None);
+        apply_cast_effect(&statics, &mut st, 0, &grant, 1.0, Seams::default(), None);
         assert!(crate::mods::granted(&st, 0, "Furious"), "the cast lands the grant on its target");
 
         let base = ctx_of(&statics[st.roster.profile[0]], &st, 0);

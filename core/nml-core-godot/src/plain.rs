@@ -205,6 +205,9 @@ fn mods_of(d: &VarDictionary) -> Mods {
         hit: dnum(d, "hit", 0.0),
         def: dnum(d, "def", 0.0),
         morale: dnum(d, "morale", 0.0),
+        // Below the snapshot gate the slot is always 0 — the table's `mods`
+        // dict carries no casting key yet, the default keeps that reading.
+        casting: dnum(d, "casting", 0.0),
         range_in: dnum(d, "range_in", 0.0),
         advance: dnum(d, "advance", 0.0),
         rush: dnum(d, "rush", 0.0),
