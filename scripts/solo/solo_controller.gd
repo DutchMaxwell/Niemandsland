@@ -4501,8 +4501,25 @@ func _spell_ev_for(unit: GameUnit, _member: GameUnit, entry: Dictionary, cand: G
 		return AiSpell.spell_damage_ev(int(effect.get("hits", 0)), def_ctx, facets)
 	if kind == "buff":
 		# Buff value = expected delta on the buffed unit's OWN next attack (design §4): the better of
-		# its shooting (at its current enemy gap) and its melee swing.
-		return _modifier_value_on_attack(cand, effect, false)
+		# its shooting (at its current enemy gap) and its melee swing — D-MAGIC step 2b, parity with
+		# the core's #1012 `modifier_cast_ev_of`: a `def_mod` buff is priced in its DEFENSE ROLE
+		# (the nearest enemy's attack INTO the bearer, sign-flipped to bearer gain) and SUMMED with
+		# the hit leg. Folding def_mod onto the NEAREST ENEMY's own defense priced a friendly +1
+		# def buff NEGATIVE, so the table AI never boosted it (the core is right: a def buff helps
+		# the bearer when it is attacked). Debuffs keep the whole-modifier fold below, untouched.
+		var modifier: Dictionary = effect.get("modifier", {})
+		var hit_effect := effect
+		if modifier.has("def_mod"):
+			hit_effect = effect.duplicate()
+			var m := (hit_effect["modifier"] as Dictionary).duplicate()
+			m.erase("def_mod")
+			hit_effect["modifier"] = m
+		var value := _modifier_value_on_attack(cand, hit_effect, false)
+		if modifier.has("def_mod"):
+			var def_effect := effect.duplicate()
+			def_effect["modifier"] = {"def_mod": modifier["def_mod"]}
+			value += _modifier_value_on_defense(cand, def_effect)
+		return value
 	if kind == "debuff":
 		if str(effect.get("beneficiary", "")) == "attackers":
 			# Our attackers gain the effect against the target: proxy = the ACTIVATING unit's own
@@ -4527,10 +4544,10 @@ func _modifier_delta(attacker: GameUnit, defender: GameUnit, effect: Dictionary)
 	return AiSpell.spell_modifier_delta(melee, att, def_ctx, effect, false, 0.0, true)
 
 
-## The value of a modifier/grant on `cand`'s OWN attack (vs its nearest enemy): max of the shooting
-## delta (when in reach) and the melee delta. `flip_sides` evaluates the effect on an ENEMY unit's
-## attack (debuffs on the target itself) — the enemy of that unit is then OUR side's nearest unit.
-func _modifier_value_on_attack(cand: GameUnit, effect: Dictionary, flip_sides: bool) -> float:
+## The nearest live enemy of `cand` on the relevant side (`flip_sides`: for a debuff ON an enemy
+## unit, "its enemy" is OUR side's nearest unit). Shared by both modifier-value wrappers; the gap
+## the caller needs is the centre distance to the returned unit (deterministic).
+func _nearest_enemy_of(cand: GameUnit, flip_sides: bool) -> GameUnit:
 	var enemy_slot: int = human_slot if not flip_sides else ai_slot
 	var nearest: GameUnit = null
 	var best := INF
@@ -4544,8 +4561,17 @@ func _modifier_value_on_attack(cand: GameUnit, effect: Dictionary, flip_sides: b
 		if d < best:
 			best = d
 			nearest = eu
+	return nearest
+
+
+## The value of a modifier/grant on `cand`'s OWN attack (vs its nearest enemy): max of the shooting
+## delta (when in reach) and the melee delta. `flip_sides` evaluates the effect on an ENEMY unit's
+## attack (debuffs on the target itself) — the enemy of that unit is then OUR side's nearest unit.
+func _modifier_value_on_attack(cand: GameUnit, effect: Dictionary, flip_sides: bool) -> float:
+	var nearest := _nearest_enemy_of(cand, flip_sides)
 	if nearest == null:
 		return 0.0
+	var best := MoveIntent.distance_inches(unit_centre(cand), unit_centre(nearest))
 	var weapons := _unit_weapons(cand)
 	var att := AiEv.ctx_for(cand, false, 0)
 	var def_ctx := AiEv.ctx_for(nearest, majority_in_cover(nearest), 0)
@@ -4556,6 +4582,28 @@ func _modifier_value_on_attack(cand: GameUnit, effect: Dictionary, flip_sides: b
 	var melee_delta := AiSpell.spell_modifier_delta(melee, att, def_ctx, effect, false, 0.0, true) \
 		if not melee.is_empty() else 0.0
 	return maxf(shoot_delta, melee_delta)
+
+
+## D-MAGIC step 2b (parity with the core's #1012 `modifier_cast_ev_of`): the DEFENSE-ROLE leg of a
+## `def_mod` buff — the nearest enemy's attack INTO the bearer (its shooting at the current gap and
+## its melee swing, the better of the two = the bearer's larger damage reduction), sign-flipped from
+## the attacker's delta to bearer gain: `maxf(-shoot, -melee)`, the core's `(-sh).max(-ml)`. A maxf
+## over the ATTACKER's deltas would pick the empty mode's 0.0 and price every def buff 0.
+func _modifier_value_on_defense(cand: GameUnit, effect: Dictionary, flip_sides: bool = false) -> float:
+	var nearest := _nearest_enemy_of(cand, flip_sides)
+	if nearest == null:
+		return 0.0
+	var best := MoveIntent.distance_inches(unit_centre(nearest), unit_centre(cand))
+	var weapons := _unit_weapons(nearest)
+	var att := AiEv.ctx_for(nearest, false, 0)
+	var def_ctx := AiEv.ctx_for(cand, majority_in_cover(cand), 0)
+	var ranged := AiEv.stamp_sergeant(filter_limited(nearest, AiShooting.profiles_in_range(weapons, best)), nearest)
+	var shoot_delta := AiSpell.spell_modifier_delta(ranged, att, def_ctx, effect, true, best, false) \
+		if not ranged.is_empty() else 0.0
+	var melee := AiEv.stamp_sergeant(filter_limited(nearest, AiShooting.melee_profiles(weapons)), nearest)
+	var melee_delta := AiSpell.spell_modifier_delta(melee, att, def_ctx, effect, false, 0.0, true) \
+		if not melee.is_empty() else 0.0
+	return maxf(-shoot_delta, -melee_delta)
 
 
 ## The caster units of `slot` holding spell tokens within the 18" boost/interference aura of
