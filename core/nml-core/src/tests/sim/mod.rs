@@ -1609,6 +1609,7 @@ mod second_wind_score;
 mod surge_mark;
 mod spell_accumulator;
 mod spell_conduit;
+mod spell_grants_batch1;
 mod split_fire;
 mod strafing;
 mod terrain_debuff;
