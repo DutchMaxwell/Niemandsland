@@ -15,8 +15,8 @@ use std::rc::Rc;
 use crate::combat::{
     at_or_below_half, block_chance, effective_attacks, melee_ev, morale_target, shielded_defense,
     shoot_ev, should_test_shooting_morale, shrouded_reach, RAVAGE_WOUND_TARGET,
-    ANGELIC_BLESSING_BOOST_TARGET_SPELL,
-    CURSED_UNDEAD_BOOST_TARGET, HOLD_THE_LINE_BOOST_MORALE_BONUS, SELF_REPAIR_BOOST_TARGET,
+    ANGELIC_BLESSING_BOOST_TARGET_SPELL, BEST_HIT_TARGET, CURSED_UNDEAD_BOOST_TARGET,
+    HOLD_THE_LINE_BOOST_MORALE_BONUS, SELF_REPAIR_BOOST_TARGET, UNMODIFIED_SIX,
 };
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
@@ -3196,21 +3196,186 @@ fn caster_boost_pool(
 }
 
 
-/// The cast's own EV — the damage EV the core can compute, 0.0 for
-/// everything else: the table's `chosen_ev` (solo_controller.gd:4345), the
-/// one number BOTH token economies price the attempt at (the boost values
-/// LANDING it through `boost_value_of`, the interference PREVENTING it
-/// raw — the table hands the same `chosen_ev` to both planners).
-fn cast_ev_of(
+/// The cast's own EV — the damage EV the core can compute for a damage
+/// spell, the P3 modifier delta for a buff/debuff, 0.0 for everything else:
+/// the table's `chosen_ev` (solo_controller.gd:4345), the one number BOTH
+/// token economies price the attempt at (the boost values LANDING it through
+/// `boost_value_of`, the interference PREVENTING it raw — the table hands
+/// the same `chosen_ev` to both planners).
+///
+/// D-MAGIC step 2 — the modifier spells now have a term. The pairing
+/// decision (the ONE deviation from the table, PR body in full): the
+/// table's own buff pairing (`_modifier_value_on_attack(cand, effect,
+/// false)`, solo_controller.gd:4530-4556) folds def_mod onto the NEAREST
+/// ENEMY's defense, pricing a friendly def buff NEGATIVE — boost 0 by
+/// construction. The core prices def_mod in its DEFENSE ROLE
+/// (ai_spell.gd:353 "defense: the bearer defends"): the nearest opposing
+/// unit's attack INTO the bearer, delta from the attacker's perspective,
+/// negated for a buff — the brief's "EV delta of the modifier for the
+/// caster's own side". The fold arithmetic itself is the byte-faithful
+/// `spell_modifier_delta` port (clamp [2,6], int() truncation, the EV
+/// chain, morale_mod -> 0).
+pub(crate) fn cast_ev_of(
     statics: &[UnitStatic],
     state: &State,
+    si: usize,
     entry: &Spell,
     ti: usize,
 ) -> f64 {
     if entry.effect_kind == "damage" {
         spell_damage_ev_of(entry, &ctx_of(&statics[state.roster.profile[ti]], state, ti))
     } else {
-        0.0
+        modifier_cast_ev_of(statics, state, si, entry, ti)
+    }
+}
+
+/// D-MAGIC step 2 — the buff/debuff cast's EV, the table's `_spell_ev_for`
+/// non-damage arms (solo_controller.gd:4496-4527) over the P3 primitive
+/// `modifier_delta_of` (ai_spell.gd:255-304). Both ctxs ride
+/// `ctx_live(..., CURRENT_RULES_EPOCH)` (the `volley_ev` pattern): the
+/// search's EV is not replayed and a captured ledger is always empty, so
+/// landed live buffs compose into the imagined fold.
+fn modifier_cast_ev_of(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    entry: &Spell,
+    ti: usize,
+) -> f64 {
+    let m = &entry.modifier;
+    if !m.present {
+        return 0.0;
+    }
+    // `int()` truncation (ai_spell.gd:269, :272); morale_mod has NO term in
+    // the chain (ai_spell.gd:250-252) — a morale-only modifier prices 0.0.
+    let hit = m.hit_mod as i64;
+    let dm = m.def_mod as i64;
+    if hit == 0 && dm == 0 {
+        return 0.0;
+    }
+    match entry.effect_kind.as_str() {
+        "buff" => {
+            // Buff value = the delta on the BEARER's own side (the table's
+            // max-of-shooting-and-melee shape, `_modifier_value_on_attack`
+            // :4530-4556): the hit_mod leg on the bearer's own next attack
+            // (max of the two mode deltas, the table's maxf verbatim), the
+            // def_mod leg in its DEFENSE ROLE (see `cast_ev_of`) — the max
+            // runs over the BEARER'S GAIN there (the damage reduction per
+            // enemy mode): maxf over the ATTACKER's deltas would pick the
+            // empty melee leg's 0.0 and price every def buff 0.
+            let bearer = ti;
+            let Some(ne) = nearest_enemy(state, bearer) else { return 0.0; };
+            let d = geom::dist_in(&state.positions[bearer], &state.positions[ne]);
+            let hit_leg = if hit != 0 {
+                let sh = modifier_delta_of(statics, state, bearer, ne, hit, 0, true, d, false);
+                let ml = modifier_delta_of(statics, state, bearer, ne, hit, 0, false, 0.0, true);
+                sh.max(ml)
+            } else {
+                0.0
+            };
+            let def_leg = if dm != 0 {
+                let sh = modifier_delta_of(statics, state, ne, bearer, 0, dm, true, d, false);
+                let ml = modifier_delta_of(statics, state, ne, bearer, 0, dm, false, 0.0, true);
+                (-sh).max(-ml)
+            } else {
+                0.0
+            };
+            hit_leg + def_leg
+        }
+        "debuff" => {
+            if entry.beneficiary == "attackers" {
+                // The table's `_modifier_delta(unit, cand, effect)` VERBATIM
+                // (solo_controller.gd:4518-4527): the activating unit's own
+                // attack into the target, the WHOLE modifier folded on ONE
+                // pairing, ranged-if-in-range-else-melee (charging) — no max.
+                let d = geom::dist_in(&state.positions[si], &state.positions[ti]);
+                modifier_delta_auto(statics, state, si, ti, hit, dm, d)
+            } else {
+                // The penalty lands on the target's own attacks:
+                // `-_modifier_value_on_attack(cand, effect, true)` — the
+                // debuffed unit's own attack into ITS nearest enemy, both
+                // sides maxed, whole modifier folded, negated (the table's
+                // maxf over the deltas VERBATIM, empty mode prices 0.0).
+                let Some(our) = nearest_enemy(state, ti) else { return 0.0; };
+                let d = geom::dist_in(&state.positions[ti], &state.positions[our]);
+                let sh = modifier_delta_of(statics, state, ti, our, hit, dm, true, d, false);
+                let ml = modifier_delta_of(statics, state, ti, our, hit, dm, false, 0.0, true);
+                -(sh.max(ml))
+            }
+        }
+        _ => 0.0,
+    }
+}
+
+/// The P3 fold primitive — `AiSpell.spell_modifier_delta` (ai_spell.gd:
+/// 255-304) over the core's own EV chain: EV(with the ±hit / ±def fold) −
+/// EV(without) over the SAME pairing, the ranged side at `dist_in` or the
+/// melee side charging. The fold: `att.hit_mod += hit` (ai_ev.gd's
+/// net-modifier composition, combat.rs `profile_ev`) and
+/// `def2.defense = clamp(defense - dm, BEST_HIT_TARGET, UNMODIFIED_SIX)`
+/// — the shielded_defense arithmetic, clamped [2,6], BASE ctx UNCLAMPED
+/// (:272-275 clamps only the modified copy).
+#[allow(clippy::too_many_arguments)]
+fn modifier_delta_of(
+    statics: &[UnitStatic],
+    state: &State,
+    att_i: usize,
+    def_i: usize,
+    hit: i64,
+    dm: i64,
+    ranged: bool,
+    dist_in: f64,
+    charging: bool,
+) -> f64 {
+    if hit == 0 && dm == 0 {
+        return 0.0;
+    }
+    let us = &statics[state.roster.profile[att_i]];
+    let ut = &statics[state.roster.profile[def_i]];
+    let melee = !ranged;
+    let att_base =
+        ctx_live(ctx_of(us, state, att_i), statics, state, att_i, melee, CURRENT_RULES_EPOCH);
+    let def_base =
+        ctx_live(ctx_of(ut, state, def_i), statics, state, def_i, melee, CURRENT_RULES_EPOCH);
+    let mut att2 = att_base;
+    let mut def2 = def_base;
+    if hit != 0 {
+        att2.hit_mod += hit;
+    }
+    if dm != 0 {
+        def2.defense = (def2.defense - dm).clamp(BEST_HIT_TARGET, UNMODIFIED_SIX);
+    }
+    let mut sc = Scratch::default();
+    if ranged {
+        profiles_of(us, state.alive[att_i], dist_in, &mut sc);
+        shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att2, &def2, dist_in)
+            - shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att_base, &def_base, dist_in)
+    } else {
+        melee_profiles_of(us, state.alive[att_i], &mut sc);
+        melee_ev(&us.melee, &sc.attacks, &att2, &def2, charging)
+            - melee_ev(&us.melee, &sc.attacks, &att_base, &def_base, charging)
+    }
+}
+
+/// `_modifier_delta`'s own side choice (:4522-4527): the ranged delta when
+/// the attacker holds a profile in range at `dist_in`, else its melee swing
+/// (charging). ONE call, not a max.
+fn modifier_delta_auto(
+    statics: &[UnitStatic],
+    state: &State,
+    att_i: usize,
+    def_i: usize,
+    hit: i64,
+    dm: i64,
+    dist_in: f64,
+) -> f64 {
+    let us = &statics[state.roster.profile[att_i]];
+    let mut sc = Scratch::default();
+    profiles_of(us, state.alive[att_i], dist_in, &mut sc);
+    if !sc.keep.is_empty() {
+        modifier_delta_of(statics, state, att_i, def_i, hit, dm, true, dist_in, false)
+    } else {
+        modifier_delta_of(statics, state, att_i, def_i, hit, dm, false, 0.0, true)
     }
 }
 
@@ -3222,16 +3387,17 @@ fn cast_ev_of(
 /// for everything else. The draw mirrors `_draw_aura_tokens`' own-front
 /// order. Returns (boost, own draw, helper draw); the caller folds the final
 /// roll target and owns the frozen `EPOCH_48_CASTER_BOOST` gate.
-fn plan_caster_boost(
+pub(crate) fn plan_caster_boost(
     statics: &[UnitStatic],
     state: &State,
+    si: usize,
     entry: &Spell,
     ti: usize,
     own: i64,
     helpers: &[(usize, i64)],
 ) -> (i64, i64, i64) {
     let own_left = (own - entry.threshold).max(0);
-    let ev = cast_ev_of(statics, state, entry, ti);
+    let ev = cast_ev_of(statics, state, si, entry, ti);
     let boost = plan_boost(
         boost_value_of(ev),
         own_left + helpers.iter().map(|(_, t)| *t).sum::<i64>(),
@@ -4809,7 +4975,7 @@ fn cast_phase(
         let plan = boost_plan
             .get_or_insert_with(|| {
                 let (b, o, h) = if rule_on(seams.rules_epoch, EPOCH_48_CASTER_BOOST) {
-                    plan_caster_boost(statics, state, &spells[idx], ti, own, &helpers)
+                    plan_caster_boost(statics, state, si, &spells[idx], ti, own, &helpers)
                 } else {
                     (0, 0, 0)
                 };
@@ -4818,7 +4984,7 @@ fn cast_phase(
                 // unpriced cast draws no counter, ai_spell.gd:518-527).
                 let i = if rule_on(seams.rules_epoch, EPOCH_51_CASTER_INTERFERENCE) {
                     plan_interference(
-                        cast_ev_of(statics, state, &spells[idx], ti),
+                        cast_ev_of(statics, state, si, &spells[idx], ti),
                         enemies.iter().map(|(_, t)| *t).sum(),
                         b,
                     )
