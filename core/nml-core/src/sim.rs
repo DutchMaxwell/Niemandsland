@@ -3305,16 +3305,40 @@ fn modifier_cast_ev_of(
                 let d = geom::dist_in(&state.positions[si], &state.positions[ti]);
                 modifier_delta_auto(statics, state, si, ti, hit, dm, d)
             } else {
-                // The penalty lands on the target's own attacks:
-                // `-_modifier_value_on_attack(cand, effect, true)` — the
-                // debuffed unit's own attack into ITS nearest enemy, both
-                // sides maxed, whole modifier folded, negated (the table's
-                // maxf over the deltas VERBATIM, empty mode prices 0.0).
+                // The penalty lands on the target's OWN attacks. D-MAGIC step
+                // 2d = the table's step 2c (solo_controller.gd:4529-4552,
+                // PR #1020) number for number. The HIT leg picks the mode by
+                // BASELINE: max over the USABLE modes of (baseline EV into
+                // our nearest unit minus the same-mode malus) — the old
+                // `-(sh.max(ml))` was #1012's buff fold verbatim, and for a
+                // debuff's negative deltas the maxf picks the mode that LOSES
+                // LEAST while an unusable ranged mode's 0.0 masked the melee
+                // leg. A def_mod debuff lands on the DEFENDER of that attack
+                // (= our unit), so folding it into the target's attack priced
+                // a good debuff NEGATIVE (the #1014 bug class) — it is priced
+                // from OUR side (our nearest unit's attack INTO the target,
+                // the target's defense worsened, sign = caster gain) and
+                // SUMMED with the hit leg; the legs split the modifier.
                 let Some(our) = nearest_enemy(state, ti) else { return 0.0; };
                 let d = geom::dist_in(&state.positions[ti], &state.positions[our]);
-                let sh = modifier_delta_of(statics, state, ti, our, hit, dm, true, d, false);
-                let ml = modifier_delta_of(statics, state, ti, our, hit, dm, false, 0.0, true);
-                -(sh.max(ml)) + move_gain
+                let hit_leg = if hit != 0 {
+                    let sh = modifier_delta_usable_of(statics, state, ti, our, hit, 0, true, d)
+                        .map(|v| -v);
+                    let ml =
+                        modifier_delta_usable_of(statics, state, ti, our, hit, 0, false, 0.0)
+                            .map(|v| -v);
+                    max_usable_delta([sh, ml])
+                } else {
+                    0.0
+                };
+                let def_leg = if dm != 0 {
+                    let sh = modifier_delta_usable_of(statics, state, our, ti, 0, dm, true, d);
+                    let ml = modifier_delta_usable_of(statics, state, our, ti, 0, dm, false, 0.0);
+                    max_usable_delta([sh, ml])
+                } else {
+                    0.0
+                };
+                hit_leg + def_leg + move_gain
             }
         }
         _ => 0.0,
@@ -3390,6 +3414,48 @@ fn modifier_delta_auto(
         modifier_delta_of(statics, state, att_i, def_i, hit, dm, true, dist_in, false)
     } else {
         modifier_delta_of(statics, state, att_i, def_i, hit, dm, false, 0.0, true)
+    }
+}
+
+/// The debuff legs' usable-mode gate (D-MAGIC step 2d = the table's step 2c,
+/// solo_controller.gd:4630-4649): the mode's delta when the mode is USABLE —
+/// a ranged mode holds a profile in range at `dist_in`, a melee mode has
+/// strike reach ("Who Can Strike", `striking_models`) — `None` when it does
+/// not. An unusable mode is not a mode: it must not enter the max (its 0.0
+/// masked the melee leg on main, the CCW-only target priced -0.0).
+#[allow(clippy::too_many_arguments)]
+fn modifier_delta_usable_of(
+    statics: &[UnitStatic],
+    state: &State,
+    att_i: usize,
+    def_i: usize,
+    hit: i64,
+    dm: i64,
+    ranged: bool,
+    dist_in: f64,
+) -> Option<f64> {
+    let us = &statics[state.roster.profile[att_i]];
+    let mut sc = Scratch::default();
+    if ranged {
+        profiles_of(us, state.alive[att_i], dist_in, &mut sc);
+        if sc.keep.is_empty() {
+            return None;
+        }
+    } else if crate::combat::striking_models(&state.positions[att_i], &state.positions[def_i]) <= 0
+    {
+        return None;
+    }
+    Some(modifier_delta_of(statics, state, att_i, def_i, hit, dm, ranged, dist_in, !ranged))
+}
+
+/// The max over the legs' usable deltas (the table's `value == -INF` guard
+/// verbatim, solo_controller.gd:4646); BOTH unusable is legitimately 0.0 — a
+/// target that cannot attack us cannot be made worse.
+fn max_usable_delta(legs: [Option<f64>; 2]) -> f64 {
+    match legs {
+        [None, None] => 0.0,
+        [Some(a), None] | [None, Some(a)] => a,
+        [Some(a), Some(b)] => a.max(b),
     }
 }
 
