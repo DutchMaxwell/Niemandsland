@@ -1189,9 +1189,20 @@ static func _spell_damage_ev_of(entry: Dictionary, def_ctx: Dictionary) -> float
 ##     spend is not representable. The attempt therefore costs the threshold of
 ##     the D3=1 face (the first of three equally likely faces), and the stamped
 ##     event names that same spell. With an rng the rolled face pays, exactly.
-##   * BOOST / INTERFERENCE OUT OF SCOPE. cast_success_chance(0, 0) always —
-##     the same 4+ spell_ev_of prices with. The engine's token economy (helper
-##     tokens in 18" LoS) is a later step.
+##   * BOOST / INTERFERENCE IN. The token economy prices the attempt exactly
+##     like the table (solo_controller.gd:4336-4390) and the core (sim.rs
+##     plan_caster_boost / interference_pool): the caster's own leftover
+##     tokens are the FIRST boost source, friendly casters within 18" in LoS
+##     lend next (nearest-first draw), and the opposing casters' pool
+##     counters at the cast's own EV (plan_interference — an unpriced cast
+##     draws no counter). Planned ONCE at the first face that produces a
+##     pick, the face that names the attempt; the spend rides the payment
+##     block below in the table's order (threshold -> own -> helpers ->
+##     enemies, all before the roll). The sim has no modifier-EV chain, so a
+##     buff/debuff prices at 0.0 EV — boost_value_of's unpriced stand-in buys
+##     exactly the one coin-flip token, the table's own unpriced-cast clause.
+##     The Spell Accumulator battery is not modeled in the imagination
+##     (casters only).
 ##   * EFFECT COVERAGE. Damage lands as expected wounds; buff/debuff land as
 ##     the six modifier fields the snapshot's "mods" dict carries (hit, def,
 ##     morale, range_in, advance, rush — the mapping of main.gd:3652
@@ -1205,8 +1216,9 @@ static func _spell_damage_ev_of(entry: Dictionary, def_ctx: Dictionary) -> float
 ##   * The attempt is not gated on the ACTION KIND — the engine plans a cast for
 ##     every activation it runs, Advance/Rush/Charge alike. Shaken IS gated (see
 ##     the p.10 check below); that is the one activation the engine skips.
-## Returns the cast event {spell, kind, cost, target, p_success}, or {} on a HOLD
-## (Shaken, no tokens, no caster, no book, no valid spell) — a hold spends nothing.
+## Returns the cast event {spell, kind, cost, target, p_success, boost,
+## interference}, or {} on a HOLD (Shaken, no tokens, no caster, no book, no
+## valid spell) — a hold spends nothing.
 static func _cast_phase(next: Dictionary, actor_key: String,
 		rng: RandomNumberGenerator) -> Dictionary:
 	var units: Dictionary = next["units"]
@@ -1235,6 +1247,7 @@ static func _cast_phase(next: Dictionary, actor_key: String,
 	var faces: Array = [1, 2, 3] if rng == null else [rng.randi_range(1, 3)]
 	var weight := 1.0 / float(faces.size())
 	var event := {}
+	var plan := {}
 	for d3 in faces:
 		var pick := _pick_cast(next, su, actor_key, spells, tokens, int(d3), u.get_caster_value(), origins)
 		if pick.is_empty():
@@ -1244,14 +1257,22 @@ static func _cast_phase(next: Dictionary, actor_key: String,
 		# The +1 rides the origin: the rule's casting_mod folds into the cast
 		# chance only when the cast is made THROUGH the conduit (design #824 §3).
 		var conduit_mod := int(origin.get("mod", 0))
-		var p_success := AiSpell.cast_success_chance(0, 0) if conduit_mod == 0 else \
-			AiSpell.cast_success_chance(0, 0, AiSpell.CAST_BASE_TARGET - conduit_mod)
+		# The boost/interference plan lands at the FIRST pick (the face that
+		# names the attempt and pays for it, like the threshold); the purse
+		# was read once before the loop, so later faces shop with — and roll
+		# with — the attempt's one token decision.
+		if plan.is_empty():
+			plan = _plan_cast_tokens(next, su, pick, tokens)
+		var boost := int(plan["boost"])
+		var interference := int(plan["interference"])
+		var p_success := AiSpell.cast_success_chance(boost, interference) if conduit_mod == 0 else \
+			AiSpell.cast_success_chance(boost, interference, AiSpell.CAST_BASE_TARGET - conduit_mod)
 		_apply_cast_effect(next, str(pick["target"]), entry, weight * p_success, rng)
 		if event.is_empty():   # the FIRST face pays and names the attempt (see above)
 			event = {"spell": str(entry.get("name", "?")),
 				"kind": str((entry.get("effect", {}) as Dictionary).get("kind", "")),
 				"cost": int(entry.get("threshold", 0)), "target": str(pick["target"]),
-				"p_success": p_success}
+				"p_success": p_success, "boost": boost, "interference": interference}
 			# The recorder: the chosen origin rides the cast act (PR 2 replays it).
 			# Absent key = the caster's own position (every legacy byte unchanged).
 			if not bool(origin.get("is_caster", true)):
@@ -1259,8 +1280,98 @@ static func _cast_phase(next: Dictionary, actor_key: String,
 					"position": _centre_of(origin["su"])}
 	if event.is_empty():
 		return {}
-	su["casts"] = maxi(tokens - int(event["cost"]), 0)
+	# SPEND (v3.5.1: the attempt's cost is paid before the roll — one try per
+	# spell), the table's order (solo_controller.gd:4387-4395): the caster's
+	# threshold + own boost draw, then the helpers' and the enemies' draws,
+	# each source paying exactly what the plan drew from it.
+	su["casts"] = maxi(tokens - int(event["cost"]) - int(plan.get("own_draw", 0)), 0)
+	for src in (plan.get("helpers", []) as Array) + (plan.get("enemies", []) as Array):
+		var src_su: Dictionary = (src as Dictionary)["su"]
+		src_su["casts"] = maxi(int(src_su.get("casts", 0)) - int((src as Dictionary)["tokens"]), 0)
 	return event
+
+
+## The token-economy plan for ONE picked cast (the table's planning block,
+## solo_controller.gd:4332-4386): the boost the caster side buys, split into
+## the caster's own draw and the helpers' nearest-first draw, plus the
+## interference the OPPOSING casters' pool buys against the committed boost.
+## Both economies price the attempt at the cast's own EV — the damage EV the
+## sim can compute, 0.0 for everything else (no modifier-EV chain here, so
+## boost_value_of's unpriced stand-in prices a buff/debuff: the one coin-flip
+## token and no more; and plan_interference draws NO counter on an unpriced
+## cast, ai_spell.gd:518-527).
+static func _plan_cast_tokens(state: Dictionary, su: Dictionary, pick: Dictionary,
+		tokens: int) -> Dictionary:
+	var entry: Dictionary = pick["entry"]
+	var kind := str((entry.get("effect", {}) as Dictionary).get("kind", ""))
+	var ev := _spell_damage_ev_of(entry, _ctx_of(state["units"][str(pick["target"])])) \
+		if kind == "damage" else 0.0
+	# Own leftover FIRST (Caster(X) v3.5.1: "may spend any number of spell
+	# tokens" — solo_controller.gd:4336-4342), then the 18" LoS helpers.
+	var own_left := maxi(tokens - int(entry.get("threshold", 0)), 0)
+	var helpers := _cast_token_pool(state, su, true)
+	var helper_pool := 0
+	for h in helpers:
+		helper_pool += int((h as Dictionary)["tokens"])
+	var boost := AiSpell.plan_boost(AiSpell.boost_value_of(ev), own_left + helper_pool)
+	var own_draw := mini(boost, own_left)
+	# The interference pool reads ONCE with the boost purse (the both-AI
+	# auto-plan, solo_controller.gd:4378-4386).
+	var enemies := _cast_token_pool(state, su, false)
+	var enemy_pool := 0
+	for e in enemies:
+		enemy_pool += int((e as Dictionary)["tokens"])
+	var interference := AiSpell.plan_interference(ev, enemy_pool, boost)
+	return {"boost": boost, "own_draw": own_draw,
+		"helpers": _draw_cast_tokens(helpers, boost - own_draw),
+		"enemies": _draw_cast_tokens(enemies, interference),
+		"interference": interference}
+
+
+## The boost/interference aura pool of ONE side: casters holding tokens within
+## the Caster rule's 18" in line of sight of the caster's unit, nearest-first
+## — the table's _aura_casters walk (solo_controller.gd:4685-4729), mirrored
+## for the opposing side as the interference pool (sim.rs interference_pool).
+## The imagination keeps it to real casters (no Spell Accumulator battery) and
+## skips no Shaken gate — a Shaken real caster still lends its own tokens, the
+## table's own reading (NML-936 blocks only the BATTERY's lending).
+static func _cast_token_pool(state: Dictionary, su: Dictionary, same_side: bool) -> Array:
+	var own := int(su.get("player", 0))
+	var out: Array = []
+	for k in state["units"]:
+		var cu: Dictionary = state["units"][k]
+		if cu == su or int(cu.get("alive", 0)) <= 0 or int(cu.get("casts", 0)) <= 0:
+			continue
+		if (int(cu.get("player", 0)) == own) != same_side:
+			continue
+		var gu: GameUnit = cu.get("unit")
+		if gu == null or not gu.is_caster():
+			continue
+		var d := dist_in(su["positions"], cu["positions"])
+		if d > AiSpell.AURA_RANGE_IN + CONTROL_EPS:
+			continue
+		if not sees(su, str(k)) or not _los_clear(state, su, cu):
+			continue
+		out.append({"su": cu, "tokens": int(cu.get("casts", 0)), "d": d})
+	out.sort_custom(func(a, b) -> bool:
+		return float((a as Dictionary)["d"]) < float((b as Dictionary)["d"]))
+	return out
+
+
+## Distribute a total token draw across a pool nearest-first — the sim twin of
+## the table's _draw_aura_tokens (solo_controller.gd:4774-4785). Returns
+## [{su, tokens}] for the units that actually pay.
+static func _draw_cast_tokens(pool: Array, total: int) -> Array:
+	var out: Array = []
+	var left := total
+	for h in pool:
+		if left <= 0:
+			break
+		var take: int = mini(int((h as Dictionary)["tokens"]), left)
+		if take > 0:
+			out.append({"su": (h as Dictionary)["su"], "tokens": take})
+			left -= take
+	return out
 
 
 ## The official cycle for ONE D3 face: walk official_pick_order and return the
