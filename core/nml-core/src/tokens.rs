@@ -23,7 +23,16 @@ use crate::terrain::{gives_cover, is_dangerous, is_difficult, Obb, Terrain, CONT
 use crate::unit::{Ctx, UnitStatic};
 use crate::{IN2M, OBJECTIVE_CONTROL_IN};
 
-pub const N_UNITS: usize = 24;
+/// 16.09. (window 32): 24 was the Gen-0 pad and it silently handed every
+/// 25+-unit table (9.5 % of 2000-pt games, analysis/EV_WINDOW_2026-09-16.md)
+/// to the hand planner. The shipped width-90 ONNX export keeps its own
+/// 24-row window as `V1_ROWS` (the hook refuses above it, as before).
+pub const N_UNITS: usize = 32;
+/// The width-90 (v1) ONNX export's row window: `units24x90`. A v1 consumer
+/// projects the first `V1_ROWS` rows and REFUSES a token set with more live
+/// units — never truncates (a truncated board is a lie, a refusal falls back).
+pub const V1_ROWS: usize = 24;
+const _: () = assert!(N_UNITS >= V1_ROWS, "the core window must not be narrower than the v1 export's");
 pub const N_OBJ: usize = 6;
 pub const N_TERR: usize = 18;
 /// Raised from 80 (NML-1073, `tools/gen0_replay_shards.py` wide-menu RED/
@@ -70,7 +79,7 @@ const VOCAB_N: f32 = 226.0;
 const BAG_PAIRS: usize = 17;
 
 /// One position's export — `Core.policy_tokens` (nml-core-py/src/lib.rs).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tokens {
     pub units: Vec<[f32; F_U]>,
     pub units_mask: Vec<u8>,
@@ -1014,16 +1023,10 @@ mod tests {
     }
 
     /// RED 4: a state over any padding cap is REFUSED, never truncated.
-    #[test]
-    fn overflow_is_refused_not_truncated() {
-        let (base, statics) = fixture();
-        let terrain = terrain_fixture();
-        let cands = cands_fixture();
-
-        // 25 living units: clone unit 0's per-unit data into a fresh 25-key
-        // roster (all pointing at profile 0, so `statics` needs no change).
+    /// `n` living units: clone unit 0's per-unit data into a fresh n-key
+    /// roster (all pointing at profile 0, so `statics` needs no change).
+    fn big_state(base: &State, n: usize) -> State {
         let mut big = base.clone();
-        let n = 25;
         let keys: Vec<String> = (0..n).map(|i| format!("u{i}")).collect();
         big.roster = Rc::new(Roster {
             index: keys.iter().cloned().enumerate().map(|(i, k)| (k, i)).collect(),
@@ -1054,6 +1057,7 @@ mod tests {
         rep!(mods);
         rep!(mods_base);
         rep!(los);
+        rep!(vengeance_markers);   // 16.09.: read by t[90] once the row actually encodes
         rep!(bands);
         rep!(shroud);
         rep!(charge_no_difficult);
@@ -1071,10 +1075,38 @@ mod tests {
         rep!(feats_used);
         big.attached = Rc::new((0..n).map(|_| Vec::new()).collect());
         big.attached_to = Rc::new((0..n).map(|_| None).collect());
+        big
+    }
+
+    /// RED on the 24-row window (16.09.): a 2000-pt AoF table with 25-32
+    /// living units must ENCODE (every row masked in), not fall back.
+    #[test]
+    fn thirty_two_live_units_encode_with_every_row_masked_in() {
+        let (base, statics) = fixture();
+        let terrain = terrain_fixture();
+        let cands = cands_fixture();
+        let mut enc = RowEncoder::new(&repo_root());
+        for n in [25usize, 28, N_UNITS] {
+            let big = big_state(&base, n);
+            let t = build(&big, 1, &statics, &terrain, &mut enc, &cands, 0, false, false, crate::acts::CURRENT_RULES_EPOCH)
+                .unwrap_or_else(|e| panic!("{n} live units must encode, got {e:?}"));
+            assert_eq!(t.units.len(), N_UNITS);
+            assert_eq!(t.units_mask.iter().map(|&m| usize::from(m)).sum::<usize>(), n, "{n} rows masked in");
+        }
+    }
+
+    #[test]
+    fn overflow_is_refused_not_truncated() {
+        let (base, statics) = fixture();
+        let terrain = terrain_fixture();
+        let cands = cands_fixture();
+
+        // N_UNITS + 1 living units must be refused, never truncated.
+        let big = big_state(&base, N_UNITS + 1);
         let mut enc = RowEncoder::new(&repo_root());
         match build(&big, 1, &statics, &terrain, &mut enc, &cands, 0, false, false, crate::acts::CURRENT_RULES_EPOCH) {
-            Err(Unsupported::TooManyUnits(25)) => {}
-            other => panic!("expected TooManyUnits(25), got {other:?}"),
+            Err(Unsupported::TooManyUnits(k)) if k == N_UNITS + 1 => {}
+            other => panic!("expected TooManyUnits({}), got {other:?}", N_UNITS + 1),
         }
 
         // 7 objectives on the ORIGINAL 2-unit state (`markers_meta` stays

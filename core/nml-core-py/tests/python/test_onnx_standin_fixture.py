@@ -28,9 +28,11 @@ GOLDEN = FIXTURES / "golden_standin-v2x2.json"
 PROVENANCE = FIXTURES / "provenance_standin-v2x2.json"
 ONNX = FIXTURES / "standin-v2x2.onnx"
 
-# The export contract mirrors `core/nml-core/src/tokens.rs:26-28`
-# (N_UNITS=24, N_OBJ=6, N_TERR=18) and `:42-45` (F_U=90, F_O=12, F_T=12,
-# F_G=16). A shape drift here is a red test, not a fixture edit.
+# The export contract mirrors the v1 ONNX window in `core/nml-core/src/tokens.rs`
+# (`V1_ROWS`=24 rows — the core's own `N_UNITS` is 32 since 16.09., the hook
+# projects the first 24 and refuses above; N_OBJ=6, N_TERR=18) and the v1 width
+# (`V1_UNITS`=90, F_O=12, F_T=12, F_G=16). A shape drift here is a red test,
+# not a fixture edit.
 N_UNITS, F_U = 24, 90
 N_OBJ, F_O = 6, 12
 N_TERR, F_T = 18, 12
