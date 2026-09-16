@@ -23,13 +23,6 @@ use super::*;
     /// Step 2 must not move the damage path by a hair.
     const PINNED_BOLT_EV: f64 = 0.5;
 
-    fn def4q4() -> UnitStatic {
-        UnitStatic {
-            ctx: crate::unit::Ctx { quality: 4, defense: 4, ..Default::default() },
-            ..UnitStatic::default()
-        }
-    }
-
     /// A shooter: 8 attacks, range 24, AP 0 — the profile the hand numbers
     /// below price (8 shots, quality 4, no weapon rules).
     fn armed() -> UnitStatic {
