@@ -4790,6 +4790,11 @@ fn cast_phase(
     // target), planned ONCE at the first face that produces a pick (the
     // face that names the attempt and pays for it, like the threshold).
     let mut boost_plan: Option<(i64, i64, i64, i64, i64, i64)> = None;
+    // D-MAGIC telemetry (CAST_FORK_2026-09-16.md Finding 2) — the kind stamp
+    // `_spells_by_kind_tally` counts (core_selfplay.gd:74-81): the FIRST
+    // face's spell names the attempt (battle_sim.gd `_cast_phase`'s own
+    // event), and the pushed cast entries carry its `effect_kind`.
+    let mut cast_kind = "";
     for d3 in 1..=3i64 {
         let Some((idx, ti, ou)) =
             pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los, &origins, seams.rules_epoch)
@@ -4834,11 +4839,12 @@ fn cast_phase(
                 statics[state.roster.profile[ci]].name, statics[state.roster.profile[ou]].name, origin_mod
             );
             trace_rule("cast", "Spell Conduit", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Conduit", "log": line })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Conduit", "log": line, "kind": spells[idx].effect_kind })));
         }
         apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success, rng.as_deref_mut());
         if cost.is_none() {
             cost = Some(spells[idx].threshold);
+            cast_kind = &spells[idx].effect_kind;
         }
     }
     if let Some(c) = cost {
@@ -4862,7 +4868,7 @@ fn cast_phase(
                 statics[state.roster.profile[*u]].name, take, statics[state.roster.profile[ci]].name
             );
             lend_log.push(line.clone());
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line, "kind": cast_kind })));
         }
         // Wave 6 (port-caster-boost) — the BOOST tokens ride the same spend
         // order: the caster's own leftover first, then the helpers
@@ -4882,7 +4888,7 @@ fn cast_phase(
             }
             let line = format!("Caster: {} tokens spent (own {}, helpers {}), target 4+ -> {}+", boost, bown, boost - bown, target);
             trace_rule("cast", "Caster", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line, "kind": cast_kind })));
         }
         // Wave 6 (port-caster-interference) — the OPPOSING casters' tokens
         // ride the same payment block, AFTER the boost (the table spends
@@ -4906,7 +4912,7 @@ fn cast_phase(
                 inter, from.join(", "), itarget, ifinal
             );
             trace_rule("cast", "Caster", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line, "kind": cast_kind })));
         }
     }
 }
