@@ -1,7 +1,7 @@
 class_name GrassField
 extends MultiMeshInstance3D
 ## Area-wide grass tufts for the grassland biome: one MultiMesh of small crossed
-## alpha-scissor quads (5-10 mm tall, colour-jittered greens) scattered over the
+## alpha-scissor quads (3-7 mm tall, colour-jittered greens) clustered over the
 ## whole table — a single draw call, so it costs next to nothing. Owned by table.gd;
 ## rebuilt on table resize / biome change / quality change (PERFORMANCE: no grass).
 
@@ -10,10 +10,10 @@ extends MultiMeshInstance3D
 const GRASS_BIOME := "temperate_grassland"
 ## Tufts per square metre per quality tier (PERFORMANCE..ULTRA).
 const TUFTS_PER_M2: Array[int] = [0, 2000, 4500, 8000, 12000]
-const TUFT_HEIGHT_MIN_M := 0.008
-const TUFT_HEIGHT_MAX_M := 0.016
+const TUFT_HEIGHT_MIN_M := 0.003
+const TUFT_HEIGHT_MAX_M := 0.007
 const TUFT_WIDTH_M := 0.009
-const BASE_COLOR := Color(0.32, 0.45, 0.2)
+const BASE_COLOR := Color(0.27, 0.34, 0.16)
 const COLOR_JITTER_MIN := 0.75
 const COLOR_JITTER_MAX := 1.25
 const BLADE_TEXTURE_SIZE := 128
@@ -73,13 +73,22 @@ func _rebuild() -> void:
 	grass.mesh = mesh
 	grass.instance_count = count
 	var half := _table_size / 2.0
+	var patches := FastNoiseLite.new()
+	patches.seed = RNG_SEED
+	patches.frequency = 7.0
+	var placed := 0
 	for i in count:
 		var height := rng.randf_range(TUFT_HEIGHT_MIN_M, TUFT_HEIGHT_MAX_M)
 		var basis := Basis(Vector3.UP, rng.randf() * TAU)
 		basis = basis.scaled(Vector3(rng.randf_range(0.8, 1.2), height / TUFT_HEIGHT_MAX_M, rng.randf_range(0.8, 1.2)))
 		var origin := Vector3(rng.randf_range(-half.x, half.x), 0.0, rng.randf_range(-half.y, half.y))
-		grass.set_instance_transform(i, Transform3D(basis, origin))
-		grass.set_instance_color(i, BASE_COLOR * rng.randf_range(COLOR_JITTER_MIN, COLOR_JITTER_MAX))
+		var color := BASE_COLOR * rng.randf_range(COLOR_JITTER_MIN, COLOR_JITTER_MAX)
+		if patches.get_noise_2d(origin.x, origin.z) < -0.05:
+			continue
+		grass.set_instance_transform(placed, Transform3D(basis, origin))
+		grass.set_instance_color(placed, color)
+		placed += 1
+	grass.visible_instance_count = placed
 	multimesh = grass
 
 

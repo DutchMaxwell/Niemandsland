@@ -38,6 +38,7 @@ const INCHES_TO_METERS: float = 0.0254  # 1 inch = 0.0254 meters
 # constant real-world scale regardless of table size. A densely-tiled procedural
 # micro-relief is layered on top for crisp close-up surface detail.
 const GROUND_SHADER: Shader = preload("res://shaders/table_ground.gdshader")
+const GRASSLAND_SURFACE: Texture2D = preload("res://assets/terrain/materials/grassland_surface.webp")
 const REFERENCE_TABLE_FEET: Vector2 = Vector2(6, 4)  # battlemaps are authored for 6x4 ft
 const DETAIL_TILING: float = 28.0
 const DETAIL_NOISE_SIZE: int = 512
@@ -178,7 +179,14 @@ func _build_ground_material() -> Material:
 	mat.set_shader_parameter("detail_normal_strength", DETAIL_NORMAL_STRENGTH)
 	mat.set_shader_parameter("detail_albedo_strength", 0.12)
 	mat.set_shader_parameter("roughness_value", 0.9)
+	_configure_surface_material(mat)
 	return mat
+
+
+## The exact same surface is projected onto the board and each miniature base.
+func _configure_surface_material(mat: ShaderMaterial) -> void:
+	mat.set_shader_parameter("use_grassland_surface", biome == "temperate_grassland")
+	mat.set_shader_parameter("grassland_albedo", GRASSLAND_SURFACE)
 
 
 ## Load the bundled fallback surface into _default_texture (used until/unless a biome
@@ -300,6 +308,7 @@ func _update_base_top_material() -> void:
 	_base_top_material.set_shader_parameter("detail_normal_strength", DETAIL_NORMAL_STRENGTH)
 	_base_top_material.set_shader_parameter("detail_albedo_strength", 0.12)
 	_base_top_material.set_shader_parameter("roughness_value", 0.9)
+	_configure_surface_material(_base_top_material)
 	# Contact-shadow hint only (subtle rim shading) — the centre reads identical to the board.
 	_base_top_material.set_shader_parameter("vignette_strength", BASE_TOP_VIGNETTE_STRENGTH)
 	_base_top_material.set_shader_parameter("vignette_start", BASE_TOP_VIGNETTE_START)
