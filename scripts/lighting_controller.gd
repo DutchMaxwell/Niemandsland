@@ -18,46 +18,47 @@ var current_preset: Dictionary = {}
 const PRESETS = {
 	"Default": {
 		"name": "Default (Warm & Cozy)",
-		"sun_energy": 1.8,
-		"sun_color": Color(1.0, 0.8, 0.6),
+		"sun_energy": 1.65,
+		"sun_color": Color(1.0, 0.94, 0.84),
 		"sun_angle_h": 84.0,  # Horizontal angle (degrees)
 		"sun_angle_v": 43.0,   # Vertical angle (degrees)
-		# Sky-driven ambient now adds fill, and AgX tonemap has its own contrast/colour
-		# response — so ambient/exposure/glow are dialled down vs the old ACES setup (the
-		# bright physical sky + sky-ambient otherwise blow the scene out to white).
-		"ambient_energy": 0.25,
-		"ambient_color": Color(0.85, 0.82, 0.78),
-		"exposure": 0.9,
+		# Neutral ambient preserves paint colours; directional cool fill reveals dark
+		# armour without lifting the whole board through exposure or bloom.
+		"ambient_energy": 0.36,
+		"ambient_color": Color(0.85, 0.88, 0.93),
+		"exposure": 1.0,
 		"shadow_opacity": 0.85,
 		"shadow_blur": 1.5,
 		"shadow_bias": 0.03,  # Balanced to prevent acne and detachment
 		"shadow_normal_bias": 1.0,  # Higher prevents shadow detachment on slopes
 		"ssao_intensity": 0.4,
-		"fill_light_energy": 0.3,
-		"fill_light_color": Color(0.7, 0.8, 1.0),
+		"fill_light_energy": 0.6,
+		"fill_light_color": Color(0.78, 0.86, 1.0),
 		"ssr_intensity": 0.2,
-		"glow_intensity": 0.9,
-		"contrast": 1.05,
-		"saturation": 1.05,
+		"glow_intensity": 0.5,
+		"contrast": 1.08,
+		"saturation": 1.0,
 	},
 	"Warm Sunset": {
 		"name": "Warm Sunset (Cozy)",
-		"sun_energy": 1.5,
-		"sun_color": Color(1.0, 0.8, 0.6),
+		"sun_energy": 1.7,
+		"sun_color": Color(1.0, 0.82, 0.66),
 		"sun_angle_h": -45.0,
 		"sun_angle_v": 25.0,
-		"ambient_energy": 0.7,
-		"ambient_color": Color(0.85, 0.82, 0.78),
-		"exposure": 1.3,
-		"shadow_opacity": 0.7,
-		"shadow_blur": 3.0,
+		# Keep the low golden key, with cooler readable shadows and restrained
+		# exposure so pale masonry retains texture next to dark miniatures.
+		"ambient_energy": 0.38,
+		"ambient_color": Color(0.8, 0.85, 0.95),
+		"exposure": 1.05,
+		"shadow_opacity": 0.8,
+		"shadow_blur": 1.5,
 		"ssao_intensity": 0.4,
-		"fill_light_energy": 0.3,
-		"fill_light_color": Color(0.7, 0.75, 0.9),
+		"fill_light_energy": 0.65,
+		"fill_light_color": Color(0.78, 0.86, 1.0),
 		"ssr_intensity": 0.8,
-		"glow_intensity": 1.2,
-		"contrast": 1.15,
-		"saturation": 1.15,
+		"glow_intensity": 0.55,
+		"contrast": 1.08,
+		"saturation": 1.0,
 	},
 	"Cool Overcast": {
 		"name": "Cool Overcast (Moody)",
