@@ -32,7 +32,7 @@ func _armed(pid: int, positions: Array, uid: String, weapons: Array,
 		var ow := OPRApiClient.OPRWeapon.new()
 		ow.name = str((w as Dictionary).get("name", "W"))
 		ow.range_value = int((w as Dictionary).get("range", 0))
-		ow.attacks = int((w as Dictionary).get("attacks", 4))
+		ow.attacks = int((w as Dictionary).get("attacks", 4))  # the hand numbers assume the 8-attack rifle; pass "attacks" explicitly
 		ow.count = 1
 		opr.weapons.append(ow)
 	u.source_type = "opr"
@@ -55,9 +55,9 @@ func _controller(units: Array) -> SoloController:
 func test_def_mod_buff_prices_in_the_bearer_defense_role() -> void:
 	# AI-side bearer 9" from the human-side enemy: +1 def is worth +2/3 (RED on main: -2/3).
 	var bearer := _armed(2, [Vector3(9.0 * IN2M, 0, 0)], "Bearer",
-		[{"name": "Rifle", "range": 24}, {"name": "CCW", "range": 0}])
+		[{"name": "Rifle", "range": 24, "attacks": 8}, {"name": "CCW", "range": 0}])
 	var enemy := _armed(1, [Vector3.ZERO], "Enemy",
-		[{"name": "Rifle", "range": 24}, {"name": "CCW", "range": 0}])
+		[{"name": "Rifle", "range": 24, "attacks": 8}, {"name": "CCW", "range": 0}])
 	var sc := _controller([bearer, enemy])
 	var entry := {"status": "modeled", "target": {"kind": "unit"},
 		"effect": {"kind": "buff", "modifier": {"def_mod": 1}}}
@@ -67,9 +67,9 @@ func test_def_mod_buff_prices_in_the_bearer_defense_role() -> void:
 
 func test_hit_buff_prices_on_the_bearer_own_attack() -> void:
 	var bearer := _armed(2, [Vector3(9.0 * IN2M, 0, 0)], "Bearer",
-		[{"name": "Rifle", "range": 24}, {"name": "CCW", "range": 0}])
+		[{"name": "Rifle", "range": 24, "attacks": 8}, {"name": "CCW", "range": 0}])
 	var enemy := _armed(1, [Vector3.ZERO], "Enemy",
-		[{"name": "Rifle", "range": 24}, {"name": "CCW", "range": 0}])
+		[{"name": "Rifle", "range": 24, "attacks": 8}, {"name": "CCW", "range": 0}])
 	var sc := _controller([bearer, enemy])
 	var entry := {"status": "modeled", "target": {"kind": "unit"},
 		"effect": {"kind": "buff", "modifier": {"hit_mod": 1}}}
@@ -79,9 +79,9 @@ func test_hit_buff_prices_on_the_bearer_own_attack() -> void:
 
 func test_hit_plus_def_buff_sums_both_roles() -> void:
 	var bearer := _armed(2, [Vector3(9.0 * IN2M, 0, 0)], "Bearer",
-		[{"name": "Rifle", "range": 24}, {"name": "CCW", "range": 0}])
+		[{"name": "Rifle", "range": 24, "attacks": 8}, {"name": "CCW", "range": 0}])
 	var enemy := _armed(1, [Vector3.ZERO], "Enemy",
-		[{"name": "Rifle", "range": 24}, {"name": "CCW", "range": 0}])
+		[{"name": "Rifle", "range": 24, "attacks": 8}, {"name": "CCW", "range": 0}])
 	var sc := _controller([bearer, enemy])
 	var entry := {"status": "modeled", "target": {"kind": "unit"},
 		"effect": {"kind": "buff", "modifier": {"hit_mod": 1, "def_mod": 1}}}
@@ -94,9 +94,9 @@ func test_debuff_keeps_the_whole_modifier_fold() -> void:
 	# 2.0 -> 4/3, so the cast is worth +2/3 (unchanged by the patch — pin against drift).
 	var target := _armed(1, [Vector3.ZERO], "Target", [{"name": "CCW", "range": 0}])
 	var ours := _armed(2, [Vector3(9.0 * IN2M, 0, 0)], "Ours",
-		[{"name": "Rifle", "range": 24}, {"name": "CCW", "range": 0}])
+		[{"name": "Rifle", "range": 24, "attacks": 8}, {"name": "CCW", "range": 0}])
 	var caster := _armed(2, [Vector3(18.0 * IN2M, 0, 0)], "Caster",
-		[{"name": "Rifle", "range": 24}, {"name": "CCW", "range": 0}])
+		[{"name": "Rifle", "range": 24, "attacks": 8}, {"name": "CCW", "range": 0}])
 	var sc := _controller([target, ours, caster])
 	var entry := {"status": "modeled", "target": {"kind": "unit"},
 		"effect": {"kind": "debuff", "modifier": {"hit_mod": -1}}}
