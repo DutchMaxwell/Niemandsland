@@ -1542,6 +1542,7 @@ mod caster_boost;
 mod caster_interference;
 mod cast_ev;
 mod cast_kind;
+mod cast_move;
 mod casting_debuff;
 mod casting_mod;
 mod courage_buff;

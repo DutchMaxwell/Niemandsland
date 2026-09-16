@@ -7,6 +7,7 @@
 
 pub mod acts;
 pub mod arbitration;
+pub mod cast_move_ev;
 pub mod combat;
 pub mod deployment;
 pub mod dice;
