@@ -4547,7 +4547,7 @@ func _modifier_delta(attacker: GameUnit, defender: GameUnit, effect: Dictionary)
 ## The nearest live enemy of `cand` on the relevant side (`flip_sides`: for a debuff ON an enemy
 ## unit, "its enemy" is OUR side's nearest unit). Shared by both modifier-value wrappers; the gap
 ## the caller needs is the centre distance to the returned unit (deterministic).
-func _nearest_enemy_of(cand: GameUnit, flip_sides: bool) -> GameUnit:
+func _nearest_enemy_by_slot(cand: GameUnit, flip_sides: bool) -> GameUnit:
 	var enemy_slot: int = human_slot if not flip_sides else ai_slot
 	var nearest: GameUnit = null
 	var best := INF
@@ -4568,7 +4568,7 @@ func _nearest_enemy_of(cand: GameUnit, flip_sides: bool) -> GameUnit:
 ## delta (when in reach) and the melee delta. `flip_sides` evaluates the effect on an ENEMY unit's
 ## attack (debuffs on the target itself) — the enemy of that unit is then OUR side's nearest unit.
 func _modifier_value_on_attack(cand: GameUnit, effect: Dictionary, flip_sides: bool) -> float:
-	var nearest := _nearest_enemy_of(cand, flip_sides)
+	var nearest := _nearest_enemy_by_slot(cand, flip_sides)
 	if nearest == null:
 		return 0.0
 	var best := MoveIntent.distance_inches(unit_centre(cand), unit_centre(nearest))
@@ -4590,7 +4590,7 @@ func _modifier_value_on_attack(cand: GameUnit, effect: Dictionary, flip_sides: b
 ## the attacker's delta to bearer gain: `maxf(-shoot, -melee)`, the core's `(-sh).max(-ml)`. A maxf
 ## over the ATTACKER's deltas would pick the empty mode's 0.0 and price every def buff 0.
 func _modifier_value_on_defense(cand: GameUnit, effect: Dictionary, flip_sides: bool = false) -> float:
-	var nearest := _nearest_enemy_of(cand, flip_sides)
+	var nearest := _nearest_enemy_by_slot(cand, flip_sides)
 	if nearest == null:
 		return 0.0
 	var best := MoveIntent.distance_inches(unit_centre(nearest), unit_centre(cand))
