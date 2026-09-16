@@ -116,12 +116,15 @@ func test_no_valid_spell_holds_the_tokens() -> void:
 
 ## (c) A buff cast lands on the caster's own snapshot mods. rebel_guerrillas
 ## with Caster(6): the D3=1 face starts the cycle at index 0 ("Aura of Peace",
-## buff, +1 morale, threshold 1) — the ledger pays that face's threshold, the
+## buff, +1 morale, threshold 1) — the ledger pays that face's threshold PLUS
+## the boost the unpriced-cast clause buys (a buff prices at 0.0 EV, so
+## boost_value_of's 0.01 stand-in and the coin-flip floor buy exactly ONE
+## token: gain (2/3 - 1/2) x 0.01 > 0, then 1/6 x 0.01 <= 0.05 stops), the
 ## event names it, and the morale mod moves off its captured base.
 func test_buff_cast_moves_the_casters_own_mods() -> void:
 	var next := _hold(_melee_caster_state(6.0, 6, "rebel_guerrillas", 6))
 	var su: Dictionary = next["units"]["Wizard"]
-	assert_int(int(su["casts"])).is_equal(5)
+	assert_int(int(su["casts"])).is_equal(4)
 	var events: Array = next.get("cast_events", [])
 	assert_int(events.size()).is_equal(1)
 	var ev: Dictionary = events[0] if not events.is_empty() else {}
@@ -144,7 +147,12 @@ func test_stochastic_path_casts_and_pays_integer_tokens() -> void:
 	var events: Array = next.get("cast_events", [])
 	assert_int(events.size()).is_equal(1)
 	var ev: Dictionary = events[0] if not events.is_empty() else {}
-	assert_int(3 - left).is_equal(int(ev.get("cost", -1)))
+	# The spend is cost + own boost draw, for EVERY D3 face this seed can roll:
+	# face 1 "Piercing Bots" (cost 1, ev 2 x 5/6, boost 2 -> 3), face 2
+	# "Inspiring Bots" (cost 2, unpriced boost 1 -> 3), face 3 "Flame Bots"
+	# (cost 2, boost >= 1 -> 3). All three leave the Wizard at 0, so the
+	# integer ledger holds under the token economy too.
+	assert_int(3 - left).is_equal(int(ev.get("cost", -1)) + int(ev.get("boost", 0)))
 
 
 ## (e) Spell mods are ROUND-SCOPED: the round-loop reset (BattleSim
