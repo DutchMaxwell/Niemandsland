@@ -159,8 +159,10 @@ func get_model_scene(variant: String) -> PackedScene:
 	var path := get_cached_model_path(variant)
 	if path.is_empty():
 		return null
-	if _model_scene_cache.has(path):
-		return _model_scene_cache[path]
+	var natural_foliage := variant in TREE_VARIANTS
+	var cache_key := path + ("|foliage" if natural_foliage else "|default")
+	if _model_scene_cache.has(cache_key):
+		return _model_scene_cache[cache_key]
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
 	if doc.append_from_file(path, state) != OK:
@@ -169,14 +171,14 @@ func get_model_scene(variant: String) -> PackedScene:
 	var scene_root := doc.generate_scene(state)
 	if scene_root == null:
 		return null
-	_fix_runtime_materials(scene_root)
+	_fix_runtime_materials(scene_root, natural_foliage)
 	_set_owner_recursive(scene_root, scene_root)
 	var packed := PackedScene.new()
 	var ok := packed.pack(scene_root)
 	scene_root.free()
 	if ok != OK:
 		return null
-	_model_scene_cache[path] = packed
+	_model_scene_cache[cache_key] = packed
 	return packed
 
 # === Private helpers ===
@@ -191,7 +193,7 @@ static func _set_owner_recursive(node: Node, scene_owner: Node) -> void:
 ## fill light reads as diffuse, and regenerated mipmaps + anisotropic filtering for
 ## runtime glTF textures, which Godot loads without a mip chain
 ## (godotengine/godot#100481) so they would shimmer and alias.
-static func _fix_runtime_materials(node: Node) -> void:
+static func _fix_runtime_materials(node: Node, natural_foliage: bool = false) -> void:
 	var nodes_to_check: Array[Node] = [node]
 	while not nodes_to_check.is_empty():
 		var current: Node = nodes_to_check.pop_back()
@@ -211,7 +213,22 @@ static func _fix_runtime_materials(node: Node) -> void:
 			adjusted.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 			adjusted.albedo_texture = _ensure_texture_mipmaps(adjusted.albedo_texture)
 			adjusted.normal_texture = _ensure_texture_mipmaps(adjusted.normal_texture)
-			mesh_instance.mesh.surface_set_material(surface_idx, adjusted)
+			var result: Material = adjusted
+			# The current opaque deciduous atlases contain both bark and leaves.
+			# Preserve richer/future imports on the standard path rather than losing
+			# their cutouts, normals, emission or vertex colours in this grading shader.
+			if natural_foliage and adjusted.albedo_texture != null \
+					and adjusted.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED \
+					and not adjusted.normal_enabled and not adjusted.emission_enabled \
+					and not adjusted.vertex_color_use_as_albedo:
+				var foliage := ShaderMaterial.new()
+				foliage.shader = preload("res://shaders/forest_foliage.gdshader")
+				foliage.set_shader_parameter("albedo_tex", adjusted.albedo_texture)
+				foliage.set_shader_parameter("base_color", adjusted.albedo_color)
+				var bounds := mesh_instance.mesh.get_aabb()
+				foliage.set_shader_parameter("height_bounds", Vector2(bounds.position.y, bounds.size.y))
+				result = foliage
+			mesh_instance.mesh.surface_set_material(surface_idx, result)
 
 
 static func _ensure_texture_mipmaps(tex: Texture2D) -> Texture2D:
