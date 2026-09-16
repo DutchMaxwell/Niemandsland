@@ -1981,6 +1981,9 @@ def play_game(
     menu_targets: bool = False,
     hero_last: bool = True,
     cast_fold: bool = True,
+    # 16.09. (D-MAGIC): the cast SUB-PHASE switch as a kwarg, so a replay of a record stamped
+    # `seam_cast: true` (#1023) plays it ON; None = TRAINER_KNOBS["seam_cast"] (the fork door).
+    seam_cast: bool | None = None,
     hero_attach: str = "off",
     dice: str = "expected",
     charge_landing: str = "off",
@@ -2386,6 +2389,7 @@ def play_game(
         # without the fold the rest of the resolver does not believe in the
         # chain either (`sim::caster_of`).
         cast_fold=bool(cast_fold),
+        seam_cast=(TRAINER_KNOBS["seam_cast"] if seam_cast is None else bool(seam_cast)),
         # NML-1073 M5 D1-B4b: the SEAM half of `hero_attach`. Deriving the
         # attachment is not enough — without this the hero would fire inside its
         # host's volley AND still be handed a full activation of its own
