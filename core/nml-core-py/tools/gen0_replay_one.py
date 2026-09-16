@@ -44,7 +44,12 @@ KNOBS = dict(selfplay.LEGACY_FIDELITY_KNOBS, sidecars=False, hero_attach="table"
              # replayed as a duel (3,502 of 4,350 games diverged at seq 0, "menu
              # width"). The recorder stamps `mission` only when != "duel", so the
              # pin IS the recorder's default; a silent record keeps replaying a duel.
-             mission="duel")
+             mission="duel",
+             # D-MAGIC A/B: the cast SUB-PHASE switch. Every corpus predates the
+             # `seam_cast` stamp (the pin IS the recorder's default, False), and a
+             # record played with the seam ON must REPLAY ON or its casts diverge
+             # from its own headers — `replay_knobs` forwards the stamp below.
+             seam_cast=False)
 
 
 def replay_knobs(kn: dict, prescreen: dict | None = None, record: dict | None = None) -> dict:
@@ -91,6 +96,10 @@ def replay_knobs(kn: dict, prescreen: dict | None = None, record: dict | None = 
         merged["melee_reach"] = top_knobs["melee_reach"]
         print("[replay] melee_reach %r read from the record's own top-level "
               "knobs (absent from prescreen.knobs)" % top_knobs["melee_reach"])
+    if "seam_cast" not in kn and "seam_cast" in top_knobs:
+        merged["seam_cast"] = top_knobs["seam_cast"]
+        print("[replay] seam_cast %r read from the record's own top-level "
+              "knobs (absent from prescreen.knobs)" % top_knobs["seam_cast"])
     return merged
 
 
