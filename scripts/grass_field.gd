@@ -1,7 +1,7 @@
 class_name GrassField
 extends MultiMeshInstance3D
 ## Area-wide grass tufts for the grassland biome: one MultiMesh of small crossed
-## alpha-scissor quads (3-7 mm tall, colour-jittered greens) clustered over the
+## alpha-scissor quads (4-12 mm tall, colour-jittered greens) clustered over the
 ## whole table — a single draw call, so it costs next to nothing. Owned by table.gd;
 ## rebuilt on table resize / biome change / quality change (PERFORMANCE: no grass).
 
@@ -10,14 +10,18 @@ extends MultiMeshInstance3D
 const GRASS_BIOME := "temperate_grassland"
 ## Tufts per square metre per quality tier (PERFORMANCE..ULTRA).
 const TUFTS_PER_M2: Array[int] = [0, 2000, 4500, 8000, 12000]
-const TUFT_HEIGHT_MIN_M := 0.003
-const TUFT_HEIGHT_MAX_M := 0.007
-const TUFT_WIDTH_M := 0.009
-const BASE_COLOR := Color(0.27, 0.34, 0.16)
+const TUFT_HEIGHT_MIN_M := 0.004
+const TUFT_HEIGHT_MAX_M := 0.012
+const TUFT_WIDTH_M := 0.016
+const BASE_COLOR := Color(0.32, 0.40, 0.18)
 const COLOR_JITTER_MIN := 0.75
 const COLOR_JITTER_MAX := 1.25
 const BLADE_TEXTURE_SIZE := 128
 const RNG_SEED := 71823  # deterministic scatter (purely cosmetic, but stable)
+const COVERAGE_EXTENT_M := 4.0
+const COVERAGE_SIZE := 256
+static var _coverage_image: Image
+static var _coverage_texture: ImageTexture
 
 # === Private variables ===
 
@@ -36,6 +40,31 @@ func _ready() -> void:
 	_rebuild()
 
 # === Public ===
+
+## A synchronous, cached mask shared by ground shading and tuft placement.
+## World scale stays fixed when resizing the board; no background noise race.
+static func coverage_texture() -> ImageTexture:
+	if _coverage_texture == null:
+		var noise := FastNoiseLite.new()
+		noise.seed = RNG_SEED
+		noise.frequency = 5.0
+		_coverage_image = Image.create(COVERAGE_SIZE, COVERAGE_SIZE, false, Image.FORMAT_R8)
+		for y in COVERAGE_SIZE:
+			for x in COVERAGE_SIZE:
+				var p := ((Vector2(x, y) + Vector2(0.5, 0.5)) / COVERAGE_SIZE - Vector2(0.5, 0.5)) * COVERAGE_EXTENT_M
+				var amount := clampf(0.5 + noise.get_noise_2d(p.x, p.y) * 1.8, 0.0, 1.0)
+				_coverage_image.set_pixel(x, y, Color(amount, 0, 0))
+		_coverage_image.generate_mipmaps()
+		_coverage_texture = ImageTexture.create_from_image(_coverage_image)
+	return _coverage_texture
+
+
+static func coverage_at(world_xz: Vector2) -> float:
+	coverage_texture()
+	var uv := world_xz / COVERAGE_EXTENT_M + Vector2(0.5, 0.5)
+	var pixel := (uv * COVERAGE_SIZE).clamp(Vector2.ZERO, Vector2.ONE * (COVERAGE_SIZE - 1))
+	return _coverage_image.get_pixel(int(pixel.x), int(pixel.y)).r
+
 
 func set_table_size(size_m: Vector2) -> void:
 	if size_m.is_equal_approx(_table_size):
@@ -73,9 +102,6 @@ func _rebuild() -> void:
 	grass.mesh = mesh
 	grass.instance_count = count
 	var half := _table_size / 2.0
-	var patches := FastNoiseLite.new()
-	patches.seed = RNG_SEED
-	patches.frequency = 7.0
 	var placed := 0
 	for i in count:
 		var height := rng.randf_range(TUFT_HEIGHT_MIN_M, TUFT_HEIGHT_MAX_M)
@@ -83,8 +109,10 @@ func _rebuild() -> void:
 		basis = basis.scaled(Vector3(rng.randf_range(0.8, 1.2), height / TUFT_HEIGHT_MAX_M, rng.randf_range(0.8, 1.2)))
 		var origin := Vector3(rng.randf_range(-half.x, half.x), 0.0, rng.randf_range(-half.y, half.y))
 		var color := BASE_COLOR * rng.randf_range(COLOR_JITTER_MIN, COLOR_JITTER_MAX)
-		if patches.get_noise_2d(origin.x, origin.z) < -0.05:
+		var coverage := coverage_at(Vector2(origin.x, origin.z))
+		if coverage < 0.48:
 			continue
+		color = color.lerp(Color(0.42, 0.38, 0.22), (1.0 - coverage) * 0.65)
 		grass.set_instance_transform(placed, Transform3D(basis, origin))
 		grass.set_instance_color(placed, color)
 		placed += 1
@@ -101,6 +129,7 @@ func _tuft_mesh() -> ArrayMesh:
 	var h := TUFT_HEIGHT_MAX_M
 	for angle in [0.0, PI / 2.0]:
 		var dir := Vector3(cos(angle), 0.0, sin(angle))
+		st.set_normal(Vector3.UP)
 		var a := -dir * w
 		var b := dir * w
 		st.set_uv(Vector2(0, 1)); st.add_vertex(a)
@@ -109,18 +138,11 @@ func _tuft_mesh() -> ArrayMesh:
 		st.set_uv(Vector2(0, 1)); st.add_vertex(a)
 		st.set_uv(Vector2(1, 0)); st.add_vertex(b + Vector3.UP * h)
 		st.set_uv(Vector2(0, 0)); st.add_vertex(a + Vector3.UP * h)
-	st.generate_normals()
 	var mesh := st.commit()
 
-	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = _blade_texture()
-	mat.vertex_color_use_as_albedo = true
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-	mat.alpha_scissor_threshold = 0.5
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mat.roughness = 1.0
-	mat.metallic = 0.0
-	mat.texture_repeat = false
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/grass_tuft.gdshader")
+	mat.set_shader_parameter("blade_texture", _blade_texture())
 	mesh.surface_set_material(0, mat)
 	return mesh
 
@@ -133,7 +155,7 @@ func _blade_texture() -> ImageTexture:
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = RNG_SEED
-	for blade in 6:
+	for blade in 9:
 		var base_x := rng.randf_range(0.1, 0.9)
 		var lean := rng.randf_range(-0.22, 0.22)
 		var blade_height := rng.randf_range(0.55, 1.0)
@@ -146,7 +168,7 @@ func _blade_texture() -> ImageTexture:
 			var x := base_x + lean * grow * grow
 			var half_w := lerpf(2.2, 0.5, grow)           # slender taper (in px @128)
 			var center := x * size
-			var shade := 1.0 - grow * 0.3                 # tips slightly darker
+			var shade := lerpf(0.45, 1.0, sqrt(grow))     # dark roots, sunlit tips
 			for px in range(int(floor(center - half_w - 1.0)), int(ceil(center + half_w + 1.0)) + 1):
 				if px < 0 or px >= size:
 					continue

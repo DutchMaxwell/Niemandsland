@@ -187,6 +187,8 @@ func _build_ground_material() -> Material:
 func _configure_surface_material(mat: ShaderMaterial) -> void:
 	mat.set_shader_parameter("use_grassland_surface", biome == "temperate_grassland")
 	mat.set_shader_parameter("grassland_albedo", GRASSLAND_SURFACE)
+	mat.set_shader_parameter("grassland_coverage", GrassField.coverage_texture())
+	mat.set_shader_parameter("coverage_extent_m", GrassField.COVERAGE_EXTENT_M)
 
 
 ## Load the bundled fallback surface into _default_texture (used until/unless a biome

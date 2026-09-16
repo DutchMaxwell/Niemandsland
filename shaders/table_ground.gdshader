@@ -41,5 +41,5 @@ void fragment() {
 	// Tangent-space detail normal for fine surface relief that catches the sun.
 	vec3 n = texture(detail_normal, duv).xyz;
 	NORMAL_MAP = n;
-	NORMAL_MAP_DEPTH = detail_normal_strength * (use_grassland_surface ? 0.45 : 1.0);
+	NORMAL_MAP_DEPTH = detail_normal_strength * (use_grassland_surface ? 0.85 : 1.0);
 }

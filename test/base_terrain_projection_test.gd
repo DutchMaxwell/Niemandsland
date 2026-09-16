@@ -102,3 +102,7 @@ func test_surface_material_tracks_biome_switch_on_board_and_existing_bases() -> 
 		assert_object(ground.get_shader_parameter("grassland_albedo")).is_not_null()
 		assert_object(base.get_shader_parameter("grassland_albedo")) \
 			.is_same(ground.get_shader_parameter("grassland_albedo"))
+		assert_object(ground.get_shader_parameter("grassland_coverage")).is_same(GrassField.coverage_texture())
+		assert_object(base.get_shader_parameter("grassland_coverage")) \
+			.is_same(ground.get_shader_parameter("grassland_coverage"))
+		assert_float(base.get_shader_parameter("coverage_extent_m")).is_equal(GrassField.COVERAGE_EXTENT_M)
