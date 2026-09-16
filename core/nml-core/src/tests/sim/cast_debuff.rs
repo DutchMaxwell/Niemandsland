@@ -90,11 +90,11 @@ use super::*;
         }
     }
 
-    /// The debuff board: the caster (unit 0) holds the spell, a filler (unit
-    /// 1) keeps the caster's side occupied far out, the target (unit 2) sits
-    /// at x=0 and OUR nearest unit (unit 3) at `our_x` inches from it — every
-    /// unit its own profile, so the legs pair unit 2 against unit 3 cleanly
-    /// and `nearest_enemy(2)` reads unit 3 at exactly `our_x`.
+    /// The debuff board: the caster (unit 0) holds the spell, a filler
+    /// (unit 1) keeps the caster's side occupied far out, the target (unit 2)
+    /// sits at x=0 and OUR nearest unit (unit 3) at `our_x` inches from it.
+    /// Every unit has its own profile, so the legs pair unit 2 against unit 3
+    /// cleanly and `nearest_enemy(2)` reads unit 3 at exactly `our_x`.
     fn board(target: UnitStatic, our: UnitStatic, our_x: f64) -> (State, Vec<UnitStatic>) {
         let mut st = four_unit_line();
         st.player = vec![0, 0, 1, 0];
