@@ -9,10 +9,13 @@ var _ground: ShaderMaterial
 var _base: ShaderMaterial
 var _trees: Array[ArrayMesh] = []
 var _regions := PackedVector4Array()
+var _tree_points := PackedVector2Array()
 var _angles := PackedFloat32Array()
 var _props: Node3D
 var _previous_viewport: Dictionary = {}
 var _studio_sky: Sky
+var _fog: FogVolume
+var _wall_top := 0.0635
 
 
 func prepare() -> void:
@@ -54,6 +57,7 @@ func apply(main: Node) -> void:
 	var overlay: Node3D = main.terrain_overlay
 	_dress_grid_forest(overlay)
 	_dress_movable_forests()
+	_wall_top = overlay.WALL_HEIGHT_INCHES * overlay.INCHES_TO_METERS
 	for wall in overlay._wall_instances:
 		_weather_ruin(wall)
 	_sync_regions()
@@ -71,7 +75,31 @@ func apply(main: Node) -> void:
 	if _props != null:
 		_props.dress(self,table.table_size*0.3048)
 	_style_trays()
+	_build_fog(main)
 	apply_lighting("Day")
+
+
+## Local fog volume over the board only: no global exponential fog, so the dark
+## studio background behind the table stays black. Height falloff keeps the haze
+## near the ground and lets light shafts form around the ruins.
+func _build_fog(main: Node) -> void:
+	var table: Node3D = main.get_node("Table")
+	var surface: MeshInstance3D = main.get_node("Table/TableMesh")
+	var size: Vector2 = table.table_size * 0.3048
+	var span: float = maxf(size.x,size.y)
+	var fog := FogMaterial.new()
+	fog.density = 0.14
+	fog.albedo = Color(0.74,0.72,0.66)
+	fog.emission = Color(0.0,0.0,0.0)
+	fog.height_falloff = 1.4
+	fog.edge_fade = 0.55
+	var volume := FogVolume.new()
+	volume.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	volume.size = Vector3(span,span * 0.6,span)
+	volume.material = fog
+	surface.add_child(volume)
+	volume.position = Vector3(0.0,span * 0.30,0.0)
+	_fog = volume
 
 
 func apply_lighting(mood: String) -> void:
@@ -80,27 +108,28 @@ func apply_lighting(mood: String) -> void:
 	var light: Node = _main.lighting_controller
 	var evening := mood == "Sunset"
 	light.set_sun_energy(2.55)
-	light.set_sun_color(Color(1,0.85,0.69) if evening else Color(1,0.89,0.72))
+	light.set_sun_color(Color(1,0.85,0.69) if evening else Color(1,0.90,0.76))
 	light.set_sun_angles(-40.0 if evening else -58.0,28.0 if evening else 38.0)
-	light.set_ambient_energy(0.25)
+	light.set_ambient_energy(0.32)
 	light.set_ambient_color(Color(0.77,0.84,0.94))
 	light.set_fill_light_energy(0.40)
 	light.set_fill_light_color(Color(0.95,0.94,0.90))
 	light.set_exposure(1.0)
-	light.set_contrast(1.12)
-	light.set_saturation(0.88)
-	light.set_shadow_opacity(0.85)
-	light.set_shadow_blur(0.65)
+	light.set_contrast(1.06)
+	light.set_saturation(0.82)
+	light.set_shadow_opacity(0.60)
+	light.set_shadow_blur(1.5)
 	light.set_shadow_bias(0.015)
 	light.set_shadow_normal_bias(0.25)
 	var sun: DirectionalLight3D = _main.get_node("DirectionalLight3D")
 	sun.directional_shadow_max_distance = 3.0
 	sun.directional_shadow_pancake_size = 1.0
+	sun.light_volumetric_fog_energy = 0.9
 	RenderingServer.directional_shadow_atlas_set_size(8192,true)
 	get_viewport().use_taa = false
 	get_viewport().scaling_3d_scale = 1.25
 	light.set_ssao_intensity(1.2)
-	light.set_glow_intensity(0.1)
+	light.set_glow_intensity(0.16)
 	var env: Environment = _main.get_node("WorldEnvironment").environment
 	if _studio_sky == null:
 		var sky_material := ProceduralSkyMaterial.new()
@@ -122,6 +151,16 @@ func apply_lighting(mood: String) -> void:
 	env.ssil_enabled = true
 	env.ssil_radius = 0.075
 	env.ssil_intensity = 0.7
+	env.volumetric_fog_enabled = true
+	env.volumetric_fog_density = 0.0
+	env.volumetric_fog_albedo = Color(0.76,0.74,0.68)
+	env.volumetric_fog_emission = Color(0.0,0.0,0.0)
+	env.volumetric_fog_length = 12.0
+	env.volumetric_fog_detail_spread = 2.0
+	env.volumetric_fog_gi_inject = 0.0
+	env.volumetric_fog_ambient_inject = 0.10
+	env.volumetric_fog_temporal_reprojection_enabled = true
+	env.volumetric_fog_temporal_reprojection_amount = 0.9
 
 
 func _dress_grid_forest(overlay: Node3D) -> void:
@@ -168,6 +207,7 @@ func _dress_grid_forest(overlay: Node3D) -> void:
 				tree.mesh = _trees[index%3]
 				tree.scale = Vector3.ONE*height
 				original.add_child(tree)
+			_tree_points.append(expected)
 			index += 1
 			break
 	print("REFERENCE_TREES ",index," regions=",_regions.size())
@@ -220,8 +260,28 @@ func _surface_noise(p: Vector2) -> float:
 
 func _weather_ruin(node: Node) -> void:
 	if node is MeshInstance3D:
+		var panel_texture: Texture2D = null
+		var panel_scale := Vector2.ONE
+		var panel_offset := Vector2.ZERO
+		if node.material_override is BaseMaterial3D:
+			var stone: BaseMaterial3D = node.material_override.duplicate()
+			if stone.normal_enabled:
+				stone.normal_scale *= 3.0
+			stone.albedo_color = Color(stone.albedo_color.r*0.74,
+					stone.albedo_color.g*0.69,stone.albedo_color.b*0.60,stone.albedo_color.a)
+			node.material_override = stone
+			if not stone.uv1_triplanar and stone.albedo_texture != null:
+				panel_texture = stone.albedo_texture
+				panel_scale = Vector2(stone.uv1_scale.x,stone.uv1_scale.y)
+				panel_offset = Vector2(stone.uv1_offset.x,stone.uv1_offset.y)
 		var material := ShaderMaterial.new()
 		material.shader = preload("res://shaders/visual/reference_weathering.gdshader")
+		material.set_shader_parameter("wall_top",_wall_top)
+		if panel_texture != null:
+			material.set_shader_parameter("stone_tex",panel_texture)
+			material.set_shader_parameter("joint_darken",true)
+			material.set_shader_parameter("panel_uv_scale",panel_scale)
+			material.set_shader_parameter("panel_uv_offset",panel_offset)
 		node.material_overlay = material
 	for child in node.get_children():
 		_weather_ruin(child)

@@ -24,6 +24,6 @@ void fragment() {
  ALBEDO = col;
  ROUGHNESS = 0.72;
  SPECULAR = 0.22;
- BACKLIGHT = col*0.24;
+ BACKLIGHT = col*0.55;
  NORMAL = FRONT_FACING ? NORMAL : -NORMAL;
 }

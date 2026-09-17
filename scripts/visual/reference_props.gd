@@ -1,8 +1,9 @@
 extends Node3D
 ## Reference-only TRELLIS terrain props using the project's verified asset cache.
+const ReferenceMaterials = preload("res://scripts/visual/reference_materials.gd")
 var _rock: PackedScene
 var _bounds := AABB()
-var _tree: PackedScene
+var _tree_variants: Array[PackedScene] = []
 var _tree_bounds := AABB()
 
 func prepare() -> void:
@@ -12,17 +13,17 @@ func prepare() -> void:
 		_bounds = rock_data.bounds
 	var tree_data: Dictionary = await _load_asset("oak")
 	if not tree_data.is_empty():
-		_tree = tree_data.scene
+		_tree_variants = tree_data.scenes
 		_tree_bounds = tree_data.bounds
 
 
 func has_tree() -> bool:
-	return _tree!=null
+	return not _tree_variants.is_empty()
 
 
 func tree_instance(height: float,index: int) -> Node3D:
 	var wrapper := Node3D.new()
-	var tree: Node3D = _tree.instantiate()
+	var tree: Node3D = _tree_variants[index % _tree_variants.size()].instantiate()
 	wrapper.add_child(tree)
 	tree.position = -Vector3(_tree_bounds.get_center().x,_tree_bounds.position.y,_tree_bounds.get_center().z)
 	var scale_value := height/maxf(_tree_bounds.size.y,0.001)
@@ -57,18 +58,34 @@ func _load_asset(kind: String) -> Dictionary:
 		return {}
 	if kind == "rock":
 		_rock_materials(root)
-	if kind == "oak":
-		preload("res://scripts/visual/reference_canopy.gd").dress(root)
-	var bounds := _mesh_bounds(root,Transform3D.IDENTITY,AABB())
-	if bounds.size.y <= 0.0 or maxf(bounds.size.x,bounds.size.z) <= 0.0:
+		var rock_bounds := _mesh_bounds(root,Transform3D.IDENTITY,AABB())
+		if rock_bounds.size.y <= 0.0 or maxf(rock_bounds.size.x,rock_bounds.size.z) <= 0.0:
+			root.free()
+			return {}
+		_own(root,root)
+		var rock_packed := PackedScene.new()
+		rock_packed.pack(root)
 		root.free()
-		return {}
-	_own(root,root)
-	var packed := PackedScene.new()
-	packed.pack(root)
+		print("REFERENCE_TRELLIS_READY ",kind)
+		return {"scene":rock_packed,"bounds":rock_bounds}
+	var canopy := preload("res://scripts/visual/reference_canopy.gd")
+	var variants: Array[PackedScene] = []
+	var tree_bounds := AABB()
+	for variant in canopy.VARIANTS:
+		var copy: Node = root.duplicate()
+		canopy.dress(copy,variant)
+		if variant == 0:
+			tree_bounds = _mesh_bounds(copy,Transform3D.IDENTITY,AABB())
+		_own(copy,copy)
+		var packed := PackedScene.new()
+		packed.pack(copy)
+		copy.free()
+		variants.append(packed)
 	root.free()
+	if variants.is_empty() or tree_bounds.size.y <= 0.0 or maxf(tree_bounds.size.x,tree_bounds.size.z) <= 0.0:
+		return {}
 	print("REFERENCE_TRELLIS_READY ",kind)
-	return {"scene":packed,"bounds":bounds}
+	return {"scenes":variants,"bounds":tree_bounds}
 
 
 func dress(presentation: Node3D,size: Vector2) -> void:
@@ -139,7 +156,7 @@ func _place_rock(point: Vector2,width: float,rng: RandomNumberGenerator) -> void
 	var scale_value := width/maxf(_bounds.size.x,_bounds.size.z)
 	wrapper.scale = Vector3(scale_value,scale_value*rng.randf_range(0.6,1.05),scale_value)
 	wrapper.rotation.y = rng.randf()*TAU
-	wrapper.position = Vector3(point.x,-0.00025,point.y)
+	wrapper.position = Vector3(point.x,ReferenceMaterials.ground_height(point)-0.00025,point.y)
 	add_child(wrapper)
 
 
