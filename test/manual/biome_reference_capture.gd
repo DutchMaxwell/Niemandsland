@@ -45,7 +45,18 @@ func _run() -> void:
 	if args.size() > 1 and args[1] == "after":
 		_presentation = load("res://scripts/visual/grassland_reference.gd").new()
 		main.add_child(_presentation)
+		await _presentation.prepare()
+		var miniatures: Dictionary = {}
+		for model in main.object_manager.get_children():
+			if model is Node3D and model.is_in_group("selectable"):
+				miniatures[model] = model.global_transform
 		_presentation.apply(main)
+		for model: Node3D in miniatures:
+			if model.global_transform != miniatures[model]:
+				printerr("Reference moved an existing miniature")
+				quit(1)
+				return
+		print("REFERENCE_MINIATURE_TRANSFORMS_UNCHANGED ",miniatures.size())
 		if main.terrain_overlay.los_volumes() != original_volumes or main.terrain_overlay.get_wall_segments_world() != original_walls:
 			printerr("Reference changed rule geometry")
 			quit(1)
@@ -59,6 +70,7 @@ func _run() -> void:
 	var camera: Camera3D = main.get_node("CameraPivot/Camera3D")
 	camera.fov = 50.0
 	var shots := [
+		{"name": "detail", "eye": Vector3(-0.57,0.145,0.60), "target": Vector3(-0.68,0.030,0.38)},
 		{"name": "forest", "eye": Vector3(-0.50, 0.20, 0.68), "target": Vector3(-0.78, 0.06, 0.35)},
 		{"name": "overview", "eye": Vector3(0, 1.3, 1.45), "target": Vector3(0, 0, 0)},
 		{"name": "miniatures", "eye": Vector3(-0.50, 0.17, 0.69), "target": Vector3(-0.61, 0.025, 0.39)},
@@ -66,14 +78,32 @@ func _run() -> void:
 	]
 	var report := {"renderer": RenderingServer.get_current_rendering_method(),
 		"gpu": RenderingServer.get_video_adapter_name(), "resolution": "1920x1080",
-		"quality": "Medium", "board": "assets/tutorial/tutorial_board.nml",
+		"quality": "Reference studio" if args.has("studio") else "Medium",
+		"internal_scale": root.scaling_3d_scale, "board": "assets/tutorial/tutorial_board.nml",
 		"animated_atmosphere": false, "samples": []}
 	for mood in (["Day"] if args.has("quick") else ["Day", "Sunset"]):
 		main.atmosphere_controller.apply_atmosphere(mood, true)
 		if _presentation != null:
 			_presentation.apply_lighting(mood)
+		if args.has("studio"):
+			root.use_taa = false
+			root.scaling_3d_scale = 1.25
+			RenderingServer.directional_shadow_atlas_set_size(8192,true)
+			var sun: DirectionalLight3D = main.get_node("DirectionalLight3D")
+			sun.directional_shadow_max_distance = 3.0
+			sun.directional_shadow_pancake_size = 1.0
+			sun.shadow_bias = 0.015
+			sun.shadow_normal_bias = 0.25
+			var env: Environment = main.get_node("WorldEnvironment").environment
+			env.ssao_radius = 0.035
+			env.ssao_intensity = 2.0
+			env.ssao_power = 1.4
+			env.ssil_enabled = true
+			env.ssil_radius = 0.075
+			env.ssil_intensity = 0.7
+		report.internal_scale = root.scaling_3d_scale
 		for shot in shots:
-			if args.has("quick") and shot.name != "miniatures":
+			if args.has("quick") and shot.name not in ["miniatures","detail"]:
 				continue
 			camera.global_position = shot.eye
 			camera.look_at(shot.target)
@@ -98,6 +128,18 @@ func _run() -> void:
 				"p95_ms": times[171], "eye": str(shot.eye), "target": str(shot.target),
 				"camera_transform": str(camera.global_transform)})
 			print("GFX_CAPTURE ", shot_name, " median_ms=", times[90])
+	if args.has("orbit"):
+		var frame_directory := _output.path_join("flight_frames")
+		DirAccess.make_dir_recursive_absolute(frame_directory)
+		for frame in 240:
+			var t := float(frame)/239.0
+			var eased := t*t*(3.0-2.0*t)
+			camera.global_position = Vector3(-0.61,0.16,0.68).lerp(Vector3(-0.40,0.19,0.60),eased)
+			camera.look_at(Vector3(-0.65,0.035,0.38))
+			await process_frame
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_jpg(frame_directory.path_join("%04d.jpg"%frame),0.95)
+		print("REFERENCE_FLIGHT_DONE")
 	main.get_node("UI").visible = true
 	for _i in 30:
 		await process_frame

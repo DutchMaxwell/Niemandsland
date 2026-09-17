@@ -1,86 +1,116 @@
 # Grassland reference scene
 
-An opt-in, playable art-direction study using the existing tutorial board and
-its original 54 miniatures. It adds three NanoBanana-generated ground textures,
-world-aligned meadow/earth/woodland blending shared with miniature base tops,
-three procedural tree variants, short grass, a subdued table frame and player
-trays, and a coordinated day/evening light treatment.
+An opt-in, playable visual reference on the existing tutorial board, retaining
+its original 54 miniatures. The September 17 revision concentrates detail in
+one woodland/ruin slice: TRELLIS branch anatomy with fine textured leaf cards, mixed short grass and alpha
+cards, pebble and leaf scatter, reconstructed stone props, wall-foot debris,
+world-aligned earth/woodland blending, a procedural reflection sky and
+coordinated directional lighting. The reflection sky is code-generated and
+requires no external HDRI asset.
 
-Production startup, the miniature library, source GLBs, manifests, original
-terrain geometry, collision layers, footprints and LOS are unchanged. The
-scene is deliberately separate from the production game until visual review.
+Production startup, miniature GLBs/materials, terrain collision, footprints,
+LOS and saved board geometry are unchanged. The reference is separate from
+production until visual and performance review.
 
 ## Run
 
-Import once with `godot --headless --editor --quit --path .`, then launch on a
-real display:
+Import with `godot --headless --editor --quit --path .`, then use a real display:
 
 ```
 godot --path . res://scenes/visual/grassland_reference.tscn
 ```
 
-The existing asset caches must be populated for the reference miniatures and
-terrain; otherwise the game's normal download/fallback behavior applies. Use
-isolated XDG data/config directories for review so user saves and graphics
-preferences are not affected by the capture harness.
+The normal miniature/terrain caches must be populated. New reference props
+use their own manifests in `assets/terrain/reference/hero/`, `{cdn}` expansion
+and the existing SHA-256-verified asset downloader. No binary GLBs are committed.
+If a prop cannot be fetched, the study retains procedural trees and small stones.
+Use isolated XDG data/config directories for review to protect user preferences.
 
-## Before/after
+## Reproduce the comparison
 
 ```
 godot --path . --resolution 1920x1080 --audio-driver Dummy \
-  -s res://test/manual/biome_reference_capture.gd -- <before-directory> before
+  -s res://test/manual/biome_reference_capture.gd -- <before-directory> before quick studio
 godot --path . --resolution 1920x1080 --audio-driver Dummy \
-  -s res://test/manual/biome_reference_capture.gd -- <after-directory> after
+  -s res://test/manual/biome_reference_capture.gd -- <after-directory> after quick studio orbit
 ```
 
-The harness uses the same board, seed, four cameras and two moods on both sides.
-It verifies that applying the presentation leaves LOS volumes and wall segments
-unchanged. Each image has 90 warm-up frames and 180 frame-time samples. The
-quality preset is Medium at 1920x1080 with VSync disabled. `game_ui.png` retains
-the existing actual game HUD; the separate web menu/HUD study is a prototype.
+`quick` captures two daytime cameras; omit it for five cameras and two moods.
+`studio` applies the same 1.25 internal resolution scale, 8192 directional
+shadow atlas, three-metre shadow range and small-scale SSAO/SSIL settings to
+both sides. The reference lighting also uses this quality level when launched
+interactively. Viewport scaling/TAA and the configured shadow atlas are restored
+on exit. Higher quality is confined to this reference, not a production default.
 
-Public comparison and clickable menu study:
+`orbit` writes 240 actual engine frames in `flight_frames/`. Encode at 30 fps
+for an eight-second camera flight. Offline frame recording is not an FPS test.
+The separate still-image timings use 90 warm-up frames and 180 measured frames
+per camera, VSync disabled. Camera transforms and timings are saved in JSON.
+
+The original state, September 16 intermediate at `8bc5e758`, and new reference
+use identical cameras and studio settings. Original PNG captures are retained;
+WebP copies are format conversions, without compositing or retouching. The
+original generated concept is labelled separately from actual engine images.
+
+Public comparison:
+https://forge.niemandsland.xyz/static/hero-biome-2026-09-17/index.html
+
+Previous comparison and separately simulated menu prototype:
 https://forge.niemandsland.xyz/static/biome-reference-2026-09-16/index.html
 
-## Scope and limitations
+## Scope and limits
 
-- This is an integrated reference composition, not a replacement of all biome
-  rendering. Initial grid forests are dressed from the loaded board. Editing
-  the terrain layout or switching biomes after application is not yet supported
-  by the presentation layer. Reload the reference scene to reset it.
-- Three procedural tree variants explore visible branches and open foliage.
-  They are not a finished botanical asset library; finer branch anatomy,
-  vegetation variation, distant LODs and ruin contact dressing remain work.
-- Ground textures use mirrored dual sampling to avoid seams in generated
-  tiles. Fine relief is cosmetic. No terrain displacement changes rules.
-- Existing miniature materials and models are retained. Base tops sample the
-  new ground material; no miniature regeneration or global import changes.
-- HTML menu flow is a design study, with explicit demo states for joining,
-  importing, measuring, activation and results. It is not the game's real UI.
-- Frame-time results are laptop spot checks, not a stress test or a web FPS
-  guarantee. Compatibility capture is only a desktop renderer check; foliage and
-  environment brightness differ and still need renderer-specific calibration.
-- Baseline ObjectDB/resource warnings at exit also occur without this study.
+- Detail is concentrated around the example woodland/ruin slice. This is not
+  the finished vegetation budget for an entire board or every biome.
+- Initial grid forests are dressed from the loaded board. Live terrain editing,
+  biome switching and newly moved miniature exclusion zones are not rebuilt;
+  reload the reference scene to reset the dressing.
+- All new dressing is non-colliding. The capture verifies unchanged LOS volumes
+  and wall segments. Sub-millimetre mesh relief and shading affect only the visible table surface;
+  collision and the rule surface stay flat.
+- Original miniatures and their materials remain intact. Base tops sample the
+  same world-aligned ground texture; no miniature regeneration is required.
+- Alpha-card grass and generated tree topology still require distance LODs and
+  a production performance budget. Forward+ is the reviewed renderer. Do not
+  infer web/Compatibility parity from these desktop captures.
+- Existing ObjectDB/two-resource warnings on shutdown also occur in baseline.
+- The previous HTML menu study remains a simulated prototype, separate from
+  this environment work and the actual game HUD.
 
-## Asset provenance
+## Asset provenance and generation
 
-New bitmap assets and their per-file source prompts/hashes are in
-`assets/terrain/reference/provenance.json`, with CC-BY-SA-4.0 attribution in
-`assets/terrain/reference/LICENSE.md`. They were generated through the existing
-NanoBanana/Gemini image generator from original text, with no reference images.
-They are 1024-square WebP files. Tree/grass geometry and all shaders are original
-MIT project code. No third-party game content or new miniature GLBs are included.
+See `assets/terrain/reference/provenance.json`, `hero/provenance.json`, the
+per-model JSON manifests, and `assets/terrain/reference/LICENSE.md`.
 
-## Validation of this reference
+NanoBanana (Gemini 2.5 Flash Image) generated original ground, bark, leaf, grass
+and prop sources. Only the oak used an image reference: the project's own
+previously generated battlefield concept. TRELLIS.2 reconstructed the new
+terrain props. Visual outputs are attributed to Niemandsland Contributors
+under CC BY-SA 4.0; code/procedural geometry is MIT. Tool/service/dependency
+licenses remain separate; no blanket license claim is made for those tools.
 
-The editor import passes without script errors. All 39 cases across
-`base_terrain_projection_test`, `terrain_overlay_test` and
-`sandbox_terrain_test` pass. The separate entry scene loads the tutorial board
-with the original UI, and the capture harness verifies unchanged LOS volumes
-and wall segments. Forward+ and desktop Compatibility produce actual images.
+The direct TRELLIS `image_to_3d` endpoint bypasses the upload callback. Final
+inputs use the existing project's deterministic white-key/deshadow routine,
+with an asset-specific threshold recorded in provenance. Their explicit alpha
+is supplied to the server's `preprocess_image` endpoint, which takes its
+`has_alpha` branch, crops and conditions to RGB. This bypasses its optional
+BRIA background-removal service. Early trials using automatic background
+removal were excluded from the shipped manifests and public renders.
 
-Eight pairs use identical recorded camera transforms. At 1080p Medium on an
-RTX 3070 Ti Laptop, the daytime miniature view measured 9.24 ms median before
-and 7.18 ms after (180 samples each); these are local spot measurements.
-The public report includes every median and P95 result, the original PNGs,
-and a separate browser-tested, explicitly simulated menu/HUD design study.
+The oak retains TRELLIS branch geometry. `reference_canopy.gd` classifies the
+source foliage colour and replaces those surfaces with folded cards using the
+original NanoBanana leaf texture, avoiding waxy reconstructed leaf clumps.
+This heuristic is specific to this reference oak, not a general asset importer.
+Its shared runtime mesh is built once per load. The small rock is reduced to
+3000 faces with UVs/textures preserved. All generation seeds, conditioning
+hashes and final GLB hashes are recorded; existing miniature pipeline code
+and models are unchanged.
+
+## Validation
+
+The capture uses the real main scene, tutorial board, original UI and asset
+loading. It checks rule geometry after dressing. Relevant existing regression
+suites are `base_terrain_projection_test`, `terrain_overlay_test` and
+`sandbox_terrain_test`; CI additionally covers the full suite, launch smoke,
+multiplayer and exports. Current capture measurements and validation results
+are reported with the PR, not extrapolated to all hardware or renderers.

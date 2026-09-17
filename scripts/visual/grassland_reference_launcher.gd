@@ -25,6 +25,10 @@ func _ready() -> void:
 	main.atmosphere_controller.apply_atmosphere("Day",true)
 	var presentation := preload("res://scripts/visual/grassland_reference.gd").new()
 	main.add_child(presentation)
+	await presentation.prepare()
+	if not is_instance_valid(main):
+		queue_free()
+		return
 	presentation.apply(main)
 	main.set_meta("grassland_reference_ready", true)
 	print("REFERENCE_SCENE_READY")

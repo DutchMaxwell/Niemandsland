@@ -1,0 +1,150 @@
+[
+  {
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Original photorealistic game material, square image, no text, no logos, no border, no grid, no diagrams. Strict vertical overhead macro photograph of an uneven dry temperate meadow floor. A 45 centimetre patch with irregular clumps of very short olive-green and straw grass, exposed granular brown earth, many tiny angular grey beige pebbles, a few dry brown leaf fragments and fine tangled roots. Roughly half bare rocky earth and half low green and ochre plants, natural and weathered, crisp distinct stones and blades, no soft moss carpet, no big rocks. Edge-to-edge seamless ground texture, soft diffuse overcast illumination with fine ambient occlusion but no cast shadows. Rich brown soil, muted golden straw and dark olive greens, earthy natural colours, finely detailed. This will be a diffuse albedo texture with real geometry above it.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-17",
+    "source_file": "field.png",
+    "source_sha256": "22902638c1d7f55594c58d2e7a0b15937b11c4ef01bd23ef67983d167499984e",
+    "file": "field.webp",
+    "sha256": "91806d8427ed11a2787eb79ab703b60f9e38f88c43cfa41dcf02b5bd56560af0",
+    "processing": "WebP encoding, quality 95; no compositing or third-party inputs"
+  },
+  {
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Original photorealistic game material, square image, no text, no logos, no border, no grid, no diagrams. Seamless edge-to-edge albedo texture photograph of rough weathered oak bark, very fine irregular vertical fissures, grey brown ridges, scattered tiny olive lichen patches, lifelike organic irregular detail. Strict front on close-up covers 30 centimetres across a trunk, no curvature, no tree silhouette, no background, no directional lighting or shadows. Soft neutral diffuse light, physically realistic brown grey bark, no repeated stripes.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-17",
+    "source_file": "bark.png",
+    "source_sha256": "8da6b6a6756ee2791474363aafa226df8687e51786097bb56f7cf8d176292ce6",
+    "file": "bark.webp",
+    "sha256": "3c1face33abd482062b40769ac88fce27d44bbf91e5acbd3d825a0b9ebd20e8e",
+    "processing": "WebP encoding, quality 95; no compositing or third-party inputs"
+  },
+  {
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Original photorealistic game material, square image, no text, no logos, no border, no grid, no diagrams. One single natural small oak leaf viewed straight down, centered on a pure solid BLACK background. Leaf points upward, stem down. The leaf blade occupies most of the image with a narrow black margin, distinctly lobed scalloped outline, slightly asymmetrical. Rich olive green with subtle yellow-green at some tips, dark central veins and very fine branching veins, tiny natural blemishes. Sharp realistic photographic botanical detail. Flat diffuse shadowless illumination, no gloss hotspots, no other leaves, no branch, no ground. This is a foliage cutout texture, keep all exterior background perfectly black.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-17",
+    "source_file": "leaf.png",
+    "source_sha256": "b75ceb9ddb7913664d9911a1d0d609e6beedd2b85fa9d930daffbf91075a0ea9",
+    "file": "leaf.webp",
+    "sha256": "30cca13fb933a75d84fd58b745a27c18360d2d7a43e491d030ff144a173342b2",
+    "processing": "WebP encoding, quality 95; no compositing or third-party inputs"
+  },
+  {
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Create one original photorealistic cutout of a low, wide, naturally irregular tuft of wild meadow grass, viewed from the side with a slight downward angle. Pure solid BLACK background. The isolated tuft has about 100 finely detailed slender arching blades, a mixture of muted olive-green living blades and warm dry straw blades. Many blades bend outward and curl down near the soil, others lean diagonally, only a few upright tips. Irregular loose feathery silhouette, real botanical shapes and believable fine blade detail, NOT a stiff upright bunch, NOT a neat ornamental plant. Wide spreading base with tangled dry fine grass, no visible soil clod, no rock, no pot, no flowers, no seed heads. Roughly twice as wide as tall. Occupies 90 percent of width and 70 percent of height, lower base near bottom. Soft shadowless diffuse daylight, no directional cast shadow, no baked sun highlights, no ground plane. Every gap between the blades is pure black background. A game foliage alpha-card source photograph, no text, no border, no grid, one tuft only.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-17",
+    "source_file": "tuft.png",
+    "source_sha256": "4510618a42c1fdd55e2c3e3d0ef18b20de982d9c707e633245e2fd9988544b1a",
+    "file": "tuft.webp",
+    "sha256": "23788c4f4a6ad2d376eb516ec3a023d0f609a2321d2ae97d2fa5b03041718b3a",
+    "processing": "WebP encoding, quality 95; exterior black discarded in the runtime shader"
+  },
+  {
+    "file": "rock.png",
+    "sha256": "2e1a12e39150d4ea45cb188e4f909f8677877ce448f43689a843769d98f10a97",
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Original photorealistic game material, square image, no text, no logos, no border, no grid, no diagrams. One original isolated irregular low limestone rock photographed on a pure white studio background for 3D reconstruction, front three-quarter view with full object in frame, no base, no plinth, no other objects. Grey beige weathered stone with broken angular faces, rough chipped edges, detailed fine cracks, tiny dark olive moss in a few crevices. A natural fist-sized fieldstone, wider than tall, approximately 25 by 18 by 12 centimetres. Soft balanced lighting, excellent realistic material detail, realistic stone not stylized not polished.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-17"
+  },
+  {
+    "file": "oak.png",
+    "sha256": "e2df5294ff7eb08aedddd4b31571a4a4604dc8506efdb0e9b707479966e35790",
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Use the attached original Niemandsland concept ONLY as a visual style reference for the NATURAL OAK TREES. Create one single isolated photorealistic small mature oak tree on a pure white background, suitable for high-quality 3D reconstruction. Entire tree visible including subtle root flare, no terrain base or platform, no soil disc, no miniatures, no wall, no containers, no text. Match the convincing naturalistic foreground oak from the concept: beautiful irregular twisting grey-brown woody trunk splitting into multiple thick curved limbs, complex fine branches, asymmetrical broad crown with varied overlapping foliage clusters and small openings showing interior branches. Thousands of individually recognizable SMALL olive-green leaves with a few warm yellow-brown tips. The crown should be about as wide as the tree is tall; foliage descends naturally to the lower side branches, not an umbrella crown high on a bare pole. A believable 3.5-metre old oak with rugged bark and realistic botanical leaves, lifelike photographed material detail, physically plausible proportions, not a bonsai, not stylized, not a low-poly game model, not a perfect sphere. Soft neutral diffuse studio light with no harsh cast shadows, three-quarter front view. Fill the frame with the single tree and leave narrow white margins.",
+    "reference_images": [
+      {
+        "file": "original-concept-battlefield.webp",
+        "sha256": "a8425a6672d799ac2a3acfb094596e8ca82ee578f943baca459bd7f8dad7c3bc",
+        "source": "Previously generated original Niemandsland art-direction concept"
+      }
+    ],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-17"
+  },
+  {
+    "file": "oak-clean.png",
+    "sha256": "6c54ce6066678c8c19b9f51ef8ca313918032ac5d56d13870024a934d30416b6",
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Keep this exact single oak tree and all of its detailed foliage, branches, trunk and roots. Change ONLY the background. Replace EVERY part of the background and ground with perfectly flat pure white RGB 255,255,255, including every gap between branches and leaves. Remove ALL cast shadows and ALL grey studio-floor gradients around and below the tree. No ground plane, no floor contact shadow, no horizon, no vignetting, no platform. The root ends are the bottom of the isolated tree. Background must be plain uniform white all the way to the frame edges. Preserve the tree itself and its realistic natural colours and fine detail.",
+    "edit_input": "oak.png",
+    "edit_input_sha256": "e2df5294ff7eb08aedddd4b31571a4a4604dc8506efdb0e9b707479966e35790",
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-17"
+  },
+  {
+    "version": 1,
+    "url": "{cdn}/fdad14ef08633fba48d83ea695dbe5ac72b85110267dbcd2bb413a1a58a72b8d.glb",
+    "sha256": "fdad14ef08633fba48d83ea695dbe5ac72b85110267dbcd2bb413a1a58a72b8d",
+    "size": 10470012,
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "source": "Original NanoBanana image -> project deterministic white-key/deshadow + alpha-preserving server conditioning (BRIA bypassed) -> TRELLIS.2 -> 1024 reconstruction, 4096 texture",
+    "source_image": "oak-clean.png",
+    "source_sha256": "6c54ce6066678c8c19b9f51ef8ca313918032ac5d56d13870024a934d30416b6",
+    "conditioned_image": "oak-conditioned.png",
+    "conditioned_sha256": "c822ff02f022c46bb6ebdf8c7116e767be9a0ce12916c0a57b55879197a54f91",
+    "trellis_sha256": "fdad14ef08633fba48d83ea695dbe5ac72b85110267dbcd2bb413a1a58a72b8d",
+    "seed": 650770009,
+    "processing": "Unmodified generated GLB",
+    "conditioning": {
+      "source_image": "oak-clean.png",
+      "source_sha256": "6c54ce6066678c8c19b9f51ef8ca313918032ac5d56d13870024a934d30416b6",
+      "preprocessing": "Existing project deterministic white-key/deshadow, then server alpha-preserving crop and RGB conditioning; remove_background/BRIA bypassed by supplied alpha",
+      "white_threshold": 180,
+      "alpha_image": "oak-keyed.png",
+      "alpha_sha256": "f16332e7e13530fb3e0661641bc70db38696a0e39468204042296ed310db5306",
+      "conditioned_image": "oak-conditioned.png",
+      "conditioned_sha256": "c822ff02f022c46bb6ebdf8c7116e767be9a0ce12916c0a57b55879197a54f91"
+    }
+  },
+  {
+    "version": 1,
+    "url": "{cdn}/7b7f77299c0e3c2906c3a707b8010cbae93164cd24ef87c9ef9003fb78512463.glb",
+    "sha256": "7b7f77299c0e3c2906c3a707b8010cbae93164cd24ef87c9ef9003fb78512463",
+    "size": 2029624,
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "source": "Original NanoBanana image -> project deterministic white-key/deshadow + alpha-preserving server conditioning (BRIA bypassed) -> TRELLIS.2 -> 1024 reconstruction, 4096 texture",
+    "source_image": "rock.png",
+    "source_sha256": "2e1a12e39150d4ea45cb188e4f909f8677877ce448f43689a843769d98f10a97",
+    "conditioned_image": "rock-conditioned.png",
+    "conditioned_sha256": "d635b680903a228e436aaa54bc37ba5ef335d184d32d9d62cfc20c1e2ab41005",
+    "trellis_sha256": "37a3afe30b6a27292dec90d0c61fd8509463c0d9edd9959f98ddba2b31a1651b",
+    "seed": 961536507,
+    "processing": "Blender topology reduction to 3000 faces; textures and UVs preserved",
+    "conditioning": {
+      "source_image": "rock.png",
+      "source_sha256": "2e1a12e39150d4ea45cb188e4f909f8677877ce448f43689a843769d98f10a97",
+      "preprocessing": "Existing project deterministic white-key/deshadow, then server alpha-preserving crop and RGB conditioning; remove_background/BRIA bypassed by supplied alpha",
+      "white_threshold": 240,
+      "alpha_image": "rock-keyed.png",
+      "alpha_sha256": "ee50701b45fe8ebc7b585586b2764112f6a600360a3eee92a8335c812c2ffa1a",
+      "conditioned_image": "rock-conditioned.png",
+      "conditioned_sha256": "d635b680903a228e436aaa54bc37ba5ef335d184d32d9d62cfc20c1e2ab41005"
+    }
+  }
+]

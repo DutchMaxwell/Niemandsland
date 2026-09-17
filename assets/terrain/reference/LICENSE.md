@@ -1,19 +1,28 @@
-# Grassland reference materials
+# Grassland reference visual assets
 
-The files `meadow.webp`, `earth.webp` and `woodland.webp` are original
-Niemandsland generated visual assets, released under **CC BY-SA 4.0**:
-https://creativecommons.org/licenses/by-sa/4.0/
+The reference textures and the generated tree/rock models referenced by
+`hero/*.json` are original Niemandsland visual assets, released under
+**CC BY-SA 4.0**: https://creativecommons.org/licenses/by-sa/4.0/
 
-Attribution: Niemandsland Contributors. AI-generated with Google Gemini
-2.5 Flash Image (NanoBanana), 2026-09-16, through the existing Model Forge
-pipeline. Inputs were original text descriptions; no third-party images or
-assets were supplied. See `provenance.json` for the exact prompts, original
-image hashes, encoding and shipped image hashes.
+Attribution: Niemandsland Contributors.
+
+- `meadow.webp`, `earth.webp`, `woodland.webp`: Google Gemini 2.5 Flash Image
+  (NanoBanana), 2026-09-16. Original text descriptions; no reference images.
+- `hero/field.webp`, `hero/bark.webp`, `hero/leaf.webp`, `hero/tuft.webp`:
+  NanoBanana, 2026-09-17. Original text descriptions; no reference images.
+- Generated 3D terrain props: original NanoBanana image sources reconstructed
+  with TRELLIS.2 through the existing Model Forge pipeline. The oak image uses
+  the project's own previously generated battlefield concept as a style
+  reference. No third-party artwork, stock images or game assets were supplied.
+
+Exact prompts, source/output hashes and processing records are in
+`provenance.json` and `hero/provenance.json`. Model manifests identify immutable
+CDN assets by SHA-256; the binary models are not bundled in this repository.
 
 The license applies to the visual assets to the extent applicable rights
 exist. It does not assert exclusive rights in purely generated output or
-clear unrelated third-party rights. Tool and service licenses are separate
-from this project asset license.
+clear unrelated third-party rights. Tool, service and dependency licenses
+remain separate from this project asset license; see `THIRD_PARTY.md`.
 
-Procedural tree/grass geometry and shaders are original project code under
-MIT. Existing miniature and terrain assets retain their existing notices.
+Procedural geometry and shaders are original project code under MIT.
+Existing miniature and terrain assets retain their existing notices.

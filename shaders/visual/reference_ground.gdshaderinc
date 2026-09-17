@@ -4,6 +4,8 @@ uniform sampler2D woodland_tex : source_color, filter_linear_mipmap_anisotropic,
 uniform int forest_count = 0;
 uniform vec4 forest_regions[16];
 uniform float forest_angles[16];
+uniform int wall_count=0;
+uniform vec4 wall_regions[64];
 
 // Integer hashing keeps neighboring cells identical across GPU optimizations.
 float surface_hash(vec2 p) {
@@ -21,15 +23,15 @@ float surface_noise(vec2 p) {
 vec2 mirrored_uv(vec2 uv) { return 1.0 - abs(mod(uv, 2.0) - 1.0); }
 vec3 tiled_surface(sampler2D tex, vec2 uv) {
  vec2 rotated = mat2(vec2(0.8,0.6),vec2(-0.6,0.8)) * uv * 0.71 + vec2(0.37,0.61);
- return mix(texture(tex,mirrored_uv(uv)).rgb,texture(tex,mirrored_uv(rotated)).rgb,0.45);
+ return mix(texture(tex,mirrored_uv(uv)).rgb,texture(tex,mirrored_uv(rotated)).rgb,0.15);
 }
 vec3 ground_sample(vec2 p) {
- vec2 uv = p * 18.0;
- float broad = surface_noise(p * 6.5) * 0.65 + surface_noise(p * 18.0) * 0.35;
+ vec2 uv = p * 14.0;
+ float broad = surface_noise(p * 6.5) * 0.65 + surface_noise(p * 14.0) * 0.35;
  float meadow = smoothstep(0.31, 0.64, broad);
  vec3 earth = tiled_surface(earth_tex, uv);
  vec3 grass = tiled_surface(meadow_tex, uv);
- vec3 col = mix(earth * vec3(0.48,0.43,0.37), grass, meadow);
+ vec3 col = mix(earth * 0.94, grass * vec3(0.64,0.62,0.44), meadow * 0.28);
  float woodland = 0.0;
  for (int i = 0; i < forest_count; i++) {
   vec2 d = p - forest_regions[i].xy;
@@ -39,5 +41,14 @@ vec3 ground_sample(vec2 p) {
   woodland = max(woodland, 1.0 - smoothstep(0.78,1.18 + 0.10 * broad,distance_to_edge));
  }
  col = mix(col, tiled_surface(woodland_tex, uv * 1.1) * 0.87, woodland * 0.88);
- return col * 0.76;
+ float foot=0.0;
+ for(int i=0;i<wall_count;i++){
+  vec2 a=wall_regions[i].xy,b=wall_regions[i].zw;
+  vec2 e=b-a;
+  float t=clamp(dot(p-a,e)/max(dot(e,e),0.000001),0.0,1.0);
+  float d=length(p-(a+t*e));
+  foot=max(foot,1.0-smoothstep(0.005,0.025+0.008*broad,d));
+ }
+ col*=mix(vec3(1.0),vec3(0.56,0.58,0.45),foot*0.65);
+ return col * 0.94;
 }

@@ -10,6 +10,15 @@ var _base: ShaderMaterial
 var _trees: Array[ArrayMesh] = []
 var _regions := PackedVector4Array()
 var _angles := PackedFloat32Array()
+var _props: Node3D
+var _previous_viewport: Dictionary = {}
+var _studio_sky: Sky
+
+
+func prepare() -> void:
+	_props = preload("res://scripts/visual/reference_props.gd").new()
+	add_child(_props)
+	await _props.prepare()
 
 
 func apply(main: Node) -> void:
@@ -20,18 +29,23 @@ func apply(main: Node) -> void:
 	_ground.shader = GROUND
 	for texture_name in ["meadow","earth","woodland"]:
 		_ground.set_shader_parameter(texture_name + "_tex",load("res://assets/terrain/reference/" + texture_name + ".webp"))
+	_ground.set_shader_parameter("earth_tex",load("res://assets/terrain/reference/hero/field.webp"))
 	var table: Node3D = main.get_node("Table")
-	_ground.set_shader_parameter("detail_normal", table._detail_normal_tex)
-	table.get_node("TableMesh").material_override = _ground
+	var surface: MeshInstance3D = table.get_node("TableMesh")
+	var plane: PlaneMesh = surface.mesh.duplicate()
+	plane.subdivide_width = 450
+	plane.subdivide_depth = 300
+	surface.mesh = plane
+	_ground.set_shader_parameter("surface_relief",true)
+	surface.material_override = _ground
 	table.get_node("GrassField").visible = false
 	_base = table.get_base_top_material()
 	_base.shader = GROUND
 	_base.set_shader_parameter("clip_base",true)
-	_base.set_shader_parameter("detail_normal", table._detail_normal_tex)
 	for texture_name in ["meadow","earth","woodland"]:
 		_base.set_shader_parameter(texture_name + "_tex",_ground.get_shader_parameter(texture_name + "_tex"))
 	var frame := StandardMaterial3D.new()
-	frame.albedo_color = Color(0.075,0.084,0.078)
+	frame.albedo_color = Color(0.022,0.026,0.023)
 	frame.roughness = 0.86
 	for child in table.get_children():
 		if child is MeshInstance3D and child != table.get_node("TableMesh"):
@@ -39,33 +53,74 @@ func apply(main: Node) -> void:
 	var overlay: Node3D = main.terrain_overlay
 	_dress_grid_forest(overlay)
 	_dress_movable_forests()
+	for wall in overlay._wall_instances:
+		_weather_ruin(wall)
 	_sync_regions()
-	_build_meadow(table.table_size * 0.3048)
+	var wall_regions := PackedVector4Array()
+	for edge: Array in overlay.get_wall_segments_world():
+		wall_regions.append(Vector4(edge[0].x,edge[0].y,edge[1].x,edge[1].y))
+	var wall_count := mini(wall_regions.size(),64)
+	wall_regions.resize(64)
+	for mat in [_ground,_base]:
+		mat.set_shader_parameter("wall_count",wall_count)
+		mat.set_shader_parameter("wall_regions",wall_regions)
+	var understory := preload("res://scripts/visual/reference_understory.gd").new()
+	add_child(understory)
+	understory.build(self,main,table.table_size * 0.3048)
+	if _props != null:
+		_props.dress(self,table.table_size*0.3048)
 	_style_trays()
 	apply_lighting("Day")
 
 
 func apply_lighting(mood: String) -> void:
+	if _previous_viewport.is_empty():
+		_previous_viewport = {"taa":get_viewport().use_taa,"scale":get_viewport().scaling_3d_scale}
 	var light: Node = _main.lighting_controller
 	var evening := mood == "Sunset"
-	light.set_sun_energy(1.7 if evening else 1.55)
-	light.set_sun_color(Color(1,0.85,0.69) if evening else Color(1,0.97,0.89))
-	light.set_sun_angles(-40.0 if evening else 65.0,28.0 if evening else 48.0)
-	light.set_ambient_energy(0.28)
+	light.set_sun_energy(2.1)
+	light.set_sun_color(Color(1,0.85,0.69) if evening else Color(1,0.90,0.75))
+	light.set_sun_angles(-40.0 if evening else -65.0,28.0 if evening else 48.0)
+	light.set_ambient_energy(0.32)
 	light.set_ambient_color(Color(0.77,0.84,0.94))
-	light.set_fill_light_energy(0.40)
-	light.set_fill_light_color(Color(0.80,0.89,1.0))
+	light.set_fill_light_energy(0.90)
+	light.set_fill_light_color(Color(0.95,0.94,0.90))
 	light.set_exposure(1.0)
-	light.set_contrast(1.05)
+	light.set_contrast(1.09)
 	light.set_saturation(0.96)
 	light.set_shadow_opacity(0.85)
-	light.set_shadow_blur(1.5)
-	light.set_ssao_intensity(0.65)
+	light.set_shadow_blur(0.65)
+	light.set_shadow_bias(0.015)
+	light.set_shadow_normal_bias(0.25)
+	var sun: DirectionalLight3D = _main.get_node("DirectionalLight3D")
+	sun.directional_shadow_max_distance = 3.0
+	sun.directional_shadow_pancake_size = 1.0
+	RenderingServer.directional_shadow_atlas_set_size(8192,true)
+	get_viewport().use_taa = false
+	get_viewport().scaling_3d_scale = 1.25
+	light.set_ssao_intensity(1.2)
 	light.set_glow_intensity(0.1)
 	var env: Environment = _main.get_node("WorldEnvironment").environment
+	if _studio_sky == null:
+		var sky_material := ProceduralSkyMaterial.new()
+		sky_material.sky_top_color = Color(0.34,0.42,0.52)
+		sky_material.sky_horizon_color = Color(0.65,0.61,0.51)
+		sky_material.ground_bottom_color = Color(0.055,0.040,0.025)
+		sky_material.ground_horizon_color = Color(0.46,0.42,0.34)
+		_studio_sky = Sky.new()
+		_studio_sky.sky_material = sky_material
+		_studio_sky.radiance_size = Sky.RADIANCE_SIZE_512
+	env.sky = _studio_sky
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.12,0.14,0.125)
+	env.background_color = Color(0.20,0.205,0.20)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ssao_radius = 0.035
+	env.ssao_intensity = 2.0
+	env.ssao_power = 1.4
+	env.ssil_enabled = true
+	env.ssil_radius = 0.075
+	env.ssil_intensity = 0.7
 
 
 func _dress_grid_forest(overlay: Node3D) -> void:
@@ -102,11 +157,16 @@ func _dress_grid_forest(overlay: Node3D) -> void:
 			for child in original.get_children():
 				if child is Node3D:
 					child.visible = false
-			var tree := MeshInstance3D.new()
-			tree.name = "ReferenceCanopy"
-			tree.mesh = _trees[index%3]
-			tree.scale = Vector3.ONE * height
-			original.add_child(tree)
+			if _props != null and _props.has_tree():
+				var tree: Node3D = _props.tree_instance(height,index)
+				tree.name = "ReferenceCanopy"
+				original.add_child(tree)
+			else:
+				var tree := MeshInstance3D.new()
+				tree.name = "ReferenceCanopy"
+				tree.mesh = _trees[index%3]
+				tree.scale = Vector3.ONE*height
+				original.add_child(tree)
 			index += 1
 			break
 	print("REFERENCE_TREES ",index," regions=",_regions.size())
@@ -133,55 +193,12 @@ func _sync_regions() -> void:
 		mat.set_shader_parameter("forest_angles",_angles)
 
 
-func _build_meadow(size: Vector2) -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 91624
-	var source := SurfaceTool.new()
-	source.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in 5:
-		var angle := float(i)*2.39996
-		var a := Vector3(cos(angle)*0.0007,0,sin(angle)*0.0007)
-		var sideways := Vector3(cos(angle+PI*0.5),0,sin(angle+PI*0.5))*0.00035
-		var tip := a+Vector3(cos(angle)*0.0014,0.004+float(i%3)*0.001,sin(angle)*0.0014)
-		for p in [a-sideways,a+sideways,tip]:
-			source.set_normal(Vector3.UP)
-			source.set_uv(Vector2(0.5,clampf(p.y/0.006,0,1)))
-			source.add_vertex(p)
-	var material := ShaderMaterial.new()
-	material.shader = preload("res://shaders/visual/reference_foliage.gdshader")
-	source.set_material(material)
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.mesh = source.commit()
-	var count := int(size.x*size.y*4800)
-	mm.instance_count = count
-	var accepted := 0
-	for i in count:
-		var point := Vector3(rng.randf_range(-size.x*0.5,size.x*0.5),0.0003,rng.randf_range(-size.y*0.5,size.y*0.5))
-		var xz := Vector2(point.x,point.z)
-		var cover := _surface_noise(xz*6.5)*0.65+_surface_noise(xz*18.0)*0.35
-		if cover < 0.46:
-			continue
-		var scale_value := rng.randf_range(0.45,1.0)
-		var basis := Basis(Vector3.UP,rng.randf()*TAU).scaled(Vector3.ONE*scale_value)
-		mm.set_instance_transform(accepted,Transform3D(basis,point))
-		mm.set_instance_color(accepted,Color(0.24,0.31,0.10).lerp(Color(0.43,0.43,0.19),rng.randf()).srgb_to_linear())
-		accepted += 1
-	mm.visible_instance_count = accepted
-	var grass := MultiMeshInstance3D.new()
-	grass.name = "ShortMeadow"
-	grass.multimesh = mm
-	grass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(grass)
-
-
 func _style_trays() -> void:
 	for tray in _main.opr_army_manager.army_trays.values():
 		for child in tray.get_children():
 			if child is MeshInstance3D and child.material_override is StandardMaterial3D:
 				var mat: StandardMaterial3D = child.material_override.duplicate()
-				mat.albedo_color = mat.albedo_color.lerp(Color(0.08,0.10,0.11,mat.albedo_color.a),0.83)
+				mat.albedo_color = mat.albedo_color.lerp(Color(0.025,0.030,0.032,mat.albedo_color.a),0.83)
 				mat.roughness = 0.88
 				child.material_override = mat
 
@@ -198,3 +215,23 @@ func _surface_noise(p: Vector2) -> float:
 	var f := p-i
 	var u := f*f*(Vector2(3,3)-2.0*f)
 	return lerpf(lerpf(_surface_hash(i),_surface_hash(i+Vector2.RIGHT),u.x),lerpf(_surface_hash(i+Vector2.DOWN),_surface_hash(i+Vector2.ONE),u.x),u.y)
+
+
+func _weather_ruin(node: Node) -> void:
+	if node is MeshInstance3D:
+		var material := ShaderMaterial.new()
+		material.shader = preload("res://shaders/visual/reference_weathering.gdshader")
+		node.material_overlay = material
+	for child in node.get_children():
+		_weather_ruin(child)
+
+
+func _exit_tree() -> void:
+	if _previous_viewport.is_empty():
+		return
+	var viewport := get_viewport()
+	viewport.use_taa = _previous_viewport.taa
+	viewport.scaling_3d_scale = _previous_viewport.scale
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null:
+		RenderingServer.directional_shadow_atlas_set_size(graphics.PRESETS[graphics.current_preset]["shadow_size"],true)
