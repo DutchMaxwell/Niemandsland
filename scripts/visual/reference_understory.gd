@@ -89,16 +89,16 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 		add_child(shrub)
 	_contact_details(litter_transforms,litter_colors)
 	_litter_drifts(litter_transforms,litter_colors,size)
-	_multimesh("MeadowClumps",_tuft_mesh(),grass_transforms,grass_colors)
+	_multimesh("MeadowClumps",_tuft_mesh(),grass_transforms,grass_colors,false)
 	var thatch_transforms: Array[Transform3D] = []
 	var thatch_colors: Array[Color] = []
 	for i in grass_transforms.size():
 		if i%3==0:
 			thatch_transforms.append(grass_transforms[i])
 			thatch_colors.append(Color(0.42,0.35,0.20).lerp(Color(0.68,0.58,0.36),_rng.randf()).srgb_to_linear())
-	_multimesh("FallenStraw",_thatch_mesh(),thatch_transforms,thatch_colors)
-	_multimesh("MeadowHerbs",_herb_mesh(),herb_transforms,herb_colors)
-	_multimesh("DryFescue",_fescue_mesh(),tall_transforms,tall_colors)
+	_multimesh("FallenStraw",_thatch_mesh(),thatch_transforms,thatch_colors,false)
+	_multimesh("MeadowHerbs",_herb_mesh(),herb_transforms,herb_colors,false)
+	_multimesh("DryFescue",_fescue_mesh(),tall_transforms,tall_colors,false)
 	_multimesh("FieldPebbles",_stone_mesh(),stone_transforms,stone_colors)
 	_multimesh("LeafLitter",_litter_mesh(),litter_transforms,litter_colors)
 	print("REFERENCE_UNDERSTORY grass=",grass_transforms.size()," stones=",stone_transforms.size()," leaves=",litter_transforms.size()," fescue=",tall_transforms.size())
@@ -196,7 +196,7 @@ func _wall_distance(p: Vector2) -> float:
 	return result
 
 
-func _multimesh(label: String,mesh: Mesh,transforms: Array[Transform3D],colors: Array[Color]) -> void:
+func _multimesh(label: String,mesh: Mesh,transforms: Array[Transform3D],colors: Array[Color],shadow := true) -> void:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
@@ -208,13 +208,14 @@ func _multimesh(label: String,mesh: Mesh,transforms: Array[Transform3D],colors: 
 	var node := MultiMeshInstance3D.new()
 	node.name = label
 	node.multimesh = mm
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)
 
 
 func _tuft_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for blade in 32:
+	for blade in 22:
 		var angle := _rng.randf()*TAU
 		var dir := Vector3(cos(angle),0,sin(angle))
 		var side := Vector3(-sin(angle),0,cos(angle))
@@ -293,7 +294,7 @@ func _path_amount(p: Vector2) -> float:
 func _fescue_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for blade in 150:
+	for blade in 100:
 		var angle := _rng.randf()*TAU
 		var dir := Vector3(cos(angle),0,sin(angle))
 		var side := Vector3(-sin(angle),0,cos(angle))
@@ -349,7 +350,7 @@ func _herb_mesh() -> ArrayMesh:
 func _thatch_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in 36:
+	for i in 28:
 		var angle := _rng.randf()*TAU
 		var dir := Vector3(cos(angle),0,sin(angle))
 		var side := Vector3(-sin(angle),0,cos(angle))*_rng.randf_range(0.00007,0.00016)

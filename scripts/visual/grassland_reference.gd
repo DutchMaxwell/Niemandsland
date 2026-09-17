@@ -148,9 +148,8 @@ func apply_lighting(mood: String) -> void:
 	env.ssao_radius = 0.035
 	env.ssao_intensity = 2.0
 	env.ssao_power = 1.4
-	env.ssil_enabled = true
-	env.ssil_radius = 0.075
-	env.ssil_intensity = 0.7
+	env.ssil_enabled = false
+	env.tonemap_agx_contrast = 1.15
 	env.volumetric_fog_enabled = true
 	env.volumetric_fog_density = 0.0
 	env.volumetric_fog_albedo = Color(0.76,0.74,0.68)
