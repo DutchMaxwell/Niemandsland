@@ -42,9 +42,9 @@ static func _rebuild(instance: MeshInstance3D) -> void:
 			var color := source.get_pixel(clampi(int(uv.x*source.get_width()),0,source.get_width()-1),clampi(int(uv.y*source.get_height()),0,source.get_height()-1))
 			var foliage := color.g > color.r*0.82 and color.b < color.g*0.68
 			if foliage:
-				if rng.randf()<0.19:
+				if rng.randf()<0.078:
 					var center := (vertices[a]+vertices[b]+vertices[c])/3.0
-					preload("res://scripts/visual/reference_tree.gd")._leaf(leaves,center,rng,0.48)
+					preload("res://scripts/visual/reference_tree.gd")._leaf(leaves,center,rng,0.70)
 					leaf_count += 1
 			else:
 				for j in [a,b,c]:
@@ -66,9 +66,9 @@ static func _rebuild(instance: MeshInstance3D) -> void:
 		return
 	var material := ShaderMaterial.new()
 	material.shader = preload("res://shaders/visual/reference_foliage.gdshader")
-	material.set_shader_parameter("leaf_tex",load("res://assets/terrain/reference/hero/leaf.webp"))
+	material.set_shader_parameter("leaf_tex",preload("res://scripts/visual/reference_materials.gd").texture("res://assets/terrain/reference/hero/leaf.webp"))
 	material.set_shader_parameter("textured_leaf",true)
-	material.set_shader_parameter("foliage_tint",Vector3(1.05,0.88,0.64))
+	material.set_shader_parameter("foliage_tint",Vector3(0.91,0.85,0.67))
 	leaves.set_material(material)
 	leaves.commit(result)
 	instance.mesh = result

@@ -27,11 +27,15 @@ vec3 tiled_surface(sampler2D tex, vec2 uv) {
 }
 vec3 ground_sample(vec2 p) {
  vec2 uv = p * 14.0;
- float broad = surface_noise(p * 6.5) * 0.65 + surface_noise(p * 14.0) * 0.35;
- float meadow = smoothstep(0.31, 0.64, broad);
+ float broad = surface_noise(p * 10.0) * 0.65 + surface_noise(p * 43.0) * 0.35;
+ float meadow = smoothstep(0.34, 0.63, broad);
+ float path_center = -0.60+sin(p.y*8.0+0.4)*0.085;
+ float path_width = 0.020+surface_noise(p*38.0)*0.020;
+ float path = (1.0-smoothstep(path_width,path_width+0.030,abs(p.x-path_center)))*smoothstep(0.02,0.15,p.y);
  vec3 earth = tiled_surface(earth_tex, uv);
  vec3 grass = tiled_surface(meadow_tex, uv);
- vec3 col = mix(earth * 0.94, grass * vec3(0.64,0.62,0.44), meadow * 0.28);
+ vec3 col = mix(earth * vec3(0.80,0.76,0.65), grass * vec3(0.51,0.56,0.32), meadow * (1.0-path*0.95) * 0.80);
+ col *= mix(0.77,1.12,surface_noise(p*82.0));
  float woodland = 0.0;
  for (int i = 0; i < forest_count; i++) {
   vec2 d = p - forest_regions[i].xy;
@@ -40,7 +44,8 @@ vec3 ground_sample(vec2 p) {
   float distance_to_edge = length(d / forest_regions[i].zw);
   woodland = max(woodland, 1.0 - smoothstep(0.78,1.18 + 0.10 * broad,distance_to_edge));
  }
- col = mix(col, tiled_surface(woodland_tex, uv * 1.1) * 0.87, woodland * 0.88);
+ col = mix(col, tiled_surface(woodland_tex, uv * 2.2) * vec3(0.64,0.64,0.49), woodland * 0.85);
+ col = mix(col,earth*vec3(0.87,0.82,0.71),path*0.72);
  float foot=0.0;
  for(int i=0;i<wall_count;i++){
   vec2 a=wall_regions[i].xy,b=wall_regions[i].zw;

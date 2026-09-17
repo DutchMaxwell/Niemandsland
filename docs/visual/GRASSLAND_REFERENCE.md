@@ -2,10 +2,13 @@
 
 An opt-in, playable visual reference on the existing tutorial board, retaining
 its original 54 miniatures. The September 17 revision concentrates detail in
-one woodland/ruin slice: TRELLIS branch anatomy with fine textured leaf cards, mixed short grass and alpha
-cards, pebble and leaf scatter, reconstructed stone props, wall-foot debris,
+one woodland/ruin slice: TRELLIS branch anatomy with fine textured leaf cards, short meadow grass, bent dry fescue, low rosettes and fallen straw,
+angular embedded grit and folded leaf scatter, reconstructed stone props, wall-foot debris,
 world-aligned earth/woodland blending, a procedural reflection sky and
-coordinated directional lighting. The reflection sky is code-generated and
+coordinated directional lighting. A winding wear mask connects exposed soil
+with vegetation placement. Layered woodland litter and mixed-height grass
+replace the earlier evenly distributed small clumps; lower daylight creates
+longer, readable plant shadows. The reflection sky is code-generated and
 requires no external HDRI asset.
 
 Production startup, miniature GLBs/materials, terrain collision, footprints,
@@ -52,7 +55,10 @@ use identical cameras and studio settings. Original PNG captures are retained;
 WebP copies are format conversions, without compositing or retouching. The
 original generated concept is labelled separately from actual engine images.
 
-Public comparison:
+Latest quality comparison against the previous reference:
+https://forge.niemandsland.xyz/static/woodland-quality-2026-09-17/index.html
+
+Earlier original/intermediate/reference comparison:
 https://forge.niemandsland.xyz/static/hero-biome-2026-09-17/index.html
 
 Previous comparison and separately simulated menu prototype:
@@ -101,7 +107,9 @@ The oak retains TRELLIS branch geometry. `reference_canopy.gd` classifies the
 source foliage colour and replaces those surfaces with folded cards using the
 original NanoBanana leaf texture, avoiding waxy reconstructed leaf clumps.
 This heuristic is specific to this reference oak, not a general asset importer.
-Its shared runtime mesh is built once per load. The small rock is reduced to
+Its shared runtime mesh is built once per load. The latest canopy uses fewer,
+larger leaves to open the twig structure. Reference shader textures receive
+mipmaps at runtime because the default project import disables them. This reference-only preparation requires no project-setting changes. The small rock is reduced to
 3000 faces with UVs/textures preserved. All generation seeds, conditioning
 hashes and final GLB hashes are recorded; existing miniature pipeline code
 and models are unchanged.

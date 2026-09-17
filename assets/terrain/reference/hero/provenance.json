@@ -146,5 +146,33 @@
       "conditioned_image": "rock-conditioned.png",
       "conditioned_sha256": "d635b680903a228e436aaa54bc37ba5ef335d184d32d9d62cfc20c1e2ab41005"
     }
+  },
+  {
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Use case: photorealistic-natural. Asset type: original tileable diffuse albedo texture for a high-detail realistic tabletop game woodland environment. Strict vertical overhead orthographic MACRO PHOTOGRAPH, completely flat overhead view. Square edge-to-edge surface, evenly lit by soft overcast light with NO directional cast shadows, no vignette, no depth of field, no large highlighted objects. All regions equally in focus. Natural irregular detail, physically real scale. No text, no diagrams, no grid, no logos. A 40 centimetre square of rough brown woodland path soil. Compacted loam broken by embedded ANGULAR small grey-brown shale chips and limestone fragments, gritty mineral aggregates, fine branching exposed roots, scattered broken pale straw stems, torn decomposing ochre leaf fragments and small sparse pockets of dark olive moss. Complex irregular mottled earthy surface with eroded hollows and little fractured soil clods; no smooth sand, no uniform gravel, no round pebble balls, no turf or lawn, no big whole leaves, no planted grass clumps, no symmetrical patterns. Rich natural restrained brown, grey limestone, olive and weathered straw colours. Premium detailed photographic ground material, authentic gritty roughness. Most of the surface is exposed earth and fractured grit; the organic litter is unevenly scattered.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-17",
+    "source_file": "rough-earth.png",
+    "source_sha256": "840cc29ee7f3aff2f5e7e550d3f1a58783f3631df298c301d9ddb689846b3704",
+    "file": "rough-earth.webp",
+    "sha256": "61ee91cc37c3580746efbc25208361aa1efa0e96c9352084dccb637e9627065d",
+    "processing": "WebP encoding, quality 95; original generated material, no third-party inputs or compositing"
+  },
+  {
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Use case: photorealistic-natural. Asset type: original tileable diffuse albedo texture for a high-detail realistic tabletop game woodland environment. Strict vertical overhead orthographic MACRO PHOTOGRAPH, completely flat overhead view. Square edge-to-edge surface, evenly lit by soft overcast light with NO directional cast shadows, no vignette, no depth of field, no large highlighted objects. All regions equally in focus. Natural irregular detail, physically real scale. No text, no diagrams, no grid, no logos. A 40 centimetre square of layered oak woodland floor with a dense tangled mat of small curled dry brown and ochre oak leaves, decomposing torn leaf fragments, a few fine twigs and exposed thin roots, black-brown humus showing between the leaves, and patches of deep olive moss. Many overlapping curled leaves in irregular GROUPS, some skeletonized leaf veins, small angular grey fragments. Photorealistic natural layered litter, not individual leaves neatly scattered on smooth soil, no uniform orange dots, no green living leaves, no big rocks, no tree trunk. Muted warm umber, russet, dusty gold and olive. Rich realistic material microdetail and natural asymmetry, crisp fine veins, tiny curls and tears, entirely original surface.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-17",
+    "source_file": "forest-duff.png",
+    "source_sha256": "d066dcb45f7ee41401b0b468fcafb08f80b1557fc9e3e27ae79e3df7f8882c9d",
+    "file": "forest-duff.webp",
+    "sha256": "f11601410d248f820633f9f7f64662e41d2c688021aadac84640ed53eef26a60",
+    "processing": "WebP encoding, quality 95; original generated material, no third-party inputs or compositing"
   }
 ]

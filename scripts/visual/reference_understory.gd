@@ -16,46 +16,62 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 			_exclusions.append(Vector3(obj.global_position.x,obj.global_position.z,0.021))
 	var grass_transforms: Array[Transform3D] = []
 	var grass_colors: Array[Color] = []
+	var herb_transforms: Array[Transform3D] = []
+	var herb_colors: Array[Color] = []
+	var tall_transforms: Array[Transform3D] = []
+	var tall_colors: Array[Color] = []
 	var stone_transforms: Array[Transform3D] = []
 	var stone_colors: Array[Color] = []
 	var litter_transforms: Array[Transform3D] = []
 	var litter_colors: Array[Color] = []
-	var count := int(size.x*size.y*23000)
+	var count := int(size.x*size.y*26000)
 	for i in count:
 		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		var hero := point.x<0.1 and point.y>0.06
 		if not hero and _rng.randf()>0.18:
 			continue
 		var forest := _forest_amount(point)
-		var noise: float = presentation._surface_noise(point*8.0)*0.70+presentation._surface_noise(point*35.0)*0.30
+		var noise: float = presentation._surface_noise(point*10.0)*0.65+presentation._surface_noise(point*43.0)*0.35
+		var path := _path_amount(point)
 		var wall := _wall_distance(point)
 		var excluded := _excluded(point)
-		var density := smoothstep(0.33,0.64,noise)*0.88
-		density *= 1.0-forest*0.48
+		var density := smoothstep(0.34,0.63,noise)*0.80
+		density *= (1.0-forest*0.80)*(1.0-path*0.98)
 		if wall<0.015:
-			density = maxf(density,0.55)
+			density = maxf(density,0.35)*(1.0-path*0.8)
 		var chance := _rng.randf()
 		if not excluded and chance<density:
-			var scale_value := _rng.randf_range(0.45,1.25)
+			var scale_value := _rng.randf_range(0.35,0.85)
 			if _rng.randf()<0.12:
-				scale_value *= 1.65
+				scale_value *= 1.25
 			if forest>0.65:
 				scale_value *= 0.72
 			var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(scale_value,scale_value*_rng.randf_range(0.7,1.3),scale_value))
 			grass_transforms.append(Transform3D(basis,Vector3(point.x,0.00005,point.y)))
-			var col := Color(0.25,0.32,0.075).lerp(Color(0.57,0.48,0.23),_rng.randf()*0.78)
+			var col := Color(0.22,0.28,0.07).lerp(Color(0.51,0.46,0.24),_rng.randf()*0.7)
 			grass_colors.append(col.srgb_to_linear())
-		if not excluded and _rng.randf()<(0.36 if wall<0.03 else 0.22):
-			var scale_value := _rng.randf_range(0.0005,0.0020)
-			var basis := Basis.from_euler(Vector3(_rng.randf()*0.3,_rng.randf()*TAU,_rng.randf()*0.3)).scaled(Vector3(scale_value,scale_value*_rng.randf_range(0.45,0.8),scale_value*_rng.randf_range(0.75,1.3)))
-			stone_transforms.append(Transform3D(basis,Vector3(point.x,scale_value*0.18,point.y)))
+		if not excluded and _rng.randf()<density*0.14:
+			var h := _rng.randf_range(0.65,1.30)
+			var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(h,h,h))
+			herb_transforms.append(Transform3D(basis,Vector3(point.x,0.0001,point.y)))
+			herb_colors.append(Color(0.75,0.78,0.50).lerp(Color(1.0,0.94,0.70),_rng.randf()))
+		if not excluded and _rng.randf()<density*0.09 and wall>0.006:
+			var h := _rng.randf_range(0.70,1.45)
+			var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(h,h*_rng.randf_range(0.8,1.2),h))
+			tall_transforms.append(Transform3D(basis,Vector3(point.x,-0.0002,point.y)))
+			var straw := Color(0.43,0.46,0.20).lerp(Color(0.72,0.63,0.38),_rng.randf())
+			tall_colors.append(straw.srgb_to_linear())
+		if not excluded and _rng.randf()<(0.40 if wall<0.03 else 0.12+path*0.19):
+			var scale_value := _rng.randf_range(0.0006,0.0026)
+			var basis := Basis.from_euler(Vector3(_rng.randf()*0.3,_rng.randf()*TAU,_rng.randf()*0.3)).scaled(Vector3(scale_value,scale_value*_rng.randf_range(0.20,0.40),scale_value*_rng.randf_range(0.75,1.3)))
+			stone_transforms.append(Transform3D(basis,Vector3(point.x,scale_value*0.06,point.y)))
 			stone_colors.append(Color(0.36,0.34,0.28).lerp(Color(0.65,0.61,0.50),_rng.randf()).srgb_to_linear())
-		if not excluded and _rng.randf()<forest*0.65:
-			var s := _rng.randf_range(0.0011,0.0026)
+		if not excluded and _rng.randf()<forest*0.90+(1.0-path)*0.06:
+			var s := _rng.randf_range(0.0007,0.0018)
 			var basis := Basis.from_euler(Vector3(_rng.randf_range(-0.2,0.2),_rng.randf()*TAU,_rng.randf_range(-0.2,0.2))).scaled(Vector3.ONE*s)
 			litter_transforms.append(Transform3D(basis,Vector3(point.x,0.00025,point.y)))
-			litter_colors.append(Color(0.24,0.15,0.065).lerp(Color(0.54,0.34,0.14),_rng.randf()).srgb_to_linear())
-	for i in 420:
+			litter_colors.append(Color(0.28,0.17,0.065).lerp(Color(0.64,0.40,0.18),_rng.randf()).srgb_to_linear())
+	for i in 90:
 		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		var forest := _forest_amount(point)
 		if forest<0.2 or forest>0.90 or _excluded(point):
@@ -63,22 +79,23 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 		var shrub := MeshInstance3D.new()
 		shrub.mesh = presentation._trees[i%3]
 		shrub.position = Vector3(point.x,-0.001,point.y)
-		var h := _rng.randf_range(0.012,0.028)
+		var h := _rng.randf_range(0.009,0.019)
 		shrub.scale = Vector3(h*1.35,h,h*1.35)
 		shrub.rotation.y = _rng.randf()*TAU
 		add_child(shrub)
 	_multimesh("MeadowClumps",_tuft_mesh(),grass_transforms,grass_colors)
-	var cards: Array[Transform3D] = []
-	var card_colors: Array[Color] = []
+	var thatch_transforms: Array[Transform3D] = []
+	var thatch_colors: Array[Color] = []
 	for i in grass_transforms.size():
-		if i%2!=0:
-			continue
-		cards.append(grass_transforms[i])
-		card_colors.append(Color(1,1,1).lerp(Color(0.85,0.90,0.65),_rng.randf()))
-	_multimesh("PhotographicTufts",_tuft_cards(),cards,card_colors)
+		if i%3==0:
+			thatch_transforms.append(grass_transforms[i])
+			thatch_colors.append(Color(0.42,0.35,0.20).lerp(Color(0.68,0.58,0.36),_rng.randf()).srgb_to_linear())
+	_multimesh("FallenStraw",_thatch_mesh(),thatch_transforms,thatch_colors)
+	_multimesh("MeadowHerbs",_herb_mesh(),herb_transforms,herb_colors)
+	_multimesh("DryFescue",_fescue_mesh(),tall_transforms,tall_colors)
 	_multimesh("FieldPebbles",_stone_mesh(),stone_transforms,stone_colors)
 	_multimesh("LeafLitter",_litter_mesh(),litter_transforms,litter_colors)
-	print("REFERENCE_UNDERSTORY grass=",grass_transforms.size()," stones=",stone_transforms.size()," leaves=",litter_transforms.size())
+	print("REFERENCE_UNDERSTORY grass=",grass_transforms.size()," stones=",stone_transforms.size()," leaves=",litter_transforms.size()," fescue=",tall_transforms.size())
 
 
 func _excluded(p: Vector2) -> bool:
@@ -132,9 +149,9 @@ func _tuft_mesh() -> ArrayMesh:
 		var dir := Vector3(cos(angle),0,sin(angle))
 		var side := Vector3(-sin(angle),0,cos(angle))
 		var root := dir*_rng.randf_range(0.0,0.0035)
-		var height := _rng.randf_range(0.0025,0.007)
+		var height := _rng.randf_range(0.0035,0.009)
 		var bend := _rng.randf_range(0.003,0.008)
-		var width := _rng.randf_range(0.00009,0.00021)
+		var width := _rng.randf_range(0.00012,0.00029)
 		for j in 3:
 			var t0 := float(j)/3.0
 			var t1 := float(j+1)/3.0
@@ -166,12 +183,20 @@ func _stone_mesh() -> ArrayMesh:
 		var factor := 0.88+sin(p.x*9+p.y*5+p.z*7)*0.12
 		vertices[i] = p*factor
 	arrays[Mesh.ARRAY_VERTEX] = vertices
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	for i in range(0,indices.size(),3):
+		var a := vertices[indices[i]]
+		var b := vertices[indices[i+1]]
+		var c := vertices[indices[i+2]]
+		var normal := (c-a).cross(b-a).normalized()
+		for point in [a,b,c]:
+			st.set_normal(normal);st.add_vertex(point)
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/visual/reference_stone.gdshader")
-	mesh.surface_set_material(0,mat)
-	return mesh
+	st.set_material(mat)
+	return st.commit()
 
 
 func _litter_mesh() -> ArrayMesh:
@@ -181,24 +206,93 @@ func _litter_mesh() -> ArrayMesh:
 	for i in [0,1,2,0,2,4,2,3,4]:
 		st.set_normal(Vector3.UP);st.set_uv(Vector2(points[i].x+0.5,points[i].z*0.5+0.5));st.add_vertex(points[i])
 	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/visual/reference_litter.gdshader")
+	mat.set_shader_parameter("leaf_tex",preload("res://scripts/visual/reference_materials.gd").texture("res://assets/terrain/reference/hero/leaf.webp"))
+	st.set_material(mat)
+	return st.commit()
+
+
+## A shared winding wear mask also drives the ground material. It is visual only.
+func _path_amount(p: Vector2) -> float:
+	var center := -0.60+sin(p.y*8.0+0.4)*0.085
+	var width: float = 0.020+_presentation._surface_noise(p*38.0)*0.020
+	return (1.0-smoothstep(width,width+0.030,abs(p.x-center)))*smoothstep(0.02,0.15,p.y)
+
+
+## Bent ribbons give dry grass a readable silhouette at the miniature scale.
+func _fescue_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for blade in 150:
+		var angle := _rng.randf()*TAU
+		var dir := Vector3(cos(angle),0,sin(angle))
+		var side := Vector3(-sin(angle),0,cos(angle))
+		var root := dir*_rng.randf_range(0.0,0.0025)
+		var height := _rng.randf_range(0.007,0.017)
+		var bend := _rng.randf_range(0.004,0.015)
+		var width := _rng.randf_range(0.00013,0.00028)
+		var tint := _rng.randf_range(0.72,1.18)
+		st.set_color(Color(tint,tint,tint))
+		for j in 5:
+			var t0 := float(j)/5.0
+			var t1 := float(j+1)/5.0
+			var p0 := root+Vector3.UP*height*sin(t0*2.25)+dir*bend*t0*t0
+			var p1 := root+Vector3.UP*height*sin(t1*2.25)+dir*bend*t1*t1
+			var s0 := side*width*(1.0-t0*0.92)
+			var s1 := side*width*(1.0-t1*0.92)
+			var points := [p0-s0,p1-s1,p1+s1,p0-s0,p1+s1,p0+s0]
+			var uvs := [Vector2(0,t0),Vector2(0,t1),Vector2(1,t1),Vector2(0,t0),Vector2(1,t1),Vector2(1,t0)]
+			for k in 6:
+				st.set_normal((dir*0.45+Vector3.UP*0.89).normalized())
+				st.set_uv(uvs[k]);st.add_vertex(points[k])
+	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/visual/reference_foliage.gdshader")
 	st.set_material(mat)
 	return st.commit()
 
 
-func _tuft_cards() -> ArrayMesh:
+func _herb_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for j in 3:
-		var angle := j*PI/3.0
-		var side := Vector3(cos(angle),0,sin(angle))*0.0075
-		var normal := Vector3(-sin(angle),0.7,cos(angle)).normalized()
-		var points := [-side,side,-side+Vector3.UP*0.0085,side+Vector3.UP*0.0085]
-		var uv := [Vector2(0,0.76),Vector2(1,0.76),Vector2(0,0.24),Vector2(1,0.24)]
-		for i in [0,2,1,1,2,3]:
-			st.set_normal(normal);st.set_uv(uv[i]);st.add_vertex(points[i])
+	for i in 9:
+		var angle := float(i)*2.39996
+		var dir := Vector3(cos(angle),0,sin(angle))
+		var side := Vector3(-sin(angle),0,cos(angle))
+		var length := _rng.randf_range(0.0025,0.006)
+		var width := length*0.36
+		var center := dir*length*0.55+Vector3.UP*length*0.45
+		var points := [Vector3.ZERO,center-side*width,dir*length+Vector3.UP*length*0.2,center+side*width,center+Vector3.UP*0.0003]
+		var uv := [Vector2(0.5,1),Vector2(0,0.5),Vector2(0.5,0),Vector2(1,0.5),Vector2(0.5,0.5)]
+		for j in [0,1,4,1,2,4,2,3,4,3,0,4]:
+			st.set_normal((Vector3.UP-dir*0.2).normalized())
+			st.set_color(Color.WHITE);st.set_uv(uv[j]);st.add_vertex(points[j])
 	var mat := ShaderMaterial.new()
-	mat.shader = preload("res://shaders/visual/reference_tuft.gdshader")
-	mat.set_shader_parameter("tuft_tex",load("res://assets/terrain/reference/hero/tuft.webp"))
+	mat.shader = preload("res://shaders/visual/reference_foliage.gdshader")
+	mat.set_shader_parameter("textured_leaf",true)
+	mat.set_shader_parameter("leaf_tex",preload("res://scripts/visual/reference_materials.gd").texture("res://assets/terrain/reference/hero/leaf.webp"))
+	mat.set_shader_parameter("foliage_tint",Vector3(0.72,0.83,0.65))
+	st.set_material(mat)
+	return st.commit()
+
+
+
+func _thatch_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in 36:
+		var angle := _rng.randf()*TAU
+		var dir := Vector3(cos(angle),0,sin(angle))
+		var side := Vector3(-sin(angle),0,cos(angle))*_rng.randf_range(0.00007,0.00016)
+		var origin := Vector3(_rng.randf_range(-0.007,0.007),0.00015,_rng.randf_range(-0.007,0.007))
+		var length := _rng.randf_range(0.003,0.010)
+		var middle := origin+dir*length*0.5+Vector3.UP*_rng.randf_range(0.0002,0.0009)
+		var tip := origin+dir*length
+		for segment in [[origin,middle],[middle,tip]]:
+			var points := [segment[0]-side,segment[1]-side,segment[1]+side,segment[0]-side,segment[1]+side,segment[0]+side]
+			for j in 6:
+				st.set_normal(Vector3.UP)
+				st.set_uv(Vector2(float(j%2),0.75));st.add_vertex(points[j])
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/visual/reference_foliage.gdshader")
 	st.set_material(mat)
 	return st.commit()

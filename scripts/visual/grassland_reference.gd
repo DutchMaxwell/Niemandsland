@@ -28,8 +28,9 @@ func apply(main: Node) -> void:
 	_ground = ShaderMaterial.new()
 	_ground.shader = GROUND
 	for texture_name in ["meadow","earth","woodland"]:
-		_ground.set_shader_parameter(texture_name + "_tex",load("res://assets/terrain/reference/" + texture_name + ".webp"))
-	_ground.set_shader_parameter("earth_tex",load("res://assets/terrain/reference/hero/field.webp"))
+		_ground.set_shader_parameter(texture_name + "_tex",preload("res://scripts/visual/reference_materials.gd").texture("res://assets/terrain/reference/" + texture_name + ".webp"))
+	_ground.set_shader_parameter("earth_tex",preload("res://scripts/visual/reference_materials.gd").texture("res://assets/terrain/reference/hero/rough-earth.webp"))
+	_ground.set_shader_parameter("woodland_tex",preload("res://scripts/visual/reference_materials.gd").texture("res://assets/terrain/reference/hero/forest-duff.webp"))
 	var table: Node3D = main.get_node("Table")
 	var surface: MeshInstance3D = table.get_node("TableMesh")
 	var plane: PlaneMesh = surface.mesh.duplicate()
@@ -78,16 +79,16 @@ func apply_lighting(mood: String) -> void:
 		_previous_viewport = {"taa":get_viewport().use_taa,"scale":get_viewport().scaling_3d_scale}
 	var light: Node = _main.lighting_controller
 	var evening := mood == "Sunset"
-	light.set_sun_energy(2.1)
-	light.set_sun_color(Color(1,0.85,0.69) if evening else Color(1,0.90,0.75))
-	light.set_sun_angles(-40.0 if evening else -65.0,28.0 if evening else 48.0)
-	light.set_ambient_energy(0.32)
+	light.set_sun_energy(2.55)
+	light.set_sun_color(Color(1,0.85,0.69) if evening else Color(1,0.89,0.72))
+	light.set_sun_angles(-40.0 if evening else -58.0,28.0 if evening else 38.0)
+	light.set_ambient_energy(0.25)
 	light.set_ambient_color(Color(0.77,0.84,0.94))
-	light.set_fill_light_energy(0.90)
+	light.set_fill_light_energy(0.40)
 	light.set_fill_light_color(Color(0.95,0.94,0.90))
 	light.set_exposure(1.0)
-	light.set_contrast(1.09)
-	light.set_saturation(0.96)
+	light.set_contrast(1.12)
+	light.set_saturation(0.88)
 	light.set_shadow_opacity(0.85)
 	light.set_shadow_blur(0.65)
 	light.set_shadow_bias(0.015)

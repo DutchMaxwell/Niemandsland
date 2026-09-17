@@ -10,6 +10,8 @@ Attribution: Niemandsland Contributors.
   (NanoBanana), 2026-09-16. Original text descriptions; no reference images.
 - `hero/field.webp`, `hero/bark.webp`, `hero/leaf.webp`, `hero/tuft.webp`:
   NanoBanana, 2026-09-17. Original text descriptions; no reference images.
+- `hero/rough-earth.webp`, `hero/forest-duff.webp`:
+  NanoBanana, 2026-09-17. Original text descriptions; no reference images.
 - Generated 3D terrain props: original NanoBanana image sources reconstructed
   with TRELLIS.2 through the existing Model Forge pipeline. The oak image uses
   the project's own previously generated battlefield concept as a style
