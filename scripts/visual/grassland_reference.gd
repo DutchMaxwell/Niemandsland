@@ -16,6 +16,12 @@ var _previous_viewport: Dictionary = {}
 var _studio_sky: Sky
 var _fog: FogVolume
 var _wall_top := 0.0635
+var _camera: Camera3D
+var _dof: CameraAttributesPractical
+var _tilt_shift_enabled := true
+const DOF_MAX_AMOUNT := 0.09
+const DOF_NEAR_DISTANCE := 0.22
+const DOF_FAR_DISTANCE := 1.10
 
 
 func prepare() -> void:
@@ -58,6 +64,7 @@ func apply(main: Node) -> void:
 	_dress_grid_forest(overlay)
 	_dress_movable_forests()
 	_wall_top = overlay.WALL_HEIGHT_INCHES * overlay.INCHES_TO_METERS
+	_dress_decals()
 	for wall in overlay._wall_instances:
 		_weather_ruin(wall)
 	_sync_regions()
@@ -168,8 +175,44 @@ func apply_lighting(mood: String) -> void:
 	attributes.dof_blur_near_enabled = true
 	attributes.dof_blur_near_distance = 0.075
 	attributes.dof_blur_near_transition = 0.05
-	attributes.dof_blur_amount = 0.09
+	attributes.dof_blur_amount = 0.0
 	camera.attributes = attributes
+	_camera = camera
+	_dof = attributes
+
+
+## Tilt-shift fades in as the camera zooms towards the table, so the wide review
+## view stays sharp and only the close inspection gets the photo-like falloff.
+## Player-toggleable: off removes the attribute cost entirely.
+func set_tilt_shift_enabled(enabled: bool) -> void:
+	_tilt_shift_enabled = enabled
+	if _dof != null and not enabled:
+		_dof.dof_blur_amount = 0.0
+
+
+func tilt_shift_enabled() -> bool:
+	return _tilt_shift_enabled
+
+
+## Toggles the effect for a player. Production should wire this to a settings
+## entry instead of the key; the key is only the reference-scene shortcut.
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_T:
+		set_tilt_shift_enabled(not _tilt_shift_enabled)
+
+
+func _process(_delta: float) -> void:
+	if _camera == null or _dof == null:
+		return
+	if not _tilt_shift_enabled:
+		return
+	var origin := _camera.global_position
+	var forward := -_camera.global_transform.basis.z
+	var focus_distance := origin.length()
+	if absf(forward.y) > 0.001:
+		focus_distance = origin.distance_to(origin + forward * (-origin.y / forward.y))
+	var fade := 1.0 - smoothstep(DOF_NEAR_DISTANCE, DOF_FAR_DISTANCE, focus_distance)
+	_dof.dof_blur_amount = DOF_MAX_AMOUNT * fade
 
 
 func _dress_grid_forest(overlay: Node3D) -> void:
@@ -265,6 +308,75 @@ func _surface_noise(p: Vector2) -> float:
 	var f := p-i
 	var u := f*f*(Vector2(3,3)-2.0*f)
 	return lerpf(lerpf(_surface_hash(i),_surface_hash(i+Vector2.RIGHT),u.x),lerpf(_surface_hash(i+Vector2.DOWN),_surface_hash(i+Vector2.ONE),u.x),u.y)
+
+
+## Organic moss blobs with soft alpha, used as a decal so the ruin feet and wall
+## faces get patches the flat weathering shader cannot place per-position.
+func _moss_texture() -> Texture2D:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.022
+	noise.fractal_octaves = 4
+	var ramp := Gradient.new()
+	ramp.set_color(0,Color(0.0,0.0,0.0,0.0))
+	ramp.set_color(1,Color(0.22,0.32,0.10,1.0))
+	ramp.add_point(0.52,Color(0.10,0.17,0.05,0.45))
+	var texture := NoiseTexture2D.new()
+	texture.noise = noise
+	texture.color_ramp = ramp
+	texture.width = 256
+	texture.height = 256
+	texture.seamless = true
+	return texture
+
+
+func _dress_decals() -> void:
+	var moss := _moss_texture()
+	var units: Array[Vector2] = []
+	for model in _main.object_manager.get_children():
+		if model is Node3D and model.is_in_group("selectable"):
+			units.append(Vector2(model.global_position.x,model.global_position.z))
+	var segments: Array = _main.terrain_overlay.get_wall_segments_world()
+	var placed := 0
+	for segment: Array in segments:
+		var a: Vector2 = segment[0]
+		var b: Vector2 = segment[1]
+		var edge := b-a
+		var length := edge.length()
+		if length<0.01:
+			continue
+		var dir := edge/length
+		var side := Vector2(-dir.y,dir.x)
+		var count := clampi(int(length/0.15),1,2)
+		for i in count:
+			var t := (float(i)+0.5)/float(count)
+			var p := a+edge*t
+			var foot_center := p+side*0.020
+			if _near_unit(foot_center,units):
+				continue
+			var foot := Decal.new()
+			foot.texture_albedo = moss
+			foot.albedo_mix = 0.55
+			foot.size = Vector3(0.11,0.018,0.11)
+			foot.position = Vector3(foot_center.x,0.010,foot_center.y)
+			add_child(foot)
+			var face_center := p+side*0.003
+			var face := Decal.new()
+			face.texture_albedo = moss
+			face.albedo_mix = 0.5
+			face.size = Vector3(0.08,0.05,0.016)
+			face.position = Vector3(face_center.x,_wall_top*0.45,face_center.y)
+			face.rotation = Vector3(-PI/2.0,atan2(side.x,side.y),0.0)
+			add_child(face)
+			placed += 2
+	print("REFERENCE_DECALS ",placed)
+
+
+func _near_unit(p: Vector2,units: Array[Vector2]) -> bool:
+	for u in units:
+		if p.distance_squared_to(u)<0.055*0.055:
+			return true
+	return false
 
 
 func _weather_ruin(node: Node) -> void:
