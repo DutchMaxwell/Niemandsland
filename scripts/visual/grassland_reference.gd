@@ -95,11 +95,11 @@ func _build_fog(main: Node) -> void:
 	var size: Vector2 = table.table_size * 0.3048
 	var span: float = maxf(size.x,size.y)
 	var fog := FogMaterial.new()
-	fog.density = 0.14
-	fog.albedo = Color(0.74,0.72,0.66)
+	fog.density = 0.30
+	fog.albedo = Color(0.72,0.73,0.70)
 	fog.emission = Color(0.0,0.0,0.0)
-	fog.height_falloff = 1.4
-	fog.edge_fade = 0.55
+	fog.height_falloff = 1.1
+	fog.edge_fade = 0.60
 	var volume := FogVolume.new()
 	volume.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
 	volume.size = Vector3(span,span * 0.6,span)
@@ -157,11 +157,25 @@ func apply_lighting(mood: String) -> void:
 	env.ssao_power = 1.4
 	env.ssil_enabled = false
 	env.tonemap_agx_contrast = 1.15
+	# Wet-after-rain atmosphere: soft bloom on the highlights, damp-surface
+	# screen-space reflections, and a light volumetric haze over the whole board.
+	env.glow_enabled = true
+	env.glow_intensity = 0.55
+	env.glow_strength = 1.0
+	env.glow_bloom = 0.18
+	env.glow_hdr_threshold = 0.95
+	env.glow_hdr_scale = 2.0
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	env.ssr_enabled = true
+	env.ssr_max_steps = 48
+	env.ssr_fade_in = 0.08
+	env.ssr_fade_out = 1.6
+	env.ssr_depth_tolerance = 0.20
 	env.volumetric_fog_enabled = true
 	env.volumetric_fog_density = 0.0
-	env.volumetric_fog_albedo = Color(0.76,0.74,0.68)
+	env.volumetric_fog_albedo = Color(0.72,0.73,0.70)
 	env.volumetric_fog_emission = Color(0.0,0.0,0.0)
-	env.volumetric_fog_length = 12.0
+	env.volumetric_fog_length = 18.0
 	env.volumetric_fog_detail_spread = 2.0
 	env.volumetric_fog_gi_inject = 0.0
 	env.volumetric_fog_ambient_inject = 0.10

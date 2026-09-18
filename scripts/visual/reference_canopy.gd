@@ -89,6 +89,8 @@ static func _rebuild(instance: MeshInstance3D, variant: int) -> void:
 	material.set_shader_parameter("leaf_tex",preload("res://scripts/visual/reference_materials.gd").texture("res://assets/terrain/reference/hero/leaf.webp"))
 	material.set_shader_parameter("textured_leaf",true)
 	material.set_shader_parameter("foliage_tint",Vector3(1.0,0.96,0.74))
+	material.set_shader_parameter("wind_leaf",0.0025)
+	material.set_shader_parameter("wind_strength",0.0)
 	leaves.set_material(material)
 	leaves.commit(result)
 	instance.mesh = result

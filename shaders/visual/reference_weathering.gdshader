@@ -39,6 +39,6 @@ void fragment(){
  base=mix(base,vec3(0.058,0.052,0.042),grime);
  base*=mix(1.0,0.70,low*0.6);
  ALBEDO=base*mix(0.72,1.15,grain)*(1.0-0.70*joint);
- ROUGHNESS=0.99;
+ ROUGHNESS=0.72;
  ALPHA=clamp(0.22+grime*0.30+foot*0.30+moss*0.40+lichen+damp*0.30+joint*0.35,0.0,0.88)*panel_alpha;
 }

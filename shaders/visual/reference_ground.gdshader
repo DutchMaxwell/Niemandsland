@@ -14,7 +14,8 @@ void vertex() {
 void fragment() {
  if (clip_base && length(UV) > 1.0) { discard; }
  ALBEDO = ground_sample(ground_xz);
- ROUGHNESS = 0.94;
+ ROUGHNESS = 0.62;
+ SPECULAR = 0.45;
  METALLIC = 0.0;
  float step_size=0.00014;
  vec2 uv=ground_xz*2.2;

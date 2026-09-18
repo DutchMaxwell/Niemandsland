@@ -221,6 +221,14 @@ func _multimesh(label: String,mesh: Mesh,transforms: Array[Transform3D],colors: 
 	var node := MultiMeshInstance3D.new()
 	node.name = label
 	node.multimesh = mm
+	# Wind: blades bend from the root (UV.y), taller dry grass sways more. Fallen
+	# straw, stones and litter stay put at the shader default of 0.
+	var mat := mesh.surface_get_material(0)
+	if mat is ShaderMaterial:
+		match label:
+			"MeadowClumps": mat.set_shader_parameter("wind_strength",0.0022)
+			"DryFescue": mat.set_shader_parameter("wind_strength",0.0030)
+			"MeadowHerbs": mat.set_shader_parameter("wind_strength",0.0018)
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)
 
