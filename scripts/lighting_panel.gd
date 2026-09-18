@@ -307,6 +307,20 @@ func _build_ui() -> void:
 			rf.enabled = on)
 	vbox.add_child(floats_cb)
 
+	# Tilt-Shift (cinematic depth of field): sharp while zoomed out, softly blurred in
+	# the foreground/background as the camera zooms towards the models. On by default;
+	# persisted; CameraController applies it live.
+	var tilt_cb := CheckButton.new()
+	tilt_cb.text = "Tilt-Shift (Depth of Field)"
+	tilt_cb.button_pressed = GraphicsSettings.tilt_shift
+	tilt_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.tilt_shift = on
+		GraphicsSettings.save_settings()
+		var pivot := get_node_or_null("/root/Main/CameraPivot")
+		if pivot != null and pivot.has_method("set_tilt_shift_enabled"):
+			pivot.set_tilt_shift_enabled(on))
+	vbox.add_child(tilt_cb)
+
 	# Pacing grill 31.07.: the combat stage's discoverable switch + its beat length.
 	var stage_cb := CheckButton.new()
 	stage_cb.text = "Combat Stage (paces the resolution)"
