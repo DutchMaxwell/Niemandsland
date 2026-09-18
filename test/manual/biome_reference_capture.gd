@@ -98,9 +98,6 @@ func _run() -> void:
 			env.ssao_radius = 0.035
 			env.ssao_intensity = 2.0
 			env.ssao_power = 1.4
-			env.ssil_enabled = true
-			env.ssil_radius = 0.075
-			env.ssil_intensity = 0.7
 		report.internal_scale = root.scaling_3d_scale
 		for shot in shots:
 			if args.has("quick") and shot.name not in ["miniatures","detail"]:

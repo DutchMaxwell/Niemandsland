@@ -160,6 +160,16 @@ func apply_lighting(mood: String) -> void:
 	env.volumetric_fog_ambient_inject = 0.10
 	env.volumetric_fog_temporal_reprojection_enabled = true
 	env.volumetric_fog_temporal_reprojection_amount = 0.9
+	var camera: Camera3D = _main.get_node("CameraPivot/Camera3D")
+	var attributes := CameraAttributesPractical.new()
+	attributes.dof_blur_far_enabled = true
+	attributes.dof_blur_far_distance = 0.40
+	attributes.dof_blur_far_transition = 0.28
+	attributes.dof_blur_near_enabled = true
+	attributes.dof_blur_near_distance = 0.075
+	attributes.dof_blur_near_transition = 0.05
+	attributes.dof_blur_amount = 0.09
+	camera.attributes = attributes
 
 
 func _dress_grid_forest(overlay: Node3D) -> void:
