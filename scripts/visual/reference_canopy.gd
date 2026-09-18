@@ -21,9 +21,12 @@ static func _rebuild(instance: MeshInstance3D, variant: int) -> void:
 	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var result := ArrayMesh.new()
 	var leaf_count := 0
-	var extent := _crown_extent(instance.mesh)
-	var coarse_size := maxf(extent / 5.0, 0.0001)
-	var fine_size := maxf(extent / 11.0, 0.0001)
+	var box := instance.mesh.get_aabb()
+	var crown_center := box.get_center()
+	var extent := maxf(maxf(box.size.x,box.size.y),box.size.z)
+	# Per-variant group scale, so trees no longer share one statistical envelope.
+	var coarse_size := maxf(extent / (4.0 + float(variant % 3)), 0.0001)
+	var fine_size := maxf(extent / (9.0 + float(variant % 4)), 0.0001)
 	var salt := variant * 97 + 13
 	for surface in instance.mesh.get_surface_count():
 		var mat := instance.mesh.surface_get_material(surface) as StandardMaterial3D
@@ -55,8 +58,12 @@ static func _rebuild(instance: MeshInstance3D, variant: int) -> void:
 				var clump := _clump_factor(center,coarse_size,fine_size,salt)
 				var detail := _cell_rand(center,fine_size,salt+1)
 				var pores := _cell_rand(center,fine_size*0.5,salt+3)
-				if rng.randf()<0.32*clump*(0.40+1.10*detail)*(0.55+0.65*pores):
-					var leaf_size := 0.38+0.42*detail+rng.randf_range(-0.06,0.09)
+				# Denser near the crown shell, lighter in the core: an irregular edge
+				# instead of one uniform ball over every tree.
+				var rel := (center-crown_center).length()/maxf(extent*0.5,0.0001)
+				var edge := smoothstep(0.55,1.05,rel)
+				if rng.randf()<0.32*clump*(0.40+1.10*detail)*(0.55+0.65*pores)*(0.72+0.60*edge):
+					var leaf_size := (0.34+0.30*clump)+0.42*detail+rng.randf_range(-0.06,0.09)
 					preload("res://scripts/visual/reference_tree.gd")._leaf(leaves,center,rng,leaf_size)
 					leaf_count += 1
 			else:
@@ -86,11 +93,6 @@ static func _rebuild(instance: MeshInstance3D, variant: int) -> void:
 	leaves.commit(result)
 	instance.mesh = result
 	print("REFERENCE_CANOPY_LEAVES ",leaf_count," variant=",variant)
-
-
-static func _crown_extent(mesh: Mesh) -> float:
-	var box := mesh.get_aabb()
-	return maxf(maxf(box.size.x,box.size.y),box.size.z)
 
 
 static func _clump_factor(point: Vector3,coarse: float,fine: float,salt: int) -> float:
