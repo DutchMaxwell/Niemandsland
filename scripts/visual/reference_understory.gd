@@ -38,8 +38,10 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 		var wall := _wall_distance(point)
 		var excluded := _excluded(point)
 		var clump := _clump_amount(point)
+		var fringe := smoothstep(0.30,0.55,forest)*(1.0-smoothstep(0.65,0.90,forest))
 		var density := smoothstep(0.34,0.63,noise)*0.92
 		density *= (1.0-forest*0.80)*(1.0-path*0.98)*(0.55+1.05*clump)
+		density *= _unit_quiet(point)
 		if wall<0.015:
 			density = maxf(density,0.35)*(1.0-path*0.8)
 		var chance := _rng.randf()
@@ -49,6 +51,7 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 				scale_value *= 1.25
 			if forest>0.65:
 				scale_value *= 0.72
+			scale_value *= (1.0+0.55*fringe)*(1.0-0.35*path)
 			var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(scale_value,scale_value*_rng.randf_range(0.7,1.3),scale_value))
 			grass_transforms.append(Transform3D(basis,Vector3(point.x,gh+0.00005,point.y)))
 			var age := clampf((1.0-clump)*0.9+_rng.randf()*0.45,0.0,1.0)
@@ -59,22 +62,22 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 			var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(h,h,h))
 			herb_transforms.append(Transform3D(basis,Vector3(point.x,gh+0.0001,point.y)))
 			herb_colors.append(Color(0.75,0.78,0.50).lerp(Color(1.0,0.94,0.70),_rng.randf()))
-		if not excluded and _rng.randf()<density*0.09 and wall>0.006:
+		if not excluded and _rng.randf()<density*(0.09+0.10*fringe) and wall>0.006:
 			var h := _rng.randf_range(0.70,1.45)
 			var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(h,h*_rng.randf_range(0.8,1.2),h))
 			tall_transforms.append(Transform3D(basis,Vector3(point.x,gh-0.0002,point.y)))
 			var straw := Color(0.43,0.46,0.20).lerp(Color(0.72,0.63,0.38),_rng.randf())
 			tall_colors.append(straw.srgb_to_linear())
-		if not excluded and _rng.randf()<(0.16 if wall<0.03 else 0.05+path*0.07):
+		if not excluded and _rng.randf()<(0.16 if wall<0.03 else 0.05+path*0.07)*_unit_quiet(point):
 			var scale_value := _rng.randf_range(0.0008,0.0032)
 			var basis := Basis.from_euler(Vector3(_rng.randf()*0.3,_rng.randf()*TAU,_rng.randf()*0.3)).scaled(Vector3(scale_value,scale_value*_rng.randf_range(0.20,0.40),scale_value*_rng.randf_range(0.75,1.3)))
 			stone_transforms.append(Transform3D(basis,Vector3(point.x,gh+scale_value*0.06,point.y)))
 			stone_colors.append(Color(0.36,0.34,0.28).lerp(Color(0.65,0.61,0.50),_rng.randf()).srgb_to_linear())
-		if not excluded and _rng.randf()<forest*(1.60+2.40*clump)+0.10+(1.0-path)*0.30*clump:
+		if not excluded and _rng.randf()<(forest*(1.30+2.00*clump)+0.05+(1.0-path)*0.20*clump)*_unit_quiet(point):
 			var s := _rng.randf_range(0.0042,0.0100)
 			var basis := Basis.from_euler(Vector3(_rng.randf_range(-0.2,0.2),_rng.randf()*TAU,_rng.randf_range(-0.2,0.2))).scaled(Vector3.ONE*s)
 			litter_transforms.append(Transform3D(basis,Vector3(point.x,gh+0.00025,point.y)))
-			litter_colors.append(Color(0.28,0.17,0.065).lerp(Color(0.64,0.40,0.18),_rng.randf()).srgb_to_linear())
+			litter_colors.append(Color(0.34,0.21,0.08).lerp(Color(0.70,0.47,0.21),_rng.randf()).srgb_to_linear())
 	for i in 90:
 		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		var forest := _forest_amount(point)
@@ -122,7 +125,7 @@ func _litter_drifts(litter_transforms: Array[Transform3D],litter_colors: Array[C
 			var s := _rng.randf_range(0.0035,0.0085)
 			var basis := Basis.from_euler(Vector3(_rng.randf_range(-0.25,0.25),_rng.randf()*TAU,_rng.randf_range(-0.25,0.25))).scaled(Vector3(s,s*_rng.randf_range(0.8,1.2),s))
 			litter_transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.00028,p.y)))
-			litter_colors.append(Color(0.26,0.15,0.055).lerp(Color(0.62,0.40,0.18),_rng.randf()).srgb_to_linear())
+			litter_colors.append(Color(0.32,0.20,0.08).lerp(Color(0.68,0.46,0.21),_rng.randf()).srgb_to_linear())
 
 
 func _excluded(p: Vector2) -> bool:
@@ -130,6 +133,16 @@ func _excluded(p: Vector2) -> bool:
 		if p.distance_squared_to(Vector2(e.x,e.y))<e.z*e.z:
 			return true
 	return false
+
+
+## Soft clearing around miniatures: 0 on the base, ramping to 1 by ~0.028 m past the
+## hard exclusion radius, so units sit in a deliberate gap instead of a hard-edged disc.
+func _unit_quiet(p: Vector2) -> float:
+	var quiet := 1.0
+	for e in _exclusions:
+		var d := p.distance_to(Vector2(e.x,e.y))
+		quiet = minf(quiet,smoothstep(0.0,0.028,d-e.z))
+	return quiet
 
 
 func _contact_details(litter_transforms: Array[Transform3D],litter_colors: Array[Color]) -> void:
@@ -143,18 +156,18 @@ func _contact_details(litter_transforms: Array[Transform3D],litter_colors: Array
 			var s := _rng.randf_range(0.0040,0.0090)*(1.45-radius/0.048)
 			var basis := Basis.from_euler(Vector3(_rng.randf_range(-0.18,0.18),angle+PI*0.5,_rng.randf_range(-0.18,0.18))).scaled(Vector3(s*1.7,s,s*1.25))
 			litter_transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.00030,p.y)))
-			litter_colors.append(Color(0.24,0.14,0.055).lerp(Color(0.60,0.37,0.16),_rng.randf()).srgb_to_linear())
-		for i in 6:
-			var angle := float(i)*TAU/6.0+_rng.randf_range(-0.5,0.5)
+			litter_colors.append(Color(0.30,0.19,0.075).lerp(Color(0.66,0.44,0.20),_rng.randf()).srgb_to_linear())
+		for i in 10:
+			var angle := float(i)*TAU/10.0+_rng.randf_range(-0.5,0.5)
 			var dir := Vector2(cos(angle),sin(angle))
-			var length := _rng.randf_range(0.018,0.042)
-			var p: Vector2 = tree_point+dir*length*0.55
+			var length := _rng.randf_range(0.024,0.058)
+			var p: Vector2 = tree_point+dir*length*0.5
 			if _excluded(p):
 				continue
 			var s := _rng.randf_range(0.0012,0.0026)
 			var basis := Basis.from_euler(Vector3(_rng.randf_range(-0.2,0.2),-angle,_rng.randf_range(-0.2,0.2))).scaled(Vector3(length*0.9,s,s*1.1))
 			litter_transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.00022,p.y)))
-			litter_colors.append(Color(0.20,0.12,0.05).lerp(Color(0.55,0.34,0.15),_rng.randf()).srgb_to_linear())
+			litter_colors.append(Color(0.16,0.10,0.045).lerp(Color(0.48,0.30,0.13),_rng.randf()).srgb_to_linear())
 	for segment: Array in _walls:
 		var a: Vector2 = segment[0]
 		var b: Vector2 = segment[1]
@@ -166,7 +179,7 @@ func _contact_details(litter_transforms: Array[Transform3D],litter_colors: Array
 			var s := _rng.randf_range(0.0009,0.0020)
 			var basis := Basis.from_euler(Vector3(_rng.randf_range(-0.2,0.2),_rng.randf()*TAU,_rng.randf_range(-0.2,0.2))).scaled(Vector3(s*1.4,s,s*1.2))
 			litter_transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.00030,p.y)))
-			litter_colors.append(Color(0.24,0.15,0.06).lerp(Color(0.58,0.38,0.18),_rng.randf()).srgb_to_linear())
+			litter_colors.append(Color(0.30,0.19,0.075).lerp(Color(0.64,0.43,0.20),_rng.randf()).srgb_to_linear())
 
 
 func _clump_amount(p: Vector2) -> float:
