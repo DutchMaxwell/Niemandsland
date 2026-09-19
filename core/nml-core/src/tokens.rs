@@ -51,7 +51,9 @@ pub const N_CAND: usize = 160;
 /// Wave-6 splice (BRIEF_vocab3 / EV_VOCAB_2026-09-15): the design's 88 fields
 /// gain the three columns past the old padding — t[88]/t[89] the CARRIED
 /// terrain debuffs, t[90] the chain host's vengeance markers. The width-90
-/// export (t[88]/t[89] zero pads) is `TOKEN_VOCAB_VERSION` 1.
+/// export (t[88]/t[89] zero pads) is `TOKEN_VOCAB_VERSION` 1. Vocab 3 adds
+/// the objective token's reach columns t[10]/t[11]
+/// (RESIDUALS_ERLKOENIG_2026-09-19).
 pub const F_U: usize = 91;
 /// The v1 layout the splice rode past: the design's 88 unit fields, then the
 /// two pads the width-90 export carried at t[88]/t[89]. A v1-width consumer
@@ -64,9 +66,10 @@ pub const F_T: usize = 12;
 pub const F_G: usize = 16;
 pub const F_C: usize = 40;
 /// The token export's own stamp (`Tokens::to_json`/`tokens_dict`): 1 = the
-/// width-90 row, 2 = the terrain-debuff/vengeance splice. A separate axis
+/// width-90 row, 2 = the terrain-debuff/vengeance splice, 3 = the objective
+/// token's reach columns t[10]/t[11]. A separate axis
 /// from `RowEncoder::rule_vocab_version` — one stamp per vocabulary family.
-pub const TOKEN_VOCAB_VERSION: u32 = 2;
+pub const TOKEN_VOCAB_VERSION: u32 = 3;
 /// `RowVocab` (rows.rs:107-152) unit(200) + weapon(25) slots + one overflow
 /// bucket — the divisor the unit token's rule-bag slot ids are read against.
 const VOCAB_N: f32 = 226.0;
@@ -276,16 +279,20 @@ fn rule_bag(rows: &mut RowEncoder, p: &crate::state::Profile, us: &UnitStatic) -
 /// `OBJECTIVE_CONTROL_IN` (`lib.rs:41`) — the rulebook contest range, not a
 /// re-derived one.
 ///
-/// DEVIATION §8.1: the design cites `placed_by`/`swept` at `objectives.rs:
-/// 52-53`, but those lines belong to the offline layout GENERATOR's `Layout`
-/// struct, not `State` — no live game state carries either field (`Objective`
-/// is `pos`+`owner` only). Both columns are stamped 0, not invented.
+/// t[8]/t[9] count CONTESTING units per side (edge gap <=
+/// `OBJECTIVE_CONTROL_IN`); t[10]/t[11] count per side the units whose edge
+/// gap is within the last-round flip band, `OBJECTIVE_CONTROL_IN + live rush`
+/// (`sim::live_bands_of`, the unit token's t[28]/t[29] seam — an empty
+/// `statics` falls back to the static bands). Reach is a superset of
+/// contest: a unit already inside the control range cannot leave it in one
+/// activation, so `t[10] >= t[8]` and `t[11] >= t[9]`. Counts are per UNIT,
+/// not per model.
 ///
 /// `markers_meta` is a SEPARATE, marker-MISSION-only ledger — empty on every
 /// plain objective mission even when `objectives` is not (`io.rs:195`,
 /// written only when the recorder actually carried one) — so a missing entry
 /// reads as `Marker::default()`, not a panic.
-fn objective_token(state: &State, side: i64, oi: usize) -> [f32; F_O] {
+fn objective_token(state: &State, side: i64, statics: &[UnitStatic], oi: usize) -> [f32; F_O] {
     let o = &state.objectives[oi];
     let default_marker = crate::state::Marker::default();
     let mk = state.markers_meta.get(oi).unwrap_or(&default_marker);
@@ -299,6 +306,7 @@ fn objective_token(state: &State, side: i64, oi: usize) -> [f32; F_O] {
     };
     let (mut mine, mut theirs) = (f64::INFINITY, f64::INFINITY);
     let (mut cm, mut ct) = (0i64, 0i64);
+    let (mut rm, mut rt) = (0i64, 0i64);
     for i in 0..state.units() {
         if state.alive[i] <= 0 {
             continue;
@@ -310,11 +318,20 @@ fn objective_token(state: &State, side: i64, oi: usize) -> [f32; F_O] {
         } else {
             theirs = theirs.min(d);
         }
-        if control_gap_in(state, i, o.pos) <= OBJECTIVE_CONTROL_IN {
+        let gap = control_gap_in(state, i, o.pos);
+        let (_, rush) = crate::sim::live_bands_of(statics, state, i);
+        if gap <= OBJECTIVE_CONTROL_IN {
             if mine_side {
                 cm += 1;
             } else {
                 ct += 1;
+            }
+        }
+        if gap <= OBJECTIVE_CONTROL_IN + rush {
+            if mine_side {
+                rm += 1;
+            } else {
+                rt += 1;
             }
         }
     }
@@ -329,6 +346,8 @@ fn objective_token(state: &State, side: i64, oi: usize) -> [f32; F_O] {
     t[7] = (theirs.min(999.0) / 30.0) as f32;
     t[8] = (cm as f64 / 10.0) as f32;
     t[9] = (ct as f64 / 10.0) as f32;
+    t[10] = (rm as f64 / 10.0) as f32;
+    t[11] = (rt as f64 / 10.0) as f32;
     t
 }
 
@@ -604,8 +623,9 @@ pub fn build(
     units_mask.resize(N_UNITS, 0);
     let _ = hero_attach; // reserved: `can_activate`'s seam, off in Gen 0 like the corpus itself
 
-    let mut objs: Vec<[f32; F_O]> =
-        (0..state.objectives.len()).map(|oi| objective_token(state, side, oi)).collect();
+    let mut objs: Vec<[f32; F_O]> = (0..state.objectives.len())
+        .map(|oi| objective_token(state, side, statics, oi))
+        .collect();
     let mut objs_mask = vec![1u8; objs.len()];
     objs.resize(N_OBJ, [0.0; F_O]);
     objs_mask.resize(N_OBJ, 0);
@@ -833,12 +853,12 @@ mod tests {
         assert_eq!(&t.objs_mask[..2], &[1, 1]);
         assert!(t.objs_mask[2..].iter().all(|&m| m == 0));
         let o0 = &t.objs[0];
-        let want_o0 = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 10.5 / 30.0, 10.0 / 30.0, 0.0, 0.0, 0.0, 0.0];
+        let want_o0 = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 10.5 / 30.0, 10.0 / 30.0, 0.0, 0.0, 0.1, 0.1];
         for (k, &w) in want_o0.iter().enumerate() {
             near(o0[k], w, &format!("obj0 col {k}"));
         }
         let o1 = &t.objs[1];
-        let want_o1 = [0.5, 5.0 / 30.0, -1.0, 0.0, 0.0, 0.0, 6.726 / 30.0, 25.495 / 30.0, 0.0, 0.0, 0.0, 0.0];
+        let want_o1 = [0.5, 5.0 / 30.0, -1.0, 0.0, 0.0, 0.0, 6.726 / 30.0, 25.495 / 30.0, 0.0, 0.0, 0.1, 0.0];
         for (k, &w) in want_o1.iter().enumerate() {
             near(o1[k], w, &format!("obj1 col {k}"));
         }

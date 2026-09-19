@@ -7,6 +7,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Objective-token rush reach.** The fast core's objective token carries two new columns — t[10]/t[11], the per-side count of units whose base-edge gap to the objective is within the last-round flip band (`OBJECTIVE_CONTROL_IN + live rush`), a superset of the contest count. Token vocab bumps to 3 (RESIDUALS_ERLKOENIG_2026-09-19).
 - **Privacy & data settings (local only).** A consent screen, off by default, explains optional
   game-record sharing, previews an example record and can save it locally; nothing is sent. An
   in-memory collector for the opt-in path is on `main`, still local-only (see
