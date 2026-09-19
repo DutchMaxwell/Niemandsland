@@ -159,7 +159,7 @@ func apply_lighting(mood: String) -> void:
 	env.tonemap_agx_contrast = 1.15
 	# Damp-surface screen-space reflections; no bloom (rejected by the maintainer).
 	env.ssr_enabled = true
-	env.ssr_max_steps = 48
+	env.ssr_max_steps = 32
 	env.ssr_fade_in = 0.08
 	env.ssr_fade_out = 1.6
 	env.ssr_depth_tolerance = 0.20

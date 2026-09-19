@@ -78,6 +78,24 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 			var basis := Basis.from_euler(Vector3(_rng.randf_range(-0.2,0.2),_rng.randf()*TAU,_rng.randf_range(-0.2,0.2))).scaled(Vector3.ONE*s)
 			litter_transforms.append(Transform3D(basis,Vector3(point.x,gh+0.00025,point.y)))
 			litter_colors.append(Color(0.34,0.21,0.08).lerp(Color(0.70,0.47,0.21),_rng.randf()).srgb_to_linear())
+	var turf_transforms: Array[Transform3D] = []
+	var turf_colors: Array[Color] = []
+	for i in int(size.x*size.y*14000):
+		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
+		if _excluded(point):
+			continue
+		var noise: float = presentation._surface_noise(point*10.0)*0.65+presentation._surface_noise(point*43.0)*0.35
+		var path := _path_amount(point)
+		var forest := _forest_amount(point)
+		var fill := 1.0 - smoothstep(0.30,0.62,noise)
+		if _rng.randf() > fill*0.55*(1.0-path*0.95)*(1.0-forest*0.45)*_unit_quiet(point):
+			continue
+		var gh := ReferenceMaterials.ground_height(point)
+		var s := _rng.randf_range(0.16,0.34)
+		var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(s,s*_rng.randf_range(0.7,1.2),s))
+		turf_transforms.append(Transform3D(basis,Vector3(point.x,gh+0.00004,point.y)))
+		turf_colors.append(Color(0.24,0.30,0.09).lerp(Color(0.46,0.43,0.22),_rng.randf()).srgb_to_linear())
+	_multimesh("Turf",_turf_mesh(),turf_transforms,turf_colors,false)
 	for i in 90:
 		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		var forest := _forest_amount(point)
@@ -105,7 +123,7 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 	_multimesh("FieldPebbles",_stone_mesh(),stone_transforms,stone_colors)
 	_multimesh("LeafLitter",_litter_mesh(),litter_transforms,litter_colors)
 	_build_puddles(size)
-	print("REFERENCE_UNDERSTORY grass=",grass_transforms.size()," stones=",stone_transforms.size()," leaves=",litter_transforms.size()," fescue=",tall_transforms.size())
+	print("REFERENCE_UNDERSTORY grass=",grass_transforms.size()," stones=",stone_transforms.size()," leaves=",litter_transforms.size()," fescue=",tall_transforms.size()," turf=",turf_transforms.size())
 
 
 ## Drifts read as wind-piled leaves instead of an even sprinkle. Centres sit in
@@ -146,14 +164,14 @@ func _build_puddles(size: Vector2) -> void:
 	mesh.material = mat
 	var transforms: Array[Transform3D] = []
 	var colors: Array[Color] = []
-	for i in 90:
+	for i in 160:
 		var p := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		if _excluded(p):
 			continue
 		var path := _path_amount(p)
-		if _rng.randf() > 0.35+path*0.65:
+		if _rng.randf() > 0.45+path*0.55:
 			continue
-		var r := _rng.randf_range(0.012,0.045)*(0.7+path)
+		var r := _rng.randf_range(0.015,0.060)*(0.7+path)
 		var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(r,r,r))
 		transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.0004,p.y)))
 		colors.append(Color.WHITE)
@@ -254,6 +272,7 @@ func _multimesh(label: String,mesh: Mesh,transforms: Array[Transform3D],colors: 
 			"MeadowClumps": mat.set_shader_parameter("wind_strength",0.0022)
 			"DryFescue": mat.set_shader_parameter("wind_strength",0.0030)
 			"MeadowHerbs": mat.set_shader_parameter("wind_strength",0.0018)
+			"Turf": mat.set_shader_parameter("wind_strength",0.0012)
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)
 
@@ -261,7 +280,7 @@ func _multimesh(label: String,mesh: Mesh,transforms: Array[Transform3D],colors: 
 func _tuft_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for blade in 22:
+	for blade in 18:
 		var angle := _rng.randf()*TAU
 		var dir := Vector3(cos(angle),0,sin(angle))
 		var side := Vector3(-sin(angle),0,cos(angle))
@@ -272,6 +291,35 @@ func _tuft_mesh() -> ArrayMesh:
 		for j in 3:
 			var t0 := float(j)/3.0
 			var t1 := float(j+1)/3.0
+			var p0 := root+Vector3.UP*height*t0+dir*bend*t0*t0
+			var p1 := root+Vector3.UP*height*t1+dir*bend*t1*t1
+			var s0 := side*width*(1.0-t0)
+			var s1 := side*width*(1.0-t1)
+			var points := [p0-s0,p1-s1,p1+s1,p0-s0,p1+s1,p0+s0]
+			var uvs := [Vector2(0,t0),Vector2(0,t1),Vector2(1,t1),Vector2(0,t0),Vector2(1,t1),Vector2(1,t0)]
+			var normal := (dir*0.6+Vector3.UP*0.8).normalized()
+			for k in 6:
+				st.set_normal(normal);st.set_uv(uvs[k]);st.add_vertex(points[k])
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/visual/reference_foliage.gdshader")
+	st.set_material(mat)
+	return st.commit()
+
+
+func _turf_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for blade in 8:
+		var angle := _rng.randf()*TAU
+		var dir := Vector3(cos(angle),0,sin(angle))
+		var side := Vector3(-sin(angle),0,cos(angle))
+		var root := dir*_rng.randf_range(0.0,0.0022)
+		var height := _rng.randf_range(0.0022,0.005)
+		var bend := _rng.randf_range(0.0015,0.0035)
+		var width := _rng.randf_range(0.00014,0.00028)
+		for j in 2:
+			var t0 := float(j)/2.0
+			var t1 := float(j+1)/2.0
 			var p0 := root+Vector3.UP*height*t0+dir*bend*t0*t0
 			var p1 := root+Vector3.UP*height*t1+dir*bend*t1*t1
 			var s0 := side*width*(1.0-t0)
@@ -340,7 +388,7 @@ func _path_amount(p: Vector2) -> float:
 func _fescue_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for blade in 100:
+	for blade in 80:
 		var angle := _rng.randf()*TAU
 		var dir := Vector3(cos(angle),0,sin(angle))
 		var side := Vector3(-sin(angle),0,cos(angle))

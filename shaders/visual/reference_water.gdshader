@@ -24,8 +24,8 @@ void fragment() {
 	vec3 n = normalize(vec3(nx*ripple_strength,1.0,nz*ripple_strength));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n,0.0)).xyz);
 	ALBEDO = mix(vec3(0.030,0.035,0.040), vec3(0.060,0.065,0.070), w_noise(world_pos.xz*90.0));
-	ROUGHNESS = 0.03;
-	SPECULAR = 0.90;
+	ROUGHNESS = 0.02;
+	SPECULAR = 0.95;
 	METALLIC = 0.0;
-	ALPHA = mask * 0.85;
+	ALPHA = mask * 0.95;
 }
