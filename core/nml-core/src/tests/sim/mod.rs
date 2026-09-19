@@ -1589,6 +1589,7 @@ mod mentioned2a_buffs;
 mod mind_control;
 mod mend;
 mod missions;
+mod objective_reach;
 mod pierce_mark_grants;
 mod precision_markers;
 mod move_buff;
