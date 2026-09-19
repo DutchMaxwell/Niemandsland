@@ -4,7 +4,7 @@ const ReferenceMaterials = preload("res://scripts/visual/reference_materials.gd"
 var _rock: PackedScene
 var _bounds := AABB()
 var _tree_variants: Array[PackedScene] = []
-var _tree_bounds := AABB()
+var _tree_bounds: Array[AABB] = []
 
 func prepare() -> void:
 	var rock_data: Dictionary = await _load_asset("rock")
@@ -21,14 +21,17 @@ func has_tree() -> bool:
 	return not _tree_variants.is_empty()
 
 
-func tree_instance(height: float,index: int) -> Node3D:
+func tree_instance(height: float,index: int,base_y: float = 0.0) -> Node3D:
+	var variant := index % _tree_variants.size()
+	var bounds: AABB = _tree_bounds[variant]
 	var wrapper := Node3D.new()
-	var tree: Node3D = _tree_variants[index % _tree_variants.size()].instantiate()
+	var tree: Node3D = _tree_variants[variant].instantiate()
 	wrapper.add_child(tree)
-	tree.position = -Vector3(_tree_bounds.get_center().x,_tree_bounds.position.y,_tree_bounds.get_center().z)
-	var scale_value := height/maxf(_tree_bounds.size.y,0.001)
+	tree.position = -Vector3(bounds.get_center().x,bounds.position.y,bounds.get_center().z)
+	var scale_value := height/maxf(bounds.size.y,0.001)
 	wrapper.scale = Vector3.ONE*scale_value
 	wrapper.rotation.y = float(index)*2.39996
+	wrapper.position.y = base_y
 	return wrapper
 
 
@@ -70,22 +73,25 @@ func _load_asset(kind: String) -> Dictionary:
 		return {"scene":rock_packed,"bounds":rock_bounds}
 	var canopy := preload("res://scripts/visual/reference_canopy.gd")
 	var variants: Array[PackedScene] = []
+	var bounds_list: Array[AABB] = []
 	var tree_bounds := AABB()
 	for variant in canopy.VARIANTS:
 		var copy: Node = root.duplicate()
 		canopy.dress(copy,variant)
+		var variant_bounds := _mesh_bounds(copy,Transform3D.IDENTITY,AABB())
 		if variant == 0:
-			tree_bounds = _mesh_bounds(copy,Transform3D.IDENTITY,AABB())
+			tree_bounds = variant_bounds
 		_own(copy,copy)
 		var packed := PackedScene.new()
 		packed.pack(copy)
 		copy.free()
 		variants.append(packed)
+		bounds_list.append(variant_bounds)
 	root.free()
 	if variants.is_empty() or tree_bounds.size.y <= 0.0 or maxf(tree_bounds.size.x,tree_bounds.size.z) <= 0.0:
 		return {}
 	print("REFERENCE_TRELLIS_READY ",kind)
-	return {"scenes":variants,"bounds":tree_bounds}
+	return {"scenes":variants,"bounds":bounds_list}
 
 
 func dress(presentation: Node3D,size: Vector2) -> void:

@@ -1,6 +1,6 @@
 shader_type spatial;
 render_mode blend_mix, depth_draw_never, cull_disabled;
-uniform float ripple_strength = 0.10;
+uniform float ripple_strength = 0.14;
 varying vec3 world_pos;
 float w_hash(vec2 p) {
 	uvec2 q = uvec2(ivec2(p));
@@ -23,9 +23,11 @@ void fragment() {
 	float nz = w_noise(world_pos.xz*180.0 + vec2(0.0,TIME*0.30)) - 0.5;
 	vec3 n = normalize(vec3(nx*ripple_strength,1.0,nz*ripple_strength));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n,0.0)).xyz);
-	ALBEDO = mix(vec3(0.030,0.035,0.040), vec3(0.060,0.065,0.070), w_noise(world_pos.xz*90.0));
-	ROUGHNESS = 0.02;
-	SPECULAR = 0.95;
+	float fres = pow(1.0 - clamp(dot(NORMAL, normalize(VIEW)),0.0,1.0), 3.0);
+	vec3 deep = mix(vec3(0.016,0.026,0.034), vec3(0.045,0.058,0.070), w_noise(world_pos.xz*90.0));
+	ALBEDO = mix(deep, vec3(0.40,0.47,0.56), fres*0.45);
+	ROUGHNESS = 0.04;
+	SPECULAR = 1.0;
 	METALLIC = 0.0;
 	ALPHA = mask * 0.95;
 }

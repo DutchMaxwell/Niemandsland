@@ -81,7 +81,12 @@ func _run() -> void:
 		"quality": "Reference studio" if args.has("studio") else "Medium",
 		"internal_scale": root.scaling_3d_scale, "board": "assets/tutorial/tutorial_board.nml",
 		"animated_atmosphere": false, "samples": []}
-	for mood in (["Day"] if args.has("quick") else ["Day", "Sunset"]):
+	var moods: Array = ["Day"]
+	if args.has("sunset"):
+		moods = ["Sunset"]
+	elif not args.has("quick"):
+		moods = ["Day", "Sunset"]
+	for mood in moods:
 		main.atmosphere_controller.apply_atmosphere(mood, true)
 		if _presentation != null:
 			_presentation.apply_lighting(mood)
@@ -125,6 +130,81 @@ func _run() -> void:
 				"p95_ms": times[171], "eye": str(shot.eye), "target": str(shot.target),
 				"camera_transform": str(camera.global_transform)})
 			print("GFX_CAPTURE ", shot_name, " median_ms=", times[90])
+	if args.has("effects") and _presentation != null:
+		camera.global_position = Vector3(-0.50,0.17,0.69)
+		camera.look_at(Vector3(-0.61,0.025,0.39))
+		main.get_node("WorldEnvironment").environment.volumetric_fog_temporal_reprojection_enabled = false
+		Engine.time_scale = 0.0
+		for _i in 60:
+			await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(_output.path_join("fx_all.png"))
+		# Old, too-strong tilt-shift for the "before/after of the fix" split.
+		_presentation.set_tilt_shift_enabled(false)
+		_presentation._dof.dof_blur_amount = 0.09
+		for _i in 4:
+			await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(_output.path_join("fx_tiltstrong.png"))
+		_presentation.set_tilt_shift_enabled(true)
+		# Old, too-thick fog for the "before/after of the fix" split.
+		if _presentation._fog != null:
+			var tbl: Vector2 = main.get_node("Table").table_size * 0.3048
+			var sp: float = maxf(tbl.x,tbl.y)
+			_presentation._fog.size = Vector3(sp,sp * 0.6,sp)
+			_presentation._fog.position.y = sp * 0.30
+			_presentation._fog.material.density = 0.30
+			for _i in 4:
+				await process_frame
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_png(_output.path_join("fx_fogheavy.png"))
+			_presentation._fog.size = Vector3(sp,0.015,sp)
+			_presentation._fog.position.y = 0.010
+			_presentation._fog.material.density = 3.0
+		_presentation.set_tilt_shift_enabled(false)
+		for _i in 4:
+			await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(_output.path_join("fx_notilt.png"))
+		_presentation.set_tilt_shift_enabled(true)
+		if _presentation._fog != null:
+			_presentation._fog.visible = false
+			for _i in 4:
+				await process_frame
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_png(_output.path_join("fx_nofog.png"))
+			_presentation._fog.visible = true
+		var puddles := _presentation.find_child("Puddles",true,false)
+		print("PUDDLE_NODE ",puddles != null)
+		if puddles != null:
+			puddles.visible = false
+			for _i in 4:
+				await process_frame
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_png(_output.path_join("fx_nopuddle.png"))
+			puddles.visible = true
+		Engine.time_scale = 1.0
+		print("REFERENCE_EFFECTS_DONE")
+	if args.has("flight"):
+		var frame_directory := _output.path_join("flight_frames")
+		DirAccess.make_dir_recursive_absolute(frame_directory)
+		# A slow descending spiral: steady orbit around the tree group while the
+		# radius and height ease down towards the surface, so lighting and wind
+		# get time to read.
+		var center := Vector3(-0.60,0.030,0.45)
+		var frames := 1200
+		var turns := 2.5 * PI
+		for frame in frames:
+			var t := float(frame)/float(frames-1)
+			var radius := lerpf(1.35,0.26,t)
+			var height := lerpf(1.30,0.16,t)
+			var angle := turns * t
+			camera.global_position = Vector3(center.x+radius*cos(angle),height,center.z+radius*sin(angle))
+			camera.look_at(center)
+			await process_frame
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_jpg(frame_directory.path_join("%04d.jpg"%frame),0.95)
+		print("REFERENCE_FLIGHT_DONE")
 	if args.has("orbit"):
 		var frame_directory := _output.path_join("flight_frames")
 		DirAccess.make_dir_recursive_absolute(frame_directory)

@@ -40,11 +40,11 @@ vec3 ground_sample(vec2 p) {
  float patchy = surface_noise(p*6.5);
  col = mix(col, col*vec3(1.10,1.04,0.86), patchy*0.45*(1.0-path));
  float grit = surface_hash(p*95.0);
- col *= mix(0.85,1.15,grit*grit);
+ col *= mix(0.90,1.10,grit*grit);
  float pebble = surface_hash(p*52.0+vec2(37.0,11.0));
- col = mix(col, col*vec3(1.30,1.27,1.20), step(0.972,pebble));
+ col = mix(col, col*vec3(1.22,1.20,1.14), smoothstep(0.966,0.990,pebble));
  float dark = surface_hash(p*68.0+vec2(5.0,91.0));
- col = mix(col, col*vec3(0.56,0.52,0.44), step(0.976,dark));
+ col = mix(col, col*vec3(0.66,0.62,0.53), smoothstep(0.970,0.992,dark));
  float woodland = 0.0;
  for (int i = 0; i < forest_count; i++) {
   vec2 d = p - forest_regions[i].xy;

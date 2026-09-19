@@ -164,18 +164,19 @@ func _build_puddles(size: Vector2) -> void:
 	mesh.material = mat
 	var transforms: Array[Transform3D] = []
 	var colors: Array[Color] = []
-	for i in 160:
+	for i in 220:
 		var p := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		if _excluded(p):
 			continue
 		var path := _path_amount(p)
 		if _rng.randf() > 0.45+path*0.55:
 			continue
-		var r := _rng.randf_range(0.015,0.060)*(0.7+path)
+		var r := _rng.randf_range(0.020,0.075)*(0.7+path)
 		var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(r,r,r))
-		transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.0004,p.y)))
+		transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.0020,p.y)))
 		colors.append(Color.WHITE)
 	_multimesh("Puddles",mesh,transforms,colors,false)
+	print("REFERENCE_PUDDLES ",transforms.size())
 
 
 ## Soft clearing around miniatures: 0 on the base, ramping to 1 by ~0.028 m past the
@@ -200,17 +201,17 @@ func _contact_details(litter_transforms: Array[Transform3D],litter_colors: Array
 			var basis := Basis.from_euler(Vector3(_rng.randf_range(-0.18,0.18),angle+PI*0.5,_rng.randf_range(-0.18,0.18))).scaled(Vector3(s*1.7,s,s*1.25))
 			litter_transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.00030,p.y)))
 			litter_colors.append(Color(0.30,0.19,0.075).lerp(Color(0.66,0.44,0.20),_rng.randf()).srgb_to_linear())
-		for i in 10:
-			var angle := float(i)*TAU/10.0+_rng.randf_range(-0.5,0.5)
+		for i in 6:
+			var angle := float(i)*TAU/6.0+_rng.randf_range(-0.5,0.5)
 			var dir := Vector2(cos(angle),sin(angle))
-			var length := _rng.randf_range(0.024,0.058)
-			var p: Vector2 = tree_point+dir*length*0.5
+			var length := _rng.randf_range(0.010,0.024)
+			var p: Vector2 = tree_point+dir*length*0.55
 			if _excluded(p):
 				continue
-			var s := _rng.randf_range(0.0012,0.0026)
-			var basis := Basis.from_euler(Vector3(_rng.randf_range(-0.2,0.2),-angle,_rng.randf_range(-0.2,0.2))).scaled(Vector3(length*0.9,s,s*1.1))
-			litter_transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.00022,p.y)))
-			litter_colors.append(Color(0.16,0.10,0.045).lerp(Color(0.48,0.30,0.13),_rng.randf()).srgb_to_linear())
+			var s := _rng.randf_range(0.0018,0.0034)
+			var basis := Basis.from_euler(Vector3(_rng.randf_range(-0.10,0.10),-angle,_rng.randf_range(-0.10,0.10))).scaled(Vector3(length,s,s*1.1))
+			litter_transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.00012,p.y)))
+			litter_colors.append(Color(0.34,0.23,0.11).lerp(Color(0.58,0.40,0.20),_rng.randf()).srgb_to_linear())
 	for segment: Array in _walls:
 		var a: Vector2 = segment[0]
 		var b: Vector2 = segment[1]

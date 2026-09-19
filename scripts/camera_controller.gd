@@ -25,9 +25,9 @@ var _last_mouse_pos: Vector2 = Vector2.ZERO
 ## Cinematic depth of field ("tilt-shift"): production counterpart of the reference
 ## scene's zoom-driven DOF. Blur fades in as the camera approaches the table plane.
 ## Controlled by GraphicsSettings.tilt_shift.
-const TILT_SHIFT_MAX_AMOUNT := 0.09
-const TILT_SHIFT_FADE_NEAR := 0.22  # full blur at/below this camera distance (m)
-const TILT_SHIFT_FADE_FAR := 1.10   # no blur at/above this camera distance (m)
+const TILT_SHIFT_MAX_AMOUNT := 0.045
+const TILT_SHIFT_FADE_NEAR := 0.35  # full blur at/below this camera distance (m)
+const TILT_SHIFT_FADE_FAR := 0.95   # no blur at/above this camera distance (m)
 
 var _tilt_shift_enabled: bool = false
 var _camera_attributes: CameraAttributesPractical
@@ -48,11 +48,11 @@ func _ready() -> void:
 		_camera.near = 0.01
 	_camera_attributes = CameraAttributesPractical.new()
 	_camera_attributes.dof_blur_far_enabled = true
-	_camera_attributes.dof_blur_far_distance = 0.40
-	_camera_attributes.dof_blur_far_transition = 0.28
+	_camera_attributes.dof_blur_far_distance = 0.55
+	_camera_attributes.dof_blur_far_transition = 0.55
 	_camera_attributes.dof_blur_near_enabled = true
-	_camera_attributes.dof_blur_near_distance = 0.075
-	_camera_attributes.dof_blur_near_transition = 0.05
+	_camera_attributes.dof_blur_near_distance = 0.10
+	_camera_attributes.dof_blur_near_transition = 0.12
 	_camera_attributes.dof_blur_amount = 0.0
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null:

@@ -4,6 +4,7 @@ extends Node3D
 
 const TREE_BUILDER = preload("res://scripts/visual/reference_tree.gd")
 const GROUND = preload("res://shaders/visual/reference_ground.gdshader")
+const ReferenceMaterials = preload("res://scripts/visual/reference_materials.gd")
 var _main: Node
 var _ground: ShaderMaterial
 var _base: ShaderMaterial
@@ -19,9 +20,9 @@ var _wall_top := 0.0635
 var _camera: Camera3D
 var _dof: CameraAttributesPractical
 var _tilt_shift_enabled := true
-const DOF_MAX_AMOUNT := 0.09
-const DOF_NEAR_DISTANCE := 0.22
-const DOF_FAR_DISTANCE := 1.10
+const DOF_MAX_AMOUNT := 0.045
+const DOF_NEAR_DISTANCE := 0.30
+const DOF_FAR_DISTANCE := 0.85
 
 
 func prepare() -> void:
@@ -87,25 +88,38 @@ func apply(main: Node) -> void:
 
 
 ## Local fog volume over the board only: no global exponential fog, so the dark
-## studio background behind the table stays black. Height falloff keeps the haze
-## near the ground and lets light shafts form around the ruins.
+## studio background behind the table stays black. A 3D noise texture breaks the
+## haze into sparse wisps that hug the ground and drift slowly across it.
 func _build_fog(main: Node) -> void:
 	var table: Node3D = main.get_node("Table")
 	var surface: MeshInstance3D = main.get_node("Table/TableMesh")
 	var size: Vector2 = table.table_size * 0.3048
 	var span: float = maxf(size.x,size.y)
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.28
+	noise.fractal_octaves = 3
+	var wisps := NoiseTexture3D.new()
+	wisps.noise = noise
+	wisps.width = 64
+	wisps.height = 16
+	wisps.depth = 64
+	wisps.seamless = true
+	wisps.seamless_blend_skirt = 0.2
 	var fog := FogMaterial.new()
-	fog.density = 0.30
-	fog.albedo = Color(0.72,0.73,0.70)
+	fog.density = 3.0
+	fog.density_texture = wisps
+	fog.albedo = Color(0.74,0.75,0.72)
 	fog.emission = Color(0.0,0.0,0.0)
-	fog.height_falloff = 1.1
-	fog.edge_fade = 0.60
+	fog.height_falloff = 1.5
+	fog.edge_fade = 0.90
 	var volume := FogVolume.new()
 	volume.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
-	volume.size = Vector3(span,span * 0.6,span)
+	# A thin band (~1.5 cm) laid just above the ground.
+	volume.size = Vector3(span,0.015,span)
 	volume.material = fog
 	surface.add_child(volume)
-	volume.position = Vector3(0.0,span * 0.30,0.0)
+	volume.position = Vector3(0.0,0.010,0.0)
 	_fog = volume
 
 
@@ -176,11 +190,11 @@ func apply_lighting(mood: String) -> void:
 	var camera: Camera3D = _main.get_node("CameraPivot/Camera3D")
 	var attributes := CameraAttributesPractical.new()
 	attributes.dof_blur_far_enabled = true
-	attributes.dof_blur_far_distance = 0.40
-	attributes.dof_blur_far_transition = 0.28
+	attributes.dof_blur_far_distance = 0.55
+	attributes.dof_blur_far_transition = 0.55
 	attributes.dof_blur_near_enabled = true
-	attributes.dof_blur_near_distance = 0.075
-	attributes.dof_blur_near_transition = 0.05
+	attributes.dof_blur_near_distance = 0.10
+	attributes.dof_blur_near_transition = 0.12
 	attributes.dof_blur_amount = 0.0
 	camera.attributes = attributes
 	_camera = camera
@@ -208,6 +222,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(_delta: float) -> void:
+	if _fog != null:
+		var t := Time.get_ticks_msec() / 1000.0
+		var span: float = _fog.size.x
+		_fog.position.x = sin(t * 0.05) * span * 0.02
+		_fog.position.z = cos(t * 0.037) * span * 0.02
 	if _camera == null or _dof == null:
 		return
 	if not _tilt_shift_enabled:
@@ -256,7 +275,7 @@ func _dress_grid_forest(overlay: Node3D) -> void:
 				if child is Node3D:
 					child.visible = false
 			if _props != null and _props.has_tree():
-				var tree: Node3D = _props.tree_instance(height,index)
+				var tree: Node3D = _props.tree_instance(height,index,ReferenceMaterials.ground_height(expected))
 				tree.name = "ReferenceCanopy"
 				original.add_child(tree)
 			else:
