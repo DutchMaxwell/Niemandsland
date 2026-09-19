@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "url": "{cdn}/7b7f77299c0e3c2906c3a707b8010cbae93164cd24ef87c9ef9003fb78512463.glb",
+  "sha256": "7b7f77299c0e3c2906c3a707b8010cbae93164cd24ef87c9ef9003fb78512463",
+  "size": 2029624,
+  "license": "CC-BY-SA-4.0",
+  "attribution": "Niemandsland Contributors",
+  "source": "Original NanoBanana image -> project deterministic white-key/deshadow + alpha-preserving server conditioning (BRIA bypassed) -> TRELLIS.2 -> 1024 reconstruction, 4096 texture",
+  "source_image": "rock.png",
+  "source_sha256": "2e1a12e39150d4ea45cb188e4f909f8677877ce448f43689a843769d98f10a97",
+  "conditioned_image": "rock-conditioned.png",
+  "conditioned_sha256": "d635b680903a228e436aaa54bc37ba5ef335d184d32d9d62cfc20c1e2ab41005",
+  "trellis_sha256": "37a3afe30b6a27292dec90d0c61fd8509463c0d9edd9959f98ddba2b31a1651b",
+  "seed": 961536507,
+  "processing": "Blender topology reduction to 3000 faces; textures and UVs preserved",
+  "conditioning": {
+    "source_image": "rock.png",
+    "source_sha256": "2e1a12e39150d4ea45cb188e4f909f8677877ce448f43689a843769d98f10a97",
+    "preprocessing": "Existing project deterministic white-key/deshadow, then server alpha-preserving crop and RGB conditioning; remove_background/BRIA bypassed by supplied alpha",
+    "white_threshold": 240,
+    "alpha_image": "rock-keyed.png",
+    "alpha_sha256": "ee50701b45fe8ebc7b585586b2764112f6a600360a3eee92a8335c812c2ffa1a",
+    "conditioned_image": "rock-conditioned.png",
+    "conditioned_sha256": "d635b680903a228e436aaa54bc37ba5ef335d184d32d9d62cfc20c1e2ab41005"
+  }
+}

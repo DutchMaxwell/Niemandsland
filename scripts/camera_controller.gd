@@ -22,6 +22,16 @@ var _is_rotating: bool = false
 var _is_panning: bool = false
 var _last_mouse_pos: Vector2 = Vector2.ZERO
 
+## Cinematic depth of field ("tilt-shift"): production counterpart of the reference
+## scene's zoom-driven DOF. Blur fades in as the camera approaches the table plane.
+## Controlled by GraphicsSettings.tilt_shift.
+const TILT_SHIFT_MAX_AMOUNT := 0.045
+const TILT_SHIFT_FADE_NEAR := 0.35  # full blur at/below this camera distance (m)
+const TILT_SHIFT_FADE_FAR := 0.95   # no blur at/above this camera distance (m)
+
+var _tilt_shift_enabled: bool = false
+var _camera_attributes: CameraAttributesPractical
+
 # WASD movement state
 var _move_direction: Vector2 = Vector2.ZERO
 var _rotation_direction: float = 0.0
@@ -36,6 +46,18 @@ func _ready() -> void:
 	# a few cm tall, far below the default 0.05 m near plane).
 	if _camera:
 		_camera.near = 0.01
+	_camera_attributes = CameraAttributesPractical.new()
+	_camera_attributes.dof_blur_far_enabled = true
+	_camera_attributes.dof_blur_far_distance = 0.55
+	_camera_attributes.dof_blur_far_transition = 0.55
+	_camera_attributes.dof_blur_near_enabled = true
+	_camera_attributes.dof_blur_near_distance = 0.10
+	_camera_attributes.dof_blur_near_transition = 0.12
+	_camera_attributes.dof_blur_amount = 0.0
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null:
+		_tilt_shift_enabled = graphics.tilt_shift
+	set_tilt_shift_enabled(_tilt_shift_enabled)
 	_mark_dirty()
 
 
@@ -250,6 +272,27 @@ func _apply_camera_transform() -> void:
 		var offset = Vector3(0, -sin(pitch_rad), cos(pitch_rad)) * _current_zoom
 		_camera.position = offset
 		_camera.look_at(_target_position, Vector3.UP)
+		_update_tilt_shift()
+
+
+## Enable/disable the cinematic depth of field at runtime (Settings toggle).
+func set_tilt_shift_enabled(enabled: bool) -> void:
+	_tilt_shift_enabled = enabled
+	if _camera == null:
+		return
+	if enabled:
+		_camera.attributes = _camera_attributes
+		_update_tilt_shift()
+	else:
+		_camera.attributes = null
+
+
+## Recompute the DOF blur amount from the current camera distance.
+func _update_tilt_shift() -> void:
+	if not _tilt_shift_enabled or _camera_attributes == null:
+		return
+	var fade := 1.0 - smoothstep(TILT_SHIFT_FADE_NEAR, TILT_SHIFT_FADE_FAR, _current_zoom)
+	_camera_attributes.dof_blur_amount = TILT_SHIFT_MAX_AMOUNT * fade
 
 
 ## Reset camera to default view

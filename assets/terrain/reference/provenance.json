@@ -1,0 +1,47 @@
+[
+  {
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Create one square photorealistic texture photograph looking straight vertically down at living short green meadow grass. The frame covers 30 by 30 centimetres. Clearly visible small flat GREEN blades overlap irregularly, some dark brown earth appears between tufts. Rich natural subdued olive green and deeper green, dark earthy shadows between blades, occasional pale dried blade but overwhelmingly living green grass. Flat overcast lighting with no directional cast shadows. This is a diffuse albedo texture for a game, edge-to-edge ground only, seamlessly tileable edges. Detailed real botanical grass blades, not moss, not lichen, not grey fibres, no aerial landscape, no yellow straw field. No text, frame, icons or objects. Original generic natural material.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "purpose": "Meadow revision: visible living green grass",
+    "source_file": "meadow-v2.png",
+    "source_sha256": "6e27f05a460d368685eeb0aa994083ac43467cab7cd3eefe9b2743f722b0078b",
+    "file": "meadow.webp",
+    "sha256": "c7dc260d26079adc53ab99ae92f0c5381fb60a8e74086fa5b2e20023dbb2988e",
+    "processing": "WebP encoding, quality 94; no image compositing or third-party inputs",
+    "provider_terms": "https://ai.google.dev/gemini-api/terms",
+    "generation_date": "2026-09-16"
+  },
+  {
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Create an original seamless square tileable diffuse color texture for a realistic miniature tabletop battlefield. Strict orthographic overhead view, entire image is ground surface, identical material scale across the frame, soft flat shadowless illumination suitable as a game albedo map. No directional shadows, no perspective, no horizon, no objects, no lettering, no frame. Natural photographic material detail, not an illustration, not stylized. Small features and fine detail; avoid any large recognizable landmark. Fine compacted grey-brown loam with very small scattered gravel and tiny dry root fibres, mostly smooth earth. Desaturated earthy taupe, subtle darker moist patches, a few tiny moss specks. No large rocks, no footprints, no cracks, no tire tracks, no baked-in grass shadows. The tile represents about one metre of ground.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "purpose": "Original Niemandsland ground material; no third-party source images",
+    "source_file": "earth.png",
+    "source_sha256": "58222406806a377e45da0f254f9ba4c2381b3c211b3824553d29d34eb485491d",
+    "file": "earth.webp",
+    "sha256": "2c9b31dae20eb45e12abc25f69eab9b0ad38da4d421101f9ba39c91a9fa9299f",
+    "processing": "WebP encoding, quality 94; no image compositing or third-party inputs",
+    "provider_terms": "https://ai.google.dev/gemini-api/terms",
+    "generation_date": "2026-09-16"
+  },
+  {
+    "provider": "Google Gemini API",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Create an original seamless square tileable diffuse color texture for a realistic miniature tabletop battlefield. Strict orthographic overhead view, entire image is ground surface, identical material scale across the frame, soft flat shadowless illumination suitable as a game albedo map. No directional shadows, no perspective, no horizon, no objects, no lettering, no frame. Natural photographic material detail, not an illustration, not stylized. Small features and fine detail; avoid any large recognizable landmark. A temperate woodland floor of dark brown humus, very small decomposing oak leaves, fine root fibres and subdued olive moss. Mostly soil, small leaf fragments concentrated in soft patches. No giant whole leaves, no branches thicker than a twig, no tree trunks, no cast shadows, no dramatic lighting. The tile represents about one metre of forest floor.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "purpose": "Original Niemandsland ground material; no third-party source images",
+    "source_file": "woodland.png",
+    "source_sha256": "f2fa2e5c88ee849858d83ecc04fe971966712a950009213c8725b3e8f5a7ea09",
+    "file": "woodland.webp",
+    "sha256": "a94eb391f38236a4e1090ae430cdff8f53fe833767a78a1e6e2ab401b3db272b",
+    "processing": "WebP encoding, quality 94; no image compositing or third-party inputs",
+    "provider_terms": "https://ai.google.dev/gemini-api/terms",
+    "generation_date": "2026-09-16"
+  }
+]
