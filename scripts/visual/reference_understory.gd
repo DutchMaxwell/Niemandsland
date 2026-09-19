@@ -104,6 +104,7 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 	_multimesh("DryFescue",_fescue_mesh(),tall_transforms,tall_colors,false)
 	_multimesh("FieldPebbles",_stone_mesh(),stone_transforms,stone_colors)
 	_multimesh("LeafLitter",_litter_mesh(),litter_transforms,litter_colors)
+	_build_puddles(size)
 	print("REFERENCE_UNDERSTORY grass=",grass_transforms.size()," stones=",stone_transforms.size()," leaves=",litter_transforms.size()," fescue=",tall_transforms.size())
 
 
@@ -133,6 +134,30 @@ func _excluded(p: Vector2) -> bool:
 		if p.distance_squared_to(Vector2(e.x,e.y))<e.z*e.z:
 			return true
 	return false
+
+
+## Standing water after the rain: irregular, low-roughness puddles that reflect the
+## scene via SSR, biased to the worn path and kept clear of the miniatures.
+func _build_puddles(size: Vector2) -> void:
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(1.0,1.0)
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/visual/reference_water.gdshader")
+	mesh.material = mat
+	var transforms: Array[Transform3D] = []
+	var colors: Array[Color] = []
+	for i in 90:
+		var p := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
+		if _excluded(p):
+			continue
+		var path := _path_amount(p)
+		if _rng.randf() > 0.35+path*0.65:
+			continue
+		var r := _rng.randf_range(0.012,0.045)*(0.7+path)
+		var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(r,r,r))
+		transforms.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+0.0004,p.y)))
+		colors.append(Color.WHITE)
+	_multimesh("Puddles",mesh,transforms,colors,false)
 
 
 ## Soft clearing around miniatures: 0 on the base, ramping to 1 by ~0.028 m past the

@@ -13,9 +13,14 @@ void vertex() {
 }
 void fragment() {
  if (clip_base && length(UV) > 1.0) { discard; }
- ALBEDO = ground_sample(ground_xz);
- ROUGHNESS = 0.62;
- SPECULAR = 0.45;
+ // Wet-after-rain: damp soil is darker and glossier, strongest along the worn path.
+ float pc = -0.60+sin(ground_xz.y*8.0+0.4)*0.085;
+ float pw = 0.020+surface_noise(ground_xz*38.0)*0.020;
+ float path = (1.0-smoothstep(pw,pw+0.030,abs(ground_xz.x-pc)))*smoothstep(0.02,0.15,ground_xz.y);
+ float wet = clamp(0.30+path*0.90,0.0,1.0);
+ ALBEDO = ground_sample(ground_xz)*mix(1.0,0.72,wet);
+ ROUGHNESS = mix(0.55,0.18,wet);
+ SPECULAR = mix(0.40,0.80,wet);
  METALLIC = 0.0;
  float step_size=0.00014;
  vec2 uv=ground_xz*2.2;

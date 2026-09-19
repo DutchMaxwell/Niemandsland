@@ -157,15 +157,7 @@ func apply_lighting(mood: String) -> void:
 	env.ssao_power = 1.4
 	env.ssil_enabled = false
 	env.tonemap_agx_contrast = 1.15
-	# Wet-after-rain atmosphere: soft bloom on the highlights, damp-surface
-	# screen-space reflections, and a light volumetric haze over the whole board.
-	env.glow_enabled = true
-	env.glow_intensity = 0.55
-	env.glow_strength = 1.0
-	env.glow_bloom = 0.18
-	env.glow_hdr_threshold = 0.95
-	env.glow_hdr_scale = 2.0
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	# Damp-surface screen-space reflections; no bloom (rejected by the maintainer).
 	env.ssr_enabled = true
 	env.ssr_max_steps = 48
 	env.ssr_fade_in = 0.08
@@ -402,8 +394,11 @@ func _weather_ruin(node: Node) -> void:
 			var stone: BaseMaterial3D = node.material_override.duplicate()
 			if stone.normal_enabled:
 				stone.normal_scale *= 3.0
-			stone.albedo_color = Color(stone.albedo_color.r*0.74,
-					stone.albedo_color.g*0.69,stone.albedo_color.b*0.60,stone.albedo_color.a)
+			# Damp masonry: darker and glossier than the shipped dry panels.
+			stone.roughness = 0.45
+			stone.metallic_specular = 0.6
+			stone.albedo_color = Color(stone.albedo_color.r*0.62,
+					stone.albedo_color.g*0.62,stone.albedo_color.b*0.60,stone.albedo_color.a)
 			node.material_override = stone
 			if not stone.uv1_triplanar and stone.albedo_texture != null:
 				panel_texture = stone.albedo_texture
