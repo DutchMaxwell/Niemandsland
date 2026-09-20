@@ -4,12 +4,19 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 uniform bool clip_base = false;
 uniform bool surface_relief = false;
 float relief(vec2 p) {
- return (surface_noise(p*2.6)-0.5)*0.008+(surface_noise(p*7.5)-0.5)*0.003;
+	float amp = desert_mode ? 0.45 : 1.0;
+	return ((surface_noise(p*2.6)-0.5)*0.008+(surface_noise(p*7.5)-0.5)*0.003)*amp;
+}
+// The drift mound is vertex-only: the fragment needs relief four times for the normal,
+// and the drift loop there cost ~9 ms. The mound still reads from its silhouette and
+// the brighter, noised sand in the fragment.
+float full_relief(vec2 p) {
+	return relief(p) + drift_height(p);
 }
 varying vec2 ground_xz;
 void vertex() {
  ground_xz = (MODEL_MATRIX * vec4(VERTEX,1.0)).xz;
- if(surface_relief) { VERTEX.y += relief(ground_xz); }
+ if(surface_relief) { VERTEX.y += full_relief(ground_xz); }
 }
 void fragment() {
  if (clip_base && length(UV) > 1.0) { discard; }

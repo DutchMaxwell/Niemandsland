@@ -8,6 +8,8 @@ uniform int wall_count=0;
 uniform vec4 wall_regions[64];
 uniform bool desert_mode = false;
 uniform float wind_time = 0.0;
+uniform int drift_count = 0;
+uniform vec4 drift_points[32];
 
 // Integer hashing keeps neighboring cells identical across GPU optimizations.
 float surface_hash(vec2 p) {
@@ -26,6 +28,35 @@ vec2 mirrored_uv(vec2 uv) { return 1.0 - abs(mod(uv, 2.0) - 1.0); }
 vec3 tiled_surface(sampler2D tex, vec2 uv) {
  vec2 rotated = mat2(vec2(0.8,0.6),vec2(-0.6,0.8)) * uv * 0.71 + vec2(0.37,0.61);
  return mix(texture(tex,mirrored_uv(uv)).rgb,texture(tex,mirrored_uv(rotated)).rgb,0.15);
+}
+// Wind-piled sand: a soft mound at the foot of every ruin wall and placed prop, so the
+// props sit in the terrain instead of on top of it. Walls use the wall segments; placed
+// props come in as drift_points (xz + radius).
+float drift_mask(vec2 p) {
+	float m = 0.0;
+	for (int i = 0; i < drift_count; i++) {
+		float d = length(p - drift_points[i].xy) / max(drift_points[i].z, 0.0001);
+		m = max(m, 1.0 - smoothstep(0.0,1.0,d));
+	}
+	return m;
+}
+float drift_height(vec2 p) {
+	float h = 0.0;
+	for (int i = 0; i < drift_count; i++) {
+		float r = max(drift_points[i].z, 0.0001);
+		float d = length(p - drift_points[i].xy) / r;
+		float m = 1.0 - smoothstep(0.0,1.0,d);
+		h += m * m * r * 0.20;
+	}
+	for (int i = 0; i < wall_count; i++) {
+		vec2 a = wall_regions[i].xy, b = wall_regions[i].zw;
+		vec2 e = b - a;
+		float t = clamp(dot(p - a, e) / max(dot(e, e), 0.000001), 0.0, 1.0);
+		float d = length(p - (a + t * e));
+		float m = 1.0 - smoothstep(0.0, 0.030, d);
+		h += m * m * 0.007;
+	}
+	return h;
 }
 // Wind-rippled sand with cracked-earth pans and scree patches. Reuses the same three
 // samplers as the grassland (meadow=sand, earth=cracked, woodland=scree).
@@ -58,6 +89,9 @@ vec3 desert_sample(vec2 p) {
 		foot = max(foot, 1.0 - smoothstep(0.004, 0.024, d));
 	}
 	col *= mix(vec3(1.0), vec3(0.82, 0.78, 0.68), foot * 0.6);
+	// Clean, brighter sand where the wind piles it up against a wall or a prop; broken
+	// with fine noise so the mound does not read as a smooth white dome.
+	col = mix(col, sand * vec3(1.12,1.05,0.93), drift_mask(p) * (0.45 + 0.35 * surface_noise(p * 46.0)));
 	// Warm the pale sand toward a real desert tan; the raw texture is almost white
 	// and the bright sun bleached it further.
 	return col * vec3(0.92, 0.78, 0.56);

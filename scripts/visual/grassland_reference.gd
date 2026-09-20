@@ -86,9 +86,30 @@ func apply(main: Node) -> void:
 		wall_regions.append(Vector4(edge[0].x,edge[0].y,edge[1].x,edge[1].y))
 	var wall_count := mini(wall_regions.size(),64)
 	wall_regions.resize(64)
+	var drift_points := PackedVector4Array()
+	if _profile["desert_mode"]:
+		# Sand piles only where a windbreak stands: ruin walls (handled in the shader),
+		# trees/cacti and containers. Mines and signs are flat markers, so they get none.
+		var dims: Vector2i = overlay._calculate_grid_dims(overlay.table_size_feet)
+		var cell_size: float = overlay.GRID_SIZE_INCHES * overlay.INCHES_TO_METERS
+		var rot := deg_to_rad(float(overlay.grid_rotation_degrees))
+		for obj: Dictionary in overlay._last_objects:
+			var kind: String = obj.get("object_type","tree")
+			if kind != "tree" and kind != "container":
+				continue
+			var cell: Vector2i = obj.cell
+			var offset: Vector2 = obj.offset
+			var x := (cell.x-dims.x/2.0+offset.x)*cell_size
+			var z := (cell.y-dims.y/2.0+offset.y)*cell_size
+			var point := Vector2(x*cos(rot)-z*sin(rot),x*sin(rot)+z*cos(rot))
+			drift_points.append(Vector4(point.x,point.y,0.028 if kind=="tree" else 0.058,0.0))
+	var drift_count := mini(drift_points.size(),32)
+	drift_points.resize(32)
 	for mat in [_ground,_base]:
 		mat.set_shader_parameter("wall_count",wall_count)
 		mat.set_shader_parameter("wall_regions",wall_regions)
+		mat.set_shader_parameter("drift_count",drift_count)
+		mat.set_shader_parameter("drift_points",drift_points)
 	var understory := preload("res://scripts/visual/reference_understory.gd").new()
 	add_child(understory)
 	if _profile["understory"] == "desert":
@@ -154,9 +175,8 @@ func _build_dust(main: Node) -> void:
 	var size: Vector2 = table.table_size * 0.3048
 	var veil_shader := preload("res://shaders/visual/reference_sand_veil.gdshader")
 	var layers := [
-		{"height": 0.010, "scale": 2.6, "speed": 0.10, "opacity": 0.55},
-		{"height": 0.018, "scale": 5.5, "speed": 0.17, "opacity": 0.30},
-		{"height": 0.026, "scale": 1.6, "speed": 0.06, "opacity": 0.22},
+		{"height": 0.004, "scale": 2.6, "speed": 0.10, "opacity": 0.50},
+		{"height": 0.009, "scale": 5.5, "speed": 0.17, "opacity": 0.28},
 	]
 	for layer in layers:
 		var plane := PlaneMesh.new()
