@@ -67,6 +67,16 @@ static var fast_planner_guard: int = FAST_PLANNER_GUARD
 ## NML-1073 M4-0a: armed by MoveRecorder.begin() when NML_MOVE_TRACE=1 is set alongside NML_MOVE_DUMP —
 ## every trace_* call below is gated on this ONE bool so the hot path stays zero-cost when off.
 static var trace_on := false
+## Wall-cull broad phase (speed): step_blocked first rejects any wall whose axis-aligned bbox is
+## disjoint from the step bbox inflated by clearance + EPS. Provably behaviour-identical: a pair that
+## crosses or sits closer than `clearance` always has overlapping boxes (a blocked wall's nearest
+## point is within `clearance < pad` of the step segment, so its box touches the inflated box), while
+## a disjoint box keeps every wall point ≥ pad > clearance away. `false` restores the exact
+## pre-cull loop — the A/B lever for the equivalence tests.
+static var wall_cull := true
+## Diagnostic seam (armed by tests): when a Dictionary {"tested": int, "culled": int}, step_blocked
+## tallies how many wall pairs the cull saw and rejected; null (shipped default) adds no work.
+static var wall_cull_stats: Variant = null
 const DIFFICULT_COST_MULT := 2.0            # Theta* soft cost: route AROUND Difficult when cheaper (research §1.3/3.3)
 const DANGEROUS_COST_MULT := 6.0            # Dangerous DEALS DAMAGE — avoid it hard (route around unless the detour is >6x)
 const THETA_DIAG := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
