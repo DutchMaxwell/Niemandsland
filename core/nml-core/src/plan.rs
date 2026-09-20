@@ -214,7 +214,7 @@ pub struct Search<'a> {
 }
 
 /// The three seams `resolve` branches on, off the resolved knobs.
-fn seams_of(knobs: &Knobs) -> Seams {
+pub fn seams_of(knobs: &Knobs) -> Seams {
     Seams {
         spacing: knobs.seam_spacing,
         cast: knobs.seam_cast,
