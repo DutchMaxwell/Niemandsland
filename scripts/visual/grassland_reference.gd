@@ -16,6 +16,7 @@ var _props: Node3D
 var _previous_viewport: Dictionary = {}
 var _current_mood := "Day"
 var _fog: FogVolume
+var _dust: GPUParticles3D
 var _wall_top := 0.0635
 var _camera: Camera3D
 var _dof: CameraAttributesPractical
@@ -96,6 +97,8 @@ func apply(main: Node) -> void:
 	if _props != null:
 		_props.dress(self,table.table_size*0.3048)
 	_build_fog(main)
+	if _profile["dust"]:
+		_build_dust(main)
 	apply_lighting("Day")
 	# A quality-preset change rewrites the shared environment (SDFGI, SSIL, metre-scale
 	# SSAO, stronger glow). Re-assert the tuned reference look so Ultra cannot undo it.
@@ -124,9 +127,9 @@ func _build_fog(main: Node) -> void:
 	wisps.seamless = true
 	wisps.seamless_blend_skirt = 0.2
 	var fog := FogMaterial.new()
-	fog.density = 3.0
+	fog.density = _profile["fog_density"]
 	fog.density_texture = wisps
-	fog.albedo = Color(0.74,0.75,0.72)
+	fog.albedo = _profile["fog_color"]
 	fog.emission = Color(0.0,0.0,0.0)
 	fog.height_falloff = 1.5
 	fog.edge_fade = 0.90
@@ -138,6 +141,75 @@ func _build_fog(main: Node) -> void:
 	surface.add_child(volume)
 	volume.position = Vector3(0.0,0.010,0.0)
 	_fog = volume
+
+
+## Wind-blown sand: one low GPU emitter of soft billboard puffs that drift across the
+## board, so the desert reads as gusty instead of a still photograph. Turbulence gives
+## the puffs a swirl; the emission box is the table, the wind blows toward +X.
+func _build_dust(main: Node) -> void:
+	var table: Node3D = main.get_node("Table")
+	var surface: MeshInstance3D = main.get_node("Table/TableMesh")
+	var size: Vector2 = table.table_size * 0.3048
+	var span: float = maxf(size.x,size.y)
+	var process := ParticleProcessMaterial.new()
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	process.emission_box_extents = Vector3(size.x*0.55,0.004,size.y*0.55)
+	process.direction = Vector3(1.0,0.03,0.20)
+	process.spread = 14.0
+	process.initial_velocity_min = 0.12
+	process.initial_velocity_max = 0.32
+	process.gravity = Vector3(0.0,-0.030,0.0)
+	process.damping_min = 0.04
+	process.damping_max = 0.14
+	process.turbulence_enabled = true
+	process.turbulence_noise_strength = 0.22
+	process.turbulence_noise_scale = 3.0
+	process.turbulence_noise_speed = Vector3(0.09,0.02,0.06)
+	process.scale_min = 0.22
+	process.scale_max = 0.55
+	process.color = Color(0.86,0.74,0.52,0.22)
+	var ramp := Gradient.new()
+	ramp.set_color(0,Color(1,1,1,0.0))
+	ramp.add_point(0.30,Color(1,1,1,0.60))
+	ramp.add_point(0.72,Color(1,1,1,0.40))
+	ramp.set_color(ramp.get_point_count()-1,Color(1,1,1,0.0))
+	var ramp_tex := GradientTexture1D.new()
+	ramp_tex.gradient = ramp
+	process.color_ramp = ramp_tex
+	var puff := GradientTexture2D.new()
+	var soft := Gradient.new()
+	soft.set_color(0,Color(1,1,1,1))
+	soft.set_color(1,Color(1,1,1,0))
+	puff.gradient = soft
+	puff.fill = GradientTexture2D.FILL_RADIAL
+	puff.fill_from = Vector2(0.5,0.5)
+	puff.fill_to = Vector2(0.5,0.0)
+	puff.width = 64
+	puff.height = 64
+	var material := StandardMaterial3D.new()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	material.albedo_texture = puff
+	material.albedo_color = Color(0.87,0.75,0.53,0.15)
+	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	material.disable_receive_shadows = true
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.085,0.034)
+	quad.material = material
+	var particles := GPUParticles3D.new()
+	particles.amount = 100
+	particles.lifetime = 5.5
+	particles.preprocess = 5.5
+	particles.randomness = 0.7
+	particles.fixed_fps = 30
+	particles.local_coords = false
+	particles.process_material = process
+	particles.draw_pass_1 = quad
+	particles.position = Vector3(0.0,0.008,0.0)
+	particles.visibility_aabb = AABB(Vector3(-span,-0.06,-span),Vector3(span*2.0,0.3,span*2.0))
+	surface.add_child(particles)
+	_dust = particles
 
 
 func apply_lighting(mood: String) -> void:
