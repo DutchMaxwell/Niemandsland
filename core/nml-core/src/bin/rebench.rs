@@ -43,14 +43,14 @@ fn pct(sorted: &[f64], p: f64) -> f64 {
 }
 
 /// (min, mean, median, p90, max) — sorts in place.
-fn stats(v: &mut Vec<f64>) -> (f64, f64, f64, f64, f64) {
+fn stats(v: &mut [f64]) -> (f64, f64, f64, f64, f64) {
     assert!(!v.is_empty(), "empty distribution");
     let mean = v.iter().sum::<f64>() / v.len() as f64;
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     (v[0], mean, pct(v, 0.5), pct(v, 0.90), v[v.len() - 1])
 }
 
-fn line(name: &str, v: &mut Vec<f64>, unit: &str) {
+fn line(name: &str, v: &mut [f64], unit: &str) {
     let (min, mean, med, p90, max) = stats(v);
     println!(
         "{name:38} min {min:9.2}  mean {mean:9.2}  median {med:9.2}  p90 {p90:9.2}  max {max:11.2}  {unit}  (n {})",
