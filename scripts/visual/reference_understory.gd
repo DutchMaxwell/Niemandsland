@@ -126,6 +126,43 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 	print("REFERENCE_UNDERSTORY grass=",grass_transforms.size()," stones=",stone_transforms.size()," leaves=",litter_transforms.size()," fescue=",tall_transforms.size()," turf=",turf_transforms.size())
 
 
+## Arid scatter: wind-laid pebbles and a little scree, no litter, turf or standing
+## water. The ground shader carries the ripples; this only dresses the surface.
+func build_desert(presentation: Node3D,main: Node,size: Vector2) -> void:
+	_presentation = presentation
+	_rng.seed = 170927
+	_walls = main.terrain_overlay.get_wall_segments_world()
+	for obj in main.object_manager.get_children():
+		if obj is Node3D and obj.is_in_group("selectable"):
+			_exclusions.append(Vector3(obj.global_position.x,obj.global_position.z,0.021))
+	var stone_transforms: Array[Transform3D] = []
+	var stone_colors: Array[Color] = []
+	for i in int(size.x*size.y*9000):
+		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
+		if _excluded(point):
+			continue
+		var wall := _wall_distance(point)
+		if _rng.randf()>(0.34 if wall<0.03 else 0.09):
+			continue
+		var s := _rng.randf_range(0.0008,0.0034)
+		var basis := Basis.from_euler(Vector3(_rng.randf()*0.3,_rng.randf()*TAU,_rng.randf()*0.3)).scaled(Vector3(s,s*_rng.randf_range(0.20,0.40),s*_rng.randf_range(0.75,1.3)))
+		stone_transforms.append(Transform3D(basis,Vector3(point.x,ReferenceMaterials.ground_height(point)+s*0.06,point.y)))
+		stone_colors.append(Color(0.42,0.36,0.27).lerp(Color(0.74,0.67,0.53),_rng.randf()).srgb_to_linear())
+	_multimesh("DesertPebbles",_stone_mesh(),stone_transforms,stone_colors)
+	for i in 26:
+		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
+		if _excluded(point) or _wall_distance(point)<0.02:
+			continue
+		var shrub := MeshInstance3D.new()
+		shrub.mesh = presentation._trees[i%3]
+		shrub.position = Vector3(point.x,ReferenceMaterials.ground_height(point)-0.001,point.y)
+		var h := _rng.randf_range(0.008,0.016)
+		shrub.scale = Vector3(h*1.35,h,h*1.35)
+		shrub.rotation.y = _rng.randf()*TAU
+		add_child(shrub)
+	print("REFERENCE_DESERT stones=",stone_transforms.size())
+
+
 ## Drifts read as wind-piled leaves instead of an even sprinkle. Centres sit in
 ## the open field and thicken near woodland edges, where litter actually gathers.
 func _litter_drifts(litter_transforms: Array[Transform3D],litter_colors: Array[Color],size: Vector2) -> void:

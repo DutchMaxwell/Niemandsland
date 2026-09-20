@@ -20,6 +20,9 @@ var _wall_top := 0.0635
 var _camera: Camera3D
 var _dof: CameraAttributesPractical
 var _tilt_shift_enabled := true
+var biome := "grassland"
+var _profile: Dictionary = {}
+const Biomes = preload("res://scripts/visual/reference_biomes.gd")
 const DOF_MAX_AMOUNT := 0.045
 const DOF_NEAR_DISTANCE := 0.30
 const DOF_FAR_DISTANCE := 0.85
@@ -33,15 +36,20 @@ func prepare() -> void:
 
 func apply(main: Node) -> void:
 	_main = main
+	_profile = Biomes.get_profile(biome)
+	var table: Node3D = main.get_node("Table")
+	# Re-theme the ruin walls and trees to the biome before dressing. The overlay is themed
+	# directly: table.set_biome also rebuilds the production battlemap material, which would
+	# replace the reference ground and reset the shared base-top material under us.
+	if not _profile["biome"].is_empty() and main.terrain_overlay.has_method("set_biome"):
+		main.terrain_overlay.set_biome(_profile["biome"])
 	for i in 3:
 		_trees.append(TREE_BUILDER.build(i))
 	_ground = ShaderMaterial.new()
 	_ground.shader = GROUND
 	for texture_name in ["meadow","earth","woodland"]:
-		_ground.set_shader_parameter(texture_name + "_tex",preload("res://scripts/visual/reference_materials.gd").texture("res://assets/terrain/reference/" + texture_name + ".webp"))
-	_ground.set_shader_parameter("earth_tex",preload("res://scripts/visual/reference_materials.gd").texture("res://assets/terrain/reference/hero/rough-earth.webp"))
-	_ground.set_shader_parameter("woodland_tex",preload("res://scripts/visual/reference_materials.gd").texture("res://assets/terrain/reference/hero/forest-duff.webp"))
-	var table: Node3D = main.get_node("Table")
+		_ground.set_shader_parameter(texture_name + "_tex",ReferenceMaterials.texture(_profile["textures"][texture_name]))
+	_ground.set_shader_parameter("desert_mode",_profile["desert_mode"])
 	var surface: MeshInstance3D = table.get_node("TableMesh")
 	var plane: PlaneMesh = surface.mesh.duplicate()
 	plane.subdivide_width = 450
@@ -55,6 +63,7 @@ func apply(main: Node) -> void:
 	_base.set_shader_parameter("clip_base",true)
 	for texture_name in ["meadow","earth","woodland"]:
 		_base.set_shader_parameter(texture_name + "_tex",_ground.get_shader_parameter(texture_name + "_tex"))
+	_base.set_shader_parameter("desert_mode",_profile["desert_mode"])
 	var frame := StandardMaterial3D.new()
 	frame.albedo_color = Color(0.022,0.026,0.023)
 	frame.roughness = 0.86
@@ -79,7 +88,10 @@ func apply(main: Node) -> void:
 		mat.set_shader_parameter("wall_regions",wall_regions)
 	var understory := preload("res://scripts/visual/reference_understory.gd").new()
 	add_child(understory)
-	understory.build(self,main,table.table_size * 0.3048)
+	if _profile["understory"] == "desert":
+		understory.build_desert(self,main,table.table_size * 0.3048)
+	else:
+		understory.build(self,main,table.table_size * 0.3048)
 	if _props != null:
 		_props.dress(self,table.table_size*0.3048)
 	_build_fog(main)
@@ -133,16 +145,17 @@ func apply_lighting(mood: String) -> void:
 		_previous_viewport = {"taa":get_viewport().use_taa,"scale":get_viewport().scaling_3d_scale}
 	var light: Node = _main.lighting_controller
 	var evening := mood == "Sunset"
-	light.set_sun_energy(2.55)
-	light.set_sun_color(Color(1,0.85,0.69) if evening else Color(1,0.90,0.76))
-	light.set_sun_angles(-40.0 if evening else -58.0,28.0 if evening else 38.0)
-	light.set_ambient_energy(0.32)
-	light.set_ambient_color(Color(0.77,0.84,0.94))
-	light.set_fill_light_energy(0.40)
-	light.set_fill_light_color(Color(0.95,0.94,0.90))
+	var angles: Vector2 = _profile["sun_angles_sunset"] if evening else _profile["sun_angles_day"]
+	light.set_sun_energy(_profile["sun_energy"])
+	light.set_sun_color(_profile["sun_color_sunset"] if evening else _profile["sun_color_day"])
+	light.set_sun_angles(angles.x,angles.y)
+	light.set_ambient_energy(_profile["ambient_energy"])
+	light.set_ambient_color(_profile["ambient_color"])
+	light.set_fill_light_energy(_profile["fill_energy"])
+	light.set_fill_light_color(_profile["fill_color"])
 	light.set_exposure(1.0)
 	light.set_contrast(1.06)
-	light.set_saturation(0.82)
+	light.set_saturation(_profile["saturation"])
 	light.set_shadow_opacity(0.60)
 	light.set_shadow_blur(1.5)
 	light.set_shadow_bias(0.015)

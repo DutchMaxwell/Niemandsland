@@ -17,7 +17,7 @@ void fragment() {
  float pc = -0.60+sin(ground_xz.y*8.0+0.4)*0.085;
  float pw = 0.020+surface_noise(ground_xz*38.0)*0.020;
  float path = (1.0-smoothstep(pw,pw+0.030,abs(ground_xz.x-pc)))*smoothstep(0.02,0.15,ground_xz.y);
- float wet = clamp(0.10+path*0.62,0.0,1.0);
+ float wet = desert_mode ? 0.0 : clamp(0.10+path*0.62,0.0,1.0);
 	ALBEDO = ground_sample(ground_xz)*mix(1.0,0.80,wet);
 	ROUGHNESS = mix(0.80,0.24,wet);
 	SPECULAR = mix(0.28,0.68,wet);

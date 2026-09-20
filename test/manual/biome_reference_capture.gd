@@ -20,6 +20,10 @@ func _run() -> void:
 		quit(1)
 		return
 	_output = args[0]
+	var biome := "grassland"
+	for i in args.size():
+		if args[i] == "--biome" and i+1 < args.size():
+			biome = args[i+1]
 	DirAccess.make_dir_recursive_absolute(_output)
 	seed(20260916)
 	change_scene_to_file("res://scenes/main.tscn")
@@ -44,6 +48,7 @@ func _run() -> void:
 	var original_walls: Array = main.terrain_overlay.get_wall_segments_world().duplicate(true)
 	if args.size() > 1 and args[1] == "after":
 		_presentation = load("res://scripts/visual/grassland_reference.gd").new()
+		_presentation.biome = biome
 		main.add_child(_presentation)
 		await _presentation.prepare()
 		var miniatures: Dictionary = {}

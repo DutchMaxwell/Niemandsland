@@ -6,6 +6,7 @@ uniform vec4 forest_regions[16];
 uniform float forest_angles[16];
 uniform int wall_count=0;
 uniform vec4 wall_regions[64];
+uniform bool desert_mode = false;
 
 // Integer hashing keeps neighboring cells identical across GPU optimizations.
 float surface_hash(vec2 p) {
@@ -25,8 +26,37 @@ vec3 tiled_surface(sampler2D tex, vec2 uv) {
  vec2 rotated = mat2(vec2(0.8,0.6),vec2(-0.6,0.8)) * uv * 0.71 + vec2(0.37,0.61);
  return mix(texture(tex,mirrored_uv(uv)).rgb,texture(tex,mirrored_uv(rotated)).rgb,0.15);
 }
+// Wind-rippled sand with cracked-earth pans and scree patches. Reuses the same three
+// samplers as the grassland (meadow=sand, earth=cracked, woodland=scree).
+vec3 desert_sample(vec2 p) {
+	vec3 sand = tiled_surface(meadow_tex, p * 3.4);
+	vec3 crack = tiled_surface(earth_tex, p * 1.6);
+	vec3 scree = tiled_surface(woodland_tex, p * 5.5);
+	float warp = surface_noise(p * 3.1) * 0.35;
+	float ripple = sin((p.y + warp) * 260.0) * 0.5 + 0.5;
+	ripple = pow(ripple, 1.6);
+	float crack_mask = smoothstep(0.54, 0.76, surface_noise(p * 2.3));
+	float scree_mask = smoothstep(0.74, 0.92, surface_noise(p * 5.5));
+	vec3 col = mix(sand, crack, crack_mask * 0.85);
+	col = mix(col, scree, scree_mask * 0.55);
+	col *= mix(0.93, 1.07, ripple);
+	col *= mix(0.94, 1.06, surface_noise(p * 90.0));
+	float broad = surface_noise(p * 7.0);
+	col = mix(col, col * vec3(1.05, 1.00, 0.90), broad * 0.5);
+	float foot = 0.0;
+	for (int i = 0; i < wall_count; i++) {
+		vec2 a = wall_regions[i].xy, b = wall_regions[i].zw;
+		vec2 e = b - a;
+		float t = clamp(dot(p - a, e) / max(dot(e, e), 0.000001), 0.0, 1.0);
+		float d = length(p - (a + t * e));
+		foot = max(foot, 1.0 - smoothstep(0.004, 0.024, d));
+	}
+	col *= mix(vec3(1.0), vec3(0.82, 0.78, 0.68), foot * 0.6);
+	return col * 0.98;
+}
 vec3 ground_sample(vec2 p) {
- vec2 uv_earth = p * 2.2;
+	if (desert_mode) { return desert_sample(p); }
+	vec2 uv_earth = p * 2.2;
  vec2 uv_grass = p * 5.0;
  float broad = surface_noise(p * 10.0) * 0.65 + surface_noise(p * 43.0) * 0.35;
  float meadow = smoothstep(0.24, 0.56, broad);
