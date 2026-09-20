@@ -67,6 +67,9 @@ func _run() -> void:
 			quit(1)
 			return
 		print("REFERENCE_RULE_GEOMETRY_UNCHANGED")
+	else:
+		if biome != "grassland" and main.terrain_overlay.has_method("set_biome"):
+			main.terrain_overlay.set_biome(biome)
 	main.terrain_overlay.set_overlay_mode(1)
 	main.terrain_overlay.set_deployment_zones_visible(false)
 	main.atmospheric_clouds.visible = false

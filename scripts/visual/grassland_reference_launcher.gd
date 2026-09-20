@@ -36,10 +36,12 @@ func _ready() -> void:
 	queue_free()
 
 
-## `--biome <name>` after the `--` separator selects the profile; default grassland.
+## `--biome <name>` after the `--` separator, or the `NML_BIOME` env var, selects the
+## profile; default grassland.
 func _chosen_biome() -> String:
 	var args := OS.get_cmdline_user_args()
 	for i in args.size():
 		if args[i] == "--biome" and i+1 < args.size():
 			return args[i+1]
-	return "grassland"
+	var env := OS.get_environment("NML_BIOME")
+	return env if not env.is_empty() else "grassland"
