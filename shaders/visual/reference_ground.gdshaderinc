@@ -7,6 +7,7 @@ uniform float forest_angles[16];
 uniform int wall_count=0;
 uniform vec4 wall_regions[64];
 uniform bool desert_mode = false;
+uniform float wind_time = 0.0;
 
 // Integer hashing keeps neighboring cells identical across GPU optimizations.
 float surface_hash(vec2 p) {
@@ -29,18 +30,23 @@ vec3 tiled_surface(sampler2D tex, vec2 uv) {
 // Wind-rippled sand with cracked-earth pans and scree patches. Reuses the same three
 // samplers as the grassland (meadow=sand, earth=cracked, woodland=scree).
 vec3 desert_sample(vec2 p) {
-	vec3 sand = tiled_surface(meadow_tex, p * 3.4);
-	vec3 crack = tiled_surface(earth_tex, p * 1.6);
-	vec3 scree = tiled_surface(woodland_tex, p * 5.5);
+	vec3 sand = tiled_surface(meadow_tex, p * 5.0);
+	vec3 crack = tiled_surface(earth_tex, p * 6.0);
+	vec3 scree = tiled_surface(woodland_tex, p * 7.0);
 	float warp = surface_noise(p * 3.1) * 0.35;
 	float ripple = sin((p.y + warp) * 260.0) * 0.5 + 0.5;
 	ripple = pow(ripple, 1.6);
-	float crack_mask = smoothstep(0.54, 0.76, surface_noise(p * 2.3));
-	float scree_mask = smoothstep(0.74, 0.92, surface_noise(p * 5.5));
-	vec3 col = mix(sand, crack, crack_mask * 0.85);
-	col = mix(col, scree, scree_mask * 0.55);
+	float crack_mask = smoothstep(0.58, 0.80, surface_noise(p * 3.4));
+	float scree_mask = smoothstep(0.76, 0.94, surface_noise(p * 7.0));
+	vec3 col = mix(sand, crack, crack_mask * 0.80);
+	col = mix(col, scree, scree_mask * 0.50);
 	col *= mix(0.93, 1.07, ripple);
-	col *= mix(0.94, 1.06, surface_noise(p * 90.0));
+	// Saltation: fine wind-scrolled grain streaks drawn on the sand itself, so the
+	// surface reads as moving even where the translucent veil is thin.
+	float streak = surface_noise(p * vec2(11.0,3.4) - vec2(wind_time * 1.1,wind_time * 0.12));
+	col *= mix(0.95, 1.07, streak);
+	float grains = surface_noise(p * vec2(72.0,22.0) - vec2(wind_time * 3.6,wind_time * 0.5));
+	col *= mix(0.96, 1.05, grains * grains);
 	float broad = surface_noise(p * 7.0);
 	col = mix(col, col * vec3(1.05, 1.00, 0.90), broad * 0.5);
 	float foot = 0.0;

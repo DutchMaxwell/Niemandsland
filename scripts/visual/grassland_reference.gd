@@ -16,7 +16,8 @@ var _props: Node3D
 var _previous_viewport: Dictionary = {}
 var _current_mood := "Day"
 var _fog: FogVolume
-var _dust: GPUParticles3D
+var _dust: Array = []
+var _wind_time := 0.0
 var _wall_top := 0.0635
 var _camera: Camera3D
 var _dof: CameraAttributesPractical
@@ -143,73 +144,41 @@ func _build_fog(main: Node) -> void:
 	_fog = volume
 
 
-## Wind-blown sand: one low GPU emitter of soft billboard puffs that drift across the
-## board, so the desert reads as gusty instead of a still photograph. Turbulence gives
-## the puffs a swirl; the emission box is the table, the wind blows toward +X.
+## Wind-blown sand, built the way it actually reads: not camera-facing puffs (which
+## show as floating ovals) but two flat translucent sheets lying just above the sand,
+## their fbm noise scrolled along the wind and stretched into streaks. Confined to the
+## board, so nothing hangs in the black studio behind it.
 func _build_dust(main: Node) -> void:
 	var table: Node3D = main.get_node("Table")
 	var surface: MeshInstance3D = main.get_node("Table/TableMesh")
 	var size: Vector2 = table.table_size * 0.3048
-	var span: float = maxf(size.x,size.y)
-	var process := ParticleProcessMaterial.new()
-	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	process.emission_box_extents = Vector3(size.x*0.40,0.003,size.y*0.40)
-	process.direction = Vector3(1.0,0.03,0.20)
-	process.spread = 14.0
-	process.initial_velocity_min = 0.12
-	process.initial_velocity_max = 0.26
-	process.gravity = Vector3(0.0,-0.038,0.0)
-	process.damping_min = 0.05
-	process.damping_max = 0.16
-	process.turbulence_enabled = true
-	process.turbulence_noise_strength = 0.20
-	process.turbulence_noise_scale = 3.0
-	process.turbulence_noise_speed = Vector3(0.09,0.02,0.06)
-	process.scale_min = 0.30
-	process.scale_max = 0.70
-	process.color = Color(0.86,0.74,0.52,0.24)
-	var ramp := Gradient.new()
-	ramp.set_color(0,Color(1,1,1,0.0))
-	ramp.add_point(0.30,Color(1,1,1,0.60))
-	ramp.add_point(0.72,Color(1,1,1,0.40))
-	ramp.set_color(ramp.get_point_count()-1,Color(1,1,1,0.0))
-	var ramp_tex := GradientTexture1D.new()
-	ramp_tex.gradient = ramp
-	process.color_ramp = ramp_tex
-	var puff := GradientTexture2D.new()
-	var soft := Gradient.new()
-	soft.set_color(0,Color(1,1,1,1))
-	soft.set_color(1,Color(1,1,1,0))
-	puff.gradient = soft
-	puff.fill = GradientTexture2D.FILL_RADIAL
-	puff.fill_from = Vector2(0.5,0.5)
-	puff.fill_to = Vector2(0.5,0.0)
-	puff.width = 64
-	puff.height = 64
-	var material := StandardMaterial3D.new()
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	material.albedo_texture = puff
-	material.albedo_color = Color(0.87,0.75,0.53,0.20)
-	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	material.disable_receive_shadows = true
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.08,0.034)
-	quad.material = material
-	var particles := GPUParticles3D.new()
-	particles.amount = 130
-	particles.lifetime = 4.5
-	particles.preprocess = 4.5
-	particles.randomness = 0.7
-	particles.fixed_fps = 30
-	particles.local_coords = false
-	particles.process_material = process
-	particles.draw_pass_1 = quad
-	particles.position = Vector3(0.0,0.006,0.0)
-	particles.visibility_aabb = AABB(Vector3(-span,-0.06,-span),Vector3(span*2.0,0.3,span*2.0))
-	surface.add_child(particles)
-	_dust = particles
+	var veil_shader := preload("res://shaders/visual/reference_sand_veil.gdshader")
+	var layers := [
+		{"height": 0.010, "scale": 2.6, "speed": 0.10, "opacity": 0.55},
+		{"height": 0.018, "scale": 5.5, "speed": 0.17, "opacity": 0.30},
+		{"height": 0.026, "scale": 1.6, "speed": 0.06, "opacity": 0.22},
+	]
+	for layer in layers:
+		var plane := PlaneMesh.new()
+		plane.size = size
+		plane.subdivide_width = 8
+		plane.subdivide_depth = 8
+		var mat := ShaderMaterial.new()
+		mat.shader = veil_shader
+		mat.set_shader_parameter("tint",Color(0.90,0.79,0.58))
+		mat.set_shader_parameter("wind_speed",layer["speed"])
+		mat.set_shader_parameter("noise_scale",layer["scale"])
+		mat.set_shader_parameter("opacity",layer["opacity"])
+		mat.set_shader_parameter("time",0.0)
+		mat.set_shader_parameter("gust",1.0)
+		var veil := MeshInstance3D.new()
+		veil.name = "SandVeil"
+		veil.mesh = plane
+		veil.material_override = mat
+		veil.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		veil.position = Vector3(0.0,layer["height"],0.0)
+		surface.add_child(veil)
+		_dust.append(veil)
 
 
 func apply_lighting(mood: String) -> void:
@@ -320,7 +289,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		set_tilt_shift_enabled(not _tilt_shift_enabled)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if not _dust.is_empty():
+		_wind_time += delta
+		# Gusts: the veil thickens and thins so the sand comes in waves, not a constant fog.
+		var gust := 0.55 + 0.9 * (0.5 + 0.5 * sin(_wind_time * 0.23) * sin(_wind_time * 0.071 + 1.7))
+		for veil in _dust:
+			veil.material_override.set_shader_parameter("time",_wind_time)
+			veil.material_override.set_shader_parameter("gust",gust)
+	if _ground != null:
+		_ground.set_shader_parameter("wind_time",_wind_time)
+	if _base != null:
+		_base.set_shader_parameter("wind_time",_wind_time)
 	if _fog != null:
 		var t := Time.get_ticks_msec() / 1000.0
 		var span: float = _fog.size.x
