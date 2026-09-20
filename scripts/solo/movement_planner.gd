@@ -224,9 +224,32 @@ static func _zone_blocks(p: Vector2, c: Vector2, centre: Vector2, r: float) -> b
 static func step_blocked(p: Vector2, c: Vector2, walls: Array, opts: Dictionary) -> bool:
 	var clearance: float = float(opts.get("clearance", 0.0))
 	if clearance > 0.0:
-		for w in walls:
-			if _wall_blocks(p, c, _wall_a(w), _wall_b(w), clearance):
-				return true
+		var stats: Variant = wall_cull_stats
+		if wall_cull:
+			# Broad phase: skip walls whose bbox is disjoint from the step bbox inflated by
+			# clearance + EPS — such a wall can neither cross the step nor dip within clearance,
+			# so skipping it cannot change the verdict (see the statics' proof above).
+			var pad := clearance + EPS
+			var sx0 := minf(p.x, c.x) - pad
+			var sx1 := maxf(p.x, c.x) + pad
+			var sy0 := minf(p.y, c.y) - pad
+			var sy1 := maxf(p.y, c.y) + pad
+			for w in walls:
+				var wa := _wall_a(w)
+				var wb := _wall_b(w)
+				if stats != null:
+					stats["tested"] += 1
+				if maxf(wa.x, wb.x) < sx0 or minf(wa.x, wb.x) > sx1 \
+						or maxf(wa.y, wb.y) < sy0 or minf(wa.y, wb.y) > sy1:
+					if stats != null:
+						stats["culled"] += 1
+					continue
+				if _wall_blocks(p, c, wa, wb, clearance):
+					return true
+		else:
+			for w in walls:
+				if _wall_blocks(p, c, _wall_a(w), _wall_b(w), clearance):
+					return true
 	elif path_crosses_wall(p, c, walls):
 		return true
 	for z in opts.get("zones", []):
