@@ -39,12 +39,14 @@ vec3 ground_sample(vec2 p) {
  col *= mix(0.77,1.12,surface_noise(p*82.0));
  float patchy = surface_noise(p*6.5);
  col = mix(col, col*vec3(1.10,1.04,0.86), patchy*0.45*(1.0-path));
- float grit = surface_hash(p*95.0);
+ // Smooth noise instead of per-cell hashing: the integer hash made every cell a
+ // visible flat square, which read as little tiles on the field.
+ float grit = surface_noise(p*95.0);
  col *= mix(0.90,1.10,grit*grit);
- float pebble = surface_hash(p*52.0+vec2(37.0,11.0));
- col = mix(col, col*vec3(1.22,1.20,1.14), smoothstep(0.966,0.990,pebble));
- float dark = surface_hash(p*68.0+vec2(5.0,91.0));
- col = mix(col, col*vec3(0.66,0.62,0.53), smoothstep(0.970,0.992,dark));
+ float pebble = surface_noise(p*52.0+vec2(37.0,11.0));
+ col = mix(col, col*vec3(1.22,1.20,1.14), smoothstep(0.78,0.95,pebble));
+ float dark = surface_noise(p*68.0+vec2(5.0,91.0));
+ col = mix(col, col*vec3(0.66,0.62,0.53), smoothstep(0.80,0.96,dark));
  float woodland = 0.0;
  for (int i = 0; i < forest_count; i++) {
   vec2 d = p - forest_regions[i].xy;
@@ -53,7 +55,7 @@ vec3 ground_sample(vec2 p) {
   float distance_to_edge = length(d / forest_regions[i].zw);
   woodland = max(woodland, 1.0 - smoothstep(0.78,1.18 + 0.10 * broad,distance_to_edge));
  }
- col = mix(col, tiled_surface(woodland_tex, p*1.8) * vec3(0.64,0.64,0.49), woodland * 0.85);
+ col = mix(col, tiled_surface(woodland_tex, p*6.0) * vec3(0.64,0.64,0.49), woodland * 0.85);
  col = mix(col,earth*vec3(0.87,0.82,0.71),path*0.72);
  float foot=0.0;
  for(int i=0;i<wall_count;i++){

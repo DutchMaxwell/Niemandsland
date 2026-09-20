@@ -73,12 +73,16 @@ static func _rebuild(instance: MeshInstance3D, variant: int) -> void:
 					wood.add_vertex(vertices[j])
 				wood_count += 1
 		if wood_count>0:
-			var bark: StandardMaterial3D = mat.duplicate()
-			bark.metallic = 0.0
-			bark.metallic_texture = null
-			bark.roughness = 0.94
-			bark.roughness_texture = null
-			bark.metallic_specular = 0.15
+			var bark := ShaderMaterial.new()
+			bark.shader = preload("res://shaders/visual/reference_bark_wind.gdshader")
+			bark.set_shader_parameter("bark_tex",mat.albedo_texture)
+			if mat.normal_texture != null:
+				bark.set_shader_parameter("bark_normal",mat.normal_texture)
+				bark.set_shader_parameter("bark_normal_enabled",true)
+			# Only the wood above the trunk bends, so the crown moves as one piece.
+			bark.set_shader_parameter("wind_branch",extent * 0.02)
+			bark.set_shader_parameter("sway_bottom",box.position.y + box.size.y * 0.12)
+			bark.set_shader_parameter("sway_top",box.position.y + box.size.y * 0.72)
 			wood.set_material(bark)
 			wood.generate_tangents()
 			wood.commit(result)

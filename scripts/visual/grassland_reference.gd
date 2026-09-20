@@ -14,7 +14,7 @@ var _tree_points := PackedVector2Array()
 var _angles := PackedFloat32Array()
 var _props: Node3D
 var _previous_viewport: Dictionary = {}
-var _studio_sky: Sky
+var _current_mood := "Day"
 var _fog: FogVolume
 var _wall_top := 0.0635
 var _camera: Camera3D
@@ -82,9 +82,13 @@ func apply(main: Node) -> void:
 	understory.build(self,main,table.table_size * 0.3048)
 	if _props != null:
 		_props.dress(self,table.table_size*0.3048)
-	_style_trays()
 	_build_fog(main)
 	apply_lighting("Day")
+	# A quality-preset change rewrites the shared environment (SDFGI, SSIL, metre-scale
+	# SSAO, stronger glow). Re-assert the tuned reference look so Ultra cannot undo it.
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null and not graphics.settings_applied.is_connected(_on_graphics_settings_applied):
+		graphics.settings_applied.connect(_on_graphics_settings_applied)
 
 
 ## Local fog volume over the board only: no global exponential fog, so the dark
@@ -124,6 +128,7 @@ func _build_fog(main: Node) -> void:
 
 
 func apply_lighting(mood: String) -> void:
+	_current_mood = mood
 	if _previous_viewport.is_empty():
 		_previous_viewport = {"taa":get_viewport().use_taa,"scale":get_viewport().scaling_3d_scale}
 	var light: Node = _main.lighting_controller
@@ -151,25 +156,34 @@ func apply_lighting(mood: String) -> void:
 	get_viewport().scaling_3d_scale = 1.25
 	light.set_ssao_intensity(1.2)
 	light.set_glow_intensity(0.16)
+	_apply_reference_environment()
+	var camera: Camera3D = _main.get_node("CameraPivot/Camera3D")
+	var attributes := CameraAttributesPractical.new()
+	attributes.dof_blur_far_enabled = true
+	attributes.dof_blur_far_distance = 0.55
+	attributes.dof_blur_far_transition = 0.55
+	attributes.dof_blur_near_enabled = true
+	attributes.dof_blur_near_distance = 0.10
+	attributes.dof_blur_near_transition = 0.12
+	attributes.dof_blur_amount = 0.0
+	camera.attributes = attributes
+	_camera = camera
+	_dof = attributes
+
+
+## Reference environment, isolated so a quality-preset change can be countered. Keeps the
+## game's space skybox as the visible background and reflection source (the starfield is
+## part of the identity, maintainer decision) and pins the tuned miniature-scale values.
+func _apply_reference_environment() -> void:
 	var env: Environment = _main.get_node("WorldEnvironment").environment
-	if _studio_sky == null:
-		var sky_material := ProceduralSkyMaterial.new()
-		sky_material.sky_top_color = Color(0.34,0.42,0.52)
-		sky_material.sky_horizon_color = Color(0.65,0.61,0.51)
-		sky_material.ground_bottom_color = Color(0.055,0.040,0.025)
-		sky_material.ground_horizon_color = Color(0.46,0.42,0.34)
-		_studio_sky = Sky.new()
-		_studio_sky.sky_material = sky_material
-		_studio_sky.radiance_size = Sky.RADIANCE_SIZE_512
-	env.sky = _studio_sky
+	env.background_mode = Environment.BG_SKY
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.20,0.205,0.20)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ssao_radius = 0.035
 	env.ssao_intensity = 2.0
 	env.ssao_power = 1.4
 	env.ssil_enabled = false
+	env.sdfgi_enabled = false
 	env.tonemap_agx_contrast = 1.15
 	# Damp-surface screen-space reflections; no bloom (rejected by the maintainer).
 	env.ssr_enabled = true
@@ -187,18 +201,17 @@ func apply_lighting(mood: String) -> void:
 	env.volumetric_fog_ambient_inject = 0.10
 	env.volumetric_fog_temporal_reprojection_enabled = true
 	env.volumetric_fog_temporal_reprojection_amount = 0.9
-	var camera: Camera3D = _main.get_node("CameraPivot/Camera3D")
-	var attributes := CameraAttributesPractical.new()
-	attributes.dof_blur_far_enabled = true
-	attributes.dof_blur_far_distance = 0.55
-	attributes.dof_blur_far_transition = 0.55
-	attributes.dof_blur_near_enabled = true
-	attributes.dof_blur_near_distance = 0.10
-	attributes.dof_blur_near_transition = 0.12
-	attributes.dof_blur_amount = 0.0
-	camera.attributes = attributes
-	_camera = camera
-	_dof = attributes
+	# Pin the glow to the accepted reference look so ULTRA's stronger glow/bloom cannot
+	# wash the scene out; the light controller's set_glow_intensity(0.16) still wins on intensity.
+	env.glow_enabled = true
+	env.glow_bloom = 0.1
+	env.glow_intensity = 0.16
+	env.fog_enabled = false
+
+
+func _on_graphics_settings_applied(_preset_name: String) -> void:
+	if _main != null:
+		apply_lighting(_current_mood)
 
 
 ## Tilt-shift fades in as the camera zooms towards the table, so the wide review
@@ -309,16 +322,6 @@ func _sync_regions() -> void:
 		mat.set_shader_parameter("forest_count",count)
 		mat.set_shader_parameter("forest_regions",_regions)
 		mat.set_shader_parameter("forest_angles",_angles)
-
-
-func _style_trays() -> void:
-	for tray in _main.opr_army_manager.army_trays.values():
-		for child in tray.get_children():
-			if child is MeshInstance3D and child.material_override is StandardMaterial3D:
-				var mat: StandardMaterial3D = child.material_override.duplicate()
-				mat.albedo_color = mat.albedo_color.lerp(Color(0.025,0.030,0.032,mat.albedo_color.a),0.83)
-				mat.roughness = 0.88
-				child.material_override = mat
 
 
 func _surface_hash(p: Vector2) -> float:

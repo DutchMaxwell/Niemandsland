@@ -16,7 +16,7 @@ func _ready() -> void:
 	if not is_instance_valid(main):
 		queue_free()
 		return
-	main.atmosphere_controller.set_fires_enabled(false)
+	main.atmosphere_controller.set_fires_enabled(true)
 	main.atmosphere_controller.set_war_sounds_enabled(false)
 	main.terrain_overlay.set_overlay_mode(1)
 	main.terrain_overlay.set_deployment_zones_visible(false)
