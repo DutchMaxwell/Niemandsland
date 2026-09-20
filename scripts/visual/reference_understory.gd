@@ -149,17 +149,6 @@ func build_desert(presentation: Node3D,main: Node,size: Vector2) -> void:
 		stone_transforms.append(Transform3D(basis,Vector3(point.x,ReferenceMaterials.ground_height(point)+s*0.06,point.y)))
 		stone_colors.append(Color(0.42,0.36,0.27).lerp(Color(0.74,0.67,0.53),_rng.randf()).srgb_to_linear())
 	_multimesh("DesertPebbles",_stone_mesh(),stone_transforms,stone_colors)
-	for i in 26:
-		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
-		if _excluded(point) or _wall_distance(point)<0.02:
-			continue
-		var shrub := MeshInstance3D.new()
-		shrub.mesh = presentation._trees[i%3]
-		shrub.position = Vector3(point.x,ReferenceMaterials.ground_height(point)-0.001,point.y)
-		var h := _rng.randf_range(0.008,0.016)
-		shrub.scale = Vector3(h*1.35,h,h*1.35)
-		shrub.rotation.y = _rng.randf()*TAU
-		add_child(shrub)
 	print("REFERENCE_DESERT stones=",stone_transforms.size())
 
 

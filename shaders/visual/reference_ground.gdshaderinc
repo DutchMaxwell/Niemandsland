@@ -52,7 +52,7 @@ vec3 desert_sample(vec2 p) {
 		foot = max(foot, 1.0 - smoothstep(0.004, 0.024, d));
 	}
 	col *= mix(vec3(1.0), vec3(0.82, 0.78, 0.68), foot * 0.6);
-	return col * 0.98;
+	return col * 0.80;
 }
 vec3 ground_sample(vec2 p) {
 	if (desert_mode) { return desert_sample(p); }

@@ -71,8 +71,9 @@ func apply(main: Node) -> void:
 		if child is MeshInstance3D and child != table.get_node("TableMesh"):
 			child.material_override = frame
 	var overlay: Node3D = main.terrain_overlay
-	_dress_grid_forest(overlay)
-	_dress_movable_forests()
+	if _profile["forests"]:
+		_dress_grid_forest(overlay)
+		_dress_movable_forests()
 	_wall_top = overlay.WALL_HEIGHT_INCHES * overlay.INCHES_TO_METERS
 	_dress_decals()
 	for wall in overlay._wall_instances:
