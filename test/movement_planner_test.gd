@@ -1036,3 +1036,138 @@ func test_zones_rest_only_still_never_ends_inside_a_zone() -> void:
 	# (b) Real progress: the unit still gets close to the goal's zone despite the band. RED today — the
 	# band still blocks the route entirely, so the unit stays ~17" short, nowhere near the goal.
 	assert_float((out[0] as Vector2).distance_to(goal)).is_less(6.0)
+
+
+
+# === Wall cull: broad-phase AABB reject in front of the exact wall test (speed, behaviour-identical) ===
+
+## A wall field spread over the whole board (the shape the cull pays for): walls march across the map
+## while the action stays in one corner — every far wall is pure iteration cost for the exact test.
+func _spread_walls() -> Array:
+	var walls: Array = []
+	for i in range(10):
+		var y := 6.0 + 4.0 * i
+		walls.append([Vector2(2.0 + i, y), Vector2(14.0 + i, y)])
+		walls.append([Vector2(30.0 + i, y), Vector2(42.0 + i, y)])
+	return walls
+
+
+## Runs step_blocked twice — cull on (shipped) and cull off (the exact pre-cull loop) — and restores
+## the static BEFORE returning, so a failure cannot leak the off-switch into other tests.
+## Returns [on, off].
+func _ab_step_blocked(p: Vector2, c: Vector2, walls: Array, opts: Dictionary) -> Array:
+	var on: bool = MovementPlanner.step_blocked(p, c, walls, opts)
+	MovementPlanner.wall_cull = false
+	var off: bool = MovementPlanner.step_blocked(p, c, walls, opts)
+	MovementPlanner.wall_cull = true
+	return [on, off]
+
+
+## Runs plan_unit_step twice (cull on / cull off, separate trail arrays) and restores the static
+## before returning. Returns [planned_on, trails_on, planned_off, trails_off].
+func _ab_plan(model_pos: Array, delta: Vector2, walls: Array, opts: Dictionary) -> Array:
+	var trails_on: Array = []
+	var on: Array = MovementPlanner.plan_unit_step(model_pos, delta, walls, {}, false, 48.0, trails_on, opts)
+	MovementPlanner.wall_cull = false
+	var trails_off: Array = []
+	var off: Array = MovementPlanner.plan_unit_step(model_pos, delta, walls, {}, false, 48.0, trails_off, opts)
+	MovementPlanner.wall_cull = true
+	return [on, trails_on, off, trails_off]
+
+
+func test_wall_cull_planned_positions_are_bit_identical_to_the_exact_loop() -> void:
+	# The cull may only skip walls that provably cannot block — with the cull OFF (the exact
+	# pre-change loop) every planned position and every recorded trail must be bit-identical.
+	var opts := {"clearance": 0.5}
+	var scenarios := [
+		# Corridor march down a wall field: steering slides along the near walls' ends.
+		[[Vector2(6.0, 4.0)], Vector2(0.0, 16.0), _spread_walls(), opts],
+		# U-pocket escape WITH clearance: the steer + A* rescue funnel through step_blocked.
+		[[Vector2(23, 24), Vector2(25, 24)], Vector2(0, 14), _u_pocket(), opts],
+		# Unified pipeline (opts radii): the c-space route checks many candidate legs.
+		[[Vector2(10.0, 20.0), Vector2(11.0, 20.0)], Vector2(0.0, 6.0), _spread_walls(),
+			{"clearance": 0.5, "radii": [0.5, 0.5]}],
+	]
+	for s in scenarios:
+		var ab := _ab_plan(s[0], s[1], s[2], s[3])
+		assert_array(ab[0]).is_equal(ab[2])
+		assert_array(ab[1]).is_equal(ab[3])
+
+
+func test_wall_cull_reject_is_safe_on_the_clearance_margin() -> void:
+	# Adversarial shapes around `clearance`: the reject expands the step bbox by clearance + EPS, so a
+	# pair EXACTLY at clearance is still tested — and answered exactly as the exact loop answers it.
+	var wall_h := [[Vector2(0.0, 20.0), Vector2(20.0, 20.0)]]
+	var cases := [
+		# step ends exactly `clearance` above the wall: free (>= clearance is not a dip)
+		[Vector2(10.0, 23.0), Vector2(10.0, 21.0), false],
+		# one EPS inside: a clip — blocked
+		[Vector2(10.0, 23.0), Vector2(10.0, 21.0 - MovementPlanner.EPS), true],
+		# starts inside the band, escapes outward: allowed by the escape rule
+		[Vector2(10.0, 20.5), Vector2(10.0, 21.5), false],
+		# starts inside the band, digs deeper: blocked
+		[Vector2(10.0, 20.5), Vector2(10.0, 20.3), true],
+		# crosses the wall outright: blocked
+		[Vector2(10.0, 19.0), Vector2(10.0, 21.0), true],
+		# collinear with the wall but disjoint: free
+		[Vector2(22.0, 20.0), Vector2(30.0, 20.0), false],
+		# collinear and overlapping the wall: blocked
+		[Vector2(10.0, 20.0), Vector2(30.0, 20.0), true],
+	]
+	for case_i in range(cases.size()):
+		var cs := cases[case_i] as Array
+		var opts := {"clearance": 1.0}
+		var ab := _ab_step_blocked(cs[0], cs[1], wall_h, opts)
+		assert_bool(ab[0]).override_failure_message(
+			"case %d: cull must match the exact loop" % case_i).is_equal(ab[1])
+		assert_bool(ab[0]).override_failure_message(
+			"case %d: expected verdict wrong" % case_i).is_equal(cs[2])
+
+
+func test_wall_cull_tallies_tested_and_culled_pairs() -> void:
+	# The stats seam must show: (a) on a free step across a spread board EVERY pair is culled;
+	# (b) a wall exactly at `clearance` is tested, not culled (the EPS margin guarantees overlap);
+	# (c) a crossing wall is tested and blocks.
+	var clearance_free := {"clearance": 0.5}
+	var stats := {"tested": 0, "culled": 0}
+	MovementPlanner.wall_cull_stats = stats
+	var spread_free := MovementPlanner.step_blocked(Vector2(6.0, 2.0), Vector2(6.0, 5.4),
+		_spread_walls(), clearance_free)
+	MovementPlanner.wall_cull_stats = null
+	assert_bool(spread_free).is_false()
+	assert_int(stats["tested"]).is_equal(20)
+	assert_int(stats["culled"]).is_equal(20)
+	stats = {"tested": 0, "culled": 0}
+	MovementPlanner.wall_cull_stats = stats
+	var margin_free := MovementPlanner.step_blocked(Vector2(6.0, 4.0), Vector2(6.0, 5.0),
+		[[Vector2(0.0, 5.5), Vector2(20.0, 5.5)]], clearance_free)
+	MovementPlanner.wall_cull_stats = null
+	assert_bool(margin_free).is_false()
+	assert_int(stats["tested"]).is_equal(1)
+	assert_int(stats["culled"]).is_equal(0)
+	stats = {"tested": 0, "culled": 0}
+	MovementPlanner.wall_cull_stats = stats
+	var crossed := MovementPlanner.step_blocked(Vector2(6.0, 4.0), Vector2(6.0, 12.0),
+		[[Vector2(0.0, 6.0), Vector2(20.0, 6.0)]], clearance_free)
+	MovementPlanner.wall_cull_stats = null
+	assert_bool(crossed).is_true()
+	assert_int(stats["tested"]).is_equal(1)
+	assert_int(stats["culled"]).is_equal(0)
+
+
+func test_wall_cull_matches_the_exact_loop_on_a_seeded_fuzz() -> void:
+	# Randomized equivalence: 500 seeded configurations (random walls, steps, clearances — degenerate
+	# collinear/touching shapes included by construction) must answer identically with cull on/off.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260920
+	for case_i in range(500):
+		var walls: Array = []
+		for _w in range(1 + case_i % 4):
+			walls.append([Vector2(rng.randf_range(-10.0, 30.0), rng.randf_range(-10.0, 30.0)),
+				Vector2(rng.randf_range(-10.0, 30.0), rng.randf_range(-10.0, 30.0))])
+		var p := Vector2(rng.randf_range(-10.0, 30.0), rng.randf_range(-10.0, 30.0))
+		var c := Vector2(rng.randf_range(-10.0, 30.0), rng.randf_range(-10.0, 30.0))
+		var opts := {"clearance": rng.randf_range(0.1, 2.0)}
+		var ab := _ab_step_blocked(p, c, walls, opts)
+		assert_bool(ab[0]).override_failure_message(
+			"fuzz case %d: p=%s c=%s walls=%s opts=%s" % [case_i, p, c, walls, opts]).is_equal(ab[1])
