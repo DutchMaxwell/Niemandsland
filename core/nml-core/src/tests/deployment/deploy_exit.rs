@@ -1,5 +1,3 @@
-use super::*;
-
     // ---- PR #1032 (`fix/deploy-exit-veto`): the table's deploy exit veto.
     // A spot whose walls box the unit's base in — no straight 12" exit
     // (`DEPLOY_EXIT_REACH_M` 0.3048 m) at the base's clearance
