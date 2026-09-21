@@ -21,7 +21,7 @@ Unknown keys and invalid identifier strings are dropped. The format has no free-
 
 ## Never included
 
-Player, army and unit display names; chat; battle-log prose; room codes; multiplayer identity tokens; account, platform, device or IP identifiers; save files; screenshots; timestamps; filesystem paths; host names; hardware inventory; unrelated diagnostics.
+Typed display names — the player's, the army list's and the units' (the army list itself IS included, as book, faction, unit and profile identifiers); chat; battle-log prose; room codes; multiplayer identity tokens; account, platform, device or IP identifiers; save files; screenshots; timestamps; filesystem paths; host names; hardware inventory; unrelated diagnostics.
 
 ## Facts the maintainer must publish before any sending feature
 
