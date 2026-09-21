@@ -153,7 +153,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--onnx", type=Path, default=FIXTURES / "standin-v2x2.onnx")
-    ap.add_argument("--golden", type=Path, default=FIXTURES / "golden_standin-v2x2.json")
+    ap.add_argument("--golden", type=Path, default=FIXTURES / "parity_base_standin-v2x2.json")
     ap.add_argument("--out", type=Path, default=FIXTURES / "parity_pinned_10238.json")
     ap.add_argument("--count", type=int, default=COUNT)
     ap.add_argument("--seed", type=int, default=SEED)

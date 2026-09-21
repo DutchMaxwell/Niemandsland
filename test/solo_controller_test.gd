@@ -1418,6 +1418,71 @@ func test_pull_stragglers_restores_coherency_without_moving_the_advanced_models(
 	assert_float((cfg[1] as Vector3).distance_to(Vector3(r * 2.8, 0, 0))).is_less(0.01)
 
 
+# === Deploy coherency repair stays INSIDE the deployment zone and off the table edge (brief deploycoh) ===
+
+func test_deploy_coherency_repair_respects_zone_and_table_edge() -> void:
+	# Geometry (32 mm default bases, r = 0.016 m): A(0.22) and B(0.17) are linked (centre gap 0.05 m
+	# = edge gap ~0.7"); the straggler at (0.42, 0) is torn. The repair rings around A: the first
+	# ring spot today (radius 0.0447 m at angle 0) lands at x = 0.2647 - OUTSIDE the zone rect
+	# ending at x = 0.25. With the fix ON, that spot is illegal and the first LEGAL one (60 deg,
+	# x = 0.2423) is inside the zone. The whole table (4' x 4' stub, half-extents 0.6096 m) keeps
+	# every candidate far from the edge - so this test isolates the ZONE rule.
+	SoloController.repair_in_zone = true
+	auto_free(_table_stub(Vector2(4, 4)))
+	var zone := Rect2(Vector2(-0.25, -0.25), Vector2(0.5, 0.5))
+	var ai := _unit(2, [Vector3(0.22, 0, 0), Vector3(0.17, 0, 0), Vector3(0.42, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ai.unit_id: ai}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo._deploy_zone_of[ai] = zone
+	var blocked := func(_p: Vector2) -> bool: return false
+	var models: Array = ai.get_alive_models()
+	var base_r: float = SeparationChecker.DEFAULT_BASE_RADIUS_M   # no explicit shapes -> 32 mm fallback
+	var limit: float = 0.6096 - (base_r + SoloController.INCHES_TO_METERS)   # >= base_r + 1" from every table edge
+	var s: ModelInstance = models[2]
+
+	# Today's path (switch OFF): the repair still heals the tear, but the straggler may land
+	# OUTSIDE the unit's deployment zone - the bug this brief kills.
+	SoloController.repair_in_zone = false
+	(s.node as Node3D).global_position = Vector3(0.42, 0, 0)
+	solo.drain_decisions()
+	assert_bool(solo._repair_deploy_coherency(blocked, blocked)).is_false()   # returns forced_any: a FREE re-place is false
+	assert_bool(solo.unit_coherent_now(ai)).is_true()
+	var s_off: Vector2 = Vector2((s.node as Node3D).global_position.x, (s.node as Node3D).global_position.z)
+	assert_bool(s_off.x > zone.end.x).is_true()
+
+	# The fix (switch ON): the same tear is healed with every model inside the zone and
+	# base_r + 1" clear of every table edge, and the record names the re-place (no "still torn").
+	SoloController.repair_in_zone = true
+	(s.node as Node3D).global_position = Vector3(0.42, 0, 0)
+	solo.drain_decisions()
+	assert_bool(solo._repair_deploy_coherency(blocked, blocked)).is_false()   # returns forced_any: a FREE re-place is false
+	assert_bool(solo.unit_coherent_now(ai)).is_true()
+	for m in models:
+		var p: Vector2 = Vector2((m.node as Node3D).global_position.x, (m.node as Node3D).global_position.z)
+		assert_bool(zone.has_point(p)).is_true()
+		assert_float(absf(p.x)).is_less_equal(limit)
+		assert_float(absf(p.y)).is_less_equal(limit)
+	var recs: Array = solo.drain_decisions()
+	var found_replaced := false
+	var found_torn := false
+	for rec in recs:
+		var rd: Dictionary = rec as Dictionary
+		if str(rd.get("chosen", "")) == "straggler re-placed":
+			found_replaced = true
+		if str(rd.get("chosen", "")) == "still torn":
+			found_torn = true
+	assert_bool(found_replaced).is_true()
+	assert_bool(found_torn).is_false()
+
+
+func after_test() -> void:
+	# The zone switch is a STATIC - pin it back so neighbouring suites never see a flip leak.
+	SoloController.repair_in_zone = true
+
+
 # === Wave-5: Indirect hold overlay + LOS waiver, Musician move bands, Limited once-per-game ===
 
 func _weapon(rng: int, rules: Array) -> OPRApiClient.OPRWeapon:
@@ -2157,6 +2222,59 @@ func test_deploy_begin_and_next_one_step_through_the_queue() -> void:
 	for gu in [a, b]:
 		var c := solo.unit_centre(gu)
 		assert_bool(zone.has_point(Vector2(c.x, c.z))).is_true()   # both AI units stand in the zone
+
+
+func test_large_base_takes_a_forward_spot_from_the_whole_zone() -> void:
+	# DEPLOYLARGE: a one-model tank (one 152 mm round base ≈ 0.076 m radius — LARGE) whose assigned
+	# SECTION has its forward 4.5" band blocked used to deploy >6" behind the zone's forward edge
+	# while a legal forward spot sat in a neighbouring section. With the switch on, one whole-zone
+	# re-search takes the nearer spot; with the switch off, the old section spot must stand.
+	var human := _unit(1, [Vector3(0, 0, 0.5)])
+	var tank := _unit(2, [Vector3(0, 0, -0.5)])
+	tank.unit_id = "tank"
+	tank.unit_properties["base_size_round"] = 152
+	tank.models[0].unit = tank   # shape_for_model reads the base size through the model's unit
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, tank.unit_id: tank}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var zone := Rect2(Vector2(-0.55, -0.6), Vector2(1.1, 0.3048))
+	var forward_y := zone.end.y   # deploy_begin's forward edge: the one toward the table centre
+	# The tank's OWN section keeps a 4.5" blocked strip behind the forward edge — read at CALL time,
+	# because with one unit the D3 section roll is seed-dependent and all three sections must work.
+	var band := 0.1143   # 4.5": with a 3" base the section spot centre sits 7.5-9" behind the edge (> 6" = trigger), a deeper band leaves NO section spot and the fallback ignores the block
+	var blocked := func(p: Vector2) -> bool:
+		var sec := AiDeployment.section_rect(zone, int(solo._deploy_alt["section_of"][0]))
+		return p.x >= sec.position.x and p.x <= sec.end.x and p.y > forward_y - band
+	var objectives := [Vector2(zone.position.x + zone.size.x / 6.0, forward_y),
+			Vector2(zone.end.x - zone.size.x / 6.0, forward_y)]
+	# Switch ON (default): the whole-zone re-search finds a legal forward spot in a neighbour section.
+	solo.deploy_begin(zone, objectives, blocked, Callable(), 4242)
+	assert_object(solo.deploy_next_one()).is_same(tank)
+	var c := solo.unit_centre(tank)
+	assert_float(absf(c.z - forward_y)).is_less_equal(0.1524)   # within 6" of the forward edge
+	assert_str(_deploy_why_for(solo, "U2")).contains("large base — whole-zone forward spot")
+	# Switch OFF: byte-identical to today — the section-confined spot stays >6" behind the edge.
+	SoloController.large_zone_search = false
+	solo.deploy_begin(zone, objectives, blocked, Callable(), 777)
+	assert_object(solo.deploy_next_one()).is_same(tank)
+	var c2 := solo.unit_centre(tank)
+	var off_why := _deploy_why_for(solo, "U2")
+	SoloController.large_zone_search = true   # restored BEFORE asserting: no leak on failure
+	assert_float(absf(c2.z - forward_y)).is_greater(0.1524)
+	assert_str(off_why).is_equal("best legal spot toward nearest objective (section, forward-edge doctrine)")
+
+
+func _deploy_why_for(solo: SoloController, unit_name: String) -> String:
+	# The latest "deploy" record for `unit_name` (the log accumulates across deploy_begin calls).
+	var why := ""
+	for r in solo.decision_log:
+		var d := r as Dictionary
+		if str(d.get("kind", "")) == "deploy" and str(d.get("unit", "")) == unit_name:
+			why = str(d.get("why", ""))
+	return why
 
 
 func test_deploy_scouts_wait_in_their_own_queue_and_land_in_the_band() -> void:
@@ -3626,3 +3744,77 @@ func test_lane_hold_false_keeps_the_old_abort_record() -> void:
 	var recs: Array = solo.drain_decisions()
 	var rec: Dictionary = recs[recs.size() - 1] as Dictionary
 	assert_str(str(rec["chosen"])).is_equal("abort hold — reposition")
+
+
+## DEPLOYTHREAT (tactics canon principle 7): (a) `_deploy_threat_cb` counts the enemy first-activation
+## envelopes (advance + longest range) over a point, only for enemies the deploy path already placed,
+## only when the seat switch allows; (b) `AiDeployment.best_spot` charges `threat_w` per envelope, so a
+## marker-nearest spot inside an envelope loses to a spot outside it. Off = byte-identical.
+func test_deploy_threat_cb_counts_enemy_envelopes_per_seat() -> void:
+	SoloController._dt_env = 0
+	var enemy := _unit(1, [Vector3(0, 0, 0.15)])
+	var eopr := OPRApiClient.OPRUnit.new()
+	var erifle := OPRApiClient.OPRWeapon.new()
+	erifle.name = "Rifle"
+	erifle.range_value = 18
+	erifle.attacks = 1
+	erifle.count = 1
+	eopr.weapons.append(erifle)
+	enemy.source_type = "opr"
+	enemy.source_data = eopr
+	var me := _unit(2, [Vector3(0, 0, -0.5)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, me.unit_id: me}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var reach := (float(SoloController.move_bands_for_unit(enemy, null).get("advance", 6)) + 18.0) \
+			* SoloController.INCHES_TO_METERS
+	var inside := Vector2(0.0, 0.15 - reach + 0.01)
+	var outside := Vector2(0.0, 0.15 - reach - 0.01)
+	SoloController.deploy_threat_in = 6.0
+	SoloController.deploy_threat_seat = 0
+	# The enemy is not "placed" yet (no _deploy_zone_of entry): nothing to fear, invalid Callable.
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()
+	solo._deploy_zone_of[enemy] = Rect2(Vector2(-0.9, 0.3), Vector2(1.8, 0.3))
+	var cb := solo._deploy_threat_cb(me)
+	assert_bool(cb.is_valid()).is_true()
+	assert_float(float(cb.call(inside))).is_equal(1.0)
+	assert_float(float(cb.call(outside))).is_equal(0.0)
+	# Seat switch: only slot 1 gets the term -> slot 2's unit sees no Callable.
+	SoloController.deploy_threat_seat = 1
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()
+	SoloController.deploy_threat_seat = 2
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_true()
+	# Preset gate: the term follows the arena preset of the slot (NML_AI_P2), not the seat number.
+	SoloController.deploy_threat_seat = 0
+	SoloController.deploy_threat_preset = "planner_v0"
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()   # NML_AI_P2 unset in the test
+	SoloController.deploy_threat_preset = OS.get_environment("NML_AI_P2")   # "" = no gate
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_true()
+	# Off (today): no Callable regardless of seat.
+	SoloController.deploy_threat_in = 0.0
+	SoloController.deploy_threat_seat = 0
+	SoloController.deploy_threat_preset = ""
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()
+
+
+func test_best_spot_threat_term_prefers_the_spot_outside_the_envelope() -> void:
+	# Section 0.6 m wide x 0.3 m deep, forward edge at y = -0.3, marker just beyond it: the
+	# marker-nearest spot is the forward edge. A threat that covers everything above y = -0.45
+	# costs 12" per envelope -> the best spot drops below -0.45 (objective distance +0.15 < 0.3048).
+	var sec := Rect2(Vector2(-0.3, -0.6), Vector2(0.6, 0.3))
+	var objectives := [Vector2(0.0, -0.25)]
+	var threat := func(p: Vector2) -> float: return 1.0 if p.y > -0.45 else 0.0
+	var off := AiDeployment.best_spot(sec, objectives, [], 0.016, Callable(), 0.025, 0.016, [], 0.016, -0.3)
+	assert_float(off.y).is_greater(-0.35)
+	var on := AiDeployment.best_spot(sec, objectives, [], 0.016, Callable(), 0.025, 0.016, [], 0.016, -0.3,
+			threat, 12.0 * SoloController.INCHES_TO_METERS)
+	assert_float(on.y).is_less_equal(-0.45)
+	assert_bool(sec.has_point(on)).is_true()
+	# Zero weight or an invalid Callable: byte-identical to today.
+	var w0 := AiDeployment.best_spot(sec, objectives, [], 0.016, Callable(), 0.025, 0.016, [], 0.016, -0.3, threat, 0.0)
+	assert_that(w0).is_equal(off)
+	var nocb := AiDeployment.best_spot(sec, objectives, [], 0.016, Callable(), 0.025, 0.016, [], 0.016, -0.3,
+			Callable(), 12.0 * SoloController.INCHES_TO_METERS)
+	assert_that(nocb).is_equal(off)

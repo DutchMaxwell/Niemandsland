@@ -117,6 +117,26 @@ const AIRCRAFT_HEADINGS := 16
 ## it gets the boxed-reposition fallback and, at high coordination grades, activates before smaller
 ## friends fill the lanes. A planning convention, not a rule value.
 const LARGE_BASE_RADIUS_IN := 1.5
+## DEPLOYLARGE: when a LARGE base's section-confined deploy spot lands more than this far behind the
+## zone's forward edge while the switch is on, ONE extra whole-zone search takes a nearer forward
+## spot from a neighbour section (static test switch: false = byte-identical to today).
+const LARGE_ZONE_SPOT_BEHIND_M := 0.1524   # 6"
+static var large_zone_search := true
+## DEPLOYTHREAT (tactics canon principle 7 — "measure threat ranges at deployment"): each enemy unit
+## already on the table whose first-activation envelope (advance band + longest weapon range +
+## shooting bonus) covers a candidate spot costs `deploy_threat_in` inches of objective distance in
+## `AiDeployment.best_spot`. 0 = off (today). `deploy_threat_seat` 0 = every AI seat, 1/2 = only that
+## slot (paired A/B: tree vs tree with the term on one side). Read once from NML_DEPLOY_THREAT_IN /
+## NML_DEPLOY_THREAT_SEAT; tests set the statics directly. Enemy units count only once the AI deploy
+## path placed them (`_deploy_zone_of`) — a human's hand-placed units are not yet seen (no deployed
+## flag on GameUnit), so against a human the term is a no-op today.
+static var deploy_threat_in := 0.0
+static var deploy_threat_seat := 0
+## `deploy_threat_preset` (NML_DEPLOY_THREAT_PRESET): when set, the term applies only to the slot
+## whose arena preset (NML_AI_P<slot>) has that name — the paired A/B "planner_v0 + term vs tree"
+## on both seat orders without the seat confound.
+static var deploy_threat_preset := ""
+static var _dt_env := -1
 ## A completed move that displaced the unit less than this counts as BOXED for the reposition fallback
 ## and the plausibility metric ("no large model idles >2 activations unless surrounded").
 const BOXED_ACHIEVED_IN := 1.0
@@ -9698,8 +9718,25 @@ func _deploy_place_id(id: int) -> GameUnit:
 		blocked = func(p: Vector2) -> bool:
 			return not bool(ztest.call(p)) \
 				or (terrain_only.is_valid() and bool(terrain_only.call(p)))
-	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+	var threat := _deploy_threat_cb(unit)
+	var threat_w := deploy_threat_in * INCHES_TO_METERS if threat.is_valid() else 0.0
+	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 	var spot_why := "best legal spot toward nearest objective (section, forward-edge doctrine)"
+	if threat.is_valid() and spot != Vector2.INF:
+		spot_why += " (threat-aware: %d enemy envelope(s) over the spot)" % int(threat.call(spot))
+	# DEPLOYLARGE: a LARGE base confined to its section may sit far behind the zone's forward edge
+	# while a neighbour section still holds a legal forward spot — ONE whole-zone re-search takes the
+	# nearer spot. The candidate is chosen BEFORE the wall-bisect retry loop below, so the loop runs
+	# on the final spot either way. Switch off = byte-identical to today.
+	var sec_behind := absf(spot.y - forward_y)
+	if (large_zone_search and not is_scout and spot != Vector2.INF and forward_y != INF
+			and base_r >= LARGE_BASE_RADIUS_IN * INCHES_TO_METERS
+			and sec_behind > LARGE_ZONE_SPOT_BEHIND_M):
+		var zone_spot := AiDeployment.best_spot(zone, objectives, occupied, radius, blocked,
+				0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+		if zone_spot != Vector2.INF and absf(zone_spot.y - forward_y) < sec_behind:
+			spot = zone_spot
+			spot_why = "large base — whole-zone forward spot (section spot was %.1f\" behind the forward edge)" % (sec_behind / INCHES_TO_METERS)
 	# Wall-bisect retries (bug 12c): a spot whose formation grid a wall cuts in half is vetoed by
 	# marking it occupied and re-searching — the unit must never START the game split across a wall.
 	for _retry in range(4):
@@ -9709,17 +9746,17 @@ func _deploy_place_id(id: int) -> GameUnit:
 		if not bisected and not _deploy_footprint_boxed(spot, footprint, base_r):
 			break
 		occupied.append({"pos": spot, "radius": radius * 0.6})
-		spot = AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+		spot = AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "re-sited — wall bisected the formation" if bisected \
 				else "re-sited — walls boxed the base in (no straight 12\" exit)"
 	if spot == Vector2.INF:
-		spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+		spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "section full — whole-zone fallback"
 	if spot == Vector2.INF:
 		# Crowded out of every spaced spot: relax the 1" spacing (allow neighbours to bunch) but STILL
 		# reject blocking/impassable terrain — the army MUST deploy, yet a legal footprint always beats
 		# a spot inside a wall/forest (field-test finding 3: units deployed inside blocking terrain).
-		spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+		spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "crowded — nearest legal (non-terrain) spot, spacing relaxed"
 	if spot == Vector2.INF:
 		# Truly no fully terrain-legal cell anywhere (a terrain-choked table) — must still deploy, so pick
@@ -9822,6 +9859,12 @@ func deploy_remaining_scouts() -> int:
 ## game torn and stayed torn all game). At deployment placement is free — every model outside its
 ## unit's largest link component is re-placed onto the nearest legal free ring spot around the
 ## component, so no AI unit ever STARTS the game out of coherency.
+## Brief deploycoh: the repair's re-placed stragglers must stay inside the unit's deployment zone
+## and at least base_r + 1" from every table edge. Static kill switch (false = the shipped
+## byte-identical path) so tests can pin both behaviours and the field can revert.
+static var repair_in_zone := true
+
+
 func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable) -> bool:
 	# EVERY AI-controlled slot, not just the side deploying right now (verification run 4): the SECOND
 	# deploy's overlap cleanup can nudge a FIRST side's model back out of chain — the repair after the
@@ -9842,6 +9885,8 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 		if unit.has_method("is_attached") and unit.is_attached():
 			continue
 		var blocked := blocked_flying if (unit.has_special_rule("Strider") or unit.has_special_rule("Flying")) else blocked_normal
+		var base_r := _deploy_base_radius(_deploy_models(unit))
+		var unit_moved := false
 		for _pass in range(8):   # each pass re-links one straggler or shrinks the span one step
 			var ms := _moving_models(unit)
 			if ms.size() <= 1 or unit_coherent_now(unit):
@@ -9855,11 +9900,11 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 			for i in range(ms.size()):
 				if in_comp.has(i):
 					continue
-				var spot := _deploy_ring_spot(ms, pts, comp, i, blocked)
+				var spot := _deploy_ring_spot(ms, pts, comp, i, blocked, true, unit, base_r)
 				if spot == Vector3.INF:
 					# Packed zone — FORCE contact beside the group (overlap allowed, terrain-legal);
 					# the caller's follow-up resolve pass separates to contact, chain-preserving.
-					spot = _deploy_ring_spot(ms, pts, comp, i, blocked, false)
+					spot = _deploy_ring_spot(ms, pts, comp, i, blocked, false, unit, base_r)
 					if spot != Vector3.INF:
 						forced_any = true
 				if spot != Vector3.INF:
@@ -9885,7 +9930,7 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 						dmin = dd
 						near_j = i
 				if far_i != near_j:
-					var spot2 := _deploy_ring_spot(ms, pts, [near_j], far_i, blocked, false)
+					var spot2 := _deploy_ring_spot(ms, pts, [near_j], far_i, blocked, false, unit, base_r)
 					if spot2 != Vector3.INF:
 						var node2: Node3D = (ms[far_i] as ModelInstance).node
 						if node2 != null and is_instance_valid(node2):
@@ -9893,6 +9938,7 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 							moved_one = true
 							forced_any = true
 			if moved_one:
+				unit_moved = true
 				_broadcast_positions(unit)
 				record_decision({"kind": "deploy", "unit": unit.get_name(),
 					"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (p.7 — a unit never starts torn)",
@@ -9907,15 +9953,32 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 						"stragglers": ms.size() - comp.size(),
 						"slot": int(unit.unit_properties.get("player_id", 0))}})
 				break   # avoid spinning
+		if repair_in_zone and unit_moved:
+			# Brief deploycoh: a repair may push the unit's own footprint AGAINST a table-edge wall.
+			# Re-check the boxed verdict on the unit's NEW centroid; boxed -> say so, then ONE more
+			# straggler pass biased toward the zone's forward edge. Two attempts, then stop.
+			var cen := MoveIntent.anchor_of(_positions_of(_moving_models(unit)))
+			if _deploy_footprint_boxed(Vector2(cen.x, cen.z), _deploy_footprint_offsets(unit), base_r):
+				record_decision({"kind": "deploy", "unit": unit.get_name(),
+					"rule": "Deploy coherency repair: re-check after the re-place — the unit's own footprint landed boxed at a table edge",
+					"candidates": [], "chosen": "repair left the unit boxed",
+					"why": "the repair moved the unit against a table-edge wall",
+					"data": {"slot": int(unit.unit_properties.get("player_id", 0))}})
+				var zone: Rect2 = _deploy_zone_of.get(unit, Rect2())
+				var fwd_y := zone.position.y if absf(zone.position.y) < absf(zone.end.y) else zone.end.y
+				_repair_once_toward_forward(unit, blocked, base_r, fwd_y)
 	return forced_any
 
 
 ## Nearest legal free spot for straggler `idx` on rings around the component's models: linked
 ## (edge gap ≤ chain), terrain-legal for this unit, and free of EVERY on-table base.
 func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Callable,
-		require_free: bool = true) -> Vector3:
+		require_free: bool = true, zone_unit: GameUnit = null, zone_base_r := 0.0,
+		forward_y := INF) -> Vector3:
 	var r_i := model_base_radius_m(ms[idx] as ModelInstance)
 	var straggler: Vector3 = pts[idx]
+	var best := Vector3.INF
+	var best_fwd := INF
 	# Component models nearest to the straggler first — the smallest legal correction wins.
 	var order := comp.duplicate()
 	order.sort_custom(func(a, b) -> bool:
@@ -9932,6 +9995,12 @@ func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Ca
 			for step in range(24):
 				var ang := TAU * float(step) / 24.0
 				var cand := Vector3(centre.x + cos(ang) * ring, straggler.y, centre.z + sin(ang) * ring)
+				# Zone + table-edge gate (brief deploycoh): a re-placed straggler stays inside its unit's
+				# deployment zone and at least base_r + 1" off every table edge. The gate runs in FORCED
+				# mode too — overlap is the one allowance, never off-zone or off-table.
+				if repair_in_zone and zone_unit != null \
+						and not _repair_spot_in_zone(zone_unit, Vector2(cand.x, cand.z), zone_base_r):
+					continue
 				# FORCED mode (require_free=false) is the last resort and skips BOTH gates: the component
 				# itself already stands in/at that terrain (the "least blocked" deploy fallback), and the
 				# caller's follow-up resolve pass settles overlap — a torn unit is worse than either.
@@ -9940,8 +10009,58 @@ func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Ca
 						continue
 					if not _deploy_spot_free(cand, r_i, ms[idx] as ModelInstance):
 						continue
+				if is_finite(forward_y):
+					var fwd := absf(cand.z - forward_y)
+					if fwd < best_fwd:
+						best_fwd = fwd
+						best = cand
+					continue
 				return cand
-	return Vector3.INF
+	return best if is_finite(forward_y) else Vector3.INF
+
+
+## Zone + table-edge legality of a repair spot (brief deploycoh): the spot must sit inside the
+## unit's recorded deployment zone (`_deploy_zone_of`, set by `_deploy_place_id` — no record, e.g.
+## a scout band, means the ZONE rule is skipped but the table rule never is) and its centre at
+## least base_r + 1" from every table edge.
+func _repair_spot_in_zone(unit: GameUnit, p: Vector2, base_r: float) -> bool:
+	if _deploy_zone_of.has(unit) and not (_deploy_zone_of[unit] as Rect2).has_point(p):
+		return false
+	var margin := base_r + INCHES_TO_METERS
+	var h := _table_half_extents()
+	return absf(p.x) <= h.x - margin and absf(p.y) <= h.y - margin
+
+
+## Second repair attempt (brief deploycoh): the boxed re-check found the FIRST repair drove the
+## unit's own footprint against a table-edge wall. ONE more straggler pass, biased toward the
+## zone's forward edge, to pull the unit's centre back into free space. Bounded: a single pass.
+func _repair_once_toward_forward(unit: GameUnit, blocked: Callable, base_r: float,
+		forward_y: float) -> void:
+	var ms := _moving_models(unit)
+	if ms.size() <= 1 or unit_coherent_now(unit):
+		return
+	var pts := _positions_of(ms)
+	var comp := _largest_link_component_world(_moving_shapes_at(ms, pts))
+	var in_comp := {}
+	for ci in comp:
+		in_comp[int(ci)] = true
+	var moved := false
+	for i in range(ms.size()):
+		if in_comp.has(i):
+			continue
+		var spot := _deploy_ring_spot(ms, pts, comp, i, blocked, true, unit, base_r, forward_y)
+		if spot == Vector3.INF:
+			continue
+		var node: Node3D = (ms[i] as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			node.global_position = Vector3(spot.x, node.global_position.y, spot.z)
+			moved = true
+	if moved:
+		_broadcast_positions(unit)
+		record_decision({"kind": "deploy", "unit": unit.get_name(),
+			"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (p.7 — a unit never starts torn)",
+			"candidates": [], "chosen": "straggler re-placed", "why": "deploy left a model out of coherency",
+			"data": {"attempt": 2, "slot": int(unit.unit_properties.get("player_id", 0))}})
 
 
 ## No on-table base (any unit, any side) overlaps a base of radius `r` at `cand` — placement-free test.
@@ -11090,6 +11209,55 @@ func _deploy_footprint_radius(unit: GameUnit) -> float:
 
 ## The largest base radius (metres) among a unit's deployment models — the per-model base extent the
 ## footprint check inflates each grid cell by (SeparationChecker shape truth; 32 mm fallback).
+## DEPLOYTHREAT: the envelope counter for `AiDeployment.best_spot`, or an invalid Callable when the
+## term is off for this unit's seat. Enemy = every unit of another slot the AI deploy path has
+## already placed; envelope radius = (advance band + longest weapon range + shooting bonus) inches,
+## measured from the enemy's nearest model.
+func _deploy_threat_cb(unit: GameUnit) -> Callable:
+	if _dt_env < 0:
+		_dt_env = 0
+		var e := OS.get_environment("NML_DEPLOY_THREAT_IN")
+		if e.is_valid_float() and float(e) > 0.0:
+			deploy_threat_in = float(e)
+			_dt_env = 1
+		var se := OS.get_environment("NML_DEPLOY_THREAT_SEAT")
+		if se.is_valid_int():
+			deploy_threat_seat = int(se)
+		deploy_threat_preset = OS.get_environment("NML_DEPLOY_THREAT_PRESET")
+	if deploy_threat_in <= 0.0 or unit == null or army_manager == null:
+		return Callable()
+	var slot := int(unit.unit_properties.get("player_id", 0))
+	if deploy_threat_seat != 0 and deploy_threat_seat != slot:
+		return Callable()
+	if deploy_threat_preset != "" and OS.get_environment("NML_AI_P%d" % slot) != deploy_threat_preset:
+		return Callable()
+	var envelopes: Array = []   # [positions: Array[Vector2], reach_m: float]
+	for gu in army_manager.game_units.values():
+		var eu := gu as GameUnit
+		if eu == null or int(eu.unit_properties.get("player_id", 0)) == slot or not _deploy_zone_of.has(eu):
+			continue
+		var pts: Array = []
+		for p3 in SoloController.alive_positions(eu):
+			pts.append(Vector2((p3 as Vector3).x, (p3 as Vector3).z))
+		if pts.is_empty():
+			continue
+		var bands: Dictionary = move_bands_for_unit(eu, movement_range)
+		var reach_in := float(bands.get("advance", 6)) + float(AiArchetype.max_range_inches(_unit_weapons(eu))) \
+				+ float(shooting_range_bonus(eu))
+		envelopes.append([pts, reach_in * INCHES_TO_METERS])
+	if envelopes.is_empty():
+		return Callable()
+	return func(p: Vector2) -> float:
+		var n := 0
+		for env in envelopes:
+			var reach: float = env[1]
+			for q in env[0]:
+				if p.distance_to(q as Vector2) <= reach:
+					n += 1
+					break
+		return float(n)
+
+
 func _deploy_base_radius(models: Array) -> float:
 	var r: float = SeparationChecker.DEFAULT_BASE_RADIUS_M
 	for m in models:
