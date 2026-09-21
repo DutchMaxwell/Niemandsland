@@ -2161,7 +2161,7 @@ func test_deploy_begin_and_next_one_step_through_the_queue() -> void:
 
 func test_large_base_takes_a_forward_spot_from_the_whole_zone() -> void:
 	# DEPLOYLARGE: a one-model tank (one 152 mm round base ≈ 0.076 m radius — LARGE) whose assigned
-	# SECTION has its forward 4.5" band blocked used to deploy >6" behind the zone's forward edge
+	# SECTION has its forward 7" band blocked used to deploy >6" behind the zone's forward edge
 	# while a legal forward spot sat in a neighbouring section. With the switch on, one whole-zone
 	# re-search takes the nearer spot; with the switch off, the old section spot must stand.
 	var human := _unit(1, [Vector3(0, 0, 0.5)])
@@ -2178,7 +2178,7 @@ func test_large_base_takes_a_forward_spot_from_the_whole_zone() -> void:
 	var forward_y := zone.end.y   # deploy_begin's forward edge: the one toward the table centre
 	# The tank's OWN section keeps a 4.5" blocked strip behind the forward edge — read at CALL time,
 	# because with one unit the D3 section roll is seed-dependent and all three sections must work.
-	var band := 0.1143
+	var band := 0.1778   # 7": the section spot must land > 6" behind the edge for the whole-zone trigger
 	var blocked := func(p: Vector2) -> bool:
 		var sec := AiDeployment.section_rect(zone, int(solo._deploy_alt["section_of"][0]))
 		return p.x >= sec.position.x and p.x <= sec.end.x and p.y > forward_y - band
