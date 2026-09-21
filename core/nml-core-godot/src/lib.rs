@@ -46,6 +46,59 @@ pub mod onnx;
 #[cfg(feature = "onnx-tract")]
 pub mod onnx_hook;
 
+/// The brain record of one ONNX-priced activation: `name` is always `onnx`,
+/// `hash` the model's hex SHA-256, `batches`/`batch_us` the tract runs the
+/// search consumed and their wall time.
+#[cfg(feature = "onnx-tract")]
+pub struct OnnxRun { pub name: String, pub hash: String, pub batches: u64, pub batch_us: u64 }
+
+/// `NML_BRAIN_ONNX=<path>` (+ optional `NML_BRAIN_ONNX_SHA256`): None when unset,
+/// `Err` with the loader's decline, else the brain with its hex SHA-256. Not
+/// developer-gated — this is the ship path.
+#[cfg(feature = "onnx-tract")]
+pub fn onnx_brain_from_env() -> Option<Result<(onnx::Brain, String), String>> {
+    let path = std::env::var("NML_BRAIN_ONNX").unwrap_or_default();
+    if path.is_empty() { return None; }
+    Some((|| {
+        let bytes = std::fs::read(&path).map_err(|e| format!("onnx: read {path}: {e}"))?;
+        let expected = std::env::var("NML_BRAIN_ONNX_SHA256").ok().filter(|s| !s.is_empty());
+        let brain = onnx::load(&bytes, expected.as_deref()).map_err(|u| format!("{u:?}"))?;
+        let sha = brain.sha256().to_string();
+        Ok((brain, sha))
+    })())
+}
+
+/// Leaf-value weight for the in-process brain: `NML_BRAIN_W` (default 1).
+#[cfg(feature = "onnx-tract")]
+fn onnx_weight() -> f64 {
+    std::env::var("NML_BRAIN_W").ok().and_then(|s| s.parse::<f64>().ok())
+        .filter(|w| w.is_finite() && *w > 0.0).unwrap_or(1.0)
+}
+
+/// `plan_with_rollout`'s ONNX leg without the marshalling: the same search as
+/// the default path, priced by `OnnxHook`. Declines `LeafValueBridge(NotConsumed)`
+/// when the search never asked the brain (a plan that ran no rollout leaf).
+#[cfg(feature = "onnx-tract")]
+#[allow(clippy::too_many_arguments)]
+pub fn plan_with_onnx(
+    state: &nml_core::state::State, terrain: &Terrain, statics: &[UnitStatic], knobs: &Knobs,
+    act: &ActStatics, player: i64, sig: Option<i64>, root: &str, brain: &onnx::Brain,
+) -> Result<(Pick, OnnxRun), nml_core::sim::Unsupported> {
+    let hook = onnx_hook::OnnxHook {
+        brain, statics, terrain,
+        rows: std::cell::RefCell::new(nml_core::rows::RowEncoder::new(root)),
+        hero_attach: knobs.hero_attach, opener_seat: act.opener_seat,
+    };
+    let before = (brain.batches(), brain.micros());
+    let pick = nml_core::plan::plan_with_leaf_value(state, terrain, statics, knobs, act, player, sig,
+        Some(&hook as &dyn nml_core::plan::LeafValue), onnx_weight())?;
+    if brain.batches() == before.0 {
+        return Err(nml_core::sim::Unsupported::LeafValueBridge("NotConsumed"));
+    }
+    Ok((pick, OnnxRun { name: "onnx".to_string(), hash: brain.sha256().to_string(),
+        batches: brain.batches() - before.0, batch_us: brain.micros() - before.1 }))
+}
+
 use plain::Captured;
 
 struct NmlCoreExtension;
@@ -111,6 +164,11 @@ pub struct NmlCore {
     dropped: Vec<String>,
     header: Option<GameHeader>,
     brain: Option<Result<brain::Client, String>>,
+    /// The in-process ONNX brain (`NML_BRAIN_ONNX`, feature `onnx-tract`): the ship
+    /// path. Loaded once per game in `set_game_header`; takes precedence over the
+    /// loopback HTTP brain in `plan_with_rollout`.
+    #[cfg(feature = "onnx-tract")]
+    onnx: Option<Result<(onnx::Brain, String), String>>,
 }
 
 #[godot_api]
@@ -308,6 +366,16 @@ impl NmlCore {
         if let Some(Ok(client)) = &self.brain {
             godot_print!("brain: {} {} at {}, w={}", client.identity["name"].as_str().unwrap(),
                 client.identity["hash"].as_str().unwrap(), client.url, client.weight);
+        }
+        #[cfg(feature = "onnx-tract")]
+        {
+            self.onnx = onnx_brain_from_env();
+            match &self.onnx {
+                Some(Ok((b, sha))) => godot_print!("brain: onnx {} rows={} width={} members={} batch={} w={}",
+                    sha, b.rows(), b.width(), b.members(), b.static_batch(), onnx_weight()),
+                Some(Err(e)) => godot_print!("brain: onnx declined: {e}"),
+                None => {}
+            }
         }
         let profiles = plain::profiles_of_header(&plain::sub_dict(&header, "profiles"));
         if profiles.list.is_empty() {
@@ -708,6 +776,22 @@ impl NmlCore {
         let act = act_statics_of(statics);
         let mut knobs = h.knobs;
         knobs.seam_path = knobs.seam_path || path_seam;
+        #[cfg(feature = "onnx-tract")]
+        if let Some(loaded) = self.onnx.as_ref() {
+            // ONNX precedence: the in-process brain answers the leaves; the HTTP
+            // brain (if any) is not consulted on this activation.
+            let (brain, _sha) = loaded.as_ref().map_err(Clone::clone)?;
+            let (pick, run) = plan_with_onnx(&cap.state, &h.terrain, &unit_statics, &knobs, &act,
+                player, Some(sig), &root, brain).map_err(|u| format!("{u:?}"))?;
+            let mut out = pick_out(&pick, &cap, sig);
+            let mut info = VarDictionary::new();
+            info.set("name", &GString::from(run.name.as_str()));
+            info.set("hash", &GString::from(run.hash.as_str()));
+            info.set("batches", run.batches as i64);
+            info.set("batch_us", run.batch_us as i64);
+            out.set("brain", &info);
+            return Ok(out);
+        }
         let client = self.brain.as_ref().map(Result::as_ref).transpose()?;
         let hook = client.map(|client| brain::Hook {
             client, statics: &unit_statics, terrain: &h.terrain,

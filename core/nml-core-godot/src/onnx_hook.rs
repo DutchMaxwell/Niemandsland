@@ -8,7 +8,7 @@ use nml_core::rows::RowEncoder;
 use nml_core::sim::Unsupported;
 use nml_core::state::State;
 use nml_core::terrain::Terrain;
-use nml_core::tokens::{self, Tokens, DESIGN_FIELDS, F_G, F_O, F_T, N_OBJ, N_TERR, V1_ROWS, V1_UNITS};
+use nml_core::tokens::{self, Tokens, DESIGN_FIELDS, F_G, F_O, F_T, N_OBJ, N_TERR, V1_UNITS};
 use nml_core::unit::UnitStatic;
 use std::cell::RefCell;
 use super::onnx::{Batch, Brain};
@@ -27,40 +27,37 @@ impl OnnxHook<'_> {
     /// zero-padded to the full width and its padding rows are discarded. The
     /// width comes from the brain, never a hardcoded number.
     pub fn run_tokens(&self, tokens: &[Tokens]) -> Result<(Vec<f32>, Vec<f32>), Unsupported> {
-        let width = self.brain.static_batch();
+        let wide = self.brain.static_batch();
         let members = self.brain.members();
+        // The unit window comes from the model's token_schema (`Brain::rows/width`):
+        // the v1 stand-in is 24 × 90 (each 91-wide core row is fed as its first 88
+        // design fields; t[88]/t[89] stay the trained-zero pads, t[90] drops), the
+        // vocab-3 export is the core's own 32 × 91 window and takes the row whole.
+        // A token set with more live units than the model has rows is REFUSED —
+        // the caller falls back to the hand planner. Never truncate a board.
+        let (rows, width) = (self.brain.rows(), self.brain.width());
         let mut values = Vec::with_capacity(tokens.len());
         let mut member_values = Vec::with_capacity(tokens.len() * members);
-        for chunk in tokens.chunks(width) {
-            // The v1 projection (`tokens::V1_UNITS`): the stand-in's input
-            // contract is the width-90 export, so each 91-wide row is fed as
-            // its first 88 design fields only. t[88]/t[89] stay the v1 pads
-            // (the buffer is zeroed — the v1 net keeps its trained-zero
-            // semantics even when a live ledger carries the grants), t[90]
-            // drops. A vocab-2 net is a future loader with its own schema.
-            // 16.09. (window 32): the core now hands out `tokens::N_UNITS` = 32
-            // rows; the v1 export's contract is `units24x90`. Project the first
-            // `V1_ROWS` rows and REFUSE a token set with more live units — the
-            // caller falls back to the hand planner exactly as it did when the
-            // core itself refused at 24. Never truncate a board.
+        for chunk in tokens.chunks(wide) {
             for t in chunk {
                 let live = t.units_mask.iter().map(|&m| usize::from(m)).sum::<usize>();
-                if live > V1_ROWS {
+                if live > rows {
                     return Err(Unsupported::TooManyUnits(live));
                 }
             }
             let mut batch = Batch {
-                units: vec![0.0; width * V1_ROWS * V1_UNITS], units_mask: vec![0.0; width * V1_ROWS],
-                objs: vec![0.0; width * N_OBJ * F_O], objs_mask: vec![0.0; width * N_OBJ],
-                terr: vec![0.0; width * N_TERR * F_T], glob: vec![0.0; width * F_G],
+                units: vec![0.0; wide * rows * width], units_mask: vec![0.0; wide * rows],
+                objs: vec![0.0; wide * N_OBJ * F_O], objs_mask: vec![0.0; wide * N_OBJ],
+                terr: vec![0.0; wide * N_TERR * F_T], glob: vec![0.0; wide * F_G],
             };
             for (i, t) in chunk.iter().enumerate() {
-                for (j, row) in t.units.iter().take(V1_ROWS).enumerate() {
-                    let d = i * V1_ROWS * V1_UNITS + j * V1_UNITS;
-                    batch.units[d..d + DESIGN_FIELDS].copy_from_slice(&row[..DESIGN_FIELDS]);
+                for (j, row) in t.units.iter().take(rows).enumerate() {
+                    let d = i * rows * width + j * width;
+                    let take = if width == V1_UNITS { DESIGN_FIELDS } else { width };
+                    batch.units[d..d + take].copy_from_slice(&row[..take]);
                 }
-                let units_mask = i * V1_ROWS..(i + 1) * V1_ROWS;
-                for (dst, &src) in batch.units_mask[units_mask].iter_mut().zip(t.units_mask.iter().take(V1_ROWS)) {
+                let units_mask = i * rows..(i + 1) * rows;
+                for (dst, &src) in batch.units_mask[units_mask].iter_mut().zip(t.units_mask.iter().take(rows)) {
                     *dst = f32::from(src);
                 }
                 let objs = i * N_OBJ * F_O..(i + 1) * N_OBJ * F_O;
