@@ -182,3 +182,55 @@ func test_capped_first_leg_pays_the_difficult_toll_in_arrival_math() -> void:
 		"units": [capped.duplicate(true)], "markers": [_m(0, 13)],
 		"rounds_left": 2, "current_round": 3})
 	assert_str(str((two["tasks"]["Runner"] as Dictionary).get("kind"))).is_equal("seize")
+
+
+func test_lone_runner_is_held_back_while_enemy_holds_reserves() -> void:
+	# Wave6 (test game 21.09., R1→R2): "Sappers → marker 1 (arrives R2)" was the only AI unit on
+	# its flank while the human held 1 Ambush unit in reserve — R2 it arrived, charged 12", 10
+	# hits, and the half-strength Sappers routed. A lone runner far from every friend is the ideal
+	# ambush target, and the reserve count is on the tray for both players. With reserves left,
+	# the lone trip on a FREE marker is held back and the plan line says so (rules-must-log).
+	var sol := AiRoundPlanner.solve({
+		"units": [_u("Sappers", 0)],
+		"markers": [_m(0, 20)],
+		"rounds_left": 4, "current_round": 1, "enemy_reserves": 1})
+	var t: Dictionary = sol["tasks"]["Sappers"]
+	assert_str(str(t.get("kind"))).is_equal("fight")
+	assert_str(str(t.get("held_back", ""))).is_equal("enemy reserves, no buddy near marker 0")
+	assert_str(str(sol["log"])).contains("held back")
+	assert_str(str(sol["log"])).contains("enemy reserves")
+
+
+func test_runner_with_a_buddy_near_the_marker_keeps_the_trip() -> void:
+	# Unit B stands 6" from the marker but is a rich shooter (its volley beats the trip, so it
+	# fights); A's trip is covered by B's presence — the seize stays.
+	var sol := AiRoundPlanner.solve({
+		"units": [_u("A", 0), _u("B", 14, 12.0, 10.0)],
+		"markers": [_m(0, 20)],
+		"rounds_left": 4, "current_round": 1, "enemy_reserves": 1})
+	assert_str(str((sol["tasks"]["A"] as Dictionary).get("kind"))).is_equal("seize")
+
+
+func test_no_enemy_reserves_keeps_the_lone_trip() -> void:
+	var sol := AiRoundPlanner.solve({
+		"units": [_u("A", 0)], "markers": [_m(0, 20)],
+		"rounds_left": 4, "current_round": 1, "enemy_reserves": 0})
+	assert_str(str((sol["tasks"]["A"] as Dictionary).get("kind"))).is_equal("seize")
+
+
+func test_enemy_held_marker_is_exempt_from_the_lone_runner_guard() -> void:
+	# Contested markers keep the pair logic; the guard only holds back FREE-marker trips.
+	var sol := AiRoundPlanner.solve({
+		"units": [_u("A", 0)], "markers": [_m(0, 20, 1)],
+		"rounds_left": 4, "current_round": 1, "enemy_reserves": 1})
+	assert_str(str((sol["tasks"]["A"] as Dictionary).get("kind"))).is_equal("seize")
+
+
+func test_lone_runner_guard_off_is_byte_identical() -> void:
+	AiRoundPlanner.lone_runner_guard = false
+	var sol := AiRoundPlanner.solve({
+		"units": [_u("A", 0)], "markers": [_m(0, 20)],
+		"rounds_left": 4, "current_round": 1, "enemy_reserves": 1})
+	AiRoundPlanner.lone_runner_guard = true
+	assert_str(str((sol["tasks"]["A"] as Dictionary).get("kind"))).is_equal("seize")
+	assert_bool(str(sol["log"]).contains("held back")).is_false()

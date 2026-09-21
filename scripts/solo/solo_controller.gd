@@ -7485,8 +7485,15 @@ func _plan_for_round() -> Dictionary:
 	# game_rounds is 0 until a game configures it (fixtures, casual flows) — the OPR standard is
 	# 4 rounds; without the default every arrival reads infeasible and the whole army "fights".
 	var total_rounds: int = game_rounds if game_rounds > 0 else 4
+	# Lone-runner guard input: the enemy's off-table reserves (on the tray for both players).
+	var enemy_reserves := 0
+	for r in ambush_reserve:
+		var ru := r as GameUnit
+		if ru != null and not ru.is_destroyed() and int(ru.unit_properties.get("player_id", 0)) == human_slot:
+			enemy_reserves += 1
 	var sol := AiRoundPlanner.solve({"units": units_in, "markers": markers_in,
-		"rounds_left": maxi(total_rounds - rnd + 1, 1), "current_round": rnd})
+		"rounds_left": maxi(total_rounds - rnd + 1, 1), "current_round": rnd,
+		"enemy_reserves": enemy_reserves})
 	_round_plans[ai_slot] = {"round": rnd, "tasks": sol.get("tasks", {})}
 	# E2 (test game 1): the plan record fires EVERY round — an all-fight round logs its own line
 	# ("everyone fights"), so a silent round never reads like a dead planner again.
