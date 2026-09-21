@@ -340,16 +340,16 @@ func test_the_reach_gate_measures_the_band_the_live_move_covers() -> void:
 
 
 func after_test() -> void:
-	AiPlanner.menu_targets = false   # the MENUTARGETS static: pin it back so no suite sees a leak
-	AiPlanner._mt_env = 0
+	AiPlanner.menu_holders = false   # the MENUHOLDERS static: pin it back so no suite sees a leak
+	AiPlanner._mh_env = 0
 
 
-## MENUTARGETS (tactics canon, principle 1): the live menu offers ONE shoot target — the max-EV
+## MENUHOLDERS (tactics canon, principle 1): the live menu offers ONE shoot target — the max-EV
 ## one — so an enemy that holds a marker or has not activated yet is targeted only by accident.
 ## With the switch on the menu ALSO offers the best qualifying enemy (marker holder / un-activated)
 ## when it differs from the max-EV pick; with the switch off the menu is byte-identical to today.
-func test_menu_targets_adds_the_marker_holder_after_the_max_ev_target() -> void:
-	AiPlanner._mt_env = 0
+func test_menu_holders_adds_the_marker_holder_after_the_max_ev_target() -> void:
+	AiPlanner._mh_env = 0
 	var marker := Vector3(20.0 * IN2M, 0, 0)
 	var me := _armed(2, [Vector3.ZERO], "Gunner", [{"name": "Rifle", "range": 24}])
 	# A: the max-EV target (defense 6 = easy wounds), already activated, far from every marker.
@@ -362,12 +362,12 @@ func test_menu_targets_adds_the_marker_holder_after_the_max_ev_target() -> void:
 	army.game_units = {"Gunner": me, "A": a, "B": b}
 	var state := BattleSim.capture(army, func() -> Array: return [marker],
 		func(_i: int) -> int: return 1)   # owner = player 1 = the enemy of the gunner
-	AiPlanner.menu_targets = false
+	AiPlanner.menu_holders = false
 	var off := AiPlanner.candidates(state, "Gunner")
 	var off_shoots := _of_kind(off, AiDecision.Action.HOLD).filter(func(c: Dictionary) -> bool: return c.has("shoot"))
 	assert_int(off_shoots.size()).is_equal(1)
 	assert_str(str(off_shoots[0]["shoot"])).is_equal("A")   # today: only the max-EV target
-	AiPlanner.menu_targets = true
+	AiPlanner.menu_holders = true
 	var on := AiPlanner.candidates(state, "Gunner")
 	assert_int(on.size()).is_equal(off.size() + 1)
 	for i in range(off.size()):

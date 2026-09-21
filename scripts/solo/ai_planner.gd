@@ -61,12 +61,12 @@ static func plan(state: Dictionary, player: int) -> Dictionary:
 
 const ROLLOUT_TOP_K := 6   # rollout budget: only this many 1-ply-best openers get played out
 static var _tk := 0   # research seam: NML_TOP_K overrides (lazy; <=0 = unread)
-## MENUTARGETS (tactics canon, principle 1): when on, the live menu also offers the best shoot
+## MENUHOLDERS (tactics canon, principle 1): when on, the live menu also offers the best shoot
 ## and charge against an enemy that HOLDS or CONTESTS a marker not ours (within 3") or has NOT
 ## activated this round — when that enemy differs from the max-EV pick. Off = byte-identical menu.
-## Read once from NML_MENU_TARGETS=1 (tests set the static directly; _mt_env = -1 means unread).
-static var menu_targets := false
-static var _mt_env := -1
+## Read once from NML_MENU_HOLDERS=1 (tests set the static directly; _mh_env = -1 means unread).
+static var menu_holders := false
+static var _mh_env := -1
 
 
 static func top_k_default() -> int:
@@ -1090,29 +1090,29 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	var wave := _second_wave(state, key)
 	if not wave.is_empty():
 		out.append(wave)
-	if _menu_targets_on():
-		var mshoot := _best_shoot(state, key, Callable(AiPlanner, "_marker_or_unactivated"))
+	if _menu_holders_on():
+		var mshoot := _best_shoot(state, key, Callable(AiPlanner, "_holder_or_unactivated"))
 		if mshoot != "" and mshoot != shoot:
 			out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": mshoot})
-		var mcharge := _best_charge(state, key, Callable(AiPlanner, "_marker_or_unactivated"))
+		var mcharge := _best_charge(state, key, Callable(AiPlanner, "_holder_or_unactivated"))
 		if mcharge != "" and mcharge != charge:
 			out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
 				"dest": _centre(state["units"][mcharge]), "charge": mcharge})
 	return out
 
 
-static func _menu_targets_on() -> bool:
-	if _mt_env < 0:
-		_mt_env = 1 if OS.get_environment("NML_MENU_TARGETS") == "1" else 0
-		if _mt_env == 1:
-			menu_targets = true
-	return menu_targets
+static func _menu_holders_on() -> bool:
+	if _mh_env < 0:
+		_mh_env = 1 if OS.get_environment("NML_MENU_HOLDERS") == "1" else 0
+		if _mh_env == 1:
+			menu_holders = true
+	return menu_holders
 
 
-## MENUTARGETS qualifier: the enemy unit `ek` holds/contests a marker not ours (any model's
+## MENUHOLDERS qualifier: the enemy unit `ek` holds/contests a marker not ours (any model's
 ## centre within 3" of an objective whose owner is not `player`; 0 = nobody counts as not ours)
 ## or has not activated this round.
-static func _marker_or_unactivated(state: Dictionary, player: int, ek: String) -> bool:
+static func _holder_or_unactivated(state: Dictionary, player: int, ek: String) -> bool:
 	var tu: Dictionary = state["units"][ek]
 	if not bool(tu.get("activated", false)):
 		return true
