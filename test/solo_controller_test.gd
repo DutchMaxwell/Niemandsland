@@ -3786,12 +3786,15 @@ func test_deploy_threat_cb_counts_enemy_envelopes_per_seat() -> void:
 	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()
 	SoloController.deploy_threat_seat = 2
 	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_true()
-	# Preset gate: the term follows the arena preset of the slot (NML_AI_P2), not the seat number.
+	# Preset gate: the term follows the slot's CONFIGURED difficulty name, not the seat number.
 	SoloController.deploy_threat_seat = 0
 	SoloController.deploy_threat_preset = "planner_v0"
-	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()   # NML_AI_P2 unset in the test
-	SoloController.deploy_threat_preset = OS.get_environment("NML_AI_P2")   # "" = no gate
-	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_true()
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()   # slot 2 has no difficulty yet
+	solo.set_difficulty(2, SoloDifficulty.for_grade("nachtmahr"))
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()   # wrong preset
+	solo.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_true()    # the planner seat gets the term
+	solo.set_difficulty(2, null)
 	# Off (today): no Callable regardless of seat.
 	SoloController.deploy_threat_in = 0.0
 	SoloController.deploy_threat_seat = 0
