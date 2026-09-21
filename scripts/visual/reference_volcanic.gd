@@ -9,14 +9,18 @@ func build(main: Node,presentation: Node3D) -> void:
 	add_child(deposits)
 	deposits.prepare(main)
 	var craters := 0
+	var walls: Array = main.terrain_overlay.get_wall_segments_world()
 	for original: Node3D in main.terrain_overlay._object_instances:
 		var lights := original.find_children("*","OmniLight3D",true,false)
 		if lights.is_empty():
 			continue
 		# The volcanic overlay attaches a local glow light only to existing lava props.
 		deposits.add_deposit(original,0.03048,true,craters)
-		_shade_lava(original)
+		var offset := _crater_ground_offset(original,walls)
+		_shade_lava(original,offset)
+		var local_offset: Vector3 = original.global_basis.inverse()*Vector3(0.0,offset,0.0)
 		for light: OmniLight3D in lights:
+			light.position += local_offset
 			light.light_energy = 0.16
 			light.omni_range = 0.10
 		var heat := MeshInstance3D.new()
@@ -29,7 +33,7 @@ func build(main: Node,presentation: Node3D) -> void:
 		heat.material_override = material
 		heat.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		original.add_child(heat)
-		heat.position.y = 0.022
+		heat.position = Vector3(0.0,0.022,0.0)+local_offset
 		_materials.append(material)
 		craters += 1
 	var monoliths := 0
@@ -78,7 +82,7 @@ func set_time(value: float) -> void:
 		material.set_shader_parameter("time",value)
 
 
-func _shade_lava(node: Node) -> void:
+func _shade_lava(node: Node,ground_offset: float = 0.0) -> void:
 	if node is MeshInstance3D and node.mesh != null:
 		for surface in node.mesh.get_surface_count():
 			var source := node.get_active_material(surface) as BaseMaterial3D
@@ -87,7 +91,47 @@ func _shade_lava(node: Node) -> void:
 			var material := ShaderMaterial.new()
 			material.shader = preload("res://shaders/visual/reference_lava.gdshader")
 			material.set_shader_parameter("albedo_tex",source.albedo_texture)
+			material.set_shader_parameter("ground_offset",ground_offset)
 			node.set_surface_override_material(surface,material)
 			_materials.append(material)
+		var box: AABB = node.mesh.get_aabb()
+		if node.is_inside_tree():
+			box.position += node.global_basis.inverse()*Vector3(0.0,ground_offset,0.0)
+			node.custom_aabb = box
 	for child in node.get_children():
-		_shade_lava(child)
+		_shade_lava(child,ground_offset)
+
+
+static func _terrain_height(point: Vector2,walls: Array) -> float:
+	var height := preload("res://scripts/visual/reference_materials.gd").ground_height(point)
+	# Match the wall-foot relief already present in the reference ground vertex shader.
+	for wall: Array in walls:
+		var distance := point.distance_to(Geometry2D.get_closest_point_to_segment(point,wall[0],wall[1]))
+		var mask := 1.0-smoothstep(0.0,0.030,distance)
+		height += mask*mask*0.007
+	return height
+
+
+static func _crater_ground_offset(node: Node3D,walls: Array) -> float:
+	var bounds := AABB()
+	var first := true
+	for mesh: MeshInstance3D in node.find_children("*","MeshInstance3D",true,false):
+		if mesh.mesh == null or mesh.name == "CraterHeatShimmer":
+			continue
+		var box: AABB = mesh.global_transform*mesh.mesh.get_aabb()
+		bounds = box if first else bounds.merge(box)
+		first = false
+	if first:
+		return 0.0
+	var center := Vector2(bounds.get_center().x,bounds.get_center().z)
+	var radius := Vector2(bounds.size.x,bounds.size.z)*0.5
+	var bed := INF
+	for z in range(-4,5):
+		for x in range(-4,5):
+			var disc := Vector2(x,z)/4.0
+			if disc.length_squared()>1.0:
+				continue
+			bed = minf(bed,_terrain_height(center+disc*radius,walls))
+	# Embed the visual underside slightly in the lowest sampled bed; the hazard's
+	# saved anchor, geometry resources and collision nodes remain untouched.
+	return bed-bounds.position.y-0.0005

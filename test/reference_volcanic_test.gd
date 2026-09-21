@@ -70,3 +70,44 @@ func test_ash_keeps_pool_center_clear_and_follows_movable_parent() -> void:
 	assert_bool(ash.global_transform.is_equal_approx(group.global_transform*ash_transform)).is_true()
 	assert_bool(flow.global_transform.is_equal_approx(group.global_transform*flow_transform)).is_true()
 	assert_bool(anchor.transform == original).is_true()
+
+
+func test_crater_seating_closes_gap_without_moving_hazard_or_mesh_resources() -> void:
+	for center in [Vector2(-0.822,0.206),Vector2(0.415,0.481)]:
+		var anchor: Node3D = auto_free(Node3D.new())
+		add_child(anchor)
+		anchor.position = Vector3(center.x,0.002,center.y)
+		anchor.rotation.y = 0.4
+		var visible := MeshInstance3D.new()
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = 0.03
+		mesh.bottom_radius = 0.03
+		mesh.height = 0.01
+		visible.mesh = mesh
+		visible.position.y = 0.005
+		anchor.add_child(visible)
+		var material := StandardMaterial3D.new()
+		var image := Image.create(2,2,false,Image.FORMAT_RGBA8)
+		image.fill(Color.ORANGE)
+		material.albedo_texture = ImageTexture.create_from_image(image)
+		mesh.material = material
+		var collider := StaticBody3D.new()
+		anchor.add_child(collider)
+		var anchor_before := anchor.transform
+		var mesh_before := visible.transform
+		var collider_before := collider.global_transform
+		var offset: float = Volcanic._crater_ground_offset(anchor,[])
+		assert_float(offset).is_less(0.0)
+		var effects: Node3D = auto_free(Volcanic.new())
+		effects._shade_lava(anchor,offset)
+		assert_bool(anchor.transform == anchor_before).is_true()
+		assert_bool(visible.transform == mesh_before).is_true()
+		assert_bool(collider.global_transform == collider_before).is_true()
+		assert_object(visible.mesh).is_same(mesh)
+		assert_object(mesh.material).is_same(material)
+		var shader_material := visible.get_active_material(0) as ShaderMaterial
+		assert_float(shader_material.get_shader_parameter("ground_offset")).is_equal(offset)
+		var rendered_bounds: AABB = visible.global_transform*visible.custom_aabb
+		for i in 64:
+			var point: Vector2 = center+Vector2(cos(i*TAU/64.0),sin(i*TAU/64.0))*0.030
+			assert_float(rendered_bounds.position.y-Volcanic._terrain_height(point,[])).is_less_equal(0.0001)

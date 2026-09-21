@@ -96,6 +96,9 @@ func _run() -> void:
 		"biome": biome, "baseline_battlemap": baseline_battlemap,
 		"internal_scale": root.scaling_3d_scale, "board": "assets/tutorial/tutorial_board.nml",
 		"animated_atmosphere": false, "reference_effects": _presentation != null, "samples": []}
+	if args.has("surface"):
+		shots.append({"name":"top","eye":Vector3(0,1.5,0.14),"target":Vector3.ZERO})
+		shots.append({"name":"contact","eye":Vector3(-0.66,0.026,0.50),"target":Vector3(-0.822,0.004,0.206)})
 	var moods: Array = ["Day"]
 	if args.has("sunset"):
 		moods = ["Sunset"]
@@ -120,7 +123,7 @@ func _run() -> void:
 			env.ssao_power = 1.4
 		report.internal_scale = root.scaling_3d_scale
 		for shot in shots:
-			if args.has("quick") and shot.name not in ["miniatures","detail"]:
+			if args.has("quick") and shot.name not in ["miniatures","detail"] and not (args.has("surface") and shot.name in ["top","contact"]):
 				continue
 			camera.global_position = shot.eye
 			camera.look_at(shot.target)

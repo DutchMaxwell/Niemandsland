@@ -15,6 +15,7 @@ uniform vec4 drift_points[32];
 uniform bool woody_ground_enabled = false;
 uniform sampler2D woody_ground_mask : filter_linear_mipmap, repeat_disable;
 uniform vec2 woody_board_size = vec2(1.8288,1.2192);
+#include "res://shaders/visual/reference_volcanic_surface.gdshaderinc"
 
 float woody_contact(vec2 p) {
 	return woody_ground_enabled ? texture(woody_ground_mask,p/woody_board_size+vec2(0.5)).r : 0.0;
@@ -128,9 +129,9 @@ float volcanic_crust(vec2 p) {
 	return smoothstep(0.37,0.68,surface_noise(p*4.5+warp*1.4));
 }
 vec3 volcanic_sample(vec2 p) {
-	vec3 ash = tiled_surface(meadow_tex,p*5.0)*vec3(0.92,0.94,0.98);
-	vec3 lava = tiled_surface(earth_tex,p*6.0)*vec3(0.87,0.90,0.96);
-	vec3 chips = tiled_surface(woodland_tex,p*7.5);
+	vec3 ash = volcanic_surface_sample(meadow_tex,p*5.0)*vec3(0.92,0.94,0.98);
+	vec3 lava = volcanic_surface_sample(earth_tex,p*6.0)*vec3(0.87,0.90,0.96);
+	vec3 chips = volcanic_surface_sample(woodland_tex,p*7.5);
 	float crust = volcanic_crust(p);
 	vec3 base = mix(ash,lava,crust*0.90);
 	float rubble = smoothstep(0.57,0.79,surface_noise(p*13.0));

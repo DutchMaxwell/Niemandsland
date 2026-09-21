@@ -2,6 +2,11 @@ shader_type spatial;
 render_mode cull_disabled, diffuse_burley;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic;
 uniform float time = 0.0;
+uniform float ground_offset = 0.0;
+void vertex() {
+	// World-space vertical seating changes the visual mesh only, never the rule anchor.
+	VERTEX += (inverse(MODEL_MATRIX)*vec4(0.0,ground_offset,0.0,0.0)).xyz;
+}
 void fragment() {
 	vec3 source = texture(albedo_tex,UV).rgb;
 	float up = clamp((INV_VIEW_MATRIX*vec4(NORMAL,0.0)).y,0.0,1.0);
