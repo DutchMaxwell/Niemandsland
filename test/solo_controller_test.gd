@@ -3567,3 +3567,62 @@ func test_812_rush_with_no_target_in_range_after_the_move_stays_a_rush() -> void
 	assert_object(moved2).is_equal(ai)
 	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
 	assert_bool(bool(solo.last_report["shoot"])).is_false()
+
+
+# === Lane hold (battle log 2026-09-21): a ranged line never rushes a firing lane two moves cannot reach ===
+
+func _rifle_line(pid: int) -> GameUnit:
+	var u := _unit(pid, [Vector3.ZERO])
+	var opr := OPRApiClient.OPRUnit.new()
+	var rifle := OPRApiClient.OPRWeapon.new()
+	rifle.name = "Rifle"
+	rifle.range_value = 24
+	rifle.attacks = 3
+	rifle.count = 2
+	opr.weapons = [rifle]
+	u.source_type = "opr"
+	u.source_data = opr
+	for m in u.models:
+		(m as ModelInstance).properties["weapons"] = [{"name": "Rifle"}]
+	return u
+
+
+func test_lane_within_two_moves_uses_the_battle_log_numbers() -> void:
+	# Battle log: rifles 24", rush 9", snipers 56.3" out — even two full rushes (42") leave them
+	# out of range → false → the commander HOLDS. A target 30" out IS within two moves → the old
+	# reposition abort stands.
+	assert_bool(SoloController.lane_within_two_moves(56.3, 24.0, 9.0)).is_false()
+	assert_bool(SoloController.lane_within_two_moves(30.0, 24.0, 9.0)).is_true()
+
+
+func test_commander_ranged_hold_holds_when_no_lane_is_within_two_moves() -> void:
+	# (56.3, 24, 9): the tree would RUSH 9" toward a target two activations out of range, out of
+	# cover, in front of a Blast(3) AP(2) cannon — the hold outranks the abort record instead.
+	var solo: SoloController = auto_free(SoloController.new())
+	var shooter := _rifle_line(2)
+	var snipers := _rifle_line(1)
+	assert_bool(SoloController.lane_hold).is_true()
+	var res: Dictionary = solo._commander_ranged_hold(shooter, snipers, [_weapon(24, [])],
+		AiDecision.Action.RUSH, AiDecision.Toward.ENEMY, 24.0, 56.3, {},
+		SoloDifficulty.for_grade("veteran"), 9.0)
+	assert_str(str(res["why"])).is_equal("commander hold — no firing lane within two moves")
+	var recs: Array = solo.drain_decisions()
+	var rec: Dictionary = recs[recs.size() - 1] as Dictionary
+	assert_str(str(rec["chosen"])).is_equal("hold — no firing lane within two moves")
+	assert_str(str((rec["data"] as Dictionary)["continuity"])).is_equal("hold_no_lane")
+
+
+func test_lane_hold_false_keeps_the_old_abort_record() -> void:
+	# Overlay off → byte-identical to today: the abort record, {} — the tree repositions.
+	var solo: SoloController = auto_free(SoloController.new())
+	var shooter := _rifle_line(2)
+	var snipers := _rifle_line(1)
+	SoloController.lane_hold = false
+	var res: Dictionary = solo._commander_ranged_hold(shooter, snipers, [_weapon(24, [])],
+		AiDecision.Action.RUSH, AiDecision.Toward.ENEMY, 24.0, 56.3, {},
+		SoloDifficulty.for_grade("veteran"), 9.0)
+	SoloController.lane_hold = true
+	assert_bool(res.is_empty()).is_true()
+	var recs: Array = solo.drain_decisions()
+	var rec: Dictionary = recs[recs.size() - 1] as Dictionary
+	assert_str(str(rec["chosen"])).is_equal("abort hold — reposition")

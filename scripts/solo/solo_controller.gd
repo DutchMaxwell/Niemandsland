@@ -2059,7 +2059,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	# Runs before the position solver / flank hooks so a held shot short-circuits any repositioning. Charges,
 	# the final round, and the null-AI / SoloSim path (diff2 == null) are untouched — byte-identical there.
 	var ranged_hold := _commander_ranged_hold(unit, target_unit, weapons, action, int(dec["toward"]),
-		float(shoot_range), enemy_dist, ctx, diff2)
+		float(shoot_range), enemy_dist, ctx, diff2, rush)
 	if not ranged_hold.is_empty():
 		action = AiDecision.Action.HOLD
 		do_shoot = true
@@ -2834,6 +2834,17 @@ func _cmd_role_name(role: int) -> String:
 	return CMD_ROLE_NAMES[role] if role >= 0 and role < CMD_ROLE_NAMES.size() else "?"
 
 
+## LANE HOLD (battle log 2026-09-21): a ranged line does not CHASE a firing lane it cannot reach.
+## The hold's abort let the tree rush shooters toward targets beyond even two full moves (56.3"
+## away, dead by round 3 without firing once). Beyond shoot_range + 2 * rush the commander HOLDS
+## instead; the abort-reposition path stays for reachable lanes. lane_hold = false: old behaviour.
+static var lane_hold := true
+
+
+static func lane_within_two_moves(enemy_dist: float, shoot_range: float, rush_in: float) -> bool:
+	return enemy_dist <= shoot_range + 2.0 * rush_in
+
+
 ## RANGED-LINE standing order (Stage 4, Part B — preserve firepower): a shooter's order is to HOLD a firing
 ## position with LOS + range, NOT be dragged into an objective run that costs its shot (the Stage-3 firepower
 ## dip: the commander pulled units toward combat/objectives and shooters fired less). When the unit's role is
@@ -2847,7 +2858,8 @@ func _cmd_role_name(role: int) -> String:
 ## are all that scores then — decisiveness/urgency win). Empty return ⇒ no override (null-AI/SoloSim: diff==null).
 ## Returns {} to leave the plan, or {"why": ...} to force HOLD + shoot toward the enemy.
 func _commander_ranged_hold(unit: GameUnit, target: GameUnit, weapons: Array, action: int,
-		toward: int, shoot_range: float, enemy_dist: float, ctx: Dictionary, diff: SoloDifficulty) -> Dictionary:
+		toward: int, shoot_range: float, enemy_dist: float, ctx: Dictionary, diff: SoloDifficulty,
+		rush_in: float) -> Dictionary:
 	if diff == null or target == null:
 		return {}
 	if _commander_role(unit) != CmdRole.RANGED_LINE:
@@ -2878,6 +2890,18 @@ func _commander_ranged_hold(unit: GameUnit, target: GameUnit, weapons: Array, ac
 	var has_shot: bool = shoot_range > 0.0 and enemy_dist <= shoot_range \
 			and (_has_los(unit, target) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)))
 	if not has_shot:
+		# LANE HOLD (battle log 2026-09-21): no target in range/LOS AND none within even two full
+		# rushes — walking toward a firing lane we cannot reach is pure exposure (the line rushed
+		# 9" toward snipers 56.3" out and died by round 3 without a single shot). HOLD instead;
+		# the tree's rush never starts. lane_hold = false keeps today's abort byte-identical.
+		if lane_hold and not lane_within_two_moves(enemy_dist, shoot_range, rush_in):
+			record_decision({"kind": "commander", "unit": unit.get_name(),
+				"rule": "Ranged-line standing order re-validated: hold a firing position with LOS + range",
+				"candidates": [], "chosen": "hold — no firing lane within two moves",
+				"why": "hold position: the nearest target is beyond range even after two rushes — walking there only exposes the line",
+				"data": {"grade": diff.grade_name, "order": "hold_fire", "continuity": "hold_no_lane",
+					"enemy_dist_in": enemy_dist, "shoot_range_in": shoot_range, "rush_in": rush_in}})
+			return {"why": "commander hold — no firing lane within two moves"}
 		# Abort the hold-fire order for this activation: no target in range/LOS → let the tree reposition.
 		record_decision({"kind": "commander", "unit": unit.get_name(),
 			"rule": "Ranged-line standing order re-validated: hold a firing position with LOS + range",
