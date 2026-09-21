@@ -29,6 +29,12 @@ void fragment() {
 	ROUGHNESS = mix(0.80,0.24,wet);
 	SPECULAR = mix(0.28,0.68,wet);
 	METALLIC = 0.0;
+	if (jungle_mode) {
+		ALBEDO = jungle_sample(ground_xz)*0.92;
+		float damp = (1.0-jungle_growth(ground_xz))*smoothstep(0.40,0.70,surface_noise(ground_xz*12.0));
+		ROUGHNESS = mix(0.88,0.30,damp);
+		SPECULAR = mix(0.25,0.54,damp);
+	}
 	if (tundra_mode) {
 		float ice = tundra_ice(ground_xz);
 		ROUGHNESS = mix(0.94,0.20,ice);
@@ -53,6 +59,11 @@ void fragment() {
 		h = dot(volcanic_sample(ground_xz),vec3(0.3,0.5,0.2));
 		hx = dot(volcanic_sample(ground_xz+vec2(step_size,0.0)),vec3(0.3,0.5,0.2));
 		hz = dot(volcanic_sample(ground_xz+vec2(0.0,step_size)),vec3(0.3,0.5,0.2));
+	}
+	if (jungle_mode) {
+		h = dot(jungle_sample(ground_xz),vec3(0.3,0.5,0.2));
+		hx = dot(jungle_sample(ground_xz+vec2(step_size,0.0)),vec3(0.3,0.5,0.2));
+		hz = dot(jungle_sample(ground_xz+vec2(0.0,step_size)),vec3(0.3,0.5,0.2));
 	}
 	float slope_x=surface_relief ? (relief(ground_xz)-relief(ground_xz+vec2(step_size,0.0)))/step_size : 0.0;
 	float slope_z=surface_relief ? (relief(ground_xz)-relief(ground_xz+vec2(0.0,step_size)))/step_size : 0.0;

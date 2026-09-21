@@ -207,3 +207,35 @@ This isolates motion quality from the orbit camera and avoids accidentally
 accelerating the effect during offline playback. The before clip uses the same
 new trees with the old sand treatment. Decorative sand paths are baked for the
 initial board; terrain edits or moved units require reloading the reference.
+
+## Alien jungle reference
+
+Select `-- --biome alien_jungle` or `NML_BIOME=alien_jungle` in the same opt-in
+scene. Three original NanoBanana albedos layer damp humus, decaying leaf litter
+and fine moss. They use independently rotated/offset continuous patches without
+reflected tiling. A shared CPU/shader growth mask connects moss with fern and
+broadleaf colonies; roughness varies separately in damp exposed soil.
+
+The existing three jungle tree/fungus variants are retained with varied crown
+width, lean and gentle upper-plant sway. Their instance materials remain
+separate from source resources. Existing carnivorous hazard plants keep their
+models and rule anchors. Folded, pinnate fern fronds and broad leaves are real
+geometry with restrained wind and backlighting. Full decorative footprints
+respect initial miniature clearings, walls, props and board margins. Leaf litter
+connects the low vegetation to the ground; the local thin mist stays bounded
+above the table. Existing miniature assets and all four earlier biome profiles
+are preserved.
+
+Sources, prompts and source/output hashes:
+`assets/terrain/reference/jungle/provenance.json`. New texture art: CC BY-SA4.0,
+Niemandsland Contributors; procedural geometry/shaders: MIT. No new GLB or
+third-party image sources are needed.
+
+Review: https://forge.niemandsland.xyz/static/jungle-biome-2026-09-21/index.html
+
+This is authored initial-scene dressing, not vegetation growth or fluid
+simulation. Reload after terrain/biome edits or moved-miniature clearings.
+Movable forest groups retain their saved members/colliders and carry dressed
+trees with them; board understory remains baked at its initial positions.
+Forward+ is the reviewed renderer; broad performance budgets, LODs and
+Compatibility/web calibration remain separate work.

@@ -36,7 +36,7 @@ func prepare() -> void:
 	_props = preload("res://scripts/visual/reference_props.gd").new()
 	add_child(_props)
 	await _props.prepare()
-	if biome in ["frozen_tundra","arid_desert","volcanic_ash"]:
+	if biome in ["frozen_tundra","arid_desert","volcanic_ash","alien_jungle"]:
 		_biome_forest = preload("res://scripts/visual/reference_biome_forest.gd").new()
 		add_child(_biome_forest)
 		await _biome_forest.prepare(biome)
@@ -60,6 +60,7 @@ func apply(main: Node) -> void:
 	_ground.set_shader_parameter("desert_mode",_profile["desert_mode"])
 	_ground.set_shader_parameter("tundra_mode",_profile.get("tundra_mode",false))
 	_ground.set_shader_parameter("volcanic_mode",_profile.get("volcanic_mode",false))
+	_ground.set_shader_parameter("jungle_mode",_profile.get("jungle_mode",false))
 	var surface: MeshInstance3D = table.get_node("TableMesh")
 	var plane: PlaneMesh = surface.mesh.duplicate()
 	plane.subdivide_width = 450
@@ -76,6 +77,7 @@ func apply(main: Node) -> void:
 	_base.set_shader_parameter("desert_mode",_profile["desert_mode"])
 	_base.set_shader_parameter("tundra_mode",_profile.get("tundra_mode",false))
 	_base.set_shader_parameter("volcanic_mode",_profile.get("volcanic_mode",false))
+	_base.set_shader_parameter("jungle_mode",_profile.get("jungle_mode",false))
 	var frame := StandardMaterial3D.new()
 	frame.albedo_color = Color(0.022,0.026,0.023)
 	frame.roughness = 0.86
@@ -124,7 +126,7 @@ func apply(main: Node) -> void:
 		mat.set_shader_parameter("wall_regions",wall_regions)
 		mat.set_shader_parameter("drift_count",drift_count)
 		mat.set_shader_parameter("drift_points",drift_points)
-	var understory := preload("res://scripts/visual/reference_understory.gd").new()
+	var understory: Node3D = preload("res://scripts/visual/reference_jungle.gd").new() if _profile.get("jungle_mode",false) else preload("res://scripts/visual/reference_understory.gd").new()
 	add_child(understory)
 	if _profile["understory"] == "desert":
 		understory.build_desert(self,main,table.table_size * 0.3048)

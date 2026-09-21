@@ -112,9 +112,29 @@ const VOLCANIC_ASH := {
 }
 
 
+const ALIEN_JUNGLE := {
+	"name": "alien_jungle", "biome": "alien_jungle",
+	"desert_mode": false, "jungle_mode": true,
+	"textures": {
+		"meadow": "res://assets/terrain/reference/jungle/velvet-moss.webp",
+		"earth": "res://assets/terrain/reference/jungle/damp-humus.webp",
+		"woodland": "res://assets/terrain/reference/jungle/jungle-litter.webp",
+	},
+	"understory": "jungle", "forests": false, "dust": false,
+	"fog_color": Color(0.62,0.72,0.65), "fog_density": 3.2,
+	"sun_energy": 2.25,
+	"sun_color_day": Color(1.0,0.93,0.80), "sun_color_sunset": Color(1.0,0.80,0.60),
+	"sun_angles_day": Vector2(-58.0,42.0), "sun_angles_sunset": Vector2(-40.0,25.0),
+	"ambient_energy": 0.40, "ambient_color": Color(0.66,0.79,0.81),
+	"fill_energy": 0.34, "fill_color": Color(0.81,0.91,0.83),
+	"saturation": 0.82,
+}
+
+
 static func get_profile(biome_name: String) -> Dictionary:
 	match biome_name:
 		"arid_desert": return ARID_DESERT
 		"frozen_tundra": return FROZEN_TUNDRA
 		"volcanic_ash": return VOLCANIC_ASH
+		"alien_jungle": return ALIEN_JUNGLE
 		_: return GRASSLAND

@@ -9,6 +9,7 @@ uniform vec4 wall_regions[64];
 uniform bool desert_mode = false;
 uniform bool tundra_mode = false;
 uniform bool volcanic_mode = false;
+uniform bool jungle_mode = false;
 uniform float wind_time = 0.0;
 uniform int drift_count = 0;
 uniform vec4 drift_points[32];
@@ -138,7 +139,21 @@ vec3 volcanic_sample(vec2 p) {
 	base = mix(base,chips,rubble*0.45+woody_contact(p)*0.25);
 	return base*mix(1.0,0.82,woody_contact(p));
 }
+float jungle_growth(vec2 p) {
+	return smoothstep(0.28,0.60,surface_noise(p*5.3)*0.65+surface_noise(p*18.0)*0.35);
+}
+vec3 jungle_sample(vec2 p) {
+	// Reuse the continuous non-reflected sampler introduced for volcanic surfaces.
+	vec3 soil = volcanic_surface_sample(earth_tex,p*5.0)*vec3(0.62,0.67,0.60);
+	vec3 moss = volcanic_surface_sample(meadow_tex,p*5.0)*vec3(0.80,1.06,0.70);
+	vec3 litter = volcanic_surface_sample(woodland_tex,p*6.0)*vec3(0.65,0.68,0.58);
+	float growth = jungle_growth(p);
+	float shelter = max(woody_contact(p),smoothstep(0.46,0.75,surface_noise(p*8.0+11.0))*0.65);
+	vec3 col = mix(soil,moss,0.16+growth*0.82);
+	return mix(col,litter,shelter*0.68)*mix(1.0,0.87,woody_contact(p));
+}
 vec3 ground_sample(vec2 p) {
+	if (jungle_mode) { return jungle_sample(p); }
 	if (volcanic_mode) { return volcanic_sample(p); }
 	if (tundra_mode) { return tundra_sample(p); }
 	if (desert_mode) { return desert_sample(p); }

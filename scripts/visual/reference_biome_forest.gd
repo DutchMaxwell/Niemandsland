@@ -22,7 +22,7 @@ var _anchor_heights: Array[float] = []
 func prepare(biome: String) -> void:
 	_biome = biome
 	_rng.seed = 210921
-	if biome == "volcanic_ash":
+	if biome in ["volcanic_ash","alien_jungle"]:
 		_hero = null
 		return
 	var kind := "open-pine" if biome == "frozen_tundra" else "dry-acacia"
@@ -92,6 +92,8 @@ func apply(main: Node,presentation: Node3D) -> void:
 				break
 			_hide_meshes(original)
 			original.add_child(tree)
+			if _biome == "alien_jungle":
+				tree.position += original.global_basis.inverse()*Vector3(0,-original.global_position.y,0)
 			_anchors.append(p)
 			_anchor_parents.append(self)
 			_anchor_heights.append(0.0)
@@ -105,7 +107,7 @@ func apply(main: Node,presentation: Node3D) -> void:
 
 func _instance(source_index: int,variant: int,height: float,base_y: float) -> Node3D:
 	var winter := _biome == "frozen_tundra"
-	var prefix := "volcanic_" if _biome == "volcanic_ash" else ("tundra_" if winter else "desert_")
+	var prefix := _native_prefix()
 	var use_hero := source_index == 2 and _hero != null
 	# Without the new pine, use an existing open spruce instead of the snow-pillow tree.
 	var native_index := mini(source_index,1) if winter else source_index
@@ -120,7 +122,7 @@ func _instance(source_index: int,variant: int,height: float,base_y: float) -> No
 			root.free()
 			return null
 		# Cacti stay rigid. Wood sways above the fixed trunk and carries sparse snow.
-		_shade(root,variant,(winter or use_hero) and _biome != "volcanic_ash",0.90 if winter and use_hero else 0.0)
+		_shade(root,variant,(winter or use_hero or _biome == "alien_jungle") and _biome != "volcanic_ash",0.90 if winter and use_hero else 0.0)
 		_own(root,root)
 		var packed := PackedScene.new()
 		packed.pack(root)
@@ -181,7 +183,7 @@ func _inside_forest(p: Vector2) -> bool:
 
 func _dress_groups() -> int:
 	var count := 0
-	var prefix := "volcanic_" if _biome == "volcanic_ash" else ("tundra_" if _biome == "frozen_tundra" else "desert_")
+	var prefix := _native_prefix()
 	for group in get_tree().get_nodes_in_group("terrain_group_base"):
 		if group.prop_kind != TerrainGroupBase.KIND_FOREST or group.biome_prefix != prefix:
 			continue
@@ -207,6 +209,10 @@ func _dress_groups() -> int:
 			floor_material.set_shader_parameter("surface_relief",false)
 			group._floor_mesh.material_override = floor_material
 	return count
+
+
+func _native_prefix() -> String:
+	return {"volcanic_ash":"volcanic_","frozen_tundra":"tundra_","alien_jungle":"jungle_"}.get(_biome,"desert_")
 
 
 func _clear(p: Vector2) -> bool:

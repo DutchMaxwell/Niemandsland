@@ -51,3 +51,8 @@ static func ground_height(p: Vector2) -> float:
 ## Shared with tundra_snow in reference_ground.gdshaderinc.
 static func tundra_snow(p: Vector2) -> float:
 	return smoothstep(0.40,0.53,_noise2(p * 5.2) * 0.60 + _noise2(p * 21.0) * 0.25 + _noise2(p * 67.0) * 0.15)
+
+
+## Shared with jungle_growth in the ground shader; connects moss and live plants.
+static func jungle_growth(p: Vector2) -> float:
+	return smoothstep(0.28,0.60,_noise2(p*5.3)*0.65+_noise2(p*18.0)*0.35)
