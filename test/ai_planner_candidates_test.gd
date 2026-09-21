@@ -342,6 +342,34 @@ func test_the_reach_gate_measures_the_band_the_live_move_covers() -> void:
 func after_test() -> void:
 	AiPlanner.menu_holders = false   # the MENUHOLDERS static: pin it back so no suite sees a leak
 	AiPlanner._mh_env = 0
+	AiPlanner.menu_wide = false
+	AiPlanner._mw_env = 0
+
+
+## Second opinion 21.09.: the SPLIT. With the max-EV target A NOT yet activated, one combined
+## qualifier picked A for the qualified best too — no extra — although B holds the marker. Two
+## proposals (holder, un-activated) with dedupe give B its HOLD+shoot; A dedupes away.
+func test_menu_holders_split_offers_the_holder_when_the_max_ev_target_is_unactivated() -> void:
+	AiPlanner._mh_env = 0
+	var marker := Vector3(20.0 * IN2M, 0, 0)
+	var me := _armed(2, [Vector3.ZERO], "Gunner", [{"name": "Rifle", "range": 24}])
+	var a := _armed(1, [Vector3(0, 0, 18.0 * IN2M)], "A", [{"name": "CCW", "range": 0}], [], 1, 4, 6)
+	a.is_activated = false   # the max-EV target has NOT activated
+	var b := _armed(1, [marker], "B", [{"name": "CCW", "range": 0}], [], 1, 4, 2)
+	b.is_activated = true
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": me, "A": a, "B": b}
+	var state := BattleSim.capture(army, func() -> Array: return [marker],
+		func(_i: int) -> int: return 1)
+	AiPlanner.menu_holders = false
+	var off := AiPlanner.candidates(state, "Gunner")
+	AiPlanner.menu_holders = true
+	var on := AiPlanner.candidates(state, "Gunner")
+	assert_int(on.size()).is_equal(off.size() + 1)
+	for i in range(off.size()):
+		assert_that(on[i]).is_equal(off[i])
+	var extra: Dictionary = on[on.size() - 1]
+	assert_str(str(extra.get("shoot", ""))).is_equal("B")   # the holder, not a duplicate of A
 
 
 ## MENUHOLDERS (tactics canon, principle 1): the live menu offers ONE shoot target — the max-EV

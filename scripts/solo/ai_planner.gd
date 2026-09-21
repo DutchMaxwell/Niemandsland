@@ -67,6 +67,11 @@ static var _tk := 0   # research seam: NML_TOP_K overrides (lazy; <=0 = unread)
 ## Read once from NML_MENU_HOLDERS=1 (tests set the static directly; _mh_env = -1 means unread).
 static var menu_holders := false
 static var _mh_env := -1
+## MENUWIDE: the header knob `menu_wide` for the Rust seam (its W1 ADVANCE+shoot leg, off by default).
+## The table's live menu has no such leg yet — this static only stamps the knob so an NML_CORE=1
+## game can arm it (NML_MENU_WIDE=1); tests set it directly.
+static var menu_wide := false
+static var _mw_env := -1
 
 
 static func top_k_default() -> int:
@@ -1091,14 +1096,32 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	if not wave.is_empty():
 		out.append(wave)
 	if _menu_holders_on():
-		var mshoot := _best_shoot(state, key, Callable(AiPlanner, "_holder_or_unactivated"))
-		if mshoot != "" and mshoot != shoot:
-			out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": mshoot})
-		var mcharge := _best_charge(state, key, Callable(AiPlanner, "_holder_or_unactivated"))
-		if mcharge != "" and mcharge != charge:
-			out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
-				"dest": _centre(state["units"][mcharge]), "charge": mcharge})
+		# Two SEPARATE proposals (second opinion 21.09.): the best marker HOLDER and the best
+		# UN-ACTIVATED enemy. One combined qualifier collapsed them — the max-EV target is
+		# usually itself un-activated, so the holder never got its entry. Dedupe against the
+		# unqualified picks and against each other; order holder, then un-activated.
+		var shot: Array = [shoot]
+		var charged: Array = [charge]
+		for q in [Callable(AiPlanner, "_marker_holder"), Callable(AiPlanner, "_unactivated")]:
+			var mshoot := _best_shoot(state, key, q)
+			if mshoot != "" and not shot.has(mshoot):
+				shot.append(mshoot)
+				out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": mshoot})
+		for q in [Callable(AiPlanner, "_marker_holder"), Callable(AiPlanner, "_unactivated")]:
+			var mcharge := _best_charge(state, key, q)
+			if mcharge != "" and not charged.has(mcharge):
+				charged.append(mcharge)
+				out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
+					"dest": _centre(state["units"][mcharge]), "charge": mcharge})
 	return out
+
+
+static func menu_wide_on() -> bool:
+	if _mw_env < 0:
+		_mw_env = 1 if OS.get_environment("NML_MENU_WIDE") == "1" else 0
+		if _mw_env == 1:
+			menu_wide = true
+	return menu_wide
 
 
 static func _menu_holders_on() -> bool:
@@ -1113,9 +1136,16 @@ static func _menu_holders_on() -> bool:
 ## centre within 3" of an objective whose owner is not `player`; 0 = nobody counts as not ours)
 ## or has not activated this round.
 static func _holder_or_unactivated(state: Dictionary, player: int, ek: String) -> bool:
+	return _unactivated(state, player, ek) or _marker_holder(state, player, ek)
+
+
+static func _unactivated(state: Dictionary, _player: int, ek: String) -> bool:
+	return not bool((state["units"][ek] as Dictionary).get("activated", false))
+
+
+## The MARKER half on its own: any model of `ek` within 3" of an objective not owned by `player`.
+static func _marker_holder(state: Dictionary, player: int, ek: String) -> bool:
 	var tu: Dictionary = state["units"][ek]
-	if not bool(tu.get("activated", false)):
-		return true
 	for o in state["objectives"]:
 		var od: Dictionary = o as Dictionary
 		if int(od.get("owner", 0)) == player:

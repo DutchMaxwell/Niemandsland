@@ -252,6 +252,11 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	# default is still "expected" (selfplay.py DICE_MODES). Without this a reader cannot
 	# tell an expected-value corpus from a real-dice one.
 	assert_str(str((header["knobs"] as Dictionary).get("dice", ""))).is_equal("table")
+	# Wave 6 menu knobs for the Rust seam ride the header, OFF by default.
+	assert_bool((header["knobs"] as Dictionary).has("menu_holders")).is_true()
+	assert_bool((header["knobs"] as Dictionary).has("menu_wide")).is_true()
+	assert_bool(bool((header["knobs"] as Dictionary)["menu_holders"])).is_false()
+	assert_bool(bool((header["knobs"] as Dictionary)["menu_wide"])).is_false()
 	assert_object(header.get("terrain")).is_null()   # no terrain_type_at seam in this fixture
 
 	var act := JSON.parse_string(lines[1]) as Dictionary
