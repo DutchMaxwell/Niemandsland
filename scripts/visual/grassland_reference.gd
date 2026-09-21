@@ -34,6 +34,9 @@ const DOF_FAR_DISTANCE := 0.85
 
 
 func prepare() -> void:
+	# Urban uses native props and existing mineral textures; no oak/rock source is needed.
+	if biome == "urban_ruins":
+		return
 	_props = preload("res://scripts/visual/reference_props.gd").new()
 	add_child(_props)
 	await _props.prepare()
@@ -62,6 +65,7 @@ func apply(main: Node) -> void:
 	_ground.set_shader_parameter("tundra_mode",_profile.get("tundra_mode",false))
 	_ground.set_shader_parameter("volcanic_mode",_profile.get("volcanic_mode",false))
 	_ground.set_shader_parameter("jungle_mode",_profile.get("jungle_mode",false))
+	_ground.set_shader_parameter("urban_mode",_profile.get("urban_mode",false))
 	var surface: MeshInstance3D = table.get_node("TableMesh")
 	var plane: PlaneMesh = surface.mesh.duplicate()
 	plane.subdivide_width = 450
@@ -79,6 +83,7 @@ func apply(main: Node) -> void:
 	_base.set_shader_parameter("tundra_mode",_profile.get("tundra_mode",false))
 	_base.set_shader_parameter("volcanic_mode",_profile.get("volcanic_mode",false))
 	_base.set_shader_parameter("jungle_mode",_profile.get("jungle_mode",false))
+	_base.set_shader_parameter("urban_mode",_profile.get("urban_mode",false))
 	var frame := StandardMaterial3D.new()
 	frame.albedo_color = Color(0.022,0.026,0.023)
 	frame.roughness = 0.86
@@ -93,7 +98,7 @@ func apply(main: Node) -> void:
 		_biome_forest.apply(main,self)
 	_wall_top = overlay.WALL_HEIGHT_INCHES * overlay.INCHES_TO_METERS
 	# Retain the tundra's snow-covered masonry instead of applying damp green moss.
-	if not _profile.get("tundra_mode",false) and not _profile.get("volcanic_mode",false):
+	if not _profile.get("tundra_mode",false) and not _profile.get("volcanic_mode",false) and not _profile.get("urban_mode",false):
 		_dress_decals()
 		for wall in overlay._wall_instances:
 			_weather_ruin(wall)
@@ -128,6 +133,9 @@ func apply(main: Node) -> void:
 		mat.set_shader_parameter("drift_count",drift_count)
 		mat.set_shader_parameter("drift_points",drift_points)
 	var understory: Node3D = preload("res://scripts/visual/reference_jungle.gd").new() if _profile.get("jungle_mode",false) else preload("res://scripts/visual/reference_understory.gd").new()
+	if _profile.get("urban_mode",false):
+		understory.free()
+		understory = preload("res://scripts/visual/reference_urban.gd").new()
 	add_child(understory)
 	if _profile["understory"] == "desert":
 		understory.build_desert(self,main,table.table_size * 0.3048)
@@ -137,7 +145,7 @@ func apply(main: Node) -> void:
 		understory.build_tundra(self,main,table.table_size * 0.3048)
 	else:
 		understory.build(self,main,table.table_size * 0.3048)
-	if _props != null and not _profile.get("volcanic_mode",false):
+	if _props != null and not _profile.get("volcanic_mode",false) and not _profile.get("urban_mode",false):
 		_props.dress(self,table.table_size*0.3048)
 	if _profile.get("volcanic_mode",false):
 		_volcanic = preload("res://scripts/visual/reference_volcanic.gd").new()

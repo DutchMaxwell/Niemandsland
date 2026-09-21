@@ -10,6 +10,9 @@ uniform bool desert_mode = false;
 uniform bool tundra_mode = false;
 uniform bool volcanic_mode = false;
 uniform bool jungle_mode = false;
+uniform bool urban_mode = false;
+uniform sampler2D urban_contact_mask : filter_linear_mipmap, repeat_disable;
+uniform vec2 urban_board_size = vec2(1.8288,1.2192);
 uniform float wind_time = 0.0;
 uniform int drift_count = 0;
 uniform vec4 drift_points[32];
@@ -152,7 +155,44 @@ vec3 jungle_sample(vec2 p) {
 	vec3 col = mix(soil,moss,0.16+growth*0.82);
 	return mix(col,litter,shelter*0.68)*mix(1.0,0.87,woody_contact(p));
 }
+// Broken pavement islands interrupt quieter asphalt. Fine dust connects the actual
+// wall feet to low rubble; this mask describes decoration, never a new hazard.
+float urban_contact(vec2 p) {
+	return texture(urban_contact_mask,p/urban_board_size+vec2(0.5)).r;
+}
+float urban_pavement(vec2 p) {
+	float islands = surface_noise(p*4.0)*0.60+surface_noise(p*17.0)*0.25+surface_noise(p*73.0)*0.15;
+	return smoothstep(0.46,0.50,islands);
+}
+vec3 urban_sample(vec2 p) {
+	// Existing original mineral albedos supply grain; cement/bitumen response and
+	// slab joints are authored here, without modifying the source bitmap assets.
+	float grit = dot(volcanic_surface_sample(meadow_tex,p*11.0),vec3(0.30,0.59,0.11));
+	float mineral = dot(volcanic_surface_sample(earth_tex,p*7.5),vec3(0.30,0.59,0.11));
+	float chips = dot(volcanic_surface_sample(woodland_tex,p*10.0),vec3(0.30,0.59,0.11));
+	vec3 asphalt = vec3(0.055,0.060,0.066)+grit*0.65;
+	asphalt *= mix(0.70,1.12,surface_noise(p*8.3));
+	vec3 concrete = vec3(0.12,0.117,0.108)+mineral*0.42;
+	vec3 dust = vec3(0.18,0.165,0.145)+chips*0.52;
+	vec2 slab = p/0.060;
+	slab.x += mod(floor(slab.y),2.0)*0.5;
+	vec2 edge = min(fract(slab),1.0-fract(slab))*0.060;
+	float joint = 1.0-smoothstep(0.00025,0.00095,min(edge.x,edge.y));
+	float broken = smoothstep(0.26,0.53,surface_noise(p*58.0));
+	concrete *= 1.0-joint*broken*0.40;
+	float tile_age = surface_hash(floor(slab));
+	concrete *= mix(0.70,1.08,tile_age)*mix(0.78,1.03,surface_noise(p*24.0));
+	vec2 local_slab = fract(slab)-vec2(0.5);
+	float fracture = abs(local_slab.x+local_slab.y*mix(-1.2,1.2,tile_age)+(tile_age-0.5)*0.5);
+	float hairline = (1.0-smoothstep(0.002,0.008,fracture))*smoothstep(0.25,0.50,tile_age);
+	concrete *= 1.0-hairline*0.28;
+	vec3 col = mix(asphalt,concrete,urban_pavement(p));
+	float contact = urban_contact(p);
+	float powder = contact*(0.56+0.35*surface_noise(p*45.0));
+	return mix(col,dust,powder)*mix(1.0,0.86,contact*contact);
+}
 vec3 ground_sample(vec2 p) {
+	if (urban_mode) { return urban_sample(p); }
 	if (jungle_mode) { return jungle_sample(p); }
 	if (volcanic_mode) { return volcanic_sample(p); }
 	if (tundra_mode) { return tundra_sample(p); }

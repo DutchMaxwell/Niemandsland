@@ -5,13 +5,14 @@ uniform bool clip_base = false;
 uniform bool surface_relief = false;
 float relief(vec2 p) {
 	float amp = desert_mode ? 0.45 : 1.0;
+	if (urban_mode) { amp = 0.15; }
 	return ((surface_noise(p*2.6)-0.5)*0.008+(surface_noise(p*7.5)-0.5)*0.003)*amp;
 }
 // The drift mound is vertex-only: the fragment needs relief four times for the normal,
 // and the drift loop there cost ~9 ms. The mound still reads from its silhouette and
 // the brighter, noised sand in the fragment.
 float full_relief(vec2 p) {
-	return relief(p) + drift_height(p);
+	return relief(p) + (urban_mode ? 0.0 : drift_height(p));
 }
 varying vec2 ground_xz;
 void vertex() {
@@ -24,11 +25,15 @@ void fragment() {
  float pc = -0.60+sin(ground_xz.y*8.0+0.4)*0.085;
  float pw = 0.020+surface_noise(ground_xz*38.0)*0.020;
  float path = (1.0-smoothstep(pw,pw+0.030,abs(ground_xz.x-pc)))*smoothstep(0.02,0.15,ground_xz.y);
- float wet = (desert_mode || tundra_mode || volcanic_mode) ? 0.0 : clamp(0.10+path*0.62,0.0,1.0);
+ float wet = (desert_mode || tundra_mode || volcanic_mode || urban_mode) ? 0.0 : clamp(0.10+path*0.62,0.0,1.0);
 	ALBEDO = ground_sample(ground_xz)*mix(1.0,0.80,wet);
 	ROUGHNESS = mix(0.80,0.24,wet);
 	SPECULAR = mix(0.28,0.68,wet);
 	METALLIC = 0.0;
+	if (urban_mode) {
+		ROUGHNESS = mix(0.88,0.98,urban_contact(ground_xz));
+		SPECULAR = 0.23;
+	}
 	if (jungle_mode) {
 		ALBEDO = jungle_sample(ground_xz)*0.92;
 		float damp = (1.0-jungle_growth(ground_xz))*smoothstep(0.40,0.70,surface_noise(ground_xz*12.0));
@@ -66,6 +71,11 @@ void fragment() {
 		hz = dot(jungle_sample(ground_xz+vec2(0.0,step_size)),vec3(0.3,0.5,0.2));
 	}
 	float slope_x=surface_relief ? (relief(ground_xz)-relief(ground_xz+vec2(step_size,0.0)))/step_size : 0.0;
+	if (urban_mode) {
+		h = dot(urban_sample(ground_xz),vec3(0.3,0.5,0.2));
+		hx = dot(urban_sample(ground_xz+vec2(step_size,0.0)),vec3(0.3,0.5,0.2));
+		hz = dot(urban_sample(ground_xz+vec2(0.0,step_size)),vec3(0.3,0.5,0.2));
+	}
 	float slope_z=surface_relief ? (relief(ground_xz)-relief(ground_xz+vec2(0.0,step_size)))/step_size : 0.0;
 	vec3 surface_normal=normalize(vec3((h-hx)*14.0+slope_x,1.0,(h-hz)*14.0+slope_z));
 	NORMAL=normalize((VIEW_MATRIX*vec4(surface_normal,0.0)).xyz);

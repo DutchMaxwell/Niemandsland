@@ -131,10 +131,30 @@ const ALIEN_JUNGLE := {
 }
 
 
+const URBAN_RUINS := {
+	"name": "urban_ruins", "biome": "urban_ruins",
+	"desert_mode": false, "urban_mode": true,
+	"textures": {
+		"meadow": "res://assets/terrain/reference/volcanic/porous-basalt.webp",
+		"earth": "res://assets/terrain/reference/volcanic/fine-ash.webp",
+		"woodland": "res://assets/terrain/reference/desert/scree.webp",
+	},
+	"understory": "urban", "forests": false, "dust": false,
+	"fog_color": Color(0.68,0.71,0.74), "fog_density": 1.2,
+	"sun_energy": 2.15,
+	"sun_color_day": Color(1.0,0.94,0.85), "sun_color_sunset": Color(1.0,0.80,0.61),
+	"sun_angles_day": Vector2(-58.0,36.0), "sun_angles_sunset": Vector2(-40.0,24.0),
+	"ambient_energy": 0.38, "ambient_color": Color(0.72,0.80,0.92),
+	"fill_energy": 0.32, "fill_color": Color(0.85,0.90,0.96),
+	"saturation": 0.82,
+}
+
+
 static func get_profile(biome_name: String) -> Dictionary:
 	match biome_name:
 		"arid_desert": return ARID_DESERT
 		"frozen_tundra": return FROZEN_TUNDRA
 		"volcanic_ash": return VOLCANIC_ASH
 		"alien_jungle": return ALIEN_JUNGLE
+		"urban_ruins": return URBAN_RUINS
 		_: return GRASSLAND
