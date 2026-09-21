@@ -1655,6 +1655,27 @@ func test_casualty_order_protects_rare_weapon_bearers_at_equal_count() -> void:
 	assert_int(int(order.back())).is_equal(3)   # the launcher bearer is spared longest
 
 
+## Deploy exit veto (maintainer test game 2026-09-21): a base wider than the only doorway of its ruin
+## is boxed in from the first turn. Walls: a 20 cm box with one 6 cm doorway in the front wall.
+func test_deploy_exit_vetoes_a_spot_whose_walls_box_a_wide_base_in() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	var walls: Array = [
+		[Vector2(-0.10, -0.10), Vector2(-0.10, 0.10)], [Vector2(0.10, -0.10), Vector2(0.10, 0.10)],
+		[Vector2(-0.10, 0.10), Vector2(0.10, 0.10)],
+		[Vector2(-0.10, -0.10), Vector2(-0.03, -0.10)], [Vector2(0.03, -0.10), Vector2(0.10, -0.10)]]
+	solo.walls_provider = func() -> Array: return walls
+	assert_bool(solo._deploy_footprint_boxed(Vector2.ZERO, [], 0.04)).is_true()     # 8 cm base: no way out
+	assert_bool(solo._deploy_footprint_boxed(Vector2.ZERO, [], 0.016)).is_false()   # 32 mm base walks out
+	# Widen the doorway to 12 cm: the same 8 cm base leaves through it — not boxed.
+	walls[3] = [Vector2(-0.10, -0.10), Vector2(-0.06, -0.10)]
+	walls[4] = [Vector2(0.06, -0.10), Vector2(0.10, -0.10)]
+	assert_bool(solo._deploy_footprint_boxed(Vector2.ZERO, [], 0.04)).is_false()
+	# No walls at all: never boxed.
+	solo.walls_provider = func() -> Array: return []
+	assert_bool(solo._deploy_footprint_boxed(Vector2(5, 5), [Vector2(-0.03, 0), Vector2(0.03, 0)], 0.04)).is_false()
+
+
 # === P2: Regroup mandatory action — a casualty-torn unit gathers (GF v3.5.1 p.7) ===
 
 func test_torn_unit_regroups_at_activation_start() -> void:

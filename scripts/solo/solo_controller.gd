@@ -9664,11 +9664,15 @@ func _deploy_place_id(id: int) -> GameUnit:
 	# Wall-bisect retries (bug 12c): a spot whose formation grid a wall cuts in half is vetoed by
 	# marking it occupied and re-searching — the unit must never START the game split across a wall.
 	for _retry in range(4):
-		if spot == Vector2.INF or not _deploy_footprint_bisected(spot, footprint, base_r):
+		if spot == Vector2.INF:
+			break
+		var bisected := _deploy_footprint_bisected(spot, footprint, base_r)
+		if not bisected and not _deploy_footprint_boxed(spot, footprint, base_r):
 			break
 		occupied.append({"pos": spot, "radius": radius * 0.6})
 		spot = AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
-		spot_why = "re-sited — wall bisected the formation"
+		spot_why = "re-sited — wall bisected the formation" if bisected \
+				else "re-sited — walls boxed the base in (no straight 12\" exit)"
 	if spot == Vector2.INF:
 		spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
 		spot_why = "section full — whole-zone fallback"
@@ -10150,6 +10154,42 @@ func _deploy_footprint_bisected(spot: Vector2, footprint: Array, base_r: float) 
 			if MovementPlanner.path_crosses_wall(a, b, walls):
 				return true
 	return false
+
+
+const DEPLOY_EXIT_REACH_M := 0.3048        # one 12" move: the ray a base must be able to slide along
+const DEPLOY_EXIT_DIRS := 16
+const DEPLOY_EXIT_CLEARANCE_PAD_M := 0.005  # below the 2 cm deploy wall margin: the base starts clear
+
+
+## Deploy exit test (maintainer test game 2026-09-21): a Tactical Walker was set down between two ruin
+## walls whose opening was narrower than its base and stayed boxed all game — the spot was legal for
+## every deploy check (floor, walls at 2 cm, no bisect) and illegal for every move. A spot is vetoed
+## when the unit's bases cannot slide one full move in ANY of 16 compass directions without the base
+## edge clipping a wall — the movement planner's own swept-disc wall test at the moving base's
+## clearance. Straight rays only: a cramped-but-escapable spot may be vetoed (conservative — the
+## next-best spot is taken), a spot with no straight 12" exit is boxed for a base that cannot pass
+## its walls. Mirrored in the core's deployment (footprint_boxed).
+func _deploy_footprint_boxed(spot: Vector2, footprint: Array, base_r: float) -> bool:
+	var walls := _rest_walls()
+	if walls.is_empty():
+		return false
+	var offsets: Array = footprint if not footprint.is_empty() else [Vector2.ZERO]
+	var clearance := base_r + DEPLOY_EXIT_CLEARANCE_PAD_M
+	for k in range(DEPLOY_EXIT_DIRS):
+		var ang := TAU * float(k) / float(DEPLOY_EXIT_DIRS)
+		var ray := Vector2(cos(ang), sin(ang)) * DEPLOY_EXIT_REACH_M
+		var clear := true
+		for off in offsets:
+			var p: Vector2 = spot + (off as Vector2)
+			for w in walls:
+				if MovementPlanner._wall_blocks(p, p + ray, MovementPlanner._wall_a(w), MovementPlanner._wall_b(w), clearance):
+					clear = false
+					break
+			if not clear:
+				break
+		if clear:
+			return false
+	return true
 
 
 const AMBUSH_MIN_ENEMY_DIST_M := 0.2286   # OPR: Ambush arrivals deploy MORE THAN 9" from enemy units
