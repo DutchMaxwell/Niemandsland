@@ -181,7 +181,9 @@ use super::*;
     /// `Candidate` carries no `PartialEq`, so assertions compare the plain
     /// shape the GDScript candidate dict would carry: kind, shoot, charge,
     /// dest (exact — every dest here is a deterministic expression).
-    fn shape(menu: &[Candidate]) -> Vec<(i64, Option<String>, Option<String>, Option<[f64; 3]>)> {
+    /// (kind, shoot, charge, dest) — the menu entry as the assertions compare it.
+    type Shape = (i64, Option<String>, Option<String>, Option<[f64; 3]>);
+    fn shape(menu: &[Candidate]) -> Vec<Shape> {
         menu.iter()
             .map(|c| (c.kind, c.shoot.clone(), c.charge.clone(), c.dest))
             .collect()
