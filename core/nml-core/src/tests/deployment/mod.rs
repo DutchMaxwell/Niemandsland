@@ -50,6 +50,7 @@
         Terrain::build(&plain)
     }
 
+    mod deploy_coherency;
     mod deploy_exit;
     mod reinforcement;
     mod spawn;
