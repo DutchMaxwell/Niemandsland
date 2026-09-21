@@ -798,9 +798,12 @@ fn charge_at(state: &State, key: &str, e: usize) -> Candidate {
 /// it has NOT yet activated this round, or when it stands within 3" of an
 /// objective not owned by the acting player (owner 0 counts as not ours).
 pub fn holder_or_unactivated(state: &State, player: i64, e: usize) -> bool {
-    if !state.activated[e] {
-        return true;
-    }
+    !state.activated[e] || marker_holder(state, player, e)
+}
+
+/// The MARKER half of the qualifier on its own: any model of `e` within 3" of an
+/// objective not owned by `player` (owner 0 = nobody counts as not ours).
+pub fn marker_holder(state: &State, player: i64, e: usize) -> bool {
     state.objectives.iter().any(|o| {
         o.owner != player
             && state.positions[e].iter().any(|p| {
@@ -911,23 +914,34 @@ pub fn candidates_tuned(
     // player — but ONLY when the unqualified pick differs. Appended LAST like
     // every tail-growth leg, so an OFF menu stays byte-identical.
     if tuning.holders {
+        // Two SEPARATE proposals (second opinion 21.09.): the best marker HOLDER and the
+        // best UN-ACTIVATED enemy. One combined qualifier collapsed them — the max-EV
+        // target is usually itself un-activated, so the holder never got its entry
+        // (funnel: an extra in 2 of 17 opportunities). Dedupe against the unqualified
+        // picks and against each other; order holder, then un-activated.
         let player = state.player[unit];
-        let q = |e: usize| holder_or_unactivated(state, player, e);
-        let mshoot =
-            best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, Some(&q));
-        if let Some(e) = mshoot {
-            if Some(e) != shoot {
-                let mut c = Candidate::new(key, HOLD);
-                c.shoot = Some(state.key(e).to_string());
-                out.push(c);
+        let qh = |e: usize| marker_holder(state, player, e);
+        let qu = |e: usize| !state.activated[e];
+        let mut shot: Vec<usize> = shoot.into_iter().collect();
+        for q in [&qh as &dyn Fn(usize) -> bool, &qu] {
+            if let Some(e) = best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, Some(q)) {
+                if !shot.contains(&e) {
+                    shot.push(e);
+                    let mut c = Candidate::new(key, HOLD);
+                    c.shoot = Some(state.key(e).to_string());
+                    out.push(c);
+                }
             }
         }
-        let mcharge = best_charge(
-            state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, Some(&q),
-        );
-        if let Some(e) = mcharge {
-            if Some(e) != scored {
-                out.push(charge_at(state, key, e));
+        let mut charged: Vec<usize> = scored.into_iter().collect();
+        for q in [&qh as &dyn Fn(usize) -> bool, &qu] {
+            if let Some(e) = best_charge(
+                state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, Some(q),
+            ) {
+                if !charged.contains(&e) {
+                    charged.push(e);
+                    out.push(charge_at(state, key, e));
+                }
             }
         }
     }
