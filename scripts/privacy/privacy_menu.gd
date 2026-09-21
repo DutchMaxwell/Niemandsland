@@ -34,7 +34,7 @@ const COPY := {
 		"saved": "Saved exact example bytes to %s",
 		"saved_last": "Saved your last game's exact bytes to %s",
 		"fields": "Fields in the record:\n• payload_schema_version — payload format number\n• consent_schema_version — consent wording version\n• deletion_code — random installation deletion code\n• record_id — random record identifier\n• game_version and build_hash — public game build\n• core_abi and rules_epoch — rules-engine versions\n• training_use — whether separate training permission was given\n• brain.engine, brain.id and brain.hash — public opponent version, or Classic\n• game.system_id, mission_id and scoring_id — public rules identifiers\n• game.random_seed, layout_seed and dice_seed — game seeds when known\n• table.width_inches and height_inches — table size\n• table.terrain — type identifiers, coordinates and rotations\n• table.objectives — type identifiers, coordinates and owner numbers\n• armies — side, book and faction identifiers\n• armies.units — stable unit/profile identifiers, numeric quality, defense and model count, plus loadout/rule identifiers\n• actions — ordered index, round, side, stable unit/action/target identifiers, coordinates, observed dice faces and numeric score\n• rounds — completed round count\n• final.vp, objective_owners and outcome — final numeric score and result\n• payload_sha256 — integrity hash of all preceding fields",
-		"never": "Never collected in this record:\nPlayer, army or unit display names; chat or battle-log prose; room codes; multiplayer identity tokens; account, platform, device or IP identifiers; save files; screenshots; timestamps; file paths; host names; hardware inventory; unrelated diagnostics.",
+		"never": "Never collected in this record:\nTyped display names — yours, your army list's or your units' (the list itself IS in the record, as book, faction, unit and profile identifiers — see the armies fields above); chat or battle-log prose; room codes; multiplayer identity tokens; account, platform, device or IP identifiers; save files; screenshots; timestamps; file paths; host names; hardware inventory; unrelated diagnostics.",
 		"destination": "Destination: a storage bucket operated by the maintainer of Niemandsland (Cloudflare R2, object storage). Records are uploaded only after you switch sharing on, and only for the games you choose.",
 		"controller": "Controller (the person responsible under the GDPR): Andreas Kesberg, privacy@niemandsland.xyz.",
 		"processor": "Processor and hosting: Cloudflare, Inc. (R2 object storage) for shared records; Fly.io, Inc., region Frankfurt (fra), for the multiplayer relay. The relay processes your IP address and a per-install reconnect token to route your game; neither is written to a log, and the retention bound is 30 days.",
@@ -68,7 +68,7 @@ const COPY := {
 		"saved": "Die exakten Beispieldaten wurden unter %s gespeichert",
 		"saved_last": "Die exakten Daten deiner letzten Partie wurden unter %s gespeichert",
 		"fields": "Felder im Datensatz:\n• payload_schema_version — Nummer des Datenformats\n• consent_schema_version — Version dieser Einwilligung\n• deletion_code — zufälliger Löschcode dieser Installation\n• record_id — zufällige Kennung des Datensatzes\n• game_version und build_hash — öffentliche Spielversion\n• core_abi und rules_epoch — Versionen der Regel-Engine\n• training_use — ob die getrennte Trainingsfreigabe erteilt wurde\n• brain.engine, brain.id und brain.hash — öffentliche Gegnerversion oder Classic\n• game.system_id, mission_id und scoring_id — öffentliche Regelkennungen\n• game.random_seed, layout_seed und dice_seed — bekannte Spiel-Zufallswerte\n• table.width_inches und height_inches — Tischgröße\n• table.terrain — Typkennungen, Koordinaten und Drehungen\n• table.objectives — Typkennungen, Koordinaten und Besitznummern\n• armies — Seite sowie Buch- und Fraktionskennungen\n• armies.units — stabile Einheiten-/Profilkennungen, Zahlenwerte und Ausrüstungs-/Regelkennungen\n• actions — Reihenfolge, Runde, Seite, stabile Aktions-/Einheiten-/Zielkennungen, Koordinaten, beobachtete Würfelaugen und Zahlenwert\n• rounds — Zahl abgeschlossener Runden\n• final.vp, objective_owners und outcome — Endstand und Ergebnis\n• payload_sha256 — Prüfsumme aller vorherigen Felder",
-		"never": "Niemals in diesem Datensatz erhoben:\nAnzeige-Namen von Spielern, Armeen oder Einheiten; Chat oder Schlachtprosa; Raumcodes; Mehrspieler-Identitätsschlüssel; Konto-, Plattform-, Geräte- oder IP-Kennungen; Spielstände; Bildschirmfotos; Zeitstempel; Dateipfade; Rechnernamen; Hardwaredaten; sonstige Diagnosen.",
+		"never": "Niemals in diesem Datensatz erhoben:\nGetippte Anzeige-Namen — deiner, deiner Armeeliste oder deiner Einheiten (die Liste selbst IST im Datensatz, als Buch-, Fraktions-, Einheiten- und Profilkennungen — siehe die armies-Felder oben); Chat oder Schlachtprosa; Raumcodes; Mehrspieler-Identitätsschlüssel; Konto-, Plattform-, Geräte- oder IP-Kennungen; Spielstände; Bildschirmfotos; Zeitstempel; Dateipfade; Rechnernamen; Hardwaredaten; sonstige Diagnosen.",
 		"destination": "Ziel: ein vom Betreiber von Niemandsland verwalteter Speicher (Cloudflare R2, Objektspeicher). Aufzeichnungen werden nur hochgeladen, nachdem du das Teilen eingeschaltet hast, und nur für Partien, die du auswählst.",
 		"controller": "Verantwortlicher im Sinne der DSGVO: Andreas Kesberg, privacy@niemandsland.xyz.",
 		"processor": "Auftragsverarbeiter und Hosting: Cloudflare, Inc. (R2-Objektspeicher) für geteilte Aufzeichnungen; Fly.io, Inc., Region Frankfurt (fra), für den Mehrspieler-Relay. Der Relay verarbeitet deine IP-Adresse und ein Wiederverbindungs-Token je Installation, um deine Partie zu vermitteln; beides wird nicht protokolliert, die Aufbewahrungsgrenze beträgt 30 Tage.",
@@ -208,8 +208,15 @@ func _t(key: String) -> String:
 
 func _build_shell() -> void:
 	title = _t("title")
+	# Maintainer test game 21.09.: two multi-kilobyte JSON previews in 240 px letterboxes inside a fixed
+	# 780x680 shell made the record unreadable. Take the room the screen has; the old shell stays the
+	# floor (and the headless/test size, where the usable rect is unknown).
+	var shell := Vector2i(780, 680)
+	var usable: Vector2i = DisplayServer.screen_get_usable_rect().size
+	if usable.x >= 900 and usable.y >= 760:
+		shell = Vector2i(mini(1000, usable.x - 120), mini(900, usable.y - 80))
 	min_size = Vector2i(780, 680)
-	size = Vector2i(780, 680)
+	size = shell
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 18)
@@ -282,7 +289,7 @@ func _show_details() -> void:
 		_last_preview = TextEdit.new()
 		_last_preview.name = "LastGamePreview"
 		_last_preview.editable = false
-		_last_preview.custom_minimum_size = Vector2(0, 240)
+		_last_preview.custom_minimum_size = Vector2(0, 360)
 		_last_preview.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 		_last_preview.text = last_game_bytes().get_string_from_utf8()
 		_content.add_child(_last_preview)
@@ -293,7 +300,7 @@ func _show_details() -> void:
 	_preview = TextEdit.new()
 	_preview.name = "ExamplePreview"
 	_preview.editable = false
-	_preview.custom_minimum_size = Vector2(0, 240)
+	_preview.custom_minimum_size = Vector2(0, 360)
 	_preview.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_preview.text = example_bytes().get_string_from_utf8()
 	_content.add_child(_preview)
