@@ -826,6 +826,15 @@ static func search_knobs() -> Dictionary:
 		# NML-1073 M5 D1-B7: the resolver behind this game's combat, the same key the act
 		# corpus header carries (act_recorder.gd `_header_line`). Constant on the table.
 		"dice": "table",
+		# RUN PROOF (21.09.): the EFFECTIVE A/B switches of this game, so a result file proves
+		# its own arm. Three runs that day nearly measured a switch that was silently off (a stale
+		# pin, an env gate the box runner never sets, a stale local checkout) — a commit sha is
+		# not evidence that a switch was live in the process.
+		"menu_holders": AiPlanner._menu_holders_on(),
+		"menu_wide": AiPlanner.menu_wide_on(),
+		"deploy_threat_in": SoloController.deploy_threat_in,
+		"deploy_threat_seat": SoloController.deploy_threat_seat,
+		"deploy_threat_preset": SoloController.deploy_threat_preset,
 	}
 
 
