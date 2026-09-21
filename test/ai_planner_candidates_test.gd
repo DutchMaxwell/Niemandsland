@@ -337,3 +337,46 @@ func test_the_reach_gate_measures_the_band_the_live_move_covers() -> void:
 	assert_int(_wide_shots("Plain", [], 24, 31.0)).is_equal(0)
 	# And the original hole stays shut: not even +4" makes a 12" gun reach 30".
 	assert_int(_wide_shots("Bounder", ["Bounding"], 12, 30.0)).is_equal(0)
+
+
+func after_test() -> void:
+	AiPlanner.menu_targets = false   # the MENUTARGETS static: pin it back so no suite sees a leak
+	AiPlanner._mt_env = 0
+
+
+## MENUTARGETS (tactics canon, principle 1): the live menu offers ONE shoot target — the max-EV
+## one — so an enemy that holds a marker or has not activated yet is targeted only by accident.
+## With the switch on the menu ALSO offers the best qualifying enemy (marker holder / un-activated)
+## when it differs from the max-EV pick; with the switch off the menu is byte-identical to today.
+func test_menu_targets_adds_the_marker_holder_after_the_max_ev_target() -> void:
+	AiPlanner._mt_env = 0
+	var marker := Vector3(20.0 * IN2M, 0, 0)
+	var me := _armed(2, [Vector3.ZERO], "Gunner", [{"name": "Rifle", "range": 24}])
+	# A: the max-EV target (defense 6 = easy wounds), already activated, far from every marker.
+	var a := _armed(1, [Vector3(0, 0, 18.0 * IN2M)], "A", [{"name": "CCW", "range": 0}], [], 1, 4, 6)
+	a.is_activated = true
+	# B: harder to wound (defense 2), but stands ON the enemy-owned marker.
+	var b := _armed(1, [marker], "B", [{"name": "CCW", "range": 0}], [], 1, 4, 2)
+	b.is_activated = true
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": me, "A": a, "B": b}
+	var state := BattleSim.capture(army, func() -> Array: return [marker],
+		func(_i: int) -> int: return 1)   # owner = player 1 = the enemy of the gunner
+	AiPlanner.menu_targets = false
+	var off := AiPlanner.candidates(state, "Gunner")
+	var off_shoots := _of_kind(off, AiDecision.Action.HOLD).filter(func(c: Dictionary) -> bool: return c.has("shoot"))
+	assert_int(off_shoots.size()).is_equal(1)
+	assert_str(str(off_shoots[0]["shoot"])).is_equal("A")   # today: only the max-EV target
+	AiPlanner.menu_targets = true
+	var on := AiPlanner.candidates(state, "Gunner")
+	assert_int(on.size()).is_equal(off.size() + 1)
+	for i in range(off.size()):
+		assert_that(on[i]).is_equal(off[i])   # the existing entries stay, in order
+	var extra: Dictionary = on[on.size() - 1]
+	assert_int(int(extra["kind"])).is_equal(AiDecision.Action.HOLD)
+	assert_str(str(extra["shoot"])).is_equal("B")   # the marker holder joins the menu
+	# Nothing qualifies: A already activated and off the marker, B activated but NOW the marker
+	# is ours -> no extra entry even with the switch on.
+	var mine := BattleSim.capture(army, func() -> Array: return [marker],
+		func(_i: int) -> int: return 2)
+	assert_int(AiPlanner.candidates(mine, "Gunner").size()).is_equal(off.size())
