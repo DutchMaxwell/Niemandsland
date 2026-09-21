@@ -800,15 +800,63 @@ pub fn footprint_bisected(
     false
 }
 
-// TEMP STUB (RED) — replaced by the real mirror below.
+/// `DEPLOY_EXIT_REACH_M` (solo_controller.gd, PR #1032): one 12" move — the
+/// ray a base must be able to slide along to leave its spot.
+const DEPLOY_EXIT_REACH_M: f64 = 0.3048;
+
+/// `DEPLOY_EXIT_DIRS`: the 16 exit rays the table sweeps.
+const DEPLOY_EXIT_DIRS: usize = 16;
+
+/// `DEPLOY_EXIT_CLEARANCE_PAD_M`: below the 2 cm deploy wall margin — the
+/// base starts clear.
+const DEPLOY_EXIT_CLEARANCE_PAD_M: f64 = 0.005;
+
+/// `SoloController._deploy_footprint_boxed` (solo_controller.gd, PR #1032):
+/// the deploy exit veto — no straight 12" ray out of the base's clearance is
+/// free of the rest walls, so the spot is boxed: mark it occupied and
+/// re-search. Precision mirrors the table's f32 Vector2 ops: `p`/`p + ray`
+/// are Vector2 adds (f32, via `v2_add`), the ray's `cos/sin` of
+/// `TAU * k / 16` in f64 (GDScript floats) narrowed to f32 by the Vector2
+/// ctor, the 0.3048 scalar narrowed to f32 by `Vector2 * float`; the
+/// clearance stays f64 (a GDScript float), widened components only.
 pub fn footprint_boxed(
     spot: (f64, f64),
     footprint: &[(f64, f64)],
     base_r: f64,
     walls: &[WallSeg],
 ) -> bool {
-    let _ = (spot, footprint, base_r, walls);
-    false
+    if walls.is_empty() {
+        return false;
+    }
+    let clearance = base_r + DEPLOY_EXIT_CLEARANCE_PAD_M;
+    let zero = [(0.0_f64, 0.0_f64)];
+    let offsets: &[(f64, f64)] = if footprint.is_empty() { &zero } else { footprint };
+    for k in 0..DEPLOY_EXIT_DIRS {
+        let ang = std::f64::consts::TAU * k as f64 / DEPLOY_EXIT_DIRS as f64;
+        let ray = (
+            ((ang.cos() as f32) * (DEPLOY_EXIT_REACH_M as f32)) as f64,
+            ((ang.sin() as f32) * (DEPLOY_EXIT_REACH_M as f32)) as f64,
+        );
+        let mut clear = true;
+        for off in offsets {
+            let p = v2_add(spot, *off);
+            let end = v2_add(p, ray);
+            let (pf, cf) = ([p.0 as f32, p.1 as f32], [end.0 as f32, end.1 as f32]);
+            for w in walls {
+                if crate::mv::cost::wall_blocks(pf, cf, w[0], w[1], clearance) {
+                    clear = false;
+                    break;
+                }
+            }
+            if !clear {
+                break;
+            }
+        }
+        if clear {
+            return false;
+        }
+    }
+    true
 }
 
 /// `SoloController._deploy_spot_clear` (solo_controller.gd:9640-9652): the
@@ -987,7 +1035,12 @@ pub fn deploy_place_id(
     let (mut rung, mut marks, mut pushed) = (0u8, 0u8, false);
     let mut pushed_from = spot;
     for _ in 0..4 {
-        if spot.0.is_infinite() || !footprint_bisected(spot, footprint, base_r, walls) {
+        // Two vetoes share one retry (solo_controller.gd `_deploy_place_id`): a wall
+        // bisecting the formation, or walls boxing the base in (PR #1032 exit test).
+        if spot.0.is_infinite()
+            || !(footprint_bisected(spot, footprint, base_r, walls)
+                || footprint_boxed(spot, footprint, base_r, walls))
+        {
             break;
         }
         occupied.push(Occupied { pos: spot, radius: radius * 0.6 });
