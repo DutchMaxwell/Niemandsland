@@ -889,6 +889,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // yet, so an absent one answers `Knobs::default()` — OFF, the menu
         // every recorded corpus carries.
         menu_targets: dflag(d, "menu_targets"),
+        // Wave 6 (`lead/menutargets`). A MENU knob, not a seam (like
+        // `menu_targets`): it widens what the search may choose and changes no
+        // resolve. No recorder writes the key yet, so an absent one answers
+        // `Knobs::default()` — OFF, the menu every recorded corpus carries.
+        menu_holders: dflag(d, "menu_holders"),
         // NML-1073 M5 D1-B4b/BUG-3. The recorder NOW writes this key
         // (act_recorder.gd `_header_line`, from `BattleSim.hero_fold_enabled()`),
         // so an in-game seam under the `hero_fold` knob folds the joined hero
