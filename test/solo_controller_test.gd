@@ -2159,6 +2159,58 @@ func test_deploy_begin_and_next_one_step_through_the_queue() -> void:
 		assert_bool(zone.has_point(Vector2(c.x, c.z))).is_true()   # both AI units stand in the zone
 
 
+func test_large_base_takes_a_forward_spot_from_the_whole_zone() -> void:
+	# DEPLOYLARGE: a one-model tank (one 152 mm round base ≈ 0.076 m radius — LARGE) whose assigned
+	# SECTION has its forward 4.5" band blocked used to deploy >6" behind the zone's forward edge
+	# while a legal forward spot sat in a neighbouring section. With the switch on, one whole-zone
+	# re-search takes the nearer spot; with the switch off, the old section spot must stand.
+	var human := _unit(1, [Vector3(0, 0, 0.5)])
+	var tank := _unit(2, [Vector3(0, 0, -0.5)])
+	tank.unit_id = "tank"
+	tank.unit_properties["base_size_round"] = 152
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, tank.unit_id: tank}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var zone := Rect2(Vector2(-0.55, -0.6), Vector2(1.1, 0.3048))
+	var forward_y := zone.end.y   # deploy_begin's forward edge: the one toward the table centre
+	# The tank's OWN section keeps a 4.5" blocked strip behind the forward edge — read at CALL time,
+	# because with one unit the D3 section roll is seed-dependent and all three sections must work.
+	var band := 0.1143
+	var blocked := func(p: Vector2) -> bool:
+		var sec := AiDeployment.section_rect(zone, int(solo._deploy_alt["section_of"][0]))
+		return p.x >= sec.position.x and p.x <= sec.end.x and p.y > forward_y - band
+	var objectives := [Vector2(zone.position.x + zone.size.x / 6.0, forward_y),
+			Vector2(zone.end.x - zone.size.x / 6.0, forward_y)]
+	# Switch ON (default): the whole-zone re-search finds a legal forward spot in a neighbour section.
+	solo.deploy_begin(zone, objectives, blocked, Callable(), 4242)
+	assert_object(solo.deploy_next_one()).is_same(tank)
+	var c := solo.unit_centre(tank)
+	assert_float(absf(c.z - forward_y)).is_less_equal(0.1524)   # within 6" of the forward edge
+	assert_str(_deploy_why_for(solo, "U2")).contains("large base — whole-zone forward spot")
+	# Switch OFF: byte-identical to today — the section-confined spot stays >6" behind the edge.
+	SoloController.large_zone_search = false
+	solo.deploy_begin(zone, objectives, blocked, Callable(), 777)
+	assert_object(solo.deploy_next_one()).is_same(tank)
+	var c2 := solo.unit_centre(tank)
+	var off_why := _deploy_why_for(solo, "U2")
+	SoloController.large_zone_search = true   # restored BEFORE asserting: no leak on failure
+	assert_float(absf(c2.z - forward_y)).is_greater(0.1524)
+	assert_str(off_why).is_equal("best legal spot toward nearest objective (section, forward-edge doctrine)")
+
+
+func _deploy_why_for(solo: SoloController, unit_name: String) -> String:
+	# The latest "deploy" record for `unit_name` (the log accumulates across deploy_begin calls).
+	var why := ""
+	for r in solo.decision_log:
+		var d := r as Dictionary
+		if str(d.get("kind", "")) == "deploy" and str(d.get("unit", "")) == unit_name:
+			why = str(d.get("why", ""))
+	return why
+
+
 func test_deploy_scouts_wait_in_their_own_queue_and_land_in_the_band() -> void:
 	# Maintainer flow: scouts deploy in their OWN phase after all other units (GF v3.5.1) — the
 	# main queue never contains them, and the scout placement may stand ahead of the zone.
