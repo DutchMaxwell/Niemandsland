@@ -800,6 +800,17 @@ pub fn footprint_bisected(
     false
 }
 
+// TEMP STUB (RED) — replaced by the real mirror below.
+pub fn footprint_boxed(
+    spot: (f64, f64),
+    footprint: &[(f64, f64)],
+    base_r: f64,
+    walls: &[WallSeg],
+) -> bool {
+    let _ = (spot, footprint, base_r, walls);
+    false
+}
+
 /// `SoloController._deploy_spot_clear` (solo_controller.gd:9640-9652): the
 /// vanguard candidate's legality — occupied rings, per-MODEL-CENTRE terrain
 /// (no base edges: the table's own law) and no wall bisect.
