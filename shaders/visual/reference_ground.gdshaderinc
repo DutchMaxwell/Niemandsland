@@ -7,6 +7,7 @@ uniform float forest_angles[16];
 uniform int wall_count=0;
 uniform vec4 wall_regions[64];
 uniform bool desert_mode = false;
+uniform bool tundra_mode = false;
 uniform float wind_time = 0.0;
 uniform int drift_count = 0;
 uniform vec4 drift_points[32];
@@ -96,7 +97,26 @@ vec3 desert_sample(vec2 p) {
 	// and the bright sun bleached it further.
 	return col * vec3(0.92, 0.78, 0.56);
 }
+// Broad wind-scoured ground connects exposed soil; finer noise breaks the snow edge.
+// Keep coverage identical to ReferenceMaterials.tundra_snow for vegetation placement.
+float tundra_snow(vec2 p) {
+	float cover = surface_noise(p * 5.2) * 0.60 + surface_noise(p * 21.0) * 0.25 + surface_noise(p * 67.0) * 0.15;
+	return smoothstep(0.40, 0.53, cover);
+}
+float tundra_ice(vec2 p) {
+	return (1.0 - tundra_snow(p)) * smoothstep(0.54,0.74,surface_noise(p * 8.0 + vec2(19.0,7.0)));
+}
+vec3 tundra_sample(vec2 p) {
+	vec3 snow = tiled_surface(meadow_tex,p * 5.0);
+	vec3 soil = tiled_surface(earth_tex,p * 5.0) * vec3(0.72,0.73,0.77);
+	vec3 ice = tiled_surface(woodland_tex,p * 6.0) * vec3(0.50,0.62,0.70);
+	vec3 exposed = mix(soil,ice,smoothstep(0.54,0.74,surface_noise(p * 8.0 + vec2(19.0,7.0))));
+	float crust = surface_noise(p * 140.0);
+	snow *= mix(0.87,1.0,crust) * vec3(0.86,0.91,0.96);
+	return mix(exposed,snow,tundra_snow(p));
+}
 vec3 ground_sample(vec2 p) {
+	if (tundra_mode) { return tundra_sample(p); }
 	if (desert_mode) { return desert_sample(p); }
 	vec2 uv_earth = p * 2.2;
  vec2 uv_grass = p * 5.0;

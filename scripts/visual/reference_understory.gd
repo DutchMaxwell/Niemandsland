@@ -152,6 +152,41 @@ func build_desert(presentation: Node3D,main: Node,size: Vector2) -> void:
 	print("REFERENCE_DESERT stones=",stone_transforms.size())
 
 
+## Dormant stalks and frost-weathered grit only emerge through exposed soil.
+func build_tundra(presentation: Node3D,main: Node,size: Vector2) -> void:
+	_presentation = presentation
+	_rng.seed = 170927
+	_walls = main.terrain_overlay.get_wall_segments_world()
+	for obj in main.object_manager.get_children():
+		if obj is Node3D and obj.is_in_group("selectable"):
+			_exclusions.append(Vector3(obj.global_position.x,obj.global_position.z,0.021))
+	var stones: Array[Transform3D] = []
+	var stone_colors: Array[Color] = []
+	var stalks: Array[Transform3D] = []
+	var stalk_colors: Array[Color] = []
+	for i in int(size.x * size.y * 10000):
+		var p := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
+		if _excluded(p):
+			continue
+		var snow := ReferenceMaterials.tundra_snow(p)
+		var ice := smoothstep(0.54,0.74,ReferenceMaterials._noise2(p*8.0+Vector2(19.0,7.0)))
+		var exposed := (1.0-snow)*(1.0-ice)*_unit_quiet(p)
+		var height := ReferenceMaterials.ground_height(p)
+		if _rng.randf() < exposed*0.32:
+			var s := _rng.randf_range(0.0010,0.0036)
+			var basis := Basis.from_euler(Vector3(_rng.randf()*0.3,_rng.randf()*TAU,_rng.randf()*0.3)).scaled(Vector3(s,s*0.30,s*0.8))
+			stones.append(Transform3D(basis,Vector3(p.x,height+s*0.06,p.y)))
+			stone_colors.append(Color(0.29,0.31,0.33).lerp(Color(0.61,0.63,0.65),_rng.randf()).srgb_to_linear())
+		if _rng.randf() < exposed*0.14 and _wall_distance(p)>0.009:
+			var s := _rng.randf_range(0.25,0.60)
+			var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(s,s*0.8,s))
+			stalks.append(Transform3D(basis,Vector3(p.x,height,p.y)))
+			stalk_colors.append(Color(0.38,0.34,0.25).lerp(Color(0.65,0.60,0.46),_rng.randf()).srgb_to_linear())
+	_multimesh("TundraStones",_stone_mesh(),stones,stone_colors)
+	_multimesh("TundraStalks",_fescue_mesh(),stalks,stalk_colors,false)
+	print("REFERENCE_TUNDRA stones=",stones.size()," stalks=",stalks.size())
+
+
 ## Drifts read as wind-piled leaves instead of an even sprinkle. Centres sit in
 ## the open field and thicken near woodland edges, where litter actually gathers.
 func _litter_drifts(litter_transforms: Array[Transform3D],litter_colors: Array[Color],size: Vector2) -> void:

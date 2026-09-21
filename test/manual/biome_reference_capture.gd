@@ -46,6 +46,7 @@ func _run() -> void:
 	await create_timer(8.0).timeout
 	var original_volumes: Array = main.terrain_overlay.los_volumes().duplicate(true)
 	var original_walls: Array = main.terrain_overlay.get_wall_segments_world().duplicate(true)
+	var baseline_battlemap := "tutorial"
 	if args.size() > 1 and args[1] == "after":
 		_presentation = load("res://scripts/visual/grassland_reference.gd").new()
 		_presentation.biome = biome
@@ -68,8 +69,13 @@ func _run() -> void:
 			return
 		print("REFERENCE_RULE_GEOMETRY_UNCHANGED")
 	else:
-		if biome != "grassland" and main.terrain_overlay.has_method("set_biome"):
-			main.terrain_overlay.set_biome(biome)
+		if biome != "grassland":
+			# Theme the actual shipped ground as well as its props. Warm the cache first
+			# so an asynchronous battlemap swap cannot occur between the two cameras.
+			var table: Node = main.get_node("Table")
+			var cached: String = await table._biome_library.ensure_biome(biome)
+			table.set_biome(biome)
+			baseline_battlemap = "cached" if not cached.is_empty() else "fallback"
 	main.terrain_overlay.set_overlay_mode(1)
 	main.terrain_overlay.set_deployment_zones_visible(false)
 	main.atmospheric_clouds.visible = false
@@ -87,6 +93,7 @@ func _run() -> void:
 	var report := {"renderer": RenderingServer.get_current_rendering_method(),
 		"gpu": RenderingServer.get_video_adapter_name(), "resolution": "1920x1080",
 		"quality": "Reference studio" if args.has("studio") else "Medium",
+		"biome": biome, "baseline_battlemap": baseline_battlemap,
 		"internal_scale": root.scaling_3d_scale, "board": "assets/tutorial/tutorial_board.nml",
 		"animated_atmosphere": false, "samples": []}
 	var moods: Array = ["Day"]

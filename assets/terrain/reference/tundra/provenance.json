@@ -1,0 +1,51 @@
+{
+  "biome": "frozen_tundra",
+  "role": "Reference ground albedos: packed snow, exposed frost soil and cloudy ice.",
+  "license": "CC-BY-SA-4.0",
+  "attribution": "Niemandsland Contributors",
+  "notes": "Original text prompts, no reference images. Requested tileable; shader mirrors and blends samples. Albedo-derived relief is an artistic approximation, not measured physical data.",
+  "textures": [
+    {
+      "file": "wind-snow.png",
+      "sha256": "0ce961f934c5504b08e9613cbeaf4508416a15d7615690244d7550fa3479bdc1",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Use case: photorealistic-natural. Asset type: original seamless diffuse albedo ground texture for a realistic miniature tabletop tundra. Strict vertical overhead orthographic macro photograph of a 40 centimetre square surface, edge to edge, evenly lit with diffuse neutral light. No directional shadows, highlights, vignette, perspective, depth of field, text, grid or objects. Fine natural irregular detail, tileable edges, no obvious repeated motif. Dense wind-packed snow, fine granular frost crystals and delicate irregular shallow wind-sculpted ridges. Restrained off-white and pale neutral grey, subtle microtexture rather than blank white. No blue lighting, no footprints, no large dunes, no rocks or vegetation, no dark deep cracks. A mostly continuous snow crust with intricate small grains.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-21",
+      "webp_file": "wind-snow.webp",
+      "webp_sha256": "ba6d977c5adf955988b5096ff33ae6ff8bd82b5662b26e68b7779d3575682d0b",
+      "output": "1024 x 1024 WebP, quality 85; no retouching"
+    },
+    {
+      "file": "frost-soil.png",
+      "sha256": "d95e3ee6a87eb61bc441411549b2321ff87795a55664523cfbe8bcb965bc2e1b",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Use case: photorealistic-natural. Asset type: original seamless diffuse albedo ground texture for a realistic miniature tabletop tundra. Strict vertical overhead orthographic macro photograph of a 40 centimetre square surface, edge to edge, evenly lit with diffuse neutral light. No directional shadows, highlights, vignette, perspective, depth of field, text, grid or objects. Fine natural irregular detail, tileable edges, no obvious repeated motif. Exposed frozen dark grey-brown mineral earth with small angular slate chips and scattered thin dry straw fragments. Fine pale hoarfrost traces around the grit, tiny subdued olive-grey lichen patches. Irregular rough compacted ground, mostly dark earth, restrained charcoal taupe and grey. No big stones, no snow blanket, no leafy plants, no polygonal tiling.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-21",
+      "webp_file": "frost-soil.webp",
+      "webp_sha256": "924392aacfc923627ed4997c1d0b96024be284ac8bb54c25ba656e922de52548",
+      "output": "1024 x 1024 WebP, quality 85; no retouching"
+    },
+    {
+      "file": "cloudy-ice.png",
+      "sha256": "392461b942e668126adf96dd31b1f3e524a3c83f6ac3d769e1338912b6ca2baa",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Use case: photorealistic-natural. Asset type: original seamless diffuse albedo ground texture for a realistic miniature tabletop tundra. Strict vertical overhead orthographic macro photograph of a 40 centimetre square surface, edge to edge, evenly lit with diffuse neutral light. No directional shadows, highlights, vignette, perspective, depth of field, text, grid or objects. Fine natural irregular detail, tileable edges, no obvious repeated motif. Opaque cloudy pale grey glacier ice surface, subtle cool grey-blue veining, trapped tiny bubbles and fine branching hairline fissures. Matte diffuse colour only without reflections or shine. Natural irregular cloudy internal structure, no giant polygon cracks, no dark background, no deep transparent water, no bright cyan.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-21",
+      "webp_file": "cloudy-ice.webp",
+      "webp_sha256": "b3ffe154cc39ba6fba64f7ee116c572fd724ff35b2f901af1d28c76c10885002",
+      "output": "1024 x 1024 WebP, quality 85; no retouching"
+    }
+  ]
+}

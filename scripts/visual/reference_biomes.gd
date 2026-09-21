@@ -56,5 +56,36 @@ const ARID_DESERT := {
 }
 
 
+const FROZEN_TUNDRA := {
+	"name": "frozen_tundra",
+	"biome": "frozen_tundra",
+	"desert_mode": false,
+	"tundra_mode": true,
+	"textures": {
+		"meadow": "res://assets/terrain/reference/tundra/wind-snow.webp",
+		"earth": "res://assets/terrain/reference/tundra/frost-soil.webp",
+		"woodland": "res://assets/terrain/reference/tundra/cloudy-ice.webp",
+	},
+	"understory": "tundra",
+	"forests": false,
+	"dust": false,
+	"fog_color": Color(0.72,0.80,0.88),
+	"fog_density": 2.0,
+	"sun_energy": 1.85,
+	"sun_color_day": Color(0.96,0.97,1.0),
+	"sun_color_sunset": Color(1.0,0.84,0.70),
+	"sun_angles_day": Vector2(-58.0,30.0),
+	"sun_angles_sunset": Vector2(-40.0,20.0),
+	"ambient_energy": 0.34,
+	"ambient_color": Color(0.66,0.77,0.94),
+	"fill_energy": 0.30,
+	"fill_color": Color(0.79,0.86,0.97),
+	"saturation": 0.78,
+}
+
+
 static func get_profile(biome_name: String) -> Dictionary:
-	return ARID_DESERT if biome_name == "arid_desert" else GRASSLAND
+	match biome_name:
+		"arid_desert": return ARID_DESERT
+		"frozen_tundra": return FROZEN_TUNDRA
+		_: return GRASSLAND

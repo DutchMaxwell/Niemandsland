@@ -46,3 +46,8 @@ static func _noise2(p: Vector2) -> float:
 ## sync with relief() in reference_ground.gdshader.
 static func ground_height(p: Vector2) -> float:
 	return (_noise2(p * 2.6) - 0.5) * 0.008 + (_noise2(p * 7.5) - 0.5) * 0.003
+
+
+## Shared with tundra_snow in reference_ground.gdshaderinc.
+static func tundra_snow(p: Vector2) -> float:
+	return smoothstep(0.40,0.53,_noise2(p * 5.2) * 0.60 + _noise2(p * 21.0) * 0.25 + _noise2(p * 67.0) * 0.15)

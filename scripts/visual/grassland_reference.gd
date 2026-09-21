@@ -52,6 +52,7 @@ func apply(main: Node) -> void:
 	for texture_name in ["meadow","earth","woodland"]:
 		_ground.set_shader_parameter(texture_name + "_tex",ReferenceMaterials.texture(_profile["textures"][texture_name]))
 	_ground.set_shader_parameter("desert_mode",_profile["desert_mode"])
+	_ground.set_shader_parameter("tundra_mode",_profile.get("tundra_mode",false))
 	var surface: MeshInstance3D = table.get_node("TableMesh")
 	var plane: PlaneMesh = surface.mesh.duplicate()
 	plane.subdivide_width = 450
@@ -66,6 +67,7 @@ func apply(main: Node) -> void:
 	for texture_name in ["meadow","earth","woodland"]:
 		_base.set_shader_parameter(texture_name + "_tex",_ground.get_shader_parameter(texture_name + "_tex"))
 	_base.set_shader_parameter("desert_mode",_profile["desert_mode"])
+	_base.set_shader_parameter("tundra_mode",_profile.get("tundra_mode",false))
 	var frame := StandardMaterial3D.new()
 	frame.albedo_color = Color(0.022,0.026,0.023)
 	frame.roughness = 0.86
@@ -77,9 +79,11 @@ func apply(main: Node) -> void:
 		_dress_grid_forest(overlay)
 		_dress_movable_forests()
 	_wall_top = overlay.WALL_HEIGHT_INCHES * overlay.INCHES_TO_METERS
-	_dress_decals()
-	for wall in overlay._wall_instances:
-		_weather_ruin(wall)
+	# Retain the tundra's snow-covered masonry instead of applying damp green moss.
+	if not _profile.get("tundra_mode",false):
+		_dress_decals()
+		for wall in overlay._wall_instances:
+			_weather_ruin(wall)
 	_sync_regions()
 	var wall_regions := PackedVector4Array()
 	for edge: Array in overlay.get_wall_segments_world():
@@ -114,6 +118,8 @@ func apply(main: Node) -> void:
 	add_child(understory)
 	if _profile["understory"] == "desert":
 		understory.build_desert(self,main,table.table_size * 0.3048)
+	elif _profile["understory"] == "tundra":
+		understory.build_tundra(self,main,table.table_size * 0.3048)
 	else:
 		understory.build(self,main,table.table_size * 0.3048)
 	if _props != null:

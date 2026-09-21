@@ -122,3 +122,38 @@ suites are `base_terrain_projection_test`, `terrain_overlay_test` and
 `sandbox_terrain_test`; CI additionally covers the full suite, launch smoke,
 multiplayer and exports. Current capture measurements and validation results
 are reported with the PR, not extrapolated to all hardware or renderers.
+
+## Frozen tundra reference
+
+Launch the same opt-in scene with `-- --biome frozen_tundra`, or set
+`NML_BIOME=frozen_tundra`. The profile supplies wind-packed snow, exposed frost
+soil and cloudy ice albedos, cool low-angle daylight and a thin local mist.
+The existing snow-covered terrain props and miniature models are reused.
+
+Snow coverage is shared between the shader and deterministic scatter: dormant
+stalks and angular grit emerge from exposed soil, avoiding ice, deep snow,
+walls and the existing miniature clearings. Ice patches have a separate
+roughness response. The tundra keeps the existing snowy masonry rather than
+the woodland moss/damp-wall overlays. Ground projection continues across
+miniature base caps; model transforms and rule geometry remain unchanged.
+
+New material sources and output hashes are in
+`assets/terrain/reference/tundra/provenance.json`; visual assets are
+CC BY-SA 4.0, Niemandsland Contributors. NanoBanana generated the three original
+albedos from text only. Their albedo-derived surface relief is an artistic
+approximation, not measured physical material data.
+
+Comparison: https://forge.niemandsland.xyz/static/tundra-biome-2026-09-21/index.html
+
+The capture harness now loads the actual shipped biome battlemap for `before`,
+not just the matching props over the tutorial's grass. Its metrics identify
+the selected biome and whether the baseline battlemap was cached or fell back.
+Both views retain identical cameras, resolution and studio settings; lighting
+is an intentional part of the reference change. This correction affects new
+biome captures only; older published comparisons retain their original evidence.
+
+The reference remains opt-in, with no live rebuild on biome edits or miniature
+movement. Snow does not accumulate dynamically, and the existing trees are
+reused without new tundra-specific wind animation. Forward+ is the reviewed
+renderer; browser/Compatibility calibration and production adoption remain
+separate work.
