@@ -3744,3 +3744,70 @@ func test_lane_hold_false_keeps_the_old_abort_record() -> void:
 	var recs: Array = solo.drain_decisions()
 	var rec: Dictionary = recs[recs.size() - 1] as Dictionary
 	assert_str(str(rec["chosen"])).is_equal("abort hold — reposition")
+
+
+## DEPLOYTHREAT (tactics canon principle 7): (a) `_deploy_threat_cb` counts the enemy first-activation
+## envelopes (advance + longest range) over a point, only for enemies the deploy path already placed,
+## only when the seat switch allows; (b) `AiDeployment.best_spot` charges `threat_w` per envelope, so a
+## marker-nearest spot inside an envelope loses to a spot outside it. Off = byte-identical.
+func test_deploy_threat_cb_counts_enemy_envelopes_per_seat() -> void:
+	SoloController._dt_env = 0
+	var enemy := _unit(1, [Vector3(0, 0, 0.15)])
+	var eopr := OPRApiClient.OPRUnit.new()
+	var erifle := OPRApiClient.OPRWeapon.new()
+	erifle.name = "Rifle"
+	erifle.range_value = 18
+	erifle.attacks = 1
+	erifle.count = 1
+	eopr.weapons.append(erifle)
+	enemy.source_type = "opr"
+	enemy.source_data = eopr
+	var me := _unit(2, [Vector3(0, 0, -0.5)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, me.unit_id: me}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var reach := (float(SoloController.move_bands_for_unit(enemy, null).get("advance", 6)) + 18.0) \
+			* SoloController.INCHES_TO_METERS
+	var inside := Vector2(0.0, 0.15 - reach + 0.01)
+	var outside := Vector2(0.0, 0.15 - reach - 0.01)
+	SoloController.deploy_threat_in = 6.0
+	SoloController.deploy_threat_seat = 0
+	# The enemy is not "placed" yet (no _deploy_zone_of entry): nothing to fear, invalid Callable.
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()
+	solo._deploy_zone_of[enemy] = Rect2(Vector2(-0.9, 0.3), Vector2(1.8, 0.3))
+	var cb := solo._deploy_threat_cb(me)
+	assert_bool(cb.is_valid()).is_true()
+	assert_float(float(cb.call(inside))).is_equal(1.0)
+	assert_float(float(cb.call(outside))).is_equal(0.0)
+	# Seat switch: only slot 1 gets the term -> slot 2's unit sees no Callable.
+	SoloController.deploy_threat_seat = 1
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()
+	SoloController.deploy_threat_seat = 2
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_true()
+	# Off (today): no Callable regardless of seat.
+	SoloController.deploy_threat_in = 0.0
+	SoloController.deploy_threat_seat = 0
+	assert_bool(solo._deploy_threat_cb(me).is_valid()).is_false()
+
+
+func test_best_spot_threat_term_prefers_the_spot_outside_the_envelope() -> void:
+	# Section 0.6 m wide x 0.3 m deep, forward edge at y = -0.3, marker just beyond it: the
+	# marker-nearest spot is the forward edge. A threat that covers everything above y = -0.45
+	# costs 12" per envelope -> the best spot drops below -0.45 (objective distance +0.15 < 0.3048).
+	var sec := Rect2(Vector2(-0.3, -0.6), Vector2(0.6, 0.3))
+	var objectives := [Vector2(0.0, -0.25)]
+	var threat := func(p: Vector2) -> float: return 1.0 if p.y > -0.45 else 0.0
+	var off := AiDeployment.best_spot(sec, objectives, [], 0.016, Callable(), 0.025, 0.016, [], 0.016, -0.3)
+	assert_float(off.y).is_greater(-0.35)
+	var on := AiDeployment.best_spot(sec, objectives, [], 0.016, Callable(), 0.025, 0.016, [], 0.016, -0.3,
+			threat, 12.0 * SoloController.INCHES_TO_METERS)
+	assert_float(on.y).is_less_equal(-0.45)
+	assert_bool(sec.has_point(on)).is_true()
+	# Zero weight or an invalid Callable: byte-identical to today.
+	var w0 := AiDeployment.best_spot(sec, objectives, [], 0.016, Callable(), 0.025, 0.016, [], 0.016, -0.3, threat, 0.0)
+	assert_that(w0).is_equal(off)
+	var nocb := AiDeployment.best_spot(sec, objectives, [], 0.016, Callable(), 0.025, 0.016, [], 0.016, -0.3,
+			Callable(), 12.0 * SoloController.INCHES_TO_METERS)
+	assert_that(nocb).is_equal(off)
