@@ -1448,7 +1448,7 @@ func test_deploy_coherency_repair_respects_zone_and_table_edge() -> void:
 	SoloController.repair_in_zone = false
 	(s.node as Node3D).global_position = Vector3(0.42, 0, 0)
 	solo.drain_decisions()
-	assert_bool(solo._repair_deploy_coherency(blocked, blocked)).is_true()
+	assert_bool(solo._repair_deploy_coherency(blocked, blocked)).is_false()   # returns forced_any: a FREE re-place is false
 	assert_bool(solo.unit_coherent_now(ai)).is_true()
 	var s_off: Vector2 = Vector2((s.node as Node3D).global_position.x, (s.node as Node3D).global_position.z)
 	assert_bool(s_off.x > zone.end.x).is_true()
@@ -1458,7 +1458,7 @@ func test_deploy_coherency_repair_respects_zone_and_table_edge() -> void:
 	SoloController.repair_in_zone = true
 	(s.node as Node3D).global_position = Vector3(0.42, 0, 0)
 	solo.drain_decisions()
-	assert_bool(solo._repair_deploy_coherency(blocked, blocked)).is_true()
+	assert_bool(solo._repair_deploy_coherency(blocked, blocked)).is_false()   # returns forced_any: a FREE re-place is false
 	assert_bool(solo.unit_coherent_now(ai)).is_true()
 	for m in models:
 		var p: Vector2 = Vector2((m.node as Node3D).global_position.x, (m.node as Node3D).global_position.z)
