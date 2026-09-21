@@ -133,8 +133,10 @@ static var large_zone_search := true
 static var deploy_threat_in := 0.0
 static var deploy_threat_seat := 0
 ## `deploy_threat_preset` (NML_DEPLOY_THREAT_PRESET): when set, the term applies only to the slot
-## whose arena preset (NML_AI_P<slot>) has that name — the paired A/B "planner_v0 + term vs tree"
-## on both seat orders without the seat confound.
+## whose CONFIGURED difficulty (`set_difficulty`, `SoloDifficulty.grade_name`) has that name — the
+## paired A/B "planner_v0 + term vs tree" on both seat orders without the seat confound. The
+## controller's own record, not an env var: the box runner hands presets to the arena as cmdline
+## args, so NML_AI_P<slot> is never set there (false start 21.09.).
 static var deploy_threat_preset := ""
 static var _dt_env := -1
 ## A completed move that displaced the unit less than this counts as BOXED for the reposition fallback
@@ -11229,8 +11231,10 @@ func _deploy_threat_cb(unit: GameUnit) -> Callable:
 	var slot := int(unit.unit_properties.get("player_id", 0))
 	if deploy_threat_seat != 0 and deploy_threat_seat != slot:
 		return Callable()
-	if deploy_threat_preset != "" and OS.get_environment("NML_AI_P%d" % slot) != deploy_threat_preset:
-		return Callable()
+	if deploy_threat_preset != "":
+		var diff: SoloDifficulty = difficulty_by_slot.get(slot, null)
+		if diff == null or diff.grade_name != deploy_threat_preset:
+			return Callable()
 	var envelopes: Array = []   # [positions: Array[Vector2], reach_m: float]
 	for gu in army_manager.game_units.values():
 		var eu := gu as GameUnit
