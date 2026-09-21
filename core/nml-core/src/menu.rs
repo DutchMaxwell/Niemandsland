@@ -141,6 +141,15 @@ pub struct Tuning {
     /// enemy's centre carrying the shot. Default OFF, so every recorded corpus
     /// replays with the identical menu.
     pub wide_shoot: bool,
+    /// Wave 6 (`lead/menutargets`) — the MENUHOLDERS leg: the menu ALSO offers
+    /// the best-EV shoot target and the best charge victim among enemies that
+    /// QUALIFY — `holder_or_unactivated`: any model within 3" of an objective
+    /// not owned by the acting player (owner 0 counts as not ours), or not yet
+    /// activated this round — appended AFTER every existing entry, and only
+    /// when they differ from the max-EV picks. A MENU knob, not a seam: it
+    /// changes what the search may choose, never how a chosen act resolves.
+    /// Default OFF, so every recorded corpus replays with the identical menu.
+    pub holders: bool,
 }
 
 impl Default for Tuning {
@@ -152,6 +161,7 @@ impl Default for Tuning {
             shoot_los: false,
             target_units: false,
             wide_shoot: false,
+            holders: false,
         }
     }
 }
