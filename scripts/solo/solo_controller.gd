@@ -8488,11 +8488,19 @@ static func casualty_order(unit: GameUnit) -> Array:
 		if int(m.wounds_max) > base_tough:
 			v += 8.0   # weapon-team / upgraded-Tough: the TOP rung — above any single
 			           # special bearer (count 2x2 + rare 3 = 7 < 8), ladder intact
+		# GF v3.5.1 p.14 Tough(X): "continue to put wounds on the tough model with most wounds in the
+		# unit until it is killed, before starting to put them on the next" — a body an EARLIER volley
+		# already wounded dies first, most wounds taken first, above every value rung (maintainer test
+		# game 21.09.: three Tough(3) mortars took 4 then 2 wounds and still stood at 2/3 — the second
+		# volley landed on a fresh body instead of finishing the wounded one). The core's land_wounds
+		# empties one slot before the next — parity.
+		var taken: int = maxi(int(m.wounds_max) - int(m.wounds_current), 0)
 		var d := 0.0
 		var node := m.node
 		if node != null and is_instance_valid(node):
 			d = Vector2(node.global_position.x - cx, node.global_position.z - cz).length()
-		return v * 1000.0 - d   # lowest rank dies first: plain models, outermost of them first
+		# lowest rank dies first: already-wounded Tough bodies, then plain models, outermost of them first
+		return v * 1000.0 - d - float(taken) * 1000000.0
 	alive.sort_custom(func(a, b) -> bool: return float(rank.call(a)) < float(rank.call(b)))
 	return alive
 

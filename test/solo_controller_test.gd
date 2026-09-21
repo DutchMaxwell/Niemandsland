@@ -1674,6 +1674,28 @@ func test_deploy_exit_vetoes_a_spot_whose_walls_box_a_wide_base_in() -> void:
 	# No walls at all: never boxed.
 	solo.walls_provider = func() -> Array: return []
 	assert_bool(solo._deploy_footprint_boxed(Vector2(5, 5), [Vector2(-0.03, 0), Vector2(0.03, 0)], 0.04)).is_false()
+## GF v3.5.1 p.14 Tough(X): wounds keep landing on the tough model with the MOST wounds until it dies.
+## Maintainer test game 21.09.: three Tough(3) mortars took 4 then 2 wounds and still stood at 2/3 — the
+## second volley restarted on a fresh outermost body. The already-wounded body must lead the order, even
+## when central.
+func test_casualty_order_puts_the_already_wounded_tough_body_first() -> void:
+	var u := _unit(2, [Vector3(-0.30, 0, 0), Vector3(0, 0, 0), Vector3(0.30, 0, 0)])
+	for m in u.models:
+		m.wounds_max = 3
+		m.wounds_current = 3
+		m.properties["weapons"] = [{"name": "Mortar"}]
+	u.models[1].wounds_current = 1   # the CENTRAL body took two wounds from the last volley
+	var order := SoloController.casualty_order(u)
+	assert_int(int(order[0])).is_equal(1)
+	# A second volley of 3 finishes that body (1 left) and puts the other 2 on ONE next body — never spread.
+	var left := SoloController.apply_wounds_to_models(u, 3, Callable(), Callable())
+	assert_int(left).is_equal(0)
+	assert_bool(u.models[1].is_alive).is_false()
+	var wounded := 0
+	for i in [0, 2]:
+		if u.models[i].wounds_current < 3:
+			wounded += 1
+	assert_int(wounded).is_equal(1)
 
 
 # === P2: Regroup mandatory action — a casualty-torn unit gathers (GF v3.5.1 p.7) ===
