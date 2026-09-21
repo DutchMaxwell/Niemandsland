@@ -132,6 +132,10 @@ static var large_zone_search := true
 ## flag on GameUnit), so against a human the term is a no-op today.
 static var deploy_threat_in := 0.0
 static var deploy_threat_seat := 0
+## `deploy_threat_preset` (NML_DEPLOY_THREAT_PRESET): when set, the term applies only to the slot
+## whose arena preset (NML_AI_P<slot>) has that name — the paired A/B "planner_v0 + term vs tree"
+## on both seat orders without the seat confound.
+static var deploy_threat_preset := ""
 static var _dt_env := -1
 ## A completed move that displaced the unit less than this counts as BOXED for the reposition fallback
 ## and the plausibility metric ("no large model idles >2 activations unless surrounded").
@@ -11219,10 +11223,13 @@ func _deploy_threat_cb(unit: GameUnit) -> Callable:
 		var se := OS.get_environment("NML_DEPLOY_THREAT_SEAT")
 		if se.is_valid_int():
 			deploy_threat_seat = int(se)
+		deploy_threat_preset = OS.get_environment("NML_DEPLOY_THREAT_PRESET")
 	if deploy_threat_in <= 0.0 or unit == null or army_manager == null:
 		return Callable()
 	var slot := int(unit.unit_properties.get("player_id", 0))
 	if deploy_threat_seat != 0 and deploy_threat_seat != slot:
+		return Callable()
+	if deploy_threat_preset != "" and OS.get_environment("NML_AI_P%d" % slot) != deploy_threat_preset:
 		return Callable()
 	var envelopes: Array = []   # [positions: Array[Vector2], reach_m: float]
 	for gu in army_manager.game_units.values():
