@@ -84,8 +84,37 @@ const FROZEN_TUNDRA := {
 }
 
 
+const VOLCANIC_ASH := {
+	"name": "volcanic_ash",
+	"biome": "volcanic_ash",
+	"desert_mode": false,
+	"volcanic_mode": true,
+	"textures": {
+		"meadow": "res://assets/terrain/reference/volcanic/fine-ash.webp",
+		"earth": "res://assets/terrain/reference/volcanic/cooled-lava.webp",
+		"woodland": "res://assets/terrain/reference/volcanic/porous-basalt.webp",
+	},
+	"understory": "volcanic",
+	"forests": false,
+	"dust": false,
+	"fog_color": Color(0.44,0.43,0.41),
+	"fog_density": 1.4,
+	"sun_energy": 2.25,
+	"sun_color_day": Color(1.0,0.94,0.86),
+	"sun_color_sunset": Color(1.0,0.75,0.52),
+	"sun_angles_day": Vector2(-58.0,36.0),
+	"sun_angles_sunset": Vector2(-40.0,22.0),
+	"ambient_energy": 0.40,
+	"ambient_color": Color(0.76,0.81,0.89),
+	"fill_energy": 0.34,
+	"fill_color": Color(0.87,0.91,0.97),
+	"saturation": 0.84,
+}
+
+
 static func get_profile(biome_name: String) -> Dictionary:
 	match biome_name:
 		"arid_desert": return ARID_DESERT
 		"frozen_tundra": return FROZEN_TUNDRA
+		"volcanic_ash": return VOLCANIC_ASH
 		_: return GRASSLAND

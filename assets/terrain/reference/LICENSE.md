@@ -1,7 +1,7 @@
-# Grassland reference visual assets
+# Biome reference visual assets
 
 The reference textures and the generated tree/rock models referenced by
-`hero/*.json` and `forest/*.json` are original Niemandsland visual assets, released under
+`hero/*.json`, `forest/*.json` and `volcanic/charred-tree.json` are original Niemandsland visual assets, released under
 **CC BY-SA 4.0**: https://creativecommons.org/licenses/by-sa/4.0/
 
 Attribution: Niemandsland Contributors.
@@ -37,3 +37,14 @@ Niemandsland Contributors attribution. No reference artwork was supplied.
 The individual manifests in `forest/` contain source prompts, image hashes,
 conditioning records, seeds and export parameters. Runtime crown variation,
 wind, snow shading and decorative placement are original MIT-licensed code.
+
+## Volcanic sources (2026-09-21)
+
+The three albedos in `volcanic/` and the charred-tree image/model use the same
+CC BY-SA 4.0 terms and Niemandsland Contributors attribution. Original text-only
+NanoBanana sources; no reference images. The tree uses the established explicit
+alpha conditioning and TRELLIS.2 reconstruction pipeline. Exact prompts and
+hashes are in `volcanic/provenance.json` and `volcanic/charred-tree.json`.
+Ash scatter, crater materials, local heat refraction and moving ash are original
+MIT-licensed code. Existing volcanic pillars, masonry and hazards retain their
+original source notices.

@@ -1,6 +1,6 @@
 extends Node3D
 ## Reference-only woody vegetation. Rule anchors, forest areas and colliders stay intact.
-## Existing spruces/cacti mix with original reconstructed pine/acacia sources.
+## Native terrain mixes with original reconstructed pine, acacia and burnt wood.
 
 const Materials = preload("res://scripts/visual/reference_materials.gd")
 const PROP_SHADER = preload("res://shaders/visual/reference_woody_prop.gdshader")
@@ -23,7 +23,11 @@ func prepare(biome: String) -> void:
 	_biome = biome
 	_rng.seed = 210921
 	var kind := "open-pine" if biome == "frozen_tundra" else "dry-acacia"
-	var path := "res://assets/terrain/reference/forest/" + kind + ".json"
+	var folder := "forest"
+	if biome == "volcanic_ash":
+		kind = "charred-tree"
+		folder = "volcanic"
+	var path := "res://assets/terrain/reference/" + folder + "/" + kind + ".json"
 	if not FileAccess.file_exists(path):
 		return
 	var entry: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -102,7 +106,7 @@ func apply(main: Node,presentation: Node3D) -> void:
 
 func _instance(source_index: int,variant: int,height: float,base_y: float) -> Node3D:
 	var winter := _biome == "frozen_tundra"
-	var prefix := "tundra_" if winter else "desert_"
+	var prefix := "volcanic_" if _biome == "volcanic_ash" else ("tundra_" if winter else "desert_")
 	var use_hero := source_index == 2 and _hero != null
 	# Without the new pine, use an existing open spruce instead of the snow-pillow tree.
 	var native_index := mini(source_index,1) if winter else source_index
@@ -117,7 +121,7 @@ func _instance(source_index: int,variant: int,height: float,base_y: float) -> No
 			root.free()
 			return null
 		# Cacti stay rigid. Wood sways above the fixed trunk and carries sparse snow.
-		_shade(root,variant,winter or use_hero,0.90 if winter and use_hero else 0.0)
+		_shade(root,variant,(winter or use_hero) and _biome != "volcanic_ash",0.90 if winter and use_hero else 0.0)
 		_own(root,root)
 		var packed := PackedScene.new()
 		packed.pack(root)
@@ -173,7 +177,7 @@ func _inside_forest(p: Vector2) -> bool:
 
 func _dress_groups() -> int:
 	var count := 0
-	var prefix := "tundra_" if _biome == "frozen_tundra" else "desert_"
+	var prefix := "volcanic_" if _biome == "volcanic_ash" else ("tundra_" if _biome == "frozen_tundra" else "desert_")
 	for group in get_tree().get_nodes_in_group("terrain_group_base"):
 		if group.prop_kind != TerrainGroupBase.KIND_FOREST or group.biome_prefix != prefix:
 			continue
@@ -260,6 +264,7 @@ func _shade(node: Node,variant: int,wind: bool,snow: float) -> void:
 			material.set_shader_parameter("crown_lean",Vector2(sin(float(variant)*2.3),cos(float(variant)*1.7))*0.025)
 			material.set_shader_parameter("wind_amount",0.006 if wind else 0.0)
 			material.set_shader_parameter("snow_amount",snow)
+			material.set_shader_parameter("charred",_biome == "volcanic_ash")
 			node.set_surface_override_material(surface,material)
 		# Vertex sway/variation may reach outside the source mesh's original bounds.
 		node.custom_aabb = box.grow(box.size.length()*0.12)

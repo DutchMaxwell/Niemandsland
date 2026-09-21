@@ -2,7 +2,7 @@ extends SceneTree
 ## Reproducible forest review on the bundled tutorial board. Run on a real display:
 ## godot --path . -s res://test/manual/biome_reference_capture.gd -- <output_directory>
 ## Use isolated XDG_DATA_HOME / XDG_CONFIG_HOME directories with populated asset caches.
-## Animated atmosphere is hidden in both revisions to isolate the forest comparison.
+## General scene atmosphere is hidden; reference-local effects remain visible.
 
 var _output: String
 var _presentation: Node3D = null
@@ -95,7 +95,7 @@ func _run() -> void:
 		"quality": "Reference studio" if args.has("studio") else "Medium",
 		"biome": biome, "baseline_battlemap": baseline_battlemap,
 		"internal_scale": root.scaling_3d_scale, "board": "assets/tutorial/tutorial_board.nml",
-		"animated_atmosphere": false, "samples": []}
+		"animated_atmosphere": false, "reference_effects": _presentation != null, "samples": []}
 	var moods: Array = ["Day"]
 	if args.has("sunset"):
 		moods = ["Sunset"]
@@ -200,12 +200,13 @@ func _run() -> void:
 			puddles.visible = true
 		Engine.time_scale = 1.0
 		print("REFERENCE_EFFECTS_DONE")
-	if args.has("wind") and _presentation != null:
-		var frame_directory := _output.path_join("wind_frames")
+	if (args.has("wind") or args.has("atmosphere")) and _presentation != null:
+		var atmosphere := args.has("atmosphere")
+		var frame_directory := _output.path_join("atmosphere_frames" if atmosphere else "wind_frames")
 		DirAccess.make_dir_recursive_absolute(frame_directory)
 		camera.global_position = Vector3(-0.50,0.17,0.69)
 		camera.look_at(Vector3(-0.61,0.025,0.39))
-		# Advance the sand clock by exactly 1/30 second per output frame. Image-save
+		# Advance the effect clock by exactly 1/30 second per output frame. Image-save
 		# latency must not accelerate a shader effect in the exported review clip.
 		_presentation.set_process(false)
 		for frame in 240:
@@ -215,8 +216,8 @@ func _run() -> void:
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_jpg(frame_directory.path_join("%04d.jpg"%frame),0.95)
 		_presentation.set_process(true)
-		report["wind_clip"] = {"fps":30,"frames":240,"start_seconds":6.0,"fixed_camera":true,"fixed_sand_step":true}
-		print("REFERENCE_WIND_DONE")
+		report["atmosphere_clip" if atmosphere else "wind_clip"] = {"fps":30,"frames":240,"start_seconds":6.0,"fixed_camera":true,"fixed_effect_step":true}
+		print("REFERENCE_ATMOSPHERE_DONE" if atmosphere else "REFERENCE_WIND_DONE")
 	if args.has("flight"):
 		var frame_directory := _output.path_join("flight_frames")
 		DirAccess.make_dir_recursive_absolute(frame_directory)
@@ -240,7 +241,12 @@ func _run() -> void:
 	if args.has("orbit"):
 		var frame_directory := _output.path_join("flight_frames")
 		DirAccess.make_dir_recursive_absolute(frame_directory)
+		if _presentation != null:
+			_presentation.set_process(false)
 		for frame in 240:
+			if _presentation != null:
+				_presentation._wind_time = 6.0 + float(frame)/30.0
+				_presentation._process(0.0)
 			var t := float(frame)/239.0
 			var eased := t*t*(3.0-2.0*t)
 			camera.global_position = Vector3(-0.61,0.16,0.68).lerp(Vector3(-0.40,0.19,0.60),eased)
@@ -248,6 +254,9 @@ func _run() -> void:
 			await process_frame
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_jpg(frame_directory.path_join("%04d.jpg"%frame),0.95)
+		if _presentation != null:
+			_presentation.set_process(true)
+		report["orbit_clip"] = {"fps":30,"frames":240,"start_seconds":6.0,"fixed_effect_step":_presentation != null}
 		print("REFERENCE_FLIGHT_DONE")
 	main.get_node("UI").visible = true
 	for _i in 30:

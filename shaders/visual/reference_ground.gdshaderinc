@@ -8,6 +8,7 @@ uniform int wall_count=0;
 uniform vec4 wall_regions[64];
 uniform bool desert_mode = false;
 uniform bool tundra_mode = false;
+uniform bool volcanic_mode = false;
 uniform float wind_time = 0.0;
 uniform int drift_count = 0;
 uniform vec4 drift_points[32];
@@ -121,7 +122,23 @@ vec3 tundra_sample(vec2 p) {
 	float contact = woody_contact(p);
 	return mix(exposed*mix(1.0,0.84,contact),snow,tundra_snow(p)*(1.0-contact*0.85));
 }
+// Broad cooled flows interrupted by softer wind-settled ash, never new lava hazards.
+float volcanic_crust(vec2 p) {
+	vec2 warp = vec2(surface_noise(p*3.7),surface_noise(p*3.7+17.0))-vec2(0.5);
+	return smoothstep(0.37,0.68,surface_noise(p*4.5+warp*1.4));
+}
+vec3 volcanic_sample(vec2 p) {
+	vec3 ash = tiled_surface(meadow_tex,p*5.0)*vec3(0.92,0.94,0.98);
+	vec3 lava = tiled_surface(earth_tex,p*6.0)*vec3(0.87,0.90,0.96);
+	vec3 chips = tiled_surface(woodland_tex,p*7.5);
+	float crust = volcanic_crust(p);
+	vec3 base = mix(ash,lava,crust*0.90);
+	float rubble = smoothstep(0.57,0.79,surface_noise(p*13.0));
+	base = mix(base,chips,rubble*0.45+woody_contact(p)*0.25);
+	return base*mix(1.0,0.82,woody_contact(p));
+}
 vec3 ground_sample(vec2 p) {
+	if (volcanic_mode) { return volcanic_sample(p); }
 	if (tundra_mode) { return tundra_sample(p); }
 	if (desert_mode) { return desert_sample(p); }
 	vec2 uv_earth = p * 2.2;

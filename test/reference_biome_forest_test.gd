@@ -23,7 +23,7 @@ class PresentationFixture extends Node3D:
 
 
 func test_movable_forest_keeps_saved_members_and_colliders() -> void:
-	for biome in ["frozen_tundra", "arid_desert"]:
+	for biome in ["frozen_tundra", "arid_desert", "volcanic_ash"]:
 		var main: MainFixture = auto_free(MainFixture.new())
 		var overlay: OverlayFixture = auto_free(OverlayFixture.new())
 		main.terrain_overlay = overlay
@@ -51,7 +51,7 @@ func test_movable_forest_keeps_saved_members_and_colliders() -> void:
 		group.configure("forest_large", TerrainGroupBase.KIND_FOREST, Vector2(12, 10))
 		add_child(group)
 		group.build(12345, null)
-		group.biome_prefix = "tundra_" if biome == "frozen_tundra" else "desert_"
+		group.biome_prefix = "volcanic_" if biome == "volcanic_ash" else ("tundra_" if biome == "frozen_tundra" else "desert_")
 		group.position = Vector3(0.4, 0.02, -0.3)
 		group.rotation.y = 0.7
 		var saved := group.member_states().duplicate(true)

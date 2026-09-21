@@ -152,6 +152,32 @@ func build_desert(presentation: Node3D,main: Node,size: Vector2) -> void:
 	print("REFERENCE_DESERT stones=",stone_transforms.size())
 
 
+## Angular cinders settle on cool ground, with quiet areas around the miniatures.
+func build_volcanic(presentation: Node3D,main: Node,size: Vector2) -> void:
+	_presentation = presentation
+	_rng.seed = 21926
+	_walls = main.terrain_overlay.get_wall_segments_world()
+	for obj in main.object_manager.get_children():
+		if obj is Node3D and obj.is_in_group("selectable"):
+			_exclusions.append(Vector3(obj.global_position.x,obj.global_position.z,0.025))
+	var stones: Array[Transform3D] = []
+	var colors: Array[Color] = []
+	for i in int(size.x*size.y*10500):
+		var p := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
+		if _excluded(p):
+			continue
+		var patch := ReferenceMaterials._noise2(p*19.0)
+		var density := 0.10+smoothstep(0.48,0.76,patch)*0.22
+		if _rng.randf()>density:
+			continue
+		var s := _rng.randf_range(0.0008,0.0036)
+		var basis := Basis.from_euler(Vector3(_rng.randf()*0.4,_rng.randf()*TAU,_rng.randf()*0.3)).scaled(Vector3(s,s*_rng.randf_range(0.25,0.55),s))
+		stones.append(Transform3D(basis,Vector3(p.x,ReferenceMaterials.ground_height(p)+s*0.12,p.y)))
+		colors.append(Color(0.12,0.13,0.15).lerp(Color(0.40,0.38,0.35),_rng.randf()).srgb_to_linear())
+	_multimesh("VolcanicCinders",_stone_mesh(),stones,colors)
+	print("REFERENCE_VOLCANIC_CINDERS ",stones.size())
+
+
 ## Dormant stalks and frost-weathered grit only emerge through exposed soil.
 func build_tundra(presentation: Node3D,main: Node,size: Vector2) -> void:
 	_presentation = presentation

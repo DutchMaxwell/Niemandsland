@@ -11,6 +11,7 @@ uniform float crown_width = 1.0;
 uniform vec2 crown_lean = vec2(0.0);
 uniform float wind_amount = 0.004;
 uniform float snow_amount = 0.0;
+uniform bool charred = false;
 varying vec3 tree_position;
 
 float patch(vec3 p) {
@@ -34,6 +35,10 @@ void fragment() {
 	float broken_cover = smoothstep(0.28,0.74,patch(tree_position * 2.4));
 	float snow = smoothstep(0.20,0.72,up) * broken_cover * snow_amount;
 	ALBEDO = mix(sample_color.rgb,vec3(0.72,0.79,0.85),snow);
+	if (charred) {
+		float grey = dot(sample_color.rgb,vec3(0.3,0.5,0.2));
+		ALBEDO = mix(vec3(grey)*vec3(0.49,0.51,0.55),vec3(0.16,0.15,0.14),smoothstep(0.30,0.85,up)*broken_cover*0.60);
+	}
 	ROUGHNESS = mix(0.89,0.97,snow);
 	SPECULAR = 0.18;
 	if (has_normal) {

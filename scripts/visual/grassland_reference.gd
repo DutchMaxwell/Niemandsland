@@ -14,6 +14,7 @@ var _tree_points := PackedVector2Array()
 var _angles := PackedFloat32Array()
 var _props: Node3D
 var _biome_forest: Node3D
+var _volcanic: Node3D
 var _previous_viewport: Dictionary = {}
 var _current_mood := "Day"
 var _fog: FogVolume
@@ -35,7 +36,7 @@ func prepare() -> void:
 	_props = preload("res://scripts/visual/reference_props.gd").new()
 	add_child(_props)
 	await _props.prepare()
-	if biome in ["frozen_tundra","arid_desert"]:
+	if biome in ["frozen_tundra","arid_desert","volcanic_ash"]:
 		_biome_forest = preload("res://scripts/visual/reference_biome_forest.gd").new()
 		add_child(_biome_forest)
 		await _biome_forest.prepare(biome)
@@ -58,6 +59,7 @@ func apply(main: Node) -> void:
 		_ground.set_shader_parameter(texture_name + "_tex",ReferenceMaterials.texture(_profile["textures"][texture_name]))
 	_ground.set_shader_parameter("desert_mode",_profile["desert_mode"])
 	_ground.set_shader_parameter("tundra_mode",_profile.get("tundra_mode",false))
+	_ground.set_shader_parameter("volcanic_mode",_profile.get("volcanic_mode",false))
 	var surface: MeshInstance3D = table.get_node("TableMesh")
 	var plane: PlaneMesh = surface.mesh.duplicate()
 	plane.subdivide_width = 450
@@ -73,6 +75,7 @@ func apply(main: Node) -> void:
 		_base.set_shader_parameter(texture_name + "_tex",_ground.get_shader_parameter(texture_name + "_tex"))
 	_base.set_shader_parameter("desert_mode",_profile["desert_mode"])
 	_base.set_shader_parameter("tundra_mode",_profile.get("tundra_mode",false))
+	_base.set_shader_parameter("volcanic_mode",_profile.get("volcanic_mode",false))
 	var frame := StandardMaterial3D.new()
 	frame.albedo_color = Color(0.022,0.026,0.023)
 	frame.roughness = 0.86
@@ -87,7 +90,7 @@ func apply(main: Node) -> void:
 		_biome_forest.apply(main,self)
 	_wall_top = overlay.WALL_HEIGHT_INCHES * overlay.INCHES_TO_METERS
 	# Retain the tundra's snow-covered masonry instead of applying damp green moss.
-	if not _profile.get("tundra_mode",false):
+	if not _profile.get("tundra_mode",false) and not _profile.get("volcanic_mode",false):
 		_dress_decals()
 		for wall in overlay._wall_instances:
 			_weather_ruin(wall)
@@ -125,12 +128,18 @@ func apply(main: Node) -> void:
 	add_child(understory)
 	if _profile["understory"] == "desert":
 		understory.build_desert(self,main,table.table_size * 0.3048)
+	elif _profile["understory"] == "volcanic":
+		understory.build_volcanic(self,main,table.table_size * 0.3048)
 	elif _profile["understory"] == "tundra":
 		understory.build_tundra(self,main,table.table_size * 0.3048)
 	else:
 		understory.build(self,main,table.table_size * 0.3048)
-	if _props != null:
+	if _props != null and not _profile.get("volcanic_mode",false):
 		_props.dress(self,table.table_size*0.3048)
+	if _profile.get("volcanic_mode",false):
+		_volcanic = preload("res://scripts/visual/reference_volcanic.gd").new()
+		add_child(_volcanic)
+		_volcanic.build(main,self)
 	_build_fog(main)
 	if _profile["dust"]:
 		_build_dust(main)
@@ -297,10 +306,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	if not _dust.is_empty():
+	if not _dust.is_empty() or _volcanic != null:
 		_wind_time += delta
 		for streams in _dust:
 			streams.material_override.set_shader_parameter("time",_wind_time)
+	if _volcanic != null:
+		_volcanic.set_time(_wind_time)
 	if _ground != null:
 		_ground.set_shader_parameter("wind_time",_wind_time)
 	if _base != null:
