@@ -1440,7 +1440,7 @@ func test_deploy_coherency_repair_respects_zone_and_table_edge() -> void:
 	var blocked := func(_p: Vector2) -> bool: return false
 	var models: Array = ai.get_alive_models()
 	var base_r: float = SeparationChecker.DEFAULT_BASE_RADIUS_M   # no explicit shapes -> 32 mm fallback
-	var limit: float = 0.6096 - (base_r + INCHES_TO_METERS)   # >= base_r + 1" from every table edge
+	var limit: float = 0.6096 - (base_r + S.INCHES_TO_METERS)   # >= base_r + 1" from every table edge
 	var s: ModelInstance = models[2]
 
 	# Today's path (switch OFF): the repair still heals the tear, but the straggler may land
