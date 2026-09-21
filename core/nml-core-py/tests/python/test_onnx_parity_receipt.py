@@ -21,7 +21,7 @@ REPO = Path(__file__).resolve().parents[4]
 FIXTURES = REPO / "core" / "nml-core-godot" / "tests" / "fixtures" / "onnx"
 RECEIPT = FIXTURES / "parity_pinned_10238.json"
 ONNX = FIXTURES / "standin-v2x2.onnx"
-GOLDEN = FIXTURES / "golden_standin-v2x2.json"
+GOLDEN = FIXTURES / "parity_base_standin-v2x2.json"   # the FROZEN 11.09. golden = the parity corpus base (golden_standin-v2x2.json tracks the core tokens since 21.09.)
 MAX_FIXTURE_BYTES = 2_000_000
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -47,7 +47,7 @@ def test_parity_receipt_contract():
     count = corpus["count"]
     assert count >= 10_000, count
     assert corpus["seed"] == gen.SEED
-    assert corpus["base_fixture"] == "golden_standin-v2x2.json"
+    assert corpus["base_fixture"] == "parity_base_standin-v2x2.json"
     assert corpus["base_leaves"] == 60
     assert corpus["spec"] == gen.SPEC
 
