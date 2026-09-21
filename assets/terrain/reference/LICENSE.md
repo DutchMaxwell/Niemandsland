@@ -1,7 +1,7 @@
 # Grassland reference visual assets
 
 The reference textures and the generated tree/rock models referenced by
-`hero/*.json` are original Niemandsland visual assets, released under
+`hero/*.json` and `forest/*.json` are original Niemandsland visual assets, released under
 **CC BY-SA 4.0**: https://creativecommons.org/licenses/by-sa/4.0/
 
 Attribution: Niemandsland Contributors.
@@ -28,3 +28,12 @@ remain separate from this project asset license; see `THIRD_PARTY.md`.
 
 Procedural geometry and shaders are original project code under MIT.
 Existing miniature and terrain assets retain their existing notices.
+
+## Tundra/desert forest sources (2026-09-21)
+
+The forest image sources and reconstructed models are original text-only
+NanoBanana / TRELLIS.2 outputs under the same CC BY-SA 4.0 asset terms and
+Niemandsland Contributors attribution. No reference artwork was supplied.
+The individual manifests in `forest/` contain source prompts, image hashes,
+conditioning records, seeds and export parameters. Runtime crown variation,
+wind, snow shading and decorative placement are original MIT-licensed code.

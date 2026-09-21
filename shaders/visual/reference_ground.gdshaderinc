@@ -11,6 +11,13 @@ uniform bool tundra_mode = false;
 uniform float wind_time = 0.0;
 uniform int drift_count = 0;
 uniform vec4 drift_points[32];
+uniform bool woody_ground_enabled = false;
+uniform sampler2D woody_ground_mask : filter_linear_mipmap, repeat_disable;
+uniform vec2 woody_board_size = vec2(1.8288,1.2192);
+
+float woody_contact(vec2 p) {
+	return woody_ground_enabled ? texture(woody_ground_mask,p/woody_board_size+vec2(0.5)).r : 0.0;
+}
 
 // Integer hashing keeps neighboring cells identical across GPU optimizations.
 float surface_hash(vec2 p) {
@@ -73,12 +80,7 @@ vec3 desert_sample(vec2 p) {
 	vec3 col = mix(sand, crack, crack_mask * 0.80);
 	col = mix(col, scree, scree_mask * 0.50);
 	col *= mix(0.93, 1.07, ripple);
-	// Saltation: fine wind-scrolled grain streaks drawn on the sand itself, so the
-	// surface reads as moving even where the translucent veil is thin.
-	float streak = surface_noise(p * vec2(11.0,3.4) - vec2(wind_time * 1.1,wind_time * 0.12));
-	col *= mix(0.95, 1.07, streak);
-	float grains = surface_noise(p * vec2(72.0,22.0) - vec2(wind_time * 3.6,wind_time * 0.5));
-	col *= mix(0.96, 1.05, grains * grains);
+	// The surface stays stationary; separate low ribbons carry airborne sand.
 	float broad = surface_noise(p * 7.0);
 	col = mix(col, col * vec3(1.05, 1.00, 0.90), broad * 0.5);
 	float foot = 0.0;
@@ -93,6 +95,8 @@ vec3 desert_sample(vec2 p) {
 	// Clean, brighter sand where the wind piles it up against a wall or a prop; broken
 	// with fine noise so the mound does not read as a smooth white dome.
 	col = mix(col, sand * vec3(1.12,1.05,0.93), drift_mask(p) * (0.45 + 0.35 * surface_noise(p * 46.0)));
+	// Grit and dry organic material gather at the woody vegetation's feet.
+	col = mix(col,scree*vec3(0.86,0.82,0.73),woody_contact(p)*0.62);
 	// Warm the pale sand toward a real desert tan; the raw texture is almost white
 	// and the bright sun bleached it further.
 	return col * vec3(0.92, 0.78, 0.56);
@@ -113,7 +117,9 @@ vec3 tundra_sample(vec2 p) {
 	vec3 exposed = mix(soil,ice,smoothstep(0.54,0.74,surface_noise(p * 8.0 + vec2(19.0,7.0))));
 	float crust = surface_noise(p * 140.0);
 	snow *= mix(0.87,1.0,crust) * vec3(0.86,0.91,0.96);
-	return mix(exposed,snow,tundra_snow(p));
+	// Sheltered soil and needle duff interrupt the snow directly below each crown.
+	float contact = woody_contact(p);
+	return mix(exposed*mix(1.0,0.84,contact),snow,tundra_snow(p)*(1.0-contact*0.85));
 }
 vec3 ground_sample(vec2 p) {
 	if (tundra_mode) { return tundra_sample(p); }

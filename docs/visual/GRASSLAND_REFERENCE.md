@@ -153,7 +153,57 @@ is an intentional part of the reference change. This correction affects new
 biome captures only; older published comparisons retain their original evidence.
 
 The reference remains opt-in, with no live rebuild on biome edits or miniature
-movement. Snow does not accumulate dynamically, and the existing trees are
-reused without new tundra-specific wind animation. Forward+ is the reviewed
+movement. Snow does not accumulate dynamically. Forward+ is the reviewed
 renderer; browser/Compatibility calibration and production adoption remain
 separate work.
+
+## Tundra and desert forest refinement
+
+The reference-only `reference_biome_forest.gd` helper dresses initial tundra and
+desert forests. Grassland keeps its completed treatment. Tundra combines the
+existing snow-covered spruces with a new open pine, small young spruces and
+patchy upward-facing snow. Desert retains both native cactus variants and
+adds an original sparse acacia crown and small young shrubs. Crown width, lean and slow upper-branch sway
+vary deterministically; cacti remain rigid.
+
+Original grid anchors remain in place. Small young trees stay inside existing
+forest cells or forest-group ellipses and avoid the initial miniature and wall
+positions. A small baked mask darkens ground contact and breaks tundra snow
+around fixed trees; it affects the ground and the shared miniature base-top
+projection. Movable groups keep decoration as unmarked children, preserving
+saved member transforms and selection colliders. Their contact treatment is
+not baked onto the board, so dragging them leaves no old tree-shaped stain.
+
+The original generated model sources use the established text-only NanoBanana
+and explicit-alpha TRELLIS.2 pipeline. `assets/terrain/reference/forest/*.json`
+records prompts, conditioning hashes, seeds, export settings and immutable CDN
+GLB hashes. Model binaries stay outside Git. Shader overrides belong to the
+reference instances and do not modify shared source mesh materials.
+
+Comparison against the preceding reference at `99894218`, with unchanged
+lighting and cameras:
+https://forge.niemandsland.xyz/static/forest-quality-2026-09-21/index.html
+
+This remains initial-scene dressing: forest edits, new groups, biome switches
+and moved-miniature clearings require reloading the reference. Existing dressed
+groups carry their visuals when moved, but young growth is not re-evaluated
+against units after a drag. Dynamic snow accumulation, LODs and browser-renderer
+calibration remain separate work. The opaque woody shader is intended for the
+reconstructed textured meshes; native untextured fallbacks retain their material.
+
+## Local desert sand streams
+
+Desert wind uses one decorative mesh of narrow, curved ribbons following the
+actual vertex relief and drift mounds. Placement checks the ribbon path against
+the initial miniature and wall clearings, and confines it to the board. The
+shader receives scene lighting and the existing sand albedo; independently
+phased gust envelopes and moving grain filaments create quiet gaps. The previous
+two board-wide unshaded sheets and scrolling ground-colour noise are removed.
+Grassland and tundra do not instantiate these streams.
+
+Use capture option `wind` for a fixed-camera 240-frame comparison. Its explicit
+sand clock advances at 1/30 second per image, independent of image-save latency.
+This isolates motion quality from the orbit camera and avoids accidentally
+accelerating the effect during offline playback. The before clip uses the same
+new trees with the old sand treatment. Decorative sand paths are baked for the
+initial board; terrain edits or moved units require reloading the reference.

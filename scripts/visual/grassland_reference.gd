@@ -13,6 +13,7 @@ var _regions := PackedVector4Array()
 var _tree_points := PackedVector2Array()
 var _angles := PackedFloat32Array()
 var _props: Node3D
+var _biome_forest: Node3D
 var _previous_viewport: Dictionary = {}
 var _current_mood := "Day"
 var _fog: FogVolume
@@ -34,6 +35,10 @@ func prepare() -> void:
 	_props = preload("res://scripts/visual/reference_props.gd").new()
 	add_child(_props)
 	await _props.prepare()
+	if biome in ["frozen_tundra","arid_desert"]:
+		_biome_forest = preload("res://scripts/visual/reference_biome_forest.gd").new()
+		add_child(_biome_forest)
+		await _biome_forest.prepare(biome)
 
 
 func apply(main: Node) -> void:
@@ -78,6 +83,8 @@ func apply(main: Node) -> void:
 	if _profile["forests"]:
 		_dress_grid_forest(overlay)
 		_dress_movable_forests()
+	if _biome_forest != null:
+		_biome_forest.apply(main,self)
 	_wall_top = overlay.WALL_HEIGHT_INCHES * overlay.INCHES_TO_METERS
 	# Retain the tundra's snow-covered masonry instead of applying damp green moss.
 	if not _profile.get("tundra_mode",false):
@@ -171,40 +178,14 @@ func _build_fog(main: Node) -> void:
 	_fog = volume
 
 
-## Wind-blown sand, built the way it actually reads: not camera-facing puffs (which
-## show as floating ovals) but two flat translucent sheets lying just above the sand,
-## their fbm noise scrolled along the wind and stretched into streaks. Confined to the
-## board, so nothing hangs in the black studio behind it.
+## Local, terrain-following sand streams with separate gust phases.
 func _build_dust(main: Node) -> void:
 	var table: Node3D = main.get_node("Table")
 	var surface: MeshInstance3D = main.get_node("Table/TableMesh")
 	var size: Vector2 = table.table_size * 0.3048
-	var veil_shader := preload("res://shaders/visual/reference_sand_veil.gdshader")
-	var layers := [
-		{"height": 0.004, "scale": 2.6, "speed": 0.10, "opacity": 0.50},
-		{"height": 0.009, "scale": 5.5, "speed": 0.17, "opacity": 0.28},
-	]
-	for layer in layers:
-		var plane := PlaneMesh.new()
-		plane.size = size
-		plane.subdivide_width = 8
-		plane.subdivide_depth = 8
-		var mat := ShaderMaterial.new()
-		mat.shader = veil_shader
-		mat.set_shader_parameter("tint",Color(0.90,0.79,0.58))
-		mat.set_shader_parameter("wind_speed",layer["speed"])
-		mat.set_shader_parameter("noise_scale",layer["scale"])
-		mat.set_shader_parameter("opacity",layer["opacity"])
-		mat.set_shader_parameter("time",0.0)
-		mat.set_shader_parameter("gust",1.0)
-		var veil := MeshInstance3D.new()
-		veil.name = "SandVeil"
-		veil.mesh = plane
-		veil.material_override = mat
-		veil.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		veil.position = Vector3(0.0,layer["height"],0.0)
-		surface.add_child(veil)
-		_dust.append(veil)
+	var streams := preload("res://scripts/visual/reference_sand_streams.gd").build(main,_ground,size)
+	surface.add_child(streams)
+	_dust.append(streams)
 
 
 func apply_lighting(mood: String) -> void:
@@ -318,11 +299,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if not _dust.is_empty():
 		_wind_time += delta
-		# Gusts: the veil thickens and thins so the sand comes in waves, not a constant fog.
-		var gust := 0.55 + 0.9 * (0.5 + 0.5 * sin(_wind_time * 0.23) * sin(_wind_time * 0.071 + 1.7))
-		for veil in _dust:
-			veil.material_override.set_shader_parameter("time",_wind_time)
-			veil.material_override.set_shader_parameter("gust",gust)
+		for streams in _dust:
+			streams.material_override.set_shader_parameter("time",_wind_time)
 	if _ground != null:
 		_ground.set_shader_parameter("wind_time",_wind_time)
 	if _base != null:

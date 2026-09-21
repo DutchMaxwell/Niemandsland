@@ -200,6 +200,23 @@ func _run() -> void:
 			puddles.visible = true
 		Engine.time_scale = 1.0
 		print("REFERENCE_EFFECTS_DONE")
+	if args.has("wind") and _presentation != null:
+		var frame_directory := _output.path_join("wind_frames")
+		DirAccess.make_dir_recursive_absolute(frame_directory)
+		camera.global_position = Vector3(-0.50,0.17,0.69)
+		camera.look_at(Vector3(-0.61,0.025,0.39))
+		# Advance the sand clock by exactly 1/30 second per output frame. Image-save
+		# latency must not accelerate a shader effect in the exported review clip.
+		_presentation.set_process(false)
+		for frame in 240:
+			_presentation._wind_time = 6.0 + float(frame)/30.0
+			_presentation._process(0.0)
+			await process_frame
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_jpg(frame_directory.path_join("%04d.jpg"%frame),0.95)
+		_presentation.set_process(true)
+		report["wind_clip"] = {"fps":30,"frames":240,"start_seconds":6.0,"fixed_camera":true,"fixed_sand_step":true}
+		print("REFERENCE_WIND_DONE")
 	if args.has("flight"):
 		var frame_directory := _output.path_join("flight_frames")
 		DirAccess.make_dir_recursive_absolute(frame_directory)
