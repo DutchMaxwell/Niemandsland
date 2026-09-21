@@ -50,6 +50,7 @@
         Terrain::build(&plain)
     }
 
+    mod deploy_exit;
     mod reinforcement;
     mod spawn;
     mod vanguard_free;
