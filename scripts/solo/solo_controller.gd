@@ -117,6 +117,11 @@ const AIRCRAFT_HEADINGS := 16
 ## it gets the boxed-reposition fallback and, at high coordination grades, activates before smaller
 ## friends fill the lanes. A planning convention, not a rule value.
 const LARGE_BASE_RADIUS_IN := 1.5
+## DEPLOYLARGE: when a LARGE base's section-confined deploy spot lands more than this far behind the
+## zone's forward edge while the switch is on, ONE extra whole-zone search takes a nearer forward
+## spot from a neighbour section (static test switch: false = byte-identical to today).
+const LARGE_ZONE_SPOT_BEHIND_M := 0.1524   # 6"
+static var large_zone_search := true
 ## A completed move that displaced the unit less than this counts as BOXED for the reposition fallback
 ## and the plausibility metric ("no large model idles >2 activations unless surrounded").
 const BOXED_ACHIEVED_IN := 1.0
@@ -9700,6 +9705,19 @@ func _deploy_place_id(id: int) -> GameUnit:
 				or (terrain_only.is_valid() and bool(terrain_only.call(p)))
 	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
 	var spot_why := "best legal spot toward nearest objective (section, forward-edge doctrine)"
+	# DEPLOYLARGE: a LARGE base confined to its section may sit far behind the zone's forward edge
+	# while a neighbour section still holds a legal forward spot — ONE whole-zone re-search takes the
+	# nearer spot. The candidate is chosen BEFORE the wall-bisect retry loop below, so the loop runs
+	# on the final spot either way. Switch off = byte-identical to today.
+	var sec_behind := absf(spot.y - forward_y)
+	if (large_zone_search and not is_scout and spot != Vector2.INF and forward_y != INF
+			and base_r >= LARGE_BASE_RADIUS_IN * INCHES_TO_METERS
+			and sec_behind > LARGE_ZONE_SPOT_BEHIND_M):
+		var zone_spot := AiDeployment.best_spot(zone, objectives, occupied, radius, blocked,
+				0.025, radius, footprint, base_r, forward_y)
+		if zone_spot != Vector2.INF and absf(zone_spot.y - forward_y) < sec_behind:
+			spot = zone_spot
+			spot_why = "large base — whole-zone forward spot (section spot was %.1f\" behind the forward edge)" % (sec_behind / INCHES_TO_METERS)
 	# Wall-bisect retries (bug 12c): a spot whose formation grid a wall cuts in half is vetoed by
 	# marking it occupied and re-searching — the unit must never START the game split across a wall.
 	for _retry in range(4):
