@@ -9822,6 +9822,12 @@ func deploy_remaining_scouts() -> int:
 ## game torn and stayed torn all game). At deployment placement is free — every model outside its
 ## unit's largest link component is re-placed onto the nearest legal free ring spot around the
 ## component, so no AI unit ever STARTS the game out of coherency.
+## Brief deploycoh: the repair's re-placed stragglers must stay inside the unit's deployment zone
+## and at least base_r + 1" from every table edge. Static kill switch (false = the shipped
+## byte-identical path) so tests can pin both behaviours and the field can revert.
+static var repair_in_zone := true
+
+
 func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable) -> bool:
 	# EVERY AI-controlled slot, not just the side deploying right now (verification run 4): the SECOND
 	# deploy's overlap cleanup can nudge a FIRST side's model back out of chain — the repair after the
@@ -9842,6 +9848,8 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 		if unit.has_method("is_attached") and unit.is_attached():
 			continue
 		var blocked := blocked_flying if (unit.has_special_rule("Strider") or unit.has_special_rule("Flying")) else blocked_normal
+		var base_r := _deploy_base_radius(_deploy_models(unit))
+		var unit_moved := false
 		for _pass in range(8):   # each pass re-links one straggler or shrinks the span one step
 			var ms := _moving_models(unit)
 			if ms.size() <= 1 or unit_coherent_now(unit):
@@ -9855,11 +9863,11 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 			for i in range(ms.size()):
 				if in_comp.has(i):
 					continue
-				var spot := _deploy_ring_spot(ms, pts, comp, i, blocked)
+				var spot := _deploy_ring_spot(ms, pts, comp, i, blocked, true, unit, base_r)
 				if spot == Vector3.INF:
 					# Packed zone — FORCE contact beside the group (overlap allowed, terrain-legal);
 					# the caller's follow-up resolve pass separates to contact, chain-preserving.
-					spot = _deploy_ring_spot(ms, pts, comp, i, blocked, false)
+					spot = _deploy_ring_spot(ms, pts, comp, i, blocked, false, unit, base_r)
 					if spot != Vector3.INF:
 						forced_any = true
 				if spot != Vector3.INF:
@@ -9885,7 +9893,7 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 						dmin = dd
 						near_j = i
 				if far_i != near_j:
-					var spot2 := _deploy_ring_spot(ms, pts, [near_j], far_i, blocked, false)
+					var spot2 := _deploy_ring_spot(ms, pts, [near_j], far_i, blocked, false, unit, base_r)
 					if spot2 != Vector3.INF:
 						var node2: Node3D = (ms[far_i] as ModelInstance).node
 						if node2 != null and is_instance_valid(node2):
@@ -9893,6 +9901,7 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 							moved_one = true
 							forced_any = true
 			if moved_one:
+				unit_moved = true
 				_broadcast_positions(unit)
 				record_decision({"kind": "deploy", "unit": unit.get_name(),
 					"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (p.7 — a unit never starts torn)",
@@ -9907,15 +9916,32 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 						"stragglers": ms.size() - comp.size(),
 						"slot": int(unit.unit_properties.get("player_id", 0))}})
 				break   # avoid spinning
+		if repair_in_zone and unit_moved:
+			# Brief deploycoh: a repair may push the unit's own footprint AGAINST a table-edge wall.
+			# Re-check the boxed verdict on the unit's NEW centroid; boxed -> say so, then ONE more
+			# straggler pass biased toward the zone's forward edge. Two attempts, then stop.
+			var cen := MoveIntent.anchor_of(_positions_of(_moving_models(unit)))
+			if _deploy_footprint_boxed(Vector2(cen.x, cen.z), _deploy_footprint_offsets(unit), base_r):
+				record_decision({"kind": "deploy", "unit": unit.get_name(),
+					"rule": "Deploy coherency repair: re-check after the re-place — the unit's own footprint landed boxed at a table edge",
+					"candidates": [], "chosen": "repair left the unit boxed",
+					"why": "the repair moved the unit against a table-edge wall",
+					"data": {"slot": int(unit.unit_properties.get("player_id", 0))}})
+				var zone: Rect2 = _deploy_zone_of.get(unit, Rect2())
+				var fwd_y := zone.position.y if absf(zone.position.y) < absf(zone.end.y) else zone.end.y
+				_repair_once_toward_forward(unit, blocked, base_r, fwd_y)
 	return forced_any
 
 
 ## Nearest legal free spot for straggler `idx` on rings around the component's models: linked
 ## (edge gap ≤ chain), terrain-legal for this unit, and free of EVERY on-table base.
 func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Callable,
-		require_free: bool = true) -> Vector3:
+		require_free: bool = true, zone_unit: GameUnit = null, zone_base_r := 0.0,
+		forward_y := INF) -> Vector3:
 	var r_i := model_base_radius_m(ms[idx] as ModelInstance)
 	var straggler: Vector3 = pts[idx]
+	var best := Vector3.INF
+	var best_fwd := INF
 	# Component models nearest to the straggler first — the smallest legal correction wins.
 	var order := comp.duplicate()
 	order.sort_custom(func(a, b) -> bool:
@@ -9932,6 +9958,12 @@ func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Ca
 			for step in range(24):
 				var ang := TAU * float(step) / 24.0
 				var cand := Vector3(centre.x + cos(ang) * ring, straggler.y, centre.z + sin(ang) * ring)
+				# Zone + table-edge gate (brief deploycoh): a re-placed straggler stays inside its unit's
+				# deployment zone and at least base_r + 1" off every table edge. The gate runs in FORCED
+				# mode too — overlap is the one allowance, never off-zone or off-table.
+				if repair_in_zone and zone_unit != null \
+						and not _repair_spot_in_zone(zone_unit, Vector2(cand.x, cand.z), zone_base_r):
+					continue
 				# FORCED mode (require_free=false) is the last resort and skips BOTH gates: the component
 				# itself already stands in/at that terrain (the "least blocked" deploy fallback), and the
 				# caller's follow-up resolve pass settles overlap — a torn unit is worse than either.
@@ -9940,8 +9972,58 @@ func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Ca
 						continue
 					if not _deploy_spot_free(cand, r_i, ms[idx] as ModelInstance):
 						continue
+				if is_finite(forward_y):
+					var fwd := absf(cand.z - forward_y)
+					if fwd < best_fwd:
+						best_fwd = fwd
+						best = cand
+					continue
 				return cand
-	return Vector3.INF
+	return best if is_finite(forward_y) else Vector3.INF
+
+
+## Zone + table-edge legality of a repair spot (brief deploycoh): the spot must sit inside the
+## unit's recorded deployment zone (`_deploy_zone_of`, set by `_deploy_place_id` — no record, e.g.
+## a scout band, means the ZONE rule is skipped but the table rule never is) and its centre at
+## least base_r + 1" from every table edge.
+func _repair_spot_in_zone(unit: GameUnit, p: Vector2, base_r: float) -> bool:
+	if _deploy_zone_of.has(unit) and not (_deploy_zone_of[unit] as Rect2).has_point(p):
+		return false
+	var margin := base_r + INCHES_TO_METERS
+	var h := _table_half_extents()
+	return absf(p.x) <= h.x - margin and absf(p.y) <= h.y - margin
+
+
+## Second repair attempt (brief deploycoh): the boxed re-check found the FIRST repair drove the
+## unit's own footprint against a table-edge wall. ONE more straggler pass, biased toward the
+## zone's forward edge, to pull the unit's centre back into free space. Bounded: a single pass.
+func _repair_once_toward_forward(unit: GameUnit, blocked: Callable, base_r: float,
+		forward_y: float) -> void:
+	var ms := _moving_models(unit)
+	if ms.size() <= 1 or unit_coherent_now(unit):
+		return
+	var pts := _positions_of(ms)
+	var comp := _largest_link_component_world(_moving_shapes_at(ms, pts))
+	var in_comp := {}
+	for ci in comp:
+		in_comp[int(ci)] = true
+	var moved := false
+	for i in range(ms.size()):
+		if in_comp.has(i):
+			continue
+		var spot := _deploy_ring_spot(ms, pts, comp, i, blocked, true, unit, base_r, forward_y)
+		if spot == Vector3.INF:
+			continue
+		var node: Node3D = (ms[i] as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			node.global_position = Vector3(spot.x, node.global_position.y, spot.z)
+			moved = true
+	if moved:
+		_broadcast_positions(unit)
+		record_decision({"kind": "deploy", "unit": unit.get_name(),
+			"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (p.7 — a unit never starts torn)",
+			"candidates": [], "chosen": "straggler re-placed", "why": "deploy left a model out of coherency",
+			"data": {"attempt": 2, "slot": int(unit.unit_properties.get("player_id", 0))}})
 
 
 ## No on-table base (any unit, any side) overlaps a base of radius `r` at `cand` — placement-free test.
