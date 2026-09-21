@@ -233,3 +233,25 @@ use super::*;
         expected.push((HOLD, Some("u2".into()), None, None));
         assert_eq!(shape(&on), expected, "ON = OFF + one qualified HOLD+shoot at the tail");
     }
+    /// Second opinion 21.09.: the SPLIT. With the max-EV target ("Wall") NOT yet activated,
+    /// the old single qualifier picked Wall for the qualified best too — no extra entry —
+    /// although "Squish" holds the marker. Two proposals (holder, un-activated) with dedupe
+    /// give Squish its HOLD+shoot; the un-activated best (Wall) is the unqualified pick and
+    /// is deduped away.
+    #[test]
+    fn holders_split_offers_the_marker_holder_when_the_max_ev_target_is_unactivated() {
+        let mut st = holders_line();
+        st.activated[1] = false;
+        let statics = holders_statics();
+        let mut sc = Scratch::default();
+        let off = shape(&candidates_tuned(
+            &st, &Terrain::default(), &statics, 0, &mut sc, Tuning::default(),
+        ));
+        let on = shape(&candidates_tuned(
+            &st, &Terrain::default(), &statics, 0, &mut sc,
+            Tuning { holders: true, ..Tuning::default() },
+        ));
+        assert_eq!(&on[..off.len()], &off[..], "the OFF entries stay, in order");
+        assert_eq!(on.len(), off.len() + 1, "exactly one extra: the holder; the un-activated best is the max-EV pick and dedupes: {:?}", on);
+        assert_eq!(on[off.len()], (HOLD, Some("u2".into()), None, None), "the marker holder joins the menu");
+    }
