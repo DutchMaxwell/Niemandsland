@@ -23,6 +23,7 @@ const COPY := {
 		"allow_evaluation": "Allow evaluation sharing",
 		"withdraw": "Withdraw evaluation sharing",
 		"allow_training": "Allow use for training",
+		"reviewed": "I have reviewed the fields and the example above",
 		"save": "Save example locally",
 		"save_last": "Save last game locally",
 		"close": "Close",
@@ -57,6 +58,7 @@ const COPY := {
 		"allow_evaluation": "Auswertung erlauben",
 		"withdraw": "Auswertung nicht mehr erlauben",
 		"allow_training": "Nutzung fürs Training erlauben",
+		"reviewed": "Ich habe die Felder und das Beispiel oben geprüft",
 		"save": "Beispiel lokal speichern",
 		"save_last": "Letzte Partie lokal speichern",
 		"close": "Schließen",
@@ -84,6 +86,9 @@ var _store: ConsentStore
 var _content: VBoxContainer
 var _training_toggle: CheckButton
 var _allow_button: Button
+## Two-step accept (maintainer 21.09.): the allow button stays disabled until the player ticks
+## that they reviewed the fields and the example — one stray click can no longer switch sharing on.
+var _reviewed_toggle: CheckButton
 var _status: Label
 var _preview: TextEdit
 var _last_game_record: Dictionary = {}
@@ -304,6 +309,11 @@ func _show_details() -> void:
 	_preview.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_preview.text = example_bytes().get_string_from_utf8()
 	_content.add_child(_preview)
+	_reviewed_toggle = CheckButton.new()
+	_reviewed_toggle.name = "ReviewedToggle"
+	_reviewed_toggle.text = _t("reviewed")
+	_reviewed_toggle.toggled.connect(func(_pressed: bool) -> void: _sync_consent_controls())
+	_content.add_child(_reviewed_toggle)
 	_allow_button = _button("", _on_allow_or_withdraw)
 	_allow_button.name = "AllowEvaluationButton"
 	_content.add_child(_allow_button)
@@ -330,6 +340,8 @@ func _on_no_thanks() -> void:
 func _on_allow_or_withdraw() -> void:
 	if _store.evaluation_sharing:
 		_store.withdraw()
+	elif not _reviewed():
+		return   # belt and braces: the button is disabled until reviewed, never enable by accident
 	else:
 		_store.set_consent(true, _training_toggle.button_pressed)
 	_sync_consent_controls()
@@ -348,8 +360,15 @@ func _on_training_toggled(pressed: bool) -> void:
 			_last_preview.text = last_game_bytes().get_string_from_utf8()
 
 
+func _reviewed() -> bool:
+	return _reviewed_toggle != null and _reviewed_toggle.button_pressed
+
+
 func _sync_consent_controls() -> void:
 	_allow_button.text = _t("withdraw") if _store.evaluation_sharing else _t("allow_evaluation")
+	_allow_button.disabled = not _store.evaluation_sharing and not _reviewed()
+	if _reviewed_toggle != null:
+		_reviewed_toggle.visible = not _store.evaluation_sharing   # done its job once sharing is on
 	_training_toggle.disabled = not _store.evaluation_sharing
 	_training_toggle.set_pressed_no_signal(_store.training_use)
 

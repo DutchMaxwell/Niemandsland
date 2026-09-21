@@ -322,6 +322,32 @@ func test_last_game_wording_and_details_require_a_record() -> void:
 	menu.queue_free()
 
 
+## Two-step accept (maintainer 21.09.): "Allow evaluation" stays disabled until the player ticks that
+## they reviewed the fields and the example; a click on the disabled button changes nothing; once
+## sharing is on the tick disappears and the button reads "withdraw".
+func test_allow_needs_the_reviewed_tick_first() -> void:
+	if not _require("res://scripts/privacy/privacy_menu.gd"):
+		return
+	var menu = load(MENU_SCENE).instantiate()
+	add_child(menu)
+	menu.set_store_path_for_tests(TEST_STORE)
+	menu._show_details()
+	var allow := menu.find_child("AllowEvaluationButton", true, false) as Button
+	var tick := menu.find_child("ReviewedToggle", true, false) as CheckButton
+	assert_bool(allow.disabled).is_true()
+	assert_bool(tick.visible).is_true()
+	menu._on_allow_or_withdraw()   # the guard behind the disabled button
+	assert_bool(_load_json(TEST_STORE).get("evaluation_sharing", false)).is_false()
+	tick.button_pressed = true
+	assert_bool(allow.disabled).is_false()
+	menu._on_allow_or_withdraw()
+	assert_bool(_load_json(TEST_STORE).get("evaluation_sharing", false)).is_true()
+	assert_bool(tick.visible).is_false()
+	assert_str(allow.text).is_equal(menu.localized_text("withdraw"))
+	assert_bool(allow.disabled).is_false()
+	menu.queue_free()
+
+
 func test_after_game_card_wording() -> void:
 	if not _require(CARD_PATH):
 		return
