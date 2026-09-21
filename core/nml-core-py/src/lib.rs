@@ -779,6 +779,7 @@ impl Core {
         m.insert("cast_fold".into(), self.knobs.cast_fold.into());
         m.insert("charge_gate".into(), self.knobs.charge_gate.into());
         m.insert("menu_targets".into(), self.knobs.menu_targets.into());
+        m.insert("menu_holders".into(), self.knobs.menu_holders.into());
         m.insert("hero_attach".into(), self.knobs.hero_attach.into());
         m.insert("charge_landing".into(), self.knobs.charge_landing.into());
         m.insert(

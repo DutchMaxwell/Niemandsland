@@ -82,6 +82,14 @@ pub struct Knobs {
     /// before it, so the default is OFF and no menu moves.
     #[serde(default)]
     pub menu_targets: bool,
+    /// Wave 6 (`lead/menutargets`) — `Tuning::holders`, the MENUHOLDERS leg:
+    /// the menu also offers the best shoot and charge against an enemy that
+    /// holds or contests an objective not ours (within 3", owner 0 counts as
+    /// not ours) or has not activated this round, when that target differs
+    /// from the max-EV pick. A MENU knob, not a seam. Absent from every corpus
+    /// recorded before it, so the default is OFF and no menu moves.
+    #[serde(default)]
+    pub menu_holders: bool,
     /// NML-1073 M5 D1-B4b — `Seams::hero_attach`, carried in the header the way
     /// every other seam is. Absent from every corpus recorded before it, so the
     /// default is OFF and nothing replays differently.
@@ -1238,6 +1246,7 @@ impl Default for Knobs {
             cast_fold: false,
             charge_gate: true,
             menu_targets: false,
+            menu_holders: false,
             hero_attach: false,
             charge_landing: false,
             sighting: Sighting::Unit,
