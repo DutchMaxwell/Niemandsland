@@ -203,23 +203,30 @@ func _run() -> void:
 			puddles.visible = true
 		Engine.time_scale = 1.0
 		print("REFERENCE_EFFECTS_DONE")
-	if (args.has("wind") or args.has("atmosphere")) and _presentation != null:
+	if (args.has("wind") or args.has("atmosphere") or args.has("plants")) and _presentation != null:
 		var atmosphere := args.has("atmosphere")
-		var frame_directory := _output.path_join("atmosphere_frames" if atmosphere else "wind_frames")
+		var plants := args.has("plants")
+		var clocks: Array[ShaderMaterial] = _plant_clock_materials(main) if plants else []
+		var frame_directory := _output.path_join("plant_frames" if plants else ("atmosphere_frames" if atmosphere else "wind_frames"))
 		DirAccess.make_dir_recursive_absolute(frame_directory)
 		camera.global_position = Vector3(-0.50,0.17,0.69)
 		camera.look_at(Vector3(-0.61,0.025,0.39))
+		if plants:
+			camera.global_position = Vector3(-0.66,0.085,0.48)
+			camera.look_at(Vector3(-0.80,0.035,0.23))
 		# Advance the effect clock by exactly 1/30 second per output frame. Image-save
 		# latency must not accelerate a shader effect in the exported review clip.
 		_presentation.set_process(false)
 		for frame in 240:
 			_presentation._wind_time = 6.0 + float(frame)/30.0
 			_presentation._process(0.0)
+			for material in clocks:
+				material.set_shader_parameter("capture_time",_presentation._wind_time)
 			await process_frame
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_jpg(frame_directory.path_join("%04d.jpg"%frame),0.95)
 		_presentation.set_process(true)
-		report["atmosphere_clip" if atmosphere else "wind_clip"] = {"fps":30,"frames":240,"start_seconds":6.0,"fixed_camera":true,"fixed_effect_step":true}
+		report["plant_clip" if plants else ("atmosphere_clip" if atmosphere else "wind_clip")] = {"fps":30,"frames":240,"start_seconds":6.0,"fixed_camera":true,"fixed_effect_step":true,"camera_transform":str(camera.global_transform)}
 		print("REFERENCE_ATMOSPHERE_DONE" if atmosphere else "REFERENCE_WIND_DONE")
 	if args.has("flight"):
 		var frame_directory := _output.path_join("flight_frames")
@@ -273,3 +280,33 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	quit()
+
+
+## Freeze legacy TIME-based plant shaders on the same explicit clock as new effects.
+## Changes only capture-local runtime shader resources, preserving motion equations.
+func _plant_clock_materials(node: Node) -> Array[ShaderMaterial]:
+	var result: Array[ShaderMaterial] = []
+	var shaders: Dictionary = {}
+	var pending: Array[Node] = [node]
+	while not pending.is_empty():
+		var current: Node = pending.pop_back()
+		pending.append_array(current.get_children())
+		var materials: Array = []
+		if current is MeshInstance3D and current.mesh != null:
+			for i in current.mesh.get_surface_count():
+				materials.append(current.get_active_material(i))
+		elif current is MultiMeshInstance3D and current.multimesh != null:
+			materials.append(current.multimesh.mesh.surface_get_material(0))
+		for material in materials:
+			if not material is ShaderMaterial or result.has(material):
+				continue
+			var shader: Shader = material.shader
+			if shader.resource_path not in ["res://shaders/visual/reference_woody_prop.gdshader","res://shaders/visual/reference_jungle_leaf.gdshader"]:
+				continue
+			if not shaders.has(shader):
+				var controlled := Shader.new()
+				controlled.code = shader.code.replace("TIME","capture_time").replace("shader_type spatial;","shader_type spatial;\nuniform float capture_time = 0.0;")
+				shaders[shader] = controlled
+			material.shader = shaders[shader]
+			result.append(material)
+	return result

@@ -15,6 +15,7 @@ var _angles := PackedFloat32Array()
 var _props: Node3D
 var _biome_forest: Node3D
 var _volcanic: Node3D
+var _jungle_motion: Node3D
 var _previous_viewport: Dictionary = {}
 var _current_mood := "Day"
 var _fog: FogVolume
@@ -142,6 +143,10 @@ func apply(main: Node) -> void:
 		_volcanic = preload("res://scripts/visual/reference_volcanic.gd").new()
 		add_child(_volcanic)
 		_volcanic.build(main,self)
+	if _profile.get("jungle_mode",false):
+		_jungle_motion = preload("res://scripts/visual/reference_jungle_motion.gd").new()
+		add_child(_jungle_motion)
+		_jungle_motion.build(main,self,understory)
 	_build_fog(main)
 	if _profile["dust"]:
 		_build_dust(main)
@@ -308,12 +313,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	if not _dust.is_empty() or _volcanic != null:
+	if not _dust.is_empty() or _volcanic != null or _jungle_motion != null:
 		_wind_time += delta
 		for streams in _dust:
 			streams.material_override.set_shader_parameter("time",_wind_time)
 	if _volcanic != null:
 		_volcanic.set_time(_wind_time)
+	if _jungle_motion != null:
+		_jungle_motion.set_time(_wind_time)
 	if _ground != null:
 		_ground.set_shader_parameter("wind_time",_wind_time)
 	if _base != null:

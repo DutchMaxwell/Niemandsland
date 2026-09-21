@@ -12,6 +12,14 @@ uniform vec2 crown_lean = vec2(0.0);
 uniform float wind_amount = 0.004;
 uniform float snow_amount = 0.0;
 uniform bool charred = false;
+uniform bool jungle_sway = false;
+uniform float wind_time = -1.0;
+uniform float wind_phase = 0.0;
+uniform mat4 wind_to_plant = mat4(1.0);
+uniform float base_roughness = 0.89;
+uniform float base_specular = 0.18;
+uniform float base_metallic = 0.0;
+#include "res://shaders/visual/reference_jungle_sway.gdshaderinc"
 varying vec3 tree_position;
 
 float patch(vec3 p) {
@@ -25,7 +33,13 @@ void vertex() {
 	VERTEX.xz += crown_lean * tree_height * h * h;
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX,1.0)).xyz;
 	float sway = sin(TIME * 1.15 + world.x * 3.0 + world.z * 2.4);
-	VERTEX.xz += vec2(sway,cos(TIME * 0.91 + world.z * 2.0)) * tree_height * wind_amount * crown;
+	if (jungle_sway) {
+		vec3 plant = (wind_to_plant*vec4(VERTEX,1.0)).xyz;
+		vec3 offset = jungle_displacement(plant,tree_bottom,tree_height,wind_time<0.0 ? TIME : wind_time,wind_phase+world.x*3.0+world.z*2.4,wind_amount);
+		VERTEX += (inverse(wind_to_plant)*vec4(offset,0.0)).xyz;
+	} else {
+		VERTEX.xz += vec2(sway,cos(TIME * 0.91 + world.z * 2.0)) * tree_height * wind_amount * crown;
+	}
 	tree_position = VERTEX / max(tree_height,0.001);
 }
 
@@ -39,8 +53,9 @@ void fragment() {
 		float grey = dot(sample_color.rgb,vec3(0.3,0.5,0.2));
 		ALBEDO = mix(vec3(grey)*vec3(0.49,0.51,0.55),vec3(0.16,0.15,0.14),smoothstep(0.30,0.85,up)*broken_cover*0.60);
 	}
-	ROUGHNESS = mix(0.89,0.97,snow);
-	SPECULAR = 0.18;
+	ROUGHNESS = mix(base_roughness,0.97,snow);
+	SPECULAR = base_specular;
+	METALLIC = base_metallic;
 	if (has_normal) {
 		NORMAL_MAP = texture(normal_tex,UV).rgb;
 		NORMAL_MAP_DEPTH = mix(1.0,0.35,snow);

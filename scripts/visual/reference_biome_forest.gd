@@ -17,6 +17,7 @@ var _walls: Array = []
 var _anchors: Array[Vector2] = []
 var _anchor_parents: Array[Node3D] = []
 var _anchor_heights: Array[float] = []
+var _wind_materials: Array[ShaderMaterial] = []
 
 
 func prepare(biome: String) -> void:
@@ -275,6 +276,11 @@ func _shade(node: Node,variant: int,wind: bool,snow: float) -> void:
 			material.set_shader_parameter("crown_width",0.85+float(variant%4)*0.10)
 			material.set_shader_parameter("crown_lean",Vector2(sin(float(variant)*2.3),cos(float(variant)*1.7))*0.025)
 			material.set_shader_parameter("wind_amount",0.006 if wind else 0.0)
+			if _biome == "alien_jungle":
+				material.set_shader_parameter("jungle_sway",true)
+				material.set_shader_parameter("wind_amount",0.015)
+				material.set_shader_parameter("wind_phase",float(variant)*2.39996)
+				_wind_materials.append(material)
 			material.set_shader_parameter("snow_amount",snow)
 			material.set_shader_parameter("charred",_biome == "volcanic_ash")
 			node.set_surface_override_material(surface,material)

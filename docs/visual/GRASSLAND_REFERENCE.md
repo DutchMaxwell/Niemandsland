@@ -239,3 +239,25 @@ Movable forest groups retain their saved members/colliders and carry dressed
 trees with them; board understory remains baked at its initial positions.
 Forward+ is the reviewed renderer; broad performance budgets, LODs and
 Compatibility/web calibration remain separate work.
+
+### Gentle jungle plant movement
+
+Jungle crowns use slow, differently phased gusts at1.5% of source height. The
+existing ten carnivorous hazard clumps bend above a fixed lower16% root region,
+with peak horizontal motion bounded by2.6% of their height. A common plant-local
+frame keeps separate mesh parts coherent despite model import transforms.
+Original mesh resources, node transforms, collision and hazard anchors stay
+fixed; only instance shader vertices move. Instance culling bounds include the
+excursion. Albedo/tint, normal texture, roughness, specular and metallic values
+are retained from the native hazard material.
+
+Trees, hazards and low foliage share an explicit jungle effect clock. Capture
+option `plants` records a fixed close camera for240 frames at30fps; it also
+substitutes an explicit time uniform into capture-local copies of the earlier
+TIME-based tree/leaf shaders. That keeps legacy and current motion equations
+at the same elapsed time despite offline frame-save latency. Other biomes keep
+their existing wind path. This is gentle stem/crown sway, not an articulated
+bite, attack animation or new gameplay behavior.
+
+Motion comparison:
+https://forge.niemandsland.xyz/static/jungle-motion-2026-09-21/index.html
