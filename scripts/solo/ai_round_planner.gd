@@ -26,12 +26,27 @@ extends RefCounted
 ##   "contest_cap": int = 2,      # … except enemy-held markers, which may take a pair (majority win)
 ## }
 
+## Lone-runner guard (wave6): a seize task for a unit that is the ONLY own unit near its target
+## marker, while the enemy still holds ambush reserves, is the ideal ambush target — the reserve
+## count is on the tray for both players, so the planner legitimately knows it. With
+## `lone_runner_guard = false` solve() is byte-identical to the pre-wave6 behaviour.
+static var lone_runner_guard := true
+
 const SEIZE_RING_IN := 3.0
+const BUDDY_IN := 12.0  # "no buddy near" radius: another own unit within 12" of the marker keeps the trip honest
 const DIFFICULT_CAP_IN := 6.0  # GF v3.5.1 p.11 — mirrors SoloController.DIFFICULT_MOVE_CAP_IN (pure core keeps no controller import)
 const WORTH_FREE := 2.5        # expected-wounds currency: an unheld marker (mirrors OBJ_SEIZE_WORTH)
 const WORTH_ENEMY := 3.5       # flipping an enemy-held marker is a two-point swing
 const TIME_COST_PER_ROUND := 0.6
 const FIGHT_OPPORTUNITY_W := 0.5    # per MARCH ROUND: a walking gun forfeits this share of its volley
+
+
+static func _marker_pos(markers: Array, index: int) -> Vector3:
+	for m in markers:
+		var md: Dictionary = m
+		if int(md.get("index", -1)) == index:
+			return md.get("pos", Vector3.ZERO)
+	return Vector3.ZERO
 
 
 static func solve(p: Dictionary) -> Dictionary:
@@ -40,6 +55,7 @@ static func solve(p: Dictionary) -> Dictionary:
 	var rounds_left: int = maxi(int(p.get("rounds_left", 1)), 1)
 	var max_per: int = maxi(int(p.get("max_per_marker", 1)), 1)
 	var contest_cap: int = maxi(int(p.get("contest_cap", 2)), max_per)
+	var enemy_reserves: int = int(p.get("enemy_reserves", 0))
 	var tasks := {}
 	if units.is_empty():
 		return {"tasks": tasks, "log": ""}
@@ -123,6 +139,33 @@ static func solve(p: Dictionary) -> Dictionary:
 			# DENY = the target is enemy-held (TC-019 visibility): without the tag the plan line
 			# was byte-identical for a free-marker trip and a denial trip — denial fired unseen.
 			"deny": int(pd["enemy_near"]) > 0}
+	# Lone-runner guard (test game 21.09.): while the enemy still holds reserves, a FREE-marker trip
+	# needs a buddy — another own unit within BUDDY_IN of the marker, or a second runner on it.
+	# Otherwise the runner is held back to fight; the plan line says so (rules-must-log).
+	if lone_runner_guard and enemy_reserves > 0:
+		for ui in range(units.size()):
+			var ud0 := units[ui] as Dictionary
+			var key0 := str(ud0.get("key", ui))
+			var t0: Dictionary = tasks.get(key0, {})
+			if str(t0.get("kind", "")) != "seize" or bool(t0.get("deny", false)):
+				continue
+			var mi0: int = int(t0["marker"])
+			var mpos: Vector3 = _marker_pos(markers, mi0)
+			var buddy := false
+			for uj in range(units.size()):
+				if uj == ui:
+					continue
+				var ud1 := units[uj] as Dictionary
+				var t1: Dictionary = tasks.get(str(ud1.get("key", uj)), {})
+				if str(t1.get("kind", "")) == "seize" and int(t1.get("marker", -1)) == mi0:
+					buddy = true
+					break
+				if MoveIntent.distance_inches(ud1.get("centre", Vector3.ZERO), mpos) <= BUDDY_IN:
+					buddy = true
+					break
+			if not buddy:
+				tasks[key0] = {"kind": "fight", "held_back": "enemy reserves, no buddy near marker %d" % mi0}
+				per_marker[mi0] = maxi(int(per_marker.get(mi0, 0)) - 1, 0)
 	for u in units:
 		var key2 := str((u as Dictionary).get("key", ""))
 		if not tasks.has(key2):
@@ -141,6 +184,8 @@ static func solve(p: Dictionary) -> Dictionary:
 			# denial fire in the battle log instead of reading a generic marker trip.
 			parts.append("%s → %smarker %d (arrives R%d)" % [str(ud.get("name", key3)),
 				"DENY " if bool(t.get("deny", false)) else "", int(t["marker"]), int(t["arrive_round"])])
+		elif t.has("held_back"):
+			parts.append("%s held back (%s)" % [str(ud.get("name", key3)), str(t["held_back"])])
 	var log_line := ("NACHTMAHR plan R%d: everyone fights — no feasible marker trip" % int(p.get("current_round", 1))) \
 		if parts.is_empty() else "NACHTMAHR plan R%d: %s — everyone else fights" % [
 		int(p.get("current_round", 1)), ", ".join(parts)]
