@@ -167,7 +167,10 @@ fn place(batch: &mut Batch, i: usize, row: &Leaf) {
 #[test]
 fn onnx_parity_pinned_corpus() {
     let onnx = fixture("standin-v2x2.onnx");
-    let golden: Value = serde_json::from_slice(&fixture("golden_standin-v2x2.json")).unwrap();
+    // The parity corpus is derived from a FROZEN base leaf set (the 11.09. golden, kept verbatim as
+    // parity_base_standin-v2x2.json): its input_sha256 pins tract-vs-ort numerics, not the token
+    // builder — the golden itself now tracks the core tokens (refreshed 21.09.).
+    let golden: Value = serde_json::from_slice(&fixture("parity_base_standin-v2x2.json")).unwrap();
     let receipt: Value = serde_json::from_slice(&fixture("parity_pinned_10238.json")).unwrap();
 
     let count = receipt["corpus"]["count"].as_u64().unwrap() as usize;
