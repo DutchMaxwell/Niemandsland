@@ -1418,6 +1418,71 @@ func test_pull_stragglers_restores_coherency_without_moving_the_advanced_models(
 	assert_float((cfg[1] as Vector3).distance_to(Vector3(r * 2.8, 0, 0))).is_less(0.01)
 
 
+# === Deploy coherency repair stays INSIDE the deployment zone and off the table edge (brief deploycoh) ===
+
+func test_deploy_coherency_repair_respects_zone_and_table_edge() -> void:
+	# Geometry (32 mm default bases, r = 0.016 m): A(0.22) and B(0.17) are linked (centre gap 0.05 m
+	# = edge gap ~0.7"); the straggler at (0.42, 0) is torn. The repair rings around A: the first
+	# ring spot today (radius 0.0447 m at angle 0) lands at x = 0.2647 - OUTSIDE the zone rect
+	# ending at x = 0.25. With the fix ON, that spot is illegal and the first LEGAL one (60 deg,
+	# x = 0.2423) is inside the zone. The whole table (4' x 4' stub, half-extents 0.6096 m) keeps
+	# every candidate far from the edge - so this test isolates the ZONE rule.
+	SoloController.repair_in_zone = true
+	auto_free(_table_stub(Vector2(4, 4)))
+	var zone := Rect2(Vector2(-0.25, -0.25), Vector2(0.5, 0.5))
+	var ai := _unit(2, [Vector3(0.22, 0, 0), Vector3(0.17, 0, 0), Vector3(0.42, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ai.unit_id: ai}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo._deploy_zone_of[ai] = zone
+	var blocked := func(_p: Vector2) -> bool: return false
+	var models: Array = ai.get_alive_models()
+	var base_r: float = SeparationChecker.DEFAULT_BASE_RADIUS_M   # no explicit shapes -> 32 mm fallback
+	var limit: float = 0.6096 - (base_r + INCHES_TO_METERS)   # >= base_r + 1" from every table edge
+	var s: ModelInstance = models[2]
+
+	# Today's path (switch OFF): the repair still heals the tear, but the straggler may land
+	# OUTSIDE the unit's deployment zone - the bug this brief kills.
+	SoloController.repair_in_zone = false
+	(s.node as Node3D).global_position = Vector3(0.42, 0, 0)
+	solo.drain_decisions()
+	assert_bool(solo._repair_deploy_coherency(blocked, blocked)).is_true()
+	assert_bool(solo.unit_coherent_now(ai)).is_true()
+	var s_off: Vector2 = Vector2((s.node as Node3D).global_position.x, (s.node as Node3D).global_position.z)
+	assert_bool(s_off.x > zone.end.x).is_true()
+
+	# The fix (switch ON): the same tear is healed with every model inside the zone and
+	# base_r + 1" clear of every table edge, and the record names the re-place (no "still torn").
+	SoloController.repair_in_zone = true
+	(s.node as Node3D).global_position = Vector3(0.42, 0, 0)
+	solo.drain_decisions()
+	assert_bool(solo._repair_deploy_coherency(blocked, blocked)).is_true()
+	assert_bool(solo.unit_coherent_now(ai)).is_true()
+	for m in models:
+		var p: Vector2 = Vector2((m.node as Node3D).global_position.x, (m.node as Node3D).global_position.z)
+		assert_bool(zone.has_point(p)).is_true()
+		assert_float(absf(p.x)).is_less_equal(limit)
+		assert_float(absf(p.y)).is_less_equal(limit)
+	var recs: Array = solo.drain_decisions()
+	var found_replaced := false
+	var found_torn := false
+	for rec in recs:
+		var rd: Dictionary = rec as Dictionary
+		if str(rd.get("chosen", "")) == "straggler re-placed":
+			found_replaced = true
+		if str(rd.get("chosen", "")) == "still torn":
+			found_torn = true
+	assert_bool(found_replaced).is_true()
+	assert_bool(found_torn).is_false()
+
+
+func after_test() -> void:
+	# The zone switch is a STATIC - pin it back so neighbouring suites never see a flip leak.
+	SoloController.repair_in_zone = true
+
+
 # === Wave-5: Indirect hold overlay + LOS waiver, Musician move bands, Limited once-per-game ===
 
 func _weapon(rng: int, rules: Array) -> OPRApiClient.OPRWeapon:
