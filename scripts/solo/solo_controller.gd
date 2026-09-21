@@ -122,6 +122,21 @@ const LARGE_BASE_RADIUS_IN := 1.5
 ## spot from a neighbour section (static test switch: false = byte-identical to today).
 const LARGE_ZONE_SPOT_BEHIND_M := 0.1524   # 6"
 static var large_zone_search := true
+## DEPLOYTHREAT (tactics canon principle 7 — "measure threat ranges at deployment"): each enemy unit
+## already on the table whose first-activation envelope (advance band + longest weapon range +
+## shooting bonus) covers a candidate spot costs `deploy_threat_in` inches of objective distance in
+## `AiDeployment.best_spot`. 0 = off (today). `deploy_threat_seat` 0 = every AI seat, 1/2 = only that
+## slot (paired A/B: tree vs tree with the term on one side). Read once from NML_DEPLOY_THREAT_IN /
+## NML_DEPLOY_THREAT_SEAT; tests set the statics directly. Enemy units count only once the AI deploy
+## path placed them (`_deploy_zone_of`) — a human's hand-placed units are not yet seen (no deployed
+## flag on GameUnit), so against a human the term is a no-op today.
+static var deploy_threat_in := 0.0
+static var deploy_threat_seat := 0
+## `deploy_threat_preset` (NML_DEPLOY_THREAT_PRESET): when set, the term applies only to the slot
+## whose arena preset (NML_AI_P<slot>) has that name — the paired A/B "planner_v0 + term vs tree"
+## on both seat orders without the seat confound.
+static var deploy_threat_preset := ""
+static var _dt_env := -1
 ## A completed move that displaced the unit less than this counts as BOXED for the reposition fallback
 ## and the plausibility metric ("no large model idles >2 activations unless surrounded").
 const BOXED_ACHIEVED_IN := 1.0
@@ -9703,8 +9718,12 @@ func _deploy_place_id(id: int) -> GameUnit:
 		blocked = func(p: Vector2) -> bool:
 			return not bool(ztest.call(p)) \
 				or (terrain_only.is_valid() and bool(terrain_only.call(p)))
-	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+	var threat := _deploy_threat_cb(unit)
+	var threat_w := deploy_threat_in * INCHES_TO_METERS if threat.is_valid() else 0.0
+	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 	var spot_why := "best legal spot toward nearest objective (section, forward-edge doctrine)"
+	if threat.is_valid() and spot != Vector2.INF:
+		spot_why += " (threat-aware: %d enemy envelope(s) over the spot)" % int(threat.call(spot))
 	# DEPLOYLARGE: a LARGE base confined to its section may sit far behind the zone's forward edge
 	# while a neighbour section still holds a legal forward spot — ONE whole-zone re-search takes the
 	# nearer spot. The candidate is chosen BEFORE the wall-bisect retry loop below, so the loop runs
@@ -9714,7 +9733,7 @@ func _deploy_place_id(id: int) -> GameUnit:
 			and base_r >= LARGE_BASE_RADIUS_IN * INCHES_TO_METERS
 			and sec_behind > LARGE_ZONE_SPOT_BEHIND_M):
 		var zone_spot := AiDeployment.best_spot(zone, objectives, occupied, radius, blocked,
-				0.025, radius, footprint, base_r, forward_y)
+				0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		if zone_spot != Vector2.INF and absf(zone_spot.y - forward_y) < sec_behind:
 			spot = zone_spot
 			spot_why = "large base — whole-zone forward spot (section spot was %.1f\" behind the forward edge)" % (sec_behind / INCHES_TO_METERS)
@@ -9727,17 +9746,17 @@ func _deploy_place_id(id: int) -> GameUnit:
 		if not bisected and not _deploy_footprint_boxed(spot, footprint, base_r):
 			break
 		occupied.append({"pos": spot, "radius": radius * 0.6})
-		spot = AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+		spot = AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "re-sited — wall bisected the formation" if bisected \
 				else "re-sited — walls boxed the base in (no straight 12\" exit)"
 	if spot == Vector2.INF:
-		spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+		spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "section full — whole-zone fallback"
 	if spot == Vector2.INF:
 		# Crowded out of every spaced spot: relax the 1" spacing (allow neighbours to bunch) but STILL
 		# reject blocking/impassable terrain — the army MUST deploy, yet a legal footprint always beats
 		# a spot inside a wall/forest (field-test finding 3: units deployed inside blocking terrain).
-		spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+		spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "crowded — nearest legal (non-terrain) spot, spacing relaxed"
 	if spot == Vector2.INF:
 		# Truly no fully terrain-legal cell anywhere (a terrain-choked table) — must still deploy, so pick
@@ -11190,6 +11209,55 @@ func _deploy_footprint_radius(unit: GameUnit) -> float:
 
 ## The largest base radius (metres) among a unit's deployment models — the per-model base extent the
 ## footprint check inflates each grid cell by (SeparationChecker shape truth; 32 mm fallback).
+## DEPLOYTHREAT: the envelope counter for `AiDeployment.best_spot`, or an invalid Callable when the
+## term is off for this unit's seat. Enemy = every unit of another slot the AI deploy path has
+## already placed; envelope radius = (advance band + longest weapon range + shooting bonus) inches,
+## measured from the enemy's nearest model.
+func _deploy_threat_cb(unit: GameUnit) -> Callable:
+	if _dt_env < 0:
+		_dt_env = 0
+		var e := OS.get_environment("NML_DEPLOY_THREAT_IN")
+		if e.is_valid_float() and float(e) > 0.0:
+			deploy_threat_in = float(e)
+			_dt_env = 1
+		var se := OS.get_environment("NML_DEPLOY_THREAT_SEAT")
+		if se.is_valid_int():
+			deploy_threat_seat = int(se)
+		deploy_threat_preset = OS.get_environment("NML_DEPLOY_THREAT_PRESET")
+	if deploy_threat_in <= 0.0 or unit == null or army_manager == null:
+		return Callable()
+	var slot := int(unit.unit_properties.get("player_id", 0))
+	if deploy_threat_seat != 0 and deploy_threat_seat != slot:
+		return Callable()
+	if deploy_threat_preset != "" and OS.get_environment("NML_AI_P%d" % slot) != deploy_threat_preset:
+		return Callable()
+	var envelopes: Array = []   # [positions: Array[Vector2], reach_m: float]
+	for gu in army_manager.game_units.values():
+		var eu := gu as GameUnit
+		if eu == null or int(eu.unit_properties.get("player_id", 0)) == slot or not _deploy_zone_of.has(eu):
+			continue
+		var pts: Array = []
+		for p3 in SoloController.alive_positions(eu):
+			pts.append(Vector2((p3 as Vector3).x, (p3 as Vector3).z))
+		if pts.is_empty():
+			continue
+		var bands: Dictionary = move_bands_for_unit(eu, movement_range)
+		var reach_in := float(bands.get("advance", 6)) + float(AiArchetype.max_range_inches(_unit_weapons(eu))) \
+				+ float(shooting_range_bonus(eu))
+		envelopes.append([pts, reach_in * INCHES_TO_METERS])
+	if envelopes.is_empty():
+		return Callable()
+	return func(p: Vector2) -> float:
+		var n := 0
+		for env in envelopes:
+			var reach: float = env[1]
+			for q in env[0]:
+				if p.distance_to(q as Vector2) <= reach:
+					n += 1
+					break
+		return float(n)
+
+
 func _deploy_base_radius(models: Array) -> float:
 	var r: float = SeparationChecker.DEFAULT_BASE_RADIUS_M
 	for m in models:
