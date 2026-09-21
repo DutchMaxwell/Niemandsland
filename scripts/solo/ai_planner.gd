@@ -61,6 +61,12 @@ static func plan(state: Dictionary, player: int) -> Dictionary:
 
 const ROLLOUT_TOP_K := 6   # rollout budget: only this many 1-ply-best openers get played out
 static var _tk := 0   # research seam: NML_TOP_K overrides (lazy; <=0 = unread)
+## MENUTARGETS (tactics canon, principle 1): when on, the live menu also offers the best shoot
+## and charge against an enemy that HOLDS or CONTESTS a marker not ours (within 3") or has NOT
+## activated this round — when that enemy differs from the max-EV pick. Off = byte-identical menu.
+## Read once from NML_MENU_TARGETS=1 (tests set the static directly; _mt_env = -1 means unread).
+static var menu_targets := false
+static var _mt_env := -1
 
 
 static func top_k_default() -> int:
@@ -1084,7 +1090,41 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	var wave := _second_wave(state, key)
 	if not wave.is_empty():
 		out.append(wave)
+	if _menu_targets_on():
+		var mshoot := _best_shoot(state, key, Callable(AiPlanner, "_marker_or_unactivated"))
+		if mshoot != "" and mshoot != shoot:
+			out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": mshoot})
+		var mcharge := _best_charge(state, key, Callable(AiPlanner, "_marker_or_unactivated"))
+		if mcharge != "" and mcharge != charge:
+			out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
+				"dest": _centre(state["units"][mcharge]), "charge": mcharge})
 	return out
+
+
+static func _menu_targets_on() -> bool:
+	if _mt_env < 0:
+		_mt_env = 1 if OS.get_environment("NML_MENU_TARGETS") == "1" else 0
+		if _mt_env == 1:
+			menu_targets = true
+	return menu_targets
+
+
+## MENUTARGETS qualifier: the enemy unit `ek` holds/contests a marker not ours (any model's
+## centre within 3" of an objective whose owner is not `player`; 0 = nobody counts as not ours)
+## or has not activated this round.
+static func _marker_or_unactivated(state: Dictionary, player: int, ek: String) -> bool:
+	var tu: Dictionary = state["units"][ek]
+	if not bool(tu.get("activated", false)):
+		return true
+	for o in state["objectives"]:
+		var od: Dictionary = o as Dictionary
+		if int(od.get("owner", 0)) == player:
+			continue
+		var opos: Vector3 = od["pos"]
+		for p in tu["positions"]:
+			if (p as Vector3).distance_to(opos) <= 3.0 * BattleSim.IN2M:
+				return true
+	return false
 
 
 ## The TEACHER menu (P0b, NML-1009). P0 measured where the narrow menu cannot
@@ -1373,11 +1413,13 @@ static func _enemy_keys(state: Dictionary, key: String) -> Array:
 	return out
 
 
-static func _best_shoot(state: Dictionary, key: String) -> String:
+static func _best_shoot(state: Dictionary, key: String, qualify: Callable = Callable()) -> String:
 	var su: Dictionary = state["units"][key]
 	var best := ""
 	var best_ev := 0.0
 	for ek in _enemy_keys(state, key):
+		if qualify.is_valid() and not bool(qualify.call(state, int(su["player"]), str(ek))):
+			continue
 		if not BattleSim.sees(su, str(ek)):
 			continue
 		var tu: Dictionary = state["units"][ek]
@@ -1392,7 +1434,7 @@ static func _best_shoot(state: Dictionary, key: String) -> String:
 
 ## Best hurtable melee target by charge_score; targets under the live
 ## futile-charge bar (SoloController.FUTILE_CHARGE_EV) are never candidates.
-static func _best_charge(state: Dictionary, key: String) -> String:
+static func _best_charge(state: Dictionary, key: String, qualify: Callable = Callable()) -> String:
 	var su: Dictionary = state["units"][key]
 	var ours: Array = BattleSim._profiles_of(su, true)
 	if ours.is_empty():
@@ -1405,6 +1447,8 @@ static func _best_charge(state: Dictionary, key: String) -> String:
 	var best := ""
 	var best_score := -INF
 	for ek in _enemy_keys(state, key):
+		if qualify.is_valid() and not bool(qualify.call(state, int(su["player"]), str(ek))):
+			continue
 		var tu: Dictionary = state["units"][ek]
 		if illegal_cb.is_valid() and bool(illegal_cb.call(su["unit"], tu["unit"],
 				maxf(BattleSim.edge_gap_in(su["positions"], su.get("radii", []),
