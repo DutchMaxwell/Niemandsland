@@ -1,6 +1,6 @@
 extends Node3D
 ## Reference-only woody vegetation. Rule anchors, forest areas and colliders stay intact.
-## Native terrain mixes with original reconstructed pine, acacia and burnt wood.
+## Native terrain mixes with reconstructed pine/acacia; volcanic terrain stays mineral.
 
 const Materials = preload("res://scripts/visual/reference_materials.gd")
 const PROP_SHADER = preload("res://shaders/visual/reference_woody_prop.gdshader")
@@ -22,12 +22,11 @@ var _anchor_heights: Array[float] = []
 func prepare(biome: String) -> void:
 	_biome = biome
 	_rng.seed = 210921
-	var kind := "open-pine" if biome == "frozen_tundra" else "dry-acacia"
-	var folder := "forest"
 	if biome == "volcanic_ash":
-		kind = "charred-tree"
-		folder = "volcanic"
-	var path := "res://assets/terrain/reference/" + folder + "/" + kind + ".json"
+		_hero = null
+		return
+	var kind := "open-pine" if biome == "frozen_tundra" else "dry-acacia"
+	var path := "res://assets/terrain/reference/forest/" + kind + ".json"
 	if not FileAccess.file_exists(path):
 		return
 	var entry: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -133,6 +132,9 @@ func _instance(source_index: int,variant: int,height: float,base_y: float) -> No
 	model.position = -Vector3(bounds.get_center().x,bounds.position.y,bounds.get_center().z)
 	var wrapper := Node3D.new()
 	wrapper.name = "ReferenceWoodyVegetation"
+	if _biome == "volcanic_ash":
+		wrapper.name = "ReferenceMonolith"
+		wrapper.add_to_group("reference_volcanic_monolith")
 	wrapper.add_child(model)
 	var scale_value := height / bounds.size.y
 	wrapper.scale = Vector3.ONE * scale_value
@@ -142,6 +144,8 @@ func _instance(source_index: int,variant: int,height: float,base_y: float) -> No
 
 
 func _young_growth() -> int:
+	if _biome == "volcanic_ash":
+		return 0
 	var count := 0
 	for i in _anchors.size():
 		var anchor: Vector2 = _anchors[i]
@@ -216,6 +220,8 @@ func _clear(p: Vector2) -> bool:
 
 
 func _apply_ground_contact() -> void:
+	if _biome == "volcanic_ash":
+		return
 	# Bake the small contact mask once, avoiding a per-pixel loop over every tree.
 	var board_size: Vector2 = _main.get_node("Table").table_size * 0.3048
 	const RESOLUTION := 256

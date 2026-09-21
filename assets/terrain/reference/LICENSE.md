@@ -48,3 +48,8 @@ hashes are in `volcanic/provenance.json` and `volcanic/charred-tree.json`.
 Ash scatter, crater materials, local heat refraction and moving ash are original
 MIT-licensed code. Existing volcanic pillars, masonry and hazards retain their
 original source notices.
+
+The volcanic reference now uses native monoliths without trees. The previous
+charred-tree manifest remains as source history and is no longer loaded by that
+profile. Ash deposits and ground-flow geometry reuse `volcanic/fine-ash.webp`;
+their geometry and shaders are original MIT-licensed code.

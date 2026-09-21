@@ -5,12 +5,16 @@ var _materials: Array[ShaderMaterial] = []
 
 
 func build(main: Node,presentation: Node3D) -> void:
+	var deposits := preload("res://scripts/visual/reference_ash_deposits.gd").new()
+	add_child(deposits)
+	deposits.prepare(main)
 	var craters := 0
 	for original: Node3D in main.terrain_overlay._object_instances:
 		var lights := original.find_children("*","OmniLight3D",true,false)
 		if lights.is_empty():
 			continue
 		# The volcanic overlay attaches a local glow light only to existing lava props.
+		deposits.add_deposit(original,0.03048,true,craters)
 		_shade_lava(original)
 		for light: OmniLight3D in lights:
 			light.light_energy = 0.16
@@ -28,6 +32,13 @@ func build(main: Node,presentation: Node3D) -> void:
 		heat.position.y = 0.022
 		_materials.append(material)
 		craters += 1
+	var monoliths := 0
+	for monolith: Node3D in get_tree().get_nodes_in_group("reference_volcanic_monolith"):
+		var bounds: AABB = main.terrain_overlay._model_space_aabb(monolith)
+		var radius := clampf(maxf(bounds.size.x,bounds.size.z)*0.42,0.006,0.028)
+		deposits.add_deposit(monolith,radius,false,craters+monoliths)
+		monoliths += 1
+	_materials.append_array(deposits.materials)
 	var size: Vector2 = main.get_node("Table").table_size*0.3048
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 21926
@@ -35,12 +46,12 @@ func build(main: Node,presentation: Node3D) -> void:
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
 	var flake := QuadMesh.new()
-	flake.size = Vector2(0.0007,0.0005)
+	flake.size = Vector2(0.0010,0.0006)
 	mm.mesh = flake
-	mm.instance_count = 220
+	mm.instance_count = 480
 	for i in mm.instance_count:
 		mm.set_instance_transform(i,Transform3D(Basis.IDENTITY,Vector3(rng.randf_range(-size.x*0.45,size.x*0.45),0.0,rng.randf_range(-size.y*0.45,size.y*0.45))))
-		mm.set_instance_custom_data(i,Color(rng.randf(),0.0,0.0,1.0))
+		mm.set_instance_custom_data(i,Color(rng.randf(),rng.randf(),0.0,1.0))
 	var ash := MultiMeshInstance3D.new()
 	ash.name = "SparseVolcanicAsh"
 	ash.multimesh = mm
@@ -59,7 +70,7 @@ func build(main: Node,presentation: Node3D) -> void:
 			ground.set_shader_parameter("surface_relief",false)
 			ground.set_shader_parameter("woody_ground_enabled",false)
 			group._floor_mesh.material_override = ground
-	print("REFERENCE_VOLCANIC_EFFECTS craters=",craters," ash=",mm.instance_count)
+	print("REFERENCE_VOLCANIC_EFFECTS craters=",craters," monoliths=",monoliths," deposits=",craters+monoliths," ash=",mm.instance_count)
 
 
 func set_time(value: float) -> void:

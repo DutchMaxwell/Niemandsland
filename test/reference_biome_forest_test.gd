@@ -60,7 +60,10 @@ func test_movable_forest_keeps_saved_members_and_colliders() -> void:
 		var shape := collider.shape
 		var collider_transform := collider.transform
 		assert_int(forest._dress_groups()).is_equal(saved.size())
-		assert_int(forest._young_growth()).is_greater(0)
+		if biome == "volcanic_ash":
+			assert_int(forest._young_growth()).is_equal(0)
+		else:
+			assert_int(forest._young_growth()).is_greater(0)
 		assert_array(group.member_states()).is_equal(saved)
 		assert_object(collider.shape).is_same(shape)
 		assert_bool(collider.transform == collider_transform).is_true()
@@ -73,7 +76,12 @@ func test_movable_forest_keeps_saved_members_and_colliders() -> void:
 				replacements.append(child)
 				local_transforms.append(child.transform)
 				assert_bool(child.has_meta(TerrainGroupBase.MEMBER_META)).is_false()
-		assert_int(replacements.size()).is_greater(saved.size())
+		if biome == "volcanic_ash":
+			assert_int(replacements.size()).is_equal(saved.size())
+			for replacement in replacements:
+				assert_bool(replacement.is_in_group("reference_volcanic_monolith")).is_true()
+		else:
+			assert_int(replacements.size()).is_greater(saved.size())
 		group.position += Vector3(0.2, 0.0, 0.1)
 		group.rotation.y += 0.5
 		for i in replacements.size():
