@@ -106,7 +106,7 @@ impl<'a> Policy<'a> {
         }
         let mut hold = Candidate::hold(key);
         if let Some(e) =
-            best_shoot(state, self.statics, unit, sc, self.tuning, self.seams.rules_epoch)
+            best_shoot(state, self.statics, unit, sc, self.tuning, self.seams.rules_epoch, None)
         {
             hold.shoot = Some(state.key(e).to_string());
         }
@@ -147,7 +147,13 @@ impl<'a> Policy<'a> {
                     .moved_shoot
                     .then(|| {
                         best_shoot(
-                            state, self.statics, unit, sc, self.tuning, self.seams.rules_epoch,
+                            state,
+                            self.statics,
+                            unit,
+                            sc,
+                            self.tuning,
+                            self.seams.rules_epoch,
+                            None,
                         )
                     })
                     .flatten();
@@ -193,7 +199,7 @@ impl<'a> Policy<'a> {
         // without this a committed unit could never be punished in a rollout,
         // so early commitment looked free.
         if let Some(e) = best_charge(
-            state, self.terrain, self.statics, unit, sc, self.tuning, self.seams.rules_epoch,
+            state, self.terrain, self.statics, unit, sc, self.tuning, self.seams.rules_epoch, None,
         ) {
             let mut c = Candidate::new(key, CHARGE);
             c.dest = Some(geom::to_f64(geom::centre(&state.positions[e])));

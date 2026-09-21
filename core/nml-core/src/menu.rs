@@ -255,6 +255,9 @@ fn gap_m(a: &[[f64; 3]], offset: V3, b: &[[f64; 3]]) -> f64 {
 /// by recorded games, and a captured state's ledger is always empty
 /// (`State::buffs` is deliberately not serialised), so the fold is a no-op
 /// on every corpus and no frozen gate is needed.
+/// Wave 6 (`lead/menutargets`): `qualify` filters the enemy loop BEFORE the
+/// sight gate — the table's holder qualifier. Shipping callers pass `None`,
+/// which keeps the loop byte-exact.
 pub fn best_shoot(
     state: &State,
     statics: &[UnitStatic],
@@ -262,11 +265,17 @@ pub fn best_shoot(
     sc: &mut Scratch,
     tuning: Tuning,
     rules_epoch: u32,
+    qualify: Option<&dyn Fn(usize) -> bool>,
 ) -> Option<usize> {
     let us = &statics[state.roster.profile[i]];
     let mut best = None;
     let mut best_ev = 0.0f64;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
+        if let Some(q) = qualify {
+            if !q(e) {
+                continue;
+            }
+        }
         if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
@@ -393,6 +402,10 @@ fn charge_score(
 /// The charge EV prices the LIVE root ctx like every other arm (families
 /// 2-4 of the blindness report) — a granted Furious, Shielded-family
 /// defense or utility-buff knob on either side moves the score.
+///
+/// Wave 6 (`lead/menutargets`): `qualify` filters the enemy loop BEFORE the
+/// legality gate — the table's holder qualifier. Shipping callers pass
+/// `None`, which keeps the loop byte-exact.
 pub fn best_charge(
     state: &State,
     terrain: &Terrain,
@@ -401,6 +414,7 @@ pub fn best_charge(
     sc: &mut Scratch,
     tuning: Tuning,
     rules_epoch: u32,
+    qualify: Option<&dyn Fn(usize) -> bool>,
 ) -> Option<usize> {
     let us_static = &statics[state.roster.profile[i]];
     if us_static.melee.is_empty() {
@@ -416,6 +430,11 @@ pub fn best_charge(
     let mut best = None;
     let mut best_score = f64::NEG_INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
+        if let Some(q) = qualify {
+            if !q(e) {
+                continue;
+            }
+        }
         let gap_in = geom::edge_gap_in(
             &state.positions[i],
             &state.radii[i],
@@ -775,6 +794,22 @@ fn charge_at(state: &State, key: &str, e: usize) -> Candidate {
     c
 }
 
+/// Wave 6 (`lead/menutargets`): the holder qualifier — an enemy qualifies when
+/// it has NOT yet activated this round, or when it stands within 3" of an
+/// objective not owned by the acting player (owner 0 counts as not ours).
+pub fn holder_or_unactivated(state: &State, player: i64, e: usize) -> bool {
+    if !state.activated[e] {
+        return true;
+    }
+    state.objectives.iter().any(|o| {
+        o.owner != player
+            && state.positions[e].iter().any(|p| {
+                geom::length(geom::sub(geom::to_f32(o.pos), geom::to_f32(*p))) as f64
+                    <= 3.0 * IN2M
+            })
+    })
+}
+
 /// The same menu with the parity `Tuning` exposed — see `Tuning`. Shipping code
 /// calls `candidates`/`candidates_in`; only the red proofs pass anything else.
 ///
@@ -792,7 +827,8 @@ pub fn candidates_tuned(
 ) -> Vec<Candidate> {
     let key = state.key(unit);
     let mut out = vec![Candidate::new(key, HOLD)];
-    if let Some(e) = best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH) {
+    let shoot = best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None);
+    if let Some(e) = shoot {
         let mut c = Candidate::new(key, HOLD);
         c.shoot = Some(state.key(e).to_string());
         out.push(c);
@@ -810,7 +846,7 @@ pub fn candidates_tuned(
         out.push(c);
     }
     let scored =
-        best_charge(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH);
+        best_charge(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None);
     if let Some(e) = scored {
         out.push(charge_at(state, key, e));
     }
@@ -867,6 +903,32 @@ pub fn candidates_tuned(
             let mut c = Candidate::new(key, REPOSITION);
             c.dest = Some([to[0], state.positions[unit][0][1], to[1]]);
             out.push(c);
+        }
+    }
+    // Wave 6 (`lead/menutargets`): the table appends, at the very tail, the
+    // best shoot target and best charge victim among enemies that QUALIFY —
+    // not yet activated, or within 3" of an objective not owned by the acting
+    // player — but ONLY when the unqualified pick differs. Appended LAST like
+    // every tail-growth leg, so an OFF menu stays byte-identical.
+    if tuning.holders {
+        let player = state.player[unit];
+        let q = |e: usize| holder_or_unactivated(state, player, e);
+        let mshoot =
+            best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, Some(&q));
+        if let Some(e) = mshoot {
+            if Some(e) != shoot {
+                let mut c = Candidate::new(key, HOLD);
+                c.shoot = Some(state.key(e).to_string());
+                out.push(c);
+            }
+        }
+        let mcharge = best_charge(
+            state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, Some(&q),
+        );
+        if let Some(e) = mcharge {
+            if Some(e) != scored {
+                out.push(charge_at(state, key, e));
+            }
         }
     }
     out
