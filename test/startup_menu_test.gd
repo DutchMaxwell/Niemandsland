@@ -160,3 +160,25 @@ func test_host_creation_commits_selected_table_and_network_settings_together() -
 	assert_bool(result["niemandsland/pending_internet_lobby"]).is_true()
 	assert_bool(result["niemandsland/internet_is_host"]).is_true()
 	assert_bool(result["niemandsland/internet_public"]).is_true()
+
+func test_grassland_card_hands_main_a_table_biome_id() -> void:
+	# The chooser's selection reaches table.set_biome unchanged (main.gd), which rejects ids outside
+	# table.gd BIOMES — the Grassland card used to send "grassland" ("Unknown biome", table unchanged).
+	var previous = ProjectSettings.get_setting("niemandsland/pending_table_setup",null)
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe._on_start_battle_pressed()
+	var card: Button = null
+	for key in probe._table_setup._biome_buttons:
+		if probe._table_setup._biome_buttons[key].text == "Grassland":
+			card = probe._table_setup._biome_buttons[key]
+	assert_object(card).is_not_null()
+	if card == null:
+		return
+	card.pressed.emit()
+	probe._table_setup._confirm()
+	var setup = ProjectSettings.get_setting("niemandsland/pending_table_setup",{})
+	ProjectSettings.set_setting("niemandsland/pending_table_setup",previous)
+	assert_str(setup.biome).is_equal("temperate_grassland")
+	assert_bool(preload("res://scripts/table.gd").BIOMES.has(setup.biome)).is_true()

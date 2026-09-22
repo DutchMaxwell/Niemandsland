@@ -14,13 +14,18 @@ const INK := Color("e9e9df")
 const MUTED := Color("a7b0b6")
 const CYAN := Color("87babc")
 const GOLD := Color("d9bd83")
+# Keys are the TABLE's biome ids (table.gd BIOMES): the selection goes straight into table.set_biome.
 const BIOMES := {
 	"urban_ruins":["Urban ruins","Fractured stone, scarred concrete and scattered rubble."],
 	"alien_jungle":["Alien jungle","Dense foliage, mossy ground and strange undergrowth."],
-	"grassland":["Grassland","Soft earth, open grass and weathered woodland."],
+	"temperate_grassland":["Grassland","Soft earth, open grass and weathered woodland."],
 	"arid_desert":["Arid desert","Wind-worn rock, dry ground and drifting sand."],
 	"frozen_tundra":["Frozen tundra","Frosted stone and snow across a cold, exposed landscape."],
 	"volcanic_ash":["Volcanic ash","Blackened rock, ash-covered ground and ember-red accents."]}
+## The menu diorama names grassland "grassland"; the table only knows "temperate_grassland".
+const MENU_TO_TABLE := {"grassland":"temperate_grassland"}
+## Preview images keep the diorama's file names (assets/ui/table_setup/<name>.webp).
+const PREVIEW_FILE := {"temperate_grassland":"grassland"}
 var selected_biome := "urban_ruins"
 var selected_size := "standard"
 var custom_inches := Vector2(72,48)
@@ -313,7 +318,9 @@ func _build_ui() -> void:
 
 
 func set_biomes(keys: Array, current: String) -> void:
-	_biome_keys = keys.filter(func(key: Variant) -> bool: return BIOMES.has(key))
+	_biome_keys = keys.map(func(key: Variant) -> String: return table_biome(str(key))) \
+		.filter(func(key: String) -> bool: return BIOMES.has(key))
+	current = table_biome(current)
 	selected_biome = current if current in _biome_keys else str(_biome_keys[0]) if not _biome_keys.is_empty() else ""
 	if is_node_ready():
 		_refresh()
@@ -394,7 +401,7 @@ func _refresh() -> void:
 	_error.text = "Enter width and depth from 30.48 to 609.6 cm." if _unit_option.selected == 1 else "Enter width and depth from 12 to 240 in."
 	_summary.text = "%s · %s" % [BIOMES.get(selected_biome,["Choose a biome"])[0],_size_text(inches) if _valid else "Choose valid dimensions"]
 	if BIOMES.has(selected_biome):
-		_preview.texture = load("res://assets/ui/table_setup/"+selected_biome+".webp")
+		_preview.texture = load(_preview_path(selected_biome))
 		_preview_title.text = BIOMES[selected_biome][0]
 		_preview_description.text = BIOMES[selected_biome][1]
 	if _valid:
@@ -497,9 +504,18 @@ func _box(color: Color, border: Color) -> StyleBoxFlat:
 	return box
 
 
+## A menu or table biome id -> the table's id (what table.set_biome accepts).
+static func table_biome(key: String) -> String:
+	return MENU_TO_TABLE.get(key,key)
+
+
+func _preview_path(key: String) -> String:
+	return "res://assets/ui/table_setup/"+str(PREVIEW_FILE.get(key,key))+".webp"
+
+
 func _image(key: String) -> TextureRect:
 	var image := TextureRect.new()
-	image.texture = load("res://assets/ui/table_setup/"+key+".webp")
+	image.texture = load(_preview_path(key))
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
