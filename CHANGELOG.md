@@ -55,7 +55,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **Model downloads no longer depend on the frame rate.** On a slow or busy machine the online model
   list fell back to the built-in one (newly published factions showed as placeholders) and big models
   failed after three 2-minute attempts. Downloads now read up to 4 MiB per frame and give up only when
-  no data arrives for 30 s. (this PR)
+  no data arrives for 30 s. (#1075)
 - **Co-op multiplayer against the AI:** the AI designation reaches every player, and the owner of an
   attacked unit rolls its own saves. (#835, #836)
 - **Spell-granted rules apply where they act** — Quick Shot, Rapid Charge, Slayer, Unwieldy, Piercing
