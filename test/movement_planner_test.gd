@@ -201,6 +201,16 @@ func test_step_blocked_zone_end_pass_and_escape() -> void:
 	assert_bool(MovementPlanner.step_blocked(Vector2(19, 20), Vector2(19.5, 20), [], opts)).is_true()
 
 
+func test_zone_blocks_broad_phase_is_exact() -> void:
+	# WAITTAIL fix: the AABB broad phase may only SKIP zones the point_seg_distance test would reject.
+	# Near cases keep their verdict; a zone whose inflated AABB misses the step is skipped (false).
+	var near := Vector2(20, 20)
+	assert_bool(MovementPlanner._zone_blocks(Vector2(15, 20), Vector2(19, 20), near, 3.0)).is_true()
+	assert_bool(MovementPlanner._zone_blocks(Vector2(15, 20), Vector2(25, 20), near, 3.0)).is_true()
+	assert_bool(MovementPlanner._zone_blocks(Vector2(0, 0), Vector2(1, 0), Vector2(50, 50), 3.0)).is_false()
+	assert_bool(MovementPlanner._zone_blocks(Vector2(0, 0), Vector2(1, 1), Vector2(1.5, 1.5), 1.0)).is_true()
+
+
 func test_step_blocked_avoid_cells_with_escape() -> void:
 	# Cell (5,5) spans x/y 15..18 (3" grid). Entering it is blocked; a model already inside may leave.
 	var opts := {"avoid_cells": {Vector2i(5, 5): true}}
