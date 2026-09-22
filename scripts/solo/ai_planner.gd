@@ -1199,10 +1199,14 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		return out
 	var seen_shoot := {}
 	var seen_charge := {}
+	var seen_advance_shoot := {}   # S5: the live menu carries ADVANCE+shoot itself now (menu_wide default)
 	for c in out:
 		var cd: Dictionary = c
 		if cd.has("shoot"):
-			seen_shoot[str(cd["shoot"])] = true
+			if int(cd["kind"]) == AiDecision.Action.ADVANCE:
+				seen_advance_shoot[str(cd["shoot"])] = true
+			else:
+				seen_shoot[str(cd["shoot"])] = true
 		if cd.has("charge"):
 			seen_charge[str(cd["charge"])] = true
 	var ours: Array = BattleSim._profiles_of(su, true)
@@ -1247,7 +1251,7 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		# NML-1049: ...but only when the barrel reaches after that advance. The gap
 		# is the OPTIMISTIC one (closing straight in at the full band), so the gate
 		# never removes a shot the move could have set up.
-		if BattleSim.sees(su, str(ek)) \
+		if not seen_advance_shoot.has(str(ek)) and BattleSim.sees(su, str(ek)) \
 				and _can_shoot_at(su, tu, maxf(gap_in - advance_in, 0.0)):
 			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE,
 				"dest": _centre(tu), "shoot": str(ek)})
