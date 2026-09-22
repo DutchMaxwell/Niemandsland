@@ -1861,11 +1861,12 @@ func _solo_apply_difficulty() -> void:
 		interactive_grade = SoloDifficulty.preset_for_nachtmahr(core_up, brain_up)
 		if interactive_grade == "planner_v0":
 			AiPlanner.set_search_budget(SoloDifficulty.SHIP_SEARCH_TOP_K, SoloDifficulty.SHIP_SEARCH_HORIZON)
-			print("opponent: erlkoenig brain=%s top_k=%d horizon=%d" % [
+			print("opponent: erlkoenig brain=%s top_k=%d horizon=%d move=%s" % [
 				"loopback" if dev_brain else "onnx " + solo_controller.shipped_brain_sha.left(8),
-				AiPlanner.top_k_default(), AiPlanner.horizon()])
+				AiPlanner.top_k_default(), AiPlanner.horizon(), "core" if SoloController._move_seam_on() else "gdscript"])
 		else:
-			print("opponent: tree — core %s, brain %s" % ["up" if core_up else "off", "up" if brain_up else "none"])
+			print("opponent: tree — core %s, brain %s, move=%s" % ["up" if core_up else "off", "up" if brain_up else "none",
+				"core" if SoloController._move_seam_on() else "gdscript"])
 	for pid in solo_ai_slots:   # Human slots stay human; explicit arena grades above take precedence.
 		solo_controller.set_difficulty(int(pid), SoloDifficulty.for_grade(interactive_grade, _solo_arena_seed))
 
