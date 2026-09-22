@@ -398,6 +398,21 @@ func test_move_bands_royal_legion_charge_bonus_only() -> void:
 	assert_int(b["charge"]).is_equal(14)
 
 
+## Rapid Charge (GF/AoF army books v3.5.3): "This model moves +4" when using Charge actions." — its
+## registry entry is `Fast | rush_mod=4, charge_only=true`. Charge only: the Rush band stays the
+## plain 12", only the Charge band grows. Same for the aura.
+func test_move_bands_rapid_charge_is_charge_only() -> void:
+	for system_faction in [["gf", "wormhole_daemons_of_war"], ["aof", "dark_elves"]]:
+		for rule_name in ["Rapid Charge", "Rapid Charge Aura"]:
+			var b := _controller().move_bands_for_props({
+				"game_system": system_faction[0], "faction_folder": system_faction[1],
+				"special_rules": [rule_name]})
+			var where := "%s %s/%s" % [rule_name, system_faction[0], system_faction[1]]
+			assert_int(b["advance"]).override_failure_message("%s moved the Advance band" % where).is_equal(6)
+			assert_int(b["rush"]).override_failure_message("%s moved the Rush band (charge only)" % where).is_equal(12)
+			assert_int(b["charge"]).override_failure_message("%s: Charge must be 12 + 4" % where).is_equal(16)
+
+
 # === Grounded Speed (aof volcanic_dwarves; registry `Fast | advance_mod=2, rush_mod=4,
 # terrain_within_in=1`): the CONDITIONAL band. The core answers it per activation — the
 # majority of the unit's models within the entry's own 1" of terrain, over the twin query
