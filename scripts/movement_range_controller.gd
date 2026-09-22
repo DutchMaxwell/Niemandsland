@@ -172,8 +172,12 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 			advance += int(rp.get("advance_mod", 0))
 		if not bool(done2.get("rush", false)) and in_terrain:
 			var rush_mod := int(rp.get("rush_mod", 0))
-			rush += rush_mod
-			charge_extra += int(rp.get("charge_mod", rush_mod)) - rush_mod
+			if bool(rp.get("charge_only", false)):
+				# Rapid Charge (+ Aura), v3.5.3: "moves +4\" when using Charge actions" — the Charge band only.
+				charge_extra += int(rp.get("charge_mod", rush_mod))
+			else:
+				rush += rush_mod
+				charge_extra += int(rp.get("charge_mod", rush_mod)) - rush_mod
 		counted[base2] = {"advance": true, "rush": true}
 	# NML-006: active spell tokens with movement modifiers ('+2" advance / +4" rush', once) are stamped
 	# into props as "spell_move_mod" by the solo layer — read here so the AI's bands AND the human's
