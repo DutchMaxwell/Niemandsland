@@ -202,7 +202,7 @@ var unit_dock: UnitDock = null
 var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
 var _command_bar = null            # top bar: round / phase / turn + turn action (UI handoff 22.09.)
-var _dice_collapse = null          # collapse toggle for the dice panel (UI handoff 22.09.)
+var _tool_rail = null              # right-side tool rail: Dice / Measure / Terrain / View (UI handoff 22.09.)
 var game_record_collector: GameRecordCollector = null   # in-memory opt-in game record (PR B1, local only)
 var _tutorial_mode: bool = false              # guided tutorial: set from the startup-menu flag, drives _start_tutorial
 var _tutorial_director: TutorialDirector = null
@@ -508,10 +508,11 @@ func _ready() -> void:
 	_build_movement_cap_row()
 	_set_dice_count(DEFAULT_DICE_COUNT)
 
-	# Let the big dice panel fold down to a slim title bar so it stops covering the field
-	# (UI handoff 22.09.). Display only.
-	_dice_collapse = preload("res://scripts/hud/panel_collapse.gd").new()
-	_dice_collapse.install($UI/HUD/DiceRollerPanel as PanelContainer, "Dice Roller", -650.0, -56.0)
+	# Right-side tool rail: groups Dice / Measure / Terrain / View in one collapsible rail and
+	# moves the dice panel off the field (UI handoff 22.09.). Display only.
+	_tool_rail = preload("res://scripts/hud/tool_rail.gd").new()
+	$UI/HUD.add_child(_tool_rail)
+	_tool_rail.setup(self)
 
 	# Build the multiplayer chat + roster panel (hidden until a session is active).
 	_build_chat_panel()
