@@ -8574,8 +8574,8 @@ func _solo_flush_dev() -> void:
 	var records: Array = solo_controller.drain_decisions()
 	if not _solo_dev or battle_log == null:
 		return
-	for rec in records:
-		battle_log.log_event(BattleLog.Category.GENERAL, SoloController.render_decision(rec as Dictionary))
+	for line in SoloController.player_decision_lines(records):
+		battle_log.log_event(BattleLog.Category.GENERAL, line)
 
 
 func _solo_log_unmodeled_rules(unit: GameUnit) -> void:
@@ -12834,8 +12834,7 @@ func _on_battle_log_export() -> void:
 		return
 	var decision_lines: Array = []
 	if _solo_dev and solo_controller != null:
-		for rec in solo_controller.decision_log:
-			decision_lines.append(SoloController.render_decision(rec as Dictionary))
+		decision_lines = SoloController.player_decision_lines(solo_controller.decision_log)
 	var path: String = battle_log.export_to_file(decision_lines)
 	if path.is_empty():
 		_solo_show_toast("Battle Log export failed — see console")
@@ -12851,8 +12850,7 @@ func _on_battle_log_copy() -> void:
 		return
 	var decision_lines: Array = []
 	if _solo_dev and solo_controller != null:
-		for rec in solo_controller.decision_log:
-			decision_lines.append(SoloController.render_decision(rec as Dictionary))
+		decision_lines = SoloController.player_decision_lines(solo_controller.decision_log)
 	DisplayServer.clipboard_set(battle_log.export_as_text(decision_lines))
 	_solo_show_toast("Battle Log copied to clipboard")
 

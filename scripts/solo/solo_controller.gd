@@ -8292,6 +8292,45 @@ static func render_decision(rec: Dictionary) -> String:
 	return " — ".join(parts)
 
 
+## The PLAYER's view of one decision record — "" means the player does not see it. The "AI reasoning
+## in the log" toggle is a player option (NML-1084), so the panel and the export are player text: plain
+## words, no working names. render_decision above stays the developer renderer (self-play harness) and
+## the raw records stay untouched (decision_sink capture). Text and routing only — no record changes.
+##   - trace taps (dice / digest / rng) carry no rule, choice or reason: nothing for a player to read;
+##   - the leaf row is a training-data sample of the search, not a decision;
+##   - the brain record names the evaluator the look-ahead consulted: one plain sentence instead;
+##   - a feature vector (training input) leaves the numbers; the rule line itself stays.
+static func render_decision_for_player(rec: Dictionary) -> String:
+	var cands: Array = rec.get("candidates", [])
+	if str(rec.get("rule", "")).is_empty() and str(rec.get("chosen", "")).is_empty() \
+			and str(rec.get("why", "")).is_empty() and cands.is_empty():
+		return ""
+	var data: Dictionary = rec.get("data", {})
+	if bool(data.get("leaf", false)):
+		return ""
+	if str(rec.get("kind", "")) == "brain":
+		var evaluator := "its trained evaluator" if str(data.get("name", "")) == "onnx" else "an external evaluator"
+		return "AI [look-ahead] NACHTMAHR — thinks ahead with %s" % evaluator
+	if data.has("features"):
+		var shown := rec.duplicate()
+		var numbers := data.duplicate()
+		numbers.erase("features")
+		shown["data"] = numbers
+		return render_decision(shown)
+	return render_decision(rec)
+
+
+## The player lines for a batch of records, hidden records skipped — what the battle-log panel shows
+## and what its export appends.
+static func player_decision_lines(records: Array) -> Array:
+	var out: Array = []
+	for rec in records:
+		var line := render_decision_for_player(rec as Dictionary)
+		if not line.is_empty():
+			out.append(line)
+	return out
+
+
 # ===== Army rule inventory (the AI-handoff transparency scan) =====
 
 ## Classify an army's special-rule occurrences into the three transparency classes the maintainer asked
