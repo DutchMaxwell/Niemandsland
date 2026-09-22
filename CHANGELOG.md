@@ -24,7 +24,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   max 1.16 s**. The game log names the planner in use (`move=core` / `move=gdscript`).
   (#1056, #1061, #1060)
 - **The planner's live menu offers ADVANCE + shoot** (`menu_wide`, default on; `NML_MENU_WIDE=0`
-  turns it off), proven equal to the core's menu on a recorded corpus. (#1050, this PR)
+  turns it off), proven equal to the core's menu on a recorded corpus. (#1050, #1057)
 - **The core stages its rule files and the model out of the packed build** (`user://nml_core/<version>/`)
   and refuses a game — loudly, falling back to the tree — when a rules file or the row vocab is
   missing instead of searching rule-blind. (#1053, #1054)
@@ -56,6 +56,22 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   list fell back to the built-in one (newly published factions showed as placeholders) and big models
   failed after three 2-minute attempts. Downloads now read up to 4 MiB per frame and give up only when
   no data arrives for 30 s. (#1075)
+- **Windows in-game updates install the whole release.** The update helper replaced only the `.exe`,
+  so the Rust extension next to it was never installed and an updated game silently played the
+  decision tree. It now waits for the game to exit, replaces every release file and rolls all of them
+  back if one copy fails. The release job also refuses a tag that does not match the game's version,
+  which would offer the same update on every start. (#1073)
+- **No more false "apply it manually" notes in solo games.** The battle log told players to apply
+  rules by hand that the table already resolves (a stale list; Army Forge item names such as
+  "Jetpacks" read as rules; prefix matches) and printed a manual note for spells whose effect the
+  table applies. (#1072)
+- **Rapid Charge (and its Aura) extends only the Charge move**, as the army books say ("+4" when using
+  Charge actions"); it lengthened the Rush band too. (#1072)
+- **The battle log speaks to players.** AI records no longer show empty trace lines, training
+  feature dumps or the evaluator's hash; the look-ahead is one plain line. (#1068)
+- **No engine "material is null" errors when models die.** The grey dead-model look no longer sets a
+  hidden material under the base decor's override, which printed four engine errors per base when
+  the node was freed. (#1071)
 - **Co-op multiplayer against the AI:** the AI designation reaches every player, and the owner of an
   attacked unit rolls its own saves. (#835, #836)
 - **Spell-granted rules apply where they act** — Quick Shot, Rapid Charge, Slayer, Unwieldy, Piercing
@@ -86,10 +102,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   have a slot, against 446 of 450 ported to the core. (#792, #793, #797, #800, #803, #808, #810,
   #818, #827, #831, #838, #839,
   #841, #842, #843, #848, #852, #853, #856, #859, #860, #861, #862, #864, #865, #879, #908)
-- **The optional Rust rules core ships dormant in the Linux and Windows exports.** CI builds the
-  extension and places it in the exports; game behaviour is unchanged until the Rust planner is
-  switched on. macOS stays out for now, and the release job waits for the Rust workspace checks.
-  (#873, #874)
+- **The Rust rules core ships in the Linux and Windows exports.** CI builds the extension and places
+  it in the exports (first dormant, #873, #874); since #1055 the release build uses it by default for
+  NACHTMAHR (see Added). macOS ships without it, so NACHTMAHR plays the decision tree there, and the
+  release job waits for the Rust workspace checks.
 - **AI rules fidelity — named rules ported to the fast core.** Split fire (a volley per target group), Mend, Re-Position
   Artillery and the Utility Buff bridge, Breath Attack, Shot Modifier with melee leg and flat / over-9" siblings, Hit &
   Run (incl. Fighter + Shooter), natural-6 extra attack dice, Growth Markers, Second Wind, Vanguard, Resistance,
