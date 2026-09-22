@@ -82,10 +82,16 @@ static func build_report(player_names: Array = [], room_code: String = "", extra
 	lines.append("renderer: %s" % str(ProjectSettings.get_setting("rendering/renderer/rendering_method", "?")))
 	lines.append("gpu: %s (%s)" % [RenderingServer.get_video_adapter_name(), RenderingServer.get_video_adapter_vendor()])
 	lines.append("cpu: %s x%d" % [OS.get_processor_name(), OS.get_processor_count()])
+	# AI path (22.09.): which opponent this machine runs is decided per launch — extension present,
+	# movement planner in the core or in GDScript, and the last "opponent:" banner the game printed.
+	# A triager reads it here instead of grepping the log below.
+	var log_text := _read_log()
+	lines.append("ai_extension: %s" % ("yes" if ClassDB.class_exists("NmlCore") else "no"))
+	lines.append("ai_move: %s" % ("core" if SoloController._move_seam_on() else "gdscript"))
+	lines.append("ai_opponent: %s" % last_opponent_line(log_text))
 	for k in extra:
 		lines.append("%s: %s" % [str(k), str(extra[k])])
 	lines.append("")
-	var log_text := _read_log()
 	lines.append("=== recent log ===")
 	lines.append(log_text)
 	var raw := "\n".join(lines)
@@ -148,6 +154,16 @@ static func export_report_with_screenshot(stamp: String, screenshot: Image, play
 ## Read the recent log: the newest RECENT_LOG_FILES `niemandsland*.log` files (the engine rotates
 ## per launch), each tailed to its last PER_LOG_TAIL_BYTES, in chronological order — so a report
 ## taken from the menu after restarting still carries the previous session's game.
+## The LAST log line that starts with "opponent: " (the banner main.gd prints when the AI grade is
+## applied), or "none seen" — a line that merely contains the word mid-line is not a banner.
+static func last_opponent_line(log_text: String) -> String:
+	var found := "none seen"
+	for l in log_text.split("\n"):
+		if l.begins_with("opponent: "):
+			found = l.strip_edges()
+	return found
+
+
 static func _read_log() -> String:
 	var dir := DirAccess.open(LOG_DIR)
 	if dir == null:

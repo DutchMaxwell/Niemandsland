@@ -68,3 +68,28 @@ func test_discovered_room_code_scrubs_out() -> void:
 	for c in Reporter._room_codes_in(log_text):
 		pairs.append([c, "<room>"])
 	assert_str(Reporter.scrub_text(log_text, pairs)).is_equal("joined room <room> ok")
+
+
+# ===== AI path header: extension present, move seam, last opponent banner =====
+
+func test_build_report_names_ai_path() -> void:
+	var report := Reporter.build_report()
+	assert_str(report).contains("ai_extension: %s\n" % ("yes" if ClassDB.class_exists("NmlCore") else "no"))
+	var move := ""
+	for l in report.split("\n"):
+		if l.begins_with("ai_move: "):
+			move = l.trim_prefix("ai_move: ")
+	assert_bool(move == "core" or move == "gdscript").is_true()
+
+
+func test_last_opponent_line_takes_the_last() -> void:
+	var log_text := "boot\nopponent: tree — core up, brain none, move=gdscript\nnoise\nopponent: erlkoenig brain=onnx move=core\n"
+	assert_str(Reporter.last_opponent_line(log_text)).is_equal("opponent: erlkoenig brain=onnx move=core")
+
+
+func test_last_opponent_line_none_seen() -> void:
+	assert_str(Reporter.last_opponent_line("boot\nno banner\n")).is_equal("none seen")
+
+
+func test_last_opponent_line_ignores_non_line_start() -> void:
+	assert_str(Reporter.last_opponent_line("the opponent: word mid-line\n")).is_equal("none seen")
