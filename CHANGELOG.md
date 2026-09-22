@@ -7,6 +7,21 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **NACHTMAHR plays with the search planner and a neural leaf evaluator in-process.** When the
+  Rust core (`NmlCore` GDExtension, now built with the ONNX evaluator) and the packed model
+  `assets/solo/brains/erlkoenig.onnx` load, the one player-facing grade runs the rollout search
+  (top-k 10, horizon 3) priced by the net; otherwise the decision tree plays exactly as before, and
+  the game log says which (`opponent: erlkoenig brain=onnx …` / `opponent: tree — …`). Measured on
+  the real table against the shipped tree: 55.3 % over 600 games (paired sign test p = 0.0003,
+  21.09.); the wider menu below adds +4.70 points [95 % +2.77, +6.83] over 2,000 paired games on
+  seeds no development run ever used (22.09.). AI decision wait on the reference laptop (headless
+  harness, 20 games each): tree median 79 ms / p90 2.5 s; new opponent median 486 ms / p90 3.5 s.
+  (#1052, #1053, #1054, #1055, #1056)
+- **The planner's live menu offers ADVANCE + shoot** (`menu_wide`, default on; `NML_MENU_WIDE=0`
+  turns it off), proven equal to the core's menu on a recorded corpus. (#1050, this PR)
+- **The core stages its rule files and the model out of the packed build** (`user://nml_core/<version>/`)
+  and refuses a game — loudly, falling back to the tree — when a rules file or the row vocab is
+  missing instead of searching rule-blind. (#1053, #1054)
 - **Objective-token rush reach.** The fast core's objective token carries two new columns — t[10]/t[11], the per-side count of units whose base-edge gap to the objective is within the last-round flip band (`OBJECTIVE_CONTROL_IN + live rush`), a superset of the contest count. Token vocab bumps to 3 (RESIDUALS_ERLKOENIG_2026-09-19).
 - **Privacy & data settings (local only).** A consent screen, off by default, explains optional
   game-record sharing, previews an example record and can save it locally; nothing is sent. An

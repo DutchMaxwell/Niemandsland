@@ -420,6 +420,7 @@ func test_live_api_rule_text_is_refused_under_the_env() -> void:
 ## RUN PROOF: every arena result carries the effective A/B switches, read from the same statics the
 ## game used — so a result file proves its own arm (a commit sha does not prove a switch was live).
 func test_search_knobs_carry_the_effective_ab_switches() -> void:
+	var saved_mw := AiPlanner.menu_wide
 	AiPlanner._mh_env = 0
 	AiPlanner._mw_env = 0
 	AiPlanner.menu_holders = true
@@ -428,6 +429,8 @@ func test_search_knobs_carry_the_effective_ab_switches() -> void:
 	SoloController.deploy_threat_preset = "planner_v0"
 	var k: Dictionary = ArenaMatch.search_knobs()
 	AiPlanner.menu_holders = false   # restored BEFORE asserting: no leak on failure
+	AiPlanner.menu_wide = saved_mw   # S5: the shipped default is ON — never leak "off" into the next suite
+	AiPlanner._mw_env = -1
 	SoloController.deploy_threat_in = 0.0
 	SoloController.deploy_threat_preset = ""
 	# .get() with a sentinel, never k[...]: a missing key must FAIL the assertion, not raise a

@@ -67,10 +67,11 @@ static var _tk := 0   # research seam: NML_TOP_K overrides (lazy; <=0 = unread)
 ## Read once from NML_MENU_HOLDERS=1 (tests set the static directly; _mh_env = -1 means unread).
 static var menu_holders := false
 static var _mh_env := -1
-## MENUWIDE: the header knob `menu_wide` for the Rust seam (its W1 ADVANCE+shoot leg, off by default).
-## The table's live menu has no such leg yet — this static only stamps the knob so an NML_CORE=1
-## game can arm it (NML_MENU_WIDE=1); tests set it directly.
-static var menu_wide := false
+## MENUWIDE: the header knob `menu_wide` (the ADVANCE+shoot leg, in the core's menu and in the
+## table's live menu, #1050). DEFAULT ON since 22.09.: confirmation on fresh seeds 1001-1500,
+## 2,000 pairs, +4.70 points [+2.77, +6.83] over the same planner without the leg (analysis
+## CONFIRM_MENUWIDE_2026-09-22). NML_MENU_WIDE=0 switches it off, =1 on; tests set it directly.
+static var menu_wide := true
 static var _mw_env := -1
 
 
@@ -1136,9 +1137,12 @@ static func candidates(state: Dictionary, key: String) -> Array:
 
 static func menu_wide_on() -> bool:
 	if _mw_env < 0:
-		_mw_env = 1 if OS.get_environment("NML_MENU_WIDE") == "1" else 0
+		var e := OS.get_environment("NML_MENU_WIDE")
+		_mw_env = 1 if e == "1" else (0 if e == "0" else 2)   # 2 = unset: the static default stands
 		if _mw_env == 1:
 			menu_wide = true
+		elif _mw_env == 0:
+			menu_wide = false
 	return menu_wide
 
 
@@ -1195,10 +1199,14 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		return out
 	var seen_shoot := {}
 	var seen_charge := {}
+	var seen_advance_shoot := {}   # S5: the live menu carries ADVANCE+shoot itself now (menu_wide default)
 	for c in out:
 		var cd: Dictionary = c
 		if cd.has("shoot"):
-			seen_shoot[str(cd["shoot"])] = true
+			if int(cd["kind"]) == AiDecision.Action.ADVANCE:
+				seen_advance_shoot[str(cd["shoot"])] = true
+			else:
+				seen_shoot[str(cd["shoot"])] = true
 		if cd.has("charge"):
 			seen_charge[str(cd["charge"])] = true
 	var ours: Array = BattleSim._profiles_of(su, true)
@@ -1243,7 +1251,7 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		# NML-1049: ...but only when the barrel reaches after that advance. The gap
 		# is the OPTIMISTIC one (closing straight in at the full band), so the gate
 		# never removes a shot the move could have set up.
-		if BattleSim.sees(su, str(ek)) \
+		if not seen_advance_shoot.has(str(ek)) and BattleSim.sees(su, str(ek)) \
 				and _can_shoot_at(su, tu, maxf(gap_in - advance_in, 0.0)):
 			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE,
 				"dest": _centre(tu), "shoot": str(ek)})

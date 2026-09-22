@@ -431,3 +431,26 @@ func test_menu_wide_offers_advance_and_shoot_when_the_shot_needs_the_move() -> v
 	assert_int(int(extra["kind"])).is_equal(AiDecision.Action.ADVANCE)
 	assert_str(str(extra.get("shoot", ""))).is_equal("Far")
 
+
+
+## S5 (22.09.): the ADVANCE+shoot leg is ON by default; NML_MENU_WIDE=0 is the explicit off,
+## =1 the explicit on, anything else leaves the static default alone. (Confirmation run
+## 22.09.: +4.70 points [+2.77, +6.83] over 2,000 pairs on fresh seeds.)
+func test_menu_wide_env_switch_and_default() -> void:
+	var saved_env := OS.get_environment("NML_MENU_WIDE")
+	var saved_static := AiPlanner.menu_wide
+	OS.set_environment("NML_MENU_WIDE", "0")
+	AiPlanner._mw_env = -1
+	AiPlanner.menu_wide = true
+	assert_bool(AiPlanner.menu_wide_on()).is_false()
+	OS.set_environment("NML_MENU_WIDE", "1")
+	AiPlanner._mw_env = -1
+	AiPlanner.menu_wide = false
+	assert_bool(AiPlanner.menu_wide_on()).is_true()
+	OS.set_environment("NML_MENU_WIDE", "")
+	AiPlanner._mw_env = -1
+	AiPlanner.menu_wide = true
+	assert_bool(AiPlanner.menu_wide_on()).is_true()   # unset: the shipped default (on) stands
+	OS.set_environment("NML_MENU_WIDE", saved_env)
+	AiPlanner._mw_env = -1
+	AiPlanner.menu_wide = saved_static
