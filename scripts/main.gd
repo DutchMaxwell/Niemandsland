@@ -493,6 +493,8 @@ func _ready() -> void:
 	# Connect Dice Roller Plugin
 	roll_button.pressed.connect(_on_roll_button_pressed)
 	quick_roll_button.pressed.connect(_on_quick_roll_button_pressed)
+	_style_dice_button(roll_button, true)
+	_style_dice_button(quick_roll_button)
 	dice_roller_control.roll_finnished.connect(_on_roller_finished)
 	dice_roller_control.roll_started.connect(_on_roller_started)
 	# A local die-colour click → mirror it live to the opponent's tray.
@@ -12483,6 +12485,7 @@ func _build_movement_cap_row() -> void:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
 		btn.pressed.connect(_on_movement_cap_pressed.bind(int(spec[0])))
+		_style_dice_button(btn)
 		row.add_child(btn)
 		_movement_cap_buttons[int(spec[0])] = btn
 
@@ -12525,6 +12528,7 @@ func _build_dice_count_selector() -> void:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
 		btn.pressed.connect(_on_dice_preset_pressed.bind(n))
+		_style_dice_button(btn)
 		grid.add_child(btn)
 		_dice_preset_buttons.append(btn)
 	selector.add_child(grid)
@@ -12557,6 +12561,7 @@ func _make_dice_delta_button(delta: int) -> Button:
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
 	btn.pressed.connect(_on_dice_delta_pressed.bind(delta))
+	_style_dice_button(btn)
 	return btn
 
 
@@ -12702,7 +12707,25 @@ func _make_dice_option_button(text: String) -> Button:
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
+	_style_dice_button(btn)
 	return btn
+
+
+## Re-skins one dense dice-panel button to the tactical tokens (UI handoff 22.09.): compact
+## content margins so the 26 px rows keep their height. The active-state tint (modulate) still
+## reads on top. Display only.
+func _style_dice_button(btn: Button, primary: bool = false) -> void:
+	var boxes: Dictionary = HudTokens.primary_button() if primary else HudTokens.ghost_button()
+	for state in boxes:
+		var style: StyleBoxFlat = (boxes[state] as StyleBoxFlat).duplicate()
+		style.content_margin_left = 8
+		style.content_margin_right = 8
+		style.content_margin_top = 2
+		style.content_margin_bottom = 2
+		btn.add_theme_stylebox_override(state, style)
+	btn.add_theme_color_override("font_color", HudTokens.TEXT)
+	btn.add_theme_font_override("font", HudTokens.body_font())
+	btn.add_theme_font_size_override("font_size", 12)
 
 
 func _on_success_target_pressed(target: int) -> void:
