@@ -1,15 +1,7 @@
 shader_type canvas_item;
-// Menu legibility scrim: darkens the left edge (under the menu column) fading out
-// toward the diorama, plus a thin bottom gradient under the footer. Pure UV math —
-// web-safe (no screen textures, no derivatives).
-
-uniform float edge_alpha : hint_range(0.0, 1.0) = 0.7;
-uniform float fade_end : hint_range(0.0, 1.0) = 0.62;
-uniform float bottom_alpha : hint_range(0.0, 1.0) = 0.45;
-uniform float bottom_start : hint_range(0.0, 1.0) = 0.85;
-
+// Quiet navy backing for readable menu text, fading into the native night scene.
 void fragment() {
-	float side = edge_alpha * (1.0 - smoothstep(0.0, fade_end, UV.x));
-	float bottom = bottom_alpha * smoothstep(bottom_start, 1.0, UV.y);
-	COLOR = vec4(0.0, 0.0, 0.0, max(side, bottom));
+	float side = mix(0.98,0.0,smoothstep(0.22,0.72,UV.x));
+	float bottom = 0.88*smoothstep(0.76,1.0,UV.y);
+	COLOR = vec4(0.035,0.055,0.078,max(side,bottom));
 }

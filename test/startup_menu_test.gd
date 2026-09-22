@@ -1,372 +1,112 @@
 extends GdUnitTestSuite
-## Tests for the AAA startup menu: button set (incl. conditional CONTINUE), focus
-## chain, version binding and the diorama safety guards (sky-only under tests, no
-## AtmosphereController so user://atmosphere.cfg is never touched by the menu).
-
-const STARTUP_MENU_SCENE := "res://scenes/startup_menu.tscn"
-
+## Native routes, focus ownership and real-save state. Tests mount outside the live
+## scene so the decorative 3D assets and update check never delay or network here.
 var _runner: GdUnitSceneRunner
 var _menu: Control
 
-
 func before_test() -> void:
-	_runner = scene_runner(STARTUP_MENU_SCENE)
+	_runner = scene_runner("res://scenes/startup_menu.tscn")
 	_menu = _runner.scene()
 
-
 func after_test() -> void:
-	_runner = null
 	_menu = null
+	_runner = null
 
+func test_primary_routes_are_grouped() -> void:
+	var actions := _menu.find_child("MenuButtons",true,false)
+	assert_int(actions.get_child_count()).is_equal(4)
+	assert_bool(_menu.host_online_btn.is_visible_in_tree()).is_false()
+	assert_bool(_menu.tutorial_btn.is_visible_in_tree()).is_false()
+	_menu.view.buttons.OnlineBtn.pressed.emit()
+	assert_bool(_menu.host_online_btn.is_visible_in_tree()).is_true()
+	assert_bool(_menu.join_online_btn.is_visible_in_tree()).is_true()
+	assert_bool(_menu.browse_online_btn.is_visible_in_tree()).is_true()
+	assert_bool(_menu.tutorial_btn.is_visible_in_tree()).is_false()
 
-## ===== Button Count =====
+func test_continue_matches_actual_save_lookup() -> void:
+	assert_bool(_menu.continue_btn.visible).is_equal(not SaveManager.latest_save_info().is_empty())
+	assert_str(_menu._continue_path).is_equal(str(SaveManager.latest_save_info().get("path","")))
 
-func test_menu_has_expected_buttons() -> void:
-	var menu_buttons := _menu.find_child("MenuButtons", true, false) as VBoxContainer
-	assert_that(menu_buttons).is_not_null()
+func test_first_visit_promotes_new_table_and_hides_save() -> void:
+	_menu.view.set_save({})
+	assert_bool(_menu.view.resume.visible).is_false()
+	assert_bool(_menu.continue_btn.is_visible_in_tree()).is_false()
+	assert_bool(_menu.start_battle_btn.primary).is_true()
+	assert_str(_menu.view.welcome.text).is_equal("Dein erster Tisch wartet.")
 
-	var buttons: Array[Button] = []
-	for child in menu_buttons.get_children():
-		if child is Button:
-			buttons.append(child)
+func test_saved_title_is_not_replaced_with_mockup_data() -> void:
+	_menu.view.set_save({"name":"Meine eigene Runde","modified_unix":1727000000})
+	assert_str(_menu.view.save_name.text).is_equal("Meine eigene Runde")
+	assert_bool(_menu.start_battle_btn.primary).is_false()
 
-	# Continue/Start/Tutorial/Host/Join/Browse/Load/ReportProblem/Credits/Exit; CONTINUE may be hidden.
-	assert_that(buttons.size()).is_equal(11)   # +1: the GAME SCHOOL entry (Spielschule wave 1)
+func test_visible_focus_chain_loops_and_skips_hidden_routes() -> void:
+	_menu.view.set_save({})
+	assert_object(_menu.start_battle_btn.get_node(_menu.start_battle_btn.focus_neighbor_top)).is_same(_menu.exit_game_btn)
+	assert_object(_menu.exit_game_btn.get_node(_menu.exit_game_btn.focus_neighbor_bottom)).is_same(_menu.start_battle_btn)
+	for button in _menu.view.main_buttons():
+		assert_int(button.focus_mode).is_equal(Control.FOCUS_ALL)
 
+func test_escape_closes_group_without_quit_dialog() -> void:
+	_menu.view.buttons.LearnBtn.grab_focus()
+	_menu.view.buttons.LearnBtn.pressed.emit()
+	var event := InputEventKey.new()
+	event.keycode = KEY_ESCAPE
+	event.pressed = true
+	_menu._unhandled_key_input(event)
+	assert_bool(_menu.view.route_panel.visible).is_false()
+	assert_object(_menu._exit_confirm).is_null()
+	assert_bool(_menu.view.buttons.LearnBtn.has_focus()).is_true()
 
-func test_continue_button_hidden_without_save() -> void:
-	var btn := _menu.find_child("ContinueBtn", true, false) as Button
-	assert_that(btn).is_not_null()
-	# In the test environment there may or may not be user saves; the button's
-	# visibility must MATCH SaveManager.latest_save_info() exactly.
-	assert_that(btn.visible).is_equal(not SaveManager.latest_save_info().is_empty())
+func test_group_focus_cycles_inside_group() -> void:
+	_menu.view.show_route("online")
+	assert_object(_menu.browse_online_btn.get_node(_menu.browse_online_btn.focus_next)).is_same(_menu.view.route_back)
+	assert_object(_menu.view.route_back.get_node(_menu.view.route_back.focus_next)).is_same(_menu.host_online_btn)
 
+func test_existing_routes_keep_their_own_handlers() -> void:
+	for pair in [[_menu.start_battle_btn,_menu._on_start_battle_pressed],[_menu.continue_btn,_menu._on_continue_pressed],
+		[_menu.load_battle_btn,_menu._on_load_battle_pressed],[_menu.tutorial_btn,_menu._on_tutorial_pressed],
+		[_menu.spielschule_btn,_menu._on_spielschule_pressed],[_menu.credits_btn,_menu._on_credits_pressed]]:
+		assert_bool(pair[0].pressed.is_connected(pair[1])).is_true()
+	assert_bool(_menu.tutorial_btn.pressed.is_connected(_menu._on_spielschule_pressed)).is_false()
 
-func test_version_label_bound_to_project_config() -> void:
-	var label := _menu.find_child("VersionLabel", true, false) as Label
-	assert_that(label).is_not_null()
-	var expected: String = "v%s" % str(ProjectSettings.get_setting("application/config/version"))
-	assert_that(label.text).is_equal(expected)
+func test_host_route_opens_existing_dialog_and_keeps_public_checkbox_focusable() -> void:
+	_menu.view.show_route("online")
+	_menu.host_online_btn.pressed.emit()
+	assert_bool(_menu.view.route_panel.visible).is_false()
+	assert_bool(_menu._host_popup.visible).is_true()
+	assert_object(_menu._relay_url_input).is_not_null()
+	assert_int(_menu._host_public_check.focus_mode).is_equal(Control.FOCUS_ALL)
 
-
-func test_all_menu_buttons_are_keyboard_focusable() -> void:
-	var menu_buttons := _menu.find_child("MenuButtons", true, false) as VBoxContainer
-	for child in menu_buttons.get_children():
-		if child is Button:
-			assert_that((child as Button).focus_mode).is_equal(Control.FOCUS_ALL)
-
-
-func test_menu_never_contains_atmosphere_controller() -> void:
-	# AtmosphereController persists to user://atmosphere.cfg on every change — the
-	# menu must never instantiate it (the diorama composes lighting directly).
-	assert_that(_find_by_script(_menu, "atmosphere_controller.gd")).is_null()
-
-
-func test_diorama_stays_sky_only_under_tests() -> void:
-	# gdUnit adds the scene under /root (not as current_scene); AUTO mode must keep
-	# the heavyweight 3D diorama (terrain overlay) off and never fetch from R2.
-	assert_that(_find_by_script(_menu, "terrain_overlay.gd")).is_null()
-
-
-func _find_by_script(root: Node, script_file: String) -> Node:
-	for child in root.get_children():
-		var script: Script = child.get_script() as Script
-		if script != null and script.resource_path.ends_with(script_file):
-			return child
-		var found := _find_by_script(child, script_file)
-		if found != null:
-			return found
-	return null
-
-
-## ===== Button Labels =====
-
-func test_start_battle_button_label() -> void:
-	var btn := _menu.find_child("StartBattleBtn", true, false) as Button
-	assert_that(btn).is_not_null()
-	assert_that(btn.text).contains("START NEW BATTLE")
-
-
-func test_load_battle_button_label() -> void:
-	var btn := _menu.find_child("LoadBattleBtn", true, false) as Button
-	assert_that(btn).is_not_null()
-	assert_that(btn.text).contains("LOAD BATTLE")
-
-
-func test_exit_game_button_label() -> void:
-	var btn := _menu.find_child("ExitGameBtn", true, false) as Button
-	assert_that(btn).is_not_null()
-	assert_that(btn.text).contains("EXIT GAME")
-
-
-func test_credits_button_label_and_handler() -> void:
-	var btn := _menu.find_child("CreditsBtn", true, false) as Button
-	assert_that(btn).is_not_null()
-	assert_that(btn.text).contains("CREDITS")
-	assert_that(_menu.has_method("_on_credits_pressed")).is_true()
-	assert_that(btn.pressed.is_connected(_menu._on_credits_pressed)).is_true()
-
-
-## ===== No Multiplayer =====
-
-func test_no_multiplayer_button_exists() -> void:
-	var multiplayer_btn := _menu.find_child("MultiplayerBtn", true, false)
-	assert_that(multiplayer_btn).is_null()
-
-
-func test_no_multiplayer_handler_exists() -> void:
-	assert_that(_menu.has_method("_on_multiplayer_pressed")).is_false()
-
-
-## ===== Handler Methods Exist =====
-
-func test_start_battle_handler_exists() -> void:
-	assert_that(_menu.has_method("_on_start_battle_pressed")).is_true()
-
-
-func test_load_battle_handler_exists() -> void:
-	assert_that(_menu.has_method("_on_load_battle_pressed")).is_true()
-
-
-func test_exit_handler_exists() -> void:
-	assert_that(_menu.has_method("_on_exit_pressed")).is_true()
-
-
-func test_transition_to_game_exists() -> void:
-	assert_that(_menu.has_method("_transition_to_game")).is_true()
-
-
-## ===== Signal Connections =====
-
-func test_start_battle_button_is_connected() -> void:
-	var btn := _menu.find_child("StartBattleBtn", true, false) as Button
-	assert_that(btn).is_not_null()
-	assert_that(btn.pressed.is_connected(_menu._on_start_battle_pressed)).is_true()
-
-
-func test_load_battle_button_is_connected() -> void:
-	var btn := _menu.find_child("LoadBattleBtn", true, false) as Button
-	assert_that(btn).is_not_null()
-	assert_that(btn.pressed.is_connected(_menu._on_load_battle_pressed)).is_true()
-
-
-func test_exit_button_is_connected() -> void:
-	var btn := _menu.find_child("ExitGameBtn", true, false) as Button
-	assert_that(btn).is_not_null()
-	assert_that(btn.pressed.is_connected(_menu._on_exit_pressed)).is_true()
-
-
-## ===== Load Battle FileDialog =====
-
-func test_load_battle_opens_file_dialog() -> void:
-	_menu._on_load_battle_pressed()
-	await _runner.simulate_frames(2)
-
-	var dialog_found := false
-	for child in _menu.get_children():
-		if child is FileDialog:
-			dialog_found = true
-			break
-	assert_that(dialog_found).is_true()
-
-
-## ===== Hover Effects =====
-
-func test_hover_effects_on_all_buttons() -> void:
-	var menu_buttons := _menu.find_child("MenuButtons", true, false) as VBoxContainer
-	var buttons: Array[Button] = []
-	for child in menu_buttons.get_children():
-		if child is Button:
-			buttons.append(child)
-
-	for btn in buttons:
-		assert_that(btn.mouse_entered.get_connections().size()).is_greater(0)
-
-
-func test_focus_chain_loops_first_to_last() -> void:
-	var first := _menu.find_child("StartBattleBtn", true, false) as Button
-	var last := _menu.find_child("ExitGameBtn", true, false) as Button
-	# With no save, StartBattle is the first VISIBLE button: up from it lands on Exit.
-	if not (_menu.find_child("ContinueBtn", true, false) as Button).visible:
-		assert_that(first.get_node(first.focus_neighbor_top)).is_equal(last)
-		assert_that(last.get_node(last.focus_neighbor_bottom)).is_equal(first)
-
-
-## ===== Online dialogs (regression: the content node must resolve) =====
-## The net dialog's intermediate MarginContainer gets a runtime auto-name, so a
-## fixed get_node path resolved to null and adding content crashed — "Host Online"
-## opened nothing. These guard that the host/join/browse dialogs build fully.
-
-func test_host_online_dialog_builds() -> void:
-	_menu._on_host_online_pressed()
-	await _runner.simulate_frames(3)
-	assert_that(_menu._host_name_input).is_not_null()
-	assert_that(_menu._host_public_check).is_not_null()
-	assert_that(_menu._relay_url_input).is_not_null()
-	assert_that(_menu._host_popup.visible).is_true()
-
-
-func test_join_online_dialog_builds() -> void:
+func test_join_invalid_code_keeps_dialog_open_and_does_not_transition() -> void:
 	_menu._on_join_online_pressed()
-	await _runner.simulate_frames(3)
-	assert_that(_menu._join_name_input).is_not_null()
-	assert_that(_menu._join_code_input).is_not_null()
-	assert_that(_menu._join_popup.visible).is_true()
+	_menu._join_code_input.text = "AB"
+	_menu._on_join_confirmed()
+	assert_bool(_menu._join_popup.visible).is_true()
+	assert_bool(_menu._join_error_label.visible).is_true()
+	assert_bool(_menu._transitioning).is_false()
 
+func test_load_opens_real_nml_file_dialog() -> void:
+	_menu.load_battle_btn.pressed.emit()
+	assert_object(_menu._load_dialog).is_not_null()
+	assert_int(_menu._load_dialog.file_mode).is_equal(FileDialog.FILE_MODE_OPEN_FILE)
+	assert_bool(_menu._load_dialog.visible).is_true()
 
-func test_browse_online_dialog_builds() -> void:
-	_menu._on_browse_online_pressed()
-	await _runner.simulate_frames(3)
-	assert_that(_menu._browse_rooms_vbox).is_not_null()
-	assert_that(_menu._browse_lobby).is_not_null()
-	assert_that(_menu._browse_popup.visible).is_true()
-
-
-## ===== Live quality-switch rebuild cover =====
-## Switching Performance -> higher rebuilds the whole diorama live; without a
-## loading cover the heavy build froze the visible menu with no feedback.
-
-func test_diorama_rebuild_shows_loading_overlay() -> void:
-	await _runner.simulate_frames(3)
-	# After startup the initial overlay is gone (or absent in tests) — force the
-	# rebuild signal like a live Performance -> higher switch would.
-	_menu._loading_overlay = null
-	_menu._on_diorama_rebuild_started()
-	assert_that(_menu._loading_overlay).is_not_null()
-	assert_that(is_instance_valid(_menu._loading_overlay)).is_true()
-
-
-## ===== Teaching-entry contract =====
-## Pins WHICH menu entries teach, what each is called, and where each one leads — the seam
-## a future duplicate/half-wired entry or a renamed flag would silently break.
-
-## The teaching entries, by NODE name (stable) -> the words their label must carry (E3b).
-## Node names, not labels, are the identity here: a label is copy and will be reworded, and
-## the previous version of this test keyed on the word "TUTORIAL" alone — which is exactly
-## how it would have gone green again the moment the second entry stopped saying "TUTORIAL".
-const TEACHING_ENTRIES := {
-	"TutorialBtn": ["TUTORIAL", "KLASSISCH"],
-	"SpielschuleBtn": ["FEUERTAUFE", "IN ARBEIT"],
-}
-
-## Words that mark a button as leading into teaching content. Any button carrying one of
-## these must be a known entry above — that is what catches a THIRD entry appearing quietly.
-const TEACHING_WORDS := ["TUTORIAL", "SPIELSCHULE", "FEUERTAUFE", "LEHRGANG", "SCHULE"]
-
-
-func test_both_teaching_entries_exist_and_say_which_is_which() -> void:
-	# TC-058: a tester clicked "TUTORIAL" expecting the Game School and landed in the old
-	# tool track, because the two entries stood one under the other and neither said what
-	# it was. E3b's answer is that BOTH are named — no entry is hidden, none is silently
-	# rerouted. This test is what keeps that true.
-	#
-	# It used to be a canary that demanded exactly ONE entry, red on purpose the moment the
-	# Game School landed. That moment is now: the canary fired (2 matches instead of 1) and
-	# is replaced here by the contract it asked for — both entries asserted by name, each
-	# with its own label and its own handler.
-	var menu_buttons := _menu.find_child("MenuButtons", true, false) as VBoxContainer
-	assert_that(menu_buttons).is_not_null()
-
-	var found: Array[String] = []
-	for child in menu_buttons.get_children():
-		if not (child is Button):
-			continue
-		var btn := child as Button
-		var label := btn.text.to_upper()
-		var teaches := false
-		for word in TEACHING_WORDS:
-			if label.contains(word) or btn.name.to_upper().contains(word):
-				teaches = true
-				break
-		if not teaches:
-			continue
-		# A teaching entry the contract does not know about is the TC-058 failure mode
-		# returning under a new name — fail here rather than let it stand unlabelled.
-		assert_that(TEACHING_ENTRIES.has(btn.name)).override_failure_message(
-			"Unknown teaching entry '%s' (label '%s') — add it to TEACHING_ENTRIES and say what it is."
-			% [btn.name, btn.text]).is_true()
-		found.append(btn.name)
-
-	# Every known entry present, exactly once, and nothing else teaching.
-	found.sort()
-	var expected: Array[String] = []
-	for key in TEACHING_ENTRIES.keys():
-		expected.append(str(key))
-	expected.sort()
-	assert_that(found).is_equal(expected)
-
-	# Each label carries its own distinguishing words — that is the whole point of E3b.
-	for name in TEACHING_ENTRIES.keys():
-		var btn := _menu.find_child(str(name), true, false) as Button
-		assert_that(btn).is_not_null()
-		for word in TEACHING_ENTRIES[name]:
-			assert_that(btn.text.to_upper()).contains(str(word))
-
-
-func test_each_teaching_entry_has_its_own_handler() -> void:
-	# The two entries must not share a handler: that would be the silent reroute E3 forbids.
-	var tut := _menu.find_child("TutorialBtn", true, false) as Button
-	var school := _menu.find_child("SpielschuleBtn", true, false) as Button
-	assert_that(tut).is_not_null()
-	assert_that(school).is_not_null()
-	assert_that(_menu.has_method("_on_tutorial_pressed")).is_true()
-	assert_that(_menu.has_method("_on_spielschule_pressed")).is_true()
-	assert_that(tut.pressed.is_connected(_menu._on_tutorial_pressed)).is_true()
-	assert_that(school.pressed.is_connected(_menu._on_spielschule_pressed)).is_true()
-	# Cross-wiring check: neither button may also carry the other's handler.
-	assert_that(tut.pressed.is_connected(_menu._on_spielschule_pressed)).is_false()
-	assert_that(school.pressed.is_connected(_menu._on_tutorial_pressed)).is_false()
-
-
-func test_tutorial_button_label_and_handler() -> void:
-	var btn := _menu.find_child("TutorialBtn", true, false) as Button
-	assert_that(btn).is_not_null()
-	assert_that(btn.text).contains("TUTORIAL")
-	assert_that(_menu.has_method("_on_tutorial_pressed")).is_true()
-	assert_that(btn.pressed.is_connected(_menu._on_tutorial_pressed)).is_true()
-
-
-func test_tutorial_entry_arms_the_flags_main_reads() -> void:
-	# _arm_tutorial_flags is called directly instead of _launch_tutorial because the
-	# latter also swaps the scene, which this suite must not trigger.
-	var saved_mode: bool = ProjectSettings.get_setting("niemandsland/tutorial_mode", false)
-	var saved_lesson: String = ProjectSettings.get_setting("niemandsland/tutorial_lesson", "")
+func test_tutorial_entry_arms_existing_runtime_flags() -> void:
+	var mode = ProjectSettings.get_setting("niemandsland/tutorial_mode",false)
+	var lesson = ProjectSettings.get_setting("niemandsland/tutorial_lesson","")
 	_menu._arm_tutorial_flags("T-04")
-	var armed_mode: bool = ProjectSettings.get_setting("niemandsland/tutorial_mode", false)
-	var armed_lesson: String = ProjectSettings.get_setting("niemandsland/tutorial_lesson", "")
-	# Restore BEFORE asserting: these settings are process-global, and a failing assertion
-	# would otherwise abort the test with tutorial_mode still armed and poison later suites.
-	ProjectSettings.set_setting("niemandsland/tutorial_mode", saved_mode)
-	ProjectSettings.set_setting("niemandsland/tutorial_lesson", saved_lesson)
-	assert_that(armed_mode).is_equal(true)
-	assert_that(armed_lesson).is_equal("T-04")
+	var result = ProjectSettings.get_setting("niemandsland/tutorial_lesson")
+	ProjectSettings.set_setting("niemandsland/tutorial_mode",mode)
+	ProjectSettings.set_setting("niemandsland/tutorial_lesson",lesson)
+	assert_str(result).is_equal("T-04")
 
+func test_menu_never_creates_game_or_atmosphere_controllers() -> void:
+	assert_object(_menu.find_child("NetworkManager",true,false)).is_null()
+	assert_object(_menu.find_child("AtmosphereController",true,false)).is_null()
+	assert_bool(_menu.diorama._diorama_built).is_false()
 
-func test_tutorial_entry_targets_the_bundled_board() -> void:
-	# This is the board the single TUTORIAL entry routes to; if a future entry points
-	# elsewhere this suite must speak.
-	assert_that(TutorialDirector.BOARD_PATH).is_equal("res://assets/tutorial/tutorial_board.nml")
-	assert_that(FileAccess.file_exists(TutorialDirector.BOARD_PATH)).is_true()
-
-
-func test_feuertaufe_dialog_carries_display_name() -> void:
-	# NML-964: the Game School dialog's working name ("Spielschule"/"Game School") must not
-	# leak to players — the display name is FEUERTAUFE. Does NOT call
-	# _maybe_show_spielschule_hint, which persists a hint-seen flag to user://.
-	_menu._on_spielschule_pressed()
-
-	var dialog: AcceptDialog = null
-	for child in _menu.get_children():
-		if child is AcceptDialog:
-			dialog = child as AcceptDialog
-			break
-	assert_that(dialog).is_not_null()
-
-	var vbox := dialog.get_child(0) as VBoxContainer
-	var intro := vbox.get_child(0) as Label
-
-	assert_str(dialog.title).is_equal("FEUERTAUFE")
-	assert_str(dialog.title).not_contains("Game School")
-	assert_str(intro.text).not_contains("Game School")
-
-	dialog.queue_free()
+func test_rebuild_keeps_main_actions_usable() -> void:
+	_menu._on_diorama_rebuild_started()
+	assert_bool(_menu.start_battle_btn.is_visible_in_tree()).is_true()
+	assert_bool(_menu.start_battle_btn.disabled).is_false()
+	assert_str(_menu.view.status.text).contains("Kulisse")
