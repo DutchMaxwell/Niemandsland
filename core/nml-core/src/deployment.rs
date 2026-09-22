@@ -987,6 +987,15 @@ pub fn vanguard_free_place(
     best
 }
 
+/// `LARGE_BASE_RADIUS_IN` (solo_controller.gd "Big-base maneuvering"): a base
+/// whose bounding radius reaches this counts as LARGE — the DEPLOYLARGE respot
+/// trigger. A planning convention, not a rule value.
+pub const LARGE_BASE_RADIUS_IN: f64 = 1.5;
+/// `LARGE_ZONE_SPOT_BEHIND_M` (solo_controller.gd, 6"): the section spot must
+/// lag the forward edge by more than this before ONE whole-zone re-search may
+/// take a nearer forward spot (DEPLOYLARGE).
+pub const LARGE_ZONE_SPOT_BEHIND_M: f64 = 0.1524;
+
 /// How the ladder landed: the spot, which rung produced it (0 = section scan,
 /// 1 = whole-zone fallback, 2 = crowded/occupied-cleared, 3 = least_blocked —
 /// the table's own `spot_why` ladder), how many wall-bisect marks were
@@ -1002,6 +1011,10 @@ pub struct PlaceOutcome {
     /// the table's `chosen` distance source, `spot.distance_to(v_spot)`
     /// (solo_controller.gd:9162).
     pub pushed_from: (f64, f64),
+    /// DEPLOYLARGE (solo_controller.gd `_deploy_place_id`, `spot_why` echo):
+    /// the whole-zone forward respot fired over the section spot. Not
+    /// serialized — a planning-diagnostic flag.
+    pub zone_forward_respotted: bool,
 }
 
 /// `SoloController._deploy_place_id` (solo_controller.gd:9086-9170) for the
@@ -1032,6 +1045,30 @@ pub fn deploy_place_id(
         |p: (f64, f64)| spot_blocked(board, p, flying, radius, footprint, base_r);
     let mut spot =
         best_spot(sec, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y);
+    // DEPLOYLARGE (solo_controller.gd `_deploy_place_id`, the static switch
+    // `large_zone_search` mirrored UNGATED — the core has no static switches):
+    // a LARGE base confined to its section may sit far behind the zone's
+    // forward edge while a neighbour section still holds a legal forward spot
+    // — ONE whole-zone re-search takes the nearer spot, chosen BEFORE the
+    // wall-bisect retry loop so the loop runs on the final spot either way.
+    // Scouts replay this inertly: their section IS the (extended) zone, so the
+    // re-search returns the same spot and the strict `<` never fires.
+    let sec_behind = (spot.1 - forward_y).abs();
+    let mut zone_forward_respotted = false;
+    if !spot.0.is_infinite()
+        && forward_y != f64::INFINITY
+        && base_r >= LARGE_BASE_RADIUS_IN * crate::IN2M
+        && sec_behind > LARGE_ZONE_SPOT_BEHIND_M
+    {
+        let zone_spot = best_spot(
+            zone, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
+            forward_y,
+        );
+        if !zone_spot.0.is_infinite() && (zone_spot.1 - forward_y).abs() < sec_behind {
+            spot = zone_spot;
+            zone_forward_respotted = true;
+        }
+    }
     let (mut rung, mut marks, mut pushed) = (0u8, 0u8, false);
     let mut pushed_from = spot;
     for _ in 0..4 {
@@ -1083,7 +1120,7 @@ pub fn deploy_place_id(
         }
     }
     occupied.push(Occupied { pos: spot, radius });
-    PlaceOutcome { spot, rung, bisect_marks: marks, pushed, pushed_from }
+    PlaceOutcome { spot, rung, bisect_marks: marks, pushed, pushed_from, zone_forward_respotted }
 }
 
 /// `AiDeployment._blocked_count` (ai_deployment.gd:151-165): blocked SAMPLE
