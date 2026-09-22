@@ -1095,6 +1095,15 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	var wave := _second_wave(state, key)
 	if not wave.is_empty():
 		out.append(wave)
+	if menu_wide_on():
+		# W1 ADVANCE+shoot, the LIVE leg (22.09.; the teacher menu grew it on 16.08., the core's
+		# `advance_shoots` mirrors it under `menu_wide`): every seen enemy the unit could still shoot
+		# AFTER its advance band (shoot_ev > 0 at the closed distance) gets one ADVANCE toward it
+		# with that shot — the move the tree makes constantly and the search could never express.
+		# Same order as the core: after second_wave, before the holder proposals.
+		for ek in _advance_shoots(state, key):
+			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE,
+				"dest": _centre(state["units"][ek]), "shoot": ek})
 	if _menu_holders_on():
 		# Two SEPARATE proposals (second opinion 21.09.): the best marker HOLDER and the best
 		# UN-ACTIVATED enemy. One combined qualifier collapsed them — the max-EV target is
@@ -1440,6 +1449,25 @@ static func _enemy_keys(state: Dictionary, key: String) -> Array:
 		var su: Dictionary = state["units"][k]
 		if int(su["player"]) != player and int(su["alive"]) > 0:
 			out.append(k)
+	return out
+
+
+## The core's `advance_shoots` (menu.rs): enemies the unit sees and could shoot once its advance
+## band has closed the gap — the volley's EV at (distance − advance) must be positive. Enemy
+## order = `_enemy_keys` (the core's `enemy_keys_tuned`), so both menus list them alike.
+static func _advance_shoots(state: Dictionary, key: String) -> Array:
+	var su: Dictionary = state["units"][key]
+	var advance_in := float(SoloController.sim_move_bands(su["unit"]).get("advance", 6))
+	var out: Array = []
+	for ek in _enemy_keys(state, key):
+		if not BattleSim.sees(su, str(ek)):
+			continue
+		var tu: Dictionary = state["units"][ek]
+		var d := maxf(BattleSim.dist_in(su["positions"], tu["positions"]) - advance_in, 0.0)
+		var ev := AiEv.shoot_ev(BattleSim._profiles_of(su, false, d),
+			BattleSim._ctx_of(su), BattleSim._ctx_of(tu), d)
+		if ev > 0.0:
+			out.append(str(ek))
 	return out
 
 

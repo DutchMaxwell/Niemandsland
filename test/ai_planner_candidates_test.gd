@@ -408,3 +408,26 @@ func test_menu_holders_adds_the_marker_holder_after_the_max_ev_target() -> void:
 	var mine := BattleSim.capture(army, func() -> Array: return [marker],
 		func(_i: int) -> int: return 2)
 	assert_int(AiPlanner.candidates(mine, "Gunner").size()).is_equal(off.size())
+
+
+## W1 ADVANCE+shoot as a LIVE leg (22.09.): an enemy 26" away is out of the 24" rifle's reach from
+## where the gunner stands (no HOLD+shoot), but in reach after a 6" advance — with `menu_wide` on
+## the menu offers ADVANCE toward it WITH the shot; off = today's menu, entry for entry.
+func test_menu_wide_offers_advance_and_shoot_when_the_shot_needs_the_move() -> void:
+	AiPlanner._mw_env = 0
+	var me := _armed(2, [Vector3.ZERO], "Gunner", [{"name": "Rifle", "range": 24}])
+	var far := _armed(1, [Vector3(0, 0, 26.0 * IN2M)], "Far", [{"name": "CCW", "range": 0}])
+	var state := _state([me, far])
+	AiPlanner.menu_wide = false
+	var off := AiPlanner.candidates(state, "Gunner")
+	assert_int(_of_kind(off, AiDecision.Action.HOLD).filter(func(c: Dictionary) -> bool: return c.has("shoot")).size()).is_equal(0)
+	AiPlanner.menu_wide = true
+	var on := AiPlanner.candidates(state, "Gunner")
+	AiPlanner.menu_wide = false   # restored BEFORE asserting: no leak on failure
+	assert_int(on.size()).is_equal(off.size() + 1)
+	for i in range(off.size()):
+		assert_that(on[i]).is_equal(off[i])
+	var extra: Dictionary = on[on.size() - 1]
+	assert_int(int(extra["kind"])).is_equal(AiDecision.Action.ADVANCE)
+	assert_str(str(extra.get("shoot", ""))).is_equal("Far")
+
