@@ -26,7 +26,6 @@ const BUNDLED_MANIFEST_PATH: String = "res://assets/model_manifest.json"
 ## Live manifest, fetched from the CDN at startup so asset fixes published AFTER this build
 ## shipped appear without a re-export. Same schema as the bundled file (the offline fallback).
 const REMOTE_MANIFEST_FILE: String = "model_manifest.json"
-const REMOTE_MANIFEST_TIMEOUT_SEC: float = 15.0
 ## ctex texture roles the game actually FETCHES + uses. "orm" is intentionally omitted: the material
 ## path (opr_army_manager._brighten_ctex_materials) drops metallic/roughness (the game has no
 ## reflection probes) and this batch's ORM has no AO, so the ORM texture (~5.6 MB/unit) is dead weight.
@@ -469,21 +468,25 @@ func _refresh_remote_manifest() -> void:
 		url = "%s%st=%d" % [override_url, sep, int(Time.get_unix_time_from_system())]
 	else:
 		url = "%s/%s?t=%d" % [AssetCDN.HOST, REMOTE_MANIFEST_FILE, int(Time.get_unix_time_from_system())]
-	var http := HTTPRequest.new()
-	http.timeout = REMOTE_MANIFEST_TIMEOUT_SEC
+	# Big chunks + a stall guard instead of a 15 s total timeout, which slow boot frames used up
+	# before the ~1 MB manifest arrived (the request reads once per frame).
+	var http := AssetDownloadManager.new_request()
 	add_child(http)
 	if http.request(url, AssetCDN.headers("application/json")) != OK:   # honest product UA (bus 037)
 		http.queue_free()
 		return
+	AssetDownloadManager.watch_stall(http)
 	var res: Array = await http.request_completed
 	http.queue_free()
 	if int(res[0]) != HTTPRequest.RESULT_SUCCESS or int(res[1]) < 200 or int(res[1]) >= 300:
+		print("[ModelLibrary] live manifest fetch failed (result %d, http %d) — keeping the bundled manifest" % [int(res[0]), int(res[1])])
 		return
 	var text: String = (res[3] as PackedByteArray).get_string_from_utf8()
 	var data: Variant = JSON.parse_string(text)
 	if typeof(data) != TYPE_DICTIONARY or typeof((data as Dictionary).get("models")) != TYPE_DICTIONARY:
 		return  # malformed -> keep the bundled manifest
 	apply_manifest_text(text)
+	print("[ModelLibrary] live manifest applied: %d models" % _models.size())
 	manifest_refreshed.emit(_models.size())
 
 

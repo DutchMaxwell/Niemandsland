@@ -8,18 +8,25 @@ extends Node
 # === Constants ===
 
 const DEFAULT_CACHE_DIR: String = "user://model_cache"
-const CHUNK_SIZE: int = 65536  # 64 KiB streamed to disk
-## Per-request total timeout. HTTPRequest defaults to 0 (NEVER times out): a stalled/never-
-## completing download (R2 hiccup, dead connection, missing object that hangs instead of 404)
-## would leave `request_completed` un-emitted, `_request_active` stuck true, and the serial
-## download loop — plus the army loading overlay — hung forever. Generous enough for the largest
-## GLBs (~28 MB) on a slow link; a true stall now fails cleanly and falls back to a placeholder.
-const REQUEST_TIMEOUT_SEC: float = 120.0
+## Max bytes read per poll. A non-threaded HTTPRequest polls ONCE PER FRAME, so throughput is capped
+## at CHUNK_SIZE x FPS: 64 KiB made a 50 MB GLB need 200 s at 4 FPS (a model-loading stall); 4 MiB
+## took 4.6 s (measured, localhost). The buffer only holds what arrived since the last frame.
+const CHUNK_SIZE: int = 4 * 1024 * 1024
+## Stall guard instead of HTTPRequest.timeout. That timeout is a TOTAL budget, so a big GLB on a
+## slow link (or any file while frames stall) ran out of it with bytes still arriving; with NO
+## timeout a dead connection would leave `request_completed` un-emitted and the loading overlay hung
+## forever. An attempt now fails only when no new byte arrives for STALL_TIMEOUT_SEC of wall time
+## AND STALL_MIN_FRAMES polls — the frame floor keeps a slow main loop from looking like a dead link.
+const STALL_TIMEOUT_SEC: float = 30.0
+const STALL_MIN_FRAMES: int = 60
 
 # Cache location + file extension. The defaults suit the GLB model cache; BiomeLibrary
 # overrides them (WebP battlemap cache) before the node enters the tree.
 var cache_dir: String = DEFAULT_CACHE_DIR
 var file_extension: String = "glb"
+# Stall guard thresholds (tests shorten them).
+var stall_timeout_sec: float = STALL_TIMEOUT_SEC
+var stall_min_frames: int = STALL_MIN_FRAMES
 
 # === Signals ===
 
@@ -43,9 +50,7 @@ var _in_flight_key: String = ""  # _in_flight entry held by THIS instance
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(cache_dir)
-	_http = HTTPRequest.new()
-	_http.download_chunk_size = CHUNK_SIZE
-	_http.timeout = REQUEST_TIMEOUT_SEC  # never hang forever on a stalled download
+	_http = new_request()
 	add_child(_http)
 
 
@@ -65,6 +70,49 @@ func cache_path(sha256: String) -> String:
 
 func is_cached(sha256: String) -> bool:
 	return not sha256.is_empty() and FileAccess.file_exists(cache_path(sha256))
+
+
+## An HTTPRequest configured for asset/manifest downloads: big chunks, no total timeout (pair every
+## request with watch_stall). use_threads stays false on purpose: Godot 4.6's threaded client
+## busy-waits for bytes (one core at 100 % per download, measured) and cancel_request() on a dead
+## connection blocks the main thread forever (measured: never returned).
+static func new_request() -> HTTPRequest:
+	var http := HTTPRequest.new()
+	http.download_chunk_size = CHUNK_SIZE
+	http.timeout = 0.0
+	http.use_threads = false
+	return http
+
+
+## Guards ONE in-flight request on `http` (call right after request() returned OK). On a stall it
+## cancels the request and emits request_completed with RESULT_TIMEOUT — as HTTPRequest's own
+## timeout does — so callers keep a plain `await http.request_completed`.
+static func watch_stall(http: HTTPRequest, stall_sec: float = STALL_TIMEOUT_SEC,
+		min_frames: int = STALL_MIN_FRAMES) -> void:
+	var state: Dictionary = {"done": false}
+	var on_done := func(_r: int, _c: int, _h: PackedStringArray, _b: PackedByteArray) -> void:
+		state["done"] = true
+	http.request_completed.connect(on_done, CONNECT_ONE_SHOT)
+	var tree: SceneTree = http.get_tree()
+	var seen: int = -1
+	var since_ms: int = Time.get_ticks_msec()
+	var idle_frames: int = 0
+	while not state["done"]:
+		await tree.process_frame
+		if not is_instance_valid(http):
+			return   # owner freed mid-download: nothing left to guard
+		var got: int = http.get_downloaded_bytes()
+		if got != seen:
+			seen = got
+			since_ms = Time.get_ticks_msec()
+			idle_frames = 0
+			continue
+		idle_frames += 1
+		if not state["done"] and idle_frames >= min_frames and Time.get_ticks_msec() - since_ms >= int(stall_sec * 1000.0):
+			http.request_completed.disconnect(on_done)
+			http.cancel_request()
+			http.request_completed.emit(HTTPRequest.RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray())
+			return
 
 
 ## Ensures a single asset is cached, downloading it if missing. Awaitable.
@@ -112,9 +160,7 @@ func ensure_batch_parallel(entries: Array, max_concurrent: int = 5, retries: int
 ## One worker: pulls entries off the shared cursor and downloads them on its OWN HTTPRequest until the
 ## batch is exhausted. Multiple run concurrently (they interleave at each request await).
 func _batch_worker(entries: Array, state: Dictionary, total: int, retries: int) -> void:
-	var http := HTTPRequest.new()
-	http.download_chunk_size = CHUNK_SIZE
-	http.timeout = REQUEST_TIMEOUT_SEC
+	var http := new_request()
 	add_child(http)
 	while int(state["next"]) < entries.size():
 		var my: int = int(state["next"])
@@ -138,6 +184,7 @@ func _download_to(http: HTTPRequest, url: String, sha256: String, path: String, 
 		if http.request(url, AssetCDN.headers()) != OK:   # honest product UA (bus 037)
 			await get_tree().process_frame
 			continue
+		watch_stall(http, stall_timeout_sec, stall_min_frames)
 		var res: Array = await http.request_completed
 		var okc: bool = int(res[0]) == HTTPRequest.RESULT_SUCCESS and int(res[1]) >= 200 and int(res[1]) < 300
 		if okc and FileAccess.get_sha256(tmp).to_lower() == sha256.to_lower():
@@ -183,6 +230,7 @@ func _perform_request(url: String, sha256: String) -> bool:
 	if _http.request(url, AssetCDN.headers()) != OK:   # honest product UA (bus 037)
 		download_completed.emit(sha256, "", false)
 		return false
+	watch_stall(_http, stall_timeout_sec, stall_min_frames)
 
 	var res: Array = await _http.request_completed
 	var result_code: int = res[0]
