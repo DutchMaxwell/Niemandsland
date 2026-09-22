@@ -32,7 +32,7 @@ func test_first_visit_promotes_new_table_and_hides_save() -> void:
 	assert_bool(_menu.view.resume.visible).is_false()
 	assert_bool(_menu.continue_btn.is_visible_in_tree()).is_false()
 	assert_bool(_menu.start_battle_btn.primary).is_true()
-	assert_str(_menu.view.welcome.text).is_equal("Dein erster Tisch wartet.")
+	assert_str(_menu.view.welcome.text).is_equal("Your first table awaits.")
 
 func test_saved_title_is_not_replaced_with_mockup_data() -> void:
 	_menu.view.set_save({"name":"Meine eigene Runde","modified_unix":1727000000})
@@ -109,4 +109,4 @@ func test_rebuild_keeps_main_actions_usable() -> void:
 	_menu._on_diorama_rebuild_started()
 	assert_bool(_menu.start_battle_btn.is_visible_in_tree()).is_true()
 	assert_bool(_menu.start_battle_btn.disabled).is_false()
-	assert_str(_menu.view.status.text).contains("Kulisse")
+	assert_str(_menu.view.status.text).contains("Preparing background")

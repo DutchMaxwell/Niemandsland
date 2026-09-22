@@ -79,7 +79,7 @@ func _ready() -> void:
 	var identity := VBoxContainer.new()
 	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_masthead.add_child(identity)
-	identity.add_child(_label("TABLETOP FÜR ONEPAGERULES",10,MUTED))
+	identity.add_child(_label("TABLETOP FOR ONEPAGERULES",10,MUTED))
 	var wordmark := HBoxContainer.new()
 	wordmark.add_theme_constant_override("separation",0)
 	identity.add_child(wordmark)
@@ -92,7 +92,7 @@ func _ready() -> void:
 	rule.custom_minimum_size = Vector2(450,1)
 	rule.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	identity.add_child(rule)
-	var settings := _utility("SettingsBtn","⚙  Einstellungen")
+	var settings := _utility("SettingsBtn","⚙  Settings")
 	settings.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	_masthead.add_child(settings)
 	_main = VBoxContainer.new()
@@ -102,9 +102,9 @@ func _ready() -> void:
 	add_child(_scroll)
 	_scroll.add_child(_main)
 	_main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	welcome_kicker = _label("WILLKOMMEN BEI NIEMANDSLAND",10,MUTED)
+	welcome_kicker = _label("WELCOME TO NIEMANDSLAND",10,MUTED)
 	_main.add_child(welcome_kicker)
-	welcome = _label("Dein erster Tisch wartet.",35,INK)
+	welcome = _label("Your first table awaits.",35,INK)
 	_main.add_child(welcome)
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 18
@@ -115,31 +115,31 @@ func _ready() -> void:
 	var saved := VBoxContainer.new()
 	saved.add_theme_constant_override("separation",12)
 	resume.add_child(saved)
-	saved.add_child(_label("LETZTER SPIELSTAND",10,MUTED))
+	saved.add_child(_label("LATEST SAVE",10,MUTED))
 	save_name = _label("",21,INK)
 	save_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	saved.add_child(save_name)
 	save_date = _label("",12,MUTED)
 	saved.add_child(save_date)
-	var cont := _action("ContinueBtn","Weiterspielen","","",true)
+	var cont := _action("ContinueBtn","Continue","","",true)
 	cont.custom_minimum_size.y = 54
 	saved.add_child(cont)
 	var actions := VBoxContainer.new()
 	actions.name = "MenuButtons"
 	actions.add_theme_constant_override("separation",5)
 	_main.add_child(actions)
-	actions.add_child(_action("StartBattleBtn","Neuen Tisch vorbereiten","Größe und Biom auswählen","+",false,true))
-	actions.add_child(_action("OnlineBtn","Online spielen","Raum erstellen oder einem Tisch beitreten","⊕"))
-	actions.add_child(_action("LoadBattleBtn","Spielstand laden","Eine gespeicherte Partie öffnen","□"))
-	actions.add_child(_action("LearnBtn","Spiel lernen","Bedienung üben und Feuertaufe entdecken","≡"))
+	actions.add_child(_action("StartBattleBtn","Prepare a new table","Choose a size and biome","+",false,true))
+	actions.add_child(_action("OnlineBtn","Play online","Create a room or join a table","⊕"))
+	actions.add_child(_action("LoadBattleBtn","Load game","Open a saved game","□"))
+	actions.add_child(_action("LearnBtn","Learn to play","Learn the controls and explore Trial by Fire","≡"))
 	_footer = HBoxContainer.new()
 	_footer.add_theme_constant_override("separation",24)
 	add_child(_footer)
-	for row in [["HelpBtn","Hilfe & Feedback"],["CreditsBtn","Credits & Lizenzen"],["ExitGameBtn","Beenden"]]:
+	for row in [["HelpBtn","Help & feedback"],["CreditsBtn","Credits & licenses"],["ExitGameBtn","Quit"]]:
 		_footer.add_child(_utility(row[0],row[1]))
 	version = _label("",11,MUTED)
 	add_child(version)
-	status = _label("Kulisse wird vorbereitet …",11,MUTED)
+	status = _label("Preparing background …",11,MUTED)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(status)
@@ -158,7 +158,7 @@ func _build_routes() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation",18)
 	route_panel.add_child(column)
-	route_back = _utility("RouteBackBtn","←  Zurück")
+	route_back = _utility("RouteBackBtn","←  Back")
 	column.add_child(route_back)
 	route_title = _label("",28,INK)
 	column.add_child(route_title)
@@ -170,13 +170,13 @@ func _build_routes() -> void:
 		_route_body.add_child(group)
 		routes[key] = group
 	for row in [
-		["online","HostOnlineBtn","Raum erstellen","Einen Tisch für deine Runde vorbereiten"],
-		["online","JoinOnlineBtn","Mit Code beitreten","Einen sechsstelligen Einladungscode eingeben"],
-		["online","BrowseOnlineBtn","Öffentliche Tische","Eine offene Spielrunde finden"],
-		["learn","TutorialBtn","Bedienung lernen","Klassisches Tutorial: Kamera, Miniaturen und Werkzeuge"],
-		["learn","SpielschuleBtn","Feuertaufe · In Entwicklung","Kurze, einzeln spielbare Übungsszenarien"],
-		["help","HelpTutorialBtn","Bedienung lernen","Das vorhandene Tutorial öffnen"],
-		["help","ReportProblemBtn","Problem melden","Eine Diagnosedatei zum Weitergeben erstellen"]]:
+		["online","HostOnlineBtn","Create a room","Prepare a table for your group"],
+		["online","JoinOnlineBtn","Join with a code","Enter a six-character invitation code"],
+		["online","BrowseOnlineBtn","Public tables","Find an open game"],
+		["learn","TutorialBtn","Learn the controls","Classic tutorial: camera, miniatures and tools"],
+		["learn","SpielschuleBtn","Trial by Fire · In development","Short practice scenarios you can play individually"],
+		["help","HelpTutorialBtn","Learn the controls","Open the tutorial"],
+		["help","ReportProblemBtn","Report a problem","Create a diagnostics file to share"]]:
 		var button := _action(row[1],row[2],row[3],"",false,true)
 		routes[row[0]].add_child(button)
 		button.pressed.connect(close_route)
@@ -190,7 +190,7 @@ func show_route(key: String) -> void:
 	_return_focus = get_viewport().gui_get_focus_owner()
 	for route in routes:
 		routes[route].visible = route == key
-	route_title.text = {"online":"Gemeinsam an einen Tisch.","learn":"Finde deinen Einstieg.","help":"Hilfe & Feedback."}[key]
+	route_title.text = {"online":"Meet around the table.","learn":"Find your starting point.","help":"Help & feedback."}[key]
 	route_panel.reset_size()
 	route_panel.show()
 	# Trap keyboard focus within the open route, including Shift+Tab and arrows.
@@ -214,13 +214,13 @@ func close_route() -> void:
 func set_save(info: Dictionary) -> void:
 	resume.visible = not info.is_empty()
 	buttons.ContinueBtn.visible = resume.visible
-	welcome_kicker.text = "WILLKOMMEN ZURÜCK" if resume.visible else "WILLKOMMEN BEI NIEMANDSLAND"
-	welcome.text = "Zurück an den Tisch." if resume.visible else "Dein erster Tisch wartet."
+	welcome_kicker.text = "WELCOME BACK" if resume.visible else "WELCOME TO NIEMANDSLAND"
+	welcome.text = "Back to the table." if resume.visible else "Your first table awaits."
 	if resume.visible:
 		save_name.text = str(info.name)
 		save_name.tooltip_text = str(info.name)
 		var stamp := Time.get_datetime_dict_from_unix_time(info.modified_unix)
-		save_date.text = "Gespeichert am %02d.%02d.%04d" % [stamp.day,stamp.month,stamp.year]
+		save_date.text = "Saved on %04d-%02d-%02d" % [stamp.year,stamp.month,stamp.day]
 	var start: Action = buttons.StartBattleBtn
 	start.primary = not resume.visible
 	# Rebuild only the state styles, once after the save lookup.

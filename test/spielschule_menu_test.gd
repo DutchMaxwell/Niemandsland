@@ -6,9 +6,9 @@ func test_learn_group_exposes_both_distinct_routes() -> void:
 	menu.view.buttons.LearnBtn.pressed.emit()
 	assert_bool(menu.tutorial_btn.is_visible_in_tree()).is_true()
 	assert_bool(menu.spielschule_btn.is_visible_in_tree()).is_true()
-	assert_str(menu.tutorial_btn.description).contains("Klassisches Tutorial")
-	assert_str(menu.spielschule_btn.text).contains("Feuertaufe")
-	assert_str(menu.spielschule_btn.text).contains("In Entwicklung")
+	assert_str(menu.tutorial_btn.description).contains("Classic tutorial")
+	assert_str(menu.spielschule_btn.text).contains("Trial by Fire")
+	assert_str(menu.spielschule_btn.text).contains("In development")
 	assert_int(menu.spielschule_btn.get_index()).is_equal(menu.tutorial_btn.get_index()+1)
 	assert_int(menu.spielschule_btn.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
 	assert_bool(menu.spielschule_btn.pressed.is_connected(menu._on_spielschule_pressed)).is_true()
@@ -20,7 +20,7 @@ func test_feuertaufe_still_opens_real_chapter_picker() -> void:
 	menu.spielschule_btn.pressed.emit()
 	var found := false
 	for child in menu.get_children():
-		if child is AcceptDialog and child.title == "FEUERTAUFE":
+		if child is AcceptDialog and child.title == "TRIAL BY FIRE":
 			found = child.visible
 	assert_bool(found).is_true()
 	assert_bool(menu.view.route_panel.visible).is_false()

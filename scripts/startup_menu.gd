@@ -58,6 +58,8 @@ var _music_player: AudioStreamPlayer = null
 # === Lifecycle ===
 
 func _ready() -> void:
+	# Keep Godot's built-in dialog controls in the game's English UI language too.
+	TranslationServer.set_locale("en")
 	print("[Boot] Niemandsland %s build %s" % [ProjectSettings.get_setting("application/config/version","?"),ProjectSettings.get_setting("application/config/build_hash","local-dev")])
 	var file_to_open := _get_save_from_cmdline()
 	if not file_to_open.is_empty():
@@ -82,7 +84,7 @@ func _ready() -> void:
 	var save := SaveManager.latest_save_info()
 	_continue_path = str(save.get("path",""))
 	view.set_save(save)
-	view.version.text = "Fanprojekt für OnePageRules     " + version_string()
+	view.version.text = "Fan project for OnePageRules     " + version_string()
 	continue_btn.pressed.connect(_on_continue_pressed)
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	tutorial_btn.pressed.connect(_on_tutorial_pressed)
@@ -113,7 +115,7 @@ func _on_diorama_loading(label: String, ratio: float) -> void:
 
 
 func _on_diorama_rebuild_started() -> void:
-	view.status.text = "Kulisse wird vorbereitet …"
+	view.status.text = "Preparing background …"
 
 
 func _on_diorama_ready() -> void:
@@ -130,12 +132,12 @@ func _on_settings_pressed() -> void:
 		_settings.set_script(load("res://scripts/lighting_panel.gd"))
 		add_child(_settings)
 		_settings.initialize(diorama.get_lighting_controller())
-		_settings.title = "Einstellungen"
+		_settings.title = "Settings"
 		var label := Label.new()
-		label.text = "Menükulisse"
+		label.text = "Menu background"
 		_settings._main_vbox.add_child(label)
 		var choices := OptionButton.new()
-		for title in ["Stadtruinen","Dschungel","Grasland","Wüste","Tundra","Vulkanasche"]:
+		for title in ["Urban ruins","Alien jungle","Grassland","Arid desert","Frozen tundra","Volcanic ash"]:
 			choices.add_item(title)
 		choices.select(MenuDiorama.Battlefield.BIOMES.find(diorama.biome))
 		_settings._main_vbox.add_child(choices)
@@ -192,7 +194,7 @@ func _launch_tutorial(lesson_id: String) -> void:
 func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Tutorial"
-	dialog.ok_button_text = "Schließen"
+	dialog.ok_button_text = "Close"
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
 
@@ -245,8 +247,8 @@ func _on_spielschule_pressed() -> void:
 	progress.load_from_disk()
 
 	var dialog := AcceptDialog.new()
-	dialog.title = "FEUERTAUFE"
-	dialog.ok_button_text = "Schließen"
+	dialog.title = "TRIAL BY FIRE"
+	dialog.ok_button_text = "Close"
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
@@ -324,7 +326,7 @@ func _on_report_problem_pressed() -> void:
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
 	var path := DiagnosticsReporter.export_report(stamp)
 	var dialog := AcceptDialog.new()
-	dialog.title = "Problem melden"
+	dialog.title = "Report a problem"
 	if path.is_empty():
 		dialog.dialog_text = "Could not write the diagnostics file.\nThe log lives at user://logs/niemandsland.log."
 	else:
@@ -339,7 +341,7 @@ func _on_report_problem_pressed() -> void:
 ## not only in the repo docs. Full text lives in THIRD_PARTY.md.
 func _on_credits_pressed() -> void:
 	var dialog := AcceptDialog.new()
-	dialog.title = "Credits & Lizenzen"
+	dialog.title = "Credits & licenses"
 	# As plain dialog_text these ~12 licence lines size the window themselves, with nothing
 	# stopping it (and its OK button) from growing past a small screen. A scrolled body with a
 	# FIXED viewport is the clamp here: an AcceptDialog wraps its contents (wrap_controls), so
@@ -381,10 +383,10 @@ func _on_exit_pressed() -> void:
 	if is_instance_valid(_exit_confirm):
 		return
 	_exit_confirm = ConfirmationDialog.new()
-	_exit_confirm.title = "Niemandsland beenden"
-	_exit_confirm.dialog_text = "Möchtest du Niemandsland beenden?"
-	_exit_confirm.ok_button_text = "Beenden"
-	_exit_confirm.cancel_button_text = "Zurück"
+	_exit_confirm.title = "Quit Niemandsland"
+	_exit_confirm.dialog_text = "Are you sure you want to quit Niemandsland?"
+	_exit_confirm.ok_button_text = "Quit"
+	_exit_confirm.cancel_button_text = "Back"
 	_exit_confirm.confirmed.connect(func() -> void: get_tree().quit())
 	_exit_confirm.canceled.connect(_exit_confirm.queue_free)
 	add_child(_exit_confirm)
@@ -497,21 +499,21 @@ func _on_join_online_pressed() -> void:
 func _show_host_popup() -> void:
 	if _host_popup:
 		_host_popup.queue_free()
-	_host_popup = NetDialog.build("Raum erstellen", "NET-01", "Tisch vorbereiten")
+	_host_popup = NetDialog.build("Create a room", "NET-01", "Prepare table")
 
 	var content := NetDialog.content(_host_popup)
-	content.add_child(NetDialog.label("Dein Name:"))
-	_host_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Spielername")
+	content.add_child(NetDialog.label("Your name:"))
+	_host_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	_host_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_host_name_input)
-	content.add_child(NetDialog.label("Verbindungsserver:"))
+	content.add_child(NetDialog.label("Relay server:"))
 	_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_relay_url_input)
 	_host_public_check = CheckBox.new()
-	_host_public_check.text = "Raum öffentlich anzeigen"
+	_host_public_check.text = "List room publicly"
 	_host_public_check.focus_mode = Control.FOCUS_ALL
 	content.add_child(_host_public_check)
-	var info := NetDialog.label("Den Einladungscode erhältst du nach dem Verbinden am Tisch.")
+	var info := NetDialog.label("Your invitation code appears once you connect at the table.")
 	info.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	content.add_child(info)
@@ -543,14 +545,14 @@ func _on_host_confirmed() -> void:
 func _show_join_popup() -> void:
 	if _join_popup:
 		_join_popup.queue_free()
-	_join_popup = NetDialog.build("Mit Code beitreten", "NET-02", "Beitreten")
+	_join_popup = NetDialog.build("Join with a code", "NET-02", "Join")
 
 	var content := NetDialog.content(_join_popup)
-	content.add_child(NetDialog.label("Dein Name:"))
-	_join_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Spielername")
+	content.add_child(NetDialog.label("Your name:"))
+	_join_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	_join_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_join_name_input)
-	content.add_child(NetDialog.label("Einladungscode:"))
+	content.add_child(NetDialog.label("Invitation code:"))
 	_join_code_input = NetDialog.line_edit("", "ABC-123")
 	_join_code_input.max_length = 7  # 6 chars + optional hyphen
 	_join_code_input.add_theme_font_size_override("font_size", 24)
@@ -566,7 +568,7 @@ func _show_join_popup() -> void:
 	# Editing the code is the fix for the message, so the message must not outlive the edit.
 	_join_code_input.text_changed.connect(func(_new_text: String) -> void:
 		_join_error_label.visible = false)
-	content.add_child(NetDialog.label("Verbindungsserver:"))
+	content.add_child(NetDialog.label("Relay server:"))
 	_join_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_join_relay_url_input)
 
@@ -588,10 +590,10 @@ func _show_join_popup() -> void:
 func _on_join_confirmed() -> void:
 	var code = _join_code_input.text.strip_edges().replace("-", "").to_upper()
 	if code.is_empty():
-		_show_join_error("Gib den Einladungscode deiner Spielrunde ein.")
+		_show_join_error("Enter your game’s invitation code.")
 		return
 	if code.length() != JOIN_CODE_LEN:
-		_show_join_error("Ein Einladungscode hat %d Zeichen, zum Beispiel ABC-123." % JOIN_CODE_LEN)
+		_show_join_error("An invitation code has %d characters, for example ABC-123." % JOIN_CODE_LEN)
 		return
 	var url = _join_relay_url_input.text.strip_edges()
 	if url.is_empty():
@@ -632,19 +634,19 @@ func _on_browse_online_pressed() -> void:
 func _show_browse_popup() -> void:
 	if _browse_popup:
 		_browse_popup.queue_free()
-	_browse_popup = NetDialog.build("Öffentliche Tische", "NET-03", "Schließen")
+	_browse_popup = NetDialog.build("Public tables", "NET-03", "Close")
 
 	var content := NetDialog.content(_browse_popup)
-	content.add_child(NetDialog.label("Dein Name:"))
-	_browse_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Spielername")
+	content.add_child(NetDialog.label("Your name:"))
+	_browse_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	_browse_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_browse_name_input)
-	content.add_child(NetDialog.label("Verbindungsserver:"))
+	content.add_child(NetDialog.label("Relay server:"))
 	_browse_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_browse_url_input)
 
 	var refresh_btn := Button.new()
-	refresh_btn.text = "Liste aktualisieren"
+	refresh_btn.text = "Refresh list"
 	refresh_btn.focus_mode = Control.FOCUS_ALL
 	refresh_btn.pressed.connect(_refresh_browse_list)
 	content.add_child(refresh_btn)
@@ -713,7 +715,7 @@ func _on_browse_rooms_received(rooms: Array) -> void:
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(label)
 		var join_btn := Button.new()
-		join_btn.text = "Beitreten"
+		join_btn.text = "Join"
 		join_btn.focus_mode = Control.FOCUS_NONE
 		join_btn.pressed.connect(_on_browse_join.bind(code))
 		row.add_child(join_btn)
@@ -799,13 +801,13 @@ func _open_load_battle_dialog() -> void:
 		_load_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 		_load_dialog.access = FileDialog.ACCESS_FILESYSTEM
 		_load_dialog.filters = PackedStringArray(["*.nml ; Niemandsland Save Files"])
-		_load_dialog.title = "Spielstand laden"
+		_load_dialog.title = "Load game"
 		# FileDialog derives its OK label from file_mode and takes both button labels from
 		# Godot's own translations, i.e. from the SYSTEM language — on a German Windows the
-		# only English-only UI in the game would suddenly read "Öffnen"/"Abbrechen". Pin them
+		# English-only UI would otherwise show localized Open/Cancel labels. Pin them
 		# explicitly, AFTER file_mode (set_file_mode rewrites ok_button_text).
-		_load_dialog.ok_button_text = "Öffnen"
-		_load_dialog.cancel_button_text = "Abbrechen"
+		_load_dialog.ok_button_text = "Open"
+		_load_dialog.cancel_button_text = "Cancel"
 		_load_dialog.file_selected.connect(_on_load_file_selected)
 		add_child(_load_dialog)
 		# A hard 800x600 is nearly full-screen on a 1366x768 laptop; clamp to the host

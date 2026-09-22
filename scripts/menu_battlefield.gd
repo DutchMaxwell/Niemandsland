@@ -65,10 +65,10 @@ func build(selected_biome: String, world_env: WorldEnvironment, sun: Directional
 	terrain_overlay = load("res://scripts/terrain_overlay.gd").new()
 	add_child(terrain_overlay)
 	_build_terrain()
-	progress.emit("Gelände vorbereiten",0.15)
+	progress.emit("Preparing terrain",0.15)
 	await get_tree().process_frame
 	await _build_units(table)
-	progress.emit("Biom gestalten",0.75)
+	progress.emit("Preparing biome",0.75)
 	await get_tree().process_frame
 	presentation = load("res://scripts/visual/grassland_reference.gd").new()
 	presentation.biome = biome
@@ -86,7 +86,7 @@ func build(selected_biome: String, world_env: WorldEnvironment, sun: Directional
 		label.hide()
 	_add_spill(Vector3(0.12,0.12,0.20),Color(0.78,0.84,1),0.10,0.42)
 	_add_spill(Vector3(-0.03,0.045,-0.13),Color(1,0.42,0.16),0.12,0.27)
-	progress.emit("Bereit",1.0)
+	progress.emit("Ready",1.0)
 	finished.emit()
 
 
@@ -118,7 +118,7 @@ func _build_units(table: Node3D) -> void:
 	factory.object_manager = object_manager
 	for unit in [{"name":"Battle Brothers","faction":"battle_brothers","base":25,"center":Vector3(-0.005,0,0.135),"yaw":65.0},
 		{"name":"Warriors","faction":"robot_legions","base":32,"center":Vector3(0.170,0,0.115),"yaw":-110.0}]:
-		progress.emit("Miniaturen vorbereiten",0.25+float(model_count)*0.04)
+		progress.emit("Preparing miniatures",0.25+float(model_count)*0.04)
 		# The same manifest-backed delivery as army import; offline retains native fallback models.
 		await factory.model_library.ensure_models([{"faction":unit.faction,"unit_name":unit.name}])
 		for index in FORMATION.size():
