@@ -71,6 +71,11 @@ func setup(main: Node) -> void:
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null:
 		graphics.settings_applied.connect(_on_graphics_settings_applied)
+	# D1 order: the atmosphere controller writes the mood's lighting first (restore_saved() after the intro,
+	# or a mood change), THEN the biome profile goes on top. atmosphere_changed fires at the end of
+	# apply_atmosphere; a blended change is waited out before the profile is applied.
+	if main.atmosphere_controller != null:
+		main.atmosphere_controller.atmosphere_changed.connect(_on_atmosphere_changed)
 	request_rebuild("start")
 
 
@@ -261,6 +266,16 @@ func _process(_delta: float) -> void:
 	var grass: Node3D = _table.get_node("GrassField")
 	if grass.visible:
 		grass.visible = false
+
+
+func _on_atmosphere_changed(mood: String) -> void:
+	var tween = _main.atmosphere_controller.get("_transition_tween")
+	if tween is Tween and tween.is_valid() and tween.is_running():
+		await tween.finished
+	if _building or not is_instance_valid(_presentation):
+		return
+	# The mood may have changed again while the blend ran: apply the current one.
+	_presentation.apply_table_mood(_main.atmosphere_controller.get_current_atmosphere())
 
 
 ## A quality-preset change: rebuild only when the dressing state or the density actually changes.

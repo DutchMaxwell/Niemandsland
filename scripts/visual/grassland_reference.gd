@@ -36,6 +36,8 @@ var table_tier := false
 var density_scale := 1.0
 ## Table tier: edge length of the relief cells of the table plane.
 const TABLE_RELIEF_CELL_M := 0.012
+## Table tier: game moods that take the biome light profile (D1); the others keep the game's lighting.
+const TABLE_PROFILE_MOODS: Array[String] = ["Day", "Sunset", "Night"]
 var _profile: Dictionary = {}
 const Biomes = preload("res://scripts/visual/reference_biomes.gd")
 const DOF_MAX_AMOUNT := 0.045
@@ -176,7 +178,10 @@ func apply(main: Node) -> void:
 	_build_fog(main)
 	if _profile["dust"]:
 		_build_dust(main)
-	apply_lighting("Day")
+	if table_tier:
+		apply_table_mood(_game_mood())
+	else:
+		apply_lighting("Day")
 	# A quality-preset change rewrites the shared environment (SDFGI, SSIL, metre-scale
 	# SSAO, stronger glow). Re-assert the tuned reference look so Ultra cannot undo it.
 	var graphics := get_node_or_null("/root/GraphicsSettings")
@@ -235,7 +240,8 @@ func apply_lighting(mood: String) -> void:
 	if _previous_viewport.is_empty():
 		_previous_viewport = {"taa":get_viewport().use_taa,"scale":get_viewport().scaling_3d_scale}
 	var light: Node = _main.lighting_controller
-	var evening := mood == "Sunset"
+	# D1 (table tier): Night uses the profile's sunset values too.
+	var evening := mood == "Sunset" or (table_tier and mood == "Night")
 	var angles: Vector2 = _profile["sun_angles_sunset"] if evening else _profile["sun_angles_day"]
 	light.set_sun_energy(_profile["sun_energy"])
 	light.set_sun_color(_profile["sun_color_sunset"] if evening else _profile["sun_color_day"])
@@ -328,7 +334,23 @@ func _preset_values() -> Dictionary:
 
 func _on_graphics_settings_applied(_preset_name: String) -> void:
 	if _main != null:
-		apply_lighting(_current_mood)
+		if table_tier:
+			apply_table_mood(_game_mood())
+		else:
+			apply_lighting(_current_mood)
+
+
+## Table tier, maintainer decision D1: the biome light profile is the Day base; Sunset and Night use the
+## profile's own sunset values; the other game moods (Overcast, Rain) keep the game's own lighting.
+func apply_table_mood(mood: String) -> void:
+	if mood in TABLE_PROFILE_MOODS:
+		apply_lighting(mood)
+
+
+## The game's current atmosphere mood (atmosphere_controller), "Day" outside the game.
+func _game_mood() -> String:
+	var atmosphere = _main.get("atmosphere_controller") if _main != null else null
+	return str(atmosphere.get_current_atmosphere()) if atmosphere != null else "Day"
 
 
 ## Tilt-shift fades in as the camera zooms towards the table, so the wide review
@@ -441,7 +463,7 @@ func _dress_grid_forest(overlay: Node3D) -> void:
 
 func _dress_movable_forests() -> void:
 	for group in get_tree().get_nodes_in_group("terrain_group_base"):
-		if group.kind != TerrainGroupBase.KIND_FOREST or group.biome_prefix != "":
+		if group.prop_kind != TerrainGroupBase.KIND_FOREST or group.biome_prefix != "":
 			continue
 		var radius: Vector2 = group.footprint_inches * 0.0254 * 0.5
 		_regions.append(Vector4(group.global_position.x,group.global_position.z,radius.x,radius.y))
