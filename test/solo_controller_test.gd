@@ -3821,3 +3821,25 @@ func test_best_spot_threat_term_prefers_the_spot_outside_the_envelope() -> void:
 	var nocb := AiDeployment.best_spot(sec, objectives, [], 0.016, Callable(), 0.025, 0.016, [], 0.016, -0.3,
 			Callable(), 12.0 * SoloController.INCHES_TO_METERS)
 	assert_that(nocb).is_equal(off)
+
+
+## SHADOW MENU (22.09.): the divergence test between the live and the shadow core pick is pure —
+## same unit + kind + target + destination (to 1 mm) = no divergence; anything else diverges. The
+## knob parser sets the named menu knobs true and every other menu knob false.
+func test_shadow_diverges_and_shadow_menu_knobs() -> void:
+	var live := {"unit_key": "u1", "action": {"kind": 2, "unit": "u1", "dest": [0.1, 0.0, 0.2]}}
+	assert_bool(SoloController.shadow_diverges(live, {"unit_key": "u1",
+		"action": {"kind": 2, "unit": "u1", "dest": [0.1004, 0.0, 0.2]}})).is_false()   # 0.4 mm = same
+	assert_bool(SoloController.shadow_diverges(live, {"unit_key": "u1",
+		"action": {"kind": 2, "unit": "u1", "dest": [0.11, 0.0, 0.2]}})).is_true()     # 1 cm = differs
+	assert_bool(SoloController.shadow_diverges(live, {"unit_key": "u2",
+		"action": {"kind": 2, "unit": "u2", "dest": [0.1, 0.0, 0.2]}})).is_true()      # other unit
+	assert_bool(SoloController.shadow_diverges(live, {"unit_key": "u1",
+		"action": {"kind": 0, "unit": "u1", "shoot": "e1"}})).is_true()                 # other kind
+	var shoot := {"unit_key": "u1", "action": {"kind": 0, "unit": "u1", "shoot": "e1"}}
+	assert_bool(SoloController.shadow_diverges(shoot, {"unit_key": "u1",
+		"action": {"kind": 0, "unit": "u1", "shoot": "e2"}})).is_true()                 # other target
+	assert_bool(SoloController.shadow_diverges(shoot, shoot.duplicate(true))).is_false()
+	assert_that(SoloController.shadow_menu_knobs("off")).is_equal({"menu_holders": false, "menu_wide": false})
+	assert_that(SoloController.shadow_menu_knobs("menu_wide")).is_equal({"menu_holders": false, "menu_wide": true})
+	assert_that(SoloController.shadow_menu_knobs(" menu_holders , menu_wide ")).is_equal({"menu_holders": true, "menu_wide": true})

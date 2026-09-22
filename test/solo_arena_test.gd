@@ -438,4 +438,5 @@ func test_search_knobs_carry_the_effective_ab_switches() -> void:
 	assert_float(float(k.get("deploy_threat_in", -1.0))).is_equal(6.0)
 	assert_str(str(k.get("deploy_threat_preset", "<missing>"))).is_equal("planner_v0")
 	assert_bool(k.has("deploy_threat_seat")).is_true()
+	assert_bool(k.has("shadow_menu")).is_true()   # the shadow-menu config rides the result too
 
