@@ -639,6 +639,11 @@ func _desaturate_model(node: Node3D) -> void:
 		var mi := child as MeshInstance3D
 		if mi.mesh == null or mi.has_meta("dead_orig_override"):
 			continue
+		# A material_override (BaseDecor rim/top/ring) hides surface materials anyway, and Godot never
+		# tracks a surface material an override shadows: freeing the node then prints four 'Parameter
+		# "material" is null' engine errors per mesh. Skipping it changes nothing on screen.
+		if mi.material_override != null:
+			continue
 		var origs: Array = []
 		for s in range(mi.mesh.get_surface_count()):
 			origs.append(mi.get_surface_override_material(s))
