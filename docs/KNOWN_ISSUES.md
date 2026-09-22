@@ -17,7 +17,8 @@ not there yet and what to watch for. The full done / in-progress / planned break
   resolve activations, dice, wounds, morale, terrain effects and hundreds of special rules for
   both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: one
   difficulty (full strength), co-op against the AI in multiplayer is a first version, the UI is
-  English (only the privacy & data screens also come in German), and a small residue
+  English (the privacy & data screens also come in German, and two start-menu entries still carry
+  German labels), and a small residue
   of special rules is still manual — the battle log names any rule it applies (or asks for
   manual handling).
 - **AI thinking time has been measured on one machine only** (a developer laptop). On a slower PC
