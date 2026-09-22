@@ -69,7 +69,7 @@ What the code actually does today:
   **`Ctrl`+`Z` takes a finished move back** — position, facing, chalk and inch proof all
   revert (MP-synced) until dice hit the tray or the next activation starts. 1″ spacing
   walls (red enemy / orange friendly) with base-contact snap and no-overlap drops; an
-  opt-in "dry-brush" cap stops the drag at the selected action band (Advance ~6″ /
+  "dry-brush" cap (on by default; Settings → *Enforce Movement Limit*) stops the drag at the selected action band (Advance ~6″ /
   Rush-Charge ~12″). A Deployment → **Start Game** → Playing phase gate (with an MP
   ready-sync) frames setup vs play.
 - **Multiplayer** — manual play: no dice or combat automation, alternate activations like at a real

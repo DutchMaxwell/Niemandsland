@@ -211,7 +211,7 @@ path length (arc), not straight-line, while weapon/charge RANGE stays straight-l
 Every executed move is recorded to a move ledger and MP-synced (proof-of-movement),
 and clicking a trail reports its distance. A **1″ spacing** layer shows proximity walls
 (red enemy / orange friendly), snaps to base contact and forbids overlapping drops (own
-units too). An **opt-in "dry-brush" movement cap** (default on) hard-stops the drag at
+units too). A **"dry-brush" movement cap** (on by default, can be switched off) hard-stops the drag at
 the selected action band (Advance ~6″ / Rush-Charge ~12″, Fast/aura-aware); backtracking
 refunds the budget — the eraser band is the model's own chalk-ribbon width, so hand-walked
 corrections actually refund (a genuine detour wider than the base still counts in full).
