@@ -561,12 +561,18 @@ func run_ai_turn() -> int:
 ## A Shaken unit's activation is an IDLE (no move/attack) reported as {"idle_shaken": true}; the caller
 ## clears the Shaken state through its marker/broadcast seam. Returns the unit, or null when none left.
 func activate_next_ai_unit() -> GameUnit:
+	var _ph_sel := 0
+	if act_wall_enabled():
+		_phase_begin()
+		_ph_sel = _phase_enter()
 	var unit := _take_peeked_unit()
 	if unit == null:
 		var eligible := eligible_ai_units()
 		if eligible.is_empty():
 			return null
 		unit = _select_ai_unit(eligible)
+	if act_wall_enabled():
+		_phase_mark("select", _ph_sel)
 	if unit == null:
 		return null
 	_activation_seq += 1   # monotonic per-activation index for the deterministic difficulty draws
@@ -574,6 +580,9 @@ func activate_next_ai_unit() -> GameUnit:
 		_round_first_slot[_current_round()] = ai_slot   # D-wave: this round's opener
 	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing
 	board_clamp_notes = []   # #215: per-activation, drained by main into the battle log
+	var _ph_act := 0
+	if act_wall_enabled():
+		_ph_act = _phase_enter()
 	if unit.is_shaken:
 		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover. An AIRCRAFT still
 		# makes its MANDATORY straight move first (GF v3.5.1: the move happens even Shaken, and it does
@@ -595,6 +604,11 @@ func activate_next_ai_unit() -> GameUnit:
 		last_report = _act_disembark(unit)
 	else:
 		last_report = _act(unit)
+	if act_wall_enabled():
+		_phase_mark("act", _ph_act)
+	var _ph_book := 0
+	if act_wall_enabled():
+		_ph_book = _phase_enter()
 	mark_activated(unit)
 	if network_manager != null and network_manager.has_method("broadcast_unit_activation"):
 		network_manager.broadcast_unit_activation(unit)
@@ -616,6 +630,9 @@ func activate_next_ai_unit() -> GameUnit:
 	# per roll) and gated by the same NML_TRACE guard as the dice/rng taps (write-only, no reader).
 	if _rng_trace_enabled:
 		record_decision({"kind": "digest", "seq": _activation_seq, "sha": state_digest()})
+	if act_wall_enabled():
+		_phase_mark("book", _ph_book)
+		_phase_print()
 	return unit
 
 
@@ -2103,10 +2120,15 @@ func _act(unit: GameUnit) -> Dictionary:
 	# No policy loaded => {} => byte-identical tree.
 	var planner_used := false
 	var pl := {}
+	var _ph_plan := 0
+	if act_wall_enabled():
+		_ph_plan = _phase_enter()
 	if _planner_active():
 		pl = _solve_planner(unit)
 	elif _clone_active():
 		pl = _solve_clone(unit)
+	if act_wall_enabled():
+		_phase_mark("plan", _ph_plan)
 	if bool(pl.get("used", false)):
 		planner_used = true
 		action = int(pl["action"])
@@ -3211,11 +3233,16 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# D-wave: seat-aware depth — opener when OUR side made this round's first
 	# activation (or nobody acted yet, i.e. we are about to open it).
 	AiPlanner.opener_seat = int(_round_first_slot.get(_current_round(), ai_slot)) == int(ai_slot)
+	var _ph_cap := 0
+	if act_wall_enabled():
+		_ph_cap = _phase_enter()
 	var _prof_cap_t0 := BattleSim.prof_t0()
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
 	BattleSim.prof_mark("capture", _prof_cap_t0)
+	if act_wall_enabled():
+		_phase_mark("capture", _ph_cap)
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
 	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var me: int = int((pool[0] as GameUnit).unit_properties.get("player_id", 0))
@@ -3244,13 +3271,23 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# unported branch) falls straight through to the GDScript search, unchanged.
 	# The doctrine probe keeps precedence — it is a different decision entirely.
 	if not doctrine_on and not bool(pick.get("used", false)) and BattleSim.core_enabled():
+		var _ph_core := 0
+		if act_wall_enabled():
+			_ph_core = _phase_enter()
 		var seam := _core_plan(state, me)
+		if act_wall_enabled():
+			_phase_mark("core", _ph_core)
 		if bool(seam.get("used", false)):
 			seam_leaf = seam.get("leaf", {})
 			seam.erase("leaf")
 			pick = seam
 	if not bool(pick.get("used", false)):
+		var _ph_gd := 0
+		if act_wall_enabled():
+			_ph_gd = _phase_enter()
 		pick = AiPlanner.plan_with_rollout(state, me)
+		if act_wall_enabled():
+			_phase_mark("gdsearch", _ph_gd)
 	BattleSim.prof_mark("search", _prof_srch_t0)
 	AiActRecorder.finish(act_rec, pick)
 	if pick.has("brain"):
@@ -3330,6 +3367,35 @@ static func act_wall_enabled() -> bool:
 	if _act_wall < 0:
 		_act_wall = 1 if OS.get_environment("NML_ACT_WALL") == "1" else 0
 	return _act_wall == 1
+## PHASE instrument — behind the SAME NML_ACT_WALL switch as the [ACT_WALL] line above. One
+## "[ACT_PHASE] r<round> p<side> total_us=<n> select=<us> act=<us> book=<us> other=<us>
+## plan=<us> core=<us> gdsearch=<us> capture=<us> move=<us>" line per activation. select/act/book are
+## the three DISJOINT top-level stretches (they sum with other to total); plan/core/gdsearch/capture/
+## move are NESTED probes inside those stretches (they may overlap) and exist to localise the tail.
+## Switch off = every probe call is skipped: no allocation, no print, byte-identical output.
+var _phase_us := {}
+var _phase_t0 := 0
+
+func _phase_begin() -> void:
+	_phase_us = {}
+	_phase_t0 = Time.get_ticks_usec()
+
+func _phase_mark(name: String, t0: int) -> void:
+	_phase_us[name] = int(_phase_us.get(name, 0)) + (Time.get_ticks_usec() - t0)
+
+func _phase_enter() -> int:
+	return Time.get_ticks_usec()
+
+func _phase_print() -> void:
+	var total := Time.get_ticks_usec() - _phase_t0
+	var parts: Array = []
+	for k in ["select", "act", "book"]:
+		parts.append("%s=%d" % [k, int(_phase_us.get(k, 0))])
+	parts.append("other=%d" % maxi(total - int(_phase_us.get("select", 0)) \
+		- int(_phase_us.get("act", 0)) - int(_phase_us.get("book", 0)), 0))
+	for k in ["plan", "core", "gdsearch", "capture", "move"]:
+		parts.append("%s=%d" % [k, int(_phase_us.get(k, 0))])
+	print("[ACT_PHASE] r%d p%d total_us=%d %s" % [_current_round(), ai_slot, total, " ".join(parts)])
 ## SHADOW MENU (22.09., second opinion: Δ = p·g): a SECOND core node whose header carries the menu
 ## knobs named in NML_SHADOW_MENU (comma list of `menu_holders`/`menu_wide` to set TRUE, every other
 ## menu knob FALSE; "off" = both false) plans the SAME activation after the live node. The first
@@ -4167,9 +4233,14 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 				cout["target"] = tgt
 			return cout
 	_planner_intent = {}
+	var _ph_cap2 := 0
+	if act_wall_enabled():
+		_ph_cap2 = _phase_enter()
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
+	if act_wall_enabled():
+		_phase_mark("capture", _ph_cap2)
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
 	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var unit_key := ""
@@ -4184,7 +4255,12 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 		var su: Dictionary = state["units"][k]
 		if str(k) != unit_key and int(su["player"]) == me:
 			su["activated"] = true
+	var _ph_gd2 := 0
+	if act_wall_enabled():
+		_ph_gd2 = _phase_enter()
 	var pick := AiPlanner.plan(state, me)
+	if act_wall_enabled():
+		_phase_mark("gdsearch", _ph_gd2)
 	if not bool(pick.get("used", false)) or str(pick["unit_key"]) != unit_key:
 		return {}
 	var act: Dictionary = pick["action"]
@@ -5553,8 +5629,14 @@ func _plan_move(unit: GameUnit, models: Array, positions: Array, goal: Vector3, 
 	if delta == Vector3.ZERO:
 		_fill_straight_trails(trails, positions, positions)
 		return positions.duplicate()
-	return _plan_positions(unit, models, positions, delta, allow_contact, trails, avoid_difficult,
-		avoid_dangerous, charge_target, reach_in, dry_run)
+	var _ph_move := 0
+	if act_wall_enabled():
+		_ph_move = _phase_enter()
+	var _planned := _plan_positions(unit, models, positions, delta, allow_contact, trails,
+		avoid_difficult, avoid_dangerous, charge_target, reach_in, dry_run)
+	if act_wall_enabled():
+		_phase_mark("move", _ph_move)
+	return _planned
 
 
 ## Would the rigid move's per-model TARGETS land inside difficult terrain? (Objective or charge target
