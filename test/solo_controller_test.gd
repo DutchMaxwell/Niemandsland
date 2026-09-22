@@ -1112,6 +1112,25 @@ func test_render_decision_formats_candidates_and_reason() -> void:
 	assert_bool(SoloController.render_decision({"kind": "move", "unit": "X"}).contains("X")).is_true()
 
 
+func test_render_decision_for_player_hides_debug_and_keeps_rule_lines() -> void:
+	# Trace taps and leaf rows are hidden; a feature vector leaves the numbers, the rest stays.
+	assert_str(SoloController.render_decision_for_player({"kind": "dice", "seq": 1, "faces": [6]})).is_empty()
+	assert_str(SoloController.render_decision_for_player({"kind": "planner", "unit": "A",
+		"rule": "leaf row", "why": "leaf", "data": {"leaf": true, "features": {"x": 1.0}}})).is_empty()
+	var pick := SoloController.render_decision_for_player({"kind": "planner", "unit": "A", "rule": "unit pick",
+		"chosen": "activates next", "data": {"kept_back": 2, "features": {"x": 1.0}}})
+	assert_str(pick).contains("chose activates next")
+	assert_str(pick).contains("kept_back=2")
+	assert_str(pick).not_contains("features")
+	# A brain other than the shipped net is not called "trained".
+	var brain := SoloController.render_decision_for_player({"kind": "brain", "unit": "", "rule": "r", "why": "w",
+		"data": {"name": "constant-test", "hash": "zeros-v1"}})
+	assert_str(brain).contains("external evaluator")
+	assert_str(brain).not_contains("zeros-v1")
+	assert_array(SoloController.player_decision_lines([{"kind": "rng"}, {"kind": "target", "unit": "B",
+		"rule": "nearest", "chosen": "C"}])).has_size(1)
+
+
 func test_target_key_compare_official_order() -> void:
 	# Not-yet-activated beats activated regardless of band; then the nearer band; equal = genuine tie.
 	var fresh_far := {"activated": false, "band": 20}
