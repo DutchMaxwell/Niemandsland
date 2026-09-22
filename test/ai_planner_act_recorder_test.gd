@@ -265,6 +265,11 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	assert_bool((header["knobs"] as Dictionary).has("menu_advance_k")).is_true()
 	assert_int(int((header["knobs"] as Dictionary)["menu_advance_k"])).is_equal(1)
 	assert_int(AiPlanner.menu_advance_k_on()).is_equal(1)
+	# Wave 6 (`rushk`): the header carries the playout's rush k, 1 by default, so the core's
+	# rollout follows the shipped single RUSH and an A/B can flip it from the header.
+	assert_bool((header["knobs"] as Dictionary).has("playout_rush_k")).is_true()
+	assert_int(int((header["knobs"] as Dictionary)["playout_rush_k"])).is_equal(1)
+	assert_int(AiPlanner.playout_rush_k_on()).is_equal(1)
 	assert_object(header.get("terrain")).is_null()   # no terrain_type_at seam in this fixture
 
 	var act := JSON.parse_string(lines[1]) as Dictionary

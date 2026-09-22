@@ -81,6 +81,13 @@ static var _mw_env := -1
 ## _mak_env = -2 means unread.
 static var menu_advance_k := 1
 static var _mak_env := -2
+## PLAYOUTRUSHK (wave 6, `rushk`): how many of the nearest objectives the ROLLOUT's greedy
+## brain rushes. 1 (the default) is byte-identical to the single RUSH every recorded corpus
+## replays; the Rust core's `Tuning::rush_k` reads the same number. NML_PLAYOUT_RUSH_K=<int>
+## sets it (clamped to 1..4; unset = 1). Tests set the static directly; _prk_env = -2 means
+## unread.
+static var playout_rush_k := 1
+static var _prk_env := -2
 
 
 ## Ship path (22.09.): pin the search budget for the shipped Erlkönig grade. An explicit
@@ -1161,6 +1168,15 @@ static func menu_advance_k_on() -> int:
 			menu_advance_k = clampi(int(e), 1, 8)
 		_mak_env = 0
 	return menu_advance_k
+
+
+static func playout_rush_k_on() -> int:
+	if _prk_env == -2:
+		var e := OS.get_environment("NML_PLAYOUT_RUSH_K")
+		if e.is_valid_int():
+			playout_rush_k = clampi(int(e), 1, 4)
+		_prk_env = 0
+	return playout_rush_k
 
 
 static func _menu_holders_on() -> bool:

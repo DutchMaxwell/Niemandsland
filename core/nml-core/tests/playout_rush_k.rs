@@ -19,7 +19,7 @@
 //!     activation whose state has >= 2 objectives carries exactly one more
 //!     RUSH/ADVANCE-to-objective candidate than k=1, to a DIFFERENT dest, with
 //!     every other candidate identical and in the same order.
-use nml_core::menu::{Candidate, Tuning};
+use nml_core::menu::Candidate;
 use nml_core::plan::{seams_of, tuning_of};
 use nml_core::playout::Policy;
 use nml_core::sim::{Scratch, ADVANCE, RUSH};
