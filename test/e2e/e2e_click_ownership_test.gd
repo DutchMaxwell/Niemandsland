@@ -258,6 +258,9 @@ func test_a_hud_surface_built_at_runtime_owns_its_clicks_too(timeout := 120000) 
 	assert_that(panel) \
 		.override_failure_message("the battle-log panel is gone — this test stands in for the runtime-built HUD surfaces the static .tscn test cannot enumerate; retarget it at another one") \
 		.is_not_null()
+	# The collapsed top-centre tab is retired (HUD pass 1): the command bar's Battle Log button opens it.
+	_main._command_bar.toggle_battle_log()
+	await _runner.simulate_frames(2)
 	assert_bool(panel.is_visible_in_tree()).is_true()
 	var pt := _point_owned_only_by(panel)
 	assert_vector(pt) \

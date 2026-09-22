@@ -21,6 +21,9 @@ var _round: Label = null
 var _phase: Label = null
 var _turn: Label = null
 var _turn_action: Button = null
+var _enemy_chip: PanelContainer = null
+var _enemy_chip_label: Label = null
+var _battle_log_btn: Button = null
 var _help: Control = null
 
 
@@ -38,6 +41,16 @@ func setup(main: Node) -> void:
 	var info := main.get_node_or_null("UI/HUD/InfoLabel") as Label
 	if info != null:
 		info.visible = false   # the controls list now lives behind the ? Controls button
+	var log_panel = main.get("battle_log_panel")
+	if log_panel != null:
+		log_panel.retire_tab()   # the bar's Battle Log button replaces the collapsed top-centre tab
+	# A light poll keeps the readouts current (units falling, an AI box ticked mid-game) without
+	# hooking every game event that can change them. Reads only.
+	var poll := Timer.new()
+	poll.wait_time = 0.5
+	poll.autostart = true
+	poll.timeout.connect(refresh)
+	add_child(poll)
 	refresh()
 
 
@@ -71,6 +84,32 @@ func _build_bar() -> void:
 
 	_turn = _label("HOTSEAT", HudTokensScript.CYAN, HudTokensScript.body_font(), 13)
 	row.add_child(_turn)
+
+	_enemy_chip = PanelContainer.new()
+	_enemy_chip.name = "EnemyChip"
+	_enemy_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE   # readout, owns no click
+	_enemy_chip.add_theme_stylebox_override("panel", HudTokensScript.sunken_style())
+	_enemy_chip.visible = false
+	var chip_row := HBoxContainer.new()
+	chip_row.add_theme_constant_override("separation", 6)
+	_enemy_chip.add_child(chip_row)
+	var dot := ColorRect.new()
+	dot.color = Color(0.85, 0.45, 0.35)
+	dot.custom_minimum_size = Vector2(8, 8)
+	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip_row.add_child(dot)
+	_enemy_chip_label = _label("", Color(0.91, 0.78, 0.74), HudTokensScript.body_font(), 12)
+	chip_row.add_child(_enemy_chip_label)
+	row.add_child(_enemy_chip)
+
+	_battle_log_btn = Button.new()
+	_battle_log_btn.name = "BattleLogBtn"
+	_battle_log_btn.text = "▤ Battle Log"
+	_battle_log_btn.focus_mode = Control.FOCUS_NONE
+	_battle_log_btn.tooltip_text = "Show or hide the battle log"
+	_battle_log_btn.pressed.connect(toggle_battle_log)
+	row.add_child(_battle_log_btn)
 
 	var help_btn := Button.new()
 	help_btn.name = "ControlsHelpBtn"
@@ -167,6 +206,12 @@ func toggle_help() -> void:
 		_help.visible = not _help.visible
 
 
+## Route to the existing battle log panel's own toggle (no new logic, no second log).
+func toggle_battle_log() -> void:
+	if _main != null and _main.get("battle_log_panel") != null:
+		_main.battle_log_panel._toggle()
+
+
 # === State (display only) ===
 
 ## Read the current round / phase / turn into the bar. Safe to call any time.
@@ -183,6 +228,7 @@ func refresh() -> void:
 	_phase.text = "DEPLOYMENT" if phase == OPRArmyManager.GamePhase.DEPLOYMENT else "PLAYING"
 	_turn.text = _turn_text()
 	_turn.add_theme_color_override("font_color", _turn_color())
+	_update_enemy_chip()
 	if _turn_action != null:
 		var final_round: bool = bool(_main.call("_solo_final_round_active"))
 		_turn_action.text = _main.next_round_button_label(round_n, final_round)
@@ -201,6 +247,11 @@ func _turn_text() -> String:
 	var net = _main.get("network_manager")
 	if net != null and net.is_multiplayer_active():
 		return "MULTIPLAYER"
+	# An AI army is designated but its controller is not up yet (e.g. a loaded table before
+	# deployment): still a solo game — never "HOTSEAT" next to the NACHTMAHR chip.
+	var ai_slots = _main.get("solo_ai_slots")
+	if ai_slots is Dictionary and not (ai_slots as Dictionary).is_empty():
+		return "SOLO"
 	return "HOTSEAT"
 
 
@@ -210,6 +261,25 @@ func _turn_color() -> Color:
 			and solo.turn_manager.active_side() != TurnManager.Side.HUMAN:
 		return Color(0.85, 0.45, 0.35)
 	return HudTokensScript.CYAN
+
+
+## Display only. In solo, show how many enemy units are still on the table (>=1 living
+## model). Hidden while no army is designated to NACHTMAHR (hotseat, plain multiplayer).
+func _update_enemy_chip() -> void:
+	if _enemy_chip == null or _main == null:
+		return
+	var ai_slots = _main.get("solo_ai_slots")
+	var manager = _main.get("opr_army_manager")
+	if not (ai_slots is Dictionary) or (ai_slots as Dictionary).is_empty() or manager == null:
+		_enemy_chip.visible = false
+		return
+	var ai_slot: int = int(_main.call("_solo_ai_slot"))
+	var left := 0
+	for u in manager.get_game_units_for_player(ai_slot):
+		if u != null and u.get_alive_count() > 0:
+			left += 1
+	_enemy_chip_label.text = "NACHTMAHR · %d UNIT%s LEFT" % [left, "" if left == 1 else "S"]
+	_enemy_chip.visible = true
 
 
 func _on_turn_changed(_side: int) -> void:
