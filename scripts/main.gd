@@ -862,6 +862,8 @@ func _ready() -> void:
 	# Table size is chosen ONCE up front, then locked — changing it later wipes the
 	# built layout. Loads and multiplayer clients inherit the size from the saved/host
 	# data, so they skip the chooser.
+	var table_setup: Dictionary = ProjectSettings.get_setting("niemandsland/pending_table_setup",{})
+	ProjectSettings.set_setting("niemandsland/pending_table_setup",null)
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
@@ -871,14 +873,19 @@ func _ready() -> void:
 	# School scenario load skips the chooser + intro the same way (its board provides the size).
 	if harness_mode or _tutorial_mode or _scenario_mode:
 		if not joining_client and pending_load.is_empty():
-			_set_table_size(DEFAULT_TABLE_SIZE_FEET)
+			_set_table_size(table_setup.get("size",DEFAULT_TABLE_SIZE_FEET))
+			if table_setup.has("biome"):
+				table.set_biome(table_setup.biome)
 		call_deferred("_on_intro_finished")
 	elif pending_load.is_empty() and not joining_client:
 		# Choose the table size FIRST on a black backdrop, then dissolve into the intro —
 		# the chooser must never overlap the cinematic. UI stays hidden until the intro ends.
 		$UI.visible = false
 		_show_prompt_black()
-		call_deferred("_prompt_table_size")
+		if table_setup.has("size") and table_setup.has("biome"):
+			call_deferred("_on_table_size_chosen",table_setup.size,null,table_setup.biome)
+		else:
+			call_deferred("_prompt_table_size")
 	else:
 		# Loaded battle / joining client: size comes from the saved/host data, so there is
 		# no chooser — go straight into the intro.
@@ -13458,7 +13465,8 @@ func _prompt_table_size() -> void:
 	if table and table.has_method("get_biomes"):
 		dialog.set_biomes(table.get_biomes(), table.biome)
 	dialog.size_chosen.connect(_on_table_size_chosen.bind(dialog))
-	dialog.popup_centered()
+	dialog.cancelled.connect(_on_table_setup_cancelled)
+	dialog.popup()
 	# Gently fade the chooser in over the black backdrop.
 	var content := dialog.get_child(0) as Control
 	if content:
@@ -13468,24 +13476,36 @@ func _prompt_table_size() -> void:
 
 
 ## Apply the chosen table size, dissolve the chooser into black, then play the intro.
-func _on_table_size_chosen(size_feet: Vector2, dialog: Window) -> void:
+func _on_table_setup_cancelled() -> void:
+	# Direct-to-Main entry fallback: unwind any live session before returning.
+	if internet_lobby:
+		internet_lobby.disconnect_internet_game()
+	if network_manager:
+		network_manager.disconnect_game()
+	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
+
+
+func _on_table_size_chosen(size_feet: Vector2, dialog: Window = null, biome_name: String = "") -> void:
 	_set_table_size(size_feet)
 	# Apply the biome chosen in the dialog.
 	var td := dialog as TableSizeDialog
-	if td and td.selected_biome != "" and table.has_method("set_biome"):
-		table.set_biome(td.selected_biome)
+	if td:
+		biome_name = td.selected_biome
+	if biome_name != "" and table.has_method("set_biome"):
+		table.set_biome(biome_name)
 		# Sync the biome to other players (host-authoritative, via the table-settings RPC).
 		if network_manager.is_multiplayer_active():
-			network_manager.broadcast_table_settings({"biome": td.selected_biome})
-	var content := dialog.get_child(0) as Control
+			network_manager.broadcast_table_settings({"biome": biome_name})
+	var content := dialog.get_child(0) as Control if is_instance_valid(dialog) else null
 	var t := create_tween()
 	if content:
 		t.tween_property(content, "modulate:a", 0.0, 0.8).set_trans(Tween.TRANS_SINE)
 	else:
 		t.tween_interval(0.4)
 	t.tween_callback(func() -> void:
-		dialog.hide()   # hide before free — see the note in _solo_await_confirm
-		dialog.queue_free()
+		if is_instance_valid(dialog):
+			dialog.hide()
+			dialog.queue_free()
 		# Start the intro (its own opaque black covers the screen). Keep our black backdrop
 		# up a few frames longer so the hand-off stays black -> never a grey flash if the
 		# intro's overlay isn't covering on the very first frame.

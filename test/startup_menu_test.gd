@@ -110,3 +110,53 @@ func test_rebuild_keeps_main_actions_usable() -> void:
 	assert_bool(_menu.start_battle_btn.is_visible_in_tree()).is_true()
 	assert_bool(_menu.start_battle_btn.disabled).is_false()
 	assert_str(_menu.view.status.text).contains("Preparing background")
+
+func test_new_table_configuration_can_cancel_without_leaving_menu() -> void:
+	_menu.start_battle_btn.pressed.emit()
+	assert_object(_menu._table_setup).is_not_null()
+	assert_bool(_menu._transitioning).is_false()
+	assert_bool(_menu.view.visible).is_false()
+	_menu._table_setup._on_close()
+	assert_bool(_menu.view.visible).is_true()
+	assert_object(_menu._table_setup).is_null()
+	assert_bool(_menu._transitioning).is_false()
+
+func test_host_setup_cancel_does_not_arm_network_or_table_state() -> void:
+	var pending = ProjectSettings.get_setting("niemandsland/pending_internet_lobby",false)
+	var setup = ProjectSettings.get_setting("niemandsland/pending_table_setup",{})
+	_menu._show_table_setup({"niemandsland/pending_internet_lobby":true})
+	_menu._table_setup._on_close()
+	assert_bool(ProjectSettings.get_setting("niemandsland/pending_internet_lobby",false)).is_equal(pending)
+	assert_dict(ProjectSettings.get_setting("niemandsland/pending_table_setup",{})).is_equal(setup)
+
+class MenuTransitionProbe extends "res://scripts/startup_menu.gd":
+	var entered_game := false
+	func _transition_to_game() -> void:
+		entered_game = true
+
+func test_host_creation_commits_selected_table_and_network_settings_together() -> void:
+	var keys := ["niemandsland/pending_table_setup","niemandsland/pending_internet_lobby","niemandsland/internet_is_host","niemandsland/internet_relay_url","niemandsland/player_name","niemandsland/internet_public"]
+	var previous := {}
+	for key in keys:
+		previous[key] = ProjectSettings.get_setting(key,null)
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe._on_host_online_pressed()
+	probe._host_public_check.button_pressed = true
+	probe._on_host_confirmed()
+	var started_early: bool = probe.entered_game
+	probe._table_setup._select_biome("arid_desert")
+	probe._table_setup._select_size("square")
+	probe._table_setup._confirm()
+	var result := {}
+	for key in keys:
+		result[key] = ProjectSettings.get_setting(key,null)
+		ProjectSettings.set_setting(key,previous[key])
+	assert_bool(started_early).is_false()
+	assert_bool(probe.entered_game).is_true()
+	assert_vector(result["niemandsland/pending_table_setup"].size).is_equal(Vector2(4,4))
+	assert_str(result["niemandsland/pending_table_setup"].biome).is_equal("arid_desert")
+	assert_bool(result["niemandsland/pending_internet_lobby"]).is_true()
+	assert_bool(result["niemandsland/internet_is_host"]).is_true()
+	assert_bool(result["niemandsland/internet_public"]).is_true()

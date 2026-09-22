@@ -20,6 +20,7 @@ const MenuView = preload("res://scripts/startup_menu_view.gd")
 @onready var diorama: MenuDiorama = %Diorama
 var view: Control
 var _settings: Window
+var _table_setup: TableSizeDialog
 var _transitioning := false
 var continue_btn: Button
 var start_battle_btn: Button
@@ -159,7 +160,37 @@ func _on_continue_pressed() -> void:
 
 
 func _on_start_battle_pressed() -> void:
+	_show_table_setup()
+
+
+func _show_table_setup(host_settings: Dictionary = {}) -> void:
+	if is_instance_valid(_table_setup):
+		return
+	_table_setup = TableSizeDialog.new()
+	add_child(_table_setup)
+	_table_setup.set_biomes(MenuDiorama.Battlefield.BIOMES,diorama.biome)
+	_table_setup.size_chosen.connect(_on_table_setup_chosen.bind(host_settings))
+	_table_setup.cancelled.connect(_on_table_setup_cancelled)
+	view.hide()
+	_table_setup.popup()
+
+
+func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> void:
+	ProjectSettings.set_setting("niemandsland/pending_table_setup",{"size":size_feet,"biome":_table_setup.selected_biome})
+	for key in host_settings:
+		ProjectSettings.set_setting(key,host_settings[key])
+	_table_setup.hide()
+	_table_setup.queue_free()
+	_table_setup = null
 	_transition_to_game()
+
+
+func _on_table_setup_cancelled() -> void:
+	_table_setup.queue_free()
+	_table_setup = null
+	view.show()
+	start_battle_btn.grab_focus()
+
 
 
 ## TUTORIAL pressed: first-timers go straight in (assessment + full track); once any
@@ -533,13 +564,15 @@ func _on_host_confirmed() -> void:
 	var player_name := PlayerIdentity.sanitize(_host_name_input.text)
 	PlayerIdentity.save_name(player_name)
 
-	# Pass settings to main scene — connection happens there
-	ProjectSettings.set_setting("niemandsland/pending_internet_lobby", true)
-	ProjectSettings.set_setting("niemandsland/internet_is_host", true)
-	ProjectSettings.set_setting("niemandsland/internet_relay_url", url)
-	ProjectSettings.set_setting("niemandsland/player_name", player_name)
-	ProjectSettings.set_setting("niemandsland/internet_public", _host_public_check.button_pressed)
-	_transition_to_game()
+	# Hosting only begins after Create table. Back leaves no pending network state.
+	_host_popup.hide()
+	_show_table_setup({
+		"niemandsland/pending_internet_lobby":true,
+		"niemandsland/internet_is_host":true,
+		"niemandsland/internet_relay_url":url,
+		"niemandsland/player_name":player_name,
+		"niemandsland/internet_public":_host_public_check.button_pressed})
+
 
 
 func _show_join_popup() -> void:
