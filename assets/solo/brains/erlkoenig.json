@@ -1,0 +1,26 @@
+{
+ "label": "erlkoenig",
+ "working_name": "r2_mix3_w91",
+ "file": "erlkoenig.onnx",
+ "bytes": 1646812,
+ "sha256": "bb5568f646d97295b9f460254305ef6d18a9e830924a984b237651116b1e5e36",
+ "raw_sha256_at_export": "bb5568f646d97295b9f460254305ef6d18a9e830924a984b237651116b1e5e36",
+ "golden_sha256": "77af61b406fe7424a0f746dbf15884a5a5705654276dcf795071af15b411132d",
+ "opset": 17,
+ "static_batch": 32,
+ "exporter": "torch-2.13.0+cu130-torchscript",
+ "nml_core_sha": "5ce5ce5dce7a23bf7bbbcdf6474e072bd5a819d7",
+ "exported": "2026-09-19",
+ "verify": {
+  "leaves": 60,
+  "real_leaves": 48,
+  "synthetic_leaves": 12,
+  "members": 2,
+  "intra_op_threads": 1,
+  "ort_max_abs": 2.384185791015625e-07,
+  "member_max_abs": 3.725290298461914e-07,
+  "layout_max_abs": 0.0
+ },
+ "verdict": "PASS",
+ "note": "the shipped leaf evaluator; loaded by NmlCore.set_brain_onnx(bytes, sha256); golden = core/nml-core-godot tests onnx_golden"
+}
