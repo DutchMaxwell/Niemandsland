@@ -3752,8 +3752,22 @@ var _core_move_diffs := 0         # selfcheck: how many of them disagreed
 static func _move_seam_on() -> bool:
 	if _move_seam_env < 0:
 		_move_seam_env = 1 if (BattleSim.core_enabled()
-			and OS.get_environment("NML_CORE_MOVE") == "1") else 0
+			and move_seam_wanted(OS.get_environment("NML_CORE_MOVE"), OS.is_debug_build())) else 0
 	return _move_seam_env == 1
+
+
+## S7 (22.09.): the move seam as a pure switch, the twin of BattleSim.core_wanted — a RELEASE
+## build routes plan_unit_step through the core unless NML_CORE_MOVE=0; a debug build keeps the
+## explicit =1. Measured 22.09. (DeepSeek's phase instrument, 2 seeds, 57 activations): the GDScript
+## movement planner owned 76 % of the AI decision time, p90 4,255 ms → 650 ms with the seam; the
+## self-check (NML_CORE_SELFCHECK) compared 2,532 plan_unit_step calls over 40 games, both grades,
+## 0 disagreements — same moves, ~15x less waiting.
+static func move_seam_wanted(env: String, debug_build: bool) -> bool:
+	if env == "1":
+		return true
+	if env == "0":
+		return false
+	return env.is_empty() and not debug_build
 
 
 static func _move_check_on() -> bool:
