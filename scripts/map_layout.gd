@@ -229,10 +229,8 @@ func _ready() -> void:
 		deployment_check.toggled.connect(_on_deployment_toggled)
 	if save_file_dialog:
 		save_file_dialog.file_selected.connect(_on_save_file_selected)
-		save_file_dialog.theme = preload("res://scripts/hud/dialog_style.gd").file_dialog_theme()
 	if load_file_dialog:
 		load_file_dialog.file_selected.connect(_on_load_file_selected)
-		load_file_dialog.theme = preload("res://scripts/hud/dialog_style.gd").file_dialog_theme()
 
 	# Setup deployment zone type selection
 	_setup_deployment_type_option()

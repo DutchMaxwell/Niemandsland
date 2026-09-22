@@ -201,8 +201,6 @@ var unit_card: UnitCard = null
 var unit_dock: UnitDock = null
 var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
-var _command_bar = null            # top bar: round / phase / turn + turn action (UI handoff 22.09.)
-var _tool_rail = null              # right-side tool rail: Dice / Measure / Terrain / View (UI handoff 22.09.)
 var game_record_collector: GameRecordCollector = null   # in-memory opt-in game record (PR B1, local only)
 var _tutorial_mode: bool = false              # guided tutorial: set from the startup-menu flag, drives _start_tutorial
 var _tutorial_director: TutorialDirector = null
@@ -459,9 +457,6 @@ func _ready() -> void:
 	if has_node("/root/ThemeManager"):
 		left_panel_scroll.theme = get_node("/root/ThemeManager").get_current_theme()
 	left_panel_scroll.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	# The menu shipped with the older glassmorphism look; restyle it to the mockup's tokens
-	# (UI handoff 22.09.). Display only.
-	preload("res://scripts/hud/menu_style.gd").apply(left_panel_scroll)
 
 	# Connect End Battle button and confirmation dialog
 	end_battle_btn.pressed.connect(_on_end_battle_pressed)
@@ -493,8 +488,6 @@ func _ready() -> void:
 	# Connect Dice Roller Plugin
 	roll_button.pressed.connect(_on_roll_button_pressed)
 	quick_roll_button.pressed.connect(_on_quick_roll_button_pressed)
-	_style_dice_button(roll_button, true)
-	_style_dice_button(quick_roll_button)
 	dice_roller_control.roll_finnished.connect(_on_roller_finished)
 	dice_roller_control.roll_started.connect(_on_roller_started)
 	# A local die-colour click → mirror it live to the opponent's tray.
@@ -509,12 +502,6 @@ func _ready() -> void:
 	_build_reroll_row()
 	_build_movement_cap_row()
 	_set_dice_count(DEFAULT_DICE_COUNT)
-
-	# Right-side tool rail: groups Dice / Measure / Terrain / View in one collapsible rail and
-	# moves the dice panel off the field (UI handoff 22.09.). Display only.
-	_tool_rail = preload("res://scripts/hud/tool_rail.gd").new()
-	$UI/HUD.add_child(_tool_rail)
-	_tool_rail.setup(self)
 
 	# Build the multiplayer chat + roster panel (hidden until a session is active).
 	_build_chat_panel()
@@ -787,15 +774,6 @@ func _ready() -> void:
 
 	# Battle Log — after the managers + radial controller exist, wire the collector to the central seams.
 	_setup_battle_log()
-
-	# Top command bar (round / phase / turn + turn action) and the controls help overlay.
-	# UI handoff 22.09.: the round gets a permanent home, the always-on controls wall becomes a
-	# help overlay, so the battlefield stays clear. Display only — no rule or simulation change.
-	_command_bar = preload("res://scripts/hud/command_bar.gd").new()
-	$UI/HUD.add_child(_command_bar)
-	_command_bar.setup(self)
-	if opr_army_manager != null:
-		opr_army_manager.game_phase_changed.connect(func(_phase: int) -> void: _command_bar.refresh())
 
 	# Opt-in game record (PR B1): same central seams, in memory only, no disk and no network.
 	_setup_game_record_collector()
@@ -12276,8 +12254,6 @@ func _refresh_round_visuals() -> void:
 				radial_menu_controller._update_activated_markers(game_unit)
 				radial_menu_controller._update_caster_marker(game_unit)
 	_update_round_button()
-	if _command_bar != null:
-		_command_bar.refresh()
 
 
 ## The Next Round button/confirm label names the round it moves ONTO ("Next Round → 3"
@@ -12505,7 +12481,6 @@ func _build_movement_cap_row() -> void:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
 		btn.pressed.connect(_on_movement_cap_pressed.bind(int(spec[0])))
-		_style_dice_button(btn)
 		row.add_child(btn)
 		_movement_cap_buttons[int(spec[0])] = btn
 
@@ -12548,7 +12523,6 @@ func _build_dice_count_selector() -> void:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
 		btn.pressed.connect(_on_dice_preset_pressed.bind(n))
-		_style_dice_button(btn)
 		grid.add_child(btn)
 		_dice_preset_buttons.append(btn)
 	selector.add_child(grid)
@@ -12581,7 +12555,6 @@ func _make_dice_delta_button(delta: int) -> Button:
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
 	btn.pressed.connect(_on_dice_delta_pressed.bind(delta))
-	_style_dice_button(btn)
 	return btn
 
 
@@ -12727,25 +12700,7 @@ func _make_dice_option_button(text: String) -> Button:
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
-	_style_dice_button(btn)
 	return btn
-
-
-## Re-skins one dense dice-panel button to the tactical tokens (UI handoff 22.09.): compact
-## content margins so the 26 px rows keep their height. The active-state tint (modulate) still
-## reads on top. Display only.
-func _style_dice_button(btn: Button, primary: bool = false) -> void:
-	var boxes: Dictionary = HudTokens.primary_button() if primary else HudTokens.ghost_button()
-	for state in boxes:
-		var style: StyleBoxFlat = (boxes[state] as StyleBoxFlat).duplicate()
-		style.content_margin_left = 8
-		style.content_margin_right = 8
-		style.content_margin_top = 2
-		style.content_margin_bottom = 2
-		btn.add_theme_stylebox_override(state, style)
-	btn.add_theme_color_override("font_color", HudTokens.TEXT)
-	btn.add_theme_font_override("font", HudTokens.body_font())
-	btn.add_theme_font_size_override("font_size", 12)
 
 
 func _on_success_target_pressed(target: int) -> void:
@@ -12820,15 +12775,15 @@ func _setup_battle_log() -> void:
 		radial_menu_controller.battle_log = battle_log
 	battle_log_panel = BattleLogPanel.new()
 	$UI/HUD.add_child(battle_log_panel)
-	# Top-CENTRE, under the command bar; collapsed to a tab by default, expands downward (maintainer req).
+	# Top-CENTRE, hugging the top edge; collapsed to a tab by default, expands downward (maintainer req).
 	battle_log_panel.anchor_left = 0.5
 	battle_log_panel.anchor_right = 0.5
 	battle_log_panel.anchor_top = 0.0
 	battle_log_panel.anchor_bottom = 0.0
 	battle_log_panel.offset_left = -170.0
 	battle_log_panel.offset_right = 170.0
-	battle_log_panel.offset_top = 60.0
-	battle_log_panel.offset_bottom = 60.0
+	battle_log_panel.offset_top = 6.0
+	battle_log_panel.offset_bottom = 6.0
 	battle_log_panel.grow_vertical = Control.GROW_DIRECTION_END
 	battle_log_panel.bind(battle_log)
 	battle_log_panel.export_requested.connect(_on_battle_log_export)
@@ -15031,11 +14986,9 @@ func _apply_ui_theme() -> void:
 	# Tactical corner-bracket chrome on the main HUD panels (additive, mouse-ignore).
 	_add_hud_frame($UI/HUD/DiceRollerPanel)
 
-	# Apply to all file dialogs — the shared theme plus the FileDialog's ItemList (grid view),
-	# which the app theme never covered (UI handoff 22.09.).
-	var file_dialog_theme: Theme = preload("res://scripts/hud/dialog_style.gd").file_dialog_theme()
-	save_game_dialog.theme = file_dialog_theme
-	load_game_dialog.theme = file_dialog_theme
+	# Apply to all file dialogs
+	save_game_dialog.theme = current_theme
+	load_game_dialog.theme = current_theme
 
 
 ## Adds a corner-bracket HudFrame overlay to a HUD PanelContainer (idempotent).
@@ -15673,8 +15626,6 @@ func _on_intro_finished() -> void:
 	# Reveal the gameplay UI only now that the intro is fully built — fade it in gently
 	# so the panels don't pop in during the build.
 	$UI.visible = true
-	if _command_bar != null:
-		_command_bar.refresh()   # a loaded battle only now has its round/phase/turn state
 	var hud := $UI.get_node_or_null("HUD") as Control
 	if hud:
 		hud.modulate.a = 0.0

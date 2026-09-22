@@ -205,14 +205,10 @@ func _tab_target_y(open: bool) -> float:
 	return (_strip_target_y(true) - TAB_H) if open else (vp.y - TAB_H)
 
 
-## The selected unit's card lives on the LEFT (UI handoff 22.09., mockup "one home for the selected
-## unit") instead of under the tab at the screen bottom — no reaching across the screen. Sits just
-## below the top command bar; clamped so a tall caster card never runs off the bottom.
 func _presented_rest_pos() -> Vector2:
 	var vp := get_viewport_rect().size
 	var h: float = _presented.size.y if _presented != null else float(PCARD_H)
-	var top := minf(64.0, maxf(16.0, vp.y - h - 16.0))
-	return Vector2(16.0, top)
+	return Vector2(vp.x / 2.0 - PCARD_W / 2.0, vp.y - h - TAB_H - GAP_ABOVE_TAB)
 
 
 # === Strip show/hide ===

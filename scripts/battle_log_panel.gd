@@ -22,7 +22,6 @@ signal copy_requested()
 
 var _log: BattleLog = null
 var _open := false   # starts collapsed to a top-centre tab; click the header to expand downward
-var _tab_retired := false   # true once the command bar's Battle Log button owns the toggle
 var _filter := BattleLog.Filter.ALL
 
 var _header: Button = null
@@ -205,18 +204,9 @@ func _entry_label(entry: Dictionary) -> Control:
 func _toggle() -> void:
 	_open = not _open
 	_body.visible = _open
-	if _tab_retired:
-		visible = _open   # no collapsed tab left behind: the bar's button brings the panel back
 	# Top-edge panel: ▲ collapses up (open), ▼ expands down (collapsed).
 	_header.text = ("▲  Battle Log" if _open else "▼  Battle Log")
 	reset_size()
-
-
-## The command bar's Battle Log button replaces the collapsed top-centre tab: from now on the panel is
-## hidden while collapsed and shown only while open (its header still collapses it).
-func retire_tab() -> void:
-	_tab_retired = true
-	visible = _open
 
 
 func _panel_style() -> StyleBoxFlat:
