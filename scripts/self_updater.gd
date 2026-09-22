@@ -159,7 +159,21 @@ func _apply_windows(extracted_abs: String, install_dir: String, exe: String) -> 
 		_fail("the Windows update contained no %s" % exe.get_file())
 		return
 	var bat := ProjectSettings.globalize_path(STAGING_DIR).path_join("apply_update.bat")
-	var name := exe.get_file()
+	var fa := FileAccess.open(bat, FileAccess.WRITE)
+	if fa == null:
+		_fail("could not write the Windows update helper")
+		return
+	fa.store_string(windows_helper_script(extracted_abs, exe))
+	fa.close()
+	restarting.emit()
+	OS.create_process("cmd.exe", ["/c", "start", "", "/min", bat])
+	get_tree().quit()
+
+
+## The helper .bat that swaps the install once this process has exited. Static and side-effect free,
+## so the swap the player cannot see (no Windows machine in CI) is pinned by a unit test.
+static func windows_helper_script(extracted_abs: String, exe: String) -> String:
+	var new_exe := extracted_abs.path_join(exe.get_file())
 	var script := "@echo off\r\n"
 	script += "ping 127.0.0.1 -n 3 >nul\r\n"  # ~2s: let the game process exit + release the lock
 	script += "copy /Y \"%s\" \"%s.bak\" >nul\r\n" % [exe, exe]
@@ -167,15 +181,7 @@ func _apply_windows(extracted_abs: String, install_dir: String, exe: String) -> 
 	script += "if errorlevel 1 copy /Y \"%s.bak\" \"%s\" >nul\r\n" % [exe, exe]
 	script += "del \"%s.bak\" >nul 2>&1\r\n" % exe
 	script += "start \"\" \"%s\"\r\n" % exe
-	var fa := FileAccess.open(bat, FileAccess.WRITE)
-	if fa == null:
-		_fail("could not write the Windows update helper")
-		return
-	fa.store_string(script)
-	fa.close()
-	restarting.emit()
-	OS.create_process("cmd.exe", ["/c", "start", "", "/min", bat])
-	get_tree().quit()
+	return script
 
 
 # ===== Helpers =====
