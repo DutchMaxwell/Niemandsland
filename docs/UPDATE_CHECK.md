@@ -15,7 +15,8 @@ similar clients.
 | Piece | File | Role |
 |---|---|---|
 | `UpdateChecker` (autoload) | `scripts/update_checker.gd` | Fetches releases, compares versions, emits signals. Holds the pure, unit-tested SemVer logic. |
-| `UpdatePrompt` (dialog) | `scripts/update_prompt.gd` | Non-blocking "Download / Later / Skip this version" popup. |
+| `UpdatePrompt` (dialog) | `scripts/update_prompt.gd` | Non-blocking "Update & Restart / Later / Skip this version" popup. |
+| `SelfUpdater` | `scripts/self_updater.gd` | Downloads the release `.zip` and installs it over the running install, then relaunches. |
 | Startup wiring | `scripts/startup_menu.gd` | Starts the check and shows the prompt on a hit. |
 
 Flow on launch:
@@ -28,7 +29,9 @@ Flow on launch:
    uses — see `network_manager.gd`).
 4. If it is strictly newer and not skipped, `update_available` fires and the menu pops
    the `UpdatePrompt` over itself.
-5. **Download** opens the release page (`OS.shell_open`); **Later** dismisses it;
+5. **Update & Restart** downloads this platform's release `.zip`, installs it over the running
+   install and relaunches; with no matching `.zip` asset, or when the self-update fails, it opens
+   the release page instead (`OS.shell_open`). **Later** dismisses it;
    **Skip this version** persists so that exact version is never offered again.
 
 Everything is best-effort: offline, rate-limited, or malformed responses emit
@@ -44,7 +47,7 @@ endpoint and pick the highest version ourselves (`INCLUDE_PRERELEASES = true`).
 ## Version comparison
 
 `UpdateChecker` implements a SemVer-precedence subset that handles the project's
-`MAJOR.MINOR.PATCH-prerelease` scheme:
+`MAJOR.MINOR.PATCH.BUILD-prerelease` scheme (up to four numeric core fields):
 
 - A leading `v` and any `+build` metadata are tolerated/ignored.
 - Numeric core fields compare numerically (`0.4.0 > 0.3.9`).
