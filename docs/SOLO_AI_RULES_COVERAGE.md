@@ -1,7 +1,8 @@
 # Solo-AI — Special-Rule Coverage Matrix
 
 Systematic inventory of the OPR special rules that touch **combat / AI behaviour**, and whether the
-headless self-play sim (`scripts/solo/`) models each one. This is the M2/M3 backlog driver: the game now
+headless self-play sim (`scripts/solo/solo_sim.gd`, the mirror-fairness oracle) models each one — the
+Rust rules core (`core/nml-core`), which also drives self-play and the AI's rollouts, is not tracked here. This is the M2/M3 backlog driver: the game now
 **names any unit rule the automation does not resolve, once per rule name in the battle log** (see
 `_solo_log_unmodeled_rules` in `scripts/main.gd`), so field tests
 and the phone review app *show* the gaps instead of hiding them.
@@ -38,7 +39,7 @@ Mount was available on 2026-07-09; every rule below was read from the PDFs/army 
 | **Split fire** (weapon types → different targets) | 🆕 | `SoloSim._resolve_shooting_split` (p.8) |
 | **Deadly(X)** (×X to one model, Tough-capped, overkill lost) | 🆕 | `AiCombatMath.deadly_multiplier` + `_resolve_volley`/`_strike`. Pooled-sim note: exact only when X ≥ Tough (the common case); a Deadly hit with X < Tough may pool onto the next model rather than strictly losing overkill. |
 | **Relentless** (>9" shooting: unmodified 6 → +1 hit) | 🆕 | `AiCombatMath.relentless_bonus_hits` in `_resolve_volley` |
-| **Takedown** (snipe a model as a unit of [1]) | ⏳ | targeting overlay done (§B); the *damage* facet (resolve one model as unit-of-1, ignore other models' LOS/cover) needs per-model wound tracking — the pooled sim assigns to the unit. |
+| **Takedown** (snipe a model as a unit of [1]) | ⏳ sim / ✅ **real game** | targeting overlay done (§B); the *damage* facet resolves the model picked before the roll as a unit of [1] (`main._solo_takedown_pick`). Sim wiring open — the pooled sim assigns to the unit. |
 | **Surge** (unmodified 6-to-hit → +1 hit, any range) | ⏳ sim / ✅ **real game** | `AiCombatMath.surge_bonus_hits` in `main._solo_hits` (both directions). Sim wiring open. |
 | **Furious** (charging melee: unmodified 6-to-hit → +1 hit) | ⏳ sim / ✅ **real game** | `AiCombatMath.furious_bonus_hits` (unit rule stamped onto melee profiles) in `main._solo_hits`, charge sites only. Sim wiring open. |
 | **Rending** (unmodified 6-to-hit → AP(+4) on those hits) | ⏳ sim / ✅ **real game** | `AiCombatMath.rending_ap_hits` + `main._solo_resolve_saves` (a separate AP(+4) save batch), both directions. Regeneration-bypass facet was already wave-1. Sim wiring open. Blast×Rending on one weapon: the AP(+4) count is capped at the post-Blast hits (documented edge; the field armies never carry both on one weapon). |
@@ -48,19 +49,19 @@ Mount was available on 2026-07-09; every rule below was read from the PDFs/army 
 | **Counter** (strikes first when charged; −Impact) | ⏳ sim / ✅ **real game** | Wave 3: the charged defender's Counter weapons resolve as a phase BEFORE the charger's attacks (incl. Impact) — `main._solo_melee_strike_phase` with a Counter/non-Counter profile filter, both directions (the human defender gets ONE strike-back choice covering the whole melee; the AI always strikes back, solo p.57). Impact reduction via `AiCombatMath.impact_total_dice`; the activation-order overlay (Counter last in section) in `SoloController._select_ai_unit`. Ordering note: the PDF does not pin Counter vs Impact — we resolve Counter first ("strikes first"; its Impact reduction presumes the counter-attack precedes), a documented reading. Sim wiring open. |
 | **Fearless** (re-roll a failed morale on 4+) | ⏳ sim / ✅ **real game** | `AiCombatMath.fearless_recovers` in `main._solo_morale_test` (shared by both directions) — a failed test re-rolls one real tray die, 4+ passes. Present on the whole test army. Sim wiring open. |
 | **Fear(X)** (+X wounds for who-won-melee) | ⏳ sim / ✅ **real game** | `AiCombatMath.fear_adjusted_wounds` in both melee-winner comparisons (`_run_ai_melee` / `_run_human_attack`). Comparison-only; never changes wounds applied. Sim wiring open. |
-| **Bane / Lacerate** (target re-rolls unmodified block 6s) | ⏳ sim / ✅ **real game (Bane)** | `AiCombatMath.blocks_with_bane` + `main._solo_save_batch` — the defender re-rolls its unmodified Defense 6s once (extra tray dice), respecting the melee/shooting Bane variants; auras excluded. Regeneration-bypass facet was already wave-1. Lacerate is an army-specific name (not in the core PDF) → its re-roll facet stays logged, regen-bypass only. Sim wiring open. |
+| **Bane / Lacerate** (target re-rolls unmodified block 6s) | ⏳ sim / ✅ **real game** | `AiCombatMath.blocks_with_bane` + `main._solo_save_batch` — the defender re-rolls its unmodified Defense 6s once (extra tray dice), respecting the melee/shooting Bane variants; auras excluded. Regeneration-bypass facet was already wave-1. Lacerate (the AoF alias of Bane) re-rolls the same way (`main._solo_striker_has_bane`). Sim wiring open. |
 | **Thrust** (+1 hit & AP(+1) in melee on charge) | ⏳ sim / ✅ **real game** | `AiCombatMath.thrust_to_hit` + `main._solo_thrust_profile` — charging melee gets +1 to hit (fatigue's unmodified-6 overrides it) and AP(+1), both charge directions. Sim wiring open. |
 | **Stealth** (−1 to hit, shot >9") | ⏳ sim / ✅ **real game** | Wave 3: `AiCombatMath.shooting_hit_modifier` → both shooting directions; "units where all models have this rule" honoured incl. attached heroes (`main._solo_rule_on_all_models`); battle log names the modifier. Sim wiring open. |
 | **Evasive** (−1 to hit, any attack) | ⏳ sim / ✅ **real game** | Army-book rule (official Army Forge rule text carried by the field list — NOT in the core PDF): "Enemies get -1 to hit rolls when attacking units where all models have this rule." Shooting AND melee, both directions (`shooting_hit_modifier` / `melee_hit_modifier`). Sim wiring open. |
 | **Shielded** (+1 Defense vs non-spell hits) | ⏳ sim / ✅ **real game** | Army-book rule (Army Forge text): `AiCombatMath.shielded_defense`, folded into EVERY save site (shooting, melee, Impact; Blast ignores cover but not Shielded) — prompts/logs show the modified threshold. No spell system → every hit qualifies. Sim wiring open. |
-| **Defense(+X)** (army-specific stat bump) | ⏳ | not in the core PDF; stays logged as un-automated. |
+| **Defense(+X)** (army-specific stat bump) | ⏳ sim / ✅ **real game** | not in the core PDF; the mechanics maps apply it as Shielded with the bonus from its rating (`main._solo_defense_parts`). Sim wiring open. |
 | **Regeneration / Regeneration Aura** (ignore each wound on 5+) | 🆕 | `SoloSim._apply_regeneration` — **this is the Battle Brothers "Medical Training" medic** (the item grants Regeneration Aura). |
-| **Mend** (active: remove D3 wounds from a friendly Tough model) | ⏳ | not in the test army; needs an activation-phase heal step (pick friendly Tough model within 3", remove D3). Distinct from the passive Regeneration medic above. |
+| **Mend** (active: remove D3 wounds from a friendly Tough model) | ⏳ sim / ✅ **real game** | `main._solo_apply_mend`: an AI bearer heals the most-wounded Tough model within 3" by one tray D3 before attacking; human bearers apply it manually. Sim wiring open. Distinct from the passive Regeneration medic above. |
 | **Fast / Slow** (±move) | ⏳ sim / ✅ **real game** | the real AI's move bands come from `movement_range_controller.move_bands_for_props` (Fast +2"/+4", Slow −2"/−4", negation-aware). Sim import still fixed 6"/12" (open). |
 | **Immobile / Artillery** (Hold only; Artillery ±to-hit >9") | ⏳ sim / ✅ **real game** | Wave 3: `SoloController.forces_hold` overrides the tree to HOLD (still shoots in range — Artillery solo overlay p.57); Artillery's +1 to hit (shooter, >9") and −2 to hit (as target, >9") via `shooting_hit_modifier`, both directions. Artillery's deploy-high overlay facet is NOT modeled (flagged). Sim wiring open. |
 | **Limited** (once per game) | ⏳ sim / ✅ **real game** | Wave 5: per-(unit, weapon) expenditure tracked in `SoloController.limited_used`; expended profiles are pre-filtered from BOTH the dice paths and the EV. Sim wiring open. |
-| **Caster** (cast a random spell after moving) | ⏳ sim / ✅ **real game** | Wave 6: the full official Solo v3.5.0 procedure (D3+X over the book-ordered faction list, cycle-to-valid, else hold) + the v3.5.1 token economy (X/round cap 6, spend-on-attempt, 4+, boost/interference ±1 per token in 18" LoS). Damage spells resolve mechanically (fixed hits → the shared save path; **no Shielded, no Cover vs spells**); buff/debuff/utility spells are cast + announced, effect applied manually. See "Wave 6" below. Sim wiring open. |
-| **Aircraft / Flying / Strider / Ambush / Scout** | ➖/⏳/✅ | Ambush/Scout deployment ✅ (real game). Wave 3: **Strider** ignores the Difficult-halving and **Flying** additionally skips Dangerous tests on the real AI's moves (`SoloController._execute_move`, core p.13/14 + solo overlay p.57). Aircraft stays out of scope (➖). |
+| **Caster** (cast a random spell after moving) | ⏳ sim / ✅ **real game** | Wave 6: the full official Solo v3.5.0 procedure (D3+X over the book-ordered faction list, cycle-to-valid, else hold) + the v3.5.1 token economy (X/round cap 6, spend-on-attempt, 4+, boost/interference ±1 per token in 18" LoS). Damage spells resolve mechanically (fixed hits → the shared save path; **no Shielded, no Cover vs spells**); buff/debuff/utility spells are cast + announced; spells with a derived token apply their effect mechanically, the rest stay manual. See "Wave 6" below. Sim wiring open. |
+| **Aircraft / Flying / Strider / Ambush / Scout** | ⏳ sim / ✅ | Ambush/Scout deployment ✅ (real game). Wave 3: **Strider** ignores the Difficult 6" cap and **Flying** additionally skips Dangerous tests on the real AI's moves (`SoloController._execute_move`, core p.13/14 + solo overlay p.57). **Aircraft** ✅ (real game): mandatory 30" straight flight, −12" range against it, can't be charged or seize, never blocks LOS (`SoloController._act_aircraft`). |
 | **Transport(X) / Unstoppable** | ⏳ sim / ✅ **real game** | Transports: the full embark/exit flow ships and the AI fills its transports at deploy, cargo exits on its first activation (#230/#242); a wrecked transport's passenger consequences (dangerous test, Shaken, 6" placement) are automated. Unstoppable: the negative-modifier strip on both volley paths and the melee strike (NML-974) plus the exact-name Regeneration bypass; unit-level GRANTED Unstoppable still misses the strip (NML-975). Sim wiring open. |
 
 ## B. Solo & Co-Op AI overlays (Solo & Co-Op Rules v3.5.0, p.2)
@@ -75,7 +76,7 @@ These change **which target** a weapon picks or **which action** a unit takes (n
 | **Takedown → heroes first** | 🆕 (partial) | `AiTargeting` Overlay.TAKEDOWN. **Flagged:** the rules' "models with upgrades, most expensive first" tier is **not representable** — the sim has no per-model upgrade cost, so only *heroes-first* is honoured. |
 | **Relentless → Hold and shoot when in range** | 🆕 | `SoloSim._forces_hold_and_shoot` |
 | **Indirect / Artillery → Hold and shoot when in range** | ✅ **real game (both)** | Artillery: Hold-only + shoot (`SoloController.forces_hold`) with the ±to-hit facets modeled (Wave 3); its deploy-high facet stays open. Indirect: Wave 5 — hold-and-shoot overlay (`hold_and_shoot_rule`), −1 after moving, LOS-free targeting and cover-ignore all modeled. |
-| Caster / Counter / Ambush / Scout / Aircraft ordering | ⏳/✅ | Wave 3: **Counter last in section** implemented in the real game's pick (`SoloController._select_ai_unit`); Shaken-last was already in. Ambush/Scout deployment ✅. **Caster: Wave 6** — the official cast procedure runs after the move, before the attack (`SoloController._plan_casts`). Aircraft remains out of scope. |
+| Caster / Counter / Ambush / Scout / Aircraft ordering | ⏳/✅ | Wave 3: **Counter last in section** implemented in the real game's pick (`SoloController._select_ai_unit`); Shaken-last was already in. Ambush/Scout deployment ✅. **Caster: Wave 6** — the official cast procedure runs after the move, before the attack (`SoloController._plan_casts`). Aircraft plays its own mandatory-flight role (`SoloController._act_aircraft`). |
 
 ### Ambiguities flagged (not guessed)
 
@@ -98,9 +99,9 @@ Runtime unknown-rule log from the 1000-game mirror (game 1) after this chunk:
 
 Modelled for this army: **AP** ✅, **Tough** ✅, **Relentless** 🆕 (HMG), **Medical Training → Regeneration
 Aura** 🆕 (the medic), as of **Wave 2** — **Fearless** ✅, **Blast** ✅, **Reliable** ✅ — and as of
-**Wave 3** — **Shielded** ✅, **Evasive** ✅, **Artillery** ✅ (all in the real game). The remaining honest
-gap for this army is **Battleborn** (Shaken→4+ recover at round start — an army-specific rule, no core-PDF
-definition, still logged) plus the aura/faction one-offs. Combat lethality changes both sides symmetrically.
+**Wave 3** — **Shielded** ✅, **Evasive** ✅, **Artillery** ✅ (all in the real game). As of **Wave 4**,
+**Battleborn** ✅ too (Shaken→4+ recover at round start, `main._solo_battleborn_recovery`), leaving
+the aura/faction one-offs. Combat lethality changes both sides symmetrically.
 
 ## Wave 2 — combat special rules (real game, 2026-07-10)
 
@@ -217,7 +218,7 @@ round 7 — see the round-7 section at the end of this document.)
   weighs Furious/Thrust/Impact in, the defender's Counter down (strike-first attrition + Impact
   reduction) and halves the taken-wounds weight for a Fearless attacker (p.13 morale re-roll —
   advisory heuristic, tie-breaks only). Deterministic: probabilities, never dice.
-- **Developer mode** ("AI reasoning (dev)" toggle beside Fast AI, default off): every AI decision builds
+- **Developer mode** ("AI reasoning in the log" toggle beside "Fast AI (short pauses)", default off): every AI decision builds
   a STRUCTURED record at decision time (`SoloController.decision_log`, ring-capped at 200 — kind/unit/
   rule-citation/candidates-with-EV/chosen/why/data) covering deployment spots, the D6-section activation
   pick (Shaken/Counter ordering), the tree action (incl. Hold-overlay overrides), target selection with
@@ -238,8 +239,9 @@ AI [move] HDF Storm Troopers — rule: GF v3.5.1 p.7 move bands; p.11 difficult 
 
 The REAL game now mirrors the sim's unknown-rule logging (2026-07-10): the first time a unit acts in solo
 combat, every combat-relevant special rule the automation does not model is noted ONCE per session in the
-battle log ("Note: \"Fearless\" is not automated in solo — apply it manually"). The modeled list lives in
-`main.gd SOLO_MODELED_RULES`.
+battle log ("Note: \"Fearless\" is not automated in solo — apply it manually"). The modeled list is
+derived per game system from the mechanics maps (`RulesRegistry.modeled_tokens`); `main.gd
+SOLO_MODELED_RULES` is the fallback.
 
 ## Fairness (mandatory re-run — combat change)
 
@@ -344,13 +346,13 @@ pinned with a gdUnit test.
    target selection AND resolution AND the human's `n/m sight` display all run one truth,
    `main._solo_true_los_callable`, which blocks a shooter-model→target-model line on (a) blocking terrain
    zones (grid), (b) **wall segments** (`get_wall_segments_world`, previously ignored — the cause of the AI
-   shooting through the central ruins/walls, finding 2), and (c) **any other unit's base** (`LosRules.units_block_line`,
-   the unit-as-blocker engine, previously unwired — finding 11), excluding only the shooter's and target's
+   shooting through the central ruins/walls, finding 2), and (c) **any other unit's base** (`LosRules.units_block_line` then — today volumetric blocker cylinders,
+   `main._solo_los_blockers` + `VolumetricLos`; the unit-as-blocker engine, previously unwired — finding 11), excluding only the shooter's and target's
    own units. The AI *decision* now uses this same per-model check (`SoloController.unit_los_checker`),
    replacing the coarse unit-centre line that both let it shoot with no line (finding 2) and held it from
    firing when its models had a clear line (finding 6). Tests: the existing
    `test_sighted_models_gates_per_model_behind_a_blocker` (per-model gate) + `unit_los_blocker_test.gd` (the
-   geometry).
+   geometry; since ported into `volumetric_los_test.gd`).
 3 & 4b. **Ambush reserve units are truly OFF-TABLE** (GF/AoF v3.5.1 p.13). Round 2 made them ineligible;
    round 3 closes the remaining leaks via one truth, `SoloController.unit_in_reserve`: a reserve unit is
    excluded from activation eligibility (already), from movement/LOS **obstacle** sets, from AI **target**
@@ -373,8 +375,8 @@ pinned with a gdUnit test.
    that are not in base contact … must move by up to 3” to get into base contact … maintaining unit
    coherency", p.9) is surfaced as a battle-log reminder (the automation never moves the opponent's models on
    the player's behalf). Who then strikes is unchanged: models within 2" (p.9). Test:
-   `test_nearest_melee_gap_and_charge_snap`. (The 1"-proximity VISUALIZER lives on `feat/proximity-hint` and
-   is intentionally NOT duplicated here.)
+   `test_nearest_melee_gap_and_charge_snap`. (The 1"-proximity visualizer has since landed on main as
+   `scripts/separation_visualizer.gd`.)
 7. **Dangerous-terrain damage no longer stops shooting** (GF/AoF v3.5.1 p.12: a dangerous test neither
    consumes the activation nor prevents shooting; only a dead model is removed). The premature morale test
    was moved OUT of the dangerous step and DEFERRED to the END of the activation (`_solo_activate_one_ai`),
@@ -436,8 +438,10 @@ research-informed package and is not reworked here.)
    `SoloController.majority_in_cover` → `TerrainRules.gives_cover(RUINS)`), so ruins still confer +1 Defense.
    **Intentional divergence:** this is a `terrain_overlay` (game) change only; `TerrainRules.blocks_los` (the
    SIM's shared classifier) still counts RUINS as a blocker — left untouched per "SIM untouched", and the sim
-   stays fair because both mirror armies use the same classifier. Tests: `terrain_overlay_test.test_ruins_do_not_block_line_of_sight`,
-   `terrain_los_test.test_blocking_and_height_helpers`.
+   stays fair because both mirror armies use the same classifier. *Superseded (maintainer correction):
+   ruins are AREA terrain — see into/out, not through; both classifiers list RUINS again and sight is
+   volumetric (`VolumetricLos`).* Tests today: `terrain_overlay_test.test_ruins_are_area_terrain_blockers`,
+   `terrain_rules_test.test_twin_area_terrain_keeps_see_in_out_not_through`.
 6. **Models moved onto each other, even within their own unit** (GF/AoF v3.5.1 p.7: "may never move through
    other models or units, friendly or enemy"). The planner steered/eased in point space with no base-overlap
    notion. `MovementPlanner.separate_overlaps` now pushes any two of the unit's OWN bases that overlap apart
@@ -568,8 +572,9 @@ v3.5.1; Solo & Co-Op v3.5.0). Self-play audit (2 fixed seeds, the real board + r
    an Ambush-reserve unit blocks no path (it is off-table).
 5. **The human's Ambush units — the game must ASK.** The human's Ambush-rule units are now set aside into
    reserve at deployment (`set_aside_human_ambush`, symmetric to the AI, p.13 "May be set aside before
-   deployment"). At the start of any round ≥ 2 the game **prompts** the human (`_solo_prompt_human_ambush`)
-   to deploy them via guided placement (>9" from enemies, near an objective, terrain-legal — the same legal
+   deployment"). At the start of any round ≥ 2 the game **prompts** the human (`_solo_prompt_human_ambush`
+   then; today the sides alternate arrivals one unit at a time, `_solo_alternate_ambush_arrivals` /
+   `_solo_ambush_human_turn`, p.13) to deploy them via guided placement (>9" from enemies, near an objective, terrain-legal — the same legal
    core as the AI arrival) or keep waiting; the AI's world-model already counts them as existing-but-off-table
    everywhere. Tests: `test_should_prompt_human_ambush_*`, `test_set_aside_human_ambush_*`.
 6. **AI broke coherency — the HARD coherency gate.** If, after the terrain + overlap passes, the unit is not
@@ -628,7 +633,7 @@ other** — the formation jams into nonsense. The new placement, in `MovementPla
 ### The other six findings
 
 6. **Edge-not-centre terrain checks.** Every terrain no-rest / containment check in the solo path now tests the
-   base's OUTER EDGE (centre + 8 base-edge points at the real base radius — shared `_base_edge_offsets_world`),
+   base's OUTER EDGE (centre + 8 base-edge points at the real base radius — shared `_base_edge_offsets_world`, today `TerrainRules.base_in_terrain`),
    never the centre point alone: the round-5 terrain-out gate (`_world_forbidden` / `_project_out_forbidden_
    world` / `_config_terrain_clear` are now radius-aware) and the difficult/dangerous destination checks
    (`_targets_in_difficult` / `_targets_in_dangerous`). This is the "models half inside containers" cause — a
@@ -662,7 +667,9 @@ other** — the formation jams into nonsense. The new placement, in `MovementPla
    trigger never fired and the AI never got its reply. `_run_human_attack` now AUTO-COMPLETES it
    (`SoloController.human_activation_autocompletes` — destroyed AND not already marked): it counts as the
    human's activation and grants the AI its one alternating reply. A pre-toggled unit is never double-counted.
-   Test: `test_human_activation_autocompletes_only_when_destroyed_and_unmarked`.
+   Test: `test_human_activation_autocompletes_only_when_destroyed_and_unmarked`. *Since widened:* any
+   resolved attack completes the activation, survivor or wiped, unless already marked
+   (`SoloController.human_attack_completes_activation`, test `test_human_attack_completes_activation_unless_pretoggled`).
 
 ### Self-play audit (real board + real armies, before → after)
 
@@ -771,11 +778,11 @@ preset knob-vectors:
 - **Never illegal at any grade.** Every knob operates STRICTLY inside the official-tied set (same
   not-activated / nearest key) or on the objective-vs-fight choice (fighting is always legal). A weaker grade
   is a WEAKER opponent, not an illegal one — proved by the legality sweep
-  (`solo_arena_test.test_rekrut_target_pick_is_always_a_legal_tied_candidate`: across 300 seeds Rekrut's pick
+  (`solo_arena_test.test_noisy_target_pick_is_always_a_legal_tied_candidate`: across 300 seeds a noisy knob set's pick
   is always one of the two tied enemies, never the nearer-but-activated unit nor the farther one).
-- **Ceiling grades never deviate** (`solo_difficulty_test.test_ceiling_grades_never_deviate_regardless_of_seed`).
-- **Reproducible.** Same seed + same preset → identical decisions (`test_noisy_pick_is_reproducible_for_a_fixed_
-  seed`, `test_kriegsherr_is_deterministic_and_reproducible`).
+- **Ceiling grades never deviate** (`solo_difficulty_test.test_nachtmahr_never_deviates_regardless_of_seed`).
+- **Reproducible.** Same seed + same preset → identical decisions (`test_noise_machinery_is_reproducible_for_a_fixed_seed`,
+  `test_kriegsherr_is_deterministic_and_reproducible`).
 - **Default unchanged / SIM untouched.** When no difficulty is configured, `active_difficulty()` is null and
   every knob site falls through to the original decision path (byte-identical human-vs-AI). The difficulty
   lives entirely game-side (the opts-pattern discipline): `SoloSim` never constructs a `SoloDifficulty`, so the
@@ -824,11 +831,11 @@ five highest-breadth unautomated rule families gain primitives.
 | **Musician** | +1" on move actions (same picked-variant note as Banner) | — (movement) | `musician_move_bonus_in` widens Advance/Rush(=Charge) bands in `_act`; dev-record carries `musician_bonus_in` |
 | **Sergeant** (model-level) | the bearer's unmodified 6s to hit deal +1 hit (shooting AND melee) | `sergeant_bonus_hits` capped at the bearer's attack share, stamped on ONE profile per member (`AiEv.stamp_sergeant`) — documented pooled approximation | same stamp feeds `profile_ev` (+share/6 hits) |
 | **Limited** | once per game, per weapon | expended profiles skipped in the AI volley, human shooting and melee groups; spent on the roll (`mark_limited_used`, decision record) | `filter_limited` pre-filters the EV's profile lists — an expended weapon stops swaying targeting |
-| **Armor(X)** | "counts as having Defense X+" (best-of guard: never degrades a better printed Defense) | `armored_defense` folded into `_solo_shielded_defense` — every save site (shooting/melee/Impact), logged | `ctx_for` defense + the targeting overlay's defense key |
+| **Armor(X)** | "counts as having Defense X+" (best-of guard: never degrades a better printed Defense) | `armored_defense` folded into `_solo_defense_vs` (via `_solo_armored_defense`) — every save site (shooting/melee/Impact), logged | `ctx_for` defense + the targeting overlay's defense key |
 
 Notes and honest gaps: the GFF/AoFS Banner/Musician "pick up to 3 friendly units before the game" facet is
 data (`scope:"picked"`, `picked_units:3`) but not automated (needs a pre-game pick step); the human's own
-Indirect moved-penalty is not applied (the automation does not track the human's move state); Sergeant's
+Indirect moved-penalty is applied too (keyed on the unit's `moved_round` stamp); Sergeant's
 per-model dice attribution is approximated by the capped bonus (exact in expectation); Limited tracking
 covers both sides' units through the shared profile paths.
 
@@ -927,19 +934,18 @@ half-strength morale test. In native both-AI mode everything auto-rolls (the def
 interference was planned deterministically) — casters work unattended in the arena.
 
 Buff/debuff/utility spells announce the effect (the LIVE army-book spell text, runtime data — never
-committed) with an explicit "not auto-applied — apply manually" note, exactly the un-automated-rule
+committed); only spells without a derived token carry the explicit "not auto-applied — apply manually" note, exactly the un-automated-rule
 convention. Human-side casting (radial "C", CastsDialog, token ±, preview ring) is untouched.
 
 ### Honest gaps (kept visible, not guessed away)
 
-- **Buff/debuff effect application is manual** (announced + logged; the AI casts them per the
-  official procedure and values them via P3, but granted rules/modifiers do not yet alter later
-  dice automatically — needs a per-unit once-effect store consumed by every attack site).
-- **Interference of HUMAN casts by the AI** needs a cast-declaration hook (human casting is fully
-  manual today) — later wave, per the design.
+- **Buff/debuff effects without a derived token stay manual** (announced + logged); tokened spells
+  land in the per-unit store (`_solo_spell_mods`) that the attack sites read.
+- **Interference of HUMAN casts by the AI** ships with the human cast flow (radial "Cast",
+  `solo_begin_cast` → `_run_human_cast`): the AI spends counter-tokens after the player commits.
 - **Advanced Casting (Winds/Currents of Power)** is an opt-in pre-game module that heavily rewrites
-  Caster(X) — out of scope (standard Caster only). **Spell Conduit** and **Mystic Terrain's** token
-  bonus likewise follow-ups.
+  Caster(X) — out of scope (standard Caster only). **Mystic Terrain's** token
+  bonus likewise a follow-up (**Spell Conduit** has since shipped: +1 to cast via a friendly conduit in range).
 - **Last Stand** ("can't use rules that require picking a target, ex. Caster") is not tracked as a
   state by the automation — if it ever is, the cast phase must gate on it.
 - **"This model's unit" Hazardous self-wounds** apply direct (no Regeneration roll) — a documented
@@ -969,7 +975,8 @@ mirror-fairness oracle are untouched):
    lead-stall deferral in the sequential flow (a stuck lead files LAST instead of anchoring the unit),
    and a stall-escalation re-plan in `_execute_move` (a move that achieved <25% of its budget going
    AROUND difficult/dangerous terrain is re-planned THROUGH it — 6" cap / dangerous tests apply).
-   Every move record now logs `achieved_in` (post-gate centroid displacement) as the regression metric.
+   Every move record now logs `achieved_in` (post-gate longest model arc; the centroid displacement is
+   `centroid_in`) as the regression metric.
 3. **Melee "Who Can Strike" is base-edge true** — `striking_models_for` measures base EDGE to base
    edge (2" reach) via the shared SeparationChecker shapes; the old centre-space count (fixed 1"
    contact allowance) excluded big bases (walker/vehicle) from their own melee, so a charger could
@@ -992,8 +999,10 @@ mirror-fairness oracle are untouched):
 
 **Deferred to a future coordination wave** (documented, not faked): route-level lane awareness (the
 slice only checks END positions), the friend's REAL intended target (nearest-enemy proxy today),
-screening/bodyguard behaviour (cheap units interposing against charges), focus-fire target pooling,
-terrain-anchored roles (holding cover/choke points), and any multi-unit lookahead. The natural home
+screening/bodyguard behaviour (cheap units interposing against charges), and terrain-anchored roles
+(holding cover/choke points). (Focus-fire pooling has since shipped as the per-round overkill ledger, and
+multi-unit lookahead as the round-rollout planner NACHTMAHR uses when the rules core and trained network
+are loaded.) The natural home
 for these is an EV term over candidate end positions rather than more goal post-processing.
 
 ---
@@ -1032,7 +1041,8 @@ carry `primitive: "Ambush"` plus their own params — `beacon_in`, `arrive_from_
    our missions (only static, round-end-seized markers exist); the TODO for carry-the-relic missions sits on
    `ambush_redeploy_withdraw`. A transport takes its cargo along on the existing reserve machinery.
 
-**Prefix lesson, again.** `GameUnit.has_special_rule` matches by PREFIX, so *"Ambush Beacon"* and
+**Prefix lesson, again.** `GameUnit.has_special_rule` matched by PREFIX (since fixed: exact name or its
+parenthesised form, NML-1112), so *"Ambush Beacon"* and
 *"Ambush Re-Deployment"* both answered true to `"Ambush"` — their carriers were set aside off the table
 although both deploy normally. All three rules are matched by EXACT base name (`unit_carries_rule`, direct
 rules + item grants).
@@ -1226,7 +1236,7 @@ optional `charging` flag (passed by `_solo_melee_strike_phase`, which knows) so 
 bonus fires on the charge it is printed for and nowhere else.
 
 **One more prefix bug.** `_solo_ignores_regen`'s fallback asked `has_special_rule("Unstoppable")`,
-which matches by **prefix** — so `Unstoppable in Melee` and `Unstoppable when Shooting` bypassed
+which matched by **prefix** (since made exact, NML-1112) — so `Unstoppable in Melee` and `Unstoppable when Shooting` bypassed
 Regeneration in both halves regardless of their gate, and `Unstoppable Mark` (a mark placed on the
 **enemy**) bypassed it for its bearer. It matches the exact name now, the same lesson
 `AiEv.has_exact_rule` already exists for.
@@ -1240,10 +1250,9 @@ aura entry of every book in all five systems and fails if one grants a name that
 that live inside `main.gd` itself (the Shred facet, the Regeneration bypass, the to-hit modifier), each
 asserted in BOTH halves of the game.
 
-**Still open, deliberately.** Three aura families need a mechanic that does not exist yet, so they are a
-separate wave and are listed in `KNOWN_OPEN` in the test: **Thrust in Melee** (9), **Piercing Fighter**
-(7), **Piercing Shooter** (5) — 21 entries. The second test, `test_the_known_open_families_are_still_
-exactly_three`, fails if one of them starts resolving, which forces the list to be kept honest.
+**Closed since.** The three aura families that were still open — **Thrust in Melee** (9), **Piercing
+Fighter** (7), **Piercing Shooter** (5), 21 entries — now resolve too (early September 2026, #725, #727);
+`KNOWN_OPEN` is empty, so `test_no_aura_grants_a_rule_that_resolves_nowhere` covers every aura family.
 
 Every registry entry in all five system maps must identify an implemented table primitive, except `Unique` — an army-building constraint (one per army), not a game rule the sim can apply, so it stays on the allow-list with a null primitive; the `Sniper REMOVE` editing-marker rows were deleted from all five maps 2026-09-15. `Aura Channel` entries must name a mapped base in `params.grants`; import expansion remains the single grant path. `test/rules_registry_test.gd` checks the shrinking allow-list and expanded-roster hashes. Measure the current book snapshot with `python3 core/nml-core-py/tools/rule_universe_census.py --books "$BOOKS" --repo . --out-json /tmp/rule-census.json --out-md /tmp/rule-census.md`; assess null and missing entries separately, and require both gap columns to contain only the documented exceptions.
 
