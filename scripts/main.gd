@@ -8557,7 +8557,7 @@ func _solo_log_rule_inventory(player_id: int) -> void:
 			continue
 		if first_unit == null:
 			first_unit = gu
-		names.append_array(gu.get_special_rules())
+		names.append_array(_solo_rules_without_items(gu.get_special_rules(), gu.unit_properties.get("item_grants", {})))
 		for w in _solo_all_weapons(gu):
 			if w is Object and (w as Object).get("special_rules") != null:
 				names.append_array((w as Object).special_rules)
@@ -8594,10 +8594,32 @@ func _solo_flush_dev() -> void:
 		battle_log.log_event(BattleLog.Category.GENERAL, line)
 
 
+## Army Forge ITEM names ("Jetpacks") ride in special_rules next to the rules they grant, but an item is a
+## container, not a rule: replace each item name by its granted rules (unit_properties.item_grants),
+## skipping the ones the list already carries. Pure — shared by the manual note and the handoff inventory.
+static func _solo_rules_without_items(rules: Array, item_grants: Variant) -> Array:
+	if not item_grants is Dictionary or (item_grants as Dictionary).is_empty():
+		return rules.duplicate()   # a copy: callers append weapon rules to it
+	var present := {}
+	for r in rules:
+		present[RulesRegistry.base_rule_name(str(r))] = true
+	var out: Array = []
+	for r in rules:
+		var base := RulesRegistry.base_rule_name(str(r))
+		if not (item_grants as Dictionary).has(base):
+			out.append(r)
+			continue
+		for g in (item_grants as Dictionary)[base]:
+			if not present.has(RulesRegistry.base_rule_name(str(g))):
+				present[RulesRegistry.base_rule_name(str(g))] = true
+				out.append(g)
+	return out
+
+
 func _solo_log_unmodeled_rules(unit: GameUnit) -> void:
 	if unit == null or battle_log == null:
 		return
-	var rules: Array = unit.get_special_rules().duplicate()
+	var rules: Array = _solo_rules_without_items(unit.get_special_rules(), unit.unit_properties.get("item_grants", {}))
 	for w in _solo_all_weapons(unit):
 		if w is Object and (w as Object).get("special_rules") != null:
 			rules.append_array((w as Object).special_rules)
