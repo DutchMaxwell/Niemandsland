@@ -10,9 +10,10 @@ the full change history is in `git log`.
 
 **Solo mode — a full game against NACHTMAHR** — mark any imported army as AI-controlled
 (checkbox at import, or later in the solo panel), or press **AI Opponent** and let
-NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). NACHTMAHR is a
-**game AI in the classic sense: rule-based and deterministic** — no machine learning, no language
-model, and **every decision is made offline**: the same inputs produce the same decisions, and
+NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). On Linux and Windows
+builds NACHTMAHR searches its moves with a **trained neural network (value net)** that ships with
+the game, inside the bundled Rust rules core; on macOS, or when that core does not load, it plays
+the **rule-based decision tree**. No language model, and **every decision is made offline**: the same inputs produce the same decisions, and
 nothing about a turn leaves the machine. One qualification, because "no network call" was too broad:
 if you let NACHTMAHR bring **its own** list, that list is fetched from the asset CDN the first time
 and cached (see below), so the very first use of **AI Opponent** needs a connection. Your own
@@ -22,7 +23,8 @@ legacy grade name resolves to NACHTMAHR; selectable grades are a roadmap item). 
 runs the rulebook flow end to end: roll-off → the winner picks a table edge and deploys
 first → both sides alternate unit by unit with explicit hand-over clicks → scout phase in
 the 12″ band → the roll-off winner opens round 1. Ambush / Infiltrate reserves wait off
-table and arrive from round 2 (alternating placement, a per-model >9″ base-edge gate,
+table and arrive from round 2 (alternating placement, a per-model base-edge gate — more than 9″
+from enemies for Ambush, more than 3″ for Infiltrate,
 terrain-legal), objective markers are scored at the end of each round, and after the final
 round (4 by default) a victory dialog states the result. The AI's own lists are fetched
 from the asset CDN at runtime and cached for offline play — they are **never bundled in
@@ -102,9 +104,8 @@ both — walker keywords no longer win the tie-break by accident.
 inventory, and any rule name the automation does not resolve is named per unit rather than
 hidden behind an "…". **Traversal** resolves since `0.3.11.0`. The unit-creating rules
 **Spawn** and **Split** now have real-table resolvers on `main`, added after that release.
-A small army-book flavour residue remains without effect (three aura families and a few
-conditional-AP legs, tracked on the board as NML-931); a standing guard test pins the healed
-set so no future book ships a dead grant unnoticed.
+The former army-book residue (three aura families and a few conditional-AP legs) now resolves
+too; a standing guard test pins the healed set so no future book ships a dead grant unnoticed.
 
 **Extended Buff Range & Coordinate** — a unit within 24″ of a friendly unit that carries
 **Extended Buff Range** *and* holds a Hero can be picked by that Hero's within-12″ buff rules as if
@@ -146,7 +147,7 @@ apply.
 
 **Transports (stage 1)** — units embark and unload through the radial menu with book-exact
 capacity, disembark into an automatic 6″ formation, and a destroyed transport spills its cargo
-with a Shaken marker. An **Ambush transport can load during deployment** ("Embark (reserve)"
+with a Shaken marker. An **Ambush transport can load during deployment** ("Load into … (reserve)"
 in the radial while both wait in reserve) — the whole package arrives together from round 2.
 The whole embark state syncs in multiplayer and persists in saves (`SAVE_VERSION` 1.7, with a
 migration step).
@@ -184,8 +185,8 @@ crumble, alpha-profile caps, window reveals), forests as volumetric TRELLIS tree
 margins), blockers as shipping containers (2 colourways), dangerous terrain as a
 minefield (15 anti-tank mines + 2 warning signs). **Biome themes** re-skin the set in
 place via `table.set_biome`: grassland (default), desert (fine adobe + cacti) and
-tundra (snowed stone/conifers/containers); volcanic/jungle/urban still use the default
-set. **Terrain reference aids (Asgard tournament standard, display only)**:
+tundra (snowed stone/conifers/containers); volcanic, jungle and urban have their own themed
+sets (volcanic and jungle swap the minefield for lava craters / carnivorous plants). **Terrain reference aids (Asgard tournament standard, display only)**:
 always-visible effect labels per terrain zone (Cover / Difficult / Dangerous /
 Impassable / Height) and height-aware line-of-sight in the measure tool — since `0.3.12` this
 runs on the same **volumetric** truth as everything else (`VolumetricLos`,
@@ -210,7 +211,7 @@ path length (arc), not straight-line, while weapon/charge RANGE stays straight-l
 Every executed move is recorded to a move ledger and MP-synced (proof-of-movement),
 and clicking a trail reports its distance. A **1″ spacing** layer shows proximity walls
 (red enemy / orange friendly), snaps to base contact and forbids overlapping drops (own
-units too). An **opt-in "dry-brush" movement cap** (default on) hard-stops the drag at
+units too). A **"dry-brush" movement cap** (on by default, can be switched off) hard-stops the drag at
 the selected action band (Advance ~6″ / Rush-Charge ~12″, Fast/aura-aware); backtracking
 refunds the budget — the eraser band is the model's own chalk-ribbon width, so hand-walked
 corrections actually refund (a genuine detour wider than the base still counts in full).
@@ -310,21 +311,25 @@ For **human-vs-human** play Niemandsland stays a **tool, not an automated game**
 or multiplayer game between people nothing is resolved for you — no automated combat or damage
 resolution, no forced turn tracking, no automated terrain effects. The only framing device is
 the lightweight **deployment→play phase gate** (a Start-Game affordance with a multiplayer
-ready-sync), which resolves nothing.
+ready-sync), which resolves nothing. A few bookkeeping steps also run there: the round-start
+Fatigue clear, spell-token expiry, growth markers, the transport activation mark and the
+line-of-sight line (#662–#665, #667).
 
 **Solo mode is the deliberate exception**, because an opponent that resolves nothing cannot
 play: when an army is marked AI-controlled the game runs activations, dice, wounds, morale and
 special rules for both sides. Those systems only activate in a solo game; a human-vs-human
-table behaves exactly as before. The legacy AI system + battle simulator (~5500 lines) was
+table gets only the bookkeeping listed above. The legacy AI system + battle simulator (~5500 lines) was
 removed and was **not** revived — today's solo engine (`scripts/solo/`) was written from
-scratch against OPR's official Solo & Co-Op ruleset, deterministic and explainable by design.
+scratch against OPR's official Solo & Co-Op ruleset, deterministic and explainable by design;
+on Linux and Windows builds NACHTMAHR's move search also scores positions with a trained
+neural network (value net) in the bundled Rust rules core.
 
-**Not in this release:** co-op (two or more people in one multiplayer room against an
-AI-controlled army). A first version is on `main`: the AI designation now reaches every
-player, and each player rolls saves for their own units (#835, #836).
-Still out of scope: campaigns and ladders. A trained computer opponent is planned as an
-optional, clearly labelled choice next to the Classic AI, which is planned to stay in every
-build (see [`docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md`](docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md)).
+**Co-op** (two or more people in one multiplayer room against an AI-controlled army) is a
+first version: the AI designation reaches every player, and each player rolls saves for their
+own units (#835, #836).
+Still out of scope: campaigns and ladders. The rule-based decision tree stays in every build as
+the fallback and is the only AI on macOS (see
+[`docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md`](docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md)).
 Sharing game records with the developer will only ever be opt-in and is off by default (see
 [`docs/PRIVACY_DATA_SHARING.md`](docs/PRIVACY_DATA_SHARING.md)).
 
@@ -332,20 +337,18 @@ Sharing game records with the developer will only ever be opt-in and is off by d
 
 The old root-level `ai_*.gd` scripts and `battle_simulator.gd` are gone and were not revived —
 the `scripts/solo/ai_*.gd` files are the new, unrelated solo engine. `activation_tracker.gd`
-and `hero_attachment_dialog.gd` never existed as separate files — that logic lives in
+and `hero_attachment_dialog.gd` were removed as dead code in January 2026 — that logic lives in
 `game_unit.gd` / `radial_menu*.gd` / `network_manager.gd`.
 
 ## Known issues
 
 - **Solo is alpha.** One difficulty grade only (full strength); co-op against the AI is
-  not in a release yet; the rules listed under *Not automated* above must be
-  applied by hand; all solo UI is English-only.
+  a first version; the rules listed under *Not automated* above must be
+  applied by hand; all solo UI is English-only. macOS builds carry no rules core, so there
+  NACHTMAHR plays the decision tree only; AI thinking time has been measured on one machine.
 - Dice can occasionally jitter at miniature scale (mitigated by the scaled-SubViewport
   dice approach; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#scaling)).
 - Some TTS texture-loading errors (non-fatal).
-- OPR rule descriptions resolve for freshly imported armies; loaded saves /
-  remote-only armies show rule names without descriptions (persist/sync is a
-  future step).
 - The 3D dice tray is shared between local and remote rolls: a remote roll that
   arrives while a local physics roll/reroll is still tumbling (same ~2 s window)
   preempts and drops the local roll (not logged/broadcast). Remote wins by design
@@ -353,7 +356,7 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: about **2,875 test functions** across **327 suites** in `test/` (incl. `coherency_checker`,
+gdUnit4: about **3,040 test functions** across **357 suites** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`, `network_manager` /
 `network_version_handshake`, `dice_rules`, `player_identity`, the movement/spacing
 suites `separation_checker` / `separation_resolver` / `separation_zone`, `move_ledger` /
@@ -362,10 +365,10 @@ suites — `solo_controller`, `turn_manager`, `movement_planner`, `ai_decision` 
 `ai_targeting` / `ai_position` / `ai_round_planner` / `ai_combat_math` / `ai_spell`,
 `rules_registry`, `spells_registry`, `terrain_rules`, `sight_fan`, `volumetric_los`,
 `los_volumes`, `transport_state` / `transport_embark`, `autosave_controller`). The
-**end-to-end layer** (`test/e2e/`, **85 suites**)
+**end-to-end layer** (`test/e2e/`, **95 suites**)
 boots the real `scenes/main.tscn` and drives the real menu / deployment-gate / click-ownership
 / battle-log-export / AI-path-label flows that unit tests skip. Python: the nml-core-py bindings
-suite (**78 pytest files**) and `relay/test_relay_server.py` (67 green); the Rust workspace tests
+suite (**88 pytest files**) and `relay/test_relay_server.py` (67 green); the Rust workspace tests
 run in `.github/workflows/rust.yml`. How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the
 solo / movement / MP / tutorial paths is solid; some older gameplay scripts are still
 untested.

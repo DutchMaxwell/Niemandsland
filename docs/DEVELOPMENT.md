@@ -43,8 +43,9 @@ Empty output = everything compiles.
 
 ### Scene-script smoke gate (main.gd and other scene-only scripts)
 
-The `--editor --quit` import and the gdUnit4 suites both **skip** `scripts/main.gd` and
-any script that is only attached to a scene (never instantiated by a test). A parse
+The `--editor --quit` import and the unit-level gdUnit4 suites **skip** `scripts/main.gd` and
+any script that is only attached to a scene (never instantiated by a test); only the `test/e2e/`
+suites boot `main.tscn`. A parse
 error there passes both gates and then hangs the startup menu's threaded load of
 `main.tscn` on the LOADING overlay. After editing scene-attached scripts, run a short
 real launch as the gate:
@@ -54,7 +55,8 @@ timeout 25 flatpak run --filesystem=home org.godotengine.Godot --path "$PWD" \
   res://scenes/main.tscn 2>&1 | grep -iE "Failed to load script|SCRIPT ERROR|Fehler bei"
 ```
 
-0 hits = pass. (Headless does not exercise the scene scripts; the launch needs a display.
+0 hits = pass. (Outside the `test/e2e/` suites, headless runs do not exercise the scene scripts;
+this launch needs a display.
 On this machine the physical display may be in use — do not seize `:0` without asking.)
 
 ## Tests
@@ -80,7 +82,7 @@ Reports are written to `reports/` (git-ignored).
 > plainly exists, or silently run the old method count. The `--headless --editor --quit`
 > import above regenerates the cache — run it, then the suite.
 
-> **The end-to-end layer (`test/e2e/`).** Most suites are unit level — no suite loads
+> **The end-to-end layer (`test/e2e/`).** Most suites are unit level and never load
 > `scripts/main.gd`, so defects that live in `main.gd`'s own flow (a walk-around of the
 > deployment gate, menu clicks falling through to the battlefield, a truncated log export,
 > an AI path label positioned before it entered the tree) passed the whole suite and reached
@@ -91,7 +93,7 @@ Reports are written to `reports/` (git-ignored).
 > e2e test, **prove it can go red** (make it fail against the un-fixed behaviour first), so a
 > green run actually means something.
 
-**Python** — the relay's tests, and the nml-core-py bindings suite: `core/nml-core-py/tests/python/` holds 78 pytest files, run by CI as `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900` (the offline asset pipeline lives in a separate private repo and has no tests here):
+**Python** — the relay's tests, and the nml-core-py bindings suite: `core/nml-core-py/tests/python/` holds 88 pytest files, run by CI as `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900` (the offline asset pipeline lives in a separate private repo and has no tests here):
 
 ```bash
 cd relay && python -m pytest                       # WebSocket relay (base + churn/soak)
@@ -149,6 +151,10 @@ relay/.venv/bin/python test/mp/run_soak.py \
 the relay pytest (`relay-tests` job) on Godot 4.6 — keep it in sync with `project.godot`'s engine
 version. `.github/workflows/rust.yml` builds and tests the Rust workspace and the nml-core-py
 pytest suite; it is blocking and also gates every release tag.
+`.github/workflows/hygiene.yml` runs the repo-hygiene checks (no home paths, no bundled OPR data or
+rule text, README / PROJECT_STATUS version guard) on every push and PR.
+`.github/workflows/onnx-spike.yml` runs the ONNX (tract) golden and parity tests on PRs that touch
+`core/nml-core-godot/`.
 `.github/workflows/mp-two-instance.yml` runs two real Godot peers against a local relay (advisory).
 The timing-sensitive headless 2-client soak + fault matrix run in
 `.github/workflows/mp-nightly.yml` (nightly + on demand) to keep the push path fast and non-flaky.
