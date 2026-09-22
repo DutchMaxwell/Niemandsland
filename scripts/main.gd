@@ -8516,9 +8516,25 @@ const SOLO_DECISION_RULES: Array = ["AP", "Deadly", "Takedown", "Relentless", "A
 	"Delayed Action", "Pass Turn"]
 
 
-## The modeled-rule tokens for a unit's game system — mechanics-map-derived (wave 5), constant fallback.
+## The modeled-rule tokens for a unit's game system — mechanics-map-derived (wave 5), constant fallback —
+## PLUS every registry name that carries a primitive for the unit's faction or its system's common
+## section. The committed `modeled` list is a hand-run export snapshot and lags the maps (78 names with a
+## live primitive were missing, e.g. GF Brutal / Courageous / Vicious), so the manual note and the
+## handoff inventory told players to apply by hand what the table resolves. The registry is the truth.
 func _solo_modeled_rules_for(unit: GameUnit) -> Array:
-	return RulesRegistry.modeled_tokens(RulesRegistry.system_of_unit(unit), SOLO_MODELED_RULES)
+	var system := RulesRegistry.system_of_unit(unit)
+	var faction := RulesRegistry.faction_of_unit(unit)
+	var tokens: Array = RulesRegistry.modeled_tokens(system, SOLO_MODELED_RULES).duplicate()
+	var m := RulesRegistry.map_for(system)
+	var sections: Array = [m.get("common", {})]
+	var factions: Dictionary = m.get("factions", {})
+	if factions.has(faction):
+		sections.append(factions[faction])
+	for section in sections:
+		for rule_name in (section as Dictionary):
+			if not tokens.has(rule_name) and RulesRegistry.has_primitive(system, faction, str(rule_name)):
+				tokens.append(rule_name)
+	return tokens
 
 
 ## The decision-relevant tokens for a unit's game system — mechanics-map-derived, constant fallback.
