@@ -51,6 +51,7 @@
     }
 
     mod deploy_exit;
+    mod deploy_large;
     mod reinforcement;
     mod spawn;
     mod vanguard_free;
