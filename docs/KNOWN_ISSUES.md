@@ -50,7 +50,7 @@ not there yet and what to watch for. The full done / in-progress / planned break
   README's macOS note. The in-browser (web) build is parked (post-Alpha).
 - **macOS plays without the rules core.** The Windows and Linux builds carry the Rust rules core
   that runs the trained network; the macOS build has no core, so NACHTMAHR plays its decision-tree
-  opponent there, not the stronger search opponent.
+  opponent there, not the stronger Erlkönig model.
 
 ## Smaller things to know
 
