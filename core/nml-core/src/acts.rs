@@ -82,6 +82,28 @@ pub struct Knobs {
     /// before it, so the default is OFF and no menu moves.
     #[serde(default)]
     pub menu_targets: bool,
+    /// Wave 6 (`lead/menutargets`) — `Tuning::holders`, the MENUHOLDERS leg:
+    /// the menu also offers the best shoot and charge against an enemy that
+    /// holds or contests an objective not ours (within 3", owner 0 counts as
+    /// not ours) or has not activated this round, when that target differs
+    /// from the max-EV pick. A MENU knob, not a seam. Absent from every corpus
+    /// recorded before it, so the default is OFF and no menu moves.
+    #[serde(default)]
+    pub menu_holders: bool,
+    /// Wave 6 (`advancek`) — `Tuning::advance_k`, the MENU leg that offers the
+    /// safe-advance frontier's top-k destinations instead of the single best.
+    /// A MENU knob, not a seam: it widens what the search may choose and never
+    /// changes how a chosen act resolves. Absent from every corpus recorded
+    /// before it, so the default is 1 — byte-identical to today's one candidate.
+    #[serde(default = "one")]
+    pub menu_advance_k: usize,
+    /// Wave 6 (`rushk`) — `Tuning::rush_k`, the PLAYOUT leg: how many of the
+    /// nearest objectives the rollout's greedy brain rushes instead of only the
+    /// nearest. A MENU knob, not a seam: it widens what the search may choose and
+    /// never changes how a chosen act resolves. Absent from every corpus recorded
+    /// before it, so the default is 1 — byte-identical to today's single RUSH.
+    #[serde(default = "one")]
+    pub playout_rush_k: usize,
     /// NML-1073 M5 D1-B4b — `Seams::hero_attach`, carried in the header the way
     /// every other seam is. Absent from every corpus recorded before it, so the
     /// default is OFF and nothing replays differently.
@@ -1204,6 +1226,13 @@ fn legacy_vocab_version() -> i64 {
     crate::rows::LEGACY_VOCAB_VERSION
 }
 
+/// Wave 6 (`advancek`) — `#[serde(default)]` on `menu_advance_k`: an absent key
+/// is a corpus recorded before the knob, whose menu carried exactly one patient
+/// safe-advance candidate.
+fn one() -> usize {
+    1
+}
+
 /// NML-1134 — the vocabulary version one act header asks to be replayed under,
 /// read through the SAME serde default every corpus reader uses. Python calls
 /// it as `nml_core.vocab_version_of_header(header)`; the Rust tests call it
@@ -1238,6 +1267,9 @@ impl Default for Knobs {
             cast_fold: false,
             charge_gate: true,
             menu_targets: false,
+            menu_holders: false,
+            menu_advance_k: 1,
+            playout_rush_k: 1,
             hero_attach: false,
             charge_landing: false,
             sighting: Sighting::Unit,

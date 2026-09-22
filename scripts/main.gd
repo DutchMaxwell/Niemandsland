@@ -1002,7 +1002,13 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# table while the move is planned instead of being left behind at the unit's start position. The
 	# peek caches its draw, so the seeded unit selection stays byte-identical to a run without it.
 	await _solo_try_reanimation(solo_controller.peek_next_ai_unit())
+	var act_t0 := Time.get_ticks_usec()
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
+	# S4 wait-time instrument (NML_ACT_WALL=1): the decision call a player waits for, on the
+	# INTERACTIVE path — the 20.09. numbers came from the headless harness, a lower bound.
+	if SoloController.act_wall_enabled():
+		print("[ACT_WALL] interactive r%d p%d us=%d" % [solo_controller._current_round(),
+			solo_controller.ai_slot, Time.get_ticks_usec() - act_t0])
 	# Stage 3 (transparency): the banner narrates WHAT NACHTMAHR just decided, in one plain
 	# sentence — no more anonymous "is taking its turn…" while units visibly act.
 	if unit != null and is_instance_valid(_solo_ai_banner) and solo_controller != null:
@@ -1873,9 +1879,23 @@ func _solo_apply_difficulty() -> void:
 			solo_controller.set_difficulty(int(slot), SoloDifficulty.for_grade(grade, _solo_arena_seed))
 		return
 	var interactive_grade := _solo_interactive_grade
-	# Developer-only bridge: the rollout preset is intentionally absent from the player UI.
-	if OS.is_debug_build() and not OS.get_environment("NML_BRAIN_URL").is_empty() and BattleSim.core_enabled():
-		interactive_grade = "planner_v0"
+	# Ship path (22.09.): NACHTMAHR runs on the search planner with the packed net when the
+	# core and its brain are up (Erlkönig), else on the decision tree. The developer's
+	# loopback brain (NML_BRAIN_URL, debug builds) counts as a brain too. ONE log line says
+	# which — a player's bug report must be able to tell the two apart.
+	if interactive_grade == "nachtmahr":
+		var core_up := BattleSim.core_enabled()
+		var dev_brain := OS.is_debug_build() and not OS.get_environment("NML_BRAIN_URL").is_empty()
+		var brain_up := dev_brain or solo_controller.shipped_brain_ready()
+		interactive_grade = SoloDifficulty.preset_for_nachtmahr(core_up, brain_up)
+		if interactive_grade == "planner_v0":
+			AiPlanner.set_search_budget(SoloDifficulty.SHIP_SEARCH_TOP_K, SoloDifficulty.SHIP_SEARCH_HORIZON)
+			print("opponent: erlkoenig brain=%s top_k=%d horizon=%d move=%s" % [
+				"loopback" if dev_brain else "onnx " + solo_controller.shipped_brain_sha.left(8),
+				AiPlanner.top_k_default(), AiPlanner.horizon(), "core" if SoloController._move_seam_on() else "gdscript"])
+		else:
+			print("opponent: tree — core %s, brain %s, move=%s" % ["up" if core_up else "off", "up" if brain_up else "none",
+				"core" if SoloController._move_seam_on() else "gdscript"])
 	for pid in solo_ai_slots:   # Human slots stay human; explicit arena grades above take precedence.
 		solo_controller.set_difficulty(int(pid), SoloDifficulty.for_grade(interactive_grade, _solo_arena_seed))
 

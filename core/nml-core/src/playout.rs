@@ -3,9 +3,9 @@
 //! imagined activation after the opener.
 //!
 //! It is deliberately a SMALLER menu than `menu::candidates`: hold (with the
-//! best-EV shoot), one rush to the NEAREST objective only, the counter-charge,
-//! the patient advance. No retreat point, no per-objective rush, no second
-//! wave — the search pays for depth here, not for breadth.
+//! best-EV shoot), the rush to the nearest `Tuning::rush_k` objectives, the
+//! counter-charge, the patient advance. No retreat point, no second wave — the
+//! search pays for depth here, not for breadth.
 //!
 //! Every helper is the one `menu.rs` already ports (`best_shoot`, `best_charge`,
 //! `safe_advance`): the GDScript calls the SAME four statics from both menus, so
@@ -89,7 +89,8 @@ impl<'a> Policy<'a> {
     /// `AiPlanner._policy_candidates` ai_planner.gd:649-677 — the restricted
     /// rollout menu, in build order:
     ///   1. HOLD, carrying the best-EV shoot when one exists;
-    ///   2. RUSH to the NEAREST objective (one entry, not one per marker);
+    ///   2. RUSH to the nearest `Tuning::rush_k` objectives (one entry per
+///      objective, in distance order, stable on ties by `state.objectives`);
     ///   3. CHARGE on `_best_charge`;
     ///   4. the patient `_safe_advance`.
     /// A SHAKEN unit gets its recovery hold and nothing else — the same rule
@@ -106,24 +107,23 @@ impl<'a> Policy<'a> {
         }
         let mut hold = Candidate::hold(key);
         if let Some(e) =
-            best_shoot(state, self.statics, unit, sc, self.tuning, self.seams.rules_epoch)
+            best_shoot(state, self.statics, unit, sc, self.tuning, self.seams.rules_epoch, None)
         {
             hold.shoot = Some(state.key(e).to_string());
         }
         let mut out = vec![hold];
-        // The NEAREST objective, measured from the unit centre in the engine's
-        // own f32 — `((o["pos"] as Vector3) - _centre(su)).length()`.
+        // The k NEAREST objectives, measured from the unit centre in the engine's
+        // own f32 — `((o["pos"] as Vector3) - _centre(su)).length()` — sorted by
+        // distance, stable on ties by their order in `state.objectives`. With
+        // `rush_k == 1` this is exactly the single nearest objective the leg used.
         let centre = geom::centre(&state.positions[unit]);
-        let mut best_d = f64::INFINITY;
-        let mut dest: Option<Objective> = None;
-        for o in &state.objectives {
-            let d = geom::length(geom::sub(geom::to_f32(o.pos), centre)) as f64;
-            if d < best_d {
-                best_d = d;
-                dest = Some(*o);
-            }
-        }
-        if let Some(o) = dest {
+        let mut sorted: Vec<(f64, Objective)> = state
+            .objectives
+            .iter()
+            .map(|o| (geom::length(geom::sub(geom::to_f32(o.pos), centre)) as f64, *o))
+            .collect();
+        sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        for (_, o) in sorted.into_iter().take(self.tuning.rush_k) {
             // #812 core half — GF v3.5.1 p.7: Rush forbids shooting, so a rush
             // whose EXECUTABLE distance (p.11 difficult cap, mv/step.rs:598)
             // cannot beat the advance band is dominated by advance + shoot.
@@ -147,7 +147,13 @@ impl<'a> Policy<'a> {
                     .moved_shoot
                     .then(|| {
                         best_shoot(
-                            state, self.statics, unit, sc, self.tuning, self.seams.rules_epoch,
+                            state,
+                            self.statics,
+                            unit,
+                            sc,
+                            self.tuning,
+                            self.seams.rules_epoch,
+                            None,
                         )
                     })
                     .flatten();
@@ -193,7 +199,7 @@ impl<'a> Policy<'a> {
         // without this a committed unit could never be punished in a rollout,
         // so early commitment looked free.
         if let Some(e) = best_charge(
-            state, self.terrain, self.statics, unit, sc, self.tuning, self.seams.rules_epoch,
+            state, self.terrain, self.statics, unit, sc, self.tuning, self.seams.rules_epoch, None,
         ) {
             let mut c = Candidate::new(key, CHARGE);
             c.dest = Some(geom::to_f64(geom::centre(&state.positions[e])));

@@ -117,6 +117,28 @@ const AIRCRAFT_HEADINGS := 16
 ## it gets the boxed-reposition fallback and, at high coordination grades, activates before smaller
 ## friends fill the lanes. A planning convention, not a rule value.
 const LARGE_BASE_RADIUS_IN := 1.5
+## DEPLOYLARGE: when a LARGE base's section-confined deploy spot lands more than this far behind the
+## zone's forward edge while the switch is on, ONE extra whole-zone search takes a nearer forward
+## spot from a neighbour section (static test switch: false = byte-identical to today).
+const LARGE_ZONE_SPOT_BEHIND_M := 0.1524   # 6"
+static var large_zone_search := true
+## DEPLOYTHREAT (tactics canon principle 7 — "measure threat ranges at deployment"): each enemy unit
+## already on the table whose first-activation envelope (advance band + longest weapon range +
+## shooting bonus) covers a candidate spot costs `deploy_threat_in` inches of objective distance in
+## `AiDeployment.best_spot`. 0 = off (today). `deploy_threat_seat` 0 = every AI seat, 1/2 = only that
+## slot (paired A/B: tree vs tree with the term on one side). Read once from NML_DEPLOY_THREAT_IN /
+## NML_DEPLOY_THREAT_SEAT; tests set the statics directly. Enemy units count only once the AI deploy
+## path placed them (`_deploy_zone_of`) — a human's hand-placed units are not yet seen (no deployed
+## flag on GameUnit), so against a human the term is a no-op today.
+static var deploy_threat_in := 0.0
+static var deploy_threat_seat := 0
+## `deploy_threat_preset` (NML_DEPLOY_THREAT_PRESET): when set, the term applies only to the slot
+## whose CONFIGURED difficulty (`set_difficulty`, `SoloDifficulty.grade_name`) has that name — the
+## paired A/B "planner_v0 + term vs tree" on both seat orders without the seat confound. The
+## controller's own record, not an env var: the box runner hands presets to the arena as cmdline
+## args, so NML_AI_P<slot> is never set there (false start 21.09.).
+static var deploy_threat_preset := ""
+static var _dt_env := -1
 ## A completed move that displaced the unit less than this counts as BOXED for the reposition fallback
 ## and the plausibility metric ("no large model idles >2 activations unless surrounded").
 const BOXED_ACHIEVED_IN := 1.0
@@ -539,12 +561,18 @@ func run_ai_turn() -> int:
 ## A Shaken unit's activation is an IDLE (no move/attack) reported as {"idle_shaken": true}; the caller
 ## clears the Shaken state through its marker/broadcast seam. Returns the unit, or null when none left.
 func activate_next_ai_unit() -> GameUnit:
+	var _ph_sel := 0
+	if act_wall_enabled():
+		_phase_begin()
+		_ph_sel = _phase_enter()
 	var unit := _take_peeked_unit()
 	if unit == null:
 		var eligible := eligible_ai_units()
 		if eligible.is_empty():
 			return null
 		unit = _select_ai_unit(eligible)
+	if act_wall_enabled():
+		_phase_mark("select", _ph_sel)
 	if unit == null:
 		return null
 	_activation_seq += 1   # monotonic per-activation index for the deterministic difficulty draws
@@ -552,6 +580,9 @@ func activate_next_ai_unit() -> GameUnit:
 		_round_first_slot[_current_round()] = ai_slot   # D-wave: this round's opener
 	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing
 	board_clamp_notes = []   # #215: per-activation, drained by main into the battle log
+	var _ph_act := 0
+	if act_wall_enabled():
+		_ph_act = _phase_enter()
 	if unit.is_shaken:
 		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover. An AIRCRAFT still
 		# makes its MANDATORY straight move first (GF v3.5.1: the move happens even Shaken, and it does
@@ -573,6 +604,11 @@ func activate_next_ai_unit() -> GameUnit:
 		last_report = _act_disembark(unit)
 	else:
 		last_report = _act(unit)
+	if act_wall_enabled():
+		_phase_mark("act", _ph_act)
+	var _ph_book := 0
+	if act_wall_enabled():
+		_ph_book = _phase_enter()
 	mark_activated(unit)
 	if network_manager != null and network_manager.has_method("broadcast_unit_activation"):
 		network_manager.broadcast_unit_activation(unit)
@@ -594,6 +630,9 @@ func activate_next_ai_unit() -> GameUnit:
 	# per roll) and gated by the same NML_TRACE guard as the dice/rng taps (write-only, no reader).
 	if _rng_trace_enabled:
 		record_decision({"kind": "digest", "seq": _activation_seq, "sha": state_digest()})
+	if act_wall_enabled():
+		_phase_mark("book", _ph_book)
+		_phase_print()
 	return unit
 
 
@@ -2059,7 +2098,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	# Runs before the position solver / flank hooks so a held shot short-circuits any repositioning. Charges,
 	# the final round, and the null-AI / SoloSim path (diff2 == null) are untouched — byte-identical there.
 	var ranged_hold := _commander_ranged_hold(unit, target_unit, weapons, action, int(dec["toward"]),
-		float(shoot_range), enemy_dist, ctx, diff2)
+		float(shoot_range), enemy_dist, ctx, diff2, rush)
 	if not ranged_hold.is_empty():
 		action = AiDecision.Action.HOLD
 		do_shoot = true
@@ -2081,10 +2120,15 @@ func _act(unit: GameUnit) -> Dictionary:
 	# No policy loaded => {} => byte-identical tree.
 	var planner_used := false
 	var pl := {}
+	var _ph_plan := 0
+	if act_wall_enabled():
+		_ph_plan = _phase_enter()
 	if _planner_active():
 		pl = _solve_planner(unit)
 	elif _clone_active():
 		pl = _solve_clone(unit)
+	if act_wall_enabled():
+		_phase_mark("plan", _ph_plan)
 	if bool(pl.get("used", false)):
 		planner_used = true
 		action = int(pl["action"])
@@ -2834,6 +2878,17 @@ func _cmd_role_name(role: int) -> String:
 	return CMD_ROLE_NAMES[role] if role >= 0 and role < CMD_ROLE_NAMES.size() else "?"
 
 
+## LANE HOLD (battle log 2026-09-21): a ranged line does not CHASE a firing lane it cannot reach.
+## The hold's abort let the tree rush shooters toward targets beyond even two full moves (56.3"
+## away, dead by round 3 without firing once). Beyond shoot_range + 2 * rush the commander HOLDS
+## instead; the abort-reposition path stays for reachable lanes. lane_hold = false: old behaviour.
+static var lane_hold := true
+
+
+static func lane_within_two_moves(enemy_dist: float, shoot_range: float, rush_in: float) -> bool:
+	return enemy_dist <= shoot_range + 2.0 * rush_in
+
+
 ## RANGED-LINE standing order (Stage 4, Part B — preserve firepower): a shooter's order is to HOLD a firing
 ## position with LOS + range, NOT be dragged into an objective run that costs its shot (the Stage-3 firepower
 ## dip: the commander pulled units toward combat/objectives and shooters fired less). When the unit's role is
@@ -2847,7 +2902,8 @@ func _cmd_role_name(role: int) -> String:
 ## are all that scores then — decisiveness/urgency win). Empty return ⇒ no override (null-AI/SoloSim: diff==null).
 ## Returns {} to leave the plan, or {"why": ...} to force HOLD + shoot toward the enemy.
 func _commander_ranged_hold(unit: GameUnit, target: GameUnit, weapons: Array, action: int,
-		toward: int, shoot_range: float, enemy_dist: float, ctx: Dictionary, diff: SoloDifficulty) -> Dictionary:
+		toward: int, shoot_range: float, enemy_dist: float, ctx: Dictionary, diff: SoloDifficulty,
+		rush_in: float) -> Dictionary:
 	if diff == null or target == null:
 		return {}
 	if _commander_role(unit) != CmdRole.RANGED_LINE:
@@ -2878,6 +2934,18 @@ func _commander_ranged_hold(unit: GameUnit, target: GameUnit, weapons: Array, ac
 	var has_shot: bool = shoot_range > 0.0 and enemy_dist <= shoot_range \
 			and (_has_los(unit, target) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)))
 	if not has_shot:
+		# LANE HOLD (battle log 2026-09-21): no target in range/LOS AND none within even two full
+		# rushes — walking toward a firing lane we cannot reach is pure exposure (the line rushed
+		# 9" toward snipers 56.3" out and died by round 3 without a single shot). HOLD instead;
+		# the tree's rush never starts. lane_hold = false keeps today's abort byte-identical.
+		if lane_hold and not lane_within_two_moves(enemy_dist, shoot_range, rush_in):
+			record_decision({"kind": "commander", "unit": unit.get_name(),
+				"rule": "Ranged-line standing order re-validated: hold a firing position with LOS + range",
+				"candidates": [], "chosen": "hold — no firing lane within two moves",
+				"why": "hold position: the nearest target is beyond range even after two rushes — walking there only exposes the line",
+				"data": {"grade": diff.grade_name, "order": "hold_fire", "continuity": "hold_no_lane",
+					"enemy_dist_in": enemy_dist, "shoot_range_in": shoot_range, "rush_in": rush_in}})
+			return {"why": "commander hold — no firing lane within two moves"}
 		# Abort the hold-fire order for this activation: no target in range/LOS → let the tree reposition.
 		record_decision({"kind": "commander", "unit": unit.get_name(),
 			"rule": "Ranged-line standing order re-validated: hold a firing position with LOS + range",
@@ -3165,11 +3233,16 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# D-wave: seat-aware depth — opener when OUR side made this round's first
 	# activation (or nobody acted yet, i.e. we are about to open it).
 	AiPlanner.opener_seat = int(_round_first_slot.get(_current_round(), ai_slot)) == int(ai_slot)
+	var _ph_cap := 0
+	if act_wall_enabled():
+		_ph_cap = _phase_enter()
 	var _prof_cap_t0 := BattleSim.prof_t0()
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
 	BattleSim.prof_mark("capture", _prof_cap_t0)
+	if act_wall_enabled():
+		_phase_mark("capture", _ph_cap)
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
 	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var me: int = int((pool[0] as GameUnit).unit_properties.get("player_id", 0))
@@ -3198,13 +3271,23 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# unported branch) falls straight through to the GDScript search, unchanged.
 	# The doctrine probe keeps precedence — it is a different decision entirely.
 	if not doctrine_on and not bool(pick.get("used", false)) and BattleSim.core_enabled():
+		var _ph_core := 0
+		if act_wall_enabled():
+			_ph_core = _phase_enter()
 		var seam := _core_plan(state, me)
+		if act_wall_enabled():
+			_phase_mark("core", _ph_core)
 		if bool(seam.get("used", false)):
 			seam_leaf = seam.get("leaf", {})
 			seam.erase("leaf")
 			pick = seam
 	if not bool(pick.get("used", false)):
+		var _ph_gd := 0
+		if act_wall_enabled():
+			_ph_gd = _phase_enter()
 		pick = AiPlanner.plan_with_rollout(state, me)
+		if act_wall_enabled():
+			_phase_mark("gdsearch", _ph_gd)
 	BattleSim.prof_mark("search", _prof_srch_t0)
 	AiActRecorder.finish(act_rec, pick)
 	if pick.has("brain"):
@@ -3276,6 +3359,54 @@ var _core_calls := 0
 var _core_us_total := 0
 var _core_us_max := 0
 var _core_statics_builds := 0     # M2-5b: profile-closure rebuilds seen so far
+var shipped_brain_sha := ""       # ship path 22.09.: sha256 of the packed brain the node accepted, "" = none
+## S4 wait-time instrument: NML_ACT_WALL=1 prints one "[ACT_WALL] <driver> r<round> p<side> us=<n>"
+## line per activation around activate_next_ai_unit() in both drivers (interactive + harness).
+static var _act_wall := -1
+static func act_wall_enabled() -> bool:
+	if _act_wall < 0:
+		_act_wall = 1 if OS.get_environment("NML_ACT_WALL") == "1" else 0
+	return _act_wall == 1
+## PHASE instrument — behind the SAME NML_ACT_WALL switch as the [ACT_WALL] line above. One
+## "[ACT_PHASE] r<round> p<side> total_us=<n> select=<us> act=<us> book=<us> other=<us>
+## plan=<us> core=<us> gdsearch=<us> capture=<us> move=<us>" line per activation. select/act/book are
+## the three DISJOINT top-level stretches (they sum with other to total); plan/core/gdsearch/capture/
+## move are NESTED probes inside those stretches (they may overlap) and exist to localise the tail.
+## Switch off = every probe call is skipped: no allocation, no print, byte-identical output.
+var _phase_us := {}
+var _phase_t0 := 0
+
+func _phase_begin() -> void:
+	_phase_us = {}
+	_phase_t0 = Time.get_ticks_usec()
+
+func _phase_mark(name: String, t0: int) -> void:
+	_phase_us[name] = int(_phase_us.get(name, 0)) + (Time.get_ticks_usec() - t0)
+
+func _phase_enter() -> int:
+	return Time.get_ticks_usec()
+
+func _phase_print() -> void:
+	var total := Time.get_ticks_usec() - _phase_t0
+	var parts: Array = []
+	for k in ["select", "act", "book"]:
+		parts.append("%s=%d" % [k, int(_phase_us.get(k, 0))])
+	parts.append("other=%d" % maxi(total - int(_phase_us.get("select", 0)) \
+		- int(_phase_us.get("act", 0)) - int(_phase_us.get("book", 0)), 0))
+	for k in ["plan", "core", "gdsearch", "capture", "move"]:
+		parts.append("%s=%d" % [k, int(_phase_us.get(k, 0))])
+	print("[ACT_PHASE] r%d p%d total_us=%d %s" % [_current_round(), ai_slot, total, " ".join(parts)])
+## SHADOW MENU (22.09., second opinion: Δ = p·g): a SECOND core node whose header carries the menu
+## knobs named in NML_SHADOW_MENU (comma list of `menu_holders`/`menu_wide` to set TRUE, every other
+## menu knob FALSE; "off" = both false) plans the SAME activation after the live node. The first
+## activation per game where the two picks differ is recorded once ("shadow_first"), every
+## divergence counts ("shadow") — so a result file yields p, the share of games the switch touched,
+## and the diverging activations are the branching-diagnostics corpus. Measurement only: the shadow
+## pick is never executed. Empty env = no shadow node, byte-identical.
+var _shadow_node: Object = null
+var _shadow_header_done := false
+var _shadow_first_seen := {}      # side -> true once the first divergence of that side is recorded
+var _shadow_env := -1             # -1 unread, 0 off, 1 on
 
 
 ## The ONE live NmlCore node per controller — the search seam (M2-5) and the
@@ -3287,9 +3418,29 @@ func _core_node_ready() -> Object:
 		if _core_node == null:
 			_core_warn_once("NmlCore could not be instantiated")
 			return null
-		_core_node.set_repo_root(ProjectSettings.globalize_path("res://"))
+		# CoreAssets: res:// in the editor, the staged user:// copy in an export — the
+		# core reads its rules with std::fs and a PCK is not a directory (rule-blind
+		# search otherwise, with no error at all).
+		_core_node.set_repo_root(CoreAssets.root())
 		_core_node.set_seams(BattleSim.spacing_enabled(), BattleSim.cast_phase_enabled())
+		# The shipped brain travels as bytes; a node built without the evaluator answers false.
+		var brain := "res://" + CoreAssets.FILES[CoreAssets.FILES.size() - 2]
+		if _core_node.has_method("set_brain_onnx") and FileAccess.file_exists(brain):
+			var parsed = JSON.parse_string(FileAccess.get_file_as_string(brain.get_basename() + ".json"))
+			var meta: Dictionary = parsed if parsed is Dictionary else {}
+			if bool(_core_node.set_brain_onnx(FileAccess.get_file_as_bytes(brain), str(meta.get("sha256", "")))):
+				shipped_brain_sha = str(meta.get("sha256", ""))
+			else:
+				_core_warn_once("shipped brain refused: " + str(_core_node.last_error()))
 	return _core_node
+
+
+## Ship path (22.09.): true when the core is wanted AND loaded AND the packed brain was
+## accepted — the three things a player's Erlkönig needs. Builds the node on first call.
+func shipped_brain_ready() -> bool:
+	if not BattleSim.core_enabled():
+		return false
+	return _core_node_ready() != null and not shipped_brain_sha.is_empty()
 
 
 ## Asks the Rust core for THIS activation. {} = declined (or the node could not
@@ -3340,7 +3491,85 @@ func _core_plan(state: Dictionary, me: int) -> Dictionary:
 		_core_selfcheck(state, me, out)
 	print("[CORE] ACT r%d p%d us=%d n=%d mean_us=%d max_us=%d" % [_current_round(), me,
 		dt, _core_calls, _core_us_total / maxi(_core_calls, 1), _core_us_max])
+	if _shadow_on():
+		_shadow_plan(state, me, plain, statics, sig, out)
 	return _core_pick_of(out, state)
+
+
+static func shadow_menu_knobs(env: String) -> Dictionary:
+	## The shadow header's menu knobs from NML_SHADOW_MENU: names listed = true, the rest false.
+	var want := {"menu_holders": false, "menu_wide": false}
+	for tok in env.split(","):
+		var t := tok.strip_edges()
+		if want.has(t):
+			want[t] = true
+	return want
+
+
+func _shadow_on() -> bool:
+	if _shadow_env < 0:
+		_shadow_env = 1 if OS.get_environment("NML_SHADOW_MENU").strip_edges() != "" else 0
+	return _shadow_env == 1
+
+
+## Two core picks are the SAME activation when unit, action kind, target and destination (to the
+## millimetre) agree; anything else is a divergence. Pure and static so it is unit-testable.
+static func shadow_diverges(live: Dictionary, shadow: Dictionary) -> bool:
+	if str(live.get("unit_key", "")) != str(shadow.get("unit_key", "")):
+		return true
+	var a: Dictionary = live.get("action", {})
+	var b: Dictionary = shadow.get("action", {})
+	for k in ["kind", "unit", "shoot", "charge", "at"]:
+		if str(a.get(k, "")) != str(b.get(k, "")):
+			return true
+	var da: Array = a.get("dest", [])
+	var db: Array = b.get("dest", [])
+	if da.size() != db.size():
+		return true
+	for i in range(da.size()):
+		if absf(float(da[i]) - float(db[i])) > 0.001:
+			return true
+	return false
+
+
+func _shadow_plan(state: Dictionary, me: int, plain: Dictionary, statics: Dictionary, sig: int,
+		live: Dictionary) -> void:
+	if _shadow_node == null:
+		_shadow_node = ClassDB.instantiate("NmlCore")
+		if _shadow_node == null:
+			return
+		_shadow_node.set_repo_root(CoreAssets.root())
+		_shadow_node.set_seams(BattleSim.spacing_enabled(), BattleSim.cast_phase_enabled())
+	if not _shadow_header_done:
+		var head := AiActRecorder._header_line(state, terrain_type_at)
+		var knobs: Dictionary = (head["knobs"] as Dictionary).duplicate()
+		var want := shadow_menu_knobs(OS.get_environment("NML_SHADOW_MENU"))
+		for k in want:
+			knobs[k] = want[k]
+		head["knobs"] = knobs
+		if not bool(_shadow_node.set_game_header(head)):
+			_core_warn_once("shadow: " + str(_shadow_node.last_error()))
+			return
+		_shadow_header_done = true
+	var out: Dictionary = _shadow_node.plan_with_rollout(plain, me, statics, sig)
+	if not bool(out.get("used", false)):
+		return
+	if not shadow_diverges(live, out):
+		return
+	var la: Dictionary = live.get("action", {})
+	var sa: Dictionary = out.get("action", {})
+	var summary := "live %s:%s -> shadow %s:%s" % [str(live.get("unit_key", "")), str(la.get("kind", "")),
+		str(out.get("unit_key", "")), str(sa.get("kind", ""))]
+	if not _shadow_first_seen.has(me):
+		_shadow_first_seen[me] = true
+		record_decision({"kind": "shadow_first", "unit": str(live.get("unit_key", "")),
+			"rule": "shadow menu: first activation of this side where the live and the shadow menu pick differently",
+			"candidates": [], "chosen": summary, "why": "NML_SHADOW_MENU=" + OS.get_environment("NML_SHADOW_MENU"),
+			"data": {"round": _current_round(), "side": me, "live": la, "shadow": sa}})
+	record_decision({"kind": "shadow", "unit": str(live.get("unit_key", "")),
+		"rule": "shadow menu: the live and the shadow menu pick differently on this activation",
+		"candidates": [], "chosen": summary, "why": "",
+		"data": {"round": _current_round(), "side": me}})
 
 
 ## The core's answer as the dictionary AiPlanner.plan_with_rollout returns —
@@ -3523,8 +3752,22 @@ var _core_move_diffs := 0         # selfcheck: how many of them disagreed
 static func _move_seam_on() -> bool:
 	if _move_seam_env < 0:
 		_move_seam_env = 1 if (BattleSim.core_enabled()
-			and OS.get_environment("NML_CORE_MOVE") == "1") else 0
+			and move_seam_wanted(OS.get_environment("NML_CORE_MOVE"), OS.is_debug_build())) else 0
 	return _move_seam_env == 1
+
+
+## S7 (22.09.): the move seam as a pure switch, the twin of BattleSim.core_wanted — a RELEASE
+## build routes plan_unit_step through the core unless NML_CORE_MOVE=0; a debug build keeps the
+## explicit =1. Measured 22.09. (DeepSeek's phase instrument, 2 seeds, 57 activations): the GDScript
+## movement planner owned 76 % of the AI decision time, p90 4,255 ms → 650 ms with the seam; the
+## self-check (NML_CORE_SELFCHECK) compared 2,532 plan_unit_step calls over 40 games, both grades,
+## 0 disagreements — same moves, ~15x less waiting.
+static func move_seam_wanted(env: String, debug_build: bool) -> bool:
+	if env == "1":
+		return true
+	if env == "0":
+		return false
+	return env.is_empty() and not debug_build
 
 
 static func _move_check_on() -> bool:
@@ -4004,9 +4247,14 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 				cout["target"] = tgt
 			return cout
 	_planner_intent = {}
+	var _ph_cap2 := 0
+	if act_wall_enabled():
+		_ph_cap2 = _phase_enter()
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
+	if act_wall_enabled():
+		_phase_mark("capture", _ph_cap2)
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
 	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var unit_key := ""
@@ -4021,7 +4269,12 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 		var su: Dictionary = state["units"][k]
 		if str(k) != unit_key and int(su["player"]) == me:
 			su["activated"] = true
+	var _ph_gd2 := 0
+	if act_wall_enabled():
+		_ph_gd2 = _phase_enter()
 	var pick := AiPlanner.plan(state, me)
+	if act_wall_enabled():
+		_phase_mark("gdsearch", _ph_gd2)
 	if not bool(pick.get("used", false)) or str(pick["unit_key"]) != unit_key:
 		return {}
 	var act: Dictionary = pick["action"]
@@ -5390,8 +5643,14 @@ func _plan_move(unit: GameUnit, models: Array, positions: Array, goal: Vector3, 
 	if delta == Vector3.ZERO:
 		_fill_straight_trails(trails, positions, positions)
 		return positions.duplicate()
-	return _plan_positions(unit, models, positions, delta, allow_contact, trails, avoid_difficult,
-		avoid_dangerous, charge_target, reach_in, dry_run)
+	var _ph_move := 0
+	if act_wall_enabled():
+		_ph_move = _phase_enter()
+	var _planned := _plan_positions(unit, models, positions, delta, allow_contact, trails,
+		avoid_difficult, avoid_dangerous, charge_target, reach_in, dry_run)
+	if act_wall_enabled():
+		_phase_mark("move", _ph_move)
+	return _planned
 
 
 ## Would the rigid move's per-model TARGETS land inside difficult terrain? (Objective or charge target
@@ -7461,8 +7720,15 @@ func _plan_for_round() -> Dictionary:
 	# game_rounds is 0 until a game configures it (fixtures, casual flows) — the OPR standard is
 	# 4 rounds; without the default every arrival reads infeasible and the whole army "fights".
 	var total_rounds: int = game_rounds if game_rounds > 0 else 4
+	# Lone-runner guard input: the enemy's off-table reserves (on the tray for both players).
+	var enemy_reserves := 0
+	for r in ambush_reserve:
+		var ru := r as GameUnit
+		if ru != null and not ru.is_destroyed() and int(ru.unit_properties.get("player_id", 0)) == human_slot:
+			enemy_reserves += 1
 	var sol := AiRoundPlanner.solve({"units": units_in, "markers": markers_in,
-		"rounds_left": maxi(total_rounds - rnd + 1, 1), "current_round": rnd})
+		"rounds_left": maxi(total_rounds - rnd + 1, 1), "current_round": rnd,
+		"enemy_reserves": enemy_reserves})
 	_round_plans[ai_slot] = {"round": rnd, "tasks": sol.get("tasks", {})}
 	# E2 (test game 1): the plan record fires EVERY round — an all-fight round logs its own line
 	# ("everyone fights"), so a silent round never reads like a dead planner again.
@@ -8488,11 +8754,19 @@ static func casualty_order(unit: GameUnit) -> Array:
 		if int(m.wounds_max) > base_tough:
 			v += 8.0   # weapon-team / upgraded-Tough: the TOP rung — above any single
 			           # special bearer (count 2x2 + rare 3 = 7 < 8), ladder intact
+		# GF v3.5.1 p.14 Tough(X): "continue to put wounds on the tough model with most wounds in the
+		# unit until it is killed, before starting to put them on the next" — a body an EARLIER volley
+		# already wounded dies first, most wounds taken first, above every value rung (maintainer test
+		# game 21.09.: three Tough(3) mortars took 4 then 2 wounds and still stood at 2/3 — the second
+		# volley landed on a fresh body instead of finishing the wounded one). The core's land_wounds
+		# empties one slot before the next — parity.
+		var taken: int = maxi(int(m.wounds_max) - int(m.wounds_current), 0)
 		var d := 0.0
 		var node := m.node
 		if node != null and is_instance_valid(node):
 			d = Vector2(node.global_position.x - cx, node.global_position.z - cz).length()
-		return v * 1000.0 - d   # lowest rank dies first: plain models, outermost of them first
+		# lowest rank dies first: already-wounded Tough bodies, then plain models, outermost of them first
+		return v * 1000.0 - d - float(taken) * 1000000.0
 	alive.sort_custom(func(a, b) -> bool: return float(rank.call(a)) < float(rank.call(b)))
 	return alive
 
@@ -9659,24 +9933,45 @@ func _deploy_place_id(id: int) -> GameUnit:
 		blocked = func(p: Vector2) -> bool:
 			return not bool(ztest.call(p)) \
 				or (terrain_only.is_valid() and bool(terrain_only.call(p)))
-	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+	var threat := _deploy_threat_cb(unit)
+	var threat_w := deploy_threat_in * INCHES_TO_METERS if threat.is_valid() else 0.0
+	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 	var spot_why := "best legal spot toward nearest objective (section, forward-edge doctrine)"
+	if threat.is_valid() and spot != Vector2.INF:
+		spot_why += " (threat-aware: %d enemy envelope(s) over the spot)" % int(threat.call(spot))
+	# DEPLOYLARGE: a LARGE base confined to its section may sit far behind the zone's forward edge
+	# while a neighbour section still holds a legal forward spot — ONE whole-zone re-search takes the
+	# nearer spot. The candidate is chosen BEFORE the wall-bisect retry loop below, so the loop runs
+	# on the final spot either way. Switch off = byte-identical to today.
+	var sec_behind := absf(spot.y - forward_y)
+	if (large_zone_search and not is_scout and spot != Vector2.INF and forward_y != INF
+			and base_r >= LARGE_BASE_RADIUS_IN * INCHES_TO_METERS
+			and sec_behind > LARGE_ZONE_SPOT_BEHIND_M):
+		var zone_spot := AiDeployment.best_spot(zone, objectives, occupied, radius, blocked,
+				0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+		if zone_spot != Vector2.INF and absf(zone_spot.y - forward_y) < sec_behind:
+			spot = zone_spot
+			spot_why = "large base — whole-zone forward spot (section spot was %.1f\" behind the forward edge)" % (sec_behind / INCHES_TO_METERS)
 	# Wall-bisect retries (bug 12c): a spot whose formation grid a wall cuts in half is vetoed by
 	# marking it occupied and re-searching — the unit must never START the game split across a wall.
 	for _retry in range(4):
-		if spot == Vector2.INF or not _deploy_footprint_bisected(spot, footprint, base_r):
+		if spot == Vector2.INF:
+			break
+		var bisected := _deploy_footprint_bisected(spot, footprint, base_r)
+		if not bisected and not _deploy_footprint_boxed(spot, footprint, base_r):
 			break
 		occupied.append({"pos": spot, "radius": radius * 0.6})
-		spot = AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
-		spot_why = "re-sited — wall bisected the formation"
+		spot = AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+		spot_why = "re-sited — wall bisected the formation" if bisected \
+				else "re-sited — walls boxed the base in (no straight 12\" exit)"
 	if spot == Vector2.INF:
-		spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+		spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "section full — whole-zone fallback"
 	if spot == Vector2.INF:
 		# Crowded out of every spaced spot: relax the 1" spacing (allow neighbours to bunch) but STILL
 		# reject blocking/impassable terrain — the army MUST deploy, yet a legal footprint always beats
 		# a spot inside a wall/forest (field-test finding 3: units deployed inside blocking terrain).
-		spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius, footprint, base_r, forward_y)
+		spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "crowded — nearest legal (non-terrain) spot, spacing relaxed"
 	if spot == Vector2.INF:
 		# Truly no fully terrain-legal cell anywhere (a terrain-choked table) — must still deploy, so pick
@@ -9779,6 +10074,12 @@ func deploy_remaining_scouts() -> int:
 ## game torn and stayed torn all game). At deployment placement is free — every model outside its
 ## unit's largest link component is re-placed onto the nearest legal free ring spot around the
 ## component, so no AI unit ever STARTS the game out of coherency.
+## Brief deploycoh: the repair's re-placed stragglers must stay inside the unit's deployment zone
+## and at least base_r + 1" from every table edge. Static kill switch (false = the shipped
+## byte-identical path) so tests can pin both behaviours and the field can revert.
+static var repair_in_zone := true
+
+
 func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable) -> bool:
 	# EVERY AI-controlled slot, not just the side deploying right now (verification run 4): the SECOND
 	# deploy's overlap cleanup can nudge a FIRST side's model back out of chain — the repair after the
@@ -9799,6 +10100,8 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 		if unit.has_method("is_attached") and unit.is_attached():
 			continue
 		var blocked := blocked_flying if (unit.has_special_rule("Strider") or unit.has_special_rule("Flying")) else blocked_normal
+		var base_r := _deploy_base_radius(_deploy_models(unit))
+		var unit_moved := false
 		for _pass in range(8):   # each pass re-links one straggler or shrinks the span one step
 			var ms := _moving_models(unit)
 			if ms.size() <= 1 or unit_coherent_now(unit):
@@ -9812,11 +10115,11 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 			for i in range(ms.size()):
 				if in_comp.has(i):
 					continue
-				var spot := _deploy_ring_spot(ms, pts, comp, i, blocked)
+				var spot := _deploy_ring_spot(ms, pts, comp, i, blocked, true, unit, base_r)
 				if spot == Vector3.INF:
 					# Packed zone — FORCE contact beside the group (overlap allowed, terrain-legal);
 					# the caller's follow-up resolve pass separates to contact, chain-preserving.
-					spot = _deploy_ring_spot(ms, pts, comp, i, blocked, false)
+					spot = _deploy_ring_spot(ms, pts, comp, i, blocked, false, unit, base_r)
 					if spot != Vector3.INF:
 						forced_any = true
 				if spot != Vector3.INF:
@@ -9842,7 +10145,7 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 						dmin = dd
 						near_j = i
 				if far_i != near_j:
-					var spot2 := _deploy_ring_spot(ms, pts, [near_j], far_i, blocked, false)
+					var spot2 := _deploy_ring_spot(ms, pts, [near_j], far_i, blocked, false, unit, base_r)
 					if spot2 != Vector3.INF:
 						var node2: Node3D = (ms[far_i] as ModelInstance).node
 						if node2 != null and is_instance_valid(node2):
@@ -9850,6 +10153,7 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 							moved_one = true
 							forced_any = true
 			if moved_one:
+				unit_moved = true
 				_broadcast_positions(unit)
 				record_decision({"kind": "deploy", "unit": unit.get_name(),
 					"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (p.7 — a unit never starts torn)",
@@ -9864,15 +10168,32 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 						"stragglers": ms.size() - comp.size(),
 						"slot": int(unit.unit_properties.get("player_id", 0))}})
 				break   # avoid spinning
+		if repair_in_zone and unit_moved:
+			# Brief deploycoh: a repair may push the unit's own footprint AGAINST a table-edge wall.
+			# Re-check the boxed verdict on the unit's NEW centroid; boxed -> say so, then ONE more
+			# straggler pass biased toward the zone's forward edge. Two attempts, then stop.
+			var cen := MoveIntent.anchor_of(_positions_of(_moving_models(unit)))
+			if _deploy_footprint_boxed(Vector2(cen.x, cen.z), _deploy_footprint_offsets(unit), base_r):
+				record_decision({"kind": "deploy", "unit": unit.get_name(),
+					"rule": "Deploy coherency repair: re-check after the re-place — the unit's own footprint landed boxed at a table edge",
+					"candidates": [], "chosen": "repair left the unit boxed",
+					"why": "the repair moved the unit against a table-edge wall",
+					"data": {"slot": int(unit.unit_properties.get("player_id", 0))}})
+				var zone: Rect2 = _deploy_zone_of.get(unit, Rect2())
+				var fwd_y := zone.position.y if absf(zone.position.y) < absf(zone.end.y) else zone.end.y
+				_repair_once_toward_forward(unit, blocked, base_r, fwd_y)
 	return forced_any
 
 
 ## Nearest legal free spot for straggler `idx` on rings around the component's models: linked
 ## (edge gap ≤ chain), terrain-legal for this unit, and free of EVERY on-table base.
 func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Callable,
-		require_free: bool = true) -> Vector3:
+		require_free: bool = true, zone_unit: GameUnit = null, zone_base_r := 0.0,
+		forward_y := INF) -> Vector3:
 	var r_i := model_base_radius_m(ms[idx] as ModelInstance)
 	var straggler: Vector3 = pts[idx]
+	var best := Vector3.INF
+	var best_fwd := INF
 	# Component models nearest to the straggler first — the smallest legal correction wins.
 	var order := comp.duplicate()
 	order.sort_custom(func(a, b) -> bool:
@@ -9889,6 +10210,12 @@ func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Ca
 			for step in range(24):
 				var ang := TAU * float(step) / 24.0
 				var cand := Vector3(centre.x + cos(ang) * ring, straggler.y, centre.z + sin(ang) * ring)
+				# Zone + table-edge gate (brief deploycoh): a re-placed straggler stays inside its unit's
+				# deployment zone and at least base_r + 1" off every table edge. The gate runs in FORCED
+				# mode too — overlap is the one allowance, never off-zone or off-table.
+				if repair_in_zone and zone_unit != null \
+						and not _repair_spot_in_zone(zone_unit, Vector2(cand.x, cand.z), zone_base_r):
+					continue
 				# FORCED mode (require_free=false) is the last resort and skips BOTH gates: the component
 				# itself already stands in/at that terrain (the "least blocked" deploy fallback), and the
 				# caller's follow-up resolve pass settles overlap — a torn unit is worse than either.
@@ -9897,8 +10224,58 @@ func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Ca
 						continue
 					if not _deploy_spot_free(cand, r_i, ms[idx] as ModelInstance):
 						continue
+				if is_finite(forward_y):
+					var fwd := absf(cand.z - forward_y)
+					if fwd < best_fwd:
+						best_fwd = fwd
+						best = cand
+					continue
 				return cand
-	return Vector3.INF
+	return best if is_finite(forward_y) else Vector3.INF
+
+
+## Zone + table-edge legality of a repair spot (brief deploycoh): the spot must sit inside the
+## unit's recorded deployment zone (`_deploy_zone_of`, set by `_deploy_place_id` — no record, e.g.
+## a scout band, means the ZONE rule is skipped but the table rule never is) and its centre at
+## least base_r + 1" from every table edge.
+func _repair_spot_in_zone(unit: GameUnit, p: Vector2, base_r: float) -> bool:
+	if _deploy_zone_of.has(unit) and not (_deploy_zone_of[unit] as Rect2).has_point(p):
+		return false
+	var margin := base_r + INCHES_TO_METERS
+	var h := _table_half_extents()
+	return absf(p.x) <= h.x - margin and absf(p.y) <= h.y - margin
+
+
+## Second repair attempt (brief deploycoh): the boxed re-check found the FIRST repair drove the
+## unit's own footprint against a table-edge wall. ONE more straggler pass, biased toward the
+## zone's forward edge, to pull the unit's centre back into free space. Bounded: a single pass.
+func _repair_once_toward_forward(unit: GameUnit, blocked: Callable, base_r: float,
+		forward_y: float) -> void:
+	var ms := _moving_models(unit)
+	if ms.size() <= 1 or unit_coherent_now(unit):
+		return
+	var pts := _positions_of(ms)
+	var comp := _largest_link_component_world(_moving_shapes_at(ms, pts))
+	var in_comp := {}
+	for ci in comp:
+		in_comp[int(ci)] = true
+	var moved := false
+	for i in range(ms.size()):
+		if in_comp.has(i):
+			continue
+		var spot := _deploy_ring_spot(ms, pts, comp, i, blocked, true, unit, base_r, forward_y)
+		if spot == Vector3.INF:
+			continue
+		var node: Node3D = (ms[i] as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			node.global_position = Vector3(spot.x, node.global_position.y, spot.z)
+			moved = true
+	if moved:
+		_broadcast_positions(unit)
+		record_decision({"kind": "deploy", "unit": unit.get_name(),
+			"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (p.7 — a unit never starts torn)",
+			"candidates": [], "chosen": "straggler re-placed", "why": "deploy left a model out of coherency",
+			"data": {"attempt": 2, "slot": int(unit.unit_properties.get("player_id", 0))}})
 
 
 ## No on-table base (any unit, any side) overlaps a base of radius `r` at `cand` — placement-free test.
@@ -10150,6 +10527,42 @@ func _deploy_footprint_bisected(spot: Vector2, footprint: Array, base_r: float) 
 			if MovementPlanner.path_crosses_wall(a, b, walls):
 				return true
 	return false
+
+
+const DEPLOY_EXIT_REACH_M := 0.3048        # one 12" move: the ray a base must be able to slide along
+const DEPLOY_EXIT_DIRS := 16
+const DEPLOY_EXIT_CLEARANCE_PAD_M := 0.005  # below the 2 cm deploy wall margin: the base starts clear
+
+
+## Deploy exit test (maintainer test game 2026-09-21): a Tactical Walker was set down between two ruin
+## walls whose opening was narrower than its base and stayed boxed all game — the spot was legal for
+## every deploy check (floor, walls at 2 cm, no bisect) and illegal for every move. A spot is vetoed
+## when the unit's bases cannot slide one full move in ANY of 16 compass directions without the base
+## edge clipping a wall — the movement planner's own swept-disc wall test at the moving base's
+## clearance. Straight rays only: a cramped-but-escapable spot may be vetoed (conservative — the
+## next-best spot is taken), a spot with no straight 12" exit is boxed for a base that cannot pass
+## its walls. Mirrored in the core's deployment (footprint_boxed).
+func _deploy_footprint_boxed(spot: Vector2, footprint: Array, base_r: float) -> bool:
+	var walls := _rest_walls()
+	if walls.is_empty():
+		return false
+	var offsets: Array = footprint if not footprint.is_empty() else [Vector2.ZERO]
+	var clearance := base_r + DEPLOY_EXIT_CLEARANCE_PAD_M
+	for k in range(DEPLOY_EXIT_DIRS):
+		var ang := TAU * float(k) / float(DEPLOY_EXIT_DIRS)
+		var ray := Vector2(cos(ang), sin(ang)) * DEPLOY_EXIT_REACH_M
+		var clear := true
+		for off in offsets:
+			var p: Vector2 = spot + (off as Vector2)
+			for w in walls:
+				if MovementPlanner._wall_blocks(p, p + ray, MovementPlanner._wall_a(w), MovementPlanner._wall_b(w), clearance):
+					clear = false
+					break
+			if not clear:
+				break
+		if clear:
+			return false
+	return true
 
 
 const AMBUSH_MIN_ENEMY_DIST_M := 0.2286   # OPR: Ambush arrivals deploy MORE THAN 9" from enemy units
@@ -11011,6 +11424,57 @@ func _deploy_footprint_radius(unit: GameUnit) -> float:
 
 ## The largest base radius (metres) among a unit's deployment models — the per-model base extent the
 ## footprint check inflates each grid cell by (SeparationChecker shape truth; 32 mm fallback).
+## DEPLOYTHREAT: the envelope counter for `AiDeployment.best_spot`, or an invalid Callable when the
+## term is off for this unit's seat. Enemy = every unit of another slot the AI deploy path has
+## already placed; envelope radius = (advance band + longest weapon range + shooting bonus) inches,
+## measured from the enemy's nearest model.
+func _deploy_threat_cb(unit: GameUnit) -> Callable:
+	if _dt_env < 0:
+		_dt_env = 0
+		var e := OS.get_environment("NML_DEPLOY_THREAT_IN")
+		if e.is_valid_float() and float(e) > 0.0:
+			deploy_threat_in = float(e)
+			_dt_env = 1
+		var se := OS.get_environment("NML_DEPLOY_THREAT_SEAT")
+		if se.is_valid_int():
+			deploy_threat_seat = int(se)
+		deploy_threat_preset = OS.get_environment("NML_DEPLOY_THREAT_PRESET")
+	if deploy_threat_in <= 0.0 or unit == null or army_manager == null:
+		return Callable()
+	var slot := int(unit.unit_properties.get("player_id", 0))
+	if deploy_threat_seat != 0 and deploy_threat_seat != slot:
+		return Callable()
+	if deploy_threat_preset != "":
+		var diff: SoloDifficulty = difficulty_by_slot.get(slot, null)
+		if diff == null or diff.grade_name != deploy_threat_preset:
+			return Callable()
+	var envelopes: Array = []   # [positions: Array[Vector2], reach_m: float]
+	for gu in army_manager.game_units.values():
+		var eu := gu as GameUnit
+		if eu == null or int(eu.unit_properties.get("player_id", 0)) == slot or not _deploy_zone_of.has(eu):
+			continue
+		var pts: Array = []
+		for p3 in SoloController.alive_positions(eu):
+			pts.append(Vector2((p3 as Vector3).x, (p3 as Vector3).z))
+		if pts.is_empty():
+			continue
+		var bands: Dictionary = move_bands_for_unit(eu, movement_range)
+		var reach_in := float(bands.get("advance", 6)) + float(AiArchetype.max_range_inches(_unit_weapons(eu))) \
+				+ float(shooting_range_bonus(eu))
+		envelopes.append([pts, reach_in * INCHES_TO_METERS])
+	if envelopes.is_empty():
+		return Callable()
+	return func(p: Vector2) -> float:
+		var n := 0
+		for env in envelopes:
+			var reach: float = env[1]
+			for q in env[0]:
+				if p.distance_to(q as Vector2) <= reach:
+					n += 1
+					break
+		return float(n)
+
+
 func _deploy_base_radius(models: Array) -> float:
 	var r: float = SeparationChecker.DEFAULT_BASE_RADIUS_M
 	for m in models:

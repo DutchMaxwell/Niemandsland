@@ -141,6 +141,26 @@ pub struct Tuning {
     /// enemy's centre carrying the shot. Default OFF, so every recorded corpus
     /// replays with the identical menu.
     pub wide_shoot: bool,
+    /// Wave 6 (`lead/menutargets`) — the MENUHOLDERS leg: the menu ALSO offers
+    /// the best-EV shoot target and the best charge victim among enemies that
+    /// QUALIFY — `holder_or_unactivated`: any model within 3" of an objective
+    /// not owned by the acting player (owner 0 counts as not ours), or not yet
+    /// activated this round — appended AFTER every existing entry, and only
+    /// when they differ from the max-EV picks. A MENU knob, not a seam: it
+    /// changes what the search may choose, never how a chosen act resolves.
+    /// Default OFF, so every recorded corpus replays with the identical menu.
+    pub holders: bool,
+    /// Wave 6 (`advancek`) — `Knobs::menu_advance_k`: how many of the
+    /// safe-advance frontier's best destinations the LIVE menu offers. 1 is
+    /// today's single candidate; the scorer is shared, so every k uses the SAME
+    /// score (`safe_advances`), best first, stable on ties by frontier order.
+    /// The playout's greedy brain stays one-option (`safe_advance`).
+    pub advance_k: usize,
+    /// Wave 6 (`rushk`) — `Knobs::playout_rush_k`: how many of the nearest
+    /// objectives the rollout's greedy brain rushes. 1 is today's single RUSH to
+    /// the nearest objective; the same rush/demotion rule runs per objective, in
+    /// distance order (stable on ties by `state.objectives` order).
+    pub rush_k: usize,
 }
 
 impl Default for Tuning {
@@ -152,6 +172,9 @@ impl Default for Tuning {
             shoot_los: false,
             target_units: false,
             wide_shoot: false,
+            holders: false,
+            advance_k: 1,
+            rush_k: 1,
         }
     }
 }
@@ -245,6 +268,9 @@ fn gap_m(a: &[[f64; 3]], offset: V3, b: &[[f64; 3]]) -> f64 {
 /// by recorded games, and a captured state's ledger is always empty
 /// (`State::buffs` is deliberately not serialised), so the fold is a no-op
 /// on every corpus and no frozen gate is needed.
+/// Wave 6 (`lead/menutargets`): `qualify` filters the enemy loop BEFORE the
+/// sight gate — the table's holder qualifier. Shipping callers pass `None`,
+/// which keeps the loop byte-exact.
 pub fn best_shoot(
     state: &State,
     statics: &[UnitStatic],
@@ -252,11 +278,17 @@ pub fn best_shoot(
     sc: &mut Scratch,
     tuning: Tuning,
     rules_epoch: u32,
+    qualify: Option<&dyn Fn(usize) -> bool>,
 ) -> Option<usize> {
     let us = &statics[state.roster.profile[i]];
     let mut best = None;
     let mut best_ev = 0.0f64;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
+        if let Some(q) = qualify {
+            if !q(e) {
+                continue;
+            }
+        }
         if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
@@ -383,6 +415,10 @@ fn charge_score(
 /// The charge EV prices the LIVE root ctx like every other arm (families
 /// 2-4 of the blindness report) — a granted Furious, Shielded-family
 /// defense or utility-buff knob on either side moves the score.
+///
+/// Wave 6 (`lead/menutargets`): `qualify` filters the enemy loop BEFORE the
+/// legality gate — the table's holder qualifier. Shipping callers pass
+/// `None`, which keeps the loop byte-exact.
 pub fn best_charge(
     state: &State,
     terrain: &Terrain,
@@ -391,6 +427,7 @@ pub fn best_charge(
     sc: &mut Scratch,
     tuning: Tuning,
     rules_epoch: u32,
+    qualify: Option<&dyn Fn(usize) -> bool>,
 ) -> Option<usize> {
     let us_static = &statics[state.roster.profile[i]];
     if us_static.melee.is_empty() {
@@ -406,6 +443,11 @@ pub fn best_charge(
     let mut best = None;
     let mut best_score = f64::NEG_INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
+        if let Some(q) = qualify {
+            if !q(e) {
+                continue;
+            }
+        }
         let gap_in = geom::edge_gap_in(
             &state.positions[i],
             &state.radii[i],
@@ -542,9 +584,10 @@ struct Threat<'a> {
 /// `AiPlanner._safe_advance` ai_planner.gd:690-787 — the PATIENT advance:
 /// toward the nearest objective, stopped at the strongest safety still
 /// available (tier 1: outside every gun's reach; tier 2: outside every charge
-/// reach). `None` when even charge safety is already lost or there is nothing to
-/// walk toward.
-pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Option<Candidate> {
+/// reach). Returns the frontier's top-`tuning.advance_k` destinations, best
+/// first, stable on ties by frontier order; empty when even charge safety is
+/// already lost or there is nothing to walk toward.
+pub fn safe_advances(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
     let centre = geom::centre(&state.positions[i]);
     let mut best_d = f64::INFINITY;
     let mut goal: V3 = [0.0, 0.0, 0.0];
@@ -556,7 +599,7 @@ pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) 
         }
     }
     if best_d.is_infinite() || best_d < 0.001 {
-        return None;
+        return Vec::new();
     }
     let dir = geom::normalized(geom::sub(goal, centre));
     let band_m = state.bands[i].advance * IN2M;
@@ -573,7 +616,7 @@ pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) 
         charge_only.push(Threat { positions: &state.positions[e], reach: charge_in * IN2M });
     }
     if full.is_empty() {
-        return None;
+        return Vec::new();
     }
     let positions = &state.positions[i];
     for threats in [&full, &charge_only] {
@@ -600,8 +643,11 @@ pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) 
             continue;
         }
         let frontier = &safe_ts[safe_ts.len().saturating_sub(SAFE_FRONTIER)..];
-        let mut best_t = 0.0f64;
-        let mut best_sc = f64::NEG_INFINITY;
+        // Score every frontier point ONCE, in frontier order. The stable
+        // descending sort below is the tie-break: `sort_by` keeps the frontier
+        // order of equal scores, so `advance_k == 1` returns exactly the
+        // first-wins argmax the single-candidate routine always did.
+        let mut scored: Vec<(f64, f64)> = Vec::with_capacity(frontier.len());
         for &ft in frontier {
             let pnt = geom::add(centre, geom::mul(dir, ft));
             let mut s = ft / IN2M;
@@ -630,19 +676,33 @@ pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) 
                 }
                 s -= SAFE_LINE_OPEN_LINE_PENALTY_IN * (open_lines - 1).max(0) as f64;
             }
-            if s > best_sc {
-                best_sc = s;
-                best_t = ft;
+            scored.push((s, ft));
+        }
+        if scored.is_empty() {
+            continue;
+        }
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        let k = tuning.advance_k.min(scored.len());
+        let mut out = Vec::with_capacity(k);
+        for &(_, ft) in scored.iter().take(k) {
+            if ft <= 0.001 {
+                continue; // the old `best_t > 0.001` guard: a null move is no candidate
             }
-        }
-        if best_t > 0.001 {
             let mut c = Candidate::new(state.key(i), ADVANCE);
-            c.dest = Some(geom::to_f64(geom::add(centre, geom::mul(dir, best_t))));
+            c.dest = Some(geom::to_f64(geom::add(centre, geom::mul(dir, ft))));
             c.patient = true;
-            return Some(c);
+            out.push(c);
         }
+        return out;
     }
-    None
+    Vec::new()
+}
+
+/// The single best safe advance — the greedy playout's one-option menu, and
+/// nothing else. `safe_advances(...).into_iter().next()` keeps ONE scoring
+/// routine behind both sites.
+pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Option<Candidate> {
+    safe_advances(state, terrain, i, tuning).into_iter().next()
 }
 
 /// `AiPlanner._second_wave` ai_planner.gd:1141-1200 (D21/D23) — a follow-up move
@@ -765,6 +825,25 @@ fn charge_at(state: &State, key: &str, e: usize) -> Candidate {
     c
 }
 
+/// Wave 6 (`lead/menutargets`): the holder qualifier — an enemy qualifies when
+/// it has NOT yet activated this round, or when it stands within 3" of an
+/// objective not owned by the acting player (owner 0 counts as not ours).
+pub fn holder_or_unactivated(state: &State, player: i64, e: usize) -> bool {
+    !state.activated[e] || marker_holder(state, player, e)
+}
+
+/// The MARKER half of the qualifier on its own: any model of `e` within 3" of an
+/// objective not owned by `player` (owner 0 = nobody counts as not ours).
+pub fn marker_holder(state: &State, player: i64, e: usize) -> bool {
+    state.objectives.iter().any(|o| {
+        o.owner != player
+            && state.positions[e].iter().any(|p| {
+                geom::length(geom::sub(geom::to_f32(o.pos), geom::to_f32(*p))) as f64
+                    <= 3.0 * IN2M
+            })
+    })
+}
+
 /// The same menu with the parity `Tuning` exposed — see `Tuning`. Shipping code
 /// calls `candidates`/`candidates_in`; only the red proofs pass anything else.
 ///
@@ -782,7 +861,8 @@ pub fn candidates_tuned(
 ) -> Vec<Candidate> {
     let key = state.key(unit);
     let mut out = vec![Candidate::new(key, HOLD)];
-    if let Some(e) = best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH) {
+    let shoot = best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None);
+    if let Some(e) = shoot {
         let mut c = Candidate::new(key, HOLD);
         c.shoot = Some(state.key(e).to_string());
         out.push(c);
@@ -800,7 +880,7 @@ pub fn candidates_tuned(
         out.push(c);
     }
     let scored =
-        best_charge(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH);
+        best_charge(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None);
     if let Some(e) = scored {
         out.push(charge_at(state, key, e));
     }
@@ -828,7 +908,7 @@ pub fn candidates_tuned(
             out.push(c);
         }
     }
-    if let Some(c) = safe_advance(state, terrain, unit, tuning) {
+    for c in safe_advances(state, terrain, unit, tuning) {
         out.push(c);
     }
     if let Some(c) = second_wave(state, unit) {
@@ -857,6 +937,43 @@ pub fn candidates_tuned(
             let mut c = Candidate::new(key, REPOSITION);
             c.dest = Some([to[0], state.positions[unit][0][1], to[1]]);
             out.push(c);
+        }
+    }
+    // Wave 6 (`lead/menutargets`): the table appends, at the very tail, the
+    // best shoot target and best charge victim among enemies that QUALIFY —
+    // not yet activated, or within 3" of an objective not owned by the acting
+    // player — but ONLY when the unqualified pick differs. Appended LAST like
+    // every tail-growth leg, so an OFF menu stays byte-identical.
+    if tuning.holders {
+        // Two SEPARATE proposals (second opinion 21.09.): the best marker HOLDER and the
+        // best UN-ACTIVATED enemy. One combined qualifier collapsed them — the max-EV
+        // target is usually itself un-activated, so the holder never got its entry
+        // (funnel: an extra in 2 of 17 opportunities). Dedupe against the unqualified
+        // picks and against each other; order holder, then un-activated.
+        let player = state.player[unit];
+        let qh = |e: usize| marker_holder(state, player, e);
+        let qu = |e: usize| !state.activated[e];
+        let mut shot: Vec<usize> = shoot.into_iter().collect();
+        for q in [&qh as &dyn Fn(usize) -> bool, &qu] {
+            if let Some(e) = best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, Some(q)) {
+                if !shot.contains(&e) {
+                    shot.push(e);
+                    let mut c = Candidate::new(key, HOLD);
+                    c.shoot = Some(state.key(e).to_string());
+                    out.push(c);
+                }
+            }
+        }
+        let mut charged: Vec<usize> = scored.into_iter().collect();
+        for q in [&qh as &dyn Fn(usize) -> bool, &qu] {
+            if let Some(e) = best_charge(
+                state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, Some(q),
+            ) {
+                if !charged.contains(&e) {
+                    charged.push(e);
+                    out.push(charge_at(state, key, e));
+                }
+            }
         }
     }
     out

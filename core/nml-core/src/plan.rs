@@ -214,7 +214,7 @@ pub struct Search<'a> {
 }
 
 /// The three seams `resolve` branches on, off the resolved knobs.
-fn seams_of(knobs: &Knobs) -> Seams {
+pub fn seams_of(knobs: &Knobs) -> Seams {
     Seams {
         spacing: knobs.seam_spacing,
         cast: knobs.seam_cast,
@@ -278,7 +278,10 @@ pub fn tuning_of(knobs: &Knobs) -> crate::menu::Tuning {
         charge_gate: knobs.charge_gate,
         shoot_los: knobs.menu_los,
         target_units: knobs.menu_targets,
+        holders: knobs.menu_holders,
         wide_shoot: knobs.menu_wide,
+        advance_k: knobs.menu_advance_k,
+        rush_k: knobs.playout_rush_k,
         ..Default::default()
     }
 }

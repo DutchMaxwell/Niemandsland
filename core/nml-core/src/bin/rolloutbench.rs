@@ -11,10 +11,11 @@
 use std::time::Instant;
 
 use nml_core::menu::Candidate;
+use nml_core::plan::{seams_of, tuning_of};
 use nml_core::playout::Policy;
 use nml_core::rollout::Rollout;
 use nml_core::sim::Scratch;
-use nml_core::{build_act_statics, load_acts, Act, Seams};
+use nml_core::{build_act_statics, load_acts, Act};
 
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 
@@ -51,10 +52,15 @@ fn main() {
     let rounds: usize = args.next().and_then(|s| s.parse().ok()).unwrap_or(20);
     let c = load_acts(&path).unwrap_or_else(|e| panic!("{e}"));
     let statics = build_act_statics(&c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() };
-    let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
+    // The header knobs are the ONLY source of the resolve/menu seams — a
+    // hand-built subset predates W1 (`moved_shoot`) and the epoch gate
+    // (`rules_epoch`), and an epoch-62 corpus declines every ADVANCE+shoot
+    // rollout with `Unsupported::MovedShootLos`. `seams_of`/`tuning_of` are
+    // the canonical knobs→seams/tuning mappings `plan_with_rollout` uses.
+    let seams = seams_of(&c.knobs);
+    let mut pol = Policy::new(&statics, &c.terrain, seams);
+    pol.tuning = tuning_of(&c.knobs);
+    let roll = Rollout::new(pol, c.knobs);
     let mut sc = Scratch::default();
 
     let mut boundaries_ns: Vec<f64> = Vec::new();

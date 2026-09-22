@@ -142,12 +142,12 @@ use super::*;
             "the bare twin's printed 12\" band covers the same gap"
         );
         assert_eq!(
-            crate::menu::best_charge(&st, &t, &statics, 0, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH),
+            crate::menu::best_charge(&st, &t, &statics, 0, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH, None),
             None,
             "the debuffed unit's charge on e1 never enters the menu"
         );
         assert_eq!(
-            crate::menu::best_charge(&st, &t, &statics, 1, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH),
+            crate::menu::best_charge(&st, &t, &statics, 1, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH, None),
             Some(3),
             "the bare twin takes the same 10\" gap"
         );
@@ -170,12 +170,12 @@ use super::*;
             "dangerous never touches the band read — only the charge EV"
         );
         assert_eq!(
-            crate::menu::best_charge(&st, &t, &statics, 0, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH),
+            crate::menu::best_charge(&st, &t, &statics, 0, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH, None),
             None,
             "the raw EV minus the dice/6 loss drops under the futile bar"
         );
         assert_eq!(
-            crate::menu::best_charge(&st, &t, &statics, 1, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH),
+            crate::menu::best_charge(&st, &t, &statics, 1, &mut Scratch::default(), crate::menu::Tuning::default(), crate::acts::CURRENT_RULES_EPOCH, None),
             Some(3),
             "the bare twin's raw EV clears the bar unchanged"
         );

@@ -183,11 +183,17 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
 `core/` is a Cargo workspace — `nml-core` (the rules port), `nml-core-godot` (the optional Godot
 extension) and `nml-core-py` (Python bindings) — used for fast look-ahead and training. Godot
 loads it only as an optional GDExtension (`core/nml_core.gdextension.in`, installed by
-`core/install_gdextension.sh`), and the extension ships dormant inside the Linux and Windows
-exports: its presence changes no game behaviour until the Rust planner is switched on. Without
-the built library, or with the switch off (`BattleSim.core_enabled()`), the GDScript engine runs
-unchanged. See [`DEV_BRAIN_BRIDGE.md`](DEV_BRAIN_BRIDGE.md) for the developer-only evaluator
-bridge.
+`core/install_gdextension.sh`). Until 22.09.2026 the extension shipped dormant inside the Linux and
+Windows exports; since then a **release build wants the core by default** (`BattleSim.core_wanted`,
+`NML_CORE=0` opts out; debug builds still need the explicit `NML_CORE=1`): the one player-facing grade
+runs the search planner with the packed ONNX leaf evaluator (`assets/solo/brains/erlkoenig.onnx`,
+handed to `NmlCore.set_brain_onnx`) when the extension and the model load, and movement planning goes
+through the core's planner (`NML_CORE_MOVE=0` opts out). Without the built library, with a refused
+model, or with the switch off, the GDScript engine runs unchanged and the game log says which path is
+live (`opponent: erlkoenig … move=core` / `opponent: tree — …`). The core reads its rule files and the
+model from a staged copy under `user://nml_core/<version>/` (`CoreAssets`), because a packed export has
+no files on disk. See [`DEV_BRAIN_BRIDGE.md`](DEV_BRAIN_BRIDGE.md) for the developer-only loopback
+evaluator, which still exists for experiments.
 
 ## Save format (`.nml`)
 

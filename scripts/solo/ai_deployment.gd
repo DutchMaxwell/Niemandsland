@@ -94,7 +94,12 @@ static func footprint_margins(radius: float, footprint: Array, base_r: float) ->
 const FORWARD_EDGE_W := 0.0
 
 
-static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius: float, blocked: Callable, step: float = 0.05, probe_radius: float = 0.0, footprint: Array = [], base_r: float = 0.0, forward_y: float = INF) -> Vector2:
+## `threat` (DEPLOYTHREAT, tactics canon principle 7): an optional scorer `func(p: Vector2) -> float`
+## — the number of enemy first-activation envelopes (advance + longest range) covering `p`. Each one
+## costs `threat_w` metres of objective distance, so a spot one enemy can reach and shoot on its
+## first activation loses to a spot slightly farther from the marker but out of reach. Invalid
+## Callable / zero weight = byte-identical to today.
+static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius: float, blocked: Callable, step: float = 0.05, probe_radius: float = 0.0, footprint: Array = [], base_r: float = 0.0, forward_y: float = INF, threat: Callable = Callable(), threat_w: float = 0.0) -> Vector2:
 	var best := Vector2.INF
 	var best_score := INF
 	var m := footprint_margins(radius, footprint, base_r)
@@ -107,6 +112,8 @@ static func best_spot(section: Rect2, objectives: Array, occupied: Array, radius
 				var score := _nearest_objective_distance(p, objectives, section)
 				if forward_y != INF:
 					score += FORWARD_EDGE_W * absf(p.y - forward_y)
+				if threat_w > 0.0 and threat.is_valid():
+					score += threat_w * float(threat.call(p))
 				if score < best_score:
 					best_score = score
 					best = p

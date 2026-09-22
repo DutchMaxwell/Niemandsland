@@ -889,6 +889,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // yet, so an absent one answers `Knobs::default()` — OFF, the menu
         // every recorded corpus carries.
         menu_targets: dflag(d, "menu_targets"),
+        // Wave 6 (`lead/menutargets`). A MENU knob, not a seam (like
+        // `menu_targets`): it widens what the search may choose and changes no
+        // resolve. No recorder writes the key yet, so an absent one answers
+        // `Knobs::default()` — OFF, the menu every recorded corpus carries.
+        menu_holders: dflag(d, "menu_holders"),
         // NML-1073 M5 D1-B4b/BUG-3. The recorder NOW writes this key
         // (act_recorder.gd `_header_line`, from `BattleSim.hero_fold_enabled()`),
         // so an in-game seam under the `hero_fold` knob folds the joined hero
@@ -973,6 +978,16 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // matching every seam above; `header_of` stamps it for a header that
         // carries `books`.
         bands_prefolded: dflag(d, "bands_prefolded"),
+        // Wave 6 (`advancek`). A MENU knob, not a seam (like `menu_targets`):
+        // the live menu offers the safe-advance frontier's top-k destinations.
+        // No recorder wrote the key before it, so an absent one answers
+        // `Knobs::default()` = 1 — the single candidate every corpus carries.
+        menu_advance_k: dint(d, "menu_advance_k", dflt.menu_advance_k as i64) as usize,
+        // Wave 6 (`rushk`). A MENU knob, not a seam (like `menu_advance_k`): the
+        // rollout's greedy brain rushes the top-k nearest objectives. No recorder
+        // wrote the key before it, so an absent one answers `Knobs::default()` = 1
+        // — the single RUSH every corpus carries.
+        playout_rush_k: dint(d, "playout_rush_k", dflt.playout_rush_k as i64) as usize,
     }
 }
 

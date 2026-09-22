@@ -337,3 +337,120 @@ func test_the_reach_gate_measures_the_band_the_live_move_covers() -> void:
 	assert_int(_wide_shots("Plain", [], 24, 31.0)).is_equal(0)
 	# And the original hole stays shut: not even +4" makes a 12" gun reach 30".
 	assert_int(_wide_shots("Bounder", ["Bounding"], 12, 30.0)).is_equal(0)
+
+
+func after_test() -> void:
+	AiPlanner.menu_holders = false   # the MENUHOLDERS static: pin it back so no suite sees a leak
+	AiPlanner._mh_env = 0
+	AiPlanner.menu_wide = false
+	AiPlanner._mw_env = 0
+
+
+## Second opinion 21.09.: the SPLIT. With the max-EV target A NOT yet activated, one combined
+## qualifier picked A for the qualified best too — no extra — although B holds the marker. Two
+## proposals (holder, un-activated) with dedupe give B its HOLD+shoot; A dedupes away.
+func test_menu_holders_split_offers_the_holder_when_the_max_ev_target_is_unactivated() -> void:
+	AiPlanner._mh_env = 0
+	var marker := Vector3(20.0 * IN2M, 0, 0)
+	var me := _armed(2, [Vector3.ZERO], "Gunner", [{"name": "Rifle", "range": 24}])
+	var a := _armed(1, [Vector3(0, 0, 18.0 * IN2M)], "A", [{"name": "CCW", "range": 0}], [], 1, 4, 6)
+	a.is_activated = false   # the max-EV target has NOT activated
+	var b := _armed(1, [marker], "B", [{"name": "CCW", "range": 0}], [], 1, 4, 2)
+	b.is_activated = true
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": me, "A": a, "B": b}
+	var state := BattleSim.capture(army, func() -> Array: return [marker],
+		func(_i: int) -> int: return 1)
+	AiPlanner.menu_holders = false
+	var off := AiPlanner.candidates(state, "Gunner")
+	AiPlanner.menu_holders = true
+	var on := AiPlanner.candidates(state, "Gunner")
+	assert_int(on.size()).is_equal(off.size() + 1)
+	for i in range(off.size()):
+		assert_that(on[i]).is_equal(off[i])
+	var extra: Dictionary = on[on.size() - 1]
+	assert_str(str(extra.get("shoot", ""))).is_equal("B")   # the holder, not a duplicate of A
+
+
+## MENUHOLDERS (tactics canon, principle 1): the live menu offers ONE shoot target — the max-EV
+## one — so an enemy that holds a marker or has not activated yet is targeted only by accident.
+## With the switch on the menu ALSO offers the best qualifying enemy (marker holder / un-activated)
+## when it differs from the max-EV pick; with the switch off the menu is byte-identical to today.
+func test_menu_holders_adds_the_marker_holder_after_the_max_ev_target() -> void:
+	AiPlanner._mh_env = 0
+	var marker := Vector3(20.0 * IN2M, 0, 0)
+	var me := _armed(2, [Vector3.ZERO], "Gunner", [{"name": "Rifle", "range": 24}])
+	# A: the max-EV target (defense 6 = easy wounds), already activated, far from every marker.
+	var a := _armed(1, [Vector3(0, 0, 18.0 * IN2M)], "A", [{"name": "CCW", "range": 0}], [], 1, 4, 6)
+	a.is_activated = true
+	# B: harder to wound (defense 2), but stands ON the enemy-owned marker.
+	var b := _armed(1, [marker], "B", [{"name": "CCW", "range": 0}], [], 1, 4, 2)
+	b.is_activated = true
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": me, "A": a, "B": b}
+	var state := BattleSim.capture(army, func() -> Array: return [marker],
+		func(_i: int) -> int: return 1)   # owner = player 1 = the enemy of the gunner
+	AiPlanner.menu_holders = false
+	var off := AiPlanner.candidates(state, "Gunner")
+	var off_shoots := _of_kind(off, AiDecision.Action.HOLD).filter(func(c: Dictionary) -> bool: return c.has("shoot"))
+	assert_int(off_shoots.size()).is_equal(1)
+	assert_str(str(off_shoots[0]["shoot"])).is_equal("A")   # today: only the max-EV target
+	AiPlanner.menu_holders = true
+	var on := AiPlanner.candidates(state, "Gunner")
+	assert_int(on.size()).is_equal(off.size() + 1)
+	for i in range(off.size()):
+		assert_that(on[i]).is_equal(off[i])   # the existing entries stay, in order
+	var extra: Dictionary = on[on.size() - 1]
+	assert_int(int(extra["kind"])).is_equal(AiDecision.Action.HOLD)
+	assert_str(str(extra["shoot"])).is_equal("B")   # the marker holder joins the menu
+	# Nothing qualifies: A already activated and off the marker, B activated but NOW the marker
+	# is ours -> no extra entry even with the switch on.
+	var mine := BattleSim.capture(army, func() -> Array: return [marker],
+		func(_i: int) -> int: return 2)
+	assert_int(AiPlanner.candidates(mine, "Gunner").size()).is_equal(off.size())
+
+
+## W1 ADVANCE+shoot as a LIVE leg (22.09.): an enemy 26" away is out of the 24" rifle's reach from
+## where the gunner stands (no HOLD+shoot), but in reach after a 6" advance — with `menu_wide` on
+## the menu offers ADVANCE toward it WITH the shot; off = today's menu, entry for entry.
+func test_menu_wide_offers_advance_and_shoot_when_the_shot_needs_the_move() -> void:
+	AiPlanner._mw_env = 0
+	var me := _armed(2, [Vector3.ZERO], "Gunner", [{"name": "Rifle", "range": 24}])
+	var far := _armed(1, [Vector3(0, 0, 26.0 * IN2M)], "Far", [{"name": "CCW", "range": 0}])
+	var state := _state([me, far])
+	AiPlanner.menu_wide = false
+	var off := AiPlanner.candidates(state, "Gunner")
+	assert_int(_of_kind(off, AiDecision.Action.HOLD).filter(func(c: Dictionary) -> bool: return c.has("shoot")).size()).is_equal(0)
+	AiPlanner.menu_wide = true
+	var on := AiPlanner.candidates(state, "Gunner")
+	AiPlanner.menu_wide = false   # restored BEFORE asserting: no leak on failure
+	assert_int(on.size()).is_equal(off.size() + 1)
+	for i in range(off.size()):
+		assert_that(on[i]).is_equal(off[i])
+	var extra: Dictionary = on[on.size() - 1]
+	assert_int(int(extra["kind"])).is_equal(AiDecision.Action.ADVANCE)
+	assert_str(str(extra.get("shoot", ""))).is_equal("Far")
+
+
+
+## S5 (22.09.): the ADVANCE+shoot leg is ON by default; NML_MENU_WIDE=0 is the explicit off,
+## =1 the explicit on, anything else leaves the static default alone. (Confirmation run
+## 22.09.: +4.70 points [+2.77, +6.83] over 2,000 pairs on fresh seeds.)
+func test_menu_wide_env_switch_and_default() -> void:
+	var saved_env := OS.get_environment("NML_MENU_WIDE")
+	var saved_static := AiPlanner.menu_wide
+	OS.set_environment("NML_MENU_WIDE", "0")
+	AiPlanner._mw_env = -1
+	AiPlanner.menu_wide = true
+	assert_bool(AiPlanner.menu_wide_on()).is_false()
+	OS.set_environment("NML_MENU_WIDE", "1")
+	AiPlanner._mw_env = -1
+	AiPlanner.menu_wide = false
+	assert_bool(AiPlanner.menu_wide_on()).is_true()
+	OS.set_environment("NML_MENU_WIDE", "")
+	AiPlanner._mw_env = -1
+	AiPlanner.menu_wide = true
+	assert_bool(AiPlanner.menu_wide_on()).is_true()   # unset: the shipped default (on) stands
+	OS.set_environment("NML_MENU_WIDE", saved_env)
+	AiPlanner._mw_env = -1
+	AiPlanner.menu_wide = saved_static

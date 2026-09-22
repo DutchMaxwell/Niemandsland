@@ -74,13 +74,24 @@ static func hero_fold_enabled() -> bool:
 static var _core_env := -1
 static func core_enabled() -> bool:
 	if _core_env < 0:
-		var want := OS.get_environment("NML_CORE") == "1"
+		var want := core_wanted(OS.get_environment("NML_CORE"), OS.is_debug_build())
 		var have := ClassDB.class_exists("NmlCore")
 		if want and not have:
 			push_warning("[CORE] NML_CORE=1 but the NmlCore GDExtension is not loaded — "
 				+ "the GDScript BattleSim stays in charge (NML-1073 R1).")
 		_core_env = 1 if (want and have) else 0
 	return _core_env == 1
+
+
+## The switch as a pure function (ship path 22.09.): a RELEASE build wants the core
+## unless NML_CORE=0 says otherwise; a debug build keeps the explicit NML_CORE=1, so
+## every measurement stays a deliberate switch and the tests' default path is unchanged.
+static func core_wanted(env: String, debug_build: bool) -> bool:
+	if env == "1":
+		return true
+	if env == "0":
+		return false
+	return env.is_empty() and not debug_build
 
 ## NML-1072: wall-clock profile of the trainer path — env-gated NML_PROFILE=1
 ## (unset = byte-identical: the hot path pays exactly one cached bool check,

@@ -7,6 +7,28 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **NACHTMAHR plays with the search planner and a neural leaf evaluator in-process.** When the
+  Rust core (`NmlCore` GDExtension, now built with the ONNX evaluator) and the packed model
+  `assets/solo/brains/erlkoenig.onnx` load, the one player-facing grade runs the rollout search
+  (top-k 10, horizon 3) priced by the net; otherwise the decision tree plays exactly as before, and
+  the game log says which (`opponent: erlkoenig brain=onnx …` / `opponent: tree — …`). Measured on
+  the real table against the shipped tree: 55.3 % over 600 games (paired sign test p = 0.0003,
+  21.09.); the wider menu below adds +4.70 points [95 % +2.77, +6.83] over 2,000 paired games on
+  seeds no development run ever used (22.09.). (#1052, #1053, #1054, #1055, #1056)
+- **The AI moves its models through the Rust core by default** (`NML_CORE_MOVE=0` turns it off).
+  A phase instrument showed the GDScript movement planner owning 94-98 % of the slowest AI decisions
+  while the search itself took 2 %; the core's planner produces the same moves (2,532 planned steps
+  compared over 40 games, both grades, 0 differences). Decision wait on the reference laptop, 20
+  games per row: the old tree p50 132 ms / p90 2.7 s / max 10.5 s → now p50 48 ms / p90 0.23 s /
+  max 0.73 s; the new opponent p50 486 ms / p90 3.5 s / max 10.3 s → **p50 373 ms / p90 0.67 s /
+  max 1.16 s**. The game log names the planner in use (`move=core` / `move=gdscript`).
+  (#1056, #1061, #1060)
+- **The planner's live menu offers ADVANCE + shoot** (`menu_wide`, default on; `NML_MENU_WIDE=0`
+  turns it off), proven equal to the core's menu on a recorded corpus. (#1050, this PR)
+- **The core stages its rule files and the model out of the packed build** (`user://nml_core/<version>/`)
+  and refuses a game — loudly, falling back to the tree — when a rules file or the row vocab is
+  missing instead of searching rule-blind. (#1053, #1054)
+- **Objective-token rush reach.** The fast core's objective token carries two new columns — t[10]/t[11], the per-side count of units whose base-edge gap to the objective is within the last-round flip band (`OBJECTIVE_CONTROL_IN + live rush`), a superset of the contest count. Token vocab bumps to 3 (RESIDUALS_ERLKOENIG_2026-09-19).
 - **Privacy & data settings (local only).** A consent screen, off by default, explains optional
   game-record sharing, previews an example record and can save it locally; nothing is sent. An
   in-memory collector for the opt-in path is on `main`, still local-only (see

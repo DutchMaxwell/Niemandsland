@@ -103,13 +103,19 @@ func test_fake_brain_is_in_decisions_and_killed_server_declines(
 	await Boot.settle(get_tree())
 
 
-func test_unset_url_preserves_the_interactive_grade() -> void:
+## Ship path (22.09.): without a developer URL the grade follows the SHIPPED brain —
+## planner iff the core is up and the packed model was accepted, else the tree. Without
+## the extension (CI's gdUnit job) that is the tree, byte-identical to before.
+func test_unset_url_follows_the_shipped_brain_else_the_tree() -> void:
 	var sc := _controller()
 	_main.solo_controller = sc
 	_main.solo_ai_slots = {2: true}
 	_main._solo_difficulty_grades = {}
 	_main._solo_apply_difficulty()
-	assert_bool(sc.difficulty_by_slot[2].planner).is_false()
+	var shipped := sc.shipped_brain_ready()
+	if not ClassDB.class_exists("NmlCore"):
+		assert_bool(shipped).is_false()
+	assert_bool(sc.difficulty_by_slot[2].planner).is_equal(shipped)
 	assert_bool(sc.difficulty_by_slot.has(1)).is_false()
 	assert_bool(sc.auto_interference).is_false()
 	await Boot.settle(get_tree())

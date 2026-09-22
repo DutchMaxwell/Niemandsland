@@ -61,6 +61,42 @@ static func plan(state: Dictionary, player: int) -> Dictionary:
 
 const ROLLOUT_TOP_K := 6   # rollout budget: only this many 1-ply-best openers get played out
 static var _tk := 0   # research seam: NML_TOP_K overrides (lazy; <=0 = unread)
+## MENUHOLDERS (tactics canon, principle 1): when on, the live menu also offers the best shoot
+## and charge against an enemy that HOLDS or CONTESTS a marker not ours (within 3") or has NOT
+## activated this round — when that enemy differs from the max-EV pick. Off = byte-identical menu.
+## Read once from NML_MENU_HOLDERS=1 (tests set the static directly; _mh_env = -1 means unread).
+static var menu_holders := false
+static var _mh_env := -1
+## MENUWIDE: the header knob `menu_wide` (the ADVANCE+shoot leg, in the core's menu and in the
+## table's live menu, #1050). DEFAULT ON since 22.09.: confirmation on fresh seeds 1001-1500,
+## 2,000 pairs, +4.70 points [+2.77, +6.83] over the same planner without the leg (analysis
+## CONFIRM_MENUWIDE_2026-09-22). NML_MENU_WIDE=0 switches it off, =1 on; tests set it directly.
+static var menu_wide := true
+static var _mw_env := -1
+## MENUADVANCEK (wave 6, `advancek`): how many of the safe-advance frontier's best destinations
+## the LIVE menu offers. 1 (the default) is byte-identical to the single candidate every recorded
+## corpus replays; the Rust core's `Tuning::advance_k` reads the same number. NML_MENU_ADVANCE_K=<int>
+## sets it (clamped to 1..8; unset = 1). The TABLE's own GDScript menu does not read it — the core
+## decides the A/B, and on a decline the table answers as today. Tests set the static directly;
+## _mak_env = -2 means unread.
+static var menu_advance_k := 1
+static var _mak_env := -2
+## PLAYOUTRUSHK (wave 6, `rushk`): how many of the nearest objectives the ROLLOUT's greedy
+## brain rushes. 1 (the default) is byte-identical to the single RUSH every recorded corpus
+## replays; the Rust core's `Tuning::rush_k` reads the same number. NML_PLAYOUT_RUSH_K=<int>
+## sets it (clamped to 1..4; unset = 1). Tests set the static directly; _prk_env = -2 means
+## unread.
+static var playout_rush_k := 1
+static var _prk_env := -2
+
+
+## Ship path (22.09.): pin the search budget for the shipped Erlkönig grade. An explicit
+## NML_TOP_K / NML_HORIZON still wins (measurements stay deliberate switches).
+static func set_search_budget(top_k: int, horizon_rounds: int) -> void:
+	if OS.get_environment("NML_TOP_K").is_empty():
+		_tk = clampi(top_k, 1, 32)
+	if OS.get_environment("NML_HORIZON").is_empty():
+		_hz = clampi(horizon_rounds, 1, 3)
 
 
 static func top_k_default() -> int:
@@ -1084,7 +1120,96 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	var wave := _second_wave(state, key)
 	if not wave.is_empty():
 		out.append(wave)
+	if menu_wide_on():
+		# W1 ADVANCE+shoot, the LIVE leg (22.09.; the teacher menu grew it on 16.08., the core's
+		# `advance_shoots` mirrors it under `menu_wide`): every seen enemy the unit could still shoot
+		# AFTER its advance band (shoot_ev > 0 at the closed distance) gets one ADVANCE toward it
+		# with that shot — the move the tree makes constantly and the search could never express.
+		# Same order as the core: after second_wave, before the holder proposals.
+		for ek in _advance_shoots(state, key):
+			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE,
+				"dest": _centre(state["units"][ek]), "shoot": ek})
+	if _menu_holders_on():
+		# Two SEPARATE proposals (second opinion 21.09.): the best marker HOLDER and the best
+		# UN-ACTIVATED enemy. One combined qualifier collapsed them — the max-EV target is
+		# usually itself un-activated, so the holder never got its entry. Dedupe against the
+		# unqualified picks and against each other; order holder, then un-activated.
+		var shot: Array = [shoot]
+		var charged: Array = [charge]
+		for q in [Callable(AiPlanner, "_marker_holder"), Callable(AiPlanner, "_unactivated")]:
+			var mshoot := _best_shoot(state, key, q)
+			if mshoot != "" and not shot.has(mshoot):
+				shot.append(mshoot)
+				out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": mshoot})
+		for q in [Callable(AiPlanner, "_marker_holder"), Callable(AiPlanner, "_unactivated")]:
+			var mcharge := _best_charge(state, key, q)
+			if mcharge != "" and not charged.has(mcharge):
+				charged.append(mcharge)
+				out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
+					"dest": _centre(state["units"][mcharge]), "charge": mcharge})
 	return out
+
+
+static func menu_wide_on() -> bool:
+	if _mw_env < 0:
+		var e := OS.get_environment("NML_MENU_WIDE")
+		_mw_env = 1 if e == "1" else (0 if e == "0" else 2)   # 2 = unset: the static default stands
+		if _mw_env == 1:
+			menu_wide = true
+		elif _mw_env == 0:
+			menu_wide = false
+	return menu_wide
+
+
+static func menu_advance_k_on() -> int:
+	if _mak_env == -2:
+		var e := OS.get_environment("NML_MENU_ADVANCE_K")
+		if e.is_valid_int():
+			menu_advance_k = clampi(int(e), 1, 8)
+		_mak_env = 0
+	return menu_advance_k
+
+
+static func playout_rush_k_on() -> int:
+	if _prk_env == -2:
+		var e := OS.get_environment("NML_PLAYOUT_RUSH_K")
+		if e.is_valid_int():
+			playout_rush_k = clampi(int(e), 1, 4)
+		_prk_env = 0
+	return playout_rush_k
+
+
+static func _menu_holders_on() -> bool:
+	if _mh_env < 0:
+		_mh_env = 1 if OS.get_environment("NML_MENU_HOLDERS") == "1" else 0
+		if _mh_env == 1:
+			menu_holders = true
+	return menu_holders
+
+
+## MENUHOLDERS qualifier: the enemy unit `ek` holds/contests a marker not ours (any model's
+## centre within 3" of an objective whose owner is not `player`; 0 = nobody counts as not ours)
+## or has not activated this round.
+static func _holder_or_unactivated(state: Dictionary, player: int, ek: String) -> bool:
+	return _unactivated(state, player, ek) or _marker_holder(state, player, ek)
+
+
+static func _unactivated(state: Dictionary, _player: int, ek: String) -> bool:
+	return not bool((state["units"][ek] as Dictionary).get("activated", false))
+
+
+## The MARKER half on its own: any model of `ek` within 3" of an objective not owned by `player`.
+static func _marker_holder(state: Dictionary, player: int, ek: String) -> bool:
+	var tu: Dictionary = state["units"][ek]
+	for o in state["objectives"]:
+		var od: Dictionary = o as Dictionary
+		if int(od.get("owner", 0)) == player:
+			continue
+		var opos: Vector3 = od["pos"]
+		for p in tu["positions"]:
+			if (p as Vector3).distance_to(opos) <= 3.0 * BattleSim.IN2M:
+				return true
+	return false
 
 
 ## The TEACHER menu (P0b, NML-1009). P0 measured where the narrow menu cannot
@@ -1107,10 +1232,14 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		return out
 	var seen_shoot := {}
 	var seen_charge := {}
+	var seen_advance_shoot := {}   # S5: the live menu carries ADVANCE+shoot itself now (menu_wide default)
 	for c in out:
 		var cd: Dictionary = c
 		if cd.has("shoot"):
-			seen_shoot[str(cd["shoot"])] = true
+			if int(cd["kind"]) == AiDecision.Action.ADVANCE:
+				seen_advance_shoot[str(cd["shoot"])] = true
+			else:
+				seen_shoot[str(cd["shoot"])] = true
 		if cd.has("charge"):
 			seen_charge[str(cd["charge"])] = true
 	var ours: Array = BattleSim._profiles_of(su, true)
@@ -1155,7 +1284,7 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		# NML-1049: ...but only when the barrel reaches after that advance. The gap
 		# is the OPTIMISTIC one (closing straight in at the full band), so the gate
 		# never removes a shot the move could have set up.
-		if BattleSim.sees(su, str(ek)) \
+		if not seen_advance_shoot.has(str(ek)) and BattleSim.sees(su, str(ek)) \
 				and _can_shoot_at(su, tu, maxf(gap_in - advance_in, 0.0)):
 			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE,
 				"dest": _centre(tu), "shoot": str(ek)})
@@ -1373,11 +1502,32 @@ static func _enemy_keys(state: Dictionary, key: String) -> Array:
 	return out
 
 
-static func _best_shoot(state: Dictionary, key: String) -> String:
+## The core's `advance_shoots` (menu.rs): enemies the unit sees and could shoot once its advance
+## band has closed the gap — the volley's EV at (distance − advance) must be positive. Enemy
+## order = `_enemy_keys` (the core's `enemy_keys_tuned`), so both menus list them alike.
+static func _advance_shoots(state: Dictionary, key: String) -> Array:
+	var su: Dictionary = state["units"][key]
+	var advance_in := float(SoloController.sim_move_bands(su["unit"]).get("advance", 6))
+	var out: Array = []
+	for ek in _enemy_keys(state, key):
+		if not BattleSim.sees(su, str(ek)):
+			continue
+		var tu: Dictionary = state["units"][ek]
+		var d := maxf(BattleSim.dist_in(su["positions"], tu["positions"]) - advance_in, 0.0)
+		var ev := AiEv.shoot_ev(BattleSim._profiles_of(su, false, d),
+			BattleSim._ctx_of(su), BattleSim._ctx_of(tu), d)
+		if ev > 0.0:
+			out.append(str(ek))
+	return out
+
+
+static func _best_shoot(state: Dictionary, key: String, qualify: Callable = Callable()) -> String:
 	var su: Dictionary = state["units"][key]
 	var best := ""
 	var best_ev := 0.0
 	for ek in _enemy_keys(state, key):
+		if qualify.is_valid() and not bool(qualify.call(state, int(su["player"]), str(ek))):
+			continue
 		if not BattleSim.sees(su, str(ek)):
 			continue
 		var tu: Dictionary = state["units"][ek]
@@ -1392,7 +1542,7 @@ static func _best_shoot(state: Dictionary, key: String) -> String:
 
 ## Best hurtable melee target by charge_score; targets under the live
 ## futile-charge bar (SoloController.FUTILE_CHARGE_EV) are never candidates.
-static func _best_charge(state: Dictionary, key: String) -> String:
+static func _best_charge(state: Dictionary, key: String, qualify: Callable = Callable()) -> String:
 	var su: Dictionary = state["units"][key]
 	var ours: Array = BattleSim._profiles_of(su, true)
 	if ours.is_empty():
@@ -1405,6 +1555,8 @@ static func _best_charge(state: Dictionary, key: String) -> String:
 	var best := ""
 	var best_score := -INF
 	for ek in _enemy_keys(state, key):
+		if qualify.is_valid() and not bool(qualify.call(state, int(su["player"]), str(ek))):
+			continue
 		var tu: Dictionary = state["units"][ek]
 		if illegal_cb.is_valid() and bool(illegal_cb.call(su["unit"], tu["unit"],
 				maxf(BattleSim.edge_gap_in(su["positions"], su.get("radii", []),

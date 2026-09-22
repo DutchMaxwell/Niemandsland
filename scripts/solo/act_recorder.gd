@@ -414,6 +414,15 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# arm (fold on one side only) must run with NML_CORE unset — the GDScript path reads the
 			# knob per pick and is always seat-correct.
 			"hero_attach": BattleSim.hero_fold_enabled(),
+			# Wave 6 menu knobs for the Rust seam (plain.rs knobs_of reads both): the marker-holder /
+			# un-activated extra targets and the W1 ADVANCE+shoot leg. Off by default — every corpus
+			# recorded before this stamp replays byte-identical (an absent key reads OFF).
+			"menu_holders": AiPlanner._menu_holders_on(),
+			"menu_wide": AiPlanner.menu_wide_on(),
+			"menu_advance_k": AiPlanner.menu_advance_k_on(),
+			# Wave 6 (`rushk`): the rollout's greedy brain rushes the k nearest objectives.
+			# 1 by default, so every corpus recorded before this stamp replays byte-identical.
+			"playout_rush_k": AiPlanner.playout_rush_k_on(),
 			# NML-1129: the ENGAGE half of that same fold — whether THIS game's imagination
 			# measured a landed charge's engage gap over both sides' models INCLUDING attached
 			# heroes (BattleSim._engage_gap_in, battle_sim.gd:791), the way the table does

@@ -46,6 +46,59 @@ pub mod onnx;
 #[cfg(feature = "onnx-tract")]
 pub mod onnx_hook;
 
+/// The brain record of one ONNX-priced activation: `name` is always `onnx`,
+/// `hash` the model's hex SHA-256, `batches`/`batch_us` the tract runs the
+/// search consumed and their wall time.
+#[cfg(feature = "onnx-tract")]
+pub struct OnnxRun { pub name: String, pub hash: String, pub batches: u64, pub batch_us: u64 }
+
+/// `NML_BRAIN_ONNX=<path>` (+ optional `NML_BRAIN_ONNX_SHA256`): None when unset,
+/// `Err` with the loader's decline, else the brain with its hex SHA-256. Not
+/// developer-gated — this is the ship path.
+#[cfg(feature = "onnx-tract")]
+pub fn onnx_brain_from_env() -> Option<Result<(onnx::Brain, String), String>> {
+    let path = std::env::var("NML_BRAIN_ONNX").unwrap_or_default();
+    if path.is_empty() { return None; }
+    Some((|| {
+        let bytes = std::fs::read(&path).map_err(|e| format!("onnx: read {path}: {e}"))?;
+        let expected = std::env::var("NML_BRAIN_ONNX_SHA256").ok().filter(|s| !s.is_empty());
+        let brain = onnx::load(&bytes, expected.as_deref()).map_err(|u| format!("{u:?}"))?;
+        let sha = brain.sha256().to_string();
+        Ok((brain, sha))
+    })())
+}
+
+/// Leaf-value weight for the in-process brain: `NML_BRAIN_W` (default 1).
+#[cfg(feature = "onnx-tract")]
+fn onnx_weight() -> f64 {
+    std::env::var("NML_BRAIN_W").ok().and_then(|s| s.parse::<f64>().ok())
+        .filter(|w| w.is_finite() && *w > 0.0).unwrap_or(1.0)
+}
+
+/// `plan_with_rollout`'s ONNX leg without the marshalling: the same search as
+/// the default path, priced by `OnnxHook`. Declines `LeafValueBridge(NotConsumed)`
+/// when the search never asked the brain (a plan that ran no rollout leaf).
+#[cfg(feature = "onnx-tract")]
+#[allow(clippy::too_many_arguments)]
+pub fn plan_with_onnx(
+    state: &nml_core::state::State, terrain: &Terrain, statics: &[UnitStatic], knobs: &Knobs,
+    act: &ActStatics, player: i64, sig: Option<i64>, root: &str, brain: &onnx::Brain,
+) -> Result<(Pick, OnnxRun), nml_core::sim::Unsupported> {
+    let hook = onnx_hook::OnnxHook {
+        brain, statics, terrain,
+        rows: std::cell::RefCell::new(nml_core::rows::RowEncoder::new(root)),
+        hero_attach: knobs.hero_attach, opener_seat: act.opener_seat,
+    };
+    let before = (brain.batches(), brain.micros());
+    let pick = nml_core::plan::plan_with_leaf_value(state, terrain, statics, knobs, act, player, sig,
+        Some(&hook as &dyn nml_core::plan::LeafValue), onnx_weight())?;
+    if brain.batches() == before.0 {
+        return Err(nml_core::sim::Unsupported::LeafValueBridge("NotConsumed"));
+    }
+    Ok((pick, OnnxRun { name: "onnx".to_string(), hash: brain.sha256().to_string(),
+        batches: brain.batches() - before.0, batch_us: brain.micros() - before.1 }))
+}
+
 use plain::Captured;
 
 struct NmlCoreExtension;
@@ -111,6 +164,16 @@ pub struct NmlCore {
     dropped: Vec<String>,
     header: Option<GameHeader>,
     brain: Option<Result<brain::Client, String>>,
+    /// The in-process ONNX brain (`NML_BRAIN_ONNX`, feature `onnx-tract`): the ship
+    /// path. Loaded once per game in `set_game_header`; takes precedence over the
+    /// loopback HTTP brain in `plan_with_rollout`.
+    #[cfg(feature = "onnx-tract")]
+    onnx: Option<Result<(onnx::Brain, String), String>>,
+    /// The SHIPPED model: bytes the game hands over through `set_brain_onnx`
+    /// (read from the PCK with FileAccess — the extension cannot `std::fs` a
+    /// packed file). Used by `set_game_header` when no `NML_BRAIN_ONNX` is set.
+    #[cfg(feature = "onnx-tract")]
+    onnx_shipped: Option<(Vec<u8>, Option<String>)>,
 }
 
 #[godot_api]
@@ -294,6 +357,32 @@ impl NmlCore {
         }
     }
 
+    /// The SHIPPED leaf evaluator: the game reads the packed model with
+    /// FileAccess and hands the bytes over (an export has no file on disk).
+    /// Validates now — a bad file returns false with the loader's reason in
+    /// `last_error()` — and is used by every later `set_game_header` unless a
+    /// developer's `NML_BRAIN_ONNX` overrides it. `expected_sha256` may be "".
+    #[func]
+    fn set_brain_onnx(&mut self, bytes: PackedByteArray, expected_sha256: GString) -> bool {
+        self.last_error.clear();
+        #[cfg(feature = "onnx-tract")]
+        {
+            let sha = expected_sha256.to_string();
+            let sha = if sha.is_empty() { None } else { Some(sha) };
+            let raw = bytes.to_vec();
+            match onnx::load(&raw, sha.as_deref()) {
+                Ok(_) => { self.onnx_shipped = Some((raw, sha)); true }
+                Err(u) => { self.last_error = format!("onnx: {u:?}"); self.onnx_shipped = None; false }
+            }
+        }
+        #[cfg(not(feature = "onnx-tract"))]
+        {
+            let _ = (bytes, expected_sha256);
+            self.last_error = "onnx evaluator not compiled into this extension (feature onnx-tract)".to_string();
+            false
+        }
+    }
+
     /// NML-1073 M2-5 — the SEARCH seam, half one: the per-GAME closure.
     ///
     /// `header` is exactly the dictionary `AiActRecorder._header_line`
@@ -309,9 +398,67 @@ impl NmlCore {
             godot_print!("brain: {} {} at {}, w={}", client.identity["name"].as_str().unwrap(),
                 client.identity["hash"].as_str().unwrap(), client.url, client.weight);
         }
+        #[cfg(feature = "onnx-tract")]
+        {
+            // Precedence: the developer's NML_BRAIN_ONNX file, else the shipped bytes.
+            self.onnx = onnx_brain_from_env().or_else(|| {
+                self.onnx_shipped.as_ref().map(|(bytes, sha)| {
+                    onnx::load(bytes, sha.as_deref()).map_err(|u| format!("{u:?}"))
+                        .map(|b| { let s = b.sha256().to_string(); (b, s) })
+                })
+            });
+            // R5: the row encoder reads data/encoder_rule_vocab_v1.json from the root; a
+            // brain fed broken rows is worse than no brain, so decline it here, loudly.
+            if matches!(self.onnx, Some(Ok(_))) {
+                let root = self.root();
+                let vocab = nml_core::rows::RowVocab::for_version(&root, nml_core::rows::RULE_VOCAB_VERSION);
+                if !vocab.loaded {
+                    self.onnx = Some(Err(format!("row vocab at {root}: {}", vocab.error.unwrap_or_default())));
+                }
+            }
+            match &self.onnx {
+                Some(Ok((b, sha))) => godot_print!("brain: onnx {} rows={} width={} members={} batch={} w={}",
+                    sha, b.rows(), b.width(), b.members(), b.static_batch(), onnx_weight()),
+                Some(Err(e)) => godot_print!("brain: onnx declined: {e}"),
+                None => {}
+            }
+        }
         let profiles = plain::profiles_of_header(&plain::sub_dict(&header, "profiles"));
         if profiles.list.is_empty() {
             self.last_error = "game header carries no \"profiles\"".to_string();
+            return false;
+        }
+        // R5: an unreadable rules file yields an EMPTY map without an error (rules.rs
+        // rules_for) — in a packed export that is a rule-blind search wearing the core's
+        // name. Refuse the game instead; the caller's warn-once carries the reason.
+        let root = self.root();
+        let mut systems: Vec<String> = profiles.list.iter().map(|p| p.game_system.clone()).collect();
+        systems.sort();
+        systems.dedup();
+        if self.reg.is_none() {
+            self.reg = Some(Registries::new(&root));
+        }
+        // A file that could not be READ is named with its path; a file that read
+        // but parsed to nothing keeps the old "registry empty" wording.
+        let mut empty_system: Option<String> = None;
+        for s in &systems {
+            if self.reg.as_mut().unwrap().rules_for(s).empty && empty_system.is_none() {
+                empty_system = Some(s.clone());
+            }
+        }
+        // The spells file loads on the same call (spells_for caches per system,
+        // the faction is irrelevant): a missing spells file must be NAMED here,
+        // not worn as "that faction never casts".
+        for s in &systems {
+            let _ = self.reg.as_mut().unwrap().spells_for(s, "");
+        }
+        let missing = self.reg.as_ref().unwrap().missing_files().to_vec();
+        if !missing.is_empty() {
+            self.last_error = format!("rules files unreadable at {root}: {} — core declines the game", missing.join(", "));
+            return false;
+        }
+        if let Some(s) = empty_system {
+            self.last_error = format!("rules registry empty for system \"{s}\" at {root} — core declines the game");
             return false;
         }
         let terrain = match header.get("terrain").and_then(|v| v.try_to::<VarDictionary>().ok()) {
@@ -708,6 +855,22 @@ impl NmlCore {
         let act = act_statics_of(statics);
         let mut knobs = h.knobs;
         knobs.seam_path = knobs.seam_path || path_seam;
+        #[cfg(feature = "onnx-tract")]
+        if let Some(loaded) = self.onnx.as_ref() {
+            // ONNX precedence: the in-process brain answers the leaves; the HTTP
+            // brain (if any) is not consulted on this activation.
+            let (brain, _sha) = loaded.as_ref().map_err(Clone::clone)?;
+            let (pick, run) = plan_with_onnx(&cap.state, &h.terrain, &unit_statics, &knobs, &act,
+                player, Some(sig), &root, brain).map_err(|u| format!("{u:?}"))?;
+            let mut out = pick_out(&pick, &cap, sig);
+            let mut info = VarDictionary::new();
+            info.set("name", &GString::from(run.name.as_str()));
+            info.set("hash", &GString::from(run.hash.as_str()));
+            info.set("batches", run.batches as i64);
+            info.set("batch_us", run.batch_us as i64);
+            out.set("brain", &info);
+            return Ok(out);
+        }
         let client = self.brain.as_ref().map(Result::as_ref).transpose()?;
         let hook = client.map(|client| brain::Hook {
             client, statics: &unit_statics, terrain: &h.terrain,
