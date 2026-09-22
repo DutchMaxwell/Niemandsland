@@ -86,3 +86,34 @@ func test_modeled_list_covers_every_registry_name_with_a_primitive() -> void:
 		.override_failure_message("%d registry names with a primitive are not in the modeled list, e.g. %s" % [
 			missing.size(), missing.slice(0, 12)]) \
 		.is_empty()
+
+
+# === Fix 2: an Army Forge ITEM is not a rule ===
+
+## The Guardians of the bundled tutorial board carry the item "Jetpacks (Ambush, Flying, Swift)": the
+## import keeps the item NAME in special_rules next to the rules it grants, and maps it in
+## unit_properties.item_grants. The note said "Jetpacks is not automated" although all three
+## granted rules resolve.
+func test_item_name_jetpacks_gets_no_manual_note() -> void:
+	var board: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/tutorial/tutorial_board.nml"))
+	var props: Dictionary = {}
+	for gu in (board as Dictionary)["game_units"]:
+		var p: Dictionary = (gu as Dictionary).get("unit_properties", {})
+		if (p.get("item_grants", {}) as Dictionary).has("Jetpacks"):
+			props = p
+	assert_bool(props.is_empty()).override_failure_message("fixture drift: no Jetpacks unit on the tutorial board").is_false()
+	assert_array(props["special_rules"]).contains(["Jetpacks"])
+	var u := GameUnit.new()
+	u.unit_properties = props.duplicate(true)
+	_main._solo_log_unmodeled_rules(u)
+	assert_array(_noted_rules()) \
+		.override_failure_message("an item name reached the manual note: %s" % [_noted_rules()]) \
+		.not_contains(["Jetpacks"])
+
+
+## The item is replaced by what it grants: a granted rule the table does NOT resolve is still named —
+## by its own name, never by the item container.
+func test_an_item_surfaces_its_unresolved_granted_rule_not_its_name() -> void:
+	_main._solo_log_unmodeled_rules(_unit("gf", "robot_legions", ["Made-Up Kit"], {"Made-Up Kit": ["Made-Up Rule"]}))
+	assert_array(_noted_rules()).contains(["Made-Up Rule"])
+	assert_array(_noted_rules()).not_contains(["Made-Up Kit"])
