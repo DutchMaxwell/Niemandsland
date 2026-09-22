@@ -28,7 +28,8 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 	var count := int(size.x*size.y*26000*_density())
 	for i in count:
 		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
-		var hero := point.x<0.1 and point.y>0.06
+		# The reference review camera's "hero" corner; the game table has no fixed camera (uniform 18 %).
+		var hero := not _table_tier() and point.x<0.1 and point.y>0.06
 		if not hero and _rng.randf()>0.18:
 			continue
 		var forest := _forest_amount(point)
@@ -480,6 +481,8 @@ func _litter_mesh() -> ArrayMesh:
 
 ## A shared winding wear mask also drives the ground material. It is visual only.
 func _path_amount(p: Vector2) -> float:
+	if _table_tier():
+		return 0.0   # the tutorial board's worn path does not belong on a player's table (D2)
 	var center := -0.60+sin(p.y*8.0+0.4)*0.085
 	var width: float = 0.020+_presentation._surface_noise(p*38.0)*0.020
 	return (1.0-smoothstep(width,width+0.030,abs(p.x-center)))*smoothstep(0.02,0.15,p.y)

@@ -147,6 +147,9 @@ func rebuild() -> void:
 			var surface := _surface()
 			_applied_mesh = surface.mesh
 			_applied_material = surface.material_override
+			# The floor needs no shadow of its own; with relief its vertex shader (wall loop included) ran
+			# again in every shadow cascade.
+			surface.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			print("TABLE_BIOME built %s (table %s, %s ft)" % [presentation.biome, _table.biome, str(_table.table_size)])
 			presentation_built.emit(str(presentation.biome))
 	_building = false
@@ -181,6 +184,7 @@ func _snapshot() -> void:
 	_saved.clear()
 	var surface := _surface()
 	_saved["mesh"] = surface.mesh
+	_saved["cast_shadow"] = surface.cast_shadow
 	_saved["grass_visible"] = _table.get_node("GrassField").visible
 	_saved["base_shader"] = _table.get_base_top_material().shader
 	var frames := {}
@@ -214,6 +218,7 @@ func _restore() -> void:
 		surface.mesh = _saved["mesh"]
 	if surface.material_override == _applied_material:
 		surface.material_override = _table._build_ground_material()
+	surface.cast_shadow = _saved.get("cast_shadow", GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
 	_table.get_node("GrassField").visible = bool(_saved.get("grass_visible", true))
 	var base: ShaderMaterial = _table.get_base_top_material()
 	base.shader = _saved["base_shader"]

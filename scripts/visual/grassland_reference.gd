@@ -34,6 +34,8 @@ var biome := "grassland"
 var table_tier := false
 ## Scatter density multiplier (table tier: quality preset x area cap). 1.0 = the reference density.
 var density_scale := 1.0
+## Table tier: edge length of the relief cells of the table plane.
+const TABLE_RELIEF_CELL_M := 0.012
 var _profile: Dictionary = {}
 const Biomes = preload("res://scripts/visual/reference_biomes.gd")
 const DOF_MAX_AMOUNT := 0.045
@@ -79,6 +81,13 @@ func apply(main: Node) -> void:
 	var plane: PlaneMesh = surface.mesh.duplicate()
 	plane.subdivide_width = 450
 	plane.subdivide_depth = 300
+	if table_tier:
+		# Relief cells follow the table size (the reference's 450x300 is ~4 mm on 6x4 ft only). The relief's
+		# shortest wavelength is ~13 cm, so TABLE_RELIEF_CELL_M still samples it finely; 4 mm cells were
+		# 3-6 px triangles at play zoom, shaded several times per pixel under MSAA. Capped for 240 in tables.
+		var size_m: Vector2 = table.table_size * 0.3048
+		plane.subdivide_width = clampi(int(size_m.x / TABLE_RELIEF_CELL_M), 16, 400)
+		plane.subdivide_depth = clampi(int(size_m.y / TABLE_RELIEF_CELL_M), 16, 400)
 	surface.mesh = plane
 	_ground.set_shader_parameter("surface_relief",true)
 	surface.material_override = _ground
