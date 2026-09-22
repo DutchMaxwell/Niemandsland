@@ -169,6 +169,11 @@ pub struct NmlCore {
     /// loopback HTTP brain in `plan_with_rollout`.
     #[cfg(feature = "onnx-tract")]
     onnx: Option<Result<(onnx::Brain, String), String>>,
+    /// The SHIPPED model: bytes the game hands over through `set_brain_onnx`
+    /// (read from the PCK with FileAccess — the extension cannot `std::fs` a
+    /// packed file). Used by `set_game_header` when no `NML_BRAIN_ONNX` is set.
+    #[cfg(feature = "onnx-tract")]
+    onnx_shipped: Option<(Vec<u8>, Option<String>)>,
 }
 
 #[godot_api]
@@ -352,6 +357,32 @@ impl NmlCore {
         }
     }
 
+    /// The SHIPPED leaf evaluator: the game reads the packed model with
+    /// FileAccess and hands the bytes over (an export has no file on disk).
+    /// Validates now — a bad file returns false with the loader's reason in
+    /// `last_error()` — and is used by every later `set_game_header` unless a
+    /// developer's `NML_BRAIN_ONNX` overrides it. `expected_sha256` may be "".
+    #[func]
+    fn set_brain_onnx(&mut self, bytes: PackedByteArray, expected_sha256: GString) -> bool {
+        self.last_error.clear();
+        #[cfg(feature = "onnx-tract")]
+        {
+            let sha = expected_sha256.to_string();
+            let sha = if sha.is_empty() { None } else { Some(sha) };
+            let raw = bytes.to_vec();
+            match onnx::load(&raw, sha.as_deref()) {
+                Ok(_) => { self.onnx_shipped = Some((raw, sha)); true }
+                Err(u) => { self.last_error = format!("onnx: {u:?}"); self.onnx_shipped = None; false }
+            }
+        }
+        #[cfg(not(feature = "onnx-tract"))]
+        {
+            let _ = (bytes, expected_sha256);
+            self.last_error = "onnx evaluator not compiled into this extension (feature onnx-tract)".to_string();
+            false
+        }
+    }
+
     /// NML-1073 M2-5 — the SEARCH seam, half one: the per-GAME closure.
     ///
     /// `header` is exactly the dictionary `AiActRecorder._header_line`
@@ -369,7 +400,22 @@ impl NmlCore {
         }
         #[cfg(feature = "onnx-tract")]
         {
-            self.onnx = onnx_brain_from_env();
+            // Precedence: the developer's NML_BRAIN_ONNX file, else the shipped bytes.
+            self.onnx = onnx_brain_from_env().or_else(|| {
+                self.onnx_shipped.as_ref().map(|(bytes, sha)| {
+                    onnx::load(bytes, sha.as_deref()).map_err(|u| format!("{u:?}"))
+                        .map(|b| { let s = b.sha256().to_string(); (b, s) })
+                })
+            });
+            // R5: the row encoder reads data/encoder_rule_vocab_v1.json from the root; a
+            // brain fed broken rows is worse than no brain, so decline it here, loudly.
+            if matches!(self.onnx, Some(Ok(_))) {
+                let root = self.root();
+                let vocab = nml_core::rows::RowVocab::for_version(&root, nml_core::rows::RULE_VOCAB_VERSION);
+                if !vocab.loaded {
+                    self.onnx = Some(Err(format!("row vocab at {root}: {}", vocab.error.unwrap_or_default())));
+                }
+            }
             match &self.onnx {
                 Some(Ok((b, sha))) => godot_print!("brain: onnx {} rows={} width={} members={} batch={} w={}",
                     sha, b.rows(), b.width(), b.members(), b.static_batch(), onnx_weight()),
@@ -381,6 +427,22 @@ impl NmlCore {
         if profiles.list.is_empty() {
             self.last_error = "game header carries no \"profiles\"".to_string();
             return false;
+        }
+        // R5: an unreadable rules file yields an EMPTY map without an error (rules.rs
+        // rules_for) — in a packed export that is a rule-blind search wearing the core's
+        // name. Refuse the game instead; the caller's warn-once carries the reason.
+        let root = self.root();
+        let mut systems: Vec<String> = profiles.list.iter().map(|p| p.game_system.clone()).collect();
+        systems.sort();
+        systems.dedup();
+        if self.reg.is_none() {
+            self.reg = Some(Registries::new(&root));
+        }
+        for s in &systems {
+            if self.reg.as_mut().unwrap().rules_for(s).empty {
+                self.last_error = format!("rules registry empty for system \"{s}\" at {root} — core declines the game");
+                return false;
+            }
         }
         let terrain = match header.get("terrain").and_then(|v| v.try_to::<VarDictionary>().ok()) {
             Some(t) => Terrain::build(&plain::terrain_of(&t)),
