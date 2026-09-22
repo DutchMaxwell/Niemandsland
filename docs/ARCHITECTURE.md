@@ -18,10 +18,11 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 
 ## Scenes
 
-- `startup_menu.tscn` — main scene; menu + `cinematic_intro.gd` animation.
+- `startup_menu.tscn` — main scene; menu over a live battlefield diorama (`menu_diorama.gd`).
+  `cinematic_intro.gd` is the table's opening flight, started by `main.gd`.
 - `main.tscn` — the game table; instantiates the subsystems below.
-- Dialog/overlay scenes: `map_layout`, `radial_menu`, `opr_stats_tooltip`,
-  `unit_card`, and the import/wounds/marker/casts dialogs.
+- Dialog/overlay scenes: `map_layout`, `radial_menu`, `opr_stats_tooltip`; the
+  import/wounds/marker/casts dialogs are code-built (`*_dialog.gd`).
 
 ## Subsystems (scripts/)
 
@@ -38,7 +39,7 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 - `table.gd` — table dimensions and collision.
 - `selectable_object.gd` — per-object selection behaviour.
 
-**Measurement & display aids** (local, display-only)
+**Measurement & display aids** (display-only; pinned rulers are shared)
 - `volumetric_los.gd` (`VolumetricLos`) — the single line-of-sight truth: every model is a
   cylinder off the official base-size table, every terrain piece is a real 3D volume, and a sight
   query is one 3D eye-to-eye segment. Pure/static, no scene/mesh/physics dependency; shared by the
@@ -60,8 +61,8 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 - `coherency_visualizer.gd` — flat on-table chain/ring/distance lines (matches the
   measure tool).
 - `unit_boundary_visualizer.gd` — convex-hull boundary for multi-model units; token rail.
-- `unit_marker.gd` / `unit_card.gd` — status tokens (F/S/A, wounds, caster) and the
-  docked info card.
+- `unit_marker.gd` / `unit_dock.gd` — status tokens (F/S/A, wounds, caster) and the
+  bottom-edge unit-card dock (`unit_card.gd` is retired, kept for its unit test).
 - `radial_menu.gd` / `radial_menu_controller.gd` — context pie-menu. The controller
   owns the unit-boundary token engine (Fatigued/Shaken/Activated/WoundMarker tokens
   placed on the `UnitBoundaryVisualizer` contour) and a regiment-specific menu
@@ -92,7 +93,7 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
   (BC7) texture resolution + the `_ctex_block_usable` forward-compat guard.
 - `opr_army_manager.gd` — spawns imported armies onto a per-player **army tray**; loads
   per-unit GLBs and **scales them to the base** (height-fit vs 125 % footprint cap,
-  whichever is smaller; Flying units hover). See [Scaling](#scaling). The tray's near
+  whichever is smaller; Aircraft sit on a flight stand). See [Scaling](#scaling). The tray's near
   third is an **Ambush/Scout staging band**: split left/right with a divider + flat
   labels, and units carrying Scout/Ambush auto-place into their half. Owns the
   `regiments` dictionary and the regiment handling: `form_regiment` /
@@ -101,7 +102,7 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
   (pooled-tough counter, AoF:R p.9), and `toggle_selected_regiment_arcs` (F key).
 - `opr_import_dialog.gd` — import UI.
 - `tts_download_manager.gd` — Tabletop Simulator asset download + cache manager
-  (Steam CDN + local cache; glTF/STL/OBJ); also the template for the on-demand
+  (Steam CDN + local cache; OBJ meshes + PNG/JPG textures); also the template for the on-demand
   R2 delivery pattern.
 
 > **On-demand delivery (live):** miniature GLBs are downloaded + cached via `asset_cdn.gd` /
@@ -112,16 +113,18 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 
 **Solo AI (`scripts/solo/`)**
 
-The solo opponent (**NACHTMAHR**) is a self-contained, rule-based, deterministic engine — no
-machine learning, no network, same inputs → same decisions. It runs only in a solo game; a
+The solo opponent (**NACHTMAHR**) is a self-contained engine (no network). Its GDScript path below
+is rule-based and deterministic; a release build with the Rust core plays it through the core's
+search planner with a trained neural network (value net) as leaf evaluator — see
+[Rust rules core](#rust-rules-core-optional). It runs only in a solo game; a
 human-vs-human table never touches it. Written from scratch against OPR's official Solo & Co-Op
 ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and **not** revived).
 - `solo_controller.gd` (`SoloController`) — the orchestrator wired into `main.gd`: the **AI
   Opponent** flow, the click-guided deployment (roll-off → edge → alternating placement → scout
   band → reserves), per-unit activation (`activate_next_ai_unit`), shooting / melee / morale /
   consolidation, casting, and objective scoring.
-- `turn_manager.gd` (`TurnManager`) — round + alternating-activation state machine and end-of-round
-  objective scoring / victory check.
+- `turn_manager.gd` (`TurnManager`) — round + alternating-activation state machine (end-of-round
+  objective scoring and the game end run in `main.gd` `_solo_end_round`).
 - `ai_decision.gd` / `ai_round_planner.gd` / `ai_position.gd` / `ai_targeting.gd` /
   `ai_shooting.gd` / `ai_spell.gd` / `ai_combat_math.gd` / `ai_ev.gd` / `ai_archetype.gd` — the
   decision brain: round plan + look-ahead activation ordering, positioning, target and
@@ -139,7 +142,7 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
 - `sight_fan.gd` (`SightFan`) — per-model, base-edge line-of-sight + weapon-range geometry (also
   the source for the `F`-key sight fan, presented by `sight_fan_controller.gd`); sight resolves
   through `VolumetricLos`.
-- `transport_state.gd` (`TransportState`) — embark / capacity / disembark-formation / destruction-
+- `transport_state.gd` (`TransportState`, in `scripts/`) — embark / capacity / disembark-formation / destruction-
   spill state (see [Save format](#save-format-nml)).
 - `solo_difficulty.gd` (`SoloDifficulty`) — the single shipped grade (full strength); every legacy
   grade name resolves to it. `solo_sim.gd` (`SoloSim`) is the headless self-play harness that runs
@@ -173,7 +176,7 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
 - `atmosphere_controller.gd` / `rain_effect.gd` / `fire_prop.gd` / `war_ambience.gd` /
   `ambience_synth.gd` / `ambience_library.gd` — one-click weather/mood, rain + lightning,
   war-torn fires and CC0 battlefield ambience (see [`ATMOSPHERE.md`](ATMOSPHERE.md)).
-- `glassmorphism_theme.gd` + `hud/` (`hud_frame`, `hud_tokens`, `segmented_meter`,
+- `glassmorphism_theme.gd` + `hud/` (`hud_frame`, `hud_tokens`,
   `state_panel`, `ui_motion`) — the Tactical-HUD UI language and overlay.
 - `grass_field.gd`, `atmospheric_clouds.gd`, `cinematic_intro.gd`, `model_info_popup.gd`,
   `opr_stats_tooltip.gd`, `selection_spill_light.gd`.
@@ -190,7 +193,8 @@ runs the search planner with the packed ONNX leaf evaluator (`assets/solo/brains
 handed to `NmlCore.set_brain_onnx`) when the extension and the model load, and movement planning goes
 through the core's planner (`NML_CORE_MOVE=0` opts out). Without the built library, with a refused
 model, or with the switch off, the GDScript engine runs unchanged and the game log says which path is
-live (`opponent: erlkoenig … move=core` / `opponent: tree — …`). The core reads its rule files and the
+live (`opponent: erlkoenig … move=core` / `opponent: tree — …`). macOS release builds carry no
+core library, so they always run the GDScript engine. The core reads its rule files and the
 model from a staged copy under `user://nml_core/<version>/` (`CoreAssets`), because a packed export has
 no files on disk. See [`DEV_BRAIN_BRIDGE.md`](DEV_BRAIN_BRIDGE.md) for the developer-only loopback
 evaluator, which still exists for experiments.
@@ -224,8 +228,8 @@ The newest slot is offered by CONTINUE / the load dialog and announced by toast 
   table size, wounds/markers/activation) with batched updates. Regiment-specific
   sync: `broadcast_regiment_frontage` / `sync_regiment_frontage` (frontage cycle)
   and `broadcast_regiment_wounds` / `sync_regiment_wounds` (pooled-tough counter).
-- `relay_multiplayer_peer.gd` — custom `MultiplayerPeer` that tunnels ENet over a
-  WebSocket relay for internet play.
+- `relay_multiplayer_peer.gd` — custom `MultiplayerPeer` that carries the game's RPC traffic
+  over a WebSocket relay for internet play.
 - `relay/` — standalone Python WebSocket relay server (Fly.io deployable); see
   [`relay/README.md`](../relay/README.md).
 - `internet_lobby.gd`, `player_avatar.gd`, `remote_cursor.gd` — lobby + presence.
@@ -251,10 +255,11 @@ Godot's default physics. Table dice are display-only.
 1 unit = 1 m. API/rules in inches, world in metres, bases in mm
 (`INCHES_TO_METERS = 0.0254`, `MM_TO_METERS = 0.001`). Imported GLBs are scaled in
 `opr_army_manager._compute_model_fit()`: target height ≈ base size (mildly larger for
-Tough), but the horizontal footprint is capped at 125 % of the base's long side
-(`FOOTPRINT_MAX_RATIO`); the smaller factor wins, so slim infantry stay height-driven
-while wide vehicles are footprint-capped. Flying units hover (`AIRCRAFT_HOVER_M`), and an
-aircraft stands on its flight stand rather than floating.
+Tough), but on a round base the horizontal footprint is capped at 125 % of the base's long side
+(`FOOTPRINT_MAX_RATIO`; oval/rectangular bases fit within both axes, `OVAL_FOOTPRINT_RATIO`);
+the smaller factor wins, so slim infantry stay height-driven
+while wide vehicles are footprint-capped. Aircraft sit on a fixed flight stand
+(`AIRCRAFT_HOVER_M`); Flying models stand on their base.
 
 ## Miniatures — mounts & riders
 
@@ -290,5 +295,5 @@ GPU, recent log files) and scrubs room codes, file paths and player names before
 
 ## Tests
 
-gdUnit4 suites in `test/`; Python tests in `relay/` and in `core/nml-core-py/tests/python/` (78 pytest files, run by CI: `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900`); the Rust workspace tests run in `.github/workflows/rust.yml`.
+gdUnit4 suites in `test/`; Python tests in `relay/` and in `core/nml-core-py/tests/python/` (88 pytest files, run by CI: `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900`); the Rust workspace tests run in `.github/workflows/rust.yml`.
 Runner commands in [`DEVELOPMENT.md`](DEVELOPMENT.md).
