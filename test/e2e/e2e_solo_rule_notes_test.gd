@@ -119,6 +119,49 @@ func test_an_item_surfaces_its_unresolved_granted_rule_not_its_name() -> void:
 	assert_array(_noted_rules()).not_contains(["Made-Up Kit"])
 
 
+# === Fix 4: the spell note only for spells the table cannot apply ===
+
+const SPELL_NOTE_HEAD := "Note: spell effects other than damage are not auto-applied"
+
+
+func _spell_notes() -> Array:
+	var out: Array = []
+	for e in _main.battle_log.entries():
+		var t := str((e as Dictionary)["text"])
+		if t.begins_with(SPELL_NOTE_HEAD):
+			out.append(t.get_slice(char(34), 1))
+	return out
+
+
+## The committed GF spell data of one spell (human_defense_force carries Calculated Foresight).
+static func _spell_effect(faction: String, spell_name: String) -> Dictionary:
+	var m: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/solo/spells_mechanics_gf.json"))
+	for s in ((m as Dictionary)["factions"][faction] as Dictionary)["spells"]:
+		if str((s as Dictionary).get("name", "")) == spell_name:
+			return (s as Dictionary)["effect"]
+	return {}
+
+
+## Calculated Foresight grants Relentless (a mechanical record the attack sites read), yet the log
+## told the player to apply it by hand — the note tested the token library, which
+## _solo_place_spell_tokens fills on the fly right after the note.
+func test_a_spell_that_grants_a_rule_gets_no_manual_note() -> void:
+	var effect := _spell_effect("human_defense_force", "Calculated Foresight")
+	assert_str(str(effect.get("grants_rule", ""))).override_failure_message("fixture drift: %s" % [effect]).is_equal("Relentless")
+	_main._solo_announce_spell_effect(_unit("gf", "human_defense_force", []), "Calculated Foresight", effect,
+		[_unit("gf", "orc_marauders", [])])
+	assert_array(_spell_notes()) \
+		.override_failure_message("the table applies Calculated Foresight, yet the log says 'apply manually'") \
+		.not_contains(["Calculated Foresight"])
+
+
+## The control: a spell with neither a modifier nor a granted rule is still named for manual play.
+func test_a_spell_without_mechanical_data_keeps_the_manual_note() -> void:
+	_main._solo_announce_spell_effect(_unit("gf", "human_defense_force", []), "Made-Up Hex", {"kind": "buff"},
+		[_unit("gf", "orc_marauders", [])])
+	assert_array(_spell_notes()).contains(["Made-Up Hex"])
+
+
 # === Fix 3: exact names, never a prefix (NML-1112) ===
 
 ## "Fearsome Made-Up Rule" is no rule of any book, but it STARTS with the modeled token "Fear": a
