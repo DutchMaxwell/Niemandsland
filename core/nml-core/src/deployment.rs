@@ -620,6 +620,15 @@ impl Rect {
             (self.pos.1 as f32 + self.size.1 as f32) as f64,
         )
     }
+    /// `Rect2.has_point` — left/top INCLUSIVE, right/bottom EXCLUSIVE, every
+    /// comparison at real_t (f32, Godot's Rect2 law).
+    pub fn has_point(&self, p: (f64, f64)) -> bool {
+        let end = self.end();
+        (p.0 as f32) >= (self.pos.0 as f32)
+            && (p.0 as f32) < (end.0 as f32)
+            && (p.1 as f32) >= (self.pos.1 as f32)
+            && (p.1 as f32) < (end.1 as f32)
+    }
     /// `Rect2.get_center` — position + size/2 (f32).
     pub fn centre(&self) -> (f64, f64) {
         (
@@ -1761,6 +1770,10 @@ pub struct SettleUnit {
     /// The unit's Strider/Flying law (:9246 picks the coherency repair's
     /// blocked variant from it) — `UnitSpec.ignores_terrain`'s predicate.
     pub flying: bool,
+    /// The unit's deploy footprint — the reform's per-model grid offsets
+    /// (`_deploy_footprint_offsets`) the post-repair boxed re-check consumes
+    /// (DEPLOYCOH). Empty for a single-model unit.
+    pub footprint: Vec<(f64, f64)>,
 }
 
 /// A base for the settle math: f32 centre (Vector2), f64 extents (the
@@ -2230,6 +2243,7 @@ pub fn settle_units(specs: &[UnitSpec], sd: &SideDeploy, zone: &Rect) -> Vec<(us
                     geoms,
                     zone: if s.scout { scout_extended_zone(zone, forward_y) } else { *zone },
                     flying: s.ignores_terrain,
+                    footprint: s.footprint.clone(),
                 },
             )
         })
@@ -2342,6 +2356,14 @@ fn deploy_spot_free(cand: (f32, f32), r: f64, moving: usize, all: &[([f32; 2], f
 /// callable (:9341 — no disc sampling here, unlike the ladder): walls at
 /// 0.02 m, cells by the unit's Strider/Flying variant, props. The Vector3
 /// ctor narrows the f64 candidate (centre f32 widened, cos·ring f64).
+///
+/// Brief DEPLOYCOH (:9982-9988, the static switch `repair_in_zone` mirrored
+/// UNGATED): the zone + table-edge gate runs BEFORE the require_free gates —
+/// in FORCED mode too (overlap is the one allowance, never off-zone or
+/// off-table); `zone = None` skips the ZONE rule, never the table rule. With
+/// a finite `forward_y` the walk returns the candidate NEAREST the forward
+/// edge instead of the first legal one (the boxed re-check's second attempt
+/// bias); INFINITY keeps the first-candidate law.
 #[allow(clippy::too_many_arguments)]
 fn deploy_ring_spot(
     geoms: &[SettleShapeGeom],
@@ -2354,6 +2376,9 @@ fn deploy_ring_spot(
     all: &[([f32; 2], f64)],
     moving: usize,
     require_free: bool,
+    zone: Option<&Rect>,
+    zone_base_r: f64,
+    forward_y: f64,
 ) -> Option<(f32, f32)> {
     let r_i = geoms[idx].bounding_radius();
     let straggler = pts[idx];
@@ -2361,6 +2386,15 @@ fn deploy_ring_spot(
         let (dx, dy) = (straggler[0] - pts[j][0], straggler[1] - pts[j][1]);
         (dx * dx + dy * dy).sqrt()
     };
+    // The table-edge gate's half extents — the table's own read
+    // (`_table_half_extents`, a 4x4 ft default), the margin `base_r + 1"`.
+    let [bw_in, bd_in] = board.board_in();
+    let (hx, hy) = (
+        (if bw_in > 0.0 { bw_in } else { 48.0 }) * crate::IN2M * 0.5,
+        (if bd_in > 0.0 { bd_in } else { 48.0 }) * crate::IN2M * 0.5,
+    );
+    let edge_margin = zone_base_r + crate::IN2M;
+    let (mut best, mut best_fwd) = (None::<(f32, f32)>, f64::INFINITY);
     let mut order: Vec<usize> = comp.to_vec();
     order.sort_by(|&a, &b| key(a).partial_cmp(&key(b)).unwrap());
     for &j in &order {
@@ -2374,11 +2408,23 @@ fn deploy_ring_spot(
                     (centre[0] as f64 + ang.cos() * ring) as f32,
                     (centre[1] as f64 + ang.sin() * ring) as f32,
                 );
+                // Zone + table-edge gate (DEPLOYCOH, `_repair_spot_in_zone`
+                // :10007-10015): inside the unit's recorded zone (Rect2
+                // has_point) and at least base_r + 1" off every table edge —
+                // in FORCED mode too.
+                let p64 = (cand.0 as f64, cand.1 as f64);
+                if let Some(zr) = zone {
+                    if !zr.has_point(p64) {
+                        continue;
+                    }
+                }
+                if p64.0.abs() > hx - edge_margin || p64.1.abs() > hy - edge_margin {
+                    continue;
+                }
                 if require_free {
                     // the single-point callable takes the f32 candidate (the
                     // Vector2 ctor adds no narrowing — widened for the f64
                     // helpers without drift)
-                    let p64 = (cand.0 as f64, cand.1 as f64);
                     if wall_blocked(board, p64)
                         || cell_blocked(board, p64, flying)
                         || prop_blocked(board, p64)
@@ -2389,11 +2435,19 @@ fn deploy_ring_spot(
                         continue;
                     }
                 }
+                if forward_y != f64::INFINITY {
+                    let fwd = (cand.1 as f64 - forward_y).abs();
+                    if fwd < best_fwd {
+                        best_fwd = fwd;
+                        best = Some(cand);
+                    }
+                    continue;
+                }
                 return Some(cand);
             }
         }
     }
-    None
+    best
 }
 
 /// `_largest_link_component_world` (:6529-6552): the largest 1"-edge-link
@@ -2489,6 +2543,13 @@ pub fn repair_deploy_coherency(
     let mut forced_any = false;
     for ui in 0..units.len() {
         let flying = units[ui].flying;
+        // The repair's base radius — the table's `_deploy_base_radius` over
+        // the unit's own models (:10263): the largest bounding radius floored
+        // at 0.016. Drives the zone/table-edge gate margin and the boxed
+        // re-check (DEPLOYCOH).
+        let zone_base_r =
+            units[ui].geoms.iter().map(|g| g.bounding_radius()).fold(0.016f64, f64::max);
+        let mut unit_moved = false;
         for _pass in 0..8 {
             let n = units[ui].models.len();
             if n <= 1 {
@@ -2511,8 +2572,8 @@ pub fn repair_deploy_coherency(
             }
             let prefix: usize = units[..ui].iter().map(|u| u.models.len()).sum();
             let mut moved_one = false;
-            for i in 0..n {
-                if in_comp[i] {
+            for (i, &linked) in in_comp.iter().enumerate() {
+                if linked {
                     continue;
                 }
                 let all: Vec<([f32; 2], f64)> = units
@@ -2528,13 +2589,14 @@ pub fn repair_deploy_coherency(
                 let moving = prefix + i;
                 let mut spot = deploy_ring_spot(
                     &units[ui].geoms, &pts, &comp, i, board, walls, flying, &all, moving, true,
+                    Some(&units[ui].zone), zone_base_r, f64::INFINITY,
                 );
                 if spot.is_none() {
                     // packed zone — FORCE contact beside the group (:9262-9266);
                     // forced_any only on SUCCESS (:9265-9266)
                     spot = deploy_ring_spot(
                         &units[ui].geoms, &pts, &comp, i, board, walls, flying, &all, moving,
-                        false,
+                        false, Some(&units[ui].zone), zone_base_r, f64::INFINITY,
                     );
                     if spot.is_some() {
                         forced_any = true;
@@ -2578,7 +2640,8 @@ pub fn repair_deploy_coherency(
                         .collect();
                     if let Some(s2) = deploy_ring_spot(
                         &units[ui].geoms, &pts, &[near_j], far_i, board, walls, flying, &all,
-                        prefix + far_i, false,
+                        prefix + far_i, false, Some(&units[ui].zone), zone_base_r,
+                        f64::INFINITY,
                     ) {
                         units[ui].models[far_i] = [s2.0, s2.1];
                         moved_one = true;
@@ -2589,12 +2652,94 @@ pub fn repair_deploy_coherency(
             if moved_one {
                 // _broadcast_positions + the deploy decision records are
                 // harness cosmetics — no positions (:9297-9302).
+                unit_moved = true;
             } else {
                 break; // FAILED record + avoid spinning (:9303-9311)
             }
         }
+        if unit_moved {
+            // Brief DEPLOYCOH (:9939-9950): a repair may push the unit's own
+            // footprint AGAINST a table-edge wall — re-check the boxed verdict
+            // on the unit's NEW centroid; boxed -> ONE more straggler pass
+            // biased toward the zone's forward edge. Two attempts, then stop.
+            let cen = anchor_of(&units[ui].models);
+            if footprint_boxed(
+                (cen[0] as f64, cen[1] as f64),
+                &units[ui].footprint,
+                zone_base_r,
+                walls,
+            ) {
+                let end = units[ui].zone.end();
+                let fwd_y = if units[ui].zone.pos.1.abs() < end.1.abs() {
+                    units[ui].zone.pos.1
+                } else {
+                    end.1
+                };
+                repair_once_toward_forward(units, ui, board, walls, tray, zone_base_r, fwd_y);
+            }
+        }
     }
     forced_any
+}
+
+/// `_repair_once_toward_forward` (:10018-10055, brief DEPLOYCOH): the boxed
+/// re-check's second repair attempt — the FIRST repair drove the unit's own
+/// footprint against a table-edge wall, so ONE more straggler pass, biased
+/// toward the zone's forward edge, pulls the unit's centre back into free
+/// space. Bounded: a single pass, free spots only (`require_free = true`).
+#[allow(clippy::too_many_arguments)]
+fn repair_once_toward_forward(
+    units: &mut [SettleUnit],
+    ui: usize,
+    board: &Terrain,
+    walls: &[WallSeg],
+    tray: &[([f32; 2], f64)],
+    zone_base_r: f64,
+    forward_y: f64,
+) {
+    if units[ui].models.len() <= 1 {
+        return;
+    }
+    let flying = units[ui].flying;
+    let n = units[ui].models.len();
+    let shapes: Vec<SettleShape> = units[ui]
+        .models
+        .iter()
+        .zip(&units[ui].geoms)
+        .map(|(m, g)| g.settle_shape(*m))
+        .collect();
+    if config_coherent(&shapes, COHERENCY_CHAIN_IN) {
+        return;
+    }
+    let pts: Vec<[f32; 2]> = units[ui].models.clone();
+    let comp = largest_link_component(&shapes);
+    let mut in_comp = vec![false; n];
+    for &c in &comp {
+        in_comp[c] = true;
+    }
+    let prefix: usize = units[..ui].iter().map(|u| u.models.len()).sum();
+    for (i, &linked) in in_comp.iter().enumerate() {
+        if linked {
+            continue;
+        }
+        let all: Vec<([f32; 2], f64)> = units
+            .iter()
+            .flat_map(|u| {
+                u.models
+                    .iter()
+                    .zip(&u.geoms)
+                    .map(move |(m, g)| (*m, g.bounding_radius()))
+            })
+            .chain(tray.iter().copied())
+            .collect();
+        let moving = prefix + i;
+        if let Some(s) = deploy_ring_spot(
+            &units[ui].geoms, &pts, &comp, i, board, walls, flying, &all, moving, true,
+            Some(&units[ui].zone), zone_base_r, forward_y,
+        ) {
+            units[ui].models[i] = [s.0, s.1];
+        }
+    }
 }
 
 // ---- the AMBUSH ARRIVAL (SPEC ambush arrival S3 + S5).
