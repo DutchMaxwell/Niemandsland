@@ -344,6 +344,10 @@ pub struct Registries {
     /// (system, faction) -> BOOK-ORDERED spell list (spells_registry.gd:13-14:
     /// the committed order IS rule data, never sort it).
     spells: HashMap<String, HashMap<String, Vec<Spell>>>,
+    /// Mechanics files that could not be READ — absent or unreadable — as
+    /// `path.display()`, in first-failure order, once per path (a cached
+    /// system never re-reads, so it never re-pushes).
+    missing: Vec<String>,
 }
 
 impl Registries {
@@ -360,10 +364,11 @@ impl Registries {
             let path = Path::new(&self.root)
                 .join("assets/solo")
                 .join(format!("rules_mechanics_{s}.json"));
-            let map = match std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            {
+            let text = std::fs::read_to_string(&path);
+            if text.is_err() {
+                self.missing.push(path.display().to_string());
+            }
+            let map = match text.ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
                 Some(v) => {
                     let mut factions = HashMap::new();
                     if let Some(obj) = v.get("factions").and_then(|f| f.as_object()) {
@@ -395,11 +400,12 @@ impl Registries {
             let path = Path::new(&self.root)
                 .join("assets/solo")
                 .join(format!("spells_mechanics_{s}.json"));
+            let text = std::fs::read_to_string(&path);
+            if text.is_err() {
+                self.missing.push(path.display().to_string());
+            }
             let mut by_faction: HashMap<String, Vec<Spell>> = HashMap::new();
-            if let Some(v) = std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            {
+            if let Some(v) = text.ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
                 if let Some(fs) = v.get("factions").and_then(|f| f.as_object()) {
                     for (fk, fv) in fs {
                         let mut list = Vec::new();
@@ -421,6 +427,15 @@ impl Registries {
             Some(v) => v.as_slice(),
             None => &[],
         }
+    }
+
+    /// The mechanics files this registry could not READ, in first-failure
+    /// order, once per path — a player's bug report can quote the path.
+    /// A file that READS but does not PARSE is not missing: it yields the
+    /// empty map under the old contract and stays the caller's
+    /// "registry empty" case.
+    pub fn missing_files(&self) -> &[String] {
+        &self.missing
     }
 }
 
