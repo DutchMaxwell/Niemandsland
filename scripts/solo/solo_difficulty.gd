@@ -188,6 +188,16 @@ static func grade_names() -> Array:
 	return ["nachtmahr"]
 
 
+## Ship path (22.09.): which PRESET the one player-facing grade NACHTMAHR runs on.
+## The name stays; the brain changes — the search planner with the packed net
+## (Erlkönig, +5.3 points over the tree on the real table, 21.09.) when the core
+## and its brain are up, else the decision tree. Pure, so the choice is testable.
+const SHIP_SEARCH_TOP_K := 10        # the measured Erlkönig budget (every number of record ran 10/3)
+const SHIP_SEARCH_HORIZON := 3
+static func preset_for_nachtmahr(core_up: bool, brain_up: bool) -> String:
+	return "planner_v0" if (core_up and brain_up) else "nachtmahr"
+
+
 ## NML-1140 step 8: THE one placement resolver — all three harnesses take their
 ## generate() rung from here and nowhere else. Env NML_OBJECTIVE_DOCTRINE
 ## (rulebook|style|search) beats the preset — the arena/test control (an explicit

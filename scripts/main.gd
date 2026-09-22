@@ -1844,9 +1844,22 @@ func _solo_apply_difficulty() -> void:
 			solo_controller.set_difficulty(int(slot), SoloDifficulty.for_grade(grade, _solo_arena_seed))
 		return
 	var interactive_grade := _solo_interactive_grade
-	# Developer-only bridge: the rollout preset is intentionally absent from the player UI.
-	if OS.is_debug_build() and not OS.get_environment("NML_BRAIN_URL").is_empty() and BattleSim.core_enabled():
-		interactive_grade = "planner_v0"
+	# Ship path (22.09.): NACHTMAHR runs on the search planner with the packed net when the
+	# core and its brain are up (Erlkönig), else on the decision tree. The developer's
+	# loopback brain (NML_BRAIN_URL, debug builds) counts as a brain too. ONE log line says
+	# which — a player's bug report must be able to tell the two apart.
+	if interactive_grade == "nachtmahr":
+		var core_up := BattleSim.core_enabled()
+		var dev_brain := OS.is_debug_build() and not OS.get_environment("NML_BRAIN_URL").is_empty()
+		var brain_up := dev_brain or solo_controller.shipped_brain_ready()
+		interactive_grade = SoloDifficulty.preset_for_nachtmahr(core_up, brain_up)
+		if interactive_grade == "planner_v0":
+			AiPlanner.set_search_budget(SoloDifficulty.SHIP_SEARCH_TOP_K, SoloDifficulty.SHIP_SEARCH_HORIZON)
+			print("opponent: erlkoenig brain=%s top_k=%d horizon=%d" % [
+				"loopback" if dev_brain else "onnx " + solo_controller.shipped_brain_sha.left(8),
+				AiPlanner.top_k_default(), AiPlanner.horizon()])
+		else:
+			print("opponent: tree — core %s, brain %s" % ["up" if core_up else "off", "up" if brain_up else "none"])
 	for pid in solo_ai_slots:   # Human slots stay human; explicit arena grades above take precedence.
 		solo_controller.set_difficulty(int(pid), SoloDifficulty.for_grade(interactive_grade, _solo_arena_seed))
 

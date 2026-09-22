@@ -3322,6 +3322,7 @@ var _core_calls := 0
 var _core_us_total := 0
 var _core_us_max := 0
 var _core_statics_builds := 0     # M2-5b: profile-closure rebuilds seen so far
+var shipped_brain_sha := ""       # ship path 22.09.: sha256 of the packed brain the node accepted, "" = none
 ## SHADOW MENU (22.09., second opinion: Δ = p·g): a SECOND core node whose header carries the menu
 ## knobs named in NML_SHADOW_MENU (comma list of `menu_holders`/`menu_wide` to set TRUE, every other
 ## menu knob FALSE; "off" = both false) plans the SAME activation after the live node. The first
@@ -3354,9 +3355,19 @@ func _core_node_ready() -> Object:
 		if _core_node.has_method("set_brain_onnx") and FileAccess.file_exists(brain):
 			var parsed = JSON.parse_string(FileAccess.get_file_as_string(brain.get_basename() + ".json"))
 			var meta: Dictionary = parsed if parsed is Dictionary else {}
-			if not bool(_core_node.set_brain_onnx(FileAccess.get_file_as_bytes(brain), str(meta.get("sha256", "")))):
+			if bool(_core_node.set_brain_onnx(FileAccess.get_file_as_bytes(brain), str(meta.get("sha256", "")))):
+				shipped_brain_sha = str(meta.get("sha256", ""))
+			else:
 				_core_warn_once("shipped brain refused: " + str(_core_node.last_error()))
 	return _core_node
+
+
+## Ship path (22.09.): true when the core is wanted AND loaded AND the packed brain was
+## accepted — the three things a player's Erlkönig needs. Builds the node on first call.
+func shipped_brain_ready() -> bool:
+	if not BattleSim.core_enabled():
+		return false
+	return _core_node_ready() != null and not shipped_brain_sha.is_empty()
 
 
 ## Asks the Rust core for THIS activation. {} = declined (or the node could not
