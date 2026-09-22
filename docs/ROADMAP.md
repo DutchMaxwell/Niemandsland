@@ -27,11 +27,8 @@ planned and where ideas go. For what already works see
   check (`VolumetricLos`) shared by the ruler, the sight fan, the engine and the AI. Phase B is a
   performance pass on the sight fan's own drawn overlay, so it can walk that same volumetric truth
   on wide tables without a frame-cost regression. _M_
-- **Solo-AI planner substrate.** A snapshot + expectation-resolver layer for the AI's round planning
-  is being built and measured arena-side (headless self-play) — groundwork for future planning
-  quality, not a new difficulty grade or a rewrite of NACHTMAHR's decisions. _M_
 - **`0.3.10.0-alpha` shipped — the solo update.** The headline is **NACHTMAHR**, the built-in
-  opponent: a rules-based, deterministic game AI (no LLM, no neural net) that runs entirely offline and
+  opponent: a rules-based, deterministic game AI (no LLM, no neural net in that release) that runs entirely offline and
   plays the official OPR solo decision trees. Mark any imported army as AI-controlled, or let the **AI
   Opponent** button bring one of NACHTMAHR's own pre-built lists (every Grimdark Future faction,
   1000–3000 pts, fetched
@@ -39,7 +36,7 @@ planned and where ideas go. For what already works see
   click-guided rulebook **deployment flow** (roll-off → table edge → alternating placement → scout band →
   Ambush / Infiltrate / Vanguard reserves), **Shoot / Fight / Cast** for the human player through the
   radial menu with real tray dice for both sides, **hundreds of special rules resolved automatically**
-  across all five systems (100% over the bundled opponent lists; book-wide, 446 of 452 rule names —
+  across all five systems (100% over the bundled opponent lists; on `main`, measured 2026-09-13, book-wide 446 of 452 rule names —
   98.7% — resolve at every layer, **measured for GrimDark Future and Age of Fantasy only**, since the
   census walks those two book families) with a
   battle-log line per applied rule, **transports stage 1** (save format 1.7), the **tutorial course at
@@ -82,8 +79,8 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   2-player reconnect is shipped + soak-validated. _S_
 - **UX polish (feedback-driven)** — measure-on-pickup origin ghost (ESC snaps back) and the contextual
   control hints (hover an object → its hotkeys) **shipped in `0.3.10.0-alpha` ([#140](../../pull/140))**.
-  **Remaining:** the coherency visualizer still needs sharpening (highlight the models that are outside
-  X″ of a neighbour, not just the unit-level verdict). Deeper post-Alpha resilience / accessibility /
+  (The coherency visualizer already rings each model that breaks coherency and draws a labelled line to
+  its nearest neighbour, `coherency_visualizer.gd`.) Deeper post-Alpha resilience / accessibility /
   onboarding items live in **Ideas**. _S–M_
 - **Solo rules automation — coverage and core parity.** **Spawn** and **Split** now have
   real-table resolvers on `main`; **Traversal** shipped in `0.3.11.0`. These implementations
@@ -99,12 +96,11 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 > **✅ Shipped in `0.3.7.2-alpha`:** dice-log live-scroll, deployment-zone colour flip, cursor/avatar
 > label sizes + avatar fade-on-zoom, movement cap (opt-in), and return/revive units & models.
 > **✅ Shipped in `0.3.8.0-alpha`:** the bottom army unit-card dock (D-series + card-UX rounds). The
-> items below remain queued (avatar/cursor full rework, background-world toggle, Change-Daemons cascade).
+> items below remain queued (avatar/cursor full rework, background-world toggle).
 
 **📋 Soon (medium — next):**
-- **Avatar transparency on zoom** — as a player zooms in (closer to the table), fade *their* avatar
-  for the others so it stops hiding the detail they're inspecting; at max zoom only a faint ghost
-  remains. Needs the remote camera zoom/distance synced. _M_
+- ~~**Avatar transparency on zoom**~~ — **shipped in `0.3.7.2-alpha`**: other players see your avatar
+  fade as you zoom in, down to a faint ghost at max zoom (camera zoom synced). _shipped_
 - ~~**Movement cap (opt-in enforcement)**~~ — **shipped in `0.3.9.0-alpha`** as the "dry brush" cap
   ([#131](../../pull/131)): the *Enforce Movement Limit* toggle hard-stops a drag at the selected action
   band (Advance / Rush-Charge, Fast- and aura-aware) measured along the painted path. _shipped_
@@ -114,9 +110,9 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   a **fantasy world** environment. Needs a fantasy skybox/environment asset. _M_
 
 **🧊 Larger (coming weeks — design/UI/rules):**
-- **Change Daemons death-cascade** — Change Horrors spawn a new (smaller) unit when destroyed, which
-  can itself cascade on death. Faction-specific, builds on the shipped Return/revive (#87–#91). Example
-  list: `army-forge.onepagerules.com/share?id=JqJOxSFl4ooA` (Wormhole — Daemons of Change). _L_
+- ~~**Change Daemons death-cascade**~~ — **on `main` for Solo games** ([#748](../../pull/748)): when a
+  Split unit's last model dies, the table places the named new unit within the rule's range. Multiplayer
+  stays manual play. _shipped_
 
 > _(The **bottom army unit-card dock** (#84–#103) and **Return / revive units & models** (#87–#91)
 > that used to head this list shipped in `0.3.8.0-alpha` — see **Recently shipped**.)_
@@ -190,7 +186,7 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
     fullscreen / MAILBOX path. _S_
   - **Control offset transforms for HUD polish** — `offset_transform_*` animates / rotates / scales
     container-bound Controls without the parent re-layout wiping it: the floating unit-card rule popup
-    (`unit_card.gd`) and the planned "Contextual control hints". (Not the radial menu — it is
+    (`unit_dock.gd`) and the contextual control hints (`control_hints_controller.gd`). (Not the radial menu — it is
     immediate-mode `_draw`.) _S_
   - **3D particle scale / rotation in the process material** — directional rain streaks + varied
     smoke / embers via the new scale-3D / rotation-3D process params (`rain_effect.gd`, `fire_prop.gd`).
@@ -207,9 +203,9 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   ring buffer). MP-safe: both clients observe the same central events. (Maintainer, 2026-07-06.) _L_
   - **Cinematic replay** (far future) — a camera director on top of the journal: framing the active unit,
     dice moments, charges — instead of the static top view. _XL, after the base replay_
-- **Variant-aware mounting** — a mounted leader currently swaps to the mount GLB and loses his weapon-
-  variant visual (`opr_army_manager` replaces model 0); a later game-side change could resolve composed
-  `<unit>#<mount>+<slug>` variants instead. _M, after the mounts chapter ships_
+- ~~**Variant-aware mounting**~~ — **done game-side in `0.3.9.0-alpha`** ([#117](../../pull/117)): a mounted
+  leader resolves a composed `<hero>#<weapon>+<mountslug>` bake first and falls back to the faction mount
+  GLB only when no such bake exists. _shipped_
 - **Persistent room / async play** — a long-running hosted table (or a turn-based save-file relay flow)
   so players take turns asynchronously; today's answer is save-file exchange + the battle log. We are
   host-authoritative with a dumb relay, so a "persistent room" means either a headless host client or
@@ -226,6 +222,27 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 ## ✅ Recently shipped
 
 See [`CHANGELOG.md`](../CHANGELOG.md).
+
+**Next release (on `main`, not yet tagged):** **Solo AI** — on Windows and Linux NACHTMAHR plays with
+its new model **Erlkönig**: a search planner priced by a trained neural network (value net) in the Rust
+rules core, which now ships in those exports ([#873](../../pull/873), [#874](../../pull/874),
+[#1052](../../pull/1052)–[#1055](../../pull/1055)); the planner also offers Advance + shoot
+([#1057](../../pull/1057)), and models move through the core by default, which shortens the AI's
+decision wait ([#1060](../../pull/1060)). macOS, or a build whose core does not load, plays the decision
+tree; the game log and the diagnostics report name which ([#1066](../../pull/1066)). Still one
+difficulty grade. **Rules (Solo)**: Split and Spawn resolve on the table — the Change Daemons
+death-cascade ([#748](../../pull/748)); a mission selector in the Solo panel ([#640](../../pull/640));
+rulebook-legal objective placement ([#473](../../pull/473)). **Multiplayer**: co-op against the AI, a
+first version ([#835](../../pull/835), [#836](../../pull/836)); round bookkeeping (Fatigue, spell
+tokens, growth markers, transport activations) and the line-of-sight line also run in human-vs-human
+rooms ([#662](../../pull/662)–[#665](../../pull/665), [#667](../../pull/667)). **Privacy & data
+settings** (local only, nothing is sent): a consent screen, preview and local export of the last game
+([#684](../../pull/684), [#876](../../pull/876), [#892](../../pull/892), [#1031](../../pull/1031),
+[#1034](../../pull/1034)). **UI**: opens on the primary monitor, with a monitor selector
+([#365](../../pull/365)); no more dropped clicks ([#366](../../pull/366), [#368](../../pull/368)); `F`
+reaches the sight fan again ([#414](../../pull/414)); the AI-log toggle is back in exported builds
+([#416](../../pull/416)); the off-table tray groups reserves by arrival class ([#832](../../pull/832));
+wreck spill shows a formation ghost at the cursor ([#828](../../pull/828)).
 
 **`0.3.12.0-alpha` (2026-08-06):** **Elevation, Phase A** — every sight question (can this unit
 see that one, is it in cover, what does the sight fan show) now flows through one volumetric
@@ -301,7 +318,7 @@ the animation step is now capped so a card just catches up after a hitch ([#126]
 **Path Painting** (base-width chalk trails, arc-truth distance in ruler + battle log, click-to-measure,
 MP-synced move ledger, trail toggle + deployment auto-suppress, backtrack-erase), **1″ spacing**
 protection (proximity walls, base-contact snap, no-overlap drops), a **game-phase gate** (Deployment →
-Start Game → Playing with an MP ready-sync + save/load), and an opt-in **"dry-brush" movement cap**
+Start Game → Playing with an MP ready-sync + save/load), and a **"dry-brush" movement cap** (on by default)
 (action-band-aware, Advance/Rush-Charge); the **guided tutorial** foundation (T0 + T1 tool track W1–W7,
 #121); **Mummified Undead** live on R2 (#117); "perfectly based" terrain-projected bases (#123);
 versioned `.nml` save migration (#119); privacy-preserving relay usage stats (#115); rotate-to-cursor
