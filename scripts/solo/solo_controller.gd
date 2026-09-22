@@ -3323,6 +3323,13 @@ var _core_us_total := 0
 var _core_us_max := 0
 var _core_statics_builds := 0     # M2-5b: profile-closure rebuilds seen so far
 var shipped_brain_sha := ""       # ship path 22.09.: sha256 of the packed brain the node accepted, "" = none
+## S4 wait-time instrument: NML_ACT_WALL=1 prints one "[ACT_WALL] <driver> r<round> p<side> us=<n>"
+## line per activation around activate_next_ai_unit() in both drivers (interactive + harness).
+static var _act_wall := -1
+static func act_wall_enabled() -> bool:
+	if _act_wall < 0:
+		_act_wall = 1 if OS.get_environment("NML_ACT_WALL") == "1" else 0
+	return _act_wall == 1
 ## SHADOW MENU (22.09., second opinion: Δ = p·g): a SECOND core node whose header carries the menu
 ## knobs named in NML_SHADOW_MENU (comma list of `menu_holders`/`menu_wide` to set TRUE, every other
 ## menu knob FALSE; "off" = both false) plans the SAME activation after the live node. The first

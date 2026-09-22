@@ -973,7 +973,13 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# table while the move is planned instead of being left behind at the unit's start position. The
 	# peek caches its draw, so the seeded unit selection stays byte-identical to a run without it.
 	await _solo_try_reanimation(solo_controller.peek_next_ai_unit())
+	var act_t0 := Time.get_ticks_usec()
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
+	# S4 wait-time instrument (NML_ACT_WALL=1): the decision call a player waits for, on the
+	# INTERACTIVE path — the 20.09. numbers came from the headless harness, a lower bound.
+	if SoloController.act_wall_enabled():
+		print("[ACT_WALL] interactive r%d p%d us=%d" % [solo_controller._current_round(),
+			solo_controller.ai_slot, Time.get_ticks_usec() - act_t0])
 	# Stage 3 (transparency): the banner narrates WHAT NACHTMAHR just decided, in one plain
 	# sentence — no more anonymous "is taking its turn…" while units visibly act.
 	if unit != null and is_instance_valid(_solo_ai_banner) and solo_controller != null:
