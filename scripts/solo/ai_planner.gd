@@ -67,10 +67,11 @@ static var _tk := 0   # research seam: NML_TOP_K overrides (lazy; <=0 = unread)
 ## Read once from NML_MENU_HOLDERS=1 (tests set the static directly; _mh_env = -1 means unread).
 static var menu_holders := false
 static var _mh_env := -1
-## MENUWIDE: the header knob `menu_wide` for the Rust seam (its W1 ADVANCE+shoot leg, off by default).
-## The table's live menu has no such leg yet — this static only stamps the knob so an NML_CORE=1
-## game can arm it (NML_MENU_WIDE=1); tests set it directly.
-static var menu_wide := false
+## MENUWIDE: the header knob `menu_wide` (the ADVANCE+shoot leg, in the core's menu and in the
+## table's live menu, #1050). DEFAULT ON since 22.09.: confirmation on fresh seeds 1001-1500,
+## 2,000 pairs, +4.70 points [+2.77, +6.83] over the same planner without the leg (analysis
+## CONFIRM_MENUWIDE_2026-09-22). NML_MENU_WIDE=0 switches it off, =1 on; tests set it directly.
+static var menu_wide := true
 static var _mw_env := -1
 
 
@@ -1136,9 +1137,12 @@ static func candidates(state: Dictionary, key: String) -> Array:
 
 static func menu_wide_on() -> bool:
 	if _mw_env < 0:
-		_mw_env = 1 if OS.get_environment("NML_MENU_WIDE") == "1" else 0
+		var e := OS.get_environment("NML_MENU_WIDE")
+		_mw_env = 1 if e == "1" else (0 if e == "0" else 2)   # 2 = unset: the static default stands
 		if _mw_env == 1:
 			menu_wide = true
+		elif _mw_env == 0:
+			menu_wide = false
 	return menu_wide
 
 
