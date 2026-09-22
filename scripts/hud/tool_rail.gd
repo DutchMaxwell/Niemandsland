@@ -16,11 +16,15 @@ extends Control
 
 const HudTokensScript := preload("res://scripts/hud/hud_tokens.gd")
 
-# The right-hand slot the tools occupy; the rail buttons sit just right of it.
-const SLOT_LEFT := -396.0
-const SLOT_RIGHT := -64.0
+# The right-hand slot the tools occupy. Its right edge is not a constant: it ends RAIL_GAP left of the
+# rail's REAL width — the rail buttons grow with their labels, and a fixed edge let the open panel
+# cover them ("easure", "errain" in the 22.09. captures).
+const SLOT_WIDTH := 332.0
 const SLOT_TOP := 60.0
 const SLOT_BOTTOM := -70.0
+const RAIL_INSET := 12.0       # rail distance from the right screen edge
+const RAIL_MIN_WIDTH := 48.0
+const RAIL_GAP := 8.0
 
 var _main: Node = null
 var _dice: Control = null
@@ -41,11 +45,12 @@ func _ready() -> void:
 ## calls its existing handlers.
 func setup(main: Node) -> void:
 	_main = main
+	_build_rail()   # first: the tool slot is placed from the rail's real width
 	_dice = main.get_node_or_null("UI/HUD/DiceRollerPanel") as Control
 	if _dice != null:
 		_place_dice()
-	_build_rail()
 	_build_host()
+	_rail.minimum_size_changed.connect(_relayout)
 	_select("dice")
 
 
@@ -63,12 +68,28 @@ func _apply_slot(node: Control) -> void:
 	node.anchor_right = 1.0
 	node.anchor_top = 0.0
 	node.anchor_bottom = 1.0
-	node.offset_left = SLOT_LEFT
-	node.offset_right = SLOT_RIGHT
+	var right := -(RAIL_INSET + _rail_width() + RAIL_GAP)
+	node.offset_left = right - SLOT_WIDTH
+	node.offset_right = right
 	node.offset_top = SLOT_TOP
 	node.offset_bottom = SLOT_BOTTOM
 	node.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	node.grow_vertical = Control.GROW_DIRECTION_BOTH
+
+
+## The rail's real width: its buttons are at least RAIL_MIN_WIDTH but grow with their labels.
+func _rail_width() -> float:
+	if _rail == null:
+		return RAIL_MIN_WIDTH
+	return maxf(RAIL_MIN_WIDTH, _rail.get_combined_minimum_size().x)
+
+
+## Re-place the tool slot when the rail's width changes (font or label change).
+func _relayout() -> void:
+	if _dice != null:
+		_apply_slot(_dice)
+	if _host != null:
+		_apply_slot(_host)
 
 
 func _build_rail() -> void:
@@ -79,8 +100,8 @@ func _build_rail() -> void:
 	_rail.anchor_right = 1.0
 	_rail.anchor_top = 0.5
 	_rail.anchor_bottom = 0.5
-	_rail.offset_left = -60.0
-	_rail.offset_right = -12.0
+	_rail.offset_left = -(RAIL_INSET + RAIL_MIN_WIDTH)
+	_rail.offset_right = -RAIL_INSET
 	_rail.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_rail.grow_vertical = Control.GROW_DIRECTION_BOTH
 	add_child(_rail)
