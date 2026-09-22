@@ -19,7 +19,7 @@ runs:
         case "${{ inputs.target }}" in
           linux)
             RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$GITHUB_WORKSPACE=/workspace --remap-path-prefix=$HOME=/build" \
-              cargo build --release --manifest-path core/nml-core-godot/Cargo.toml ;;
+              cargo build --release --features onnx-tract --manifest-path core/nml-core-godot/Cargo.toml ;;
           windows)
             # Cross-build on the ubuntu runner. The DLL must not import the MinGW
             # runtime (libgcc_s / libstdc++ / libwinpthread) a player machine lacks;
@@ -28,7 +28,7 @@ runs:
             sudo apt-get update
             sudo apt-get install -y mingw-w64
             RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$GITHUB_WORKSPACE=/workspace --remap-path-prefix=$HOME=/build" \
-              cargo build --release --target x86_64-pc-windows-gnu --manifest-path core/nml-core-godot/Cargo.toml ;;
+              cargo build --release --features onnx-tract --target x86_64-pc-windows-gnu --manifest-path core/nml-core-godot/Cargo.toml ;;
           *)
             echo "::error::build-core-extension target '${{ inputs.target }}' is unknown"; exit 1 ;;
         esac
@@ -48,8 +48,10 @@ runs:
         SIZE=$(stat -c %s "$LIB")
         PATHS=$(strings "$LIB" | grep -c /home/ || true)
         echo "Shipped library: $LIB — $SIZE bytes, /home/ paths: $PATHS, build-id: $BUILD_ID"
-        if [ "$SIZE" -gt 20971520 ]; then
-          echo "::error::shipped library is $SIZE bytes — over the 20 MB budget"; exit 1
+        # Budget 40 MB since the in-process ONNX evaluator (feature onnx-tract) ships: measured
+        # stripped 31,464,032 bytes with tract vs 6,104,240 without (onnx-spike run 35615665560, 21.09.).
+        if [ "$SIZE" -gt 41943040 ]; then
+          echo "::error::shipped library is $SIZE bytes — over the 40 MB budget"; exit 1
         fi
         if [ "$PATHS" -ne 0 ]; then
           echo "::error::shipped library still embeds $PATHS /home/ path(s)"; exit 1
@@ -81,8 +83,10 @@ runs:
         ENTRY=$(x86_64-w64-mingw32-objdump -p "$DLL" | grep -c gdext_rust_init || true)
         echo "Shipped DLL: $DLL — $SIZE bytes, /home/ paths: $PATHS, gdext_rust_init count: $ENTRY"
         x86_64-w64-mingw32-objdump -p "$DLL" | grep -iE "debug directory|codeview|rsds" || true
-        if [ "$SIZE" -gt 20971520 ]; then
-          echo "::error::shipped DLL is $SIZE bytes — over the 20 MB budget"; exit 1
+        # Budget 48 MB since the in-process ONNX evaluator (feature onnx-tract) ships: measured
+        # stripped 40,964,672 bytes with tract vs 14,565,249 without (onnx-spike run 35615665560, 21.09.).
+        if [ "$SIZE" -gt 50331648 ]; then
+          echo "::error::shipped DLL is $SIZE bytes — over the 48 MB budget"; exit 1
         fi
         if [ "$PATHS" -ne 0 ]; then
           echo "::error::shipped DLL still embeds $PATHS /home/ path(s)"; exit 1
