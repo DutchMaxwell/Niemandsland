@@ -14,9 +14,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   the game log says which (`opponent: erlkoenig brain=onnx …` / `opponent: tree — …`). Measured on
   the real table against the shipped tree: 55.3 % over 600 games (paired sign test p = 0.0003,
   21.09.); the wider menu below adds +4.70 points [95 % +2.77, +6.83] over 2,000 paired games on
-  seeds no development run ever used (22.09.). AI decision wait on the reference laptop (headless
-  harness, 20 games each): tree median 79 ms / p90 2.5 s; new opponent median 486 ms / p90 3.5 s.
-  (#1052, #1053, #1054, #1055, #1056)
+  seeds no development run ever used (22.09.). (#1052, #1053, #1054, #1055, #1056)
+- **The AI moves its models through the Rust core by default** (`NML_CORE_MOVE=0` turns it off).
+  A phase instrument showed the GDScript movement planner owning 94-98 % of the slowest AI decisions
+  while the search itself took 2 %; the core's planner produces the same moves (2,532 planned steps
+  compared over 40 games, both grades, 0 differences). Decision wait on the reference laptop, 20
+  games per row: the old tree p50 132 ms / p90 2.7 s / max 10.5 s → now p50 48 ms / p90 0.23 s /
+  max 0.73 s; the new opponent p50 486 ms / p90 3.5 s / max 10.3 s → **p50 373 ms / p90 0.67 s /
+  max 1.16 s**. The game log names the planner in use (`move=core` / `move=gdscript`).
+  (#1056, #1061, #1060)
 - **The planner's live menu offers ADVANCE + shoot** (`menu_wide`, default on; `NML_MENU_WIDE=0`
   turns it off), proven equal to the core's menu on a recorded corpus. (#1050, this PR)
 - **The core stages its rule files and the model out of the packed build** (`user://nml_core/<version>/`)
