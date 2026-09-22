@@ -1,0 +1,415 @@
+{
+  "mixed": {
+    "name": "Weapon Teams",
+    "size": 3,
+    "bases": {
+      "round": "60x35"
+    },
+    "rules": [
+      "Tough(3)",
+      "Scurry"
+    ],
+    "loadout": [
+      {
+        "name": "Crew",
+        "range": 0,
+        "attacks": 1,
+        "count": 3,
+        "specialRules": []
+      },
+      {
+        "name": "Heavy Drill",
+        "range": 0,
+        "attacks": 1,
+        "count": 1,
+        "specialRules": [
+          {
+            "name": "AP",
+            "rating": 4
+          },
+          {
+            "name": "Deadly",
+            "rating": 3
+          }
+        ]
+      },
+      {
+        "name": "Flamethrower",
+        "range": 12,
+        "attacks": 1,
+        "count": 1,
+        "specialRules": [
+          {
+            "name": "Blast",
+            "rating": 3
+          },
+          {
+            "name": "Reliable"
+          }
+        ],
+        "type": "ArmyBookWeapon"
+      },
+      {
+        "name": "Gatling Gun",
+        "range": 18,
+        "attacks": 4,
+        "count": 1,
+        "specialRules": [
+          {
+            "name": "AP",
+            "rating": 1
+          }
+        ],
+        "type": "ArmyBookWeapon"
+      }
+    ],
+    "selectedUpgrades": [
+      {
+        "upgrade": {
+          "uid": "MwsXsbn",
+          "label": "Replace any Heavy Drill",
+          "variant": "replace",
+          "model": false,
+          "affects": {
+            "type": "any",
+            "value": 0
+          },
+          "select": {
+            "type": "",
+            "value": 0
+          },
+          "targets": [
+            "Heavy Drill"
+          ],
+          "isCommandGroup": false
+        },
+        "option": {
+          "uid": "I-bS0",
+          "label": "Flamethrower (12\", A1, Blast(3), Reliable)",
+          "gains": [
+            {
+              "name": "Flamethrower",
+              "range": 12,
+              "attacks": 1,
+              "count": 1,
+              "specialRules": [
+                {
+                  "name": "Blast",
+                  "rating": 3
+                },
+                {
+                  "name": "Reliable"
+                }
+              ],
+              "type": "ArmyBookWeapon"
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "wXtqtYK",
+              "cost": 5
+            }
+          ]
+        }
+      },
+      {
+        "upgrade": {
+          "uid": "MwsXsbn",
+          "label": "Replace any Heavy Drill",
+          "variant": "replace",
+          "model": false,
+          "affects": {
+            "type": "any",
+            "value": 0
+          },
+          "select": {
+            "type": "",
+            "value": 0
+          },
+          "targets": [
+            "Heavy Drill"
+          ],
+          "isCommandGroup": false
+        },
+        "option": {
+          "uid": "VurkaS1",
+          "label": "Gatling Gun (18\", A4, AP(1))",
+          "gains": [
+            {
+              "name": "Gatling Gun",
+              "range": 18,
+              "attacks": 4,
+              "count": 1,
+              "specialRules": [
+                {
+                  "name": "AP",
+                  "rating": 1
+                }
+              ],
+              "type": "ArmyBookWeapon"
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "wXtqtYK",
+              "cost": 5
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "combined": [
+    {
+      "name": "Weapon Teams",
+      "size": 3,
+      "bases": {
+        "round": "60x35"
+      },
+      "rules": [
+        "Tough(3)",
+        "Scurry"
+      ],
+      "loadout": [
+        {
+          "name": "Crew",
+          "range": 0,
+          "attacks": 1,
+          "count": 3,
+          "specialRules": []
+        },
+        {
+          "name": "Heavy Drill",
+          "range": 0,
+          "attacks": 1,
+          "count": 3,
+          "specialRules": [
+            {
+              "name": "AP",
+              "rating": 4
+            },
+            {
+              "name": "Deadly",
+              "rating": 3
+            }
+          ]
+        }
+      ],
+      "selectedUpgrades": []
+    },
+    {
+      "name": "Weapon Teams",
+      "size": 3,
+      "bases": {
+        "round": "60x35"
+      },
+      "rules": [
+        "Tough(3)",
+        "Scurry"
+      ],
+      "loadout": [
+        {
+          "name": "Crew",
+          "range": 0,
+          "attacks": 1,
+          "count": 3,
+          "specialRules": []
+        },
+        {
+          "name": "Flamethrower",
+          "range": 12,
+          "attacks": 1,
+          "count": 1,
+          "specialRules": [
+            {
+              "name": "Blast",
+              "rating": 3
+            },
+            {
+              "name": "Reliable"
+            }
+          ],
+          "type": "ArmyBookWeapon"
+        },
+        {
+          "name": "Toxin Mortar",
+          "range": 24,
+          "attacks": 1,
+          "count": 1,
+          "specialRules": [
+            {
+              "name": "Blast",
+              "rating": 3
+            },
+            {
+              "name": "Bane"
+            },
+            {
+              "name": "Indirect"
+            }
+          ],
+          "type": "ArmyBookWeapon"
+        },
+        {
+          "name": "Gatling Gun",
+          "range": 18,
+          "attacks": 4,
+          "count": 1,
+          "specialRules": [
+            {
+              "name": "AP",
+              "rating": 1
+            }
+          ],
+          "type": "ArmyBookWeapon"
+        }
+      ],
+      "selectedUpgrades": [
+        {
+          "upgrade": {
+            "uid": "MwsXsbn",
+            "label": "Replace any Heavy Drill",
+            "variant": "replace",
+            "model": false,
+            "affects": {
+              "type": "any",
+              "value": 0
+            },
+            "select": {
+              "type": "",
+              "value": 0
+            },
+            "targets": [
+              "Heavy Drill"
+            ],
+            "isCommandGroup": false
+          },
+          "option": {
+            "uid": "I-bS0",
+            "label": "Flamethrower (12\", A1, Blast(3), Reliable)",
+            "gains": [
+              {
+                "name": "Flamethrower",
+                "range": 12,
+                "attacks": 1,
+                "count": 1,
+                "specialRules": [
+                  {
+                    "name": "Blast",
+                    "rating": 3
+                  },
+                  {
+                    "name": "Reliable"
+                  }
+                ],
+                "type": "ArmyBookWeapon"
+              }
+            ],
+            "costs": [
+              {
+                "unitId": "wXtqtYK",
+                "cost": 5
+              }
+            ]
+          }
+        },
+        {
+          "upgrade": {
+            "uid": "MwsXsbn",
+            "label": "Replace any Heavy Drill",
+            "variant": "replace",
+            "model": false,
+            "affects": {
+              "type": "any",
+              "value": 0
+            },
+            "select": {
+              "type": "",
+              "value": 0
+            },
+            "targets": [
+              "Heavy Drill"
+            ],
+            "isCommandGroup": false
+          },
+          "option": {
+            "uid": "5YDtlX5",
+            "label": "Toxin Mortar (24\", A1, Blast(3), Indirect, Bane)",
+            "gains": [
+              {
+                "name": "Toxin Mortar",
+                "range": 24,
+                "attacks": 1,
+                "count": 1,
+                "specialRules": [
+                  {
+                    "name": "Blast",
+                    "rating": 3
+                  },
+                  {
+                    "name": "Bane"
+                  },
+                  {
+                    "name": "Indirect"
+                  }
+                ],
+                "type": "ArmyBookWeapon"
+              }
+            ],
+            "costs": [
+              {
+                "unitId": "wXtqtYK",
+                "cost": 5
+              }
+            ]
+          }
+        },
+        {
+          "upgrade": {
+            "uid": "MwsXsbn",
+            "label": "Replace any Heavy Drill",
+            "variant": "replace",
+            "model": false,
+            "affects": {
+              "type": "any",
+              "value": 0
+            },
+            "select": {
+              "type": "",
+              "value": 0
+            },
+            "targets": [
+              "Heavy Drill"
+            ],
+            "isCommandGroup": false
+          },
+          "option": {
+            "uid": "VurkaS1",
+            "label": "Gatling Gun (18\", A4, AP(1))",
+            "gains": [
+              {
+                "name": "Gatling Gun",
+                "range": 18,
+                "attacks": 4,
+                "count": 1,
+                "specialRules": [
+                  {
+                    "name": "AP",
+                    "rating": 1
+                  }
+                ],
+                "type": "ArmyBookWeapon"
+              }
+            ],
+            "costs": [
+              {
+                "unitId": "wXtqtYK",
+                "cost": 5
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

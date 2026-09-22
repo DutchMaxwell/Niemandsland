@@ -1,0 +1,883 @@
+{
+  "drill": {
+    "id": "BUbrjeh",
+    "selectionId": "BUbrjeh-0",
+    "name": "Warriors",
+    "customName": "",
+    "size": 10,
+    "cost": 130,
+    "quality": 5,
+    "defense": 5,
+    "bases": {
+      "round": "25",
+      "square": "25"
+    },
+    "rules": [
+      {
+        "name": "Scurry",
+        "label": "Scurry"
+      }
+    ],
+    "items": [
+      {
+        "type": "ArmyBookItem",
+        "name": "Weapon Team",
+        "count": 1,
+        "content": [
+          {
+            "name": "Heavy Drill",
+            "range": 0,
+            "attacks": 1,
+            "count": 1,
+            "specialRules": [
+              {
+                "name": "AP",
+                "rating": 4
+              },
+              {
+                "name": "Deadly",
+                "rating": 3
+              }
+            ],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "name": "Crew",
+            "range": 0,
+            "attacks": 1,
+            "count": 1,
+            "specialRules": [],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "type": "ArmyBookRule",
+            "name": "Tough",
+            "rating": 3
+          }
+        ],
+        "label": "Weapon Team"
+      }
+    ],
+    "weapons": [
+      {
+        "name": "Hand Weapon",
+        "type": "ArmyBookWeapon",
+        "range": 0,
+        "attacks": 1,
+        "count": 9,
+        "specialRules": [],
+        "label": "Hand Weapon"
+      }
+    ],
+    "loadout": [
+      {
+        "name": "Hand Weapon",
+        "type": "ArmyBookWeapon",
+        "range": 0,
+        "attacks": 1,
+        "count": 9,
+        "specialRules": [],
+        "label": "Hand Weapon"
+      },
+      {
+        "type": "ArmyBookItem",
+        "name": "Weapon Team",
+        "count": 1,
+        "content": [
+          {
+            "name": "Heavy Drill",
+            "range": 0,
+            "attacks": 1,
+            "count": 1,
+            "specialRules": [
+              {
+                "name": "AP",
+                "rating": 4
+              },
+              {
+                "name": "Deadly",
+                "rating": 3
+              }
+            ],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "name": "Crew",
+            "range": 0,
+            "attacks": 1,
+            "count": 1,
+            "specialRules": [],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "type": "ArmyBookRule",
+            "name": "Tough",
+            "rating": 3
+          }
+        ],
+        "label": "Weapon Team"
+      }
+    ],
+    "upgrades": [
+      "D1",
+      "E1"
+    ],
+    "combined": false,
+    "joinToUnit": null,
+    "armyId": "tOWt5fgqK2nfpoBN",
+    "role_tags": [
+      "melee"
+    ],
+    "selectedUpgrades": [
+      {
+        "upgrade": {
+          "uid": "uL69Z",
+          "label": "Replace one Hand Weapon",
+          "variant": "replace",
+          "model": false,
+          "affects": {
+            "type": "exactly",
+            "value": 1
+          },
+          "select": {
+            "type": "",
+            "value": 0
+          },
+          "targets": [
+            "Hand Weapon"
+          ],
+          "isCommandGroup": false
+        },
+        "option": {
+          "uid": "qflnR",
+          "label": "Weapon Team (Crew (A1), Heavy Drill (A1, AP(4), Deadly(3)), Tough(3))",
+          "gains": [
+            {
+              "type": "ArmyBookItem",
+              "name": "Weapon Team",
+              "count": 1,
+              "content": [
+                {
+                  "name": "Heavy Drill",
+                  "range": 0,
+                  "attacks": 1,
+                  "count": 1,
+                  "specialRules": [
+                    {
+                      "name": "AP",
+                      "rating": 4
+                    },
+                    {
+                      "name": "Deadly",
+                      "rating": 3
+                    }
+                  ],
+                  "type": "ArmyBookWeapon"
+                },
+                {
+                  "name": "Crew",
+                  "range": 0,
+                  "attacks": 1,
+                  "count": 1,
+                  "specialRules": [],
+                  "type": "ArmyBookWeapon"
+                },
+                {
+                  "type": "ArmyBookRule",
+                  "name": "Tough",
+                  "rating": 3
+                }
+              ]
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 30
+            }
+          ]
+        }
+      },
+      {
+        "upgrade": {
+          "uid": "8WqtKtU",
+          "label": "Upgrade up to three models with one",
+          "variant": "upgrade",
+          "model": true,
+          "affects": {
+            "type": "up to",
+            "value": 3
+          },
+          "select": {
+            "type": "exactly",
+            "value": 1
+          },
+          "targets": [],
+          "isCommandGroup": true
+        },
+        "option": {
+          "uid": "zoMovLL",
+          "label": "Sergeant",
+          "gains": [
+            {
+              "type": "ArmyBookRule",
+              "name": "Sergeant",
+              "count": 1
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 5
+            }
+          ]
+        }
+      },
+      {
+        "upgrade": {
+          "uid": "8WqtKtU",
+          "label": "Upgrade up to three models with one",
+          "variant": "upgrade",
+          "model": true,
+          "affects": {
+            "type": "up to",
+            "value": 3
+          },
+          "select": {
+            "type": "exactly",
+            "value": 1
+          },
+          "targets": [],
+          "isCommandGroup": true
+        },
+        "option": {
+          "uid": "R4iUCuT",
+          "label": "Banner",
+          "gains": [
+            {
+              "type": "ArmyBookRule",
+              "name": "Banner",
+              "count": 1
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 10
+            }
+          ]
+        }
+      },
+      {
+        "upgrade": {
+          "uid": "8WqtKtU",
+          "label": "Upgrade up to three models with one",
+          "variant": "upgrade",
+          "model": true,
+          "affects": {
+            "type": "up to",
+            "value": 3
+          },
+          "select": {
+            "type": "exactly",
+            "value": 1
+          },
+          "targets": [],
+          "isCommandGroup": true
+        },
+        "option": {
+          "uid": "ZhMfGgt",
+          "label": "Musician",
+          "gains": [
+            {
+              "type": "ArmyBookRule",
+              "name": "Musician",
+              "count": 1
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 10
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "mixed": {
+    "id": "BUbrjeh",
+    "selectionId": "BUbrjeh-0",
+    "name": "Warriors",
+    "customName": "",
+    "size": 20,
+    "cost": 295,
+    "quality": 5,
+    "defense": 5,
+    "bases": {
+      "round": "25",
+      "square": "25"
+    },
+    "rules": [
+      {
+        "name": "Scurry",
+        "label": "Scurry"
+      }
+    ],
+    "items": [
+      {
+        "type": "ArmyBookItem",
+        "name": "Weapon Team",
+        "count": 1,
+        "content": [
+          {
+            "name": "Heavy Drill",
+            "range": 0,
+            "attacks": 1,
+            "count": 1,
+            "specialRules": [
+              {
+                "name": "AP",
+                "rating": 4
+              },
+              {
+                "name": "Deadly",
+                "rating": 3
+              }
+            ],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "name": "Crew",
+            "range": 0,
+            "attacks": 1,
+            "count": 1,
+            "specialRules": [],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "type": "ArmyBookRule",
+            "name": "Tough",
+            "rating": 3
+          }
+        ],
+        "label": "Weapon Team"
+      },
+      {
+        "type": "ArmyBookItem",
+        "name": "Weapon Team",
+        "count": 1,
+        "content": [
+          {
+            "name": "Gatling Gun",
+            "range": 18,
+            "attacks": 4,
+            "count": 1,
+            "specialRules": [
+              {
+                "name": "AP",
+                "rating": 1
+              }
+            ],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "name": "Crew",
+            "range": 0,
+            "attacks": 1,
+            "count": 1,
+            "specialRules": [],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "type": "ArmyBookRule",
+            "name": "Tough",
+            "rating": 3
+          }
+        ],
+        "label": "Weapon Team"
+      }
+    ],
+    "weapons": [
+      {
+        "name": "Halberd",
+        "type": "ArmyBookWeapon",
+        "range": 0,
+        "attacks": 1,
+        "count": 18,
+        "specialRules": [
+          {
+            "name": "Rending",
+            "type": "ArmyBookRule"
+          }
+        ],
+        "label": "Halberd"
+      }
+    ],
+    "loadout": [
+      {
+        "name": "Halberd",
+        "type": "ArmyBookWeapon",
+        "range": 0,
+        "attacks": 1,
+        "count": 18,
+        "specialRules": [
+          {
+            "name": "Rending",
+            "type": "ArmyBookRule"
+          }
+        ],
+        "label": "Halberd"
+      },
+      {
+        "type": "ArmyBookItem",
+        "name": "Weapon Team",
+        "count": 1,
+        "content": [
+          {
+            "name": "Heavy Drill",
+            "range": 0,
+            "attacks": 1,
+            "count": 1,
+            "specialRules": [
+              {
+                "name": "AP",
+                "rating": 4
+              },
+              {
+                "name": "Deadly",
+                "rating": 3
+              }
+            ],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "name": "Crew",
+            "range": 0,
+            "attacks": 1,
+            "count": 1,
+            "specialRules": [],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "type": "ArmyBookRule",
+            "name": "Tough",
+            "rating": 3
+          }
+        ],
+        "label": "Weapon Team"
+      },
+      {
+        "type": "ArmyBookItem",
+        "name": "Weapon Team",
+        "count": 1,
+        "content": [
+          {
+            "name": "Gatling Gun",
+            "range": 18,
+            "attacks": 4,
+            "count": 1,
+            "specialRules": [
+              {
+                "name": "AP",
+                "rating": 1
+              }
+            ],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "name": "Crew",
+            "range": 0,
+            "attacks": 1,
+            "count": 1,
+            "specialRules": [],
+            "type": "ArmyBookWeapon"
+          },
+          {
+            "type": "ArmyBookRule",
+            "name": "Tough",
+            "rating": 3
+          }
+        ],
+        "label": "Weapon Team"
+      }
+    ],
+    "upgrades": [
+      "D1",
+      "E1"
+    ],
+    "combined": true,
+    "joinToUnit": null,
+    "armyId": "tOWt5fgqK2nfpoBN",
+    "role_tags": [
+      "anti_elite",
+      "melee"
+    ],
+    "selectedUpgrades": [
+      {
+        "upgrade": {
+          "uid": "uL69Z",
+          "label": "Replace one Hand Weapon",
+          "variant": "replace",
+          "model": false,
+          "affects": {
+            "type": "exactly",
+            "value": 1
+          },
+          "select": {
+            "type": "",
+            "value": 0
+          },
+          "targets": [
+            "Hand Weapon"
+          ],
+          "isCommandGroup": false
+        },
+        "option": {
+          "uid": "qflnR",
+          "label": "Weapon Team (Crew (A1), Heavy Drill (A1, AP(4), Deadly(3)), Tough(3))",
+          "gains": [
+            {
+              "type": "ArmyBookItem",
+              "name": "Weapon Team",
+              "count": 1,
+              "content": [
+                {
+                  "name": "Heavy Drill",
+                  "range": 0,
+                  "attacks": 1,
+                  "count": 1,
+                  "specialRules": [
+                    {
+                      "name": "AP",
+                      "rating": 4
+                    },
+                    {
+                      "name": "Deadly",
+                      "rating": 3
+                    }
+                  ],
+                  "type": "ArmyBookWeapon"
+                },
+                {
+                  "name": "Crew",
+                  "range": 0,
+                  "attacks": 1,
+                  "count": 1,
+                  "specialRules": [],
+                  "type": "ArmyBookWeapon"
+                },
+                {
+                  "type": "ArmyBookRule",
+                  "name": "Tough",
+                  "rating": 3
+                }
+              ]
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 30
+            }
+          ]
+        }
+      },
+      {
+        "upgrade": {
+          "uid": "IbwdvTo",
+          "label": "Replace all Hand Weapons",
+          "variant": "replace",
+          "model": false,
+          "affects": {
+            "type": "all",
+            "value": 0
+          },
+          "select": {
+            "type": "",
+            "value": 0
+          },
+          "targets": [
+            "Hand Weapons"
+          ],
+          "isCommandGroup": false
+        },
+        "option": {
+          "uid": "1QYYsYq",
+          "label": "Halberd (A1, Rending)",
+          "gains": [
+            {
+              "name": "Halberd",
+              "range": 0,
+              "attacks": 1,
+              "count": 1,
+              "specialRules": [
+                {
+                  "name": "Rending"
+                }
+              ],
+              "type": "ArmyBookWeapon"
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 25
+            }
+          ]
+        }
+      },
+      {
+        "upgrade": {
+          "uid": "8WqtKtU",
+          "label": "Upgrade up to three models with one",
+          "variant": "upgrade",
+          "model": true,
+          "affects": {
+            "type": "up to",
+            "value": 3
+          },
+          "select": {
+            "type": "exactly",
+            "value": 1
+          },
+          "targets": [],
+          "isCommandGroup": true
+        },
+        "option": {
+          "uid": "zoMovLL",
+          "label": "Sergeant",
+          "gains": [
+            {
+              "type": "ArmyBookRule",
+              "name": "Sergeant",
+              "count": 1
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 5
+            }
+          ]
+        }
+      },
+      {
+        "upgrade": {
+          "uid": "8WqtKtU",
+          "label": "Upgrade up to three models with one",
+          "variant": "upgrade",
+          "model": true,
+          "affects": {
+            "type": "up to",
+            "value": 3
+          },
+          "select": {
+            "type": "exactly",
+            "value": 1
+          },
+          "targets": [],
+          "isCommandGroup": true
+        },
+        "option": {
+          "uid": "R4iUCuT",
+          "label": "Banner",
+          "gains": [
+            {
+              "type": "ArmyBookRule",
+              "name": "Banner",
+              "count": 1
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 10
+            }
+          ]
+        }
+      },
+      {
+        "upgrade": {
+          "uid": "8WqtKtU",
+          "label": "Upgrade up to three models with one",
+          "variant": "upgrade",
+          "model": true,
+          "affects": {
+            "type": "up to",
+            "value": 3
+          },
+          "select": {
+            "type": "exactly",
+            "value": 1
+          },
+          "targets": [],
+          "isCommandGroup": true
+        },
+        "option": {
+          "uid": "ZhMfGgt",
+          "label": "Musician",
+          "gains": [
+            {
+              "type": "ArmyBookRule",
+              "name": "Musician",
+              "count": 1
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 10
+            }
+          ]
+        }
+      }
+    ],
+    "selectedUpgradesB": [
+      {
+        "upgrade": {
+          "uid": "uL69Z",
+          "label": "Replace one Hand Weapon",
+          "variant": "replace",
+          "model": false,
+          "affects": {
+            "type": "exactly",
+            "value": 1
+          },
+          "select": {
+            "type": "",
+            "value": 0
+          },
+          "targets": [
+            "Hand Weapon"
+          ],
+          "isCommandGroup": false
+        },
+        "option": {
+          "uid": "kCh-m",
+          "label": "Weapon Team (Gatling Gun (18\", A4, AP(1)), Crew (A1), Tough(3))",
+          "gains": [
+            {
+              "type": "ArmyBookItem",
+              "name": "Weapon Team",
+              "count": 1,
+              "content": [
+                {
+                  "name": "Gatling Gun",
+                  "range": 18,
+                  "attacks": 4,
+                  "count": 1,
+                  "specialRules": [
+                    {
+                      "name": "AP",
+                      "rating": 1
+                    }
+                  ],
+                  "type": "ArmyBookWeapon"
+                },
+                {
+                  "name": "Crew",
+                  "range": 0,
+                  "attacks": 1,
+                  "count": 1,
+                  "specialRules": [],
+                  "type": "ArmyBookWeapon"
+                },
+                {
+                  "type": "ArmyBookRule",
+                  "name": "Tough",
+                  "rating": 3
+                }
+              ]
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 35
+            }
+          ]
+        }
+      },
+      {
+        "upgrade": {
+          "uid": "IbwdvTo",
+          "label": "Replace all Hand Weapons",
+          "variant": "replace",
+          "model": false,
+          "affects": {
+            "type": "all",
+            "value": 0
+          },
+          "select": {
+            "type": "",
+            "value": 0
+          },
+          "targets": [
+            "Hand Weapons"
+          ],
+          "isCommandGroup": false
+        },
+        "option": {
+          "uid": "1QYYsYq",
+          "label": "Halberd (A1, Rending)",
+          "gains": [
+            {
+              "name": "Halberd",
+              "range": 0,
+              "attacks": 1,
+              "count": 1,
+              "specialRules": [
+                {
+                  "name": "Rending"
+                }
+              ],
+              "type": "ArmyBookWeapon"
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 25
+            }
+          ]
+        }
+      },
+      {
+        "upgrade": {
+          "uid": "8WqtKtU",
+          "label": "Upgrade up to three models with one",
+          "variant": "upgrade",
+          "model": true,
+          "affects": {
+            "type": "up to",
+            "value": 3
+          },
+          "select": {
+            "type": "exactly",
+            "value": 1
+          },
+          "targets": [],
+          "isCommandGroup": true
+        },
+        "option": {
+          "uid": "zoMovLL",
+          "label": "Sergeant",
+          "gains": [
+            {
+              "type": "ArmyBookRule",
+              "name": "Sergeant",
+              "count": 1
+            }
+          ],
+          "costs": [
+            {
+              "unitId": "BUbrjeh",
+              "cost": 5
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
