@@ -252,11 +252,14 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	# default is still "expected" (selfplay.py DICE_MODES). Without this a reader cannot
 	# tell an expected-value corpus from a real-dice one.
 	assert_str(str((header["knobs"] as Dictionary).get("dice", ""))).is_equal("table")
-	# Wave 6 menu knobs for the Rust seam ride the header, OFF by default.
+	# Wave 6 menu knobs for the Rust seam ride the header: menu_holders OFF (null on 21.09.),
+	# menu_wide ON since 22.09. (confirmation +4.70 [+2.77, +6.83]) — the header must say what
+	# the table actually offered, so the core's menu follows the shipped default.
 	assert_bool((header["knobs"] as Dictionary).has("menu_holders")).is_true()
 	assert_bool((header["knobs"] as Dictionary).has("menu_wide")).is_true()
 	assert_bool(bool((header["knobs"] as Dictionary)["menu_holders"])).is_false()
-	assert_bool(bool((header["knobs"] as Dictionary)["menu_wide"])).is_false()
+	assert_bool(bool((header["knobs"] as Dictionary)["menu_wide"])).is_equal(AiPlanner.menu_wide_on())
+	assert_bool(AiPlanner.menu_wide_on()).is_true()
 	assert_object(header.get("terrain")).is_null()   # no terrain_type_at seam in this fixture
 
 	var act := JSON.parse_string(lines[1]) as Dictionary
