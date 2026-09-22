@@ -117,3 +117,17 @@ func test_an_item_surfaces_its_unresolved_granted_rule_not_its_name() -> void:
 	_main._solo_log_unmodeled_rules(_unit("gf", "robot_legions", ["Made-Up Kit"], {"Made-Up Kit": ["Made-Up Rule"]}))
 	assert_array(_noted_rules()).contains(["Made-Up Rule"])
 	assert_array(_noted_rules()).not_contains(["Made-Up Kit"])
+
+
+# === Fix 3: exact names, never a prefix (NML-1112) ===
+
+## "Fearsome Made-Up Rule" is no rule of any book, but it STARTS with the modeled token "Fear": a
+## prefix match counts it as automated and the player never hears about it. The rated form of a
+## real rule ("Fear(2)") must still count as modeled.
+func test_a_name_that_only_starts_with_a_modeled_token_is_noted() -> void:
+	assert_bool(_main._solo_modeled_rules_for(_unit("gf", "", [])).has("Fear")).is_true()
+	_main._solo_log_unmodeled_rules(_unit("gf", "", ["Fearsome Made-Up Rule", "Fear(2)"]))
+	assert_array(_noted_rules()) \
+		.override_failure_message("a prefix match hid an unknown rule: %s" % [_noted_rules()]) \
+		.contains(["Fearsome Made-Up Rule"])
+	assert_array(_noted_rules()).not_contains(["Fear"])
