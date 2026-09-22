@@ -3344,8 +3344,18 @@ func _core_node_ready() -> Object:
 		if _core_node == null:
 			_core_warn_once("NmlCore could not be instantiated")
 			return null
-		_core_node.set_repo_root(ProjectSettings.globalize_path("res://"))
+		# CoreAssets: res:// in the editor, the staged user:// copy in an export — the
+		# core reads its rules with std::fs and a PCK is not a directory (rule-blind
+		# search otherwise, with no error at all).
+		_core_node.set_repo_root(CoreAssets.root())
 		_core_node.set_seams(BattleSim.spacing_enabled(), BattleSim.cast_phase_enabled())
+		# The shipped brain travels as bytes; a node built without the evaluator answers false.
+		var brain := "res://" + CoreAssets.FILES[CoreAssets.FILES.size() - 2]
+		if _core_node.has_method("set_brain_onnx") and FileAccess.file_exists(brain):
+			var parsed = JSON.parse_string(FileAccess.get_file_as_string(brain.get_basename() + ".json"))
+			var meta: Dictionary = parsed if parsed is Dictionary else {}
+			if not bool(_core_node.set_brain_onnx(FileAccess.get_file_as_bytes(brain), str(meta.get("sha256", "")))):
+				_core_warn_once("shipped brain refused: " + str(_core_node.last_error()))
 	return _core_node
 
 
@@ -3444,7 +3454,7 @@ func _shadow_plan(state: Dictionary, me: int, plain: Dictionary, statics: Dictio
 		_shadow_node = ClassDB.instantiate("NmlCore")
 		if _shadow_node == null:
 			return
-		_shadow_node.set_repo_root(ProjectSettings.globalize_path("res://"))
+		_shadow_node.set_repo_root(CoreAssets.root())
 		_shadow_node.set_seams(BattleSim.spacing_enabled(), BattleSim.cast_phase_enabled())
 	if not _shadow_header_done:
 		var head := AiActRecorder._header_line(state, terrain_type_at)
