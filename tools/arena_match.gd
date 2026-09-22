@@ -835,6 +835,7 @@ static func search_knobs() -> Dictionary:
 		"deploy_threat_in": SoloController.deploy_threat_in,
 		"deploy_threat_seat": SoloController.deploy_threat_seat,
 		"deploy_threat_preset": SoloController.deploy_threat_preset,
+		"shadow_menu": OS.get_environment("NML_SHADOW_MENU"),
 	}
 
 

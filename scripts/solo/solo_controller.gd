@@ -3322,6 +3322,17 @@ var _core_calls := 0
 var _core_us_total := 0
 var _core_us_max := 0
 var _core_statics_builds := 0     # M2-5b: profile-closure rebuilds seen so far
+## SHADOW MENU (22.09., second opinion: Δ = p·g): a SECOND core node whose header carries the menu
+## knobs named in NML_SHADOW_MENU (comma list of `menu_holders`/`menu_wide` to set TRUE, every other
+## menu knob FALSE; "off" = both false) plans the SAME activation after the live node. The first
+## activation per game where the two picks differ is recorded once ("shadow_first"), every
+## divergence counts ("shadow") — so a result file yields p, the share of games the switch touched,
+## and the diverging activations are the branching-diagnostics corpus. Measurement only: the shadow
+## pick is never executed. Empty env = no shadow node, byte-identical.
+var _shadow_node: Object = null
+var _shadow_header_done := false
+var _shadow_first_seen := {}      # side -> true once the first divergence of that side is recorded
+var _shadow_env := -1             # -1 unread, 0 off, 1 on
 
 
 ## The ONE live NmlCore node per controller — the search seam (M2-5) and the
@@ -3386,7 +3397,85 @@ func _core_plan(state: Dictionary, me: int) -> Dictionary:
 		_core_selfcheck(state, me, out)
 	print("[CORE] ACT r%d p%d us=%d n=%d mean_us=%d max_us=%d" % [_current_round(), me,
 		dt, _core_calls, _core_us_total / maxi(_core_calls, 1), _core_us_max])
+	if _shadow_on():
+		_shadow_plan(state, me, plain, statics, sig, out)
 	return _core_pick_of(out, state)
+
+
+static func shadow_menu_knobs(env: String) -> Dictionary:
+	## The shadow header's menu knobs from NML_SHADOW_MENU: names listed = true, the rest false.
+	var want := {"menu_holders": false, "menu_wide": false}
+	for tok in env.split(","):
+		var t := tok.strip_edges()
+		if want.has(t):
+			want[t] = true
+	return want
+
+
+func _shadow_on() -> bool:
+	if _shadow_env < 0:
+		_shadow_env = 1 if OS.get_environment("NML_SHADOW_MENU").strip_edges() != "" else 0
+	return _shadow_env == 1
+
+
+## Two core picks are the SAME activation when unit, action kind, target and destination (to the
+## millimetre) agree; anything else is a divergence. Pure and static so it is unit-testable.
+static func shadow_diverges(live: Dictionary, shadow: Dictionary) -> bool:
+	if str(live.get("unit_key", "")) != str(shadow.get("unit_key", "")):
+		return true
+	var a: Dictionary = live.get("action", {})
+	var b: Dictionary = shadow.get("action", {})
+	for k in ["kind", "unit", "shoot", "charge", "at"]:
+		if str(a.get(k, "")) != str(b.get(k, "")):
+			return true
+	var da: Array = a.get("dest", [])
+	var db: Array = b.get("dest", [])
+	if da.size() != db.size():
+		return true
+	for i in range(da.size()):
+		if absf(float(da[i]) - float(db[i])) > 0.001:
+			return true
+	return false
+
+
+func _shadow_plan(state: Dictionary, me: int, plain: Dictionary, statics: Dictionary, sig: int,
+		live: Dictionary) -> void:
+	if _shadow_node == null:
+		_shadow_node = ClassDB.instantiate("NmlCore")
+		if _shadow_node == null:
+			return
+		_shadow_node.set_repo_root(ProjectSettings.globalize_path("res://"))
+		_shadow_node.set_seams(BattleSim.spacing_enabled(), BattleSim.cast_phase_enabled())
+	if not _shadow_header_done:
+		var head := AiActRecorder._header_line(state, terrain_type_at)
+		var knobs: Dictionary = (head["knobs"] as Dictionary).duplicate()
+		var want := shadow_menu_knobs(OS.get_environment("NML_SHADOW_MENU"))
+		for k in want:
+			knobs[k] = want[k]
+		head["knobs"] = knobs
+		if not bool(_shadow_node.set_game_header(head)):
+			_core_warn_once("shadow: " + str(_shadow_node.last_error()))
+			return
+		_shadow_header_done = true
+	var out: Dictionary = _shadow_node.plan_with_rollout(plain, me, statics, sig)
+	if not bool(out.get("used", false)):
+		return
+	if not shadow_diverges(live, out):
+		return
+	var la: Dictionary = live.get("action", {})
+	var sa: Dictionary = out.get("action", {})
+	var summary := "live %s:%s -> shadow %s:%s" % [str(live.get("unit_key", "")), str(la.get("kind", "")),
+		str(out.get("unit_key", "")), str(sa.get("kind", ""))]
+	if not _shadow_first_seen.has(me):
+		_shadow_first_seen[me] = true
+		record_decision({"kind": "shadow_first", "unit": str(live.get("unit_key", "")),
+			"rule": "shadow menu: first activation of this side where the live and the shadow menu pick differently",
+			"candidates": [], "chosen": summary, "why": "NML_SHADOW_MENU=" + OS.get_environment("NML_SHADOW_MENU"),
+			"data": {"round": _current_round(), "side": me, "live": la, "shadow": sa}})
+	record_decision({"kind": "shadow", "unit": str(live.get("unit_key", "")),
+		"rule": "shadow menu: the live and the shadow menu pick differently on this activation",
+		"candidates": [], "chosen": summary, "why": "",
+		"data": {"round": _current_round(), "side": me}})
 
 
 ## The core's answer as the dictionary AiPlanner.plan_with_rollout returns —
