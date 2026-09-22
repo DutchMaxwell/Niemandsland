@@ -267,6 +267,11 @@ func _run() -> void:
 			_presentation.set_process(true)
 		report["orbit_clip"] = {"fps":30,"frames":240,"start_seconds":6.0,"fixed_effect_step":_presentation != null}
 		print("REFERENCE_FLIGHT_DONE")
+	if args.has("placement") and _presentation != null:
+		var probe := preload("res://test/manual/urban_placement_probe.gd").new()
+		if not await probe.run(main,_presentation,_output,self):
+			quit(1)
+			return
 	main.get_node("UI").visible = true
 	for _i in 30:
 		await process_frame

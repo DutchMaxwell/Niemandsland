@@ -1,53 +1,62 @@
 # Urban ruins reference
 
-The opt-in reference now accepts `--biome urban_ruins` after the Godot argument
-separator. The native urban trees, minefields, containers and ruin geometry are
-retained. A quieter asphalt/concrete surface replaces the oversized painted
-debris, with chipped pavement edges, masonry dust and small geometric fragments.
-Sparse pioneer weeds grow near walls. Existing miniatures and their materials
-remain intact; base caps share the world-aligned ground projection.
+The opt-in city reference uses original NanoBanana textures for fractured asphalt,
+battered concrete and masonry fines. Irregular wear replaces the former clean
+slab grid. Low angular fragments, restrained brick accents, wall soot and localized
+dust/rust/damp marks connect the native ruins to the ground. Miniatures, native
+terrain meshes, source materials, collision and LOS geometry remain intact.
 
 ```sh
 godot --path . res://scenes/visual/grassland_reference.tscn -- --biome urban_ruins
 ```
 
-`reference_biomes.gd` supplies the urban profile. `reference_urban.gd` places
-non-colliding chipped fragments and weeds, using finite wall segments for a
-shared R8 contact mask. Full decorative footprints avoid miniature clearings,
-native prop bounds, walls and table edges. Placement is deterministic and uses
-the same reduced visual relief as the ground shader (15% of grassland relief).
-Pavement-edge noise agrees between the shader and scatter placement.
+## Freely placed terrain
 
-The ground shader reuses three original NanoBanana mineral albedos:
+`reference_urban.gd` derives dressing from current finite wall segments, including
+individually placed sandbox ruins. Each owner has an external visual rig that
+follows translation, rotation and scale through a geometry-free transform
+observer. Keeping visual meshes outside native owners preserves recursive bounds,
+save serialization and rule geometry. Clipboard copies receive fresh observers.
 
-- `assets/terrain/reference/volcanic/porous-basalt.webp`: asphalt aggregate.
-- `assets/terrain/reference/volcanic/fine-ash.webp`: fine cement grain.
-- `assets/terrain/reference/desert/scree.webp`: crushed masonry/dust grain.
+After 120 ms without edits, the controller rebuilds decorative placements and a
+shared RGBA contact texture: dust, soot, rust and dampness. During movement old
+contact marks are disabled; rubble follows its owner immediately. Removed owners
+lose their rigs and contact marks. Save loading, table resizing, native layout
+edits and asynchronous biome material replacement restore the reference surface.
+Stable owner identity seeds decoration. Shader seating keeps fragments on the
+world-aligned ground after owner transforms. Full fragment footprints avoid
+walls, unit bases, native props and table edges. Unit/hazard movement refreshes
+clearings; a shader clearance texture also clips dressing against those areas.
 
-The original bitmaps are unchanged. Shader luminance remapping, slab joints,
-weathering and material response make the urban surface. These are artistic
-approximations, not calibrated physical material scans. Original prompts,
-model/provider and hashes remain in the adjacent `provenance.json` files.
-Art: CC BY-SA 4.0, Niemandsland Contributors; procedural geometry/shaders: MIT.
-No new generated bitmap or GLB is included in this milestone.
+This is presentation-only derived state: no new serialized terrain, multiplayer
+message, movement blocker, cover or collision object. Each client can derive the
+same treatment from its synchronized native terrain state.
+
+## Sources
+
+Three dedicated 1024-square albedos are in `assets/terrain/reference/urban/`:
+`fractured-asphalt.webp`, `battered-concrete.webp`, `masonry-fines.webp`.
+Generated with Google Gemini `gemini-2.5-flash-image` (NanoBanana), without source
+images, on 2026-09-22. Original prompts and source/runtime hashes are recorded in
+`provenance.json`. PNG originals were converted to WebP quality 90. Art: CC BY-SA
+4.0, Niemandsland Contributors. Procedural geometry and shaders: MIT. These are
+authored game materials, not calibrated surface scans. No new GLB is included.
 
 ## Review and validation
 
-[Matched comparison](https://forge.niemandsland.xyz/static/urban-biome-2026-09-21/index.html)
-includes original unretouched PNGs, four camera pairs, source records and timings.
-Capture with `test/manual/biome_reference_capture.gd`, `quick studio surface`, and
-`--biome urban_ruins`, once in `before` and once in `after` mode. `orbit` adds
-240 offline frames. Both sides load the native biome before the miniature and
-rule-geometry snapshots; guards therefore compare against the relevant biome.
+[Matched comparison](https://forge.niemandsland.xyz/static/urban-biome-2026-09-22/index.html)
+compares the previous city candidate with this surface at unchanged camera/light
+settings. It also includes the original native city, original PNGs, source records,
+placement screenshots and capture timings.
 
-Focused tests cover decoration bounds/normals, contact-mask coordinates and
-finite-wall falloff, plus prior terrain/base/forest/volcanic/jungle regressions.
-Real renderer captures check all 54 miniature transforms, LOS volumes and wall
-segments. Lighting, atmosphere and the table frame are part of the reference
-look; this is not an isolated material benchmark.
+`test/manual/biome_reference_capture.gd` accepts `after quick studio surface
+--biome urban_ruins orbit placement`. The placement probe uses native spawn,
+clipboard duplication, transforms, deletion, save/load and table resize paths.
+Focused tests cover decorative bounds, contact masks, moving owners, deletion,
+miniature clearings, base projection and previous biome regressions. GPU capture
+guards compare all 54 original miniature transforms, native LOS and wall segments.
 
-The reference is separate from production startup. Scatter/contact masks are
-built at load and require reload after moving terrain or units. Existing urban
-tree geometry, flat ruin panels and painted source detail remain visible limits.
-Broad performance, LODs, Compatibility/web calibration and game integration are
-separate work. No new cover, collision, damage or movement rule is introduced.
+The reference remains separate from production startup. Existing urban tree
+geometry and flat ruin panels still limit close views. Contact masks update after
+movement settles rather than every drag frame. Large-layout performance, LODs,
+Compatibility/web calibration and production integration remain separate work.

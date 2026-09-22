@@ -135,9 +135,9 @@ const URBAN_RUINS := {
 	"name": "urban_ruins", "biome": "urban_ruins",
 	"desert_mode": false, "urban_mode": true,
 	"textures": {
-		"meadow": "res://assets/terrain/reference/volcanic/porous-basalt.webp",
-		"earth": "res://assets/terrain/reference/volcanic/fine-ash.webp",
-		"woodland": "res://assets/terrain/reference/desert/scree.webp",
+		"meadow": "res://assets/terrain/reference/urban/fractured-asphalt.webp",
+		"earth": "res://assets/terrain/reference/urban/battered-concrete.webp",
+		"woodland": "res://assets/terrain/reference/urban/masonry-fines.webp",
 	},
 	"understory": "urban", "forests": false, "dust": false,
 	"fog_color": Color(0.68,0.71,0.74), "fog_density": 1.2,

@@ -34,7 +34,7 @@ const DOF_FAR_DISTANCE := 0.85
 
 
 func prepare() -> void:
-	# Urban uses native props and existing mineral textures; no oak/rock source is needed.
+	# Urban uses native props and its dedicated textures; no oak/rock source is needed.
 	if biome == "urban_ruins":
 		return
 	_props = preload("res://scripts/visual/reference_props.gd").new()

@@ -31,8 +31,9 @@ void fragment() {
 	SPECULAR = mix(0.28,0.68,wet);
 	METALLIC = 0.0;
 	if (urban_mode) {
-		ROUGHNESS = mix(0.88,0.98,urban_contact(ground_xz));
-		SPECULAR = 0.23;
+		float damp = urban_contact_enabled ? texture(urban_contact_mask,ground_xz/urban_board_size+vec2(0.5)).a : 0.0;
+		ROUGHNESS = mix(mix(0.86,0.98,urban_contact(ground_xz)),0.30,damp);
+		SPECULAR = mix(0.23,0.48,damp);
 	}
 	if (jungle_mode) {
 		ALBEDO = jungle_sample(ground_xz)*0.92;
