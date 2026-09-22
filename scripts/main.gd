@@ -3664,14 +3664,25 @@ func _solo_announce_spell_effect(caster: GameUnit, spell_name: String, effect: D
 		effect_text = ("grants %s (once)" % grant) if not grant.is_empty() else "see the faction's spell list"
 	_log_rule_event(BattleLog.Category.COMBAT, "%s takes effect on %s: %s" % [
 		spell_name, ", ".join(names), effect_text], true)
-	# When the spell has a derived library token, _solo_place_spell_tokens applies it right after
-	# this announce — only spells WITHOUT a token still need the manual-application note.
-	var has_token: bool = radial_menu_controller != null \
-			and radial_menu_controller.token_library != null \
-			and radial_menu_controller.token_library.has(spell_name)
-	if not has_token:
+	# _solo_place_spell_tokens runs right after this announce: it defines a missing token on the fly and
+	# records the effect mechanically whenever the data carries a modifier or a granted rule — only a
+	# spell with neither still needs the manual-application note (the token library cannot tell).
+	if not _solo_spell_effect_applies(effect):
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"Note: spell effects other than damage are not auto-applied — apply \"%s\" manually" % spell_name, true)
+
+
+## Whether _solo_record_spell_mod will apply anything for this effect data: a granted rule, or a nonzero
+## hit / defense / casting / morale / range / advance / rush modifier — the same fields its two early
+## returns test. Pure, so the manual note and the record cannot disagree.
+static func _solo_spell_effect_applies(effect: Dictionary) -> bool:
+	if not str(effect.get("grants_rule", "")).is_empty():
+		return true
+	var modifier: Dictionary = effect.get("modifier", {})
+	for k in ["hit_mod", "def_mod", "casting_mod", "morale_mod", "range_in", "advance_in", "rush_in"]:
+		if int(modifier.get(k, 0)) != 0:
+			return true
+	return false
 
 
 ## NML-949 — the durable half of the spell bookkeeping. `_solo_spell_mods` is keyed by
