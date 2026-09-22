@@ -3,6 +3,7 @@ extends Node3D
 ## Supplies the small scene contract used by the accepted biome presentation.
 
 signal progress(label: String, ratio: float)
+signal finished
 
 const BIOMES := ["urban_ruins", "alien_jungle", "grassland", "arid_desert", "frozen_tundra", "volcanic_ash"]
 const FORMATION := [Vector2(-0.043,0), Vector2(0,0.01), Vector2(0.043,0), Vector2(-0.0215,-0.043), Vector2(0.0215,-0.043)]
@@ -51,6 +52,8 @@ func build(selected_biome: String, world_env: WorldEnvironment, sun: Directional
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(4,4)
 	surface.mesh = plane
+	# The node owns the mesh; do not retain a resource in a cancelled coroutine.
+	plane = null
 	table.add_child(surface)
 	var grass := Node3D.new()
 	grass.name = "GrassField"
@@ -84,6 +87,7 @@ func build(selected_biome: String, world_env: WorldEnvironment, sun: Directional
 	_add_spill(Vector3(0.12,0.12,0.20),Color(0.78,0.84,1),0.10,0.42)
 	_add_spill(Vector3(-0.03,0.045,-0.13),Color(1,0.42,0.16),0.12,0.27)
 	progress.emit("Bereit",1.0)
+	finished.emit()
 
 
 func _build_terrain() -> void:

@@ -117,7 +117,13 @@ func _setup() -> void:
 	_battlefield = stage
 	_viewport.add_child(stage)
 	stage.progress.connect(func(label: String, ratio: float) -> void: loading_progress.emit(label,ratio))
-	await stage.build(biome,world,sun,_lighting,_camera)
+	# Do not suspend this surviving menu on a scene that a later choice may free.
+	# A cancelled build must release its captured environment and sky resources.
+	stage.finished.connect(_on_battlefield_ready.bind(stage,generation),CONNECT_ONE_SHOT)
+	stage.build(biome,world,sun,_lighting,_camera)
+
+
+func _on_battlefield_ready(stage: Node3D, generation: int) -> void:
 	if generation != _generation or not is_instance_valid(stage):
 		return
 	_diorama_built = true
