@@ -14677,6 +14677,10 @@ func _on_save_completed(path: String) -> void:
 func _on_load_completed(object_count: int) -> void:
 	print("Game loaded: %d objects" % object_count)
 	_update_round_button()  # restored round may differ from 1
+	# A loaded battle spawns no army_spawned signal, so the unit strip was only ever built on a fresh
+	# spawn and stayed empty after a save-load (UI handoff finding 4). Rebuild it from the restored units.
+	if unit_dock != null:
+		unit_dock.rebuild()
 	# Restored game phase drives the trail chalk + the Start-Game/Ready UI (a mid-play save resumes in
 	# PLAYING with trails live; a setup save resumes in DEPLOYMENT).
 	_sync_move_trails_deployment()
