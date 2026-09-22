@@ -8338,18 +8338,19 @@ static func player_decision_lines(records: Array) -> Array:
 ## hand-maintained list), of which the "decision" subset ALSO steers behaviour choices (targeting
 ## overlays / EV inputs / activation order / movement), and "unknown" (kept in the once-per-session
 ## un-automated battle-log flow). `rule_names` may repeat (one entry per bearing unit/weapon) — the
-## values are occurrence counts. Matching is prefix-based, mirroring _solo_log_unmodeled_rules.
+## values are occurrence counts. The modeled test is an EXACT name (NML-1112, rated / "(spell)" forms
+## included), mirroring _solo_log_unmodeled_rules — a prefix would file "Fearsome X" under "Fear".
 static func classify_rule_inventory(rule_names: Array, modeled: Array, decision_relevant: Array) -> Dictionary:
 	var resolved := {}
 	var decision := {}
 	var unknown := {}
 	for r in rule_names:
-		var name := str(r).strip_edges().get_slice("(", 0)
+		var name := RulesRegistry.base_rule_name(str(r))
 		if name.is_empty():
 			continue
 		var is_modeled := false
 		for known in modeled:
-			if name.begins_with(str(known)):
+			if GameUnit.rule_name_matches(name, str(known)):
 				is_modeled = true
 				break
 		if not is_modeled:

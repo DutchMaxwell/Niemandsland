@@ -8625,12 +8625,13 @@ func _solo_log_unmodeled_rules(unit: GameUnit) -> void:
 			rules.append_array((w as Object).special_rules)
 	var modeled_tokens: Array = _solo_modeled_rules_for(unit)   # system-scoped (wave 5), const fallback
 	for r in rules:
-		var rule_name := str(r).strip_edges().get_slice("(", 0)
+		var rule_name := RulesRegistry.base_rule_name(str(r))
 		if rule_name.is_empty() or _solo_unmodeled_logged.has(rule_name):
 			continue
+		# NML-1112: an EXACT name (or its rated / "(spell)" form), never a prefix — "Fearsome X" is not "Fear".
 		var modeled := false
 		for known in modeled_tokens:
-			if rule_name.begins_with(str(known)):
+			if GameUnit.rule_name_matches(rule_name, str(known)):
 				modeled = true
 				break
 		_solo_unmodeled_logged[rule_name] = true
