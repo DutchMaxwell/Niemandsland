@@ -438,11 +438,28 @@ impl NmlCore {
         if self.reg.is_none() {
             self.reg = Some(Registries::new(&root));
         }
+        // A file that could not be READ is named with its path; a file that read
+        // but parsed to nothing keeps the old "registry empty" wording.
+        let mut empty_system: Option<String> = None;
         for s in &systems {
-            if self.reg.as_mut().unwrap().rules_for(s).empty {
-                self.last_error = format!("rules registry empty for system \"{s}\" at {root} — core declines the game");
-                return false;
+            if self.reg.as_mut().unwrap().rules_for(s).empty && empty_system.is_none() {
+                empty_system = Some(s.clone());
             }
+        }
+        // The spells file loads on the same call (spells_for caches per system,
+        // the faction is irrelevant): a missing spells file must be NAMED here,
+        // not worn as "that faction never casts".
+        for s in &systems {
+            let _ = self.reg.as_mut().unwrap().spells_for(s, "");
+        }
+        let missing = self.reg.as_ref().unwrap().missing_files().to_vec();
+        if !missing.is_empty() {
+            self.last_error = format!("rules files unreadable at {root}: {} — core declines the game", missing.join(", "));
+            return false;
+        }
+        if let Some(s) = empty_system {
+            self.last_error = format!("rules registry empty for system \"{s}\" at {root} — core declines the game");
+            return false;
         }
         let terrain = match header.get("terrain").and_then(|v| v.try_to::<VarDictionary>().ok()) {
             Some(t) => Terrain::build(&plain::terrain_of(&t)),
