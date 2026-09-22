@@ -140,7 +140,7 @@ func _dress_owner(entry: Dictionary) -> int:
 		var length := a.distance_to(b)
 		var burn := a.lerp(b,_rng.randf_range(0.10,0.90))+normal*_rng.randf_range(-0.013,0.013)
 		_marks.append(Vector4(burn.x,burn.y,_rng.randf_range(0.025,0.050),_rng.randf()))
-		for i in maxi(1,int(length*2100.0)):
+		for i in maxi(1,int(length*2100.0*_density())):
 			var t := _rng.randf()
 			var distance := _rng.randf_range(0.009,0.047)*_rng.randf_range(0.45,1.0)
 			var p := a.lerp(b,t)+normal*distance*(-1.0 if i%2==0 else 1.0)

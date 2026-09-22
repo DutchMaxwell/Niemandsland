@@ -41,8 +41,13 @@ float surface_noise(vec2 p) {
 }
 vec2 mirrored_uv(vec2 uv) { return 1.0 - abs(mod(uv, 2.0) - 1.0); }
 vec3 tiled_surface(sampler2D tex, vec2 uv) {
+#ifdef TABLE_TIER
+ // Game-table tier: one fetch; the reference blends in 15 % of a rotated second fetch against tiling.
+ return texture(tex,mirrored_uv(uv)).rgb;
+#else
  vec2 rotated = mat2(vec2(0.8,0.6),vec2(-0.6,0.8)) * uv * 0.71 + vec2(0.37,0.61);
  return mix(texture(tex,mirrored_uv(uv)).rgb,texture(tex,mirrored_uv(rotated)).rgb,0.15);
+#endif
 }
 // Wind-piled sand: a soft mound at the foot of every ruin wall and placed prop, so the
 // props sit in the terrain instead of on top of it. Walls use the wall segments; placed

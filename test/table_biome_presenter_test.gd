@@ -19,10 +19,22 @@ func test_every_table_biome_maps_to_its_own_reference_profile() -> void:
 
 func test_headless_and_switched_off_runs_are_not_dressed() -> void:
 	var presenter: TableBiomePresenter = auto_free(TableBiomePresenter.new())
-	presenter.set("_table", Node3D.new())
+	var table: Node3D = auto_free(TableScript.new())   # never added to the tree: only table_size is read
+	presenter.set("_table", table)
 	assert_bool(presenter.should_dress()).is_false()   # gdUnit runs headless
 	presenter.allow_headless = true
 	assert_bool(presenter.should_dress()).is_true()
 	presenter.enabled = false
 	assert_bool(presenter.should_dress()).is_false()
-	presenter.get("_table").free()
+
+
+func test_density_follows_preset_and_caps_large_tables() -> void:
+	# Performance (0) and Low (1) are not dressed: today's battlemap table.
+	assert_float(TableBiomePresenter.density_for(0, Vector2(6, 4))).is_equal(0.0)
+	assert_float(TableBiomePresenter.density_for(1, Vector2(6, 4))).is_equal(0.0)
+	# Medium on 6x4 and on a smaller table: the full table-tier density.
+	assert_float(TableBiomePresenter.density_for(2, Vector2(6, 4))).is_equal_approx(1.0, 0.0001)
+	assert_float(TableBiomePresenter.density_for(2, Vector2(4, 4))).is_equal_approx(1.0, 0.0001)
+	# 240 x 240 in (20 x 20 ft): 16.7x the 6x4 area -> density falls so the instance count stays at 6x4's.
+	var big := TableBiomePresenter.density_for(2, Vector2(20, 20))
+	assert_float(big * 20.0 * 20.0).is_equal_approx(1.0 * 6.0 * 4.0, 0.001)

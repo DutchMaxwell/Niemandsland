@@ -18,6 +18,11 @@ const ReferenceScript := preload("res://scripts/visual/grassland_reference.gd")
 ## Table ids (table.gd BIOMES) -> reference profile ids (reference_biomes.gd). Only grassland differs.
 const TABLE_TO_REFERENCE := {"temperate_grassland": "grassland"}
 const REBUILD_DELAY_S := 0.25
+## Scatter density per quality preset (GraphicsSettings.QualityPreset); presets missing here are NOT dressed
+## (Performance, Low): they keep today's battlemap table, the escape hatch for weak GPUs.
+const PRESET_DENSITY := {2: 1.0, 3: 1.0, 4: 1.0}   # MEDIUM, HIGH, ULTRA
+## Scatter counts are per m²; above a 6x4 ft table the density falls instead of the frame rate.
+const REFERENCE_AREA_M2 := 6.0 * 0.3048 * 4.0 * 0.3048
 const ENV_PROPS: Array[String] = ["background_mode", "reflected_light_source", "ambient_light_source",
 	"ssao_radius", "ssao_intensity", "ssao_power", "ssil_enabled", "sdfgi_enabled", "tonemap_agx_contrast",
 	"ssr_enabled", "ssr_max_steps", "ssr_fade_in", "ssr_fade_out", "ssr_depth_tolerance",
@@ -45,6 +50,7 @@ var _rebuild_queued := false
 var _saved := {}
 var _applied_mesh: Mesh = null
 var _applied_material: Material = null
+var _applied_density := -1.0
 
 
 ## A table id -> the reference profile id that dresses it.
@@ -62,7 +68,24 @@ func setup(main: Node) -> void:
 	main.opr_army_manager.game_phase_changed.connect(_on_game_phase_changed)
 	if main.map_layout_editor != null:
 		main.map_layout_editor.layout_closed.connect(func() -> void: request_rebuild("layout"))
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null:
+		graphics.settings_applied.connect(_on_graphics_settings_applied)
 	request_rebuild("start")
+
+
+## Scatter density for this table and preset (0 = do not dress).
+static func density_for(preset: int, table_size_feet: Vector2) -> float:
+	if not PRESET_DENSITY.has(preset):
+		return 0.0
+	var area := table_size_feet.x * 0.3048 * table_size_feet.y * 0.3048
+	return float(PRESET_DENSITY[preset]) * minf(1.0, REFERENCE_AREA_M2 / maxf(area, 0.0001))
+
+
+func _current_density() -> float:
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	var preset: int = int(graphics.current_preset) if graphics != null else 2
+	return density_for(preset, _table.table_size)
 
 
 ## Is the table dressed right now?
@@ -80,7 +103,10 @@ func should_dress() -> bool:
 		return false
 	if DisplayServer.get_name() == "headless" and not allow_headless:
 		return false
-	return true
+	# The reference shaders are Forward+ only (the web export runs gl_compatibility).
+	if DisplayServer.get_name() != "headless" and RenderingServer.get_current_rendering_method() != "forward_plus":
+		return false
+	return _current_density() > 0.0
 
 
 ## Ask for a rebuild. Layout reasons count only during setup (DEPLOYMENT); everything else always.
@@ -109,6 +135,9 @@ func rebuild() -> void:
 		var presentation: Node3D = ReferenceScript.new()
 		presentation.name = "TableBiomeReference"
 		presentation.biome = reference_biome(str(_table.biome))
+		presentation.table_tier = true
+		presentation.density_scale = _current_density()
+		_applied_density = presentation.density_scale
 		add_child(presentation)
 		await presentation.prepare()
 		if is_instance_valid(presentation) and is_instance_valid(_table) and is_inside_tree():
@@ -227,6 +256,15 @@ func _process(_delta: float) -> void:
 	var grass: Node3D = _table.get_node("GrassField")
 	if grass.visible:
 		grass.visible = false
+
+
+## A quality-preset change: rebuild only when the dressing state or the density actually changes.
+func _on_graphics_settings_applied(_preset_name: String) -> void:
+	if _building or _table == null:
+		return
+	var want := should_dress()
+	if want != is_dressed() or (want and not is_equal_approx(_current_density(), _applied_density)):
+		request_rebuild("preset")
 
 
 func _on_game_phase_changed(phase: int) -> void:

@@ -13,10 +13,13 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 	for obj in main.object_manager.get_children():
 		if obj is Node3D and obj.is_in_group("selectable"):
 			_exclusions.append(Vector3(obj.global_position.x,obj.global_position.z,0.024))
+	# The table tier loads no biome forest (no TRELLIS replacement): no anchors, no forest shelter.
+	var forest: Node3D = presentation._biome_forest
+	var anchors: Array = forest._anchors if forest != null else []
 	for obj: Node3D in main.terrain_overlay._object_instances:
 		var p := Vector2(obj.global_position.x,obj.global_position.z)
 		var is_tree := false
-		for anchor: Vector2 in presentation._biome_forest._anchors:
+		for anchor: Vector2 in anchors:
 			if anchor.distance_squared_to(p)<0.000001:
 				is_tree = true
 				break
@@ -29,10 +32,10 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 	var leaf_colors: Array[Color] = []
 	var litter: Array[Transform3D] = []
 	var litter_colors: Array[Color] = []
-	for i in int(size.x*size.y*14500):
+	for i in int(size.x*size.y*14500*_density()):
 		var p := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		var growth := ReferenceMaterials.jungle_growth(p)
-		var shelter: float = 1.0 if presentation._biome_forest._inside_forest(p) else 0.0
+		var shelter: float = 1.0 if forest != null and forest._inside_forest(p) else 0.0
 		var patch := smoothstep(0.36,0.68,ReferenceMaterials._noise2(p*31.0))
 		var density := (0.02+growth*0.24+shelter*0.50)*patch*_unit_quiet(p)
 		if _rng.randf()<density:
