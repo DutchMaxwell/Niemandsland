@@ -280,6 +280,7 @@ pub fn tuning_of(knobs: &Knobs) -> crate::menu::Tuning {
         target_units: knobs.menu_targets,
         holders: knobs.menu_holders,
         wide_shoot: knobs.menu_wide,
+        advance_k: knobs.menu_advance_k,
         ..Default::default()
     }
 }

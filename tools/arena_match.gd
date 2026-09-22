@@ -832,6 +832,7 @@ static func search_knobs() -> Dictionary:
 		# not evidence that a switch was live in the process.
 		"menu_holders": AiPlanner._menu_holders_on(),
 		"menu_wide": AiPlanner.menu_wide_on(),
+		"menu_advance_k": AiPlanner.menu_advance_k_on(),
 		"deploy_threat_in": SoloController.deploy_threat_in,
 		"deploy_threat_seat": SoloController.deploy_threat_seat,
 		"deploy_threat_preset": SoloController.deploy_threat_preset,

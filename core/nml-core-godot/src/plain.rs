@@ -978,6 +978,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // matching every seam above; `header_of` stamps it for a header that
         // carries `books`.
         bands_prefolded: dflag(d, "bands_prefolded"),
+        // Wave 6 (`advancek`). A MENU knob, not a seam (like `menu_targets`):
+        // the live menu offers the safe-advance frontier's top-k destinations.
+        // No recorder wrote the key before it, so an absent one answers
+        // `Knobs::default()` = 1 — the single candidate every corpus carries.
+        menu_advance_k: dint(d, "menu_advance_k", dflt.menu_advance_k as i64) as usize,
     }
 }
 

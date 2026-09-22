@@ -150,6 +150,12 @@ pub struct Tuning {
     /// changes what the search may choose, never how a chosen act resolves.
     /// Default OFF, so every recorded corpus replays with the identical menu.
     pub holders: bool,
+    /// Wave 6 (`advancek`) — `Knobs::menu_advance_k`: how many of the
+    /// safe-advance frontier's best destinations the LIVE menu offers. 1 is
+    /// today's single candidate; the scorer is shared, so every k uses the SAME
+    /// score (`safe_advances`), best first, stable on ties by frontier order.
+    /// The playout's greedy brain stays one-option (`safe_advance`).
+    pub advance_k: usize,
 }
 
 impl Default for Tuning {
@@ -162,6 +168,7 @@ impl Default for Tuning {
             target_units: false,
             wide_shoot: false,
             holders: false,
+            advance_k: 1,
         }
     }
 }
@@ -571,9 +578,10 @@ struct Threat<'a> {
 /// `AiPlanner._safe_advance` ai_planner.gd:690-787 — the PATIENT advance:
 /// toward the nearest objective, stopped at the strongest safety still
 /// available (tier 1: outside every gun's reach; tier 2: outside every charge
-/// reach). `None` when even charge safety is already lost or there is nothing to
-/// walk toward.
-pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Option<Candidate> {
+/// reach). Returns the frontier's top-`tuning.advance_k` destinations, best
+/// first, stable on ties by frontier order; empty when even charge safety is
+/// already lost or there is nothing to walk toward.
+pub fn safe_advances(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
     let centre = geom::centre(&state.positions[i]);
     let mut best_d = f64::INFINITY;
     let mut goal: V3 = [0.0, 0.0, 0.0];
@@ -585,7 +593,7 @@ pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) 
         }
     }
     if best_d.is_infinite() || best_d < 0.001 {
-        return None;
+        return Vec::new();
     }
     let dir = geom::normalized(geom::sub(goal, centre));
     let band_m = state.bands[i].advance * IN2M;
@@ -602,7 +610,7 @@ pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) 
         charge_only.push(Threat { positions: &state.positions[e], reach: charge_in * IN2M });
     }
     if full.is_empty() {
-        return None;
+        return Vec::new();
     }
     let positions = &state.positions[i];
     for threats in [&full, &charge_only] {
@@ -629,8 +637,11 @@ pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) 
             continue;
         }
         let frontier = &safe_ts[safe_ts.len().saturating_sub(SAFE_FRONTIER)..];
-        let mut best_t = 0.0f64;
-        let mut best_sc = f64::NEG_INFINITY;
+        // Score every frontier point ONCE, in frontier order. The stable
+        // descending sort below is the tie-break: `sort_by` keeps the frontier
+        // order of equal scores, so `advance_k == 1` returns exactly the
+        // first-wins argmax the single-candidate routine always did.
+        let mut scored: Vec<(f64, f64)> = Vec::with_capacity(frontier.len());
         for &ft in frontier {
             let pnt = geom::add(centre, geom::mul(dir, ft));
             let mut s = ft / IN2M;
@@ -659,19 +670,33 @@ pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) 
                 }
                 s -= SAFE_LINE_OPEN_LINE_PENALTY_IN * (open_lines - 1).max(0) as f64;
             }
-            if s > best_sc {
-                best_sc = s;
-                best_t = ft;
+            scored.push((s, ft));
+        }
+        if scored.is_empty() {
+            continue;
+        }
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        let k = tuning.advance_k.min(scored.len());
+        let mut out = Vec::with_capacity(k);
+        for &(_, ft) in scored.iter().take(k) {
+            if ft <= 0.001 {
+                continue; // the old `best_t > 0.001` guard: a null move is no candidate
             }
-        }
-        if best_t > 0.001 {
             let mut c = Candidate::new(state.key(i), ADVANCE);
-            c.dest = Some(geom::to_f64(geom::add(centre, geom::mul(dir, best_t))));
+            c.dest = Some(geom::to_f64(geom::add(centre, geom::mul(dir, ft))));
             c.patient = true;
-            return Some(c);
+            out.push(c);
         }
+        return out;
     }
-    None
+    Vec::new()
+}
+
+/// The single best safe advance — the greedy playout's one-option menu, and
+/// nothing else. `safe_advances(...).into_iter().next()` keeps ONE scoring
+/// routine behind both sites.
+pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Option<Candidate> {
+    safe_advances(state, terrain, i, tuning).into_iter().next()
 }
 
 /// `AiPlanner._second_wave` ai_planner.gd:1141-1200 (D21/D23) — a follow-up move
@@ -877,7 +902,7 @@ pub fn candidates_tuned(
             out.push(c);
         }
     }
-    if let Some(c) = safe_advance(state, terrain, unit, tuning) {
+    for c in safe_advances(state, terrain, unit, tuning) {
         out.push(c);
     }
     if let Some(c) = second_wave(state, unit) {
