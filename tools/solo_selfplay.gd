@@ -343,7 +343,10 @@ func _play_round(main: Node, solo: Node, round_no: int) -> void:
 ## the cosmetic move animation skipped (the controller already applied the final model positions).
 func _drive_activation(main: Node, solo: Node, side: int, round_no: int) -> void:
 	_set_sides(solo, side)
+	var act_t0 := Time.get_ticks_usec()
 	var unit = solo.activate_next_ai_unit()
+	if SoloController.act_wall_enabled():
+		print("[ACT_WALL] harness r%d p%d us=%d" % [round_no, side, Time.get_ticks_usec() - act_t0])
 	if unit == null:
 		return
 	_capture_decisions(main, solo)
