@@ -97,6 +97,13 @@ pub struct Knobs {
     /// before it, so the default is 1 — byte-identical to today's one candidate.
     #[serde(default = "one")]
     pub menu_advance_k: usize,
+    /// Wave 6 (`rushk`) — `Tuning::rush_k`, the PLAYOUT leg: how many of the
+    /// nearest objectives the rollout's greedy brain rushes instead of only the
+    /// nearest. A MENU knob, not a seam: it widens what the search may choose and
+    /// never changes how a chosen act resolves. Absent from every corpus recorded
+    /// before it, so the default is 1 — byte-identical to today's single RUSH.
+    #[serde(default = "one")]
+    pub playout_rush_k: usize,
     /// NML-1073 M5 D1-B4b — `Seams::hero_attach`, carried in the header the way
     /// every other seam is. Absent from every corpus recorded before it, so the
     /// default is OFF and nothing replays differently.
@@ -1262,6 +1269,7 @@ impl Default for Knobs {
             menu_targets: false,
             menu_holders: false,
             menu_advance_k: 1,
+            playout_rush_k: 1,
             hero_attach: false,
             charge_landing: false,
             sighting: Sighting::Unit,

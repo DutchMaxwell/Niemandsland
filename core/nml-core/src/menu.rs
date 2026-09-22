@@ -156,6 +156,11 @@ pub struct Tuning {
     /// score (`safe_advances`), best first, stable on ties by frontier order.
     /// The playout's greedy brain stays one-option (`safe_advance`).
     pub advance_k: usize,
+    /// Wave 6 (`rushk`) — `Knobs::playout_rush_k`: how many of the nearest
+    /// objectives the rollout's greedy brain rushes. 1 is today's single RUSH to
+    /// the nearest objective; the same rush/demotion rule runs per objective, in
+    /// distance order (stable on ties by `state.objectives` order).
+    pub rush_k: usize,
 }
 
 impl Default for Tuning {
@@ -169,6 +174,7 @@ impl Default for Tuning {
             wide_shoot: false,
             holders: false,
             advance_k: 1,
+            rush_k: 1,
         }
     }
 }
