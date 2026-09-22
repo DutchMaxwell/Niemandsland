@@ -1,8 +1,8 @@
 # Solo / Co-Op AI — Implementation Plan
 
 > **Status: shipped — Solo v1 is live on `main` in `0.3.10.0-alpha`** (the solo core landed in
-> [#151](../../pull/151); NACHTMAHR's own AI lists are CDN-delivered and kept out of the repo by
-> [#150](../../pull/150)). The GDScript engine lives under
+> [#151](../../../pull/151); NACHTMAHR's own AI lists are CDN-delivered and kept out of the repo by
+> [#150](../../../pull/150)). The GDScript engine lives under
 > `scripts/solo/` (M1 skeleton, M2 combat brain, the headless self-play sim, **P3** — the sim's pure
 > modules wired into the real game — and **P2** — the in-game auto-game: alternating activation,
 > objective scoring, the 4-round match). NACHTMAHR is an in-game **AI Opponent** you can play a full

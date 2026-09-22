@@ -8,7 +8,7 @@ Niemandsland is a 3D tabletop sandbox for [OnePageRules](https://onepagerules.co
 
 **Windows**
 
-1. Download the latest release from the [Releases](../../releases) page.
+1. Download the latest release from the [Releases](../../../releases) page.
 2. Unzip the archive.
 3. Run `Niemandsland.exe` — no installer needed.
 
@@ -20,7 +20,7 @@ Niemandsland is a 3D tabletop sandbox for [OnePageRules](https://onepagerules.co
 
 **macOS**
 
-1. Download the latest release from the [Releases](../../releases) page and unzip it.
+1. Download the latest release from the [Releases](../../../releases) page and unzip it.
 2. Run `Niemandsland.app`.
 
 The build is ad-hoc signed but **not notarized** (no Apple Developer account), so macOS won't
@@ -131,6 +131,6 @@ State (models, terrain, dice) syncs automatically. Player names, cursors, and av
 
 - **In-game:** Press `F12` to capture a screenshot and bundle it with the anonymised log into a zip on your Desktop — attach it to a bug report.
 - **Start menu:** Use **"Report a problem"** to export a scrubbed diagnostic bundle.
-- **GitHub:** [Open an issue](../../issues/new/choose) using the Bug report template.
+- **GitHub:** [Open an issue](../../../issues/new/choose) using the Bug report template.
 
 For known limitations and alpha caveats, see [`docs/KNOWN_ISSUES.md`](KNOWN_ISSUES.md).

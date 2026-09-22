@@ -13,7 +13,7 @@ planned and where ideas go. For what already works see
              accepts / declines)
 ```
 
-- **Submit** ideas and bugs as [GitHub issues](../../issues/new/choose) (Bug report /
+- **Submit** ideas and bugs as [GitHub issues](../../../issues/new/choose) (Bug report /
   Feedback templates) — that's the intake.
 - The **maintainer triages**: accepted items move to **Next**, raw ideas to **Ideas**.
   Nothing is owed an outcome; this is a hobby project (see
@@ -70,15 +70,15 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   **Remaining:** display-only melee aids (two-front-rows highlight, full-rows counter,
   flank/rear morale modifier hint) — not yet built. Beta. _L_
 - **MP reconnect — 3+ player hardening** — **mostly shipped in `0.3.8.0-alpha`
-  ([#105](../../pull/105)):** the host peer→slot-table mirror (3+-player avatar/cursor colour agreement
+  ([#105](../../../pull/105)):** the host peer→slot-table mirror (3+-player avatar/cursor colour agreement
   after a reconnect), the shared wrapping `slot→palette` helper (army bases match presence colour at
   slot ≥ 5), and the regiment tray's serialized `network_id` all landed. The last piece — a
   **guest army-import await timeout** (a stalled import aborts, releases the restore lock, toasts
   the player, and recovers; host can re-import) — **shipped in `0.3.9.0-alpha`
-  ([#120](../../pull/120))**; live 2-instance verification of that timeout path is still outstanding.
+  ([#120](../../../pull/120))**; live 2-instance verification of that timeout path is still outstanding.
   2-player reconnect is shipped + soak-validated. _S_
 - **UX polish (feedback-driven)** — measure-on-pickup origin ghost (ESC snaps back) and the contextual
-  control hints (hover an object → its hotkeys) **shipped in `0.3.10.0-alpha` ([#140](../../pull/140))**.
+  control hints (hover an object → its hotkeys) **shipped in `0.3.10.0-alpha` ([#140](../../../pull/140))**.
   (The coherency visualizer already rings each model that breaks coherency and draws a labelled line to
   its nearest neighbour, `coherency_visualizer.gd`.) Deeper post-Alpha resilience / accessibility /
   onboarding items live in **Ideas**. _S–M_
@@ -102,7 +102,7 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 - ~~**Avatar transparency on zoom**~~ — **shipped in `0.3.7.2-alpha`**: other players see your avatar
   fade as you zoom in, down to a faint ghost at max zoom (camera zoom synced). _shipped_
 - ~~**Movement cap (opt-in enforcement)**~~ — **shipped in `0.3.9.0-alpha`** as the "dry brush" cap
-  ([#131](../../pull/131)): the *Enforce Movement Limit* toggle hard-stops a drag at the selected action
+  ([#131](../../../pull/131)): the *Enforce Movement Limit* toggle hard-stops a drag at the selected action
   band (Advance / Rush-Charge, Fast- and aura-aware) measured along the painted path. _shipped_
 - **Avatar + MP cursor rework** — beyond the label sizes: redesign the two-ring cursor + the avatar
   presentation (the transparency-on-zoom and label-size items fold in here). _M_
@@ -110,7 +110,7 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   a **fantasy world** environment. Needs a fantasy skybox/environment asset. _M_
 
 **🧊 Larger (coming weeks — design/UI/rules):**
-- ~~**Change Daemons death-cascade**~~ — **on `main` for Solo games** ([#748](../../pull/748)): when a
+- ~~**Change Daemons death-cascade**~~ — **on `main` for Solo games** ([#748](../../../pull/748)): when a
   Split unit's last model dies, the table places the named new unit within the rule's range. Multiplayer
   stays manual play. _shipped_
 
@@ -203,7 +203,7 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   ring buffer). MP-safe: both clients observe the same central events. (Maintainer, 2026-07-06.) _L_
   - **Cinematic replay** (far future) — a camera director on top of the journal: framing the active unit,
     dice moments, charges — instead of the static top view. _XL, after the base replay_
-- ~~**Variant-aware mounting**~~ — **done game-side in `0.3.9.0-alpha`** ([#117](../../pull/117)): a mounted
+- ~~**Variant-aware mounting**~~ — **done game-side in `0.3.9.0-alpha`** ([#117](../../../pull/117)): a mounted
   leader resolves a composed `<hero>#<weapon>+<mountslug>` bake first and falls back to the faction mount
   GLB only when no such bake exists. _shipped_
 - **Persistent room / async play** — a long-running hosted table (or a turn-based save-file relay flow)
@@ -225,24 +225,24 @@ See [`CHANGELOG.md`](../CHANGELOG.md).
 
 **Next release (on `main`, not yet tagged):** **Solo AI** — on Windows and Linux NACHTMAHR plays with
 its new model **Erlkönig**: a search planner priced by a trained neural network (value net) in the Rust
-rules core, which now ships in those exports ([#873](../../pull/873), [#874](../../pull/874),
-[#1052](../../pull/1052)–[#1055](../../pull/1055)); the planner also offers Advance + shoot
-([#1057](../../pull/1057)), and models move through the core by default, which shortens the AI's
-decision wait ([#1060](../../pull/1060)). macOS, or a build whose core does not load, plays the decision
-tree; the game log and the diagnostics report name which ([#1066](../../pull/1066)). Still one
+rules core, which now ships in those exports ([#873](../../../pull/873), [#874](../../../pull/874),
+[#1052](../../../pull/1052)–[#1055](../../../pull/1055)); the planner also offers Advance + shoot
+([#1057](../../../pull/1057)), and models move through the core by default, which shortens the AI's
+decision wait ([#1060](../../../pull/1060)). macOS, or a build whose core does not load, plays the decision
+tree; the game log and the diagnostics report name which ([#1066](../../../pull/1066)). Still one
 difficulty grade. **Rules (Solo)**: Split and Spawn resolve on the table — the Change Daemons
-death-cascade ([#748](../../pull/748)); a mission selector in the Solo panel ([#640](../../pull/640));
-rulebook-legal objective placement ([#473](../../pull/473)). **Multiplayer**: co-op against the AI, a
-first version ([#835](../../pull/835), [#836](../../pull/836)); round bookkeeping (Fatigue, spell
+death-cascade ([#748](../../../pull/748)); a mission selector in the Solo panel ([#640](../../../pull/640));
+rulebook-legal objective placement ([#473](../../../pull/473)). **Multiplayer**: co-op against the AI, a
+first version ([#835](../../../pull/835), [#836](../../../pull/836)); round bookkeeping (Fatigue, spell
 tokens, growth markers, transport activations) and the line-of-sight line also run in human-vs-human
-rooms ([#662](../../pull/662)–[#665](../../pull/665), [#667](../../pull/667)). **Privacy & data
+rooms ([#662](../../../pull/662)–[#665](../../../pull/665), [#667](../../../pull/667)). **Privacy & data
 settings** (local only, nothing is sent): a consent screen, preview and local export of the last game
-([#684](../../pull/684), [#876](../../pull/876), [#892](../../pull/892), [#1031](../../pull/1031),
-[#1034](../../pull/1034)). **UI**: opens on the primary monitor, with a monitor selector
-([#365](../../pull/365)); no more dropped clicks ([#366](../../pull/366), [#368](../../pull/368)); `F`
-reaches the sight fan again ([#414](../../pull/414)); the AI-log toggle is back in exported builds
-([#416](../../pull/416)); the off-table tray groups reserves by arrival class ([#832](../../pull/832));
-wreck spill shows a formation ghost at the cursor ([#828](../../pull/828)).
+([#684](../../../pull/684), [#876](../../../pull/876), [#892](../../../pull/892), [#1031](../../../pull/1031),
+[#1034](../../../pull/1034)). **UI**: opens on the primary monitor, with a monitor selector
+([#365](../../../pull/365)); no more dropped clicks ([#366](../../../pull/366), [#368](../../../pull/368)); `F`
+reaches the sight fan again ([#414](../../../pull/414)); the AI-log toggle is back in exported builds
+([#416](../../../pull/416)); the off-table tray groups reserves by arrival class ([#832](../../../pull/832));
+wreck spill shows a formation ghost at the cursor ([#828](../../../pull/828)).
 
 **`0.3.12.0-alpha` (2026-08-06):** **Elevation, Phase A** — every sight question (can this unit
 see that one, is it in cover, what does the sight fan show) now flows through one volumetric
@@ -250,13 +250,13 @@ line-of-sight check (`VolumetricLos`) instead of several flat-map approximations
 disagree; hills, ruins and walls block by their actual shape, and the AI and the human previews
 read the same truth (NML-972, closes NML-968). **AI**: melee never charges or chases a target it
 cannot hurt — an expected-wounds floor gates the charge, either way logged
-([#321](../../issues/321)); movement targets get commitment hysteresis so units stop flip-flopping
-between similar targets round after round ([#319](../../issues/319)); a holding caster now says
-why it did nothing ([#320](../../issues/320)); attacker-side spell buffs (e.g. Calculated
+([#321](../../../issues/321)); movement targets get commitment hysteresis so units stop flip-flopping
+between similar targets round after round ([#319](../../../issues/319)); a holding caster now says
+why it did nothing ([#320](../../../issues/320)); attacker-side spell buffs (e.g. Calculated
 Foresight) finally reach the attack they were meant to boost (NML-987); a vehicle-and-walker
 keyword clash resolves to the vehicle base size again (NML-993). **Multiplayer**: a persistent
 status line and a toast make clear that multiplayer is manual play — no rules automation
-([#322](../../issues/322)).
+([#322](../../../issues/322)).
 
 **`0.3.11.1-alpha` (2026-08-04):** hotfix — a once-per-game move feat (e.g. Speed Feat) no longer
 doubled its Advance/Rush bonus into the unit's permanent move bands (NML-982); split fire no
@@ -275,22 +275,22 @@ the `CHANGELOG`.
 
 **`0.3.10.1-alpha` (2026-07-29):** the community hotfix wave from the first days of public play —
 **multiplayer**: a slot a connected human occupies can never be driven by the solo automation
-([#196](../../issues/196)); deployment zones reach the guest and stop flashing (geometry host-synced,
-visibility/colour-flip strictly local, [#194](../../issues/194)/[#195](../../issues/195)). **Movement**:
-`Ctrl`+`Z` **movement take-back** (position, facing, chalk + inch proof, MP-synced, [#162](../../issues/162));
-mid-drag corrections refund inside your own chalk ribbon ([#191](../../issues/191)). **Solo**: click-based
-**wound allocation** when the choice matters ([#172](../../issues/172)); Ambush transports load cargo during
-deployment ([#160](../../issues/160)); Indirect fire without LOS for human players ([#182](../../issues/182));
-Surge/Blast/7+-save log lines ([#193](../../issues/193)/[#169](../../issues/169)/[#173](../../issues/173));
-the AI turn keeps the frame loop alive ([#163](../../issues/163)); the dice tray names what each roll is
-about ([#170](../../issues/170)); draggable deployment control box ([#159](../../issues/159)).
+([#196](../../../issues/196)); deployment zones reach the guest and stop flashing (geometry host-synced,
+visibility/colour-flip strictly local, [#194](../../../issues/194)/[#195](../../../issues/195)). **Movement**:
+`Ctrl`+`Z` **movement take-back** (position, facing, chalk + inch proof, MP-synced, [#162](../../../issues/162));
+mid-drag corrections refund inside your own chalk ribbon ([#191](../../../issues/191)). **Solo**: click-based
+**wound allocation** when the choice matters ([#172](../../../issues/172)); Ambush transports load cargo during
+deployment ([#160](../../../issues/160)); Indirect fire without LOS for human players ([#182](../../../issues/182));
+Surge/Blast/7+-save log lines ([#193](../../../issues/193)/[#169](../../../issues/169)/[#173](../../../issues/173));
+the AI turn keeps the frame loop alive ([#163](../../../issues/163)); the dice tray names what each roll is
+about ([#170](../../../issues/170)); draggable deployment control box ([#159](../../../issues/159)).
 
 **`0.3.10.0-alpha`:** the solo update — **NACHTMAHR**, the built-in
 opponent (rules-based, deterministic, fully offline; one difficulty, full strength) with alternating
 activations, its own objective-marker scoring, round plans and look-ahead activation ordering, and a
 battle log that explains every decision; the **AI Opponent** button (NACHTMAHR brings its own list —
 every Grimdark Future faction, 1000–3000 pts, CDN-delivered at runtime, guarded out of the public repo by a CI check,
-[#150](../../pull/150)); the click-guided **deployment flow** (roll-off → edge → alternating placement →
+[#150](../../../pull/150)); the click-guided **deployment flow** (roll-off → edge → alternating placement →
 scout band) with full **Ambush / Infiltrate / Vanguard / Re-Deployment** reserve handling; **Shoot /
 Fight / Cast** from the radial menu with a live line-of-sight ray, range rings and real tray dice, the
 full melee sequence (charge snap to base contact, Counter, Impact, pile-in, strike-back, Fear-adjusted
@@ -301,10 +301,10 @@ honest per-unit notice for what is *not* automated; **one measuring truth** (bas
 shooting, charges, spells and marker control; per-model line of sight from the base edge); **transports
 stage 1** (capacity, embark/disembark with 6″ auto-formation, rule-exact cargo spill, MP-synced, save
 format 1.7); the **tutorial course at 64 steps / 11 chapters**; the **sight & range fan** (`F`);
-**autosave** ([#139](../../pull/139)); **battle-log export & copy** (F8); measure-on-pickup origin ghost
-+ hover hotkey hints ([#140](../../pull/140)); Ctrl+R 90° snap on every selectable
-([#148](../../pull/148)); the unit-card strip fix wave ([#144](../../pull/144)–[#147](../../pull/147));
-and an import-path cleanup ([#143](../../pull/143)). This release also closed out the
+**autosave** ([#139](../../../pull/139)); **battle-log export & copy** (F8); measure-on-pickup origin ghost
++ hover hotkey hints ([#140](../../../pull/140)); Ctrl+R 90° snap on every selectable
+([#148](../../../pull/148)); the unit-card strip fix wave ([#144](../../../pull/144)–[#147](../../../pull/147));
+and an import-path cleanup ([#143](../../../pull/143)). This release also closed out the
 **"solo movement overhaul"** backlog item: AI models now steer individually while the unit is held in
 coherency, wall segments are real impassable barriers, dangerous terrain is routed around when a free
 path exists, and a placement gate guarantees no overlaps and no models inside blocked terrain after
@@ -312,7 +312,7 @@ every AI move.
 
 **`0.3.9.1-alpha` (2026-07-15):** hotfix — a heavy Army Forge import
 could stall the main loop and blow up the dock unit-cards' spring animation into a NaN, freezing the game;
-the animation step is now capped so a card just catches up after a hitch ([#126](../../issues/126), #137).
+the animation step is now capped so a card just catches up after a hitch ([#126](../../../issues/126), #137).
 
 **`0.3.9.0-alpha` (2026-07-15):** the movement/UX bundle (#131) —
 **Path Painting** (base-width chalk trails, arc-truth distance in ruler + battle log, click-to-measure,
@@ -374,13 +374,13 @@ out) — the manifest is now **634 models across 27 factions**, all live on R2, 
 sync + reconnect-hardening pass** (imported-army
 models + biome sync to peers and late-joiners, paste/delete/arrange replication, own-only
 mini movement, import-slot default, phantom-player + abort hardening), and **stable player
-identity across reconnect** ([PR #66](../../pull/66) — a per-install token → canonical slot remap so a
+identity across reconnect** ([PR #66](../../../pull/66) — a per-install token → canonical slot remap so a
 reconnecting player returns to their exact slot/colour/army with no phantom; `network_id`
 namespaced by owner so two armies never collide; adversarially reviewed), **persistent
-shared rulers** ([PR #64](../../pull/64) — pin a measurement with P; it stays on the table in the owner's
+shared rulers** ([PR #64](../../../pull/64) — pin a measurement with P; it stays on the table in the owner's
 colour and replicates to everyone, including late-joiners; K clears yours, Shift+K all), and
-**base-anchored range rings / auras** ([PR #65](../../pull/65) — G cycles a per-model radius 3″/6″/…/24″ from
-the base edge, Shift+G clears; local display aid), and the **movement reach indicator** ([PR #67](../../pull/67)
+**base-anchored range rings / auras** ([PR #65](../../../pull/65) — G cycles a per-model radius 3″/6″/…/24″ from
+the base edge, Shift+G clears; local display aid), and the **movement reach indicator** ([PR #67](../../../pull/67)
 — M toggles per-model Advance + Rush/Charge bands in the player's colour, OPR Fast/Slow aware;
 display-only, local). Earlier: **Age of
 Fantasy: Regiments**
