@@ -639,6 +639,11 @@ func _desaturate_model(node: Node3D) -> void:
 		var mi := child as MeshInstance3D
 		if mi.mesh == null or mi.has_meta("dead_orig_override"):
 			continue
+		# A material_override (BaseDecor rim/top/ring) hides surface materials anyway, and Godot never
+		# tracks a surface material an override shadows: freeing the node then prints four 'Parameter
+		# "material" is null' engine errors per mesh. Skipping it changes nothing on screen.
+		if mi.material_override != null:
+			continue
 		var origs: Array = []
 		for s in range(mi.mesh.get_surface_count()):
 			origs.append(mi.get_surface_override_material(s))
@@ -1397,11 +1402,10 @@ func _build_unit_model_nodes(unit: OPRApiClient.OPRUnit, faction_folder: String,
 	if object_manager == null:
 		push_warning("OPRArmyManager: no object_manager — cannot build unit models")
 		return models
-	var loadout := EquipmentDistributor.build_loadout(unit)
 	# Per-model loadout labels → pre-baked variant model resolution (I2). The mount upgrade is folded
 	# into the carrier (model 0) so it contributes a variant slug like any weapon (a composed mount bake
 	# resolves as `<hero>#<weapon>+<mountslug>`); mountless units are byte-unchanged.
-	var labels_per_model := _labels_with_mount(EquipmentDistributor.per_model_labels(unit.size, loadout), unit.mount_name)
+	var labels_per_model := _model_labels_for_unit(unit, faction_folder)
 	var unit_base_long := _unit_base_long_mm(unit)
 	var model_longs := _model_base_longs(unit)
 	var any_enlarged := false
@@ -1422,7 +1426,7 @@ func _build_unit_model_nodes(unit: OPRApiClient.OPRUnit, faction_folder: String,
 		var is_mount: bool = i == 0 and not unit.mount_name.is_empty()
 		var mglb: String = _resolve_carrier_model(unit.name, labels_per_model[i], faction_folder, mount_glb if is_mount else "")
 		# A slug was derived but neither a variant bake nor a mount replaced it → base fallback (rare; E6).
-		if mglb.is_empty() and model_library != null and not model_library.variant_slug(labels_per_model[i]).is_empty():
+		if mglb.is_empty() and model_library != null and not model_library.variant_slug(labels_per_model[i], faction_folder).is_empty():
 			_variant_missing_count += 1
 		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder, override_mm, mglb, is_mount)
 		if model:
@@ -2470,11 +2474,23 @@ func _set_owner_recursive(node: Node, scene_owner: Node) -> void:
 func _resolve_model_variant_name(base_name: String, labels: Array, faction_folder: String) -> String:
 	if model_library == null:
 		return ""
-	var slug: String = model_library.variant_slug(labels)
+	var slug: String = model_library.variant_slug(labels, faction_folder)
 	if slug.is_empty():
 		return ""
 	var variant: String = "%s#%s" % [base_name, slug]
 	return variant if model_library.has_model(faction_folder, variant) else ""
+
+
+## Shared visual labels for spawn and prefetch. Universal equipment contributes
+## only when its complete composed model is present in the manifest.
+func _model_labels_for_unit(unit, faction_folder: String) -> Array:
+	var loadout := EquipmentDistributor.build_loadout(unit)
+	var labels := _labels_with_mount(EquipmentDistributor.per_model_labels(unit.size, loadout), unit.mount_name)
+	if model_library != null:
+		var items := EquipmentDistributor.universal_item_labels(unit)
+		for i in range(labels.size()):
+			labels[i] = model_library.labels_with_available_items(faction_folder, unit.name, labels[i], items)
+	return labels
 
 
 ## Per-model loadout labels with the mount upgrade folded into the MOUNT CARRIER (model 0), so the
@@ -2510,10 +2526,9 @@ func _resolve_carrier_model(base_name: String, labels: Array, faction_folder: St
 ## prefetch spec builder AND the spawn loop, so every variant a unit needs is DOWNLOADED, not just
 ## derived at spawn (009). Length == unit.size.
 func _unit_model_variant_names(unit, faction_folder: String) -> Array:
-	var loadout := EquipmentDistributor.build_loadout(unit)
 	# Same mount folding as the spawn loop, so a composed mount variant `<hero>#<weapon>+<mountslug>` is
 	# PREFETCHED (else it resolves at spawn but was never downloaded → "No model found").
-	var labels := _labels_with_mount(EquipmentDistributor.per_model_labels(unit.size, loadout), unit.mount_name)
+	var labels := _model_labels_for_unit(unit, faction_folder)
 	var out: Array = []
 	for i in range(unit.size):
 		out.append(_resolve_model_variant_name(unit.name, labels[i], faction_folder))

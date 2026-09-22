@@ -10,8 +10,8 @@ class_name SelfUpdater
 ## Per platform (the running binary's directory is the install dir):
 ##   Linux  — overwrite Niemandsland.x86_64 + .pck (the running process keeps its old inodes), relaunch.
 ##   macOS  — replace the .app bundle, relaunch via `open`.
-##   Windows— the running .exe is LOCKED, so a tiny helper .bat waits for us to exit, swaps the single
-##            self-contained .exe (with a .bak it restores on failure), and relaunches.
+##   Windows— the running .exe and .dll are LOCKED, so a tiny helper .bat waits for us to exit, swaps
+##            every file of the release (.bak copies it restores on failure), and relaunches.
 
 # ===== Signals =====
 
@@ -151,31 +151,66 @@ func _apply_macos(extracted_abs: String, exe: String) -> void:
 	get_tree().quit()
 
 
-## Windows: the running .exe is locked, so a helper .bat waits for us to exit, swaps the single
-## self-contained .exe (keeping a .bak it restores if the copy fails), and relaunches.
+## Windows: the running .exe and .dll are locked, so a helper .bat waits for us to exit, swaps every
+## file of the release (see windows_helper_script), and relaunches.
 func _apply_windows(extracted_abs: String, install_dir: String, exe: String) -> void:
 	var new_exe := extracted_abs.path_join(exe.get_file())
 	if not FileAccess.file_exists(new_exe):
 		_fail("the Windows update contained no %s" % exe.get_file())
 		return
 	var bat := ProjectSettings.globalize_path(STAGING_DIR).path_join("apply_update.bat")
-	var name := exe.get_file()
-	var script := "@echo off\r\n"
-	script += "ping 127.0.0.1 -n 3 >nul\r\n"  # ~2s: let the game process exit + release the lock
-	script += "copy /Y \"%s\" \"%s.bak\" >nul\r\n" % [exe, exe]
-	script += "copy /Y \"%s\" \"%s\" >nul\r\n" % [new_exe, exe]
-	script += "if errorlevel 1 copy /Y \"%s.bak\" \"%s\" >nul\r\n" % [exe, exe]
-	script += "del \"%s.bak\" >nul 2>&1\r\n" % exe
-	script += "start \"\" \"%s\"\r\n" % exe
 	var fa := FileAccess.open(bat, FileAccess.WRITE)
 	if fa == null:
 		_fail("could not write the Windows update helper")
 		return
-	fa.store_string(script)
+	fa.store_string(windows_helper_script(extracted_abs, exe))
 	fa.close()
 	restarting.emit()
 	OS.create_process("cmd.exe", ["/c", "start", "", "/min", bat])
 	get_tree().quit()
+
+
+## The helper .bat that swaps the install once this process has exited. Static and side-effect free,
+## so the swap the player cannot see (no Windows machine in CI) is pinned by a unit test.
+## It installs EVERY top-level file of the release — the .exe (embedded PCK) AND nml_core_godot.dll;
+## swapping only the .exe left the old DLL and the updated game silently ran the decision-tree AI.
+## Both files stay locked until the game has exited, so it waits for THIS pid (at most ~30 s), backs
+## every target up, and on any failed copy restores every backup: never a half-swapped install.
+static func windows_helper_script(extracted_abs: String, exe: String) -> String:
+	var pid := OS.get_process_id()
+	var install := exe.get_base_dir()
+	var files := DirAccess.get_files_at(extracted_abs)
+	var script := "@echo off\r\n"
+	script += "set tries=0\r\n"
+	script += ":wait\r\n"
+	script += "tasklist /FI \"PID eq %d\" 2>nul | find \" %d \" >nul\r\n" % [pid, pid]
+	script += "if errorlevel 1 goto install\r\n"
+	script += "set /a tries+=1\r\n"
+	script += "if %tries% geq 30 goto install\r\n"
+	script += "ping 127.0.0.1 -n 2 >nul\r\n"
+	script += "goto wait\r\n"
+	script += ":install\r\n"
+	for f in files:
+		var dst := _win_path(install.path_join(f))
+		script += "if exist \"%s\" copy /Y \"%s\" \"%s.bak\" >nul\r\n" % [dst, dst, dst]
+	for f in files:
+		script += "copy /Y \"%s\" \"%s\" >nul\r\n" % [_win_path(extracted_abs.path_join(f)), _win_path(install.path_join(f))]
+		script += "if errorlevel 1 goto rollback\r\n"
+	script += "goto done\r\n"
+	script += ":rollback\r\n"
+	for f in files:
+		var dst := _win_path(install.path_join(f))
+		script += "if exist \"%s.bak\" copy /Y \"%s.bak\" \"%s\" >nul\r\n" % [dst, dst, dst]
+	script += ":done\r\n"
+	for f in files:
+		script += "del \"%s.bak\" >nul 2>&1\r\n" % _win_path(install.path_join(f))
+	script += "start \"\" \"%s\"\r\n" % _win_path(exe)
+	return script
+
+
+## cmd.exe's native separator: Godot hands out forward-slash paths on Windows too.
+static func _win_path(path: String) -> String:
+	return path.replace("/", "\\")
 
 
 # ===== Helpers =====

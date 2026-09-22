@@ -65,6 +65,12 @@ static func distribute(game_unit: GameUnit, loadout: Array, special_rules: Array
 ## The slot a loadout item occupies for per-model distribution: ranged / melee / equipment get
 ## SEPARATE cursors so a leader model keeps its distinct ranged + melee weapons together.
 static func _loadout_slot_key(item: Dictionary) -> String:
+	var target: String = item.get("replacement_target", "")
+	if not target.is_empty():
+		return "replace:" + target
+	var replacement: String = item.get("replacement_slot", "")
+	if replacement in ["melee", "ranged"]:
+		return replacement
 	if int(item.get("attacks", 0)) <= 0:
 		return "equip"
 	return "ranged" if int(item.get("range", 0)) > 0 else "melee"
@@ -103,23 +109,41 @@ static func _assign_limited_to_models(limited: Array, unit_size: int) -> Array:
 ## SAME per-model Tough distribute() will later apply (one source of truth, no drift).
 static func build_loadout(opr_unit: Variant) -> Array:
 	var loadout: Array = []
+	var replacement_targets: Array = []
+	for weapon in opr_unit.weapons:
+		if not weapon.replacement_target.is_empty() and weapon.replacement_target not in replacement_targets:
+			replacement_targets.append(weapon.replacement_target)
 	for weapon in opr_unit.weapons:
 		if not weapon.from_item.is_empty():
-			continue  # item-granted (e.g. Weapon Team) weapons are display-only, not distributed
-		loadout.append({
+			continue  # item-granted: display-only, or (bundle factions) carried by their item bundle below
+		var target: String = weapon.replacement_target
+		# A combined half may contain only unchanged base weapons and thus no
+		# selected-upgrade metadata. Its target still joins the other half's group.
+		var normalized := OPRApiClient._equipment_target_name(weapon.name)
+		if target.is_empty() and normalized in replacement_targets:
+			target = normalized
+		var entry := {
 			"name": weapon.name,
 			"range": weapon.range_value,
 			"attacks": weapon.attacks,
 			"count": weapon.count,
 			"specialRules": weapon.special_rules.duplicate()
-		})
+		}
+		# Bundle metadata only when present: this dict lands verbatim in the model's weapons.
+		if not target.is_empty():
+			entry["replacement_target"] = target
+		loadout.append(entry)
 	for equip_item in opr_unit.equipment_items:
-		loadout.append({
+		var entry := {
 			"name": equip_item.get("name", ""),
 			"attacks": 0,
 			"count": equip_item.get("count", 1),
 			"specialRules": equip_item.get("rules", [])
-		})
+		}
+		for field in ["weapons", "replacement_slot", "replacement_target", "bundle_only"]:
+			if equip_item.has(field):
+				entry[field] = equip_item[field].duplicate(true) if equip_item[field] is Array else equip_item[field]
+		loadout.append(entry)
 	return loadout
 
 
@@ -152,6 +176,19 @@ static func per_model_toughs(unit_size: int, loadout: Array, special_rules: Arra
 	return toughs
 
 
+## Item names applying to every model. Limited items already ride on their
+## assigned model via per_model_labels(), so never spread those across a squad.
+static func universal_item_labels(opr_unit: Variant) -> Array:
+	var distributed: Dictionary = {}
+	for item in opr_unit.equipment_items:
+		distributed[str(item.get("name", ""))] = true
+	var names: Array = []
+	for item_name in opr_unit.item_grants:
+		if not distributed.has(str(item_name)):
+			names.append(str(item_name))
+	return names
+
+
 ## Per-model loadout LABELS (option/weapon names), distributed EXACTLY as per_model_toughs distributes
 ## Tough — universal items on every model, limited items slot-cursor-assigned — so a model's variant
 ## slug is derived from the same parts that land on it (I2). Returns an Array (one entry per model) of
@@ -171,10 +208,19 @@ static func per_model_labels(unit_size: int, loadout: Array) -> Array:
 			limited.append(item)
 	for item in universal:
 		for i in range(unit_size):
-			(labels[i] as Array).append(str(item.get("name", "")))
+			(labels[i] as Array).append_array(_loadout_labels(item))
 	for a in _assign_limited_to_models(limited, unit_size):
-		(labels[a["model"]] as Array).append(str(a["item"].get("name", "")))
+		(labels[a["model"]] as Array).append_array(_loadout_labels(a["item"]))
 	return labels
+
+
+static func _loadout_labels(item: Dictionary) -> Array:
+	var names: Array = [str(item.get("name", ""))]
+	for weapon in item.get("weapons", []):
+		var name := str(weapon.get("name", ""))
+		if not name.is_empty() and name not in names:
+			names.append(name)
+	return names
 
 
 # ===== Tough Parsing =====
@@ -293,7 +339,14 @@ static func _add_loadout_item_to_model(model: ModelInstance, item: Variant) -> v
 	if _get_attacks(item) > 0:
 		_add_weapon_to_model(model, item)
 	else:
-		_add_equipment_to_model(model, _get_name(item))
+		if not (item is Dictionary and item.get("bundle_only", false)):
+			_add_equipment_to_model(model, _get_name(item))
+		if item is Dictionary:
+			for weapon in item.get("weapons", []):
+				for _copy in range(maxi(1, int(weapon.get("count", 1)))):
+					var profile: Dictionary = weapon.duplicate(true)
+					profile["count"] = 1
+					_add_weapon_to_model(model, profile)
 
 
 ## Adds an equipment/tool name to a model's equipment list (deduped per model).

@@ -1,17 +1,22 @@
 # Solo / Co-Op AI — Implementation Plan
 
 > **Status: shipped — Solo v1 is live on `main` in `0.3.10.0-alpha`** (the solo core landed in
-> [#151](../../pull/151); NACHTMAHR's own AI lists in [#150](../../pull/150)). The engine lives under
+> [#151](../../../pull/151); NACHTMAHR's own AI lists are CDN-delivered and kept out of the repo by
+> [#150](../../../pull/150)). The GDScript engine lives under
 > `scripts/solo/` (M1 skeleton, M2 combat brain, the headless self-play sim, **P3** — the sim's pure
 > modules wired into the real game — and **P2** — the in-game auto-game: alternating activation,
 > objective scoring, the 4-round match). NACHTMAHR is an in-game **AI Opponent** you can play a full
-> game against today. This document is retained as the design record; the sections below describe how
-> the shipped system was built, so some milestone framing ("to merge-ready") is historical.
-> See [`ROADMAP.md`](ROADMAP.md) for what remains (resolver waves B + C, difficulty grades, co-op),
+> game against today. On Linux and Windows release builds it plays with a search planner and a trained
+> neural network (value net, the Erlkönig model) on the Rust rules core when both load, else with the
+> GDScript decision tree; macOS always uses the tree. This document is retained as the design record;
+> the sections below describe how the shipped system was built, so some milestone framing ("to
+> merge-ready") is historical — where later work changed a detail (the unit pick, the round opener, the
+> result texts, Fast AI), the code and the coverage matrix are authoritative.
+> See [`ROADMAP.md`](ROADMAP.md) for what remains (rules coverage and core parity, difficulty grades),
 > [`SOLO_AI_RULES_COVERAGE.md`](SOLO_AI_RULES_COVERAGE.md) for the rule-by-rule coverage matrix, and
 > [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the system map.
 
-Niemandsland is currently a **manual sandbox**: players move minis by hand and resolve
+Between two humans Niemandsland is a **manual sandbox**: players move minis by hand and resolve
 dice themselves. A Solo/AI opponent automates one side. This plan follows OnePageRules'
 **official Solo & Co-Op Rules v3.5.0** (free, one PDF per game system; AoF:R uses the
 Age of Fantasy PDF) so every AI behaviour cites an OPR reference, per
@@ -92,7 +97,8 @@ wheeling or charge arcs. There is **no official template** for a Regiments-aware
 regiment; any deeper rank-and-flank AI would be homebrew (deferred).
 
 ## The hybrid policy: trees + utility tie-break
-- The decision tree is evaluated first and is authoritative.
+- The decision tree is evaluated first and is authoritative on the tree path. (When the Rust core
+  and the trained value net load, the search planner decides instead.)
 - Where the tree (or target rule) yields **multiple equally-valid options** — the rules say
   "roll a die" — we instead compute a small **utility score** per candidate and pick the max
   (ties within utility fall back to a seeded random for determinism/replay). Candidate utility
@@ -310,7 +316,7 @@ magic numbers; a "Fast AI" toggle in the Solo panel shrinks all holds and skips 
 
 ## Architecture
 
-An **`SoloAIController`** that owns a `player_id` **slot locally** (not a faked network peer)
+A **`SoloController`** (`scripts/solo/solo_controller.gd`; planned as `SoloAIController`) that owns a `player_id` **slot locally** (not a faked network peer)
 and drives units through the **same local mutators the human uses**, reusing the broadcast/sync
 layer so a watching MP guest still sees the AI's moves. Layers:
 
@@ -330,7 +336,7 @@ layer so a watching MP guest still sees the AI's moves. Layers:
 |---|---|---|
 | Unit/model stats + live wounds | **EXISTS** | `game_unit.gd`, `model_instance.gd`, `opr_api_client.gd` (`OPRUnit`/`OPRWeapon`, `range_value==0 ⇒ melee`) |
 | Apply-wound / kill primitives | **EXISTS** | `model_instance.gd:apply_damage`, `regiment.gd` pooled wounds, wound-action path |
-| LoS (models + terrain) | **EXISTS** | `VolumetricLos` (`scripts/solo/volumetric_los.gd`), `terrain_overlay.gd:has_line_of_sight` |
+| LoS (models + terrain) | **EXISTS** | `VolumetricLos` (`scripts/solo/volumetric_los.gd`; replaced `terrain_overlay.gd:has_line_of_sight` in #312) |
 | Range/move constants + distance | **EXISTS** | `movement_range_controller.gd` (Advance 6"/Rush 12" + rule modifiers), `range_ring_controller.gd`, `INCHES_TO_METERS` |
 | Objective positions + ownership state | **EXISTS** | `map_layout.gd:mission_objectives`, `terrain_overlay.gd:set/get_objective_owner`, 3" seize-ring geometry |
 | Round counter + activation flags | **EXISTS (state only)** | `game_unit.gd:is_activated/activate`, `opr_army_manager.gd:advance_round` |
@@ -354,19 +360,20 @@ layer so a watching MP guest still sees the AI's moves. Layers:
   solo game.*
 - **Phase 3 — Polish.** Challenge Bonus, cover/kiting refinements, AP/Deadly target overrides,
   Caster behaviour, randomised setup (army/objective/deployment), **terrain-grid pathfinding — the
-  `MovementPlanner` steering + local A* now exists and is proven in the sim; Phase 3 wires it into the real
-  game's move-enforcement**, Co-Op (AI runs all enemy units for 2+ humans), Horde Mode scoring.
+  `MovementPlanner` steering + local A* now exists, is proven in the sim and is wired into the real game's
+  AI moves (P3 above)**, Co-Op (AI runs all enemy units for 2+ humans), Horde Mode scoring.
 
 ## Open questions / risks
-- **Movement legality vs simulation freedom** — the sandbox doesn't enforce ranges/terrain
-  today; the AI must self-limit. How strict (e.g. block illegal AI moves but still let humans
+- **Movement legality vs simulation freedom** — the table caps a drag at the model's move band
+  by default (Enforce Movement Limit, can be switched off); the AI self-limits to its move bands. How strict (e.g. block illegal AI moves but still let humans
   free-move)?
 - **Coherency & regiments** — moving a multi-model unit/regiment as a block while keeping
   coherency; regiment block-move + auto-face already exist and should be reused.
 - **Determinism/replay** — seed all AI randomness so a solo game is reproducible (helps tests).
-- **Difficulty** — only Challenge Bonus is official; do we want extra (homebrew) knobs later?
+- **Difficulty** — only Challenge Bonus is official (not implemented); homebrew knobs live in
+  `SoloDifficulty`, and exactly one grade ships: NACHTMAHR.
 - **Testing** — perception + trees + utility are pure/headless-testable (gdUnit); the turn
-  engine needs a headless harness like the MP soak tests.
+  engine has headless harnesses (`tools/solo_field_test.gd`, `tools/arena_match.gd`).
 
 ## References (OPR official, free)
 - Resources hub — https://onepagerules.com/resources

@@ -3671,14 +3671,25 @@ func _solo_announce_spell_effect(caster: GameUnit, spell_name: String, effect: D
 		effect_text = ("grants %s (once)" % grant) if not grant.is_empty() else "see the faction's spell list"
 	_log_rule_event(BattleLog.Category.COMBAT, "%s takes effect on %s: %s" % [
 		spell_name, ", ".join(names), effect_text], true)
-	# When the spell has a derived library token, _solo_place_spell_tokens applies it right after
-	# this announce — only spells WITHOUT a token still need the manual-application note.
-	var has_token: bool = radial_menu_controller != null \
-			and radial_menu_controller.token_library != null \
-			and radial_menu_controller.token_library.has(spell_name)
-	if not has_token:
+	# _solo_place_spell_tokens runs right after this announce: it defines a missing token on the fly and
+	# records the effect mechanically whenever the data carries a modifier or a granted rule — only a
+	# spell with neither still needs the manual-application note (the token library cannot tell).
+	if not _solo_spell_effect_applies(effect):
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"Note: spell effects other than damage are not auto-applied — apply \"%s\" manually" % spell_name, true)
+
+
+## Whether _solo_record_spell_mod will apply anything for this effect data: a granted rule, or a nonzero
+## hit / defense / casting / morale / range / advance / rush modifier — the same fields its two early
+## returns test. Pure, so the manual note and the record cannot disagree.
+static func _solo_spell_effect_applies(effect: Dictionary) -> bool:
+	if not str(effect.get("grants_rule", "")).is_empty():
+		return true
+	var modifier: Dictionary = effect.get("modifier", {})
+	for k in ["hit_mod", "def_mod", "casting_mod", "morale_mod", "range_in", "advance_in", "rush_in"]:
+		if int(modifier.get(k, 0)) != 0:
+			return true
+	return false
 
 
 ## NML-949 — the durable half of the spell bookkeeping. `_solo_spell_mods` is keyed by
@@ -8523,9 +8534,25 @@ const SOLO_DECISION_RULES: Array = ["AP", "Deadly", "Takedown", "Relentless", "A
 	"Delayed Action", "Pass Turn"]
 
 
-## The modeled-rule tokens for a unit's game system — mechanics-map-derived (wave 5), constant fallback.
+## The modeled-rule tokens for a unit's game system — mechanics-map-derived (wave 5), constant fallback —
+## PLUS every registry name that carries a primitive for the unit's faction or its system's common
+## section. The committed `modeled` list is a hand-run export snapshot and lags the maps (78 names with a
+## live primitive were missing, e.g. GF Brutal / Courageous / Vicious), so the manual note and the
+## handoff inventory told players to apply by hand what the table resolves. The registry is the truth.
 func _solo_modeled_rules_for(unit: GameUnit) -> Array:
-	return RulesRegistry.modeled_tokens(RulesRegistry.system_of_unit(unit), SOLO_MODELED_RULES)
+	var system := RulesRegistry.system_of_unit(unit)
+	var faction := RulesRegistry.faction_of_unit(unit)
+	var tokens: Array = RulesRegistry.modeled_tokens(system, SOLO_MODELED_RULES).duplicate()
+	var m := RulesRegistry.map_for(system)
+	var sections: Array = [m.get("common", {})]
+	var factions: Dictionary = m.get("factions", {})
+	if factions.has(faction):
+		sections.append(factions[faction])
+	for section in sections:
+		for rule_name in (section as Dictionary):
+			if not tokens.has(rule_name) and RulesRegistry.has_primitive(system, faction, str(rule_name)):
+				tokens.append(rule_name)
+	return tokens
 
 
 ## The decision-relevant tokens for a unit's game system — mechanics-map-derived, constant fallback.
@@ -8548,7 +8575,7 @@ func _solo_log_rule_inventory(player_id: int) -> void:
 			continue
 		if first_unit == null:
 			first_unit = gu
-		names.append_array(gu.get_special_rules())
+		names.append_array(_solo_rules_without_items(gu.get_special_rules(), gu.unit_properties.get("item_grants", {})))
 		for w in _solo_all_weapons(gu):
 			if w is Object and (w as Object).get("special_rules") != null:
 				names.append_array((w as Object).special_rules)
@@ -8581,25 +8608,48 @@ func _solo_flush_dev() -> void:
 	var records: Array = solo_controller.drain_decisions()
 	if not _solo_dev or battle_log == null:
 		return
-	for rec in records:
-		battle_log.log_event(BattleLog.Category.GENERAL, SoloController.render_decision(rec as Dictionary))
+	for line in SoloController.player_decision_lines(records):
+		battle_log.log_event(BattleLog.Category.GENERAL, line)
+
+
+## Army Forge ITEM names ("Jetpacks") ride in special_rules next to the rules they grant, but an item is a
+## container, not a rule: replace each item name by its granted rules (unit_properties.item_grants),
+## skipping the ones the list already carries. Pure — shared by the manual note and the handoff inventory.
+static func _solo_rules_without_items(rules: Array, item_grants: Variant) -> Array:
+	if not item_grants is Dictionary or (item_grants as Dictionary).is_empty():
+		return rules.duplicate()   # a copy: callers append weapon rules to it
+	var present := {}
+	for r in rules:
+		present[RulesRegistry.base_rule_name(str(r))] = true
+	var out: Array = []
+	for r in rules:
+		var base := RulesRegistry.base_rule_name(str(r))
+		if not (item_grants as Dictionary).has(base):
+			out.append(r)
+			continue
+		for g in (item_grants as Dictionary)[base]:
+			if not present.has(RulesRegistry.base_rule_name(str(g))):
+				present[RulesRegistry.base_rule_name(str(g))] = true
+				out.append(g)
+	return out
 
 
 func _solo_log_unmodeled_rules(unit: GameUnit) -> void:
 	if unit == null or battle_log == null:
 		return
-	var rules: Array = unit.get_special_rules().duplicate()
+	var rules: Array = _solo_rules_without_items(unit.get_special_rules(), unit.unit_properties.get("item_grants", {}))
 	for w in _solo_all_weapons(unit):
 		if w is Object and (w as Object).get("special_rules") != null:
 			rules.append_array((w as Object).special_rules)
 	var modeled_tokens: Array = _solo_modeled_rules_for(unit)   # system-scoped (wave 5), const fallback
 	for r in rules:
-		var rule_name := str(r).strip_edges().get_slice("(", 0)
+		var rule_name := RulesRegistry.base_rule_name(str(r))
 		if rule_name.is_empty() or _solo_unmodeled_logged.has(rule_name):
 			continue
+		# NML-1112: an EXACT name (or its rated / "(spell)" form), never a prefix — "Fearsome X" is not "Fear".
 		var modeled := false
 		for known in modeled_tokens:
-			if rule_name.begins_with(str(known)):
+			if GameUnit.rule_name_matches(rule_name, str(known)):
 				modeled = true
 				break
 		_solo_unmodeled_logged[rule_name] = true
@@ -12841,8 +12891,7 @@ func _on_battle_log_export() -> void:
 		return
 	var decision_lines: Array = []
 	if _solo_dev and solo_controller != null:
-		for rec in solo_controller.decision_log:
-			decision_lines.append(SoloController.render_decision(rec as Dictionary))
+		decision_lines = SoloController.player_decision_lines(solo_controller.decision_log)
 	var path: String = battle_log.export_to_file(decision_lines)
 	if path.is_empty():
 		_solo_show_toast("Battle Log export failed — see console")
@@ -12858,8 +12907,7 @@ func _on_battle_log_copy() -> void:
 		return
 	var decision_lines: Array = []
 	if _solo_dev and solo_controller != null:
-		for rec in solo_controller.decision_log:
-			decision_lines.append(SoloController.render_decision(rec as Dictionary))
+		decision_lines = SoloController.player_decision_lines(solo_controller.decision_log)
 	DisplayServer.clipboard_set(battle_log.export_as_text(decision_lines))
 	_solo_show_toast("Battle Log copied to clipboard")
 

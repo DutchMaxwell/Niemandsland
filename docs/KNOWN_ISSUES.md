@@ -16,9 +16,14 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **Solo against NACHTMAHR is the exception.** When an army is AI-controlled the game does
   resolve activations, dice, wounds, morale, terrain effects and hundreds of special rules for
   both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: one
-  difficulty (full strength), co-op against the AI is not in a release yet, English-only UI, and a small residue
+  difficulty (full strength), co-op against the AI in multiplayer is a first version, the UI is
+  English (the privacy & data screens also come in German, and two start-menu entries still carry
+  German labels), and a small residue
   of special rules is still manual — the battle log names any rule it applies (or asks for
   manual handling).
+- **AI thinking time has been measured on one machine only** (a developer laptop). On a slower PC
+  the opponent may take longer per decision — if it feels slow, send a diagnostics report (below);
+  its header names which AI path your machine ran.
 - **OPR army data is loaded live, not bundled.** Army import calls the **Army Forge API** at
   runtime — you need an internet connection to import, and stats are never redistributed.
 - **3D models are delivered on demand.** The first time you use a faction, its models download
@@ -44,6 +49,9 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **macOS is ad-hoc signed but not notarized** (no Apple Developer account): first launch needs
   **right-click → Open**, or the one-time `xattr -dr com.apple.quarantine` fallback — see the
   README's macOS note. The in-browser (web) build is parked (post-Alpha).
+- **macOS plays without the rules core.** The Windows and Linux builds carry the Rust rules core
+  that runs the trained network; the macOS build has no core, so NACHTMAHR plays its decision-tree
+  opponent there, not the stronger Erlkönig model.
 
 ## Smaller things to know
 
@@ -61,7 +69,7 @@ not there yet and what to watch for. The full done / in-progress / planned break
   zip on your Desktop — attach it when you file the issue. Useful for visual glitches that never
   appear in the log.
 - **Start menu:** Use **"Report a problem"** to export an anonymised diagnostics bundle (version +
-  build hash + OS/GPU + recent log + MP error counts — **no** username, player names or room codes).
-- **GitHub:** [Open an issue](../../issues/new/choose) using the Bug report or Feedback template.
+  OS/GPU/CPU + which AI path ran + recent log — **no** username, player names or room codes).
+- **GitHub:** [Open an issue](../../../issues/new/choose) using the Bug report or Feedback template.
 
 That's the fastest way to get something fixed.
