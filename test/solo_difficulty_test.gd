@@ -133,3 +133,17 @@ func test_resolver_env_beats_preset_and_preset_decides_when_unset() -> void:
 	# A typo'd word and an armed rung without the rulebook layout: loud "?" (quit law).
 	assert_str(_resolve_with_env("aggressive")).is_equal("?")
 	assert_str(_resolve_with_env("style", "nachtmahr", "nachtmahr", "")).is_equal("?")
+
+
+## Ship path (22.09.): the one grade NACHTMAHR runs on the search planner with the packed
+## net only when BOTH the core and its brain are up — a player without the extension, or
+## with a refused model, gets the tree and never a half-configured planner.
+func test_nachtmahr_runs_on_the_planner_only_with_core_and_brain() -> void:
+	assert_str(SoloDifficulty.preset_for_nachtmahr(true, true)).is_equal("planner_v0")
+	assert_str(SoloDifficulty.preset_for_nachtmahr(true, false)).is_equal("nachtmahr")
+	assert_str(SoloDifficulty.preset_for_nachtmahr(false, true)).is_equal("nachtmahr")
+	assert_str(SoloDifficulty.preset_for_nachtmahr(false, false)).is_equal("nachtmahr")
+	# The shipped budget is the MEASURED one (every Erlkönig number of record ran 10/3).
+	assert_int(SoloDifficulty.SHIP_SEARCH_TOP_K).is_equal(10)
+	assert_int(SoloDifficulty.SHIP_SEARCH_HORIZON).is_equal(3)
+	assert_bool(SoloDifficulty.PRESETS.has("planner_v0")).is_true()

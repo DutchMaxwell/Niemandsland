@@ -74,6 +74,15 @@ static var menu_wide := false
 static var _mw_env := -1
 
 
+## Ship path (22.09.): pin the search budget for the shipped Erlkönig grade. An explicit
+## NML_TOP_K / NML_HORIZON still wins (measurements stay deliberate switches).
+static func set_search_budget(top_k: int, horizon_rounds: int) -> void:
+	if OS.get_environment("NML_TOP_K").is_empty():
+		_tk = clampi(top_k, 1, 32)
+	if OS.get_environment("NML_HORIZON").is_empty():
+		_hz = clampi(horizon_rounds, 1, 3)
+
+
 static func top_k_default() -> int:
 	if _tk <= 0:
 		var e := OS.get_environment("NML_TOP_K")
