@@ -73,6 +73,14 @@ static var _mh_env := -1
 ## CONFIRM_MENUWIDE_2026-09-22). NML_MENU_WIDE=0 switches it off, =1 on; tests set it directly.
 static var menu_wide := true
 static var _mw_env := -1
+## MENUADVANCEK (wave 6, `advancek`): how many of the safe-advance frontier's best destinations
+## the LIVE menu offers. 1 (the default) is byte-identical to the single candidate every recorded
+## corpus replays; the Rust core's `Tuning::advance_k` reads the same number. NML_MENU_ADVANCE_K=<int>
+## sets it (clamped to 1..8; unset = 1). The TABLE's own GDScript menu does not read it — the core
+## decides the A/B, and on a decline the table answers as today. Tests set the static directly;
+## _mak_env = -2 means unread.
+static var menu_advance_k := 1
+static var _mak_env := -2
 
 
 ## Ship path (22.09.): pin the search budget for the shipped Erlkönig grade. An explicit
@@ -1144,6 +1152,15 @@ static func menu_wide_on() -> bool:
 		elif _mw_env == 0:
 			menu_wide = false
 	return menu_wide
+
+
+static func menu_advance_k_on() -> int:
+	if _mak_env == -2:
+		var e := OS.get_environment("NML_MENU_ADVANCE_K")
+		if e.is_valid_int():
+			menu_advance_k = clampi(int(e), 1, 8)
+		_mak_env = 0
+	return menu_advance_k
 
 
 static func _menu_holders_on() -> bool:

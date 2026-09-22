@@ -260,6 +260,11 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	assert_bool(bool((header["knobs"] as Dictionary)["menu_holders"])).is_false()
 	assert_bool(bool((header["knobs"] as Dictionary)["menu_wide"])).is_equal(AiPlanner.menu_wide_on())
 	assert_bool(AiPlanner.menu_wide_on()).is_true()
+	# Wave 6 (`advancek`): the header carries the safe-advance k, 1 by default, so the core's menu
+	# follows the shipped single candidate and an A/B can flip it from the header.
+	assert_bool((header["knobs"] as Dictionary).has("menu_advance_k")).is_true()
+	assert_int(int((header["knobs"] as Dictionary)["menu_advance_k"])).is_equal(1)
+	assert_int(AiPlanner.menu_advance_k_on()).is_equal(1)
 	assert_object(header.get("terrain")).is_null()   # no terrain_type_at seam in this fixture
 
 	var act := JSON.parse_string(lines[1]) as Dictionary

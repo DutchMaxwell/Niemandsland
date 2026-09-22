@@ -419,6 +419,7 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# recorded before this stamp replays byte-identical (an absent key reads OFF).
 			"menu_holders": AiPlanner._menu_holders_on(),
 			"menu_wide": AiPlanner.menu_wide_on(),
+			"menu_advance_k": AiPlanner.menu_advance_k_on(),
 			# NML-1129: the ENGAGE half of that same fold — whether THIS game's imagination
 			# measured a landed charge's engage gap over both sides' models INCLUDING attached
 			# heroes (BattleSim._engage_gap_in, battle_sim.gd:791), the way the table does
