@@ -348,6 +348,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The in-game updater compares the release TAG against the running config/version. A tag
+      # ahead of project.godot ships a build that reports the old version, sees its own release
+      # as newer and offers the same update on every start (rehearsed 22.09.2026). Fail fast.
+      - name: Guard - the tag matches config/version in project.godot
+        run: |
+          V=$(grep -oP '^config/version="\K[^"]+' project.godot)
+          if [ "${GITHUB_REF_NAME#v}" != "$V" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match config/version=\"${V}\" — updated players would be offered this release again on every start; bump project.godot first"; exit 1
+          fi
+          echo "OK: tag ${GITHUB_REF_NAME} matches config/version ${V}"
+
       # Build both libraries before the import: the Linux and Windows presets now
       # both admit the manifest, so each export carries its own library.
       - name: Build core extension (NmlCore, linux)

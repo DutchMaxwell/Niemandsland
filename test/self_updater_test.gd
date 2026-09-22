@@ -49,7 +49,45 @@ func test_copy_tree_replaces_install_files_including_the_binary() -> void:
 	assert_str(FileAccess.get_file_as_string(install.path_join("Niemandsland.x86_64"))).is_equal("BINARY")
 
 
+# Release 0925: the Windows zip ships nml_core_godot.dll next to the .exe (the ONNX evaluator). A
+# helper that swaps only the .exe leaves the old DLL (or none) and the updated game silently falls
+# back to the decision-tree AI. The helper must install EVERY file of the release zip.
+func test_windows_helper_installs_every_file_including_the_extension_dll() -> void:
+	var script := SelfUpdater.windows_helper_script(_make_windows_extract(), WIN_EXE)
+	var dll_src := ProjectSettings.globalize_path(TMP.path_join("win/nml_core_godot.dll")).replace("/", "\\")
+	assert_str(script).contains("copy /Y \"%s\" \"C:\\Games\\Niemandsland\\nml_core_godot.dll\"" % dll_src)
+	assert_str(script).contains("\"C:\\Games\\Niemandsland\\Niemandsland.exe\"")
+
+
+# The .exe AND the .dll stay locked until the game process has really exited — a fixed ~2 s pause
+# races a slow shutdown. The helper waits for THIS process id to disappear.
+func test_windows_helper_waits_for_this_process_to_exit() -> void:
+	var script := SelfUpdater.windows_helper_script(_make_windows_extract(), WIN_EXE)
+	assert_str(script).contains("tasklist /FI \"PID eq %d\"" % OS.get_process_id())
+
+
+# A half-swapped install (new .exe, old .dll) is worse than no update: any failed copy restores
+# every file from its .bak, so the player relaunches the version they had.
+func test_windows_helper_rolls_back_every_file_on_a_failed_copy() -> void:
+	var script := SelfUpdater.windows_helper_script(_make_windows_extract(), WIN_EXE)
+	assert_str(script).contains("goto rollback")
+	assert_str(script).contains("copy /Y \"C:\\Games\\Niemandsland\\nml_core_godot.dll.bak\" \"C:\\Games\\Niemandsland\\nml_core_godot.dll\"")
+	assert_str(script).contains("copy /Y \"C:\\Games\\Niemandsland\\Niemandsland.exe.bak\" \"C:\\Games\\Niemandsland\\Niemandsland.exe\"")
+
+
 # ===== helpers =====
+
+const WIN_EXE := "C:/Games/Niemandsland/Niemandsland.exe"
+
+
+## A staged Windows release as the updater extracts it: the .exe (embedded PCK) + the extension DLL.
+func _make_windows_extract() -> String:
+	var dir := ProjectSettings.globalize_path(TMP.path_join("win"))
+	DirAccess.make_dir_recursive_absolute(dir)
+	_write(dir.path_join("Niemandsland.exe"), "EXE")
+	_write(dir.path_join("nml_core_godot.dll"), "DLL")
+	return dir
+
 
 func _make_linux_zip() -> String:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(TMP))
