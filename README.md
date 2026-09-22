@@ -23,13 +23,10 @@ Fantasy). Built in Godot.
 What the code actually does today:
 
 - **Solo mode vs NACHTMAHR** — play a whole game against the built-in opponent. NACHTMAHR is a
-  rules-based, deterministic game AI (no LLM, no neural net) that decides entirely offline; it plays
-  by the official OPR solo decision trees and never cheats. *(You will find an ONNX model loader, a
-  batched evaluator and an ONNX CI workflow in this repo. They are behind non-default cargo features
-  — `default = []` in `core/nml-core-godot/Cargo.toml` — exercised only by a spike workflow, never
-  built into an export, and no `.gd` file references them. A trained opponent is planned as an
-  optional, clearly labelled choice **next to** the Classic AI, not as a replacement; see
-  `PROJECT_STATUS.md`.)* Mark an imported army as AI-controlled,
+  game AI (no LLM) that decides entirely offline and never cheats. In the Windows and Linux builds it
+  plans with a search guided by a trained neural network (value net) that ships with the game and runs
+  in the Rust rules core; without the core (always on macOS) it plays by the official OPR solo
+  decision trees. The game log names which one plays. Mark an imported army as AI-controlled,
   or let NACHTMAHR bring one of its own pre-built lists (fetched at runtime, cached locally).
   Deployment is a click-guided rulebook flow (roll-off, alternating placement, scouts, ambush
   arrivals), and you shoot, fight and cast through the radial menu with real dice in the tray.
@@ -43,7 +40,7 @@ What the code actually does today:
   the rest. One difficulty (full strength) — selectable grades are on the roadmap.
 - **3D tabletop** — variable table sizes (4×4, 6×4, custom), orbit/pan/zoom camera.
 - **Object handling** — click / Alt-click / box select, drag, rotate, copy / paste /
-  duplicate, formation arrangement (rows `1`–`9`, arrow `A`) with constant base-edge
+  duplicate, formation arrangement (rows `1`–`9`, arrow `Shift`+`A`) with constant base-edge
   spacing across base sizes.
 - **Dice** — physics D6 dice via our own MIT dice scripts (`dice_tray.gd` / `dice_d6.gd`),
   rendered in a scaled SubViewport (see [Scaling](#scaling-conventions)); click a die to colour-tag
@@ -75,13 +72,15 @@ What the code actually does today:
   opt-in "dry-brush" cap stops the drag at the selected action band (Advance ~6″ /
   Rush-Charge ~12″). A Deployment → **Start Game** → Playing phase gate (with an MP
   ready-sync) frames setup vs play.
-- **Multiplayer** — manual play: no rules automation, alternate activations like at a real table.
+- **Multiplayer** — manual play: no dice or combat automation, alternate activations like at a real
+  table; only round bookkeeping (Fatigue, spell tokens, growth markers, transport activations) runs
+  automatically.
   ENet over LAN, or over the internet via a WebSocket relay (see [`relay/`](relay/README.md));
   full state sync (models, terrain, table size), shared dice log, player avatars/cursors,
   save/load, and a deployment ready-sync.
 - **Import / export** — Army Forge (OPR) list import; `.nml` save format with OS file
-  association, plus autosave (every 5 minutes and at round changes, three rotating slots
-  offered in CONTINUE).
+  association, plus autosave (every 5 minutes and at round changes, three rotating slots;
+  CONTINUE loads the newest save).
 - **Guided tutorial** — an event-gated course of 64 steps in 11 chapters that teaches on a
   real bundled board: camera & table, selecting, move/rotate/arrange, measuring & rings, the
   dice tray, unit cards & the radial menu, wounds & casualties, a real army import, table &
@@ -121,7 +120,7 @@ macOS) — no install. The start menu shows the version; the first log line is
 - **Play solo**: import a second list with **AI-controlled (Solo)** ticked, or let NACHTMAHR pick
   one of its own (faction + points), then follow the guided deployment into round 1.
 - Honest alpha caveats are in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md); hit **"Report a
-  problem"** in the start menu to send an anonymised bug report.
+  problem"** in the start menu to save an anonymised diagnostics file you can attach to a bug report.
 
 ### From source (developers)
 
@@ -154,11 +153,11 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 | Snap rotate to 90° (any selectable — units, loose models, terrain) | `Ctrl`+`R` |
 | Delete | `Del` / `Backspace` |
 | Copy / paste / duplicate | `Ctrl`+`C` / `V` / `D` |
-| Arrange (multi-select) | `1`–`9` rows, `A` arrow |
+| Arrange (multi-select) | `1`–`9` rows, `Shift`+`A` arrow |
 
 | Regiments (AoF:R) | |
 |---|---|
-| Toggle 45° arc quadrants (front/flank/rear) — selected unit | `F` (also raises the sight & range fan) |
+| Toggle 45° arc quadrants (front/flank/rear) — selected unit | `F` (nothing selected: all regiments) |
 | Cycle frontage (models per rank) | `Shift`+`F` |
 | Axis-locked drag (forward/backward only) | `Shift`+drag |
 | Mouse-driven rotation (R held) | `R` (drag mouse) |
@@ -167,9 +166,9 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 
 | Other | |
 |---|---|
-| Roll dice | `Space` |
+| Roll dice | **Roll** button in the dice tray |
 | Range rings / movement / pin ruler | `G` / `M` / `P` |
-| Sight & range fan (selected unit) / clear | `F` / `Shift`+`F` |
+| Sight & range fan (selected unit) — press again to clear | `F` |
 | Hide / clear move trails | `T` / `Shift`+`T` |
 | Export the battle log to a text file | `F8` |
 

@@ -57,7 +57,7 @@ To play a full game against the built-in AI opponent:
 2. Follow the **guided deployment**: a roll-off decides who picks a table edge and deploys first, then both sides place units alternately with explicit hand-over clicks (Scout, Ambush and Infiltrate reserves are handled for you).
 3. On **Start Game**, play alternates unit by unit. You act through the **radial menu** — **Shoot**, **Fight**, **Cast** — with real dice in the tray for both sides; NACHTMAHR takes its own activations, and **every applied rule writes a battle-log line** so you can follow (and audit) each decision. The remaining uncovered special rules are a small residue; the battle log names any rule it applies (or asks for manual handling) per unit, so you can apply the rest by hand.
 
-NACHTMAHR is a rules-based, deterministic game AI (no LLM, no neural net) that runs entirely offline and never cheats. One difficulty ships (full strength); see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
+NACHTMAHR is a game AI (no LLM) that runs entirely offline and never cheats. On Windows and Linux it plans with a trained neural network (value net) that ships with the game; without the Rust rules core (always on macOS) it plays by the official OPR solo decision trees. One difficulty ships (full strength); see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
 
 ### Camera
 
@@ -80,7 +80,7 @@ NACHTMAHR is a rules-based, deterministic game AI (no LLM, no neural net) that r
 | Copy / Paste / Duplicate | `Ctrl`+`C` / `V` / `D` |
 | Take back the last finished move | `Ctrl`+`Z` (until dice roll / next activation) |
 | Arrange selected (rows) | `1`–`9` |
-| Arrange selected (arrow) | `A` |
+| Arrange selected (arrow) | `Shift`+`A` |
 
 ### Measuring and display aids
 
@@ -88,11 +88,11 @@ NACHTMAHR is a rules-based, deterministic game AI (no LLM, no neural net) that r
 |---|---|
 | Range rings (3″ / 6″ / … / 24″) | `G` — cycles; `Shift`+`G` clears |
 | Movement reach (Advance + Rush/Charge bands) | `M` — toggles |
-| Pin a ruler on the table | `P` — persists for all players; `K` clears yours; `Shift`+`K` clears all |
+| Pin a ruler on the table | `P` — persists for all players; `K` clears yours; `Shift`+`K` (host) clears all |
 
 ### Dice
 
-Press `Space` to roll physics D6 dice. Results appear in the shared dice log (visible to all players in multiplayer).
+Press **Roll** in the dice tray to roll physics D6 dice. Results appear in the shared dice log (visible to all players in multiplayer).
 
 For the full control reference, see the **Controls** section in [`README.md`](../README.md).
 
@@ -110,7 +110,7 @@ Each model appears on the table with its base size, wound counter, and status to
 
 ## Multiplayer
 
-Multiplayer is **manual play** — no rules automation; alternate activations like at a real table.
+Multiplayer is **manual play** — no dice or combat automation; alternate activations like at a real table.
 It supports **2 players** over LAN or the internet. Both players must run the **same version** — the version handshake will reject a mismatch.
 
 **Host a game**
@@ -121,7 +121,7 @@ It supports **2 players** over LAN or the internet. Both players must run the **
 **Join a game**
 
 - Enter the host's room code and click **Join**, or
-- Open the **Room Browser** to see listed public rooms and join by clicking.
+- Open **Browse Online Games** to see listed public rooms and join by clicking.
 
 State (models, terrain, dice) syncs automatically. Player names, cursors, and avatars are visible to both sides.
 
