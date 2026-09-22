@@ -1,10 +1,13 @@
-# Developer brain bridge (not a player release)
+# Developer brain bridge (the loopback evaluator for experiments)
 
 This opt-in experiment lets the existing Rust search ask a trusted, local
-Python evaluator for batched leaf values. It is off by default, unavailable
-in release Godot builds, and does not install a model or change exports,
-downloads, multiplayer, saves, or release workflows. Use only in developer
-solo games. Do not use it for multiplayer or reproducibility-critical runs.
+Python evaluator for batched leaf values. It is off by default and unavailable
+in release Godot builds. Since 22.09.2026 the SHIPPED game no longer needs it:
+release builds carry the same net as a packed ONNX model
+(`assets/solo/brains/erlkoenig.onnx`) evaluated in-process by the extension
+(`NmlCore.set_brain_onnx`); the bridge below stays the developer's way to try
+another checkpoint without an export. Use only in developer solo games. Do not
+use it for multiplayer or reproducibility-critical runs.
 
 ## Start with the public dummy
 
