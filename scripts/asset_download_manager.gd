@@ -154,6 +154,8 @@ func ensure_batch_parallel(entries: Array, max_concurrent: int = 5, retries: int
 	for _i in range(pool):
 		_batch_worker(entries, state, total, retries)   # fire concurrent workers (no await here)
 	while int(state["done"]) < total:
+		if not is_inside_tree():
+			return   # owner left the tree mid-batch (the player left the menu): stop waiting quietly
 		await get_tree().process_frame
 
 

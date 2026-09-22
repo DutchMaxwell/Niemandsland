@@ -66,14 +66,24 @@ func build(selected_biome: String, world_env: WorldEnvironment, sun: Directional
 	add_child(terrain_overlay)
 	_build_terrain()
 	progress.emit("Preparing terrain",0.15)
+	# Every await can resume after the player left the menu (Create during a cold-cache
+	# download): the scene is out of the tree until it is freed, so stop building quietly.
 	await get_tree().process_frame
+	if not is_inside_tree():
+		return
 	await _build_units(table)
+	if not is_inside_tree():
+		return
 	progress.emit("Preparing biome",0.75)
 	await get_tree().process_frame
+	if not is_inside_tree():
+		return
 	presentation = load("res://scripts/visual/grassland_reference.gd").new()
 	presentation.biome = biome
 	add_child(presentation)
 	await presentation.prepare()
+	if not is_inside_tree():
+		return
 	presentation.apply(self)
 	presentation.set_tilt_shift_enabled(false)
 	# This scene owns its lighting and quality policy. Reference's daylight callback
@@ -121,6 +131,8 @@ func _build_units(table: Node3D) -> void:
 		progress.emit("Preparing miniatures",0.25+float(model_count)*0.04)
 		# The same manifest-backed delivery as army import; offline retains native fallback models.
 		await factory.model_library.ensure_models([{"faction":unit.faction,"unit_name":unit.name}])
+		if not is_inside_tree():
+			return
 		for index in FORMATION.size():
 			var props := {"name":unit.name,"faction_folder":unit.faction,"size":5,
 				"base_size_round":unit.base,"base_width_mm":unit.base,"base_depth_mm":unit.base,"base_from_tough":false}
@@ -135,6 +147,8 @@ func _build_units(table: Node3D) -> void:
 			model.rotation.y = deg_to_rad(unit.yaw+(index%3-1)*7.0)
 			model_count += 1
 			await get_tree().process_frame
+			if not is_inside_tree():
+				return
 	factory.queue_free()
 
 
