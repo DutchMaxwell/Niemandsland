@@ -211,13 +211,6 @@ static func _wall_blocks(p: Vector2, c: Vector2, wa: Vector2, wb: Vector2, clear
 ## No-go circle check for one step p→c: the step may not cross the circle nor end inside it; a model
 ## starting inside may only move outward (escape).
 static func _zone_blocks(p: Vector2, c: Vector2, centre: Vector2, r: float) -> bool:
-	# Exact broad phase (the zone twin of wall_cull): the segment p→c lies inside its own AABB, so a zone
-	# centre outside that AABB inflated by r is > r from every point of the segment — point_seg_distance
-	# could not fall below r, and skipping it cannot change the verdict. Cuts the per-edge zone scan from
-	# every zone to the few near the step (the Theta* hot loop; ~90 zones in a large game).
-	if centre.x < minf(p.x, c.x) - r or centre.x > maxf(p.x, c.x) + r \
-			or centre.y < minf(p.y, c.y) - r or centre.y > maxf(p.y, c.y) + r:
-		return false
 	if point_seg_distance(centre, p, c) >= r:
 		return false
 	var d_p := p.distance_to(centre)
