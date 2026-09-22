@@ -60,6 +60,14 @@ static var rule_text_source := "none"
 const SNAPSHOT_USER_DIR := "user://army_books"
 const SNAPSHOT_DIR_ENV := "NML_ARMY_BOOKS_DIR"
 
+## Factions (book-index faction folders) whose imports parse per-model LOADOUT BUNDLES: a weapon
+## team's item weapons ride with the model it replaced, a "replace any X" swap keeps its slot even
+## across ranges, and a multi-weapon swap (Storm Ogre fist pairs) stays one atomic per-model pair.
+## Their pre-baked variant models need exactly that per-model split. It changes which model carries
+## which weapon, so it is scoped: every faction NOT listed parses byte-identically to before.
+## Widening it is a rules change for that faction (review + parity check), not a data edit.
+const LOADOUT_BUNDLE_FACTIONS: Array[String] = ["ratmen"]
+
 ## The snapshot's identity, read once out of its `_manifest.json` and stamped into every act
 ## header (AiActRecorder._header_line, key "books"), so a corpus row names the exact texts it
 ## played with. Both empty while no snapshot has answered.
@@ -403,6 +411,9 @@ class OPRWeapon:
 	## distributed (build_loadout skips them) — they belong to the item's model, which already has
 	## the special-equipment ring + enlarged base.
 	var from_item: String = ""
+	## Original single target of an any-model weapon replacement. Keeps melee and
+	## ranged alternatives in one distribution group; empty for ordinary loadouts.
+	var replacement_target: String = ""
 
 	func get_display_text() -> String:
 		var count_str = "" if count <= 1 else "%dx " % count
@@ -413,7 +424,7 @@ class OPRWeapon:
 		return text
 
 	func to_dict() -> Dictionary:
-		return {
+		var out := {
 			"name": name,
 			"range_value": range_value,
 			"attacks": attacks,
@@ -421,6 +432,10 @@ class OPRWeapon:
 			"count": count,
 			"from_item": from_item,
 		}
+		# Only bundle-parsed factions ever set a target; every other payload stays byte-identical.
+		if not replacement_target.is_empty():
+			out["replacement_target"] = replacement_target
+		return out
 
 	static func from_dict(data: Dictionary) -> OPRWeapon:
 		var w := OPRWeapon.new()
@@ -429,6 +444,7 @@ class OPRWeapon:
 		w.attacks = int(data.get("attacks", 1))
 		w.count = int(data.get("count", 1))
 		w.from_item = str(data.get("from_item", ""))
+		w.replacement_target = str(data.get("replacement_target", ""))
 		for rule in data.get("special_rules", []):
 			w.special_rules.append(str(rule))
 		return w
@@ -612,16 +628,17 @@ func build_army_offline(data: Dictionary) -> OPRArmy:
 			army.army_id = first_unit.get("armyId", "")
 	# NML-1115: the registry key BEFORE any HTTP call.
 	_apply_book_index(army)
+	var bundles: bool = army.faction_folder in LOADOUT_BUNDLE_FACTIONS
 
 	for unit_data in units_data:
-		var unit = _parse_tts_unit(unit_data, army.game_system_abbrev)
+		var unit = _parse_tts_unit(unit_data, army.game_system_abbrev, bundles)
 		if unit:
 			army.units.append(unit)
 			army.model_count += unit.size
 
 	# Fold OPR "Combined" unit halves into single larger units (e.g. 2x[5] -> 1x[10]).
 	# model_count is the sum of model sizes and is unchanged by merging.
-	army.units = _merge_combined_units(army.units)
+	army.units = _merge_combined_units(army.units, bundles)
 	return army
 
 
@@ -919,7 +936,9 @@ const ALL_MODELS_RULES: Array[String] = ["Shielded"]
 
 
 ## Parse a unit from TTS API response
-func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUnit:
+## `bundles` = the unit's faction is in LOADOUT_BUNDLE_FACTIONS (see there); false keeps the
+## pre-bundle parse byte-identical for every other faction.
+func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "", bundles: bool = false) -> OPRUnit:
 	var unit = OPRUnit.new()
 
 	unit.game_system = game_system_abbrev
@@ -1023,7 +1042,12 @@ func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUn
 			# Carried by a subset → pin to specific model(s) and show on the base ring.
 			# Carry the item's granted rules ON the entry so the EquipmentDistributor can
 			# apply a per-model stat (Tough) to only the carrier model (see below).
-			unit.equipment_items.append({"name": item_name, "count": item_count, "rules": granted})
+			var equipment_entry := {"name": item_name, "count": item_count, "rules": granted}
+			# Bundle factions: the item's weapons ride on the SAME carrier (a weapon team's gun).
+			var item_weapons: Array = _item_weapon_profiles(item) if bundles else []
+			if not item_weapons.is_empty():
+				equipment_entry["weapons"] = item_weapons
+			unit.equipment_items.append(equipment_entry)
 			if not item_name.is_empty() and item_name not in unit.equipment:
 				unit.equipment.append(item_name)
 		elif not item_name.is_empty() and item_name not in unit.special_rules:
@@ -1047,7 +1071,19 @@ func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUn
 	# Rule-only upgrades (Banner, Musician, ...) grant an ArmyBookRule DIRECTLY on the selected
 	# upgrade option and are NOT mirrored into the resolved `loadout` (unlike item/weapon upgrades,
 	# which are). Fold those into the unit's rules so the Banner/Musician actually show on the card.
-	_apply_selected_upgrade_rules(unit, data.get("selectedUpgrades", []))
+	if not bundles:
+		_apply_selected_upgrade_rules(unit, data.get("selectedUpgrades", []))
+	else:
+		var selected_rules: Array = data.get("selectedUpgrades", []).duplicate()
+		# Model Forge's resolved combined export is one merged unit, with half B's
+		# purchases retained separately. Real AF two-half exports omit this field.
+		selected_rules.append_array(data.get("selectedUpgradesB", []))
+		_apply_weapon_replacement_targets(unit.weapons, selected_rules)
+		for entry in unit.equipment_items:
+			if entry.has("weapons"):
+				entry["replacement_slot"] = _item_replacement_slot(entry, selected_rules, unit.weapons)
+		_apply_selected_upgrade_rules(unit, selected_rules)
+		_apply_weapon_replacement_bundles(unit, selected_rules)
 
 	# No base recommendation from Army Forge → estimate from Tough (vehicles/monsters).
 	if not had_base_recommendation:
@@ -1139,6 +1175,216 @@ func _granted_weapons_of_item(item: Dictionary) -> Array:
 			if w and w.attacks > 0:
 				weapons.append(w)
 	return weapons
+
+
+## Serializable per-carrier weapon profiles. The outer item count owns distribution;
+## a nested count is the number of copies carried by each recipient.
+func _item_weapon_profiles(item: Dictionary) -> Array:
+	var profiles: Array = []
+	for weapon in _granted_weapons_of_item(item):
+		profiles.append({"name": weapon.name, "range": weapon.range_value,
+			"attacks": weapon.attacks, "count": weapon.count,
+			"specialRules": weapon.special_rules.duplicate()})
+	return profiles
+
+
+static func _equipment_target_name(value: String) -> String:
+	var name := value.strip_edges().to_lower()
+	var rx := RegEx.new()
+	rx.compile("^[0-9]+x?\\s+")
+	return rx.sub(name, "").trim_suffix("s")
+
+
+## Use the selected replacement's target weapon slot. Another selected replacement
+## may already have renamed every remaining target (Hand Weapons -> Halberds), so
+## its gain profiles also supply target-slot evidence. Additive items keep equip.
+func _item_replacement_slot(item: Dictionary, selections: Array, weapons: Array) -> String:
+	var target_slots: Dictionary = {}
+	for weapon in weapons:
+		if weapon.from_item.is_empty():
+			target_slots[_equipment_target_name(weapon.name)] = "ranged" if weapon.range_value > 0 else "melee"
+	for selection in selections:
+		if not (selection is Dictionary):
+			continue
+		var upgrade: Dictionary = selection.get("upgrade", {})
+		if upgrade.get("variant", "") != "replace":
+			continue
+		var slots: Array = []
+		for gain in selection.get("option", {}).get("gains", []):
+			if gain is Dictionary and gain.get("type", "") == "ArmyBookWeapon":
+				var slot := "ranged" if int(gain.get("range", 0)) > 0 else "melee"
+				if slot not in slots:
+					slots.append(slot)
+		if slots.size() == 1:
+			for target in upgrade.get("targets", []):
+				target_slots[_equipment_target_name(str(target))] = slots[0]
+	for selection in selections:
+		if not (selection is Dictionary):
+			continue
+		var upgrade: Dictionary = selection.get("upgrade", {})
+		if upgrade.get("variant", "") != "replace":
+			continue
+		for gain in selection.get("option", {}).get("gains", []):
+			if not (gain is Dictionary) or gain.get("type", "") != "ArmyBookItem":
+				continue
+			if gain.get("name", "") != item.name or _item_weapon_profiles(gain) != item.weapons:
+				continue
+			var slots: Array = []
+			for target in upgrade.get("targets", []):
+				var slot: String = target_slots.get(_equipment_target_name(str(target)), "")
+				if not slot.is_empty() and slot not in slots:
+					slots.append(slot)
+			if slots.size() == 1:
+				return slots[0]
+	return ""
+
+
+## A direct "replace any X" choice consumes the same per-model slot even when
+## its new range differs. Infer only explicit single-target/single-weapon gains.
+## Group membership travels with serialized weapons, including combined halves.
+func _apply_weapon_replacement_targets(weapons: Array, selections: Array) -> void:
+	var targets_by_name: Dictionary = {}
+	for selection in selections:
+		if not (selection is Dictionary):
+			continue
+		var upgrade: Dictionary = selection.get("upgrade", {})
+		var targets: Array = upgrade.get("targets", [])
+		var gains: Array = selection.get("option", {}).get("gains", [])
+		if upgrade.get("variant", "") != "replace" or upgrade.get("affects", {}).get("type", "") != "any" or targets.size() != 1 or gains.size() != 1:
+			continue
+		var gain = gains[0]
+		if not (gain is Dictionary) or gain.get("type", "") != "ArmyBookWeapon" or int(gain.get("count", 1)) != 1:
+			continue
+		var target := _equipment_target_name(str(targets[0]))
+		for name in [target, _equipment_target_name(str(gain.get("name", "")))]:
+			if not targets_by_name.has(name):
+				targets_by_name[name] = []
+			if target not in targets_by_name[name]:
+				targets_by_name[name].append(target)
+	for weapon in weapons:
+		var candidates: Array = targets_by_name.get(_equipment_target_name(weapon.name), [])
+		if weapon.from_item.is_empty() and candidates.size() == 1:
+			weapon.replacement_target = candidates[0]
+
+
+## Preserve a multi-target replacement as one per-model weapon bundle. Match
+## full profiles: a remaining Bash(A2) must never become a gained Bash(A1).
+func _apply_weapon_replacement_bundles(unit, selections: Array) -> void:
+	var targets: Array = []
+	var bundles: Array = []
+	var remaining: Array = []
+	for weapon in unit.weapons:
+		remaining.append(weapon.count if weapon.from_item.is_empty() else 0)
+	for selection in selections:
+		if not (selection is Dictionary):
+			continue
+		var upgrade: Dictionary = selection.get("upgrade", {})
+		var names: Array = upgrade.get("targets", [])
+		if upgrade.get("variant", "") != "replace" or names.size() < 2:
+			continue
+		if upgrade.get("model", false) or upgrade.get("affects", {}).get("type", "") != "any" or not str(upgrade.get("select", {}).get("type", "")).is_empty():
+			return
+		var normalized: Array = []
+		for name in names:
+			normalized.append(_equipment_target_name(str(name)))
+		if not targets.is_empty() and targets != normalized:
+			return  # Overlapping replacement groups need explicit allocation.
+		targets = normalized
+		var profiles: Array = []
+		for gain in selection.get("option", {}).get("gains", []):
+			if not (gain is Dictionary) or gain.get("type", "") != "ArmyBookWeapon" or int(gain.get("count", 1)) != 1:
+				return
+			var parsed := _parse_tts_weapon(gain)
+			var found := -1
+			for i in range(unit.weapons.size()):
+				if remaining[i] > 0 and _same_bundle_weapon(unit.weapons[i], parsed):
+					found = i
+					break
+			if found < 0:
+				return  # Transactional: leave malformed/incomplete exports untouched.
+			remaining[found] -= 1
+			profiles.append(_bundle_weapon_profile(parsed))
+		if profiles.is_empty():
+			return
+		_merge_equipment_items(bundles, [_weapon_bundle_entry(profiles, 1, targets)], true)
+	if targets.is_empty():
+		return
+	var selected_count := 0
+	for bundle in bundles:
+		selected_count += int(bundle.count)
+	var base_count: int = unit.size - selected_count
+	if base_count < 0:
+		return
+	var base_profiles: Array = []
+	if base_count > 0:
+		for name in targets:
+			var found := -1
+			for i in range(unit.weapons.size()):
+				if remaining[i] > 0 and _equipment_target_name(unit.weapons[i].name) == name:
+					if found >= 0 or remaining[i] != base_count:
+						return
+					found = i
+			if found < 0:
+				return
+			base_profiles.append(_bundle_weapon_profile(unit.weapons[found]))
+			remaining[found] = 0
+		bundles.push_front(_weapon_bundle_entry(base_profiles, base_count, targets))
+	# Reject partial consumption; from_item applies to an entire profile count.
+	for i in range(unit.weapons.size()):
+		if remaining[i] != 0 and remaining[i] != unit.weapons[i].count:
+			return
+		if remaining[i] > 0 and _equipment_target_name(unit.weapons[i].name) in targets:
+			return
+	for i in range(unit.weapons.size()):
+		if remaining[i] == 0 and unit.weapons[i].from_item.is_empty():
+			unit.weapons[i].from_item = "__weapon_bundle__:" + "|".join(targets)
+	_merge_equipment_items(unit.equipment_items, bundles, true)
+
+
+static func _same_bundle_weapon(a: OPRWeapon, b: OPRWeapon) -> bool:
+	return a.name == b.name and a.range_value == b.range_value and a.attacks == b.attacks and a.special_rules == b.special_rules
+
+
+static func _bundle_weapon_profile(weapon: OPRWeapon) -> Dictionary:
+	return {"name": weapon.name, "range": weapon.range_value, "attacks": weapon.attacks,
+		"count": 1, "specialRules": weapon.special_rules.duplicate()}
+
+
+static func _weapon_bundle_entry(profiles: Array, count: int, targets: Array) -> Dictionary:
+	return {"name": profiles[0].name, "count": count, "weapons": profiles,
+		"rules": [], "bundle_only": true, "bundle_targets": targets.duplicate(),
+		"replacement_target": "|".join(targets)}
+
+
+## A completely unchanged combined half has no selected-upgrade metadata.
+## Normalize it BEFORE merging, preserving first-half ordering on equal counts.
+func _inherit_weapon_bundle_targets(unit, other) -> void:
+	for item in unit.equipment_items:
+		if item.get("bundle_only", false):
+			return
+	var targets: Array = []
+	for item in other.equipment_items:
+		if item.get("bundle_only", false):
+			targets = item.get("bundle_targets", [])
+			break
+	if targets.is_empty():
+		return
+	var sources: Array = []
+	var profiles: Array = []
+	for name in targets:
+		var found: OPRWeapon = null
+		for weapon in unit.weapons:
+			if _equipment_target_name(weapon.name) == name:
+				if found != null or not weapon.from_item.is_empty() or weapon.count != unit.size:
+					return
+				found = weapon
+		if found == null:
+			return
+		sources.append(found)
+		profiles.append(_bundle_weapon_profile(found))
+	for weapon in sources:
+		weapon.from_item = "__weapon_bundle__:" + "|".join(targets)
+	unit.equipment_items.push_front(_weapon_bundle_entry(profiles, unit.size, targets))
 
 
 ## Parse a weapon from TTS API response
@@ -1628,7 +1874,9 @@ func _parse_weapon(data) -> OPRWeapon:
 ## drop it from the unit list.
 ## A joined Hero (combined==false, joinToUnit set) is a distinct model and is
 ## intentionally left as its own unit.
-func _merge_combined_units(units: Array[OPRUnit]) -> Array[OPRUnit]:
+## `bundles`: the halves were parsed with loadout bundles (LOADOUT_BUNDLE_FACTIONS); only then do
+## bundle identity, item profiles and replacement targets take part in the merge.
+func _merge_combined_units(units: Array[OPRUnit], bundles: bool = false) -> Array[OPRUnit]:
 	# Index the anchor halves (combined, no joinToUnit) by their selectionId.
 	var anchors_by_selection: Dictionary = {}
 	for unit in units:
@@ -1640,13 +1888,16 @@ func _merge_combined_units(units: Array[OPRUnit]) -> Array[OPRUnit]:
 		# Secondary half of a Combined unit: fold it into its anchor and drop it.
 		if unit.combined and not unit.join_to_unit.is_empty() and anchors_by_selection.has(unit.join_to_unit):
 			var anchor: OPRUnit = anchors_by_selection[unit.join_to_unit]
+			if bundles:
+				_inherit_weapon_bundle_targets(anchor, unit)
+				_inherit_weapon_bundle_targets(unit, anchor)
 			anchor.size += unit.size
 			anchor.cost += unit.cost
-			_merge_weapon_counts(anchor.weapons, unit.weapons)
+			_merge_weapon_counts(anchor.weapons, unit.weapons, bundles)
 			# Per-model equipment/roles (a Sergeant / Banner / weapon-team item on the SECONDARY half)
 			# must survive the merge: they drive the base ring, per-model Tough AND the loadout-variant
 			# model (`#crest`). Dropping them silently de-cresetd combined squads' sergeants.
-			_merge_equipment_items(anchor.equipment_items, unit.equipment_items)
+			_merge_equipment_items(anchor.equipment_items, unit.equipment_items, bundles)
 			for equip_name in unit.equipment:
 				if equip_name not in anchor.equipment:
 					anchor.equipment.append(equip_name)
@@ -1667,14 +1918,23 @@ func _merge_combined_units(units: Array[OPRUnit]) -> Array[OPRUnit]:
 ## Folds `extra` per-model equipment items into `target`, summing counts for same-named items so a
 ## merged Combined unit keeps BOTH halves' Sergeants/Banners/weapon-team items (each with its ring,
 ## per-model Tough and `#<slug>` variant model).
-static func _merge_equipment_items(target: Array, extra: Array) -> void:
+## With `bundles`, two same-named items merge only when their whole bundle identity matches (two
+## different weapon teams stay two entries).
+static func _merge_equipment_items(target: Array, extra: Array, bundles: bool = false) -> void:
 	for item in extra:
 		var item_name: String = str(item.get("name", ""))
 		var existing: Dictionary = {}
 		for t in target:
-			if str(t.get("name", "")) == item_name:
-				existing = t
-				break
+			if str(t.get("name", "")) != item_name:
+				continue
+			if bundles and not (t.get("weapons", []) == item.get("weapons", []) \
+					and t.get("rules", []) == item.get("rules", []) \
+					and t.get("replacement_slot", "") == item.get("replacement_slot", "") \
+					and t.get("replacement_target", "") == item.get("replacement_target", "") \
+					and t.get("bundle_only", false) == item.get("bundle_only", false)):
+				continue
+			existing = t
+			break
 		if existing.is_empty():
 			target.append(item)
 		else:
@@ -1683,7 +1943,9 @@ static func _merge_equipment_items(target: Array, extra: Array) -> void:
 
 ## Folds `extra` weapons into `target`, summing counts for identical weapons
 ## (same name/range/attacks/rules) so a merged unit shows e.g. "Rifle x10".
-func _merge_weapon_counts(target: Array[OPRWeapon], extra: Array[OPRWeapon]) -> void:
+## With `bundles`, an item-granted or bundled weapon never folds into a plain one, and a
+## replacement target travels with the merged count.
+func _merge_weapon_counts(target: Array[OPRWeapon], extra: Array[OPRWeapon], bundles: bool = false) -> void:
 	for weapon in extra:
 		var existing_match: OPRWeapon = null
 		for existing in target:
@@ -1691,6 +1953,13 @@ func _merge_weapon_counts(target: Array[OPRWeapon], extra: Array[OPRWeapon]) -> 
 					and existing.range_value == weapon.range_value \
 					and existing.attacks == weapon.attacks \
 					and existing.special_rules == weapon.special_rules:
+				if bundles:
+					if existing.from_item != weapon.from_item:
+						continue
+					if not existing.replacement_target.is_empty() and not weapon.replacement_target.is_empty() and existing.replacement_target != weapon.replacement_target:
+						continue
+					if existing.replacement_target.is_empty():
+						existing.replacement_target = weapon.replacement_target
 				existing_match = existing
 				break
 		if existing_match:

@@ -43,6 +43,9 @@ var _downloader: AssetDownloadManager = null
 var _ctex_tex: AssetDownloadManager = null
 var _models: Dictionary = {}   # key -> { url, sha256, size, ctex? }
 var _label_slug: Dictionary = {}   # lowercased AF option label -> part-slug (I2)
+## Faction-scoped vocabulary (`"_faction_<folder>": {label: slug}` in the map): consulted only for
+## that faction's models, so one faction's gain names can never re-slug another faction's models.
+var _label_slug_by_faction: Dictionary = {}   # faction folder -> { lowercased label -> slug }
 var _base_url: String = ""     # optional prefix for relative entry URLs
 
 # === Lifecycle ===
@@ -71,6 +74,12 @@ func _load_label_slug_map() -> void:
 		return
 	for k in data:
 		var key: String = str(k).strip_edges().to_lower()
+		if key.begins_with("_faction_") and data[k] is Dictionary:
+			var section: Dictionary = {}
+			for label in data[k]:
+				section[str(label).strip_edges().to_lower()] = str(data[k][label])
+			_label_slug_by_faction[key.trim_prefix("_faction_")] = section
+			continue
 		if key.is_empty() or key.begins_with("_"):
 			continue
 		_label_slug[key] = str(data[k])
@@ -79,16 +88,47 @@ func _load_label_slug_map() -> void:
 ## The variant slug for a model from its loadout labels (I2): map each label to a part-slug via the
 ## data file, then the slug is the SORTED, de-duplicated set of matched slugs joined by "+". Returns ""
 ## when no label maps (→ caller uses the base model). THE single documented derivation — Model Forge
-## reproduces exactly this when naming a variant bake `<baseKey>#<slug>`.
-func variant_slug(labels: Array) -> String:
+## reproduces exactly this when naming a variant bake `<baseKey>#<slug>`. `faction` adds that
+## faction's scoped vocabulary on top of the shared one ("" = shared only).
+func variant_slug(labels: Array, faction: String = "") -> String:
+	var scoped: Dictionary = _label_slug_by_faction.get(faction.strip_edges().to_lower(), {})
 	var slugs: Dictionary = {}
 	for label in labels:
-		var slug: String = str(_label_slug.get(str(label).strip_edges().to_lower(), ""))
+		var key: String = str(label).strip_edges().to_lower()
+		var slug: String = str(scoped.get(key, _label_slug.get(key, "")))
 		if not slug.is_empty():
 			slugs[slug] = true
 	var arr: Array = slugs.keys()
 	arr.sort()
 	return "+".join(arr)
+
+
+## Universal ArmyBookItems (companions, riders, statues) live in the unit's rule data rather than
+## its distributed weapons. Only items named in the FACTION's scoped vocabulary take part, and only
+## when their complete composed variant is shipped; otherwise the labels come back unchanged — so a
+## faction without a scoped section resolves exactly as before.
+func labels_with_available_items(faction: String, unit_name: String, labels: Array, item_names: Array) -> Array:
+	var scoped: Dictionary = _label_slug_by_faction.get(faction.strip_edges().to_lower(), {})
+	var visual_items: Array = item_names.filter(func(n): return scoped.has(str(n).strip_edges().to_lower()))
+	if visual_items.is_empty():
+		return labels
+	var expanded := labels.duplicate()
+	for item_name in visual_items:
+		if item_name not in expanded:
+			expanded.append(item_name)
+	var slug := variant_slug(expanded, faction)
+	if not slug.is_empty() and has_model(faction, unit_name + "#" + slug):
+		return expanded
+	# The full combination is not shipped: keep each item whose own composed variant is.
+	var available := labels.duplicate()
+	for item_name in visual_items:
+		var candidate := available.duplicate()
+		if item_name not in candidate:
+			candidate.append(item_name)
+		var candidate_slug := variant_slug(candidate, faction)
+		if not candidate_slug.is_empty() and has_model(faction, unit_name + "#" + candidate_slug):
+			available = candidate
+	return available
 
 # === Public API ===
 
