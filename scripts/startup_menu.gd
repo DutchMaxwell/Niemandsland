@@ -842,6 +842,7 @@ func _open_load_battle_dialog() -> void:
 		_load_dialog.ok_button_text = "Open"
 		_load_dialog.cancel_button_text = "Cancel"
 		_load_dialog.file_selected.connect(_on_load_file_selected)
+		_load_dialog.theme = preload("res://scripts/hud/dialog_style.gd").file_dialog_theme()
 		add_child(_load_dialog)
 		# A hard 800x600 is nearly full-screen on a 1366x768 laptop; clamp to the host
 		# window instead (and re-clamp when it is resized).
