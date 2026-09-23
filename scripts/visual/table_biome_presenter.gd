@@ -13,8 +13,11 @@ extends Node3D
 ## The reference writes into nodes it does not own (table plane + material, grass field, base tops, table
 ## frame, environment, sun). Everything it touches is snapshot before apply() and restored by teardown();
 ## walls and placed objects are rebuilt by the terrain overlay, which drops their reference dressing.
+## The trees are swapped by a tree pass (table_tree_pass.gd) that prepares its sources off the main thread
+## and restores the old trees on teardown.
 
 const ReferenceScript := preload("res://scripts/visual/grassland_reference.gd")
+const TreePassScript := preload("res://scripts/visual/table_tree_pass.gd")
 ## Table ids (table.gd BIOMES) -> reference profile ids (reference_biomes.gd). Only grassland differs.
 const TABLE_TO_REFERENCE := {"temperate_grassland": "grassland"}
 const REBUILD_DELAY_S := 0.25
@@ -38,6 +41,8 @@ const SUN_PROPS: Array[String] = ["directional_shadow_max_distance", "directiona
 
 signal presentation_built(reference_biome: String)
 signal presentation_removed
+## The biome's reference trees replaced the table's trees (may come after presentation_built).
+signal trees_dressed(reference_biome: String)
 
 ## Master switch (the review-page / cut flag). Off = the table as shipped before this work.
 var enabled := true
@@ -54,6 +59,7 @@ var _saved := {}
 var _applied_mesh: Mesh = null
 var _applied_material: Material = null
 var _applied_density := -1.0
+var _tree_pass = null
 
 
 ## A table id -> the reference profile id that dresses it.
@@ -65,6 +71,8 @@ static func reference_biome(table_biome: String) -> String:
 func setup(main: Node) -> void:
 	_main = main
 	_table = main.get_node("Table")
+	_tree_pass = TreePassScript.new(self, main)
+	_tree_pass.trees_dressed.connect(func(b: String) -> void: trees_dressed.emit(b))
 	_table.biome_changed.connect(func(_b: String) -> void: request_rebuild("biome"))
 	_table.table_resized.connect(func(_s: Vector2) -> void: request_rebuild("resize"))
 	main.save_manager.load_completed.connect(func(_n: int) -> void: request_rebuild("load"))
@@ -99,6 +107,11 @@ func _current_density() -> float:
 ## Is the table dressed right now?
 func is_dressed() -> bool:
 	return is_instance_valid(_presentation)
+
+
+## Do the table's trees show the dressed biome's reference trees right now?
+func are_trees_dressed() -> bool:
+	return is_dressed() and _tree_pass != null and _tree_pass.is_dressed()
 
 
 func current_presentation() -> Node3D:
@@ -161,6 +174,7 @@ func rebuild() -> void:
 			var mist = _main.get("atmospheric_clouds")
 			if HIDE_GROUND_MIST and mist != null:
 				mist.visible = false
+			_tree_pass.dress(presentation)
 			print("TABLE_BIOME built %s (table %s, %s ft)" % [presentation.biome, _table.biome, str(_table.table_size)])
 			presentation_built.emit(str(presentation.biome))
 	_building = false
@@ -176,6 +190,8 @@ func teardown() -> void:
 		return
 	var presentation := _presentation
 	_presentation = null
+	# The old trees come back first: the tree pass hid them and parented reference trees under them.
+	_tree_pass.undress()
 	# Nodes the reference parented outside itself.
 	var fog = presentation.get("_fog")
 	if is_instance_valid(fog):
@@ -270,6 +286,8 @@ func _restore() -> void:
 ## The table rebuilds its ground material when a battlemap download finishes (table.gd _apply_biome),
 ## which would silently put the old battlemap back under the dressing. Re-assert ours (two compares).
 func _process(_delta: float) -> void:
+	if _tree_pass != null and not _building:
+		_tree_pass.process()   # also collects finished source jobs while the table is not dressed
 	if _building or not is_instance_valid(_presentation) or not is_instance_valid(_table):
 		return
 	var surface := _surface()
