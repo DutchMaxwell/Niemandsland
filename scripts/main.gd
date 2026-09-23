@@ -121,7 +121,8 @@ const NO_DICE_TINT := Color.TRANSPARENT      # sentinel: no colour-tag tint on a
 # The dice window is the house-style prototype (23.09.): every colour, radius and font size comes
 # from HouseStyle — no literals here. Collapsed = folded to its header at the bottom-right corner.
 var _dice_collapsed: bool = false
-var _dice_collapse_button: Button = null
+var _dice_collapse_button: Button = null   # the dice window's × — closes it into the tool rail
+var _tool_rail: ToolRail = null
 ## Wave-2 tutorial seam (toolstrack spec §14): ONE consolidated edge for the dice-control rows —
 ## count / success / modifier / reroll / movecap. The tutorial director gates T-05 steps on it;
 ## display-consumers only, no game logic reads it back.
@@ -510,6 +511,7 @@ func _ready() -> void:
 	_build_reroll_row()
 	_build_movement_cap_row()
 	_build_dice_panel_frame()
+	_build_tool_rail()
 	_set_dice_count(DEFAULT_DICE_COUNT)
 
 	# Build the multiplayer chat + roster panel (hidden until a session is active).
@@ -12733,24 +12735,40 @@ func _build_dice_panel_frame() -> void:
 	for b: Button in [quick_roll_button, roll_button]:
 		b.custom_minimum_size = Vector2(0, HouseStyle.H_ACTION)
 		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var header := HouseStyle.panel_header("Dice Roller")
+	var header := HouseStyle.panel_header("Dice Roller", true)
 	_dice_vbox.add_child(header)
 	_dice_vbox.move_child(header, 0)
-	_dice_collapse_button = header.get_node("CollapseButton") as Button
-	_dice_collapse_button.pressed.connect(func() -> void: _set_dice_collapsed(not _dice_collapsed))
+	_dice_collapse_button = header.get_node("CloseButton") as Button
+	_dice_collapse_button.pressed.connect(func() -> void: _set_dice_collapsed(true))
 	# The log keeps the newest roll in view whenever its range changes: wrapped rows settle their
 	# height late, and a re-evaluation resizes the tray card above it (the log card shrinks).
 	_dice_log_scroll.get_v_scroll_bar().changed.connect(func() -> void:
 		_dice_log_scroll.scroll_vertical = int(_dice_log_scroll.get_v_scroll_bar().max_value))
 
 
-## Folds the dice window to its header (it keeps its bottom-right corner) or unfolds it. The
-## roll-purpose line only shows while unfolded and a purpose is set.
+## Closes the dice window into the tool rail or opens it (the rail's Dice tool). The roll-purpose line
+## only shows while it is open and a purpose is set.
 func _set_dice_collapsed(collapsed: bool) -> void:
 	_dice_collapsed = collapsed
-	HouseStyle.set_collapsed(_dice_panel, [_dice_controls, _dice_tray_card, _dice_results],
-		_dice_collapse_button, collapsed)
+	if _tool_rail != null:
+		_tool_rail.set_open(&"dice", not collapsed)
 	roll_purpose_label.visible = not collapsed and not roll_purpose_label.text.is_empty()
+
+
+## The tool rail (house style, 23.09.): Dice / Measure / Terrain / View beside the right edge, one open
+## at a time, plus "? Controls" — the key list that stood on the table is its overlay now.
+func _build_tool_rail() -> void:
+	_tool_rail = ToolRail.new()
+	$UI/HUD.add_child(_tool_rail)
+	_tool_rail.setup(self, _dice_panel, $UI/HUD/InfoLabel as Label, $UI)
+	_tool_rail.tool_changed.connect(_on_tool_rail_changed)
+	_tool_rail.set_open(&"dice", true)   # the dice window opens as it always stood open
+
+
+## A rail click opened or closed a tool: the dice window is "collapsed" whenever Dice is not the open one.
+func _on_tool_rail_changed(tool: StringName) -> void:
+	_dice_collapsed = tool != &"dice"
+	roll_purpose_label.visible = not _dice_collapsed and not roll_purpose_label.text.is_empty()
 
 
 func _on_success_target_pressed(target: int) -> void:
