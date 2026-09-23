@@ -551,6 +551,20 @@ static func from_dict(data: Dictionary) -> GameUnit:
 	if unit.source_type == "opr" and data.get("source_data") is Dictionary:
 		unit.source_data = OPRApiClient.OPRUnit.from_dict(data["source_data"])
 	unit.unit_properties = data.get("unit_properties", {}).duplicate(true)
+	# OPRUnit.to_dict carries the loadout only; name, size, points and the Quality/Defense statline live
+	# in unit_properties (EquipmentDistributor.create_from_opr_unit). Put them back, or the restored
+	# profile reads the class defaults — the hover tooltip showed Q4+/D4+ and no name for a Q3+/D3+ unit.
+	if unit.source_data is OPRApiClient.OPRUnit:
+		var profile := unit.source_data as OPRApiClient.OPRUnit
+		var props: Dictionary = unit.unit_properties
+		profile.name = str(props.get("name", profile.name))
+		profile.custom_name = str(props.get("custom_name", profile.custom_name))
+		profile.size = int(props.get("size", profile.size))
+		profile.cost = int(props.get("cost", profile.cost))
+		profile.quality = int(props.get("quality", profile.quality))
+		profile.defense = int(props.get("defense", profile.defense))
+		if props.get("item_grants") is Dictionary:
+			profile.item_grants = (props["item_grants"] as Dictionary).duplicate(true)
 	unit.is_activated = data.get("is_activated", false)
 	unit.activation_round = data.get("activation_round", 0)
 	unit.is_fatigued = data.get("is_fatigued", false)

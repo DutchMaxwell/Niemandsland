@@ -88,3 +88,38 @@ func test_the_unit_strip_has_a_card_for_every_unit_of_a_loaded_save() -> void:
 		.override_failure_message("the unit strip has no card for the loaded unit — the load never rebuilt it")
 	assert_int(dock._cards.size()).is_equal(dock._local_units().size())
 	await E2EBoot.settle(get_tree())
+
+
+# === 2. The hover tooltip after a save-load ===================================================
+# Capture 04 + probe A: pointing at a loaded model showed nothing — the hover asks get_unit_for_model(),
+# whose model -> profile map is filled only at spawn (0 entries after a load). And the profile the save
+# hands back had lost name, points, Quality and Defense (OPRUnit.to_dict carries the loadout only), so a
+# tooltip forced onto it read the class defaults Q4+/D4+ where the unit card said Q3+/D3+.
+
+func test_the_hover_tooltip_shows_a_loaded_unit_with_its_own_profile() -> void:
+	var uid: String = await _unit_through_save_and_fresh_load()
+	var loaded: GameUnit = _main.opr_army_manager.game_units.get(uid)
+	assert_object(loaded).is_not_null()
+	if loaded == null:
+		return
+	var node: Node3D = (loaded.models[0] as ModelInstance).node
+	# The exact lookup _update_opr_hover makes for the model under the cursor.
+	var profile = _main.opr_army_manager.get_unit_for_model(node)
+	assert_object(profile).is_not_null() \
+		.override_failure_message("hovering a loaded model finds no unit — the tooltip stays dead")
+	# The profile the load restored, whichever way the hover reaches it.
+	var restored := loaded.source_data as OPRApiClient.OPRUnit
+	assert_object(restored).is_not_null()
+	if restored == null:
+		return
+	assert_str(restored.name).is_equal("Battle Brothers")
+	assert_int(restored.quality).is_equal(3)
+	assert_int(restored.defense).is_equal(3)
+	assert_int(restored.cost).is_equal(300)
+	var tip = _main.opr_stats_tooltip
+	tip.show_unit(restored, node, true)
+	assert_str(tip.unit_name_label.text).contains("Battle Brothers")
+	assert_str(tip.stats_label.text).contains("Quality: [color=#88ff88]3+") \
+		.contains("Defense: [color=#8888ff]3+").contains("300 pts")
+	tip.hide_tooltip()
+	await E2EBoot.settle(get_tree())
