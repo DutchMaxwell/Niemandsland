@@ -281,9 +281,13 @@ func get_attached_heroes() -> Array:
 	return unit_properties.get("attached_heroes", [])
 
 
-## Gets the unit this hero is attached to.
+## Gets the unit this hero is attached to: a live GameUnit, or null. A save load or network restore parks the host's
+## unit_id String here ("" = not joined) until SaveManager._restore_hero_attachments_after_load resolves it, and the
+## spawned models draw their tokens in between; that String is not a join (it reached a GameUnit variable in
+## RadialMenuController._hero_marker_suppressed on every save load).
 func get_attached_to() -> Variant:
-	return unit_properties.get("attached_to", null)
+	var host = unit_properties.get("attached_to", null)
+	return host if host is GameUnit else null
 
 
 ## Checks if this unit has attached heroes.
