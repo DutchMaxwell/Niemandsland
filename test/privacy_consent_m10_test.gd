@@ -222,6 +222,25 @@ func test_privacy_facts_are_published_in_both_languages() -> void:
 	assert_str(menu_script.text_for("de", "controller")).contains("privacy@niemandsland.xyz")
 
 
+## This version has no send path (no transport API in scripts/privacy; the record only reaches the
+## menu's local preview/save), so the destination line must say that nothing is uploaded — never
+## promise an upload after sharing is switched on — and point at the local save that does exist.
+func test_destination_text_promises_no_upload_this_version_cannot_make() -> void:
+	var menu_script = load("res://scripts/privacy/privacy_menu.gd")
+	for path in ["res://scripts/privacy/privacy_menu.gd", "res://scripts/privacy/game_record_collector.gd",
+			"res://scripts/privacy/shared_record_builder.gd", "res://scripts/privacy/consent_store.gd"]:
+		for token: String in ["HTTP" + "Request", "HTTP" + "Client", "Stream" + "Peer", "Web" + "Socket"]:
+			assert_str(FileAccess.get_file_as_string(path)).override_failure_message("%s references %s" % [path, token]).not_contains(token)
+	var en: String = menu_script.text_for("en", "destination")
+	var de: String = menu_script.text_for("de", "destination")
+	assert_str(en).override_failure_message("EN destination promises an upload: " + en).not_contains("Records are uploaded")
+	assert_str(en).contains("uploads nothing")
+	assert_str(en).contains("save the exact bytes")
+	assert_str(de).override_failure_message("DE destination promises an upload: " + de).not_contains("Aufzeichnungen werden nur hochgeladen")
+	assert_str(de).contains("lädt nichts hoch")
+	assert_str(de).contains("lokal speichern")
+
+
 func test_press_review_details_keeps_button_alive_for_feedback() -> void:
 	var menu = load(MENU_SCENE).instantiate()
 	add_child(menu)
