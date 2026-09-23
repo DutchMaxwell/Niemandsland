@@ -21,6 +21,9 @@ const REBUILD_DELAY_S := 0.25
 ## Scatter density per quality preset (GraphicsSettings.QualityPreset); presets missing here are NOT dressed
 ## (Performance, Low): they keep today's battlemap table, the escape hatch for weak GPUs.
 const PRESET_DENSITY := {2: 1.0, 3: 1.0, 4: 1.0}   # MEDIUM, HIGH, ULTRA
+## Maintainer decision D4: the game's ground mist is hidden while a biome is dressed — the accepted
+## look had none (the reference scene hides it too). The mist comes back on teardown.
+const HIDE_GROUND_MIST := true
 ## Scatter counts are per m²; above a 6x4 ft table the density falls instead of the frame rate.
 const REFERENCE_AREA_M2 := 6.0 * 0.3048 * 4.0 * 0.3048
 const ENV_PROPS: Array[String] = ["background_mode", "reflected_light_source", "ambient_light_source",
@@ -155,6 +158,9 @@ func rebuild() -> void:
 			# The floor needs no shadow of its own; with relief its vertex shader (wall loop included) ran
 			# again in every shadow cascade.
 			surface.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var mist = _main.get("atmospheric_clouds")
+			if HIDE_GROUND_MIST and mist != null:
+				mist.visible = false
 			print("TABLE_BIOME built %s (table %s, %s ft)" % [presentation.biome, _table.biome, str(_table.table_size)])
 			presentation_built.emit(str(presentation.biome))
 	_building = false
@@ -190,6 +196,9 @@ func _snapshot() -> void:
 	var surface := _surface()
 	_saved["mesh"] = surface.mesh
 	_saved["cast_shadow"] = surface.cast_shadow
+	var mist = _main.get("atmospheric_clouds")
+	if mist != null:
+		_saved["mist_visible"] = mist.visible
 	_saved["grass_visible"] = _table.get_node("GrassField").visible
 	_saved["base_shader"] = _table.get_base_top_material().shader
 	var frames := {}
@@ -224,6 +233,9 @@ func _restore() -> void:
 	if surface.material_override == _applied_material:
 		surface.material_override = _table._build_ground_material()
 	surface.cast_shadow = _saved.get("cast_shadow", GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+	var mist = _main.get("atmospheric_clouds")
+	if mist != null and _saved.has("mist_visible"):
+		mist.visible = bool(_saved["mist_visible"])
 	_table.get_node("GrassField").visible = bool(_saved.get("grass_visible", true))
 	var base: ShaderMaterial = _table.get_base_top_material()
 	base.shader = _saved["base_shader"]

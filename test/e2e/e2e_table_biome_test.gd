@@ -96,8 +96,12 @@ func test_teardown_gives_the_table_back(timeout := 120000) -> void:
 	var env: Environment = _main.get_node("WorldEnvironment").environment
 	var ssr_before := env.ssr_enabled
 	var ambient_source_before := env.ambient_light_source
+	var mist: Node3D = _main.atmospheric_clouds
+	var mist_before := mist.visible
 	var presenter := await _dress("volcanic_ash")
 	assert_bool(presenter.is_dressed()).is_true()
+	# D4: the game's ground mist is off while a biome is dressed (the accepted look had none).
+	assert_bool(mist.visible).override_failure_message("the ground mist stayed on over a dressed table").is_false()
 	assert_object((surface.material_override as ShaderMaterial).shader).is_same(preload("res://shaders/visual/reference_ground_table.gdshader"))
 	assert_bool(table.get_node("GrassField").visible).is_false()
 	presenter.enabled = false
@@ -110,6 +114,7 @@ func test_teardown_gives_the_table_back(timeout := 120000) -> void:
 	assert_bool(table.get_node("GrassField").visible).is_true()
 	assert_bool(env.ssr_enabled == ssr_before).is_true()
 	assert_int(env.ambient_light_source).is_equal(ambient_source_before)
+	assert_bool(mist.visible).is_equal(mist_before)
 	assert_int(presenter.get_child_count()).is_equal(0)
 
 
