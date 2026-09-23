@@ -4,7 +4,8 @@ extends Control
 ##
 ## Set [member face] to 1-6; the control draws a rounded die body with the
 ## matching pip pattern, scaled to the control's current size. Used by the dice
-## roller's success readout (current roll column and the horizontal log).
+## roller's success readout (current roll column and the horizontal log). Its
+## default colours are the physics dice's own (DiceLook — the one look switch).
 
 # === Constants ===
 
@@ -36,6 +37,13 @@ const PIP_LAYOUT: Dictionary = {
 @export var border_color: Color = Color(0.30, 0.30, 0.32)
 
 # === Lifecycle ===
+
+func _init() -> void:
+	var look := DiceLook.current()
+	body_color = look.body_color
+	pip_color = look.pip_color
+	border_color = look.icon_border
+
 
 func _ready() -> void:
 	resized.connect(queue_redraw)

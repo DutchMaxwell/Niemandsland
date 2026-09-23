@@ -43,6 +43,8 @@ const MAX_ROLL_TIME: float = 2.5  # safety cap
 const WALL_THICKNESS: float = 1.5
 const SEPARATION_PASSES: int = 6  # relaxation iterations for the cosmetic de-overlap
 const PICK_RADIUS_SCALE: float = 1.4  # accept a click within 1.4x a die's on-screen half-size
+const CAMERA_MARGIN: float = 1.03     # a hair of air around the tray's rim
+const REST_MARGIN: float = 1.1        # felt between a resting die's corner and the rim (half a die)
 
 # === Private variables ===
 
@@ -55,6 +57,8 @@ var _rolling: bool = false
 var _roll_time: float = 0.0
 var _still_time: float = 0.0
 var _result: Dictionary = {}
+var _tray_half_extents: Vector2 = Vector2.ZERO   # the visible tray's outer half-size (x, z)
+var _fitted_size: Vector2 = Vector2.ZERO         # the container size the camera was last fitted to
 
 # === Lifecycle ===
 
@@ -70,6 +74,15 @@ func _ready() -> void:
 	_setup_lighting()
 	_rebuild_environment()
 	_show_resting_dice()
+
+
+## Keeps the camera fitted when the layout resizes the tray (the tally column widening for colour
+## groups). Measured on 4.6: a new size on the EXISTING orthogonal camera never reached the render
+## (the image kept the old scale, the tray looked cut), a freshly made camera renders the new fit —
+## so a resize rebuilds the camera. Rare (layout changes only), display only.
+func _process(_delta: float) -> void:
+	if size != _fitted_size:
+		_setup_camera()
 
 
 func _physics_process(delta: float) -> void:
@@ -328,7 +341,8 @@ func _spawn_dice(resting: bool) -> void:
 		d.size = DIE_SIZE
 		d.freeze = resting
 		_root.add_child(d)
-		var slot: Vector2 = _grid_slot(i, count)
+		# Resting dice sit inset from the rim (display only); a throw starts from the unchanged grid.
+		var slot: Vector2 = _rest_slot(i, count) if resting else _grid_slot(i, count)
 		if resting:
 			d.position = Vector3(slot.x, DIE_SIZE * 0.5 + 0.05, slot.y)
 		else:
@@ -342,10 +356,23 @@ func _spawn_dice(resting: bool) -> void:
 ## XZ grid slot of die `i` in a set of `count`: maximum spacing, spreading the
 ## grid across the full usable box footprint (shared by spawn and reroll drops).
 func _grid_slot(i: int, count: int) -> Vector2:
+	return _slot_in(i, count, roller_size.x * 0.5 - DIE_SIZE, roller_size.z * 0.5 - DIE_SIZE)
+
+
+## XZ slot of RESTING die `i` (before a throw, and a shown Quick / remote result): the same grid,
+## spread over the visible floor with REST_MARGIN of felt between every outer die and the rim on all
+## four sides (maintainer 23.09.: the resting dice looked squeezed against the rim). Display only —
+## a physics throw still starts from _grid_slot, so every throw is launched exactly as before.
+func _rest_slot(i: int, count: int) -> Vector2:
+	var reach: float = DIE_SIZE * 0.5 * sqrt(2.0) + REST_MARGIN   # half-diagonal: resting dice turn to any yaw
+	return _slot_in(i, count,
+		maxf(0.0, roller_size.x * 0.5 - WALL_THICKNESS * 0.5 - reach),
+		maxf(0.0, roller_size.z * 0.5 - WALL_THICKNESS * 0.5 - reach))
+
+
+func _slot_in(i: int, count: int, half_x: float, half_z: float) -> Vector2:
 	var cols: int = int(ceil(sqrt(float(maxi(1, count)))))
 	var rows: int = int(ceil(float(maxi(1, count)) / float(cols)))
-	var half_x: float = roller_size.x * 0.5 - DIE_SIZE
-	var half_z: float = roller_size.z * 0.5 - DIE_SIZE
 	var spacing_x: float = (2.0 * half_x / float(cols - 1)) if cols > 1 else 0.0
 	var spacing_z: float = (2.0 * half_z / float(rows - 1)) if rows > 1 else 0.0
 	var col: int = i % cols
@@ -354,10 +381,7 @@ func _grid_slot(i: int, count: int) -> Vector2:
 
 
 func _setup_lighting() -> void:
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-65, -35, 0)
-	light.light_energy = 1.2
-	_root.add_child(light)
+	DiceVisual.add_tray_lighting(_root)   # soft key light with contact shadows, fill, dim environment
 
 
 func _rebuild_environment() -> void:
@@ -370,16 +394,8 @@ func _rebuild_environment() -> void:
 	var hz: float = roller_size.z * 0.5
 	var h: float = roller_size.y
 
-	# Visible floor.
-	var floor_mesh := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(roller_size.x, roller_size.z)
-	var floor_mat := StandardMaterial3D.new()
-	floor_mat.albedo_color = Color(0.12, 0.13, 0.16)
-	floor_mat.roughness = 0.95
-	plane.material = floor_mat
-	floor_mesh.mesh = plane
-	_environment.add_child(floor_mesh)
+	# Visible tray (felt, rim, gold lip) — display only; its rim sits on the colliders' inner faces.
+	_tray_half_extents = DiceVisual.add_tray(_environment, roller_size, WALL_THICKNESS)
 
 	# Colliders: floor + four walls (invisible) keep the dice in the box.
 	_add_collider(Vector3(roller_size.x, WALL_THICKNESS, roller_size.z), Vector3(0, -WALL_THICKNESS * 0.5, 0))
@@ -407,7 +423,19 @@ func _setup_camera() -> void:
 		_camera.queue_free()
 	_camera = Camera3D.new()
 	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	_camera.size = maxf(roller_size.x, roller_size.z) * 1.1
 	_camera.position = Vector3(0, roller_size.y * 1.5, 0)
 	_camera.rotation_degrees = Vector3(-90, 0, 0)
 	_root.add_child(_camera)
+	_fit_camera()
+
+
+## Frames the visible tray (rim included) as large as the container allows — the dice read bigger than
+## on the old floating floor. Display only; picking projects through this same camera.
+func _fit_camera() -> void:
+	if _camera == null or not is_instance_valid(_camera):
+		return
+	_fitted_size = size
+	var aspect: float = size.x / size.y if size.x > 0.0 and size.y > 0.0 else 1.5
+	var half: Vector2 = _tray_half_extents if _tray_half_extents != Vector2.ZERO \
+		else Vector2(roller_size.x, roller_size.z) * 0.5
+	_camera.size = maxf(half.y * 2.0, half.x * 2.0 / aspect) * CAMERA_MARGIN

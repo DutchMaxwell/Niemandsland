@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3 uid="uid://main001"]
+[gd_scene load_steps=14 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Shader" path="res://shaders/space_skybox.gdshader" id="10_spacesky"]
@@ -9,20 +9,6 @@
 [ext_resource type="Script" path="res://scripts/network_manager.gd" id="6_network"]
 [ext_resource type="Script" path="res://scripts/save_manager.gd" id="7_savemgr"]
 [ext_resource type="Script" path="res://scripts/graphics_settings.gd" id="9_graphics"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.08, 0.09, 0.11, 0.95)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.3, 0.5, 0.7, 0.8)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
-shadow_size = 4
-shadow_color = Color(0, 0, 0, 0.5)
 
 [sub_resource type="ShaderMaterial" id="SpaceSky_1"]
 shader = ExtResource("10_spacesky")
@@ -395,65 +381,95 @@ offset_right = -10.0
 offset_bottom = -10.0
 grow_horizontal = 0
 grow_vertical = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+theme_type_variation = &"HsPanel"
 
 [node name="VBox" type="VBoxContainer" parent="UI/HUD/DiceRollerPanel"]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="UI/HUD/DiceRollerPanel/VBox"]
-layout_mode = 2
-text = "Dice Roller"
-horizontal_alignment = 1
-
-[node name="CurrentDiceLabel" type="Label" parent="UI/HUD/DiceRollerPanel/VBox"]
+[node name="DiceControls" type="VBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "In box: 6 D6"
-horizontal_alignment = 1
+
+[node name="ButtonRow" type="HBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox/DiceControls"]
+layout_mode = 2
+
+[node name="QuickRollButton" type="Button" parent="UI/HUD/DiceRollerPanel/VBox/DiceControls/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_type_variation = &"HsButton"
+text = "Quick"
+
+[node name="RollButton" type="Button" parent="UI/HUD/DiceRollerPanel/VBox/DiceControls/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.4
+focus_mode = 0
+theme_type_variation = &"HsPrimary"
+text = "Roll"
 
 [node name="RollPurposeLabel" type="Label" parent="UI/HUD/DiceRollerPanel/VBox"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(0.92, 0.85, 0.62, 1)
-theme_override_font_sizes/font_size = 13
+theme_type_variation = &"HsNote"
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="DiceRollerControl" type="SubViewportContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
+[node name="TrayCard" type="PanelContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(300, 220)
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"HsCard"
+
+[node name="TrayVBox" type="VBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox/TrayCard"]
+layout_mode = 2
+
+[node name="DiceRollerControl" type="SubViewportContainer" parent="UI/HUD/DiceRollerPanel/VBox/TrayCard/TrayVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 140)
 layout_mode = 2
 size_flags_vertical = 3
 stretch = true
 script = ExtResource("5_diceroller")
 roller_size = Vector3(18, 15, 12)
 
-[node name="ButtonRow" type="HBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
+[node name="TrayFooter" type="HBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox/TrayCard/TrayVBox"]
 layout_mode = 2
 
-[node name="RollButton" type="Button" parent="UI/HUD/DiceRollerPanel/VBox/ButtonRow"]
+[node name="CurrentDiceLabel" type="Label" parent="UI/HUD/DiceRollerPanel/VBox/TrayCard/TrayVBox/TrayFooter"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-focus_mode = 0
-text = "Roll"
+theme_type_variation = &"HsCaption"
+text = "In box: 6 D6"
 
-[node name="QuickRollButton" type="Button" parent="UI/HUD/DiceRollerPanel/VBox/ButtonRow"]
+[node name="DiceResultLabel" type="Label" parent="UI/HUD/DiceRollerPanel/VBox/TrayCard/TrayVBox/TrayFooter"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
-focus_mode = 0
-text = "Quick"
+theme_type_variation = &"HsNote"
+horizontal_alignment = 2
 
-[node name="DiceLogScroll" type="ScrollContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
+[node name="DiceResults" type="VBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-custom_minimum_size = Vector2(0, 120)
+size_flags_vertical = 3
+
+[node name="LogCard" type="PanelContainer" parent="UI/HUD/DiceRollerPanel/VBox/DiceResults"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"HsCard"
+
+[node name="DiceLogScroll" type="ScrollContainer" parent="UI/HUD/DiceRollerPanel/VBox/DiceResults/LogCard"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="DiceLogVBox" type="VBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox/DiceLogScroll"]
+[node name="DiceLogVBox" type="VBoxContainer" parent="UI/HUD/DiceRollerPanel/VBox/DiceResults/LogCard/DiceLogScroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3

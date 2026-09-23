@@ -100,7 +100,12 @@ const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 @onready var _dice_log_scroll: ScrollContainer = %DiceLogScroll
 @onready var _dice_log_vbox: VBoxContainer = %DiceLogVBox
 @onready var current_dice_label: Label = %CurrentDiceLabel
+@onready var _dice_panel: PanelContainer = $UI/HUD/DiceRollerPanel
 @onready var _dice_vbox: VBoxContainer = $UI/HUD/DiceRollerPanel/VBox
+@onready var _dice_controls: VBoxContainer = %DiceControls   # movement, count, success, modifier, Quick/Roll
+@onready var _dice_results: VBoxContainer = %DiceResults     # re-roll row + dice log
+@onready var _dice_tray_card: PanelContainer = %TrayCard     # the tray's frame: tally + tray + "In box" line
+@onready var _dice_result_label: Label = %DiceResultLabel    # "total 18 · 4 successes" under the tray
 
 # Dice count selection (click-based; replaces the old SpinBox so keyboard focus
 # never leaves the table and WASD always reaches the camera).
@@ -108,15 +113,15 @@ const MIN_DICE: int = 1
 const MAX_DICE: int = 50
 const DICE_PRESET_MAX: int = 10
 const DEFAULT_DICE_COUNT: int = 6
-const CURRENT_ROLL_ICON_SIZE: int = 26
+const CURRENT_ROLL_ICON_SIZE: int = 20
 const DICE_LOG_ICON_SIZE: int = 16
-const DICE_BUTTON_HEIGHT: int = 26
-const ACTIVE_DICE_BUTTON_TINT := Color(0.55, 0.85, 1.0)
-const DICE_CAPTION_FONT_SIZE: int = 12       # row captions + success tag in the log
-const DICE_CAPTION_MIN_WIDTH: int = 56       # caption column width on the option rows
 const MODIFIER_VALUE_MIN_WIDTH: int = 44     # modifier value readout width
-const SUCCESS_SUMMARY_FONT_SIZE: int = 16    # "✓ N" total under the success column
-const NO_DICE_TINT := Color(0, 0, 0, 0)      # sentinel: no colour-tag tint on a result count (#77)
+const DICE_COUNT_STEPS: Array[int] = [-10, -5, -1, 1, 5, 10]
+const NO_DICE_TINT := Color.TRANSPARENT      # sentinel: no colour-tag tint on a result count (#77)
+# The dice window is the house-style prototype (23.09.): every colour, radius and font size comes
+# from HouseStyle — no literals here. Collapsed = folded to its header at the bottom-right corner.
+var _dice_collapsed: bool = false
+var _dice_collapse_button: Button = null
 ## Wave-2 tutorial seam (toolstrack spec §14): ONE consolidated edge for the dice-control rows —
 ## count / success / modifier / reroll / movecap. The tutorial director gates T-05 steps on it;
 ## display-consumers only, no game logic reads it back.
@@ -504,6 +509,7 @@ func _ready() -> void:
 	_build_success_controls()
 	_build_reroll_row()
 	_build_movement_cap_row()
+	_build_dice_panel_frame()
 	_set_dice_count(DEFAULT_DICE_COUNT)
 
 	# Build the multiplayer chat + roster panel (hidden until a session is active).
@@ -7779,7 +7785,7 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 func _set_roll_purpose(text: String) -> void:
 	if roll_purpose_label != null:
 		roll_purpose_label.text = text
-		roll_purpose_label.visible = not text.is_empty()
+		roll_purpose_label.visible = not text.is_empty() and not _dice_collapsed
 
 
 # === #673 co-op: the defender's owner rolls its own saves ====================================
@@ -12450,6 +12456,10 @@ func _on_quick_roll_button_pressed() -> void:
 
 
 func _on_roller_started() -> void:
+	# Every roll shows its dice: an AI, scripted or remote roll unfolds a collapsed dice window,
+	# exactly as the always-open panel showed them before (house-style pass, 23.09.).
+	if _dice_collapsed:
+		_set_dice_collapsed(false)
 	roll_button.text = "Rolling..."
 	roll_button.disabled = true
 	for mode: int in _reroll_buttons:
@@ -12524,35 +12534,26 @@ func _current_roll_context() -> Dictionary:
 ## Builds the "Movement" cap row above the dice interface: pick Off / Advance / Rush-Charge and
 ## the selected model/unit can then only be dragged that far (enforced in ObjectManager).
 func _build_movement_cap_row() -> void:
-	var row := HBoxContainer.new()
-	row.name = "MovementCapRow"
-	row.add_theme_constant_override("separation", 4)
-
-	var label := Label.new()
-	label.text = "Movement:"
-	label.add_theme_font_size_override("font_size", DICE_CAPTION_FONT_SIZE)
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(label)
-
-	_movement_cap_buttons.clear()
 	var specs := [
 		[ObjectManager.MovementCap.OFF, "Off"],
 		[ObjectManager.MovementCap.ADVANCE, "Advance"],
 		[ObjectManager.MovementCap.RUSH, "Rush"],
 		[ObjectManager.MovementCap.CHARGE, "Charge"],
 	]
+	var texts: Array = []
 	for spec in specs:
-		var btn := Button.new()
-		btn.text = spec[1]
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
-		btn.pressed.connect(_on_movement_cap_pressed.bind(int(spec[0])))
-		row.add_child(btn)
-		_movement_cap_buttons[int(spec[0])] = btn
+		texts.append(spec[1])
+	var segments := HouseStyle.button_row(texts, HouseStyle.SEGMENT)
+	_movement_cap_buttons.clear()
+	for i: int in specs.size():
+		var btn := segments.get_child(i) as Button
+		btn.pressed.connect(_on_movement_cap_pressed.bind(int(specs[i][0])))
+		_movement_cap_buttons[int(specs[i][0])] = btn
 
-	_dice_vbox.add_child(row)
-	_dice_vbox.move_child(row, 0)  # above the dice-roller title
+	var row := HouseStyle.field_row("Movement", segments)
+	row.name = "MovementCapRow"
+	_dice_controls.add_child(row)
+	_dice_controls.move_child(row, 0)  # the window's first row, right under the header
 	_update_movement_cap_display()
 
 
@@ -12567,62 +12568,40 @@ func _on_movement_cap_pressed(mode: int) -> void:
 func _update_movement_cap_display() -> void:
 	var active: int = object_manager.get("_movement_cap") if object_manager else ObjectManager.MovementCap.OFF
 	for mode in _movement_cap_buttons:
-		(_movement_cap_buttons[mode] as Button).modulate = ACTIVE_DICE_BUTTON_TINT if mode == active else Color.WHITE
+		HouseStyle.set_selected(_movement_cap_buttons[mode] as Button, mode == active)
 
 
-## Builds the click-based dice count selector (preset buttons 1..N plus
-## increment buttons) and inserts it right below the panel title.
+## Builds the dice-count card (the mockup's counter): the −10 … +10 steps around the big
+## "N D6" readout, and the 1..N quick picks under it — a squad rolls 30 dice, so both stay.
 func _build_dice_count_selector() -> void:
-	var selector := VBoxContainer.new()
-	selector.name = "DiceCountSelector"
-	selector.add_theme_constant_override("separation", 4)
-
-	# Preset buttons 1..DICE_PRESET_MAX in a 5-column grid.
-	var grid := GridContainer.new()
-	grid.columns = 5
-	grid.add_theme_constant_override("h_separation", 2)
-	grid.add_theme_constant_override("v_separation", 2)
-	_dice_preset_buttons.clear()
-	for n: int in range(1, DICE_PRESET_MAX + 1):
-		var btn := Button.new()
-		btn.text = str(n)
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
-		btn.pressed.connect(_on_dice_preset_pressed.bind(n))
-		grid.add_child(btn)
-		_dice_preset_buttons.append(btn)
-	selector.add_child(grid)
-
-	# Increment row: -10 -5 -1 [count] +1 +5 +10
-	var inc_row := HBoxContainer.new()
-	inc_row.add_theme_constant_override("separation", 2)
-	for delta: int in [-10, -5, -1]:
-		inc_row.add_child(_make_dice_delta_button(delta))
-	_dice_count_value_label = Label.new()
-	_dice_count_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_dice_count_value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_dice_count_value_label = HouseStyle.label("", HouseStyle.VALUE)
+	_dice_count_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_dice_count_value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_dice_count_value_label.custom_minimum_size = Vector2(44, 0)
-	_dice_count_value_label.add_theme_font_size_override("font_size", 20)
-	inc_row.add_child(_dice_count_value_label)
-	for delta: int in [1, 5, 10]:
-		inc_row.add_child(_make_dice_delta_button(delta))
-	selector.add_child(inc_row)
+	var unit := HouseStyle.label("D6", HouseStyle.CAPTION)
+	unit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var readout := HBoxContainer.new()
+	readout.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
+	readout.add_child(_dice_count_value_label)
+	readout.add_child(unit)
+	var steps := HouseStyle.stepper(DICE_COUNT_STEPS, readout, _on_dice_delta_pressed, "DiceCount")
 
-	_dice_vbox.add_child(selector)
-	_dice_vbox.move_child(selector, 1)  # directly below the "Dice Roller" title
+	var presets: Array = []
+	for n: int in range(1, DICE_PRESET_MAX + 1):
+		presets.append(n)
+	var picks := HouseStyle.button_row(presets, HouseStyle.PIP, HouseStyle.H_CHIP)
+	_dice_preset_buttons.clear()
+	for i: int in picks.get_child_count():
+		var btn := picks.get_child(i) as Button
+		btn.pressed.connect(_on_dice_preset_pressed.bind(i + 1))
+		_dice_preset_buttons.append(btn)
 
-
-## Creates one +N / -N increment button for the dice selector.
-func _make_dice_delta_button(delta: int) -> Button:
-	var btn := Button.new()
-	btn.text = "+%d" % delta if delta > 0 else str(delta)
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
-	btn.pressed.connect(_on_dice_delta_pressed.bind(delta))
-	return btn
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override(&"separation", HouseStyle.GAP_ROW)
+	stack.add_child(steps)
+	stack.add_child(picks)
+	var selector := HouseStyle.card(stack)
+	selector.name = "DiceCountSelector"
+	_insert_dice_control(selector)
 
 
 func _on_dice_preset_pressed(count: int) -> void:
@@ -12650,8 +12629,7 @@ func _update_dice_count_display() -> void:
 	if _dice_count_value_label:
 		_dice_count_value_label.text = str(_dice_count)
 	for i: int in _dice_preset_buttons.size():
-		var is_active: bool = (i + 1) == _dice_count
-		_dice_preset_buttons[i].modulate = ACTIVE_DICE_BUTTON_TINT if is_active else Color.WHITE
+		HouseStyle.set_selected(_dice_preset_buttons[i], (i + 1) == _dice_count)
 
 
 ## Update the dice set with the specified number of D6 dice
@@ -12668,66 +12646,48 @@ func _update_dice_set(count: int) -> void:
 	)
 
 
-## Builds the success-evaluation controls — a target row ("vs" –/2+..6+) and a
-## modifier stepper — inserted directly above the "In box" label. Display-only
-## aid: the tool counts successes, the players apply the rules (OPR GF/AoF Core
-## Rules v3.5.1, p.1 "Quality Tests" / "Shooting").
+## Builds the success-evaluation controls — a target pip row ("–" / 2+..6+) and a
+## modifier stepper — above the Quick/Roll row. Display-only aid: the tool counts
+## successes, the players apply the rules (OPR GF/AoF Core Rules v3.5.1, p.1
+## "Quality Tests" / "Shooting").
 func _build_success_controls() -> void:
-	var section := VBoxContainer.new()
-	section.name = "SuccessControls"
-	section.add_theme_constant_override("separation", 4)
-
 	# Target row: no-target ("–") plus 2+..6+.
-	var target_row := HBoxContainer.new()
-	target_row.add_theme_constant_override("separation", 2)
-	target_row.add_child(_make_dice_caption("Success"))
-	_target_buttons.clear()
 	var targets: Array[int] = [DiceRules.TARGET_NONE]
 	for target: int in range(DiceRules.TARGET_MIN, DiceRules.TARGET_MAX + 1):
 		targets.append(target)
+	var texts: Array = []
 	for target: int in targets:
-		var btn := _make_dice_option_button("–" if target == DiceRules.TARGET_NONE else "%d+" % target)
+		texts.append("–" if target == DiceRules.TARGET_NONE else "%d+" % target)
+	var pips := HouseStyle.button_row(texts, HouseStyle.PIP)
+	_target_buttons.clear()
+	for i: int in targets.size():
+		var target: int = targets[i]
+		var btn := pips.get_child(i) as Button
 		btn.tooltip_text = "No success counting" if target == DiceRules.TARGET_NONE \
 			else "Count rolls of %d+ as successes (OPR Quality/Defense tests)" % target
 		btn.pressed.connect(_on_success_target_pressed.bind(target))
-		target_row.add_child(btn)
 		_target_buttons.append(btn)
-	section.add_child(target_row)
+	var target_row := HouseStyle.field_row("Success", pips)
+	target_row.name = "SuccessRow"
+	_insert_dice_control(target_row)
 
 	# Modifier stepper. OPR has no modifier cap; natural 6/1 is the only valve
 	# (OPR GF/AoF Core Rules v3.5.1, p.1 "Modifiers").
-	var modifier_row := HBoxContainer.new()
-	modifier_row.add_theme_constant_override("separation", 2)
-	modifier_row.add_child(_make_dice_caption("Modifier"))
-	var minus := _make_dice_option_button("-")
-	minus.pressed.connect(_on_modifier_delta_pressed.bind(-1))
-	modifier_row.add_child(minus)
-	_modifier_value_label = Label.new()
+	_modifier_value_label = HouseStyle.label("", HouseStyle.BODY)
 	_modifier_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_modifier_value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_modifier_value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_modifier_value_label.custom_minimum_size = Vector2(MODIFIER_VALUE_MIN_WIDTH, 0)
 	_modifier_value_label.tooltip_text = "Applied to every die. Natural 6 always succeeds," \
 		+ " natural 1 always fails (OPR Core Rules v3.5.1)."
-	modifier_row.add_child(_modifier_value_label)
-	var plus := _make_dice_option_button("+")
-	plus.pressed.connect(_on_modifier_delta_pressed.bind(1))
-	modifier_row.add_child(plus)
-	section.add_child(modifier_row)
-
-	_dice_vbox.add_child(section)
-	_dice_vbox.move_child(section, current_dice_label.get_index())
+	var stepper := HouseStyle.stepper([-1, 1], _modifier_value_label, _on_modifier_delta_pressed, "Modifier", true)
+	var modifier_row := HouseStyle.field_row("Modifier", stepper)
+	modifier_row.name = "ModifierRow"
+	_insert_dice_control(modifier_row)
 	_update_success_controls_display()
 
 
-## Builds the reroll row (Fails / 1s / 6s / All) right below the Roll buttons.
+## Builds the reroll row (Fails / 1s / 6s / All) under the tray card, above the log.
 ## Buttons enable only when the matching dice exist in the last LOCAL roll.
 func _build_reroll_row() -> void:
-	var row := HBoxContainer.new()
-	row.name = "RerollRow"
-	row.add_theme_constant_override("separation", 2)
-	row.add_child(_make_dice_caption("Re-roll"))
-
 	var options: Array = [
 		[DiceRules.RerollMode.FAILURES, "Fails", "Re-roll every die that failed the success target"],
 		[DiceRules.RerollMode.ONES, "1s", "Re-roll all natural 1s"],
@@ -12735,39 +12695,62 @@ func _build_reroll_row() -> void:
 			"Re-roll all natural 6s (OPR \"Bane\", v3.5.1: the target must re-roll unmodified Defense rolls of 6)"],
 		[DiceRules.RerollMode.ALL, "All", "Re-roll every die"],
 	]
-	_reroll_buttons.clear()
+	var texts: Array = []
 	for option: Array in options:
-		var mode: int = option[0]
-		var btn := _make_dice_option_button(option[1])
-		btn.tooltip_text = option[2]
+		texts.append(option[1])
+	var chips := HouseStyle.button_row(texts, HouseStyle.BUTTON, HouseStyle.H_CHIP)
+	_reroll_buttons.clear()
+	for i: int in options.size():
+		var mode: int = options[i][0]
+		var btn := chips.get_child(i) as Button
+		btn.tooltip_text = options[i][2]
 		btn.disabled = true
 		btn.pressed.connect(_on_reroll_pressed.bind(mode))
-		row.add_child(btn)
 		_reroll_buttons[mode] = btn
 
-	_dice_vbox.add_child(row)
-	_dice_vbox.move_child(row, roll_button.get_parent().get_index() + 1)
+	var row := HouseStyle.field_row("Re-roll", chips)
+	row.name = "RerollRow"
+	_dice_results.add_child(row)
+	_dice_results.move_child(row, 0)  # under the tray card, above the dice log
 
 
-## Small muted caption label for the dice option rows.
-func _make_dice_caption(text: String) -> Label:
-	var lbl := Label.new()
-	lbl.text = text
-	lbl.add_theme_font_size_override("font_size", DICE_CAPTION_FONT_SIZE)
-	lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
-	lbl.custom_minimum_size = Vector2(DICE_CAPTION_MIN_WIDTH, 0)
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	return lbl
+## Inserts a control row into the dice window's control stack, just above the Quick/Roll row.
+func _insert_dice_control(row: Control) -> void:
+	_dice_controls.add_child(row)
+	_dice_controls.move_child(row, roll_button.get_parent().get_index())
 
 
-## One equally-sized, focus-less option button for the dice panel rows.
-func _make_dice_option_button(text: String) -> Button:
-	var btn := Button.new()
-	btn.text = text
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.custom_minimum_size = Vector2(0, DICE_BUTTON_HEIGHT)
-	return btn
+## The house-style frame of the dice window (the prototype every later window copies, 23.09.):
+## theme + section rhythm, the eyebrow header with its collapse control, Quick/Roll at action height.
+func _build_dice_panel_frame() -> void:
+	HouseStyle.apply(_dice_panel)
+	_dice_vbox.add_theme_constant_override(&"separation", HouseStyle.GAP_SECTION)
+	_dice_controls.add_theme_constant_override(&"separation", HouseStyle.GAP_ROW)
+	_dice_results.add_theme_constant_override(&"separation", HouseStyle.GAP_ROW)
+	(roll_button.get_parent() as HBoxContainer).add_theme_constant_override(&"separation", HouseStyle.GAP_ROW)
+	(current_dice_label.get_parent() as HBoxContainer).add_theme_constant_override(&"separation", HouseStyle.GAP_ROW)
+	(_dice_tray_card.get_child(0) as VBoxContainer).add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
+	for b: Button in [quick_roll_button, roll_button]:
+		b.custom_minimum_size = Vector2(0, HouseStyle.H_ACTION)
+		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var header := HouseStyle.panel_header("Dice Roller")
+	_dice_vbox.add_child(header)
+	_dice_vbox.move_child(header, 0)
+	_dice_collapse_button = header.get_node("CollapseButton") as Button
+	_dice_collapse_button.pressed.connect(func() -> void: _set_dice_collapsed(not _dice_collapsed))
+	# The log keeps the newest roll in view whenever its range changes: wrapped rows settle their
+	# height late, and a re-evaluation resizes the tray card above it (the log card shrinks).
+	_dice_log_scroll.get_v_scroll_bar().changed.connect(func() -> void:
+		_dice_log_scroll.scroll_vertical = int(_dice_log_scroll.get_v_scroll_bar().max_value))
+
+
+## Folds the dice window to its header (it keeps its bottom-right corner) or unfolds it. The
+## roll-purpose line only shows while unfolded and a purpose is set.
+func _set_dice_collapsed(collapsed: bool) -> void:
+	_dice_collapsed = collapsed
+	HouseStyle.set_collapsed(_dice_panel, [_dice_controls, _dice_tray_card, _dice_results],
+		_dice_collapse_button, collapsed)
+	roll_purpose_label.visible = not collapsed and not roll_purpose_label.text.is_empty()
 
 
 func _on_success_target_pressed(target: int) -> void:
@@ -12789,7 +12772,7 @@ func _update_success_controls_display() -> void:
 	for i: int in _target_buttons.size():
 		# Button order matches [TARGET_NONE, TARGET_MIN..TARGET_MAX].
 		var button_target: int = DiceRules.TARGET_NONE if i == 0 else DiceRules.TARGET_MIN + i - 1
-		_target_buttons[i].modulate = ACTIVE_DICE_BUTTON_TINT if button_target == _success_target else Color.WHITE
+		HouseStyle.set_selected(_target_buttons[i], button_target == _success_target)
 	if _modifier_value_label:
 		_modifier_value_label.text = "±0" if _success_modifier == 0 else "%+d" % _success_modifier
 
@@ -13264,8 +13247,11 @@ func _add_dice_log_entry(player_name: String, faces: Array[int], context: Dictio
 	var reroll_mode: int = context.get(DiceRules.CTX_REROLL_MODE, DiceRules.REROLL_NONE)
 	var time_str: String = Time.get_time_string_from_system().substr(0, 5)
 
-	var entry := HBoxContainer.new()
-	entry.add_theme_constant_override("separation", 4)
+	# A flow, not a box: a long line (re-roll tag + formula + six faces) wraps inside the log card
+	# instead of widening the whole dice window (it grew to 474 px before the house-style pass).
+	var entry := HFlowContainer.new()
+	entry.add_theme_constant_override(&"h_separation", HouseStyle.GAP_CONTROL)
+	entry.add_theme_constant_override(&"v_separation", 2)
 
 	var formula := "%dd6" % faces.size()
 	if target != DiceRules.TARGET_NONE:
@@ -13277,11 +13263,7 @@ func _add_dice_log_entry(player_name: String, faces: Array[int], context: Dictio
 		head_text = "%s %s ↻%d %s (%s)" % [time_str, player_name,
 			context.get(DiceRules.CTX_REROLL_COUNT, 0), DiceRules.reroll_mode_label(reroll_mode), formula]
 
-	var head := Label.new()
-	head.text = head_text
-	head.add_theme_font_size_override("font_size", 12)
-	head.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	entry.add_child(head)
+	entry.add_child(HouseStyle.label(head_text, HouseStyle.SMALL))
 
 	var groups: Dictionary = _faces_grouped_by_color(faces, tags)
 	var tags_present: Array[int] = _ordered_color_groups(groups.keys())
@@ -13330,7 +13312,7 @@ func _build_current_roll_column() -> void:
 	var row := HBoxContainer.new()
 	row.name = "DiceBoxRow"
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 6)
+	row.add_theme_constant_override(&"separation", HouseStyle.GAP_ROW)
 
 	_current_roll_column = VBoxContainer.new()
 	_current_roll_column.name = "CurrentRollColumn"
@@ -13356,10 +13338,14 @@ func _build_current_roll_column() -> void:
 func _populate_current_roll_column(faces: Array[int], context: Dictionary) -> void:
 	if not _current_roll_column:
 		return
+	# Detach before freeing: a queued child still counts for layout until the frame ends, so the
+	# column was briefly twice as tall and the tray card jumped on every re-evaluation.
 	for child: Node in _current_roll_column.get_children():
+		_current_roll_column.remove_child(child)
 		child.queue_free()
 	var target: int = context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE)
 	var modifier: int = context.get(DiceRules.CTX_MODIFIER, 0)
+	_update_dice_result_summary(faces, target, modifier)
 	var groups: Dictionary = _faces_grouped_by_color(faces, _last_color_tags)
 	var tags_present: Array[int] = _ordered_color_groups(groups.keys())
 	if tags_present.size() <= 1:
@@ -13375,15 +13361,33 @@ func _populate_current_roll_column(faces: Array[int], context: Dictionary) -> vo
 		return
 	# Mixed colours: one sub-column per colour, side by side (issue #77).
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override(&"separation", HouseStyle.GAP_ROW)
 	for tag: int in tags_present:
 		row.add_child(_build_color_group_column(tag, groups[tag], target, modifier, CURRENT_ROLL_ICON_SIZE))
 	_current_roll_column.add_child(row)
 
 
+## The gold result line in the tray card's footer — the mockup's result card: "total 18 · 4
+## successes" (successes only with a target set). Empty before the first roll.
+func _update_dice_result_summary(faces: Array[int], target: int, modifier: int) -> void:
+	if _dice_result_label == null:
+		return
+	if faces.is_empty():
+		_dice_result_label.text = ""
+		return
+	var total := 0
+	for face: int in faces:
+		total += face
+	var summary := "total %d" % total
+	if target != DiceRules.TARGET_NONE:
+		var hits := DiceRules.count_successes(faces, target, modifier)
+		summary += " · %d %s" % [hits, "success" if hits == 1 else "successes"]
+	_dice_result_label.text = summary
+
+
 ## One "die icon + xN" row; dimmed when the count is zero. The ×N count is shown in the die's
-## colour-tag colour when `tint` is set (a tagged result), else tinted cyan when the face passes
-## the active success target — so coloured dice read in their own colour (issue #77).
+## colour-tag colour when `tint` is set (a tagged result), else in the house accent when the face
+## passes the active success target — so coloured dice read in their own colour (issue #77).
 func _make_success_row(face: int, count: int, icon_size: int, highlight: bool, tint: Color = NO_DICE_TINT) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 3)
@@ -13401,14 +13405,12 @@ func _make_success_row(face: int, count: int, icon_size: int, highlight: bool, t
 		icon.pip_color = DiceD6._pip_color_for_body(tint)
 	row.add_child(icon)
 
-	var lbl := Label.new()
-	lbl.text = "×%d" % count
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", maxi(12, icon_size - 10))
+	var lbl := HouseStyle.label("×%d" % count,
+		HouseStyle.BODY if icon_size >= CURRENT_ROLL_ICON_SIZE else HouseStyle.SMALL)
 	if tint.a > 0.0:
-		lbl.add_theme_color_override("font_color", tint)
+		lbl.add_theme_color_override(&"font_color", tint)   # the die's colour tag: game data, not style
 	elif highlight:
-		lbl.add_theme_color_override("font_color", HudTokens.CYAN)
+		lbl.add_theme_color_override(&"font_color", HouseStyle.ACCENT)
 	row.add_child(lbl)
 	return row
 
@@ -13457,21 +13459,15 @@ func _ordered_color_groups(present: Array) -> Array[int]:
 
 ## The "✓ N" success summary line used at the bottom of a current-roll column.
 func _make_success_summary(count: int) -> Label:
-	var summary := Label.new()
-	summary.text = "✓ %d" % count
-	summary.add_theme_font_size_override("font_size", SUCCESS_SUMMARY_FONT_SIZE)
-	summary.add_theme_color_override("font_color", HudTokens.CYAN)
+	var summary := HouseStyle.label("✓ %d" % count, HouseStyle.HIT)
 	summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return summary
 
 
 ## The compact "✓N" success tag used inline in a dice-log entry.
 func _make_log_success_tag(count: int) -> Label:
-	var tag := Label.new()
-	tag.text = "✓%d" % count
-	tag.add_theme_font_size_override("font_size", DICE_CAPTION_FONT_SIZE)
-	tag.add_theme_color_override("font_color", HudTokens.CYAN)
-	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var tag := HouseStyle.label("✓%d" % count, HouseStyle.SMALL)
+	tag.add_theme_color_override(&"font_color", HouseStyle.ACCENT)
 	return tag
 
 
@@ -15047,9 +15043,8 @@ func _apply_ui_theme() -> void:
 	# Apply to HUD
 	var hud = $UI/HUD
 	hud.theme = current_theme
-
-	# Tactical corner-bracket chrome on the main HUD panels (additive, mouse-ignore).
-	_add_hud_frame($UI/HUD/DiceRollerPanel)
+	# The dice window carries its own house-style theme (HouseStyle.apply in _build_dice_panel_frame),
+	# so it gets no tactical corner brackets and keeps its look whatever the HUD theme is.
 
 	# Apply to all file dialogs
 	save_game_dialog.theme = current_theme
