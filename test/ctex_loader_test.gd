@@ -47,3 +47,36 @@ func test_build_material_missing_paths_skip_textures() -> void:
 	assert_object(mat.albedo_texture).is_null()
 	assert_object(mat.normal_texture).is_null()
 	assert_object(mat.roughness_texture).is_null()
+
+
+# ===== load_ctex shares one texture per file (CACHE_MODE_REUSE) =====
+
+## A real .ctex from this project's own import cache (every imported PNG/SVG has one), copied to a
+## content-addressed-style user:// path like the ctex downloader's cache_path(sha).
+func _real_ctex_copy(dest: String) -> String:
+	for f in DirAccess.get_files_at("res://.godot/imported"):
+		if str(f).ends_with(".ctex"):
+			var bytes := FileAccess.get_file_as_bytes("res://.godot/imported/" + str(f))
+			var out := FileAccess.open(dest, FileAccess.WRITE)
+			if out == null or bytes.is_empty():
+				return ""
+			out.store_buffer(bytes)
+			out.close()
+			return dest
+	return ""
+
+
+## Ratmen weight follow-up (PLAN 22.09. 23:40): every model instance loaded its own copy of each
+## .ctex (CACHE_MODE_IGNORE), so a 20-model unit uploaded the same BC7 texture 20 times. The ctex
+## cache paths are content-addressed (sha256 file names), so a same-path reload can never be stale:
+## the same file must come back as the SAME texture.
+func test_the_same_ctex_file_loads_as_one_shared_texture() -> void:
+	var path := _real_ctex_copy("user://ctex_reuse_probe_%d.ctex" % Time.get_ticks_usec())
+	assert_str(path).override_failure_message("fixture: no imported .ctex found under res://.godot/imported").is_not_empty()
+	var first := Ctex.load_ctex(path)
+	var second := Ctex.load_ctex(path)
+	assert_object(first).is_not_null()
+	assert_bool(first == second) \
+		.override_failure_message("two models loading the same .ctex got two textures (one GPU upload each)") \
+		.is_true()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

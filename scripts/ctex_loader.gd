@@ -19,11 +19,13 @@ static func ctex_compatible(manifest_godot_version: String) -> bool:
 
 
 ## Load a .ctex from a runtime (user://) path → CompressedTexture2D, or null if missing/unloadable.
-## CACHE_MODE_IGNORE so a re-downloaded file with the same path isn't served stale from the cache.
+## CACHE_MODE_REUSE: every model of a unit (and every unit sharing a texture) gets the SAME texture
+## instead of its own upload of identical bytes. Safe because the cache is content-addressed
+## (AssetDownloadManager.cache_path = <sha256>.ctex, verified .part → rename): one path, one content.
 static func load_ctex(path: String) -> Texture2D:
 	if path.is_empty() or not FileAccess.file_exists(path):
 		return null
-	return ResourceLoader.load(path, "CompressedTexture2D", ResourceLoader.CACHE_MODE_IGNORE) as Texture2D
+	return ResourceLoader.load(path, "CompressedTexture2D", ResourceLoader.CACHE_MODE_REUSE) as Texture2D
 
 
 ## Build a StandardMaterial3D from downloaded .ctex paths (normal/orm may be "" / absent):
