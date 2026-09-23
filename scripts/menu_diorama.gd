@@ -15,6 +15,14 @@ enum Mode { AUTO, FORCED, SKY_ONLY }
 
 const Battlefield = preload("res://scripts/menu_battlefield.gd")
 const SKYBOX_MATERIAL_PATH := "res://materials/space_skybox.tres"
+## A still of each finished backdrop (tools/menu_backdrop_render.gd), shown until the live scene is complete.
+const POSTER_PATH := "res://assets/ui/menu_backdrop/%s.res"
+const REVEAL_FADE_S := 0.6
+## Cover tone for a biome without a still: the night sky's own.
+const COVER_COLOR := Color(0.02,0.03,0.05)
+var _poster: Texture2D
+var _cover_alpha := 0.0
+var _reveal_frame := -1
 var _viewport: SubViewport
 var _camera: Camera3D
 var _lighting: Node
@@ -106,11 +114,19 @@ func _setup() -> void:
 	_camera.h_offset = -0.075
 	_viewport.add_child(_camera)
 	_place_camera()
+	# Cover the live scene until it is complete: the player sees the finished backdrop at once and never
+	# watches placeholders pop in. The cover is drawn here, so the menu UI above stays usable.
+	_cover_alpha = 1.0 if _diorama_active() else 0.0
+	_poster = load(POSTER_PATH % biome) if ResourceLoader.exists(POSTER_PATH % biome) else null
+	_reveal_frame = -1
+	queue_redraw()
 	await get_tree().process_frame
 	if generation != _generation:
 		return
 	first_frame_rendered.emit()
 	if not _diorama_active():
+		_cover_alpha = 0.0
+		queue_redraw()
 		diorama_ready.emit()
 		return
 	var stage := Battlefield.new()
@@ -132,15 +148,37 @@ func _on_battlefield_ready(stage: Node3D, generation: int) -> void:
 	_war.set_volume_offset_db(-10)
 	_war.set_war_sounds_enabled(_ambience_enabled)
 	_war.update_fire_crackle(stage.terrain_overlay.get_fire_positions())
+	# Fade two frames later: the first frame of the dressed scene compiles its pipelines and uploads its
+	# textures (seconds on a cold start) and would swallow the fade. The stills are taken at drift 0.
+	_reveal_frame = Engine.get_process_frames()+2
+	_drift_t = 0.0
 	diorama_ready.emit()
 
 
 func _process(delta: float) -> void:
+	if _reveal_frame >= 0 and Engine.get_process_frames() >= _reveal_frame and _cover_alpha > 0.0:
+		# A stalled frame must not skip the fade: advance by at most a 20 fps step.
+		_cover_alpha = maxf(0.0,_cover_alpha-minf(delta,0.05)/REVEAL_FADE_S)
+		queue_redraw()
 	if not is_instance_valid(_camera):
 		return
 	if not GraphicsSettings.reduce_motion:
 		_drift_t += delta
 	_place_camera()
+
+
+func _draw() -> void:
+	if _cover_alpha <= 0.0:
+		return
+	if _poster == null:
+		draw_rect(Rect2(Vector2.ZERO,size),Color(COVER_COLOR,_cover_alpha))
+		return
+	# Fill the height and crop the sides, as the camera keeps its height: the wide still lines up with
+	# the live view in every window up to its own aspect.
+	var source_size := _poster.get_size()
+	var scale_value := maxf(size.x/source_size.x,size.y/source_size.y)
+	var region := Rect2((source_size-size/scale_value)*0.5,size/scale_value)
+	draw_texture_rect_region(_poster,Rect2(Vector2.ZERO,size),region,Color(1,1,1,_cover_alpha))
 
 
 func _place_camera() -> void:

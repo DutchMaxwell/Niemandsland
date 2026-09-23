@@ -52,18 +52,32 @@ func prepare(biome: String) -> void:
 	if cached.is_empty():
 		push_warning("Reference forest source unavailable; existing tree sources used.")
 		return
+	# The reconstructed tree is 100-270k triangles, seconds of parse: run it on the worker pool (as
+	# table_tree_pass.gd does) so the main menu stays responsive meanwhile.
+	var parsed := {}
+	var task := WorkerThreadPool.add_task(func() -> void: parsed["hero"] = _parse_hero(cached),false,"reference forest")
+	while not WorkerThreadPool.is_task_completed(task) and is_inside_tree():
+		await get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	_hero = parsed.get("hero")
+	if _hero != null:
+		print("REFERENCE_FOREST_SOURCE_READY ",kind)
+
+
+## Worker thread: touches no node inside the scene tree.
+func _parse_hero(path: String) -> PackedScene:
 	var document := GLTFDocument.new()
 	var state := GLTFState.new()
-	if document.append_from_file(cached,state) != OK:
-		return
+	if document.append_from_file(path,state) != OK:
+		return null
 	var root := document.generate_scene(state)
 	if root == null:
-		return
+		return null
 	_own(root,root)
-	_hero = PackedScene.new()
-	_hero.pack(root)
+	var packed := PackedScene.new()
+	packed.pack(root)
 	root.free()
-	print("REFERENCE_FOREST_SOURCE_READY ",kind)
+	return packed
 
 
 func apply(main: Node,presentation: Node3D) -> void:

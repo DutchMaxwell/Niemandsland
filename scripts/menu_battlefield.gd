@@ -7,6 +7,8 @@ signal finished
 
 const BIOMES := ["urban_ruins", "alien_jungle", "grassland", "arid_desert", "frozen_tundra", "volcanic_ash"]
 const FORMATION := [Vector2(-0.043,0), Vector2(0,0.01), Vector2(0.043,0), Vector2(-0.0215,-0.043), Vector2(0.0215,-0.043)]
+## Offline or a failed download: reveal the placeholders after this long rather than never.
+const TERRAIN_MODELS_WAIT_MS := 30000
 var terrain_overlay: Node3D
 var object_manager: ObjectManager
 var lighting_controller: Node
@@ -84,6 +86,15 @@ func build(selected_biome: String, world_env: WorldEnvironment, sun: Directional
 	await presentation.prepare()
 	if not is_inside_tree():
 		return
+	# On a cold cache the overlay shows placeholder walls and trees until their models download, and the
+	# biome dressing below replaces trees only once. Dress the finished terrain, never a placeholder.
+	if not _terrain_models_ready():
+		progress.emit("Preparing terrain models",0.9)
+		var deadline := Time.get_ticks_msec()+TERRAIN_MODELS_WAIT_MS
+		while not _terrain_models_ready() and Time.get_ticks_msec() < deadline:
+			await get_tree().process_frame
+			if not is_inside_tree():
+				return
 	presentation.apply(self)
 	presentation.set_tilt_shift_enabled(false)
 	# This scene owns its lighting and quality policy. Reference's daylight callback
@@ -100,12 +111,19 @@ func build(selected_biome: String, world_env: WorldEnvironment, sun: Directional
 	finished.emit()
 
 
+func _terrain_models_ready() -> bool:
+	return terrain_overlay._ruin_panels_ready() and terrain_overlay._tree_panels_ready() and terrain_overlay._tree_models_ready()
+
+
 func _build_terrain() -> void:
 	var cells: Dictionary = {}
 	var walls: Array = []
 	var objects: Array = []
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 220922
+	# The biome's wall and tree theme now (the presentation's apply() sets the same one), so their models
+	# download while the miniatures and the biome sources load.
+	terrain_overlay.set_biome(biome)
 	for placement in [["ruine_9x9",Vector2i(11,9)], ["ruine_9x6",Vector2i(7,6)],
 		["wald_9x9",Vector2i(6,9)], ["wald_9x9",Vector2i(12,4)], ["wald_9x9",Vector2i(16,8)]]:
 		for cell in TerrainPrefabs.footprint_cells(placement[0],placement[1]):
