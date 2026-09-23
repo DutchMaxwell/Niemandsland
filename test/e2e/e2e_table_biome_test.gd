@@ -422,36 +422,52 @@ func test_grassland_trees_become_the_reference_oak(timeout := 120000) -> void:
 ## nicht einfach runterplumpsen lassen auf die Oberfläche". So on the game table: no noise (open ground stays at
 ## y = 0, where miniatures, ruler and LOS measure), the mounds and ridges stay, every placed prop sits on the lowest
 ## ground under its footprint (the 2 mm overlay lift aside), and the scatter follows the same surface.
+## Every placed marker sits on the lowest ground under its footprint; the container stays sunk in its own mound.
+func _check_seats(overlay: Node3D, ground: ShaderMaterial, biome: String, when: String) -> void:
+	var worst := 0.0
+	var worst_at := Vector2.ZERO
+	var raised := 0
+	var container := Vector2(0.0381, 0.2667)   # cell (15, 18) + (0.5, 0.5) on the 30-cell grid
+	for prop in overlay._object_instances:
+		if Vector2(prop.position.x, prop.position.z).distance_to(container) < 0.001:
+			# It raises its own ridges and sand pile, so it stays sunk in them.
+			assert_float(prop.position.y).override_failure_message("%s %s: the container was lifted onto its own mound" % [biome, when]).is_equal(0.0)
+			continue
+		var box: AABB = overlay._model_space_aabb(prop)
+		var lowest := INF
+		for i in 3:
+			for j in 3:
+				lowest = minf(lowest, _ground_displacement(ground, Vector2(lerpf(box.position.x, box.end.x, i * 0.5), lerpf(box.position.z, box.end.z, j * 0.5))))
+		var gap: float = prop.position.y - lowest
+		if absf(gap) > absf(worst):
+			worst = gap
+			worst_at = Vector2(prop.position.x, prop.position.z)
+		if prop.position.y > 0.001:
+			raised += 1
+	assert_float(absf(worst) * 1000.0).override_failure_message("%s %s: the prop at %s stands %.2f mm off the lowest ground under it — it floats or sinks" % [biome, when, worst_at, worst * 1000.0]).is_less(0.5)
+	if biome != "urban_ruins":
+		assert_int(raised).override_failure_message("%s %s: no prop sits up on a mound or ridge — the seating is not exercised" % [biome, when]).is_greater(0)
+
+
 func test_dressed_table_keeps_its_mounds_and_props_sit_on_them(timeout := 240000) -> void:
 	await _paint_minefield()
 	var overlay: Node3D = _main.terrain_overlay
+	var container := Vector2(0.0381, 0.2667)   # cell (15, 18) + (0.5, 0.5) on the 30-cell grid
 	for biome in ["temperate_grassland", "arid_desert", "frozen_tundra", "urban_ruins"]:
 		var presenter := await _dress(biome)
 		assert_bool(presenter.is_dressed()).is_true()
+		# A second build over the same props (start of play, a load, a preset change): a same-biome rebuild keeps the
+		# overlay's props (terrain_overlay.gd set_biome returns early). On CI's slow cold start the presenter's own
+		# delayed "start" build landed after the test's build and stacked the seat (the sign stood 4.45 mm up).
+		await presenter.rebuild()
+		await _runner.simulate_frames(2)
 		var ground := (_main.table.get_node("TableMesh") as MeshInstance3D).material_override as ShaderMaterial
-		var worst := 0.0
-		var worst_at := Vector2.ZERO
-		var raised := 0
-		var container := Vector2(0.0381, 0.2667)   # cell (15, 18) + (0.5, 0.5) on the 30-cell grid
-		for prop in overlay._object_instances:
-			if Vector2(prop.position.x, prop.position.z).distance_to(container) < 0.001:
-				# It raises its own ridges and sand pile, so it stays sunk in them.
-				assert_float(prop.position.y).override_failure_message("%s: the container was lifted onto its own mound" % biome).is_equal(0.0)
-				continue
-			var box: AABB = overlay._model_space_aabb(prop)
-			var lowest := INF
-			for i in 3:
-				for j in 3:
-					lowest = minf(lowest, _ground_displacement(ground, Vector2(lerpf(box.position.x, box.end.x, i * 0.5), lerpf(box.position.z, box.end.z, j * 0.5))))
-			var gap: float = prop.position.y - lowest
-			if absf(gap) > absf(worst):
-				worst = gap
-				worst_at = Vector2(prop.position.x, prop.position.z)
-			if prop.position.y > 0.001:
-				raised += 1
-		assert_float(absf(worst) * 1000.0).override_failure_message("%s: the prop at %s stands %.2f mm off the lowest ground under it — it floats or sinks" % [biome, worst_at, worst * 1000.0]).is_less(0.5)
-		if biome != "urban_ruins":
-			assert_int(raised).override_failure_message("%s: no prop sits up on a mound or ridge — the seating is not exercised" % biome).is_greater(0)
+		_check_seats(overlay, ground, biome, "after a second build")
+		# A late panel download (mine/sign/container/tree textures on a cold cache, as on CI and on a fresh install)
+		# rebuilds every overlay prop at y = 0 after the table was dressed (terrain_overlay.gd _fetch_hazard_panels).
+		overlay.update_placed_objects(overlay._last_objects, Vector2(6, 4), 0.0)
+		await _runner.simulate_frames(2)
+		_check_seats(overlay, ground, biome, "after a late panel download")
 		var open_worst := 0.0
 		var mismatch := 0.0
 		for ix in range(-12, 13):
@@ -482,3 +498,18 @@ func test_dressed_table_keeps_its_mounds_and_props_sit_on_them(timeout := 240000
 				if lift < 0.0006 or lift > 0.0030:
 					off = maxf(off, absf(lift))
 			assert_float(off * 1000.0).override_failure_message("the desert sand streams leave the ground by up to %.2f mm" % (off * 1000.0)).is_equal(0.0)
+	# Teardown (Low preset, master switch) gives the markers back to the flat battlemap table: a same-biome teardown
+	# keeps the overlay's props, so the seat must be undone, not left floating on a flat table.
+	var dressed := await _dress("arid_desert")
+	var raised_before := 0
+	for prop in overlay._object_instances:
+		if prop.position.y > 0.001:
+			raised_before += 1
+	assert_int(raised_before).override_failure_message("nothing was seated, the teardown check would be empty").is_greater(0)
+	dressed.enabled = false
+	await dressed.rebuild()
+	var lifted := 0
+	for prop in overlay._object_instances:
+		if is_instance_valid(prop) and absf(prop.position.y) > 0.00001:
+			lifted += 1
+	assert_int(lifted).override_failure_message("%d props stayed lifted on the undressed table" % lifted).is_equal(0)

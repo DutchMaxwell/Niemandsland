@@ -23,6 +23,9 @@ var _current_mood := "Day"
 var _fog: FogVolume
 var _dust: Array = []
 var _wind_time := 0.0
+## Table tier: the overlay props _seat_props last seated (their count and the first one's instance id).
+var _seated_count := -1
+var _seated_first := 0
 var _wall_top := 0.0635
 var _camera: Camera3D
 var _dof: CameraAttributesPractical
@@ -384,6 +387,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if table_tier and _main != null:
+		_keep_props_seated(_main.terrain_overlay)
 	if not _dust.is_empty() or _volcanic != null or _jungle_motion != null:
 		_wind_time += delta
 		for streams in _dust:
@@ -473,8 +478,11 @@ func _dress_grid_forest(overlay: Node3D) -> void:
 ## at a mound's foot: each drops onto the LOWEST ground under its footprint, so nothing floats. Trees and containers
 ## raise the mounds themselves (a container's edges are wall segments, the desert piles sand around both), so they
 ## stay at y = 0, sunk in their own mound as in the reference. Display only: cells, footprints and LOS are untouched,
-## and the overlay's rebuild on teardown puts the markers back at y = 0.
+## and the overlay's rebuild on teardown puts the markers back at y = 0. A rebuild while dressed (a late panel
+## download) is seated again by _keep_props_seated.
 func _seat_props(overlay: Node3D) -> void:
+	_seated_count = overlay._object_instances.size()
+	_seated_first = overlay._object_instances[0].get_instance_id() if _seated_count > 0 and is_instance_valid(overlay._object_instances[0]) else 0
 	var dims: Vector2i = overlay._calculate_grid_dims(overlay.table_size_feet)
 	var cell_size: float = overlay.GRID_SIZE_INCHES * overlay.INCHES_TO_METERS
 	var rot := deg_to_rad(float(overlay.grid_rotation_degrees))
@@ -494,7 +502,19 @@ func _seat_props(overlay: Node3D) -> void:
 		for i in 3:
 			for j in 3:
 				lowest = minf(lowest,ReferenceMaterials.ground_height(Vector2(lerpf(box.position.x,box.end.x,i*0.5),lerpf(box.position.z,box.end.z,j*0.5))))
-		prop.position.y += lowest
+		# Absolute: the overlay puts every prop root at y = 0 (it sets x/z only), and a same-biome rebuild keeps its
+		# props (terrain_overlay.gd set_biome returns early), so an additive seat stacked on every rebuild.
+		prop.position.y = lowest
+
+
+## Table tier, once per frame: a finished panel download (mines, signs, containers, trees, lava) makes the overlay
+## rebuild ALL its props at y = 0 (terrain_overlay.gd _fetch_hazard_panels and its siblings), long after apply() on
+## a cold cache. New prop nodes = seat them again. The check is two compares.
+func _keep_props_seated(overlay: Node3D) -> void:
+	var live: Array = overlay._object_instances
+	var first: int = live[0].get_instance_id() if not live.is_empty() and is_instance_valid(live[0]) else 0
+	if live.size() != _seated_count or first != _seated_first:
+		_seat_props(overlay)
 
 
 func _dress_movable_forests() -> void:
@@ -634,6 +654,11 @@ func _weather_ruin(node: Node) -> void:
 
 
 func _exit_tree() -> void:
+	# Teardown: a same-biome teardown keeps the overlay's props (set_biome returns early), so unseat them here.
+	if table_tier and _main != null and is_instance_valid(_main.terrain_overlay):
+		for prop in _main.terrain_overlay._object_instances:
+			if is_instance_valid(prop):
+				prop.position.y = 0.0
 	if _previous_viewport.is_empty():
 		return
 	var viewport := get_viewport()
