@@ -8133,6 +8133,9 @@ func _solo_show_toast(text: String, auto_hide_s: float = SOLO_TOAST_HIDE_S, expl
 		_solo_toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 		_solo_toast.add_theme_constant_override("outline_size", 4)
 		_solo_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, STATUS_LANE_TOAST)
+		# The preset is taken while the label is still EMPTY (zero width at the centre); the text comes
+		# later and a Label grows to the right by default — the line sat half its width right of centre.
+		_solo_toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
 		_solo_toast.gui_input.connect(_on_solo_toast_gui_input)
 		$UI.add_child(_solo_toast)
 	_solo_toast.text = text

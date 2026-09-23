@@ -150,3 +150,20 @@ func test_the_ruler_readout_is_not_covered_while_measuring() -> void:
 	assert_bool(label.get_global_rect().intersects(_main.battle_log_panel.get_global_rect())).is_false() \
 		.override_failure_message("the ruler readout lies under the opened battle log")
 	_main.battle_log_panel._toggle()
+
+
+# === 4. NACHTMAHR's reasoning line =============================================================
+# Probe C: the toast is placed with PRESET_CENTER_TOP while still EMPTY (zero width at x=960); the text
+# arrives afterwards and a Label grows to the RIGHT by default — a 347 px line was centred at x=1133,
+# 173 px right of the screen centre.
+
+func test_the_reasoning_line_is_centred_on_the_screen() -> void:
+	var screen_centre: float = (_main.get_node("UI/HUD") as Control).get_global_rect().get_center().x
+	for text in ["NACHTMAHR: Battle Brothers shoot at Clan Rats — 4 hits, 2 wounds, 1 model lost",
+			"NACHTMAHR holds."]:
+		_main._solo_show_toast(text, 0.0, true)
+		await _runner.simulate_frames(2)
+		var centre: float = (_main._solo_toast as Label).get_global_rect().get_center().x
+		assert_float(absf(centre - screen_centre)).is_less(2.0) \
+			.override_failure_message("'%s' is centred at x=%.0f, the screen at x=%.0f" % [text, centre, screen_centre])
+	_main._solo_hide_toast(true)
