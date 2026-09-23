@@ -1104,7 +1104,8 @@ def _manifest_base_overrides() -> dict[str, dict[str, Any]]:
     global _MANIFEST_BASES
     if _MANIFEST_BASES is None:
         out: dict[str, dict[str, Any]] = {}
-        p = Path(__file__).resolve().parents[2] / "assets" / "model_manifest.json"
+        # <repo>/core/nml-core-py/python/list_to_profile.py -> parents[3] = <repo>
+        p = Path(__file__).resolve().parents[3] / "assets" / "model_manifest.json"
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError):

@@ -623,6 +623,28 @@ def test_a_profile_without_a_charge_only_rule_carries_no_charge_key():
     }
 
 
+def test_manifest_base_overrides_read_the_repo_bundled_manifest(monkeypatch):
+    """NML-1152 step 6c — the base_mm overrides come from the table's bundled
+    manifest, res://assets/model_manifest.json = <repo>/assets/model_manifest.json.
+    The loader lives at <repo>/core/nml-core-py/python/, so the repo root is
+    parents[3]; parents[2] is <repo>/core, which has no assets/ — the read
+    failed silently and every override was empty."""
+    repo = Path(__file__).resolve().parents[4]
+    seen: list[Path] = []
+    real_read = Path.read_text
+
+    def spy(self, *args, **kwargs):
+        seen.append(self)
+        return real_read(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", spy)
+    monkeypatch.setattr(list_to_profile, "_MANIFEST_BASES", None)
+    list_to_profile._manifest_base_overrides()
+    assert seen, "the override loader read no file"
+    assert seen[0] == repo / "assets" / "model_manifest.json"
+    assert seen[0].is_file()
+
+
 def test_swift_through_an_item_grant_cancels_slow_too():
     """opr_api_client.gd:1031-1035 — an item's granted rules fold into
     special_rules, so an item-granted Swift reaches the band pass the same
