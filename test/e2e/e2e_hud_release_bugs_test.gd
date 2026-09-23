@@ -119,8 +119,10 @@ func test_the_hover_tooltip_shows_a_loaded_unit_with_its_own_profile() -> void:
 	var tip = _main.opr_stats_tooltip
 	tip.show_unit(restored, node, true)
 	assert_str(tip.unit_name_label.text).contains("Battle Brothers")
-	assert_str(tip.stats_label.text).contains("Quality: [color=#88ff88]3+") \
-		.contains("Defense: [color=#8888ff]3+").contains("300 pts")
+	# uicard: the values wear the house ink (the text itself is pinned by e2e_unit_card_info_test).
+	var ink := HouseStyle.INK.to_html(false)
+	assert_str(tip.stats_label.text).contains("Quality: [color=#%s]3+" % ink) \
+		.contains("Defense: [color=#%s]3+" % ink).contains("300 pts")
 	tip.hide_tooltip()
 	await E2EBoot.settle(get_tree())
 
