@@ -225,6 +225,9 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 See [`CHANGELOG.md`](../CHANGELOG.md).
 
 **`0.3.13.0-alpha` (2026-09-25):**
+**Menu**: a new main menu over a night-time diorama; the table size (6x4 ft default, 4x4 ft, custom
+12–240 in) and the biome are chosen before the match; tilt-shift depth of field on the table camera
+([#1069](../../../pull/1069)).
 **Solo AI** — on Windows and Linux NACHTMAHR plays with its new model **Erlkönig**: a search planner priced by a trained neural network (value net) in the Rust
 rules core, which now ships in those exports ([#873](../../../pull/873), [#874](../../../pull/874),
 [#1052](../../../pull/1052)–[#1055](../../../pull/1055)); the planner also offers Advance + shoot

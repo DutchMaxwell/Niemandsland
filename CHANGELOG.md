@@ -9,6 +9,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [0.3.13.0-alpha] — 2026-09-25
 
 ### Added
+- **A new main menu.** A native menu over a night-time diorama of six biomes with miniatures; English
+  throughout. (#1069)
+- **Choose the table size and biome before the match.** 6x4 ft (default), 4x4 ft, or a custom size
+  (12–240 in). Loading a save or joining a multiplayer host takes the size from the save or the
+  host. (#1069)
+- **Tilt-shift depth of field on the table camera**, on by default; switch it off in Settings
+  (lighting panel). (#1069)
 - **The Ratmen (Age of Fantasy) have their own 3D models** for every unit and legal loadout; weapon
   teams fight with their team weapon on the model that carries it (the team guns used to sit on no
   model and fired with 0 attacks). The models download on first use, like every faction. (#1076)
@@ -62,6 +69,8 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **No engine "material is null" errors when models die.** The grey dead-model look no longer sets a
   hidden material under the base decor's override, which printed four engine errors per base when
   the node was freed. (#1071)
+- **The unit strip is filled after loading a save.** It was only built when an army was spawned
+  fresh. (#1069)
 - **Co-op multiplayer against the AI:** the AI designation reaches every player, and the owner of an
   attacked unit rolls its own saves. (#835, #836)
 - **Spell-granted rules apply where they act** — Quick Shot, Rapid Charge, Slayer, Unwieldy, Piercing
