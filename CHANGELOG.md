@@ -33,7 +33,6 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The core stages its rule files and the model out of the packed build** (`user://nml_core/<version>/`)
   and refuses a game — loudly, falling back to the tree — when a rules file or the row vocab is
   missing instead of searching rule-blind. (#1053, #1054)
-- **Objective-token rush reach.** The fast core's objective token carries two new columns — t[10]/t[11], the per-side count of units whose base-edge gap to the objective is within the last-round flip band (`OBJECTIVE_CONTROL_IN + live rush`), a superset of the contest count. Token vocab bumps to 3. (#1026)
 - **Privacy & data settings (local only).** A consent screen, off by default, explains optional
   game-record sharing, previews an example record and can save it locally; nothing is sent. An
   in-memory collector for the opt-in path is on `main`, still local-only (see
@@ -41,20 +40,6 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The off-table tray groups reserves by arrival class**, with headers and counts. (#832)
 - **Wreck spill shows a formation ghost at the cursor** after the automatic placement. (#828)
 - **The Solo panel has a mission selector, driven by the mission catalogue.** (#640)
-- **The mission catalogue reaches the AI twin.** The Python side can play the ten catalogue missions from `missions.json`
-  (missions R1, default duel), and the twin sets deterministic mission-marker placements. (#623, #639)
-- **AI rules fidelity — thirteen more named rules ported to the fast core** (all behind a frozen epoch gate).
-  CORE-side: Crossing Attack (any executed move through enemy units strikes them; #770), Retreating Strike (the
-  shared Ravage dice fire once per round on the post-melee move; #772), Extended Buff Range (relayed utility picks
-  through a radio/runner carrier; #773), Spell Accumulator (token battery casters may drain; #774), Reanimation with
-  its aura (a model stands back up at the activation step; #777), Delayed Action (the core can finally PASS — the
-  Pass Turn primitive per the #775 design; #778), Coordinate (the bearer hands its activation to a chosen friend;
-  #780), Mind Control's displacement arm (a failed morale test shifts the target up to 6"; #783), Transport (the
-  loader now parses the unit's own Transport(X) capacity, so the core fills transports; #787), Vengeance (a
-  marker-on-kill counter pays into the bearer's later attacks; #790), and the Re-Deployment param stamp (census
-  evidence; the optional re-place choice stays table-side; #781).
-- **The value net sees the rules it could not read.** Encoder vocabulary v7 appends the 12 core-ported names the
-  unit band had no room for (#786's blind set) to an open-ended unit2 band. (#789)
 
 ### Fixed
 - **Model downloads no longer depend on the frame rate.** On a slow or busy machine the online model
@@ -88,11 +73,33 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **A short charge lands on the table's approach vector.** (#875)
 - **Ranged Slayer fired in the core but not on the table.** The table now resolves the range-gated
   ("ranged_over") AP(+2) spec at the conditional-AP seams — the one gap of the table-side parity audit (#785). (#784)
-- **The census no longer counts a primitive literal as a rule-name read** (Mind Control un-flipped, then
-  honestly re-earned by its displacement port). (#782)
 - **The Solo arena's both-AI round loop grants Second Wind.** (#503)
 
 ### Changed
+- **The Rust rules core ships in the Linux and Windows exports.** CI builds the extension and places
+  it in the exports (first dormant, #873, #874); since #1055 the release build uses it by default for
+  NACHTMAHR (see Added). macOS ships without it, so NACHTMAHR plays the decision tree there, and the
+  release job waits for the Rust workspace checks.
+- **AI decisions fixed.** The menu targets the UNIT and offers the charge it can reach; a joined Caster hero can finally
+  cast; a combat intent aimed at a joined hero fights its HOST; Unstoppable follows the table's dice path; the over-9"
+  modifier gate measures centre-to-centre; an absent knob key reads as OFF. (#492, #495, #502, #601–#602, #605)
+
+### Internal
+- **Objective-token rush reach.** The fast core's objective token carries two new columns — t[10]/t[11], the per-side count of units whose base-edge gap to the objective is within the last-round flip band (`OBJECTIVE_CONTROL_IN + live rush`), a superset of the contest count. Token vocab bumps to 3. (#1026)
+- **The mission catalogue reaches the AI twin.** The Python side can play the ten catalogue missions from `missions.json`
+  (missions R1, default duel), and the twin sets deterministic mission-marker placements. (#623, #639)
+- **AI rules fidelity — thirteen more named rules ported to the fast core** (all behind a frozen epoch gate).
+  CORE-side: Crossing Attack (any executed move through enemy units strikes them; #770), Retreating Strike (the
+  shared Ravage dice fire once per round on the post-melee move; #772), Extended Buff Range (relayed utility picks
+  through a radio/runner carrier; #773), Spell Accumulator (token battery casters may drain; #774), Reanimation with
+  its aura (a model stands back up at the activation step; #777), Delayed Action (the core can finally PASS — the
+  Pass Turn primitive per the #775 design; #778), Coordinate (the bearer hands its activation to a chosen friend;
+  #780), Mind Control's displacement arm (a failed morale test shifts the target up to 6"; #783), Transport (the
+  loader now parses the unit's own Transport(X) capacity, so the core fills transports; #787), Vengeance (a
+  marker-on-kill counter pays into the bearer's later attacks; #790), and the Re-Deployment param stamp (census
+  evidence; the optional re-place choice stays table-side; #781).
+- **The value net sees the rules it could not read.** Encoder vocabulary v7 appends the 12 core-ported names the
+  unit band had no room for (#786's blind set) to an open-ended unit2 band. (#789)
 - **Rules epochs 8–11.** The planner's rush demotion moved behind a new frozen gate (epoch 8, #837)
   and every record header now stamps the epoch (#844); the Mark grants switched on by #870 apply
   from epoch 9 (#878); the core reads the table's distinct CHARGE band behind `EPOCH_10_CHARGE_BAND`
@@ -107,10 +114,6 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   have a slot, against 446 of 450 ported to the core. (#792, #793, #797, #800, #803, #808, #810,
   #818, #827, #831, #838, #839,
   #841, #842, #843, #848, #852, #853, #856, #859, #860, #861, #862, #864, #865, #879, #908)
-- **The Rust rules core ships in the Linux and Windows exports.** CI builds the extension and places
-  it in the exports (first dormant, #873, #874); since #1055 the release build uses it by default for
-  NACHTMAHR (see Added). macOS ships without it, so NACHTMAHR plays the decision tree there, and the
-  release job waits for the Rust workspace checks.
 - **AI rules fidelity — named rules ported to the fast core.** Split fire (a volley per target group), Mend, Re-Position
   Artillery and the Utility Buff bridge, Breath Attack, Shot Modifier with melee leg and flat / over-9" siblings, Hit &
   Run (incl. Fighter + Shooter), natural-6 extra attack dice, Growth Markers, Second Wind, Vanguard, Resistance,
@@ -131,11 +134,8 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   ladder, stall escalation, bounded straggler pull); self-play reads the table's per-model sight and the shoot leg asks
   the whole resolve question. (#473, #481, #484, #505, #509, #514, #519, #523–#524, #537–#538, #555, #565, #567,
   #575–#577, #581, #583, #586, #589, #592–#593, #599)
-- **AI decisions fixed.** The menu targets the UNIT and offers the charge it can reach; a joined Caster hero can finally
-  cast; a combat intent aimed at a joined hero fights its HOST; Unstoppable follows the table's dice path; the over-9"
-  modifier gate measures centre-to-centre; an absent knob key reads as OFF. (#492, #495, #502, #601–#602, #605)
-
-### Internal
+- **The census no longer counts a primitive literal as a rule-name read** (Mind Control un-flipped, then
+  honestly re-earned by its displacement port). (#782)
 - **The S5 (Reinforcement) seam, part 1:** `arrive_one` takes an arrival zone — the shared-signature change alone,
   ahead of the mid-game unit-creation port (verdict corrected PORT → DESIGN in #779). (#788)
 - **Wave-4 docs:** the Delayed Action primitive design (#775), the table-side parity audit A (#785), the
