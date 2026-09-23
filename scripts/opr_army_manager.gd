@@ -2002,8 +2002,16 @@ func _get_tough_value_from_rules(rules: Array) -> int:
 
 
 ## Get unit data for a model
+## The map is filled only when a unit is SPAWNED here. A model that arrived through a save-load or an
+## MP sync never was, so fall back to the GameUnit it carries as meta (save_manager
+## restore_game_unit_state) — without it hovering a loaded model showed no stats tooltip at all.
 func get_unit_for_model(model: Node3D) -> OPRApiClient.OPRUnit:
-	return model_to_unit.get(model, null)
+	var unit: OPRApiClient.OPRUnit = model_to_unit.get(model, null)
+	if unit == null and model != null and model.has_meta("game_unit"):
+		var game_unit := model.get_meta("game_unit") as GameUnit
+		if game_unit != null and game_unit.source_data is OPRApiClient.OPRUnit:
+			unit = game_unit.source_data
+	return unit
 
 
 ## Get all models for a unit

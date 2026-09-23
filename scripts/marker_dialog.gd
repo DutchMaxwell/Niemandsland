@@ -139,7 +139,7 @@ func _update_active_markers(markers: Array) -> void:
 			hbox.add_child(plus_btn)
 
 		var remove_btn = Button.new()
-		remove_btn.text = "✕"
+		remove_btn.text = "×"   # U+00D7: Inter (the UI font) has no U+2715
 		remove_btn.pressed.connect(_on_remove_marker_pressed.bind(marker_name))
 		hbox.add_child(remove_btn)
 
