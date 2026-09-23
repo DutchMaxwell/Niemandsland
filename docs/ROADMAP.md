@@ -228,6 +228,8 @@ See [`CHANGELOG.md`](../CHANGELOG.md).
 **Menu**: a new main menu over a night-time diorama; the table size (6x4 ft default, 4x4 ft, custom
 12–240 in) and the biome are chosen before the match; tilt-shift depth of field on the table camera
 ([#1069](../../../pull/1069)).
+**Table**: the chosen biome dresses the game table on the Medium preset and above — display only, line
+of sight and rules unchanged ([#1078](../../../pull/1078)).
 **Solo AI** — on Windows and Linux NACHTMAHR plays with its new model **Erlkönig**: a search planner priced by a trained neural network (value net) in the Rust
 rules core, which now ships in those exports ([#873](../../../pull/873), [#874](../../../pull/874),
 [#1052](../../../pull/1052)–[#1055](../../../pull/1055)); the planner also offers Advance + shoot

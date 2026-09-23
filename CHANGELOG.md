@@ -19,6 +19,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The Ratmen (Age of Fantasy) have their own 3D models** for every unit and legal loadout; weapon
   teams fight with their team weapon on the model that carries it (the team guns used to sit on no
   model and fired with 0 attacks). The models download on first use, like every faction. (#1076)
+- **The chosen biome dresses the game table** — ground, light and atmosphere of six biomes (grassland,
+  arid desert, frozen tundra, volcanic ash, alien jungle, urban ruins) on the Medium, High and Ultra
+  presets; Performance, Low and the Compatibility renderer keep the plain battlemap. Display only:
+  line of sight, colliders and rules are unchanged. (#1078)
 - **NACHTMAHR plays with the search planner and a neural leaf evaluator in-process.** When the
   Rust core (`NmlCore` GDExtension, now built with the ONNX evaluator) and the packed model
   `assets/solo/brains/erlkoenig.onnx` load, the one player-facing grade runs the rollout search
