@@ -10,6 +10,7 @@ extends GdUnitTestSuite
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Biomes := preload("res://scripts/visual/reference_biomes.gd")
 const TreePass := preload("res://scripts/visual/table_tree_pass.gd")
+const Materials := preload("res://scripts/visual/reference_materials.gd")
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -27,6 +28,7 @@ func before_test() -> void:
 func after_test() -> void:
 	TreePass.clear_sources()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
+	Materials.set_tier(false)   # static: a table-tier build leaves its surface in the mirror for later suites
 	_main = null
 	_runner = null
 
@@ -70,6 +72,70 @@ func _paint_terrain() -> void:
 
 func _colliders() -> int:
 	return _main.find_children("*", "CollisionObject3D", true, false).size()
+
+
+## A Dangerous Terrain field on open ground plus mines and signs around every edge of a ruin wall and against the
+## sides of a container (the desert also piles sand around the container), as the map layout editor places them.
+func _paint_minefield() -> void:
+	var overlay: Node3D = _main.terrain_overlay
+	var table := Vector2(6, 4)
+	var cells := {}
+	var objects: Array = []
+	for i in 10:
+		var cell := Vector2i(6 + i * 2, 8 + i % 3)
+		cells[cell] = 4                     # TerrainType.DANGEROUS
+		objects.append({"object_type": "mine", "cell": cell, "offset": Vector2(0.3, 0.6)})
+	for offset in [Vector2(0.5, 0.06), Vector2(0.5, 0.94), Vector2(0.06, 0.5), Vector2(0.94, 0.5)]:
+		objects.append({"object_type": "mine", "cell": Vector2i(12, 12), "offset": offset})
+	objects.append({"object_type": "warning_sign", "cell": Vector2i(13, 12), "offset": Vector2(0.5, 0.06)})
+	objects.append({"object_type": "container", "cell": Vector2i(15, 18), "offset": Vector2(0.5, 0.5), "angle_deg": 0.0})
+	objects.append({"object_type": "mine", "cell": Vector2i(15, 19), "offset": Vector2(0.5, 0.05)})
+	objects.append({"object_type": "warning_sign", "cell": Vector2i(14, 18), "offset": Vector2(0.45, 0.5)})
+	overlay.update_overlay(cells, table, 0.0)
+	overlay.update_wall_models([{"edge_cell": Vector2i(12, 12), "edge_side": 0, "wall_key": "w",
+		"length_inches": overlay.GRID_SIZE_INCHES, "sub_position": 0}], table, 0.0)
+	overlay.update_placed_objects(objects, table, 0.0)
+	await _runner.simulate_frames(3)
+
+
+## How far the dressed ground's vertex shader moves the surface at `p` (reference_ground_body.gdshaderinc vertex():
+## full_relief() while surface_relief is on), rebuilt from the material's own uniforms.
+func _ground_displacement(ground: ShaderMaterial, p: Vector2) -> float:
+	if not ground.get_shader_parameter("surface_relief"):
+		return 0.0
+	var urban: bool = ground.get_shader_parameter("urban_mode")
+	var h := 0.0
+	if ground.get_shader_parameter("relief_noise") != false:   # null = a build without the switch: always on
+		var amp := 0.15 if urban else (0.45 if ground.get_shader_parameter("desert_mode") else 1.0)
+		h = ((Materials._noise2(p * 2.6) - 0.5) * 0.008 + (Materials._noise2(p * 7.5) - 0.5) * 0.003) * amp
+	if urban:
+		return h
+	var drifts: PackedVector4Array = ground.get_shader_parameter("drift_points")
+	for i in int(ground.get_shader_parameter("drift_count")):
+		var r := maxf(drifts[i].z, 0.0001)
+		var m := 1.0 - smoothstep(0.0, 1.0, p.distance_to(Vector2(drifts[i].x, drifts[i].y)) / r)
+		h += m * m * r * 0.20
+	for w in _walls(ground):
+		var m := 1.0 - smoothstep(0.0, 0.030, p.distance_to(Geometry2D.get_closest_point_to_segment(p, Vector2(w.x, w.y), Vector2(w.z, w.w))))
+		h += m * m * 0.007
+	return h
+
+
+func _walls(ground: ShaderMaterial) -> PackedVector4Array:
+	var walls: PackedVector4Array = ground.get_shader_parameter("wall_regions")
+	return walls.slice(0, int(ground.get_shader_parameter("wall_count")))
+
+
+## Is `p` clear of every mound and ridge the ground draws (open table)?
+func _open_ground(ground: ShaderMaterial, p: Vector2) -> bool:
+	var drifts: PackedVector4Array = ground.get_shader_parameter("drift_points")
+	for i in int(ground.get_shader_parameter("drift_count")):
+		if p.distance_to(Vector2(drifts[i].x, drifts[i].y)) < drifts[i].z + 0.005:
+			return false
+	for w in _walls(ground):
+		if p.distance_to(Geometry2D.get_closest_point_to_segment(p, Vector2(w.x, w.y), Vector2(w.z, w.w))) < 0.035:
+			return false
+	return true
 
 
 func test_dressing_adds_no_collider_and_keeps_line_of_sight_geometry(timeout := 180000) -> void:
@@ -349,3 +415,70 @@ func test_grassland_trees_become_the_reference_oak(timeout := 120000) -> void:
 	assert_int(canopies).override_failure_message("%d oaks for %d table trees" % [canopies, _tree_roots(group).size()]) \
 		.is_equal(_tree_roots(group).size())
 	assert_int(_visible_old_meshes(group, added)).override_failure_message("old tree meshes still show next to the oaks").is_equal(0)
+
+
+## Maintainer 23.09.: "die Minen und die Warnschilder schweben" — the dressed ground moved by a small-scale noise
+## relief (+-5.5 mm) under props that stood at y = 0; then: "Der Verlust der Hügel ist nicht okay. Können wir die Minen
+## nicht einfach runterplumpsen lassen auf die Oberfläche". So on the game table: no noise (open ground stays at
+## y = 0, where miniatures, ruler and LOS measure), the mounds and ridges stay, every placed prop sits on the lowest
+## ground under its footprint (the 2 mm overlay lift aside), and the scatter follows the same surface.
+func test_dressed_table_keeps_its_mounds_and_props_sit_on_them(timeout := 240000) -> void:
+	await _paint_minefield()
+	var overlay: Node3D = _main.terrain_overlay
+	for biome in ["temperate_grassland", "arid_desert", "frozen_tundra", "urban_ruins"]:
+		var presenter := await _dress(biome)
+		assert_bool(presenter.is_dressed()).is_true()
+		var ground := (_main.table.get_node("TableMesh") as MeshInstance3D).material_override as ShaderMaterial
+		var worst := 0.0
+		var worst_at := Vector2.ZERO
+		var raised := 0
+		var container := Vector2(0.0381, 0.2667)   # cell (15, 18) + (0.5, 0.5) on the 30-cell grid
+		for prop in overlay._object_instances:
+			if Vector2(prop.position.x, prop.position.z).distance_to(container) < 0.001:
+				# It raises its own ridges and sand pile, so it stays sunk in them.
+				assert_float(prop.position.y).override_failure_message("%s: the container was lifted onto its own mound" % biome).is_equal(0.0)
+				continue
+			var box: AABB = overlay._model_space_aabb(prop)
+			var lowest := INF
+			for i in 3:
+				for j in 3:
+					lowest = minf(lowest, _ground_displacement(ground, Vector2(lerpf(box.position.x, box.end.x, i * 0.5), lerpf(box.position.z, box.end.z, j * 0.5))))
+			var gap: float = prop.position.y - lowest
+			if absf(gap) > absf(worst):
+				worst = gap
+				worst_at = Vector2(prop.position.x, prop.position.z)
+			if prop.position.y > 0.001:
+				raised += 1
+		assert_float(absf(worst) * 1000.0).override_failure_message("%s: the prop at %s stands %.2f mm off the lowest ground under it — it floats or sinks" % [biome, worst_at, worst * 1000.0]).is_less(0.5)
+		if biome != "urban_ruins":
+			assert_int(raised).override_failure_message("%s: no prop sits up on a mound or ridge — the seating is not exercised" % biome).is_greater(0)
+		var open_worst := 0.0
+		var mismatch := 0.0
+		for ix in range(-12, 13):
+			for iz in range(-8, 9):
+				var p := Vector2(ix * 0.07, iz * 0.07)
+				var d := _ground_displacement(ground, p)
+				if _open_ground(ground, p):
+					open_worst = maxf(open_worst, absf(d))
+				mismatch = maxf(mismatch, absf(Materials.ground_height(p) - d))
+		assert_float(open_worst * 1000.0).override_failure_message("%s: open ground moves by %.2f mm — miniature bases float or sink there" % [biome, open_worst * 1000.0]).is_less(0.01)
+		assert_float(mismatch * 1000.0).override_failure_message("%s: the scatter's ground height disagrees with the dressed ground by up to %.2f mm" % [biome, mismatch * 1000.0]).is_less(0.1)
+		if biome != "urban_ruins":
+			# How far the ridge rises above the ground 6 cm beside it (the noise, where it exists, is ~flat over 6 cm).
+			var ridge := 0.0
+			for w in _walls(ground):
+				var mid := (Vector2(w.x, w.y) + Vector2(w.z, w.w)) * 0.5
+				var side := (Vector2(w.z, w.w) - Vector2(w.x, w.y)).orthogonal().normalized() * 0.06
+				ridge = maxf(ridge, _ground_displacement(ground, mid) - maxf(_ground_displacement(ground, mid + side), _ground_displacement(ground, mid - side)))
+			assert_float(ridge * 1000.0).override_failure_message("%s: the wall-foot ridge is gone (%.2f mm)" % [biome, ridge * 1000.0]).is_greater(5.0)
+		if biome == "arid_desert":
+			var mound := _ground_displacement(ground, container) - _ground_displacement(ground, container + Vector2(0.0, 0.12))
+			assert_float(mound * 1000.0).override_failure_message("the desert container's sand mound is gone (%.2f mm)" % (mound * 1000.0)).is_greater(5.0)
+			# The ribbons lie 0.7 .. 2.9 mm above the ground they follow, mounds included.
+			var streams: MeshInstance3D = presenter.current_presentation().get("_dust")[0]
+			var off := 0.0
+			for v: Vector3 in streams.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]:
+				var lift := v.y - _ground_displacement(ground, Vector2(v.x, v.z))
+				if lift < 0.0006 or lift > 0.0030:
+					off = maxf(off, absf(lift))
+			assert_float(off * 1000.0).override_failure_message("the desert sand streams leave the ground by up to %.2f mm" % (off * 1000.0)).is_equal(0.0)

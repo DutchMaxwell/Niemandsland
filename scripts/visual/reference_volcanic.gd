@@ -104,6 +104,8 @@ func _shade_lava(node: Node,ground_offset: float = 0.0) -> void:
 
 static func _terrain_height(point: Vector2,walls: Array) -> float:
 	var height := preload("res://scripts/visual/reference_materials.gd").ground_height(point)
+	if not preload("res://scripts/visual/reference_materials.gd").noise_relief:
+		return height   # the game table: ground_height already holds the wall-foot ridges
 	# Match the wall-foot relief already present in the reference ground vertex shader.
 	for wall: Array in walls:
 		var distance := point.distance_to(Geometry2D.get_closest_point_to_segment(point,wall[0],wall[1]))

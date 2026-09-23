@@ -4,6 +4,9 @@
 #include "res://shaders/visual/reference_ground.gdshaderinc"
 uniform bool clip_base = false;
 uniform bool surface_relief = false;
+// The small-scale noise relief (+-5.5 mm everywhere). Off on the game table, where props and miniatures stand at
+// y = 0; the mounds and ridges of drift_height() stay (grassland_reference.apply sets it per tier).
+uniform bool relief_noise = true;
 float relief(vec2 p) {
 	float amp = desert_mode ? 0.45 : 1.0;
 	if (urban_mode) { amp = 0.15; }
@@ -13,7 +16,7 @@ float relief(vec2 p) {
 // and the drift loop there cost ~9 ms. The mound still reads from its silhouette and
 // the brighter, noised sand in the fragment.
 float full_relief(vec2 p) {
-	return relief(p) + (urban_mode ? 0.0 : drift_height(p));
+	return (relief_noise ? relief(p) : 0.0) + (urban_mode ? 0.0 : drift_height(p));
 }
 varying vec2 ground_xz;
 void vertex() {

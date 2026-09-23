@@ -70,6 +70,8 @@ static func build(main: Node, ground: ShaderMaterial, size: Vector2) -> MeshInst
 
 static func _height(p: Vector2,walls: Array,drifts: PackedVector4Array,drift_count: int) -> float:
 	# Same vertex-only relief as the desert ground; the ribbons follow its mounds.
+	if not Materials.noise_relief:
+		return Materials.ground_height(p)   # the game table: its mounds and ridges only
 	var height := Materials.ground_height(p)*0.45
 	for i in drift_count:
 		var point := drifts[i]

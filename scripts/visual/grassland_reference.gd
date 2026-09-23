@@ -92,6 +92,10 @@ func apply(main: Node) -> void:
 		plane.subdivide_depth = clampi(int(size_m.y / TABLE_RELIEF_CELL_M), 16, 400)
 	surface.mesh = plane
 	_ground.set_shader_parameter("surface_relief",true)
+	# Props and miniatures stand at y = 0 on the game table, so its tier drops the small-scale noise relief (mines
+	# floated over its dips) and keeps the mounds and ridges; the dressing below follows the same surface.
+	_ground.set_shader_parameter("relief_noise",not table_tier)
+	ReferenceMaterials.set_tier(table_tier)
 	surface.material_override = _ground
 	table.get_node("GrassField").visible = false
 	_base = table.get_base_top_material()
@@ -152,6 +156,10 @@ func apply(main: Node) -> void:
 		mat.set_shader_parameter("wall_regions",wall_regions)
 		mat.set_shader_parameter("drift_count",drift_count)
 		mat.set_shader_parameter("drift_points",drift_points)
+	if table_tier:
+		if not _profile.get("urban_mode",false):   # the urban ground draws no mounds
+			ReferenceMaterials.set_mounds(wall_regions.slice(0,wall_count),drift_points.slice(0,drift_count))
+		_seat_props(overlay)
 	var understory: Node3D = preload("res://scripts/visual/reference_jungle.gd").new() if _profile.get("jungle_mode",false) else preload("res://scripts/visual/reference_understory.gd").new()
 	if _profile.get("urban_mode",false):
 		understory.free()
@@ -459,6 +467,34 @@ func _dress_grid_forest(overlay: Node3D) -> void:
 			index += 1
 			break
 	print("REFERENCE_TREES ",index," regions=",_regions.size())
+
+
+## Table tier: the flat markers (mines, warning signs, hazard models) stand on the dressed ground instead of hovering
+## at a mound's foot: each drops onto the LOWEST ground under its footprint, so nothing floats. Trees and containers
+## raise the mounds themselves (a container's edges are wall segments, the desert piles sand around both), so they
+## stay at y = 0, sunk in their own mound as in the reference. Display only: cells, footprints and LOS are untouched,
+## and the overlay's rebuild on teardown puts the markers back at y = 0.
+func _seat_props(overlay: Node3D) -> void:
+	var dims: Vector2i = overlay._calculate_grid_dims(overlay.table_size_feet)
+	var cell_size: float = overlay.GRID_SIZE_INCHES * overlay.INCHES_TO_METERS
+	var rot := deg_to_rad(float(overlay.grid_rotation_degrees))
+	var windbreaks: Array[Vector2] = []
+	for obj: Dictionary in overlay._last_objects:
+		if obj.get("object_type","tree") in ["tree","container"]:
+			var x: float = (obj.cell.x-dims.x/2.0+obj.offset.x)*cell_size
+			var z: float = (obj.cell.y-dims.y/2.0+obj.offset.y)*cell_size
+			windbreaks.append(Vector2(x*cos(rot)-z*sin(rot),x*sin(rot)+z*cos(rot)))
+	for prop in overlay._object_instances:
+		if not is_instance_valid(prop) or windbreaks.any(func(w: Vector2) -> bool: return w.distance_to(Vector2(prop.position.x,prop.position.z)) < 0.001):
+			continue
+		var box: AABB = overlay._model_space_aabb(prop)
+		if not box.has_volume():   # no mesh yet (a model still loading): its own spot
+			box = AABB(prop.position,Vector3.ZERO)
+		var lowest := INF
+		for i in 3:
+			for j in 3:
+				lowest = minf(lowest,ReferenceMaterials.ground_height(Vector2(lerpf(box.position.x,box.end.x,i*0.5),lerpf(box.position.z,box.end.z,j*0.5))))
+		prop.position.y += lowest
 
 
 func _dress_movable_forests() -> void:
