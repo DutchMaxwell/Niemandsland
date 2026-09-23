@@ -123,3 +123,30 @@ func test_the_hover_tooltip_shows_a_loaded_unit_with_its_own_profile() -> void:
 		.contains("Defense: [color=#8888ff]3+").contains("300 pts")
 	tip.hide_tooltip()
 	await E2EBoot.settle(get_tree())
+
+
+# === 3. The ruler readout ======================================================================
+# Probe B: DistanceLabel (860,10 200x40) sat under the Battle Log tab (790,6 340x41) — both children of
+# UI/HUD, the log added later and so painted on top: "30.4″" was invisible for the whole measurement.
+
+func test_the_ruler_readout_is_not_covered_while_measuring() -> void:
+	_main._on_distance_changed(30.4, Vector3.ZERO, Vector3(30.4 * INCH, 0.0, 0.0))
+	await _runner.simulate_frames(2)
+	var label: Label = _main.distance_label
+	assert_str(label.text).is_equal("30.4\"")
+	assert_bool(label.is_visible_in_tree()).is_true()
+	var neighbours := {
+		"Battle Log tab": _main.battle_log_panel,
+		"FPS line": _main.performance_label,
+		"controls list": _main.get_node("UI/HUD/InfoLabel"),
+	}
+	for what in neighbours:
+		assert_bool(label.get_global_rect().intersects((neighbours[what] as Control).get_global_rect())).is_false() \
+			.override_failure_message("the ruler readout %s lies under the %s %s" % [
+				label.get_global_rect(), what, (neighbours[what] as Control).get_global_rect()])
+	# Measuring with the log OPEN — its panel grows downward from the same tab.
+	_main.battle_log_panel._toggle()
+	await _runner.simulate_frames(2)
+	assert_bool(label.get_global_rect().intersects(_main.battle_log_panel.get_global_rect())).is_false() \
+		.override_failure_message("the ruler readout lies under the opened battle log")
+	_main.battle_log_panel._toggle()

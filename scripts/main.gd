@@ -79,6 +79,8 @@ var _is_mirroring_dice: bool = false
 var _group_rotation_broadcast_timer: float = 0.0
 const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 
+## Sits RIGHT of the top-centre Battle Log tab (main.tscn), never under it: the log panel joins UI/HUD
+## later, so it paints over anything it overlaps — the ruler readout was invisible while measuring.
 @onready var distance_label: Label = $UI/HUD/DistanceLabel
 @onready var clear_all_btn: Button = %ClearAll
 @onready var sort_table_btn: Button = %SortTableBtn
