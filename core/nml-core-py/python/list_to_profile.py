@@ -538,6 +538,7 @@ def _move_bands(
     permanent bands."""
     advance = OPR_ADVANCE_INCHES
     rush = OPR_RUSH_CHARGE_INCHES
+    charge_extra = 0
     counted: dict[str, dict[str, bool]] = {}
     # movement_range_controller.gd:95-99 — Swift cancels Slow by NAME ("This
     # model may ignore the Slow rule"); the rule pair is the whole measured
@@ -595,9 +596,24 @@ def _move_bands(
             if not done["advance"]:
                 advance += int(rp.get("advance_mod", 0))
             if not done["rush"]:
-                rush += int(rp.get("rush_mod", rp.get("charge_mod", 0)))
+                rush_mod = int(rp.get("rush_mod", rp.get("charge_mod", 0)))
+                if bool(rp.get("charge_only", False)):
+                    # movement_range_controller.gd:175-177 (#1072): Rapid Charge
+                    # (+ Aura) "moves +4\" when using Charge actions" — the
+                    # Charge band only, never Rush.
+                    charge_extra += int(rp.get("charge_mod", rush_mod))
+                else:
+                    rush += rush_mod
+                    charge_extra += int(rp.get("charge_mod", rush_mod)) - rush_mod
             counted[base] = {"advance": True, "rush": True}
-    return {"advance": float(max(0, advance)), "rush": float(max(0, rush))}
+    bands = {"advance": float(max(0, advance)), "rush": float(max(0, rush))}
+    # The table always writes `charge` (= rush + charge_extra); the core reads
+    # an absent key as Rush (state.rs MoveBands.charge = None), so the key rides
+    # only when it differs — every other profile stays byte-identical.
+    charge = float(max(0, rush + charge_extra))
+    if charge != bands["rush"]:
+        bands["charge"] = charge
+    return bands
 
 
 def _shooting_range_bonus(
