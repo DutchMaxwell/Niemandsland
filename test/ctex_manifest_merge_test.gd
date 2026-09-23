@@ -30,16 +30,43 @@ func test_every_entry_keeps_complete_legacy_fields() -> void:
 	assert_int(bad).is_equal(0)
 
 
+## Complete = baked for an engine (godot_version) AND usable by the loader: ModelLibrary's own shared
+## check accepts the single `textures.albedo` form and the multi-material `materials[]` form. No
+## `size_class` requirement: nothing in scripts/ or tools/ reads it, and the Ratmen entries omit it.
+static func _ctex_block_complete(c: Dictionary) -> bool:
+	return c.has("godot_version") and ModelLibrary._ctex_block_usable(c)
+
+
 func test_every_entry_has_a_complete_ctex_block() -> void:
 	var models := _models()
 	var incomplete := 0
 	for key in models:
-		var c: Dictionary = models[key].get("ctex", {})
-		var tex: Dictionary = c.get("textures", {})
-		if c.is_empty() or not c.has("mesh") or not c.has("godot_version") \
-				or not c.has("size_class") or not tex.has("albedo"):
+		if not _ctex_block_complete(models[key].get("ctex", {})):
 			incomplete += 1
 	assert_int(incomplete).is_equal(0)
+
+
+## The live/staged manifest's multi-material form (model_manifest.staged_ctex.json, 392 of 1,406
+## entries; the 221 Ratmen entries carry no size_class): mesh + godot_version + a non-empty
+## `materials` ARRAY with an albedo per surface — the form ModelLibrary._ctex_block_usable loads.
+## Shape copied from a staged entry (hashes shortened).
+func test_the_multi_material_form_is_a_complete_ctex_block() -> void:
+	var staged := {"godot_version": "4.6", "mesh": {"url": "f3e0.glb", "sha256": "f3e0", "size": 7660932},
+		"materials": [{"surface": 0, "name": "Material_0", "albedo": {"url": "bfd1.ctex", "sha256": "bfd1", "size": 5592484}},
+			{"surface": 1, "name": "Material_0.003", "albedo": {"url": "1b9e.ctex", "sha256": "1b9e", "size": 5592484}}]}
+	assert_bool(_ctex_block_complete(staged)) \
+		.override_failure_message("the staged multi-material ctex block (materials[], no size_class) must count as complete") \
+		.is_true()
+	var single := {"godot_version": "4.6", "size_class": "m", "mesh": {"sha256": "m", "url": "m.glb"},
+		"textures": {"albedo": {"sha256": "a", "url": "a.ctex"}}}
+	assert_bool(_ctex_block_complete(single)).is_true()
+	# Incomplete shapes stay incomplete: the contract-v1 materials DICT, a surface without albedo,
+	# no mesh, no godot_version, an empty block.
+	assert_bool(_ctex_block_complete({"godot_version": "4.6", "mesh": {"sha256": "m"}, "materials": {"body": {}}})).is_false()
+	assert_bool(_ctex_block_complete({"godot_version": "4.6", "mesh": {"sha256": "m"}, "materials": [{"surface": 0}]})).is_false()
+	assert_bool(_ctex_block_complete({"godot_version": "4.6", "textures": {"albedo": {"sha256": "a"}}})).is_false()
+	assert_bool(_ctex_block_complete({"mesh": {"sha256": "m"}, "textures": {"albedo": {"sha256": "a"}}})).is_false()
+	assert_bool(_ctex_block_complete({})).is_false()
 
 
 ## Mirrors the per-entry unsafe guard of tools/merge_ctex_manifest.py: the legacy sha must NEVER
