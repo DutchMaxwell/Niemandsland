@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "url": "{cdn}/c4d5326ee039d16f02eb780440513777cff26fab4342983fda1d27dfb05c7661.glb",
+  "sha256": "c4d5326ee039d16f02eb780440513777cff26fab4342983fda1d27dfb05c7661",
+  "size": 6895864,
+  "license": "CC-BY-SA-4.0",
+  "attribution": "Niemandsland Contributors",
+  "source": "Original text-only NanoBanana source -> project explicit-alpha white-key/deshadow -> server alpha-preserving conditioning -> TRELLIS.2 1024 reconstruction / 4096 texture",
+  "generation": {
+    "file": "charred-tree.png",
+    "sha256": "7ab0fba36edfa05a66a79b152efe9a7942baae452658a2aa968855c75d6cd346",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Use case: photorealistic-natural. Original isolated burned dead oak trunk for 3D game reconstruction. One entire standing wildfire-killed tree on pure white background, tall narrow irregular silhouette, approximately 2.5 times taller than its spread. Thick weathered charred trunk, deeply fissured black-grey bark with small patches of exposed grey wood. The trunk twists subtly and forks unevenly into three large broken limbs, with a few gnarled lateral branches of unequal lengths. Blunt jagged splintered branch ends, damaged top, natural asymmetry and large gaps; a few short crooked twigs only, NO evenly spaced pointed spikes, no regular conifer silhouette, no foliage, no needles, no grass, no leaves. Restrained charcoal and neutral grey bark, not featureless black, no orange glow or fire. Root flare visible at trunk bottom with no soil, ground plane, pedestal or shadow. Whole subject fits in image with white margin. Natural photograph, soft flat neutral diffuse studio light, no dramatic lighting, no text or watermark. No other objects or trees.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-21"
+  },
+  "reconstruction": {
+    "source_image": "charred-tree.png",
+    "source_sha256": "7ab0fba36edfa05a66a79b152efe9a7942baae452658a2aa968855c75d6cd346",
+    "preprocessing": "Existing project white-key/deshadow at threshold180; explicit alpha supplied to server alpha-preserving crop/conditioning, optional BRIA bypassed",
+    "alpha_image": "charred-tree-keyed.png",
+    "alpha_sha256": "c15af8633cdc8f5745f73fc71c4ffebe5283d39ba97723fcf6d6c64d11514161",
+    "conditioned_image": "charred-tree-conditioned.png",
+    "conditioned_sha256": "7adbe1af9cb360a0379a0a5f57b7ff4b49a2af94f46794f4c895bbc5fe11e664",
+    "resolution": 1024,
+    "texture_size": 4096,
+    "decimation_target": 100000,
+    "seed": 1128754434,
+    "glb_file": "charred-tree-conditioned.glb",
+    "glb_sha256": "c4d5326ee039d16f02eb780440513777cff26fab4342983fda1d27dfb05c7661",
+    "size": 6895864
+  },
+  "processing": "Generated GLB geometry unchanged; reference-only runtime crown variation and upward-facing ash material"
+}

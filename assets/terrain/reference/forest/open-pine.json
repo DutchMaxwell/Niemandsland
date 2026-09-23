@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "url": "{cdn}/3e71c055cb434962123b4b72a3e059cd2e6ad2440bd0879eeaef6953363ef495.glb",
+  "sha256": "3e71c055cb434962123b4b72a3e059cd2e6ad2440bd0879eeaef6953363ef495",
+  "size": 9478964,
+  "license": "CC-BY-SA-4.0",
+  "attribution": "Niemandsland Contributors",
+  "source": "Original text-only NanoBanana source -> project explicit-alpha white-key/deshadow -> server alpha-preserving conditioning -> TRELLIS.2 1024 reconstruction / 4096 texture",
+  "generation": {
+    "file": "open-pine.png",
+    "sha256": "c8a0e904b62047981ad2a88e20e9a9d60c1020bdee41cca582f3f708547ac03e",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Use case: photorealistic-natural. Asset type: original isolated tree photograph for 3D game reconstruction. One mature windswept Scots pine tree, complete roots-to-tip silhouette on pure white studio background. Natural full-size forest tree proportions, tall rather than wide, approximately twice as tall as wide. Weathered warm grey-brown bark trunk forks asymmetrically in its upper half. Long irregular lateral branches with bare visible woody lengths carry many small loose dark olive-green needle sprays at their ends. Open airy crown with large uneven gaps revealing the true branched structure, broken irregular asymmetrical outline, some sparse dead lower limbs and a slightly wind-bent leader. Foliage is finely divided into tiny feathery needle-bearing shoots, NOT smooth solid balls or cushion tiers, NOT a bonsai, NOT a Christmas cone. Slight three-quarter view from near ground height, trunk and branch structure clearly visible. Entire tree fits in the square image with a thin white margin. No snow: needles and bark must remain visible; snow is added in the game. Soft neutral shadowless diffuse light without directional highlights or cast shadows. No ground plane, grass, soil mound, pot, plinth, stand, other trees, text or watermark. No blue lighting, no autumn leaves. Fully original realistic botanical object, not an illustration or stylized miniature.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-21"
+  },
+  "reconstruction": {
+    "source_image": "open-pine.png",
+    "source_sha256": "c8a0e904b62047981ad2a88e20e9a9d60c1020bdee41cca582f3f708547ac03e",
+    "preprocessing": "Existing project white-key/deshadow at threshold180; explicit alpha supplied to server alpha-preserving crop/conditioning, optional BRIA bypassed",
+    "alpha_image": "open-pine-keyed.png",
+    "alpha_sha256": "8bfa5c0b7562552d37a03a9bc5ae2856560f2b8852573d0f4ac1f09062bd5e30",
+    "conditioned_image": "open-pine-conditioned.png",
+    "conditioned_sha256": "e8db563c774e509a9ec589dd6ba53e6c33576037f6b999c297eb65ebb8c4d195",
+    "resolution": 1024,
+    "texture_size": 4096,
+    "decimation_target": 100000,
+    "seed": 476646957,
+    "glb_file": "open-pine-conditioned.glb",
+    "glb_sha256": "3e71c055cb434962123b4b72a3e059cd2e6ad2440bd0879eeaef6953363ef495",
+    "size": 9478964
+  },
+  "processing": "Generated GLB geometry unchanged; reference-only runtime crown variation, wind and patchy snow material"
+}

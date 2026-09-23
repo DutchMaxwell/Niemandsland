@@ -2624,6 +2624,13 @@ func _rubble_stone_mesh() -> Mesh:
 		mat.uv1_world_triplanar = true
 		var tile := 1.0 / RUBBLE_TEXTURE_TILE_M
 		mat.uv1_scale = Vector3(tile, tile, tile)
+		# Match the wall: the same masonry normal map, so the loose stones read as
+		# broken-off pieces of the ruin instead of smooth grey blocks.
+		var normal_tex: Texture2D = _ruins_library.get_texture(_prop_theme + "normal") if _ruins_library != null else null
+		if normal_tex != null:
+			mat.normal_enabled = true
+			mat.normal_texture = normal_tex
+			mat.normal_scale = RUIN_NORMAL_STRENGTH
 	else:
 		mat.albedo_color = Color(0.45, 0.43, 0.4)
 	box.material = mat

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "url": "{cdn}/fdad14ef08633fba48d83ea695dbe5ac72b85110267dbcd2bb413a1a58a72b8d.glb",
+  "sha256": "fdad14ef08633fba48d83ea695dbe5ac72b85110267dbcd2bb413a1a58a72b8d",
+  "size": 10470012,
+  "license": "CC-BY-SA-4.0",
+  "attribution": "Niemandsland Contributors",
+  "source": "Original NanoBanana image -> project deterministic white-key/deshadow + alpha-preserving server conditioning (BRIA bypassed) -> TRELLIS.2 -> 1024 reconstruction, 4096 texture",
+  "source_image": "oak-clean.png",
+  "source_sha256": "6c54ce6066678c8c19b9f51ef8ca313918032ac5d56d13870024a934d30416b6",
+  "conditioned_image": "oak-conditioned.png",
+  "conditioned_sha256": "c822ff02f022c46bb6ebdf8c7116e767be9a0ce12916c0a57b55879197a54f91",
+  "trellis_sha256": "fdad14ef08633fba48d83ea695dbe5ac72b85110267dbcd2bb413a1a58a72b8d",
+  "seed": 650770009,
+  "processing": "Unmodified generated GLB",
+  "conditioning": {
+    "source_image": "oak-clean.png",
+    "source_sha256": "6c54ce6066678c8c19b9f51ef8ca313918032ac5d56d13870024a934d30416b6",
+    "preprocessing": "Existing project deterministic white-key/deshadow, then server alpha-preserving crop and RGB conditioning; remove_background/BRIA bypassed by supplied alpha",
+    "white_threshold": 180,
+    "alpha_image": "oak-keyed.png",
+    "alpha_sha256": "f16332e7e13530fb3e0661641bc70db38696a0e39468204042296ed310db5306",
+    "conditioned_image": "oak-conditioned.png",
+    "conditioned_sha256": "c822ff02f022c46bb6ebdf8c7116e767be9a0ce12916c0a57b55879197a54f91"
+  }
+}

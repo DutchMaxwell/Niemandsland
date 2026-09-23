@@ -1,0 +1,53 @@
+{
+  "biome": "arid_desert",
+  "role": "Reference ground albedo textures for the desert biome (sand / cracked clay pan / rock scree).",
+  "provider": "Google Gemini API (gemini-2.5-flash-image, NANO_BANANA)",
+  "license": "CC-BY-SA-4.0",
+  "attribution": "Niemandsland Contributors",
+  "generation_date": "2026-09-19",
+  "notes": "Original text prompts, no reference images. Flat overhead macro, no directional shadows, requested tileable.",
+  "textures": [
+    {
+      "file": "sand.png",
+      "sha256": "f852547b34890d80cd81f432101f406a16f7d962f2b96ff5db84513d9b2acba6",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Use case: photorealistic-natural. Asset type: original tileable diffuse albedo texture for a high-detail realistic tabletop game desert environment. Strict vertical overhead orthographic MACRO PHOTOGRAPH, completely flat overhead view. Square edge-to-edge surface, evenly lit by soft overcast light with NO directional cast shadows, no vignette, no depth of field, no large highlighted objects. All regions equally in focus. Natural irregular detail, physically real scale. No text, no diagrams, no grid, no logos. A 40 centimetre square of fine wind-blown desert dune sand. Gentle wind ripples with soft crests and troughs, fine mineral grain, a few scattered small dark grit specks and tiny shell/quartz fragments, subtle colour drift between warm pale ochre and cooler grey-tan. No plants, no grass, no leaves, no rocks larger than a pea, no footprints, no tyre tracks, no symmetrical patterns. Warm restrained natural sand colours. Premium detailed photographic ground material, authentic fine grain.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-19",
+      "webp_file": "sand.webp",
+      "webp_sha256": "46baa277e316cb7916e212df5c8024f61b89c6631d79e812776f3fbb74502f2a",
+      "output": "power-of-two 1024 WebP, quality 82"
+    },
+    {
+      "file": "cracked-earth.png",
+      "sha256": "97d6da9cb468b1583939cc7c6ffd08c7eda8dced8bbc2cae9bc2a18d5c071b2d",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Use case: photorealistic-natural. Asset type: original tileable diffuse albedo texture for a high-detail realistic tabletop game desert environment. Strict vertical overhead orthographic MACRO PHOTOGRAPH, completely flat overhead view. Square edge-to-edge surface, evenly lit by soft overcast light with NO directional cast shadows, no vignette, no depth of field, no large highlighted objects. All regions equally in focus. Natural irregular detail, physically real scale. No text, no diagrams, no grid, no logos. A 40 centimetre square of dried cracked desert clay pan. A network of irregular polygonal desiccation cracks with slightly raised pale edges and darker recessed seams, brittle curled clay flakes, fine dust between the plates, a few embedded small angular stones. Muted pale grey-tan and dusty brown. No plants, no roots, no sand dunes, no water, no tile grid regularity. Premium detailed photographic dry mudflat material.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-19",
+      "webp_file": "cracked-earth.webp",
+      "webp_sha256": "7712e6559d6bba005df815da7d8c9ed97404a64a2b137ff012b60dda844fa554",
+      "output": "power-of-two 1024 WebP, quality 82"
+    },
+    {
+      "file": "scree.png",
+      "sha256": "f408f6b1ef20aff3890bd65edb3fee574b828601806d140b87ab5b6cec0da94a",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Use case: photorealistic-natural. Asset type: original tileable diffuse albedo texture for a high-detail realistic tabletop game desert environment. Strict vertical overhead orthographic MACRO PHOTOGRAPH, completely flat overhead view. Square edge-to-edge surface, evenly lit by soft overcast light with NO directional cast shadows, no vignette, no depth of field, no large highlighted objects. All regions equally in focus. Natural irregular detail, physically real scale. No text, no diagrams, no grid, no logos. A 40 centimetre square of desert rock scree and angular gravel. Dense scattered angular grey-tan rock chips, fractured limestone and sandstone fragments of mixed size, fine grit and dust filling the gaps, occasional small pebbles, no vegetation. Irregular natural packing with varied orientation, not a uniform mosaic. Muted grey, tan and dusty ochre. No large boulders, no plants, no round polished pebbles, no symmetrical patterns. Premium detailed photographic rocky desert material.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-19",
+      "webp_file": "scree.webp",
+      "webp_sha256": "1b9516060ffc522608707226b05fb062c15074b1ac213306816009bf907471e7",
+      "output": "power-of-two 1024 WebP, quality 82"
+    }
+  ]
+}

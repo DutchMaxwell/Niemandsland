@@ -1,0 +1,46 @@
+{
+  "assets": [
+    {
+      "file": "fractured-asphalt.png",
+      "sha256": "195c374945e10ab1705bff80dbb3a9ffa88ad82b47f206892fb378e25e292d17",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Generate a square 1024 by 1024 photographic material texture image. Directly overhead orthographic view, evenly illuminated diffuse surface with no cast shadows or perspective. Edge-to-edge surface, natural irregular detail, suitable for repeating across game terrain. Old damaged charcoal grey asphalt. Broken jagged edges of aged bitumen plates with exposed coarse aggregate, thin branching fissures and patches of finer compacted grit in missing parts. Small chips settled into depressions, muted medium dark greys and brown-grey dust. About two thirds worn asphalt and one third rough exposed aggregate. Realistically uneven weathering, not decorative paving, not a cobblestone pattern. No road markings, no objects, no plants or text.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-22",
+      "runtime_file": "fractured-asphalt.webp",
+      "runtime_sha256": "eaf29ecb83ebec092e1ee8816fd7276897917e48294113fdf29d6fd1b134aac4",
+      "processing": "Original 1024-square PNG converted to WebP quality90. Runtime mipmaps. Albedo-derived relief is an artistic approximation, not scanned physical depth."
+    },
+    {
+      "file": "battered-concrete.png",
+      "sha256": "114e3096f155d17386a5ad359faf5d286f80b3e8237676252a71389639557469",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Generate a square 1024 by 1024 photographic material texture image. Directly overhead orthographic view, evenly illuminated diffuse surface with no cast shadows or perspective. Edge-to-edge surface, natural irregular detail, suitable for repeating across game terrain. Heavily weathered grey concrete ground. Irregular flaked and spalled areas expose gritty aggregate beneath the old cement skin. Angular thin cracks, pitted abrasion, dusty pale grey flakes against darker grey porous chipped recesses, some small warm grey mineral fragments. Rough quiet grey cement areas between localized patches of damage. No square tiles, no regular joints, no sand ripples, no clean smooth new concrete. No objects or text.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-22",
+      "runtime_file": "battered-concrete.webp",
+      "runtime_sha256": "3ffc941bf029444c6e0c2bea279de9278491c92ef69aceb0b1c35b9f86ea9e36",
+      "processing": "Original 1024-square PNG converted to WebP quality90. Runtime mipmaps. Albedo-derived relief is an artistic approximation, not scanned physical depth."
+    },
+    {
+      "file": "masonry-fines.png",
+      "sha256": "111611286f956e78fc32621255856da0f8bfc97b9bd6760044a553bb86fdd289",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Generate a square 1024 by 1024 photographic material texture image. Directly overhead orthographic view, evenly illuminated diffuse surface with no cast shadows or perspective. Edge-to-edge surface, natural irregular detail, suitable for repeating across game terrain. Ground covered by crushed aged masonry. A thin uneven layer of grey-beige mortar dust and angular concrete grit with scattered small broken red-brown brick fragments. More fine dust than stones, irregular patchy packing, realistic small-scale chipped granular surface. Desaturated cold grey, warm taupe, occasional muted brick red. No large whole bricks, boulders, deep cast shadows, tiles, plants or text.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-22",
+      "runtime_file": "masonry-fines.webp",
+      "runtime_sha256": "5565912200177d0c13c56e3372cdab9c587a1342c4e11d8775722f582331f0c1",
+      "processing": "Original 1024-square PNG converted to WebP quality90. Runtime mipmaps. Albedo-derived relief is an artistic approximation, not scanned physical depth."
+    }
+  ]
+}

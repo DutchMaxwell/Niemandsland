@@ -1,0 +1,48 @@
+{
+  "assets": [
+    {
+      "file": "damp-humus.png",
+      "sha256": "7b12e0862943da211b2acc0ba433183e130b1b5681ac5990af11b123818f73a5",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Use case: photorealistic-natural. Asset type: original seamless diffuse albedo ground texture for realistic miniature tropical alien jungle terrain. Strict vertical overhead orthographic macro photograph of a 40 centimetre square surface, edge to edge, evenly lit neutral diffuse light. No directional shadows, specular highlights, vignette, perspective, depth of field, text or grid. Fine natural irregular detail, tileable edges, no obvious repeated motif or symmetry. Compacted damp tropical humus, deep muted umber and warm charcoal-brown earth, fine decomposed organic grains, tiny thin root fibres and occasional gritty mineral flecks. Mostly quiet exposed soil with gentle irregular moisture variation. No puddles or standing water, no cracks, no large stones or leaves, no plants, no grass carpet. Detailed matte diffuse colour only, not a black featureless surface.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-21",
+      "runtime_file": "damp-humus.webp",
+      "runtime_sha256": "4990600c707335199f6e0a87c078cf1f7eba3d17eaae5ec5d67d51603a3dee89",
+      "processing": "Original 1024-square PNG converted to WebP quality90. Runtime mipmaps; independently rotated and offset patch sampling without reflection."
+    },
+    {
+      "file": "jungle-litter.png",
+      "sha256": "543beef29739b455d7478541bb00c68561ecee8a0372465f987dca32e7146ebd",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Use case: photorealistic-natural. Asset type: original seamless diffuse albedo ground texture for realistic miniature tropical alien jungle terrain. Strict vertical overhead orthographic macro photograph of a 40 centimetre square surface, edge to edge, evenly lit neutral diffuse light. No directional shadows, specular highlights, vignette, perspective, depth of field, text or grid. Fine natural irregular detail, tileable edges, no obvious repeated motif or symmetry. A thin naturally scattered layer of decaying small tropical leaves and broken leaf skeletons pressed into rich brown damp soil. Warm tobacco brown, muted russet, faded olive fragments, fine fibres and tiny twigs. Roughly half exposed fine earth. Varied irregular directions and sizes, leaves two to six centimetres, no giant whole palm fronds, no flowers, no neon, no thick overlapping pile. Flat damp leaf litter, not living vegetation.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-21",
+      "runtime_file": "jungle-litter.webp",
+      "runtime_sha256": "2a1867c3fc99ba7ea46308114086ee58b888281ec6db9ab2e7406571b14ec69c",
+      "processing": "Original 1024-square PNG converted to WebP quality90. Runtime mipmaps; independently rotated and offset patch sampling without reflection."
+    },
+    {
+      "file": "velvet-moss.png",
+      "sha256": "16e8c23aed5fa614a64821060fbdc3b57f51a02477f3ffe9b318090f95bc940f",
+      "provider": "Google Gemini API",
+      "model": "gemini-2.5-flash-image",
+      "prompt": "Use case: photorealistic-natural. Asset type: original seamless diffuse albedo ground texture for realistic miniature tropical alien jungle terrain. Strict vertical overhead orthographic macro photograph of a 40 centimetre square surface, edge to edge, evenly lit neutral diffuse light. No directional shadows, specular highlights, vignette, perspective, depth of field, text or grid. Fine natural irregular detail, tileable edges, no obvious repeated motif or symmetry. Fine low tropical moss and minute liverwort colonies spreading irregularly across dark humus. Subdued deep olive and fern green, small patches of fresh yellow-green tips among muted brown bare soil. Roughly half moss and half soil, finely interwoven irregular borders. Natural tiny scale, soft dense microtexture, no huge bumpy cushions, no stones, no large leaves, no grass blades, no neon green, no visible lighting or shadows.",
+      "reference_images": [],
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Niemandsland Contributors",
+      "generation_date": "2026-09-21",
+      "runtime_file": "velvet-moss.webp",
+      "runtime_sha256": "7127bb2225d5cf641308117fc557aa766ba77d890b9efa6471a8cf45713554f9",
+      "processing": "Original 1024-square PNG converted to WebP quality90. Runtime mipmaps; independently rotated and offset patch sampling without reflection."
+    }
+  ],
+  "reused_models": "Existing jungle tree variants and carnivore plant hazard; source assets and licenses unchanged.",
+  "procedural_geometry": "Original fern, broadleaf and ground dressing code, MIT."
+}

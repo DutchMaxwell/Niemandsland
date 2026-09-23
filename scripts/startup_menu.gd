@@ -1,36 +1,12 @@
 extends Control
-## Main menu controller: command-console UI column over the live battlefield diorama
-## (MenuDiorama). Owns the entrance choreography, the CONTINUE save shortcut, the
-## menu Settings window, the network dialogs and the transition into the game scene.
+## Native menu over a live biome vignette. This controller owns existing save,
+## teaching and network routes; StartupMenuView handles grouping and layout.
 
 # === Constants ===
-
-const ORBITRON_PATH := "res://assets/ui_glassmorphism/fonts/Orbitron.ttf"
-const MONO_PATH := "res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf"
-const WORDMARK_FONT_SIZE := 46
-const WORDMARK_TRACKING_PX := 4    # Orbitron glyph tracking (editorial AAA lockup)
-const KICKER_TEXT := "TACTICAL TABLETOP WARGAMING"
-const RULE_TICK_W := 26.0          # amber tick, then a cyan hairline (header language)
-const RULE_H := 2.0
-
-## Entrance choreography (motion tokens).
-const ENTRANCE_WORDMARK_DELAY := 0.05
-const ENTRANCE_WORDMARK_S := 0.45
-const ENTRANCE_BUTTONS_START := 0.30
-const ENTRANCE_BUTTON_STAGGER := 0.06
-const ENTRANCE_SLIDE_PX := 24.0
-const ENTRANCE_FOOTER_AT := 0.60
-const ENTRANCE_TICKER_AT := 1.0
-const REDUCED_MOTION_FADE_S := 0.2
 
 const MUSIC_VOLUME_DB := -12.0
 const MUSIC_FADE_IN_S := 2.5
 
-## Hover camera reactivity (degrees of FOV bias) + idle attract mode.
-const FOV_BIAS_PUSH_IN := -2.0   # Continue/Start: lean toward the battlefield
-const FOV_BIAS_WIDE := 2.0       # Host/Join: step back for the wider table
-const ATTRACT_IDLE_S := 60.0
-const ATTRACT_FADE_S := 0.2
 ## Fail the room-list request if neither rooms nor an error arrive in this time
 ## (safety net for a relay that accepts the socket but never replies).
 const BROWSE_TIMEOUT_S := 8.0
@@ -39,30 +15,27 @@ const BROWSE_TIMEOUT_S := 8.0
 const JOIN_CODE_LEN := 6
 
 
-# === Node references ===
-
+# === Native menu view and preserved game routes ===
+const MenuView = preload("res://scripts/startup_menu_view.gd")
 @onready var diorama: MenuDiorama = %Diorama
-@onready var logo_label: Label = %LogoLabel
-@onready var subtitle_label: Label = %SubtitleLabel
-@onready var menu_buttons: VBoxContainer = %MenuButtons
-@onready var continue_btn: MenuListButton = %ContinueBtn
-@onready var start_battle_btn: MenuListButton = %StartBattleBtn
-@onready var tutorial_btn: MenuListButton = %TutorialBtn
-@onready var spielschule_btn: MenuListButton = %SpielschuleBtn
-@onready var host_online_btn: MenuListButton = %HostOnlineBtn
-@onready var join_online_btn: MenuListButton = %JoinOnlineBtn
-@onready var browse_online_btn: MenuListButton = %BrowseOnlineBtn
-@onready var load_battle_btn: MenuListButton = %LoadBattleBtn
-@onready var report_problem_btn: MenuListButton = %ReportProblemBtn
-@onready var credits_btn: MenuListButton = %CreditsBtn
-@onready var exit_game_btn: MenuListButton = %ExitGameBtn
-@onready var ticker: MenuTicker = %Ticker
-@onready var version_label: Label = %VersionLabel
-@onready var build_label: Label = %BuildLabel
+var view: Control
+var _settings: Window
+var _table_setup: TableSizeDialog
+var _transitioning := false
+var continue_btn: Button
+var start_battle_btn: Button
+var tutorial_btn: Button
+var spielschule_btn: Button
+var host_online_btn: Button
+var join_online_btn: Button
+var browse_online_btn: Button
+var load_battle_btn: Button
+var report_problem_btn: Button
+var credits_btn: Button
+var exit_game_btn: Button
 
 # === Private variables ===
 
-var animation_played: bool = false
 var _load_dialog: FileDialog
 var _host_popup: AcceptDialog
 var _join_popup: AcceptDialog
@@ -80,41 +53,39 @@ var _browse_url_input: LineEdit
 var _browse_rooms_vbox: VBoxContainer
 var _browse_lobby: InternetLobby
 var _browse_request_gen: int = 0  # invalidates a stale request's timeout/reply
-var _wordmark_box: HBoxContainer
-var _wordmark_lockup: VBoxContainer
-var _loading_overlay: LoadingOverlay = null
 var _continue_path := ""
 var _music_player: AudioStreamPlayer = null
-var _idle_timer: Timer = null
-var _attract_active := false
 
 # === Lifecycle ===
 
 func _ready() -> void:
-	# First log line of every session: the version AND the build hash baked at export time.
-	# The version string alone can be right while the packed bytecode is stale, so the hash is
-	# the only way to prove the running binary matches a given commit (defaults to "local-dev"
-	# for editor/source runs where no export-time hash was injected).
-	print("[Boot] Niemandsland %s build %s" % [
-		ProjectSettings.get_setting("application/config/version", "?"),
-		ProjectSettings.get_setting("application/config/build_hash", "local-dev"),
-	])
-
-	# Check if an .nml file was passed via command-line (e.g. double-click in file manager)
+	# Keep Godot's built-in dialog controls in the game's English UI language too.
+	TranslationServer.set_locale("en")
+	print("[Boot] Niemandsland %s build %s" % [ProjectSettings.get_setting("application/config/version","?"),ProjectSettings.get_setting("application/config/build_hash","local-dev")])
 	var file_to_open := _get_save_from_cmdline()
 	if not file_to_open.is_empty():
-		ProjectSettings.set_setting("niemandsland/pending_load_path", file_to_open)
+		ProjectSettings.set_setting("niemandsland/pending_load_path",file_to_open)
 		get_tree().change_scene_to_file("res://scenes/main.tscn")
 		return
-
 	theme = ThemeManager.get_current_theme()
-
-	_build_wordmark()
-	_style_subtitle()
-	_bind_version()
-	_setup_continue_button()
-	_build_post_layers()
-
+	view = MenuView.new()
+	view.name = "SafeArea"
+	add_child(view)
+	continue_btn = view.buttons.ContinueBtn
+	start_battle_btn = view.buttons.StartBattleBtn
+	tutorial_btn = view.buttons.TutorialBtn
+	spielschule_btn = view.buttons.SpielschuleBtn
+	host_online_btn = view.buttons.HostOnlineBtn
+	join_online_btn = view.buttons.JoinOnlineBtn
+	browse_online_btn = view.buttons.BrowseOnlineBtn
+	load_battle_btn = view.buttons.LoadBattleBtn
+	report_problem_btn = view.buttons.ReportProblemBtn
+	credits_btn = view.buttons.CreditsBtn
+	exit_game_btn = view.buttons.ExitGameBtn
+	var save := SaveManager.latest_save_info()
+	_continue_path = str(save.get("path",""))
+	view.set_save(save)
+	view.version.text = "Fan project for OnePageRules     " + version_string()
 	continue_btn.pressed.connect(_on_continue_pressed)
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	tutorial_btn.pressed.connect(_on_tutorial_pressed)
@@ -126,119 +97,58 @@ func _ready() -> void:
 	report_problem_btn.pressed.connect(_on_report_problem_pressed)
 	credits_btn.pressed.connect(_on_credits_pressed)
 	exit_game_btn.pressed.connect(_on_exit_pressed)
-	exit_game_btn.accent_color = HudTokens.DANGER
-	exit_game_btn.add_theme_color_override("font_color", HudTokens.DANGER)
-
-	_renumber_buttons()
-	_setup_focus_chain()
-	_setup_camera_reactivity()
-	_setup_attract_mode()
-	_start_menu_music()
-	_play_startup_animation()
-	_maybe_check_for_updates()
-	_maybe_show_spielschule_hint()
-	if get_tree().current_scene == self:
-		start_battle_btn.grab_focus.call_deferred()
-
-# === Entrance choreography ===
-
-func _play_startup_animation() -> void:
-	if animation_played:
-		_wordmark_lockup.modulate.a = 1.0
-		return
-	animation_played = true
-
-	# Black cover with a loading indicator over EVERYTHING while the diorama parses its
-	# 3D models. Hold it until diorama_ready, then fade the finished scene in — nothing
-	# pops or stutters in view; the bar's continuous fill communicates the app is alive.
-	_loading_overlay = LoadingOverlay.new()
-	add_child(_loading_overlay)
-	_loading_overlay.set_label("PREPARING BATTLEFIELD")
+	view.buttons.SettingsBtn.pressed.connect(_on_settings_pressed)
+	view.buttons.HelpTutorialBtn.pressed.connect(_on_tutorial_pressed)
 	diorama.loading_progress.connect(_on_diorama_loading)
-	diorama.diorama_ready.connect(_on_diorama_ready, CONNECT_ONE_SHOT)
+	diorama.diorama_ready.connect(_on_diorama_ready)
 	diorama.rebuild_started.connect(_on_diorama_rebuild_started)
-
-	# Hide the to-be-revealed UI until the cover fades (so nothing shows behind it).
-	_wordmark_lockup.modulate.a = 0.0
-	for btn: Button in _visible_menu_buttons():
-		btn.modulate.a = 0.0
-	$FooterLeft.modulate.a = 0.0
-	ticker.modulate.a = 0.0
-
-
-## Feed the diorama's build progress into the loading bar (label stays static; the
-## continuous fill conveys progress).
-func _on_diorama_loading(_label: String, ratio: float) -> void:
-	if is_instance_valid(_loading_overlay):
-		_loading_overlay.set_progress(ratio)
+	diorama.lighting_changed.connect(func(controller: Node) -> void:
+		if is_instance_valid(_settings):
+			_settings.lighting_controller = controller)
+	_start_menu_music()
+	_maybe_check_for_updates()
+	if get_tree().current_scene == self:
+		(continue_btn if continue_btn.visible else start_battle_btn).grab_focus.call_deferred()
 
 
-## A LIVE quality switch (Performance -> higher) rebuilds the whole diorama — the
-## heavy build would freeze the visible menu with no feedback. Cover it with the
-## same loading overlay as the initial start, dismissed on diorama_ready.
+func _on_diorama_loading(label: String, ratio: float) -> void:
+	view.status.text = "%s … %d %%" % [label,roundi(ratio*100)]
+
+
 func _on_diorama_rebuild_started() -> void:
-	if is_instance_valid(_loading_overlay):
-		return  # initial-start cover is already up
-	_loading_overlay = LoadingOverlay.new()
-	add_child(_loading_overlay)
-	_loading_overlay.set_label("PREPARING BATTLEFIELD")
-	diorama.diorama_ready.connect(func() -> void:
-		if is_instance_valid(_loading_overlay):
-			_loading_overlay.set_progress(1.0)
-			_loading_overlay.fade_and_free(), CONNECT_ONE_SHOT)
+	view.status.text = "Preparing background …"
 
 
 func _on_diorama_ready() -> void:
-	if is_instance_valid(_loading_overlay):
-		_loading_overlay.set_progress(1.0)
-		await get_tree().create_timer(0.35, true).timeout  # let the fill ease to full
-		if is_instance_valid(_loading_overlay):
-			_loading_overlay.fade_and_free()
-
-	if GraphicsSettings.reduce_motion:
-		for node in [_wordmark_lockup, $FooterLeft, ticker]:
-			node.modulate.a = 1.0
-		for btn: Button in _visible_menu_buttons():
-			btn.modulate.a = 1.0
-		ticker.start()
-		return
-	_play_entrance()
+	view.status.text = ""
+	if is_instance_valid(_settings):
+		_settings.lighting_controller = diorama.get_lighting_controller()
+		_settings._sync_ui_from_controller()
 
 
-## The staggered reveal (wordmark, buttons, footer, ticker), played after the cover fade.
-func _play_entrance() -> void:
-	# Wordmark power-on (whole lockup: kicker, wordmark, rule).
-	_wordmark_lockup.modulate.a = 0.0
-	_wordmark_lockup.scale = Vector2(0.92, 0.92)
-	var word := create_tween()
-	word.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	word.tween_interval(ENTRANCE_WORDMARK_DELAY)
-	word.tween_property(_wordmark_lockup, "modulate:a", 1.0, ENTRANCE_WORDMARK_S)
-	word.parallel().tween_property(_wordmark_lockup, "scale", Vector2.ONE, ENTRANCE_WORDMARK_S)
+func _on_settings_pressed() -> void:
+	view.close_route()
+	if not is_instance_valid(_settings):
+		_settings = Window.new()
+		_settings.set_script(load("res://scripts/lighting_panel.gd"))
+		add_child(_settings)
+		_settings.initialize(diorama.get_lighting_controller())
+		_settings.title = "Settings"
+		var label := Label.new()
+		label.text = "Menu background"
+		_settings._main_vbox.add_child(label)
+		var choices := OptionButton.new()
+		for title in ["Urban ruins","Alien jungle","Grassland","Arid desert","Frozen tundra","Volcanic ash"]:
+			choices.add_item(title)
+		choices.select(MenuDiorama.Battlefield.BIOMES.find(diorama.biome))
+		_settings._main_vbox.add_child(choices)
+		choices.item_selected.connect(func(index: int) -> void:
+			diorama.set_biome(MenuDiorama.Battlefield.BIOMES[index])
+			var config := ConfigFile.new()
+			config.set_value("menu","biome",diorama.biome)
+			config.save("user://menu.cfg"))
+	_settings.popup_centered()
 
-	# Buttons cascade in from the left.
-	var visible_buttons := _visible_menu_buttons()
-	for i in visible_buttons.size():
-		var btn := visible_buttons[i]
-		btn.modulate.a = 0.0
-		var slide := create_tween()
-		slide.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-		slide.tween_interval(ENTRANCE_BUTTONS_START + i * ENTRANCE_BUTTON_STAGGER)
-		slide.tween_property(btn, "modulate:a", 1.0, HudTokens.DUR_PANEL_IN)
-		btn.position.x = -ENTRANCE_SLIDE_PX  # containers re-layout next frame; offset via margin
-		slide.parallel().tween_property(btn, "position:x", 0.0, HudTokens.DUR_PANEL_IN)
-
-	# Footer + ticker beats.
-	for footer in [$FooterLeft]:
-		footer.modulate.a = 0.0
-		var fade := create_tween()
-		fade.tween_interval(ENTRANCE_FOOTER_AT)
-		fade.tween_property(footer, "modulate:a", 1.0, HudTokens.DUR_PANEL_IN)
-	ticker.modulate.a = 0.0
-	var ticker_in := create_tween()
-	ticker_in.tween_interval(ENTRANCE_TICKER_AT)
-	ticker_in.tween_property(ticker, "modulate:a", 1.0, HudTokens.DUR_PANEL_IN)
-	ticker_in.tween_callback(ticker.start)
 
 # === Button handlers ===
 
@@ -250,7 +160,37 @@ func _on_continue_pressed() -> void:
 
 
 func _on_start_battle_pressed() -> void:
+	_show_table_setup()
+
+
+func _show_table_setup(host_settings: Dictionary = {}) -> void:
+	if is_instance_valid(_table_setup):
+		return
+	_table_setup = TableSizeDialog.new()
+	add_child(_table_setup)
+	_table_setup.set_biomes(MenuDiorama.Battlefield.BIOMES,diorama.biome)
+	_table_setup.size_chosen.connect(_on_table_setup_chosen.bind(host_settings))
+	_table_setup.cancelled.connect(_on_table_setup_cancelled)
+	view.hide()
+	_table_setup.popup()
+
+
+func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> void:
+	ProjectSettings.set_setting("niemandsland/pending_table_setup",{"size":size_feet,"biome":_table_setup.selected_biome})
+	for key in host_settings:
+		ProjectSettings.set_setting(key,host_settings[key])
+	_table_setup.hide()
+	_table_setup.queue_free()
+	_table_setup = null
 	_transition_to_game()
+
+
+func _on_table_setup_cancelled() -> void:
+	_table_setup.queue_free()
+	_table_setup = null
+	view.show()
+	start_battle_btn.grab_focus()
+
 
 
 ## TUTORIAL pressed: first-timers go straight in (assessment + full track); once any
@@ -285,7 +225,7 @@ func _launch_tutorial(lesson_id: String) -> void:
 func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Tutorial"
-	dialog.ok_button_text = "CLOSE"
+	dialog.ok_button_text = "Close"
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
 
@@ -338,8 +278,8 @@ func _on_spielschule_pressed() -> void:
 	progress.load_from_disk()
 
 	var dialog := AcceptDialog.new()
-	dialog.title = "FEUERTAUFE"
-	dialog.ok_button_text = "CLOSE"
+	dialog.title = "TRIAL BY FIRE"
+	dialog.ok_button_text = "Close"
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
@@ -407,30 +347,6 @@ func _launch_scenario(chapter: Dictionary) -> void:
 	_transition_to_game()
 
 
-## One-time, dismissible pointer to the new GAME SCHOOL entry (mission part C). Persists a "seen"
-## flag BEFORE showing, so a decline (or quitting without pressing OK) never nags again. Guarded to
-## the live main scene only — gdUnit's scene_runner mounts the menu under /root (not as current_scene),
-## so tests never pop it (same guard as the update check + attract mode).
-func _maybe_show_spielschule_hint() -> void:
-	if get_tree().current_scene != self:
-		return
-	var progress := SpielschuleProgress.new()
-	progress.load_from_disk()
-	if progress.hint_seen():
-		return
-	progress.set_hint_seen(true)
-	progress.save_to_disk()
-
-	var dialog := AcceptDialog.new()
-	dialog.title = "New: FEUERTAUFE"
-	dialog.dialog_text = "New here? FEUERTAUFE walks you through the game in short, replayable lessons.\n\nFind it in the menu whenever you like."
-	dialog.ok_button_text = "GOT IT"
-	add_child(dialog)
-	dialog.popup_centered()
-	dialog.confirmed.connect(dialog.queue_free)
-	dialog.canceled.connect(dialog.queue_free)
-
-
 func _on_load_battle_pressed() -> void:
 	_open_load_battle_dialog()
 
@@ -456,7 +372,7 @@ func _on_report_problem_pressed() -> void:
 ## not only in the repo docs. Full text lives in THIRD_PARTY.md.
 func _on_credits_pressed() -> void:
 	var dialog := AcceptDialog.new()
-	dialog.title = "Credits & Licenses"
+	dialog.title = "Credits & licenses"
 	# As plain dialog_text these ~12 licence lines size the window themselves, with nothing
 	# stopping it (and its OK button) from growing past a small screen. A scrolled body with a
 	# FIXED viewport is the clamp here: an AcceptDialog wraps its contents (wrap_controls), so
@@ -498,10 +414,10 @@ func _on_exit_pressed() -> void:
 	if is_instance_valid(_exit_confirm):
 		return
 	_exit_confirm = ConfirmationDialog.new()
-	_exit_confirm.title = "Exit game"
-	_exit_confirm.dialog_text = "Quit Niemandsland?"
-	_exit_confirm.ok_button_text = "QUIT"
-	_exit_confirm.cancel_button_text = "CANCEL"
+	_exit_confirm.title = "Quit Niemandsland"
+	_exit_confirm.dialog_text = "Are you sure you want to quit Niemandsland?"
+	_exit_confirm.ok_button_text = "Quit"
+	_exit_confirm.cancel_button_text = "Back"
 	_exit_confirm.confirmed.connect(func() -> void: get_tree().quit())
 	_exit_confirm.canceled.connect(_exit_confirm.queue_free)
 	add_child(_exit_confirm)
@@ -614,21 +530,21 @@ func _on_join_online_pressed() -> void:
 func _show_host_popup() -> void:
 	if _host_popup:
 		_host_popup.queue_free()
-	_host_popup = NetDialog.build("HOST ONLINE GAME", "NET-01", "Start Hosting")
+	_host_popup = NetDialog.build("Create a room", "NET-01", "Prepare table")
 
 	var content := NetDialog.content(_host_popup)
-	content.add_child(NetDialog.label("Player Name:"))
-	_host_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	content.add_child(NetDialog.label("Your name:"))
+	_host_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	_host_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_host_name_input)
-	content.add_child(NetDialog.label("Relay Server URL:"))
+	content.add_child(NetDialog.label("Relay server:"))
 	_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_relay_url_input)
 	_host_public_check = CheckBox.new()
-	_host_public_check.text = "List this room publicly (Browse Online Games)"
-	_host_public_check.focus_mode = Control.FOCUS_NONE
+	_host_public_check.text = "List room publicly"
+	_host_public_check.focus_mode = Control.FOCUS_ALL
 	content.add_child(_host_public_check)
-	var info := NetDialog.label("The room code will be shown in-game after connecting.")
+	var info := NetDialog.label("Your invitation code appears once you connect at the table.")
 	info.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	content.add_child(info)
@@ -648,26 +564,28 @@ func _on_host_confirmed() -> void:
 	var player_name := PlayerIdentity.sanitize(_host_name_input.text)
 	PlayerIdentity.save_name(player_name)
 
-	# Pass settings to main scene — connection happens there
-	ProjectSettings.set_setting("niemandsland/pending_internet_lobby", true)
-	ProjectSettings.set_setting("niemandsland/internet_is_host", true)
-	ProjectSettings.set_setting("niemandsland/internet_relay_url", url)
-	ProjectSettings.set_setting("niemandsland/player_name", player_name)
-	ProjectSettings.set_setting("niemandsland/internet_public", _host_public_check.button_pressed)
-	_transition_to_game()
+	# Hosting only begins after Create table. Back leaves no pending network state.
+	_host_popup.hide()
+	_show_table_setup({
+		"niemandsland/pending_internet_lobby":true,
+		"niemandsland/internet_is_host":true,
+		"niemandsland/internet_relay_url":url,
+		"niemandsland/player_name":player_name,
+		"niemandsland/internet_public":_host_public_check.button_pressed})
+
 
 
 func _show_join_popup() -> void:
 	if _join_popup:
 		_join_popup.queue_free()
-	_join_popup = NetDialog.build("JOIN ONLINE GAME", "NET-02", "Join")
+	_join_popup = NetDialog.build("Join with a code", "NET-02", "Join")
 
 	var content := NetDialog.content(_join_popup)
-	content.add_child(NetDialog.label("Player Name:"))
-	_join_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	content.add_child(NetDialog.label("Your name:"))
+	_join_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	_join_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_join_name_input)
-	content.add_child(NetDialog.label("Room Code:"))
+	content.add_child(NetDialog.label("Invitation code:"))
 	_join_code_input = NetDialog.line_edit("", "ABC-123")
 	_join_code_input.max_length = 7  # 6 chars + optional hyphen
 	_join_code_input.add_theme_font_size_override("font_size", 24)
@@ -683,7 +601,7 @@ func _show_join_popup() -> void:
 	# Editing the code is the fix for the message, so the message must not outlive the edit.
 	_join_code_input.text_changed.connect(func(_new_text: String) -> void:
 		_join_error_label.visible = false)
-	content.add_child(NetDialog.label("Relay Server URL:"))
+	content.add_child(NetDialog.label("Relay server:"))
 	_join_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_join_relay_url_input)
 
@@ -705,10 +623,10 @@ func _show_join_popup() -> void:
 func _on_join_confirmed() -> void:
 	var code = _join_code_input.text.strip_edges().replace("-", "").to_upper()
 	if code.is_empty():
-		_show_join_error("Enter the room code the host gave you.")
+		_show_join_error("Enter your game’s invitation code.")
 		return
 	if code.length() != JOIN_CODE_LEN:
-		_show_join_error("A room code has %d characters, like ABC-123." % JOIN_CODE_LEN)
+		_show_join_error("An invitation code has %d characters, for example ABC-123." % JOIN_CODE_LEN)
 		return
 	var url = _join_relay_url_input.text.strip_edges()
 	if url.is_empty():
@@ -749,20 +667,20 @@ func _on_browse_online_pressed() -> void:
 func _show_browse_popup() -> void:
 	if _browse_popup:
 		_browse_popup.queue_free()
-	_browse_popup = NetDialog.build("BROWSE ONLINE GAMES", "NET-03", "Close")
+	_browse_popup = NetDialog.build("Public tables", "NET-03", "Close")
 
 	var content := NetDialog.content(_browse_popup)
-	content.add_child(NetDialog.label("Player Name:"))
-	_browse_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Your name")
+	content.add_child(NetDialog.label("Your name:"))
+	_browse_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	_browse_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_browse_name_input)
-	content.add_child(NetDialog.label("Relay Server URL:"))
+	content.add_child(NetDialog.label("Relay server:"))
 	_browse_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_browse_url_input)
 
 	var refresh_btn := Button.new()
 	refresh_btn.text = "Refresh list"
-	refresh_btn.focus_mode = Control.FOCUS_NONE
+	refresh_btn.focus_mode = Control.FOCUS_ALL
 	refresh_btn.pressed.connect(_refresh_browse_list)
 	content.add_child(refresh_btn)
 
@@ -879,6 +797,10 @@ func _set_browse_status(text: String) -> void:
 # ===== Shared =====
 
 func _transition_to_game() -> void:
+	if _transitioning:
+		return
+	_transitioning = true
+	view.hide()
 	const GAME_SCENE := "res://scenes/main.tscn"
 	# Black loading overlay added to the SceneTree root so it survives the scene swap
 	# (no grey flash). The game scene takes a few seconds to load; show the bar against
@@ -912,10 +834,10 @@ func _open_load_battle_dialog() -> void:
 		_load_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 		_load_dialog.access = FileDialog.ACCESS_FILESYSTEM
 		_load_dialog.filters = PackedStringArray(["*.nml ; Niemandsland Save Files"])
-		_load_dialog.title = "Load Battle"
+		_load_dialog.title = "Load game"
 		# FileDialog derives its OK label from file_mode and takes both button labels from
 		# Godot's own translations, i.e. from the SYSTEM language — on a German Windows the
-		# only English-only UI in the game would suddenly read "Öffnen"/"Abbrechen". Pin them
+		# English-only UI would otherwise show localized Open/Cancel labels. Pin them
 		# explicitly, AFTER file_mode (set_file_mode rewrites ok_button_text).
 		_load_dialog.ok_button_text = "Open"
 		_load_dialog.cancel_button_text = "Cancel"
@@ -953,30 +875,19 @@ func _get_save_from_cmdline() -> String:
 	return ""
 
 
-func _input(event: InputEvent) -> void:
-	_register_activity(event)
-	if event is InputEventKey and event.pressed and not event.echo:
-		# Never fire menu shortcuts while a dialog text field (name / code / URL)
-		# has focus — digits in a name like "Boss5" would otherwise trigger menu
-		# entries and Esc would quit (same LineEdit guard used in-game).
-		if get_viewport().gui_get_focus_owner() is LineEdit:
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not event is InputEventKey or not event.pressed or event.echo or _transitioning:
+		return
+	for child in get_children():
+		if child is Window and child.visible:
 			return
-		# Same reason while the quit confirmation is up: it has no text field, so without
-		# this the menu behind it would still answer number keys, and ESC would be handled
-		# twice (once by the dialog's own close).
-		if is_instance_valid(_exit_confirm) and _exit_confirm.visible:
-			return
-		if event.keycode == KEY_ESCAPE:
+	if event.keycode == KEY_ESCAPE:
+		if view.route_panel.visible:
+			view.close_route()
+		else:
 			_on_exit_pressed()
-			return
-		# Number keys press the matching visible menu entry — bound to the live
-		# on-screen index (set by _renumber_buttons), so adding/hiding entries
-		# (e.g. CONTINUE, BROWSE ONLINE GAMES) keeps keys and labels in sync.
-		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
-			var idx: int = event.keycode - KEY_1
-			var buttons := _visible_menu_buttons()
-			if idx < buttons.size():
-				buttons[idx].pressed.emit()
+		get_viewport().set_input_as_handled()
+
 
 # ===== Static (testable) =====
 
@@ -984,148 +895,6 @@ func _input(event: InputEvent) -> void:
 static func version_string() -> String:
 	return "v%s" % ProjectSettings.get_setting("application/config/version", "?")
 
-# ===== Private: build the look =====
-
-## AAA wordmark lockup replacing the plain title label: an amber mono kicker line,
-## the tracked Orbitron "NIEMANDS|LAND" wordmark, and the HudTokens header rule
-## (amber tick + cyan hairline) underneath.
-func _build_wordmark() -> void:
-	var orbitron := FontVariation.new()
-	orbitron.base_font = load(ORBITRON_PATH)
-	orbitron.variation_opentype = {"wght": 700}
-	orbitron.spacing_glyph = WORDMARK_TRACKING_PX
-
-	logo_label.visible = false
-	var lockup := VBoxContainer.new()
-	lockup.name = "WordmarkLockup"
-	lockup.add_theme_constant_override("separation", 6)
-	lockup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var kicker := Label.new()
-	kicker.text = KICKER_TEXT
-	var mono := FontVariation.new()
-	mono.base_font = load(MONO_PATH)
-	mono.spacing_glyph = 3
-	kicker.add_theme_font_override("font", mono)
-	kicker.add_theme_font_size_override("font_size", 11)
-	kicker.add_theme_color_override("font_color", HudTokens.AMBER)
-	lockup.add_child(kicker)
-
-	_wordmark_box = HBoxContainer.new()
-	_wordmark_box.name = "Wordmark"
-	_wordmark_box.alignment = BoxContainer.ALIGNMENT_BEGIN
-	_wordmark_box.add_theme_constant_override("separation", 2)
-	_wordmark_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_wordmark_box.add_child(_make_word("NIEMANDS", orbitron, HudTokens.TEXT, false))
-	_wordmark_box.add_child(_make_word("LAND", orbitron, HudTokens.CYAN, true))
-	lockup.add_child(_wordmark_box)
-
-	# Header rule: amber tick -> cyan hairline (the established section language).
-	var rule := HBoxContainer.new()
-	rule.add_theme_constant_override("separation", 6)
-	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tick := ColorRect.new()
-	tick.color = HudTokens.AMBER
-	tick.custom_minimum_size = Vector2(RULE_TICK_W, RULE_H)
-	tick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	rule.add_child(tick)
-	var hairline := ColorRect.new()
-	hairline.color = Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.45)
-	hairline.custom_minimum_size = Vector2(0, 1)
-	hairline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hairline.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	rule.add_child(hairline)
-	lockup.add_child(rule)
-
-	var parent := logo_label.get_parent()
-	parent.add_child(lockup)
-	parent.move_child(lockup, logo_label.get_index())
-	_wordmark_lockup = lockup
-
-
-func _make_word(word: String, font: FontVariation, color: Color, glow: bool) -> Label:
-	var label := Label.new()
-	label.text = word
-	label.add_theme_font_override("font", font)
-	label.add_theme_font_size_override("font_size", WORDMARK_FONT_SIZE)
-	label.add_theme_color_override("font_color", color)
-	if glow:
-		# Soft "bloom" approximated with a large, offset-less shadow outline.
-		label.add_theme_color_override("font_shadow_color", Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.85))
-		label.add_theme_constant_override("shadow_offset_x", 0)
-		label.add_theme_constant_override("shadow_offset_y", 0)
-		label.add_theme_constant_override("shadow_outline_size", 28)
-		label.add_theme_color_override("font_outline_color", Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.5))
-		label.add_theme_constant_override("outline_size", 2)
-	else:
-		label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.55))
-		label.add_theme_constant_override("shadow_offset_y", 3)
-	return label
-
-
-func _style_subtitle() -> void:
-	subtitle_label.add_theme_font_size_override("font_size", 13)
-	subtitle_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
-
-
-## Footer version/build lines, bound to the project config (never hardcoded).
-func _bind_version() -> void:
-	var mono := FontVariation.new()
-	mono.base_font = load(MONO_PATH)
-	for label: Label in [version_label, build_label]:
-		label.add_theme_font_override("font", mono)
-		label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
-	version_label.add_theme_font_size_override("font_size", 12)
-	build_label.add_theme_font_size_override("font_size", 10)
-	version_label.text = version_string()
-	var engine: Dictionary = Engine.get_version_info()
-	build_label.text = "GODOT %d.%d · %s" % [engine["major"], engine["minor"], OS.get_name().to_upper()]
-
-
-## CONTINUE shows only when a save exists; it loads the newest one directly.
-func _setup_continue_button() -> void:
-	var info := SaveManager.latest_save_info()
-	if info.is_empty():
-		continue_btn.visible = false
-		return
-	_continue_path = info["path"]
-	var stamp: Dictionary = Time.get_datetime_dict_from_unix_time(info["modified_unix"])
-	continue_btn.text = "CONTINUE — %s · %02d.%02d.%04d" % [
-		str(info["name"]).to_upper(), stamp["day"], stamp["month"], stamp["year"]]
-	continue_btn.accent_color = HudTokens.AMBER
-	continue_btn.add_theme_color_override("font_color", HudTokens.AMBER)
-	continue_btn.visible = true
-
-
-## Mono index labels ("01"...) reflect the actual visible order.
-func _renumber_buttons() -> void:
-	var visible_buttons := _visible_menu_buttons()
-	for i in visible_buttons.size():
-		visible_buttons[i].index_text = "%02d" % (i + 1)
-
-
-func _visible_menu_buttons() -> Array[MenuListButton]:
-	var result: Array[MenuListButton] = []
-	for child in menu_buttons.get_children():
-		if child is MenuListButton and child.visible:
-			result.append(child)
-	return result
-
-
-## Vertical focus chain that loops first <-> last (linear menus loop; playbook).
-func _setup_focus_chain() -> void:
-	var buttons := _visible_menu_buttons()
-	for i in buttons.size():
-		var prev := buttons[(i - 1 + buttons.size()) % buttons.size()]
-		var next := buttons[(i + 1) % buttons.size()]
-		buttons[i].focus_neighbor_top = buttons[i].get_path_to(prev)
-		buttons[i].focus_neighbor_bottom = buttons[i].get_path_to(next)
-		buttons[i].focus_next = buttons[i].get_path_to(next)
-		buttons[i].focus_previous = buttons[i].get_path_to(prev)
-
-
-## Somber menu score on the Music bus: the CC0 dark-ambient loop once cached
-## (fetched in the background on first run), the synth drone pad until then.
 func _start_menu_music() -> void:
 	_music_player = AudioStreamPlayer.new()
 	_music_player.bus = AudioManager.BUS_MUSIC
@@ -1158,79 +927,3 @@ func _fetch_menu_drone(library: AmbienceLibrary) -> void:
 	_music_player.stop()
 	_music_player.stream = stream
 	_music_player.play()
-
-
-## Hover on key entries nudges the diorama lens (push-in toward battle, step back
-## for the online/table entries) — felt rather than seen.
-func _setup_camera_reactivity() -> void:
-	var biases := {
-		continue_btn: FOV_BIAS_PUSH_IN, start_battle_btn: FOV_BIAS_PUSH_IN,
-		host_online_btn: FOV_BIAS_WIDE, join_online_btn: FOV_BIAS_WIDE,
-		browse_online_btn: FOV_BIAS_WIDE,
-	}
-	for btn: Button in biases:
-		btn.mouse_entered.connect(func() -> void: diorama.set_fov_bias(biases[btn]))
-		btn.mouse_exited.connect(func() -> void: diorama.set_fov_bias(0.0))
-
-
-## After 60 s without input the UI sleeps and the camera tours the battlefield;
-## any input wakes the menu instantly. Skipped under Reduce Motion.
-func _setup_attract_mode() -> void:
-	if GraphicsSettings.reduce_motion or get_tree().current_scene != self:
-		return
-	_idle_timer = Timer.new()
-	_idle_timer.one_shot = true
-	_idle_timer.wait_time = ATTRACT_IDLE_S
-	_idle_timer.timeout.connect(_enter_attract)
-	add_child(_idle_timer)
-	_idle_timer.start()
-
-
-func _register_activity(_event: InputEvent) -> void:
-	if _idle_timer == null:
-		return
-	if _attract_active:
-		_exit_attract()
-	_idle_timer.start()  # restart the idle countdown
-
-
-func _enter_attract() -> void:
-	_attract_active = true
-	diorama.set_attract(true)
-	for layer in _ui_layers():
-		var fade := create_tween()
-		fade.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
-		fade.tween_property(layer, "modulate:a", 0.0, 1.2)
-
-
-func _exit_attract() -> void:
-	_attract_active = false
-	diorama.set_attract(false)
-	for layer in _ui_layers():
-		var fade := create_tween()
-		fade.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-		fade.tween_property(layer, "modulate:a", 1.0, ATTRACT_FADE_S)
-
-
-func _ui_layers() -> Array:
-	return [$SafeArea, $FooterLeft, $Scrim]
-
-
-## Web-safe post layers on top: vignette + film grain (UV/TIME shaders only).
-func _build_post_layers() -> void:
-	_add_fullscreen_shader("Vignette", "res://shaders/menu_vignette.gdshader")
-	_add_fullscreen_shader("Grain", "res://shaders/menu_grain.gdshader")
-
-
-func _add_fullscreen_shader(node_name: String, shader_path: String) -> void:
-	var rect := ColorRect.new()
-	rect.name = node_name
-	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var mat := ShaderMaterial.new()
-	mat.shader = load(shader_path)
-	rect.material = mat
-	add_child(rect)
-	# Cinematic post FX belongs on the DIORAMA, not on the UI text: slot the rect
-	# below SafeArea (above diorama + scrim), keeping wordmark/buttons/ticker crisp.
-	move_child(rect, get_node("SafeArea").get_index())

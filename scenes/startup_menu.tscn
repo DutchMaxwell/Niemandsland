@@ -1,14 +1,9 @@
-[gd_scene load_steps=7 format=3 uid="uid://startup_menu_001"]
-
-[ext_resource type="Script" path="res://scripts/startup_menu.gd" id="1_startup"]
-[ext_resource type="Script" path="res://scripts/menu_diorama.gd" id="2_diorama"]
-[ext_resource type="Script" path="res://scripts/menu_list_button.gd" id="3_listbtn"]
-[ext_resource type="Script" path="res://scripts/menu_ticker.gd" id="4_ticker"]
-[ext_resource type="Shader" path="res://shaders/menu_scrim.gdshader" id="5_scrim"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_scrim"]
-shader = ExtResource("5_scrim")
-
+[gd_scene load_steps=5 format=3 uid="uid://startup_menu_001"]
+[ext_resource type="Script" path="res://scripts/startup_menu.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/menu_diorama.gd" id="2"]
+[ext_resource type="Shader" path="res://shaders/menu_scrim.gdshader" id="3"]
+[sub_resource type="ShaderMaterial" id="Scrim"]
+shader = ExtResource("3")
 [node name="StartupMenu" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -16,8 +11,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_startup")
-
+script = ExtResource("1")
 [node name="Diorama" type="SubViewportContainer" parent="."]
 unique_name_in_owner = true
 layout_mode = 1
@@ -27,8 +21,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-script = ExtResource("2_diorama")
-
+script = ExtResource("2")
 [node name="Scrim" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -37,150 +30,4 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-material = SubResource("ShaderMaterial_scrim")
-
-[node name="SafeArea" type="MarginContainer" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-theme_override_constants/margin_left = 48
-theme_override_constants/margin_top = 48
-theme_override_constants/margin_right = 48
-theme_override_constants/margin_bottom = 64
-
-[node name="Columns" type="HBoxContainer" parent="SafeArea"]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="LeftColumn" type="VBoxContainer" parent="SafeArea/Columns"]
-custom_minimum_size = Vector2(420, 0)
-layout_mode = 2
-size_flags_horizontal = 0
-mouse_filter = 2
-
-[node name="LogoLabel" type="Label" parent="SafeArea/Columns/LeftColumn"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "NIEMANDSLAND"
-
-[node name="SubtitleLabel" type="Label" parent="SafeArea/Columns/LeftColumn"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "A Fan-Made Tabletop Simulator for OnePageRules Game Systems"
-autowrap_mode = 3
-
-[node name="SpacerTop" type="Control" parent="SafeArea/Columns/LeftColumn"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-mouse_filter = 2
-
-[node name="MenuButtons" type="VBoxContainer" parent="SafeArea/Columns/LeftColumn"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="ContinueBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-text = "CONTINUE"
-script = ExtResource("3_listbtn")
-
-[node name="StartBattleBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "START NEW BATTLE"
-script = ExtResource("3_listbtn")
-
-[node name="TutorialBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "TUTORIAL (KLASSISCH)"
-script = ExtResource("3_listbtn")
-
-[node name="SpielschuleBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "FEUERTAUFE (IN ARBEIT)"
-script = ExtResource("3_listbtn")
-
-[node name="HostOnlineBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "HOST ONLINE GAME"
-script = ExtResource("3_listbtn")
-
-[node name="JoinOnlineBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "JOIN ONLINE GAME"
-script = ExtResource("3_listbtn")
-
-[node name="BrowseOnlineBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "BROWSE ONLINE GAMES"
-script = ExtResource("3_listbtn")
-
-[node name="LoadBattleBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "LOAD BATTLE"
-script = ExtResource("3_listbtn")
-
-[node name="ReportProblemBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "REPORT A PROBLEM"
-script = ExtResource("3_listbtn")
-
-[node name="CreditsBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "CREDITS & LICENSES"
-script = ExtResource("3_listbtn")
-
-[node name="ExitGameBtn" type="Button" parent="SafeArea/Columns/LeftColumn/MenuButtons"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "EXIT GAME"
-script = ExtResource("3_listbtn")
-
-[node name="SpacerBottom" type="Control" parent="SafeArea/Columns/LeftColumn"]
-layout_mode = 2
-size_flags_vertical = 3
-mouse_filter = 2
-
-[node name="Ticker" type="Label" parent="SafeArea/Columns/LeftColumn"]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("4_ticker")
-
-[node name="ColumnSpacer" type="Control" parent="SafeArea/Columns"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-
-[node name="FooterLeft" type="VBoxContainer" parent="."]
-layout_mode = 1
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 48.0
-offset_top = -52.0
-offset_bottom = -16.0
-grow_vertical = 0
-mouse_filter = 2
-
-[node name="VersionLabel" type="Label" parent="FooterLeft"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="BuildLabel" type="Label" parent="FooterLeft"]
-unique_name_in_owner = true
-layout_mode = 2
-
+material = SubResource("Scrim")

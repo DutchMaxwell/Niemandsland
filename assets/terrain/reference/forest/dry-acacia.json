@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "url": "{cdn}/acda4838768d9375e3025e0335965f8d5ef1e44f4083f74507e15862e1f53d06.glb",
+  "sha256": "acda4838768d9375e3025e0335965f8d5ef1e44f4083f74507e15862e1f53d06",
+  "size": 19198240,
+  "license": "CC-BY-SA-4.0",
+  "attribution": "Niemandsland Contributors",
+  "source": "Original text-only NanoBanana source -> project explicit-alpha white-key/deshadow -> server alpha-preserving conditioning -> TRELLIS.2 1024 reconstruction / 4096 texture",
+  "generation": {
+    "file": "dry-acacia.png",
+    "sha256": "7a0d6073f27d3e1c98043b73083be0e9408e4190d8a3a921fbe093b657371cee",
+    "model": "gemini-2.5-flash-image",
+    "prompt": "Use case: photorealistic-natural. Asset type: original isolated botanical tree photograph for 3D game reconstruction. One mature drought-weathered desert acacia, complete object on pure white studio background, full trunk and all branches in frame. A rough pale grey-brown twisted trunk divides into a few strongly unequal main limbs. Thin angular twig branches form an irregular sparse flattened umbrella crown with wide open gaps. Small scattered tufts of dusty olive-grey tiny compound leaves occupy only the tips of some branches; more than half the fine twigs are bare. A few natural broken branches and asymmetrical growth explain the harsh dry climate. Natural full-size tree proportions, wider than tall, NOT a bonsai, NOT a round ball, NOT repeated puffy clumps. Rich sharp bark cracks and fine woody twigs, restrained dusty colours. Soft neutral diffuse light, no directional cast shadow, no snow, no ground plane, soil clod, pot, pedestal, roots spread across ground, grass or other objects. Thin white margin all around, no labels, logos, watermarks or text. Three-quarter view from near ground height. Fully original realistic botanical form, no stylized game art.",
+    "reference_images": [],
+    "license": "CC-BY-SA-4.0",
+    "attribution": "Niemandsland Contributors",
+    "generation_date": "2026-09-21"
+  },
+  "reconstruction": {
+    "source_image": "dry-acacia.png",
+    "source_sha256": "7a0d6073f27d3e1c98043b73083be0e9408e4190d8a3a921fbe093b657371cee",
+    "preprocessing": "Existing project white-key/deshadow at threshold180; explicit alpha supplied to server alpha-preserving crop/conditioning, optional BRIA bypassed",
+    "alpha_image": "dry-acacia-keyed.png",
+    "alpha_sha256": "fcb2404534af7dd3363c9b28844a88f4866f5e42308209bb2c3685d6e3171682",
+    "conditioned_image": "dry-acacia-conditioned.png",
+    "conditioned_sha256": "dbc4c9a53b3b6f133030d3202b285ec6f4bd5834901b9f150dd0b7874e791b83",
+    "resolution": 1024,
+    "texture_size": 4096,
+    "decimation_target": 300000,
+    "seed": 1161868205,
+    "glb_file": "dry-acacia-conditioned.glb",
+    "glb_sha256": "acda4838768d9375e3025e0335965f8d5ef1e44f4083f74507e15862e1f53d06",
+    "size": 19198240
+  },
+  "processing": "Generated GLB geometry unchanged; reference-only runtime crown variation, wind and patchy snow material"
+}
