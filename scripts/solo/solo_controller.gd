@@ -500,13 +500,13 @@ static func scaled_attacks_report(member: GameUnit, profile: Dictionary,
 		sighted: int, max_models: int) -> Dictionary:
 	var copies: int = maxi(int(profile.get("count", 1)), 1)
 	if copies < max_models:
-		var bearers: int = alive_bearers_of(member, str(profile.get("name", "")))
+		var per_copy: int = maxi(int(profile.get("attacks", 0)) / copies, 0)
+		var bearers: int = alive_bearers_of(member, str(profile.get("name", "")), per_copy)
 		if bearers >= 0:
 			if bearers == 0:
 				honesty_alarm("dead-weapon volley", "%s tried to fire '%s' with zero living bearers" % [
 					member.get_name(), str(profile.get("name", ""))])
 				return {"attacks": 0, "silent": "no living bearers"}
-			var per_copy: int = maxi(int(profile.get("attacks", 0)) / copies, 0)
 			var scaled: int = per_copy * mini(bearers, sighted)
 			return {"attacks": scaled, "silent": "" if scaled > 0 else _volley_silence(sighted)}
 	var flat: int = effective_attacks(int(profile.get("attacks", 0)), sighted, max_models)
@@ -8425,7 +8425,10 @@ static func effective_attacks(base_attacks: int, alive: int, max_models: int) ->
 ## p.9) — a weapon whose bearer died must die with it, which the unit-wide alive/max ratio scaling
 ## cannot express. Returns -1 when the unit carries NO per-model loadout data at all (older saves,
 ## ad-hoc units) so the caller falls back to ratio scaling instead of silently zeroing the volley.
-static func alive_bearers_of(member: GameUnit, weapon_name: String) -> int:
+## `attacks_per_copy` >= 0 counts only copies of THAT profile (same name AND same per-weapon attacks —
+## P1: two same-name profiles each counted every bearer); an item without an attacks value still
+## matches by name, so thin per-model data never silences a volley.
+static func alive_bearers_of(member: GameUnit, weapon_name: String, attacks_per_copy: int = -1) -> int:
 	if member == null or weapon_name.is_empty():
 		return -1
 	var any_loadout := false
@@ -8441,9 +8444,15 @@ static func alive_bearers_of(member: GameUnit, weapon_name: String) -> int:
 		if not mi.is_alive:
 			continue
 		for w in weapons:
-			if w is Dictionary and str((w as Dictionary).get("name", "")) == weapon_name:
-				copies += 1
-			elif not (w is Dictionary) and "name" in w and str(w.name) == weapon_name:
+			var w_name := ""
+			var w_attacks := 0
+			if w is Dictionary:
+				w_name = str((w as Dictionary).get("name", ""))
+				w_attacks = int((w as Dictionary).get("attacks", 0))
+			elif "name" in w:
+				w_name = str(w.name)
+				w_attacks = int(w.attacks) if "attacks" in w else 0
+			if w_name == weapon_name and (attacks_per_copy < 0 or w_attacks <= 0 or w_attacks == attacks_per_copy):
 				copies += 1
 	return copies if any_loadout else -1
 
