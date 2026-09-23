@@ -128,6 +128,35 @@ func test_one_switch_drives_the_dice_and_the_tally_icons() -> void:
 	assert_that(DiceLook.current().id).is_equal(HouseStyle.DICE_LOOK)
 
 
+## The dice resting BEFORE a throw (and a shown result) keep a clear, even margin to the rim on every
+## side (maintainer 23.09.: they sat squeezed against the rim) — for 1, 6, 10 and 30 dice. The margin is
+## measured from a die's half-diagonal, since resting dice turn to a random yaw.
+func test_resting_dice_keep_an_even_margin_from_the_rim() -> void:
+	for n: int in [1, 6, 10, 30]:
+		var t := DiceTray.new()
+		t.dice_count = n
+		add_child(t)
+		auto_free(t)
+		var f := sqrt(n / 6.0)
+		t.roller_size = Vector3(maxf(12.0, 18.0 * f), 15.0, maxf(8.0, 12.0 * f))   # as main._update_dice_set
+		await get_tree().process_frame
+		var in_x := t.roller_size.x * 0.5 - DiceTray.WALL_THICKNESS * 0.5
+		var in_z := t.roller_size.z * 0.5 - DiceTray.WALL_THICKNESS * 0.5
+		var reach := DiceTray.DIE_SIZE * 0.5 * sqrt(2.0)
+		var lo := Vector2(INF, INF)
+		var hi := Vector2(-INF, -INF)
+		for d: DiceD6 in t._dice:
+			lo = lo.min(Vector2(d.position.x, d.position.z))
+			hi = hi.max(Vector2(d.position.x, d.position.z))
+		var gaps := [lo.x - reach + in_x, in_x - hi.x - reach, lo.y - reach + in_z, in_z - hi.y - reach]
+		for g: float in gaps:
+			assert_float(g).override_failure_message("%d dice: a resting die %.2f from the rim %s" % [n, g, str(gaps)]) \
+				.is_greater_equal(DiceTray.DIE_SIZE * 0.5 - 0.001)   # positions are float32
+		if n > 1:
+			assert_float(absf(gaps[0] - gaps[1]) + absf(gaps[2] - gaps[3]) + absf(gaps[0] - gaps[2])) \
+				.override_failure_message("%d dice: uneven margins %s" % [n, str(gaps)]).is_less(0.01)
+
+
 ## WCAG relative luminance / contrast ratio.
 static func _contrast(a: Color, b: Color) -> float:
 	var la := a.srgb_to_linear().get_luminance()

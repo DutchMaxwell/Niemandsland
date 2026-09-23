@@ -318,8 +318,14 @@ func test_rolls_tally_result_log_and_rerolls(timeout := 180000) -> void:
 			_main._dice_log_scroll.scroll_vertical, bar.max_value - bar.page]) \
 		.is_greater_equal(bar.max_value - bar.page - 1.0)
 
-	# The log wraps inside its card: the window never widens past today's width.
+	# The log wraps inside its card: the window never widens past today's width — not even when one roll
+	# uses all four colour tags (five tally columns beside the tray).
 	assert_float(_panel().size.x).is_less_equal(TODAY_W + 0.5)
+	var all_tags: Array[int] = [6, 5, 4, 3, 2, 1]
+	_main.dice_roller_control.show_faces(all_tags, [1, 1, 2, 3, 4, 0])
+	await _runner.simulate_frames(10)
+	assert_float(_panel().size.x).override_failure_message("five colour groups widened the window to %d" % _panel().size.x) \
+		.is_less_equal(TODAY_W + 0.5)
 	await E2EBoot.settle(get_tree())   # let the log's auto-scroll await finish before teardown
 
 

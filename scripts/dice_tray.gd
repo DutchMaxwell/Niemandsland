@@ -44,6 +44,7 @@ const WALL_THICKNESS: float = 1.5
 const SEPARATION_PASSES: int = 6  # relaxation iterations for the cosmetic de-overlap
 const PICK_RADIUS_SCALE: float = 1.4  # accept a click within 1.4x a die's on-screen half-size
 const CAMERA_MARGIN: float = 1.03     # a hair of air around the tray's rim
+const REST_MARGIN: float = 1.1        # felt between a resting die's corner and the rim (half a die)
 
 # === Private variables ===
 
@@ -340,7 +341,8 @@ func _spawn_dice(resting: bool) -> void:
 		d.size = DIE_SIZE
 		d.freeze = resting
 		_root.add_child(d)
-		var slot: Vector2 = _grid_slot(i, count)
+		# Resting dice sit inset from the rim (display only); a throw starts from the unchanged grid.
+		var slot: Vector2 = _rest_slot(i, count) if resting else _grid_slot(i, count)
 		if resting:
 			d.position = Vector3(slot.x, DIE_SIZE * 0.5 + 0.05, slot.y)
 		else:
@@ -354,10 +356,23 @@ func _spawn_dice(resting: bool) -> void:
 ## XZ grid slot of die `i` in a set of `count`: maximum spacing, spreading the
 ## grid across the full usable box footprint (shared by spawn and reroll drops).
 func _grid_slot(i: int, count: int) -> Vector2:
+	return _slot_in(i, count, roller_size.x * 0.5 - DIE_SIZE, roller_size.z * 0.5 - DIE_SIZE)
+
+
+## XZ slot of RESTING die `i` (before a throw, and a shown Quick / remote result): the same grid,
+## spread over the visible floor with REST_MARGIN of felt between every outer die and the rim on all
+## four sides (maintainer 23.09.: the resting dice looked squeezed against the rim). Display only —
+## a physics throw still starts from _grid_slot, so every throw is launched exactly as before.
+func _rest_slot(i: int, count: int) -> Vector2:
+	var reach: float = DIE_SIZE * 0.5 * sqrt(2.0) + REST_MARGIN   # half-diagonal: resting dice turn to any yaw
+	return _slot_in(i, count,
+		maxf(0.0, roller_size.x * 0.5 - WALL_THICKNESS * 0.5 - reach),
+		maxf(0.0, roller_size.z * 0.5 - WALL_THICKNESS * 0.5 - reach))
+
+
+func _slot_in(i: int, count: int, half_x: float, half_z: float) -> Vector2:
 	var cols: int = int(ceil(sqrt(float(maxi(1, count)))))
 	var rows: int = int(ceil(float(maxi(1, count)) / float(cols)))
-	var half_x: float = roller_size.x * 0.5 - DIE_SIZE
-	var half_z: float = roller_size.z * 0.5 - DIE_SIZE
 	var spacing_x: float = (2.0 * half_x / float(cols - 1)) if cols > 1 else 0.0
 	var spacing_z: float = (2.0 * half_z / float(rows - 1)) if rows > 1 else 0.0
 	var col: int = i % cols

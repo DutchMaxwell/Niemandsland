@@ -429,7 +429,7 @@ layout_mode = 2
 
 [node name="DiceRollerControl" type="SubViewportContainer" parent="UI/HUD/DiceRollerPanel/VBox/TrayCard/TrayVBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(180, 140)
+custom_minimum_size = Vector2(110, 140)
 layout_mode = 2
 size_flags_vertical = 3
 stretch = true
