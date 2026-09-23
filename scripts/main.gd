@@ -123,6 +123,7 @@ const NO_DICE_TINT := Color.TRANSPARENT      # sentinel: no colour-tag tint on a
 var _dice_collapsed: bool = false
 var _dice_collapse_button: Button = null   # the dice window's × — closes it into the tool rail
 var _tool_rail: ToolRail = null
+var _top_bar: TopBar = null
 ## Wave-2 tutorial seam (toolstrack spec §14): ONE consolidated edge for the dice-control rows —
 ## count / success / modifier / reroll / movecap. The tutorial director gates T-05 steps on it;
 ## display-consumers only, no game logic reads it back.
@@ -803,6 +804,8 @@ func _ready() -> void:
 
 	# Battle Log — after the managers + radial controller exist, wire the collector to the central seams.
 	_setup_battle_log()
+	_build_top_bar()   # opens the battle log from its Battle Log button
+	_update_round_button()   # #161 label: the call at the button wiring ran before the army manager existed
 
 	# Opt-in game record (PR B1): same central seams, in memory only, no disk and no network.
 	_setup_game_record_collector()
@@ -1742,7 +1745,8 @@ func _solo_pump() -> void:
 ## builder, three fixed lanes — banner, toast, peer-busy — so any combination stacks readably.
 # NML-226: the FPS/perf row occupies the 50–90 px band top-centre (scenes/main.tscn
 # PerformanceLabel), and lanes 40/68 printed straight onto it — every autosave toast landed on the
-# FPS text in the field-test screenshots. All three lanes now stack BELOW that band.
+# FPS text in the field-test screenshots. All three lanes now stack BELOW that band. (23.09.: the FPS
+# line moved up into the top bar's row, 16–40 px; the lanes stay where they were, below the bar.)
 const STATUS_LANE_BANNER := 92
 const STATUS_LANE_TOAST := 116
 ## How long a plain OPERATIONAL notice stays up (NML-955 keeps AI explanations off this timer).
@@ -12953,13 +12957,21 @@ func _set_dice_collapsed(collapsed: bool) -> void:
 
 
 ## The tool rail (house style, 23.09.): Dice / Measure / Terrain / View beside the right edge, one open
-## at a time, plus "? Controls" — the key list that stood on the table is its overlay now.
+## at a time.
 func _build_tool_rail() -> void:
 	_tool_rail = ToolRail.new()
 	$UI/HUD.add_child(_tool_rail)
-	_tool_rail.setup(self, _dice_panel, $UI/HUD/InfoLabel as Label, $UI)
+	_tool_rail.setup(self, _dice_panel)
 	_tool_rail.tool_changed.connect(_on_tool_rail_changed)
 	_tool_rail.set_open(&"dice", true)   # the dice window opens as it always stood open
+
+
+## The top bar (house style, 23.09.): ☰, round and phase / turn left, Battle Log, "? Controls" (the key
+## list that stood on the table is its overlay) and Next Round right. Needs the battle log panel.
+func _build_top_bar() -> void:
+	_top_bar = TopBar.new()
+	$UI/HUD.add_child(_top_bar)
+	_top_bar.setup(self, $UI)
 
 
 ## A rail click opened or closed a tool: the dice window is "collapsed" whenever Dice is not the open one.
@@ -13040,7 +13052,8 @@ func _setup_battle_log() -> void:
 		radial_menu_controller.battle_log = battle_log
 	battle_log_panel = BattleLogPanel.new()
 	$UI/HUD.add_child(battle_log_panel)
-	# Top-CENTRE, hugging the top edge; collapsed to a tab by default, expands downward (maintainer req).
+	# Top-CENTRE, expands downward (maintainer req); the top bar moves it below itself and opens it from
+	# its Battle Log button (the collapsed tab is that button now).
 	battle_log_panel.anchor_left = 0.5
 	battle_log_panel.anchor_right = 0.5
 	battle_log_panel.anchor_top = 0.0

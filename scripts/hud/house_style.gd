@@ -71,6 +71,11 @@ const PAD_SHEET := 22
 const SHEET_FILL := Color("0e161c")                    # an overlay sheet (mockup --panel-solid)
 const SCRIM := Color(0.016, 0.027, 0.039, 0.66)        # behind an overlay sheet (mockup rgba(4,7,10,.66))
 const KEYCAP_FILL := Color("1b262d")                   # a key cap (mockup kbd)
+const H_BAR := 32           # a top-bar item (mockup chips 34 / buttons 38 on a 60 px bar; here no bar behind)
+const BAR_TOP := 12         # the top bar's row
+const PAD_CHIP_X := 10
+const PAD_BAR_PRIMARY_X := 14
+const DOT := 8              # the side dot of a turn chip
 
 # ===== Type =====
 const FONT_BODY := 14
@@ -103,6 +108,15 @@ const KEYCAP := &"HsKeyCap"         # a key in a shortcut hint (static)
 const KEY := &"HsKey"               # a key cap you can click: it presses that key
 const TOOL_LINE := &"HsToolLine"    # a row: an action's name left, its keys right (mockup .tool-line)
 const SHEET := &"HsSheet"           # an overlay sheet (the controls help)
+const BAR_BUTTON := &"HsBarButton"  # a top-bar button: it carries a window's dark fill itself (no bar behind)
+const BAR_PRIMARY := &"HsBarPrimary"  # the top bar's one main action (gold): Next Round
+const CHIP := &"HsChip"             # a top-bar state chip: the phase (muted)
+const CHIP_ROUND := &"HsChipRound"  # the round (gold)
+const CHIP_TURN := &"HsChipTurn"    # your turn (accent dot)
+const CHIP_ENEMY := &"HsChipEnemy"  # the opponent's turn (danger dot)
+## A chip's text colour and its dot (transparent = no dot).
+const CHIP_INK := {CHIP: MUTED, CHIP_ROUND: GOLD, CHIP_TURN: INK, CHIP_ENEMY: INK}
+const CHIP_DOT := {CHIP: Color(0, 0, 0, 0), CHIP_ROUND: Color(0, 0, 0, 0), CHIP_TURN: ACCENT, CHIP_ENEMY: DANGER}
 const SELECTED_SUFFIX := "On"
 
 # ===== Glyphs (Inter carries each one; the dice-panel inventory test checks has_char) =====
@@ -196,6 +210,23 @@ static func theme() -> Theme:
 	t.set_stylebox(&"panel", TOOL_LINE, _box(FILL, LINE, RADIUS_CARD, 12, 4))
 	t.set_type_variation(SHEET, &"PanelContainer")
 	t.set_stylebox(&"panel", SHEET, _box(SHEET_FILL, LINE_SOFT, RADIUS_SHEET, PAD_SHEET, PAD_SHEET))
+
+	# Top bar: no strip behind the items — each carries the window's dark fill itself, so the table
+	# shows between them and the bar covers no more of it than the items it replaced.
+	var bar_rest := _box(PANEL, LINE, RADIUS_CARD, PAD_CHIP_X, 0)
+	var bar_hover := _box(PANEL.blend(_alpha(ACCENT, HOVER_ALPHA)), ACCENT, RADIUS_CARD, PAD_CHIP_X, 0)
+	var bar_press := _box(PANEL.blend(_alpha(ACCENT, PRESS_ALPHA)), ACCENT, RADIUS_CARD, PAD_CHIP_X, 0)
+	_button_variant(t, BAR_BUTTON, bar_rest, bar_hover, bar_press, bar_rest, INK, FONT_BODY)
+	var bar_on := _box(PANEL.blend(_alpha(ACCENT, SELECTED_ALPHA)), ACCENT, RADIUS_CARD, PAD_CHIP_X, 0)
+	_button_variant(t, _on(BAR_BUTTON), bar_on, bar_hover, bar_press, bar_on, ON_ACCENT, FONT_BODY)
+	_button_variant(t, BAR_PRIMARY, _pad_x(primary[0], PAD_BAR_PRIMARY_X), _pad_x(primary[1], PAD_BAR_PRIMARY_X),
+		_pad_x(primary[2], PAD_BAR_PRIMARY_X), _pad_x(primary[3], PAD_BAR_PRIMARY_X), ON_GOLD, FONT_ACTION)
+	t.set_color(&"font_disabled_color", BAR_PRIMARY, _alpha(ON_GOLD, 0.7))
+	for v: StringName in [CHIP, CHIP_ROUND, CHIP_TURN, CHIP_ENEMY]:
+		var tint: Color = {CHIP: LINE, CHIP_ROUND: GOLD, CHIP_TURN: ACCENT, CHIP_ENEMY: DANGER}[v]
+		t.set_type_variation(v, &"PanelContainer")
+		t.set_stylebox(&"panel", v, _box(PANEL.blend(_alpha(tint, 0.10 if v != CHIP else 0.0)),
+			tint if v == CHIP else _alpha(tint, 0.55), RADIUS_CARD, PAD_CHIP_X, 0))
 
 	_label_variant(t, BODY, INK, FONT_BODY)
 	_label_variant(t, CAPTION, MUTED, FONT_CAPTION)
@@ -406,6 +437,50 @@ static func rail_button(text: String, icon: Texture2D) -> Button:
 	return b
 
 
+## A top-bar state chip (mockup .chip): spaced capitals in the variant's tint, a side dot for a turn.
+## It paints, so it owns its pixels (STOP).
+static func chip(text: String, variant: StringName = CHIP) -> PanelContainer:
+	var c := PanelContainer.new()
+	c.custom_minimum_size = Vector2(0, H_BAR)
+	c.mouse_filter = Control.MOUSE_FILTER_STOP
+	var row := HBoxContainer.new()
+	row.name = "Row"
+	row.add_theme_constant_override(&"separation", GAP_ROW - 2)
+	c.add_child(row)
+	var dot := Panel.new()
+	dot.name = "Dot"
+	dot.custom_minimum_size = Vector2(DOT, DOT)
+	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(dot)
+	var l := label(text, EYEBROW)
+	l.name = "Text"
+	row.add_child(l)
+	set_chip(c, text, variant)
+	return c
+
+
+## Sets a chip's text and tint (the turn chip turns from yours to the opponent's).
+static func set_chip(c: PanelContainer, text: String, variant: StringName) -> void:
+	c.theme_type_variation = variant
+	var l := c.get_node("Row/Text") as Label
+	l.text = text
+	l.add_theme_color_override(&"font_color", CHIP_INK[variant])
+	var dot := c.get_node("Row/Dot") as Panel
+	dot.visible = (CHIP_DOT[variant] as Color).a > 0.0
+	if dot.visible:
+		var s := _box(CHIP_DOT[variant], CHIP_DOT[variant], int(DOT * 0.5), 0, 0)
+		s.set_border_width_all(0)
+		dot.add_theme_stylebox_override(&"panel", s)
+
+
+## Dresses a button that must keep its own font (the ☰ menu button: Inter has no ☰) in a variant's
+## boxes, without the variant's side padding.
+static func borrow_look(b: Button, variant: StringName) -> void:
+	for state: StringName in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled", &"focus"]:
+		b.add_theme_stylebox_override(state, _pad_x(theme().get_stylebox(state, variant), 0))
+
+
 ## A crisp, state-tinted icon from an inline SVG (white strokes on transparent, 48 x 48 view box);
 ## drawn at RAIL_ICON, rendered at twice that so it stays sharp at 2560 x 1440.
 static func svg_icon(svg: String) -> ImageTexture:
@@ -479,6 +554,8 @@ static func _default_height(variant: StringName) -> int:
 			return H_ACTION
 		ICON:
 			return ICON_BUTTON
+		BAR_BUTTON, BAR_PRIMARY:
+			return H_BAR
 		_:
 			return H_PIP
 
@@ -508,6 +585,13 @@ static func _box(fill: Color, rim: Color, radius: int, pad_x: int, pad_y: int) -
 static func _radius(s: StyleBoxFlat, radius: int) -> StyleBoxFlat:
 	var copy := s.duplicate() as StyleBoxFlat
 	copy.set_corner_radius_all(radius)
+	return copy
+
+
+static func _pad_x(s: StyleBox, pad_x: int) -> StyleBox:
+	var copy := s.duplicate() as StyleBox
+	copy.content_margin_left = pad_x
+	copy.content_margin_right = pad_x
 	return copy
 
 
