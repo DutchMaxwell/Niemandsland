@@ -601,6 +601,28 @@ def test_slow_without_swift_takes_the_fold():
     }
 
 
+def test_rapid_charge_lands_on_the_charge_band_only():
+    """movement_range_controller.gd:175-188 (#1072) — a `charge_only` registry
+    entry (Rapid Charge, v3.5.3: "moves +4\" when using Charge actions") adds
+    its inches to the CHARGE band, never to Rush. The profile then carries the
+    distinct `charge` key the core reads (state.rs MoveBands.charge)."""
+    assert _aof_profile("dark_elves", ["Rapid Charge"])["move_bands"] == {
+        "advance": 6.0,
+        "rush": 12.0,
+        "charge": 16.0,
+    }
+
+
+def test_a_profile_without_a_charge_only_rule_carries_no_charge_key():
+    """The control half: no charge-only rule, no `charge` key — the core falls
+    back to Rush (MoveBands.charge = None), and every such profile stays
+    byte-identical to what the loader wrote before."""
+    assert _aof_profile("dark_elves", ["Fast"])["move_bands"] == {
+        "advance": 8.0,
+        "rush": 16.0,
+    }
+
+
 def test_swift_through_an_item_grant_cancels_slow_too():
     """opr_api_client.gd:1031-1035 — an item's granted rules fold into
     special_rules, so an item-granted Swift reaches the band pass the same
