@@ -260,10 +260,7 @@ func _refit_strip_heights(gen: int) -> void:
 	await get_tree().process_frame
 	if gen != _refit_gen or _strip == null or not is_inside_tree():
 		return
-	# Cards may take up to ~40% of the screen: real full-face cards (weapons + wrapped rule
-	# rows) need 270+ px — the old hard 240 cap CUT the last rule row (maintainer screenshot
-	# 2026-07-20, second finding). The strip band then hugs the tallest card.
-	var cap: float = maxf(240.0, get_viewport_rect().size.y * 0.4 - STRIP_FAN_ARC_PX - 22.0)
+	var cap: float = _strip_card_cap()
 	var tallest: float = float(STRIP_CARD_H)
 	for child in _strip.get_children():
 		var cv := child as CardVisual
@@ -280,6 +277,14 @@ func _refit_strip_heights(gen: int) -> void:
 	# viewport and parked it hard left — this pass, two frames later, sees the real viewport
 	# (maintainer finding 2026-07-20). Idempotent when geometry is already right.
 	_layout()
+
+
+## The tallest a strip card may grow. Real full-face cards (weapons + wrapped rule rows) need 270+ px —
+## the old hard 240 cap CUT the last rule row (maintainer screenshot 2026-07-20, second finding), and 40 %
+## of the screen still cut a nine-weapon unit (23.09.: nothing may be cut). The strip band hugs the
+## tallest card, so only such a unit makes the open strip this tall.
+func _strip_card_cap() -> float:
+	return maxf(240.0, get_viewport_rect().size.y * 0.6 - STRIP_FAN_ARC_PX - 22.0)
 
 
 ## Arrange the strip cards as a playing-card hand: a slight per-card rotation arc and horizontal overlap,
@@ -365,18 +370,19 @@ func _add_card(unit: GameUnit) -> void:
 	# action bar (include_actions=false). Weapons block stays full here — collapse_weapons is the
 	# strip-density fallback if the maintainer finds it illegible.
 	var data := _card_data(unit)
-	var content := CardFace.build_presented(data, Callable(), false)
+	var content := CardFace.build_presented(data, Callable(), false, CARD_W)
 	cv.set_content_node(content)
 	# Same rule/spell tooltips as the focus card — the strip links were never wired, so hovering
 	# them popped an EMPTY tooltip panel (maintainer 2026-07-20).
 	_wire_rules_hover(content, unit)
-	cv.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
+	cv.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), _strip_card_cap()))
 	_cards[unit.unit_id] = {"card": cv, "sig": data.hash()}
 
 
 # === Live status ===
 
 func _refresh_status() -> void:
+	var rebuilt := false
 	for unit: GameUnit in _local_units():
 		var entry = _cards.get(unit.unit_id)
 		if entry == null:
@@ -391,9 +397,16 @@ func _refresh_status() -> void:
 		if int(entry.get("sig", 0)) == sig:
 			continue
 		entry["sig"] = sig
-		var content := CardFace.build_presented(data, Callable(), false)
+		var content := CardFace.build_presented(data, Callable(), false, CARD_W)
 		card.set_content_node(content)
-		card.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
+		_wire_rules_hover(content, unit)   # the rebuilt card's rule links showed EMPTY tooltips (161 links)
+		card.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), _strip_card_cap()))
+		rebuilt = true
+	# A rebuilt card was measured before layout (one flow row): re-fit it once it has laid out, or its
+	# last rows sat below the card edge, clipped (199 texts after one status change).
+	if rebuilt:
+		_refit_gen += 1
+		_refit_strip_heights(_refit_gen)
 	# Presented card: same change-gate so the rule/spell hover is never interrupted under the cursor.
 	if _presented_unit != null and _presented.visible and _card_data(_presented_unit).hash() != _presented_sig:
 		_fill_presented(_presented_unit)
@@ -555,7 +568,7 @@ func _fill_presented(unit: GameUnit) -> void:
 	# spell ring flickered — maintainer "keine Ruhe").
 	var data := _card_data(unit)
 	_presented_sig = data.hash()
-	var content := CardFace.build_presented(data, _card_action)
+	var content := CardFace.build_presented(data, _card_action, false, PCARD_W)
 	_presented.set_content_node(content)
 	_wire_rules_hover(content, unit)   # bus 033: the focus card absorbs the old Info card's rule/spell tooltips
 	_resize_presented_to_fit(content)
@@ -593,8 +606,8 @@ func set_range_ring_controller(rrc: Node) -> void:
 ## show the range ring on hover. No click popup — the card no longer rebuilds under the cursor (see
 ## _refresh_status), so the hover tooltip is stable on its own.
 func _wire_rules_hover(content: Control, unit: GameUnit) -> void:
-	for node in content.find_children("*", "LinkButton", true, false):
-		var lb := node as LinkButton
+	for node in content.find_children("*", "Button", true, false):   # RuleLink is a wrapping Button
+		var lb := node as Button
 		if lb == null or not lb.has_meta("rule_meta"):
 			continue
 		var meta_key := str(lb.get_meta("rule_meta", ""))

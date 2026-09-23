@@ -132,8 +132,8 @@ func test_strip_rule_links_carry_descriptions() -> void:
 	dock.setup(army, null, null, null, null)
 	var cv: CardVisual = _live_cards(dock)[0]
 	var wired := 0
-	for node in cv.find_children("*", "LinkButton", true, false):
-		var lb := node as LinkButton
+	for node in cv.find_children("*", "Button", true, false):   # RuleLink is a wrapping Button (card fix)
+		var lb := node as Button
 		if lb != null and lb.has_meta("rule_meta") and str(lb.get_meta("rule_meta")) == "Fearless":
 			assert_str(lb.tooltip_text).contains("only fails morale")
 			wired += 1
