@@ -21,7 +21,7 @@ const STRIP_FAN_MAX_DEG := 8.0
 const STRIP_OVERLAP_PX := 6           # near-touching so each full face stays fully legible (no right clip)
 const STRIP_FAN_ARC_PX := 6.0         # shallow vertical arc
 const STRIP_SIDE_MARGIN := 14         # the strip background hugs the fan + this margin (grows w/ card count)
-const PCARD_W := 320
+const PCARD_W := 340              # 320 until the mockup's stat captions (QUALITY … WOUNDS) needed four boxes' room
 const PCARD_H := 188
 const PCARD_MAX_H := 880          # presented card auto-grows to fit weapons + a full caster spell list (uicard:
                                   # a nine-weapon unit needs 635 of the old 640 — nothing may be cut, so headroom)
@@ -484,7 +484,40 @@ func _card_data(unit: GameUnit) -> Dictionary:
 	# spells (casters): {name, threshold, effect} from the army glossary, for the hoverable spell list.
 	if unit.is_caster() and army_manager != null and army_manager.has_method("get_spells_for_unit"):
 		data["spells"] = army_manager.get_spells_for_unit(unit)
+	# Back from the retired detail card (maintainer 23.09.), in its wording: base size, joined heroes,
+	# the caster's points, wound counts.
+	data.merge(retired_card_lines(unit))
 	return data
+
+
+## The retired UnitCard's extra lines for `unit` (scripts/unit_card.gd): {"base": "25mm round",
+## "joined": "Joined Hero: Name Q3+ D3+", "casts": "Casts 2/6", "wounds": "12/18"} — "" where it has none.
+## Wounds only when a model has more than one wound (Tough), counting the alive models' remaining wounds.
+static func retired_card_lines(unit: GameUnit) -> Dictionary:
+	var out := {"base": "", "joined": "", "casts": "", "wounds": ""}
+	var opr: OPRApiClient.OPRUnit = null
+	if unit.source_type == "opr":
+		opr = unit.source_data as OPRApiClient.OPRUnit
+	if opr != null:
+		out["base"] = ("%dx%dmm oval" % [opr.base_width_mm, opr.base_depth_mm]) if opr.base_is_oval \
+			else ("%dmm round" % opr.base_size_round)
+	var heroes: Array[String] = []
+	for hero in unit.get_attached_heroes():
+		if hero is GameUnit:
+			heroes.append("%s Q%d+ D%d+" % [hero.get_name(), hero.get_quality(), hero.get_defense()])
+	if not heroes.is_empty():
+		out["joined"] = "Joined Hero: " + ", ".join(heroes)
+	if unit.is_caster():
+		out["casts"] = "Casts %d/%d" % [unit.casts_current, GameUnit.CASTER_POINTS_CAP]
+	var cur := 0
+	var most := 0
+	for m in unit.models:
+		most += m.wounds_max
+		if m.is_alive:
+			cur += m.wounds_current
+	if most > unit.models.size():
+		out["wounds"] = "%d/%d" % [cur, most]
+	return out
 
 
 ## One distinct weapon → CardFace's {name, meta, rules} shape, in the APPROVED format (bus 027):

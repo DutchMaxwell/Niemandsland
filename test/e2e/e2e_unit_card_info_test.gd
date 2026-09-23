@@ -31,6 +31,11 @@ const SPELLS := [
 		"effect": "Friendly units within 12\" get Fearless until the end of the round."},
 ]
 
+## Maintainer 23.09.: the mockup's headings may be ADDED and the retired detail card's lines come BACK —
+## additions yes, removals never. The presented card's old "Q" / "D" glyphs are spelled out in their box
+## captions: that pair is the one removal allowed, and only with its spelled-out word present.
+const EXPANDED := {"Q": "QUALITY", "D": "DEFENSE"}
+
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
@@ -186,8 +191,35 @@ func _read_all_cards(units: Array) -> Dictionary:
 
 # === tests ====================================================================================
 
+## Takes out of a presented card's diff what the maintainer allowed: the mockup's headings, the retired
+## card's lines for THIS unit, and the Q / D glyphs spelled out. Anything else stays a problem.
+func _accept_allowed_changes(d: Dictionary, gu: GameUnit) -> void:
+	var dead := gu.get_alive_count() == 0
+	var opr := gu.source_data as OPRApiClient.OPRUnit
+	var allowed: Array = ["QUALITY", "DEFENSE", "MODELS"]
+	if not dead and opr != null and not opr.weapons.is_empty():
+		allowed.append("WEAPONS")
+	var lines := UnitDock.retired_card_lines(gu)
+	for key in ["base", "joined"]:
+		if lines[key] != "":
+			allowed.append(lines[key])
+	if not dead and lines["casts"] != "":
+		allowed.append(lines["casts"])
+	if not dead and lines["wounds"] != "":
+		allowed.append_array(["WOUNDS", lines["wounds"]])
+	for s in allowed:
+		var i: int = (d["extra"] as Array).find(s)
+		if i >= 0:
+			(d["extra"] as Array).remove_at(i)
+	for glyph: String in EXPANDED:
+		var i: int = (d["missing"] as Array).find(glyph)
+		if i >= 0 and EXPANDED[glyph] in allowed:
+			(d["missing"] as Array).remove_at(i)
+
+
 func test_every_card_shows_exactly_what_it_showed_before(timeout := 300000) -> void:
-	var cards: Dictionary = await _read_all_cards(_build_units())
+	var units := _build_units()
+	var cards: Dictionary = await _read_all_cards(units)
 	if OS.get_environment("NML_RECORD_CARD_GOLDEN") == "1":
 		var f := FileAccess.open(ProjectSettings.globalize_path(GOLDEN), FileAccess.WRITE)
 		f.store_string(JSON.stringify(cards, "  ", true) + "\n")
@@ -200,6 +232,8 @@ func test_every_card_shows_exactly_what_it_showed_before(timeout := 300000) -> v
 			problems.append("%s: the card is gone" % key)
 			continue
 		var d := diff(golden[key], cards[key])
+		if key.ends_with(" presented"):
+			_accept_allowed_changes(d, _unit(units, key.trim_suffix(" presented")))
 		for s in d["missing"]:
 			problems.append("%s: MISSING %s" % [key, JSON.stringify(s)])
 		for s in d["extra"]:
@@ -217,14 +251,14 @@ func test_the_equality_check_names_a_dropped_weapon_tag(timeout := 120000) -> vo
 	dock.present_unit(_unit(units, "wolf#1"))   # Wolf Veteran Assault Brothers: AP(4) on a weapon
 	await _runner.simulate_frames(4)
 	var before := texts(dock._presented)
-	var tag: Button = null
-	for c: Node in dock._presented.find_children("*", "Button", true, false):
+	var tag: BaseButton = null
+	for c: Node in dock._presented.find_children("*", "BaseButton", true, false):
 		if tag == null and str(c.get_meta("rule_meta", "")).begins_with("AP("):
 			tag = c
 	if tag == null:
 		fail("no weapon tag to drop — the check proves nothing")
 		return
-	var dropped := [tag.text, "tooltip: " + tag.tooltip_text]
+	var dropped := [str(tag.get(&"text")), "tooltip: " + tag.tooltip_text]
 	tag.get_parent().remove_child(tag)
 	tag.free()
 	var d := diff(before, texts(dock._presented))
@@ -324,3 +358,53 @@ func test_the_first_stats_tooltip_is_as_tall_as_its_text(timeout := 120000) -> v
 	var need: float = tip.get_combined_minimum_size().y
 	assert_float(tip.size.y).override_failure_message("the first tooltip is %d px tall, its text needs %d (screen %d)" % [
 		tip.size.y, need, tip.get_viewport_rect().size.y]).is_less_equal(need + 1.0)
+
+
+## The retired detail card's information is back on the presented card, for exactly the units it belongs
+## to (maintainer 23.09.): the joined hero line on a host, Casts X/6 on a living caster, the wound count
+## on a unit with multi-wound models, the base size on every unit. Expectations from the unit itself.
+func test_the_retired_card_lines_show_for_the_right_units(timeout := 300000) -> void:
+	var units := _build_units()
+	var dock: UnitDock = _main.unit_dock
+	var shown := {"joined": 0, "casts": 0, "wounds": 0, "base": 0}
+	var bad: Array = []
+	for pair: Array in units:
+		var gu: GameUnit = pair[1]
+		dock.present_unit(gu)
+		await _runner.simulate_frames(4)
+		var t := texts(dock._presented)
+		var alive := gu.get_alive_count() > 0
+		var joined := t.filter(func(s: String) -> bool: return s.begins_with("Joined Hero: "))
+		var heroes: Array = gu.get_attached_heroes()
+		if heroes.is_empty() != joined.is_empty():
+			bad.append("%s: %d joined heroes, joined lines %s" % [pair[0], heroes.size(), joined])
+		for h in heroes:
+			if joined.is_empty() or not str(joined[0]).contains((h as GameUnit).get_name()):
+				bad.append("%s: hero %s missing from %s" % [pair[0], (h as GameUnit).get_name(), joined])
+		shown["joined"] += joined.size()
+		var casts := t.filter(func(s: String) -> bool: return s.begins_with("Casts "))
+		var want_casts := ["Casts %d/%d" % [gu.casts_current, GameUnit.CASTER_POINTS_CAP]] if gu.is_caster() and alive else []
+		if casts != want_casts:
+			bad.append("%s: casts %s, want %s" % [pair[0], casts, want_casts])
+		shown["casts"] += casts.size()
+		var tough := gu.models.any(func(m: ModelInstance) -> bool: return m.wounds_max > 1)
+		if ("WOUNDS" in t) != (tough and alive):
+			bad.append("%s: WOUNDS box %s, tough %s" % [pair[0], "WOUNDS" in t, tough])
+		shown["wounds"] += int("WOUNDS" in t)
+		var opr := gu.source_data as OPRApiClient.OPRUnit
+		var base := ("%dx%dmm oval" % [opr.base_width_mm, opr.base_depth_mm]) if opr.base_is_oval \
+			else ("%dmm round" % opr.base_size_round)
+		if not base in t:
+			bad.append("%s: base %s missing" % [pair[0], base])
+		shown["base"] += int(base in t)
+	assert_array(bad).override_failure_message("\n".join(bad)).is_empty()
+	for k: String in shown:
+		assert_int(int(shown[k])).override_failure_message("no card showed a %s line — the fixture proves nothing" % k).is_greater(0)
+	# The wound count follows the table: a hit on the tank shows on its card at the next refresh.
+	var tank := _unit(units, "wolf#6")
+	var model := tank.models[0] as ModelInstance
+	model.wounds_current = model.wounds_max - 5
+	dock.present_unit(tank)
+	dock._refresh_status()
+	await _runner.simulate_frames(4)
+	assert_array(texts(dock._presented)).contains(["%d/%d" % [model.wounds_max - 5, model.wounds_max]])
