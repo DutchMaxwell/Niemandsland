@@ -34,7 +34,7 @@ Typed display names — the player's, the army list's and the units' (the army l
 
 The maintainer published these facts on 2026-09-14; the in-game privacy screen shows the same facts in English and German:
 
-- **Destination:** a storage bucket operated by the maintainer of Niemandsland (Cloudflare R2, object storage). Records are uploaded only after you switch sharing on, and only for the games you choose.
+- **Destination:** sharing is prepared but not active yet — this version uploads nothing, even with sharing switched on. You can save the exact bytes of the example or of your last game locally. When uploading arrives in a later version, records will go to a storage bucket operated by the maintainer of Niemandsland (Cloudflare R2, object storage), only after you switch sharing on, and only for the games you choose.
 - **Controller (the person responsible under the GDPR):** Andreas Kesberg, privacy@niemandsland.xyz.
 - **Processor and hosting:** Cloudflare, Inc. (R2 object storage) for shared records; Fly.io, Inc., region Frankfurt (fra), for the multiplayer relay. The relay processes your IP address and a per-install reconnect token to route your game; neither is written to a log, and the retention bound is 30 days.
 - **Recipients:** nobody but the maintainer. Records are not sold, not shared with third parties, and never used for advertising.
