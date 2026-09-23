@@ -14,6 +14,8 @@ const PAD := HouseStyle.PAD_PANEL
 const PAD_COMPACT := 10
 const NAME_FLOOR := 96      # a wrapping label is measured at width 0 first — never below this
 const WEAPON_FLOOR := 72
+const STAT_CAPTION_PX := 10   # QUALITY / DEFENSE / MODELS / WOUNDS under a stat box's value
+const STAT_PAD_X := 6
 
 
 ## Presented card content (the big card). `on_action` (optional) is called with the action kind string
@@ -47,6 +49,16 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 	pts.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	header.add_child(pts)
 	col.add_child(header)
+	# Back from the retired detail card (presented card only): the base size under the name and the
+	# heroes joined to this unit.
+	if not compact:
+		for key in ["base", "joined"]:
+			var line := str(data.get(key, ""))
+			if not line.is_empty():
+				var l := HouseStyle.label(line, HouseStyle.CAPTION)
+				l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				l.custom_minimum_size = Vector2(NAME_FLOOR, 0)
+				col.add_child(l)
 
 	# Stats: Quality, Defense and the alive counter (red when destroyed, warn when wounded).
 	var alive := int(data.get("alive", 0))
@@ -59,7 +71,8 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 	var q := "%d+" % int(data.get("quality", 0))
 	var d := "%d+" % int(data.get("defense", 0))
 	var count := "%d/%d" % [alive, total]
-	col.add_child(_stats_compact(q, d, count, counter_color) if compact else _stats_boxes(q, d, count, counter_color))
+	col.add_child(_stats_compact(q, d, count, counter_color) if compact
+		else _stats_boxes(q, d, count, counter_color, "" if dead else str(data.get("wounds", ""))))
 
 	# Status pills: on the presented card they ARE the controls (a click toggles the state / opens the
 	# wound or cast window); strip cards get display pills. A flow, so extra pills wrap.
@@ -74,6 +87,8 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 		strip.add_child(_status_chip("Shaken", bool(data.get("shaken", false)), HouseStyle.TONE_WARN, compact, on_action, "shaken"))
 		if bool(data.get("caster", false)):
 			strip.add_child(_status_chip("Caster", true, HouseStyle.TONE_ACCENT, compact, on_action, "casts"))
+			if not compact and not str(data.get("casts", "")).is_empty():
+				strip.add_child(_status_chip(str(data["casts"]), false, HouseStyle.TONE_ACCENT, compact))   # display only
 		if bool(data.get("woundable", false)):
 			strip.add_child(_status_chip("✚ Wounds", false, HouseStyle.TONE_WARN, compact, on_action, "wounds"))
 	col.add_child(strip)
@@ -92,6 +107,8 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 			summary.custom_minimum_size = Vector2(inner, 0)
 			col.add_child(summary)
 		else:
+			if not compact:
+				col.add_child(HouseStyle.label("WEAPONS", HouseStyle.EYEBROW))   # mockup heading (23.09.: allowed)
 			var list := VBoxContainer.new()
 			list.add_theme_constant_override("separation", 2 if compact else 3)
 			for i in weapons.size():
@@ -127,13 +144,16 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 	return margin
 
 
-## Quality / Defense / alive counter as the mockup's three stat boxes: the value over its glyph.
-static func _stats_boxes(q: String, d: String, count: String, count_color: Color) -> Control:
+## Quality / Defense / models (+ wounds for Tough units) as the mockup's stat boxes: the value over its
+## caption. The captions spell out the old "Q" / "D" glyphs (23.09.: the mockup's headings are allowed).
+static func _stats_boxes(q: String, d: String, count: String, count_color: Color, wounds: String) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
-	row.add_child(_stat_box(q, "Q", HouseStyle.INK))
-	row.add_child(_stat_box(d, "D", HouseStyle.INK))
-	row.add_child(_stat_box(count, "", count_color))
+	row.add_child(_stat_box(q, "QUALITY", HouseStyle.INK))
+	row.add_child(_stat_box(d, "DEFENSE", HouseStyle.INK))
+	row.add_child(_stat_box(count, "MODELS", count_color))
+	if not wounds.is_empty():
+		row.add_child(_stat_box(wounds, "WOUNDS", HouseStyle.WARN))
 	return row
 
 
@@ -146,9 +166,15 @@ static func _stat_box(value: String, glyph: String, color: Color) -> Control:
 	v.add_child(val)
 	if not glyph.is_empty():
 		var g := HouseStyle.label(glyph, HouseStyle.EYEBROW)
+		g.add_theme_font_size_override(&"font_size", STAT_CAPTION_PX)
 		g.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		v.add_child(g)
 	var box := HouseStyle.card(v)
+	# Four boxes (with WOUNDS) share one card row: a narrower side padding than a result card.
+	var sb := HouseStyle.theme().get_stylebox(&"panel", HouseStyle.CARD).duplicate() as StyleBox
+	sb.content_margin_left = STAT_PAD_X
+	sb.content_margin_right = STAT_PAD_X
+	box.add_theme_stylebox_override(&"panel", sb)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return box
 
@@ -180,13 +206,16 @@ static func _rules_list(data: Dictionary, compact: bool, inner: float) -> Array:
 	var spells: Array = data.get("spells", []) if bool(data.get("caster", false)) else []
 	var px := 11 if compact else 13
 	if not rule_names.is_empty():
-		parts.append(HouseStyle.label("Rules", HouseStyle.EYEBROW))
+		var rules_cap := HouseStyle.label("Rules", HouseStyle.EYEBROW)
+		rules_cap.uppercase = true   # shown as RULES like WEAPONS; the word itself is unchanged
+		parts.append(rules_cap)
 		var flow := _flow("RulesList")
 		for r in rule_names:
 			flow.add_child(RuleLink.make(str(r), str(r), HouseStyle.TONE_ACCENT, px, inner))
 		parts.append(flow)
 	if not spells.is_empty():
 		var cap := HouseStyle.label("Spells", HouseStyle.EYEBROW)
+		cap.uppercase = true
 		cap.add_theme_color_override(&"font_color", HouseStyle.GOLD)
 		parts.append(cap)
 		var flow := _flow("SpellsList")
