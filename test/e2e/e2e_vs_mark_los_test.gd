@@ -354,6 +354,38 @@ func test_the_real_rapid_charge_mark_lands_on_the_target() -> void:
 		.is_true()
 
 
+# #845 follow-up — the book (aof Dark Elves v3.5.3): "... which friendly units gets Rapid Charge
+# against once (next time the effect would apply)". Rapid Charge only ever applies to a charge, so
+# the volley that placed the mark (main.gd: _solo_apply_vs_marks, then _solo_consume_once_mods
+# with melee=false at the end of the SAME exchange) must not spend it — otherwise no friendly
+# charge can ever read it and the Mark is dead on the table. The charge's melee exchange spends it.
+func test_the_real_rapid_charge_mark_survives_the_volley_and_is_spent_by_the_charge() -> void:
+	var bearer := E2EBoot.make_unit(_main, 1, "Bearer", [Vector3(-0.3, 0, 0)])
+	bearer.unit_properties["game_system"] = "aof"
+	bearer.unit_properties["faction_folder"] = "dark_elves"
+	bearer.unit_properties["special_rules"] = ["Rapid Charge Mark"]
+	var target := E2EBoot.make_unit(_main, 2, "Target", [Vector3(0.3, 0, 0)])
+	target.unit_properties["game_system"] = "aof"
+	target.unit_properties["faction_folder"] = "dark_elves"
+	var ally := E2EBoot.make_unit(_main, 1, "Ally", [Vector3(0.0, 0, 0.3)])
+	ally.unit_properties["game_system"] = "aof"
+	ally.unit_properties["faction_folder"] = "dark_elves"
+	_main.opr_army_manager.game_units[target.unit_id] = target   # the NML-949 mirror walks the manager
+	_main.opr_army_manager.current_round = 1
+	_main._solo_apply_vs_marks(bearer, target, 6.0)
+	_main._solo_consume_once_mods(bearer, target, false)   # the marking volley's own consumption
+	assert_float(SoloController.rapid_charge_reach_bonus_in(ally, target)) \
+		.override_failure_message("#845 — the marking VOLLEY spent the Rapid Charge Mark (target records " +
+			"after the volley: %s); the book spends it the next time the effect would apply, a charge" \
+			% str(_attacker_records(target))) \
+		.is_equal(4.0)
+	_main._solo_consume_once_mods(ally, target, true)   # the friendly charge's melee exchange
+	assert_float(SoloController.rapid_charge_reach_bonus_in(ally, target)) \
+		.override_failure_message("#845 — the charge's melee exchange must spend the once-grant") \
+		.is_equal(0.0)
+	assert_str(_log_text()).contains("\"Rapid Charge Mark\" on Target is consumed (applies once)")
+
+
 func test_the_real_furious_mark_lands_on_the_target_and_arms_a_charger() -> void:
 	var bearer := E2EBoot.make_unit(_main, 1, "Bearer", [Vector3(-0.3, 0, 0)])
 	bearer.unit_properties["game_system"] = "aof"
