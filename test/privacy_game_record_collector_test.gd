@@ -81,6 +81,47 @@ func test_per_action_cost_is_negligible() -> void:
 	collector.free()
 
 
+## The record names the opponent the game really ran (main._solo_opponent_brain, set next to the
+## "opponent:" log line), never a hardcoded "classic": an Erlkönig game and a tree fallback must differ.
+func test_record_names_the_opponent_main_resolved() -> void:
+	var pair: Array = _table_fixture()
+	var main_src := GDScript.new()
+	main_src.source_code = "extends RefCounted\nvar table = null\nvar opr_army_manager = null\nvar terrain_overlay = null\nvar _solo_mission_id = \"\"\nvar _solo_opponent_brain = {}\n"
+	main_src.reload()
+	var main = main_src.new()
+	main.table = pair[1]
+	var sha := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	main._solo_opponent_brain = {"engine": "erlkoenig", "id": "onnx", "hash": sha}
+	var collector = _collector()
+	collector.bind(main)
+	assert_dict(collector.build_record()["brain"]) \
+		.override_failure_message("an Erlkönig game must record engine erlkoenig + the net's sha256") \
+		.is_equal({"engine": "erlkoenig", "id": "onnx", "hash": sha})
+	main._solo_opponent_brain = {"engine": "classic", "id": "nachtmahr", "hash": ""}
+	assert_dict(collector.build_record()["brain"]) \
+		.override_failure_message("the tree fallback must record the classic engine at its grade") \
+		.is_equal({"engine": "classic", "id": "nachtmahr", "hash": ""})
+	collector.free()
+	pair[1].free()
+
+
+## The resolved grade -> record brain mapping main uses next to its "opponent:" line.
+func test_opponent_brain_names_erlkoenig_the_tree_and_the_loopback() -> void:
+	var sha := "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+	assert_dict(GameRecordCollector.opponent_brain("planner_v0", false, sha)).is_equal({"engine": "erlkoenig", "id": "onnx", "hash": sha})
+	assert_dict(GameRecordCollector.opponent_brain("nachtmahr", false, sha)).is_equal({"engine": "classic", "id": "nachtmahr", "hash": ""})
+	assert_dict(GameRecordCollector.opponent_brain("planner_v0", true, sha)) \
+		.override_failure_message("the developer's loopback brain has no packed file to hash") \
+		.is_equal({"engine": "erlkoenig", "id": "loopback", "hash": ""})
+
+
+## No AI seat resolved (the stub main of the corner test carries no opponent) keeps the old Classic stamp.
+func test_record_without_an_opponent_keeps_the_classic_stamp() -> void:
+	var collector = _collector()
+	assert_dict(collector.build_record()["brain"]).is_equal({"engine": "classic", "id": "classic", "hash": ""})
+	collector.free()
+
+
 ## PR B2: main.gd hands the record to the menu and resets the collector; reset must leave no actions
 ## and no round counter behind for the next game.
 func test_reset_clears_actions_and_round_counters() -> void:
