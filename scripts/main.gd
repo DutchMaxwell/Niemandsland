@@ -12678,7 +12678,7 @@ func _build_success_controls() -> void:
 	_modifier_value_label.custom_minimum_size = Vector2(MODIFIER_VALUE_MIN_WIDTH, 0)
 	_modifier_value_label.tooltip_text = "Applied to every die. Natural 6 always succeeds," \
 		+ " natural 1 always fails (OPR Core Rules v3.5.1)."
-	var stepper := HouseStyle.stepper([-1, 1], _modifier_value_label, _on_modifier_delta_pressed, "Modifier")
+	var stepper := HouseStyle.stepper([-1, 1], _modifier_value_label, _on_modifier_delta_pressed, "Modifier", true)
 	var modifier_row := HouseStyle.field_row("Modifier", stepper)
 	modifier_row.name = "ModifierRow"
 	_insert_dice_control(modifier_row)
@@ -13338,7 +13338,10 @@ func _build_current_roll_column() -> void:
 func _populate_current_roll_column(faces: Array[int], context: Dictionary) -> void:
 	if not _current_roll_column:
 		return
+	# Detach before freeing: a queued child still counts for layout until the frame ends, so the
+	# column was briefly twice as tall and the tray card jumped on every re-evaluation.
 	for child: Node in _current_roll_column.get_children():
+		_current_roll_column.remove_child(child)
 		child.queue_free()
 	var target: int = context.get(DiceRules.CTX_TARGET, DiceRules.TARGET_NONE)
 	var modifier: int = context.get(DiceRules.CTX_MODIFIER, 0)

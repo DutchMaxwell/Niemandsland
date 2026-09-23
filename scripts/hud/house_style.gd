@@ -228,8 +228,10 @@ static func field_row(caption: String, content: Control) -> HBoxContainer:
 
 
 ## A stepper: one ghost button per delta (negatives left of `middle`, positives right), each
-## pressing on_step(delta). Buttons are named "<name_prefix><delta>" ("Modifier+1").
-static func stepper(deltas: Array, middle: Control, on_step: Callable, name_prefix: String = "Step") -> HBoxContainer:
+## pressing on_step(delta). Buttons are named "<name_prefix><delta>" ("Modifier+1"). `sign_only`
+## labels a single-step stepper "−" / "+" so the steps never read like the value between them.
+static func stepper(deltas: Array, middle: Control, on_step: Callable, name_prefix: String = "Step",
+		sign_only: bool = false) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override(&"separation", GAP_CONTROL)
 	middle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -239,7 +241,7 @@ static func stepper(deltas: Array, middle: Control, on_step: Callable, name_pref
 		if delta > 0 and not placed_middle:
 			row.add_child(middle)
 			placed_middle = true
-		var b := button(step_text(delta), BUTTON, H_PIP)
+		var b := button(step_text(delta, sign_only), BUTTON, H_PIP)
 		b.name = "%s%+d" % [name_prefix, delta]
 		b.pressed.connect(on_step.bind(delta))
 		row.add_child(b)
@@ -248,8 +250,10 @@ static func stepper(deltas: Array, middle: Control, on_step: Callable, name_pref
 	return row
 
 
-## "−10" / "+5": a step label with the typographic minus.
-static func step_text(delta: int) -> String:
+## "−10" / "+5" (or just "−" / "+" with `sign_only`): a step label with the typographic minus.
+static func step_text(delta: int, sign_only: bool = false) -> String:
+	if sign_only:
+		return "+" if delta > 0 else GLYPH_MINUS
 	return ("+%d" % delta) if delta > 0 else (GLYPH_MINUS + str(absi(delta)))
 
 

@@ -13,8 +13,7 @@ extends GdUnitTestSuite
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
 ## Today's controls: [row it lives in now, the text a player reads on it, what it is]. The step
-## minus is typographic in the house style ("−10") and reads as "-10" here; the modifier steps were
-## labelled "-" / "+" before and now name their size ("−1" / "+1").
+## minus is typographic in the house style ("−10", "−") and reads as "-10" / "-" here.
 const INVENTORY := [
 	["MovementCapRow", "Off", "movement Off"],
 	["MovementCapRow", "Advance", "movement Advance"],
@@ -42,8 +41,8 @@ const INVENTORY := [
 	["SuccessRow", "4+", "success 4+"],
 	["SuccessRow", "5+", "success 5+"],
 	["SuccessRow", "6+", "success 6+"],
-	["ModifierRow", "-1", "modifier - (was \"-\")"],
-	["ModifierRow", "+1", "modifier + (was \"+\")"],
+	["ModifierRow", "-", "modifier -"],
+	["ModifierRow", "+", "modifier +"],
 	["ButtonRow", "Roll", "Roll"],
 	["ButtonRow", "Quick", "Quick"],
 	["RerollRow", "Fails", "re-roll Fails"],
@@ -234,14 +233,14 @@ func test_selectors_drive_their_effects(timeout := 120000) -> void:
 		assert_int(_main._success_target).override_failure_message("success " + text).is_equal(targets[text])
 		assert_bool(HouseStyle.is_selected(t)).is_true()
 
-	await _click(_find("ModifierRow", "+1"))
+	await _click(_find("ModifierRow", "+"))
 	assert_int(_main._success_modifier).is_equal(1)
 	assert_str(_main._modifier_value_label.text).is_equal("+1")
-	await _click(_find("ModifierRow", "-1"))
-	await _click(_find("ModifierRow", "-1"))
+	await _click(_find("ModifierRow", "-"))
+	await _click(_find("ModifierRow", "-"))
 	assert_int(_main._success_modifier).is_equal(-1)
 	assert_str(_main._modifier_value_label.text).is_equal("-1")
-	await _click(_find("ModifierRow", "+1"))
+	await _click(_find("ModifierRow", "+"))
 	assert_str(_main._modifier_value_label.text).is_equal("±0")
 
 
@@ -275,6 +274,13 @@ func test_rolls_tally_result_log_and_rerolls(timeout := 180000) -> void:
 	for l: Node in _main._current_roll_column.find_children("*", "Label", true, false):
 		hits = hits or ((l as Label).text == "✓ 3" and not l.is_queued_for_deletion())
 	assert_bool(hits).override_failure_message("no '✓ 3' success line in the tally").is_true()
+	# No tally jump: a re-evaluation swaps the rows in place in the same frame — the old rows may
+	# not linger (queued for deletion) beside the new ones and double the column for a frame.
+	_main._on_success_target_pressed(5)
+	var rows: int = _main._current_roll_column.get_child_count()
+	assert_int(rows).override_failure_message("tally column holds %d rows mid-re-evaluation (6 faces + ✓)" % rows) \
+		.is_equal(7)
+	_main._on_success_target_pressed(4)
 
 	# Re-rolls: each chip re-tosses exactly its dice of 6 5 4 3 2 1 vs 4+ and logs "↻N <label>".
 	var modes := {"Fails": 3, "1s": 1, "6s": 1, "All": 6}
@@ -305,7 +311,7 @@ func test_rolls_tally_result_log_and_rerolls(timeout := 180000) -> void:
 		.is_greater_equal(bar.max_value - bar.page - 1.0)
 	# A selector change re-evaluates the last roll and rebuilds the tally; the log stays on the newest.
 	await _click(_find("SuccessRow", "5+"))
-	await _click(_find("ModifierRow", "+1"))
+	await _click(_find("ModifierRow", "+"))
 	await _runner.simulate_frames(10)
 	assert_float(float(_main._dice_log_scroll.scroll_vertical)) \
 		.override_failure_message("a selector change scrolled the log off the newest roll: %d of %d" % [
