@@ -8,6 +8,7 @@ const FEET_6X4 := Vector2(6,4)
 const DEFAULT_SIZE := FEET_6X4
 const INCHES_TO_FEET := 1.0/12.0
 const CM_TO_FEET := 1.0/30.48
+const PAGE_ASPECT := 1768.0/1080.0
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
 const LOGO = preload("res://assets/ui_glassmorphism/fonts/Orbitron.ttf")
 const INK := Color("e9e9df")
@@ -103,8 +104,9 @@ func _ready() -> void:
 
 func _fit_host() -> void:
 	var root := get_tree().root
-	# Compensate the 1920px canvas shrink while preserving the user's UI scale.
-	content_scale_factor = root.content_scale_factor / maxf(0.1,root.get_final_transform().get_scale().x)
+	# Compensate the 1920px canvas shrink while preserving the user's UI scale. Only the shrink: on
+	# windows above 1080p the chooser grows with the canvas like the rest of the UI (1440p, ultrawide).
+	content_scale_factor = maxf(1.0,root.content_scale_factor / maxf(0.1,root.get_final_transform().get_scale().x))
 	size = Vector2i(root.get_visible_rect().size)
 	position = Vector2i.ZERO
 	_layout()
@@ -442,7 +444,9 @@ func _layout() -> void:
 	var area := get_visible_rect().size
 	var compact := area.y <= 800
 	var narrow := area.x < 900
-	var padding := maxi(20,int(area.x*0.04))
+	# The page is a centred column no wider than PAGE_ASPECT x the height (the 1080p page is 1768 px wide),
+	# so wide windows keep the 16:9 proportions of cards and preview instead of stretching them.
+	var padding := maxi(maxi(20,int(area.x*0.04)),int((area.x-area.y*PAGE_ASPECT)*0.5))
 	_header.vertical = area.x < 560
 	_footer.vertical = narrow
 	for side in ["left","right"]:
