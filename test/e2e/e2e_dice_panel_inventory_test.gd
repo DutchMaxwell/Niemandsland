@@ -51,9 +51,10 @@ const INVENTORY := [
 	["RerollRow", "All", "re-roll All"],
 ]
 
-## Every glyph the rebuilt window draws beyond plain ASCII: step minus, collapse / expand, the
-## "none" dash, ±0, the tally ×N, the success ✓, the log's re-roll ↻ and the result line's ·.
-const GLYPHS := "−▼▲–±×✓↻·"
+## Every glyph the rebuilt window draws beyond plain ASCII: step minus, the close ×, the "none" dash,
+## ±0, the tally ×N, the success ✓, the log's re-roll ↻, the result line's · — and the tool rail's
+## "opens something" › and "…" on the Terrain lines.
+const GLYPHS := "−×–±✓↻·›…"
 
 ## Today's dice panel at rest, measured on the real display (1920x1080 base, 23.09.): 420 x 702 px,
 ## and it widened to 474 px once a re-roll line reached the log. The rebuilt window may not cover more.
@@ -350,36 +351,37 @@ func test_colour_tag_click_on_a_die(timeout := 120000) -> void:
 	await E2EBoot.settle(get_tree())
 
 
-func test_collapse_folds_to_the_header_and_a_roll_unfolds_it(timeout := 120000) -> void:
+## The dice window lives in the tool rail (uirail): its × closes it into the rail, the rail's Dice
+## button opens it again at the same place, and any roll opens it so its dice are seen.
+func test_close_into_the_rail_and_a_roll_reopens_it(timeout := 120000) -> void:
 	var panel := _panel()
 	var open_rect := panel.get_global_rect()
-	var fold := panel.find_child("CollapseButton", true, false) as Button
-	assert_object(fold).is_not_null()
-	assert_str(fold.text).is_equal(HouseStyle.GLYPH_COLLAPSE)
+	var close := panel.find_child("CloseButton", true, false) as Button
+	assert_object(close).is_not_null()
+	assert_str(close.text).is_equal(HouseStyle.GLYPH_CLOSE)
+	var dice_tool: Button = _main._tool_rail.button(&"dice")
+	assert_bool(HouseStyle.is_selected(dice_tool)).is_true()
 
-	await _click(fold)
+	await _click(close)
 	await _runner.simulate_frames(2)
 	assert_bool(_main._dice_collapsed).is_true()
-	assert_bool((_main._dice_controls as Control).is_visible_in_tree()).is_false()
-	assert_bool((_main.dice_roller_control as Control).is_visible_in_tree()).is_false()
-	var folded := panel.get_global_rect()
-	assert_float(folded.size.y).override_failure_message("folded window %s" % folded).is_less(80.0)
-	assert_float(folded.end.y).is_equal_approx(open_rect.end.y, 1.0)   # keeps its bottom-right corner
-	assert_str(fold.text).is_equal(HouseStyle.GLYPH_EXPAND)
-	# A purpose set while folded waits for the unfold.
+	assert_bool(panel.visible).is_false()
+	assert_bool(HouseStyle.is_selected(dice_tool)).is_false()
+	# A purpose set while closed waits for the window.
 	_main._set_roll_purpose("Rending shots")
 	assert_bool((_main.roll_purpose_label as Control).visible).is_false()
 
-	await _click(fold)
+	await _click(dice_tool)
 	await _runner.simulate_frames(2)
 	assert_bool(_main._dice_collapsed).is_false()
+	assert_bool(panel.visible).is_true()
 	assert_bool((_main.roll_purpose_label as Control).visible).is_true()
 	_main._set_roll_purpose("")
 	await _runner.simulate_frames(2)
 	assert_that(panel.get_global_rect()).is_equal(open_rect)
 
-	# Folded again, any roll (AI, scripted, remote) unfolds the window so its dice are seen.
-	await _click(fold)
+	# Closed again, any roll (AI, scripted, remote) opens the window so its dice are seen.
+	await _click(close)
 	var faces: Array[int] = [5, 5]
 	await _show(faces)
 	assert_bool(_main._dice_collapsed).is_false()
