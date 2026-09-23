@@ -79,7 +79,9 @@ static func merge_identical(profiles: Array) -> Array:
 	return out
 
 
-## Everything except the summable fields, deterministically stringified.
+## Everything except the summable fields, deterministically stringified — plus the per-copy attacks:
+## Bash (A2) x1 and Bash (A1) x2 are different weapons, and merged (attacks 4, count 3) the bearer
+## scaler's per-copy 4 / 3 = 1 swung 3 attacks where the core swings 4 (P1, RATMEN_SHIP_REPORT §6.2).
 static func _merge_signature(p: Dictionary) -> String:
 	var keys := p.keys()
 	keys.sort()
@@ -88,6 +90,7 @@ static func _merge_signature(p: Dictionary) -> String:
 		if str(k) == "attacks" or str(k) == "count":
 			continue
 		parts.append("%s=%s" % [str(k), str(p[k])])
+	parts.append("per_copy=%d" % (int(p.get("attacks", 0)) / maxi(int(p.get("count", 1)), 1)))
 	return ";".join(parts)
 
 

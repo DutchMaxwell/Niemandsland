@@ -3270,8 +3270,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		var shot_range_in: int = int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target))
 		var shot_max_models: int = int(shot["max"])
 		var shot_copies: int = maxi(int(profile.get("count", 1)), 1)
-		var shot_bearers: int = SoloController.alive_bearers_of(member, str(profile.get("name", ""))) \
-			if shot_copies < shot_max_models else -1
+		var shot_bearers: int = SoloController.alive_bearers_of(member, str(profile.get("name", "")),
+			maxi(int(profile.get("attacks", 0)) / shot_copies, 0)) if shot_copies < shot_max_models else -1
 		AiShotRecorder.record({"act": solo_controller.move_act_seq(), "round": solo_controller._current_round(),
 			"player": solo_controller.ai_slot, "shooter": attacker.get_name(), "member": member.get_name(),
 			"weapon": str(profile.get("name", "?")), "target": target.get_name(),
@@ -4540,9 +4540,9 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# ratio, which let the last survivor swing every dead specialist's fist. Base weapons (a
 			# copy per model) and units without per-model loadout data keep the ratio scaling.
 			var copies: int = maxi(int(prof.get("count", 1)), 1)
-			var bearers: int = SoloController.alive_bearers_of(member, str(prof.get("name", ""))) if copies < max_models else -1
+			var per_copy: int = maxi(int(prof.get("attacks", 0)) / copies, 0)
+			var bearers: int = SoloController.alive_bearers_of(member, str(prof.get("name", "")), per_copy) if copies < max_models else -1
 			if bearers >= 0:
-				var per_copy: int = maxi(int(prof.get("attacks", 0)) / copies, 0)
 				prof["attacks"] = per_copy * mini(bearers, count)
 			else:
 				prof["attacks"] = SoloController.effective_attacks(int(prof.get("attacks", 0)), count, max_models)
