@@ -36,6 +36,9 @@ const TOOLTIP_OFFSET = Vector2(15, 15)
 ## Delay before showing tooltip (seconds)
 const SHOW_DELAY: float = 0.4
 
+## Invalidates a pending _reveal when another show / hide comes first.
+var _reveal_gen: int = 0
+
 
 func _ready() -> void:
 	# Start hidden
@@ -126,10 +129,7 @@ func show_unit(unit: OPRApiClient.OPRUnit, model: Node3D = null, immediate: bool
 		_pending_model = null
 		_current_unit = unit
 		_current_model = model
-		_update_content()
-		reset_size()
-		visible = true
-		_update_position()
+		_reveal()
 		return
 
 	# If we're already waiting for this unit, don't restart timer
@@ -149,11 +149,26 @@ func _on_show_timer_timeout() -> void:
 		_current_model = _pending_model
 		_pending_unit = null
 		_pending_model = null
-		_update_content()
-		# Force resize to fit content
-		reset_size()
-		visible = true
-		_update_position()
+		_reveal()
+
+
+## Shows the current unit once the panel has laid out at its real width. A hidden container never gives
+## its rich-text rows a width, and measured at width 0 the session's FIRST tooltip came out ~6,000 px
+## tall (content at the top of a screen-high box). So: fill, lay out unseen for two frames, then size to
+## the text and show.
+func _reveal() -> void:
+	_update_content()
+	visible = true
+	modulate.a = 0.0
+	_reveal_gen += 1
+	var gen := _reveal_gen
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if gen != _reveal_gen or not visible:
+		return
+	reset_size()
+	_update_position()
+	modulate.a = 1.0
 
 
 ## Hide the tooltip
@@ -161,6 +176,8 @@ func hide_tooltip() -> void:
 	_show_timer.stop()
 	_pending_unit = null
 	_pending_model = null
+	_reveal_gen += 1
+	modulate.a = 1.0
 	visible = false
 	_current_unit = null
 	_current_model = null

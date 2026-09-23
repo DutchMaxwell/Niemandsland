@@ -18,12 +18,15 @@ const RED := Color(0.95, 0.36, 0.31)
 const TEXT := Color(0.90, 0.93, 0.97)
 const TEXT_DIM := Color(0.58, 0.64, 0.72)
 const CHIP_OFF := Color(0.22, 0.26, 0.33)
+const WRAP_FLOOR := 72.0   # the narrowest a wrapping name gets before the card has laid out
 
 
 ## Presented card content (the big card). `on_action` (optional) is called with the action kind string
 ## ("activation"/"fatigued"/"shaken"/"casts"/"wounds"/"details"/"revive") when an action chip is pressed;
 ## the dock connects it to _card_action. Left empty in the dev preview so the chips are inert.
-static func build_presented(data: Dictionary, on_action: Callable = Callable(), collapse_weapons: bool = false) -> Control:
+static func build_presented(data: Dictionary, on_action: Callable = Callable(), collapse_weapons: bool = false,
+		card_w: float = 320.0) -> Control:
+	var inner: float = card_w - 24.0   # the card's content width (12 px margins): links wrap inside it
 	var margin := MarginContainer.new()
 	for s in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + s, 12)
@@ -31,7 +34,7 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 	col.add_theme_constant_override("separation", 8)
 	margin.add_child(col)
 
-	# Header band: name (auto-fit + ellipsize so long names never truncate mid-word) + points.
+	# Header band: name (auto-fit + wrap, never cut) + points.
 	var header := HBoxContainer.new()
 	var name_lbl := _fit_name(str(data.get("name", "Unit")), 19, 15, 20)
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -90,27 +93,25 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 			for w in weapons:
 				names.append(str((w as Dictionary).get("name", "")))
 			var summary := _label("⚔ " + ", ".join(names), 11, TEXT_DIM)
-			summary.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-			summary.clip_text = true
+			_wrap(summary)   # never cut: the line wraps
 			col.add_child(summary)
 		else:
 			for w in weapons:
 				var row := HBoxContainer.new()
 				var nm := _label(str((w as Dictionary).get("name", "")), 12, TEXT)
 				nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-				nm.clip_text = true
+				_wrap(nm)   # a long weapon name wraps instead of losing its end to "…"
 				row.add_child(nm)
 				row.add_child(_label(str((w as Dictionary).get("meta", "")), 12, TEXT_DIM))
 				col.add_child(row)
 				var wr := str((w as Dictionary).get("rules", ""))
 				if not wr.is_empty():
-					col.add_child(_weapon_rules_list(wr.split(", ", false)))
+					col.add_child(_weapon_rules_list(wr.split(", ", false), inner))
 
 	# Rules + Spells list — each name is a hover target (the dock wires meta_hover to the description
 	# tooltip + spell-range ring, bus 033). This absorbs the old detail Info card; there is no Info button.
 	if not bool(data.get("dead", false)):
-		var rules_rt := _rules_list(data)
+		var rules_rt := _rules_list(data, inner)
 		if rules_rt != null:
 			col.add_child(rules_rt)
 
@@ -131,22 +132,40 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 ## meta "rule_meta". The dock connects mouse_entered/exited/pressed to the description tooltip. LinkButtons
 ## are reliably picked (unlike the previous nested RichTextLabel meta_hover, which never fired in-game —
 ## Godot routes input to a scaled Control's nested RichText unreliably). Maintainer: hover must work.
-static func _rule_link(label: String, meta_key: String, color: Color, font_px: int) -> LinkButton:
-	var lb := RuleLink.new()   # LinkButton subclass with a WORD-WRAPPING tooltip (bus feedback)
+static func _rule_link(label: String, meta_key: String, color: Color, font_px: int, max_w: float) -> RuleLink:
+	var lb := RuleLink.new()   # wrapping Button with a WORD-WRAPPING tooltip (bus feedback)
 	lb.text = label
-	lb.underline = LinkButton.UNDERLINE_MODE_ALWAYS
+	lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # a long name wraps inside the card, never past it
+	lb.max_width = max_w
+	lb.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	lb.focus_mode = Control.FOCUS_NONE
 	lb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	lb.add_theme_font_size_override("font_size", font_px)
-	lb.add_theme_color_override("font_color", color)
-	lb.add_theme_color_override("font_hover_color", Color(0.9, 0.95, 1.0))
+	var hover := Color(0.9, 0.95, 1.0)
+	for c in ["font_color", "font_pressed_color", "font_focus_color"]:
+		lb.add_theme_color_override(c, color)
+	for c in ["font_hover_color", "font_hover_pressed_color"]:
+		lb.add_theme_color_override(c, hover)
+	# The LinkButton look: no box, the text underlined (a 1 px rule in the text colour).
+	for s in ["normal", "pressed", "disabled", "focus"]:
+		lb.add_theme_stylebox_override(s, _underline(color))
+	for s in ["hover", "hover_pressed"]:
+		lb.add_theme_stylebox_override(s, _underline(hover))
 	lb.set_meta("rule_meta", meta_key)
 	return lb
 
 
+static func _underline(color: Color) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(0, 0, 0, 0)
+	s.border_width_bottom = 1
+	s.border_color = color
+	return s
+
+
 ## Unit rules + spells as a row of hover/click targets. Container named "RulesList" so the dock finds and
 ## wires every LinkButton inside it.
-static func _rules_list(data: Dictionary) -> Control:
+static func _rules_list(data: Dictionary, max_w: float) -> Control:
 	var rule_names: Array = data.get("rules_list", [])
 	var spells: Array = data.get("spells", []) if bool(data.get("caster", false)) else []
 	if rule_names.is_empty() and spells.is_empty():
@@ -158,25 +177,25 @@ static func _rules_list(data: Dictionary) -> Control:
 	if not rule_names.is_empty():
 		flow.add_child(_label("Rules", 11, TEXT_DIM))
 		for r in rule_names:
-			flow.add_child(_rule_link(str(r), str(r), TEXT_DIM, 11))
+			flow.add_child(_rule_link(str(r), str(r), TEXT_DIM, 11, max_w))
 	if not spells.is_empty():
 		flow.add_child(_label("Spells", 11, CYAN))
 		for s in spells:
 			var sd := s as Dictionary
-			flow.add_child(_rule_link("%s (%d+)" % [str(sd.get("name", "")), int(sd.get("threshold", 0))], "spell:" + str(sd.get("name", "")), CYAN, 11))
+			flow.add_child(_rule_link("%s (%d+)" % [str(sd.get("name", "")), int(sd.get("threshold", 0))], "spell:" + str(sd.get("name", "")), CYAN, 11, max_w))
 	return flow
 
 
 ## A weapon's named special rules as hover/click targets (maintainer #5). Same "RulesList" container so
 ## the dock wires them alongside the unit rules.
-static func _weapon_rules_list(names: PackedStringArray) -> Control:
+static func _weapon_rules_list(names: PackedStringArray, max_w: float) -> Control:
 	var flow := HFlowContainer.new()
 	flow.name = "RulesList"
 	flow.add_theme_constant_override("h_separation", 6)
 	for nm in names:
 		var t := nm.strip_edges()
 		if not t.is_empty():
-			flow.add_child(_rule_link(t, t, CYAN, 10))
+			flow.add_child(_rule_link(t, t, CYAN, 10, max_w))
 	return flow
 
 
@@ -191,18 +210,22 @@ static func _label(text: String, size: int, color: Color) -> Label:
 	return l
 
 
-## A unit-name label that never truncates mid-word: drop a font step when the name is long, then let
-## the label ellipsize if it still overflows the available width.
+## A unit-name label that never loses a letter: drop a font step when the name is long, then WRAP if it
+## still overflows (maintainer 23.09.: nothing on a card may be cut — the "…" hid "Battle Brot…").
 static func _fit_name(text: String, size_big: int, size_small: int, max_chars: int) -> Label:
 	var l := Label.new()
 	l.text = text
-	# Auto-shrink a step past the char budget, THEN ellipsize only if it still overflows the label's
-	# width (bus 034: ~24 chars must fit; do not clip short names). clip_text=false so an expand-filled
-	# label uses its full allotted width before the ellipsis kicks in.
 	l.add_theme_font_size_override("font_size", size_big if text.length() <= max_chars else size_small)
 	l.add_theme_color_override("font_color", TEXT)
-	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_wrap(l)
 	return l
+
+
+## Word-wraps a card label. A wrapping label is first measured at width 0 (one word per line): the floor
+## keeps a short name on one line while the layout has not given it its width yet.
+static func _wrap(l: Label) -> void:
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(WRAP_FLOOR, 0)
 
 
 ## Compact icon+label action button with hover state (chip-styled), part of the presented-card design.
