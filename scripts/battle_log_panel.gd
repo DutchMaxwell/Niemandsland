@@ -19,6 +19,8 @@ const MAX_VISIBLE := 200
 ## SoloController / dev-mode knowledge.
 signal export_requested()
 signal copy_requested()
+## The panel opened or closed (the top bar's Battle Log button follows it).
+signal open_changed(open: bool)
 
 var _log: BattleLog = null
 var _open := false   # starts collapsed to a top-centre tab; click the header to expand downward
@@ -202,11 +204,23 @@ func _entry_label(entry: Dictionary) -> Control:
 
 
 func _toggle() -> void:
-	_open = not _open
+	set_open(not _open)
+
+
+func is_open() -> bool:
+	return _open
+
+
+## Expands the panel downward or folds it back to its header.
+func set_open(open: bool) -> void:
+	if open == _open:
+		return
+	_open = open
 	_body.visible = _open
 	# Top-edge panel: ▲ collapses up (open), ▼ expands down (collapsed).
 	_header.text = ("▲  Battle Log" if _open else "▼  Battle Log")
 	reset_size()
+	open_changed.emit(_open)
 
 
 func _panel_style() -> StyleBoxFlat:

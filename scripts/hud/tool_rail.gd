@@ -1,8 +1,8 @@
 class_name ToolRail
 extends Control
 ## The tool rail (house style, maintainer 23.09.: "Werkzeugleiste"): Dice, Measure, Terrain and View
-## in one slim column at the right edge, one tool open at a time (the open one in gold), and
-## "? Controls" for the key list that used to sit on the table.
+## in one slim column at the right edge, one tool open at a time (the open one in gold). "? Controls"
+## moved to the top bar (maintainer 23.09.: "Obere Leiste").
 ##
 ## - Dice is the existing dice window, docked beside the rail — same node, same functions.
 ## - Measure and View show every table key with its caps. A clickable cap PRESSES that key (the same
@@ -11,7 +11,7 @@ extends Control
 ##   buttons.
 ## - Terrain routes to Main's existing handlers and mirrors the menu's switches.
 ## Display only: no rule, simulation or network change. This root is full-screen but IGNORE; only the
-## rail, the open panel and the open overlay own their pixels.
+## rail and the open panel own their pixels.
 
 signal tool_changed(tool: StringName)   # &"" = every tool closed
 
@@ -25,7 +25,6 @@ const ICONS := {
 	&"measure": "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'><path d='M6 24H42M6 24l8-8M6 24l8 8M42 24l-8-8M42 24l-8 8' fill='none' stroke='#fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/></svg>",
 	&"terrain": "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'><path d='M4 40L18 14l9 15 5-7 12 18Z' fill='none' stroke='#fff' stroke-width='3.5' stroke-linejoin='round'/><path d='M13 23.5l5-9.5 5 8.3-3-1.8-3.5 3Z' fill='#fff'/></svg>",
 	&"view": "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'><circle cx='24' cy='24' r='15' fill='none' stroke='#fff' stroke-width='3.5'/><circle cx='24' cy='24' r='6' fill='#fff'/></svg>",
-	&"help": "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'><circle cx='24' cy='24' r='17' fill='none' stroke='#fff' stroke-width='3.5'/><path d='M18.5 19.5a5.5 5.5 0 1 1 7.6 5.1c-1.4.6-2.1 1.6-2.1 3v1.4' fill='none' stroke='#fff' stroke-width='3.5' stroke-linecap='round'/><circle cx='24' cy='34.5' r='2.3' fill='#fff'/></svg>",
 }
 const TITLES := {&"dice": "Dice", &"measure": "Measure", &"terrain": "Terrain", &"view": "View"}
 
@@ -34,14 +33,11 @@ var _rail: PanelContainer = null
 var _buttons: Dictionary = {}    # tool -> rail Button
 var _panels: Dictionary = {}     # tool -> Control
 var _active: StringName = &""
-var _help: Button = null
-var _overlay: ControlsOverlay = null
 var _switches: Array = []        # [Button, Callable -> the source CheckBox/Button or null]
 
 
-## Wires the rail into the HUD: builds it, docks the dice window beside it, builds the other panels
-## and the controls overlay (on `overlay_parent`, above the HUD) from `key_list`, which it hides.
-func setup(main: Node, dice_panel: Control, key_list: Label, overlay_parent: Node) -> void:
+## Wires the rail into the HUD: builds it, docks the dice window beside it, builds the other panels.
+func setup(main: Node, dice_panel: Control) -> void:
 	_main = main
 	name = "ToolRail"
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -54,9 +50,6 @@ func setup(main: Node, dice_panel: Control, key_list: Label, overlay_parent: Nod
 	_panels[&"view"] = _build_view()
 	for t: StringName in TOOLS:
 		(_panels[t] as Control).visible = false
-	key_list.visible = false   # the always-on wall goes; "? Controls" shows the same list
-	_overlay = ControlsOverlay.new()
-	_overlay.build(overlay_parent, key_list)
 
 
 # === State ===
@@ -71,14 +64,6 @@ func button(tool: StringName) -> Button:
 
 func panel(tool: StringName) -> Control:
 	return _panels.get(tool)
-
-
-func help_button() -> Button:
-	return _help
-
-
-func overlay() -> ControlsOverlay:
-	return _overlay
 
 
 ## A rail click: open that tool, or close it when it is the open one.
@@ -98,11 +83,6 @@ func set_open(tool: StringName, open: bool) -> void:
 		_refresh_switches()
 	if changed:
 		tool_changed.emit(_active)
-
-
-func _unhandled_key_input(event: InputEvent) -> void:
-	if _overlay != null and event is InputEventKey and _overlay.handle_key(event as InputEventKey):
-		get_viewport().set_input_as_handled()
 
 
 # === Layout ===
@@ -149,15 +129,6 @@ func _build_rail() -> void:
 		b.pressed.connect(select.bind(t))
 		col.add_child(b)
 		_buttons[t] = b
-	var rule := ColorRect.new()
-	rule.color = HouseStyle.LINE
-	rule.custom_minimum_size = Vector2(0, HouseStyle.BORDER)
-	col.add_child(rule)
-	_help = HouseStyle.rail_button("Controls", HouseStyle.svg_icon(ICONS[&"help"]))
-	_help.name = "Tool_help"
-	_help.tooltip_text = "Keys and mouse controls"
-	_help.pressed.connect(func() -> void: _overlay.open())
-	col.add_child(_help)
 
 
 ## A house-style panel for one tool, docked and closable back into the rail.

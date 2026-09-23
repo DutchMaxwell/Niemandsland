@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## E2E — the tool rail (uirail, maintainer 23.09.: "Werkzeugleiste"; mockup LOOK, today's FULL function
-## set). Dice / Measure / Terrain / View in one rail, exactly one panel open, the always-on key wall
-## replaced by "? Controls". Every function the table has today for measuring, viewing and terrain is
+## set). Dice / Measure / Terrain / View in one rail, exactly one panel open ("? Controls" moved to the
+## top bar: e2e_top_bar_test). Every function the table has today for measuring, viewing and terrain is
 ## found in its panel, is reachable by a REAL click, and does what the key or menu button does today:
 ## a clickable key cap presses that very key; a Terrain line runs Main's own menu handler.
 ## test_inventory_check_reports_a_removed_control proves the presence check can fail.
@@ -26,12 +26,6 @@ const INVENTORY := [
 ## Terrain's menu actions (buttons that run Main's own handlers).
 const TERRAIN_ACTIONS := ["Map layout…", "Terrain mode", "Clear table…", "Sort table…",
 	"Show deployment zones", "Flip zone colours"]
-
-## The always-on key wall as it stood on main (96af498a, scenes/main.tscn UI/HUD/InfoLabel) — every
-## binding's keys must be in the Controls overlay.
-const WALL_TODAY := ["WASD", "Q/E", "Scroll", "Left Click", "Alt + Click", "Shift + Click", "R (hold)",
-	"Shift+R", "1-9", "Shift+A", "Ctrl+C/V/D", "L", "G / Shift+G", "F / Shift+F", "M / Shift+M", "P",
-	"K / Shift+K", "T / Shift+T"]
 
 ## Today's dice panel on main at rest (1920x1080 base): 420 x 702. Rail + an open panel may not cover more.
 const TODAY_DICE_AREA := 420.0 * 702.0
@@ -302,42 +296,6 @@ func test_keyboard_shortcuts_are_unchanged(timeout := 120000) -> void:
 	assert_int(_main.range_ring_controller.active_count()).override_failure_message("G on the keyboard").is_greater(0)
 	assert_int(_main.movement_range_controller.active_count()).override_failure_message("M on the keyboard").is_greater(0)
 	await E2EBoot.settle(get_tree())
-
-
-func test_controls_overlay_lists_every_binding_of_the_old_wall(timeout := 120000) -> void:
-	var wall := _main.get_node("UI/HUD/InfoLabel") as Label
-	assert_bool(wall.visible).override_failure_message("the always-on key wall should be gone from the table").is_false()
-	await _click(_rail().help_button())
-	var overlay := _rail().overlay()
-	assert_bool(overlay.is_open()).is_true()
-	var shown: Array = []
-	for r: Node in overlay.root.find_children("*", "HBoxContainer", true, false):
-		if r.has_meta(&"keys"):
-			shown.append(String(r.get_meta(&"keys")))
-	for keys: String in WALL_TODAY:
-		assert_bool(keys in shown).override_failure_message("'%s' is missing from the Controls overlay %s" % [keys, str(shown)]).is_true()
-	# Every line of the list, not only the old ones, and the version line from the one source.
-	assert_int(shown.size()).is_equal(ControlsOverlay.parse(wall.text).size())
-	var version := overlay.root.find_child("Version", true, false) as Label
-	assert_str(version.text).is_equal("Niemandsland v%s" % ProjectSettings.get_setting("application/config/version"))
-	# Glyphs the overlay draws exist in its font.
-	var font: Font = version.get_theme_font(&"font")
-	for ch: String in ["×", "/", "…", "›"]:
-		assert_bool(font.has_char(ch.unicode_at(0))).override_failure_message("font lacks " + ch).is_true()
-	# Esc closes it; the × too.
-	var esc := InputEventKey.new()
-	esc.keycode = KEY_ESCAPE
-	esc.pressed = true
-	_main.get_viewport().push_input(esc)
-	await _runner.simulate_frames(2)
-	assert_bool(overlay.is_open()).is_false()
-	await _click(_rail().help_button())
-	# The sheet fits the screen (a wrapping label once blew it up to ~4,800 px, × off screen).
-	var sheet := overlay.root.find_child("Sheet", true, false) as Control
-	assert_bool((_main.get_node("UI/HUD") as Control).get_global_rect().encloses(sheet.get_global_rect())) \
-		.override_failure_message("the Controls sheet %s does not fit the screen" % sheet.get_global_rect()).is_true()
-	await _click(overlay.root.find_child("CloseButton", true, false) as Button)
-	assert_bool(overlay.is_open()).is_false()
 
 
 func test_rail_and_an_open_panel_cover_no_more_than_todays_dice_panel(timeout := 120000) -> void:
