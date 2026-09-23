@@ -264,7 +264,7 @@ func _action(v: VBoxContainer, text: String, trailing: String, run: Callable) ->
 
 ## A switch line that flips the menu's own toggle (so its handler runs and both stay in step).
 func _switch(v: VBoxContainer, text: String, source: Callable) -> Button:
-	var b := _action(v, text, "", func() -> void: _flip(source))
+	var b := _action(v, text, "Off", func() -> void: _flip(source))
 	_switches.append([b, source])
 	return b
 
@@ -279,5 +279,9 @@ func _flip(source: Callable) -> void:
 func _refresh_switches() -> void:
 	for s: Array in _switches:
 		var toggle := (s[1] as Callable).call() as BaseButton
-		HouseStyle.set_selected(s[0] as Button, toggle != null and toggle.button_pressed)
+		var on := toggle != null and toggle.button_pressed
+		HouseStyle.set_selected(s[0] as Button, on)
 		(s[0] as Button).disabled = toggle == null
+		var state := (s[0] as Button).get_node("Trailing") as Label   # the switch's own state word
+		state.text = "On" if on else "Off"
+		state.theme_type_variation = HouseStyle.HIT if on else HouseStyle.CAPTION

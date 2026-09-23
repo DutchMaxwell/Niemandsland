@@ -254,9 +254,11 @@ func test_terrain_lines_run_the_menus_own_handlers(timeout := 120000) -> void:
 	assert_bool(om.is_terrain_edit_mode()).is_true()
 	assert_bool((_main._terrain_mode_btn as BaseButton).button_pressed).is_true()
 	assert_bool(HouseStyle.is_selected(mode)).is_true()
+	assert_str((mode.get_node("Trailing") as Label).text).is_equal("On")
 	await _click(mode)
 	assert_bool(om.is_terrain_edit_mode()).is_false()
 	assert_bool(HouseStyle.is_selected(mode)).is_false()
+	assert_str((mode.get_node("Trailing") as Label).text).is_equal("Off")
 
 	var zones := _action("Show deployment zones")
 	var before: bool = (_main.deployment_zone_check as BaseButton).button_pressed
