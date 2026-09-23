@@ -52,6 +52,8 @@ func _load_asset(kind: String) -> Dictionary:
 	if path.is_empty():
 		push_warning("Reference terrain unavailable; procedural fallback remains visible.")
 		return {}
+	if kind == "oak":
+		return await _oak_on_worker(path)
 	var document := GLTFDocument.new()
 	var state := GLTFState.new()
 	if document.append_from_file(path,state)!=OK:
@@ -71,27 +73,26 @@ func _load_asset(kind: String) -> Dictionary:
 		root.free()
 		print("REFERENCE_TRELLIS_READY ",kind)
 		return {"scene":rock_packed,"bounds":rock_bounds}
-	var canopy := preload("res://scripts/visual/reference_canopy.gd")
-	var variants: Array[PackedScene] = []
-	var bounds_list: Array[AABB] = []
-	var tree_bounds := AABB()
-	for variant in canopy.VARIANTS:
-		var copy: Node = root.duplicate()
-		canopy.dress(copy,variant)
-		var variant_bounds := _mesh_bounds(copy,Transform3D.IDENTITY,AABB())
-		if variant == 0:
-			tree_bounds = variant_bounds
-		_own(copy,copy)
-		var packed := PackedScene.new()
-		packed.pack(copy)
-		copy.free()
-		variants.append(packed)
-		bounds_list.append(variant_bounds)
 	root.free()
-	if variants.is_empty() or tree_bounds.size.y <= 0.0 or maxf(tree_bounds.size.x,tree_bounds.size.z) <= 0.0:
+	return {}
+
+
+## The oak's parse and canopy dressing take seconds. The table tree pass's worker job builds the oak exactly as
+## this reference did on the main thread; running it on the worker pool keeps the main menu responsive.
+func _oak_on_worker(path: String) -> Dictionary:
+	var tree_pass: GDScript = load("res://scripts/visual/table_tree_pass.gd")
+	ReferenceMaterials.texture(tree_pass.LEAF_TEXTURE)   # the canopy reads it from this cache: fill it here
+	var job = tree_pass.SourceJob.new()
+	job.biome = "grassland"
+	job.hero_path = path
+	var task := WorkerThreadPool.add_task(job.run,false,"reference oak")
+	while not WorkerThreadPool.is_task_completed(task) and is_inside_tree():
+		await get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	if job.result.is_empty():
 		return {}
-	print("REFERENCE_TRELLIS_READY ",kind)
-	return {"scenes":variants,"bounds":bounds_list}
+	print("REFERENCE_TRELLIS_READY oak")
+	return {"scenes":job.result.oak_scenes,"bounds":job.result.oak_bounds}
 
 
 func dress(presentation: Node3D,size: Vector2) -> void:
