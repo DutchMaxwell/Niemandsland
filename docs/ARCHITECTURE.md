@@ -97,7 +97,7 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
   third is an **Ambush/Scout staging band**: split left/right with a divider + flat
   labels, and units carrying Scout/Ambush auto-place into their half. Owns the
   `regiments` dictionary and the regiment handling: `form_regiment` /
-  `restore_regiment` (save/load), `cycle_selected_regiment_frontage` (Shift+F),
+  `restore_regiment` (save/load), `cycle_selected_regiment_frontage` (B),
   `apply_regiment_wounds` / `regiment_take_casualty` / `regiment_revive_casualty`
   (pooled-tough counter, AoF:R p.9), and `toggle_selected_regiment_arcs` (F key).
 - `opr_import_dialog.gd` — import UI.

@@ -10,7 +10,7 @@ extends RefCounted
 const GROUPS := [
 	["Camera", ["WASD", "Q/E", "Scroll"]],
 	["Selection", ["Left Click", "Alt + Click", "Double Click", "Right Click"]],
-	["Unit", ["R (hold)", "Shift+R", "1-9", "Shift+A", "Ctrl+C/V/D", "L", "Del", "Ctrl+Z / Ctrl+Y"]],
+	["Unit", ["R (hold)", "Shift+R", "1-9", "B", "Shift+A", "Ctrl+C/V/D", "L", "Del", "Ctrl+Z / Ctrl+Y"]],
 	["Measure & view", ["Shift + Click", "P", "K / Shift+K", "G / Shift+G", "F / Shift+F", "M / Shift+M", "T / Shift+T"]],
 	["Game", ["F7", "F8"]],
 ]

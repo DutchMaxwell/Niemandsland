@@ -1120,7 +1120,7 @@ func _collect_toughs(gu: GameUnit) -> Array:
 	return toughs
 
 
-## Cycle the regiment's frontage (mirrors Shift+F).
+## Cycle the regiment's frontage (mirrors B).
 func _regiment_frontage(context: Dictionary) -> void:
 	var tray = context.get("regiment_tray", null)
 	if tray == null or not is_instance_valid(tray) or not army_manager:
