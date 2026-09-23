@@ -66,11 +66,28 @@ func build_record() -> Dictionary:
 		"payload_schema_version": 1, "consent_schema_version": 1, "record_id": "local-game",
 		"game_version": str(ProjectSettings.get_setting("application/config/version", "")),
 		"build_hash": "", "core_abi": 1, "rules_epoch": AiActRecorder.rules_epoch, "training_use": false,
-		"brain": {"engine": "classic", "id": "classic", "hash": ""},
+		"brain": _brain(),
 		"game": {"system_id": "opr", "mission_id": mission if not mission.is_empty() else "duel", "scoring_id": SoloController.mission_scoring},
 		"table": table, "armies": _armies(), "actions": _actions, "rounds": _rounds,
 		"final": _final(), "not_recorded": NOT_RECORDED.duplicate(),
 	}
+
+
+## The opponent a resolved grade stands for — the same resolution that prints main's "opponent:" line:
+## "planner_v0" is Erlkönig (the search planner on the packed net, hashed by the net's sha256; the
+## developer's loopback brain has no packed file to hash), every other grade is the classic tree.
+static func opponent_brain(grade: String, dev_brain: bool, brain_sha: String) -> Dictionary:
+	if grade == "planner_v0":
+		return {"engine": "erlkoenig", "id": "loopback" if dev_brain else "onnx", "hash": "" if dev_brain else brain_sha}
+	return {"engine": "classic", "id": grade, "hash": ""}
+
+
+## main._solo_opponent_brain when an AI seat was graded, else the legacy Classic stamp.
+func _brain() -> Dictionary:
+	var b = _main.get("_solo_opponent_brain") if _main != null else null
+	if b is Dictionary and not (b as Dictionary).is_empty():
+		return {"engine": str(b.get("engine", "")), "id": str(b.get("id", "")), "hash": str(b.get("hash", ""))}
+	return {"engine": "classic", "id": "classic", "hash": ""}
 
 
 func _append(kind: String, unit_id: String, side: int, from: Array, to: Array, target_id: String, faces: Array) -> void:

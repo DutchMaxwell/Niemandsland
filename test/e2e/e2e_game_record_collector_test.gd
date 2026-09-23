@@ -59,6 +59,26 @@ func _recorded_actions(kind: String) -> Array:
 	return out
 
 
+## The record's brain comes from the SAME resolution that prints the "opponent:" line
+## (main._solo_apply_difficulty): NACHTMAHR is Erlkönig when the core and its packed net are up,
+## else the classic tree — never the old hardcoded "classic"/"classic". A tree grade names itself.
+func test_record_names_the_opponent_the_game_really_ran(timeout := 120000) -> void:
+	_main._ensure_solo_controller()
+	_main.solo_ai_slots = {2: true}
+	_main._solo_interactive_grade = "nachtmahr"
+	_main._solo_apply_difficulty()
+	var brain: Dictionary = _main.game_record_collector.build_record()["brain"]
+	var ran := SoloDifficulty.preset_for_nachtmahr(BattleSim.core_enabled(), _main.solo_controller.shipped_brain_ready())
+	var want := {"engine": "classic", "id": "nachtmahr", "hash": ""}
+	if ran == "planner_v0":
+		want = {"engine": "erlkoenig", "id": "onnx", "hash": _main.solo_controller.shipped_brain_sha}
+	assert_dict(brain).override_failure_message("NACHTMAHR resolved to %s, the record says %s" % [ran, str(brain)]).is_equal(want)
+	_main._solo_interactive_grade = "veteran"
+	_main._solo_apply_difficulty()
+	assert_dict(_main.game_record_collector.build_record()["brain"]) \
+		.is_equal({"engine": "classic", "id": "veteran", "hash": ""})
+
+
 ## The collector is built by the real _ready() and tapped by the SAME activation funnel the Battle
 ## Log uses, so both counts must move together — one record action per logged activation.
 func test_record_actions_match_battle_log_activations(timeout := 120000) -> void:

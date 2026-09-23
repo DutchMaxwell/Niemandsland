@@ -275,6 +275,8 @@ var solo_ai_slots: Dictionary = {}           # player_id -> true: armies the Sol
 var _solo_interactive_grade: String = "nachtmahr"  # the ONE grade (NML-211): NACHTMAHR, every knob at
                                                   # its ceiling. WITHOUT a grade active_difficulty()==null
                                                   # → the naive baseline AI (no position solver, no knobs).
+var _solo_opponent_brain: Dictionary = {}  # the opponent the game really runs (GameRecordCollector.opponent_brain),
+                                           # set with the "opponent:" line; {} = no AI seat graded
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
 var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
@@ -1867,12 +1869,15 @@ func _solo_apply_difficulty() -> void:
 	solo_controller.auto_interference = _solo_both_ai
 	solo_controller.difficulty_seed = _solo_arena_seed
 	solo_controller.difficulty_by_slot = {}
+	_solo_opponent_brain = {}   # arena grades per slot: the record keeps the legacy stamp
 	if not _solo_difficulty_grades.is_empty():
 		for slot in _solo_difficulty_grades:
 			var grade := str(_solo_difficulty_grades[slot])
 			solo_controller.set_difficulty(int(slot), SoloDifficulty.for_grade(grade, _solo_arena_seed))
 		return
 	var interactive_grade := _solo_interactive_grade
+	if not solo_ai_slots.is_empty():
+		_solo_opponent_brain = GameRecordCollector.opponent_brain(interactive_grade, false, "")
 	# Ship path (22.09.): NACHTMAHR runs on the search planner with the packed net when the
 	# core and its brain are up (Erlkönig), else on the decision tree. The developer's
 	# loopback brain (NML_BRAIN_URL, debug builds) counts as a brain too. ONE log line says
@@ -1884,6 +1889,8 @@ func _solo_apply_difficulty() -> void:
 		interactive_grade = SoloDifficulty.preset_for_nachtmahr(core_up, brain_up)
 		if interactive_grade == "planner_v0":
 			AiPlanner.set_search_budget(SoloDifficulty.SHIP_SEARCH_TOP_K, SoloDifficulty.SHIP_SEARCH_HORIZON)
+			if not solo_ai_slots.is_empty():
+				_solo_opponent_brain = GameRecordCollector.opponent_brain(interactive_grade, dev_brain, solo_controller.shipped_brain_sha)
 			print("opponent: erlkoenig brain=%s top_k=%d horizon=%d move=%s" % [
 				"loopback" if dev_brain else "onnx " + solo_controller.shipped_brain_sha.left(8),
 				AiPlanner.top_k_default(), AiPlanner.horizon(), "core" if SoloController._move_seam_on() else "gdscript"])
