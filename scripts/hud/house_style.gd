@@ -77,7 +77,7 @@ const PAD_CHIP_X := 10
 const PAD_BAR_PRIMARY_X := 14
 const DOT := 8              # the side dot of a turn chip
 const RADIUS_PILL := 13     # a status pill on a unit card (mockup .pill)
-const PAD_PILL_X := 10
+const PAD_PILL_X := 7
 ## Tones of a card's pills and links.
 const TONE_GOLD := &"gold"       # activated
 const TONE_WARN := &"warn"       # fatigued, shaken, wounds

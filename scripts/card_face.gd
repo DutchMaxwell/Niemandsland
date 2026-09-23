@@ -64,7 +64,7 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 	# Status pills: on the presented card they ARE the controls (a click toggles the state / opens the
 	# wound or cast window); strip cards get display pills. A flow, so extra pills wrap.
 	var strip := HFlowContainer.new()
-	strip.add_theme_constant_override("h_separation", 6)
+	strip.add_theme_constant_override("h_separation", 5)
 	strip.add_theme_constant_override("v_separation", 6)
 	if dead:
 		strip.add_child(_status_chip("↺ Revive", false, HouseStyle.TONE_ACCENT, compact, on_action, "revive"))
@@ -93,14 +93,14 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 			col.add_child(summary)
 		else:
 			var list := VBoxContainer.new()
-			list.add_theme_constant_override("separation", 2 if compact else 4)
+			list.add_theme_constant_override("separation", 2 if compact else 3)
 			for i in weapons.size():
 				var w := weapons[i] as Dictionary
 				if i > 0 and not compact:
 					list.add_child(_rule(HouseStyle.LINE))
 				var row := HBoxContainer.new()
 				row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
-				var nm := _label(str(w.get("name", "")), 12 if compact else 14, HouseStyle.INK)
+				var nm := _label(str(w.get("name", "")), 12 if compact else 13, HouseStyle.INK)
 				nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				nm.custom_minimum_size = Vector2(WEAPON_FLOOR, 0)
@@ -240,7 +240,7 @@ static func _rule(color: Color) -> Control:
 ## on_action) it is a plain lit/unlit display pill.
 static func _status_chip(text: String, lit: bool, tone: StringName, compact: bool, on_action: Callable = Callable(),
 		kind: String = "") -> Control:
-	var px := 11 if compact else 13
+	var px := 11 if compact else 12
 	if not (on_action.is_valid() and not kind.is_empty()):
 		var box := PanelContainer.new()
 		box.add_theme_stylebox_override(&"panel", HouseStyle.pill_box(tone, lit))
