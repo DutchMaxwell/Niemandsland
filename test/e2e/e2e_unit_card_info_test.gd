@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
-## E2E — the unit cards show EVERY piece of information and hide none of it (maintainer 23.09.: "die
-## Informationen ... dürfen nicht eingekürzt werden" — "wir müssen das Abschneiden heilen").
+## E2E — the unit cards keep EVERY piece of information through the house-style restyle (uicard,
+## maintainer 23.09.: "die Informationen ... dürfen nicht eingekürzt werden" — a visual alignment only).
 ##
 ## Four real lists go through the production importer (build_army_offline -> EquipmentDistributor ->
 ## joined heroes) into the real main.tscn: heroes, joined heroes, combined units, Tough vehicles, a
@@ -10,7 +10,7 @@ extends GdUnitTestSuite
 ## every label, button, link, rich text (as displayed) and every tooltip of a tag.
 ##
 ## - The multisets must equal test/fixtures/card_text_golden.json, recorded on origin/main's card code
-##   (NML_RECORD_CARD_GOLDEN=1 re-records it; never re-record to make a change pass).
+##   (NML_RECORD_CARD_GOLDEN=1 re-records it; never re-record to make a restyle pass).
 ## - Nothing on a card may be trimmed, clipped or sit outside its card / box.
 ## - The first stats tooltip of a session is as tall as its text (it came out screen-tall).
 
@@ -217,14 +217,14 @@ func test_the_equality_check_names_a_dropped_weapon_tag(timeout := 120000) -> vo
 	dock.present_unit(_unit(units, "wolf#1"))   # Wolf Veteran Assault Brothers: AP(4) on a weapon
 	await _runner.simulate_frames(4)
 	var before := texts(dock._presented)
-	var tag: BaseButton = null
-	for c: Node in dock._presented.find_children("*", "BaseButton", true, false):
+	var tag: Button = null
+	for c: Node in dock._presented.find_children("*", "Button", true, false):
 		if tag == null and str(c.get_meta("rule_meta", "")).begins_with("AP("):
 			tag = c
 	if tag == null:
 		fail("no weapon tag to drop — the check proves nothing")
 		return
-	var dropped := [str(tag.get(&"text")), "tooltip: " + tag.tooltip_text]
+	var dropped := [tag.text, "tooltip: " + tag.tooltip_text]
 	tag.get_parent().remove_child(tag)
 	tag.free()
 	var d := diff(before, texts(dock._presented))

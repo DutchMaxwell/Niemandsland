@@ -76,6 +76,13 @@ const BAR_TOP := 12         # the top bar's row
 const PAD_CHIP_X := 10
 const PAD_BAR_PRIMARY_X := 14
 const DOT := 8              # the side dot of a turn chip
+const RADIUS_PILL := 13     # a status pill on a unit card (mockup .pill)
+const PAD_PILL_X := 10
+## Tones of a card's pills and links.
+const TONE_GOLD := &"gold"       # activated
+const TONE_WARN := &"warn"       # fatigued, shaken, wounds
+const TONE_ACCENT := &"accent"   # caster, revive, rule links
+const TONE_MUTED := &"muted"     # weapon rule links
 
 # ===== Type =====
 const FONT_BODY := 14
@@ -472,6 +479,63 @@ static func set_chip(c: PanelContainer, text: String, variant: StringName) -> vo
 		var s := _box(CHIP_DOT[variant], CHIP_DOT[variant], int(DOT * 0.5), 0, 0)
 		s.set_border_width_all(0)
 		dot.add_theme_stylebox_override(&"panel", s)
+
+
+## The colour of a pill / link tone.
+static func tone_color(tone: StringName) -> Color:
+	match tone:
+		TONE_GOLD:
+			return GOLD
+		TONE_WARN:
+			return WARN
+		TONE_MUTED:
+			return MUTED
+		_:
+			return ACCENT
+
+
+## A status pill's box (mockup .pill): lit = the tone (gold solid, the others a tint), unlit = a ghost;
+## hovered = the tone's rim.
+static func pill_box(tone: StringName, lit: bool, hovered: bool = false) -> StyleBoxFlat:
+	var c := tone_color(tone)
+	var fill := FILL
+	var rim := LINE
+	if lit:
+		fill = c if tone == TONE_GOLD else _alpha(c, SELECTED_ALPHA)
+		rim = c
+		if hovered:
+			fill = c.lightened(GOLD_HOVER_LIGHTEN) if tone == TONE_GOLD else _alpha(c, SELECTED_ALPHA + HOVER_ALPHA)
+	elif hovered:
+		fill = _alpha(c, HOVER_ALPHA)
+		rim = c
+	return _box(fill, rim, RADIUS_PILL, PAD_PILL_X, 3)
+
+
+## A pill's text colour: dark on gold, the tone on a tint, muted when off.
+static func pill_ink(tone: StringName, lit: bool) -> Color:
+	if not lit:
+		return MUTED
+	return ON_GOLD if tone == TONE_GOLD else tone_color(tone)
+
+
+## A rule / spell link's box (mockup .rule-link): no fill, a soft underline rule in the tone.
+static func link_box(tone: StringName, hovered: bool = false) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(0, 0, 0, 0)
+	s.border_width_bottom = BORDER
+	s.border_color = tone_color(tone) if hovered else _alpha(tone_color(tone), 0.45)
+	s.content_margin_bottom = 1
+	return s
+
+
+## A hover tooltip's box (rule descriptions): the sheet fill with the window rim.
+static func tooltip_box() -> StyleBoxFlat:
+	return _box(SHEET_FILL, LINE_SOFT, RADIUS_CARD, PAD_CARD_X, PAD_CARD_Y)
+
+
+## A warning strip's box (coherency): a warn tint with a warn rim.
+static func warning_box() -> StyleBoxFlat:
+	return _box(_alpha(WARN, 0.12), _alpha(WARN, 0.55), RADIUS_CARD, PAD_CARD_X, PAD_CARD_Y)
 
 
 ## Dresses a button that must keep its own font (the ☰ menu button: Inter has no ☰) in a variant's
