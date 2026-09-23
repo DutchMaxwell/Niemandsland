@@ -211,6 +211,7 @@ var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
 var game_record_collector: GameRecordCollector = null   # in-memory opt-in game record (PR B1, local only)
 var _tutorial_mode: bool = false              # guided tutorial: set from the startup-menu flag, drives _start_tutorial
+var _solo_hotseat: bool = false               # tutorial table = two humans: retires the implicit "P2 is NACHTMAHR" default (plan B1)
 var _tutorial_director: TutorialDirector = null
 var _tutorial_start_lesson: String = ""       # chapter-picker lesson id ("" = assessment/resume flow)
 var _tutorial_board_pending: bool = false     # the bundled tutorial board was queued on the pending-load path
@@ -807,6 +808,7 @@ func _ready() -> void:
 	if tutorial_mode:
 		ProjectSettings.set_setting("niemandsland/tutorial_mode", false)
 		_tutorial_mode = true
+		_solo_hotseat = true   # from the first frame: the board loads before the director starts
 		_tutorial_start_lesson = str(ProjectSettings.get_setting("niemandsland/tutorial_lesson", ""))
 		ProjectSettings.set_setting("niemandsland/tutorial_lesson", "")
 		if str(ProjectSettings.get_setting("niemandsland/pending_load_path", "")).is_empty() \
@@ -2387,6 +2389,9 @@ func _ensure_solo_controller() -> void:
 	# designated AI slot — a cast/targeting click in a human-vs-human room must not summon
 	# NACHTMAHR (the controller's existence alone arms the alternation pump).
 	if solo_ai_slots.is_empty() and network_manager != null and network_manager.is_multiplayer_active():
+		return
+	# Plan B1, tutorial only: same rule on the tutorial table — no designation, no controller.
+	if solo_ai_slots.is_empty() and _solo_hotseat:
 		return
 	var ai_slot := _solo_ai_slot()
 	# In native both-AI mode the driver flips solo_controller.ai_slot per activation, so a slot-mismatch is
@@ -9176,6 +9181,10 @@ func _solo_is_ai_unit(unit: GameUnit) -> bool:
 	# is what let NACHTMAHR hijack the guest's army in a human-vs-human room.
 	if network_manager != null and network_manager.is_multiplayer_active():
 		return false
+	# Plan B1, tutorial only: the tutorial table is two humans at one screen — an explicit
+	# designation (above) still wins, the implicit default does not apply there.
+	if _solo_hotseat:
+		return false
 	return solo_ai_slots.is_empty() and pid == _solo_ai_slot()
 
 
@@ -14728,6 +14737,7 @@ func _on_load_file_selected(path: String) -> void:
 	if _scenario_loader != null and not path.begins_with(ScenarioLoader.SCENARIO_DIR):
 		_scenario_loader.leave_lesson_for_external_load()
 		_scenario_mode = false
+	_solo_hotseat = false   # a loaded battle is not the tutorial table: the solo default applies again
 	var error = await save_manager.load_game(path)
 	if error != OK:
 		push_error("Failed to load game: %d" % error)
@@ -15731,6 +15741,7 @@ const TUTORIAL_BOARD_TIMEOUT_S := 120.0
 func _start_tutorial() -> void:
 	if is_instance_valid(_tutorial_director):
 		return  # already running (guard against a double call_deferred)
+	_solo_hotseat = true   # plan B1: the tutorial table never hands player 2 to NACHTMAHR
 	# The board .nml deserializes asynchronously (unit-by-unit): wait for its
 	# load_completed/load_failed gate, with a hard timeout so a broken board never
 	# hangs the tutorial (it then runs degraded: banner spotlights, no unit target).
