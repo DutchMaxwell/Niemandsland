@@ -188,8 +188,10 @@ static func theme() -> Theme:
 	var cap := _box(KEYCAP_FILL, LINE, RADIUS_KEYCAP, 6, 1)
 	_label_variant(t, KEYCAP, INK, FONT_SMALL)
 	t.set_stylebox(&"normal", KEYCAP, cap)
-	_button_variant(t, KEY, cap, _box(_alpha(ACCENT, HOVER_ALPHA + 0.04), ACCENT, RADIUS_KEYCAP, 6, 1),
-		_box(_alpha(ACCENT, PRESS_ALPHA), ACCENT, RADIUS_KEYCAP, 6, 1), cap, INK, FONT_SMALL)
+	# A cap you can click wears a faint accent rim at rest, so it reads apart from a hint cap.
+	var key_rest := _box(KEYCAP_FILL, _alpha(ACCENT, 0.45), RADIUS_KEYCAP, 6, 1)
+	_button_variant(t, KEY, key_rest, _box(_alpha(ACCENT, HOVER_ALPHA + 0.04), ACCENT, RADIUS_KEYCAP, 6, 1),
+		_box(_alpha(ACCENT, PRESS_ALPHA), ACCENT, RADIUS_KEYCAP, 6, 1), key_rest, INK, FONT_SMALL)
 	t.set_type_variation(TOOL_LINE, &"PanelContainer")
 	t.set_stylebox(&"panel", TOOL_LINE, _box(FILL, LINE, RADIUS_CARD, 12, 4))
 	t.set_type_variation(SHEET, &"PanelContainer")
@@ -384,6 +386,7 @@ static func action_line(text: String, trailing: String = "") -> Button:
 	b.add_theme_constant_override(&"h_separation", GAP_ROW)
 	if trailing != "":
 		var t := label(trailing, HIT)
+		t.name = "Trailing"
 		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		t.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		t.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
