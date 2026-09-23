@@ -52,7 +52,7 @@ custom_minimum_size = Vector2(26, 26)
 layout_mode = 2
 size_flags_vertical = 4
 flat = true
-text = "✕"
+text = "×"
 
 [node name="StatsLabel" type="RichTextLabel" parent="MarginContainer/VBox"]
 layout_mode = 2

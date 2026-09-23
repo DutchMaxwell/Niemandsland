@@ -2636,7 +2636,9 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		row.add_child(_solo_deploy_ui_btn2)
 		# Discoverability for the drag (community #159) — a dim one-liner, no extra chrome.
 		var hint := Label.new()
-		hint.text = "⠿  drag to move"
+		# Not U+283F: this unthemed strip draws with Godot's default Open Sans, which lacks it (and every
+		# arrow) — it rendered as a hex box. U+2022 is in Open Sans and in Inter.
+		hint.text = "•  drag to move"
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hint.add_theme_font_size_override("font_size", 10)
 		hint.modulate = Color(1, 1, 1, 0.45)
@@ -9549,7 +9551,7 @@ func _solo_split_declare_second(target: GameUnit) -> void:
 			", ".join(rest), sf.get_name(), ", ".join(sb), target.get_name()])
 	_solo_deploy_ui_show("Split fire declared:\n· %s → %s\n· %s → %s" % [
 		", ".join(rest), sf.get_name(), ", ".join(sb), target.get_name()],
-		"🔥 Fire!", _solo_split_commit, "✕ Cancel attack", _solo_split_abort)
+		"🔥 Fire!", _solo_split_commit, "× Cancel attack", _solo_split_abort)
 
 
 ## The GO button of the declared split — only now do dice roll. Awaitable (tests wait on
@@ -12370,7 +12372,7 @@ func _on_hamburger_pressed() -> void:
 		var tween = create_tween()
 		tween.tween_property(left_panel_scroll, "modulate:a", 1.0, 0.2)
 		tween.tween_callback(func(): left_panel_scroll.mouse_filter = Control.MOUSE_FILTER_STOP)
-		hamburger_button.text = "✕"
+		hamburger_button.text = "×"   # U+00D7: Inter (the UI font) has no U+2715 — it drew a hex box
 	else:
 		# Fading OUT: the menu is still VISIBLE and still solid for most of the fade, so it must keep
 		# owning its clicks the whole way down. Dropping the filter up front re-created this very bug

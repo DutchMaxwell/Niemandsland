@@ -167,3 +167,68 @@ func test_the_reasoning_line_is_centred_on_the_screen() -> void:
 		assert_float(absf(centre - screen_centre)).is_less(2.0) \
 			.override_failure_message("'%s' is centred at x=%.0f, the screen at x=%.0f" % [text, centre, screen_centre])
 	_main._solo_hide_toast(true)
+
+
+# === 5. Glyphs the UI font does not have ======================================================
+# Captures 08 + 13: "✕" (U+2715, the open menu's close button) and "⠿" (U+283F, the deploy strip's drag
+# hint) are not in Inter, the HUD font, and rendered as boxes showing "2715" / "283F" wherever the
+# operating system had no fallback font carrying them.
+
+## Every character of `text` that `font` cannot draw, as "U+XXXX".
+func _missing_glyphs(font: Font, text: String) -> Array:
+	var out: Array = []
+	for i in text.length():
+		var cp := text.unicode_at(i)
+		if cp > 0x20 and not font.has_char(cp):
+			out.append("U+%04X" % cp)
+	return out
+
+
+func test_the_open_menu_button_draws_with_its_font() -> void:
+	var btn: Button = _main.hamburger_button
+	_main._on_hamburger_pressed()   # open: the button turns into the close glyph
+	await _runner.simulate_frames(2)
+	var missing := _missing_glyphs(btn.get_theme_font("font"), btn.text)
+	_main._on_hamburger_pressed()
+	assert_array(missing).is_empty()
+
+
+func test_the_deploy_strip_draws_every_glyph_with_its_font() -> void:
+	_main._solo_deploy_ui_show("Your turn: place one unit on your side, then hand over.", "Unit placed",
+		func() -> void: pass)
+	await _runner.simulate_frames(2)
+	var missing: Array = []
+	for n in _main._solo_deploy_ui.find_children("*", "Control", true, false):
+		if (n is Label or n is Button) and (n as Control).is_visible_in_tree():
+			for code in _missing_glyphs((n as Control).get_theme_font("font"), n.text):
+				missing.append("%s in '%s'" % [code, n.text])
+	_main._solo_deploy_ui_hide()
+	assert_array(missing).is_empty()
+
+
+## The other places that printed the same two glyphs (radial menu centre, the attack-split Cancel
+## button, the marker dialog, the retired unit card) are not all reachable from one boot, so this keeps
+## the two code points out of every script and scene — as long as Inter still lacks them.
+func test_no_script_or_scene_prints_a_glyph_the_ui_font_lacks() -> void:
+	var font: Font = load("res://assets/ui_glassmorphism/fonts/Inter.ttf")
+	var glyphs: Array = []
+	for g in ["✕", "⠿"]:
+		if not font.has_char(g.unicode_at(0)):
+			glyphs.append(g)
+	var hits: Array = []
+	for path in _source_files("res://scripts") + _source_files("res://scenes"):
+		var text := FileAccess.get_file_as_string(path)
+		for g in glyphs:
+			if text.contains(g):
+				hits.append("U+%04X in %s" % [g.unicode_at(0), path])
+	assert_array(hits).is_empty()
+
+
+func _source_files(dir: String) -> Array:
+	var out: Array = []
+	for f in DirAccess.get_files_at(dir):
+		if f.ends_with(".gd") or f.ends_with(".tscn"):
+			out.append(dir.path_join(f))
+	for d in DirAccess.get_directories_at(dir):
+		out.append_array(_source_files(dir.path_join(d)))
+	return out

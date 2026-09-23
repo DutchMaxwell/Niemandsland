@@ -161,7 +161,7 @@ func _draw() -> void:
 	# Center dead-zone (glass) + cancel glyph.
 	draw_circle(_center_pos, center_radius, Color(HudTokens.SURFACE.r, HudTokens.SURFACE.g, HudTokens.SURFACE.b, 0.95))
 	draw_arc(_center_pos, center_radius, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.16), 1.0, true)
-	var cancel_text := "✕"
+	var cancel_text := "×"   # U+00D7: Inter has no U+2715
 	var cs := font.get_string_size(cancel_text, HORIZONTAL_ALIGNMENT_CENTER, -1, LABEL_FONT_SIZE)
 	var cancel_col: Color = DESTRUCTIVE_COLOR if _hovered_index == -1 else HudTokens.TEXT_MUTED
 	draw_string(font, Vector2(_center_pos.x - cs.x / 2.0, _center_pos.y + cs.y * 0.32), cancel_text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, cancel_col)
