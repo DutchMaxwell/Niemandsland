@@ -92,6 +92,11 @@ const GLYPH_COLLAPSE := "▼"
 const GLYPH_EXPAND := "▲"
 const GLYPH_MINUS := "−"
 
+# ===== Dice =====
+## The dice look — ONE switch for the physics dice, their tally icons and the dice log
+## (DiceLook: &"classic" ivory, &"house" smoked + gold, &"brass" brass + black enamel).
+const DICE_LOOK := &"classic"
+
 const _META_EXPANDED_OFFSET := &"hs_expanded_offset"
 
 static var _theme: Theme = null

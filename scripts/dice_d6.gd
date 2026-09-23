@@ -1,8 +1,9 @@
 class_name DiceD6
 extends RigidBody3D
 ## A single six-sided physics die with up-face detection. Our own MIT implementation
-## (replaces the AGPL dice_roller addon). Pip faces reuse DieFaceIcon.PIP_LAYOUT so
-## the rolling dice and the success readout share one look.
+## (replaces the AGPL dice_roller addon). Its look comes from DiceLook (one switch, uidice2):
+## a rounded body whose pips use DieFaceIcon.PIP_LAYOUT, so the rolling dice and the success
+## readout share one look. The look is visual only — shape, mass, damping and top_face() are fixed.
 
 # === Constants ===
 
@@ -12,16 +13,9 @@ const FACE_NORMALS: Dictionary = {
 	2: Vector3.RIGHT, 5: Vector3.LEFT,
 	3: Vector3.BACK, 4: Vector3.FORWARD,
 }
-## Rotation (deg) that turns a QuadMesh's +Z face to sit on each face, facing out.
-const FACE_ROTATIONS: Dictionary = {
-	1: Vector3(-90, 0, 0), 6: Vector3(90, 0, 0),
-	2: Vector3(0, 90, 0), 5: Vector3(0, -90, 0),
-	3: Vector3(0, 0, 0), 4: Vector3(0, 180, 0),
-}
-const BODY_COLOR: Color = Color(0.93, 0.93, 0.90)
-const PIP_COLOR: Color = Color(0.12, 0.12, 0.14)
-const PIP_RADIUS_FACTOR: float = 0.11
-const TEXTURE_SIZE: int = 96
+## The classic look's untagged body colour (DiceLook "classic"): bone / ivory — a near-white body
+## blew out to plain white under the tray's key light.
+const BODY_COLOR: Color = Color(0.88, 0.84, 0.74)
 
 ## Per-die colour tags the player can cycle through by clicking a die. Index 0 is the
 ## default (untagged) BODY_COLOR; 1..4 are the four distinct tag colours. The interaction
@@ -45,15 +39,13 @@ const DEFAULT_COLOR_TAG: int = 0
 ## Edge length in viewport units. Set before adding to the tree.
 var size: float = 2.0
 
-## Current colour tag: 0 = untagged (BODY_COLOR), 1..TAG_COLORS.size() = a tag colour.
+## Current colour tag: 0 = untagged (the look's body), 1..TAG_COLORS.size() = a tag colour.
 var color_tag: int = DEFAULT_COLOR_TAG
 
 # === Private variables ===
 
-## The body's material, kept so the tag colour can be re-applied at runtime.
-var _body_mat: StandardMaterial3D = null
-## One material per face value, kept so the tag colour re-fills the pip textures at runtime.
-var _face_mats: Dictionary = {}  # Dictionary[int, StandardMaterial3D]
+## The visible body (DiceVisual): shared mesh + the look's material; the tag is a per-instance colour.
+var _visual: MeshInstance3D = null
 ## Floating "?" shown while the die has NOT yet been rolled (issue #80); lazily created.
 var _unrolled_label: Label3D = null
 
@@ -76,16 +68,8 @@ func _ready() -> void:
 	shape.shape = box
 	add_child(shape)
 
-	var body := MeshInstance3D.new()
-	var box_mesh := BoxMesh.new()
-	box_mesh.size = Vector3(size, size, size)
-	_body_mat = StandardMaterial3D.new()
-	_body_mat.albedo_color = BODY_COLOR
-	box_mesh.material = _body_mat
-	body.mesh = box_mesh
-	add_child(body)
-
-	_add_pip_faces()
+	_visual = DiceVisual.body_instance(size, DiceLook.current())
+	add_child(_visual)
 	_apply_color_tag()
 
 # === Public API ===
@@ -107,11 +91,23 @@ func clear_color_tag() -> void:
 	set_color_tag(DEFAULT_COLOR_TAG)
 
 
-## The body colour for a given tag (0 = default BODY_COLOR, 1..N = TAG_COLORS).
+## The body colour for a given tag (0 = the look's body colour, 1..N = TAG_COLORS).
 static func body_color_for_tag(tag: int) -> Color:
 	if tag >= 1 and tag <= TAG_COLORS.size():
 		return TAG_COLORS[tag - 1]
-	return BODY_COLOR
+	return DiceLook.current().body_color
+
+
+## The pip colour for a given tag: the look's own pips untagged, light / dark by body luminance on a tag.
+static func pip_color_for_tag(tag: int) -> Color:
+	if tag >= 1 and tag <= TAG_COLORS.size():
+		return _pip_color_for_body(TAG_COLORS[tag - 1])
+	return DiceLook.current().pip_color
+
+
+## The visible body (tests read its mesh and colours).
+func visual_instance() -> MeshInstance3D:
+	return _visual
 
 
 ## The face value currently pointing up (world space).
@@ -191,55 +187,15 @@ func set_unrolled() -> void:
 
 # === Private helpers ===
 
-func _add_pip_faces() -> void:
-	var half: float = size * 0.5 + 0.001
-	_face_mats.clear()
-	for value: int in FACE_NORMALS:
-		var quad := MeshInstance3D.new()
-		var mesh := QuadMesh.new()
-		mesh.size = Vector2(size, size)
-		var mat := StandardMaterial3D.new()
-		mat.albedo_texture = _make_face_texture(value, BODY_COLOR, PIP_COLOR)
-		mat.roughness = 0.85
-		mesh.material = mat
-		quad.mesh = mesh
-		quad.position = FACE_NORMALS[value] * half
-		quad.rotation_degrees = FACE_ROTATIONS[value]
-		add_child(quad)
-		_face_mats[value] = mat
-
-
-## Recolours the body + every face texture to match the current colour tag. The pip colour
-## is derived from the body luminance so the pips stay readable on light AND dark tags.
+## Recolours the body + pips to match the current colour tag (per-instance shader colours, so every
+## die of a look shares one material). Tagged pips follow the body luminance on every look.
 func _apply_color_tag() -> void:
-	var body: Color = body_color_for_tag(color_tag)
-	var pip: Color = _pip_color_for_body(body)
-	if _body_mat != null:
-		_body_mat.albedo_color = body
-	for value: int in _face_mats:
-		var mat: StandardMaterial3D = _face_mats[value]
-		if mat != null:
-			mat.albedo_texture = _make_face_texture(value, body, pip)
+	if _visual != null:
+		_visual.set_instance_shader_parameter(&"body_color", body_color_for_tag(color_tag))
+		_visual.set_instance_shader_parameter(&"pip_color", pip_color_for_tag(color_tag))
 
 
 ## Pip colour with enough contrast against the given body colour (Rec. 709 luminance).
 static func _pip_color_for_body(body: Color) -> Color:
 	var luminance: float = 0.2126 * body.r + 0.7152 * body.g + 0.0722 * body.b
 	return PIP_COLOR_ON_DARK if luminance < PIP_CONTRAST_LUMINANCE else PIP_COLOR_ON_LIGHT
-
-
-static func _make_face_texture(value: int, body: Color, pip: Color) -> Texture2D:
-	var s: int = TEXTURE_SIZE
-	var img := Image.create(s, s, false, Image.FORMAT_RGBA8)
-	img.fill(body)
-	var r: int = int(s * PIP_RADIUS_FACTOR)
-	for cell: Vector2 in DieFaceIcon.PIP_LAYOUT[value]:
-		var cx: int = int(cell.x * s)
-		var cy: int = int(cell.y * s)
-		for y: int in range(maxi(0, cy - r), mini(s, cy + r + 1)):
-			for x: int in range(maxi(0, cx - r), mini(s, cx + r + 1)):
-				var dx: int = x - cx
-				var dy: int = y - cy
-				if dx * dx + dy * dy <= r * r:
-					img.set_pixel(x, y, pip)
-	return ImageTexture.create_from_image(img)
