@@ -18,6 +18,17 @@ var _anchors: Array[Vector2] = []
 var _anchor_parents: Array[Node3D] = []
 var _anchor_heights: Array[float] = []
 var _wind_materials: Array[ShaderMaterial] = []
+## Game-table tier (table_tree_pass.gd): native tree scenes prepared off the main thread (with mesh LODs),
+## by TreesLibrary model name. Empty = the library's own scenes, as in the reference scene.
+var native_sources := {}
+
+
+## Game-table tier: take sources the table tree pass prepared instead of downloading them in prepare().
+func use_sources(biome: String, hero: PackedScene, natives: Dictionary) -> void:
+	_biome = biome
+	_rng.seed = 210921
+	_hero = hero
+	native_sources = natives
 
 
 func prepare(biome: String) -> void:
@@ -114,7 +125,10 @@ func _instance(source_index: int,variant: int,height: float,base_y: float) -> No
 	var native_index := mini(source_index,1) if winter else source_index
 	var key := ("hero" if use_hero else prefix+str(native_index)) + ":" + str(variant%4)
 	if not _templates.has(key):
-		var source: PackedScene = _hero if use_hero else _main.terrain_overlay._trees_library.get_model_scene(prefix+TreesLibrary.TREE_VARIANTS[native_index])
+		var native_name := prefix+TreesLibrary.TREE_VARIANTS[native_index]
+		var source: PackedScene = _hero if use_hero else native_sources.get(native_name,null)
+		if source == null and not use_hero and _main.terrain_overlay._trees_library != null:
+			source = _main.terrain_overlay._trees_library.get_model_scene(native_name)
 		if source == null:
 			return null
 		var root: Node3D = source.instantiate()

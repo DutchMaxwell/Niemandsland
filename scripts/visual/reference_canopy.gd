@@ -5,6 +5,9 @@ extends RefCounted
 ## voids stay visible. Built once per variant; instances share the meshes.
 
 const VARIANTS := 6
+## Meta on an albedo texture: a CPU copy of its image, attached by a caller on a worker thread
+## (table_tree_pass.gd). Reading the texture back from the GPU would stall the main thread.
+const CPU_IMAGE_META := &"reference_cpu_image"
 
 
 static func dress(node: Node, variant: int = 0) -> void:
@@ -32,7 +35,7 @@ static func _rebuild(instance: MeshInstance3D, variant: int) -> void:
 		var mat := instance.mesh.surface_get_material(surface) as StandardMaterial3D
 		if mat == null or mat.albedo_texture == null:
 			return
-		var source := mat.albedo_texture.get_image()
+		var source: Image = mat.albedo_texture.get_meta(CPU_IMAGE_META) if mat.albedo_texture.has_meta(CPU_IMAGE_META) else mat.albedo_texture.get_image()
 		if source.is_compressed():
 			source.decompress()
 		var arrays: Array = instance.mesh.surface_get_arrays(surface)

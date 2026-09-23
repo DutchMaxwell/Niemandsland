@@ -9,6 +9,7 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Biomes := preload("res://scripts/visual/reference_biomes.gd")
+const TreePass := preload("res://scripts/visual/table_tree_pass.gd")
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -24,6 +25,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	TreePass.clear_sources()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -180,3 +182,170 @@ func test_biome_light_profile_stays_on_top_of_the_atmosphere(timeout := 120000) 
 	await _runner.simulate_frames(2)
 	assert_bool(_sun().light_color.is_equal_approx(profile["sun_color_day"])).is_true()
 	assert_float(_sun().light_energy).is_equal_approx(float(profile["sun_energy"]), 0.0001)
+
+
+# === Tree pass (table_tree_pass.gd): the dressed biome's reference trees replace the table's trees ===
+
+## A stand-in source tree (a 1 m box standing on the ground). Tests inject prepared sources; CI never
+## downloads the reconstructed trees.
+func _source_tree() -> PackedScene:
+	var root := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.3, 1.0, 0.3)
+	mesh.mesh = box
+	mesh.position.y = 0.5
+	root.add_child(mesh)
+	mesh.owner = root
+	var packed := PackedScene.new()
+	packed.pack(root)
+	root.free()
+	return packed
+
+
+func _inject_tree_sources() -> void:
+	var tree := _source_tree()
+	TreePass.inject_sources("arid_desert", {"hero": tree,
+		"natives": {"desert_tree_a": tree, "desert_tree_b": tree, "desert_tree_c": tree}})
+	var oaks: Array[PackedScene] = []
+	var bounds: Array[AABB] = []
+	for _i in 6:
+		oaks.append(tree)
+		bounds.append(AABB(Vector3(-0.15, 0.0, -0.15), Vector3(0.3, 1.0, 0.3)))
+	TreePass.inject_sources("grassland", {"oak_scenes": oaks, "oak_bounds": bounds})
+
+
+## A painted forest (zone + three tree models + a container) and a movable forest group of `prefix`.
+func _paint_forest(prefix: String) -> TerrainGroupBase:
+	var overlay: Node3D = _main.terrain_overlay
+	var table := Vector2(6, 4)
+	var cells := {}
+	for x in range(18, 21):
+		for y in range(16, 19):
+			cells[Vector2i(x, y)] = 2       # TerrainType.FOREST
+	overlay.update_overlay(cells, table, 0.0)
+	var objects: Array = []
+	for x in range(18, 21):
+		objects.append({"object_type": "tree", "cell": Vector2i(x, 17), "offset": Vector2(0.5, 0.5)})
+	objects.append({"object_type": "container", "cell": Vector2i(15, 15), "offset": Vector2(0.5, 0.5), "angle_deg": 0.0})
+	overlay.update_placed_objects(objects, table, 0.0)
+	var group := TerrainGroupBase.new()
+	group.configure(prefix + "forest_small", TerrainGroupBase.KIND_FOREST, Vector2(8, 6), prefix)
+	_main.object_manager.add_child(group)
+	group.position = Vector3(-0.4, 0.0, -0.2)
+	group.build(4242, null)
+	await _runner.simulate_frames(3)
+	return group
+
+
+## The table's own trees: the overlay's tree models and the forest group's members.
+func _tree_roots(group: TerrainGroupBase) -> Array:
+	var roots: Array = []
+	for original in _main.terrain_overlay._object_instances:
+		if is_instance_valid(original) and not original is CollisionObject3D:
+			roots.append(original)
+	for member in group.get_children():
+		if member.has_meta(TerrainGroupBase.MEMBER_META):
+			roots.append(member)
+	return roots
+
+
+## Meshes of the table's own trees that show (reference trees under `added` are not counted).
+func _visible_old_meshes(group: TerrainGroupBase, added: Array) -> int:
+	var count := 0
+	for root in _tree_roots(group):
+		for mesh: Node in root.find_children("*", "GeometryInstance3D", true, false):
+			if (mesh as Node3D).is_visible_in_tree() and not _under_any(mesh, added):
+				count += 1
+	return count
+
+
+func _hidden_old_meshes(group: TerrainGroupBase) -> int:
+	var count := 0
+	for root in _tree_roots(group):
+		for mesh: Node in root.find_children("*", "GeometryInstance3D", true, false):
+			if not (mesh as Node3D).is_visible_in_tree():
+				count += 1
+	return count
+
+
+func _under_any(node: Node, roots: Array) -> bool:
+	for root: Node in roots:
+		if is_instance_valid(root) and (root == node or root.is_ancestor_of(node)):
+			return true
+	return false
+
+
+func test_tree_pass_swaps_the_trees_and_keeps_line_of_sight_geometry(timeout := 180000) -> void:
+	var group := await _paint_forest("desert_")
+	var presenter := await _dress("arid_desert")
+	assert_bool(presenter.is_dressed()).is_true()
+	# No sources yet (CI never downloads): the table keeps its trees, never an empty spot.
+	assert_bool(presenter.are_trees_dressed()).is_false()
+	assert_int(_visible_old_meshes(group, [])).override_failure_message("the painted forest shows no tree mesh, nothing to swap").is_greater(0)
+	assert_int(_hidden_old_meshes(group)).override_failure_message("old trees were hidden before any source was ready").is_equal(0)
+	var volumes: Array = _main.terrain_overlay.los_volumes().duplicate(true)
+	var colliders := _colliders()
+	var members: Array = group.member_states()
+	var group_transform := group.global_transform
+	_inject_tree_sources()
+	await _runner.simulate_frames(2)   # the presenter's frame poll picks the ready sources up
+	assert_bool(presenter.are_trees_dressed()).override_failure_message("ready sources were not swapped in").is_true()
+	var added: Array = presenter._tree_pass._added
+	assert_int(added.size()).override_failure_message("%d reference trees for %d table trees" % [added.size(), _tree_roots(group).size()]) \
+		.is_equal(_tree_roots(group).size())
+	assert_int(_visible_old_meshes(group, added)).override_failure_message("old tree meshes still show next to the reference trees").is_equal(0)
+	assert_int(_colliders()).override_failure_message("the tree swap changed the collider count").is_equal(colliders)
+	assert_bool(_main.terrain_overlay.los_volumes() == volumes).override_failure_message("the tree swap changed the LOS volumes").is_true()
+	assert_bool(group.member_states() == members).override_failure_message("the tree swap changed the saved forest members").is_true()
+	assert_bool(group.global_transform.is_equal_approx(group_transform)).override_failure_message("the tree swap moved the forest group").is_true()
+
+
+func test_tree_teardown_puts_the_old_trees_back(timeout := 120000) -> void:
+	var group := await _paint_forest("desert_")
+	_inject_tree_sources()
+	var presenter := await _dress("arid_desert")
+	assert_bool(presenter.are_trees_dressed()).is_true()
+	var added: Array = presenter._tree_pass._added.duplicate()
+	assert_int(added.size()).is_greater(0)
+	presenter.enabled = false
+	await presenter.rebuild()
+	await _runner.simulate_frames(1)
+	assert_bool(presenter.are_trees_dressed()).is_false()
+	var left := 0
+	for tree in added:
+		if is_instance_valid(tree) and tree.is_inside_tree():
+			left += 1
+	assert_int(left).override_failure_message("%d reference trees stayed on the table after teardown" % left).is_equal(0)
+	assert_int(_hidden_old_meshes(group)).override_failure_message("old tree meshes stayed hidden after teardown").is_equal(0)
+
+
+func test_low_preset_keeps_the_old_trees(timeout := 120000) -> void:
+	var group := await _paint_forest("desert_")
+	_inject_tree_sources()
+	var graphics := get_tree().root.get_node("GraphicsSettings")
+	var previous: int = graphics.current_preset
+	graphics.current_preset = 1   # LOW, set directly: apply_preset() would persist the player's settings
+	var presenter := await _dress("arid_desert")
+	var dressed := presenter.is_dressed()
+	var trees := presenter.are_trees_dressed()
+	var hidden := _hidden_old_meshes(group)
+	graphics.current_preset = previous
+	assert_bool(dressed).override_failure_message("the table was dressed on the Low preset").is_false()
+	assert_bool(trees).override_failure_message("the trees were swapped on the Low preset").is_false()
+	assert_int(hidden).override_failure_message("old tree meshes were hidden on the Low preset").is_equal(0)
+
+
+func test_grassland_trees_become_the_reference_oak(timeout := 120000) -> void:
+	var group := await _paint_forest("")
+	_inject_tree_sources()
+	var presenter := await _dress("temperate_grassland")
+	assert_bool(presenter.are_trees_dressed()).is_true()
+	var added: Array = presenter._tree_pass._added
+	var canopies := 0
+	for tree: Node in added:
+		if str(tree.name).begins_with("ReferenceCanopy") or tree.get_parent() == group:
+			canopies += 1
+	assert_int(canopies).override_failure_message("%d oaks for %d table trees" % [canopies, _tree_roots(group).size()]) \
+		.is_equal(_tree_roots(group).size())
+	assert_int(_visible_old_meshes(group, added)).override_failure_message("old tree meshes still show next to the oaks").is_equal(0)
