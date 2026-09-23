@@ -25,10 +25,11 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 	var stone_colors: Array[Color] = []
 	var litter_transforms: Array[Transform3D] = []
 	var litter_colors: Array[Color] = []
-	var count := int(size.x*size.y*26000)
+	var count := int(size.x*size.y*26000*_density())
 	for i in count:
 		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
-		var hero := point.x<0.1 and point.y>0.06
+		# The reference review camera's "hero" corner; the game table has no fixed camera (uniform 18 %).
+		var hero := not _table_tier() and point.x<0.1 and point.y>0.06
 		if not hero and _rng.randf()>0.18:
 			continue
 		var forest := _forest_amount(point)
@@ -80,7 +81,7 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 			litter_colors.append(Color(0.34,0.21,0.08).lerp(Color(0.70,0.47,0.21),_rng.randf()).srgb_to_linear())
 	var turf_transforms: Array[Transform3D] = []
 	var turf_colors: Array[Color] = []
-	for i in int(size.x*size.y*14000):
+	for i in int(size.x*size.y*14000*_density()):
 		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		if _excluded(point):
 			continue
@@ -107,6 +108,8 @@ func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 		var h := _rng.randf_range(0.009,0.019)
 		shrub.scale = Vector3(h*1.35,h,h*1.35)
 		shrub.rotation.y = _rng.randf()*TAU
+		if _table_tier():
+			shrub.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(shrub)
 	_contact_details(litter_transforms,litter_colors)
 	_litter_drifts(litter_transforms,litter_colors,size)
@@ -137,7 +140,7 @@ func build_desert(presentation: Node3D,main: Node,size: Vector2) -> void:
 			_exclusions.append(Vector3(obj.global_position.x,obj.global_position.z,0.021))
 	var stone_transforms: Array[Transform3D] = []
 	var stone_colors: Array[Color] = []
-	for i in int(size.x*size.y*9000):
+	for i in int(size.x*size.y*9000*_density()):
 		var point := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		if _excluded(point):
 			continue
@@ -162,7 +165,7 @@ func build_volcanic(presentation: Node3D,main: Node,size: Vector2) -> void:
 			_exclusions.append(Vector3(obj.global_position.x,obj.global_position.z,0.025))
 	var stones: Array[Transform3D] = []
 	var colors: Array[Color] = []
-	for i in int(size.x*size.y*10500):
+	for i in int(size.x*size.y*10500*_density()):
 		var p := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		if _excluded(p):
 			continue
@@ -190,7 +193,7 @@ func build_tundra(presentation: Node3D,main: Node,size: Vector2) -> void:
 	var stone_colors: Array[Color] = []
 	var stalks: Array[Transform3D] = []
 	var stalk_colors: Array[Color] = []
-	for i in int(size.x * size.y * 10000):
+	for i in int(size.x * size.y * 10000 * _density()):
 		var p := Vector2(_rng.randf_range(-size.x*0.5,size.x*0.5),_rng.randf_range(-size.y*0.5,size.y*0.5))
 		if _excluded(p):
 			continue
@@ -340,6 +343,17 @@ func _wall_distance(p: Vector2) -> float:
 	return result
 
 
+## Table tier (grassland_reference.gd): the presentation's scatter density multiplier (1.0 = reference).
+func _density() -> float:
+	var value = _presentation.get("density_scale") if _presentation != null else null
+	return float(value) if value != null else 1.0
+
+
+## Table tier: scatter casts no shadow (the shadow pass re-rendered every blade and fragment).
+func _table_tier() -> bool:
+	return _presentation != null and _presentation.get("table_tier") == true
+
+
 func _multimesh(label: String,mesh: Mesh,transforms: Array[Transform3D],colors: Array[Color],shadow := true) -> void:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -361,7 +375,7 @@ func _multimesh(label: String,mesh: Mesh,transforms: Array[Transform3D],colors: 
 			"DryFescue": mat.set_shader_parameter("wind_strength",0.0030)
 			"MeadowHerbs": mat.set_shader_parameter("wind_strength",0.0018)
 			"Turf": mat.set_shader_parameter("wind_strength",0.0012)
-	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow and not _table_tier() else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)
 
 
@@ -467,6 +481,8 @@ func _litter_mesh() -> ArrayMesh:
 
 ## A shared winding wear mask also drives the ground material. It is visual only.
 func _path_amount(p: Vector2) -> float:
+	if _table_tier():
+		return 0.0   # the tutorial board's worn path does not belong on a player's table (D2)
 	var center := -0.60+sin(p.y*8.0+0.4)*0.085
 	var width: float = 0.020+_presentation._surface_noise(p*38.0)*0.020
 	return (1.0-smoothstep(width,width+0.030,abs(p.x-center)))*smoothstep(0.02,0.15,p.y)

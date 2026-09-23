@@ -6,7 +6,8 @@ var _materials: Array[ShaderMaterial] = []
 
 
 func build(main: Node,presentation: Node3D,understory: Node3D) -> void:
-	_materials.append_array(presentation._biome_forest._wind_materials)
+	if presentation._biome_forest != null:   # absent in the table tier (no TRELLIS replacement)
+		_materials.append_array(presentation._biome_forest._wind_materials)
 	for child in understory.get_children():
 		if child is MultiMeshInstance3D and child.name in ["JungleFerns","JungleBroadleaves"]:
 			_materials.append(child.multimesh.mesh.surface_get_material(0))

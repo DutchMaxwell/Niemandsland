@@ -4,6 +4,8 @@ extends Node3D
 
 const TREE_BUILDER = preload("res://scripts/visual/reference_tree.gd")
 const GROUND = preload("res://shaders/visual/reference_ground.gdshader")
+## Game-table tier variant: same surface, derivative bump instead of three extra surface samples.
+const GROUND_TABLE = preload("res://shaders/visual/reference_ground_table.gdshader")
 const ReferenceMaterials = preload("res://scripts/visual/reference_materials.gd")
 var _main: Node
 var _ground: ShaderMaterial
@@ -26,6 +28,16 @@ var _camera: Camera3D
 var _dof: CameraAttributesPractical
 var _tilt_shift_enabled := true
 var biome := "grassland"
+## Game-table tier (TableBiomePresenter): no TRELLIS prop replacement, the render scale / TAA / shadow
+## atlas / camera stay with the player's quality preset, and scatter casts no shadow. Off = the accepted
+## reference look (menu diorama, reference scene).
+var table_tier := false
+## Scatter density multiplier (table tier: quality preset x area cap). 1.0 = the reference density.
+var density_scale := 1.0
+## Table tier: edge length of the relief cells of the table plane.
+const TABLE_RELIEF_CELL_M := 0.012
+## Table tier: game moods that take the biome light profile (D1); the others keep the game's lighting.
+const TABLE_PROFILE_MOODS: Array[String] = ["Day", "Sunset", "Night"]
 var _profile: Dictionary = {}
 const Biomes = preload("res://scripts/visual/reference_biomes.gd")
 const DOF_MAX_AMOUNT := 0.045
@@ -34,8 +46,9 @@ const DOF_FAR_DISTANCE := 0.85
 
 
 func prepare() -> void:
-	# Urban uses native props and its dedicated textures; no oak/rock source is needed.
-	if biome == "urban_ruins":
+	# Urban uses native props and its dedicated textures; no oak/rock source is needed. The table tier
+	# replaces no props, so it needs no TRELLIS source either.
+	if biome == "urban_ruins" or table_tier:
 		return
 	_props = preload("res://scripts/visual/reference_props.gd").new()
 	add_child(_props)
@@ -58,7 +71,7 @@ func apply(main: Node) -> void:
 	for i in 3:
 		_trees.append(TREE_BUILDER.build(i))
 	_ground = ShaderMaterial.new()
-	_ground.shader = GROUND
+	_ground.shader = GROUND_TABLE if table_tier else GROUND
 	for texture_name in ["meadow","earth","woodland"]:
 		_ground.set_shader_parameter(texture_name + "_tex",ReferenceMaterials.texture(_profile["textures"][texture_name]))
 	_ground.set_shader_parameter("desert_mode",_profile["desert_mode"])
@@ -70,12 +83,19 @@ func apply(main: Node) -> void:
 	var plane: PlaneMesh = surface.mesh.duplicate()
 	plane.subdivide_width = 450
 	plane.subdivide_depth = 300
+	if table_tier:
+		# Relief cells follow the table size (the reference's 450x300 is ~4 mm on 6x4 ft only). The relief's
+		# shortest wavelength is ~13 cm, so TABLE_RELIEF_CELL_M still samples it finely; 4 mm cells were
+		# 3-6 px triangles at play zoom, shaded several times per pixel under MSAA. Capped for 240 in tables.
+		var size_m: Vector2 = table.table_size * 0.3048
+		plane.subdivide_width = clampi(int(size_m.x / TABLE_RELIEF_CELL_M), 16, 400)
+		plane.subdivide_depth = clampi(int(size_m.y / TABLE_RELIEF_CELL_M), 16, 400)
 	surface.mesh = plane
 	_ground.set_shader_parameter("surface_relief",true)
 	surface.material_override = _ground
 	table.get_node("GrassField").visible = false
 	_base = table.get_base_top_material()
-	_base.shader = GROUND
+	_base.shader = _ground.shader
 	_base.set_shader_parameter("clip_base",true)
 	for texture_name in ["meadow","earth","woodland"]:
 		_base.set_shader_parameter(texture_name + "_tex",_ground.get_shader_parameter(texture_name + "_tex"))
@@ -158,7 +178,10 @@ func apply(main: Node) -> void:
 	_build_fog(main)
 	if _profile["dust"]:
 		_build_dust(main)
-	apply_lighting("Day")
+	if table_tier:
+		apply_table_mood(_game_mood())
+	else:
+		apply_lighting("Day")
 	# A quality-preset change rewrites the shared environment (SDFGI, SSIL, metre-scale
 	# SSAO, stronger glow). Re-assert the tuned reference look so Ultra cannot undo it.
 	var graphics := get_node_or_null("/root/GraphicsSettings")
@@ -217,7 +240,8 @@ func apply_lighting(mood: String) -> void:
 	if _previous_viewport.is_empty():
 		_previous_viewport = {"taa":get_viewport().use_taa,"scale":get_viewport().scaling_3d_scale}
 	var light: Node = _main.lighting_controller
-	var evening := mood == "Sunset"
+	# D1 (table tier): Night uses the profile's sunset values too.
+	var evening := mood == "Sunset" or (table_tier and mood == "Night")
 	var angles: Vector2 = _profile["sun_angles_sunset"] if evening else _profile["sun_angles_day"]
 	light.set_sun_energy(_profile["sun_energy"])
 	light.set_sun_color(_profile["sun_color_sunset"] if evening else _profile["sun_color_day"])
@@ -237,12 +261,15 @@ func apply_lighting(mood: String) -> void:
 	sun.directional_shadow_max_distance = 3.0
 	sun.directional_shadow_pancake_size = 1.0
 	sun.light_volumetric_fog_energy = 0.9
-	RenderingServer.directional_shadow_atlas_set_size(8192,true)
-	get_viewport().use_taa = false
-	get_viewport().scaling_3d_scale = 1.25
+	if not table_tier:
+		RenderingServer.directional_shadow_atlas_set_size(8192,true)
+		get_viewport().use_taa = false
+		get_viewport().scaling_3d_scale = 1.25
 	light.set_ssao_intensity(1.2)
 	light.set_glow_intensity(0.16)
 	_apply_reference_environment()
+	if table_tier:
+		return   # the game camera keeps its own tilt-shift (camera_controller.gd)
 	var camera: Camera3D = _main.get_node("CameraPivot/Camera3D")
 	var attributes := CameraAttributesPractical.new()
 	attributes.dof_blur_far_enabled = true
@@ -271,13 +298,15 @@ func _apply_reference_environment() -> void:
 	env.ssil_enabled = false
 	env.sdfgi_enabled = false
 	env.tonemap_agx_contrast = 1.15
-	# Damp-surface screen-space reflections; no bloom (rejected by the maintainer).
-	env.ssr_enabled = true
+	# Damp-surface screen-space reflections; no bloom (rejected by the maintainer). The table tier follows
+	# the player's quality preset for SSR and volumetric fog (Medium: both off, High/Ultra: on).
+	var preset := _preset_values()
+	env.ssr_enabled = bool(preset.get("ssr", true)) if table_tier else true
 	env.ssr_max_steps = 32
 	env.ssr_fade_in = 0.08
 	env.ssr_fade_out = 1.6
 	env.ssr_depth_tolerance = 0.20
-	env.volumetric_fog_enabled = true
+	env.volumetric_fog_enabled = bool(preset.get("volumetric_fog", true)) if table_tier else true
 	env.volumetric_fog_density = 0.0
 	env.volumetric_fog_albedo = Color(0.72,0.73,0.70)
 	env.volumetric_fog_emission = Color(0.0,0.0,0.0)
@@ -295,9 +324,33 @@ func _apply_reference_environment() -> void:
 	env.fog_enabled = false
 
 
+## The player's current quality preset values (GraphicsSettings.PRESETS); empty outside the game.
+func _preset_values() -> Dictionary:
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics == null:
+		return {}
+	return graphics.PRESETS.get(graphics.current_preset, {})
+
+
 func _on_graphics_settings_applied(_preset_name: String) -> void:
 	if _main != null:
-		apply_lighting(_current_mood)
+		if table_tier:
+			apply_table_mood(_game_mood())
+		else:
+			apply_lighting(_current_mood)
+
+
+## Table tier, maintainer decision D1: the biome light profile is the Day base; Sunset and Night use the
+## profile's own sunset values; the other game moods (Overcast, Rain) keep the game's own lighting.
+func apply_table_mood(mood: String) -> void:
+	if mood in TABLE_PROFILE_MOODS:
+		apply_lighting(mood)
+
+
+## The game's current atmosphere mood (atmosphere_controller), "Day" outside the game.
+func _game_mood() -> String:
+	var atmosphere = _main.get("atmosphere_controller") if _main != null else null
+	return str(atmosphere.get_current_atmosphere()) if atmosphere != null else "Day"
 
 
 ## Tilt-shift fades in as the camera zooms towards the table, so the wide review
@@ -316,6 +369,8 @@ func tilt_shift_enabled() -> bool:
 ## Toggles the effect for a player. Production should wire this to a settings
 ## entry instead of the key; the key is only the reference-scene shortcut.
 func _unhandled_input(event: InputEvent) -> void:
+	if table_tier:
+		return   # T is the game's move-trails key; the table tier has no camera of its own
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_T:
 		set_tilt_shift_enabled(not _tilt_shift_enabled)
 
@@ -380,6 +435,11 @@ func _dress_grid_forest(overlay: Node3D) -> void:
 		for original: Node3D in overlay._object_instances:
 			if Vector2(original.position.x,original.position.z).distance_squared_to(expected)>0.000001:
 				continue
+			if table_tier:
+				# Keep the game's own tree; only its position feeds the litter around it.
+				_tree_points.append(expected)
+				index += 1
+				break
 			var bounds: AABB = overlay._model_space_aabb(original)
 			var height := clampf(bounds.size.y,0.08,0.20)
 			for child in original.get_children():
@@ -403,7 +463,7 @@ func _dress_grid_forest(overlay: Node3D) -> void:
 
 func _dress_movable_forests() -> void:
 	for group in get_tree().get_nodes_in_group("terrain_group_base"):
-		if group.kind != TerrainGroupBase.KIND_FOREST or group.biome_prefix != "":
+		if group.prop_kind != TerrainGroupBase.KIND_FOREST or group.biome_prefix != "":
 			continue
 		var radius: Vector2 = group.footprint_inches * 0.0254 * 0.5
 		_regions.append(Vector4(group.global_position.x,group.global_position.z,radius.x,radius.y))

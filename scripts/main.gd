@@ -68,6 +68,7 @@ var lighting_panel: Window = null
 var privacy_menu: PrivacyMenu = null
 var after_game_card: AfterGameCard = null
 var atmosphere_controller: AtmosphereController = null
+var _table_biome_presenter: TableBiomePresenter = null   # display only: the reference biome look on the table
 
 # Group rotation state
 var _is_group_rotating: bool = false
@@ -747,6 +748,13 @@ func _ready() -> void:
 	# table-dependent fire/war-sound layers.)
 	atmosphere_controller.apply_saved_lighting()
 	lighting_panel.set_atmosphere_controller(atmosphere_controller)
+
+	# Table biomes: dress the game table with the accepted reference biome look. Display only; it
+	# rebuilds itself on biome / size / load / start-of-play / setup layout changes.
+	_table_biome_presenter = TableBiomePresenter.new()
+	_table_biome_presenter.name = "TableBiomePresenter"
+	add_child(_table_biome_presenter)
+	_table_biome_presenter.setup(self)
 
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
@@ -12225,6 +12233,8 @@ func _do_clear_all() -> void:
 	object_manager.clear_all_objects()
 	_clear_dice_log()
 	_update_round_button()  # clear_all_objects() resets the round to 1
+	if _table_biome_presenter != null:
+		_table_biome_presenter.request_rebuild("layout")   # terrain pieces are gone: re-dress the empty table
 
 
 func _on_sort_table() -> void:
