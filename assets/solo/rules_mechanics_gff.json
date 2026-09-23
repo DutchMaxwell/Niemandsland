@@ -2684,6 +2684,7 @@
      "needs_los": true,
      "once": true,
      "range_in": 18,
+     "scope": "melee",
      "target": "enemy",
      "vs_target": true
     }
