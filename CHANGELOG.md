@@ -62,6 +62,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   decision tree. It now waits for the game to exit, replaces every release file and rolls all of them
   back if one copy fails. The release job also refuses a tag that does not match the game's version,
   which would offer the same update on every start. (#1073)
+- **Windows games updated in-game from 0.3.12.0 get the rules core.** The 0.3.12.0 helper installed
+  only the `.exe`; on its first start without the core, the game copies the missing
+  `nml_core_godot.dll` from the downloaded update (only if that update is this exact build) and
+  restarts once. If the core still does not load, it gives up and the decision tree plays. (#1074)
 - **No more false "apply it manually" notes in solo games.** The battle log told players to apply
   rules by hand that the table already resolves (a stale list; Army Forge item names such as
   "Jetpacks" read as rules; prefix matches) and printed a manual note for spells whose effect the

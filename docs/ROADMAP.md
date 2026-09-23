@@ -251,7 +251,8 @@ reaches the sight fan again ([#414](../../../pull/414)); the AI-log toggle is ba
 wreck spill shows a formation ghost at the cursor ([#828](../../../pull/828)). **Models**: the Ratmen
 (Age of Fantasy) have their own 3D models for every unit and legal loadout, and weapon teams carry their
 team weapon ([#1076](../../../pull/1076)). **Fixes**: Windows in-game updates install every release file
-([#1073](../../../pull/1073)); model downloads no longer depend on the frame rate
+([#1073](../../../pull/1073)), and a Windows game updated in-game from 0.3.12.0 restores the missing
+rules core with one restart ([#1074](../../../pull/1074)); model downloads no longer depend on the frame rate
 ([#1075](../../../pull/1075)); the battle log drops developer lines and false "apply it manually" notes
 ([#1068](../../../pull/1068), [#1072](../../../pull/1072)).
 
