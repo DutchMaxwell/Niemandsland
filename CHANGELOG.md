@@ -6,7 +6,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+## [0.3.13.0-alpha] — 2026-09-25
+
 ### Added
+- **The Ratmen (Age of Fantasy) have their own 3D models** for every unit and legal loadout; weapon
+  teams fight with their team weapon on the model that carries it (the team guns used to sit on no
+  model and fired with 0 attacks). The models download on first use, like every faction. (#1076)
 - **NACHTMAHR plays with the search planner and a neural leaf evaluator in-process.** When the
   Rust core (`NmlCore` GDExtension, now built with the ONNX evaluator) and the packed model
   `assets/solo/brains/erlkoenig.onnx` load, the one player-facing grade runs the rollout search
@@ -28,7 +33,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The core stages its rule files and the model out of the packed build** (`user://nml_core/<version>/`)
   and refuses a game — loudly, falling back to the tree — when a rules file or the row vocab is
   missing instead of searching rule-blind. (#1053, #1054)
-- **Objective-token rush reach.** The fast core's objective token carries two new columns — t[10]/t[11], the per-side count of units whose base-edge gap to the objective is within the last-round flip band (`OBJECTIVE_CONTROL_IN + live rush`), a superset of the contest count. Token vocab bumps to 3 (RESIDUALS_ERLKOENIG_2026-09-19).
+- **Objective-token rush reach.** The fast core's objective token carries two new columns — t[10]/t[11], the per-side count of units whose base-edge gap to the objective is within the last-round flip band (`OBJECTIVE_CONTROL_IN + live rush`), a superset of the contest count. Token vocab bumps to 3. (#1026)
 - **Privacy & data settings (local only).** A consent screen, off by default, explains optional
   game-record sharing, previews an example record and can save it locally; nothing is sent. An
   in-memory collector for the opt-in path is on `main`, still local-only (see
