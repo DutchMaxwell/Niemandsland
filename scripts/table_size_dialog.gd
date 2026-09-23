@@ -9,6 +9,10 @@ const DEFAULT_SIZE := FEET_6X4
 const INCHES_TO_FEET := 1.0/12.0
 const CM_TO_FEET := 1.0/30.48
 const PAGE_ASPECT := 1768.0/1080.0
+## Spare window height grows the preview and the biome cards only down to these proportions.
+const HERO_MIN_ASPECT := 2.2
+const CARD_MIN_ASPECT := 2.0
+const CARD_MAX_ASPECT := 2.8
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
 const LOGO = preload("res://assets/ui_glassmorphism/fonts/Orbitron.ttf")
 const INK := Color("e9e9df")
@@ -55,6 +59,8 @@ var _header: BoxContainer
 var _footer: BoxContainer
 var _page: VBoxContainer
 var _left: VBoxContainer
+var _left_air: Array[Control] = []
+var _right: VBoxContainer
 var _columns: BoxContainer
 var _grid: GridContainer
 var _hero: Control
@@ -178,6 +184,7 @@ func _build_ui() -> void:
 		button.add_child(stack)
 		var photo := _image(key)
 		photo.custom_minimum_size.y = 76
+		photo.size_flags_vertical = Control.SIZE_EXPAND_FILL   # a card grown by _fill_height grows its photo
 		stack.add_child(photo)
 		_cards.append(photo)
 		var label := _label(BIOMES[key][0],12)
@@ -188,6 +195,7 @@ func _build_ui() -> void:
 		button.pressed.connect(_select_biome.bind(key))
 		_grid.add_child(button)
 		_biome_buttons[key] = button
+	_add_left_air(left)
 	var size_header := HBoxContainer.new()
 	left.add_child(size_header)
 	var size_title := _label("02   Set the table size",17)
@@ -246,10 +254,12 @@ func _build_ui() -> void:
 	_error = _label("",12,Color("eab2a2"),true)
 	left.add_child(_error)
 	left.add_child(_label("Table size is fixed once you create it.",11,MUTED))
+	_add_left_air(left)
 	left.add_child(HSeparator.new())
 	left.add_child(_label("+   Your terrain. Your layout.",14,CYAN))
 	left.add_child(_label("Place and rearrange terrain freely after creating your table. The biome defines its visual style.",12,MUTED,true))
 	var right := VBoxContainer.new()
+	_right = right
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right.size_flags_stretch_ratio = 1.2
 	right.add_theme_constant_override("separation",12)
@@ -289,6 +299,7 @@ func _build_ui() -> void:
 	right.add_child(_label("Example terrain arrangement. Your layout is up to you.",11,MUTED,true))
 	right.add_child(HSeparator.new())
 	var footprint_row := HBoxContainer.new()
+	footprint_row.size_flags_vertical = Control.SIZE_EXPAND_FILL   # takes the right column's slack
 	right.add_child(footprint_row)
 	var details := VBoxContainer.new()
 	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -317,6 +328,16 @@ func _build_ui() -> void:
 	_create.pressed.connect(_confirm)
 	_footer.add_child(_create)
 	_style(_create,true,true)
+
+
+## An expanding gap in the left column: when the right column grew taller, the left column's slack is
+## shared between the biome cards, the size step and the note instead of one hole at its bottom.
+func _add_left_air(column: VBoxContainer) -> void:
+	var air := Control.new()
+	air.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	air.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(air)
+	_left_air.append(air)
 
 
 func set_biomes(keys: Array, current: String) -> void:
@@ -438,7 +459,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-func _layout() -> void:
+func _layout(refill := true) -> void:
 	if not is_instance_valid(_margin):
 		return
 	var area := get_visible_rect().size
@@ -459,10 +480,67 @@ func _layout() -> void:
 	_columns.add_theme_constant_override("separation",24 if compact else 36)
 	_grid.columns = 2 if area.x < 560 else 3
 	for photo in _cards:
-		photo.custom_minimum_size.y = 46 if compact else 76
+		photo.custom_minimum_size.y = 24   # expands to its card, which _fill_height may make flatter
 	for button in _biome_buttons.values():
 		button.custom_minimum_size.y = 76 if compact else 106
 	_hero.custom_minimum_size.y = 250 if compact else 370
+	_footprint.custom_minimum_size.y = 110
+	for air in _left_air:
+		air.visible = false
+	if not narrow:
+		_fill_height(area.y-2*(20 if compact else 36),12 if compact else 24)
+	# Wrapped labels measure their height at their CURRENT width, which the containers set only after this
+	# pass (a 1 px wide label reports ~1500 px): fill once more on the next frame, with every width final.
+	if refill and not get_tree().process_frame.is_connected(_layout.bind(false)):
+		get_tree().process_frame.connect(_layout.bind(false),CONNECT_ONE_SHOT)
+
+
+## The page fills the window height at every aspect: spare height grows the biome cards and the preview
+## (each only down to its minimum aspect), then the table footprint (until its drawing is bound by its
+## width); what is still left spreads evenly over the gaps between the page sections. Nothing scrolls.
+func _fill_height(usable: float, separation: int) -> void:
+	# Caps come from the sorted widths; the first pass of a new size (stale widths) is redone next frame.
+	# Tall windows: the six cards reflow to 2 x 3 when that fits at 2.8:1, so the left column grows with
+	# the preview instead of leaving a hole under the size presets.
+	# Cards start at their flattest allowed shape and grow from there, so they also make room (the Custom
+	# inputs at 1280x720).
+	var buttons := _biome_buttons.values()
+	for columns: int in [2,3]:
+		_grid.columns = columns
+		var card_width := (_grid.size.x-10*(columns-1))/columns
+		for button in buttons:
+			button.custom_minimum_size.y = ceilf(card_width/CARD_MAX_ASPECT)
+		if columns == 3 or _page.get_combined_minimum_size().y <= usable:
+			_grow(buttons,card_width/CARD_MIN_ASPECT,usable)
+			break
+	_grow([_hero],_hero.size.x/HERO_MIN_ASPECT,usable)
+	# Until the 6 x 4 ft drawing (72 x 48 in plus 90 x 38 px of labels) is bound by the footprint's width.
+	_grow([_footprint],(_footprint.size.x-90)/72*48+38,usable)
+	var slack := _right.get_combined_minimum_size().y-_left.get_combined_minimum_size().y
+	for air in _left_air:
+		air.visible = slack > 48   # each shown gap also costs one column separation (at most 14)
+	var gaps := _page.get_children().filter(func(child: Node) -> bool: return child is Control and child.visible).size()-1
+	var spare := usable-_page.get_combined_minimum_size().y
+	if spare > 0 and gaps > 0:
+		_page.add_theme_constant_override("separation",separation+int(spare/gaps))
+
+
+## Raises the controls' minimum height toward `cap` as far as the page still fits `usable` (bisection).
+func _grow(controls: Array, cap: float, usable: float) -> void:
+	var fits: float = controls[0].custom_minimum_size.y
+	var over := cap
+	for step in 12:
+		if over-fits < 1.0:
+			break
+		var height := over if step == 0 else (fits+over)*0.5
+		for control in controls:
+			control.custom_minimum_size.y = height
+		if _page.get_combined_minimum_size().y <= usable:
+			fits = height
+		else:
+			over = height
+	for control in controls:
+		control.custom_minimum_size.y = floorf(fits)
 
 
 func _label(value: String, font_size: int, color := INK, wrap := false) -> Label:
