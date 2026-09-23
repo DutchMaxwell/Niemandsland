@@ -291,6 +291,27 @@ func test_rolls_tally_result_log_and_rerolls(timeout := 180000) -> void:
 			{"Fails": DiceRules.RerollMode.FAILURES, "1s": DiceRules.RerollMode.ONES,
 			"6s": DiceRules.RerollMode.SIXES, "All": DiceRules.RerollMode.ALL}[text])])
 
+	# The log follows new rolls: after a mixed-colour roll (the tallest entry) the newest line is in
+	# view, as it was before the restyle — its wrapped rows settle their height a few frames late.
+	var mixed: Array[int] = [6, 2, 4]
+	_main.dice_roller_control.show_faces(mixed, [1, 0, 2])
+	await _runner.simulate_frames(10)
+	var bar: VScrollBar = _main._dice_log_scroll.get_v_scroll_bar()
+	assert_float(bar.max_value).override_failure_message("log never overflowed — the check proves nothing") \
+		.is_greater(bar.page)
+	assert_float(float(_main._dice_log_scroll.scroll_vertical)) \
+		.override_failure_message("newest log entry below the fold: scroll %d of %d" % [
+			_main._dice_log_scroll.scroll_vertical, bar.max_value - bar.page]) \
+		.is_greater_equal(bar.max_value - bar.page - 1.0)
+	# A selector change re-evaluates the last roll and rebuilds the tally; the log stays on the newest.
+	await _click(_find("SuccessRow", "5+"))
+	await _click(_find("ModifierRow", "+1"))
+	await _runner.simulate_frames(10)
+	assert_float(float(_main._dice_log_scroll.scroll_vertical)) \
+		.override_failure_message("a selector change scrolled the log off the newest roll: %d of %d" % [
+			_main._dice_log_scroll.scroll_vertical, bar.max_value - bar.page]) \
+		.is_greater_equal(bar.max_value - bar.page - 1.0)
+
 	# The log wraps inside its card: the window never widens past today's width.
 	assert_float(_panel().size.x).is_less_equal(TODAY_W + 0.5)
 	await E2EBoot.settle(get_tree())   # let the log's auto-scroll await finish before teardown

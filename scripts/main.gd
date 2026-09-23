@@ -12738,6 +12738,10 @@ func _build_dice_panel_frame() -> void:
 	_dice_vbox.move_child(header, 0)
 	_dice_collapse_button = header.get_node("CollapseButton") as Button
 	_dice_collapse_button.pressed.connect(func() -> void: _set_dice_collapsed(not _dice_collapsed))
+	# The log keeps the newest roll in view whenever its range changes: wrapped rows settle their
+	# height late, and a re-evaluation resizes the tray card above it (the log card shrinks).
+	_dice_log_scroll.get_v_scroll_bar().changed.connect(func() -> void:
+		_dice_log_scroll.scroll_vertical = int(_dice_log_scroll.get_v_scroll_bar().max_value))
 
 
 ## Folds the dice window to its header (it keeps its bottom-right corner) or unfolds it. The
