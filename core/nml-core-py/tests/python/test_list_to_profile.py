@@ -520,13 +520,16 @@ def test_a_registry_alias_of_quick_moves_the_bands():
     }
 
 
-def test_royal_legion_lands_on_the_rush_band_and_the_shooting_range():
+def test_royal_legion_lands_on_the_charge_band_and_the_shooting_range():
     """solo_controller.gd:5436 + the registry move pass — Royal Legion is one
     rule with two halves: +4" range when shooting (unit_profile_dyn's
-    shooting_range_bonus) and +2" on Charge, which rides the rush band via the
-    primitive's `charge_mod`. Both halves hit the same 27 qag_ref units."""
+    shooting_range_bonus) and +2" on Charge. The table
+    (movement_range_controller.gd:173-188) reads `rush_mod` with a 0 default,
+    so the primitive's `charge_mod` lands on the CHARGE band only — Rush stays
+    12" (maintainer 24.09.: "wie der Tisch"). Both halves hit the same 27
+    qag_ref units."""
     prof = _aof_profile("mummified_undead", ["Royal Legion"])
-    assert prof["move_bands"] == {"advance": 6.0, "rush": 14.0}
+    assert prof["move_bands"] == {"advance": 6.0, "rush": 12.0, "charge": 14.0}
     assert prof["shooting_range_bonus"] == 4
     # The two halves are scoped DIFFERENTLY, and this port keeps the table's
     # asymmetry: the band half runs through the registry, so a faction whose

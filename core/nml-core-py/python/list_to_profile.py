@@ -596,7 +596,10 @@ def _move_bands(
             if not done["advance"]:
                 advance += int(rp.get("advance_mod", 0))
             if not done["rush"]:
-                rush_mod = int(rp.get("rush_mod", rp.get("charge_mod", 0)))
+                # movement_range_controller.gd:174 — `rush_mod` with a 0 default: a
+                # `charge_mod`-only entry (the Royal Legion primitive family) rides the
+                # CHARGE band below, never Rush (maintainer 24.09.: "wie der Tisch").
+                rush_mod = int(rp.get("rush_mod", 0))
                 if bool(rp.get("charge_only", False)):
                     # movement_range_controller.gd:175-177 (#1072): Rapid Charge
                     # (+ Aura) "moves +4\" when using Charge actions" — the
