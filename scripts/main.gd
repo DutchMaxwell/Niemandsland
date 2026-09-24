@@ -14919,7 +14919,9 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 
 	# Serialize against the per-army broadcast restore: both clear _loaded_game_units, and an
 	# interleave (host imports while we join) wipes it mid-restore. Released below before return.
-	await save_manager.begin_restore()
+	# A connection drop mid-load supersedes this generation (reset_restore_lock): the re-sync then
+	# owns the table, and this sync stops at its next await instead of spawning into it.
+	var restore_gen: int = await save_manager.begin_restore()
 
 	# Clear current objects (broadcast=false to avoid clearing host's objects)
 	object_manager.clear_all_objects(false)
@@ -14952,10 +14954,15 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 				join_specs.append({"faction": jf, "unit_name": jn})
 		if not join_specs.is_empty():
 			await opr_army_manager.model_library.ensure_models(join_specs)
+	if save_manager.restore_superseded(restore_gen):
+		return
 
 	# Deserialize objects (async for TTS downloads)
 	var objects_data = state.get("objects", [])
-	var loaded_count = await save_manager._deserialize_objects(objects_data)
+	var loaded_count = await save_manager._deserialize_objects(objects_data, restore_gen)
+	if save_manager.restore_superseded(restore_gen):
+		print("[StateSync] superseded by a re-sync after a connection drop — stopped after %d objects" % loaded_count)
+		return
 
 	# Sync object counter so subsequent spawns don't conflict with existing IDs
 	var synced_counter = int(state.get("object_counter", 0))
@@ -14992,7 +14999,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	if opr_army_manager != null:
 		opr_army_manager.restore_embarked_after_load()
 
-	save_manager.end_restore()
+	save_manager.end_restore(restore_gen)
 	network_manager.broadcast_peer_busy(false)  # join load done — release the other peers' gate
 
 	if is_instance_valid(_army_loading_overlay):
@@ -15299,9 +15306,9 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_contro
 	# both mutate the shared object_manager._object_counter + save_manager._loaded_game_units, so
 	# two simultaneous mid-session imports would clobber each other's network_ids and lose models
 	# (the headless stress-test finding). The restore-lock makes the two builds mutually exclusive.
-	await save_manager.begin_restore()
+	var import_gen: int = await save_manager.begin_restore()
 	var spawned = await opr_army_manager.spawn_army(army)
-	save_manager.end_restore()
+	save_manager.end_restore(import_gen)
 	network_manager.broadcast_peer_busy(false)  # load done — release the other peer's gate
 	print("Spawned %d models for army '%s' on Player %d's tray" % [spawned.size(), army.name, player_id])
 
@@ -15470,8 +15477,9 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	# the incoming army (mirrors begin_restore/end_restore; cleared after end_restore below).
 	network_manager.broadcast_peer_busy(true)
 
-	# Serialize against the join state-sync restore: both clear _loaded_game_units. Released below.
-	await save_manager.begin_restore()
+	# Serialize against the join state-sync restore: both clear _loaded_game_units. Released below
+	# (by generation: after a connection drop the re-sync holds the lock, and this build must not free it).
+	var restore_gen: int = await save_manager.begin_restore()
 
 	# 1. Rebuild all GameUnits at once (deserialize clears + repopulates _loaded_game_units).
 	save_manager._deserialize_game_units(units)
@@ -15527,7 +15535,7 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	save_manager._restore_regiments_after_load()
 	solo_rehydrate_spell_state()   # NML-949: rebuild the spell bookkeeping the units carried in
 
-	save_manager.end_restore()
+	save_manager.end_restore(restore_gen)
 	network_manager.broadcast_peer_busy(false)  # army built — release the other peers' gate
 
 	# 5. Close the loading overlay.

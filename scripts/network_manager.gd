@@ -2088,8 +2088,9 @@ func _build_created_unit(unit_dict: Dictionary, objects: Array, origin: String, 
 	var om = main.object_manager
 	var unit_id: String = str(unit_dict.get("unit_id", ""))
 
-	# Serialize against a concurrent army build / join state-sync — same mutex, same reason.
-	await sm.begin_restore()
+	# Serialize against a concurrent army build / join state-sync — same mutex, same reason. The
+	# generation keeps a build superseded by a connection drop from freeing the re-sync's lock.
+	var restore_gen: int = await sm.begin_restore()
 
 	# Water-mark the BARE low counter (strip the slot band) before anything allocates, so an id we
 	# mint later can never land on one this payload already carries.
@@ -2119,7 +2120,7 @@ func _build_created_unit(unit_dict: Dictionary, objects: Array, origin: String, 
 		# registers the unit in army_manager.game_units).
 		var game_unit := GameUnit.from_dict(unit_dict)
 		if game_unit == null:
-			sm.end_restore()
+			sm.end_restore(restore_gen)
 			return
 		# ADDITIVE on purpose: _deserialize_game_units() clears the staging dict, which would drop an
 		# army build that is queued behind us.
@@ -2148,7 +2149,7 @@ func _build_created_unit(unit_dict: Dictionary, objects: Array, origin: String, 
 				int(reg_data.get("network_id", -1))
 			)
 
-	sm.end_restore()
+	sm.end_restore(restore_gen)
 	if built == null:
 		return
 	print("[Network] Built mid-game unit '%s' (%d models, origin='%s')" % [
