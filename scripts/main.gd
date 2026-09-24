@@ -6859,8 +6859,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 				else:
 					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense roll%s of %d+" % [
 						str(win["rule"]), defender.get_name(), sixes, ("" if sixes == 1 else "s"), bane_low], true)
-			reroll = await _solo_tray_roll(sixes, base_defense + ap, _solo_owner_label(defender), "defense",
-				"Defense re-roll (Bane) vs %s" % weapon_name)
+			reroll = await _owner_roll(defender, sixes, base_defense + ap, "defense",
+				"Defense re-roll (Bane) vs %s" % weapon_name, {"what": "Bane re-roll vs %s" % weapon_name})
 		blocks = AiCombatMath.blocks_with_bane_from(save_faces, reroll, base_defense, ap, bane_low)
 	else:
 		blocks = AiCombatMath.count_blocks(save_faces, base_defense, ap)
@@ -6979,8 +6979,8 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s — %s" % [target.get_name(), trace], true)
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
-	var faces: Array = await _solo_tray_roll(wounds, regen_target, _solo_owner_label(target), "regeneration",
-		"Regeneration (%d+ ignores a wound)" % regen_target)
+	var faces: Array = await _owner_roll(target, wounds, regen_target, "regeneration",
+		"Regeneration (%d+ ignores a wound)" % regen_target, {"what": "regeneration dice"})
 	var ignored := 0
 	for f in faces:
 		if int(f) >= regen_target:
@@ -7639,9 +7639,21 @@ func _solo_model_in_cover(model: ModelInstance) -> bool:
 	return solo_controller != null and solo_controller.model_in_cover(model)
 
 
-## Battle-log / dice-owner label for a unit: "AI (name)" for an AI-controlled unit, else "You".
+## Battle-log / dice-owner label for a unit: "AI (name)" for an AI-controlled unit, the owner's player
+## name for another human's unit (co-op, rules plan 0.1b), else "You".
 func _solo_owner_label(unit: GameUnit) -> String:
-	return ("AI (%s)" % unit.get_name()) if _solo_is_ai_unit(unit) else "You"
+	if _solo_is_ai_unit(unit):
+		return "AI (%s)" % unit.get_name()
+	return "You" if _solo_i_own_unit(unit) else _solo_owner_name(unit)
+
+
+## The player name of a unit's owner seat (the session's name for its peer, else "player N").
+func _solo_owner_name(unit: GameUnit) -> String:
+	var owner_slot := unit_owner_slot(unit.unit_properties)
+	var owner_peer := _solo_peer_for_slot(owner_slot)
+	if network_manager != null and network_manager.player_names.has(owner_peer):
+		return str(network_manager.player_names[owner_peer])
+	return "player %d" % owner_slot
 
 
 ## Dangerous terrain (GF Advanced Rules v3.5.1 p.12): each model that crossed a Dangerous cell rolls one REAL
@@ -7817,16 +7829,16 @@ var _solo_remote_save_waiters: Dictionary = {}   # request id -> {"faces": Array
 ## The seam. Local owner (solo, our own slot, an AI unit — the resolving machine rolls NACHTMAHR's
 ## dice) → our tray. Another human's unit → its owner rolls; vacant seat or no answer → a visible
 ## auto-roll. `ask` = what the owner's side needs beyond a plain roll: "what" (the waiting / rolled
-## wording, default `purpose`) and, for a save batch, "striker"/"weapon"/"defense"/"ap" (the prompt).
+## wording, default `purpose`), "label" (the caller's own tray label for a LOCAL roll, default
+## `_solo_owner_label`) and, for a save batch, "striker"/"weapon"/"defense"/"ap" (the prompt).
 func _owner_roll(unit: GameUnit, count: int, target: int, roll_kind: String, purpose: String,
 		ask: Dictionary = {}) -> Array:
 	if _solo_is_ai_unit(unit) or _solo_i_own_unit(unit):
-		return await _solo_tray_roll(count, target, _solo_owner_label(unit), roll_kind, purpose)
-	var owner_slot := unit_owner_slot(unit.unit_properties)
-	var owner_peer := _solo_peer_for_slot(owner_slot)
-	var owner_name: String = "player %d" % owner_slot
-	if network_manager != null and network_manager.player_names.has(owner_peer):
-		owner_name = str(network_manager.player_names[owner_peer])
+		var label := str(ask.get("label", ""))
+		return await _solo_tray_roll(count, target, label if not label.is_empty() else _solo_owner_label(unit),
+			roll_kind, purpose)
+	var owner_peer := _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
+	var owner_name := _solo_owner_name(unit)
 	var what := str(ask.get("what", purpose))
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Waiting for %s — %s" % [owner_name, what], true)
@@ -9053,8 +9065,8 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 		if spell_morale != 0 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %+d to morale test rolls — %s passes on %d+" % [
 				", ".join(morale_notes), spell_morale, unit.get_name(), test_target], true)
-		var faces: Array = await _solo_tray_roll(1, test_target, owner, "morale",
-			"Morale test: %s (%d+)" % [unit.get_name(), test_target])
+		var faces: Array = await _owner_roll(unit, 1, test_target, "morale",
+			"Morale test: %s (%d+)" % [unit.get_name(), test_target], {"what": "morale test", "label": owner})
 		_solo_spend_once_kind(unit, ["morale"])   # NML-006: spent by this test
 		if faces.is_empty():
 			return
@@ -9064,8 +9076,8 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 	# tray. The 4+ is DATA where the mechanics map carries it (RulesRegistry; constant fallback — byte-identical seam).
 	if result != AiCombatMath.Morale.PASSED and unit.has_special_rule("Fearless"):
 		var recover_target: int = int(RulesRegistry.unit_param(unit, "Fearless", "recover_target", AiCombatMath.FEARLESS_RECOVER_TARGET))
-		var recovery_die: Array = await _solo_tray_roll(1, recover_target, owner, "fearless",
-			"Morale recovery die — Fearless (%d+)" % recover_target)
+		var recovery_die: Array = await _owner_roll(unit, 1, recover_target, "fearless",
+			"Morale recovery die — Fearless (%d+)" % recover_target, {"what": "Fearless recovery die", "label": owner})
 		if not recovery_die.is_empty() and DiceRules.is_success(int(recovery_die[0]), recover_target, 0):
 			result = AiCombatMath.Morale.PASSED
 			if battle_log != null:
@@ -9082,8 +9094,8 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 	if result != AiCombatMath.Morale.PASSED and RulesRegistry.unit_rule_active(unit, "No Retreat"):
 		var wound_max: int = int(RulesRegistry.unit_param(unit, "No Retreat", "self_wound_max", AiCombatMath.NO_RETREAT_SELF_WOUND_MAX))
 		var dice_n: int = maxi(1, SoloController.wounds_to_destroy(unit))
-		var nr_faces: Array = await _solo_tray_roll(dice_n, wound_max + 1, owner, "no_retreat",
-			"No Retreat self-wounds (1-%d = wound)" % wound_max)
+		var nr_faces: Array = await _owner_roll(unit, dice_n, wound_max + 1, "no_retreat",
+			"No Retreat self-wounds (1-%d = wound)" % wound_max, {"what": "No Retreat self-wound dice", "label": owner})
 		var self_wounds: int = AiCombatMath.no_retreat_wounds(nr_faces, wound_max)
 		result = AiCombatMath.Morale.PASSED
 		if battle_log != null:
