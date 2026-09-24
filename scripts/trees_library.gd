@@ -41,6 +41,11 @@ var _textures: Dictionary = {}  # panel name -> Texture2D (decoded once, then re
 ## cache and re-parse the ~3 large tree GLBs from scratch — that was the bulk of the
 ## multi-second menu rebuild. Static = parse once, reuse everywhere.
 static var _model_scene_cache: Dictionary = {}
+## Worker-pool parses in flight (prepare_models()), keyed by cached file PATH like the cache above.
+static var _model_jobs: Dictionary = {}
+## The headless build's dummy renderer allocates meshes and textures without a lock: a worker parse beside the
+## main thread crashed the headless suite in 4 of 6 runs. Headless, a job runs on the main thread when collected.
+static var _parse_on_main_thread := DisplayServer.get_name() == "headless"
 
 # === Lifecycle ===
 
@@ -159,6 +164,7 @@ func get_model_scene(variant: String) -> PackedScene:
 	var path := get_cached_model_path(variant)
 	if path.is_empty():
 		return null
+	_finish_model_job(path)  # a worker parse in flight: wait for it rather than parse the file twice
 	if _model_scene_cache.has(path):
 		return _model_scene_cache[path]
 	var doc := GLTFDocument.new()
@@ -179,7 +185,61 @@ func get_model_scene(variant: String) -> PackedScene:
 	_model_scene_cache[path] = packed
 	return packed
 
+
+## True when every tree variant of the theme is parsed into the shared scene cache (sync, never parses).
+func models_prepared(theme_prefix: String = "") -> bool:
+	for variant in TREE_VARIANTS:
+		var path := get_cached_model_path(theme_prefix + variant)
+		if path.is_empty() or not _model_scene_cache.has(path):
+			return false
+	return true
+
+
+## The variant's scene if prepare_models() (or get_model_scene()) already parsed it, else null (never parses).
+func get_prepared_model_scene(variant: String) -> PackedScene:
+	return _model_scene_cache.get(get_cached_model_path(variant))
+
+
+## Parses the theme's cached tree GLBs on the worker pool into the shared scene cache, so the main thread
+## never stalls on them (inline, each GLB held the main thread 0.53-0.70 s). Awaitable; true once every
+## variant is prepared. A GLB that fails to parse is cached as null, so callers fall back to the billboard.
+func prepare_models(theme_prefix: String = "") -> bool:
+	var paths: Array[String] = []
+	for variant in TREE_VARIANTS:
+		var path := get_cached_model_path(theme_prefix + variant)
+		if path.is_empty() or _model_scene_cache.has(path):
+			continue
+		if not _model_jobs.has(path):
+			var job := ModelJob.new(path)
+			if not _parse_on_main_thread:
+				job.task_id = WorkerThreadPool.add_task(job.run, false, "tree model " + theme_prefix + variant)
+			_model_jobs[path] = job
+		paths.append(path)
+	for path in paths:
+		var job: ModelJob = _model_jobs.get(path)
+		# At least one frame always passes, so the caller never resumes inside the call that started the parse.
+		# Another caller may have collected the job meanwhile; its task id is invalid from then on.
+		while is_inside_tree():
+			await get_tree().process_frame
+			if job == null or _model_jobs.get(path) != job or job.task_id < 0 \
+					or WorkerThreadPool.is_task_completed(job.task_id):
+				break
+		_finish_model_job(path)
+	return models_prepared(theme_prefix)
+
 # === Private helpers ===
+
+## Main thread: collects a worker parse (waits if it is still running) into the shared scene cache.
+static func _finish_model_job(path: String) -> void:
+	var job: ModelJob = _model_jobs.get(path)
+	if job == null:
+		return
+	if job.task_id < 0:
+		job.run()  # headless (_parse_on_main_thread)
+	else:
+		WorkerThreadPool.wait_for_task_completion(job.task_id)
+	_model_jobs.erase(path)
+	_model_scene_cache[path] = job.scene
 
 static func _set_owner_recursive(node: Node, scene_owner: Node) -> void:
 	for child: Node in node.get_children():
@@ -191,7 +251,8 @@ static func _set_owner_recursive(node: Node, scene_owner: Node) -> void:
 ## fill light reads as diffuse, and regenerated mipmaps + anisotropic filtering for
 ## runtime glTF textures, which Godot loads without a mip chain
 ## (godotengine/godot#100481) so they would shimmer and alias.
-static func _fix_runtime_materials(node: Node) -> void:
+## `cpu_images` (texture -> Image, from a worker parse) replaces the GPU read-back.
+static func _fix_runtime_materials(node: Node, cpu_images: Variant = null) -> void:
 	var nodes_to_check: Array[Node] = [node]
 	while not nodes_to_check.is_empty():
 		var current: Node = nodes_to_check.pop_back()
@@ -209,15 +270,17 @@ static func _fix_runtime_materials(node: Node) -> void:
 			adjusted.metallic = 0.0
 			adjusted.roughness = 0.9
 			adjusted.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-			adjusted.albedo_texture = _ensure_texture_mipmaps(adjusted.albedo_texture)
-			adjusted.normal_texture = _ensure_texture_mipmaps(adjusted.normal_texture)
+			adjusted.albedo_texture = _ensure_texture_mipmaps(adjusted.albedo_texture, cpu_images)
+			adjusted.normal_texture = _ensure_texture_mipmaps(adjusted.normal_texture, cpu_images)
 			mesh_instance.mesh.surface_set_material(surface_idx, adjusted)
 
 
-static func _ensure_texture_mipmaps(tex: Texture2D) -> Texture2D:
+## A worker never reads a texture back from the GPU: without a CPU copy the texture stays as it is.
+static func _ensure_texture_mipmaps(tex: Texture2D, cpu_images: Variant = null) -> Texture2D:
 	if tex == null:
 		return null
-	var img := tex.get_image()
+	var img: Image = tex.get_image() if cpu_images == null \
+			else (cpu_images[tex].duplicate() if cpu_images.has(tex) else null)
 	if img == null or img.has_mipmaps() or img.is_compressed():
 		return tex
 	img.generate_mipmaps()
@@ -250,3 +313,49 @@ func apply_manifest_text(text: String) -> void:
 	var models: Variant = data.get("models", {})
 	if typeof(models) == TYPE_DICTIONARY:
 		_models = models
+
+
+## The worker-thread half of prepare_models(): parse, fix the materials from CPU copies of the embedded
+## images (as table_tree_pass.gd's SourceJob does) and pack. Touches no node inside the scene tree.
+class ModelJob extends RefCounted:
+	var path := ""
+	var task_id := -1
+	var scene: PackedScene = null
+
+	func _init(glb_path: String) -> void:
+		path = glb_path
+
+	func run() -> void:
+		var doc := GLTFDocument.new()
+		var state := GLTFState.new()
+		if doc.append_from_file(path, state) != OK:
+			return
+		var images := _cpu_images(state)
+		var root := doc.generate_scene(state)
+		if root == null:
+			return
+		TreesLibrary._fix_runtime_materials(root, images)
+		TreesLibrary._set_owner_recursive(root, root)
+		var packed := PackedScene.new()
+		if packed.pack(root) == OK:
+			scene = packed
+		root.free()
+
+	## texture -> Image decoded from the GLB's own bytes, keyed by the texture object the materials use.
+	static func _cpu_images(state: GLTFState) -> Dictionary:
+		var images := {}
+		var entries: Array = state.get_json().get("images", [])
+		var textures: Array = state.get_images()
+		var views: Array = state.get_buffer_views()
+		for i in mini(entries.size(), textures.size()):
+			var entry: Dictionary = entries[i]
+			if textures[i] == null or not entry.has("bufferView"):
+				continue
+			var data: PackedByteArray = (views[int(entry["bufferView"])] as GLTFBufferView).load_buffer_view_data(state)
+			var image := Image.new()
+			var mime := str(entry.get("mimeType", ""))
+			var err := image.load_webp_from_buffer(data) if mime == "image/webp" \
+				else (image.load_png_from_buffer(data) if mime == "image/png" else image.load_jpg_from_buffer(data))
+			if err == OK:
+				images[textures[i]] = image
+		return images

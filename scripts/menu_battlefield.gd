@@ -65,6 +65,7 @@ func build(selected_biome: String, world_env: WorldEnvironment, sun: Directional
 	object_manager.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(object_manager)
 	terrain_overlay = load("res://scripts/terrain_overlay.gd").new()
+	terrain_overlay.defer_tree_model_parse = true
 	add_child(terrain_overlay)
 	_build_terrain()
 	progress.emit("Preparing terrain",0.15)
