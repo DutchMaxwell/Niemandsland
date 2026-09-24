@@ -410,6 +410,13 @@ func load_game(path: String) -> Error:
 	# Load objects (async for TTS downloads)
 	var loaded_count = await _deserialize_objects(state.get("objects", []))
 
+	# clear_all_objects() zeroed the id counter and the OPR models above keep their SAVED network_ids
+	# without touching it, so put the saved counter back — otherwise the next id minted after this load
+	# (a runtime unit, a second import, regiment forming) is slot*1e6 + 1 again and collides with a
+	# loaded model. maxi: the generic spawn_* calls above already bumped it once each.
+	if object_manager:
+		object_manager._object_counter = maxi(object_manager._object_counter, int(state.get("object_counter", 0)))
+
 	# Rebuild Age of Fantasy: Regiments movement-tray blocks now that the model
 	# nodes exist and are wired to their loaded GameUnits.
 	_restore_regiments_after_load()
@@ -552,22 +559,23 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 		if deployment_type > 0 and terrain_overlay.has_method("set_deployment_zones_visible"):
 			terrain_overlay.set_deployment_zones_visible(true)
 
-		# Update mission objectives (convert 1" to world coords), restoring owners
-		if not objectives.is_empty() and map_layout_editor:
+		# Update mission objectives (convert 1" to world coords), restoring owners. The three overlay
+		# updates below run for EMPTY lists too: each one clears its own instances first (and the
+		# clear_overlay above only clears terrain), so skipping an empty list left the previous table's
+		# objectives, walls and trees on the overlay — and gameplay reads the overlay.
+		if map_layout_editor:
 			if map_layout_editor.has_method("get_objectives_for_overlay"):
 				var world_objectives = map_layout_editor.get_objectives_for_overlay()
 				if terrain_overlay.has_method("update_objectives"):
 					terrain_overlay.update_objectives(world_objectives, objective_owners)
 
 		# Restore wall models in 3D
-		if not wall_segments.is_empty():
-			if terrain_overlay.has_method("update_wall_models"):
-				terrain_overlay.update_wall_models(wall_segments, table_size, grid_rotation)
+		if terrain_overlay.has_method("update_wall_models"):
+			terrain_overlay.update_wall_models(wall_segments, table_size, grid_rotation)
 
 		# Restore placed objects (trees, containers) in 3D
-		if not placed_objects.is_empty():
-			if terrain_overlay.has_method("update_placed_objects"):
-				terrain_overlay.update_placed_objects(placed_objects, table_size, grid_rotation)
+		if terrain_overlay.has_method("update_placed_objects"):
+			terrain_overlay.update_placed_objects(placed_objects, table_size, grid_rotation)
 
 	# Restore terrain overlay display mode
 	if terrain_overlay:
