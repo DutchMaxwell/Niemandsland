@@ -352,6 +352,10 @@ var _ruin_panel_hole_rects: Dictionary = {}  # panel name -> Array[Rect2] interi
 var _trees_library: TreesLibrary = null
 var _tree_panel_materials: Dictionary = {}
 var _tree_fetch_started := false
+## Parse the tree GLBs on the worker pool (TreesLibrary.prepare_models) and show the billboard tier until they
+## are ready, instead of parsing them inline (~2 s main-thread stall per theme, measured). Set before the first
+## layout. The main menu's diorama sets it; the game table does not (yet).
+var defer_tree_model_parse := false
 var _last_objects: Array = []
 var _last_obj_table_size := Vector2.ZERO
 var _last_obj_rotation := 0.0
@@ -2940,9 +2944,11 @@ func _tree_panels_ready() -> bool:
 	return _trees_library != null and _trees_library.all_panels_cached(_prop_theme)
 
 
-## True once the textured tree GLBs are cached locally (sync; no network access).
+## True once the textured tree GLBs are cached locally (sync; no network access) — and, when their parse is
+## deferred, parsed too.
 func _tree_models_ready() -> bool:
-	return _trees_library != null and _trees_library.all_models_cached(_prop_theme)
+	return _trees_library != null and _trees_library.all_models_cached(_prop_theme) \
+			and (not defer_tree_model_parse or _trees_library.models_prepared(_prop_theme))
 
 
 ## Start the one-time async panel download. On success the last object layout is
@@ -2958,10 +2964,15 @@ func _request_tree_panels() -> void:
 ## Progressive enhancement: the small billboard panels land first (trees pop in as
 ## cutouts), then the textured GLBs upgrade them to volumetric models in place.
 func _fetch_tree_panels() -> void:
+	# A deferred parse starts here with the panels already cached, synchronously inside the
+	# update_placed_objects() that requested it: no rebuild there (it would build every object twice).
+	var panels_were_ready := defer_tree_model_parse and _tree_panels_ready()
 	var panels_ok: bool = await _trees_library.ensure_all_panels(_prop_theme)
-	if panels_ok and not _last_objects.is_empty():
+	if panels_ok and not panels_were_ready and not _last_objects.is_empty():
 		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
 	var models_ok: bool = await _trees_library.ensure_all_models(_prop_theme)
+	if models_ok and defer_tree_model_parse:
+		models_ok = await _trees_library.prepare_models(_prop_theme)
 	if models_ok and not _last_objects.is_empty():
 		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
 	if not panels_ok and not models_ok:
@@ -2984,7 +2995,8 @@ func _create_textured_tree(obj: Dictionary) -> Node3D:
 
 	# Volumetric tree: instance the variant's GLB, scaled so the model stands on the
 	# table at the same height the billboard would have.
-	var scene: PackedScene = _trees_library.get_model_scene(panel)
+	var scene: PackedScene = _trees_library.get_prepared_model_scene(panel) if defer_tree_model_parse \
+			else _trees_library.get_model_scene(panel)
 	if scene != null:
 		var model := scene.instantiate() as Node3D
 		if model != null:
