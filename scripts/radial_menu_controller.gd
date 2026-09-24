@@ -817,7 +817,15 @@ func _delete_unit(context: Dictionary) -> void:
 func _delete_terrain(context: Dictionary) -> void:
 	var terrain = context.get("terrain") as Node3D
 	if terrain:
-		terrain.queue_free()
+		_delete_plain_object(terrain)
+
+
+## Radial Delete on a non-unit object runs the SAME path as the Delete key (undoable, hidden not freed,
+## visibility broadcast to the other table) — a bare queue_free() left no undo entry and vanished on one screen.
+func _delete_plain_object(obj: Node3D) -> void:
+	delete_objects([obj])
+	if object_manager and object_manager.has_method("deselect_all"):
+		object_manager.deselect_all()
 
 
 ## Show a minimal info popup (name + node type) for a generic table object — one
@@ -832,7 +840,7 @@ func _show_generic_info(context: Dictionary) -> void:
 func _delete_generic(context: Dictionary) -> void:
 	var obj = context.get("object") as Node3D
 	if obj:
-		obj.queue_free()
+		_delete_plain_object(obj)
 
 
 ## Revive a unit's destroyed models — special rules that return/revive fallen models. Brings the

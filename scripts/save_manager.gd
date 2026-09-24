@@ -32,6 +32,7 @@ var radial_menu_controller: Node  # Reference for token/marker visualization aft
 ## then left out of a save and ignored on load.
 var ai_slots_getter: Callable  # () -> Array: sorted slot ids
 var ai_slots_setter: Callable  # (slots: Array) -> void: adopts the designation wholesale
+var network_manager: Node  # Session role: a guest never loads a save into a shared game (see load_game)
 
 
 func _ready() -> void:
@@ -369,6 +370,12 @@ func restore_state(state: Dictionary) -> Error:
 
 ## Load game state from file
 func load_game(path: String) -> Error:
+	# The host owns the shared table: every peer mirrors the host's state (_rpc_sync_game_state is authority-only)
+	# and only a host re-syncs after a load. A guest load used to broadcast a table clear to everyone and then
+	# rebuild only its own screen, wiping the host's table. Offline and host loads are untouched.
+	if network_manager != null and network_manager.is_multiplayer_active() and not network_manager.is_host:
+		load_failed.emit("Only the host can load a saved game during a multiplayer session")
+		return ERR_UNAUTHORIZED
 	if not FileAccess.file_exists(path):
 		load_failed.emit("File not found: %s" % path)
 		return ERR_FILE_NOT_FOUND

@@ -601,6 +601,7 @@ func _ready() -> void:
 	# Initialize SaveManager references
 	save_manager.object_manager = object_manager
 	save_manager.table = table
+	save_manager.network_manager = network_manager
 
 	# Connect Graphics Settings UI
 	graphics_quality_option.item_selected.connect(_on_graphics_quality_changed)
@@ -14743,6 +14744,10 @@ func _on_save_game() -> void:
 
 ## Open load dialog
 func _on_load_game() -> void:
+	# SaveManager.load_game refuses a guest's load too; say so up front instead of after the file pick.
+	if network_manager.is_multiplayer_active() and not network_manager.is_host:
+		_solo_show_toast("Only the host can load a saved game")
+		return
 	load_game_dialog.current_dir = SaveManager.get_default_save_dir()
 	load_game_dialog.popup_centered()
 
