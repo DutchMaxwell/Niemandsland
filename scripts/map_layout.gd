@@ -2624,6 +2624,20 @@ func get_objectives_for_overlay() -> Array[Vector3]:
 	return result
 
 
+## Inverse of get_objectives_for_overlay: adopt markers given in TABLE-CENTRED inches (the frame the mission
+## catalog resolves in; a table-centred inch is a world metre / 0.0254) as this editor's grid-origin list.
+## The editor owns the objective list — the window close, the save and the multiplayer sync all read it —
+## so a mission's markers have to live here too, not only on the overlay (audit S6-U1).
+func set_objectives_from_table_inches(table_inches: Array) -> void:
+	var valid_range = _get_valid_cell_range()
+	var center := Vector2((valid_range.position.x + valid_range.size.x / 2.0) * GRID_SIZE_INCHES,
+		(valid_range.position.y + valid_range.size.y / 2.0) * GRID_SIZE_INCHES)
+	var unrotate := -deg_to_rad(grid_rotation_degrees)
+	mission_objectives.clear()
+	for p in table_inches:
+		mission_objectives.append((p as Vector2).rotated(unrotate) + center)
+
+
 # ============================================================================
 # Zoom Functions
 # ============================================================================

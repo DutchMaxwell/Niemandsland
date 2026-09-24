@@ -1467,6 +1467,25 @@ func update_objectives(objectives: Array, owners: Array = []) -> void:
 		_create_objective_marker(mission_objectives[i], i + 1, objective_owners[i])
 
 
+## Two markers closer than this (metres, ~2") are the SAME marker: real ones sit at least 9" apart.
+const OBJECTIVE_SAME_SPOT_M := 0.05
+
+
+## update_objectives for a rebuild from an authoritative list (the Map Layout editor's): a marker that
+## stays where it was keeps its captured owner, only a new or moved marker starts neutral. A plain
+## update_objectives(list) hands every captured marker back to neutral.
+func update_objectives_keeping_owners(objectives: Array) -> void:
+	var kept: Array = []
+	for obj in objectives:
+		var owner_id := 0
+		for i in range(mission_objectives.size()):
+			if obj is Vector3 and (obj as Vector3).distance_to(mission_objectives[i]) < OBJECTIVE_SAME_SPOT_M:
+				owner_id = objective_owners[i] if i < objective_owners.size() else 0
+				break
+		kept.append(owner_id)
+	update_objectives(objectives, kept)
+
+
 ## Color for an objective owner: neutral gold for 0, else the army's player color
 ## (shared with unit boundaries/bases via OPRArmyManager.PLAYER_COLORS).
 func _objective_owner_color(owner_id: int) -> Color:

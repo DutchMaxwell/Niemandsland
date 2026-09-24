@@ -27,6 +27,11 @@ var army_manager: OPRArmyManager  # Reference for GameUnit data
 var map_layout_editor: Control  # Reference to map layout editor (terrain, zones, objectives)
 var terrain_overlay: Node3D  # Reference to 3D terrain overlay
 var radial_menu_controller: Node  # Reference for token/marker visualization after load
+## Solo AI designation lives on main.gd (solo_ai_slots); the save carries it so a loaded / continued battle
+## keeps WHICH army the AI plays (audit S1-16). Both stay unset in a bare SaveManager (unit tests): the key is
+## then left out of a save and ignored on load.
+var ai_slots_getter: Callable  # () -> Array: sorted slot ids
+var ai_slots_setter: Callable  # (slots: Array) -> void: adopts the designation wholesale
 
 
 func _ready() -> void:
@@ -317,7 +322,13 @@ const SCENARIO_RESTORE_TMP := "user://_scenario_restore.nml"
 
 ## Save the current game state to file (serialize + write + save_completed signal).
 func save_game(path: String) -> Error:
-	var err := save_state_to_file(serialize_game_state(), path)
+	var state := serialize_game_state()
+	# FILE saves only: the multiplayer full-state push reuses serialize_game_state and carries the
+	# designation its own way (main._sync_state_to_peer). Optional key, no SAVE_VERSION bump (same
+	# reasoning as rule_state in _deserialize_game_state).
+	if ai_slots_getter.is_valid():
+		state["solo_ai_slots"] = ai_slots_getter.call()
+	var err := save_state_to_file(state, path)
 	if err == OK:
 		save_completed.emit(path)
 	return err
@@ -441,6 +452,11 @@ func load_game(path: String) -> Error:
 
 	# Restore game state
 	_deserialize_game_state(state.get("game_state", {}))
+
+	# Which army the AI plays — BEFORE load_completed (the host's re-sync to clients reads it). An absent
+	# key (a save from an older build) leaves the live designation alone.
+	if ai_slots_setter.is_valid() and state.get("solo_ai_slots") is Array:
+		ai_slots_setter.call(state["solo_ai_slots"])
 
 	# Restore token/marker visualizations for all loaded game units
 	_restore_markers_after_load()
