@@ -2371,6 +2371,7 @@ func clear_all() -> void:
 			army_trays[player_id].queue_free()
 
 	armies.clear()
+	_session_spells.clear()  # the lists belong to the cleared armies; a load / join refills them
 	model_to_unit.clear()
 	unit_to_models.clear()
 	unit_to_game_unit.clear()

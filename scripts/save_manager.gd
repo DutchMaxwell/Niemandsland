@@ -421,6 +421,10 @@ func load_game(path: String) -> Error:
 	# Restore OPR special-rule descriptions so the loaded army shows them.
 	if army_manager and army_manager.has_method("merge_rule_descriptions"):
 		army_manager.merge_rule_descriptions(state.get("rule_descriptions", {}))
+	# ...and the per-player faction spell lists, so the loaded casters show their spells (a loaded
+	# save rebuilds no OPRArmy, so this cache is their only source — same as the MP join path).
+	if army_manager and army_manager.has_method("merge_player_spells"):
+		army_manager.merge_player_spells(state.get("player_spells", {}))
 
 	# Load GameUnits first (they contain model-level state)
 	var game_units_loaded = _deserialize_game_units(state.get("game_units", []))
