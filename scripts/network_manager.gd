@@ -406,6 +406,100 @@ func _get_sender() -> int:
 	return _command_sender if _command_sender != 0 else multiplayer.get_remote_sender_id()
 
 
+## The host's transport peer id. The relay stamps the true sender on every frame, so a guest
+## cannot claim it.
+const HOST_PEER_ID: int = 1
+
+## Command-channel allow-list: the ONLY handler names a "rpc" frame may invoke, split by who may
+## send them. The @rpc annotations are never enforced on this channel (nothing calls .rpc()), so
+## this table is the one statement of authority. Host-only = the former @rpc("authority")
+## handlers. Any name outside both lists, inherited engine methods included, is dropped.
+## Keep in step with every _remote_call("...") in this file; test/network_command_channel_test.gd
+## checks the table against the sends.
+const HOST_ONLY_HANDLERS: PackedStringArray = [
+	"_rpc_reject_version",
+	"_rpc_assign_slot",
+	"_rpc_remap_peer",
+	"sync_peer_busy_proxy",
+	"sync_player_roster",
+	"sync_slot_table",
+	"_rpc_set_game_phase",
+]
+const ANY_PEER_HANDLERS: PackedStringArray = [
+	"_rpc_announce_version",
+	"spawn_object_networked",
+	"spawn_sandbox_terrain_networked",
+	"pin_ruler_networked",
+	"clear_ruler_networked",
+	"clear_rulers_by_owner_networked",
+	"clear_all_rulers_networked",
+	"sync_move_trails",
+	"sync_move_trails_undo",
+	"move_object_networked",
+	"move_objects_batch_networked",
+	"sync_move_log",
+	"sync_log_event",
+	"clear_objects_networked",
+	"sync_sort_table",
+	"sync_round_advance",
+	"sync_unit_activation",
+	"sync_model_wounds",
+	"sync_regiment_frontage",
+	"sync_regiment_wounds",
+	"sync_model_marker",
+	"sync_unit_marker",
+	"sync_model_marker_value",
+	"sync_unit_marker_value",
+	"sync_unit_visible",
+	"sync_unit_property",
+	"sync_spell_mods",
+	"sync_objective_owner",
+	"sync_token_define",
+	"sync_token_edit",
+	"sync_unit_casts",
+	"sync_unit_delete",
+	"rotate_object_networked",
+	"rotate_objects_batch_networked",
+	"sync_hero_attachment",
+	"sync_cursor_position",
+	"sync_camera_direction",
+	"sync_dice_roll",
+	"sync_dice_composition",
+	"sync_dice_color_tag",
+	"sync_peer_busy",
+	"sync_player_name",
+	"sync_chat_message",
+	"sync_table_settings",
+	"_rpc_report_ready",
+	"spawn_object_data_networked",
+	"sync_object_visibility",
+	"sync_army_header",
+	"sync_army_unit",
+	"sync_army_complete",
+	"sync_unit_created",
+	"sync_tts_terrain_spawn",
+	"sync_camera_position",
+	"sync_unit_embark",
+]
+## Main-owned command types (forwarded via command_received) that only the host may send:
+## main._rpc_sync_game_state is @rpc("authority") and rebuilds the receiver's whole table.
+const HOST_ONLY_COMMAND_TYPES: PackedStringArray = ["sync_game_state"]
+
+
+## Validate one "rpc" frame: the handler must be allow-listed, and host-only handlers must come
+## from the host. Every dropped frame logs one line.
+func _command_allowed(method: String, from_peer: int) -> bool:
+	if HOST_ONLY_HANDLERS.has(method):
+		if from_peer != HOST_PEER_ID:
+			push_warning("[Network] Dropped host-only command '%s' from peer %d" % [method, from_peer])
+			return false
+		return true
+	if ANY_PEER_HANDLERS.has(method):
+		return true
+	push_warning("[Network] Dropped command from peer %d: '%s' is not a command handler" % [from_peer, method])
+	return false
+
+
 func _on_raw_command(from_peer: int, data: PackedByteArray) -> void:
 	var env: Dictionary = MPCommand.decode(data)
 	if env.is_empty():
@@ -415,6 +509,8 @@ func _on_raw_command(from_peer: int, data: PackedByteArray) -> void:
 	if type == "rpc":
 		var payload: Dictionary = env.get("p", {})
 		var method: String = str(payload.get("m", ""))
+		if not _command_allowed(method, from_peer):
+			return
 		if method != "" and has_method(method):
 			_command_sender = from_peer
 			callv(method, payload.get("a", []))
@@ -428,6 +524,9 @@ func _on_raw_command(from_peer: int, data: PackedByteArray) -> void:
 		return
 	if type == "cmd_pong":
 		print("[CMD] pong from %d (command channel verified)" % from_peer)
+		return
+	if HOST_ONLY_COMMAND_TYPES.has(type) and from_peer != HOST_PEER_ID:
+		push_warning("[Network] Dropped host-only command '%s' from peer %d" % [type, from_peer])
 		return
 	command_received.emit(type, env.get("p", null), from_peer)
 
