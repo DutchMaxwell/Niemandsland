@@ -571,7 +571,7 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 
 
 ## Deserialize all objects (async for TTS downloads)
-func _deserialize_objects(objects_data: Array) -> int:
+func _deserialize_objects(objects_data: Array, generation: int = -1) -> int:
 	if not object_manager:
 		return 0
 
@@ -579,6 +579,8 @@ func _deserialize_objects(objects_data: Array) -> int:
 	var since_yield := 0
 
 	for obj_data in objects_data:
+		if generation >= 0 and restore_superseded(generation):
+			break   # a connection drop handed the table to the re-sync — stop spawning into it
 		if not obj_data is Dictionary:
 			continue
 
@@ -815,23 +817,37 @@ var _loaded_game_units: Dictionary = {}  # unit_id -> GameUnit
 ## a correct lock; each waiter re-checks the flag after the unlock signal fires.
 signal _restore_unlocked
 var _restore_in_flight: bool = false
+var _restore_generation: int = 0   # bumped by reset_restore_lock; an older holder is superseded
 
 ## Acquire the restore lock — await until any in-flight restore finishes, then claim it.
-func begin_restore() -> void:
+## Returns the lock GENERATION the caller now holds (see restore_superseded).
+func begin_restore() -> int:
 	while _restore_in_flight:
 		await _restore_unlocked
 	_restore_in_flight = true
+	return _restore_generation
 
-## Release the restore lock. Idempotent: safe to call on any exit path / more than once.
-func end_restore() -> void:
+## Release the restore lock. Idempotent: safe to call on any exit path / more than once. A holder
+## whose `generation` was superseded by a connection drop does NOT release — the re-sync holds it now.
+func end_restore(generation: int = -1) -> void:
+	if generation >= 0 and restore_superseded(generation):
+		return
 	_restore_in_flight = false
 	_restore_unlocked.emit()
 
 ## Force-release on a connection drop, so a restore stranded on a dead await (its coroutine
-## abandoned by the disconnect) can't block the post-reconnect re-sync forever.
+## abandoned by the disconnect) can't block the post-reconnect re-sync forever. It also starts a new
+## generation: a restore that was NOT stranded (it only awaited frames/downloads and resumes) is now
+## superseded and must stop spawning — otherwise it keeps building after the re-sync cleared the
+## table (the nightly soak's blip: guest minis 16 for the host's 10).
 func reset_restore_lock() -> void:
+	_restore_generation += 1
 	_restore_in_flight = false
 	_restore_unlocked.emit()
+
+## Whether the restore that began in `generation` was superseded by a connection drop.
+func restore_superseded(generation: int) -> bool:
+	return generation != _restore_generation
 
 
 ## Whether a save/load restore is currently running — the autosave gate reads this so a periodic

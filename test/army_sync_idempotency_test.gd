@@ -61,3 +61,19 @@ func test_restore_lock_serializes_second_acquirer() -> void:
 	await get_tree().process_frame
 	assert_bool(second_done[0]).is_true()
 	sm.end_restore()
+
+
+## Soak blip: a connection drop resets the lock mid-restore; the old holder is superseded and its late
+## end_restore must not free the lock the post-reconnect re-sync now holds (else a 3rd restore runs
+## concurrently with the re-sync and the guest collects duplicate models).
+func test_a_superseded_holder_cannot_release_the_re_sync_s_lock() -> void:
+	var sm: SaveManager = auto_free(SaveManager.new())
+	var old_gen: int = await sm.begin_restore()      # the join sync, mid-load
+	sm.reset_restore_lock()                          # the drop
+	var new_gen: int = await sm.begin_restore()      # the post-reconnect re-sync
+	assert_bool(sm.restore_superseded(old_gen)).is_true()
+	assert_bool(sm.restore_superseded(new_gen)).is_false()
+	sm.end_restore(old_gen)                          # the old sync finishing late
+	assert_bool(sm._restore_in_flight).override_failure_message("a superseded holder released the re-sync's lock").is_true()
+	sm.end_restore(new_gen)
+	assert_bool(sm._restore_in_flight).is_false()
