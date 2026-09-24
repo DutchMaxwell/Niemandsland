@@ -181,6 +181,17 @@ func _serialize_objects() -> Array:
 		if not obj_data.is_empty():
 			objects.append(obj_data)
 
+		# A formed Age of Fantasy: Regiments block parents its models under the RegimentTray. The
+		# tray has no record of its own (it is rebuilt from the unit's "regiment" block on load), so
+		# its members are saved here or they are missing from every save and full-state sync.
+		if child is RegimentTray:
+			for member in child.get_children():
+				if not member is Node3D or not member.is_in_group("selectable"):
+					continue
+				var member_data = _serialize_object(member)
+				if not member_data.is_empty():
+					objects.append(member_data)
+
 	return objects
 
 
