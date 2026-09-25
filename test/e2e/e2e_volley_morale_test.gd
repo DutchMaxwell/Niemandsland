@@ -374,4 +374,8 @@ func test_deadly_only_volley_triggers_half_strength_morale(timeout := 120000) ->
 	assert_array(_morale_lines()) \
 		.override_failure_message("NML-966 (gap B) — the squad dropped to %d of 4 models (half strength or less) through Deadly(3) alone, but NO morale test was rolled: `landed` only pools the non-Deadly/Takedown wounds (main.gd:3068), so a volley whose casualties are entirely Deadly never satisfies the `if landed > 0` gate (main.gd:3080).\n%s" % [alive, log]) \
 		.is_not_empty()
+	var outcome: String = (_main._solo_toast as Label).text
+	assert_str(outcome) \
+		.override_failure_message("the Deadly volley killed %d models, but its banner must name those landed wounds: %s" % [4 - alive, outcome]) \
+		.contains("→ %d wounds land — Wachtrupp loses %d models" % [4 - alive, 4 - alive])
 	await E2EBoot.settle(get_tree())
