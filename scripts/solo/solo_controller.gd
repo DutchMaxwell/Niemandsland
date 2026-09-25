@@ -9037,6 +9037,16 @@ static func presentation_start_positions(move_paths: Array) -> Array:
 ##   owners     : Array[int] current owner player ids (0 = neutral), same length as objectives
 ## Returns {"owners": Array[int], "changes": Array of {index: int, owner: int}} (changes only where the
 ## owner actually flipped — the caller logs + broadcasts exactly those).
+static func objective_info_in_range(info: Dictionary, objective: Vector3) -> bool:
+	var radii: Array = info.get("radii", [])
+	var positions: Array = info.get("positions", [])
+	for pi in range(positions.size()):
+		var radius_in: float = (float(radii[pi]) / 0.0254) if pi < radii.size() else 0.0
+		if MoveIntent.distance_inches(positions[pi], objective) - radius_in <= OBJECTIVE_CONTROL_IN + 0.001:
+			return true
+	return false
+
+
 static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array) -> Dictionary:
 	var new_owners: Array = []
 	var changes: Array = []
@@ -9054,16 +9064,10 @@ static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array
 			var pid: int = int(d.get("player", 0))
 			if near_players.has(pid):
 				continue
-			var d_radii: Array = d.get("radii", [])
-			var d_pos: Array = d.get("positions", [])
-			for pi in range(d_pos.size()):
-				# BASE-EDGE measure (bug 11 — OPR: distances from the closest point of the base): centre
-				# distance minus the model's base radius. Inclusive 3" with float tolerance; infos without
-				# radii (older callers/tests) keep the centre measure.
-				var r_in: float = (float(d_radii[pi]) / 0.0254) if pi < d_radii.size() else 0.0
-				if MoveIntent.distance_inches(d_pos[pi], objectives[i]) - r_in <= OBJECTIVE_CONTROL_IN + 0.001:
-					near_players[pid] = true
-					break
+			# BASE-EDGE measure (bug 11); the round-end log uses this same predicate to identify
+			# nearby Ambush arrivals that were excluded from this verdict.
+			if objective_info_in_range(d, objectives[i]):
+				near_players[pid] = true
 		var next: int = current
 		if near_players.size() == 1:
 			next = int(near_players.keys()[0])   # seized (or held) by the only side near
