@@ -601,6 +601,7 @@ func _ready() -> void:
 	# Initialize SaveManager references
 	save_manager.object_manager = object_manager
 	save_manager.table = table
+	save_manager.network_manager = network_manager
 
 	# Connect Graphics Settings UI
 	graphics_quality_option.item_selected.connect(_on_graphics_quality_changed)
@@ -791,6 +792,8 @@ func _ready() -> void:
 	save_manager.map_layout_editor = map_layout_editor
 	save_manager.terrain_overlay = terrain_overlay
 	save_manager.radial_menu_controller = radial_menu_controller
+	save_manager.ai_slots_getter = func() -> Array: return ai_slots_sync_payload(solo_ai_slots)
+	save_manager.ai_slots_setter = _rpc_sync_ai_slots   # the same adopt + roster + grade + panel refresh a late joiner runs
 
 	# Battle Log — after the managers + radial controller exist, wire the collector to the central seams.
 	_setup_battle_log()
@@ -2522,6 +2525,10 @@ func _solo_apply_mission_if_chosen() -> void:
 			for rp in resolved:
 				obj_world.append(Vector3((rp as Vector2).x * SoloController.INCHES_TO_METERS, 0.0,
 					(rp as Vector2).y * SoloController.INCHES_TO_METERS))
+			# The Map Layout editor owns the objective list (its window close and the save both read
+			# it), so the mission's markers go through it too (audit S6-U1); the overlay is drawn as before.
+			if map_layout_editor != null:
+				map_layout_editor.set_objectives_from_table_inches(resolved)
 			terrain_overlay.update_objectives(obj_world)
 	# Maintainer policy (2026-07-19): every applied rule surfaces in the battle log.
 	_log_rule_event(BattleLog.Category.GENERAL, "Mission: %s" % MissionCatalog.display_name(_solo_mission_id), true)
@@ -14737,6 +14744,10 @@ func _on_save_game() -> void:
 
 ## Open load dialog
 func _on_load_game() -> void:
+	# SaveManager.load_game refuses a guest's load too; say so up front instead of after the file pick.
+	if network_manager.is_multiplayer_active() and not network_manager.is_host:
+		_solo_show_toast("Only the host can load a saved game")
+		return
 	load_game_dialog.current_dir = SaveManager.get_default_save_dir()
 	load_game_dialog.popup_centered()
 
@@ -15903,8 +15914,8 @@ func _on_map_layout_closed() -> void:
 	# Update objectives on 3D terrain when closing
 	if map_layout_editor and map_layout_editor.has_method("get_objectives_for_overlay"):
 		var world_objectives = map_layout_editor.get_objectives_for_overlay()
-		if terrain_overlay and terrain_overlay.has_method("update_objectives"):
-			terrain_overlay.update_objectives(world_objectives)
+		if terrain_overlay and terrain_overlay.has_method("update_objectives_keeping_owners"):
+			terrain_overlay.update_objectives_keeping_owners(world_objectives)   # captured markers stay captured
 
 	# Broadcast terrain layout to remote clients when map editor closes
 	if network_manager.is_multiplayer_active() and map_layout_editor:
@@ -15984,7 +15995,7 @@ func _on_objectives_changed(objectives: Array) -> void:
 	if map_layout_editor and map_layout_editor.has_method("get_objectives_for_overlay"):
 		world_objectives = map_layout_editor.get_objectives_for_overlay()
 
-	terrain_overlay.update_objectives(world_objectives)
+	terrain_overlay.update_objectives_keeping_owners(world_objectives)
 
 	# Sync objectives to remote clients (4th element = owner, 0 = neutral)
 	var obj_owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay.has_method("get_objective_owners") else []

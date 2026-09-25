@@ -1633,12 +1633,23 @@ func _cancel_drag() -> void:
 		return
 
 	# Restore all objects to their original positions
+	var restore_batch: Array = []
 	for obj in _selected_objects:
 		if is_instance_valid(obj) and _drag_start_positions.has(obj):
 			obj.global_position = _drag_start_positions[obj]
+			if obj.has_meta("network_id"):
+				restore_batch.append(int(obj.get_meta("network_id")))
+				restore_batch.append(obj.global_position.x)
+				restore_batch.append(obj.global_position.y)
+				restore_batch.append(obj.global_position.z)
 			# Re-enable physics for rigid bodies
 			if obj is RigidBody3D:
 				obj.freeze = false
+
+	# The drag was streamed to the peers (~20 Hz, lifted): tell them the objects are back where they started,
+	# otherwise the other table keeps the last streamed position (the drop branch is skipped after a cancel).
+	if not restore_batch.is_empty() and _network_manager and _network_manager.is_multiplayer_active():
+		_network_manager.broadcast_move_batch(restore_batch)
 
 	# Cancelled = no move executed: the live ribbons vanish, nothing is committed.
 	if move_trails != null:

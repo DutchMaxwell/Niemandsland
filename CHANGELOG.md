@@ -6,6 +6,35 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+## [0.3.13.1-alpha] — 2026-09-25
+
+A quiet follow-up to 0.3.13.0: save/load and multiplayer fixes from a code review, plus the table fixes merged the same day.
+
+### Fixed
+- **Multiplayer hardening:** the command channel checks every incoming message before it is handled.
+- **Saves keep formed Age of Fantasy regiments.** Their models were missing from every save and from the full-state
+  sync.
+- **Loading a save restores the object counter and clears empty objective, wall and object lists** — no duplicate
+  object ids after a load, no leftovers from the previous table.
+- **A saved Solo game keeps its AI opponent**, and mission markers with their owners survive closing Map Layout and
+  save/load, so the mission keeps scoring.
+- **Multiplayer tables stay in step:** Load Game is host-only during a session (a guest's load used to clear the
+  host's table), an ESC-cancelled drag and a radial Delete now reach every table (and Delete can be undone).
+- **A loaded save keeps the casters' spell lists.**
+- **Fast plus Fast Aura (and Rapid Advance plus its aura) count once** on the movement bands. (#1104)
+- **Deadly(X) melee wounds trigger Retaliate.** (#1105)
+- **The battle log names normal wounds before the models are removed.** (#1107)
+- **The volley outcome banner counts Deadly wounds.** (#1108)
+- **The round-end seize log explains the Ambush lock.** (#1109)
+- **Autosave notices stay out of the battle banners.** (#1110)
+- **Shift+F belongs to regiment frontage only.** (#1111)
+
+### Changed
+- **Every release is published as the current GitHub release** (no longer as a pre-release).
+
+### Internal
+- Player docs follow the new start menu, the table chooser, the dice window and the Windows self-heal. (#1103)
+
 ## [0.3.13.0-alpha] — 2026-09-25
 
 ### Added

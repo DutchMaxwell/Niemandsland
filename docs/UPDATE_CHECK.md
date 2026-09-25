@@ -60,8 +60,8 @@ heal it reads `core self-heal: NmlCore loaded after the self-heal relaunch`. Upd
 ## Why the list endpoint (not `/releases/latest`)
 
 GitHub's `/releases/latest` returns the latest **stable** release and skips
-prereleases and drafts. The whole project is on its alpha line, so every release is a
-GitHub *prerelease* — `/releases/latest` would 404. We therefore read the list
+prereleases and drafts. Alpha releases used to be published as GitHub *prereleases*
+(since 25.09.2026 every release is published as the current one). We read the list
 endpoint and pick the highest version ourselves (`INCLUDE_PRERELEASES = true`).
 
 ## Version comparison

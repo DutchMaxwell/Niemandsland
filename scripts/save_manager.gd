@@ -27,6 +27,12 @@ var army_manager: OPRArmyManager  # Reference for GameUnit data
 var map_layout_editor: Control  # Reference to map layout editor (terrain, zones, objectives)
 var terrain_overlay: Node3D  # Reference to 3D terrain overlay
 var radial_menu_controller: Node  # Reference for token/marker visualization after load
+## Solo AI designation lives on main.gd (solo_ai_slots); the save carries it so a loaded / continued battle
+## keeps WHICH army the AI plays (audit S1-16). Both stay unset in a bare SaveManager (unit tests): the key is
+## then left out of a save and ignored on load.
+var ai_slots_getter: Callable  # () -> Array: sorted slot ids
+var ai_slots_setter: Callable  # (slots: Array) -> void: adopts the designation wholesale
+var network_manager: Node  # Session role: a guest never loads a save into a shared game (see load_game)
 
 
 func _ready() -> void:
@@ -181,6 +187,17 @@ func _serialize_objects() -> Array:
 		if not obj_data.is_empty():
 			objects.append(obj_data)
 
+		# A formed Age of Fantasy: Regiments block parents its models under the RegimentTray. The
+		# tray has no record of its own (it is rebuilt from the unit's "regiment" block on load), so
+		# its members are saved here or they are missing from every save and full-state sync.
+		if child is RegimentTray:
+			for member in child.get_children():
+				if not member is Node3D or not member.is_in_group("selectable"):
+					continue
+				var member_data = _serialize_object(member)
+				if not member_data.is_empty():
+					objects.append(member_data)
+
 	return objects
 
 
@@ -306,7 +323,13 @@ const SCENARIO_RESTORE_TMP := "user://_scenario_restore.nml"
 
 ## Save the current game state to file (serialize + write + save_completed signal).
 func save_game(path: String) -> Error:
-	var err := save_state_to_file(serialize_game_state(), path)
+	var state := serialize_game_state()
+	# FILE saves only: the multiplayer full-state push reuses serialize_game_state and carries the
+	# designation its own way (main._sync_state_to_peer). Optional key, no SAVE_VERSION bump (same
+	# reasoning as rule_state in _deserialize_game_state).
+	if ai_slots_getter.is_valid():
+		state["solo_ai_slots"] = ai_slots_getter.call()
+	var err := save_state_to_file(state, path)
 	if err == OK:
 		save_completed.emit(path)
 	return err
@@ -347,6 +370,12 @@ func restore_state(state: Dictionary) -> Error:
 
 ## Load game state from file
 func load_game(path: String) -> Error:
+	# The host owns the shared table: every peer mirrors the host's state (_rpc_sync_game_state is authority-only)
+	# and only a host re-syncs after a load. A guest load used to broadcast a table clear to everyone and then
+	# rebuild only its own screen, wiping the host's table. Offline and host loads are untouched.
+	if network_manager != null and network_manager.is_multiplayer_active() and not network_manager.is_host:
+		load_failed.emit("Only the host can load a saved game during a multiplayer session")
+		return ERR_UNAUTHORIZED
 	if not FileAccess.file_exists(path):
 		load_failed.emit("File not found: %s" % path)
 		return ERR_FILE_NOT_FOUND
@@ -392,12 +421,23 @@ func load_game(path: String) -> Error:
 	# Restore OPR special-rule descriptions so the loaded army shows them.
 	if army_manager and army_manager.has_method("merge_rule_descriptions"):
 		army_manager.merge_rule_descriptions(state.get("rule_descriptions", {}))
+	# ...and the per-player faction spell lists, so the loaded casters show their spells (a loaded
+	# save rebuilds no OPRArmy, so this cache is their only source — same as the MP join path).
+	if army_manager and army_manager.has_method("merge_player_spells"):
+		army_manager.merge_player_spells(state.get("player_spells", {}))
 
 	# Load GameUnits first (they contain model-level state)
 	var game_units_loaded = _deserialize_game_units(state.get("game_units", []))
 
 	# Load objects (async for TTS downloads)
 	var loaded_count = await _deserialize_objects(state.get("objects", []))
+
+	# clear_all_objects() zeroed the id counter and the OPR models above keep their SAVED network_ids
+	# without touching it, so put the saved counter back — otherwise the next id minted after this load
+	# (a runtime unit, a second import, regiment forming) is slot*1e6 + 1 again and collides with a
+	# loaded model. maxi: the generic spawn_* calls above already bumped it once each.
+	if object_manager:
+		object_manager._object_counter = maxi(object_manager._object_counter, int(state.get("object_counter", 0)))
 
 	# Rebuild Age of Fantasy: Regiments movement-tray blocks now that the model
 	# nodes exist and are wired to their loaded GameUnits.
@@ -423,6 +463,11 @@ func load_game(path: String) -> Error:
 
 	# Restore game state
 	_deserialize_game_state(state.get("game_state", {}))
+
+	# Which army the AI plays — BEFORE load_completed (the host's re-sync to clients reads it). An absent
+	# key (a save from an older build) leaves the live designation alone.
+	if ai_slots_setter.is_valid() and state.get("solo_ai_slots") is Array:
+		ai_slots_setter.call(state["solo_ai_slots"])
 
 	# Restore token/marker visualizations for all loaded game units
 	_restore_markers_after_load()
@@ -541,22 +586,23 @@ func _deserialize_map_layout(table_data: Dictionary, table_size: Vector2) -> voi
 		if deployment_type > 0 and terrain_overlay.has_method("set_deployment_zones_visible"):
 			terrain_overlay.set_deployment_zones_visible(true)
 
-		# Update mission objectives (convert 1" to world coords), restoring owners
-		if not objectives.is_empty() and map_layout_editor:
+		# Update mission objectives (convert 1" to world coords), restoring owners. The three overlay
+		# updates below run for EMPTY lists too: each one clears its own instances first (and the
+		# clear_overlay above only clears terrain), so skipping an empty list left the previous table's
+		# objectives, walls and trees on the overlay — and gameplay reads the overlay.
+		if map_layout_editor:
 			if map_layout_editor.has_method("get_objectives_for_overlay"):
 				var world_objectives = map_layout_editor.get_objectives_for_overlay()
 				if terrain_overlay.has_method("update_objectives"):
 					terrain_overlay.update_objectives(world_objectives, objective_owners)
 
 		# Restore wall models in 3D
-		if not wall_segments.is_empty():
-			if terrain_overlay.has_method("update_wall_models"):
-				terrain_overlay.update_wall_models(wall_segments, table_size, grid_rotation)
+		if terrain_overlay.has_method("update_wall_models"):
+			terrain_overlay.update_wall_models(wall_segments, table_size, grid_rotation)
 
 		# Restore placed objects (trees, containers) in 3D
-		if not placed_objects.is_empty():
-			if terrain_overlay.has_method("update_placed_objects"):
-				terrain_overlay.update_placed_objects(placed_objects, table_size, grid_rotation)
+		if terrain_overlay.has_method("update_placed_objects"):
+			terrain_overlay.update_placed_objects(placed_objects, table_size, grid_rotation)
 
 	# Restore terrain overlay display mode
 	if terrain_overlay:
