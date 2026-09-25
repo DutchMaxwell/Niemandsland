@@ -3418,7 +3418,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# OUTCOME: one readable summary line, held on screen (toast + battle log).
 	await _solo_show_outcome("%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [
 		target.get_name(), total_hits, ("" if total_hits == 1 else "s"),
-		landed, ("" if landed == 1 else "s"), target.get_name(),
+		landed + landed_extra, ("" if landed + landed_extra == 1 else "s"), target.get_name(),
 		models_before - _solo_combined_alive(target), ("" if models_before - _solo_combined_alive(target) == 1 else "s")])
 	await _solo_stage_phase("Result")
 	# NML-966 gap B: Deadly/Takedown wounds bypass the regen pool and never reached `landed` —
