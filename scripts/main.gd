@@ -6357,8 +6357,13 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					battle_log.log_event(BattleLog.Category.COMBAT,
 						"Unstoppable in Melee: negative to-hit modifiers ignored"
 						if name_unstop else "Unstoppable: negative to-hit modifiers ignored", true)
+			# S1-01: Thrust is a CHARGE bonus (p.14 "When charging") — the strike-back runs charging=false.
+			var thrusting: bool = charging and bool(profile.get("thrust", false))
 			var to_hit: int = 6 if fatigued else AiCombatMath.modified_hit_target(
-				AiCombatMath.thrust_to_hit(strike_quality, bool(profile.get("thrust", false))), m_mod)
+				AiCombatMath.thrust_to_hit(strike_quality, thrusting), m_mod)
+			if thrusting and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Thrust: AP(+1) on the charge" if fatigued
+					else "Thrust: +1 to hit and AP(+1) on the charge", true)
 			# Versatile Attack (army-book): on a charge from over 9" the EV-better of +1 to hit
 			# or AP(+1) — the SAME chooser as the shooting facet + the EV metric. Fatigue
 			# (unmodified-6-only) overrides the +1-to-hit part; the AP(+1) part still folds in below.
