@@ -29,6 +29,10 @@ not there yet and what to watch for. The full done / in-progress / planned break
   from the asset CDN (cached afterwards). First import of a new faction needs internet and a
   moment to fetch. Generated minis are **base-less** (the app makes the base) and licensed
   **CC-BY-SA**.
+- **The biome dresses the table only on Medium and above.** The biome you pick before the match
+  sets the ground, light and trees of the table on the Medium, High and Ultra graphics presets;
+  Performance, Low and the Compatibility renderer keep the plain battlemap. Display only — line of
+  sight and rules are never affected.
 
 ## Multiplayer
 
@@ -72,7 +76,7 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **In-game:** Press **`F12`** to grab a screenshot and bundle it with the anonymised log into a
   zip on your Desktop — attach it when you file the issue. Useful for visual glitches that never
   appear in the log.
-- **Start menu:** Use **"Report a problem"** to export an anonymised diagnostics bundle (version +
+- **Start menu:** Use **Help & feedback → Report a problem** to export an anonymised diagnostics bundle (version +
   OS/GPU/CPU + which AI path ran + recent log — **no** username, player names or room codes).
 - **GitHub:** [Open an issue](../../../issues/new/choose) using the Bug report or Feedback template.
 

@@ -43,7 +43,7 @@ The start menu shows the version number. The first line of the log reads `[Boot]
 
 ### Start a game
 
-From the start menu, choose **Start New Battle** to open the 3D sandbox. Pick a table size (6×4 ft default) and a map layout, or generate one automatically.
+From the start menu, choose **Prepare a new table**. Pick a biome (six to choose from) and the table size — Standard 6×4 ft (default), Square 4×4 ft or Custom (12–240 in) — then press **Create table**. The size is fixed once the table exists. Terrain comes after that: open **Map Layout…** in the left panel (☰) to lay it out, or generate one automatically.
 
 The table opens in the **Deployment** phase — place your army, then press **Start Game** (left panel) to begin play. In multiplayer both players signal ready and the host starts once both are. During play, dragging a model paints a measured **move trail** (`T` hides / `Shift`+`T` clears); the *Enforce Movement Limit* setting (on by default) stops the drag at the model's Advance/Rush-Charge band.
 
@@ -101,7 +101,7 @@ For the full control reference, see the **Controls** section in [`README.md`](..
 ## Import an army
 
 1. Open your army list in [Army Forge](https://army-forge.onepagerules.com/) and copy the share link.
-2. In Niemandsland, choose **Import Army** from the menu and paste the link.
+2. In Niemandsland, open the left panel (☰) on your table, choose **Import OPR Army…** and paste the link.
 3. The game fetches the list via the OPR API and downloads the faction's 3D models from the asset CDN on first use (internet required; cached afterwards).
 
 Each model appears on the table with its base size, wound counter, and status tokens. Units show coherency indicators and a docked info card.
@@ -115,13 +115,13 @@ It supports **2 players** over LAN or the internet. Both players must run the **
 
 **Host a game**
 
-1. Choose **Host** from the start menu.
+1. Choose **Play online → Create a room** from the start menu.
 2. Share your **room code** with the other player (or make the room public so it appears in the room browser).
 
 **Join a game**
 
-- Enter the host's room code and click **Join**, or
-- Open **Browse Online Games** to see listed public rooms and join by clicking.
+- Choose **Play online → Join with a code**, enter the host's room code and click **Join**, or
+- Open **Play online → Public tables** to see listed public rooms and join by clicking.
 
 State (models, terrain, dice) syncs automatically. Player names, cursors, and avatars are visible to both sides.
 
@@ -130,7 +130,7 @@ State (models, terrain, dice) syncs automatically. Player names, cursors, and av
 ## Reporting a bug
 
 - **In-game:** Press `F12` to capture a screenshot and bundle it with the anonymised log into a zip on your Desktop — attach it to a bug report.
-- **Start menu:** Use **"Report a problem"** to export a scrubbed diagnostic bundle.
+- **Start menu:** Use **Help & feedback → Report a problem** to export a scrubbed diagnostic bundle.
 - **GitHub:** [Open an issue](../../../issues/new/choose) using the Bug report template.
 
 For known limitations and alpha caveats, see [`docs/KNOWN_ISSUES.md`](KNOWN_ISSUES.md).

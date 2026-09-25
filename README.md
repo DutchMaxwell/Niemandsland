@@ -38,7 +38,9 @@ What the code actually does today:
   you can apply the rest by hand. When your unit takes wounds and the choice matters (Tough models,
   mixed loadouts), **you allocate them by clicking** — LMB places one wound, RMB auto-allocates
   the rest. One difficulty (full strength) — selectable grades are on the roadmap.
-- **3D tabletop** — variable table sizes (4×4, 6×4, custom), orbit/pan/zoom camera.
+- **3D tabletop** — choose the table size (6×4 ft default, 4×4, or custom 12–240 in) and one of six
+  biomes before the match; on the Medium preset and above the biome also dresses the table (display
+  only). Orbit/pan/zoom camera.
 - **Object handling** — click / Alt-click / box select, drag, rotate, copy / paste /
   duplicate, formation arrangement (rows `1`–`9`, arrow `Shift`+`A`) with constant base-edge
   spacing across base sizes.
@@ -112,15 +114,18 @@ macOS) — no install. The start menu shows the version; the first log line is
 > ```
 > This is expected for an unnotarized app — the file is not actually damaged.
 
-- **Host or join** a multiplayer game from the start menu — the host shares a room code, the guest
-  enters it. **Both players must run the same version** (the exact-match handshake won't connect
-  otherwise).
-- **Import an army** from the menu by pasting an [Army Forge](https://army-forge.onepagerules.com/)
-  list link. A faction's 3D models download on first use (cached afterwards) — internet required.
+- **Start a table**: **Prepare a new table** in the start menu, pick a biome and the table size, then
+  **Create table**. **Continue** reopens your newest save; **Load game** opens any other.
+- **Host or join** a multiplayer game from **Play online** in the start menu (Create a room / Join
+  with a code / Public tables) — the host shares a room code, the guest enters it. **Both players
+  must run the same version** (the exact-match handshake won't connect otherwise).
+- **Import an army** with **Import OPR Army…** (left panel, opened with ☰) by pasting an
+  [Army Forge](https://army-forge.onepagerules.com/) list link. A faction's 3D models download on
+  first use (cached afterwards) — internet required.
 - **Play solo**: import a second list with **AI-controlled (Solo)** ticked, or let NACHTMAHR pick
   one of its own (faction + points), then follow the guided deployment into round 1.
-- Honest alpha caveats are in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md); hit **"Report a
-  problem"** in the start menu to save an anonymised diagnostics file you can attach to a bug report.
+- Honest alpha caveats are in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md); hit **Help &
+  feedback → Report a problem** in the start menu to save an anonymised diagnostics file you can attach to a bug report.
 
 ### From source (developers)
 
@@ -179,7 +184,7 @@ Niemandsland/
 ├── scenes/            # startup_menu.tscn (main), main.tscn, dialogs
 ├── core/              # Rust rules core (Cargo workspace: nml-core, the optional
 │                      # Godot extension nml-core-godot, Python bindings nml-core-py)
-├── scripts/           # ~175 GDScript files, incl. scripts/solo/ (see docs/ARCHITECTURE.md)
+├── scripts/           # ~200 GDScript files, incl. scripts/solo/ (see docs/ARCHITECTURE.md)
 ├── tools/             # developer and CI tools
 ├── addons/            # gdUnit4 (tests)
 ├── test/              # gdUnit4 test suites
