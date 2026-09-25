@@ -3972,6 +3972,10 @@ func _solo_apply_grant(tu: GameUnit, rec: Dictionary) -> void:
 	# target-aware by the attack seams and must NOT self-buff its holder's joined chain.
 	if bool(rec.get("no_live_grant", false)):
 		return
+	# S1-05: an attackers-side grant ("friendly units attacking it") is for whoever attacks the bearer —
+	# read target-aware (the bridge, AiSpell.granted_rules_of), never stamped onto the bearer itself.
+	if str(rec.get("beneficiary", "")) == "attackers":
+		return
 	var granted_to: Array = []
 	for u in _solo_joined_chain(tu):
 		var gu := u as GameUnit
@@ -4067,7 +4071,7 @@ func _solo_consume_once_mods(attacker: GameUnit, defender: GameUnit, melee: bool
 	var att_roles: Array = ["attacker_own", "grant"]
 	if not melee:
 		att_roles.append("range")
-	for pair in [[attacker, att_roles], [defender, ["vs_target", "defense", "grant"]]]:
+	for pair in [[attacker, att_roles], [defender, ["vs_target", "defense", "grant", "grant_vs"]]]:
 		var unit := pair[0] as GameUnit
 		if unit == null:
 			continue
@@ -6736,7 +6740,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	# before _solo_apply_vs_marks, so an impact batch sees no record — the same
 	# order the core's tray_vs_marks seam keeps (after Impact, before strikes).
 	var pierce_grant_ap := 0
-	for rd in AiSpell.mods_for(_solo_mods_of_chain(defender), "grant", melee):
+	for rd in AiSpell.mods_for(_solo_mods_of_chain(defender), "grant_vs", melee):
 		if str((rd as Dictionary).get("beneficiary", "")) != "attackers":
 			continue
 		var grant_rule := str((rd as Dictionary).get("grants_rule", ""))
@@ -17918,7 +17922,7 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 func _solo_target_grants_indirect(target: GameUnit) -> bool:
 	if target == null:
 		return false
-	for rd in AiSpell.mods_for(_solo_mods_of_chain(target), "grant", false):
+	for rd in AiSpell.mods_for(_solo_mods_of_chain(target), "grant_vs", false):
 		if str((rd as Dictionary).get("beneficiary", "")) != "attackers":
 			continue
 		var base := RulesRegistry.base_rule_name(str((rd as Dictionary).get("grants_rule", "")))

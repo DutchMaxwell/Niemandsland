@@ -355,7 +355,8 @@ static func boost_value_of(effect_value: float) -> float:
 ##   "morale"       : the bearer takes a morale test — morale_mod
 ##   "range"        : the bearer shoots — range_in (shooting-scoped in the data; call with melee=false)
 ##   "speed"        : the bearer moves — advance_in/rush_in (feeds the props stamp, NML-006)
-##   "grant"        : records granting a special rule (grants_rule non-empty; the overlay reader)
+##   "grant"        : records granting the BEARER a special rule (grants_rule non-empty, beneficiary != "attackers"; the overlay reader)
+##   "grant_vs"     : records granting a rule to units attacking the BEARER (beneficiary == "attackers"; the Marks' readers)
 ## melee filters scope ("melee"/"shooting"/"attacking"/""); "charging" is never applied here (v1).
 ## `source` (NML-104) names the hit source the read serves. A token's modifier carries no clause of
 ## its own ("+1 to defense rolls"), so it counts against spell damage too — but a token whose text
@@ -397,7 +398,10 @@ static func mods_for(records: Array, role: String, melee: bool, source: String =
 				if int(rd.get("advance_in", 0)) != 0 or int(rd.get("rush_in", 0)) != 0:
 					out.append(rd)
 			"grant":
-				if not str(rd.get("grants_rule", "")).is_empty():
+				if not attackers and not str(rd.get("grants_rule", "")).is_empty():
+					out.append(rd)
+			"grant_vs":
+				if attackers and not str(rd.get("grants_rule", "")).is_empty():
 					out.append(rd)
 	return out
 
