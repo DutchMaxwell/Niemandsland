@@ -579,6 +579,7 @@ func activate_next_ai_unit() -> GameUnit:
 	if not _round_first_slot.has(_current_round()):
 		_round_first_slot[_current_round()] = ai_slot   # D-wave: this round's opener
 	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing
+	last_dangerous_dice = 0
 	board_clamp_notes = []   # #215: per-activation, drained by main into the battle log
 	var _ph_act := 0
 	if act_wall_enabled():
@@ -604,6 +605,10 @@ func activate_next_ai_unit() -> GameUnit:
 		last_report = _act_disembark(unit)
 	else:
 		last_report = _act(unit)
+	if last_move_paths.is_empty():
+		var standing: Dictionary = _dangerous_standing_counts(unit)
+		last_report["dangerous_models"] = int(standing["models"])
+		last_report["dangerous_dice"] = int(standing["dice"])
 	if act_wall_enabled():
 		_phase_mark("act", _ph_act)
 	var _ph_book := 0
@@ -5261,11 +5266,33 @@ func _move_away(unit: GameUnit, from_world: Vector3, inches: float) -> int:
 ##     every model's ACTUAL polyline is measured and trimmed to the granted budget — the drawn corridor
 ##     length always equals the distance moved.
 ##   • Dangerous tests count the models whose actual route crossed dangerous cells (Flying ignores, p.13).
+## A non-moving activation still tests each model whose base is in Dangerous terrain.
+func _dangerous_standing_counts(unit: GameUnit) -> Dictionary:
+	var models := 0
+	var dice := 0
+	if is_aircraft(unit) or unit_in_reserve(unit) \
+			or (army_manager != null and army_manager.transport_of(unit) != null):
+		return {"models": models, "dice": dice}
+	var debuffed: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_27_TERRAIN_DEBUFF \
+		and _chain_has_special_rule(unit, "Dangerous Terrain")
+	if unit.has_special_rule("Flying"):
+		return {"models": models, "dice": dice}
+	for raw in _moving_models(unit):
+		var model := raw as ModelInstance
+		if debuffed or (terrain_type_at.is_valid() and TerrainRules.base_in_terrain(
+				model.node.global_position, model_base_radius_m(model), terrain_type_at,
+				TerrainRules.is_dangerous)):
+			models += 1
+			dice += maxi(1, int(model.wounds_max))
+	return {"models": models, "dice": dice}
+
+
 ## Moves the host's models AND its attached heroes' as ONE formation (GF v3.5.1 "Hero"). Publishes
 ## last_move_paths ({model, path, radius_m}) + last_move_budget_in for the corridor presentation.
 ## Returns the Dangerous-crossing model count (main rolls the real tests).
 func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: bool,
 		charge_target: GameUnit = null) -> int:
+	last_dangerous_dice = 0
 	var models := _moving_models(unit)
 	var positions := _positions_of(models)
 	if positions.is_empty():
