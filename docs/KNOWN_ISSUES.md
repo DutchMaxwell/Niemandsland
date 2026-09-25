@@ -56,15 +56,6 @@ not there yet and what to watch for. The full done / in-progress / planned break
   (`nml_core_godot.dll`) from the downloaded update next to the game and restarts once by itself.
   If the diagnostics report (below) still names the decision tree after that, download the 0.3.13.0
   Windows zip and unzip it over your game folder. Updates from 0.3.13.0 onward install every file.
-<!-- Release lead: the variant for when the Windows core self-heal (#1074) is NOT merged. Swap it in
-     for the entry above, then delete this comment.
-- **Windows: after an in-game update from 0.3.12.0, download the zip once.** The 0.3.12.0 updater
-  replaces only `Niemandsland.exe`, so the new rules-core file (`nml_core_godot.dll`) is not
-  installed and NACHTMAHR quietly plays its decision-tree opponent instead of Erlkönig. Download the
-  0.3.13.0 Windows zip and unzip it over your game folder (saves and settings live in your user
-  folder and are not touched). Updates from 0.3.13.0 onward install every file, and the itch app
-  always installs the whole folder.
--->
 
 ## Smaller things to know
 
