@@ -44,7 +44,69 @@ static func mission_reset(scoring: String, flavour: Dictionary, markers: Array =
 	mission_vp_memo = {}
 	mission_markers = markers
 	mission_destroy_seq = [0]
-const CONTACT_IN := 2.0             # centre-to-centre "in melee" distance a charge closes to
+
+
+## S1-15: the live mission state above as JSON-safe data, for the save and the MP full-state push.
+## `mission_id` is main's _solo_mission_id ("" = Duel) — it rides along so one key holds the mission.
+static func mission_state_to_dict(mission_id: String) -> Dictionary:
+	return {
+		"id": mission_id,
+		"scoring": mission_scoring,
+		"vp_flavour": mission_vp_flavour.duplicate(true),
+		"vp": mission_vp.duplicate(),
+		"vp_memo": mission_vp_memo.duplicate(true),
+		"markers": mission_markers.duplicate(true),
+		"destroy_seq": mission_destroy_seq.duplicate(),
+	}
+
+
+## Inverse of mission_state_to_dict: REPLACES every static and returns the mission id. {} (a save
+## written before S1-15) yields no mission and the declared defaults. A garbled field falls back to its
+## default instead of aborting the load (never int() an unknown Variant: int(null) is a runtime error).
+static func mission_state_from_dict(data: Dictionary) -> String:
+	var scoring: Variant = data.get("scoring", "end")
+	var flavour: Variant = data.get("vp_flavour", {})
+	var markers: Array = []
+	var raw_markers: Variant = data.get("markers", [])
+	if raw_markers is Array:
+		for mk in raw_markers:
+			if mk is Dictionary:
+				markers.append(_ints_from_json(mk))
+	mission_reset(scoring if scoring is String else "end",
+		(flavour as Dictionary).duplicate(true) if flavour is Dictionary else {}, markers)
+	var vp: Variant = _ints_from_json(data.get("vp"))
+	if vp is Array and (vp as Array).size() == 2 and vp[0] is int and vp[1] is int:
+		mission_vp = vp
+	var memo: Variant = _ints_from_json(data.get("vp_memo"))
+	if memo is Dictionary:
+		mission_vp_memo = memo
+	var seq: Variant = _ints_from_json(data.get("destroy_seq"))
+	if seq is Array and not (seq as Array).is_empty() and seq[0] is int:
+		mission_destroy_seq = [seq[0]]
+	var id: Variant = data.get("id", "")
+	return id if id is String else ""
+
+
+## JSON hands every number back as a float (1 -> 1.0), but the ledger, the destruction counter and the
+## marker fields are ints in play. A whole float goes back to the int the bookkeeping wrote; every other
+## value passes through untouched.
+static func _ints_from_json(v: Variant) -> Variant:
+	if v is float:
+		return int(v) if is_finite(v) and v == floorf(v) else v
+	if v is Array:
+		var arr: Array = []
+		for e in v:
+			arr.append(_ints_from_json(e))
+		return arr
+	if v is Dictionary:
+		var dict: Dictionary = {}
+		for k in v:
+			dict[k] = _ints_from_json(v[k])
+		return dict
+	return v
+
+
+const CONTACT_IN := 2.0            # centre-to-centre "in melee" distance a charge closes to
 const MELEE_REACH_IN := 2.0         # OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9): only models within 2" strike
 const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standard ~25 mm bases at contact (~1")
 ## A charge closes the REAL base-to-base gap plus this hair so the nearest models land firmly in contact
