@@ -1,6 +1,6 @@
 # Optional game-record sharing: current facts
 
-Niemandsland currently sends no game records. There is no upload URL, upload client, background queue, retry path, or collector in this version. The privacy screen can only build a committed example through the real allowlist builder, preview those exact bytes, and save those same bytes locally to `user://shared_records/example.json` when the player explicitly asks.
+Niemandsland currently sends no game records. There is no upload URL, upload client, background queue, retry path, or receiving collector in this version, and no transport API under `scripts/privacy` (a test pins this). The game is recorded in memory only — no disk, no network — and the privacy screen can only build a committed example and, after a game, that game's record through the real allowlist builder, preview those exact bytes, and save those same bytes locally to `user://shared_records/example.json` or `user://shared_records/last_game.json` when the player explicitly asks.
 
 The settings default to off. Evaluation sharing and training use are separate choices in `user://privacy.json`; training use cannot be on unless evaluation sharing is on. The one-time prompt appears only after a completed game and is marked seen when first shown, so dismissing it or choosing **No thanks** cannot cause another automatic prompt. Both choices can be withdrawn immediately on the same details page.
 
@@ -43,4 +43,4 @@ The maintainer published these facts on 2026-09-14; the in-game privacy screen s
 - **Contact and privacy notice:** privacy@niemandsland.xyz; the full notice is this document. **Supervisory authority:** the data-protection authority of the German federal state of the controller (see bfdi.bund.de for the list).
 - **Lawful basis:** consent (Art. 6(1)(a) GDPR), separately for evaluation and for training, revocable here.
 
-Until a collector and a separately reviewed per-game veto milestone exist, the product remains local-only and sends nothing.
+Until a receiving collector and a separately reviewed per-game veto milestone exist, the product remains local-only and sends nothing.
