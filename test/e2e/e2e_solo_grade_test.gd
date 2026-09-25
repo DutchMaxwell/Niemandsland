@@ -25,6 +25,11 @@ func _boot(saved_grade: String) -> void:
 	ProjectSettings.set_setting(OVERRIDE, CFG)
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
+	await _mount()
+
+
+## Mount a fresh scenes/main.tscn — the second call in one test is a game RESTART (same saved file).
+func _mount() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
@@ -86,3 +91,89 @@ func test_a_saved_grade_decides_the_game_and_its_start_line(timeout := 120000) -
 	assert_array(_grade_lines()).contains_exactly(["NACHTMAHR — Zwielicht (decision tree)"])
 	_main._solo_apply_difficulty()   # a mid-game re-apply (controller rebuild) does not repeat it
 	assert_int(_grade_lines().size()).is_equal(1)
+
+
+## Start Game without the guided deployment: NACHTMAHR takes its seat at the first activation, and the
+## line comes the moment it does (not never, not twice).
+func test_a_game_started_before_nachtmahr_sits_down_logs_it_on_arrival(timeout := 120000) -> void:
+	await _boot("finsternis")
+	_main.solo_ai_slots = {2: true}
+	_main.opr_army_manager.start_game()
+	await E2EBoot.settle(get_tree())
+	assert_array(_grade_lines()).is_empty()
+	_main._ensure_solo_controller()
+	assert_array(_grade_lines()).contains_exactly(["NACHTMAHR — Finsternis (decision tree)"])
+
+
+# === Step 2 — the picker in the AI row of the real left-menu solo panel ===
+
+func _ai_checkbox(pid: int) -> CheckButton:
+	for c in _main.solo_panel_box.get_children():
+		if c is CheckButton and (c as CheckButton).text.begins_with("AI plays P%d" % pid):
+			return c
+	return null
+
+
+func _grade_option() -> OptionButton:
+	for c in _main.solo_panel_box.get_children():
+		if c is OptionButton and (c as OptionButton).item_count > 0 and str((c as OptionButton).get_item_metadata(0)) == "daemmerung":
+			return c
+	return null
+
+
+## Two imported armies, the player ticks "AI plays P2" (the panel rebuilds deferred).
+func _panel_with_ai_on_p2() -> void:
+	_main.opr_army_manager.armies = {1: null, 2: null}
+	_main._refresh_solo_panel()
+	var cb := _ai_checkbox(2)
+	if cb != null:
+		cb.button_pressed = true
+	await E2EBoot.settle(get_tree())
+
+
+func test_the_ai_row_offers_the_five_grades_with_descriptions(timeout := 120000) -> void:
+	await _boot("")
+	await _panel_with_ai_on_p2()
+	var opt := _grade_option()
+	assert_object(opt).override_failure_message("no grade picker in the solo panel").is_not_null()
+	if opt == null:
+		return
+	assert_int(opt.get_index()).override_failure_message("the picker is not in P2's AI row").is_equal(_ai_checkbox(2).get_index() + 1)
+	var texts: Array = []
+	for i in opt.item_count:
+		texts.append(opt.get_item_text(i))
+	assert_array(texts).contains_exactly([
+		"Dämmerung — still learning; makes visible mistakes",
+		"Zwielicht — plays solidly, misses some chances",
+		"Finsternis — plays the rules hard and punishes mistakes",
+		"Albtraum — " + ("on macOS still without Erlkönig" if OS.get_name() == "macOS" else "Erlkönig: thinks several moves ahead"),
+		"NACHTMAHR — coming"])
+	assert_bool(opt.is_item_disabled(4)).override_failure_message("NACHTMAHR is selectable").is_true()
+	assert_bool(opt.is_item_disabled(3)).is_false()
+	assert_int(opt.selected).override_failure_message("the default is not Albtraum").is_equal(3)
+
+
+func test_a_picked_grade_plays_logs_and_survives_a_restart(timeout := 180000) -> void:
+	await _boot("")
+	await _panel_with_ai_on_p2()
+	var opt := _grade_option()
+	assert_object(opt).override_failure_message("no grade picker in the solo panel").is_not_null()
+	if opt == null:
+		return
+	opt.select(1)
+	opt.item_selected.emit(1)   # the player picks Zwielicht
+	# "Start Deployment" seats NACHTMAHR first (main.gd _on_solo_deploy_pressed -> _ensure_solo_controller);
+	# the end of the deployment flips the game to PLAYING.
+	_main._ensure_solo_controller()
+	var d: SoloDifficulty = _main.solo_controller.difficulty_by_slot.get(2, null)
+	assert_str(d.grade_name if d != null else "none").is_equal("zwielicht")
+	_main.opr_army_manager.start_game()
+	await E2EBoot.settle(get_tree())
+	assert_array(_grade_lines()).contains_exactly(["NACHTMAHR — Zwielicht (decision tree)"])
+	# Restart: a fresh main.tscn on the same saved file shows the downshift still selected.
+	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
+	await _mount()
+	assert_str(_main._solo_interactive_grade).is_equal("zwielicht")
+	await _panel_with_ai_on_p2()
+	var again := _grade_option()
+	assert_int(again.selected if again != null else -1).override_failure_message("Zwielicht was not remembered").is_equal(1)
