@@ -7,6 +7,8 @@ signal unit_activated(game_unit: GameUnit)
 signal unit_deactivated(game_unit: GameUnit)
 signal model_deleted(model_instance: ModelInstance)
 signal unit_deleted(game_unit: GameUnit)
+## Plain (non-unit) objects hard-deleted by delete_objects — no model_deleted / unit_deleted fires for those.
+signal objects_deleted(nodes: Array)
 
 ## Reference to the radial menu UI
 var radial_menu: RadialMenu = null
@@ -719,6 +721,7 @@ func delete_objects(objects: Array) -> void:
 
 	if undo_manager:
 		undo_manager.push(action)
+	objects_deleted.emit(nodes)
 
 
 ## Delete an entire regiment unit (all its models + the tray). Mirrors `_delete_unit`

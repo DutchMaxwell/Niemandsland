@@ -4374,6 +4374,7 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 			continue
 
 		var copy: Node3D = null
+		var army_source := _is_army_node(obj)
 
 		# Check if it's a TTS import (has mesh URL meta)
 		if obj.has_meta("tts_mesh_url"):
@@ -4385,6 +4386,8 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 			# id offsets (miniature 0, terrain 10000, custom 20000, tts 30000,
 			# generated terrain 40000).
 			copy = obj.duplicate()
+			if army_source:
+				_strip_army_identity(copy)
 			_object_counter += 1
 			copy.name = obj.name.split("_")[0] + "_%d" % _object_counter
 			copy.set_meta("network_id", _object_counter + 50000)
@@ -4397,7 +4400,8 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 			copy.global_position.y = obj.global_position.y  # Keep original height
 			# Select the pasted object
 			_add_to_selection(copy)
-			_broadcast_pasted_copy(copy)
+			if not army_source:
+				_broadcast_pasted_copy(copy)
 			_pasted_nodes_scratch.append(copy)
 			pasted_count += 1
 
@@ -4407,14 +4411,40 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 		_pasted_nodes_scratch = []
 
 
+## Meta keys and groups that tie a node to one army unit. Node.duplicate() copies metas BY REFERENCE, so a
+## copy that keeps them resolves to the ORIGINAL's GameUnit / ModelInstance / Regiment / tray and Delete on
+## the copy parks or deletes the original (S8-U4).
+const _ARMY_IDENTITY_METAS: Array[String] = ["game_unit", "model_instance", "model_index", "opr_unit", "regiment", RegimentTray.MEMBER_META]
+const _ARMY_IDENTITY_GROUPS: Array[String] = ["opr_unit", "unit"]
+
+
+## True for a node that carries an army unit's identity: a model wrapper or a regiment tray.
+static func _is_army_node(node: Node) -> bool:
+	return node.is_in_group("opr_unit") or node is RegimentTray
+
+
+## Make a duplicate of an army node (and every army node below it, e.g. a tray's models) a plain prop:
+## no GameUnit / ModelInstance / Regiment, not in the army groups. Delete on it is then the ordinary hard
+## delete with Ctrl+Z, and it never touches the original unit.
+static func _strip_army_identity(root: Node) -> void:
+	var nodes: Array = root.find_children("*", "", true, false)
+	nodes.append(root)
+	for n: Node in nodes:
+		for meta_name in _ARMY_IDENTITY_METAS:
+			if n.has_meta(meta_name):
+				n.remove_meta(meta_name)
+		for group_name in _ARMY_IDENTITY_GROUPS:
+			if n.is_in_group(group_name):
+				n.remove_from_group(group_name)
+
+
 ## Mirror a pasted/duplicated object to remote peers by serializing it and
 ## letting SaveManager._deserialize_object reconstruct it with the same
-## network_id. OPR army models are skipped (they are re-imported, not pasted,
-## and depend on per-load game-unit state that peers do not have live).
+## network_id. Copies of OPR army nodes are never sent (paste_from_clipboard skips
+## them: they are re-imported, not pasted, and depend on per-load game-unit state
+## that peers do not have live).
 func _broadcast_pasted_copy(copy: Node3D) -> void:
 	if not _network_manager or not _network_manager.is_multiplayer_active():
-		return
-	if copy.is_in_group("opr_unit"):
 		return
 	var main = get_node_or_null("/root/Main")
 	if main == null or main.save_manager == null:
