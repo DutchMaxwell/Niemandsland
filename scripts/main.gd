@@ -6266,6 +6266,10 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				await _solo_land_wounds(defender, rv_wounds, 0)
 	# Resolver wave A — Takedown Strike: the once-per-game extra attack joins the striker's own
 	# turn (never the Counter-only pre-phase; strike-back counts — "its turn to attack in melee").
+	# NML-241/NML-937/NML-940: the Retaliate tally is measured PER CHAIN MEMBER, so the wound pools are
+	# snapshotted BEFORE the weapon loop — Deadly(X) and Takedown wounds land INSIDE it (their own
+	# per-model landing), the pooled wounds land right after it; the diff is "what THIS member took".
+	var pools_before: Array = _solo_wound_pools(defender)
 	var m_groups: Array = _solo_attack_groups(striker, 0.0, true, defender)
 	if filter != SoloStrike.COUNTER_ONLY and not m_groups.is_empty():
 		m_groups = m_groups + _solo_takedown_bonus_groups(striker, true)
@@ -6431,25 +6435,18 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 							regen_proof += bt_w
 						else:
 							regenable += bt_w
-	# NML-241/NML-937: the Retaliate tally is measured PER CHAIN MEMBER, so the wound pools are
-	# snapshotted BEFORE the wounds land — the diff is "what THIS member actually took".
-	# UNCHANGED PRE-EXISTING GAP (own ticket): Deadly(X) wounds land inside the weapon loop ABOVE, so
-	# they sit outside this window exactly as they sat outside the old `landed_on_defender` count —
-	# a Deadly melee weapon still triggers no Retaliate. Moving the snapshot in front of the loop is
-	# the fix, and it needs its own proof.
-	var pools_before: Array = _solo_wound_pools(defender)
-	var landed_on_defender := 0
 	if regenable + regen_proof > 0:
-		landed_on_defender = await _solo_land_wounds(defender, regenable, regen_proof)
+		await _solo_land_wounds(defender, regenable, regen_proof)
 	# Retaliate(X) — wave 7, re-proven against the v3.5.3 army-book wording (NML-937): "When this
 	# model takes a wound in melee, the attacker takes X hits PER WOUND TAKEN". v3.5.2 fired the
 	# trigger once per wound event; v3.5.3 states the scale explicitly, and the registry carries it
 	# as the `hits_per_wound` knob ("X" = the rule's own rating) — read by _solo_retaliate_hits.
-	# Hits resolve AFTER the wounds landed (post-Regeneration = wounds actually TAKEN), saved at the
+	# Hits resolve AFTER the wounds landed (post-Regeneration, Deadly and Takedown included = wounds
+	# actually TAKEN — the pool diff, so overkill lost to Deadly's no-carry-over buys nothing), saved at the
 	# striker's Shielded-adjusted Defense, no AP (not a weapon), NON-chaining (retaliation wounds
 	# never trigger the striker's own Retaliate). Wounds credit the DEFENDER's melee tally via
 	# _solo_take_retaliate_credit.
-	if landed_on_defender > 0 and _solo_combined_alive(striker) > 0:
+	if _solo_combined_alive(striker) > 0:
 		var rt: Dictionary = _solo_retaliate_hits(pools_before)
 		var rhits: int = int(rt.get("hits", 0))
 		if rhits > 0:
