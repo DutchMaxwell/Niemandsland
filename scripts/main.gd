@@ -7102,8 +7102,8 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 		died_models.append(m)
 	var dealt: int = SoloController.apply_deadly_wounds(target, surviving, deadly_x, on_changed, on_died)
 	if battle_log != null and dealt > 0:
-		battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d unsaved ×%d, no carry-over → %d wound%s dealt" % [
-			deadly_x, surviving, deadly_x, dealt, ("" if dealt == 1 else "s")], true)
+		battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d unsaved ×%d, no carry-over → %d wound%s dealt (%s)" % [
+			deadly_x, surviving, deadly_x, dealt, ("" if dealt == 1 else "s"), weapon_name], true)
 		_solo_rule_float(target, "Deadly(%d) → %d" % [deadly_x, dealt], Color(1.0, 0.5, 0.4))
 	await _solo_remove_dead_models(target, died_models, pid)
 	return dealt
@@ -11656,15 +11656,16 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 	if _solo_wound_choice_matters(target, wounds):
 		wounds = await _solo_prompt_wound_allocation(target, wounds, pid)
 	var remaining := 0
+	var deferred_deaths: Array = []
 	if wounds > 0:
-		remaining = await _solo_wound_models(target, wounds, pid)
+		remaining = await _solo_wound_models(target, wounds, pid, deferred_deaths)
 	# A joined hero is part of the unit and takes wounds LAST (defender-optimal, field-test lock).
 	if remaining > 0 and target.has_method("get_attached_heroes"):
 		for h in target.get_attached_heroes():
 			if remaining <= 0:
 				break
 			if h != null:
-				remaining = await _solo_wound_models(h, remaining, pid)
+				remaining = await _solo_wound_models(h, remaining, pid, deferred_deaths)
 	if battle_log != null:
 		# Combined alive AND combined total: with a joined hero both numbers must count the same pool
 		# (the old own-models total printed impossible "(4/3)" shapes once the hero soaked the spill).
@@ -11682,6 +11683,8 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 			battle_log.on_wounds(target.get_name(), landed, maxi(int(lone.wounds_current), 0), int(lone.wounds_max), true)
 		else:
 			battle_log.on_wounds(target.get_name(), landed, _solo_combined_alive(target), SoloController.combined_total(target))
+	for casualty in deferred_deaths:
+		await _solo_remove_dead_models(casualty["unit"], casualty["models"], pid)
 	_solo_hero_carries_on(target)
 
 
@@ -11815,7 +11818,7 @@ func _solo_hero_carries_on(target: GameUnit) -> void:
 ## SoloController.apply_wounds_to_models; this wires the SAME visible seams manual play uses — the wound
 ## token + MP broadcast for a surviving Tough model (maintainer field-test: an AI Tough hero soaked
 ## wounds with no visible tick), and tray-parking on death.
-func _solo_wound_models(unit: GameUnit, wounds: int, pid: int) -> int:
+func _solo_wound_models(unit: GameUnit, wounds: int, pid: int, deferred_deaths = null) -> int:
 	var on_changed := func(m: ModelInstance) -> void:
 		if radial_menu_controller != null:
 			radial_menu_controller._update_wound_marker(m)
@@ -11825,7 +11828,11 @@ func _solo_wound_models(unit: GameUnit, wounds: int, pid: int) -> int:
 	var on_died := func(m: ModelInstance) -> void:
 		died_models.append(m)
 	var remaining := SoloController.apply_wounds_to_models(unit, wounds, on_changed, on_died)
-	await _solo_remove_dead_models(unit, died_models, pid)
+	if not died_models.is_empty():
+		if deferred_deaths == null:
+			await _solo_remove_dead_models(unit, died_models, pid)
+		else:
+			deferred_deaths.append({"unit": unit, "models": died_models})
 	return remaining
 
 
