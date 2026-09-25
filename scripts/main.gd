@@ -2789,6 +2789,22 @@ func _solo_deploy_pick_side(swap: bool) -> void:
 ## Build the zones from the chosen AI edge, queue the AI army (main + scout queues), set the
 ## reserves aside on BOTH sides, and start the MAIN phase with the roll-off winner's placement.
 func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
+	# Sabotage/Demolition markers are ordered by deployment zone: -Z, then +Z.
+	# Ownership follows the side actually chosen at the roll-off, not slot order.
+	if (_solo_mission_id == "sabotage" or _solo_mission_id == "demolition") \
+			and SoloController.mission_markers.size() >= 2:
+		var neg_owner: int = solo_controller.ai_slot if ai_neg_z else solo_controller.human_slot
+		var pos_owner: int = solo_controller.human_slot if ai_neg_z else solo_controller.ai_slot
+		var neg_marker: Dictionary = SoloController.mission_markers[0]
+		var pos_marker: Dictionary = SoloController.mission_markers[1]
+		neg_marker["owned_by"] = neg_owner
+		pos_marker["owned_by"] = pos_owner
+		SoloController.mission_markers[0] = neg_marker
+		SoloController.mission_markers[1] = pos_marker
+		if battle_log != null:
+			_log_rule_event(BattleLog.Category.GENERAL,
+				"%s: P%d owns the -Z marker; P%d owns the +Z marker" % [
+					MissionCatalog.display_name(_solo_mission_id), neg_owner, pos_owner], true)
 	_solo_rapid_round_one_done = false   # a fresh game owes its round-1 Rapid Ambush beat again
 	var w: float = float(_solo_deploy_fsm.get("w", 0.0))
 	var d: float = float(_solo_deploy_fsm.get("d", 0.0))
