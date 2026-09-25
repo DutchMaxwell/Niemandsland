@@ -465,9 +465,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				movement_range_controller.clear_all()
 			else:
 				movement_range_controller.toggle(_selected_model_nodes())
-		elif event.keycode == KEY_F and sight_fan_toggle.is_valid():
-			# F: sight+range fan for the selected unit; Shift+F clears (maintainer sketch overlay).
-			sight_fan_toggle.call([] if event.shift_pressed else _selected_model_nodes(), event.shift_pressed)
+		elif event.keycode == KEY_F and not event.shift_pressed and sight_fan_toggle.is_valid():
+			# F toggles the selected unit's fan.
+			sight_fan_toggle.call(_selected_model_nodes(), false)
 		elif event.keycode == KEY_P and _is_measuring:
 			_pin_current_measurement()
 		elif event.keycode == KEY_K:

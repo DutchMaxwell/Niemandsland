@@ -1,0 +1,29 @@
+extends GdUnitTestSuite
+
+
+func test_shift_f_is_not_a_second_sight_fan_binding() -> void:
+	var manager: ObjectManager = auto_free(ObjectManager.new())
+	add_child(manager)
+	var calls: Array = []
+	manager.sight_fan_toggle = func(_nodes: Array, clear_all: bool) -> void:
+		calls.append(clear_all)
+	var event := InputEventKey.new()
+	event.keycode = KEY_F
+	event.pressed = true
+	event.shift_pressed = true
+	manager._unhandled_input(event)
+	assert_array(calls).is_empty()
+
+
+func test_plain_f_still_reaches_the_sight_fan() -> void:
+	var manager: ObjectManager = auto_free(ObjectManager.new())
+	add_child(manager)
+	var calls: Array = []
+	manager.sight_fan_toggle = func(_nodes: Array, clear_all: bool) -> void:
+		calls.append(clear_all)
+	var event := InputEventKey.new()
+	event.keycode = KEY_F
+	event.pressed = true
+	manager._unhandled_input(event)
+	assert_int(calls.size()).is_equal(1)
+	assert_bool(calls[0]).is_false()
