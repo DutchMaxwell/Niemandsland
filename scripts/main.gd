@@ -1500,6 +1500,10 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 		return
 	_solo_ensure_playing_phase()
 	if not _solo_alternation_ready(gu):
+		# NML-939: a room with no AI seat (plain human-vs-human multiplayer) has no alternation to drive, but
+		# the unit's own activation is still the door of its once-per-activation Utility Buff.
+		if not _solo_alternation_active() and gu != null and not _solo_is_ai_unit(gu):
+			await _solo_apply_utility_buffs(gu)
 		return
 	# ONE reply per unit per round (round 7, finding 5): the radial activation marker is a TOGGLE, so
 	# un-marking and re-marking a unit (a mis-click fix, or re-marking after an attack) re-emitted
@@ -17409,20 +17413,29 @@ var _solo_ebr_relays: Dictionary = {}
 func _solo_utility_targets(bearer: GameUnit, kind: String, range_in: float, needs_los: bool,
 		max_targets: int = 1) -> Array:
 	_solo_ebr_relays = {}
-	if solo_controller == null or opr_army_manager == null or bearer == null:
+	if opr_army_manager == null or bearer == null:
 		return []
-	var own_slot := int(bearer.unit_properties.get("player_id", solo_controller.ai_slot))
+	# NML-939: a plain human-vs-human room has no controller (see _ensure_solo_controller), so its seats
+	# come from the units themselves: the enemy is every OTHER player's army.
+	var own_slot := int(bearer.unit_properties.get("player_id", solo_controller.ai_slot if solo_controller != null else 0))
 	var enemy := kind == "enemy"
 	var slot: int = own_slot
-	if enemy:
-		slot = solo_controller.human_slot if own_slot == solo_controller.ai_slot else solo_controller.ai_slot
+	var pool: Array = []
+	if enemy and solo_controller == null:
+		for other in opr_army_manager.get_all_game_units():
+			if int(other.unit_properties.get("player_id", 0)) != own_slot:
+				pool.append(other)
+	else:
+		if enemy:
+			slot = solo_controller.human_slot if own_slot == solo_controller.ai_slot else solo_controller.ai_slot
+		pool = opr_army_manager.get_game_units_for_player(slot)
 	# The relay unit is the BUFFING HERO'S OWN unit: the rule hands the extended reach to "that
 	# Hero" — the one inside the friendly unit that carries Extended Buff Range — so a joined hero
 	# relays through its host. Exactly ONE hop: the extended pick may not itself become a new relay.
 	var relay: GameUnit = _solo_combat_unit(bearer)
 	var ebr_open: bool = kind == "friendly" and is_equal_approx(range_in, SoloController.EBR_PICK_RANGE_IN)
 	var scored: Array = []
-	for u in opr_army_manager.get_game_units_for_player(slot):
+	for u in pool:
 		var gu := u as GameUnit
 		if gu == null or gu.get_alive_count() == 0 or SoloController.unit_in_reserve(gu):
 			continue
@@ -17432,7 +17445,7 @@ func _solo_utility_targets(bearer: GameUnit, kind: String, range_in: float, need
 			continue
 		if kind == "friendly_artillery" and not gu.has_special_rule("Artillery"):
 			continue
-		var d := MoveIntent.distance_inches(solo_controller.unit_centre(bearer), solo_controller.unit_centre(gu))
+		var d := MoveIntent.distance_inches(_los_unit_centre(bearer), _los_unit_centre(gu))
 		var relayed_gap := -1.0
 		if d > range_in:
 			if not ebr_open or gu == relay:
@@ -17561,7 +17574,9 @@ func _solo_log_ebr_spell_exclusion(caster: GameUnit, spell_name: String, range_i
 ## round stamp keeps that to ONE application per unit per round — the same guard Reanimation and
 ## Reckless Piercing use.
 func _solo_apply_utility_buffs(unit: GameUnit) -> void:
-	if solo_controller == null or opr_army_manager == null or unit == null:
+	# NML-939: no controller requirement. A plain human-vs-human room never has one (#196 keeps it that
+	# way — its existence would summon NACHTMAHR), and the buff needs only the units and their geometry.
+	if opr_army_manager == null or unit == null:
 		return
 	if not _solo_is_ai_unit(unit):
 		# NML-929: this used to bail out in a live multiplayer game. The effect lands as a once-mod
@@ -17590,6 +17605,14 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 			var range_in := float(sp.get("range_in", 12.0))
 			# Re-Position Artillery: a friendly Artillery model may immediately move up to 9".
 			if float(sp.get("reposition_in", 0.0)) > 0.0:
+				if solo_controller == null:
+					# NML-939: the mover is the AI planner's (controller-only). At a table the player moves the
+					# model by hand, so the rule names itself instead of silently doing nothing.
+					if battle_log != null:
+						_log_rule_event(BattleLog.Category.MOVEMENT,
+							"%s: %s may re-position a friendly Artillery unit within %.0f\" by up to %.0f\" — move it by hand" % [
+								n, member.get_name(), range_in, float(sp.get("reposition_in", 9.0))], false)
+					continue
 				var arty := _solo_utility_target(member, "friendly_artillery", range_in, false)
 				if arty != null and solo_controller.best_shoot_target_now(arty) == null:
 					var to_enemy := solo_controller.nearest_human_unit(arty)
