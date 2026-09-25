@@ -2236,14 +2236,28 @@ func _solo_auto_seize() -> void:
 		# A unit that arrived from Ambush THIS round can neither seize nor contest (GF/AoF v3.5.1 p.13);
 		# an Aircraft never can at all (GF v3.5.1 Aircraft, system-scoped via the mechanics maps).
 		var ambush_locked: bool = int(gu.unit_properties.get("ambush_arrived_round", -1)) == round_no
-		infos.append({"player": int(gu.unit_properties.get("player_id", 0)), "shaken": gu.is_shaken,
+		infos.append({"player": int(gu.unit_properties.get("player_id", 0)), "name": gu.get_name(), "shaken": gu.is_shaken,
 			"ambush_locked": ambush_locked, "aircraft": SoloController.is_aircraft(gu),
 			"positions": solo_controller.alive_positions(gu),
 			"radii": _solo_alive_radii(gu)})
 	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners)
+	var locked_near: Dictionary = {}
+	for i in range(objectives.size()):
+		var reasons := PackedStringArray()
+		for info in infos:
+			var entry := info as Dictionary
+			if not bool(entry.get("ambush_locked", false)) or bool(entry.get("shaken", false)) \
+					or bool(entry.get("aircraft", false)):
+				continue
+			if SoloController.objective_info_in_range(entry, objectives[i]):
+				reasons.append("%s arrived from Ambush this round and cannot seize or contest (GF/AoF v3.5.1 p.13)" % str(entry["name"]))
+		if not reasons.is_empty():
+			locked_near[i] = "; ".join(reasons)
+	var changed_indices := {}
 	for c in res.get("changes", []):
 		var idx: int = int((c as Dictionary).get("index", -1))
 		var owner: int = int((c as Dictionary).get("owner", 0))
+		changed_indices[idx] = true
 		terrain_overlay.set_objective_owner(idx, owner)
 		# Emit the round-end ownership flip into the AI decision log too (field-test finding 1): the harness
 		# reads the structured records, so a seize/contest event there makes "did the AI hold anything?"
@@ -2256,10 +2270,15 @@ func _solo_auto_seize() -> void:
 		if network_manager != null:
 			network_manager.broadcast_objective_owner(idx, owner)
 		if battle_log != null:
+			var reason: String = " — %s" % locked_near[idx] if locked_near.has(idx) else ""
 			if owner == 0:
-				battle_log.log_event(BattleLog.Category.GENERAL, "Objective %d contested — goes neutral" % (idx + 1), true)
+				battle_log.log_event(BattleLog.Category.GENERAL, "Objective %d contested — goes neutral%s" % [idx + 1, reason], true)
 			else:
-				battle_log.log_event(BattleLog.Category.GENERAL, "Objective %d seized by %s" % [idx + 1, _solo_player_label(owner)], true)
+				battle_log.log_event(BattleLog.Category.GENERAL, "Objective %d seized by %s%s" % [idx + 1, _solo_player_label(owner), reason], true)
+	if battle_log != null:
+		for i in locked_near:
+			if not changed_indices.has(i):
+				battle_log.log_event(BattleLog.Category.GENERAL, "Objective %d: %s" % [int(i) + 1, locked_near[i]], true)
 
 
 ## Player label for logs/summary: "P<n> (<army>)" when the slot has an imported army, else "P<n>".
