@@ -14,6 +14,8 @@ const NodeRecheck := preload("res://tools/node_recheck.gd")   ## NML-1073 M3-0c
 const IN2M := 0.0254
 const _DUMP_DIR := "user://act_recorder_test_tmp"
 
+var _epoch0: int
+
 
 func _armed(pid: int, positions: Array, uid: String) -> GameUnit:
 	var u := GameUnit.new()
@@ -65,6 +67,7 @@ func before_test() -> void:
 	AiActRecorder._header_written = false
 	AiActRecorder._count = 0
 	AiActRecorder.spawn_profile_resolver = Callable()
+	_epoch0 = AiActRecorder.rules_epoch   # statics leak across gdUnit tests — restored in after_test
 	AiActRecorder.rules_epoch = AiActRecorder.SPAWN_PROFILES_EPOCH
 	AiPlanner.trace = {}
 	# F12: a test that failed mid-way must not leave a redirected registry path
@@ -83,6 +86,7 @@ func after_test() -> void:
 	# turned CI red AFTER a fully green suite.
 	AiActRecorder.close()
 	AiPlanner.close()
+	AiActRecorder.rules_epoch = _epoch0
 	OS.set_environment("NML_ACT_DUMP", "")
 	var d := DirAccess.open(_DUMP_DIR)
 	if d != null:
