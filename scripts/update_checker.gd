@@ -74,6 +74,9 @@ func _ready() -> void:
 	_http.timeout = REQUEST_TIMEOUT_SECONDS
 	add_child(_http)
 	_http.request_completed.connect(_on_request_completed)
+	# Release 0925 option (b): a Windows install the 0.3.12.0 updater left without its core DLL heals once.
+	CoreSelfHeal.run(CoreSelfHeal.Ops.new(self), OS.get_name() == "Windows" and OS.has_feature("template"),
+			ClassDB.class_exists("NmlCore"))
 
 
 # ===== Public API =====
