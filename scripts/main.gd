@@ -1041,6 +1041,10 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# mandatory straight move still happened (GF v3.5.1: it flies even Shaken and still recovers) — show
 	# the flight, then the recovery.
 	if bool(report.get("idle_shaken", false)):
+		if int(report.get("dangerous_dice", 0)) > 0:
+			await _run_ai_dangerous(unit, int(report["dangerous_dice"]))
+			if unit.is_destroyed():
+				return unit
 		if bool(report.get("aircraft", false)) and not solo_controller.last_move_paths.is_empty():
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.MOVEMENT,
@@ -7691,6 +7695,9 @@ func _solo_owner_label(unit: GameUnit) -> String:
 func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 	if unit == null or dice_roller_control == null or model_count <= 0:
 		return
+	if battle_log != null:
+		_log_rule_event(BattleLog.Category.COMBAT,
+			"%s takes %d Dangerous terrain test dice" % [unit.get_name(), model_count], true)
 	var faces: Array = await _solo_tray_roll(model_count, 6, "AI (%s)" % unit.get_name(), "dangerous",
 		"Dangerous terrain: %s (a 1 wounds)" % unit.get_name())
 	var wounds := 0
