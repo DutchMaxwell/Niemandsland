@@ -963,8 +963,9 @@ func card_revive(unit: GameUnit) -> void:
 		_revive_dead({"revive_unit": unit, "revive_model": m0})
 
 
-## Open the wounds control for a unit's card: the pooled counter for a regiment, else the per-model
-## dialog on the first alive model.
+## Open the wounds control for a unit's card: the pooled counter for a Tough(1) regiment, else the
+## per-model dialog on the first alive model. Same gate as the radial route (Regiment.is_pooled_tough1):
+## a Tough(X>1) regiment tracks wounds per model, so the pool would read a stale counter and heal it.
 func card_open_wounds(unit: GameUnit) -> void:
 	if unit == null or unit.models.is_empty():
 		return
@@ -973,7 +974,7 @@ func card_open_wounds(unit: GameUnit) -> void:
 		if m.node != null and is_instance_valid(m.node):
 			anchor = m.node
 			break
-	if anchor != null and anchor.has_meta(RegimentTray.MEMBER_META):
+	if anchor != null and anchor.has_meta(RegimentTray.MEMBER_META) and Regiment.is_pooled_tough1(_collect_toughs(unit)):
 		var tray = anchor.get_meta(RegimentTray.MEMBER_META)
 		if is_instance_valid(tray):
 			_open_regiment_wounds_dialog({"regiment_tray": tray})
