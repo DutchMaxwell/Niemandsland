@@ -4,8 +4,8 @@ extends Node
 ## builds always run the latest deploy, so there is nothing to update there.
 ##
 ## The "latest version" is read from the project's GitHub Releases. The list endpoint
-## (not `/releases/latest`) is used on purpose: while the project is on its alpha line
-## every release is a GitHub *prerelease*, and `/releases/latest` skips those. The
+## (not `/releases/latest`) is used on purpose: alpha releases used to be published as
+## GitHub *prereleases*, which `/releases/latest` skips. The
 ## running version comes from `application/config/version` — the same string the
 ## multiplayer version handshake compares (see network_manager.gd).
 ##

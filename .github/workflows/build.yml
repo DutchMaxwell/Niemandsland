@@ -340,10 +340,10 @@ jobs:
     permissions:
       contents: write
     env:
-      # docs/UPDATE_CHECK.md: the project is on its alpha line, so every alpha/beta tag must
-      # publish as a GitHub *prerelease* — "/releases/latest" only ever returns the newest
-      # non-prerelease, so a mislabeled alpha 404s there and is invisible to that link.
-      IS_PRERELEASE: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') }}
+      # Maintainer decision 25.09.2026: every release publishes as the current ("Latest") release,
+      # alpha or not, so the GitHub page and "/releases/latest" show the newest build. The in-game
+      # checker reads the list endpoint and is unaffected (docs/UPDATE_CHECK.md).
+      IS_PRERELEASE: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
