@@ -227,11 +227,14 @@ class MoveTakebackAction extends UndoableAction:
 	var _trails: Node = null
 	var _net: Node = null
 	var _log: Node = null
+	var _moved_unit: GameUnit = null
+	var _had_moved_round: bool = false
+	var _previous_moved_round: Variant = null
 
 	func _init(models: Array[Node3D], from_pos: Array[Vector3], from_rot: Array[float],
 			owner_slot: int, p_unit_key: String, unit_name: String, drop_id: int,
 			move_trails: Node, network_manager: Node, battle_log: Node,
-			owner_peer_id: int = 0) -> void:
+			owner_peer_id: int = 0, moved_unit: GameUnit = null) -> void:
 		_models = models
 		_from_pos = from_pos
 		_from_rot = from_rot
@@ -242,11 +245,20 @@ class MoveTakebackAction extends UndoableAction:
 		_trails = move_trails
 		_net = network_manager
 		_log = battle_log
+		_moved_unit = moved_unit
+		if _moved_unit != null:
+			_had_moved_round = _moved_unit.unit_properties.has("moved_round")
+			_previous_moved_round = _moved_unit.unit_properties.get("moved_round")
 		peer_id = owner_peer_id
 		redoable = false
 		description = "Take back move (%s)" % unit_name
 
 	func undo() -> void:
+		if _moved_unit != null and is_instance_valid(_moved_unit):
+			if _had_moved_round:
+				_moved_unit.unit_properties["moved_round"] = _previous_moved_round
+			else:
+				_moved_unit.unit_properties.erase("moved_round")
 		for i in _models.size():
 			var obj: Node3D = _models[i]
 			if not is_instance_valid(obj):

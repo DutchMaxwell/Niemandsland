@@ -13212,7 +13212,8 @@ func _on_trails_dropped(moves: Array, undoable: bool = false) -> void:
 		if undoable and mv.has("from_raw"):
 			var tb: Dictionary = takeback.get(gu.unit_id, {})
 			if tb.is_empty():
-				tb = {"owner": owner, "name": gu.get_name(), "nodes": [], "from_pos": [], "from_rot": []}
+				tb = {"owner": owner, "name": gu.get_name(), "unit": gu,
+					"nodes": [], "from_pos": [], "from_rot": []}
 				takeback[gu.unit_id] = tb
 			(tb["nodes"] as Array).append(node)
 			(tb["from_pos"] as Array).append(mv["from_raw"])
@@ -13251,7 +13252,7 @@ func _on_trails_dropped(moves: Array, undoable: bool = false) -> void:
 				from_rot.append(float(r))
 			undo_manager.push(UndoManager.MoveTakebackAction.new(nodes, from_pos, from_rot,
 					int(tb["owner"]), str(unit_id), str(tb["name"]), drop_id,
-					move_trails, network_manager, battle_log, peer))
+					move_trails, network_manager, battle_log, peer, tb["unit"] as GameUnit))
 
 
 ## The GameUnit behind a dragged battlefield piece (model node or regiment tray) — the
@@ -16659,14 +16660,19 @@ func _on_unit_moved() -> void:
 	# nearby walls fade out.
 	_separation_cache_valid = false
 	_check_separation_for_selected_units(false)
-	# Entrenched-family bookkeeping: a human drag stamps moved_round on the dragged units (the
-	# stationary -2-to-hit gate reads it; deployment drags before round 1 stamp round 0 or 1
-	# harmlessly — Entrenched only compares against the CURRENT round).
-	if opr_army_manager != null and object_manager != null:
-		for obj in object_manager.get_selected_objects():
-			var gu := UnitUtils.get_game_unit(obj)
-			if gu != null:
-				gu.unit_properties["moved_round"] = opr_army_manager.current_round
+
+
+## Only a real drop in play spends the stationary benefits. ObjectManager filters the
+## payload to models moved over 0.1", while drag_ended also fires on a plain click.
+func _on_units_dropped(moves: Array) -> void:
+	if opr_army_manager == null or opr_army_manager.is_deployment_phase():
+		return
+	for mv in moves:
+		if float((mv as Dictionary).get("inches", 0.0)) <= 0.1:
+			continue
+		var unit := UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)
+		if unit != null:
+			unit.unit_properties["moved_round"] = opr_army_manager.current_round
 
 
 ## Check coherency for all currently selected units
@@ -17080,6 +17086,8 @@ func _init_radial_menu() -> void:
 	# #162: HUMAN drops arm a take-back (the AI's direct choreography call never does).
 	object_manager.selection_dropped.connect(func(moves: Array) -> void:
 		_on_trails_dropped(moves, true))
+	# Preserve the prior moved_round in the take-back before the drop stamps its new value.
+	object_manager.selection_dropped.connect(_on_units_dropped)
 	# A unit marked Activated is DONE for the round — its trail's job ends with it,
 	# and every open take-back expires (#162: the next activation began).
 	if radial_menu_controller.has_signal("unit_activated"):
