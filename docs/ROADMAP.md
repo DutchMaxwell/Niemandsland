@@ -150,7 +150,9 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   writable** (system/read-only locations would need elevation). Cheap win: detect an un-writable install
   up front and go straight to the download page (never "fail" mid-update). A true self-update for *any*
   location is a known-hard problem (deferred — maintainer); itch.io's butler channel already auto-updates
-  that install. Win/macOS in-place swap also still untested. _S_
+  that install. The Windows in-place swap has since been tested on a real Windows machine (an in-game
+  update from 0.3.12.0, 25.09.2026; [#1073](../../../pull/1073), [#1074](../../../pull/1074)); the macOS
+  swap is still untested. _S_
 - ~~**Repo `.git` bloat cleanup (~2.3 GB)**~~ — **DONE 2026-06-29.** Diagnosis (`count-objects -vH`)
   showed the *packed* history was only 70 MiB; the 2.22 GiB was **loose unreachable objects** (dangling
   leftovers from the earlier filter-repo rewrites + GLB imports), not large blobs in real history. So no
@@ -217,7 +219,8 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 - **Runtime LOD for CDN-loaded GLBs** — Godot's automatic mesh LOD is generated at *import* time, so it
   does **not** apply to GLBs loaded at runtime from the CDN; a hand-rolled distance-based LOD (or a
   pre-baked LOD chain carried in the manifest) would cut the draw cost of large armies. Depends on the
-  asset pipeline emitting the LOD levels. _M_
+  asset pipeline emitting the LOD levels. (The biome trees on the game table already get LODs generated
+  at load, `scripts/visual/reference_tree_lod.gd`, [#1083](../../../pull/1083); the miniatures do not.) _M_
 - _Community feedback from the alpha lands here first._
 
 ## ✅ Recently shipped
@@ -227,9 +230,12 @@ See [`CHANGELOG.md`](../CHANGELOG.md).
 **`0.3.13.0-alpha` (2026-09-25):**
 **Menu**: a new main menu over a night-time diorama; the table size (6x4 ft default, 4x4 ft, custom
 12–240 in) and the biome are chosen before the match; tilt-shift depth of field on the table camera
-([#1069](../../../pull/1069)).
+([#1069](../../../pull/1069)); the chooser fills the window height at every aspect ratio
+([#1081](../../../pull/1081)), and the menu shows a still of the finished backdrop until the live scene
+is ready ([#1086](../../../pull/1086)).
 **Table**: the chosen biome dresses the game table on the Medium preset and above — display only, line
-of sight and rules unchanged ([#1078](../../../pull/1078)).
+of sight and rules unchanged ([#1078](../../../pull/1078)); its accepted reference trees stand on it
+([#1083](../../../pull/1083)), and mines and signs sit on the surface ([#1082](../../../pull/1082)).
 **Solo AI** — on Windows and Linux NACHTMAHR plays with its new model **Erlkönig**: a search planner priced by a trained neural network (value net) in the Rust
 rules core, which now ships in those exports ([#873](../../../pull/873), [#874](../../../pull/874),
 [#1052](../../../pull/1052)–[#1055](../../../pull/1055)); the planner also offers Advance + shoot
@@ -244,7 +250,11 @@ tokens, growth markers, transport activations) and the line-of-sight line also r
 rooms ([#662](../../../pull/662)–[#665](../../../pull/665), [#667](../../../pull/667)). **Privacy & data
 settings** (local only, nothing is sent): a consent screen, preview and local export of the last game
 ([#684](../../../pull/684), [#876](../../../pull/876), [#892](../../../pull/892), [#1031](../../../pull/1031),
-[#1034](../../../pull/1034)). **UI**: opens on the primary monitor, with a monitor selector
+[#1034](../../../pull/1034)); the local game record names the opponent that really ran, and the
+destination text no longer promises an upload ([#1090](../../../pull/1090),
+[#1091](../../../pull/1091)). **UI**: the dice window is rebuilt in the new house style — classic white
+dice on a felt tray ([#1087](../../../pull/1087)); unit cards no longer cut names or rule text off
+([#1088](../../../pull/1088)); five in-game HUD defects are fixed ([#1080](../../../pull/1080)); opens on the primary monitor, with a monitor selector
 ([#365](../../../pull/365)); no more dropped clicks ([#366](../../../pull/366), [#368](../../../pull/368)); `F`
 reaches the sight fan again ([#414](../../../pull/414)); the AI-log toggle is back in exported builds
 ([#416](../../../pull/416)); the off-table tray groups reserves by arrival class ([#832](../../../pull/832));
@@ -254,7 +264,10 @@ team weapon ([#1076](../../../pull/1076)). **Fixes**: Windows in-game updates in
 ([#1073](../../../pull/1073)), and a Windows game updated in-game from 0.3.12.0 restores the missing
 rules core with one restart ([#1074](../../../pull/1074)); model downloads no longer depend on the frame rate
 ([#1075](../../../pull/1075)); the battle log drops developer lines and false "apply it manually" notes
-([#1068](../../../pull/1068), [#1072](../../../pull/1072)).
+([#1068](../../../pull/1068), [#1072](../../../pull/1072)); a loaded save no longer reads every unit as a
+joined hero ([#1085](../../../pull/1085)); the tutorial table never hands player 2 to NACHTMAHR
+([#1092](../../../pull/1092)); a state sync superseded by a connection drop no longer spawns duplicate
+models after a reconnect ([#1101](../../../pull/1101)).
 
 **`0.3.12.0-alpha` (2026-08-06):** **Elevation, Phase A** — every sight question (can this unit
 see that one, is it in cover, what does the sight fan show) now flows through one volumetric
