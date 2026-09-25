@@ -32,6 +32,11 @@ var radial_menu_controller: Node  # Reference for token/marker visualization aft
 ## then left out of a save and ignored on load.
 var ai_slots_getter: Callable  # () -> Array: sorted slot ids
 var ai_slots_setter: Callable  # (slots: Array) -> void: adopts the designation wholesale
+## The Solo mission id lives on main.gd (_solo_mission_id, "" = Duel); the save carries it together with
+## SoloController's mission scoring state so a loaded game keeps scoring by its own mission (audit S1-15).
+## Both stay unset in a bare SaveManager (unit tests): no id travels and a load hands none back.
+var solo_mission_id_getter: Callable  # () -> String
+var solo_mission_id_setter: Callable  # (mission_id: String) -> void
 var network_manager: Node  # Session role: a guest never loads a save into a shared game (see load_game)
 
 
@@ -312,7 +317,11 @@ func _serialize_game_state() -> Dictionary:
 		"token_library": lib,
 		# NML-949: match-level rule bookkeeping (once-per-game / per-round counters that are
 		# not per-unit). Carried on the MP full-state push too, since that reuses this serializer.
-		"rule_state": army_manager.rule_state.duplicate(true) if army_manager else {}
+		"rule_state": army_manager.rule_state.duplicate(true) if army_manager else {},
+		# S1-15: the Solo mission (id + SoloController's live scoring state), so a loaded game keeps scoring
+		# by its own mission's rule. Rides the MP full-state push too, since that reuses this serializer.
+		"solo_mission": SoloController.mission_state_to_dict(
+			str(solo_mission_id_getter.call()) if solo_mission_id_getter.is_valid() else "")
 	}
 
 
@@ -991,6 +1000,13 @@ func _deserialize_game_state(state_data: Dictionary) -> void:
 		# older build reading a newer save ignores the key for the same reason.
 		var rs: Variant = state_data.get("rule_state", {})
 		army_manager.rule_state = (rs as Dictionary).duplicate(true) if rs is Dictionary else {}
+	# S1-15: a load REPLACES the Solo mission state whole (before load_completed fires). Optional key, no
+	# SAVE_VERSION bump (the rule_state reasoning above): a save without it carried no mission, and "no
+	# mission" with the default scoring is how such a save has always played.
+	var sm: Variant = state_data.get("solo_mission", {})
+	var mission_id := SoloController.mission_state_from_dict(sm if sm is Dictionary else {})
+	if solo_mission_id_setter.is_valid():
+		solo_mission_id_setter.call(mission_id)
 	# current_player is not restored: there is no turn-order system yet.
 	# Restore the custom-token library before markers re-render so colors/effects resolve.
 	if radial_menu_controller and radial_menu_controller.token_library:

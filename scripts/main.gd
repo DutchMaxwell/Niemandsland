@@ -794,6 +794,8 @@ func _ready() -> void:
 	save_manager.radial_menu_controller = radial_menu_controller
 	save_manager.ai_slots_getter = func() -> Array: return ai_slots_sync_payload(solo_ai_slots)
 	save_manager.ai_slots_setter = _rpc_sync_ai_slots   # the same adopt + roster + grade + panel refresh a late joiner runs
+	save_manager.solo_mission_id_getter = func() -> String: return _solo_mission_id
+	save_manager.solo_mission_id_setter = func(mission_id: String) -> void: _solo_mission_id = mission_id
 
 	# Battle Log — after the managers + radial controller exist, wire the collector to the central seams.
 	_setup_battle_log()
