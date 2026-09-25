@@ -4548,7 +4548,10 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 				prof["furious"] = member.has_special_rule("Furious")
 				# Counter (p.13) is usually a weapon rule (parsed by AiShooting) but can be granted
 				# unit-wide — fold the member's unit rule onto every melee profile for the strike filter.
-				if member.has_special_rule("Counter"):
+				# S1-04: the registry DATA aliases (Counter-Attack, Counter in Melee) count too — the same
+				# read as _solo_has_counter's gate and the core's stamp (unit.rs:5825-5832).
+				if member.has_special_rule("Counter") \
+						or not RulesRegistry.unit_rules_of_primitive(member, "Counter").is_empty():
 					prof["counter"] = true
 			# Shred can be granted at unit level too (wave 5) — mark every profile of that member.
 			if member_shred:
