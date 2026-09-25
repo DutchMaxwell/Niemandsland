@@ -7476,6 +7476,13 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 		var s := str(r).strip_edges()
 		if s.begins_with("Bane") or s.begins_with("Rending") or s.begins_with("Lacerate"):
 			return true
+		# S1-06: the weapon's own printed Unstoppable ("Ignores Regeneration", GF/AoF v3.5.1 p.15). The
+		# EXACT name (the read that stamps profile.unstoppable): the scoped names stay the registry
+		# facet's below, and the plain entry carries no bypass_regen param.
+		if GameUnit.rule_name_matches(s, "Unstoppable"):
+			if attacker != null and battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT, "Unstoppable: Regeneration ignored", _solo_is_ai_unit(attacker))
+			return true
 		# Registry-driven Regeneration bypass (e.g. Disintegrate "Ignores Regeneration"), system-scoped;
 		# the explicit name checks above remain the byte-identical fallback when the map is absent.
 		# Coverage wave (skeptic flag): melee_only bypass entries ("Ignores Regeneration in Melee")
