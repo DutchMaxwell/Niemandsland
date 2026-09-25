@@ -221,6 +221,8 @@ func _connect_seams() -> void:
 		_radial_controller.model_deleted.connect(_on_model_deleted)
 	if _radial_controller != null and _radial_controller.has_signal("unit_deleted"):
 		_radial_controller.unit_deleted.connect(_on_unit_deleted)
+	if _radial_controller != null and _radial_controller.has_signal("objects_deleted"):
+		_radial_controller.objects_deleted.connect(_on_objects_deleted)
 	if _army_manager != null and _army_manager.has_signal("loose_model_dead_changed"):
 		_army_manager.loose_model_dead_changed.connect(_on_loose_model_dead_changed)
 	if _army_manager != null and _army_manager.has_signal("game_phase_changed"):
@@ -283,6 +285,7 @@ func _disconnect_seams() -> void:
 		_disconnect_if(_radial_controller, "unit_activated", _on_unit_activated)
 		_disconnect_if(_radial_controller, "model_deleted", _on_model_deleted)
 		_disconnect_if(_radial_controller, "unit_deleted", _on_unit_deleted)
+		_disconnect_if(_radial_controller, "objects_deleted", _on_objects_deleted)
 	if _army_manager != null:
 		_disconnect_if(_army_manager, "loose_model_dead_changed", _on_loose_model_dead_changed)
 		_disconnect_if(_army_manager, "game_phase_changed", _on_game_phase_changed)
@@ -409,6 +412,10 @@ func _on_model_deleted(_model_instance: ModelInstance) -> void:
 
 
 func _on_unit_deleted(_game_unit: GameUnit) -> void:
+	_on_event(TutorialFlow.Event.OBJECT_DELETED)
+
+
+func _on_objects_deleted(_nodes: Array) -> void:
 	_on_event(TutorialFlow.Event.OBJECT_DELETED)
 
 
