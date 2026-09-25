@@ -37,6 +37,7 @@ class NetStub extends Node:
 ## Stands in for the ObjectManager on the SaveManager side: counts clears and whether they were broadcast.
 class OmStub extends Node3D:
 	var clears: Array = []
+	var _object_counter: int = 0  # the load restores the saved id counter onto the ObjectManager
 
 	func clear_all_objects(broadcast: bool = true) -> void:
 		clears.append(broadcast)
