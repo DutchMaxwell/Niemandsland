@@ -23,6 +23,9 @@ signal hover_changed(obj: Node3D)
 signal arrangement_applied(kind: String)
 signal objects_pasted(nodes: Array)
 signal lock_state_changed(objects: Array, locked: bool)
+## A rubber-band selection was released; `added` = the objects it newly selected. selection_changed fires
+## once PER object while the band is applied, so this is the single "the box is done" seam.
+signal box_selection_finished(added: Array)
 ## A rotation gesture actually TURNED something (> the undo epsilon). All rotation
 ## paths — R-hold aim-at-cursor, Shift+R group spin, Ctrl+R snap — commit through
 ## commit_rotation_capture, so this is the single seam (tutorial / future replay),
@@ -1110,6 +1113,7 @@ func _finish_box_selection(alt_pressed: bool) -> void:
 	# Find all selectable objects within the rectangle
 	var rect = _get_box_select_rect()
 	var camera = get_viewport().get_camera_3d()
+	var added: Array[Node3D] = []
 
 	if camera:
 		# Gather the band's hits first (objects behind the camera unproject MIRRORED — skip them, else
@@ -1137,10 +1141,12 @@ func _finish_box_selection(alt_pressed: bool) -> void:
 				_remove_from_selection(child)
 			elif child not in _selected_objects:
 				_add_to_selection(child)
+				added.append(child)
 
 	# Clean up
 	_is_box_selecting = false
 	_destroy_box_select_rect()
+	box_selection_finished.emit(added)
 
 
 ## Create the visual selection rectangle

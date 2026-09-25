@@ -109,9 +109,9 @@ func test_t02_selection_composition_walk() -> void:
 	director._on_selection_changed([director._target_nodes[0], _nodes_of(second)[0]])
 	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("box")
 
-	# A jump in selection size across units (rubber-band result) advances box -> cancel.
-	director._on_selection_changed([director._target_nodes[0], director._target_nodes[1],
-		_nodes_of(second)[0], _nodes_of(second)[1]])
+	# A released rubber band that picked up two or more models (ObjectManager.box_selection_finished; the
+	# real gesture adds one object per selection_changed, see tutorial_box_select_test) advances box -> cancel.
+	director._on_box_selection_finished([director._target_nodes[1], _nodes_of(second)[0]])
 	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("cancel")
 
 	# Esc (empty selection) completes the lesson.
