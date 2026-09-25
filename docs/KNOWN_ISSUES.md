@@ -17,8 +17,7 @@ not there yet and what to watch for. The full done / in-progress / planned break
   resolve activations, dice, wounds, morale, terrain effects and hundreds of special rules for
   both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: one
   difficulty (full strength), co-op against the AI in multiplayer is a first version, the UI is
-  English (the privacy & data screens also come in German, and two start-menu entries still carry
-  German labels), and a small residue
+  English (the privacy & data screens also come in German), and a small residue
   of special rules is still manual — the battle log names any rule it applies (or asks for
   manual handling).
 - **AI thinking time has been measured on one machine only** (a developer laptop). On a slower PC
@@ -52,6 +51,11 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **macOS plays without the rules core.** The Windows and Linux builds carry the Rust rules core
   that runs the trained network; the macOS build has no core, so NACHTMAHR plays its decision-tree
   opponent there, not the stronger Erlkönig model.
+- **Windows: an in-game update from 0.3.12.0 restarts the game once.** The 0.3.12.0 updater
+  replaces only `Niemandsland.exe`; on its first start 0.3.13.0 copies the missing rules-core file
+  (`nml_core_godot.dll`) from the downloaded update next to the game and restarts once by itself.
+  If the diagnostics report (below) still names the decision tree after that, download the 0.3.13.0
+  Windows zip and unzip it over your game folder. Updates from 0.3.13.0 onward install every file.
 
 ## Smaller things to know
 

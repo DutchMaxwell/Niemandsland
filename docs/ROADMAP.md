@@ -61,7 +61,8 @@ Deferred out of Alpha by maintainer decision (2026-06-23): the 2-player game is 
 validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 - **Age of Fantasy — factions + Regiments** — generate the AoF faction 3D models via **Model Forge
-  V2** (→ R2; this also resolves the `saurians` ↔ `saurian_starhost` faction-folder mismatch).
+  V2** (→ R2; this also resolves the `saurians` ↔ `saurian_starhost` faction-folder mismatch). The
+  **Ratmen** ship in `0.3.13.0-alpha` ([#1076](../../../pull/1076)).
   Live Regiments import vs a real `aofr` list is **verified** (2026-06-29). **Regiments handling polish — SHIPPED:** auto-face-on-drop
   facing fix (P0); frontage cycle (Shift+F), axis-locked drag (Shift+drag), pivot snap (Ctrl+R),
   mouse-driven rotation (R-hold, AoF:R p.8 "Pivoting"); pooled-wound counter with back-rank casualty
@@ -223,8 +224,13 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 See [`CHANGELOG.md`](../CHANGELOG.md).
 
-**Next release (on `main`, not yet tagged):** **Solo AI** — on Windows and Linux NACHTMAHR plays with
-its new model **Erlkönig**: a search planner priced by a trained neural network (value net) in the Rust
+**`0.3.13.0-alpha` (2026-09-25):**
+**Menu**: a new main menu over a night-time diorama; the table size (6x4 ft default, 4x4 ft, custom
+12–240 in) and the biome are chosen before the match; tilt-shift depth of field on the table camera
+([#1069](../../../pull/1069)).
+**Table**: the chosen biome dresses the game table on the Medium preset and above — display only, line
+of sight and rules unchanged ([#1078](../../../pull/1078)).
+**Solo AI** — on Windows and Linux NACHTMAHR plays with its new model **Erlkönig**: a search planner priced by a trained neural network (value net) in the Rust
 rules core, which now ships in those exports ([#873](../../../pull/873), [#874](../../../pull/874),
 [#1052](../../../pull/1052)–[#1055](../../../pull/1055)); the planner also offers Advance + shoot
 ([#1057](../../../pull/1057)), and models move through the core by default, which shortens the AI's
@@ -242,7 +248,13 @@ settings** (local only, nothing is sent): a consent screen, preview and local ex
 ([#365](../../../pull/365)); no more dropped clicks ([#366](../../../pull/366), [#368](../../../pull/368)); `F`
 reaches the sight fan again ([#414](../../../pull/414)); the AI-log toggle is back in exported builds
 ([#416](../../../pull/416)); the off-table tray groups reserves by arrival class ([#832](../../../pull/832));
-wreck spill shows a formation ghost at the cursor ([#828](../../../pull/828)).
+wreck spill shows a formation ghost at the cursor ([#828](../../../pull/828)). **Models**: the Ratmen
+(Age of Fantasy) have their own 3D models for every unit and legal loadout, and weapon teams carry their
+team weapon ([#1076](../../../pull/1076)). **Fixes**: Windows in-game updates install every release file
+([#1073](../../../pull/1073)), and a Windows game updated in-game from 0.3.12.0 restores the missing
+rules core with one restart ([#1074](../../../pull/1074)); model downloads no longer depend on the frame rate
+([#1075](../../../pull/1075)); the battle log drops developer lines and false "apply it manually" notes
+([#1068](../../../pull/1068), [#1072](../../../pull/1072)).
 
 **`0.3.12.0-alpha` (2026-08-06):** **Elevation, Phase A** — every sight question (can this unit
 see that one, is it in cover, what does the sight fan show) now flows through one volumetric

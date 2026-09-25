@@ -6,7 +6,23 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+## [0.3.13.0-alpha] — 2026-09-25
+
 ### Added
+- **A new main menu.** A native menu over a night-time diorama of six biomes with miniatures; English
+  throughout. (#1069)
+- **Choose the table size and biome before the match.** 6x4 ft (default), 4x4 ft, or a custom size
+  (12–240 in). Loading a save or joining a multiplayer host takes the size from the save or the
+  host. (#1069)
+- **Tilt-shift depth of field on the table camera**, on by default; switch it off in Settings
+  (lighting panel). (#1069)
+- **The Ratmen (Age of Fantasy) have their own 3D models** for every unit and legal loadout; weapon
+  teams fight with their team weapon on the model that carries it (the team guns used to sit on no
+  model and fired with 0 attacks). The models download on first use, like every faction. (#1076)
+- **The chosen biome dresses the game table** — ground, light and atmosphere of six biomes (grassland,
+  arid desert, frozen tundra, volcanic ash, alien jungle, urban ruins) on the Medium, High and Ultra
+  presets; Performance, Low and the Compatibility renderer keep the plain battlemap. Display only:
+  line of sight, colliders and rules are unchanged. (#1078)
 - **NACHTMAHR plays with the search planner and a neural leaf evaluator in-process.** When the
   Rust core (`NmlCore` GDExtension, now built with the ONNX evaluator) and the packed model
   `assets/solo/brains/erlkoenig.onnx` load, the one player-facing grade runs the rollout search
@@ -28,7 +44,6 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The core stages its rule files and the model out of the packed build** (`user://nml_core/<version>/`)
   and refuses a game — loudly, falling back to the tree — when a rules file or the row vocab is
   missing instead of searching rule-blind. (#1053, #1054)
-- **Objective-token rush reach.** The fast core's objective token carries two new columns — t[10]/t[11], the per-side count of units whose base-edge gap to the objective is within the last-round flip band (`OBJECTIVE_CONTROL_IN + live rush`), a superset of the contest count. Token vocab bumps to 3 (RESIDUALS_ERLKOENIG_2026-09-19).
 - **Privacy & data settings (local only).** A consent screen, off by default, explains optional
   game-record sharing, previews an example record and can save it locally; nothing is sent. An
   in-memory collector for the opt-in path is on `main`, still local-only (see
@@ -36,6 +51,74 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The off-table tray groups reserves by arrival class**, with headers and counts. (#832)
 - **Wreck spill shows a formation ghost at the cursor** after the automatic placement. (#828)
 - **The Solo panel has a mission selector, driven by the mission catalogue.** (#640)
+- **The chosen biome's reference trees stand on the game table** (display only; rules and line of sight are
+  unchanged). (#1083)
+- **The dice window in the new house style:** classic white dice on felt. (#1087)
+
+### Fixed
+- **Model downloads no longer depend on the frame rate.** On a slow or busy machine the online model
+  list fell back to the built-in one (newly published factions showed as placeholders) and big models
+  failed after three 2-minute attempts. Downloads now read up to 4 MiB per frame and give up only when
+  no data arrives for 30 s. (#1075)
+- **Windows in-game updates install the whole release.** The update helper replaced only the `.exe`,
+  so the Rust extension next to it was never installed and an updated game silently played the
+  decision tree. It now waits for the game to exit, replaces every release file and rolls all of them
+  back if one copy fails. The release job also refuses a tag that does not match the game's version,
+  which would offer the same update on every start. (#1073)
+- **Windows games updated in-game from 0.3.12.0 get the rules core.** The 0.3.12.0 helper installed
+  only the `.exe`; on its first start without the core, the game copies the missing
+  `nml_core_godot.dll` from the downloaded update (only if that update is this exact build) and
+  restarts once. If the core still does not load, it gives up and the decision tree plays. (#1074)
+- **No more false "apply it manually" notes in solo games.** The battle log told players to apply
+  rules by hand that the table already resolves (a stale list; Army Forge item names such as
+  "Jetpacks" read as rules; prefix matches) and printed a manual note for spells whose effect the
+  table applies. (#1072)
+- **Rapid Charge (and its Aura) extends only the Charge move**, as the army books say ("+4" when using
+  Charge actions"); it lengthened the Rush band too. (#1072)
+- **The battle log speaks to players.** AI records no longer show empty trace lines, training
+  feature dumps or the evaluator's hash; the look-ahead is one plain line. (#1068)
+- **No engine "material is null" errors when models die.** The grey dead-model look no longer sets a
+  hidden material under the base decor's override, which printed four engine errors per base when
+  the node was freed. (#1071)
+- **The unit strip is filled after loading a save.** It was only built when an army was spawned
+  fresh. (#1069)
+- **Co-op multiplayer against the AI:** the AI designation reaches every player, and the owner of an
+  attacked unit rolls its own saves. (#835, #836)
+- **Spell-granted rules apply where they act** — Quick Shot, Rapid Charge, Slayer, Unwieldy, Piercing
+  Fighter, Unpredictable and Indirect. (#829, #833)
+- **Fear(X) counts in the melee-won comparison.** (#809)
+- **Bestial Boost, Rending in Melee, Surprise Attack's first-activation burst, Rapid Charge Mark and
+  Great Musician's +1" move now apply on the table.** (#804, #805, #811, #819, #870, #871)
+- **AI:** a Rush capped to the Advance distance is demoted to Advance + shoot. (#813, #821)
+- **A short charge lands on the table's approach vector.** (#875)
+- **Ranged Slayer fired in the core but not on the table.** The table now resolves the range-gated
+  ("ranged_over") AP(+2) spec at the conditional-AP seams — the one gap of the table-side parity audit (#785). (#784)
+- **The Solo arena's both-AI round loop grants Second Wind.** (#503)
+- **Five in-game HUD defects:** a tooltip that stayed after loading, the ruler readout, the AI reasoning line,
+  missing glyphs and the strip test. (#1080)
+- **The table chooser fills the window height at every aspect ratio.** (#1081)
+- **Loading a save no longer reads every unit as a joined hero** (a script error on load). (#1085)
+- **The main menu shows a still of the finished backdrop until the live scene is ready, then crossfades;** the
+  tree parse runs off the main thread. (#1086)
+- **Unit cards no longer cut anything off** (names, rows, rule tooltips, the first tooltip). (#1088)
+- **The game record names the opponent the game really ran.** (#1090)
+- **The destination text no longer promises an upload.** (#1091)
+- **The tutorial table never hands player 2 to NACHTMAHR.** (#1092)
+- **Multiplayer: a sync superseded by a connection drop no longer spawns models** (the nightly soak blip). (#1101)
+
+### Changed
+- **The Rust rules core ships in the Linux and Windows exports.** CI builds the extension and places
+  it in the exports (first dormant, #873, #874); since #1055 the release build uses it by default for
+  NACHTMAHR (see Added). macOS ships without it, so NACHTMAHR plays the decision tree there, and the
+  release job waits for the Rust workspace checks.
+- **AI decisions fixed.** The menu targets the UNIT and offers the charge it can reach; a joined Caster hero can finally
+  cast; a combat intent aimed at a joined hero fights its HOST; Unstoppable follows the table's dice path; the over-9"
+  modifier gate measures centre-to-centre; an absent knob key reads as OFF. (#492, #495, #502, #601–#602, #605)
+- **Biome tables keep their mounds; mines and signs sit on the surface** (no noise relief on the game table). (#1082)
+- **Models share one texture per texture file** (less video memory when an army repeats a model). (#1096)
+
+### Internal
+- **Objective-token rush reach.** The fast core's objective token carries two new columns — t[10]/t[11], the per-side count of units whose base-edge gap to the objective is within the last-round flip band (`OBJECTIVE_CONTROL_IN + live rush`), a superset of the contest count. Token vocab bumps to 3. (#1026)
 - **The mission catalogue reaches the AI twin.** The Python side can play the ten catalogue missions from `missions.json`
   (missions R1, default duel), and the twin sets deterministic mission-marker placements. (#623, #639)
 - **AI rules fidelity — thirteen more named rules ported to the fast core** (all behind a frozen epoch gate).
@@ -50,44 +133,6 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   evidence; the optional re-place choice stays table-side; #781).
 - **The value net sees the rules it could not read.** Encoder vocabulary v7 appends the 12 core-ported names the
   unit band had no room for (#786's blind set) to an open-ended unit2 band. (#789)
-
-### Fixed
-- **Model downloads no longer depend on the frame rate.** On a slow or busy machine the online model
-  list fell back to the built-in one (newly published factions showed as placeholders) and big models
-  failed after three 2-minute attempts. Downloads now read up to 4 MiB per frame and give up only when
-  no data arrives for 30 s. (#1075)
-- **Windows in-game updates install the whole release.** The update helper replaced only the `.exe`,
-  so the Rust extension next to it was never installed and an updated game silently played the
-  decision tree. It now waits for the game to exit, replaces every release file and rolls all of them
-  back if one copy fails. The release job also refuses a tag that does not match the game's version,
-  which would offer the same update on every start. (#1073)
-- **No more false "apply it manually" notes in solo games.** The battle log told players to apply
-  rules by hand that the table already resolves (a stale list; Army Forge item names such as
-  "Jetpacks" read as rules; prefix matches) and printed a manual note for spells whose effect the
-  table applies. (#1072)
-- **Rapid Charge (and its Aura) extends only the Charge move**, as the army books say ("+4" when using
-  Charge actions"); it lengthened the Rush band too. (#1072)
-- **The battle log speaks to players.** AI records no longer show empty trace lines, training
-  feature dumps or the evaluator's hash; the look-ahead is one plain line. (#1068)
-- **No engine "material is null" errors when models die.** The grey dead-model look no longer sets a
-  hidden material under the base decor's override, which printed four engine errors per base when
-  the node was freed. (#1071)
-- **Co-op multiplayer against the AI:** the AI designation reaches every player, and the owner of an
-  attacked unit rolls its own saves. (#835, #836)
-- **Spell-granted rules apply where they act** — Quick Shot, Rapid Charge, Slayer, Unwieldy, Piercing
-  Fighter, Unpredictable and Indirect. (#829, #833)
-- **Fear(X) counts in the melee-won comparison.** (#809)
-- **Bestial Boost, Rending in Melee, Surprise Attack's first-activation burst, Rapid Charge Mark and
-  Great Musician's +1" move now apply on the table.** (#804, #805, #811, #819, #870, #871)
-- **AI:** a Rush capped to the Advance distance is demoted to Advance + shoot. (#813, #821)
-- **A short charge lands on the table's approach vector.** (#875)
-- **Ranged Slayer fired in the core but not on the table.** The table now resolves the range-gated
-  ("ranged_over") AP(+2) spec at the conditional-AP seams — the one gap of the table-side parity audit (#785). (#784)
-- **The census no longer counts a primitive literal as a rule-name read** (Mind Control un-flipped, then
-  honestly re-earned by its displacement port). (#782)
-- **The Solo arena's both-AI round loop grants Second Wind.** (#503)
-
-### Changed
 - **Rules epochs 8–11.** The planner's rush demotion moved behind a new frozen gate (epoch 8, #837)
   and every record header now stamps the epoch (#844); the Mark grants switched on by #870 apply
   from epoch 9 (#878); the core reads the table's distinct CHARGE band behind `EPOCH_10_CHARGE_BAND`
@@ -102,10 +147,6 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   have a slot, against 446 of 450 ported to the core. (#792, #793, #797, #800, #803, #808, #810,
   #818, #827, #831, #838, #839,
   #841, #842, #843, #848, #852, #853, #856, #859, #860, #861, #862, #864, #865, #879, #908)
-- **The Rust rules core ships in the Linux and Windows exports.** CI builds the extension and places
-  it in the exports (first dormant, #873, #874); since #1055 the release build uses it by default for
-  NACHTMAHR (see Added). macOS ships without it, so NACHTMAHR plays the decision tree there, and the
-  release job waits for the Rust workspace checks.
 - **AI rules fidelity — named rules ported to the fast core.** Split fire (a volley per target group), Mend, Re-Position
   Artillery and the Utility Buff bridge, Breath Attack, Shot Modifier with melee leg and flat / over-9" siblings, Hit &
   Run (incl. Fighter + Shooter), natural-6 extra attack dice, Growth Markers, Second Wind, Vanguard, Resistance,
@@ -126,11 +167,8 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   ladder, stall escalation, bounded straggler pull); self-play reads the table's per-model sight and the shoot leg asks
   the whole resolve question. (#473, #481, #484, #505, #509, #514, #519, #523–#524, #537–#538, #555, #565, #567,
   #575–#577, #581, #583, #586, #589, #592–#593, #599)
-- **AI decisions fixed.** The menu targets the UNIT and offers the charge it can reach; a joined Caster hero can finally
-  cast; a combat intent aimed at a joined hero fights its HOST; Unstoppable follows the table's dice path; the over-9"
-  modifier gate measures centre-to-centre; an absent knob key reads as OFF. (#492, #495, #502, #601–#602, #605)
-
-### Internal
+- **The census no longer counts a primitive literal as a rule-name read** (Mind Control un-flipped, then
+  honestly re-earned by its displacement port). (#782)
 - **The S5 (Reinforcement) seam, part 1:** `arrive_one` takes an arrival zone — the shared-signature change alone,
   ahead of the mid-game unit-creation port (verdict corrected PORT → DESIGN in #779). (#788)
 - **Wave-4 docs:** the Delayed Action primitive design (#775), the table-side parity audit A (#785), the
@@ -163,6 +201,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   (#886, #887)
 - **Docs.** Stale charge_contact_slots comments corrected. (#518) The current-vs-released rule-resolver
   wording was clarified. (#885)
+- Changelog catch-up for #1068, #1071, #1072, #1073 (#1077); the manifest merge test accepts the multi-material
+  `materials[]` form (#1093); the list-to-profile tool puts Rapid Charge and Royal Legion's charge bonus on the
+  charge band and reads the bundled manifest from the repo root (#1094, #1095, #1102).
 
 ## [0.3.12.0-alpha] — 2026-08-06
 
