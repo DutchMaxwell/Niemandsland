@@ -51,6 +51,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The off-table tray groups reserves by arrival class**, with headers and counts. (#832)
 - **Wreck spill shows a formation ghost at the cursor** after the automatic placement. (#828)
 - **The Solo panel has a mission selector, driven by the mission catalogue.** (#640)
+- **The chosen biome's reference trees stand on the game table** (display only; rules and line of sight are
+  unchanged). (#1083)
+- **The dice window in the new house style:** classic white dice on felt. (#1087)
 
 ### Fixed
 - **Model downloads no longer depend on the frame rate.** On a slow or busy machine the online model
@@ -91,6 +94,17 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **Ranged Slayer fired in the core but not on the table.** The table now resolves the range-gated
   ("ranged_over") AP(+2) spec at the conditional-AP seams — the one gap of the table-side parity audit (#785). (#784)
 - **The Solo arena's both-AI round loop grants Second Wind.** (#503)
+- **Five in-game HUD defects:** a tooltip that stayed after loading, the ruler readout, the AI reasoning line,
+  missing glyphs and the strip test. (#1080)
+- **The table chooser fills the window height at every aspect ratio.** (#1081)
+- **Loading a save no longer reads every unit as a joined hero** (a script error on load). (#1085)
+- **The main menu shows a still of the finished backdrop until the live scene is ready, then crossfades;** the
+  tree parse runs off the main thread. (#1086)
+- **Unit cards no longer cut anything off** (names, rows, rule tooltips, the first tooltip). (#1088)
+- **The game record names the opponent the game really ran.** (#1090)
+- **The destination text no longer promises an upload.** (#1091)
+- **The tutorial table never hands player 2 to NACHTMAHR.** (#1092)
+- **Multiplayer: a sync superseded by a connection drop no longer spawns models** (the nightly soak blip). (#1101)
 
 ### Changed
 - **The Rust rules core ships in the Linux and Windows exports.** CI builds the extension and places
@@ -100,6 +114,8 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **AI decisions fixed.** The menu targets the UNIT and offers the charge it can reach; a joined Caster hero can finally
   cast; a combat intent aimed at a joined hero fights its HOST; Unstoppable follows the table's dice path; the over-9"
   modifier gate measures centre-to-centre; an absent knob key reads as OFF. (#492, #495, #502, #601–#602, #605)
+- **Biome tables keep their mounds; mines and signs sit on the surface** (no noise relief on the game table). (#1082)
+- **Models share one texture per texture file** (less video memory when an army repeats a model). (#1096)
 
 ### Internal
 - **Objective-token rush reach.** The fast core's objective token carries two new columns — t[10]/t[11], the per-side count of units whose base-edge gap to the objective is within the last-round flip band (`OBJECTIVE_CONTROL_IN + live rush`), a superset of the contest count. Token vocab bumps to 3. (#1026)
@@ -185,6 +201,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   (#886, #887)
 - **Docs.** Stale charge_contact_slots comments corrected. (#518) The current-vs-released rule-resolver
   wording was clarified. (#885)
+- Changelog catch-up for #1068, #1071, #1072, #1073 (#1077); the manifest merge test accepts the multi-material
+  `materials[]` form (#1093); the list-to-profile tool puts Rapid Charge and Royal Legion's charge bonus on the
+  charge band and reads the bundled manifest from the repo root (#1094, #1095, #1102).
 
 ## [0.3.12.0-alpha] — 2026-08-06
 
