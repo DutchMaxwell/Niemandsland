@@ -195,6 +195,8 @@ func _connect_seams() -> void:
 	if _object_manager != null:
 		if _object_manager.has_signal("selection_changed"):
 			_object_manager.selection_changed.connect(_on_selection_changed)
+		if _object_manager.has_signal("box_selection_finished"):
+			_object_manager.box_selection_finished.connect(_on_box_selection_finished)
 		if _object_manager.has_signal("selection_dropped"):
 			_object_manager.selection_dropped.connect(_on_selection_dropped)
 		if _object_manager.has_signal("rotation_committed"):
@@ -269,6 +271,7 @@ func _connect_seams() -> void:
 func _disconnect_seams() -> void:
 	if _object_manager != null:
 		_disconnect_if(_object_manager, "selection_changed", _on_selection_changed)
+		_disconnect_if(_object_manager, "box_selection_finished", _on_box_selection_finished)
 		_disconnect_if(_object_manager, "selection_dropped", _on_selection_dropped)
 		_disconnect_if(_object_manager, "rotation_committed", _on_rotation_committed)
 		_disconnect_if(_object_manager, "measurement_finished", _on_measurement_finished)
@@ -333,7 +336,9 @@ func _on_selection_changed(selected: Array) -> void:
 		_on_event(TutorialFlow.Event.UNIT_SELECTED)
 	# Wave 1 (T-02): classify the RESULTING selection composition — gesture-independent by
 	# design (spec note: reaching the same selection another way still advances). Emission
-	# order multi -> whole -> box is safe: consume() only accepts the current step's event.
+	# order multi -> whole is safe: consume() only accepts the current step's event. The "box"
+	# step is NOT classified here: every gesture adds ONE object per emission, so no callback
+	# ever sees a jump — it listens to ObjectManager.box_selection_finished instead.
 	if selected.is_empty():
 		if _prev_selection_size > 0:
 			_on_event(TutorialFlow.Event.SELECTION_CLEARED)
@@ -344,9 +349,13 @@ func _on_selection_changed(selected: Array) -> void:
 		_on_event(TutorialFlow.Event.MULTI_SELECTED)
 	if units.size() == 1 and is_whole_unit_selection(selected, units[0]):
 		_on_event(TutorialFlow.Event.UNIT_WHOLE_SELECTED)
-	if selected.size() >= _prev_selection_size + 2 and not (units.size() == 1 and is_whole_unit_selection(selected, units[0])):
-		_on_event(TutorialFlow.Event.BOX_SELECTED)
 	_prev_selection_size = selected.size()
+
+
+## A released rubber band that picked up at least two models (a band over one model is just a click).
+func _on_box_selection_finished(added: Array) -> void:
+	if added.size() >= 2:
+		_on_event(TutorialFlow.Event.BOX_SELECTED)
 
 
 ## PURE: the distinct GameUnits the selected nodes belong to (nodes without a unit meta count none).
