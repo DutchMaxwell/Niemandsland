@@ -676,7 +676,8 @@ func _ready() -> void:
 	autosave.setup(save_manager, opr_army_manager, object_manager, network_manager)
 	_autosave_controller = autosave
 	autosave.autosaved.connect(func(path: String) -> void:
-		_show_toast("Autosaved — %s" % path.get_file())
+		if opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
+			_show_toast("Autosaved — %s" % path.get_file())
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Autosaved (%s)" % path.get_file(), true))
 
