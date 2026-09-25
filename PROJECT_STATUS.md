@@ -163,7 +163,8 @@ automatically on every AI volley. Picking a unit up leaves a translucent **origi
 the move began, hovering an object shows that object's hotkeys in a hint line, and `Ctrl+R`
 snaps any selectable (unit, loose model, terrain) to the nearest 90°.
 
-**Sandbox & objects** — 3D table (variable sizes), orbit/pan/zoom camera, spawn/
+**Sandbox & objects** — 3D table (the size — 6×4 ft default, 4×4 or custom 12–240 in — and the biome
+are chosen before the match), orbit/pan/zoom camera, spawn/
 move/rotate/delete, multi- and box-select, copy/paste/duplicate, row/arrow
 arrangement with constant base-edge spacing, distance measuring (inches), physics
 D6 dice in a scaled SubViewport (our own MIT `dice_tray.gd` / `dice_d6.gd`; replaced
@@ -186,7 +187,12 @@ margins), blockers as shipping containers (2 colourways), dangerous terrain as a
 minefield (15 anti-tank mines + 2 warning signs). **Biome themes** re-skin the set in
 place via `table.set_biome`: grassland (default), desert (fine adobe + cacti) and
 tundra (snowed stone/conifers/containers); volcanic, jungle and urban have their own themed
-sets (volcanic and jungle swap the minefield for lava craters / carnivorous plants). **Terrain reference aids (Asgard tournament standard, display only)**:
+sets (volcanic and jungle swap the minefield for lava craters / carnivorous plants). The biome chosen
+before the match also **dresses the game table itself** — ground, light profile, atmosphere, scatter and
+the accepted reference trees (grassland oak, desert acacia, tundra pine, volcanic monoliths, jungle forest
+shading) — on the Medium preset and above; display only, so colliders, footprints, line of sight and the
+save format are untouched (`scripts/visual/table_biome_presenter.gd`, `scripts/visual/table_tree_pass.gd`).
+**Terrain reference aids (Asgard tournament standard, display only)**:
 always-visible effect labels per terrain zone (Cover / Difficult / Dangerous /
 Impassable / Height) and height-aware line-of-sight in the measure tool — since `0.3.12` this
 runs on the same **volumetric** truth as everything else (`VolumetricLos`,
@@ -267,10 +273,15 @@ presets (2 s blends, rain particles, lightning + delayed thunder), a "war-torn" 
 (deterministic fires at ruin walls with smoke + flicker light) and "distant war sounds"
 — audio is real CC0 recordings delivered from R2 with procedural synth fallback
 (`ambience_synth.gd`), persisted per player. Scatter decor: brick-rubble piles at ruin
-wall bases + grassland grass field (one MultiMesh each, quality-gated). **AAA main
-menu**: live night-battlefield diorama (production terrain stack + miniatures vignette
-+ orbit camera with DoF), left command column (HudTokens), CONTINUE-newest-save entry,
-typewriter quote ticker, menu soundscape + CC0 dark-ambient drone, idle attract mode.
+wall bases + grassland grass field (one MultiMesh each, quality-gated). **Main menu**:
+native Godot UI over a live night-time diorama of the six biomes (two groups of miniatures, a slow
+camera drift); a still of the finished backdrop covers the view until the live scene is complete,
+then crossfades away. Entries: **Continue** (the newest save), **Prepare a new table** (biome and
+table size before the match), **Play online**, **Load game**, **Learn to play**; **Help & feedback**,
+**Credits & licenses** and **Quit** below; menu soundscape + CC0 dark-ambient drone.
+**Tilt-shift depth of field** on the table camera (on by default; Settings → lighting panel). The
+**dice window** is built in the new house style (`scripts/hud/house_style.gd`): classic white dice on
+a felt tray with a gold rim, and the window folds to its header.
 Settings window reachable in-game via left panel button or F7. **UI audio**: every
 `BaseButton` gets procedural hover/click/focus ticks via the `UiFeedback` autoload
 (one `node_added` hook, zero per-button code; variation-aware confirm/back tones) on
@@ -356,7 +367,7 @@ and `hero_attachment_dialog.gd` were removed as dead code in January 2026 — th
 
 ## Tests
 
-gdUnit4: about **3,040 test functions** across **357 suites** in `test/` (incl. `coherency_checker`,
+gdUnit4: about **3,160 test functions** across **387 suites** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`, `network_manager` /
 `network_version_handshake`, `dice_rules`, `player_identity`, the movement/spacing
 suites `separation_checker` / `separation_resolver` / `separation_zone`, `move_ledger` /
@@ -365,7 +376,7 @@ suites — `solo_controller`, `turn_manager`, `movement_planner`, `ai_decision` 
 `ai_targeting` / `ai_position` / `ai_round_planner` / `ai_combat_math` / `ai_spell`,
 `rules_registry`, `spells_registry`, `terrain_rules`, `sight_fan`, `volumetric_los`,
 `los_volumes`, `transport_state` / `transport_embark`, `autosave_controller`). The
-**end-to-end layer** (`test/e2e/`, **95 suites**)
+**end-to-end layer** (`test/e2e/`, **105 suites**)
 boots the real `scenes/main.tscn` and drives the real menu / deployment-gate / click-ownership
 / battle-log-export / AI-path-label flows that unit tests skip. Python: the nml-core-py bindings
 suite (**88 pytest files**) and `relay/test_relay_server.py` (67 green); the Rust workspace tests
