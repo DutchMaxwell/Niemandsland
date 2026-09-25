@@ -212,6 +212,22 @@ func test_example_is_shipped_and_preview_is_nonempty() -> void:
 	menu.queue_free()
 
 
+func test_the_shown_example_carries_the_project_version() -> void:
+	# Versions have ONE source (application/config/version): the example the player reviews and can
+	# save must show the running build's version, not whatever the fixture file was frozen at.
+	var menu = load(MENU_SCENE).instantiate()
+	add_child(menu)
+	menu.set_store_path_for_tests(TEST_STORE)
+	var project_version := str(ProjectSettings.get_setting("application/config/version", ""))
+	assert_str(project_version).is_not_empty()
+	var shown := JSON.parse_string(menu.example_bytes().get_string_from_utf8()) as Dictionary
+	assert_str(str(shown.get("game_version", ""))).is_equal(project_version)
+	menu._show_details()
+	var preview := menu.find_child("ExamplePreview", true, false) as TextEdit
+	assert_str(preview.text).contains("\"game_version\":\"%s\"" % project_version)
+	menu.queue_free()
+
+
 func test_privacy_facts_are_published_in_both_languages() -> void:
 	var menu_script = load("res://scripts/privacy/privacy_menu.gd")
 	for key in ["destination", "controller", "processor", "recipients", "retention", "withdrawal", "contact"]:

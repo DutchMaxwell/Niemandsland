@@ -159,6 +159,9 @@ func example_bytes() -> PackedByteArray:
 	var record := (parsed as Dictionary).duplicate(true)
 	record["deletion_code"] = _store.deletion_code
 	record["training_use"] = _store.training_use
+	# One source for the version (same read as GameRecordCollector.build_record): the fixture's own
+	# value is only the golden test's input and goes stale every release.
+	record["game_version"] = str(ProjectSettings.get_setting("application/config/version", ""))
 	return Builder.build(record)
 
 
