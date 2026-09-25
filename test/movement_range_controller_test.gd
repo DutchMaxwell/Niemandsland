@@ -246,6 +246,46 @@ func test_move_bands_free_text_rule_grant_no_longer_moves_the_bands() -> void:
 	assert_int(b["rush"]).is_equal(12)
 
 
+# === NML-1123: a band aura and the bare rule it grants are ONE rule, counted once ===
+# AoF/GF Advanced Rules v3.5.1 p.13, "Rules Priority & Stacking Effects": "Effects from multiple
+# instances of the same special rule or spell don't stack, unless it is a rule with (X) in its
+# name, or unless it is specified otherwise." Fast / Rapid Charge carry no (X). The aura expansion
+# (OPRArmyManager.expand_auras_of) stamps the bare base onto the unit, so the unit holds both names.
+
+func test_fast_plus_fast_aura_counts_fast_once() -> void:
+	# Captain Blackfang (vampiric_undead) carries Fast AND Fast Aura -> 8"/16", not 10"/20".
+	for rules in [["Fast", "Fast Aura"], ["Fast Aura", "Fast"]]:
+		var b := _controller().move_bands_for_props({
+			"game_system": "aof", "faction_folder": "vampiric_undead", "special_rules": rules})
+		assert_int(b["advance"]).is_equal(8)    # 6 + 2, once
+		assert_int(b["rush"]).is_equal(16)       # 12 + 4, once
+
+
+func test_fast_aura_with_its_expanded_bare_fast_counts_fast_once() -> void:
+	# The plain aura carrier: expansion adds the bare "Fast" next to "Fast Aura".
+	var b := _controller().move_bands_for_props({
+		"game_system": "aof", "faction_folder": "vampiric_undead", "special_rules": ["Fast Aura", "Fast"]})
+	assert_int(b["advance"]).is_equal(8)
+	assert_int(b["rush"]).is_equal(16)
+
+
+func test_fast_aura_alone_still_moves_the_bands_once() -> void:
+	# No expansion (headless caller): the registry alias of the aura alone must still bite, once.
+	var b := _controller().move_bands_for_props({
+		"game_system": "aof", "faction_folder": "vampiric_undead", "special_rules": ["Fast Aura"]})
+	assert_int(b["advance"]).is_equal(8)
+	assert_int(b["rush"]).is_equal(16)
+
+
+func test_rapid_advance_plus_its_aura_adds_the_advance_band_once() -> void:
+	# Same family (Wood Elves, AoF Skirmish): the expansion turns "Rapid Advance Aura" into a bare
+	# "Rapid Advance" next to it -> Advance 6 + 4 = 10", not 14". Rush is untouched.
+	var b := _controller().move_bands_for_props({
+		"game_system": "aofs", "faction_folder": "wood_elves", "special_rules": ["Rapid Advance Aura", "Rapid Advance"]})
+	assert_int(b["advance"]).is_equal(10)
+	assert_int(b["rush"]).is_equal(12)
+
+
 func test_move_bands_clamps_at_zero() -> void:
 	# A heavy Slow plus a debuff spell token can't drive the bands negative.
 	var b := _controller().move_bands_for_props({

@@ -148,7 +148,10 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 	# for it, so it never rides this pass; it stays a per-activation ability bonus, solo_controller.gd).
 	for r in props.get("special_rules", []):
 		var base2 := _rule_base_name(str(r))
-		var done2: Dictionary = counted.get(base2, {})
+		# NML-1123: "X Aura" and the bare X the aura expansion stamps beside it are ONE rule — same-rule
+		# effects don't stack (AoF/GF Advanced Rules v3.5.1 p.13) — so both share one `counted` key.
+		var key2 := base2.trim_suffix(" Aura")
+		var done2: Dictionary = counted.get(key2, {})
 		if bool(done2.get("advance", false)) and bool(done2.get("rush", false)):
 			continue
 		var entry := RulesRegistry.lookup(reg_system, reg_faction, base2)
@@ -178,7 +181,7 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 			else:
 				rush += rush_mod
 				charge_extra += int(rp.get("charge_mod", rush_mod)) - rush_mod
-		counted[base2] = {"advance": true, "rush": true}
+		counted[key2] = {"advance": true, "rush": true}
 	# NML-006: active spell tokens with movement modifiers ('+2" advance / +4" rush', once) are stamped
 	# into props as "spell_move_mod" by the solo layer — read here so the AI's bands AND the human's
 	# move rings shrink/grow through this ONE band source (stays pure: props in, bands out).
