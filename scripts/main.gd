@@ -273,9 +273,11 @@ var _sight_fan_unit: GameUnit = null     # unit whose fan is currently shown (F 
 var movement_range_controller: Node = null  # MovementRangeController (Advance/Rush reach)
 var solo_controller: SoloController = null   # Solo/AI — drives the designated AI army (F11 = whole side)
 var solo_ai_slots: Dictionary = {}           # player_id -> true: armies the Solo AI controls (goal 001)
-var _solo_interactive_grade: String = "nachtmahr"  # the ONE grade (NML-211): NACHTMAHR, every knob at
-                                                  # its ceiling. WITHOUT a grade active_difficulty()==null
+var _solo_interactive_grade: String = SoloGrade.base_preset(SoloGrade.load_saved())  # the saved ladder grade's
+                                                  # preset (grill 25.09.2026); default Albtraum = "nachtmahr".
+                                                  # WITHOUT a grade active_difficulty()==null
                                                   # → the naive baseline AI (no position solver, no knobs).
+var _solo_grade_logged := ""   # the grade line this game already logged ("" = none yet)
 var _solo_opponent_brain: Dictionary = {}  # the opponent the game really runs (GameRecordCollector.opponent_brain),
                                            # set with the "opponent:" line; {} = no AI seat graded
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
@@ -1915,6 +1917,17 @@ func _solo_apply_difficulty() -> void:
 				"core" if SoloController._move_seam_on() else "gdscript"])
 	for pid in solo_ai_slots:   # Human slots stay human; explicit arena grades above take precedence.
 		solo_controller.set_difficulty(int(pid), SoloDifficulty.for_grade(interactive_grade, _solo_arena_seed))
+	_solo_log_grade()
+
+
+## Grill 25.09.2026 (every applied rule logs): once the game is PLAYING, one battle-log line names the
+## grade and the brain NACHTMAHR plays with; again only when that changes (a new game resets it).
+func _solo_log_grade() -> void:
+	var line := SoloGrade.start_line(_solo_opponent_brain, OS.get_name() == "macOS")
+	if opr_army_manager == null or opr_army_manager.is_deployment_phase() or line.is_empty() or line == _solo_grade_logged:
+		return
+	_solo_grade_logged = line
+	_log_rule_event(BattleLog.Category.GENERAL, line, true)
 
 
 ## Point the controller at `slot` as the acting AI and the OTHER slot as its enemy — main's combat helpers
@@ -16145,7 +16158,7 @@ func _refresh_solo_panel() -> void:
 	solo_panel_box.add_child(dev_cb)
 	# Difficulty selector REMOVED (maintainer 2026-07-17): while we train NACHTMAHR to be as strong as
 	# possible it always plays at maximum (Albtraum) — no grade picker to clutter the panel. The grade is
-	# pinned to _solo_interactive_grade ("albtraum"); the selector + downshift return in a later release.
+	# read from the saved solo_grade setting (SoloGrade, default Albtraum); the selector returns next.
 	for pid in pids:
 		var army = opr_army_manager.armies[pid]
 		var cb := CheckButton.new()
@@ -16572,6 +16585,8 @@ func _on_start_game_pressed() -> void:
 func _on_game_phase_changed(_phase: int) -> void:
 	_sync_move_trails_deployment()
 	_update_game_phase_ui()
+	_solo_grade_logged = ""   # every phase change opens a new game's grade line
+	_solo_log_grade()
 
 
 ## The host broadcast the authoritative game phase (host applies it here too). Apply it to the army

@@ -114,6 +114,12 @@ const PRESETS := {
 	"planner_v0_both": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "pool1_rollout": true, "hero_fold": true},
 	# NML-1073 M5: table-fidelity knobs default on, same as planner_v0 (see above).
 	"planner_v2": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "eval_fit": true, "playout_search": true, "pool1_rollout": true, "hero_fold": true},
+	# The difficulty ladder (grill 25.09.2026, SoloGrade): the three lower grades are tree presets with
+	# the documented rekrut / veteran / kriegsherr knob vectors (docs/SOLO_AI_RULES_COVERAGE.md). NEW keys,
+	# so the legacy names keep resolving to the ceiling for every arena tool and saved invocation.
+	"daemmerung": {"grade": Grade.REKRUT, "ev_noise": 0.40, "rule_exploitation": 0.0, "mission_focus": 0.35, "coordination": 0.0, "persistence": 0.0, "lookahead": false, "placement": "rulebook"},
+	"zwielicht": {"grade": Grade.VETERAN, "ev_noise": 0.15, "rule_exploitation": 0.5, "mission_focus": 0.70, "coordination": 0.60, "persistence": 0.5, "lookahead": false, "placement": "rulebook"},
+	"finsternis": {"grade": Grade.KRIEGSHERR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": false, "placement": "rulebook"},
 }
 
 ## Legacy grade names (old harness scripts, saved arena invocations, docs) all resolve to
