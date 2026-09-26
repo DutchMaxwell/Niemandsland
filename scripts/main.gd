@@ -610,6 +610,7 @@ func _ready() -> void:
 
 	# Connect Graphics Settings UI
 	graphics_quality_option.item_selected.connect(_on_graphics_quality_changed)
+	DropdownPlacement.keep_button_clear(graphics_quality_option)
 	# Set initial selection based on current preset (UI index matches enum directly)
 	graphics_quality_option.selected = GraphicsSettings.current_preset
 
@@ -16297,6 +16298,7 @@ func _refresh_solo_panel() -> void:
 	solo_mission_option.select(mission_idx)
 	solo_mission_option.item_selected.connect(func(idx: int) -> void:
 		_solo_mission_id = str(solo_mission_option.get_item_metadata(idx)))
+	DropdownPlacement.keep_button_clear(solo_mission_option)
 	solo_panel_box.add_child(solo_mission_option)
 	var deploy_btn := Button.new()
 	deploy_btn.text = "Start Deployment"
@@ -16331,6 +16333,7 @@ func _solo_grade_option() -> OptionButton:
 	opt.item_selected.connect(func(idx: int) -> void:
 		show_closed.call(str(opt.get_item_metadata(idx)))
 		_on_solo_grade_selected(str(opt.get_item_metadata(idx))))
+	DropdownPlacement.keep_button_clear(opt)
 	return opt
 
 
