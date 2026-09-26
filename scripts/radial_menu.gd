@@ -461,6 +461,10 @@ static func solo_combat_items(game_unit: GameUnit = null) -> Array[RadialMenuIte
 	if game_unit != null and _spotter_member_of(game_unit) != null:
 		out.append(RadialMenuItem.new("solo_spot", "Spot", "◎", true,
 			"Precision Spotter: pick an enemy within 30\" line of sight — on 4+ a marker lands; attackers may remove markers for +1 to hit each"))
+	# D22 (NML-984): the once-per-game Speed Feat is the player's to spend — one click, this activation.
+	if game_unit != null and not SoloController.unspent_speed_feats(game_unit).is_empty():
+		out.append(RadialMenuItem.new("solo_speed_feat", "Speed Feat (once per game)", "SF", true,
+			"Speed Feat: spend the once-per-game move bonus for this activation — Advance and Rush/Charge grow at once. Cannot be undone."))
 	# Delayed Action (wave 5) — the "Pass Turn" primitive. Offered on every carrier, NEVER hidden when
 	# the condition happens to fail: an entry that vanishes reads like a missing rule, so an illegal
 	# pass is refused in the battle log with the measured counts instead (#224 transparency doctrine).

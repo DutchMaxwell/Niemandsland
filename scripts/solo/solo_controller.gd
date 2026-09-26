@@ -8694,6 +8694,23 @@ static func delayed_action_member_of(gu: GameUnit) -> GameUnit:
 	return null
 
 
+## D22 (NML-984): the Speed Feat family entries (Quick primitive with `uses_per_game`) the unit has
+## NOT spent yet. The latch is the one NACHTMAHR's own endgame spend writes, so the radial entry, the
+## AI and the act ledger's feats_used all read one flag.
+static func unspent_speed_feats(gu: GameUnit) -> Array:
+	var out: Array = []
+	for e in RulesRegistry.unit_rules_of_primitive(gu, "Quick"):
+		var ed := e as Dictionary
+		if int((ed.get("params", {}) as Dictionary).get("uses_per_game", 0)) > 0 \
+				and not bool(gu.unit_properties.get(speed_feat_flag(str(ed["name"])), false)):
+			out.append(ed)
+	return out
+
+
+static func speed_feat_flag(rule_name: String) -> String:
+	return "speed_feat_used_%s" % rule_name.to_snake_case()
+
+
 ## The verdict on one pass attempt. "" = the pass is legal; anything else is the REASON it is not,
 ## ready to be printed. Transparency doctrine (#224): the radial entry is offered even when the
 ## rule cannot be used right now, and the refusal explains itself instead of vanishing from the menu.
