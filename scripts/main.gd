@@ -7700,12 +7700,17 @@ func _solo_majority_in_cover(unit: GameUnit) -> bool:
 	var models: Array = unit.get_alive_models()
 	if models.is_empty():
 		return false
+	# D15 (p.11): a multi-model unit's model counts only when its whole base is inside ("fully inside"); a
+	# single-model unit (one model as built, not one survivor of a squad) keeps the centre probe = "mostly inside".
+	var single := unit.models.size() <= 1
+	var probe := Callable(terrain_overlay, "get_terrain_at_world_position")
 	var n := 0
 	for m in models:
 		var node: Node3D = (m as ModelInstance).node
 		if node == null or not is_instance_valid(node):
 			continue
-		if TerrainRules.gives_cover(terrain_overlay.get_terrain_at_world_position(node.global_position)):
+		if TerrainRules.base_fully_in_cover(node.global_position,
+				0.0 if single else SoloController.model_base_radius_m(m as ModelInstance), probe):
 			n += 1
 	return n * 2 > models.size()
 

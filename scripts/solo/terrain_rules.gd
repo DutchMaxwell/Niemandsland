@@ -54,6 +54,27 @@ static func gives_cover(t: int) -> bool:
 	return t == TerrainType.RUINS or t == TerrainType.FOREST
 
 
+## Points on a model's base edge probed besides its centre for "fully inside" (8 = every 45 degrees).
+const BASE_RIM_SAMPLES := 8
+
+
+## Cover (GF/AoF v3.5.1 p.11): true when the WHOLE base — the centre plus BASE_RIM_SAMPLES points on its edge —
+## stands on cover terrain ("fully inside a piece of cover terrain"). `type_at` maps a world position (Vector3,
+## metres) to a TerrainType. The centre goes first: most models stand in the open and cost one probe.
+## radius_m <= 0 is the centre probe alone = "mostly inside" for single-model units (against a straight edge the
+## centre is inside exactly when at least half of the base is).
+static func base_fully_in_cover(pos: Vector3, radius_m: float, type_at: Callable) -> bool:
+	if not gives_cover(int(type_at.call(pos))):
+		return false
+	if radius_m <= 0.0:
+		return true
+	for i in BASE_RIM_SAMPLES:
+		var a := TAU * float(i) / float(BASE_RIM_SAMPLES)
+		if not gives_cover(int(type_at.call(pos + Vector3(cos(a), 0.0, sin(a)) * radius_m))):
+			return false
+	return true
+
+
 ## AREA terrain (Forests + Ruins): you see INTO and OUT OF it, but not completely THROUGH it (GF/AoF v3.5.1
 ## p.12). Containers are solid Impassable+Blocking buildings — NOT area terrain, so they hard-block LOS and
 ## the see-in/out zone exception never applies to them (they publish a SOLID volume).
