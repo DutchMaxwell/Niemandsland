@@ -139,6 +139,11 @@ func test_the_menu_button_opens_and_closes_the_column(timeout := 120000) -> void
 	# The column opens under the menu button, at the left edge.
 	assert_float(_scroll().get_global_rect().position.y).is_greater_equal(menu.get_global_rect().end.y)
 	assert_float(_scroll().get_global_rect().position.x).is_less_equal(menu.get_global_rect().position.x)
+	# The column keeps the width the scene gives it: no menu line pushes it wider.
+	var width: float = _scroll().offset_right - _scroll().offset_left
+	assert_float(_scroll().get_combined_minimum_size().x).override_failure_message(
+		"a menu line needs %d px, the column has %d" % [_scroll().get_combined_minimum_size().x, width]).is_less_equal(width)
+	assert_float(_scroll().size.x).is_equal_approx(width, 0.5)
 	await _click(menu)
 	assert_str(menu.text).is_equal("☰")
 	assert_int(_scroll().mouse_filter).override_failure_message("the closing menu dropped its clicks early") \
@@ -157,6 +162,26 @@ func test_every_control_of_rows_2_and_4_is_in_the_open_menu(timeout := 120000) -
 	# End Battle reads as the dangerous one: its text is red.
 	var red: Color = _button("End Battle - To Main Menu").get_theme_color(&"font_color")
 	assert_bool(red.r > red.g + 0.3 and red.r > red.b + 0.3).override_failure_message("End Battle is not red: %s" % red).is_true()
+
+
+func test_rows_2_and_4_wear_the_house_style_and_the_other_sections_keep_theirs(timeout := 120000) -> void:
+	await _open_menu()
+	for t: String in BUTTONS:
+		var want: StringName = HouseStyle.DANGER_BUTTON if t.begins_with("End Battle") else HouseStyle.BUTTON
+		assert_str(String(_button(t).theme_type_variation)).override_failure_message("%s is not a house-style line" % t) \
+			.is_equal(String(want))
+		assert_object((_button(t).get_parent() as Control).theme).override_failure_message("%s's section is not in the house theme" % t) \
+			.is_same(HouseStyle.theme())
+	assert_str(String(_graphics().theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	for t: String in LABELS:
+		assert_str(String(_label(t).theme_type_variation)).is_equal(String(HouseStyle.EYEBROW))
+	# PR 2 and 3: multiplayer, solo and deployment keep today's look — no house style reaches them.
+	for section: String in ["NetworkPanel", "DeploymentPanel"]:
+		var box := _scroll().get_node("LeftPanelVBox/" + section) as Control
+		for n: Node in [box] + box.find_children("*", "Control", true, false):
+			assert_str(String((n as Control).theme_type_variation)).override_failure_message("%s/%s was restyled" % [section, n.name]).is_empty()
+			assert_object((n as Control).theme).override_failure_message("%s/%s wears the house theme" % [section, n.name]) \
+				.is_not_same(HouseStyle.theme())
 
 
 func test_inventory_check_names_a_removed_control(timeout := 120000) -> void:
