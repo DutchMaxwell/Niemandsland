@@ -319,3 +319,56 @@ static func _get_max_spread_pair(models: Array[ModelInstance]) -> Dictionary:
 	return result
 
 
+# ===== What-if table (casualty removal) =====
+
+## The pairwise links of a FIXED model set, measured ONCE, so a caller can ask "would the unit still be coherent
+## without these models?" per candidate without re-measuring (SoloController.chain_casualty_order asks it for every
+## body it might remove). Same rule as check_unit_coherency: one connected 1" chain (3" across elevation) and every
+## pair within `max_chain`. Distances stay doubles so a model placed exactly on 1.000" reads like the checker reads it.
+class LinkTable:
+	var n := 0
+	var valid := true   # false when a pair could not be measured (a node is gone) - callers then skip the what-if
+	var _gap := PackedFloat64Array()   # n*n edge-to-edge inches
+	var _linked := PackedByteArray()   # n*n, 1 = the pair is a coherency link
+
+	func _init(models: Array[ModelInstance]) -> void:
+		n = models.size()
+		_gap.resize(n * n)
+		_linked.resize(n * n)
+		for i in range(n):
+			for j in range(i + 1, n):
+				var d := CoherencyChecker._distance_between_models(models[i], models[j])
+				if is_inf(d):
+					valid = false
+				_gap[i * n + j] = d
+				_gap[j * n + i] = d
+				var limit := CoherencyChecker.COHERENCY_DISTANCE_INCHES
+				if CoherencyChecker._is_elevated_different(models[i], models[j]):
+					limit = CoherencyChecker.ELEVATED_COHERENCY_INCHES
+				var linked := 1 if d <= limit else 0
+				_linked[i * n + j] = linked
+				_linked[j * n + i] = linked
+
+	## True when the models NOT in `gone` ({table index: true}) still form one chain within `max_chain` of each other.
+	func coherent_without(gone: Dictionary, max_chain: float) -> bool:
+		var alive: Array[int] = []
+		for i in range(n):
+			if not gone.has(i):
+				alive.append(i)
+		if alive.size() <= 1:
+			return true
+		var seen := {alive[0]: true}
+		var queue: Array[int] = [alive[0]]
+		while not queue.is_empty():
+			var cur: int = queue.pop_back()
+			for other in alive:
+				if not seen.has(other) and _linked[cur * n + other] == 1:
+					seen[other] = true
+					queue.append(other)
+		if seen.size() < alive.size():
+			return false
+		for a in range(alive.size()):
+			for b in range(a + 1, alive.size()):
+				if _gap[alive[a] * n + alive[b]] > max_chain:
+					return false
+		return true
