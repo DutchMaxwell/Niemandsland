@@ -9782,19 +9782,23 @@ func majority_in_cover(unit: GameUnit) -> bool:
 	var models := unit.get_alive_models()
 	if models.is_empty():
 		return false
+	# D15: a multi-model unit's model counts only when its whole base is inside ("fully inside"); a single-model
+	# unit (one model as built, not one survivor of a squad) keeps the centre probe = "mostly inside".
+	var single := unit.models.size() <= 1
 	var n := 0
 	for m in models:
 		var node := (m as ModelInstance).node
 		if node != null and is_instance_valid(node) \
-				and TerrainRules.gives_cover(int(terrain_type_at.call((node as Node3D).global_position))):
+				and TerrainRules.base_fully_in_cover((node as Node3D).global_position,
+					0.0 if single else model_base_radius_m(m as ModelInstance), terrain_type_at):
 			n += 1
 	return n * 2 > models.size()   # strict majority (p.11)
 
 
 ## TC-023 (Takedown, GF v3.5.1 p.14: the attack "is resolved as if it was a unit of [1]" and the other
 ## models "don't … provide cover to the target model in the unit") — ONE model's own cover state. It is
-## deliberately the SAME centre-point probe majority_in_cover folds over its unit, so the single-model
-## answer and the majority answer can never contradict each other on the same terrain.
+## deliberately the centre-point probe = p.11's "mostly inside" for a single-model unit (D15: majority_in_cover
+## asks a multi-model unit's models to be FULLY inside, so a straddling model can differ between the two).
 ## This is the SHIPPED reader, not a test mirror: main._solo_model_in_cover (the Takedown resolution's only
 ## cover source) is a pure delegate to it, so the regression test below guards the code the dice run on.
 func model_in_cover(m: ModelInstance) -> bool:
