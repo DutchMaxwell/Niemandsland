@@ -47,6 +47,33 @@ func test_combined_different_teams_and_half_b_command_survive() -> void:
 	assert_array(unit.models[2].properties.get("equipment", [])).is_equal(["Banner"])
 	assert_array(unit.models[3].properties.get("equipment", [])).is_equal(["Musician"])
 
+## One real Ratmen Warriors half (the `drill` export: Weapon Team = Tough(3) on ONE model) re-labelled as a
+## combined half — the shape `_merge_combined_units` folds. `join_to` null = the anchor half.
+func _half(selection_id: String, join_to: Variant) -> OPRApiClient.OPRUnit:
+	var fixtures: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
+		"res://test/fixtures/ratmen_warriors_export.json"))
+	var raw: Dictionary = (fixtures["drill"] as Dictionary).duplicate(true)
+	raw["combined"] = true
+	raw["selectionId"] = selection_id
+	raw["joinToUnit"] = join_to
+	return auto_free(OPRApiClient.new())._parse_tts_unit(raw, "aof", true)
+
+func test_two_half_merge_keeps_the_teams_tough_on_the_team_models_only() -> void:
+	# D13 / NML-1107: the ONLY per-model Tough on a multi-model unit in the real AoF/GF army books is a Weapon
+	# Team (item content Tough(3), "exactly 1" model — 16 options, 41 books). Fold two REAL halves and prove the
+	# squad does not inherit it: no unit-level Tough line, wounds 3 on the two team models, 1 on the other 18.
+	var client: OPRApiClient = auto_free(OPRApiClient.new())
+	var halves: Array[OPRApiClient.OPRUnit] = [_half("W-A", null), _half("W-B", "W-A")]
+	var merged := client._merge_combined_units(halves, true)
+	assert_int(merged.size()).is_equal(1)
+	assert_int(merged[0].size).is_equal(20)
+	var tough_lines: Array = merged[0].special_rules.filter(func(r): return str(r).begins_with("Tough("))
+	assert_array(tough_lines).is_empty()
+	var unit := _models(merged[0])
+	var wounds: Array = unit.models.map(func(m): return m.wounds_max)
+	assert_int(wounds.count(3)).is_equal(2)
+	assert_int(wounds.count(1)).is_equal(18)
+
 func test_combined_merge_preserves_different_item_profiles() -> void:
 	var parsed := _parse("mixed")
 	var teams: Array = parsed.equipment_items.filter(func(i): return i.name == "Weapon Team")
