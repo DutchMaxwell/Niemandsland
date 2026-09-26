@@ -7155,10 +7155,13 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 	return landed
 
 
-## Deadly(X) landing (GF v3.5.1 p.14, no carry-over): each unsaved wound deals X to the alive model with
-## the most remaining wounds (defender's casualty-minimising spread), capped at that model — excess lost.
+## Deadly(X) landing (GF v3.5.1 p.13, no carry-over): each unsaved wound deals X to ONE model, capped at what
+## that model has left — excess lost. D17 (Q8): a wound goes first to the already-wounded Tough model (p.15,
+## automatic — SoloController.deadly_pick), a joined hero last; when a FRESH model is about to be hit the
+## DEFENDER picks: a human defender clicks the model through the same prompt as for normal wounds (#172), the
+## AI defender / batch / MP take the defender-optimal casualty order.
 ## Regeneration rolls on the RAW unsaved wounds first (before the ×X), then the survivors multiply. Returns
-## the wounds actually dealt (the melee comparison + summary). Own models only (hero spill = documented edge).
+## the wounds actually dealt (the melee comparison + summary).
 func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: int,
 		regenable_unsaved: int, regen_proof_unsaved: int) -> int:
 	var surviving: int = maxi(regen_proof_unsaved, 0) + await _solo_apply_regeneration(target, regenable_unsaved)
@@ -7178,12 +7181,39 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 	var died_models: Array[ModelInstance] = []
 	var on_died := func(m: ModelInstance) -> void:
 		died_models.append(m)
-	var dealt: int = SoloController.apply_deadly_wounds(target, surviving, deadly_x, on_changed, on_died)
+	# D17: per wound — forced onto a wounded Tough model, else the defender picks a fresh one (a human clicks it).
+	var acc := {"dealt": 0, "forced": 0}
+	var take := func(_pu: GameUnit, mi: ModelInstance) -> void:
+		acc["dealt"] += SoloController.apply_deadly_hit(mi, deadly_x, on_changed, on_died)
+	for _w in range(surviving):
+		var pick: Dictionary = SoloController.deadly_pick(target)
+		if pick.is_empty():
+			break   # everything in the joined chain is dead — the remaining Deadly wounds are wasted
+		if bool(pick["forced"]):
+			acc["forced"] += 1
+		elif _solo_wound_choice_matters(target, 1):
+			var left: int = await _solo_prompt_wound_allocation(target, 1, pid, take, "Deadly(%d): " % deadly_x)
+			if left == 0:
+				continue   # the defender clicked the model — the hit is already applied
+		take.call(pick["unit"], (pick["unit"] as GameUnit).models[int(pick["index"])])
+	var dealt: int = int(acc["dealt"])
 	if battle_log != null and dealt > 0:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d unsaved ×%d, no carry-over → %d wound%s dealt (%s)" % [
 			deadly_x, surviving, deadly_x, dealt, ("" if dealt == 1 else "s"), weapon_name], true)
 		_solo_rule_float(target, "Deadly(%d) → %d" % [deadly_x, dealt], Color(1.0, 0.5, 0.4))
-	await _solo_remove_dead_models(target, died_models, pid)
+		if int(acc["forced"]) > 0:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d wound%s finish the already-wounded Tough model first (GF v3.5.1 p.15)" % [
+				deadly_x, int(acc["forced"]), ("" if int(acc["forced"]) == 1 else "s")], true)
+	# A joined hero's casualties are parked through the hero's OWN unit (its unit_id), like the normal wound path.
+	var died_by_owner := {}   # GameUnit -> Array[ModelInstance]
+	for m in died_models:
+		var owner_unit: GameUnit = (m.unit as GameUnit) if m.unit != null else target
+		if not died_by_owner.has(owner_unit):
+			var fresh: Array[ModelInstance] = []
+			died_by_owner[owner_unit] = fresh
+		(died_by_owner[owner_unit] as Array[ModelInstance]).append(m)
+	for owner_unit in died_by_owner:
+		await _solo_remove_dead_models(owner_unit, died_by_owner[owner_unit], pid)
 	return dealt
 
 
@@ -11812,8 +11842,10 @@ func _solo_wound_choice_matters(target: GameUnit, wounds: int) -> bool:
 ## #172 — the owner clicks their wounds onto their own models: LMB on a model of the
 ## joined chain = 1 wound there (applied immediately through the same visible seams as
 ## the auto path), RMB or the strip button = auto-allocate the rest. Returns the count
-## left for the auto path (0 when every wound was clicked).
-func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int) -> int:
+## left for the auto path (0 when every wound was clicked). D17: `apply_pick` (Callable(unit, model)) replaces
+## the one-wound apply for a click — Deadly lands X wounds on the clicked model; `label` prefixes the prompt.
+func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int, apply_pick: Callable = Callable(),
+		label: String = "") -> int:
 	var chain: Array = _solo_joined_chain(target)
 	_solo_model_pick = {"unit": target, "chain": chain, "recommended": {}, "outcome": []}
 	var outcome: Array = _solo_model_pick["outcome"]
@@ -11821,10 +11853,10 @@ func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int) -> i
 	var left := wounds
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s: allocate %d wound%s — CLICK a model per wound; right-click auto-allocates the rest" % [
-			target.get_name(), wounds, ("" if wounds == 1 else "s")], false)
+			"%s%s: allocate %d wound%s — CLICK a model per wound; right-click auto-allocates the rest" % [
+			label, target.get_name(), wounds, ("" if wounds == 1 else "s")], false)
 	_solo_deploy_ui_show(
-		"Allocate %d wound%s to %s — click a model per wound." % [wounds, ("" if wounds == 1 else "s"), target.get_name()],
+		"%sAllocate %d wound%s to %s — click a model per wound." % [label, wounds, ("" if wounds == 1 else "s"), target.get_name()],
 		"Auto-allocate the rest",
 		func() -> void: skipped.append(true))
 	while left > 0:
@@ -11852,10 +11884,13 @@ func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int) -> i
 					pu.get_name(), target.get_name()], false)
 			continue
 		left -= 1
-		await _solo_apply_picked_wound(pu, mi, pid)
+		if apply_pick.is_valid():
+			apply_pick.call(pu, mi)
+		else:
+			await _solo_apply_picked_wound(pu, mi, pid)
 		if left > 0:
 			_solo_deploy_ui_show(
-				"Allocate %d wound%s to %s — click a model per wound." % [left, ("" if left == 1 else "s"), target.get_name()],
+				"%sAllocate %d wound%s to %s — click a model per wound." % [label, left, ("" if left == 1 else "s"), target.get_name()],
 				"Auto-allocate the rest",
 				func() -> void: skipped.append(true))
 	_solo_deploy_ui_hide()

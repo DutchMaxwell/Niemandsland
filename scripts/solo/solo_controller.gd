@@ -8950,29 +8950,55 @@ static func apply_wounds_to_model(unit: GameUnit, idx: int, wounds: int, on_chan
 	return remaining
 
 
-## Deadly(X) applied to game models (GF v3.5.1 p.14): each unsaved wound hits the alive model with the
-## MOST remaining wounds (defender's casualty-minimising spread), dealing X capped at that model — no
-## carry-over. Returns the wounds actually dealt (for the melee comparison + summary). Own models only
-## (attached-hero Deadly spill is a documented edge — heroes are their own unit here).
+## D17 (Q8, GF v3.5.1 p.13 Deadly + p.15 Tough) — where the NEXT Deadly wound lands: {"unit": GameUnit, "index": int,
+## "forced": bool}, {} once nothing in the joined chain is alive. The unit's own models come first and a joined hero
+## only when none of them is alive (p.15 "heroes must be assigned wounds last, even if already wounded"). Inside
+## the unit `casualty_order` ranks the models: an already-wounded Tough model first, most wounds taken first
+## ("continue to put wounds on the tough model with most wounds … until it is killed"), then the defender-optimal
+## removal order. `forced` = that first model is a wounded Tough one — the wound MUST go there, nobody chooses;
+## otherwise a FRESH model is about to be hit and the DEFENDER picks (a human clicks, the AI takes this order).
+static func deadly_pick(unit: GameUnit) -> Dictionary:
+	if unit == null:
+		return {}
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain.append_array(unit.get_attached_heroes())
+	for member in chain:
+		var gu := member as GameUnit
+		if gu == null or gu.get_alive_count() <= 0:
+			continue
+		var idx := int(casualty_order(gu)[0])
+		var m: ModelInstance = gu.models[idx]
+		return {"unit": gu, "index": idx, "forced": int(m.wounds_max) > 1 and int(m.wounds_current) < int(m.wounds_max)}
+	return {}
+
+
+## ONE Deadly(X) wound on `victim` (p.13): X wounds capped at what the model has left — the excess is lost, no
+## carry-over. Returns the wounds actually dealt.
+static func apply_deadly_hit(victim: ModelInstance, deadly_x: int, on_changed: Callable, on_died: Callable) -> int:
+	var absorb: int = mini(maxi(1, deadly_x), int(victim.wounds_current))
+	var died := false
+	for _d in range(absorb):
+		died = victim.apply_damage(1)
+	if died and on_died.is_valid():
+		on_died.call(victim)
+	elif on_changed.is_valid():
+		on_changed.call(victim)
+	return absorb
+
+
+## Deadly(X) applied to game models (GF v3.5.1 p.13): each unsaved wound lands where `deadly_pick` says (the
+## wounded Tough model first, then the defender-optimal order, a joined hero last), dealing X capped at that
+## model — no carry-over. This is the AUTOMATIC allocation (the AI defender, batch runs, tests); a human
+## defender's fresh hits are clicked in main._solo_land_deadly_wounds. Returns the wounds actually dealt (for
+## the melee comparison + summary).
 static func apply_deadly_wounds(unit: GameUnit, unsaved: int, deadly_x: int, on_changed: Callable, on_died: Callable) -> int:
-	var x: int = maxi(1, deadly_x)
 	var dealt := 0
 	for _w in range(maxi(0, unsaved)):
-		var best: ModelInstance = null
-		for m in unit.models:
-			if m != null and m.is_alive and (best == null or int(m.wounds_current) > int(best.wounds_current)):
-				best = m
-		if best == null:
-			break   # unit wiped — the remaining Deadly wounds are wasted
-		var absorb: int = mini(x, int(best.wounds_current))
-		dealt += absorb
-		var died := false
-		for _d in range(absorb):
-			died = best.apply_damage(1)
-		if died and on_died.is_valid():
-			on_died.call(best)
-		elif on_changed.is_valid():
-			on_changed.call(best)
+		var pick := deadly_pick(unit)
+		if pick.is_empty():
+			break   # everything in the joined chain is dead — the remaining Deadly wounds are wasted
+		dealt += apply_deadly_hit((pick["unit"] as GameUnit).models[int(pick["index"])], deadly_x, on_changed, on_died)
 	return dealt
 
 
