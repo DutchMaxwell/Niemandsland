@@ -10,12 +10,18 @@
 ; (F7: the linux library lands in the one workspace target dir, core/target/release)
 ; and are NOT committed.
 ;
+; MACOS (universal) — built ONLY by the macos-14 job of .github/workflows/build.yml (the
+; tract-linalg assembly kernels need Apple's toolchain, so there is no cross-build from
+; Linux): both darwin triples with --features onnx-tract, lipo'd into ONE universal dylib
+; at core/target/macos/libnml_core_godot.dylib (.github/actions/build-core-extension,
+; target "macos"). The export then places it in Contents/Frameworks of the .app.
+;
 ; Maintainer decision 11.09.2026 (coreship): the extension SHIPS inside the Linux
 ; AND Windows game exports, DORMANT — its presence alone changes no game byte. Both
 ; wake-up seams (BattleSim.core_enabled() for the search/move seams, the
 ; NML_OBJECTIVE_DOCTRINE rung for placement) stay behind their explicit env
-; opt-in, and no difficulty preset arms them by default. macOS stays out for this
-; work.
+; opt-in, and no difficulty preset arms them by default. Maintainer decision
+; (board D40, 26.09.2026): macOS ships the core too, so NACHTMAHR plays Erlkönig there.
 ;
 ; THIS FILE IS A TEMPLATE, not the live manifest. Godot only loads files
 ; literally named *.gdextension, so this .in copy is inert on a plain checkout.
@@ -35,3 +41,5 @@ linux.debug.x86_64 = "res://core/target/release/libnml_core_godot.so"
 linux.release.x86_64 = "res://core/target/release/libnml_core_godot.so"
 windows.debug.x86_64 = "res://core/target/x86_64-pc-windows-gnu/release/nml_core_godot.dll"
 windows.release.x86_64 = "res://core/target/x86_64-pc-windows-gnu/release/nml_core_godot.dll"
+macos.debug = "res://core/target/macos/libnml_core_godot.dylib"
+macos.release = "res://core/target/macos/libnml_core_godot.dylib"
