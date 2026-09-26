@@ -1,206 +1,252 @@
 class_name CardFace
 extends RefCounted
-## Builds the unit-card CONTENT in the shipped Tactical-HUD design language (docs/archive/
-## AAA_UI_PLAYBOOK.md — sleek dark-navy base, cyan accents, amber warnings). One builder feeds BOTH the
-## presented card and the compact strip card (Handover D7), so the layout stays consistent. Pure view:
-## it takes a plain data Dictionary and returns a Control; it never reads game state directly.
+## Builds the unit-card CONTENT in the house style (scripts/hud/house_style.gd — the dice window's design,
+## maintainer 23.09.: a visual alignment only; every word, number, tag, rule, state and warning stays).
+## One builder feeds BOTH the presented card and the compact strip card (Handover D7), so the layout
+## stays consistent. Pure view: it takes a plain data Dictionary and returns a Control; it never reads
+## game state directly. Nothing is trimmed: long names and weapon names wrap, links wrap inside the card.
 ##
 ## data = { name:String, points:int, quality:int, defense:int, alive:int, total:int,
 ##          activated:bool, fatigued:bool, shaken:bool, caster:bool, coherent:bool, dead:bool,
 ##          player_color:Color }
 
-# === Palette (Tactical-HUD) ===
-const NAVY := Color(0.10, 0.13, 0.19)
-const NAVY_HI := Color(0.16, 0.20, 0.28)
-const CYAN := Color(0.36, 0.80, 0.92)
-const AMBER := Color(0.96, 0.62, 0.18)
-const RED := Color(0.95, 0.36, 0.31)
-const TEXT := Color(0.90, 0.93, 0.97)
-const TEXT_DIM := Color(0.58, 0.64, 0.72)
-const CHIP_OFF := Color(0.22, 0.26, 0.33)
-const WRAP_FLOOR := 72.0   # the narrowest a wrapping name gets before the card has laid out
+const PAD := HouseStyle.PAD_PANEL
+const PAD_COMPACT := 10
+const NAME_FLOOR := 96      # a wrapping label is measured at width 0 first — never below this
+const WEAPON_FLOOR := 72
+const STAT_CAPTION_PX := 10   # QUALITY / DEFENSE / MODELS / WOUNDS under a stat box's value
+const STAT_PAD_X := 6
 
 
 ## Presented card content (the big card). `on_action` (optional) is called with the action kind string
 ## ("activation"/"fatigued"/"shaken"/"casts"/"wounds"/"details"/"revive") when an action chip is pressed;
-## the dock connects it to _card_action. Left empty in the dev preview so the chips are inert.
+## the dock connects it to _card_action. Left empty for strip cards (and the dev preview): the chips are
+## then plain display pills and the card is the compact strip layout. `card_w` is the card's width.
 static func build_presented(data: Dictionary, on_action: Callable = Callable(), collapse_weapons: bool = false,
 		card_w: float = 320.0) -> Control:
-	var inner: float = card_w - 24.0   # the card's content width (12 px margins): links wrap inside it
+	var compact := not on_action.is_valid()
+	var pad: int = PAD_COMPACT if compact else PAD
+	var inner: float = card_w - 2.0 * pad
 	var margin := MarginContainer.new()
+	margin.theme = HouseStyle.theme()
 	for s in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + s, 12)
+		margin.add_theme_constant_override("margin_" + s, pad)
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 8)
+	col.add_theme_constant_override("separation", HouseStyle.GAP_ROW if compact else HouseStyle.GAP_SECTION)
 	margin.add_child(col)
+	var dead := bool(data.get("dead", false))
 
-	# Header band: name (auto-fit + wrap, never cut) + points.
+	# Header: the name (a step smaller past 20 characters, wrapping — never trimmed) and the points.
 	var header := HBoxContainer.new()
-	var name_lbl := _fit_name(str(data.get("name", "Unit")), 19, 15, 20)
+	header.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+	var name_text := str(data.get("name", "Unit"))
+	var name_lbl := _label(name_text, (19 if name_text.length() <= 20 else 15) - (2 if compact else 0), HouseStyle.INK)
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_lbl.custom_minimum_size = Vector2(NAME_FLOOR, 0)
 	header.add_child(name_lbl)
-	header.add_child(_label("%d pts" % int(data.get("points", 0)), 14, TEXT_DIM))
+	var pts := _label("%d pts" % int(data.get("points", 0)), 13 if compact else 14, HouseStyle.GOLD)
+	pts.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	header.add_child(pts)
 	col.add_child(header)
-	col.add_child(_rule(CYAN, 0.28, 1.0))   # subtle header divider (bus 027)
+	# Back from the retired detail card (presented card only): the base size under the name and the
+	# heroes joined to this unit.
+	if not compact:
+		for key in ["base", "joined"]:
+			var line := str(data.get(key, ""))
+			if not line.is_empty():
+				var l := HouseStyle.label(line, HouseStyle.CAPTION)
+				l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				l.custom_minimum_size = Vector2(NAME_FLOOR, 0)
+				col.add_child(l)
 
-	# Stat row: Q + D die-chips, alive counter pushed right.
-	var stats := HBoxContainer.new()
-	stats.add_theme_constant_override("separation", 8)
-	stats.add_child(_die_chip("Q", "%d+" % int(data.get("quality", 0))))
-	stats.add_child(_die_chip("D", "%d+" % int(data.get("defense", 0))))
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stats.add_child(spacer)
+	# Stats: Quality, Defense and the alive counter (red when destroyed, warn when wounded).
 	var alive := int(data.get("alive", 0))
 	var total := int(data.get("total", 0))
-	# Counter: red when destroyed, amber when wounded, else normal.
-	var counter_color := TEXT
-	if bool(data.get("dead", false)) or alive == 0:
-		counter_color = RED
+	var counter_color := HouseStyle.INK
+	if dead or alive == 0:
+		counter_color = HouseStyle.DANGER
 	elif alive < total:
-		counter_color = AMBER
-	stats.add_child(_label("%d/%d" % [alive, total], 18, counter_color))
-	col.add_child(stats)
+		counter_color = HouseStyle.WARN
+	var q := "%d+" % int(data.get("quality", 0))
+	var d := "%d+" % int(data.get("defense", 0))
+	var count := "%d/%d" % [alive, total]
+	col.add_child(_stats_compact(q, d, count, counter_color) if compact
+		else _stats_boxes(q, d, count, counter_color, "" if dead else str(data.get("wounds", ""))))
 
-	# Status strip: the chips ARE the controls now (the old ▶Act/~Fat/!Shk/✚Wnd bar is gone). On the
-	# presented card (on_action wired) a click toggles the state / opens the wound or cast window; strip
-	# cards get plain display chips. HFlow so extra chips wrap instead of overflowing the card width.
+	# Status pills: on the presented card they ARE the controls (a click toggles the state / opens the
+	# wound or cast window); strip cards get display pills. A flow, so extra pills wrap.
 	var strip := HFlowContainer.new()
-	strip.add_theme_constant_override("h_separation", 6)
-	strip.add_theme_constant_override("v_separation", 4)
-	if bool(data.get("dead", false)):
-		strip.add_child(_status_chip("↺ Revive", false, CYAN, on_action, "revive"))
+	strip.add_theme_constant_override("h_separation", 5)
+	strip.add_theme_constant_override("v_separation", 6)
+	if dead:
+		strip.add_child(_status_chip("↺ Revive", false, HouseStyle.TONE_ACCENT, compact, on_action, "revive"))
 	else:
-		strip.add_child(_status_chip("Activated", bool(data.get("activated", false)), CYAN, on_action, "activation"))
-		strip.add_child(_status_chip("Fatigued", bool(data.get("fatigued", false)), AMBER, on_action, "fatigued"))
-		strip.add_child(_status_chip("Shaken", bool(data.get("shaken", false)), AMBER, on_action, "shaken"))
+		strip.add_child(_status_chip("Activated", bool(data.get("activated", false)), HouseStyle.TONE_GOLD, compact, on_action, "activation"))
+		strip.add_child(_status_chip("Fatigued", bool(data.get("fatigued", false)), HouseStyle.TONE_WARN, compact, on_action, "fatigued"))
+		strip.add_child(_status_chip("Shaken", bool(data.get("shaken", false)), HouseStyle.TONE_WARN, compact, on_action, "shaken"))
 		if bool(data.get("caster", false)):
-			strip.add_child(_status_chip("Caster", true, CYAN, on_action, "casts"))
+			strip.add_child(_status_chip("Caster", true, HouseStyle.TONE_ACCENT, compact, on_action, "casts"))
+			if not compact and not str(data.get("casts", "")).is_empty():
+				strip.add_child(_status_chip(str(data["casts"]), false, HouseStyle.TONE_ACCENT, compact))   # display only
 		if bool(data.get("woundable", false)):
-			strip.add_child(_status_chip("✚ Wounds", false, AMBER, on_action, "wounds"))
+			strip.add_child(_status_chip("✚ Wounds", false, HouseStyle.TONE_WARN, compact, on_action, "wounds"))
 	col.add_child(strip)
 
-	# Weapons block — one line per distinct weapon (name+count · RNG A· AP·), special rules on a small
-	# second line. data.weapons = [{name, meta, rules}] built by the caller from the SAME distributed-
-	# loadout aggregation the old UnitCard uses (D8 reuse), NOT re-derived here.
+	# Weapons — one row per distinct weapon (name+count · range, attacks, AP), its rules as links below.
+	# data.weapons = [{name, meta, rules}] from the dock's distributed-loadout aggregation (D8 reuse).
 	var weapons: Array = data.get("weapons", [])
-	if not weapons.is_empty() and not bool(data.get("dead", false)):
-		col.add_child(_rule(NAVY_HI))
+	if not weapons.is_empty() and not dead:
 		if collapse_weapons:
-			# Strip-size fallback (bus 033): a one-line weapon summary instead of the full block, so a
-			# dense strip stays legible. The full block shows on the focus card / on hover.
+			# Strip-size fallback (bus 033; no live caller): the weapon names on one wrapping line.
 			var names: Array[String] = []
 			for w in weapons:
 				names.append(str((w as Dictionary).get("name", "")))
-			var summary := _label("⚔ " + ", ".join(names), 11, TEXT_DIM)
-			_wrap(summary)   # never cut: the line wraps
+			var summary := _label("⚔ " + ", ".join(names), 11, HouseStyle.MUTED)
+			summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			summary.custom_minimum_size = Vector2(inner, 0)
 			col.add_child(summary)
 		else:
-			for w in weapons:
+			if not compact:
+				col.add_child(HouseStyle.label("WEAPONS", HouseStyle.EYEBROW))   # mockup heading (23.09.: allowed)
+			var list := VBoxContainer.new()
+			list.add_theme_constant_override("separation", 2 if compact else 3)
+			for i in weapons.size():
+				var w := weapons[i] as Dictionary
+				if i > 0 and not compact:
+					list.add_child(_rule(HouseStyle.LINE))
 				var row := HBoxContainer.new()
-				var nm := _label(str((w as Dictionary).get("name", "")), 12, TEXT)
+				row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+				var nm := _label(str(w.get("name", "")), 12 if compact else 13, HouseStyle.INK)
 				nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				_wrap(nm)   # a long weapon name wraps instead of losing its end to "…"
+				nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				nm.custom_minimum_size = Vector2(WEAPON_FLOOR, 0)
 				row.add_child(nm)
-				row.add_child(_label(str((w as Dictionary).get("meta", "")), 12, TEXT_DIM))
-				col.add_child(row)
-				var wr := str((w as Dictionary).get("rules", ""))
+				var meta := _label(str(w.get("meta", "")), 12 if compact else 13, HouseStyle.ACCENT)
+				meta.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+				row.add_child(meta)
+				list.add_child(row)
+				var wr := str(w.get("rules", ""))
 				if not wr.is_empty():
-					col.add_child(_weapon_rules_list(wr.split(", ", false), inner))
+					list.add_child(_weapon_rules_list(wr.split(", ", false), compact, inner))
+			col.add_child(list)
 
-	# Rules + Spells list — each name is a hover target (the dock wires meta_hover to the description
-	# tooltip + spell-range ring, bus 033). This absorbs the old detail Info card; there is no Info button.
-	if not bool(data.get("dead", false)):
-		var rules_rt := _rules_list(data, inner)
-		if rules_rt != null:
-			col.add_child(rules_rt)
+	# Rules + Spells — each name is a hover target (the dock wires its description tooltip and, for a
+	# spell, the range ring). This absorbs the old detail Info card; there is no Info button.
+	if not dead:
+		for part in _rules_list(data, compact, inner):
+			col.add_child(part)
 
-	# Amber coherency strip (only when out of coherency and not dead).
-	if not bool(data.get("coherent", true)) and not bool(data.get("dead", false)):
-		col.add_child(_warning_strip("⚠  Out of coherency"))
-
-	# (The old action bar is gone — its controls moved onto the interactive status chips above.)
+	# Warn strip (only when out of coherency and not dead).
+	if not bool(data.get("coherent", true)) and not dead:
+		col.add_child(_warning_strip("⚠  Out of coherency", compact))
 
 	return margin
 
 
-## The hoverable Rules (+ Spells) list as a RichTextLabel of [url] spans, named "RulesList" so the dock
-## can wire meta_hover_started/ended to descriptions + the spell-range ring. data.rules_list = Array of
-## rule-name Strings; data.spells = Array of {name, threshold}. Returns null when there is nothing to
-## show. Spell spans are keyed "spell:<name>".
-## One hover/click target for a rule or spell name: an underlined LinkButton carrying its lookup key in
-## meta "rule_meta". The dock connects mouse_entered/exited/pressed to the description tooltip. LinkButtons
-## are reliably picked (unlike the previous nested RichTextLabel meta_hover, which never fired in-game —
-## Godot routes input to a scaled Control's nested RichText unreliably). Maintainer: hover must work.
-static func _rule_link(label: String, meta_key: String, color: Color, font_px: int, max_w: float) -> RuleLink:
-	var lb := RuleLink.new()   # wrapping Button with a WORD-WRAPPING tooltip (bus feedback)
-	lb.text = label
-	lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # a long name wraps inside the card, never past it
-	lb.max_width = max_w
-	lb.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	lb.focus_mode = Control.FOCUS_NONE
-	lb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	lb.add_theme_font_size_override("font_size", font_px)
-	var hover := Color(0.9, 0.95, 1.0)
-	for c in ["font_color", "font_pressed_color", "font_focus_color"]:
-		lb.add_theme_color_override(c, color)
-	for c in ["font_hover_color", "font_hover_pressed_color"]:
-		lb.add_theme_color_override(c, hover)
-	# The LinkButton look: no box, the text underlined (a 1 px rule in the text colour).
-	for s in ["normal", "pressed", "disabled", "focus"]:
-		lb.add_theme_stylebox_override(s, _underline(color))
-	for s in ["hover", "hover_pressed"]:
-		lb.add_theme_stylebox_override(s, _underline(hover))
-	lb.set_meta("rule_meta", meta_key)
-	return lb
+## Quality / Defense / models (+ wounds for Tough units) as the mockup's stat boxes: the value over its
+## caption. The captions spell out the old "Q" / "D" glyphs (23.09.: the mockup's headings are allowed).
+static func _stats_boxes(q: String, d: String, count: String, count_color: Color, wounds: String) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+	row.add_child(_stat_box(q, "QUALITY", HouseStyle.INK))
+	row.add_child(_stat_box(d, "DEFENSE", HouseStyle.INK))
+	row.add_child(_stat_box(count, "MODELS", count_color))
+	if not wounds.is_empty():
+		row.add_child(_stat_box(wounds, "WOUNDS", HouseStyle.WARN))
+	return row
 
 
-static func _underline(color: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0, 0, 0, 0)
-	s.border_width_bottom = 1
-	s.border_color = color
-	return s
+static func _stat_box(value: String, glyph: String, color: Color) -> Control:
+	var v := VBoxContainer.new()
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 0)
+	var val := _label(value, 20, color)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(val)
+	if not glyph.is_empty():
+		var g := HouseStyle.label(glyph, HouseStyle.EYEBROW)
+		g.add_theme_font_size_override(&"font_size", STAT_CAPTION_PX)
+		g.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		v.add_child(g)
+	var box := HouseStyle.card(v)
+	# Four boxes (with WOUNDS) share one card row: a narrower side padding than a result card.
+	var sb := HouseStyle.theme().get_stylebox(&"panel", HouseStyle.CARD).duplicate() as StyleBox
+	sb.content_margin_left = STAT_PAD_X
+	sb.content_margin_right = STAT_PAD_X
+	box.add_theme_stylebox_override(&"panel", sb)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return box
 
 
-## Unit rules + spells as a row of hover/click targets. Container named "RulesList" so the dock finds and
-## wires every LinkButton inside it.
-static func _rules_list(data: Dictionary, max_w: float) -> Control:
+## The strip card's narrow stat line: [Q 3+] [D 3+] … 3/3.
+static func _stats_compact(q: String, d: String, count: String, count_color: Color) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	for pair: Array in [["Q", q], ["D", d]]:
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 4)
+		h.add_child(HouseStyle.label(pair[0], HouseStyle.EYEBROW))
+		h.add_child(_label(pair[1], 15, HouseStyle.INK))
+		var chip := HouseStyle.card(h)
+		chip.add_theme_stylebox_override(&"panel", HouseStyle.pill_box(HouseStyle.TONE_ACCENT, false))
+		row.add_child(chip)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
+	row.add_child(_label(count, 16, count_color))
+	return row
+
+
+## Unit rules + spells: a caption ("Rules" / "Spells") over a flow of links. The dock finds and wires
+## every RuleLink. Returns [] when there is nothing to show. Spell links are keyed "spell:<name>".
+static func _rules_list(data: Dictionary, compact: bool, inner: float) -> Array:
+	var parts: Array = []
 	var rule_names: Array = data.get("rules_list", [])
 	var spells: Array = data.get("spells", []) if bool(data.get("caster", false)) else []
-	if rule_names.is_empty() and spells.is_empty():
-		return null
-	var flow := HFlowContainer.new()
-	flow.name = "RulesList"
-	flow.add_theme_constant_override("h_separation", 6)
-	flow.add_theme_constant_override("v_separation", 2)
+	var px := 11 if compact else 13
 	if not rule_names.is_empty():
-		flow.add_child(_label("Rules", 11, TEXT_DIM))
+		var rules_cap := HouseStyle.label("Rules", HouseStyle.EYEBROW)
+		rules_cap.uppercase = true   # shown as RULES like WEAPONS; the word itself is unchanged
+		parts.append(rules_cap)
+		var flow := _flow("RulesList")
 		for r in rule_names:
-			flow.add_child(_rule_link(str(r), str(r), TEXT_DIM, 11, max_w))
+			flow.add_child(RuleLink.make(str(r), str(r), HouseStyle.TONE_ACCENT, px, inner))
+		parts.append(flow)
 	if not spells.is_empty():
-		flow.add_child(_label("Spells", 11, CYAN))
+		var cap := HouseStyle.label("Spells", HouseStyle.EYEBROW)
+		cap.uppercase = true
+		cap.add_theme_color_override(&"font_color", HouseStyle.GOLD)
+		parts.append(cap)
+		var flow := _flow("SpellsList")
 		for s in spells:
 			var sd := s as Dictionary
-			flow.add_child(_rule_link("%s (%d+)" % [str(sd.get("name", "")), int(sd.get("threshold", 0))], "spell:" + str(sd.get("name", "")), CYAN, 11, max_w))
-	return flow
+			flow.add_child(RuleLink.make("%s (%d+)" % [str(sd.get("name", "")), int(sd.get("threshold", 0))],
+				"spell:" + str(sd.get("name", "")), HouseStyle.TONE_GOLD, px, inner))
+		parts.append(flow)
+	return parts
 
 
-## A weapon's named special rules as hover/click targets (maintainer #5). Same "RulesList" container so
-## the dock wires them alongside the unit rules.
-static func _weapon_rules_list(names: PackedStringArray, max_w: float) -> Control:
-	var flow := HFlowContainer.new()
-	flow.name = "RulesList"
-	flow.add_theme_constant_override("h_separation", 6)
+## A weapon's named special rules as hover/click targets (maintainer #5), wired by the dock alongside
+## the unit rules.
+static func _weapon_rules_list(names: PackedStringArray, compact: bool, inner: float) -> Control:
+	var flow := _flow("WeaponRules")
 	for nm in names:
 		var t := nm.strip_edges()
 		if not t.is_empty():
-			flow.add_child(_rule_link(t, t, CYAN, 10, max_w))
+			flow.add_child(RuleLink.make(t, t, HouseStyle.TONE_MUTED, 11 if compact else 12, inner))
 	return flow
 
 
-
 # === Pieces ===
+
+static func _flow(node_name: String) -> HFlowContainer:
+	var flow := HFlowContainer.new()
+	flow.name = node_name
+	flow.add_theme_constant_override("h_separation", 8)
+	flow.add_theme_constant_override("v_separation", 4)
+	return flow
+
 
 static func _label(text: String, size: int, color: Color) -> Label:
 	var l := Label.new()
@@ -210,87 +256,47 @@ static func _label(text: String, size: int, color: Color) -> Label:
 	return l
 
 
-## A unit-name label that never loses a letter: drop a font step when the name is long, then WRAP if it
-## still overflows (maintainer 23.09.: nothing on a card may be cut — the "…" hid "Battle Brot…").
-static func _fit_name(text: String, size_big: int, size_small: int, max_chars: int) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", size_big if text.length() <= max_chars else size_small)
-	l.add_theme_color_override("font_color", TEXT)
-	_wrap(l)
-	return l
-
-
-## Word-wraps a card label. A wrapping label is first measured at width 0 (one word per line): the floor
-## keeps a short name on one line while the layout has not given it its width yet.
-static func _wrap(l: Label) -> void:
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.custom_minimum_size = Vector2(WRAP_FLOOR, 0)
-
-
-## Compact icon+label action button with hover state (chip-styled), part of the presented-card design.
-## When pressed, calls `on_action.call(kind)` (if valid) so the dock routes it to _card_action.
-static func _rule(color: Color, alpha: float = 0.55, height: float = 2.0) -> Control:
+static func _rule(color: Color) -> Control:
 	var r := ColorRect.new()
-	r.color = Color(color.r, color.g, color.b, alpha)
-	r.custom_minimum_size = Vector2(0, height)
+	r.color = color
+	r.custom_minimum_size = Vector2(0, HouseStyle.BORDER)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return r
 
 
-## A die-face chip: a rounded square with the stat glyph over its value (Q 4+, D 3+).
-static func _die_chip(glyph: String, value: String) -> Control:
-	var box := PanelContainer.new()
-	box.add_theme_stylebox_override("panel", _chip_style(NAVY_HI, CYAN))
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 4)
-	for s in ["left", "right", "top", "bottom"]:
-		h.add_theme_constant_override("margin_" + s, 4)
-	h.add_child(_label(glyph, 12, CYAN))
-	h.add_child(_label(value, 17, TEXT))
-	box.add_child(h)
-	return box
-
-
-## A status chip. On the presented card it is CLICKABLE (on_action wired + a kind): clicking toggles the
-## state / opens the wound or cast window — the chips ARE the controls now, the old action bar is gone
-## (maintainer). On strip cards (no on_action) it is a plain lit/unlit display chip.
-static func _status_chip(text: String, lit: bool, lit_color: Color, on_action: Callable = Callable(), kind: String = "") -> Control:
+## A status pill. On the presented card it is CLICKABLE (on_action wired + a kind): clicking toggles the
+## state / opens the wound or cast window — the chips ARE the controls (maintainer). On strip cards (no
+## on_action) it is a plain lit/unlit display pill.
+static func _status_chip(text: String, lit: bool, tone: StringName, compact: bool, on_action: Callable = Callable(),
+		kind: String = "") -> Control:
+	var px := 11 if compact else 12
 	if not (on_action.is_valid() and not kind.is_empty()):
 		var box := PanelContainer.new()
-		box.add_theme_stylebox_override("panel", _chip_style(NAVY_HI if lit else NAVY, lit_color if lit else CHIP_OFF))
-		box.add_child(_label(text, 11, (lit_color if lit else TEXT_DIM)))
+		box.add_theme_stylebox_override(&"panel", HouseStyle.pill_box(tone, lit))
+		box.add_child(_label(text, px, HouseStyle.pill_ink(tone, lit)))
 		return box
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	b.add_theme_font_size_override("font_size", 11)
-	b.add_theme_color_override("font_color", lit_color if lit else TEXT_DIM)
-	b.add_theme_color_override("font_hover_color", lit_color)
-	b.add_theme_color_override("font_pressed_color", lit_color)
-	b.add_theme_stylebox_override("normal", _chip_style(NAVY_HI if lit else NAVY, lit_color if lit else CHIP_OFF))
-	b.add_theme_stylebox_override("hover", _chip_style(Color(lit_color.r, lit_color.g, lit_color.b, 0.22), lit_color))
-	b.add_theme_stylebox_override("pressed", _chip_style(NAVY, lit_color))
+	b.add_theme_font_size_override(&"font_size", px)
+	for c: StringName in [&"font_color", &"font_pressed_color", &"font_hover_pressed_color"]:
+		b.add_theme_color_override(c, HouseStyle.pill_ink(tone, lit))
+	b.add_theme_color_override(&"font_hover_color", HouseStyle.pill_ink(tone, lit) if lit else HouseStyle.INK)
+	b.add_theme_stylebox_override(&"normal", HouseStyle.pill_box(tone, lit))
+	b.add_theme_stylebox_override(&"hover", HouseStyle.pill_box(tone, lit, true))
+	b.add_theme_stylebox_override(&"pressed", HouseStyle.pill_box(tone, not lit))
+	b.add_theme_stylebox_override(&"hover_pressed", HouseStyle.pill_box(tone, not lit, true))
+	b.add_theme_stylebox_override(&"focus", StyleBoxEmpty.new())
 	b.pressed.connect(func() -> void: on_action.call(kind))
 	return b
 
 
-
-static func _warning_strip(text: String) -> Control:
+static func _warning_strip(text: String, compact: bool) -> Control:
 	var box := PanelContainer.new()
-	box.add_theme_stylebox_override("panel", _chip_style(Color(AMBER.r, AMBER.g, AMBER.b, 0.18), AMBER))
-	box.add_child(_label(text, 13, AMBER))
+	box.add_theme_stylebox_override(&"panel", HouseStyle.warning_box())
+	var l := _label(text, 12 if compact else 13, HouseStyle.WARN)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(NAME_FLOOR, 0)
+	box.add_child(l)
 	return box
-
-
-static func _chip_style(bg: Color, border: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = bg
-	s.set_corner_radius_all(5)
-	s.set_border_width_all(1)
-	s.border_color = Color(border.r, border.g, border.b, 0.7)
-	s.content_margin_left = 6
-	s.content_margin_right = 6
-	s.content_margin_top = 3
-	s.content_margin_bottom = 3
-	return s

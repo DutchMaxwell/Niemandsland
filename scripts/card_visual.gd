@@ -14,8 +14,7 @@ extends Control
 # The only motion is the deal-in / deal-out spring; selection is a static cyan border (set_selected).
 const SHADOW_SPREAD_PX: float = 6.0      # drop-shadow spread
 const SHADOW_OFFSET_PX: float = 4.0      # drop-shadow downward offset
-const CORNER_RADIUS_PX: int = 10         # rounded corners
-const BEVEL_ALPHA: float = 0.16          # subtle top bevel highlight
+const CORNER_RADIUS_PX: int = HouseStyle.RADIUS_PANEL   # rounded corners (the house window radius)
 
 # Damped-spring constants (D3). stiffness = how hard it pulls to target; damping = 1.0 ≈ critical.
 const POS_STIFFNESS: float = 220.0
@@ -226,20 +225,22 @@ func _layout_shadow(grow: float) -> void:
 
 # === Styles ===
 
+## The house-style window face (the dice window's panel: dark fill, soft accent rim, 8 px corners).
 func _face_style() -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.14, 0.16, 0.20, 0.98)
+	s.bg_color = Color(HouseStyle.PANEL, 0.97)
 	s.set_corner_radius_all(CORNER_RADIUS_PX)
-	s.border_width_top = 1
-	s.border_color = Color(1, 1, 1, BEVEL_ALPHA)   # subtle top bevel highlight
+	s.set_border_width_all(HouseStyle.BORDER)
+	s.border_color = HouseStyle.LINE_SOFT
+	s.anti_aliasing = true
 	return s
 
 
-## Face with a cyan accent border for the selected strip card (Tactical-HUD selection glow).
+## Face of the selected strip card: a gold rim over a warm tint (mockup strip, selected card).
 func _face_style_selected() -> StyleBoxFlat:
 	var s := _face_style()
-	s.set_border_width_all(2)
-	s.border_color = Color(0.36, 0.80, 0.92, 0.9)
+	s.bg_color = s.bg_color.blend(Color(HouseStyle.GOLD, 0.06))
+	s.border_color = HouseStyle.GOLD
 	return s
 
 

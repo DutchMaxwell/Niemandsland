@@ -21,9 +21,10 @@ const STRIP_FAN_MAX_DEG := 8.0
 const STRIP_OVERLAP_PX := 6           # near-touching so each full face stays fully legible (no right clip)
 const STRIP_FAN_ARC_PX := 6.0         # shallow vertical arc
 const STRIP_SIDE_MARGIN := 14         # the strip background hugs the fan + this margin (grows w/ card count)
-const PCARD_W := 320
+const PCARD_W := 340              # 320 until the mockup's stat captions (QUALITY … WOUNDS) needed four boxes' room
 const PCARD_H := 188
-const PCARD_MAX_H := 640          # presented card auto-grows to fit weapons + a full caster spell list
+const PCARD_MAX_H := 880          # presented card auto-grows to fit weapons + a full caster spell list (uicard:
+                                  # a nine-weapon unit needs 635 of the old 640 — nothing may be cut, so headroom)
 const GAP_ABOVE_TAB := 12
 const REFRESH_INTERVAL := 0.4
 
@@ -100,9 +101,9 @@ func _build_tab() -> void:
 	_tab.focus_mode = Control.FOCUS_NONE
 	_tab.mouse_filter = Control.MOUSE_FILTER_STOP
 	_tab.z_index = 20   # always above the strip cards so it stays clickable to collapse the dock
-	# Dark-grey panel like the other HUD boxes (was the transparent default theme — maintainer).
-	for state in ["normal", "hover", "pressed", "focus"]:
-		_tab.add_theme_stylebox_override(state, _panel_style())
+	# The top bar's button look (house style): its own dark fill, accent rim on hover.
+	_tab.theme = HouseStyle.theme()
+	_tab.theme_type_variation = HouseStyle.BAR_BUTTON
 	_tab.pressed.connect(_toggle_dock)
 	add_child(_tab)
 
@@ -281,7 +282,7 @@ func _refit_strip_heights(gen: int) -> void:
 
 ## The tallest a strip card may grow. Real full-face cards (weapons + wrapped rule rows) need 270+ px —
 ## the old hard 240 cap CUT the last rule row (maintainer screenshot 2026-07-20, second finding), and 40 %
-## of the screen still cut a nine-weapon unit (23.09.: nothing may be cut). The strip band hugs the
+## of the screen still cut a nine-weapon unit (uicard: nothing may be cut). The strip band hugs the
 ## tallest card, so only such a unit makes the open strip this tall.
 func _strip_card_cap() -> float:
 	return maxf(240.0, get_viewport_rect().size.y * 0.6 - STRIP_FAN_ARC_PX - 22.0)
@@ -399,11 +400,11 @@ func _refresh_status() -> void:
 		entry["sig"] = sig
 		var content := CardFace.build_presented(data, Callable(), false, CARD_W)
 		card.set_content_node(content)
-		_wire_rules_hover(content, unit)   # the rebuilt card's rule links showed EMPTY tooltips (161 links)
+		_wire_rules_hover(content, unit)
 		card.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), _strip_card_cap()))
 		rebuilt = true
 	# A rebuilt card was measured before layout (one flow row): re-fit it once it has laid out, or its
-	# last rows sat below the card edge, clipped (199 texts after one status change).
+	# last rows sat below the card edge, clipped (uicard: 199 texts after one status change).
 	if rebuilt:
 		_refit_gen += 1
 		_refit_strip_heights(_refit_gen)
@@ -483,7 +484,40 @@ func _card_data(unit: GameUnit) -> Dictionary:
 	# spells (casters): {name, threshold, effect} from the army glossary, for the hoverable spell list.
 	if unit.is_caster() and army_manager != null and army_manager.has_method("get_spells_for_unit"):
 		data["spells"] = army_manager.get_spells_for_unit(unit)
+	# Back from the retired detail card (maintainer 23.09.), in its wording: base size, joined heroes,
+	# the caster's points, wound counts.
+	data.merge(retired_card_lines(unit))
 	return data
+
+
+## The retired UnitCard's extra lines for `unit` (scripts/unit_card.gd): {"base": "25mm round",
+## "joined": "Joined Hero: Name Q3+ D3+", "casts": "Casts 2/6", "wounds": "12/18"} — "" where it has none.
+## Wounds only when a model has more than one wound (Tough), counting the alive models' remaining wounds.
+static func retired_card_lines(unit: GameUnit) -> Dictionary:
+	var out := {"base": "", "joined": "", "casts": "", "wounds": ""}
+	var opr: OPRApiClient.OPRUnit = null
+	if unit.source_type == "opr":
+		opr = unit.source_data as OPRApiClient.OPRUnit
+	if opr != null:
+		out["base"] = ("%dx%dmm oval" % [opr.base_width_mm, opr.base_depth_mm]) if opr.base_is_oval \
+			else ("%dmm round" % opr.base_size_round)
+	var heroes: Array[String] = []
+	for hero in unit.get_attached_heroes():
+		if hero is GameUnit:
+			heroes.append("%s Q%d+ D%d+" % [hero.get_name(), hero.get_quality(), hero.get_defense()])
+	if not heroes.is_empty():
+		out["joined"] = "Joined Hero: " + ", ".join(heroes)
+	if unit.is_caster():
+		out["casts"] = "Casts %d/%d" % [unit.casts_current, GameUnit.CASTER_POINTS_CAP]
+	var cur := 0
+	var most := 0
+	for m in unit.models:
+		most += m.wounds_max
+		if m.is_alive:
+			cur += m.wounds_current
+	if most > unit.models.size():
+		out["wounds"] = "%d/%d" % [cur, most]
+	return out
 
 
 ## One distinct weapon → CardFace's {name, meta, rules} shape, in the APPROVED format (bus 027):
@@ -606,7 +640,7 @@ func set_range_ring_controller(rrc: Node) -> void:
 ## show the range ring on hover. No click popup — the card no longer rebuilds under the cursor (see
 ## _refresh_status), so the hover tooltip is stable on its own.
 func _wire_rules_hover(content: Control, unit: GameUnit) -> void:
-	for node in content.find_children("*", "Button", true, false):   # RuleLink is a wrapping Button
+	for node in content.find_children("*", "Button", true, false):
 		var lb := node as Button
 		if lb == null or not lb.has_meta("rule_meta"):
 			continue
@@ -919,12 +953,13 @@ func _on_table_selection_changed(selected_objects: Array) -> void:
 
 # === Styles ===
 
+## The strip's band: the house window panel (dark fill, soft accent rim).
 func _panel_style() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.10, 0.11, 0.14, 0.92)
-	sb.set_corner_radius_all(6)
-	sb.set_border_width_all(1)
-	sb.border_color = Color(0.3, 0.55, 0.7, 0.7)
+	sb.bg_color = HouseStyle.PANEL
+	sb.set_corner_radius_all(HouseStyle.RADIUS_PANEL)
+	sb.set_border_width_all(HouseStyle.BORDER)
+	sb.border_color = HouseStyle.LINE_SOFT
 	return sb
 
 

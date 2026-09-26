@@ -39,6 +39,13 @@ const SHOW_DELAY: float = 0.4
 ## Invalidates a pending _reveal when another show / hide comes first.
 var _reveal_gen: int = 0
 
+## Text colours (house style, one source: HouseStyle).
+var _ink := HouseStyle.INK.to_html(false)
+var _gold := HouseStyle.GOLD.to_html(false)
+var _warn := HouseStyle.WARN.to_html(false)
+var _muted := HouseStyle.MUTED.to_html(false)
+var _accent := HouseStyle.ACCENT.to_html(false)
+
 
 func _ready() -> void:
 	# Start hidden
@@ -62,10 +69,18 @@ func _ready() -> void:
 	tokens_label.visible = false
 	rules_label.get_parent().add_child(tokens_label)
 
+	# House style (the dice window's look): Inter, the ink colour, the window panel.
+	theme = HouseStyle.theme()
+	var box := HouseStyle.tooltip_box()   # replaces the scene's panel box; the scene's margins stay
+	box.set_content_margin_all(0)
+	box.shadow_size = 4
+	box.shadow_color = Color(0, 0, 0, 0.5)
+	add_theme_stylebox_override("panel", box)
 	# Real bold glyphs (Inter weight axis) so [b] unit names/headers never faux-bold.
 	var bold := HudTokens.bold_font()
 	for rtl: RichTextLabel in [unit_name_label, stats_label, weapons_label, rules_label, tokens_label]:
 		rtl.add_theme_font_override("bold_font", bold)
+		rtl.add_theme_color_override("default_color", HouseStyle.INK)
 	unit_name_label.add_theme_font_size_override("bold_font_size", 22)  # larger, prominent unit name
 
 	# Make sure all children ignore mouse
@@ -155,7 +170,7 @@ func _on_show_timer_timeout() -> void:
 ## Shows the current unit once the panel has laid out at its real width. A hidden container never gives
 ## its rich-text rows a width, and measured at width 0 the session's FIRST tooltip came out ~6,000 px
 ## tall (content at the top of a screen-high box). So: fill, lay out unseen for two frames, then size to
-## the text and show.
+## the text and fade in.
 func _reveal() -> void:
 	_update_content()
 	visible = true
@@ -203,24 +218,24 @@ func _update_content() -> void:
 	unit_name_label.text = name_text
 
 	# Core stats
-	var stats_text = "Quality: [color=#88ff88]%d+[/color] | Defense: [color=#8888ff]%d+[/color]" % [
-		_current_unit.quality,
-		_current_unit.defense
+	var stats_text = "Quality: [color=#%s]%d+[/color] | Defense: [color=#%s]%d+[/color]" % [
+		_ink, _current_unit.quality,
+		_ink, _current_unit.defense
 	]
 	if _current_unit.cost > 0:
-		stats_text += " | [color=#ffcc44]%d pts[/color]" % _current_unit.cost
+		stats_text += " | [color=#%s]%d pts[/color]" % [_gold, _current_unit.cost]
 
 	# Show Tough/wounds info if model has multiple wounds
 	if _current_model:
 		var model_inst = _current_model.get_meta("model_instance", null) as ModelInstance
 		if model_inst and model_inst.wounds_max > 1:
-			stats_text += " | [color=#ff8888]Tough(%d)[/color]" % model_inst.wounds_max
+			stats_text += " | [color=#%s]Tough(%d)[/color]" % [_warn, model_inst.wounds_max]
 
 	# Add base size (oval or round)
 	if _current_unit.base_is_oval:
-		stats_text += " | [color=#cccccc]%dx%dmm oval[/color]" % [_current_unit.base_width_mm, _current_unit.base_depth_mm]
+		stats_text += " | [color=#%s]%dx%dmm oval[/color]" % [_muted, _current_unit.base_width_mm, _current_unit.base_depth_mm]
 	else:
-		stats_text += " | [color=#cccccc]%dmm round[/color]" % _current_unit.base_size_round
+		stats_text += " | [color=#%s]%dmm round[/color]" % [_muted, _current_unit.base_size_round]
 	stats_label.text = stats_text
 
 	# Weapons
@@ -259,7 +274,7 @@ func _update_content() -> void:
 			parts.append(r)
 
 	if parts.size() > 0:
-		rules_label.text = "[b]Rules:[/b] [color=#aaaaaa]%s[/color]" % ", ".join(parts)
+		rules_label.text = "[b]Rules:[/b] [color=#%s]%s[/color]" % [_muted, ", ".join(parts)]
 		rules_label.visible = true
 	else:
 		rules_label.visible = false
@@ -291,9 +306,9 @@ func _update_tokens_section() -> void:
 		if token_library:
 			effect = token_library.get_effect(marker_name)
 		if effect.is_empty():
-			lines.append("[color=#ffd86b]%s[/color]" % head)
+			lines.append("[color=#%s]%s[/color]" % [_gold, head])
 		else:
-			lines.append("[color=#ffd86b]%s[/color] [color=#aaaaaa]- %s[/color]" % [head, effect])
+			lines.append("[color=#%s]%s[/color] [color=#%s]- %s[/color]" % [_gold, head, _muted, effect])
 
 	if lines.is_empty():
 		tokens_label.visible = false
@@ -314,15 +329,15 @@ func _format_weapon(weapon: OPRApiClient.OPRWeapon) -> String:
 
 	# Range
 	if weapon.range_value > 0:
-		parts.append("[color=#88ccff]%d\"[/color]" % weapon.range_value)
+		parts.append("[color=#%s]%d\"[/color]" % [_accent, weapon.range_value])
 	else:
-		parts.append("[color=#ff8888]Melee[/color]")
+		parts.append("[color=#%s]Melee[/color]" % _warn)
 
 	# Attacks
 	parts.append("A%d" % weapon.attacks)
 
 	# Special rules
 	if weapon.special_rules.size() > 0:
-		parts.append("[color=#aaaaaa](%s)[/color]" % ", ".join(weapon.special_rules))
+		parts.append("[color=#%s](%s)[/color]" % [_muted, ", ".join(weapon.special_rules)])
 
 	return " ".join(parts)
