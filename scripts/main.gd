@@ -467,11 +467,11 @@ func _ready() -> void:
 	# Connect hamburger menu toggle
 	hamburger_button.pressed.connect(_on_hamburger_pressed)
 
-	# AAA-style the slide-out game menu (under the hamburger): glassmorphism theme on its
-	# buttons/labels + a glass panel background, matching the rest of the UI.
+	# The slide-out game menu (under the hamburger): the glassmorphism theme stays on the column for the
+	# sections not yet in the house style (multiplayer, solo, deployment); GameMenu.style dresses the
+	# shell and the table / save sections once the AI Opponent line exists (below).
 	if has_node("/root/ThemeManager"):
 		left_panel_scroll.theme = get_node("/root/ThemeManager").get_current_theme()
-	left_panel_scroll.add_theme_stylebox_override("panel", HudTokens.panel_style())
 
 	# Connect End Battle button and confirmation dialog
 	end_battle_btn.pressed.connect(_on_end_battle_pressed)
@@ -723,6 +723,8 @@ func _ready() -> void:
 	if import_opr_btn.get_parent() != null:
 		import_opr_btn.get_parent().add_child(_ai_opponent_btn)
 		import_opr_btn.get_parent().move_child(_ai_opponent_btn, import_opr_btn.get_index() + 1)
+	GameMenu.style(left_panel_scroll, [import_opr_btn.get_parent(), save_game_btn.get_parent(),
+		graphics_quality_option.get_parent(), end_battle_btn.get_parent()], [end_battle_btn])
 
 	# Initialize Map Layout Editor
 	var map_layout_scene = load("res://scenes/map_layout.tscn")
@@ -14127,14 +14129,14 @@ func _build_chat_panel() -> void:
 	_chat_panel = PanelContainer.new()
 	_chat_panel.name = "ChatPanel"
 	_chat_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	# Docked bottom, just right of the LeftPanelScroll column (x ends at 210) and
+	# Docked bottom, just right of the LeftPanelScroll column and
 	# left of the bottom-right DiceRollerPanel, so it overlaps neither.
 	_chat_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_chat_panel.anchor_top = 1.0
 	_chat_panel.anchor_bottom = 1.0
-	_chat_panel.offset_left = 220
+	_chat_panel.offset_left = left_panel_scroll.offset_right + 10
 	_chat_panel.offset_top = -310
-	_chat_panel.offset_right = 560
+	_chat_panel.offset_right = _chat_panel.offset_left + 340
 	_chat_panel.offset_bottom = -10
 	_chat_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_chat_panel.visible = false

@@ -41,6 +41,7 @@ const SELECTED_ALPHA := 0.20
 const GOLD_HOVER_LIGHTEN := 0.08
 const GOLD_PRESS_DARKEN := 0.12
 const DISABLED_ALPHA := 0.40
+const DANGER_INK_LIFT := 0.15   # danger text lifted to ~5:1 on a panel (DANGER itself reads ~4.1:1 at 14 px)
 
 # ===== Geometry (px at the 1920x1080 base; the canvas_items stretch scales the rest) =====
 const BORDER := 1
@@ -102,6 +103,7 @@ const SEGMENT := &"HsSegment"       # one of a segmented group; selected = gold
 const PIP := &"HsPip"               # one of a pip row; selected = accent
 const PRIMARY := &"HsPrimary"       # the one main action (gold)
 const ICON := &"HsIcon"             # close / collapse
+const DANGER_BUTTON := &"HsDanger"  # a ghost button that ends something for good (End Battle)
 const BODY := &"HsBody"             # plain text / a small value
 const CAPTION := &"HsCaption"       # muted field label
 const EYEBROW := &"HsEyebrow"       # the window title
@@ -185,6 +187,11 @@ static func theme() -> Theme:
 	# A switched-on action line (Terrain mode, zones shown): the accent of a selected pip.
 	_button_variant(t, _on(BUTTON), _radius(pip_on, RADIUS_CARD), _radius(pip_on_hover, RADIUS_CARD),
 		_radius(press, RADIUS_CARD), _radius(off, RADIUS_CARD), ON_ACCENT, FONT_BODY)
+	# End Battle: a ghost button in danger ink with a danger rim, filling red under the pointer.
+	_button_variant(t, DANGER_BUTTON, _box(FILL, _alpha(DANGER, 0.55), RADIUS_CARD, PAD_BUTTON_X, 0),
+		_box(_alpha(DANGER, HOVER_ALPHA), DANGER, RADIUS_CARD, PAD_BUTTON_X, 0),
+		_box(_alpha(DANGER, PRESS_ALPHA), DANGER, RADIUS_CARD, PAD_BUTTON_X, 0), _radius(off, RADIUS_CARD),
+		DANGER.lightened(DANGER_INK_LIFT), FONT_BODY)
 
 	# Tool rail: quiet buttons until hovered, the open tool in gold (mockup .rail-btn / .active).
 	var none := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
