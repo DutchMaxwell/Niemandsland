@@ -1944,6 +1944,8 @@ func _solo_apply_difficulty() -> void:
 		else:
 			print("opponent: tree — core %s, brain %s, move=%s" % ["up" if core_up else "off", "up" if brain_up else "none",
 				"core" if SoloController._move_seam_on() else "gdscript"])
+	else:   # a lower ladder grade: the tree, never the planner — and no stale "opponent:" line in a report
+		print("opponent: tree — grade %s" % interactive_grade)
 	for pid in solo_ai_slots:   # Human slots stay human; explicit arena grades above take precedence.
 		solo_controller.set_difficulty(int(pid), SoloDifficulty.for_grade(interactive_grade, _solo_arena_seed))
 	_solo_log_grade()
@@ -16243,9 +16245,9 @@ func _refresh_solo_panel() -> void:
 	dev_cb.add_theme_font_size_override("font_size", 12)
 	dev_cb.toggled.connect(func(pressed: bool) -> void: _solo_dev = pressed)
 	solo_panel_box.add_child(dev_cb)
-	# Difficulty selector REMOVED (maintainer 2026-07-17): while we train NACHTMAHR to be as strong as
-	# possible it always plays at maximum (Albtraum) — no grade picker to clutter the panel. The grade is
-	# read from the saved solo_grade setting (SoloGrade, default Albtraum); the selector returns next.
+	# The difficulty ladder (grill 25.09.2026): the grade picker sits in the AI seat's row — the one slot
+	# the controller plays — and only where the AI runs (solo, or the co-op host).
+	var mp: bool = network_manager != null and network_manager.is_multiplayer_active()
 	for pid in pids:
 		var army = opr_army_manager.armies[pid]
 		var cb := CheckButton.new()
@@ -16255,6 +16257,9 @@ func _refresh_solo_panel() -> void:
 		cb.add_theme_font_size_override("font_size", 12)
 		cb.toggled.connect(_on_solo_ai_toggled.bind(int(pid)))
 		solo_panel_box.add_child(cb)
+		if solo_ai_slots.has(int(pid)) and int(pid) == _solo_ai_slot() \
+				and SoloGrade.picker_visible(mp, mp and network_manager.is_host):
+			solo_panel_box.add_child(_solo_grade_option())
 	# Missions wave M5 — the table-side selector the design doc calls a prerequisite (never
 	# hard-code display names: read them from the catalog so a catalog edit renames the menu).
 	var mission_label := Label.new()
@@ -16289,6 +16294,38 @@ func _refresh_solo_panel() -> void:
 	solo_panel_box.add_child(deploy_btn)
 
 
+## The grade dropdown: name + one-line description per grade, NACHTMAHR greyed "coming" (grill Q5/Q6).
+func _solo_grade_option() -> OptionButton:
+	var opt := OptionButton.new()
+	var macos := OS.get_name() == "macOS"
+	# Closed, the button shows ONLY the grade name; its line goes to the tooltip (maintainer 26.09.2026).
+	var show_closed := func(g: String) -> void:
+		opt.text = SoloGrade.display_name(g)
+		opt.tooltip_text = "%s — %s\nNACHTMAHR's difficulty grade. Your choice is kept for the next game." % [
+			SoloGrade.display_name(g), SoloGrade.description(g, macos)]
+	opt.focus_mode = Control.FOCUS_NONE
+	opt.fit_to_longest_item = false   # the long descriptions live in the list, not in the panel width
+	opt.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	opt.add_theme_font_size_override("font_size", 12)
+	for g in SoloGrade.GRADES:
+		opt.add_item("%s — %s" % [SoloGrade.display_name(g), SoloGrade.description(g, macos)])
+		opt.set_item_metadata(opt.item_count - 1, g)
+		opt.set_item_disabled(opt.item_count - 1, not SoloGrade.selectable(g))
+	opt.select(SoloGrade.GRADES.find(SoloGrade.sanitize(_solo_interactive_grade)))
+	show_closed.call(str(opt.get_item_metadata(opt.selected)))
+	opt.item_selected.connect(func(idx: int) -> void:
+		show_closed.call(str(opt.get_item_metadata(idx)))
+		_on_solo_grade_selected(str(opt.get_item_metadata(idx))))
+	return opt
+
+
+## A pick is saved at once (remembered after a downshift) and applied to the live AI seat.
+func _on_solo_grade_selected(grade: String) -> void:
+	SoloGrade.save(grade)
+	_solo_interactive_grade = SoloGrade.base_preset(grade)
+	_solo_sync_difficulty()
+
+
 func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 	# #196 — a slot a connected human occupies can never be handed to NACHTMAHR.
 	if pressed and network_manager != null and network_manager.slot_has_human_peer(player_id):
@@ -16303,6 +16340,7 @@ func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 		solo_ai_slots.erase(player_id)
 	_solo_sync_difficulty()
 	_rebuild_roster()
+	_refresh_solo_panel.call_deferred()   # the grade picker follows the AI seat's row
 
 
 ## Re-apply the difficulty after an AI designation or Solo-panel grade change. Thin alias of

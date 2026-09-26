@@ -12,6 +12,9 @@ const CONFIG_PATH := "user://solo.cfg"
 const CONFIG_SECTION := "solo"
 const CONFIG_KEY := "solo_grade"
 const CFG_OVERRIDE_SETTING := "niemandsland/solo_cfg_override"   # tests: their own file
+const DESCRIPTIONS := {"daemmerung": "still learning; makes visible mistakes",
+	"zwielicht": "plays solidly, misses some chances", "finsternis": "plays the rules hard and punishes mistakes",
+	"albtraum": "Erlkönig: thinks several moves ahead", "nachtmahr": "coming"}
 
 
 static func selectable(grade: String) -> bool:
@@ -26,6 +29,16 @@ static func sanitize(grade: String) -> String:
 
 static func display_name(grade: String) -> String:
 	return str(NAMES.get(grade, grade))
+
+
+## The picker's one line per grade; on macOS Albtraum says honestly that Erlkönig is missing (Q6).
+static func description(grade: String, macos: bool) -> String:
+	return "on macOS still without Erlkönig" if macos and grade == "albtraum" else str(DESCRIPTIONS.get(grade, ""))
+
+
+## Solo, or the host of a co-op room: the AI runs there, so only there is the grade picked.
+static func picker_visible(multiplayer_active: bool, is_host: bool) -> bool:
+	return not multiplayer_active or is_host
 
 
 ## Albtraum starts from "nachtmahr", the pre-ladder pin main resolves to Erlkönig or the tree ceiling.
@@ -63,3 +76,13 @@ static func load_saved() -> String:
 	if _path().is_empty() or config.load(_path()) != OK:
 		return DEFAULT
 	return sanitize(str(config.get_value(CONFIG_SECTION, CONFIG_KEY, DEFAULT)))
+
+
+## Persists a selectable grade (remembered after a downshift); anything else is refused.
+static func save(grade: String) -> void:
+	if not selectable(grade) or _path().is_empty():
+		return
+	var config := ConfigFile.new()
+	config.load(_path())   # keep any other keys; ignore "not found"
+	config.set_value(CONFIG_SECTION, CONFIG_KEY, grade)
+	config.save(_path())
