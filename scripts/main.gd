@@ -4446,11 +4446,18 @@ func _solo_los_blockers(exclude_a: GameUnit, exclude_b: GameUnit) -> Array:
 	for u in [exclude_a, exclude_b]:
 		if u == null:
 			continue
-		excluded[u.get_instance_id()] = true
-		if u.has_method("get_attached_heroes"):
-			for h in u.get_attached_heroes():
-				if h != null:
-					excluded[h.get_instance_id()] = true
+		# D10 (Q1): a joined hero counts as part of its host's unit (GF v3.5.1 p.14), so its host squad and the
+		# host's other joined heroes are "their own unit" for the p.5 see-through carve-out too.
+		var chain: Array = [u]
+		var host: Variant = u.get_attached_to() if u.has_method("get_attached_to") else null
+		if host is GameUnit:
+			chain.append(host)
+		for member in chain:
+			excluded[member.get_instance_id()] = true
+			if member.has_method("get_attached_heroes"):
+				for h in member.get_attached_heroes():
+					if h != null:
+						excluded[h.get_instance_id()] = true
 	for g in opr_army_manager.get_all_game_units():
 		var gu := g as GameUnit
 		if gu == null or excluded.has(gu.get_instance_id()) or SoloController.unit_in_reserve(gu):
