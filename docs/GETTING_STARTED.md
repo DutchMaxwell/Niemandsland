@@ -57,7 +57,7 @@ To play a full game against the built-in AI opponent:
 2. Follow the **guided deployment**: a roll-off decides who picks a table edge and deploys first, then both sides place units alternately with explicit hand-over clicks (Scout, Ambush and Infiltrate reserves are handled for you).
 3. On **Start Game**, play alternates unit by unit. You act through the **radial menu** — **Shoot**, **Fight**, **Cast** — with real dice in the tray for both sides; NACHTMAHR takes its own activations, and **every applied rule writes a battle-log line** so you can follow (and audit) each decision. The remaining uncovered special rules are a small residue; the battle log names any rule it applies (or asks for manual handling) per unit, so you can apply the rest by hand.
 
-NACHTMAHR is a game AI (no LLM) that runs entirely offline and never cheats. On Windows and Linux it plays with its new AI model **Erlkönig**, a trained neural network (value net) that ships with the game; without the Rust rules core (always on macOS) it plays by the official OPR solo decision trees. One difficulty ships (full strength); see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
+NACHTMAHR is a game AI (no LLM) that runs entirely offline and never cheats. On Windows, Linux and macOS it plays with its new AI model **Erlkönig**, a trained neural network (value net) that ships with the game; without the Rust rules core (when it does not load) it plays by the official OPR solo decision trees. One difficulty ships (full strength); see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
 
 ### Camera
 

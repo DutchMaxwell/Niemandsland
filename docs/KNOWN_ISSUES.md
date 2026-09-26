@@ -52,9 +52,13 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **macOS is ad-hoc signed but not notarized** (no Apple Developer account): first launch needs
   **right-click → Open**, or the one-time `xattr -dr com.apple.quarantine` fallback — see the
   README's macOS note. The in-browser (web) build is parked (post-Alpha).
-- **macOS plays without the rules core.** The Windows and Linux builds carry the Rust rules core
-  that runs the trained network; the macOS build has no core, so NACHTMAHR plays its decision-tree
-  opponent there, not the stronger Erlkönig model.
+- **macOS: the rules core is verified on GitHub's macOS runners only.** Like Windows and Linux, the
+  macOS build carries the Rust rules core (a universal arm64 + x86_64 library inside the app), so
+  NACHTMAHR plays with Erlkönig. The release build proves on an Apple Silicon runner that the core
+  loads and plays (the Intel half under emulation); no person has tried it on a real Mac yet. The
+  library is not notarized either, so macOS may refuse to load it until the download flag is cleared
+  (the `xattr` line in the README's macOS note covers the whole app). If the start line or the
+  diagnostics report names the decision tree on your Mac, the core did not load — please report it.
 - **Windows: an in-game update from 0.3.12.0 restarts the game once.** The 0.3.12.0 updater
   replaces only `Niemandsland.exe`; on its first start 0.3.13.0 copies the missing rules-core file
   (`nml_core_godot.dll`) from the downloaded update next to the game and restarts once by itself.

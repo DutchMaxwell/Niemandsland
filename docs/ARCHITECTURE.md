@@ -193,8 +193,12 @@ runs the search planner with the packed ONNX leaf evaluator (`assets/solo/brains
 handed to `NmlCore.set_brain_onnx`) when the extension and the model load, and movement planning goes
 through the core's planner (`NML_CORE_MOVE=0` opts out). Without the built library, with a refused
 model, or with the switch off, the GDScript engine runs unchanged and the game log says which path is
-live (`opponent: erlkoenig … move=core` / `opponent: tree — …`). macOS release builds carry no
-core library, so they always run the GDScript engine. The core reads its rule files and the
+live (`opponent: erlkoenig … move=core` / `opponent: tree — …`). macOS release builds carry a
+universal (arm64 + x86_64) core dylib in `Contents/Frameworks`; it can only be built on a macOS
+runner (tract-linalg assembles per-target kernels), so the `export-macos` job of `build.yml` builds
+it, exports and ad-hoc signs the app, and runs the exported app headless
+(`tools/core_ship_probe.tscn`, read by `tools/assert_ship_probe.py`) before the release ships that
+zip; a release whose macOS build failed ships macOS without the core. The core reads its rule files and the
 model from a staged copy under `user://nml_core/<version>/` (`CoreAssets`), because a packed export has
 no files on disk. See [`DEV_BRAIN_BRIDGE.md`](DEV_BRAIN_BRIDGE.md) for the developer-only loopback
 evaluator, which still exists for experiments.
