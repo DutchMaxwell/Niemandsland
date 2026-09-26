@@ -16514,7 +16514,6 @@ func _init_game_phase_ui() -> void:
 	_start_game_button = Button.new()
 	_start_game_button.name = "StartGameButton"
 	_start_game_button.focus_mode = Control.FOCUS_NONE
-	_start_game_button.add_theme_color_override("font_color", HouseStyle.tone_ink(HouseStyle.TONE_OK))   # "go"
 	_start_game_button.pressed.connect(_on_start_game_pressed)
 	panel.add_child(_start_game_button)
 
@@ -16524,6 +16523,7 @@ func _init_game_phase_ui() -> void:
 	_game_phase_status_label.visible = false
 	panel.add_child(_game_phase_status_label)
 	GameMenu.section(panel)
+	GameMenu.primary(_start_game_button)
 
 	_update_game_phase_ui()
 
