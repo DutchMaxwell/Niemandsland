@@ -47,6 +47,13 @@ static func set_status(label: Label, text: String, tone: StringName) -> void:
 	label.add_theme_color_override(&"font_color", HouseStyle.tone_ink(tone))
 
 
+## The menu's one main action (maintainer D60: Start Game / Ready) — the gold primary, centred, full height.
+static func primary(b: Button) -> void:
+	b.theme_type_variation = HouseStyle.PRIMARY
+	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.custom_minimum_size.y = HouseStyle.H_ACTION
+
+
 ## The permanent room-code line above the sections: a menu line in the "online" ink.
 static func room_code(b: Button) -> void:
 	b.theme = HouseStyle.theme()

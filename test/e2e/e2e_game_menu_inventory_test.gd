@@ -607,8 +607,9 @@ func test_the_solo_section_appears_with_armies_and_every_control_works(timeout :
 
 
 ## The last two sections in the house style: every section is a house section, its first label the
-## eyebrow, later ones body or caption; every control a menu line; no font size or colour of its own
-## except Start Game's "go" ink. The open solo section with the grade picker still fits the column — also
+## eyebrow, later ones body or caption; every control a menu line except Start Game, the menu's one main
+## action in gold (maintainer D60 = a: HouseStyle.PRIMARY); no font size or colour of its own anywhere.
+## The open solo section with the grade picker still fits the column — also
 ## when the column scrolls: its scrollbar then takes 8 px inside it, and no line may push it wider for that
 ## (#1145 CI: "Show Deployment Zones" needed 230 px and pushed the column to 266 px at ui_scale 1.0; the
 ## local runs sat at the laptop's saved ui_scale 0.8, a taller canvas, and never scrolled).
@@ -637,12 +638,13 @@ func test_rows_5_and_6_wear_the_house_style(timeout := 120000) -> void:
 			if c is Label:
 				var want: Array = [String(HouseStyle.EYEBROW)] if first else [String(HouseStyle.BODY), String(HouseStyle.CAPTION)]
 				assert_array(want).override_failure_message("%s is a \"%s\" label" % [where, v]).contains([v])
+			elif c == _main._start_game_button:
+				assert_str(v).override_failure_message("Start Game is not the gold main action").is_equal(String(HouseStyle.PRIMARY))
+				assert_that(c.get_theme_color(&"font_color")).override_failure_message("Start Game's text is not the ink on gold") \
+					.is_equal(HouseStyle.ON_GOLD)
 			elif c is Button:
 				assert_str(v).override_failure_message("%s is not a menu line" % where).is_equal(String(HouseStyle.BUTTON))
 			first = false
 			assert_bool(c.has_theme_font_size_override(&"font_size")).override_failure_message("%s keeps its own font size" % where).is_false()
-			if c == _main._start_game_button:
-				assert_that(c.get_theme_color(&"font_color")).is_equal(HouseStyle.tone_ink(HouseStyle.TONE_OK))
-			else:
-				assert_bool(c.has_theme_color_override(&"font_color")).override_failure_message("%s keeps its own colour" % where).is_false()
+			assert_bool(c.has_theme_color_override(&"font_color")).override_failure_message("%s keeps its own colour" % where).is_false()
 	await E2EBoot.settle(get_tree())
