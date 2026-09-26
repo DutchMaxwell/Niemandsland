@@ -606,14 +606,15 @@ func _solo_combat_available(game_unit: GameUnit) -> bool:
 
 ## PRE-hook for activation-triggered solo rules (Reanimation): the doors that START a unit's
 ## activation without going through main's own combat entries — the manual activation toggle and the
-## transport embark/disembark actions — announce the activation here first. main owns the round stamp,
-## so whichever door opens first completes its rule choices before movement or activation proceeds.
+## transport embark/disembark actions — announce the activation here first, through main's ONE door
+## (begin_activation, D23), so whichever door opens first completes its rule choices before movement
+## or activation proceeds.
 func _solo_activation_rules(unit: GameUnit) -> void:
 	if unit == null:
 		return
 	var main_node := get_node_or_null("/root/Main")
-	if main_node != null and main_node.has_method("_solo_try_reanimation"):
-		await main_node.call("_solo_try_reanimation", unit)
+	if main_node != null and main_node.has_method("begin_activation"):
+		await main_node.call("begin_activation", unit)
 
 
 func _solo_begin_targeting(context: Dictionary, melee: bool) -> void:
