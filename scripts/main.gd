@@ -16297,17 +16297,25 @@ func _refresh_solo_panel() -> void:
 ## The grade dropdown: name + one-line description per grade, NACHTMAHR greyed "coming" (grill Q5/Q6).
 func _solo_grade_option() -> OptionButton:
 	var opt := OptionButton.new()
-	opt.tooltip_text = "NACHTMAHR's difficulty grade. Your choice is kept for the next game."
+	var macos := OS.get_name() == "macOS"
+	# Closed, the button shows ONLY the grade name; its line goes to the tooltip (maintainer 26.09.2026).
+	var show_closed := func(g: String) -> void:
+		opt.text = SoloGrade.display_name(g)
+		opt.tooltip_text = "%s — %s\nNACHTMAHR's difficulty grade. Your choice is kept for the next game." % [
+			SoloGrade.display_name(g), SoloGrade.description(g, macos)]
 	opt.focus_mode = Control.FOCUS_NONE
 	opt.fit_to_longest_item = false   # the long descriptions live in the list, not in the panel width
 	opt.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	opt.add_theme_font_size_override("font_size", 12)
 	for g in SoloGrade.GRADES:
-		opt.add_item("%s — %s" % [SoloGrade.display_name(g), SoloGrade.description(g, OS.get_name() == "macOS")])
+		opt.add_item("%s — %s" % [SoloGrade.display_name(g), SoloGrade.description(g, macos)])
 		opt.set_item_metadata(opt.item_count - 1, g)
 		opt.set_item_disabled(opt.item_count - 1, not SoloGrade.selectable(g))
 	opt.select(SoloGrade.GRADES.find(SoloGrade.sanitize(_solo_interactive_grade)))
-	opt.item_selected.connect(func(idx: int) -> void: _on_solo_grade_selected(str(opt.get_item_metadata(idx))))
+	show_closed.call(str(opt.get_item_metadata(opt.selected)))
+	opt.item_selected.connect(func(idx: int) -> void:
+		show_closed.call(str(opt.get_item_metadata(idx)))
+		_on_solo_grade_selected(str(opt.get_item_metadata(idx))))
 	return opt
 
 

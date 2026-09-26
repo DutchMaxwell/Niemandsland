@@ -153,6 +153,25 @@ func test_the_ai_row_offers_the_five_grades_with_descriptions(timeout := 120000)
 	assert_int(opt.selected).override_failure_message("the default is not Albtraum").is_equal(3)
 
 
+## Picker polish (maintainer 26.09.2026): closed, the dropdown shows ONLY the grade name; the one-line
+## description lives in the opened list and in the tooltip.
+func test_the_closed_picker_shows_only_the_grade_name(timeout := 120000) -> void:
+	await _boot("")
+	await _panel_with_ai_on_p2()
+	var opt := _grade_option()
+	assert_object(opt).override_failure_message("no grade picker in the solo panel").is_not_null()
+	if opt == null:
+		return
+	var albtraum := SoloGrade.description("albtraum", OS.get_name() == "macOS")
+	assert_str(opt.text).is_equal("Albtraum")
+	assert_str(opt.tooltip_text).contains(albtraum)
+	assert_str(opt.get_item_text(3)).is_equal("Albtraum — " + albtraum)   # the opened list keeps the line
+	opt.select(1)
+	opt.item_selected.emit(1)   # the player picks Zwielicht
+	assert_str(opt.text).is_equal("Zwielicht")
+	assert_str(opt.tooltip_text).contains("plays solidly, misses some chances")
+
+
 func test_a_picked_grade_plays_logs_and_survives_a_restart(timeout := 180000) -> void:
 	await _boot("")
 	await _panel_with_ai_on_p2()
