@@ -60,6 +60,17 @@ const H_PIP := 30
 const H_ACTION := 40
 const H_CHIP := 28
 const ICON_BUTTON := 28
+const W_RAIL := 54          # a tool-rail button (mockup .rail-btn in a 66 px rail)
+const H_RAIL := 56
+const PAD_RAIL := 6
+const RAIL_ICON := 22       # drawn size of a rail icon
+const H_KEYCAP := 24
+const RADIUS_KEYCAP := 3
+const RADIUS_SHEET := 10
+const PAD_SHEET := 22
+const SHEET_FILL := Color("0e161c")                    # an overlay sheet (mockup --panel-solid)
+const SCRIM := Color(0.016, 0.027, 0.039, 0.66)        # behind an overlay sheet (mockup rgba(4,7,10,.66))
+const KEYCAP_FILL := Color("1b262d")                   # a key cap (mockup kbd)
 
 # ===== Type =====
 const FONT_BODY := 14
@@ -69,6 +80,7 @@ const FONT_SMALL := 12
 const FONT_EYEBROW := 12
 const FONT_VALUE := 22
 const EYEBROW_SPACING := 2   # extra px per glyph (mockup letter-spacing .12em)
+const FONT_RAIL := 11        # a rail button's label
 
 # ===== Variants (theme type variations; pick one per control) =====
 const PANEL_VARIANT := &"HsPanel"   # a window root
@@ -85,12 +97,20 @@ const VALUE := &"HsValue"           # a big number (the dice count)
 const NOTE := &"HsNote"             # a gold key line (roll purpose, result summary)
 const SMALL := &"HsSmall"           # dense readout text (log lines, tally counts)
 const HIT := &"HsHit"               # a success count next to its glyph
+const RAIL := &"HsRail"             # a tool in the tool rail; the open tool = selected (gold)
+const RAIL_PANEL := &"HsRailPanel"  # the rail's own slim frame
+const KEYCAP := &"HsKeyCap"         # a key in a shortcut hint (static)
+const KEY := &"HsKey"               # a key cap you can click: it presses that key
+const TOOL_LINE := &"HsToolLine"    # a row: an action's name left, its keys right (mockup .tool-line)
+const SHEET := &"HsSheet"           # an overlay sheet (the controls help)
 const SELECTED_SUFFIX := "On"
 
 # ===== Glyphs (Inter carries each one; the dice-panel inventory test checks has_char) =====
 const GLYPH_COLLAPSE := "▼"
 const GLYPH_EXPAND := "▲"
 const GLYPH_MINUS := "−"
+const GLYPH_CLOSE := "×"
+const GLYPH_GO := "›"
 
 # ===== Dice =====
 ## The dice look — ONE switch for the physics dice, their tally icons and the dice log
@@ -141,6 +161,41 @@ static func theme() -> Theme:
 	# Quick and the other ghost actions keep the calmer ghost rim radius of the mockup (6).
 	for state: StringName in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
 		t.set_stylebox(state, BUTTON, _radius(t.get_stylebox(state, BUTTON) as StyleBoxFlat, RADIUS_CARD))
+	# A switched-on action line (Terrain mode, zones shown): the accent of a selected pip.
+	_button_variant(t, _on(BUTTON), _radius(pip_on, RADIUS_CARD), _radius(pip_on_hover, RADIUS_CARD),
+		_radius(press, RADIUS_CARD), _radius(off, RADIUS_CARD), ON_ACCENT, FONT_BODY)
+
+	# Tool rail: quiet buttons until hovered, the open tool in gold (mockup .rail-btn / .active).
+	var none := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
+	var rail_hover := _box(FILL_RAISED, Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
+	var rail_press := _box(_alpha(ACCENT, HOVER_ALPHA), Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
+	_button_variant(t, RAIL, none, rail_hover, rail_press, none, MUTED, FONT_RAIL)
+	t.set_color(&"font_hover_color", RAIL, INK)
+	var rail_on := _box(_alpha(GOLD, 0.10), _alpha(GOLD, 0.5), RADIUS_CARD, 2, PAD_RAIL)
+	var rail_on_hover := _box(_alpha(GOLD, 0.16), _alpha(GOLD, 0.7), RADIUS_CARD, 2, PAD_RAIL)
+	_button_variant(t, _on(RAIL), rail_on, rail_on_hover, rail_on_hover, rail_on, GOLD, FONT_RAIL)
+	for v: StringName in [RAIL, _on(RAIL)]:
+		var ink: Color = t.get_color(&"font_color", v)
+		for c: StringName in [&"icon_normal_color", &"icon_pressed_color", &"icon_focus_color", &"icon_hover_pressed_color"]:
+			t.set_color(c, v, ink)
+		t.set_color(&"icon_hover_color", v, t.get_color(&"font_hover_color", v))
+		t.set_constant(&"icon_max_width", v, RAIL_ICON)
+		t.set_constant(&"h_separation", v, 2)
+	t.set_type_variation(RAIL_PANEL, &"PanelContainer")
+	t.set_stylebox(&"panel", RAIL_PANEL, _box(PANEL, LINE_SOFT, RADIUS_PANEL, PAD_RAIL, PAD_RAIL))
+
+	# Keys: a static cap for hints, a clickable cap that presses its key (hover rim in accent).
+	var cap := _box(KEYCAP_FILL, LINE, RADIUS_KEYCAP, 6, 1)
+	_label_variant(t, KEYCAP, INK, FONT_SMALL)
+	t.set_stylebox(&"normal", KEYCAP, cap)
+	# A cap you can click wears a faint accent rim at rest, so it reads apart from a hint cap.
+	var key_rest := _box(KEYCAP_FILL, _alpha(ACCENT, 0.45), RADIUS_KEYCAP, 6, 1)
+	_button_variant(t, KEY, key_rest, _box(_alpha(ACCENT, HOVER_ALPHA + 0.04), ACCENT, RADIUS_KEYCAP, 6, 1),
+		_box(_alpha(ACCENT, PRESS_ALPHA), ACCENT, RADIUS_KEYCAP, 6, 1), key_rest, INK, FONT_SMALL)
+	t.set_type_variation(TOOL_LINE, &"PanelContainer")
+	t.set_stylebox(&"panel", TOOL_LINE, _box(FILL, LINE, RADIUS_CARD, 12, 4))
+	t.set_type_variation(SHEET, &"PanelContainer")
+	t.set_stylebox(&"panel", SHEET, _box(SHEET_FILL, LINE_SOFT, RADIUS_SHEET, PAD_SHEET, PAD_SHEET))
 
 	_label_variant(t, BODY, INK, FONT_BODY)
 	_label_variant(t, CAPTION, MUTED, FONT_CAPTION)
@@ -271,21 +326,122 @@ static func card(child: Control = null) -> PanelContainer:
 	return c
 
 
-## The window header: eyebrow title left, collapse control right (named "CollapseButton").
-static func panel_header(title: String) -> HBoxContainer:
+## The window header: eyebrow title left, its control right — a collapse control ("CollapseButton")
+## or, for a window that lives in the tool rail or over the table, a close control ("CloseButton", ×).
+static func panel_header(title: String, closes: bool = false) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = "Header"
 	row.add_theme_constant_override(&"separation", GAP_ROW)
 	var t := label(title.to_upper(), EYEBROW)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(t)
-	var b := button(GLYPH_COLLAPSE, ICON, ICON_BUTTON)
-	b.name = "CollapseButton"
-	b.tooltip_text = "Collapse"
+	var b := button(GLYPH_CLOSE if closes else GLYPH_COLLAPSE, ICON, ICON_BUTTON)
+	b.name = "CloseButton" if closes else "CollapseButton"
+	b.tooltip_text = "Close" if closes else "Collapse"
 	b.custom_minimum_size = Vector2(ICON_BUTTON, ICON_BUTTON)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_END
 	row.add_child(b)
 	return row
+
+
+## A key of a shortcut hint ("Shift", "G") — a label, not a button.
+static func key_cap(text: String) -> Label:
+	var l := label(text, KEYCAP)
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return l
+
+
+## A key cap you can click: pressing it does what pressing that key does (the caller wires it).
+static func key_button(text: String, tooltip: String) -> Button:
+	var b := button(text, KEY, H_KEYCAP)
+	b.tooltip_text = tooltip
+	b.size_flags_horizontal = Control.SIZE_SHRINK_END
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return b
+
+
+## A tool line (mockup .tool-line): the action's name left, then its keys — key_cap hints and / or
+## key_button actions — right. The line itself is a frame, not a button.
+static func tool_line(text: String, keys: Array) -> PanelContainer:
+	var line := PanelContainer.new()
+	line.theme_type_variation = TOOL_LINE
+	line.custom_minimum_size = Vector2(0, H_ACTION)
+	line.mouse_filter = Control.MOUSE_FILTER_STOP
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", GAP_CONTROL)
+	var l := label(text, BODY)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(l)
+	for k: Variant in keys:
+		row.add_child(k as Control)
+	line.add_child(row)
+	return line
+
+
+## An action line: a full-width ghost button, its name left and an optional hint glyph right
+## (GLYPH_GO for "opens something"). A switch line shows its state with set_selected.
+static func action_line(text: String, trailing: String = "") -> Button:
+	var b := button(text, BUTTON, H_ACTION)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.add_theme_constant_override(&"h_separation", GAP_ROW)
+	if trailing != "":
+		var t := label(trailing, HIT)
+		t.name = "Trailing"
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		t.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		t.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		t.offset_right = -PAD_CARD_X - 2
+		b.add_child(t)
+	return b
+
+
+## A tool-rail button: its icon above a small label; the open tool is set_selected (gold).
+static func rail_button(text: String, icon: Texture2D) -> Button:
+	var b := button(text, RAIL, H_RAIL)
+	b.icon = icon
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+	b.custom_minimum_size = Vector2(W_RAIL, H_RAIL)
+	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	return b
+
+
+## A crisp, state-tinted icon from an inline SVG (white strokes on transparent, 48 x 48 view box);
+## drawn at RAIL_ICON, rendered at twice that so it stays sharp at 2560 x 1440.
+static func svg_icon(svg: String) -> ImageTexture:
+	var img := Image.new()
+	img.load_svg_from_string(svg, RAIL_ICON * 2 / 48.0)
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+
+## A modal sheet over a dimmed screen (mockup .overlay / .sheet): {"root": the full-screen holder,
+## "sheet": the centred PanelContainer, "body": its content VBox, "close": the × button}.
+static func overlay_sheet(title: String, width: int) -> Dictionary:
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.theme = theme()
+	var scrim := ColorRect.new()
+	scrim.name = "Scrim"
+	scrim.color = SCRIM
+	scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(scrim)
+	var centre := CenterContainer.new()
+	centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(centre)
+	var sheet := PanelContainer.new()
+	sheet.name = "Sheet"
+	sheet.theme_type_variation = SHEET
+	sheet.custom_minimum_size = Vector2(width, 0)
+	centre.add_child(sheet)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override(&"separation", GAP_SECTION)
+	sheet.add_child(body)
+	var header := panel_header(title, true)
+	body.add_child(header)
+	return {"root": root, "sheet": sheet, "body": body, "close": header.get_node("CloseButton")}
 
 
 ## Folds a window to its header or unfolds it: hides / shows `body`, flips the collapse glyph and

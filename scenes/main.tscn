@@ -152,6 +152,8 @@ Controls:
 - Scroll: Zoom
 - Left Click: Select/Drag
 - Alt + Click: Multi-Select
+- Double Click: Select Whole Unit
+- Right Click: Menu / Remove Ruler
 - Shift + Click: Measure
 - R (hold): Rotate to face cursor
 - Shift+R: Rotate Group (Ctrl=rev)
@@ -159,12 +161,16 @@ Controls:
 - Shift+A: Arrow (on unit)
 - Ctrl+C/V/D: Copy/Paste/Dup
 - L: Lock/Unlock
+- Del: Delete Selected
+- Ctrl+Z / Ctrl+Y: Undo / Redo
 - G / Shift+G: Range Ring / clear
-- F / Shift+F: Sight/Range Fan / clear
+- F / Shift+F: Sight/Range Fan / Frontage
 - M / Shift+M: Move Bands / clear
-- P: Pin Ruler
+- P: Pin Ruler (while measuring)
 - K / Shift+K: Clear Rulers mine/all
-- T / Shift+T: Move Trails hide/clear"
+- T / Shift+T: Move Trails hide/clear
+- F7: Settings
+- F8: Export Battle Log"
 
 [node name="PerformanceLabel" type="Label" parent="UI/HUD"]
 unique_name_in_owner = true
