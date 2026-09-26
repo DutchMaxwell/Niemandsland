@@ -135,6 +135,10 @@ runs:
           T="core/target/$TRIPLE/release/libnml_core_godot.dylib"
           # -x drops local symbols, -S the debug map; the exported gdext_rust_init stays.
           strip -x -S "$T"
+          # cargo leaves the linker's absolute output path as the dylib's own install name (LC_ID_DYLIB, a load
+          # command that --remap-path-prefix never touches); a Mac-style id carries no build-machine path.
+          echo "Install name before: $(otool -D "$T" | tail -n 1) — raw /Users/ hits: $(LC_ALL=C grep -a -o /Users/ "$T" | wc -l | tr -d ' ')"
+          install_name_tool -id @rpath/libnml_core_godot.dylib "$T"
           SIZE=$(wc -c < "$T" | tr -d ' ')
           echo "Thin slice $TRIPLE: $T — $SIZE bytes"
           # Same 40 MB per-slice budget as the Linux library (measured 31,464,032 bytes stripped with tract).
@@ -147,7 +151,8 @@ runs:
         codesign --force --sign - --timestamp=none "$LIB"
         lipo -info "$LIB"
         SIZE=$(wc -c < "$LIB" | tr -d ' ')
-        PATHS=$(strings -a "$LIB" | grep -c /Users/ || true)
+        # Raw bytes, not Apple's strings: its -a reads sections only and misses load commands (the install name).
+        PATHS=$( (LC_ALL=C grep -a -o /Users/ "$LIB" || true) | wc -l | tr -d ' ')
         echo "Shipped dylib: $LIB — $SIZE bytes, /Users/ paths: $PATHS"
         if [ "$SIZE" -gt 83886080 ]; then
           echo "::error::the universal dylib is $SIZE bytes — over the 80 MB budget"; exit 1
