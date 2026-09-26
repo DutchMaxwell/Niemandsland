@@ -83,6 +83,8 @@ const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"tag_markers",      # Precision Tag marks (int) — the Spotter pool's once-per-game sister.
 	"spell_move_mod",   # {advance, rush} — the NET spell movement delta the move bands read.
 	"spell_range_mod",  # int — the NET spell shooting-range delta every volley/plan site reads.
+	"speed_feat_used_speed_feat",       # D22 (NML-984): a spent once-per-game Speed Feat (bool) —
+	"speed_feat_used_speed_feat_aura",  # the other table's wheel must not offer it again.
 ]
 
 var peer: ENetMultiplayerPeer = null

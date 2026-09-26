@@ -390,6 +390,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_solo_begin_spot(context)
 		"solo_pass":
 			_solo_begin_pass(context)
+		"solo_speed_feat":
+			_solo_spend_speed_feat(context)
 		"reinforce":
 			_begin_reinforcement(context)
 		"select_unit":
@@ -635,6 +637,14 @@ func _solo_begin_spot(context: Dictionary) -> void:
 	var main_node := get_node_or_null("/root/Main")
 	if unit != null and main_node != null and main_node.has_method("solo_begin_spot"):
 		main_node.call("solo_begin_spot", unit)
+
+
+## D22 (NML-984): the once-per-game Speed Feat — main owns the spend (flag, move bonus, log line, rings).
+func _solo_spend_speed_feat(context: Dictionary) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_spend_speed_feat"):
+		main_node.call("solo_spend_speed_feat", unit)
 
 
 ## Reinforcement (army-book v3.5.3): the owner takes the unit off the table as destroyed and is

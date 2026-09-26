@@ -1648,6 +1648,35 @@ func solo_begin_pass(unit: GameUnit) -> void:
 	await _solo_pump()
 
 
+## D22 (NML-984): YOUR half of the Speed Feat family (NACHTMAHR's is its endgame spend in
+## solo_controller.gd). The radial entry spends it for this activation: the shared once-per-game
+## flag (synced — the other table's wheel must not offer it again), the bonus as a round-long speed
+## record (its spell_move_mod stamp feeds the move bands and travels, NML-929), the AI's own log
+## words, and any shown move rings are rebuilt at once.
+func solo_spend_speed_feat(unit: GameUnit) -> void:
+	var feats := SoloController.unspent_speed_feats(unit)
+	if unit == null or feats.is_empty() or _solo_is_ai_unit(unit):
+		return
+	var n := str((feats[0] as Dictionary)["name"])
+	if unit.is_activated:
+		_log_rule_event(BattleLog.Category.MOVEMENT,
+			"%s: %s has already activated this round — the feat stays unspent" % [n, unit.get_name()])
+		return
+	var sp: Dictionary = (feats[0] as Dictionary).get("params", {})
+	var adv := int(sp.get("advance_mod", 2))
+	var rush := int(sp.get("rush_mod", 2))
+	_sync_unit_property(unit, SoloController.speed_feat_flag(n), true)
+	_solo_record_spell_mod(unit, n, {"modifier": {"advance_in": adv, "rush_in": rush}, "duration": "round", "quiet": true})
+	_log_rule_event(BattleLog.Category.MOVEMENT,
+		"%s: %s spends its once-per-game move bonus (+%d\"/+%d\")" % [n, unit.get_name(), adv, rush])
+	if movement_range_controller != null:
+		for m in unit.models:
+			var node: Node3D = (m as ModelInstance).node
+			if node != null and movement_range_controller.is_active(node):
+				movement_range_controller.clear(node)
+				movement_range_controller.toggle([node])
+
+
 ## Drive the alternation state machine until it waits for the human or the round ends. TAIL activations
 ## (the AI playing out its remaining units unprompted) run with a readable pause between them and a
 ## non-blocking "NACHTMAHR is taking its turn" banner so the player stays oriented.
@@ -3948,7 +3977,7 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 	_solo_apply_grant(tu, rec)
 	_solo_refresh_spell_stamps(tu)
 	_broadcast_spell_mods(tu)   # NML-929: the record itself rides the wire, not just its stamps
-	if battle_log != null:
+	if battle_log != null and not bool(effect.get("quiet", false)):   # "quiet": the caller logs its own rule line
 		var hd: PackedStringArray = []
 		if rec["hit_mod"] != 0:
 			hd.append("%+d to hit" % rec["hit_mod"])
