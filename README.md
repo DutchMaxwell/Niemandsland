@@ -23,9 +23,9 @@ Fantasy). Built in Godot.
 What the code actually does today:
 
 - **Solo mode vs NACHTMAHR** — play a whole game against the built-in opponent. NACHTMAHR is a
-  game AI (no LLM) that decides entirely offline and never cheats. In the Windows and Linux builds it
+  game AI (no LLM) that decides entirely offline and never cheats. In the Windows, Linux and macOS builds it
   plays with its new AI model **Erlkönig**: a search guided by a trained neural network (value net)
-  that ships with the game and runs in the Rust rules core; without the core (always on macOS) it plays by the official OPR solo
+  that ships with the game and runs in the Rust rules core; without the core (when it does not load) it plays by the official OPR solo
   decision trees. The game log names which one plays. Mark an imported army as AI-controlled,
   or let NACHTMAHR bring one of its own pre-built lists (fetched at runtime, cached locally).
   Deployment is a click-guided rulebook flow (roll-off, alternating placement, scouts, ambush
