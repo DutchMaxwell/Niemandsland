@@ -10,9 +10,9 @@ the full change history is in `git log`.
 
 **Solo mode — a full game against NACHTMAHR** — mark any imported army as AI-controlled
 (checkbox at import, or later in the solo panel), or press **AI Opponent** and let
-NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). On Linux and Windows
+NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). On Linux, Windows and macOS
 builds NACHTMAHR searches its moves with a **trained neural network (value net)** that ships with
-the game, inside the bundled Rust rules core; on macOS, or when that core does not load, it plays
+the game, inside the bundled Rust rules core; when that core does not load, it plays
 the **rule-based decision tree**. No language model, and **every decision is made offline**: the same inputs produce the same decisions, and
 nothing about a turn leaves the machine. One qualification, because "no network call" was too broad:
 if you let NACHTMAHR bring **its own** list, that list is fetched from the asset CDN the first time
@@ -339,7 +339,7 @@ neural network (value net) in the bundled Rust rules core.
 first version: the AI designation reaches every player, and each player rolls saves for their
 own units (#835, #836).
 Still out of scope: campaigns and ladders. The rule-based decision tree stays in every build as
-the fallback and is the only AI on macOS (see
+the fallback when the core does not load (see
 [`docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md`](docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md)).
 Sharing game records with the developer will only ever be opt-in and is off by default (see
 [`docs/PRIVACY_DATA_SHARING.md`](docs/PRIVACY_DATA_SHARING.md)).
@@ -355,8 +355,8 @@ and `hero_attachment_dialog.gd` were removed as dead code in January 2026 — th
 
 - **Solo is alpha.** One difficulty grade only (full strength); co-op against the AI is
   a first version; the rules listed under *Not automated* above must be
-  applied by hand; all solo UI is English-only. macOS builds carry no rules core, so there
-  NACHTMAHR plays the decision tree only; AI thinking time has been measured on one machine.
+  applied by hand; all solo UI is English-only. The macOS rules core is verified on GitHub's
+  macOS runners only (no real-Mac test yet); AI thinking time has been measured on one machine.
 - Dice can occasionally jitter at miniature scale (mitigated by the scaled-SubViewport
   dice approach; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#scaling)).
 - Some TTS texture-loading errors (non-fatal).

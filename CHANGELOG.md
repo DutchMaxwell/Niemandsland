@@ -6,6 +6,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Changed
+- **macOS builds carry the rules core, so NACHTMAHR plays Erlkönig there too.** The app ships a universal
+  (Apple Silicon + Intel) core library; the release build proves on a GitHub macOS runner that it loads and plays
+  before the zip is published. If the core fails to load, the game falls back to the decision tree as before.
+
 ## [0.3.13.1-alpha] — 2026-09-25
 
 A quiet follow-up to 0.3.13.0: save/load and multiplayer fixes from a code review, plus the table fixes merged the same day.
