@@ -207,6 +207,93 @@ func test_a_full_strength_unit_rolls_nothing_at_all() -> void:
 	assert_int(int(u.unit_properties.get("reanimated_round", -1))).is_equal(-1)
 
 
+# === D23 (NML-977) stage 1 — the binding activation start ===========================================
+# The trigger used to fire when a window OPENED (Shoot/Fight/Cast/Spot); a right-click cancel then left
+# the unit un-activated with its restores banked — a free Reanimation. begin_activation is the ONE door
+# now, and it opens at the committed action only.
+
+## The PLAYER's reanimating unit (the AI seat is 2): 4 models, 2 fallen.
+func _my_bots(unit_name: String, rules: Array = ["Reanimation"]) -> GameUnit:
+	var u := _bots(unit_name, 4, 2)
+	u.unit_properties["player_id"] = 1
+	u.unit_properties["special_rules"] = rules
+	return u
+
+
+func test_opening_a_window_and_cancelling_rolls_no_reanimation() -> void:
+	var u := _my_bots("Mine", ["Reanimation", "Precision Spotter"])
+	_reg(E2EBoot.make_unit(_main, 2, "Foe", [Vector3(10.0 * INCH, 0, 0)]))
+	await _main.solo_begin_targeting(u, false)   # Shoot: the targeting window opens ...
+	_main._solo_end_targeting()                  # ... and the right-click cancels it
+	await _main.solo_begin_spot(u)               # Spot: the pick window opens ...
+	_main._solo_end_targeting()                  # ... and is cancelled too
+	assert_int(_count("Reanimation: Mine rolls")) \
+		.override_failure_message("a cancelled window rolled a free Reanimation:\n%s" % _log_text()) \
+		.is_equal(0)
+	assert_int(int(u.unit_properties.get("reanimated_round", -1))).is_equal(-1)
+	assert_int(u.get_alive_count()).is_equal(2)
+
+
+func test_the_committed_spot_pick_begins_the_activation_once() -> void:
+	var u := _my_bots("Mine", ["Reanimation", "Precision Spotter"])
+	var foe := _reg(E2EBoot.make_unit(_main, 2, "Foe", [Vector3(10.0 * INCH, 0, 0)]))
+	await _main.solo_begin_spot(u)
+	assert_int(_count("Reanimation: Mine rolls")).override_failure_message("the open window rolled already").is_equal(0)
+	assert_bool((_main._solo_target_mode.get("spot_valid", []) as Array).has(foe)).is_true()
+	await _main._solo_spot_click(foe)   # the pick commits: the activation begins HERE
+	assert_int(_count("Reanimation: Mine rolls")).is_equal(1)
+	assert_int(int(u.unit_properties.get("reanimated_round", -1))).is_equal(_main.opr_army_manager.current_round)
+	assert_bool(_main.has_method("begin_activation")).override_failure_message("no begin_activation door").is_true()
+	if _main.has_method("begin_activation"):
+		await _main.call("begin_activation", u)   # a later door in the same round
+	assert_int(_count("Reanimation: Mine rolls")).override_failure_message("a second door rolled again").is_equal(1)
+
+
+## The index of the first battle-log line containing `needle`, -1 when none.
+func _first(needle: String) -> int:
+	var entries: Array = _main.battle_log.entries()
+	for i in entries.size():
+		if str((entries[i] as Dictionary)["text"]).contains(needle):
+			return i
+	return -1
+
+
+func test_a_committed_attack_begins_the_activation_before_it_shoots() -> void:
+	var u := _my_bots("Mine")
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Gauss"
+	w.range_value = 24
+	w.attacks = 1
+	var ws: Array[OPRApiClient.OPRWeapon] = [w]
+	var src := OPRApiClient.OPRUnit.new()
+	src.weapons = ws
+	u.source_type = "opr"
+	u.source_data = src
+	var foe := _reg(E2EBoot.make_unit(_main, 2, "Foe", [Vector3(10.0 * INCH, 0, 0)]))
+	foe.activate(1)   # NACHTMAHR has nothing left to answer with — the reply turn is not this case
+	await _main.solo_begin_targeting(u, false)
+	assert_int(_count("Reanimation: Mine rolls")).override_failure_message("the open window rolled already").is_equal(0)
+	_main._solo_end_targeting()   # the target click ends the targeting mode, then attacks
+	await _main._run_human_attack(u, foe, false)
+	assert_int(_count("Reanimation: Mine rolls")).override_failure_message("the committed attack rolled no Reanimation").is_equal(1)
+	# "When activated": the restores come BEFORE the volley, not with the activation's end marker.
+	assert_int(_first("Foe")).override_failure_message("the volley logged nothing:\n%s" % _log_text()).is_greater(-1)
+	assert_int(_first("Reanimation: Mine rolls")) \
+		.override_failure_message("Reanimation rolled after the volley:\n%s" % _log_text()) \
+		.is_less(_first("Foe"))
+
+
+func test_a_cast_refused_for_tokens_begins_nothing() -> void:
+	var u := _my_bots("Mine")
+	var foe := _reg(E2EBoot.make_unit(_main, 2, "Foe", [Vector3(10.0 * INCH, 0, 0)]))
+	u.casts_current = 0
+	await _main._run_human_cast(u, u, {"name": "Bolt", "threshold": 2}, [foe])
+	assert_str(_log_text()).contains("Mine: not enough tokens for Bolt")
+	assert_int(_count("Reanimation: Mine rolls")) \
+		.override_failure_message("a refused cast began the activation — a free Reanimation") \
+		.is_equal(0)
+
+
 func test_the_ai_pick_is_peeked_once_and_then_consumed() -> void:
 	# The AI's trigger runs BEFORE the decision tree, so main peeks the pick. The peek must not
 	# consume a second draw — otherwise every AI activation would skip a unit.

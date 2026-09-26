@@ -1007,7 +1007,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# resolve them on the real tray, THEN let the decision tree plan — so a restored model is on the
 	# table while the move is planned instead of being left behind at the unit's start position. The
 	# peek caches its draw, so the seeded unit selection stays byte-identical to a run without it.
-	await _solo_try_reanimation(solo_controller.peek_next_ai_unit())
+	await begin_activation(solo_controller.peek_next_ai_unit())
 	var act_t0 := Time.get_ticks_usec()
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	# S4 wait-time instrument (NML_ACT_WALL=1): the decision call a player waits for, on the
@@ -4965,10 +4965,18 @@ func _solo_reanimation_mapped(unit: GameUnit) -> bool:
 		SoloController.REANIMATION_RULE)
 
 
-## THE activation trigger — every door that starts a unit's activation calls this first (AI: the
-## peeked pick before the decision tree; human: shoot/fight/cast/spot, embark/disembark, the manual
-## activation toggle). Rolls the pool in the real dice tray and applies the restores. Silent no-op
-## when the unit does not carry the rule, when nothing is missing, or when it already fired this round.
+## D23 (NML-977) stage 1 — THE binding activation start. Every activation-triggered rule fires here
+## (Spawn, then Reanimation — both inside _solo_try_reanimation), each exactly once per unit per round
+## by its own round stamp, and only at a COMMITTED action: the resolving attack/cast/spot pick, the
+## manual activation toggle, embark/disembark, the AI's peeked pick. Opening a window and cancelling
+## it starts nothing (it used to bank a free Reanimation). Stage 2's "Activate" button calls this too.
+func begin_activation(unit: GameUnit) -> void:
+	await _solo_try_reanimation(unit)
+
+
+## The Spawn + Reanimation trigger behind begin_activation (the only production caller). Rolls the
+## pool in the real dice tray and applies the restores. Silent no-op when the unit does not carry the
+## rule, when nothing is missing, or when it already fired this round.
 func _solo_try_reanimation(unit: GameUnit) -> void:
 	if unit == null or opr_army_manager == null or solo_controller == null:
 		return
@@ -9391,8 +9399,7 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
 		return
-	# Activation door (Reanimation): the first door a unit opens this round rolls its restores.
-	await _solo_try_reanimation(unit)
+	# No activation door here (D23): opening the window commits nothing — _run_human_attack begins it.
 	# Cast-window guard (maintainer decision "Vorfrage" 2026-07-23): spells go BEFORE the attack
 	# ("at any point before attacking" — GF v3.5.1 Caster(X)) and the attack COMPLETES the
 	# activation (X1), so a shoot click would silently burn the cast window. ONE ask per unit per
@@ -9430,8 +9437,7 @@ func solo_begin_cast(unit: GameUnit) -> void:
 				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
 		return
 	_ensure_solo_controller()
-	# Activation door (Reanimation) — see solo_begin_targeting; the round stamp keeps it to one roll.
-	await _solo_try_reanimation(unit)
+	# No activation door here (D23): the spell picker commits nothing — _run_human_cast begins it.
 	var member := RadialMenu._caster_member_of(unit)
 	if member == null:
 		if battle_log != null:
@@ -9499,6 +9505,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 		return
 	if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
 		network_manager.broadcast_unit_casts(member)
+	await begin_activation(unit)   # D23: the paid cast is the committed action (a refused one begins nothing)
 	# #227 (was the v1 auto-fill): every target is the PLAYER's click now.
 	var targets: Array = picked
 	if targets.size() > 1 and battle_log != null:
@@ -10328,6 +10335,7 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> void:
 	if attacker == null or target == null or dice_roller_control == null:
 		return
+	await begin_activation(attacker)   # D23: the resolving attack is the committed action
 	_solo_log_unmodeled_rules(attacker)
 	_solo_log_unmodeled_rules(target)
 	if melee:
@@ -10489,8 +10497,7 @@ func solo_begin_spot(unit: GameUnit) -> void:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"%s already spotted this round (once per activation)" % unit.get_name())
 		return
-	# Activation door (Reanimation) — see solo_begin_targeting; the round stamp keeps it to one roll.
-	await _solo_try_reanimation(unit)
+	# No activation door here (D23): the spot window commits nothing — _solo_spot_click begins it.
 	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
 	var cands: Array = []
 	var blocked_eu: GameUnit = null   # NML-967: nearest in-range refusal, named in the empty-set log
@@ -10535,6 +10542,7 @@ func _solo_spot_click(target: GameUnit) -> void:
 	_solo_end_targeting()
 	if opr_army_manager != null:
 		spotter.unit_properties["spotted_round"] = opr_army_manager.current_round
+	await begin_activation(spotter)   # D23: the pick is the committed action
 	_solo_resolve_spot(spotter, target)
 
 
@@ -10572,6 +10580,7 @@ func _solo_complete_human_attack(attacker: GameUnit) -> void:
 func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: GameUnit, b_names: Array) -> void:
 	if attacker == null or target_a == null or target_b == null:
 		return
+	await begin_activation(attacker)   # D23: the pressed Fire! is the committed action
 	_solo_log_unmodeled_rules(attacker)
 	_solo_log_unmodeled_rules(target_a)
 	_solo_log_unmodeled_rules(target_b)
