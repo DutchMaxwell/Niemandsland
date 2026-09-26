@@ -1,9 +1,9 @@
 extends GdUnitTestSuite
-## E2E — the ☰ game menu, rows 1-4 of the UI inventory (uimenu PR 1: the slide-out shell, "Table and
-## army", "Save / Load / Graphics / End Battle"; PR 2: "Multiplayer" + the room code; mockup LOOK,
-## today's FULL function set). Every control of today's menu is found in the open column by the words the
-## player reads, is reached by a REAL click and does what it does today. The solo / deployment sections
-## (rows 5, 6) are PR 3 and are not checked here.
+## E2E — the ☰ game menu, rows 1-6 of the UI inventory (uimenu PR 1: the slide-out shell, "Table and
+## army", "Save / Load / Graphics / End Battle"; PR 2: "Multiplayer" + the room code; PR 3: the NACHTMAHR
+## solo section with the grade picker, deployment zones, host tools, Start Game; mockup LOOK, today's FULL
+## function set). Every control of today's menu is found in the open column by the words the player
+## reads, is reached by a REAL click and does what it does today.
 ## test_inventory_check_names_a_removed_control proves the presence check can fail.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -33,6 +33,16 @@ const STATES := [
 const GRAPHICS := ["Performance", "Low", "Medium", "High", "Ultra"]
 ## Buttons that explain themselves on hover.
 const TOOLTIPS := ["Sort Table", "Next Round", "Settings", "AI Opponent"]
+## Row 6: deployment zones and the phase gate (the host tools show only to the host of a live session).
+const DEPLOY_BUTTONS := ["Show Deployment Zones", "Flip Zone Colours", "Start Game"]
+const DEPLOY_LABELS := ["Deployment Zones:", "(Configure in Map Tool)"]
+## Row 5 with two imported armies (no army object: "Army"); the grade picker joins the AI seat's row.
+const SOLO_BUTTONS := ["Fast AI (short pauses)", "AI reasoning in the log", "AI plays P1 — Army",
+	"AI plays P2 — Army", "Start Deployment"]
+const SOLO_LABELS := ["NACHTMAHR:", "Mission:"]
+## A picked grade is saved: to a test file, never the player's own user://solo.cfg (as e2e_solo_grade_test).
+const SOLO_CFG := "user://e2e_game_menu_solo.cfg"
+const SOLO_CFG_OVERRIDE := "niemandsland/solo_cfg_override"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -44,6 +54,8 @@ func before_test() -> void:
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_peer_before = get_tree().get_multiplayer().multiplayer_peer
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SOLO_CFG))
+	ProjectSettings.set_setting(SOLO_CFG_OVERRIDE, SOLO_CFG)
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
@@ -55,6 +67,8 @@ func after_test() -> void:
 	# shares it, so every later suite logged "No multiplayer peer is assigned" and the card suite's AI
 	# seat read differently (measured: 131 errors over 15 suites). Put the offline peer back.
 	get_tree().get_multiplayer().multiplayer_peer = _peer_before
+	ProjectSettings.set_setting(SOLO_CFG_OVERRIDE, "")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SOLO_CFG))
 	_main = null
 	_runner = null
 
@@ -87,6 +101,10 @@ func _click(c: Control) -> void:
 	var vp := c.get_viewport()
 	var at := c.get_global_rect().get_center()
 	E2EBoot.motion_canvas(vp, at)
+	# The pointer must be ON the control: another surface over it would take the click instead.
+	var under := vp.gui_get_hovered_control()
+	assert_bool(under == c or (under != null and c.is_ancestor_of(under))).override_failure_message(
+		"%s is covered at %s by %s" % [c.name, at, under.get_path() if under != null else "nothing"]).is_true()
 	E2EBoot.click_canvas(vp, at, true)
 	E2EBoot.click_canvas(vp, at, false)
 	await _runner.simulate_frames(3)
@@ -95,6 +113,8 @@ func _click(c: Control) -> void:
 func _button(text: String) -> Button:
 	for n: Node in _scroll().find_children("*", "Button", true, false):
 		var b := n as Button
+		if b.is_queued_for_deletion():   # the solo section rebuilds: its old nodes linger to the frame's end
+			continue
 		if not (b is OptionButton) and (b.text == text or (text == "Next Round" and b.text.begins_with(text))):
 			return b
 	return null
@@ -102,9 +122,58 @@ func _button(text: String) -> Button:
 
 func _label(text: String) -> Label:
 	for n: Node in _scroll().find_children("*", "Label", true, false):
-		if (n as Label).text == text:
+		if (n as Label).text == text and not n.is_queued_for_deletion():
 			return n as Label
 	return null
+
+
+## A dropdown of the solo section by its first entry's text or metadata.
+func _solo_option(first: String) -> OptionButton:
+	for n: Node in _main.solo_panel_box.get_children():
+		var o := n as OptionButton
+		if o != null and not o.is_queued_for_deletion() and o.item_count > 0 \
+				and (o.get_item_text(0) == first or str(o.get_item_metadata(0)) == first):
+			return o
+	return null
+
+
+## Picks entry `index` of a dropdown as a player does: a real PRESS opens the list (asserted), the entry is
+## chosen, the list closes, then the button is let go. Not a plain click: a dropdown at the screen's bottom
+## opens its list OVER its own button, and the release then picks whatever entry lies under the pointer —
+## measured on the mission dropdown: entry 3, with 0 ms and with 200 ms between press and release.
+func _pick(o: OptionButton, index: int) -> void:
+	_scroll().ensure_control_visible(o)
+	await _runner.simulate_frames(2)
+	var vp := o.get_viewport()
+	var at := o.get_global_rect().get_center()
+	E2EBoot.motion_canvas(vp, at)
+	assert_object(vp.gui_get_hovered_control()).override_failure_message("%s is covered" % o.name).is_same(o)
+	E2EBoot.click_canvas(vp, at, true)
+	assert_bool(o.get_popup().visible).override_failure_message("the %s list did not open" % o.name).is_true()
+	o.get_popup().index_pressed.emit(index)
+	o.get_popup().hide()
+	E2EBoot.click_canvas(vp, at, false)
+	await _runner.simulate_frames(3)
+
+
+## The column's widest control in a section, as "path (min px)" — the one that decides the column's width.
+func _widest() -> String:
+	var best: Control = null
+	for n: Node in _scroll().get_node("LeftPanelVBox").get_children():
+		for c: Node in [n] + n.find_children("*", "Control", true, false):
+			var ctl := c as Control
+			if ctl != null and ctl.is_visible_in_tree() and not (ctl is Container) \
+					and (best == null or ctl.get_combined_minimum_size().x > best.get_combined_minimum_size().x):
+				best = ctl
+	return "%s (%d px)" % [_scroll().get_path_to(best), best.get_combined_minimum_size().x] if best != null else "none"
+
+
+## Row 5 appears once armies are imported: two, as e2e_solo_grade_test (the section rebuilds deferred).
+func _show_solo_section() -> void:
+	_main.opr_army_manager.armies = {1: null, 2: null}
+	_main._refresh_solo_panel()
+	await E2EBoot.settle(get_tree())
+	await _open_menu()
 
 
 func _graphics() -> OptionButton:
@@ -131,9 +200,12 @@ func _shown(c: Control) -> bool:
 func _missing_controls() -> Array:
 	await _open_menu()
 	var missing: Array = []
-	for t: String in BUTTONS + MP_BUTTONS:
+	for t: String in BUTTONS + MP_BUTTONS + DEPLOY_BUTTONS:
 		if not _shown(_button(t)):
 			missing.append("button: " + t)
+	for t: String in DEPLOY_LABELS:
+		if not _shown(_label(t)):
+			missing.append("label: " + t)
 	if not _shown(_main.network_status_label) or _main.network_status_label.text != "Offline":
 		missing.append("status: Offline")
 	for t: String in LABELS:
@@ -220,7 +292,7 @@ func test_every_control_of_rows_2_to_4_is_in_the_open_menu(timeout := 120000) ->
 	assert_bool(red.r > red.g + 0.3 and red.r > red.b + 0.3).override_failure_message("End Battle is not red: %s" % red).is_true()
 
 
-func test_rows_2_to_4_wear_the_house_style_and_the_other_sections_keep_theirs(timeout := 120000) -> void:
+func test_rows_2_to_4_wear_the_house_style(timeout := 120000) -> void:
 	await _open_menu()
 	for t: String in BUTTONS + MP_BUTTONS + ["Disconnect"]:
 		var want: StringName = HouseStyle.DANGER_BUTTON if t.begins_with("End Battle") else HouseStyle.BUTTON
@@ -236,13 +308,6 @@ func test_rows_2_to_4_wear_the_house_style_and_the_other_sections_keep_theirs(ti
 	assert_str(String(room.theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
 	assert_object(room.theme).is_same(HouseStyle.theme())
 	assert_that(room.get_theme_color(&"font_color")).is_equal(HouseStyle.OK)
-	# PR 3: solo and deployment keep today's look — no house style reaches them.
-	for section: String in ["DeploymentPanel"]:
-		var box := _scroll().get_node("LeftPanelVBox/" + section) as Control
-		for n: Node in [box] + box.find_children("*", "Control", true, false):
-			assert_str(String((n as Control).theme_type_variation)).override_failure_message("%s/%s was restyled" % [section, n.name]).is_empty()
-			assert_object((n as Control).theme).override_failure_message("%s/%s wears the house theme" % [section, n.name]) \
-				.is_not_same(HouseStyle.theme())
 
 
 func test_inventory_check_names_a_removed_control(timeout := 120000) -> void:
@@ -438,4 +503,146 @@ func test_the_status_line_wears_house_tokens_and_wraps_inside_the_column(timeout
 		for i in status.text.length():
 			assert_bool(status.text.unicode_at(i) <= 0x20 or font.has_char(status.text.unicode_at(i))) \
 				.override_failure_message("the status font lacks \"%s\"" % status.text[i]).is_true()
+	await E2EBoot.settle(get_tree())
+
+
+func test_deployment_zones_host_tools_and_start_game_do_what_they_do_today(timeout := 120000) -> void:
+	await _open_menu()
+	var overlay: Node = _main.terrain_overlay
+	var zones := _button("Show Deployment Zones")
+	var shown: bool = overlay.deployment_zones_visible
+	await _click(zones)
+	assert_bool(overlay.deployment_zones_visible).override_failure_message("Show Deployment Zones did not show them").is_equal(not shown)
+	assert_bool(zones.button_pressed).is_equal(not shown)
+	await _click(zones)
+	assert_bool(overlay.deployment_zones_visible).is_equal(shown)
+	var flipped: bool = overlay.deployment_colors_flipped
+	await _click(_button("Flip Zone Colours"))
+	assert_bool(overlay.deployment_colors_flipped).override_failure_message("Flip Zone Colours did not flip them").is_equal(not flipped)
+
+	# Host tools: only the host of a live session sees them — offline they are hidden. Shown for the click.
+	var host_box: Control = _main._host_tools_box
+	assert_bool(host_box.visible).override_failure_message("the host tools show offline").is_false()
+	host_box.visible = true
+	var free := _button("Move all models")
+	await _click(free)
+	assert_bool(_main.object_manager.host_free_move).override_failure_message("Move all models did not lift the lock").is_true()
+	assert_bool(_main.battle_log.entries().any(func(e: Dictionary) -> bool:
+		return e["text"] == "Free-move enabled (everyone may move all models)")).override_failure_message("free-move was not logged").is_true()
+	await _click(free)
+	assert_bool(_main.object_manager.host_free_move).is_false()
+	host_box.visible = false
+
+	# Single player, empty table: Start Game begins round 1 and goes away.
+	var start := _button("Start Game")
+	assert_str(start.tooltip_text).is_not_empty()
+	await _click(start)
+	assert_bool(_main.opr_army_manager.is_deployment_phase()).override_failure_message("Start Game did not start the game").is_false()
+	assert_bool(start.visible).is_false()
+	await E2EBoot.settle(get_tree())
+
+
+func test_the_solo_section_appears_with_armies_and_every_control_works(timeout := 120000) -> void:
+	await _open_menu()
+	assert_bool(_main.solo_panel_box.visible).override_failure_message("the solo section shows without armies").is_false()
+	await _show_solo_section()
+	var missing: Array = []
+	for t: String in SOLO_BUTTONS:
+		if not _shown(_button(t)):
+			missing.append("button: " + t)
+	for t: String in SOLO_LABELS:
+		if not _shown(_label(t)):
+			missing.append("label: " + t)
+	if not _shown(_solo_option("Duel (no mission)")):
+		missing.append("dropdown: Mission")
+	assert_array(missing).override_failure_message("today's solo controls missing: %s" % str(missing)).is_empty()
+	if not missing.is_empty():
+		return
+	assert_str(_label("NACHTMAHR:").tooltip_text).is_not_empty()
+	var fast: bool = _main._solo_fast
+	await _click(_button("Fast AI (short pauses)"))
+	assert_bool(_main._solo_fast).override_failure_message("Fast AI did not switch").is_equal(not fast)
+	var dev: bool = _main._solo_dev
+	await _click(_button("AI reasoning in the log"))
+	assert_bool(_main._solo_dev).override_failure_message("AI reasoning did not switch").is_equal(not dev)
+
+	# Mission: Duel + every catalog mission by its display name; a pick is this game's mission.
+	var ids := MissionCatalog.mission_ids()
+	var mission := _solo_option("Duel (no mission)")
+	assert_int(mission.item_count).is_equal(1 + ids.size())
+	await _pick(mission, 1)
+	assert_str(mission.get_item_text(1)).is_equal(MissionCatalog.display_name(ids[0]))
+	assert_str(_main._solo_mission_id).override_failure_message("the mission pick did not take").is_equal(ids[0])
+
+	# Start Deployment runs the guided deployment (roll-off, table edge, alternate units) — a whole game
+	# flow for two empty armies; the click is proven to reach it and today's handler to be wired to it.
+	var deploy := _button("Start Deployment")
+	var handler := Callable(_main, &"_on_solo_deploy_pressed")
+	assert_bool(deploy.pressed.is_connected(handler)).override_failure_message("Start Deployment lost its handler").is_true()
+	deploy.pressed.disconnect(handler)
+	var presses := [0]
+	var spy := func() -> void: presses[0] += 1
+	deploy.pressed.connect(spy)
+	await _click(deploy)
+	deploy.pressed.disconnect(spy)
+	deploy.pressed.connect(handler)
+	assert_int(presses[0]).override_failure_message("a click on Start Deployment did not press it").is_equal(1)
+
+	# AI plays P2: NACHTMAHR takes the slot and the grade picker joins that row (the section rebuilds).
+	assert_object(_solo_option("daemmerung")).override_failure_message("a grade picker without an AI seat").is_null()
+	await _click(_button("AI plays P2 — Army"))
+	await E2EBoot.settle(get_tree())
+	assert_bool(_main.solo_ai_slots.has(2)).override_failure_message("AI plays P2 did not seat NACHTMAHR").is_true()
+	var grade := _solo_option("daemmerung")
+	assert_object(grade).override_failure_message("no grade picker in the AI row").is_not_null()
+	if grade == null:
+		return
+	assert_int(grade.get_index()).is_equal(_button("AI plays P2 — Army").get_index() + 1)
+	assert_str(grade.text).is_equal("Albtraum")
+	await _pick(grade, 1)   # the player picks Zwielicht
+	assert_str(grade.text).is_equal("Zwielicht")
+	assert_str(_main._solo_interactive_grade).is_equal("zwielicht")
+	assert_bool(FileAccess.file_exists(SOLO_CFG)).override_failure_message("the grade was not saved").is_true()
+	await E2EBoot.settle(get_tree())
+
+
+## The last two sections in the house style: every section is a house section, its first label the
+## eyebrow, later ones body or caption; every control a menu line; no font size or colour of its own
+## except Start Game's "go" ink. The open solo section with the grade picker still fits the column — also
+## when the column scrolls: its scrollbar then takes 8 px inside it, and no line may push it wider for that
+## (#1145 CI: "Show Deployment Zones" needed 230 px and pushed the column to 266 px at ui_scale 1.0; the
+## local runs sat at the laptop's saved ui_scale 0.8, a taller canvas, and never scrolled).
+func test_rows_5_and_6_wear_the_house_style(timeout := 120000) -> void:
+	await _show_solo_section()
+	await _click(_button("AI plays P2 — Army"))
+	await E2EBoot.settle(get_tree())
+	_main._host_tools_box.visible = true
+	_scroll().anchor_bottom = 0.0   # a column shorter than its content, on any screen: it must scroll
+	_scroll().offset_bottom = _scroll().offset_top + 400.0
+	await _runner.simulate_frames(3)
+	assert_bool(_scroll().get_v_scroll_bar().visible).override_failure_message("the shortened column does not scroll").is_true()
+	var width: float = _scroll().offset_right - _scroll().offset_left
+	assert_float(_scroll().get_combined_minimum_size().x).override_failure_message("the column needs %d px, it has %d: %s" % [
+		_scroll().get_combined_minimum_size().x, width, _widest()]).is_less_equal(width)
+	for section: String in ["SoloPanel", "DeploymentPanel", "GamePhasePanel", "HostToolsPanel"]:
+		var box := _scroll().get_node("LeftPanelVBox/" + section) as Control
+		assert_object(box.theme).override_failure_message("%s is not a house section" % section).is_same(HouseStyle.theme())
+		var first := true
+		for n: Node in box.get_children():
+			var c := n as Control
+			if c == null or c.is_queued_for_deletion():
+				continue
+			var where := "%s/%s" % [section, c.name]
+			var v := String(c.theme_type_variation)
+			if c is Label:
+				var want: Array = [String(HouseStyle.EYEBROW)] if first else [String(HouseStyle.BODY), String(HouseStyle.CAPTION)]
+				assert_array(want).override_failure_message("%s is a \"%s\" label" % [where, v]).contains([v])
+			elif c is Button:
+				assert_str(v).override_failure_message("%s is not a menu line" % where).is_equal(String(HouseStyle.BUTTON))
+			first = false
+			assert_bool(c.has_theme_font_size_override(&"font_size")).override_failure_message("%s keeps its own font size" % where).is_false()
+			if c == _main._start_game_button:
+				assert_that(c.get_theme_color(&"font_color")).is_equal(HouseStyle.tone_ink(HouseStyle.TONE_OK))
+			else:
+				assert_bool(c.has_theme_color_override(&"font_color")).override_failure_message("%s keeps its own colour" % where).is_false()
 	await E2EBoot.settle(get_tree())

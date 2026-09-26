@@ -16245,14 +16245,12 @@ func _refresh_solo_panel() -> void:
 	label.text = "NACHTMAHR:"
 	label.tooltip_text = "Mark the army the AI controls. The AI answers each of your activations with one of its own (alternating activation); after %d rounds the game is scored. F11 runs the whole remaining AI side at once (debug)." % SOLO_GAME_ROUNDS
 	label.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default — needed for the tooltip
-	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	solo_panel_box.add_child(label)
 	var fast_cb := CheckButton.new()
 	fast_cb.text = "Fast AI (short pauses)"
 	fast_cb.tooltip_text = "Skips the move animation and shrinks the announce/outcome pauses of AI actions."
 	fast_cb.button_pressed = _solo_fast
 	fast_cb.focus_mode = Control.FOCUS_NONE
-	fast_cb.add_theme_font_size_override("font_size", 12)
 	fast_cb.toggled.connect(func(pressed: bool) -> void: _solo_fast = pressed)
 	solo_panel_box.add_child(fast_cb)
 	# NML-1084: the AI log is a player-facing option again (see ai_reasoning_toggle_visible).
@@ -16262,7 +16260,6 @@ func _refresh_solo_panel() -> void:
 	dev_cb.tooltip_text = "Log WHY the AI decides: deployment spots, activation picks, tree branches, target EV scores, move budgets. Off = zero rendering cost."
 	dev_cb.button_pressed = _solo_dev
 	dev_cb.focus_mode = Control.FOCUS_NONE
-	dev_cb.add_theme_font_size_override("font_size", 12)
 	dev_cb.toggled.connect(func(pressed: bool) -> void: _solo_dev = pressed)
 	solo_panel_box.add_child(dev_cb)
 	# The difficulty ladder (grill 25.09.2026): the grade picker sits in the AI seat's row — the one slot
@@ -16274,7 +16271,6 @@ func _refresh_solo_panel() -> void:
 		cb.text = "AI plays P%d — %s" % [int(pid), (str(army.name) if army != null else "Army")]
 		cb.button_pressed = solo_ai_slots.has(int(pid))
 		cb.focus_mode = Control.FOCUS_NONE
-		cb.add_theme_font_size_override("font_size", 12)
 		cb.toggled.connect(_on_solo_ai_toggled.bind(int(pid)))
 		solo_panel_box.add_child(cb)
 		if solo_ai_slots.has(int(pid)) and int(pid) == _solo_ai_slot() \
@@ -16284,12 +16280,11 @@ func _refresh_solo_panel() -> void:
 	# hard-code display names: read them from the catalog so a catalog edit renames the menu).
 	var mission_label := Label.new()
 	mission_label.text = "Mission:"
-	mission_label.add_theme_font_size_override("font_size", 12)
+	mission_label.theme_type_variation = HouseStyle.CAPTION   # a field caption, not the section title
 	solo_panel_box.add_child(mission_label)
 	solo_mission_option = OptionButton.new()
 	solo_mission_option.tooltip_text = "Pick a catalog mission for this game (automatic objectives), or Duel for today's hand-placed markers."
 	solo_mission_option.focus_mode = Control.FOCUS_NONE
-	solo_mission_option.add_theme_font_size_override("font_size", 12)
 	solo_mission_option.add_item("Duel (no mission)")
 	solo_mission_option.set_item_metadata(0, "")
 	var mission_ids := MissionCatalog.mission_ids()
@@ -16312,6 +16307,7 @@ func _refresh_solo_panel() -> void:
 	# it is not offered (players deploy freely, alternating by their own agreement).
 	deploy_btn.visible = network_manager == null or not network_manager.is_multiplayer_active()
 	solo_panel_box.add_child(deploy_btn)
+	GameMenu.section(solo_panel_box)
 
 
 ## The grade dropdown: name + one-line description per grade, NACHTMAHR greyed "coming" (grill Q5/Q6).
@@ -16326,7 +16322,6 @@ func _solo_grade_option() -> OptionButton:
 	opt.focus_mode = Control.FOCUS_NONE
 	opt.fit_to_longest_item = false   # the long descriptions live in the list, not in the panel width
 	opt.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	opt.add_theme_font_size_override("font_size", 12)
 	for g in SoloGrade.GRADES:
 		opt.add_item("%s — %s" % [SoloGrade.display_name(g), SoloGrade.description(g, macos)])
 		opt.set_item_metadata(opt.item_count - 1, g)
@@ -16386,15 +16381,14 @@ func _init_host_tools_ui() -> void:
 	_host_tools_box = box
 	var label := Label.new()
 	label.text = "Host tools:"
-	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	box.add_child(label)
 	_host_free_move_check = CheckButton.new()
 	_host_free_move_check.text = "Move all models"
 	_host_free_move_check.tooltip_text = "Lift the ownership lock for EVERYONE at the table (solo / refereeing). Only the host can switch this."
 	_host_free_move_check.focus_mode = Control.FOCUS_NONE
-	_host_free_move_check.add_theme_font_size_override("font_size", 12)
 	_host_free_move_check.toggled.connect(_on_host_free_move_toggled)
 	box.add_child(_host_free_move_check)
+	GameMenu.section(box)
 	_refresh_host_tools_visibility()
 
 
@@ -16439,24 +16433,21 @@ func _init_deployment_zones_ui() -> void:
 	deployment_panel.name = "DeploymentPanel"
 	left_panel_vbox.add_child(deployment_panel)
 
-	# Add label with Glassmorphism styling
+	# The section's title (GameMenu.section below dresses it)
 	var label = Label.new()
 	label.text = "Deployment Zones:"
-	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	deployment_panel.add_child(label)
 
 	# Info label explaining where to edit
 	var info_label = Label.new()
 	info_label.text = "(Configure in Map Tool)"
-	info_label.add_theme_font_size_override("font_size", 11)
-	info_label.add_theme_color_override("font_color", Color(0.6, 0.63, 0.7, 1.0))
+	info_label.theme_type_variation = HouseStyle.CAPTION
 	deployment_panel.add_child(info_label)
 
 	# Create CheckBox for visibility toggle
 	deployment_zone_check = CheckBox.new()
 	deployment_zone_check.text = "Show Deployment Zones"
 	deployment_zone_check.button_pressed = false
-	deployment_zone_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	deployment_zone_check.toggled.connect(_on_deployment_zones_visibility_toggled)
 	deployment_panel.add_child(deployment_zone_check)
 
@@ -16464,9 +16455,9 @@ func _init_deployment_zones_ui() -> void:
 	deployment_flip_check = CheckBox.new()
 	deployment_flip_check.text = "Flip Zone Colours"
 	deployment_flip_check.button_pressed = false
-	deployment_flip_check.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
 	deployment_flip_check.toggled.connect(_on_deployment_flip_toggled)
 	deployment_panel.add_child(deployment_flip_check)
+	GameMenu.section(deployment_panel)
 
 
 ## Handle deployment zone visibility toggle
@@ -16523,16 +16514,16 @@ func _init_game_phase_ui() -> void:
 	_start_game_button = Button.new()
 	_start_game_button.name = "StartGameButton"
 	_start_game_button.focus_mode = Control.FOCUS_NONE
-	_start_game_button.add_theme_color_override("font_color", Color(0.4, 0.95, 0.55))
+	_start_game_button.add_theme_color_override("font_color", HouseStyle.tone_ink(HouseStyle.TONE_OK))   # "go"
 	_start_game_button.pressed.connect(_on_start_game_pressed)
 	panel.add_child(_start_game_button)
 
 	_game_phase_status_label = Label.new()
 	_game_phase_status_label.name = "GamePhaseStatus"
-	_game_phase_status_label.add_theme_font_size_override("font_size", 11)
-	_game_phase_status_label.add_theme_color_override("font_color", Color(0.6, 0.63, 0.7, 1.0))
+	_game_phase_status_label.theme_type_variation = HouseStyle.CAPTION
 	_game_phase_status_label.visible = false
 	panel.add_child(_game_phase_status_label)
+	GameMenu.section(panel)
 
 	_update_game_phase_ui()
 
