@@ -115,6 +115,10 @@ var _move_trail_dump: Array = []        # per-activation per-model path polyline
 var _move_trail_walls: Array = []       # wall segments (world XZ metres), stashed at the first activation capture
 var _all_decisions: Array = []          # EVERY decision record verbatim, annotated {side, round}
 var _log_entries: Array = []            # every battle-log entry (the panel itself caps at 200)
+# Arena margins: how badly each side lost, by points. The start-roster snapshot per slot (taken at game
+# start, so summoned/reinforcement units never enter it) + the round each side's last model died in.
+var _roster: Dictionary = {}            # slot(int) → margin_rows(...) at game start
+var _eliminated_round: Dictionary = {}  # slot(int) → round of that side's last model death (absent = still standing)
 
 
 func _initialize() -> void:
@@ -396,6 +400,10 @@ func _run() -> void:
 	# settled; tools/tactic_audit.py counts those lines as d9. Measurement only — no decision is touched.
 	solo.ai_unit_activated.connect(func(u) -> void:
 		OffboardAudit.audit_and_log(main.get("table"), battle_log, u, "after activation"))
+	# Arena margins (read-only): latch the round a side's last model died in — after each activation, and at
+	# each round boundary for a death outside one (advance_round bumps current_round BEFORE it emits, so n - 1).
+	solo.ai_unit_activated.connect(func(_u) -> void: _note_eliminations(main, int(army_manager.current_round)))
+	army_manager.round_advanced.connect(func(n: int) -> void: _note_eliminations(main, n - 1))
 	# Eval-method hardening (10.08.): per-unit activation counts into the result
 	# JSON — the log linter's food. A unit alive at game end with ZERO
 	# activations is the NML-1002 anomaly class (stolen/stuck units) and must
@@ -538,6 +546,8 @@ func _run() -> void:
 	# RNG) replays exactly as before this fix.
 	seed(_dice_seed)
 	main.seed_tray_rng(_dice_seed)
+	for pid in [1, 2]:   # arena margins: the START roster (everything on the table before round 1)
+		_roster[pid] = margin_rows(army_manager.get_game_units_for_player(pid))
 
 	# Run the whole match unattended to the SOLO_GAME_ROUNDS scoring end, opened by the roll-off winner.
 	army_manager.current_round = 1
@@ -706,6 +716,7 @@ func _mission_stamp() -> Dictionary:
 ## counts, and the verbatim difficulty/roll-off records (the monotonicity-diagnosis evidence).
 func _write_result_json(main: Node, army_manager: Node, opener: int, winner: String,
 		objectives: Dictionary, duration_sec: float) -> void:
+	_note_eliminations(main, int(army_manager.current_round))   # a death after the last activation of the last round
 	var result := {
 		"schema": RESULT_SCHEMA,
 		"tool": "arena_match",
@@ -926,7 +937,69 @@ func _survivors(main: Node, army_manager: Node, pid: int) -> Dictionary:
 	for u in army_manager.get_game_units_for_player(pid):
 		if u != null and int(u.get_alive_count()) > 0:
 			units_alive += 1
-	return {"units": units_alive, "models": int(main._solo_side_alive(pid))}
+	var out := {"units": units_alive, "models": int(main._solo_side_alive(pid))}
+	out.merge(side_margins(_roster.get(pid, [])))
+	out["eliminated_round"] = _eliminated_round.get(pid, null)
+	return out
+
+
+## Arena margins, the START roster: one row per unit on the table at game start (each joined Hero is its
+## own row; a unit created later — Reinforcement, Spawn, Split — is never in it). A row freezes what the
+## points rule needs: the unit's points (GameUnit.get_cost(), game_unit.gd:240 <- OPRUnit.cost, the imported
+## list's per-unit cost incl. upgrades, opr_api_client.gd:953; combined halves already summed, :1895), its
+## model count and its wounds pool (ModelInstance.wounds_max, model_instance.gd:37 <- Tough(X), equipment_distributor.gd:25).
+static func margin_rows(units: Array) -> Array:
+	var rows: Array = []
+	for u in units:
+		var gu := u as GameUnit
+		if gu == null:
+			continue
+		var pool := 0
+		for m in gu.models:
+			pool += (m as ModelInstance).wounds_max
+		rows.append({"unit": gu, "points": int(gu.get_cost()), "models": gu.models.size(), "wounds": pool})
+	return rows
+
+
+## Arena margins, the POINTS RULE (rows from margin_rows). points_start = the sum of the rows' points;
+## models_start = the sum of their model counts. points_alive = the sum over rows of points x surviving
+## fraction, where the fraction is
+##   * a unit that STARTED with one model (a lone Tough hero, a vehicle): its remaining wounds / its
+##     starting wounds (a dead model counts 0 wounds; without Tough that is simply alive = 1, dead = 0);
+##   * any other unit: alive models / starting models (GameUnit.get_alive_count(), game_unit.gd:103;
+##     wounds on a surviving model of a multi-model unit are NOT counted).
+## A joined Hero is its own row, so it is scored by its own fraction, never folded into its squad's.
+## points_alive is rounded to 0.01; the sums are over the roster only, so summoned models add nothing.
+static func side_margins(rows: Array) -> Dictionary:
+	var start := 0
+	var models := 0
+	var alive := 0.0
+	for r in rows:
+		var gu: GameUnit = r["unit"]
+		var n: int = r["models"]
+		start += int(r["points"])
+		models += n
+		if n == 1:
+			var m: ModelInstance = gu.models[0]
+			alive += float(r["points"]) * float(m.wounds_current if m.is_alive else 0) / float(maxi(int(r["wounds"]), 1))
+		elif n > 1:
+			alive += float(r["points"]) * float(gu.get_alive_count()) / float(n)
+	return {"points_start": start, "points_alive": snappedf(alive, 0.01), "models_start": models}
+
+
+## Arena margins, the ELIMINATION rule: a side is eliminated in round R when its last model died in R —
+## the first check that finds its alive-model count (main._solo_side_alive, ALL its units) at 0 latches R
+## (never overwritten), so eliminated_round == null exactly when survivors.models > 0. Pure on its inputs:
+## `alive` maps slot → alive models, `latched` is the slot → round record it fills.
+static func latch_eliminations(latched: Dictionary, alive: Dictionary, round_no: int) -> void:
+	for pid in [1, 2]:
+		if not latched.has(pid) and int(alive.get(pid, 1)) == 0:
+			latched[pid] = round_no
+
+
+## Read-only feed for latch_eliminations: no decision, no RNG draw, no log line.
+func _note_eliminations(main: Node, round_no: int) -> void:
+	latch_eliminations(_eliminated_round, {1: int(main._solo_side_alive(1)), 2: int(main._solo_side_alive(2))}, round_no)
 
 
 ## JSON.stringify keeps int keys as-is (non-standard JSON) — normalise the side keys to strings.
