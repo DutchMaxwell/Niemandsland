@@ -1,8 +1,8 @@
 name: Build core extension
-description: "Builds the optional Rust NmlCore GDExtension for Linux or Windows and installs its manifest."
+description: "Builds the optional Rust NmlCore GDExtension for Linux, Windows or macOS and installs its manifest."
 inputs:
   target:
-    description: "Target platform to build for: 'linux' or 'windows'."
+    description: "Target platform to build for: 'linux' or 'windows' (ubuntu runner), 'macos' (macos-14 runner only)."
     required: true
 runs:
   using: composite
@@ -29,6 +29,18 @@ runs:
             sudo apt-get install -y mingw-w64
             RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$GITHUB_WORKSPACE=/workspace --remap-path-prefix=$HOME=/build" \
               cargo build --release --features onnx-tract --target x86_64-pc-windows-gnu --manifest-path core/nml-core-godot/Cargo.toml ;;
+          macos)
+            # Native build on the macos-14 runner: tract-linalg's build.rs assembles hand-written .S kernels
+            # per target, which needs Apple's toolchain (no cross-build from Linux). Both darwin triples are
+            # built here and lipo'd into ONE universal dylib by the next step. Full debug info is dropped for
+            # this build (CARGO_PROFILE_RELEASE_DEBUG=false): on macOS it stays in the object files as a debug
+            # map full of build-machine paths, and no symbol artifact is kept for this platform.
+            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+            export RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$GITHUB_WORKSPACE=/workspace --remap-path-prefix=$HOME=/build"
+            export CARGO_PROFILE_RELEASE_DEBUG=false
+            for TRIPLE in aarch64-apple-darwin x86_64-apple-darwin; do
+              cargo build --release --features onnx-tract --target "$TRIPLE" --manifest-path core/nml-core-godot/Cargo.toml
+            done ;;
           *)
             echo "::error::build-core-extension target '${{ inputs.target }}' is unknown"; exit 1 ;;
         esac
@@ -105,6 +117,65 @@ runs:
         path: core/target/x86_64-pc-windows-gnu/release/nml_core_godot.dll.debug
         retention-days: 90
         if-no-files-found: error
+    # macOS ships ONE universal dylib (the preset exports binary_format/architecture=universal). Each
+    # thin slice is stripped and budgeted, lipo joins them, the result is signed ad hoc (strip and lipo
+    # invalidate the linker's signature), and the guards below read the FINISHED file: both slices
+    # present, the entry symbol survived the strip, no build-machine path, only Apple system libraries.
+    - name: Lipo, strip, sign and guard the macOS dylib
+      if: inputs.target == 'macos'
+      shell: bash
+      run: |
+        set -euo pipefail
+        OUT=core/target/macos
+        LIB="$OUT/libnml_core_godot.dylib"
+        rm -rf "$OUT"
+        mkdir -p "$OUT"
+        THIN=()
+        for TRIPLE in aarch64-apple-darwin x86_64-apple-darwin; do
+          T="core/target/$TRIPLE/release/libnml_core_godot.dylib"
+          # -x drops local symbols, -S the debug map; the exported gdext_rust_init stays.
+          strip -x -S "$T"
+          # cargo leaves the linker's absolute output path as the dylib's own install name (LC_ID_DYLIB, a load
+          # command that --remap-path-prefix never touches); a Mac-style id carries no build-machine path.
+          echo "Install name before: $(otool -D "$T" | tail -n 1) — raw /Users/ hits: $(LC_ALL=C grep -a -o /Users/ "$T" | wc -l | tr -d ' ')"
+          install_name_tool -id @rpath/libnml_core_godot.dylib "$T"
+          SIZE=$(wc -c < "$T" | tr -d ' ')
+          echo "Thin slice $TRIPLE: $T — $SIZE bytes"
+          # Same 40 MB per-slice budget as the Linux library (measured 31,464,032 bytes stripped with tract).
+          if [ "$SIZE" -gt 41943040 ]; then
+            echo "::error::the $TRIPLE slice is $SIZE bytes — over the 40 MB budget"; exit 1
+          fi
+          THIN+=("$T")
+        done
+        lipo -create "${THIN[@]}" -output "$LIB"
+        codesign --force --sign - --timestamp=none "$LIB"
+        lipo -info "$LIB"
+        SIZE=$(wc -c < "$LIB" | tr -d ' ')
+        # Raw bytes, not Apple's strings: its -a reads sections only and misses load commands (the install name).
+        PATHS=$( (LC_ALL=C grep -a -o /Users/ "$LIB" || true) | wc -l | tr -d ' ')
+        echo "Shipped dylib: $LIB — $SIZE bytes, /Users/ paths: $PATHS"
+        if [ "$SIZE" -gt 83886080 ]; then
+          echo "::error::the universal dylib is $SIZE bytes — over the 80 MB budget"; exit 1
+        fi
+        if [ "$PATHS" -ne 0 ]; then
+          echo "::error::the shipped dylib still embeds $PATHS /Users/ path(s)"; exit 1
+        fi
+        for ARCH in arm64 x86_64; do
+          ENTRY=$(nm -gU -arch "$ARCH" "$LIB" | grep -c _gdext_rust_init || true)
+          echo "$ARCH: exported _gdext_rust_init symbols: $ENTRY"
+          if [ "$ENTRY" -eq 0 ]; then
+            echo "::error::_gdext_rust_init did not survive the strip in the $ARCH slice"; exit 1
+          fi
+          otool -arch "$ARCH" -L "$LIB"
+          BAD=$(otool -arch "$ARCH" -L "$LIB" | tail -n +2 | awk '{print $1}' | grep -vE '^(/usr/lib/|/System/Library/|@rpath/libnml_core_godot\.dylib$)' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::the $ARCH slice links a library a Mac would lack: $BAD"; exit 1
+          fi
+        done
+        otool -arch arm64 -l "$LIB" | grep -A4 -E "LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX" || true
+        otool -arch x86_64 -l "$LIB" | grep -A4 -E "LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX" || true
+        codesign -dv "$LIB" 2>&1 | head -8 || true
+
     - name: Install GDExtension manifest
       shell: bash
       run: bash core/install_gdextension.sh

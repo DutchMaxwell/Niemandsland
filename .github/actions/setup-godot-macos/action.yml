@@ -1,0 +1,44 @@
+name: Setup Godot (macOS runner)
+description: >-
+  macOS twin of the setup-godot action: installs the universal headless-capable Godot editor
+  (Godot.app) and, optionally, the export templates on a macos-* runner, and puts a `godot`
+  command on PATH. Separate from setup-godot on purpose so the Linux jobs stay untouched.
+
+inputs:
+  version:
+    description: Godot version to install, e.g. "4.6".
+    required: true
+  templates:
+    description: Also install the matching export templates (needed by export jobs).
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Install Godot (headless)
+      shell: bash
+      run: |
+        set -euo pipefail
+        ver="${{ inputs.version }}"
+        base="https://github.com/godotengine/godot/releases/download/${ver}-stable"
+        curl -fsSL -o "${RUNNER_TEMP}/godot.zip" "${base}/Godot_v${ver}-stable_macos.universal.zip"
+        unzip -q "${RUNNER_TEMP}/godot.zip" -d "${RUNNER_TEMP}/godot"
+        mkdir -p "${HOME}/.local/bin"
+        printf '#!/bin/bash\nexec "%s/godot/Godot.app/Contents/MacOS/Godot" "$@"\n' "${RUNNER_TEMP}" > "${HOME}/.local/bin/godot"
+        chmod +x "${HOME}/.local/bin/godot"
+        echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+        "${HOME}/.local/bin/godot" --headless --version
+
+    - name: Install export templates
+      if: ${{ inputs.templates == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        ver="${{ inputs.version }}"
+        base="https://github.com/godotengine/godot/releases/download/${ver}-stable"
+        curl -fsSL -o "${RUNNER_TEMP}/templates.tpz" "${base}/Godot_v${ver}-stable_export_templates.tpz"
+        unzip -q "${RUNNER_TEMP}/templates.tpz" -d "${RUNNER_TEMP}/templates"
+        dest="${HOME}/Library/Application Support/Godot/export_templates/${ver}.stable"
+        mkdir -p "${dest}"
+        mv "${RUNNER_TEMP}/templates/templates/"* "${dest}/"

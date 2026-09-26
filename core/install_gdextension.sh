@@ -3,14 +3,17 @@
 # Run this after the core build, e.g.
 #   cargo build --release --manifest-path core/nml-core-godot/Cargo.toml
 #   cargo build --release --target x86_64-pc-windows-gnu --manifest-path core/nml-core-godot/Cargo.toml
+# The macOS dylib is the lipo'd universal library the macos-14 CI job places at
+# target/macos/ (see .github/actions/build-core-extension, target "macos").
 #
-# SO_PATH / DLL_PATH are the library entries of core/nml_core.gdextension.in —
+# SO_PATH / DLL_PATH / DYLIB_PATH are the library entries of core/nml_core.gdextension.in —
 # keep them in sync by hand if those entries ever change.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 SO_PATH="target/release/libnml_core_godot.so"
 DLL_PATH="target/x86_64-pc-windows-gnu/release/nml_core_godot.dll"
+DYLIB_PATH="target/macos/libnml_core_godot.dylib"
 
 # NML-1073 M2-5: a build with CARGO_TARGET_DIR set (the shared cache the
 # milestone builds with) leaves the linux library outside core/target (F7). The
@@ -22,7 +25,7 @@ if [[ -n "${CARGO_TARGET_DIR:-}" && -f "$CARGO_TARGET_DIR/release/libnml_core_go
 	echo "nml_core: library copied from CARGO_TARGET_DIR"
 fi
 
-if [[ -f "$SO_PATH" || -f "$DLL_PATH" ]]; then
+if [[ -f "$SO_PATH" || -f "$DLL_PATH" || -f "$DYLIB_PATH" ]]; then
 	cp nml_core.gdextension.in nml_core.gdextension
 	echo "nml_core: library found — extension installed"
 else
