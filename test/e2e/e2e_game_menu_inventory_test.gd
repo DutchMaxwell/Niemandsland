@@ -1,9 +1,9 @@
 extends GdUnitTestSuite
-## E2E — the ☰ game menu, rows 1, 2 and 4 of the UI inventory (uimenu, PR 1 of 3: the slide-out shell,
-## "Table and army", "Save / Load / Graphics / End Battle"; mockup LOOK, today's FULL function set).
-## Every control of today's menu is found in the open column by the words the player reads, is reached
-## by a REAL click and does what it does today. Multiplayer (row 3) and the solo / deployment sections
-## (rows 5, 6) are PR 2 and 3 and are not checked here.
+## E2E — the ☰ game menu, rows 1-4 of the UI inventory (uimenu PR 1: the slide-out shell, "Table and
+## army", "Save / Load / Graphics / End Battle"; PR 2: "Multiplayer" + the room code; mockup LOOK,
+## today's FULL function set). Every control of today's menu is found in the open column by the words the
+## player reads, is reached by a REAL click and does what it does today. The solo / deployment sections
+## (rows 5, 6) are PR 3 and are not checked here.
 ## test_inventory_check_names_a_removed_control proves the presence check can fail.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -11,8 +11,24 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 ## Rows 2 and 4: every button by its text ("Next Round" by prefix: its label names the round).
 const BUTTONS := ["Import OPR Army...", "AI Opponent", "Map Layout...", "Terrain Mode", "Clear Table",
 	"Sort Table", "Next Round", "Settings", "Save Game...", "Load Game...", "End Battle - To Main Menu"]
-## Their section labels.
-const LABELS := ["Import / Load:", "Save / Load:", "Graphics:"]
+## Row 3 while offline (Disconnect shows once connected).
+const MP_BUTTONS := ["Host Online Game", "Join Online Game"]
+## The section labels.
+const LABELS := ["Import / Load:", "Multiplayer:", "Save / Load:", "Graphics:"]
+## Row 3's status line: [handler, its arguments, today's text, the tone it reads in]. Only the handlers
+## that touch no socket and send no RPC. Not here: "Reconnect failed (…)" — _on_relay_reconnect_failed
+## tears the relay down, which emits internet_disconnected, which writes "Offline" over it at once.
+const STATES := [
+	[&"_on_internet_disconnected", [], "Offline", "muted"],
+	[&"_on_guest_reconnected", [], "Reconnected", "ok"],
+	[&"_on_relay_reconnecting", [], "Reconnecting…", "warn"],
+	[&"_on_host_paused", [], "Host disconnected — waiting for reconnect…", "warn"],
+	[&"_on_internet_failed", ["relay unreachable"], "Online failed: relay unreachable", "danger"],
+	[&"_on_network_failed", [], "Connection failed!", "danger"],
+	[&"_on_network_disconnected", [], "Server disconnected", "danger"],
+	[&"_on_version_rejected", ["0.3.14.0", "0.3.13.0"],
+		"Version mismatch: host 0.3.14.0, you 0.3.13.0 — update to match", "danger"],
+]
 ## The graphics quality dropdown, in GraphicsSettings.QualityPreset order.
 const GRAPHICS := ["Performance", "Low", "Medium", "High", "Ultra"]
 ## Buttons that explain themselves on hover.
@@ -21,11 +37,13 @@ const TOOLTIPS := ["Sort Table", "Next Round", "Settings", "AI Opponent"]
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _peer_before: MultiplayerPeer
 
 
 func before_test() -> void:
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
+	_peer_before = get_tree().get_multiplayer().multiplayer_peer
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
@@ -33,6 +51,10 @@ func before_test() -> void:
 
 func after_test() -> void:
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
+	# Disconnect (network_manager.disconnect_game) sets the TREE's peer to null — the whole test process
+	# shares it, so every later suite logged "No multiplayer peer is assigned" and the card suite's AI
+	# seat read differently (measured: 131 errors over 15 suites). Put the offline peer back.
+	get_tree().get_multiplayer().multiplayer_peer = _peer_before
 	_main = null
 	_runner = null
 
@@ -109,15 +131,49 @@ func _shown(c: Control) -> bool:
 func _missing_controls() -> Array:
 	await _open_menu()
 	var missing: Array = []
-	for t: String in BUTTONS:
+	for t: String in BUTTONS + MP_BUTTONS:
 		if not _shown(_button(t)):
 			missing.append("button: " + t)
+	if not _shown(_main.network_status_label) or _main.network_status_label.text != "Offline":
+		missing.append("status: Offline")
 	for t: String in LABELS:
 		if not _shown(_label(t)):
 			missing.append("label: " + t)
 	if not _shown(_graphics()):
 		missing.append("dropdown: Graphics quality")
 	return missing
+
+
+## Runs one STATES handler and returns the status line's colour.
+func _show_state(state: Array) -> Color:
+	_main.callv(state[0], state[1])
+	await _runner.simulate_frames(1)
+	return _main.network_status_label.get_theme_color(&"font_color")
+
+
+## The tone a status colour reads as: grey, green, amber / yellow or red ("" = none of them).
+func _tone_of(c: Color) -> String:
+	if maxf(c.r, maxf(c.g, c.b)) - minf(c.r, minf(c.g, c.b)) < 0.15:
+		return "muted"
+	if c.g > c.r and c.g > c.b:
+		return "ok"
+	if c.r > c.b + 0.3 and c.g > c.b + 0.2:
+		return "warn"
+	if c.r > c.g + 0.3 and c.r > c.b + 0.3:
+		return "danger"
+	return ""
+
+
+## The house-style ink of a tone (the danger text lifted as on End Battle).
+func _tone_ink(tone: String) -> Color:
+	match tone:
+		"ok":
+			return HouseStyle.OK
+		"warn":
+			return HouseStyle.WARN
+		"danger":
+			return HouseStyle.DANGER.lightened(HouseStyle.DANGER_INK_LIFT)
+	return HouseStyle.MUTED
 
 
 # === tests ====================================================================================
@@ -153,7 +209,7 @@ func test_the_menu_button_opens_and_closes_the_column(timeout := 120000) -> void
 	assert_bool(_scroll().visible).override_failure_message("× did not close the game menu").is_false()
 
 
-func test_every_control_of_rows_2_and_4_is_in_the_open_menu(timeout := 120000) -> void:
+func test_every_control_of_rows_2_to_4_is_in_the_open_menu(timeout := 120000) -> void:
 	var missing: Array = await _missing_controls()
 	assert_array(missing).override_failure_message("today's menu controls missing: %s" % str(missing)).is_empty()
 	for t: String in TOOLTIPS:
@@ -164,9 +220,9 @@ func test_every_control_of_rows_2_and_4_is_in_the_open_menu(timeout := 120000) -
 	assert_bool(red.r > red.g + 0.3 and red.r > red.b + 0.3).override_failure_message("End Battle is not red: %s" % red).is_true()
 
 
-func test_rows_2_and_4_wear_the_house_style_and_the_other_sections_keep_theirs(timeout := 120000) -> void:
+func test_rows_2_to_4_wear_the_house_style_and_the_other_sections_keep_theirs(timeout := 120000) -> void:
 	await _open_menu()
-	for t: String in BUTTONS:
+	for t: String in BUTTONS + MP_BUTTONS + ["Disconnect"]:
 		var want: StringName = HouseStyle.DANGER_BUTTON if t.begins_with("End Battle") else HouseStyle.BUTTON
 		assert_str(String(_button(t).theme_type_variation)).override_failure_message("%s is not a house-style line" % t) \
 			.is_equal(String(want))
@@ -175,8 +231,13 @@ func test_rows_2_and_4_wear_the_house_style_and_the_other_sections_keep_theirs(t
 	assert_str(String(_graphics().theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
 	for t: String in LABELS:
 		assert_str(String(_label(t).theme_type_variation)).is_equal(String(HouseStyle.EYEBROW))
-	# PR 2 and 3: multiplayer, solo and deployment keep today's look — no house style reaches them.
-	for section: String in ["NetworkPanel", "DeploymentPanel"]:
+	# The room code sits above the sections, in the column itself: a house-style line in the "online" ink.
+	var room: Button = _main._room_code_button
+	assert_str(String(room.theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_object(room.theme).is_same(HouseStyle.theme())
+	assert_that(room.get_theme_color(&"font_color")).is_equal(HouseStyle.OK)
+	# PR 3: solo and deployment keep today's look — no house style reaches them.
+	for section: String in ["DeploymentPanel"]:
 		var box := _scroll().get_node("LeftPanelVBox/" + section) as Control
 		for n: Node in [box] + box.find_children("*", "Control", true, false):
 			assert_str(String((n as Control).theme_type_variation)).override_failure_message("%s/%s was restyled" % [section, n.name]).is_empty()
@@ -298,4 +359,83 @@ func test_save_load_graphics_and_end_battle_do_what_they_do_today(timeout := 120
 	assert_bool(end.confirmed.is_connected(Callable(_main, &"_on_end_battle_confirmed"))) \
 		.override_failure_message("confirming End Battle no longer returns to the main menu").is_true()
 	end.hide()
+	await E2EBoot.settle(get_tree())
+
+
+func test_host_and_join_open_the_online_dialogs(timeout := 120000) -> void:
+	await _open_menu()
+	await _click(_button("Host Online Game"))
+	var host: Window = _main._net_host_popup
+	assert_bool(host != null and host.visible).override_failure_message("Host Online Game did not open its dialog").is_true()
+	if host != null:
+		host.hide()
+	await _click(_button("Join Online Game"))
+	var join: Window = _main._net_join_popup
+	assert_bool(join != null and join.visible).override_failure_message("Join Online Game did not open its dialog").is_true()
+	if join != null:
+		join.hide()
+	await E2EBoot.settle(get_tree())
+
+
+func test_connection_states_read_apart_in_the_status_line(timeout := 120000) -> void:
+	await _open_menu()
+	var first := {}   # tone -> the first colour seen in it
+	for state: Array in STATES:
+		var ink: Color = await _show_state(state)
+		assert_str(_main.network_status_label.text).is_equal(state[2])
+		assert_str(_tone_of(ink)).override_failure_message("\"%s\" reads as \"%s\", not %s (%s)" % [
+			state[2], _tone_of(ink), state[3], ink]).is_equal(state[3])
+		if first.has(state[3]):
+			assert_that(ink).override_failure_message("two %s states in two colours" % state[3]).is_equal(first[state[3]])
+		first[state[3]] = ink
+	assert_int(first.size()).is_equal(4)
+	await E2EBoot.settle(get_tree())
+
+
+func test_room_code_copies_and_logs_once_and_disconnect_ends_the_session(timeout := 120000) -> void:
+	await _open_menu()
+	var room: Button = _main._room_code_button
+	var logged := func() -> int:
+		return _main.battle_log.entries().filter(func(e: Dictionary) -> bool: return e["text"] == "Room code: ABC-123").size()
+	_main._update_network_ui(true, true)   # a live session: Disconnect instead of Host / Join
+	_main._set_room_code_display("ABC123")
+	await _runner.simulate_frames(2)
+	assert_bool(room.is_visible_in_tree()).override_failure_message("the room code does not show").is_true()
+	assert_str(room.text).is_equal("Room: ABC-123")
+	assert_object(room.get_parent()).is_same(_scroll().get_node("LeftPanelVBox"))
+	assert_int(room.get_index()).override_failure_message("the room code is not at the top of the column").is_equal(0)
+	assert_str(_tone_of(room.get_theme_color(&"font_color"))).override_failure_message("the room code is not green").is_equal("ok")
+	assert_int(logged.call()).is_equal(1)
+	await _click(room)
+	assert_str(_main._solo_toast.text).override_failure_message("a click did not say the code was copied").is_equal("Room code copied")
+	assert_int(logged.call()).override_failure_message("a copy click wrote to the battle log").is_equal(1)
+	for t: String in MP_BUTTONS:
+		assert_bool(_button(t).visible).override_failure_message("%s shows in a live session" % t).is_false()
+	var bye := _button("Disconnect")
+	assert_bool(bye != null and bye.is_visible_in_tree()).override_failure_message("Disconnect is missing in a live session").is_true()
+	await _click(bye)
+	assert_str(_main.network_status_label.text).is_equal("Offline")
+	assert_str(_tone_of(_main.network_status_label.get_theme_color(&"font_color"))).is_equal("muted")
+	assert_bool(bye.visible).is_false()
+	assert_bool(room.visible).override_failure_message("the room code outlived the session").is_false()
+	for t: String in MP_BUTTONS:
+		assert_bool(_button(t).is_visible_in_tree()).override_failure_message("%s did not come back" % t).is_true()
+	await E2EBoot.settle(get_tree())
+
+
+func test_the_status_line_wears_house_tokens_and_wraps_inside_the_column(timeout := 120000) -> void:
+	await _open_menu()
+	var status: Label = _main.network_status_label
+	assert_str(String(status.theme_type_variation)).is_equal(String(HouseStyle.BODY))
+	var width: float = _scroll().offset_right - _scroll().offset_left
+	for state: Array in STATES:
+		var ink: Color = await _show_state(state)
+		assert_that(ink).override_failure_message("\"%s\" is not in the house %s ink (%s)" % [state[2], state[3], ink]) \
+			.is_equal(_tone_ink(state[3]))
+		assert_float(_scroll().get_combined_minimum_size().x).override_failure_message("\"%s\" widens the column to %d px" % [
+			state[2], _scroll().get_combined_minimum_size().x]).is_less_equal(width)
+		var font := status.get_theme_font(&"font")
+		for i in status.text.length():
+			assert_bool(status.text.unicode_at(i) <= 0x20 or font.has_char(status.text.unicode_at(i))) \
+				.override_failure_message("the status font lacks \"%s\"" % status.text[i]).is_true()
 	await E2EBoot.settle(get_tree())

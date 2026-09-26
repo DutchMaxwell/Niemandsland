@@ -83,7 +83,9 @@ const PAD_PILL_X := 7
 const TONE_GOLD := &"gold"       # activated
 const TONE_WARN := &"warn"       # fatigued, shaken, wounds
 const TONE_ACCENT := &"accent"   # caster, revive, rule links
-const TONE_MUTED := &"muted"     # weapon rule links
+const TONE_MUTED := &"muted"     # weapon rule links, offline
+const TONE_OK := &"ok"           # online, reconnected
+const TONE_DANGER := &"danger"   # failed, refused, lost for good
 
 # ===== Type =====
 const FONT_BODY := 14
@@ -191,7 +193,7 @@ static func theme() -> Theme:
 	_button_variant(t, DANGER_BUTTON, _box(FILL, _alpha(DANGER, 0.55), RADIUS_CARD, PAD_BUTTON_X, 0),
 		_box(_alpha(DANGER, HOVER_ALPHA), DANGER, RADIUS_CARD, PAD_BUTTON_X, 0),
 		_box(_alpha(DANGER, PRESS_ALPHA), DANGER, RADIUS_CARD, PAD_BUTTON_X, 0), _radius(off, RADIUS_CARD),
-		DANGER.lightened(DANGER_INK_LIFT), FONT_BODY)
+		tone_ink(TONE_DANGER), FONT_BODY)
 
 	# Tool rail: quiet buttons until hovered, the open tool in gold (mockup .rail-btn / .active).
 	var none := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
@@ -497,8 +499,17 @@ static func tone_color(tone: StringName) -> Color:
 			return WARN
 		TONE_MUTED:
 			return MUTED
+		TONE_OK:
+			return OK
+		TONE_DANGER:
+			return DANGER
 		_:
 			return ACCENT
+
+
+## A tone as text on a panel: its colour, the danger red lifted so it stays readable at 14 px.
+static func tone_ink(tone: StringName) -> Color:
+	return DANGER.lightened(DANGER_INK_LIFT) if tone == TONE_DANGER else tone_color(tone)
 
 
 ## A status pill's box (mockup .pill): lit = the tone (gold solid, the others a tint), unlit = a ghost;
