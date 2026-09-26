@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Frontage-cycle hotkey (Shift+F): OPRArmyManager.cycle_selected_regiment_frontage
+## Frontage-cycle hotkey (B): OPRArmyManager.cycle_selected_regiment_frontage
 ## walks the selected RegimentTray blocks through the frontage cycle (5 -> 4 -> 3 ->
 ## 2 -> 1 -> 5, AoF:R v3.5.1 p.6 "Unit Formations"), re-ranks the block in place,
 ## syncs the Regiment companion + unit_properties, and pushes an undoable

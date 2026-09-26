@@ -31,11 +31,12 @@ func after_test() -> void:
 	_runner = null
 
 
-## One press of F through the viewport — the same route a real keystroke takes.
-func _press_f() -> void:
+## One press of F (or Shift+F) through the viewport — the same route a real keystroke takes.
+func _press_f(shift := false) -> void:
 	var ev := InputEventKey.new()
 	ev.keycode = KEY_F
 	ev.physical_keycode = KEY_F
+	ev.shift_pressed = shift
 	ev.pressed = true
 	_main.get_viewport().push_input(ev)
 
@@ -78,6 +79,18 @@ func test_f_toggles_the_sight_and_range_fan_of_the_selected_unit() -> void:
 	_press_f()
 	await _runner.simulate_frames(2)
 	assert_object(_main._sight_fan_unit).is_null()
+
+
+## Maintainer 23.09.: Shift+F clears the fan, as the key list always promised. Before, main.gd's
+## frontage branch ate every Shift+F, so ObjectManager's clear branch never ran (frontage is B now).
+func test_shift_f_clears_a_shown_fan() -> void:
+	var u := _selected_unit_with_a_gun()
+	_press_f()
+	await _runner.simulate_frames(2)
+	assert_object(_main._sight_fan_unit).override_failure_message("no fan to clear — the check proves nothing").is_equal(u)
+	_press_f(true)
+	await _runner.simulate_frames(2)
+	assert_object(_main._sight_fan_unit).override_failure_message("Shift+F did not clear the shown fan").is_null()
 
 
 ## NML-1033 must survive: with NOTHING selected, F still toggles every regiment's arc wedges — main

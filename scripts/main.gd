@@ -29,12 +29,12 @@ const DEFAULT_TABLE_SIZE_FEET := Vector2(6, 4)  # 72x48 inches (landscape)
 const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 
 ## Keycodes handled in _unhandled_key_input that MOVE/EDIT objects (arrange, copy/paste,
-## duplicate, lock, regiment-arc toggle, group-rotate, undo/redo, delete). These are swallowed
+## duplicate, lock, regiment frontage, regiment-arc toggle, group-rotate, undo/redo, delete). These are swallowed
 ## while a remote peer is loading (the non-loading player is held back). The non-edit panels
 ## (F6/F7) are intentionally NOT in this set, so settings stay reachable mid-load.
 const _OBJECT_EDIT_KEYS: Array[int] = [
 	KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9,
-	KEY_A, KEY_C, KEY_V, KEY_D, KEY_L, KEY_F, KEY_R, KEY_Z, KEY_Y,
+	KEY_A, KEY_B, KEY_C, KEY_V, KEY_D, KEY_L, KEY_F, KEY_R, KEY_Z, KEY_Y,
 	KEY_DELETE, KEY_BACKSPACE,
 ]
 
@@ -12250,10 +12250,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 					opr_army_manager.toggle_all_regiment_arcs()
 			if f_trays != -1 or f_selection.is_empty():
 				get_viewport().set_input_as_handled()
-		# Cycle regiment frontage (Shift+F) - reform to the next width in the cycle
+		# Cycle regiment frontage (B, "breadth"; Shift+F until 23.09. — Shift+F now reaches
+		# ObjectManager and clears the sight+range fan) - reform to the next width in the cycle
 		# (5 -> 4 -> 3 -> 2 -> 1 -> 5). AoF:R v3.5.1 p.6 "Unit Formations". Only
 		# selected RegimentTray blocks are affected; loose models are ignored.
-		elif event.keycode == KEY_F and event.shift_pressed and not event.ctrl_pressed:
+		elif event.keycode == KEY_B and not event.shift_pressed and not event.ctrl_pressed:
 			if opr_army_manager:
 				opr_army_manager.cycle_selected_regiment_frontage(object_manager.get_selected_objects())
 			get_viewport().set_input_as_handled()
