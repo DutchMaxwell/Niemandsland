@@ -273,3 +273,14 @@ func test_link_table_is_invalid_when_a_node_is_gone() -> void:
 	var unit := _make_unit([Vector3.ZERO, Vector3(0.5 * INCH, 0, 0)])
 	unit.models[1].node = null
 	assert_bool(_table_for(unit).valid).is_false()
+
+
+func test_link_table_slack_absorbs_a_hair_but_not_a_real_gap() -> void:
+	# The slack is what a tape cannot resolve (MEASURING_SLACK_INCHES = 0.01"): a 1.004" link is a hair, 1.05" is a gap.
+	var hair := _make_unit([Vector3.ZERO, Vector3(1.004 * INCH, 0, 0)])
+	var hair_models := hair.get_alive_models_with_attached()
+	assert_bool(CoherencyChecker.check_unit_coherency(hair).valid).is_false()
+	assert_bool(CoherencyChecker.LinkTable.new(hair_models).coherent_without({}, 9.0)).is_false()   # default slack 0 = the checker
+	assert_bool(CoherencyChecker.LinkTable.new(hair_models, CoherencyChecker.MEASURING_SLACK_INCHES).coherent_without({}, 9.0)).is_true()
+	var gap_models := _make_unit([Vector3.ZERO, Vector3(1.05 * INCH, 0, 0)]).get_alive_models_with_attached()
+	assert_bool(CoherencyChecker.LinkTable.new(gap_models, CoherencyChecker.MEASURING_SLACK_INCHES).coherent_without({}, 9.0)).is_false()

@@ -20,6 +20,10 @@ const SKIRMISH_CHAIN_DISTANCE_INCHES := 6.0
 ## Elevated coherency distance (different heights)
 const ELEVATED_COHERENCY_INCHES := 3.0
 
+## What a tape measure cannot resolve (0.25 mm). The AI places bodies exactly on 1.000", so a link that reads 1.003" is
+## common and invisible on the table; decisions that ask "is the unit still coherent?" (LinkTable) allow this much.
+const MEASURING_SLACK_INCHES := 0.01
+
 ## Height difference above which models count as being at "different elevation"
 ## (GF p.11: short terrain up to 1" tall is not elevation; anything taller is).
 ## Each node's "drag_lift" meta (set by ObjectManager while the model is being
@@ -325,14 +329,18 @@ static func _get_max_spread_pair(models: Array[ModelInstance]) -> Dictionary:
 ## without these models?" per candidate without re-measuring (SoloController.chain_casualty_order asks it for every
 ## body it might remove). Same rule as check_unit_coherency: one connected 1" chain (3" across elevation) and every
 ## pair within `max_chain`. Distances stay doubles so a model placed exactly on 1.000" reads like the checker reads it.
+## `slack` (inches, default 0 = exactly the checker) is added to the 1" / 3" link limit and to `max_chain`: a caller
+## deciding what to remove passes MEASURING_SLACK_INCHES so one hair-over link does not make every removal look tearing.
 class LinkTable:
 	var n := 0
 	var valid := true   # false when a pair could not be measured (a node is gone) - callers then skip the what-if
+	var _slack := 0.0
 	var _gap := PackedFloat64Array()   # n*n edge-to-edge inches
 	var _linked := PackedByteArray()   # n*n, 1 = the pair is a coherency link
 
-	func _init(models: Array[ModelInstance]) -> void:
+	func _init(models: Array[ModelInstance], slack: float = 0.0) -> void:
 		n = models.size()
+		_slack = slack
 		_gap.resize(n * n)
 		_linked.resize(n * n)
 		for i in range(n):
@@ -345,7 +353,7 @@ class LinkTable:
 				var limit := CoherencyChecker.COHERENCY_DISTANCE_INCHES
 				if CoherencyChecker._is_elevated_different(models[i], models[j]):
 					limit = CoherencyChecker.ELEVATED_COHERENCY_INCHES
-				var linked := 1 if d <= limit else 0
+				var linked := 1 if d <= limit + slack else 0
 				_linked[i * n + j] = linked
 				_linked[j * n + i] = linked
 
@@ -369,6 +377,6 @@ class LinkTable:
 			return false
 		for a in range(alive.size()):
 			for b in range(a + 1, alive.size()):
-				if _gap[alive[a] * n + alive[b]] > max_chain:
+				if _gap[alive[a] * n + alive[b]] > max_chain + _slack:
 					return false
 		return true

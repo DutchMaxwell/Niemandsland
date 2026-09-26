@@ -8965,7 +8965,9 @@ static func casualty_order(unit: GameUnit) -> Array:
 ## `casualty_order` with the survivors' chain kept (GF/AoF v3.5.1 p.8 "keeping unit coherency in mind", p.7 the 1"
 ## chain + 9" spread). Greedy, one removal at a time: a wounded Tough body is still finished first (p.14 — no choice);
 ## otherwise the first body in the value order whose removal leaves the survivors (joined heroes included) coherent
-## goes; when no removal can (the unit is already torn) the value order stands. `max_picks` = how many leading picks
+## goes; when no removal can (the unit is already torn) the value order stands. "Coherent" allows the tape slack
+## (MEASURING_SLACK_INCHES): the AI places bodies exactly on 1.000", so a 1.003" hair must not read as already torn
+## (arena seed 2 replay: it switched the rule off and four casualties stranded the survivors). `max_picks` = how many leading picks
 ## the caller can use (the wounds to land; 1 for a Deadly pick), the tail keeps the value order.
 ## Measured 26.09.: 5 of 8 coherency violations after an AI move were casualty removal tearing the chain.
 ## No Rust twin to keep in step: the core removes in ARRAY order (sim.rs land_wounds; battle_sim.gd:1558 "casualty_order
@@ -8978,7 +8980,7 @@ static func chain_casualty_order(unit: GameUnit, max_picks: int = -1) -> Array:
 	if unit.get_attached_to() is GameUnit:
 		host = unit.get_attached_to() as GameUnit   # a joined hero's losses are judged against the host's chain
 	var group: Array[ModelInstance] = host.get_alive_models_with_attached()
-	var table := CoherencyChecker.LinkTable.new(group)
+	var table := CoherencyChecker.LinkTable.new(group, CoherencyChecker.MEASURING_SLACK_INCHES)
 	if not table.valid:
 		return order   # a node is gone (headless / mid-teardown) — nothing to measure
 	var max_chain: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \

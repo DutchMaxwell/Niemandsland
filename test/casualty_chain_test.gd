@@ -166,3 +166,60 @@ func test_a_coherent_unit_stays_coherent_for_every_casualty_count() -> void:
 				return
 			checked += 1
 	assert_int(checked).is_greater(300)
+
+
+func test_a_hair_over_one_inch_link_does_not_switch_the_chain_rule_off() -> void:
+	# The AI places bodies exactly on 1.000", so a link of 1.003" is common: invisible to a tape, strictly torn for
+	# check_unit_coherency. Replay of arena seed 2 (26.09.): one such hair in the MIDDLE of the chain made every
+	# removal look tearing (no single removal can heal it), the picker fell back to the value order and four
+	# casualties stranded the survivors 5.3" apart. Value order here: D, B, C, E, A (E and A carry the Flamer).
+	var u := _row([0.0, 0.9, 1.8, 2.803, 3.703])
+	u.models[0].properties["weapons"] = [{"name": "Flamer"}]
+	u.models[4].properties["weapons"] = [{"name": "Flamer"}]
+	assert_bool(_coherent(u)).is_false()   # strictly torn by 0.003" at the C-D link — the hair
+	_kill(u, 1)
+	assert_bool(u.models[4].is_alive).is_false()   # E: the end whose removal leaves A-B-C-D as one chain
+	assert_bool(u.models[3].is_alive).is_true()    # D (plain, first in the value order) bridges to E — spared
+	for i in [0, 1, 2]:
+		assert_bool(u.models[i].is_alive).is_true()
+
+
+func test_hairs_over_one_inch_do_not_break_the_property_either() -> void:
+	# Same property as above on squads whose links run up to 1.006" (the AI places on exactly 1.000", float noise and
+	# gate rounding leave hairs): judged with the picker's own tape slack, no casualty count tears the survivors.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260927
+	var checked := 0
+	for _case in range(150):
+		var n: int = rng.randi_range(4, 12)
+		var pts: Array = [Vector2.ZERO]
+		var guard := 0
+		while pts.size() < n and guard < 400:
+			guard += 1
+			var base: Vector2 = pts[rng.randi_range(0, pts.size() - 1)]
+			var p: Vector2 = base + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(0.7, 1.006)
+			var spread_ok := true
+			for q in pts:
+				if (p - q).length() > 8.5:
+					spread_ok = false
+			if spread_ok:
+				pts.append(p)
+		if pts.size() < n:
+			continue
+		for wounds in range(1, n - 1):
+			var u := GameUnit.new()
+			u.unit_id = "cc_hair_%d" % randi()
+			u.unit_properties = {"player_id": 1, "name": "Squad", "base_size_round": 0, "base_is_oval": false}
+			for i in range(n):
+				var m := _model(u, i, Vector3(pts[i].x * INCH, 0.0, pts[i].y * INCH))
+				m.properties["weapons"] = [{"name": "Rifle"}] if rng.randi_range(0, 1) == 1 else []
+				u.models.append(m)
+			var slack := CoherencyChecker.MEASURING_SLACK_INCHES
+			assert_bool(CoherencyChecker.LinkTable.new(u.get_alive_models_with_attached(), slack).coherent_without({}, 9.0)).is_true()
+			SoloController.apply_wounds_to_models(u, wounds, Callable(), Callable())
+			var still := CoherencyChecker.LinkTable.new(u.get_alive_models_with_attached(), slack).coherent_without({}, 9.0)
+			assert_bool(still).override_failure_message("case %d: %d bodies, %d casualties tore the chain (within slack)" % [_case, n, wounds]).is_true()
+			if not still:
+				return
+			checked += 1
+	assert_int(checked).is_greater(300)
