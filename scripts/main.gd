@@ -468,8 +468,8 @@ func _ready() -> void:
 	hamburger_button.pressed.connect(_on_hamburger_pressed)
 
 	# The slide-out game menu (under the hamburger): the glassmorphism theme stays on the column for the
-	# sections not yet in the house style (multiplayer, solo, deployment); GameMenu.style dresses the
-	# shell and the table / save sections once the AI Opponent line exists (below).
+	# sections not yet in the house style (solo, deployment); GameMenu.style dresses the shell and the
+	# table / multiplayer / save sections once the AI Opponent line exists (below).
 	if has_node("/root/ThemeManager"):
 		left_panel_scroll.theme = get_node("/root/ThemeManager").get_current_theme()
 
@@ -723,8 +723,9 @@ func _ready() -> void:
 	if import_opr_btn.get_parent() != null:
 		import_opr_btn.get_parent().add_child(_ai_opponent_btn)
 		import_opr_btn.get_parent().move_child(_ai_opponent_btn, import_opr_btn.get_index() + 1)
-	GameMenu.style(left_panel_scroll, [import_opr_btn.get_parent(), save_game_btn.get_parent(),
+	GameMenu.style(left_panel_scroll, [import_opr_btn.get_parent(), host_button.get_parent(), save_game_btn.get_parent(),
 		graphics_quality_option.get_parent(), end_battle_btn.get_parent()], [end_battle_btn])
+	GameMenu.set_status(network_status_label, "Offline", HouseStyle.TONE_MUTED)
 
 	# Initialize Map Layout Editor
 	var map_layout_scene = load("res://scenes/map_layout.tscn")
@@ -13947,14 +13948,12 @@ func _on_net_join_confirmed() -> void:
 func _on_disconnect_pressed() -> void:
 	network_manager.disconnect_game()
 	_update_network_ui(false, false)
-	network_status_label.text = "Offline"
-	network_status_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	GameMenu.set_status(network_status_label, "Offline", HouseStyle.TONE_MUTED)
 
 
 func _on_network_connected() -> void:
 	_update_network_ui(true, false)
-	network_status_label.text = "Connected (Peer %d)" % network_manager.get_my_peer_id()
-	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	GameMenu.set_status(network_status_label, "Connected (Peer %d)" % network_manager.get_my_peer_id(), HouseStyle.TONE_OK)
 	# Announce our version so the host can validate us; on a match it then pushes
 	# the full state (gated on the handshake). No explicit state request needed.
 	network_manager.announce_version_to_host()
@@ -13963,14 +13962,12 @@ func _on_network_connected() -> void:
 
 func _on_network_failed() -> void:
 	_update_network_ui(false, false)
-	network_status_label.text = "Connection failed!"
-	network_status_label.add_theme_color_override("font_color", Color.RED)
+	GameMenu.set_status(network_status_label, "Connection failed!", HouseStyle.TONE_DANGER)
 
 
 func _on_network_disconnected() -> void:
 	_update_network_ui(false, false)
-	network_status_label.text = "Server disconnected"
-	network_status_label.add_theme_color_override("font_color", Color.RED)
+	GameMenu.set_status(network_status_label, "Server disconnected", HouseStyle.TONE_DANGER)
 
 
 func _on_player_joined(peer_id: int) -> void:
@@ -14049,8 +14046,7 @@ func _on_version_rejected(host_version: String, my_version: String) -> void:
 	push_warning("[Network] Version mismatch — host=%s, us=%s. Disconnecting." % [host_version, my_version])
 	network_manager.disconnect_game()
 	_update_network_ui(false, false)
-	network_status_label.text = "Version mismatch: host %s, you %s — update to match" % [host_version, my_version]
-	network_status_label.add_theme_color_override("font_color", Color.RED)
+	GameMenu.set_status(network_status_label, "Version mismatch: host %s, you %s — update to match" % [host_version, my_version], HouseStyle.TONE_DANGER)
 
 
 func _on_player_left(peer_id: int) -> void:
@@ -14070,8 +14066,7 @@ func _on_player_left(peer_id: int) -> void:
 func _on_internet_room_ready(code: String) -> void:
 	_update_network_ui(true, true)
 	var display_code = InternetLobby._format_code(code)
-	network_status_label.text = "Online: %s" % display_code
-	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	GameMenu.set_status(network_status_label, "Online: %s" % display_code, HouseStyle.TONE_OK)
 	# Copy code to clipboard for easy sharing
 	DisplayServer.clipboard_set(code)
 	print("Room code %s copied to clipboard" % display_code)
@@ -14092,8 +14087,7 @@ func _on_internet_connected(peer_id: int) -> void:
 	if network_manager:
 		network_manager.is_host = multiplayer.is_server()
 	_update_network_ui(true, false)
-	network_status_label.text = "Online (Peer %d)" % peer_id
-	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	GameMenu.set_status(network_status_label, "Online (Peer %d)" % peer_id, HouseStyle.TONE_OK)
 	# The guest keeps the room code visible too (it typed it once, then it was gone — no rejoin).
 	if internet_lobby != null and not internet_lobby.room_code.is_empty():
 		_set_room_code_display(internet_lobby.room_code)
@@ -14303,14 +14297,12 @@ func _rebuild_roster() -> void:
 
 func _on_internet_failed(reason: String) -> void:
 	_update_network_ui(false, false)
-	network_status_label.text = "Online failed: %s" % reason
-	network_status_label.add_theme_color_override("font_color", Color.RED)
+	GameMenu.set_status(network_status_label, "Online failed: %s" % reason, HouseStyle.TONE_DANGER)
 
 
 func _on_internet_disconnected() -> void:
 	_update_network_ui(false, false)
-	network_status_label.text = "Offline"
-	network_status_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	GameMenu.set_status(network_status_label, "Offline", HouseStyle.TONE_MUTED)
 	# Clean up presence nodes
 	_cleanup_all_presence()
 
@@ -14327,15 +14319,13 @@ func _on_relay_connection_lost() -> void:
 	network_manager.broadcast_peer_busy(false)
 	var role := "host" if network_manager.is_host else "guest"
 	push_warning("[Network] Connection lost — attempting to rejoin the room (%s)…" % role)
-	network_status_label.text = "Connection lost — reconnecting…"
-	network_status_label.add_theme_color_override("font_color", Color.YELLOW)
+	GameMenu.set_status(network_status_label, "Connection lost — reconnecting…", HouseStyle.TONE_WARN)
 	internet_lobby.reconnect_to_room()
 
 
 func _on_relay_reconnecting() -> void:
 	_is_reconnecting = true
-	network_status_label.text = "Reconnecting…"
-	network_status_label.add_theme_color_override("font_color", Color.YELLOW)
+	GameMenu.set_status(network_status_label, "Reconnecting…", HouseStyle.TONE_WARN)
 
 
 ## Rejoin failed (relay unreachable or the room is gone, e.g. host left). End the
@@ -14343,8 +14333,7 @@ func _on_relay_reconnecting() -> void:
 func _on_relay_reconnect_failed(reason: String) -> void:
 	_is_reconnecting = false
 	push_warning("[Network] Reconnect failed: %s" % reason)
-	network_status_label.text = "Reconnect failed (%s)" % reason
-	network_status_label.add_theme_color_override("font_color", Color.RED)
+	GameMenu.set_status(network_status_label, "Reconnect failed (%s)" % reason, HouseStyle.TONE_DANGER)
 	# Tear the dead relay peer down cleanly (RC4): close + null the socket, drop the
 	# multiplayer peer, and reset the roster dicts so a later Host/Join starts from a
 	# known-clean state instead of layering over a half-alive session.
@@ -14360,8 +14349,7 @@ func _on_relay_reconnect_failed(reason: String) -> void:
 ## Guest side: the host dropped but the room is preserved. Wait for it to return (the
 ## host reclaims peer id 1 and re-syncs) instead of treating it as a full disconnect.
 func _on_host_paused() -> void:
-	network_status_label.text = "Host disconnected — waiting for reconnect…"
-	network_status_label.add_theme_color_override("font_color", Color.YELLOW)
+	GameMenu.set_status(network_status_label, "Host disconnected — waiting for reconnect…", HouseStyle.TONE_WARN)
 
 
 ## Guest side: OUR OWN connection was restored after a drop (fresh peer id). Godot's
@@ -14376,8 +14364,7 @@ func _on_guest_reconnected() -> void:
 	# NOTE: this fixes the REUSED-peer-id reconnect; when the relay hands out a NEW peer id the
 	# RPC still doesn't route (stale SceneMultiplayer unique-id) — see ROADMAP "graceful guest
 	# reconnect". Harmless + correct on its own (idempotent announce).
-	network_status_label.text = "Reconnected"
-	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	GameMenu.set_status(network_status_label, "Reconnected", HouseStyle.TONE_OK)
 	if network_manager:
 		network_manager.is_host = multiplayer.is_server()
 		# NOTE: the re-announce is driven by the room_joined -> internet_connected path on every
@@ -14403,8 +14390,7 @@ func _on_host_rejoined() -> void:
 			# missing-resync gap after a host rehost.
 			network_manager.announce_version_to_host()
 			_register_local_name()
-	network_status_label.text = "Reconnected"
-	network_status_label.add_theme_color_override("font_color", Color.GREEN)
+	GameMenu.set_status(network_status_label, "Reconnected", HouseStyle.TONE_OK)
 
 
 # ============================================================================
@@ -14874,7 +14860,7 @@ func _init_room_code_display() -> void:
 	_room_code_button.visible = false
 	_room_code_button.focus_mode = Control.FOCUS_NONE
 	_room_code_button.tooltip_text = "The session's room code — click to copy"
-	_room_code_button.add_theme_color_override("font_color", Color(0.4, 0.95, 0.55))
+	GameMenu.room_code(_room_code_button)
 	_room_code_button.pressed.connect(func() -> void:
 		if not _session_room_code.is_empty():
 			DisplayServer.clipboard_set(_session_room_code)
