@@ -27,7 +27,7 @@ code **measures, visualises and synchronises** — the players apply the rules.
 | Control | Key | Rule |
 |---|---|---|
 | Toggle 45° arc quadrants (selected unit only) | `F` | p.5 "Unit Facing" |
-| Cycle frontage (5→4→3→2→1) | `Shift`+`F` | p.6 "Unit Formations" |
+| Cycle frontage (5→4→3→2→1) | `B` | p.6 "Unit Formations" |
 | Axis-locked drag (forward/backward only) | `Shift`+drag | p.8 (Rush/Charge forward-only) |
 | Snap to nearest 90° facing | `Ctrl`+`R` | p.8 "Pivoting" |
 | Mouse-driven rotation (tray turns to cursor) | `R` (hold) | p.8 "Pivoting" |

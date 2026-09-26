@@ -201,6 +201,9 @@ func test_controls_overlay_lists_every_binding_of_the_old_wall(timeout := 120000
 			shown.append(String(r.get_meta(&"keys")))
 	for keys: String in WALL_TODAY:
 		assert_bool(keys in shown).override_failure_message("'%s' is missing from the Controls overlay %s" % [keys, str(shown)]).is_true()
+	# Maintainer 23.09.: regiment frontage moved from Shift+F to B, listed with the unit keys.
+	assert_bool("B" in shown).override_failure_message("the frontage key B is missing from the Controls overlay %s" % str(shown)).is_true()
+	assert_str(ControlsOverlay.group_of("B")).is_equal("Unit")
 	# Every line of the list, not only the old ones, and the version line from the one source.
 	assert_int(shown.size()).is_equal(ControlsOverlay.parse(wall.text).size())
 	var version := overlay.root.find_child("Version", true, false) as Label

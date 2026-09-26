@@ -590,7 +590,7 @@ static func create_regiment_menu(game_unit: GameUnit, remaining: int, pool_max: 
 	var can_adjust: bool = pool_max > 0
 	items.append(RadialMenuItem.new("regiment_wounds", wounds_label, "W", can_adjust, "Open the wounds dialog (AoF:R p.9 pooled-tough counter)"))
 
-	# Cycle frontage (mirrors Shift+F) — convenient from the menu.
+	# Cycle frontage (mirrors B) — convenient from the menu.
 	items.append(RadialMenuItem.new("regiment_frontage", "Frontage", "⊧", true, "Cycle models-per-rank (5 → 4 → 3 → 2 → 1)"))
 
 	var activate_icon = "-" if game_unit.is_activated else "+"

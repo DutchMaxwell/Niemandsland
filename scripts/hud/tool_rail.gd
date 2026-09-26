@@ -197,9 +197,10 @@ func _build_view() -> Control:
 		_key("G", KEY_G, false, "G — range ring of the selected unit: 3, 6, 9, 12, 18, 24\", off"),
 		_key("Shift+G", KEY_G, true, "Shift+G — clear all range rings")])
 	_line(v, "Sight / range fan", [
-		_key("F", KEY_F, false, "F — sight and range fan of the selected unit (nothing selected: regiment arcs)")])
+		_key("F", KEY_F, false, "F — sight and range fan of the selected unit (nothing selected: regiment arcs)"),
+		_key("Shift+F", KEY_F, true, "Shift+F — clear the sight and range fan")])
 	_line(v, "Regiment frontage", [
-		_key("Shift+F", KEY_F, true, "Shift+F — cycle the frontage of the selected regiment")])
+		_key("B", KEY_B, false, "B — cycle the frontage of the selected regiment")])
 	_line(v, "Move trails", [
 		_key("T", KEY_T, false, "T — show / hide the move trails"),
 		_key("Shift+T", KEY_T, true, "Shift+T — clear the move trails")])

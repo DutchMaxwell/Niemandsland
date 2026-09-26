@@ -163,7 +163,7 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 | Regiments (AoF:R) | |
 |---|---|
 | Toggle 45° arc quadrants (front/flank/rear) — selected unit | `F` (nothing selected: all regiments) |
-| Cycle frontage (models per rank) on selected regiments | `Shift`+`F` |
+| Cycle frontage (models per rank) on selected regiments | `B` |
 | Axis-locked drag (forward/backward only) | `Shift`+drag |
 | Mouse-driven rotation (R held) | `R` (drag mouse) |
 | Take/revive casualties (pooled Tough(1)) | Right-click model → `W` |
@@ -173,7 +173,7 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 |---|---|
 | Roll dice | **Roll** button in the dice tray |
 | Range rings / movement / pin ruler | `G` / `M` / `P` |
-| Sight & range fan (selected unit) — press again with the same unit selected to clear | `F` |
+| Sight & range fan (selected unit) — press again with the same unit selected to clear; `Shift`+`F` clears all fans | `F` |
 | Hide / clear move trails | `T` / `Shift`+`T` |
 | Export the battle log to a text file | `F8` |
 
