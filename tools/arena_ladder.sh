@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# AI RATING LADDER — round-robin the four difficulty grades (rekrut, veteran,
-# kriegsherr, albtraum) through tools/arena_match.gd: 6 pairings, each played
+# AI RATING LADDER — round-robin the difficulty grades (default: daemmerung, zwielicht,
+# finsternis, nachtmahr; env LADDER_GRADES) through tools/arena_match.gd: every pairing played
 # TWICE with sides swapped (a structural second-player advantage exists — the
 # last activation of a round seizes markers unpunished — so single-sided games
 # are biased). Fixed seed => same board/deployment/roll-off in both games of a
 # pairing; fixed dice_seed => same dice stream. Afterwards AGGREGATE every
 # arena result JSON in the out dir into a win-rate matrix + monotonicity check
-# (albtraum >= kriegsherr >= veteran >= rekrut).
+# (each higher grade >= the one below; zero graded games = no verdict, exit 2).
 #
 # Usage:   tools/arena_ladder.sh [SEED] [DICE_SEED]   (defaults: SEED=7, DICE_SEED=SEED)
 # Env:     GODOT_APP=org.godotengine.Godot    flatpak app id
@@ -25,7 +25,9 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${ARENA_OUT:-$HOME/selfplay_out}"
 GODOT_APP="${GODOT_APP:-org.godotengine.Godot}"
 FLATPAK=(flatpak run --filesystem=home --share=network "$GODOT_APP")
-GRADES=(rekrut veteran kriegsherr albtraum)
+# The difficulty ladder bottom-up (NML-1018). The legacy names rekrut/veteran/kriegsherr/albtraum all alias to the
+# ceiling preset `nachtmahr` since July, so they cannot form a ladder; override with LADDER_GRADES="a b c".
+read -r -a GRADES <<<"${LADDER_GRADES:-daemmerung zwielicht finsternis nachtmahr}"
 
 mkdir -p "$OUT_DIR"
 echo "[LADDER] repo=$REPO_DIR seed=$SEED dice_seed=$DICE_SEED out=$OUT_DIR"
@@ -76,11 +78,11 @@ for pair in "${pairs[@]}"; do
 done
 
 # 3) Aggregate EVERY arena_*.json in the out dir → win-rate matrix + monotonicity verdict.
-python3 - "$OUT_DIR" <<'PY'
+python3 - "$OUT_DIR" "${GRADES[@]}" <<'PY'
 import glob, json, os, sys
 
 out_dir = sys.argv[1]
-ladder = ["rekrut", "veteran", "kriegsherr", "albtraum"]
+ladder = sys.argv[2:]
 games = []
 for p in sorted(glob.glob(os.path.join(out_dir, "arena_*.json"))):
     with open(p) as f:
@@ -89,8 +91,8 @@ for p in sorted(glob.glob(os.path.join(out_dir, "arena_*.json"))):
         g["_file"] = os.path.basename(p)
         games.append(g)
 if not games:
-    print("[LADDER] no arena result JSONs found in", out_dir)
-    sys.exit(0)
+    print("[LADDER] no arena result JSONs found in", out_dir, "— no verdict")
+    sys.exit(2)
 
 # points[a][b] = points grade a scored against grade b (win 1 / draw 0.5); n[a][b] = games played.
 points = {a: {b: 0.0 for b in ladder} for a in ladder}
@@ -111,6 +113,12 @@ for g in games:
     else:
         points[a][b] += 0.5
         points[b][a] += 0.5
+
+graded = sum(n[a][b] for a in ladder for b in ladder) // 2
+if graded == 0:
+    # A verdict over zero games is a check that cannot fail: refuse it loudly instead.
+    print("[LADDER] NO GRADED GAMES for the ladder %s among %d result files — no verdict" % (ladder, len(games)))
+    sys.exit(2)
 
 print()
 print("==== RATING LADDER — win-rate matrix (row grade's points vs column, of games played) ====")
@@ -151,7 +159,7 @@ order_ok = all(rate[ladder[i]] <= rate[ladder[i + 1]] + 1e-9
                if rate[ladder[i]] is not None and rate[ladder[i + 1]] is not None)
 print("MONOTONICITY:", "OK — every higher grade >= lower per pairing" if not violations
       else "VIOLATED: " + "; ".join(violations))
-print("WIN-RATE ORDER (rekrut <= veteran <= kriegsherr <= albtraum):",
+print("WIN-RATE ORDER (%s):" % " <= ".join(ladder),
       "OK" if order_ok else "VIOLATED",
       " ".join("%s=%.2f" % (g, rate[g]) for g in ladder if rate[g] is not None))
 
