@@ -7185,16 +7185,18 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 	var acc := {"dealt": 0, "forced": 0}
 	var take := func(_pu: GameUnit, mi: ModelInstance) -> void:
 		acc["dealt"] += SoloController.apply_deadly_hit(mi, deadly_x, on_changed, on_died)
+	var auto_rest := false   # a right-click / the strip button = "auto-allocate the rest" of this volley
 	for _w in range(surviving):
 		var pick: Dictionary = SoloController.deadly_pick(target)
 		if pick.is_empty():
 			break   # everything in the joined chain is dead — the remaining Deadly wounds are wasted
 		if bool(pick["forced"]):
 			acc["forced"] += 1
-		elif _solo_wound_choice_matters(target, 1):
+		elif not auto_rest and _solo_wound_choice_matters(target, 1):
 			var left: int = await _solo_prompt_wound_allocation(target, 1, pid, take, "Deadly(%d): " % deadly_x)
 			if left == 0:
 				continue   # the defender clicked the model — the hit is already applied
+			auto_rest = true
 		take.call(pick["unit"], (pick["unit"] as GameUnit).models[int(pick["index"])])
 	var dealt: int = int(acc["dealt"])
 	if battle_log != null and dealt > 0:

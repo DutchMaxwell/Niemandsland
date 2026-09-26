@@ -117,6 +117,21 @@ func test_a_fresh_model_hit_by_deadly_is_picked_by_the_human_defender() -> void:
 	await E2EBoot.settle(get_tree())
 
 
+func test_right_click_means_auto_for_the_rest_of_the_volley() -> void:
+	# The prompt's right-click is "auto-allocate the rest": after it, the volley's remaining fresh Deadly wounds
+	# must NOT re-open the prompt one by one (six unsaved wounds would be six prompts).
+	var u := _mixed_unit(1, "RestAuto")
+	_schedule_pick(0.3, {})
+	_schedule_pick(0.9, {})
+	_schedule_pick(1.5, {})
+	var dealt: int = await _main._solo_land_deadly_wounds(u, "Axe", 1, 0, 2)
+	assert_int(dealt).is_equal(2)
+	assert_int(_prompts_seen) \
+		.override_failure_message("D17 — the second fresh Deadly wound re-opened the prompt after a right-click") \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
 func test_the_forced_wound_finishes_first_then_the_defender_picks_the_next() -> void:
 	# Two unsaved Deadly(2) wounds on a unit whose Tough model is down to 2: wound 1 is forced onto it (dies, the
 	# excess is lost), wound 2 hits a FRESH model — the human picks it. One prompt only, for the second wound.
