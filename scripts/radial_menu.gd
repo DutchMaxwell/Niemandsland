@@ -8,8 +8,8 @@ signal menu_closed()
 
 # ===== Configuration =====
 
-## Menu radius in pixels
-@export var menu_radius: float = 100.0
+## Menu radius in pixels (the approved mockup B draws a 240 px ring)
+@export var menu_radius: float = 120.0
 
 ## Inner dead zone radius (cancel area)
 @export var center_radius: float = 34.0
@@ -17,24 +17,18 @@ signal menu_closed()
 ## Animation duration in seconds
 @export var animation_duration: float = 0.15
 
-## Colors — Tactical HUD tokens
-@export var background_color: Color = Color(HudTokens.SURFACE.r, HudTokens.SURFACE.g, HudTokens.SURFACE.b, 0.9)
-@export var segment_color: Color = Color(1.0, 1.0, 1.0, 0.06)
-@export var segment_hover_color: Color = Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.28)
-@export var text_color: Color = HudTokens.TEXT
-@export var disabled_color: Color = Color(1.0, 1.0, 1.0, 0.25)
-
-const ACCENT_COLOR := HudTokens.CYAN
-const DESTRUCTIVE_COLOR := HudTokens.DANGER
-const INTER_FONT_PATH := "res://assets/ui_glassmorphism/fonts/Inter.ttf"
+# House style (maintainer D53): _draw paints with draw_* calls, which no Theme reaches, so every colour,
+# font size and box of the wheel is read from HouseStyle — never a literal; a tint is a token at one of
+# HouseStyle's alphas (UI inventory finding 5).
+const GOLD_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_spot"]   # mockup B: the attack verbs in gold
 const SEGMENT_GAP := 0.07          # radians trimmed from each side of a segment
 const HOVER_POP := 10.0            # px the hovered segment extends outward
-const LABEL_FONT_SIZE := 14
-const TOOLTIP_FONT_SIZE := 14
-const TOOLTIP_PAD := Vector2(12.0, 7.0)   # px of padding inside the tooltip box
+const LABEL_PAD := 4.0             # px kept clear between a label and the edges of its wedge
+const ELLIPSIS := "…"              # U+2026 (Inter has it)
+const TOOLTIP_PAD := Vector2(HouseStyle.PAD_CARD_X, HouseStyle.PAD_CARD_Y)   # px inside the tooltip box
 const TOOLTIP_BAR_W := 4.0                # px width of the tooltip's left accent bar
+const TOOLTIP_TEXT_W := 340.0             # px a tooltip line wraps at (Reinforce's text is 1,945 px on one line)
 const TOOLTIP_GAP := 16.0                 # px between the ring's popped edge and the tooltip box
-const HALO_EXTENT := 15.0                 # px the glow halo reaches past menu_radius (see _draw)
 const EDGE_PADDING := 8.0                 # px kept clear between the menu and the viewport border
 
 
@@ -60,6 +54,9 @@ var _center_pos: Vector2 = Vector2.ZERO
 
 ## Label font (project Inter; falls back to the engine default if missing)
 var _font: Font = null
+
+## Each wedge's label as drawn, laid out once per open (see _label_layout)
+var _labels: Array = []
 
 
 # ===== Menu Item Class =====
@@ -94,7 +91,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# Load the project font (Inter); fall back to the engine default if missing.
-	var loaded := load(INTER_FONT_PATH)
+	var loaded := load(HouseStyle.FONT_PATH)
 	_font = loaded if loaded is Font else ThemeDB.fallback_font
 
 	# Set up for drawing
@@ -110,78 +107,110 @@ func _draw() -> void:
 	var start_angle := -PI / 2 - angle_step / 2  # Start from top
 	var font: Font = _font if _font else ThemeDB.fallback_font
 
-	# Soft cyan glow halo (concentric fading rings — _draw has no blur).
-	for g in range(3):
-		var halo_r := menu_radius + 3.0 + g * 5.0
-		var halo_a := 0.12 - g * 0.035
-		draw_arc(_center_pos, halo_r, 0.0, TAU, 64, Color(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, halo_a), 4.0, true)
-
-	# Dark glass disk + cyan rim.
-	draw_circle(_center_pos, menu_radius, background_color)
-	draw_arc(_center_pos, menu_radius, 0.0, TAU, 64, Color(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.55), 2.0, true)
+	# The disc: a house-style window — panel fill, window rim, no glow.
+	draw_circle(_center_pos, menu_radius, HouseStyle.PANEL)
+	draw_arc(_center_pos, menu_radius, 0.0, TAU, 64, HouseStyle.LINE_SOFT, HouseStyle.BORDER, true)
 
 	# Segments.
 	for i in range(item_count):
 		var item := _items[i]
 		var seg_start := start_angle + i * angle_step + SEGMENT_GAP
 		var seg_end := start_angle + (i + 1) * angle_step - SEGMENT_GAP
-		var hovered := i == _hovered_index
-		var destructive := item.id.begins_with("delete")
+		var hovered := i == _hovered_index and item.enabled
+		var tone := HouseStyle.TONE_DANGER if item.id.begins_with("delete") else HouseStyle.TONE_ACCENT
 		var outer := menu_radius - 4.0 + (HOVER_POP if hovered else 0.0)
 
-		var color := segment_color
-		if not item.enabled:
-			color = disabled_color
-		elif hovered:
-			color = segment_hover_color
-		elif destructive:
-			color = Color(DESTRUCTIVE_COLOR.r, DESTRUCTIVE_COLOR.g, DESTRUCTIVE_COLOR.b, 0.12)
+		var color := HouseStyle.FILL
+		if hovered:
+			color = Color(HouseStyle.tone_color(tone), HouseStyle.SELECTED_ALPHA)
+		elif tone == HouseStyle.TONE_DANGER:
+			color = Color(HouseStyle.DANGER, HouseStyle.HOVER_ALPHA)
 		_draw_segment(seg_start, seg_end, center_radius, outer, color)
 
-		# Bright accent arc on the hovered segment's outer edge.
+		# The tone's rim on the hovered segment's outer edge.
 		if hovered:
-			var arc_color := DESTRUCTIVE_COLOR if destructive else ACCENT_COLOR
-			draw_arc(_center_pos, outer, seg_start, seg_end, 24, arc_color, 3.0, true)
+			draw_arc(_center_pos, outer, seg_start, seg_end, 24, HouseStyle.tone_color(tone), 3.0, true)
 
-		# Label (full word, Inter).
-		var label_angle := (seg_start + seg_end) / 2.0
-		var label_radius := (outer + center_radius) / 2.0
-		var label_pos := _center_pos + Vector2(cos(label_angle), sin(label_angle)) * label_radius
-		var label_col := text_color
-		if not item.enabled:
-			label_col = disabled_color
-		elif destructive:
-			label_col = DESTRUCTIVE_COLOR
-		elif hovered:
-			label_col = HudTokens.TEXT
-		var ls := font.get_string_size(item.label, HORIZONTAL_ALIGNMENT_CENTER, -1, LABEL_FONT_SIZE)
-		var label_draw := Vector2(label_pos.x - ls.x / 2.0, label_pos.y + ls.y * 0.32)
-		draw_string(font, label_draw, item.label, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, label_col)
+		draw_string(font, _labels[i][1], _labels[i][0], HORIZONTAL_ALIGNMENT_LEFT, -1, HouseStyle.FONT_BODY, _ink(item))
 
-	# Center dead-zone (glass) + cancel glyph.
-	draw_circle(_center_pos, center_radius, Color(HudTokens.SURFACE.r, HudTokens.SURFACE.g, HudTokens.SURFACE.b, 0.95))
-	draw_arc(_center_pos, center_radius, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.16), 1.0, true)
-	var cancel_text := "×"   # U+00D7: Inter has no U+2715
-	var cs := font.get_string_size(cancel_text, HORIZONTAL_ALIGNMENT_CENTER, -1, LABEL_FONT_SIZE)
-	var cancel_col: Color = DESTRUCTIVE_COLOR if _hovered_index == -1 else HudTokens.TEXT_MUTED
-	draw_string(font, Vector2(_center_pos.x - cs.x / 2.0, _center_pos.y + cs.y * 0.32), cancel_text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, cancel_col)
+	# Center dead-zone (a sheet well) + cancel glyph.
+	draw_circle(_center_pos, center_radius, HouseStyle.SHEET_FILL)
+	draw_arc(_center_pos, center_radius, 0.0, TAU, 48, HouseStyle.LINE, HouseStyle.BORDER, true)
+	var cancel_text := HouseStyle.GLYPH_CLOSE
+	var cs := font.get_string_size(cancel_text, HORIZONTAL_ALIGNMENT_CENTER, -1, HouseStyle.FONT_BODY)
+	var cancel_col: Color = HouseStyle.tone_ink(HouseStyle.TONE_DANGER) if _hovered_index == -1 else HouseStyle.MUTED
+	draw_string(font, Vector2(_center_pos.x - cs.x / 2.0, _center_pos.y + cs.y * 0.32), cancel_text, HORIZONTAL_ALIGNMENT_LEFT, -1, HouseStyle.FONT_BODY, cancel_col)
 
 	# Tooltip for the hovered item.
 	if _hovered_index >= 0 and _hovered_index < _items.size():
-		var hovered_item := _items[_hovered_index]
-		if not hovered_item.tooltip.is_empty():
-			_draw_tooltip(font, hovered_item.tooltip)
+		var tip := _tooltip_text(_items[_hovered_index], _labels[_hovered_index][0])
+		if not tip.is_empty():
+			_draw_tooltip(font, tip)
+
+
+## A wedge label's ink: muted when off, the lifted danger red for what ends something, gold for the
+## attack verbs (mockup B), the house ink otherwise.
+static func _ink(item: RadialMenuItem) -> Color:
+	if not item.enabled:
+		return Color(HouseStyle.MUTED, HouseStyle.DISABLED_ALPHA)
+	if item.id.begins_with("delete"):
+		return HouseStyle.tone_ink(HouseStyle.TONE_DANGER)
+	return HouseStyle.GOLD if item.id in GOLD_VERBS else HouseStyle.INK
+
+
+## Each wedge's label as drawn: [text, baseline position]. A label sits centred in the room its wedge
+## has on the label's row; one wider than that room is cut with an ellipsis (NML-979: long labels burst
+## the ring), and the hover tooltip then names it in full (_tooltip_text).
+func _label_layout(font: Font) -> Array:
+	var out: Array = []
+	var half := PI / _items.size() - SEGMENT_GAP
+	for i in _items.size():
+		var a := -PI / 2.0 + i * TAU / _items.size()
+		var row := Vector2(cos(a), sin(a)) * (menu_radius - 4.0 + center_radius) / 2.0
+		var lo := 0.0
+		while lo > -menu_radius and _in_wedge(row + Vector2(lo - 1.0, 0.0), a, half):
+			lo -= 1.0
+		var hi := 0.0
+		while hi < menu_radius and _in_wedge(row + Vector2(hi + 1.0, 0.0), a, half):
+			hi += 1.0
+		var text := _fit(font, _items[i].label, hi - lo - LABEL_PAD * 2.0)
+		var ls := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, HouseStyle.FONT_BODY)
+		out.append([text, _center_pos + row + Vector2((lo + hi - ls.x) / 2.0, ls.y * 0.32)])
+	return out
+
+
+## `v` (relative to the centre) lies on the ring and within `half` radians of the wedge angle `a`.
+func _in_wedge(v: Vector2, a: float, half: float) -> bool:
+	return v.length() >= center_radius and v.length() <= menu_radius - 4.0 and absf(angle_difference(a, v.angle())) <= half
+
+
+## `text` fitted to `room` px: a note in brackets or after a dash goes first ("Speed Feat (once per
+## game)" -> "Speed Feat"), then letters, with an ellipsis; "" when not even one letter fits.
+static func _fit(font: Font, text: String, room: float) -> String:
+	var head := text if _text_w(font, text) <= room else text.get_slice(" (", 0).get_slice(" — ", 0)
+	var cut := head
+	while not cut.is_empty() and _text_w(font, cut if cut == head else cut + ELLIPSIS) > room:
+		cut = cut.left(-1).strip_edges()
+	return cut if cut == head or cut.is_empty() else cut + ELLIPSIS
+
+
+static func _text_w(font: Font, text: String) -> float:
+	return font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, HouseStyle.FONT_BODY).x
+
+
+## The hover text: the tooltip, headed by the full label when the wedge shows it cut (`shown`).
+static func _tooltip_text(item: RadialMenuItem, shown: String) -> String:
+	return item.tooltip if shown == item.label or item.tooltip == item.label else "%s\n%s" % [item.label, item.tooltip]
 
 
 ## Size of the tooltip box for `tip`. Shared by the drawing below and by the viewport clamp
 ## in _clamp_to_viewport, so the two can never disagree about how much room a tooltip needs.
 func _tooltip_box_size(font: Font, tip: String) -> Vector2:
-	var ts := font.get_string_size(tip, HORIZONTAL_ALIGNMENT_LEFT, -1, TOOLTIP_FONT_SIZE)
+	var ts := font.get_multiline_string_size(tip, HORIZONTAL_ALIGNMENT_LEFT, TOOLTIP_TEXT_W, HouseStyle.FONT_BODY)
 	return Vector2(ts.x + TOOLTIP_PAD.x * 2.0 + TOOLTIP_BAR_W + 4.0, ts.y + TOOLTIP_PAD.y * 2.0)
 
 
 func _draw_tooltip(font: Font, tip: String) -> void:
-	var ts := font.get_string_size(tip, HORIZONTAL_ALIGNMENT_LEFT, -1, TOOLTIP_FONT_SIZE)
 	var box_size := _tooltip_box_size(font, tip)
 	var box_pos := _center_pos + Vector2(-box_size.x / 2.0, menu_radius + HOVER_POP + TOOLTIP_GAP)
 	# The box is centred under the ring but can be far WIDER than the ring (measured: 374-618 px
@@ -193,19 +222,14 @@ func _draw_tooltip(font: Font, tip: String) -> void:
 	var view_w := get_viewport_rect().size.x
 	box_pos.x = clampf(box_pos.x, EDGE_PADDING, maxf(EDGE_PADDING, view_w - box_size.x - EDGE_PADDING))
 
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(HudTokens.SURFACE.r, HudTokens.SURFACE.g, HudTokens.SURFACE.b, 0.96)
-	sb.set_corner_radius_all(HudTokens.RADIUS)
-	sb.border_color = HudTokens.HAIRLINE
-	sb.set_border_width_all(1)
-	sb.draw(get_canvas_item(), Rect2(box_pos, box_size))
+	HouseStyle.tooltip_box().draw(get_canvas_item(), Rect2(box_pos, box_size))
 
 	# Accent bar.
-	draw_rect(Rect2(box_pos + Vector2(TOOLTIP_PAD.x * 0.4, TOOLTIP_PAD.y), Vector2(TOOLTIP_BAR_W, box_size.y - TOOLTIP_PAD.y * 2.0)), ACCENT_COLOR)
+	draw_rect(Rect2(box_pos + Vector2(TOOLTIP_PAD.x * 0.4, TOOLTIP_PAD.y), Vector2(TOOLTIP_BAR_W, box_size.y - TOOLTIP_PAD.y * 2.0)), HouseStyle.ACCENT)
 
-	# Text.
-	var text_pos := box_pos + Vector2(TOOLTIP_PAD.x + TOOLTIP_BAR_W + 4.0, box_size.y / 2.0 + ts.y * 0.32)
-	draw_string(font, text_pos, tip, HORIZONTAL_ALIGNMENT_LEFT, -1, TOOLTIP_FONT_SIZE, text_color)
+	# Text, wrapped at TOOLTIP_TEXT_W.
+	var text_pos := box_pos + Vector2(TOOLTIP_PAD.x + TOOLTIP_BAR_W + 4.0, TOOLTIP_PAD.y + font.get_ascent(HouseStyle.FONT_BODY))
+	draw_multiline_string(font, text_pos, tip, HORIZONTAL_ALIGNMENT_LEFT, TOOLTIP_TEXT_W, HouseStyle.FONT_BODY, -1, HouseStyle.INK)
 
 
 func _draw_segment(angle_start: float, angle_end: float, r_inner: float, r_outer: float, color: Color) -> void:
@@ -299,7 +323,7 @@ func _select_index(index: int) -> void:
 	close()
 
 
-## Nudges the menu centre so everything the player has to HIT — glow halo, popped segment and
+## Nudges the menu centre so everything the player has to HIT — the ring, its popped segment and
 ## the height of the tooltip below the ring — stays inside the viewport. Opened next to a screen
 ## border the menu was previously drawn half off-image, and this is the most frequent interaction
 ## of the game (click a unit -> radial menu), so the edge case is not an edge case at all.
@@ -322,9 +346,9 @@ func _clamp_to_viewport(pos: Vector2) -> Vector2:
 	for item in _items:
 		if item.tooltip.is_empty():
 			continue
-		tip_h = maxf(tip_h, _tooltip_box_size(font, item.tooltip).y)
+		tip_h = maxf(tip_h, _tooltip_box_size(font, _tooltip_text(item, "")).y)
 
-	var ring := menu_radius + maxf(HALO_EXTENT, HOVER_POP)
+	var ring := menu_radius + HOVER_POP
 	var pad_x := ring + EDGE_PADDING
 	var pad_top := ring + EDGE_PADDING
 	var pad_bottom := ring + EDGE_PADDING
@@ -349,6 +373,7 @@ func open(screen_pos: Vector2, items: Array[RadialMenuItem], context: Dictionary
 	# all measure from _center_pos, which is exactly why the shift is safe (see _clamp_to_viewport).
 	# _items must already be assigned: the clamp measures this menu's widest tooltip.
 	_center_pos = _clamp_to_viewport(screen_pos)
+	_labels = _label_layout(_font if _font else ThemeDB.fallback_font)
 	_hovered_index = -1
 	_is_open = true
 	# Swallow board clicks for as long as the menu stands (see the filter note in _ready).
