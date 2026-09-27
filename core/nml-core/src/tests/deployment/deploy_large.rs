@@ -91,3 +91,30 @@
         assert!(!out.zone_forward_respotted, "a forward section spot never respots");
     }
 
+    /// The OLD leg: #1048 shipped the respot ungated, so every corpus recorded
+    /// before it (the Gen-0 teacher corpus at epoch 0 included) re-deployed its
+    /// large bases on replay and parted at the first activation's menu. Below
+    /// `EPOCH_63_DEPLOY_LARGE_RESPOT` the section spot stands, lagging or not.
+    #[test]
+    fn at_epoch_62_a_large_base_keeps_its_lagging_section_spot() {
+        let board = empty_board();
+        let (zone, forward_y) = respot_zone();
+        let sec = crate::deployment::section_rect(&zone, 2);
+        let base_r = 0.076;
+        let radius = crate::deployment::deploy_footprint_radius(1, base_r);
+        let objectives = vec![(-0.3667, -0.2952), (0.3667, -0.2952)];
+        for epoch in [0, crate::acts::EPOCH_62_CASTING_MOD] {
+            let mut occupied = respot_blockers();
+            let out = crate::deployment::deploy_place_id(
+                &zone, &sec, forward_y, &objectives, &mut occupied, &board, &[], radius, &[],
+                base_r, false, false, 0.0, epoch,
+            );
+            assert!(!out.zone_forward_respotted, "epoch {epoch}: no respot below the gate");
+            assert!(
+                (out.spot.1 - forward_y).abs() > 0.1524,
+                "epoch {epoch}: the section spot stays behind the 6\" margin, got {:?}",
+                out.spot
+            );
+        }
+    }
+
