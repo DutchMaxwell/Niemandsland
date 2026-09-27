@@ -72,7 +72,10 @@ func test_plain_rush_closes_the_band_with_no_volley(timeout := 60000) -> void:
 	var enemy := _unit(2, "Foe", Vector3(20.0 * INCH, 0, 0), 0)
 	enemy.is_activated = true   # stays put — Watchers is the AI's eligible reply, not Foe itself
 	await _main._run_player_intent(runner, AiDecision.Action.RUSH, enemy)
-	await E2EBoot.settle(get_tree())
+	# _solo_animate_move glides on a real SceneTreeTimer (wall-clock, not frame-based) — under this
+	# shared box's CPU pressure gdUnit's scheduler occasionally needs more than 4 frames to catch an
+	# already-fired timeout (see e2e_auto_advance_test.gd, same fix).
+	await E2EBoot.settle(get_tree(), 30)
 	assert_float(_dist_in(runner, enemy)).is_equal_approx(8.0, 0.5)   # 20" - the 12" Rush band
 	var text := _log_text()
 	assert_str(text).contains("Auto:")
@@ -93,7 +96,7 @@ func test_quick_shot_bearer_fires_after_its_rush(timeout := 60000) -> void:
 	var enemy := _unit(2, "Foe", Vector3(20.0 * INCH, 0, 0), 0)
 	enemy.is_activated = true   # stays put — Watchers is the AI's eligible reply, not Foe itself
 	await _main._run_player_intent(runner, AiDecision.Action.RUSH, enemy)
-	await E2EBoot.settle(get_tree())
+	await E2EBoot.settle(get_tree(), 30)
 	assert_float(_dist_in(runner, enemy)).is_equal_approx(8.0, 0.5)
 	var text := _log_text()
 	assert_str(text).contains("rushes")

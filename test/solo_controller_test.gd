@@ -3862,3 +3862,12 @@ func test_shadow_diverges_and_shadow_menu_knobs() -> void:
 	assert_that(SoloController.shadow_menu_knobs("off")).is_equal({"menu_holders": false, "menu_wide": false})
 	assert_that(SoloController.shadow_menu_knobs("menu_wide")).is_equal({"menu_holders": false, "menu_wide": true})
 	assert_that(SoloController.shadow_menu_knobs(" menu_holders , menu_wide ")).is_equal({"menu_holders": true, "menu_wide": true})
+
+
+## A3 (NML-202): the auto-saves switch turns ON the first executed intent and never turns itself
+## back off — a refusal (executed=false) leaves an already-off switch off and an already-on one on.
+func test_auto_saves_after_intent_latches_on() -> void:
+	assert_bool(SoloController.auto_saves_after_intent(false, false)).is_false()
+	assert_bool(SoloController.auto_saves_after_intent(false, true)).is_true()
+	assert_bool(SoloController.auto_saves_after_intent(true, false)).is_true()
+	assert_bool(SoloController.auto_saves_after_intent(true, true)).is_true()
