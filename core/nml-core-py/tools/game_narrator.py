@@ -92,8 +92,10 @@ def replay(path, lists, repo, bank):
                                      # objectives, each its own rung with its own legacy value
                                      # (DEFECT_LEDGER: a 6-key allowlist silently kept gen0's
                                      # pins under a shipped-default arena record) — and THAT
-                                     # played.
-                                     **{**gr.KNOBS, **{k: kn[k] for k in gr.KNOBS if k in kn}})
+                                     # played. The shared merge also carries the epoch the
+                                     # record ran at (its own key, the prescreen sibling, or
+                                     # the core_build stamp) instead of gen0's pin 0.
+                                     **gr.replay_knobs(kn, rec.get("prescreen"), rec))
     finally:
         nml_core.load = load
     # Three ways for the replay to be a different game, all fatal: a short run, a

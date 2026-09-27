@@ -53,3 +53,33 @@ def test_a_fresh_shipped_defaults_game_replays_every_recorded_pick(tmp_path):
     rec, acts = gn.replay(str(rec_path), str(LISTS), gr.REPO, str(BANK))
     assert len(acts) == len(out["planner_positions"]) > 0
     assert (rec["winner"], rec["vp"]) == (out["winner"], out["vp"])
+
+
+def test_the_narrator_merges_knobs_through_replay_knobs(monkeypatch, tmp_path):
+    """`game_narrator.replay` kept its own copy of the knob merge after #636
+    generalised it into `gen0_replay_one.replay_knobs`, so every fallback added
+    there since (the prescreen epoch sibling, `melee_reach`, `seam_cast`, the
+    `core_build` epoch) never reached the narrator: a fresh shipped-defaults
+    record replayed at the gen0 pin `rules_epoch=0` and left its recording at
+    the first epoch-gated rule that fired. A spy on the shared merge, stopped
+    before the game: the narrator must hand it the record."""
+
+    class Stop(Exception):
+        pass
+
+    seen = []
+
+    def spy(kn, prescreen=None, record=None):
+        seen.append((kn, prescreen, record is not None))
+        raise Stop
+
+    monkeypatch.setattr(gr, "replay_knobs", spy)
+    prescreen = {"core_commit": "x", "core_build": {"rules_epoch": 61}}
+    rec = {"seed": 1, "dice_seed": 2, "planner_positions": [], "prescreen": prescreen,
+           "armies": {"p1": "a.json", "p2": "b.json"},
+           "knobs": {"top_k": 32, "horizon": 3, "movement": "act"}}
+    path = tmp_path / "fresh.json"
+    path.write_text(json.dumps(rec), encoding="utf-8")
+    with pytest.raises(Stop):
+        gn.replay(str(path), str(tmp_path), gr.REPO, str(tmp_path))
+    assert seen == [(rec["knobs"], prescreen, True)]
