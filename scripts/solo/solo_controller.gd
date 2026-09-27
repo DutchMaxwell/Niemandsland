@@ -8962,6 +8962,52 @@ static func casualty_order(unit: GameUnit) -> Array:
 	return alive
 
 
+## `casualty_order` with the survivors' chain kept (GF/AoF v3.5.1 p.8 "keeping unit coherency in mind", p.7 the 1"
+## chain + 9" spread). Greedy, one removal at a time: a wounded Tough body is still finished first (p.14 — no choice);
+## otherwise the first body in the value order whose removal leaves the survivors (joined heroes included) coherent
+## goes; when no removal can (the unit is already torn) the value order stands. "Coherent" allows the tape slack
+## (MEASURING_SLACK_INCHES): the AI places bodies exactly on 1.000", so a 1.003" hair must not read as already torn
+## (arena seed 2 replay: it switched the rule off and four casualties stranded the survivors). `max_picks` = how many leading picks
+## the caller can use (the wounds to land; 1 for a Deadly pick), the tail keeps the value order.
+## Measured 26.09.: 5 of 8 coherency violations after an AI move were casualty removal tearing the chain.
+## No Rust twin to keep in step: the core removes in ARRAY order (sim.rs land_wounds; battle_sim.gd:1558 "casualty_order
+## parity is a later step").
+static func chain_casualty_order(unit: GameUnit, max_picks: int = -1) -> Array:
+	var order: Array = casualty_order(unit)
+	if order.size() <= 2:
+		return order   # one body left is coherent whichever goes
+	var host: GameUnit = unit
+	if unit.get_attached_to() is GameUnit:
+		host = unit.get_attached_to() as GameUnit   # a joined hero's losses are judged against the host's chain
+	var group: Array[ModelInstance] = host.get_alive_models_with_attached()
+	var table := CoherencyChecker.LinkTable.new(group, CoherencyChecker.MEASURING_SLACK_INCHES)
+	if not table.valid:
+		return order   # a node is gone (headless / mid-teardown) — nothing to measure
+	var max_chain: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
+		if CoherencyChecker.is_skirmish_system(host) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	var picks: int = order.size() if max_picks < 0 else mini(max_picks, order.size())
+	var gone := {}
+	var out: Array = []
+	var todo: Array = order.duplicate()
+	while out.size() < picks and not todo.is_empty():
+		var at := 0
+		var lead := unit.models[int(todo[0])] as ModelInstance
+		if not (int(lead.wounds_max) > 1 and int(lead.wounds_current) < int(lead.wounds_max)):
+			for k in range(todo.size()):
+				var slot := group.find(unit.models[int(todo[k])])
+				gone[slot] = true
+				var keeps := table.coherent_without(gone, max_chain)
+				gone.erase(slot)
+				if keeps:
+					at = k
+					break
+		out.append(int(todo[at]))
+		gone[group.find(unit.models[int(todo[at])])] = true
+		todo.remove_at(at)
+	out.append_array(todo)
+	return out
+
+
 ## Bug 25 (Takedown, GF v3.5.1 p.14): the ATTACKER's pick — the most valuable alive model in the
 ## target (hero-grade loadout > special weapon > elevated Tough). The exact inverse of casualty_order's
 ## defender-optimal ranking: highest rank first. -1 when the unit has no alive model. Attached heroes
@@ -9029,7 +9075,7 @@ static func deadly_pick(unit: GameUnit) -> Dictionary:
 		var gu := member as GameUnit
 		if gu == null or gu.get_alive_count() <= 0:
 			continue
-		var idx := int(casualty_order(gu)[0])
+		var idx := int(chain_casualty_order(gu, 1)[0])
 		var m: ModelInstance = gu.models[idx]
 		return {"unit": gu, "index": idx, "forced": int(m.wounds_max) > 1 and int(m.wounds_current) < int(m.wounds_max)}
 	return {}
@@ -9066,7 +9112,7 @@ static func apply_deadly_wounds(unit: GameUnit, unsaved: int, deadly_x: int, on_
 
 static func apply_wounds_to_models(unit: GameUnit, wounds: int, on_changed: Callable, on_died: Callable) -> int:
 	var remaining := wounds
-	for i in casualty_order(unit):
+	for i in chain_casualty_order(unit, wounds):
 		if remaining <= 0:
 			break
 		var m: ModelInstance = unit.models[i]

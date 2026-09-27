@@ -231,3 +231,56 @@ func test_dead_models_are_ignored() -> void:
 	unit.models[2].is_alive = false
 	var result := CoherencyChecker.check_unit_coherency(unit)
 	assert_bool(result.valid).is_true()
+
+
+# ===== What-if table (LinkTable) =====
+
+func _table_for(unit: GameUnit) -> CoherencyChecker.LinkTable:
+	return CoherencyChecker.LinkTable.new(unit.get_alive_models_with_attached())
+
+
+func test_link_table_agrees_with_the_checker_on_whole_units() -> void:
+	var cases: Array = [
+		[Vector3.ZERO, Vector3(0.9 * INCH, 0, 0), Vector3(1.8 * INCH, 0, 0)],                            # a chain
+		[Vector3.ZERO, Vector3(0.5 * INCH, 0, 0), Vector3(5.5 * INCH, 0, 0), Vector3(6.0 * INCH, 0, 0)],  # two clusters
+		[Vector3.ZERO, Vector3(2.0 * INCH, 0.1, 0)],                                                     # 3" across elevation
+		[Vector3.ZERO, Vector3(2.0 * INCH, 0.0, 0)],                                                     # 2" on the flat
+		[Vector3.ZERO, Vector3(1.0 * INCH, 0, 0)],                                                       # exactly 1.000"
+	]
+	for positions in cases:
+		var unit := _make_unit(positions)
+		assert_bool(_table_for(unit).coherent_without({}, 9.0)).is_equal(CoherencyChecker.check_unit_coherency(unit).valid)
+
+
+func test_link_table_applies_the_spread_limit() -> void:
+	var positions: Array = []
+	for i in range(11):
+		positions.append(Vector3(i * 0.95 * INCH, 0, 0))
+	var table := _table_for(_make_unit(positions))
+	assert_bool(table.coherent_without({}, 9.0)).is_false()          # one chain, but 9.5" across
+	assert_bool(table.coherent_without({10: true}, 9.0)).is_true()   # without the last body it spans 8.55"
+	assert_bool(table.coherent_without({10: true}, 6.0)).is_false()  # the Skirmish 6" limit
+
+
+func test_link_table_answers_what_if_a_bridge_or_an_end_were_gone() -> void:
+	var table := _table_for(_make_unit([Vector3.ZERO, Vector3(0.9 * INCH, 0, 0), Vector3(1.8 * INCH, 0, 0)]))
+	assert_bool(table.coherent_without({1: true}, 9.0)).is_false()   # the middle body is the bridge
+	assert_bool(table.coherent_without({0: true}, 9.0)).is_true()
+	assert_bool(table.coherent_without({0: true, 1: true}, 9.0)).is_true()   # one body left
+
+
+func test_link_table_is_invalid_when_a_node_is_gone() -> void:
+	var unit := _make_unit([Vector3.ZERO, Vector3(0.5 * INCH, 0, 0)])
+	unit.models[1].node = null
+	assert_bool(_table_for(unit).valid).is_false()
+
+
+func test_link_table_slack_absorbs_a_hair_but_not_a_real_gap() -> void:
+	# The slack is what a tape cannot resolve (MEASURING_SLACK_INCHES = 0.01"): a 1.004" link is a hair, 1.05" is a gap.
+	var hair := _make_unit([Vector3.ZERO, Vector3(1.004 * INCH, 0, 0)])
+	var hair_models := hair.get_alive_models_with_attached()
+	assert_bool(CoherencyChecker.check_unit_coherency(hair).valid).is_false()
+	assert_bool(CoherencyChecker.LinkTable.new(hair_models).coherent_without({}, 9.0)).is_false()   # default slack 0 = the checker
+	assert_bool(CoherencyChecker.LinkTable.new(hair_models, CoherencyChecker.MEASURING_SLACK_INCHES).coherent_without({}, 9.0)).is_true()
+	var gap_models := _make_unit([Vector3.ZERO, Vector3(1.05 * INCH, 0, 0)]).get_alive_models_with_attached()
+	assert_bool(CoherencyChecker.LinkTable.new(gap_models, CoherencyChecker.MEASURING_SLACK_INCHES).coherent_without({}, 9.0)).is_false()
