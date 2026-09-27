@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 ## layer split (terrain on layer 1, miniatures on layer 2). Placement aid; no rule.
 
 const ObjectManagerScript = preload("res://scripts/object_manager.gd")
+const INCH := 0.0254   # metres per inch
 
 
 # ===== _pick_surface_y (pure) =====
@@ -86,3 +87,46 @@ func test_travel_label_plain_with_no_climb() -> void:
 
 func test_travel_label_names_the_climb() -> void:
 	assert_str(ObjectManagerScript.travel_label(7.3, 2.5)).is_equal("7.3\" (+2.5\" climb)")
+
+
+# ===== _surface_y_under with an explicit top_y (heights B1-d, D2a floor picking) =====
+
+func test_top_y_probe_skips_the_top_slab_to_reach_the_one_below() -> void:
+	var om := _om_in_tree()
+	# A two-storey stack: floor slabs at 3" and 6" (a two-storey ruin, D1a).
+	add_child(_ground_box(Vector3(2, 0.02, 2), Vector3(0, 3.0 * INCH - 0.01, 0), 1))
+	add_child(_ground_box(Vector3(2, 0.02, 2), Vector3(0, 6.0 * INCH - 0.01, 0), 1))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	# From the top (default) -> the highest slab.
+	assert_float(om._surface_y_under(Vector3(0, 0, 0))).is_equal_approx(6.0 * INCH, 0.002)
+	# Probing from just under the top slab -> the one below it.
+	assert_float(om._surface_y_under(Vector3(0, 0, 0), [], 6.0 * INCH - 0.001)) \
+		.is_equal_approx(3.0 * INCH, 0.002)
+	# Probing from just under that one -> nothing left, falls back to 0 (the table).
+	assert_float(om._surface_y_under(Vector3(0, 0, 0), [], 3.0 * INCH - 0.001)) \
+		.is_equal_approx(0.0, 0.002)
+
+
+func test_floor_tops_under_counts_every_distinct_storey() -> void:
+	var om := _om_in_tree()
+	add_child(_ground_box(Vector3(2, 0.5, 2), Vector3(0, -0.25, 0), 1))  # table top at 0
+	add_child(_ground_box(Vector3(2, 0.02, 2), Vector3(0, 3.0 * INCH - 0.01, 0), 1))
+	add_child(_ground_box(Vector3(2, 0.02, 2), Vector3(0, 6.0 * INCH - 0.01, 0), 1))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_int(om._floor_tops_under(Vector3(0, 0, 0)).size()).is_equal(3)
+
+
+func test_floor_label_names_the_current_storey() -> void:
+	var om := _om_in_tree()
+	add_child(_ground_box(Vector3(2, 0.5, 2), Vector3(0, -0.25, 0), 1))  # table top at 0
+	add_child(_ground_box(Vector3(2, 0.02, 2), Vector3(0, 3.0 * INCH - 0.01, 0), 1))
+	add_child(_ground_box(Vector3(2, 0.02, 2), Vector3(0, 6.0 * INCH - 0.01, 0), 1))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_str(om._floor_label_for(Vector3(0, 0, 0))).is_equal("Floor 3/3")   # default: the top
+	om._drag_probe_top_y = 6.0 * INCH - 0.001   # skip the top slab -> the middle one
+	assert_str(om._floor_label_for(Vector3(0, 0, 0))).is_equal("Floor 2/3")
+	om._drag_probe_top_y = 3.0 * INCH - 0.001   # skip the middle slab too -> the table
+	assert_str(om._floor_label_for(Vector3(0, 0, 0))).is_equal("Floor 1/3")
