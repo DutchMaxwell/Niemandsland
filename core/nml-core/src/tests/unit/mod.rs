@@ -968,6 +968,29 @@
 // family PRs in the same wave never append to the same region. A new
 // family adds ONE line to this ALPHABETICAL list plus its own file; the
 // fixtures every family shares stay here, in the module root.
+fn fearless_flags(heroes: Vec<Vec<String>>, rules_epoch: u32) -> (bool, bool) {
+    let mut p: Profile = serde_json::from_str(r#"{"unit_id":"fearless","name":"Fearless"}"#).unwrap();
+    p.game_system = "gf".into();
+    p.special_rules = vec!["Fearless".into()];
+    p.attached_hero_rules = heroes;
+    let mut reg = Registries::new(&format!("{}/../..", env!("CARGO_MANIFEST_DIR")));
+    let ctx = ctx_for(&mut reg, &p, rules_epoch);
+    let unit = UnitStatic::build_for(&mut reg, &p, rules_epoch);
+    (ctx.fearless, unit.fearless)
+}
+
+#[test]
+fn a_plain_joined_hero_disables_fearless_from_epoch_65() {
+    assert_eq!(fearless_flags(vec![vec![]], crate::acts::EPOCH_65_MELEE_TRUTH), (false, false));
+    assert_eq!(fearless_flags(vec![], crate::acts::EPOCH_65_MELEE_TRUTH), (true, true),
+        "a lone Fearless hero keeps its recovery die");
+}
+
+#[test]
+fn the_old_fearless_host_stamp_remains_below_epoch_65() {
+    assert_eq!(fearless_flags(vec![vec![]], crate::acts::EPOCH_64_DEPLOY_LARGE_RESPOT), (true, true));
+}
+
 mod aura_channel;
 mod aura_grants;
 mod bane_bypass;

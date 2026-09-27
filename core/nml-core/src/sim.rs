@@ -208,16 +208,37 @@ fn morale_side_alive(state: &State, i: usize, seams: Seams) -> bool {
     }
 }
 
+/// Fearless checks the models still in the joined unit when morale is tested.
+fn morale_fearless(statics: &[UnitStatic], state: &State, i: usize, seams: Seams) -> bool {
+    let own = &statics[state.roster.profile[i]];
+    if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
+        return own.fearless;
+    }
+    let mut found = false;
+    if state.alive[i] > 0 {
+        found = true;
+        if !own.fearless_own { return false; }
+    }
+    if seams.hero_attach {
+        for &h in &state.attached[i] {
+            if state.alive[h] > 0 {
+                found = true;
+                if !statics[state.roster.profile[h]].fearless_own { return false; }
+            }
+        }
+    }
+    found
+}
+
 /// `BattleSim._morale_fails_expected` battle_sim.gd:1082-1090 — Shaken always
 /// fails; otherwise the quality target's fail chance, halved by Fearless, and a
 /// fail at 50% or worse.
 fn morale_fails_expected(state: &State, statics: &[UnitStatic], i: usize, seams: Seams) -> bool {
-    let us = &statics[state.roster.profile[i]];
     if state.shaken[i] {
         return true;
     }
     let mut fail_p = (morale_target(morale_quality(statics, state, i, seams), state.morale_bonus[i]) - 1) as f64 / 6.0;
-    if us.fearless {
+    if morale_fearless(statics, state, i, seams) {
         fail_p *= 0.5;
     }
     fail_p >= 0.5
@@ -4390,6 +4411,9 @@ fn tray_morale(
     let mut ctx = ctx_of(us, state, i);
     if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) && seams.hero_attach {
         ctx.quality = morale_quality(statics, state, i, seams);
+    }
+    if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
+        ctx.fearless = morale_fearless(statics, state, i, seams);
     }
     // The LIVE Banner/spell bonus, not the static one: `morale_fails_expected`
     // reads `state.morale_bonus[i]` and `_solo_morale_bonus` (main.gd:6632) is

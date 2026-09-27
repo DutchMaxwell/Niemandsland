@@ -1680,7 +1680,7 @@ static func _morale_fails_expected(su: Dictionary) -> bool:
 	var u: GameUnit = su["unit"]
 	var fail_p := float(AiCombatMath.morale_target(u.get_quality(),
 		int(su.get("morale_bonus", 0))) - 1) / 6.0
-	if u.has_special_rule("Fearless"):
+	if AiEv.rule_on_all_models(u, "Fearless"):
 		fail_p *= 0.5
 	return fail_p >= 0.5
 
