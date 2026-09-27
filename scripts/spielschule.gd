@@ -25,7 +25,7 @@ extends RefCounted
 ## hand-built scene). Every other chapter carries scenario == "" until its scene is authored.
 static func chapters() -> Array:
 	return [
-		{"id": "S-01", "title": "Tools & Basics",
+		{"id": "S-01", "title": "First Steps",
 			"goal": "Camera, selection and movement — the core tools.",
 			"scenario": "res://assets/tutorial/scenarios/s01_werkzeug_grundlagen.nml"},
 		{"id": "S-02", "title": "Table Setup",

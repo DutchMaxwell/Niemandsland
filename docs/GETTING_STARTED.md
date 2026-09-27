@@ -41,6 +41,12 @@ The start menu shows the version number. The first line of the log reads `[Boot]
 
 ## First steps
 
+### Trial by Fire — First Steps
+
+From the start menu, choose **Learn → Trial by Fire → First Steps** to open a small practice table with one squad.
+Follow the six lesson-card steps to turn, zoom and pan the camera, select and move the squad, then measure a distance.
+The chapter earns a check mark only after the last step; you can replay it or leave early from the lesson card.
+
 ### Start a game
 
 From the start menu, choose **Prepare a new table**. Pick a biome (six to choose from) and the table size — Standard 6×4 ft (default), Square 4×4 ft or Custom (12–240 in) — then press **Create table**. The size is fixed once the table exists. Terrain comes after that: open **Map Layout…** in the left panel (☰) to lay it out, or generate one automatically.

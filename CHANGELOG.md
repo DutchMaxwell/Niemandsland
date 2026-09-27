@@ -20,6 +20,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   over 3" is refused under the movement limit, and the mouse wheel steps which floor of a
   multi-storey ruin a drag lands on. (NML-972, phase B1)
 
+### Added
+- **Trial by Fire: First Steps** teaches the camera, squad selection, movement and measuring on a small table; completion follows the sixth step and the chapter can be replayed.
+
 ## [0.3.13.1-alpha] — 2026-09-25
 
 A quiet follow-up to 0.3.13.0: save/load and multiplayer fixes from a code review, plus the table fixes merged the same day.

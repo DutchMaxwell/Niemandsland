@@ -197,6 +197,20 @@ func test_save_state_to_file_survives_json_and_the_migration_chain() -> void:
 	sm.queue_free()
 
 
+func test_bundled_s01_loads_one_tagged_squad_on_a_small_table() -> void:
+	var sm := _real_save_manager()
+	var err: Error = await sm.load_game(REAL_BUNDLED)
+	assert_int(err).is_equal(OK)
+	assert_int(sm._loaded_game_units.size()).is_equal(1)
+	if not sm._loaded_game_units.is_empty():
+		var entry: Dictionary = sm._loaded_game_units.values()[0]
+		var unit: GameUnit = entry.game_unit
+		assert_int(unit.models.size()).is_equal(10)
+		assert_str(String(unit.unit_properties.get("lesson_tag", ""))).is_equal("alpha")
+	assert_vector(sm.table.table_size).is_equal(Vector2(4, 4))
+	_free_real_save_manager(sm)
+
+
 # ============================================================================
 # Helpers
 # ============================================================================

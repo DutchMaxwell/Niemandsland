@@ -34,8 +34,8 @@ func test_every_chapter_has_a_title_and_a_one_line_goal() -> void:
 		assert_str(String(c.get("goal", ""))).is_not_empty()
 
 
-func test_chapter_one_is_available_because_its_placeholder_scenario_ships() -> void:
-	# The one working end-to-end proof: chapter 1 bundles a (placeholder) scenario, so it is playable.
+func test_chapter_one_is_available_because_its_scenario_ships() -> void:
+	# Chapter 1 bundles a scenario, so it is playable.
 	var s01 := Spielschule.chapter("S-01")
 	assert_str(String(s01.get("scenario", ""))).is_equal("res://assets/tutorial/scenarios/s01_werkzeug_grundlagen.nml")
 	assert_bool(FileAccess.file_exists(String(s01.get("scenario", "")))).is_true()
