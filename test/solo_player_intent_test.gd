@@ -126,3 +126,46 @@ func test_capped_move_honesty_note_names_the_difficult_cap() -> void:
 		.override_failure_message("no capped-move honesty note in the rule notes (got: %s)" % joined) \
 		.contains("moved")
 	assert_str(joined).contains("difficult cap")
+
+
+# ===== A5 hardening — edge refusals (the logic is step 5's; these are new coverage) =====
+
+func test_aircraft_moves_by_hand() -> void:
+	var attacker := _unit(2, "Bomber", [Vector3.ZERO])
+	attacker.unit_properties["special_rules"] = ["Aircraft"]
+	var target := _unit(1, "Target", [Vector3(8 * IN2M, 0, 0)])
+	var solo := _controller([attacker, target])
+	assert_str(str(solo.player_intent(attacker, AiDecision.Action.RUSH, target).get("refused", ""))) \
+		.contains("moves by hand")
+
+
+func test_regiment_moves_by_hand() -> void:
+	var attacker := _unit(2, "Block", [Vector3.ZERO])
+	var target := _unit(1, "Target", [Vector3(8 * IN2M, 0, 0)])
+	var solo := _controller([attacker, target])
+	solo.army_manager.regiments[attacker.unit_id] = true   # _is_regiment only checks membership
+	assert_str(str(solo.player_intent(attacker, AiDecision.Action.RUSH, target).get("refused", ""))) \
+		.contains("moves by hand")
+
+
+func test_embarked_cargo_moves_by_hand() -> void:
+	var attacker := _unit(2, "Passenger", [Vector3.ZERO])
+	var transport := _unit(2, "Truck", [Vector3(0.5, 0, 0)])
+	attacker.unit_properties["embarked_in"] = transport.unit_id
+	var target := _unit(1, "Target", [Vector3(8 * IN2M, 0, 0)])
+	var solo := _controller([attacker, transport, target])
+	assert_str(str(solo.player_intent(attacker, AiDecision.Action.RUSH, target).get("refused", ""))) \
+		.contains("moves by hand")
+
+
+## A joined hero has no refusal of its OWN in player_intent — main._solo_combat_unit resolves it to
+## its host BEFORE player_intent ever sees a unit (same door solo_begin_targeting already uses), so
+## the host's intent is what this layer always sees; nothing to gate here.
+func test_shaken_refusal_names_the_idle_rule() -> void:
+	var attacker := _unit(2, "Routed", [Vector3.ZERO])
+	attacker.is_shaken = true
+	var target := _unit(1, "Target", [Vector3(8 * IN2M, 0, 0)])
+	var solo := _controller([attacker, target])
+	var refused := str(solo.player_intent(attacker, AiDecision.Action.CHARGE, target).get("refused", ""))
+	assert_str(refused).contains("Shaken")
+	assert_str(refused).contains("idle")
