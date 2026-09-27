@@ -1706,9 +1706,7 @@ func nearest_hurtable_enemy(unit: GameUnit) -> GameUnit:
 
 
 func _act(unit: GameUnit) -> Dictionary:
-	var report := {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
-		"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false, "dist_in": INF, "dangerous_models": 0,
-		"rule_notes": []}   # {text, travels} entries — maintainer policy: every applied special rule surfaces in the battle log
+	var report := ActIntent.blank_report(unit)   # {text, travels} rule_notes — every applied special rule surfaces in the battle log
 	if alive_positions(unit).is_empty():
 		return report
 	# Aircraft (GF v3.5.1, system-scoped): mandatory straight Advance on an EV-picked strafing lane —
@@ -2405,44 +2403,16 @@ func _act(unit: GameUnit) -> Dictionary:
 	# every re-gate above has spoken and nothing has moved yet, so the row can
 	# carry the action the body is about to play instead of the one it wanted.
 	_flush_teacher_row(action)
-	var dang := 0
-	match action:
-		AiDecision.Action.RUSH:
-			dang = _move_toward(unit, goal, (minf(rush, goal_dist) if (to_obj or to_flank) else rush), false)
-		AiDecision.Action.CHARGE:
-			# Close the REAL base-to-base gap to base contact, capped at the band (field-test finding 3): the
-			# former "move toward the enemy centre, capped at rush" under-shot for wide/offset units and the
-			# charge fell short within band. Charge is the one action exempt from steering easing.
-			# The band is the Melee-Shrouding-adjusted CHARGE reach (same gate that declared the charge legal).
-			dang = _charge_move(unit, target_unit, melee_shroud_charge_in(charge_reach, target_unit))
-		AiDecision.Action.ADVANCE:
-			if to_obj or to_flank:
-				dang = _move_toward(unit, goal, minf(advance, goal_dist), false)
-			elif enemy_dist <= float(shoot_range):
-				# "Advancing" (p.58): a shooter already in range steps BACK toward the range edge, still
-				# shooting — held a measuring hair INSIDE range so the post-move gate never flips on floats.
-				dang = _move_away(unit, tcentre,
-					minf(advance, maxf(float(shoot_range) - enemy_dist - KITE_RANGE_MARGIN_IN, 0.0)))
-			else:
-				dang = _move_toward(unit, goal, advance, false)
-		_:
-			pass   # HOLD
-	_move_extra = {}
-	report["dangerous_models"] = dang
-	report["dangerous_dice"] = last_dangerous_dice   # Bug 23: Tough-weighted (p.12 "as many dice as Tough")
-	# Instrument the objective outcome (field-test finding 1: the harness logged enemy distance but NEVER the
-	# model-to-marker distance, so "did the AI actually contest?" was unmeasurable). Record the post-move gap
-	# from the unit's NEAREST model to its NEAREST marker and whether it now sits in seize range (≤3", p.2).
-	if objectives_provider.is_valid():
-		var obj_gap_after := _nearest_objective_model_gap_in(unit)
-		if obj_gap_after < INF:
-			report["obj_gap_after_in"] = obj_gap_after
-			record_decision({"kind": "seize_check", "unit": unit.get_name(),
-				"rule": "Solo & Co-Op v3.5.0 p.2: a marker is held by non-Shaken models within 3\"",
-				"candidates": [], "chosen": ("in seize range" if obj_gap_after <= OBJECTIVE_CONTROL_IN else "short of marker"),
-				"why": ("toward objective" if to_obj else "toward enemy"),
-				"data": {"obj_gap_after_in": obj_gap_after, "toward_objective": to_obj,
-					"in_seize_range": obj_gap_after <= OBJECTIVE_CONTROL_IN}})
+	# A0 (NML-202): the AI feeds execute_intent() the SAME intent shape the player's
+	# player_intent() will (PR 2) — one executor, no second truth for the move/shoot gates.
+	var band_in: float = (rush if action == AiDecision.Action.RUSH
+		else (advance if action == AiDecision.Action.ADVANCE else 0.0))
+	var charge_band_in := melee_shroud_charge_in(charge_reach, target_unit)
+	var intent := ActIntent.make(unit, action, target_unit, goal, band_in, do_shoot, {
+		"charge_band_in": charge_band_in, "shoot_range_in": shoot_range, "quick_shot": quick_shot,
+		"enemy_dist_in": enemy_dist, "to_objective": to_obj, "to_flank": to_flank,
+		"source": "ai", "why": action_why})
+	report = execute_intent(intent, report)
 	# Shooting eligibility is measured AFTER the move; only actions the tree marked shoot=true actually
 	# fire. Indirect (wave 5) may target enemies out of line of sight, so an Indirect ranged weapon
 	# waives the LOS gate here (the volley's per-model sighting then counts range-only for it).
@@ -2495,6 +2465,65 @@ func _act(unit: GameUnit) -> Dictionary:
 	if not casts.is_empty():
 		report["casts"] = casts
 	_book_attack_claims(unit, report)
+	return report
+
+
+## A0 (NML-202) — the ONE executor both feeders call: `_act` (source "ai") and the player's
+## player_intent (PR 2, source "player") hand it the same ActIntent shape and get the same move,
+## the same post-move shot gate and the same log lines back. No behaviour change on the AI path —
+## this is the `_act` tail moved verbatim, reading its working variables from the intent instead of
+## the enclosing closure (digest-identical proof: step 4).
+func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
+	var unit := intent["unit"] as GameUnit
+	var action: int = int(intent["action"])
+	var target := intent.get("target") as GameUnit
+	var goal: Vector3 = intent.get("goal", Vector3.ZERO)
+	var band_in: float = float(intent.get("band_in", 0.0))
+	var charge_band_in: float = float(intent.get("charge_band_in", 0.0))
+	var to_objective: bool = bool(intent.get("to_objective", false))
+	var to_flank: bool = bool(intent.get("to_flank", false))
+	var enemy_dist_in: float = float(intent.get("enemy_dist_in", 0.0))
+	var shoot_range_in: float = float(intent.get("shoot_range_in", 0.0))
+	var goal_dist := MoveIntent.distance_inches(unit_centre(unit), goal)   # nothing has moved yet
+	var tcentre := unit_centre(target) if target != null else unit_centre(unit)
+	var dang := 0
+	match action:
+		AiDecision.Action.RUSH:
+			dang = _move_toward(unit, goal, (minf(band_in, goal_dist) if (to_objective or to_flank) else band_in), false)
+		AiDecision.Action.CHARGE:
+			# Close the REAL base-to-base gap to base contact, capped at the band (field-test finding 3): the
+			# former "move toward the enemy centre, capped at rush" under-shot for wide/offset units and the
+			# charge fell short within band. Charge is the one action exempt from steering easing.
+			# The band is the Melee-Shrouding-adjusted CHARGE reach (same gate that declared the charge legal).
+			dang = _charge_move(unit, target, charge_band_in)
+		AiDecision.Action.ADVANCE:
+			if to_objective or to_flank:
+				dang = _move_toward(unit, goal, minf(band_in, goal_dist), false)
+			elif enemy_dist_in <= shoot_range_in:
+				# "Advancing" (p.58): a shooter already in range steps BACK toward the range edge, still
+				# shooting — held a measuring hair INSIDE range so the post-move gate never flips on floats.
+				dang = _move_away(unit, tcentre,
+					minf(band_in, maxf(shoot_range_in - enemy_dist_in - KITE_RANGE_MARGIN_IN, 0.0)))
+			else:
+				dang = _move_toward(unit, goal, band_in, false)
+		_:
+			pass   # HOLD
+	_move_extra = {}
+	report["dangerous_models"] = dang
+	report["dangerous_dice"] = last_dangerous_dice   # Bug 23: Tough-weighted (p.12 "as many dice as Tough")
+	# Instrument the objective outcome (field-test finding 1: the harness logged enemy distance but NEVER the
+	# model-to-marker distance, so "did the AI actually contest?" was unmeasurable). Record the post-move gap
+	# from the unit's NEAREST model to its NEAREST marker and whether it now sits in seize range (≤3", p.2).
+	if objectives_provider.is_valid():
+		var obj_gap_after := _nearest_objective_model_gap_in(unit)
+		if obj_gap_after < INF:
+			report["obj_gap_after_in"] = obj_gap_after
+			record_decision({"kind": "seize_check", "unit": unit.get_name(),
+				"rule": "Solo & Co-Op v3.5.0 p.2: a marker is held by non-Shaken models within 3\"",
+				"candidates": [], "chosen": ("in seize range" if obj_gap_after <= OBJECTIVE_CONTROL_IN else "short of marker"),
+				"why": ("toward objective" if to_objective else "toward enemy"),
+				"data": {"obj_gap_after_in": obj_gap_after, "toward_objective": to_objective,
+					"in_seize_range": obj_gap_after <= OBJECTIVE_CONTROL_IN}})
 	return report
 
 
