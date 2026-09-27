@@ -11,7 +11,8 @@ use std::rc::Rc;
 pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionary, String> {
     let state_input = plain::sub_dict(input, "state");
     let (profiles, roster) = plain::build_roster(&state_input)?;
-    let captured = plain::build_state(&state_input, Rc::new(profiles), Rc::new(roster))?;
+    // No header here: epoch 0, as `ensure_closure` reads it.
+    let captured = plain::build_state(&state_input, Rc::new(profiles), Rc::new(roster), 0)?;
     let state = &captured.state;
     let action = crate::action_of(&plain::sub_dict(input, "action"));
     let si = *state

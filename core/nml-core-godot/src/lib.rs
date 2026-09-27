@@ -242,6 +242,8 @@ impl NmlCore {
         d.set("spacing", s.spacing);
         d.set("cast", s.cast);
         d.set("path", s.path);
+        let prefolded = self.header.as_ref().map(|h| h.knobs.bands_prefolded).unwrap_or(false);
+        d.set("bands_prefolded", prefolded);
         d
     }
 
@@ -257,7 +259,9 @@ impl NmlCore {
         let profiles = Rc::clone(self.cache.profiles.as_ref().unwrap());
         let roster = Rc::clone(self.cache.roster.as_ref().unwrap());
         let statics = Rc::clone(self.cache.statics.as_ref().unwrap());
-        match plain::build_state(&plain, profiles, roster) {
+        // The header's epoch, 0 without one: `ensure_closure`'s own reading.
+        let epoch = self.header.as_ref().map(|h| h.knobs.rules_epoch).unwrap_or(0);
+        match plain::build_state(&plain, profiles, roster, epoch) {
             Ok(cap) => {
                 for d in &cap.dropped {
                     if !self.dropped.iter().any(|x| x == d) {
@@ -465,7 +469,10 @@ impl NmlCore {
             Some(t) => Terrain::build(&plain::terrain_of(&t)),
             None => Terrain::absent(),
         };
-        let knobs = plain::knobs_of(&plain::sub_dict(&header, "knobs"));
+        let mut knobs = plain::knobs_of(&plain::sub_dict(&header, "knobs"));
+        // S4-U4: `acts::header_of`'s rule. A header carrying `books` is a table
+        // recording whose bands already fold every move grant.
+        knobs.bands_prefolded |= header.contains_key("books");
         // The header's own `rules_epoch` — `acts::rule_on`'s build-time leg.
         self.scache = StaticsCache::with_epoch(knobs.rules_epoch);
         let root = self.root();
@@ -846,6 +853,7 @@ impl NmlCore {
             plain,
             Rc::clone(&effective),
             Rc::clone(h.roster.as_ref().unwrap()),
+            h.knobs.rules_epoch,
         )?;
         for d in &cap.dropped {
             if !self.dropped.iter().any(|x| x == d) {

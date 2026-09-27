@@ -516,6 +516,26 @@ pub const EPOCH_61_PRECISION_MARKERS: u32 = 61;
 /// replay never had the behaviour; the mirror bumps with the table-side port.
 pub const EPOCH_62_CASTING_MOD: u32 = 62;
 
+/// The MELEE HEIGHT gate (27.09., heights B1-b): OPR "Who Can Strike" (GF/AoF
+/// Advanced Rules v3.5.1 p.9) reads "within 2” horizontally AND 4” vertically
+/// of an enemy model" — `combat::striking_models` dropped the vertical half
+/// (`s[1]`/`e[1]`) and let a unit standing on a 6" ruin floor strike (and be
+/// struck by) infantry at the wall foot. From 63 `striking_models` also
+/// requires `within_melee_height` (`combat::MELEE_VERTICAL_IN`, 4"). Below 63
+/// the vertical filter is off. Every recorded corpus has y = 0 for every
+/// model (Phase A/B1 do not move the AI), so no replay changes at any epoch
+/// (L1, `PLAN_heights_2026-09-27.md`). `63` is one past every epoch present
+/// at the rebase (62 = `EPOCH_62_CASTING_MOD`), and the value
+/// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
+/// reads THIS constant, not the literal `63` or `CURRENT_RULES_EPOCH`.
+/// MIRROR HOLD: the table applies the melee-height rule unconditionally (it
+/// is table truth, not a corpus-gated behaviour) and every recorded corpus
+/// has y = 0, so `act_recorder.gd`'s `rules_epoch` mirror stays at 61 (the
+/// casting-mod slot is still unported, see EPOCH_62_CASTING_MOD above); it
+/// carries only its own
+/// `EPOCH_63_MELEE_HEIGHT` constant for reference.
+pub const EPOCH_63_MELEE_HEIGHT: u32 = 63;
+
 /// The PRECISION DEBUFF gate (15.09., the precision text sweep — row
 /// `Precision Debuff`; gf Infected Colonies / Alien Hives, aof Deep-Sea
 /// Elves / Dragon Empire / Kingdom of Angels / High Elves, word-identical
@@ -537,7 +557,7 @@ pub const EPOCH_62_CASTING_MOD: u32 = 62;
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
 /// reads THIS constant, not the literal `58` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_58_PRECISION_DEBUFF: u32 = 58;
-pub const CURRENT_RULES_EPOCH: u32 = 62;
+pub const CURRENT_RULES_EPOCH: u32 = 63;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1725,7 +1745,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 62, "the live epoch is 62 (EPOCH_62_CASTING_MOD; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 63, "the live epoch is 63 (EPOCH_63_MELEE_HEIGHT; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1735,11 +1755,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":62}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":63}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 62"
+            "a fresh play_game() now stamps the bumped epoch, 63"
         );
     }
 

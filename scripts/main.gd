@@ -8909,7 +8909,13 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var gap_in: float = solo_controller.nearest_melee_gap_in(unit, target)
 	if gap_in > SoloController.MELEE_ENGAGE_IN:
 		if battle_log != null:
-			_log_rule_event(BattleLog.Category.COMBAT, "%s's charge falls short (%.1f\")" % [unit.get_name(), gap_in], true)
+			var msg := "%s's charge falls short (%.1f\")" % [unit.get_name(), gap_in]
+			if is_inf(gap_in):
+				var info := solo_controller.nearest_melee_pair_info(unit, target, false)
+				if info["gap_in"] <= SoloController.MELEE_ENGAGE_IN:
+					msg = "%s's charge falls short — %.1f\" above, melee reaches %.0f\" up (GF p.9)" \
+						% [unit.get_name(), info["height_in"], SoloController.MELEE_VERTICAL_IN]
+			_log_rule_event(BattleLog.Category.COMBAT, msg, true)
 		# Stage seam: an early exit still closes its phase boundary — the falls-short line gets
 		# its own card instead of bleeding into the next activation.
 		await _solo_stage_phase("Charge")
@@ -9971,6 +9977,12 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 		var gap := solo_controller.nearest_melee_gap_in(attacker, target)
 		if gap <= SoloController.MELEE_ENGAGE_IN:
 			return ""
+		if is_inf(gap):
+			var info := solo_controller.nearest_melee_pair_info(attacker, target, false)
+			if info["gap_in"] <= SoloController.MELEE_ENGAGE_IN:
+				return "%.1f\" above — melee reaches %.0f\" up (GF p.9)" \
+					% [info["height_in"], SoloController.MELEE_VERTICAL_IN]
+			gap = info["gap_in"]
 		return "not in melee range (%.1f\" — move into base contact)" % gap
 	# B11 (test game 2): the refusal message measures base-EDGE to base-edge between the NEAREST
 	# model pair — the same figure the ruler shows (the old unit-centre distance disagreed with the
