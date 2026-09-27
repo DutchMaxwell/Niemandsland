@@ -221,6 +221,8 @@ var _tutorial_board_loaded: bool = false      # its load finished (load_complete
 var _autosave_controller: AutosaveController = null   # kept so a Game School lesson can pause it
 var _scenario_mode: bool = false              # Game School: a bundled lesson scenario is being loaded
 var _scenario_loader: ScenarioLoader = null   # holds the paused-autosave + captured-table lesson state
+var _scenario_chapter: String = ""
+var _lesson_progress_path: String = SpielschuleProgress.DEFAULT_PATH
 var _host_free_move_check: CheckButton = null   # "Move all models" — host-operated, session-wide
 var _host_tools_box: VBoxContainer = null   # host-only tools; hidden offline / in solo
 var _room_code_button: Button = null          # permanent room-code display in the left bar (click = copy)
@@ -861,6 +863,7 @@ func _ready() -> void:
 		if not scenario_path.is_empty() and FileAccess.file_exists(scenario_path) \
 				and str(ProjectSettings.get_setting("niemandsland/pending_load_path", "")).is_empty():
 			_scenario_mode = true  # skips the table-size chooser + intro (see the harness short-circuit)
+			_scenario_chapter = scenario_chapter
 			ProjectSettings.set_setting("niemandsland/pending_load_path", scenario_path)
 			# Pause autosave for the whole lesson so the lesson table can NEVER overwrite the player's
 			# real rotating save slots — the sharpest isolation hazard. ScenarioLoader owns the pause
@@ -869,10 +872,7 @@ func _ready() -> void:
 			_scenario_loader = ScenarioLoader.new()
 			_scenario_loader.setup(save_manager, _autosave_controller, move_trails)
 			_scenario_loader.begin_lesson()
-			# Provisional completion: opening a chapter marks it done (still replayable). Per-chapter
-			# step-gates will replace this once the maintainer's hand-built lessons land.
-			save_manager.load_completed.connect(
-				func(_object_count: int) -> void: _mark_scenario_chapter_done(scenario_chapter), CONNECT_ONE_SHOT)
+			save_manager.load_completed.connect(_start_lesson, CONNECT_ONE_SHOT)
 
 	# Check if a saved battle should be loaded (from startup menu)
 	var pending_load := ProjectSettings.get_setting("niemandsland/pending_load_path", "") as String
@@ -16202,15 +16202,35 @@ func _start_tutorial() -> void:
 	_tutorial_director.begin(progress, _tutorial_start_lesson)
 
 
-## Game School: mark a chapter completed once its bundled scenario finished loading. Provisional
-## (opening = done, still replayable) until per-chapter step-gates ship with the hand-built lessons.
-func _mark_scenario_chapter_done(chapter_id: String) -> void:
-	if chapter_id.is_empty():
-		return
-	var progress := SpielschuleProgress.new()
+## Start state checks only after the bundled table has fully loaded.
+func _start_lesson(_object_count: int) -> void:
+	var facts := LessonFacts.new()
+	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
+		"army_manager": opr_army_manager})
+	var progress := SpielschuleProgress.new(_lesson_progress_path)
 	progress.load_from_disk()
-	progress.mark_completed(chapter_id)
-	progress.save_to_disk()
+	var runner := LessonRunner.new()
+	runner.name = "LessonRunner"
+	add_child(runner)
+	runner.setup(_scenario_chapter, facts, progress)
+	var title := String(Spielschule.chapter(_scenario_chapter).get("title", ""))
+	var card := LessonCard.new()
+	card.name = "LessonCard"
+	card.chapter_title = title
+	$UI.add_child(card)
+	card.continue_pressed.connect(func() -> void: facts.bump("continue"))
+	card.skip_pressed.connect(runner.skip_step)
+	card.leave_pressed.connect(_leave_lesson)
+	card.stay_pressed.connect(func() -> void: card.hide())
+	runner.step_changed.connect(card.show_step)
+	runner.chapter_completed.connect(func(_id: String) -> void: card.show_complete(title))
+	runner.begin()
+
+
+func _leave_lesson() -> void:
+	await _scenario_loader.end_lesson()
+	ProjectSettings.set_setting("niemandsland/open_game_school", true)
+	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
 
 
 ## A lesson finished (played through or skipped) — quick, non-blocking confirmation.

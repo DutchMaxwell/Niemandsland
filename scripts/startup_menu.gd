@@ -109,6 +109,9 @@ func _ready() -> void:
 	_maybe_check_for_updates()
 	if get_tree().current_scene == self:
 		(continue_btn if continue_btn.visible else start_battle_btn).grab_focus.call_deferred()
+	if ProjectSettings.get_setting("niemandsland/open_game_school", false):
+		ProjectSettings.set_setting("niemandsland/open_game_school", false)
+		call_deferred("_on_spielschule_pressed")
 
 
 func _on_diorama_loading(label: String, ratio: float) -> void:

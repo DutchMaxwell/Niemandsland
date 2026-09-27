@@ -100,6 +100,38 @@ func test_tutorial_entry_arms_existing_runtime_flags() -> void:
 	ProjectSettings.set_setting("niemandsland/tutorial_lesson",lesson)
 	assert_str(result).is_equal("T-04")
 
+
+func test_return_from_lesson_opens_chapter_picker_and_clears_flag() -> void:
+	var key := "niemandsland/open_game_school"
+	var previous: Variant = ProjectSettings.get_setting(key, false)
+	ProjectSettings.set_setting(key, true)
+	var menu: Control = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	add_child(menu)
+	await get_tree().process_frame
+	var found := false
+	for child in menu.get_children():
+		if child is AcceptDialog and child.title == "TRIAL BY FIRE":
+			found = child.visible
+	var cleared: bool = not ProjectSettings.get_setting(key, false)
+	ProjectSettings.set_setting(key, previous)
+	assert_bool(found).is_true()
+	assert_bool(cleared).is_true()
+
+
+func test_normal_menu_boot_does_not_open_chapter_picker() -> void:
+	var key := "niemandsland/open_game_school"
+	var previous: Variant = ProjectSettings.get_setting(key, false)
+	ProjectSettings.set_setting(key, false)
+	var menu: Control = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	add_child(menu)
+	await get_tree().process_frame
+	var found := false
+	for child in menu.get_children():
+		if child is AcceptDialog and child.title == "TRIAL BY FIRE":
+			found = child.visible
+	ProjectSettings.set_setting(key, previous)
+	assert_bool(found).is_false()
+
 func test_menu_never_creates_game_or_atmosphere_controllers() -> void:
 	assert_object(_menu.find_child("NetworkManager",true,false)).is_null()
 	assert_object(_menu.find_child("AtmosphereController",true,false)).is_null()
