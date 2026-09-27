@@ -6746,8 +6746,8 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 	var heavy_dice: int = hx * models - heavy_cut
 	var dice: int = AiCombatMath.impact_total_dice(x, models, counter_models - heavy_cut)
 	if counter_models > 0 and battle_log != null and (x + hx) * models > 0:
-		_log_rule_event(BattleLog.Category.COMBAT, "Counter: %s loses %d Impact roll%s" % [
-			charger.get_name(), counter_models, ("" if counter_models == 1 else "s")], true)
+		_log_rule_event(BattleLog.Category.COMBAT, "Counter: -%d Impact dice (%s)" % [
+			counter_models, charger.get_name()], true)
 	var impact_defense: int = AiCombatMath.guarded_defense(_solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE),
 		not _solo_over9_defense_rule(defender).is_empty() and charge_from_in > AiCombatMath.LONG_RANGE_IN)
 	var caused: int = 0

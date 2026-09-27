@@ -2655,6 +2655,18 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         artillery_entry.as_ref().map(|e| e.param_i("shooter_hit_bonus", 1));
     let artillery_target_hit_penalty =
         artillery_entry.as_ref().map(|e| e.param_i("target_hit_penalty", 2));
+    // Unit-wide Counter aliases strip one Impact roll per living model. Keep
+    // the older weapon-only stamp unchanged for recordings before epoch 65.
+    let counter_unit_reduction = if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
+        let map = reg.rules_for(&p.game_system);
+        p.special_rules.iter().chain(p.item_grants.iter()).find_map(|raw| {
+            map.lookup(&p.faction_folder, &base_rule_name(raw))
+                .filter(|e| e.primitive.as_deref() == Some("Counter"))
+                .map(|e| e.param_i("impact_reduction_per_model", 1))
+        })
+    } else {
+        None
+    };
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -2767,34 +2779,22 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         sturdy_boost_gates_guarded: rule_on(rules_epoch, EPOCH_13_WHO_WINS)
             && shielded_alias.as_ref().is_some_and(|(a, _)| a.is_sturdy_kind()),
         in_cover: false,
-        // Audit 2026-09-13 §2.2 — see `counter_models` below: the bearer read
-        // joins at the CURRENT epoch, the live alive-scaling rides
-        // `sim::ctx_of`, and the COUNTER_ONLY pre-phase runs in
-        // `sim::tray_charge` (main.gd:8268-8274). Pre-port records keep the
-        // hard 0 the comment below describes and replay byte-exact.
-        // HARD 0 below the CURRENT epoch, and it stays 0 there: `BattleSim._ctx_of` never passes
-        // `AiEv.ctx_for`'s third argument either (battle_sim.gd:702,
-        // ai_ev.gd:135). The table counts the DEFENDER's alive models whose
-        // melee weapons carry Counter (`SoloController.counter_models_of`), a
-        // per-MODEL loadout read the capture does not carry — so Counter's
-        // Impact reduction is inert in this port, and `resolve_melee_with_tray`
-        // raises `counter_strikes_first` whenever it would have mattered.
-        // Audit 2026-09-13 §2.2 — the Counter Impact cut joins the ctx at the
-        // CURRENT epoch: the bearer count of the unit's Counter melee weapons
-        // (the capture's weapon `count` sums, min the model count — exactly
-        // `SoloController.counter_models_of` solo_controller.gd:7556-7581's
-        // per-unit shape). The live alive-scaling rides `sim::ctx_of`'s
-        // `min(bearers, alive)` fold. Pre-port records keep the hard 0 and
-        // replay byte-exact.
-        counter_models: if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
+        // Epoch 13 records count Counter melee-weapon bearers, capped at model
+        // count; epoch 65 also recognizes a unit-wide Counter primitive alias.
+        // `sim::ctx_of` scales the stamped count to living models. Earlier
+        // recordings retain their original weapon-only or hard-zero count.
+        counter_models: if counter_unit_reduction.is_some() {
+            p.model_count.max(0)
+        } else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
             p.weapons.iter().filter(|w| w.range <= 0.0 && weapon_has(w, "Counter")).map(|w| w.count.max(1)).sum::<i64>().min(p.model_count.max(0))
         } else {
             0
         },
-        // The reduction's per-model magnitude — the same gate, the registry's
-        // own `impact_reduction_per_model` (dead-parameter recount
-        // 2026-09-15); the shipped entry answers the 1 the folds assumed.
-        counter_impact_per_model: if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
+        // The unit alias supplies its own per-model magnitude at epoch 65;
+        // weapon-only records retain the epoch-13 Counter entry's value.
+        counter_impact_per_model: if counter_unit_reduction.is_some() {
+            counter_unit_reduction
+        } else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
             reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Counter").map(|e| e.param_i("impact_reduction_per_model", 1))
         } else {
             None

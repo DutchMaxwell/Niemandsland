@@ -138,5 +138,5 @@ func test_counter_attack_unit_cuts_impact_dice() -> void:
 	_main.seed_tray_rng(7)
 	await _main._solo_charge_impact(charger, defender, false)
 	assert_str(_log_text()).contains("Counter: -2 Impact dice")
-	assert_str(_log_text()).contains("4 →")
+	assert_str(_log_text()).contains("Impact(3) rolls 4 dice")
 	await E2EBoot.settle(get_tree())
