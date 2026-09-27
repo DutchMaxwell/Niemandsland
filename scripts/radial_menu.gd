@@ -34,7 +34,8 @@ const EDGE_PADDING := 8.0                 # px kept clear between the menu and t
 # the ring and moves the rest (status, management, transport lines) into a second tier — a column of
 # pills beside the ring that the ring's TIER_ID wedge opens. 8 wedges still leave "Shoot" its 39 px.
 const RING_MAX := 8
-const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass", "toggle_activate"]
+const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass", "toggle_activate",
+	"solo_auto_charge", "solo_auto_advance", "solo_auto_rush"]
 const TIER_ID := "more"                   # the wedge that opens the second tier; never sent down the action pipe
 
 
@@ -592,10 +593,20 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 ## Creates menu items for a full unit selection.
 ## Solo (goal 001 P8): declare an attack on the AI — enters targeting mode (line of sight shown), then
 ## the whole exchange resolves with real tray dice, mirroring the AI's own combat flow.
-static func solo_combat_items(game_unit: GameUnit = null) -> Array[RadialMenuItem]:
+static func solo_combat_items(game_unit: GameUnit = null, auto_ok: bool = false) -> Array[RadialMenuItem]:
 	var out: Array[RadialMenuItem] = []
 	out.append(RadialMenuItem.new("solo_shoot", "Shoot", "»", true, "Shoot at an AI unit — pick a target with line of sight"))
 	out.append(RadialMenuItem.new("solo_fight", "Fight", "⚔", true, "Strike an AI unit in melee contact"))
+	# Automodus (A1, NML-202): the engine moves the unit along a legal corridor and rolls the
+	# attack itself — rulebook verbs, no "Auto-" jargon in the wheel (the "Auto:" log prefix marks
+	# an engine-executed activation instead).
+	if auto_ok:
+		out.append(RadialMenuItem.new("solo_auto_charge", "Charge", "⚡", true,
+			"Charge: the engine moves the unit along a legal path into base contact and fights — pick the enemy"))
+		out.append(RadialMenuItem.new("solo_auto_advance", "Advance & Shoot", "»→", true,
+			"Advance & Shoot: the engine advances toward the enemy (or steps back into range if already close) and fires — pick the enemy"))
+		out.append(RadialMenuItem.new("solo_auto_rush", "Rush", "→→", true,
+			"Rush: the engine moves the unit its full Rush distance toward the enemy — pick the enemy"))
 	# Spell wave F2: a unit that fields a caster (itself or a joined hero) with tokens can cast —
 	# spell picker -> target -> boost -> automatic resolution.
 	if game_unit != null and _caster_member_of(game_unit) != null:
@@ -659,11 +670,11 @@ static func reinforcement_items(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	return out
 
 
-static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false) -> Array[RadialMenuItem]:
+static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false, auto_ok: bool = false) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
 	if solo_combat:
-		items.append_array(solo_combat_items(game_unit))
+		items.append_array(solo_combat_items(game_unit, auto_ok))
 	items.append_array(reinforcement_items(game_unit))
 
 	var activate_icon = "-" if game_unit.is_activated else "+"

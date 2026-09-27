@@ -87,3 +87,19 @@ func test_spot_entry_appears_only_for_spotter_units() -> void:
 	assert_bool(ids.has("solo_spot")) \
 		.override_failure_message("a Precision Spotter unit must offer the Spot radial action") \
 		.is_true()
+
+
+# ===== Automodus (A1, NML-202) — Charge / Advance & Shoot / Rush =====
+
+func test_auto_verbs_hidden_by_default() -> void:
+	var ids := _ids(RadialMenu.solo_combat_items(GameUnit.new()))
+	assert_bool(ids.has("solo_auto_charge")).is_false()
+	assert_bool(ids.has("solo_auto_advance")).is_false()
+	assert_bool(ids.has("solo_auto_rush")).is_false()
+
+
+func test_auto_verbs_appear_when_auto_ok() -> void:
+	var ids := _ids(RadialMenu.solo_combat_items(GameUnit.new(), true))
+	assert_bool(ids.has("solo_auto_charge")).is_true()
+	assert_bool(ids.has("solo_auto_advance")).is_true()
+	assert_bool(ids.has("solo_auto_rush")).is_true()
