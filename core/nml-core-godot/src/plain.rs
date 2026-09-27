@@ -29,7 +29,7 @@ use nml_core::{
 /// writes, minus the two this port does not model (see `DROPPED`). Bit `i` of a
 /// capture mask says "the plain form carried key `i`", so `plain_of` writes back
 /// exactly the key set that came in — `state_to_plain` is `if su.has(k)` too.
-pub const UNIT_KEYS: [&str; 19] = [
+pub const UNIT_KEYS: [&str; 20] = [
     "alive",
     "wounds",
     "radii",
@@ -51,6 +51,9 @@ pub const UNIT_KEYS: [&str; 19] = [
     // insert would rename every key above it (battle_sim.gd:1353-1354 appends too).
     "attached",
     "attached_to",
+    // Wave 3 S4-U3: `state_to_plain` writes `bands` (battle_sim.gd:1837); the
+    // node corpus predates it, so the bit keeps its round trip absent there.
+    "bands",
 ];
 
 /// Keys of `_UNIT_DYNAMIC` this SEAM does not read. Reported by
@@ -59,10 +62,11 @@ pub const UNIT_KEYS: [&str; 19] = [
 /// seam's `UNIT_KEYS` mask has no bit for them, so it declines them here too.)
 pub const DROPPED: [&str; 2] = ["dormant_models", "dormant_wounds"];
 
-/// The state-level blobs nothing in `resolve`/`score` reads: kept verbatim and
-/// handed back by `plain_of` unchanged (`markers_meta` and `destroy_seq` are
-/// ALSO parsed into the state, because `score` reads them).
-pub const EXTRA_KEYS: [&str; 5] = ["vp", "vp_flavour", "vp_memo", "markers_meta", "destroy_seq"];
+/// The state-level blobs kept verbatim and handed back by `plain_of` unchanged
+/// (both are ALSO parsed into the state, because `score` reads them). The vp
+/// ledger is NOT echoed: `plain_of` writes `State.vp`/`vp_flavour`/`vp_memo`,
+/// so the read-back shows what the core holds (wave 3 S4-U1).
+pub const EXTRA_KEYS: [&str; 2] = ["markers_meta", "destroy_seq"];
 
 // ---------------------------------------------------------------- readers ---
 
@@ -592,6 +596,36 @@ fn mods_out(m: &Mods) -> VarDictionary {
     d
 }
 
+/// The inverse of `mvcall::flat` for the JSON blobs `State` keeps (`vp`,
+/// `vp_flavour`, `vp_memo`): an integer stays an `int`, every other number a
+/// `float`, arrays and objects recurse.
+fn variant_of(v: &serde_json::Value) -> Variant {
+    use serde_json::Value;
+    match v {
+        Value::Null => Variant::nil(),
+        Value::Bool(b) => b.to_variant(),
+        Value::Number(n) => match n.as_i64() {
+            Some(i) => i.to_variant(),
+            None => n.as_f64().unwrap_or(0.0).to_variant(),
+        },
+        Value::String(s) => GString::from(s.as_str()).to_variant(),
+        Value::Array(a) => {
+            let mut out = VarArray::new();
+            for e in a {
+                out.push(&variant_of(e));
+            }
+            out.to_variant()
+        }
+        Value::Object(m) => {
+            let mut d = VarDictionary::new();
+            for (k, e) in m {
+                d.set(k.as_str(), &variant_of(e));
+            }
+            d.to_variant()
+        }
+    }
+}
+
 /// The inverse of `build_state` — the plain form `BattleSim.state_to_plain(state,
 /// false)` would have written for this state, key set included (`mask`).
 pub fn plain_of(cap: &Captured) -> VarDictionary {
@@ -679,6 +713,16 @@ pub fn plain_of(cap: &Captured) -> VarDictionary {
             let host = st.attached_to[i].map(|h| st.key(h)).unwrap_or("");
             u.set("attached_to", &GString::from(host));
         }
+        if has("bands") {
+            let b = &st.bands[i];
+            let mut d = VarDictionary::new();
+            d.set("advance", b.advance);
+            d.set("rush", b.rush);
+            if let Some(c) = b.charge {
+                d.set("charge", c);
+            }
+            u.set("bands", &d);
+        }
         // `_apply_expected_wounds` (battle_sim.gd:1050-1059) CREATES the key on
         // the target the first time a volley lands, so a state that had none can
         // grow one; a zero carry it also writes is indistinguishable from "never
@@ -713,6 +757,11 @@ pub fn plain_of(cap: &Captured) -> VarDictionary {
     for k in EXTRA_KEYS {
         if let Some(v) = cap.extras.get(k) {
             out.set(k, &v);
+        }
+    }
+    for (k, v) in [("vp", &st.vp), ("vp_flavour", &st.vp_flavour), ("vp_memo", &st.vp_memo)] {
+        if let Some(v) = v {
+            out.set(k, &variant_of(v));
         }
     }
     if let Some(m) = &st.los_pairs {
