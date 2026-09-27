@@ -143,6 +143,15 @@ const EPOCH_56_GROUNDED_PROTECTION := 56
 ## entries carry no marker params at all. The core's own gate reads the frozen
 ## `EPOCH_61_PRECISION_MARKERS` (acts.rs); this mirror never re-dates itself.
 const EPOCH_61_PRECISION_MARKERS := 61
+## The frozen gate of the MELEE HEIGHT rule (epoch 63, heights B1-b 2026-09-27, GF/AoF
+## Advanced Rules v3.5.1 p.9 "Who Can Strike"): a melee pair must be within 4" vertically,
+## not just 2" horizontally. The table applies this rule UNCONDITIONALLY (table truth, not
+## a corpus-gated behaviour) and every recorded corpus has y = 0 (no replay changes), so
+## `rules_epoch` below stays at 61 (L1, `PLAN_heights_2026-09-27.md`; the core's own
+## EPOCH_62_CASTING_MOD gate ahead of this one is also still unmirrored, acts.rs:514-516).
+## This constant is kept for reference only. The core's own gate reads the frozen
+## `EPOCH_63_MELEE_HEIGHT` (acts.rs).
+const EPOCH_63_MELEE_HEIGHT := 63
 ## The frozen gate of the `spawn_profiles` header map (epoch 8, design §3.6): a record
 ## stamped below it writes no map, exactly like every record written before it.
 ## Bumped to 48 in the same diff as the core's EPOCH_48_CASTER_BOOST (wave 6

@@ -108,6 +108,7 @@ static func _ints_from_json(v: Variant) -> Variant:
 
 const CONTACT_IN := 2.0            # centre-to-centre "in melee" distance a charge closes to
 const MELEE_REACH_IN := 2.0         # OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9): only models within 2" strike
+const MELEE_VERTICAL_IN := 4.0      # OPR "Who Can Strike" (GF p.9): ... and within 4" vertically ... may attack it
 const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standard ~25 mm bases at contact (~1")
 ## A charge closes the REAL base-to-base gap plus this hair so the nearest models land firmly in contact
 ## (the target's body-only planner zone clamps them to exact contact; snap_charge clears any residual).
@@ -9221,21 +9222,30 @@ static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array
 	return {"owners": new_owners, "changes": changes}
 
 
+## True when two world Y coordinates (metres) are within the 4" vertical melee reach (GF p.9).
+## Static/pure so both layers (and their tests) share one truth.
+static func within_melee_height(y_a_m: float, y_b_m: float) -> bool:
+	return absf(y_a_m - y_b_m) <= MELEE_VERTICAL_IN * INCHES_TO_METERS
+
+
 ## OPR "Who Can Strike" — BASE-EDGE measure (field-test round 7, finding 3): count `member`'s alive models
-## whose base EDGE is within 2" (MELEE_REACH_IN) of ANY enemy base edge, via the shared SeparationChecker
-## shapes. The official rule measures model-to-model distance — which OPR takes base to base — so the old
-## centre-to-centre test with a fixed 1" contact allowance (striking_models, kept for the sim) excluded any
-## BIG base from its own melee: a walker/vehicle base-touching its target had its centre >3" from the enemy's
-## and rolled NOTHING while the small-based defender still struck back (the maintainer's one-sided charge).
+## whose base EDGE is within 2" (MELEE_REACH_IN) and 4" vertically (MELEE_VERTICAL_IN, GF p.9) of ANY
+## enemy base edge, via the shared SeparationChecker shapes. The official rule measures model-to-model
+## distance — which OPR takes base to base — so the old centre-to-centre test with a fixed 1" contact
+## allowance (striking_models, kept for the sim) excluded any BIG base from its own melee: a walker/vehicle
+## base-touching its target had its centre >3" from the enemy's and rolled NOTHING while the small-based
+## defender still struck back (the maintainer's one-sided charge).
 ## Models without a buildable shape fall back to the centre measure with their default radius folded in.
 func striking_models_for(member: GameUnit, enemy: GameUnit) -> int:
 	if member == null or enemy == null:
 		return 0
 	var enemy_shapes: Array = []
+	var enemy_ys: Array = []
 	for em in _moving_models(enemy):
 		var es := SeparationChecker.shape_for_model(em as ModelInstance)
 		if es != null:
 			enemy_shapes.append(es)
+			enemy_ys.append((em as ModelInstance).node.global_position.y)
 	if enemy_shapes.is_empty():
 		return striking_models(alive_positions(member), alive_positions(enemy))
 	var n := 0
@@ -9243,8 +9253,11 @@ func striking_models_for(member: GameUnit, enemy: GameUnit) -> int:
 		var shape := SeparationChecker.shape_for_model(m as ModelInstance)
 		if shape == null:
 			continue
-		for es in enemy_shapes:
-			if SeparationChecker.edge_distance(shape, es) <= MELEE_REACH_IN:
+		var my: float = (m as ModelInstance).node.global_position.y
+		for i in range(enemy_shapes.size()):
+			if not within_melee_height(my, enemy_ys[i]):
+				continue
+			if SeparationChecker.edge_distance(shape, enemy_shapes[i]) <= MELEE_REACH_IN:
 				n += 1
 				break
 	return n
@@ -9262,9 +9275,13 @@ static func striking_models(striker_positions: Array, enemy_positions: Array) ->
 	var reach2 := reach * reach
 	var n := 0
 	for s in striker_positions:
-		var sp := Vector2((s as Vector3).x, (s as Vector3).z)
+		var sv := s as Vector3
+		var sp := Vector2(sv.x, sv.z)
 		for e in enemy_positions:
-			if sp.distance_squared_to(Vector2((e as Vector3).x, (e as Vector3).z)) <= reach2:
+			var ev := e as Vector3
+			if not within_melee_height(sv.y, ev.y):
+				continue
+			if sp.distance_squared_to(Vector2(ev.x, ev.z)) <= reach2:
 				n += 1
 				break
 	return n
@@ -9389,29 +9406,42 @@ func unit_centre(unit: GameUnit) -> Vector3:
 	return MoveIntent.anchor_of(pts)
 
 
-## Smallest base-to-base EDGE gap (inches) between ANY alive model of `a` (incl. attached heroes) and ANY
-## of `b` — the TRUE melee-contact measure via the shared SeparationChecker shapes, replacing the coarse
-## unit-centre distance that missed base contact for wide/multi-model units (field-test finding 5: the
-## player could not attack an enemy his models were touching). 0 = touching/overlapping; INF when either
-## side has no live models.
-func nearest_melee_gap_in(a: GameUnit, b: GameUnit) -> float:
+## Nearest base-to-base pair between ANY alive model of `a` (incl. attached heroes) and ANY of `b`, via
+## the shared SeparationChecker shapes. `honor_height_reach` applies GF p.9's 4" vertical melee reach
+## (false is used only to phrase a height-blocked refusal — see nearest_melee_gap_in below). Returns
+## {"gap_in": edge gap or INF, "height_in": that pair's vertical separation in inches}.
+func nearest_melee_pair_info(a: GameUnit, b: GameUnit, honor_height_reach: bool) -> Dictionary:
 	var a_models := _moving_models(a)
 	var b_models := _moving_models(b)
+	var out := {"gap_in": INF, "height_in": 0.0}
 	if a_models.is_empty() or b_models.is_empty():
-		return INF
-	var b_shapes: Array = []
-	for bm in b_models:
-		var bs := SeparationChecker.shape_for_model(bm as ModelInstance)
-		if bs != null:
-			b_shapes.append(bs)
-	var best := INF
+		return out
 	for am in a_models:
 		var ashape := SeparationChecker.shape_for_model(am as ModelInstance)
 		if ashape == null:
 			continue
-		for bs in b_shapes:
-			best = minf(best, SeparationChecker.edge_distance(ashape, bs))
-	return best
+		var ay: float = (am as ModelInstance).node.global_position.y
+		for bm in b_models:
+			var bshape := SeparationChecker.shape_for_model(bm as ModelInstance)
+			if bshape == null:
+				continue
+			var by: float = (bm as ModelInstance).node.global_position.y
+			if honor_height_reach and not within_melee_height(ay, by):
+				continue
+			var gap := SeparationChecker.edge_distance(ashape, bshape)
+			if gap < out["gap_in"]:
+				out["gap_in"] = gap
+				out["height_in"] = absf(ay - by) / INCHES_TO_METERS
+	return out
+
+
+## Smallest base-to-base EDGE gap (inches) between ANY alive model of `a` (incl. attached heroes) and ANY
+## of `b`, honoring GF p.9's 4" vertical melee reach — the TRUE melee-contact measure via the shared
+## SeparationChecker shapes, replacing the coarse unit-centre distance that missed base contact for
+## wide/multi-model units (field-test finding 5: the player could not attack an enemy his models were
+## touching). 0 = touching/overlapping; INF when either side has no live models, or no pair is in reach.
+func nearest_melee_gap_in(a: GameUnit, b: GameUnit) -> float:
+	return nearest_melee_pair_info(a, b, true)["gap_in"]
 
 
 ## The nearest charger-model / enemy-model pair, as the base-to-base gap (inches) to close and the world
