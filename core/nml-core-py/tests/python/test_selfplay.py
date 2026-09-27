@@ -220,6 +220,34 @@ def test_deploy_zone_draws_two_values_per_unit_and_lays_models_five_wide():
     assert pos[0][5][2] == sp.f32((-24.0 + want[1] + 1.0) * sp.IN2M)
 
 
+def test_the_arena_placement_runs_at_the_records_own_epoch(monkeypatch, tmp_path):
+    """`_deploy_arena` handed the placement bindings no `rules_epoch`, so
+    `deploy_side` / `deploy_interleaved` ran every placement gate at the LIVE
+    epoch (lib.rs `unwrap_or(CURRENT_RULES_EPOCH)`) and a replay re-deployed an
+    old corpus the new way: #1048's large-base respot parted the Gen-0 teacher
+    corpus (epoch 0) at its first activation. A spy on both bindings, stopped
+    before the finish: the epoch the caller passes is the epoch placement sees."""
+
+    class Stop(Exception):
+        pass
+
+    seen = []
+
+    def spy(*_args, **kwargs):
+        seen.append(kwargs.get("rules_epoch"))
+        raise Stop
+
+    monkeypatch.setattr(sp.nml_core, "deploy_side", spy)
+    monkeypatch.setattr(sp.nml_core, "deploy_interleaved", spy)
+    monkeypatch.setattr(sp, "deploy_unit_specs", lambda _data, _faction, _slot: ([], {}))
+    army = tmp_path / "robot_legions_1000.json"
+    army.write_text("{}", encoding="utf-8")
+    for interleave in (False, True):
+        with pytest.raises(Stop):
+            sp._deploy_arena(7, [], [], army, army, None, [], 1, interleave, rules_epoch=5)
+    assert seen == [5, 5]
+
+
 def test_the_deployment_stream_is_the_games_own():
     """Deployment draws BEFORE the opener roll-off, from the same generator —
     so a harness that seeded a private one for deployment would hand the roll-off

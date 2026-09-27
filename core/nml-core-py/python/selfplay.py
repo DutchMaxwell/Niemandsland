@@ -292,16 +292,20 @@ def _deploy_arena(
     objs2 = [[o[0], o[2]] for o in objectives]
     sequence: list[list[Any]] = []
     if interleave:
+        # The record's epoch reaches the placement gates (`EPOCH_16_FREE_PLACEMENT`,
+        # `EPOCH_64_DEPLOY_LARGE_RESPOT`); without it the binding ran them at the
+        # live epoch and a replay re-deployed an old corpus the new way.
         out = nml_core.deploy_interleaved(
             roster["1"], roster["2"], zones["1"], zones["2"], objs2, board,
-            seed + 1, seed + 2, opener,
+            seed + 1, seed + 2, opener, rules_epoch=int(rules_epoch),
         )
         placed_by = {"1": out["side1"], "2": out["side2"]}
         sequence = [list(e) for e in out["sequence"]]
     else:
         placed_by = {
             slot: nml_core.deploy_side(
-                roster[slot], zones[slot], objs2, board, seed + int(slot)
+                roster[slot], zones[slot], objs2, board, seed + int(slot),
+                rules_epoch=int(rules_epoch),
             )
             for slot in ("1", "2")
         }
