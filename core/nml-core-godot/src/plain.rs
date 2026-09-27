@@ -407,9 +407,11 @@ pub fn build_state(
             .collect(),
         markers_meta,
         destroy_seq: darr(plain, "destroy_seq").iter_shared().map(|v| int(&v)).collect(),
-        vp: None,
-        vp_flavour: None,
-        vp_memo: None,
+        // Wave 3 S4-U1: the live mission ledger (battle_sim.gd:1789-1792 sends it
+        // on round_vp missions); absent = None, as `io::state_of` reads it.
+        vp: plain.get("vp").map(|v| Rc::new(crate::mvcall::flat(&v))),
+        vp_flavour: plain.get("vp_flavour").map(|v| Rc::new(crate::mvcall::flat(&v))),
+        vp_memo: plain.get("vp_memo").map(|v| Rc::new(crate::mvcall::flat(&v))),
         cast_events: Vec::new(),
         player: Vec::with_capacity(n),
         alive: Vec::with_capacity(n),
@@ -530,7 +532,12 @@ pub fn build_state(
         // `SoloController.sim_move_bands` call, exactly as `io::state_of` does —
         // a defaulted 6"/12" would answer for a Slow unit the profile reads as 4"/8".
         st.bands.push(match u.get("bands").and_then(|v| v.try_to::<VarDictionary>().ok()) {
-            Some(b) => Bands { advance: dnum(&b, "advance", 6.0), rush: dnum(&b, "rush", 12.0), ..Default::default() },
+            // Wave 3 S4-U3: a distinct charge reach (Rapid Charge) rides `charge`.
+            Some(b) => Bands {
+                advance: dnum(&b, "advance", 6.0),
+                rush: dnum(&b, "rush", 12.0),
+                charge: b.get("charge").map(|v| num(&v)),
+            },
             None => {
                 let mb = prof_table.list[roster.profile[st.bands.len()]].move_bands;
                 Bands { advance: mb.advance, rush: mb.rush, ..Default::default() }
