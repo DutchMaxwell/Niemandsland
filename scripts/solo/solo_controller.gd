@@ -2438,9 +2438,12 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	var goal_dist := MoveIntent.distance_inches(unit_centre(unit), goal)   # nothing has moved yet
 	var tcentre := unit_centre(target) if target != null else unit_centre(unit)
 	var dang := 0
+	var move_inches := 0.0   # A4: what THIS move actually requested — not the raw band (the kite/
+			# arrival branches deliberately ask for less; only a further, gate-driven shortfall is a cap)
 	match action:
 		AiDecision.Action.RUSH:
-			dang = _move_toward(unit, goal, (minf(band_in, goal_dist) if (to_objective or to_flank) else band_in), false)
+			move_inches = minf(band_in, goal_dist) if (to_objective or to_flank) else band_in
+			dang = _move_toward(unit, goal, move_inches, false)
 		AiDecision.Action.CHARGE:
 			# Close the REAL base-to-base gap to base contact, capped at the band (field-test finding 3): the
 			# former "move toward the enemy centre, capped at rush" under-shot for wide/offset units and the
@@ -2449,17 +2452,33 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 			dang = _charge_move(unit, target, charge_band_in)
 		AiDecision.Action.ADVANCE:
 			if to_objective or to_flank:
-				dang = _move_toward(unit, goal, minf(band_in, goal_dist), false)
+				move_inches = minf(band_in, goal_dist)
+				dang = _move_toward(unit, goal, move_inches, false)
 			elif enemy_dist_in <= shoot_range_in:
 				# "Advancing" (p.58): a shooter already in range steps BACK toward the range edge, still
 				# shooting — held a measuring hair INSIDE range so the post-move gate never flips on floats.
-				dang = _move_away(unit, tcentre,
-					minf(band_in, maxf(shoot_range_in - enemy_dist_in - KITE_RANGE_MARGIN_IN, 0.0)))
+				move_inches = minf(band_in, maxf(shoot_range_in - enemy_dist_in - KITE_RANGE_MARGIN_IN, 0.0))
+				dang = _move_away(unit, tcentre, move_inches)
 			else:
-				dang = _move_toward(unit, goal, band_in, false)
+				move_inches = band_in
+				dang = _move_toward(unit, goal, move_inches, false)
 		_:
 			pass   # HOLD
 	_move_extra = {}
+	# A4 (NML-202): capped-move honesty — a player who watched their unit stop short of the
+	# reach they were shown deserves the reason, not silence. AI intents never source this note
+	# (its own narration already carries these reasons through record_decision).
+	if source == "player" and move_inches > 0.05:
+		var mv: Dictionary = decision_log.back() if not decision_log.is_empty() else {}
+		if str(mv.get("kind", "")) == "move":
+			var mv_data: Dictionary = mv.get("data", {})
+			var why := str(mv.get("why", ""))
+			var achieved_in := float(mv_data.get("achieved_in", last_move_budget_in))
+			var capped: bool = last_move_budget_in < move_inches - 0.05 \
+				or (why in ["difficult cap", "gate-legal shorten", "boxed reposition"] \
+					and achieved_in < last_move_budget_in - 0.05)
+			if capped:
+				_rule_note(report, "Auto: moved %.1f\" of %.1f\" — %s" % [achieved_in, move_inches, why], true)
 	report["dangerous_models"] = dang
 	report["dangerous_dice"] = last_dangerous_dice   # Bug 23: Tough-weighted (p.12 "as many dice as Tough")
 	# Instrument the objective outcome (field-test finding 1: the harness logged enemy distance but NEVER the
@@ -2585,6 +2604,54 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit) -> Dictionary:
 		_:
 			action = AiDecision.Action.HOLD
 	return ActIntent.make(unit, action, target, unit_centre(target), band_in, do_shoot, extra)
+
+
+## A2 (NML-202) — the suggested target for the radial's Charge / Advance & Shoot / Rush click: named
+## in the log (main.solo_begin_auto) and taken by a PICK on the unit's own base. Pure read, no state
+## change. Charge picks the nearest enemy the charge gate would actually accept; Rush picks by the
+## same base-to-base gap the charge gate itself measures; Advance/Hold prefer whatever the AI's own
+## volley picker would shoot right now, falling back to the nearest enemy when nothing is in reach.
+func suggest_target(unit: GameUnit, verb: int) -> GameUnit:
+	match verb:
+		AiDecision.Action.CHARGE:
+			return _nearest_enemy_where(unit, func(gu: GameUnit) -> bool:
+				var bands: Dictionary = move_bands_for_unit(unit, movement_range)
+				var charge := float(bands.get("charge", bands.get("rush", 12))) + musician_move_bonus_in(unit)
+				return charge_illegal_why(unit, gu, charge) == "")
+		AiDecision.Action.RUSH:
+			return _nearest_enemy_where(unit, func(_gu: GameUnit) -> bool: return true)
+		_:
+			var shot := best_shoot_target_now(unit)
+			return shot if shot != null else _nearest_enemy_of(unit)
+
+
+## The nearest (base-to-base gap) enemy of `unit` for which `accept` returns true, or null.
+func _nearest_enemy_where(unit: GameUnit, accept: Callable) -> GameUnit:
+	if army_manager == null or unit == null:
+		return null
+	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
+	var best: GameUnit = null
+	var best_d := INF
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
+			continue
+		if int(gu.unit_properties.get("player_id", 0)) == own_pid:
+			continue
+		if not accept.call(gu):
+			continue
+		var d := nearest_melee_gap_in(unit, gu)
+		if d < best_d:
+			best_d = d
+			best = gu
+	return best
+
+
+## A3 (NML-202) — pure rule behind "roll my saves without the prompt": the switch turns ON the
+## first time a player's auto intent actually executes and never turns itself back off (a refusal
+## never reaches this call at all — see main._run_player_intent).
+static func auto_saves_after_intent(current: bool, executed: bool) -> bool:
+	return current or executed
 
 
 ## albtraum v2 — book the COMMITTED plan's expected shooting damage into the overkill ledger. One call
