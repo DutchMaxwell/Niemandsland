@@ -1046,7 +1046,8 @@ static func _ctx_of(su: Dictionary, melee := false) -> Dictionary:
 	ctx["models"] = int(su["alive"])
 	# W-P1 parity: the flag rides the ctx — profile_ev hard-sets the natural-6
 	# target itself (the old quality=6 approximation still let modifiers move it).
-	if melee and bool(su.get("fatigued", false)):
+	# S1-02 (GF/AoF v3.5.1 p.10): a Shaken unit strikes back counting as fatigued.
+	if melee and (bool(su.get("fatigued", false)) or bool(su.get("shaken", false))):
 		ctx["fatigued"] = true
 	return ctx
 

@@ -38,7 +38,7 @@ use crate::combat::{melee_ev, shoot_ev};
 use crate::geom;
 use crate::rules::has_special_rule;
 use crate::score::{can_hold_marker, control_gap_in, presence, Incoming};
-use crate::sim::{melee_threat, reply_threat, CONTACT_IN};
+use crate::sim::{melee_threat_at_epoch, reply_threat_at_epoch, CONTACT_IN};
 use crate::state::{Profile, State};
 use crate::unit::{melee_profiles, profiles_in_range, Ctx, UnitStatic};
 use crate::{IN2M, OBJECTIVE_CONTROL_IN};
@@ -566,6 +566,7 @@ pub fn features(
     incoming: Incoming,
     rich: bool,
     reserves: (f64, f64),
+    rules_epoch: u32,
 ) -> Vec<f64> {
     let mut f = [0.0f64; FEATURE_KEYS.len()];
     f[ROUND_FRAC] = state.round as f64 / (state.rounds_total as f64).max(1.0);
@@ -579,7 +580,7 @@ pub fn features(
         f[MY_INCOMING_MAX] = f[MY_INCOMING_MAX].max(*v);
     }
     if rich {
-        for v in reply_threat(statics, state, 3 - player) {
+        for v in reply_threat_at_epoch(statics, state, 3 - player, rules_epoch) {
             f[THEIR_INCOMING] += v;
         }
     }
@@ -629,7 +630,7 @@ pub fn features(
             if geom::dist_in(&state.positions[i], &state.positions[j]) <= oreach {
                 exposed = true;
                 if rich {
-                    worst_melee = worst_melee.max(melee_threat(statics, state, j, i));
+                    worst_melee = worst_melee.max(melee_threat_at_epoch(statics, state, j, i, rules_epoch));
                 } else {
                     break; // pre-wave behaviour: the binary flag is enough
                 }
@@ -851,7 +852,7 @@ mod tests {
     #[test]
     fn features_of_a_hand_built_two_unit_state() {
         let (state, statics) = two_unit_state();
-        let v = features(&state, &statics, 1, crate::NO_INCOMING, false, NO_RESERVES);
+        let v = features(&state, &statics, 1, crate::NO_INCOMING, false, NO_RESERVES, 0);
         assert_eq!(v.len(), FEATURE_KEYS.len());
         assert_eq!(f(&v, "round_frac"), 0.5, "round 2 of 4");
         assert_eq!(f(&v, "my_units"), 1.0);
@@ -874,7 +875,7 @@ mod tests {
         assert_eq!(f(&v, "their_incoming"), 0.0, "rich is off");
         assert!(f(&v, "presence_mine") > 0.0 && f(&v, "presence_theirs") > 0.0);
         // The mirror is the same state from the other seat.
-        let w = features(&state, &statics, 2, crate::NO_INCOMING, false, NO_RESERVES);
+        let w = features(&state, &statics, 2, crate::NO_INCOMING, false, NO_RESERVES, 0);
         assert_eq!(f(&w, "my_units"), 1.0);
         assert_eq!(f(&w, "obj_owned_theirs"), 1.0);
         assert_eq!(f(&w, "presence_mine"), f(&v, "presence_theirs"));

@@ -30,7 +30,7 @@ use crate::acts::{
     EPOCH_34_UNSTOPPABLE_MARK, EPOCH_37_UNSTOPPABLE_AURA, EPOCH_38_WATCHBORN_LATCH,
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
-    EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD,
+    EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -3538,9 +3538,13 @@ fn interference_pool(
     found.into_iter().map(|(u, _, t)| (u, t)).collect()
 }
 
-fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize) -> Ctx {
+/// S1-02 (GF/AoF v3.5.1 p.10): "Shaken units must stay idle, but may strike
+/// back counting as fatigued" — from `EPOCH_65_MELEE_TRUTH` a Shaken unit's
+/// melee ctx carries `fatigued` (unmodified 6s to hit). A Shaken unit never
+/// charges, so on the charger's side the flag stays its own fatigue.
+fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize, rules_epoch: u32) -> Ctx {
     let mut c = ctx_of(us, state, i);
-    c.fatigued = state.fatigued[i];
+    c.fatigued = state.fatigued[i] || (rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) && state.shaken[i]);
     c
 }
 
@@ -3966,7 +3970,7 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
         parts.push((
             mi,
             sc,
-            ctx_live_vs(ctx_of_melee(um, state, mi), statics, state, mi, ti, true, seams.rules_epoch),
+            ctx_live_vs(ctx_of_melee(um, state, mi, seams.rules_epoch), statics, state, mi, ti, true, seams.rules_epoch),
         ));
     }
     parts
@@ -4254,10 +4258,11 @@ fn impact_phase(
     ti: usize,
     tray: &mut Tray,
     shot: &mut ShootResult,
+    rules_epoch: u32,
 ) -> i64 {
     let us = &statics[next.roster.profile[si]];
     let ut = &statics[next.roster.profile[ti]];
-    let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si), &ctx_of(ut, next, ti));
+    let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &ctx_of(ut, next, ti));
     let mut caused = 0;
     for (dice, ap) in pools {
         if dice <= 0 || next.alive[ti] <= 0 {
@@ -4442,7 +4447,7 @@ fn tray_charge(
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
     if next.alive[si] > 0 && next.alive[ti] > 0 {
-        by_su += impact_phase(statics, next, si, ti, tray, shot);
+        by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch);
     }
     // main.gd:8035 — the charger's Mark lands after Impact and before the
     // strikes, measured at 0" (the two units are in base contact).
@@ -5244,10 +5249,9 @@ fn caster_of(statics: &[UnitStatic], state: &State, si: usize, seams: Seams) -> 
 /// reply". Returns (ev, spell token cost); `reply_threat` discards the cost,
 /// `resolve`'s shoot branch spends it.
 ///
-/// The priced pair is the LIVE root ctx (families 2-4 of the blindness
-/// report): `rules_epoch` rides `CURRENT_RULES_EPOCH` from `reply_threat` —
-/// the EV is not replayed by recorded games and a captured ledger is always
-/// empty, so no frozen gate is needed.
+/// The priced pair is the live root ctx (families 2-4 of the blindness
+/// report). Feature reconstruction passes the recording epoch; live callers
+/// use the current epoch through `reply_threat`.
 fn volley_ev(
     statics: &[UnitStatic],
     state: &State,
@@ -5272,19 +5276,21 @@ fn volley_ev(
 /// `AiMissionEval.features` reads for `my_melee_in`/`their_melee_in` when the
 /// feature wave is on (ai_mission_eval.gd:544).
 ///
-/// The priced pair is the LIVE root ctx (families 2-4 of the blindness
-/// report), folded at `CURRENT_RULES_EPOCH`: the EV is not replayed by
-/// recorded games and a captured ledger is always empty, so no frozen gate
-/// is needed and the public signature stays as it is.
-pub fn melee_threat(statics: &[UnitStatic], state: &State, si: usize, ti: usize) -> f64 {
+/// Feature reconstruction passes the record epoch; live callers use
+/// `melee_threat`, which selects the current epoch.
+pub fn melee_threat_at_epoch(statics: &[UnitStatic], state: &State, si: usize, ti: usize, rules_epoch: u32) -> f64 {
     let us = &statics[state.roster.profile[si]];
     let ut = &statics[state.roster.profile[ti]];
     let att =
-        ctx_live(ctx_of_melee(us, state, si), statics, state, si, true, CURRENT_RULES_EPOCH);
-    let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, true, CURRENT_RULES_EPOCH);
+        ctx_live(ctx_of_melee(us, state, si, rules_epoch), statics, state, si, true, rules_epoch);
+    let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, true, rules_epoch);
     let mut sc = Scratch::default();
     melee_profiles_of(us, state.alive[si], &mut sc);
     melee_ev(&us.melee, &sc.attacks, &att, &def, true)
+}
+
+pub fn melee_threat(statics: &[UnitStatic], state: &State, si: usize, ti: usize) -> f64 {
+    melee_threat_at_epoch(statics, state, si, ti, CURRENT_RULES_EPOCH)
 }
 
 /// `BattleSim.reply_threat` battle_sim.gd:1003-1024 — every living enemy
@@ -5299,7 +5305,7 @@ pub fn melee_threat(statics: &[UnitStatic], state: &State, si: usize, ti: usize)
 ///
 /// Each volley prices the LIVE root ctx (families 2-4 of the blindness
 /// report) — see `volley_ev`.
-pub fn reply_threat(statics: &[UnitStatic], state: &State, player: i64) -> Vec<f64> {
+pub fn reply_threat_at_epoch(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32) -> Vec<f64> {
     let n = state.units();
     let mut incoming = vec![0.0f64; n];
     let mut sc = Scratch::default();
@@ -5318,7 +5324,7 @@ pub fn reply_threat(statics: &[UnitStatic], state: &State, player: i64) -> Vec<f
                 continue;
             }
             let d = geom::dist_in(&state.positions[e], &state.positions[m]);
-            let (ev, _) = volley_ev(statics, state, e, m, d, &mut sc, CURRENT_RULES_EPOCH);
+            let (ev, _) = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch);
             if ev > best_ev {
                 best_ev = ev;
                 best_key = Some(m);
@@ -5329,6 +5335,10 @@ pub fn reply_threat(statics: &[UnitStatic], state: &State, player: i64) -> Vec<f
         }
     }
     incoming
+}
+
+pub fn reply_threat(statics: &[UnitStatic], state: &State, player: i64) -> Vec<f64> {
+    reply_threat_at_epoch(statics, state, player, CURRENT_RULES_EPOCH)
 }
 
 /// Where the mover's post-move cover answer comes from — `battle_sim.gd:598-600`
@@ -7375,7 +7385,7 @@ fn resolve_with(
                     let ev = {
                         let us = &statics[pi_s];
                         let ut = &statics[next.roster.profile[ti]];
-                        let att = ctx_of_melee(us, &next, si);
+                        let att = ctx_of_melee(us, &next, si, seams.rules_epoch);
                         let def = ctx_of(ut, &next, ti);
                         // NML-1132: the charger's strike phase is the host's melee set
                         // PLUS every alive attached hero's, the way the table builds it.
@@ -7391,7 +7401,7 @@ fn resolve_with(
                         let ev_back = {
                             let ut = &statics[next.roster.profile[ti]];
                             let us = &statics[pi_s];
-                            let att = ctx_of_melee(ut, &next, ti);
+                            let att = ctx_of_melee(ut, &next, ti, seams.rules_epoch);
                             let def = ctx_of(us, &next, si);
                             // The strike-back folds too (`_solo_attack_groups` is built
                             // for the DEFENDER the same way, main.gd:4284-4290).
