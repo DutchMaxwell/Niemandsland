@@ -1439,22 +1439,27 @@ fn tray_vs_marks(
 
 /// The Mind Control family uses the shared morale resolver from epoch 65;
 /// earlier records keep the bare Quality die and its original draw count.
+struct ControlMoraleSource<'a> {
+    owner: &'a str,
+    rule: &'a str,
+}
+
 fn control_morale_passed(
-    statics: &[UnitStatic], next: &mut State, ti: usize, owner: &str, rule: &str,
+    statics: &[UnitStatic], next: &mut State, ti: usize, source: ControlMoraleSource<'_>,
     seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
 ) -> bool {
     if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
         let quality = statics[next.roster.profile[ti]].ctx.quality as i64;
         let faces = tray.roll(1);
         shot.rolls.push(crate::dice::Roll {
-            kind: "attack", count: 1, target: quality, faces: faces.clone(), owner: owner.into(),
+            kind: "attack", count: 1, target: quality, faces: faces.clone(), owner: source.owner.into(),
         });
         return faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
     }
     let us = &statics[next.roster.profile[ti]];
     let ctx = live_morale_ctx(statics, next, ti, false, seams);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
-        &ctx, owner, false, false, next.shaken[ti], wounds_left(next, ti), tray,
+        &ctx, source.owner, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
     mods::spend_once(next, ti, &[mods::Role::Morale], false);
     let self_wounds = shot.absorb(rolled);
@@ -1464,7 +1469,7 @@ fn control_morale_passed(
     if seams.hero_attach {
         for &h in &next.attached[ti] { next.shaken[h] = true; }
     }
-    shot.log.push(format!("{}: {} fails the morale test — Shaken", rule, us.name));
+    shot.log.push(format!("{}: {} fails the morale test — Shaken", source.rule, us.name));
     false
 }
 
@@ -1497,7 +1502,8 @@ pub(crate) fn tray_fatigue_debuff(
             if spec.effect != "fatigue" { continue; }
             let pick = spec.as_pick();
             let Some(&ti) = utility_targets(statics, next, bearer, &pick, seams).first() else { continue; };
-            if control_morale_passed(statics, next, ti, &owner, &spec.name, seams, tray, shot) { continue; }
+            if control_morale_passed(statics, next, ti,
+                ControlMoraleSource { owner: &owner, rule: &spec.name }, seams, tray, shot) { continue; }
             // Fatigue Debuff (:17022-17025): the failed test fatigues the
             // target AND its joined chain instead of displacing it.
             let mut chain = vec![ti];
@@ -1538,7 +1544,8 @@ pub(crate) fn tray_mind_control(
             let pick = spec.as_pick();
             let Some(&ti) = utility_targets(statics, next, bearer, &pick, seams).first() else { continue; };
             let owner = &statics[next.roster.profile[bearer]].name;
-            if control_morale_passed(statics, next, ti, owner, &spec.name, seams, tray, shot) { continue; }
+            if control_morale_passed(statics, next, ti,
+                ControlMoraleSource { owner, rule: &spec.name }, seams, tray, shot) { continue; }
             let from = geom::centre(&next.positions[ti]);
             let goal = nearest_uncontrolled_objective(next, next.player[bearer], next.player[ti], from)
                 .unwrap_or(geom::centre(&next.positions[bearer]));
