@@ -3902,6 +3902,7 @@ fn expected_melee_morale(
     su_before: i64,
     ti: usize,
     tu_before: i64,
+    _rules_epoch: u32,
 ) {
     let dealt_by_su = tu_before - wounds_left(state, ti);
     let dealt_by_tu = su_before - wounds_left(state, si);
@@ -7411,7 +7412,7 @@ fn resolve_with(
                         apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
                         next.fatigued[ti] = true;
                     }
-                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before);
+                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before, seams.rules_epoch);
                 }
                 // Consolidation Moves (GF v3.5.1 p.9), seam-gated: one side
                 // wiped by the melee just resolved above (wounds or the
