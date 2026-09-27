@@ -473,12 +473,26 @@ func _clamp_to_viewport(pos: Vector2) -> Vector2:
 
 ## Opens the menu at the specified position with the given items.
 func open(screen_pos: Vector2, items: Array[RadialMenuItem], context: Dictionary = {}) -> void:
-	# D53 = b: a crowded menu keeps its verbs on the ring, the rest goes to the second tier.
+	# D53 = b: a crowded menu keeps its verbs on the ring, the rest goes to the second tier. RING_VERBS
+	# grew past what the worst-case crowded menu (every verb-granting rule at once) leaves room for —
+	# its OWN declared order is the priority: the ring fills up to RING_MAX-1 verb slots (plus "More"),
+	# so an established verb is never bumped off the ring by a newer one further down the list.
 	_tier.clear()
 	if items.size() > RING_MAX:
-		var ring: Array[RadialMenuItem] = []
+		var by_id := {}
 		for it in items:
-			(ring if it.id in RING_VERBS else _tier).append(it)
+			by_id[it.id] = it
+		var ring: Array[RadialMenuItem] = []
+		var kept := {}
+		for verb_id in RING_VERBS:
+			if ring.size() >= RING_MAX - 1:
+				break
+			if by_id.has(verb_id):
+				ring.append(by_id[verb_id])
+				kept[verb_id] = true
+		for it in items:
+			if not kept.has(it.id):
+				_tier.append(it)
 		var names := PackedStringArray()
 		for it in _tier:
 			names.append(it.label)
@@ -603,7 +617,10 @@ static func solo_combat_items(game_unit: GameUnit = null, auto_ok: bool = false)
 	if auto_ok:
 		out.append(RadialMenuItem.new("solo_auto_charge", "Charge", "⚡", true,
 			"Charge: the engine moves the unit along a legal path into base contact and fights — pick the enemy"))
-		out.append(RadialMenuItem.new("solo_auto_advance", "Advance & Shoot", "»→", true,
+		# The " (& Shoot)" note follows the label's own drop-the-parenthetical convention (see
+		# "Speed Feat (once per game)"): a crowded wedge shows "Advance", the tooltip always says
+		# "Advance & Shoot" in full.
+		out.append(RadialMenuItem.new("solo_auto_advance", "Advance (& Shoot)", "»→", true,
 			"Advance & Shoot: the engine advances toward the enemy (or steps back into range if already close) and fires — pick the enemy"))
 		out.append(RadialMenuItem.new("solo_auto_rush", "Rush", "→→", true,
 			"Rush: the engine moves the unit its full Rush distance toward the enemy — pick the enemy"))
