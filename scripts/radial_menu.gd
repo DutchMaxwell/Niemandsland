@@ -30,6 +30,12 @@ const TOOLTIP_BAR_W := 4.0                # px width of the tooltip's left accen
 const TOOLTIP_TEXT_W := 340.0             # px a tooltip line wraps at (Reinforce's text is 1,945 px on one line)
 const TOOLTIP_GAP := 16.0                 # px between the ring's popped edge and the tooltip box
 const EDGE_PADDING := 8.0                 # px kept clear between the menu and the viewport border
+# D53 = b: a menu of up to RING_MAX entries stays one flat ring; a crowded one keeps its core verbs on
+# the ring and moves the rest (status, management, transport lines) into a second tier — a column of
+# pills beside the ring that the ring's TIER_ID wedge opens. 8 wedges still leave "Shoot" its 39 px.
+const RING_MAX := 8
+const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass", "toggle_activate"]
+const TIER_ID := "more"                   # the wedge that opens the second tier; never sent down the action pipe
 
 
 # ===== Internal State =====
@@ -57,6 +63,12 @@ var _font: Font = null
 
 ## Each wedge's label as drawn, laid out once per open (see _label_layout)
 var _labels: Array = []
+
+## The second tier (D53 = b): its entries, their pills (Rect2 each), whether it is shown, the hovered pill
+var _tier: Array[RadialMenuItem] = []
+var _pills: Array = []
+var _tier_open: bool = false
+var _hovered_pill: int = -1
 
 
 # ===== Menu Item Class =====
@@ -131,7 +143,8 @@ func _draw() -> void:
 		if hovered:
 			draw_arc(_center_pos, outer, seg_start, seg_end, 24, HouseStyle.tone_color(tone), 3.0, true)
 
-		draw_string(font, _labels[i][1], _labels[i][0], HORIZONTAL_ALIGNMENT_LEFT, -1, HouseStyle.FONT_BODY, _ink(item))
+		draw_multiline_string(font, _labels[i][1], _labels[i][0], HORIZONTAL_ALIGNMENT_CENTER,
+			_labels[i][2], HouseStyle.FONT_BODY, -1, _ink(item))
 
 	# Center dead-zone (a sheet well) + cancel glyph.
 	draw_circle(_center_pos, center_radius, HouseStyle.SHEET_FILL)
@@ -141,11 +154,26 @@ func _draw() -> void:
 	var cancel_col: Color = HouseStyle.tone_ink(HouseStyle.TONE_DANGER) if _hovered_index == -1 else HouseStyle.MUTED
 	draw_string(font, Vector2(_center_pos.x - cs.x / 2.0, _center_pos.y + cs.y * 0.32), cancel_text, HORIZONTAL_ALIGNMENT_LEFT, -1, HouseStyle.FONT_BODY, cancel_col)
 
+	# The second tier, once its wedge was pointed at: one house-style pill per entry, on a dark sheet
+	# (a bare pill is 3 % white — unreadable over a bright table).
+	if _tier_open and not _pills.is_empty():
+		HouseStyle.tooltip_box().draw(get_canvas_item(), (_pills[0] as Rect2).merge(_pills[-1]).grow(HouseStyle.GAP_CONTROL))
+	for k in (_tier.size() if _tier_open else 0):
+		var pill: Rect2 = _pills[k]
+		var tone := HouseStyle.TONE_DANGER if _tier[k].id.begins_with("delete") else HouseStyle.TONE_ACCENT
+		HouseStyle.pill_box(tone, false, k == _hovered_pill and _tier[k].enabled).draw(get_canvas_item(), pill)
+		var baseline := pill.get_center().y + (font.get_ascent(HouseStyle.FONT_BODY) - font.get_descent(HouseStyle.FONT_BODY)) / 2.0
+		draw_string(font, Vector2(pill.position.x + HouseStyle.PAD_PILL_X, baseline), _fit(font, _tier[k].label,
+			pill.size.x - HouseStyle.PAD_PILL_X * 2.0), HORIZONTAL_ALIGNMENT_LEFT, -1, HouseStyle.FONT_BODY, _ink(_tier[k]))
+
 	# Tooltip for the hovered item.
-	if _hovered_index >= 0 and _hovered_index < _items.size():
-		var tip := _tooltip_text(_items[_hovered_index], _labels[_hovered_index][0])
-		if not tip.is_empty():
-			_draw_tooltip(font, tip)
+	var tip := ""
+	if _hovered_pill >= 0:
+		tip = _tooltip_text(_tier[_hovered_pill], "")
+	elif _hovered_index >= 0 and _hovered_index < _items.size():
+		tip = _tooltip_text(_items[_hovered_index], _labels[_hovered_index][0])
+	if not tip.is_empty():
+		_draw_tooltip(font, tip)
 
 
 ## A wedge label's ink: muted when off, the lifted danger red for what ends something, gold for the
@@ -158,30 +186,86 @@ static func _ink(item: RadialMenuItem) -> Color:
 	return HouseStyle.GOLD if item.id in GOLD_VERBS else HouseStyle.INK
 
 
-## Each wedge's label as drawn: [text, baseline position]. A label sits centred in the room its wedge
-## has on the label's row; one wider than that room is cut with an ellipsis (NML-979: long labels burst
-## the ring), and the hover tooltip then names it in full (_tooltip_text).
+## Each wedge's label as drawn: [text, first baseline]. A label sits centred in the room its wedge has on
+## a row; one too wide for any row drops its note ("Speed Feat (once per game)" -> "Speed Feat"), then
+## breaks onto two lines, and only then is cut with an ellipsis (NML-979: long labels burst the ring) —
+## the hover tooltip names it in full (_tooltip_text).
 func _label_layout(font: Font) -> Array:
 	var out: Array = []
-	var half := PI / _items.size() - SEGMENT_GAP
+	var line_h := font.get_height(HouseStyle.FONT_BODY)
 	for i in _items.size():
 		var a := -PI / 2.0 + i * TAU / _items.size()
-		var row := Vector2(cos(a), sin(a)) * (menu_radius - 4.0 + center_radius) / 2.0
-		var lo := 0.0
-		while lo > -menu_radius and _in_wedge(row + Vector2(lo - 1.0, 0.0), a, half):
-			lo -= 1.0
-		var hi := 0.0
-		while hi < menu_radius and _in_wedge(row + Vector2(hi + 1.0, 0.0), a, half):
-			hi += 1.0
-		var text := _fit(font, _items[i].label, hi - lo - LABEL_PAD * 2.0)
-		var ls := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, HouseStyle.FONT_BODY)
-		out.append([text, _center_pos + row + Vector2((lo + hi - ls.x) / 2.0, ls.y * 0.32)])
+		var label := _items[i].label
+		var head := label.get_slice(" (", 0).get_slice(" — ", 0)
+		var sp := head.find(" ", head.length() / 2 - 1)
+		var two := head.substr(0, sp) + "\n" + head.substr(sp + 1) if sp > 0 else head
+		var text := ""
+		var spot: Array = []
+		for t: String in [label, head, two]:
+			var lines := t.split("\n")
+			var w := 0.0
+			for ln in lines:
+				w = maxf(w, _text_w(font, ln))
+			spot = _row_room(a, line_h * lines.size() / 2.0, w + LABEL_PAD * 2.0)
+			if spot[0] >= w + LABEL_PAD * 2.0:
+				text = t
+				break
+		if text.is_empty():
+			spot = _row_room(a, line_h / 2.0, INF)
+			text = _fit(font, label, spot[0] - LABEL_PAD * 2.0)
+		var size := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, HouseStyle.FONT_BODY)
+		out.append([text, _center_pos + spot[2] + Vector2(spot[1] - size.x / 2.0, font.get_ascent(HouseStyle.FONT_BODY) - size.y / 2.0),
+			maxf(size.x, 1.0)])
 	return out
 
 
-## `v` (relative to the centre) lies on the ring and within `half` radians of the wedge angle `a`.
-func _in_wedge(v: Vector2, a: float, half: float) -> bool:
-	return v.length() >= center_radius and v.length() <= menu_radius - 4.0 and absf(angle_difference(a, v.angle())) <= half
+## The widest room a text box `fh` px half-high finds on a row of the wedge at angle `a`: [room, the
+## room's middle x, the row]. The middle row first; rows further out or in only while it needs more.
+func _row_room(a: float, fh: float, need: float) -> Array:
+	var half := PI / _items.size()
+	var mid := (menu_radius - 4.0 + center_radius) / 2.0
+	var best: Array = [-1.0, 0.0, Vector2.ZERO]
+	for r: float in [mid, mid + 12.0, mid - 12.0, mid + 22.0]:
+		var row := Vector2(cos(a), sin(a)) * r
+		var lo := 0.0
+		while lo > -menu_radius and _in_wedge(row + Vector2(lo - 2.0, 0.0), a, half, fh):
+			lo -= 2.0
+		var hi := 0.0
+		while hi < menu_radius and _in_wedge(row + Vector2(hi + 2.0, 0.0), a, half, fh):
+			hi += 2.0
+		if hi - lo > best[0]:
+			best = [hi - lo, (lo + hi) / 2.0, row]
+		if best[0] >= need:
+			break
+	return best
+
+
+## The second tier's pills: one row per entry, a column beside the ring — left of it, right when the
+## left has no room — centred on the ring and kept on screen. Wider labels are cut to TOOLTIP_TEXT_W.
+func _pill_layout(font: Font) -> Array:
+	var w := 0.0
+	for it in _tier:
+		w = maxf(w, _text_w(font, it.label))
+	w = minf(w, TOOLTIP_TEXT_W) + HouseStyle.PAD_PILL_X * 2.0
+	var row := HouseStyle.H_CHIP + HouseStyle.GAP_CONTROL
+	var x := _center_pos.x - menu_radius - HouseStyle.GAP_SECTION - w
+	if x < EDGE_PADDING:
+		x = _center_pos.x + menu_radius + HouseStyle.GAP_SECTION
+	var h := _tier.size() * row
+	var y := clampf(_center_pos.y - h / 2.0, EDGE_PADDING, maxf(EDGE_PADDING, get_viewport_rect().size.y - h - EDGE_PADDING))
+	var out: Array = []
+	for k in _tier.size():
+		out.append(Rect2(x, y + k * row, w, HouseStyle.H_CHIP))
+	return out
+
+
+## The text row through `v` (relative to the centre), `fh` px above and below, lies on the ring and
+## within `half` radians of the wedge angle `a` — its top and bottom edge alike.
+func _in_wedge(v: Vector2, a: float, half: float, fh: float) -> bool:
+	for p: Vector2 in [v + Vector2(0.0, fh), v - Vector2(0.0, fh)]:
+		if p.length() < center_radius or p.length() > menu_radius - 4.0 or absf(angle_difference(a, p.angle())) > half:
+			return false
+	return true
 
 
 ## `text` fitted to `room` px: a note in brackets or after a dash goes first ("Speed Feat (once per
@@ -278,6 +362,14 @@ func _input(event: InputEvent) -> void:
 
 
 func _update_hover(mouse_pos: Vector2) -> void:
+	# The second tier's pills first: they stand inside the ring's generous outer hit zone.
+	_hovered_pill = -1
+	for k in (_pills.size() if _tier_open else 0):
+		if (_pills[k] as Rect2).has_point(mouse_pos):
+			_hovered_pill = k
+			_hovered_index = -1
+			return
+
 	var offset = mouse_pos - _center_pos
 	var distance = offset.length()
 
@@ -300,12 +392,25 @@ func _update_hover(mouse_pos: Vector2) -> void:
 	# Normalize angle to match our coordinate system
 	var normalized_angle = fmod(angle - start_angle + TAU, TAU)
 	_hovered_index = int(normalized_angle / angle_step) % item_count
+	# Pointing at the tier's wedge opens the tier; it then stays while the menu is open.
+	_tier_open = _tier_open or _items[_hovered_index].id == TIER_ID
 
 
 func _select_current() -> void:
+	if _hovered_pill >= 0:
+		if _tier[_hovered_pill].enabled:
+			action_selected.emit(_tier[_hovered_pill].id, _context)
+			close()
+		return
+
 	if _hovered_index < 0:
 		# Center = cancel
 		close()
+		return
+
+	if _items[_hovered_index].id == TIER_ID:
+		_tier_open = true   # the tier's wedge opens the tier, it is no action
+		queue_redraw()
 		return
 
 	_select_index(_hovered_index)
@@ -343,7 +448,7 @@ func _clamp_to_viewport(pos: Vector2) -> Vector2:
 	# is still unknown while opening — so reserve the height of the tallest one this menu can
 	# show. Only the height: the width is the tooltip's own problem (see _draw_tooltip).
 	var tip_h := 0.0
-	for item in _items:
+	for item in _items + _tier:
 		if item.tooltip.is_empty():
 			continue
 		tip_h = maxf(tip_h, _tooltip_box_size(font, _tooltip_text(item, "")).y)
@@ -367,6 +472,17 @@ func _clamp_to_viewport(pos: Vector2) -> Vector2:
 
 ## Opens the menu at the specified position with the given items.
 func open(screen_pos: Vector2, items: Array[RadialMenuItem], context: Dictionary = {}) -> void:
+	# D53 = b: a crowded menu keeps its verbs on the ring, the rest goes to the second tier.
+	_tier.clear()
+	if items.size() > RING_MAX:
+		var ring: Array[RadialMenuItem] = []
+		for it in items:
+			(ring if it.id in RING_VERBS else _tier).append(it)
+		var names := PackedStringArray()
+		for it in _tier:
+			names.append(it.label)
+		ring.append(RadialMenuItem.new(TIER_ID, "More", "", true, ", ".join(names)))
+		items = ring
 	_items = items
 	_context = context
 	# Clamp before ANYTHING reads the centre — _draw(), _update_hover() and pivot_offset below
@@ -374,6 +490,9 @@ func open(screen_pos: Vector2, items: Array[RadialMenuItem], context: Dictionary
 	# _items must already be assigned: the clamp measures this menu's widest tooltip.
 	_center_pos = _clamp_to_viewport(screen_pos)
 	_labels = _label_layout(_font if _font else ThemeDB.fallback_font)
+	_pills = _pill_layout(_font if _font else ThemeDB.fallback_font)
+	_tier_open = false
+	_hovered_pill = -1
 	_hovered_index = -1
 	_is_open = true
 	# Swallow board clicks for as long as the menu stands (see the filter note in _ready).

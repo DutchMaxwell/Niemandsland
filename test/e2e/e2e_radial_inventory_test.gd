@@ -352,8 +352,8 @@ func _label_boxes() -> Array:
 		if not layout.is_empty():
 			text = layout[i][0]
 			base = layout[i][1]
-		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		out.append([text, Rect2(base.x, base.y - font.get_ascent(fs), w, font.get_height(fs))])
+		var size := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)   # a label may take two lines
+		out.append([text, Rect2(base.x, base.y - font.get_ascent(fs), size.x, size.y)])
 	return out
 
 
@@ -465,5 +465,15 @@ func test_a_crowded_menu_keeps_its_verbs_on_the_ring_and_the_rest_in_a_second_ti
 		await _runner.simulate_frames(2)
 		if not bool(_menu().get("_tier_open")):
 			misses.append("pointing at the '%s' wedge did not open the second tier" % TIER_WEDGE)
+	_menu().close()
+	await _runner.simulate_frames(2)
+	# Opened at the left screen edge, the tier stands right of the ring, on screen.
+	_main.object_manager.context_menu_requested.emit(Vector2(20, 520), _nodes(hero))
+	await _runner.simulate_frames(2)
+	var view := _menu().get_viewport_rect()
+	for p in (_menu().get("_pills") if _menu().get("_pills") != null else []):
+		if not view.encloses(p) or (p as Rect2).position.x < _menu()._center_pos.x:
+			misses.append("at the left edge a tier pill sits at %s (ring centre %s, screen %s)" % [p, _menu()._center_pos, view.size])
+			break
 	_menu().close()
 	assert_array(misses).override_failure_message("\n".join(misses)).is_empty()
