@@ -59,3 +59,13 @@ func test_better_living_hero_tests_for_living_host_on_quality_three() -> void:
 	await _main._solo_morale_test(host, "AI (Squad)")
 	assert_str(_log_text()).contains("Hero Captain tests on behalf of Squad (Q3+)")
 	assert_str(_log_text()).contains("1 hit (3+)")
+
+
+func test_dead_hero_cannot_supply_quality_to_living_host() -> void:
+	var host := _joined_unit(true)
+	var hero := host.get_attached_heroes()[0] as GameUnit
+	(hero.models[0] as ModelInstance).is_alive = false
+	_main.seed_tray_rng(7)
+	await _main._solo_morale_test(host, "AI (Squad)")
+	assert_str(_log_text()).not_contains("Hero Captain tests on behalf")
+	assert_str(_log_text()).contains("1 hit (5+)")

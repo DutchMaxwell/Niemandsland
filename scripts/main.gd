@@ -9268,6 +9268,23 @@ func _solo_below_half_strength(unit: GameUnit) -> bool:
 ## "If the test is failed, the unit is Shaken" for GENERAL tests; only the MELEE section adds "and the
 ## unit only has half or less … then the unit Routs". A shooting-caused failure at half strength wrongly
 ## wiped whole units before).
+func _solo_morale_quality(unit: GameUnit) -> int:
+	var best_quality: int = unit.get_quality()
+	var host_alive: bool = unit.get_alive_count() > 0
+	var best_hero: GameUnit = null
+	for attached in unit.get_attached_heroes():
+		var hero := attached as GameUnit
+		if hero == null or hero.get_alive_count() <= 0:
+			continue
+		if (not host_alive and best_hero == null) or hero.get_quality() < best_quality:
+			best_quality = hero.get_quality()
+			best_hero = hero
+	if best_hero != null and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Hero %s tests on behalf of %s (Q%d+)" % [
+			best_hero.get_name(), unit.get_name(), best_quality], true)
+	return best_quality
+
+
 func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> void:
 	var below_half := _solo_below_half_strength(unit)   # single models: tough-wounds scale (p.10)
 	var result: int
@@ -9292,7 +9309,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 			spell_morale += int((mrd as Dictionary).get("morale_mod", 0))
 			morale_notes.append("%s %+d" % [str((mrd as Dictionary).get("spell", "")),
 				int((mrd as Dictionary).get("morale_mod", 0))])
-		var test_target: int = AiCombatMath.morale_target(unit.get_quality(), morale_bonus + spell_morale)
+		var test_target: int = AiCombatMath.morale_target(_solo_morale_quality(unit), morale_bonus + spell_morale)
 		if morale_bonus > 0 and battle_log != null:
 			var rating := SoloController.morale_rating_of(unit)
 			var source := "Morale(%d)" % rating if rating > 0 else "Banner"

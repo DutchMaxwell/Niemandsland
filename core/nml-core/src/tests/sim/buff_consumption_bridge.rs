@@ -124,7 +124,7 @@ use super::*;
 
         let mut tray = Tray::seeded(5);
         let mut mshot = ShootResult::default();
-        tray_morale(&mut next, &statics[2], 2, false, 4, &mut tray, &mut mshot);
+        tray_morale(&mut next, &statics, 2, false, Seams { rules_epoch: 4, ..Default::default() }, &mut tray, &mut mshot);
         assert_eq!(mshot.rolls[0].target, 5, "Quality 4+ tested at 5+ under the debuff");
         assert!(next.buffs[2].is_empty(), "main.gd:8303 — the test die spends it");
 
