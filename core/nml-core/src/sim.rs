@@ -183,14 +183,40 @@ fn below_half(state: &State, us: &UnitStatic, i: usize) -> bool {
     at_or_below_half(state.alive[i], us.model_count)
 }
 
+/// The best living model's Quality in a joined unit from the melee-truth epoch.
+/// Earlier records and records without the attachment seam keep host Quality.
+fn morale_quality(statics: &[UnitStatic], state: &State, i: usize, seams: Seams) -> i64 {
+    let own = statics[state.roster.profile[i]].quality;
+    if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || !seams.hero_attach {
+        return own;
+    }
+    let mut best = if state.alive[i] > 0 { Some(own) } else { None };
+    for &h in &state.attached[i] {
+        if state.alive[h] > 0 {
+            let quality = statics[state.roster.profile[h]].quality;
+            best = Some(best.map_or(quality, |q: i64| q.min(quality)));
+        }
+    }
+    best.unwrap_or(own)
+}
+
+fn morale_side_alive(state: &State, i: usize, seams: Seams) -> bool {
+    if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) && seams.hero_attach {
+        combined_alive(state, i, seams) > 0
+    } else {
+        state.alive[i] > 0
+    }
+}
+
 /// `BattleSim._morale_fails_expected` battle_sim.gd:1082-1090 — Shaken always
 /// fails; otherwise the quality target's fail chance, halved by Fearless, and a
 /// fail at 50% or worse.
-fn morale_fails_expected(state: &State, us: &UnitStatic, i: usize) -> bool {
+fn morale_fails_expected(state: &State, statics: &[UnitStatic], i: usize, seams: Seams) -> bool {
+    let us = &statics[state.roster.profile[i]];
     if state.shaken[i] {
         return true;
     }
-    let mut fail_p = (morale_target(us.quality, state.morale_bonus[i]) - 1) as f64 / 6.0;
+    let mut fail_p = (morale_target(morale_quality(statics, state, i, seams), state.morale_bonus[i]) - 1) as f64 / 6.0;
     if us.fearless {
         fail_p *= 0.5;
     }
@@ -523,7 +549,7 @@ pub(crate) fn tray_breath_attack(
     let landed = shot.absorb(out);
     land_wounds(next, ti, landed);
     if shooting_morale_trigger(next, ut, ti, alive_before, wounds_before) {
-        tray_morale(next, ut, ti, false, seams.rules_epoch, tray, shot);
+        tray_morale(next, statics, ti, false, seams, tray, shot);
     }
 }
 
@@ -723,7 +749,7 @@ fn surprise_strike(
     let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(successes, spec.ap, false, false, &def, &ut.name, tray));
     land_wounds(next, best, landed);
     if shooting_morale_trigger(next, ut, best, ab, wb) {
-        tray_morale(next, ut, best, false, seams.rules_epoch, tray, shot);
+        tray_morale(next, statics, best, false, seams, tray, shot);
     }
 }
 
@@ -928,7 +954,7 @@ pub(crate) fn tray_strafing(
         shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
     }
     if shooting_morale_trigger(next, ut, target, alive_before, wounds_before) {
-        tray_morale(next, ut, target, false, seams.rules_epoch, tray, shot);
+        tray_morale(next, statics, target, false, seams, tray, shot);
     }
 }
 
@@ -991,7 +1017,7 @@ pub(crate) fn tray_storm_attack(
                 let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(hits, ap, bane, shred, &def, &ut.name, tray));
                 land_wounds(next, best, landed);
                 if shooting_morale_trigger(next, ut, best, alive_before, wounds_before) {
-                    tray_morale(next, ut, best, false, seams.rules_epoch, tray, shot);
+                    tray_morale(next, statics, best, false, seams, tray, shot);
                 }
             }
         }
@@ -3885,9 +3911,9 @@ fn sighted_profiles_of(
 /// The destroyed side loses from melee-truth epoch 65, regardless of Fear or
 /// wound score. A mutual wipe leaves nobody to test. Earlier records keep the
 /// score-only verdict they were played under.
-fn melee_loser(state: &State, si: usize, ti: usize, score_su: i64, score_tu: i64, rules_epoch: u32) -> Option<usize> {
-    if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
-        match (state.alive[si] > 0, state.alive[ti] > 0) {
+fn melee_loser(state: &State, si: usize, ti: usize, score_su: i64, score_tu: i64, seams: Seams) -> Option<usize> {
+    if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
+        match (morale_side_alive(state, si, seams), morale_side_alive(state, ti, seams)) {
             (false, false) => return None,
             (false, true) => return Some(si),
             (true, false) => return Some(ti),
@@ -3917,15 +3943,15 @@ fn expected_melee_morale(
     su_before: i64,
     ti: usize,
     tu_before: i64,
-    rules_epoch: u32,
+    seams: Seams,
 ) {
     let dealt_by_su = tu_before - wounds_left(state, ti);
     let dealt_by_tu = su_before - wounds_left(state, si);
     let score_su = dealt_by_su + statics[state.roster.profile[si]].ctx.fear;
     let score_tu = dealt_by_tu + statics[state.roster.profile[ti]].ctx.fear;
-    let Some(li) = melee_loser(state, si, ti, score_su, score_tu, rules_epoch) else { return };
+    let Some(li) = melee_loser(state, si, ti, score_su, score_tu, seams) else { return };
     let ul = &statics[state.roster.profile[li]];
-    if state.alive[li] <= 0 || !morale_fails_expected(state, ul, li) {
+    if !morale_side_alive(state, li, seams) || !morale_fails_expected(state, statics, li, seams) {
         return;
     }
     if below_half(state, ul, li) {
@@ -4350,17 +4376,21 @@ fn self_destruct_post_melee(
 /// exactly as `expected_melee_morale` does.
 fn tray_morale(
     state: &mut State,
-    us: &UnitStatic,
+    statics: &[UnitStatic],
     i: usize,
     melee: bool,
-    rules_epoch: u32,
+    seams: Seams,
     tray: &mut Tray,
     shot: &mut ShootResult,
 ) {
-    if state.alive[i] <= 0 {
+    if !morale_side_alive(state, i, seams) {
         return;
     }
+    let us = &statics[state.roster.profile[i]];
     let mut ctx = ctx_of(us, state, i);
+    if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) && seams.hero_attach {
+        ctx.quality = morale_quality(statics, state, i, seams);
+    }
     // The LIVE Banner/spell bonus, not the static one: `morale_fails_expected`
     // reads `state.morale_bonus[i]` and `_solo_morale_bonus` (main.gd:6632) is
     // the same live read, so the ROLLED target has to be too. Reading the static
@@ -4370,7 +4400,7 @@ fn tray_morale(
     // granted "Hold the Line Boost" joins the same net, epoch-gated.
     ctx.morale_bonus = state.morale_bonus[i]
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
-        + if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Hold the Line Boost") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
+        + if rule_on(seams.rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Hold the Line Boost") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
     ctx.no_retreat = ctx.no_retreat || mods::granted(state, i, "No Retreat");
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
@@ -4493,7 +4523,7 @@ fn tray_charge(
     self_destruct_post_melee(statics, next, ti, si, seams, tray, shot);
     let a = by_su + statics[next.roster.profile[si]].ctx.fear;
     let b = by_tu + statics[next.roster.profile[ti]].ctx.fear;
-    melee_loser(next, si, ti, a, b, seams.rules_epoch)
+    melee_loser(next, si, ti, a, b, seams)
 }
 
 /// NML-1157 — `main._solo_combat_unit` main.gd:8452-8458, the table's own line:
@@ -7299,7 +7329,7 @@ fn resolve_with(
                             if shooting_morale_trigger(
                                 &next, ut_g, g.ti, alive_before_g, wounds_before_g,
                             ) {
-                                tray_morale(&mut next, ut_g, g.ti, false, seams.rules_epoch, tray, shot);
+                                tray_morale(&mut next, statics, g.ti, false, seams, tray, shot);
                             }
                         }
                     }
@@ -7307,7 +7337,7 @@ fn resolve_with(
                         apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut());
                         let ut = &statics[next.roster.profile[ti]];
                         if shooting_morale_trigger(&next, ut, ti, alive_before, wounds_before)
-                            && morale_fails_expected(&next, ut, ti)
+                            && morale_fails_expected(&next, statics, ti, seams)
                         {
                             next.shaken[ti] = true;
                         }
@@ -7366,9 +7396,8 @@ fn resolve_with(
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
-                        if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || next.alive[li] > 0 {
-                            let ul = &statics[next.roster.profile[li]];
-                            tray_morale(&mut next, ul, li, true, seams.rules_epoch, tray, shot);
+                        if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || morale_side_alive(&next, li, seams) {
+                            tray_morale(&mut next, statics, li, true, seams, tray, shot);
                         }
                     }
                     // Coverage wave — growth markers (Defensive Frenzy):
@@ -7422,7 +7451,7 @@ fn resolve_with(
                         apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
                         next.fatigued[ti] = true;
                     }
-                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before, seams.rules_epoch);
+                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before, seams);
                 }
                 // Consolidation Moves (GF v3.5.1 p.9), seam-gated: one side
                 // wiped by the melee just resolved above (wounds or the
@@ -7485,7 +7514,7 @@ fn resolve_with(
             if let Some((tray, shot)) = dice.as_mut() {
                 let us = &statics[pi_s];
                 if shooting_morale_trigger(&next, us, si, alive_before, wounds_before) {
-                    tray_morale(&mut next, us, si, false, seams.rules_epoch, tray, shot);
+                    tray_morale(&mut next, statics, si, false, seams, tray, shot);
                 }
             }
         }

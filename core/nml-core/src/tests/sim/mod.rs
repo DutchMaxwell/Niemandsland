@@ -359,7 +359,7 @@
             UnitStatic { ctx: Ctx { fear: 2, ..Ctx::default() }, quality: 6, ..UnitStatic::default() },
             UnitStatic { quality: 6, ..UnitStatic::default() },
         ];
-        expected_melee_morale(&mut st, &statics, 0, 10, 2, 10, CURRENT_RULES_EPOCH);
+        expected_melee_morale(&mut st, &statics, 0, 10, 2, 10, Seams { rules_epoch: CURRENT_RULES_EPOCH, ..Default::default() });
         assert_eq!(st.alive[0], 1, "the Fear(2) unit dealt 1+2=3 > 2, it must not test morale");
         assert_eq!(st.alive[2], 0, "the plain unit lost the comparison and must rout");
     }
@@ -377,7 +377,7 @@
             UnitStatic { ctx: Ctx { fear: 2, ..Ctx::default() }, quality: 6, ..UnitStatic::default() },
             UnitStatic { quality: 6, ..UnitStatic::default() },
         ];
-        expected_melee_morale(&mut st, &statics, 0, 1, 2, 1, rules_epoch);
+        expected_melee_morale(&mut st, &statics, 0, 1, 2, 1, Seams { rules_epoch, ..Default::default() });
         st.alive[2]
     }
 
@@ -398,7 +398,55 @@
         let mut st = four_unit_line();
         st.alive[0] = 0;
         st.alive[2] = 0;
-        assert_eq!(melee_loser(&st, 0, 2, 3, 1, EPOCH_65_MELEE_TRUTH), None);
+        assert_eq!(melee_loser(&st, 0, 2, 3, 1, Seams { rules_epoch: EPOCH_65_MELEE_TRUTH, ..Default::default() }), None);
+    }
+
+    fn joined_hero_morale_target(host_alive: bool, rules_epoch: u32) -> Option<i64> {
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: HashMap::new(), profile: vec![0, 1, 0, 0] });
+        st.alive[0] = i64::from(host_alive);
+        if !host_alive {
+            st.wounds[0].clear();
+            st.positions[0].clear();
+            st.radii[0].clear();
+        }
+        let statics = vec![
+            UnitStatic { name: "Squad".into(), quality: 5, ctx: Ctx { quality: 5, ..Ctx::default() }, model_count: 1, wounds_max: vec![1], ..UnitStatic::default() },
+            UnitStatic { name: "Captain".into(), quality: 3, ctx: Ctx { quality: 3, ..Ctx::default() }, model_count: 1, wounds_max: vec![1], ..UnitStatic::default() },
+        ];
+        let mut tray = Tray::seeded(7);
+        let mut shot = ShootResult::default();
+        tray_morale(&mut st, &statics, 0, false, Seams { rules_epoch, hero_attach: true, ..Default::default() }, &mut tray, &mut shot);
+        shot.rolls.first().map(|r| r.target)
+    }
+
+    #[test]
+    fn joined_hero_uses_better_quality_from_epoch_65() {
+        assert_eq!(joined_hero_morale_target(true, EPOCH_65_MELEE_TRUTH), Some(3));
+        assert_eq!(joined_hero_morale_target(false, EPOCH_65_MELEE_TRUTH), Some(3));
+    }
+
+    #[test]
+    fn joined_hero_keeps_host_quality_below_epoch_65() {
+        assert_eq!(joined_hero_morale_target(true, crate::acts::EPOCH_64_DEPLOY_LARGE_RESPOT), Some(5));
+    }
+
+    #[test]
+    fn expected_morale_uses_the_living_hero_quality_only_from_epoch_65() {
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: HashMap::new(), profile: vec![0, 1, 0, 0] });
+        let statics = vec![
+            UnitStatic { quality: 5, ..UnitStatic::default() },
+            UnitStatic { quality: 3, ..UnitStatic::default() },
+        ];
+        let old = Seams { rules_epoch: crate::acts::EPOCH_64_DEPLOY_LARGE_RESPOT, hero_attach: true, ..Default::default() };
+        let new = Seams { rules_epoch: EPOCH_65_MELEE_TRUTH, hero_attach: true, ..Default::default() };
+        assert!(morale_fails_expected(&st, &statics, 0, old), "Q5 fails the EV threshold");
+        assert!(!morale_fails_expected(&st, &statics, 0, new), "the attached Q3 hero passes the EV threshold");
+        st.alive[0] = 0;
+        assert_eq!(morale_quality(&statics, &st, 0, new), 3);
+        assert!(morale_side_alive(&st, 0, new), "a living hero keeps the joined unit alive");
+        assert_eq!(melee_loser(&st, 0, 2, 3, 1, new), Some(2), "the joined side has not been wiped");
     }
 
     /// D5-4. `nearest_melee_gap_in` (:8526) measures `_moving_models` on BOTH

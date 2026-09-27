@@ -75,7 +75,7 @@ use crate::rules::Registries;
         let mut tray = Tray::seeded(5);
         let mut mshot = ShootResult::default();
         tray_morale(
-            &mut next, &statics[0], 0, false, crate::acts::CURRENT_RULES_EPOCH,
+            &mut next, &statics, 0, false, Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Default::default() },
             &mut tray, &mut mshot,
         );
         assert_eq!(mshot.rolls[0].target, 3, "Quality 4+ tested at 3+ under the +1");
