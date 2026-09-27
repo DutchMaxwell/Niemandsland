@@ -3882,8 +3882,23 @@ fn sighted_profiles_of(
     }
 }
 
-/// `BattleSim._expected_melee_morale` battle_sim.gd:1111-1125 — the side that
-/// dealt FEWER wounds tests (a tie means nobody); a fail at or below half is a
+/// The destroyed side loses from melee-truth epoch 65, regardless of Fear or
+/// wound score. A mutual wipe leaves nobody to test. Earlier records keep the
+/// score-only verdict they were played under.
+fn melee_loser(state: &State, si: usize, ti: usize, score_su: i64, score_tu: i64, rules_epoch: u32) -> Option<usize> {
+    if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
+        match (state.alive[si] > 0, state.alive[ti] > 0) {
+            (false, false) => return None,
+            (false, true) => return Some(si),
+            (true, false) => return Some(ti),
+            (true, true) => {}
+        }
+    }
+    if score_su == score_tu { None } else { Some(if score_su > score_tu { ti } else { si }) }
+}
+
+/// `BattleSim._expected_melee_morale` battle_sim.gd:1111-1125 — the loser
+/// tests only while alive; a fail at or below half is a
 /// ROUT, and the loser leaves the board: wounds, positions and radii cleared,
 /// `alive` 0. `wound_frac` is deliberately NOT cleared — the GDScript leaves it
 /// standing too.
@@ -3902,15 +3917,13 @@ fn expected_melee_morale(
     su_before: i64,
     ti: usize,
     tu_before: i64,
+    rules_epoch: u32,
 ) {
     let dealt_by_su = tu_before - wounds_left(state, ti);
     let dealt_by_tu = su_before - wounds_left(state, si);
     let score_su = dealt_by_su + statics[state.roster.profile[si]].ctx.fear;
     let score_tu = dealt_by_tu + statics[state.roster.profile[ti]].ctx.fear;
-    if score_su == score_tu {
-        return;
-    }
-    let li = if score_su > score_tu { ti } else { si };
+    let Some(li) = melee_loser(state, si, ti, score_su, score_tu, rules_epoch) else { return };
     let ul = &statics[state.roster.profile[li]];
     if state.alive[li] <= 0 || !morale_fails_expected(state, ul, li) {
         return;
@@ -4406,10 +4419,9 @@ fn tray_morale(
 /// (:8110). UNWIELDY swaps the charger BEHIND the strike-back (:8073-8078);
 /// Counter and Impact keep their slots either way.
 ///
-/// Returns the loser of the melee — the side that CAUSED fewer wounds, Fear(X)
-/// counting as +X dealt for this comparison only and never for the wounds
-/// applied (:8110-8112). `None` on a tie, which is what the table means by
-/// "nobody tests".
+/// Returns the loser of the melee — the destroyed side from epoch 65, else
+/// the side that caused fewer wounds (Fear(X) adds to the score only).
+/// `None` on a live tie or mutual wipe: nobody tests.
 #[allow(clippy::too_many_arguments)]
 fn tray_charge(
     statics: &[UnitStatic],
@@ -4481,10 +4493,7 @@ fn tray_charge(
     self_destruct_post_melee(statics, next, ti, si, seams, tray, shot);
     let a = by_su + statics[next.roster.profile[si]].ctx.fear;
     let b = by_tu + statics[next.roster.profile[ti]].ctx.fear;
-    if a == b {
-        return None;
-    }
-    Some(if a > b { ti } else { si })
+    melee_loser(next, si, ti, a, b, seams.rules_epoch)
 }
 
 /// NML-1157 — `main._solo_combat_unit` main.gd:8452-8458, the table's own line:
@@ -7357,8 +7366,10 @@ fn resolve_with(
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
-                        let ul = &statics[next.roster.profile[li]];
-                        tray_morale(&mut next, ul, li, true, seams.rules_epoch, tray, shot);
+                        if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || next.alive[li] > 0 {
+                            let ul = &statics[next.roster.profile[li]];
+                            tray_morale(&mut next, ul, li, true, seams.rules_epoch, tray, shot);
+                        }
                     }
                     // Coverage wave — growth markers (Defensive Frenzy):
                     // main.gd:8137-8140 credits the WIPING side's own kill
@@ -7411,7 +7422,7 @@ fn resolve_with(
                         apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
                         next.fatigued[ti] = true;
                     }
-                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before);
+                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before, seams.rules_epoch);
                 }
                 // Consolidation Moves (GF v3.5.1 p.9), seam-gated: one side
                 // wiped by the melee just resolved above (wounds or the

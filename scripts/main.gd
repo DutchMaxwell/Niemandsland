@@ -9055,16 +9055,15 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# Resolver wave A — Self-Destruct survival half: "after both sides have finished attacking".
 	await _solo_self_destruct_post_melee(unit, target)
 	await _solo_self_destruct_post_melee(target, unit)
-	# — Morale: the side that CAUSED more wounds wins; the loser tests (tie = nobody). Fear(X) (GF/AoF
+	# — Morale: a destroyed side loses first; otherwise the lower wound score loses (tie = nobody). Fear(X) (GF/AoF
 	#   v3.5.1 p.13) counts as +X dealt wounds for THIS comparison only (never changes wounds applied) —
 	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(unit, "Fear"))
 	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(target, "Fear"))
+	var loser: GameUnit = _solo_melee_loser(unit, ai_score, target, human_score)
 	_solo_log_melee_result(unit, ai_caused, ai_score, target, human_caused, human_score)
 	await _solo_stage_phase("Melee result")
-	if ai_score > human_score and _solo_combined_alive(target) > 0:
-		await _solo_morale_test(target, _solo_owner_label(target), true)   # MELEE loser — rout possible at half
-	elif human_score > ai_score and _solo_combined_alive(unit) > 0:
-		await _solo_morale_test(unit, _solo_owner_label(unit), true)   # MELEE loser
+	if loser != null and _solo_combined_alive(loser) > 0:
+		await _solo_morale_test(loser, _solo_owner_label(loser), true)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
 	#   back 1"; one side destroyed → the survivor consolidates up to 3" (round 7, finding 4) —
@@ -9082,15 +9081,30 @@ func _run_ai_melee(report: Dictionary) -> void:
 ## weighed, Fear(X) shifted them, a unit tested morale and the log never said why. One line now names
 ## both tallies (with the Fear-adjusted value where it differs) and who lost. Shared by both melee
 ## paths, and it is what the stage's "Melee result" card shows.
+func _solo_melee_loser(a: GameUnit, a_score: int, b: GameUnit, b_score: int) -> GameUnit:
+	var a_alive: bool = _solo_combined_alive(a) > 0
+	var b_alive: bool = _solo_combined_alive(b) > 0
+	if not a_alive and not b_alive:
+		return null
+	if not a_alive:
+		return a
+	if not b_alive:
+		return b
+	if a_score == b_score:
+		return null
+	return b if a_score > b_score else a
+
+
 func _solo_log_melee_result(a: GameUnit, a_caused: int, a_score: int,
 		b: GameUnit, b_caused: int, b_score: int) -> void:
 	if battle_log == null or a == null or b == null:
 		return
 	var verdict := "a draw — no morale test"
-	if a_score > b_score:
-		verdict = "%s loses the melee" % b.get_name()
-	elif b_score > a_score:
-		verdict = "%s loses the melee" % a.get_name()
+	var loser: GameUnit = _solo_melee_loser(a, a_score, b, b_score)
+	if loser != null:
+		verdict = "%s loses the melee" % loser.get_name()
+	elif _solo_combined_alive(a) <= 0 and _solo_combined_alive(b) <= 0:
+		verdict = "both destroyed — no morale test"
 	battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s dealt %s, %s dealt %s — %s" % [
 		a.get_name(), _solo_melee_tally(a_caused, a_score),
 		b.get_name(), _solo_melee_tally(b_caused, b_score), verdict], true)
@@ -11220,16 +11234,15 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	# Resolver wave A — Self-Destruct survival half: "after both sides have finished attacking".
 	await _solo_self_destruct_post_melee(attacker, target)
 	await _solo_self_destruct_post_melee(target, attacker)
-	# — Morale: the side that CAUSED more wounds wins; the loser tests. Fear(X) (GF/AoF v3.5.1 p.13) adds
+	# — Morale: a destroyed side loses first; otherwise the lower wound score loses. Fear(X) (GF/AoF v3.5.1 p.13) adds
 	#   +X to the bearer's tally for THIS comparison only. —
 	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(attacker, "Fear"))
 	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(target, "Fear"))
+	var loser: GameUnit = _solo_melee_loser(attacker, human_score, target, ai_score)
 	_solo_log_melee_result(attacker, human_caused, human_score, target, ai_caused, ai_score)
 	await _solo_stage_phase("Melee result")
-	if human_score > ai_score and _solo_combined_alive(target) > 0:
-		await _solo_morale_test(target, "AI (%s)" % target.get_name(), true)   # MELEE loser
-	elif ai_score > human_score and _solo_combined_alive(attacker) > 0:
-		await _solo_morale_test(attacker, "You", true)   # MELEE loser
+	if loser != null and _solo_combined_alive(loser) > 0:
+		await _solo_morale_test(loser, "You" if loser == attacker else "AI (%s)" % target.get_name(), true)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, round 7 finding 4): neither destroyed → the human charger's 1"
 	#   back-step is surfaced as a reminder; one side destroyed → the survivor consolidates up to 3"

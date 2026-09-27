@@ -359,9 +359,46 @@
             UnitStatic { ctx: Ctx { fear: 2, ..Ctx::default() }, quality: 6, ..UnitStatic::default() },
             UnitStatic { quality: 6, ..UnitStatic::default() },
         ];
-        expected_melee_morale(&mut st, &statics, 0, 10, 2, 10);
+        expected_melee_morale(&mut st, &statics, 0, 10, 2, 10, CURRENT_RULES_EPOCH);
         assert_eq!(st.alive[0], 1, "the Fear(2) unit dealt 1+2=3 > 2, it must not test morale");
         assert_eq!(st.alive[2], 0, "the plain unit lost the comparison and must rout");
+    }
+
+    fn survivor_after_fear_charger_wiped(rules_epoch: u32) -> i64 {
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: HashMap::new(), profile: vec![0, 0, 1, 0] });
+        st.attached = Rc::new(vec![vec![]; 4]);
+        st.attached_to = Rc::new(vec![None; 4]);
+        st.alive[0] = 0;
+        st.positions[0].clear();
+        st.wounds[0].clear();
+        st.radii[0].clear();
+        let statics = vec![
+            UnitStatic { ctx: Ctx { fear: 2, ..Ctx::default() }, quality: 6, ..UnitStatic::default() },
+            UnitStatic { quality: 6, ..UnitStatic::default() },
+        ];
+        expected_melee_morale(&mut st, &statics, 0, 1, 2, 1, rules_epoch);
+        st.alive[2]
+    }
+
+    #[test]
+    fn a_wiped_fear_charger_is_the_loser_at_epoch_65() {
+        assert_eq!(survivor_after_fear_charger_wiped(EPOCH_65_MELEE_TRUTH), 1,
+            "the living defender must not test morale even when Fear lifts the dead charger's tally");
+    }
+
+    #[test]
+    fn a_wiped_fear_charger_keeps_the_old_score_verdict_below_epoch_65() {
+        assert_eq!(survivor_after_fear_charger_wiped(crate::acts::EPOCH_64_DEPLOY_LARGE_RESPOT), 0,
+            "the old score-only reading remains pinned below the melee truth gate");
+    }
+
+    #[test]
+    fn mutual_melee_wipe_has_no_living_loser_at_epoch_65() {
+        let mut st = four_unit_line();
+        st.alive[0] = 0;
+        st.alive[2] = 0;
+        assert_eq!(melee_loser(&st, 0, 2, 3, 1, EPOCH_65_MELEE_TRUTH), None);
     }
 
     /// D5-4. `nearest_melee_gap_in` (:8526) measures `_moving_models` on BOTH
