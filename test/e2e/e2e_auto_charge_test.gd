@@ -91,8 +91,12 @@ func test_a_legal_charge_reaches_contact_fights_and_books_the_ai_reply(timeout :
 	await E2EBoot.settle(get_tree())
 	var gap: float = _main.solo_controller.nearest_melee_gap_in(attacker, enemy)
 	# Consolidation (GF v3.5.1 p.9) steps the charger back exactly 1" when neither side is destroyed,
-	# so the FINAL gap settles at MELEE_ENGAGE_IN itself — a hair of float rounding included.
-	assert_float(gap).is_less_equal(SoloController.MELEE_ENGAGE_IN + 0.001)
+	# so the FINAL gap settles at MELEE_ENGAGE_IN itself (a hair of float rounding included) — OR one
+	# side didn't survive the exchange at all (nearest_melee_gap_in reads INF with no models left),
+	# which is just as valid a "the charge reached and fought" outcome as a draw.
+	assert_bool(gap <= SoloController.MELEE_ENGAGE_IN + 0.001 or is_inf(gap)) \
+		.override_failure_message("gap %.3f\" is neither a settled melee distance nor a wipe (inf)" % gap) \
+		.is_true()
 	var text := _log_text()
 	assert_str(text).contains("Auto:")
 	assert_str(text).contains("charges")
