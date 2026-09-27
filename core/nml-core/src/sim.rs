@@ -3441,8 +3441,15 @@ fn modifier_delta_usable_of(
         if sc.keep.is_empty() {
             return None;
         }
-    } else if crate::combat::striking_models(&state.positions[att_i], &state.positions[def_i]) <= 0
+    } else if crate::combat::striking_models(
+        &state.positions[att_i],
+        &state.positions[def_i],
+        crate::acts::CURRENT_RULES_EPOCH,
+    ) <= 0
     {
+        // This AI spell-EV heuristic has no per-game `seams` in its call chain (unlike
+        // `melee_parts` below); every recorded corpus has y = 0, so the height gate is a
+        // no-op here regardless of which epoch is passed.
         return None;
     }
     Some(modifier_delta_of(statics, state, att_i, def_i, hit, dm, ranged, dist_in, !ranged))
@@ -3935,7 +3942,7 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
         let um = &statics[state.roster.profile[mi]];
         let mut sc = Scratch::default();
         let count = if seams.melee_reach {
-            crate::combat::striking_models(&state.positions[mi], &state.positions[ti])
+            crate::combat::striking_models(&state.positions[mi], &state.positions[ti], seams.rules_epoch)
         } else {
             state.alive[mi]
         };

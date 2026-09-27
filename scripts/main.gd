@@ -2202,6 +2202,25 @@ func _solo_init_arena_from_env() -> void:
 ## their rounds independently (the probe game that booked nothing found
 ## exactly this seam). final pays the end bonus exactly once. Logged to the
 ## battle log AND stderr so a silent ledger can never pass for a broken one.
+## NML-1010 wave C step C2: a carrier that stops being able to hold a marker (Shaken, destroyed)
+## drops it — the marker returns to the table at the carrier's own position (the mission's own
+## drop-placement rule, R3a, lands in C3). No-op when `gu` carries nothing.
+func _solo_drop_carried(gu: GameUnit, reason: String) -> void:
+	if terrain_overlay == null or SoloController.mission_markers.is_empty():
+		return
+	var pos_list: Array = solo_controller.alive_positions(gu)
+	var drop_pos: Vector3 = pos_list[0] if not pos_list.is_empty() else Vector3.ZERO
+	for i in range(SoloController.mission_markers.size()):
+		var mk: Dictionary = SoloController.mission_markers[i]
+		if bool(mk.get("carry", false)) and String(mk.get("carried_by", "")) == gu.unit_id:
+			mk["carried_by"] = ""
+			terrain_overlay.set_objective_position(i, drop_pos)
+			terrain_overlay.set_objective_carried(i, false)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"Relic dropped by %s (%s)" % [gu.get_name(), reason], true)
+
+
 func _solo_book_mission_vp(final: bool) -> void:
 	var has_markers: bool = not SoloController.mission_markers.is_empty()
 	if SoloController.mission_scoring != "round_vp" and not has_markers:
@@ -2305,10 +2324,20 @@ func _solo_auto_seize() -> void:
 		# an Aircraft never can at all (GF v3.5.1 Aircraft, system-scoped via the mechanics maps).
 		var ambush_locked: bool = int(gu.unit_properties.get("ambush_arrived_round", -1)) == round_no
 		infos.append({"player": int(gu.unit_properties.get("player_id", 0)), "name": gu.get_name(), "shaken": gu.is_shaken,
-			"ambush_locked": ambush_locked, "aircraft": SoloController.is_aircraft(gu),
+			"ambush_locked": ambush_locked, "aircraft": SoloController.is_aircraft(gu), "unit_id": gu.unit_id,
 			"positions": solo_controller.alive_positions(gu),
 			"radii": _solo_alive_radii(gu)})
 	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners)
+	# NML-1010 wave C step C2 (Relic Hunt/Capture & Hold): a marker just seized this round is
+	# picked up onto the seizing side's nearest eligible unit; the overlay hides its own token
+	# while carried (drop hooks re-show it — main.gd:_solo_drop_carried).
+	if not SoloController.mission_markers.is_empty():
+		for ev in SoloController.carry_step(infos, objectives, res["owners"], SoloController.mission_markers):
+			var ci: int = int((ev as Dictionary)["index"])
+			terrain_overlay.set_objective_carried(ci, true)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"Relic picked up by %s" % str((ev as Dictionary).get("name", "")), true)
 	var locked_near: Dictionary = {}
 	for i in range(objectives.size()):
 		var reasons := PackedStringArray()
@@ -8909,7 +8938,13 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var gap_in: float = solo_controller.nearest_melee_gap_in(unit, target)
 	if gap_in > SoloController.MELEE_ENGAGE_IN:
 		if battle_log != null:
-			_log_rule_event(BattleLog.Category.COMBAT, "%s's charge falls short (%.1f\")" % [unit.get_name(), gap_in], true)
+			var msg := "%s's charge falls short (%.1f\")" % [unit.get_name(), gap_in]
+			if is_inf(gap_in):
+				var info := solo_controller.nearest_melee_pair_info(unit, target, false)
+				if info["gap_in"] <= SoloController.MELEE_ENGAGE_IN:
+					msg = "%s's charge falls short — %.1f\" above, melee reaches %.0f\" up (GF p.9)" \
+						% [unit.get_name(), info["height_in"], SoloController.MELEE_VERTICAL_IN]
+			_log_rule_event(BattleLog.Category.COMBAT, msg, true)
 		# Stage seam: an early exit still closes its phase boundary — the falls-short line gets
 		# its own card instead of bleeding into the next activation.
 		await _solo_stage_phase("Charge")
@@ -9289,6 +9324,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 			if not unit.is_shaken and radial_menu_controller != null:
 				radial_menu_controller.card_toggle_shaken(unit)   # state + marker + MP broadcast
 				_solo_mirror_shaken(unit)   # the joined hero shares the unit's state (p.14), no 2nd token
+				_solo_drop_carried(unit, "shaken")
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fails morale — Shaken" % unit.get_name())
 		AiCombatMath.Morale.ROUT:
@@ -9971,6 +10007,12 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 		var gap := solo_controller.nearest_melee_gap_in(attacker, target)
 		if gap <= SoloController.MELEE_ENGAGE_IN:
 			return ""
+		if is_inf(gap):
+			var info := solo_controller.nearest_melee_pair_info(attacker, target, false)
+			if info["gap_in"] <= SoloController.MELEE_ENGAGE_IN:
+				return "%.1f\" above — melee reaches %.0f\" up (GF p.9)" \
+					% [info["height_in"], SoloController.MELEE_VERTICAL_IN]
+			gap = info["gap_in"]
 		return "not in melee range (%.1f\" — move into base contact)" % gap
 	# B11 (test game 2): the refusal message measures base-EDGE to base-edge between the NEAREST
 	# model pair — the same figure the ruler shows (the old unit-centre distance disagreed with the
@@ -11086,6 +11128,8 @@ func _solo_mirror_shaken(unit: GameUnit) -> void:
 		var hu := h as GameUnit
 		if hu != null and hu.is_shaken != unit.is_shaken:
 			radial_menu_controller.card_toggle_shaken(hu)
+			if hu.is_shaken:
+				_solo_drop_carried(hu, "shaken")
 
 
 func _solo_set_fatigued(unit: GameUnit) -> void:
@@ -12640,8 +12684,9 @@ func _on_distance_changed(distance_inches: float, _from_pos: Vector3, _to_pos: V
 ## STRICT "dry brush" HUD readout: during a movement-budget-capped drag, show consumed vs the
 ## model's max legal band ("6.0/6.0″") and colour it amber → red the moment the brush runs dry,
 ## so the cap reads unmistakably. Emitted after _on_distance_changed, so it wins the label.
-func _on_movement_capped(consumed_inches: float, cap_inches: float, dry: bool) -> void:
-	distance_label.text = "%.1f/%.1f\"" % [consumed_inches, cap_inches]
+func _on_movement_capped(consumed_inches: float, cap_inches: float, dry: bool, reason: String = "") -> void:
+	distance_label.text = ("%.1f/%.1f\" — %s" % [consumed_inches, cap_inches, reason]) \
+			if not reason.is_empty() else "%.1f/%.1f\"" % [consumed_inches, cap_inches]
 	distance_label.add_theme_color_override("font_color",
 			Color(1.0, 0.35, 0.3) if dry else Color(1.0, 0.78, 0.25))
 
@@ -13212,6 +13257,7 @@ func _on_battle_log_dead(node, dead: bool) -> void:
 	if dead:
 		if alive == 0:
 			battle_log.on_unit_destroyed(gu.get_name())
+			_solo_drop_carried(gu, "destroyed")
 		else:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s loses a model (%d/%d)" % [gu.get_name(), alive, total])
 	else:
@@ -13236,7 +13282,7 @@ func _on_battle_log_regiment_wounds(unit_name: String, delta: int, remaining: in
 func _on_battle_log_dropped(moves: Array) -> void:
 	if battle_log == null:
 		return
-	var per_unit := {}   # unit name -> {count, max_in, alive, whole}
+	var per_unit := {}   # unit name -> {count, max_in, climb_in, alive, whole}
 	for mv in moves:
 		var node: Node3D = mv.get("node")
 		var unit_name := _battle_log_unit_name(node)
@@ -13249,20 +13295,30 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		if res_gu != null and SoloController.unit_in_reserve(res_gu):
 			continue
 		if not per_unit.has(unit_name):
-			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "alive": _battle_log_unit_alive(node), "whole": false}
+			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "climb_in": 0.0,
+				"alive": _battle_log_unit_alive(node), "whole": false}
 		var e: Dictionary = per_unit[unit_name]
 		e["count"] = int(e["count"]) + 1
 		# Movement distance = the ACTUAL traveled arc (the ledger's measured net path),
 		# NOT crow-flight — one source of truth with the trail stamp / HUD / ruler. Falls
-		# back to the straight from→to only for a mover with no recorded path.
-		e["max_in"] = maxf(float(e["max_in"]), float(mv.get("arc_in", mv.get("inches", 0.0))))
+		# back to the straight from→to only for a mover with no recorded path. The climb
+		# (GF p.11) travels with whichever move set the max, so the two stay paired.
+		var mv_in: float = float(mv.get("arc_in", mv.get("inches", 0.0)))
+		if mv_in >= float(e["max_in"]):
+			e["max_in"] = mv_in
+			e["climb_in"] = float(mv.get("climb_in", 0.0))
 		if node is RegimentTray:
 			e["whole"] = true
 	var summaries: Array = []
 	for unit_name in per_unit:
 		var e: Dictionary = per_unit[unit_name]
 		summaries.append({"unit": unit_name, "count": int(e["count"]), "alive": int(e["alive"]),
-			"max_in": float(e["max_in"]), "whole": bool(e["whole"])})
+			"max_in": float(e["max_in"]), "climb_in": float(e["climb_in"]), "whole": bool(e["whole"])})
+		# GF p.11: a step over 3" is impassable under mass-battle rules — the drag itself is
+		# a sandbox aid (D5a, no hard stop without Strict), so the drop's own line flags it.
+		if float(e["climb_in"]) > MoveLedger.CLIMB_MAX_IN:
+			_log_rule_event(BattleLog.Category.MOVEMENT,
+				"%s climbs %.1f\" — over 3\", impassable (GF p.11)" % [unit_name, float(e["climb_in"])])
 	_log_move_summaries(summaries)
 	# The move STREAM is unreliable + continuous (drag), so the other side cannot know when a drop
 	# happened — ship the finished per-unit summary reliably; every peer logs identical lines
@@ -13356,11 +13412,13 @@ func _log_move_summaries(summaries: Array) -> void:
 		var alive: int = int(e.get("alive", 0))
 		var count: int = int(e.get("count", 0))
 		var max_in: float = float(e.get("max_in", 0.0))
+		var climb_in: float = float(e.get("climb_in", 0.0))
 		if bool(e.get("whole", false)) or count >= alive or alive <= 1:
-			battle_log.on_unit_moved(unit_name, max_in)
+			battle_log.on_unit_moved(unit_name, max_in, false, climb_in)
 		else:
+			var suffix := " incl. %.1f\" climb — GF p.11" % climb_in if climb_in > 0.05 else ""
 			battle_log.log_event(BattleLog.Category.MOVEMENT,
-				"%s: %d of %d models move %.0f\"" % [unit_name, count, alive, max_in])
+				"%s: %d of %d models move %.0f\"%s" % [unit_name, count, alive, max_in, suffix])
 
 
 ## Path painting: a drag dropped — commit each moved model's traversed path as a visible

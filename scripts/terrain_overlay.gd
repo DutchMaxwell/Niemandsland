@@ -1522,6 +1522,33 @@ func set_objective_owner(index: int, owner_id: int) -> void:
 			(ring.material_override as StandardMaterial3D).albedo_color = Color(color.r, color.g, color.b, 0.25)
 
 
+## Moves an objective's token + seize ring to `pos` (world metres) without touching its owner —
+## the carry step's drop point (NML-1010 wave C step C2). The token/ring formulas only ever use
+## x/z of the input position (y is a fixed render-layer offset), so only those two move.
+func set_objective_position(index: int, pos: Vector3) -> void:
+	if index < 0 or index >= mission_objectives.size():
+		return
+	mission_objectives[index] = pos
+	if index < objective_meshes.size() and is_instance_valid(objective_meshes[index]):
+		objective_meshes[index].position.x = pos.x
+		objective_meshes[index].position.z = pos.z
+	if index < objective_ring_meshes.size() and is_instance_valid(objective_ring_meshes[index]):
+		objective_ring_meshes[index].position.x = pos.x
+		objective_ring_meshes[index].position.z = pos.z
+
+
+## Hides an objective's token + seize ring while it is CARRIED (NML-1010 wave C step C2) — the
+## marker moves with its carrier, so its own token has nothing true to show until it drops; call
+## set_objective_position first, then set_objective_carried(index, false) to re-show it there.
+func set_objective_carried(index: int, carried: bool) -> void:
+	if index < 0 or index >= objective_meshes.size():
+		return
+	if is_instance_valid(objective_meshes[index]):
+		objective_meshes[index].visible = not carried
+	if index < objective_ring_meshes.size() and is_instance_valid(objective_ring_meshes[index]):
+		objective_ring_meshes[index].visible = not carried
+
+
 ## Returns the owner of an objective (0 = neutral) or 0 if out of range.
 func get_objective_owner(index: int) -> int:
 	if index < 0 or index >= objective_owners.size():

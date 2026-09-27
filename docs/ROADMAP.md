@@ -22,11 +22,16 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **Elevation — Phase B (sight-fan performance follow-up).** Phase A shipped the single volumetric
+- **Sight-fan performance follow-up (NML-986).** Phase A shipped the single volumetric
   line-of-sight truth in `0.3.12.0-alpha` — every sight question resolves through one 3D eye-to-eye
-  check (`VolumetricLos`) shared by the ruler, the sight fan, the engine and the AI. Phase B is a
+  check (`VolumetricLos`) shared by the ruler, the sight fan, the engine and the AI. This follow-up is a
   performance pass on the sight fan's own drawn overlay, so it can walk that same volumetric truth
   on wide tables without a frame-cost regression. _M_
+- **Elevation — Phase B/C/D (NML-972).** Heights are rules, not scenery: Phase B1 (climbing pays its
+  inches, melee reaches only 4" up/down, coherency's 3" allowance is real elevation, the player can
+  pick a ruin floor) shipped; Phase B2 makes both AI planners climb pieces up to 3", measured on the
+  yardstick; Phase C ports skirmish jump/fall (GFF p.14/p.55); Phase D lets the AI value elevated
+  firing spots by sight gain only. _L_
 - **`0.3.10.0-alpha` shipped — the solo update.** The headline is **NACHTMAHR**, the built-in
   opponent: a rules-based, deterministic game AI (no LLM, no neural net in that release) that runs entirely offline and
   plays the official OPR solo decision trees. Mark any imported army as AI-controlled, or let the **AI
