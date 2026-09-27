@@ -23,6 +23,11 @@ const TRUCK := ["add_marker", "select_unit", "toggle_fatigued", "toggle_shaken",
 	"solo_shoot", "solo_fight", "unload_cargo_0", "delete_model"]
 const WALKERS := ["add_marker", "toggle_fatigued", "toggle_shaken", "toggle_activate", "solo_shoot",
 	"solo_fight", "delete_unit", "embark_0"]
+## D53 = b: the core verbs a crowded menu keeps on its ring; the ring's wedge that opens the second tier.
+const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass",
+	"toggle_activate"]
+const TIER_WEDGE := "more"
+const RING_MAX := 8
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -131,10 +136,23 @@ func _ids() -> Array:
 	return out
 
 
+## The second tier's entries (D53 = b), [] while the menu has none.
+func _tier_ids() -> Array:
+	var out: Array = []
+	var tier = _menu().get("_tier")
+	for it in (tier if tier != null else []):
+		out.append(str((it as RadialMenu.RadialMenuItem).id))
+	return out
+
+
 ## Where the player points to pick `id` in the open menu (canvas coordinates): the middle of its
-## wedge, measured from the menu's own centre the way its hit test does. INF = nothing drawn for it.
+## wedge, measured from the menu's own centre the way its hit test does, or of its pill in the second
+## tier. INF = nothing drawn for it.
 func _reach_point(id: String) -> Vector2:
 	var m := _menu()
+	var k := _tier_ids().find(id)
+	if k >= 0:
+		return m.get_global_transform_with_canvas() * (m.get("_pills")[k] as Rect2).get_center()
 	var n := m._items.size()
 	for i in n:
 		if (m._items[i] as RadialMenu.RadialMenuItem).id == id:
@@ -147,10 +165,13 @@ func _reach_point(id: String) -> Vector2:
 ## A real pointer move onto the entry and a real left click there. True when the menu handed exactly
 ## `id` to the action pipe.
 func _pick(id: String) -> bool:
+	var vp := _menu().get_viewport()
+	if _tier_ids().has(id):   # the second tier: point at its wedge first, then its pills stand beside the ring
+		E2EBoot.motion_canvas(vp, _reach_point(TIER_WEDGE))
+		await _runner.simulate_frames(1)
 	var at := _reach_point(id)
 	if at == Vector2.INF:
 		return false
-	var vp := _menu().get_viewport()
 	_picked.clear()
 	E2EBoot.motion_canvas(vp, at)
 	await _runner.simulate_frames(1)
@@ -230,7 +251,8 @@ func _reset(u: GameUnit) -> void:
 func _walk(u: GameUnit, ids: Array) -> Array:
 	var misses: Array = []
 	await _open(u)
-	var offered := _ids()
+	var offered := _ids() + _tier_ids()
+	offered.erase(TIER_WEDGE)
 	offered.sort()
 	var want := ids.duplicate()
 	want.sort()
@@ -398,3 +420,50 @@ func test_a_long_tooltip_wraps_and_a_cut_label_reads_in_full(timeout := 120000) 
 			wide.append("'%s' is shown as '%s' and its tooltip never names it in full" % [it.label, boxes[i][0]])
 	m.close()
 	assert_array(wide).override_failure_message("\n".join(wide)).is_empty()
+
+
+# === the second tier (D53 = b; RED on the ring-only commit 08e853f0) ===========================
+
+## Ring labels cut to an ellipsis or to nothing, as readable lines (a dropped note — "Speed Feat" for
+## "Speed Feat (once per game)" — still reads; its tooltip names it in full).
+func _cut_labels(who: String) -> Array:
+	var out: Array = []
+	var boxes := _label_boxes()
+	for i in boxes.size():
+		var label := str((_menu()._items[i] as RadialMenu.RadialMenuItem).label)
+		if str(boxes[i][0]).is_empty() or str(boxes[i][0]).ends_with("…"):
+			out.append("%s: '%s' reads '%s' on the ring" % [who, label, boxes[i][0]])
+	return out
+
+
+func test_a_crowded_menu_keeps_its_verbs_on_the_ring_and_the_rest_in_a_second_tier(timeout := 120000) -> void:
+	var squad := _unit(1, "Wardens", [Vector3.ZERO, Vector3(1.2 * INCH, 0, 0), Vector3(2.4 * INCH, 0, 0)])
+	var hero := _hero()
+	hero.models[0].node.global_position = Vector3(0.3, 0, 0)
+	_solo_playing_on()
+	var misses: Array = []
+	# The everyday menu stays today's flat ring, every label in full.
+	await _open(squad)
+	if _ids().size() != PLAIN.size() or not _tier_ids().is_empty():
+		misses.append("the plain squad's 7 entries left the flat ring: ring %s, tier %s" % [_ids(), _tier_ids()])
+	misses.append_array(_cut_labels("Wardens"))
+	_menu().close()
+	await _runner.simulate_frames(2)
+	# The crowded hero: at most 8 wedges — its verbs plus the wedge that opens the second tier.
+	await _open(hero)
+	var ring := _ids()
+	if ring.size() > RING_MAX:
+		misses.append("the hero's ring carries %d wedges, D53 allows %d" % [ring.size(), RING_MAX])
+	for id in HERO:
+		var want_ring: bool = id in RING_VERBS
+		if want_ring != ring.has(id) or want_ring == _tier_ids().has(id):
+			misses.append("'%s' belongs %s (ring %s, tier %s)" % [id, "on the ring" if want_ring else "in the second tier", ring, _tier_ids()])
+	misses.append_array(_cut_labels("Warboss"))
+	# Pointing at the tier's wedge opens the tier.
+	if ring.has(TIER_WEDGE):
+		E2EBoot.motion_canvas(_menu().get_viewport(), _reach_point(TIER_WEDGE))
+		await _runner.simulate_frames(2)
+		if not bool(_menu().get("_tier_open")):
+			misses.append("pointing at the '%s' wedge did not open the second tier" % TIER_WEDGE)
+	_menu().close()
+	assert_array(misses).override_failure_message("\n".join(misses)).is_empty()
