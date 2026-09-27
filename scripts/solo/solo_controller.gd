@@ -2412,60 +2412,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		"charge_band_in": charge_band_in, "shoot_range_in": shoot_range, "quick_shot": quick_shot,
 		"enemy_dist_in": enemy_dist, "to_objective": to_obj, "to_flank": to_flank,
 		"source": "ai", "why": action_why})
-	report = execute_intent(intent, report)
-	# Shooting eligibility is measured AFTER the move; only actions the tree marked shoot=true actually
-	# fire. Indirect (wave 5) may target enemies out of line of sight, so an Indirect ranged weapon
-	# waives the LOS gate here (the volley's per-model sighting then counts range-only for it).
-	var d2 := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target_unit))
-	report["dist_in"] = d2
-	report["charge_from_in"] = enemy_dist   # pre-move distance — the Versatile Attack >9" melee-charge gate
-	report["moved"] = action != AiDecision.Action.HOLD   # Indirect's -1 to hit fires when shooting after moving
-	# Traversal (army-book: "May move through friendly and enemy units"): the move itself crossed bases
-	# the planner/gate would otherwise have routed around or clamped — that is invisible to the opponent,
-	# so it travels. Terrain and the rest-position spacing rule are both still enforced (unlike Flying),
-	# which is a local clarification, not a hidden decision — those two notes stay local.
-	if is_traversal(unit) and bool(report["moved"]):
-		_rule_note(report, "Traversal: moves through friendly and enemy units", true)   # invisible move-through — travels
-		_rule_note(report, "Traversal: terrain is NOT ignored (unlike Flying)", false)   # local clarification — no travel
-		_rule_note(report, "Traversal: may not end inside another unit — end stays clear", false)   # local clarification — no travel
-	report["can_shoot"] = (do_shoot or (quick_shot and action == AiDecision.Action.RUSH)) \
-		and shoot_range > 0 and d2 <= float(shoot_range) \
-		and (_has_los(unit, target_unit) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)) \
-			or granted_indirect_of(unit)   # GH #325 — the shooter's own Indirect token
-			or grants_indirect_to_attackers(target_unit))   # wave 6 — the Indirect Mark's once-grant
-	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
-		_rule_note(report, "Quick Shot: shoots after its Rush action", true)   # explains otherwise-impossible shots — travels
-	# POST-MOVE RETARGET (Bug 27/28): a HOLD/ADVANCE always MAY shoot (OPR) — so if the decided target is
-	# now out of range/LOS (or the objective-advance never set do_shoot), but the unit can still hit ANOTHER
-	# enemy from here, shoot that one instead of wasting the volley. A Quick Shot unit's RUSH may shoot
-	# too (army-book); a plain Rush and Charge (melee) are untouched. The move narration keeps its own
-	# target; report["shoot_target"] drives the volley.
-	if not bool(report["can_shoot"]) and shoot_range > 0 \
-			and (action == AiDecision.Action.HOLD or action == AiDecision.Action.ADVANCE \
-				or (quick_shot and action == AiDecision.Action.RUSH)):
-		# _run_ai_shooting split-fires — each weapon picks its OWN in-range+LOS target — so opening the
-		# can_shoot gate is enough; no need to thread a specific target through.
-		var retgt := best_shoot_target_now(unit)
-		if retgt != null:
-			report["can_shoot"] = true
-			record_decision({"kind": "target", "unit": unit.get_name(),
-				"rule": "Post-move retarget: an Advance/Hold may always shoot — the decided target is out of range/LOS, so fire on the best reachable enemy instead (Bug 27/28)",
-				"candidates": [], "chosen": retgt.get_name(), "why": "post-move retarget to a reachable enemy",
-				"data": {"orig_target": target_unit.get_name() if target_unit != null else "-",
-					"orig_dist_in": d2, "shoot_range_in": shoot_range}})
-		else:
-			# B2/B6 transparency (test games 1+2, "Einheiten advancen aber schießen nicht"): a unit
-			# WITH ranged weapons that ends its move without any shot names the reason in the log —
-			# a silent no-shot reads like a bug (rules-must-log). Feeds the D7 detector.
-			_rule_note(report, "%s: no shot — %s" % [unit.get_name(), _no_shot_reason(unit, shoot_range)], true)   # missing-dice explanation — travels
-	# Wave 6 — Caster(X): the official Solo v3.5.0 procedure casts AFTER moving, BEFORE attacking, so
-	# the cast plan is drawn from the post-move geometry here; main resolves the cast rolls on the real
-	# dice tray before the shooting/melee it already resolves (spells are ADDITIONAL to the attack).
-	var casts := _plan_casts(unit, report)
-	if not casts.is_empty():
-		report["casts"] = casts
-	_book_attack_claims(unit, report)
-	return report
+	return execute_intent(intent, report)
 
 
 ## A0 (NML-202) — the ONE executor both feeders call: `_act` (source "ai") and the player's
@@ -2484,6 +2431,9 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	var to_flank: bool = bool(intent.get("to_flank", false))
 	var enemy_dist_in: float = float(intent.get("enemy_dist_in", 0.0))
 	var shoot_range_in: float = float(intent.get("shoot_range_in", 0.0))
+	var do_shoot: bool = bool(intent.get("shoot", false))
+	var quick_shot: bool = bool(intent.get("quick_shot", false))
+	var source: String = str(intent.get("source", "ai"))
 	var goal_dist := MoveIntent.distance_inches(unit_centre(unit), goal)   # nothing has moved yet
 	var tcentre := unit_centre(target) if target != null else unit_centre(unit)
 	var dang := 0
@@ -2524,6 +2474,62 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 				"why": ("toward objective" if to_objective else "toward enemy"),
 				"data": {"obj_gap_after_in": obj_gap_after, "toward_objective": to_objective,
 					"in_seize_range": obj_gap_after <= OBJECTIVE_CONTROL_IN}})
+	# Shooting eligibility is measured AFTER the move; only actions the tree marked shoot=true actually
+	# fire. Indirect (wave 5) may target enemies out of line of sight, so an Indirect ranged weapon
+	# waives the LOS gate here (the volley's per-model sighting then counts range-only for it).
+	var weapons := _unit_weapons(unit)
+	var d2 := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target)) if target != null else INF
+	report["dist_in"] = d2
+	report["charge_from_in"] = enemy_dist_in   # pre-move distance — the Versatile Attack >9" melee-charge gate
+	report["moved"] = action != AiDecision.Action.HOLD   # Indirect's -1 to hit fires when shooting after moving
+	# Traversal (army-book: "May move through friendly and enemy units"): the move itself crossed bases
+	# the planner/gate would otherwise have routed around or clamped — that is invisible to the opponent,
+	# so it travels. Terrain and the rest-position spacing rule are both still enforced (unlike Flying),
+	# which is a local clarification, not a hidden decision — those two notes stay local.
+	if is_traversal(unit) and bool(report["moved"]):
+		_rule_note(report, "Traversal: moves through friendly and enemy units", true)   # invisible move-through — travels
+		_rule_note(report, "Traversal: terrain is NOT ignored (unlike Flying)", false)   # local clarification — no travel
+		_rule_note(report, "Traversal: may not end inside another unit — end stays clear", false)   # local clarification — no travel
+	report["can_shoot"] = (do_shoot or (quick_shot and action == AiDecision.Action.RUSH)) \
+		and shoot_range_in > 0 and d2 <= shoot_range_in \
+		and (_has_los(unit, target) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)) \
+			or granted_indirect_of(unit)   # GH #325 — the shooter's own Indirect token
+			or grants_indirect_to_attackers(target))   # wave 6 — the Indirect Mark's once-grant
+	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
+		_rule_note(report, "Quick Shot: shoots after its Rush action", true)   # explains otherwise-impossible shots — travels
+	# POST-MOVE RETARGET (Bug 27/28): a HOLD/ADVANCE always MAY shoot (OPR) — so if the decided target is
+	# now out of range/LOS (or the objective-advance never set do_shoot), but the unit can still hit ANOTHER
+	# enemy from here, shoot that one instead of wasting the volley. A Quick Shot unit's RUSH may shoot
+	# too (army-book); a plain Rush and Charge (melee) are untouched. The move narration keeps its own
+	# target; report["shoot_target"] drives the volley.
+	if not bool(report["can_shoot"]) and shoot_range_in > 0 \
+			and (action == AiDecision.Action.HOLD or action == AiDecision.Action.ADVANCE \
+				or (quick_shot and action == AiDecision.Action.RUSH)):
+		# _run_ai_shooting split-fires — each weapon picks its OWN in-range+LOS target — so opening the
+		# can_shoot gate is enough; no need to thread a specific target through.
+		var retgt := best_shoot_target_now(unit)
+		if retgt != null:
+			report["can_shoot"] = true
+			record_decision({"kind": "target", "unit": unit.get_name(),
+				"rule": "Post-move retarget: an Advance/Hold may always shoot — the decided target is out of range/LOS, so fire on the best reachable enemy instead (Bug 27/28)",
+				"candidates": [], "chosen": retgt.get_name(), "why": "post-move retarget to a reachable enemy",
+				"data": {"orig_target": target.get_name() if target != null else "-",
+					"orig_dist_in": d2, "shoot_range_in": shoot_range_in}})
+		else:
+			# B2/B6 transparency (test games 1+2, "Einheiten advancen aber schießen nicht"): a unit
+			# WITH ranged weapons that ends its move without any shot names the reason in the log —
+			# a silent no-shot reads like a bug (rules-must-log). Feeds the D7 detector.
+			_rule_note(report, "%s: no shot — %s" % [unit.get_name(), _no_shot_reason(unit, shoot_range_in)], true)   # missing-dice explanation — travels
+	# Wave 6 — Caster(X): the official Solo v3.5.0 procedure casts AFTER moving, BEFORE attacking, so
+	# the cast plan is drawn from the post-move geometry here; main resolves the cast rolls on the real
+	# dice tray before the shooting/melee it already resolves (spells are ADDITIONAL to the attack).
+	# Player intents (V1, NML-202) skip both: spells stay a manual player action, and the overkill
+	# ledger is the AI's own lookahead bookkeeping — a player click never claims against it.
+	if source != "player":
+		var casts := _plan_casts(unit, report)
+		if not casts.is_empty():
+			report["casts"] = casts
+		_book_attack_claims(unit, report)
 	return report
 
 
