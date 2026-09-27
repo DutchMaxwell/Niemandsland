@@ -2202,6 +2202,25 @@ func _solo_init_arena_from_env() -> void:
 ## their rounds independently (the probe game that booked nothing found
 ## exactly this seam). final pays the end bonus exactly once. Logged to the
 ## battle log AND stderr so a silent ledger can never pass for a broken one.
+## NML-1010 wave C step C2: a carrier that stops being able to hold a marker (Shaken, destroyed)
+## drops it — the marker returns to the table at the carrier's own position (the mission's own
+## drop-placement rule, R3a, lands in C3). No-op when `gu` carries nothing.
+func _solo_drop_carried(gu: GameUnit, reason: String) -> void:
+	if terrain_overlay == null or SoloController.mission_markers.is_empty():
+		return
+	var pos_list: Array = solo_controller.alive_positions(gu)
+	var drop_pos: Vector3 = pos_list[0] if not pos_list.is_empty() else Vector3.ZERO
+	for i in range(SoloController.mission_markers.size()):
+		var mk: Dictionary = SoloController.mission_markers[i]
+		if bool(mk.get("carry", false)) and String(mk.get("carried_by", "")) == gu.unit_id:
+			mk["carried_by"] = ""
+			terrain_overlay.set_objective_position(i, drop_pos)
+			terrain_overlay.set_objective_carried(i, false)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"Relic dropped by %s (%s)" % [gu.get_name(), reason], true)
+
+
 func _solo_book_mission_vp(final: bool) -> void:
 	var has_markers: bool = not SoloController.mission_markers.is_empty()
 	if SoloController.mission_scoring != "round_vp" and not has_markers:
@@ -2305,10 +2324,20 @@ func _solo_auto_seize() -> void:
 		# an Aircraft never can at all (GF v3.5.1 Aircraft, system-scoped via the mechanics maps).
 		var ambush_locked: bool = int(gu.unit_properties.get("ambush_arrived_round", -1)) == round_no
 		infos.append({"player": int(gu.unit_properties.get("player_id", 0)), "name": gu.get_name(), "shaken": gu.is_shaken,
-			"ambush_locked": ambush_locked, "aircraft": SoloController.is_aircraft(gu),
+			"ambush_locked": ambush_locked, "aircraft": SoloController.is_aircraft(gu), "unit_id": gu.unit_id,
 			"positions": solo_controller.alive_positions(gu),
 			"radii": _solo_alive_radii(gu)})
 	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners)
+	# NML-1010 wave C step C2 (Relic Hunt/Capture & Hold): a marker just seized this round is
+	# picked up onto the seizing side's nearest eligible unit; the overlay hides its own token
+	# while carried (drop hooks re-show it — main.gd:_solo_drop_carried).
+	if not SoloController.mission_markers.is_empty():
+		for ev in SoloController.carry_step(infos, objectives, res["owners"], SoloController.mission_markers):
+			var ci: int = int((ev as Dictionary)["index"])
+			terrain_overlay.set_objective_carried(ci, true)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"Relic picked up by %s" % str((ev as Dictionary).get("name", "")), true)
 	var locked_near: Dictionary = {}
 	for i in range(objectives.size()):
 		var reasons := PackedStringArray()
@@ -9295,6 +9324,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 			if not unit.is_shaken and radial_menu_controller != null:
 				radial_menu_controller.card_toggle_shaken(unit)   # state + marker + MP broadcast
 				_solo_mirror_shaken(unit)   # the joined hero shares the unit's state (p.14), no 2nd token
+				_solo_drop_carried(unit, "shaken")
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fails morale — Shaken" % unit.get_name())
 		AiCombatMath.Morale.ROUT:
@@ -11098,6 +11128,8 @@ func _solo_mirror_shaken(unit: GameUnit) -> void:
 		var hu := h as GameUnit
 		if hu != null and hu.is_shaken != unit.is_shaken:
 			radial_menu_controller.card_toggle_shaken(hu)
+			if hu.is_shaken:
+				_solo_drop_carried(hu, "shaken")
 
 
 func _solo_set_fatigued(unit: GameUnit) -> void:
@@ -13225,6 +13257,7 @@ func _on_battle_log_dead(node, dead: bool) -> void:
 	if dead:
 		if alive == 0:
 			battle_log.on_unit_destroyed(gu.get_name())
+			_solo_drop_carried(gu, "destroyed")
 		else:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s loses a model (%d/%d)" % [gu.get_name(), alive, total])
 	else:
