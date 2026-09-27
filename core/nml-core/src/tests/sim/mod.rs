@@ -401,6 +401,36 @@
         assert_eq!(melee_loser(&st, 0, 2, 3, 1, EPOCH_65_MELEE_TRUTH), None);
     }
 
+    fn joined_hero_morale_target(host_alive: bool, rules_epoch: u32) -> Option<i64> {
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: HashMap::new(), profile: vec![0, 1, 0, 0] });
+        st.alive[0] = i64::from(host_alive);
+        if !host_alive {
+            st.wounds[0].clear();
+            st.positions[0].clear();
+            st.radii[0].clear();
+        }
+        let statics = vec![
+            UnitStatic { name: "Squad".into(), quality: 5, ctx: Ctx { quality: 5, ..Ctx::default() }, model_count: 1, wounds_max: vec![1], ..UnitStatic::default() },
+            UnitStatic { name: "Captain".into(), quality: 3, ctx: Ctx { quality: 3, ..Ctx::default() }, model_count: 1, wounds_max: vec![1], ..UnitStatic::default() },
+        ];
+        let mut tray = Tray::seeded(7);
+        let mut shot = ShootResult::default();
+        tray_morale(&mut st, &statics[0], 0, false, rules_epoch, &mut tray, &mut shot);
+        shot.rolls.first().map(|r| r.target)
+    }
+
+    #[test]
+    fn joined_hero_uses_better_quality_from_epoch_65() {
+        assert_eq!(joined_hero_morale_target(true, EPOCH_65_MELEE_TRUTH), Some(3));
+        assert_eq!(joined_hero_morale_target(false, EPOCH_65_MELEE_TRUTH), Some(3));
+    }
+
+    #[test]
+    fn joined_hero_keeps_host_quality_below_epoch_65() {
+        assert_eq!(joined_hero_morale_target(true, crate::acts::EPOCH_64_DEPLOY_LARGE_RESPOT), Some(5));
+    }
+
     /// D5-4. `nearest_melee_gap_in` (:8526) measures `_moving_models` on BOTH
     /// sides, so the joined heroes' bases are the ones that decide this charge:
     /// 5", not the hosts' 10". Folding only one side would read 8" or 7", which
