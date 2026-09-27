@@ -502,6 +502,7 @@ static func _imagined_round_end(cur: Dictionary) -> void:
 		owners.append(int((o as Dictionary).get("owner", 0)))
 	BattleSim.playout_seize(cur, owners)
 	if cur.has("markers_meta"):
+		BattleSim.apply_carry_step(cur, cur["markers_meta"], owners)
 		BattleSim.apply_destroy_step(cur["markers_meta"], owners, cur["destroy_seq"])
 	var vp := [0, 0]
 	var vp_live: Variant = cur.get("vp")
@@ -1655,6 +1656,7 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 	var opener: int = (2 if int(res["last"]) == 1 else 1) if int(res["last"]) != 0 else turn
 	BattleSim.playout_seize(state, owners)
 	if state.has("markers_meta"):
+		BattleSim.apply_carry_step(state, state["markers_meta"], owners)
 		BattleSim.apply_destroy_step(state["markers_meta"], owners, state["destroy_seq"])
 	BattleSim.vp_score_round(owners, vp, vp_flavour, vp_memo, state.get("markers_meta", []))
 	var round0 := int(state0.get("round", 1))
@@ -1670,6 +1672,7 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 			opener = 2 if int(res["last"]) == 1 else 1
 		BattleSim.playout_seize(state, owners)
 		if state.has("markers_meta"):
+			BattleSim.apply_carry_step(state, state["markers_meta"], owners)
 			BattleSim.apply_destroy_step(state["markers_meta"], owners, state["destroy_seq"])
 		BattleSim.vp_score_round(owners, vp, vp_flavour, vp_memo, state.get("markers_meta", []))
 	# NML-1008 CORRECTED (record check 15.08. evening): our v1 missions are

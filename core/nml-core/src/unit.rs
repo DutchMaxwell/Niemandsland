@@ -1348,6 +1348,10 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         rending: weapon_has(w, "Rending"),
         // Lacerate is a straight data-alias of Bane — ai_shooting.gd:126-129.
         bane: weapon_has(w, "Bane") || weapon_has(w, "Lacerate"),
+        // The weapon's printed Bane/Lacerate is the rule itself, never a §2.3
+        // data alias: it keeps the Regeneration bypass at every epoch, which
+        // is what the flat `bane` read gave it before #921 split the flags.
+        bypass_regen: weapon_has(w, "Bane") || weapon_has(w, "Lacerate"),
         thrust: weapon_has(w, "Thrust"),
         unstoppable: weapon_has(w, "Unstoppable"),
         counter: weapon_has(w, "Counter"),

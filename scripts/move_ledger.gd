@@ -45,6 +45,16 @@ const RETRACE_TOLERANCE_M := 0.00635
 ## legs long enough for stable retrace geometry; the live head tracks the cursor between.
 const PATH_SAMPLE_MIN_M := 0.005
 
+## climb_report's sample spacing along the polyline (~0.25") — dense enough to catch a
+## slab edge crossed mid-leg without missing it between two coarse samples.
+const CLIMB_SAMPLE_M := 0.00635
+## GF Advanced Rules v3.5.1 p.11: "short terrain up to 1” tall may be ignored for the
+## purposes of movement" — a step at or below this is free.
+const CLIMB_FREE_IN := 1.0
+## GF p.11: terrain over 3" tall is elevated terrain and impassable (unless climbed floor
+## by floor, D1a). climb_report only measures; climb_blocks applies this as a refusal.
+const CLIMB_MAX_IN := 3.0
+
 # ===== State =====
 
 ## Every recorded move this session: {owner, unit, unit_name, model, points, inches,
@@ -118,6 +128,59 @@ static func extend_path(points: PackedVector2Array, c: Vector2,
 	if pts.is_empty() or pts[pts.size() - 1].distance_to(c) >= sample_min:
 		pts.append(c)
 	return pts
+
+
+## Points along `points` spaced at most `step_m` apart (arc length); every original vertex
+## is kept exactly (a slab edge that lands on a vertex is never skipped between samples).
+static func _sample_polyline(points: PackedVector2Array, step_m: float) -> PackedVector2Array:
+	var out := PackedVector2Array([points[0]])
+	for i in range(1, points.size()):
+		var a: Vector2 = points[i - 1]
+		var b: Vector2 = points[i]
+		var n := int(ceil(a.distance_to(b) / step_m))
+		for k in range(1, maxi(n, 1) + 1):
+			out.append(a.lerp(b, float(k) / float(maxi(n, 1))))
+	return out
+
+
+## Climbed distance along a world-XZ polyline (GF p.11): samples every CLIMB_SAMPLE_M and
+## reads `surface_fn(xz_m) -> y_m`, folding each step's height into `climb_in` when it is
+## over CLIMB_FREE_IN (the FULL height, both up and down — D4a), or free at/below it.
+## `max_step_in` is the single biggest |Δy| step seen (free or not) — climb_blocks' own
+## >3" impassable check reads it. Returns {"climb_in": float, "max_step_in": float} in
+## inches. Pure; 0/0 for fewer than 2 points.
+static func climb_report(points: PackedVector2Array, surface_fn: Callable) -> Dictionary:
+	var out := {"climb_in": 0.0, "max_step_in": 0.0}
+	if points.size() < 2:
+		return out
+	var samples := _sample_polyline(points, CLIMB_SAMPLE_M)
+	var prev_y: float = surface_fn.call(samples[0])
+	for i in range(1, samples.size()):
+		var y: float = surface_fn.call(samples[i])
+		var step_in: float = absf(y - prev_y) / INCHES_TO_METERS
+		out["max_step_in"] = maxf(out["max_step_in"], step_in)
+		if step_in > CLIMB_FREE_IN:
+			out["climb_in"] += step_in
+		prev_y = y
+	return out
+
+
+## The STRICT "dry brush" cap's climb verdict for a candidate `report` (climb_report's
+## return), given the inch budget `remaining_in` left over after the candidate path's own
+## flat cost (so the check is flat + climb together, GF p.11). "" = clear, "over budget" =
+## the climb alone would blow what is left, or the impassable message when the single
+## biggest step is over CLIMB_MAX_IN — GF p.11 "over 3” tall... impassable". The impassable
+## hard stop is opt-in (D5a): only `strict` enforces it here; the drop-time battle log
+## flags an over-3" step regardless (step 11). Pure.
+static func climb_blocks(report: Dictionary, remaining_in: float, strict: bool) -> String:
+	if not strict:
+		return ""
+	var max_step_in: float = float(report.get("max_step_in", 0.0))
+	if max_step_in > CLIMB_MAX_IN:
+		return "%.1f\" step — over 3\", impassable" % max_step_in
+	if float(report.get("climb_in", 0.0)) > remaining_in:
+		return "over budget"
+	return ""
 
 
 ## Truncate a world-XZ polyline to a maximum arc length (metres), interpolating the final

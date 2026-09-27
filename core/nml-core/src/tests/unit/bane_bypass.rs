@@ -74,3 +74,41 @@ use super::*;
             "epoch 12 replays the old flat read: the alias bypasses Regeneration"
         );
     }
+
+    /// The WEAPON-printed Bane ("Ignores Regeneration") keeps its bypass at
+    /// EVERY epoch. §2.3 moved the regen read onto `bypass_regen`, but the
+    /// weapon profile builder stamped only `bane`, so a Bane weapon rolled the
+    /// defender's regen dice at every epoch (the m3_oracle_v2 replay gate
+    /// test_rows.py: `my_melee_in` 2.43 vs 2.92 recorded). The table never
+    /// split it: main.gd `_solo_ignores_regen` reads the weapon's own "Bane".
+    #[test]
+    fn a_weapon_printed_bane_bypasses_regeneration_at_every_epoch() {
+        let att = Ctx { quality: 2, models: 1, ..Default::default() };
+        let def = Ctx {
+            defense: 4, tough: 1, models: 1,
+            regeneration: true, regen_target: 5,
+            ..Default::default()
+        };
+        let tpl = BANE_HEADER
+            .replace("\"special_rules\":[\"Bane in Melee\"]", "\"special_rules\":[]")
+            .replacen("\"ap\":0,\"rules\":[]},", "\"ap\":0,\"rules\":[\"Bane\"]},", 1);
+        let header = read_act_header(&tpl).expect("header");
+        let p = header.profiles.get("carrier").expect("carrier");
+        for epoch in [0, 12, crate::acts::EPOCH_13_WHO_WINS, CURRENT_RULES_EPOCH] {
+            let mut reg = Registries::new(&repo_root());
+            let us = UnitStatic::build_for(&mut reg, p, epoch);
+            assert_eq!(us.shoot[0].name, "Rifle");
+            assert!(us.shoot[0].bane, "epoch {epoch}: the weapon's Bane re-rolls sixes");
+            let mut prof = us.shoot[0].clone();
+            prof.attacks = 24;
+            let mut tray = crate::dice::Tray::seeded(27);
+            let out = crate::dice::resolve_shooting_with_tray(
+                &[prof], &[0], &[24], &att, &def, 12.0, &mut tray,
+            );
+            assert!(out.caused > 0, "fixture seed no longer wounds — pick another");
+            assert_eq!(
+                out.wounds, out.caused,
+                "epoch {epoch}: a weapon-printed Bane ignores Regeneration"
+            );
+        }
+    }
