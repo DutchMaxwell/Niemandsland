@@ -32,7 +32,7 @@ use crate::acts::{
     EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
-    EPOCH_61_PRECISION_MARKERS,
+    EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -968,6 +968,8 @@ pub struct UnitStatic {
     pub wounds_max: Vec<i64>,
     pub quality: i64,
     pub fearless: bool,
+    /// The host/hero's own rule, before the joined-unit all-models gate.
+    pub fearless_own: bool,
     /// `Profile.base_radius` — the S5 arrival machinery reads it off the
     /// STATICS (`arrive_unit`'s explicit template parameter), so a copy mints
     /// with the template's footprint, not the carrier's.
@@ -2664,7 +2666,11 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         artillery_shooter_hit_bonus,
         artillery_target_hit_penalty,
         furious: has_special_rule(&p.special_rules, "Furious"),
-        fearless: has_special_rule(&p.special_rules, "Fearless"),
+        fearless: if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
+            rule_on_all_models(p, "Fearless")
+        } else {
+            has_special_rule(&p.special_rules, "Fearless")
+        },
         fear: unit_rating(&p.special_rules, "Fear"),
         no_retreat: unit_rule_active(reg, p, "No Retreat"),
         // BOTH variants, in `_solo_unpredictable_rule`'s own order and with its
@@ -6273,7 +6279,12 @@ impl UnitStatic {
             model_count: p.model_count,
             wounds_max: p.wounds_max.clone(),
             quality: p.quality,
-            fearless: has_special_rule(&p.special_rules, "Fearless"),
+            fearless: if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
+                rule_on_all_models(p, "Fearless")
+            } else {
+                has_special_rule(&p.special_rules, "Fearless")
+            },
+            fearless_own: has_special_rule(&p.special_rules, "Fearless"),
             base_radius: p.base_radius,
             is_caster,
             spells,
