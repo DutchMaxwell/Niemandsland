@@ -17,7 +17,7 @@ use std::rc::Rc;
 use godot::prelude::*;
 use godot::builtin::VariantType;
 
-use nml_core::io::los_positions;
+use nml_core::io::{fold_ledger, los_positions, PlainLedger};
 use nml_core::state::{Bands, MoveBands, Roster};
 use nml_core::terrain::{CellParams, Obb, PlainTerrain};
 use nml_core::{
@@ -342,10 +342,12 @@ pub fn build_roster(plain: &VarDictionary) -> Result<(Profiles, Roster), String>
 
 /// The dynamic layer: everything but the profile table and the roster, which the
 /// caller supplies (they are interned across every node of one game).
+/// `rules_epoch` is the header's (0 without one), for the ledger fold's gates.
 pub fn build_state(
     plain: &VarDictionary,
     profiles: Rc<Profiles>,
     roster: Rc<Roster>,
+    rules_epoch: u32,
 ) -> Result<Captured, String> {
     let units = ddict(plain, "units");
     let n = roster.keys.len();
@@ -480,6 +482,7 @@ pub fn build_state(
     // The attachment keys only resolve once every unit key is known.
     let mut attached_keys: Vec<Vec<String>> = Vec::with_capacity(n);
     let mut host_keys: Vec<String> = Vec::with_capacity(n);
+    let mut ledgers: Vec<Option<PlainLedger>> = Vec::with_capacity(n);
     for key in roster.keys.iter() {
         let u = units
             .get(key.as_str())
@@ -553,6 +556,17 @@ pub fn build_state(
         // `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
         // `BattleSim.charge_illegal_plain` (battle_sim.gd:1563) reads.
         st.charge_probe_r.push(dnum(&u, "charge_probe_r", 0.016));
+        // Wave 3 S4-U2: the table's per-unit ledger (`AiActRecorder._ledger_of`,
+        // stamped live by `_stamp_gate_reads`), folded after the roster resolve.
+        // Whole floats go back to ints first (a save/load reads every number as
+        // float); a ledger that still fails to parse is reported, not folded.
+        ledgers.push(u.get("ledger").and_then(|l| {
+            let parsed = serde_json::from_value::<PlainLedger>(integral(crate::mvcall::flat(&l))).ok();
+            if parsed.is_none() && !dropped.iter().any(|d| d == "ledger") {
+                dropped.push("ledger".to_string());
+            }
+            parsed
+        }));
         match u.get("los").and_then(|v| v.try_to::<VarDictionary>().ok()) {
             Some(m) => {
                 has_los = true;
@@ -579,7 +593,31 @@ pub fn build_state(
     );
     st.attached_to =
         Rc::new(host_keys.iter().map(|k| roster.index.get(k.as_str()).copied()).collect());
+    // `io::state_of`'s own fold; `is_attached` is the unit's `attached_to` key, as there.
+    for (ui, l) in ledgers.iter().enumerate() {
+        if let Some(l) = l {
+            let (alive, arrived) = (st.alive[ui], st.ambush_arrived_round[ui]);
+            fold_ledger(&mut st, ui, l, rules_epoch, alive, !host_keys[ui].is_empty(), arrived);
+        }
+    }
     Ok(Captured { state: st, extras, mask, has_los, dropped })
+}
+
+/// A JSON number that is a whole float becomes an integer, recursively: the
+/// ledger's integer fields refuse `1.0`, which is what a Godot float reads as.
+fn integral(v: serde_json::Value) -> serde_json::Value {
+    use serde_json::Value;
+    match v {
+        Value::Number(n) => match n.as_f64() {
+            Some(f) if !n.is_i64() && !n.is_u64() && f.fract() == 0.0 && f.abs() < 9.0e15 => {
+                Value::from(f as i64)
+            }
+            _ => Value::Number(n),
+        },
+        Value::Array(a) => Value::Array(a.into_iter().map(integral).collect()),
+        Value::Object(m) => Value::Object(m.into_iter().map(|(k, e)| (k, integral(e))).collect()),
+        other => other,
+    }
 }
 
 // ---------------------------------------------------------------- writers ---
@@ -1029,10 +1067,9 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // read — `act_recorder.gd` would need to stamp it for this to move.
         rules_epoch: dint(d, "rules_epoch", dflt.rules_epoch as i64) as u32,
         // The replay-aware half of `EPOCH_19_MOVE_GRANTS_FOLD` (`Knobs::
-        // bands_prefolded`). No recorder writes a `books` key into the
-        // header dict yet, so an absent one answers `Knobs::default()` = OFF,
-        // matching every seam above; `header_of` stamps it for a header that
-        // carries `books`.
+        // bands_prefolded`). The knob itself is never written: the live header
+        // (`AiActRecorder._header_line`) carries `books`, and `set_game_header`
+        // stamps the flag from that, the rule `acts::header_of` applies.
         bands_prefolded: dflag(d, "bands_prefolded"),
         // Wave 6 (`advancek`). A MENU knob, not a seam (like `menu_targets`):
         // the live menu offers the safe-advance frontier's top-k destinations.
