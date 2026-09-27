@@ -12652,8 +12652,9 @@ func _on_distance_changed(distance_inches: float, _from_pos: Vector3, _to_pos: V
 ## STRICT "dry brush" HUD readout: during a movement-budget-capped drag, show consumed vs the
 ## model's max legal band ("6.0/6.0″") and colour it amber → red the moment the brush runs dry,
 ## so the cap reads unmistakably. Emitted after _on_distance_changed, so it wins the label.
-func _on_movement_capped(consumed_inches: float, cap_inches: float, dry: bool) -> void:
-	distance_label.text = "%.1f/%.1f\"" % [consumed_inches, cap_inches]
+func _on_movement_capped(consumed_inches: float, cap_inches: float, dry: bool, reason: String = "") -> void:
+	distance_label.text = ("%.1f/%.1f\" — %s" % [consumed_inches, cap_inches, reason]) \
+			if not reason.is_empty() else "%.1f/%.1f\"" % [consumed_inches, cap_inches]
 	distance_label.add_theme_color_override("font_color",
 			Color(1.0, 0.35, 0.3) if dry else Color(1.0, 0.78, 0.25))
 
@@ -13248,7 +13249,7 @@ func _on_battle_log_regiment_wounds(unit_name: String, delta: int, remaining: in
 func _on_battle_log_dropped(moves: Array) -> void:
 	if battle_log == null:
 		return
-	var per_unit := {}   # unit name -> {count, max_in, alive, whole}
+	var per_unit := {}   # unit name -> {count, max_in, climb_in, alive, whole}
 	for mv in moves:
 		var node: Node3D = mv.get("node")
 		var unit_name := _battle_log_unit_name(node)
@@ -13261,20 +13262,30 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		if res_gu != null and SoloController.unit_in_reserve(res_gu):
 			continue
 		if not per_unit.has(unit_name):
-			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "alive": _battle_log_unit_alive(node), "whole": false}
+			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "climb_in": 0.0,
+				"alive": _battle_log_unit_alive(node), "whole": false}
 		var e: Dictionary = per_unit[unit_name]
 		e["count"] = int(e["count"]) + 1
 		# Movement distance = the ACTUAL traveled arc (the ledger's measured net path),
 		# NOT crow-flight — one source of truth with the trail stamp / HUD / ruler. Falls
-		# back to the straight from→to only for a mover with no recorded path.
-		e["max_in"] = maxf(float(e["max_in"]), float(mv.get("arc_in", mv.get("inches", 0.0))))
+		# back to the straight from→to only for a mover with no recorded path. The climb
+		# (GF p.11) travels with whichever move set the max, so the two stay paired.
+		var mv_in: float = float(mv.get("arc_in", mv.get("inches", 0.0)))
+		if mv_in >= float(e["max_in"]):
+			e["max_in"] = mv_in
+			e["climb_in"] = float(mv.get("climb_in", 0.0))
 		if node is RegimentTray:
 			e["whole"] = true
 	var summaries: Array = []
 	for unit_name in per_unit:
 		var e: Dictionary = per_unit[unit_name]
 		summaries.append({"unit": unit_name, "count": int(e["count"]), "alive": int(e["alive"]),
-			"max_in": float(e["max_in"]), "whole": bool(e["whole"])})
+			"max_in": float(e["max_in"]), "climb_in": float(e["climb_in"]), "whole": bool(e["whole"])})
+		# GF p.11: a step over 3" is impassable under mass-battle rules — the drag itself is
+		# a sandbox aid (D5a, no hard stop without Strict), so the drop's own line flags it.
+		if float(e["climb_in"]) > MoveLedger.CLIMB_MAX_IN:
+			_log_rule_event(BattleLog.Category.MOVEMENT,
+				"%s climbs %.1f\" — over 3\", impassable (GF p.11)" % [unit_name, float(e["climb_in"])])
 	_log_move_summaries(summaries)
 	# The move STREAM is unreliable + continuous (drag), so the other side cannot know when a drop
 	# happened — ship the finished per-unit summary reliably; every peer logs identical lines
@@ -13368,11 +13379,13 @@ func _log_move_summaries(summaries: Array) -> void:
 		var alive: int = int(e.get("alive", 0))
 		var count: int = int(e.get("count", 0))
 		var max_in: float = float(e.get("max_in", 0.0))
+		var climb_in: float = float(e.get("climb_in", 0.0))
 		if bool(e.get("whole", false)) or count >= alive or alive <= 1:
-			battle_log.on_unit_moved(unit_name, max_in)
+			battle_log.on_unit_moved(unit_name, max_in, false, climb_in)
 		else:
+			var suffix := " incl. %.1f\" climb — GF p.11" % climb_in if climb_in > 0.05 else ""
 			battle_log.log_event(BattleLog.Category.MOVEMENT,
-				"%s: %d of %d models move %.0f\"" % [unit_name, count, alive, max_in])
+				"%s: %d of %d models move %.0f\"%s" % [unit_name, count, alive, max_in, suffix])
 
 
 ## Path painting: a drag dropped — commit each moved model's traversed path as a visible

@@ -379,3 +379,74 @@ func test_cap_off_allows_moving_past_the_band() -> void:
 	# arc is recorded. (Backtrack-erase still applies independently; it is not the cap.)
 	assert_float(_capped_drag([Vector2(0, 0), Vector2(2, 0), Vector2(4, 0),
 			Vector2(6, 0), Vector2(8, 0), Vector2(10, 0)], 0.0)).is_equal_approx(10.0, 0.05)
+
+
+# ===== climb_report (heights B1-c, GF p.11) =====
+
+func test_climb_report_is_zero_on_flat_ground() -> void:
+	var points := _line([Vector2(0, 0), Vector2(20, 0)])
+	var flat := func(_p: Vector2) -> float: return 0.0
+	var r := MoveLedger.climb_report(points, flat)
+	assert_float(r["climb_in"]).is_equal_approx(0.0, TOL)
+	assert_float(r["max_step_in"]).is_equal_approx(0.0, TOL)
+
+
+func test_climb_report_onto_a_box_costs_its_full_height() -> void:
+	var points := _line([Vector2(0, 0), Vector2(20, 0)])
+	var box := func(p: Vector2) -> float: return (2.5 * INCH) if p.x >= 10.0 * INCH else 0.0
+	var r := MoveLedger.climb_report(points, box)
+	assert_float(r["climb_in"]).is_equal_approx(2.5, 0.05)
+	assert_float(r["max_step_in"]).is_equal_approx(2.5, 0.05)
+
+
+func test_climb_report_over_and_off_costs_both_the_up_and_down_step() -> void:
+	# D4a: a step DOWN costs its height too, not just the climb up.
+	var points := _line([Vector2(0, 0), Vector2(30, 0)])
+	var box := func(p: Vector2) -> float:
+		return (2.5 * INCH) if (p.x >= 10.0 * INCH and p.x <= 20.0 * INCH) else 0.0
+	var r := MoveLedger.climb_report(points, box)
+	assert_float(r["climb_in"]).is_equal_approx(5.0, 0.1)
+	assert_float(r["max_step_in"]).is_equal_approx(2.5, 0.05)
+
+
+func test_climb_report_a_short_step_is_free() -> void:
+	# GF p.11: short terrain up to 1" tall may be ignored.
+	var points := _line([Vector2(0, 0), Vector2(20, 0)])
+	var step := func(p: Vector2) -> float: return (0.8 * INCH) if p.x >= 10.0 * INCH else 0.0
+	var r := MoveLedger.climb_report(points, step)
+	assert_float(r["climb_in"]).is_equal_approx(0.0, TOL)
+	assert_float(r["max_step_in"]).is_equal_approx(0.8, 0.05)
+
+
+func test_climb_report_a_tall_step_is_not_capped_here() -> void:
+	# climb_report only MEASURES; the >3" impassable refusal is climb_blocks' job.
+	var points := _line([Vector2(0, 0), Vector2(20, 0)])
+	var step := func(p: Vector2) -> float: return (3.5 * INCH) if p.x >= 10.0 * INCH else 0.0
+	var r := MoveLedger.climb_report(points, step)
+	assert_float(r["climb_in"]).is_equal_approx(3.5, 0.05)
+	assert_float(r["max_step_in"]).is_equal_approx(3.5, 0.05)
+
+
+# ===== climb_blocks (heights B1-c, D5a) =====
+
+func test_climb_blocks_is_clear_within_budget() -> void:
+	var report := {"climb_in": 0.0, "max_step_in": 0.0}
+	assert_str(MoveLedger.climb_blocks(report, 10.0, true)).is_equal("")
+
+
+func test_climb_blocks_over_budget() -> void:
+	var report := {"climb_in": 5.0, "max_step_in": 2.5}
+	assert_str(MoveLedger.climb_blocks(report, 3.0, true)).is_equal("over budget")
+
+
+func test_climb_blocks_a_step_over_3in_is_impassable() -> void:
+	var report := {"climb_in": 3.5, "max_step_in": 3.5}
+	assert_str(MoveLedger.climb_blocks(report, 100.0, true)) \
+		.is_equal("3.5\" step — over 3\", impassable")
+
+
+func test_climb_blocks_never_blocks_outside_strict() -> void:
+	# D5a: the >3" hard stop is opt-in (Enforce Movement Limit); without it the drag never
+	# holds — the battle log flags it as a warning at drop time instead (step 11).
+	var report := {"climb_in": 3.5, "max_step_in": 3.5}
+	assert_str(MoveLedger.climb_blocks(report, 100.0, false)).is_equal("")
