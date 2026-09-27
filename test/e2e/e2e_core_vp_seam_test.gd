@@ -10,6 +10,7 @@ extends GdUnitTestSuite
 ##
 ## WHAT IS REAL vs CONSTRUCTED. Real: scenes/main.tscn, the real SoloController mission ledger, BattleSim.capture
 ## and state_to_plain, the NmlCore extension. Constructed: two bare units, the ledger values and one unit's bands.
+## Skipped where the extension is not loaded (the CI gdUnit shards build no core), as e2e_core_reload_test does.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const IN2M := 0.0254
@@ -76,9 +77,8 @@ func _plain() -> Dictionary:
 	return plain
 
 
-func test_the_core_holds_the_vp_ledger_and_the_charge_band() -> void:
-	assert_bool(ClassDB.class_exists("NmlCore")).override_failure_message(
-		"NmlCore extension not loaded — run core/install_gdextension.sh").is_true()
+func test_the_core_holds_the_vp_ledger_and_the_charge_band(
+		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "needs the NmlCore extension") -> void:
 	var core: Object = ClassDB.instantiate("NmlCore")
 	var plain := _plain()
 	assert_that(plain.get("vp")).is_equal([3, 1])   # the fixture really sends the ledger
