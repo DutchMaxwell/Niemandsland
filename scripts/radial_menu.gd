@@ -34,7 +34,8 @@ const EDGE_PADDING := 8.0                 # px kept clear between the menu and t
 # the ring and moves the rest (status, management, transport lines) into a second tier — a column of
 # pills beside the ring that the ring's TIER_ID wedge opens. 8 wedges still leave "Shoot" its 39 px.
 const RING_MAX := 8
-const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass", "toggle_activate"]
+const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass", "toggle_activate",
+	"solo_auto_charge", "solo_auto_advance", "solo_auto_rush"]
 const TIER_ID := "more"                   # the wedge that opens the second tier; never sent down the action pipe
 
 
@@ -472,12 +473,26 @@ func _clamp_to_viewport(pos: Vector2) -> Vector2:
 
 ## Opens the menu at the specified position with the given items.
 func open(screen_pos: Vector2, items: Array[RadialMenuItem], context: Dictionary = {}) -> void:
-	# D53 = b: a crowded menu keeps its verbs on the ring, the rest goes to the second tier.
+	# D53 = b: a crowded menu keeps its verbs on the ring, the rest goes to the second tier. RING_VERBS
+	# grew past what the worst-case crowded menu (every verb-granting rule at once) leaves room for —
+	# its OWN declared order is the priority: the ring fills up to RING_MAX-1 verb slots (plus "More"),
+	# so an established verb is never bumped off the ring by a newer one further down the list.
 	_tier.clear()
 	if items.size() > RING_MAX:
-		var ring: Array[RadialMenuItem] = []
+		var by_id := {}
 		for it in items:
-			(ring if it.id in RING_VERBS else _tier).append(it)
+			by_id[it.id] = it
+		var ring: Array[RadialMenuItem] = []
+		var kept := {}
+		for verb_id in RING_VERBS:
+			if ring.size() >= RING_MAX - 1:
+				break
+			if by_id.has(verb_id):
+				ring.append(by_id[verb_id])
+				kept[verb_id] = true
+		for it in items:
+			if not kept.has(it.id):
+				_tier.append(it)
 		var names := PackedStringArray()
 		for it in _tier:
 			names.append(it.label)
@@ -592,10 +607,23 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 ## Creates menu items for a full unit selection.
 ## Solo (goal 001 P8): declare an attack on the AI — enters targeting mode (line of sight shown), then
 ## the whole exchange resolves with real tray dice, mirroring the AI's own combat flow.
-static func solo_combat_items(game_unit: GameUnit = null) -> Array[RadialMenuItem]:
+static func solo_combat_items(game_unit: GameUnit = null, auto_ok: bool = false) -> Array[RadialMenuItem]:
 	var out: Array[RadialMenuItem] = []
 	out.append(RadialMenuItem.new("solo_shoot", "Shoot", "»", true, "Shoot at an AI unit — pick a target with line of sight"))
 	out.append(RadialMenuItem.new("solo_fight", "Fight", "⚔", true, "Strike an AI unit in melee contact"))
+	# Automodus (A1, NML-202): the engine moves the unit along a legal corridor and rolls the
+	# attack itself — rulebook verbs, no "Auto-" jargon in the wheel (the "Auto:" log prefix marks
+	# an engine-executed activation instead).
+	if auto_ok:
+		out.append(RadialMenuItem.new("solo_auto_charge", "Charge", "⚡", true,
+			"Charge: the engine moves the unit along a legal path into base contact and fights — pick the enemy"))
+		# The " (& Shoot)" note follows the label's own drop-the-parenthetical convention (see
+		# "Speed Feat (once per game)"): a crowded wedge shows "Advance", the tooltip always says
+		# "Advance & Shoot" in full.
+		out.append(RadialMenuItem.new("solo_auto_advance", "Advance (& Shoot)", "»→", true,
+			"Advance & Shoot: the engine advances toward the enemy (or steps back into range if already close) and fires — pick the enemy"))
+		out.append(RadialMenuItem.new("solo_auto_rush", "Rush", "→→", true,
+			"Rush: the engine moves the unit its full Rush distance toward the enemy — pick the enemy"))
 	# Spell wave F2: a unit that fields a caster (itself or a joined hero) with tokens can cast —
 	# spell picker -> target -> boost -> automatic resolution.
 	if game_unit != null and _caster_member_of(game_unit) != null:
@@ -659,11 +687,11 @@ static func reinforcement_items(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	return out
 
 
-static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false) -> Array[RadialMenuItem]:
+static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false, auto_ok: bool = false) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
 	if solo_combat:
-		items.append_array(solo_combat_items(game_unit))
+		items.append_array(solo_combat_items(game_unit, auto_ok))
 	items.append_array(reinforcement_items(game_unit))
 
 	var activate_icon = "-" if game_unit.is_activated else "+"

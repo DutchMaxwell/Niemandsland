@@ -9110,7 +9110,7 @@ func _solo_melee_tally(caused: int, score: int) -> String:
 ## objective, else the next target — via consolidate_after_melee_win). The HUMAN's units are OFFERED the
 ## move instead (battle log + toast), consistent with the solo convention that the automation never moves
 ## the player's models; the player drags the models through the normal move flow.
-func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
+func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool = false) -> void:
 	if solo_controller == null:
 		return
 	var charger_alive: bool = _solo_combined_alive(charger) > 0
@@ -9124,7 +9124,10 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 		_solo_growth_on_kill(defender)
 		_solo_vengeance_on_destroyed(charger, defender)
 	if charger_alive and defender_alive:
-		if not _solo_is_ai_unit(charger):
+		# A1 (NML-202): an engine-executed auto intent owns every step of its own activation — the
+		# mandatory back-step consolidates itself, same as an AI charger, even though the unit is
+		# player-owned (the player never dragged this charge in by hand either).
+		if not _solo_is_ai_unit(charger) and not auto:
 			# The human charged: the mandatory 1" back-step is HIS move and the game WAITS for it
 			# (field find 2026-07-23: the next activation used to start instantly — the step was
 			# impossible). Non-exclusive: the board stays interactive while the dialog stands.
@@ -9149,7 +9152,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 	if charger_alive == defender_alive:
 		return   # both sides wiped — nobody left to consolidate
 	var survivor: GameUnit = charger if charger_alive else defender
-	if _solo_is_ai_unit(survivor):
+	if _solo_is_ai_unit(survivor) or auto:
 		var dang2: int = solo_controller.consolidate_after_melee_win(survivor)
 		if not solo_controller.last_move_paths.is_empty():
 			if battle_log != null:
@@ -9595,14 +9598,14 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit) -> void:
 	if verb == AiDecision.Action.CHARGE:
 		var gap_in: float = solo_controller.nearest_melee_gap_in(unit, target)
 		if gap_in <= SoloController.MELEE_ENGAGE_IN:
-			await _run_human_attack(unit, target, true)   # snap, pile-in, melee, activation, AI reply
+			await _run_human_attack(unit, target, true, true)   # snap, pile-in, melee, activation, AI reply
 			return
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				"Auto: %s's charge falls short (%.1f\")" % [unit.get_name(), gap_in], true)
 		await _solo_complete_human_attack(unit)
 	elif bool(report.get("can_shoot", false)):
-		await _run_human_attack(unit, target, false)
+		await _run_human_attack(unit, target, false, true)
 	else:
 		await _solo_complete_human_attack(unit)   # the no-shot reason is already a rule note
 
@@ -10529,7 +10532,7 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 	return {"split": true, "names": picked, "rest": rest}
 
 
-func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> void:
+func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: bool = false) -> void:
 	if attacker == null or target == null or dice_roller_control == null:
 		return
 	await begin_activation(attacker)   # D23: the resolving attack is the committed action
@@ -10554,7 +10557,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 		elif _solo_combined_alive(target) > 1 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				"%s: all models already in base contact — no pile-in needed (GF v3.5.1 p.9)" % target.get_name(), true)
-		await _run_human_melee(attacker, target)
+		await _run_human_melee(attacker, target, auto)
 		# Hit & Run (cut C): "being in melee" covers the DEFENDER too — the AI's charged unit may take
 		# its once-per-round 3" step after the melee resolves (the human's own bearers move manually).
 		# after_shoot=false: the melee leg (covers the Fighter half, never the Shooter half).
@@ -11161,7 +11164,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 ## strike back — solo rules p.57 — so no prompt), Impact (Counter-reduced), your strikes (charging:
 ## Furious/Thrust; the AI's Evasive/Shielded apply), the AI's remaining strike-back, then the Fear-adjusted
 ## melee-winner morale (GF/AoF v3.5.1 p.13).
-func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
+func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) -> void:
 	var human_caused := 0
 	var ai_caused := 0
 	_solo_stage_begin("%s charges %s" % [attacker.get_name(), target.get_name()])
@@ -11231,7 +11234,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
 	# — Consolidation (GF v3.5.1 p.9, round 7 finding 4): neither destroyed → the human charger's 1"
 	#   back-step is surfaced as a reminder; one side destroyed → the survivor consolidates up to 3"
 	#   (your unit gets the move OFFERED; a surviving AI defender takes it automatically, EV-aware). —
-	await _solo_consolidate_melee(attacker, target)
+	await _solo_consolidate_melee(attacker, target, auto)
 	await _solo_stage_phase("Consolidation")
 	_solo_stage_end()
 

@@ -278,7 +278,9 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 					var readout: Dictionary = army_manager.regiment_wound_readout(tray)
 					items = RadialMenu.create_regiment_menu(game_unit, int(readout["remaining"]), int(readout["pool_max"]))
 					if _solo_combat_available(game_unit):
-						var solo_items := RadialMenu.solo_combat_items()
+						# Regiment trays never passed game_unit here (Cast/Spot/Speed-Feat/Pass stay
+						# absent, unchanged) — only auto_ok is new.
+						var solo_items := RadialMenu.solo_combat_items(null, _solo_auto_available(game_unit))
 						for si in range(solo_items.size()):
 							items.insert(si, solo_items[si])
 					radial_menu.open(screen_position, items, context)
@@ -302,7 +304,7 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 
 		if is_full_unit and not is_single_model_unit:
 			# Multi-model unit fully selected - show unit menu
-			items = RadialMenu.create_unit_menu(game_unit, _solo_combat_available(game_unit))
+			items = RadialMenu.create_unit_menu(game_unit, _solo_combat_available(game_unit), _solo_auto_available(game_unit))
 			_append_transport_items(game_unit, context, items)
 		elif model_instance:
 			# Single model or partial selection - show model menu (includes wounds)
@@ -314,7 +316,7 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 			if game_unit != null and _solo_combat_available(game_unit):
 				# Pass the unit so the Cast entry appears here too (maintainer 2026-07-22: a LONE
 				# caster hero always lands in this model-menu path — Cast was unreachable).
-				var solo_items := RadialMenu.solo_combat_items(game_unit)
+				var solo_items := RadialMenu.solo_combat_items(game_unit, _solo_auto_available(game_unit))
 				for si in range(solo_items.size()):
 					items.insert(si, solo_items[si])
 			# Reinforcement reaches the model-menu path too: a DESTROYED carrier has no full-unit
@@ -384,6 +386,12 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_solo_begin_targeting(context, false)
 		"solo_fight":
 			_solo_begin_targeting(context, true)
+		"solo_auto_charge":
+			_solo_begin_auto(context, AiDecision.Action.CHARGE)
+		"solo_auto_advance":
+			_solo_begin_auto(context, AiDecision.Action.ADVANCE)
+		"solo_auto_rush":
+			_solo_begin_auto(context, AiDecision.Action.RUSH)
 		"solo_cast":
 			_solo_begin_cast(context)
 		"solo_spot":
@@ -606,6 +614,15 @@ func _solo_combat_available(game_unit: GameUnit) -> bool:
 	return bool(main_node.call("solo_combat_available", game_unit)) if main_node.has_method("solo_combat_available") else false
 
 
+## A1 (NML-202): the engine-executed verbs (Charge / Advance & Shoot / Rush) gate — same eligibility
+## as Shoot/Fight, but hidden in a co-op room (main.solo_auto_available folds that check in).
+func _solo_auto_available(game_unit: GameUnit) -> bool:
+	var main_node := get_node_or_null("/root/Main")
+	if main_node == null or game_unit == null:
+		return false
+	return bool(main_node.call("solo_auto_available", game_unit)) if main_node.has_method("solo_auto_available") else false
+
+
 ## PRE-hook for activation-triggered solo rules (Reanimation): the doors that START a unit's
 ## activation without going through main's own combat entries — the manual activation toggle and the
 ## transport embark/disembark actions — announce the activation here first, through main's ONE door
@@ -624,6 +641,13 @@ func _solo_begin_targeting(context: Dictionary, melee: bool) -> void:
 	var main_node := get_node_or_null("/root/Main")
 	if unit != null and main_node != null and main_node.has_method("solo_begin_targeting"):
 		main_node.call("solo_begin_targeting", unit, melee)
+
+
+func _solo_begin_auto(context: Dictionary, verb: int) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_begin_auto"):
+		main_node.call("solo_begin_auto", unit, verb)
 
 
 func _solo_begin_cast(context: Dictionary) -> void:

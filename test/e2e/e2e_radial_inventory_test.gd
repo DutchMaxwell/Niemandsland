@@ -14,18 +14,24 @@ const FEAT_FLAG := "speed_feat_used_speed_feat"
 
 ## Today's entries per menu, in the order the test clicks them (what ends the unit's life goes last;
 ## the Walkers' Delete is undone by a revive so their Embark can still be clicked).
+## The three Automodus verbs (NML-202): the engine moves the unit and rolls the attack for the
+## clicked target. Menu-construction order (solo_combat_items) puts them right after solo_fight.
+const AUTO := ["solo_auto_charge", "solo_auto_advance", "solo_auto_rush"]
 const PLAIN := ["add_marker", "toggle_fatigued", "toggle_shaken", "toggle_activate", "solo_shoot",
-	"solo_fight", "delete_unit"]
+	"solo_fight", "solo_auto_charge", "solo_auto_advance", "solo_auto_rush", "delete_unit"]
 const HERO := ["wounds", "casts", "add_marker", "select_unit", "toggle_fatigued", "toggle_shaken",
-	"toggle_activate", "solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass",
-	"reinforce", "delete_model"]
+	"toggle_activate", "solo_shoot", "solo_fight", "solo_auto_charge", "solo_auto_advance", "solo_auto_rush",
+	"solo_cast", "solo_spot", "solo_speed_feat", "solo_pass", "reinforce", "delete_model"]
 const TRUCK := ["add_marker", "select_unit", "toggle_fatigued", "toggle_shaken", "toggle_activate",
-	"solo_shoot", "solo_fight", "unload_cargo_0", "delete_model"]
+	"solo_shoot", "solo_fight", "solo_auto_charge", "solo_auto_advance", "solo_auto_rush",
+	"unload_cargo_0", "delete_model"]
 const WALKERS := ["add_marker", "toggle_fatigued", "toggle_shaken", "toggle_activate", "solo_shoot",
-	"solo_fight", "delete_unit", "embark_0"]
-## D53 = b: the core verbs a crowded menu keeps on its ring; the ring's wedge that opens the second tier.
+	"solo_fight", "solo_auto_charge", "solo_auto_advance", "solo_auto_rush", "delete_unit", "embark_0"]
+## D53 = b: the core verbs a crowded menu keeps on its ring, in PRIORITY order — the ring fills up to
+## RING_MAX-1 of these before the rest spill to the second tier (radial_menu.gd's own list, mirrored
+## here so a drift between the two is a test failure, not a silent surprise).
 const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass",
-	"toggle_activate"]
+	"toggle_activate", "solo_auto_charge", "solo_auto_advance", "solo_auto_rush"]
 const TIER_WEDGE := "more"
 const RING_MAX := 8
 
@@ -189,6 +195,8 @@ func _did(id: String, u: GameUnit, lines: String) -> bool:
 			return lines.contains("pick a target (shooting)")
 		"solo_fight":
 			return lines.contains("pick a target (melee)")
+		"solo_auto_charge", "solo_auto_advance", "solo_auto_rush":
+			return _main._solo_target_mode.has("auto_verb") and lines.contains("pick a target for")
 		"solo_cast":
 			return _spell_picker() != null or lines.contains("spell")
 		"solo_spot":
@@ -436,26 +444,47 @@ func _cut_labels(who: String) -> Array:
 	return out
 
 
+## D53 = b, priority cap: the first RING_MAX-1 entries of RING_VERBS (in that declared order) present
+## in `ids` stay on the ring; every overflow verb plus every non-verb entry goes to the second tier.
+## Computed independently of radial_menu.gd's own logic — this is the DOCUMENTED rule, fresh each
+## call, so a drift between the two reads as a test failure instead of a silent agreement.
+func _expected_ring_ids(ids: Array) -> Array:
+	var out: Array = []
+	for verb in RING_VERBS:
+		if out.size() >= RING_MAX - 1:
+			break
+		if ids.has(verb):
+			out.append(verb)
+	return out
+
+
 func test_a_crowded_menu_keeps_its_verbs_on_the_ring_and_the_rest_in_a_second_tier(timeout := 120000) -> void:
 	var squad := _unit(1, "Wardens", [Vector3.ZERO, Vector3(1.2 * INCH, 0, 0), Vector3(2.4 * INCH, 0, 0)])
 	var hero := _hero()
 	hero.models[0].node.global_position = Vector3(0.3, 0, 0)
 	_solo_playing_on()
 	var misses: Array = []
-	# The everyday menu stays today's flat ring, every label in full.
+	# The everyday menu (10 raw entries, past RING_MAX) still fits every one of its 6 verbs on the
+	# ring — a "More" wedge appears, but nothing it would carry is actually truncated off the ring.
 	await _open(squad)
-	if _ids().size() != PLAIN.size() or not _tier_ids().is_empty():
-		misses.append("the plain squad's 7 entries left the flat ring: ring %s, tier %s" % [_ids(), _tier_ids()])
+	var want_ring_plain := _expected_ring_ids(PLAIN)
+	for id in PLAIN:
+		var want_ring: bool = id in want_ring_plain
+		if want_ring != _ids().has(id) or want_ring == _tier_ids().has(id):
+			misses.append("Wardens: '%s' belongs %s (ring %s, tier %s)" % [id, "on the ring" if want_ring else "in the second tier", _ids(), _tier_ids()])
 	misses.append_array(_cut_labels("Wardens"))
 	_menu().close()
 	await _runner.simulate_frames(2)
-	# The crowded hero: at most 8 wedges — its verbs plus the wedge that opens the second tier.
+	# The crowded hero: at most RING_MAX wedges. Its 10 ring-tagged verbs exceed the RING_MAX-1 cap, so
+	# the three Automodus verbs (last in RING_VERBS' priority order) spill to the second tier — the
+	# pre-existing 7 verbs keep the ring seats they always had.
 	await _open(hero)
 	var ring := _ids()
 	if ring.size() > RING_MAX:
 		misses.append("the hero's ring carries %d wedges, D53 allows %d" % [ring.size(), RING_MAX])
+	var want_ring_hero := _expected_ring_ids(HERO)
 	for id in HERO:
-		var want_ring: bool = id in RING_VERBS
+		var want_ring: bool = id in want_ring_hero
 		if want_ring != ring.has(id) or want_ring == _tier_ids().has(id):
 			misses.append("'%s' belongs %s (ring %s, tier %s)" % [id, "on the ring" if want_ring else "in the second tier", ring, _tier_ids()])
 	misses.append_array(_cut_labels("Warboss"))
