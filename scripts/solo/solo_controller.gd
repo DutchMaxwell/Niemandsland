@@ -2534,6 +2534,59 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	return report
 
 
+## A1 (NML-202, automodus PR 2) — the player's feeder into execute_intent(): one enemy click decides a
+## whole legal activation (Charge / Advance & Shoot / Rush). Refusals come FIRST and move nothing
+## ({"refused": <why>}, the caller narrates it and leaves the unit free); a legal intent is the SAME
+## ActIntent shape _act builds, source "player", so execute_intent runs one gate for both feeders — no
+## second truth for the move/shoot rules. quick_shot is computed the same way _act does (not listed in
+## the plan's step 5 field list, but PR 3's Quick-Shot-after-Rush test needs it wired here to fire).
+func player_intent(unit: GameUnit, verb: int, target: GameUnit) -> Dictionary:
+	if unit.is_shaken:
+		return {"refused": "Shaken — spends its activation idle (GF v3.5.1 p.10)"}
+	if forces_hold(unit.get_special_rules()) and hold_only_param(unit) and verb != AiDecision.Action.HOLD:
+		return {"refused": "may only use Hold actions (p.13)"}
+	if is_aircraft(unit) or _is_regiment(unit) or army_manager.transport_of(unit) != null:
+		return {"refused": "moves by hand in this version"}
+	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
+	var musician_in := musician_move_bonus_in(unit)
+	var advance := float(bands.get("advance", 6)) + musician_in
+	var rush := float(bands.get("rush", 12)) + musician_in
+	var charge := float(bands.get("charge", bands.get("rush", 12))) + musician_in
+	var weapons := _unit_weapons(unit)
+	var shoot_range_in := effective_shoot_reach_in(
+		AiArchetype.max_range_inches(weapons) + float(shooting_range_bonus(unit)), target)
+	var enemy_dist_in := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target))
+	var quick_shot: bool = (unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
+		or AiSpell.granted_rules_of(unit, target).has("Quick Shot")
+	var extra := {"shoot_range_in": shoot_range_in, "enemy_dist_in": enemy_dist_in, "quick_shot": quick_shot,
+		"to_objective": false, "to_flank": false, "source": "player",
+		"why": "player intent: " + AiDecision.action_name(verb)}
+	var action := verb
+	var band_in := 0.0
+	var do_shoot := true   # HOLD default (p.1: a Hold unit may always shoot)
+	match verb:
+		AiDecision.Action.CHARGE:
+			# charge_illegal_why re-applies Melee Shrouding + Rapid Charge internally (its only other
+			# call site, :2226, passes the same pre-adjustment band) — passing it the ALREADY-adjusted
+			# charge_band_in would double-count both. The intent's execution band still gets the full
+			# adjustment; only the legality check reads the raw pre-adjustment band.
+			var charge_band_in := melee_shroud_charge_in(charge + rapid_charge_reach_bonus_in(unit, target), target)
+			var deny := charge_illegal_why(unit, target, charge)
+			if deny != "":
+				return {"refused": deny}
+			do_shoot = false
+			extra["charge_band_in"] = charge_band_in
+		AiDecision.Action.ADVANCE:
+			do_shoot = shoot_range_in > 0.0
+			band_in = advance
+		AiDecision.Action.RUSH:
+			do_shoot = false
+			band_in = rush
+		_:
+			action = AiDecision.Action.HOLD
+	return ActIntent.make(unit, action, target, unit_centre(target), band_in, do_shoot, extra)
+
+
 ## albtraum v2 — book the COMMITTED plan's expected shooting damage into the overkill ledger. One call
 ## per activation, at the end of _act/_act_aircraft; the lookahead and the tie-break only READ claims.
 ## Shooting only for now: charge_score is a net dealt-minus-taken ranking key, not an expected-wounds
@@ -8962,6 +9015,52 @@ static func casualty_order(unit: GameUnit) -> Array:
 	return alive
 
 
+## `casualty_order` with the survivors' chain kept (GF/AoF v3.5.1 p.8 "keeping unit coherency in mind", p.7 the 1"
+## chain + 9" spread). Greedy, one removal at a time: a wounded Tough body is still finished first (p.14 — no choice);
+## otherwise the first body in the value order whose removal leaves the survivors (joined heroes included) coherent
+## goes; when no removal can (the unit is already torn) the value order stands. "Coherent" allows the tape slack
+## (MEASURING_SLACK_INCHES): the AI places bodies exactly on 1.000", so a 1.003" hair must not read as already torn
+## (arena seed 2 replay: it switched the rule off and four casualties stranded the survivors). `max_picks` = how many leading picks
+## the caller can use (the wounds to land; 1 for a Deadly pick), the tail keeps the value order.
+## Measured 26.09.: 5 of 8 coherency violations after an AI move were casualty removal tearing the chain.
+## No Rust twin to keep in step: the core removes in ARRAY order (sim.rs land_wounds; battle_sim.gd:1558 "casualty_order
+## parity is a later step").
+static func chain_casualty_order(unit: GameUnit, max_picks: int = -1) -> Array:
+	var order: Array = casualty_order(unit)
+	if order.size() <= 2:
+		return order   # one body left is coherent whichever goes
+	var host: GameUnit = unit
+	if unit.get_attached_to() is GameUnit:
+		host = unit.get_attached_to() as GameUnit   # a joined hero's losses are judged against the host's chain
+	var group: Array[ModelInstance] = host.get_alive_models_with_attached()
+	var table := CoherencyChecker.LinkTable.new(group, CoherencyChecker.MEASURING_SLACK_INCHES)
+	if not table.valid:
+		return order   # a node is gone (headless / mid-teardown) — nothing to measure
+	var max_chain: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
+		if CoherencyChecker.is_skirmish_system(host) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	var picks: int = order.size() if max_picks < 0 else mini(max_picks, order.size())
+	var gone := {}
+	var out: Array = []
+	var todo: Array = order.duplicate()
+	while out.size() < picks and not todo.is_empty():
+		var at := 0
+		var lead := unit.models[int(todo[0])] as ModelInstance
+		if not (int(lead.wounds_max) > 1 and int(lead.wounds_current) < int(lead.wounds_max)):
+			for k in range(todo.size()):
+				var slot := group.find(unit.models[int(todo[k])])
+				gone[slot] = true
+				var keeps := table.coherent_without(gone, max_chain)
+				gone.erase(slot)
+				if keeps:
+					at = k
+					break
+		out.append(int(todo[at]))
+		gone[group.find(unit.models[int(todo[at])])] = true
+		todo.remove_at(at)
+	out.append_array(todo)
+	return out
+
+
 ## Bug 25 (Takedown, GF v3.5.1 p.14): the ATTACKER's pick — the most valuable alive model in the
 ## target (hero-grade loadout > special weapon > elevated Tough). The exact inverse of casualty_order's
 ## defender-optimal ranking: highest rank first. -1 when the unit has no alive model. Attached heroes
@@ -9029,7 +9128,7 @@ static func deadly_pick(unit: GameUnit) -> Dictionary:
 		var gu := member as GameUnit
 		if gu == null or gu.get_alive_count() <= 0:
 			continue
-		var idx := int(casualty_order(gu)[0])
+		var idx := int(chain_casualty_order(gu, 1)[0])
 		var m: ModelInstance = gu.models[idx]
 		return {"unit": gu, "index": idx, "forced": int(m.wounds_max) > 1 and int(m.wounds_current) < int(m.wounds_max)}
 	return {}
@@ -9066,7 +9165,7 @@ static func apply_deadly_wounds(unit: GameUnit, unsaved: int, deadly_x: int, on_
 
 static func apply_wounds_to_models(unit: GameUnit, wounds: int, on_changed: Callable, on_died: Callable) -> int:
 	var remaining := wounds
-	for i in casualty_order(unit):
+	for i in chain_casualty_order(unit, wounds):
 		if remaining <= 0:
 			break
 		var m: ModelInstance = unit.models[i]
