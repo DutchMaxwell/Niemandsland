@@ -9224,6 +9224,55 @@ static func objective_info_in_range(info: Dictionary, objective: Vector3) -> boo
 	return false
 
 
+## The nearest base-edge gap in inches, same measure as objective_info_in_range's ring test — the
+## live-table twin of BattleSim.control_gap_in, for the carry step's "nearest eligible unit" pick.
+static func objective_gap_in(info: Dictionary, objective: Vector3) -> float:
+	var radii: Array = info.get("radii", [])
+	var positions: Array = info.get("positions", [])
+	var best := INF
+	for pi in range(positions.size()):
+		var radius_in: float = (float(radii[pi]) / 0.0254) if pi < radii.size() else 0.0
+		best = minf(best, MoveIntent.distance_inches(positions[pi], objective) - radius_in)
+	return best
+
+
+## NML-1010 wave C step C2 — the live-table twin of BattleSim.apply_carry_step: a `carry` marker
+## just seized (owners[i] in (1,2)) and not yet carried is picked up by the seizing side's nearest
+## eligible unit (not shaken, not ambush-locked, not aircraft); ties go to whichever `unit_infos`
+## lists first. Mutates `markers` in place and returns one event per pickup for the caller to log
+## and hide the overlay token.
+static func carry_step(unit_infos: Array, objectives: Array, owners: Array, markers: Array) -> Array:
+	var events: Array = []
+	for i in range(markers.size()):
+		var mk: Dictionary = markers[i]
+		if not bool(mk.get("carry", false)) or not String(mk.get("carried_by", "")).is_empty():
+			continue
+		if i >= owners.size() or i >= objectives.size():
+			continue
+		var side := int(owners[i])
+		if side != 1 and side != 2:
+			continue
+		var op: Vector3 = objectives[i]
+		var best_id := ""
+		var best_name := ""
+		var best_gap := INF
+		for info in unit_infos:
+			var d := info as Dictionary
+			if int(d.get("player", 0)) != side:
+				continue
+			if bool(d.get("shaken", false)) or bool(d.get("ambush_locked", false)) or bool(d.get("aircraft", false)):
+				continue
+			var gap := objective_gap_in(d, op)
+			if gap < best_gap:
+				best_gap = gap
+				best_id = String(d.get("unit_id", ""))
+				best_name = String(d.get("name", ""))
+		if not best_id.is_empty():
+			mk["carried_by"] = best_id
+			events.append({"index": i, "unit_id": best_id, "name": best_name})
+	return events
+
+
 static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array) -> Dictionary:
 	var new_owners: Array = []
 	var changes: Array = []
