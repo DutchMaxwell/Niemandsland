@@ -61,3 +61,15 @@ func test_lone_fearless_hero_gets_recovery_die() -> void:
 	_main.seed_tray_rng(7)
 	await _main._solo_morale_test(hero, "AI (Captain)")
 	assert_str(_log_text()).contains("Captain is Fearless — recovery die")
+
+
+func test_fearless_hero_keeps_recovery_after_plain_squad_dies() -> void:
+	var squad := _unit("Squad", [])
+	var hero := _unit("Captain", ["Hero", "Fearless"])
+	hero.unit_properties["attached_to"] = squad
+	squad.unit_properties["attached_heroes"] = [hero]
+	(squad.models[0] as ModelInstance).is_alive = false
+	squad.is_shaken = true
+	_main.seed_tray_rng(7)
+	await _main._solo_morale_test(squad, "AI (Squad)")
+	assert_str(_log_text()).contains("Fearless — recovery die")
