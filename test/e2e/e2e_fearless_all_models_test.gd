@@ -73,3 +73,17 @@ func test_fearless_hero_keeps_recovery_after_plain_squad_dies() -> void:
 	_main.seed_tray_rng(7)
 	await _main._solo_morale_test(squad, "AI (Squad)")
 	assert_str(_log_text()).contains("Fearless — recovery die")
+
+
+func test_fearless_squad_recovers_after_plain_hero_dies() -> void:
+	var squad := _unit("Squad", ["Fearless"])
+	var hero := _unit("Captain", ["Hero"])
+	hero.unit_properties["attached_to"] = squad
+	squad.unit_properties["attached_heroes"] = [hero]
+	(hero.models[0] as ModelInstance).is_alive = false
+	assert_bool(bool(AiEv.ctx_for(squad)["fearless"])).is_true()
+	assert_bool(BattleSim._morale_fails_expected({"unit": squad, "shaken": false})).is_false()
+	squad.is_shaken = true
+	_main.seed_tray_rng(7)
+	await _main._solo_morale_test(squad, "AI (Squad)")
+	assert_str(_log_text()).contains("Fearless — recovery die")

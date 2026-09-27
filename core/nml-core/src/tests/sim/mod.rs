@@ -449,6 +449,34 @@
         assert_eq!(melee_loser(&st, 0, 2, 3, 1, new), Some(2), "the joined side has not been wiped");
     }
 
+    #[test]
+    fn fearless_morale_counts_only_living_joined_models_at_epoch_65() {
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: HashMap::new(), profile: vec![0, 1, 0, 0] });
+        let mut statics = vec![
+            UnitStatic { quality: 5, fearless: false, fearless_own: false, ctx: Ctx { quality: 5, ..Default::default() }, ..Default::default() },
+            UnitStatic { quality: 5, fearless: true, fearless_own: true, ctx: Ctx { quality: 5, fearless: true, ..Default::default() }, ..Default::default() },
+        ];
+        let seams = Seams { rules_epoch: EPOCH_65_MELEE_TRUTH, hero_attach: true, ..Default::default() };
+        assert!(!morale_fearless(&statics, &st, 0, seams), "the living plain host withholds Fearless");
+        assert!(morale_fails_expected(&st, &statics, 0, seams));
+
+        st.alive[0] = 0;
+        assert!(morale_fearless(&statics, &st, 0, seams), "the surviving Fearless hero now carries the unit");
+        assert!(!morale_fails_expected(&st, &statics, 0, seams));
+        st.shaken[0] = true;
+        let mut shot = ShootResult::default();
+        tray_morale(&mut st, &statics, 0, false, seams, &mut Tray::seeded(7), &mut shot);
+        assert_eq!(shot.rolls.len(), 1, "Shaken skips the test die and draws only the Fearless recovery die");
+        assert_eq!(shot.rolls[0].target, crate::combat::FEARLESS_RECOVER_TARGET);
+
+        statics[0].fearless_own = true;
+        statics[1].fearless_own = false;
+        st.alive[0] = 1;
+        st.alive[1] = 0;
+        assert!(morale_fearless(&statics, &st, 0, seams), "the Fearless host keeps its rule after a plain hero dies");
+    }
+
     /// D5-4. `nearest_melee_gap_in` (:8526) measures `_moving_models` on BOTH
     /// sides, so the joined heroes' bases are the ones that decide this charge:
     /// 5", not the hosts' 10". Folding only one side would read 8" or 7", which

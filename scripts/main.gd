@@ -9329,7 +9329,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 	# Fearless (GF/AoF Advanced Rules v3.5.1 p.13): a unit where all models have this rule rolls a recovery
 	# die once after a FAILED morale test; on a 4+ it counts as passed instead. Rolled visibly on the real
 	# tray. The 4+ is DATA where the mechanics map carries it (RulesRegistry; constant fallback — byte-identical seam).
-	if result != AiCombatMath.Morale.PASSED and unit.has_special_rule("Fearless"):
+	if result != AiCombatMath.Morale.PASSED and AiEv.rule_on_all_models(unit, "Fearless"):
 		var recover_target: int = int(RulesRegistry.unit_param(unit, "Fearless", "recover_target", AiCombatMath.FEARLESS_RECOVER_TARGET))
 		var recovery_die: Array = await _owner_roll(unit, 1, recover_target, "fearless",
 			"Morale recovery die — Fearless (%d+)" % recover_target, {"what": "Fearless recovery die", "label": owner})
