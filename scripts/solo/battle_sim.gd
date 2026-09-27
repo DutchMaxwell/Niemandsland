@@ -1700,8 +1700,8 @@ static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_
 		tu["shaken"] = true
 
 
-## Melee morale (p.10 via main.gd's flow): the side that dealt FEWER wounds
-## tests (tie = nobody); an expected fail at/below half is a ROUT — the loser
+## Melee morale (p.10 via main.gd's flow): a destroyed side loses first;
+## otherwise the side that dealt FEWER wounds tests (tie = nobody). A fail at/below half is a ROUT — the loser
 ## leaves the board. Fear(X) counts as having dealt +X wounds for the COMPARISON
 ## only (p.13; the same AiCombatMath.fear_adjusted_wounds the table path uses).
 static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionary, tu_before: int) -> void:
@@ -1709,9 +1709,17 @@ static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionar
 		AiEv.unit_rating(su["unit"], "Fear"))
 	var dealt_by_tu := AiCombatMath.fear_adjusted_wounds(su_before - _wounds_left(su),
 		AiEv.unit_rating(tu["unit"], "Fear"))
-	if dealt_by_su == dealt_by_tu:
+	var loser: Dictionary
+	if int(su["alive"]) <= 0 and int(tu["alive"]) <= 0:
 		return
-	var loser: Dictionary = tu if dealt_by_su > dealt_by_tu else su
+	elif int(su["alive"]) <= 0:
+		loser = su
+	elif int(tu["alive"]) <= 0:
+		loser = tu
+	elif dealt_by_su == dealt_by_tu:
+		return
+	else:
+		loser = tu if dealt_by_su > dealt_by_tu else su
 	if int(loser["alive"]) <= 0 or not _morale_fails_expected(loser):
 		return
 	if _below_half(loser):

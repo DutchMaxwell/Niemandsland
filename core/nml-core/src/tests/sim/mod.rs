@@ -393,6 +393,14 @@
             "the old score-only reading remains pinned below the melee truth gate");
     }
 
+    #[test]
+    fn mutual_melee_wipe_has_no_living_loser_at_epoch_65() {
+        let mut st = four_unit_line();
+        st.alive[0] = 0;
+        st.alive[2] = 0;
+        assert_eq!(melee_loser(&st, 0, 2, 3, 1, EPOCH_65_MELEE_TRUTH), None);
+    }
+
     /// D5-4. `nearest_melee_gap_in` (:8526) measures `_moving_models` on BOTH
     /// sides, so the joined heroes' bases are the ones that decide this charge:
     /// 5", not the hosts' 10". Folding only one side would read 8" or 7", which

@@ -66,3 +66,26 @@ func test_destroyed_fear_charger_loses_and_survivor_does_not_test_morale(timeout
 	assert_str(text).contains("Fear Charger loses the melee")
 	assert_str(text).not_contains("Morale test: Defender")
 	await E2EBoot.settle(get_tree())
+
+
+func test_mutual_wipe_names_no_loser() -> void:
+	var charger := _unit(2, "Charger", 0.0, 0)
+	var defender := _unit(1, "Defender", 1.0, 0)
+	(charger.models[0] as ModelInstance).is_alive = false
+	(defender.models[0] as ModelInstance).is_alive = false
+	assert_object(_main._solo_melee_loser(charger, 3, defender, 1)).is_null()
+	_main._solo_log_melee_result(charger, 3, 3, defender, 1, 1)
+	assert_str(_log_text()).contains("both destroyed — no morale test")
+
+
+func test_battle_sim_twin_keeps_the_wipe_survivor_steady() -> void:
+	var charger := _unit(2, "Fear Charger", 0.0, 0)
+	charger.unit_properties["special_rules"] = ["Fear(2)"]
+	var defender := _unit(1, "Defender", 1.0, 0)
+	defender.unit_properties["quality"] = 6
+	var su := {"unit": charger, "alive": 0, "wounds": [], "positions": [], "shaken": false}
+	var tu := {"unit": defender, "alive": 1, "wounds": [1],
+		"positions": [Vector3(INCH, 0, 0)], "shaken": false}
+	BattleSim._expected_melee_morale(su, 1, tu, 1)
+	assert_bool(tu["shaken"]).is_false()
+	assert_int(tu["alive"]).is_equal(1)
