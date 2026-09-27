@@ -1,7 +1,8 @@
     // ---- PR #1038 (`large base may take a forward spot from the whole zone`),
-    // mirrored UNGATED from the table (the core has no static switches): the
-    // whole-zone respot fires only when the section scan had to land far behind
-    // the forward edge. Fixtures reuse the table's geometry spot-for-spot.
+    // mirrored from the table and gated from EPOCH_64_DEPLOY_LARGE_RESPOT
+    // (#1048 shipped it ungated): the whole-zone respot fires only when the
+    // section scan had to land far behind the forward edge. Fixtures reuse the
+    // table's geometry spot-for-spot.
 
     use super::empty_board;
 
@@ -37,7 +38,7 @@
         let mut occupied = respot_blockers();
         let out = crate::deployment::deploy_place_id(
             &zone, &sec, forward_y, &objectives, &mut occupied, &board, &[], radius, &[],
-            base_r, false, false, 0.0, 15,
+            base_r, false, false, 0.0, crate::acts::EPOCH_64_DEPLOY_LARGE_RESPOT,
         );
         assert!(out.zone_forward_respotted, "the whole-zone respot must fire");
         assert!(
@@ -68,7 +69,7 @@
         let mut occupied = respot_blockers();
         let out = crate::deployment::deploy_place_id(
             &zone, &sec, forward_y, &objectives, &mut occupied, &board, &[], radius, &[],
-            base_r, false, false, 0.0, 15,
+            base_r, false, false, 0.0, crate::acts::EPOCH_64_DEPLOY_LARGE_RESPOT,
         );
         assert!(!out.zone_forward_respotted, "a small base never respots");
     }
@@ -86,8 +87,35 @@
         let mut occupied = Vec::new();
         let out = crate::deployment::deploy_place_id(
             &zone, &sec, forward_y, &objectives, &mut occupied, &board, &[], radius, &[],
-            base_r, false, false, 0.0, 15,
+            base_r, false, false, 0.0, crate::acts::EPOCH_64_DEPLOY_LARGE_RESPOT,
         );
         assert!(!out.zone_forward_respotted, "a forward section spot never respots");
+    }
+
+    /// The OLD leg: #1048 shipped the respot ungated, so every corpus recorded
+    /// before it (the Gen-0 teacher corpus at epoch 0 included) re-deployed its
+    /// large bases on replay and parted at the first activation's menu. Below
+    /// `EPOCH_64_DEPLOY_LARGE_RESPOT` the section spot stands, lagging or not.
+    #[test]
+    fn at_epoch_63_a_large_base_keeps_its_lagging_section_spot() {
+        let board = empty_board();
+        let (zone, forward_y) = respot_zone();
+        let sec = crate::deployment::section_rect(&zone, 2);
+        let base_r = 0.076;
+        let radius = crate::deployment::deploy_footprint_radius(1, base_r);
+        let objectives = vec![(-0.3667, -0.2952), (0.3667, -0.2952)];
+        for epoch in [0, crate::acts::EPOCH_63_MELEE_HEIGHT] {
+            let mut occupied = respot_blockers();
+            let out = crate::deployment::deploy_place_id(
+                &zone, &sec, forward_y, &objectives, &mut occupied, &board, &[], radius, &[],
+                base_r, false, false, 0.0, epoch,
+            );
+            assert!(!out.zone_forward_respotted, "epoch {epoch}: no respot below the gate");
+            assert!(
+                (out.spot.1 - forward_y).abs() > 0.1524,
+                "epoch {epoch}: the section spot stays behind the 6\" margin, got {:?}",
+                out.spot
+            );
+        }
     }
 

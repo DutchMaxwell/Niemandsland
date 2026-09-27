@@ -113,6 +113,19 @@ def test_replay_knobs_keeps_the_legacy_pin_with_neither_key_present():
     assert gr.replay_knobs({})["rules_epoch"] == 0
 
 
+def test_replay_knobs_reads_a_fresh_records_epoch_off_its_core_build_stamp():
+    """A record played WITHOUT `record_cands` (every arena / A/B seat, the
+    narrator's own fresh games) stamps no `rules_epoch` at all: `play_game`
+    keeps the key out of its `knobs` so `result_digest` never moves. It ran at
+    `play_game`'s default, the recording build's live epoch — which every
+    record carries as provenance in `prescreen.core_build.rules_epoch`. That
+    stamp beats the gen0 pin `0`; the two real stamps still beat it."""
+    prescreen = {"core_commit": "x", "core_build": {"rules_epoch": 61}}
+    assert gr.replay_knobs({}, prescreen, {"knobs": {}})["rules_epoch"] == 61
+    assert gr.replay_knobs({"rules_epoch": 7}, prescreen)["rules_epoch"] == 7
+    assert gr.replay_knobs({}, dict(prescreen, rules_epoch=3))["rules_epoch"] == 3
+
+
 # ------------------------------------------------ replay_knobs / melee_reach ---
 
 

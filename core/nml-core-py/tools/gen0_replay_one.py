@@ -91,6 +91,13 @@ def replay_knobs(kn: dict, prescreen: dict | None = None, record: dict | None = 
         merged["rules_epoch"] = prescreen["rules_epoch"]
         print("[replay] rules_epoch %r read from prescreen's sibling stamp "
               "(absent from prescreen.knobs)" % prescreen["rules_epoch"])
+    elif "rules_epoch" not in kn and "rules_epoch" in ((prescreen or {}).get("core_build") or {}):
+        # A record played without `record_cands` (arena / A/B seats, the
+        # narrator's fresh games) stamps no epoch: it ran at `play_game`'s
+        # default, the recording build's live epoch — the provenance stamp.
+        merged["rules_epoch"] = prescreen["core_build"]["rules_epoch"]
+        print("[replay] rules_epoch %r read from prescreen.core_build (no epoch "
+              "stamp of its own)" % merged["rules_epoch"])
     top_knobs = (record or {}).get("knobs") or {}
     if "melee_reach" not in kn and "melee_reach" in top_knobs:
         merged["melee_reach"] = top_knobs["melee_reach"]
