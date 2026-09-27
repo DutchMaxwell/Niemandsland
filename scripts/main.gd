@@ -359,6 +359,7 @@ const AI_LISTS_DIR := "res://assets/ai_lists"          # dev/arena bundle — NE
 const AI_LISTS_CDN_PATH := "ai_lists"                   # <AssetCdn.HOST>/ai_lists/… (S6 runtime delivery)
 const AI_LISTS_CACHE_DIR := "user://ai_lists_cache"     # offline replay of fetched lists
 var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
+var _solo_auto_saves: bool = false           # A3 (NML-202): skip _solo_prompt_saves' dialog, roll straight to the tray
 var _solo_batch: bool = false                # headless sweeps: instant (non-physics) dice + zero pacing holds (implies fast)
 var _solo_dev: bool = false                  # developer mode: render the AI's decision records into the battle log
 ## Per-activation stderr trace of the both-AI arena loop (env NML_AI_TRACE=1) — the ladder tooling's
@@ -8115,20 +8116,23 @@ func _rpc_roll_result(req: int, faces: Array) -> void:
 ## Save prompt (locked decision: prompt + auto-roll for speed): the human confirms and their save dice
 ## roll in the tray, attributed to "You". Returns the rolled faces.
 func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: String, hits: int, defense: int, ap: int) -> Array:
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Incoming fire!"
-	var ap_note: String = (" (AP %d → save on %d+)" % [ap, defense + ap]) if ap > 0 else " (save on %d+)" % defense
-	dlg.dialog_text = "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
-		attacker.get_name(), target.get_name(), hits, ("" if hits == 1 else "s"), weapon_name, ap_note]
-	dlg.ok_button_text = "Roll %d save%s" % [hits, ("" if hits == 1 else "s")]
-	dlg.get_cancel_button().hide()   # saves are not optional — one clear action
-	add_child(dlg)
-	# UI audit 2026-07-24: this used to `await dlg.confirmed` directly. ESC still emits `canceled`
-	# even with the cancel button hidden, so the await never returned and the board locked up —
-	# in the MOST frequent solo interaction (every AI volley). The shared helper resolves on
-	# EITHER signal and re-asks a stray dismissal; saves are mandatory, so either way we roll.
-	await _solo_await_confirm(dlg)
-	dlg.queue_free()
+	# A3 (NML-202): the panel switch (or _run_player_intent's own first-use flip) skips the ask —
+	# the threshold log line and the tray roll are unchanged either way.
+	if not _solo_auto_saves:
+		var dlg := ConfirmationDialog.new()
+		dlg.title = "Incoming fire!"
+		var ap_note: String = (" (AP %d → save on %d+)" % [ap, defense + ap]) if ap > 0 else " (save on %d+)" % defense
+		dlg.dialog_text = "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
+			attacker.get_name(), target.get_name(), hits, ("" if hits == 1 else "s"), weapon_name, ap_note]
+		dlg.ok_button_text = "Roll %d save%s" % [hits, ("" if hits == 1 else "s")]
+		dlg.get_cancel_button().hide()   # saves are not optional — one clear action
+		add_child(dlg)
+		# UI audit 2026-07-24: this used to `await dlg.confirmed` directly. ESC still emits `canceled`
+		# even with the cancel button hidden, so the await never returned and the board locked up —
+		# in the MOST frequent solo interaction (every AI volley). The shared helper resolves on
+		# EITHER signal and re-asks a stray dismissal; saves are mandatory, so either way we roll.
+		await _solo_await_confirm(dlg)
+		dlg.queue_free()
 	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
 	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
 	_solo_log_save_threshold(target, defense, ap)
@@ -9604,6 +9608,13 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit) -> void:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"Auto: %s — %s" % [unit.get_name(), str(intent["refused"])], true)
 		return
+	# A3 (NML-202): the first EXECUTED auto intent switches the save prompt off for the rest of the
+	# game — a refusal above never reaches here, so it never flips the switch.
+	if SoloController.auto_saves_after_intent(_solo_auto_saves, true) and not _solo_auto_saves:
+		_solo_auto_saves = true
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Auto: your saves now roll without the prompt — NACHTMAHR panel switches it back")
 	# Per-activation reset the AI gets from activate_next_ai_unit() (solo_controller.gd:643-645) —
 	# the player path never goes through that door, so execute_intent's move would otherwise replay
 	# stale paths/notes/extras left over from the AI's last activation.
@@ -16516,6 +16527,15 @@ func _refresh_solo_panel() -> void:
 	fast_cb.focus_mode = Control.FOCUS_NONE
 	fast_cb.toggled.connect(func(pressed: bool) -> void: _solo_fast = pressed)
 	solo_panel_box.add_child(fast_cb)
+	# A3 (NML-202): the switch _run_player_intent flips ON after a player's first executed auto
+	# intent — an experienced player can also just tick it up front.
+	var auto_saves_cb := CheckButton.new()
+	auto_saves_cb.text = "Roll my saves without the prompt"
+	auto_saves_cb.tooltip_text = "Skip the 'Incoming fire!' confirmation — your defense saves roll straight onto the tray."
+	auto_saves_cb.button_pressed = _solo_auto_saves
+	auto_saves_cb.focus_mode = Control.FOCUS_NONE
+	auto_saves_cb.toggled.connect(func(pressed: bool) -> void: _solo_auto_saves = pressed)
+	solo_panel_box.add_child(auto_saves_cb)
 	# NML-1084: the AI log is a player-facing option again (see ai_reasoning_toggle_visible).
 	var dev_cb := CheckButton.new()
 	dev_cb.visible = ai_reasoning_toggle_visible(OS.is_debug_build(), OS.get_environment("NML_AI_TRACE"))

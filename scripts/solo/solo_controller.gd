@@ -2628,6 +2628,13 @@ func _nearest_enemy_where(unit: GameUnit, accept: Callable) -> GameUnit:
 	return best
 
 
+## A3 (NML-202) — pure rule behind "roll my saves without the prompt": the switch turns ON the
+## first time a player's auto intent actually executes and never turns itself back off (a refusal
+## never reaches this call at all — see main._run_player_intent).
+static func auto_saves_after_intent(current: bool, executed: bool) -> bool:
+	return current or executed
+
+
 ## albtraum v2 — book the COMMITTED plan's expected shooting damage into the overkill ledger. One call
 ## per activation, at the end of _act/_act_aircraft; the lookahead and the tie-break only READ claims.
 ## Shooting only for now: charge_score is a net dealt-minus-taken ranking key, not an expected-wounds
