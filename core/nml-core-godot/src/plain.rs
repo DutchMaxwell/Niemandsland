@@ -29,7 +29,7 @@ use nml_core::{
 /// writes, minus the two this port does not model (see `DROPPED`). Bit `i` of a
 /// capture mask says "the plain form carried key `i`", so `plain_of` writes back
 /// exactly the key set that came in — `state_to_plain` is `if su.has(k)` too.
-pub const UNIT_KEYS: [&str; 19] = [
+pub const UNIT_KEYS: [&str; 20] = [
     "alive",
     "wounds",
     "radii",
@@ -51,6 +51,9 @@ pub const UNIT_KEYS: [&str; 19] = [
     // insert would rename every key above it (battle_sim.gd:1353-1354 appends too).
     "attached",
     "attached_to",
+    // Wave 3 S4-U3: `state_to_plain` writes `bands` (battle_sim.gd:1837); the
+    // node corpus predates it, so the bit keeps its round trip absent there.
+    "bands",
 ];
 
 /// Keys of `_UNIT_DYNAMIC` this SEAM does not read. Reported by
@@ -59,10 +62,11 @@ pub const UNIT_KEYS: [&str; 19] = [
 /// seam's `UNIT_KEYS` mask has no bit for them, so it declines them here too.)
 pub const DROPPED: [&str; 2] = ["dormant_models", "dormant_wounds"];
 
-/// The state-level blobs nothing in `resolve`/`score` reads: kept verbatim and
-/// handed back by `plain_of` unchanged (`markers_meta` and `destroy_seq` are
-/// ALSO parsed into the state, because `score` reads them).
-pub const EXTRA_KEYS: [&str; 5] = ["vp", "vp_flavour", "vp_memo", "markers_meta", "destroy_seq"];
+/// The state-level blobs kept verbatim and handed back by `plain_of` unchanged
+/// (both are ALSO parsed into the state, because `score` reads them). The vp
+/// ledger is NOT echoed: `plain_of` writes `State.vp`/`vp_flavour`/`vp_memo`,
+/// so the read-back shows what the core holds (wave 3 S4-U1).
+pub const EXTRA_KEYS: [&str; 2] = ["markers_meta", "destroy_seq"];
 
 // ---------------------------------------------------------------- readers ---
 
@@ -403,9 +407,11 @@ pub fn build_state(
             .collect(),
         markers_meta,
         destroy_seq: darr(plain, "destroy_seq").iter_shared().map(|v| int(&v)).collect(),
-        vp: None,
-        vp_flavour: None,
-        vp_memo: None,
+        // Wave 3 S4-U1: the live mission ledger (battle_sim.gd:1789-1792 sends it
+        // on round_vp missions); absent = None, as `io::state_of` reads it.
+        vp: plain.get("vp").map(|v| Rc::new(crate::mvcall::flat(&v))),
+        vp_flavour: plain.get("vp_flavour").map(|v| Rc::new(crate::mvcall::flat(&v))),
+        vp_memo: plain.get("vp_memo").map(|v| Rc::new(crate::mvcall::flat(&v))),
         cast_events: Vec::new(),
         player: Vec::with_capacity(n),
         alive: Vec::with_capacity(n),
@@ -526,7 +532,12 @@ pub fn build_state(
         // `SoloController.sim_move_bands` call, exactly as `io::state_of` does —
         // a defaulted 6"/12" would answer for a Slow unit the profile reads as 4"/8".
         st.bands.push(match u.get("bands").and_then(|v| v.try_to::<VarDictionary>().ok()) {
-            Some(b) => Bands { advance: dnum(&b, "advance", 6.0), rush: dnum(&b, "rush", 12.0), ..Default::default() },
+            // Wave 3 S4-U3: a distinct charge reach (Rapid Charge) rides `charge`.
+            Some(b) => Bands {
+                advance: dnum(&b, "advance", 6.0),
+                rush: dnum(&b, "rush", 12.0),
+                charge: b.get("charge").map(|v| num(&v)),
+            },
             None => {
                 let mb = prof_table.list[roster.profile[st.bands.len()]].move_bands;
                 Bands { advance: mb.advance, rush: mb.rush, ..Default::default() }
@@ -590,6 +601,36 @@ fn mods_out(m: &Mods) -> VarDictionary {
     d.set("advance", m.advance);
     d.set("rush", m.rush);
     d
+}
+
+/// The inverse of `mvcall::flat` for the JSON blobs `State` keeps (`vp`,
+/// `vp_flavour`, `vp_memo`): an integer stays an `int`, every other number a
+/// `float`, arrays and objects recurse.
+fn variant_of(v: &serde_json::Value) -> Variant {
+    use serde_json::Value;
+    match v {
+        Value::Null => Variant::nil(),
+        Value::Bool(b) => b.to_variant(),
+        Value::Number(n) => match n.as_i64() {
+            Some(i) => i.to_variant(),
+            None => n.as_f64().unwrap_or(0.0).to_variant(),
+        },
+        Value::String(s) => GString::from(s.as_str()).to_variant(),
+        Value::Array(a) => {
+            let mut out = VarArray::new();
+            for e in a {
+                out.push(&variant_of(e));
+            }
+            out.to_variant()
+        }
+        Value::Object(m) => {
+            let mut d = VarDictionary::new();
+            for (k, e) in m {
+                d.set(k.as_str(), &variant_of(e));
+            }
+            d.to_variant()
+        }
+    }
 }
 
 /// The inverse of `build_state` — the plain form `BattleSim.state_to_plain(state,
@@ -679,6 +720,16 @@ pub fn plain_of(cap: &Captured) -> VarDictionary {
             let host = st.attached_to[i].map(|h| st.key(h)).unwrap_or("");
             u.set("attached_to", &GString::from(host));
         }
+        if has("bands") {
+            let b = &st.bands[i];
+            let mut d = VarDictionary::new();
+            d.set("advance", b.advance);
+            d.set("rush", b.rush);
+            if let Some(c) = b.charge {
+                d.set("charge", c);
+            }
+            u.set("bands", &d);
+        }
         // `_apply_expected_wounds` (battle_sim.gd:1050-1059) CREATES the key on
         // the target the first time a volley lands, so a state that had none can
         // grow one; a zero carry it also writes is indistinguishable from "never
@@ -713,6 +764,11 @@ pub fn plain_of(cap: &Captured) -> VarDictionary {
     for k in EXTRA_KEYS {
         if let Some(v) = cap.extras.get(k) {
             out.set(k, &v);
+        }
+    }
+    for (k, v) in [("vp", &st.vp), ("vp_flavour", &st.vp_flavour), ("vp_memo", &st.vp_memo)] {
+        if let Some(v) = v {
+            out.set(k, &variant_of(v));
         }
     }
     if let Some(m) = &st.los_pairs {
