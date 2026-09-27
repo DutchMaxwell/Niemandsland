@@ -2587,6 +2587,47 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit) -> Dictionary:
 	return ActIntent.make(unit, action, target, unit_centre(target), band_in, do_shoot, extra)
 
 
+## A2 (NML-202) — the suggested target for the radial's Charge / Advance & Shoot / Rush click: named
+## in the log (main.solo_begin_auto) and taken by a PICK on the unit's own base. Pure read, no state
+## change. Charge picks the nearest enemy the charge gate would actually accept; Rush picks by the
+## same base-to-base gap the charge gate itself measures; Advance/Hold prefer whatever the AI's own
+## volley picker would shoot right now, falling back to the nearest enemy when nothing is in reach.
+func suggest_target(unit: GameUnit, verb: int) -> GameUnit:
+	match verb:
+		AiDecision.Action.CHARGE:
+			return _nearest_enemy_where(unit, func(gu: GameUnit) -> bool:
+				var bands: Dictionary = move_bands_for_unit(unit, movement_range)
+				var charge := float(bands.get("charge", bands.get("rush", 12))) + musician_move_bonus_in(unit)
+				return charge_illegal_why(unit, gu, charge) == "")
+		AiDecision.Action.RUSH:
+			return _nearest_enemy_where(unit, func(_gu: GameUnit) -> bool: return true)
+		_:
+			var shot := best_shoot_target_now(unit)
+			return shot if shot != null else _nearest_enemy_of(unit)
+
+
+## The nearest (base-to-base gap) enemy of `unit` for which `accept` returns true, or null.
+func _nearest_enemy_where(unit: GameUnit, accept: Callable) -> GameUnit:
+	if army_manager == null or unit == null:
+		return null
+	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
+	var best: GameUnit = null
+	var best_d := INF
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
+			continue
+		if int(gu.unit_properties.get("player_id", 0)) == own_pid:
+			continue
+		if not accept.call(gu):
+			continue
+		var d := nearest_melee_gap_in(unit, gu)
+		if d < best_d:
+			best_d = d
+			best = gu
+	return best
+
+
 ## albtraum v2 — book the COMMITTED plan's expected shooting damage into the overkill ledger. One call
 ## per activation, at the end of _act/_act_aircraft; the lookahead and the tie-break only READ claims.
 ## Shooting only for now: charge_score is a net dealt-minus-taken ranking key, not an expected-wounds

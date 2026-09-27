@@ -79,3 +79,28 @@ func test_immobile_unit_refuses_anything_but_hold() -> void:
 	var intent := solo.player_intent(attacker, AiDecision.Action.RUSH, target)
 	assert_bool(intent.has("refused")).is_true()
 	assert_str(str(intent.get("refused", ""))).contains("Hold")
+
+
+# ===== A2 suggest_target =====
+
+func test_suggest_target_charge_picks_the_chargeable_enemy() -> void:
+	var attacker := _unit(2, "Attacker", [Vector3.ZERO])
+	var enemy := _unit(1, "Enemy", [Vector3(8 * IN2M, 0, 0)])
+	var solo := _controller([attacker, enemy])
+	assert_object(solo.suggest_target(attacker, AiDecision.Action.CHARGE)).is_equal(enemy)
+
+
+func test_suggest_target_rush_picks_the_nearest_enemy_by_gap() -> void:
+	var attacker := _unit(2, "Attacker", [Vector3.ZERO])
+	var near := _unit(1, "Near", [Vector3(6 * IN2M, 0, 0)])
+	var far := _unit(1, "Far", [Vector3(20 * IN2M, 0, 0)])
+	var solo := _controller([attacker, near, far])
+	assert_object(solo.suggest_target(attacker, AiDecision.Action.RUSH)).is_equal(near)
+
+
+func test_suggest_target_advance_falls_back_to_nearest_enemy_with_no_shot() -> void:
+	var attacker := _unit(2, "Attacker", [Vector3.ZERO])   # no weapons -> best_shoot_target_now is null
+	var near := _unit(1, "Near", [Vector3(6 * IN2M, 0, 0)])
+	var far := _unit(1, "Far", [Vector3(20 * IN2M, 0, 0)])
+	var solo := _controller([attacker, near, far])
+	assert_object(solo.suggest_target(attacker, AiDecision.Action.ADVANCE)).is_equal(near)

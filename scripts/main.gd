@@ -9581,6 +9581,13 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "%s: pick a target for %s — right-click cancels" % [
 			unit.get_name(), verb_label])
+	# A2 (NML-202): name a suggestion so the player isn't guessing which enemy is worth the click —
+	# a PICK on the unit's OWN base (in _solo_targeting_input) takes it.
+	var suggested: GameUnit = solo_controller.suggest_target(unit, verb)
+	if suggested != null:
+		_solo_target_mode["suggested"] = suggested
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Suggested: %s" % suggested.get_name())
 
 
 ## A1 (NML-202, automodus PR 2) — resolves a player's Charge / Advance & Shoot / Rush intent through
@@ -9860,6 +9867,10 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				if target != null:
 					_solo_cast_click(target)
 				return true
+			# A2 (NML-202): a PICK on the unit's own base takes the suggested target — the player
+			# doesn't have to click the far side of the table to accept the engine's own pick.
+			if _solo_target_mode.has("auto_verb") and target == attacker:
+				target = _solo_target_mode.get("suggested") as GameUnit
 			var melee: bool = bool(_solo_target_mode.get("melee", false))
 			if target == null or not _solo_is_ai_unit(target) or _solo_combined_alive(target) <= 0 \
 					or SoloController.unit_in_reserve(target):
