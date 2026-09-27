@@ -7720,6 +7720,13 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 				"%s: %s — Regeneration is ignored (once)" % [from_mark, attacker.get_name()],
 				_solo_is_ai_unit(attacker))
 		return true
+	for flag in ["rending", "unstoppable", "bane"]:
+		if bool(profile.get(flag, false)):
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s (granted): Regeneration ignored" % flag.capitalize(),
+					attacker != null and _solo_is_ai_unit(attacker))
+			return true
 	if attacker == null:
 		return false
 	var shooting := int(profile.get("range", 0)) > 0
@@ -9275,6 +9282,8 @@ func _solo_below_half_strength(unit: GameUnit) -> bool:
 ## wiped whole units before).
 func _solo_morale_quality(unit: GameUnit) -> int:
 	var best_quality: int = unit.get_quality()
+	if not _solo_is_ai_unit(unit) and not bool(unit.unit_properties.get("hero_tests_morale", true)):
+		return best_quality
 	var host_alive: bool = unit.get_alive_count() > 0
 	var best_hero: GameUnit = null
 	for attached in unit.get_attached_heroes():
@@ -9290,7 +9299,32 @@ func _solo_morale_quality(unit: GameUnit) -> int:
 	return best_quality
 
 
+func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
+	if _solo_is_ai_unit(unit) or unit.unit_properties.has("hero_tests_morale"):
+		return
+	var has_hero := false
+	for attached in unit.get_attached_heroes():
+		var hero := attached as GameUnit
+		if hero != null and hero.get_alive_count() > 0:
+			has_hero = true
+			break
+	if not has_hero:
+		return
+	if _solo_batch:
+		unit.unit_properties["hero_tests_morale"] = true
+		return
+	var dlg := ConfirmationDialog.new()
+	dlg.title = "Hero morale"
+	dlg.dialog_text = "Let a living Hero test morale for %s from now on?" % unit.get_name()
+	dlg.ok_button_text = "Use Hero"
+	dlg.get_cancel_button().text = "Use unit"
+	add_child(dlg)
+	unit.unit_properties["hero_tests_morale"] = await _solo_await_confirm(dlg, true, true)
+	dlg.queue_free()
+
+
 func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bool:
+	await _solo_ask_hero_morale_once(unit)
 	var below_half := _solo_below_half_strength(unit)   # single models: tough-wounds scale (p.10)
 	var result: int
 	if unit.is_shaken:
