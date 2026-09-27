@@ -64,12 +64,12 @@ use nmlcore::playout::Policy;
 use nmlcore::policy::{Policy as PolicyHarness, PolicyNet};
 use nmlcore::rollout::Rollout;
 use nmlcore::sight;
-use nmlcore::sim::Scratch;
+use nmlcore::sim::{reply_threat_at_epoch, Scratch};
 use nmlcore::state::{Marker, ProfileCache, Roster};
 use nmlcore::rows::{Cell, RowEncoder, RowVocab};
 use nmlcore::unit::{StaticsCache, UnitStatic};
 use nmlcore::{
-    geom, io, mission, reply_threat, resolve_on_board, resolve_stochastic_on_board,
+    geom, io, mission, resolve_on_board, resolve_stochastic_on_board,
     resolve_stochastic_tray_on_board, score_with, Action, Fitted, GodotRng, PlainTerrain,
     Registries, Seams, State as CoreState, Terrain, Tray, Unsupported as CoreUnsupported,
 };
@@ -88,6 +88,15 @@ fn json_text(obj: &Bound<'_, PyAny>) -> PyResult<String> {
 /// carries no meaning — never for a plain state.
 fn value_of(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
     serde_json::from_str(&json_text(obj)?).map_err(|e| Unsupported::new_err(e.to_string()))
+}
+
+/// The same recording-epoch resolver used by Rust ACT headers and rows.
+#[pyfunction]
+#[pyo3(signature = (knobs, prescreen = None))]
+fn record_rules_epoch(knobs: &Bound<'_, PyAny>, prescreen: Option<&Bound<'_, PyAny>>) -> PyResult<u32> {
+    let kn = value_of(knobs)?;
+    let ps = prescreen.map(value_of).transpose()?.unwrap_or(Value::Null);
+    Ok(nmlcore::acts::record_rules_epoch(&kn, &ps))
 }
 
 /// One `serde_json::Value` as a Python object.
@@ -1489,7 +1498,7 @@ impl Core {
     /// (`AiPlanner._policy_step` ai_planner.gd:508-510).
     fn score(&mut self, state: PyRef<'_, PyState>, player: i64) -> PyResult<f64> {
         let statics = self.statics_for(&state.inner)?;
-        let incoming = reply_threat(&statics, &state.inner, player);
+        let incoming = reply_threat_at_epoch(&statics, &state.inner, player, self.knobs.rules_epoch);
         Ok(score_with(&state.inner, &statics, player, &incoming, self.net.as_ref()))
     }
 
@@ -1588,7 +1597,7 @@ impl Core {
     /// unit, indexed by CAPTURE order (`State.keys()`), not by key.
     fn reply_threat(&mut self, state: PyRef<'_, PyState>, player: i64) -> PyResult<Vec<f64>> {
         let statics = self.statics_for(&state.inner)?;
-        Ok(reply_threat(&statics, &state.inner, player))
+        Ok(reply_threat_at_epoch(&statics, &state.inner, player, self.knobs.rules_epoch))
     }
 
     /// `AiPlanner._policy_step` ai_planner.gd:602-624 with the RICH leaf — the
@@ -1848,10 +1857,11 @@ impl Core {
         let statics = self.statics_for(&state.inner)?;
         let inc = match incoming {
             Some(v) => v,
-            None => reply_threat(&statics, &state.inner, player),
+            None => reply_threat_at_epoch(&statics, &state.inner, player, self.knobs.rules_epoch),
         };
         let vals =
-            nmlcore::features(&state.inner, &statics, player, &inc, rich, reserves);
+            nmlcore::features(&state.inner, &statics, player, &inc, rich, reserves,
+                self.knobs.rules_epoch);
         let d = PyDict::new(py);
         for (k, v) in nmlcore::FEATURE_KEYS.iter().zip(vals) {
             d.set_item(*k, v)?;
@@ -2728,6 +2738,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRng>()?;
     m.add_class::<PyTray>()?;
     m.add_function(wrap_pyfunction!(load, m)?)?;
+    m.add_function(wrap_pyfunction!(record_rules_epoch, m)?)?;
     m.add_function(wrap_pyfunction!(set_legacy_prefix_rules, m)?)?;
     m.add_function(wrap_pyfunction!(set_legacy_no_cond_ap, m)?)?;
     // NML-1134: the rule vocabulary's version — this build's, and one corpus's.

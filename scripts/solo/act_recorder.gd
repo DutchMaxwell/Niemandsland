@@ -147,8 +147,7 @@ const EPOCH_61_PRECISION_MARKERS := 61
 ## Advanced Rules v3.5.1 p.9 "Who Can Strike"): a melee pair must be within 4" vertically,
 ## not just 2" horizontally. The table applies this rule UNCONDITIONALLY (table truth, not
 ## a corpus-gated behaviour) and every recorded corpus has y = 0 (no replay changes), so
-## `rules_epoch` below stays at 61 (L1, `PLAN_heights_2026-09-27.md`; the core's own
-## EPOCH_62_CASTING_MOD gate ahead of this one is also still unmirrored, acts.rs:514-516).
+## `rules_epoch` stayed at 61 in that PR (L1, `PLAN_heights_2026-09-27.md`).
 ## This constant is kept for reference only. The core's own gate reads the frozen
 ## `EPOCH_63_MELEE_HEIGHT` (acts.rs).
 const EPOCH_63_MELEE_HEIGHT := 63
@@ -185,7 +184,8 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## hit reads the per-model within-1" terrain predicate on both layers; the
 ## table's cover-cell approximation is dropped).
 ## on the Regeneration fold).
-static var rules_epoch: int = 61
+## Wave 3 batch B moves this stamp to 65 with EPOCH_65_MELEE_TRUTH.
+static var rules_epoch: int = 65
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

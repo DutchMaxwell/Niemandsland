@@ -61,7 +61,7 @@ def replay_knobs(kn: dict, prescreen: dict | None = None, record: dict | None = 
     actually played with. A key the record is silent on (every Gen-0 file
     here, predating it) keeps `KNOBS`'s legacy value, exactly as before.
 
-    `rules_epoch` gets one extra fallback (root cause of the 15% Gen-2 replay
+    `rules_epoch` uses the ACT reader's shared resolver (root cause of the 15% Gen-2 replay
     gap this closes, INVESTIGATION-grade proof: forcing epoch 3 replays
     gen0_s10004_d13004.json 54/54 exact): the Gen-2 recorder stamps the epoch
     it actually played at ONE LEVEL UP, `prescreen["rules_epoch"]`, a sibling
@@ -69,9 +69,9 @@ def replay_knobs(kn: dict, prescreen: dict | None = None, record: dict | None = 
     only started writing it INTO its own `knobs` dict, under `record_cands`,
     after these corpora were recorded). So the order is: `kn["rules_epoch"]`
     if the record's own knobs carry it, else `prescreen["rules_epoch"]` if
-    the sibling stamp is there, else `KNOBS`'s legacy pin (`0`) exactly as
-    before — a pre-epoch record (neither key present, every Gen-0/Gen-1 file)
-    replays exactly as it always did.
+    the sibling stamp is there, else `prescreen.core_build.rules_epoch` for an
+    unstamped later record, else the legacy pin (`0`). A pre-epoch record
+    without any of these fields still replays exactly as it always did.
 
     `melee_reach` gets its own fallback, one level further up again — the
     Gen-2b export gate's whole reason to fail (reproduced on
@@ -87,17 +87,9 @@ def replay_knobs(kn: dict, prescreen: dict | None = None, record: dict | None = 
     before — a pre-#669 record (neither key present) replays exactly as it
     always did."""
     merged = {**KNOBS, **{k: kn[k] for k in KNOBS if k in kn}}
-    if "rules_epoch" not in kn and prescreen is not None and "rules_epoch" in prescreen:
-        merged["rules_epoch"] = prescreen["rules_epoch"]
-        print("[replay] rules_epoch %r read from prescreen's sibling stamp "
-              "(absent from prescreen.knobs)" % prescreen["rules_epoch"])
-    elif "rules_epoch" not in kn and "rules_epoch" in ((prescreen or {}).get("core_build") or {}):
-        # A record played without `record_cands` (arena / A/B seats, the
-        # narrator's fresh games) stamps no epoch: it ran at `play_game`'s
-        # default, the recording build's live epoch — the provenance stamp.
-        merged["rules_epoch"] = prescreen["core_build"]["rules_epoch"]
-        print("[replay] rules_epoch %r read from prescreen.core_build (no epoch "
-              "stamp of its own)" % merged["rules_epoch"])
+    # The ACT reader and the narrator use the same record-epoch resolver;
+    # in particular a silent old record remains at epoch 0.
+    merged["rules_epoch"] = nml_core.record_rules_epoch(kn, prescreen)
     top_knobs = (record or {}).get("knobs") or {}
     if "melee_reach" not in kn and "melee_reach" in top_knobs:
         merged["melee_reach"] = top_knobs["melee_reach"]
