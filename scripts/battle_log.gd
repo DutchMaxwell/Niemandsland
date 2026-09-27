@@ -157,9 +157,11 @@ func on_unit_activated(unit_name: String, owner: String, ai: bool = false, detai
 	log_event(Category.GENERAL, "%s activated (%s)" % [unit_name, owner], ai, detail)
 
 
-func on_unit_moved(unit_name: String, distance_inches: float, ai: bool = false) -> void:
+func on_unit_moved(unit_name: String, distance_inches: float, ai: bool = false, climb_in: float = 0.0) -> void:
 	var verb := "advances" if ai else "moves"
-	log_event(Category.MOVEMENT, "%s %s %.0f\"" % [unit_name, verb, distance_inches], ai)
+	# GF p.11: name the climb inline when the move spent any (D5a is a separate warning).
+	var suffix := " incl. %.1f\" climb — GF p.11" % climb_in if climb_in > 0.05 else ""
+	log_event(Category.MOVEMENT, "%s %s %.0f\"%s" % [unit_name, verb, distance_inches, suffix], ai)
 
 
 func on_dice_rolled(count: int, hits: int, target: int, player: String = "", faces: Array = [],

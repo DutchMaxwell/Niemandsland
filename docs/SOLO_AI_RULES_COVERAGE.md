@@ -36,6 +36,7 @@ Mount was available on 2026-07-09; every rule below was read from the PDFs/army 
 | LOS / Cover / Difficult / Dangerous terrain | ✅ | `TerrainRules` (shared with `terrain_overlay.gd`) |
 | 1" enemy spacing · Fatigue · Shaken · morale/Rout | ✅ | `SoloSim` |
 | **Melee "Who Can Strike" — only models within 2"** | 🆕 | `SoloSim._striking_models` / `_effective_melee_attacks` (p.9; base-contact folded into centre distance) |
+| **Elevation** (climb cost, melee 2″/4″, coherency 3″) | ⏳ sim / ✅ **real game** | GF p.9/p.11; `SoloController.within_melee_height`, `MoveLedger.climb_report`, `CoherencyChecker._is_elevated_different` (heights B1, NML-972). `SoloSim`'s board is flat 2D — no height dimension (Finding 6, out of scope). |
 | **Split fire** (weapon types → different targets) | 🆕 | `SoloSim._resolve_shooting_split` (p.8) |
 | **Deadly(X)** (×X to one model, Tough-capped, overkill lost) | 🆕 | `AiCombatMath.deadly_multiplier` + `_resolve_volley`/`_strike`. Pooled-sim note: exact only when X ≥ Tough (the common case); a Deadly hit with X < Tough may pool onto the next model rather than strictly losing overkill. |
 | **Relentless** (>9" shooting: unmodified 6 → +1 hit) | 🆕 | `AiCombatMath.relentless_bonus_hits` in `_resolve_volley` |

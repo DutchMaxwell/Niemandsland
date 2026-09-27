@@ -6,6 +6,20 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Fixed
+- **Unit coherency's 3" allowance now triggers on real elevation, not a drag lift.** The
+  threshold was 3" tall, so a model on a 2.5" container roof and its mate on the ground
+  counted as "same level" and had to stand 1" apart, which the wall face makes
+  impossible; it is now GF p.11's own 1" floor, and a drag pickup is never mistaken for
+  standing on elevated terrain. (NML-972, phase B1)
+- **Melee "Who Can Strike" also measures 4" vertically (GF/AoF p.9).** A unit standing on
+  a 6" ruin floor could strike, and be struck by, infantry at the wall foot. (NML-972,
+  phase B1)
+- **A human move pays its climb cost, and the player can pick a ruin floor.** Climbing a
+  container or a ruin's floor slab now spends its height (up and down, GF p.11), a step
+  over 3" is refused under the movement limit, and the mouse wheel steps which floor of a
+  multi-storey ruin a drag lands on. (NML-972, phase B1)
+
 ## [0.3.13.1-alpha] — 2026-09-25
 
 A quiet follow-up to 0.3.13.0: save/load and multiplayer fixes from a code review, plus the table fixes merged the same day.
