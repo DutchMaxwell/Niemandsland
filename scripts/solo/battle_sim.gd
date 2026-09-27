@@ -351,8 +351,23 @@ static func board_rows(state: Dictionary) -> Array:
 ## dicts (eval/features read them).
 static func playout_seize(state: Dictionary, owners: Array) -> void:
 	var objs: Array = state.get("objectives", [])
+	var markers: Array = state.get("markers_meta", [])
+	var units: Dictionary = state.get("units", {})
 	for i in range(objs.size()):
 		var op: Vector3 = (objs[i] as Dictionary)["pos"]
+		# NML-1010 wave C, R1a: a CARRIED marker is owned by the carrier's side
+		# for as long as the carrier is alive and unshaken — no ring test, the
+		# carrier can stand anywhere. Only once it drops (drop_carried) does the
+		# ring test below resume deciding the marker.
+		if i < markers.size():
+			var mk: Dictionary = markers[i]
+			var carrier := String(mk.get("carried_by", ""))
+			if bool(mk.get("carry", false)) and not carrier.is_empty():
+				var cu: Dictionary = units.get(carrier, {})
+				if int(cu.get("alive", 0)) > 0 and not bool(cu.get("shaken", false)):
+					owners[i] = int(cu.get("player", 0))
+					(objs[i] as Dictionary)["owner"] = int(owners[i])
+					continue
 		# SIDES PRESENT, NOT BODIES PRESENT. Until 16.08. this counted units and
 		# gave the marker to the majority — a rule the game does not have. The
 		# book (and SoloController.seize_objectives) says: one side near seizes
@@ -376,6 +391,55 @@ static func playout_seize(state: Dictionary, owners: Array) -> void:
 		elif sides.size() > 1:
 			owners[i] = 0
 		(objs[i] as Dictionary)["owner"] = int(owners[i])
+
+
+## NML-1010 wave C (Relic Hunt/Capture & Hold): a `carry` marker just seized
+## (owners[i] in (1,2)) and not yet carried is picked up by the seizing side's
+## eligible unit (can_hold_marker) with the smallest control_gap_in; a tie goes
+## to whichever unit `state["units"]` iterates first (capture order — R1/R4
+## GRILL). From then on the marker's position tracks the carrier's first
+## living model, so every clone_state/capture snapshot moves it for free.
+static func apply_carry_step(state: Dictionary, markers: Array, owners: Array) -> void:
+	var objs: Array = state.get("objectives", [])
+	var units: Dictionary = state.get("units", {})
+	var round_no := int(state.get("round", 1))
+	for i in range(markers.size()):
+		var mk: Dictionary = markers[i]
+		if not bool(mk.get("carry", false)) or not String(mk.get("carried_by", "")).is_empty():
+			continue
+		if i >= owners.size() or i >= objs.size():
+			continue
+		var side := int(owners[i])
+		if side != 1 and side != 2:
+			continue
+		var op: Vector3 = (objs[i] as Dictionary)["pos"]
+		var best_key := ""
+		var best_gap := INF
+		for k in units:
+			var su: Dictionary = units[k]
+			if int(su.get("player", 0)) != side or not can_hold_marker(su, round_no):
+				continue
+			var gap := control_gap_in(su, op)
+			if gap < best_gap:
+				best_gap = gap
+				best_key = k
+		if not best_key.is_empty():
+			mk["carried_by"] = best_key
+			var ps: Array = (units[best_key] as Dictionary).get("positions", [])
+			if not ps.is_empty():
+				(objs[i] as Dictionary)["pos"] = ps[0]
+
+
+## The carrier's own marker(s) return to the table at `drop_pos` (R3/R4: a
+## unit may carry more than one, the book states no limit — both drop at the
+## SAME point, one call per drop event).
+static func drop_carried(markers: Array, objectives: Array, unit_key: String, drop_pos: Vector3) -> void:
+	for i in range(markers.size()):
+		var mk: Dictionary = markers[i]
+		if bool(mk.get("carry", false)) and String(mk.get("carried_by", "")) == unit_key:
+			mk["carried_by"] = ""
+			if i < objectives.size():
+				(objectives[i] as Dictionary)["pos"] = drop_pos
 
 
 ## HEAD_QUEUE #12/#13 (rebuilt 23.08.): ONE marker measure for referee AND
