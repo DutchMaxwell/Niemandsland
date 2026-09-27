@@ -527,11 +527,12 @@ pub const EPOCH_62_CASTING_MOD: u32 = 62;
 /// (L1, `PLAN_heights_2026-09-27.md`). `63` is one past every epoch present
 /// at the rebase (62 = `EPOCH_62_CASTING_MOD`), and the value
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
-/// reads THIS constant, not the literal `63` or `CURRENT_RULES_EPOCH`. MIRROR
-/// HOLD: table-side PR — the table applies the melee-height rule
-/// unconditionally (it is table truth), so `act_recorder.gd`'s
-/// `rules_epoch` mirror stays at 61 (the casting-mod slot is still unported,
-/// see EPOCH_62_CASTING_MOD above); it carries only its own
+/// reads THIS constant, not the literal `63` or `CURRENT_RULES_EPOCH`.
+/// MIRROR HOLD: the table applies the melee-height rule unconditionally (it
+/// is table truth, not a corpus-gated behaviour) and every recorded corpus
+/// has y = 0, so `act_recorder.gd`'s `rules_epoch` mirror stays at 61 (the
+/// casting-mod slot is still unported, see EPOCH_62_CASTING_MOD above); it
+/// carries only its own
 /// `EPOCH_63_MELEE_HEIGHT` constant for reference.
 pub const EPOCH_63_MELEE_HEIGHT: u32 = 63;
 
