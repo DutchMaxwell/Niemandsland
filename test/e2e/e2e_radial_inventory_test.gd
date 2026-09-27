@@ -291,3 +291,110 @@ func test_the_inventory_check_can_fail(timeout := 120000) -> void:
 	await _reset(squad)
 	var misses: Array = await _walk(squad, ["toggle_fatigued", "delete_unit"])
 	assert_bool(misses.size() > 0).override_failure_message("a menu with 7 entries passed as a 2-entry menu").is_true()
+
+
+# === the house-style ring (RED on main 17c1cebb) ==============================================
+
+## A colour spelled out (numbers, a hex string, a named colour) or an old HUD token, in code — not in
+## comments. A token tint such as Color(HouseStyle.ACCENT, HouseStyle.HOVER_ALPHA) is not a literal.
+const LITERAL := "Color8?\\(\\s*[\"'0-9.-]|Color\\.[A-Z_]+|HudTokens\\."
+## The widest tooltip box the ring may draw (the mockup's tooltip is ~340 px of text).
+const TOOLTIP_MAX_W := 420.0
+
+
+func _colour_literals(source: String) -> Array:
+	var re := RegEx.create_from_string(LITERAL)
+	var hits: Array = []
+	var lines := source.split("\n")
+	for i in lines.size():
+		if re.search(lines[i].split("#")[0]) != null:
+			hits.append("%d: %s" % [i + 1, lines[i].strip_edges()])
+	return hits
+
+
+## Every wedge label as drawn: [text, Rect2 in the menu's px]. The menu's own layout when it has one;
+## before the house-style ring, today's formula (the full label centred on the wedge's middle radius).
+func _label_boxes() -> Array:
+	var m := _menu()
+	var font: Font = m._font
+	var fs := HouseStyle.FONT_BODY
+	var layout: Array = m.call("_label_layout", font) if m.has_method("_label_layout") else []
+	var out: Array = []
+	var n := m._items.size()
+	for i in n:
+		var text: String = m._items[i].label
+		var a := -PI / 2.0 + i * TAU / n
+		var p := m._center_pos + Vector2(cos(a), sin(a)) * (m.menu_radius - 4.0 + m.center_radius) / 2.0
+		var ls := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+		var base := Vector2(p.x - ls.x / 2.0, p.y + ls.y * 0.32)
+		if not layout.is_empty():
+			text = layout[i][0]
+			base = layout[i][1]
+		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		out.append([text, Rect2(base.x, base.y - font.get_ascent(fs), w, font.get_height(fs))])
+	return out
+
+
+## Labels that leave the ring or lie on another label (NML-979), as readable lines.
+func _bursts(who: String) -> Array:
+	var m := _menu()
+	var boxes := _label_boxes()
+	var out: Array = []
+	for i in boxes.size():
+		var r: Rect2 = boxes[i][1]
+		if str(boxes[i][0]).is_empty():
+			continue
+		for c: Vector2 in [r.position, r.position + Vector2(r.size.x, 0), r.end, r.position + Vector2(0, r.size.y)]:
+			if c.distance_to(m._center_pos) > m.menu_radius:
+				out.append("%s: '%s' reaches %.0f px past the ring" % [who, boxes[i][0], c.distance_to(m._center_pos) - m.menu_radius])
+				break
+		for j in range(i + 1, boxes.size()):
+			if not str(boxes[j][0]).is_empty() and r.intersects(boxes[j][1]):
+				out.append("%s: '%s' lies on '%s'" % [who, boxes[i][0], boxes[j][0]])
+	return out
+
+
+func test_the_ring_paints_only_house_style_tokens() -> void:
+	# The scan can fail: literals and old HUD tokens are caught, a token tint and a comment are not.
+	assert_array(_colour_literals("var a := Color(1.0, 1.0, 1.0, 0.06)\nvar b := Color.RED\nvar c := HudTokens.CYAN\nvar d := Color8(1, 2, 3)\nvar e := Color(\"e9e9df\")")).has_size(5)
+	assert_array(_colour_literals("var t := Color(HouseStyle.ACCENT, HouseStyle.HOVER_ALPHA)  # not Color(1, 0, 0)")).is_empty()
+	assert_array(_colour_literals(FileAccess.get_file_as_string("res://scripts/radial_menu.gd"))) \
+		.override_failure_message("radial_menu.gd paints colours HouseStyle does not own:\n%s" % "\n".join(
+			_colour_literals(FileAccess.get_file_as_string("res://scripts/radial_menu.gd")))).is_empty()
+
+
+func test_no_label_leaves_the_ring_or_covers_another(timeout := 120000) -> void:
+	var squad := _unit(1, "Wardens", [Vector3.ZERO, Vector3(1.2 * INCH, 0, 0), Vector3(2.4 * INCH, 0, 0)])
+	var hero := _hero()
+	hero.models[0].node.global_position = Vector3(0.3, 0, 0)
+	var truck := _unit(1, "Battle Wagon Transport", [Vector3(-0.3, 0, 0)], ["Transport(6)"])
+	var walkers := _unit(1, "Wolf Brothers Pack Veterans", [Vector3(-0.3, 0, 0.04), Vector3(-0.3 + 1.2 * INCH, 0, 0.04)])
+	var riders := _unit(1, "Custodian Brothers Retinue", [Vector3(-0.26, 0, 0)])
+	_rmc()._embark_unit({"game_unit": riders, "embark_target": truck})
+	_solo_playing_on()
+	var bursts: Array = []
+	for u: GameUnit in [squad, hero, walkers, truck]:
+		await _open(u)
+		bursts.append_array(_bursts(u.get_name()))
+		_menu().close()
+		await _runner.simulate_frames(2)
+	assert_array(bursts).override_failure_message("labels burst the ring:\n%s" % "\n".join(bursts)).is_empty()
+
+
+func test_a_long_tooltip_wraps_and_a_cut_label_reads_in_full(timeout := 120000) -> void:
+	var hero := _hero()
+	_solo_playing_on()
+	await _open(hero)
+	var m := _menu()
+	var boxes := _label_boxes()
+	var wide: Array = []
+	for i in m._items.size():
+		var it := m._items[i] as RadialMenu.RadialMenuItem
+		var tip: String = m.call("_tooltip_text", it, boxes[i][0]) if m.has_method("_tooltip_text") else it.tooltip
+		var w: float = m._tooltip_box_size(m._font, tip).x
+		if w > TOOLTIP_MAX_W:
+			wide.append("'%s' tooltip is %.0f px wide" % [it.label, w])
+		if boxes[i][0] != it.label and not tip.contains(it.label):
+			wide.append("'%s' is shown as '%s' and its tooltip never names it in full" % [it.label, boxes[i][0]])
+	m.close()
+	assert_array(wide).override_failure_message("\n".join(wide)).is_empty()
