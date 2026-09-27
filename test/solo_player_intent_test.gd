@@ -104,3 +104,25 @@ func test_suggest_target_advance_falls_back_to_nearest_enemy_with_no_shot() -> v
 	var far := _unit(1, "Far", [Vector3(20 * IN2M, 0, 0)])
 	var solo := _controller([attacker, near, far])
 	assert_object(solo.suggest_target(attacker, AiDecision.Action.ADVANCE)).is_equal(near)
+
+
+# ===== A4 capped-move honesty =====
+
+func test_capped_move_honesty_note_names_the_difficult_cap() -> void:
+	var attacker := _unit(2, "Runner", [Vector3.ZERO])
+	var enemy := _unit(1, "Foe", [Vector3(20 * IN2M, 0, 0)])
+	var solo := _controller([attacker, enemy])
+	# A forest cell (GF/AoF v3.5.1 p.11 difficult terrain) sits square in the Rush's 12" corridor —
+	# the p.11 cap shortens the granted reach to 6", well short of the 12" band.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST if p.x > 1.0 * IN2M else TerrainRules.TerrainType.NONE
+	var intent := solo.player_intent(attacker, AiDecision.Action.RUSH, enemy)
+	var report := solo.execute_intent(intent, ActIntent.blank_report(attacker))
+	var texts := PackedStringArray()
+	for note in report.get("rule_notes", []):
+		texts.append(str((note as Dictionary).get("text", "")) if note is Dictionary else str(note))
+	var joined := "\n".join(texts)
+	assert_str(joined) \
+		.override_failure_message("no capped-move honesty note in the rule notes (got: %s)" % joined) \
+		.contains("moved")
+	assert_str(joined).contains("difficult cap")

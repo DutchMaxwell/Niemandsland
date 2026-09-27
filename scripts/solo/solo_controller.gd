@@ -2438,9 +2438,12 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	var goal_dist := MoveIntent.distance_inches(unit_centre(unit), goal)   # nothing has moved yet
 	var tcentre := unit_centre(target) if target != null else unit_centre(unit)
 	var dang := 0
+	var move_inches := 0.0   # A4: what THIS move actually requested — not the raw band (the kite/
+			# arrival branches deliberately ask for less; only a further, gate-driven shortfall is a cap)
 	match action:
 		AiDecision.Action.RUSH:
-			dang = _move_toward(unit, goal, (minf(band_in, goal_dist) if (to_objective or to_flank) else band_in), false)
+			move_inches = minf(band_in, goal_dist) if (to_objective or to_flank) else band_in
+			dang = _move_toward(unit, goal, move_inches, false)
 		AiDecision.Action.CHARGE:
 			# Close the REAL base-to-base gap to base contact, capped at the band (field-test finding 3): the
 			# former "move toward the enemy centre, capped at rush" under-shot for wide/offset units and the
@@ -2449,17 +2452,33 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 			dang = _charge_move(unit, target, charge_band_in)
 		AiDecision.Action.ADVANCE:
 			if to_objective or to_flank:
-				dang = _move_toward(unit, goal, minf(band_in, goal_dist), false)
+				move_inches = minf(band_in, goal_dist)
+				dang = _move_toward(unit, goal, move_inches, false)
 			elif enemy_dist_in <= shoot_range_in:
 				# "Advancing" (p.58): a shooter already in range steps BACK toward the range edge, still
 				# shooting — held a measuring hair INSIDE range so the post-move gate never flips on floats.
-				dang = _move_away(unit, tcentre,
-					minf(band_in, maxf(shoot_range_in - enemy_dist_in - KITE_RANGE_MARGIN_IN, 0.0)))
+				move_inches = minf(band_in, maxf(shoot_range_in - enemy_dist_in - KITE_RANGE_MARGIN_IN, 0.0))
+				dang = _move_away(unit, tcentre, move_inches)
 			else:
-				dang = _move_toward(unit, goal, band_in, false)
+				move_inches = band_in
+				dang = _move_toward(unit, goal, move_inches, false)
 		_:
 			pass   # HOLD
 	_move_extra = {}
+	# A4 (NML-202): capped-move honesty — a player who watched their unit stop short of the
+	# reach they were shown deserves the reason, not silence. AI intents never source this note
+	# (its own narration already carries these reasons through record_decision).
+	if source == "player" and move_inches > 0.05:
+		var mv: Dictionary = decision_log.back() if not decision_log.is_empty() else {}
+		if str(mv.get("kind", "")) == "move":
+			var mv_data: Dictionary = mv.get("data", {})
+			var why := str(mv.get("why", ""))
+			var achieved_in := float(mv_data.get("achieved_in", last_move_budget_in))
+			var capped: bool = last_move_budget_in < move_inches - 0.05 \
+				or (why in ["difficult cap", "gate-legal shorten", "boxed reposition"] \
+					and achieved_in < last_move_budget_in - 0.05)
+			if capped:
+				_rule_note(report, "Auto: moved %.1f\" of %.1f\" — %s" % [achieved_in, move_inches, why], true)
 	report["dangerous_models"] = dang
 	report["dangerous_dice"] = last_dangerous_dice   # Bug 23: Tough-weighted (p.12 "as many dice as Tough")
 	# Instrument the objective outcome (field-test finding 1: the harness logged enemy distance but NEVER the
