@@ -82,6 +82,16 @@ func _build() -> void:
 	if err != OK:
 		_fail("save_game returned %d" % err)
 		return
+	var state: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if typeof(state) != TYPE_DICTIONARY:
+		_fail("saved table is invalid JSON")
+		return
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		_fail("cannot compact saved table")
+		return
+	file.store_string(JSON.stringify(state))
+	file.close()
 	print("LESSON-OK %s: %d units / %d models -> %s" % [_id, placements.size(), model_count, ProjectSettings.globalize_path(path)])
 	quit(0)
 
