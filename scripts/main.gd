@@ -9285,7 +9285,7 @@ func _solo_morale_quality(unit: GameUnit) -> int:
 	return best_quality
 
 
-func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> void:
+func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bool:
 	var below_half := _solo_below_half_strength(unit)   # single models: tough-wounds scale (p.10)
 	var result: int
 	if unit.is_shaken:
@@ -9324,7 +9324,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 			"Morale test: %s (%d+)" % [unit.get_name(), test_target], {"what": "morale test", "label": owner})
 		_solo_spend_once_kind(unit, ["morale"])   # NML-006: spent by this test
 		if faces.is_empty():
-			return
+			return true
 		result = AiCombatMath.morale_result(int(faces[0]), test_target, below_half and melee)
 	# Fearless (GF/AoF Advanced Rules v3.5.1 p.13): a unit where all models have this rule rolls a recovery
 	# die once after a FAILED morale test; on a 4+ it counts as passed instead. Rolled visibly on the real
@@ -9373,6 +9373,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fails morale at half strength — ROUTS" % unit.get_name())
 			await _solo_apply_wounds(unit, unit.models.size() * 12)   # overkill wipes the unit via the normal flows
+	return result == AiCombatMath.Morale.PASSED
 
 
 # === Solo P8: the player's own attack flow (radial "Shoot"/"Fight" → targeting mode → tray dice) ===
@@ -18451,7 +18452,7 @@ func _solo_reckless_ap(attacker: GameUnit, target: GameUnit) -> int:
 
 ## Mind Control ("pick one enemy within 18\" in LOS, it takes a morale test; if failed you may move
 ## it up to 6\" in a straight line"): the AI pulls the holder OFF the marker it defends — denial by
-## displacement. One real tray die vs Quality; the shift is the shared forced straight move.
+## displacement. The target takes the shared morale test; the shift is the shared forced straight move.
 func _solo_apply_mind_control(unit: GameUnit) -> void:
 	if solo_controller == null or unit == null or not _solo_is_ai_unit(unit):
 		return
@@ -18469,14 +18470,14 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 18.0)), bool(sp.get("needs_los", true)))
 			if tgt == null:
 				continue
-			var q := tgt.get_quality()
-			var faces: Array = await _solo_tray_roll(1, q, "AI (%s)" % member.get_name())
-			var passed: bool = not faces.is_empty() and int(faces[0]) >= q
+			var passed: bool = await _solo_morale_test(tgt, _solo_owner_label(tgt))
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s forces a morale test on %s — %s" % [
 					n, member.get_name(), tgt.get_name(), ("passed" if passed else "FAILED")], true)
 			if passed:
 				continue
+			for cm in _solo_joined_chain(tgt):
+				(cm as GameUnit).is_shaken = true
 			# Fatigue Debuff (resolver wave A): the failed test fatigues instead of displacing —
 			# the target strikes on unmodified 6s in melee until it next activates.
 			if str(sp.get("effect", "")) == "fatigue":
@@ -18493,9 +18494,9 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 			if obj != SoloController.NO_OBJECTIVE:
 				away = Vector2(c.x - obj.x, c.z - obj.z)
 			var moved := solo_controller.forced_straight_move(tgt, away, float(sp.get("move_in", 6.0)))
-			if moved > 0.0 and battle_log != null:
+			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.MOVEMENT,
-					"%s: %s is moved %.0f\" in a straight line (away from the marker)" % [n, tgt.get_name(), moved], true)
+					"%s: %s fails the morale test — Shaken, moved %.0f\" in a straight line (away from the marker)" % [n, tgt.get_name(), moved], true)
 
 
 ## Piercing Tag ("once per game … place X markers on an enemy within 24\"/LOS; attackers remove
