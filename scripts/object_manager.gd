@@ -340,20 +340,6 @@ func _is_game_blocking_input() -> bool:
 ## Only LIVE gestures are claimed here; plain hover stays in _unhandled_input where the UI can win, and
 ## the button that STARTS a gesture is still gated by the UI, so a drag can never begin on a panel.
 func _input(event: InputEvent) -> void:
-	# D2a floor picking: while dragging a model, the wheel steps _drag_probe_top_y instead
-	# of zooming the camera. Consumed HERE (before _unhandled_input, where the camera's own
-	# zoom lives) so camera zoom is untouched everywhere else.
-	if _is_dragging and _drag_anchor_object != null and is_instance_valid(_drag_anchor_object) \
-			and event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
-		var wheel_dir := (event as InputEventMouseButton).button_index
-		if wheel_dir == MOUSE_BUTTON_WHEEL_DOWN:
-			_step_drag_probe_floor_down()
-			get_viewport().set_input_as_handled()
-			return
-		elif wheel_dir == MOUSE_BUTTON_WHEEL_UP:
-			_drag_probe_top_y = SURFACE_PROBE_TOP_Y
-			get_viewport().set_input_as_handled()
-			return
 	if not (_is_dragging or _is_box_selecting or _is_measuring):
 		return
 	if event is not InputEventMouseMotion:
@@ -374,6 +360,22 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
+
+		# D2a floor picking: while dragging a model, the wheel steps _drag_probe_top_y instead
+		# of zooming the camera. Consumed here, ahead of the camera's own wheel-zoom (reverse
+		# tree order per the comment below — CameraPivot precedes ObjectManager in main.tscn,
+		# so ObjectManager's _unhandled_input still fires first), so camera zoom is untouched
+		# everywhere else including outside a drag.
+		if _is_dragging and _drag_anchor_object != null and is_instance_valid(_drag_anchor_object) \
+				and mouse_event.pressed:
+			if mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_step_drag_probe_floor_down()
+				get_viewport().set_input_as_handled()
+				return
+			elif mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_drag_probe_top_y = SURFACE_PROBE_TOP_Y
+				get_viewport().set_input_as_handled()
+				return
 
 		# Solo P8/B5: while main owns the mouse for attack targeting or a Takedown model pick, no
 		# selection/box-select underneath. Ordering, not politeness: the _unhandled_input group is
