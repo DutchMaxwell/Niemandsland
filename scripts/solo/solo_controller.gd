@@ -2534,6 +2534,59 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	return report
 
 
+## A1 (NML-202, automodus PR 2) — the player's feeder into execute_intent(): one enemy click decides a
+## whole legal activation (Charge / Advance & Shoot / Rush). Refusals come FIRST and move nothing
+## ({"refused": <why>}, the caller narrates it and leaves the unit free); a legal intent is the SAME
+## ActIntent shape _act builds, source "player", so execute_intent runs one gate for both feeders — no
+## second truth for the move/shoot rules. quick_shot is computed the same way _act does (not listed in
+## the plan's step 5 field list, but PR 3's Quick-Shot-after-Rush test needs it wired here to fire).
+func player_intent(unit: GameUnit, verb: int, target: GameUnit) -> Dictionary:
+	if unit.is_shaken:
+		return {"refused": "Shaken — spends its activation idle (GF v3.5.1 p.10)"}
+	if forces_hold(unit.get_special_rules()) and hold_only_param(unit) and verb != AiDecision.Action.HOLD:
+		return {"refused": "may only use Hold actions (p.13)"}
+	if is_aircraft(unit) or _is_regiment(unit) or army_manager.transport_of(unit) != null:
+		return {"refused": "moves by hand in this version"}
+	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
+	var musician_in := musician_move_bonus_in(unit)
+	var advance := float(bands.get("advance", 6)) + musician_in
+	var rush := float(bands.get("rush", 12)) + musician_in
+	var charge := float(bands.get("charge", bands.get("rush", 12))) + musician_in
+	var weapons := _unit_weapons(unit)
+	var shoot_range_in := effective_shoot_reach_in(
+		AiArchetype.max_range_inches(weapons) + float(shooting_range_bonus(unit)), target)
+	var enemy_dist_in := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target))
+	var quick_shot: bool = (unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
+		or AiSpell.granted_rules_of(unit, target).has("Quick Shot")
+	var extra := {"shoot_range_in": shoot_range_in, "enemy_dist_in": enemy_dist_in, "quick_shot": quick_shot,
+		"to_objective": false, "to_flank": false, "source": "player",
+		"why": "player intent: " + AiDecision.action_name(verb)}
+	var action := verb
+	var band_in := 0.0
+	var do_shoot := true   # HOLD default (p.1: a Hold unit may always shoot)
+	match verb:
+		AiDecision.Action.CHARGE:
+			# charge_illegal_why re-applies Melee Shrouding + Rapid Charge internally (its only other
+			# call site, :2226, passes the same pre-adjustment band) — passing it the ALREADY-adjusted
+			# charge_band_in would double-count both. The intent's execution band still gets the full
+			# adjustment; only the legality check reads the raw pre-adjustment band.
+			var charge_band_in := melee_shroud_charge_in(charge + rapid_charge_reach_bonus_in(unit, target), target)
+			var deny := charge_illegal_why(unit, target, charge)
+			if deny != "":
+				return {"refused": deny}
+			do_shoot = false
+			extra["charge_band_in"] = charge_band_in
+		AiDecision.Action.ADVANCE:
+			do_shoot = shoot_range_in > 0.0
+			band_in = advance
+		AiDecision.Action.RUSH:
+			do_shoot = false
+			band_in = rush
+		_:
+			action = AiDecision.Action.HOLD
+	return ActIntent.make(unit, action, target, unit_centre(target), band_in, do_shoot, extra)
+
+
 ## albtraum v2 — book the COMMITTED plan's expected shooting damage into the overkill ledger. One call
 ## per activation, at the end of _act/_act_aircraft; the lookahead and the tie-break only READ claims.
 ## Shooting only for now: charge_score is a net dealt-minus-taken ranking key, not an expected-wounds
