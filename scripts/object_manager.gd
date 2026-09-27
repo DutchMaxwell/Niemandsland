@@ -161,6 +161,10 @@ var pickup_ghosts: Node = null
 ## MoveLedger.extend_path). Feeds the consumed-inches readout, live trail, ledger + log.
 var _drag_path_points: PackedVector2Array = PackedVector2Array()
 var _drag_anchor_object: Node3D = null
+## D2a floor picking: the ray-probe start height for every settle/lift this drag. Reset to
+## SURFACE_PROBE_TOP_Y (the top) at drag start; the mouse wheel steps it down/up while
+## dragging a model so the player can pick which floor of a multi-storey ruin to land on.
+var _drag_probe_top_y: float = SURFACE_PROBE_TOP_Y
 ## STRICT "dry brush" cap (metres) for the current drag: the anchor model's band for the
 ## SELECTED movement action (Advance vs Rush/Charge; Fast/Slow/aura-aware). 0 = not enforced
 ## (Casual, deployment, or a non-model drag). Resolved at drag start and re-resolved live if the
@@ -356,6 +360,22 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
+
+		# D2a floor picking: while dragging a model, the wheel steps _drag_probe_top_y instead
+		# of zooming the camera. Consumed here, ahead of the camera's own wheel-zoom (reverse
+		# tree order per the comment below — CameraPivot precedes ObjectManager in main.tscn,
+		# so ObjectManager's _unhandled_input still fires first), so camera zoom is untouched
+		# everywhere else including outside a drag.
+		if _is_dragging and _drag_anchor_object != null and is_instance_valid(_drag_anchor_object) \
+				and mouse_event.pressed:
+			if mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_step_drag_probe_floor_down()
+				get_viewport().set_input_as_handled()
+				return
+			elif mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_drag_probe_top_y = SURFACE_PROBE_TOP_Y
+				get_viewport().set_input_as_handled()
+				return
 
 		# Solo P8/B5: while main owns the mouse for attack targeting or a Takedown model pick, no
 		# selection/box-select underneath. Ordering, not politeness: the _unhandled_input group is
@@ -1236,6 +1256,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 		hover_changed.emit(null)
 	_drag_start_positions.clear()
 	_drag_start_rotations.clear()
+	_drag_probe_top_y = SURFACE_PROBE_TOP_Y
 
 	# Measure-on-pickup ghost (UX polish): capture the origin silhouettes BEFORE the lift,
 	# so the ghost shows the true pre-drag pose (what ESC returns to).
@@ -1314,7 +1335,8 @@ func _stop_dragging() -> void:
 					# Static bodies settle onto the ground surface beneath the base
 					# (table top = 0, or a terrain prop like a container). Exclude the
 					# dragged bodies so a terrain prop doesn't settle on its own floors.
-					target_y = _surface_y_under(obj.global_position, _dragged_body_rids())
+					# The probe honors the floor the player picked while dragging (D2a).
+					target_y = _surface_y_under(obj.global_position, _dragged_body_rids(), _drag_probe_top_y)
 
 				# Collect final ground-level positions for batched broadcast
 				if obj.has_meta("network_id"):
@@ -1792,7 +1814,7 @@ func _record_move_for_undo() -> void:
 		var start_pos: Vector3 = _drag_start_positions[obj]
 		# Final resting height: static bodies settle on the ground surface beneath the
 		# base (table or terrain prop), rigid bodies drop back by the lift height.
-		var end_y: float = obj.global_position.y - drag_lift_height if obj is RigidBody3D else _surface_y_under(obj.global_position)
+		var end_y: float = obj.global_position.y - drag_lift_height if obj is RigidBody3D else _surface_y_under(obj.global_position, [], _drag_probe_top_y)
 		var end_pos: Vector3 = Vector3(obj.global_position.x, end_y, obj.global_position.z)
 		objects.append(obj)
 		from_positions.append(start_pos)
@@ -2080,9 +2102,10 @@ func _update_drag_line(from_pos: Vector3, to_pos: Vector3, distance_inches: floa
 	var angle = atan2(direction.x, direction.z)
 	_drag_line.rotation = Vector3(0, angle + PI/2, 0)
 
-	# Update label
+	# Update label. D2a: name the picked floor while the anchor stands over more than one.
 	_drag_label.global_position = Vector3(midpoint.x, 0.02, midpoint.z)
-	_drag_label.text = travel_label(distance_inches, climb_in)
+	var floor_label := _floor_label_for(to_pos) if _drag_anchor_object != null else ""
+	_drag_label.text = travel_label(distance_inches, climb_in) + (("  " + floor_label) if not floor_label.is_empty() else "")
 	_drag_label.rotation = Vector3(-PI/2, angle, 0)
 
 	# Tint the drag line by the terrain it crosses (OPR Difficult/Dangerous Terrain,
@@ -2136,11 +2159,14 @@ func _destroy_drag_line() -> void:
 ## `exclude` holds body RIDs to ignore — used while dragging so a movable terrain prop
 ## (whose own walkable floors are on the ground layer) rests on the table or a lower prop
 ## instead of climbing onto itself.
-func _surface_y_under(xz: Vector3, exclude: Array = []) -> float:
+## `top_y` (D2a floor picking): the ray starts here instead of SURFACE_PROBE_TOP_Y, so a
+## probe seeded just under an upper floor's slab (top_y = that slab's top − 1 mm) never
+## sees it and rests on the NEXT surface down (a multi-storey ruin, D1a).
+func _surface_y_under(xz: Vector3, exclude: Array = [], top_y: float = SURFACE_PROBE_TOP_Y) -> float:
 	var space_state := get_world_3d().direct_space_state
 	if space_state == null:
 		return 0.0
-	var from := Vector3(xz.x, SURFACE_PROBE_TOP_Y, xz.z)
+	var from := Vector3(xz.x, top_y, xz.z)
 	var to := Vector3(xz.x, SURFACE_PROBE_BOTTOM_Y, xz.z)
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = GROUND_COLLISION_LAYER
@@ -2187,6 +2213,45 @@ static func travel_label(flat_in: float, climb_in: float) -> String:
 	if climb_in > 0.05:
 		return "%.1f\" (+%.1f\" climb)" % [flat_in, climb_in]
 	return "%.1f\"" % flat_in
+
+
+## D2a: step the floor probe down to whatever is directly beneath the anchor's CURRENT
+## floor (its top − 1 mm), so the next _surface_y_under call skips it and lands one storey
+## lower (a multi-storey ruin, D1a).
+func _step_drag_probe_floor_down() -> void:
+	var anchor_xz := _drag_anchor_object.global_position
+	var current_y := _surface_y_under(anchor_xz, _dragged_body_rids(), _drag_probe_top_y)
+	_drag_probe_top_y = current_y - 0.001
+
+
+## Distinct surface heights under `xz` from the top down (a multi-storey ruin's floors),
+## each found by re-probing from just under the previous hit. Stops once two consecutive
+## probes agree (bottomed out) or at `max_floors` (safety cap; no shipped ruin needs more).
+func _floor_tops_under(xz: Vector3, max_floors: int = 6) -> PackedFloat32Array:
+	var tops := PackedFloat32Array()
+	var probe_y := SURFACE_PROBE_TOP_Y
+	for i in range(max_floors):
+		var y := _surface_y_under(xz, _dragged_body_rids(), probe_y)
+		if i > 0 and absf(y - tops[i - 1]) < 0.0005:
+			break
+		tops.append(y)
+		probe_y = y - 0.001
+	return tops
+
+
+## "Floor 2/3" while the anchor stands over more than one storey, else "" (nothing to pick
+## on a plain table/single-surface spot).
+func _floor_label_for(xz: Vector3) -> String:
+	var tops := _floor_tops_under(xz)
+	if tops.size() <= 1:
+		return ""
+	var current_y := _surface_y_under(xz, _dragged_body_rids(), _drag_probe_top_y)
+	var index := tops.size() - 1
+	for i in range(tops.size()):
+		if absf(tops[i] - current_y) < 0.0015:
+			index = i
+			break
+	return "Floor %d/%d" % [tops.size() - index, tops.size()]
 
 
 func _update_drag(screen_pos: Vector2) -> void:
@@ -2283,7 +2348,7 @@ func _update_drag(screen_pos: Vector2) -> void:
 				var obj_start = _drag_start_positions.get(obj, obj.global_position)
 				var new_x: float = obj_start.x + delta_xz.x
 				var new_z: float = obj_start.z + delta_xz.z
-				var surface_y: float = _surface_y_under(Vector3(new_x, 0.0, new_z), exclude_rids)
+				var surface_y: float = _surface_y_under(Vector3(new_x, 0.0, new_z), exclude_rids, _drag_probe_top_y)
 				obj.global_position = Vector3(new_x, surface_y + drag_lift_height, new_z)
 
 		# Broadcast positions throttled to ~20 Hz to avoid relay rate limit
