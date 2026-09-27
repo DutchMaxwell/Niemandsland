@@ -194,6 +194,31 @@ func test_elevation_allows_three_inch_coherency() -> void:
 	assert_bool(result.valid).is_true()
 
 
+func test_elevation_threshold_is_one_inch_not_three() -> void:
+	# A model on a 2.5" container roof, 2" apart in XZ from a mate on the ground: this is
+	# real elevation (GF p.11 short terrain is only <=1"), so the 3" allowance applies.
+	var unit := _make_unit([Vector3.ZERO, Vector3(2.0 * INCH, 2.5 * INCH, 0)])
+	var result := CoherencyChecker.check_unit_coherency(unit)
+	assert_bool(result.valid).is_true()
+
+
+func test_half_inch_height_difference_is_not_elevation() -> void:
+	# 2" apart with only a 0.5" height difference (short terrain, GF p.11) -> the plain
+	# 1" rule applies, so this is NOT coherent.
+	var unit := _make_unit([Vector3.ZERO, Vector3(2.0 * INCH, 0.5 * INCH, 0)])
+	var result := CoherencyChecker.check_unit_coherency(unit)
+	assert_bool(result.valid).is_false()
+
+
+func test_drag_lift_is_not_mistaken_for_elevation() -> void:
+	# A model mid-drag is lifted by ObjectManager.drag_lift_height (0.05m); that lift must
+	# not be mistaken for standing on elevated terrain. 2" apart from a grounded mate.
+	var unit := _make_unit([Vector3.ZERO, Vector3(2.0 * INCH, 0.05, 0)])
+	unit.models[1].node.set_meta("drag_lift", 0.05)
+	var result := CoherencyChecker.check_unit_coherency(unit)
+	assert_bool(result.valid).is_false()
+
+
 # ===== Dead models =====
 
 func test_dead_models_are_ignored() -> void:

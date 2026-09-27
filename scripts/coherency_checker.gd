@@ -21,11 +21,11 @@ const SKIRMISH_CHAIN_DISTANCE_INCHES := 6.0
 const ELEVATED_COHERENCY_INCHES := 3.0
 
 ## Height difference above which models count as being at "different elevation"
-## (OPR: elevated terrain is >3" tall). Must stay clearly above ObjectManager's
-## drag_lift_height (0.05m) so a model that is briefly lifted while being dragged
-## is NOT mistaken for standing on elevated terrain - that false positive made
-## the 3" elevation allowance trigger and showed models >1" apart as coherent.
-const ELEVATION_THRESHOLD := 0.0762  # 3 inches
+## (GF p.11: short terrain up to 1" tall is not elevation; anything taller is).
+## Each node's "drag_lift" meta (set by ObjectManager while the model is being
+## dragged, default 0.0) is subtracted before comparing, so a drag pickup is
+## never mistaken for standing on elevated terrain.
+const ELEVATION_THRESHOLD := 0.0254  # 1 inch (GF p.11)
 
 ## Inches to meters conversion
 const INCHES_TO_METERS := 0.0254
@@ -295,7 +295,11 @@ static func _is_elevated_different(model_a: ModelInstance, model_b: ModelInstanc
 	if not model_a.node or not model_b.node:
 		return false
 
-	var height_diff = abs(model_a.node.global_position.y - model_b.node.global_position.y)
+	var lift_a: float = model_a.node.get_meta("drag_lift", 0.0)
+	var lift_b: float = model_b.node.get_meta("drag_lift", 0.0)
+	var y_a := model_a.node.global_position.y - lift_a
+	var y_b := model_b.node.global_position.y - lift_b
+	var height_diff = abs(y_a - y_b)
 	return height_diff > ELEVATION_THRESHOLD
 
 

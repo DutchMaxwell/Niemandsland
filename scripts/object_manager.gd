@@ -1250,8 +1250,10 @@ func _start_dragging(screen_pos: Vector2) -> void:
 			# For rigid bodies, make them kinematic while dragging
 			if obj is RigidBody3D:
 				obj.freeze = true
-			# Lift object above the table surface
+			# Lift object above the table surface. CoherencyChecker subtracts this meta so
+			# the lift is never mistaken for standing on elevated terrain (GF p.11).
 			obj.global_position.y += drag_lift_height
+			obj.set_meta("drag_lift", drag_lift_height)
 
 	# Anchor = first movable object (original position)
 	_drag_anchor_position = _drag_start_positions[movable[0]]
@@ -1302,6 +1304,7 @@ func _stop_dragging() -> void:
 		# Smoothly lower objects back down and re-enable physics for rigid bodies
 		for obj in _selected_objects:
 			if is_instance_valid(obj):
+				obj.remove_meta("drag_lift")
 				# For static bodies, snap to table surface (y=0)
 				# For rigid bodies, lower by lift height and let physics handle it
 				var target_y: float
