@@ -76,3 +76,13 @@ func test_ignores_miniatures_on_layer_2() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	assert_float(om._surface_y_under(Vector3(0.5, 0, 0.5))).is_equal_approx(0.0, 0.002)
+
+
+# ===== travel_label (heights B1-c) =====
+
+func test_travel_label_plain_with_no_climb() -> void:
+	assert_str(ObjectManagerScript.travel_label(7.3, 0.0)).is_equal("7.3\"")
+
+
+func test_travel_label_names_the_climb() -> void:
+	assert_str(ObjectManagerScript.travel_label(7.3, 2.5)).is_equal("7.3\" (+2.5\" climb)")

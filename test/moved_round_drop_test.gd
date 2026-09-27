@@ -69,3 +69,18 @@ func test_takeback_restores_previous_moved_round_stamp() -> void:
 	assert_str(undo.undo_for(0)).contains("Take back")
 	assert_bool(unit.unit_properties.has("moved_round")).is_false()
 	assert_vector(model.global_position).is_equal(Vector3.ZERO)
+
+
+func test_a_step_over_3in_logs_an_impassable_warning() -> void:
+	# D5a: non-strict never blocks the drag, but the drop's battle log still flags the
+	# rule (GF p.11) — a logged warning, not a hard stop.
+	var f := _fixture()
+	var main := f["main"] as Node3D
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	main.battle_log = log_node
+	(f["army"] as OPRArmyManager).start_game()
+	main._on_battle_log_dropped([{"node": f["model"], "inches": 6.0, "arc_in": 6.0, "climb_in": 6.0}])
+	var texts: Array = []
+	for e in log_node.entries():
+		texts.append(str(e["text"]))
+	assert_array(texts).contains(["Own Unit climbs 6.0\" — over 3\", impassable (GF p.11)"])
