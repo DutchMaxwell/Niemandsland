@@ -186,9 +186,11 @@ pub(crate) struct PlainBuff {
 /// no special casing is needed for the "empty object, not missing" convention.
 /// `growth` is the unit's SINGLE marker counter (`unit_properties["growth_
 /// <rule>"]` summed, main.gd:16979) — no "round" of its own; `state_of` derives
-/// `growth_round` from facts already on the unit (see below).
+/// `growth_round` from facts already on the unit (see below). `pub` because the
+/// Godot seam (`nml-core-godot` plain.rs) deserializes the same record and
+/// folds it through `fold_ledger`.
 #[derive(Deserialize)]
-pub(crate) struct PlainLedger {
+pub struct PlainLedger {
     #[serde(default)]
     buffs: Vec<PlainBuff>,
     #[serde(default = "neg_one")]
@@ -966,65 +968,7 @@ pub(crate) fn state_of(
         // above, so an old corpus's `growth_round`/`growth_markers` stay
         // untouched too — proof 3's byte-identity turns on that.
         if let Some(ledger) = u.ledger {
-            for b in ledger.buffs {
-                // SEAM 4 step 1 — the reader gate, the SAME one `record_buff`
-                // writes (design §4(c), the FROZEN `EPOCH_7_TABLE_RULES`): a
-                // record stamped below 7 keeps ignoring the three ap/def knobs
-                // (the row still lands — the fold has no all-zero guard — so
-                // today's reading is preserved byte-identically).
-                let epoch7 = rule_on(rules_epoch, EPOCH_7_TABLE_RULES);
-                st.buffs[ui].push(LiveMod {
-                    hit_mod: b.hit_mod,
-                    casting_mod: b.casting_mod,
-                    morale_mod: b.morale_mod,
-                    ap_mod: if epoch7 { b.ap_mod } else { 0 },
-                    def_mod: if epoch7 { b.def_mod } else { 0 },
-                    defense_mod: if epoch7 { b.defense_mod } else { 0 },
-                    // The Great Musician port's anti-double-count rule: a
-                    // table-loaded row NEVER carries the move knob — the
-                    // table's `advance_in`/`rush_in` are unparsed above and
-                    // their inches already ride the recorded `bands`.
-                    move_mod: 0,
-                    grants_rule: Rc::from(b.grants_rule.as_str()),
-                    scope: Rc::from(b.scope.as_str()),
-                    attackers: b.beneficiary == "attackers",
-                    once: b.duration == "once",
-                    name: Rc::from(b.spell.as_str()),
-                });
-            }
-            st.hit_and_run_round[ui] = ledger.hit_and_run_round;
-            st.delayed_action_round[ui] = ledger.delayed_action_round;
-            // The table's bool is round-scoped by its own erase, so a stamp that
-            // is present at all belongs to the act's own round.
-            if ledger.activated_via_coordinate {
-                st.coordinate_via_round[ui] = st.round;
-            }
-            st.vs_mark_round[ui] = ledger.vs_mark_round;
-            st.second_wind_used[ui] = ledger.second_wind_used;
-            st.reinforcement_used[ui] = ledger.reinforcement_used;
-            st.storm_used[ui] = ledger.storm_used.clone();
-            st.feats_used[ui] = ledger.feats_used.clone();
-            st.teleport_used[ui] = ledger.teleport.as_ref().map(|t| t.used).unwrap_or(false);
-            st.growth_markers[ui] = ledger.growth;
-            st.vengeance_markers[ui] = ledger.vengeance_markers;
-            st.spot_markers[ui] = ledger.spot_markers;
-            st.tag_markers[ui] = ledger.tag_markers;
-            st.spot_round[ui] = ledger.spot_round;
-            st.precision_used[ui] = ledger.precision_used.clone();
-            // `growth_round` has no key of its own on the wire (see
-            // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED
-            // here from facts every act already carries. `_solo_growth_
-            // round_start` (main.gd:16984) sweeps every alive, unattached,
-            // on-table unit ONCE at true round start, before any activation
-            // — so by the time ANY act's state_before is captured this
-            // round, that sweep already ran for such a unit, grower or not
-            // (`sim.rs::growth_round_start` is a no-op for a non-grower
-            // either way — see the fixture below). Excluded: a unit that
-            // arrived (ambush) THIS round was still in reserve when the
-            // sweep ran, so it was skipped there too.
-            if u.alive > 0 && !is_attached && u.ambush_arrived_round != st.round {
-                st.growth_round[ui] = st.round;
-            }
+            fold_ledger(&mut st, ui, &ledger, rules_epoch, u.alive, is_attached, u.ambush_arrived_round);
         }
     }
     st.attached = Rc::new(
@@ -1037,6 +981,81 @@ pub(crate) fn state_of(
         host_keys.iter().map(|k| st.roster.index.get(k.as_str()).copied()).collect(),
     );
     st
+}
+
+/// NML-1152 step 10 — one unit's `ledger` folded into `st` at roster index
+/// `ui`: the body `state_of` runs per unit, shared with the Godot seam
+/// (`nml-core-godot` plain.rs `build_state`), so both readers fold the
+/// same record the same way. `alive`, `is_attached` and
+/// `ambush_arrived_round` are the unit's own facts `growth_round` derives from.
+pub fn fold_ledger(
+    st: &mut State,
+    ui: usize,
+    ledger: &PlainLedger,
+    rules_epoch: u32,
+    alive: i64,
+    is_attached: bool,
+    ambush_arrived_round: i64,
+) {
+    for b in &ledger.buffs {
+        // SEAM 4 step 1 — the reader gate, the SAME one `record_buff`
+        // writes (design §4(c), the FROZEN `EPOCH_7_TABLE_RULES`): a
+        // record stamped below 7 keeps ignoring the three ap/def knobs
+        // (the row still lands — the fold has no all-zero guard — so
+        // today's reading is preserved byte-identically).
+        let epoch7 = rule_on(rules_epoch, EPOCH_7_TABLE_RULES);
+        st.buffs[ui].push(LiveMod {
+            hit_mod: b.hit_mod,
+            casting_mod: b.casting_mod,
+            morale_mod: b.morale_mod,
+            ap_mod: if epoch7 { b.ap_mod } else { 0 },
+            def_mod: if epoch7 { b.def_mod } else { 0 },
+            defense_mod: if epoch7 { b.defense_mod } else { 0 },
+            // The Great Musician port's anti-double-count rule: a
+            // table-loaded row NEVER carries the move knob — the
+            // table's `advance_in`/`rush_in` are unparsed above and
+            // their inches already ride the recorded `bands`.
+            move_mod: 0,
+            grants_rule: Rc::from(b.grants_rule.as_str()),
+            scope: Rc::from(b.scope.as_str()),
+            attackers: b.beneficiary == "attackers",
+            once: b.duration == "once",
+            name: Rc::from(b.spell.as_str()),
+        });
+    }
+    st.hit_and_run_round[ui] = ledger.hit_and_run_round;
+    st.delayed_action_round[ui] = ledger.delayed_action_round;
+    // The table's bool is round-scoped by its own erase, so a stamp that
+    // is present at all belongs to the act's own round.
+    if ledger.activated_via_coordinate {
+        st.coordinate_via_round[ui] = st.round;
+    }
+    st.vs_mark_round[ui] = ledger.vs_mark_round;
+    st.second_wind_used[ui] = ledger.second_wind_used;
+    st.reinforcement_used[ui] = ledger.reinforcement_used;
+    st.storm_used[ui] = ledger.storm_used.clone();
+    st.feats_used[ui] = ledger.feats_used.clone();
+    st.teleport_used[ui] = ledger.teleport.as_ref().map(|t| t.used).unwrap_or(false);
+    st.growth_markers[ui] = ledger.growth;
+    st.vengeance_markers[ui] = ledger.vengeance_markers;
+    st.spot_markers[ui] = ledger.spot_markers;
+    st.tag_markers[ui] = ledger.tag_markers;
+    st.spot_round[ui] = ledger.spot_round;
+    st.precision_used[ui] = ledger.precision_used.clone();
+    // `growth_round` has no key of its own on the wire (see
+    // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED
+    // here from facts every act already carries. `_solo_growth_
+    // round_start` (main.gd:16984) sweeps every alive, unattached,
+    // on-table unit ONCE at true round start, before any activation
+    // — so by the time ANY act's state_before is captured this
+    // round, that sweep already ran for such a unit, grower or not
+    // (`sim.rs::growth_round_start` is a no-op for a non-grower
+    // either way — see the fixture below). Excluded: a unit that
+    // arrived (ambush) THIS round was still in reserve when the
+    // sweep ran, so it was skipped there too.
+    if alive > 0 && !is_attached && ambush_arrived_round != st.round {
+        st.growth_round[ui] = st.round;
+    }
 }
 
 #[derive(Deserialize)]
@@ -1391,6 +1410,39 @@ mod tests {
         let state = state_from_json(&plain, &mut cache, &mut roster).expect("state");
         assert_eq!(state.growth_markers[0], 2, "the recorded count still folds");
         assert_eq!(state.growth_round[0], -1, "arrived this round -> not yet swept");
+    }
+
+    /// Wave 3 step 2 — `fold_ledger` on its own (the Godot seam calls it
+    /// outside `state_of`): a spell buff, the once-per-game latches and the
+    /// marker pools land on the named unit, the other unit's fold stays put,
+    /// and an attached unit never derives `growth_round`.
+    #[test]
+    fn fold_ledger_folds_buffs_latches_and_markers() {
+        let mut st = state_of(LEDGER_PLAIN);
+        let ledger: super::PlainLedger = serde_json::from_str(
+            r#"{"buffs":[{"hit_mod":1,"spell":"X","duration":"once"}],"second_wind_used":true,
+            "spot_markers":2,"tag_markers":1,"spot_round":2,"storm_used":["Storm Attack"],
+            "teleport":{"used":true,"to":[0.1,0.2]},"growth":3}"#,
+        )
+        .expect("ledger");
+        super::fold_ledger(&mut st, 1, &ledger, crate::acts::CURRENT_RULES_EPOCH, 1, false, -1);
+        assert_eq!(st.buffs[1].len(), 1);
+        assert_eq!(st.buffs[1][0].hit_mod, 1);
+        assert_eq!(st.buffs[1][0].name.as_ref(), "X");
+        assert!(st.buffs[1][0].once);
+        assert!(st.second_wind_used[1]);
+        assert_eq!(st.spot_markers[1], 2);
+        assert_eq!(st.tag_markers[1], 1);
+        assert_eq!(st.spot_round[1], 2);
+        assert_eq!(st.storm_used[1], vec!["Storm Attack".to_string()]);
+        assert!(st.teleport_used[1]);
+        assert_eq!(st.growth_markers[1], 3);
+        assert_eq!(st.growth_round[1], st.round);
+        assert_eq!(st.hit_and_run_round[1], -1, "absent key -> the -1 default");
+        assert_eq!(st.buffs[0].len(), 1, "unit 0's own fold is untouched");
+        let mut hosted = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut hosted, 1, &ledger, crate::acts::CURRENT_RULES_EPOCH, 1, true, -1);
+        assert_eq!(hosted.growth_round[1], -1, "attached -> never swept");
     }
 
     /// `p1_0_a` on the tray: the shape `battle_sim.gd:1477-1489` + `:1539-1543`
