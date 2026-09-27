@@ -41,10 +41,10 @@ this file can toggle):
         fixture from 50 to 47 rows; re-measured, replay still matches
         exactly, `divergence == ""`);
   (iii) an OLD Gen-0 record (predating `played`) still replays 100% and
-        exports the byte-identical shard it always did — measured by hand,
-        sha256 `1168e0f76dbf8795b91a1694e081e76ee6353e094e9d7605e6afb0e350
-        d993e0` for `gen0_shard_00000.npz` over the 3-game sample below,
-        BOTH before and after this fix.
+        exports the byte-identical shard the pre-fix labelling (`best`,
+        unconditionally) exports -- compared in the SAME tree, so an encoder
+        change cannot stale it (the hand-measured sha256 pin this replaced
+        went stale at #918's rule-bag widening and nobody saw it).
 
 (i)/(ii) need only the terrain bank and the local `ai_lists` mirror (the
 same `needs_fixtures` gate `test_narrator_shipped_knobs.py` uses); (iii)
@@ -67,6 +67,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
 import gen0_replay_one as gr  # noqa: E402
+import gen0_replay_shards as grs  # noqa: E402
 import selfplay  # noqa: E402
 
 SHARDS_TOOL = str(Path(__file__).resolve().parents[2] / "tools" / "gen0_replay_shards.py")
@@ -76,7 +77,6 @@ P1 = LISTS / "change_disciples_1000.json"
 P2 = LISTS / "robot_legions_1000.json"
 CORPUS = Path(os.path.expanduser("~/selfplay_out/gen0_teacher"))
 OLD_GAMES = ["gen0_s10000_d10000.json", "gen0_s10000_d11000.json", "gen0_s10000_d12000.json"]
-OLD_SHARD_SHA256 = "1168e0f76dbf8795b91a1694e081e76ee6353e094e9d7605e6afb0e350d993e0"
 
 needs_fixtures = pytest.mark.skipif(
     not (BANK.is_dir() and P1.exists() and P2.exists()),
@@ -178,12 +178,12 @@ def test_export_of_a_reranked_record_labels_played_not_best(tmp_path):
 
 
 @needs_corpus
-def test_old_gen0_records_still_replay_100pct_and_export_identical_labels(tmp_path):
+def test_old_gen0_records_still_replay_100pct_and_export_identical_labels(tmp_path, monkeypatch):
     """Old Gen-0 rows carry no `cands["played"]` at all -- `export()`'s new
-    played-or-best fallback must be a byte-for-byte no-op there. `sha256`
-    over the packed shard is the strongest form of that claim: it was
-    MEASURED identical both on the pre-fix tree and on this one (see the PR
-    body for the exact before/after commands)."""
+    played-or-best fallback must be a byte-for-byte no-op there. The shard the
+    tool writes is compared byte for byte with the pre-fix labelling in the
+    same tree: an in-process export whose every row names `best` as its
+    `played`. A fallback that picked anything but `best` moves the bytes."""
     recs = [json.loads((CORPUS / g).read_text(encoding="utf-8")) for g in OLD_GAMES]
     assert all("played" not in row["cands"] for r in recs for row in r["planner_positions"])
     out_dir = tmp_path / "shards"
@@ -201,5 +201,19 @@ def test_old_gen0_records_still_replay_100pct_and_export_identical_labels(tmp_pa
     want_labels = [row["cands"]["best"] for r in recs for row in r["planner_positions"]]
     arrays = np.load(out_dir / "gen0_shard_00000.npz")
     assert arrays["label"].tolist() == want_labels
-    got_hash = hashlib.sha256((out_dir / "gen0_shard_00000.npz").read_bytes()).hexdigest()
-    assert got_hash == OLD_SHARD_SHA256, "shard bytes moved for a record with no `played` key: %s" % got_hash
+    real_export = grs.export
+
+    def best_export(core, state, row, cands, opener_seat):
+        row = dict(row, cands=dict(row["cands"], played=row["cands"]["best"]))
+        return real_export(core, state, row, cands, opener_seat)
+
+    monkeypatch.setattr(grs, "export", best_export)
+    id_of = {p.name: i for i, p in enumerate(sorted(CORPUS.glob("gen0_s*_d*.json")))}
+    pre_dir = tmp_path / "pre_fix"
+    pre_dir.mkdir()
+    grs.run_shard(0, [CORPUS / g["file"] for g in index["games"]], str(LISTS), str(pre_dir), id_of)
+    pre = json.loads((pre_dir / "gen0_shard_00000.json").read_text())
+    assert pre["label_kinds"] == {"played": sum(want_counts), "best": 0}, pre
+    got, want = ((d / "gen0_shard_00000.npz").read_bytes() for d in (out_dir, pre_dir))
+    assert hashlib.sha256(got).hexdigest() == hashlib.sha256(want).hexdigest(), \
+        "shard bytes moved for a record with no `played` key"

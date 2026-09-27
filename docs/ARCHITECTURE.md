@@ -56,8 +56,9 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
   home of activation/hero-attachment state.
 - `equipment_distributor.gd` — assigns weapons to models from API counts.
 - `unit_utils.gd` — unit-detection helpers.
-- `coherency_checker.gd` — OPR coherency: connected 1″ chain (3″ across elevation)
-  + 9″ spread, via BFS connected components; edge-to-edge distances.
+- `coherency_checker.gd` — OPR coherency: connected 1″ chain (3″ across elevation, i.e.
+  more than 1″ apart in height) + 9″ spread, via BFS connected components; edge-to-edge
+  distances.
 - `coherency_visualizer.gd` — flat on-table chain/ring/distance lines (matches the
   measure tool).
 - `unit_boundary_visualizer.gd` — convex-hull boundary for multi-model units; token rail.

@@ -6,7 +6,7 @@
 //! 2 `randi_range(1, 6)` draws per attempt, ties re-roll, cap 100 — trace kept because
 //! the attempt count is data-dependent (the gate compares the FULL attempt list).
 
-use crate::acts::{rule_on, EPOCH_16_FREE_PLACEMENT, EPOCH_33_REDEPLOYMENT};
+use crate::acts::{rule_on, EPOCH_16_FREE_PLACEMENT, EPOCH_33_REDEPLOYMENT, EPOCH_64_DEPLOY_LARGE_RESPOT};
 use crate::rng::GodotRng;
 use std::collections::HashMap;
 use crate::terrain::{CONTAINER, DANGEROUS, RUINS, Terrain};
@@ -1055,7 +1055,8 @@ pub fn deploy_place_id(
     let mut spot =
         best_spot(sec, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y);
     // DEPLOYLARGE (solo_controller.gd `_deploy_place_id`, the static switch
-    // `large_zone_search` mirrored UNGATED — the core has no static switches):
+    // `large_zone_search`), gated from `EPOCH_64_DEPLOY_LARGE_RESPOT` so every
+    // earlier corpus re-deploys as it was recorded (#1048 shipped it ungated):
     // a LARGE base confined to its section may sit far behind the zone's
     // forward edge while a neighbour section still holds a legal forward spot
     // — ONE whole-zone re-search takes the nearer spot, chosen BEFORE the
@@ -1064,7 +1065,8 @@ pub fn deploy_place_id(
     // re-search returns the same spot and the strict `<` never fires.
     let sec_behind = (spot.1 - forward_y).abs();
     let mut zone_forward_respotted = false;
-    if !spot.0.is_infinite()
+    if rule_on(rules_epoch, EPOCH_64_DEPLOY_LARGE_RESPOT)
+        && !spot.0.is_infinite()
         && forward_y != f64::INFINITY
         && base_r >= LARGE_BASE_RADIUS_IN * crate::IN2M
         && sec_behind > LARGE_ZONE_SPOT_BEHIND_M
