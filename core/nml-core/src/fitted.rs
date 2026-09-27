@@ -360,7 +360,8 @@ impl Fitted {
     ) -> f64 {
         let view = next_round_view(state);
         let v = view.as_ref().unwrap_or(state);
-        let f = rows::features(v, statics, player, incoming, false, rows::NO_RESERVES);
+        let f = rows::features(v, statics, player, incoming, false, rows::NO_RESERVES,
+            crate::acts::CURRENT_RULES_EPOCH);
         let xs = self.net.xs_of(&f);
         let raw: Vec<Vec<f64>> = self
             .enc

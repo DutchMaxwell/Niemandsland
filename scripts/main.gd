@@ -4705,8 +4705,11 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		# Wave 5 Sergeant (model-level): ONE profile per member carries the bearer's attack share.
 		AiEv.stamp_sergeant(scaled, member)
 		AiEv.stamp_conditional_ap(scaled, member)   # value Shatter/Tear/Melee Slayer/Disintegrate AP
+		# S1-02 (GF/AoF v3.5.1 p.10): "Shaken units must stay idle, but may strike back counting as
+		# fatigued" — a Shaken unit never charges, so every melee strike it makes is a strike-back.
+		var shaken: bool = melee and (unit.is_shaken or member.is_shaken)
 		groups.append({"name": member.get_name(), "quality": member.get_quality(),
-			"fatigued": member.is_fatigued, "member": member, "profiles": scaled})
+			"fatigued": member.is_fatigued or shaken, "shaken": shaken, "member": member, "profiles": scaled})
 	return groups
 
 
@@ -6435,6 +6438,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 		var group := grp as Dictionary
 		var base_quality: int = int(group.get("quality", 4))
 		var fatigued: bool = bool(group.get("fatigued", false))
+		if bool(group.get("shaken", false)) and battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"Shaken: %s strikes back counting as fatigued (6+)" % str(group.get("name", "?")), true)
 		for p in group.get("profiles", []):
 			var profile := _solo_bridge_granted_flags(group.get("member"), p as Dictionary, defender)
 			if int(profile.get("attacks", 0)) <= 0:
@@ -18033,7 +18039,7 @@ func _solo_takedown_bonus_groups(unit: GameUnit, melee: bool) -> Array:
 					"%s: %s makes one extra attack at Quality %d+ with AP(%d), Deadly(3), Takedown (once per game)" % [
 					n, member.get_name(), int(sp.get("extra_attack_q", 2)), int(sp.get("ap", 2))], true)
 			out.append({"name": member.get_name(), "quality": int(sp.get("extra_attack_q", 2)),
-				"fatigued": member.is_fatigued, "member": member,
+				"fatigued": member.is_fatigued or unit.is_shaken or member.is_shaken, "member": member,
 				"profiles": [{"name": n, "attacks": 1, "count": 1, "ap": int(sp.get("ap", 2)),
 					"deadly": int(sp.get("deadly", 3)), "takedown": true, "range": 0, "rules": []}]})
 			break   # one bonus attack per member even if books duplicate the rule

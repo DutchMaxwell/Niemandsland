@@ -1234,6 +1234,18 @@ pub fn rule_on(rules_epoch: u32, since_epoch: u32) -> bool {
     rules_epoch >= since_epoch
 }
 
+/// Resolve the epoch a record actually played at. The explicit knob wins;
+/// Gen-2 recorded it beside prescreen.knobs, and later unstamped arena records
+/// identify their playing build under prescreen.core_build. Older records are 0.
+pub fn record_rules_epoch(knobs: &serde_json::Value, prescreen: &serde_json::Value) -> u32 {
+    [knobs.get("rules_epoch"), prescreen.get("rules_epoch"),
+        prescreen.get("core_build").and_then(|b| b.get("rules_epoch"))]
+        .into_iter()
+        .flatten()
+        .find_map(|v| v.as_u64().and_then(|n| u32::try_from(n).ok()))
+        .unwrap_or(0)
+}
+
 /// The `melee_reach` knob's two settings — written the way `sighting` is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -1647,7 +1659,11 @@ impl ActHeader {
 
 /// Parses one act-corpus header line (`{"kind":"header", ...}`).
 pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
-    let header: Header = serde_json::from_str(text).map_err(|e| format!("act header: {e}"))?;
+    let raw: serde_json::Value = serde_json::from_str(text).map_err(|e| format!("act header: {e}"))?;
+    // Parse the typed header from the original text: Ordered<Profile> must
+    // retain JSON insertion order, which serde_json::Value would sort.
+    let mut header: Header = serde_json::from_str(text).map_err(|e| format!("act header: {e}"))?;
+    header.knobs.rules_epoch = record_rules_epoch(&raw["knobs"], &raw["prescreen"]);
     // The evolved-eval seam: variant 0 (today's frozen eval) and variant 1 (the
     // referee-shaped marker term, ledger row 7) have registered arms in
     // `score::score_hand_variant`. A header asking for anything else is
@@ -1747,7 +1763,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 #[cfg(test)]
 mod tests {
     use super::{
-        read_act_header, rule_on, MeleeReach, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
+        read_act_header, record_rules_epoch, rule_on, MeleeReach, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
     };
 
@@ -1910,6 +1926,17 @@ mod tests {
         let head = r#"{"kind":"header","profiles":{},"knobs":{}}"#;
         let header = read_act_header(head).expect("no knobs at all still parses");
         assert_eq!(header.knobs.rules_epoch, 0);
+    }
+
+    #[test]
+    fn record_epoch_uses_the_playing_build_only_when_the_record_has_no_stamp() {
+        let ps = serde_json::json!({"rules_epoch": 3, "core_build": {"rules_epoch": 64}});
+        assert_eq!(record_rules_epoch(&serde_json::json!({"rules_epoch": 7}), &ps), 7);
+        assert_eq!(record_rules_epoch(&serde_json::json!({}), &ps), 3);
+        assert_eq!(record_rules_epoch(&serde_json::json!({}), &serde_json::json!({"core_build": {"rules_epoch": 64}})), 64);
+        assert_eq!(record_rules_epoch(&serde_json::json!({}), &serde_json::Value::Null), 0);
+        let header = read_act_header(r#"{"kind":"header","profiles":{},"knobs":{},"prescreen":{"core_build":{"rules_epoch":64}}}"#).unwrap();
+        assert_eq!(header.knobs.rules_epoch, 64);
     }
 
     /// A header that stamps `rules_epoch` carries it through unchanged — the
