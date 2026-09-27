@@ -16,6 +16,8 @@ const KNOWN := [
 	"at_least",
 	"value_changed",
 	"value_is",
+	"unit_selected_whole",
+	"unit_moved",
 ]
 
 
@@ -63,4 +65,19 @@ static func _passes_one(check_name: String, args: Dictionary, now: Dictionary, b
 			return now.get(key2) != base.get(key2)
 		"value_is":
 			return now.get(String(args.get("key", ""))) == args.get("value")
+		"unit_selected_whole":
+			var tag := String(args.get("tag", ""))
+			var now_tags: Dictionary = now.get("tags", {})
+			if not now_tags.has(tag):
+				return false
+			return bool(now_tags[tag].get("selected_whole", false))
+		"unit_moved":
+			var tag2 := String(args.get("tag", ""))
+			var now_tags2: Dictionary = now.get("tags", {})
+			var base_tags2: Dictionary = base.get("tags", {})
+			if not now_tags2.has(tag2) or not base_tags2.has(tag2):
+				return false
+			var now_centroid: Vector2 = now_tags2[tag2].get("centroid_in", Vector2.ZERO)
+			var base_centroid: Vector2 = base_tags2[tag2].get("centroid_in", Vector2.ZERO)
+			return now_centroid.distance_to(base_centroid) >= float(args.get("inches", 0.0))
 	return false

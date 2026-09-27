@@ -86,3 +86,26 @@ func test_all_of_one_failing_entry_fails_the_step() -> void:
 func test_unknown_check_fails() -> void:
 	var step := _step("no_such_check", {})
 	assert_bool(LessonChecks.passes(step, {}, {})).is_false()
+
+
+func test_unit_selected_whole() -> void:
+	var step := _step("unit_selected_whole", {"tag": "alpha"})
+	var base := {"tags": {"alpha": {"selected_whole": false}}}
+	assert_bool(LessonChecks.passes(step, base, base)).is_false()
+	var now := {"tags": {"alpha": {"selected_whole": true}}}
+	assert_bool(LessonChecks.passes(step, now, base)).is_true()
+
+
+func test_unit_moved() -> void:
+	var step := _step("unit_moved", {"tag": "alpha", "inches": 3.0})
+	var base := {"tags": {"alpha": {"centroid_in": Vector2(0.0, 12.0)}}}
+	assert_bool(LessonChecks.passes(step, base, base)).is_false()
+	var now := {"tags": {"alpha": {"centroid_in": Vector2(0.0, 8.0)}}}
+	assert_bool(LessonChecks.passes(step, now, base)).is_true()
+
+
+func test_missing_tag_is_false_for_unit_checks() -> void:
+	var base := {"tags": {}}
+	var now := {"tags": {}}
+	assert_bool(LessonChecks.passes(_step("unit_selected_whole", {"tag": "alpha"}), now, base)).is_false()
+	assert_bool(LessonChecks.passes(_step("unit_moved", {"tag": "alpha", "inches": 1.0}), now, base)).is_false()
