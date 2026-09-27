@@ -1606,6 +1606,7 @@ mod retreating_strike;
     mod screened_melee;
 
     mod self_destruct;
+mod shaken_strikeback;
 mod second_wind;
 mod second_wind_score;
 mod surge_mark;
