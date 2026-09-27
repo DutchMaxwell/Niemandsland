@@ -535,6 +535,18 @@ pub const EPOCH_62_CASTING_MOD: u32 = 62;
 /// carries only its own
 /// `EPOCH_63_MELEE_HEIGHT` constant for reference.
 pub const EPOCH_63_MELEE_HEIGHT: u32 = 63;
+/// The DEPLOYLARGE gate (F4, 27.09.): #1048 mirrored the table's whole-zone
+/// forward respot for large bases (`deployment::deploy_place_id`) UNGATED,
+/// so every corpus recorded before it re-deployed its large bases on replay
+/// and the Gen-0 teacher corpus (epoch 0) parted at the first activation.
+/// From 64 the respot fires; below it the section spot stands and every
+/// earlier corpus replays byte-exact. Corpora recorded at 62/63 between #1048
+/// (2026-09-22) and this gate carry the respot and replay without it.
+/// MIRROR HOLD: core-only gate — the table runs `large_zone_search`
+/// unconditionally and its recordings carry the deployed positions, so no
+/// table replay re-runs the core deployment; `act_recorder.gd` stays at 61
+/// (`EPOCH_62_CASTING_MOD` is unmirrored too, `EPOCH_63_MELEE_HEIGHT` held).
+pub const EPOCH_64_DEPLOY_LARGE_RESPOT: u32 = 64;
 
 /// The PRECISION DEBUFF gate (15.09., the precision text sweep — row
 /// `Precision Debuff`; gf Infected Colonies / Alien Hives, aof Deep-Sea
@@ -557,7 +569,7 @@ pub const EPOCH_63_MELEE_HEIGHT: u32 = 63;
 /// `CURRENT_RULES_EPOCH` is bumped to in the same change. Every call site
 /// reads THIS constant, not the literal `58` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_58_PRECISION_DEBUFF: u32 = 58;
-pub const CURRENT_RULES_EPOCH: u32 = 63;
+pub const CURRENT_RULES_EPOCH: u32 = 64;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1745,7 +1757,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 63, "the live epoch is 63 (EPOCH_63_MELEE_HEIGHT; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
+        assert_eq!(CURRENT_RULES_EPOCH, 64, "the live epoch is 64 (EPOCH_64_DEPLOY_LARGE_RESPOT; the newest gate constant bumps it; renumbered at rebase per the epoch rules)");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1755,11 +1767,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":63}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":64}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 63"
+            "a fresh play_game() now stamps the bumped epoch, 64"
         );
     }
 
