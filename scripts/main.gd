@@ -7874,7 +7874,9 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s takes %d Dangerous terrain test dice" % [unit.get_name(), model_count], true)
-	var faces: Array = await _solo_tray_roll(model_count, 6, "AI (%s)" % unit.get_name(), "dangerous",
+	# A1 (NML-202): a player-driven auto intent can land here too (execute_intent's dangerous-terrain
+	# tap doesn't know which side moved) — the tray label must say "You"/the co-op owner, not "AI".
+	var faces: Array = await _solo_tray_roll(model_count, 6, _solo_owner_label(unit), "dangerous",
 		"Dangerous terrain: %s (a 1 wounds)" % unit.get_name())
 	var wounds := 0
 	for f in faces:
@@ -9359,6 +9361,13 @@ func solo_combat_available(unit: GameUnit) -> bool:
 	return false
 
 
+## Radial gate for the engine-executed verbs (A1, NML-202): the same eligibility as Shoot/Fight, but
+## co-op rooms hide them in this version (grilled decision 2: V1 is solo) — a multiplayer session's
+## players still move and attack by hand, same as today.
+func solo_auto_available(unit: GameUnit) -> bool:
+	return solo_combat_available(unit) and (network_manager == null or not network_manager.is_multiplayer_active())
+
+
 ## The pre-attack cast-window ask (decision "Vorfrage"): true → the player casts first. Asked at
 ## most once per unit per round, and only when the unit's caster can actually afford a spell.
 var _solo_cast_asked: Dictionary = {}   # instance_id → round the ask happened
@@ -9499,6 +9508,103 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 			range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), rng_in)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "%s: pick a target (%s) — right-click cancels" % [unit.get_name(), ("melee" if melee else "shooting")])
+
+
+## A1 (NML-202, automodus PR 2) — the player's engine-executed activation entry (radial Charge /
+## Advance & Shoot / Rush): the SAME guards as solo_begin_targeting, but the PICK closes into
+## _run_player_intent instead of the manual attack flow — the engine moves the unit along a legal
+## corridor, rolls the attack/saves/morale, and books NACHTMAHR's reply.
+func solo_begin_auto(unit: GameUnit, verb: int) -> void:
+	unit = _solo_combat_unit(unit)   # X1: a joined hero's intent belongs to its host unit
+	if unit == null:
+		return
+	if unit.is_activated:
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
+		return
+	if await _solo_confirm_cast_first(unit):
+		solo_begin_cast(unit)
+		return
+	_ensure_solo_controller()
+	await _solo_apply_utility_buffs(unit)
+	_solo_target_mode = {"unit": unit, "auto_verb": verb}
+	var bands: Dictionary = SoloController.move_bands_for_unit(unit, solo_controller.movement_range)
+	var band: float
+	var verb_label: String
+	match verb:
+		AiDecision.Action.CHARGE:
+			band = float(bands.get("charge", bands.get("rush", 12)))
+			verb_label = "Charge"
+		AiDecision.Action.RUSH:
+			band = float(bands.get("rush", 12))
+			verb_label = "Rush"
+		_:
+			band = float(bands.get("advance", 6))
+			verb_label = "Advance & Shoot"
+	if band > 0 and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
+		range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), band)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s: pick a target for %s — right-click cancels" % [
+			unit.get_name(), verb_label])
+
+
+## A1 (NML-202, automodus PR 2) — resolves a player's Charge / Advance & Shoot / Rush intent through
+## the SAME executor the AI uses (execute_intent): the move, the post-move shot gate and the log lines
+## are the one truth both feeders share. A refused intent moves nothing and leaves the unit free to
+## try again. V1 scope only (no casts, no Mend/Breath/Utility-Buff replay — those stay the AI's own
+## before-attacking beats; execute_intent's source == "player" branch already skips the spell plan and
+## the overkill ledger for the same reason).
+func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit) -> void:
+	await begin_activation(unit)
+	var intent: Dictionary = solo_controller.player_intent(unit, verb, target)
+	if intent.has("refused"):
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Auto: %s — %s" % [unit.get_name(), str(intent["refused"])], true)
+		return
+	# Per-activation reset the AI gets from activate_next_ai_unit() (solo_controller.gd:643-645) —
+	# the player path never goes through that door, so execute_intent's move would otherwise replay
+	# stale paths/notes/extras left over from the AI's last activation.
+	solo_controller.last_move_paths = []
+	solo_controller.board_clamp_notes = []
+	solo_controller._move_extra = {}
+	var report: Dictionary = solo_controller.execute_intent(intent, ActIntent.blank_report(unit))
+	if undo_manager != null:
+		undo_manager.expire_move_takebacks()
+	_solo_present_move_start(solo_controller.last_move_paths)
+	_solo_focus_on_unit(unit)
+	_print_rule_notes(report)
+	if battle_log != null:
+		for note in solo_controller.board_clamp_notes:
+			battle_log.log_event(BattleLog.Category.GENERAL, str(note), true)
+		battle_log.log_event(BattleLog.Category.MOVEMENT, "Auto: %s %s (→ %s)" % [
+			unit.get_name(), AiDecision.action_name(verb), target.get_name()], true)
+	var has_move: bool = not solo_controller.last_move_paths.is_empty()
+	if has_move:
+		await _solo_pace_attention()
+	await _solo_animate_move(solo_controller.last_move_paths)
+	if has_move:
+		await _solo_pace_attention()
+		_solo_spend_once_kind(unit, ["speed"])   # NML-006: speed once-mods are spent by the executed move
+	var dangerous_dice: int = int(report.get("dangerous_dice", 0))
+	if dangerous_dice > 0:
+		await _run_ai_dangerous(unit, dangerous_dice)
+		if unit.is_destroyed():
+			return
+	if verb == AiDecision.Action.CHARGE:
+		var gap_in: float = solo_controller.nearest_melee_gap_in(unit, target)
+		if gap_in <= SoloController.MELEE_ENGAGE_IN:
+			await _run_human_attack(unit, target, true)   # snap, pile-in, melee, activation, AI reply
+			return
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"Auto: %s's charge falls short (%.1f\")" % [unit.get_name(), gap_in], true)
+		await _solo_complete_human_attack(unit)
+	elif bool(report.get("can_shoot", false)):
+		await _run_human_attack(unit, target, false)
+	else:
+		await _solo_complete_human_attack(unit)   # the no-shot reason is already a rule note
 
 
 ## Spell wave F2 — the human cast flow entry (radial "Cast"): spell picker (live army-book text,
@@ -9724,6 +9830,13 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			if target == null or not _solo_is_ai_unit(target) or _solo_combined_alive(target) <= 0 \
 					or SoloController.unit_in_reserve(target):
 				return true   # swallow the click; stay in targeting mode (a reserve unit is off-table)
+			# A1 (NML-202): an auto_verb click hands off to the engine executor, not the manual attack
+			# flow — the melee/shoot split above never applies to it.
+			if _solo_target_mode.has("auto_verb"):
+				var verb: int = int(_solo_target_mode.get("auto_verb"))
+				_solo_end_targeting()
+				await _run_player_intent(attacker, verb, target)
+				return true
 			var verdict := _solo_validate_target(attacker, target, melee)
 			if verdict != "":
 				if battle_log != null:
@@ -9868,7 +9981,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not (event is InputEventMouseButton or event is InputEventMouseMotion):
 		return
-	if _solo_targeting_input(event):
+	if await _solo_targeting_input(event):
 		get_viewport().set_input_as_handled()
 
 
@@ -12241,7 +12354,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	# Solo P8: while the player is picking an attack target, ESC cancels the mode. (KEY events only ever
 	# reach _unhandled_key_input — the mouse side of targeting is hooked in _input above.)
-	if not _solo_target_mode.is_empty() and _solo_targeting_input(event):
+	if not _solo_target_mode.is_empty() and await _solo_targeting_input(event):
 		get_viewport().set_input_as_handled()
 		return
 	# F11 (Solo/AI M1 debug trigger): treat player 2's army as AI-controlled and run its turn — each of
