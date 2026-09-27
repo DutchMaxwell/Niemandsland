@@ -34,7 +34,7 @@ signal rotation_committed(objects: Array[Node3D])
 ## Emitted (throttled) during a STRICT movement-budget-capped model drag: the consumed arc,
 ## the model's max legal band (both inches), and whether the brush has run dry (at the cap).
 ## The HUD shows "X.X/Y.Y″" and a dry colour; not emitted for free (Casual) or non-model drags.
-signal movement_capped(consumed_inches: float, cap_inches: float, dry: bool)
+signal movement_capped(consumed_inches: float, cap_inches: float, dry: bool, reason: String)
 ## Emitted once on drop when the 1" spacing rule actually MOVED a dropped base — the unit-scoped
 ## enemy base-contact snap or the other-unit 1" push (Phase 1 of _resolve_drop_separation). Lets
 ## the tutorial confirm the player felt the red 1" wall; carries whether a snap/push was applied.
@@ -1375,6 +1375,7 @@ func _stop_dragging() -> void:
 						MoveLedger.translated(base_path, offset), Vector2(end.x, end.z))
 				moves.append({"node": obj, "from": start, "to": end, "inches": inches,
 						"path": path, "arc_in": MoveLedger.length_inches(path),
+						"climb_in": MoveLedger.climb_report(path, _surface_fn())["climb_in"],
 						"radius_m": _trail_radius_for(obj),
 						"drop_id": drop_id,
 						"from_raw": _drag_start_positions[obj],
@@ -2047,7 +2048,7 @@ func _create_drag_line() -> void:
 
 
 ## Update drag line visualization
-func _update_drag_line(from_pos: Vector3, to_pos: Vector3, distance_inches: float) -> void:
+func _update_drag_line(from_pos: Vector3, to_pos: Vector3, distance_inches: float, climb_in: float = 0.0) -> void:
 	if not _drag_line or not _drag_label:
 		return
 
@@ -2078,7 +2079,7 @@ func _update_drag_line(from_pos: Vector3, to_pos: Vector3, distance_inches: floa
 
 	# Update label
 	_drag_label.global_position = Vector3(midpoint.x, 0.02, midpoint.z)
-	_drag_label.text = "%.1f\"" % distance_inches
+	_drag_label.text = travel_label(distance_inches, climb_in)
 	_drag_label.rotation = Vector3(-PI/2, angle, 0)
 
 	# Tint the drag line by the terrain it crosses (OPR Difficult/Dangerous Terrain,
@@ -2168,6 +2169,23 @@ static func _pick_surface_y(hit: Dictionary, fallback: float) -> float:
 	return (pos as Vector3).y
 
 
+## Surface Y (metres) beneath a world-XZ point, for MoveLedger.climb_report — the ONE
+## surface truth (terrain_overlay.surface_y_at) a drag's climb cost reads; flat (0.0)
+## without a terrain overlay wired in.
+func _surface_fn() -> Callable:
+	if terrain_overlay and terrain_overlay.has_method("surface_y_at"):
+		return terrain_overlay.surface_y_at
+	return func(_xz: Vector2) -> float: return 0.0
+
+
+## The drag/drop travel readout: a plain "7.3″" when there was no climb, else "7.3″ (+2.5″
+## climb)". Pure/testable.
+static func travel_label(flat_in: float, climb_in: float) -> String:
+	if climb_in > 0.05:
+		return "%.1f\" (+%.1f\" climb)" % [flat_in, climb_in]
+	return "%.1f\"" % flat_in
+
+
 func _update_drag(screen_pos: Vector2) -> void:
 	if _selected_objects.is_empty() or not _is_dragging:
 		return
@@ -2212,6 +2230,7 @@ func _update_drag(screen_pos: Vector2) -> void:
 		# delta. Non-model drags skip this — `head` stays unused and delta_xz is left as-is.
 		var head := Vector2.ZERO
 		var have_path := _drag_anchor_object != null and is_instance_valid(_drag_anchor_object)
+		var climb_reason := ""
 		if have_path:
 			var desired := Vector2(_drag_anchor_position.x + delta_xz.x, _drag_anchor_position.z + delta_xz.z)
 			# Erase whatever the cursor walked back over (refunds budget), keeping the path sparse.
@@ -2228,6 +2247,17 @@ func _update_drag(screen_pos: Vector2) -> void:
 				elif from_pt.distance_to(desired) > remaining:
 					# The brush runs dry mid-stroke: stop the head at the max-reach point.
 					head = from_pt + (desired - from_pt).normalized() * remaining
+				# Climb cost (GF p.11): the STRICT cap compares flat + climb together. A
+				# candidate that climbs over 3" in one step, or whose climb alone would blow
+				# what the flat cost left of the cap, holds at the last committed point (D5a:
+				# a hard stop only under Strict — non-strict never blocks here).
+				var candidate := MoveLedger.with_final(committed, head)
+				var climb := MoveLedger.climb_report(candidate, _surface_fn())
+				var cap_in := _strict_cap_meters * METERS_TO_INCHES
+				var remaining_in := cap_in - MoveLedger.length_inches(candidate)
+				climb_reason = MoveLedger.climb_blocks(climb, remaining_in, true)
+				if not climb_reason.is_empty():
+					head = from_pt
 			# Commit the (capped) head forward once it has advanced a sample step.
 			if committed.is_empty():
 				committed = PackedVector2Array([head])
@@ -2285,9 +2315,16 @@ func _update_drag(screen_pos: Vector2) -> void:
 			consumed_inches = MoveLedger.length_inches(_drag_path_points) \
 					+ _drag_path_points[_drag_path_points.size() - 1].distance_to(head) * METERS_TO_INCHES
 
+		# Climb cost (GF p.11): the anchor's own path, surface-sampled — 0.0 without a
+		# recorded path (a non-model drag has nothing to climb).
+		var climb_in: float = 0.0
+		if have_path and not _drag_path_points.is_empty():
+			var climb_path := MoveLedger.with_final(_drag_path_points, head)
+			climb_in = MoveLedger.climb_report(climb_path, _surface_fn())["climb_in"]
+
 		# The drag line's readout is a MOVEMENT-travel measure — label it with the consumed
 		# arc (matches the trail stamp + HUD counter). Range/charge stays on the measure tool.
-		_update_drag_line(_drag_anchor_position, current_anchor_pos, consumed_inches)
+		_update_drag_line(_drag_anchor_position, current_anchor_pos, consumed_inches, climb_in)
 
 		distance_changed.emit(consumed_inches, _drag_anchor_position, current_anchor_pos)
 
@@ -2295,7 +2332,8 @@ func _update_drag(screen_pos: Vector2) -> void:
 		# "X.X/Y.Y″" and a colour once the budget is spent.
 		if _strict_cap_meters > 0.0:
 			var cap_in := _strict_cap_meters * METERS_TO_INCHES
-			movement_capped.emit(consumed_inches, cap_in, consumed_inches >= cap_in - 0.05)
+			movement_capped.emit(consumed_inches, cap_in,
+					consumed_inches >= cap_in - 0.05 or not climb_reason.is_empty(), climb_reason)
 
 		# Throttled live update for coherency feedback while dragging
 		_coherency_update_timer += get_process_delta_time()
