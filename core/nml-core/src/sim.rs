@@ -31,6 +31,7 @@ use crate::acts::{
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
+    EPOCH_66_DISTANCE_TRUTH,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -6029,7 +6030,8 @@ fn solo_move_grant_delta_in(
     if mods::granted(state, si, "Rapid Advance") && !stamp.rapid_advance_printed {
         d += fire("Rapid Advance", stamp.rapid_advance);
     }
-    if mods::granted(state, si, "Rapid Rush") && !stamp.rapid_rush_printed {
+    if mods::granted(state, si, "Rapid Rush") && !stamp.rapid_rush_printed
+        && (kind == RUSH || !rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH)) {
         d += fire("Rapid Rush", stamp.rapid_rush);
     }
     let slow = mods::granted(state, si, "Slow") && !stamp.slow_printed;

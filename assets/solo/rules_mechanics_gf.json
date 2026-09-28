@@ -1409,7 +1409,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -1417,7 +1418,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Re-Deployment": {
@@ -1867,7 +1869,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -1875,7 +1878,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Re-Deployment": {
@@ -2070,7 +2074,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -2078,7 +2083,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Ravage": {
@@ -2931,7 +2937,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -2939,7 +2946,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Re-Deployment": {
@@ -3363,7 +3371,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -3371,7 +3380,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Ravage": {
@@ -5866,7 +5876,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -5874,7 +5885,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Ravage": {
@@ -6098,7 +6110,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -6106,7 +6119,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Ravage": {
@@ -7042,7 +7056,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Relentless Aura": {
@@ -7252,7 +7267,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -7260,7 +7276,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Ravage": {
@@ -8839,7 +8856,8 @@
     "rated": false,
     "book_version": "3.5.2",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Surge": {
@@ -9183,7 +9201,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -9191,7 +9210,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Re-Position Artillery": {
@@ -9370,7 +9390,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -9378,7 +9399,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Ravage": {
@@ -9616,7 +9638,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -9624,7 +9647,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Re-Deployment": {
@@ -9836,7 +9860,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -9844,7 +9869,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Ravage": {
@@ -10495,7 +10521,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Regeneration Aura": {
