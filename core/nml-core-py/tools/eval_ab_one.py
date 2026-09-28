@@ -56,6 +56,9 @@ def main() -> int:
     ap.add_argument("--deep-horizon", type=int, default=None)
     ap.add_argument("--repo", default=REPO)
     ap.add_argument("--bank", default=BANK)
+    ap.add_argument("--mission", default="duel",
+                    help="wave C gate C9.9: a catalog mission plays its own marker layout and "
+                         "referee; duel keeps the rulebook layout every earlier run used")
     a = ap.parse_args()
 
     gr.G["dice"] = a.dice_seed
@@ -76,6 +79,8 @@ def main() -> int:
         )
     if a.cand_variant != 0:
         kwargs.update(eval_variant_player=a.cand_player, eval_variant=a.cand_variant)
+    if a.mission != "duel":
+        kwargs.update(objectives="mission", mission=a.mission)
 
     t0 = time.perf_counter()
     with gr.armed(selfplay._pick_for):
