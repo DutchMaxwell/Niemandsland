@@ -82,11 +82,10 @@ pub fn playout_seize(state: &mut State, owners: &mut [i64]) {
 
 /// Pick up each newly seized relic with the closest eligible unit; capture order breaks ties.
 pub fn apply_carry_step(state: &mut State, owners: &[i64]) {
-    for i in 0..state.markers_meta.len().min(state.objectives.len()).min(owners.len()) {
+    for (i, &side) in owners.iter().enumerate().take(state.markers_meta.len().min(state.objectives.len())) {
         if !state.markers_meta[i].carry || state.markers_meta[i].carried_by != -1 {
             continue;
         }
-        let side = owners[i];
         if side != 1 && side != 2 { continue; }
         let op = state.objectives[i].pos;
         let mut best = None;
