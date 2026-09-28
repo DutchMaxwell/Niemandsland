@@ -3755,7 +3755,10 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
 /// Reposition candidate, so nothing of the port is live below 8). Cap by
 /// NAME: Teleport 3"/6", others (Ethereal) flat 6".
 #[derive(Debug, Clone, PartialEq)]
-pub struct TeleportSpec { pub name: String } // the cap key and the log subject
+pub struct TeleportSpec {
+    pub name: String, // the cap key and the log subject
+    pub standalone_reposition: bool,
+}
 
 pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
     if rule != "Teleport" || rush { 6.0 } else { 3.0 }
@@ -3769,7 +3772,10 @@ fn teleport_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<Te
         .find(|n| (*n == "Teleport" && map.lookup(&p.faction_folder, n).is_some())
             || *n == "Ethereal"
             || map.lookup(&p.faction_folder, n).filter(|e| e.primitive.as_deref() == Some("Teleport")).is_some())
-        .map(|n| TeleportSpec { name: n })
+        .map(|n| TeleportSpec {
+            standalone_reposition: n != "Teleport" || !rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH),
+            name: n,
+        })
 }
 
 /// One carried "Surprise Attack" — "Counts as having Infiltrate. The first

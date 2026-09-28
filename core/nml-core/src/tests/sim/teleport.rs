@@ -50,6 +50,30 @@ use super::*;
         .unwrap()
     }
 
+    #[test]
+    fn teleport_hold_is_refused_at_epoch_66_but_ethereal_hold_remains_legal() {
+        let (st, mut statics) = tp_line(crate::acts::EPOCH_66_DISTANCE_TRUTH);
+        let from = geom::centre(&st.positions[0]);
+        let to = [from[0] as f64 + 2.0 * IN2M, from[2] as f64];
+        let act = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None,
+            charge: None, patient: false, split: None, traced: None, teleport: Some(to) };
+        let run = |statics: &[UnitStatic], epoch| {
+            let mut tray = Tray::seeded(11);
+            let mut rng = crate::rng::GodotRng::new(0);
+            resolve_stochastic_tray_on_board(statics, &st, &act,
+                &crate::terrain::Terrain::default(),
+                Seams { rules_epoch: epoch, ..Seams::default() }, &mut rng, &mut tray)
+                .unwrap().0
+        };
+        let old = run(&statics, crate::acts::EPOCH_65_MELEE_TRUTH);
+        let current = run(&statics, crate::acts::EPOCH_66_DISTANCE_TRUTH);
+        assert!(old.teleport_used[0], "old records keep their HOLD teleport");
+        assert!(!current.teleport_used[0], "Teleport cannot fire on HOLD from epoch 66");
+        statics[0].teleport = Some(crate::unit::TeleportSpec { name: "Ethereal".into(), standalone_reposition: true });
+        assert!(run(&statics, crate::acts::EPOCH_66_DISTANCE_TRUTH).teleport_used[0],
+            "Ethereal still repositions on HOLD");
+    }
+
     /// (1) a replayed act carrying the record's `teleport` block lands the
     /// formation ON the recorded centroid (the record decides), sets the
     /// latch, and names rule, band cap and landing centroid (rules-must-log).
@@ -85,6 +109,25 @@ use super::*;
         assert_eq!(crate::unit::teleport_cap_in("Ethereal", true), 6.0);
     }
 
+    #[test]
+    fn teleport_rush_log_uses_six_inch_cap_from_epoch_66() {
+        let (st, statics) = tp_line(crate::acts::EPOCH_66_DISTANCE_TRUTH);
+        let from = geom::centre(&st.positions[0]);
+        let to = [from[0] as f64 + 2.0 * IN2M, from[2] as f64];
+        let act = Action { kind: RUSH, unit: "a".into(), dest: None, shoot: None,
+            charge: None, patient: false, split: None, traced: None, teleport: Some(to) };
+        let log_at = |epoch| {
+            let mut tray = Tray::seeded(11);
+            let mut rng = crate::rng::GodotRng::new(0);
+            resolve_stochastic_tray_on_board(&statics, &st, &act,
+                &crate::terrain::Terrain::default(),
+                Seams { rules_epoch: epoch, ..Seams::default() }, &mut rng, &mut tray)
+                .unwrap().1.log.join("\n")
+        };
+        assert!(log_at(crate::acts::EPOCH_65_MELEE_TRUTH).contains("within 3\""));
+        assert!(log_at(crate::acts::EPOCH_66_DISTANCE_TRUTH).contains("within 6\""));
+    }
+
     /// (2b) the LIVE rollout arm: a Reposition act (kind 4) for a Teleport
     /// bearer lands at the probed candidate, never past the cap — a 3.5"
     /// pull toward the objective clamps to the 3" cap; Ethereal goes 6" flat.
@@ -98,7 +141,7 @@ use super::*;
             owner: 0,
         }];
         st.teleport_used = vec![false; 4];
-        statics[0].teleport = Some(crate::unit::TeleportSpec { name: "Teleport".into() });
+        statics[0].teleport = Some(crate::unit::TeleportSpec { name: "Teleport".into(), standalone_reposition: true });
         let act = crate::io::Action { kind: REPOSITION, unit: "a".into(), dest: None,
             shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
         let mut rng = crate::rng::GodotRng::new(0);
@@ -226,4 +269,10 @@ use super::*;
             "exactly ONE Reposition candidate at epoch 8"
         );
         assert_eq!(m8.last().map(|c| c.kind), Some(REPOSITION), "appended LAST");
+        assert_eq!(menu_at(crate::acts::EPOCH_65_MELEE_TRUTH)
+            .iter().filter(|c| c.kind == REPOSITION).count(), 1,
+            "epoch 65 keeps the old standalone Teleport candidate");
+        assert_eq!(menu_at(crate::acts::EPOCH_66_DISTANCE_TRUTH)
+            .iter().filter(|c| c.kind == REPOSITION).count(), 0,
+            "Teleport no longer supplies a HOLD-like standalone action");
     }

@@ -1850,8 +1850,8 @@ func _act(unit: GameUnit) -> Dictionary:
 			"data": {"advance_bonus": adv_b, "rush_bonus": rush_b}})
 		_rule_note(report, "%s: %s spends its once-per-game move bonus (+%.0f\"/+%.0f\")" % [str(edq["name"]), unit.get_name(), adv_b, rush_b], true)   # once-per-game spend — travels
 	# Teleport (cut C — "once per activation, before attacking, place this model within 3\" of its
-	# position on Advance/Charge actions, or within 6\" on Rush actions"): the same band valuation —
-	# +3" Advance/Charge, +6" Rush (once per activation by construction).
+	# position on Advance/Charge actions, or within 6\" on Rush actions"): this is a
+	# separate before-attack reposition, never extra movement in the action band.
 	var tele_rule := "Teleport" if RulesRegistry.unit_rule_active(unit, "Teleport") else ""
 	if tele_rule.is_empty():
 		# Coverage wave (resolver audit): Teleport DATA aliases (Ethereal net-zero valuation, …).
@@ -1862,11 +1862,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	if not tele_rule.is_empty():
 		var t_adv := float(RulesRegistry.unit_param(unit, tele_rule, "advance_bonus_in", 3.0))
 		var t_rush := float(RulesRegistry.unit_param(unit, tele_rule, "rush_bonus_in", 6.0))
-		advance += t_adv
-		rush += t_rush
-		charge_reach += t_adv
 		if t_adv != 0.0 or t_rush != 0.0:
-			_rule_note(report, "%s: +%.0f\" on Advance/Charge, +%.0f\" on Rush this activation" % [tele_rule, t_adv, t_rush], true)   # invisible band bonus — travels
+			_rule_note(report, "%s: repositions up to %.0f\" after Advance/Charge or %.0f\" after Rush" % [tele_rule, t_adv, t_rush], true)
 	var centre := unit_centre(unit)
 	var tcentre := unit_centre(target_unit)
 	var enemy_dist := MoveIntent.distance_inches(centre, tcentre)

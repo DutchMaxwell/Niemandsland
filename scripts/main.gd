@@ -19142,6 +19142,9 @@ func _solo_apply_teleport(unit: GameUnit, report: Dictionary) -> void:
 	if unit == null or solo_controller == null or not _solo_is_ai_unit(unit) or unit.is_destroyed():
 		return
 	unit.unit_properties.erase("teleport_used_this_activation")
+	if int(report.get("action", AiDecision.Action.HOLD)) == AiDecision.Action.HOLD \
+			and SoloController.teleport_rule_name(unit) == "Teleport":
+		return
 	var rush: bool = int(report.get("action", 0)) == AiDecision.Action.RUSH
 	var dec: Dictionary = solo_controller.teleport_decision(unit, rush)
 	var rule := str(dec.get("rule", ""))
