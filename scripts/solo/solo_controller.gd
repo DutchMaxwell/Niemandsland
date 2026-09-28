@@ -1707,6 +1707,10 @@ func nearest_hurtable_enemy(unit: GameUnit) -> GameUnit:
 
 
 func _act(unit: GameUnit) -> Dictionary:
+	# A charge with no travel still owns a fresh activation budget: its snap may
+	# not spend movement left by the previous unit or previous round.
+	last_move_budget_in = 0.0
+	last_move_paths.clear()
 	var report := ActIntent.blank_report(unit)   # {text, travels} rule_notes — every applied special rule surfaces in the battle log
 	if alive_positions(unit).is_empty():
 		return report
@@ -1850,8 +1854,8 @@ func _act(unit: GameUnit) -> Dictionary:
 			"data": {"advance_bonus": adv_b, "rush_bonus": rush_b}})
 		_rule_note(report, "%s: %s spends its once-per-game move bonus (+%.0f\"/+%.0f\")" % [str(edq["name"]), unit.get_name(), adv_b, rush_b], true)   # once-per-game spend — travels
 	# Teleport (cut C — "once per activation, before attacking, place this model within 3\" of its
-	# position on Advance/Charge actions, or within 6\" on Rush actions"): the same band valuation —
-	# +3" Advance/Charge, +6" Rush (once per activation by construction).
+	# position on Advance/Charge actions, or within 6\" on Rush actions"): this is a
+	# separate before-attack reposition, never extra movement in the action band.
 	var tele_rule := "Teleport" if RulesRegistry.unit_rule_active(unit, "Teleport") else ""
 	if tele_rule.is_empty():
 		# Coverage wave (resolver audit): Teleport DATA aliases (Ethereal net-zero valuation, …).
@@ -1862,11 +1866,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	if not tele_rule.is_empty():
 		var t_adv := float(RulesRegistry.unit_param(unit, tele_rule, "advance_bonus_in", 3.0))
 		var t_rush := float(RulesRegistry.unit_param(unit, tele_rule, "rush_bonus_in", 6.0))
-		advance += t_adv
-		rush += t_rush
-		charge_reach += t_adv
 		if t_adv != 0.0 or t_rush != 0.0:
-			_rule_note(report, "%s: +%.0f\" on Advance/Charge, +%.0f\" on Rush this activation" % [tele_rule, t_adv, t_rush], true)   # invisible band bonus — travels
+			_rule_note(report, "%s: repositions up to %.0f\" after Advance/Charge or %.0f\" after Rush" % [tele_rule, t_adv, t_rush], true)
 	var centre := unit_centre(unit)
 	var tcentre := unit_centre(target_unit)
 	var enemy_dist := MoveIntent.distance_inches(centre, tcentre)
@@ -8727,7 +8728,9 @@ static func sighted_models(shooter_positions: Array, target_positions: Array, ra
 		# Nearest target model first: it is the most likely to be visible AND the cheapest to confirm.
 		var order: Array = target_positions.duplicate()
 		order.sort_custom(func(a, b) -> bool:
-			return sp.distance_squared_to(a) < sp.distance_squared_to(b))
+			var da := Vector2(a.x - sp.x, a.z - sp.z).length_squared()
+			var db := Vector2(b.x - sp.x, b.z - sp.z).length_squared()
+			return da < db)
 		for t in order:
 			var tp := t as Vector3
 			if Vector2(tp.x - sp.x, tp.z - sp.z).length_squared() > range2:
@@ -9475,13 +9478,20 @@ static func drop_point(carrier: GameUnit, opponent_units: Array) -> Vector3:
 	return centre + direction * (model_base_radius_m(first) + 0.0254)
 
 
-static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array) -> Dictionary:
+static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array,
+		markers: Array = []) -> Dictionary:
 	var new_owners: Array = []
 	var changes: Array = []
 	for i in range(objectives.size()):
 		var current: int = int(owners[i]) if i < owners.size() else 0
 		var near_players := {}
-		for info in unit_infos:
+		# NML-1010 wave C, R1a — the live twin of BattleSim.playout_seize :358-371: a CARRIED
+		# marker is held by the carrier's side while the carrier is alive and unshaken. Its overlay
+		# spot is only where it was picked up, so the ring test is skipped for it.
+		var carrier := _live_carrier(unit_infos, markers, i)
+		if not carrier.is_empty():
+			near_players[int(carrier.get("player", 0))] = true
+		for info in (unit_infos if carrier.is_empty() else []):
 			var d := info as Dictionary
 			if bool(d.get("shaken", false)):
 				continue   # Shaken units can neither seize nor contest
@@ -9506,6 +9516,19 @@ static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array
 		if next != current:
 			changes.append({"index": i, "owner": next})
 	return {"owners": new_owners, "changes": changes}
+
+
+## The live info of the unit carrying marker `i` while it can still hold it (listed = alive, not
+## shaken); {} for an uncarried marker or a carrier that can no longer hold it.
+static func _live_carrier(unit_infos: Array, markers: Array, i: int) -> Dictionary:
+	if i >= markers.size() or not bool((markers[i] as Dictionary).get("carry", false)):
+		return {}
+	var key := String((markers[i] as Dictionary).get("carried_by", ""))
+	for info in unit_infos:
+		var d := info as Dictionary
+		if not key.is_empty() and String(d.get("unit_id", "")) == key and not bool(d.get("shaken", false)):
+			return d
+	return {}
 
 
 ## True when two world Y coordinates (metres) are within the 4" vertical melee reach (GF p.9).

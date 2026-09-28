@@ -31,7 +31,7 @@ use crate::io::Seams;
 use crate::menu::Candidate;
 use crate::rules::has_special_rule;
 use crate::terrain::Terrain;
-use crate::mission::{apply_destroy_step, playout_seize, vp_of, vp_score_round};
+use crate::mission::{apply_carry_step, apply_destroy_step, playout_seize, sync_carried_positions, vp_of, vp_score_round};
 use crate::rng::GodotRng;
 use crate::playout::{other_player, Policy};
 use crate::score::{score_with, score_with_variant, NO_INCOMING};
@@ -503,8 +503,10 @@ impl<'a> Rollout<'a> {
 /// leak into sibling rollouts and into the captured live state. In this port the
 /// two are `Rc`s, and rebinding them is exactly that replacement.
 pub fn imagined_round_end(cur: &mut State) {
+    sync_carried_positions(cur);
     let mut owners: Vec<i64> = cur.objectives.iter().map(|o| o.owner).collect();
     playout_seize(cur, &mut owners);
+    apply_carry_step(cur, &owners);
     if !cur.markers_meta.is_empty() {
         // Taken out and put back so the borrow checker sees what the GDScript
         // does implicitly: these two arrays are the state's own, mutated in place.

@@ -1514,6 +1514,14 @@ impl Core {
         ))
     }
 
+    /// The hand score with a supplied reply-wounds vector, for table parity pins.
+    fn score_hand_incoming(
+        &mut self, state: PyRef<'_, PyState>, player: i64, incoming: Vec<f64>,
+    ) -> PyResult<f64> {
+        let statics = self.statics_for(&state.inner)?;
+        Ok(nmlcore::score::score_hand(&state.inner, &statics, player, &incoming))
+    }
+
     /// NML-1142 — load a `netlab/fork_train.py` ENCODER net and play with it.
     /// The loader GATE is the GDScript's own (`_encoder_selftest_ok`): a net
     /// without a `selftest` block, or one whose forward here misses that block's
@@ -1654,8 +1662,10 @@ impl Core {
         };
         let (mi, ti) = (idx(member)?, idx(target)?);
         let zones = nmlcore::sight::zones_of(&self.terrain);
-        let blockers = nmlcore::sight::blockers_of(st, mi, ti);
-        let n = nmlcore::sight::sighted_count(st, &zones, &blockers, mi, ti, reach_in, indirect);
+        let blockers = nmlcore::sight::blockers_of(st, mi, ti, self.knobs.rules_epoch);
+        let n = nmlcore::sight::sighted_count(st, &zones, &blockers, mi, ti, reach_in,
+            indirect, nmlcore::acts::rule_on(self.knobs.rules_epoch,
+                nmlcore::acts::EPOCH_66_DISTANCE_TRUTH));
         let slack = nmlcore::sight::unit_radius_m(st, mi) + nmlcore::sight::unit_radius_m(st, ti);
         to_py(
             py,
@@ -1883,6 +1893,20 @@ impl Core {
         let mut own = owners;
         mission::playout_seize(&mut st, &mut own);
         (PyState::derived(st), own)
+    }
+
+    /// The round-end relic pickup, after seize and before VP booking.
+    fn apply_carry_step(&self, state: PyRef<'_, PyState>, owners: Vec<i64>) -> PyState {
+        let mut st = state.inner.clone();
+        mission::apply_carry_step(&mut st, &owners);
+        PyState::derived(st)
+    }
+
+    /// Return all relics held by a unit to the deterministic R3a drop point.
+    fn drop_carried(&self, state: PyRef<'_, PyState>, unit: usize) -> PyState {
+        let mut st = state.inner.clone();
+        mission::drop_carried(&mut st, unit);
+        PyState::derived(st)
     }
 
     /// `BattleSim.vp_round_add` battle_sim.gd:332 — 1 VP per controlled marker.
@@ -2749,6 +2773,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh
     // `play_game()` stamps. See `acts::rule_on`.
     m.add("CURRENT_RULES_EPOCH", nmlcore::CURRENT_RULES_EPOCH)?;
+    m.add("EPOCH_66_DISTANCE_TRUTH", nmlcore::acts::EPOCH_66_DISTANCE_TRUTH)?;
     // 16.09. (window 32): the token layout constants, so python tests and the netlab
     // read the core's window instead of pinning 24 by hand.
     m.add("N_UNITS", nmlcore::tokens::N_UNITS)?;

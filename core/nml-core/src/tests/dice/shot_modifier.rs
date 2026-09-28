@@ -65,9 +65,10 @@ use super::*;
         assert_eq!(out_offset.rolls[0].target, 4, "Good Shot +1 cancels Stealth's -1, back to 4+");
     }
 
-    /// NML-1152 — the over-9" modifier gate is `mod_dist_in` (unit centre to
-    /// unit centre, main.gd:3029), never `dist_in` (the range-VALIDITY edge
-    /// gap, B11). Numbers are the corpus find (qag_ref act 24, PLAN NML-1152):
+    /// NML-1152 — the low-level over-9" modifier gate is the supplied
+    /// `mod_dist_in`, independently of `dist_in` (the range-validity edge
+    /// gap). Epoch-65 callers supplied unit centres; epoch-66 callers supply
+    /// the nearest base gap. Numbers are the old corpus find (qag_ref act 24):
     /// edge gap 7.95" (<= 9", range gate) but centre gap 14.30" (> 9",
     /// modifier gate) — Stealth must fire off the WIDER centre gap even
     /// though the closer edge gap is the one that let the shot reach at all.

@@ -31,10 +31,12 @@ use crate::acts::{
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
+    EPOCH_66_DISTANCE_TRUTH,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
+use crate::mission::{drop_carried, sync_carried_positions};
 use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{
@@ -278,6 +280,7 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
         state.wounds[ti][0] -= take;
         left -= take;
         if state.wounds[ti][0] <= 0 {
+            if state.positions[ti].len() == 1 { drop_carried(state, ti); }
             state.wounds[ti].remove(0);
             state.positions[ti].remove(0);
             // radii stay aligned with positions or the base-edge measure lies.
@@ -313,6 +316,7 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
         dealt += take;
         state.wounds[ti][best] -= take;
         if state.wounds[ti][best] <= 0 {
+            if state.positions[ti].len() == 1 { drop_carried(state, ti); }
             state.wounds[ti].remove(best);
             state.positions[ti].remove(best);
             // radii stay aligned with positions or the base-edge measure lies.
@@ -917,9 +921,9 @@ pub(crate) fn tray_strafing(
         statics[next.roster.profile[si]].name));
     // ONE shooting exchange, ONLY the Strafing profiles, through the shared
     // volley resolver — main.gd:3007's `_solo_resolve_ai_volley(unit, target,
-    // shots, true)`: one centre-to-centre distance (main.gd:3133), the
+    // shots, true)`: the activation's modifier distance, the
     // defender's live context, the members at their own Quality.
-    let d = geom::centre_dist_in(&next.positions[si], &next.positions[target]);
+    let d = modifier_distance_in(next, si, target, seams);
     let ut = &statics[next.roster.profile[target]];
     let mut def = ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch);
     // D-STEALTH — the strafe volley reads the defender's live context the
@@ -1585,7 +1589,10 @@ pub(crate) fn teleport_beat(
     let mut shot = dice.map(|(_, sh)| &mut **sh);
     if !rule_on(seams.rules_epoch, EPOCH_8_PLANNER_MENU) || next.alive[si] <= 0 { return false; }
     let Some(spec) = statics[next.roster.profile[si]].teleport.as_ref() else { return false; };
-    let cap_in = crate::unit::teleport_cap_in(&spec.name, false);
+    if spec.name == "Teleport" && rule_on(seams.rules_epoch, EPOCH_66_DISTANCE_TRUTH)
+        && action.kind == HOLD { return false; }
+    let rush_cap = rule_on(seams.rules_epoch, EPOCH_66_DISTANCE_TRUTH) && action.kind == RUSH;
+    let cap_in = crate::unit::teleport_cap_in(&spec.name, rush_cap);
     // REPLAY: the record's centroid, no clamp; LIVE: the probe set (the
     // ADVANCE band — a standalone Reposition act has no Rush context).
     let to = match action.teleport {
@@ -2661,6 +2668,40 @@ fn engage_gap_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
         }
     }
     best
+}
+
+/// Live table modifier distance: nearest alive model bases, including joined
+/// heroes when that seam is active. Older recordings keep the centre measure.
+fn modifier_distance_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
+    let centre = || geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
+    if !rule_on(seams.rules_epoch, EPOCH_66_DISTANCE_TRUTH) {
+        return centre();
+    }
+    let side = |u: usize| -> Vec<usize> {
+        let mut units = vec![u];
+        if seams.hero_attach {
+            units.extend(state.attached[u].iter().copied());
+        }
+        units
+    };
+    // Some synthetic state fixtures carry only the static unit contexts; a
+    // missing profile has the same round footprint as an unstamped base.
+    let shape = |u: usize| state.roster.profile.get(u)
+        .and_then(|&p| state.profiles.list.get(p))
+        .map_or(geom::BaseShape::Round, crate::state::Profile::shape);
+    let mut gap = f64::INFINITY;
+    for a in side(si) {
+        if state.alive[a] <= 0 { continue; }
+        for b in side(ti) {
+            if state.alive[b] <= 0 { continue; }
+            gap = gap.min(geom::edge_gap_shaped_in(
+                &state.positions[a], &state.radii[a], shape(a),
+                &state.positions[b], &state.radii[b], shape(b),
+                DEFAULT_BASE_RADIUS_M,
+            ));
+        }
+    }
+    if gap.is_finite() { gap } else { centre() }
 }
 
 /// `BattleSim._expected_shooting_morale` battle_sim.gd:1096-1105 /
@@ -3916,7 +3957,7 @@ fn sighted_profiles_of(
 ) {
     sc.keep.clear();
     sc.attacks.clear();
-    let blockers = sight::blockers_of(state, mi, ti);
+    let blockers = sight::blockers_of(state, mi, ti, sc.rules_epoch);
     let def = &statics[state.roster.profile[ti]].ctx;
     // WAVE 3 MARK CONSUMERS (`acts::rule_on`, frozen at `EPOCH_6_TABLE_RULES`):
     // the two enemy-side grant names the pre-attack pick already records on
@@ -3940,7 +3981,9 @@ fn sighted_profiles_of(
         // Indirect (GF v3.5.1) "may target enemies that are not in line of
         // sight as if in line of sight": the range gate stays, the sight test
         // goes (main.gd:4136-4138).
-        let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach, (p.indirect && p.indirect_ignores_los.unwrap_or(true)) || mark_indirect);
+        let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach,
+            (p.indirect && p.indirect_ignores_los.unwrap_or(true)) || mark_indirect,
+            rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH));
         // Rules-must-log: the mark fires only where it changes the volley.
         if mark_indirect && !p.indirect && seen > 0 {
             trace_rule("volley", "Indirect Mark",
@@ -4005,12 +4048,14 @@ fn expected_melee_morale(
         return;
     }
     if below_half(state, ul, li) {
+        drop_carried(state, li);
         state.wounds[li].clear();
         state.positions[li].clear();
         state.radii[li].clear();
         state.alive[li] = 0;
     } else {
         state.shaken[li] = true;
+        drop_carried(state, li);
     }
 }
 
@@ -4493,8 +4538,12 @@ fn tray_morale(
     land_wounds(state, i, self_wounds);
     match outcome {
         Morale::Passed => {}
-        Morale::Shaken => state.shaken[i] = true,
+        Morale::Shaken => {
+            state.shaken[i] = true;
+            drop_carried(state, i);
+        }
         Morale::Routed => {
+            drop_carried(state, i);
             state.wounds[i].clear();
             state.positions[i].clear();
             state.radii[i].clear();
@@ -5559,10 +5608,8 @@ struct SplitGroup {
     /// radii off) for a split group, which exists because the TABLE's own
     /// test fired.
     d: f64,
-    /// NML-1152: the over-9" MODIFIER distance (`geom::centre_dist_in` — unit
-    /// centre to unit centre, main.gd:3029), kept apart from `d` — the table
-    /// gates Stealth/Artillery/Versatile Attack/Relentless/Guarded Defense on
-    /// THIS distance, never on the range-validity gap.
+    /// The over-9" modifier measure, kept apart from the range gate. Epoch 65
+    /// recordings use unit centres; epoch 66 uses the nearest live base gap.
     mod_d: f64,
     /// Per member index, the weapon indices of that member's `shoot` list the
     /// table aimed at THIS group, in build order. `None` = the pooled plan:
@@ -5626,6 +5673,7 @@ fn split_plan(
     state: &State,
     si: usize,
     shoot_key: &str,
+    seams: Seams,
 ) -> (Option<Vec<SplitGroup>>, Vec<&'static str>) {
     let mut marks: Vec<&'static str> = Vec::new();
     let Some(list) = split.filter(|l| !l.is_empty()) else { return (None, marks) };
@@ -5653,12 +5701,9 @@ fn split_plan(
                 + state.radii[ti].first().copied().unwrap_or(DEFAULT_BASE_RADIUS_M))
                 / IN2M)
             .max(0.0);
-        // NML-1152: the modifier gate is unit-centre to unit-centre
-        // (`main.gd:3029`/solo_controller.gd:8525-8533), not this group's
-        // EDGE gap — a split group's own weapons can still land Stealth or
-        // Versatile Attack on the table's terms even where B11 sees a closer
-        // edge.
-        let mod_d = geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
+        // Epoch 66 follows the table's nearest-base modifier measure; older
+        // records keep the centre gap independently of this range gate.
+        let mod_d = modifier_distance_in(state, si, ti, seams);
         groups.push(SplitGroup { ti, key: key.clone(), d, mod_d, weapons: Some(HashMap::new()) });
     }
     // The member lookup by name: one host plus its own attached heroes, alive
@@ -5858,6 +5903,25 @@ fn place_d3_hop(
     ))
 }
 
+/// The Mark's attackers-side grant on the target, priced by the charger's own
+/// registry stamp. One matching record grants the book's +4" once, never once
+/// per duplicate mark; the old epoch remains untouched.
+fn rapid_charge_mark_bonus_in(
+    statics: &[UnitStatic], state: &State, si: usize, ci: Option<usize>,
+    kind: i64, rules_epoch: u32,
+) -> f64 {
+    if kind != CHARGE || !rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH) {
+        return 0.0;
+    }
+    let Some(ti) = ci.filter(|&ti| state.alive[ti] > 0) else { return 0.0 };
+    if state.buffs[ti].iter().any(|r| r.scope.as_ref() == "melee"
+        && r.grants_rule.as_ref() == "Rapid Charge"
+        && mods::matches(r, mods::Role::GrantVs, true))
+    {
+        statics[state.roster.profile[si]].rapid_charge_grant_in
+    } else { 0.0 }
+}
+
 /// Versatile Reach (solo_controller.gd:1781-1827) — the CHARGE half of the
 /// per-activation "pick one". The ACTION is the witness: at the table the
 /// charge execution (:2213) is reachable with a gap in the unlock ring only if
@@ -5891,7 +5955,7 @@ fn versatile_reach_charge_in(
         state.bands[si].charge.unwrap_or(state.bands[si].rush) + bounding_in
     } else {
         state.bands[si].rush + bounding_in
-    };
+    } + rapid_charge_mark_bonus_in(statics, state, si, ci, kind, rules_epoch);
     let gap = geom::edge_gap_in(
         &state.positions[si], &state.radii[si],
         &state.positions[ti], &state.radii[ti],
@@ -6029,7 +6093,8 @@ fn solo_move_grant_delta_in(
     if mods::granted(state, si, "Rapid Advance") && !stamp.rapid_advance_printed {
         d += fire("Rapid Advance", stamp.rapid_advance);
     }
-    if mods::granted(state, si, "Rapid Rush") && !stamp.rapid_rush_printed {
+    if mods::granted(state, si, "Rapid Rush") && !stamp.rapid_rush_printed
+        && (kind == RUSH || !rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH)) {
         d += fire("Rapid Rush", stamp.rapid_rush);
     }
     let slow = mods::granted(state, si, "Slow") && !stamp.slow_printed;
@@ -6585,6 +6650,7 @@ fn resolve_with(
     let grant_in = solo_move_grant_delta_in(
         statics, &next, si, kind, seams.rules_epoch, seams.bands_prefolded, true,
     );
+    let rapid_mark_in = rapid_charge_mark_bonus_in(statics, &next, si, ci, kind, seams.rules_epoch);
     if feat_in != 0.0 {
         next.feats_used[si].push(
             statics[pi_s]
@@ -6612,7 +6678,14 @@ fn resolve_with(
         + gs_in
         + feat_in
         + buff_in
-        + grant_in;
+        + grant_in
+        + rapid_mark_in;
+    if rapid_mark_in > 0.0 {
+        if let (Some(ti), Some((_, shot))) = (ci, dice.as_mut()) {
+            shot.log.push(format!("Rapid Charge Mark: +{rapid_mark_in:.0}\" charge reach against {}",
+                statics[next.roster.profile[ti]].name));
+        }
+    }
     // NML-1152 B14 step 1 — rules-must-log: the live read names itself the
     // one time it changes the band (Bounding's line above is the shape).
     if gs_in != 0.0 {
@@ -7007,7 +7080,7 @@ fn resolve_with(
             // name, and then validity is gated PER GROUP below (main.gd
             // :2963-2984). The EV half keeps the one-target gate.
             let (plan, split_marks) = match dice.as_mut() {
-                Some(_) => split_plan(action.split.as_ref(), statics, &next, si, &shoot_key),
+                Some(_) => split_plan(action.split.as_ref(), statics, &next, si, &shoot_key, seams),
                 None => (None, Vec::new()),
             };
             // W1: a MOVED shooter's sight is not in the recorded rows — `sees`
@@ -7042,11 +7115,9 @@ fn resolve_with(
             }
             if plan.is_some() || sighted {
                 let d = geom::dist_in(&next.positions[si], &next.positions[ti]);
-                // NML-1152: the pooled plan's own modifier distance — unit
-                // centre to unit centre (main.gd:3029) — kept apart from `d`
-                // for the SAME reason the split groups above are (below,
-                // :2453-2460's `pooled` literal).
-                let mod_d = geom::centre_dist_in(&next.positions[si], &next.positions[ti]);
+                // The table's epoch-66 nearest-base modifier measure remains
+                // separate from this pooled range-validity distance.
+                let mod_d = modifier_distance_in(&next, si, ti, seams);
                 // NML-1132: the EXPECTED-VALUE half measures over the table's folded
                 // model set (`fold_dist_in`); the TRAY half below keeps the plain
                 // host-to-host `d`, because it already measures per FIRING MEMBER
@@ -7400,6 +7471,7 @@ fn resolve_with(
                             && morale_fails_expected(&next, statics, ti, seams)
                         {
                             next.shaken[ti] = true;
+                            drop_carried(&mut next, ti);
                         }
                     }
                 }
@@ -7445,13 +7517,11 @@ fn resolve_with(
                 // replay.
                 if let Some((tray, shot)) = dice.as_mut() {
                     // EPOCH_22_SCREENED_MELEE — the pre-charge gap, measured the
-                    // table's own way: unit-centre to unit-centre on the
-                    // PRE-move snapshot (`report["charge_from_in"]`,
-                    // solo_controller.gd:2329; `geom::centre_dist_in` is the
-                    // NML-1152 over-9" modifier measure). `state` still holds
-                    // the pre-move positions the charge move started from.
+                    // table's own way on the PRE-move snapshot
+                    // (`report["charge_from_in"]`, solo_controller.gd:2329).
+                    // `state` still holds the positions before the charge.
                     let charge_from_in =
-                        geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
+                        modifier_distance_in(state, si, ti, seams);
                     if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot, charge_from_in, cover) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
@@ -7625,6 +7695,7 @@ fn resolve_with(
     if let Cover::Board(terrain) = cover {
         refresh_los_pairs(&mut next, state, terrain, seams);
     }
+    sync_carried_positions(&mut next);
     Ok(next)
 }
 
@@ -7723,7 +7794,7 @@ mod d6a_tests {
 
 #[cfg(test)]
 #[path = "tests/sim/mod.rs"]
-mod tests;
+pub(crate) mod tests;
 
 /// NML-1157 — HERO-LAST: a combat intent aimed at a JOINED HERO resolves to its
 /// HOST (`main._solo_combat_unit` :8452, GF v3.5.1 p.14). The port aimed at the

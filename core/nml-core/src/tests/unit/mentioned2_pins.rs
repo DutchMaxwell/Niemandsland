@@ -347,9 +347,14 @@ use super::*;
         let us = pin_unit("gf", "battle_brothers", &["Rapid Rush Aura", "Rapid Rush"], epoch);
         assert_eq!(
             us.move_rule_mods,
-            Some(Bands { advance: 0.0, rush: 6.0, ..Default::default() }),
-            "the granted base's rush_mod"
+            Some(Bands { advance: 0.0, rush: 6.0, charge: Some(0.0) }),
+            "the granted base's Rush-only modifier"
         );
+        let old = pin_unit("gf", "battle_brothers", &["Rapid Rush Aura", "Rapid Rush"],
+            crate::acts::EPOCH_65_MELEE_TRUTH);
+        assert_eq!(old.move_rule_mods,
+            Some(Bands { advance: 0.0, rush: 6.0, charge: None }),
+            "epoch 65 keeps the recorded Rush-derived charge");
         let pre = pin_unit("gf", "battle_brothers", &["Rapid Rush Aura", "Rapid Rush"], 6);
         assert_eq!(pre.move_rule_mods, None, "epoch 6: granted, not read (byte-exact)");
     }

@@ -362,7 +362,7 @@ pub struct Objective {
 }
 
 /// Marker-mission state — `SoloController` :33, read by `_score_hand` :368-380.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Marker {
     #[serde(default)]
     pub owned_by: i64,
@@ -375,6 +375,21 @@ pub struct Marker {
     /// decide who collects the revenge VP.
     #[serde(default)]
     pub destroyed_seq: i64,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub carry: bool,
+    #[serde(default = "no_carrier", skip_serializing_if = "is_no_carrier")]
+    pub carried_by: i64,
+}
+
+fn no_carrier() -> i64 { -1 }
+fn is_false(v: &bool) -> bool { !*v }
+fn is_no_carrier(v: &i64) -> bool { *v == -1 }
+
+impl Default for Marker {
+    fn default() -> Self {
+        Self { owned_by: 0, destructible: false, destroyed: false, destroyed_seq: 0,
+            carry: false, carried_by: -1 }
+    }
 }
 
 /// The table controller shares eight small-base sidestep attempts per round.

@@ -96,6 +96,17 @@ func test_incoming_threat_discounts_presence_and_floors_at_zero() -> void:
 		.is_equal_approx(0.0, 0.0001)
 
 
+func test_threatened_enemy_carrier_loses_relic_control_probability() -> void:
+	var state := _state([_unit(2, [Vector3.ZERO, Vector3(0.02, 0, 0)], "Enemy")],
+		[Vector3.ZERO], [2])
+	state["markers_meta"] = [{"carry": true, "carried_by": "Enemy"}]
+	assert_float(AiMissionEval.score(state, 1)).is_equal_approx(0.0, 0.0001)
+	assert_float(AiMissionEval.score(state, 1, {"Enemy": 1.0})) \
+		.is_equal_approx(0.5, 0.0001)
+	assert_float(AiMissionEval.score(state, 2, {"Enemy": 1.0})) \
+		.is_equal_approx(0.5, 0.0001)
+
+
 func test_no_objectives_is_even() -> void:
 	var state := _state([_unit(1, [Vector3.ZERO], "Solo")], [], [])
 	assert_float(AiMissionEval.score(state, 1)).is_equal_approx(0.5, 0.0001)

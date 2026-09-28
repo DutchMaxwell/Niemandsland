@@ -1499,7 +1499,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -1510,7 +1511,8 @@
      "rush_mod": 6,
      "aura_expand": true,
      "max_picks": 3,
-     "lost_if_bearer_killed": true
+     "lost_if_bearer_killed": true,
+     "charge_mod": 0
     }
    },
    "Shred": {
@@ -2184,7 +2186,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Re-Deployment": {
@@ -4700,7 +4703,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Buff": {
@@ -6368,7 +6372,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Scout Aura": {
@@ -7124,7 +7129,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Regeneration Aura": {
