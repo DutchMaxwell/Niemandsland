@@ -161,6 +161,21 @@ def compare(want: dict, got: dict) -> dict:
             "div_class": div_class, "margin_diff": abs(margin(want) - margin(got))}
 
 
+def vp_rounds(table_rounds: list, twin_rounds_log: list) -> tuple:
+    """Wave C gate C9.6, VP/round: the twin's per-round VP against the table's own
+    round-end ledger (`rounds.jsonl` `post.vp`); a round the twin never reached parts."""
+    got = [list(e["vp"]) for e in twin_rounds_log]
+    return (sum(1 for i, rec in enumerate(table_rounds)
+                if i < len(got) and list(rec["post"]["vp"]) == got[i]), len(table_rounds))
+
+
+def mission_refusals(ref: Path, games: list, mission: str | None) -> list:
+    """C9.6 `--mission`: every game whose arena stamp names another mission."""
+    stamps = {g: str((json.loads(next((ref / g).glob("arena_*.json")).read_text())
+                      .get("mission") or {}).get("name", "duel")) for g in games} if mission else {}
+    return ["%s (%s)" % (g, m) for g, m in stamps.items() if m != mission]
+
+
 def dice_divergence(rolls_by_act: list, dice: list) -> int | None:
     """The twin's own activation ordinal (1-based) at the first roll where its
     dice stream stops matching `dice.jsonl`; `None` when the two agree roll for
@@ -236,6 +251,10 @@ def play_one(job: tuple) -> dict:
                dice_div=dice_divergence(rolls, dice), vintage=eff,
                swapped=compare(want, swap_seats(got))["result"],
                draw=want["winner"] == "draw")
+    rf = d / "rounds.jsonl"
+    if rf.exists() and lines[0]["state"].get("scoring") == "round_vp":
+        row["vp_rounds"] = vp_rounds([json.loads(x) for x in rf.read_text().splitlines()
+                                      if x.strip()], got["rounds_log"])
     if misseed:
         # THE RED, and it runs against the GREEN arm above rather than against
         # the table — the docstring's THE TWO REDS says why.
@@ -270,6 +289,10 @@ def report(label: str, ref: Path, rows: list, secs: float, jobs: int) -> int:
     print("  DIV why : %s" % hist([r["div_class"] for r in rows],
                                   PICK_FIELDS + ("length", "none")))
     print("  DICE act: %s" % hist([bucket(r["dice_div"]) for r in rows], HIST))
+    vr = [r["vp_rounds"] for r in rows if "vp_rounds" in r]
+    if vr:
+        print("  VP/round: %d/%d rounds identical, twin vs the table's round-end ledger "
+              "(%d round_vp games)" % (sum(a for a, _ in vr), sum(b for _, b in vr), len(vr)))
     print("  acts    : %d twin vs %d recorded, %.2fs per game; markers per game %s"
           % (sum(r["acts"] for r in rows), sum(r["rec_acts"] for r in rows),
              sum(r["seconds"] for r in rows) / max(n, 1),
@@ -327,13 +350,18 @@ def fresh(n: int, army1: str, army2: str, repo: str, bank: str, start: int, jobs
 
 
 def run(ref: Path, repo: str, limit: int, jobs: int, misseed: bool,
-        engage_fold: str, cond_ap: str, knobs: str) -> int:
+        engage_fold: str, cond_ap: str, mission: str | None, knobs: str) -> int:
     games = sorted(d.name for d in ref.iterdir()
                    if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
     if not games:
         print("no dice.jsonl under %s" % ref)
+        return 1
+    refused = mission_refusals(ref, games, mission)
+    if refused:
+        print("refusing %s: %d games stamped with another mission: %s"
+              % (ref, len(refused), ", ".join(refused[:5])))
         return 1
     jobs = max(1, min(jobs, len(games)))
     jobargs = [(g, str(ref), repo, misseed, engage_fold, cond_ap, knobs) for g in games]
@@ -344,7 +372,8 @@ def run(ref: Path, repo: str, limit: int, jobs: int, misseed: bool,
         with mp.get_context("spawn").Pool(jobs) as pool:
             rows = pool.map(play_one, jobargs)
     label = ("GATE D0 outcome parity + RED --red-misseed" if misseed
-             else "GATE D0 outcome parity") + " [knobs=%s]" % knobs
+             else "GATE D0 outcome parity") + " [knobs=%s]" % knobs + (
+                 " [mission=%s]" % mission if mission else "")
     rc = report(label, ref, rows, time.perf_counter() - t0, jobs)
     if not misseed:
         return rc
@@ -382,6 +411,8 @@ def main(argv: list[str]) -> int:
                     help="W5b: 'legacy' (default) forces every fidelity knob on — every number "
                          "this gate has ever reported. 'shipped' plays selfplay.play_game()'s "
                          "own current defaults instead, against this corpus's recorded result")
+    ap.add_argument("--mission", help="C9.6: refuse a bundle with any game stamped with "
+                                      "another mission; the replay inherits it off the state")
     ap.add_argument("--fresh", type=int, default=0,
                     help="instead of the gate: N fresh seeds, both seats the twin")
     ap.add_argument("--army1")
@@ -396,7 +427,7 @@ def main(argv: list[str]) -> int:
     if not a.ref:
         ap.error("--ref is required (or use --fresh)")
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.jobs, a.red_misseed,
-               a.engage_fold, a.cond_ap, a.knobs)
+               a.engage_fold, a.cond_ap, a.mission, a.knobs)
 
 
 if __name__ == "__main__":
