@@ -37,6 +37,24 @@ static var mission_markers: Array = []
 static var mission_destroy_seq: Array = [0]
 
 
+static func marker_metadata(spec: Dictionary) -> Array:
+	var owned := bool(spec.get("owned", false))
+	var carry := bool(spec.get("carry", false))
+	if not owned and not carry:
+		return []
+	var markers: Array = []
+	for i in range(int(spec.get("count", 2))):
+		var marker: Dictionary = {}
+		if owned:
+			marker = {"owned_by": i + 1, "destructible": bool(spec.get("destructible", false)),
+				"destroyed": false, "destroyed_seq": 0}
+		if carry:
+			marker["carry"] = true
+			marker["carried_by"] = ""
+		markers.append(marker)
+	return markers
+
+
 static func mission_reset(scoring: String, flavour: Dictionary, markers: Array = []) -> void:
 	mission_scoring = scoring
 	mission_vp_flavour = flavour

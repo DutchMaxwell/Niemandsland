@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "comment": "Mission catalog v1 (grill 2026-08-12, D1-D4): the four placement-only Face-Off missions. One catalog feeds game selection AND ladder rotation. Wording is our own; rules follow the official advanced missions. marker count is an int or a dice term like 'd3+2'; placement modes: alternate (players place outside zones, min_gap apart), quarter_centres, deploy_zone_centres, deploy_zone_front (zone centre across, edge_in inches from the owner's table edge), table_centre. W3: owned/destructible marker flags; scoring 'sabotage' = destroy-theirs-keep-yours end verdict.",
+  "comment": "Mission catalog v1 (grill 2026-08-12, D1-D4): twelve Face-Off and Progressive missions. One catalog feeds game selection AND ladder rotation. Wording is our own; rules follow the official advanced missions. marker count is an int or a dice term like 'd3+2'; placement modes: alternate (players place outside zones, min_gap apart), quarter_centres, deploy_zone_centres, deploy_zone_front (zone centre across, edge_in inches from the owner's table edge), table_centre. W3: owned/destructible marker flags; scoring 'sabotage' = destroy-theirs-keep-yours end verdict. Wave C: carried-marker flag.",
   "missions": {
     "duel": {
       "name": "Duel",
@@ -13,6 +13,20 @@
         "placement": "alternate",
         "min_gap_in": 9,
         "outside_zones_in": 9
+      }
+    },
+    "relic_hunt": {
+      "name": "Relic Hunt",
+      "family": "face_off",
+      "rounds": 4,
+      "scoring": "end",
+      "deployment": "front_line",
+      "markers": {
+        "count": 3,
+        "placement": "alternate",
+        "min_gap_in": 9,
+        "outside_zones_in": 9,
+        "carry": true
       }
     },
     "seize_ground": {
@@ -77,6 +91,23 @@
       "markers": {
         "count": 4,
         "placement": "quarter_centres"
+      }
+    },
+    "capture_and_hold": {
+      "name": "Capture & Hold",
+      "family": "progressive",
+      "rounds": 4,
+      "scoring": "round_vp",
+      "vp": {
+        "majority": "end"
+      },
+      "deployment": "front_line",
+      "markers": {
+        "count": 3,
+        "placement": "alternate",
+        "min_gap_in": 9,
+        "outside_zones_in": 9,
+        "carry": true
       }
     },
     "headquarters": {
