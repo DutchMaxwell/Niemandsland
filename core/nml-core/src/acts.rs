@@ -1670,9 +1670,10 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     // `score::score_hand_variant`. A header asking for anything else is
     // rejected HERE, loudly, rather than silently playing variant 0 or
     // panicking deep inside a rollout.
-    if !matches!(header.knobs.eval_variant, 0 | 1) {
+    // Variant 2 (wave C G-AB) is variant 0 without the C7 carry term.
+    if !matches!(header.knobs.eval_variant, 0..=2) {
         return Err(format!(
-            "eval_variant {}: no registered arm (only 0 and 1 exist)",
+            "eval_variant {}: no registered arm (only 0, 1 and 2 exist)",
             header.knobs.eval_variant
         ));
     }
@@ -1955,9 +1956,18 @@ mod tests {
     /// `score::score_hand_variant`'s `unreachable!` fallback.
     #[test]
     fn an_unregistered_eval_variant_is_refused_at_header_parse() {
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":2}}"#;
-        let err = read_act_header(head).expect_err("eval_variant 2 has no registered arm");
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":3}}"#;
+        let err = read_act_header(head).expect_err("eval_variant 3 has no registered arm");
         assert!(err.contains("eval_variant"), "error should name the seam: {err}");
+    }
+
+    /// Wave C G-AB's ablation arm — variant 2 (variant 0 without the C7 carry
+    /// term) is registered and carried through like variant 1.
+    #[test]
+    fn the_registered_no_carry_eval_variant_parses() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":2}}"#;
+        let header = read_act_header(head).expect("eval_variant 2 is registered");
+        assert_eq!(header.knobs.eval_variant, 2);
     }
 
     /// Ledger row 7's arm — variant 1 IS registered now, so the same parser
