@@ -18700,6 +18700,10 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 			member.unit_properties["piercing_tag_used"] = true
 			var markers: int = maxi(int((e as Dictionary).get("rating", 0)), 1)
 			tgt.unit_properties["piercing_tag_markers"] = int(tgt.unit_properties.get("piercing_tag_markers", 0)) + markers
+			# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
+			# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
+			# Target, no removal clause) or spends whole (the rest of the family).
+			tgt.unit_properties["piercing_tag_source"] = n
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s places %d marker%s on %s — friendly attackers may spend them for +AP" % [
@@ -18708,12 +18712,19 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 
 ## Spend every Piercing-Tag marker on the target for +AP(markers) on THIS volley (the AI spends all
 ## at once — markers are a shared resource and the first big volley is the best use). Returns bonus.
+## D42 (a): "Piercing Target" (army-book v3.5.3, no removal clause) STANDS while the target lives —
+## the pool is read but never zeroed; the rest of the family still spends whole on first use.
 func _solo_spend_piercing_tag(target: GameUnit) -> int:
 	if target == null:
 		return 0
 	var markers := int(target.unit_properties.get("piercing_tag_markers", 0))
 	if markers <= 0:
 		return 0
+	if str(target.unit_properties.get("piercing_tag_source", "")) == "Piercing Target":
+		if battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT,
+				"Piercing Target: +AP(%d) stands while %s lives" % [markers, target.get_name()], true)
+		return markers
 	target.unit_properties["piercing_tag_markers"] = 0
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,

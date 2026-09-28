@@ -31,7 +31,7 @@ use crate::acts::{
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
-    EPOCH_66_DISTANCE_TRUTH,
+    EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -1813,6 +1813,13 @@ fn tray_piercing_tag(
             };
             next.piercing_tag_used[bearer] = true;
             next.piercing_tag_markers[ti] += t.markers;
+            // D42 (a), EPOCH_67_MARKERS_BURSTS: "Piercing Target" has no removal
+            // clause — the spend half (`piercing_tag_spend`) reads this flag and
+            // stands the pool instead of zeroing it. Every other family name
+            // still spends whole, so the flag is per-NAME, not per-pool.
+            if t.name == "Piercing Target" && rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS) {
+                next.piercing_tag_persistent[ti] = true;
+            }
             // Rules-must-log — the table's own line, main.gd:17025-17027.
             shot.log.push(format!(
                 "{}: {} places {} marker{} on {} — friendly attackers may spend them for +AP",
@@ -1834,11 +1841,19 @@ fn tray_piercing_tag(
 /// volley fold gives Piercing Growth's marker delta. GATED
 /// `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)` like the placement: below the
 /// family's epoch the pool is empty by construction, so this reads 0.
+///
+/// D42 (a), `EPOCH_67_MARKERS_BURSTS`: when the placement set
+/// `piercing_tag_persistent[ti]` (the "Piercing Target" name only), the pool
+/// is READ, never zeroed — the book text has no removal clause. Every other
+/// family name keeps spending whole.
 fn piercing_tag_spend(next: &mut State, ti: usize, rules_epoch: u32) -> i64 {
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         return 0;
     }
     let markers = next.piercing_tag_markers[ti].max(0);
+    if rule_on(rules_epoch, EPOCH_67_MARKERS_BURSTS) && next.piercing_tag_persistent[ti] {
+        return markers;
+    }
     next.piercing_tag_markers[ti] = 0;
     markers
 }
@@ -7222,10 +7237,17 @@ fn resolve_with(
                             // melee seams never call it), once per group.
                             let tag_ap = piercing_tag_spend(&mut next, g.ti, seams.rules_epoch);
                             if tag_ap > 0 {
-                                let s = if tag_ap == 1 { "" } else { "s" };
-                                shot.log.push(format!(
-                                    "Piercing Tag: {tag_ap} marker{s} spent — +AP({tag_ap}) on this volley"
-                                ));
+                                if next.piercing_tag_persistent[g.ti] {
+                                    let tn = statics[next.roster.profile[g.ti]].name.clone();
+                                    shot.log.push(format!(
+                                        "Piercing Target: +AP({tag_ap}) stands while {tn} lives"
+                                    ));
+                                } else {
+                                    let s = if tag_ap == 1 { "" } else { "s" };
+                                    shot.log.push(format!(
+                                        "Piercing Tag: {tag_ap} marker{s} spent — +AP({tag_ap}) on this volley"
+                                    ));
+                                }
                             }
                             // Wave 6 — Precision Spotter/Tag: the marked
                             // target's pools spend EVERY marker on THIS

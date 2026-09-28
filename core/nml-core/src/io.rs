@@ -16,7 +16,7 @@ use std::rc::Rc;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
-use crate::acts::{rule_on, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
+use crate::acts::{rule_on, EPOCH_67_MARKERS_BURSTS, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::mods::LiveMod;
 use crate::rules::spawn_target_rule;
 use crate::state::{
@@ -266,6 +266,19 @@ pub struct PlainLedger {
     /// Wave 5 (PR 1's recorder): the `{"used", "to"}` block; `to` arrives as the `"(x, y)"` Vector2 string.
     #[serde(default)]
     teleport: Option<PlainTeleport>,
+    /// Wave 3 batch D (`EPOCH_67_MARKERS_BURSTS`, D42 a) —
+    /// `unit_properties["piercing_tag_markers"]` / `["piercing_tag_source"]`
+    /// (act_recorder.gd `_ledger_of`): the Piercing-Tag family's marker pool
+    /// ON the tagged unit, and which name placed it last.
+    /// `piercing_tag_source == "Piercing Target"` is what keeps
+    /// `fold_ledger` from marking the pool spend-whole (see
+    /// `State.piercing_tag_persistent`). Absent from every corpus recorded
+    /// before this key, and `0`/`""` there — an old act replays unmarked,
+    /// exactly as it did.
+    #[serde(default)]
+    piercing_tag_markers: i64,
+    #[serde(default)]
+    piercing_tag_source: String,
 }
 
 /// The `teleport` block; `to` is a `[x, y]` pair or a `"(x, y)"` string.
@@ -887,14 +900,16 @@ pub(crate) fn state_of(
         second_wind_uses: 0,
         sidestep_budget: plain.sidestep_budget,
         limited_used: vec![Vec::new(); n],
-        // Wave 3 — the Piercing-Tag ledger keys are NOT recorded corpora
-        // inputs: `AiActRecorder._ledger_of` stamps neither key today, so a
-        // captured state always starts the pool empty and the used flags
-        // false (the recorder would need its own wave before any rules_epoch-6
-        // corpus could carry them; every shipped corpus is 5 or lower, where
-        // the family gate keeps these inert anyway).
+        // Wave 3 — the `used` flag is still NOT a recorded corpus input:
+        // `AiActRecorder._ledger_of` never stamps `piercing_tag_used`, so a
+        // captured state always starts that flag false (a bearer could, in
+        // principle, place twice across a replay boundary; no shipped corpus
+        // exercises it). `markers`/`persistent` below ARE folded from the
+        // ledger (batch D, D42 a) — the fresh literal here is only the
+        // pre-fold default for a unit whose record carries no `ledger` key.
         piercing_tag_used: vec![false; n],
         piercing_tag_markers: vec![0; n],
+        piercing_tag_persistent: vec![false; n],
         storm_used: vec![Vec::new(); n],
         feats_used: vec![Vec::new(); n],
         teleport_used: vec![false; n],
@@ -1041,6 +1056,14 @@ pub fn fold_ledger(
     st.spot_markers[ui] = ledger.spot_markers;
     st.tag_markers[ui] = ledger.tag_markers;
     st.spot_round[ui] = ledger.spot_round;
+    // D42 (a), EPOCH_67_MARKERS_BURSTS: the Piercing-Tag pool folds from the
+    // ledger; whether it stands (never spends) is read off WHICH name placed
+    // it, gated on the record's own epoch (Amendment B1) so a corpus below
+    // the gate keeps the old spend-whole reading even if a future recorder
+    // ever backfills the source key onto it.
+    st.piercing_tag_markers[ui] = ledger.piercing_tag_markers;
+    st.piercing_tag_persistent[ui] =
+        rule_on(rules_epoch, EPOCH_67_MARKERS_BURSTS) && ledger.piercing_tag_source == "Piercing Target";
     st.precision_used[ui] = ledger.precision_used.clone();
     // `growth_round` has no key of its own on the wire (see
     // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED

@@ -739,6 +739,13 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 	var sr := int(u.unit_properties.get("spotted_round", -1))
 	if sr != -1:
 		ledger["spot_round"] = sr
+	# Wave 3 batch D (D42 a, EPOCH_67_MARKERS_BURSTS) — the Piercing-Tag family's marker pool ON
+	# the tagged unit, and which name placed it last: only "Piercing Target" keeps the core from
+	# spending it whole (main.gd `_solo_spend_piercing_tag` / sim.rs `piercing_tag_spend`).
+	var ptm := int(u.unit_properties.get("piercing_tag_markers", 0))
+	if ptm > 0:
+		ledger["piercing_tag_markers"] = ptm
+		ledger["piercing_tag_source"] = str(u.unit_properties.get("piercing_tag_source", ""))
 	var pu: Array = []
 	if bool(u.unit_properties.get("precision_tag_used", false)):
 		pu.append("Precision Tag")
