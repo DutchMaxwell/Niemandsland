@@ -9466,13 +9466,20 @@ static func drop_point(carrier: GameUnit, opponent_units: Array) -> Vector3:
 	return centre + direction * (model_base_radius_m(first) + 0.0254)
 
 
-static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array) -> Dictionary:
+static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array,
+		markers: Array = []) -> Dictionary:
 	var new_owners: Array = []
 	var changes: Array = []
 	for i in range(objectives.size()):
 		var current: int = int(owners[i]) if i < owners.size() else 0
 		var near_players := {}
-		for info in unit_infos:
+		# NML-1010 wave C, R1a — the live twin of BattleSim.playout_seize :358-371: a CARRIED
+		# marker is held by the carrier's side while the carrier is alive and unshaken. Its overlay
+		# spot is only where it was picked up, so the ring test is skipped for it.
+		var carrier := _live_carrier(unit_infos, markers, i)
+		if not carrier.is_empty():
+			near_players[int(carrier.get("player", 0))] = true
+		for info in (unit_infos if carrier.is_empty() else []):
 			var d := info as Dictionary
 			if bool(d.get("shaken", false)):
 				continue   # Shaken units can neither seize nor contest
@@ -9497,6 +9504,19 @@ static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array
 		if next != current:
 			changes.append({"index": i, "owner": next})
 	return {"owners": new_owners, "changes": changes}
+
+
+## The live info of the unit carrying marker `i` while it can still hold it (listed = alive, not
+## shaken); {} for an uncarried marker or a carrier that can no longer hold it.
+static func _live_carrier(unit_infos: Array, markers: Array, i: int) -> Dictionary:
+	if i >= markers.size() or not bool((markers[i] as Dictionary).get("carry", false)):
+		return {}
+	var key := String((markers[i] as Dictionary).get("carried_by", ""))
+	for info in unit_infos:
+		var d := info as Dictionary
+		if not key.is_empty() and String(d.get("unit_id", "")) == key and not bool(d.get("shaken", false)):
+			return d
+	return {}
 
 
 ## True when two world Y coordinates (metres) are within the 4" vertical melee reach (GF p.9).

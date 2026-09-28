@@ -2388,7 +2388,8 @@ func _solo_auto_seize() -> void:
 			"ambush_locked": ambush_locked, "aircraft": SoloController.is_aircraft(gu), "unit_id": gu.unit_id,
 			"positions": solo_controller.alive_positions(gu),
 			"radii": _solo_alive_radii(gu)})
-	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners)
+	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners,
+		SoloController.mission_markers)
 	# NML-1010 wave C step C2 (Relic Hunt/Capture & Hold): a marker just seized this round is
 	# picked up onto the seizing side's nearest eligible unit; the overlay hides its own token
 	# while carried (drop hooks re-show it — main.gd:_solo_drop_carried).
