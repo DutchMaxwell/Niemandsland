@@ -6298,7 +6298,8 @@ func _solo_log_hit_mod(info: Dictionary, target: GameUnit, to_hit: int) -> void:
 ## Transparency stage 2: float one rule text over a unit's table position (cascades in
 ## FloatingRuleText). Safe no-op headless-batch or when the unit has no live node.
 func _solo_rule_float(unit: GameUnit, text: String, color: Color = Color(1.0, 0.92, 0.5)) -> void:
-	if rule_floats == null or unit == null or text.is_empty() or _solo_batch:
+	if rule_floats == null or unit == null or text.is_empty() or _solo_batch \
+			or SoloController.combined_alive(unit) <= 0:
 		return
 	var pos := Vector3.INF
 	if solo_controller != null:
@@ -10175,6 +10176,10 @@ func _solo_ring_pick_at(screen_pos: Vector2) -> Dictionary:
 ## "" when the target is attackable, else the human-readable reason. Shooting validity is PER MODEL
 ## (GF v3.5.1 p.8): the target is valid when at least ONE of the attacker's models has range + LOS.
 func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) -> String:
+	if SoloController.combined_alive(attacker) <= 0:
+		return "attacker destroyed"
+	if SoloController.combined_alive(target) <= 0:
+		return "target destroyed"
 	if melee:
 		# BASE-CONTACT measure (field-test finding 5): the true base-to-base gap between the nearest models,
 		# not the unit-centre distance (which failed for wide/multi-model units the player had in contact).
@@ -10278,6 +10283,8 @@ func _solo_los_refusal_detail(shooter: GameUnit, target: GameUnit) -> String:
 
 
 func _solo_has_los(a: GameUnit, b: GameUnit) -> bool:
+	if SoloController.combined_alive(a) <= 0 or SoloController.combined_alive(b) <= 0:
+		return false
 	if terrain_overlay == null or not terrain_overlay.has_method("los_volumes"):
 		return true
 	# NML-005 step 3: the REAL unit heights (same source as the shooting path) instead of the old
@@ -10368,6 +10375,8 @@ func _solo_reach_note(attacker: GameUnit, hovered: GameUnit) -> String:
 ## SoloController instance, so the centre falls back to the same pure geometry the controller's
 ## unit_centre() computes: alive model positions, the attached-hero fallback, MoveIntent anchor.
 func _los_unit_centre(unit: GameUnit) -> Vector3:
+	if SoloController.combined_alive(unit) <= 0:
+		return Vector3.INF
 	if solo_controller != null:
 		return solo_controller.unit_centre(unit)
 	var pts: Array = SoloController.alive_positions(unit)
@@ -10389,7 +10398,8 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 	# null. That target is VALID: every geometry the line needs comes from pure helpers
 	# (_los_unit_centre, SoloController.alive_positions), so MP hover draws the same live LOS
 	# feedback solo does — no controller instance summoned.
-	var is_valid_target: bool = hovered != null and attacker != null and (
+	var is_valid_target: bool = hovered != null and attacker != null \
+		and SoloController.combined_alive(attacker) > 0 and SoloController.combined_alive(hovered) > 0 and (
 		_solo_is_ai_unit(hovered)
 		or (network_manager != null and network_manager.is_multiplayer_active()
 			and int(hovered.unit_properties.get("player_id", 0)) != int(attacker.unit_properties.get("player_id", 0))))
@@ -10993,6 +11003,8 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 
 
 func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Array = [], skip_named: bool = false) -> void:
+	if SoloController.combined_alive(attacker) <= 0 or SoloController.combined_alive(target) <= 0:
+		return
 	_solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
 	# B11: ONE measuring truth — the shot distance (feeding the >9" Versatile/Guarded gates and the
 	# profile range gate's fallback) is the base-EDGE gap of the nearest model pair, like the ruler.
