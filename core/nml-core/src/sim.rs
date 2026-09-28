@@ -1437,6 +1437,42 @@ fn tray_vs_marks(
     }
 }
 
+/// The Mind Control family uses the shared morale resolver from epoch 65;
+/// earlier records keep the bare Quality die and its original draw count.
+struct ControlMoraleSource<'a> {
+    owner: &'a str,
+    rule: &'a str,
+}
+
+fn control_morale_passed(
+    statics: &[UnitStatic], next: &mut State, ti: usize, source: ControlMoraleSource<'_>,
+    seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
+) -> bool {
+    if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
+        let quality = statics[next.roster.profile[ti]].ctx.quality as i64;
+        let faces = tray.roll(1);
+        shot.rolls.push(crate::dice::Roll {
+            kind: "attack", count: 1, target: quality, faces: faces.clone(), owner: source.owner.into(),
+        });
+        return faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
+    }
+    let us = &statics[next.roster.profile[ti]];
+    let ctx = live_morale_ctx(statics, next, ti, false, seams);
+    let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
+        &ctx, source.owner, false, false, next.shaken[ti], wounds_left(next, ti), tray,
+    );
+    mods::spend_once(next, ti, &[mods::Role::Morale], false);
+    let self_wounds = shot.absorb(rolled);
+    land_wounds(next, ti, self_wounds);
+    if outcome == Morale::Passed { return true; }
+    next.shaken[ti] = true;
+    if seams.hero_attach {
+        for &h in &next.attached[ti] { next.shaken[h] = true; }
+    }
+    shot.log.push(format!("{}: {} fails the morale test — Shaken", source.rule, us.name));
+    false
+}
+
 /// `main._solo_apply_mind_control` :16997-17037, called at main.gd:1070 in
 /// the table's own pre-attack order (right after Utility Buffs, before the
 /// Piercing Tag). Per BEARER — the acting unit, then each attached hero, the
@@ -1466,14 +1502,8 @@ pub(crate) fn tray_fatigue_debuff(
             if spec.effect != "fatigue" { continue; }
             let pick = spec.as_pick();
             let Some(&ti) = utility_targets(statics, next, bearer, &pick, seams).first() else { continue; };
-            let quality = statics[next.roster.profile[ti]].ctx.quality as i64;
-            let faces = tray.roll(1);
-            shot.rolls.push(crate::dice::Roll {
-                kind: "attack", count: 1, target: quality,
-                faces: faces.clone(), owner: owner.clone(),
-            });
-            let passed = faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
-            if passed { continue; }
+            if control_morale_passed(statics, next, ti,
+                ControlMoraleSource { owner: &owner, rule: &spec.name }, seams, tray, shot) { continue; }
             // Fatigue Debuff (:17022-17025): the failed test fatigues the
             // target AND its joined chain instead of displacing it.
             let mut chain = vec![ti];
@@ -1513,14 +1543,9 @@ pub(crate) fn tray_mind_control(
         for spec in &statics[next.roster.profile[bearer]].mind_control {
             let pick = spec.as_pick();
             let Some(&ti) = utility_targets(statics, next, bearer, &pick, seams).first() else { continue; };
-            let quality = statics[next.roster.profile[ti]].ctx.quality as i64;
-            let faces = tray.roll(1);
-            shot.rolls.push(crate::dice::Roll {
-                kind: "attack", count: 1, target: quality,
-                faces: faces.clone(), owner: statics[next.roster.profile[bearer]].name.clone(),
-            });
-            let passed = faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
-            if passed { continue; }
+            let owner = &statics[next.roster.profile[bearer]].name;
+            if control_morale_passed(statics, next, ti,
+                ControlMoraleSource { owner, rule: &spec.name }, seams, tray, shot) { continue; }
             let from = geom::centre(&next.positions[ti]);
             let goal = nearest_uncontrolled_objective(next, next.player[bearer], next.player[ti], from)
                 .unwrap_or(geom::centre(&next.positions[bearer]));
@@ -1538,9 +1563,13 @@ pub(crate) fn tray_mind_control(
                     *p = [p[0] + (dir[0] * step_m) as f64, p[1], p[2] + (dir[1] * step_m) as f64];
                 }
             }
-            shot.log.push(format!(
-                "{}: {} is moved {:.0}\" in a straight line (away from the marker)",
-                spec.name, statics[next.roster.profile[ti]].name, dist_in));
+            if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
+                shot.log.push(format!("{}: {} fails the morale test — Shaken, moved {:.0}\" in a straight line (away from the marker)",
+                    spec.name, statics[next.roster.profile[ti]].name, dist_in));
+            } else {
+                shot.log.push(format!("{}: {} is moved {:.0}\" in a straight line (away from the marker)",
+                    spec.name, statics[next.roster.profile[ti]].name, dist_in));
+            }
         }
     }
 }
@@ -4391,22 +4420,8 @@ fn self_destruct_post_melee(
     }
 }
 
-/// `main._solo_morale_test` :8305 on the played path — the tray twin of
-/// `morale_fails_expected`, with No Retreat's self-wounds landed regen-free
-/// ("can't be ignored") and the Rout half clearing the unit off the board
-/// exactly as `expected_melee_morale` does.
-fn tray_morale(
-    state: &mut State,
-    statics: &[UnitStatic],
-    i: usize,
-    melee: bool,
-    seams: Seams,
-    tray: &mut Tray,
-    shot: &mut ShootResult,
-) {
-    if !morale_side_alive(state, i, seams) {
-        return;
-    }
+/// One live context for ordinary morale and the Mind Control family.
+fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool, seams: Seams) -> Ctx {
     let us = &statics[state.roster.profile[i]];
     let mut ctx = ctx_of(us, state, i);
     if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) && seams.hero_attach {
@@ -4426,6 +4441,27 @@ fn tray_morale(
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
         + if rule_on(seams.rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Hold the Line Boost") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
     ctx.no_retreat = ctx.no_retreat || mods::granted(state, i, "No Retreat");
+    ctx
+}
+
+/// `main._solo_morale_test` :8305 on the played path — the tray twin of
+/// `morale_fails_expected`, with No Retreat's self-wounds landed regen-free
+/// ("can't be ignored") and the Rout half clearing the unit off the board
+/// exactly as `expected_melee_morale` does.
+fn tray_morale(
+    state: &mut State,
+    statics: &[UnitStatic],
+    i: usize,
+    melee: bool,
+    seams: Seams,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
+) {
+    if !morale_side_alive(state, i, seams) {
+        return;
+    }
+    let us = &statics[state.roster.profile[i]];
+    let ctx = live_morale_ctx(statics, state, i, melee, seams);
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
     // draws no die and adds nothing, so it stays silent.
