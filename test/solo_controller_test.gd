@@ -2023,6 +2023,25 @@ func test_last_move_remaining_in_uses_longest_model_arc() -> void:
 	assert_float(solo.last_move_remaining_in()).is_equal_approx(6.0, 0.01)
 
 
+func test_no_move_activation_clears_previous_charge_snap_budget() -> void:
+	var human := _unit(1, [Vector3.ZERO])
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# First activation takes a full Rush band and leaves a nonzero move budget.
+	assert_int(int(solo._act(ai)["action"])).is_equal(AiDecision.Action.RUSH)
+	assert_float(solo.last_move_budget_in).is_greater(0.0)
+	# The following activation starts at base contact: the charge has no travel.
+	ai.models[0].node.global_position = Vector3(0.032, 0, 0)
+	var second := solo._act(ai)
+	assert_int(int(second["action"])).is_equal(AiDecision.Action.CHARGE)
+	assert_float(solo.last_move_remaining_in()).is_equal_approx(0.0, 0.001)
+
+
 ## Kanten-bewusster Difficult-Trigger: Pfadzentrum läuft AN der Zone vorbei, die Basenkante ragt hinein.
 func test_trails_cross_difficult_fires_on_base_edge_graze() -> void:
 	var solo: SoloController = auto_free(SoloController.new())
