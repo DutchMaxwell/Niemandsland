@@ -1707,6 +1707,10 @@ func nearest_hurtable_enemy(unit: GameUnit) -> GameUnit:
 
 
 func _act(unit: GameUnit) -> Dictionary:
+	# A charge with no travel still owns a fresh activation budget: its snap may
+	# not spend movement left by the previous unit or previous round.
+	last_move_budget_in = 0.0
+	last_move_paths.clear()
 	var report := ActIntent.blank_report(unit)   # {text, travels} rule_notes — every applied special rule surfaces in the battle log
 	if alive_positions(unit).is_empty():
 		return report
