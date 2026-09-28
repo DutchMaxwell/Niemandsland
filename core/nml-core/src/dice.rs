@@ -714,10 +714,9 @@ pub fn resolve_volley_leg(
         });
     }
     // `dist_in` gates RANGE VALIDITY only (`reach_gate`, B11's edge/nearest-
-    // model gap — main.gd:4098-4104). `mod_dist_in` is the table's SEPARATE
-    // over-9" modifier distance (`geom::centre_dist_in`, main.gd:3029: unit
-    // centre to unit centre) — NML-1152, found by a read-only corpus audit:
-    // the twin was reusing the range gap as the modifier gate too.
+    // model gap). `mod_dist_in` is the separate over-9" modifier distance:
+    // unit centres for recorded epochs through 65 (NML-1152), nearest live
+    // base gap from epoch 66, matching the table's AI volley.
     let reach_gate = dist_in.ceil();
     // Wave 3 — the Ranged-Shrouding clamp's own rules-must-log flag: set the
     // moment a profile's working reach actually drops below its raw range

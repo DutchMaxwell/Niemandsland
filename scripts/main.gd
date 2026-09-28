@@ -3370,6 +3370,16 @@ func _solo_shot_priority(shot: Dictionary) -> int:
 	return 0
 
 
+## The played AI volley's over-9" modifier measure is the same nearest live
+## base gap used for the target's range gate. Keep the centre fallback for a
+## degenerate unit with no reachable model pair.
+func _solo_ai_volley_distance_in(attacker: GameUnit, target: GameUnit) -> float:
+	var gap: float = solo_controller.nearest_melee_gap_in(attacker, target)
+	if gap != INF:
+		return gap
+	return MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
+
+
 ## Resolve one split-fire volley (all `shots` aimed at `target`) with real tray dice + the human's saves.
 ## Per-model shooting (GF v3.5.1 p.8 "Who Can Shoot"): each shot's attacks scale by the member's models
 ## that actually have range AND line of sight to the target — not by its whole living count. `moved` is
@@ -3400,7 +3410,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# growth markers, spell tokens — each NAMED in the log, NML-932); Cover (GF v3.5.1 p.11) is
 	# ignored by Blast and by Indirect (wave 5: "ignores cover from sight obstructions").
 	_solo_log_armor(target)
-	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
+	var dist_in: float = _solo_ai_volley_distance_in(attacker, target)
 	var base_defense: int = _solo_defense_vs(target)
 	_solo_log_defense_parts(target, AiCombatMath.HIT_SOURCE_SHOOTING, base_defense, true)
 	# Guarded / Versatile Defense's def-half ("+1 to defense rolls" when shot from over 9" away) folds

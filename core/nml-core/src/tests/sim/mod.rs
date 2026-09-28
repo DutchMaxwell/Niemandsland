@@ -122,6 +122,26 @@
         let stealth_at_old = old > 9.0;
         let stealth_at_new = new > 9.0;
         assert!(stealth_at_old && !stealth_at_new);
+        let profile = [crate::unit::ShootProfile {
+            name: "Rifle".into(), attacks: 1, count: 1, range: 24,
+            ..Default::default()
+        }];
+        let fire = |distance: f64, artillery: bool, stealth: bool| {
+            let att = Ctx { quality: 4, models: 2, artillery, ..Default::default() };
+            let def = Ctx { defense: 4, models: 1, stealth, ..Default::default() };
+            let volley = [crate::dice::Shooter {
+                profiles: &profile, keep: &[0], attacks: &[1], att: &att, owner: "Shooter",
+            }];
+            let mut tray = Tray::seeded(27);
+            crate::dice::resolve_volley_with_tray(
+                &volley, &def, "Target", 7.0, distance,
+                true, true, true, true, &mut tray,
+            ).rolls[0].target
+        };
+        assert_eq!(fire(old, false, true), 5, "old Stealth penalty off centre gap");
+        assert_eq!(fire(new, false, true), 4, "new Stealth gate off base gap");
+        assert_eq!(fire(old, true, false), 3, "old Artillery bonus off centre gap");
+        assert_eq!(fire(new, true, false), 4, "new Artillery gate off base gap");
     }
 
     /// Fear(X) (GF/AoF v3.5.1): "counts as having dealt +X wounds when
