@@ -1662,7 +1662,7 @@ impl Core {
         };
         let (mi, ti) = (idx(member)?, idx(target)?);
         let zones = nmlcore::sight::zones_of(&self.terrain);
-        let blockers = nmlcore::sight::blockers_of(st, mi, ti);
+        let blockers = nmlcore::sight::blockers_of(st, mi, ti, self.knobs.rules_epoch);
         let n = nmlcore::sight::sighted_count(st, &zones, &blockers, mi, ti, reach_in, indirect);
         let slack = nmlcore::sight::unit_radius_m(st, mi) + nmlcore::sight::unit_radius_m(st, ti);
         to_py(

@@ -8,7 +8,7 @@
     /// four base-edge gaps the engage test can pick from are therefore
     /// 10" (host to host), 8" and 7" (one hero folded) and 5" (both) — one
     /// number per fold, so a single assertion says which lists were measured.
-    pub(super) fn four_unit_line() -> State {
+    pub(crate) fn four_unit_line() -> State {
         let profile = Profile {
             unit_id: "u".into(),
             name: "u".into(),

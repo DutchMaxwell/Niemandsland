@@ -3957,7 +3957,7 @@ fn sighted_profiles_of(
 ) {
     sc.keep.clear();
     sc.attacks.clear();
-    let blockers = sight::blockers_of(state, mi, ti);
+    let blockers = sight::blockers_of(state, mi, ti, sc.rules_epoch);
     let def = &statics[state.roster.profile[ti]].ctx;
     // WAVE 3 MARK CONSUMERS (`acts::rule_on`, frozen at `EPOCH_6_TABLE_RULES`):
     // the two enemy-side grant names the pre-attack pick already records on
@@ -7792,7 +7792,7 @@ mod d6a_tests {
 
 #[cfg(test)]
 #[path = "tests/sim/mod.rs"]
-mod tests;
+pub(crate) mod tests;
 
 /// NML-1157 — HERO-LAST: a combat intent aimed at a JOINED HERO resolves to its
 /// HOST (`main._solo_combat_unit` :8452, GF v3.5.1 p.14). The port aimed at the
