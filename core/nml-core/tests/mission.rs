@@ -155,6 +155,26 @@ fn old_marker_record_omits_new_default_fields_on_round_trip() {
     assert_eq!(plain_of(&loaded).to_string(), out.to_string());
 }
 
+/// Wave C gate C9.3: the TABLE writes a carrier as its unit KEY ("" = none —
+/// `BattleSim.state_to_plain` passes `SoloController.mission_markers` through), the
+/// core as its roster index. The JSON reader resolves the key the way plain.rs does
+/// for the Godot seam; a key the roster does not hold reads as no carrier.
+#[test]
+fn table_carrier_key_resolves_to_its_roster_index() {
+    const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","objectives":[{"pos":[0,0,0],"owner":1},{"pos":[1,0,0],"owner":0},{"pos":[2,0,0],"owner":0}],"markers_meta":[{"carry":true,"carried_by":"p1_1_b"},{"carry":true,"carried_by":""},{"carry":true,"carried_by":"p9_9_gone"}],"units":{"p1_0_a":{"player":1,"alive":1,"positions":[[0.04,0,0]],"radii":[0.02]},"p1_1_b":{"player":1,"alive":1,"positions":[[-0.04,0,0]],"radii":[0.02]}}}"#;
+    let header = read_act_header(HEADER).expect("header");
+    let mut cache = ProfileCache::new(header.profiles);
+    let st = state_from_json(PLAIN, &mut cache, &mut None).expect("a table carrier key must read");
+    let carriers: Vec<i64> = st.markers_meta.iter().map(|m| m.carried_by).collect();
+    assert_eq!(carriers, vec![1, -1, -1]);
+    assert!(st.markers_meta.iter().all(|m| m.carry));
+    // The core writes its own int form back, which reads again unchanged.
+    let out = plain_of(&st);
+    assert_eq!(out["markers_meta"][0]["carried_by"], json!(1));
+    let again = state_from_json(&out.to_string(), &mut cache, &mut None).expect("int form");
+    assert_eq!(plain_of(&again).to_string(), out.to_string());
+}
+
 #[test]
 fn threatened_enemy_carrier_loses_relic_control_probability() {
     const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","objectives":[{"pos":[0,0,0],"owner":2}],"markers_meta":[{"carry":true,"carried_by":0}],"units":{"p2_0_a":{"player":2,"alive":2,"positions":[[0,0,0],[0.02,0,0]],"radii":[0.02,0.02],"wounds":[1,1]}}}"#;
