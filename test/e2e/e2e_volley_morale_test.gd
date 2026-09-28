@@ -95,7 +95,7 @@ func after_test() -> void:
 # === harness pump =============================================================================
 
 ## The volley awaits two things no headless run can click: the human's save confirmation
-## (`_solo_prompt_saves` puts up a ConfirmationDialog and spins frames until it answers) and the #172
+## (`_solo_prompt_saves` puts up a PromptCard and waits until it answers) and the #172
 ## wound-allocation prompt (`_solo_prompt_wound_allocation` spins frames until a model is picked). One
 ## repeating timer answers both — it ticks on the same tree the awaited coroutine yields to.
 func _arm_pump() -> void:
@@ -140,9 +140,9 @@ func _on_pump() -> void:
 ## The AI volley makes the HUMAN roll their own saves — press OK for the absent player.
 func _answer_save_prompt() -> void:
 	for c in _main.get_children():
-		var dlg := c as AcceptDialog
-		if dlg != null and dlg.title == "Incoming fire!":
-			dlg.confirmed.emit()
+		var card := c as PromptCard
+		if card != null and card.title == "Incoming fire!":
+			card.ok_button.pressed.emit()
 
 
 func _on_roll_finished(_total: int) -> void:

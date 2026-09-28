@@ -7,10 +7,15 @@ extends GdUnitTestSuite
 ## pass on today's native dialogs and on the in-viewport cards that replace them.
 ## Hero morale rides along: the same yes/no helper asks it, the inventory has no row for it.
 ## test_the_inventory_check_names_a_removed_control proves the control check can fail.
+## Since the restyle: every prompt in CARDS must come up as the house-style PromptCard, answer Enter / Esc
+## as the old dialogs did, and keep the table out of reach (clicks and hotkeys).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 ## The layer the in-viewport prompts live on (spell picker and interference dialog today).
 const PROMPT_LAYER := 90
+## The prompts already moved into the in-viewport card (PromptCard, D98 = a); each must come up as one.
+const CARDS := ["Incoming fire!", "Strike back?", "Cast window", "Versatile Attack", "Ambush Re-Deployment",
+	"Summon Imps", "Hero morale"]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -97,6 +102,8 @@ func _await_prompt(title: String) -> Node:
 		var p := _prompt()
 		if p != null and _title_of(p).to_lower().contains(title.to_lower()):
 			await _runner.simulate_frames(2)
+			if CARDS.has(title):
+				_assert_house_card(p)
 			return p
 		await get_tree().process_frame
 	fail("no prompt titled '%s' came up (standing: %s)" % [title, _title_of(_prompt()) if _prompt() != null else "none"])
@@ -170,6 +177,43 @@ func _missing(p: Node, expected: Array) -> Array:
 func _assert_controls(p: Node, expected: Array) -> void:
 	assert_array(_missing(p, expected)).override_failure_message(
 		"today's controls missing from '%s': %s (it shows %s)" % [_title_of(p), _missing(p, expected), _texts(p)]).is_empty()
+
+
+## A moved prompt: an in-viewport PromptCard (no OS window), dressed by the house theme alone — OK is the
+## gold primary action, cancel a ghost button, the card keeps its fixed width, no control sets its own
+## colour or font size.
+func _assert_house_card(p: Node) -> void:
+	assert_bool(p is PromptCard).override_failure_message("'%s' is still a %s, not the in-viewport card" % [
+		_title_of(p), p.get_class()]).is_true()
+	if not p is PromptCard:
+		return
+	var card := p as PromptCard
+	assert_object((card.get_node("Shield") as Control).theme).is_same(HouseStyle.theme())
+	if card.ok_button != null:
+		assert_str(String(card.ok_button.theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	if card.cancel_button != null:
+		assert_str(String(card.cancel_button.theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	var panel := card.find_child("Card", true, false) as Control
+	assert_float(panel.size.x).override_failure_message("'%s' is %d px wide, the card %d" % [
+		_title_of(p), panel.size.x, PromptCard.WIDTH]).is_equal_approx(PromptCard.WIDTH, 0.5)
+	var own: Array = []
+	for n: Node in card.find_children("*", "Control", true, false):
+		var c := n as Control
+		if c.has_theme_color_override(&"font_color") or c.has_theme_font_size_override(&"font_size"):
+			own.append(c.name)
+	assert_array(own).override_failure_message("'%s': own colour / size on %s" % [_title_of(p), own]).is_empty()
+
+
+## A key down and up, pushed through the table's viewport the way the engine delivers it.
+func _key(code: Key) -> void:
+	var vp := _main.get_viewport()
+	for down: bool in [true, false]:
+		var ev := InputEventKey.new()
+		ev.keycode = code
+		ev.physical_keycode = code
+		ev.pressed = down
+		vp.push_input(ev)
+	await _runner.simulate_frames(2)
 
 
 ## A real click at the centre of `b`. A native dialog is an embedded window: its controls speak its own
@@ -482,6 +526,66 @@ func test_spot_and_boost_modes_word_their_choices(timeout := 120000) -> void:
 	await _click(_button(p, "Boost (+1)"))
 	got = await _answer(out)
 	assert_int(got).is_equal(1)
+
+
+# === the card: the old keys, the board out of reach ===========================================
+
+## Enter takes OK and Esc the cancel button, as at the old dialogs; the saves have no cancel button and
+## still answer Esc, so the board never locks (UI audit 2026-07-24). Other keys stop at the card.
+func test_enter_and_esc_answer_like_the_old_dialogs(timeout := 120000) -> void:
+	var charger := _unit(2, "Raiders", [Vector3(0.05, 0, 0)])
+	var defender := _unit(1, "Guards", [Vector3.ZERO])
+	var out: Array = []
+	(func() -> void: out.append(await _main._solo_confirm_strike_back(defender, charger, false))).call()
+	await _await_prompt("Strike back?")
+	var g := InputEventKey.new()
+	g.keycode = KEY_G
+	g.pressed = true
+	_main.get_viewport().push_input(g)
+	assert_bool(_main.get_viewport().is_input_handled()) \
+		.override_failure_message("a hotkey reached the table behind the question").is_true()
+	await _key(KEY_ENTER)
+	var got: Variant = await _answer(out)
+	assert_bool(got).is_true()
+
+	out = []
+	(func() -> void: out.append(await _main._solo_confirm_strike_back(defender, charger, false))).call()
+	await _await_prompt("Strike back?")
+	await _key(KEY_ESCAPE)
+	got = await _answer(out)
+	assert_bool(got).is_false()
+
+	_main._solo_auto_saves = false
+	_main._solo_batch = true
+	out = []
+	(func() -> void: out.append(await _main._solo_prompt_saves(charger, defender, "Rifle", 2, 4, 0))).call()
+	await _await_prompt("Incoming fire!")
+	await _key(KEY_ESCAPE)
+	got = await _answer(out)
+	assert_array(got).has_size(2)
+
+
+## The shield: the pointer beside the card is on the shield (a STOP surface, so the table behind never
+## sees the click), and a click there answers nothing.
+func test_a_click_beside_the_card_answers_nothing(timeout := 120000) -> void:
+	var charger := _unit(2, "Raiders", [Vector3(0.05, 0, 0)])
+	var defender := _unit(1, "Guards", [Vector3.ZERO])
+	var out: Array = []
+	(func() -> void: out.append(await _main._solo_confirm_strike_back(defender, charger, false))).call()
+	var p := await _await_prompt("Strike back?")
+	var card := p as PromptCard
+	var rect := (card.find_child("Card", true, false) as Control).get_global_rect()
+	var vp := _main.get_viewport()
+	var beside := Vector2(rect.position.x - 40, rect.get_center().y)
+	E2EBoot.motion_canvas(vp, beside)
+	assert_object(vp.gui_get_hovered_control()).is_same(card.get_node("Shield"))
+	E2EBoot.click_canvas(vp, beside, true)
+	E2EBoot.click_canvas(vp, beside, false)
+	await _runner.simulate_frames(3)
+	assert_array(out).override_failure_message("a click beside the card answered it").is_empty()
+	assert_object(_prompt()).is_same(card)
+	await _click(card.ok_button)
+	await _answer(out)
 
 
 # === the check itself =========================================================================

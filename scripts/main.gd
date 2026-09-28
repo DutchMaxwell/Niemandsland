@@ -1331,15 +1331,9 @@ func _solo_try_ambush_redeploy(gu: GameUnit) -> bool:
 	else:
 		if _solo_batch:
 			return false   # headless sweeps never answer a dialog — the human simply declines
-		var dlg := ConfirmationDialog.new()
-		dlg.title = "Ambush Re-Deployment"
-		dlg.dialog_text = "%s has ended its activation.\nRemove it from the table now (once per game) and bring it back from Ambush at the start of round %d?" % [
-			gu.get_name(), opr_army_manager.current_round + 1]
-		dlg.ok_button_text = "Withdraw"
-		dlg.get_cancel_button().text = "Stay on the table"
-		add_child(dlg)
-		var yes: bool = await _solo_await_confirm(dlg)
-		dlg.queue_free()
+		var yes: bool = await _solo_ask("Ambush Re-Deployment",
+			"%s has ended its activation.\nRemove it from the table now (once per game) and bring it back from Ambush at the start of round %d?" % [
+			gu.get_name(), opr_army_manager.current_round + 1], "Withdraw", "Stay on the table")
 		if not yes:
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.GENERAL,
@@ -6724,71 +6718,34 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	return caused
 
 
-## Await a ConfirmationDialog's outcome WITHOUT the visibility race: Godot's AcceptDialog hides itself
-## BEFORE emitting `confirmed`, so an `await dlg.visibility_changed` resumed with the choice still unset and
-## an OK click read as "No" — the strike-back that never rolled and the spell interference that never spent
-## a token (Windows playtest bug 3; invisible headless, where the AI defender skips the dialog). Polling the
-## two outcome signals is order-proof; a dialog hidden by code without either signal counts as "No".
-## Fixed width for every solo prompt (UI audit): data text never decides the window width.
-const SOLO_DIALOG_MIN_WIDTH := 420
+## Every solo yes / no question goes through here: ONE in-viewport card (PromptCard, maintainer
+## D98 = a, 28.09.2026) instead of a ConfirmationDialog. OK = true, the cancel button (or Esc, or ×) =
+## false. The card keeps what the old helper had to fight for: it waits on the ANSWER, not on a window's
+## visibility (Windows playtest bug 3: an OK click read as "No"), its shield keeps a stray click off the
+## board without closing the question (B3, test game 1: a lost strike-back routed the unit), and its
+## width is fixed (UI audit 2026-07-24 B-5/B-6). `unanswered` is what a card freed without an answer
+## means: the safe refusal for a yes / no question, the RECOMMENDED mode where both buttons are game
+## options (Versatile, UI audit A-4).
+func _solo_ask(title: String, text: String, ok_text: String, cancel_text: String,
+		unanswered: bool = false) -> bool:
+	var card := PromptCard.new(title, text, ok_text, cancel_text)
+	add_child(card)
+	return await card.answer(unanswered)
 
-func _solo_await_confirm(dlg: AcceptDialog, keep_exclusive: bool = true, dismiss_default: bool = false) -> bool:
-	var outcome: Array = []
-	dlg.confirmed.connect(func() -> void: outcome.append(true))
-	dlg.canceled.connect(func() -> void: outcome.append(false))
-	# B3 (test game 1, High Sister): EXCLUSIVE by default — a stray click outside used to close the
-	# popup with NEITHER signal, which read as "No": the strike-back never rolled, the melee was
-	# lost 0:X and the unit routed on morale. WAIT-style dialogs (consolidation: the player drags
-	# models WHILE the dialog stands) pass keep_exclusive=false so the board stays interactive.
-	# If it still hides without a choice (window-manager path), RE-ASK a bounded number of times
-	# instead of guessing "No"; only then default to the safe refusal.
-	dlg.exclusive = keep_exclusive
-	# UI audit 2026-07-24 (B-5/B-6): every dialog routed through this helper used to pop as a bare
-	# grey Godot box in the cyan/amber HUD, and none set a size — so the width tracked whatever army,
-	# unit or weapon name the text happened to contain and the window visibly jumped between prompts.
-	# The neighbouring dialogs in this file already themed themselves (_apply_ui_theme's precedent);
-	# doing it HERE covers all of them at once. Width is fixed, height still grows with the body.
-	if dlg.theme == null and ThemeManager != null:
-		dlg.theme = ThemeManager.get_current_theme()
-	if dlg.min_size == Vector2i.ZERO:
-		dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 0)
-	dlg.popup_centered()
-	var reasks := 0
-	while outcome.is_empty() and is_instance_valid(dlg):
-		if not dlg.visible:
-			if reasks >= 3:
-				break
-			reasks += 1
-			dlg.popup_centered()
-		await get_tree().process_frame
-	# `dismiss_default` is what a window that vanished WITHOUT either signal means (after the
-	# re-asks above). For a yes/no question that is the safe refusal (false, the default); for a
-	# prompt whose two buttons are two equally valid GAME options — Versatile — falling back to the
-	# not-recommended one would let a stray click make a bad tactical decision (UI audit A-4).
-	# Hide BEFORE the caller frees it: freeing a still-VISIBLE Window makes Godot try to unhook a
-	# popup registration that is no longer there, which logs "Attempt to disconnect a nonexistent
-	# connection from 'root:<Window>'" — 22 of those in one of the maintainer's sessions.
-	if is_instance_valid(dlg):
-		dlg.hide()
-	return dismiss_default if outcome.is_empty() else bool(outcome[0])
+
+## Fixed width for the dialogs that are still native windows (UI audit): data text never decides it.
+const SOLO_DIALOG_MIN_WIDTH := 420
 
 
 ## The defender's strike-back choice dialog. With `counter_first` the prompt explains that Counter weapons
 ## strike BEFORE the charger (GF/AoF v3.5.1 p.13); one choice covers the whole melee (Counter phase now,
 ## remaining weapons in the normal slot).
 func _solo_confirm_strike_back(defender: GameUnit, charger: GameUnit, counter_first: bool) -> bool:
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Strike back?"
+	var text := "%s is in melee with %s.\nStrike back?" % [defender.get_name(), charger.get_name()]
 	if counter_first:
-		dlg.dialog_text = "%s charges %s.\n%s has Counter — its Counter weapons strike FIRST.\nStrike back?" % [
+		text = "%s charges %s.\n%s has Counter — its Counter weapons strike FIRST.\nStrike back?" % [
 			charger.get_name(), defender.get_name(), defender.get_name()]
-	else:
-		dlg.dialog_text = "%s is in melee with %s.\nStrike back?" % [defender.get_name(), charger.get_name()]
-	dlg.ok_button_text = "Strike back"
-	dlg.get_cancel_button().text = "Hold"
-	add_child(dlg)
-	var strike: bool = await _solo_await_confirm(dlg)   # order-proof (see _solo_await_confirm)
-	dlg.queue_free()
+	var strike: bool = await _solo_ask("Strike back?", text, "Strike back", "Hold")
 	# B3: the choice ALWAYS gets its log line — a silent "Hold" read like a swallowed input.
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
@@ -8204,20 +8161,13 @@ func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: Strin
 	# A3 (NML-202): the panel switch (or _run_player_intent's own first-use flip) skips the ask —
 	# the threshold log line and the tray roll are unchanged either way.
 	if not _solo_auto_saves:
-		var dlg := ConfirmationDialog.new()
-		dlg.title = "Incoming fire!"
 		var ap_note: String = (" (AP %d → save on %d+)" % [ap, defense + ap]) if ap > 0 else " (save on %d+)" % defense
-		dlg.dialog_text = "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
-			attacker.get_name(), target.get_name(), hits, ("" if hits == 1 else "s"), weapon_name, ap_note]
-		dlg.ok_button_text = "Roll %d save%s" % [hits, ("" if hits == 1 else "s")]
-		dlg.get_cancel_button().hide()   # saves are not optional — one clear action
-		add_child(dlg)
-		# UI audit 2026-07-24: this used to `await dlg.confirmed` directly. ESC still emits `canceled`
-		# even with the cancel button hidden, so the await never returned and the board locked up —
-		# in the MOST frequent solo interaction (every AI volley). The shared helper resolves on
-		# EITHER signal and re-asks a stray dismissal; saves are mandatory, so either way we roll.
-		await _solo_await_confirm(dlg)
-		dlg.queue_free()
+		# Saves are not optional — one clear action, no cancel button. UI audit 2026-07-24: ESC used to
+		# lock the board here (the MOST frequent solo prompt); on the card ESC answers too, and either
+		# way we roll.
+		await _solo_ask("Incoming fire!", "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
+			attacker.get_name(), target.get_name(), hits, ("" if hits == 1 else "s"), weapon_name, ap_note],
+			"Roll %d save%s" % [hits, ("" if hits == 1 else "s")], "")
 	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
 	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
 	_solo_log_save_threshold(target, defense, ap)
@@ -9390,14 +9340,8 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 	if _solo_batch:
 		unit.unit_properties["hero_tests_morale"] = true
 		return
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Hero morale"
-	dlg.dialog_text = "Let a living Hero test morale for %s from now on?" % unit.get_name()
-	dlg.ok_button_text = "Use Hero"
-	dlg.get_cancel_button().text = "Use unit"
-	add_child(dlg)
-	unit.unit_properties["hero_tests_morale"] = await _solo_await_confirm(dlg, true, true)
-	dlg.queue_free()
+	unit.unit_properties["hero_tests_morale"] = await _solo_ask("Hero morale",
+		"Let a living Hero test morale for %s from now on?" % unit.get_name(), "Use Hero", "Use unit", true)
 
 
 func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bool:
@@ -9544,15 +9488,10 @@ func _solo_confirm_cast_first(unit: GameUnit) -> bool:
 	if not affordable:
 		return false
 	_solo_cast_asked[unit.get_instance_id()] = rnd
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Cast window"
-	dlg.dialog_text = "%s can still cast (%d token%s left).\nSpells must be cast BEFORE attacking (GF v3.5.1) — after this attack the window is gone." % [
-		member.get_name(), member.casts_current, ("" if member.casts_current == 1 else "s")]
-	dlg.ok_button_text = "Cast first"
-	dlg.get_cancel_button().text = "Attack without casting"
-	add_child(dlg)
-	var cast_first: bool = await _solo_await_confirm(dlg)
-	dlg.queue_free()
+	var cast_first: bool = await _solo_ask("Cast window",
+		"%s can still cast (%d token%s left).\nSpells must be cast BEFORE attacking (GF v3.5.1) — after this attack the window is gone." % [
+		member.get_name(), member.casts_current, ("" if member.casts_current == 1 else "s")],
+		"Cast first", "Attack without casting")
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			("%s casts before attacking" if cast_first else "%s attacks — cast window passed") % unit.get_name(), false)
@@ -10984,15 +10923,10 @@ func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: G
 ## auto-pick but the CHOICE is the player's (Versatile is "pick one", not an engine decision).
 func _solo_prompt_versatile(weapon_name: String, recommended: Dictionary) -> Dictionary:
 	var rec_ap := int(recommended.get("ap", 0)) > 0
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Versatile Attack"
-	dlg.dialog_text = "%s is Versatile (target over 9\").\nChoose the mode for this volley:" % weapon_name
-	dlg.ok_button_text = ("AP(+1) — recommended" if rec_ap else "+1 to hit — recommended")
-	dlg.get_cancel_button().text = ("+1 to hit" if rec_ap else "AP(+1)")
-	add_child(dlg)
-	# Both buttons are real choices here, so a dismissed window takes the RECOMMENDED mode.
-	var take_recommended: bool = await _solo_await_confirm(dlg, true, true)
-	dlg.queue_free()
+	# Both buttons are real choices here, so a card gone without an answer takes the RECOMMENDED mode.
+	var take_recommended: bool = await _solo_ask("Versatile Attack",
+		"%s is Versatile (target over 9\").\nChoose the mode for this volley:" % weapon_name,
+		"AP(+1) — recommended" if rec_ap else "+1 to hit — recommended", "+1 to hit" if rec_ap else "AP(+1)", true)
 	if take_recommended:
 		return recommended
 	return {"ap": 0, "hit_mod": 1} if rec_ap else {"ap": 1, "hit_mod": 0}
@@ -19364,18 +19298,7 @@ func _solo_spawn_profile_stamp(carrier: GameUnit, raw: String) -> Dictionary:
 
 
 func _solo_confirm_rule_unit(rule: String, unit_name: String, count: int) -> bool:
-	var dialog := ConfirmationDialog.new()
-	dialog.title = rule
-	dialog.dialog_text = "Place %s [%d]?" % [unit_name, count]
-	var answer := {"done": false, "yes": false}
-	dialog.confirmed.connect(func() -> void: answer.merge({"done": true, "yes": true}, true))
-	dialog.canceled.connect(func() -> void: answer["done"] = true)
-	add_child(dialog)
-	dialog.popup_centered()
-	while not answer["done"]:
-		await get_tree().process_frame
-	dialog.queue_free()
-	return answer["yes"]
+	return await _solo_ask(rule, "Place %s [%d]?" % [unit_name, count], "OK", "Cancel")
 
 
 func _solo_rule_unit_shape(count: int, radius: float) -> Array:
