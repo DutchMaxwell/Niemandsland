@@ -2204,22 +2204,42 @@ func _solo_init_arena_from_env() -> void:
 ## exactly this seam). final pays the end bonus exactly once. Logged to the
 ## battle log AND stderr so a silent ledger can never pass for a broken one.
 ## NML-1010 wave C step C2: a carrier that stops being able to hold a marker (Shaken, destroyed)
-## drops it — the marker returns to the table at the carrier's own position (the mission's own
-## drop-placement rule, R3a, lands in C3). No-op when `gu` carries nothing.
+## drops it one inch beyond the carrier's base edge toward the nearest opposing unit.
 func _solo_drop_carried(gu: GameUnit, reason: String) -> void:
 	if terrain_overlay == null or SoloController.mission_markers.is_empty():
 		return
-	var pos_list: Array = solo_controller.alive_positions(gu)
-	var drop_pos: Vector3 = pos_list[0] if not pos_list.is_empty() else Vector3.ZERO
+	var carrier_side := int(gu.unit_properties.get("player_id", 0))
+	var opponents: Array = []
+	for u in opr_army_manager.get_all_game_units():
+		var other := u as GameUnit
+		if other != null and int(other.unit_properties.get("player_id", 0)) != carrier_side:
+			opponents.append(other)
+	var drop_pos := SoloController.drop_point(gu, opponents)
 	for i in range(SoloController.mission_markers.size()):
 		var mk: Dictionary = SoloController.mission_markers[i]
 		if bool(mk.get("carry", false)) and String(mk.get("carried_by", "")) == gu.unit_id:
 			mk["carried_by"] = ""
 			terrain_overlay.set_objective_position(i, drop_pos)
 			terrain_overlay.set_objective_carried(i, false)
-			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.GENERAL,
-					"Relic dropped by %s (%s)" % [gu.get_name(), reason], true)
+			_solo_log_relic_drop({"name": gu.get_name(), "reason": reason,
+				"placer": "P%d" % (3 - carrier_side)})
+	_solo_sync_relic_map()
+
+
+func _solo_sync_relic_map() -> void:
+	if map_layout_editor == null or terrain_overlay == null:
+		return
+	var positions: Array = []
+	for pos in terrain_overlay.get_objectives():
+		positions.append(Vector2((pos as Vector3).x, (pos as Vector3).z) / 0.0254)
+	map_layout_editor.set_objectives_from_table_inches(positions)
+	map_layout_editor.grid_container.queue_redraw()
+
+
+func _solo_log_relic_drop(entry: Dictionary) -> void:
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Relic dropped by %s (%s), placed by %s" % [entry["name"], entry["reason"], entry["placer"]], true)
 
 
 func _solo_book_mission_vp(final: bool) -> void:
