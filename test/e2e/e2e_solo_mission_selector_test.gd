@@ -59,6 +59,15 @@ func test_starting_with_a_mission_arms_the_controller_statics() -> void:
 	assert_str(_log_text()).contains("Mission: Sabotage")
 
 
+func test_relic_hunt_arms_three_carried_markers() -> void:
+	_main._solo_mission_id = "relic_hunt"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(SoloController.mission_markers.size()).is_equal(3)
+	for marker in SoloController.mission_markers:
+		assert_bool(bool((marker as Dictionary).get("carry", false))).is_true()
+		assert_str(str((marker as Dictionary).get("carried_by", "missing"))).is_equal("")
+
+
 ## Duel — the selector's default ("" = no mission) — is a true no-op: today's live table
 ## (SoloController's statics) stays exactly what it already was, byte-identical.
 func test_duel_leaves_the_live_statics_untouched() -> void:
