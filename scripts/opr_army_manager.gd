@@ -1280,6 +1280,8 @@ func rebuild_tray_groups(player_id: int) -> void:
 		return
 	var residents: Array = []
 	for u in get_game_units_for_player(player_id):
+		if SoloController.combined_alive(u as GameUnit) <= 0:
+			continue
 		var cls := arrival_class_of(u as GameUnit)
 		if cls.is_empty() or (cls == "Scout" and not _anchor_off_table(u as GameUnit)):
 			continue   # a deployed Scout carrier stands ON the table — never a tray resident
@@ -1310,6 +1312,8 @@ func _anchor_off_table(gu: GameUnit) -> bool:
 		var node: Node3D = (m as ModelInstance).node
 		if node != null and is_instance_valid(node):
 			pts.append(node.global_position)
+	if pts.is_empty():
+		return true
 	var c: Vector3 = MoveIntent.anchor_of(pts)
 	var half: Vector2 = Vector2(table.table_size.x, table.table_size.y) * (0.3048 / 2.0)
 	return not Rect2(-half, half * 2.0).has_point(Vector2(c.x, c.z))
