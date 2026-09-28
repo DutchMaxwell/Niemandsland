@@ -2,8 +2,9 @@
 //! VP; plus playout_seize (unopposed presence) and can_hold_marker (its three
 //! round-end exclusions). No production line touched.
 use nml_core::{
-    can_hold_marker, mission_winner, playout_seize, read_act_header, sabotage_winner,
-    state_from_json, vp_score_end, vp_score_round, Marker, ProfileCache,
+    apply_carry_step, can_hold_marker, drop_carried, mission_winner, plain_of, playout_seize,
+    read_act_header, sabotage_winner, state_from_json, vp_score_end, vp_score_round, Marker,
+    ProfileCache,
 };
 use serde_json::{json, Map};
 
@@ -89,4 +90,67 @@ fn can_hold_marker_excludes_shaken_aircraft_and_arrived_this_round() {
     assert!(!can_hold_marker(&st, 1, 2), "shaken");
     assert!(!can_hold_marker(&st, 2, 2), "aircraft");
     assert!(!can_hold_marker(&st, 3, 2), "arrived this round");
+}
+
+fn carry_state() -> nml_core::State {
+    const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","objectives":[{"pos":[0,0,0],"owner":1}],"markers_meta":[{"carry":true}],"units":{"p1_0_a":{"player":1,"alive":1,"positions":[[0.04,0,0]],"radii":[0.02]},"p2_0_a":{"player":2,"alive":1,"positions":[[0.3,2,0]],"radii":[0.02]},"p1_1_b":{"player":1,"alive":1,"positions":[[-0.04,0,0]],"radii":[0.02]}}}"#;
+    let header = read_act_header(HEADER).expect("header");
+    let mut cache = ProfileCache::new(header.profiles);
+    state_from_json(PLAIN, &mut cache, &mut None).expect("state")
+}
+
+#[test]
+fn carry_pickup_uses_capture_order_for_equal_gaps() {
+    let mut st = carry_state();
+    apply_carry_step(&mut st, &[1]);
+    assert_eq!(st.markers_meta[0].carried_by, 0);
+    assert_eq!(st.objectives[0].pos, [0.04, 0.0, 0.0]);
+}
+
+#[test]
+fn carried_marker_stays_owned_outside_the_ring() {
+    let mut st = carry_state();
+    st.markers_meta[0].carried_by = 0;
+    st.objectives[0].pos = [0.3, 0.0, 0.0];
+    let mut owners = [0];
+    playout_seize(&mut st, &mut owners);
+    assert_eq!(owners, [1]);
+}
+
+#[test]
+fn contested_marker_is_not_picked_up() {
+    let mut st = carry_state();
+    let enemy = (0..st.units()).find(|&i| st.player[i] == 2).unwrap();
+    st.positions[enemy][0] = [0.0, 0.0, 0.04];
+    let mut owners = [1];
+    playout_seize(&mut st, &mut owners);
+    assert_eq!(owners, [0]);
+    apply_carry_step(&mut st, &owners);
+    assert_eq!(st.markers_meta[0].carried_by, -1);
+}
+
+#[test]
+fn drop_uses_horizontal_nearest_enemy_and_base_edge() {
+    let mut st = carry_state();
+    st.markers_meta[0].carried_by = 0;
+    let enemy = (0..st.units()).find(|&i| st.player[i] == 2).unwrap();
+    st.positions[enemy][0] = [0.14, 20.0, 0.0];
+    st.player[1] = 2;
+    st.positions[1][0] = [-0.3, 0.0, 0.0];
+    drop_carried(&mut st, 0);
+    assert_eq!(st.markers_meta[0].carried_by, -1);
+    assert!((st.objectives[0].pos[0] - 0.0854).abs() < 1e-9);
+    assert_eq!(st.objectives[0].pos[1], 0.0);
+}
+
+#[test]
+fn old_marker_record_omits_new_default_fields_on_round_trip() {
+    let mut st = carry_state();
+    st.markers_meta = vec![serde_json::from_value(json!({"owned_by":1,"destructible":false,"destroyed":false,"destroyed_seq":0})).unwrap()];
+    let out = plain_of(&st);
+    assert_eq!(out["markers_meta"][0], json!({"owned_by":1,"destructible":false,"destroyed":false,"destroyed_seq":0}));
+    let header = read_act_header(HEADER).expect("header");
+    let mut cache = ProfileCache::new(header.profiles);
+    let loaded = state_from_json(&out.to_string(), &mut cache, &mut None).expect("round trip");
+    assert_eq!(plain_of(&loaded).to_string(), out.to_string());
 }

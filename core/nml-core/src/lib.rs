@@ -72,7 +72,7 @@ pub use objectives::{generate as objective_layout, Cells as ObjectiveCells, Layo
 pub use doctrine::place as doctrine_place;
 pub use doctrine::place_step;
 pub use mission::{
-    apply_destroy_step, mission_winner, playout_seize, sabotage_winner, vp_end_bonus,
+    apply_carry_step, apply_destroy_step, drop_carried, mission_winner, playout_seize, sabotage_winner, vp_end_bonus,
     vp_round_add, vp_score_end, vp_score_round,
 };
 pub use plan::{

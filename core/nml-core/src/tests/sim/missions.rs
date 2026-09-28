@@ -56,8 +56,8 @@ fn front_line_style() -> serde_json::Value {
 /// deploy_zone_front edge, in `owned_by = index + 1` order.
 fn owned_markers() -> Vec<Marker> {
     vec![
-        Marker { owned_by: 1, destructible: true, destroyed: false, destroyed_seq: 0 },
-        Marker { owned_by: 2, destructible: true, destroyed: false, destroyed_seq: 0 },
+        Marker { owned_by: 1, destructible: true, destroyed: false, destroyed_seq: 0, ..Default::default() },
+        Marker { owned_by: 2, destructible: true, destroyed: false, destroyed_seq: 0, ..Default::default() },
     ]
 }
 
@@ -339,8 +339,8 @@ fn demolition_own_marker_stands_and_first_fallen_collects() {
     assert_eq!(vp, [4, 1], "majority 'none' pays nothing at the end");
     assert_eq!(mission_winner("round_vp", &owners, vp, &st.markers_meta, 4, 4), "p1");
     let revenge = [
-        Marker { owned_by: 1, destructible: true, destroyed: true, destroyed_seq: 2 },
-        Marker { owned_by: 2, destructible: true, destroyed: true, destroyed_seq: 1 },
+        Marker { owned_by: 1, destructible: true, destroyed: true, destroyed_seq: 2, ..Default::default() },
+        Marker { owned_by: 2, destructible: true, destroyed: true, destroyed_seq: 1, ..Default::default() },
     ];
     let mut rvp = [0i64; 2];
     vp_score_round(&owners, &mut rvp, &flavour, &mut memo, &revenge);

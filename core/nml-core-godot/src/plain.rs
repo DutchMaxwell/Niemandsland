@@ -370,6 +370,13 @@ pub fn build_state(
             // `BattleSim.apply_destroy_step` (:405-423) stamps the destruction
             // ORDER here; `vp_score_round` reads it back.
             destroyed_seq: dint(&m, "destroyed_seq", 0),
+            carry: dflag(&m, "carry"),
+            carried_by: match m.get("carried_by") {
+                Some(v) if v.try_to::<GString>().is_ok() =>
+                    roster.index.get(&text(&v)).map(|&i| i as i64).unwrap_or(-1),
+                Some(v) => int(&v),
+                None => -1,
+            },
         })
         .collect();
     // NML-1073 seam: the matrix is KEY-SORTED (`state_to_plain` sorts it
