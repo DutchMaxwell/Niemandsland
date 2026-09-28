@@ -164,14 +164,15 @@ def _centre_f32(positions: list[list[float]]) -> list[float]:
 # ------------------------------------------------------------------ armies ---
 
 
-def load_army(path: str | Path, player: int) -> list[dict[str, Any]]:
+def load_army(path: str | Path, player: int,
+              rules_epoch: int = nml_core.CURRENT_RULES_EPOCH) -> list[dict[str, Any]]:
     """`_units_from_list` (core_selfplay.gd:437-495) as profiles, in the order
     the loader creates them — which IS `OPRArmyManager.game_units`' insertion
     order and therefore the capture order the whole state is indexed by."""
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     profiles = profiles_from_army_forge_json(
-        data, _faction_from_path(path, str(data.get("gameSystem", ""))), player
+        data, _faction_from_path(path, str(data.get("gameSystem", ""))), player, rules_epoch
     )
     return list(profiles.values())
 
@@ -2309,8 +2310,8 @@ def play_game(
     `cap_share`, stamping `row["cap"]` (True = cap core planned the act, a
     value-only row; False = the seat's full-search core, the policy target).
     0.0, the default, builds no core, draws no coin, stamps no key."""
-    units1 = load_army(list_p1, 1)
-    units2 = load_army(list_p2, 2)
+    units1 = load_army(list_p1, 1, rules_epoch)
+    units2 = load_army(list_p2, 2, rules_epoch)
     if not units1 or not units2:
         raise ValueError("empty army (%s / %s)" % (list_p1, list_p2))
     units = units1 + units2

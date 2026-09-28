@@ -2749,6 +2749,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh
     // `play_game()` stamps. See `acts::rule_on`.
     m.add("CURRENT_RULES_EPOCH", nmlcore::CURRENT_RULES_EPOCH)?;
+    m.add("EPOCH_66_DISTANCE_TRUTH", nmlcore::acts::EPOCH_66_DISTANCE_TRUTH)?;
     // 16.09. (window 32): the token layout constants, so python tests and the netlab
     // read the core's window instead of pinning 24 by hand.
     m.add("N_UNITS", nmlcore::tokens::N_UNITS)?;

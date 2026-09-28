@@ -125,6 +125,7 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 		elif base == "Rapid Rush":
 			if not rush_done:
 				rush += RAPID_RUSH_BONUS
+				charge_extra -= RAPID_RUSH_BONUS
 			counted[base] = {"advance": true, "rush": true}
 		elif base == "Quick":
 			if not adv_done:

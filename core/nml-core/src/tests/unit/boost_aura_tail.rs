@@ -1930,7 +1930,8 @@ use super::*;
     fn rapid_rush_charge_band_is_twelve_at_epoch_66() {
         let old = wave3_static_of("Rapid Rush", "gf", "battle_brothers",
             crate::acts::EPOCH_65_MELEE_TRUTH).move_rule_mods.unwrap();
-        let new = wave3_static_of("Rapid Rush", "gf", "battle_brothers", 66)
+        let new = wave3_static_of("Rapid Rush", "gf", "battle_brothers",
+            crate::acts::EPOCH_66_DISTANCE_TRUTH)
             .move_rule_mods.unwrap();
         assert_eq!(12.0 + old.charge.unwrap_or(old.rush), 18.0,
             "epoch 65 records keep the old Rush-derived charge band");

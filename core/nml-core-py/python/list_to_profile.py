@@ -523,7 +523,8 @@ def _bounding_dice_count(params: dict) -> int:
 
 
 def _move_bands(
-    special_rules: list[str], game_system: str = "", faction: str = ""
+    special_rules: list[str], game_system: str = "", faction: str = "",
+    rules_epoch: int | None = None,
 ) -> dict[str, float]:
     """movement_range_controller.gd:move_bands_for_props — the NAME pass
     (:125-163) plus, since NML-1108, the REGISTRY pass (:164-188). The
@@ -536,6 +537,9 @@ def _move_bands(
     "X" DOES stack — the table counts both too (its description pass reads the
     aura's own text). A once-per-game feat (`uses_per_game`) never rides the
     permanent bands."""
+    import nml_core
+    if rules_epoch is None:
+        rules_epoch = nml_core.CURRENT_RULES_EPOCH
     advance = OPR_ADVANCE_INCHES
     rush = OPR_RUSH_CHARGE_INCHES
     charge_extra = 0
@@ -570,6 +574,8 @@ def _move_bands(
         elif base == "Rapid Rush":
             if not done["rush"]:
                 rush += RAPID_RUSH_BONUS
+                if rules_epoch >= nml_core.EPOCH_66_DISTANCE_TRUTH:
+                    charge_extra -= RAPID_RUSH_BONUS
             counted[base] = {"advance": True, "rush": True}
         elif base == "Quick":
             if not done["advance"]:
@@ -1475,7 +1481,8 @@ def _units_from_list(
     return [units[k] for k in order]
 
 
-def _unit_profile(u: dict[str, Any], faction: str, game_system: str) -> dict[str, Any]:
+def _unit_profile(u: dict[str, Any], faction: str, game_system: str,
+                  rules_epoch: int | None = None) -> dict[str, Any]:
     """battle_sim.gd:_unit_profile off one internal unit dict."""
     special_rules: list[str] = u["special_rules"]
     grants: list[str] = _flatten_grants(u["item_grants"])
@@ -1502,7 +1509,7 @@ def _unit_profile(u: dict[str, Any], faction: str, game_system: str) -> dict[str
         "weapons": weapons,
         "special_rules": special_rules,
         "caster_value": _caster_value(special_rules, model_count),
-        "move_bands": _move_bands(special_rules, game_system, faction),
+        "move_bands": _move_bands(special_rules, game_system, faction, rules_epoch),
         "base_radius": (DEFAULT_BASE_MM / 2.0) * MM_TO_METERS
         if LEGACY_CORE_SELFPLAY
         else _base_radius_m(u["base"], u["model_tough"][0] if u["model_tough"] else 1),
@@ -1523,7 +1530,7 @@ def _unit_profile(u: dict[str, Any], faction: str, game_system: str) -> dict[str
 
 
 def profiles_from_army_forge_json(
-    data: dict[str, Any], faction: str, player: int
+    data: dict[str, Any], faction: str, player: int, rules_epoch: int | None = None,
 ) -> dict[str, dict[str, Any]]:
     """The testable core: an already-parsed Army-Forge list dict + the
     faction name a real list's FILENAME would have supplied -> one profile
@@ -1537,7 +1544,7 @@ def profiles_from_army_forge_json(
     # `base_mm` entries; digest-neutral by construction then.
     _apply_manifest_base_overrides(built, faction)
     _expand_auras(built)
-    profiles = {u["unit_id"]: _unit_profile(u, faction, game_system) for u in built}
+    profiles = {u["unit_id"]: _unit_profile(u, faction, game_system, rules_epoch) for u in built}
     _warn_unresolved_spell_books(profiles, game_system)
     _warn_unresolved_rule_names(profiles, game_system)
     return profiles
