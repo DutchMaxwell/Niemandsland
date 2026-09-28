@@ -256,3 +256,23 @@ func test_reach_hunt_range_bonus_reaches_the_real_volley_and_named_log() -> void
 		text += str(entry["text"]) + "\n"
 	assert_str(text).contains("Reach Hunt")
 	assert_str(text).contains("Rifle")
+
+
+func test_ai_volley_modifiers_use_the_nearest_base_gap(timeout := 120000) -> void:
+	# Two shooter models put the unit centre 10.5" away while the front base
+	# is only 7" from the target. Neither over-9" modifier may fire.
+	var front := Vector3.ZERO
+	var rear := Vector3(-4.48 * IN2M, 0, 0)
+	var gunner := _armed(2, "Artillery", [front, rear],
+		[{"name": "Cannon", "range": 24, "attacks": 2, "count": 2}])
+	gunner.unit_properties["special_rules"] = ["Artillery"]
+	var target := _armed(1, "Stealth", [Vector3(_x_for_gap(7.0), 0, 0)], [])
+	target.unit_properties["special_rules"] = ["Stealth"]
+	assert_float(_main.solo_controller.nearest_melee_gap_in(gunner, target)).is_equal_approx(7.0, 0.1)
+	assert_float(MoveIntent.distance_inches(_main.solo_controller.unit_centre(gunner),
+		_main.solo_controller.unit_centre(target))).is_equal_approx(10.5, 0.1)
+	var ai_dist: float = _main._solo_ai_volley_distance_in(gunner, target)
+	assert_float(ai_dist).is_equal_approx(7.0, 0.1)
+	var mod_info: Dictionary = _main._solo_hit_mod_info(gunner, target, ai_dist, false)
+	assert_str(str(mod_info.get("note", ""))).contains("Artillery: no +1 (target within 9\")")
+	assert_str(str(mod_info.get("note", ""))).contains("Stealth: no -1 (within 9\")")

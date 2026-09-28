@@ -921,9 +921,9 @@ pub(crate) fn tray_strafing(
         statics[next.roster.profile[si]].name));
     // ONE shooting exchange, ONLY the Strafing profiles, through the shared
     // volley resolver — main.gd:3007's `_solo_resolve_ai_volley(unit, target,
-    // shots, true)`: one centre-to-centre distance (main.gd:3133), the
+    // shots, true)`: the activation's modifier distance, the
     // defender's live context, the members at their own Quality.
-    let d = geom::centre_dist_in(&next.positions[si], &next.positions[target]);
+    let d = modifier_distance_in(next, si, target, seams);
     let ut = &statics[next.roster.profile[target]];
     let mut def = ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch);
     // D-STEALTH — the strafe volley reads the defender's live context the
@@ -2668,6 +2668,40 @@ fn engage_gap_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
         }
     }
     best
+}
+
+/// Live table modifier distance: nearest alive model bases, including joined
+/// heroes when that seam is active. Older recordings keep the centre measure.
+fn modifier_distance_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
+    let centre = || geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
+    if !rule_on(seams.rules_epoch, EPOCH_66_DISTANCE_TRUTH) {
+        return centre();
+    }
+    let side = |u: usize| -> Vec<usize> {
+        let mut units = vec![u];
+        if seams.hero_attach {
+            units.extend(state.attached[u].iter().copied());
+        }
+        units
+    };
+    // Some synthetic state fixtures carry only the static unit contexts; a
+    // missing profile has the same round footprint as an unstamped base.
+    let shape = |u: usize| state.roster.profile.get(u)
+        .and_then(|&p| state.profiles.list.get(p))
+        .map_or(geom::BaseShape::Round, crate::state::Profile::shape);
+    let mut gap = f64::INFINITY;
+    for a in side(si) {
+        if state.alive[a] <= 0 { continue; }
+        for b in side(ti) {
+            if state.alive[b] <= 0 { continue; }
+            gap = gap.min(geom::edge_gap_shaped_in(
+                &state.positions[a], &state.radii[a], shape(a),
+                &state.positions[b], &state.radii[b], shape(b),
+                DEFAULT_BASE_RADIUS_M,
+            ));
+        }
+    }
+    if gap.is_finite() { gap } else { centre() }
 }
 
 /// `BattleSim._expected_shooting_morale` battle_sim.gd:1096-1105 /
@@ -5572,10 +5606,8 @@ struct SplitGroup {
     /// radii off) for a split group, which exists because the TABLE's own
     /// test fired.
     d: f64,
-    /// NML-1152: the over-9" MODIFIER distance (`geom::centre_dist_in` — unit
-    /// centre to unit centre, main.gd:3029), kept apart from `d` — the table
-    /// gates Stealth/Artillery/Versatile Attack/Relentless/Guarded Defense on
-    /// THIS distance, never on the range-validity gap.
+    /// The over-9" modifier measure, kept apart from the range gate. Epoch 65
+    /// recordings use unit centres; epoch 66 uses the nearest live base gap.
     mod_d: f64,
     /// Per member index, the weapon indices of that member's `shoot` list the
     /// table aimed at THIS group, in build order. `None` = the pooled plan:
@@ -5639,6 +5671,7 @@ fn split_plan(
     state: &State,
     si: usize,
     shoot_key: &str,
+    seams: Seams,
 ) -> (Option<Vec<SplitGroup>>, Vec<&'static str>) {
     let mut marks: Vec<&'static str> = Vec::new();
     let Some(list) = split.filter(|l| !l.is_empty()) else { return (None, marks) };
@@ -5666,12 +5699,9 @@ fn split_plan(
                 + state.radii[ti].first().copied().unwrap_or(DEFAULT_BASE_RADIUS_M))
                 / IN2M)
             .max(0.0);
-        // NML-1152: the modifier gate is unit-centre to unit-centre
-        // (`main.gd:3029`/solo_controller.gd:8525-8533), not this group's
-        // EDGE gap — a split group's own weapons can still land Stealth or
-        // Versatile Attack on the table's terms even where B11 sees a closer
-        // edge.
-        let mod_d = geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
+        // Epoch 66 follows the table's nearest-base modifier measure; older
+        // records keep the centre gap independently of this range gate.
+        let mod_d = modifier_distance_in(state, si, ti, seams);
         groups.push(SplitGroup { ti, key: key.clone(), d, mod_d, weapons: Some(HashMap::new()) });
     }
     // The member lookup by name: one host plus its own attached heroes, alive
@@ -7021,7 +7051,7 @@ fn resolve_with(
             // name, and then validity is gated PER GROUP below (main.gd
             // :2963-2984). The EV half keeps the one-target gate.
             let (plan, split_marks) = match dice.as_mut() {
-                Some(_) => split_plan(action.split.as_ref(), statics, &next, si, &shoot_key),
+                Some(_) => split_plan(action.split.as_ref(), statics, &next, si, &shoot_key, seams),
                 None => (None, Vec::new()),
             };
             // W1: a MOVED shooter's sight is not in the recorded rows — `sees`
@@ -7056,11 +7086,9 @@ fn resolve_with(
             }
             if plan.is_some() || sighted {
                 let d = geom::dist_in(&next.positions[si], &next.positions[ti]);
-                // NML-1152: the pooled plan's own modifier distance — unit
-                // centre to unit centre (main.gd:3029) — kept apart from `d`
-                // for the SAME reason the split groups above are (below,
-                // :2453-2460's `pooled` literal).
-                let mod_d = geom::centre_dist_in(&next.positions[si], &next.positions[ti]);
+                // The table's epoch-66 nearest-base modifier measure remains
+                // separate from this pooled range-validity distance.
+                let mod_d = modifier_distance_in(&next, si, ti, seams);
                 // NML-1132: the EXPECTED-VALUE half measures over the table's folded
                 // model set (`fold_dist_in`); the TRAY half below keeps the plain
                 // host-to-host `d`, because it already measures per FIRING MEMBER
@@ -7460,13 +7488,11 @@ fn resolve_with(
                 // replay.
                 if let Some((tray, shot)) = dice.as_mut() {
                     // EPOCH_22_SCREENED_MELEE — the pre-charge gap, measured the
-                    // table's own way: unit-centre to unit-centre on the
-                    // PRE-move snapshot (`report["charge_from_in"]`,
-                    // solo_controller.gd:2329; `geom::centre_dist_in` is the
-                    // NML-1152 over-9" modifier measure). `state` still holds
-                    // the pre-move positions the charge move started from.
+                    // table's own way on the PRE-move snapshot
+                    // (`report["charge_from_in"]`, solo_controller.gd:2329).
+                    // `state` still holds the positions before the charge.
                     let charge_from_in =
-                        geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
+                        modifier_distance_in(state, si, ti, seams);
                     if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot, charge_from_in, cover) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the

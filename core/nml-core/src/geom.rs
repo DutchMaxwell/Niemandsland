@@ -103,9 +103,8 @@ pub fn dist_in(a: &[[f64; 3]], b: &[[f64; 3]]) -> f64 {
 /// nearest-model gap. `unit_centre` (solo_controller.gd:8525-8533) is the mean
 /// of a side's alive model positions (`MoveIntent.anchor_of`, move_intent.gd
 /// :18-24); `distance_inches` (move_intent.gd:58-60) is the gap between two
-/// such points. NML-1152: the over-9" modifier family (Stealth/Artillery,
-/// Versatile Attack, Relentless, Guarded Defense) reads THIS distance on the
-/// table — `dist_in`/`edge_gap_in` stay the range-VALIDITY measure only.
+/// such points. NML-1152 recorded this over-9" modifier distance through
+/// epoch 65; the live table and core use nearest bases from epoch 66.
 pub fn centre_dist_in(a: &[[f64; 3]], b: &[[f64; 3]]) -> f64 {
     (length(sub(centre(a), centre(b))) / IN2M as f32) as f64
 }
