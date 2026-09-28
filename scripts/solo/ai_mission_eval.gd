@@ -378,7 +378,7 @@ static func _score_hand(state: Dictionary, player: int, incoming: Dictionary = {
 				else:
 					att = 1.0
 				continue
-			var pctrl := _objective_p(state, objectives[i] as Dictionary, player, incoming)
+			var pctrl := _objective_p(state, objectives[i] as Dictionary, player, incoming, i)
 			if ob == player:
 				deff = 1.0 - pctrl
 			else:
@@ -389,8 +389,8 @@ static func _score_hand(state: Dictionary, player: int, incoming: Dictionary = {
 		# stalemate worth something while a lost home marker still hurts.
 		return clampf(0.5 + 0.5 * (att - DESTROY_DEFENCE_WEIGHT * deff), 0.0, 1.0)
 	var total := 0.0
-	for o in objectives:
-		total += _objective_p(state, o as Dictionary, player, incoming)
+	for i in range(objectives.size()):
+		total += _objective_p(state, objectives[i] as Dictionary, player, incoming, i)
 	return total / objectives.size()
 
 
@@ -404,7 +404,22 @@ static func _is_destroy_mission(state: Dictionary) -> bool:
 
 
 static func _objective_p(state: Dictionary, obj: Dictionary, player: int,
-		incoming: Dictionary = {}) -> float:
+		incoming: Dictionary = {}, obj_index: int = -1) -> float:
+	var markers: Array = state.get("markers_meta", [])
+	if obj_index >= 0 and obj_index < markers.size():
+		var marker: Dictionary = markers[obj_index]
+		var carrier := String(marker.get("carried_by", ""))
+		if bool(marker.get("carry", false)) and not carrier.is_empty() \
+				and (state["units"] as Dictionary).has(carrier):
+			var su: Dictionary = state["units"][carrier]
+			var strength := 0.0
+			for w in su.get("wounds", []):
+				strength += float(w)
+			var holds := 0.0
+			if int(su.get("alive", 0)) > 0 and not bool(su.get("shaken", false)) \
+					and strength > 0.0:
+				holds = clampf((strength - float(incoming.get(carrier, 0.0))) / strength, 0.0, 1.0)
+			return holds if int(su["player"]) == player else 1.0 - holds
 	var mine := 0.0
 	var theirs := 0.0
 	for key in state["units"]:

@@ -1514,6 +1514,14 @@ impl Core {
         ))
     }
 
+    /// The hand score with a supplied reply-wounds vector, for table parity pins.
+    fn score_hand_incoming(
+        &mut self, state: PyRef<'_, PyState>, player: i64, incoming: Vec<f64>,
+    ) -> PyResult<f64> {
+        let statics = self.statics_for(&state.inner)?;
+        Ok(nmlcore::score::score_hand(&state.inner, &statics, player, &incoming))
+    }
+
     /// NML-1142 — load a `netlab/fork_train.py` ENCODER net and play with it.
     /// The loader GATE is the GDScript's own (`_encoder_selftest_ok`): a net
     /// without a `selftest` block, or one whose forward here misses that block's

@@ -3,7 +3,7 @@
 //! round-end exclusions). No production line touched.
 use nml_core::{
     apply_carry_step, can_hold_marker, drop_carried, mission_winner, plain_of, playout_seize,
-    read_act_header, sabotage_winner, state_from_json, vp_score_end, vp_score_round, Marker,
+    read_act_header, sabotage_winner, score, state_from_json, vp_score_end, vp_score_round, Marker,
     ProfileCache,
 };
 use serde_json::{json, Map};
@@ -153,4 +153,15 @@ fn old_marker_record_omits_new_default_fields_on_round_trip() {
     let mut cache = ProfileCache::new(header.profiles);
     let loaded = state_from_json(&out.to_string(), &mut cache, &mut None).expect("round trip");
     assert_eq!(plain_of(&loaded).to_string(), out.to_string());
+}
+
+#[test]
+fn threatened_enemy_carrier_loses_relic_control_probability() {
+    const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","objectives":[{"pos":[0,0,0],"owner":2}],"markers_meta":[{"carry":true,"carried_by":0}],"units":{"p2_0_a":{"player":2,"alive":2,"positions":[[0,0,0],[0.02,0,0]],"radii":[0.02,0.02],"wounds":[1,1]}}}"#;
+    let header = read_act_header(HEADER).expect("header");
+    let mut cache = ProfileCache::new(header.profiles);
+    let st = state_from_json(PLAIN, &mut cache, &mut None).expect("state");
+    assert_eq!(score(&st, 1, &[]), 0.0);
+    assert_eq!(score(&st, 1, &[1.0]), 0.5);
+    assert_eq!(score(&st, 2, &[1.0]), 0.5);
 }

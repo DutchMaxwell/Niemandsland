@@ -110,6 +110,26 @@ def test_carry_step_and_drop_use_capture_index_and_base_edge():
     assert abs(dropped.plain()["objectives"][0]["pos"][0] - 0.0854) < 1e-9
 
 
+def test_threatened_enemy_carrier_matches_table_hand_score():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    carrier = next(i for i, u in enumerate(plain["units"].values()) if u["player"] == 2)
+    for i, u in enumerate(plain["units"].values()):
+        u.update(alive=0, positions=[], radii=[], wounds=[])
+        if i == carrier:
+            u.update(alive=2, positions=[[0, 0, 0], [0.02, 0, 0]],
+                     radii=[0.02, 0.02], wounds=[1, 1], shaken=False)
+    plain["objectives"] = [{"pos": [0, 0, 0], "owner": 2}]
+    plain["markers_meta"] = [{"carry": True, "carried_by": carrier}]
+    state = core.state_of(plain)
+    assert core.score_hand_incoming(state, 1, [0.0] * state.units) == 0.0
+    incoming = [0.0] * state.units
+    incoming[carrier] = 1.0
+    assert core.score_hand_incoming(state, 1, incoming) == 0.5
+    assert core.score_hand_incoming(state, 2, incoming) == 0.5
+
+
 def close(a, b):
     return abs(float(a) - float(b)) <= EPS
 
