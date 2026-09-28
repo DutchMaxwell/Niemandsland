@@ -171,6 +171,11 @@ var show_deployment_zones := false
 # Mission objectives - positions stored in 1" coordinates (Vector2 for precision)
 var mission_objectives: Array[Vector2] = []  # Positions in inches
 var objectives_editing := false  # Whether we're in objective placement mode
+var relic_drop_active := false
+var relic_drop_centre := Vector2.ZERO
+var relic_drop_radius_in := 0.0
+signal relic_drop_chosen(world_pos: Vector3)
+signal relic_drop_refused
 
 # Signal to notify terrain_overlay of objectives changes
 signal objectives_changed(objectives: Array)
@@ -1066,6 +1071,11 @@ func _on_symmetry_toggled(enabled: bool) -> void:
 
 
 func _on_close_pressed() -> void:
+	if relic_drop_active:
+		relic_drop_active = false
+		layout_closed.emit()  # closing this prompt keeps the deterministic default
+		hide()
+		return
 	# Send final update to 3D view before closing
 	_emit_layout_update()
 	# Reset zoom and pan for next open
@@ -1612,6 +1622,17 @@ func _is_valid_inch_pos(inch_pos: Vector2) -> bool:
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
+	if relic_drop_active:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			_on_close_pressed()
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var local_click: Vector2 = grid_container.get_global_transform_with_canvas().affine_inverse() * event.position
+			if Rect2(Vector2.ZERO, grid_container.size).has_point(local_click):
+				try_relic_drop(_get_inch_at_screen_pos(event.position, false))
+				get_viewport().set_input_as_handled()
+			return
 
 	# Check if mouse is over the grid container (for zoom/pan to work within container bounds)
 	var container_rect = Rect2(Vector2.ZERO, grid_container.size)
@@ -2523,7 +2544,7 @@ func _find_nearest_boundary_snap_point(_screen_pos: Vector2) -> Dictionary:
 
 ## Convert screen position to 1" coordinates (rounded to nearest inch for fallback)
 ## Returns Vector2 (floats) but values are rounded to integers
-func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2:
+func _get_inch_at_screen_pos(screen_pos: Vector2, snap: bool = true) -> Vector2:
 	var grid_dims = _calculate_grid_dimensions()
 	var grid_rect = _get_zoomed_grid_rect()  # Use zoomed rect
 	var center = grid_rect.position + grid_rect.size / 2.0
@@ -2539,7 +2560,8 @@ func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2:
 	var half_inches_y = grid_dims.y * 3.0 / 2.0
 
 	# Get position relative to grid container using proper coordinate transform
-	var local_pos = grid_container.get_local_mouse_position()
+	var local_pos: Vector2 = grid_container.get_local_mouse_position() if snap else \
+		grid_container.get_global_transform_with_canvas().affine_inverse() * screen_pos
 
 	# Reverse rotation
 	var pos_from_center = local_pos - center
@@ -2551,10 +2573,42 @@ func _get_inch_at_screen_pos(screen_pos: Vector2) -> Vector2:
 	)
 
 	# Convert to inch coordinates (round to nearest integer for fallback)
-	var inch_x = round(rotated_pos.x / pixels_per_inch_x + half_inches_x)
-	var inch_y = round(rotated_pos.y / pixels_per_inch_y + half_inches_y)
+	var inch_x = rotated_pos.x / pixels_per_inch_x + half_inches_x
+	var inch_y = rotated_pos.y / pixels_per_inch_y + half_inches_y
+	if snap:
+		inch_x = round(inch_x)
+		inch_y = round(inch_y)
 
 	return Vector2(inch_x, inch_y)
+
+
+## Map Tool's objective coordinate frame is rotated and offset from table-centred world metres.
+func _relic_world_to_inch(pos: Vector3) -> Vector2:
+	var valid := _get_valid_cell_range()
+	var centre := Vector2((valid.position.x + valid.size.x / 2.0) * GRID_SIZE_INCHES,
+		(valid.position.y + valid.size.y / 2.0) * GRID_SIZE_INCHES)
+	return Vector2(pos.x, pos.z).rotated(-deg_to_rad(grid_rotation_degrees)) / 0.0254 + centre
+
+
+func begin_relic_drop(centre: Vector3, base_radius_m: float) -> void:
+	relic_drop_centre = _relic_world_to_inch(centre)
+	relic_drop_radius_in = base_radius_m / 0.0254
+	relic_drop_active = true
+	grid_container.queue_redraw()
+
+
+## Valid clicks are outside the base and at most 1" from its edge; no grid snap is applied.
+func try_relic_drop(inch_pos: Vector2) -> bool:
+	var gap := inch_pos.distance_to(relic_drop_centre) - relic_drop_radius_in
+	if not relic_drop_active or not _is_valid_inch_pos(inch_pos) or gap < -0.001 or gap > 1.001:
+		relic_drop_refused.emit()
+		return false
+	var valid := _get_valid_cell_range()
+	var centre := Vector2((valid.position.x + valid.size.x / 2.0) * GRID_SIZE_INCHES,
+		(valid.position.y + valid.size.y / 2.0) * GRID_SIZE_INCHES)
+	var world := (inch_pos - centre).rotated(deg_to_rad(grid_rotation_degrees)) * 0.0254
+	relic_drop_chosen.emit(Vector3(world.x, 0.0, world.y))
+	return true
 
 
 # ============================================================================
