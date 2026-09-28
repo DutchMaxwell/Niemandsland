@@ -131,6 +131,18 @@ fn objective_p(
     state: &State, statics: &[UnitStatic], obj_index: usize, player: i64, incoming: Incoming,
 ) -> f64 {
     let obj = state.objectives[obj_index];
+    if let Some(marker) = state.markers_meta.get(obj_index) {
+        if marker.carry && marker.carried_by >= 0 {
+            let carrier = marker.carried_by as usize;
+            if carrier < state.units() {
+                let strength: f64 = state.wounds[carrier].iter().map(|&w| w as f64).sum();
+                let holds = if state.alive[carrier] > 0 && !state.shaken[carrier] && strength > 0.0 {
+                    ((strength - threat_of(incoming, carrier)) / strength).clamp(0.0, 1.0)
+                } else { 0.0 };
+                return if state.player[carrier] == player { holds } else { 1.0 - holds };
+            }
+        }
+    }
     let mut mine = 0.0f64;
     let mut theirs = 0.0f64;
     for i in 0..state.units() {
