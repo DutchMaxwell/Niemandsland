@@ -1162,6 +1162,10 @@ pub struct UnitStatic {
     /// Reach", tutorial_board.nml:5423), so the raw-name arm is what makes this
     /// core independent of that expander rather than a second effect.
     pub versatile_reach_charge_in: Option<f64>,
+    /// The charger's own book value for an enemy's attackers-side Rapid
+    /// Charge Mark. The table looks up `Rapid Charge.rush_mod` in the
+    /// CHARGER's faction; this stamp avoids registry I/O in each playout.
+    pub rapid_charge_grant_in: f64,
     /// The Royal Legion family (wave 3, epoch 6) — the class's two live halves
     /// as the twins ship them: `range_bonus_in` (the
     /// `solo_controller.gd:shooting_range_bonus` /
@@ -6373,6 +6377,10 @@ impl UnitStatic {
             } else {
                 None
             },
+            rapid_charge_grant_in: if rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH) {
+                reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Rapid Charge")
+                    .map_or(0.0, |e| e.param_f("rush_mod", 0.0))
+            } else { 0.0 },
             reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artillery"),
             hit_and_run_active: unit_rule_active(reg, p, "Hit & Run")
                 || unit_rule_active(reg, p, "Guerrilla")

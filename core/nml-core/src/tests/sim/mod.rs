@@ -1748,6 +1748,7 @@ mod place_d3;
 mod precision_debuff;
 mod plain_moves;
 mod quick_shot;
+mod rapid_charge_mark;
 mod reckless_piercing;
 mod reposition_artillery;
 mod retaliate;
