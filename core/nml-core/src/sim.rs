@@ -1586,7 +1586,10 @@ pub(crate) fn teleport_beat(
     let mut shot = dice.map(|(_, sh)| &mut **sh);
     if !rule_on(seams.rules_epoch, EPOCH_8_PLANNER_MENU) || next.alive[si] <= 0 { return false; }
     let Some(spec) = statics[next.roster.profile[si]].teleport.as_ref() else { return false; };
-    let cap_in = crate::unit::teleport_cap_in(&spec.name, false);
+    if spec.name == "Teleport" && rule_on(seams.rules_epoch, EPOCH_66_DISTANCE_TRUTH)
+        && action.kind == HOLD { return false; }
+    let rush_cap = rule_on(seams.rules_epoch, EPOCH_66_DISTANCE_TRUTH) && action.kind == RUSH;
+    let cap_in = crate::unit::teleport_cap_in(&spec.name, rush_cap);
     // REPLAY: the record's centroid, no clamp; LIVE: the probe set (the
     // ADVANCE band — a standalone Reposition act has no Rush context).
     let to = match action.teleport {
