@@ -9439,6 +9439,33 @@ static func carry_step(unit_infos: Array, objectives: Array, owners: Array, mark
 	return events
 
 
+## One inch past the carrier's first base edge, toward the nearest opposing model.
+## The first model stays available after destruction, when get_alive_models() is empty.
+static func drop_point(carrier: GameUnit, opponent_units: Array) -> Vector3:
+	if carrier == null or carrier.models.is_empty():
+		return Vector3.ZERO
+	var first := carrier.models[0] as ModelInstance
+	if first == null or first.node == null:
+		return Vector3.ZERO
+	var centre: Vector3 = first.node.global_position
+	var closest := INF
+	var direction := Vector3.RIGHT
+	for opponent in opponent_units:
+		var enemy := opponent as GameUnit
+		if enemy == null:
+			continue
+		for model in enemy.get_alive_models():
+			var target := model as ModelInstance
+			if target.node == null:
+				continue
+			var delta: Vector3 = target.node.global_position - centre
+			delta.y = 0.0
+			if delta.length_squared() < closest and delta.length_squared() > 0.000001:
+				closest = delta.length_squared()
+				direction = delta.normalized()
+	return centre + direction * (model_base_radius_m(first) + 0.0254)
+
+
 static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array) -> Dictionary:
 	var new_owners: Array = []
 	var changes: Array = []
