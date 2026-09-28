@@ -1938,6 +1938,26 @@ func test_rule_notes_carry_teleport_on_activation() -> void:
 	assert_int((solo.last_report.get("rule_notes", []) as Array).size()).is_equal(0)
 
 
+## A Teleport reposition is a separate before-attack placement. The Rush itself
+## remains 12"; the current activation code incorrectly extends it to 18".
+func test_teleport_reposition_does_not_extend_the_rush_band() -> void:
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	ai.unit_properties["special_rules"] = ["Teleport"]
+	ai.unit_properties["game_system"] = "gf"
+	ai.unit_properties["faction_folder"] = "eternal_dynasty"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_object(solo.activate_next_ai_unit()).is_equal(ai)
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
+	assert_float(ai.models[0].node.global_position.x).is_equal_approx(0.1952, 0.004)
+	assert_float(SoloController.max_activation_advance_bonus_in(ai)).is_equal(3.0)
+
+
 ## NML-938 -- Traversal ("may move through friendly and enemy units") is registry-gated the same way
 ## as Teleport: system+faction scoped via RulesRegistry.unit_rule_active. Goblins field it in
 ## AoF-Skirmish. RED until the mechanics map's `primitive` moves off null (data fix, next step).

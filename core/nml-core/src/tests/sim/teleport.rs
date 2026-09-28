@@ -50,6 +50,30 @@ use super::*;
         .unwrap()
     }
 
+    #[test]
+    fn teleport_hold_is_refused_at_epoch_66_but_ethereal_hold_remains_legal() {
+        let (st, mut statics) = tp_line(crate::acts::EPOCH_66_DISTANCE_TRUTH);
+        let from = geom::centre(&st.positions[0]);
+        let to = [from[0] as f64 + 2.0 * IN2M, from[2] as f64];
+        let act = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None,
+            charge: None, patient: false, split: None, traced: None, teleport: Some(to) };
+        let run = |statics: &[UnitStatic], epoch| {
+            let mut tray = Tray::seeded(11);
+            let mut rng = crate::rng::GodotRng::new(0);
+            resolve_stochastic_tray_on_board(statics, &st, &act,
+                &crate::terrain::Terrain::default(),
+                Seams { rules_epoch: epoch, ..Seams::default() }, &mut rng, &mut tray)
+                .unwrap().0
+        };
+        let old = run(&statics, crate::acts::EPOCH_65_MELEE_TRUTH);
+        let current = run(&statics, crate::acts::EPOCH_66_DISTANCE_TRUTH);
+        assert!(old.teleport_used[0], "old records keep their HOLD teleport");
+        assert!(!current.teleport_used[0], "Teleport cannot fire on HOLD from epoch 66");
+        statics[0].teleport = Some(crate::unit::TeleportSpec { name: "Ethereal".into() });
+        assert!(run(&statics, crate::acts::EPOCH_66_DISTANCE_TRUTH).teleport_used[0],
+            "Ethereal still repositions on HOLD");
+    }
+
     /// (1) a replayed act carrying the record's `teleport` block lands the
     /// formation ON the recorded centroid (the record decides), sets the
     /// latch, and names rule, band cap and landing centroid (rules-must-log).
