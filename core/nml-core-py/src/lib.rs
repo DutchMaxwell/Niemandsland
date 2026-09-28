@@ -1885,6 +1885,20 @@ impl Core {
         (PyState::derived(st), own)
     }
 
+    /// The round-end relic pickup, after seize and before VP booking.
+    fn apply_carry_step(&self, state: PyRef<'_, PyState>, owners: Vec<i64>) -> PyState {
+        let mut st = state.inner.clone();
+        mission::apply_carry_step(&mut st, &owners);
+        PyState::derived(st)
+    }
+
+    /// Return all relics held by a unit to the deterministic R3a drop point.
+    fn drop_carried(&self, state: PyRef<'_, PyState>, unit: usize) -> PyState {
+        let mut st = state.inner.clone();
+        mission::drop_carried(&mut st, unit);
+        PyState::derived(st)
+    }
+
     /// `BattleSim.vp_round_add` battle_sim.gd:332 — 1 VP per controlled marker.
     fn vp_round_add(&self, owners: Vec<i64>, vp: Vec<i64>) -> PyResult<Vec<i64>> {
         let mut out = pair(&vp)?;

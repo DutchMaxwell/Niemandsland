@@ -31,6 +31,7 @@ Run it with the venv that carries the module:
 from __future__ import annotations
 
 import json
+import copy
 import os
 import statistics
 import time
@@ -80,6 +81,33 @@ def core_for(header):
     core = nml_core.load(str(REPO))
     core.set_header(header)
     return core
+
+
+def test_carry_step_and_drop_use_capture_index_and_base_edge():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    first = {1: None, 2: None}
+    for i, (key, unit) in enumerate(plain["units"].items()):
+        side = unit["player"]
+        if first[side] is None:
+            first[side] = (i, key)
+        unit.update(alive=1, positions=[[2.0 + i, 0, 0]], radii=[0.02],
+                    wounds=[1], shaken=False, aircraft=False, ambush_arrived_round=0)
+    carrier, carrier_key = first[1]
+    enemy, enemy_key = first[2]
+    plain["units"][carrier_key]["positions"] = [[0.04, 0, 0]]
+    plain["units"][enemy_key]["positions"] = [[0.3, 0, 0]]
+    plain["objectives"] = [{"pos": [0, 0, 0], "owner": 0}]
+    plain["markers_meta"] = [{"carry": True, "carried_by": -1}]
+    state, owners = core.playout_seize(core.state_of(plain), [0])
+    assert owners == [1]
+    carried = core.apply_carry_step(state, owners)
+    assert carried.plain()["markers_meta"][0]["carried_by"] == carrier
+    assert carried.plain()["objectives"][0]["pos"] == [0.04, 0, 0]
+    dropped = core.drop_carried(carried, carrier)
+    assert dropped.plain()["markers_meta"][0].get("carried_by", -1) == -1
+    assert abs(dropped.plain()["objectives"][0]["pos"][0] - 0.0854) < 1e-9
 
 
 def close(a, b):
