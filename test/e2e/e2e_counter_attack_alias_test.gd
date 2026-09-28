@@ -119,3 +119,24 @@ func test_unit_without_counter_strikes_in_the_normal_slot() -> void:
 	await _main._solo_melee_strike_phase(striker, foe, false, NON_COUNTER)
 	assert_str(_log_text()).contains("strikes with Rusty Blades")
 	await E2EBoot.settle(get_tree())
+
+
+## Impact(3) x two charging models starts at six dice. Two Counter-Attack defenders
+## strip one each; the actual charge tray therefore rolls four.
+func test_counter_attack_unit_cuts_impact_dice() -> void:
+	var charger := E2EBoot.make_unit(_main, 2, "Charger", [Vector3.ZERO, Vector3(0, 0, INCH)])
+	charger.unit_properties["special_rules"] = ["Impact(3)"]
+	var defender := E2EBoot.make_unit(_main, 1, "Rat Pack", [Vector3(0.5 * INCH, 0, 0),
+		Vector3(0.5 * INCH, 0, INCH)])
+	defender.unit_properties["game_system"] = "aof"
+	defender.unit_properties["faction_folder"] = "ratmen"
+	defender.unit_properties["special_rules"] = ["Counter-Attack"]
+	_main.opr_army_manager.game_units[charger.unit_id] = charger
+	_main.opr_army_manager.game_units[defender.unit_id] = defender
+	assert_int(SoloController.counter_models_of(defender)).is_equal(2)
+	assert_int(AiCombatMath.impact_total_dice(3, 2, SoloController.counter_models_of(defender))).is_equal(4)
+	_main.seed_tray_rng(7)
+	await _main._solo_charge_impact(charger, defender, false)
+	assert_str(_log_text()).contains("Counter: -2 Impact dice")
+	assert_str(_log_text()).contains("Impact(3) rolls 4 dice")
+	await E2EBoot.settle(get_tree())

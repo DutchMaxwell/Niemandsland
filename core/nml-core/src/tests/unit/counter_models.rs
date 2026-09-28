@@ -44,3 +44,21 @@ use super::*;
             "epoch 12 replays the inert port: the Impact cut reads 0"
         );
     }
+
+    #[test]
+    fn counter_attack_unit_cuts_two_impact_dice_from_epoch_65() {
+        let mut p: Profile = serde_json::from_str(r#"{"unit_id":"counter_alias","name":"Counter-Attack"}"#).unwrap();
+        p.game_system = "aof".into();
+        p.faction_folder = "ratmen".into();
+        p.special_rules = vec!["Counter-Attack".into()];
+        p.model_count = 2;
+        p.wounds_max = vec![1, 1];
+        let mut reg = Registries::new(&repo_root());
+        let new = UnitStatic::build_for(&mut reg, &p, crate::acts::EPOCH_65_MELEE_TRUTH);
+        assert_eq!(new.ctx.counter_models, 2, "both printed Counter-Attack models deny Impact");
+        assert_eq!(new.ctx.counter_impact_per_model, Some(1), "the alias entry supplies the reduction");
+        assert_eq!(crate::combat::impact_total_dice(3, 2,
+            new.ctx.counter_models * new.ctx.counter_impact_per_model.unwrap_or(1)), 4);
+        let old = UnitStatic::build_for(&mut reg, &p, crate::acts::EPOCH_64_DEPLOY_LARGE_RESPOT);
+        assert_eq!(old.ctx.counter_models, 0, "old records keep the weapon-only read");
+    }

@@ -8297,10 +8297,10 @@ static func counter_models_of(unit: GameUnit) -> int:
 		var alive: int = member.get_alive_count()
 		if alive <= 0:
 			continue
-		if member.has_special_rule("Counter"):
-			# The per-model Impact cut is the entry's param (dead-parameter fold, twin of #1006);
-			# the shipped 1 replays the recorded "-1 per model" byte-identically.
-			total += alive * int(RulesRegistry.unit_param(member, "Counter", "impact_reduction_per_model", 1))
+		var unit_counter: Array = RulesRegistry.unit_rules_of_primitive(member, "Counter")
+		if not unit_counter.is_empty():
+			var entry := unit_counter[0] as Dictionary
+			total += alive * int((entry.get("params", {}) as Dictionary).get("impact_reduction_per_model", 1))
 			continue
 		var weapons: Array = []
 		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
