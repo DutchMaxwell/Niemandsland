@@ -17,6 +17,7 @@ the tool reports the surviving draws instead of pretending the red is total.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -192,3 +193,27 @@ def test_knobs_flag_shipped_reaches_run(monkeypatch):
     monkeypatch.setattr(gate, "run", lambda *a: seen.setdefault("knobs", a[-1]))
     gate.main(["--ref", "/nonexistent", "--knobs", "shipped"])
     assert seen["knobs"] == "shipped"
+
+
+# ------------------------------------------------- --mission, wave C gate C9.6 ---
+
+
+def test_vp_rounds_holds_the_twins_ledger_against_the_tables_round_by_round():
+    table = [{"post": {"vp": [1, 0]}}, {"post": {"vp": [2, 1]}}]
+    assert gate.vp_rounds(table, [{"vp": [1, 0]}, {"vp": [2, 2]}]) == (1, 2)
+    assert gate.vp_rounds(table, [{"vp": [1, 0]}]) == (1, 2), "a round the twin never reached parts"
+
+
+def test_mission_refusals_names_every_game_stamped_otherwise(tmp_path):
+    for name, stamp in (("a", "relic_hunt"), ("b", "duel")):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "arena_x.json").write_text(json.dumps({"mission": {"name": stamp}}))
+    assert gate.mission_refusals(tmp_path, ["a", "b"], "relic_hunt") == ["b (duel)"]
+    assert gate.mission_refusals(tmp_path, ["a", "b"], None) == []
+
+
+def test_mission_flag_reaches_run(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(gate, "run", lambda *a: seen.setdefault("mission", a[-2]))
+    gate.main(["--ref", "/nonexistent", "--mission", "relic_hunt"])
+    assert seen["mission"] == "relic_hunt"
