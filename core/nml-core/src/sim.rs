@@ -3957,7 +3957,7 @@ fn sighted_profiles_of(
 ) {
     sc.keep.clear();
     sc.attacks.clear();
-    let blockers = sight::blockers_of(state, mi, ti);
+    let blockers = sight::blockers_of(state, mi, ti, sc.rules_epoch);
     let def = &statics[state.roster.profile[ti]].ctx;
     // WAVE 3 MARK CONSUMERS (`acts::rule_on`, frozen at `EPOCH_6_TABLE_RULES`):
     // the two enemy-side grant names the pre-attack pick already records on

@@ -48,6 +48,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 
@@ -453,11 +454,19 @@ pub fn unit_height_m(state: &State, i: usize) -> f64 {
 /// heroes never block (p.5: you always see through your own unit and can always
 /// see the target); a unit still in Ambush reserve is off-table and blocks
 /// nothing (`dormant`).
-pub fn blockers_of(state: &State, from: usize, to: usize) -> Vec<Blocker> {
+pub fn blockers_of(state: &State, from: usize, to: usize, rules_epoch: u32) -> Vec<Blocker> {
     let mut excluded = HashSet::new();
     for &u in &[from, to] {
         excluded.insert(u);
         excluded.extend(state.attached[u].iter().copied());
+        // D10: a named endpoint can itself be a joined hero. Its host and
+        // siblings belong to the same unit and cannot block its sight line.
+        if rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH) {
+            if let Some(host) = state.attached_to[u] {
+                excluded.insert(host);
+                excluded.extend(state.attached[host].iter().copied());
+            }
+        }
     }
     let mut out = Vec::new();
     for i in 0..state.units() {
@@ -523,7 +532,7 @@ pub const UNBOUNDED_RANGE_IN: f64 = 9999.0;
 /// ANY alive model of `i` with a sight line to ANY alive model of `j`, terrain
 /// volumes and every other unit's bases included, the range half switched off.
 pub fn unit_sees(state: &State, zones: &[Zone], i: usize, j: usize) -> bool {
-    let blockers = blockers_of(state, i, j);
+    let blockers = blockers_of(state, i, j, CURRENT_RULES_EPOCH);
     sighted_count(state, zones, &blockers, i, j, UNBOUNDED_RANGE_IN, false) > 0
 }
 
@@ -578,9 +587,12 @@ mod tests {
         st.positions[1] = vec![at(0.0, 0.0)];
         st.positions[0] = vec![at(0.0, 6.0)];
         st.positions[2] = vec![at(0.0, 12.0)];
-        let blockers = blockers_of(&st, 1, 2);
+        let old = blockers_of(&st, 1, 2, 65);
+        assert!(!has_los(&cyl(0.0, 0.0, 32.0), &cyl(0.0, 12.0, 32.0),
+            false, &[], &old), "epoch 65 keeps the recorded host blocker");
+        let new = blockers_of(&st, 1, 2, 66);
         assert!(has_los(&cyl(0.0, 0.0, 32.0), &cyl(0.0, 12.0, 32.0),
-            false, &[], &blockers),
+            false, &[], &new),
             "a joined hero's own host is part of the shooter, not a sight blocker");
     }
 
