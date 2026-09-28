@@ -34,8 +34,10 @@ const EDGE_PADDING := 8.0                 # px kept clear between the menu and t
 # the ring and moves the rest (status, management, transport lines) into a second tier — a column of
 # pills beside the ring that the ring's TIER_ID wedge opens. 8 wedges still leave "Shoot" its 39 px.
 const RING_MAX := 8
-const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass", "toggle_activate",
-	"solo_auto_charge", "solo_auto_advance", "solo_auto_rush"]
+# Maintainer D90 = b: Charge/Advance/Rush stay visible on the ring; Spot/Speed Feat/Pass move to the
+# second tier when the ring is full.
+const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_auto_charge", "solo_auto_advance",
+	"solo_auto_rush", "toggle_activate", "solo_spot", "solo_speed_feat", "solo_pass"]
 const TIER_ID := "more"                   # the wedge that opens the second tier; never sent down the action pipe
 
 

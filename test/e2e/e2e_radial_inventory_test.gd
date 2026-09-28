@@ -30,8 +30,10 @@ const WALKERS := ["add_marker", "toggle_fatigued", "toggle_shaken", "toggle_acti
 ## D53 = b: the core verbs a crowded menu keeps on its ring, in PRIORITY order — the ring fills up to
 ## RING_MAX-1 of these before the rest spill to the second tier (radial_menu.gd's own list, mirrored
 ## here so a drift between the two is a test failure, not a silent surprise).
-const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass",
-	"toggle_activate", "solo_auto_charge", "solo_auto_advance", "solo_auto_rush"]
+## D90 = b (maintainer, in chat): Charge/Advance/Rush outrank Spot/Speed Feat/Pass — the three
+## Automodus verbs stay on a crowded ring, the three demoted ones move to "More" instead.
+const RING_VERBS := ["solo_shoot", "solo_fight", "solo_cast", "solo_auto_charge", "solo_auto_advance",
+	"solo_auto_rush", "toggle_activate", "solo_spot", "solo_speed_feat", "solo_pass"]
 const TIER_WEDGE := "more"
 const RING_MAX := 8
 
@@ -476,8 +478,8 @@ func test_a_crowded_menu_keeps_its_verbs_on_the_ring_and_the_rest_in_a_second_ti
 	_menu().close()
 	await _runner.simulate_frames(2)
 	# The crowded hero: at most RING_MAX wedges. Its 10 ring-tagged verbs exceed the RING_MAX-1 cap, so
-	# the three Automodus verbs (last in RING_VERBS' priority order) spill to the second tier — the
-	# pre-existing 7 verbs keep the ring seats they always had.
+	# Spot/Speed Feat/Pass (last in RING_VERBS' priority order under D90 = b) spill to the second tier —
+	# Shoot/Fight/Cast/Charge/Advance/Rush/Activate keep the ring seats.
 	await _open(hero)
 	var ring := _ids()
 	if ring.size() > RING_MAX:
