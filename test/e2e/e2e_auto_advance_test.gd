@@ -56,8 +56,8 @@ func _log_text() -> String:
 	return text
 
 
-func _dist_in(a: GameUnit, b: GameUnit) -> float:
-	return MoveIntent.distance_inches(_main.solo_controller.unit_centre(a), _main.solo_controller.unit_centre(b))
+func _dist_in(actor: GameUnit, target_start: Vector3) -> float:
+	return MoveIntent.distance_inches(actor.models[0].node.global_position, target_start)
 
 
 ## Bystanders so the AI's one owed reply doesn't exhaust both sides at once — a 1v1 fixture's round
@@ -71,10 +71,11 @@ func test_advance_out_of_range_closes_in_and_fires(timeout := 60000) -> void:
 	_bystanders()
 	var shooter := _shooter(1, "Riflemen", Vector3.ZERO, 12)
 	var enemy := _shooter(2, "Foe", Vector3(14.0 * INCH, 0, 0), 12)
+	var target_start: Vector3 = enemy.models[0].node.global_position
 	enemy.is_activated = true   # stays put — Watchers is the AI's eligible reply, not Foe itself
 	await _main._run_player_intent(shooter, AiDecision.Action.ADVANCE, enemy)
 	await E2EBoot.settle(get_tree())
-	assert_float(_dist_in(shooter, enemy)).is_less_equal(12.0)
+	assert_float(_dist_in(shooter, target_start)).is_less_equal(12.0)
 	var text := _log_text()
 	assert_str(text).contains("Auto:")
 	assert_str(text) \
@@ -87,15 +88,11 @@ func test_advance_already_in_range_kites_back_and_still_fires(timeout := 60000) 
 	_bystanders()
 	var shooter := _shooter(1, "Riflemen", Vector3.ZERO, 12)
 	var enemy := _shooter(2, "Foe", Vector3(5.0 * INCH, 0, 0), 12)
+	var target_start: Vector3 = enemy.models[0].node.global_position
 	enemy.is_activated = true   # stays put — Watchers is the AI's eligible reply, not Foe itself
 	await _main._run_player_intent(shooter, AiDecision.Action.ADVANCE, enemy)
-	# _solo_animate_move glides the kite step on a REAL SceneTreeTimer (measured wall-clock, not
-	# frame-based) — under CPU pressure from other lanes on this shared box, gdUnit's own coroutine
-	# scheduler occasionally needs more than the standard 4-frame settle to catch the already-fired
-	# timeout and apply the model's final position. More frames, not a fixed sleep, keeps this a
-	# real-condition wait rather than a guessed duration.
-	await E2EBoot.settle(get_tree(), 30)
-	var dist := _dist_in(shooter, enemy)
+	await E2EBoot.settle(get_tree())   # activation teardown; the awaited intent completed the glide
+	var dist := _dist_in(shooter, target_start)
 	assert_float(dist) \
 		.override_failure_message("the kite did not step the shooter away (dist=%.2f\")" % dist) \
 		.is_greater(5.0)
