@@ -7792,7 +7792,7 @@ mod d6a_tests {
 
 #[cfg(test)]
 #[path = "tests/sim/mod.rs"]
-mod tests;
+pub(crate) mod tests;
 
 /// NML-1157 — HERO-LAST: a combat intent aimed at a JOINED HERO resolves to its
 /// HOST (`main._solo_combat_unit` :8452, GF v3.5.1 p.14). The port aimed at the

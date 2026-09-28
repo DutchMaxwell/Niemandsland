@@ -570,6 +570,20 @@ mod tests {
         Blocker { cyl: cyl(x_in, z_in, base_mm), unit, aircraft: false }
     }
 
+    #[test]
+    fn attached_hero_sees_through_its_own_host() {
+        let mut st = crate::sim::tests::four_unit_line();
+        // Unit 1 is the hero attached to host 0. The host stands directly
+        // between that hero and target 2; target's hero 3 is exempt already.
+        st.positions[1] = vec![at(0.0, 0.0)];
+        st.positions[0] = vec![at(0.0, 6.0)];
+        st.positions[2] = vec![at(0.0, 12.0)];
+        let blockers = blockers_of(&st, 1, 2);
+        assert!(has_los(&cyl(0.0, 0.0, 32.0), &cyl(0.0, 12.0, 32.0),
+            false, &[], &blockers),
+            "a joined hero's own host is part of the shooter, not a sight blocker");
+    }
+
     /// `VolumetricLos.BASE_HEIGHT_TABLE` — the rows, the clamps and one
     /// interpolation between rows.
     #[test]
