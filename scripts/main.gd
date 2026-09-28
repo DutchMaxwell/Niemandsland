@@ -2670,11 +2670,7 @@ func _solo_apply_mission_if_chosen() -> void:
 		return
 	var mission := MissionCatalog.get_mission(_solo_mission_id)
 	var mk: Dictionary = mission.get("markers", {})
-	var mmeta: Array = []
-	if bool(mk.get("owned", false)):
-		for mi in range(int(mk.get("count", 2))):
-			mmeta.append({"owned_by": mi + 1, "destructible": bool(mk.get("destructible", false)),
-				"destroyed": false, "destroyed_seq": 0})
+	var mmeta: Array = SoloController.marker_metadata(mk)
 	SoloController.mission_reset(str(mission.get("scoring", "end")), (mission.get("vp", {}) as Dictionary), mmeta)
 	if terrain_overlay != null and table != null:
 		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))

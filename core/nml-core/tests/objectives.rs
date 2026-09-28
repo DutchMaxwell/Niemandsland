@@ -1,7 +1,7 @@
 //! D8a — the Rust objective generator against Godot's own output.
 //!
 //! `tools/objective_fixture.gd` plays `ObjectiveLayout.generate` for 50 layout seeds
-//! x 3 missions on one pinned board and writes every layout. Nothing here is
+//! x 5 missions on one pinned board and writes every layout. Nothing here is
 //! hand-written: a disagreement in the count roll, the roll-off, the draw order, the
 //! lattice bounds, the 9" test, the zone polygons or the impassable-cell lookup shows
 //! up as a mismatching case.
@@ -41,7 +41,7 @@ fn rust_reproduces_every_godot_layout() {
     let zones = zones_of(&f);
     let (w, d) = (f["table_w_in"].as_f64().unwrap(), f["table_d_in"].as_f64().unwrap());
     let cases = f["cases"].as_array().unwrap();
-    assert_eq!(cases.len(), 150, "fixture shape changed");
+    assert_eq!(cases.len(), 250, "fixture shape changed");
     let mut checked = 0;
     for c in cases {
         let seed = c["layout_seed"].as_i64().unwrap();
@@ -70,7 +70,7 @@ fn rust_reproduces_every_godot_layout() {
         assert_eq!(got.placed_by, want_by, "placed_by: {label}");
         checked += 1;
     }
-    assert_eq!(checked, 150);
+    assert_eq!(checked, 250);
 }
 
 /// Every marker of every fixture layout satisfies the book, checked independently of
