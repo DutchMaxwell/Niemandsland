@@ -15322,6 +15322,7 @@ func _on_save_completed(path: String) -> void:
 ## Load completed callback
 func _on_load_completed(object_count: int) -> void:
 	print("Game loaded: %d objects" % object_count)
+	_solo_rebind_carried_after_load()
 	_update_round_button()  # restored round may differ from 1
 	# A loaded battle spawns no army_spawned signal, so the unit strip was only ever built on a fresh
 	# spawn and stayed empty after a save-load (UI handoff finding 4). Rebuild it from the restored units.
@@ -15336,6 +15337,28 @@ func _on_load_completed(object_count: int) -> void:
 	# Sync to multiplayer clients if hosting
 	if network_manager.is_host and network_manager.connected_peers.size() > 0:
 		_sync_loaded_state_to_clients()
+
+
+## The saved marker metadata arrives before load_completed; the GameUnit model nodes exist now.
+func _solo_rebind_carried_after_load() -> void:
+	if terrain_overlay == null or opr_army_manager == null:
+		return
+	var rebound := false
+	for i in range(SoloController.mission_markers.size()):
+		var unit_id := str((SoloController.mission_markers[i] as Dictionary).get("carried_by", ""))
+		if unit_id.is_empty():
+			continue
+		var carrier := opr_army_manager.get_game_unit_by_id(unit_id) as GameUnit
+		if carrier == null or carrier.models.is_empty():
+			continue
+		var first := carrier.models[0] as ModelInstance
+		if first == null or first.node == null:
+			continue
+		terrain_overlay.set_objective_position(i, first.node.global_position)
+		terrain_overlay.set_objective_carried(i, true)
+		rebound = true
+	if rebound:
+		_solo_sync_relic_map()
 
 
 ## Load failed callback

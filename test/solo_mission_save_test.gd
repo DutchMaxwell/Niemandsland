@@ -98,6 +98,16 @@ func test_restored_counters_are_integers_again() -> void:
 	assert_int(typeof(SoloController.mission_vp_memo.get("first_seizer"))).is_equal(TYPE_INT)
 
 
+func test_carried_marker_metadata_round_trips_without_a_version_bump() -> void:
+	var sm := _save_mgr()
+	SoloController.mission_reset("end", {}, [{"carry": true, "carried_by": "unit-7"}])
+	var wire := _wire(sm)
+	SoloController.mission_reset("end", {})
+	sm._deserialize_game_state(wire)
+	assert_bool(bool(_marker(0).get("carry", false))).is_true()
+	assert_str(str(_marker(0).get("carried_by", ""))).is_equal("unit-7")
+
+
 # === A load REPLACES the state; a save without mission data is today's behaviour ==================
 
 func test_a_save_without_mission_data_resets_the_statics() -> void:
