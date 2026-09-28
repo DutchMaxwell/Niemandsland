@@ -725,6 +725,27 @@ func test_seize_shaken_units_neither_seize_nor_contest() -> void:
 	assert_array(vs["owners"]).is_equal([2])
 
 
+func test_seize_keeps_a_carried_marker_with_its_carrier() -> void:
+	# NML-1010 wave C, R1a on the live table: the carrier stands 20" away, an enemy sits on the
+	# spot where the relic was picked up and no friend is near — the marker stays with the carrier.
+	var carrier := _info(1, [Vector3(0.508, 0, 0)])
+	carrier["unit_id"] = "u_carrier"
+	var res := SoloController.seize_objectives([carrier, _info(2, [Vector3(0.02, 0, 0)])],
+		[Vector3(0, 0, 0)], [1], [{"carry": true, "carried_by": "u_carrier"}])
+	assert_array(res["owners"]).is_equal([1])
+	assert_int((res["changes"] as Array).size()).is_equal(0)
+
+
+func test_seize_rings_a_carried_marker_once_its_carrier_is_shaken() -> void:
+	# The carrier's hold ends with its steadiness (BattleSim.playout_seize :365-367): the ring
+	# test decides again, and the enemy on the spot takes it.
+	var carrier := _info(1, [Vector3(0.508, 0, 0)], true)
+	carrier["unit_id"] = "u_carrier"
+	var res := SoloController.seize_objectives([carrier, _info(2, [Vector3(0.02, 0, 0)])],
+		[Vector3(0, 0, 0)], [1], [{"carry": true, "carried_by": "u_carrier"}])
+	assert_array(res["owners"]).is_equal([2])
+
+
 # === P8 targeting-input routing (pure SoloController.targeting_route) ===
 # REGRESSION (maintainer field-test): the enemy click in Shoot/Fight targeting did nothing — the handler
 # was fed only from _unhandled_key_input, which never receives mouse events in Godot 4. These tests pin
