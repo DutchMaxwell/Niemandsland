@@ -127,11 +127,13 @@ pub fn presence(
 
 /// `AiMissionEval._objective_p` ai_mission_eval.gd:415-431 — the soft control
 /// ratio at one marker; an unreachable marker keeps its owner (seize rule).
+/// `carry_term` = the C7 carrier branch; only `eval_variant = 2` turns it off.
 fn objective_p(
     state: &State, statics: &[UnitStatic], obj_index: usize, player: i64, incoming: Incoming,
+    carry_term: bool,
 ) -> f64 {
     let obj = state.objectives[obj_index];
-    if let Some(marker) = state.markers_meta.get(obj_index) {
+    if let Some(marker) = state.markers_meta.get(obj_index).filter(|_| carry_term) {
         if marker.carry && marker.carried_by >= 0 {
             let carrier = marker.carried_by as usize;
             if carrier < state.units() {
@@ -183,6 +185,15 @@ fn is_destroy_mission(state: &State) -> bool {
 pub fn score_hand(
     state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
 ) -> f64 {
+    score_hand_carry(state, statics, player, incoming, true)
+}
+
+/// `score_hand` with the C7 carry term switchable — `eval_variant = 2` (wave C
+/// G-AB, plan amendment C9-gate) is `carry_term = false`: a carried marker is
+/// priced by presence like any other, the hand eval exactly as before C7.
+fn score_hand_carry(
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, carry_term: bool,
+) -> f64 {
     if state.objectives.is_empty() {
         return 0.5;
     }
@@ -205,7 +216,7 @@ pub fn score_hand(
                 }
                 continue;
             }
-            let pctrl = objective_p(state, statics, i, player, incoming);
+            let pctrl = objective_p(state, statics, i, player, incoming, carry_term);
             if ob == player {
                 deff = 1.0 - pctrl;
             } else {
@@ -216,7 +227,7 @@ pub fn score_hand(
     }
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        total += objective_p(state, statics, i, player, incoming);
+        total += objective_p(state, statics, i, player, incoming, carry_term);
     }
     total / state.objectives.len() as f64
 }
@@ -312,7 +323,7 @@ fn score_hand_majority(
     let w = (1.0 - left / total_rounds).clamp(0.0, 1.0);
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        let share = objective_p(state, statics, i, player, incoming);
+        let share = objective_p(state, statics, i, player, incoming, true);
         let own = objective_own(state, statics, i, player, incoming);
         total += (1.0 - w) * share + w * own;
     }
@@ -331,6 +342,7 @@ pub fn score_hand_variant(
     match eval_variant {
         0 => score_hand(state, statics, player, incoming),
         1 => score_hand_majority(state, statics, player, incoming),
+        2 => score_hand_carry(state, statics, player, incoming, false),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
@@ -437,6 +449,25 @@ mod tests {
         let via_seam = score_hand_variant(&state, &[], 1, NO_INCOMING, 0);
         assert_eq!(direct, via_seam, "variant 0 must be byte-identical to the direct call");
         assert_eq!(direct, 0.5, "no objectives -> score_hand's trivial branch");
+    }
+
+    /// Wave C G-AB: variant 2 is variant 0 WITHOUT the C7 carry term. My unit
+    /// carries the one relic 0.9 m off the marker's stale spot, the enemy
+    /// stands on that spot. With the term the carrier holds it outright (1.0);
+    /// without it the marker is priced by presence at the spot, where the
+    /// enemy is (< 0.5). With nothing carried, 2 and 0 are the same number.
+    #[test]
+    fn variant_2_prices_a_carried_marker_without_the_carry_term() {
+        let mut st = marker_state(
+            &[U("p1_0_a", 1, 0.9, 6, false, false), U("p2_0_a", 2, 0.02, 6, false, false)],
+            1, 1,
+        );
+        let plain_eq = score_hand_variant(&st, &[], 1, NO_INCOMING, 2)
+            == score_hand_variant(&st, &[], 1, NO_INCOMING, 0);
+        assert!(plain_eq, "nothing carried: variant 2 must equal variant 0");
+        st.markers_meta = vec![crate::state::Marker { carry: true, carried_by: 0, ..Default::default() }];
+        assert_eq!(score_hand_variant(&st, &[], 1, NO_INCOMING, 0), 1.0);
+        assert!(score_hand_variant(&st, &[], 1, NO_INCOMING, 2) < 0.5);
     }
 
     /// One one-model unit for the ledger-row-7 fixtures: id, player, x in
