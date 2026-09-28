@@ -1777,16 +1777,26 @@ pub(crate) fn tray_reckless_piercing(
 /// and none exists. GATED `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`: a
 /// recording fleet is stamping rules_epoch 5 today, and wave 3's rules do not
 /// exist in that recorder — see `acts::EPOCH_6_TABLE_RULES`.
+///
+/// W3-4 (a), `EPOCH_67_MARKERS_BURSTS`: an entry with `place_roll > 0`
+/// ("Piercing Spotter") no longer shares the once-per-GAME `piercing_tag_used`
+/// latch — it rolls the printed die (the Precision Spotter shape,
+/// `tray_precision_markers`) and gates on `State.piercing_spot_round`
+/// (once per ACTIVATION ROUND) instead. Below the gate `place_roll` stays
+/// dead data and every entry, Spotter included, keeps the old once-per-game
+/// reading.
 fn tray_piercing_tag(
     statics: &[UnitStatic],
     next: &mut State,
     si: usize,
     seams: Seams,
+    tray: &mut Tray,
     shot: &mut ShootResult,
 ) {
     if !rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
         return;
     }
+    let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach {
         bearers.extend(next.attached[si].iter().copied());
@@ -1797,7 +1807,12 @@ fn tray_piercing_tag(
         }
         let pb = next.roster.profile[bearer];
         for t in &statics[pb].piercing_tags {
-            if next.piercing_tag_used[bearer] {
+            let spotter = epoch67 && t.place_roll > 0;
+            if spotter {
+                if next.piercing_spot_round[bearer] == next.round {
+                    continue;
+                }
+            } else if next.piercing_tag_used[bearer] {
                 continue;
             }
             let probe = UtilityBuff {
@@ -1811,13 +1826,28 @@ fn tray_piercing_tag(
             let Some(ti) = utility_targets(statics, next, bearer, &probe, seams).into_iter().next() else {
                 continue;
             };
-            next.piercing_tag_used[bearer] = true;
+            if spotter {
+                next.piercing_spot_round[bearer] = next.round;
+                let face = tray.roll(1).first().copied().unwrap_or(1) as i64;
+                if face < t.place_roll {
+                    shot.log.push(format!(
+                        "{}: {} misses the mark on {} (needed {}+)",
+                        t.name,
+                        statics[pb].name,
+                        statics[next.roster.profile[ti]].name,
+                        t.place_roll
+                    ));
+                    continue;
+                }
+            } else {
+                next.piercing_tag_used[bearer] = true;
+            }
             next.piercing_tag_markers[ti] += t.markers;
             // D42 (a), EPOCH_67_MARKERS_BURSTS: "Piercing Target" has no removal
             // clause — the spend half (`piercing_tag_spend`) reads this flag and
             // stands the pool instead of zeroing it. Every other family name
             // still spends whole, so the flag is per-NAME, not per-pool.
-            if t.name == "Piercing Target" && rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS) {
+            if t.name == "Piercing Target" && epoch67 {
                 next.piercing_tag_persistent[ti] = true;
             }
             // Rules-must-log — the table's own line, main.gd:17025-17027.
@@ -7015,10 +7045,11 @@ fn resolve_with(
 
     // --- PIERCING TAG (main.gd:1071, the table's pre-attack slot right after
     // the Utility Buffs + Mind Control), tray path only — see
-    // `tray_piercing_tag`. Dice-free: no tray draw either way (the marker
-    // count comes off the rule's rating).
-    if let Some((_, shot)) = dice.as_mut() {
-        tray_piercing_tag(statics, &mut next, si, seams, shot);
+    // `tray_piercing_tag`. From EPOCH_67_MARKERS_BURSTS a `place_roll` entry
+    // (Piercing Spotter) draws its 4+; every other name is still dice-free
+    // (the marker count comes off the rule's rating).
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_piercing_tag(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- PRECISION MARKERS — TAG/TARGET (main.gd:1089-1090, the pre-attack

@@ -935,6 +935,7 @@ pub(crate) fn state_of(
         piercing_tag_used: vec![false; n],
         piercing_tag_markers: vec![0; n],
         piercing_tag_persistent: vec![false; n],
+        piercing_spot_round: vec![-1; n],
         storm_used: vec![Vec::new(); n],
         feats_used: vec![Vec::new(); n],
         teleport_used: vec![false; n],

@@ -225,3 +225,66 @@ use super::*;
         assert_eq!(shot_a.rolls[0].target, 5, "pooled: Stealth fires off the 12\" centre gap");
         assert_eq!(shot_b.rolls[0].target, 5, "split: must agree with the pooled path");
     }
+
+    /// W3-4 (a), `EPOCH_67_MARKERS_BURSTS` — Piercing Spotter's printed 4+
+    /// (army-book v3.5.3: "Once per activation... roll one die, on a 4+
+    /// place a marker") is no longer dead data: a bare HOLD (nothing draws
+    /// before the pre-attack beat) rolls the tray's first die. Seed 1's
+    /// first face is a 4 (a HIT); seed 3's is a 1 (a MISS, nothing placed,
+    /// the round latch still burns so the bearer cannot retry this round).
+    /// RED before the fix: a "Piercing Spotter" entry has no `place_roll`
+    /// field to read, so this cannot even build on main.
+    #[test]
+    fn piercing_spotter_rolls_its_printed_four_plus_from_epoch_67() {
+        let hold = Action {
+            kind: HOLD, unit: "a".into(), dest: None, shoot: None,
+            charge: None, patient: false, split: None, traced: None, teleport: None,
+        };
+        let s67 = Seams { rules_epoch: 67, ..Seams::default() };
+        let terrain = crate::terrain::Terrain::default();
+
+        // HIT: seed 1, forced 4.
+        let (st, statics) = tag_line_with_roll("Piercing Spotter", 1, 30.0, 4);
+        let mut tray_hit = Tray::seeded(1);
+        let mut rng_hit = crate::rng::GodotRng::new(0);
+        let (hit, shot_hit) = resolve_stochastic_tray_on_board(
+            &statics, &st, &hold, &terrain, s67, &mut rng_hit, &mut tray_hit,
+        )
+        .unwrap();
+        assert_eq!(hit.piercing_tag_markers[2], 1, "a forced 4 places the marker");
+        assert_eq!(hit.piercing_spot_round[0], st.round, "the once-per-activation-round stamp burned");
+        assert!(
+            shot_hit.log.iter().any(|l| l.starts_with("Piercing Spotter: tagger places 1 marker on b")),
+            "rules-must-log: the placement line — got {:#?}",
+            shot_hit.log
+        );
+        assert!(!hit.piercing_tag_used[0], "the Spotter's latch is the ROUND stamp, not the once-per-game flag");
+
+        // MISS: seed 3, forced 1 — no marker, but the round is still spent.
+        let mut tray_miss = Tray::seeded(3);
+        let mut rng_miss = crate::rng::GodotRng::new(0);
+        let (miss, shot_miss) = resolve_stochastic_tray_on_board(
+            &statics, &st, &hold, &terrain, s67, &mut rng_miss, &mut tray_miss,
+        )
+        .unwrap();
+        assert_eq!(miss.piercing_tag_markers[2], 0, "a forced 1 places nothing");
+        assert_eq!(miss.piercing_spot_round[0], st.round, "the roll still spends the activation, hit or miss");
+        assert!(
+            shot_miss.log.iter().any(|l| l == "Piercing Spotter: tagger misses the mark on b (needed 4+)"),
+            "rules-must-log: the miss names itself — got {:#?}",
+            shot_miss.log
+        );
+
+        // Below the gate: no roll, the old once-per-game reading (proven by
+        // the existing `piercing_spotter_places_through_the_same_family_resolver`).
+        let s66 = Seams { rules_epoch: 66, ..Seams::default() };
+        let mut tray66 = Tray::seeded(3); // the epoch-67 MISS seed
+        let mut rng66 = crate::rng::GodotRng::new(0);
+        let (below, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &hold, &terrain, s66, &mut rng66, &mut tray66,
+        )
+        .unwrap();
+        assert_eq!(below.piercing_tag_markers[2], 1, "epoch 66: no roll, the pick just places");
+        assert_eq!(below.piercing_spot_round[0], -1, "epoch 66: the round latch is never touched");
+        assert!(below.piercing_tag_used[0], "epoch 66: the once-per-game flag is still the gate");
+    }

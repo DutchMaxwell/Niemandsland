@@ -136,6 +136,7 @@ use super::*;
                 markers: 1,
                 range_in: 24.0,
                 needs_los: true,
+                place_roll: 0,
             }],
             "the gf/alien_hives entry: 24\"/LOS, the bare name's one marker"
         );
@@ -150,10 +151,10 @@ use super::*;
         assert!(piercing_tags_of("", "alien_hives", 6).is_empty(), "no rule, no stamp");
     }
 
-    /// "Piercing Spotter" (gf/high_elf_fleets): its OWN params (range 30);
-    /// `place_roll` is dead data on the TABLE's own resolver (main.gd:17002
-    /// never rolls) — the AI places the same maxi(rating, 1) marker. RED
-    /// before the fix.
+    /// "Piercing Spotter" (gf/high_elf_fleets): its OWN params (range 30,
+    /// `place_roll` 4). From `EPOCH_67_MARKERS_BURSTS` (batch D, W3-4 a) the
+    /// printed 4+ arms the roll (`sim.rs::tray_piercing_tag`); this stamp
+    /// test only proves the registry read, not the roll itself.
     #[test]
     fn piercing_spotter_stamps_its_own_params_at_epoch_6() {
         assert_eq!(
@@ -163,8 +164,9 @@ use super::*;
                 markers: 1,
                 range_in: 30.0,
                 needs_los: true,
+                place_roll: 4,
             }],
-            "the gf/high_elf_fleets entry: 30\"/LOS, no die roll — the table rolls none either"
+            "the gf/high_elf_fleets entry: 30\"/LOS, the printed 4+ die"
         );
         assert!(
             piercing_tags_of("Piercing Spotter", "high_elf_fleets", 5).is_empty(),
@@ -186,6 +188,7 @@ use super::*;
                 markers: 1,
                 range_in: 18.0,
                 needs_los: true,
+                place_roll: 0,
             }],
             "the gf/custodian_brothers entry: 18\"/LOS, the same pool the volley spends"
         );
