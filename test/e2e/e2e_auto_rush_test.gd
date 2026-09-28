@@ -55,8 +55,8 @@ func _log_text() -> String:
 	return text
 
 
-func _dist_in(a: GameUnit, b: GameUnit) -> float:
-	return MoveIntent.distance_inches(_main.solo_controller.unit_centre(a), _main.solo_controller.unit_centre(b))
+func _dist_in(actor: GameUnit, target_start: Vector3) -> float:
+	return MoveIntent.distance_inches(actor.models[0].node.global_position, target_start)
 
 
 ## Bystanders so the AI's one owed reply doesn't exhaust both sides at once — a 1v1 fixture's round
@@ -70,13 +70,11 @@ func test_plain_rush_closes_the_band_with_no_volley(timeout := 60000) -> void:
 	_bystanders()
 	var runner := _unit(1, "Runners", Vector3.ZERO, 0)
 	var enemy := _unit(2, "Foe", Vector3(20.0 * INCH, 0, 0), 0)
+	var target_start: Vector3 = enemy.models[0].node.global_position
 	enemy.is_activated = true   # stays put — Watchers is the AI's eligible reply, not Foe itself
 	await _main._run_player_intent(runner, AiDecision.Action.RUSH, enemy)
-	# _solo_animate_move glides on a real SceneTreeTimer (wall-clock, not frame-based) — under this
-	# shared box's CPU pressure gdUnit's scheduler occasionally needs more than 4 frames to catch an
-	# already-fired timeout (see e2e_auto_advance_test.gd, same fix).
-	await E2EBoot.settle(get_tree(), 30)
-	assert_float(_dist_in(runner, enemy)).is_equal_approx(8.0, 0.5)   # 20" - the 12" Rush band
+	await E2EBoot.settle(get_tree())   # activation teardown; the awaited intent completed the glide
+	assert_float(_dist_in(runner, target_start)).is_equal_approx(8.0, 0.5)   # 20" - the 12" Rush band
 	var text := _log_text()
 	assert_str(text).contains("Auto:")
 	assert_str(text).contains("rushes")
@@ -94,10 +92,11 @@ func test_quick_shot_bearer_fires_after_its_rush(timeout := 60000) -> void:
 	# (it is faction-scoped in the gf rules mechanics map, not a common rule).
 	runner.unit_properties["faction_folder"] = "goblin_reclaimers"
 	var enemy := _unit(2, "Foe", Vector3(20.0 * INCH, 0, 0), 0)
+	var target_start: Vector3 = enemy.models[0].node.global_position
 	enemy.is_activated = true   # stays put — Watchers is the AI's eligible reply, not Foe itself
 	await _main._run_player_intent(runner, AiDecision.Action.RUSH, enemy)
-	await E2EBoot.settle(get_tree(), 30)
-	assert_float(_dist_in(runner, enemy)).is_equal_approx(8.0, 0.5)
+	await E2EBoot.settle(get_tree())
+	assert_float(_dist_in(runner, target_start)).is_equal_approx(8.0, 0.5)
 	var text := _log_text()
 	assert_str(text).contains("rushes")
 	assert_str(text) \

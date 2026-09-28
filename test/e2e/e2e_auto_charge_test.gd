@@ -81,6 +81,9 @@ func _log_text() -> String:
 func test_a_legal_charge_reaches_contact_fights_and_books_the_ai_reply(timeout := 60000) -> void:
 	var attacker := _armed(1, "Chargers", Vector3.ZERO)
 	var enemy := _armed(2, "Foe", Vector3(8.0 * INCH, 0, 0))
+	var attacker_start: Vector3 = attacker.models[0].node.global_position
+	var target_start: Vector3 = enemy.models[0].node.global_position
+	var start_gap := MoveIntent.distance_inches(attacker_start, target_start)
 	# A bystander per side, far from the fight: with only one unit per side the AI's answering
 	# activation would exhaust BOTH sides at once and the round auto-advances one frame later,
 	# resetting is_activated before this test can read it — an artefact of a 1v1 fixture, not
@@ -89,6 +92,13 @@ func test_a_legal_charge_reaches_contact_fights_and_books_the_ai_reply(timeout :
 	_armed(2, "Watchers", Vector3(-50.0 * INCH, 0, 0))
 	await _main._run_player_intent(attacker, AiDecision.Action.CHARGE, enemy)
 	await E2EBoot.settle(get_tree())
+	assert_float(MoveIntent.distance_inches(attacker.models[0].node.global_position, attacker_start)) \
+		.override_failure_message("the charger never completed its move toward the target") \
+		.is_greater(1.0)
+	var end_gap := MoveIntent.distance_inches(attacker.models[0].node.global_position, target_start)
+	assert_float(end_gap) \
+		.override_failure_message("the charger ended no closer to the target's recorded position") \
+		.is_less(start_gap)
 	var gap: float = _main.solo_controller.nearest_melee_gap_in(attacker, enemy)
 	# Consolidation (GF v3.5.1 p.9) steps the charger back exactly 1" when neither side is destroyed,
 	# so the FINAL gap settles at MELEE_ENGAGE_IN itself (a hair of float rounding included) — OR one
