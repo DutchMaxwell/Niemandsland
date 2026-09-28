@@ -13,6 +13,24 @@
         assert_eq!(burned.state_i64(), straight.state_i64(), "and only one");
     }
 
+    /// NML-1100 (D76/W3-6 a), `EPOCH_67_MARKERS_BURSTS`: from the gate a
+    /// zero-die roll draws NOTHING — the UI-guard-leaked-into-the-rules-path
+    /// burn above is a pre-gate reading only, not a permanent invariant.
+    /// `set_zero_draws` is the same switch `resolve_stochastic_tray_on_board`
+    /// flips per resolve off the record's own epoch — this test flips it
+    /// directly, the twin's own precedent (`a_zero_die_roll_burns_exactly_
+    /// one_draw` above pins the OFF/below-gate default byte-for-byte).
+    #[test]
+    fn from_epoch_67_a_zero_die_roll_draws_nothing() {
+        let mut gated = Tray::seeded(27);
+        gated.set_zero_draws(true);
+        let mut straight = Tray::seeded(27);
+        let zero = gated.roll(0);
+        assert!(zero.is_empty(), "count taken literally: {:?}", zero);
+        assert_eq!(gated.roll(4), straight.roll(4), "no draw burned, so the very next roll reads the stream's first faces");
+        assert_eq!(gated.state_i64(), straight.state_i64());
+    }
+
     /// RED PROOF for the rule above: the same two trays with `count` taken
     /// literally. The zero-die roll then costs nothing and every later face is
     /// off by one draw.

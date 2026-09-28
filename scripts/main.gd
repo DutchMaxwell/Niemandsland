@@ -8070,8 +8070,11 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 		# the global stream cosmetic terrain/prop placement also draws from), then push them through
 		# show_faces() — which fills per_dice_result() and emits roll_finnished synchronously.
 		# ~20× faster at 2000pts, identical uniform 1-6 distribution, deterministic per dice_seed.
+		# NML-1100 (D76/W3-6 a): `count` taken literally — a zero-die roll draws NOTHING off the
+		# rules-path RNG (the old `maxi(1, …)` was a UI guard leaked into the stream); show_faces([])
+		# already renders an empty tray, its own display-only floor, untouched here.
 		var _inst: Array[int] = []
-		for _di in maxi(1, count):
+		for _di in count:
 			_inst.append(_tray_rng.randi_range(1, 6))
 		dice_roller_control.show_faces(_inst)
 	else:
