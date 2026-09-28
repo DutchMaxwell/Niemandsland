@@ -411,6 +411,14 @@ func test_move_bands_rapid_rush_name_fallback() -> void:
 	assert_int(b["rush"]).is_equal(18)
 
 
+func test_move_bands_rapid_rush_is_rush_only() -> void:
+	var b := _controller().move_bands_for_props({"special_rules": ["Rapid Rush"],
+		"game_system": "gf", "faction_folder": "battle_brothers"})
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(18)
+	assert_int(b["charge"]).is_equal(12)
+
+
 ## Autonomous wave 2026-07-19: Quick (+2/+2), Rapid Advance (+4 Advance only), Swift name-fallback.
 func test_move_bands_quick_and_rapid_advance_fallbacks() -> void:
 	var q := _controller().move_bands_for_props({"special_rules": ["Quick"]})
