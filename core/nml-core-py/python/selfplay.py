@@ -1883,6 +1883,52 @@ def _play_round(
     return state, nxt
 
 
+def _ledger_of(state) -> dict[str, Any]:
+    """The mission ledger a round-end referee carries, read off a CORE state — its
+    canonical int carriers — which is how a replay inherits the recorded game's mission."""
+    p = state.plain()
+    mm = p.get("markers_meta") or []
+    return {"scoring": p.get("scoring") or "end", "vp": list(p.get("vp") or [0, 0]),
+            "vp_flavour": p.get("vp_flavour") or {}, "vp_memo": p.get("vp_memo") or {},
+            "markers_meta": mm, "destroy_seq": list(p.get("destroy_seq") or [0]),
+            "carry": any(m.get("carry") for m in mm)}
+
+
+def _round_end(core, state, owners: list[int], led: dict[str, Any], round_no: int,
+               skip_carry: bool = False):
+    """THE ROUND-END REFEREE, once for `play_game`, `play_from_state` and the wave-C
+    parity gate (tools/mission_referee_gate.py), in the table's order (main.gd
+    `_solo_auto_seize`, then `_solo_book_mission_vp`): seize, carry pickup, an
+    enemy-held owned marker falls, then the mission's VP. Updates `led` in place and
+    returns `(state, owners)`. `skip_carry` exists for the gate's RED only."""
+    state, owners = core.playout_seize(state, owners)
+    if led["carry"] and not skip_carry:
+        state = core.apply_carry_step(state, owners)
+        led["markers_meta"] = state.plain()["markers_meta"]
+    if led["markers_meta"]:  # W3: an enemy-held owned marker falls before scoring
+        led["markers_meta"], owners, led["destroy_seq"] = core.apply_destroy_step(
+            led["markers_meta"], owners, led["destroy_seq"])
+    if led["scoring"] == "round_vp":
+        led["vp"], led["vp_memo"] = core.vp_score_round(
+            owners, led["vp"], led["vp_flavour"], led["vp_memo"], led["markers_meta"])
+        if round_no == ROUNDS:
+            led["vp"] = core.vp_score_end(owners, led["vp"], led["vp_flavour"])
+    elif led["scoring"] == "end":
+        led["vp"] = core.vp_round_add(owners, led["vp"])
+    return state, owners
+
+
+def _verdict(core, owners: list[int], led: dict[str, Any]) -> str:
+    """`_write_result` :700-706: Face-Off is END-scored (the end bonus, then MARKERS
+    decide); every other mission asks `BattleSim.mission_winner`'s own referee."""
+    if led["scoring"] != "end":
+        return core.mission_winner(led["scoring"], owners, led["vp"], led["markers_meta"], 0, 0)
+    led["vp"] = core.vp_end_bonus(owners, led["vp"])
+    p1 = sum(1 for o in owners if o == 1)
+    p2 = sum(1 for o in owners if o == 2)
+    return "draw" if p1 == p2 else ("p1" if p1 > p2 else "p2")
+
+
 def play_from_state(
     core,
     plain: dict[str, Any],
@@ -1910,10 +1956,16 @@ def play_from_state(
     vintage.
 
     Everything from there down is `play_game`'s round loop VERBATIM and shared
-    with it in code, not copied: `_round_start`, `_play_round`,
-    `playout_seize`, `vp_round_add`, `vp_end_bonus`, the marker count and the
-    Face-Off END verdict. Sidecars are off — a gate that judges the RESULT has
-    no use for the counterfactual blocks and they cost more than the game.
+    with it in code, not copied: `_round_start`, `_play_round`, `_round_end`
+    (seize, carry, destroy step, the mission's VP) and `_verdict`. Sidecars are
+    off — a gate that judges the RESULT has no use for the counterfactual blocks
+    and they cost more than the game.
+
+    THE MISSION (wave C gate C9.4) is inherited like the markers below: the
+    recorded state carries the table's `scoring`, `vp`, `vp_flavour`, `vp_memo`,
+    `markers_meta` and `destroy_seq`, and `_ledger_of` reads them back off the
+    core state, so a Capture & Hold recording replays as Capture & Hold and a
+    duel recording (scoring "end", no markers_meta) exactly as before.
 
     `rng` is the game's own stream, `tray` the SECOND one (see `_play_round`);
     `roll_log`, when given, collects the rolls per activation so a caller can
@@ -1951,7 +2003,7 @@ def play_from_state(
     if not markers:
         raise ValueError("the recorded state carries no objectives to play for")
     owners = [int(m.get("owner", 0)) for m in markers]
-    vp = [0, 0]
+    led = _ledger_of(state)
     log: list[dict[str, Any]] = []
     rounds_log: list[dict[str, Any]] = []
     rounds_played = 0
@@ -1964,19 +2016,19 @@ def play_from_state(
             tray=tray, dice_tally=dice_tally, roll_log=roll_log,
             net_player=net_player,
         )
-        state, owners = core.playout_seize(state, owners)
-        vp = core.vp_round_add(owners, vp)
+        state, owners = _round_end(core, state, owners, led, round_no)
         rounds_played = round_no
-        rounds_log.append({"round": round_no, "owners": list(owners), "vp": list(vp)})
-    vp = core.vp_end_bonus(owners, vp)
+        rounds_log.append({"round": round_no, "owners": list(owners), "vp": list(led["vp"])})
+    winner = _verdict(core, owners, led)
     p1 = sum(1 for o in owners if o == 1)
     p2 = sum(1 for o in owners if o == 2)
     return {
-        "winner": "draw" if p1 == p2 else ("p1" if p1 > p2 else "p2"),
+        "winner": winner,
         "objectives": {"p1": p1, "p2": p2, "neutral": len(owners) - p1 - p2},
-        "vp": {"p1": int(vp[0]), "p2": int(vp[1])},
+        "vp": {"p1": int(led["vp"][0]), "p2": int(led["vp"][1])},
         "rounds_played": rounds_played,
         "rounds_log": rounds_log,
+        "markers_meta": led["markers_meta"],
         "planner_positions": log,
     }
 
@@ -2792,9 +2844,8 @@ def play_game(
         state = core.restamp_los(state)
 
     owners = [0] * len(objectives)
-    vp = [0, 0]
-    vp_memo: dict[str, Any] = {}
-    destroy_seq = [0]
+    led = {"scoring": eff_scoring, "vp": [0, 0], "vp_flavour": vp_flavour, "vp_memo": {},
+           "markers_meta": markers_meta, "destroy_seq": [0], "carry": bool(mk_spec.get("carry"))}
     if not arena:
         # The d6 roll-off, P1 winning ties — and BOTH dice are drawn, left first.
         left = rng.randi_range(1, 6)
@@ -2821,34 +2872,17 @@ def play_game(
             pool_value_fn=pool_value_fn, pool_value_w=pool_value_w,
             leaf_value_fn=leaf_value_fn, leaf_value_w=leaf_value_w,
         )
-        state, owners = core.playout_seize(state, owners)
-        if mk_spec.get("carry"):
-            state = core.apply_carry_step(state, owners)
-            markers_meta = state.plain()["markers_meta"]
-        if markers_meta:  # W3: an enemy-held owned marker falls before scoring
-            markers_meta, owners, destroy_seq = core.apply_destroy_step(
-                markers_meta, owners, destroy_seq
-            )
-        if eff_scoring == "round_vp":
-            vp, vp_memo = core.vp_score_round(owners, vp, vp_flavour, vp_memo, markers_meta)
-            if round_no == ROUNDS:
-                vp = core.vp_score_end(owners, vp, vp_flavour)
-        elif eff_scoring == "end":
-            vp = core.vp_round_add(owners, vp)
+        state, owners = _round_end(core, state, owners, led, round_no)
         rounds_played = round_no
-        entry = {"round": round_no, "owners": list(owners), "vp": list(vp)}
+        entry = {"round": round_no, "owners": list(owners), "vp": list(led["vp"])}
         if record_aux:
             entry.update(_aux_alive_wounds(state, profiles))
         rounds_log.append(entry)
-    if eff_scoring == "end":
-        vp = core.vp_end_bonus(owners, vp)
+    winner = _verdict(core, owners, led)
+    vp = led["vp"]
 
     p1 = sum(1 for o in owners if o == 1)
     p2 = sum(1 for o in owners if o == 2)
-    # `_write_result` :700-706: Face-Off is END-scored, MARKERS decide; every
-    # other mission asks `BattleSim.mission_winner`'s own referee.
-    winner = ("draw" if p1 == p2 else ("p1" if p1 > p2 else "p2")) if eff_scoring == "end" \
-        else core.mission_winner(eff_scoring, owners, vp, markers_meta, 0, 0)
     return {
         "schema": 1,
         "board_schema": 5,

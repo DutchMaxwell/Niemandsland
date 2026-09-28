@@ -44,7 +44,9 @@ BANK_DIR = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
 LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
 ARMY1 = LISTS / "robot_legions_1000.json"
 ARMY2 = LISTS / "battle_brothers_1000.json"
-SEED = 27
+# Epoch-65 game rules made seed 27 converge; seed 1 still aims at a joined
+# hero and produces different outcomes with this resolver seam at epoch 66.
+SEED = 1
 GAME = {
     "charge_gate": "off", "hero_attach": "table", "dice": "table",
     "charge_landing": "table", "movement": "rigid", "sighting": "model",
@@ -101,6 +103,16 @@ def test_hero_last_changes_the_game_and_says_so():
         SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None, hero_last=True, **GAME
     )
     assert on["knobs"]["hero_last"] is True
+    units = sp.load_army(ARMY1, 1) + sp.load_army(ARMY2, 2)
+    selections = dict(sp.load_selections(ARMY1, 1))
+    selections.update(sp.load_selections(ARMY2, 2))
+    _, attached_to = sp.derive_attachment(units, selections)
+    joined_heroes = {key for key, host in attached_to.items() if host}
+    assert any(
+        r["action"].get("charge") in joined_heroes
+        or r["action"].get("shoot") in joined_heroes
+        for r in off["planner_positions"]
+    ), "the fixture must aim at a joined hero"
     off_acts = [(r["unit"], r["kind"], r["action"].get("charge"), r["action"].get("shoot"))
                 for r in off["planner_positions"]]
     on_acts = [(r["unit"], r["kind"], r["action"].get("charge"), r["action"].get("shoot"))
