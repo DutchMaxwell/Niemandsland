@@ -839,6 +839,14 @@ func test_sighted_models_gates_per_model_behind_a_blocker() -> void:
 		func(_a: Vector3, _b: Vector3) -> bool: return true)).is_equal(4)
 
 
+func test_sighted_models_range_order_uses_horizontal_distance() -> void:
+	var m := 0.0254
+	var shooters := [Vector3.ZERO]
+	var targets := [Vector3(0, 5 * m, 10 * m), Vector3(0, 0, 11 * m)]
+	assert_int(SoloController.sighted_models(shooters, targets, 10.5 * m,
+		func(_a: Vector3, _b: Vector3) -> bool: return true)).is_equal(1)
+
+
 # === Auto-tail alternation state machine (goal 003 P2 — the maintainer's "how do I proceed?" gap) ===
 
 func test_alternation_next_replies_then_tails_then_ends() -> void:

@@ -628,6 +628,13 @@ mod tests {
         assert_eq!(sighted_models(&shooters, &[], 24.0 * M, |_, _| true), 0);
     }
 
+    #[test]
+    fn sighted_models_range_order_uses_horizontal_distance() {
+        let shooters = [[0.0, 0.0, 0.0]];
+        let targets = [[0.0, 5.0 * M, 10.0 * M], [0.0, 0.0, 11.0 * M]];
+        assert_eq!(sighted_models(&shooters, &targets, 10.5 * M, |_, _| true), 1);
+    }
+
     /// A model of a THIRD unit standing in the line blocks it — and dropping the
     /// blocker list (the RED of B2) opens the same line.
     #[test]
