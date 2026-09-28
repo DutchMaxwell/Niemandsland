@@ -361,6 +361,9 @@ const AI_LISTS_CACHE_DIR := "user://ai_lists_cache"     # offline replay of fetc
 var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
 var _solo_auto_saves: bool = false           # A3 (NML-202): skip _solo_prompt_saves' dialog, roll straight to the tray
 var _solo_batch: bool = false                # headless sweeps: instant (non-physics) dice + zero pacing holds (implies fast)
+var _solo_relic_drop_queue: Array = []
+var _solo_relic_drop_active: Dictionary = {}
+var _solo_relic_drop_gen := 0
 var _solo_dev: bool = false                  # developer mode: render the AI's decision records into the battle log
 ## Per-activation stderr trace of the both-AI arena loop (env NML_AI_TRACE=1) — the ladder tooling's
 ## progress/stall diagnostic for long unattended headless matches. Off by default: zero output in normal play.
@@ -740,6 +743,9 @@ func _ready() -> void:
 	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
 	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
 	map_layout_editor.objectives_changed.connect(_on_objectives_changed)
+	map_layout_editor.relic_drop_chosen.connect(_solo_relic_drop_chosen)
+	map_layout_editor.relic_drop_refused.connect(func() -> void:
+		_show_toast("Place the relic within 1\" of the carrier's base"))
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
 
 	# Initialize Terrain Overlay (on the 3D table)
@@ -2204,7 +2210,7 @@ func _solo_init_arena_from_env() -> void:
 ## exactly this seam). final pays the end bonus exactly once. Logged to the
 ## battle log AND stderr so a silent ledger can never pass for a broken one.
 ## NML-1010 wave C step C2: a carrier that stops being able to hold a marker (Shaken, destroyed)
-## drops it one inch beyond the carrier's base edge toward the nearest opposing unit.
+## drops it. The opposing human may place it within 1" of the base; skip/timeout takes R3a.
 func _solo_drop_carried(gu: GameUnit, reason: String) -> void:
 	if terrain_overlay == null or SoloController.mission_markers.is_empty():
 		return
@@ -2215,15 +2221,24 @@ func _solo_drop_carried(gu: GameUnit, reason: String) -> void:
 		if other != null and int(other.unit_properties.get("player_id", 0)) != carrier_side:
 			opponents.append(other)
 	var drop_pos := SoloController.drop_point(gu, opponents)
+	var human_places := solo_controller != null and carrier_side != solo_controller.human_slot \
+		and not _solo_batch and not _solo_both_ai
 	for i in range(SoloController.mission_markers.size()):
 		var mk: Dictionary = SoloController.mission_markers[i]
 		if bool(mk.get("carry", false)) and String(mk.get("carried_by", "")) == gu.unit_id:
 			mk["carried_by"] = ""
 			terrain_overlay.set_objective_position(i, drop_pos)
 			terrain_overlay.set_objective_carried(i, false)
-			_solo_log_relic_drop({"name": gu.get_name(), "reason": reason,
-				"placer": "P%d" % (3 - carrier_side)})
+			var entry := {"index": i, "name": gu.get_name(), "reason": reason,
+				"centre": (gu.models[0] as ModelInstance).node.global_position,
+				"radius": SoloController.model_base_radius_m(gu.models[0] as ModelInstance),
+				"placer": "P%d" % (3 - carrier_side)}
+			if human_places:
+				_solo_relic_drop_queue.append(entry)
+			else:
+				_solo_log_relic_drop(entry)
 	_solo_sync_relic_map()
+	_solo_next_relic_drop_prompt()
 
 
 func _solo_sync_relic_map() -> void:
@@ -2240,6 +2255,31 @@ func _solo_log_relic_drop(entry: Dictionary) -> void:
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"Relic dropped by %s (%s), placed by %s" % [entry["name"], entry["reason"], entry["placer"]], true)
+
+
+func _solo_next_relic_drop_prompt() -> void:
+	if not _solo_relic_drop_active.is_empty() or _solo_relic_drop_queue.is_empty():
+		return
+	_solo_relic_drop_active = _solo_relic_drop_queue.pop_front()
+	_on_map_layout_pressed()
+	map_layout_editor.begin_relic_drop(_solo_relic_drop_active["centre"], _solo_relic_drop_active["radius"])
+	_show_toast("Place the dropped relic within 1\" of the carrier's base; close or Esc to use default")
+	_solo_relic_drop_gen += 1
+	get_tree().create_timer(20.0).timeout.connect(_solo_relic_drop_timeout.bind(_solo_relic_drop_gen))
+
+
+func _solo_relic_drop_chosen(pos: Vector3) -> void:
+	if _solo_relic_drop_active.is_empty():
+		return
+	terrain_overlay.set_objective_position(int(_solo_relic_drop_active["index"]), pos)
+	_solo_sync_relic_map()
+	_solo_relic_drop_active["placer"] = "P%d" % solo_controller.human_slot
+	map_layout_editor._on_close_pressed()
+
+
+func _solo_relic_drop_timeout(gen: int) -> void:
+	if gen == _solo_relic_drop_gen and not _solo_relic_drop_active.is_empty():
+		map_layout_editor._on_close_pressed()
 
 
 func _solo_book_mission_vp(final: bool) -> void:
@@ -15282,6 +15322,7 @@ func _on_save_completed(path: String) -> void:
 ## Load completed callback
 func _on_load_completed(object_count: int) -> void:
 	print("Game loaded: %d objects" % object_count)
+	_solo_rebind_carried_after_load()
 	_update_round_button()  # restored round may differ from 1
 	# A loaded battle spawns no army_spawned signal, so the unit strip was only ever built on a fresh
 	# spawn and stayed empty after a save-load (UI handoff finding 4). Rebuild it from the restored units.
@@ -15296,6 +15337,28 @@ func _on_load_completed(object_count: int) -> void:
 	# Sync to multiplayer clients if hosting
 	if network_manager.is_host and network_manager.connected_peers.size() > 0:
 		_sync_loaded_state_to_clients()
+
+
+## The saved marker metadata arrives before load_completed; the GameUnit model nodes exist now.
+func _solo_rebind_carried_after_load() -> void:
+	if terrain_overlay == null or opr_army_manager == null:
+		return
+	var rebound := false
+	for i in range(SoloController.mission_markers.size()):
+		var unit_id := str((SoloController.mission_markers[i] as Dictionary).get("carried_by", ""))
+		if unit_id.is_empty():
+			continue
+		var carrier := opr_army_manager.get_game_unit_by_id(unit_id) as GameUnit
+		if carrier == null or carrier.models.is_empty():
+			continue
+		var first := carrier.models[0] as ModelInstance
+		if first == null or first.node == null:
+			continue
+		terrain_overlay.set_objective_position(i, first.node.global_position)
+		terrain_overlay.set_objective_carried(i, true)
+		rebound = true
+	if rebound:
+		_solo_sync_relic_map()
 
 
 ## Load failed callback
@@ -16423,6 +16486,11 @@ func _on_map_layout_closed() -> void:
 	# Reset zoom when closing map layout editor
 	if map_layout_editor and map_layout_editor.has_method("reset_zoom"):
 		map_layout_editor.reset_zoom()
+	if not _solo_relic_drop_active.is_empty():
+		_solo_log_relic_drop(_solo_relic_drop_active)
+		_solo_relic_drop_active = {}
+		call_deferred("_solo_next_relic_drop_prompt")
+		return
 	# Update objectives on 3D terrain when closing
 	if map_layout_editor and map_layout_editor.has_method("get_objectives_for_overlay"):
 		var world_objectives = map_layout_editor.get_objectives_for_overlay()

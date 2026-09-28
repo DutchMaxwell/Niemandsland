@@ -243,6 +243,11 @@ func _draw() -> void:
 	# Draw mission objectives (always shown if any exist)
 	if map_layout.mission_objectives.size() > 0 or map_layout.objectives_editing:
 		_draw_mission_objectives(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
+	if map_layout.relic_drop_active:
+		var centre: Vector2 = map_layout._inch_to_screen_pos(map_layout.relic_drop_centre)
+		var px_per_in: float = (pixels_per_inch_x + pixels_per_inch_y) * 0.5
+		draw_arc(centre, (map_layout.relic_drop_radius_in + 1.0) * px_per_in,
+			0.0, TAU, 64, Color(1.0, 0.85, 0.2), 3.0)
 
 	# Draw table outline (always axis-aligned - represents the actual table)
 	draw_rect(grid_rect, Color.WHITE, false, 3.0)
