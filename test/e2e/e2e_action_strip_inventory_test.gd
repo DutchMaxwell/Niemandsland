@@ -200,6 +200,40 @@ func test_a_long_name_wraps_inside_the_screen(timeout := 120000) -> void:
 	assert_bool(Rect2(Vector2.ZERO, vp).encloses(panel.get_global_rect())).is_true()
 
 
+# === the house look (restyle) =================================================================
+
+## The strip wears the house style alone: a house window (no HudTokens box, no corner brackets), the
+## status line in body text, button 1 the gold primary, button 2 a ghost button, the hint a muted
+## caption, no control with a colour, font size or tint of its own — and the glyphs the call sites put
+## on the buttons are in the font they draw with.
+func test_the_strip_wears_the_house_style(timeout := 120000) -> void:
+	await _show_side_pick([])
+	var panel: PanelContainer = _main._solo_deploy_ui_panel
+	assert_object(panel.theme).is_same(HouseStyle.theme())
+	assert_str(String(panel.theme_type_variation)).is_equal(String(HouseStyle.PANEL_VARIANT))
+	assert_bool(panel.has_theme_stylebox_override(&"panel")).is_false()
+	assert_object(panel.get_node_or_null("HudFrame")).override_failure_message("corner brackets").is_null()
+	assert_str(String(_label(SIDE_TEXT).theme_type_variation)).is_equal(String(HouseStyle.BODY))
+	assert_str(String(_button("Keep my zone").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(_button("Take the other zone").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_str(String(_label(HINT).theme_type_variation)).is_equal(String(HouseStyle.CAPTION))
+	var own: Array = []
+	for n: Node in panel.find_children("*", "Control", true, false):
+		var c := n as Control
+		if c.has_theme_color_override(&"font_color") or c.has_theme_font_size_override(&"font_size") \
+				or c.modulate != Color.WHITE:
+			own.append(c.name)
+	assert_array(own).override_failure_message("own colour / size / tint on %s" % [own]).is_empty()
+	# The call sites' words ("🔥 Fire!" left out: no UI font carries the emoji — today's neither).
+	var font: Font = _button("Keep my zone").get_theme_font(&"font")
+	var lacking: Array = []
+	for t: String in ["✓ Unit placed", "✓ Done — close the phase", "× Cancel attack", "None this round — keep waiting"]:
+		for i in t.length():
+			if t[i] != " " and not font.has_char(t.unicode_at(i)):
+				lacking.append("U+%04X in '%s'" % [t.unicode_at(i), t])
+	assert_array(lacking).override_failure_message("the button font lacks %s" % [lacking]).is_empty()
+
+
 # === the check itself =========================================================================
 
 ## The control check names a control that went missing (the second button hidden).

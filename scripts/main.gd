@@ -2795,8 +2795,7 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		_solo_deploy_ui = CanvasLayer.new()
 		_solo_deploy_ui.layer = 85
 		var panel := PanelContainer.new()
-		panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-		_add_hud_frame(panel)
+		HouseStyle.apply(panel)   # the house window (maintainer D98 = a): tokens from one place, no brackets
 		# Community #159: the box is DRAGGABLE — free top-left positioning instead of the old
 		# bottom-centre anchors (which recomputed offsets every layout and would clobber a drag).
 		# The default spot stays the familiar bottom-centre via _solo_deploy_panel_relayout.
@@ -2809,45 +2808,35 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 			unit_dock.occupied_changed.connect(_solo_deploy_panel_relayout)
 		_solo_deploy_ui_panel = panel
 		_solo_deploy_ui.add_child(panel)
-		var margin := MarginContainer.new()
-		for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-			margin.add_theme_constant_override(side, 12)
-		panel.add_child(margin)
 		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 8)
-		margin.add_child(box)
-		_solo_deploy_ui_label = Label.new()
+		box.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+		panel.add_child(box)
+		_solo_deploy_ui_label = HouseStyle.label("", HouseStyle.BODY)
 		_solo_deploy_ui_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_solo_deploy_ui_label.add_theme_font_size_override("font_size", 15)
 		# Reserve/unit names are foreign data: wrap them instead of letting them stretch the strip
 		# past the screen edge (UI audit B-6).
 		_solo_deploy_ui_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_solo_deploy_ui_label.custom_minimum_size.x = 580
 		box.add_child(_solo_deploy_ui_label)
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 10)
+		row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		box.add_child(row)
-		_solo_deploy_ui_btn1 = Button.new()
-		_solo_deploy_ui_btn1.custom_minimum_size.x = 280
-		UiPolish.primary_button(_solo_deploy_ui_btn1)
-		_solo_deploy_ui_btn1.focus_mode = Control.FOCUS_NONE   # a panel button must not eat Space/Enter
+		# Button 1 is the go-on action at every call site (✓ Unit placed, Fire!, ✓ Pulled back): the gold
+		# primary; button 2 the alternative (Cancel attack, keep waiting, the other zone): a ghost button.
+		# HouseStyle buttons take no focus — a panel button must not eat Space/Enter.
+		_solo_deploy_ui_btn1 = HouseStyle.button("", HouseStyle.PRIMARY)
 		_solo_deploy_ui_btn1.pressed.connect(func() -> void: _solo_strip_fire(_solo_strip_cb1, "1"))
-		row.add_child(_solo_deploy_ui_btn1)
-		_solo_deploy_ui_btn2 = Button.new()
-		_solo_deploy_ui_btn2.custom_minimum_size.x = 280
-		UiPolish.primary_button(_solo_deploy_ui_btn2)
-		_solo_deploy_ui_btn2.focus_mode = Control.FOCUS_NONE
+		_solo_deploy_ui_btn2 = HouseStyle.button("", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 		_solo_deploy_ui_btn2.pressed.connect(func() -> void: _solo_strip_fire(_solo_strip_cb2, "2"))
-		row.add_child(_solo_deploy_ui_btn2)
-		# Discoverability for the drag (community #159) — a dim one-liner, no extra chrome.
-		var hint := Label.new()
-		# Not U+283F: this unthemed strip draws with Godot's default Open Sans, which lacks it (and every
-		# arrow) — it rendered as a hex box. U+2022 is in Open Sans and in Inter.
-		hint.text = "•  drag to move"
+		for b: Button in [_solo_deploy_ui_btn1, _solo_deploy_ui_btn2]:
+			b.custom_minimum_size.x = 280
+			b.size_flags_horizontal = Control.SIZE_FILL   # 280 px each, centred — not stretched to the text
+			row.add_child(b)
+		# Discoverability for the drag (community #159) — a muted one-liner, no extra chrome. U+2022, not
+		# U+283F: the UI font lacks that one (it rendered as a hex box).
+		var hint := HouseStyle.label("•  drag to move", HouseStyle.CAPTION)
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hint.add_theme_font_size_override("font_size", 10)
-		hint.modulate = Color(1, 1, 1, 0.45)
 		box.add_child(hint)
 		add_child(_solo_deploy_ui)
 	_solo_deploy_ui_label.text = text
@@ -15680,14 +15669,6 @@ func _apply_ui_theme() -> void:
 	# Apply to all file dialogs
 	save_game_dialog.theme = current_theme
 	load_game_dialog.theme = current_theme
-
-
-## Adds a corner-bracket HudFrame overlay to a HUD PanelContainer (idempotent).
-func _add_hud_frame(panel: Control) -> void:
-	if panel and not panel.has_node("HudFrame"):
-		var f := HudFrame.new()
-		f.name = "HudFrame"
-		panel.add_child(f)
 
 
 ## ============================================================================
