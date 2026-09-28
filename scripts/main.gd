@@ -10670,6 +10670,19 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 	var names: Array = _solo_split_fire_offer_names(attacker, target_a)
 	if names.size() < 2:
 		return {"split": false}
+	var picked: Array = await _solo_ask_split_fire(target_a, names)
+	if picked.is_empty() or picked.size() >= names.size():
+		return {"split": false}   # nothing checked, or everything — both mean one target
+	var rest: Array = []
+	for n in names:
+		if not picked.has(n):
+			rest.append(n)
+	return {"split": true, "names": picked, "rest": rest}
+
+
+## The split-fire question itself (#226): one check box per weapon group; returns the checked names
+## ([] = "All at <target>"). Apart from the guards above so the prompt is drivable headless.
+func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
 	var dlg := ConfirmationDialog.new()
 	dlg.title = "Split fire?"
 	dlg.ok_button_text = "Pick 2nd target"
@@ -10698,13 +10711,7 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 			if (checks[i] as CheckBox).button_pressed:
 				picked.append(names[i])
 	dlg.queue_free()
-	if picked.is_empty() or picked.size() >= names.size():
-		return {"split": false}   # nothing checked, or everything — both mean one target
-	var rest: Array = []
-	for n in names:
-		if not picked.has(n):
-			rest.append(n)
-	return {"split": true, "names": picked, "rest": rest}
+	return picked
 
 
 func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: bool = false) -> void:
