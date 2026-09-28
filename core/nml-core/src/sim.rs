@@ -5901,6 +5901,25 @@ fn place_d3_hop(
     ))
 }
 
+/// The Mark's attackers-side grant on the target, priced by the charger's own
+/// registry stamp. One matching record grants the book's +4" once, never once
+/// per duplicate mark; the old epoch remains untouched.
+fn rapid_charge_mark_bonus_in(
+    statics: &[UnitStatic], state: &State, si: usize, ci: Option<usize>,
+    kind: i64, rules_epoch: u32,
+) -> f64 {
+    if kind != CHARGE || !rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH) {
+        return 0.0;
+    }
+    let Some(ti) = ci.filter(|&ti| state.alive[ti] > 0) else { return 0.0 };
+    if state.buffs[ti].iter().any(|r| r.scope.as_ref() == "melee"
+        && r.grants_rule.as_ref() == "Rapid Charge"
+        && mods::matches(r, mods::Role::GrantVs, true))
+    {
+        statics[state.roster.profile[si]].rapid_charge_grant_in
+    } else { 0.0 }
+}
+
 /// Versatile Reach (solo_controller.gd:1781-1827) — the CHARGE half of the
 /// per-activation "pick one". The ACTION is the witness: at the table the
 /// charge execution (:2213) is reachable with a gap in the unlock ring only if
@@ -5934,7 +5953,7 @@ fn versatile_reach_charge_in(
         state.bands[si].charge.unwrap_or(state.bands[si].rush) + bounding_in
     } else {
         state.bands[si].rush + bounding_in
-    };
+    } + rapid_charge_mark_bonus_in(statics, state, si, ci, kind, rules_epoch);
     let gap = geom::edge_gap_in(
         &state.positions[si], &state.radii[si],
         &state.positions[ti], &state.radii[ti],
@@ -6629,6 +6648,7 @@ fn resolve_with(
     let grant_in = solo_move_grant_delta_in(
         statics, &next, si, kind, seams.rules_epoch, seams.bands_prefolded, true,
     );
+    let rapid_mark_in = rapid_charge_mark_bonus_in(statics, &next, si, ci, kind, seams.rules_epoch);
     if feat_in != 0.0 {
         next.feats_used[si].push(
             statics[pi_s]
@@ -6656,7 +6676,14 @@ fn resolve_with(
         + gs_in
         + feat_in
         + buff_in
-        + grant_in;
+        + grant_in
+        + rapid_mark_in;
+    if rapid_mark_in > 0.0 {
+        if let (Some(ti), Some((_, shot))) = (ci, dice.as_mut()) {
+            shot.log.push(format!("Rapid Charge Mark: +{rapid_mark_in:.0}\" charge reach against {}",
+                statics[next.roster.profile[ti]].name));
+        }
+    }
     // NML-1152 B14 step 1 — rules-must-log: the live read names itself the
     // one time it changes the band (Bounding's line above is the shape).
     if gs_in != 0.0 {

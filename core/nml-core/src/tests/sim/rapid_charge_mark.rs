@@ -3,6 +3,14 @@ use super::*;
 #[test]
 fn marked_target_opens_a_fourteen_inch_charge_only_at_epoch_66() {
     let (mut st, mut statics) = vr_charge_line(14.0);
+    let charger_profile: Profile = serde_json::from_str(
+        r#"{"unit_id":"a","name":"Charger","game_system":"aof","faction_folder":"dark_elves"}"#,
+    ).unwrap();
+    let mut registry = crate::rules::Registries::new(&repo_root());
+    let charger_stamp = UnitStatic::build_for(&mut registry, &charger_profile, 66);
+    assert_eq!(charger_stamp.rapid_charge_grant_in, 4.0,
+        "the charger's book supplies the Mark's four inches");
+    statics[0].rapid_charge_grant_in = charger_stamp.rapid_charge_grant_in;
     // Keep the target alive so the post-charge base gap remains measurable.
     st.wounds[1] = vec![20];
     statics[1].ctx.tough = 20;
