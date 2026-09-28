@@ -135,7 +135,9 @@ fn burst_ignores_a_victim_outside_the_rule_range() {
     assert_eq!(next.wounds[1][0], 2, "the untouched victim keeps both wounds");
 }
 
-/// The FIRST-ACTIVATION latch: a round-2 activation never fires the burst.
+/// The FIRST-ACTIVATION latch below the gate: a round-2 activation never
+/// fires the burst (the old `round != 1` reading, unchanged below
+/// `EPOCH_67_MARKERS_BURSTS`).
 #[test]
 fn burst_never_fires_on_a_later_round_activation() {
     let corpus = read_acts(Cursor::new(CORPUS_ROUND2), "inline")
@@ -156,5 +158,56 @@ fn burst_never_fires_on_a_later_round_activation() {
         !shot.log.iter().any(|l| l.contains("Surprise Attack")),
         "no rules-must-log line on a round-2 activation"
     );
+    assert_eq!(next.wounds[1][0], 2, "the untouched victim keeps both wounds");
+}
+
+/// D19 (a), `EPOCH_67_MARKERS_BURSTS`: the SAME round-2 fixture is this
+/// bearer's actual FIRST activation (`surprise_attack_used` absent from the
+/// ledger, folds false) — an Infiltrate/Ambush arrival in round 2+ must fire
+/// the burst, which the old `round != 1` gate could never reach. RED before
+/// the fix: identical to `burst_never_fires_on_a_later_round_activation`
+/// above — no burst, no log line, at ANY epoch.
+#[test]
+fn burst_fires_on_a_round2_first_activation_from_epoch_67() {
+    let corpus = read_acts(Cursor::new(CORPUS_ROUND2), "inline")
+        .unwrap_or_else(|e| panic!("corpus parse failed: {e}"));
+    let statics = nml_core::build_act_statics(&corpus, REPO);
+    let seams = Seams { rules_epoch: 67, ..Default::default() };
+    let mut rng = GodotRng::new(1);
+    let mut tray = Tray::seeded(27);
+    let (next, shot) = resolve_stochastic_tray_on_board(
+        &statics, &corpus.acts[0].state, &hold(), &corpus.terrain, seams, &mut rng, &mut tray,
+    )
+    .expect("hold resolves");
+    let burst = shot
+        .rolls
+        .iter()
+        .find(|r| r.owner == "Mover" && r.target == 2 && r.count == 2)
+        .expect("a first activation in round 2 must still fire the burst from epoch 67");
+    let hits = burst.faces.iter().filter(|&&f| f >= 2).count() as i64;
+    assert!(shot.log.iter().any(|l| l.contains("Surprise Attack")));
+    assert_eq!(next.wounds[1][0], 2 - hits);
+    assert!(next.surprise_attack_used[0], "the latch burns on this, the bearer's first, activation");
+}
+
+/// D19 (a): a bearer whose latch is ALREADY spent (a prior activation, any
+/// round) never fires again — the once-per-game half of the fix, proven
+/// independently of the round-2 timing half above.
+#[test]
+fn a_spent_bearer_never_fires_again_from_epoch_67() {
+    let corpus = read_acts(Cursor::new(CORPUS_ROUND2), "inline")
+        .unwrap_or_else(|e| panic!("corpus parse failed: {e}"));
+    let statics = nml_core::build_act_statics(&corpus, REPO);
+    let mut spent_state = corpus.acts[0].state.clone();
+    spent_state.surprise_attack_used[0] = true;
+    let seams = Seams { rules_epoch: 67, ..Default::default() };
+    let mut rng = GodotRng::new(1);
+    let mut tray = Tray::seeded(27);
+    let (next, shot) = resolve_stochastic_tray_on_board(
+        &statics, &spent_state, &hold(), &corpus.terrain, seams, &mut rng, &mut tray,
+    )
+    .expect("hold resolves");
+    assert!(!shot.rolls.iter().any(|r| r.owner == "Mover" && r.target == 2 && r.count == 2));
+    assert!(!shot.log.iter().any(|l| l.contains("Surprise Attack")));
     assert_eq!(next.wounds[1][0], 2, "the untouched victim keeps both wounds");
 }
