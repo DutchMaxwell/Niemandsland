@@ -109,6 +109,7 @@ pub fn apply_carry_step(state: &mut State, owners: &[i64]) {
 /// nearest living opposing model, measured horizontally (plan amendment M-C1).
 pub fn drop_carried(state: &mut State, unit: usize) {
     if unit >= state.units() { return; }
+    if !state.markers_meta.iter().any(|m| m.carry && m.carried_by == unit as i64) { return; }
     let Some(&centre) = state.positions[unit].first() else { return; };
     let mut direction = [1.0, 0.0];
     let mut closest = f64::INFINITY;
@@ -132,6 +133,18 @@ pub fn drop_carried(state: &mut State, unit: usize) {
         if state.markers_meta[i].carry && state.markers_meta[i].carried_by == unit as i64 {
             state.markers_meta[i].carried_by = -1;
             if i < state.objectives.len() { state.objectives[i].pos = point; }
+        }
+    }
+}
+
+/// Keep each held marker at its carrier's first living model after a resolve.
+pub fn sync_carried_positions(state: &mut State) {
+    for i in 0..state.markers_meta.len().min(state.objectives.len()) {
+        let mk = &state.markers_meta[i];
+        if !mk.carry || mk.carried_by < 0 { continue; }
+        let k = mk.carried_by as usize;
+        if let Some(&p) = state.positions.get(k).and_then(|ps| ps.first()) {
+            state.objectives[i].pos = p;
         }
     }
 }

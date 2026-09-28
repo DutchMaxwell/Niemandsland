@@ -36,6 +36,7 @@ use crate::acts::{
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
+use crate::mission::{drop_carried, sync_carried_positions};
 use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{
@@ -279,6 +280,7 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
         state.wounds[ti][0] -= take;
         left -= take;
         if state.wounds[ti][0] <= 0 {
+            if state.positions[ti].len() == 1 { drop_carried(state, ti); }
             state.wounds[ti].remove(0);
             state.positions[ti].remove(0);
             // radii stay aligned with positions or the base-edge measure lies.
@@ -314,6 +316,7 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
         dealt += take;
         state.wounds[ti][best] -= take;
         if state.wounds[ti][best] <= 0 {
+            if state.positions[ti].len() == 1 { drop_carried(state, ti); }
             state.wounds[ti].remove(best);
             state.positions[ti].remove(best);
             // radii stay aligned with positions or the base-edge measure lies.
@@ -4009,12 +4012,14 @@ fn expected_melee_morale(
         return;
     }
     if below_half(state, ul, li) {
+        drop_carried(state, li);
         state.wounds[li].clear();
         state.positions[li].clear();
         state.radii[li].clear();
         state.alive[li] = 0;
     } else {
         state.shaken[li] = true;
+        drop_carried(state, li);
     }
 }
 
@@ -4497,8 +4502,12 @@ fn tray_morale(
     land_wounds(state, i, self_wounds);
     match outcome {
         Morale::Passed => {}
-        Morale::Shaken => state.shaken[i] = true,
+        Morale::Shaken => {
+            state.shaken[i] = true;
+            drop_carried(state, i);
+        }
         Morale::Routed => {
+            drop_carried(state, i);
             state.wounds[i].clear();
             state.positions[i].clear();
             state.radii[i].clear();
@@ -7405,6 +7414,7 @@ fn resolve_with(
                             && morale_fails_expected(&next, statics, ti, seams)
                         {
                             next.shaken[ti] = true;
+                            drop_carried(&mut next, ti);
                         }
                     }
                 }
@@ -7630,6 +7640,7 @@ fn resolve_with(
     if let Cover::Board(terrain) = cover {
         refresh_los_pairs(&mut next, state, terrain, seams);
     }
+    sync_carried_positions(&mut next);
     Ok(next)
 }
 

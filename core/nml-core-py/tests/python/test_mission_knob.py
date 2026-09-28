@@ -77,3 +77,14 @@ def test_unknown_mission_id_raises():
     core = nml_core.load(str(REPO))
     with pytest.raises(ValueError):
         _play("not_a_mission", core)
+
+
+def test_inline_carry_marker_spec_arms_unowned_relics_only_when_requested():
+    assert sp.mission_markers({"carry": True}, 3) == [
+        {"carry": True, "carried_by": -1} for _ in range(3)
+    ]
+    assert sp.mission_markers({}, 3) == []
+    assert sp.mission_markers({"owned": True, "destructible": True}, 2) == [
+        {"owned_by": 1, "destructible": True},
+        {"owned_by": 2, "destructible": True},
+    ]

@@ -30,6 +30,7 @@ use nml_core::playout::Policy;
 use nml_core::rollout::{Rollout, Stop};
 use nml_core::sim::Scratch;
 use nml_core::{build_act_statics, load_acts, Act, ActCorpus, Seams, State, Terrain};
+use nml_core::{imagined_round_end, read_act_header, state_from_json, ProfileCache};
 
 mod common;
 
@@ -39,6 +40,33 @@ const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 /// `JSON.stringify(.., full_precision=true)`, so an exact hit is achievable and
 /// anything above 1e-9 is a real difference in the arithmetic, not in the print.
 const RS_EPS: f64 = 1e-9;
+
+fn relic_state() -> State {
+    let header = read_act_header(r#"{"kind":"header","knobs":{},"profiles":{"p1_0_a":{"unit_id":"p1_0_a","name":"A"},"p2_0_b":{"unit_id":"p2_0_b","name":"B"}}}"#).unwrap();
+    let mut cache = ProfileCache::new(header.profiles);
+    state_from_json(r#"{"round":1,"rounds_total":4,"scoring":"end","objectives":[{"pos":[0,0,0],"owner":0}],"markers_meta":[{"carry":true}],"units":{"p1_0_a":{"player":1,"alive":1,"positions":[[0.04,0,0]],"radii":[0.02],"wounds":[1]},"p2_0_b":{"player":2,"alive":1,"positions":[[0.3,0,0]],"radii":[0.02],"wounds":[1]}}}"#, &mut cache, &mut None).unwrap()
+}
+
+#[test]
+fn imagined_round_end_picks_up_and_follows_relic() {
+    let mut st = relic_state();
+    imagined_round_end(&mut st);
+    assert_eq!(st.markers_meta[0].carried_by, 0);
+    assert_eq!(st.objectives[0].pos, [0.04, 0.0, 0.0]);
+    st.positions[0][0] = [0.10, 0.0, 0.0];
+    imagined_round_end(&mut st);
+    assert_eq!(st.objectives[0].pos, [0.10, 0.0, 0.0]);
+}
+
+#[test]
+fn last_model_loss_drops_relic_before_position_is_removed() {
+    let mut st = relic_state();
+    st.markers_meta[0].carried_by = 0;
+    nml_core::sim::land_wounds(&mut st, 0, 1);
+    assert_eq!(st.markers_meta[0].carried_by, -1);
+    assert_eq!(st.alive[0], 0);
+    assert!((st.objectives[0].pos[0] - 0.0854).abs() < 1e-9);
+}
 
 fn corpus() -> ActCorpus {
     common::pin_legacy_no_cond_ap();
