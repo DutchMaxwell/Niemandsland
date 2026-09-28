@@ -136,3 +136,32 @@ func test_plain_melee_strike_rolls_regeneration() -> void:
 		.contains("regeneration di")
 	assert_str(text).not_contains("Unstoppable")
 	await E2EBoot.settle(get_tree())
+
+
+## A target-side Rending grant reaches the firing profile; its wounds must
+## bypass the target's Regeneration in the actual volley.
+func test_rending_mark_volley_rolls_no_regeneration_dice() -> void:
+	var attacker := _carrier([])
+	var foe := _regenerating_foe()
+	_main._solo_record_spell_mod(foe, "Rending Mark", {"grants_rule": "Rending",
+		"beneficiary": "attackers", "duration": "once", "scope": ""})
+	var weapon := OPRApiClient.OPRWeapon.new()
+	weapon.name = "Marked Volley"
+	weapon.range_value = 24
+	weapon.attacks = 60
+	weapon.count = 1
+	weapon.special_rules = ["AP(5)"]
+	var profiles := AiShooting.profiles_in_range([weapon], 0.0)
+	assert_int(profiles.size()).is_equal(1)
+	var bridged: Dictionary = _main._solo_bridge_granted_flags(attacker, profiles[0], foe)
+	assert_bool(bool(bridged.get("rending", false))).is_true()
+	assert_bool(_main._solo_ignores_regen(attacker, bridged)).is_true()
+	var shots := [{"member": attacker, "quality": attacker.get_quality(),
+		"alive": attacker.get_alive_count(), "max": attacker.models.size(),
+		"reach": 24, "profile": profiles[0]}]
+	_main.seed_tray_rng(7)
+	await _main._solo_resolve_ai_volley(attacker, foe, shots)
+	var text := _log_text()
+	assert_str(text).contains("Rending (granted): Regeneration ignored")
+	assert_str(text).not_contains("regeneration di")
+	await E2EBoot.settle(get_tree())
