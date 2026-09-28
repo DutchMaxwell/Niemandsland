@@ -3981,7 +3981,9 @@ fn sighted_profiles_of(
         // Indirect (GF v3.5.1) "may target enemies that are not in line of
         // sight as if in line of sight": the range gate stays, the sight test
         // goes (main.gd:4136-4138).
-        let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach, (p.indirect && p.indirect_ignores_los.unwrap_or(true)) || mark_indirect);
+        let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach,
+            (p.indirect && p.indirect_ignores_los.unwrap_or(true)) || mark_indirect,
+            rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH));
         // Rules-must-log: the mark fires only where it changes the volley.
         if mark_indirect && !p.indirect && seen > 0 {
             trace_rule("volley", "Indirect Mark",

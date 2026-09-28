@@ -356,6 +356,7 @@ pub fn sighted_models(
     shooters: &[[f64; 3]],
     targets: &[[f64; 3]],
     range_m: f64,
+    horizontal_sort: bool,
     mut los: impl FnMut([f64; 3], [f64; 3]) -> bool,
 ) -> i64 {
     if shooters.is_empty() || targets.is_empty() {
@@ -370,7 +371,9 @@ pub fn sighted_models(
         order.extend(0..targets.len());
         order.sort_by(|&x, &y| {
             let d = |t: &[f64; 3]| {
-                (t[0] - sp[0]).powi(2) + (t[1] - sp[1]).powi(2) + (t[2] - sp[2]).powi(2)
+                (t[0] - sp[0]).powi(2)
+                    + (t[2] - sp[2]).powi(2)
+                    + if horizontal_sort { 0.0 } else { (t[1] - sp[1]).powi(2) }
             };
             d(&targets[x]).total_cmp(&d(&targets[y]))
         });
@@ -502,6 +505,7 @@ pub fn sighted_count(
     target: usize,
     reach_in: f64,
     indirect: bool,
+    horizontal_sort: bool,
 ) -> i64 {
     let mut targets: Vec<[f64; 3]> = Vec::new();
     for &t in std::iter::once(&target).chain(state.attached[target].iter()) {
@@ -511,7 +515,7 @@ pub fn sighted_count(
     let (from_h, to_h) = (unit_height_m(state, member), unit_height_m(state, target));
     let to_air = state.aircraft[target];
     let range_m = reach_in * IN2M + from_r + to_r;
-    sighted_models(&state.positions[member], &targets, range_m, |sp, tp| {
+    sighted_models(&state.positions[member], &targets, range_m, horizontal_sort, |sp, tp| {
         indirect
             || has_los(
                 &Cyl { c: [sp[0], sp[2]], r: from_r, y0: sp[1], y1: sp[1] + from_h },
@@ -533,7 +537,8 @@ pub const UNBOUNDED_RANGE_IN: f64 = 9999.0;
 /// volumes and every other unit's bases included, the range half switched off.
 pub fn unit_sees(state: &State, zones: &[Zone], i: usize, j: usize) -> bool {
     let blockers = blockers_of(state, i, j, CURRENT_RULES_EPOCH);
-    sighted_count(state, zones, &blockers, i, j, UNBOUNDED_RANGE_IN, false) > 0
+    sighted_count(state, zones, &blockers, i, j, UNBOUNDED_RANGE_IN, false,
+        rule_on(CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH)) > 0
 }
 
 /// `BattleSim.capture`'s sight sweep (battle_sim.gd:1563-1576) as one row-major
@@ -618,14 +623,22 @@ mod tests {
         // The gdUnit board's CONTAINER strip spans x in [0, 24)": the two
         // shooters past its end see, the two behind it do not.
         let blocked = |a: [f64; 3], _b: [f64; 3]| a[0] / M >= 24.0;
-        assert_eq!(sighted_models(&shooters, &targets, 24.0 * M, blocked), 2);
+        assert_eq!(sighted_models(&shooters, &targets, 24.0 * M, true, blocked), 2);
         // Range gates too: at 6" nothing reaches a target 12" away.
-        assert_eq!(sighted_models(&shooters, &targets, 6.0 * M, blocked), 0);
+        assert_eq!(sighted_models(&shooters, &targets, 6.0 * M, true, blocked), 0);
         // Open field: everyone in range fires.
-        assert_eq!(sighted_models(&shooters, &targets, 24.0 * M, |_, _| true), 4);
+        assert_eq!(sighted_models(&shooters, &targets, 24.0 * M, true, |_, _| true), 4);
         // RED for the caller: no shooters, or no targets, is silence.
-        assert_eq!(sighted_models(&[], &targets, 24.0 * M, |_, _| true), 0);
-        assert_eq!(sighted_models(&shooters, &[], 24.0 * M, |_, _| true), 0);
+        assert_eq!(sighted_models(&[], &targets, 24.0 * M, true, |_, _| true), 0);
+        assert_eq!(sighted_models(&shooters, &[], 24.0 * M, true, |_, _| true), 0);
+    }
+
+    #[test]
+    fn sighted_models_range_order_uses_horizontal_distance() {
+        let shooters = [[0.0, 0.0, 0.0]];
+        let targets = [[0.0, 5.0 * M, 10.0 * M], [0.0, 0.0, 11.0 * M]];
+        assert_eq!(sighted_models(&shooters, &targets, 10.5 * M, false, |_, _| true), 0);
+        assert_eq!(sighted_models(&shooters, &targets, 10.5 * M, true, |_, _| true), 1);
     }
 
     /// A model of a THIRD unit standing in the line blocks it — and dropping the

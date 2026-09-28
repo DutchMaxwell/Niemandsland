@@ -8715,7 +8715,9 @@ static func sighted_models(shooter_positions: Array, target_positions: Array, ra
 		# Nearest target model first: it is the most likely to be visible AND the cheapest to confirm.
 		var order: Array = target_positions.duplicate()
 		order.sort_custom(func(a, b) -> bool:
-			return sp.distance_squared_to(a) < sp.distance_squared_to(b))
+			var da := Vector2(a.x - sp.x, a.z - sp.z).length_squared()
+			var db := Vector2(b.x - sp.x, b.z - sp.z).length_squared()
+			return da < db)
 		for t in order:
 			var tp := t as Vector3
 			if Vector2(tp.x - sp.x, tp.z - sp.z).length_squared() > range2:
