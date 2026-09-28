@@ -2876,6 +2876,15 @@ func _current_round() -> int:
 	return int(round_provider.call()) if round_provider.is_valid() else 0
 
 
+## NML-1010 wave C gate (C9.2): the board exactly as the planner captures it before a pick
+## (the capture call in the activation path), for the round-end referee record
+## (AiActRecorder.round_end) — main takes it BEFORE the table's round-end referee runs.
+func capture_board() -> Dictionary:
+	return BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
+		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
+		terrain_type_at)
+
+
 func _is_final_round() -> bool:
 	return game_rounds > 0 and _current_round() >= game_rounds
 
