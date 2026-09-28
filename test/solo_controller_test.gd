@@ -860,6 +860,14 @@ func test_sighted_models_gates_per_model_behind_a_blocker() -> void:
 		func(_a: Vector3, _b: Vector3) -> bool: return true)).is_equal(4)
 
 
+func test_sighted_models_range_order_uses_horizontal_distance() -> void:
+	var m := 0.0254
+	var shooters := [Vector3.ZERO]
+	var targets := [Vector3(0, 5 * m, 10 * m), Vector3(0, 0, 11 * m)]
+	assert_int(SoloController.sighted_models(shooters, targets, 10.5 * m,
+		func(_a: Vector3, _b: Vector3) -> bool: return true)).is_equal(1)
+
+
 # === Auto-tail alternation state machine (goal 003 P2 — the maintainer's "how do I proceed?" gap) ===
 
 func test_alternation_next_replies_then_tails_then_ends() -> void:
@@ -1959,6 +1967,26 @@ func test_rule_notes_carry_teleport_on_activation() -> void:
 	assert_int((solo.last_report.get("rule_notes", []) as Array).size()).is_equal(0)
 
 
+## A Teleport reposition is a separate before-attack placement. The Rush itself
+## remains 12"; the current activation code incorrectly extends it to 18".
+func test_teleport_reposition_does_not_extend_the_rush_band() -> void:
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	ai.unit_properties["special_rules"] = ["Teleport"]
+	ai.unit_properties["game_system"] = "gf"
+	ai.unit_properties["faction_folder"] = "eternal_dynasty"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_object(solo.activate_next_ai_unit()).is_equal(ai)
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
+	assert_float(ai.models[0].node.global_position.x).is_equal_approx(0.1952, 0.004)
+	assert_float(SoloController.max_activation_advance_bonus_in(ai)).is_equal(3.0)
+
+
 ## NML-938 -- Traversal ("may move through friendly and enemy units") is registry-gated the same way
 ## as Teleport: system+faction scoped via RulesRegistry.unit_rule_active. Goblins field it in
 ## AoF-Skirmish. RED until the mechanics map's `primitive` moves off null (data fix, next step).
@@ -2014,6 +2042,25 @@ func test_last_move_remaining_in_uses_longest_model_arc() -> void:
 	assert_float(solo.last_move_remaining_in()).is_equal_approx(0.5, 0.01)
 	solo.last_move_paths = []
 	assert_float(solo.last_move_remaining_in()).is_equal_approx(6.0, 0.01)
+
+
+func test_no_move_activation_clears_previous_charge_snap_budget() -> void:
+	var human := _unit(1, [Vector3.ZERO])
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# First activation takes a full Rush band and leaves a nonzero move budget.
+	assert_int(int(solo._act(ai)["action"])).is_equal(AiDecision.Action.RUSH)
+	assert_float(solo.last_move_budget_in).is_greater(0.0)
+	# The following activation starts at base contact: the charge has no travel.
+	ai.models[0].node.global_position = Vector3(0.032, 0, 0)
+	var second := solo._act(ai)
+	assert_int(int(second["action"])).is_equal(AiDecision.Action.CHARGE)
+	assert_float(solo.last_move_remaining_in()).is_equal_approx(0.0, 0.001)
 
 
 ## Kanten-bewusster Difficult-Trigger: Pfadzentrum läuft AN der Zone vorbei, die Basenkante ragt hinein.

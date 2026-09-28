@@ -164,14 +164,15 @@ def _centre_f32(positions: list[list[float]]) -> list[float]:
 # ------------------------------------------------------------------ armies ---
 
 
-def load_army(path: str | Path, player: int) -> list[dict[str, Any]]:
+def load_army(path: str | Path, player: int,
+              rules_epoch: int = nml_core.CURRENT_RULES_EPOCH) -> list[dict[str, Any]]:
     """`_units_from_list` (core_selfplay.gd:437-495) as profiles, in the order
     the loader creates them — which IS `OPRArmyManager.game_units`' insertion
     order and therefore the capture order the whole state is indexed by."""
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     profiles = profiles_from_army_forge_json(
-        data, _faction_from_path(path, str(data.get("gameSystem", ""))), player
+        data, _faction_from_path(path, str(data.get("gameSystem", ""))), player, rules_epoch
     )
     return list(profiles.values())
 
@@ -691,6 +692,20 @@ def resolve_dice(dice: str) -> str:
 
 
 _MISSION_CATALOG_CACHE: dict[str, dict[str, Any]] = {}
+
+
+def mission_markers(spec: dict[str, Any], count: int) -> list[dict[str, Any]]:
+    """Arm owned or carried marker state without changing legacy empty records."""
+    if not spec.get("owned") and not spec.get("carry"):
+        return []
+    markers = []
+    for i in range(count):
+        marker = {"owned_by": (i % 2) + 1, "destructible": bool(spec.get("destructible"))} \
+            if spec.get("owned") else {}
+        if spec.get("carry"):
+            marker.update(carry=True, carried_by=-1)
+        markers.append(marker)
+    return markers
 
 
 def resolve_mission(mission: str, repo_root: str | Path) -> dict[str, Any]:
@@ -2309,8 +2324,8 @@ def play_game(
     `cap_share`, stamping `row["cap"]` (True = cap core planned the act, a
     value-only row; False = the seat's full-search core, the policy target).
     0.0, the default, builds no core, draws no coin, stamps no key."""
-    units1 = load_army(list_p1, 1)
-    units2 = load_army(list_p2, 2)
+    units1 = load_army(list_p1, 1, rules_epoch)
+    units2 = load_army(list_p2, 2, rules_epoch)
     if not units1 or not units2:
         raise ValueError("empty army (%s / %s)" % (list_p1, list_p2))
     units = units1 + units2
@@ -2764,10 +2779,7 @@ def play_game(
     eff_scoring = mission_def.get("scoring", "end")
     vp_flavour = mission_def.get("vp", {})
     mk_spec = mission_def.get("markers", {})
-    markers_meta = [
-        {"owned_by": (i % 2) + 1, "destructible": bool(mk_spec.get("destructible"))}
-        for i in range(len(objectives))
-    ] if mk_spec.get("owned") else []
+    markers_meta = mission_markers(mk_spec, len(objectives))
     plain["scoring"] = eff_scoring
     if eff_scoring == "round_vp":
         plain["vp"], plain["vp_flavour"], plain["vp_memo"] = [0, 0], vp_flavour, {}
@@ -2810,6 +2822,9 @@ def play_game(
             leaf_value_fn=leaf_value_fn, leaf_value_w=leaf_value_w,
         )
         state, owners = core.playout_seize(state, owners)
+        if mk_spec.get("carry"):
+            state = core.apply_carry_step(state, owners)
+            markers_meta = state.plain()["markers_meta"]
         if markers_meta:  # W3: an enemy-held owned marker falls before scoring
             markers_meta, owners, destroy_seq = core.apply_destroy_step(
                 markers_meta, owners, destroy_seq

@@ -485,6 +485,14 @@ def test_base_shape_of_reads_a_d5_4b_header_and_survives_an_older_one():
 # === NML-1108: the registry alias passes ======================================
 
 
+def test_rapid_rush_python_profile_keeps_charge_at_twelve_from_epoch_66():
+    import nml_core
+    old = list_to_profile._move_bands(["Rapid Rush"], rules_epoch=nml_core.EPOCH_66_DISTANCE_TRUTH - 1)
+    new = list_to_profile._move_bands(["Rapid Rush"], rules_epoch=nml_core.EPOCH_66_DISTANCE_TRUTH)
+    assert old == {"advance": 6.0, "rush": 18.0}
+    assert new == {"advance": 6.0, "rush": 18.0, "charge": 12.0}
+
+
 def _aof_profile(faction: str, rules: list[str], **sel_kw) -> dict:
     """One AoF unit's profile off a bare rule list — the shape the AI lists
     ship in (rule NAMES, no description text)."""

@@ -65,12 +65,16 @@ func _assert_aura_channel(name: String, preserved: Dictionary = {}) -> void:
 				var params := {"aura_expand": true, "max_picks": 3.0, "lost_if_bearer_killed": true}
 				if name == "Rapid Rush Aura":
 					params["rush_mod"] = 6.0
+					params["charge_mod"] = 0.0  # Book: Rush +6", Charge unchanged.
 				else:
 					params.merge({"ap_bonus": 1.0, "condition": "on_charge"})
 				assert_dict(entry).is_equal({"primitive": name.trim_suffix(" Aura"), "rated": false,
 					"book_version": "3.5.3", "params": params})
 				continue
-			if entry.get("primitive") != "Aura Channel" or entry.get("params", {}) != {"grants": name.trim_suffix(" Aura")}:
+			var channel_params := {"grants": name.trim_suffix(" Aura")}
+			if name == "Rapid Rush Aura":
+				channel_params["charge_mod"] = 0.0  # Same Rush-only grant in full-scale books.
+			if entry.get("primitive") != "Aura Channel" or entry.get("params", {}) != channel_params:
 				wrong.append("%s/%s" % [system, name])
 	assert_int(checked).is_greater(0)
 	assert_array(wrong).override_failure_message("missing Aura Channel metadata: %s" % str(wrong)).is_empty()

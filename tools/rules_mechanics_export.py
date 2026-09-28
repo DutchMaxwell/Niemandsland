@@ -83,8 +83,8 @@ PRIMITIVE_PARAMS = {
     "Counter": {"strikes_first": True, "impact_reduction_per_model": 1},
     "Fast": {"advance_mod": 2, "rush_mod": 4},
     "Slow": {"advance_mod": -2, "rush_mod": -4},
-    # Rapid Rush (army-book rule): "+6\" when using Rush actions" — Rush/Charge band only.
-    "Rapid Rush": {"rush_mod": 6},
+    # Rapid Rush (army-book rule): "+6\" when using Rush actions" — Rush only.
+    "Rapid Rush": {"rush_mod": 6, "charge_mod": 0},
     "Battleborn": {"recover_target": 4},
     # Steadfast (quick-win batch): official text byte-identical to Battleborn — the round-start
     # Shaken recovery on a 4+ (shared _solo_battleborn_recovery seam, registry-tuned target).
@@ -394,13 +394,17 @@ def load_json(path: str):
 def params_for(system: str, name: str, primitive: str, mech_params: dict | None = None) -> dict:
     override = SYSTEM_PARAM_OVERRIDES.get((system, name))
     if override is not None:
-        return dict(override)
+        params = dict(override)
     # Coverage wave (2026-07-23): a registry entry's OWN mechanic params take precedence — the
     # alias families (Plaguebound -> Regeneration at 6+, Lustbound -> Royal Legion 4\"/2\", ...)
     # carry per-rule numbers the primitive defaults must not overwrite.
-    if mech_params:
-        return dict(mech_params)
-    return dict(PRIMITIVE_PARAMS.get(primitive, {}))
+    elif mech_params:
+        params = dict(mech_params)
+    else:
+        params = dict(PRIMITIVE_PARAMS.get(primitive, {}))
+    if name in ("Rapid Rush", "Rapid Rush Aura"):
+        params["charge_mod"] = 0
+    return params
 
 
 def entry_for(system: str, rule: dict, book_version: str) -> dict:

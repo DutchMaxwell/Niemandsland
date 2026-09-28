@@ -41,6 +41,18 @@ fn str_of<'a>(flavour: &'a Value, key: &str, fallback: &'a str) -> &'a str {
 pub fn playout_seize(state: &mut State, owners: &mut [i64]) {
     let round_no = state.round;
     for i in 0..state.objectives.len() {
+        if let Some(mk) = state.markers_meta.get(i) {
+            if mk.carry && mk.carried_by >= 0 {
+                let k = mk.carried_by as usize;
+                if k < state.units() && state.alive[k] > 0 && !state.shaken[k] {
+                    if i < owners.len() {
+                        owners[i] = state.player[k];
+                        state.objectives[i].owner = owners[i];
+                    }
+                    continue;
+                }
+            }
+        }
         let op = state.objectives[i].pos;
         // An insertion-ordered SET of player ids — a `Vec` is the honest shape:
         // it never holds more than two entries and only its size is read.
@@ -64,6 +76,75 @@ pub fn playout_seize(state: &mut State, owners: &mut [i64]) {
                 owners[i] = 0;
             }
             state.objectives[i].owner = owners[i];
+        }
+    }
+}
+
+/// Pick up each newly seized relic with the closest eligible unit; capture order breaks ties.
+pub fn apply_carry_step(state: &mut State, owners: &[i64]) {
+    for (i, &side) in owners.iter().enumerate().take(state.markers_meta.len().min(state.objectives.len())) {
+        if !state.markers_meta[i].carry || state.markers_meta[i].carried_by != -1 {
+            continue;
+        }
+        if side != 1 && side != 2 { continue; }
+        let op = state.objectives[i].pos;
+        let mut best = None;
+        let mut best_gap = f64::INFINITY;
+        for k in 0..state.units() {
+            if state.player[k] != side || !can_hold_marker(state, k, state.round) { continue; }
+            let gap = control_gap_in(state, k, op);
+            if gap < best_gap {
+                best = Some(k);
+                best_gap = gap;
+            }
+        }
+        if let Some(k) = best {
+            state.markers_meta[i].carried_by = k as i64;
+            if let Some(&p) = state.positions[k].first() { state.objectives[i].pos = p; }
+        }
+    }
+}
+
+/// Drop every relic held by a unit 1 inch past its first base edge toward the
+/// nearest living opposing model, measured horizontally (plan amendment M-C1).
+pub fn drop_carried(state: &mut State, unit: usize) {
+    if unit >= state.units() { return; }
+    if !state.markers_meta.iter().any(|m| m.carry && m.carried_by == unit as i64) { return; }
+    let Some(&centre) = state.positions[unit].first() else { return; };
+    let mut direction = [1.0, 0.0];
+    let mut closest = f64::INFINITY;
+    for enemy in 0..state.units() {
+        if state.player[enemy] == state.player[unit] || state.alive[enemy] <= 0 { continue; }
+        for p in state.positions[enemy].iter().take(state.alive[enemy] as usize) {
+            let dx = p[0] - centre[0];
+            let dz = p[2] - centre[2];
+            let d2 = dx * dx + dz * dz;
+            if d2 < closest && d2 > 0.000001 {
+                closest = d2;
+                let d = d2.sqrt();
+                direction = [dx / d, dz / d];
+            }
+        }
+    }
+    let radius = state.radii[unit].first().copied().unwrap_or(0.016);
+    let distance = radius + crate::IN2M;
+    let point = [centre[0] + direction[0] * distance, centre[1], centre[2] + direction[1] * distance];
+    for i in 0..state.markers_meta.len() {
+        if state.markers_meta[i].carry && state.markers_meta[i].carried_by == unit as i64 {
+            state.markers_meta[i].carried_by = -1;
+            if i < state.objectives.len() { state.objectives[i].pos = point; }
+        }
+    }
+}
+
+/// Keep each held marker at its carrier's first living model after a resolve.
+pub fn sync_carried_positions(state: &mut State) {
+    for i in 0..state.markers_meta.len().min(state.objectives.len()) {
+        let mk = &state.markers_meta[i];
+        if !mk.carry || mk.carried_by < 0 { continue; }
+        let k = mk.carried_by as usize;
+        if let Some(&p) = state.positions.get(k).and_then(|ps| ps.first()) {
+            state.objectives[i].pos = p;
         }
     }
 }

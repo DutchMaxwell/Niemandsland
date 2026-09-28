@@ -8,7 +8,7 @@
     /// four base-edge gaps the engage test can pick from are therefore
     /// 10" (host to host), 8" and 7" (one hero folded) and 5" (both) — one
     /// number per fold, so a single assertion says which lists were measured.
-    pub(super) fn four_unit_line() -> State {
+    pub(crate) fn four_unit_line() -> State {
         let profile = Profile {
             unit_id: "u".into(),
             name: "u".into(),
@@ -106,6 +106,42 @@
             storm_used: vec![Vec::new(); 4],
             feats_used: vec![Vec::new(); 4],
         }
+    }
+
+    #[test]
+    fn modifier_distance_uses_base_gap_from_epoch_66() {
+        let mut st = four_unit_line();
+        st.positions[0] = vec![[0.0, 0.0, 0.0], [-4.48 * IN2M, 0.0, 0.0]];
+        st.radii[0] = vec![0.016, 0.016];
+        st.positions[2] = vec![[(7.0 * IN2M) + 0.032, 0.0, 0.0]];
+        st.radii[2] = vec![0.016];
+        let old = modifier_distance_in(&st, 0, 2, Seams { rules_epoch: 65, ..Seams::default() });
+        let new = modifier_distance_in(&st, 0, 2, Seams { rules_epoch: 66, ..Seams::default() });
+        assert!((old - 10.5).abs() < 0.1, "old centre modifier: {old}");
+        assert!((new - 7.0).abs() < 0.1, "new base-gap modifier: {new}");
+        let stealth_at_old = old > 9.0;
+        let stealth_at_new = new > 9.0;
+        assert!(stealth_at_old && !stealth_at_new);
+        let profile = [crate::unit::ShootProfile {
+            name: "Rifle".into(), attacks: 1, count: 1, range: 24,
+            ..Default::default()
+        }];
+        let fire = |distance: f64, artillery: bool, stealth: bool| {
+            let att = Ctx { quality: 4, models: 2, artillery, ..Default::default() };
+            let def = Ctx { defense: 4, models: 1, stealth, ..Default::default() };
+            let volley = [crate::dice::Shooter {
+                profiles: &profile, keep: &[0], attacks: &[1], att: &att, owner: "Shooter",
+            }];
+            let mut tray = Tray::seeded(27);
+            crate::dice::resolve_volley_with_tray(
+                &volley, &def, "Target", 7.0, distance,
+                true, true, true, true, &mut tray,
+            ).rolls[0].target
+        };
+        assert_eq!(fire(old, false, true), 5, "old Stealth penalty off centre gap");
+        assert_eq!(fire(new, false, true), 4, "new Stealth gate off base gap");
+        assert_eq!(fire(old, true, false), 3, "old Artillery bonus off centre gap");
+        assert_eq!(fire(new, true, false), 4, "new Artillery gate off base gap");
     }
 
     /// Fear(X) (GF/AoF v3.5.1): "counts as having dealt +X wounds when
@@ -1712,6 +1748,7 @@ mod place_d3;
 mod precision_debuff;
 mod plain_moves;
 mod quick_shot;
+mod rapid_charge_mark;
 mod reckless_piercing;
 mod reposition_artillery;
 mod retaliate;

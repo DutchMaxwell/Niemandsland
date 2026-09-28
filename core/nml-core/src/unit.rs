@@ -32,7 +32,7 @@ use crate::acts::{
     EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
-    EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH,
+    EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH, EPOCH_66_DISTANCE_TRUTH,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -1162,6 +1162,10 @@ pub struct UnitStatic {
     /// Reach", tutorial_board.nml:5423), so the raw-name arm is what makes this
     /// core independent of that expander rather than a second effect.
     pub versatile_reach_charge_in: Option<f64>,
+    /// The charger's own book value for an enemy's attackers-side Rapid
+    /// Charge Mark. The table looks up `Rapid Charge.rush_mod` in the
+    /// CHARGER's faction; this stamp avoids registry I/O in each playout.
+    pub rapid_charge_grant_in: f64,
     /// The Royal Legion family (wave 3, epoch 6) — the class's two live halves
     /// as the twins ship them: `range_bonus_in` (the
     /// `solo_controller.gd:shooting_range_bonus` /
@@ -3755,7 +3759,10 @@ fn crossing_attack_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Op
 /// Reposition candidate, so nothing of the port is live below 8). Cap by
 /// NAME: Teleport 3"/6", others (Ethereal) flat 6".
 #[derive(Debug, Clone, PartialEq)]
-pub struct TeleportSpec { pub name: String } // the cap key and the log subject
+pub struct TeleportSpec {
+    pub name: String, // the cap key and the log subject
+    pub standalone_reposition: bool,
+}
 
 pub fn teleport_cap_in(rule: &str, rush: bool) -> f64 {
     if rule != "Teleport" || rush { 6.0 } else { 3.0 }
@@ -3769,7 +3776,10 @@ fn teleport_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<Te
         .find(|n| (*n == "Teleport" && map.lookup(&p.faction_folder, n).is_some())
             || *n == "Ethereal"
             || map.lookup(&p.faction_folder, n).filter(|e| e.primitive.as_deref() == Some("Teleport")).is_some())
-        .map(|n| TeleportSpec { name: n })
+        .map(|n| TeleportSpec {
+            standalone_reposition: n != "Teleport" || !rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH),
+            name: n,
+        })
 }
 
 /// One carried "Surprise Attack" — "Counts as having Infiltrate. The first
@@ -5437,6 +5447,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // zero-banded, NOT `Bands::default()` — those serde defaults are the
     // 6"/12" OPR fallback, not zero.
     let (mut acc, mut hit) = (Bands { advance: 0.0, rush: 0.0, ..Default::default() }, false);
+    let mut charge_delta = 0.0;
     for name in [
         "Agile",
         "Highborn",
@@ -5594,11 +5605,14 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
         if let Some(e) = map.lookup(&p.faction_folder, "Rapid Rush") {
             let rush = e.param_f("rush_mod", 0.0);
             acc.rush += rush;
+            if rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH) && e.params.get("charge_mod").is_some() {
+                charge_delta += e.param_f("charge_mod", rush) - rush;
+            }
             hit = true;
             crate::sim::trace_rule(
                 "move-bands",
                 "Rapid Rush",
-                &format!("{}: +{rush}\" rush/charge", p.name),
+                &format!("{}: +{rush}\" rush", p.name),
             );
         }
     }
@@ -5707,6 +5721,9 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
         }
     }
 
+    if charge_delta != 0.0 {
+        acc.charge = Some(acc.rush + charge_delta);
+    }
     if hit { Some(acc) } else { None }
 }
 
@@ -6360,6 +6377,10 @@ impl UnitStatic {
             } else {
                 None
             },
+            rapid_charge_grant_in: if rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH) {
+                reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Rapid Charge")
+                    .map_or(0.0, |e| e.param_f("rush_mod", 0.0))
+            } else { 0.0 },
             reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artillery"),
             hit_and_run_active: unit_rule_active(reg, p, "Hit & Run")
                 || unit_rule_active(reg, p, "Guerrilla")
