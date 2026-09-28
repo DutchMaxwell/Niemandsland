@@ -245,3 +245,49 @@ func test_hover_does_not_crash_with_a_null_solo_controller_in_a_human_vs_human_r
 	assert_bool(_label_shown()) \
 		.override_failure_message("the sight-count label shows alongside the fallback line") \
 		.is_true()
+
+
+func test_dead_unit_has_no_los_centre_with_or_without_controller(timeout := 120000) -> void:
+	var pair := await _place_pair(1, 2)
+	var dead: GameUnit = pair[1]
+	assert_bool(dead != null).is_true()
+	(dead.models[0] as ModelInstance).is_alive = false
+	assert_vector(_main._los_unit_centre(dead)) \
+		.override_failure_message("controller path returned Vector3.ZERO for a dead unit") \
+		.is_equal(Vector3.INF)
+	assert_bool(_main._solo_has_los(pair[0], dead)) \
+		.override_failure_message("dead target was given a terrain LOS lane from Vector3.ZERO") \
+		.is_false()
+	_main.solo_controller = null
+	assert_vector(_main._los_unit_centre(dead)) \
+		.override_failure_message("MP fallback returned anchor_of([]) == Vector3.ZERO") \
+		.is_equal(Vector3.INF)
+
+
+func test_hovered_dead_enemy_hides_the_los_line(timeout := 120000) -> void:
+	var pair := await _place_pair(1, 2)
+	var attacker: GameUnit = pair[0]
+	var target: GameUnit = pair[1]
+	assert_bool(attacker != null and target != null).is_true()
+	_hover_target(attacker, pair[2])
+	assert_bool(_line_shown()).is_true()
+	(target.models[0] as ModelInstance).is_alive = false
+	_hover_target(attacker, pair[2])
+	assert_bool(_line_shown()) \
+		.override_failure_message("dead hovered enemy still drew a LOS line to Vector3.ZERO") \
+		.is_false()
+	assert_bool(_label_shown()).is_false()
+
+
+func test_dead_attacker_hides_the_los_line(timeout := 120000) -> void:
+	var pair := await _place_pair(1, 2)
+	var attacker: GameUnit = pair[0]
+	assert_bool(attacker != null and pair[1] != null).is_true()
+	_hover_target(attacker, pair[2])
+	assert_bool(_line_shown()).is_true()
+	(attacker.models[0] as ModelInstance).is_alive = false
+	_hover_target(attacker, pair[2])
+	assert_bool(_line_shown()) \
+		.override_failure_message("dead attacker still drew a LOS line from Vector3.ZERO") \
+		.is_false()
+	assert_bool(_label_shown()).is_false()
