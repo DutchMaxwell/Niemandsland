@@ -1438,7 +1438,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Aura": {
@@ -1446,7 +1447,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Rush"
+     "grants": "Rapid Rush",
+     "charge_mod": 0
     }
    },
    "Shred": {
@@ -2053,7 +2055,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Re-Deployment": {
@@ -3320,7 +3323,8 @@
     "rated": false,
     "book_version": "3.5.2",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Surge": {
@@ -4622,7 +4626,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Rapid Rush Buff": {
@@ -6110,7 +6115,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Scout Aura": {
@@ -6961,7 +6967,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "rush_mod": 6
+     "rush_mod": 6,
+     "charge_mod": 0
     }
    },
    "Regeneration Aura": {

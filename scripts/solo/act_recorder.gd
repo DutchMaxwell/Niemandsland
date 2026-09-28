@@ -185,7 +185,7 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## table's cover-cell approximation is dropped).
 ## on the Regeneration fold).
 ## Wave 3 batch B moves this stamp to 65 with EPOCH_65_MELEE_TRUTH.
-static var rules_epoch: int = 65
+static var rules_epoch: int = 66
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

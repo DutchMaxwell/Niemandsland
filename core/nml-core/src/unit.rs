@@ -32,7 +32,7 @@ use crate::acts::{
     EPOCH_44_SURGE_MARK, EPOCH_46_DISINTEGRATE_REGEN, EPOCH_47_RENDING_SHOOTING_AURA,
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
-    EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH,
+    EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH, EPOCH_66_DISTANCE_TRUTH,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -5437,6 +5437,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // zero-banded, NOT `Bands::default()` — those serde defaults are the
     // 6"/12" OPR fallback, not zero.
     let (mut acc, mut hit) = (Bands { advance: 0.0, rush: 0.0, ..Default::default() }, false);
+    let mut charge_delta = 0.0;
     for name in [
         "Agile",
         "Highborn",
@@ -5594,11 +5595,14 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
         if let Some(e) = map.lookup(&p.faction_folder, "Rapid Rush") {
             let rush = e.param_f("rush_mod", 0.0);
             acc.rush += rush;
+            if rule_on(rules_epoch, EPOCH_66_DISTANCE_TRUTH) && e.params.get("charge_mod").is_some() {
+                charge_delta += e.param_f("charge_mod", rush) - rush;
+            }
             hit = true;
             crate::sim::trace_rule(
                 "move-bands",
                 "Rapid Rush",
-                &format!("{}: +{rush}\" rush/charge", p.name),
+                &format!("{}: +{rush}\" rush", p.name),
             );
         }
     }
@@ -5707,6 +5711,9 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
         }
     }
 
+    if charge_delta != 0.0 {
+        acc.charge = Some(acc.rush + charge_delta);
+    }
     if hit { Some(acc) } else { None }
 }
 
