@@ -6,6 +6,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Added
+- **Automodus: Charge, Advance & Shoot and Rush on the solo radial.** Pick the verb, click the enemy —
+  the engine moves your unit along a legal path and rolls the attack, saves and morale for you, the
+  same executor NACHTMAHR's own activations run through. A suggested target is named in the log; a
+  panel switch (on after your first executed intent) skips the save-roll confirmation. See
+  `KNOWN_ISSUES.md` for this version's limits. (NML-202)
+
 ### Fixed
 - **Unit coherency's 3" allowance now triggers on real elevation, not a drag lift.** The
   threshold was 3" tall, so a model on a 2.5" container roof and its mate on the ground

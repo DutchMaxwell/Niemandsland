@@ -20,6 +20,11 @@ not there yet and what to watch for. The full done / in-progress / planned break
   English (the privacy & data screens also come in German), and a small residue
   of special rules is still manual — the battle log names any rule it applies (or asks for
   manual handling).
+- **Automodus (Charge / Advance & Shoot / Rush) is a first version.** An executed intent has **no
+  take-back** — the dice fell, like at the table. Regiments, aircraft and units embarked in a
+  transport still move by hand (pick the radial's Shoot/Fight instead, or drag). **Co-op rooms hide
+  the three verbs** — a multiplayer session is solo-only for this version; move and attack by hand
+  there, same as today.
 - **AI thinking time has been measured on one machine only** (a developer laptop). On a slower PC
   the opponent may take longer per decision — if it feels slow, send a diagnostics report (below);
   its header names which AI path your machine ran.
