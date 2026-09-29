@@ -317,6 +317,113 @@ func test_the_stage_browses_and_fades(timeout := 120000) -> void:
 	assert_float(card.modulate.a).override_failure_message("the card never faded").is_less(0.05)
 
 
+# === the house look (restyle) =================================================================
+
+## Controls under `root` (itself included) that set a colour, font size, outline or tint of their own.
+func _own_look(root: Control) -> Array:
+	var out: Array = []
+	for n: Node in [root] + root.find_children("*", "Control", true, false):
+		var c := n as Control
+		if c.has_theme_color_override(&"font_color") or c.has_theme_font_size_override(&"font_size") \
+				or c.has_theme_constant_override(&"outline_size") or c.has_theme_stylebox_override(&"panel") \
+				or c.modulate != Color.WHITE:
+			out.append(c.name)
+	return out
+
+
+## Glyphs of `text` the control's own font does not carry.
+func _lacking(c: Control, text: String) -> Array:
+	var font := c.get_theme_font(&"font")
+	var out: Array = []
+	for i in text.length():
+		if text[i] != " " and not font.has_char(text.unicode_at(i)):
+			out.append("U+%04X in '%s'" % [text.unicode_at(i), text])
+	return out
+
+
+## Every status line is the same house plate (one look for one job, not three text colours with an
+## outline), sits centred, and the three lanes no longer overlap.
+func test_every_status_line_is_a_centred_house_plate(timeout := 120000) -> void:
+	_main._show_solo_ai_banner()
+	_main._solo_show_toast("Raiders advance 6\"", 0.0)
+	_main._on_session_busy_changed(true)
+	await _runner.simulate_frames(3)
+	var lanes: Array = [_main._solo_ai_banner, _main._solo_toast, _main._peer_busy_banner]
+	_main._solo_hide_toast(true)
+	_main._show_toast("Room code copied")
+	await _runner.simulate_frames(3)
+	var mid := _vp_size().x * 0.5
+	for l: Label in lanes + [_ui_label("Room code copied")]:
+		assert_str(String(l.theme_type_variation)).override_failure_message("'%s' is not a house status line" % l.text) \
+			.is_equal(String(HouseStyle.STATUS))
+		assert_object(l.theme).is_same(HouseStyle.theme())
+		assert_array(_own_look(l)).override_failure_message("'%s' dresses itself" % l.text).is_empty()
+		assert_float(l.get_global_rect().get_center().x).override_failure_message("'%s' is %d px off centre" % [
+			l.text, l.get_global_rect().get_center().x - mid]).is_equal_approx(mid, 2.0)
+	for i in 2:
+		assert_float((lanes[i] as Label).get_global_rect().end.y).override_failure_message("lane %d overlaps lane %d" % [
+			i, i + 1]).is_less_equal((lanes[i + 1] as Label).global_position.y)
+
+
+## The dream overlay: a house sheet, the words in the AI's gold voice, the spinner in the same gold.
+func test_the_dream_overlay_wears_the_house_sheet(timeout := 120000) -> void:
+	_main._solo_batch = false
+	_main._show_dream_overlay()
+	await _runner.simulate_frames(3)
+	var overlay: Control = _main._solo_dream_overlay
+	var panel := overlay.find_children("*", "PanelContainer", true, false)[0] as PanelContainer
+	assert_object(overlay.theme).is_same(HouseStyle.theme())
+	assert_str(String(panel.theme_type_variation)).is_equal(String(HouseStyle.SHEET))
+	assert_str(String(_ui_label("NACHTMAHR dreams…").theme_type_variation)).is_equal(String(HouseStyle.VOICE))
+	assert_array(_own_look(panel)).is_empty()
+	var spinner := overlay.find_children("*", "DreamSpinner", true, false)[0] as DreamSpinner
+	assert_object(spinner.arc_color).is_equal(HouseStyle.GOLD)
+	assert_array(_lacking(_ui_label("NACHTMAHR dreams…"), "NACHTMAHR dreams…")).is_empty()
+	_main._hide_dream_overlay()
+
+
+## The stage card in the house roles, and every glyph on its buttons (paused too) in their font.
+func test_the_stage_card_wears_the_house_style_and_its_glyphs_draw(timeout := 120000) -> void:
+	_open_stage()
+	var held: Array = []
+	await _stage_phase("To hit", ["Rifle: 3 hits"], held)
+	var card := _card()
+	assert_object(card.theme).is_same(HouseStyle.theme())
+	assert_str(String(card.theme_type_variation)).is_equal(String(HouseStyle.PANEL_VARIANT))
+	assert_array(_own_look(card)).override_failure_message("own look on %s" % [_own_look(card)]).is_empty()
+	var roles := {"Raiders shoot Guards": HouseStyle.EYEBROW, "To hit  (1/1)": HouseStyle.NOTE,
+		"· Rifle: 3 hits": HouseStyle.BODY, STAGE_HINT: HouseStyle.CAPTION}
+	for n: Node in card.find_children("*", "Label", true, false):
+		var l := n as Label
+		if roles.has(l.text):
+			assert_str(String(l.theme_type_variation)).override_failure_message("'%s' has the wrong role" % l.text) \
+				.is_equal(String(roles[l.text]))
+			roles.erase(l.text)
+	assert_array(roles.keys()).override_failure_message("labels not found: %s" % [roles.keys()]).is_empty()
+	var lacking: Array = []
+	for tip: String in [PREV_TIP, PAUSE_TIP, NEXT_TIP]:
+		assert_str(String(_stage_button(tip).theme_type_variation)).is_equal(String(HouseStyle.ICON))
+		lacking.append_array(_lacking(_stage_button(tip), _stage_button(tip).text))
+	_stage().toggle_pause()
+	lacking.append_array(_lacking(_stage_button(PAUSE_TIP), _stage_button(PAUSE_TIP).text))
+	_stage().toggle_pause()
+	assert_array(lacking).override_failure_message("the stage buttons' font lacks %s" % [lacking]).is_empty()
+	_stage().skip()
+
+
+## A clicked pause button must not keep the keyboard: SPACE still resumes afterwards.
+func test_space_resumes_after_the_pause_button_was_clicked(timeout := 120000) -> void:
+	_open_stage()
+	var held: Array = []
+	await _stage_phase("To hit", ["Rifle: 3 hits"], held)
+	await _click(_stage_button(PAUSE_TIP))
+	assert_bool(_stage()._paused).is_true()
+	await _key(KEY_SPACE)
+	assert_bool(_stage()._paused).override_failure_message("SPACE did not resume after a click on the pause button") \
+		.is_false()
+	_stage().skip()
+
+
 # === the check itself =========================================================================
 
 ## The control check names a stage control that went missing (the pause button hidden).

@@ -105,7 +105,7 @@ func skip() -> void:
 func toggle_pause() -> void:
 	_paused = not _paused
 	if _pause_btn != null and is_instance_valid(_pause_btn):
-		_pause_btn.text = "▶" if _paused else "⏸"
+		_pause_btn.text = HouseStyle.GLYPH_PLAY if _paused else HouseStyle.GLYPH_PAUSE
 
 
 ## ◂/▸ through the running activation's phases; reaching the newest returns to live.
@@ -164,49 +164,39 @@ func _ensure_panel() -> void:
 	layer = 80
 	_panel = PanelContainer.new()
 	_panel.name = "CombatStageCard"
-	_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+	HouseStyle.apply(_panel)   # the house window (maintainer D98 = a)
 	_panel.gui_input.connect(_card_input)
 	add_child(_panel)
-	var margin := MarginContainer.new()
-	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 12)
-	_panel.add_child(margin)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	margin.add_child(box)
-	_head_label = Label.new()
-	_head_label.add_theme_font_size_override("font_size", 16)
+	box.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
+	_panel.add_child(box)
+	# The activation as the card's title, the phase as its gold key line, the rule lines as body text.
+	_head_label = HouseStyle.label("", HouseStyle.EYEBROW)
+	_head_label.uppercase = true
 	box.add_child(_head_label)
-	_phase_label = Label.new()
-	_phase_label.add_theme_font_size_override("font_size", 13)
-	_phase_label.modulate = Color(1.0, 0.8, 0.3)
+	_phase_label = HouseStyle.label("", HouseStyle.NOTE)
 	box.add_child(_phase_label)
-	_lines_label = Label.new()
-	_lines_label.add_theme_font_size_override("font_size", 13)
+	_lines_label = HouseStyle.label("", HouseStyle.BODY)
 	box.add_child(_lines_label)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 	box.add_child(row)
-	var prev := Button.new()
-	prev.text = "◂"
-	prev.tooltip_text = "Previous phase of this activation"
-	prev.pressed.connect(browse.bind(-1))
-	row.add_child(prev)
-	_pause_btn = Button.new()
-	_pause_btn.text = "⏸"
-	_pause_btn.tooltip_text = "Pause the beat to read (SPACE)"
-	_pause_btn.pressed.connect(toggle_pause)
+	# House glyphs: the UI font has no ◂ ⏸ ▸. House buttons take no focus, so a clicked ‖ never keeps
+	# SPACE from the stage.
+	row.add_child(_icon(HouseStyle.GLYPH_BACK, "Previous phase of this activation", browse.bind(-1)))
+	_pause_btn = _icon(HouseStyle.GLYPH_PAUSE, "Pause the beat to read (SPACE)", toggle_pause)
 	row.add_child(_pause_btn)
-	var next := Button.new()
-	next.text = "▸"
-	next.tooltip_text = "Next phase / back to live"
-	next.pressed.connect(browse.bind(1))
-	row.add_child(next)
-	var hint := Label.new()
-	hint.text = "click = next · SPACE = pause · drag to move"
-	hint.add_theme_font_size_override("font_size", 11)
-	hint.modulate = Color(1, 1, 1, 0.55)
-	row.add_child(hint)
+	row.add_child(_icon(HouseStyle.GLYPH_GO, "Next phase / back to live", browse.bind(1)))
+	row.add_child(HouseStyle.label("click = next · SPACE = pause · drag to move", HouseStyle.CAPTION))
+
+
+func _icon(glyph: String, tip: String, on_press: Callable) -> Button:
+	var b := HouseStyle.button(glyph, HouseStyle.ICON, HouseStyle.ICON_BUTTON)
+	b.custom_minimum_size.x = HouseStyle.ICON_BUTTON
+	b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	b.tooltip_text = tip
+	b.pressed.connect(on_press)
+	return b
 
 
 ## LMB on the card: a short click advances, a moved press drags the card (deploy-box pattern).

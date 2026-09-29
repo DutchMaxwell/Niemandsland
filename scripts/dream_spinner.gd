@@ -5,7 +5,7 @@ extends Control
 ## alpha-ramped segments, advanced every frame it is allowed to render. During a synchronous planner
 ## burst it momentarily freezes (single-threaded), then resumes; over an AI turn it reads as "thinking".
 
-@export var arc_color: Color = Color(1.0, 0.78, 0.30)   # NACHTMAHR amber
+@export var arc_color: Color = HouseStyle.GOLD   # the AI's voice (house gold)
 @export var revolutions_per_sec: float = 0.85
 @export var thickness: float = 4.0
 
