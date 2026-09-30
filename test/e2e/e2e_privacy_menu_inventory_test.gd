@@ -108,6 +108,26 @@ func test_close_button_hides_the_window() -> void:
 	assert_bool(_menu.visible).is_false()
 
 
+func test_escape_and_the_x_hide_the_panel() -> void:
+	var esc := InputEventAction.new()
+	esc.action = "ui_cancel"
+	esc.pressed = true
+	_menu._unhandled_input(esc)
+	assert_bool(_menu.visible).is_false()
+	_menu.open_settings()
+	(_menu.find_child("CloseButton", true, false) as Button).pressed.emit()
+	assert_bool(_menu.visible).is_false()
+
+
+func test_panel_is_house_style_and_owns_its_clicks() -> void:
+	var root := _menu.get_child(0) as Control
+	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	assert_object(root.theme).is_same(HouseStyle.theme())
+	await _details()
+	assert_str(String(_button("Allow evaluation sharing").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(_button("Save example locally").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+
+
 func test_german_words() -> void:
 	assert_str(PrivacyMenu.text_for("de_DE", "title")).is_equal("Datenschutz & Daten")
 	assert_str(PrivacyMenu.text_for("en", "no_thanks")).is_equal("No thanks")
