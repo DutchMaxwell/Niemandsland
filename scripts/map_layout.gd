@@ -214,6 +214,7 @@ var _objectives_warning_label: Label = null
 var _modular_terrain_panel: VBoxContainer = null
 var _prefab_option_btn: OptionButton = null
 var _mode_buttons: Dictionary = {}  # EditorMode -> segment Button (one visible button per mode)
+var _mode_hint: HFlowContainer = null  # one muted line naming the keys and mouse of the current mode
 var _wall_option_btn: OptionButton = null
 var _prefab_row: HBoxContainer = null  # field_row holding the piece dropdown (hidden outside Place mode)
 var _wall_row: HBoxContainer = null
@@ -702,6 +703,10 @@ func _setup_modular_terrain_ui() -> void:
 		_mode_buttons[mode_ids[i]] = mb
 	_modular_terrain_panel.add_child(mode_row)
 
+	_mode_hint = HFlowContainer.new()
+	_mode_hint.name = "ModeHint"
+	_modular_terrain_panel.add_child(_mode_hint)
+
 	# Wall variant selection (visible when PLACE_WALLS mode)
 	_wall_option_btn = OptionButton.new()
 	_wall_option_btn.item_selected.connect(_on_wall_variant_selected)
@@ -747,6 +752,8 @@ func _update_modular_terrain_ui() -> void:
 	for mode in _mode_buttons:
 		HouseStyle.set_selected(_mode_buttons[mode], mode == editor_mode)
 
+	_update_mode_hint()
+
 	# Wall selection only visible in PLACE_WALLS mode
 	if _wall_row:
 		_wall_row.visible = (editor_mode == EditorMode.PLACE_WALLS)
@@ -757,6 +764,27 @@ func _update_modular_terrain_ui() -> void:
 
 	_update_wall_option_list()
 	_update_modular_status()
+
+
+## Keys and mouse of each mode: ["key", "R"] is a key cap, anything else muted text.
+const MODE_HINTS := {
+	EditorMode.PAINT_CELLS: [["text", "drag to paint"], ["text", "· wheel zoom"]],
+	EditorMode.PLACE_WALLS: [["text", "click an edge to add · right-click removes"], ["text", "· wheel zoom"]],
+	EditorMode.PLACE_PREFAB: [["key", "R"], ["text", "rotate"], ["key", "F"], ["text", "flip"],
+		["key", "Shift"], ["text", "+ wheel rotate · wheel zoom"]],
+	EditorMode.MOVE_PIECES: [["text", "drag to move"], ["key", "R"], ["text", "rotate"], ["key", "F"], ["text", "flip"],
+		["key", "Del"], ["text", "delete"]],
+}
+
+
+func _update_mode_hint() -> void:
+	if _mode_hint == null:
+		return
+	for child in _mode_hint.get_children():
+		_mode_hint.remove_child(child)
+		child.queue_free()
+	for part: Array in MODE_HINTS[editor_mode]:
+		_mode_hint.add_child(HouseStyle.key_cap(part[1]) if part[0] == "key" else HouseStyle.label(part[1], HouseStyle.SMALL))
 
 
 func _update_wall_option_list() -> void:
@@ -850,6 +878,18 @@ func _piece_index_by_id(piece_id: int) -> int:
 
 
 ## Rotate the prefab preview (PLACE_PREFAB) or the selected piece (MOVE_PIECES) 90° CW.
+## The wheel always zooms; Shift+wheel turns the piece being placed (R does the same from the keyboard).
+func _handle_wheel(up: bool, shift: bool, local_mouse: Vector2) -> void:
+	if shift and editor_mode == EditorMode.PLACE_PREFAB:
+		_preview_rotation = wrapi(_preview_rotation + (90 if up else -90), 0, 360)
+		if grid_container:
+			grid_container.queue_redraw()
+	elif up:
+		_zoom_in(local_mouse)
+	else:
+		_zoom_out(local_mouse)
+
+
 func _rotate_active() -> void:
 	if editor_mode == EditorMode.PLACE_PREFAB:
 		_preview_rotation = wrapi(_preview_rotation + 90, 0, 360)
@@ -1646,18 +1686,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if mouse_in_grid:
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-				if editor_mode == EditorMode.PLACE_PREFAB:
-					_rotate_active()
-				else:
-					_zoom_in(local_mouse)
+				_handle_wheel(true, event.shift_pressed, local_mouse)
 				get_viewport().set_input_as_handled()
 				return
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-				if editor_mode == EditorMode.PLACE_PREFAB:
-					_preview_rotation = wrapi(_preview_rotation - 90, 0, 360)
-					grid_container.queue_redraw()
-				else:
-					_zoom_out(local_mouse)
+				_handle_wheel(false, event.shift_pressed, local_mouse)
 				get_viewport().set_input_as_handled()
 				return
 
