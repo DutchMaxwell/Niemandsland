@@ -2,7 +2,7 @@ extends CanvasLayer
 ## Settings Panel — Lighting & Audio controls
 ## Interactive UI with sliders for all lighting and volume parameters
 
-const LAYER := 106
+const LAYER := 0   # under the HUD layer (1): the menu, rail and top bar stay clickable, as with the old OS window
 const SHEET_W := 520
 const SCROLL_H := 620
 
