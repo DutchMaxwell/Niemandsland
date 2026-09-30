@@ -10793,13 +10793,19 @@ func _solo_try_precision_spot(unit: GameUnit) -> void:
 			best_d = d
 	if best == null:
 		return
-	var faces: Array = await _solo_tray_roll(1, 4, _solo_owner_label(unit), "attack",
-		"Precision Spotter: 4+ marks %s" % best.get_name())
-	if not faces.is_empty() and int(faces[0]) >= 4:
-		_solo_place_spot_marker(unit, best)
-	elif battle_log != null:
+	# NML-980: one die per alive laser-carrying model in the chain, each 4+ its own marker.
+	var dice := maxi(solo_controller.precision_spot_dice_of(unit), 1)
+	var faces: Array = await _solo_tray_roll(dice, 4, _solo_owner_label(unit), "attack",
+		"Precision Spotter: %d die%s (4+) mark %s" % [dice, ("" if dice == 1 else "s"), best.get_name()])
+	var hits := 0
+	for f in faces:
+		if int(f) >= 4:
+			hits += 1
+			_solo_place_spot_marker(unit, best)
+	if hits == 0 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Precision Spotter: %s misses the mark on %s (needed 4+)" % [unit.get_name(), best.get_name()], _solo_is_ai_unit(unit))
+			"Precision Spotter: %s misses the mark on %s (needed 4+, %d die%s)" % [
+			unit.get_name(), best.get_name(), dice, ("" if dice == 1 else "s")], _solo_is_ai_unit(unit))
 
 
 ## Shared marker placement (AI auto-spot + the radial spot): property, VISIBLE "Spotted"
@@ -10925,15 +10931,21 @@ func _solo_spot_click(target: GameUnit) -> void:
 
 
 ## Fire-and-forget: the spot roll (4+) in the tray, then the shared marker placement.
+## NML-980: "roll one die" is per MODEL (GF p.4) — one click, N dice (N = every alive laser-carrying
+## model in the chain, solo_controller.precision_spot_dice_of), each 4+ its own marker.
 func _solo_resolve_spot(spotter: GameUnit, target: GameUnit) -> void:
-	var faces: Array = await _solo_tray_roll(1, 4, _solo_owner_label(spotter), "attack",
-		"Precision Spotter: 4+ marks %s" % target.get_name())
-	if not faces.is_empty() and int(faces[0]) >= 4:
-		_solo_place_spot_marker(spotter, target)
-	elif battle_log != null:
+	var dice := maxi(solo_controller.precision_spot_dice_of(spotter), 1)
+	var faces: Array = await _solo_tray_roll(dice, 4, _solo_owner_label(spotter), "attack",
+		"Precision Spotter: %d die%s (4+) mark %s" % [dice, ("" if dice == 1 else "s"), target.get_name()])
+	var hits := 0
+	for f in faces:
+		if int(f) >= 4:
+			hits += 1
+			_solo_place_spot_marker(spotter, target)
+	if hits == 0 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Precision Spotter: %s misses the mark on %s (needed 4+)" % [
-			spotter.get_name(), target.get_name()], _solo_is_ai_unit(spotter))
+			"Precision Spotter: %s misses the mark on %s (needed 4+, %d die%s)" % [
+			spotter.get_name(), target.get_name(), dice, ("" if dice == 1 else "s")], _solo_is_ai_unit(spotter))
 
 
 ## The attack's activation completion (X1 double-shoot exploit) — shared by the single-target
