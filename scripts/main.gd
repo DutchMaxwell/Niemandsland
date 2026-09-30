@@ -18848,6 +18848,10 @@ func _solo_consume_tag_markers(target: GameUnit) -> int:
 ## units, pick one of them and roll X dice; each 6+ = one wound"): the Strafing trigger seam —
 ## trails vs enemy bases, nearest crossed enemy, direct wounds (no hit roll, no save; Regeneration
 ## applies — no ignore clause in the text).
+## D20 (a): "this model" is a MODEL rule (GF p.4) — each bearer (host, then each attached hero)
+## rolls off ITS OWN trails only, X dice PER crossing model, and a joined hero's own entry fires
+## too (the shared per-activation early-return dropped; each bearer's own registry loop still
+## fires once per bearer via the "once per activation" per-bearer read below).
 func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 	if unit == null or solo_controller == null or not _solo_is_ai_unit(unit) \
 			or solo_controller.last_move_paths.is_empty():
@@ -18859,14 +18863,19 @@ func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0:
 			continue
+		var own_models: Array = member.get_alive_models()
+		var own_trails: Array = []
+		for mp in solo_controller.last_move_paths:
+			var md := mp as Dictionary
+			if own_models.has(md.get("model")):
+				own_trails.append(md.get("path", []))
+		if own_trails.is_empty():
+			continue
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Crossing Attack"):
 			var ed := e as Dictionary
 			var n := str(ed["name"])
-			var dice: int = maxi(int(ed.get("rating", 0)), 1)
+			var dice_per_model: int = maxi(int(ed.get("rating", 0)), 1)
 			var wound_target := int((ed.get("params", {}) as Dictionary).get("wound_target", 6))
-			var trails: Array = []
-			for mp in solo_controller.last_move_paths:
-				trails.append((mp as Dictionary).get("path", []))
 			var crossed: Array = []
 			for eo in opr_army_manager.get_game_units_for_player(solo_controller.enemy_slot_of(member)):
 				var eu := eo as GameUnit
@@ -18874,14 +18883,20 @@ func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 					continue
 				if eu.has_method("is_attached") and eu.is_attached():
 					continue
-				if SoloController.trails_cross_unit_bases(trails, eu.models):
+				if SoloController.trails_cross_unit_bases(own_trails, eu.models):
 					crossed.append(eu)
 			if crossed.is_empty():
-				return
+				continue
 			crossed.sort_custom(func(a, b) -> bool:
 				return MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(a)) \
 					< MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(b)))
 			var target := crossed[0] as GameUnit
+			var crossing_models := 0
+			for trail in own_trails:
+				if SoloController.trails_cross_unit_bases([trail], target.models):
+					crossing_models += 1
+			crossing_models = maxi(crossing_models, 1)
+			var dice := dice_per_model * crossing_models
 			var faces: Array = await _solo_tray_roll(dice, wound_target, "AI (%s)" % member.get_name())
 			var wounds := 0
 			for f in faces:
@@ -18889,11 +18904,11 @@ func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 					wounds += 1
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s(%d): %s moves through %s — %d wound%s (no save)" % [
-					n, dice, member.get_name(), target.get_name(), wounds, ("" if wounds == 1 else "s")], true)
+					"%s: %d model%s of %s cross %s — %d of %d dice wound (no save)" % [
+					n, crossing_models, ("" if crossing_models == 1 else "s"),
+					member.get_name(), target.get_name(), wounds, dice], true)
 			if wounds > 0:
 				await _solo_land_wounds(target, wounds, 0)
-			return   # once per activation
 
 
 # === Coverage wave: the Growth-Marker family (Defensive Frenzy / Piercing Growth / Precision Growth) ===
