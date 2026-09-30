@@ -15615,6 +15615,12 @@ func _open_ai_opponent_dialog() -> void:
 	if manifest.is_empty():
 		_solo_show_toast("No AI lists available (no connection yet?) — import any list with the AI checkbox instead")
 		return
+	_show_ai_opponent_dialog(manifest)
+
+
+## The AI Opponent question over an already loaded manifest. `loader(file, slot)` runs on OK
+## (default: _load_ai_opponent_list) so the dialog can be driven without the network.
+func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable()) -> void:
 	var dlg := ConfirmationDialog.new()
 	dlg.title = "AI Opponent"
 	dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 220)
@@ -15670,7 +15676,7 @@ func _open_ai_opponent_dialog() -> void:
 			return
 		var file: String = str((lists[pts_opt.selected] as Dictionary).get("file", ""))
 		var slot: int = slot_opt.get_item_id(slot_opt.selected)
-		_load_ai_opponent_list(file, slot))
+		(loader if loader.is_valid() else Callable(self, &"_load_ai_opponent_list")).call(file, slot))
 	dlg.confirmed.connect(dlg.queue_free)
 	dlg.canceled.connect(dlg.queue_free)
 	add_child(dlg)
