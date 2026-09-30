@@ -8,7 +8,6 @@ extends CanvasLayer
 ## including on drag start, where the hover target is cleared anyway.
 
 const DWELL_SEC := 0.45
-const PANEL_ALPHA := 0.72
 
 ## One verified hint line per object kind (English-only UI).
 const HINTS := {
@@ -16,6 +15,11 @@ const HINTS := {
 	"unit": "Drag: move · R (hold): rotate · F: sight+range fan · G: ring · M: reach · T: trails · P: pin ruler · Esc: cancel drag",
 	"object": "Drag: move · R (hold): rotate · Esc: cancel drag",
 }
+
+## The Units dock (injected by main.gd): the line sits ABOVE its tab / open strip, never on it.
+var dock: Node = null
+const DOCK_GAP := 6.0
+const LINE_H := 24.0
 
 var _label: Label = null
 var _panel: PanelContainer = null
@@ -28,7 +32,8 @@ func _ready() -> void:
 	_panel = PanelContainer.new()
 	_panel.name = "ControlHints"
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.modulate = Color(1, 1, 1, PANEL_ALPHA)
+	_panel.theme = HouseStyle.theme()   # a quiet house chip with muted words (maintainer D98 = a)
+	_panel.theme_type_variation = HouseStyle.CHIP
 	_panel.visible = false
 	_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_panel.anchor_top = 1.0
@@ -37,9 +42,8 @@ func _ready() -> void:
 	_panel.offset_bottom = -10.0
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	add_child(_panel)
-	_label = Label.new()
+	_label = HouseStyle.label("", HouseStyle.CAPTION)
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_label.add_theme_font_size_override("font_size", 12)
 	_panel.add_child(_label)
 	_dwell = Timer.new()
 	_dwell.one_shot = true
@@ -88,6 +92,23 @@ func _on_dwell() -> void:
 		return
 	_label.text = _pending_text
 	_panel.visible = true
+	_place()
+
+
+## Lifts the line above the dock (tab + open strip / presented card); no dock = the old bottom margin.
+func _place() -> void:
+	var lift := 10.0
+	if dock != null and is_instance_valid(dock) and dock.has_method("occupied_height"):
+		# The open dock parks its tab ABOVE the strip, higher than occupied_height() reports: clear both.
+		lift = maxf(float(dock.occupied_height()), float(dock.tab_target_lift())) + DOCK_GAP
+	_panel.offset_bottom = -lift
+	_panel.offset_top = -lift - LINE_H
+
+
+func set_dock(p_dock: Node) -> void:
+	dock = p_dock
+	if dock != null and dock.has_signal("occupied_changed"):
+		dock.occupied_changed.connect(_place)
 
 
 func _hide() -> void:

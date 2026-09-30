@@ -1,17 +1,10 @@
 class_name BattleLogPanel
 extends PanelContainer
-## In-game Battle Log panel — a collapsible HUD panel (Tactical-HUD language: dark navy / cyan / amber)
+## In-game Battle Log panel — a collapsible HUD window in the house style (HouseStyle, maintainer D98 = a)
 ## that shows the BattleLog's entries as compact one-liners with a round prefix, newest pinned to view.
 ## One filter dropdown (All / Combat / Movement / AI). Placed by main.gd; fed by a BattleLog via bind().
+## AI lines are the gold key lines, so they stand out; a line with reasoning folds out under a mark.
 
-const NAVY := Color(0.10, 0.13, 0.19, 0.96)
-const NAVY_HI := Color(0.16, 0.20, 0.28)
-const CYAN := Color(0.36, 0.80, 0.92)
-const AMBER := Color(0.96, 0.62, 0.18)
-const TEXT := Color(0.86, 0.90, 0.95)
-const TEXT_DIM := Color(0.58, 0.64, 0.72)
-const AI_TINT := Color(0.96, 0.62, 0.18)      # AI lines get an amber tint so they stand out
-const ENTRY_FONT := 12
 const MAX_VISIBLE := 200
 
 ## The player pressed Export — main.gd writes the log to a user:// file (adding the AI decision records when
@@ -34,33 +27,28 @@ var _list: VBoxContainer = null
 
 
 func _ready() -> void:
-	add_theme_stylebox_override("panel", _panel_style())
+	HouseStyle.apply(self)
 	custom_minimum_size = Vector2(340, 0)   # width only — the panel shrinks to the header when collapsed
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 4)
+	col.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 	add_child(col)
 
-	_header = Button.new()
-	_header.text = "▼  Battle Log"   # collapsed by default (▼ = click to expand downward)
-	_header.focus_mode = Control.FOCUS_NONE
-	_header.add_theme_font_size_override("font_size", 13)
-	_header.add_theme_color_override("font_color", CYAN)
-	_header.add_theme_stylebox_override("normal", _flat(NAVY_HI))
-	_header.add_theme_stylebox_override("hover", _flat(NAVY_HI))
-	_header.add_theme_stylebox_override("pressed", _flat(NAVY_HI))
+	# Collapsed by default (▼ = click to expand downward).
+	_header = HouseStyle.button("▼  Battle Log", HouseStyle.BUTTON)
 	_header.pressed.connect(_toggle)
 	col.add_child(_header)
 
 	_body = VBoxContainer.new()
-	_body.add_theme_constant_override("separation", 4)
+	_body.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 	_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(_body)
 
 	var controls := HBoxContainer.new()
-	controls.add_theme_constant_override("separation", 4)
+	controls.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 	_body.add_child(controls)
 
 	_filter_opt = OptionButton.new()
+	_filter_opt.theme_type_variation = HouseStyle.BUTTON
 	_filter_opt.focus_mode = Control.FOCUS_NONE
 	_filter_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_filter_opt.add_item("All", BattleLog.Filter.ALL)
@@ -71,27 +59,15 @@ func _ready() -> void:
 	controls.add_child(_filter_opt)
 
 	# Export the full log to a shareable file (the maintainer's field-test artefact). main.gd does the write.
-	var export_btn := Button.new()
-	export_btn.text = "Export"
-	export_btn.focus_mode = Control.FOCUS_NONE
-	export_btn.add_theme_font_size_override("font_size", 12)
-	export_btn.add_theme_color_override("font_color", AMBER)
-	export_btn.add_theme_stylebox_override("normal", _flat(NAVY_HI))
-	export_btn.add_theme_stylebox_override("hover", _flat(NAVY_HI))
-	export_btn.add_theme_stylebox_override("pressed", _flat(NAVY_HI))
+	var export_btn := HouseStyle.button("Export", HouseStyle.BUTTON)
+	export_btn.size_flags_horizontal = Control.SIZE_FILL   # as wide as its word; the filter takes the rest
 	export_btn.pressed.connect(func() -> void: export_requested.emit())
 	controls.add_child(export_btn)
 
 	# Maintainer request (live-test loop): one click puts the whole log on the clipboard,
 	# ready to paste into a chat/issue — the file export stays for archiving.
-	var copy_btn := Button.new()
-	copy_btn.text = "Copy"
-	copy_btn.focus_mode = Control.FOCUS_NONE
-	copy_btn.add_theme_font_size_override("font_size", 12)
-	copy_btn.add_theme_color_override("font_color", AMBER)
-	copy_btn.add_theme_stylebox_override("normal", _flat(NAVY_HI))
-	copy_btn.add_theme_stylebox_override("hover", _flat(NAVY_HI))
-	copy_btn.add_theme_stylebox_override("pressed", _flat(NAVY_HI))
+	var copy_btn := HouseStyle.button("Copy", HouseStyle.BUTTON)
+	copy_btn.size_flags_horizontal = Control.SIZE_FILL
 	copy_btn.pressed.connect(func() -> void: copy_requested.emit())
 	controls.add_child(copy_btn)
 
@@ -170,10 +146,7 @@ func _passes(entry: Dictionary) -> bool:
 
 
 func _entry_label(entry: Dictionary) -> Control:
-	var l := Label.new()
-	l.text = BattleLog.format_entry(entry)
-	l.add_theme_font_size_override("font_size", ENTRY_FONT)
-	l.add_theme_color_override("font_color", AI_TINT if bool(entry["ai"]) else TEXT)
+	var l := HouseStyle.label(BattleLog.format_entry(entry), HouseStyle.NOTE if bool(entry["ai"]) else HouseStyle.SMALL)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var detail := str(entry.get("detail", ""))
@@ -183,21 +156,18 @@ func _entry_label(entry: Dictionary) -> Control:
 	# carries it as the hover tooltip — "why did the AI do that" lives one click away.
 	var box := VBoxContainer.new()
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	l.text = "▸ " + l.text
+	l.text = HouseStyle.GLYPH_GO + " " + l.text   # folded; the UI font has no ▸ ▾
 	l.mouse_filter = Control.MOUSE_FILTER_STOP
 	l.tooltip_text = detail
-	var d := Label.new()
-	d.text = "    " + detail
+	var d := HouseStyle.label("    " + detail, HouseStyle.CAPTION)
 	d.visible = false
-	d.add_theme_font_size_override("font_size", ENTRY_FONT - 1)
-	d.add_theme_color_override("font_color", Color(0.75, 0.85, 0.95))
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	d.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	l.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and (ev as InputEventMouseButton).pressed \
 				and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 			d.visible = not d.visible
-			l.text = ("▾ " if d.visible else "▸ ") + l.text.substr(2))
+			l.text = (HouseStyle.GLYPH_COLLAPSE if d.visible else HouseStyle.GLYPH_GO) + " " + l.text.substr(2))
 	box.add_child(l)
 	box.add_child(d)
 	return box
@@ -222,20 +192,3 @@ func set_open(open: bool) -> void:
 	reset_size()
 	open_changed.emit(_open)
 
-
-func _panel_style() -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = NAVY
-	s.set_corner_radius_all(6)
-	s.set_border_width_all(1)
-	s.border_color = Color(CYAN.r, CYAN.g, CYAN.b, 0.35)
-	s.set_content_margin_all(8)
-	return s
-
-
-func _flat(c: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = c
-	s.set_corner_radius_all(4)
-	s.set_content_margin_all(4)
-	return s

@@ -130,7 +130,7 @@ func _armed(pid: int, unit_name: String, positions: Array, weapons: Array) -> Ga
 
 
 ## The AI volley makes the HUMAN roll their own saves (`_solo_prompt_saves` spins frames on a
-## ConfirmationDialog) — press OK for the absent player, the morale suite's pump pattern.
+## PromptCard) — press Roll for the absent player, the morale suite's pump pattern.
 func _arm_save_pump() -> void:
 	var pump := Timer.new()
 	pump.name = "NML970Pump"
@@ -141,9 +141,9 @@ func _arm_save_pump() -> void:
 		if _main == null or not is_instance_valid(_main):
 			return
 		for c in _main.get_children():
-			var dlg := c as AcceptDialog
-			if dlg != null and dlg.title == "Incoming fire!":
-				dlg.confirmed.emit())
+			var card := c as PromptCard
+			if card != null and card.title == "Incoming fire!":
+				card.ok_button.pressed.emit())
 	pump.start()
 
 
