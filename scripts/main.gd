@@ -2519,24 +2519,14 @@ func _solo_show_game_summary() -> void:
 	if privacy_menu != null and game_record_collector != null:
 		privacy_menu.set_last_game_record(game_record_collector.build_record())
 		game_record_collector.reset()
-	var dlg := AcceptDialog.new()
-	dlg.title = "Game over"
 	var obj_block: String = ("Objectives held:\n  %s: %d\n  %s: %d\n  Neutral: %d\n\n" % [
 		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), human_held, side_b_label, ai_held, neutral]) \
 		if not objectives.is_empty() else "No objective markers were on the table.\n\n"
 	var vp_block: String = ("Mission VP (decides):\n  %s: %d\n  %s: %d\n\n" % [
 		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), vp_a, side_b_label, vp_b]) \
 		if scored_by_vp else ""
-	dlg.dialog_text = "%d rounds played.\n\n%s%s%s" % [SOLO_GAME_ROUNDS, obj_block, vp_block, verdict]
-	dlg.confirmed.connect(dlg.queue_free)
-	dlg.canceled.connect(dlg.queue_free)
-	dlg.confirmed.connect(_maybe_prompt_for_evaluation_sharing)
-	dlg.canceled.connect(_maybe_prompt_for_evaluation_sharing)
-	if ThemeManager != null:
-		dlg.theme = ThemeManager.get_current_theme()
-	dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 0)
-	add_child(dlg)
-	dlg.popup_centered()
+	GameOverPanel.open(self, "%d rounds played.\n\n%s%s%s" % [SOLO_GAME_ROUNDS, obj_block, vp_block, verdict],
+		_maybe_prompt_for_evaluation_sharing)
 
 
 func _maybe_prompt_for_evaluation_sharing() -> void:

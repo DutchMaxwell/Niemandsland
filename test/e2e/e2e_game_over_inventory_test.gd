@@ -38,17 +38,17 @@ func after_test() -> void:
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 
 
-## The summary window the player sees (today an AcceptDialog on the main node).
+## The summary panel the player sees (an in-viewport layer on the main node).
 func _summary() -> Node:
 	for c in _main.get_children():
-		if c is AcceptDialog and (c as AcceptDialog).title == "Game over" and not c.is_queued_for_deletion():
+		if c is CanvasLayer and c.name == "GameOverLayer" and not c.is_queued_for_deletion():
 			return c
 	return null
 
 
 func _text() -> String:
 	var s := _summary()
-	return (s as AcceptDialog).dialog_text if s != null else "<no summary>"
+	return (s.find_child("Summary", true, false) as Label).text if s != null else "<no summary>"
 
 
 func _missing(want: Array) -> Array:
@@ -93,7 +93,7 @@ func test_no_markers_line_when_the_table_has_none() -> void:
 func test_ok_closes_the_summary_and_hands_over_to_the_sharing_prompt() -> void:
 	await _show()
 	assert_int(_stub.asked).is_equal(0)
-	(_summary() as AcceptDialog).confirmed.emit()
+	(_summary().find_child("OkButton", true, false) as Button).pressed.emit()
 	await _runner.simulate_frames(2)
 	assert_object(_summary()).override_failure_message("OK did not close the summary").is_null()
 	assert_int(_stub.asked).is_equal(1)
@@ -101,10 +101,31 @@ func test_ok_closes_the_summary_and_hands_over_to_the_sharing_prompt() -> void:
 
 func test_dismissal_hands_over_too() -> void:
 	await _show()
-	(_summary() as AcceptDialog).canceled.emit()
+	(_summary().find_child("CloseButton", true, false) as Button).pressed.emit()
 	await _runner.simulate_frames(2)
 	assert_object(_summary()).is_null()
 	assert_int(_stub.asked).is_equal(1)
+
+
+func test_escape_on_the_focused_ok_closes_it_too() -> void:
+	await _show()
+	var ok := _summary().find_child("OkButton", true, false) as Button
+	var esc := InputEventAction.new()
+	esc.action = "ui_cancel"
+	esc.pressed = true
+	ok.gui_input.emit(esc)
+	await _runner.simulate_frames(2)
+	assert_object(_summary()).is_null()
+	assert_int(_stub.asked).is_equal(1)
+
+
+func test_panel_is_house_style_and_owns_its_clicks() -> void:
+	await _show()
+	var layer := _summary()
+	var root := layer.get_child(0) as Control
+	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	assert_object(root.theme).is_same(HouseStyle.theme())
+	assert_str(String((layer.find_child("OkButton", true, false) as Button).theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
 
 
 func test_inventory_check_names_a_missing_line() -> void:
