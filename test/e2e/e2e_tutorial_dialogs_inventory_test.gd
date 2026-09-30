@@ -113,6 +113,22 @@ func test_cancelling_the_assessment_starts_but_asks_again_next_time() -> void:
 	assert_bool(_progress.assessment_answered()).is_false()
 
 
+func test_both_dialogs_wear_the_house_chrome_and_the_checks_stay_toggles() -> void:
+	var d: ConfirmationDialog = _dir._assessment_dialog
+	assert_object(d.theme).is_same(HouseStyle.theme())
+	assert_str(String(d.get_ok_button().theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	for c in _checks():
+		assert_str(String(c.theme_type_variation)).override_failure_message("a question became a button line").is_equal("")
+	_checks()[1].button_pressed = true
+	d.confirmed.emit()
+	await get_tree().process_frame
+	var skip := _skip_dialog()
+	assert_object(skip.theme).is_same(HouseStyle.theme())
+	assert_str(String(skip.get_ok_button().theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(skip.get_cancel_button().theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_bool(FileAccess.get_file_as_string("res://scripts/tutorial_director.gd").contains("HudTokens.SECTION_SEP")).is_false()
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	assert_array(_missing()).is_empty()
 	var check := _checks()[0]
