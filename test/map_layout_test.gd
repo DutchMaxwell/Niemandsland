@@ -165,3 +165,11 @@ func test_max_gap_lattice_covering_the_table_is_under_12_inches() -> void:
 		.override_failure_message("F1 — gap meter sampled from the table corner but cells live in grid coordinates: %s" % res.max_gap_inches) \
 		.is_less(12.0)
 	assert_bool(res.max_gap_ok).is_true()
+# ===== F6: stats need no UI =====
+
+func test_rebuild_without_ui_does_not_touch_missing_labels() -> void:
+	var ml := _layout()
+	ml.table_size_feet = Vector2(6, 4)
+	ml.free_cells[Vector2i(4, 4)] = ml.TerrainType.RUINS
+	ml._rebuild_derived()  # used to assign .text on the Nil stats label (460x in terrain_bank_dump)
+	assert_int(ml.grid_cells.size()).is_equal(1)
