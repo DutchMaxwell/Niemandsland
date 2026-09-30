@@ -18,8 +18,11 @@ nothing about a turn leaves the machine. One qualification, because "no network 
 if you let NACHTMAHR bring **its own** list, that list is fetched from the asset CDN the first time
 and cached (see below), so the very first use of **AI Opponent** needs a connection. Your own
 imported armies, and every decision NACHTMAHR makes, need none.
-**Exactly one difficulty ships: full strength** (`scripts/solo/solo_difficulty.gd` — every
-legacy grade name resolves to NACHTMAHR; selectable grades are a roadmap item). The match
+**A four-grade difficulty ladder is on `main`** (NML-1018, #1126 and
+#1127, merged 2026-09-26, not yet in a tagged release; source: git log): Dämmerung, Zwielicht and Finsternis play the decision tree; **Albtraum**, the default,
+plays with Erlkönig, NACHTMAHR's stronger model, where the core and its model load (on macOS it plays the
+tree's ceiling). The picker sits in the solo panel and the choice is remembered
+(`scripts/solo/solo_grade.gd`). Every grade plays by the rules. The match
 runs the rulebook flow end to end: roll-off → the winner picks a table edge and deploys
 first → both sides alternate unit by unit with explicit hand-over clicks → scout phase in
 the 12″ band → the roll-off winner opens round 1. Ambush / Infiltrate reserves wait off
@@ -353,7 +356,7 @@ and `hero_attachment_dialog.gd` were removed as dead code in January 2026 — th
 
 ## Known issues
 
-- **Solo is alpha.** One difficulty grade only (full strength); co-op against the AI is
+- **Solo is alpha.** Four selectable difficulty grades (unreleased, see above); co-op against the AI is
   a first version; the rules listed under *Not automated* above must be
   applied by hand; all solo UI is English-only. macOS builds carry no rules core, so there
   NACHTMAHR plays the decision tree only; AI thinking time has been measured on one machine.
