@@ -232,6 +232,15 @@ func _ready() -> void:
 		autogen_button.pressed.connect(_on_autogen_pressed)
 	if deployment_check:
 		deployment_check.toggled.connect(_on_deployment_toggled)
+	# File dialogs are Windows (they do not inherit this root's theme): give them the house look too
+	for dlg: FileDialog in [save_file_dialog, load_file_dialog]:
+		if dlg:
+			dlg.theme = HouseStyle.theme()
+	# The engine rewrites a FileDialog title when its mode is applied; pin the English titles
+	if save_file_dialog:
+		save_file_dialog.title = "Save Terrain Layout"
+	if load_file_dialog:
+		load_file_dialog.title = "Load Terrain Layout"
 	if save_file_dialog:
 		save_file_dialog.file_selected.connect(_on_save_file_selected)
 	if load_file_dialog:
