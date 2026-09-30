@@ -10,13 +10,15 @@ use crate::arbitration::adjudicate_end;
 use crate::dice::Tray;
 use crate::menu::{candidates_tuned, Candidate};
 use crate::mission::vp_of;
+use crate::plan::{rank, ScoredRow};
 use crate::playout::other_player;
 use crate::rng::GodotRng;
+use crate::score::score_with;
 use crate::rollout::{
     cross_round, delayed_action_passer, imagined_round_end, reinforcement_round_start,
     spawn_round_start, Rollout,
 };
-use crate::sim::{resolve_stochastic_tray_on_board, Scratch, Unsupported};
+use crate::sim::{reply_threat, resolve_stochastic_tray_on_board, Scratch, Unsupported};
 use crate::state::State;
 
 /// One decision node: `mover` picks among `children`, opened in order
@@ -33,10 +35,13 @@ pub struct Node {
     pub terminal: Option<f64>,
 }
 
-/// One edge out of a decision node; `node` is built when the edge is opened.
+/// One edge out of a decision node: `idx` is the row's build index in the
+/// node's menu, `nodes` one per chance sample (one under EV), empty until
+/// the edge is opened.
 pub struct Child {
+    pub idx: usize,
     pub cand: Candidate,
-    pub node: Option<Box<Node>>,
+    pub nodes: Vec<Node>,
 }
 
 /// What the walk found: the side that moves next, or the game's end.
@@ -209,4 +214,59 @@ pub fn transition(roll: &Rollout, state: &State, cand: &Candidate, dice: TreeDic
             }
         })
         .collect()
+}
+
+/// `player`'s rows at `state`, each resolved once (EV) and scored by the
+/// prefilter's own 1-ply rule (plan.rs `prefilter`: `score_with` with the
+/// reply threat, for the side that acts), with `rank`'s order: score desc,
+/// build index on ties.
+pub fn ranked(roll: &Rollout, state: &State, player: i64, sc: &mut Scratch)
+              -> Result<(Vec<ScoredRow>, Vec<usize>), Unsupported> {
+    let (statics, fit) = (roll.policy.statics, roll.policy.fit);
+    let mut rows = Vec::new();
+    for cand in menu(roll, state, player, sc) {
+        let next = roll.policy.resolve(state, &cand)?;
+        let score = score_with(&next, statics, player, &reply_threat(statics, &next, player), fit);
+        rows.push(ScoredRow { idx: rows.len(), unit_key: cand.unit.clone(), cand, score });
+    }
+    let order = rank(&rows, true);
+    Ok((rows, order))
+}
+
+/// The ROOT's children: the one-ply's prefilter rows, its rolled `pool`
+/// first in pool order, then the rest of its ranked `order`. The hand order
+/// ORDERS, it never cuts: every row is a child.
+pub fn root_children(rows: &[ScoredRow], order: &[usize], pool: &[usize]) -> Vec<Child> {
+    let rest = order.iter().filter(|i| !pool.contains(i));
+    pool.iter().chain(rest).map(|&i| Child { idx: i, cand: rows[i].cand.clone(), nodes: Vec::new() }).collect()
+}
+
+/// Opens up to `k` more of `node`'s children, in order (progressive
+/// widening: an opened child is never touched again, none is removed); a
+/// node below the root builds its children from `ranked` for its mover on
+/// its first expansion. An opened child gets one node per `transition`
+/// state: the Coordinate hand-off, then `advance` to the next decision, a
+/// game end priced by the referee for `player`. Returns how many opened.
+#[allow(clippy::too_many_arguments)]
+pub fn expand(roll: &Rollout, node: &mut Node, k: usize, dice: TreeDice, samples: usize, base: Option<i64>,
+              player: i64, sc: &mut Scratch) -> Result<usize, Unsupported> {
+    if node.terminal.is_some() {
+        return Ok(0);
+    }
+    if node.children.is_empty() {
+        let (rows, order) = ranked(roll, &node.state, node.mover, sc)?;
+        node.children = root_children(&rows, &order, &[]);
+    }
+    let (from, to) = (node.next_child, (node.next_child + k).min(node.children.len()));
+    for c in from..to {
+        let cand = node.children[c].cand.clone();
+        for mut cur in transition(roll, &node.state, &cand, dice, samples, base)? {
+            roll.coordinate_hand_off(&mut cur, &cand, player, sc)?;
+            let turn = other_player(&cur, node.mover);
+            let step = advance(roll, &mut cur, turn, None);
+            node.children[c].nodes.push(Node::new(cur, step, player));
+        }
+    }
+    node.next_child = to;
+    Ok(to - from)
 }
