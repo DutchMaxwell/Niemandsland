@@ -126,6 +126,10 @@ func _build_ui() -> void:
 	vbox.set_h_size_flags(Control.SIZE_EXPAND_FILL)
 	scroll.add_child(vbox)
 	_main_vbox = vbox
+	# Not modal, like the old window: no scrim over the table (the lighting is tuned by eye) and its clicks pass through.
+	var root := parts["root"] as Control
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	(root.get_node("Scrim") as ColorRect).visible = false
 	add_child(parts["root"] as Control)
 
 	# Lighting moods are chosen through the ATMOSPHERE section only (added at the top by
@@ -411,6 +415,8 @@ func _add_color_picker(parent: Control, key: String, label_text: String) -> void
 
 	var picker = ColorPickerButton.new()
 	picker.color = Color.WHITE
+	picker.theme_type_variation = HouseStyle.BUTTON   # the swatch needs a box and a size under the house theme
+	picker.custom_minimum_size = Vector2(56, HouseStyle.H_PIP)
 	picker.color_changed.connect(_on_color_changed.bind(key))
 	hbox.add_child(picker)
 

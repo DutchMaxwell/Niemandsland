@@ -173,9 +173,12 @@ func test_escape_and_the_x_hide_the_panel() -> void:
 	assert_bool(_panel.visible).is_false()
 
 
-func test_panel_is_a_house_style_sheet_that_owns_its_clicks() -> void:
+func test_panel_is_a_house_style_sheet_that_is_not_modal() -> void:
 	var root := _panel.get_child(0) as Control
-	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	assert_int(root.mouse_filter).override_failure_message("the settings sheet must not lock the table").is_equal(Control.MOUSE_FILTER_IGNORE)
+	assert_bool((root.get_node("Scrim") as ColorRect).visible).override_failure_message("no scrim over the table while tuning the light").is_false()
+	var sheet := root.find_child("Sheet", true, false) as Control
+	assert_int(sheet.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
 	assert_object(root.theme).is_same(HouseStyle.theme())
 
 
