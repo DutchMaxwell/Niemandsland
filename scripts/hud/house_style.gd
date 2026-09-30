@@ -216,6 +216,12 @@ static func theme() -> Theme:
 	t.set_stylebox(&"grabber_area", &"HSlider", _box(_alpha(GOLD, 0.6), _alpha(GOLD, 0.6), RADIUS_CONTROL, 0, 2))
 	t.set_stylebox(&"grabber_area_highlight", &"HSlider", _box(GOLD, GOLD, RADIUS_CONTROL, 0, 2))
 
+	# Text fields (online dialogs): a sunken well, an accent rim while typing.
+	t.set_stylebox(&"normal", &"LineEdit", _box(WELL, LINE, RADIUS_CONTROL, PAD_CARD_X, PAD_CARD_Y))
+	t.set_stylebox(&"focus", &"LineEdit", _box(WELL, ACCENT, RADIUS_CONTROL, PAD_CARD_X, PAD_CARD_Y))
+	t.set_color(&"font_color", &"LineEdit", INK)
+	t.set_color(&"font_placeholder_color", &"LineEdit", _alpha(MUTED, 0.7))
+
 	# Tool rail: quiet buttons until hovered, the open tool in gold (mockup .rail-btn / .active).
 	var none := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
 	var rail_hover := _box(FILL_RAISED, Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
