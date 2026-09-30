@@ -218,6 +218,7 @@ var _modular_status_label: Label = null
 
 
 func _ready() -> void:
+	HouseStyle.apply(self)
 	close_button.pressed.connect(_on_close_pressed)
 	clear_button.pressed.connect(_on_clear_pressed)
 	rotation_slider.value_changed.connect(_on_rotation_changed)
@@ -251,41 +252,26 @@ func _ready() -> void:
 	_update_recommendations()
 
 
-## Restyle the scene-defined "MAP LAYOUT EDITOR" title to the tactical HUD language
-## (Orbitron head font) and drop a thin amber->cyan accent line beneath the header row.
+## Dress the scene-defined header in the house style: theme on the root, variants on title + buttons.
 func _style_header_chrome() -> void:
 	var title := get_node_or_null("MarginContainer/VBox/Header/Title") as Label
 	if title:
-		title.add_theme_font_override("font", HudTokens.head_font())
-		title.add_theme_color_override("font_color", HudTokens.TEXT)
-
+		title.theme_type_variation = HouseStyle.EYEBROW
 	var header := get_node_or_null("MarginContainer/VBox/Header")
-	if header and header.get_parent():
-		var vbox := header.get_parent()
-		var line := HBoxContainer.new()
-		line.name = "HeaderAccentLine"
-		line.add_theme_constant_override("separation", 0)
-		var amber := ColorRect.new()
-		amber.color = HudTokens.AMBER
-		amber.custom_minimum_size = Vector2(24, HudTokens.ACCENT_LINE)
-		var cyan := ColorRect.new()
-		cyan.color = Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.85)
-		cyan.custom_minimum_size = Vector2(0, HudTokens.ACCENT_LINE)
-		cyan.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		line.add_child(amber)
-		line.add_child(cyan)
-		vbox.add_child(line)
-		vbox.move_child(line, header.get_index() + 1)
+	if header:
+		header.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
+	var bg := get_node_or_null("Background") as ColorRect
+	if bg:
+		bg.color = HouseStyle.SHEET_FILL
 
-	# Migrate the scene-defined header action buttons to token colours + variations.
 	if save_button:
-		save_button.theme_type_variation = "PrimaryButton"
+		save_button.theme_type_variation = HouseStyle.PRIMARY
+	if load_button:
+		load_button.theme_type_variation = HouseStyle.BUTTON
 	if clear_button:
-		clear_button.add_theme_color_override("font_color", HudTokens.AMBER)
-		clear_button.add_theme_color_override(
-			"font_hover_color", Color(HudTokens.AMBER.r, HudTokens.AMBER.g, HudTokens.AMBER.b, 1.0))
+		clear_button.theme_type_variation = HouseStyle.DANGER_BUTTON
 	if close_button:
-		close_button.theme_type_variation = "DangerButton"
+		close_button.theme_type_variation = HouseStyle.ICON
 
 	# Migrate the scene-defined left-panel labels to token greys/whites + amber accents.
 	# These scene nodes have been reparented into tabs by _setup_tabs(), so search the
@@ -321,13 +307,6 @@ func _style_header_chrome() -> void:
 			autogen.add_theme_color_override("font_color", HudTokens.SUCCESS)
 			autogen.add_theme_color_override(
 				"font_hover_color", Color(HudTokens.SUCCESS.r, HudTokens.SUCCESS.g, HudTokens.SUCCESS.b, 1.0))
-
-	# Make the left tool panel read as a HUD module: deep-navy fill + corner brackets.
-	var left_container := get_node_or_null(
-		"MarginContainer/VBox/MainContent/LeftPanelContainer") as PanelContainer
-	if left_container:
-		left_container.add_theme_stylebox_override("panel", HudTokens.panel_style())
-		left_container.add_child(HudFrame.new())
 
 
 ## Reorganize the flat left panel into Terrain / Objectives / Deployment tabs.
