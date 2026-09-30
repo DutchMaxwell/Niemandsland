@@ -495,13 +495,16 @@ pub fn profile_ev(
     let melee = p.range <= 0;
     // --- to-hit target (ai_ev.gd:335-357) ---
     let mut target;
+    // D21: the running unclamped sum beside the clamped target (== target below the gate).
+    let mut raw;
     if melee {
         if att.fatigued {
             // Fatigue (p.9): hits ONLY on an unmodified 6 — a hard target
             // OUTSIDE the modifier pipeline (ai_ev.gd:336-341).
             target = 6;
+            raw = 6;
         } else {
-            target = thrust_to_hit(att.quality, charging && p.thrust, BEST_HIT_TARGET);
+            raw = thrust_to_hit(att.quality, charging && p.thrust, def.def_floor());
             // The Stealth data-alias pair rides the fold, but the EV
             // imagination measures NO pre-charge gap (ai_ev.gd:442's melee
             // branch has no alias leg either) — charge_from_in stays 0.0,
@@ -525,10 +528,10 @@ pub fn profile_ev(
             if p.unstoppable_ev && melee_mod < 0 {
                 melee_mod = 0;
             }
-            target = modified_hit_target(target, melee_mod);
+            (raw, target) = fold_hit(def.modifier_sum, raw, melee_mod);
         }
     } else {
-        target = reliable_quality(att.quality, p.reliable);
+        raw = reliable_quality(att.quality, p.reliable);
         // ai_ev.gd:352 never reads Shot Modifier (Good Shot / Bad Shot /
         // Targeting Visor) OR the Stealth data-alias family (ai_ev.gd:151's
         // `ctx_for` reads only the literal "Stealth" name too) — the EV
@@ -545,7 +548,7 @@ pub fn profile_ev(
         if p.unstoppable_ev && shoot_mod < 0 {
             shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
         }
-        target = modified_hit_target(target, shoot_mod);
+        (raw, target) = fold_hit(def.modifier_sum, raw, shoot_mod);
     }
     // --- Versatile Attack (ai_ev.gd:361-368) ---
     let mut versatile_ap = 0;
@@ -566,10 +569,10 @@ pub fn profile_ev(
             versatile_best_mode(target, choose_def, p.ap, p.bane)
         };
         versatile_ap = ap_mod;
-        target = modified_hit_target(target, hit_mod);
+        (raw, target) = fold_hit(def.modifier_sum, raw, hit_mod);
     }
     if p.precise {
-        target = modified_hit_target(target, 1);
+        (_, target) = fold_hit(def.modifier_sum, raw, 1);
     }
     let mut hits = attacks_f * success_chance(target);
     // --- per-unmodified-6 bonus hits (ai_ev.gd:373-385) ---
