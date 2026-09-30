@@ -1939,6 +1939,18 @@ static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionar
 	for k in ["vp", "vp_flavour", "vp_memo", "markers_meta", "destroy_seq"]:
 		if state.has(k):
 			out[k] = state[k]
+	# The round's cast-attempt log, only when non-empty (the Rust plain_of's rule, io.rs
+	# `cast_events`): cast-off corpora stay byte-identical. A conduit event's origin
+	# position is a Vector3 in the live state and an [x,y,z] array in plain.
+	var cast_log: Array = state.get("cast_events", [])
+	if not cast_log.is_empty():
+		var plain_events: Array = []
+		for e in cast_log:
+			var pe: Dictionary = (e as Dictionary).duplicate(true)
+			if pe.has("origin"):
+				(pe["origin"] as Dictionary)["position"] = _plain_vec3(pe["origin"]["position"])
+			plain_events.append(pe)
+		out["cast_events"] = plain_events
 	# NML-1073 M1-2: the DYNAMIC sight answers. `_los_clear` (:666) probes the
 	# los_blocked Callable with the CURRENT unit centres, so a plain state that
 	# carries only positions cannot reproduce it — the Rust port would have to

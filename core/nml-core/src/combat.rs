@@ -150,27 +150,27 @@ pub fn shooting_hit_modifier(
 /// as one sum on the table (main.gd:5552-5559). Callers read the number off
 /// `Ctx::shielded_bonus`, never off the bare `shielded` bool. 0 = no fold.
 #[inline]
-pub fn shielded_defense(defense: i64, bonus: i64) -> i64 {
+pub fn shielded_defense(defense: i64, bonus: i64, floor: i64) -> i64 {
     if bonus > 0 {
-        (defense - bonus).max(BEST_HIT_TARGET)
+        (defense - bonus).max(floor)
     } else {
         defense
     }
 }
 
 #[inline]
-pub fn covered_defense(defense: i64, in_cover: bool) -> i64 {
+pub fn covered_defense(defense: i64, in_cover: bool, floor: i64) -> i64 {
     if in_cover {
-        (defense - 1).max(BEST_HIT_TARGET)
+        (defense - 1).max(floor)
     } else {
         defense
     }
 }
 
 #[inline]
-pub fn guarded_defense(defense: i64, applies: bool) -> i64 {
+pub fn guarded_defense(defense: i64, applies: bool, floor: i64) -> i64 {
     if applies {
-        (defense - 1).max(BEST_HIT_TARGET)
+        (defense - 1).max(floor)
     } else {
         defense
     }
@@ -535,7 +535,7 @@ pub fn profile_ev(
     // --- Versatile Attack (ai_ev.gd:361-368) ---
     let mut versatile_ap = 0;
     if p.versatile_attack && dist_in > LONG_RANGE_IN && (!melee || charging) {
-        let choose_def = shielded_defense(def.defense, def.shielded_bonus());
+        let choose_def = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
         // EPOCH_38_WATCHBORN_LATCH — a latched activation pick rides the Ctx
         // (sim::versatile_latch): the EV reuses the FIRST eligible attack's
         // pick instead of re-deciding per imagined attack.
@@ -591,14 +591,14 @@ pub fn profile_ev(
     // --- saves: Shielded, then Cover, then Guarded (ai_ev.gd:403-411) ---
     // Cover and Guarded are SHOOTING-only reads: melee EV always values at
     // dist 0, so the charge halves of both live in the dice path only.
-    let mut defense = shielded_defense(def.defense, def.shielded_bonus());
+    let mut defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
     if !melee && p.blast <= 1 && !p.indirect && !p.ignores_cover {
-        defense = covered_defense(defense, def.in_cover);
+        defense = covered_defense(defense, def.in_cover, def.def_floor());
     }
     if !melee {
         // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost replaces the gate; a
         // MAX over the two readings, never a second -1 (the dice fold's twin).
-        defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded);
+        defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded, def.def_floor());
     }
     // NML-1103 — target-property conditional AP (ai_ev.gd:412-417): Shatter,
     // Tear, Disintegrate, Melee Slayer, Piercing Assault, Piercing Hunter. The
@@ -696,7 +696,7 @@ pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
         return 0.0;
     }
     let p_hit = success_chance(IMPACT_HIT_TARGET);
-    let defense = shielded_defense(def.defense, def.shielded_bonus());
+    let defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
     let mut wounds = dice as f64 * p_hit * (1.0 - block_chance(defense, 0, false))
         + heavy_dice as f64 * p_hit * (1.0 - block_chance(defense, 1, false));
     if def.regeneration {

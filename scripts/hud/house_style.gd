@@ -30,6 +30,7 @@ const LINE_SOFT := Color(0.529, 0.729, 0.737, 0.22)   # window rim (accent at 22
 const FILL := Color(1, 1, 1, 0.03)    # a resting control
 const FILL_RAISED := Color(1, 1, 1, 0.05)   # icon buttons
 const WELL := Color(0, 0, 0, 0.30)    # sunken cards: counter, result, log
+const OUTLINE := Color(0, 0, 0, 0.85) # the rim of a readout drawn straight onto the table
 # State colours: always paired with a label or glyph, never hue alone.
 const OK := Color("5fbf8a")
 const WARN := Color("e0a34a")
@@ -110,8 +111,12 @@ const BODY := &"HsBody"             # plain text / a small value
 const CAPTION := &"HsCaption"       # muted field label
 const EYEBROW := &"HsEyebrow"       # the window title
 const VALUE := &"HsValue"           # a big number (the dice count)
+const READOUT := &"HsReadout"       # a big number drawn straight onto the table (the ruler / drag distance)
+const BAR_TEXT := &"HsBarText"      # a plain readout in the top bar's row (the FPS line), boxed like its chips
 const NOTE := &"HsNote"             # a gold key line (roll purpose, result summary)
 const SMALL := &"HsSmall"           # dense readout text (log lines, tally counts)
+const STATUS := &"HsStatus"         # a top status line on a small window plate (banners, toasts)
+const VOICE := &"HsVoice"           # the AI's own words, large and gold ("NACHTMAHR dreams…")
 const HIT := &"HsHit"               # a success count next to its glyph
 const RAIL := &"HsRail"             # a tool in the tool rail; the open tool = selected (gold)
 const RAIL_PANEL := &"HsRailPanel"  # the rail's own slim frame
@@ -136,6 +141,9 @@ const GLYPH_EXPAND := "▲"
 const GLYPH_MINUS := "−"
 const GLYPH_CLOSE := "×"
 const GLYPH_GO := "›"
+const GLYPH_BACK := "‹"
+const GLYPH_PAUSE := "‖"
+const GLYPH_PLAY := "▶"
 
 # ===== Dice =====
 ## The dice look — ONE switch for the physics dice, their tally icons and the dice log
@@ -252,10 +260,26 @@ static func theme() -> Theme:
 	spaced.spacing_glyph = EYEBROW_SPACING
 	t.set_font(&"font", EYEBROW, spaced)
 	_label_variant(t, VALUE, INK, FONT_VALUE)
+	# A readout sits on the table itself and is often empty, so no plate hangs in the air: gold with a rim.
+	_label_variant(t, READOUT, GOLD, FONT_VALUE)
+	t.set_color(&"font_outline_color", READOUT, OUTLINE)
+	t.set_constant(&"outline_size", READOUT, 3)
+	_label_variant(t, BAR_TEXT, INK, FONT_SMALL)
+	t.set_stylebox(&"normal", BAR_TEXT, _box(PANEL, LINE, RADIUS_CARD, PAD_CHIP_X, 2))
 	_label_variant(t, NOTE, GOLD, FONT_CAPTION)
 	_label_variant(t, SMALL, INK, FONT_SMALL)
 	_label_variant(t, HIT, ACCENT, FONT_BODY)
+	# A status line carries its own plate: readable over the table without an outline.
+	_label_variant(t, STATUS, INK, FONT_ACTION)
+	t.set_stylebox(&"normal", STATUS, _box(PANEL, LINE_SOFT, RADIUS_CARD, PAD_CHIP_X, 4))
+	_label_variant(t, VOICE, GOLD, FONT_VALUE)
 	t.set_color(&"font_color", &"Label", INK)
+
+	# Native dialogs of the menu scene (MenuDialog): the sheet box, light text on it.
+	t.set_stylebox(&"panel", &"AcceptDialog", _box(SHEET_FILL, LINE_SOFT, RADIUS_SHEET, PAD_SHEET, PAD_SHEET))
+	t.set_color(&"default_color", &"RichTextLabel", INK)
+	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
+		t.set_color(c, &"CheckBox", INK)
 
 	# A slim scrollbar for sunken lists (the dice log).
 	var grab := _box(LINE, LINE, RADIUS_CONTROL, 0, 0)
