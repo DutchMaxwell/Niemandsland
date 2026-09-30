@@ -106,6 +106,22 @@ func test_the_advisory_wears_the_house_style() -> void:
 	assert_int(_panel().mouse_filter).override_failure_message("the advisory must own its clicks").is_equal(Control.MOUSE_FILTER_STOP)
 
 
+func test_the_advisory_is_centred_and_clear_of_the_units_tab() -> void:
+	_main._show_fps_advisory()
+	await _runner.simulate_frames(3)
+	var rect := _panel().get_global_rect()
+	var vp := _panel().get_viewport_rect().size
+	assert_float(rect.get_center().x).override_failure_message(
+		"the advisory's centre is at x %.0f, the screen centre at %.0f" % [rect.get_center().x, vp.x * 0.5]).is_equal_approx(vp.x * 0.5, 2.0)
+	var tab: Control = null
+	for n: Node in _main.find_children("*", "Button", true, false):
+		if (n as Button).text.ends_with("Units") and (n as Control).is_visible_in_tree():
+			tab = n as Control
+	assert_object(tab).override_failure_message("the Units tab was not found").is_not_null()
+	assert_bool(rect.intersects(tab.get_global_rect())).override_failure_message("the advisory covers the Units tab").is_false()
+	assert_bool(Rect2(Vector2.ZERO, vp).encloses(rect)).override_failure_message("the advisory leaves the screen").is_true()
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	_main._show_fps_advisory()
 	await _runner.simulate_frames(2)
