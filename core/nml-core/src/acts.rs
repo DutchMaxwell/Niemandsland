@@ -582,7 +582,19 @@ pub const EPOCH_65_MELEE_TRUTH: u32 = 65;
 /// reads THIS constant, not the literal `58` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_58_PRECISION_DEBUFF: u32 = 58;
 pub const EPOCH_66_DISTANCE_TRUTH: u32 = 66;
-pub const CURRENT_RULES_EPOCH: u32 = 66;
+/// The MARKERS & BURSTS gate (28.09., wave 3 batch D, D42 a): Piercing
+/// Target's +AP(X) stands while the target lives (army-book v3.5.3, no
+/// removal clause) instead of spending on the first volley like the rest of
+/// the Piercing-Tag family — `piercing_tag_spend` reads
+/// `State.piercing_tag_persistent[ti]`, set by the placement
+/// (`tray_piercing_tag`) only for the "Piercing Target" name, itself gated
+/// on this constant so a record below it keeps the old spend-whole reading.
+/// `67` is one past every epoch present at the rebase (66 =
+/// `EPOCH_66_DISTANCE_TRUTH`), and `CURRENT_RULES_EPOCH` is bumped to it in
+/// the same change. Every call site reads THIS constant, never the literal
+/// `67` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_67_MARKERS_BURSTS: u32 = 67;
+pub const CURRENT_RULES_EPOCH: u32 = 67;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1788,7 +1800,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 66, "the live epoch is EPOCH_66_DISTANCE_TRUTH");
+        assert_eq!(CURRENT_RULES_EPOCH, 67, "the live epoch is EPOCH_67_MARKERS_BURSTS");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1798,11 +1810,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":66}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":67}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 65"
+            "a fresh play_game() now stamps the bumped epoch, 67"
         );
     }
 

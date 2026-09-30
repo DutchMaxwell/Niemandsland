@@ -185,8 +185,9 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## hit reads the per-model within-1" terrain predicate on both layers; the
 ## table's cover-cell approximation is dropped).
 ## on the Regeneration fold).
-## Wave 3 batch B moves this stamp to 65 with EPOCH_65_MELEE_TRUTH.
-static var rules_epoch: int = 66
+## Wave 3 batch B moves this stamp to 65 with EPOCH_65_MELEE_TRUTH, batch C to 66 with
+## EPOCH_66_DISTANCE_TRUTH, batch D to 67 with EPOCH_67_MARKERS_BURSTS (D42/W3-4/D19/D20).
+static var rules_epoch: int = 67
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
@@ -768,6 +769,13 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 	var sr := int(u.unit_properties.get("spotted_round", -1))
 	if sr != -1:
 		ledger["spot_round"] = sr
+	# Wave 3 batch D (D42 a, EPOCH_67_MARKERS_BURSTS) — the Piercing-Tag family's marker pool ON
+	# the tagged unit, and which name placed it last: only "Piercing Target" keeps the core from
+	# spending it whole (main.gd `_solo_spend_piercing_tag` / sim.rs `piercing_tag_spend`).
+	var ptm := int(u.unit_properties.get("piercing_tag_markers", 0))
+	if ptm > 0:
+		ledger["piercing_tag_markers"] = ptm
+		ledger["piercing_tag_source"] = str(u.unit_properties.get("piercing_tag_source", ""))
 	var pu: Array = []
 	if bool(u.unit_properties.get("precision_tag_used", false)):
 		pu.append("Precision Tag")

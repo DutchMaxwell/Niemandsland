@@ -99,6 +99,7 @@
             limited_used: vec![Vec::new(); 4],
             piercing_tag_used: vec![false; 4],
             piercing_tag_markers: vec![0; 4],
+            piercing_tag_persistent: vec![false; 4],
             spot_markers: vec![0; 4],
             tag_markers: vec![0; 4],
             spot_round: vec![-1; 4],

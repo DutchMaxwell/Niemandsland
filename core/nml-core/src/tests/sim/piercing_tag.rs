@@ -90,6 +90,40 @@ use super::*;
         assert!(shot5.log.iter().all(|l| !l.contains("Piercing")));
     }
 
+    /// D42 (a), `EPOCH_67_MARKERS_BURSTS` — from the new gate Piercing
+    /// Target's marker STANDS while the target lives (army-book v3.5.3, no
+    /// removal clause): a second volley at the same target still reads the
+    /// pool. RED before the fix: the second call sees a spent (zeroed) pool
+    /// like every other family member.
+    #[test]
+    fn piercing_target_marker_persists_across_two_volleys_from_epoch_67() {
+        let (st, statics) = tag_line("Piercing Target", 1, 18.0);
+        let s67 = Seams { rules_epoch: 67, ..Seams::default() };
+        let (mut next1, shot1) = tag_volley(&statics, &st, s67);
+        assert_eq!(shot1.rolls[1].target, 5, "first volley: +AP(1)");
+        assert_eq!(next1.piercing_tag_markers[2], 1, "the pool stands after the first volley");
+        assert!(
+            shot1.log.iter().any(|l| l == "Piercing Target: +AP(1) stands while b lives"),
+            "rules-must-log: the persistent spend names itself — got {:#?}",
+            shot1.log
+        );
+
+        // A second spend against the still-marked target (the low-level function,
+        // not a second full volley — the fixture's `b` has 1 wound and the first
+        // volley already resolved it, so a second `tag_volley` is not a clean
+        // probe of the spend seam alone): the pool must still read 1 and stand.
+        let second = piercing_tag_spend(&mut next1, 2, 67);
+        assert_eq!(second, 1, "D42 a: a second volley must still see the marker");
+        assert_eq!(next1.piercing_tag_markers[2], 1, "still standing after the second spend");
+
+        // Below the gate the old spend-everything reading still applies — proof
+        // the epoch gate, not a blanket rewrite, is what moved.
+        let mut below = st.clone();
+        below.piercing_tag_markers[2] = 1;
+        assert_eq!(piercing_tag_spend(&mut below, 2, 66), 1);
+        assert_eq!(below.piercing_tag_markers[2], 0, "epoch 66: still spends whole below the gate");
+    }
+
     /// NML-1150: an act whose two members fire at TWO different units resolves
     /// as the table resolves it — one tray volley per target group, in the
     /// act's group order, on ONE tray. The host's rifle opens at `b`, the

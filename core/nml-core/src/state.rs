@@ -600,6 +600,14 @@ pub struct State {
     /// (`_solo_apply_piercing_tag`), spent whole by the next volley at this
     /// unit for +AP per marker (main.gd:3123 AI / :9857 human, shooting only).
     pub piercing_tag_markers: Vec<i64>,
+    /// Wave 3 batch D (`EPOCH_67_MARKERS_BURSTS`, D42 a) — set true on the
+    /// tagged unit by the placement (`tray_piercing_tag`) only for the
+    /// "Piercing Target" name (`unit_properties["piercing_tag_source"]`,
+    /// act_recorder.gd `_ledger_of`): while true, `piercing_tag_spend` reads
+    /// the pool WITHOUT zeroing it — the book text has no removal clause,
+    /// unlike Tag/Spotter which still spend whole. False below the gate and
+    /// for every other family name.
+    pub piercing_tag_persistent: Vec<bool>,
     /// Wave 3 — `unit_properties["storm_used_<rule>"]` (main.gd:17244): the
     /// Storm Attack family's ONCE-per-game flags, per unit the DISPLAY names
     /// already fired this game (the recorder stamps them off the same flags,
