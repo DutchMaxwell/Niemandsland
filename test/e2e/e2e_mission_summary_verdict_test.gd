@@ -54,8 +54,8 @@ func _arm_progressive_endgame() -> void:
 ## The text the player reads in the "Game over" dialog.
 func _summary_dialog_text() -> String:
 	for c in _main.get_children():
-		if c is AcceptDialog:
-			return (c as AcceptDialog).dialog_text
+		if c is CanvasLayer and c.name == "GameOverLayer":
+			return (c.find_child("Summary", true, false) as Label).text
 	return "<no summary dialog>"
 
 

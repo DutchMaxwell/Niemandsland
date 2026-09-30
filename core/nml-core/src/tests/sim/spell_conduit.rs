@@ -155,6 +155,19 @@ use crate::spell::cast_success_chance;
         assert_eq!(damage(&next), 0.0);
     }
 
+    /// The cast-attempt event names the conduit origin the way the table does
+    /// (battle_sim.gd `_cast_phase`): `origin.unit` = the roster key, `position`
+    /// = the unit centre as [x,y,z] (castparity step 4, decision D2).
+    #[test]
+    fn the_attempt_event_records_the_conduit_origin() {
+        let (st, statics) = conduit_line(20.0, Some((12.0, true)), None, 8);
+        let next = run(&st, &statics, 8);
+        let ev = next.cast_events.iter().find(|e| e.get("spell").is_some()).expect("one attempt event");
+        assert_eq!(ev["origin"]["unit"], st.roster.keys[1].as_str());
+        assert!((ev["origin"]["position"][0].as_f64().unwrap() - 12.0 * IN2M).abs() < 1e-6);
+        assert_eq!(ev["target"], st.roster.keys[2].as_str());
+    }
+
     /// (b) Two conduits: the FIRST REACHABLE origin in walk order is the
     /// cast's origin — never EV-shopping over origins (the official walk).
     #[test]
@@ -227,7 +240,8 @@ use crate::spell::cast_success_chance;
         let next_cond = run(&st_cond, &s_cond, 8);
         assert_eq!(next_plain.casts, next_cond.casts, "the caster's own origin wins the walk");
         assert_eq!(damage(&next_plain), damage(&next_cond), "byte-identical landed EV");
-        assert!(next_cond.cast_events.is_empty(), "no conduit rode the cast, nothing logs");
+        assert!(!logged(&next_cond, "Spell Conduit"), "no conduit rode the cast, nothing logs");
+        assert!(next_cond.cast_events[0].get("origin").is_none(), "the caster's own origin writes no origin key");
 
         let ctx = ctx_of(&s_cond[2], &st_cond, 2);
         let flat = cast_success_chance(0, 0) * spell_damage_ev_of(&bolt(), &ctx);

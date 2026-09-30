@@ -1215,6 +1215,46 @@ pub fn state_from_json_with_epoch(
     Ok(state_of(plain, &eff, roster, rules_epoch))
 }
 
+/// The cast-ATTEMPT events of a state — the entries carrying a `spell`, the
+/// table's `_cast_phase` shape (battle_sim.gd:1295-1297). Log lines
+/// (`rule`/`log`) are not attempts and are not compared.
+fn cast_attempts(st: &State) -> Vec<&serde_json::Value> {
+    st.cast_events.iter().map(|e| &**e).filter(|e| e.get("spell").is_some()).collect()
+}
+
+/// Parity of the cast-attempt events: `None` when `got` and `want` agree,
+/// else a message naming the first differing field. Every field is exact
+/// except `p_success` and an `origin.position`, compared within 1e-9.
+pub fn cast_attempts_diff(got: &State, want: &State) -> Option<String> {
+    let (g, w) = (cast_attempts(got), cast_attempts(want));
+    if g.len() != w.len() {
+        return Some(format!("cast_events: {} attempt(s), want {}", g.len(), w.len()));
+    }
+    let near = |a: &serde_json::Value, b: &serde_json::Value| match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => (x - y).abs() <= 1e-9,
+        _ => a == b,
+    };
+    for (i, (a, b)) in g.iter().zip(&w).enumerate() {
+        for k in ["spell", "kind", "cost", "target", "boost", "interference"] {
+            if a.get(k) != b.get(k) {
+                return Some(format!("cast_events[{i}].{k}: {:?}, want {:?}", a.get(k), b.get(k)));
+            }
+        }
+        if !near(&a["p_success"], &b["p_success"]) {
+            return Some(format!("cast_events[{i}].p_success: {}, want {}", a["p_success"], b["p_success"]));
+        }
+        if a.get("origin").is_some() != b.get("origin").is_some() || a["origin"]["unit"] != b["origin"]["unit"] {
+            return Some(format!("cast_events[{i}].origin: {:?}, want {:?}", a.get("origin"), b.get("origin")));
+        }
+        if let (Some(pa), Some(pb)) = (a["origin"]["position"].as_array(), b["origin"]["position"].as_array()) {
+            if pa.len() != pb.len() || pa.iter().zip(pb).any(|(x, y)| !near(x, y)) {
+                return Some(format!("cast_events[{i}].origin.position: {pa:?}, want {pb:?}"));
+            }
+        }
+    }
+    None
+}
+
 /// The inverse of `state_from_json` (NML-1073 M3-2) — the plain form
 /// `BattleSim.state_to_plain(state, false)` would have written for this state.
 /// Mirrors `core/nml-core-godot/src/plain.rs:418-548`, with one difference that
