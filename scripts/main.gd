@@ -1758,10 +1758,10 @@ func _solo_pump() -> void:
 # FPS text in the field-test screenshots. All three lanes now stack BELOW that band. (23.09.: the FPS
 # line moved up into the top bar's row, 16–40 px; the lanes stay where they were, below the bar.)
 const STATUS_LANE_BANNER := 92
-const STATUS_LANE_TOAST := 116
+const STATUS_LANE_TOAST := 124
 ## How long a plain OPERATIONAL notice stays up (NML-955 keeps AI explanations off this timer).
 const SOLO_TOAST_HIDE_S := 6.0
-const STATUS_LANE_PEER := 140
+const STATUS_LANE_PEER := 156
 
 
 ## One top-centre status label (never intercepts the mouse). `lane` is one of STATUS_LANE_*.
@@ -1770,13 +1770,19 @@ func _make_status_banner(node_name: String, text: String, lane: int) -> Label:
 	lbl.name = node_name
 	lbl.text = text
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE   # never blocks clicks/camera
-	lbl.add_theme_font_size_override("font_size", 18)
-	lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
-	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	lbl.add_theme_constant_override("outline_size", 4)
-	lbl.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, lane)
+	_status_plate(lbl, lane)
 	$UI.add_child(lbl)
 	return lbl
+
+
+## A status line in the house look (maintainer D98 = a): one plate for every lane, where the lines used
+## to be three text colours with an outline. It grows both ways from the top-centre anchor — the
+## preset is taken before the label has its font, and a label grown only to the right sat off centre.
+func _status_plate(lbl: Label, lane: int) -> void:
+	lbl.theme = HouseStyle.theme()
+	lbl.theme_type_variation = HouseStyle.STATUS
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, lane)
+	lbl.grow_horizontal = Control.GROW_DIRECTION_BOTH
 
 
 func _show_solo_ai_banner() -> void:
@@ -1794,7 +1800,8 @@ func _hide_solo_ai_banner() -> void:
 
 ## The centred "NACHTMAHR dreams…" overlay (maintainer: middle of the screen — a top banner is missed)
 ## with the animated idle spinner, shown for the whole AI compute phase so the wait is transparent. A
-## dark rounded panel, the amber persona palette; never intercepts the mouse. Skipped in headless/batch.
+## house overlay sheet, the words and the spinner in the AI's gold; never intercepts the mouse. Skipped
+## in headless/batch.
 func _show_dream_overlay() -> void:
 	if is_instance_valid(_solo_dream_overlay) or _solo_batch:
 		return
@@ -1802,19 +1809,14 @@ func _show_dream_overlay() -> void:
 	centre.name = "DreamOverlay"
 	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	centre.theme = HouseStyle.theme()
 
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.05, 0.08, 0.82)
-	sb.set_corner_radius_all(14)
-	sb.set_content_margin_all(26)
-	sb.border_color = Color(1.0, 0.78, 0.30, 0.35)
-	sb.set_border_width_all(1)
-	panel.add_theme_stylebox_override("panel", sb)
+	panel.theme_type_variation = HouseStyle.SHEET
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 18)
+	row.add_theme_constant_override("separation", HouseStyle.PAD_SHEET)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -1823,14 +1825,8 @@ func _show_dream_overlay() -> void:
 	spinner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(spinner)
 
-	var label := Label.new()
-	label.text = "NACHTMAHR dreams…"
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var label := HouseStyle.label("NACHTMAHR dreams…", HouseStyle.VOICE)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override("font_size", 26)
-	label.add_theme_color_override("font_color", Color(1.0, 0.90, 0.62))
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	label.add_theme_constant_override("outline_size", 4)
 	row.add_child(label)
 
 	panel.add_child(row)
@@ -8409,14 +8405,9 @@ func _solo_show_toast(text: String, auto_hide_s: float = SOLO_TOAST_HIDE_S, expl
 		_solo_toast = Label.new()
 		_solo_toast.name = "SoloActionToast"
 		_solo_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_solo_toast.add_theme_font_size_override("font_size", 16)
-		_solo_toast.add_theme_color_override("font_color", Color(0.95, 0.95, 0.9))
-		_solo_toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-		_solo_toast.add_theme_constant_override("outline_size", 4)
-		_solo_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, STATUS_LANE_TOAST)
-		# The preset is taken while the label is still EMPTY (zero width at the centre); the text comes
-		# later and a Label grows to the right by default — the line sat half its width right of centre.
-		_solo_toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		# The preset is taken while the label is still EMPTY (zero width at the centre); the plate grows
+		# both ways, so the text that comes later stays centred.
+		_status_plate(_solo_toast, STATUS_LANE_TOAST)
 		_solo_toast.gui_input.connect(_on_solo_toast_gui_input)
 		$UI.add_child(_solo_toast)
 	_solo_toast.text = text
@@ -12344,11 +12335,7 @@ func _capture_bug_report() -> void:
 func _show_toast(text: String) -> void:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", 18)
-	label.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	label.add_theme_constant_override("outline_size", 4)
-	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, STATUS_LANE_TOAST)
+	_status_plate(label, STATUS_LANE_TOAST)
 	$UI.add_child(label)
 	var tw := create_tween()
 	tw.tween_interval(3.0)

@@ -112,6 +112,8 @@ const EYEBROW := &"HsEyebrow"       # the window title
 const VALUE := &"HsValue"           # a big number (the dice count)
 const NOTE := &"HsNote"             # a gold key line (roll purpose, result summary)
 const SMALL := &"HsSmall"           # dense readout text (log lines, tally counts)
+const STATUS := &"HsStatus"         # a top status line on a small window plate (banners, toasts)
+const VOICE := &"HsVoice"           # the AI's own words, large and gold ("NACHTMAHR dreams…")
 const HIT := &"HsHit"               # a success count next to its glyph
 const RAIL := &"HsRail"             # a tool in the tool rail; the open tool = selected (gold)
 const RAIL_PANEL := &"HsRailPanel"  # the rail's own slim frame
@@ -136,6 +138,9 @@ const GLYPH_EXPAND := "▲"
 const GLYPH_MINUS := "−"
 const GLYPH_CLOSE := "×"
 const GLYPH_GO := "›"
+const GLYPH_BACK := "‹"
+const GLYPH_PAUSE := "‖"
+const GLYPH_PLAY := "▶"
 
 # ===== Dice =====
 ## The dice look — ONE switch for the physics dice, their tally icons and the dice log
@@ -255,6 +260,10 @@ static func theme() -> Theme:
 	_label_variant(t, NOTE, GOLD, FONT_CAPTION)
 	_label_variant(t, SMALL, INK, FONT_SMALL)
 	_label_variant(t, HIT, ACCENT, FONT_BODY)
+	# A status line carries its own plate: readable over the table without an outline.
+	_label_variant(t, STATUS, INK, FONT_ACTION)
+	t.set_stylebox(&"normal", STATUS, _box(PANEL, LINE_SOFT, RADIUS_CARD, PAD_CHIP_X, 4))
+	_label_variant(t, VOICE, GOLD, FONT_VALUE)
 	t.set_color(&"font_color", &"Label", INK)
 
 	# Native dialogs of the menu scene (MenuDialog): the sheet box, light text on it.
