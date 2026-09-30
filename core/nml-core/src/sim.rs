@@ -293,39 +293,82 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
 }
 
 /// Deadly(X) landing PER MODEL — the table's `SoloController.apply_deadly_wounds`
-/// (solo_controller.gd:8333-8352, GF v3.5.1 p.14 "no carry-over", audit
-/// 2026-09-13 §2.1): each unsaved wound goes to the alive model with the MOST
-/// remaining wounds (ties keep the array order, the table's strict `>`), deals
-/// X capped at that model's remaining wounds, and the surplus is WASTED —
-/// nothing spills onto the next model. Returns the wounds actually dealt (the
-/// table's `dealt`).
-pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64) -> i64 {
+/// / `deadly_pick` (solo_controller.gd:9191-9233, GF v3.5.1 p.13 "no carry-over"
+/// and p.15 Tough "continue to put wounds on the tough model with most wounds
+/// … until it is killed" and "heroes must be assigned wounds last, even if
+/// already wounded"). Below `EPOCH_67_MARKERS_BURSTS` (D17): the OLD reading —
+/// whichever alive model has the MOST remaining wounds (ties keep array order,
+/// strict `>`, so a FRESH Tough model always wins over a damaged one), host
+/// only, surplus wasted once the host is wiped. From the gate: host slots
+/// first, the attached hero's models only once the host is fully wiped
+/// (`state.attached[ti]`); within a member, an ALREADY-WOUNDED Tough slot
+/// (current < that slot's own max) goes first — finish it off before starting
+/// a fresh one; with none wounded, `land_wounds`'s own slot order (index 0)
+/// decides, the same casualty-order convention the plain wound path already
+/// uses. `x` capped at that model's remaining wounds each hit, no carry-over
+/// either way. Returns the wounds actually dealt (the table's `dealt`).
+pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64, seams: Seams) -> i64 {
     let x = deadly_x.max(1);
     let mut dealt = 0i64;
+    let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
+    let chain: Vec<usize> = if epoch67 && seams.hero_attach {
+        std::iter::once(ti).chain(state.attached[ti].iter().copied()).collect()
+    } else {
+        vec![ti]
+    };
+    // A local mirror of each chain member's per-slot max, aligned to
+    // `state.wounds[member]` at the START of this call and kept aligned by
+    // removing the same index on both sides as models die within the loop
+    // below (State only carries the CURRENT wounds; the max lives on the
+    // static Profile and never shrinks on its own). Read ONLY on the new
+    // leg — a below-gate call must not touch `Profile` at all, so a fixture
+    // with fewer profiles than roster entries (every pre-batch-D test) keeps
+    // replaying exactly as it did.
+    let mut max_of: Vec<Vec<i64>> = if epoch67 {
+        chain.iter().map(|&m| state.profile(m).wounds_max.clone()).collect()
+    } else {
+        Vec::new()
+    };
     for _ in 0..unsaved.max(0) {
-        if state.wounds[ti].is_empty() {
-            break; // unit wiped — the remaining Deadly wounds are wasted
-        }
-        let mut best = 0usize;
-        for (i, w) in state.wounds[ti].iter().enumerate() {
-            if *w > state.wounds[ti][best] {
-                best = i;
+        let Some(ci) = chain.iter().position(|&m| !state.wounds[m].is_empty()) else {
+            break; // everything in the chain is dead — the remaining wounds are wasted
+        };
+        let m = chain[ci];
+        let best = if epoch67 {
+            (0..state.wounds[m].len())
+                .find(|&i| {
+                    max_of[ci].get(i).copied().unwrap_or(1) > 1
+                        && state.wounds[m][i] < max_of[ci][i]
+                })
+                .unwrap_or(0)
+        } else {
+            let mut b = 0usize;
+            for (i, w) in state.wounds[m].iter().enumerate() {
+                if *w > state.wounds[m][b] {
+                    b = i;
+                }
             }
-        }
-        let take = x.min(state.wounds[ti][best]);
+            b
+        };
+        let take = x.min(state.wounds[m][best]);
         dealt += take;
-        state.wounds[ti][best] -= take;
-        if state.wounds[ti][best] <= 0 {
-            if state.positions[ti].len() == 1 { drop_carried(state, ti); }
-            state.wounds[ti].remove(best);
-            state.positions[ti].remove(best);
+        state.wounds[m][best] -= take;
+        if state.wounds[m][best] <= 0 {
+            if state.positions[m].len() == 1 { drop_carried(state, m); }
+            state.wounds[m].remove(best);
+            state.positions[m].remove(best);
             // radii stay aligned with positions or the base-edge measure lies.
-            if !state.radii[ti].is_empty() {
-                state.radii[ti].remove(best);
+            if !state.radii[m].is_empty() {
+                state.radii[m].remove(best);
+            }
+            if epoch67 && best < max_of[ci].len() {
+                max_of[ci].remove(best);
             }
         }
     }
-    state.alive[ti] = state.positions[ti].len() as i64;
+    for &m in &chain {
+        state.alive[m] = state.positions[m].len() as i64;
+    }
     dealt
 }
 
@@ -1023,7 +1066,7 @@ pub(crate) fn tray_strafing(
     }
     land_wounds(next, target, shot.absorb(r));
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-        let dl = land_deadly_wounds(next, target, post, dx);
+        let dl = land_deadly_wounds(next, target, post, dx, seams);
         shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
     }
     if shooting_morale_trigger(next, ut, target, alive_before, wounds_before) {
@@ -1992,18 +2035,28 @@ fn tray_precision_markers(
                 // the NEAREST enemy within the entry's range in sight.
                 let Some(ti) = nearest_precision_target(next, bearer, b, seams) else { continue; };
                 next.spot_round[bearer] = next.round;
-                let face = tray.roll(1).first().copied().unwrap_or(1) as i64;
+                // NML-980, EPOCH_67_MARKERS_BURSTS: "roll one die" is per MODEL
+                // (GF p.4) — this bearer's own alive model count, one laser
+                // each; below the gate the old single-die reading stands.
+                let dice = if rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS) {
+                    next.alive[bearer].max(1) as usize
+                } else {
+                    1
+                };
+                let faces = tray.roll(dice);
+                let hits = faces.iter().filter(|&&f| f as i64 >= b.place_roll).count() as i64;
                 let tn = statics[next.roster.profile[ti]].name.clone();
-                if face < b.place_roll {
+                if hits <= 0 {
                     shot.log.push(format!(
-                        "Precision Spotter: {} misses the mark on {} (needed {}+)",
-                        owner, tn, b.place_roll));
+                        "Precision Spotter: {} misses the mark on {} (needed {}+, {} di{})",
+                        owner, tn, b.place_roll, dice, if dice == 1 { "e" } else { "ce" }));
                     continue;
                 }
-                next.spot_markers[ti] += b.markers;
+                let placed = b.markers * hits;
+                next.spot_markers[ti] += placed;
                 shot.log.push(format!(
                     "Precision Spotter: {} marks {} ({} marker{} — attackers may remove markers for +1 to hit each)",
-                    owner, tn, b.markers, if b.markers == 1 { "" } else { "s" }));
+                    owner, tn, placed, if placed == 1 { "" } else { "s" }));
             } else {
                 // TAG / TARGET — the piercing twins' TOUGHEST-enemy pick.
                 let probe = UtilityBuff {
@@ -4415,7 +4468,7 @@ fn strike_phase(
     // (main.gd:6190-6191).
     let mut dealt = 0i64;
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-        let d = land_deadly_wounds(next, ti, post, dx);
+        let d = land_deadly_wounds(next, ti, post, dx, seams);
         dealt += d;
         shot.log.push(format!(
             "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
@@ -5887,6 +5940,10 @@ pub fn resolve_stochastic_tray_on_board(
     rng: &mut GodotRng,
     tray: &mut Tray,
 ) -> Result<(State, ShootResult), Unsupported> {
+    // NML-1100 (D76/W3-6 a): this is the sole production site a real `Tray`
+    // reaches a `.roll()` from, so the record's own epoch decides the
+    // zero-draw reading for every nested `tray_*` call this resolve makes.
+    tray.set_zero_draws(rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS));
     let mut shot = ShootResult::default();
     let next = resolve_with(
         statics,
@@ -7522,7 +7579,7 @@ fn resolve_with(
                             // each unsaved wound ×X on the model with the most
                             // remaining wounds, capped there, surplus wasted.
                             for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-                                let d = land_deadly_wounds(&mut next, g.ti, post, dx);
+                                let d = land_deadly_wounds(&mut next, g.ti, post, dx, seams);
                                 shot.log.push(format!(
                                     "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
                             }

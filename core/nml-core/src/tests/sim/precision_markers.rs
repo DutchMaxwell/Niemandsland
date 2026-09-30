@@ -110,6 +110,35 @@ use super::*;
         assert_eq!(next2.spot_round[0], st.round, "once per activation: no re-spot this round");
     }
 
+    /// NML-980, `EPOCH_67_MARKERS_BURSTS`: "roll one die" is per MODEL (GF
+    /// p.4) — the spotter's own alive model count (`buff_line`'s "a" has 2)
+    /// draws that many dice, not one. Seed 17 draws [2, 4]: a lone die would
+    /// MISS (2 < 4, 0 markers); the second, only reachable with 2 dice, hits.
+    /// A qualitative miss-vs-hit split, not just a different marker count,
+    /// so no coincidence of numbers can fake the RED.
+    #[test]
+    fn a_spotter_with_two_alive_models_rolls_two_dice_from_epoch_67() {
+        let (st, statics) = spotter_line();
+        let epoch = crate::acts::EPOCH_67_MARKERS_BURSTS;
+        let (spotted, shot1) = run_act(&st, &statics, &spot_hold(), 17, epoch);
+        assert_eq!(
+            spotted.spot_markers[2], 1,
+            "2 dice [2, 4]: the second die hits — a single die would have missed: {:#?}",
+            shot1.log
+        );
+        assert!(
+            shot1.log.iter().any(|l| l.starts_with("Precision Spotter: a marks b (1 marker")),
+            "rules-must-log — got {:#?}",
+            shot1.log
+        );
+
+        // Below the gate: the OLD single-die reading — seed 17's first face
+        // (2) misses alone, exactly what a lone die must do.
+        let (below, shot_below) = run_act(&st, &statics, &spot_hold(), 17, crate::acts::EPOCH_66_DISTANCE_TRUTH);
+        assert_eq!(below.spot_markers[2], 0, "epoch 66: one die, seed 17's first face (2) misses");
+        assert!(shot_below.log.iter().any(|l| l.contains("misses the mark")));
+    }
+
     /// A Precision Target with 2 markers: EVERY friendly attack against the
     /// marked unit rides +2, on BOTH legs, and nothing is ever spent (the
     /// text has no removal clause — the bonus persists for the whole game).
