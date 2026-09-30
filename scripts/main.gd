@@ -235,10 +235,9 @@ var terrain_overlay: Node3D = null
 
 # End Battle / Main Menu
 @onready var end_battle_btn: Button = %EndBattleBtn
-@onready var end_battle_confirm_dialog: ConfirmationDialog = %EndBattleConfirmDialog
 
-# Reusable confirmation dialog for destructive table actions (Clear / Sort / Next Round)
-var _action_confirm_dialog: ConfirmationDialog = null
+# The open confirmation card for destructive table actions (Clear / Sort / Next Round / End Battle)
+var _action_confirm_card: PromptCard = null
 var _pending_confirm_action: Callable = Callable()
 
 # Overlay shown while an army's 3D models are downloaded from R2 (first time only).
@@ -478,11 +477,8 @@ func _ready() -> void:
 	if has_node("/root/ThemeManager"):
 		left_panel_scroll.theme = get_node("/root/ThemeManager").get_current_theme()
 
-	# Connect End Battle button and confirmation dialog
+	# Connect End Battle button (its question is the shared confirmation card)
 	end_battle_btn.pressed.connect(_on_end_battle_pressed)
-	end_battle_confirm_dialog.confirmed.connect(_on_end_battle_confirmed)
-	if has_node("/root/ThemeManager"):
-		end_battle_confirm_dialog.theme = get_node("/root/ThemeManager").get_current_theme()
 
 	# Connect UI buttons
 	clear_all_btn.pressed.connect(_on_clear_all)
@@ -12710,26 +12706,18 @@ func _process(delta: float) -> void:
 	_broadcast_presence(delta)
 
 
-## Shows a warning + confirmation before running a destructive table action, so a
-## stray click can't wipe / rearrange / advance the whole table. Reuses one dialog.
+## Shows a warning + confirmation before running a destructive table action, so a stray click can't wipe /
+## rearrange / advance the whole table. ONE in-viewport card (PromptCard, D98 a) at a time: OK runs the action,
+## cancel / Esc / x run nothing.
 func _show_action_confirm(title: String, message: String, ok_text: String, action: Callable) -> void:
-	if not _action_confirm_dialog:
-		_action_confirm_dialog = ConfirmationDialog.new()
-		# Match the app's glassmorphism look instead of the default grey Godot dialog.
-		if has_node("/root/ThemeManager"):
-			_action_confirm_dialog.theme = get_node("/root/ThemeManager").get_current_theme()
-		add_child(_action_confirm_dialog)
-		_action_confirm_dialog.confirmed.connect(_on_action_confirmed)
-	_action_confirm_dialog.title = title
-	_action_confirm_dialog.dialog_text = message
-	_action_confirm_dialog.ok_button_text = ok_text
+	if is_instance_valid(_action_confirm_card):
+		return
+	_action_confirm_card = PromptCard.new(title, message, ok_text, "Cancel")
+	add_child(_action_confirm_card)
 	_pending_confirm_action = action
-	_action_confirm_dialog.popup_centered()
-
-
-func _on_action_confirmed() -> void:
-	if _pending_confirm_action.is_valid():
-		_pending_confirm_action.call()
+	var card := _action_confirm_card
+	if await card.answer(false) and action.is_valid():
+		action.call()
 	_pending_confirm_action = Callable()
 
 
@@ -12890,7 +12878,7 @@ func _on_hamburger_pressed() -> void:
 
 ## Show confirmation dialog before ending battle
 func _on_end_battle_pressed() -> void:
-	end_battle_confirm_dialog.popup_centered()
+	_show_action_confirm("End Battle", "Really quit to main menu?\nAll unsaved progress will be lost.", "Yes, Exit", _on_end_battle_confirmed)
 
 
 ## Confirmed: End Battle and return to Main Menu
@@ -15592,8 +15580,8 @@ func _apply_ui_theme() -> void:
 	# so it gets no tactical corner brackets and keeps its look whatever the HUD theme is.
 
 	# Apply to all file dialogs
-	save_game_dialog.theme = current_theme
-	load_game_dialog.theme = current_theme
+	save_game_dialog.theme = HouseStyle.theme()   # native FileDialogs take the theme only
+	load_game_dialog.theme = HouseStyle.theme()
 
 
 ## ============================================================================
@@ -15614,7 +15602,7 @@ func _on_import_opr_army() -> void:
 			await network_manager.slot_assigned
 		slot = maxi(1, network_manager.get_my_player_slot())
 	opr_import_dialog.set_player(slot)
-	opr_import_dialog.popup_centered()
+	opr_import_dialog.show()
 
 
 ## The AI-opponent dialog (maintainer request): NACHTMAHR builds its own list — pick faction + points,
@@ -17598,6 +17586,7 @@ func _init_radial_menu() -> void:
 	var control_hints := ControlHintsController.new()
 	control_hints.name = "ControlHintsController"
 	add_child(control_hints)
+	control_hints.set_dock(unit_dock)
 	object_manager.hover_changed.connect(control_hints.on_hover_changed)
 	# #162: HUMAN drops arm a take-back (the AI's direct choreography call never does).
 	object_manager.selection_dropped.connect(func(moves: Array) -> void:

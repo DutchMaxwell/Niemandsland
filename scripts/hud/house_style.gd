@@ -211,6 +211,11 @@ static func theme() -> Theme:
 	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
 		t.set_color(c, &"CheckButton", INK)
 
+	# Sliders (Settings): a sunken track, the filled part in gold.
+	t.set_stylebox(&"slider", &"HSlider", _box(WELL, LINE, RADIUS_CONTROL, 0, 2))
+	t.set_stylebox(&"grabber_area", &"HSlider", _box(_alpha(GOLD, 0.6), _alpha(GOLD, 0.6), RADIUS_CONTROL, 0, 2))
+	t.set_stylebox(&"grabber_area_highlight", &"HSlider", _box(GOLD, GOLD, RADIUS_CONTROL, 0, 2))
+
 	# Tool rail: quiet buttons until hovered, the open tool in gold (mockup .rail-btn / .active).
 	var none := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
 	var rail_hover := _box(FILL_RAISED, Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
@@ -633,7 +638,7 @@ static func overlay_sheet(title: String, width: int) -> Dictionary:
 	return {"root": root, "sheet": sheet, "body": body, "close": header.get_node("CloseButton")}
 
 
-## A unit dialog's frame (Wounds, Caster points, Model info): `dialog` fills the screen over the scrim and
+## A unit dialog's frame (Wounds, Caster points): `dialog` fills the screen over the scrim and
 ## owns every click; a centred house panel holds the VBox it returns, headed by the eyebrow `title`. The
 ## node names are the dialogs' scene paths (Panel/Margin/VBox), which the dialogs and the table look up.
 static func dialog_frame(dialog: Control, title: String, min_size: Vector2) -> VBoxContainer:
