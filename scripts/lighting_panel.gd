@@ -131,6 +131,9 @@ func _build_ui() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	(root.get_node("Scrim") as ColorRect).visible = false
 	add_child(parts["root"] as Control)
+	visibility_changed.connect(func() -> void:
+		if visible:
+			_restyle())
 
 	# Lighting moods are chosen through the ATMOSPHERE section only (added at the top by
 	# set_atmosphere_controller); the old standalone lighting "PRESETS" were a parallel,
@@ -511,6 +514,23 @@ func _on_color_changed(color: Color, key: String) -> void:
 			lighting_controller.set_ambient_color(color)
 
 
+
+
+## House look for everything the sheet holds, late additions (atmosphere, privacy, the menu's background
+## dropdown) included: section titles are eyebrows, lines are ghost buttons, the rest is body text. A control
+## that already carries a variation keeps it. Runs on every open, so it is cheap and idempotent.
+func _restyle() -> void:
+	for n: Node in find_children("*", "Control", true, false):
+		if n is Label:
+			var l := n as Label
+			if l.theme_type_variation != &"":
+				continue
+			var title := l.has_theme_font_size_override("font_size")
+			l.remove_theme_font_size_override("font_size")
+			l.theme_type_variation = HouseStyle.EYEBROW if title else HouseStyle.BODY
+		elif n is Button and not (n is CheckButton or n is ColorPickerButton) and (n as Button).theme_type_variation == &"":
+			(n as Button).theme_type_variation = HouseStyle.BUTTON
+			(n as Button).custom_minimum_size.y = HouseStyle.H_SEGMENT
 
 
 func _unhandled_input(event: InputEvent) -> void:
