@@ -93,3 +93,64 @@ func test_a3_tabs_are_three_segment_buttons_with_exactly_one_selected() -> void:
 
 func test_a3_no_godot_tab_container_left_in_the_editor() -> void:
 	assert_array(_ed.find_children("*", "TabContainer", true, false)).is_empty()
+
+
+# ===== A4: terrain tab, part 1 =====
+
+const SCRIPT_PATH := "res://scripts/map_layout.gd"
+const _PAINT_OVERRIDES := ["add_theme_color_override", "add_theme_font_override", "add_theme_font_size_override",
+	"add_theme_stylebox_override", "HudTokens."]
+
+
+## The source of one top-level function of map_layout.gd (from its `func` line to the next `func`).
+func _func_source(fn: String) -> String:
+	var text := FileAccess.get_file_as_string(SCRIPT_PATH)
+	var start := text.find("func %s(" % fn)
+	if start < 0:
+		return ""
+	var end := text.find("\nfunc ", start + 1)
+	return text.substr(start, (end if end >= 0 else text.length()) - start)
+
+
+func _assert_no_paint_overrides(fn: String) -> void:
+	var src := _func_source(fn)
+	assert_str(src).override_failure_message("%s not found" % fn).is_not_empty()
+	for needle in _PAINT_OVERRIDES:
+		assert_bool(src.contains(needle)) \
+			.override_failure_message("A4 — %s still uses %s" % [fn, needle]).is_false()
+
+
+func test_a4_terrain_type_buttons_are_segments_with_a_colour_chip() -> void:
+	for t in ["Ruins", "Forest", "Container", "Dangerous", "None"]:
+		var b := _ed.find_child("Terrain%sButton" % t, true, false) as Button
+		assert_object(b).override_failure_message("A4 — Terrain%sButton missing" % t).is_not_null()
+		if b == null:
+			continue
+		assert_str(String(b.theme_type_variation).trim_suffix(HouseStyle.SELECTED_SUFFIX)).is_equal(String(HouseStyle.SEGMENT))
+		assert_object(b.icon).override_failure_message("A4 — %s has no colour chip" % t).is_not_null()
+	# "None" is the pre-selected type today (R1 changes that), so exactly it is selected.
+	var selected := ["Ruins", "Forest", "Container", "Dangerous", "None"].filter(func(t):
+		var b := _ed.find_child("Terrain%sButton" % t, true, false) as Button
+		return b != null and HouseStyle.is_selected(b))
+	assert_array(selected).contains_exactly(["None"])
+
+
+func test_a4_pressing_a_type_moves_the_gold_selection() -> void:
+	var forest := _ed.find_child("TerrainForestButton", true, false) as Button
+	if forest != null:
+		forest.pressed.emit()
+	assert_bool(forest != null and HouseStyle.is_selected(forest)).is_true()
+	var none := _ed.find_child("TerrainNoneButton", true, false) as Button
+	assert_bool(none != null and HouseStyle.is_selected(none)).is_false()
+
+
+func test_a4_mode_piece_and_wall_controls_sit_in_field_rows() -> void:
+	for c in [_ed._editor_mode_btn, _ed._prefab_option_btn, _ed._wall_option_btn]:
+		var row := (c as Control).get_parent()
+		assert_bool(row is HBoxContainer and row.get_child(0) is Label and row.get_child(1) == c) \
+			.override_failure_message("A4 — %s is not inside a HouseStyle.field_row" % c.name).is_true()
+
+
+func test_a4_no_paint_overrides_left_in_the_terrain_builders() -> void:
+	_assert_no_paint_overrides("_setup_terrain_buttons")
+	_assert_no_paint_overrides("_setup_modular_terrain_ui")
