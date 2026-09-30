@@ -96,6 +96,16 @@ func test_save_locally_saves_to_the_export_path_and_names_it() -> void:
 	assert_str((_card.find_child("CardStatus", true, false) as Label).text).is_equal("saved: user://e2e_after_game_card.json")
 
 
+func test_card_is_a_house_style_panel_that_owns_its_clicks() -> void:
+	var root := _card.get_child(0) as Control
+	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	assert_object(root.theme).is_same(HouseStyle.theme())
+	assert_str(String(_button("Keep private").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(_button("Preview").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	(_card.find_child("CloseButton", true, false) as Button).pressed.emit()
+	assert_bool(_card.visible).is_false()
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	assert_array(_missing()).is_empty()
 	var preview := _button("Preview")

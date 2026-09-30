@@ -440,7 +440,7 @@ func test_after_game_card_waits_for_consent_and_a_record() -> void:
 	assert_bool(FileAccess.file_exists(TEST_LAST_EXPORT)).override_failure_message(
 		"dismissing the card must not write any file").is_false()
 	card.open_for(menu)
-	card.close_requested.emit()
+	(card.find_child("CloseButton", true, false) as Button).pressed.emit()
 	assert_bool(card.visible).is_false()
 	assert_bool(FileAccess.file_exists(TEST_LAST_EXPORT)).is_false()
 	# Save locally writes exactly the previewed bytes and names the path.
