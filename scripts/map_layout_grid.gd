@@ -7,6 +7,19 @@ var map_layout: Control = null  # Reference to parent MapLayout
 
 ## Sandbox-terrain mirror: metres-per-inch and the per-kind footprint fill/border colours
 ## (ObjectManager.SandboxPropKind: 0=RUIN, 1=FOREST, 2=HAZARD_CLUSTER).
+# Grid chrome: house-style tokens by name (terrain-type fills are data and stay in map_layout.gd)
+const GRID_BACKGROUND := HouseStyle.SHEET_FILL
+const CELL_BORDER := Color(HouseStyle.LINE, 0.5)
+const RUIN_INSET_LINE := HouseStyle.ACCENT
+const GRID_LINE := Color(HouseStyle.MUTED, 0.3)
+const FINE_GRID_LINE := Color(HouseStyle.MUTED, 0.2)
+const TABLE_EDGE := HouseStyle.INK
+const CENTER_DOT := Color(HouseStyle.GOLD, 0.8)
+const SYMMETRY_AXIS := Color(HouseStyle.GOLD, 0.3)
+const RELIC_RING := HouseStyle.GOLD
+const LABEL_INK := HouseStyle.INK
+const LABEL_SIZE := HouseStyle.FONT_CAPTION
+
 const SANDBOX_INCH_M := 0.0254
 const SANDBOX_FILL_COLORS := {
 	0: Color(0.45, 0.55, 0.70, 0.45),  # ruin — slate blue
@@ -97,7 +110,7 @@ func _draw() -> void:
 	# Clip to container bounds
 	var visible_grid_rect = grid_rect.intersection(clip_rect)
 	if visible_grid_rect.size.x > 0 and visible_grid_rect.size.y > 0:
-		draw_rect(visible_grid_rect, Color(0.15, 0.15, 0.15, 1.0), true)
+		draw_rect(visible_grid_rect, GRID_BACKGROUND, true)
 
 	# Calculate half extents for centering the grid
 	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
@@ -157,7 +170,7 @@ func _draw() -> void:
 			# Draw cell border
 			for i in range(4):
 				var next_i = (i + 1) % 4
-				draw_line(corners_rotated[i], corners_rotated[next_i], Color(0.4, 0.4, 0.4, 0.5), 1.0)
+				draw_line(corners_rotated[i], corners_rotated[next_i], CELL_BORDER, 1.0)
 
 			# Draw special markers for Ruins (blue border lines for impassable walls)
 			if terrain_type == map_layout.TerrainType.RUINS:
@@ -174,10 +187,10 @@ func _draw() -> void:
 
 				for i in range(4):
 					var next_i = (i + 1) % 4
-					draw_line(inner_corners[i], inner_corners[next_i], Color(0.2, 0.4, 0.9, 0.9), 2.0)
+					draw_line(inner_corners[i], inner_corners[next_i], RUIN_INSET_LINE, 2.0)
 
 	# Draw grid lines with manual rotation and clipping
-	var line_color = Color(0.6, 0.6, 0.6, 0.4)
+	var line_color = GRID_LINE
 
 	# Vertical lines (centered on intersection point)
 	for x in range(grid_dims.x + 1):
@@ -247,13 +260,13 @@ func _draw() -> void:
 		var centre: Vector2 = map_layout._inch_to_screen_pos(map_layout.relic_drop_centre)
 		var px_per_in: float = (pixels_per_inch_x + pixels_per_inch_y) * 0.5
 		draw_arc(centre, (map_layout.relic_drop_radius_in + 1.0) * px_per_in,
-			0.0, TAU, 64, Color(1.0, 0.85, 0.2), 3.0)
+			0.0, TAU, 64, RELIC_RING, 3.0)
 
 	# Draw table outline (always axis-aligned - represents the actual table)
-	draw_rect(grid_rect, Color.WHITE, false, 3.0)
+	draw_rect(grid_rect, TABLE_EDGE, false, 3.0)
 
 	# Draw center point (for symmetry reference)
-	draw_circle(center, 5.0, Color(1.0, 1.0, 0.0, 0.8))
+	draw_circle(center, 5.0, CENTER_DOT)
 
 	# Draw symmetry indicator if enabled
 	if map_layout.point_symmetry_enabled:
@@ -269,9 +282,9 @@ func _draw() -> void:
 		var v_clipped = _clip_line_to_rect(v_start, v_end, grid_rect)
 
 		if h_clipped:
-			draw_line(h_clipped[0], h_clipped[1], Color(1.0, 1.0, 0.0, 0.3), 2.0)
+			draw_line(h_clipped[0], h_clipped[1], SYMMETRY_AXIS, 2.0)
 		if v_clipped:
-			draw_line(v_clipped[0], v_clipped[1], Color(1.0, 1.0, 0.0, 0.3), 2.0)
+			draw_line(v_clipped[0], v_clipped[1], SYMMETRY_AXIS, 2.0)
 
 	# Draw table size info
 	var table_size = map_layout.table_size_feet
@@ -280,7 +293,7 @@ func _draw() -> void:
 		table_size.x * 12, table_size.y * 12,
 		grid_dims.x, grid_dims.y
 	]
-	draw_string(ThemeDB.fallback_font, grid_rect.position + Vector2(5, -5), size_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
+	draw_string(HouseStyle.theme().default_font, grid_rect.position + Vector2(5, -5), size_text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_SIZE, LABEL_INK)
 
 
 func _clip_line_to_rect(p1: Vector2, p2: Vector2, rect: Rect2) -> Variant:
@@ -507,7 +520,7 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
 	## Draw 1" fine grid for custom deployment zone editing
 	## Grid lines rotate with the main 3" grid, covering the full diagonal
-	var line_color = Color(0.5, 0.5, 0.5, 0.3)
+	var line_color = FINE_GRID_LINE
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 
