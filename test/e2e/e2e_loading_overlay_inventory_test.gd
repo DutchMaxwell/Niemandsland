@@ -94,6 +94,19 @@ func test_fade_and_free_frees_without_forcing_100_percent() -> void:
 	assert_bool(is_instance_valid(o) and not o.is_queued_for_deletion()).is_false()
 
 
+func test_overlay_wears_the_house_style_in_both_modes() -> void:
+	_overlay = await _make(false)
+	assert_str(String(_overlay._label.theme_type_variation)).is_equal(String(HouseStyle.EYEBROW))
+	assert_that(_overlay._fill.color).is_equal(HouseStyle.ACCENT)
+	var full := _overlay
+	_overlay = await _make(true)
+	var panel := _overlay.find_children("*", "PanelContainer", true, false)[0] as PanelContainer
+	assert_str(String(panel.theme_type_variation)).is_equal(String(HouseStyle.PANEL_VARIANT))
+	assert_object(panel.theme).is_same(HouseStyle.theme())
+	full.queue_free()
+	assert_bool(FileAccess.get_file_as_string("res://scripts/loading_overlay.gd").contains("HudTokens")).is_false()
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	_overlay = await _make(false)
 	assert_array(_missing(_overlay)).is_empty()
