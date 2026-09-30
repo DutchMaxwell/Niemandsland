@@ -22,7 +22,7 @@ use nml_core::tree::{
     advance, expand, leaf_value, menu, playout, ranked, referee, root_children, run, select, transition, Child,
     Node, Step, TreeCfg, TreeTrace,
 };
-use nml_core::{act_statics, full_playout_bent, load_acts, plan_with_rollout, SearchMode, ActCorpus, ArbBend, GodotRng, State, TreeDice,
+use nml_core::{act_statics, full_playout_bent, load_acts, plan_with_rollout, read_acts, Search, SearchMode, ActCorpus, ArbBend, GodotRng, State, TreeDice,
                TreeLeaf, UnitStatic};
 
 const ACTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_25.jsonl");
@@ -356,8 +356,8 @@ fn search(roll: &Rollout, st: &State, p: i64, leaf: TreeLeaf, budget: usize, bat
     let (rows, order) = ranked(roll, st, p, sc).unwrap();
     let mut root = Node::new(st.clone(), Step::Mover(p), p);
     root.children = root_children(&rows, &order, &[]);
-    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, player: p, opener_seat: false,
-                        sig: None, hook: None, w: 0.0 };
+    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, wall_ms: 0, player: p,
+                        opener_seat: false, sig: None, hook: None, w: 0.0 };
     let (best, trace) = run(roll, &cfg, &mut root, &mut GodotRng::new(7), sc).unwrap();
     (best, trace, order)
 }
@@ -502,4 +502,55 @@ fn the_tree_knob_parts_the_pick_and_stamps_it() {
     assert_eq!(err, Unsupported::TreeOutOfScope("playout_search"));
     println!("tree knob: {n} acts stamped, {moved} picked differently at budget 64");
     assert!(n == c.acts.len() && moved >= 1, "{n} acts, {moved} moved");
+}
+
+/// Step 8 — the wall clock is a SAFETY fallback, never the budget. At 1 ms on
+/// acts_wide_25 the search stops between batches with `deadline_hit`, fewer
+/// leaves than the budget and a pick among the opened root rows; replaying
+/// with `PlanBend.tree_budget = completed` (wall off) reproduces the pick and
+/// the root statistics byte for byte; wall 0 spends the whole budget.
+#[test]
+fn the_deadline_stops_early_and_the_stamped_count_replays() {
+    let c = load(WIDE);
+    let per_act = act_statics(&c, REPO);
+    let mut knobs = c.knobs;
+    (knobs.search_mode, knobs.tree_budget, knobs.tree_wall_ms) = (SearchMode::Tree, 128, 1);
+    let (mut hit, mut sc) = (0usize, Scratch::default());
+    for (ai, act) in c.acts.iter().enumerate() {
+        let seams = seams_of(&knobs);
+        let reach = if seams.path { reach_index_for_state(&act.state, &c.terrain) } else { None };
+        let mut p = Policy::new(&per_act[ai], &c.terrain, seams);
+        (p.tuning, p.reach) = (tuning_of(&knobs), reach.as_ref());
+        let roll = Rollout::new(p, knobs);
+        let cut = Search::new(roll, &act.statics).run(&act.state, act.player, &mut sc, None).unwrap();
+        let t = cut.tree.clone().unwrap();
+        assert!(t.deadline_hit && t.completed > 0 && t.completed < 128, "act {ai}: {t:?}");
+        assert!(cut.pool_idx.contains(&(cut.scored[cut.best_idx as usize].0 as usize)), "act {ai}: pick off the root");
+        let mut replay = Search::new(roll, &act.statics);
+        replay.bend.tree_budget = Some(t.completed as i64);
+        let again = replay.run(&act.state, act.player, &mut sc, None).unwrap();
+        let ta = again.tree.clone().unwrap();
+        assert!(!ta.deadline_hit && (ta.completed, &ta.root) == (t.completed, &t.root), "act {ai}: {ta:?} vs {t:?}");
+        assert_eq!(format!("{:?}", again.action), format!("{:?}", cut.action), "act {ai}: replayed pick");
+        let off = Rollout::new(p, nml_core::Knobs { tree_wall_ms: 0, ..knobs });
+        let full = Search::new(off, &act.statics).run(&act.state, act.player, &mut sc, None).unwrap();
+        let tf = full.tree.unwrap();
+        assert!(!tf.deadline_hit && tf.completed >= 128, "act {ai}: wall 0 {tf:?}");
+        hit += 1;
+    }
+    println!("deadline: {hit} acts cut at 1 ms and replayed from their stamped count");
+    assert_eq!(hit, c.acts.len());
+}
+
+/// Step 8 — a corpus row carries the stamped count back: `trace.tree.completed`
+/// reads into `Act::tree_completed`; a row without the key reads `None`.
+#[test]
+fn a_recorded_tree_count_reads_back() {
+    let text = std::fs::read_to_string(ACTS).unwrap();
+    let lines: Vec<&str> = text.lines().take(2).collect();
+    let mut row: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+    row["trace"]["tree"] = serde_json::json!({"completed": 17, "deadline_hit": true, "root": []});
+    let read = |t: String| read_acts(std::io::Cursor::new(t.into_bytes()), "test").unwrap().acts[0].tree_completed;
+    let stamped = read(format!("{}\n{}\n", lines[0], row));
+    assert_eq!((stamped, read(format!("{}\n{}\n", lines[0], lines[1]))), (Some(17), None));
 }
