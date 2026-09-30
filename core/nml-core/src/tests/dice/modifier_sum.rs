@@ -63,7 +63,7 @@ use super::*;
         let new = Ctx { modifier_sum: true, ..old };
         let attack_target = |def: &Ctx| {
             let mut tray = Tray::seeded(27);
-            let out = resolve_shooting_with_tray(&[p.clone()], &[0], &[10], &att, def, 12.0, &mut tray);
+            let out = resolve_shooting_with_tray(std::slice::from_ref(&p), &[0], &[10], &att, def, 12.0, &mut tray);
             out.rolls.iter().find(|r| r.kind == "attack").expect("attack roll").target
         };
         assert_eq!(attack_target(&old), 5, "below the gate: clamp to 6+, then Versatile walks it back to 5+");

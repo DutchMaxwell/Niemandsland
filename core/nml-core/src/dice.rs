@@ -842,7 +842,7 @@ pub fn resolve_volley_leg(
         // never the member's; 0 = every ordinary profile, the Ctx quality
         // as always (the ranged twin of `melee_hit_target`'s override).
         let q = if p.extra_attack_q > 0 { p.extra_attack_q } else { att.quality };
-        let mut target = reliable_quality(q, p.reliable);
+        let target = reliable_quality(q, p.reliable);
         // Good Shot / Bad Shot / Targeting Visor (main.gd:5681-5701) — the
         // table's DICE path folds these in; `p.hit_bonus`/`p.hit_bonus_over9`
         // are this shot's own profile stamp (unit.rs::stamp_shot_modifier).
