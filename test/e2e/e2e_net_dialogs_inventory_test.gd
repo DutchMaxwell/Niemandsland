@@ -132,6 +132,22 @@ func test_net_dialog_builder_gives_the_in_game_dialogs_header_and_content() -> v
 	d.queue_free()
 
 
+func test_all_three_dialogs_wear_the_house_chrome() -> void:
+	_menu._on_host_online_pressed()
+	_menu._on_join_online_pressed()
+	_menu._on_browse_online_pressed()
+	await _frames(2)
+	for d: AcceptDialog in [_menu._host_popup, _menu._join_popup, _menu._browse_popup]:
+		assert_object(d.theme).override_failure_message("%s is not in the house theme" % d.title).is_same(HouseStyle.theme())
+		assert_str(String(d.get_ok_button().theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+		var head := NetDialog.content(d).get_child(0) as HBoxContainer
+		assert_str(String((head.get_child(0) as Label).theme_type_variation)).is_equal(String(HouseStyle.EYEBROW))
+	assert_str(String(_menu._join_error_label.get_theme_color(&"font_color").to_html())).is_equal(HouseStyle.tone_ink(HouseStyle.TONE_DANGER).to_html())
+	var src := FileAccess.get_file_as_string("res://scripts/startup_menu.gd")
+	assert_str(src).not_contains("HudTokens.TEXT_MUTED")
+	assert_str(src).not_contains("HudTokens.DANGER")
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	_menu._on_host_online_pressed()
 	await _frames(2)
