@@ -235,10 +235,9 @@ var terrain_overlay: Node3D = null
 
 # End Battle / Main Menu
 @onready var end_battle_btn: Button = %EndBattleBtn
-@onready var end_battle_confirm_dialog: ConfirmationDialog = %EndBattleConfirmDialog
 
-# Reusable confirmation dialog for destructive table actions (Clear / Sort / Next Round)
-var _action_confirm_dialog: ConfirmationDialog = null
+# The open confirmation card for destructive table actions (Clear / Sort / Next Round / End Battle)
+var _action_confirm_card: PromptCard = null
 var _pending_confirm_action: Callable = Callable()
 
 # Overlay shown while an army's 3D models are downloaded from R2 (first time only).
@@ -478,11 +477,8 @@ func _ready() -> void:
 	if has_node("/root/ThemeManager"):
 		left_panel_scroll.theme = get_node("/root/ThemeManager").get_current_theme()
 
-	# Connect End Battle button and confirmation dialog
+	# Connect End Battle button (its question is the shared confirmation card)
 	end_battle_btn.pressed.connect(_on_end_battle_pressed)
-	end_battle_confirm_dialog.confirmed.connect(_on_end_battle_confirmed)
-	if has_node("/root/ThemeManager"):
-		end_battle_confirm_dialog.theme = get_node("/root/ThemeManager").get_current_theme()
 
 	# Connect UI buttons
 	clear_all_btn.pressed.connect(_on_clear_all)
@@ -12413,22 +12409,21 @@ func _show_fps_advisory() -> void:
 	print("[FPS] low-framerate advisory shown")  # parseable signal for the MP soak harness
 	var panel := PanelContainer.new()
 	panel.name = "FpsAdvisory"
-	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 90)
+	HouseStyle.apply(panel)
+	panel.add_theme_stylebox_override(&"panel", HouseStyle.warning_box())
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
 	panel.add_child(row)
-	var label := Label.new()
-	label.text = "Low framerate may be destabilising your online connection."
-	row.add_child(label)
-	var lower := Button.new()
-	lower.text = "Lower Graphics Quality"
+	row.add_child(HouseStyle.label("Low framerate may be destabilising your online connection.", HouseStyle.BODY))
+	var lower := HouseStyle.button("Lower Graphics Quality", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	lower.pressed.connect(_on_fps_advisory_lower.bind(panel))
 	row.add_child(lower)
-	var dismiss := Button.new()
-	dismiss.text = "Dismiss"
+	var dismiss := HouseStyle.button("Dismiss", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	dismiss.pressed.connect(_free_if_valid.bind(panel))
 	row.add_child(dismiss)
 	$UI.add_child(panel)
+	# After the content exists: the preset centres on the panel's real width (on an empty panel it hung off to the right).
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 90)
 	var t := create_tween()
 	t.tween_interval(20.0)
 	t.tween_callback(_free_if_valid.bind(panel))
@@ -12711,26 +12706,18 @@ func _process(delta: float) -> void:
 	_broadcast_presence(delta)
 
 
-## Shows a warning + confirmation before running a destructive table action, so a
-## stray click can't wipe / rearrange / advance the whole table. Reuses one dialog.
+## Shows a warning + confirmation before running a destructive table action, so a stray click can't wipe /
+## rearrange / advance the whole table. ONE in-viewport card (PromptCard, D98 a) at a time: OK runs the action,
+## cancel / Esc / x run nothing.
 func _show_action_confirm(title: String, message: String, ok_text: String, action: Callable) -> void:
-	if not _action_confirm_dialog:
-		_action_confirm_dialog = ConfirmationDialog.new()
-		# Match the app's glassmorphism look instead of the default grey Godot dialog.
-		if has_node("/root/ThemeManager"):
-			_action_confirm_dialog.theme = get_node("/root/ThemeManager").get_current_theme()
-		add_child(_action_confirm_dialog)
-		_action_confirm_dialog.confirmed.connect(_on_action_confirmed)
-	_action_confirm_dialog.title = title
-	_action_confirm_dialog.dialog_text = message
-	_action_confirm_dialog.ok_button_text = ok_text
+	if is_instance_valid(_action_confirm_card):
+		return
+	_action_confirm_card = PromptCard.new(title, message, ok_text, "Cancel")
+	add_child(_action_confirm_card)
 	_pending_confirm_action = action
-	_action_confirm_dialog.popup_centered()
-
-
-func _on_action_confirmed() -> void:
-	if _pending_confirm_action.is_valid():
-		_pending_confirm_action.call()
+	var card := _action_confirm_card
+	if await card.answer(false) and action.is_valid():
+		action.call()
 	_pending_confirm_action = Callable()
 
 
@@ -12891,7 +12878,7 @@ func _on_hamburger_pressed() -> void:
 
 ## Show confirmation dialog before ending battle
 func _on_end_battle_pressed() -> void:
-	end_battle_confirm_dialog.popup_centered()
+	_show_action_confirm("End Battle", "Really quit to main menu?\nAll unsaved progress will be lost.", "Yes, Exit", _on_end_battle_confirmed)
 
 
 ## Confirmed: End Battle and return to Main Menu
