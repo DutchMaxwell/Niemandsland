@@ -1078,6 +1078,38 @@ func _on_close_pressed() -> void:
 
 
 func _on_clear_pressed() -> void:
+	if placed_pieces.is_empty() and free_cells.is_empty() and free_walls.is_empty():
+		return  # nothing to clear
+	if get_node_or_null("ClearConfirm") != null:
+		return
+	var parts := HouseStyle.overlay_sheet("Clear terrain?", 420)
+	var root: Control = parts["root"]
+	root.name = "ClearConfirm"
+	var body: VBoxContainer = parts["body"]
+	var msg := HouseStyle.label("Removes every terrain piece, painted cell and wall from this map. " \
+		+ "Objectives and deployment zones are not touched. Ctrl+Z brings the terrain back.", HouseStyle.BODY)
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD
+	body.add_child(msg)
+	var row := HouseStyle.button_row(["Clear terrain", "Cancel"], HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	body.add_child(row)
+	var confirm: Button = row.get_child(0)
+	confirm.name = "ConfirmClearButton"
+	confirm.theme_type_variation = HouseStyle.DANGER_BUTTON
+	confirm.pressed.connect(func() -> void:
+		root.queue_free()
+		root.name = "ClearConfirmDone"
+		_clear_terrain())
+	var cancel: Button = row.get_child(1)
+	cancel.name = "CancelClearButton"
+	cancel.pressed.connect(func() -> void:
+		root.name = "ClearConfirmDone"
+		root.queue_free())
+	(parts["close"] as Button).pressed.connect(cancel.pressed.emit)
+	add_child(root)
+
+
+## Clear pieces, painted cells and walls (one undo step).
+func _clear_terrain() -> void:
 	_push_undo()
 	placed_pieces.clear()
 	free_cells.clear()
