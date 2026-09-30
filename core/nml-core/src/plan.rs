@@ -791,7 +791,8 @@ impl<'a> Search<'a> {
         let cfg = TreeCfg {
             leaf: k.tree_leaf, dice: k.tree_dice, samples: k.tree_samples.max(1) as usize,
             batch: k.tree_batch.max(1) as usize, budget: self.bend.tree_budget.unwrap_or(k.tree_budget).max(1) as usize,
-            wall_ms: if self.bend.tree_budget.is_some() { 0 } else { k.tree_wall_ms.max(0) as u64 }, player,
+            wall_ms: if self.bend.tree_budget.is_some() { 0 } else { k.tree_wall_ms.max(0) as u64 },
+            widen: k.tree_widen, player,
             opener_seat: self.act.opener_seat, sig: self.sig, hook: self.leaf_value, w: self.leaf_value_w,
         };
         let mut root = Node::new(state.clone(), Step::Mover(player), player);
