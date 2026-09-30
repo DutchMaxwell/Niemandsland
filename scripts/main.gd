@@ -1108,6 +1108,11 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	_solo_log_unmodeled_rules(unit)   # once-per-session visibility of rules the automation skips
 	if target != null:
 		_solo_log_unmodeled_rules(target)
+	# D19 (a), EPOCH_67_MARKERS_BURSTS: "The first time this unit is activated…" fires at
+	# ACTIVATION START, before the move (the book's ambush trigger, not an after-the-fact
+	# shot) — moved out of the before-attacking cluster below, which ran after
+	# _solo_animate_move.
+	await _solo_apply_surprise_attack(unit)
 	# ACTIVATION CHOREOGRAPHY (field-test finding 7 — the maintainer's explicit staging): the camera has
 	# focused the unit (a); hold an attention beat (b); _solo_animate_move then shows the plotted corridors
 	# (c), holds a beat (d) and glides the models along them (e); a final beat (f) precedes the attack/
@@ -1147,12 +1152,12 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# once-per-activation before-attacking slot (data-driven via the primitive layer).
 	await _solo_apply_utility_buffs(unit)
 	await _solo_apply_mind_control(unit)
-	_solo_apply_piercing_tag(unit)
+	await _solo_apply_piercing_tag(unit)
 	_solo_apply_precision_tag(unit)
 	_solo_apply_precision_target(unit)
 	await _solo_apply_reckless_piercing(unit)
 	await _solo_apply_storm_attack(unit)
-	await _solo_apply_surprise_attack(unit)
+	# Surprise Attack moved to activation start (D19 a, above the move) — see the call there.
 	await _solo_apply_teleport(unit, report)   # design #816 PR 1: the before-attack reposition beat
 	if unit.is_destroyed():
 		return unit
@@ -8065,8 +8070,11 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 		# the global stream cosmetic terrain/prop placement also draws from), then push them through
 		# show_faces() — which fills per_dice_result() and emits roll_finnished synchronously.
 		# ~20× faster at 2000pts, identical uniform 1-6 distribution, deterministic per dice_seed.
+		# NML-1100 (D76/W3-6 a): `count` taken literally — a zero-die roll draws NOTHING off the
+		# rules-path RNG (the old `maxi(1, …)` was a UI guard leaked into the stream); show_faces([])
+		# already renders an empty tray, its own display-only floor, untouched here.
 		var _inst: Array[int] = []
-		for _di in maxi(1, count):
+		for _di in count:
 			_inst.append(_tray_rng.randi_range(1, 6))
 		dice_roller_control.show_faces(_inst)
 	else:
@@ -10785,13 +10793,19 @@ func _solo_try_precision_spot(unit: GameUnit) -> void:
 			best_d = d
 	if best == null:
 		return
-	var faces: Array = await _solo_tray_roll(1, 4, _solo_owner_label(unit), "attack",
-		"Precision Spotter: 4+ marks %s" % best.get_name())
-	if not faces.is_empty() and int(faces[0]) >= 4:
-		_solo_place_spot_marker(unit, best)
-	elif battle_log != null:
+	# NML-980: one die per alive laser-carrying model in the chain, each 4+ its own marker.
+	var dice := maxi(solo_controller.precision_spot_dice_of(unit), 1)
+	var faces: Array = await _solo_tray_roll(dice, 4, _solo_owner_label(unit), "attack",
+		"Precision Spotter: %d die%s (4+) mark %s" % [dice, ("" if dice == 1 else "s"), best.get_name()])
+	var hits := 0
+	for f in faces:
+		if int(f) >= 4:
+			hits += 1
+			_solo_place_spot_marker(unit, best)
+	if hits == 0 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Precision Spotter: %s misses the mark on %s (needed 4+)" % [unit.get_name(), best.get_name()], _solo_is_ai_unit(unit))
+			"Precision Spotter: %s misses the mark on %s (needed 4+, %d die%s)" % [
+			unit.get_name(), best.get_name(), dice, ("" if dice == 1 else "s")], _solo_is_ai_unit(unit))
 
 
 ## Shared marker placement (AI auto-spot + the radial spot): property, VISIBLE "Spotted"
@@ -10917,15 +10931,21 @@ func _solo_spot_click(target: GameUnit) -> void:
 
 
 ## Fire-and-forget: the spot roll (4+) in the tray, then the shared marker placement.
+## NML-980: "roll one die" is per MODEL (GF p.4) — one click, N dice (N = every alive laser-carrying
+## model in the chain, solo_controller.precision_spot_dice_of), each 4+ its own marker.
 func _solo_resolve_spot(spotter: GameUnit, target: GameUnit) -> void:
-	var faces: Array = await _solo_tray_roll(1, 4, _solo_owner_label(spotter), "attack",
-		"Precision Spotter: 4+ marks %s" % target.get_name())
-	if not faces.is_empty() and int(faces[0]) >= 4:
-		_solo_place_spot_marker(spotter, target)
-	elif battle_log != null:
+	var dice := maxi(solo_controller.precision_spot_dice_of(spotter), 1)
+	var faces: Array = await _solo_tray_roll(dice, 4, _solo_owner_label(spotter), "attack",
+		"Precision Spotter: %d die%s (4+) mark %s" % [dice, ("" if dice == 1 else "s"), target.get_name()])
+	var hits := 0
+	for f in faces:
+		if int(f) >= 4:
+			hits += 1
+			_solo_place_spot_marker(spotter, target)
+	if hits == 0 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Precision Spotter: %s misses the mark on %s (needed 4+)" % [
-			spotter.get_name(), target.get_name()], _solo_is_ai_unit(spotter))
+			"Precision Spotter: %s misses the mark on %s (needed 4+, %d die%s)" % [
+			spotter.get_name(), target.get_name(), dice, ("" if dice == 1 else "s")], _solo_is_ai_unit(spotter))
 
 
 ## The attack's activation completion (X1 double-shoot exploit) — shared by the single-target
@@ -18679,12 +18699,17 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 ## Piercing Tag ("once per game … place X markers on an enemy within 24\"/LOS; attackers remove
 ## markers before rolling to block for +AP(Y)"): the AI tags the TOUGHEST enemy; the next friendly
 ## volley against it spends every marker (+AP per marker) — see _solo_spend_piercing_tag.
+## W3-4 (a), EPOCH_67_MARKERS_BURSTS: an entry whose registry params carry `place_roll` (Piercing
+## Spotter, book: "once per activation … roll one die, on a 4+ place a marker") no longer shares
+## the once-per-GAME `piercing_tag_used` latch — it rolls the printed die (the Precision Spotter
+## shape, _solo_try_precision_spot) and gates on a per-activation-ROUND stamp instead.
 func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 	if solo_controller == null or unit == null or not _solo_is_ai_unit(unit):
 		return
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
+	var round_now: int = opr_army_manager.current_round if opr_army_manager != null else -1
 	for m in members:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0:
@@ -18692,14 +18717,28 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Piercing Tag"):
 			var ed := e as Dictionary
 			var n := str(ed["name"])
-			if bool(member.unit_properties.get("piercing_tag_used", false)):
-				continue
 			var sp: Dictionary = ed.get("params", {})
+			var place_roll := int(sp.get("place_roll", 0))
+			if place_roll > 0:
+				if int(member.unit_properties.get("piercing_spot_round", -1)) == round_now:
+					continue
+			elif bool(member.unit_properties.get("piercing_tag_used", false)):
+				continue
 			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)))
 			if tgt == null:
 				continue
-			member.unit_properties["piercing_tag_used"] = true
 			var markers: int = maxi(int((e as Dictionary).get("rating", 0)), 1)
+			if place_roll > 0:
+				member.unit_properties["piercing_spot_round"] = round_now
+				var faces: Array = await _solo_tray_roll(1, place_roll, _solo_owner_label(member), "attack",
+					"%s: %d+ marks %s" % [n, place_roll, tgt.get_name()])
+				if faces.is_empty() or int(faces[0]) < place_roll:
+					if battle_log != null:
+						_log_rule_event(BattleLog.Category.COMBAT,
+							"%s: %s misses the mark on %s (needed %d+)" % [n, member.get_name(), tgt.get_name(), place_roll], true)
+					continue
+			else:
+				member.unit_properties["piercing_tag_used"] = true
 			tgt.unit_properties["piercing_tag_markers"] = int(tgt.unit_properties.get("piercing_tag_markers", 0)) + markers
 			# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
 			# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
@@ -18824,6 +18863,10 @@ func _solo_consume_tag_markers(target: GameUnit) -> int:
 ## units, pick one of them and roll X dice; each 6+ = one wound"): the Strafing trigger seam —
 ## trails vs enemy bases, nearest crossed enemy, direct wounds (no hit roll, no save; Regeneration
 ## applies — no ignore clause in the text).
+## D20 (a): "this model" is a MODEL rule (GF p.4) — each bearer (host, then each attached hero)
+## rolls off ITS OWN trails only, X dice PER crossing model, and a joined hero's own entry fires
+## too (the shared per-activation early-return dropped; each bearer's own registry loop still
+## fires once per bearer via the "once per activation" per-bearer read below).
 func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 	if unit == null or solo_controller == null or not _solo_is_ai_unit(unit) \
 			or solo_controller.last_move_paths.is_empty():
@@ -18835,14 +18878,19 @@ func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0:
 			continue
+		var own_models: Array = member.get_alive_models()
+		var own_trails: Array = []
+		for mp in solo_controller.last_move_paths:
+			var md := mp as Dictionary
+			if own_models.has(md.get("model")):
+				own_trails.append(md.get("path", []))
+		if own_trails.is_empty():
+			continue
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Crossing Attack"):
 			var ed := e as Dictionary
 			var n := str(ed["name"])
-			var dice: int = maxi(int(ed.get("rating", 0)), 1)
+			var dice_per_model: int = maxi(int(ed.get("rating", 0)), 1)
 			var wound_target := int((ed.get("params", {}) as Dictionary).get("wound_target", 6))
-			var trails: Array = []
-			for mp in solo_controller.last_move_paths:
-				trails.append((mp as Dictionary).get("path", []))
 			var crossed: Array = []
 			for eo in opr_army_manager.get_game_units_for_player(solo_controller.enemy_slot_of(member)):
 				var eu := eo as GameUnit
@@ -18850,14 +18898,20 @@ func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 					continue
 				if eu.has_method("is_attached") and eu.is_attached():
 					continue
-				if SoloController.trails_cross_unit_bases(trails, eu.models):
+				if SoloController.trails_cross_unit_bases(own_trails, eu.models):
 					crossed.append(eu)
 			if crossed.is_empty():
-				return
+				continue
 			crossed.sort_custom(func(a, b) -> bool:
 				return MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(a)) \
 					< MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(b)))
 			var target := crossed[0] as GameUnit
+			var crossing_models := 0
+			for trail in own_trails:
+				if SoloController.trails_cross_unit_bases([trail], target.models):
+					crossing_models += 1
+			crossing_models = maxi(crossing_models, 1)
+			var dice := dice_per_model * crossing_models
 			var faces: Array = await _solo_tray_roll(dice, wound_target, "AI (%s)" % member.get_name())
 			var wounds := 0
 			for f in faces:
@@ -18865,11 +18919,11 @@ func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 					wounds += 1
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s(%d): %s moves through %s — %d wound%s (no save)" % [
-					n, dice, member.get_name(), target.get_name(), wounds, ("" if wounds == 1 else "s")], true)
+					"%s: %d model%s of %s cross %s — %d of %d dice wound (no save)" % [
+					n, crossing_models, ("" if crossing_models == 1 else "s"),
+					member.get_name(), target.get_name(), wounds, dice], true)
 			if wounds > 0:
 				await _solo_land_wounds(target, wounds, 0)
-			return   # once per activation
 
 
 # === Coverage wave: the Growth-Marker family (Defensive Frenzy / Piercing Growth / Precision Growth) ===
@@ -19102,13 +19156,17 @@ static func surprise_attack_pick(candidates: Array) -> GameUnit:
 	return best
 
 
-## The burst itself: the before-attacking slot in the AI activation body (main.gd:1088, the same
-## slot Storm Attack uses) AND the human activation's tail — once per game per bearer = the
-## first-activation trigger, SEAT-AGNOSTIC since the human-burst fix (STANDALONE_SWEEP_D
-## 2026-09-14: the burst used to live in the AI body only, so the human's identical bearer never
-## struck). Params ride the registry entry (range_in/trigger_target/ap, the #810 census rows) with
-## the book text as defaults; the target is the descending auto pick for BOTH seats (v1 — no
-## click prompt for a once-per-activation enemy pick exists on the table yet).
+## The burst itself: activation start in the AI body (main.gd ~1111, before the move) AND the
+## human activation's tail — once per game per bearer = the first-activation trigger,
+## SEAT-AGNOSTIC since the human-burst fix (STANDALONE_SWEEP_D 2026-09-14: the burst used to
+## live in the AI body only, so the human's identical bearer never struck). Params ride the
+## registry entry (range_in/trigger_target/ap, the #810 census rows) with the book text as
+## defaults; the target is the descending auto pick for BOTH seats (v1 — no click prompt for a
+## once-per-activation enemy pick exists on the table yet).
+## D19 (a): "the first time this unit is activated" fires the latch on the FIRST activation
+## whether or not a target exists — a bearer with no target in range this activation does NOT
+## get another try later (it stamps `surprise_attack_used` before the candidate search, not
+## after a successful pick).
 func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 	if unit == null or opr_army_manager == null or solo_controller == null:
 		return
@@ -19119,6 +19177,7 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 		var bu := b as GameUnit
 		if not solo_controller.surprise_attack_bearer_ready(bu):
 			continue
+		bu.unit_properties["surprise_attack_used"] = true
 		var range_in := float(RulesRegistry.unit_param(bu, "Surprise Attack", "range_in", 6.0))
 		var trigger := int(RulesRegistry.unit_param(bu, "Surprise Attack", "trigger_target", 2))
 		var ap := int(RulesRegistry.unit_param(bu, "Surprise Attack", "ap", 1))
@@ -19131,7 +19190,6 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 				candidates.append(hu)
 		if candidates.is_empty():
 			continue
-		bu.unit_properties["surprise_attack_used"] = true
 		var dice := maxi(_solo_unit_rating(bu, "Surprise Attack"), 1)
 		var faces: Array = await _solo_tray_roll(dice, trigger, _solo_owner_label(bu), "attack",
 			"Surprise Attack hits: %d+" % trigger)

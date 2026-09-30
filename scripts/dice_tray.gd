@@ -185,7 +185,10 @@ func show_faces(faces: Array, tags: Array = []) -> void:
 	dice_count = faces.size()
 	_spawn_dice(true)
 	var ints: Array[int] = []
-	for i: int in _dice.size():
+	# NML-1100: `_spawn_dice` keeps its own maxi(1, …) display floor — a zero-die call (D76 a) still
+	# spawns ONE die to look at, but there is no face for it; leave it at its spawned default rather
+	# than reading `faces` out of bounds. `ints` (the rules-path result) stays exactly `faces`.
+	for i: int in mini(_dice.size(), faces.size()):
 		var v: int = int(faces[i])
 		_dice[i].set_top_face(v)
 		if i < tags.size():

@@ -40,6 +40,13 @@ use crate::unit::{CondAp, Ctx, ShieldedAlias, ShootProfile};
 #[derive(Debug, Clone, Copy)]
 pub struct Tray {
     rng: GodotRng,
+    /// NML-1100, `EPOCH_67_MARKERS_BURSTS`: false (the default, every existing
+    /// construction site) keeps the pre-batch-D `maxi(1, count)` burn. Set
+    /// per-resolve by `resolve_stochastic_tray_on_board` (the sole production
+    /// site a real `Tray` reaches a `.roll()` from) via `set_zero_draws`, off
+    /// the RECORD's own `seams.rules_epoch` — never baked into construction,
+    /// since one long-lived `Tray` replays acts stamped at different epochs.
+    zero_draws: bool,
 }
 
 impl Tray {
@@ -49,13 +56,13 @@ impl Tray {
     /// engine and what `GodotRng::new` mirrors; a negative seed must land on
     /// the same stream on both sides.
     pub fn seeded(seed: i64) -> Tray {
-        Tray { rng: GodotRng::new(seed) }
+        Tray { rng: GodotRng::new(seed), zero_draws: false }
     }
 
     /// A tray that continues a generator already in flight — how a replay
     /// reaches a recorded position in the stream.
     pub fn from_rng(rng: GodotRng) -> Tray {
-        Tray { rng }
+        Tray { rng, zero_draws: false }
     }
 
     /// Re-seeds in place, as a second `seed_tray_rng` call would.
@@ -63,12 +70,23 @@ impl Tray {
         self.rng.seed(seed);
     }
 
-    /// One roll: `maxi(1, count)` faces of `randi_range(1, 6)`, in draw order.
-    /// `count == 0` returns ONE face — the die the table burns and reads as
-    /// nothing. Callers that asked for zero dice must ignore the value, not
+    /// NML-1100: `on` = a `count == 0` roll draws NOTHING and burns no stream
+    /// position, the table's own rules-path reading (the tray WIDGET keeps
+    /// its own display-only `maxi(1, …)`, untouched — main.gd:7951). `off` (the
+    /// default) keeps the old UI-guard-leaked-into-the-rules-path burn.
+    pub fn set_zero_draws(&mut self, on: bool) {
+        self.zero_draws = on;
+    }
+
+    /// One roll: `maxi(1, count)` faces of `randi_range(1, 6)`, in draw order
+    /// — or, from `EPOCH_67_MARKERS_BURSTS` (`zero_draws`), exactly `count`
+    /// faces, so a `count == 0` roll draws nothing. Below the gate `count ==
+    /// 0` still returns ONE face — the die the table burns and reads as
+    /// nothing; callers that asked for zero dice must ignore the value, not
     /// the draw.
     pub fn roll(&mut self, count: usize) -> Vec<u8> {
-        (0..count.max(1)).map(|_| self.rng.randi_range(1, 6) as u8).collect()
+        let n = if self.zero_draws { count } else { count.max(1) };
+        (0..n).map(|_| self.rng.randi_range(1, 6) as u8).collect()
     }
 
     /// `rng.state` — the cheap replay checkpoint GATE R already compares.

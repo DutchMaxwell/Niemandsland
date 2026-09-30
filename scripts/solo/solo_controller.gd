@@ -8346,6 +8346,30 @@ static func counter_models_of(unit: GameUnit) -> int:
 	return total
 
 
+## NML-980 — alive models of a unit (incl. attached heroes) that carry "Precision Spotter"
+## (the army-book text: "…in line of sight of THIS MODEL and roll one die" — a model rule, the
+## `counter_models_of` shape above: a unit-wide print counts every alive model, one laser each).
+## The spot roll is `dice = this` — one die per laser, not one per spot action.
+static func precision_spot_dice_of(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var total := 0
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		var alive: int = member.get_alive_count()
+		if alive <= 0:
+			continue
+		if member.has_special_rule("Precision Spotter") \
+				or not RulesRegistry.unit_rules_of_primitive(member, "Precision Spotter").is_empty():
+			total += alive
+	return total
+
+
 # ===== AI decision records (developer mode — introspection first, then intelligence) =====
 
 ## Append one structured decision record (see decision_log). Ring-buffered: the oldest record is

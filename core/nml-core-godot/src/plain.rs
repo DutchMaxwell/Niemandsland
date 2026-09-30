@@ -465,6 +465,7 @@ pub fn build_state(
         vengeance_markers: vec![0; n],
         growth_round: vec![-1; n],
         second_wind_used: vec![false; n],
+        surprise_attack_used: vec![false; n],
         reinforcement_used: vec![false; n],
         second_wind_round: -1,
         second_wind_uses: 0,
@@ -478,6 +479,7 @@ pub fn build_state(
         piercing_tag_used: vec![false; n],
         piercing_tag_markers: vec![0; n],
         piercing_tag_persistent: vec![false; n],
+        piercing_spot_round: vec![-1; n],
         spot_markers: vec![0; n], tag_markers: vec![0; n], spot_round: vec![-1; n], precision_used: vec![Vec::new(); n],
         // Precision marker trio (epoch 61): the same fresh-game shape doctrine.rs:181-183 builds.
         storm_used: vec![Vec::new(); n],
