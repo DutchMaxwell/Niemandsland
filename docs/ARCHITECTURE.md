@@ -179,7 +179,7 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
   war-torn fires and CC0 battlefield ambience (see [`ATMOSPHERE.md`](ATMOSPHERE.md)).
 - `glassmorphism_theme.gd` + `hud/` (`hud_frame`, `hud_tokens`,
   `state_panel`, `ui_motion`) — the Tactical-HUD UI language and overlay.
-- `grass_field.gd`, `atmospheric_clouds.gd`, `cinematic_intro.gd`, `model_info_popup.gd`,
+- `grass_field.gd`, `atmospheric_clouds.gd`, `cinematic_intro.gd`,
   `opr_stats_tooltip.gd`, `selection_spill_light.gd`.
 
 ## Rust rules core (optional)

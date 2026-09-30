@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
-## E2E — the unit dialogs, rows 16, 17 and 19 of the UI inventory (uiprompts step 7a): Wounds, Caster points and
-## Model info (row 19: the lead decided 30.09. to restyle it and keep today's function — name + node type).
+## E2E — the unit dialogs, rows 16 and 17 of the UI inventory (row 19 was dropped) (uiprompts step 7a): Wounds and Caster points
+## (row 19, Model info, was dropped 30.09. — D104 — the test below proves the radial menu no longer offers it).
 ## Each dialog is opened the way the radial menu opens it (the controller's action pipe), then every control
 ## of TODAY's dialog is found and clicked for real: − / + step within the bounds (disabled at them), HEAL
 ## FULL / KILL / RESET do what they do and every change is emitted for the network sync, the spell list
@@ -224,27 +224,20 @@ func test_caster_points_step_reset_list_spells_and_close(timeout := 120000) -> v
 	assert_bool(d.visible).override_failure_message("Esc did not close the dialog").is_false()
 
 
-# === row 19: Model info (generic object) ======================================================
+# === row 19: Model info — dropped (D104, 30.09.) ===============================================
 
-func test_model_info_names_a_generic_object_and_closes(timeout := 120000) -> void:
+func test_a_generic_object_menu_has_no_info_entry(timeout := 120000) -> void:
 	var obj := Node3D.new()
 	obj.name = "RuinedTower"
 	_main.add_child(obj)
-	_rmc()._on_action_selected("info", {"object": obj})
+	_rmc().open_menu(Vector2(400, 300), [obj])
 	await _runner.simulate_frames(3)
-	var d: Control = _rmc().model_info_popup
-	assert_bool(d.visible).is_true()
-	assert_array(_missing(d, ["CLOSE"])).is_empty()
-	assert_str(_text(d).to_upper()).contains("MODEL INFO")
-	assert_str(_text(d)).contains("RuinedTower")
-	assert_str(_text(d)).contains("Type: Node3D")
-	await _click_beside(d)
-	await _click(_button(d, "CLOSE"))
-	assert_bool(d.visible).is_false()
-	_rmc()._on_action_selected("info", {"object": obj})
-	await _runner.simulate_frames(3)
-	await _key(KEY_ESCAPE)
-	assert_bool(d.visible).override_failure_message("Esc did not close the popup").is_false()
+	var ids: Array = []
+	for item in _rmc().radial_menu._items:
+		ids.append(item.id)
+	assert_array(ids).override_failure_message("a generic object's radial menu is %s" % str(ids)).contains(["delete"])
+	assert_array(ids).override_failure_message("the dropped Info entry is back: %s" % str(ids)).not_contains(["info"])
+	assert_bool("model_info_popup" in _rmc()).is_false()
 
 
 # === the house look (restyle) =================================================================
@@ -313,13 +306,6 @@ func test_the_unit_dialogs_wear_the_house_style(timeout := 120000) -> void:
 	assert_str(spells.text).override_failure_message("the spell names are not in the house accent") \
 		.contains("[color=#%s]Bolt" % HouseStyle.ACCENT.to_html(false))
 	_rmc().casts_dialog.close()
-	var obj := Node3D.new()
-	obj.name = "RuinedTower"
-	_main.add_child(obj)
-	_rmc()._on_action_selected("info", {"object": obj})
-	await _runner.simulate_frames(3)
-	_assert_house_dialog(_rmc().model_info_popup, "MODEL INFO", {"TitleLabel": HouseStyle.BODY,
-		"CloseButton": HouseStyle.BUTTON})
 
 
 # === the check itself =========================================================================
