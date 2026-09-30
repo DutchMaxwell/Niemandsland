@@ -16,6 +16,11 @@ const HINTS := {
 	"object": "Drag: move · R (hold): rotate · Esc: cancel drag",
 }
 
+## The Units dock (injected by main.gd): the line sits ABOVE its tab / open strip, never on it.
+var dock: Node = null
+const DOCK_GAP := 6.0
+const LINE_H := 24.0
+
 var _label: Label = null
 var _panel: PanelContainer = null
 var _dwell: Timer = null
@@ -87,6 +92,23 @@ func _on_dwell() -> void:
 		return
 	_label.text = _pending_text
 	_panel.visible = true
+	_place()
+
+
+## Lifts the line above the dock (tab + open strip / presented card); no dock = the old bottom margin.
+func _place() -> void:
+	var lift := 10.0
+	if dock != null and is_instance_valid(dock) and dock.has_method("occupied_height"):
+		# The open dock parks its tab ABOVE the strip, higher than occupied_height() reports: clear both.
+		lift = maxf(float(dock.occupied_height()), float(dock.tab_target_lift())) + DOCK_GAP
+	_panel.offset_bottom = -lift
+	_panel.offset_top = -lift - LINE_H
+
+
+func set_dock(p_dock: Node) -> void:
+	dock = p_dock
+	if dock != null and dock.has_signal("occupied_changed"):
+		dock.occupied_changed.connect(_place)
 
 
 func _hide() -> void:

@@ -54,9 +54,6 @@ var wounds_dialog: WoundsDialog = null
 ## Reference to casts dialog
 var casts_dialog: CastsDialog = null
 
-## Reference to model info popup
-var model_info_popup: ModelInfoPopup = null
-
 ## Reference to marker dialog
 var marker_dialog: MarkerDialog = null
 
@@ -168,11 +165,6 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 		casts_dialog = CastsDialog.create_simple()
 		ui_parent.add_child(casts_dialog)
 		casts_dialog.casts_changed.connect(_on_casts_changed)
-
-	# Create model info popup
-	if not model_info_popup:
-		model_info_popup = ModelInfoPopup.create_simple()
-		ui_parent.add_child(model_info_popup)
 
 	# Create marker dialog
 	if not marker_dialog:
@@ -329,7 +321,6 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 		items = RadialMenu.create_terrain_menu()
 	else:
 		# Generic object - minimal menu
-		items.append(RadialMenu.RadialMenuItem.new("info", "Info", "ℹ️"))
 		items.append(RadialMenu.RadialMenuItem.new("delete", "Delete", "🗑️"))
 		context["object"] = first_obj
 
@@ -439,8 +430,6 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_delete_unit(context)
 		"delete_terrain":
 			_delete_terrain(context)
-		"info":
-			_show_generic_info(context)
 		"delete":
 			_delete_generic(context)
 
@@ -864,15 +853,6 @@ func _delete_plain_object(obj: Node3D) -> void:
 	delete_objects([obj])
 	if object_manager and object_manager.has_method("deselect_all"):
 		object_manager.deselect_all()
-
-
-## Show a minimal info popup (name + node type) for a generic table object — one
-## that is not an OPR unit/model or terrain (e.g. a directly loaded custom model).
-func _show_generic_info(context: Dictionary) -> void:
-	var obj = context.get("object") as Node3D
-	if not obj or not model_info_popup:
-		return
-	model_info_popup.open_with_content(obj.name, "Type: %s" % obj.get_class())
 
 
 func _delete_generic(context: Dictionary) -> void:
