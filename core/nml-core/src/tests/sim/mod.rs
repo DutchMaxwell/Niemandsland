@@ -100,6 +100,7 @@
             piercing_tag_used: vec![false; 4],
             piercing_tag_markers: vec![0; 4],
             piercing_tag_persistent: vec![false; 4],
+            piercing_spot_round: vec![-1; 4],
             spot_markers: vec![0; 4],
             tag_markers: vec![0; 4],
             spot_round: vec![-1; 4],
@@ -669,6 +670,12 @@
     /// spent markers' +AP is observable on the save target — dice.rs's own
     /// Piercing-Growth precedent.
     fn tag_line(rule: &str, markers: i64, range_in: f64) -> (State, Vec<UnitStatic>) {
+        tag_line_with_roll(rule, markers, range_in, 0)
+    }
+
+    /// `tag_line`, with the Piercing Spotter's printed 4+ (`place_roll`, 0 =
+    /// no roll — the rest of the family).
+    fn tag_line_with_roll(rule: &str, markers: i64, range_in: f64, place_roll: i64) -> (State, Vec<UnitStatic>) {
         let (st, mut statics) = split_line();
         statics[0] = UnitStatic {
             name: "tagger".into(),
@@ -679,6 +686,7 @@
                 markers,
                 range_in,
                 needs_los: true,
+                place_roll,
             }],
             ..Default::default()
         };

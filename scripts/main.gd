@@ -1147,7 +1147,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# once-per-activation before-attacking slot (data-driven via the primitive layer).
 	await _solo_apply_utility_buffs(unit)
 	await _solo_apply_mind_control(unit)
-	_solo_apply_piercing_tag(unit)
+	await _solo_apply_piercing_tag(unit)
 	_solo_apply_precision_tag(unit)
 	_solo_apply_precision_target(unit)
 	await _solo_apply_reckless_piercing(unit)
@@ -18679,12 +18679,17 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 ## Piercing Tag ("once per game … place X markers on an enemy within 24\"/LOS; attackers remove
 ## markers before rolling to block for +AP(Y)"): the AI tags the TOUGHEST enemy; the next friendly
 ## volley against it spends every marker (+AP per marker) — see _solo_spend_piercing_tag.
+## W3-4 (a), EPOCH_67_MARKERS_BURSTS: an entry whose registry params carry `place_roll` (Piercing
+## Spotter, book: "once per activation … roll one die, on a 4+ place a marker") no longer shares
+## the once-per-GAME `piercing_tag_used` latch — it rolls the printed die (the Precision Spotter
+## shape, _solo_try_precision_spot) and gates on a per-activation-ROUND stamp instead.
 func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 	if solo_controller == null or unit == null or not _solo_is_ai_unit(unit):
 		return
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
+	var round_now: int = opr_army_manager.current_round if opr_army_manager != null else -1
 	for m in members:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0:
@@ -18692,14 +18697,28 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Piercing Tag"):
 			var ed := e as Dictionary
 			var n := str(ed["name"])
-			if bool(member.unit_properties.get("piercing_tag_used", false)):
-				continue
 			var sp: Dictionary = ed.get("params", {})
+			var place_roll := int(sp.get("place_roll", 0))
+			if place_roll > 0:
+				if int(member.unit_properties.get("piercing_spot_round", -1)) == round_now:
+					continue
+			elif bool(member.unit_properties.get("piercing_tag_used", false)):
+				continue
 			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)))
 			if tgt == null:
 				continue
-			member.unit_properties["piercing_tag_used"] = true
 			var markers: int = maxi(int((e as Dictionary).get("rating", 0)), 1)
+			if place_roll > 0:
+				member.unit_properties["piercing_spot_round"] = round_now
+				var faces: Array = await _solo_tray_roll(1, place_roll, _solo_owner_label(member), "attack",
+					"%s: %d+ marks %s" % [n, place_roll, tgt.get_name()])
+				if faces.is_empty() or int(faces[0]) < place_roll:
+					if battle_log != null:
+						_log_rule_event(BattleLog.Category.COMBAT,
+							"%s: %s misses the mark on %s (needed %d+)" % [n, member.get_name(), tgt.get_name(), place_roll], true)
+					continue
+			else:
+				member.unit_properties["piercing_tag_used"] = true
 			tgt.unit_properties["piercing_tag_markers"] = int(tgt.unit_properties.get("piercing_tag_markers", 0)) + markers
 			# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
 			# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing

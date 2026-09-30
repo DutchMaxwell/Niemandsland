@@ -608,6 +608,12 @@ pub struct State {
     /// unlike Tag/Spotter which still spend whole. False below the gate and
     /// for every other family name.
     pub piercing_tag_persistent: Vec<bool>,
+    /// Wave 3 batch D (`EPOCH_67_MARKERS_BURSTS`, W3-4 a) — the round Piercing
+    /// Spotter last rolled its 4+, per bearer (the `spot_round` shape): -1 =
+    /// never. Below the gate `place_roll` stays dead data and the bearer's
+    /// placement gates on `piercing_tag_used` instead, so this field is
+    /// unread there.
+    pub piercing_spot_round: Vec<i64>,
     /// Wave 3 — `unit_properties["storm_used_<rule>"]` (main.gd:17244): the
     /// Storm Attack family's ONCE-per-game flags, per unit the DISPLAY names
     /// already fired this game (the recorder stamps them off the same flags,

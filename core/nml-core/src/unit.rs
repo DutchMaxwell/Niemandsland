@@ -4551,10 +4551,12 @@ fn re_deployment_max_units_of(reg: &mut Registries, p: &Profile, rules_epoch: u3
 /// `range_in` (its GDScript default 24.0), `needs_los` (default true) and the
 /// RAW rule string's parsed rating — `maxi(rule_rating(str(raw)), 1)`
 /// (main.gd:17022; the params' `"rating": "X"` placeholder parses as 0, so a
-/// bare name places ONE marker). The entry's `place_roll` (Piercing Spotter)
-/// and `uses_per_game` are dead data on the TABLE's own resolver — the AI
-/// never rolls for the Spotter and the shared `piercing_tag_used` flag IS the
-/// once-per-game beat — so the twin reads neither.
+/// bare name places ONE marker). `uses_per_game` stays dead data — the shared
+/// `piercing_tag_used` flag IS the once-per-game beat for every non-Spotter
+/// name. `place_roll` (Piercing Spotter's printed 4+) was dead data too until
+/// `EPOCH_67_MARKERS_BURSTS` (batch D, W3-4 a): from that gate an entry with
+/// `place_roll > 0` rolls the die and uses the per-activation-round latch
+/// (`State.piercing_spot_round`) instead of `piercing_tag_used`.
 ///
 /// GATED `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)` (frozen at 6, never the
 /// literal and never `CURRENT_RULES_EPOCH`): a recording fleet is stamping
@@ -4569,6 +4571,11 @@ pub struct PiercingTagEntry {
     pub range_in: f64,
     /// The pick's sight gate (`bool(sp.get("needs_los", true))`).
     pub needs_los: bool,
+    /// Piercing Spotter's printed 4+ die (0 = no roll, every other family
+    /// name). From `EPOCH_67_MARKERS_BURSTS` this arms the roll + the
+    /// per-activation-round latch; below the gate it stays dead data, the
+    /// same reading as before batch D.
+    pub place_roll: i64,
 }
 
 /// Every "Piercing Tag" family entry the unit carries, in
@@ -4605,6 +4612,7 @@ fn piercing_tags_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<
             markers: rule_rating(raw, 0).max(1),
             range_in: e.param_f("range_in", 24.0),
             needs_los: e.param_b_or("needs_los", true),
+            place_roll: e.param_i("place_roll", 0),
         });
     }
     out
