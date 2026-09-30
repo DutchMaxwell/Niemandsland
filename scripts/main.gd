@@ -17697,6 +17697,7 @@ func _init_radial_menu() -> void:
 	var control_hints := ControlHintsController.new()
 	control_hints.name = "ControlHintsController"
 	add_child(control_hints)
+	control_hints.set_dock(unit_dock)
 	object_manager.hover_changed.connect(control_hints.on_hover_changed)
 	# #162: HUMAN drops arm a take-back (the AI's direct choreography call never does).
 	object_manager.selection_dropped.connect(func(moves: Array) -> void:
