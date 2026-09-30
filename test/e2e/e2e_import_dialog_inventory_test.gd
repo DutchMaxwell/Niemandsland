@@ -92,7 +92,9 @@ func test_import_army_emits_the_army_slot_and_ai_flag_then_hides_and_resets() ->
 	_dlg.ai_check.button_pressed = true
 	_dlg.share_link_input.text = "https://example.invalid/x"
 	_button("IMPORT ARMY").pressed.emit()
-	assert_int(_imported.size()).is_equal(1)
+	assert_int(_imported.size()).override_failure_message("IMPORT ARMY did not emit army_imported").is_equal(1)
+	if _imported.is_empty():
+		return
 	assert_object(_imported[0][0]).is_same(army)
 	assert_int(_imported[0][1]).is_equal(2)
 	assert_bool(_imported[0][2]).is_true()
