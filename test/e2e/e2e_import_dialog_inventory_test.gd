@@ -129,6 +129,20 @@ func test_preview_shows_the_army_name_and_totals() -> void:
 	assert_str(_dlg.army_preview.text).contains("[b]Points:[/b] 1000")
 
 
+func test_the_x_cancels_and_the_sheet_is_house_style_and_owns_its_clicks() -> void:
+	var root := _dlg.get_child(0) as Control
+	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	assert_object(root.theme).is_same(HouseStyle.theme())
+	assert_str(String(_button("IMPORT ARMY").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(_button("LOAD ARMY").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(_button("CANCEL").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	_dlg.show()
+	_dlg.share_link_input.text = "abc"
+	(_dlg.find_child("CloseButton", true, false) as Button).pressed.emit()
+	assert_bool(_dlg.visible).is_false()
+	assert_str(_dlg.share_link_input.text).is_empty()
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	assert_array(_missing()).is_empty()
 	var cancel := _button("CANCEL")

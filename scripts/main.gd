@@ -15708,7 +15708,7 @@ func _on_import_opr_army() -> void:
 			await network_manager.slot_assigned
 		slot = maxi(1, network_manager.get_my_player_slot())
 	opr_import_dialog.set_player(slot)
-	opr_import_dialog.popup_centered()
+	opr_import_dialog.show()
 
 
 ## The AI-opponent dialog (maintainer request): NACHTMAHR builds its own list — pick faction + points,
