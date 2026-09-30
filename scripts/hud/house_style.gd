@@ -266,6 +266,12 @@ static func theme() -> Theme:
 	_label_variant(t, VOICE, GOLD, FONT_VALUE)
 	t.set_color(&"font_color", &"Label", INK)
 
+	# Native dialogs of the menu scene (MenuDialog): the sheet box, light text on it.
+	t.set_stylebox(&"panel", &"AcceptDialog", _box(SHEET_FILL, LINE_SOFT, RADIUS_SHEET, PAD_SHEET, PAD_SHEET))
+	t.set_color(&"default_color", &"RichTextLabel", INK)
+	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
+		t.set_color(c, &"CheckBox", INK)
+
 	# A slim scrollbar for sunken lists (the dice log).
 	var grab := _box(LINE, LINE, RADIUS_CONTROL, 0, 0)
 	var grab_hot := _box(ACCENT, ACCENT, RADIUS_CONTROL, 0, 0)

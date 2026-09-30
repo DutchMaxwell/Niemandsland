@@ -4,12 +4,13 @@ use super::*;
     //
     // `selfplay._spells_by_kind_tally` (selfplay.py:1440) and its GDScript
     // twin (core_selfplay.gd:74-81) count `state["cast_events"]` entries'
-    // "kind" stamp from the pre-apply mark. The core's cast sub-phase pushed
-    // its rules-must-log lines with "rule"/"log" only, so every kind read ""
-    // and the tally was structurally zero. The stamp: the spell's own
-    // `effect_kind` ("damage" | "buff" | "debuff" | "utility"), the same
-    // strings the GDScript table's `by_kind` keys carry (unknown kinds are
-    // skipped by both counters). The epoch literals here are 48/47, never
+    // "kind" from the pre-apply mark. The core pushes ONE attempt event per
+    // cast (the table's `_cast_phase` shape, castparity step 4) carrying the
+    // spell's own `effect_kind` ("damage" | "buff" | "debuff" | "utility"), the
+    // same strings the GDScript table's `by_kind` keys carry (unknown kinds are
+    // skipped by both counters); the rules-must-log lines carry no kind, so a
+    // conduit/boost/interference cast still counts once. The epoch literals
+    // here are 48/47, never
     // `CURRENT_RULES_EPOCH`.
 
     use crate::acts::EPOCH_48_CASTER_BOOST;
@@ -87,11 +88,35 @@ use super::*;
         Seams { rules_epoch: e, cast_fold: true, hero_attach: true, ..Seams::default() }
     }
 
+    /// The kind of every cast ATTEMPT event (the entries carrying a `spell`) —
+    /// what the tally counts. Log lines carry no kind.
     fn kinds(st: &State) -> Vec<&str> {
         st.cast_events
             .iter()
+            .filter(|e| e.get("spell").is_some())
             .map(|e| e["kind"].as_str().unwrap_or(""))
             .collect()
+    }
+
+    /// The table's event shape, key for key (battle_sim.gd `_cast_phase`): a
+    /// plain cast (no conduit, no boost, no interference) pushes exactly ONE
+    /// entry, the attempt, and log lines carry no `kind` for the tally to count.
+    #[test]
+    fn a_plain_cast_pushes_one_attempt_event_in_the_tables_shape() {
+        let (mut st, statics) = lone_caster(vec![bolt()]);
+        let los = vec![true; st.units()];
+        cast_phase(&statics, &mut st, 0, &los, Seams { cast_fold: true, hero_attach: true, ..Seams::default() }, None);
+        assert_eq!(st.cast_events.len(), 1, "one attempt, no log lines: {:?}", st.cast_events);
+        let ev = &st.cast_events[0];
+        let mut keys: Vec<&str> = ev.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        keys.sort();
+        assert_eq!(keys, ["boost", "cost", "interference", "kind", "p_success", "spell", "target"]);
+        assert_eq!(ev["spell"], "bolt");
+        assert_eq!(ev["kind"], "damage");
+        assert_eq!(ev["cost"], 0, "the bolt's own threshold");
+        assert!(ev["target"] == st.roster.keys[2].as_str() || ev["target"] == st.roster.keys[3].as_str(), "an enemy key: {ev}");
+        assert_eq!(ev["boost"], 0);
+        assert_eq!(ev["interference"], 0);
     }
 
     /// THE STAMP TEST. A caster that casts ONE damage spell (one activation,
