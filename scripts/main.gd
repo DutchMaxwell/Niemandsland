@@ -15101,10 +15101,6 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 		var rot = float(layout.get("grid_rotation", 0.0))
 		if terrain_overlay and terrain_overlay.has_method("update_overlay"):
 			terrain_overlay.update_overlay(grid_cells, table_sz, rot)
-		# Also update local map_layout_editor data
-		if map_layout_editor:
-			map_layout_editor.grid_cells = grid_cells
-			map_layout_editor.grid_rotation_degrees = rot
 
 		# Deserialize and apply wall segments (role/taper_dir drive the ruin shell
 		# walls; defaults keep peers on older layout payloads rendering "full" panels)
@@ -15120,8 +15116,6 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 					"role": str(w.get("role", "full")),
 					"taper_dir": int(w.get("taper_dir", -1)),
 				})
-		if map_layout_editor:
-			map_layout_editor.wall_segments = wall_segments
 		if terrain_overlay and terrain_overlay.has_method("update_wall_models"):
 			terrain_overlay.update_wall_models(wall_segments, table_sz, rot)
 
@@ -15135,10 +15129,11 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 					"offset": Vector2(float(o.get("offset_x", 0.5)), float(o.get("offset_y", 0.5))),
 					"object_type": str(o.get("object_type", "tree")),
 				})
-		if map_layout_editor:
-			map_layout_editor.placed_objects = placed_objects
 		if terrain_overlay and terrain_overlay.has_method("update_placed_objects"):
 			terrain_overlay.update_placed_objects(placed_objects, table_sz, rot)
+		# Also update the local map_layout_editor - through its source model, so a rebuild keeps the terrain
+		if map_layout_editor:
+			map_layout_editor.apply_synced_layout(grid_cells, wall_segments, placed_objects, rot)
 
 		print("[Settings] Terrain layout received: %d cells, %d walls, %d objects" % [
 			grid_cells.size(), wall_segments.size(), placed_objects.size()])
