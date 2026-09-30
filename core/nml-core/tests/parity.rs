@@ -50,7 +50,8 @@
 //! skipped: a node the port cannot resolve fails the test by name.
 
 use nml_core::{
-    build_statics, load_nodes, read_nodes, reply_threat, resolve, score, Seams, State,
+    build_statics, cast_attempts_diff, load_nodes, read_nodes, reply_threat, resolve, score, Seams,
+    State,
 };
 
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_200.jsonl");
@@ -434,6 +435,10 @@ fn gate_b_cast_subphase_reproduces_every_recorded_cast() {
             "node #{}: cast node does not match state_after",
             i + 1
         );
+        // The table's cast-attempt events (castparity): the gate the boolean above never was.
+        if let Some(d) = cast_attempts_diff(&got, &node.state_after) {
+            panic!("node #{}: {d}", i + 1);
+        }
         per_kind[node.action.kind as usize] += 1;
         for u in 0..got.units() {
             spent += node.state_before.casts[u] - got.casts[u];
@@ -441,6 +446,26 @@ fn gate_b_cast_subphase_reproduces_every_recorded_cast() {
     }
     assert_eq!(per_kind, [24, 0, 24, 24], "HOLD / ADVANCE / RUSH / CHARGE casts");
     assert_eq!(spent, 144, "tokens the sub-phase spent across the slice");
+}
+
+/// The comparator can fail: one perturbed field per kind of mismatch is seen.
+#[test]
+fn the_cast_attempt_comparator_can_fail() {
+    let corpus = load_nodes(CAST).expect("fixture loads");
+    let want = &corpus.nodes[0].state_after;
+    assert_eq!(cast_attempts_diff(want, want), None, "a state agrees with itself");
+    let perturbed = |key: &str, val: serde_json::Value| {
+        let mut got = want.clone();
+        std::rc::Rc::make_mut(got.cast_events.last_mut().expect("the node cast"))[key] = val;
+        got
+    };
+    let got = perturbed("p_success", serde_json::json!(0.123));
+    assert!(cast_attempts_diff(&got, want).unwrap().contains("p_success"));
+    let got = perturbed("target", serde_json::json!("nobody"));
+    assert!(cast_attempts_diff(&got, want).unwrap().contains("target"));
+    let mut got = want.clone();
+    got.cast_events.clear();
+    assert!(cast_attempts_diff(&got, want).unwrap().contains("attempt(s)"));
 }
 
 /// Red-green for the seam: with `cast` off, `resolve` runs the LEGACY rider
