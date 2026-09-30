@@ -203,6 +203,14 @@ static func theme() -> Theme:
 		_box(_alpha(DANGER, PRESS_ALPHA), DANGER, RADIUS_CARD, PAD_BUTTON_X, 0), _radius(off, RADIUS_CARD),
 		tone_ink(TONE_DANGER), FONT_BODY)
 
+	# Privacy window: sunken read-only text, light ink on the toggles.
+	t.set_stylebox(&"normal", &"TextEdit", _box(WELL, LINE, RADIUS_CARD, PAD_CARD_X, PAD_CARD_Y))
+	t.set_stylebox(&"read_only", &"TextEdit", _box(WELL, LINE, RADIUS_CARD, PAD_CARD_X, PAD_CARD_Y))
+	t.set_color(&"font_color", &"TextEdit", INK)
+	t.set_color(&"font_readonly_color", &"TextEdit", INK)
+	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
+		t.set_color(c, &"CheckButton", INK)
+
 	# Tool rail: quiet buttons until hovered, the open tool in gold (mockup .rail-btn / .active).
 	var none := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
 	var rail_hover := _box(FILL_RAISED, Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
