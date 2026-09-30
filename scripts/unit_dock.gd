@@ -191,6 +191,11 @@ func tab_rect() -> Rect2:
 	return _tab.get_global_rect() if _tab != null else Rect2()
 
 
+## Pixels from the screen bottom to the tab's TOP where it is heading (valid mid-tween).
+func tab_target_lift() -> float:
+	return get_viewport_rect().size.y - _tab_target_y(_dock_open)
+
+
 func strip_rect() -> Rect2:
 	return _strip_panel.get_global_rect() if _strip_panel != null else Rect2()
 
