@@ -4408,6 +4408,7 @@ fn strike_phase(
                     crate::combat::reliable_quality(att.quality,
                         prof36.map(|p| p.reliable).unwrap_or(false)),
                     (prof36.is_some() && prof36.unwrap().thrust) || att.thrust_grant,
+                    crate::combat::BEST_HIT_TARGET,
                 ),
                 &def, prof36, &mut shot.log);
             att.versatile_pick_hit = vh;

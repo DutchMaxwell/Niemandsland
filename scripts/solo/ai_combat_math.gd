@@ -215,11 +215,11 @@ static func impact_hits(faces: Array) -> int:
 
 
 ## Charging to-hit target for a Thrust weapon (GF/AoF Advanced Rules v3.5.1, p.14: "+1 to hit rolls ... in
-## melee" when charging). +1 to hit lowers the needed face by one, clamped at the 2+ ceiling; unchanged
-## when not charging. Fatigue is handled by the caller (a fatigued unit hits only on unmodified 6s, so
+## melee" when charging). +1 to hit lowers the needed face by one; UNCLAMPED (D21: the modifiers are one
+## sum, clamped once by modified_hit_target); unchanged when not charging. Fatigue is handled by the caller (a fatigued unit hits only on unmodified 6s, so
 ## Thrust's modifier does not apply then).
 static func thrust_to_hit(quality: int, is_charging: bool) -> int:
-	return maxi(BEST_HIT_TARGET, quality - THRUST_TO_HIT_BONUS) if is_charging else quality
+	return quality - THRUST_TO_HIT_BONUS if is_charging else quality
 
 
 ## A to-hit target under a net ROLL modifier (`+1 to hit` = roll_mod +1, which lowers the needed face by
