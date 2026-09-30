@@ -104,6 +104,30 @@ func test_melee_caster_casts_on_a_hold_and_spends_its_token() -> void:
 	assert_float(float(ev.get("p_success", 0.0))).is_equal_approx(0.5, 0.001)
 
 
+## (a2) The recorded plain state carries the cast attempt: one event, the seven
+## keys of _cast_phase's contract (castparity step 1). A state that never cast
+## writes no key at all (cast-off corpora stay byte-identical).
+func test_state_to_plain_carries_the_cast_attempt_event() -> void:
+	var plain := BattleSim.state_to_plain(_hold(_melee_caster_state(3.0)), false)
+	var events: Array = plain.get("cast_events", [])
+	assert_int(events.size()).is_equal(1)
+	var ev: Dictionary = events[0] if not events.is_empty() else {}
+	for k in ["spell", "kind", "cost", "target", "p_success", "boost", "interference"]:
+		assert_bool(ev.has(k)).is_true()
+	assert_str(str(ev.get("target", ""))).is_equal("Squad")
+	assert_bool(BattleSim.state_to_plain(_melee_caster_state(3.0), false).has("cast_events")).is_false()
+
+
+## (a3) A conduit event's origin position leaves the plain state as an [x,y,z]
+## array (JSON-safe), the shape the Rust plain_of writes.
+func test_state_to_plain_writes_a_conduit_origin_position_as_an_array() -> void:
+	var plain := BattleSim.state_to_plain(_hold(_conduit_state()), false)
+	var origin: Dictionary = (plain["cast_events"][0] as Dictionary)["origin"]
+	assert_str(str(origin["unit"])).is_equal("Banner")
+	assert_bool(origin["position"] is Array).is_true()
+	assert_float(float(origin["position"][0])).is_equal_approx(10.0 * IN2M, 0.001)
+
+
 ## (b) Discriminator: nothing in range and no affordable buff (robot_legions'
 ## two friendly spells cost 2 and 3) — the caster HOLDS: no token spent, no
 ## event, no damage anywhere.

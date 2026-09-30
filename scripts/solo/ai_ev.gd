@@ -481,6 +481,7 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	var spell_mod := int(att.get("spell_hit_mod", 0))
 	# — To-hit target: the same composition as _solo_melee_strike_phase / the shooting volleys —
 	var target: int
+	var target_raw: int   # D21: the UNCLAMPED sum; Versatile/Precise fold into it, one clamp at the end
 	if melee:
 		if bool(att.get("fatigued", false)):
 			# Fatigue (p.9, W-P1 parity): hits ONLY on unmodified 6 — a hard target
@@ -496,7 +497,7 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 			# The EV judge never knew, so it under-valued Unstoppable strikes into Evasive targets.
 			if bool(profile.get("unstoppable", false)) and melee_mod < 0:
 				melee_mod = 0
-			target = AiCombatMath.modified_hit_target(target, melee_mod)
+			target = target - melee_mod
 	else:
 		target = AiCombatMath.reliable_quality(quality, bool(profile.get("reliable", false)))
 		var shoot_mod := AiCombatMath.shooting_hit_modifier(dist_in,
@@ -504,7 +505,9 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod
 		if bool(profile.get("unstoppable", false)) and shoot_mod < 0:
 			shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)
-		target = AiCombatMath.modified_hit_target(target, shoot_mod)
+		target = target - shoot_mod
+	target_raw = target
+	target = AiCombatMath.modified_hit_target(target_raw, 0)
 	# — Versatile Attack (army-book): over 9" (shooting), pick the EV-better of +1 to hit or AP(+1) via the
 	#   SAME chooser the dice path calls. hit_mod improves the to-hit here; the ap bonus folds in below —
 	var versatile := {}
@@ -513,10 +516,11 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		# (not covered) — pass the same basis here, or a Shielded target could flip the plan/dice mode choice.
 		var choose_def := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
 		versatile = versatile_best_mode(target, choose_def, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
-		target = AiCombatMath.modified_hit_target(target, int(versatile.get("hit_mod", 0)))
+		target_raw -= int(versatile.get("hit_mod", 0))
 	# Precise (army-book weapon rule): flat +1 to hit when attacking, any range (melee or shooting).
 	if bool(profile.get("precise", false)):
-		target = AiCombatMath.modified_hit_target(target, 1)
+		target_raw -= 1
+	target = AiCombatMath.modified_hit_target(target_raw, 0)
 	var hits := attacks * AiCombatMath.success_chance(target)
 	# — Per-unmodified-6 bonus hits (expected +attacks/6 each; "only the original hit counts as a 6") —
 	if not melee and bool(profile.get("relentless", false)) and dist_in > AiCombatMath.LONG_RANGE_IN:

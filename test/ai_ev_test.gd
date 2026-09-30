@@ -311,6 +311,18 @@ func test_crack_on6_ap_raises_ev() -> void:
 		> AiEv.profile_ev(plain, ATT, DEF_PLAIN, 12.0, false)).is_true()
 
 
+func test_to_hit_modifiers_are_one_sum_clamped_once() -> void:
+	# D21 (EPOCH_68_MODIFIER_SUM): Q5 vs Artillery + Stealth over 9" with Precise is 5 + 2 - 1 = 6+ (the old
+	# per-step clamp walked it back to 5+) — the same EV as a plain Quality-6 shooter at 6+.
+	var hard := {"defense": 4, "tough": 1, "models": 5, "stealth": true, "artillery": true}
+	assert_float(AiEv.profile_ev(_rprof({"precise": true}), {"quality": 5, "models": 5}, hard, 12.0, false)) \
+		.is_equal_approx(AiEv.profile_ev(_rprof(), {"quality": 6, "models": 5}, DEF_PLAIN, 12.0, false), 0.0001)
+	# Q2 Thrust charge vs Evasive: 2 - 1 + 1 = 2+ — the same EV as a plain Quality-2 strike.
+	var evasive := {"defense": 4, "tough": 1, "models": 5, "evasive": true}
+	assert_float(AiEv.profile_ev(_mprof({"thrust": true}), {"quality": 2, "models": 5}, evasive, 0.0, true)) \
+		.is_equal_approx(AiEv.profile_ev(_mprof(), {"quality": 2, "models": 5}, DEF_PLAIN, 0.0, false), 0.0001)
+
+
 func test_precise_raises_ev() -> void:
 	# Precise: +1 to hit (any range) raises expected hits and thus EV over a plain weapon.
 	var plain := _rprof()

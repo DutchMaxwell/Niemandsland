@@ -54,7 +54,7 @@ use super::*;
         assert!(on.shielded, "in cover: the live majority read fires the alias");
         assert_eq!(on.shielded_bonus(), 1, "the +1 the rule produces");
         assert_eq!(
-            crate::combat::shielded_defense(on.defense, on.shielded_bonus()),
+            crate::combat::shielded_defense(on.defense, on.shielded_bonus(), 2),
             3,
             "Defense 4 -> hit on 3+ in cover"
         );
