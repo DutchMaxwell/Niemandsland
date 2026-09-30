@@ -5,8 +5,9 @@
 
 use serde_json::Value;
 
-use crate::acts::TreeLeaf;
+use crate::acts::{TreeDice, TreeLeaf};
 use crate::arbitration::adjudicate_end;
+use crate::dice::Tray;
 use crate::menu::{candidates_tuned, Candidate};
 use crate::mission::vp_of;
 use crate::playout::other_player;
@@ -15,7 +16,7 @@ use crate::rollout::{
     cross_round, delayed_action_passer, imagined_round_end, reinforcement_round_start,
     spawn_round_start, Rollout,
 };
-use crate::sim::{Scratch, Unsupported};
+use crate::sim::{resolve_stochastic_tray_on_board, Scratch, Unsupported};
 use crate::state::State;
 
 /// One decision node: `mover` picks among `children`, opened in order
@@ -175,4 +176,37 @@ pub fn leaf_value(roll: &Rollout, node: &Node, mode: TreeLeaf, player: i64, open
         TreeLeaf::Blend => Ok(roll.blend_score_leaf(std::slice::from_ref(&node.state), player, opener_seat, vals, w)),
         TreeLeaf::Terminal => Ok(playout(roll, &node.state, node.mover, player, rng, sc)?.0),
     }
+}
+
+/// Sample `k` of a chance edge draws `Rng(base + k)` and `Tray(base + k +
+/// TRAY_OFFSET)` — the S2 continuation layout.
+pub const TRAY_OFFSET: i64 = 50_000;
+
+/// A chance edge: the states `cand` leads to from `state`. `Ev` is ONE
+/// state, the EV transition (`Policy::resolve`) bit for bit. `Tray` is
+/// `samples` states through the TRUE tray path
+/// (`resolve_stochastic_tray_on_board`, never the remainder coin of
+/// `resolve_stochastic_on_board_reach`). `base` is the NODE's stream, not the
+/// edge's, so sibling edges roll the same dice (common random numbers). A
+/// sample the tray path flags `unported` declines by the flag's name, and
+/// `Tray` without a stream seed declines rather than invent one.
+pub fn transition(roll: &Rollout, state: &State, cand: &Candidate, dice: TreeDice, samples: usize,
+                  base: Option<i64>) -> Result<Vec<State>, Unsupported> {
+    if dice == TreeDice::Ev {
+        return Ok(vec![roll.policy.resolve(state, cand)?]);
+    }
+    let base = base.ok_or(Unsupported::TreeDiceSeed)?;
+    let (p, action) = (&roll.policy, cand.action());
+    (0..samples as i64)
+        .map(|k| {
+            let mut rng = GodotRng::new(base.wrapping_add(k));
+            let mut tray = Tray::seeded(base.wrapping_add(k + TRAY_OFFSET));
+            let (next, shot) =
+                resolve_stochastic_tray_on_board(p.statics, state, &action, p.terrain, p.seams, &mut rng, &mut tray)?;
+            match shot.unported.first() {
+                Some(&what) => Err(Unsupported::TreeUnported(what)),
+                None => Ok(next),
+            }
+        })
+        .collect()
 }
