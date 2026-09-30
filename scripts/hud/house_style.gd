@@ -638,7 +638,7 @@ static func overlay_sheet(title: String, width: int) -> Dictionary:
 	return {"root": root, "sheet": sheet, "body": body, "close": header.get_node("CloseButton")}
 
 
-## A unit dialog's frame (Wounds, Caster points, Model info): `dialog` fills the screen over the scrim and
+## A unit dialog's frame (Wounds, Caster points): `dialog` fills the screen over the scrim and
 ## owns every click; a centred house panel holds the VBox it returns, headed by the eyebrow `title`. The
 ## node names are the dialogs' scene paths (Panel/Margin/VBox), which the dialogs and the table look up.
 static func dialog_frame(dialog: Control, title: String, min_size: Vector2) -> VBoxContainer:
