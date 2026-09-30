@@ -160,7 +160,8 @@ fn relentless_mark_pays_the_extra_six_hits_once_against_the_marked_target() {
 
 /// Rending Mark (gf orc_marauders, `grants_rule: "Rending"`, vs_target): the
 /// marked volley's unmodified 6s save one batch deeper — defense 4 + the
-/// rending AP(4) bonus = target 8, an impossible d6 save — while the spent
+/// rending AP(4) bonus = 8, clamped once to a natural 6 from
+/// `EPOCH_68_MODIFIER_SUM` (this test runs at the live epoch) — while the spent
 /// exchange rolls every save at the plain 4.
 #[test]
 fn rending_mark_saves_the_marked_target_sixes_at_ap4_once() {
@@ -176,8 +177,8 @@ fn rending_mark_saves_the_marked_target_sixes_at_ap4_once() {
     let (next1, r1) = run_marks_epoch(&st, &statics, &action, 9, e);
     assert_eq!(next1.vs_mark_round[0], st.round, "the attack seam placed the mark");
     assert!(
-        r1.rolls.iter().any(|x| x.kind == "defense" && x.count == 2 && x.target == 8),
-        "the two unmodified 6s save one batch at defense 4 + AP(4) = 8 — no d6 ever passes"
+        r1.rolls.iter().any(|x| x.kind == "defense" && x.count == 2 && x.target == 6),
+        "the two unmodified 6s save one batch at defense 4 + AP(4) = 8, clamped to 6+"
     );
     let (_, r2) = run_marks_epoch(&next1, &statics, &action, 9, e);
     assert!(

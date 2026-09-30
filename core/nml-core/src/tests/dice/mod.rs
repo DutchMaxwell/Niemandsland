@@ -410,6 +410,7 @@
 // fixtures every family shares stay here, in the module root.
     mod clan_warrior;
 mod entrenched;
+mod modifier_sum;
     mod fortified;
     mod gate_only_rows;
     mod growth_markers;
