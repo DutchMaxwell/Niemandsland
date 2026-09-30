@@ -5930,6 +5930,10 @@ pub fn resolve_stochastic_tray_on_board(
     rng: &mut GodotRng,
     tray: &mut Tray,
 ) -> Result<(State, ShootResult), Unsupported> {
+    // NML-1100 (D76/W3-6 a): this is the sole production site a real `Tray`
+    // reaches a `.roll()` from, so the record's own epoch decides the
+    // zero-draw reading for every nested `tray_*` call this resolve makes.
+    tray.set_zero_draws(rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS));
     let mut shot = ShootResult::default();
     let next = resolve_with(
         statics,
