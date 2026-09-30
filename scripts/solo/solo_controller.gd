@@ -37,6 +37,24 @@ static var mission_markers: Array = []
 static var mission_destroy_seq: Array = [0]
 
 
+static func marker_metadata(spec: Dictionary) -> Array:
+	var owned := bool(spec.get("owned", false))
+	var carry := bool(spec.get("carry", false))
+	if not owned and not carry:
+		return []
+	var markers: Array = []
+	for i in range(int(spec.get("count", 2))):
+		var marker: Dictionary = {}
+		if owned:
+			marker = {"owned_by": i + 1, "destructible": bool(spec.get("destructible", false)),
+				"destroyed": false, "destroyed_seq": 0}
+		if carry:
+			marker["carry"] = true
+			marker["carried_by"] = ""
+		markers.append(marker)
+	return markers
+
+
 static func mission_reset(scoring: String, flavour: Dictionary, markers: Array = []) -> void:
 	mission_scoring = scoring
 	mission_vp_flavour = flavour
@@ -8325,6 +8343,30 @@ static func counter_models_of(unit: GameUnit) -> int:
 					bearers += maxi(int((w as Object).count) if (w as Object).get("count") != null else 1, 1)
 					break
 		total += mini(bearers, alive) * int(RulesRegistry.unit_param(member, "Counter", "impact_reduction_per_model", 1))
+	return total
+
+
+## NML-980 — alive models of a unit (incl. attached heroes) that carry "Precision Spotter"
+## (the army-book text: "…in line of sight of THIS MODEL and roll one die" — a model rule, the
+## `counter_models_of` shape above: a unit-wide print counts every alive model, one laser each).
+## The spot roll is `dice = this` — one die per laser, not one per spot action.
+static func precision_spot_dice_of(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var total := 0
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		var alive: int = member.get_alive_count()
+		if alive <= 0:
+			continue
+		if member.has_special_rule("Precision Spotter") \
+				or not RulesRegistry.unit_rules_of_primitive(member, "Precision Spotter").is_empty():
+			total += alive
 	return total
 
 

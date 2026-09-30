@@ -31,7 +31,7 @@ use crate::acts::{
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
-    EPOCH_66_DISTANCE_TRUTH,
+    EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -293,39 +293,82 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
 }
 
 /// Deadly(X) landing PER MODEL — the table's `SoloController.apply_deadly_wounds`
-/// (solo_controller.gd:8333-8352, GF v3.5.1 p.14 "no carry-over", audit
-/// 2026-09-13 §2.1): each unsaved wound goes to the alive model with the MOST
-/// remaining wounds (ties keep the array order, the table's strict `>`), deals
-/// X capped at that model's remaining wounds, and the surplus is WASTED —
-/// nothing spills onto the next model. Returns the wounds actually dealt (the
-/// table's `dealt`).
-pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64) -> i64 {
+/// / `deadly_pick` (solo_controller.gd:9191-9233, GF v3.5.1 p.13 "no carry-over"
+/// and p.15 Tough "continue to put wounds on the tough model with most wounds
+/// … until it is killed" and "heroes must be assigned wounds last, even if
+/// already wounded"). Below `EPOCH_67_MARKERS_BURSTS` (D17): the OLD reading —
+/// whichever alive model has the MOST remaining wounds (ties keep array order,
+/// strict `>`, so a FRESH Tough model always wins over a damaged one), host
+/// only, surplus wasted once the host is wiped. From the gate: host slots
+/// first, the attached hero's models only once the host is fully wiped
+/// (`state.attached[ti]`); within a member, an ALREADY-WOUNDED Tough slot
+/// (current < that slot's own max) goes first — finish it off before starting
+/// a fresh one; with none wounded, `land_wounds`'s own slot order (index 0)
+/// decides, the same casualty-order convention the plain wound path already
+/// uses. `x` capped at that model's remaining wounds each hit, no carry-over
+/// either way. Returns the wounds actually dealt (the table's `dealt`).
+pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64, seams: Seams) -> i64 {
     let x = deadly_x.max(1);
     let mut dealt = 0i64;
+    let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
+    let chain: Vec<usize> = if epoch67 && seams.hero_attach {
+        std::iter::once(ti).chain(state.attached[ti].iter().copied()).collect()
+    } else {
+        vec![ti]
+    };
+    // A local mirror of each chain member's per-slot max, aligned to
+    // `state.wounds[member]` at the START of this call and kept aligned by
+    // removing the same index on both sides as models die within the loop
+    // below (State only carries the CURRENT wounds; the max lives on the
+    // static Profile and never shrinks on its own). Read ONLY on the new
+    // leg — a below-gate call must not touch `Profile` at all, so a fixture
+    // with fewer profiles than roster entries (every pre-batch-D test) keeps
+    // replaying exactly as it did.
+    let mut max_of: Vec<Vec<i64>> = if epoch67 {
+        chain.iter().map(|&m| state.profile(m).wounds_max.clone()).collect()
+    } else {
+        Vec::new()
+    };
     for _ in 0..unsaved.max(0) {
-        if state.wounds[ti].is_empty() {
-            break; // unit wiped — the remaining Deadly wounds are wasted
-        }
-        let mut best = 0usize;
-        for (i, w) in state.wounds[ti].iter().enumerate() {
-            if *w > state.wounds[ti][best] {
-                best = i;
+        let Some(ci) = chain.iter().position(|&m| !state.wounds[m].is_empty()) else {
+            break; // everything in the chain is dead — the remaining wounds are wasted
+        };
+        let m = chain[ci];
+        let best = if epoch67 {
+            (0..state.wounds[m].len())
+                .find(|&i| {
+                    max_of[ci].get(i).copied().unwrap_or(1) > 1
+                        && state.wounds[m][i] < max_of[ci][i]
+                })
+                .unwrap_or(0)
+        } else {
+            let mut b = 0usize;
+            for (i, w) in state.wounds[m].iter().enumerate() {
+                if *w > state.wounds[m][b] {
+                    b = i;
+                }
             }
-        }
-        let take = x.min(state.wounds[ti][best]);
+            b
+        };
+        let take = x.min(state.wounds[m][best]);
         dealt += take;
-        state.wounds[ti][best] -= take;
-        if state.wounds[ti][best] <= 0 {
-            if state.positions[ti].len() == 1 { drop_carried(state, ti); }
-            state.wounds[ti].remove(best);
-            state.positions[ti].remove(best);
+        state.wounds[m][best] -= take;
+        if state.wounds[m][best] <= 0 {
+            if state.positions[m].len() == 1 { drop_carried(state, m); }
+            state.wounds[m].remove(best);
+            state.positions[m].remove(best);
             // radii stay aligned with positions or the base-edge measure lies.
-            if !state.radii[ti].is_empty() {
-                state.radii[ti].remove(best);
+            if !state.radii[m].is_empty() {
+                state.radii[m].remove(best);
+            }
+            if epoch67 && best < max_of[ci].len() {
+                max_of[ci].remove(best);
             }
         }
     }
-    state.alive[ti] = state.positions[ti].len() as i64;
+    for &m in &chain {
+        state.alive[m] = state.positions[m].len() as i64;
+    }
     dealt
 }
 
@@ -544,7 +587,7 @@ pub(crate) fn tray_breath_attack(
         }
         let ut = &statics[next.roster.profile[ti]];
         let def = ctx_of(ut, next, ti);
-        let sdef = shielded_defense(def.defense, def.shielded_bonus());
+        let sdef = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
         let alive_t = combined_alive(next, ti, seams);
         let score = (BREATH_BLAST.min(alive_t) as f64) * (1.0 - block_chance(sdef, BREATH_AP, false));
         if score > best {
@@ -720,23 +763,35 @@ pub(crate) fn tray_reanimation(
 /// line of sight, and roll X dice. For each 2+ it takes one hit with AP(1)"
 /// (army-book Surprise Attack; the gf/aof registry entry's own params).
 /// Fires at the activation trigger BEFORE the action, next to Reanimation.
-/// FIRST-ACTIVATION latch, replay-stable form: no recorded per-unit activation
-/// counter exists and the table's burst arm is the audit-B open question, so
-/// the port fires only on a ROUND-1 activation — one act per unit per round
-/// makes that the first activation for every unit on the board at round start.
-/// Gate: FROZEN `EPOCH_7_TABLE_RULES`.
+/// Below `EPOCH_67_MARKERS_BURSTS` (D19 a): FIRST-ACTIVATION latch, replay-
+/// stable form — no recorded per-unit activation counter exists and the
+/// table's burst arm was the audit-B open question, so the port fires only
+/// on a ROUND-1 activation — one act per unit per round makes that the
+/// first activation for every unit on the board at round start.
+/// From `EPOCH_67_MARKERS_BURSTS`: `State.surprise_attack_used` (folded from
+/// the ledger, main.gd stamps it the same way) is the real per-bearer
+/// latch — a spent bearer never fires again in ANY round, and a round-2+
+/// FIRST activation (e.g. an Infiltrate/Ambush arrival) fires it, which the
+/// old `round != 1` gate could never reach. Gate: FROZEN `EPOCH_7_TABLE_RULES`
+/// for the family itself, `EPOCH_67_MARKERS_BURSTS` for which latch reads.
 pub(crate) fn tray_surprise_attack(
     statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
     tray: &mut Tray, shot: &mut ShootResult,
 ) {
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) { return; }
-    if next.alive[si] <= 0 || next.round != 1 { return; }
+    if next.alive[si] <= 0 { return; }
+    let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
+    if !epoch67 && next.round != 1 { return; }
     let pid = next.player[si];
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
     for b in bearers {
         if next.alive[b] <= 0 { continue; }
         let Some(spec) = statics[next.roster.profile[b]].surprise_attack.clone() else { continue; };
+        if epoch67 {
+            if next.surprise_attack_used[b] { continue; }
+            next.surprise_attack_used[b] = true;
+        }
         let owner = statics[next.roster.profile[b]].name.clone();
         surprise_strike(statics, state, next, b, seams, tray, shot, spec, owner, pid);
     }
@@ -787,43 +842,67 @@ fn surprise_strike(
 /// the state already carries (radii are metres too) — then the table's own
 /// pick: the crossed unit NEAREST the acting unit's centre (main.gd:17115-17118
 /// for the Crossing Attack, main.gd:3000-3004 for Strafing), first index on a
-/// tie. `None` = nothing crossed (or nothing moved).
+/// tie. `None` = nothing crossed (or nothing moved). `bidx` is whose OWN legs
+/// are tested (D20 a, `EPOCH_67_MARKERS_BURSTS`: an attached hero's own
+/// trail, not always the activating unit's); `si` still centres the
+/// nearest-pick — the table sorts by `MoveIntent.distance_inches(unit_centre
+/// (unit), …)`, the ACTIVATING unit, not each bearer's own centre.
 fn crossed_enemy_of(
-    statics: &[UnitStatic], state: &State, next: &State, si: usize, seams: Seams,
+    statics: &[UnitStatic], state: &State, next: &State, si: usize, bidx: usize, seams: Seams,
 ) -> Option<(usize, String)> {
-    let pid = next.player[si];
-    let legs: Vec<([f64; 2], [f64; 2])> = (0..next.positions[si].len())
-        .filter_map(|m| {
-            let a = state.positions.get(si)?.get(m)?;
-            let b = next.positions.get(si)?.get(m)?;
-            Some(([a[0], a[2]], [b[0], b[2]]))
-        })
-        .filter(|(a, b)| (b[0] - a[0]).hypot(b[1] - a[1]) > f64::EPSILON)
-        .collect();
-    let crosses = |ti: usize| -> bool {
-        (0..next.positions[ti].len()).any(|m| {
-            if next.wounds[ti].get(m).map(|&w| w <= 0).unwrap_or(false) { return false; }
-            let c = &next.positions[ti][m];
-            let r = next.radii[ti].get(m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
-            legs.iter().any(|&(a, b)| {
-                let seg = [b[0] - a[0], b[1] - a[1]];
-                let t = (((c[0] - a[0]) * seg[0] + (c[2] - a[1]) * seg[1])
-                    / (seg[0] * seg[0] + seg[1] * seg[1])).clamp(0.0, 1.0);
-                let (dx, dy) = (a[0] + seg[0] * t - c[0], a[1] + seg[1] * t - c[2]);
-                dx * dx + dy * dy <= r * r
-            })
-        })
-    };
+    let pid = next.player[bidx];
+    let legs = bearer_legs(state, next, bidx);
     let crossed: Vec<usize> = (0..next.units())
         .filter(|&ti| {
             next.player[ti] != pid && next.alive[ti] > 0 && !next.dormant[ti]
-                && !(seams.hero_attach && next.attached_to[ti].is_some()) && crosses(ti)
+                && !(seams.hero_attach && next.attached_to[ti].is_some())
+                && legs_cross_unit(next, &legs, ti)
         })
         .collect();
     let centre = geom::centre(&next.positions[si]);
     let dist = |ti: usize| geom::length(geom::sub(geom::centre(&next.positions[ti]), centre));
     let target = crossed.iter().copied().min_by(|&x, &y| dist(x).total_cmp(&dist(y)))?;
     Some((target, statics[next.roster.profile[target]].name.clone()))
+}
+
+/// One straight leg per alive model of `bidx`, `state` -> `next` (a leg that
+/// moves nothing crosses nothing) — the shared trail read `crossed_enemy_of`
+/// and the per-model crossing count both build on.
+fn bearer_legs(state: &State, next: &State, bidx: usize) -> Vec<([f64; 2], [f64; 2])> {
+    (0..next.positions[bidx].len())
+        .filter_map(|m| {
+            let a = state.positions.get(bidx)?.get(m)?;
+            let b = next.positions.get(bidx)?.get(m)?;
+            Some(([a[0], a[2]], [b[0], b[2]]))
+        })
+        .filter(|(a, b)| (b[0] - a[0]).hypot(b[1] - a[1]) > f64::EPSILON)
+        .collect()
+}
+
+/// Whether any leg in `legs` crosses an alive model's base disc of `ti`.
+fn legs_cross_unit(next: &State, legs: &[([f64; 2], [f64; 2])], ti: usize) -> bool {
+    (0..next.positions[ti].len()).any(|m| {
+        if next.wounds[ti].get(m).map(|&w| w <= 0).unwrap_or(false) {
+            return false;
+        }
+        let c = &next.positions[ti][m];
+        let r = next.radii[ti].get(m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+        legs.iter().any(|&(a, b)| {
+            let seg = [b[0] - a[0], b[1] - a[1]];
+            let t = (((c[0] - a[0]) * seg[0] + (c[2] - a[1]) * seg[1])
+                / (seg[0] * seg[0] + seg[1] * seg[1])).clamp(0.0, 1.0);
+            let (dx, dy) = (a[0] + seg[0] * t - c[0], a[1] + seg[1] * t - c[2]);
+            dx * dx + dy * dy <= r * r
+        })
+    })
+}
+
+/// D20 (a): the number of `bidx`'s OWN models whose individual leg crosses
+/// `ti`'s base (GF p.4 "this model" = a model rule, not a unit-wide one) —
+/// floored at 1 so a caller that already knows `legs_cross_unit` is true
+/// never reads a zero-dice roll.
+fn crossing_models_against(next: &State, legs: &[([f64; 2], [f64; 2])], ti: usize) -> i64 {
+    legs.iter().filter(|&&leg| legs_cross_unit(next, std::slice::from_ref(&leg), ti)).count().max(1) as i64
 }
 
 pub(crate) fn tray_crossing_attack(
@@ -833,6 +912,11 @@ pub(crate) fn tray_crossing_attack(
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
         return;
     }
+    // D20 (a): below the gate every bearer still reads the ACTIVATING unit's
+    // own legs (byte-identical to the pre-batch-D reading); from the gate
+    // each bearer reads its OWN legs and the dice count scales by how many
+    // of ITS models actually crossed (GF p.4 "this model").
+    let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach {
         bearers.extend(state.attached[si].iter().copied());
@@ -843,13 +927,19 @@ pub(crate) fn tray_crossing_attack(
         }
         let Some(spec) = statics[next.roster.profile[b]].crossing_attack.clone() else { continue };
         let owner = statics[next.roster.profile[b]].name.clone();
+        let legs_of = if epoch67 { b } else { si };
         // Alive, un-reserved, UNATTACHED enemies whose bases an executed trail
         // touches, then the table's own pick — the shared
         // `crossed_enemy_of` read above (main.gd:17115-17118).
-        let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, seams) else {
+        let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, legs_of, seams) else {
             continue;
         };
-        let n = spec.dice.max(1) as usize;
+        let crossing_models = if epoch67 {
+            crossing_models_against(next, &bearer_legs(state, next, b), target)
+        } else {
+            1
+        };
+        let n = (spec.dice.max(1) * crossing_models) as usize;
         let faces = tray.roll(n);
         shot.rolls.push(crate::dice::Roll {
             kind: "attack", count: n as i64, target: spec.wound_target,
@@ -914,7 +1004,8 @@ pub(crate) fn tray_strafing(
         && !statics[next.roster.profile[b]].strafe_shoot.is_empty()) { return; }
     // The crossing test and the table's pick — the shared `crossed_enemy_of`
     // read (the table's `trails_cross_unit_bases` test, main.gd:3000-3004).
-    let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, seams) else { return; };
+    // Strafing is untouched by D20 (a): always the ACTIVATING unit's own legs.
+    let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, si, seams) else { return; };
     // Rules-must-log — ONE line per strafe, the table's own log line
     // (main.gd:3005-3006).
     shot.log.push(format!("Strafing: {} passes over {tname} — attacks it as if shooting (once per activation)",
@@ -925,7 +1016,7 @@ pub(crate) fn tray_strafing(
     // defender's live context, the members at their own Quality.
     let d = modifier_distance_in(next, si, target, seams);
     let ut = &statics[next.roster.profile[target]];
-    let mut def = ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch);
+    let mut def = with_modifier_sum(ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch), seams.rules_epoch);
     // D-STEALTH — the strafe volley reads the defender's live context the
     // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
     // the def build carries the same terrain gate.
@@ -975,7 +1066,7 @@ pub(crate) fn tray_strafing(
     }
     land_wounds(next, target, shot.absorb(r));
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-        let dl = land_deadly_wounds(next, target, post, dx);
+        let dl = land_deadly_wounds(next, target, post, dx, seams);
         shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
     }
     if shooting_morale_trigger(next, ut, target, alive_before, wounds_before) {
@@ -1777,16 +1868,26 @@ pub(crate) fn tray_reckless_piercing(
 /// and none exists. GATED `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`: a
 /// recording fleet is stamping rules_epoch 5 today, and wave 3's rules do not
 /// exist in that recorder — see `acts::EPOCH_6_TABLE_RULES`.
+///
+/// W3-4 (a), `EPOCH_67_MARKERS_BURSTS`: an entry with `place_roll > 0`
+/// ("Piercing Spotter") no longer shares the once-per-GAME `piercing_tag_used`
+/// latch — it rolls the printed die (the Precision Spotter shape,
+/// `tray_precision_markers`) and gates on `State.piercing_spot_round`
+/// (once per ACTIVATION ROUND) instead. Below the gate `place_roll` stays
+/// dead data and every entry, Spotter included, keeps the old once-per-game
+/// reading.
 fn tray_piercing_tag(
     statics: &[UnitStatic],
     next: &mut State,
     si: usize,
     seams: Seams,
+    tray: &mut Tray,
     shot: &mut ShootResult,
 ) {
     if !rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
         return;
     }
+    let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach {
         bearers.extend(next.attached[si].iter().copied());
@@ -1797,7 +1898,12 @@ fn tray_piercing_tag(
         }
         let pb = next.roster.profile[bearer];
         for t in &statics[pb].piercing_tags {
-            if next.piercing_tag_used[bearer] {
+            let spotter = epoch67 && t.place_roll > 0;
+            if spotter {
+                if next.piercing_spot_round[bearer] == next.round {
+                    continue;
+                }
+            } else if next.piercing_tag_used[bearer] {
                 continue;
             }
             let probe = UtilityBuff {
@@ -1811,8 +1917,30 @@ fn tray_piercing_tag(
             let Some(ti) = utility_targets(statics, next, bearer, &probe, seams).into_iter().next() else {
                 continue;
             };
-            next.piercing_tag_used[bearer] = true;
+            if spotter {
+                next.piercing_spot_round[bearer] = next.round;
+                let face = tray.roll(1).first().copied().unwrap_or(1) as i64;
+                if face < t.place_roll {
+                    shot.log.push(format!(
+                        "{}: {} misses the mark on {} (needed {}+)",
+                        t.name,
+                        statics[pb].name,
+                        statics[next.roster.profile[ti]].name,
+                        t.place_roll
+                    ));
+                    continue;
+                }
+            } else {
+                next.piercing_tag_used[bearer] = true;
+            }
             next.piercing_tag_markers[ti] += t.markers;
+            // D42 (a), EPOCH_67_MARKERS_BURSTS: "Piercing Target" has no removal
+            // clause — the spend half (`piercing_tag_spend`) reads this flag and
+            // stands the pool instead of zeroing it. Every other family name
+            // still spends whole, so the flag is per-NAME, not per-pool.
+            if t.name == "Piercing Target" && epoch67 {
+                next.piercing_tag_persistent[ti] = true;
+            }
             // Rules-must-log — the table's own line, main.gd:17025-17027.
             shot.log.push(format!(
                 "{}: {} places {} marker{} on {} — friendly attackers may spend them for +AP",
@@ -1834,11 +1962,19 @@ fn tray_piercing_tag(
 /// volley fold gives Piercing Growth's marker delta. GATED
 /// `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)` like the placement: below the
 /// family's epoch the pool is empty by construction, so this reads 0.
+///
+/// D42 (a), `EPOCH_67_MARKERS_BURSTS`: when the placement set
+/// `piercing_tag_persistent[ti]` (the "Piercing Target" name only), the pool
+/// is READ, never zeroed — the book text has no removal clause. Every other
+/// family name keeps spending whole.
 fn piercing_tag_spend(next: &mut State, ti: usize, rules_epoch: u32) -> i64 {
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         return 0;
     }
     let markers = next.piercing_tag_markers[ti].max(0);
+    if rule_on(rules_epoch, EPOCH_67_MARKERS_BURSTS) && next.piercing_tag_persistent[ti] {
+        return markers;
+    }
     next.piercing_tag_markers[ti] = 0;
     markers
 }
@@ -1899,18 +2035,28 @@ fn tray_precision_markers(
                 // the NEAREST enemy within the entry's range in sight.
                 let Some(ti) = nearest_precision_target(next, bearer, b, seams) else { continue; };
                 next.spot_round[bearer] = next.round;
-                let face = tray.roll(1).first().copied().unwrap_or(1) as i64;
+                // NML-980, EPOCH_67_MARKERS_BURSTS: "roll one die" is per MODEL
+                // (GF p.4) — this bearer's own alive model count, one laser
+                // each; below the gate the old single-die reading stands.
+                let dice = if rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS) {
+                    next.alive[bearer].max(1) as usize
+                } else {
+                    1
+                };
+                let faces = tray.roll(dice);
+                let hits = faces.iter().filter(|&&f| f as i64 >= b.place_roll).count() as i64;
                 let tn = statics[next.roster.profile[ti]].name.clone();
-                if face < b.place_roll {
+                if hits <= 0 {
                     shot.log.push(format!(
-                        "Precision Spotter: {} misses the mark on {} (needed {}+)",
-                        owner, tn, b.place_roll));
+                        "Precision Spotter: {} misses the mark on {} (needed {}+, {} di{})",
+                        owner, tn, b.place_roll, dice, if dice == 1 { "e" } else { "ce" }));
                     continue;
                 }
-                next.spot_markers[ti] += b.markers;
+                let placed = b.markers * hits;
+                next.spot_markers[ti] += placed;
                 shot.log.push(format!(
                     "Precision Spotter: {} marks {} ({} marker{} — attackers may remove markers for +1 to hit each)",
-                    owner, tn, b.markers, if b.markers == 1 { "" } else { "s" }));
+                    owner, tn, placed, if placed == 1 { "" } else { "s" }));
             } else {
                 // TAG / TARGET — the piercing twins' TOUGHEST-enemy pick.
                 let probe = UtilityBuff {
@@ -2331,7 +2477,7 @@ pub(crate) fn tray_retreating_strike(
     );
     if gap > RETREATING_STRIKE_REACH_IN { return; }
     let def_owner = statics[next.roster.profile[ti]].name.clone();
-    let def = ctx_live(ctx_of(&statics[next.roster.profile[ti]], next, ti), statics, next, ti, true, seams.rules_epoch);
+    let def = with_modifier_sum(ctx_live(ctx_of(&statics[next.roster.profile[ti]], next, ti), statics, next, ti, true, seams.rules_epoch), seams.rules_epoch);
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
     for bearer in bearers {
@@ -2753,6 +2899,14 @@ pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
 /// The regen fold's 0-means-unset MIN (the `regen_targets` stamp's own rule).
 fn fold_min(have: i64, cand: i64) -> i64 {
     if cand > 0 && (cand < have || have == 0) { cand } else { have }
+}
+
+/// D21 (`EPOCH_68_MODIFIER_SUM`) — the DICE paths stamp the summed save target off the RECORD's epoch
+/// (Amendment B1); the EV imagination (`ctx_live(.., CURRENT_RULES_EPOCH)` and the menu) never calls
+/// this, so recorded scores replay byte-exact.
+pub(crate) fn with_modifier_sum(mut c: Ctx, rules_epoch: u32) -> Ctx {
+    c.modifier_sum = rule_on(rules_epoch, EPOCH_68_MODIFIER_SUM);
+    c
 }
 
 pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, melee: bool, rules_epoch: u32) -> Ctx {
@@ -4217,7 +4371,7 @@ fn strike_phase(
         }
     }
     let ut = &statics[next.roster.profile[ti]];
-    let mut def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch);
+    let mut def = with_modifier_sum(ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch), seams.rules_epoch);
     // D-STEALTH — the def build's terrain gate (the melee leg consumes the
     // same closed alias the shooting fold does).
     stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
@@ -4254,6 +4408,7 @@ fn strike_phase(
                     crate::combat::reliable_quality(att.quality,
                         prof36.map(|p| p.reliable).unwrap_or(false)),
                     (prof36.is_some() && prof36.unwrap().thrust) || att.thrust_grant,
+                    crate::combat::BEST_HIT_TARGET,
                 ),
                 &def, prof36, &mut shot.log);
             att.versatile_pick_hit = vh;
@@ -4322,7 +4477,7 @@ fn strike_phase(
     // (main.gd:6190-6191).
     let mut dealt = 0i64;
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-        let d = land_deadly_wounds(next, ti, post, dx);
+        let d = land_deadly_wounds(next, ti, post, dx, seams);
         dealt += d;
         shot.log.push(format!(
             "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
@@ -5229,11 +5384,6 @@ fn cast_phase(
     // target), planned ONCE at the first face that produces a pick (the
     // face that names the attempt and pays for it, like the threshold).
     let mut boost_plan: Option<(i64, i64, i64, i64, i64, i64)> = None;
-    // D-MAGIC telemetry (CAST_FORK_2026-09-16.md Finding 2) — the kind stamp
-    // `_spells_by_kind_tally` counts (core_selfplay.gd:74-81): the FIRST
-    // face's spell names the attempt (battle_sim.gd `_cast_phase`'s own
-    // event), and the pushed cast entries carry its `effect_kind`.
-    let mut cast_kind = "";
     for d3 in 1..=3i64 {
         let Some((idx, ti, ou)) =
             pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los, &origins, seams.rules_epoch)
@@ -5270,6 +5420,23 @@ fn cast_phase(
             });
         let boost = plan.0;
         let p_success = cast_success_chance_vs(casting_net, boost, plan.3);
+        // The cast ATTEMPT event, the table's own shape (battle_sim.gd `_cast_phase`):
+        // the FIRST face's spell names it, and it is the only entry the
+        // `_spells_by_kind_tally` counts (the log lines below carry no kind).
+        if cost.is_none() {
+            let mut ev = serde_json::json!({
+                "spell": spells[idx].name, "kind": spells[idx].effect_kind,
+                "cost": spells[idx].threshold, "target": state.roster.keys[ti],
+                "p_success": p_success, "boost": boost, "interference": plan.3,
+            });
+            if ou != si {
+                ev["origin"] = serde_json::json!({
+                    "unit": state.roster.keys[ou],
+                    "position": geom::centre(&state.positions[ou]),
+                });
+            }
+            state.cast_events.push(Rc::new(ev));
+        }
         if origin_mod != 0 {
             // Rules-must-log (#782), the table's own line shape (main.gd
             // `_solo_resolve_one_cast`).
@@ -5278,12 +5445,11 @@ fn cast_phase(
                 statics[state.roster.profile[ci]].name, statics[state.roster.profile[ou]].name, origin_mod
             );
             trace_rule("cast", "Spell Conduit", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Conduit", "log": line, "kind": spells[idx].effect_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Conduit", "log": line })));
         }
         apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success, seams, rng.as_deref_mut());
         if cost.is_none() {
             cost = Some(spells[idx].threshold);
-            cast_kind = &spells[idx].effect_kind;
         }
     }
     if let Some(c) = cost {
@@ -5307,7 +5473,7 @@ fn cast_phase(
                 statics[state.roster.profile[*u]].name, take, statics[state.roster.profile[ci]].name
             );
             lend_log.push(line.clone());
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line, "kind": cast_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line })));
         }
         // Wave 6 (port-caster-boost) — the BOOST tokens ride the same spend
         // order: the caster's own leftover first, then the helpers
@@ -5327,7 +5493,7 @@ fn cast_phase(
             }
             let line = format!("Caster: {} tokens spent (own {}, helpers {}), target 4+ -> {}+", boost, bown, boost - bown, target);
             trace_rule("cast", "Caster", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line, "kind": cast_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
         }
         // Wave 6 (port-caster-interference) — the OPPOSING casters' tokens
         // ride the same payment block, AFTER the boost (the table spends
@@ -5351,7 +5517,7 @@ fn cast_phase(
                 inter, from.join(", "), itarget, ifinal
             );
             trace_rule("cast", "Caster", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line, "kind": cast_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
         }
     }
 }
@@ -5645,7 +5811,7 @@ fn versatile_latch(
     };
     let (hit_mod, ap_mod) = crate::combat::versatile_best_mode(
         hit_target,
-        shielded_defense(def.defense, def.shielded_bonus()),
+        shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()),
         ap,
         bane,
     );
@@ -5794,6 +5960,10 @@ pub fn resolve_stochastic_tray_on_board(
     rng: &mut GodotRng,
     tray: &mut Tray,
 ) -> Result<(State, ShootResult), Unsupported> {
+    // NML-1100 (D76/W3-6 a): this is the sole production site a real `Tray`
+    // reaches a `.roll()` from, so the record's own epoch decides the
+    // zero-draw reading for every nested `tray_*` call this resolve makes.
+    tray.set_zero_draws(rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS));
     let mut shot = ShootResult::default();
     let next = resolve_with(
         statics,
@@ -7000,10 +7170,11 @@ fn resolve_with(
 
     // --- PIERCING TAG (main.gd:1071, the table's pre-attack slot right after
     // the Utility Buffs + Mind Control), tray path only — see
-    // `tray_piercing_tag`. Dice-free: no tray draw either way (the marker
-    // count comes off the rule's rating).
-    if let Some((_, shot)) = dice.as_mut() {
-        tray_piercing_tag(statics, &mut next, si, seams, shot);
+    // `tray_piercing_tag`. From EPOCH_67_MARKERS_BURSTS a `place_roll` entry
+    // (Piercing Spotter) draws its 4+; every other name is still dice-free
+    // (the marker count comes off the rule's rating).
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_piercing_tag(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- PRECISION MARKERS — TAG/TARGET (main.gd:1089-1090, the pre-attack
@@ -7222,17 +7393,24 @@ fn resolve_with(
                             // melee seams never call it), once per group.
                             let tag_ap = piercing_tag_spend(&mut next, g.ti, seams.rules_epoch);
                             if tag_ap > 0 {
-                                let s = if tag_ap == 1 { "" } else { "s" };
-                                shot.log.push(format!(
-                                    "Piercing Tag: {tag_ap} marker{s} spent — +AP({tag_ap}) on this volley"
-                                ));
+                                if next.piercing_tag_persistent[g.ti] {
+                                    let tn = statics[next.roster.profile[g.ti]].name.clone();
+                                    shot.log.push(format!(
+                                        "Piercing Target: +AP({tag_ap}) stands while {tn} lives"
+                                    ));
+                                } else {
+                                    let s = if tag_ap == 1 { "" } else { "s" };
+                                    shot.log.push(format!(
+                                        "Piercing Tag: {tag_ap} marker{s} spent — +AP({tag_ap}) on this volley"
+                                    ));
+                                }
                             }
                             // Wave 6 — Precision Spotter/Tag: the marked
                             // target's pools spend EVERY marker on THIS
                             // volley (+1 to hit per marker), once per group.
                             let precision_hit = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
                             let ut_g = &statics[next.roster.profile[g.ti]];
-                            let mut def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch);
+                            let mut def = with_modifier_sum(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), seams.rules_epoch);
                             // D-STEALTH — the def build's terrain gate: the alias
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
@@ -7421,7 +7599,7 @@ fn resolve_with(
                             // each unsaved wound ×X on the model with the most
                             // remaining wounds, capped there, surplus wasted.
                             for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-                                let d = land_deadly_wounds(&mut next, g.ti, post, dx);
+                                let d = land_deadly_wounds(&mut next, g.ti, post, dx, seams);
                                 shot.log.push(format!(
                                     "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
                             }

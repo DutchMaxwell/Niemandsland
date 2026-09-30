@@ -128,6 +128,107 @@ use crate::rules::Registries;
         );
     }
 
+    /// D20 (a), `EPOCH_67_MARKERS_BURSTS` — a carrier with a printed rating,
+    /// spread models, one crosses on its own; a joined hero (1 model,
+    /// separate roster index) carrying the SAME rule, crossing too.
+    /// `state`/`next` are hand-built (no move resolver in the loop) so the
+    /// per-model geometry is exact: on "a" (5 models, z spread ±3"/±0.5"/0"),
+    /// the victim's 1" base at z=0 is crossed by exactly 3 of the 5 legs
+    /// (z = -0.5", 0", 0.5"); "ah" (1 model, z=0) crosses too.
+    fn crossing_multi_before_after() -> (State, State, Vec<UnitStatic>) {
+        let mut before = four_unit_line();
+        let zs_in = [-3.0_f64, -0.5, 0.0, 0.5, 3.0];
+        before.positions[0] = zs_in.iter().map(|z| [0.0, 0.0, z * IN2M]).collect();
+        before.wounds[0] = vec![1; 5];
+        before.radii[0] = vec![IN2M; 5];
+        before.positions[1] = vec![[0.0, 0.0, 0.0]];
+        before.wounds[1] = vec![1];
+        before.radii[1] = vec![IN2M];
+        before.positions[2] = vec![[6.0 * IN2M, 0.0, 0.0]];
+        before.wounds[2] = vec![3];
+        before.radii[2] = vec![IN2M];
+        before.positions[3] = vec![[0.0, 100.0 * IN2M, 0.0]]; // parked off the corridor, unused
+        before.roster = Rc::new(Roster {
+            keys: vec!["a".into(), "ah".into(), "b".into(), "bh".into()],
+            index: ["a", "ah", "b", "bh"].iter().enumerate()
+                .map(|(i, k)| (k.to_string(), i)).collect(),
+            profile: vec![0, 1, 2, 3],
+        });
+        let carrier_json = |unit_id: &str, name: &str, model_count: i64| {
+            format!(
+                r#"{{"unit_id": "{unit_id}", "name": "{name}", "model_count": {model_count},
+                    "quality": 4, "defense": 4, "tough": 1,
+                    "game_system": "gf", "faction_folder": "high_elf_fleets",
+                    "special_rules": ["Crossing Attack(2)"], "weapons": []}}"#
+            )
+        };
+        let carrier_profile: Profile = serde_json::from_str(&carrier_json("a", "Crosser", 5))
+            .expect("carrier profile parses");
+        let hero_profile: Profile = serde_json::from_str(&carrier_json("ah", "Hero", 1))
+            .expect("hero profile parses");
+        let victim_profile: Profile =
+            serde_json::from_str(r#"{"unit_id": "b", "name": "Target"}"#).expect("profile");
+        let bh_profile: Profile =
+            serde_json::from_str(r#"{"unit_id": "bh", "name": "BH"}"#).expect("profile");
+        before.profiles = Rc::new(Profiles {
+            list: vec![carrier_profile, hero_profile, victim_profile, bh_profile],
+            index: HashMap::new(),
+        });
+        let mut reg = Registries::new(&repo_root());
+        let carrier = UnitStatic::build_for(&mut reg, &before.profiles.list[0], crate::acts::CURRENT_RULES_EPOCH);
+        let hero = UnitStatic::build_for(&mut reg, &before.profiles.list[1], crate::acts::CURRENT_RULES_EPOCH);
+        let target = UnitStatic {
+            ctx: Ctx { defense: 4, tough: 1, models: 1, ..Default::default() },
+            name: "Target".into(), model_count: 1, wounds_max: vec![3], ..Default::default()
+        };
+        let bh = UnitStatic { name: "BH".into(), model_count: 1, wounds_max: vec![1], ..Default::default() };
+        let mut after = before.clone();
+        for pos in after.positions[0].iter_mut() { pos[0] += 12.0 * IN2M; }
+        for pos in after.positions[1].iter_mut() { pos[0] += 12.0 * IN2M; }
+        (before, after, vec![carrier, hero, target, bh])
+    }
+
+    /// THE PER-MODEL COUNT: 3 of "a"'s 5 models cross -> 3 x the rating's dice
+    /// (2 -> 6); the joined hero "ah" rolls its OWN entry too (dropped
+    /// `return`, the shared per-activation early-out).
+    #[test]
+    fn crossing_attack_scales_dice_by_crossing_models_and_a_joined_hero_rolls_too() {
+        let (before, mut after, statics) = crossing_multi_before_after();
+        let seams = Seams { rules_epoch: crate::acts::EPOCH_67_MARKERS_BURSTS, hero_attach: true, ..Seams::default() };
+        let mut tray = Tray::seeded(1);
+        let mut shot = crate::dice::ShootResult::default();
+        crate::sim::tray_crossing_attack(&statics, &before, &mut after, 0, seams, &mut tray, &mut shot);
+        let host_roll = shot.rolls.iter().find(|r| r.owner == "Crosser")
+            .expect("the host's own crossing roll is on the tray");
+        assert_eq!(host_roll.count, 6, "3 crossing models x the rating (2) = 6 dice: {:?}", shot.rolls);
+        let hero_roll = shot.rolls.iter().find(|r| r.owner == "Hero")
+            .expect("D20 a: the joined hero's own entry must roll too — got {:?}");
+        assert_eq!(hero_roll.count, 2, "the hero's own 1 crossing model x 2 = 2 dice: {:?}", shot.rolls);
+        assert!(
+            shot.log.iter().any(|l| l.contains("Crossing Attack") && l.contains("Crosser")),
+            "rules-must-log names the host — got {:#?}", shot.log
+        );
+        assert!(
+            shot.log.iter().any(|l| l.contains("Crossing Attack") && l.contains("Hero")),
+            "rules-must-log names the hero — got {:#?}", shot.log
+        );
+    }
+
+    /// Below the gate: unchanged — ONE roll at the rating (2), no per-model
+    /// scaling, and (the pre-batch-D shape) the hero's own entry is silent —
+    /// the shared once-per-activation early return stays below the gate.
+    #[test]
+    fn below_epoch_67_crossing_attack_keeps_the_old_once_per_bearer_unscaled_reading() {
+        let (before, mut after, statics) = crossing_multi_before_after();
+        let seams = Seams { rules_epoch: crate::acts::EPOCH_66_DISTANCE_TRUTH, hero_attach: true, ..Seams::default() };
+        let mut tray = Tray::seeded(1);
+        let mut shot = crate::dice::ShootResult::default();
+        crate::sim::tray_crossing_attack(&statics, &before, &mut after, 0, seams, &mut tray, &mut shot);
+        let host_roll = shot.rolls.iter().find(|r| r.owner == "Crosser")
+            .expect("the host still rolls below the gate");
+        assert_eq!(host_roll.count, 2, "below the gate: the plain rating, no per-model scaling: {:?}", shot.rolls);
+    }
+
     /// The epoch gate (the FROZEN `EPOCH_7_TABLE_RULES`): a record below 7
     /// keeps the pre-port silence — the corpus replay reading.
     #[test]

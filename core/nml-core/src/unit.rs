@@ -501,6 +501,11 @@ pub struct Ctx {
     /// The mod's own sign stays POSITIVE: the "Defense rolls +N" log lines
     /// name the ladder, not the fold.
     pub growth_def_lowers: bool,
+    /// D21 (`EPOCH_68_MODIFIER_SUM`): the save target is ONE sum clamped once at
+    /// `[2, 6]`, not a ladder of per-modifier 2+ floors. FALSE on every
+    /// `ctx_of` — only `sim::ctx_live` stamps it off the record's own epoch, so
+    /// the EV imagination keeps the old floors like every other live facet.
+    pub modifier_sum: bool,
     // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
     // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
     // arrival stamp and folds it in, so the EV imagination stays blind to it
@@ -586,6 +591,12 @@ pub struct Ctx {
 }
 
 impl Ctx {
+    /// The floor every per-modifier defence step clamps at: the hard 2+ below
+    /// `EPOCH_68_MODIFIER_SUM`, none from it (`save_batch` clamps the SUM once).
+    pub fn def_floor(&self) -> i64 {
+        if self.modifier_sum { i64::MIN / 4 } else { 2 }
+    }
+
     /// The Shielded group's working bonus — the defense-parts seam's own
     /// magnitude (main.gd:5552-5559 folds the group's parts as ONE sum, and
     /// every +1 kind contributes exactly `SHIELDED_DEFENSE_BONUS`). 0 = no
@@ -2844,6 +2855,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_def_mod: 0,
         growth_fortify_ap: 0,
         growth_def_lowers: false,
+        modifier_sum: false,
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
         reckless_ap: 0,
@@ -4551,10 +4563,12 @@ fn re_deployment_max_units_of(reg: &mut Registries, p: &Profile, rules_epoch: u3
 /// `range_in` (its GDScript default 24.0), `needs_los` (default true) and the
 /// RAW rule string's parsed rating — `maxi(rule_rating(str(raw)), 1)`
 /// (main.gd:17022; the params' `"rating": "X"` placeholder parses as 0, so a
-/// bare name places ONE marker). The entry's `place_roll` (Piercing Spotter)
-/// and `uses_per_game` are dead data on the TABLE's own resolver — the AI
-/// never rolls for the Spotter and the shared `piercing_tag_used` flag IS the
-/// once-per-game beat — so the twin reads neither.
+/// bare name places ONE marker). `uses_per_game` stays dead data — the shared
+/// `piercing_tag_used` flag IS the once-per-game beat for every non-Spotter
+/// name. `place_roll` (Piercing Spotter's printed 4+) was dead data too until
+/// `EPOCH_67_MARKERS_BURSTS` (batch D, W3-4 a): from that gate an entry with
+/// `place_roll > 0` rolls the die and uses the per-activation-round latch
+/// (`State.piercing_spot_round`) instead of `piercing_tag_used`.
 ///
 /// GATED `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)` (frozen at 6, never the
 /// literal and never `CURRENT_RULES_EPOCH`): a recording fleet is stamping
@@ -4569,6 +4583,11 @@ pub struct PiercingTagEntry {
     pub range_in: f64,
     /// The pick's sight gate (`bool(sp.get("needs_los", true))`).
     pub needs_los: bool,
+    /// Piercing Spotter's printed 4+ die (0 = no roll, every other family
+    /// name). From `EPOCH_67_MARKERS_BURSTS` this arms the roll + the
+    /// per-activation-round latch; below the gate it stays dead data, the
+    /// same reading as before batch D.
+    pub place_roll: i64,
 }
 
 /// Every "Piercing Tag" family entry the unit carries, in
@@ -4605,6 +4624,7 @@ fn piercing_tags_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<
             markers: rule_rating(raw, 0).max(1),
             range_in: e.param_f("range_in", 24.0),
             needs_los: e.param_b_or("needs_los", true),
+            place_roll: e.param_i("place_roll", 0),
         });
     }
     out

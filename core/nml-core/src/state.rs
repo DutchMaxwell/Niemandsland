@@ -572,6 +572,12 @@ pub struct State {
     /// 10474): per unit, ONCE per game — unlike every other ledger flag above,
     /// this never resets on a later round.
     pub second_wind_used: Vec<bool>,
+    /// D19 (a), `EPOCH_67_MARKERS_BURSTS` — `unit_properties["surprise_attack_used"]`
+    /// (main.gd `_solo_apply_surprise_attack`): Surprise Attack's "first
+    /// activation" latch, the `second_wind_used` shape — burns whether or not
+    /// a target was found, never resets on a later round. Read by
+    /// `sim::tray_surprise_attack` in place of the old `round != 1` gate.
+    pub surprise_attack_used: Vec<bool>,
     /// Wave 4 — `unit_properties["reinforcement_spent"]` (main.gd:10344): the
     /// S5 withdraw-and-recreate promise, kept ONCE per unit and never reset on
     /// a later round, the `second_wind_used` shape. It is a per-UNIT flag and
@@ -600,6 +606,20 @@ pub struct State {
     /// (`_solo_apply_piercing_tag`), spent whole by the next volley at this
     /// unit for +AP per marker (main.gd:3123 AI / :9857 human, shooting only).
     pub piercing_tag_markers: Vec<i64>,
+    /// Wave 3 batch D (`EPOCH_67_MARKERS_BURSTS`, D42 a) — set true on the
+    /// tagged unit by the placement (`tray_piercing_tag`) only for the
+    /// "Piercing Target" name (`unit_properties["piercing_tag_source"]`,
+    /// act_recorder.gd `_ledger_of`): while true, `piercing_tag_spend` reads
+    /// the pool WITHOUT zeroing it — the book text has no removal clause,
+    /// unlike Tag/Spotter which still spend whole. False below the gate and
+    /// for every other family name.
+    pub piercing_tag_persistent: Vec<bool>,
+    /// Wave 3 batch D (`EPOCH_67_MARKERS_BURSTS`, W3-4 a) — the round Piercing
+    /// Spotter last rolled its 4+, per bearer (the `spot_round` shape): -1 =
+    /// never. Below the gate `place_roll` stays dead data and the bearer's
+    /// placement gates on `piercing_tag_used` instead, so this field is
+    /// unread there.
+    pub piercing_spot_round: Vec<i64>,
     /// Wave 3 — `unit_properties["storm_used_<rule>"]` (main.gd:17244): the
     /// Storm Attack family's ONCE-per-game flags, per unit the DISPLAY names
     /// already fired this game (the recorder stamps them off the same flags,

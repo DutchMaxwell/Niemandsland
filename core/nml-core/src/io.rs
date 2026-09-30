@@ -16,7 +16,7 @@ use std::rc::Rc;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
-use crate::acts::{rule_on, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
+use crate::acts::{rule_on, EPOCH_67_MARKERS_BURSTS, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::mods::LiveMod;
 use crate::rules::spawn_target_rule;
 use crate::state::{
@@ -242,6 +242,13 @@ pub struct PlainLedger {
     /// 10474), per unit, ONCE per game (no "round" derivation, unlike growth).
     #[serde(default)]
     second_wind_used: bool,
+    /// D19 (a), `EPOCH_67_MARKERS_BURSTS` — `unit_properties["surprise_attack_used"]`
+    /// (main.gd `_solo_apply_surprise_attack`), the "first activation" latch,
+    /// per unit, ONCE per game (the `second_wind_used` shape). Absent from
+    /// every corpus recorded before this key, and `false` there — an old act
+    /// replays with the burst unspent, exactly as it did.
+    #[serde(default)]
+    surprise_attack_used: bool,
     /// Wave 4 — `unit_properties["reinforcement_spent"]` (main.gd:10344), the
     /// S5 withdraw-and-recreate promise, once per unit and never reset. Absent
     /// from every corpus recorded before this key, and `false` there — so an
@@ -266,6 +273,19 @@ pub struct PlainLedger {
     /// Wave 5 (PR 1's recorder): the `{"used", "to"}` block; `to` arrives as the `"(x, y)"` Vector2 string.
     #[serde(default)]
     teleport: Option<PlainTeleport>,
+    /// Wave 3 batch D (`EPOCH_67_MARKERS_BURSTS`, D42 a) —
+    /// `unit_properties["piercing_tag_markers"]` / `["piercing_tag_source"]`
+    /// (act_recorder.gd `_ledger_of`): the Piercing-Tag family's marker pool
+    /// ON the tagged unit, and which name placed it last.
+    /// `piercing_tag_source == "Piercing Target"` is what keeps
+    /// `fold_ledger` from marking the pool spend-whole (see
+    /// `State.piercing_tag_persistent`). Absent from every corpus recorded
+    /// before this key, and `0`/`""` there — an old act replays unmarked,
+    /// exactly as it did.
+    #[serde(default)]
+    piercing_tag_markers: i64,
+    #[serde(default)]
+    piercing_tag_source: String,
 }
 
 /// The `teleport` block; `to` is a `[x, y]` pair or a `"(x, y)"` string.
@@ -907,19 +927,23 @@ pub(crate) fn state_of(
         precision_used: vec![Vec::new(); n],
         growth_round: vec![-1; n],
         second_wind_used: vec![false; n],
+        surprise_attack_used: vec![false; n],
         reinforcement_used: vec![false; n],
         second_wind_round: -1,
         second_wind_uses: 0,
         sidestep_budget: plain.sidestep_budget,
         limited_used: vec![Vec::new(); n],
-        // Wave 3 — the Piercing-Tag ledger keys are NOT recorded corpora
-        // inputs: `AiActRecorder._ledger_of` stamps neither key today, so a
-        // captured state always starts the pool empty and the used flags
-        // false (the recorder would need its own wave before any rules_epoch-6
-        // corpus could carry them; every shipped corpus is 5 or lower, where
-        // the family gate keeps these inert anyway).
+        // Wave 3 — the `used` flag is still NOT a recorded corpus input:
+        // `AiActRecorder._ledger_of` never stamps `piercing_tag_used`, so a
+        // captured state always starts that flag false (a bearer could, in
+        // principle, place twice across a replay boundary; no shipped corpus
+        // exercises it). `markers`/`persistent` below ARE folded from the
+        // ledger (batch D, D42 a) — the fresh literal here is only the
+        // pre-fold default for a unit whose record carries no `ledger` key.
         piercing_tag_used: vec![false; n],
         piercing_tag_markers: vec![0; n],
+        piercing_tag_persistent: vec![false; n],
+        piercing_spot_round: vec![-1; n],
         storm_used: vec![Vec::new(); n],
         feats_used: vec![Vec::new(); n],
         teleport_used: vec![false; n],
@@ -1057,6 +1081,7 @@ pub fn fold_ledger(
     }
     st.vs_mark_round[ui] = ledger.vs_mark_round;
     st.second_wind_used[ui] = ledger.second_wind_used;
+    st.surprise_attack_used[ui] = ledger.surprise_attack_used;
     st.reinforcement_used[ui] = ledger.reinforcement_used;
     st.storm_used[ui] = ledger.storm_used.clone();
     st.feats_used[ui] = ledger.feats_used.clone();
@@ -1066,6 +1091,14 @@ pub fn fold_ledger(
     st.spot_markers[ui] = ledger.spot_markers;
     st.tag_markers[ui] = ledger.tag_markers;
     st.spot_round[ui] = ledger.spot_round;
+    // D42 (a), EPOCH_67_MARKERS_BURSTS: the Piercing-Tag pool folds from the
+    // ledger; whether it stands (never spends) is read off WHICH name placed
+    // it, gated on the record's own epoch (Amendment B1) so a corpus below
+    // the gate keeps the old spend-whole reading even if a future recorder
+    // ever backfills the source key onto it.
+    st.piercing_tag_markers[ui] = ledger.piercing_tag_markers;
+    st.piercing_tag_persistent[ui] =
+        rule_on(rules_epoch, EPOCH_67_MARKERS_BURSTS) && ledger.piercing_tag_source == "Piercing Target";
     st.precision_used[ui] = ledger.precision_used.clone();
     // `growth_round` has no key of its own on the wire (see
     // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED
@@ -1180,6 +1213,46 @@ pub fn state_from_json_with_epoch(
     spawn_templates_of(&plain, profiles.base(), rules_epoch)?;
     let eff = profiles.effective(&roster, &plain.dyn_profiles());
     Ok(state_of(plain, &eff, roster, rules_epoch))
+}
+
+/// The cast-ATTEMPT events of a state — the entries carrying a `spell`, the
+/// table's `_cast_phase` shape (battle_sim.gd:1295-1297). Log lines
+/// (`rule`/`log`) are not attempts and are not compared.
+fn cast_attempts(st: &State) -> Vec<&serde_json::Value> {
+    st.cast_events.iter().map(|e| &**e).filter(|e| e.get("spell").is_some()).collect()
+}
+
+/// Parity of the cast-attempt events: `None` when `got` and `want` agree,
+/// else a message naming the first differing field. Every field is exact
+/// except `p_success` and an `origin.position`, compared within 1e-9.
+pub fn cast_attempts_diff(got: &State, want: &State) -> Option<String> {
+    let (g, w) = (cast_attempts(got), cast_attempts(want));
+    if g.len() != w.len() {
+        return Some(format!("cast_events: {} attempt(s), want {}", g.len(), w.len()));
+    }
+    let near = |a: &serde_json::Value, b: &serde_json::Value| match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => (x - y).abs() <= 1e-9,
+        _ => a == b,
+    };
+    for (i, (a, b)) in g.iter().zip(&w).enumerate() {
+        for k in ["spell", "kind", "cost", "target", "boost", "interference"] {
+            if a.get(k) != b.get(k) {
+                return Some(format!("cast_events[{i}].{k}: {:?}, want {:?}", a.get(k), b.get(k)));
+            }
+        }
+        if !near(&a["p_success"], &b["p_success"]) {
+            return Some(format!("cast_events[{i}].p_success: {}, want {}", a["p_success"], b["p_success"]));
+        }
+        if a.get("origin").is_some() != b.get("origin").is_some() || a["origin"]["unit"] != b["origin"]["unit"] {
+            return Some(format!("cast_events[{i}].origin: {:?}, want {:?}", a.get("origin"), b.get("origin")));
+        }
+        if let (Some(pa), Some(pb)) = (a["origin"]["position"].as_array(), b["origin"]["position"].as_array()) {
+            if pa.len() != pb.len() || pa.iter().zip(pb).any(|(x, y)| !near(x, y)) {
+                return Some(format!("cast_events[{i}].origin.position: {pa:?}, want {pb:?}"));
+            }
+        }
+    }
+    None
 }
 
 /// The inverse of `state_from_json` (NML-1073 M3-2) — the plain form

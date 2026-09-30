@@ -582,7 +582,26 @@ pub const EPOCH_65_MELEE_TRUTH: u32 = 65;
 /// reads THIS constant, not the literal `58` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_58_PRECISION_DEBUFF: u32 = 58;
 pub const EPOCH_66_DISTANCE_TRUTH: u32 = 66;
-pub const CURRENT_RULES_EPOCH: u32 = 66;
+/// The MARKERS & BURSTS gate (28.09., wave 3 batch D, D42 a): Piercing
+/// Target's +AP(X) stands while the target lives (army-book v3.5.3, no
+/// removal clause) instead of spending on the first volley like the rest of
+/// the Piercing-Tag family — `piercing_tag_spend` reads
+/// `State.piercing_tag_persistent[ti]`, set by the placement
+/// (`tray_piercing_tag`) only for the "Piercing Target" name, itself gated
+/// on this constant so a record below it keeps the old spend-whole reading.
+/// `67` is one past every epoch present at the rebase (66 =
+/// `EPOCH_66_DISTANCE_TRUTH`), and `CURRENT_RULES_EPOCH` is bumped to it in
+/// the same change. Every call site reads THIS constant, never the literal
+/// `67` or `CURRENT_RULES_EPOCH`.
+pub const EPOCH_67_MARKERS_BURSTS: u32 = 67;
+/// D21 (S1-03), modifier arithmetic (wave 3 batch E): GF p.5 MODIFIERS — every
+/// modifier is simply added to the roll and the new value counts as the final
+/// result. From this epoch the save target is ONE sum (Defense - Shielded -
+/// Guarded - Cover + AP) clamped once at `[2, 6]`; below it each -1 floors at
+/// 2+ before the AP is added (Def 2+ in cover vs AP(1) saves on 3+). `68` is
+/// one past `EPOCH_67_MARKERS_BURSTS`; every call site reads THIS constant.
+pub const EPOCH_68_MODIFIER_SUM: u32 = 68;
+pub const CURRENT_RULES_EPOCH: u32 = 68;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1670,9 +1689,11 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     // `score::score_hand_variant`. A header asking for anything else is
     // rejected HERE, loudly, rather than silently playing variant 0 or
     // panicking deep inside a rollout.
-    if !matches!(header.knobs.eval_variant, 0 | 1) {
+    // Variant 2 (wave C G-AB) is variant 0 without the C7 carry term; variant 3
+    // (mission-play lane) is the `round_vp` currency.
+    if !matches!(header.knobs.eval_variant, 0..=3) {
         return Err(format!(
-            "eval_variant {}: no registered arm (only 0 and 1 exist)",
+            "eval_variant {}: no registered arm (only 0 to 3 exist)",
             header.knobs.eval_variant
         ));
     }
@@ -1786,7 +1807,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 66, "the live epoch is EPOCH_66_DISTANCE_TRUTH");
+        assert_eq!(CURRENT_RULES_EPOCH, 68, "the live epoch is EPOCH_68_MODIFIER_SUM");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1796,11 +1817,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":66}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":68}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 65"
+            "a fresh play_game() now stamps the bumped epoch, 68"
         );
     }
 
@@ -1955,9 +1976,27 @@ mod tests {
     /// `score::score_hand_variant`'s `unreachable!` fallback.
     #[test]
     fn an_unregistered_eval_variant_is_refused_at_header_parse() {
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":2}}"#;
-        let err = read_act_header(head).expect_err("eval_variant 2 has no registered arm");
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":99}}"#;
+        let err = read_act_header(head).expect_err("eval_variant 99 has no registered arm");
         assert!(err.contains("eval_variant"), "error should name the seam: {err}");
+    }
+
+    /// Wave C G-AB's ablation arm — variant 2 (variant 0 without the C7 carry
+    /// term) is registered and carried through like variant 1.
+    #[test]
+    fn the_registered_no_carry_eval_variant_parses() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":2}}"#;
+        let header = read_act_header(head).expect("eval_variant 2 is registered");
+        assert_eq!(header.knobs.eval_variant, 2);
+    }
+
+    /// The mission-play lane's arm — variant 3 (the `round_vp` currency) is
+    /// registered and carried through like variant 1.
+    #[test]
+    fn the_registered_vp_eval_variant_parses() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":3}}"#;
+        let header = read_act_header(head).expect("eval_variant 3 is registered");
+        assert_eq!(header.knobs.eval_variant, 3);
     }
 
     /// Ledger row 7's arm — variant 1 IS registered now, so the same parser

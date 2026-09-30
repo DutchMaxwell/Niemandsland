@@ -136,3 +136,17 @@ def test_play_from_state_carries_a_recorded_relic_in_the_tables_spelling(monkeyp
                                 destroy_seq=[0])
     assert res["markers_meta"][0]["carried_by"] == carrier
     assert res["objectives"] == {"p1": 1, "p2": 0, "neutral": 0}
+
+
+def test_carry_catalog_entries_pin_three_relics_and_scoring():
+    relic = sp.resolve_mission("relic_hunt", REPO)
+    hold = sp.resolve_mission("capture_and_hold", REPO)
+    assert relic["name"] == "Relic Hunt" and relic["scoring"] == "end"
+    assert hold["name"] == "Capture & Hold" and hold["scoring"] == "round_vp"
+    assert hold["vp"]["majority"] == "end"
+    for mission in (relic, hold):
+        assert mission["markers"]["count"] == 3
+        assert mission["markers"]["carry"] is True
+        assert sp.mission_markers(mission["markers"], 3) == [
+            {"carry": True, "carried_by": -1} for _ in range(3)
+        ]

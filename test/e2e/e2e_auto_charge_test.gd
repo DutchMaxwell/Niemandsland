@@ -48,9 +48,9 @@ func _answer_save_prompt() -> void:
 	if _main == null or not is_instance_valid(_main):
 		return
 	for c in _main.get_children():
-		var dlg := c as AcceptDialog
-		if dlg != null and dlg.title == "Incoming fire!":
-			dlg.confirmed.emit()
+		var card := c as PromptCard
+		if card != null and card.title == "Incoming fire!":
+			card.ok_button.pressed.emit()
 
 
 ## Defense 2 (saves on 2+) and a single attack each: the exchange almost never wipes either 1-model

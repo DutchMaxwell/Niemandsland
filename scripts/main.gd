@@ -177,7 +177,6 @@ var _net_join_code_input: LineEdit = null
 var _net_join_url_input: LineEdit = null
 
 # In-game chat + roster (built at runtime; visible only during a session).
-const CHAT_PANEL_SMALL_FONT: int = 12
 var _chat_panel: PanelContainer = null
 var _chat_log_scroll: ScrollContainer = null
 var _chat_log_vbox: VBoxContainer = null
@@ -505,6 +504,12 @@ func _ready() -> void:
 
 	# Hide distance label initially
 	distance_label.text = ""
+	# The two HUD readouts in the house look (maintainer D98 = a): the FPS line boxed like the top bar's
+	# chips, the distance as the gold table readout; their state inks come from the house tones.
+	for readout: Label in [performance_label, distance_label]:
+		readout.theme = HouseStyle.theme()
+	performance_label.theme_type_variation = HouseStyle.BAR_TEXT
+	distance_label.theme_type_variation = HouseStyle.READOUT
 
 	# Connect Dice Roller Plugin
 	roll_button.pressed.connect(_on_roll_button_pressed)
@@ -1108,6 +1113,11 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	_solo_log_unmodeled_rules(unit)   # once-per-session visibility of rules the automation skips
 	if target != null:
 		_solo_log_unmodeled_rules(target)
+	# D19 (a), EPOCH_67_MARKERS_BURSTS: "The first time this unit is activated…" fires at
+	# ACTIVATION START, before the move (the book's ambush trigger, not an after-the-fact
+	# shot) — moved out of the before-attacking cluster below, which ran after
+	# _solo_animate_move.
+	await _solo_apply_surprise_attack(unit)
 	# ACTIVATION CHOREOGRAPHY (field-test finding 7 — the maintainer's explicit staging): the camera has
 	# focused the unit (a); hold an attention beat (b); _solo_animate_move then shows the plotted corridors
 	# (c), holds a beat (d) and glides the models along them (e); a final beat (f) precedes the attack/
@@ -1147,12 +1157,12 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# once-per-activation before-attacking slot (data-driven via the primitive layer).
 	await _solo_apply_utility_buffs(unit)
 	await _solo_apply_mind_control(unit)
-	_solo_apply_piercing_tag(unit)
+	await _solo_apply_piercing_tag(unit)
 	_solo_apply_precision_tag(unit)
 	_solo_apply_precision_target(unit)
 	await _solo_apply_reckless_piercing(unit)
 	await _solo_apply_storm_attack(unit)
-	await _solo_apply_surprise_attack(unit)
+	# Surprise Attack moved to activation start (D19 a, above the move) — see the call there.
 	await _solo_apply_teleport(unit, report)   # design #816 PR 1: the before-attack reposition beat
 	if unit.is_destroyed():
 		return unit
@@ -1326,15 +1336,9 @@ func _solo_try_ambush_redeploy(gu: GameUnit) -> bool:
 	else:
 		if _solo_batch:
 			return false   # headless sweeps never answer a dialog — the human simply declines
-		var dlg := ConfirmationDialog.new()
-		dlg.title = "Ambush Re-Deployment"
-		dlg.dialog_text = "%s has ended its activation.\nRemove it from the table now (once per game) and bring it back from Ambush at the start of round %d?" % [
-			gu.get_name(), opr_army_manager.current_round + 1]
-		dlg.ok_button_text = "Withdraw"
-		dlg.get_cancel_button().text = "Stay on the table"
-		add_child(dlg)
-		var yes: bool = await _solo_await_confirm(dlg)
-		dlg.queue_free()
+		var yes: bool = await _solo_ask("Ambush Re-Deployment",
+			"%s has ended its activation.\nRemove it from the table now (once per game) and bring it back from Ambush at the start of round %d?" % [
+			gu.get_name(), opr_army_manager.current_round + 1], "Withdraw", "Stay on the table")
 		if not yes:
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.GENERAL,
@@ -1759,10 +1763,10 @@ func _solo_pump() -> void:
 # FPS text in the field-test screenshots. All three lanes now stack BELOW that band. (23.09.: the FPS
 # line moved up into the top bar's row, 16–40 px; the lanes stay where they were, below the bar.)
 const STATUS_LANE_BANNER := 92
-const STATUS_LANE_TOAST := 116
+const STATUS_LANE_TOAST := 124
 ## How long a plain OPERATIONAL notice stays up (NML-955 keeps AI explanations off this timer).
 const SOLO_TOAST_HIDE_S := 6.0
-const STATUS_LANE_PEER := 140
+const STATUS_LANE_PEER := 156
 
 
 ## One top-centre status label (never intercepts the mouse). `lane` is one of STATUS_LANE_*.
@@ -1771,13 +1775,19 @@ func _make_status_banner(node_name: String, text: String, lane: int) -> Label:
 	lbl.name = node_name
 	lbl.text = text
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE   # never blocks clicks/camera
-	lbl.add_theme_font_size_override("font_size", 18)
-	lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
-	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	lbl.add_theme_constant_override("outline_size", 4)
-	lbl.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, lane)
+	_status_plate(lbl, lane)
 	$UI.add_child(lbl)
 	return lbl
+
+
+## A status line in the house look (maintainer D98 = a): one plate for every lane, where the lines used
+## to be three text colours with an outline. It grows both ways from the top-centre anchor — the
+## preset is taken before the label has its font, and a label grown only to the right sat off centre.
+func _status_plate(lbl: Label, lane: int) -> void:
+	lbl.theme = HouseStyle.theme()
+	lbl.theme_type_variation = HouseStyle.STATUS
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, lane)
+	lbl.grow_horizontal = Control.GROW_DIRECTION_BOTH
 
 
 func _show_solo_ai_banner() -> void:
@@ -1795,7 +1805,8 @@ func _hide_solo_ai_banner() -> void:
 
 ## The centred "NACHTMAHR dreams…" overlay (maintainer: middle of the screen — a top banner is missed)
 ## with the animated idle spinner, shown for the whole AI compute phase so the wait is transparent. A
-## dark rounded panel, the amber persona palette; never intercepts the mouse. Skipped in headless/batch.
+## house overlay sheet, the words and the spinner in the AI's gold; never intercepts the mouse. Skipped
+## in headless/batch.
 func _show_dream_overlay() -> void:
 	if is_instance_valid(_solo_dream_overlay) or _solo_batch:
 		return
@@ -1803,19 +1814,14 @@ func _show_dream_overlay() -> void:
 	centre.name = "DreamOverlay"
 	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	centre.theme = HouseStyle.theme()
 
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.05, 0.08, 0.82)
-	sb.set_corner_radius_all(14)
-	sb.set_content_margin_all(26)
-	sb.border_color = Color(1.0, 0.78, 0.30, 0.35)
-	sb.set_border_width_all(1)
-	panel.add_theme_stylebox_override("panel", sb)
+	panel.theme_type_variation = HouseStyle.SHEET
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 18)
+	row.add_theme_constant_override("separation", HouseStyle.PAD_SHEET)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -1824,14 +1830,8 @@ func _show_dream_overlay() -> void:
 	spinner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(spinner)
 
-	var label := Label.new()
-	label.text = "NACHTMAHR dreams…"
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var label := HouseStyle.label("NACHTMAHR dreams…", HouseStyle.VOICE)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override("font_size", 26)
-	label.add_theme_color_override("font_color", Color(1.0, 0.90, 0.62))
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	label.add_theme_constant_override("outline_size", 4)
 	row.add_child(label)
 
 	panel.add_child(row)
@@ -2514,24 +2514,14 @@ func _solo_show_game_summary() -> void:
 	if privacy_menu != null and game_record_collector != null:
 		privacy_menu.set_last_game_record(game_record_collector.build_record())
 		game_record_collector.reset()
-	var dlg := AcceptDialog.new()
-	dlg.title = "Game over"
 	var obj_block: String = ("Objectives held:\n  %s: %d\n  %s: %d\n  Neutral: %d\n\n" % [
 		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), human_held, side_b_label, ai_held, neutral]) \
 		if not objectives.is_empty() else "No objective markers were on the table.\n\n"
 	var vp_block: String = ("Mission VP (decides):\n  %s: %d\n  %s: %d\n\n" % [
 		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), vp_a, side_b_label, vp_b]) \
 		if scored_by_vp else ""
-	dlg.dialog_text = "%d rounds played.\n\n%s%s%s" % [SOLO_GAME_ROUNDS, obj_block, vp_block, verdict]
-	dlg.confirmed.connect(dlg.queue_free)
-	dlg.canceled.connect(dlg.queue_free)
-	dlg.confirmed.connect(_maybe_prompt_for_evaluation_sharing)
-	dlg.canceled.connect(_maybe_prompt_for_evaluation_sharing)
-	if ThemeManager != null:
-		dlg.theme = ThemeManager.get_current_theme()
-	dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 0)
-	add_child(dlg)
-	dlg.popup_centered()
+	GameOverPanel.open(self, "%d rounds played.\n\n%s%s%s" % [SOLO_GAME_ROUNDS, obj_block, vp_block, verdict],
+		_maybe_prompt_for_evaluation_sharing)
 
 
 func _maybe_prompt_for_evaluation_sharing() -> void:
@@ -2670,11 +2660,7 @@ func _solo_apply_mission_if_chosen() -> void:
 		return
 	var mission := MissionCatalog.get_mission(_solo_mission_id)
 	var mk: Dictionary = mission.get("markers", {})
-	var mmeta: Array = []
-	if bool(mk.get("owned", false)):
-		for mi in range(int(mk.get("count", 2))):
-			mmeta.append({"owned_by": mi + 1, "destructible": bool(mk.get("destructible", false)),
-				"destroyed": false, "destroyed_seq": 0})
+	var mmeta: Array = SoloController.marker_metadata(mk)
 	SoloController.mission_reset(str(mission.get("scoring", "end")), (mission.get("vp", {}) as Dictionary), mmeta)
 	if terrain_overlay != null and table != null:
 		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
@@ -2794,8 +2780,7 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		_solo_deploy_ui = CanvasLayer.new()
 		_solo_deploy_ui.layer = 85
 		var panel := PanelContainer.new()
-		panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-		_add_hud_frame(panel)
+		HouseStyle.apply(panel)   # the house window (maintainer D98 = a): tokens from one place, no brackets
 		# Community #159: the box is DRAGGABLE — free top-left positioning instead of the old
 		# bottom-centre anchors (which recomputed offsets every layout and would clobber a drag).
 		# The default spot stays the familiar bottom-centre via _solo_deploy_panel_relayout.
@@ -2808,45 +2793,35 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 			unit_dock.occupied_changed.connect(_solo_deploy_panel_relayout)
 		_solo_deploy_ui_panel = panel
 		_solo_deploy_ui.add_child(panel)
-		var margin := MarginContainer.new()
-		for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-			margin.add_theme_constant_override(side, 12)
-		panel.add_child(margin)
 		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 8)
-		margin.add_child(box)
-		_solo_deploy_ui_label = Label.new()
+		box.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+		panel.add_child(box)
+		_solo_deploy_ui_label = HouseStyle.label("", HouseStyle.BODY)
 		_solo_deploy_ui_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_solo_deploy_ui_label.add_theme_font_size_override("font_size", 15)
 		# Reserve/unit names are foreign data: wrap them instead of letting them stretch the strip
 		# past the screen edge (UI audit B-6).
 		_solo_deploy_ui_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_solo_deploy_ui_label.custom_minimum_size.x = 580
 		box.add_child(_solo_deploy_ui_label)
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 10)
+		row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		box.add_child(row)
-		_solo_deploy_ui_btn1 = Button.new()
-		_solo_deploy_ui_btn1.custom_minimum_size.x = 280
-		UiPolish.primary_button(_solo_deploy_ui_btn1)
-		_solo_deploy_ui_btn1.focus_mode = Control.FOCUS_NONE   # a panel button must not eat Space/Enter
+		# Button 1 is the go-on action at every call site (✓ Unit placed, Fire!, ✓ Pulled back): the gold
+		# primary; button 2 the alternative (Cancel attack, keep waiting, the other zone): a ghost button.
+		# HouseStyle buttons take no focus — a panel button must not eat Space/Enter.
+		_solo_deploy_ui_btn1 = HouseStyle.button("", HouseStyle.PRIMARY)
 		_solo_deploy_ui_btn1.pressed.connect(func() -> void: _solo_strip_fire(_solo_strip_cb1, "1"))
-		row.add_child(_solo_deploy_ui_btn1)
-		_solo_deploy_ui_btn2 = Button.new()
-		_solo_deploy_ui_btn2.custom_minimum_size.x = 280
-		UiPolish.primary_button(_solo_deploy_ui_btn2)
-		_solo_deploy_ui_btn2.focus_mode = Control.FOCUS_NONE
+		_solo_deploy_ui_btn2 = HouseStyle.button("", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 		_solo_deploy_ui_btn2.pressed.connect(func() -> void: _solo_strip_fire(_solo_strip_cb2, "2"))
-		row.add_child(_solo_deploy_ui_btn2)
-		# Discoverability for the drag (community #159) — a dim one-liner, no extra chrome.
-		var hint := Label.new()
-		# Not U+283F: this unthemed strip draws with Godot's default Open Sans, which lacks it (and every
-		# arrow) — it rendered as a hex box. U+2022 is in Open Sans and in Inter.
-		hint.text = "•  drag to move"
+		for b: Button in [_solo_deploy_ui_btn1, _solo_deploy_ui_btn2]:
+			b.custom_minimum_size.x = 280
+			b.size_flags_horizontal = Control.SIZE_FILL   # 280 px each, centred — not stretched to the text
+			row.add_child(b)
+		# Discoverability for the drag (community #159) — a muted one-liner, no extra chrome. U+2022, not
+		# U+283F: the UI font lacks that one (it rendered as a hex box).
+		var hint := HouseStyle.label("•  drag to move", HouseStyle.CAPTION)
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hint.add_theme_font_size_override("font_size", 10)
-		hint.modulate = Color(1, 1, 1, 0.45)
 		box.add_child(hint)
 		add_child(_solo_deploy_ui)
 	_solo_deploy_ui_label.text = text
@@ -3426,7 +3401,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		base_defense = AiCombatMath.guarded_defense(base_defense, true)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
-				target.get_name(), over9_rule, base_defense], true)
+				target.get_name(), over9_rule, AiCombatMath.shown_target(base_defense)], true)
 	var covered_defense: int = _solo_cover_defense(target, base_defense)   # +1 Defense if majority in cover
 	# Resolver wave A — vs-target Marks: the bearer's pick lands on THIS volley's target.
 	_solo_apply_vs_marks(attacker, target, dist_in)
@@ -3544,9 +3519,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			ai_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
-		var to_hit: int = AiCombatMath.modified_hit_target(
-			AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false))),
-			ai_mod)
+		var to_hit_raw: int = AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false))) - ai_mod
+		var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 		if upr_ap > 0:
 			profile = profile.duplicate()
 			profile["ap"] = int(profile.get("ap", 0)) + upr_ap   # Unpredictable AP(+1) leg (never mutate source)
@@ -3560,7 +3534,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			if fresh:
 				vm = AiEv.versatile_best_mode(to_hit, shot_base, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
 				_solo_versatile_latch_write(member, vm)
-			to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
+			to_hit_raw -= int(vm.get("hit_mod", 0))   # D21: folds into the SAME sum, clamped once
+			to_hit = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 			if int(vm.get("ap", 0)) > 0:
 				profile = profile.duplicate()
 				profile["ap"] = int(profile.get("ap", 0)) + int(vm.get("ap", 0))
@@ -3574,7 +3549,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if bool(profile.get("limited", false)):
 			solo_controller.mark_limited_used(member, profile)   # once per game — spent on the roll (wave 5)
 		await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-		var hits: int = await _solo_hits(faces, to_hit, profile, dist_in, target, false, "AI (%s)" % attacker.get_name())
+		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % attacker.get_name())
 		if battle_log != null:
 			var sight_note: String = "" if sighted >= member.get_alive_count() else " (%d/%d models sighted)" % [sighted, member.get_alive_count()]
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s%s — %d hit%s" % [
@@ -4826,8 +4801,9 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 ## multiplies "after resolving other special rules"), which then scales each hit ×min(X, target models).
 ## Every multiplication is battle-logged so it is VISIBLE. Uses the shared AiCombatMath.
 func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "") -> int:
-	if bool(profile.get("precise", false)):   # Precise: flat +1 to hit — one choke point for every attack path
-		to_hit = AiCombatMath.modified_hit_target(to_hit, 1)
+	# `to_hit` is the caller's UNCLAMPED summed target (D21): Precise's flat +1 folds into that sum and the
+	# one clamp happens here, so a penalty the old per-step clamp swallowed still counts against the +1.
+	to_hit = AiCombatMath.modified_hit_target(to_hit, 1 if bool(profile.get("precise", false)) else 0)
 	var hits: int = AiCombatMath.count_hits(faces, to_hit)
 	if bool(profile.get("relentless", false)):
 		var rel_bonus: int = AiCombatMath.relentless_bonus_hits(faces, dist_in)
@@ -5857,7 +5833,7 @@ func _solo_unpredictable_rule(striker: GameUnit, melee: bool, target: GameUnit =
 	return ""
 
 
-## The groups of _solo_defense_parts, folded in this order (each with its own 2..6 clamp).
+## The groups of _solo_defense_parts, folded in this order (one sum, clamped once at the save).
 const DEF_PART_SHIELDED := "shielded"
 const DEF_PART_MARKER := "marker"
 const DEF_PART_TOKEN := "token"
@@ -5875,16 +5851,14 @@ const DEF_PART_TOKEN := "token"
 ## Guarded/Versatile/Sturdy family ("shot or charged from over 9\"" — _solo_over9_defense_rule).
 func _solo_defense_vs(target: GameUnit, source: String = AiCombatMath.HIT_SOURCE_SHOOTING) -> int:
 	var base: int = _solo_armored_defense(target)
+	var bonus_sum := 0
 	var parts: Array = _solo_defense_parts(target, source)
 	for group in [DEF_PART_SHIELDED, DEF_PART_MARKER, DEF_PART_TOKEN]:
-		var bonus := 0
 		for p in parts:
 			var pd := p as Dictionary
 			if str(pd["group"]) == group and bool(pd["applies"]):
-				bonus += int(pd["bonus"])
-		if bonus != 0:
-			base = clampi(base - bonus, 2, 6)
-	return base
+				bonus_sum += int(pd["bonus"])
+	return base - bonus_sum
 
 
 ## Every Defense contribution the unit brings to a save, each DECLARING the scope its own rule text
@@ -5959,7 +5933,7 @@ func _solo_log_defense_parts(target: GameUnit, source: String, defense: int, ai:
 		if bonus == 0 or not bool(pd["applies"]):
 			continue
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s is %s: %+d Defense (saves on %d+)" % [
-			target.get_name(), str(pd["name"]), bonus, defense], ai)
+			target.get_name(), str(pd["name"]), bonus, AiCombatMath.shown_target(defense)], ai)
 
 
 ## rules-must-log for NML-104: the spell save step NAMES both halves. What DOES apply gets a line —
@@ -5976,10 +5950,10 @@ func _solo_log_defense_vs_spell(target: GameUnit, defense: int) -> void:
 			continue
 		if bool(pd["applies"]):
 			battle_log.log_event(BattleLog.Category.COMBAT, "%+d defense vs spell damage — %s (%s saves on %d+)" % [
-				bonus, str(pd["name"]), target.get_name(), defense], true)
+				bonus, str(pd["name"]), target.get_name(), AiCombatMath.shown_target(defense)], true)
 		else:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s does not apply to spell damage (\"%s\") — %s saves on %d+" % [
-				str(pd["name"]), str(pd["clause"]), target.get_name(), defense], true)
+				str(pd["name"]), str(pd["clause"]), target.get_name(), AiCombatMath.shown_target(defense)], true)
 	# A token whose OWN text scopes it to an attack ("in melee", "against shooting") never reaches the
 	# parts list — AiSpell.mods_for drops it for a spell source. What it WOULD have given a shot or a
 	# melee hit is the union of both attack reads; the diff against the spell read is the silence the
@@ -5996,18 +5970,18 @@ func _solo_log_defense_vs_spell(target: GameUnit, defense: int) -> void:
 				continue
 			named.append(spell)
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s does not apply to spell damage (its modifier is scoped to %s) — %s saves on %d+" % [
-				spell, str(rdd.get("scope", "")), target.get_name(), defense], true)
+				spell, str(rdd.get("scope", "")), target.get_name(), AiCombatMath.shown_target(defense)], true)
 	# Cover and the over-9" family are applied by the ATTACK call sites, so on this path they are
 	# absent by construction — which is exactly what their wording says, and worth saying out loud.
 	if _solo_majority_in_cover(target):
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Cover does not apply to spell damage (its +1 is against shooting) — %s saves on %d+" % [
-			target.get_name(), defense], true)
+			target.get_name(), AiCombatMath.shown_target(defense)], true)
 	var over9 := _solo_over9_defense_rule(target)
 	if not over9.is_empty():
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s does not apply to spell damage (its +1 is for being shot or charged from over 9\") — %s saves on %d+" % [
-			over9, target.get_name(), defense], true)
+			over9, target.get_name(), AiCombatMath.shown_target(defense)], true)
 
 
 ## The unit's Armor(X) rating (wave 5, army-book upgrade), 0 when absent or when its book does not field
@@ -6449,7 +6423,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 		defense = AiCombatMath.guarded_defense(defense, true)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over 9\" — +1 Defense (saves on %d+)" % [
-				defender.get_name(), m_over9, defense], true)
+				defender.get_name(), m_over9, AiCombatMath.shown_target(defense)], true)
 	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, 0.0, true, charging)
 	# Wave-4 Unpredictable Fighter (Mummified, melee-only) and the generic Unpredictable ("when
 	# attacking" — the same die, shooting AND melee): ONE die per melee for the whole unit —
@@ -6574,8 +6548,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 						if name_unstop else "Unstoppable: negative to-hit modifiers ignored", true)
 			# S1-01: Thrust is a CHARGE bonus (p.14 "When charging") — the strike-back runs charging=false.
 			var thrusting: bool = charging and bool(profile.get("thrust", false))
-			var to_hit: int = 6 if fatigued else AiCombatMath.modified_hit_target(
-				AiCombatMath.thrust_to_hit(strike_quality, thrusting), m_mod)
+			var to_hit_raw: int = 6 if fatigued else AiCombatMath.thrust_to_hit(strike_quality, thrusting) - m_mod
+			var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 			if thrusting and battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "Thrust: AP(+1) on the charge" if fatigued
 					else "Thrust: +1 to hit and AP(+1) on the charge", true)
@@ -6592,7 +6566,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					vm = AiEv.versatile_best_mode(to_hit, _solo_defense_vs(strike_unit, AiCombatMath.HIT_SOURCE_MELEE), int(profile.get("ap", 0)), bool(profile.get("bane", false)))
 					_solo_versatile_latch_write(striker, vm)
 				if not fatigued:
-					to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
+					to_hit_raw -= int(vm.get("hit_mod", 0))   # D21: one sum, one clamp
+					to_hit = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 				v_ap = int(vm.get("ap", 0))
 				if battle_log != null and fresh:
 					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
@@ -6605,7 +6580,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(striker, profile, faces)   # resolver wave A: natural 1s wound the striker
-			var hits: int = await _solo_hits(faces, to_hit, profile, 0.0, defender, charging, _solo_owner_label(striker))
+			var hits: int = await _solo_hits(faces, to_hit_raw, profile, 0.0, defender, charging, _solo_owner_label(striker))
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), defender.get_name(), hits, ("" if hits == 1 else "s")], true)
@@ -6671,7 +6646,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 							bt_name, bt_ones, ("" if bt_ones == 1 else "s"), str(group.get("name", "?")),
 							bt_n, ("" if bt_n == 1 else "s"), str(profile.get("name", "?"))], true)
 					var bt_faces: Array = await _solo_tray_roll(bt_n, to_hit, roll_owner)
-					var bt_hits: int = await _solo_hits(bt_faces, to_hit, profile, 0.0, defender, charging, _solo_owner_label(striker))
+					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, profile, 0.0, defender, charging, _solo_owner_label(striker))
 					if bt_hits > 0:
 						# Extra attacks resolve pooled (no Deadly/Takedown special-casing — the aof
 						# bearers carry plain weapons) and NEVER chain (counter reset right after).
@@ -6723,71 +6698,34 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	return caused
 
 
-## Await a ConfirmationDialog's outcome WITHOUT the visibility race: Godot's AcceptDialog hides itself
-## BEFORE emitting `confirmed`, so an `await dlg.visibility_changed` resumed with the choice still unset and
-## an OK click read as "No" — the strike-back that never rolled and the spell interference that never spent
-## a token (Windows playtest bug 3; invisible headless, where the AI defender skips the dialog). Polling the
-## two outcome signals is order-proof; a dialog hidden by code without either signal counts as "No".
-## Fixed width for every solo prompt (UI audit): data text never decides the window width.
-const SOLO_DIALOG_MIN_WIDTH := 420
+## Every solo yes / no question goes through here: ONE in-viewport card (PromptCard, maintainer
+## D98 = a, 28.09.2026) instead of a ConfirmationDialog. OK = true, the cancel button (or Esc, or ×) =
+## false. The card keeps what the old helper had to fight for: it waits on the ANSWER, not on a window's
+## visibility (Windows playtest bug 3: an OK click read as "No"), its shield keeps a stray click off the
+## board without closing the question (B3, test game 1: a lost strike-back routed the unit), and its
+## width is fixed (UI audit 2026-07-24 B-5/B-6). `unanswered` is what a card freed without an answer
+## means: the safe refusal for a yes / no question, the RECOMMENDED mode where both buttons are game
+## options (Versatile, UI audit A-4).
+func _solo_ask(title: String, text: String, ok_text: String, cancel_text: String,
+		unanswered: bool = false) -> bool:
+	var card := PromptCard.new(title, text, ok_text, cancel_text)
+	add_child(card)
+	return await card.answer(unanswered)
 
-func _solo_await_confirm(dlg: AcceptDialog, keep_exclusive: bool = true, dismiss_default: bool = false) -> bool:
-	var outcome: Array = []
-	dlg.confirmed.connect(func() -> void: outcome.append(true))
-	dlg.canceled.connect(func() -> void: outcome.append(false))
-	# B3 (test game 1, High Sister): EXCLUSIVE by default — a stray click outside used to close the
-	# popup with NEITHER signal, which read as "No": the strike-back never rolled, the melee was
-	# lost 0:X and the unit routed on morale. WAIT-style dialogs (consolidation: the player drags
-	# models WHILE the dialog stands) pass keep_exclusive=false so the board stays interactive.
-	# If it still hides without a choice (window-manager path), RE-ASK a bounded number of times
-	# instead of guessing "No"; only then default to the safe refusal.
-	dlg.exclusive = keep_exclusive
-	# UI audit 2026-07-24 (B-5/B-6): every dialog routed through this helper used to pop as a bare
-	# grey Godot box in the cyan/amber HUD, and none set a size — so the width tracked whatever army,
-	# unit or weapon name the text happened to contain and the window visibly jumped between prompts.
-	# The neighbouring dialogs in this file already themed themselves (_apply_ui_theme's precedent);
-	# doing it HERE covers all of them at once. Width is fixed, height still grows with the body.
-	if dlg.theme == null and ThemeManager != null:
-		dlg.theme = ThemeManager.get_current_theme()
-	if dlg.min_size == Vector2i.ZERO:
-		dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 0)
-	dlg.popup_centered()
-	var reasks := 0
-	while outcome.is_empty() and is_instance_valid(dlg):
-		if not dlg.visible:
-			if reasks >= 3:
-				break
-			reasks += 1
-			dlg.popup_centered()
-		await get_tree().process_frame
-	# `dismiss_default` is what a window that vanished WITHOUT either signal means (after the
-	# re-asks above). For a yes/no question that is the safe refusal (false, the default); for a
-	# prompt whose two buttons are two equally valid GAME options — Versatile — falling back to the
-	# not-recommended one would let a stray click make a bad tactical decision (UI audit A-4).
-	# Hide BEFORE the caller frees it: freeing a still-VISIBLE Window makes Godot try to unhook a
-	# popup registration that is no longer there, which logs "Attempt to disconnect a nonexistent
-	# connection from 'root:<Window>'" — 22 of those in one of the maintainer's sessions.
-	if is_instance_valid(dlg):
-		dlg.hide()
-	return dismiss_default if outcome.is_empty() else bool(outcome[0])
+
+## Fixed width for the dialogs that are still native windows (UI audit): data text never decides it.
+const SOLO_DIALOG_MIN_WIDTH := 420
 
 
 ## The defender's strike-back choice dialog. With `counter_first` the prompt explains that Counter weapons
 ## strike BEFORE the charger (GF/AoF v3.5.1 p.13); one choice covers the whole melee (Counter phase now,
 ## remaining weapons in the normal slot).
 func _solo_confirm_strike_back(defender: GameUnit, charger: GameUnit, counter_first: bool) -> bool:
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Strike back?"
+	var text := "%s is in melee with %s.\nStrike back?" % [defender.get_name(), charger.get_name()]
 	if counter_first:
-		dlg.dialog_text = "%s charges %s.\n%s has Counter — its Counter weapons strike FIRST.\nStrike back?" % [
+		text = "%s charges %s.\n%s has Counter — its Counter weapons strike FIRST.\nStrike back?" % [
 			charger.get_name(), defender.get_name(), defender.get_name()]
-	else:
-		dlg.dialog_text = "%s is in melee with %s.\nStrike back?" % [defender.get_name(), charger.get_name()]
-	dlg.ok_button_text = "Strike back"
-	dlg.get_cancel_button().text = "Hold"
-	add_child(dlg)
-	var strike: bool = await _solo_await_confirm(dlg)   # order-proof (see _solo_await_confirm)
-	dlg.queue_free()
+	var strike: bool = await _solo_ask("Strike back?", text, "Strike back", "Hold")
 	# B3: the choice ALWAYS gets its log line — a silent "Hold" read like a swallowed input.
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
@@ -7475,14 +7413,14 @@ func _solo_log_takedown_context(weapon_name: String, pick: Dictionary, ctx: Dict
 		if not bool(ctx.get("in_cover", false)):
 			parts.append("no cover of its own")
 		elif cov_def == base_def:
-			parts.append("in cover, but Defense is already %d+" % base_def)
+			parts.append("in cover, but Defense is already %d+" % AiCombatMath.shown_target(base_def))
 		elif save_def == cov_def:
 			parts.append("in cover: +1 Defense")
 		else:
 			parts.append("in cover, but this weapon ignores cover")
 	if not str(ctx.get("over9_rule", "")).is_empty():
 		parts.append("%s: +1 Defense" % str(ctx["over9_rule"]))
-	parts.append("saves on %d+" % save_def)
+	parts.append("saves on %d+" % AiCombatMath.shown_target(save_def))
 	battle_log.log_event(BattleLog.Category.COMBAT, "Takedown (%s) vs the %s of %s — unit of [1]: %s" % [
 		weapon_name, _solo_model_label(owner, int(pick.get("index", -1))), owner.get_name(),
 		", ".join(parts)], true)
@@ -8069,8 +8007,11 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 		# the global stream cosmetic terrain/prop placement also draws from), then push them through
 		# show_faces() — which fills per_dice_result() and emits roll_finnished synchronously.
 		# ~20× faster at 2000pts, identical uniform 1-6 distribution, deterministic per dice_seed.
+		# NML-1100 (D76/W3-6 a): `count` taken literally — a zero-die roll draws NOTHING off the
+		# rules-path RNG (the old `maxi(1, …)` was a UI guard leaked into the stream); show_faces([])
+		# already renders an empty tray, its own display-only floor, untouched here.
 		var _inst: Array[int] = []
-		for _di in maxi(1, count):
+		for _di in count:
 			_inst.append(_tray_rng.randi_range(1, 6))
 		dice_roller_control.show_faces(_inst)
 	else:
@@ -8203,20 +8144,13 @@ func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: Strin
 	# A3 (NML-202): the panel switch (or _run_player_intent's own first-use flip) skips the ask —
 	# the threshold log line and the tray roll are unchanged either way.
 	if not _solo_auto_saves:
-		var dlg := ConfirmationDialog.new()
-		dlg.title = "Incoming fire!"
-		var ap_note: String = (" (AP %d → save on %d+)" % [ap, defense + ap]) if ap > 0 else " (save on %d+)" % defense
-		dlg.dialog_text = "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
-			attacker.get_name(), target.get_name(), hits, ("" if hits == 1 else "s"), weapon_name, ap_note]
-		dlg.ok_button_text = "Roll %d save%s" % [hits, ("" if hits == 1 else "s")]
-		dlg.get_cancel_button().hide()   # saves are not optional — one clear action
-		add_child(dlg)
-		# UI audit 2026-07-24: this used to `await dlg.confirmed` directly. ESC still emits `canceled`
-		# even with the cancel button hidden, so the await never returned and the board locked up —
-		# in the MOST frequent solo interaction (every AI volley). The shared helper resolves on
-		# EITHER signal and re-asks a stray dismissal; saves are mandatory, so either way we roll.
-		await _solo_await_confirm(dlg)
-		dlg.queue_free()
+		var ap_note: String = (" (AP %d → save on %d+)" % [ap, AiCombatMath.save_target(defense, ap)]) if ap > 0 else " (save on %d+)" % AiCombatMath.shown_target(defense)
+		# Saves are not optional — one clear action, no cancel button. UI audit 2026-07-24: ESC used to
+		# lock the board here (the MOST frequent solo prompt); on the card ESC answers too, and either
+		# way we roll.
+		await _solo_ask("Incoming fire!", "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
+			attacker.get_name(), target.get_name(), hits, ("" if hits == 1 else "s"), weapon_name, ap_note],
+			"Roll %d save%s" % [hits, ("" if hits == 1 else "s")], "")
 	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
 	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
 	_solo_log_save_threshold(target, defense, ap)
@@ -8268,11 +8202,12 @@ func _solo_log_save_threshold(defender: GameUnit, defense: int, ap: int) -> void
 ## unit test; thresholds within 2..6 keep the old format byte-identical.
 static func save_threshold_text(defense: int, ap: int) -> String:
 	var target: int = defense + ap
+	var shown: int = AiCombatMath.shown_target(defense)
 	if ap > 0 and target > 6:
-		return "6 only (Def %d+, AP %d — a natural 6 always saves)" % [defense, ap]
+		return "6 only (Def %d+, AP %d — a natural 6 always saves)" % [shown, ap]
 	if ap > 0:
-		return "%d+ (Def %d+, AP %d)" % [target, defense, ap]
-	return "%d+" % defense
+		return "%d+ (Def %d+, AP %d)" % [AiCombatMath.shown_target(target), shown, ap]
+	return "%d+" % shown
 
 
 # === AI-action presentation layer (goal 003 game-feel: announce → execute → resolve → outcome) ===
@@ -8475,14 +8410,9 @@ func _solo_show_toast(text: String, auto_hide_s: float = SOLO_TOAST_HIDE_S, expl
 		_solo_toast = Label.new()
 		_solo_toast.name = "SoloActionToast"
 		_solo_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_solo_toast.add_theme_font_size_override("font_size", 16)
-		_solo_toast.add_theme_color_override("font_color", Color(0.95, 0.95, 0.9))
-		_solo_toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-		_solo_toast.add_theme_constant_override("outline_size", 4)
-		_solo_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, STATUS_LANE_TOAST)
-		# The preset is taken while the label is still EMPTY (zero width at the centre); the text comes
-		# later and a Label grows to the right by default — the line sat half its width right of centre.
-		_solo_toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		# The preset is taken while the label is still EMPTY (zero width at the centre); the plate grows
+		# both ways, so the text that comes later stays centred.
+		_status_plate(_solo_toast, STATUS_LANE_TOAST)
 		_solo_toast.gui_input.connect(_on_solo_toast_gui_input)
 		$UI.add_child(_solo_toast)
 	_solo_toast.text = text
@@ -9389,14 +9319,8 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 	if _solo_batch:
 		unit.unit_properties["hero_tests_morale"] = true
 		return
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Hero morale"
-	dlg.dialog_text = "Let a living Hero test morale for %s from now on?" % unit.get_name()
-	dlg.ok_button_text = "Use Hero"
-	dlg.get_cancel_button().text = "Use unit"
-	add_child(dlg)
-	unit.unit_properties["hero_tests_morale"] = await _solo_await_confirm(dlg, true, true)
-	dlg.queue_free()
+	unit.unit_properties["hero_tests_morale"] = await _solo_ask("Hero morale",
+		"Let a living Hero test morale for %s from now on?" % unit.get_name(), "Use Hero", "Use unit", true)
 
 
 func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bool:
@@ -9543,15 +9467,10 @@ func _solo_confirm_cast_first(unit: GameUnit) -> bool:
 	if not affordable:
 		return false
 	_solo_cast_asked[unit.get_instance_id()] = rnd
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Cast window"
-	dlg.dialog_text = "%s can still cast (%d token%s left).\nSpells must be cast BEFORE attacking (GF v3.5.1) — after this attack the window is gone." % [
-		member.get_name(), member.casts_current, ("" if member.casts_current == 1 else "s")]
-	dlg.ok_button_text = "Cast first"
-	dlg.get_cancel_button().text = "Attack without casting"
-	add_child(dlg)
-	var cast_first: bool = await _solo_await_confirm(dlg)
-	dlg.queue_free()
+	var cast_first: bool = await _solo_ask("Cast window",
+		"%s can still cast (%d token%s left).\nSpells must be cast BEFORE attacking (GF v3.5.1) — after this attack the window is gone." % [
+		member.get_name(), member.casts_current, ("" if member.casts_current == 1 else "s")],
+		"Cast first", "Attack without casting")
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			("%s casts before attacking" if cast_first else "%s attacks — cast window passed") % unit.get_name(), false)
@@ -10669,6 +10588,19 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 	var names: Array = _solo_split_fire_offer_names(attacker, target_a)
 	if names.size() < 2:
 		return {"split": false}
+	var picked: Array = await _solo_ask_split_fire(target_a, names)
+	if picked.is_empty() or picked.size() >= names.size():
+		return {"split": false}   # nothing checked, or everything — both mean one target
+	var rest: Array = []
+	for n in names:
+		if not picked.has(n):
+			rest.append(n)
+	return {"split": true, "names": picked, "rest": rest}
+
+
+## The split-fire question itself (#226): one check box per weapon group; returns the checked names
+## ([] = "All at <target>"). Apart from the guards above so the prompt is drivable headless.
+func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
 	var dlg := ConfirmationDialog.new()
 	dlg.title = "Split fire?"
 	dlg.ok_button_text = "Pick 2nd target"
@@ -10697,13 +10629,7 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 			if (checks[i] as CheckBox).button_pressed:
 				picked.append(names[i])
 	dlg.queue_free()
-	if picked.is_empty() or picked.size() >= names.size():
-		return {"split": false}   # nothing checked, or everything — both mean one target
-	var rest: Array = []
-	for n in names:
-		if not picked.has(n):
-			rest.append(n)
-	return {"split": true, "names": picked, "rest": rest}
+	return picked
 
 
 func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: bool = false) -> void:
@@ -10789,13 +10715,19 @@ func _solo_try_precision_spot(unit: GameUnit) -> void:
 			best_d = d
 	if best == null:
 		return
-	var faces: Array = await _solo_tray_roll(1, 4, _solo_owner_label(unit), "attack",
-		"Precision Spotter: 4+ marks %s" % best.get_name())
-	if not faces.is_empty() and int(faces[0]) >= 4:
-		_solo_place_spot_marker(unit, best)
-	elif battle_log != null:
+	# NML-980: one die per alive laser-carrying model in the chain, each 4+ its own marker.
+	var dice := maxi(solo_controller.precision_spot_dice_of(unit), 1)
+	var faces: Array = await _solo_tray_roll(dice, 4, _solo_owner_label(unit), "attack",
+		"Precision Spotter: %d die%s (4+) mark %s" % [dice, ("" if dice == 1 else "s"), best.get_name()])
+	var hits := 0
+	for f in faces:
+		if int(f) >= 4:
+			hits += 1
+			_solo_place_spot_marker(unit, best)
+	if hits == 0 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Precision Spotter: %s misses the mark on %s (needed 4+)" % [unit.get_name(), best.get_name()], _solo_is_ai_unit(unit))
+			"Precision Spotter: %s misses the mark on %s (needed 4+, %d die%s)" % [
+			unit.get_name(), best.get_name(), dice, ("" if dice == 1 else "s")], _solo_is_ai_unit(unit))
 
 
 ## Shared marker placement (AI auto-spot + the radial spot): property, VISIBLE "Spotted"
@@ -10921,15 +10853,21 @@ func _solo_spot_click(target: GameUnit) -> void:
 
 
 ## Fire-and-forget: the spot roll (4+) in the tray, then the shared marker placement.
+## NML-980: "roll one die" is per MODEL (GF p.4) — one click, N dice (N = every alive laser-carrying
+## model in the chain, solo_controller.precision_spot_dice_of), each 4+ its own marker.
 func _solo_resolve_spot(spotter: GameUnit, target: GameUnit) -> void:
-	var faces: Array = await _solo_tray_roll(1, 4, _solo_owner_label(spotter), "attack",
-		"Precision Spotter: 4+ marks %s" % target.get_name())
-	if not faces.is_empty() and int(faces[0]) >= 4:
-		_solo_place_spot_marker(spotter, target)
-	elif battle_log != null:
+	var dice := maxi(solo_controller.precision_spot_dice_of(spotter), 1)
+	var faces: Array = await _solo_tray_roll(dice, 4, _solo_owner_label(spotter), "attack",
+		"Precision Spotter: %d die%s (4+) mark %s" % [dice, ("" if dice == 1 else "s"), target.get_name()])
+	var hits := 0
+	for f in faces:
+		if int(f) >= 4:
+			hits += 1
+			_solo_place_spot_marker(spotter, target)
+	if hits == 0 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Precision Spotter: %s misses the mark on %s (needed 4+)" % [
-			spotter.get_name(), target.get_name()], _solo_is_ai_unit(spotter))
+			"Precision Spotter: %s misses the mark on %s (needed 4+, %d die%s)" % [
+			spotter.get_name(), target.get_name(), dice, ("" if dice == 1 else "s")], _solo_is_ai_unit(spotter))
 
 
 ## The attack's activation completion (X1 double-shoot exploit) — shared by the single-target
@@ -10976,15 +10914,10 @@ func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: G
 ## auto-pick but the CHOICE is the player's (Versatile is "pick one", not an engine decision).
 func _solo_prompt_versatile(weapon_name: String, recommended: Dictionary) -> Dictionary:
 	var rec_ap := int(recommended.get("ap", 0)) > 0
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Versatile Attack"
-	dlg.dialog_text = "%s is Versatile (target over 9\").\nChoose the mode for this volley:" % weapon_name
-	dlg.ok_button_text = ("AP(+1) — recommended" if rec_ap else "+1 to hit — recommended")
-	dlg.get_cancel_button().text = ("+1 to hit" if rec_ap else "AP(+1)")
-	add_child(dlg)
-	# Both buttons are real choices here, so a dismissed window takes the RECOMMENDED mode.
-	var take_recommended: bool = await _solo_await_confirm(dlg, true, true)
-	dlg.queue_free()
+	# Both buttons are real choices here, so a card gone without an answer takes the RECOMMENDED mode.
+	var take_recommended: bool = await _solo_ask("Versatile Attack",
+		"%s is Versatile (target over 9\").\nChoose the mode for this volley:" % weapon_name,
+		"AP(+1) — recommended" if rec_ap else "+1 to hit — recommended", "+1 to hit" if rec_ap else "AP(+1)", true)
 	if take_recommended:
 		return recommended
 	return {"ap": 0, "hit_mod": 1} if rec_ap else {"ap": 1, "hit_mod": 0}
@@ -11144,7 +11077,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		shielded_def = AiCombatMath.guarded_defense(shielded_def, true)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
-				target.get_name(), h_over9, shielded_def], true)
+				target.get_name(), h_over9, AiCombatMath.shown_target(shielded_def)], true)
 	var covered_def: int = _solo_cover_defense(target, shielded_def)
 	# Resolver wave A parity: your volley places vs-target Marks, SPENDS Piercing-Tag markers and
 	# honours the Reckless-Piercing AP stamps — the AI path had these seams, yours silently didn't.
@@ -11250,9 +11183,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
 					_solo_rule_float(target, "Unstoppable: no penalties")
-			var to_hit: int = AiCombatMath.modified_hit_target(
-				AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))),
-				h_mod)
+			var to_hit_raw: int = AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))) - h_mod
+			var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 			if upr_ap + extra_ap > 0:
 				profile = profile.duplicate()
 				profile["ap"] = int(profile.get("ap", 0)) + upr_ap + extra_ap   # Unpredictable + Tag/Reckless AP
@@ -11270,7 +11202,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					var rec: Dictionary = AiEv.versatile_best_mode(to_hit, shot_base, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
 					vm = await _solo_prompt_versatile(pname, rec)
 					_solo_versatile_latch_write(attacker, vm)
-				to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
+				to_hit_raw -= int(vm.get("hit_mod", 0))   # D21: one sum, one clamp
+				to_hit = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 				if int(vm.get("ap", 0)) > 0:
 					profile = profile.duplicate()
 					profile["ap"] = int(profile.get("ap", 0)) + int(vm.get("ap", 0))
@@ -11283,7 +11216,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-			var hits: int = await _solo_hits(faces, to_hit, profile, dist, target, false, "You")
+			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, "You")
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
@@ -12407,11 +12340,7 @@ func _capture_bug_report() -> void:
 func _show_toast(text: String) -> void:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", 18)
-	label.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	label.add_theme_constant_override("outline_size", 4)
-	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, STATUS_LANE_TOAST)
+	_status_plate(label, STATUS_LANE_TOAST)
 	$UI.add_child(label)
 	var tw := create_tween()
 	tw.tween_interval(3.0)
@@ -12760,13 +12689,11 @@ func _process(delta: float) -> void:
 	var object_count = object_manager.get_child_count()
 
 	# Color FPS based on performance
-	var fps_color: Color
+	var fps_color := HouseStyle.tone_ink(HouseStyle.TONE_DANGER)
 	if fps >= 55:
-		fps_color = Color.GREEN
+		fps_color = HouseStyle.tone_ink(HouseStyle.TONE_OK)
 	elif fps >= 30:
-		fps_color = Color.YELLOW
-	else:
-		fps_color = Color.RED
+		fps_color = HouseStyle.tone_ink(HouseStyle.TONE_WARN)
 
 	performance_label.add_theme_color_override("font_color", fps_color)
 
@@ -12985,7 +12912,7 @@ func _on_movement_capped(consumed_inches: float, cap_inches: float, dry: bool, r
 	distance_label.text = ("%.1f/%.1f\" — %s" % [consumed_inches, cap_inches, reason]) \
 			if not reason.is_empty() else "%.1f/%.1f\"" % [consumed_inches, cap_inches]
 	distance_label.add_theme_color_override("font_color",
-			Color(1.0, 0.35, 0.3) if dry else Color(1.0, 0.78, 0.25))
+			HouseStyle.tone_ink(HouseStyle.TONE_DANGER if dry else HouseStyle.TONE_WARN))
 
 
 ## Clear distance display after measurement finishes
@@ -14502,7 +14429,7 @@ func _peer_display_name(peer_id: int) -> String:
 func _build_chat_panel() -> void:
 	_chat_panel = PanelContainer.new()
 	_chat_panel.name = "ChatPanel"
-	_chat_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+	HouseStyle.apply(_chat_panel)   # the house window (maintainer D98 = a); no corner brackets
 	# Docked bottom, just right of the LeftPanelScroll column and
 	# left of the bottom-right DiceRollerPanel, so it overlaps neither.
 	_chat_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -14516,15 +14443,15 @@ func _build_chat_panel() -> void:
 	_chat_panel.visible = false
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", HudTokens.SPACE_4)
+	vbox.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 	_chat_panel.add_child(vbox)
 
-	vbox.add_child(HudTokens.header("CHAT", "NET-04"))
+	vbox.add_child(HouseStyle.label("CHAT", HouseStyle.EYEBROW))
 
 	# Connected-player roster (filled in _rebuild_roster).
 	_roster_vbox = VBoxContainer.new()
 	_roster_vbox.name = "RosterVBox"
-	_roster_vbox.add_theme_constant_override("separation", 2)
+	_roster_vbox.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 	vbox.add_child(_roster_vbox)
 
 	# Scrollable message log (same pattern as the dice log).
@@ -14547,7 +14474,6 @@ func _build_chat_panel() -> void:
 	_chat_input.gui_input.connect(_on_chat_input_gui_input)
 	vbox.add_child(_chat_input)
 
-	_chat_panel.add_child(HudFrame.new())
 	$UI/HUD.add_child(_chat_panel)
 
 
@@ -14595,16 +14521,12 @@ func _add_chat_entry(peer_id: int, text: String) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 
-	var name_lbl := Label.new()
-	name_lbl.text = "%s:" % _peer_display_name(peer_id)
-	name_lbl.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
-	name_lbl.add_theme_color_override("font_color", _get_player_color(peer_id))
+	var name_lbl := HouseStyle.label("%s:" % _peer_display_name(peer_id), HouseStyle.SMALL)
+	name_lbl.add_theme_color_override("font_color", _get_player_color(peer_id))   # the sender's player colour
 	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	row.add_child(name_lbl)
 
-	var text_lbl := Label.new()
-	text_lbl.text = text
-	text_lbl.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
+	var text_lbl := HouseStyle.label(text, HouseStyle.SMALL)
 	text_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(text_lbl)
@@ -14631,7 +14553,7 @@ func _rebuild_roster() -> void:
 
 	for id: int in ids:
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", HudTokens.SPACE_4)
+		row.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 
 		var dot := ColorRect.new()
 		dot.color = _get_player_color(id)
@@ -14639,15 +14561,13 @@ func _rebuild_roster() -> void:
 		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(dot)
 
-		var label := Label.new()
+		var label := HouseStyle.label("", HouseStyle.CAPTION)
 		var suffix := ""
 		if id == my_id:
 			suffix = " (you)"
 		elif id == 1:
 			suffix = " (host)"
 		label.text = "%s%s" % [_peer_display_name(id), suffix]
-		label.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
-		label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 		row.add_child(label)
 
 		_roster_vbox.add_child(row)
@@ -14661,16 +14581,13 @@ func _rebuild_roster() -> void:
 		if network_manager.slot_has_human_peer(int(slot)):
 			continue
 		var ai_row := HBoxContainer.new()
-		ai_row.add_theme_constant_override("separation", HudTokens.SPACE_4)
+		ai_row.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 		var ai_dot := ColorRect.new()
 		ai_dot.color = PlayerPalette.color_for_slot(int(slot))
 		ai_dot.custom_minimum_size = Vector2(10, 10)
 		ai_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		ai_row.add_child(ai_dot)
-		var ai_label := Label.new()
-		ai_label.text = "P%d: NACHTMAHR" % int(slot)
-		ai_label.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
-		ai_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+		var ai_label := HouseStyle.label("P%d: NACHTMAHR" % int(slot), HouseStyle.CAPTION)
 		ai_row.add_child(ai_label)
 		_roster_vbox.add_child(ai_row)
 
@@ -15679,14 +15596,6 @@ func _apply_ui_theme() -> void:
 	# Apply to all file dialogs
 	save_game_dialog.theme = current_theme
 	load_game_dialog.theme = current_theme
-
-
-## Adds a corner-bracket HudFrame overlay to a HUD PanelContainer (idempotent).
-func _add_hud_frame(panel: Control) -> void:
-	if panel and not panel.has_node("HudFrame"):
-		var f := HudFrame.new()
-		f.name = "HudFrame"
-		panel.add_child(f)
 
 
 ## ============================================================================
@@ -18683,12 +18592,17 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 ## Piercing Tag ("once per game … place X markers on an enemy within 24\"/LOS; attackers remove
 ## markers before rolling to block for +AP(Y)"): the AI tags the TOUGHEST enemy; the next friendly
 ## volley against it spends every marker (+AP per marker) — see _solo_spend_piercing_tag.
+## W3-4 (a), EPOCH_67_MARKERS_BURSTS: an entry whose registry params carry `place_roll` (Piercing
+## Spotter, book: "once per activation … roll one die, on a 4+ place a marker") no longer shares
+## the once-per-GAME `piercing_tag_used` latch — it rolls the printed die (the Precision Spotter
+## shape, _solo_try_precision_spot) and gates on a per-activation-ROUND stamp instead.
 func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 	if solo_controller == null or unit == null or not _solo_is_ai_unit(unit):
 		return
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
+	var round_now: int = opr_army_manager.current_round if opr_army_manager != null else -1
 	for m in members:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0:
@@ -18696,15 +18610,33 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Piercing Tag"):
 			var ed := e as Dictionary
 			var n := str(ed["name"])
-			if bool(member.unit_properties.get("piercing_tag_used", false)):
-				continue
 			var sp: Dictionary = ed.get("params", {})
+			var place_roll := int(sp.get("place_roll", 0))
+			if place_roll > 0:
+				if int(member.unit_properties.get("piercing_spot_round", -1)) == round_now:
+					continue
+			elif bool(member.unit_properties.get("piercing_tag_used", false)):
+				continue
 			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)))
 			if tgt == null:
 				continue
-			member.unit_properties["piercing_tag_used"] = true
 			var markers: int = maxi(int((e as Dictionary).get("rating", 0)), 1)
+			if place_roll > 0:
+				member.unit_properties["piercing_spot_round"] = round_now
+				var faces: Array = await _solo_tray_roll(1, place_roll, _solo_owner_label(member), "attack",
+					"%s: %d+ marks %s" % [n, place_roll, tgt.get_name()])
+				if faces.is_empty() or int(faces[0]) < place_roll:
+					if battle_log != null:
+						_log_rule_event(BattleLog.Category.COMBAT,
+							"%s: %s misses the mark on %s (needed %d+)" % [n, member.get_name(), tgt.get_name(), place_roll], true)
+					continue
+			else:
+				member.unit_properties["piercing_tag_used"] = true
 			tgt.unit_properties["piercing_tag_markers"] = int(tgt.unit_properties.get("piercing_tag_markers", 0)) + markers
+			# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
+			# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
+			# Target, no removal clause) or spends whole (the rest of the family).
+			tgt.unit_properties["piercing_tag_source"] = n
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s places %d marker%s on %s — friendly attackers may spend them for +AP" % [
@@ -18713,12 +18645,19 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 
 ## Spend every Piercing-Tag marker on the target for +AP(markers) on THIS volley (the AI spends all
 ## at once — markers are a shared resource and the first big volley is the best use). Returns bonus.
+## D42 (a): "Piercing Target" (army-book v3.5.3, no removal clause) STANDS while the target lives —
+## the pool is read but never zeroed; the rest of the family still spends whole on first use.
 func _solo_spend_piercing_tag(target: GameUnit) -> int:
 	if target == null:
 		return 0
 	var markers := int(target.unit_properties.get("piercing_tag_markers", 0))
 	if markers <= 0:
 		return 0
+	if str(target.unit_properties.get("piercing_tag_source", "")) == "Piercing Target":
+		if battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT,
+				"Piercing Target: +AP(%d) stands while %s lives" % [markers, target.get_name()], true)
+		return markers
 	target.unit_properties["piercing_tag_markers"] = 0
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
@@ -18817,6 +18756,10 @@ func _solo_consume_tag_markers(target: GameUnit) -> int:
 ## units, pick one of them and roll X dice; each 6+ = one wound"): the Strafing trigger seam —
 ## trails vs enemy bases, nearest crossed enemy, direct wounds (no hit roll, no save; Regeneration
 ## applies — no ignore clause in the text).
+## D20 (a): "this model" is a MODEL rule (GF p.4) — each bearer (host, then each attached hero)
+## rolls off ITS OWN trails only, X dice PER crossing model, and a joined hero's own entry fires
+## too (the shared per-activation early-return dropped; each bearer's own registry loop still
+## fires once per bearer via the "once per activation" per-bearer read below).
 func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 	if unit == null or solo_controller == null or not _solo_is_ai_unit(unit) \
 			or solo_controller.last_move_paths.is_empty():
@@ -18828,14 +18771,19 @@ func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0:
 			continue
+		var own_models: Array = member.get_alive_models()
+		var own_trails: Array = []
+		for mp in solo_controller.last_move_paths:
+			var md := mp as Dictionary
+			if own_models.has(md.get("model")):
+				own_trails.append(md.get("path", []))
+		if own_trails.is_empty():
+			continue
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Crossing Attack"):
 			var ed := e as Dictionary
 			var n := str(ed["name"])
-			var dice: int = maxi(int(ed.get("rating", 0)), 1)
+			var dice_per_model: int = maxi(int(ed.get("rating", 0)), 1)
 			var wound_target := int((ed.get("params", {}) as Dictionary).get("wound_target", 6))
-			var trails: Array = []
-			for mp in solo_controller.last_move_paths:
-				trails.append((mp as Dictionary).get("path", []))
 			var crossed: Array = []
 			for eo in opr_army_manager.get_game_units_for_player(solo_controller.enemy_slot_of(member)):
 				var eu := eo as GameUnit
@@ -18843,14 +18791,20 @@ func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 					continue
 				if eu.has_method("is_attached") and eu.is_attached():
 					continue
-				if SoloController.trails_cross_unit_bases(trails, eu.models):
+				if SoloController.trails_cross_unit_bases(own_trails, eu.models):
 					crossed.append(eu)
 			if crossed.is_empty():
-				return
+				continue
 			crossed.sort_custom(func(a, b) -> bool:
 				return MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(a)) \
 					< MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(b)))
 			var target := crossed[0] as GameUnit
+			var crossing_models := 0
+			for trail in own_trails:
+				if SoloController.trails_cross_unit_bases([trail], target.models):
+					crossing_models += 1
+			crossing_models = maxi(crossing_models, 1)
+			var dice := dice_per_model * crossing_models
 			var faces: Array = await _solo_tray_roll(dice, wound_target, "AI (%s)" % member.get_name())
 			var wounds := 0
 			for f in faces:
@@ -18858,11 +18812,11 @@ func _solo_apply_crossing_attack(unit: GameUnit) -> void:
 					wounds += 1
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s(%d): %s moves through %s — %d wound%s (no save)" % [
-					n, dice, member.get_name(), target.get_name(), wounds, ("" if wounds == 1 else "s")], true)
+					"%s: %d model%s of %s cross %s — %d of %d dice wound (no save)" % [
+					n, crossing_models, ("" if crossing_models == 1 else "s"),
+					member.get_name(), target.get_name(), wounds, dice], true)
 			if wounds > 0:
 				await _solo_land_wounds(target, wounds, 0)
-			return   # once per activation
 
 
 # === Coverage wave: the Growth-Marker family (Defensive Frenzy / Piercing Growth / Precision Growth) ===
@@ -19095,13 +19049,17 @@ static func surprise_attack_pick(candidates: Array) -> GameUnit:
 	return best
 
 
-## The burst itself: the before-attacking slot in the AI activation body (main.gd:1088, the same
-## slot Storm Attack uses) AND the human activation's tail — once per game per bearer = the
-## first-activation trigger, SEAT-AGNOSTIC since the human-burst fix (STANDALONE_SWEEP_D
-## 2026-09-14: the burst used to live in the AI body only, so the human's identical bearer never
-## struck). Params ride the registry entry (range_in/trigger_target/ap, the #810 census rows) with
-## the book text as defaults; the target is the descending auto pick for BOTH seats (v1 — no
-## click prompt for a once-per-activation enemy pick exists on the table yet).
+## The burst itself: activation start in the AI body (main.gd ~1111, before the move) AND the
+## human activation's tail — once per game per bearer = the first-activation trigger,
+## SEAT-AGNOSTIC since the human-burst fix (STANDALONE_SWEEP_D 2026-09-14: the burst used to
+## live in the AI body only, so the human's identical bearer never struck). Params ride the
+## registry entry (range_in/trigger_target/ap, the #810 census rows) with the book text as
+## defaults; the target is the descending auto pick for BOTH seats (v1 — no click prompt for a
+## once-per-activation enemy pick exists on the table yet).
+## D19 (a): "the first time this unit is activated" fires the latch on the FIRST activation
+## whether or not a target exists — a bearer with no target in range this activation does NOT
+## get another try later (it stamps `surprise_attack_used` before the candidate search, not
+## after a successful pick).
 func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 	if unit == null or opr_army_manager == null or solo_controller == null:
 		return
@@ -19112,6 +19070,7 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 		var bu := b as GameUnit
 		if not solo_controller.surprise_attack_bearer_ready(bu):
 			continue
+		bu.unit_properties["surprise_attack_used"] = true
 		var range_in := float(RulesRegistry.unit_param(bu, "Surprise Attack", "range_in", 6.0))
 		var trigger := int(RulesRegistry.unit_param(bu, "Surprise Attack", "trigger_target", 2))
 		var ap := int(RulesRegistry.unit_param(bu, "Surprise Attack", "ap", 1))
@@ -19124,7 +19083,6 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 				candidates.append(hu)
 		if candidates.is_empty():
 			continue
-		bu.unit_properties["surprise_attack_used"] = true
 		var dice := maxi(_solo_unit_rating(bu, "Surprise Attack"), 1)
 		var faces: Array = await _solo_tray_roll(dice, trigger, _solo_owner_label(bu), "attack",
 			"Surprise Attack hits: %d+" % trigger)
@@ -19322,18 +19280,7 @@ func _solo_spawn_profile_stamp(carrier: GameUnit, raw: String) -> Dictionary:
 
 
 func _solo_confirm_rule_unit(rule: String, unit_name: String, count: int) -> bool:
-	var dialog := ConfirmationDialog.new()
-	dialog.title = rule
-	dialog.dialog_text = "Place %s [%d]?" % [unit_name, count]
-	var answer := {"done": false, "yes": false}
-	dialog.confirmed.connect(func() -> void: answer.merge({"done": true, "yes": true}, true))
-	dialog.canceled.connect(func() -> void: answer["done"] = true)
-	add_child(dialog)
-	dialog.popup_centered()
-	while not answer["done"]:
-		await get_tree().process_frame
-	dialog.queue_free()
-	return answer["yes"]
+	return await _solo_ask(rule, "Place %s [%d]?" % [unit_name, count], "OK", "Cancel")
 
 
 func _solo_rule_unit_shape(count: int, radius: float) -> Array:
