@@ -12415,7 +12415,6 @@ func _show_fps_advisory() -> void:
 	panel.name = "FpsAdvisory"
 	HouseStyle.apply(panel)
 	panel.add_theme_stylebox_override(&"panel", HouseStyle.warning_box())
-	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 90)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
 	panel.add_child(row)
@@ -12427,6 +12426,8 @@ func _show_fps_advisory() -> void:
 	dismiss.pressed.connect(_free_if_valid.bind(panel))
 	row.add_child(dismiss)
 	$UI.add_child(panel)
+	# After the content exists: the preset centres on the panel's real width (on an empty panel it hung off to the right).
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 90)
 	var t := create_tween()
 	t.tween_interval(20.0)
 	t.tween_callback(_free_if_valid.bind(panel))
