@@ -25,23 +25,20 @@ func after_test() -> void:
 
 # === how today's question is read and answered (the one place that knows the window kind) =========
 
-## The open question for `kind` ("action" = Clear / Sort / Next Round, "end" = End Battle), or {}.
-func _asked(kind: String) -> Dictionary:
-	var d: ConfirmationDialog = _main._action_confirm_dialog if kind == "action" else _main.end_battle_confirm_dialog
-	if d == null or not d.visible:
+## The open question (Clear / Sort / Next Round / End Battle share one card), or {}.
+func _asked(_kind: String) -> Dictionary:
+	var c: PromptCard = _main._action_confirm_card
+	if not is_instance_valid(c) or c.is_queued_for_deletion():
 		return {}
-	return {"title": d.title, "text": d.dialog_text, "ok": d.ok_button_text,
-		"press_ok": func() -> void:
-			d.confirmed.emit()
-			d.hide(),
-		"press_cancel": func() -> void:
-			d.canceled.emit()
-			d.hide()}
+	var labels := c.find_children("*", "Label", true, false)
+	return {"title": c.title, "text": (labels[1] as Label).text if labels.size() > 1 else "", "ok": c.ok_button.text,
+		"press_ok": func() -> void: c.ok_button.pressed.emit(),
+		"press_cancel": func() -> void: c.cancel_button.pressed.emit()}
 
 
 ## Whether confirming End Battle goes back to the main menu (pressing it would leave the scene).
 func _end_battle_is_wired() -> bool:
-	return _main.end_battle_confirm_dialog.confirmed.is_connected(Callable(_main, &"_on_end_battle_confirmed"))
+	return _main._pending_confirm_action == Callable(_main, &"_on_end_battle_confirmed")
 
 
 func _missing(q: Dictionary, title: String, words: String, ok: String) -> Array:
@@ -118,6 +115,24 @@ func test_end_battle_asks_first_and_goes_back_to_the_main_menu_on_ok() -> void:
 	assert_bool(str(q["text"]).contains("All unsaved progress will be lost.")).is_true()
 	assert_bool(_end_battle_is_wired()).override_failure_message("confirming End Battle no longer returns to the main menu").is_true()
 	q["press_cancel"].call()
+
+
+func test_the_question_is_one_house_card_that_keeps_the_table_out_of_reach() -> void:
+	_main._on_sort_table()
+	await _runner.simulate_frames(2)
+	var card: PromptCard = _main._action_confirm_card
+	assert_bool(card is PromptCard and card.is_inside_tree()).is_true()
+	assert_int((card.get_node("Shield") as Control).mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	assert_object((card.get_node("Shield") as Control).theme).is_same(HouseStyle.theme())
+	_main._on_clear_all()
+	assert_object(_main._action_confirm_card).override_failure_message("a second question replaced the first").is_same(card)
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	card._input(esc)
+	await _runner.simulate_frames(3)
+	assert_bool(not is_instance_valid(card) or card.is_queued_for_deletion()).override_failure_message("Esc did not cancel").is_true()
+	assert_bool(_main._pending_confirm_action.is_null()).is_true()
 
 
 func test_inventory_check_names_a_missing_line() -> void:
