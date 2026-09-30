@@ -3939,3 +3939,16 @@ func test_auto_saves_after_intent_latches_on() -> void:
 	assert_bool(SoloController.auto_saves_after_intent(false, true)).is_true()
 	assert_bool(SoloController.auto_saves_after_intent(true, false)).is_true()
 	assert_bool(SoloController.auto_saves_after_intent(true, true)).is_true()
+
+
+## D100: the hand-leaf preset arms arm 3 only without a brain; env NML_EVAL_VARIANT is the net-enabled A/B's per-run switch.
+func test_eval_variant_follows_the_preset_and_the_env_override() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	OS.set_environment("NML_EVAL_VARIANT", "")
+	assert_int(solo._eval_variant_for(SoloDifficulty.for_grade("planner_v0"))).is_equal(3)   # no brain in a unit test
+	assert_int(solo._eval_variant_for(SoloDifficulty.for_grade("nachtmahr"))).is_equal(0)
+	OS.set_environment("NML_EVAL_VARIANT", "0")
+	assert_int(solo._eval_variant_for(SoloDifficulty.for_grade("planner_v0"))).is_equal(0)
+	OS.set_environment("NML_EVAL_VARIANT", "3")
+	assert_int(solo._eval_variant_for(SoloDifficulty.for_grade("nachtmahr"))).is_equal(3)
+	OS.set_environment("NML_EVAL_VARIANT", "")

@@ -3475,6 +3475,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# NML-1073 M5 BUG-3: the joined-hero fold is a PER-SEAT knob, so it is stamped here, per
 	# pick, exactly like the line above. env NML_HERO_FOLD=1 pins it on for headless runs.
 	BattleSim.hero_fold = diff != null and diff.hero_fold
+	AiMissionEval.eval_variant = _eval_variant_for(diff)
 	# Net-guided playouts (research gate NML_PLAYOUT_NET=1): the loaded clone
 	# steers every imagined activation; OFF or no net = byte-identical heuristics.
 	# NML_PLAYOUT_NET_P<slot> overrides per seat (improvement-operator pattern,
@@ -3684,6 +3685,15 @@ func _core_node_ready() -> Object:
 			else:
 				_core_warn_once("shipped brain refused: " + str(_core_node.last_error()))
 	return _core_node
+
+
+## The hand-leaf arm for this pick: the preset's `eval_variant` only while NO brain is wired (the net was
+## calibrated on arm 0, D100). env NML_EVAL_VARIANT=<n> overrides it — the net-enabled A/B's arm switch.
+func _eval_variant_for(diff: SoloDifficulty) -> int:
+	var forced := OS.get_environment("NML_EVAL_VARIANT")
+	if forced != "":
+		return int(forced)
+	return diff.eval_variant if diff != null and not shipped_brain_ready() else 0
 
 
 ## Ship path (22.09.): true when the core is wanted AND loaded AND the packed brain was
@@ -4471,6 +4481,7 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 	AiMissionEval.fit_mode = sp_diff != null and sp_diff.eval_fit   # E4: leaf choice per preset
 	AiPlanner.playout_search = sp_diff != null and sp_diff.playout_search   # S-wave: per preset
 	BattleSim.hero_fold = sp_diff != null and sp_diff.hero_fold   # NML-1073 M5 BUG-3: per preset
+	AiMissionEval.eval_variant = _eval_variant_for(sp_diff)
 	# R3: execute the rollout intent when it is still valid (same unit, same
 	# round, target still alive) — re-deriving 1-ply here would undo the tempo
 	# choice the unit pick just made. Any mismatch falls through to the re-plan.
