@@ -730,9 +730,15 @@ static func _record_node(before: Dictionary, action: Dictionary, after: Dictiona
 		# resolve() branches on them (battle_sim.gd:590-592 spacing, :604 cast),
 		# so a corpus that does not say which were on cannot be replayed by the
 		# Rust port without guessing — the M1-2 corpus had to be probed for it.
+		# The RULES EPOCH this corpus was played under, from the act recorder's source
+		# (act_recorder.gd:496-507). The node reader takes it from `seams.rules_epoch`
+		# (`Header.seams`, core/nml-core/src/io.rs) and reads an ABSENT key as 0, which replays every
+		# `rule_on` gate on its pre-epoch branch (a fresh recording matched 42/72). Additive: a header
+		# written before this key still parses and reads 0.
 		f.store_line(JSON.stringify({"profiles": profiles,
 			"seams": {"spacing": BattleSim.spacing_enabled(),
-				"cast": BattleSim.cast_phase_enabled()}}, "", true, true))
+				"cast": BattleSim.cast_phase_enabled(), "rules_epoch": AiActRecorder.rules_epoch}},
+			"", true, true))
 	var a := action.duplicate()
 	if a.has("dest"):
 		a["dest"] = BattleSim._plain_vec3(a["dest"])
