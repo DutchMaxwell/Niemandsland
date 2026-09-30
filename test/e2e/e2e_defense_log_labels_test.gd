@@ -140,6 +140,25 @@ func test_every_contribution_gets_its_own_line(timeout := 240000) -> void:
 	await E2EBoot.settle(get_tree())
 
 
+# ===== (3b) D21 (EPOCH_68_MODIFIER_SUM): the parts are ONE sum, the log never reads 1+ =====
+
+func test_two_contributions_on_defense_3_sum_to_1_and_log_2_plus(timeout := 240000) -> void:
+	var shooter := _shooter()
+	var foe := _foe("Guards")
+	foe.unit_properties["defense"] = 3
+	foe.unit_properties["special_rules"] = ["Shielded"]
+	_buff("Warding Chant", foe, 1)
+	assert_int(_main._solo_defense_vs(foe, AiCombatMath.HIT_SOURCE_SHOOTING)) \
+		.override_failure_message("3 - 1 - 1 = 1 stays unclamped until the save target clamps the sum") \
+		.is_equal(1)
+	await _main._run_human_shooting(shooter, foe)
+	var text := _log_text()
+	assert_str(text) \
+		.override_failure_message("the log must show the clamped 2+, never 1+ (log: %s)" % text.strip_edges()) \
+		.contains("Guards is Shielded: +1 Defense (saves on 2+)")
+	await E2EBoot.settle(get_tree())
+
+
 # ===== (4) the silence case: a hex that cancels a bonus used to erase BOTH from the log =====
 
 func test_a_cancelling_hex_no_longer_silences_both_rules(timeout := 240000) -> void:

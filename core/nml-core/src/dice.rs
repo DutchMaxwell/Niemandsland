@@ -40,6 +40,13 @@ use crate::unit::{CondAp, Ctx, ShieldedAlias, ShootProfile};
 #[derive(Debug, Clone, Copy)]
 pub struct Tray {
     rng: GodotRng,
+    /// NML-1100, `EPOCH_67_MARKERS_BURSTS`: false (the default, every existing
+    /// construction site) keeps the pre-batch-D `maxi(1, count)` burn. Set
+    /// per-resolve by `resolve_stochastic_tray_on_board` (the sole production
+    /// site a real `Tray` reaches a `.roll()` from) via `set_zero_draws`, off
+    /// the RECORD's own `seams.rules_epoch` — never baked into construction,
+    /// since one long-lived `Tray` replays acts stamped at different epochs.
+    zero_draws: bool,
 }
 
 impl Tray {
@@ -49,13 +56,13 @@ impl Tray {
     /// engine and what `GodotRng::new` mirrors; a negative seed must land on
     /// the same stream on both sides.
     pub fn seeded(seed: i64) -> Tray {
-        Tray { rng: GodotRng::new(seed) }
+        Tray { rng: GodotRng::new(seed), zero_draws: false }
     }
 
     /// A tray that continues a generator already in flight — how a replay
     /// reaches a recorded position in the stream.
     pub fn from_rng(rng: GodotRng) -> Tray {
-        Tray { rng }
+        Tray { rng, zero_draws: false }
     }
 
     /// Re-seeds in place, as a second `seed_tray_rng` call would.
@@ -63,12 +70,23 @@ impl Tray {
         self.rng.seed(seed);
     }
 
-    /// One roll: `maxi(1, count)` faces of `randi_range(1, 6)`, in draw order.
-    /// `count == 0` returns ONE face — the die the table burns and reads as
-    /// nothing. Callers that asked for zero dice must ignore the value, not
+    /// NML-1100: `on` = a `count == 0` roll draws NOTHING and burns no stream
+    /// position, the table's own rules-path reading (the tray WIDGET keeps
+    /// its own display-only `maxi(1, …)`, untouched — main.gd:7951). `off` (the
+    /// default) keeps the old UI-guard-leaked-into-the-rules-path burn.
+    pub fn set_zero_draws(&mut self, on: bool) {
+        self.zero_draws = on;
+    }
+
+    /// One roll: `maxi(1, count)` faces of `randi_range(1, 6)`, in draw order
+    /// — or, from `EPOCH_67_MARKERS_BURSTS` (`zero_draws`), exactly `count`
+    /// faces, so a `count == 0` roll draws nothing. Below the gate `count ==
+    /// 0` still returns ONE face — the die the table burns and reads as
+    /// nothing; callers that asked for zero dice must ignore the value, not
     /// the draw.
     pub fn roll(&mut self, count: usize) -> Vec<u8> {
-        (0..count.max(1)).map(|_| self.rng.randi_range(1, 6) as u8).collect()
+        let n = if self.zero_draws { count } else { count.max(1) };
+        (0..n).map(|_| self.rng.randi_range(1, 6) as u8).collect()
     }
 
     /// `rng.state` — the cheap replay checkpoint GATE R already compares.
@@ -213,7 +231,7 @@ fn shielded_alias_line(def: &Ctx, def_owner: &str) -> String {
     format!(
         "{}: {def_owner} — +1 to defense rolls (saves on {}+)",
         def.shielded_alias.name(),
-        shielded_defense(def.defense, def.shielded_bonus())
+        shielded_defense(def.defense, def.shielded_bonus(), def.def_floor())
     )
 }
 
@@ -392,7 +410,11 @@ fn save_batch(
     // NOT part of the stat either — it folds onto the clamped base the way
     // it folds onto the raw one, floored at `BEST_HIT_TARGET`. Below 7 the
     // flag stays false and the wave-3 reading replays byte-exact.
-    let target = if def.growth_def_lowers {
+    let target = if def.modifier_sum {
+        // D21 (`EPOCH_68_MODIFIER_SUM`): every defence step arrives unfloored;
+        // the SUM incl. AP is clamped once, a natural 1/6 stay with the die.
+        save_target(defense - def.growth_def_mod + def.defense_mod, (eff_ap + def.growth_fortify_ap).max(0)).clamp(2, 6)
+    } else if def.growth_def_lowers {
         save_target(
             ((defense - def.growth_def_mod).clamp(2, 6) + def.defense_mod).max(BEST_HIT_TARGET),
             (eff_ap + def.growth_fortify_ap).max(0),
@@ -944,7 +966,7 @@ pub fn resolve_volley_leg(
             } else {
                 versatile_best_mode(
                     target,
-                    shielded_defense(def.defense, def.shielded_bonus()),
+                    shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()),
                     p.ap + upr_ap,
                     p.bane,
                 )
@@ -1096,19 +1118,19 @@ pub fn resolve_volley_leg(
         let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
         // Defense, in main.gd's own order: Shielded, then Guarded (over 9"),
         // then Cover — which Blast / Indirect / Ignores Cover skip (:3221).
-        let mut base = shielded_defense(def.defense, def.shielded_bonus());
+        let mut base = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
         // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost REPLACES the base
         // rule's over-9" condition ("always ... instead of only when shot or
         // charged from over 9\" away"): while one of its aliases supplied the
         // shielded half, the guarded leg's MAX reading is already on the
         // table, so the second -1 must not stack (the Fortified pair's shape
         // at :329-333).
-        base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded);
+        base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded, def.def_floor());
         shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
         let save_def = if p.blast > 1 || p.indirect || p.ignores_cover {
             base
         } else {
-            covered_defense(base, def.in_cover)
+            covered_defense(base, def.in_cover, def.def_floor())
         };
         // Wave 3 — rules-must-log: the unit-level Indirect names ("Indirect
         // when Shooting" / "Ignores Cover when Shooting", unit.rs build_for's
@@ -1335,7 +1357,7 @@ pub fn retaliate_saves_with_tray(
     if hits <= 0 {
         return (0, 0);
     }
-    let save_def = shielded_defense(def.defense, def.shielded_bonus());
+    let save_def = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
     let mut sub = ShootResult::default();
     let unsaved =
         save_batch(&ShootProfile::default(), def, def_owner, hits, save_def, 0, false, false, 1, false, tray, &mut sub);
@@ -1760,7 +1782,7 @@ pub fn resolve_melee_leg(
             let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
             // Melee reads neither Cover nor Guarded (`profile_ev` keeps both on
             // the shooting side); Shielded is the whole Defense ladder here.
-            let save_def = shielded_defense(def.defense, def.shielded_bonus());
+            let save_def = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
             shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
@@ -1994,7 +2016,7 @@ pub fn resolve_impact_pool_with_tray(
     // "Impact is not a weapon": no Deadly, no Bane, no Shred — a bare profile
     // carrying only the pool's AP, exactly as :6325 builds it.
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus()), ap, false, false, 1, false, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), ap, false, false, 1, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out
@@ -2020,7 +2042,7 @@ pub fn resolve_breath_attack_with_tray(
         return out;
     }
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus()), ap, false, false, 1, false, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), ap, false, false, 1, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out
@@ -2039,7 +2061,7 @@ pub fn resolve_storm_hits_with_tray(
     let mut out = ShootResult::default();
     if hits <= 0 { return out; }
     let bare = ShootProfile { ap, bane, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus()), ap, shred_grant, false, 1, false, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), ap, shred_grant, false, 1, false, tray, &mut out);
     out.caused = w;
     out.wounds = if bane { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
     out

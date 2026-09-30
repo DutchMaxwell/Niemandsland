@@ -327,16 +327,16 @@ func _confirm_save_prompt() -> bool:
 	if dlg == null:
 		_failure = "no visible save prompt to confirm"
 		return false
-	dlg.confirmed.emit()
+	dlg.ok_button.pressed.emit()
 	return true
 
 
-func _visible_save_prompt() -> ConfirmationDialog:
+func _visible_save_prompt() -> PromptCard:
 	if _main == null:
 		return null
 	for child in _main.get_children():
-		if child is ConfirmationDialog and (child as ConfirmationDialog).visible \
-				and (child as ConfirmationDialog).title == "Incoming fire!":
+		if child is PromptCard and (child as PromptCard).visible \
+				and (child as PromptCard).title == "Incoming fire!":
 			return child
 	return null
 

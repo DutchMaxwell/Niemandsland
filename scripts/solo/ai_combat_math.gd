@@ -123,9 +123,15 @@ static func _ints(faces: Array) -> Array[int]:
 	return out
 
 
+## A running Defense/target as the player reads it: the one clamp of the summed modifiers (D21), so a
+## logged "saves on" never says 1+ or 8+ (GF p.5: a natural 1 fails, a natural 6 succeeds).
+static func shown_target(value: int) -> int:
+	return clampi(value, BEST_HIT_TARGET, UNMODIFIED_SIX)
+
+
 ## The defender's save target after AP: a die must reach Defense + AP to block (higher AP = harder save).
 static func save_target(defense: int, armor_piercing: int) -> int:
-	return defense + maxi(armor_piercing, 0)
+	return clampi(defense + maxi(armor_piercing, 0), BEST_HIT_TARGET, UNMODIFIED_SIX)
 
 
 ## Blocked hits from the defender's save roll: faces >= (Defense + AP).
@@ -255,14 +261,14 @@ static func melee_hit_modifier(target_evasive: bool, target_melee_evasion: bool 
 ## The defender's Defense value after Shielded (army-book rule: +1 to Defense rolls = a save target one
 ## better), floored at 2+ (a natural 1 always fails a Defense roll too — core p.1 "Modifiers").
 static func shielded_defense(defense: int, is_shielded: bool) -> int:
-	return maxi(BEST_HIT_TARGET, defense - SHIELDED_DEFENSE_BONUS) if is_shielded else defense
+	return defense - SHIELDED_DEFENSE_BONUS if is_shielded else defense
 
 
 ## The defender's Defense value after Cover (GF Advanced Rules v3.5.1 p.11: the majority of the target's
 ## models in cover terrain → +1 Defense against shooting), floored at 2+ — the one arithmetic both the
 ## dice resolution (main._solo_cover_defense) and the EV metric (AiEv) share.
 static func covered_defense(defense: int, in_cover: bool) -> int:
-	return maxi(BEST_HIT_TARGET, defense - 1) if in_cover else defense
+	return defense - 1 if in_cover else defense
 
 
 ## Fortified (army-book: "units where all models have this rule take hits that count as having AP(-1),
@@ -277,7 +283,7 @@ static func fortified_ap(ap: int, is_fortified: bool) -> int:
 ## over-9" bonus, floored at 2+ like every defense-roll modifier. `applies` is the caller's range gate
 ## (shooting: volley distance over 9"; melee: the charge came from over 9").
 static func guarded_defense(defense: int, applies: bool) -> int:
-	return maxi(BEST_HIT_TARGET, defense - 1) if applies else defense
+	return defense - 1 if applies else defense
 
 
 ## Ravage(X) (army-book melee rule — official text: "When it's this model's turn to attack in melee,
