@@ -68,6 +68,17 @@ func test_menu_load_dialog_pins_english_open_cancel_and_the_nml_filter() -> void
 	assert_str(d.title).is_equal("Load game")
 
 
+func test_all_three_dialogs_carry_the_house_theme() -> void:
+	assert_object(_main.save_game_dialog.theme).is_same(HouseStyle.theme())
+	assert_object(_main.load_game_dialog.theme).is_same(HouseStyle.theme())
+	var menu: Control = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	menu.set_script(MenuProbe)
+	add_child(menu)
+	await _runner.simulate_frames(2)
+	menu._open_load_battle_dialog()
+	assert_object(menu._load_dialog.theme).is_same(HouseStyle.theme())
+
+
 func test_inventory_check_names_a_missing_filter() -> void:
 	var d := FileDialog.new()
 	assert_bool(_filters_ok(d)).is_false()

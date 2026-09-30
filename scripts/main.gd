@@ -15678,8 +15678,8 @@ func _apply_ui_theme() -> void:
 	# so it gets no tactical corner brackets and keeps its look whatever the HUD theme is.
 
 	# Apply to all file dialogs
-	save_game_dialog.theme = current_theme
-	load_game_dialog.theme = current_theme
+	save_game_dialog.theme = HouseStyle.theme()   # native FileDialogs take the theme only
+	load_game_dialog.theme = HouseStyle.theme()
 
 
 ## Adds a corner-bracket HudFrame overlay to a HUD PanelContainer (idempotent).
