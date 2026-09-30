@@ -13,7 +13,7 @@ static func style(d: AcceptDialog) -> void:
 		(d as ConfirmationDialog).get_cancel_button().custom_minimum_size.y = HouseStyle.H_ACTION
 	for n: Node in d.find_children("*", "Button", true, false):
 		var b := n as Button
-		if b == d.get_ok_button() or b.theme_type_variation != &"" or b is CheckBox:
+		if b == d.get_ok_button() or b.theme_type_variation != &"" or b is CheckBox or b is CheckButton:
 			continue
 		if d is ConfirmationDialog and b == (d as ConfirmationDialog).get_cancel_button():
 			continue
