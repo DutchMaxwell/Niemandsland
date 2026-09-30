@@ -4,12 +4,13 @@ use super::*;
     //
     // `selfplay._spells_by_kind_tally` (selfplay.py:1440) and its GDScript
     // twin (core_selfplay.gd:74-81) count `state["cast_events"]` entries'
-    // "kind" stamp from the pre-apply mark. The core's cast sub-phase pushed
-    // its rules-must-log lines with "rule"/"log" only, so every kind read ""
-    // and the tally was structurally zero. The stamp: the spell's own
-    // `effect_kind` ("damage" | "buff" | "debuff" | "utility"), the same
-    // strings the GDScript table's `by_kind` keys carry (unknown kinds are
-    // skipped by both counters). The epoch literals here are 48/47, never
+    // "kind" from the pre-apply mark. The core pushes ONE attempt event per
+    // cast (the table's `_cast_phase` shape, castparity step 4) carrying the
+    // spell's own `effect_kind` ("damage" | "buff" | "debuff" | "utility"), the
+    // same strings the GDScript table's `by_kind` keys carry (unknown kinds are
+    // skipped by both counters); the rules-must-log lines carry no kind, so a
+    // conduit/boost/interference cast still counts once. The epoch literals
+    // here are 48/47, never
     // `CURRENT_RULES_EPOCH`.
 
     use crate::acts::EPOCH_48_CASTER_BOOST;
