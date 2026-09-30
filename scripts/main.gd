@@ -15581,8 +15581,8 @@ func _apply_ui_theme() -> void:
 	# so it gets no tactical corner brackets and keeps its look whatever the HUD theme is.
 
 	# Apply to all file dialogs
-	save_game_dialog.theme = current_theme
-	load_game_dialog.theme = current_theme
+	save_game_dialog.theme = HouseStyle.theme()   # native FileDialogs take the theme only
+	load_game_dialog.theme = HouseStyle.theme()
 
 
 ## ============================================================================
@@ -15603,7 +15603,7 @@ func _on_import_opr_army() -> void:
 			await network_manager.slot_assigned
 		slot = maxi(1, network_manager.get_my_player_slot())
 	opr_import_dialog.set_player(slot)
-	opr_import_dialog.popup_centered()
+	opr_import_dialog.show()
 
 
 ## The AI-opponent dialog (maintainer request): NACHTMAHR builds its own list — pick faction + points,
@@ -17587,6 +17587,7 @@ func _init_radial_menu() -> void:
 	var control_hints := ControlHintsController.new()
 	control_hints.name = "ControlHintsController"
 	add_child(control_hints)
+	control_hints.set_dock(unit_dock)
 	object_manager.hover_changed.connect(control_hints.on_hover_changed)
 	# #162: HUMAN drops arm a take-back (the AI's direct choreography call never does).
 	object_manager.selection_dropped.connect(func(moves: Array) -> void:
