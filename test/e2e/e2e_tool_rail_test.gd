@@ -266,12 +266,15 @@ func test_terrain_lines_run_the_menus_own_handlers(timeout := 120000) -> void:
 	assert_bool(_main.terrain_overlay.deployment_colors_flipped).is_equal(not flipped)
 
 	await _click(_action("Clear table…"))
-	var confirm: ConfirmationDialog = _main._action_confirm_dialog
-	assert_bool(confirm != null and confirm.visible and confirm.title == "Clear Table").is_true()
-	confirm.hide()
+	var confirm: PromptCard = _main._action_confirm_card
+	assert_bool(is_instance_valid(confirm) and confirm.title == "Clear Table").is_true()
+	confirm.cancel_button.pressed.emit()
+	await _runner.simulate_frames(2)
 	await _click(_action("Sort table…"))
-	assert_bool(confirm.visible and confirm.title == "Sort Table").is_true()
-	confirm.hide()
+	confirm = _main._action_confirm_card
+	assert_bool(is_instance_valid(confirm) and confirm.title == "Sort Table").is_true()
+	confirm.cancel_button.pressed.emit()
+	await _runner.simulate_frames(2)
 
 	await _click(_action("Map layout…"))
 	assert_bool(_main.map_layout_editor.visible).is_true()
