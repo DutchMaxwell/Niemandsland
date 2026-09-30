@@ -67,17 +67,17 @@ def test_the_default_header_carries_eval_variant_0():
 
 def test_an_unregistered_eval_variant_is_refused_loudly():
     """`acts::read_act_header`'s own RED proof, reached through the Python
-    seam: variant 3 has no registered arm (0, 1 and 2 do; 2 = no carry term,
-    wave C G-AB), so `set_header` raises instead of silently arming variant 0
-    or panicking deep inside a rollout."""
+    seam: variant 99 has no registered arm (0 to 3 do; 2 = no carry term, wave C
+    G-AB; 3 = the round_vp currency, mission-play lane), so `set_header` raises instead of
+    silently arming variant 0 or panicking deep inside a rollout."""
     core = nml_core.load(str(REPO))
     with pytest.raises(Exception):
-        core.set_header({"profiles": {}, "knobs": {"eval_variant": 3}})
+        core.set_header({"profiles": {}, "knobs": {"eval_variant": 99}})
 
 
 def test_the_registered_marker_variant_is_accepted():
     """Ledger row 7 — variant 1 IS registered now, so the same parser that
-    refuses 3 must take 1 and carry it back out of `Core.knobs()`."""
+    refuses 99 must take 1 and carry it back out of `Core.knobs()`."""
     core = nml_core.load(str(REPO))
     core.set_header({"profiles": {}, "knobs": {"eval_variant": 1}})
     assert core.knobs()["eval_variant"] == 1
@@ -103,7 +103,7 @@ def test_an_unregistered_variant_raises_from_play_game_too():
     with pytest.raises(Exception):
         sp.play_game(
             SEED, ARMY1, ARMY2, REPO, BANK_DIR, None, sidecars=False,
-            eval_variant_player=1, eval_variant=3, **GAME,
+            eval_variant_player=1, eval_variant=99, **GAME,
         )
 
 

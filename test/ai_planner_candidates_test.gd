@@ -339,11 +339,21 @@ func test_the_reach_gate_measures_the_band_the_live_move_covers() -> void:
 	assert_int(_wide_shots("Bounder", ["Bounding"], 12, 30.0)).is_equal(0)
 
 
-func after_test() -> void:
-	AiPlanner.menu_holders = false   # the MENUHOLDERS static: pin it back so no suite sees a leak
+func before_test() -> void:
+	# The suite was written against the narrow menu: pin it (and the env caches) per test.
+	AiPlanner.menu_holders = false
 	AiPlanner._mh_env = 0
 	AiPlanner.menu_wide = false
 	AiPlanner._mw_env = 0
+
+
+func after_test() -> void:
+	# Statics leak across suites in one process: restore the SHIPPED defaults (menu_holders off,
+	# menu_wide on, env caches unread), not the values the tests pin for themselves.
+	AiPlanner.menu_holders = false
+	AiPlanner._mh_env = -1
+	AiPlanner.menu_wide = true
+	AiPlanner._mw_env = -1
 
 
 ## Second opinion 21.09.: the SPLIT. With the max-EV target A NOT yet activated, one combined
