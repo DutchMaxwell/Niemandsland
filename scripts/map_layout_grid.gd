@@ -280,7 +280,7 @@ func _draw() -> void:
 		table_size.x * 12, table_size.y * 12,
 		grid_dims.x, grid_dims.y
 	]
-	draw_string(_font(), grid_rect.position + Vector2(5, -5), size_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
+	draw_string(ThemeDB.fallback_font, grid_rect.position + Vector2(5, -5), size_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
 
 
 func _clip_line_to_rect(p1: Vector2, p2: Vector2, rect: Rect2) -> Variant:
