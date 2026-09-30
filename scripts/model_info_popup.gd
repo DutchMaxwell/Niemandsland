@@ -95,56 +95,15 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-## Creates a simple info popup programmatically (without scene).
+## Creates a simple info popup programmatically (without scene), in the house style (maintainer D98 = a).
 static func create_simple() -> ModelInfoPopup:
 	var popup = ModelInfoPopup.new()
 	popup.name = "ModelInfoPopup"
-	popup.theme = ThemeManager.get_current_theme()  # so PrimaryButton variations resolve
-	popup.set_anchors_preset(Control.PRESET_FULL_RECT)
-	popup.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	# Semi-transparent background
-	var bg = ColorRect.new()
-	bg.name = "Background"
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0, 0, 0, 0.4)
-	bg.mouse_filter = Control.MOUSE_FILTER_STOP
-	popup.add_child(bg)
-
-	# Create centered panel container (tactical dark-glass panel + hairline + shadow)
-	var panel = PanelContainer.new()
-	panel.name = "Panel"
-	panel.custom_minimum_size = Vector2(300, 200)
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	popup.add_child(panel)
-
-	# Content margin inside the panel
-	var margin = MarginContainer.new()
-	UiPolish.set_dialog_margins(margin)
-	margin.mouse_filter = Control.MOUSE_FILTER_PASS
-	panel.add_child(margin)
-
-	# VBox container
-	var vbox = VBoxContainer.new()
-	vbox.name = "VBox"
-	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
-	vbox.mouse_filter = Control.MOUSE_FILTER_PASS
-	margin.add_child(vbox)
-
-	# Tactical header (Orbitron title + amber index + accent line)
-	vbox.add_child(HudTokens.header("MODEL INFO", "/// INFO"))
+	var vbox := HouseStyle.dialog_frame(popup, "MODEL INFO", Vector2(300, 200))
 
 	# Title (dynamic — set per-model via open_with_content / _update_display)
-	var title = Label.new()
+	var title := HouseStyle.label("Model Info", HouseStyle.BODY)
 	title.name = "TitleLabel"
-	title.text = "Model Info"
-	title.add_theme_font_override("font", HudTokens.mono_font())
-	title.add_theme_font_size_override("font_size", 12)
-	title.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(title)
 	popup.title_label = title
 
@@ -160,18 +119,10 @@ static func create_simple() -> ModelInfoPopup:
 	popup.info_label = info
 
 	# Close button
-	var close_btn = Button.new()
+	var close_btn := HouseStyle.button("CLOSE", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	close_btn.name = "CloseButton"
-	close_btn.text = "CLOSE"
-	UiPolish.primary_button(close_btn)
+	close_btn.pressed.connect(popup.close)
 	vbox.add_child(close_btn)
 	popup.close_button = close_btn
-
-	# Corner-bracket chrome on top (instrumentation look; mouse-ignore)
-	panel.add_child(HudFrame.new())
-
-	# Connect signals
-	close_btn.pressed.connect(popup.close)
 	popup._signals_connected = true
-
 	return popup

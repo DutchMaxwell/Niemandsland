@@ -601,6 +601,52 @@ static func overlay_sheet(title: String, width: int) -> Dictionary:
 	return {"root": root, "sheet": sheet, "body": body, "close": header.get_node("CloseButton")}
 
 
+## A unit dialog's frame (Wounds, Caster points, Model info): `dialog` fills the screen over the scrim and
+## owns every click; a centred house panel holds the VBox it returns, headed by the eyebrow `title`. The
+## node names are the dialogs' scene paths (Panel/Margin/VBox), which the dialogs and the table look up.
+static func dialog_frame(dialog: Control, title: String, min_size: Vector2) -> VBoxContainer:
+	dialog.theme = theme()
+	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	var bg := ColorRect.new()
+	bg.name = "Background"
+	bg.color = SCRIM
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	dialog.add_child(bg)
+	var panel := PanelContainer.new()
+	panel.name = "Panel"
+	panel.theme_type_variation = PANEL_VARIANT
+	panel.custom_minimum_size = min_size
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	dialog.add_child(panel)
+	var margin := MarginContainer.new()
+	margin.name = "Margin"
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.name = "VBox"
+	vbox.add_theme_constant_override(&"separation", GAP_ROW)
+	vbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	margin.add_child(vbox)
+	vbox.add_child(label(title, EYEBROW))
+	return vbox
+
+
+## A dialog's "−  value  +" row (the dice window's stepper): the steps are named MinusButton / PlusButton
+## and press on_step(-1) / on_step(+1).
+static func step_row(row_name: String, value: Label, on_step: Callable) -> HBoxContainer:
+	var row := stepper([-1, 1], value, on_step, "Step", true)
+	row.name = row_name
+	row.get_node("Step-1").name = "MinusButton"
+	row.get_node("Step+1").name = "PlusButton"
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return row
+
+
 ## Folds a window to its header or unfolds it: hides / shows `body`, flips the collapse glyph and
 ## lets the window shrink toward its anchored edge (a bottom-anchored window keeps its bottom edge,
 ## a top-anchored one its top edge), restoring the expanded rect on unfold.

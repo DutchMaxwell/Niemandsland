@@ -151,136 +151,47 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-## Creates a simple wounds dialog programmatically (without scene).
+## Creates a simple wounds dialog programmatically (without scene), in the house style (maintainer D98 = a).
 static func create_simple() -> WoundsDialog:
 	var dialog = WoundsDialog.new()
 	dialog.name = "WoundsDialog"
-	dialog.theme = ThemeManager.get_current_theme()  # so PrimaryButton/DangerButton variations resolve
-	# Fill entire screen to block all input when visible
-	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dialog.mouse_filter = Control.MOUSE_FILTER_STOP  # Block all clicks
+	var vbox := HouseStyle.dialog_frame(dialog, "WOUNDS", Vector2(250, 200))
 
-	# Semi-transparent background to dim the scene and block input
-	var bg = ColorRect.new()
-	bg.name = "Background"
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0, 0, 0, 0.4)  # Semi-transparent black
-	bg.mouse_filter = Control.MOUSE_FILTER_STOP  # Block clicks
-	dialog.add_child(bg)
-
-	# Create centered panel container
-	var panel = PanelContainer.new()
-	panel.name = "Panel"
-	panel.custom_minimum_size = Vector2(250, 200)
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Panel captures its area
-	# Tactical background panel (deep-navy glass + hairline + shadow)
-	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	dialog.add_child(panel)
-
-	# Inner margin so content clears the corner-bracket chrome (matches the other modals).
-	var margin = MarginContainer.new()
-	margin.name = "Margin"
-	UiPolish.set_dialog_margins(margin)
-	margin.mouse_filter = Control.MOUSE_FILTER_PASS
-	panel.add_child(margin)
-
-	# VBox container
-	var vbox = VBoxContainer.new()
-	vbox.name = "VBox"
-	vbox.add_theme_constant_override("separation", UiPolish.SECTION_SEP)
-	vbox.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks to children
-	margin.add_child(vbox)
-
-	# Tactical header (Orbitron title + amber index + accent line)
-	vbox.add_child(HudTokens.header("WOUNDS", "/// MED"))
-
-	# Title (dynamic unit/model name, mono muted subtitle under the header)
-	var title = Label.new()
+	# Title (dynamic unit/model name under the header)
+	var title := HouseStyle.label("Wounds", HouseStyle.CAPTION)
 	title.name = "TitleLabel"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.text = "Wounds"
-	title.add_theme_font_override("font", HudTokens.mono_font())
-	title.add_theme_font_size_override("font_size", 12)
-	title.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(title)
 	dialog.title_label = title
 
-	# Wounds container
-	var wounds_hbox = HBoxContainer.new()
-	wounds_hbox.name = "WoundsContainer"
-	wounds_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	wounds_hbox.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks to children
-	vbox.add_child(wounds_hbox)
+	# − current / max + (the steps press _on_step)
+	dialog.wounds_label = HouseStyle.label("0 / 0", HouseStyle.VALUE)
+	dialog.wounds_label.name = "WoundsLabel"
+	var row := HouseStyle.step_row("WoundsContainer", dialog.wounds_label, dialog._on_step)
+	vbox.add_child(row)
+	dialog.minus_button = row.get_node("MinusButton")
+	dialog.plus_button = row.get_node("PlusButton")
 
-	# Minus button
-	var minus_btn = Button.new()
-	minus_btn.name = "MinusButton"
-	minus_btn.text = "-"
-	minus_btn.custom_minimum_size = Vector2(40, 40)
-	minus_btn.mouse_filter = Control.MOUSE_FILTER_STOP  # Ensure button captures input
-	wounds_hbox.add_child(minus_btn)
-	dialog.minus_button = minus_btn
-
-	# Wounds label
-	var wounds_lbl = Label.new()
-	wounds_lbl.name = "WoundsLabel"
-	wounds_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	wounds_lbl.custom_minimum_size = Vector2(80, 0)
-	wounds_lbl.text = "0 / 0"
-	wounds_lbl.add_theme_font_override("font", HudTokens.mono_font())
-	wounds_lbl.add_theme_font_size_override("font_size", 16)
-	wounds_lbl.add_theme_color_override("font_color", HudTokens.AMBER)
-	wounds_hbox.add_child(wounds_lbl)
-	dialog.wounds_label = wounds_lbl
-
-	# Plus button
-	var plus_btn = Button.new()
-	plus_btn.name = "PlusButton"
-	plus_btn.text = "+"
-	plus_btn.custom_minimum_size = Vector2(40, 40)
-	wounds_hbox.add_child(plus_btn)
-	dialog.plus_button = plus_btn
-
-	# Heal full button (primary / confirm action)
-	var heal_btn = Button.new()
-	heal_btn.name = "HealFullButton"
-	heal_btn.text = "HEAL FULL"
-	heal_btn.theme_type_variation = "PrimaryButton"
-	UiPolish.primary_button(heal_btn)
-	vbox.add_child(heal_btn)
-	dialog.heal_full_button = heal_btn
-
-	# Kill button (destructive)
-	var kill_btn = Button.new()
-	kill_btn.name = "KillButton"
-	kill_btn.text = "KILL"
-	kill_btn.theme_type_variation = "DangerButton"
-	UiPolish.primary_button(kill_btn)
-	vbox.add_child(kill_btn)
-	dialog.kill_button = kill_btn
-
-	# Close button
-	var close_btn = Button.new()
-	close_btn.name = "CloseButton"
-	close_btn.text = "CLOSE"
-	UiPolish.primary_button(close_btn)
-	vbox.add_child(close_btn)
-	dialog.close_button = close_btn
-
-	# Connect signals directly (not using _setup_ui which checks @onready vars)
-	minus_btn.pressed.connect(dialog._on_minus_pressed)
-	plus_btn.pressed.connect(dialog._on_plus_pressed)
-	heal_btn.pressed.connect(dialog._on_heal_full_pressed)
-	kill_btn.pressed.connect(dialog._on_kill_pressed)
-	close_btn.pressed.connect(dialog.close)
+	# Heal full (the main action), kill (ends the model), close
+	dialog.heal_full_button = _action(vbox, "HealFullButton", "HEAL FULL", HouseStyle.PRIMARY, dialog._on_heal_full_pressed)
+	dialog.kill_button = _action(vbox, "KillButton", "KILL", HouseStyle.DANGER_BUTTON, dialog._on_kill_pressed)
+	dialog.close_button = _action(vbox, "CloseButton", "CLOSE", HouseStyle.BUTTON, dialog.close)
 
 	# Mark signals as connected to prevent double connection in _ready
 	dialog._signals_connected = true
-
-	# Corner-bracket chrome on top (instrumentation look); must be the panel's last child
-	panel.add_child(HudFrame.new())
-
 	return dialog
+
+
+func _on_step(delta: int) -> void:
+	if delta > 0:
+		_on_plus_pressed()
+	else:
+		_on_minus_pressed()
+
+
+static func _action(box: VBoxContainer, node_name: String, text: String, variant: StringName, on_press: Callable) -> Button:
+	var b := HouseStyle.button(text, variant, HouseStyle.H_ACTION)
+	b.name = node_name
+	b.pressed.connect(on_press)
+	box.add_child(b)
+	return b

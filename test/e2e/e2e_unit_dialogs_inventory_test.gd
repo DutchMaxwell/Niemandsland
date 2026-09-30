@@ -247,6 +247,81 @@ func test_model_info_names_a_generic_object_and_closes(timeout := 120000) -> voi
 	assert_bool(d.visible).override_failure_message("Esc did not close the popup").is_false()
 
 
+# === the house look (restyle) =================================================================
+
+## Controls under `root` (engine internals skipped) with a box, font, font size or ink of their own.
+func _own_look(root: Control) -> Array:
+	var out: Array = []
+	for n: Node in [root] + root.find_children("*", "Control", true, false):
+		if n != root and not n.get_parent().get_children().has(n):
+			continue
+		var c := n as Control
+		if c.has_theme_stylebox_override(&"panel") or c.has_theme_font_override(&"font") \
+				or c.has_theme_font_size_override(&"font_size") or c.has_theme_color_override(&"font_color"):
+			out.append(c.name)
+	return out
+
+
+## Glyphs of the dialog's visible labels and buttons that their own font lacks.
+func _lacking(d: Control) -> Array:
+	var out: Array = []
+	for c: Control in _controls(d, "Label") + _controls(d, "Button"):
+		var text: String = c.text
+		for i in text.length():
+			if text[i] != " " and not c.get_theme_font(&"font").has_char(text.unicode_at(i)):
+				out.append("U+%04X in '%s'" % [text.unicode_at(i), text])
+	return out
+
+
+## Each unit dialog in the house frame: the house theme, the scrim, the house panel, an eyebrow title, the
+## number as a value, the steps as ghost buttons, the main action gold, the ending one a danger line, no
+## corner brackets, no look of its own, and every glyph in its font.
+func _assert_house_dialog(d: Control, title: String, roles: Dictionary) -> void:
+	assert_object(d.theme).override_failure_message("%s: not the house theme" % d.name).is_same(HouseStyle.theme())
+	assert_object((d.find_child("Background", true, false) as ColorRect).color).is_equal(HouseStyle.SCRIM)
+	var panel := d.find_child("Panel", true, false) as Control
+	assert_str(String(panel.theme_type_variation)).override_failure_message("%s: not a house panel" % d.name) \
+		.is_equal(String(HouseStyle.PANEL_VARIANT))
+	assert_int(d.find_children("*", "HudFrame", true, false).size()).override_failure_message("%s: brackets" % d.name) \
+		.is_equal(0)
+	var eyebrow := false
+	for l: Label in _controls(d, "Label"):
+		eyebrow = eyebrow or (l.text == title and l.theme_type_variation == HouseStyle.EYEBROW)
+	assert_bool(eyebrow).override_failure_message("%s: no eyebrow title '%s'" % [d.name, title]).is_true()
+	for node_name: String in roles:
+		var c := d.find_child(node_name, true, false) as Control
+		assert_str(String(c.theme_type_variation) if c != null else "<missing>").override_failure_message(
+			"%s/%s has the wrong role" % [d.name, node_name]).is_equal(String(roles[node_name]))
+	assert_array(_own_look(d)).override_failure_message("%s dresses itself: %s" % [d.name, _own_look(d)]).is_empty()
+	assert_array(_lacking(d)).override_failure_message("%s: its font lacks %s" % [d.name, _lacking(d)]).is_empty()
+
+
+func test_the_unit_dialogs_wear_the_house_style(timeout := 120000) -> void:
+	var u := _hero()
+	_rmc()._on_action_selected("wounds", {"model_instance": u.models[0], "game_unit": u})
+	await _runner.simulate_frames(3)
+	_assert_house_dialog(_rmc().wounds_dialog, "WOUNDS", {"WoundsLabel": HouseStyle.VALUE,
+		"MinusButton": HouseStyle.BUTTON, "PlusButton": HouseStyle.BUTTON, "HealFullButton": HouseStyle.PRIMARY,
+		"KillButton": HouseStyle.DANGER_BUTTON, "CloseButton": HouseStyle.BUTTON})
+	_rmc().wounds_dialog.close()
+	_rmc()._on_action_selected("casts", {"game_unit": u})
+	await _runner.simulate_frames(3)
+	_assert_house_dialog(_rmc().casts_dialog, "CASTS", {"CastsLabel": HouseStyle.VALUE,
+		"MinusButton": HouseStyle.BUTTON, "PlusButton": HouseStyle.BUTTON, "ResetButton": HouseStyle.DANGER_BUTTON,
+		"CloseButton": HouseStyle.PRIMARY})
+	var spells := _controls(_rmc().casts_dialog, "RichTextLabel")[0] as RichTextLabel
+	assert_str(spells.text).override_failure_message("the spell names are not in the house accent") \
+		.contains("[color=#%s]Bolt" % HouseStyle.ACCENT.to_html(false))
+	_rmc().casts_dialog.close()
+	var obj := Node3D.new()
+	obj.name = "RuinedTower"
+	_main.add_child(obj)
+	_rmc()._on_action_selected("info", {"object": obj})
+	await _runner.simulate_frames(3)
+	_assert_house_dialog(_rmc().model_info_popup, "MODEL INFO", {"TitleLabel": HouseStyle.BODY,
+		"CloseButton": HouseStyle.BUTTON})
+
+
 # === the check itself =========================================================================
 
 func test_the_inventory_check_names_a_removed_control(timeout := 120000) -> void:
