@@ -2035,18 +2035,28 @@ fn tray_precision_markers(
                 // the NEAREST enemy within the entry's range in sight.
                 let Some(ti) = nearest_precision_target(next, bearer, b, seams) else { continue; };
                 next.spot_round[bearer] = next.round;
-                let face = tray.roll(1).first().copied().unwrap_or(1) as i64;
+                // NML-980, EPOCH_67_MARKERS_BURSTS: "roll one die" is per MODEL
+                // (GF p.4) — this bearer's own alive model count, one laser
+                // each; below the gate the old single-die reading stands.
+                let dice = if rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS) {
+                    next.alive[bearer].max(1) as usize
+                } else {
+                    1
+                };
+                let faces = tray.roll(dice);
+                let hits = faces.iter().filter(|&&f| f as i64 >= b.place_roll).count() as i64;
                 let tn = statics[next.roster.profile[ti]].name.clone();
-                if face < b.place_roll {
+                if hits <= 0 {
                     shot.log.push(format!(
-                        "Precision Spotter: {} misses the mark on {} (needed {}+)",
-                        owner, tn, b.place_roll));
+                        "Precision Spotter: {} misses the mark on {} (needed {}+, {} di{})",
+                        owner, tn, b.place_roll, dice, if dice == 1 { "e" } else { "ce" }));
                     continue;
                 }
-                next.spot_markers[ti] += b.markers;
+                let placed = b.markers * hits;
+                next.spot_markers[ti] += placed;
                 shot.log.push(format!(
                     "Precision Spotter: {} marks {} ({} marker{} — attackers may remove markers for +1 to hit each)",
-                    owner, tn, b.markers, if b.markers == 1 { "" } else { "s" }));
+                    owner, tn, placed, if placed == 1 { "" } else { "s" }));
             } else {
                 // TAG / TARGET — the piercing twins' TOUGHEST-enemy pick.
                 let probe = UtilityBuff {
