@@ -23,10 +23,15 @@
 //!     contacts are plentiful enough to gate the strike/morale/rout half.
 //!     Carries 23 routs and 17 newly-shaken units.
 //!   * `CAST` — EVERY node of the cast-ON recording (`NML_SIM_CAST=1`, spacing
-//!     also on) whose activation spent a caster token: 99 of 2000, 33 each on
+//!     also on) whose activation spent a caster token: 72 of 2000, 24 each on
 //!     HOLD, RUSH and CHARGE. That HOLD/RUSH/CHARGE split IS the point of
 //!     NML-1069 — the legacy rider only ever cast inside a shoot pick, so a
 //!     rushing or charging caster never cast at all.
+//!
+//! The CAST fixture was RE-RECORDED again on 30.09. (castparity step 2, main + the
+//! `cast_events` plain key) and its header stamps `rules_epoch` 67 by hand: the
+//! recorder writes only `spacing`/`cast`, the table plays the newest rules, so a
+//! replay at the default epoch 0 misses the boost (measured: 42/72 exact vs 72/72).
 //!
 //! All four were RE-RECORDED for NML-1073 S1d (seed 27, robot_legions_1000 vs
 //! blessed_sisters_1000, `NML_NODE_DUMP_MAX=2000`), same recipe as M1-3. S1d
@@ -45,7 +50,8 @@
 //! skipped: a node the port cannot resolve fails the test by name.
 
 use nml_core::{
-    build_statics, load_nodes, read_nodes, reply_threat, resolve, score, Seams, State,
+    build_statics, cast_attempts_diff, load_nodes, read_nodes, reply_threat, resolve, score, Seams,
+    State,
 };
 
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_200.jsonl");
@@ -429,13 +435,37 @@ fn gate_b_cast_subphase_reproduces_every_recorded_cast() {
             "node #{}: cast node does not match state_after",
             i + 1
         );
+        // The table's cast-attempt events (castparity): the gate the boolean above never was.
+        if let Some(d) = cast_attempts_diff(&got, &node.state_after) {
+            panic!("node #{}: {d}", i + 1);
+        }
         per_kind[node.action.kind as usize] += 1;
         for u in 0..got.units() {
             spent += node.state_before.casts[u] - got.casts[u];
         }
     }
-    assert_eq!(per_kind, [33, 0, 33, 33], "HOLD / ADVANCE / RUSH / CHARGE casts");
-    assert_eq!(spent, 153, "tokens the sub-phase spent across the slice");
+    assert_eq!(per_kind, [24, 0, 24, 24], "HOLD / ADVANCE / RUSH / CHARGE casts");
+    assert_eq!(spent, 144, "tokens the sub-phase spent across the slice");
+}
+
+/// The comparator can fail: one perturbed field per kind of mismatch is seen.
+#[test]
+fn the_cast_attempt_comparator_can_fail() {
+    let corpus = load_nodes(CAST).expect("fixture loads");
+    let want = &corpus.nodes[0].state_after;
+    assert_eq!(cast_attempts_diff(want, want), None, "a state agrees with itself");
+    let perturbed = |key: &str, val: serde_json::Value| {
+        let mut got = want.clone();
+        std::rc::Rc::make_mut(got.cast_events.last_mut().expect("the node cast"))[key] = val;
+        got
+    };
+    let got = perturbed("p_success", serde_json::json!(0.123));
+    assert!(cast_attempts_diff(&got, want).unwrap().contains("p_success"));
+    let got = perturbed("target", serde_json::json!("nobody"));
+    assert!(cast_attempts_diff(&got, want).unwrap().contains("target"));
+    let mut got = want.clone();
+    got.cast_events.clear();
+    assert!(cast_attempts_diff(&got, want).unwrap().contains("attempt(s)"));
 }
 
 /// Red-green for the seam: with `cast` off, `resolve` runs the LEGACY rider
@@ -462,12 +492,12 @@ fn the_cast_subphase_is_load_bearing() {
             broken += 1;
         }
     }
-    assert_eq!(broken, 99, "the legacy rider reproduces none of the recorded casts");
+    assert_eq!(broken, 72, "the legacy rider reproduces none of the recorded casts");
 }
 
 /// Red-green for the recorded POST-move sight answers: dropping them back to
 /// the pre-move matrix of `state_before` must break the casts that only became
-/// possible after the caster moved. 41 of the 93 do — proof that the answer is
+/// possible after the caster moved. 30 of the 72 do — proof that the answer is
 /// a real input and not decoration.
 #[test]
 fn the_post_move_cast_los_is_a_real_input() {
@@ -488,7 +518,7 @@ fn the_post_move_cast_los_is_a_real_input() {
             broken += 1;
         }
     }
-    assert_eq!(broken, 45, "moved casters need the post-move sight answers");
+    assert_eq!(broken, 30, "moved casters need the post-move sight answers");
 }
 
 /// `AiSpell.official_pick_order` ai_spell.gd:305-312 — the rotation IS rule

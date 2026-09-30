@@ -550,3 +550,30 @@ func test_tail_uses_the_referees_eligibility_set() -> void:
 	assert_float(tail.call()).is_equal_approx(0.0, 0.001)
 	su["ambush_arrived_round"] = 1                              # landed last round
 	assert_float(tail.call()).is_equal_approx(1.0, 0.001)
+
+
+func _vp_state(vp: Array) -> Dictionary:
+	var state := _state([
+		_unit(1, [Vector3(1.0 * IN2M, 0, 0)], "Holder"),
+		_unit(2, [Vector3(8.0 * IN2M, 0, 0)], "Approacher"),
+	], [Vector3.ZERO], [0], 2, 4)
+	state["scoring"] = "round_vp"
+	state["vp"] = vp
+	state["vp_flavour"] = {"majority": "round"}
+	state["vp_memo"] = {}
+	return state
+
+
+## The core's pin (test_parity.py `test_vp_aware_hand_score_matches_the_table_pin`): same board, same numbers.
+func test_vp_arm_matches_the_core_pin() -> void:
+	AiMissionEval.eval_variant = 3
+	var behind := _vp_state([1, 3])
+	assert_float(AiMissionEval.score(behind, 1)).is_equal_approx(0.5 + 0.5 / 6.0, 1e-9)
+	assert_float(AiMissionEval.score(behind, 2)).is_equal_approx(0.5 - 0.5 / 6.0, 1e-9)
+	assert_float(AiMissionEval.score(_vp_state([3, 1]), 1)).is_greater(AiMissionEval.score(behind, 1))
+	AiMissionEval.eval_variant = 0
+	assert_float(AiMissionEval.score(_vp_state([3, 1]), 1)).is_equal(AiMissionEval.score(behind, 1))   # variant 0 is VP-blind
+
+
+func after_test() -> void:
+	AiMissionEval.eval_variant = 0

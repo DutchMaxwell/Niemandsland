@@ -31,7 +31,7 @@ use crate::acts::{
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
-    EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS,
+    EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -293,39 +293,82 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
 }
 
 /// Deadly(X) landing PER MODEL — the table's `SoloController.apply_deadly_wounds`
-/// (solo_controller.gd:8333-8352, GF v3.5.1 p.14 "no carry-over", audit
-/// 2026-09-13 §2.1): each unsaved wound goes to the alive model with the MOST
-/// remaining wounds (ties keep the array order, the table's strict `>`), deals
-/// X capped at that model's remaining wounds, and the surplus is WASTED —
-/// nothing spills onto the next model. Returns the wounds actually dealt (the
-/// table's `dealt`).
-pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64) -> i64 {
+/// / `deadly_pick` (solo_controller.gd:9191-9233, GF v3.5.1 p.13 "no carry-over"
+/// and p.15 Tough "continue to put wounds on the tough model with most wounds
+/// … until it is killed" and "heroes must be assigned wounds last, even if
+/// already wounded"). Below `EPOCH_67_MARKERS_BURSTS` (D17): the OLD reading —
+/// whichever alive model has the MOST remaining wounds (ties keep array order,
+/// strict `>`, so a FRESH Tough model always wins over a damaged one), host
+/// only, surplus wasted once the host is wiped. From the gate: host slots
+/// first, the attached hero's models only once the host is fully wiped
+/// (`state.attached[ti]`); within a member, an ALREADY-WOUNDED Tough slot
+/// (current < that slot's own max) goes first — finish it off before starting
+/// a fresh one; with none wounded, `land_wounds`'s own slot order (index 0)
+/// decides, the same casualty-order convention the plain wound path already
+/// uses. `x` capped at that model's remaining wounds each hit, no carry-over
+/// either way. Returns the wounds actually dealt (the table's `dealt`).
+pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64, seams: Seams) -> i64 {
     let x = deadly_x.max(1);
     let mut dealt = 0i64;
+    let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
+    let chain: Vec<usize> = if epoch67 && seams.hero_attach {
+        std::iter::once(ti).chain(state.attached[ti].iter().copied()).collect()
+    } else {
+        vec![ti]
+    };
+    // A local mirror of each chain member's per-slot max, aligned to
+    // `state.wounds[member]` at the START of this call and kept aligned by
+    // removing the same index on both sides as models die within the loop
+    // below (State only carries the CURRENT wounds; the max lives on the
+    // static Profile and never shrinks on its own). Read ONLY on the new
+    // leg — a below-gate call must not touch `Profile` at all, so a fixture
+    // with fewer profiles than roster entries (every pre-batch-D test) keeps
+    // replaying exactly as it did.
+    let mut max_of: Vec<Vec<i64>> = if epoch67 {
+        chain.iter().map(|&m| state.profile(m).wounds_max.clone()).collect()
+    } else {
+        Vec::new()
+    };
     for _ in 0..unsaved.max(0) {
-        if state.wounds[ti].is_empty() {
-            break; // unit wiped — the remaining Deadly wounds are wasted
-        }
-        let mut best = 0usize;
-        for (i, w) in state.wounds[ti].iter().enumerate() {
-            if *w > state.wounds[ti][best] {
-                best = i;
+        let Some(ci) = chain.iter().position(|&m| !state.wounds[m].is_empty()) else {
+            break; // everything in the chain is dead — the remaining wounds are wasted
+        };
+        let m = chain[ci];
+        let best = if epoch67 {
+            (0..state.wounds[m].len())
+                .find(|&i| {
+                    max_of[ci].get(i).copied().unwrap_or(1) > 1
+                        && state.wounds[m][i] < max_of[ci][i]
+                })
+                .unwrap_or(0)
+        } else {
+            let mut b = 0usize;
+            for (i, w) in state.wounds[m].iter().enumerate() {
+                if *w > state.wounds[m][b] {
+                    b = i;
+                }
             }
-        }
-        let take = x.min(state.wounds[ti][best]);
+            b
+        };
+        let take = x.min(state.wounds[m][best]);
         dealt += take;
-        state.wounds[ti][best] -= take;
-        if state.wounds[ti][best] <= 0 {
-            if state.positions[ti].len() == 1 { drop_carried(state, ti); }
-            state.wounds[ti].remove(best);
-            state.positions[ti].remove(best);
+        state.wounds[m][best] -= take;
+        if state.wounds[m][best] <= 0 {
+            if state.positions[m].len() == 1 { drop_carried(state, m); }
+            state.wounds[m].remove(best);
+            state.positions[m].remove(best);
             // radii stay aligned with positions or the base-edge measure lies.
-            if !state.radii[ti].is_empty() {
-                state.radii[ti].remove(best);
+            if !state.radii[m].is_empty() {
+                state.radii[m].remove(best);
+            }
+            if epoch67 && best < max_of[ci].len() {
+                max_of[ci].remove(best);
             }
         }
     }
-    state.alive[ti] = state.positions[ti].len() as i64;
+    for &m in &chain {
+        state.alive[m] = state.positions[m].len() as i64;
+    }
     dealt
 }
 
@@ -544,7 +587,7 @@ pub(crate) fn tray_breath_attack(
         }
         let ut = &statics[next.roster.profile[ti]];
         let def = ctx_of(ut, next, ti);
-        let sdef = shielded_defense(def.defense, def.shielded_bonus());
+        let sdef = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
         let alive_t = combined_alive(next, ti, seams);
         let score = (BREATH_BLAST.min(alive_t) as f64) * (1.0 - block_chance(sdef, BREATH_AP, false));
         if score > best {
@@ -973,7 +1016,7 @@ pub(crate) fn tray_strafing(
     // defender's live context, the members at their own Quality.
     let d = modifier_distance_in(next, si, target, seams);
     let ut = &statics[next.roster.profile[target]];
-    let mut def = ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch);
+    let mut def = with_modifier_sum(ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch), seams.rules_epoch);
     // D-STEALTH — the strafe volley reads the defender's live context the
     // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
     // the def build carries the same terrain gate.
@@ -1023,7 +1066,7 @@ pub(crate) fn tray_strafing(
     }
     land_wounds(next, target, shot.absorb(r));
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-        let dl = land_deadly_wounds(next, target, post, dx);
+        let dl = land_deadly_wounds(next, target, post, dx, seams);
         shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
     }
     if shooting_morale_trigger(next, ut, target, alive_before, wounds_before) {
@@ -1992,18 +2035,28 @@ fn tray_precision_markers(
                 // the NEAREST enemy within the entry's range in sight.
                 let Some(ti) = nearest_precision_target(next, bearer, b, seams) else { continue; };
                 next.spot_round[bearer] = next.round;
-                let face = tray.roll(1).first().copied().unwrap_or(1) as i64;
+                // NML-980, EPOCH_67_MARKERS_BURSTS: "roll one die" is per MODEL
+                // (GF p.4) — this bearer's own alive model count, one laser
+                // each; below the gate the old single-die reading stands.
+                let dice = if rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS) {
+                    next.alive[bearer].max(1) as usize
+                } else {
+                    1
+                };
+                let faces = tray.roll(dice);
+                let hits = faces.iter().filter(|&&f| f as i64 >= b.place_roll).count() as i64;
                 let tn = statics[next.roster.profile[ti]].name.clone();
-                if face < b.place_roll {
+                if hits <= 0 {
                     shot.log.push(format!(
-                        "Precision Spotter: {} misses the mark on {} (needed {}+)",
-                        owner, tn, b.place_roll));
+                        "Precision Spotter: {} misses the mark on {} (needed {}+, {} di{})",
+                        owner, tn, b.place_roll, dice, if dice == 1 { "e" } else { "ce" }));
                     continue;
                 }
-                next.spot_markers[ti] += b.markers;
+                let placed = b.markers * hits;
+                next.spot_markers[ti] += placed;
                 shot.log.push(format!(
                     "Precision Spotter: {} marks {} ({} marker{} — attackers may remove markers for +1 to hit each)",
-                    owner, tn, b.markers, if b.markers == 1 { "" } else { "s" }));
+                    owner, tn, placed, if placed == 1 { "" } else { "s" }));
             } else {
                 // TAG / TARGET — the piercing twins' TOUGHEST-enemy pick.
                 let probe = UtilityBuff {
@@ -2424,7 +2477,7 @@ pub(crate) fn tray_retreating_strike(
     );
     if gap > RETREATING_STRIKE_REACH_IN { return; }
     let def_owner = statics[next.roster.profile[ti]].name.clone();
-    let def = ctx_live(ctx_of(&statics[next.roster.profile[ti]], next, ti), statics, next, ti, true, seams.rules_epoch);
+    let def = with_modifier_sum(ctx_live(ctx_of(&statics[next.roster.profile[ti]], next, ti), statics, next, ti, true, seams.rules_epoch), seams.rules_epoch);
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
     for bearer in bearers {
@@ -2846,6 +2899,14 @@ pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
 /// The regen fold's 0-means-unset MIN (the `regen_targets` stamp's own rule).
 fn fold_min(have: i64, cand: i64) -> i64 {
     if cand > 0 && (cand < have || have == 0) { cand } else { have }
+}
+
+/// D21 (`EPOCH_68_MODIFIER_SUM`) — the DICE paths stamp the summed save target off the RECORD's epoch
+/// (Amendment B1); the EV imagination (`ctx_live(.., CURRENT_RULES_EPOCH)` and the menu) never calls
+/// this, so recorded scores replay byte-exact.
+pub(crate) fn with_modifier_sum(mut c: Ctx, rules_epoch: u32) -> Ctx {
+    c.modifier_sum = rule_on(rules_epoch, EPOCH_68_MODIFIER_SUM);
+    c
 }
 
 pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, melee: bool, rules_epoch: u32) -> Ctx {
@@ -4310,7 +4371,7 @@ fn strike_phase(
         }
     }
     let ut = &statics[next.roster.profile[ti]];
-    let mut def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch);
+    let mut def = with_modifier_sum(ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch), seams.rules_epoch);
     // D-STEALTH — the def build's terrain gate (the melee leg consumes the
     // same closed alias the shooting fold does).
     stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
@@ -4347,6 +4408,7 @@ fn strike_phase(
                     crate::combat::reliable_quality(att.quality,
                         prof36.map(|p| p.reliable).unwrap_or(false)),
                     (prof36.is_some() && prof36.unwrap().thrust) || att.thrust_grant,
+                    crate::combat::BEST_HIT_TARGET,
                 ),
                 &def, prof36, &mut shot.log);
             att.versatile_pick_hit = vh;
@@ -4415,7 +4477,7 @@ fn strike_phase(
     // (main.gd:6190-6191).
     let mut dealt = 0i64;
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-        let d = land_deadly_wounds(next, ti, post, dx);
+        let d = land_deadly_wounds(next, ti, post, dx, seams);
         dealt += d;
         shot.log.push(format!(
             "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
@@ -5322,11 +5384,6 @@ fn cast_phase(
     // target), planned ONCE at the first face that produces a pick (the
     // face that names the attempt and pays for it, like the threshold).
     let mut boost_plan: Option<(i64, i64, i64, i64, i64, i64)> = None;
-    // D-MAGIC telemetry (CAST_FORK_2026-09-16.md Finding 2) — the kind stamp
-    // `_spells_by_kind_tally` counts (core_selfplay.gd:74-81): the FIRST
-    // face's spell names the attempt (battle_sim.gd `_cast_phase`'s own
-    // event), and the pushed cast entries carry its `effect_kind`.
-    let mut cast_kind = "";
     for d3 in 1..=3i64 {
         let Some((idx, ti, ou)) =
             pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los, &origins, seams.rules_epoch)
@@ -5363,6 +5420,23 @@ fn cast_phase(
             });
         let boost = plan.0;
         let p_success = cast_success_chance_vs(casting_net, boost, plan.3);
+        // The cast ATTEMPT event, the table's own shape (battle_sim.gd `_cast_phase`):
+        // the FIRST face's spell names it, and it is the only entry the
+        // `_spells_by_kind_tally` counts (the log lines below carry no kind).
+        if cost.is_none() {
+            let mut ev = serde_json::json!({
+                "spell": spells[idx].name, "kind": spells[idx].effect_kind,
+                "cost": spells[idx].threshold, "target": state.roster.keys[ti],
+                "p_success": p_success, "boost": boost, "interference": plan.3,
+            });
+            if ou != si {
+                ev["origin"] = serde_json::json!({
+                    "unit": state.roster.keys[ou],
+                    "position": geom::centre(&state.positions[ou]),
+                });
+            }
+            state.cast_events.push(Rc::new(ev));
+        }
         if origin_mod != 0 {
             // Rules-must-log (#782), the table's own line shape (main.gd
             // `_solo_resolve_one_cast`).
@@ -5371,12 +5445,11 @@ fn cast_phase(
                 statics[state.roster.profile[ci]].name, statics[state.roster.profile[ou]].name, origin_mod
             );
             trace_rule("cast", "Spell Conduit", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Conduit", "log": line, "kind": spells[idx].effect_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Conduit", "log": line })));
         }
         apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success, seams, rng.as_deref_mut());
         if cost.is_none() {
             cost = Some(spells[idx].threshold);
-            cast_kind = &spells[idx].effect_kind;
         }
     }
     if let Some(c) = cost {
@@ -5400,7 +5473,7 @@ fn cast_phase(
                 statics[state.roster.profile[*u]].name, take, statics[state.roster.profile[ci]].name
             );
             lend_log.push(line.clone());
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line, "kind": cast_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line })));
         }
         // Wave 6 (port-caster-boost) — the BOOST tokens ride the same spend
         // order: the caster's own leftover first, then the helpers
@@ -5420,7 +5493,7 @@ fn cast_phase(
             }
             let line = format!("Caster: {} tokens spent (own {}, helpers {}), target 4+ -> {}+", boost, bown, boost - bown, target);
             trace_rule("cast", "Caster", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line, "kind": cast_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
         }
         // Wave 6 (port-caster-interference) — the OPPOSING casters' tokens
         // ride the same payment block, AFTER the boost (the table spends
@@ -5444,7 +5517,7 @@ fn cast_phase(
                 inter, from.join(", "), itarget, ifinal
             );
             trace_rule("cast", "Caster", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line, "kind": cast_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
         }
     }
 }
@@ -5738,7 +5811,7 @@ fn versatile_latch(
     };
     let (hit_mod, ap_mod) = crate::combat::versatile_best_mode(
         hit_target,
-        shielded_defense(def.defense, def.shielded_bonus()),
+        shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()),
         ap,
         bane,
     );
@@ -5887,6 +5960,10 @@ pub fn resolve_stochastic_tray_on_board(
     rng: &mut GodotRng,
     tray: &mut Tray,
 ) -> Result<(State, ShootResult), Unsupported> {
+    // NML-1100 (D76/W3-6 a): this is the sole production site a real `Tray`
+    // reaches a `.roll()` from, so the record's own epoch decides the
+    // zero-draw reading for every nested `tray_*` call this resolve makes.
+    tray.set_zero_draws(rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS));
     let mut shot = ShootResult::default();
     let next = resolve_with(
         statics,
@@ -7333,7 +7410,7 @@ fn resolve_with(
                             // volley (+1 to hit per marker), once per group.
                             let precision_hit = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
                             let ut_g = &statics[next.roster.profile[g.ti]];
-                            let mut def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch);
+                            let mut def = with_modifier_sum(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), seams.rules_epoch);
                             // D-STEALTH — the def build's terrain gate: the alias
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
@@ -7522,7 +7599,7 @@ fn resolve_with(
                             // each unsaved wound ×X on the model with the most
                             // remaining wounds, capped there, surplus wasted.
                             for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-                                let d = land_deadly_wounds(&mut next, g.ti, post, dx);
+                                let d = land_deadly_wounds(&mut next, g.ti, post, dx, seams);
                                 shot.log.push(format!(
                                     "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
                             }
