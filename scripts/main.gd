@@ -3518,9 +3518,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			ai_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
-		var to_hit: int = AiCombatMath.modified_hit_target(
-			AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false))),
-			ai_mod)
+		var to_hit_raw: int = AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false))) - ai_mod
+		var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 		if upr_ap > 0:
 			profile = profile.duplicate()
 			profile["ap"] = int(profile.get("ap", 0)) + upr_ap   # Unpredictable AP(+1) leg (never mutate source)
@@ -3534,7 +3533,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			if fresh:
 				vm = AiEv.versatile_best_mode(to_hit, shot_base, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
 				_solo_versatile_latch_write(member, vm)
-			to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
+			to_hit_raw -= int(vm.get("hit_mod", 0))   # D21: folds into the SAME sum, clamped once
+			to_hit = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 			if int(vm.get("ap", 0)) > 0:
 				profile = profile.duplicate()
 				profile["ap"] = int(profile.get("ap", 0)) + int(vm.get("ap", 0))
@@ -3548,7 +3548,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if bool(profile.get("limited", false)):
 			solo_controller.mark_limited_used(member, profile)   # once per game — spent on the roll (wave 5)
 		await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-		var hits: int = await _solo_hits(faces, to_hit, profile, dist_in, target, false, "AI (%s)" % attacker.get_name())
+		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % attacker.get_name())
 		if battle_log != null:
 			var sight_note: String = "" if sighted >= member.get_alive_count() else " (%d/%d models sighted)" % [sighted, member.get_alive_count()]
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s%s — %d hit%s" % [
@@ -4800,8 +4800,9 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 ## multiplies "after resolving other special rules"), which then scales each hit ×min(X, target models).
 ## Every multiplication is battle-logged so it is VISIBLE. Uses the shared AiCombatMath.
 func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "") -> int:
-	if bool(profile.get("precise", false)):   # Precise: flat +1 to hit — one choke point for every attack path
-		to_hit = AiCombatMath.modified_hit_target(to_hit, 1)
+	# `to_hit` is the caller's UNCLAMPED summed target (D21): Precise's flat +1 folds into that sum and the
+	# one clamp happens here, so a penalty the old per-step clamp swallowed still counts against the +1.
+	to_hit = AiCombatMath.modified_hit_target(to_hit, 1 if bool(profile.get("precise", false)) else 0)
 	var hits: int = AiCombatMath.count_hits(faces, to_hit)
 	if bool(profile.get("relentless", false)):
 		var rel_bonus: int = AiCombatMath.relentless_bonus_hits(faces, dist_in)
@@ -6546,8 +6547,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 						if name_unstop else "Unstoppable: negative to-hit modifiers ignored", true)
 			# S1-01: Thrust is a CHARGE bonus (p.14 "When charging") — the strike-back runs charging=false.
 			var thrusting: bool = charging and bool(profile.get("thrust", false))
-			var to_hit: int = 6 if fatigued else AiCombatMath.modified_hit_target(
-				AiCombatMath.thrust_to_hit(strike_quality, thrusting), m_mod)
+			var to_hit_raw: int = 6 if fatigued else AiCombatMath.thrust_to_hit(strike_quality, thrusting) - m_mod
+			var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 			if thrusting and battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "Thrust: AP(+1) on the charge" if fatigued
 					else "Thrust: +1 to hit and AP(+1) on the charge", true)
@@ -6564,7 +6565,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					vm = AiEv.versatile_best_mode(to_hit, _solo_defense_vs(strike_unit, AiCombatMath.HIT_SOURCE_MELEE), int(profile.get("ap", 0)), bool(profile.get("bane", false)))
 					_solo_versatile_latch_write(striker, vm)
 				if not fatigued:
-					to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
+					to_hit_raw -= int(vm.get("hit_mod", 0))   # D21: one sum, one clamp
+					to_hit = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 				v_ap = int(vm.get("ap", 0))
 				if battle_log != null and fresh:
 					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
@@ -6577,7 +6579,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(striker, profile, faces)   # resolver wave A: natural 1s wound the striker
-			var hits: int = await _solo_hits(faces, to_hit, profile, 0.0, defender, charging, _solo_owner_label(striker))
+			var hits: int = await _solo_hits(faces, to_hit_raw, profile, 0.0, defender, charging, _solo_owner_label(striker))
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), defender.get_name(), hits, ("" if hits == 1 else "s")], true)
@@ -6643,7 +6645,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 							bt_name, bt_ones, ("" if bt_ones == 1 else "s"), str(group.get("name", "?")),
 							bt_n, ("" if bt_n == 1 else "s"), str(profile.get("name", "?"))], true)
 					var bt_faces: Array = await _solo_tray_roll(bt_n, to_hit, roll_owner)
-					var bt_hits: int = await _solo_hits(bt_faces, to_hit, profile, 0.0, defender, charging, _solo_owner_label(striker))
+					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, profile, 0.0, defender, charging, _solo_owner_label(striker))
 					if bt_hits > 0:
 						# Extra attacks resolve pooled (no Deadly/Takedown special-casing — the aof
 						# bearers carry plain weapons) and NEVER chain (counter reset right after).
@@ -11185,9 +11187,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
 					_solo_rule_float(target, "Unstoppable: no penalties")
-			var to_hit: int = AiCombatMath.modified_hit_target(
-				AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))),
-				h_mod)
+			var to_hit_raw: int = AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))) - h_mod
+			var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 			if upr_ap + extra_ap > 0:
 				profile = profile.duplicate()
 				profile["ap"] = int(profile.get("ap", 0)) + upr_ap + extra_ap   # Unpredictable + Tag/Reckless AP
@@ -11205,7 +11206,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					var rec: Dictionary = AiEv.versatile_best_mode(to_hit, shot_base, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
 					vm = await _solo_prompt_versatile(pname, rec)
 					_solo_versatile_latch_write(attacker, vm)
-				to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
+				to_hit_raw -= int(vm.get("hit_mod", 0))   # D21: one sum, one clamp
+				to_hit = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 				if int(vm.get("ap", 0)) > 0:
 					profile = profile.duplicate()
 					profile["ap"] = int(profile.get("ap", 0)) + int(vm.get("ap", 0))
@@ -11218,7 +11220,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-			var hits: int = await _solo_hits(faces, to_hit, profile, dist, target, false, "You")
+			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, "You")
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])

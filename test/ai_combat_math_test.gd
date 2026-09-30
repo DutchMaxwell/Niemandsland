@@ -154,8 +154,10 @@ func test_thrust_to_hit_improves_by_one_when_charging() -> void:
 	# Thrust (GF/AoF v3.5.1 p.14): +1 to hit on a charge (a lower needed face); unchanged otherwise.
 	assert_int(AiCombatMath.thrust_to_hit(4, true)).is_equal(3)
 	assert_int(AiCombatMath.thrust_to_hit(4, false)).is_equal(4)
-	# Clamped at the 2+ ceiling (a natural 1 always misses).
-	assert_int(AiCombatMath.thrust_to_hit(2, true)).is_equal(2)
+	# D21: NOT clamped here — the to-hit modifiers are one sum, clamped once by modified_hit_target.
+	assert_int(AiCombatMath.thrust_to_hit(2, true)).is_equal(1)
+	# Q2 Thrust charge vs Evasive: 2 - 1 + 1 = 2+ (the old per-step floor said 3+).
+	assert_int(AiCombatMath.modified_hit_target(AiCombatMath.thrust_to_hit(2, true), AiCombatMath.melee_hit_modifier(true))).is_equal(2)
 
 
 func test_fearless_recovers_on_four_plus() -> void:

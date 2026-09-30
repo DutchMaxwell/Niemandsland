@@ -91,6 +91,21 @@ pub fn modified_hit_target(base_target: i64, roll_mod: i64) -> i64 {
     clampi(base_target - roll_mod, BEST_HIT_TARGET, UNMODIFIED_SIX)
 }
 
+/// D21 (`EPOCH_68_MODIFIER_SUM`) — fold one to-hit modifier into the running target. Below the gate: the
+/// old sequential clamp (`raw` IS the clamped target, returned twice). From it: `raw` stays the
+/// unclamped sum and only the returned target is clamped, so a later Versatile/Precise +1 still
+/// counts against a penalty the ladder used to swallow. Returns `(raw, clamped target)`.
+#[inline]
+pub fn fold_hit(sum: bool, raw: i64, roll_mod: i64) -> (i64, i64) {
+    if sum {
+        let r = raw - roll_mod;
+        (r, clampi(r, BEST_HIT_TARGET, UNMODIFIED_SIX))
+    } else {
+        let t = modified_hit_target(raw, roll_mod);
+        (t, t)
+    }
+}
+
 /// `AiCombatMath.shooting_hit_modifier` :230-243 — exactly 9" is not "over".
 /// `shot_hit_bonus`/`shot_hit_bonus_over9` are NOT part of that GDScript
 /// function; they are `_solo_hit_mod_info`'s own addition on top of it
@@ -190,9 +205,9 @@ pub fn fortified_ap(ap: i64, is_fortified: bool) -> i64 {
 /// floored at 2+. Fatigue is handled by the caller (a fatigued unit hits only
 /// on unmodified 6s, so no modifier applies then).
 #[inline]
-pub fn thrust_to_hit(quality: i64, is_charging: bool) -> i64 {
+pub fn thrust_to_hit(quality: i64, is_charging: bool, floor: i64) -> i64 {
     if is_charging {
-        (quality - THRUST_TO_HIT_BONUS).max(BEST_HIT_TARGET)
+        (quality - THRUST_TO_HIT_BONUS).max(floor)
     } else {
         quality
     }
@@ -486,7 +501,7 @@ pub fn profile_ev(
             // OUTSIDE the modifier pipeline (ai_ev.gd:336-341).
             target = 6;
         } else {
-            target = thrust_to_hit(att.quality, charging && p.thrust);
+            target = thrust_to_hit(att.quality, charging && p.thrust, BEST_HIT_TARGET);
             // The Stealth data-alias pair rides the fold, but the EV
             // imagination measures NO pre-charge gap (ai_ev.gd:442's melee
             // branch has no alias leg either) — charge_from_in stays 0.0,
