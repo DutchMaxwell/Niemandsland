@@ -220,6 +220,7 @@ var _wall_row: HBoxContainer = null
 var _undo_btn: Button = null
 var _redo_btn: Button = null
 var _modular_status_label: Label = null
+var _guideline_rows: VBoxContainer = null
 
 
 func _ready() -> void:
@@ -297,12 +298,6 @@ func _style_header_chrome() -> void:
 			if lbl:
 				lbl.add_theme_font_override("font", HudTokens.head_font())
 				lbl.add_theme_color_override("font_color", HudTokens.TEXT)
-		var stats_lbl := left_panel.find_child("StatsLabel", true, false) as Label
-		if stats_lbl:
-			stats_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
-		var recs_lbl := left_panel.find_child("RecommendationsLabel", true, false) as Label
-		if recs_lbl:
-			recs_lbl.add_theme_color_override("font_color", HudTokens.AMBER)
 		var deploy_chk := left_panel.find_child("DeploymentCheck", true, false) as CheckBox
 		if deploy_chk:
 			deploy_chk.add_theme_color_override("font_color", HudTokens.TEXT)
@@ -371,6 +366,7 @@ func _setup_tabs() -> void:
 	into.call(gelaende, left_panel.get_node_or_null("AutoGenButton"))
 	into.call(gelaende, left_panel.get_node_or_null("StatsLabel"))
 	into.call(gelaende, left_panel.get_node_or_null("RecommendationsLabel"))
+	_build_stats_card(gelaende)
 
 	# Missionsziele: objectives (the ObjectivesCheck was replaced by this panel)
 	into.call(ziele, _objectives_panel)
@@ -1401,6 +1397,50 @@ func _flood_fill(start: Vector2i, terrain_type: int, visited: Dictionary) -> voi
 				stack.append(neighbor)
 
 
+## Coverage numbers and the OPR guidelines live together in one sunken card. The guideline text stays in
+## RecommendationsLabel (hidden: it is the text source); the visible rows are one Label per line so a
+## met guideline reads green and a missed one amber.
+func _build_stats_card(body: Control) -> void:
+	var stats := body.get_node_or_null("StatsLabel") as Label
+	var recs := body.get_node_or_null("RecommendationsLabel") as Label
+	if stats == null or recs == null:
+		return
+	var box := VBoxContainer.new()
+	box.name = "StatsBox"
+	var card := HouseStyle.card(box)
+	card.name = "StatsCard"
+	body.add_child(card)
+	stats.reparent(box)
+	stats.theme_type_variation = HouseStyle.SMALL
+	stats.autowrap_mode = TextServer.AUTOWRAP_WORD
+	recs.reparent(box)
+	recs.visible = false
+	_guideline_rows = VBoxContainer.new()
+	_guideline_rows.name = "GuidelineRows"
+	box.add_child(_guideline_rows)
+
+
+## Rebuild the visible guideline rows from the guideline text (one Label per non-empty line).
+func _rebuild_guideline_rows() -> void:
+	if _guideline_rows == null or recommendations_label == null:
+		return
+	for child in _guideline_rows.get_children():
+		_guideline_rows.remove_child(child)
+		child.queue_free()
+	for line in recommendations_label.text.split("\n"):
+		if line.strip_edges().is_empty():
+			continue
+		var row := HouseStyle.label(line, HouseStyle.SMALL)
+		row.autowrap_mode = TextServer.AUTOWRAP_WORD
+		if line.begins_with("\u2713"):
+			row.add_theme_color_override("font_color", HouseStyle.tone_ink(HouseStyle.TONE_OK))
+		elif line.begins_with("\u2717"):
+			row.add_theme_color_override("font_color", HouseStyle.WARN)
+		elif line.ends_with(":"):
+			row.theme_type_variation = HouseStyle.CAPTION
+		_guideline_rows.add_child(row)
+
+
 func _update_recommendations() -> void:
 	_update_stats()
 
@@ -1452,12 +1492,7 @@ Tip: Connected cells = 1 piece""" % [
 		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score
 	]
 
-	# Color code the recommendations - Glassmorphism accent colors
-	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok and extended.max_gap_ok and extended.symmetry_ok
-	if all_ok:
-		recommendations_label.add_theme_color_override("font_color", HudTokens.SUCCESS)  # Accent green
-	else:
-		recommendations_label.add_theme_color_override("font_color", HudTokens.AMBER)  # Accent amber
+	_rebuild_guideline_rows()
 
 
 func _get_grid_rect() -> Rect2:
