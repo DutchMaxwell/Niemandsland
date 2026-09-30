@@ -319,10 +319,11 @@ func _setup_tabs() -> void:
 	if not left_panel:
 		return
 
-	var tabs := TabContainer.new()
+	var tabs := VBoxContainer.new()
 	tabs.name = "EditorTabs"
 	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tabs.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 
 	var gelaende := VBoxContainer.new()
 	gelaende.name = "TabTerrain"
@@ -333,13 +334,29 @@ func _setup_tabs() -> void:
 	var aufstellung := VBoxContainer.new()
 	aufstellung.name = "TabDeployment"
 	aufstellung.add_theme_constant_override("separation", 8)
+
+	# Three segment buttons switch which body is visible (exactly one selected).
+	var bodies: Array[VBoxContainer] = [gelaende, ziele, aufstellung]
+	var tab_row := HBoxContainer.new()
+	tab_row.name = "TabRow"
+	tab_row.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
+	var tab_buttons: Array[Button] = []
+	for spec in [["Terrain", "TabTerrainButton"], ["Objectives", "TabObjectivesButton"], ["Deployment", "TabDeploymentButton"]]:
+		var tb := HouseStyle.button(spec[0], HouseStyle.SEGMENT)
+		tb.name = spec[1]
+		tab_row.add_child(tb)
+		tab_buttons.append(tb)
+	for i in 3:
+		tab_buttons[i].pressed.connect(func() -> void:
+			for j in 3:
+				HouseStyle.set_selected(tab_buttons[j], j == i)
+				bodies[j].visible = (j == i))
+	tabs.add_child(tab_row)
 	tabs.add_child(gelaende)
 	tabs.add_child(ziele)
 	tabs.add_child(aufstellung)
 	left_panel.add_child(tabs)
-	tabs.set_tab_title(0, "Terrain")
-	tabs.set_tab_title(1, "Objectives")
-	tabs.set_tab_title(2, "Deployment")
+	tab_buttons[0].pressed.emit()
 
 	var into := func(tab: VBoxContainer, node: Node) -> void:
 		if node and is_instance_valid(node) and node.get_parent() == left_panel:

@@ -66,3 +66,30 @@ func test_a2_header_block_of_the_scene_has_no_theme_overrides() -> void:
 		assert_str(_scene_block(n)) \
 			.override_failure_message("A2 — %s still carries theme_override_ in the scene" % n) \
 			.not_contains("theme_override_")
+
+
+# ===== A3: tabs = three segment buttons =====
+
+func _tab_btn(n: String) -> Button:
+	return _ed.find_child(n, true, false) as Button
+
+
+func _selected_tabs(names: Array) -> Array:
+	return names.filter(func(n): return _tab_btn(n) != null and HouseStyle.is_selected(_tab_btn(n)))
+
+
+func test_a3_tabs_are_three_segment_buttons_with_exactly_one_selected() -> void:
+	var names := ["TabTerrainButton", "TabObjectivesButton", "TabDeploymentButton"]
+	for n in names:
+		var b := _tab_btn(n)
+		assert_object(b).override_failure_message("A3 — %s missing" % n).is_not_null()
+		if b != null:
+			assert_str(String(b.theme_type_variation).trim_suffix(HouseStyle.SELECTED_SUFFIX)).is_equal(String(HouseStyle.SEGMENT))
+	assert_array(_selected_tabs(names)).contains_exactly(["TabTerrainButton"])
+	if _tab_btn("TabDeploymentButton") != null:
+		_tab_btn("TabDeploymentButton").pressed.emit()
+	assert_array(_selected_tabs(names)).contains_exactly(["TabDeploymentButton"])
+
+
+func test_a3_no_godot_tab_container_left_in_the_editor() -> void:
+	assert_array(_ed.find_children("*", "TabContainer", true, false)).is_empty()
