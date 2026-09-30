@@ -576,6 +576,8 @@ func _on_custom_zone_clear() -> void:
 	_custom_zone_symmetric_check.disabled = false
 	_custom_zone_confirm_btn.disabled = true
 	grid_container.queue_redraw()
+	# The 3D table must drop the cleared zones too (it only hears about zones through this signal)
+	deployment_type_changed.emit(DeploymentType.CUSTOM)
 
 
 ## Handle click during custom zone editing
