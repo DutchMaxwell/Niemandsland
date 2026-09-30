@@ -24,6 +24,9 @@ class MenuTransitionProbe extends "res://scripts/startup_menu.gd":
 	var entered_game := false
 	func _transition_to_game() -> void:
 		entered_game = true
+	# The room browser opens with a relay request; a test must not reach the production relay.
+	func _refresh_browse_list() -> void:
+		_set_browse_status("Loading rooms…")
 
 var _menu: Control
 var _view: Control
