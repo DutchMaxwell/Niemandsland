@@ -161,6 +161,24 @@ func test_close_hides_the_window() -> void:
 	assert_bool(_panel.visible).is_false()
 
 
+func test_escape_and_the_x_hide_the_panel() -> void:
+	_panel.show()
+	var esc := InputEventAction.new()
+	esc.action = "ui_cancel"
+	esc.pressed = true
+	_panel._unhandled_input(esc)
+	assert_bool(_panel.visible).is_false()
+	_panel.show()
+	(_panel.find_child("CloseButton", true, false) as Button).pressed.emit()
+	assert_bool(_panel.visible).is_false()
+
+
+func test_panel_is_a_house_style_sheet_that_owns_its_clicks() -> void:
+	var root := _panel.get_child(0) as Control
+	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	assert_object(root.theme).is_same(HouseStyle.theme())
+
+
 func test_volume_sliders_set_their_bus_and_are_put_back() -> void:
 	for bus: String in _panel.volume_sliders:
 		var s: HSlider = _panel.volume_sliders[bus]

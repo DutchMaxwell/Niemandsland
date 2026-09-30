@@ -19,7 +19,7 @@ const JOIN_CODE_LEN := 6
 const MenuView = preload("res://scripts/startup_menu_view.gd")
 @onready var diorama: MenuDiorama = %Diorama
 var view: Control
-var _settings: Window
+var _settings: CanvasLayer
 var _table_setup: TableSizeDialog
 var _transitioning := false
 var continue_btn: Button
@@ -132,11 +132,9 @@ func _on_diorama_ready() -> void:
 func _on_settings_pressed() -> void:
 	view.close_route()
 	if not is_instance_valid(_settings):
-		_settings = Window.new()
-		_settings.set_script(load("res://scripts/lighting_panel.gd"))
+		_settings = load("res://scripts/lighting_panel.gd").new()
 		add_child(_settings)
 		_settings.initialize(diorama.get_lighting_controller())
-		_settings.title = "Settings"
 		var label := Label.new()
 		label.text = "Menu background"
 		_settings._main_vbox.add_child(label)
@@ -150,7 +148,7 @@ func _on_settings_pressed() -> void:
 			var config := ConfigFile.new()
 			config.set_value("menu","biome",diorama.biome)
 			config.save("user://menu.cfg"))
-	_settings.popup_centered()
+	_settings.show()
 
 
 # === Button handlers ===

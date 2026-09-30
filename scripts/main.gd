@@ -64,7 +64,7 @@ var _prompt_overlay: CanvasLayer = null
 
 # Lighting Controller
 var lighting_controller: Node = null
-var lighting_panel: Window = null
+var lighting_panel: CanvasLayer = null
 var privacy_menu: PrivacyMenu = null
 var after_game_card: AfterGameCard = null
 var atmosphere_controller: AtmosphereController = null
@@ -636,8 +636,7 @@ func _ready() -> void:
 	lighting_controller.initialize(directional_light, world_environment, fill_light)
 
 	# Initialize Lighting Panel UI
-	lighting_panel = Window.new()
-	lighting_panel.set_script(load("res://scripts/lighting_panel.gd"))
+	lighting_panel = load("res://scripts/lighting_panel.gd").new()
 	get_tree().root.add_child(lighting_panel)
 	lighting_panel.initialize(lighting_controller)
 	lighting_panel.hide()  # Start hidden

@@ -374,7 +374,7 @@ func test_table_and_army_buttons_do_what_they_do_today(timeout := 120000) -> voi
 	assert_int(_main.opr_army_manager.current_round).is_equal(before + 1)
 	assert_str(next.text).override_failure_message("Next Round does not name the next round").is_equal(_main.next_round_button_label(before + 1, false))
 
-	var settings: Window = _main.lighting_panel
+	var settings: CanvasLayer = _main.lighting_panel
 	var shown: bool = settings.visible
 	await _click(_button("Settings"))
 	assert_bool(settings.visible).override_failure_message("Settings did not toggle the settings window").is_equal(not shown)
