@@ -343,13 +343,13 @@ func _setup_tabs() -> void:
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 	var gelaende := VBoxContainer.new()
-	gelaende.name = "TabGelaende"
+	gelaende.name = "TabTerrain"
 	gelaende.add_theme_constant_override("separation", 8)
 	var ziele := VBoxContainer.new()
-	ziele.name = "TabZiele"
+	ziele.name = "TabObjectives"
 	ziele.add_theme_constant_override("separation", 8)
 	var aufstellung := VBoxContainer.new()
-	aufstellung.name = "TabAufstellung"
+	aufstellung.name = "TabDeployment"
 	aufstellung.add_theme_constant_override("separation", 8)
 	tabs.add_child(gelaende)
 	tabs.add_child(ziele)
