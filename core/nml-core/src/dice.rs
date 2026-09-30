@@ -25,9 +25,11 @@
 //! `RandomPCG` twin (GATE R, 6003/6003), and a tray face is one
 //! `randi_range(1, 6)` on it.
 
+#[cfg(test)]
+use crate::combat::modified_hit_target;
 use crate::combat::{
     conditional_ap_bonus, covered_defense, deadly_multiplier, fortified_ap, guarded_defense,
-    impact_total_dice, melee_hit_modifier, modified_hit_target, reliable_quality, save_target,
+    impact_total_dice, melee_hit_modifier, fold_hit, reliable_quality, save_target,
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
     IMPACT_HIT_TARGET, LONG_RANGE_IN, NO_RETREAT_SELF_WOUND_MAX, RAVAGE_WOUND_TARGET,
@@ -840,7 +842,7 @@ pub fn resolve_volley_leg(
         // never the member's; 0 = every ordinary profile, the Ctx quality
         // as always (the ranged twin of `melee_hit_target`'s override).
         let q = if p.extra_attack_q > 0 { p.extra_attack_q } else { att.quality };
-        let mut target = reliable_quality(q, p.reliable);
+        let target = reliable_quality(q, p.reliable);
         // Good Shot / Bad Shot / Targeting Visor (main.gd:5681-5701) — the
         // table's DICE path folds these in; `p.hit_bonus`/`p.hit_bonus_over9`
         // are this shot's own profile stamp (unit.rs::stamp_shot_modifier).
@@ -949,7 +951,7 @@ pub fn resolve_volley_leg(
             }
             m = 0;
         }
-        target = modified_hit_target(target, m);
+        let (mut raw, mut target) = fold_hit(def.modifier_sum, target, m);
         let mut versatile_ap = 0;
         if (p.versatile_attack || att.versatile_grant) && mod_dist_in > LONG_RANGE_IN {
             // Wave 3 — the "Vinci Tech Boost" form (`pick_one: false`,
@@ -972,7 +974,7 @@ pub fn resolve_volley_leg(
                 )
             };
             versatile_ap = ap_mod;
-            target = modified_hit_target(target, hit_mod);
+            (raw, target) = fold_hit(def.modifier_sum, raw, hit_mod);
             // Rules-must-log — only the wave-3 NAMED family forms log (the
             // named arm's stamp); the generic stamps stay silent, so every
             // earlier epoch's replay is byte-identical. At 36 the latched
@@ -1004,7 +1006,7 @@ pub fn resolve_volley_leg(
             faces: faces.clone(),
             owner: sh.owner.into(),
         });
-        let count_target = if p.precise { modified_hit_target(target, 1) } else { target };
+        let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
         if p.hazardous {
             out.mark("hazardous");
         }
@@ -1401,7 +1403,7 @@ fn melee_hit_target(
     // never the member's; 0 = every ordinary profile, the Ctx quality as
     // always.
     let q = if p.extra_attack_q > 0 { p.extra_attack_q } else { att.quality };
-    let base = thrust_to_hit(reliable_quality(q, p.reliable), charging && (p.thrust || att.thrust_grant));
+    let base = thrust_to_hit(reliable_quality(q, p.reliable), charging && (p.thrust || att.thrust_grant), def.def_floor());
     // B2b: the melee half of `_solo_hit_mod_info` (:5637-5638) sums the same
     // two live nets into `mm` before the single clamp below.
     // EPOCH_22_SCREENED_MELEE (sweep B, row `Screened`) — the Stealth
@@ -1441,9 +1443,9 @@ fn melee_hit_target(
     // did the clamping" to the caller, which owns the rules-must-log line
     // (this function has no report of its own).
     if (p.unstoppable || att.unstoppable_mark) && m < 0 {
-        return (modified_hit_target(base, 0), att.unstoppable_mark);
+        return (fold_hit(def.modifier_sum, base, 0).0, att.unstoppable_mark);
     }
-    (modified_hit_target(base, m), false)
+    (fold_hit(def.modifier_sum, base, m).0, false)
 }
 
 /// Wave 4 (port-quick-readjustment) — Indirect's moved to-hit penalty
@@ -1693,9 +1695,10 @@ pub fn resolve_melee_leg(
             // volley fold's pick read mirrored. Fatigue keeps the
             // unmodified-6 target (main.gd:6159's order); the AP half folds.
             let mut versatile_ap = 0;
-            let (mut target, unstop_grant_clamped) = melee_hit_target(
+            let (raw0, unstop_grant_clamped) = melee_hit_target(
                 p, sh.att, def, charging, uf_hit, charge_from_in, screened_melee,
             );
+            let (mut raw, mut target) = fold_hit(def.modifier_sum, raw0, 0);
             // EPOCH 34 UNSTOPPABLE MARK — the melee clamp half's rules-must-log
             // line, the volley fold's twin (the weapon's own flag stays silent).
             if unstop_grant_clamped {
@@ -1708,7 +1711,7 @@ pub fn resolve_melee_leg(
                 && (p.versatile_attack || sh.att.versatile_grant)
             {
                 if !sh.att.fatigued {
-                    target = modified_hit_target(target, sh.att.versatile_pick_hit);
+                    (raw, target) = fold_hit(def.modifier_sum, raw, sh.att.versatile_pick_hit);
                 }
                 versatile_ap = sh.att.versatile_pick_ap;
             }
@@ -1722,7 +1725,7 @@ pub fn resolve_melee_leg(
             });
             // Precise scores one better than it ROLLS — `_solo_hits` :4405-4406
             // applies the +1 when counting, so the recorded target stays raw.
-            let count_target = if p.precise { modified_hit_target(target, 1) } else { target };
+            let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
             let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
             if p.surge {
                 hits += sixes(&faces) * p.bonus_hits_per_six.max(1);
