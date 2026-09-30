@@ -103,8 +103,8 @@ func _finish_game(owners: Array) -> String:
 	await get_tree().process_frame
 	var verdict := "<no summary dialog>"
 	for c in _main.get_children():
-		if c is AcceptDialog and (c as AcceptDialog).title == "Game over":
-			var text: String = (c as AcceptDialog).dialog_text
+		if c is CanvasLayer and c.name == "GameOverLayer":
+			var text: String = (c.find_child("Summary", true, false) as Label).text
 			verdict = text.substr(text.rfind("\n") + 1)
 			_main.remove_child(c)
 			c.free()
