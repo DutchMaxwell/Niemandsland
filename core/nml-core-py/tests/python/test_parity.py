@@ -642,3 +642,31 @@ def test_p9_the_corpus_header_terrain_crosses_the_seam():
         checked += 1
     print(f"\nGATE P9: {checked} recorded cells read back through the seam")
     assert checked > 0
+
+
+def _vp_fixture(core_state_of, plain, vp):
+    """One holder (seat 1, inside the ring) vs one approacher (seat 2, one move away) on a round_vp mission."""
+    for i, u in enumerate(plain["units"].values()):
+        u.update(alive=0, positions=[], radii=[], wounds=[])
+        if i < 2:
+            u.update(alive=1, player=i + 1, positions=[[0.0254 if i == 0 else 0.2032, 0, 0]],
+                     radii=[0.0], wounds=[1], shaken=False, activated=False)
+    plain.update(objectives=[{"pos": [0, 0, 0], "owner": 0}], round=2, rounds_total=4,
+                 scoring="round_vp", vp=vp, vp_flavour={"majority": "round"}, vp_memo={})
+    plain["markers_meta"] = [{}]
+    return core_state_of(plain)
+
+
+def test_vp_aware_hand_score_matches_the_table_pin():
+    """The GDScript twin (test/ai_mission_eval_test.gd, `test_vp_arm_matches_the_core_pin`) pins the same numbers."""
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    state = _vp_fixture(core.state_of, plain, [1, 3])
+    zero = [0.0] * state.units
+    assert abs(core.score_hand_incoming(state, 1, zero, 3) - (0.5 + 0.5 / 6.0)) < 1e-12
+    assert abs(core.score_hand_incoming(state, 2, zero, 3) - (0.5 - 0.5 / 6.0)) < 1e-12
+    assert core.score_hand_incoming(state, 1, zero) == core.score_hand_incoming(state, 1, zero, 0)
+    behind = _vp_fixture(core.state_of, copy.deepcopy(acts[0]["state"]), [3, 1])
+    assert core.score_hand_incoming(behind, 1, zero, 3) > core.score_hand_incoming(state, 1, zero, 3)
+    assert core.score_hand_incoming(behind, 1, zero, 0) == core.score_hand_incoming(state, 1, zero, 0)

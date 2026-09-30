@@ -67,6 +67,7 @@ func setup(current_version: String, offered_version: String, url: String, notes:
 	content.add_child(_skip_checkbox)
 
 	add_child(content)
+	MenuDialog.style(self)
 
 
 ## Whether the player ticked "Skip this version".

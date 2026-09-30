@@ -19,7 +19,7 @@ const JOIN_CODE_LEN := 6
 const MenuView = preload("res://scripts/startup_menu_view.gd")
 @onready var diorama: MenuDiorama = %Diorama
 var view: Control
-var _settings: Window
+var _settings: CanvasLayer
 var _table_setup: TableSizeDialog
 var _transitioning := false
 var continue_btn: Button
@@ -132,11 +132,9 @@ func _on_diorama_ready() -> void:
 func _on_settings_pressed() -> void:
 	view.close_route()
 	if not is_instance_valid(_settings):
-		_settings = Window.new()
-		_settings.set_script(load("res://scripts/lighting_panel.gd"))
+		_settings = load("res://scripts/lighting_panel.gd").new()
 		add_child(_settings)
 		_settings.initialize(diorama.get_lighting_controller())
-		_settings.title = "Settings"
 		var label := Label.new()
 		label.text = "Menu background"
 		_settings._main_vbox.add_child(label)
@@ -150,7 +148,7 @@ func _on_settings_pressed() -> void:
 			var config := ConfigFile.new()
 			config.set_value("menu","biome",diorama.biome)
 			config.save("user://menu.cfg"))
-	_settings.popup_centered()
+	_settings.show()
 
 
 # === Button handlers ===
@@ -260,13 +258,14 @@ func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
 	vbox.add_child(HSeparator.new())
 	var reset_btn := Button.new()
 	reset_btn.text = "RESET TUTORIAL PROGRESS"
-	reset_btn.add_theme_color_override("font_color", HudTokens.DANGER)
+	reset_btn.theme_type_variation = HouseStyle.DANGER_BUTTON
 	reset_btn.pressed.connect(func() -> void:
 		progress.reset()
 		dialog.queue_free())
 	vbox.add_child(reset_btn)
 
 	dialog.add_child(vbox)
+	MenuDialog.style(dialog)
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
 	add_child(dialog)
@@ -289,7 +288,7 @@ func _on_spielschule_pressed() -> void:
 
 	var intro := Label.new()
 	intro.text = "Ten short lessons — play them in any order, replay any time."
-	intro.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	intro.theme_type_variation = HouseStyle.CAPTION
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(intro)
 	vbox.add_child(HSeparator.new())
@@ -298,6 +297,7 @@ func _on_spielschule_pressed() -> void:
 		_add_chapter_row(vbox, chapter, progress, dialog)
 
 	dialog.add_child(vbox)
+	MenuDialog.style(dialog)
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
 	add_child(dialog)
@@ -334,7 +334,7 @@ func _add_chapter_row(vbox: VBoxContainer, chapter: Dictionary, progress: Spiels
 
 	var goal := Label.new()
 	goal.text = "      " + String(chapter.get("goal", ""))
-	goal.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	goal.theme_type_variation = HouseStyle.CAPTION
 	goal.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(goal)
 
@@ -365,6 +365,7 @@ func _on_report_problem_pressed() -> void:
 		dialog.dialog_text = "Could not write the diagnostics file.\nThe log lives at user://logs/niemandsland.log."
 	else:
 		dialog.dialog_text = "Saved an anonymised diagnostics file to:\n%s\n\nAttach it to a bug report — it carries no player names, room codes or your username." % path
+	MenuDialog.style(dialog)
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.confirmed.connect(dialog.queue_free)
@@ -398,6 +399,7 @@ func _on_credits_pressed() -> void:
 		+ "Niemandsland is a free, non-profit, open-source fan project (MIT code, CC-BY-SA generated assets). It is not affiliated with, endorsed by, or sponsored by OnePageRules. It bundles no OPR rules text, files, art or marks; the rules are OPR's, available free at onepagerules.com, and army lists come from OPR's Army Forge. Responsible: Andreas Kesberg, privacy@niemandsland.xyz."
 	scroll.add_child(body)
 	dialog.add_child(scroll)
+	MenuDialog.style(dialog)
 	add_child(dialog)
 	# popup_centered() centres whatever size the window carries at that moment, and the wrap to
 	# the contents happens afterwards — so take the wrapped size FIRST or the window opens off
@@ -423,6 +425,7 @@ func _on_exit_pressed() -> void:
 	_exit_confirm.cancel_button_text = "Back"
 	_exit_confirm.confirmed.connect(func() -> void: get_tree().quit())
 	_exit_confirm.canceled.connect(_exit_confirm.queue_free)
+	MenuDialog.style(_exit_confirm)
 	add_child(_exit_confirm)
 	_exit_confirm.popup_centered()
 	# CANCEL is the safe answer, so it — not QUIT — starts focused.
@@ -475,6 +478,7 @@ func _start_self_update(url: String) -> void:
 	dialog.title = "Updating Niemandsland"
 	dialog.dialog_text = "Starting…"
 	dialog.get_ok_button().hide()
+	MenuDialog.style(dialog)
 	add_child(dialog)
 	dialog.popup_centered()
 	var updater := SelfUpdater.new()
@@ -514,6 +518,7 @@ func _on_update_failed(reason: String, dialog: AcceptDialog, updater: SelfUpdate
 	# node stays in the tree for the rest of the session.
 	msg.confirmed.connect(msg.queue_free)
 	msg.canceled.connect(msg.queue_free)
+	MenuDialog.style(msg)
 	add_child(msg)
 	msg.popup_centered()
 	# Open the browser only AFTER the message is up: shell_open raises the browser over the
