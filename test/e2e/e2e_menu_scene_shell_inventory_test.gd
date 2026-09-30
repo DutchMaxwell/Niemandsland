@@ -138,7 +138,7 @@ func test_welcome_card_matches_todays_save_lookup() -> void:
 	var has_save: bool = _view.resume.visible
 	assert_str(_view.welcome_kicker.text).is_equal("WELCOME BACK" if has_save else "WELCOME TO NIEMANDSLAND")
 	assert_str(_view.welcome.text).is_equal("Back to the table." if has_save else "Your first table awaits.")
-	assert_bool(_button("Continue").is_visible_in_tree()).is_equal(has_save)
+	assert_bool(_view.buttons.ContinueBtn.is_visible_in_tree()).is_equal(has_save)
 
 
 func test_settings_button_opens_the_settings_window() -> void:
