@@ -15621,27 +15621,24 @@ func _open_ai_opponent_dialog() -> void:
 ## The AI Opponent question over an already loaded manifest. `loader(file, slot)` runs on OK
 ## (default: _load_ai_opponent_list) so the dialog can be driven without the network.
 func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable()) -> void:
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "AI Opponent"
-	dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 220)
-	if ThemeManager != null:
-		dlg.theme = ThemeManager.get_current_theme()
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-
-	box.add_child(_dialog_label("NACHTMAHR builds its own list."))
-	box.add_child(_dialog_label("Faction:"))
+	var parts := HouseStyle.overlay_sheet("AI Opponent", SOLO_DIALOG_MIN_WIDTH)
+	var layer := CanvasLayer.new()
+	layer.name = "AiOpponentLayer"
+	layer.layer = 90
+	var box: VBoxContainer = parts["body"]
+	box.add_child(HouseStyle.label("NACHTMAHR builds its own list.", HouseStyle.BODY))
 	var fac_opt := OptionButton.new()
+	fac_opt.theme_type_variation = HouseStyle.BUTTON
 	var fac_keys: Array = manifest.keys()
 	fac_keys.sort()
 	for i in fac_keys.size():
 		var fk: String = fac_keys[i]
 		fac_opt.add_item(str((manifest[fk] as Dictionary).get("name", fk)), i)
-	box.add_child(fac_opt)
+	box.add_child(HouseStyle.field_row("Faction:", fac_opt))
 
-	box.add_child(_dialog_label("Points:"))
 	var pts_opt := OptionButton.new()
-	box.add_child(pts_opt)
+	pts_opt.theme_type_variation = HouseStyle.BUTTON
+	box.add_child(HouseStyle.field_row("Points:", pts_opt))
 	var refresh_points := func() -> void:
 		pts_opt.clear()
 		var fk: String = fac_keys[maxi(0, fac_opt.selected)]
@@ -15652,8 +15649,8 @@ func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable(
 	refresh_points.call()
 	fac_opt.item_selected.connect(func(_i: int) -> void: refresh_points.call())
 
-	box.add_child(_dialog_label("AI plays as:"))
 	var slot_opt := OptionButton.new()
+	slot_opt.theme_type_variation = HouseStyle.BUTTON
 	slot_opt.add_item("Player 2 (Red)", 2)
 	slot_opt.add_item("Player 1 (Blue)", 1)
 	# #196 — slots a connected human occupies are not on offer.
@@ -15665,29 +15662,37 @@ func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable(
 		if not slot_opt.is_item_disabled(i):
 			slot_opt.select(i)
 			break
-	box.add_child(slot_opt)
+	box.add_child(HouseStyle.field_row("AI plays as:", slot_opt))
 
-	dlg.add_child(box)
-	dlg.get_ok_button().text = "Build & deploy list"
-	dlg.confirmed.connect(func() -> void:
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
+	box.add_child(actions)
+	var cancel := HouseStyle.button("Cancel", HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	cancel.name = "CancelButton"
+	actions.add_child(cancel)
+	var ok := HouseStyle.button("Build & deploy list", HouseStyle.PRIMARY)
+	ok.name = "OkButton"
+	ok.focus_mode = Control.FOCUS_ALL
+	actions.add_child(ok)
+	var close := func() -> void: layer.queue_free()
+	cancel.pressed.connect(close)
+	(parts["close"] as Button).pressed.connect(close)
+	ok.gui_input.connect(func(e: InputEvent) -> void:
+		if e.is_action_pressed("ui_cancel"):
+			close.call())
+	ok.pressed.connect(func() -> void:
 		var fk: String = fac_keys[maxi(0, fac_opt.selected)]
 		var lists: Array = (manifest[fk] as Dictionary).get("lists", [])
 		if pts_opt.selected < 0 or pts_opt.selected >= lists.size():
+			close.call()
 			return
 		var file: String = str((lists[pts_opt.selected] as Dictionary).get("file", ""))
 		var slot: int = slot_opt.get_item_id(slot_opt.selected)
-		(loader if loader.is_valid() else Callable(self, &"_load_ai_opponent_list")).call(file, slot))
-	dlg.confirmed.connect(dlg.queue_free)
-	dlg.canceled.connect(dlg.queue_free)
-	add_child(dlg)
-	dlg.popup_centered()
-
-
-func _dialog_label(text: String) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", 13)
-	return l
+		(loader if loader.is_valid() else Callable(self, &"_load_ai_opponent_list")).call(file, slot)
+		close.call())
+	layer.add_child(parts["root"] as Control)
+	add_child(layer)
+	ok.grab_focus()
 
 
 ## Load + parse an AI list (bundle → user-cache → CDN, in that order) and route it through the

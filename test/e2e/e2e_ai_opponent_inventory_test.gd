@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## E2E — the AI Opponent dialog, row 21 of the UI inventory (uimenus step 10): "NACHTMAHR builds its own
 ## list.", Faction (sorted by key, shown by name), Points (per faction, the largest bracket preselected,
-## refreshed when the faction changes), "AI plays as" (Player 2 first, Player 1), "Build & deploy list" / Cancel.
+## refreshed when the faction changes), "AI plays as" (Player 2 first, Player 1), "Build & deploy list" / Cancel (and the x).
 ## OK hands the picked list file and slot to the loader; cancel hands nothing. The manifest is a fake and the
 ## loader a recorder: no CDN, no import. Not driven here: a slot a connected human holds is disabled
 ## ("— human player") — it needs a live multiplayer peer (covered by the MP suites). The no-lists toast is
@@ -34,18 +34,19 @@ func after_test() -> void:
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 
 
-## Today's dialog, read in one place: {faction, points, slot, labels, ok, press_ok, press_cancel} or {}.
+## The open dialog, read in one place: {faction, points, slot, labels, ok, press_ok, press_cancel} or {}.
 func _ask() -> Dictionary:
 	for c in _main.get_children():
-		if c is ConfirmationDialog and (c as ConfirmationDialog).title == "AI Opponent" and not c.is_queued_for_deletion():
-			var d := c as ConfirmationDialog
-			var opts := d.find_children("*", "OptionButton", true, false)
+		if c is CanvasLayer and c.name == "AiOpponentLayer" and not c.is_queued_for_deletion():
+			var opts := c.find_children("*", "OptionButton", true, false)
 			var labels: Array[String] = []
-			for l: Node in d.find_children("*", "Label", true, false):
+			for l: Node in c.find_children("*", "Label", true, false):
 				labels.append((l as Label).text)
-			return {"faction": opts[0], "points": opts[1], "slot": opts[2], "labels": labels, "ok": d.get_ok_button().text,
-				"press_ok": func() -> void: d.confirmed.emit(),
-				"press_cancel": func() -> void: d.canceled.emit()}
+			var ok := c.find_child("OkButton", true, false) as Button
+			var cancel := c.find_child("CancelButton", true, false) as Button
+			return {"faction": opts[0], "points": opts[1], "slot": opts[2], "labels": labels, "ok": ok.text, "layer": c,
+				"press_ok": func() -> void: ok.pressed.emit(),
+				"press_cancel": func() -> void: cancel.pressed.emit()}
 	return {}
 
 
@@ -108,6 +109,21 @@ func test_ok_with_the_defaults_builds_the_largest_list_for_player_2() -> void:
 
 func test_cancel_builds_nothing_and_closes() -> void:
 	_ask()["press_cancel"].call()
+	await _runner.simulate_frames(2)
+	assert_array(_loaded).is_empty()
+	assert_bool(_ask().is_empty()).is_true()
+
+
+func test_the_dialog_is_a_house_sheet_with_a_gold_ok_and_the_x_cancels() -> void:
+	var q := _ask()
+	var layer: CanvasLayer = q["layer"]
+	var root := layer.get_child(0) as Control
+	assert_object(root.theme).is_same(HouseStyle.theme())
+	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	assert_str(String((layer.find_child("OkButton", true, false) as Button).theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	for o: String in ["faction", "points", "slot"]:
+		assert_str(String((q[o] as OptionButton).theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	(layer.find_child("CloseButton", true, false) as Button).pressed.emit()
 	await _runner.simulate_frames(2)
 	assert_array(_loaded).is_empty()
 	assert_bool(_ask().is_empty()).is_true()
