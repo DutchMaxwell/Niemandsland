@@ -350,7 +350,71 @@ static func score(state: Dictionary, player: int, incoming: Dictionary = {}) -> 
 		# fit's seat/tempo context (tail counts at the next-round view).
 		var fb := fit_blend()
 		return (1.0 - fb) * _score_hand(state, player, incoming) 			+ fb * _score_fit(state, player, incoming)
+	if eval_variant == 3:
+		return _score_hand_vp(state, player, incoming)
 	return _score_hand(state, player, incoming)
+
+
+## Hand-leaf arm (core `eval_variant` 3, score.rs `score_hand_vp`): banked VP lead + the yield of the
+## remaining rounds' seizes + the majority / first-seize bonus, over the most VP that can still move.
+## Set per pick from the preset (SoloController); 0 = the frozen hand eval, byte-identical.
+static var eval_variant := 0
+
+
+static func _score_hand_vp(state: Dictionary, player: int, incoming: Dictionary = {}) -> float:
+	var objectives: Array = state["objectives"]
+	if objectives.is_empty() or str(state.get("scoring", "")) != "round_vp" or _is_destroy_mission(state):
+		return _score_hand(state, player, incoming)
+	var vp: Array = state.get("vp", [0, 0])
+	var banked := 0.0
+	if vp.size() == 2:
+		banked = float(int(vp[0]) - int(vp[1])) * (1.0 if player == 1 else -1.0)
+	var open := 0
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		if int(su["alive"]) > 0 and not bool(su.get("activated", false)):
+			open = 1
+	var left := float(maxi(int(state["rounds_total"]) - int(state["round"]), 0) + open)
+	var total := 0.0
+	for obj in objectives:
+		total += 2.0 * _objective_own(state, obj as Dictionary, player, incoming) - 1.0
+	var n := float(objectives.size())
+	var lead := clampf(total / n, -1.0, 1.0)
+	var fl: Dictionary = state.get("vp_flavour", {})
+	var bonus := 0.0
+	var bonus_max := 0.0
+	match str(fl.get("majority", "end")):
+		"round":
+			bonus = left * lead
+			bonus_max = left
+		"end":
+			bonus = lead
+			bonus_max = 1.0
+	if bool(fl.get("first_seize", false)) and float((state.get("vp_memo", {}) as Dictionary).get("first_seizer", 0)) == 0.0:
+		bonus += lead
+		bonus_max += 1.0
+	return 0.5 + 0.5 * clampf((banked + left * total + bonus) / maxf(n * left + bonus_max, 1.0), -1.0, 1.0)
+
+
+## Marker share as the referee books it (core `objective_own`): P(I hold) - P(they hold), 0.5 = level.
+static func _objective_own(state: Dictionary, obj: Dictionary, player: int, incoming: Dictionary) -> float:
+	var mine_absent := 1.0
+	var theirs_absent := 1.0
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		var strength := 0.0
+		for w in su["wounds"]:
+			strength += float(w)
+		if strength <= 0.0:
+			continue
+		var q := clampf(_presence(state, su, obj["pos"] as Vector3, float(incoming.get(str(key), 0.0))) / strength, 0.0, 1.0)
+		if int(su["player"]) == player:
+			mine_absent *= 1.0 - q
+		else:
+			theirs_absent *= 1.0 - q
+	var owner := int(obj.get("owner", 0))
+	var keep := 0.0 if owner == 0 else (1.0 if owner == player else -1.0)
+	return clampf(0.5 + 0.5 * ((theirs_absent - mine_absent) + mine_absent * theirs_absent * keep), 0.0, 1.0)
 
 
 static func _score_hand(state: Dictionary, player: int, incoming: Dictionary = {}) -> float:

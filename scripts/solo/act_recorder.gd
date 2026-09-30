@@ -445,6 +445,7 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			"tail_cap_p1": AiPlanner._tail_cap_for(1), "tail_cap_p2": AiPlanner._tail_cap_for(2),
 			"imagined_round_end": AiPlanner.imagined_round_end_enabled(),
 			"depth_discount": AiPlanner.depth_discount(), "seat_mode": AiPlanner.seat_mode(),
+			"eval_variant": AiMissionEval.eval_variant,
 			"playout_margin": AiPlanner.close_margin(), "playout_rich": AiPlanner.playout_rich(),
 			"seam_cast": BattleSim.cast_phase_enabled(), "seam_spacing": BattleSim.spacing_enabled(),
 			# NML-1073 M5 BUG-3: the Rust seam reads its `Seams::hero_attach` out of THIS key
