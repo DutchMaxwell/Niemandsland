@@ -919,4 +919,30 @@ mod tests {
             "the EV planner must stay blind to Shot Modifier, like the table's own AiEv"
         );
     }
+
+    // ------------- D21 (EPOCH_68_MODIFIER_SUM): the EV prices the to-hit as ONE sum ---------
+
+    /// F3.5 of PLAN_evfloor: Q2 Thrust charge vs Evasive is 2 - 1 + 1 = 2+ (one sum); the old ladder
+    /// floored the Thrust at 2+ first and priced 3+.
+    #[test]
+    fn ev_q2_thrust_charge_vs_evasive_follows_the_sum() {
+        let att = Ctx { quality: 2, models: 5, ..Default::default() };
+        let old = Ctx { defense: 4, tough: 1, models: 5, evasive: true, ..Default::default() };
+        let new = Ctx { modifier_sum: true, ..old };
+        let p = ShootProfile { attacks: 10, thrust: true, ..Default::default() };
+        assert!((profile_ev(&p, 10, &att, &old, 0.0, true) - 10.0 * (4.0 / 6.0) * 0.5).abs() < 1e-9, "below the gate: 3+");
+        assert!((profile_ev(&p, 10, &att, &new, 0.0, true) - 10.0 * (5.0 / 6.0) * 0.5).abs() < 1e-9, "from the gate: 2+");
+    }
+
+    /// F3.6: Q5 vs Artillery + Stealth over 9" with Precise is 5 + 2 - 1 = 6+ (one sum); the old
+    /// ladder clamped to 6+ first and Precise walked it back to 5+.
+    #[test]
+    fn ev_precise_folds_into_the_sum() {
+        let att = Ctx { quality: 5, models: 5, ..Default::default() };
+        let old = Ctx { defense: 4, tough: 1, models: 5, stealth: true, artillery: true, ..Default::default() };
+        let new = Ctx { modifier_sum: true, ..old };
+        let p = ShootProfile { attacks: 10, range: 24, precise: true, ..Default::default() };
+        assert!((profile_ev(&p, 10, &att, &old, 12.0, false) - 10.0 * (2.0 / 6.0) * 0.5).abs() < 1e-9, "below the gate: 5+");
+        assert!((profile_ev(&p, 10, &att, &new, 12.0, false) - 10.0 * (1.0 / 6.0) * 0.5).abs() < 1e-9, "from the gate: 6+");
+    }
 }
