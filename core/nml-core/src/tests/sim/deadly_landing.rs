@@ -159,3 +159,100 @@ use super::*;
             shot.log
         );
     }
+
+    // --------------------- D17, EPOCH_67_MARKERS_BURSTS: host/hero + Tough --
+
+    /// `land_deadly_wounds` called directly (it is `pub`, this module's own
+    /// `use super::*`) — no attacker fixture needed, the algorithm is the unit
+    /// under test. "a" (host): model 0 a FRESH Tough(1) body, model 1 a FRESH
+    /// Tough(3) team member; "ah" (joined hero, `four_unit_line`'s own
+    /// attachment): one Tough(1) model.
+    fn deadly_chain() -> State {
+        let mut st = four_unit_line();
+        let r = &*st.roster;
+        st.roster = Rc::new(crate::state::Roster {
+            keys: r.keys.clone(),
+            index: r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect(),
+            profile: vec![0, 1, 2, 3],
+        });
+        st.positions[0] = vec![[0.0, 0.0, 0.0], [0.02 * IN2M, 0.0, 0.0]];
+        st.wounds[0] = vec![1, 3];
+        st.radii[0] = vec![IN2M; 2];
+        st.alive[0] = 2;
+        st.positions[1] = vec![[2.0 * IN2M, 0.0, 0.0]];
+        st.wounds[1] = vec![1];
+        st.radii[1] = vec![IN2M];
+        st.alive[1] = 1;
+        st.profiles = Rc::new(Profiles {
+            list: vec![
+                Profile { wounds_max: vec![1, 3], model_count: 2, ..host_profile("a") },
+                Profile { wounds_max: vec![1], model_count: 1, ..host_profile("ah") },
+                Profile { wounds_max: vec![], model_count: 0, ..host_profile("b") },
+                Profile { wounds_max: vec![], model_count: 0, ..host_profile("bh") },
+            ],
+            index: HashMap::new(),
+        });
+        st
+    }
+
+    fn host_profile(id: &str) -> Profile {
+        Profile {
+            unit_id: id.into(), name: id.into(), quality: 4, defense: 4, tough: 1,
+            wounds_max: vec![], model_count: 1, weapons: vec![], special_rules: vec![],
+            caster_value: 0, base_radius: 0.0, base_shape: String::new(), base_w_mm: 0.0,
+            base_d_mm: 0.0, game_system: String::new(), faction_folder: String::new(),
+            item_grants: vec![], attached_hero_rules: vec![], move_bands: MoveBands::default(),
+        }
+    }
+
+    /// D17 (a) leg 1 — with NEITHER host model already wounded, a Deadly(3)
+    /// wound falls to `land_wounds`'s own slot order (index 0 = the Tough(1)
+    /// body), not the model with the most remaining wounds: the body dies
+    /// instead of the fresh Tough(3) team member taking a 3-wound bite. Below
+    /// the gate the OLD reading still picks the team (most remaining wounds).
+    #[test]
+    fn a_deadly_wound_lands_on_the_body_not_a_fresh_tough_team_member_from_epoch_67() {
+        let mut st67 = deadly_chain();
+        let s67 = Seams { rules_epoch: crate::acts::EPOCH_67_MARKERS_BURSTS, hero_attach: true, ..Seams::default() };
+        let dealt = land_deadly_wounds(&mut st67, 0, 1, 3, s67);
+        assert_eq!(dealt, 1, "capped at the body's own 1 remaining wound: {:?}", st67.wounds);
+        assert_eq!(st67.wounds[0], vec![3], "the body died, the team member stands untouched: {:?}", st67.wounds);
+        assert_eq!(st67.alive[0], 1);
+
+        let mut st66 = deadly_chain();
+        let s66 = Seams { rules_epoch: crate::acts::EPOCH_66_DISTANCE_TRUTH, hero_attach: true, ..Seams::default() };
+        let dealt66 = land_deadly_wounds(&mut st66, 0, 1, 3, s66);
+        assert_eq!(dealt66, 3, "below the gate: the OLD 'most remaining wounds' pick hits the team for all 3: {:?}", st66.wounds);
+        assert_eq!(st66.wounds[0], vec![1], "the team died (3-3=0, removed), the body stands: {:?}", st66.wounds);
+    }
+
+    /// D17 (a) leg 2 — an ALREADY-WOUNDED Tough slot (here the team member, one
+    /// wound already taken, current < max) is finished off before a FRESH slot
+    /// even when the fresh one sits earlier in the array (the tie the old
+    /// array-order pick would have resolved the other way); once the whole
+    /// host chain is dead the leftover wound reaches the joined hero instead
+    /// of being wasted (p.15 "heroes must be assigned wounds last").
+    #[test]
+    fn an_already_wounded_tough_slot_is_finished_first_then_the_leftover_reaches_the_hero() {
+        let mut st = deadly_chain();
+        st.wounds[0] = vec![1, 1]; // body still at its 1, the team already down to 1 of 3
+        let s = Seams { rules_epoch: crate::acts::EPOCH_67_MARKERS_BURSTS, hero_attach: true, ..Seams::default() };
+
+        // Wound 1: the DAMAGED team member (index 1), not the fresh-tied body at index 0.
+        assert_eq!(land_deadly_wounds(&mut st, 0, 1, 1, s), 1);
+        assert_eq!(st.wounds[0], vec![1], "the team died, only the body remains: {:?}", st.wounds);
+        assert_eq!(st.alive[0], 1);
+
+        // Wound 2: the body, the only host model left — the host chain is now wiped.
+        assert_eq!(land_deadly_wounds(&mut st, 0, 1, 1, s), 1);
+        assert_eq!(st.wounds[0], Vec::<i64>::new());
+        assert_eq!(st.alive[0], 0, "the host is fully wiped: {:?}", st.wounds);
+        assert_eq!(st.alive[1], 1, "the hero is untouched so far: {:?}", st.wounds);
+
+        // Wound 3: nothing left in the host — the joined hero takes it (never wasted).
+        assert_eq!(land_deadly_wounds(&mut st, 0, 1, 1, s), 1);
+        assert_eq!(st.alive[1], 0, "the leftover wound reached the hero instead of being wasted");
+
+        // Wound 4: the whole chain is dead now — wasted, not an error.
+        assert_eq!(land_deadly_wounds(&mut st, 0, 1, 1, s), 0);
+    }
