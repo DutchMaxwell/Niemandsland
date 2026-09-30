@@ -799,43 +799,67 @@ fn surprise_strike(
 /// the state already carries (radii are metres too) — then the table's own
 /// pick: the crossed unit NEAREST the acting unit's centre (main.gd:17115-17118
 /// for the Crossing Attack, main.gd:3000-3004 for Strafing), first index on a
-/// tie. `None` = nothing crossed (or nothing moved).
+/// tie. `None` = nothing crossed (or nothing moved). `bidx` is whose OWN legs
+/// are tested (D20 a, `EPOCH_67_MARKERS_BURSTS`: an attached hero's own
+/// trail, not always the activating unit's); `si` still centres the
+/// nearest-pick — the table sorts by `MoveIntent.distance_inches(unit_centre
+/// (unit), …)`, the ACTIVATING unit, not each bearer's own centre.
 fn crossed_enemy_of(
-    statics: &[UnitStatic], state: &State, next: &State, si: usize, seams: Seams,
+    statics: &[UnitStatic], state: &State, next: &State, si: usize, bidx: usize, seams: Seams,
 ) -> Option<(usize, String)> {
-    let pid = next.player[si];
-    let legs: Vec<([f64; 2], [f64; 2])> = (0..next.positions[si].len())
-        .filter_map(|m| {
-            let a = state.positions.get(si)?.get(m)?;
-            let b = next.positions.get(si)?.get(m)?;
-            Some(([a[0], a[2]], [b[0], b[2]]))
-        })
-        .filter(|(a, b)| (b[0] - a[0]).hypot(b[1] - a[1]) > f64::EPSILON)
-        .collect();
-    let crosses = |ti: usize| -> bool {
-        (0..next.positions[ti].len()).any(|m| {
-            if next.wounds[ti].get(m).map(|&w| w <= 0).unwrap_or(false) { return false; }
-            let c = &next.positions[ti][m];
-            let r = next.radii[ti].get(m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
-            legs.iter().any(|&(a, b)| {
-                let seg = [b[0] - a[0], b[1] - a[1]];
-                let t = (((c[0] - a[0]) * seg[0] + (c[2] - a[1]) * seg[1])
-                    / (seg[0] * seg[0] + seg[1] * seg[1])).clamp(0.0, 1.0);
-                let (dx, dy) = (a[0] + seg[0] * t - c[0], a[1] + seg[1] * t - c[2]);
-                dx * dx + dy * dy <= r * r
-            })
-        })
-    };
+    let pid = next.player[bidx];
+    let legs = bearer_legs(state, next, bidx);
     let crossed: Vec<usize> = (0..next.units())
         .filter(|&ti| {
             next.player[ti] != pid && next.alive[ti] > 0 && !next.dormant[ti]
-                && !(seams.hero_attach && next.attached_to[ti].is_some()) && crosses(ti)
+                && !(seams.hero_attach && next.attached_to[ti].is_some())
+                && legs_cross_unit(next, &legs, ti)
         })
         .collect();
     let centre = geom::centre(&next.positions[si]);
     let dist = |ti: usize| geom::length(geom::sub(geom::centre(&next.positions[ti]), centre));
     let target = crossed.iter().copied().min_by(|&x, &y| dist(x).total_cmp(&dist(y)))?;
     Some((target, statics[next.roster.profile[target]].name.clone()))
+}
+
+/// One straight leg per alive model of `bidx`, `state` -> `next` (a leg that
+/// moves nothing crosses nothing) — the shared trail read `crossed_enemy_of`
+/// and the per-model crossing count both build on.
+fn bearer_legs(state: &State, next: &State, bidx: usize) -> Vec<([f64; 2], [f64; 2])> {
+    (0..next.positions[bidx].len())
+        .filter_map(|m| {
+            let a = state.positions.get(bidx)?.get(m)?;
+            let b = next.positions.get(bidx)?.get(m)?;
+            Some(([a[0], a[2]], [b[0], b[2]]))
+        })
+        .filter(|(a, b)| (b[0] - a[0]).hypot(b[1] - a[1]) > f64::EPSILON)
+        .collect()
+}
+
+/// Whether any leg in `legs` crosses an alive model's base disc of `ti`.
+fn legs_cross_unit(next: &State, legs: &[([f64; 2], [f64; 2])], ti: usize) -> bool {
+    (0..next.positions[ti].len()).any(|m| {
+        if next.wounds[ti].get(m).map(|&w| w <= 0).unwrap_or(false) {
+            return false;
+        }
+        let c = &next.positions[ti][m];
+        let r = next.radii[ti].get(m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+        legs.iter().any(|&(a, b)| {
+            let seg = [b[0] - a[0], b[1] - a[1]];
+            let t = (((c[0] - a[0]) * seg[0] + (c[2] - a[1]) * seg[1])
+                / (seg[0] * seg[0] + seg[1] * seg[1])).clamp(0.0, 1.0);
+            let (dx, dy) = (a[0] + seg[0] * t - c[0], a[1] + seg[1] * t - c[2]);
+            dx * dx + dy * dy <= r * r
+        })
+    })
+}
+
+/// D20 (a): the number of `bidx`'s OWN models whose individual leg crosses
+/// `ti`'s base (GF p.4 "this model" = a model rule, not a unit-wide one) —
+/// floored at 1 so a caller that already knows `legs_cross_unit` is true
+/// never reads a zero-dice roll.
+fn crossing_models_against(next: &State, legs: &[([f64; 2], [f64; 2])], ti: usize) -> i64 {
+    legs.iter().filter(|&&leg| legs_cross_unit(next, std::slice::from_ref(&leg), ti)).count().max(1) as i64
 }
 
 pub(crate) fn tray_crossing_attack(
@@ -845,6 +869,11 @@ pub(crate) fn tray_crossing_attack(
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
         return;
     }
+    // D20 (a): below the gate every bearer still reads the ACTIVATING unit's
+    // own legs (byte-identical to the pre-batch-D reading); from the gate
+    // each bearer reads its OWN legs and the dice count scales by how many
+    // of ITS models actually crossed (GF p.4 "this model").
+    let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach {
         bearers.extend(state.attached[si].iter().copied());
@@ -855,13 +884,19 @@ pub(crate) fn tray_crossing_attack(
         }
         let Some(spec) = statics[next.roster.profile[b]].crossing_attack.clone() else { continue };
         let owner = statics[next.roster.profile[b]].name.clone();
+        let legs_of = if epoch67 { b } else { si };
         // Alive, un-reserved, UNATTACHED enemies whose bases an executed trail
         // touches, then the table's own pick — the shared
         // `crossed_enemy_of` read above (main.gd:17115-17118).
-        let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, seams) else {
+        let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, legs_of, seams) else {
             continue;
         };
-        let n = spec.dice.max(1) as usize;
+        let crossing_models = if epoch67 {
+            crossing_models_against(next, &bearer_legs(state, next, b), target)
+        } else {
+            1
+        };
+        let n = (spec.dice.max(1) * crossing_models) as usize;
         let faces = tray.roll(n);
         shot.rolls.push(crate::dice::Roll {
             kind: "attack", count: n as i64, target: spec.wound_target,
@@ -926,7 +961,8 @@ pub(crate) fn tray_strafing(
         && !statics[next.roster.profile[b]].strafe_shoot.is_empty()) { return; }
     // The crossing test and the table's pick — the shared `crossed_enemy_of`
     // read (the table's `trails_cross_unit_bases` test, main.gd:3000-3004).
-    let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, seams) else { return; };
+    // Strafing is untouched by D20 (a): always the ACTIVATING unit's own legs.
+    let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, si, seams) else { return; };
     // Rules-must-log — ONE line per strafe, the table's own log line
     // (main.gd:3005-3006).
     shot.log.push(format!("Strafing: {} passes over {tname} — attacks it as if shooting (once per activation)",
