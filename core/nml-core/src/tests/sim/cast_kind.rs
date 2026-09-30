@@ -87,11 +87,35 @@ use super::*;
         Seams { rules_epoch: e, cast_fold: true, hero_attach: true, ..Seams::default() }
     }
 
+    /// The kind of every cast ATTEMPT event (the entries carrying a `spell`) —
+    /// what the tally counts. Log lines carry no kind.
     fn kinds(st: &State) -> Vec<&str> {
         st.cast_events
             .iter()
+            .filter(|e| e.get("spell").is_some())
             .map(|e| e["kind"].as_str().unwrap_or(""))
             .collect()
+    }
+
+    /// The table's event shape, key for key (battle_sim.gd `_cast_phase`): a
+    /// plain cast (no conduit, no boost, no interference) pushes exactly ONE
+    /// entry, the attempt, and log lines carry no `kind` for the tally to count.
+    #[test]
+    fn a_plain_cast_pushes_one_attempt_event_in_the_tables_shape() {
+        let (mut st, statics) = lone_caster(vec![bolt()]);
+        let los = vec![true; st.units()];
+        cast_phase(&statics, &mut st, 0, &los, Seams { cast_fold: true, hero_attach: true, ..Seams::default() }, None);
+        assert_eq!(st.cast_events.len(), 1, "one attempt, no log lines: {:?}", st.cast_events);
+        let ev = &st.cast_events[0];
+        let mut keys: Vec<&str> = ev.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        keys.sort();
+        assert_eq!(keys, ["boost", "cost", "interference", "kind", "p_success", "spell", "target"]);
+        assert_eq!(ev["spell"], "bolt");
+        assert_eq!(ev["kind"], "damage");
+        assert_eq!(ev["cost"], 0, "the bolt's own threshold");
+        assert!(ev["target"] == st.roster.keys[2].as_str() || ev["target"] == st.roster.keys[3].as_str(), "an enemy key: {ev}");
+        assert_eq!(ev["boost"], 0);
+        assert_eq!(ev["interference"], 0);
     }
 
     /// THE STAMP TEST. A caster that casts ONE damage spell (one activation,
