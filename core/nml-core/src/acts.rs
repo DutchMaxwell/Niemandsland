@@ -594,7 +594,14 @@ pub const EPOCH_66_DISTANCE_TRUTH: u32 = 66;
 /// the same change. Every call site reads THIS constant, never the literal
 /// `67` or `CURRENT_RULES_EPOCH`.
 pub const EPOCH_67_MARKERS_BURSTS: u32 = 67;
-pub const CURRENT_RULES_EPOCH: u32 = 67;
+/// D21 (S1-03), modifier arithmetic (wave 3 batch E): GF p.5 MODIFIERS — every
+/// modifier is simply added to the roll and the new value counts as the final
+/// result. From this epoch the save target is ONE sum (Defense - Shielded -
+/// Guarded - Cover + AP) clamped once at `[2, 6]`; below it each -1 floors at
+/// 2+ before the AP is added (Def 2+ in cover vs AP(1) saves on 3+). `68` is
+/// one past `EPOCH_67_MARKERS_BURSTS`; every call site reads THIS constant.
+pub const EPOCH_68_MODIFIER_SUM: u32 = 68;
+pub const CURRENT_RULES_EPOCH: u32 = 68;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1800,7 +1807,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 67, "the live epoch is EPOCH_67_MARKERS_BURSTS");
+        assert_eq!(CURRENT_RULES_EPOCH, 68, "the live epoch is EPOCH_68_MODIFIER_SUM");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1810,11 +1817,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":67}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":68}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 67"
+            "a fresh play_game() now stamps the bumped epoch, 68"
         );
     }
 

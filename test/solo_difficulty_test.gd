@@ -147,3 +147,12 @@ func test_nachtmahr_runs_on_the_planner_only_with_core_and_brain() -> void:
 	assert_int(SoloDifficulty.SHIP_SEARCH_TOP_K).is_equal(10)
 	assert_int(SoloDifficulty.SHIP_SEARCH_HORIZON).is_equal(3)
 	assert_bool(SoloDifficulty.PRESETS.has("planner_v0")).is_true()
+
+
+## D100 (30.09.): the hand-leaf planner presets price the VP ledger (core arm 3); the tree, the fitted-eval
+## presets and the default stay on arm 0.
+func test_hand_leaf_presets_carry_the_vp_arm() -> void:
+	for g in ["planner_v0", "planner_v0s", "planner_v0_herofold", "planner_v0_pool1", "planner_v0_both"]:
+		assert_int(SoloDifficulty.for_grade(g).eval_variant).is_equal(3)
+	for g in ["nachtmahr", "planner_v1", "planner_v2", "finsternis"]:
+		assert_int(SoloDifficulty.for_grade(g).eval_variant).is_equal(0)

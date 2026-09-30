@@ -8,7 +8,6 @@ extends CanvasLayer
 ## including on drag start, where the hover target is cleared anyway.
 
 const DWELL_SEC := 0.45
-const PANEL_ALPHA := 0.72
 
 ## One verified hint line per object kind (English-only UI).
 const HINTS := {
@@ -28,7 +27,8 @@ func _ready() -> void:
 	_panel = PanelContainer.new()
 	_panel.name = "ControlHints"
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.modulate = Color(1, 1, 1, PANEL_ALPHA)
+	_panel.theme = HouseStyle.theme()   # a quiet house chip with muted words (maintainer D98 = a)
+	_panel.theme_type_variation = HouseStyle.CHIP
 	_panel.visible = false
 	_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_panel.anchor_top = 1.0
@@ -37,9 +37,8 @@ func _ready() -> void:
 	_panel.offset_bottom = -10.0
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	add_child(_panel)
-	_label = Label.new()
+	_label = HouseStyle.label("", HouseStyle.CAPTION)
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_label.add_theme_font_size_override("font_size", 12)
 	_panel.add_child(_label)
 	_dwell = Timer.new()
 	_dwell.one_shot = true

@@ -31,7 +31,7 @@ use crate::acts::{
     EPOCH_41_SELF_DESTRUCT_SURVIVORS, EPOCH_44_SURGE_MARK, EPOCH_48_CASTER_BOOST,
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
-    EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS,
+    EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -587,7 +587,7 @@ pub(crate) fn tray_breath_attack(
         }
         let ut = &statics[next.roster.profile[ti]];
         let def = ctx_of(ut, next, ti);
-        let sdef = shielded_defense(def.defense, def.shielded_bonus());
+        let sdef = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
         let alive_t = combined_alive(next, ti, seams);
         let score = (BREATH_BLAST.min(alive_t) as f64) * (1.0 - block_chance(sdef, BREATH_AP, false));
         if score > best {
@@ -1016,7 +1016,7 @@ pub(crate) fn tray_strafing(
     // defender's live context, the members at their own Quality.
     let d = modifier_distance_in(next, si, target, seams);
     let ut = &statics[next.roster.profile[target]];
-    let mut def = ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch);
+    let mut def = with_modifier_sum(ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch), seams.rules_epoch);
     // D-STEALTH — the strafe volley reads the defender's live context the
     // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
     // the def build carries the same terrain gate.
@@ -2477,7 +2477,7 @@ pub(crate) fn tray_retreating_strike(
     );
     if gap > RETREATING_STRIKE_REACH_IN { return; }
     let def_owner = statics[next.roster.profile[ti]].name.clone();
-    let def = ctx_live(ctx_of(&statics[next.roster.profile[ti]], next, ti), statics, next, ti, true, seams.rules_epoch);
+    let def = with_modifier_sum(ctx_live(ctx_of(&statics[next.roster.profile[ti]], next, ti), statics, next, ti, true, seams.rules_epoch), seams.rules_epoch);
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
     for bearer in bearers {
@@ -2899,6 +2899,14 @@ pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
 /// The regen fold's 0-means-unset MIN (the `regen_targets` stamp's own rule).
 fn fold_min(have: i64, cand: i64) -> i64 {
     if cand > 0 && (cand < have || have == 0) { cand } else { have }
+}
+
+/// D21 (`EPOCH_68_MODIFIER_SUM`) — the DICE paths stamp the summed save target off the RECORD's epoch
+/// (Amendment B1); the EV imagination (`ctx_live(.., CURRENT_RULES_EPOCH)` and the menu) never calls
+/// this, so recorded scores replay byte-exact.
+pub(crate) fn with_modifier_sum(mut c: Ctx, rules_epoch: u32) -> Ctx {
+    c.modifier_sum = rule_on(rules_epoch, EPOCH_68_MODIFIER_SUM);
+    c
 }
 
 pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, melee: bool, rules_epoch: u32) -> Ctx {
@@ -4363,7 +4371,7 @@ fn strike_phase(
         }
     }
     let ut = &statics[next.roster.profile[ti]];
-    let mut def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch);
+    let mut def = with_modifier_sum(ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch), seams.rules_epoch);
     // D-STEALTH — the def build's terrain gate (the melee leg consumes the
     // same closed alias the shooting fold does).
     stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
@@ -4400,6 +4408,7 @@ fn strike_phase(
                     crate::combat::reliable_quality(att.quality,
                         prof36.map(|p| p.reliable).unwrap_or(false)),
                     (prof36.is_some() && prof36.unwrap().thrust) || att.thrust_grant,
+                    crate::combat::BEST_HIT_TARGET,
                 ),
                 &def, prof36, &mut shot.log);
             att.versatile_pick_hit = vh;
@@ -5375,11 +5384,6 @@ fn cast_phase(
     // target), planned ONCE at the first face that produces a pick (the
     // face that names the attempt and pays for it, like the threshold).
     let mut boost_plan: Option<(i64, i64, i64, i64, i64, i64)> = None;
-    // D-MAGIC telemetry (CAST_FORK_2026-09-16.md Finding 2) — the kind stamp
-    // `_spells_by_kind_tally` counts (core_selfplay.gd:74-81): the FIRST
-    // face's spell names the attempt (battle_sim.gd `_cast_phase`'s own
-    // event), and the pushed cast entries carry its `effect_kind`.
-    let mut cast_kind = "";
     for d3 in 1..=3i64 {
         let Some((idx, ti, ou)) =
             pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los, &origins, seams.rules_epoch)
@@ -5416,6 +5420,23 @@ fn cast_phase(
             });
         let boost = plan.0;
         let p_success = cast_success_chance_vs(casting_net, boost, plan.3);
+        // The cast ATTEMPT event, the table's own shape (battle_sim.gd `_cast_phase`):
+        // the FIRST face's spell names it, and it is the only entry the
+        // `_spells_by_kind_tally` counts (the log lines below carry no kind).
+        if cost.is_none() {
+            let mut ev = serde_json::json!({
+                "spell": spells[idx].name, "kind": spells[idx].effect_kind,
+                "cost": spells[idx].threshold, "target": state.roster.keys[ti],
+                "p_success": p_success, "boost": boost, "interference": plan.3,
+            });
+            if ou != si {
+                ev["origin"] = serde_json::json!({
+                    "unit": state.roster.keys[ou],
+                    "position": geom::centre(&state.positions[ou]),
+                });
+            }
+            state.cast_events.push(Rc::new(ev));
+        }
         if origin_mod != 0 {
             // Rules-must-log (#782), the table's own line shape (main.gd
             // `_solo_resolve_one_cast`).
@@ -5424,12 +5445,11 @@ fn cast_phase(
                 statics[state.roster.profile[ci]].name, statics[state.roster.profile[ou]].name, origin_mod
             );
             trace_rule("cast", "Spell Conduit", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Conduit", "log": line, "kind": spells[idx].effect_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Conduit", "log": line })));
         }
         apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success, seams, rng.as_deref_mut());
         if cost.is_none() {
             cost = Some(spells[idx].threshold);
-            cast_kind = &spells[idx].effect_kind;
         }
     }
     if let Some(c) = cost {
@@ -5453,7 +5473,7 @@ fn cast_phase(
                 statics[state.roster.profile[*u]].name, take, statics[state.roster.profile[ci]].name
             );
             lend_log.push(line.clone());
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line, "kind": cast_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Spell Accumulator", "log": line })));
         }
         // Wave 6 (port-caster-boost) — the BOOST tokens ride the same spend
         // order: the caster's own leftover first, then the helpers
@@ -5473,7 +5493,7 @@ fn cast_phase(
             }
             let line = format!("Caster: {} tokens spent (own {}, helpers {}), target 4+ -> {}+", boost, bown, boost - bown, target);
             trace_rule("cast", "Caster", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line, "kind": cast_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
         }
         // Wave 6 (port-caster-interference) — the OPPOSING casters' tokens
         // ride the same payment block, AFTER the boost (the table spends
@@ -5497,7 +5517,7 @@ fn cast_phase(
                 inter, from.join(", "), itarget, ifinal
             );
             trace_rule("cast", "Caster", &line);
-            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line, "kind": cast_kind })));
+            state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
         }
     }
 }
@@ -5791,7 +5811,7 @@ fn versatile_latch(
     };
     let (hit_mod, ap_mod) = crate::combat::versatile_best_mode(
         hit_target,
-        shielded_defense(def.defense, def.shielded_bonus()),
+        shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()),
         ap,
         bane,
     );
@@ -7390,7 +7410,7 @@ fn resolve_with(
                             // volley (+1 to hit per marker), once per group.
                             let precision_hit = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
                             let ut_g = &statics[next.roster.profile[g.ti]];
-                            let mut def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch);
+                            let mut def = with_modifier_sum(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), seams.rules_epoch);
                             // D-STEALTH — the def build's terrain gate: the alias
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
