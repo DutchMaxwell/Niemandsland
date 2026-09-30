@@ -1469,7 +1469,7 @@ func _update_recommendations_with_values(total_pieces: int, coverage_pct: float,
 %s 1 dangerous piece per player (have: %d)
 
 Extended Guidelines:
-%s Max 12" gap between terrain (%.1f")
+%s Max 12" gap between terrain (%s)
 %s Balanced symmetry (%.0f%%)
 
 Tip: Connected cells = 1 piece""" % [
@@ -1479,7 +1479,7 @@ Tip: Connected cells = 1 piece""" % [
 		check_mark if cover_ok else cross_mark, cover_pct,
 		check_mark if difficult_ok else cross_mark, difficult_pct,
 		check_mark if dangerous_ok else cross_mark, dangerous_pieces,
-		check_mark if extended.max_gap_ok else cross_mark, extended.max_gap_inches,
+		check_mark if extended.max_gap_ok else cross_mark, extended.max_gap_text,
 		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score
 	]
 
@@ -2321,6 +2321,7 @@ func _check_extended_guidelines() -> Dictionary:
 	var results = {
 		"max_gap_ok": true,
 		"max_gap_inches": 0.0,
+		"max_gap_text": "–",
 		"symmetry_ok": true,
 		"symmetry_score": 0.0
 	}
@@ -2330,22 +2331,28 @@ func _check_extended_guidelines() -> Dictionary:
 	var grid_dims = _calculate_grid_dimensions()
 	var max_gap = 0.0
 
-	# Sample points across the table
-	for test_x in range(0, int(table_size_feet.x * 12), 3):
-		for test_y in range(0, int(table_size_feet.y * 12), 3):
+	# Sample points across the table (table inches, origin = table corner) against cell centres
+	# mapped from grid coordinates (centred on the table, rotated by the grid rotation) into the same frame.
+	var table_w = table_size_feet.x * 12.0
+	var table_h = table_size_feet.y * 12.0
+	var rot = deg_to_rad(grid_rotation_degrees)
+	var centers: Array[Vector2] = []
+	for cell_pos in grid_cells:
+		if grid_cells[cell_pos] == TerrainType.NONE:
+			continue
+		var local = Vector2(cell_pos.x - grid_dims.x / 2.0 + 0.5, cell_pos.y - grid_dims.y / 2.0 + 0.5) * GRID_SIZE_INCHES
+		centers.append(local.rotated(rot) + Vector2(table_w, table_h) / 2.0)
+
+	for test_x in range(0, int(table_w) + 1, 3):
+		for test_y in range(0, int(table_h) + 1, 3):
 			var min_dist = INF
-			# Find nearest terrain
-			for cell_pos in grid_cells:
-				if grid_cells[cell_pos] == TerrainType.NONE:
-					continue
-				var cell_center_x = (cell_pos.x + 0.5) * GRID_SIZE_INCHES
-				var cell_center_y = (cell_pos.y + 0.5) * GRID_SIZE_INCHES
-				var dist = Vector2(test_x, test_y).distance_to(Vector2(cell_center_x, cell_center_y))
-				min_dist = min(min_dist, dist)
+			for c in centers:
+				min_dist = min(min_dist, Vector2(test_x, test_y).distance_to(c))
 			max_gap = max(max_gap, min_dist)
 
 	results.max_gap_inches = max_gap
 	results.max_gap_ok = max_gap <= 12.0
+	results.max_gap_text = "–" if is_inf(max_gap) else "%.1f\"" % max_gap
 
 	# Symmetry check (simplified - count terrain in each half)
 	var half_x = grid_dims.x / 2
