@@ -30,8 +30,11 @@ func test_a8_zone_type_dropdown_sits_in_a_captioned_row() -> void:
 		.override_failure_message("A8 — the zone type dropdown is not inside a HouseStyle.field_row").is_true()
 	assert_object(_ed.find_child("DeploymentTypeRow", true, false)).is_not_null()
 	# and that row really lives in the Deployment tab body (it moved with the tab)
-	assert_bool(_ed.find_child("TabAufstellung", true, false).is_ancestor_of(row) \
-		or _ed.find_child("TabDeployment", true, false) != null and _ed.find_child("TabDeployment", true, false).is_ancestor_of(row)).is_true()
+	var in_tab := false
+	for tab_name in ["TabAufstellung", "TabDeployment"]:
+		var tab := _ed.find_child(tab_name, true, false)
+		in_tab = in_tab or (tab != null and tab.is_ancestor_of(row))
+	assert_bool(in_tab).is_true()
 
 
 func test_a8_zone_buttons_use_house_variants() -> void:
