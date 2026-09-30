@@ -501,6 +501,11 @@ pub struct Ctx {
     /// The mod's own sign stays POSITIVE: the "Defense rolls +N" log lines
     /// name the ladder, not the fold.
     pub growth_def_lowers: bool,
+    /// D21 (`EPOCH_68_MODIFIER_SUM`): the save target is ONE sum clamped once at
+    /// `[2, 6]`, not a ladder of per-modifier 2+ floors. FALSE on every
+    /// `ctx_of` — only `sim::ctx_live` stamps it off the record's own epoch, so
+    /// the EV imagination keeps the old floors like every other live facet.
+    pub modifier_sum: bool,
     // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
     // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
     // arrival stamp and folds it in, so the EV imagination stays blind to it
@@ -586,6 +591,12 @@ pub struct Ctx {
 }
 
 impl Ctx {
+    /// The floor every per-modifier defence step clamps at: the hard 2+ below
+    /// `EPOCH_68_MODIFIER_SUM`, none from it (`save_batch` clamps the SUM once).
+    pub fn def_floor(&self) -> i64 {
+        if self.modifier_sum { i64::MIN / 4 } else { 2 }
+    }
+
     /// The Shielded group's working bonus — the defense-parts seam's own
     /// magnitude (main.gd:5552-5559 folds the group's parts as ONE sum, and
     /// every +1 kind contributes exactly `SHIELDED_DEFENSE_BONUS`). 0 = no
@@ -2844,6 +2855,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_def_mod: 0,
         growth_fortify_ap: 0,
         growth_def_lowers: false,
+        modifier_sum: false,
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
         reckless_ap: 0,

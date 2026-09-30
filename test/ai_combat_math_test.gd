@@ -7,6 +7,18 @@ func test_count_hits_at_or_above_quality() -> void:
 	assert_int(AiCombatMath.count_hits([6, 3, 2, 1], 3)).is_equal(2)
 
 
+## D21 (GF p.5 MODIFIERS, EPOCH_68_MODIFIER_SUM): Defense, cover, Shielded and AP are ONE sum clamped once.
+func test_defense_modifiers_are_one_sum_clamped_once() -> void:
+	# Def 2+ in cover vs AP(1): 2 - 1 + 1 = 2+ (the old per-step floor saved on 3+).
+	assert_int(AiCombatMath.save_target(AiCombatMath.covered_defense(2, true), 1)).is_equal(2)
+	# Def 3+ Shielded in cover vs AP(2): 3 - 1 - 1 + 2 = 3+ (the old ladder said 4+).
+	var d: int = AiCombatMath.covered_defense(AiCombatMath.shielded_defense(3, true), true)
+	assert_int(AiCombatMath.save_target(d, 2)).is_equal(3)
+	# The one clamp: never better than 2+, never worse than a natural 6.
+	assert_int(AiCombatMath.save_target(1, 0)).is_equal(2)
+	assert_int(AiCombatMath.save_target(6, 2)).is_equal(6)
+
+
 func test_save_target_adds_ap() -> void:
 	assert_int(AiCombatMath.save_target(4, 1)).is_equal(5)
 	assert_int(AiCombatMath.save_target(4, 0)).is_equal(4)
@@ -249,8 +261,8 @@ func test_shielded_defense_improves_the_save_by_one() -> void:
 	# Shielded (army-book rule): +1 to Defense rolls = a save target one better.
 	assert_int(AiCombatMath.shielded_defense(4, true)).is_equal(3)
 	assert_int(AiCombatMath.shielded_defense(4, false)).is_equal(4)
-	# Floored at 2+ (a natural 1 always fails).
-	assert_int(AiCombatMath.shielded_defense(2, true)).is_equal(2)
+	# D21: NOT floored here — the modifiers are one sum, clamped once by save_target.
+	assert_int(AiCombatMath.shielded_defense(2, true)).is_equal(1)
 
 
 func test_impact_total_dice_counter_reduction() -> void:
@@ -361,9 +373,9 @@ func test_shrouded_reach_penalty_and_floor() -> void:
 
 func test_guarded_defense_bonus_and_floor() -> void:
 	# Guarded (+1 to defense rolls when shot/charged from over 9"): one better when the gate applies,
-	# floored at 2+ like every defense modifier; passthrough when it does not.
+	# unfloored (D21: the sum is clamped once by save_target); passthrough when it does not apply.
 	assert_int(AiCombatMath.guarded_defense(4, true)).is_equal(3)
-	assert_int(AiCombatMath.guarded_defense(2, true)).is_equal(2)
+	assert_int(AiCombatMath.guarded_defense(2, true)).is_equal(1)
 	assert_int(AiCombatMath.guarded_defense(4, false)).is_equal(4)
 
 

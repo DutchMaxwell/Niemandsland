@@ -3411,7 +3411,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		base_defense = AiCombatMath.guarded_defense(base_defense, true)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
-				target.get_name(), over9_rule, base_defense], true)
+				target.get_name(), over9_rule, AiCombatMath.shown_target(base_defense)], true)
 	var covered_defense: int = _solo_cover_defense(target, base_defense)   # +1 Defense if majority in cover
 	# Resolver wave A — vs-target Marks: the bearer's pick lands on THIS volley's target.
 	_solo_apply_vs_marks(attacker, target, dist_in)
@@ -5842,7 +5842,7 @@ func _solo_unpredictable_rule(striker: GameUnit, melee: bool, target: GameUnit =
 	return ""
 
 
-## The groups of _solo_defense_parts, folded in this order (each with its own 2..6 clamp).
+## The groups of _solo_defense_parts, folded in this order (one sum, clamped once at the save).
 const DEF_PART_SHIELDED := "shielded"
 const DEF_PART_MARKER := "marker"
 const DEF_PART_TOKEN := "token"
@@ -5860,16 +5860,14 @@ const DEF_PART_TOKEN := "token"
 ## Guarded/Versatile/Sturdy family ("shot or charged from over 9\"" — _solo_over9_defense_rule).
 func _solo_defense_vs(target: GameUnit, source: String = AiCombatMath.HIT_SOURCE_SHOOTING) -> int:
 	var base: int = _solo_armored_defense(target)
+	var bonus_sum := 0
 	var parts: Array = _solo_defense_parts(target, source)
 	for group in [DEF_PART_SHIELDED, DEF_PART_MARKER, DEF_PART_TOKEN]:
-		var bonus := 0
 		for p in parts:
 			var pd := p as Dictionary
 			if str(pd["group"]) == group and bool(pd["applies"]):
-				bonus += int(pd["bonus"])
-		if bonus != 0:
-			base = clampi(base - bonus, 2, 6)
-	return base
+				bonus_sum += int(pd["bonus"])
+	return base - bonus_sum
 
 
 ## Every Defense contribution the unit brings to a save, each DECLARING the scope its own rule text
@@ -5944,7 +5942,7 @@ func _solo_log_defense_parts(target: GameUnit, source: String, defense: int, ai:
 		if bonus == 0 or not bool(pd["applies"]):
 			continue
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s is %s: %+d Defense (saves on %d+)" % [
-			target.get_name(), str(pd["name"]), bonus, defense], ai)
+			target.get_name(), str(pd["name"]), bonus, AiCombatMath.shown_target(defense)], ai)
 
 
 ## rules-must-log for NML-104: the spell save step NAMES both halves. What DOES apply gets a line —
@@ -5961,10 +5959,10 @@ func _solo_log_defense_vs_spell(target: GameUnit, defense: int) -> void:
 			continue
 		if bool(pd["applies"]):
 			battle_log.log_event(BattleLog.Category.COMBAT, "%+d defense vs spell damage — %s (%s saves on %d+)" % [
-				bonus, str(pd["name"]), target.get_name(), defense], true)
+				bonus, str(pd["name"]), target.get_name(), AiCombatMath.shown_target(defense)], true)
 		else:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s does not apply to spell damage (\"%s\") — %s saves on %d+" % [
-				str(pd["name"]), str(pd["clause"]), target.get_name(), defense], true)
+				str(pd["name"]), str(pd["clause"]), target.get_name(), AiCombatMath.shown_target(defense)], true)
 	# A token whose OWN text scopes it to an attack ("in melee", "against shooting") never reaches the
 	# parts list — AiSpell.mods_for drops it for a spell source. What it WOULD have given a shot or a
 	# melee hit is the union of both attack reads; the diff against the spell read is the silence the
@@ -5981,18 +5979,18 @@ func _solo_log_defense_vs_spell(target: GameUnit, defense: int) -> void:
 				continue
 			named.append(spell)
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s does not apply to spell damage (its modifier is scoped to %s) — %s saves on %d+" % [
-				spell, str(rdd.get("scope", "")), target.get_name(), defense], true)
+				spell, str(rdd.get("scope", "")), target.get_name(), AiCombatMath.shown_target(defense)], true)
 	# Cover and the over-9" family are applied by the ATTACK call sites, so on this path they are
 	# absent by construction — which is exactly what their wording says, and worth saying out loud.
 	if _solo_majority_in_cover(target):
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Cover does not apply to spell damage (its +1 is against shooting) — %s saves on %d+" % [
-			target.get_name(), defense], true)
+			target.get_name(), AiCombatMath.shown_target(defense)], true)
 	var over9 := _solo_over9_defense_rule(target)
 	if not over9.is_empty():
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s does not apply to spell damage (its +1 is for being shot or charged from over 9\") — %s saves on %d+" % [
-			over9, target.get_name(), defense], true)
+			over9, target.get_name(), AiCombatMath.shown_target(defense)], true)
 
 
 ## The unit's Armor(X) rating (wave 5, army-book upgrade), 0 when absent or when its book does not field
@@ -6434,7 +6432,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 		defense = AiCombatMath.guarded_defense(defense, true)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over 9\" — +1 Defense (saves on %d+)" % [
-				defender.get_name(), m_over9, defense], true)
+				defender.get_name(), m_over9, AiCombatMath.shown_target(defense)], true)
 	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, 0.0, true, charging)
 	# Wave-4 Unpredictable Fighter (Mummified, melee-only) and the generic Unpredictable ("when
 	# attacking" — the same die, shooting AND melee): ONE die per melee for the whole unit —
@@ -7423,14 +7421,14 @@ func _solo_log_takedown_context(weapon_name: String, pick: Dictionary, ctx: Dict
 		if not bool(ctx.get("in_cover", false)):
 			parts.append("no cover of its own")
 		elif cov_def == base_def:
-			parts.append("in cover, but Defense is already %d+" % base_def)
+			parts.append("in cover, but Defense is already %d+" % AiCombatMath.shown_target(base_def))
 		elif save_def == cov_def:
 			parts.append("in cover: +1 Defense")
 		else:
 			parts.append("in cover, but this weapon ignores cover")
 	if not str(ctx.get("over9_rule", "")).is_empty():
 		parts.append("%s: +1 Defense" % str(ctx["over9_rule"]))
-	parts.append("saves on %d+" % save_def)
+	parts.append("saves on %d+" % AiCombatMath.shown_target(save_def))
 	battle_log.log_event(BattleLog.Category.COMBAT, "Takedown (%s) vs the %s of %s — unit of [1]: %s" % [
 		weapon_name, _solo_model_label(owner, int(pick.get("index", -1))), owner.get_name(),
 		", ".join(parts)], true)
@@ -8154,7 +8152,7 @@ func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: Strin
 	# A3 (NML-202): the panel switch (or _run_player_intent's own first-use flip) skips the ask —
 	# the threshold log line and the tray roll are unchanged either way.
 	if not _solo_auto_saves:
-		var ap_note: String = (" (AP %d → save on %d+)" % [ap, defense + ap]) if ap > 0 else " (save on %d+)" % defense
+		var ap_note: String = (" (AP %d → save on %d+)" % [ap, AiCombatMath.save_target(defense, ap)]) if ap > 0 else " (save on %d+)" % AiCombatMath.shown_target(defense)
 		# Saves are not optional — one clear action, no cancel button. UI audit 2026-07-24: ESC used to
 		# lock the board here (the MOST frequent solo prompt); on the card ESC answers too, and either
 		# way we roll.
@@ -8212,11 +8210,12 @@ func _solo_log_save_threshold(defender: GameUnit, defense: int, ap: int) -> void
 ## unit test; thresholds within 2..6 keep the old format byte-identical.
 static func save_threshold_text(defense: int, ap: int) -> String:
 	var target: int = defense + ap
+	var shown: int = AiCombatMath.shown_target(defense)
 	if ap > 0 and target > 6:
-		return "6 only (Def %d+, AP %d — a natural 6 always saves)" % [defense, ap]
+		return "6 only (Def %d+, AP %d — a natural 6 always saves)" % [shown, ap]
 	if ap > 0:
-		return "%d+ (Def %d+, AP %d)" % [target, defense, ap]
-	return "%d+" % defense
+		return "%d+ (Def %d+, AP %d)" % [AiCombatMath.shown_target(target), shown, ap]
+	return "%d+" % shown
 
 
 # === AI-action presentation layer (goal 003 game-feel: announce → execute → resolve → outcome) ===
@@ -11091,7 +11090,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		shielded_def = AiCombatMath.guarded_defense(shielded_def, true)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
-				target.get_name(), h_over9, shielded_def], true)
+				target.get_name(), h_over9, AiCombatMath.shown_target(shielded_def)], true)
 	var covered_def: int = _solo_cover_defense(target, shielded_def)
 	# Resolver wave A parity: your volley places vs-target Marks, SPENDS Piercing-Tag markers and
 	# honours the Reckless-Piercing AP stamps — the AI path had these seams, yours silently didn't.
