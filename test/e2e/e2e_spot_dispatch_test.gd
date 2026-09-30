@@ -60,6 +60,7 @@ func before_test() -> void:
 	_main.solo_ai_slots = {2: true}
 	_main._ensure_solo_controller()
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
+	_main._solo_batch = true
 
 
 func after_test() -> void:
@@ -265,3 +266,26 @@ func test_breath_sight_is_blocked_by_the_floor_a_model_stands_on() -> void:
 		.override_failure_message("NML-972 — Breath Attack reaches THROUGH the floor slab the upper model " +
 			"stands on: the unit-centre sight gate is not reading the 3D volume registry.") \
 		.is_false()
+
+
+## NML-980, W3-3 (a): a 3-model "Precision Spotter" unit rolls THREE dice, not one — the book's
+## "roll one die" is per MODEL (GF p.4). Seed 19 draws [1, 4, 2]: a lone die (the old reading)
+## misses (1 < 4); the second die, only reachable with 3 dice, hits. A qualitative miss-vs-hit
+## split, the same design as the Rust twin's RED proof (sim.rs test), so no coincidence of
+## numbers can fake it. Driven through the REAL dispatch chain (solo_begin_spot ->
+## _solo_spot_click), the same route the file's other tests use.
+func test_spot_dispatch_rolls_one_die_per_spotter_model() -> void:
+	_main.seed_tray_rng(19)
+	var spotter := _armed_unit(1, "Eyes", [SPOTTER_LEFT, SPOTTER_RIGHT, Vector3(0.0, 0.0, 0.0)], 36)
+	spotter.unit_properties["special_rules"] = ["Precision Spotter"]
+	var target := _armed_unit(2, "Marked", [TARGET_POS], 36)
+	_main.solo_begin_spot(spotter)
+	assert_bool(_main._solo_target_mode.has("spot")) \
+		.override_failure_message("fixture: the wheel's Spot must arm on an open table (log:\n%s)" % _log_text()) \
+		.is_true()
+	_main._solo_spot_click(target)
+	assert_int(int(target.unit_properties.get("spot_markers", 0))) \
+		.override_failure_message(
+			"W3-3 a: 3 alive models must roll 3 dice [1, 4, 2] — the second hits, a lone die would " +
+			"have missed. Log:\n%s" % _log_text()) \
+		.is_equal(1)
