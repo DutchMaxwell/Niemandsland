@@ -51,10 +51,11 @@ func _init(title_text: String, text: String = "", ok_text: String = "OK", cancel
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
 	box.add_child(actions)
-	if ok_text != "":
-		ok_button = _action(actions, ok_text, HouseStyle.PRIMARY, func() -> void: resolve(ok_value))
+	# The way out left, the main action right: the old dialogs' order and the dice window's (Quick | Roll).
 	if cancel_text != "":
 		cancel_button = _action(actions, cancel_text, HouseStyle.BUTTON, func() -> void: resolve(cancel_value))
+	if ok_text != "":
+		ok_button = _action(actions, ok_text, HouseStyle.PRIMARY, func() -> void: resolve(ok_value))
 	var close := header.get_node("CloseButton") as Button
 	close.visible = cancel_button != null
 	close.pressed.connect(func() -> void: _press(cancel_button))
