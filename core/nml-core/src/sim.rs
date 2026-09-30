@@ -720,23 +720,35 @@ pub(crate) fn tray_reanimation(
 /// line of sight, and roll X dice. For each 2+ it takes one hit with AP(1)"
 /// (army-book Surprise Attack; the gf/aof registry entry's own params).
 /// Fires at the activation trigger BEFORE the action, next to Reanimation.
-/// FIRST-ACTIVATION latch, replay-stable form: no recorded per-unit activation
-/// counter exists and the table's burst arm is the audit-B open question, so
-/// the port fires only on a ROUND-1 activation — one act per unit per round
-/// makes that the first activation for every unit on the board at round start.
-/// Gate: FROZEN `EPOCH_7_TABLE_RULES`.
+/// Below `EPOCH_67_MARKERS_BURSTS` (D19 a): FIRST-ACTIVATION latch, replay-
+/// stable form — no recorded per-unit activation counter exists and the
+/// table's burst arm was the audit-B open question, so the port fires only
+/// on a ROUND-1 activation — one act per unit per round makes that the
+/// first activation for every unit on the board at round start.
+/// From `EPOCH_67_MARKERS_BURSTS`: `State.surprise_attack_used` (folded from
+/// the ledger, main.gd stamps it the same way) is the real per-bearer
+/// latch — a spent bearer never fires again in ANY round, and a round-2+
+/// FIRST activation (e.g. an Infiltrate/Ambush arrival) fires it, which the
+/// old `round != 1` gate could never reach. Gate: FROZEN `EPOCH_7_TABLE_RULES`
+/// for the family itself, `EPOCH_67_MARKERS_BURSTS` for which latch reads.
 pub(crate) fn tray_surprise_attack(
     statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
     tray: &mut Tray, shot: &mut ShootResult,
 ) {
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) { return; }
-    if next.alive[si] <= 0 || next.round != 1 { return; }
+    if next.alive[si] <= 0 { return; }
+    let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
+    if !epoch67 && next.round != 1 { return; }
     let pid = next.player[si];
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
     for b in bearers {
         if next.alive[b] <= 0 { continue; }
         let Some(spec) = statics[next.roster.profile[b]].surprise_attack.clone() else { continue; };
+        if epoch67 {
+            if next.surprise_attack_used[b] { continue; }
+            next.surprise_attack_used[b] = true;
+        }
         let owner = statics[next.roster.profile[b]].name.clone();
         surprise_strike(statics, state, next, b, seams, tray, shot, spec, owner, pid);
     }

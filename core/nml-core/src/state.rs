@@ -572,6 +572,12 @@ pub struct State {
     /// 10474): per unit, ONCE per game — unlike every other ledger flag above,
     /// this never resets on a later round.
     pub second_wind_used: Vec<bool>,
+    /// D19 (a), `EPOCH_67_MARKERS_BURSTS` — `unit_properties["surprise_attack_used"]`
+    /// (main.gd `_solo_apply_surprise_attack`): Surprise Attack's "first
+    /// activation" latch, the `second_wind_used` shape — burns whether or not
+    /// a target was found, never resets on a later round. Read by
+    /// `sim::tray_surprise_attack` in place of the old `round != 1` gate.
+    pub surprise_attack_used: Vec<bool>,
     /// Wave 4 — `unit_properties["reinforcement_spent"]` (main.gd:10344): the
     /// S5 withdraw-and-recreate promise, kept ONCE per unit and never reset on
     /// a later round, the `second_wind_used` shape. It is a per-UNIT flag and

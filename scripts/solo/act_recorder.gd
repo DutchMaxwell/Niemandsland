@@ -788,6 +788,11 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 		ledger["delayed_action_round"] = dar
 	if bool(u.unit_properties.get("second_wind_used", false)):
 		ledger["second_wind_used"] = true
+	# D19 (a), EPOCH_67_MARKERS_BURSTS — Surprise Attack's once-per-game "first activation"
+	# latch (main.gd `_solo_apply_surprise_attack`), the second_wind_used shape: burns whether
+	# or not a target was found, never resets.
+	if bool(u.unit_properties.get("surprise_attack_used", false)):
+		ledger["surprise_attack_used"] = true
 	# Wave 4 — Reinforcement's once-per-game promise (main.gd:10344). Without it the core
 	# replays every act with the rule UNSPENT and could withdraw a unit the table has already
 	# brought back — the #493/#498 divergence shape, one seam over. The key is renamed to the

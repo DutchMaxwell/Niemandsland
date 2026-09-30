@@ -242,6 +242,13 @@ pub struct PlainLedger {
     /// 10474), per unit, ONCE per game (no "round" derivation, unlike growth).
     #[serde(default)]
     second_wind_used: bool,
+    /// D19 (a), `EPOCH_67_MARKERS_BURSTS` — `unit_properties["surprise_attack_used"]`
+    /// (main.gd `_solo_apply_surprise_attack`), the "first activation" latch,
+    /// per unit, ONCE per game (the `second_wind_used` shape). Absent from
+    /// every corpus recorded before this key, and `false` there — an old act
+    /// replays with the burst unspent, exactly as it did.
+    #[serde(default)]
+    surprise_attack_used: bool,
     /// Wave 4 — `unit_properties["reinforcement_spent"]` (main.gd:10344), the
     /// S5 withdraw-and-recreate promise, once per unit and never reset. Absent
     /// from every corpus recorded before this key, and `false` there — so an
@@ -920,6 +927,7 @@ pub(crate) fn state_of(
         precision_used: vec![Vec::new(); n],
         growth_round: vec![-1; n],
         second_wind_used: vec![false; n],
+        surprise_attack_used: vec![false; n],
         reinforcement_used: vec![false; n],
         second_wind_round: -1,
         second_wind_uses: 0,
@@ -1073,6 +1081,7 @@ pub fn fold_ledger(
     }
     st.vs_mark_round[ui] = ledger.vs_mark_round;
     st.second_wind_used[ui] = ledger.second_wind_used;
+    st.surprise_attack_used[ui] = ledger.surprise_attack_used;
     st.reinforcement_used[ui] = ledger.reinforcement_used;
     st.storm_used[ui] = ledger.storm_used.clone();
     st.feats_used[ui] = ledger.feats_used.clone();

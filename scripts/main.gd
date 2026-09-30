@@ -1108,6 +1108,11 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	_solo_log_unmodeled_rules(unit)   # once-per-session visibility of rules the automation skips
 	if target != null:
 		_solo_log_unmodeled_rules(target)
+	# D19 (a), EPOCH_67_MARKERS_BURSTS: "The first time this unit is activated…" fires at
+	# ACTIVATION START, before the move (the book's ambush trigger, not an after-the-fact
+	# shot) — moved out of the before-attacking cluster below, which ran after
+	# _solo_animate_move.
+	await _solo_apply_surprise_attack(unit)
 	# ACTIVATION CHOREOGRAPHY (field-test finding 7 — the maintainer's explicit staging): the camera has
 	# focused the unit (a); hold an attention beat (b); _solo_animate_move then shows the plotted corridors
 	# (c), holds a beat (d) and glides the models along them (e); a final beat (f) precedes the attack/
@@ -1152,7 +1157,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	_solo_apply_precision_target(unit)
 	await _solo_apply_reckless_piercing(unit)
 	await _solo_apply_storm_attack(unit)
-	await _solo_apply_surprise_attack(unit)
+	# Surprise Attack moved to activation start (D19 a, above the move) — see the call there.
 	await _solo_apply_teleport(unit, report)   # design #816 PR 1: the before-attack reposition beat
 	if unit.is_destroyed():
 		return unit
@@ -19121,13 +19126,17 @@ static func surprise_attack_pick(candidates: Array) -> GameUnit:
 	return best
 
 
-## The burst itself: the before-attacking slot in the AI activation body (main.gd:1088, the same
-## slot Storm Attack uses) AND the human activation's tail — once per game per bearer = the
-## first-activation trigger, SEAT-AGNOSTIC since the human-burst fix (STANDALONE_SWEEP_D
-## 2026-09-14: the burst used to live in the AI body only, so the human's identical bearer never
-## struck). Params ride the registry entry (range_in/trigger_target/ap, the #810 census rows) with
-## the book text as defaults; the target is the descending auto pick for BOTH seats (v1 — no
-## click prompt for a once-per-activation enemy pick exists on the table yet).
+## The burst itself: activation start in the AI body (main.gd ~1111, before the move) AND the
+## human activation's tail — once per game per bearer = the first-activation trigger,
+## SEAT-AGNOSTIC since the human-burst fix (STANDALONE_SWEEP_D 2026-09-14: the burst used to
+## live in the AI body only, so the human's identical bearer never struck). Params ride the
+## registry entry (range_in/trigger_target/ap, the #810 census rows) with the book text as
+## defaults; the target is the descending auto pick for BOTH seats (v1 — no click prompt for a
+## once-per-activation enemy pick exists on the table yet).
+## D19 (a): "the first time this unit is activated" fires the latch on the FIRST activation
+## whether or not a target exists — a bearer with no target in range this activation does NOT
+## get another try later (it stamps `surprise_attack_used` before the candidate search, not
+## after a successful pick).
 func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 	if unit == null or opr_army_manager == null or solo_controller == null:
 		return
@@ -19138,6 +19147,7 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 		var bu := b as GameUnit
 		if not solo_controller.surprise_attack_bearer_ready(bu):
 			continue
+		bu.unit_properties["surprise_attack_used"] = true
 		var range_in := float(RulesRegistry.unit_param(bu, "Surprise Attack", "range_in", 6.0))
 		var trigger := int(RulesRegistry.unit_param(bu, "Surprise Attack", "trigger_target", 2))
 		var ap := int(RulesRegistry.unit_param(bu, "Surprise Attack", "ap", 1))
@@ -19150,7 +19160,6 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 				candidates.append(hu)
 		if candidates.is_empty():
 			continue
-		bu.unit_properties["surprise_attack_used"] = true
 		var dice := maxi(_solo_unit_rating(bu, "Surprise Attack"), 1)
 		var faces: Array = await _solo_tray_roll(dice, trigger, _solo_owner_label(bu), "attack",
 			"Surprise Attack hits: %d+" % trigger)
