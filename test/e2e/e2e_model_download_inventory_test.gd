@@ -72,6 +72,16 @@ func test_a_zero_total_is_clamped_to_one() -> void:
 	assert_float(_main._cache_progress_bar.max_value).is_equal(1.0)
 
 
+func test_the_panel_wears_the_house_style() -> void:
+	_main._on_model_caching_started(3)
+	var panel: PanelContainer = _main._cache_progress_panel
+	assert_object(panel.theme).is_same(HouseStyle.theme())
+	assert_str(String(panel.theme_type_variation)).is_equal(String(HouseStyle.PANEL_VARIANT))
+	assert_str(String(_main._cache_progress_label.theme_type_variation)).is_equal(String(HouseStyle.EYEBROW))
+	var fill := _main._cache_progress_bar.get_theme_stylebox(&"fill") as StyleBoxFlat
+	assert_that(fill.bg_color).is_equal(HouseStyle.ACCENT)
+
+
 func test_inventory_check_names_a_missing_part() -> void:
 	_main._on_model_caching_started(3)
 	assert_array(_missing()).is_empty()

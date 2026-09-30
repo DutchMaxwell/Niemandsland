@@ -304,6 +304,9 @@ static func theme() -> Theme:
 	t.set_stylebox(&"grabber", &"VScrollBar", grab)
 	t.set_stylebox(&"grabber_highlight", &"VScrollBar", grab_hot)
 	t.set_stylebox(&"grabber_pressed", &"VScrollBar", grab_hot)
+	# Progress bars (the model download): a sunken track, the fill in the accent.
+	t.set_stylebox(&"background", &"ProgressBar", _box(WELL, LINE, RADIUS_CONTROL, 0, 0))
+	t.set_stylebox(&"fill", &"ProgressBar", _box(ACCENT, ACCENT, RADIUS_CONTROL, 0, 0))
 	_theme = t
 	return t
 

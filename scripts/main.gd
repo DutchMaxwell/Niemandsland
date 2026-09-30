@@ -14738,6 +14738,7 @@ func _ensure_cache_progress_ui() -> void:
 	if _cache_progress_panel:
 		return
 	_cache_progress_panel = PanelContainer.new()
+	HouseStyle.apply(_cache_progress_panel)
 	# Fully centred on screen (both axes).
 	_cache_progress_panel.anchor_left = 0.5
 	_cache_progress_panel.anchor_right = 0.5
@@ -14748,16 +14749,11 @@ func _ensure_cache_progress_ui() -> void:
 	# It renders as a centred modal with a progress bar, so it owns its clicks: with IGNORE every
 	# click on it fell straight through to the table behind.
 	_cache_progress_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_cache_progress_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
 	_cache_progress_panel.visible = false
-	var margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 12)
-	_cache_progress_panel.add_child(margin)
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 6)
-	margin.add_child(vb)
-	_cache_progress_label = Label.new()
+	vb.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+	_cache_progress_panel.add_child(vb)
+	_cache_progress_label = HouseStyle.label("", HouseStyle.EYEBROW)
 	_cache_progress_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(_cache_progress_label)
 	_cache_progress_bar = ProgressBar.new()
