@@ -12413,19 +12413,17 @@ func _show_fps_advisory() -> void:
 	print("[FPS] low-framerate advisory shown")  # parseable signal for the MP soak harness
 	var panel := PanelContainer.new()
 	panel.name = "FpsAdvisory"
+	HouseStyle.apply(panel)
+	panel.add_theme_stylebox_override(&"panel", HouseStyle.warning_box())
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 90)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
 	panel.add_child(row)
-	var label := Label.new()
-	label.text = "Low framerate may be destabilising your online connection."
-	row.add_child(label)
-	var lower := Button.new()
-	lower.text = "Lower Graphics Quality"
+	row.add_child(HouseStyle.label("Low framerate may be destabilising your online connection.", HouseStyle.BODY))
+	var lower := HouseStyle.button("Lower Graphics Quality", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	lower.pressed.connect(_on_fps_advisory_lower.bind(panel))
 	row.add_child(lower)
-	var dismiss := Button.new()
-	dismiss.text = "Dismiss"
+	var dismiss := HouseStyle.button("Dismiss", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	dismiss.pressed.connect(_free_if_valid.bind(panel))
 	row.add_child(dismiss)
 	$UI.add_child(panel)

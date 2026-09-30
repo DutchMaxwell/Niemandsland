@@ -96,6 +96,16 @@ func test_no_advisory_outside_a_multiplayer_session() -> void:
 	assert_object(_panel()).override_failure_message("the advisory showed in a solo game").is_null()
 
 
+func test_the_advisory_wears_the_house_style() -> void:
+	_main._show_fps_advisory()
+	await _runner.simulate_frames(2)
+	assert_object(_panel().theme).is_same(HouseStyle.theme())
+	assert_that((_panel().get_theme_stylebox(&"panel") as StyleBoxFlat).bg_color).is_equal(HouseStyle.warning_box().bg_color)
+	for t: String in ["Lower Graphics Quality", "Dismiss"]:
+		assert_str(String(_button(t).theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_int(_panel().mouse_filter).override_failure_message("the advisory must own its clicks").is_equal(Control.MOUSE_FILTER_STOP)
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	_main._show_fps_advisory()
 	await _runner.simulate_frames(2)
