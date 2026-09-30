@@ -168,6 +168,9 @@ pub enum Unsupported {
     /// Tree search, `tree_dice: tray` with no stream seed (the playout
     /// signature): declined, never invented.
     TreeDiceSeed,
+    /// Tree search asked for an act outside its scope (the playout
+    /// arbitration, the ORDER re-rank): declined by name, never half-applied.
+    TreeOutOfScope(&'static str),
 }
 
 /// `BattleSim._los_clear` battle_sim.gd:666-670, read off the recorded answers.
