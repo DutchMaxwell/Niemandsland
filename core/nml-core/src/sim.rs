@@ -294,9 +294,9 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
 
 /// Deadly(X) landing PER MODEL — the table's `SoloController.apply_deadly_wounds`
 /// / `deadly_pick` (solo_controller.gd:9191-9233, GF v3.5.1 p.13 "no carry-over"
-/// + p.15 Tough "continue to put wounds on the tough model with most wounds …
-/// until it is killed" + "heroes must be assigned wounds last, even if already
-/// wounded"). Below `EPOCH_67_MARKERS_BURSTS` (D17): the OLD reading —
+/// and p.15 Tough "continue to put wounds on the tough model with most wounds
+/// … until it is killed" and "heroes must be assigned wounds last, even if
+/// already wounded"). Below `EPOCH_67_MARKERS_BURSTS` (D17): the OLD reading —
 /// whichever alive model has the MOST remaining wounds (ties keep array order,
 /// strict `>`, so a FRESH Tough model always wins over a damaged one), host
 /// only, surplus wasted once the host is wiped. From the gate: host slots
