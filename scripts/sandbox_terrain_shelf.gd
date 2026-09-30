@@ -36,6 +36,9 @@ signal piece_placed(prop_id: String)
 var _object_manager: Node = null
 var _biome_option: OptionButton = null
 var _list: ItemList = null
+## Last table point the player aimed at while the cursor was OUTSIDE this window; Place lands there.
+var _last_table_point := Vector3.ZERO
+var _mouse_over_shelf := false
 
 # === Lifecycle ===
 
@@ -44,6 +47,8 @@ func _ready() -> void:
 	size = WINDOW_SIZE
 	min_size = WINDOW_SIZE
 	close_requested.connect(_emit_closed)
+	mouse_entered.connect(func(): _mouse_over_shelf = true)
+	mouse_exited.connect(func(): _mouse_over_shelf = false)
 	visible = false
 	_build_ui()
 
@@ -62,6 +67,17 @@ func open() -> void:
 
 # === Private ===
 
+func _process(_delta: float) -> void:
+	if visible:
+		_track_cursor()
+
+
+## Remember where the player last aimed on the table (not while the cursor is over the shelf).
+func _track_cursor() -> void:
+	if _object_manager != null and not _mouse_over_shelf:
+		_last_table_point = _object_manager.get_cursor_table_position()
+
+
 func _build_ui() -> void:
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 12)
@@ -77,7 +93,7 @@ func _build_ui() -> void:
 	margin.add_child(vbox)
 
 	var hint := Label.new()
-	hint.text = "Pick a piece, then click on the table to place it.\nDrag to push, hold R to rotate."
+	hint.text = "Pick a piece and press Place: it lands where you last aimed on the table.\nDrag to move it, hold R to rotate."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(hint)
 
@@ -143,7 +159,8 @@ func _place(index: int) -> void:
 	var entry: Dictionary = _list.get_item_metadata(index)
 	if entry.is_empty():
 		return
-	var cursor_pos: Vector3 = _object_manager.get_cursor_table_position()
+	# Over the window the cursor ray hits the table BEHIND the shelf: use the last aimed point instead.
+	var cursor_pos: Vector3 = _last_table_point if _mouse_over_shelf else _object_manager.get_cursor_table_position()
 	_object_manager.spawn_sandbox_terrain(entry.get("prop_id", ""), int(entry.get("kind", 0)), cursor_pos)
 	piece_placed.emit(str(entry.get("prop_id", "")))
 	# Keep the shelf open for placing multiple pieces.
