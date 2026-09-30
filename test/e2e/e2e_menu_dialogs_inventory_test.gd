@@ -210,6 +210,37 @@ func test_update_prompt_keeps_its_headline_versions_notes_skip_and_buttons() -> 
 	assert_int(empty.find_children("*", "RichTextLabel", true, false).size()).is_equal(0)
 
 
+func _wears_house_chrome(d: AcceptDialog) -> bool:
+	return d.theme == HouseStyle.theme() and d.get_ok_button().theme_type_variation == HouseStyle.PRIMARY
+
+
+func test_dialogs_wear_the_house_chrome() -> void:
+	var picker := await _open_picker()
+	assert_bool(_wears_house_chrome(picker)).override_failure_message("tutorial picker is not in the house style").is_true()
+	assert_str(String(_button(picker, "RESUME").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_str(String(_button(picker, "RESET TUTORIAL PROGRESS").theme_type_variation)).is_equal(String(HouseStyle.DANGER_BUTTON))
+	var trial := await _open_trial()
+	assert_bool(_wears_house_chrome(trial)).override_failure_message("Trial by Fire is not in the house style").is_true()
+	for b in _buttons(trial):
+		if b != trial.get_ok_button():
+			assert_str(String(b.theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	_menu._on_credits_pressed()
+	_menu._on_exit_pressed()
+	await _frames(2)
+	assert_bool(_wears_house_chrome(_dialog_titled("Credits & licenses"))).override_failure_message("credits is not in the house style").is_true()
+	var quit := _dialog_titled("Quit Niemandsland") as ConfirmationDialog
+	assert_bool(_wears_house_chrome(quit)).override_failure_message("quit is not in the house style").is_true()
+	assert_str(String(quit.get_cancel_button().theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_bool(_wears_house_chrome(_update_prompt("notes"))).override_failure_message("update prompt is not in the house style").is_true()
+
+
+func test_dialogs_define_no_colour_literals() -> void:
+	var src := FileAccess.get_file_as_string("res://scripts/startup_menu.gd")
+	var mine := src.substr(src.find("func _show_tutorial_picker"), src.find("func _launch_scenario") - src.find("func _show_tutorial_picker"))
+	assert_str(mine).not_contains("HudTokens.TEXT_MUTED")
+	assert_str(mine).not_contains("HudTokens.DANGER")
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	var d := await _open_picker()
 	assert_array(_picker_missing(d)).is_empty()
