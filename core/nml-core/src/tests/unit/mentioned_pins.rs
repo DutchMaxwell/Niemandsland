@@ -84,13 +84,13 @@ use super::*;
         assert_eq!(us.ctx.shielded_alias, ShieldedAlias::PlusOneToDefense);
         assert_eq!(us.ctx.shielded_bonus(), 1, "the +1 the rule produces");
         assert_eq!(
-            crate::combat::shielded_defense(us.ctx.defense, us.ctx.shielded_bonus()),
+            crate::combat::shielded_defense(us.ctx.defense, us.ctx.shielded_bonus(), 2),
             3,
             "Defense 4 -> hit on 3+"
         );
         let plain = mentioned_unit("gf", "wormhole_daemons_of_war", &[], "", epoch);
         assert!(!plain.ctx.shielded && plain.ctx.shielded_bonus() == 0);
-        assert_eq!(crate::combat::shielded_defense(plain.ctx.defense, 0), 4, "no rule, plain rung");
+        assert_eq!(crate::combat::shielded_defense(plain.ctx.defense, 0, 2), 4, "no rule, plain rung");
         let unmapped = mentioned_unit("gf", "robot_legions", &["+1 to Defense"], "", epoch);
         assert!(!unmapped.ctx.shielded, "no (faction) entry, no fold");
     }

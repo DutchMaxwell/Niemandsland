@@ -1,15 +1,16 @@
 """GATE for the cast_events "kind" stamp (CAST_FORK_2026-09-16.md Finding 2).
 
 `selfplay._spells_by_kind_tally` counts `state.cast_event_kinds()` from the
-pre-apply mark — the "kind" every cast_events entry carries. The core's cast
-sub-phase pushed its rules-must-log lines with "rule"/"log" only, so every
-kind read "" and `spells_by_kind` was structurally zero, cast phase on or off.
+pre-apply mark — the "kind" of every cast ATTEMPT event. The core's cast
+sub-phase pushes exactly one such event per attempt, in the table's shape
+(battle_sim.gd `_cast_phase`: spell, kind, cost, target, p_success, boost,
+interference, origin for a conduit); its rules-must-log lines carry no kind,
+so a plain cast counts once (it counted 0 before) and a conduit/boost/
+interference cast still counts once (it counted up to 3).
 
-The stamp (sim.rs cast_phase): the FIRST face's spell names the attempt
-(battle_sim.gd `_cast_phase`'s own event), and every pushed cast entry carries
-that spell's `effect_kind` — the exact strings the GDScript table's `by_kind`
-keys carry ("damage" | "buff" | "debuff"; "utility" is skipped by the counter,
-exactly as an unknown kind always was).
+The kind is the spell's `effect_kind` — the exact strings the GDScript
+table's `by_kind` keys carry ("damage" | "buff" | "debuff"; "utility" is
+skipped by the counter, exactly as an unknown kind always was).
 
 This file plays ONE real game with `seam_cast` + `cast_fold` on (the joined
 Caster finally casts, test_cast_fold_knob.py's GREEN arm) and asserts the

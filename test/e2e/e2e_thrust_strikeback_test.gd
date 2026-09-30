@@ -110,3 +110,18 @@ func test_plain_weapon_charging_rolls_plain_quality() -> void:
 		.contains("(4+)")
 	assert_str(text).not_contains("Thrust")
 	await E2EBoot.settle(get_tree())
+
+
+## D21 (EPOCH_68_MODIFIER_SUM): the to-hit modifiers are ONE sum clamped once — Q2 + Thrust (+1) vs
+## Evasive (-1) is 2+, not the 3+ the old per-step 2+ floor produced.
+func test_thrust_charge_against_evasive_is_one_sum() -> void:
+	var striker := _melee_armed(1, "Lancers", Vector3.ZERO, ["Thrust"])
+	striker.unit_properties["quality"] = 2
+	var foe := _plain_foe()
+	foe.unit_properties["special_rules"] = ["Evasive"]
+	await _main._solo_melee_strike_phase(striker, foe, true, 0)
+	var text := _log_text()
+	assert_str(text) \
+		.override_failure_message("Q2 Thrust charge vs Evasive must hit on 2+ (log: %s)" % text.strip_edges()) \
+		.contains("(2+)")
+	await E2EBoot.settle(get_tree())

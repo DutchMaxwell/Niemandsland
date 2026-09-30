@@ -91,6 +91,21 @@ pub fn modified_hit_target(base_target: i64, roll_mod: i64) -> i64 {
     clampi(base_target - roll_mod, BEST_HIT_TARGET, UNMODIFIED_SIX)
 }
 
+/// D21 (`EPOCH_68_MODIFIER_SUM`) — fold one to-hit modifier into the running target. Below the gate: the
+/// old sequential clamp (`raw` IS the clamped target, returned twice). From it: `raw` stays the
+/// unclamped sum and only the returned target is clamped, so a later Versatile/Precise +1 still
+/// counts against a penalty the ladder used to swallow. Returns `(raw, clamped target)`.
+#[inline]
+pub fn fold_hit(sum: bool, raw: i64, roll_mod: i64) -> (i64, i64) {
+    if sum {
+        let r = raw - roll_mod;
+        (r, clampi(r, BEST_HIT_TARGET, UNMODIFIED_SIX))
+    } else {
+        let t = modified_hit_target(raw, roll_mod);
+        (t, t)
+    }
+}
+
 /// `AiCombatMath.shooting_hit_modifier` :230-243 — exactly 9" is not "over".
 /// `shot_hit_bonus`/`shot_hit_bonus_over9` are NOT part of that GDScript
 /// function; they are `_solo_hit_mod_info`'s own addition on top of it
@@ -150,27 +165,27 @@ pub fn shooting_hit_modifier(
 /// as one sum on the table (main.gd:5552-5559). Callers read the number off
 /// `Ctx::shielded_bonus`, never off the bare `shielded` bool. 0 = no fold.
 #[inline]
-pub fn shielded_defense(defense: i64, bonus: i64) -> i64 {
+pub fn shielded_defense(defense: i64, bonus: i64, floor: i64) -> i64 {
     if bonus > 0 {
-        (defense - bonus).max(BEST_HIT_TARGET)
+        (defense - bonus).max(floor)
     } else {
         defense
     }
 }
 
 #[inline]
-pub fn covered_defense(defense: i64, in_cover: bool) -> i64 {
+pub fn covered_defense(defense: i64, in_cover: bool, floor: i64) -> i64 {
     if in_cover {
-        (defense - 1).max(BEST_HIT_TARGET)
+        (defense - 1).max(floor)
     } else {
         defense
     }
 }
 
 #[inline]
-pub fn guarded_defense(defense: i64, applies: bool) -> i64 {
+pub fn guarded_defense(defense: i64, applies: bool, floor: i64) -> i64 {
     if applies {
-        (defense - 1).max(BEST_HIT_TARGET)
+        (defense - 1).max(floor)
     } else {
         defense
     }
@@ -190,9 +205,9 @@ pub fn fortified_ap(ap: i64, is_fortified: bool) -> i64 {
 /// floored at 2+. Fatigue is handled by the caller (a fatigued unit hits only
 /// on unmodified 6s, so no modifier applies then).
 #[inline]
-pub fn thrust_to_hit(quality: i64, is_charging: bool) -> i64 {
+pub fn thrust_to_hit(quality: i64, is_charging: bool, floor: i64) -> i64 {
     if is_charging {
-        (quality - THRUST_TO_HIT_BONUS).max(BEST_HIT_TARGET)
+        (quality - THRUST_TO_HIT_BONUS).max(floor)
     } else {
         quality
     }
@@ -486,7 +501,7 @@ pub fn profile_ev(
             // OUTSIDE the modifier pipeline (ai_ev.gd:336-341).
             target = 6;
         } else {
-            target = thrust_to_hit(att.quality, charging && p.thrust);
+            target = thrust_to_hit(att.quality, charging && p.thrust, BEST_HIT_TARGET);
             // The Stealth data-alias pair rides the fold, but the EV
             // imagination measures NO pre-charge gap (ai_ev.gd:442's melee
             // branch has no alias leg either) — charge_from_in stays 0.0,
@@ -535,7 +550,7 @@ pub fn profile_ev(
     // --- Versatile Attack (ai_ev.gd:361-368) ---
     let mut versatile_ap = 0;
     if p.versatile_attack && dist_in > LONG_RANGE_IN && (!melee || charging) {
-        let choose_def = shielded_defense(def.defense, def.shielded_bonus());
+        let choose_def = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
         // EPOCH_38_WATCHBORN_LATCH — a latched activation pick rides the Ctx
         // (sim::versatile_latch): the EV reuses the FIRST eligible attack's
         // pick instead of re-deciding per imagined attack.
@@ -591,14 +606,14 @@ pub fn profile_ev(
     // --- saves: Shielded, then Cover, then Guarded (ai_ev.gd:403-411) ---
     // Cover and Guarded are SHOOTING-only reads: melee EV always values at
     // dist 0, so the charge halves of both live in the dice path only.
-    let mut defense = shielded_defense(def.defense, def.shielded_bonus());
+    let mut defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
     if !melee && p.blast <= 1 && !p.indirect && !p.ignores_cover {
-        defense = covered_defense(defense, def.in_cover);
+        defense = covered_defense(defense, def.in_cover, def.def_floor());
     }
     if !melee {
         // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost replaces the gate; a
         // MAX over the two readings, never a second -1 (the dice fold's twin).
-        defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded);
+        defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded, def.def_floor());
     }
     // NML-1103 — target-property conditional AP (ai_ev.gd:412-417): Shatter,
     // Tear, Disintegrate, Melee Slayer, Piercing Assault, Piercing Hunter. The
@@ -696,7 +711,7 @@ pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
         return 0.0;
     }
     let p_hit = success_chance(IMPACT_HIT_TARGET);
-    let defense = shielded_defense(def.defense, def.shielded_bonus());
+    let defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
     let mut wounds = dice as f64 * p_hit * (1.0 - block_chance(defense, 0, false))
         + heavy_dice as f64 * p_hit * (1.0 - block_chance(defense, 1, false));
     if def.regeneration {
