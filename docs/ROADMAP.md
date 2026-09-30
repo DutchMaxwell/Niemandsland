@@ -32,23 +32,10 @@ planned and where ideas go. For what already works see
   pick a ruin floor) shipped; Phase B2 makes both AI planners climb pieces up to 3", measured on the
   yardstick; Phase C ports skirmish jump/fall (GFF p.14/p.55); Phase D lets the AI value elevated
   firing spots by sight gain only. _L_
-- **`0.3.10.0-alpha` shipped — the solo update.** The headline is **NACHTMAHR**, the built-in
-  opponent: a rules-based, deterministic game AI (no LLM, no neural net in that release) that runs entirely offline and
-  plays the official OPR solo decision trees. Mark any imported army as AI-controlled, or let the **AI
-  Opponent** button bring one of NACHTMAHR's own pre-built lists (every Grimdark Future faction,
-  1000–3000 pts, fetched
-  from the asset CDN at runtime with an offline cache — the lists are never in this repo). Around it: the
-  click-guided rulebook **deployment flow** (roll-off → table edge → alternating placement → scout band →
-  Ambush / Infiltrate / Vanguard reserves), **Shoot / Fight / Cast** for the human player through the
-  radial menu with real tray dice for both sides, **hundreds of special rules resolved automatically**
-  across all five systems (100% over the bundled opponent lists; on `main`, measured 2026-09-13, book-wide 446 of 452 rule names —
-  98.7% — resolve at every layer, **measured for GrimDark Future and Age of Fantasy only**, since the
-  census walks those two book families) with a
-  battle-log line per applied rule, **transports stage 1** (save format 1.7), the **tutorial course at
-  64 steps / 11 chapters**, the **sight & range fan** (`F`), **autosave** (#139), **battle-log export
-  and copy**, and base-edge-to-base-edge measurement everywhere. There is exactly **one difficulty**
-  (full strength); selectable grades are backlog, not shipped. Full detail under **Recently shipped**.
-  Next: alpha feedback on solo, **rule-coverage validation**, and the MP-first Beta (see Next). _L_
+- **NACHTMAHR difficulty ladder (NML-1018) — on `main`, unreleased.** Four selectable grades
+  (Dämmerung, Zwielicht, Finsternis, Albtraum) with a picker in the solo panel; Albtraum, the default, is
+  the Erlkönig-driven opponent ([#1126](../../../pull/1126), [#1127](../../../pull/1127), 2026-09-26).
+  Ships with the next tagged release. _M_
 - **Guided tutorial — course expanded in `0.3.10.0-alpha`.** Event-gated guided play on the real table
   (coach-mark spotlight overlay; steps advance on real signals, never a "Next" button). The course now
   runs **64 steps across 11 chapters**: camera & table · selecting · moving/rotating/arranging ·
@@ -231,6 +218,9 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 ## ✅ Recently shipped
 
 See [`CHANGELOG.md`](../CHANGELOG.md).
+
+**`0.3.13.1-alpha` (2026-09-25):** save/load and multiplayer fixes from a code review (a saved Solo game keeps
+its AI opponent, formed regiments survive a save, Load Game is host-only in a session); see the CHANGELOG.
 
 **`0.3.13.0-alpha` (2026-09-25):**
 **Menu**: a new main menu over a night-time diorama; the table size (6x4 ft default, 4x4 ft, custom

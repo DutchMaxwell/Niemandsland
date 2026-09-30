@@ -15,6 +15,7 @@ extends RefCounted
 
 
 static var _stream: FileAccess = null
+static var _rounds: FileAccess = null   # C9.2 round-end referee record (rounds.jsonl)
 static var _checked := false
 static var _header_written := false
 ## D8a (NML-1073 M5): the objective LAYOUT INPUTS for this game — {mode, count_roll,
@@ -303,6 +304,31 @@ static func traced(act: int, tag: String, faces: Array, plus: int, bonus_in: flo
 	_count += 1
 
 
+## NML-1010 wave C gate (C9.2): one line per ROUND END into `rounds.jsonl` beside acts.jsonl.
+## `pre` = the board captured BEFORE the table's round-end referee ran (seize, carry step,
+## destroy step, VP), as the same plain an act line carries; `post` = the ledger the referee
+## left (`owners` from the overlay, the rest from SoloController's mission statics). The core
+## replays `pre` through its own referee and must reach `post` exactly
+## (core/nml-core-py/tools/mission_referee_gate.py). A file of its own, so no acts.jsonl
+## reader ever meets a new line kind. No-op when NML_ACT_DUMP is unset.
+static func round_end(round_no: int, pre_state: Dictionary, owners: Array) -> void:
+	if _dump_stream() == null:
+		return
+	if _rounds == null:
+		_rounds = FileAccess.open(OS.get_environment("NML_ACT_DUMP").path_join("rounds.jsonl"),
+			FileAccess.WRITE)
+		if _rounds == null:
+			return
+	var pre: Dictionary = BattleSim.state_to_plain(pre_state, false)
+	_stamp_gate_reads(pre_state, pre)
+	var post := {"owners": owners.duplicate(),
+		"markers_meta": SoloController.mission_markers.duplicate(true),
+		"vp": [int(SoloController.mission_vp[0]), int(SoloController.mission_vp[1])],
+		"destroy_seq": [int(SoloController.mission_destroy_seq[0])]}
+	_rounds.store_line(JSON.stringify({"round": round_no, "pre": pre, "post": post}, "", true, true))
+	_rounds.flush()
+
+
 ## NML-1073 M2-0: closes the stream at a GAME's end (arena_match.gd) or a TEST's
 ## end (after_test) — flushed and closed where the writer stands, not left to
 ## process teardown. Resets every cached static so a later begin() reopens a
@@ -315,6 +341,9 @@ static func close() -> void:
 		_stream.flush()
 		_stream.close()
 	_stream = null
+	if _rounds != null:
+		_rounds.close()
+	_rounds = null
 	_checked = false
 	_header_written = false
 	_count = 0

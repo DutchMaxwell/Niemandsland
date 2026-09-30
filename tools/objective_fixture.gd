@@ -24,12 +24,13 @@ func _init() -> void:
 		cell_list.append([(k as Vector2i).x, (k as Vector2i).y, int(cells[k])])
 	cell_list.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
 	var style := DeploymentCatalog.get_style("front_line")
-	# The three missions the generator actually serves: the two catalog 'alternate'
-	# missions, plus a synthetic fixed-count one that exercises the branch where the
-	# count spec is a NUMBER and therefore draws nothing.
+	# The four catalog alternate missions plus a synthetic fixed-count case
+	# exercise both dice and NUMBER count specs on the same pinned board.
 	var missions := {
 		"duel": MissionCatalog.get_mission("duel"),
 		"pitched_battle": MissionCatalog.get_mission("pitched_battle"),
+		"relic_hunt": MissionCatalog.get_mission("relic_hunt"),
+		"capture_and_hold": MissionCatalog.get_mission("capture_and_hold"),
 		"alternate_fixed4": {"markers": {"count": 4, "placement": "alternate"}},
 	}
 	var cases: Array = []

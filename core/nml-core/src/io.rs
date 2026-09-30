@@ -295,6 +295,30 @@ fn default_probe_r() -> f64 {
     0.016
 }
 
+/// One `markers_meta` entry as either writer spells its carrier: the core as a
+/// roster index (`plain_of`), the table as the unit KEY, "" for none
+/// (`BattleSim.state_to_plain` passes `SoloController.mission_markers` through).
+/// `state_of` resolves a key against the roster — the twin of plain.rs's mapping
+/// for the Godot seam; a key the roster does not hold reads as no carrier.
+#[derive(Deserialize)]
+pub(crate) struct PlainMarker {
+    #[serde(default)]
+    carried_by: Option<serde_json::Value>,
+    #[serde(flatten)]
+    marker: Marker,
+}
+
+impl PlainMarker {
+    fn resolve(self, roster: &Roster) -> Marker {
+        let carried_by = match self.carried_by {
+            Some(serde_json::Value::String(key)) => roster.index.get(&key).map_or(-1, |&i| i as i64),
+            Some(v) => v.as_i64().unwrap_or(-1),
+            None => -1,
+        };
+        Marker { carried_by, ..self.marker }
+    }
+}
+
 #[derive(Deserialize)]
 pub(crate) struct PlainState {
     #[serde(default)]
@@ -308,7 +332,7 @@ pub(crate) struct PlainState {
     #[serde(deserialize_with = "units_in_capture_order")]
     units: Ordered<PlainUnit>,
     #[serde(default)]
-    markers_meta: Vec<Marker>,
+    markers_meta: Vec<PlainMarker>,
     #[serde(default)]
     destroy_seq: Vec<i64>,
     #[serde(default)]
@@ -832,6 +856,7 @@ pub(crate) fn state_of(
     let n = roster.keys.len();
     // Roster index -> its row/column in the KEY-SORTED matrix; see `los_positions`.
     let cap = los_positions(&roster.keys);
+    let markers_meta = plain.markers_meta.into_iter().map(|m| m.resolve(&roster)).collect();
     let mut st = State {
         roster,
         profiles: Rc::clone(profiles),
@@ -839,7 +864,7 @@ pub(crate) fn state_of(
         rounds_total: plain.rounds_total,
         scoring: Rc::from(plain.scoring.as_str()),
         objectives: plain.objectives,
-        markers_meta: plain.markers_meta,
+        markers_meta,
         destroy_seq: plain.destroy_seq,
         vp: plain.vp.map(Rc::new),
         vp_flavour: plain.vp_flavour.map(Rc::new),

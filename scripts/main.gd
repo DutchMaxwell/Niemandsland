@@ -2024,8 +2024,13 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 		if last_side != 0:
 			opener = 2 if last_side == 1 else 1
 		_prof_rd_t0 = BattleSim.prof_t0()
+		# NML-1010 wave C gate (C9.2): the round-end referee record — the board BEFORE the
+		# referee, the ledger after it. Dump mode only (NML_ACT_DUMP); no capture otherwise.
+		var referee_pre: Dictionary = solo_controller.capture_board() if AiActRecorder.active() else {}
 		_solo_auto_seize()
 		_solo_book_mission_vp(round_no >= SOLO_GAME_ROUNDS)
+		if not referee_pre.is_empty() and terrain_overlay != null:
+			AiActRecorder.round_end(round_no, referee_pre, terrain_overlay.get_objective_owners())
 		if round_no >= SOLO_GAME_ROUNDS:
 			BattleSim.prof_mark("round", _prof_rd_t0)
 			if not _solo_game_finished:
@@ -2665,11 +2670,7 @@ func _solo_apply_mission_if_chosen() -> void:
 		return
 	var mission := MissionCatalog.get_mission(_solo_mission_id)
 	var mk: Dictionary = mission.get("markers", {})
-	var mmeta: Array = []
-	if bool(mk.get("owned", false)):
-		for mi in range(int(mk.get("count", 2))):
-			mmeta.append({"owned_by": mi + 1, "destructible": bool(mk.get("destructible", false)),
-				"destroyed": false, "destroyed_seq": 0})
+	var mmeta: Array = SoloController.marker_metadata(mk)
 	SoloController.mission_reset(str(mission.get("scoring", "end")), (mission.get("vp", {}) as Dictionary), mmeta)
 	if terrain_overlay != null and table != null:
 		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))

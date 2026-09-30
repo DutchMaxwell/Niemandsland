@@ -130,6 +130,15 @@ def test_threatened_enemy_carrier_matches_table_hand_score():
     assert core.score_hand_incoming(state, 2, incoming) == 0.5
 
 
+def test_carry_catalog_layouts_use_the_same_alternate_core_door():
+    catalog = json.loads((REPO / "assets/solo/missions.json").read_text())["missions"]
+    style = json.loads((REPO / "assets/solo/deployments.json").read_text())["styles"]["front_line"]
+    for mission_id in ("relic_hunt", "capture_and_hold"):
+        markers = catalog[mission_id]["markers"]
+        assert markers["count"] == 3 and markers["carry"] is True
+        assert nml_core.mission_marker_positions(markers["placement"], 12.0, style, 72.0, 48.0) == []
+
+
 def close(a, b):
     return abs(float(a) - float(b)) <= EPS
 

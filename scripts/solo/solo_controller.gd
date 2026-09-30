@@ -37,6 +37,24 @@ static var mission_markers: Array = []
 static var mission_destroy_seq: Array = [0]
 
 
+static func marker_metadata(spec: Dictionary) -> Array:
+	var owned := bool(spec.get("owned", false))
+	var carry := bool(spec.get("carry", false))
+	if not owned and not carry:
+		return []
+	var markers: Array = []
+	for i in range(int(spec.get("count", 2))):
+		var marker: Dictionary = {}
+		if owned:
+			marker = {"owned_by": i + 1, "destructible": bool(spec.get("destructible", false)),
+				"destroyed": false, "destroyed_seq": 0}
+		if carry:
+			marker["carry"] = true
+			marker["carried_by"] = ""
+		markers.append(marker)
+	return markers
+
+
 static func mission_reset(scoring: String, flavour: Dictionary, markers: Array = []) -> void:
 	mission_scoring = scoring
 	mission_vp_flavour = flavour
@@ -2874,6 +2892,15 @@ func _aircraft_move(unit: GameUnit, dir: Vector2, move_in: float) -> void:
 ## game_rounds); without it the urgency never fires (sandbox play, headless tests).
 func _current_round() -> int:
 	return int(round_provider.call()) if round_provider.is_valid() else 0
+
+
+## NML-1010 wave C gate (C9.2): the board exactly as the planner captures it before a pick
+## (the capture call in the activation path), for the round-end referee record
+## (AiActRecorder.round_end) — main takes it BEFORE the table's round-end referee runs.
+func capture_board() -> Dictionary:
+	return BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
+		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
+		terrain_type_at)
 
 
 func _is_final_round() -> bool:

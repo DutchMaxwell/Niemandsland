@@ -312,15 +312,7 @@ func _run() -> void:
 		# NML-1010 W2: arm the live VP ledger with the mission's scoring —
 		# "end" for Face-Off keeps every consumer as before; round_vp switches
 		# main's round-end bookkeeping, the planner state and the winner call.
-		var mmeta: Array = []
-		if bool((mission.get("markers", {}) as Dictionary).get("owned", false)):
-			# deploy_zone_front resolves [P1's, P2's] in zone order — the
-			# owned_by convention rides that order (index + 1).
-			var mc := int((mission.get("markers", {}) as Dictionary).get("count", 2))
-			for mi in range(mc):
-				mmeta.append({"owned_by": mi + 1,
-					"destructible": bool((mission.get("markers", {}) as Dictionary).get("destructible", false)),
-					"destroyed": false, "destroyed_seq": 0})
+		var mmeta: Array = SoloController.marker_metadata(mission.get("markers", {}))
 		SoloController.mission_reset(str(mission.get("scoring", "end")),
 			(mission.get("vp", {}) as Dictionary), mmeta)
 		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))

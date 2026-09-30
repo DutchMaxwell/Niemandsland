@@ -17,6 +17,7 @@ RED (manual, not a standing test): comment out the `if eff_scoring ==
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -88,3 +89,64 @@ def test_inline_carry_marker_spec_arms_unowned_relics_only_when_requested():
         {"owned_by": 1, "destructible": True},
         {"owned_by": 2, "destructible": True},
     ]
+
+
+# --- wave C gate C9.4: a replay inherits the recorded game's round-end referee ---
+
+FIXTURES = REPO / "core" / "nml-core" / "tests" / "fixtures"
+
+
+def _replay_held(monkeypatch, **mission):
+    """`play_from_state` on acts_25's first recorded board with every activation stubbed
+    out, so the board stands still and only the round-end referee moves the ledger. Every
+    unit is parked apart; p1's first unit sits on the one marker, p2's first stands 0.3 m
+    off (outside the 3" ring). `mission` = the keys a table capture writes."""
+    lines = (FIXTURES / "acts_25.jsonl").read_text().splitlines()
+    header, plain = json.loads(lines[0]), json.loads(lines[1])["state"]
+    core = nml_core.load(str(REPO))
+    core.set_header(header)
+    first = {}
+    for i, (key, unit) in enumerate(plain["units"].items()):
+        first.setdefault(unit["player"], (i, key))
+        unit.update(alive=1, positions=[[2.0 + i, 0, 2.0 + i]], radii=[0.02], wounds=[1],
+                    shaken=False, aircraft=False, ambush_arrived_round=0)
+    plain["units"][first[1][1]]["positions"] = [[0.04, 0, 0]]
+    plain["units"][first[2][1]]["positions"] = [[0.3, 0, 0]]
+    plain["objectives"] = [{"pos": [0, 0, 0], "owner": 0}]
+    plain.update(mission)
+    monkeypatch.setattr(sp, "_play_round", lambda core, state, opener, *a, **k: (state, opener))
+    return sp.play_from_state(core, plain, header["profiles"], 1, nml_core.Rng(27)), first[1][0]
+
+
+def test_play_from_state_scores_a_recorded_round_vp_mission_by_its_flavour(monkeypatch):
+    """A Domination-style board (majority paid EVERY round): p1 holds the one marker all
+    game, so each round pays 1 for the marker + 1 for the majority. The old replay loop
+    booked the end-scored duel ledger instead ([1, 0] after round 1, [5, 0] at the end)."""
+    res, _ = _replay_held(monkeypatch, scoring="round_vp", vp=[0, 0],
+                          vp_flavour={"majority": "round"}, vp_memo={})
+    assert [e["vp"] for e in res["rounds_log"]] == [[2, 0], [4, 0], [6, 0], [8, 0]]
+    assert res["vp"] == {"p1": 8, "p2": 0}
+    assert res["winner"] == "p1"
+
+
+def test_play_from_state_carries_a_recorded_relic_in_the_tables_spelling(monkeypatch):
+    """The table writes the carrier as its unit KEY, "" for none (C9.3 reads it). The
+    replay's round-end referee picks the relic up onto p1's unit standing on it."""
+    res, carrier = _replay_held(monkeypatch, markers_meta=[{"carry": True, "carried_by": ""}],
+                                destroy_seq=[0])
+    assert res["markers_meta"][0]["carried_by"] == carrier
+    assert res["objectives"] == {"p1": 1, "p2": 0, "neutral": 0}
+
+
+def test_carry_catalog_entries_pin_three_relics_and_scoring():
+    relic = sp.resolve_mission("relic_hunt", REPO)
+    hold = sp.resolve_mission("capture_and_hold", REPO)
+    assert relic["name"] == "Relic Hunt" and relic["scoring"] == "end"
+    assert hold["name"] == "Capture & Hold" and hold["scoring"] == "round_vp"
+    assert hold["vp"]["majority"] == "end"
+    for mission in (relic, hold):
+        assert mission["markers"]["count"] == 3
+        assert mission["markers"]["carry"] is True
+        assert sp.mission_markers(mission["markers"], 3) == [
+            {"carry": True, "carried_by": -1} for _ in range(3)
+        ]

@@ -11,13 +11,27 @@ func before_test() -> void:
 	MissionCatalog.reset_cache()
 
 
-func test_catalog_lists_the_v3_ten() -> void:
-	# v1 four Face-Off + four carry-free Progressive (W2) + the two
-	# destroy-marker missions (W3); the carry pair waits for its wave.
+func test_catalog_lists_the_v3_twelve() -> void:
+	# The original ten plus the two carried-marker missions.
 	assert_that(MissionCatalog.mission_ids()).is_equal(
-		["breakthrough", "demolition", "domination", "duel", "headquarters",
-		"king_of_the_hill", "mosh_pit", "pitched_battle", "sabotage",
-		"seize_ground"])
+		["breakthrough", "capture_and_hold", "demolition", "domination", "duel",
+		"headquarters", "king_of_the_hill", "mosh_pit", "pitched_battle",
+		"relic_hunt", "sabotage", "seize_ground"])
+
+
+func test_carry_missions_have_three_alternate_relics() -> void:
+	for id in ["relic_hunt", "capture_and_hold"]:
+		var mission := MissionCatalog.get_mission(id)
+		var mk: Dictionary = mission["markers"]
+		assert_int(int(mk["count"])).is_equal(3)
+		assert_str(str(mk["placement"])).is_equal("alternate")
+		assert_bool(bool(mk.get("carry", false))).is_true()
+		assert_that(MissionCatalog.marker_positions(mission,
+			DeploymentCatalog.get_style("front_line"))).is_equal([])
+	assert_str(str(MissionCatalog.get_mission("relic_hunt")["scoring"])).is_equal("end")
+	assert_str(str(MissionCatalog.get_mission("capture_and_hold")["scoring"])).is_equal("round_vp")
+	assert_str(str((MissionCatalog.get_mission("capture_and_hold").get("vp", {}) as Dictionary).get("majority", ""))) \
+		.is_equal("end")
 
 
 ## W3 — the destroy-marker pair carries owned/destructible flags and the
