@@ -1,6 +1,10 @@
-extends Window
+extends CanvasLayer
 ## Settings Panel — Lighting & Audio controls
 ## Interactive UI with sliders for all lighting and volume parameters
+
+const LAYER := 0   # under the HUD layer (1): the menu, rail and top bar stay clickable, as with the old OS window
+const SHEET_W := 520
+const SCROLL_H := 620
 
 var lighting_controller: Node
 var atmosphere_controller: Node = null
@@ -84,8 +88,6 @@ func set_atmosphere_controller(atmosphere_ctrl: Node) -> void:
 	_main_vbox.add_child(section)
 	_main_vbox.move_child(section, 0)
 
-	# close_requested is wired in _build_ui() instead — it must hold even when this late
-	# atmosphere wiring never happens, or the title-bar X would do nothing in some builds.
 	visibility_changed.connect(func() -> void:
 		if visible:
 			UiPolish.grab_first_focus.call_deferred(self))
@@ -113,55 +115,22 @@ func set_privacy_menu(menu: PrivacyMenu) -> void:
 
 
 func _build_ui() -> void:
-	# Apply UI theme
-	var ui_theme = ThemeManager.get_current_theme()
-
-	title = "Settings"
-	# 900px is taller than a 720p screen; clamp so the ScrollContainer below governs
-	# overflow and every control stays reachable.
-	UiPolish.keep_window_reachable(self, Vector2i(500, 900))
-
-	# As a bare Window this panel could slide BEHIND the main window and be lost there, and it
-	# always opened at the fixed corner (50, 50) instead of centred. `transient` ties it to the
-	# main window (stays above it, minimises with it) and fixes exactly that. Deliberately NOT
-	# `exclusive`: main.gd toggles this panel with show()/hide(), and an exclusive window opened
-	# that way can leave the game unclickable if anything swallows its close — the reported
-	# problem is "it disappears behind the game", which transient alone solves.
-	transient = true
-	# The title-bar X must be wired here rather than in the optional atmosphere hook below, or a
-	# build without that section has no way to dismiss the panel at all.
-	close_requested.connect(_on_close_requested)
-	# main.gd toggles this panel with show()/hide() and never repositions it, so re-centre on
-	# every open: a window centred once would sit off-place after a host-window resize (and
-	# keep_window_reachable may have resized it in between).
-	visibility_changed.connect(func() -> void:
-		if visible:
-			move_to_center())
-	move_to_center()
-
-	# Main container
-	var margin = MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.theme = ui_theme
-	add_child(margin)
-
-	margin.add_theme_constant_override("margin_left", 15)
-	margin.add_theme_constant_override("margin_right", 15)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
-
-	# Scroll container for all controls
-	var scroll = ScrollContainer.new()
-	scroll.set_v_size_flags(Control.SIZE_EXPAND_FILL)
-	scroll.theme = ui_theme
-	margin.add_child(scroll)
-
-	# Main VBox
-	var vbox = VBoxContainer.new()
+	layer = LAYER
+	var parts := HouseStyle.overlay_sheet("Settings", SHEET_W)
+	(parts["close"] as Button).pressed.connect(hide)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size = Vector2(0, SCROLL_H)
+	(parts["body"] as VBoxContainer).add_child(scroll)
+	var vbox := VBoxContainer.new()
 	vbox.set_h_size_flags(Control.SIZE_EXPAND_FILL)
-	vbox.theme = ui_theme
 	scroll.add_child(vbox)
 	_main_vbox = vbox
+	# Not modal, like the old window: no scrim over the table (the lighting is tuned by eye) and its clicks pass through.
+	var root := parts["root"] as Control
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	(root.get_node("Scrim") as ColorRect).visible = false
+	add_child(parts["root"] as Control)
 
 	# Lighting moods are chosen through the ATMOSPHERE section only (added at the top by
 	# set_atmosphere_controller); the old standalone lighting "PRESETS" were a parallel,
@@ -446,6 +415,8 @@ func _add_color_picker(parent: Control, key: String, label_text: String) -> void
 
 	var picker = ColorPickerButton.new()
 	picker.color = Color.WHITE
+	picker.theme_type_variation = HouseStyle.BUTTON   # the swatch needs a box and a size under the house theme
+	picker.custom_minimum_size = Vector2(56, HouseStyle.H_PIP)
 	picker.color_changed.connect(_on_color_changed.bind(key))
 	hbox.add_child(picker)
 
@@ -542,9 +513,9 @@ func _on_color_changed(color: Color, key: String) -> void:
 
 
 
-## Title-bar X — the only dismissal path besides the Close button.
-func _on_close_requested() -> void:
-	hide()
+func _unhandled_input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
+		hide()
 
 
 func _on_print_pressed() -> void:

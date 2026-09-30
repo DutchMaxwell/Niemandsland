@@ -64,7 +64,7 @@ var _prompt_overlay: CanvasLayer = null
 
 # Lighting Controller
 var lighting_controller: Node = null
-var lighting_panel: Window = null
+var lighting_panel: CanvasLayer = null
 var privacy_menu: PrivacyMenu = null
 var after_game_card: AfterGameCard = null
 var atmosphere_controller: AtmosphereController = null
@@ -641,8 +641,7 @@ func _ready() -> void:
 	lighting_controller.initialize(directional_light, world_environment, fill_light)
 
 	# Initialize Lighting Panel UI
-	lighting_panel = Window.new()
-	lighting_panel.set_script(load("res://scripts/lighting_panel.gd"))
+	lighting_panel = load("res://scripts/lighting_panel.gd").new()
 	get_tree().root.add_child(lighting_panel)
 	lighting_panel.initialize(lighting_controller)
 	lighting_panel.hide()  # Start hidden
@@ -15616,7 +15615,7 @@ func _on_import_opr_army() -> void:
 			await network_manager.slot_assigned
 		slot = maxi(1, network_manager.get_my_player_slot())
 	opr_import_dialog.set_player(slot)
-	opr_import_dialog.popup_centered()
+	opr_import_dialog.show()
 
 
 ## The AI-opponent dialog (maintainer request): NACHTMAHR builds its own list — pick faction + points,
@@ -17600,6 +17599,7 @@ func _init_radial_menu() -> void:
 	var control_hints := ControlHintsController.new()
 	control_hints.name = "ControlHintsController"
 	add_child(control_hints)
+	control_hints.set_dock(unit_dock)
 	object_manager.hover_changed.connect(control_hints.on_hover_changed)
 	# #162: HUMAN drops arm a take-back (the AI's direct choreography call never does).
 	object_manager.selection_dropped.connect(func(moves: Array) -> void:
