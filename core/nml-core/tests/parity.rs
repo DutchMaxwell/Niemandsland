@@ -23,10 +23,15 @@
 //!     contacts are plentiful enough to gate the strike/morale/rout half.
 //!     Carries 23 routs and 17 newly-shaken units.
 //!   * `CAST` — EVERY node of the cast-ON recording (`NML_SIM_CAST=1`, spacing
-//!     also on) whose activation spent a caster token: 99 of 2000, 33 each on
+//!     also on) whose activation spent a caster token: 72 of 2000, 24 each on
 //!     HOLD, RUSH and CHARGE. That HOLD/RUSH/CHARGE split IS the point of
 //!     NML-1069 — the legacy rider only ever cast inside a shoot pick, so a
 //!     rushing or charging caster never cast at all.
+//!
+//! The CAST fixture was RE-RECORDED again on 30.09. (castparity step 2, main + the
+//! `cast_events` plain key) and its header stamps `rules_epoch` 67 by hand: the
+//! recorder writes only `spacing`/`cast`, the table plays the newest rules, so a
+//! replay at the default epoch 0 misses the boost (measured: 42/72 exact vs 72/72).
 //!
 //! All four were RE-RECORDED for NML-1073 S1d (seed 27, robot_legions_1000 vs
 //! blessed_sisters_1000, `NML_NODE_DUMP_MAX=2000`), same recipe as M1-3. S1d
@@ -434,8 +439,8 @@ fn gate_b_cast_subphase_reproduces_every_recorded_cast() {
             spent += node.state_before.casts[u] - got.casts[u];
         }
     }
-    assert_eq!(per_kind, [33, 0, 33, 33], "HOLD / ADVANCE / RUSH / CHARGE casts");
-    assert_eq!(spent, 153, "tokens the sub-phase spent across the slice");
+    assert_eq!(per_kind, [24, 0, 24, 24], "HOLD / ADVANCE / RUSH / CHARGE casts");
+    assert_eq!(spent, 144, "tokens the sub-phase spent across the slice");
 }
 
 /// Red-green for the seam: with `cast` off, `resolve` runs the LEGACY rider
@@ -462,12 +467,12 @@ fn the_cast_subphase_is_load_bearing() {
             broken += 1;
         }
     }
-    assert_eq!(broken, 99, "the legacy rider reproduces none of the recorded casts");
+    assert_eq!(broken, 72, "the legacy rider reproduces none of the recorded casts");
 }
 
 /// Red-green for the recorded POST-move sight answers: dropping them back to
 /// the pre-move matrix of `state_before` must break the casts that only became
-/// possible after the caster moved. 41 of the 93 do — proof that the answer is
+/// possible after the caster moved. 30 of the 72 do — proof that the answer is
 /// a real input and not decoration.
 #[test]
 fn the_post_move_cast_los_is_a_real_input() {
@@ -488,7 +493,7 @@ fn the_post_move_cast_los_is_a_real_input() {
             broken += 1;
         }
     }
-    assert_eq!(broken, 45, "moved casters need the post-move sight answers");
+    assert_eq!(broken, 30, "moved casters need the post-move sight answers");
 }
 
 /// `AiSpell.official_pick_order` ai_spell.gd:305-312 — the rotation IS rule
