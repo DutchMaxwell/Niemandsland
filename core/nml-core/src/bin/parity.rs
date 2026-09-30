@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use nml_core::sim::Unsupported;
-use nml_core::{build_statics, load_nodes, reply_threat, resolve, score, State};
+use nml_core::{build_statics, cast_attempts_diff, load_nodes, reply_threat, resolve, score, State};
 
 const EPS: f64 = 1e-9;
 
@@ -76,6 +76,9 @@ fn diff_states(got: &State, want: &State) -> Vec<String> {
     cmp_int!(ambush_arrived_round);
     cmp_int!(earliest_arrival_round);
     cmp_int!(wounds);
+    if cast_attempts_diff(got, want).is_some() {
+        out.push("cast_events".into());
+    }
     for i in 0..got.units() {
         if (got.wound_frac[i] - want.wound_frac[i]).abs() > EPS {
             out.push("wound_frac".into());

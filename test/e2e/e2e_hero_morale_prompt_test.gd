@@ -46,12 +46,12 @@ func _schedule_answer(accept: bool) -> void:
 		if not is_instance_valid(main):
 			return
 		for child in main.get_children():
-			if child is ConfirmationDialog and child.visible and child.title == "Hero morale":
+			if child is PromptCard and child.visible and child.title == "Hero morale":
 				_prompts_seen += 1
 				if accept:
-					child.confirmed.emit()
+					child.ok_button.pressed.emit()
 				else:
-					child.canceled.emit())
+					child.cancel_button.pressed.emit())
 
 
 func test_decline_is_remembered_and_uses_host_quality() -> void:
