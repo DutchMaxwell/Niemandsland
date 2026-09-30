@@ -206,6 +206,88 @@ func test_the_hint_line_names_the_keys_of_the_hovered_kind(timeout := 120000) ->
 	assert_bool(panel.visible).override_failure_message("the hint did not hide at once").is_false()
 
 
+# === the house look (restyle) =================================================================
+
+## Controls under `root` (itself included, engine internals skipped) with a box or font size of their own,
+## or a font colour that is not one of `inks`.
+func _own_look(root: Control, inks: Array = []) -> Array:
+	var out: Array = []
+	for n: Node in [root] + root.find_children("*", "Control", true, false):
+		if n != root and not n.get_parent().get_children().has(n):
+			continue
+		var c := n as Control
+		if c.has_theme_stylebox_override(&"panel") or c.has_theme_stylebox_override(&"normal") \
+				or c.has_theme_font_size_override(&"font_size") or c.modulate != Color.WHITE:
+			out.append(c.name)
+		elif c.has_theme_color_override(&"font_color") and not inks.has(c.get_theme_color(&"font_color")):
+			out.append("%s ink" % c.name)
+	return out
+
+
+func _variant(c: Control) -> String:
+	return String(c.theme_type_variation) if c != null else "<missing>"
+
+
+## The chat is a house window: an eyebrow title, the roster as captions, messages as small text with the
+## sender in their player colour (the one ink of its own), no corner brackets.
+func test_the_chat_wears_the_house_style(timeout := 120000) -> void:
+	_main.solo_ai_slots = {2: true}
+	_main._set_chat_visible(true)
+	var me: int = _main.network_manager.get_my_peer_id()
+	_main._add_chat_entry(me, "good game")
+	await _runner.simulate_frames(3)
+	assert_object(_chat().theme).is_same(HouseStyle.theme())
+	assert_str(_variant(_chat())).is_equal(String(HouseStyle.PANEL_VARIANT))
+	assert_int(_chat().find_children("*", "HudFrame", true, false).size()).override_failure_message("corner brackets") \
+		.is_equal(0)
+	assert_str(_variant(_label(_chat(), "CHAT"))).is_equal(String(HouseStyle.EYEBROW))
+	assert_str(_variant(_label(_chat(), " (you)"))).is_equal(String(HouseStyle.CAPTION))
+	assert_str(_variant(_label(_chat(), "P2: NACHTMAHR"))).is_equal(String(HouseStyle.CAPTION))
+	assert_str(_variant(_label(_chat(), "good game"))).is_equal(String(HouseStyle.SMALL))
+	assert_array(_own_look(_chat(), [_main._get_player_color(me)])).override_failure_message("dresses itself: %s" % [
+		_own_look(_chat(), [_main._get_player_color(me)])]).is_empty()
+
+
+## The FPS line is boxed like the top bar's chips, in the tone of its rate; the distance is the gold table readout,
+## amber / red while capped — and gold again after the drag (it used to lose its colour for good).
+func test_the_readouts_wear_house_tokens_and_keep_their_gold(timeout := 120000) -> void:
+	await _runner.simulate_frames(10)
+	var fps_line: Label = _main.performance_label
+	assert_object(fps_line.theme).is_same(HouseStyle.theme())
+	assert_str(_variant(fps_line)).is_equal(String(HouseStyle.BAR_TEXT))
+	var inks := [HouseStyle.tone_ink(HouseStyle.TONE_OK), HouseStyle.tone_ink(HouseStyle.TONE_WARN),
+		HouseStyle.tone_ink(HouseStyle.TONE_DANGER)]
+	assert_array(_own_look(fps_line, inks)).override_failure_message("the FPS line dresses itself: %s" % [
+		_own_look(fps_line, inks)]).is_empty()
+	var label: Label = _main.distance_label
+	assert_str(_variant(label)).is_equal(String(HouseStyle.READOUT))
+	_main._on_distance_changed(30.4, Vector3.ZERO, Vector3(0.772, 0, 0))
+	assert_object(label.get_theme_color(&"font_color")).is_equal(HouseStyle.GOLD)
+	_main._on_movement_capped(4.0, 6.0, false)
+	assert_object(label.get_theme_color(&"font_color")).is_equal(HouseStyle.tone_ink(HouseStyle.TONE_WARN))
+	_main._on_movement_capped(6.0, 6.0, true)
+	assert_object(label.get_theme_color(&"font_color")).is_equal(HouseStyle.tone_ink(HouseStyle.TONE_DANGER))
+	_main._on_drag_ended()
+	assert_object(label.get_theme_color(&"font_color")).override_failure_message(
+		"after a capped drag the readout lost its gold").is_equal(HouseStyle.GOLD)
+	assert_array(_own_look(label, inks)).is_empty()
+
+
+## The hint line is a quiet house chip with muted words (no tint of its own).
+func test_the_hint_line_is_a_quiet_house_chip(timeout := 120000) -> void:
+	var u := E2EBoot.make_unit(_main, 1, "Guards", [Vector3.ZERO])
+	var node := (u.models[0] as ModelInstance).node
+	node.set_meta("game_unit", u)
+	_hints().on_hover_changed(node)
+	await get_tree().create_timer(0.7).timeout
+	var panel := _hint_panel()
+	assert_object(panel.theme).is_same(HouseStyle.theme())
+	assert_str(_variant(panel)).is_equal(String(HouseStyle.CHIP))
+	assert_str(_variant(_label(panel, ControlHintsController.HINTS["unit"]))).is_equal(String(HouseStyle.CAPTION))
+	assert_array(_own_look(panel)).override_failure_message("the hint line dresses itself: %s" % [_own_look(panel)]) \
+		.is_empty()
+
+
 # === the check itself =========================================================================
 
 func test_the_inventory_check_names_a_removed_control(timeout := 120000) -> void:

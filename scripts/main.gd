@@ -177,7 +177,6 @@ var _net_join_code_input: LineEdit = null
 var _net_join_url_input: LineEdit = null
 
 # In-game chat + roster (built at runtime; visible only during a session).
-const CHAT_PANEL_SMALL_FONT: int = 12
 var _chat_panel: PanelContainer = null
 var _chat_log_scroll: ScrollContainer = null
 var _chat_log_vbox: VBoxContainer = null
@@ -505,6 +504,12 @@ func _ready() -> void:
 
 	# Hide distance label initially
 	distance_label.text = ""
+	# The two HUD readouts in the house look (maintainer D98 = a): the FPS line boxed like the top bar's
+	# chips, the distance as the gold table readout; their state inks come from the house tones.
+	for readout: Label in [performance_label, distance_label]:
+		readout.theme = HouseStyle.theme()
+	performance_label.theme_type_variation = HouseStyle.BAR_TEXT
+	distance_label.theme_type_variation = HouseStyle.READOUT
 
 	# Connect Dice Roller Plugin
 	roll_button.pressed.connect(_on_roll_button_pressed)
@@ -12761,13 +12766,11 @@ func _process(delta: float) -> void:
 	var object_count = object_manager.get_child_count()
 
 	# Color FPS based on performance
-	var fps_color: Color
+	var fps_color := HouseStyle.tone_ink(HouseStyle.TONE_DANGER)
 	if fps >= 55:
-		fps_color = Color.GREEN
+		fps_color = HouseStyle.tone_ink(HouseStyle.TONE_OK)
 	elif fps >= 30:
-		fps_color = Color.YELLOW
-	else:
-		fps_color = Color.RED
+		fps_color = HouseStyle.tone_ink(HouseStyle.TONE_WARN)
 
 	performance_label.add_theme_color_override("font_color", fps_color)
 
@@ -12986,7 +12989,7 @@ func _on_movement_capped(consumed_inches: float, cap_inches: float, dry: bool, r
 	distance_label.text = ("%.1f/%.1f\" — %s" % [consumed_inches, cap_inches, reason]) \
 			if not reason.is_empty() else "%.1f/%.1f\"" % [consumed_inches, cap_inches]
 	distance_label.add_theme_color_override("font_color",
-			Color(1.0, 0.35, 0.3) if dry else Color(1.0, 0.78, 0.25))
+			HouseStyle.tone_ink(HouseStyle.TONE_DANGER if dry else HouseStyle.TONE_WARN))
 
 
 ## Clear distance display after measurement finishes
@@ -14503,7 +14506,7 @@ func _peer_display_name(peer_id: int) -> String:
 func _build_chat_panel() -> void:
 	_chat_panel = PanelContainer.new()
 	_chat_panel.name = "ChatPanel"
-	_chat_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+	HouseStyle.apply(_chat_panel)   # the house window (maintainer D98 = a); no corner brackets
 	# Docked bottom, just right of the LeftPanelScroll column and
 	# left of the bottom-right DiceRollerPanel, so it overlaps neither.
 	_chat_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -14517,15 +14520,15 @@ func _build_chat_panel() -> void:
 	_chat_panel.visible = false
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", HudTokens.SPACE_4)
+	vbox.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 	_chat_panel.add_child(vbox)
 
-	vbox.add_child(HudTokens.header("CHAT", "NET-04"))
+	vbox.add_child(HouseStyle.label("CHAT", HouseStyle.EYEBROW))
 
 	# Connected-player roster (filled in _rebuild_roster).
 	_roster_vbox = VBoxContainer.new()
 	_roster_vbox.name = "RosterVBox"
-	_roster_vbox.add_theme_constant_override("separation", 2)
+	_roster_vbox.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 	vbox.add_child(_roster_vbox)
 
 	# Scrollable message log (same pattern as the dice log).
@@ -14548,7 +14551,6 @@ func _build_chat_panel() -> void:
 	_chat_input.gui_input.connect(_on_chat_input_gui_input)
 	vbox.add_child(_chat_input)
 
-	_chat_panel.add_child(HudFrame.new())
 	$UI/HUD.add_child(_chat_panel)
 
 
@@ -14596,16 +14598,12 @@ func _add_chat_entry(peer_id: int, text: String) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 
-	var name_lbl := Label.new()
-	name_lbl.text = "%s:" % _peer_display_name(peer_id)
-	name_lbl.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
-	name_lbl.add_theme_color_override("font_color", _get_player_color(peer_id))
+	var name_lbl := HouseStyle.label("%s:" % _peer_display_name(peer_id), HouseStyle.SMALL)
+	name_lbl.add_theme_color_override("font_color", _get_player_color(peer_id))   # the sender's player colour
 	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	row.add_child(name_lbl)
 
-	var text_lbl := Label.new()
-	text_lbl.text = text
-	text_lbl.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
+	var text_lbl := HouseStyle.label(text, HouseStyle.SMALL)
 	text_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(text_lbl)
@@ -14632,7 +14630,7 @@ func _rebuild_roster() -> void:
 
 	for id: int in ids:
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", HudTokens.SPACE_4)
+		row.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 
 		var dot := ColorRect.new()
 		dot.color = _get_player_color(id)
@@ -14640,15 +14638,13 @@ func _rebuild_roster() -> void:
 		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(dot)
 
-		var label := Label.new()
+		var label := HouseStyle.label("", HouseStyle.CAPTION)
 		var suffix := ""
 		if id == my_id:
 			suffix = " (you)"
 		elif id == 1:
 			suffix = " (host)"
 		label.text = "%s%s" % [_peer_display_name(id), suffix]
-		label.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
-		label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 		row.add_child(label)
 
 		_roster_vbox.add_child(row)
@@ -14662,16 +14658,13 @@ func _rebuild_roster() -> void:
 		if network_manager.slot_has_human_peer(int(slot)):
 			continue
 		var ai_row := HBoxContainer.new()
-		ai_row.add_theme_constant_override("separation", HudTokens.SPACE_4)
+		ai_row.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 		var ai_dot := ColorRect.new()
 		ai_dot.color = PlayerPalette.color_for_slot(int(slot))
 		ai_dot.custom_minimum_size = Vector2(10, 10)
 		ai_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		ai_row.add_child(ai_dot)
-		var ai_label := Label.new()
-		ai_label.text = "P%d: NACHTMAHR" % int(slot)
-		ai_label.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
-		ai_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+		var ai_label := HouseStyle.label("P%d: NACHTMAHR" % int(slot), HouseStyle.CAPTION)
 		ai_row.add_child(ai_label)
 		_roster_vbox.add_child(ai_row)
 
