@@ -90,14 +90,15 @@ func _populate_spells() -> void:
 		var nm: String = str(sp.get("name", ""))
 		var thr: int = int(sp.get("threshold", 0))
 		var eff: String = str(sp.get("effect", ""))
-		var head: String = "[b][color=#cc88ff]%s[/color][/b]%s" % [nm, (" (%d)" % thr if thr > 0 else "")]
-		var entry: String = head + "\n[color=#aaaaaa]" + eff + "[/color]"
+		var head: String = "[b][color=#%s]%s[/color][/b]%s" % [HouseStyle.ACCENT.to_html(false), nm,
+			(" (%d)" % thr if thr > 0 else "")]
+		var entry: String = head + "\n[color=#%s]%s[/color]" % [HouseStyle.INK.to_html(false), eff]
 		# Any special rule the spell grants → append its rule text after the spell text.
 		if am and am.has_method("rules_referenced_in") and am.has_method("get_rule_description"):
 			for r in am.rules_referenced_in(eff):
 				var desc: String = str(am.get_rule_description(r))
 				if not desc.is_empty():
-					entry += "\n[color=#888888]► [b]%s[/b]: %s[/color]" % [str(r), desc]
+					entry += "\n[color=#%s]► [b]%s[/b]: %s[/color]" % [HouseStyle.MUTED.to_html(false), str(r), desc]
 		parts.append(entry)
 	_spells_label.text = "\n\n".join(parts)
 
@@ -176,135 +177,54 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-## Creates a simple casts dialog programmatically (without scene).
+## Creates a simple casts dialog programmatically (without scene), in the house style (maintainer D98 = a).
 static func create_simple() -> CastsDialog:
 	var dialog = CastsDialog.new()
 	dialog.name = "CastsDialog"
-	dialog.theme = ThemeManager.get_current_theme()  # so PrimaryButton/DangerButton variations resolve
-	# Fill entire screen to block all input when visible
-	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dialog.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	# Semi-transparent background to dim the scene and block input
-	var bg = ColorRect.new()
-	bg.name = "Background"
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0, 0, 0, 0.4)
-	bg.mouse_filter = Control.MOUSE_FILTER_STOP
-	dialog.add_child(bg)
-
-	# Create centered panel container (deep-navy glass + hairline + shadow chrome)
-	var panel = PanelContainer.new()
-	panel.name = "Panel"
-	panel.custom_minimum_size = Vector2(250, 180)
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	dialog.add_child(panel)
-
-	# Inner margin so content clears the corner-bracket chrome
-	var margin = MarginContainer.new()
-	margin.name = "Margin"
-	UiPolish.set_dialog_margins(margin)
-	margin.mouse_filter = Control.MOUSE_FILTER_PASS
-	panel.add_child(margin)
-
-	# VBox container
-	var vbox = VBoxContainer.new()
-	vbox.name = "VBox"
-	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
-	vbox.mouse_filter = Control.MOUSE_FILTER_PASS
-	margin.add_child(vbox)
-
-	# Tactical header (Orbitron title + amber index + accent line)
-	vbox.add_child(HudTokens.header("CASTS", "/// CAST"))
+	var vbox := HouseStyle.dialog_frame(dialog, "CASTS", Vector2(250, 180))
 
 	# Title (per-unit caster-points subtitle, updated in _update_display)
-	var title = Label.new()
+	var title := HouseStyle.label("Caster Points", HouseStyle.CAPTION)
 	title.name = "TitleLabel"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.text = "Caster Points"
-	title.add_theme_font_override("font", HudTokens.mono_font())
-	title.add_theme_font_size_override("font_size", 12)
-	title.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(title)
 	dialog.title_label = title
 
-	# Casts container (- / current / +)
-	var casts_hbox = HBoxContainer.new()
-	casts_hbox.name = "CastsContainer"
-	casts_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	casts_hbox.mouse_filter = Control.MOUSE_FILTER_PASS
-	vbox.add_child(casts_hbox)
+	# − current / cap + (the steps press _on_step)
+	dialog.casts_label = HouseStyle.label("0 / 6", HouseStyle.VALUE)
+	dialog.casts_label.name = "CastsLabel"
+	var row := HouseStyle.step_row("CastsContainer", dialog.casts_label, dialog._on_step)
+	vbox.add_child(row)
+	dialog.minus_button = row.get_node("MinusButton")
+	dialog.plus_button = row.get_node("PlusButton")
 
-	# Minus button
-	var minus_btn = Button.new()
-	minus_btn.name = "MinusButton"
-	minus_btn.text = "-"
-	minus_btn.custom_minimum_size = Vector2(40, 40)
-	minus_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	casts_hbox.add_child(minus_btn)
-	dialog.minus_button = minus_btn
-
-	# Casts label
-	var casts_lbl = Label.new()
-	casts_lbl.name = "CastsLabel"
-	casts_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	casts_lbl.custom_minimum_size = Vector2(80, 0)
-	casts_lbl.text = "0 / 6"
-	casts_hbox.add_child(casts_lbl)
-	dialog.casts_label = casts_lbl
-
-	# Plus button
-	var plus_btn = Button.new()
-	plus_btn.name = "PlusButton"
-	plus_btn.text = "+"
-	plus_btn.custom_minimum_size = Vector2(40, 40)
-	casts_hbox.add_child(plus_btn)
-	dialog.plus_button = plus_btn
-
-	# Per round label
-	var per_round = Label.new()
+	# Per round label (the spell list is inserted right under it on first open)
+	var per_round := HouseStyle.label("+0 PER ROUND", HouseStyle.CAPTION)
 	per_round.name = "PerRoundLabel"
 	per_round.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	per_round.text = "+0 PER ROUND"
-	per_round.add_theme_font_override("font", HudTokens.mono_font())
-	per_round.add_theme_font_size_override("font_size", 12)
-	per_round.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
 	vbox.add_child(per_round)
 	dialog.per_round_label = per_round
 
-	# Reset button (destructive: clears manual adjustment)
-	var reset_btn = Button.new()
-	reset_btn.name = "ResetButton"
-	reset_btn.text = "RESET TO PER-ROUND"
-	reset_btn.tooltip_text = "Reset points to per-round value"
-	reset_btn.theme_type_variation = "DangerButton"
-	vbox.add_child(reset_btn)
-	dialog.reset_button = reset_btn
-
-	# Close button (primary action: confirm + dismiss)
-	var close_btn = Button.new()
-	close_btn.name = "CloseButton"
-	close_btn.text = "CLOSE"
-	close_btn.theme_type_variation = "PrimaryButton"
-	vbox.add_child(close_btn)
-	dialog.close_button = close_btn
-
-	# Corner-bracket chrome on top (instrumentation look), as the LAST panel child
-	var frame = HudFrame.new()
-	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(frame)
-
-	# Connect signals directly
-	minus_btn.pressed.connect(dialog._on_minus_pressed)
-	plus_btn.pressed.connect(dialog._on_plus_pressed)
-	reset_btn.pressed.connect(dialog._on_reset_pressed)
-	close_btn.pressed.connect(dialog.close)
+	# Reset (drops the manual adjustment: a danger line), close (the main action: confirm + dismiss)
+	dialog.reset_button = _action(vbox, "ResetButton", "RESET TO PER-ROUND", HouseStyle.DANGER_BUTTON, dialog._on_reset_pressed)
+	dialog.reset_button.tooltip_text = "Reset points to per-round value"
+	dialog.close_button = _action(vbox, "CloseButton", "CLOSE", HouseStyle.PRIMARY, dialog.close)
 
 	# Mark signals as connected to prevent double connection in _ready
 	dialog._signals_connected = true
-
 	return dialog
+
+
+func _on_step(delta: int) -> void:
+	if delta > 0:
+		_on_plus_pressed()
+	else:
+		_on_minus_pressed()
+
+
+static func _action(box: VBoxContainer, node_name: String, text: String, variant: StringName, on_press: Callable) -> Button:
+	var b := HouseStyle.button(text, variant, HouseStyle.H_ACTION)
+	b.name = node_name
+	b.pressed.connect(on_press)
+	box.add_child(b)
+	return b

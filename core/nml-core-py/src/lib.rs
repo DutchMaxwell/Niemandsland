@@ -45,7 +45,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use pyo3::create_exception;
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -1515,11 +1515,15 @@ impl Core {
     }
 
     /// The hand score with a supplied reply-wounds vector, for table parity pins.
+    #[pyo3(signature = (state, player, incoming, variant = 0))]
     fn score_hand_incoming(
-        &mut self, state: PyRef<'_, PyState>, player: i64, incoming: Vec<f64>,
+        &mut self, state: PyRef<'_, PyState>, player: i64, incoming: Vec<f64>, variant: i64,
     ) -> PyResult<f64> {
+        if !(0..=3).contains(&variant) {
+            return Err(PyValueError::new_err(format!("variant {variant}: no registered arm (0 to 3)")));
+        }
         let statics = self.statics_for(&state.inner)?;
-        Ok(nmlcore::score::score_hand(&state.inner, &statics, player, &incoming))
+        Ok(nmlcore::score::score_hand_variant(&state.inner, &statics, player, &incoming, variant))
     }
 
     /// NML-1142 — load a `netlab/fork_train.py` ENCODER net and play with it.

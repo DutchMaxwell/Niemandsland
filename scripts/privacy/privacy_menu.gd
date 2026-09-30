@@ -1,8 +1,11 @@
 class_name PrivacyMenu
-extends Window
+extends CanvasLayer
 ## Consent and byte-exact example preview. This milestone deliberately has no send
 ## path: the only write is the player's explicit local example export.
 
+const LAYER := 114
+const SHEET_W := 880
+const SCROLL_H := 600
 const FIXTURE_PATH := "res://assets/privacy/example_record.json"
 const EXPORT_PATH := "user://shared_records/example.json"
 const LAST_GAME_EXPORT_PATH := "user://shared_records/last_game.json"
@@ -96,9 +99,7 @@ var _last_preview: TextEdit = null
 
 
 func _ready() -> void:
-	transient = true
-	exclusive = true
-	close_requested.connect(hide)
+	layer = LAYER
 	_store = Store.new()
 	_store.load_from_disk()
 	_build_shell()
@@ -117,7 +118,7 @@ func set_store_path_for_tests(path: String) -> void:
 
 func open_settings() -> void:
 	_show_overview()
-	popup_centered()
+	show()
 
 
 func localized_text(key: String) -> String:
@@ -149,7 +150,7 @@ func evaluation_sharing_enabled() -> bool:
 
 func open_details() -> void:
 	_show_details()
-	popup_centered()
+	show()
 
 
 func example_bytes() -> PackedByteArray:
@@ -215,32 +216,22 @@ func _t(key: String) -> String:
 
 
 func _build_shell() -> void:
-	title = _t("title")
-	# Maintainer test game 21.09.: two multi-kilobyte JSON previews in 240 px letterboxes inside a fixed
-	# 780x680 shell made the record unreadable. Take the room the screen has; the old shell stays the
-	# floor (and the headless/test size, where the usable rect is unknown).
-	var shell := Vector2i(780, 680)
-	var usable: Vector2i = DisplayServer.screen_get_usable_rect().size
-	if usable.x >= 900 and usable.y >= 760:
-		shell = Vector2i(mini(1000, usable.x - 120), mini(900, usable.y - 80))
-	min_size = Vector2i(780, 680)
-	size = shell
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 18)
-	margin.add_theme_constant_override("margin_right", 18)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_bottom", 16)
-	add_child(margin)
+	var parts := HouseStyle.overlay_sheet(_t("title"), SHEET_W)
+	(parts["close"] as Button).pressed.connect(hide)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll)
+	scroll.custom_minimum_size = Vector2(0, SCROLL_H)
+	(parts["body"] as VBoxContainer).add_child(scroll)
 	_content = VBoxContainer.new()
 	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_content.add_theme_constant_override("separation", 10)
+	_content.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
 	scroll.add_child(_content)
-	if has_node("/root/ThemeManager"):
-		margin.theme = get_node("/root/ThemeManager").get_current_theme()
+	add_child(parts["root"] as Control)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
+		hide()
 
 
 func _clear_content() -> void:
@@ -255,14 +246,12 @@ func _label(text: String, heading: bool = false) -> Label:
 	label.text = text
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if heading:
-		label.add_theme_font_size_override("font_size", 20)
+	label.theme_type_variation = HouseStyle.NOTE if heading else HouseStyle.BODY
 	return label
 
 
 func _button(text: String, callback: Callable) -> Button:
-	var button := Button.new()
-	button.text = text
+	var button := HouseStyle.button(text, HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	button.pressed.connect(callback)
 	return button
 
@@ -319,6 +308,7 @@ func _show_details() -> void:
 	_content.add_child(_reviewed_toggle)
 	_allow_button = _button("", _on_allow_or_withdraw)
 	_allow_button.name = "AllowEvaluationButton"
+	_allow_button.theme_type_variation = HouseStyle.PRIMARY
 	_content.add_child(_allow_button)
 	_training_toggle = CheckButton.new()
 	_training_toggle.name = "AllowTrainingToggle"

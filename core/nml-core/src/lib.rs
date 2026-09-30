@@ -64,7 +64,8 @@ pub use dice::{
 };
 pub use gate::{charge_illegal, charge_illegal_tuned};
 pub use io::{
-    load_nodes, plain_of, read_nodes, state_from_json, Action, Node, NodeCorpus, Seams,
+    cast_attempts_diff, load_nodes, plain_of, read_nodes, state_from_json, Action, Node, NodeCorpus,
+    Seams,
 };
 pub use menu::{candidates, candidates_in, candidates_tuned, Candidate, Tuning};
 pub use mv::{load_moves, read_moves, MoveCall, MoveCorpus, MoveHeader};

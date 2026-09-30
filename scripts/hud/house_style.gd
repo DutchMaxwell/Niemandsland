@@ -30,6 +30,7 @@ const LINE_SOFT := Color(0.529, 0.729, 0.737, 0.22)   # window rim (accent at 22
 const FILL := Color(1, 1, 1, 0.03)    # a resting control
 const FILL_RAISED := Color(1, 1, 1, 0.05)   # icon buttons
 const WELL := Color(0, 0, 0, 0.30)    # sunken cards: counter, result, log
+const OUTLINE := Color(0, 0, 0, 0.85) # the rim of a readout drawn straight onto the table
 # State colours: always paired with a label or glyph, never hue alone.
 const OK := Color("5fbf8a")
 const WARN := Color("e0a34a")
@@ -110,8 +111,12 @@ const BODY := &"HsBody"             # plain text / a small value
 const CAPTION := &"HsCaption"       # muted field label
 const EYEBROW := &"HsEyebrow"       # the window title
 const VALUE := &"HsValue"           # a big number (the dice count)
+const READOUT := &"HsReadout"       # a big number drawn straight onto the table (the ruler / drag distance)
+const BAR_TEXT := &"HsBarText"      # a plain readout in the top bar's row (the FPS line), boxed like its chips
 const NOTE := &"HsNote"             # a gold key line (roll purpose, result summary)
 const SMALL := &"HsSmall"           # dense readout text (log lines, tally counts)
+const STATUS := &"HsStatus"         # a top status line on a small window plate (banners, toasts)
+const VOICE := &"HsVoice"           # the AI's own words, large and gold ("NACHTMAHR dreams…")
 const HIT := &"HsHit"               # a success count next to its glyph
 const RAIL := &"HsRail"             # a tool in the tool rail; the open tool = selected (gold)
 const RAIL_PANEL := &"HsRailPanel"  # the rail's own slim frame
@@ -136,6 +141,9 @@ const GLYPH_EXPAND := "▲"
 const GLYPH_MINUS := "−"
 const GLYPH_CLOSE := "×"
 const GLYPH_GO := "›"
+const GLYPH_BACK := "‹"
+const GLYPH_PAUSE := "‖"
+const GLYPH_PLAY := "▶"
 
 # ===== Dice =====
 ## The dice look — ONE switch for the physics dice, their tally icons and the dice log
@@ -195,6 +203,14 @@ static func theme() -> Theme:
 		_box(_alpha(DANGER, PRESS_ALPHA), DANGER, RADIUS_CARD, PAD_BUTTON_X, 0), _radius(off, RADIUS_CARD),
 		tone_ink(TONE_DANGER), FONT_BODY)
 
+	# Privacy window: sunken read-only text, light ink on the toggles.
+	t.set_stylebox(&"normal", &"TextEdit", _box(WELL, LINE, RADIUS_CARD, PAD_CARD_X, PAD_CARD_Y))
+	t.set_stylebox(&"read_only", &"TextEdit", _box(WELL, LINE, RADIUS_CARD, PAD_CARD_X, PAD_CARD_Y))
+	t.set_color(&"font_color", &"TextEdit", INK)
+	t.set_color(&"font_readonly_color", &"TextEdit", INK)
+	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
+		t.set_color(c, &"CheckButton", INK)
+
 	# Tool rail: quiet buttons until hovered, the open tool in gold (mockup .rail-btn / .active).
 	var none := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
 	var rail_hover := _box(FILL_RAISED, Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
@@ -252,10 +268,26 @@ static func theme() -> Theme:
 	spaced.spacing_glyph = EYEBROW_SPACING
 	t.set_font(&"font", EYEBROW, spaced)
 	_label_variant(t, VALUE, INK, FONT_VALUE)
+	# A readout sits on the table itself and is often empty, so no plate hangs in the air: gold with a rim.
+	_label_variant(t, READOUT, GOLD, FONT_VALUE)
+	t.set_color(&"font_outline_color", READOUT, OUTLINE)
+	t.set_constant(&"outline_size", READOUT, 3)
+	_label_variant(t, BAR_TEXT, INK, FONT_SMALL)
+	t.set_stylebox(&"normal", BAR_TEXT, _box(PANEL, LINE, RADIUS_CARD, PAD_CHIP_X, 2))
 	_label_variant(t, NOTE, GOLD, FONT_CAPTION)
 	_label_variant(t, SMALL, INK, FONT_SMALL)
 	_label_variant(t, HIT, ACCENT, FONT_BODY)
+	# A status line carries its own plate: readable over the table without an outline.
+	_label_variant(t, STATUS, INK, FONT_ACTION)
+	t.set_stylebox(&"normal", STATUS, _box(PANEL, LINE_SOFT, RADIUS_CARD, PAD_CHIP_X, 4))
+	_label_variant(t, VOICE, GOLD, FONT_VALUE)
 	t.set_color(&"font_color", &"Label", INK)
+
+	# Native dialogs of the menu scene (MenuDialog): the sheet box, light text on it.
+	t.set_stylebox(&"panel", &"AcceptDialog", _box(SHEET_FILL, LINE_SOFT, RADIUS_SHEET, PAD_SHEET, PAD_SHEET))
+	t.set_color(&"default_color", &"RichTextLabel", INK)
+	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
+		t.set_color(c, &"CheckBox", INK)
 
 	# A slim scrollbar for sunken lists (the dice log).
 	var grab := _box(LINE, LINE, RADIUS_CONTROL, 0, 0)
@@ -599,6 +631,52 @@ static func overlay_sheet(title: String, width: int) -> Dictionary:
 	var header := panel_header(title, true)
 	body.add_child(header)
 	return {"root": root, "sheet": sheet, "body": body, "close": header.get_node("CloseButton")}
+
+
+## A unit dialog's frame (Wounds, Caster points, Model info): `dialog` fills the screen over the scrim and
+## owns every click; a centred house panel holds the VBox it returns, headed by the eyebrow `title`. The
+## node names are the dialogs' scene paths (Panel/Margin/VBox), which the dialogs and the table look up.
+static func dialog_frame(dialog: Control, title: String, min_size: Vector2) -> VBoxContainer:
+	dialog.theme = theme()
+	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	var bg := ColorRect.new()
+	bg.name = "Background"
+	bg.color = SCRIM
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	dialog.add_child(bg)
+	var panel := PanelContainer.new()
+	panel.name = "Panel"
+	panel.theme_type_variation = PANEL_VARIANT
+	panel.custom_minimum_size = min_size
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	dialog.add_child(panel)
+	var margin := MarginContainer.new()
+	margin.name = "Margin"
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.name = "VBox"
+	vbox.add_theme_constant_override(&"separation", GAP_ROW)
+	vbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	margin.add_child(vbox)
+	vbox.add_child(label(title, EYEBROW))
+	return vbox
+
+
+## A dialog's "−  value  +" row (the dice window's stepper): the steps are named MinusButton / PlusButton
+## and press on_step(-1) / on_step(+1).
+static func step_row(row_name: String, value: Label, on_step: Callable) -> HBoxContainer:
+	var row := stepper([-1, 1], value, on_step, "Step", true)
+	row.name = row_name
+	row.get_node("Step-1").name = "MinusButton"
+	row.get_node("Step+1").name = "PlusButton"
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return row
 
 
 ## Folds a window to its header or unfolds it: hides / shows `body`, flips the collapse glyph and

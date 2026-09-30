@@ -121,3 +121,12 @@ func test_an_unknown_env_id_falls_back_to_duel() -> void:
 	assert_str(str(m.get("id", ""))).override_failure_message("header stamp 'id'").is_equal("duel")
 	assert_str(str(m.get("family", ""))).override_failure_message("header stamp 'family'").is_equal("face_off")
 	assert_str(str(m.get("scoring", ""))).override_failure_message("header stamp 'scoring'").is_equal("end")
+
+
+## The hand-leaf arm rides the header's knobs (plain.rs `knobs_of` reads it back into the core's plan call).
+func test_the_header_stamps_the_eval_variant() -> void:
+	AiMissionEval.eval_variant = 3
+	var k: Dictionary = AiActRecorder._header_line(_state(), Callable()).get("knobs", {})
+	AiMissionEval.eval_variant = 0
+	assert_int(int(k.get("eval_variant", -1))).is_equal(3)
+	assert_int(int(AiActRecorder._header_line(_state(), Callable()).get("knobs", {}).get("eval_variant", -1))).is_equal(0)
