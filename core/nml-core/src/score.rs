@@ -13,6 +13,7 @@
 //! is that call with no net, i.e. `fit_mode == false`.
 
 use crate::fitted::{FitMode, Fitted};
+use crate::mission::vp_of;
 use crate::state::State;
 use crate::unit::UnitStatic;
 use crate::{CONTROL_EPS, DESTROY_DEFENCE_WEIGHT, DISCOUNT, IN2M, OBJECTIVE_CONTROL_IN};
@@ -330,10 +331,59 @@ fn score_hand_majority(
     total / state.objectives.len() as f64
 }
 
+/// `eval_variant = 3` (mission-play lane, step 2; DESIGN_missions §8) — the
+/// currency the `round_vp` referee books, in EXPECTATION: the VP already
+/// banked (`state.vp`, which `imagined_round_end` writes at every rollout
+/// boundary) plus the rounds still to be scored times each marker's expected
+/// yield (`2 * objective_own - 1`, the referee's three-way seize), plus the
+/// majority bonus the flavour pays (every round, at the end, or never) and an
+/// unclaimed first-seize bounty. `left` counts the rounds the referee has NOT
+/// booked yet: a rollout boundary arrives with every unit activated and its
+/// round already in the ledger, a mid-round leaf (tail cap, live pick) still
+/// has this round to score. Everything that is not a plain `round_vp`
+/// mission — END scoring, sabotage, the demolition flavour, no markers — is
+/// handed back to variant 0 whole, so those states score byte-identical.
+fn score_hand_vp(
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
+) -> f64 {
+    if state.objectives.is_empty() || &*state.scoring != "round_vp" || is_destroy_mission(state) {
+        return score_hand(state, statics, player, incoming);
+    }
+    let n = state.objectives.len() as f64;
+    let vp = vp_of(state.vp.as_deref());
+    let banked = (if player == 1 { vp[0] - vp[1] } else { vp[1] - vp[0] }) as f64;
+    let open = (0..state.units()).any(|i| state.alive[i] > 0 && !state.activated[i]);
+    let left = ((state.rounds_total - state.round).max(0) + i64::from(open)) as f64;
+    let mut sum = 0.0f64;
+    for i in 0..state.objectives.len() {
+        sum += 2.0 * objective_own(state, statics, i, player, incoming) - 1.0;
+    }
+    let lead = (sum / n).clamp(-1.0, 1.0);
+    let flavour = state.vp_flavour.as_deref();
+    let majority = flavour.and_then(|v| v.get("majority")).and_then(|v| v.as_str()).unwrap_or("end");
+    let (bonus, bonus_max) = match majority {
+        "round" => (left * lead, left),
+        "end" => (lead, 1.0),
+        _ => (0.0, 0.0),
+    };
+    let first_seize =
+        flavour.and_then(|v| v.get("first_seize")).and_then(|v| v.as_bool()).unwrap_or(false);
+    let claimed = state
+        .vp_memo
+        .as_deref()
+        .and_then(|m| m.get("first_seizer"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let (bounty, bounty_max) = if first_seize && claimed == 0.0 { (lead, 1.0) } else { (0.0, 0.0) };
+    let denom = (n * left + bonus_max + bounty_max).max(1.0);
+    0.5 + 0.5 * ((banked + left * sum + bonus + bounty) / denom).clamp(-1.0, 1.0)
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
-/// here. Arm 1 (ledger row 7) is the marker term above; every value past the
+/// here. Arm 1 (ledger row 7) is the marker term above, arm 2 the wave-C
+/// no-carry ablation, arm 3 the `round_vp` currency; every value past the
 /// registered arms is refused by `acts::read_act_header` before a header is
 /// ever played, so the fallback arm is an invariant, not a live path.
 pub fn score_hand_variant(
@@ -343,6 +393,7 @@ pub fn score_hand_variant(
         0 => score_hand(state, statics, player, incoming),
         1 => score_hand_majority(state, statics, player, incoming),
         2 => score_hand_carry(state, statics, player, incoming, false),
+        3 => score_hand_vp(state, statics, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
@@ -468,6 +519,114 @@ mod tests {
         st.markers_meta = vec![crate::state::Marker { carry: true, carried_by: 0, ..Default::default() }];
         assert_eq!(score_hand_variant(&st, &[], 1, NO_INCOMING, 0), 1.0);
         assert!(score_hand_variant(&st, &[], 1, NO_INCOMING, 2) < 0.5);
+    }
+
+    /// A 4-round PROGRESSIVE fixture for the mission-play arm: the given units
+    /// on the x axis (`U`, metres), neutral markers at `marker_x`, the flavour
+    /// blob and the banked ledger, through the real reader like `marker_state`.
+    fn vp_state(
+        units: &[U], marker_x: &[f64], round: i64, scoring: &str, flavour: &str, vp: [i64; 2],
+    ) -> crate::state::State {
+        let profiles: Vec<String> = units
+            .iter()
+            .map(|u| {
+                format!(
+                    r#""{id}":{{"unit_id":"{id}","name":"U","quality":4,"defense":3,"tough":6,
+                     "wounds_max":[6],"model_count":1,"caster_value":0,"base_radius":0.016,
+                     "game_system":"gf","faction_folder":"robot_legions","special_rules":[],
+                     "item_grants":[],"attached_hero_rules":[],
+                     "move_bands":{{"advance":6.0,"rush":12.0}},"weapons":[]}}"#,
+                    id = u.0
+                )
+            })
+            .collect();
+        let plain_units: Vec<String> = units
+            .iter()
+            .map(|u| {
+                format!(
+                    r#""{id}":{{"player":{p},"alive":1,"wounds":[{w}],"radii":[0.016],
+                     "positions":[[{x},0.0,0.0]],"in_cover":false,"shaken":{sh},
+                     "fatigued":false,"activated":{ac},"casts":0,"morale_bonus":0,
+                     "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+                     "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{{}},"mods_base":{{}},
+                     "bands":{{"advance":6.0,"rush":12.0}}}}"#,
+                    id = u.0, p = u.1, x = u.2, w = u.3, sh = u.4, ac = u.5
+                )
+            })
+            .collect();
+        let markers: Vec<String> =
+            marker_x.iter().map(|x| format!(r#"{{"pos":[{x},0.0,0.0],"owner":0}}"#)).collect();
+        let head = format!(r#"{{"kind":"header","knobs":{{}},"profiles":{{{}}}}}"#, profiles.join(","));
+        let plain = format!(
+            r#"{{"round":{round},"rounds_total":4,"scoring":"{scoring}","vp":[{},{}],
+             "vp_flavour":{flavour},"vp_memo":{{}},"objectives":[{}],"units":{{{}}}}}"#,
+            vp[0], vp[1], markers.join(","), plain_units.join(",")
+        );
+        let header = read_act_header(&head).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        state_from_json(&plain, &mut cache, &mut roster).expect("state")
+    }
+
+    /// RED-1 (mission-play step 2): my unit holds the one marker, theirs is far
+    /// out of reach, round 2 of a `round_vp` game. Variant 0 scores the same
+    /// board whether I am 9 VP behind or 9 ahead — it never reads the ledger;
+    /// variant 3 must price the deficit below the lead.
+    #[test]
+    fn variant_3_reads_the_banked_vp_where_variant_0_is_blind() {
+        let units = [U("p1_0_a", 1, 0.0, 6, false, false), U("p2_0_a", 2, 5.0, 6, false, false)];
+        let behind = vp_state(&units, &[0.0], 2, "round_vp", r#"{"majority":"end"}"#, [0, 9]);
+        let ahead = vp_state(&units, &[0.0], 2, "round_vp", r#"{"majority":"end"}"#, [9, 0]);
+        let v0 = (
+            score_hand_variant(&behind, &[], 1, NO_INCOMING, 0),
+            score_hand_variant(&ahead, &[], 1, NO_INCOMING, 0),
+        );
+        assert_eq!(v0.0, v0.1, "variant 0 is VP-blind by construction");
+        let v3 = (
+            score_hand_variant(&behind, &[], 1, NO_INCOMING, 3),
+            score_hand_variant(&ahead, &[], 1, NO_INCOMING, 3),
+        );
+        assert!(v3.0 < v3.1, "variant 3 must read the ledger: behind {} vs ahead {}", v3.0, v3.1);
+        assert!(v3.0 < 0.5 && v3.1 > 0.5, "9 VP down is losing, 9 up is winning: {v3:?}");
+    }
+
+    /// NULL: off the `round_vp` currency (END scoring, the demolition flavour)
+    /// variant 3 hands the whole state to variant 0 — the same bits, so every
+    /// face-off and destroy corpus replays unchanged under the new arm.
+    #[test]
+    fn variant_3_is_variant_0_off_the_round_vp_currency() {
+        let units = [U("p1_0_a", 1, 0.0, 6, false, false), U("p2_0_a", 2, 0.3, 6, false, false)];
+        let end = vp_state(&units, &[0.0, 0.5], 3, "end", "{}", [0, 4]);
+        assert_eq!(
+            score_hand_variant(&end, &[], 1, NO_INCOMING, 3),
+            score_hand_variant(&end, &[], 1, NO_INCOMING, 0),
+            "END scoring: variant 3 must be variant 0 to the bit"
+        );
+        let demo = vp_state(&units, &[0.0, 0.5], 3, "round_vp", r#"{"mode":"demolition"}"#, [0, 4]);
+        assert_eq!(
+            score_hand_variant(&demo, &[], 1, NO_INCOMING, 3),
+            score_hand_variant(&demo, &[], 1, NO_INCOMING, 0),
+            "demolition flavour: variant 3 must be variant 0 to the bit"
+        );
+    }
+
+    /// ROUND: three markers nobody can reach (every yield 0), 1 VP banked for
+    /// me, majority at the end. A BOOKED final boundary (all activated, round
+    /// 4) has nothing left to score: 1 VP over a 1-VP bonus denominator = 1.0.
+    /// The same board mid-round (one unit free) still scores this round:
+    /// denominator 3 + 1, so 0.625; one round earlier 6 + 1, so 0.5 + 1/14.
+    #[test]
+    fn variant_3_counts_the_rounds_the_referee_has_not_booked() {
+        let far = [U("p1_0_a", 1, 5.0, 6, false, true), U("p2_0_a", 2, -5.0, 6, false, true)];
+        let open = [U("p1_0_a", 1, 5.0, 6, false, false), U("p2_0_a", 2, -5.0, 6, false, true)];
+        let markers = [0.0, 0.5, 1.0];
+        let fl = r#"{"majority":"end"}"#;
+        let booked = score_hand_variant(&vp_state(&far, &markers, 4, "round_vp", fl, [1, 0]), &[], 1, NO_INCOMING, 3);
+        let last = score_hand_variant(&vp_state(&open, &markers, 4, "round_vp", fl, [1, 0]), &[], 1, NO_INCOMING, 3);
+        let third = score_hand_variant(&vp_state(&open, &markers, 3, "round_vp", fl, [1, 0]), &[], 1, NO_INCOMING, 3);
+        assert!((booked - 1.0).abs() < 1e-12, "booked final boundary: {booked}");
+        assert!((last - 0.625).abs() < 1e-12, "open final round: {last}");
+        assert!((third - (0.5 + 0.5 / 7.0)).abs() < 1e-12, "open round 3: {third}");
     }
 
     /// One one-model unit for the ledger-row-7 fixtures: id, player, x in
