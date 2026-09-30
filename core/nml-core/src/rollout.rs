@@ -98,7 +98,7 @@ pub enum Stop {
 /// Symmetric by construction: the core has no `ai_slot`/`human_slot` split, so
 /// the step applies to whichever side holds the turn (the block-B8 FIRE GATE
 /// note, sim.rs).
-fn delayed_action_passer(
+pub(crate) fn delayed_action_passer(
     statics: &[UnitStatic],
     state: &State,
     player: i64,
@@ -276,7 +276,7 @@ impl<'a> Rollout<'a> {
     /// `coordinate_hand_off` (:864), which forces the next activation onto the
     /// receiver by stamping `_peeked_unit` and bypassing the seeded section
     /// draw: the rule names the unit, the D6 does not.
-    fn coordinate_hand_off(
+    pub fn coordinate_hand_off(
         &self,
         cur: &mut State,
         acted: &Candidate,
