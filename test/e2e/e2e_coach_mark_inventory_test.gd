@@ -111,6 +111,17 @@ func test_hide_overlay_hides_and_stops_processing() -> void:
 	assert_bool(_mark.is_processing()).is_false()
 
 
+func test_overlay_wears_the_house_style_and_keeps_no_hud_tokens() -> void:
+	assert_object(_mark._card.theme).is_same(HouseStyle.theme())
+	assert_str(String(_mark._card.theme_type_variation)).is_equal(String(HouseStyle.PANEL_VARIANT))
+	assert_str(String(_mark._progress_label.theme_type_variation)).is_equal(String(HouseStyle.NOTE))
+	assert_str(String(_mark._label.theme_type_variation)).is_equal(String(HouseStyle.BODY))
+	for t: String in ["SKIP LESSON", "END TUTORIAL"]:
+		assert_str(String(_button(t).theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+		assert_object(_button(t).theme).is_same(HouseStyle.theme())
+	assert_bool(FileAccess.get_file_as_string("res://scripts/tutorial_coach_mark.gd").contains("HudTokens")).override_failure_message("HudTokens is still used").is_false()
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	assert_array(_missing()).is_empty()
 	var end := _button("END TUTORIAL")
