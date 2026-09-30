@@ -26,7 +26,7 @@ const TERRAIN_COLORS := {
 }
 
 const TERRAIN_NAMES := {
-	TerrainType.NONE: "None",
+	TerrainType.NONE: "Erase",
 	TerrainType.RUINS: "Ruins",
 	TerrainType.FOREST: "Forest",
 	TerrainType.CONTAINER: "Container",
@@ -83,7 +83,7 @@ const VERTEX_CLICK_RADIUS := 10.0  # Pixels for vertex selection
 var table_size_feet := Vector2(6, 4)  # Default 6x4 table
 var grid_rotation_degrees := 0.0
 var grid_cells := {}  # Dictionary[Vector2i, TerrainType]
-var selected_terrain_type := TerrainType.NONE
+var selected_terrain_type := TerrainType.RUINS  # the eraser is never pre-selected
 var is_painting := false
 var point_symmetry_enabled := false  # Mirror placement across center
 
@@ -94,7 +94,7 @@ var point_symmetry_enabled := false  # Mirror placement across center
 ## Editor modes: paint free cells, place walls on edges, drop complete prefab pieces,
 ## or select/move/rotate already-placed pieces.
 enum EditorMode { PAINT_CELLS, PLACE_WALLS, PLACE_PREFAB, MOVE_PIECES }
-var editor_mode := EditorMode.PAINT_CELLS
+var editor_mode := EditorMode.PLACE_PREFAB  # the modular pieces are what the 3D table renders
 
 ## Selected canonical prefab key for one-click placement (see terrain_prefabs.gd)
 var selected_prefab_key := ""
@@ -213,7 +213,7 @@ var _objectives_warning_label: Label = null
 # Modular Terrain UI (prefab palette, walls, undo/redo)
 var _modular_terrain_panel: VBoxContainer = null
 var _prefab_option_btn: OptionButton = null
-var _editor_mode_btn: Button = null
+var _mode_buttons: Dictionary = {}  # EditorMode -> segment Button (one visible button per mode)
 var _wall_option_btn: OptionButton = null
 var _prefab_row: HBoxContainer = null  # field_row holding the piece dropdown (hidden outside Place mode)
 var _wall_row: HBoxContainer = null
@@ -701,10 +701,16 @@ func _setup_modular_terrain_ui() -> void:
 	if not prefab_keys.is_empty():
 		selected_prefab_key = prefab_keys[0]
 
-	# Editor mode toggle
-	_editor_mode_btn = HouseStyle.button("Mode: Paint Cells", HouseStyle.BUTTON, 36)
-	_editor_mode_btn.pressed.connect(_on_editor_mode_toggled)
-	_modular_terrain_panel.add_child(HouseStyle.field_row("Mode", _editor_mode_btn))
+	# Editor mode: four visible segments, the current one gold
+	var mode_row := HouseStyle.button_row(["Paint", "Walls", "Place", "Move"], HouseStyle.SEGMENT, 34)
+	mode_row.name = "ModeRow"
+	var mode_ids := [EditorMode.PAINT_CELLS, EditorMode.PLACE_WALLS, EditorMode.PLACE_PREFAB, EditorMode.MOVE_PIECES]
+	for i in mode_ids.size():
+		var mb: Button = mode_row.get_child(i)
+		mb.name = "Mode%sButton" % ["Paint", "Walls", "Place", "Move"][i]
+		mb.pressed.connect(_set_editor_mode.bind(mode_ids[i]))
+		_mode_buttons[mode_ids[i]] = mb
+	_modular_terrain_panel.add_child(mode_row)
 
 	# Wall variant selection (visible when PLACE_WALLS mode)
 	_wall_option_btn = OptionButton.new()
@@ -754,18 +760,11 @@ func _setup_modular_terrain_ui() -> void:
 
 
 func _update_modular_terrain_ui() -> void:
-	if not _editor_mode_btn:
+	if _mode_buttons.is_empty():
 		return
 
-	match editor_mode:
-		EditorMode.PAINT_CELLS:
-			_editor_mode_btn.text = "Mode: Paint Cells"
-		EditorMode.PLACE_WALLS:
-			_editor_mode_btn.text = "Mode: Place Walls"
-		EditorMode.PLACE_PREFAB:
-			_editor_mode_btn.text = "Mode: Place Piece  (R rotate · F flip)"
-		EditorMode.MOVE_PIECES:
-			_editor_mode_btn.text = "Mode: Move Pieces  (R/F · Del)"
+	for mode in _mode_buttons:
+		HouseStyle.set_selected(_mode_buttons[mode], mode == editor_mode)
 
 	# Wall selection only visible in PLACE_WALLS mode
 	if _wall_row:
@@ -800,16 +799,8 @@ func _update_modular_status() -> void:
 		wall_segments.size(), placed_objects.size()]
 
 
-func _on_editor_mode_toggled() -> void:
-	match editor_mode:
-		EditorMode.PAINT_CELLS:
-			editor_mode = EditorMode.PLACE_WALLS
-		EditorMode.PLACE_WALLS:
-			editor_mode = EditorMode.PLACE_PREFAB
-		EditorMode.PLACE_PREFAB:
-			editor_mode = EditorMode.MOVE_PIECES
-		EditorMode.MOVE_PIECES:
-			editor_mode = EditorMode.PAINT_CELLS
+func _set_editor_mode(mode: EditorMode) -> void:
+	editor_mode = mode
 	_selected_piece_id = -1
 	_dragging_piece = false
 	_preview_active = false
