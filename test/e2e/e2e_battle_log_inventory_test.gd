@@ -219,6 +219,45 @@ func test_the_header_folds_the_panel(timeout := 120000) -> void:
 	assert_bool(_panel().is_visible_in_tree()).is_false()
 
 
+# === the house look (restyle) =================================================================
+
+## The panel wears the house style alone: a house window, ghost buttons for the header, the filter,
+## Export and Copy, the player's lines small ink, the AI's the gold key line, the reasoning a caption,
+## no colour, size or box of its own — and every mark it prints is in its font.
+func test_the_panel_wears_the_house_style(timeout := 120000) -> void:
+	await _fill()
+	await _open()
+	var p := _panel()
+	assert_object(p.theme).is_same(HouseStyle.theme())
+	assert_str(String(p.theme_type_variation)).is_equal(String(HouseStyle.PANEL_VARIANT))
+	for b: Button in [_button("Battle Log"), _button("Export"), _button("Copy"), _filter()]:
+		assert_str(String(b.theme_type_variation)).override_failure_message("'%s' is not a house button" % b.text) \
+			.is_equal(String(HouseStyle.BUTTON))
+	assert_str(String(_line("Guards shoot Raiders").theme_type_variation)).is_equal(String(HouseStyle.SMALL))
+	var ai := _line("NACHTMAHR: Raiders charge Guards")
+	assert_str(String(ai.theme_type_variation)).is_equal(String(HouseStyle.NOTE))
+	await _click(ai)
+	assert_str(String(_line(REASON).theme_type_variation)).is_equal(String(HouseStyle.CAPTION))
+	var own: Array = []
+	var lacking: Array = []
+	for n: Node in [p] + p.find_children("*", "Control", true, false):
+		var c := n as Control
+		if n != p and not n.get_parent().get_children().has(n):
+			continue   # an engine-internal child (the scroll's focus frame, the dropdown's popup)
+		for item: StringName in [&"panel", &"normal", &"hover", &"pressed"]:
+			if c.has_theme_stylebox_override(item):
+				own.append("%s box %s" % [c.name, item])
+		if c.has_theme_color_override(&"font_color") or c.has_theme_font_size_override(&"font_size"):
+			own.append("%s ink / size" % c.name)
+		if (c is Label or c is Button) and c.is_visible_in_tree():
+			var text: String = c.text
+			for i in text.length():
+				if text[i] != " " and not c.get_theme_font(&"font").has_char(text.unicode_at(i)):
+					lacking.append("U+%04X in '%s'" % [text.unicode_at(i), text])
+	assert_array(own).override_failure_message("dresses itself: %s" % [own]).is_empty()
+	assert_array(lacking).override_failure_message("its font lacks %s" % [lacking]).is_empty()
+
+
 # === the check itself =========================================================================
 
 func test_the_inventory_check_names_a_removed_control(timeout := 120000) -> void:
