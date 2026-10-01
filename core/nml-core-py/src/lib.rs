@@ -318,6 +318,13 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
         "arbitration".into(),
         p.arbitration.as_ref().map(arb_plain).unwrap_or(Value::Null),
     );
+    // Tree search knob: the key rides ONLY a pick the tree made (the NML-1147a
+    // stamp law), so a default pick object is the one it always was.
+    if let Some(t) = &p.tree {
+        let root: Vec<Value> = t.root.iter().map(|&(i, n, m)| serde_json::json!([i, n, m])).collect();
+        let tree = serde_json::json!({"completed": t.completed, "deadline_hit": t.deadline_hit, "root": root});
+        trace.insert("tree".into(), tree);
+    }
     out.insert("trace".into(), Value::Object(trace));
     out.insert(
         "leaf_state".into(),

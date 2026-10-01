@@ -38,7 +38,7 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use crate::acts::{ActStatics, Knobs, MeleeReach, PolicyMode, Sighting};
+use crate::acts::{ActStatics, Knobs, MeleeReach, PolicyMode, SearchMode, Sighting};
 use crate::arbitration::{arbitrate_bent, ArbBend, Arbitration};
 use crate::io::Seams;
 use crate::menu::{candidates_tuned, Candidate};
@@ -50,6 +50,7 @@ use crate::mv::reach::ReachIndex;
 use crate::sim::{reach_index_for_state, reply_threat, Scratch, Unsupported};
 use crate::state::State;
 use crate::terrain::Terrain;
+use crate::tree::{self, Node, Step, TreeCfg, TreeTrace};
 use crate::unit::UnitStatic;
 
 /// `AiPlanner.ROLLOUT_TOP_K` ai_planner.gd:48 — the rollout budget.
@@ -140,6 +141,9 @@ pub struct Pick {
     /// is on (the stamp law: a new record key rides only a pick where the knob
     /// is set). `pool_idx` / `rs` then cover exactly the completed rollouts.
     pub pool_completed: Option<(usize, bool)>,
+    /// Tree search knob — the search trace, `Some` ONLY on a pick the tree
+    /// made (`search_mode: tree`); every default pick carries `None`.
+    pub tree: Option<TreeTrace>,
 }
 
 /// NML-1165 R4 (DESIGN_value_net §7) — the LEAF VALUE seam. `Search::run`
@@ -408,6 +412,16 @@ impl<'a> Search<'a> {
     /// that asked for the ORDER re-rank and reaches a search with no policy
     /// net wired declines rather than silently falling back to the hand order.
     fn admissible(&self) -> Result<(), Unsupported> {
+        // Tree search knob — the arbitration and the ORDER re-rank are outside
+        // the tree's scope: declined by name, never half-applied.
+        if self.roll.knobs.search_mode == SearchMode::Tree {
+            if self.act.playout_search {
+                return Err(Unsupported::TreeOutOfScope("playout_search"));
+            }
+            if self.act.policy_mode == PolicyMode::Order {
+                return Err(Unsupported::TreeOutOfScope("policy_mode order"));
+            }
+        }
         if !self.act.heuristic_playout() {
             return Err(Unsupported::NetPlayout);
         }
@@ -588,6 +602,11 @@ impl<'a> Search<'a> {
 
         // PHASE 3 — the pool.
         let (mut covered, mut pool) = build_pool(&scored, &order, top_k, self.bend);
+        // Tree search knob — absent from every recorded corpus and shipped
+        // game, so nothing below moves unless a header asked for the tree.
+        if self.roll.knobs.search_mode == SearchMode::Tree {
+            return self.tree_pick(state, player, base, &scored, &order, &pos_of, &pool, sc);
+        }
 
         // PHASE 4 — exactly ONE rollout per pool candidate, in pool order.
         //
@@ -748,6 +767,68 @@ impl<'a> Search<'a> {
             explored,
             cands: scored.iter().map(|r| r.cand.clone()).collect(),
             pool_completed,
+            tree: None,
+        })
+    }
+
+    /// Tree search knob — PHASES 4-5.5 replaced by `tree::run` over the
+    /// prefilter's own rows (root children: the pool first, then the rest of
+    /// the ranked order). `pool_idx`/`rs` are the opened root children and
+    /// their means, `best_idx`/`runner_idx` sorted positions as always,
+    /// `expectation.after` the winner's mean, `last_leaf` the state the
+    /// winner leads to, `tree` the trace. The explore knob does not apply
+    /// (`explored` stays false); the Terminal playouts draw from a stream
+    /// seeded by `sig` (0 without one).
+    #[allow(clippy::too_many_arguments)]
+    fn tree_pick(&self, state: &State, player: i64, base: f64, scored: &[ScoredRow], order: &[usize],
+                 pos_of: &[usize], pool: &[usize], sc: &mut Scratch) -> Result<Pick, Unsupported> {
+        let k = &self.roll.knobs;
+        let cfg = TreeCfg {
+            leaf: k.tree_leaf, dice: k.tree_dice, samples: k.tree_samples.max(1) as usize,
+            batch: k.tree_batch.max(1) as usize, budget: k.tree_budget.max(1) as usize, player,
+            opener_seat: self.act.opener_seat, sig: self.sig, hook: self.leaf_value, w: self.leaf_value_w,
+        };
+        let mut root = Node::new(state.clone(), Step::Mover(player), player);
+        root.children = tree::root_children(scored, order, pool);
+        let mut rng = GodotRng::new(self.sig.unwrap_or(0));
+        let (best, trace) = tree::run(&self.roll, &cfg, &mut root, &mut rng, sc)?;
+        let rs: Vec<(i64, f64)> = trace.root.iter().map(|&(i, _, m)| (i as i64, m)).collect();
+        let mut runner: Option<usize> = None;
+        for j in (0..rs.len()).filter(|&j| j != best) {
+            if runner.is_none_or(|r| rs[j].1 > rs[r].1) {
+                runner = Some(j);
+            }
+        }
+        let (bi, hero_attach) = (trace.root[best].0, self.roll.policy.seams.hero_attach);
+        let unit_key = scored[bi].unit_key.clone();
+        let mut rolled_units: Vec<String> = Vec::new();
+        for &(i, _, _) in &trace.root {
+            if !rolled_units.contains(&scored[i].unit_key) {
+                rolled_units.push(scored[i].unit_key.clone());
+            }
+        }
+        let row = |i: usize| (scored[i].unit_key.clone(), scored[i].cand.clone());
+        Ok(Pick {
+            waits: (0..state.units())
+                .filter(|&i| state.can_activate(i, player, hero_attach) && state.key(i) != unit_key)
+                .count() as i64,
+            unit_key,
+            action: scored[bi].cand.clone(),
+            expectation_before: base,
+            expectation_after: rs[best].1,
+            runner_up: runner.map(|r| { let (u, c) = row(trace.root[r].0); (u, c, rs[r].1) }),
+            rolled_units,
+            scored: order.iter().map(|&i| (i as i64, scored[i].unit_key.clone(), scored[i].cand.kind, scored[i].score)).collect(),
+            pool_idx: trace.root.iter().map(|r| r.0).collect(),
+            rs,
+            best_idx: pos_of[bi] as i64,
+            runner_idx: runner.map_or(-1, |r| pos_of[trace.root[r].0] as i64),
+            last_leaf: root.children[best].nodes.first().map(|x| x.state.clone()),
+            arbitration: None,
+            explored: false,
+            cands: scored.iter().map(|r| r.cand.clone()).collect(),
+            pool_completed: None,
+            tree: Some(trace),
         })
     }
 }
