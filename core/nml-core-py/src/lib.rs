@@ -53,7 +53,7 @@ use serde_json::{Map, Value};
 
 use nmlcore::acts::{
     rule_on, ActHeader, ActStatics, CURRENT_RULES_EPOCH, EPOCH_10_CHARGE_BAND, Knobs, MeleeReach,
-    PolicyMode, Sighting,
+    PolicyMode, SearchMode, Sighting, TreeDice, TreeLeaf,
 };
 use nmlcore::arbitration::Arbitration;
 use nmlcore::deployment::{self, Placement, Rect, SettleUnit, SideDeploy, UnitSpec};
@@ -807,6 +807,41 @@ impl Core {
         m.insert("engage_fold".into(), self.knobs.engage_fold.into());
         m.insert("rule_vocab_version".into(), self.knobs.rule_vocab_version.into());
         m.insert("eval_variant".into(), self.knobs.eval_variant.into());
+        m.insert(
+            "search_mode".into(),
+            Value::String(
+                match self.knobs.search_mode {
+                    SearchMode::OnePly => "oneply",
+                    SearchMode::Tree => "tree",
+                }
+                .into(),
+            ),
+        );
+        m.insert(
+            "tree_leaf".into(),
+            Value::String(
+                match self.knobs.tree_leaf {
+                    TreeLeaf::Blend => "blend",
+                    TreeLeaf::Terminal => "terminal",
+                }
+                .into(),
+            ),
+        );
+        m.insert(
+            "tree_dice".into(),
+            Value::String(
+                match self.knobs.tree_dice {
+                    TreeDice::Ev => "ev",
+                    TreeDice::Tray => "tray",
+                }
+                .into(),
+            ),
+        );
+        m.insert("tree_budget".into(), self.knobs.tree_budget.into());
+        m.insert("tree_samples".into(), self.knobs.tree_samples.into());
+        m.insert("tree_batch".into(), self.knobs.tree_batch.into());
+        m.insert("tree_wall_ms".into(), self.knobs.tree_wall_ms.into());
+        m.insert("pool_wall_ms".into(), self.knobs.pool_wall_ms.into());
         m.insert(
             "melee_reach".into(),
             Value::String(
