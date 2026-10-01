@@ -1736,6 +1736,11 @@ pub struct Mission {
     pub family: String,
     #[serde(default)]
     pub scoring: String,
+    /// Attack & Defend only: P1's role ("attacker"/"defender") and the match length; absent otherwise.
+    #[serde(default)]
+    pub role_p1: String,
+    #[serde(default)]
+    pub rounds: i64,
 }
 
 /// The header line's three products — the profile table, the board and the

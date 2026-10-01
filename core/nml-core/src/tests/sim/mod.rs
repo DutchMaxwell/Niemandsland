@@ -44,6 +44,7 @@
             objectives: vec![],
             markers_meta: vec![],
             destroy_seq: vec![],
+            attacker: 0,
             vp: None,
             vp_flavour: None,
             vp_memo: None,
