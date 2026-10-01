@@ -55,11 +55,11 @@ func _missing(names: Array) -> Array:
 
 
 func _tab_body(title: String) -> Control:
-	var tabs := _ed.find_child("EditorTabs", true, false) as TabContainer
-	for i in tabs.get_tab_count():
-		if tabs.get_tab_title(i) == title:
-			return tabs.get_tab_control(i)
-	return null
+	return _ed.find_child("Tab" + title, true, false) as Control
+
+
+func _tab_button(title: String) -> Button:
+	return _ed.find_child("Tab%sButton" % title, true, false) as Button
 
 
 # ===== presence =====
@@ -85,21 +85,18 @@ func test_inventory_check_names_a_removed_control() -> void:
 
 
 func test_tabs_are_named_and_switch_their_bodies() -> void:
-	var tabs := _ed.find_child("EditorTabs", true, false) as TabContainer
-	assert_int(tabs.get_tab_count()).is_equal(3)
-	var titles: Array = []
-	for i in tabs.get_tab_count():
-		titles.append(tabs.get_tab_title(i))
-	assert_array(titles).contains_exactly(["Terrain", "Objectives", "Deployment"])
 	assert_bool(_tab_body("Terrain").visible).is_true()
 	assert_bool(_tab_body("Objectives").visible).is_false()
-	tabs.current_tab = 1
-	await _frames(2)
+	assert_bool(_tab_body("Deployment").visible).is_false()
+	_tab_button("Objectives").pressed.emit()
 	assert_bool(_tab_body("Objectives").visible).is_true()
 	assert_bool(_tab_body("Terrain").visible).is_false()
-	tabs.current_tab = 2
-	await _frames(2)
+	_tab_button("Deployment").pressed.emit()
 	assert_bool(_tab_body("Deployment").visible).is_true()
+	assert_bool(_tab_body("Objectives").visible).is_false()
+	assert_str(_tab_button("Deployment").text).is_equal("Deployment")
+	assert_str(_tab_button("Terrain").text).is_equal("Terrain")
+	assert_str(_tab_button("Objectives").text).is_equal("Objectives")
 
 
 # ===== header =====
