@@ -18,8 +18,8 @@ const BIOMES: Array[Dictionary] = [
 	{"label": "Urban Ruins", "prefix": "urban_"},
 ]
 const PANEL_SIZE := Vector2(320, 440)
-## Docked left, right of the tool rail and below the top bar.
-const DOCK_OFFSET := Vector2(84, 96)
+## Docked on the left, right of the left unit panel (it ends at x 270, main.tscn) and below the top bar.
+const DOCK_OFFSET := Vector2(280, 96)
 
 # === Signals ===
 

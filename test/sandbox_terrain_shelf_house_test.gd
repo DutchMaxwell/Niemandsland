@@ -42,7 +42,10 @@ func test_a12_shelf_is_a_docked_house_panel_not_a_window() -> void:
 		return
 	assert_str(String((_shelf as PanelContainer).theme_type_variation)).is_equal(String(HouseStyle.PANEL_VARIANT))
 	assert_bool((_shelf as Control).theme == HouseStyle.theme()).is_true()
-	assert_float((_shelf as Control).position.x).is_less(200.0)   # left side, right of the rail
+	# Docked on the left, but RIGHT of the left unit panel (x 10..270 in main.tscn): the shelf must never cover
+	# the Terrain Mode / Clear Table buttons that live there (CI e2e_game_menu_inventory_test clicked them).
+	assert_float((_shelf as Control).position.x).override_failure_message("A12 — the shelf covers the left panel buttons").is_greater_equal(270.0)
+	assert_float((_shelf as Control).position.x).is_less(600.0)
 
 
 func test_a12_controls_use_house_rows_and_variants() -> void:
