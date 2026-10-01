@@ -175,11 +175,10 @@ func test_next_round_runs_the_menus_next_round(timeout := 120000) -> void:
 	assert_str(next.text).is_equal(_main.next_round_btn.text)
 	var before: int = _main.opr_army_manager.current_round
 	await _click(next)
-	var dialog: ConfirmationDialog = _main._action_confirm_dialog
-	assert_bool(dialog != null and dialog.visible).override_failure_message("Next Round did not ask as the menu's button does").is_true()
+	var dialog: PromptCard = _main._action_confirm_card
+	assert_bool(is_instance_valid(dialog)).override_failure_message("Next Round did not ask as the menu's button does").is_true()
 	assert_str(dialog.title).is_equal(_main.next_round_btn.text)
-	dialog.confirmed.emit()
-	dialog.hide()
+	dialog.ok_button.pressed.emit()
 	await _runner.simulate_frames(4)
 	assert_int(_main.opr_army_manager.current_round).is_equal(before + 1)
 	assert_str((_bar().items()["round"].get_node("Row/Text") as Label).text).is_equal("ROUND %d" % (before + 1))
