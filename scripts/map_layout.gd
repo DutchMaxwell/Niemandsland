@@ -66,6 +66,8 @@ enum DeploymentType {
 # Custom zone editing state
 var custom_zone_editing := false
 var custom_zone_symmetric := true
+var _custom_zone_stale_p1 := false  ## an old zone is kept on screen until the first new vertex replaces it
+var _custom_zone_stale_p2 := false
 var custom_zone_current_player := 1  # 1 or 2
 # Vertices stored as FLOAT coordinates for precise boundary placement
 # This allows vertices to be placed exactly at grid-boundary intersections
@@ -512,29 +514,37 @@ func _update_custom_zone_ui_visibility() -> void:
 		_custom_zone_panel.visible = (deployment_type == DeploymentType.CUSTOM)
 
 
-## Start custom zone drawing
+## Start custom zone drawing. Existing zones stay visible until the first NEW vertex replaces them.
 func _on_custom_zone_start() -> void:
 	custom_zone_editing = true
 	custom_zone_current_player = 1
+	_custom_zone_stale_p1 = true
+	_custom_zone_stale_p2 = custom_zone_symmetric
 
-	# Clear previous vertices if starting fresh
 	if custom_zone_symmetric:
-		custom_zone_vertices_p1.clear()
-		custom_zone_vertices_p2.clear()
-		_custom_zone_status_label.text = "Drawing zones (symmetric)..."
+		_custom_zone_status_label.text = "Drawing zones (symmetric)... (at least 3 points)"
 	else:
-		custom_zone_vertices_p1.clear()
-		_custom_zone_status_label.text = "Drawing Player 1 zone..."
+		_custom_zone_status_label.text = "Drawing Player 1 zone... (at least 3 points)"
 
 	_custom_zone_start_btn.disabled = true
 	_custom_zone_symmetric_check.disabled = true
-	_custom_zone_confirm_btn.disabled = false
+	_custom_zone_confirm_btn.disabled = true
 
 	grid_container.queue_redraw()
 
 
+## Vertices the zone being drawn really has (a kept old zone does not count until replaced).
+func _custom_zone_current_count() -> int:
+	if custom_zone_symmetric or custom_zone_current_player == 1:
+		return 0 if _custom_zone_stale_p1 else custom_zone_vertices_p1.size()
+	return 0 if _custom_zone_stale_p2 else custom_zone_vertices_p2.size()
+
+
 ## Confirm current zone and move to next (or finish)
 func _on_custom_zone_confirm() -> void:
+	if _custom_zone_current_count() < 3:
+		_custom_zone_status_label.text = "Need at least 3 points"
+		return
 	if custom_zone_symmetric:
 		# Symmetric mode - both zones done at once
 		custom_zone_editing = false
@@ -545,7 +555,9 @@ func _on_custom_zone_confirm() -> void:
 		if custom_zone_current_player == 1:
 			# Move to player 2
 			custom_zone_current_player = 2
-			_custom_zone_status_label.text = "Drawing Player 2 zone..."
+			_custom_zone_stale_p2 = true
+			_custom_zone_confirm_btn.disabled = true
+			_custom_zone_status_label.text = "Drawing Player 2 zone... (at least 3 points)"
 		else:
 			# Done with both
 			custom_zone_editing = false
@@ -571,6 +583,8 @@ func _on_custom_zone_clear() -> void:
 	custom_zone_vertices_p2.clear()
 	custom_zone_editing = false
 	custom_zone_current_player = 1
+	_custom_zone_stale_p1 = false
+	_custom_zone_stale_p2 = false
 	_custom_zone_status_label.text = "Click grid to add zone vertices"
 	_custom_zone_start_btn.disabled = false
 	_custom_zone_symmetric_check.disabled = false
@@ -585,6 +599,11 @@ func _handle_custom_zone_click(cell: Vector2) -> void:
 		return
 
 	if custom_zone_symmetric:
+		if _custom_zone_stale_p1:
+			custom_zone_vertices_p1.clear()
+			custom_zone_vertices_p2.clear()
+			_custom_zone_stale_p1 = false
+			_custom_zone_stale_p2 = false
 		# Add to player 1 vertices, mirrored vertex added automatically
 		custom_zone_vertices_p1.append(cell)
 		var mirrored = _get_mirrored_cell(cell)
@@ -597,11 +616,18 @@ func _handle_custom_zone_click(cell: Vector2) -> void:
 	else:
 		# Add to current player's vertices
 		if custom_zone_current_player == 1:
+			if _custom_zone_stale_p1:
+				custom_zone_vertices_p1.clear()
+				_custom_zone_stale_p1 = false
 			custom_zone_vertices_p1.append(cell)
 			_custom_zone_status_label.text = "Player 1: %d vertices" % custom_zone_vertices_p1.size()
 		else:
+			if _custom_zone_stale_p2:
+				custom_zone_vertices_p2.clear()
+				_custom_zone_stale_p2 = false
 			custom_zone_vertices_p2.append(cell)
 			_custom_zone_status_label.text = "Player 2: %d vertices" % custom_zone_vertices_p2.size()
+	_custom_zone_confirm_btn.disabled = _custom_zone_current_count() < 3
 
 	grid_container.queue_redraw()
 
