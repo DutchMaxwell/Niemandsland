@@ -277,6 +277,14 @@ func _style_header_chrome() -> void:
 		clear_button.theme_type_variation = HouseStyle.DANGER_BUTTON
 	if close_button:
 		close_button.theme_type_variation = HouseStyle.ICON
+	var terrain_label := find_child("TerrainLabel", true, false) as Label
+	if terrain_label:
+		terrain_label.theme_type_variation = HouseStyle.EYEBROW
+	if rotation_label:
+		rotation_label.theme_type_variation = HouseStyle.CAPTION
+	if autogen_button:
+		autogen_button.theme_type_variation = HouseStyle.PRIMARY
+		autogen_button.custom_minimum_size = Vector2(0, HouseStyle.H_ACTION)
 
 	# Migrate the scene-defined left-panel labels to token greys/whites + amber accents.
 	# These scene nodes have been reparented into tabs by _setup_tabs(), so search the
@@ -284,34 +292,23 @@ func _style_header_chrome() -> void:
 	var left_panel := get_node_or_null(
 		"MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel")
 	if left_panel:
-		for label_name in ["TerrainLabel", "DeploymentLabel"]:
+		for label_name in ["DeploymentLabel"]:
 			var lbl := left_panel.find_child(label_name, true, false) as Label
 			if lbl:
 				lbl.add_theme_font_override("font", HudTokens.head_font())
 				lbl.add_theme_color_override("font_color", HudTokens.TEXT)
-		var rot_lbl := left_panel.find_child("RotationLabel", true, false) as Label
-		if rot_lbl:
-			rot_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 		var stats_lbl := left_panel.find_child("StatsLabel", true, false) as Label
 		if stats_lbl:
 			stats_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 		var recs_lbl := left_panel.find_child("RecommendationsLabel", true, false) as Label
 		if recs_lbl:
 			recs_lbl.add_theme_color_override("font_color", HudTokens.AMBER)
-		var sym_chk := left_panel.find_child("SymmetryCheck", true, false) as CheckBox
-		if sym_chk:
-			sym_chk.add_theme_color_override("font_color", HudTokens.TEXT)
 		var deploy_chk := left_panel.find_child("DeploymentCheck", true, false) as CheckBox
 		if deploy_chk:
 			deploy_chk.add_theme_color_override("font_color", HudTokens.TEXT)
 		var deploy_opt := left_panel.find_child("DeploymentTypeOption", true, false) as OptionButton
 		if deploy_opt:
 			deploy_opt.add_theme_color_override("font_color", HudTokens.TEXT)
-		var autogen := left_panel.find_child("AutoGenButton", true, false) as Button
-		if autogen:
-			autogen.add_theme_color_override("font_color", HudTokens.SUCCESS)
-			autogen.add_theme_color_override(
-				"font_hover_color", Color(HudTokens.SUCCESS.r, HudTokens.SUCCESS.g, HudTokens.SUCCESS.b, 1.0))
 
 
 ## Reorganize the flat left panel into Terrain / Objectives / Deployment tabs.
@@ -723,27 +720,18 @@ func _setup_modular_terrain_ui() -> void:
 	_modular_terrain_panel.add_child(sep2)
 
 	# Undo / Redo row
-	var undo_row := HBoxContainer.new()
-	undo_row.add_theme_constant_override("separation", 8)
+	var undo_row := HouseStyle.button_row(["↶ Undo", "↷ Redo"], HouseStyle.BUTTON, 36)
 	_modular_terrain_panel.add_child(undo_row)
 
-	_undo_btn = Button.new()
-	_undo_btn.text = "↶ Undo"
-	_undo_btn.custom_minimum_size = Vector2(0, 36)
-	_undo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_undo_btn = undo_row.get_child(0)
 	_undo_btn.disabled = true
 	_undo_btn.tooltip_text = "Undo (Ctrl+Z)"
 	_undo_btn.pressed.connect(undo)
-	undo_row.add_child(_undo_btn)
 
-	_redo_btn = Button.new()
-	_redo_btn.text = "↷ Redo"
-	_redo_btn.custom_minimum_size = Vector2(0, 36)
-	_redo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_redo_btn = undo_row.get_child(1)
 	_redo_btn.disabled = true
 	_redo_btn.tooltip_text = "Redo (Ctrl+Y)"
 	_redo_btn.pressed.connect(redo)
-	undo_row.add_child(_redo_btn)
 
 	# Built-in default wall for manual edge placement (procedural hologram wall).
 	# No terrain theme needed — the renderer builds wall geometry procedurally.

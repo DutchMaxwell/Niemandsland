@@ -154,3 +154,29 @@ func test_a4_mode_piece_and_wall_controls_sit_in_field_rows() -> void:
 func test_a4_no_paint_overrides_left_in_the_terrain_builders() -> void:
 	_assert_no_paint_overrides("_setup_terrain_buttons")
 	_assert_no_paint_overrides("_setup_modular_terrain_ui")
+
+
+# ===== A5: terrain tab, part 2 =====
+
+func test_a5_undo_redo_are_house_buttons_in_one_row() -> void:
+	assert_str(String(_ed._undo_btn.theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_str(String(_ed._redo_btn.theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_bool(_ed._undo_btn.get_parent() == _ed._redo_btn.get_parent()).is_true()
+
+
+func test_a5_autogen_is_the_primary_action_and_rotation_label_a_caption() -> void:
+	assert_str(String(_ed.autogen_button.theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(_ed.rotation_label.theme_type_variation)).is_equal(String(HouseStyle.CAPTION))
+
+
+func test_a5_slider_and_checkbox_come_from_the_house_theme_without_overrides() -> void:
+	var t := HouseStyle.theme()
+	assert_bool(t.has_stylebox("slider", "HSlider") and t.has_icon("grabber", "HSlider")) \
+		.override_failure_message("A5 — the house theme does not style HSlider").is_true()
+	for n: Control in [_ed.rotation_slider, _ed.symmetry_check, _ed.autogen_button, _ed.rotation_label]:
+		assert_bool(n.has_theme_color_override("font_color") or n.has_theme_font_size_override("font_size")) \
+			.override_failure_message("A5 — %s still carries a paint override" % n.name).is_false()
+	for node_name in ["TerrainLabel", "HSeparator2", "RotationLabel", "SymmetryCheck", "AutoGenButton"]:
+		assert_str(_scene_block(node_name)) \
+			.override_failure_message("A5 — %s still carries theme_override_ in the scene" % node_name) \
+			.not_contains("theme_override_")
