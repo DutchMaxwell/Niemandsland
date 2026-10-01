@@ -160,6 +160,91 @@ def cmd_timing(a) -> int:
     return 0
 
 
+# ---- part A: the endings (PREREG section 8-9) ---------------------------------------------------
+ARMS = ("I", "L", "T")
+#: Played streams: stream r of position p seeds `Rng(base)` and `Tray(base + TRAY_OFFSET)`, the SAME pair for
+#: every arm (common random numbers).
+STREAM_BASE, POS_STRIDE, TRAY_OFFSET, STREAMS = 740_000_000, 100_000, 50_000, 8
+ARM_KNOBS = {"I": {}, "L": {"search_mode": "tree", "tree_leaf": "blend"},
+             "T": {"search_mode": "tree", "tree_leaf": "terminal"}}
+CONTRASTS = (("A_T", "T", "I"), ("A_L", "L", "I"), ("A_TL", "T", "L"))
+
+
+def stream_pair(nm, pos_i, r):
+    base = STREAM_BASE + pos_i * POS_STRIDE + r
+    return nm.Rng(base), nm.Tray(base + TRAY_OFFSET)
+
+
+def play_ending(nm, sp, cores, pos, rng, tray):
+    """Finish the last round from a pre-pick state: the mover's EVERY decision from `cores["cand"]`, the
+    other side's from `cores["inc"]`; then the round-end referee and the mission verdict. Returns the
+    candidate seat's score 1 / 0.5 / 0."""
+    mover, state = pos["mover"], cores["inc"].state_of(pos["state"])
+    core_of = lambda side: cores["cand"] if side == mover else cores["inc"]
+    owners, led, turn = list(pos["owners_before_round"]), sp._ledger_of(state), mover
+    for _ in range(state.units * 2 + 4):
+        for side in (turn, 3 - turn):
+            act = sp._pick_for(core_of(side), state, side)
+            if act:
+                break
+        else:
+            break
+        state, _ = core_of(side).resolve_with_tray(state, act["action"], rng, tray)
+        state = cores["inc"].restamp_los(state)
+        turn = 3 - side
+    state, owners = sp._round_end(cores["inc"], state, owners, led, sp.ROUNDS)
+    win = sp._verdict(cores["inc"], owners, led)
+    return 0.5 if win == "draw" else float(win == "p%d" % mover)
+
+
+def position_gains(y):
+    """y[arm] = the 8 stream scores; a_X(p) = mean_r (Y_X - Y_Y) for the three registered contrasts."""
+    return {n: statistics.fmean(a - b for a, b in zip(y[x], y[z])) for n, x, z in CONTRASTS}
+
+
+def bootstrap_intervals(gains, resamples=100_000, seed=0, k=5):
+    """gains[cell][cluster] = {contrast: a}; cluster bootstrap within each cell (n_c clusters drawn with
+    replacement, resample index first, then cell), 100 x equal-cell mean, Bonferroni K=5 (0.005 / 0.995)."""
+    import numpy as np
+    rng = np.random.Generator(np.random.PCG64(seed))
+    cells = sorted(gains)
+    vec = {n: [np.array([gains[c][cl][n] for cl in sorted(gains[c])]) for c in cells] for n, _, _ in CONTRASTS}
+    draws = {n: np.empty(resamples) for n, _, _ in CONTRASTS}
+    for i in range(resamples):
+        idx = [rng.integers(0, len(vec["A_T"][j]), len(vec["A_T"][j])) for j in range(len(cells))]
+        for n in draws:
+            draws[n][i] = 100 * np.mean([vec[n][j][ix].mean() for j, ix in enumerate(idx)])
+    q = (0.05 / k / 2, 1 - 0.05 / k / 2)  # alpha .05 / K = .01 two-sided -> the .005 and .995 quantiles
+    return {n: {"point": 100 * float(np.mean([v.mean() for v in vec[n]])),
+                "lo": float(np.quantile(d, q[0])), "hi": float(np.quantile(d, q[1]))} for n, d in draws.items()}
+
+
+def cmd_endings(a) -> int:
+    import nml_core as nm  # lazy
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
+    import selfplay as sp
+    base, allow = json.load(open(a.header)), json.load(open(a.timing))
+    positions = json.load(open(a.positions))
+    def core(extra):
+        c = nm.load(a.repo)
+        c.set_header(dict(base, knobs=dict(base["knobs"], **extra)))
+        return c
+    inc = core({})
+    gains = {}
+    for i, pos in enumerate(positions):
+        wall = max(1, allow[pos["cell"]]["B_us"] // 1000)  # the knob is whole ms; 0 would mean OFF
+        y = {}
+        for arm in ARMS:
+            cand = core(dict(ARM_KNOBS[arm], **({"tree_wall_ms": wall} if arm != "I" else {})))
+            y[arm] = [play_ending(nm, sp, {"inc": inc, "cand": cand}, pos, *stream_pair(nm, i, r)) for r in range(STREAMS)]
+        gains.setdefault(pos["cell"], {})[pos["cluster"]] = position_gains(y)
+        print("[endings] %d/%d %s %s" % (i + 1, len(positions), pos["cell"], canon(gains[pos["cell"]][pos["cluster"]])), flush=True)
+    res = bootstrap_intervals(gains, a.resamples, a.seed)
+    open(a.out, "w").write(canon({"gains": gains, "intervals": res}))
+    print("[endings] " + canon(res))
+    return 0
+
+
 def cmd_pilot(a) -> int:
     plan = {"transitions": a.count, "reds": ["RED-VP", "RED-DIE"], "workers": a.workers,
             "wall_hours": a.wall_hours, "rss_gib": a.rss_gib, "namespace": a.namespace}
@@ -211,8 +296,16 @@ def main(argv) -> int:
     t.add_argument("--block-variance", default="", help='JSON {"A": {cell: s2}, "B": {cell: s2}}')
     t.add_argument("--repo", default=".")
     t.add_argument("--out", required=True)
+    e = sub.add_parser("endings")
+    e.add_argument("--positions", required=True, help="JSON list of {cell, cluster, mover, state, owners_before_round}")
+    e.add_argument("--header", required=True)
+    e.add_argument("--timing", required=True, help="the timing subcommand's .json (B_us per cell)")
+    e.add_argument("--resamples", type=int, default=100_000)
+    e.add_argument("--seed", type=int, default=0)
+    e.add_argument("--repo", default=".")
+    e.add_argument("--out", required=True)
     a = ap.parse_args(argv)
-    return cmd_timing(a) if a.cmd == "timing" else cmd_pilot(a)
+    return {"timing": cmd_timing, "endings": cmd_endings}.get(a.cmd, cmd_pilot)(a)
 
 
 if __name__ == "__main__":
