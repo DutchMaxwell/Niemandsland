@@ -66,6 +66,8 @@ enum DeploymentType {
 # Custom zone editing state
 var custom_zone_editing := false
 var custom_zone_symmetric := true
+var _custom_zone_stale_p1 := false  ## an old zone is kept on screen until the first new vertex replaces it
+var _custom_zone_stale_p2 := false
 var custom_zone_current_player := 1  # 1 or 2
 # Vertices stored as FLOAT coordinates for precise boundary placement
 # This allows vertices to be placed exactly at grid-boundary intersections
@@ -512,29 +514,37 @@ func _update_custom_zone_ui_visibility() -> void:
 		_custom_zone_panel.visible = (deployment_type == DeploymentType.CUSTOM)
 
 
-## Start custom zone drawing
+## Start custom zone drawing. Existing zones stay visible until the first NEW vertex replaces them.
 func _on_custom_zone_start() -> void:
 	custom_zone_editing = true
 	custom_zone_current_player = 1
+	_custom_zone_stale_p1 = true
+	_custom_zone_stale_p2 = custom_zone_symmetric
 
-	# Clear previous vertices if starting fresh
 	if custom_zone_symmetric:
-		custom_zone_vertices_p1.clear()
-		custom_zone_vertices_p2.clear()
-		_custom_zone_status_label.text = "Drawing zones (symmetric)..."
+		_custom_zone_status_label.text = "Drawing zones (symmetric)... (at least 3 points)"
 	else:
-		custom_zone_vertices_p1.clear()
-		_custom_zone_status_label.text = "Drawing Player 1 zone..."
+		_custom_zone_status_label.text = "Drawing Player 1 zone... (at least 3 points)"
 
 	_custom_zone_start_btn.disabled = true
 	_custom_zone_symmetric_check.disabled = true
-	_custom_zone_confirm_btn.disabled = false
+	_custom_zone_confirm_btn.disabled = true
 
 	grid_container.queue_redraw()
 
 
+## Vertices the zone being drawn really has (a kept old zone does not count until replaced).
+func _custom_zone_current_count() -> int:
+	if custom_zone_symmetric or custom_zone_current_player == 1:
+		return 0 if _custom_zone_stale_p1 else custom_zone_vertices_p1.size()
+	return 0 if _custom_zone_stale_p2 else custom_zone_vertices_p2.size()
+
+
 ## Confirm current zone and move to next (or finish)
 func _on_custom_zone_confirm() -> void:
+	if _custom_zone_current_count() < 3:
+		_custom_zone_status_label.text = "Need at least 3 points"
+		return
 	if custom_zone_symmetric:
 		# Symmetric mode - both zones done at once
 		custom_zone_editing = false
@@ -545,7 +555,9 @@ func _on_custom_zone_confirm() -> void:
 		if custom_zone_current_player == 1:
 			# Move to player 2
 			custom_zone_current_player = 2
-			_custom_zone_status_label.text = "Drawing Player 2 zone..."
+			_custom_zone_stale_p2 = true
+			_custom_zone_confirm_btn.disabled = true
+			_custom_zone_status_label.text = "Drawing Player 2 zone... (at least 3 points)"
 		else:
 			# Done with both
 			custom_zone_editing = false
@@ -571,6 +583,8 @@ func _on_custom_zone_clear() -> void:
 	custom_zone_vertices_p2.clear()
 	custom_zone_editing = false
 	custom_zone_current_player = 1
+	_custom_zone_stale_p1 = false
+	_custom_zone_stale_p2 = false
 	_custom_zone_status_label.text = "Click grid to add zone vertices"
 	_custom_zone_start_btn.disabled = false
 	_custom_zone_symmetric_check.disabled = false
@@ -585,6 +599,11 @@ func _handle_custom_zone_click(cell: Vector2) -> void:
 		return
 
 	if custom_zone_symmetric:
+		if _custom_zone_stale_p1:
+			custom_zone_vertices_p1.clear()
+			custom_zone_vertices_p2.clear()
+			_custom_zone_stale_p1 = false
+			_custom_zone_stale_p2 = false
 		# Add to player 1 vertices, mirrored vertex added automatically
 		custom_zone_vertices_p1.append(cell)
 		var mirrored = _get_mirrored_cell(cell)
@@ -597,11 +616,18 @@ func _handle_custom_zone_click(cell: Vector2) -> void:
 	else:
 		# Add to current player's vertices
 		if custom_zone_current_player == 1:
+			if _custom_zone_stale_p1:
+				custom_zone_vertices_p1.clear()
+				_custom_zone_stale_p1 = false
 			custom_zone_vertices_p1.append(cell)
 			_custom_zone_status_label.text = "Player 1: %d vertices" % custom_zone_vertices_p1.size()
 		else:
+			if _custom_zone_stale_p2:
+				custom_zone_vertices_p2.clear()
+				_custom_zone_stale_p2 = false
 			custom_zone_vertices_p2.append(cell)
 			_custom_zone_status_label.text = "Player 2: %d vertices" % custom_zone_vertices_p2.size()
+	_custom_zone_confirm_btn.disabled = _custom_zone_current_count() < 3
 
 	grid_container.queue_redraw()
 
@@ -1469,7 +1495,7 @@ func _update_recommendations_with_values(total_pieces: int, coverage_pct: float,
 %s 1 dangerous piece per player (have: %d)
 
 Extended Guidelines:
-%s Max 12" gap between terrain (%.1f")
+%s Max 12" gap between terrain (%s)
 %s Balanced symmetry (%.0f%%)
 
 Tip: Connected cells = 1 piece""" % [
@@ -1479,7 +1505,7 @@ Tip: Connected cells = 1 piece""" % [
 		check_mark if cover_ok else cross_mark, cover_pct,
 		check_mark if difficult_ok else cross_mark, difficult_pct,
 		check_mark if dangerous_ok else cross_mark, dangerous_pieces,
-		check_mark if extended.max_gap_ok else cross_mark, extended.max_gap_inches,
+		check_mark if extended.max_gap_ok else cross_mark, extended.max_gap_text,
 		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score
 	]
 
@@ -2321,6 +2347,7 @@ func _check_extended_guidelines() -> Dictionary:
 	var results = {
 		"max_gap_ok": true,
 		"max_gap_inches": 0.0,
+		"max_gap_text": "–",
 		"symmetry_ok": true,
 		"symmetry_score": 0.0
 	}
@@ -2330,22 +2357,28 @@ func _check_extended_guidelines() -> Dictionary:
 	var grid_dims = _calculate_grid_dimensions()
 	var max_gap = 0.0
 
-	# Sample points across the table
-	for test_x in range(0, int(table_size_feet.x * 12), 3):
-		for test_y in range(0, int(table_size_feet.y * 12), 3):
+	# Sample points across the table (table inches, origin = table corner) against cell centres
+	# mapped from grid coordinates (centred on the table, rotated by the grid rotation) into the same frame.
+	var table_w = table_size_feet.x * 12.0
+	var table_h = table_size_feet.y * 12.0
+	var rot = deg_to_rad(grid_rotation_degrees)
+	var centers: Array[Vector2] = []
+	for cell_pos in grid_cells:
+		if grid_cells[cell_pos] == TerrainType.NONE:
+			continue
+		var local = Vector2(cell_pos.x - grid_dims.x / 2.0 + 0.5, cell_pos.y - grid_dims.y / 2.0 + 0.5) * GRID_SIZE_INCHES
+		centers.append(local.rotated(rot) + Vector2(table_w, table_h) / 2.0)
+
+	for test_x in range(0, int(table_w) + 1, 3):
+		for test_y in range(0, int(table_h) + 1, 3):
 			var min_dist = INF
-			# Find nearest terrain
-			for cell_pos in grid_cells:
-				if grid_cells[cell_pos] == TerrainType.NONE:
-					continue
-				var cell_center_x = (cell_pos.x + 0.5) * GRID_SIZE_INCHES
-				var cell_center_y = (cell_pos.y + 0.5) * GRID_SIZE_INCHES
-				var dist = Vector2(test_x, test_y).distance_to(Vector2(cell_center_x, cell_center_y))
-				min_dist = min(min_dist, dist)
+			for c in centers:
+				min_dist = min(min_dist, Vector2(test_x, test_y).distance_to(c))
 			max_gap = max(max_gap, min_dist)
 
 	results.max_gap_inches = max_gap
 	results.max_gap_ok = max_gap <= 12.0
+	results.max_gap_text = "–" if is_inf(max_gap) else "%.1f\"" % max_gap
 
 	# Symmetry check (simplified - count terrain in each half)
 	var half_x = grid_dims.x / 2
