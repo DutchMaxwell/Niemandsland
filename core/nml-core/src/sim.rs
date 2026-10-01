@@ -2740,15 +2740,29 @@ pub(crate) fn dangerous_dice(
             (l.movers[i].unit, l.movers[i].model, l.dangerous.get(i).copied().unwrap_or(false))
         })),
         None => {
-            shot.mark("dangerous_rigid_end_only");
             let mut units = vec![si];
             if seams.hero_attach {
                 units.extend(state.attached[si].iter().copied());
             }
+            // Tree plan step 5b: this end-only reading can part from the table's
+            // per-model trail ONLY where a model's straight route meets a
+            // Dangerous cell, so the flag names exactly those moves. Samples one
+            // base radius apart overlap; the dice below never read the flag.
+            let mut meets = false;
             for u in units {
-                let ends = (0..next.positions[u].len())
-                    .map(|m| (u, m, in_dang(&next.positions[u][m], radius(next, u, m))));
-                movers.extend(ends);
+                for m in 0..next.positions[u].len() {
+                    let (b, r) = (next.positions[u][m], radius(next, u, m));
+                    movers.push((u, m, in_dang(&b, r)));
+                    let Some(a) = state.positions[u].get(m).filter(|_| !meets) else { continue };
+                    let steps = (geom::length(geom::sub(geom::to_f32(b), geom::to_f32(*a))) as f64 / r.max(1e-3)).ceil().max(1.0) as usize;
+                    meets = (0..=steps).any(|k| {
+                        let f = k as f64 / steps as f64;
+                        in_dang(&[a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1]), a[2] + f * (b[2] - a[2])], r)
+                    });
+                }
+            }
+            if meets {
+                shot.mark("dangerous_rigid_end_only");
             }
         }
     }

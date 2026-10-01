@@ -22,7 +22,7 @@ use nml_core::tree::{
     advance, expand, leaf_value, menu, playout, ranked, referee, root_children, run, select, transition, Child,
     Node, Step, TreeCfg, TreeTrace,
 };
-use nml_core::{act_statics, full_playout_bent, load_acts, plan_with_rollout, read_acts, Search, SearchMode, ActCorpus, ArbBend, GodotRng, State, TreeDice,
+use nml_core::{act_statics, full_playout_bent, load_acts, plan_with_rollout, read_act_header, read_acts, Search, SearchMode, ActCorpus, ArbBend, GodotRng, State, TreeDice,
                TreeLeaf, UnitStatic};
 
 const ACTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_25.jsonl");
@@ -353,10 +353,17 @@ fn deeper_children_follow_an_independent_rank_and_widen() {
 /// (`ranked`, no pool), the given leaf mode, budget and batch, EV edges.
 fn search(roll: &Rollout, st: &State, p: i64, leaf: TreeLeaf, budget: usize, batch: usize,
           sc: &mut Scratch) -> (usize, TreeTrace, Vec<usize>) {
+    search_widen(roll, st, p, leaf, budget, batch, 0.0, sc)
+}
+
+/// `search` at a widening rate (0.0 = open every child first).
+#[allow(clippy::too_many_arguments)]
+fn search_widen(roll: &Rollout, st: &State, p: i64, leaf: TreeLeaf, budget: usize, batch: usize, widen: f64,
+                sc: &mut Scratch) -> (usize, TreeTrace, Vec<usize>) {
     let (rows, order) = ranked(roll, st, p, sc).unwrap();
     let mut root = Node::new(st.clone(), Step::Mover(p), p);
     root.children = root_children(&rows, &order, &[]);
-    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, wall_ms: 0, player: p,
+    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, wall_ms: 0, widen, player: p,
                         opener_seat: false, sig: None, hook: None, w: 0.0 };
     let (best, trace) = run(roll, &cfg, &mut root, &mut GodotRng::new(7), sc).unwrap();
     (best, trace, order)
@@ -468,6 +475,7 @@ fn select_takes_the_movers_side() {
         (leaf.n, leaf.w) = (2, 2.0 * mean);
         node.children.push(Child { idx: i, cand: Candidate::hold(st.key(0)), nodes: vec![leaf] });
     }
+    node.next_child = 3;
     assert_eq!(select(&node, 1), 1, "the searcher's own node takes the argmax");
     node.mover = 2;
     assert_eq!(select(&node, 1), 2, "the opponent's node takes the argmin");
@@ -553,4 +561,31 @@ fn a_recorded_tree_count_reads_back() {
     let read = |t: String| read_acts(std::io::Cursor::new(t.into_bytes()), "test").unwrap().acts[0].tree_completed;
     let stamped = read(format!("{}\n{}\n", lines[0], row));
     assert_eq!((stamped, read(format!("{}\n{}\n", lines[0], lines[1]))), (Some(17), None));
+}
+
+/// Step 6c — the widening-rate knob. At its default (0.0) every child of a node
+/// opens before the search descends (the 6b tests run there): past the root
+/// width all root children are open. At 0.5 a node keeps at most
+/// ceil(n ^ 0.5) children open, so the root opens far fewer and the search
+/// goes deeper at the same budget. A negative rate is refused in the header.
+#[test]
+fn the_widening_rate_caps_open_children() {
+    let c = load(ACTS);
+    let per_act = act_statics(&c, REPO);
+    let (mut narrowed, mut sc) = (0usize, Scratch::default());
+    for (ai, act) in c.acts.iter().enumerate() {
+        with_roll(&c, ai, &per_act[ai], |roll| {
+            let width = menu(roll, &act.state, act.player, &mut sc).len();
+            let run_at = |w, sc: &mut Scratch| search_widen(roll, &act.state, act.player, TreeLeaf::Blend, width + 12, 4, w, sc).1;
+            let (full, cut) = (run_at(0.0, &mut sc), run_at(0.5, &mut sc));
+            assert_eq!(full.root.len(), width, "act {ai}: the default opens every root child");
+            let cap = (cut.completed as f64).sqrt().ceil() as usize;
+            assert!(cut.root.len() <= cap && cut.completed >= width + 12, "act {ai}: {} open, cap {cap}", cut.root.len());
+            narrowed += usize::from(cut.root.len() < width);
+        });
+    }
+    println!("widening 0.5: {narrowed} of {} roots kept fewer children open", c.acts.len());
+    assert!(narrowed > 0, "the widening rate changed nothing");
+    let head = r#"{"kind":"header","profiles":{},"knobs":{"tree_widen":-0.5}}"#;
+    assert!(read_act_header(head).is_err_and(|e| e.contains("tree_widen")), "a negative rate must be refused");
 }
