@@ -211,6 +211,17 @@ static func theme() -> Theme:
 	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
 		t.set_color(c, &"CheckButton", INK)
 
+	# Sliders (Settings): a sunken track, the filled part in gold.
+	t.set_stylebox(&"slider", &"HSlider", _box(WELL, LINE, RADIUS_CONTROL, 0, 2))
+	t.set_stylebox(&"grabber_area", &"HSlider", _box(_alpha(GOLD, 0.6), _alpha(GOLD, 0.6), RADIUS_CONTROL, 0, 2))
+	t.set_stylebox(&"grabber_area_highlight", &"HSlider", _box(GOLD, GOLD, RADIUS_CONTROL, 0, 2))
+
+	# Text fields (online dialogs): a sunken well, an accent rim while typing.
+	t.set_stylebox(&"normal", &"LineEdit", _box(WELL, LINE, RADIUS_CONTROL, PAD_CARD_X, PAD_CARD_Y))
+	t.set_stylebox(&"focus", &"LineEdit", _box(WELL, ACCENT, RADIUS_CONTROL, PAD_CARD_X, PAD_CARD_Y))
+	t.set_color(&"font_color", &"LineEdit", INK)
+	t.set_color(&"font_placeholder_color", &"LineEdit", _alpha(MUTED, 0.7))
+
 	# Tool rail: quiet buttons until hovered, the open tool in gold (mockup .rail-btn / .active).
 	var none := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
 	var rail_hover := _box(FILL_RAISED, Color(0, 0, 0, 0), RADIUS_CARD, 2, PAD_RAIL)
@@ -299,6 +310,9 @@ static func theme() -> Theme:
 	t.set_stylebox(&"grabber", &"VScrollBar", grab)
 	t.set_stylebox(&"grabber_highlight", &"VScrollBar", grab_hot)
 	t.set_stylebox(&"grabber_pressed", &"VScrollBar", grab_hot)
+	# Progress bars (the model download): a sunken track, the fill in the accent.
+	t.set_stylebox(&"background", &"ProgressBar", _box(WELL, LINE, RADIUS_CONTROL, 0, 0))
+	t.set_stylebox(&"fill", &"ProgressBar", _box(ACCENT, ACCENT, RADIUS_CONTROL, 0, 0))
 	_theme = t
 	return t
 

@@ -1007,6 +1007,7 @@ mod mentioned2_auras;
 mod mentioned2a_statics;
 mod mentioned2_pins;
 mod mentioned2d_pins;
+mod ev_sum_stamp;
 mod mentioned_pins;
 mod rending_shooting_aura;
 mod renames;
