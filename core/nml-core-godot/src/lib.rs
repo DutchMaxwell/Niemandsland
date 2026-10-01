@@ -1223,5 +1223,21 @@ fn pick_out(p: &Pick, root: &plain::Captured, sig: i64) -> VarDictionary {
         }
         None => out.set("arbitration", &Variant::nil()),
     }
+    // Tree search knob: the key rides ONLY a pick the tree made (the stamp law).
+    if let Some(t) = &p.tree {
+        let mut d = VarDictionary::new();
+        d.set("completed", t.completed as i64);
+        d.set("deadline_hit", t.deadline_hit);
+        let mut rows = VarArray::new();
+        for &(i, n, m) in &t.root {
+            let mut row = VarArray::new();
+            row.push(&(i as i64).to_variant());
+            row.push(&(n as i64).to_variant());
+            row.push(&m.to_variant());
+            rows.push(&row.to_variant());
+        }
+        d.set("root", &rows);
+        out.set("tree", &d);
+    }
     out
 }
