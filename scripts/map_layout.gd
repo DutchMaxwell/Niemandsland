@@ -1042,6 +1042,11 @@ func _snapshot() -> Dictionary:
 
 
 func _apply_snapshot(snap: Dictionary) -> void:
+	if snap.has("table"):  # an undo step made by Load: bring the old table + rotation back too
+		table_size_feet = snap["table"]
+		grid_rotation_degrees = snap["rotation"]
+		if rotation_slider:
+			rotation_slider.set_value_no_signal(grid_rotation_degrees)
 	placed_pieces = (snap["pieces"] as Array).duplicate(true)
 	free_cells = (snap["free_cells"] as Dictionary).duplicate(true)
 	free_walls = (snap["free_walls"] as Array).duplicate(true)
@@ -1299,8 +1304,35 @@ func _on_save_file_selected(path: String) -> void:
 
 
 func _on_load_file_selected(path: String) -> void:
-	if not load_layout(path):
-		push_error("Failed to load layout")
+	if (placed_pieces.is_empty() and free_cells.is_empty() and free_walls.is_empty() and mission_objectives.is_empty()) \
+			or get_node_or_null("LoadConfirm") != null:
+		if get_node_or_null("LoadConfirm") == null and not load_layout(path):
+			push_error("Failed to load layout")
+		return
+	var parts := HouseStyle.overlay_sheet("Load this map?", 420)
+	var root: Control = parts["root"]
+	root.name = "LoadConfirm"
+	var body: VBoxContainer = parts["body"]
+	var msg := HouseStyle.label("Loading replaces the map you are editing. Ctrl+Z brings it back.", HouseStyle.BODY)
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD
+	body.add_child(msg)
+	var row := HouseStyle.button_row(["Load", "Cancel"], HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	body.add_child(row)
+	var confirm: Button = row.get_child(0)
+	confirm.name = "ConfirmLoadButton"
+	confirm.theme_type_variation = HouseStyle.PRIMARY
+	confirm.pressed.connect(func() -> void:
+		root.name = "LoadConfirmDone"
+		root.queue_free()
+		if not load_layout(path):
+			push_error("Failed to load layout"))
+	var cancel: Button = row.get_child(1)
+	cancel.name = "CancelLoadButton"
+	cancel.pressed.connect(func() -> void:
+		root.name = "LoadConfirmDone"
+		root.queue_free())
+	(parts["close"] as Button).pressed.connect(cancel.pressed.emit)
+	add_child(root)
 
 
 func set_table_size(size_feet: Vector2) -> void:
@@ -2283,6 +2315,11 @@ func load_layout(file_path: String) -> bool:
 		push_error("Invalid layout data")
 		return false
 
+	# The map being replaced becomes one undo step (with the table it sat on)
+	var replaced := _snapshot()
+	replaced["table"] = table_size_feet
+	replaced["rotation"] = grid_rotation_degrees
+
 	# Load table size
 	if data.has("table_size"):
 		var ts = data.table_size
@@ -2333,7 +2370,9 @@ func load_layout(file_path: String) -> bool:
 	free_cells.clear()
 	free_walls.clear()
 	_next_piece_id = 1
-	_undo_stack.clear()
+	_undo_stack.append(replaced)
+	if _undo_stack.size() > UNDO_LIMIT:
+		_undo_stack.pop_front()
 	_redo_stack.clear()
 	_selected_piece_id = -1
 
