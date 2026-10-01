@@ -220,6 +220,7 @@ var _wall_row: HBoxContainer = null
 var _undo_btn: Button = null
 var _redo_btn: Button = null
 var _modular_status_label: Label = null
+var _guideline_rows: VBoxContainer = null
 
 
 func _ready() -> void:
@@ -238,6 +239,15 @@ func _ready() -> void:
 		autogen_button.pressed.connect(_on_autogen_pressed)
 	if deployment_check:
 		deployment_check.toggled.connect(_on_deployment_toggled)
+	# File dialogs are Windows (they do not inherit this root's theme): give them the house look too
+	for dlg: FileDialog in [save_file_dialog, load_file_dialog]:
+		if dlg:
+			dlg.theme = HouseStyle.theme()
+	# The engine rewrites a FileDialog title when its mode is applied; pin the English titles
+	if save_file_dialog:
+		save_file_dialog.title = "Save Terrain Layout"
+	if load_file_dialog:
+		load_file_dialog.title = "Load Terrain Layout"
 	if save_file_dialog:
 		save_file_dialog.file_selected.connect(_on_save_file_selected)
 	if load_file_dialog:
@@ -292,23 +302,9 @@ func _style_header_chrome() -> void:
 	var left_panel := get_node_or_null(
 		"MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel")
 	if left_panel:
-		for label_name in ["DeploymentLabel"]:
-			var lbl := left_panel.find_child(label_name, true, false) as Label
-			if lbl:
-				lbl.add_theme_font_override("font", HudTokens.head_font())
-				lbl.add_theme_color_override("font_color", HudTokens.TEXT)
-		var stats_lbl := left_panel.find_child("StatsLabel", true, false) as Label
-		if stats_lbl:
-			stats_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
-		var recs_lbl := left_panel.find_child("RecommendationsLabel", true, false) as Label
-		if recs_lbl:
-			recs_lbl.add_theme_color_override("font_color", HudTokens.AMBER)
-		var deploy_chk := left_panel.find_child("DeploymentCheck", true, false) as CheckBox
-		if deploy_chk:
-			deploy_chk.add_theme_color_override("font_color", HudTokens.TEXT)
-		var deploy_opt := left_panel.find_child("DeploymentTypeOption", true, false) as OptionButton
-		if deploy_opt:
-			deploy_opt.add_theme_color_override("font_color", HudTokens.TEXT)
+		var deploy_label := left_panel.find_child("DeploymentLabel", true, false) as Label
+		if deploy_label:
+			deploy_label.theme_type_variation = HouseStyle.EYEBROW
 
 
 ## Reorganize the flat left panel into Terrain / Objectives / Deployment tabs.
@@ -371,13 +367,14 @@ func _setup_tabs() -> void:
 	into.call(gelaende, left_panel.get_node_or_null("AutoGenButton"))
 	into.call(gelaende, left_panel.get_node_or_null("StatsLabel"))
 	into.call(gelaende, left_panel.get_node_or_null("RecommendationsLabel"))
+	_build_stats_card(gelaende)
 
 	# Missionsziele: objectives (the ObjectivesCheck was replaced by this panel)
 	into.call(ziele, _objectives_panel)
 
 	# Aufstellung: deployment zones + custom zone editor
 	into.call(aufstellung, left_panel.get_node_or_null("DeploymentLabel"))
-	into.call(aufstellung, left_panel.get_node_or_null("DeploymentTypeOption"))
+	into.call(aufstellung, left_panel.get_node_or_null("DeploymentTypeRow"))
 	into.call(aufstellung, left_panel.get_node_or_null("DeploymentCheck"))
 	into.call(aufstellung, _custom_zone_panel)
 
@@ -408,6 +405,15 @@ func _setup_deployment_type_option() -> void:
 
 	# Setup custom zone UI (initially hidden)
 	_setup_custom_zone_ui()
+
+	# The type dropdown sits in a captioned house row (after the zone UI found its parent panel)
+	var panel := deployment_type_option.get_parent()
+	var idx := deployment_type_option.get_index()
+	panel.remove_child(deployment_type_option)
+	var row := HouseStyle.field_row("Zones", deployment_type_option)
+	row.name = "DeploymentTypeRow"
+	panel.add_child(row)
+	panel.move_child(row, idx)
 
 
 ## Handle deployment zone type selection
@@ -465,43 +471,30 @@ func _setup_custom_zone_ui() -> void:
 	_custom_zone_symmetric_check = CheckBox.new()
 	_custom_zone_symmetric_check.text = "Symmetric (point-mirrored)"
 	_custom_zone_symmetric_check.button_pressed = true
-	_custom_zone_symmetric_check.add_theme_color_override("font_color", HudTokens.TEXT)
 	_custom_zone_symmetric_check.toggled.connect(func(v): custom_zone_symmetric = v)
 	_custom_zone_panel.add_child(_custom_zone_symmetric_check)
 
 	# Status label
-	_custom_zone_status_label = Label.new()
-	_custom_zone_status_label.text = "Click grid to add zone vertices"
-	_custom_zone_status_label.add_theme_font_size_override("font_size", 12)
-	_custom_zone_status_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	_custom_zone_status_label = HouseStyle.label("Click grid to add zone vertices", HouseStyle.CAPTION)
 	_custom_zone_panel.add_child(_custom_zone_status_label)
 
 	# Button container
-	var btn_row = HBoxContainer.new()
-	btn_row.add_theme_constant_override("separation", 8)
+	var btn_row := HouseStyle.button_row(["Start Drawing", "Confirm", "Clear"], HouseStyle.BUTTON, 36)
 	_custom_zone_panel.add_child(btn_row)
 
-	# Start button
-	_custom_zone_start_btn = Button.new()
-	_custom_zone_start_btn.text = "Start Drawing"
-	_custom_zone_start_btn.add_theme_color_override("font_color", HudTokens.SUCCESS)
+	# Start button (the one main action of this panel)
+	_custom_zone_start_btn = btn_row.get_child(0)
+	_custom_zone_start_btn.theme_type_variation = HouseStyle.PRIMARY
 	_custom_zone_start_btn.pressed.connect(_on_custom_zone_start)
-	btn_row.add_child(_custom_zone_start_btn)
 
 	# Confirm button
-	_custom_zone_confirm_btn = Button.new()
-	_custom_zone_confirm_btn.text = "Confirm"
+	_custom_zone_confirm_btn = btn_row.get_child(1)
 	_custom_zone_confirm_btn.disabled = true
-	_custom_zone_confirm_btn.add_theme_color_override("font_color", HudTokens.CYAN)
 	_custom_zone_confirm_btn.pressed.connect(_on_custom_zone_confirm)
-	btn_row.add_child(_custom_zone_confirm_btn)
 
 	# Clear button
-	_custom_zone_clear_btn = Button.new()
-	_custom_zone_clear_btn.text = "Clear"
-	_custom_zone_clear_btn.add_theme_color_override("font_color", HudTokens.AMBER)
+	_custom_zone_clear_btn = btn_row.get_child(2)
 	_custom_zone_clear_btn.pressed.connect(_on_custom_zone_clear)
-	btn_row.add_child(_custom_zone_clear_btn)
 
 
 ## Update visibility of custom zone UI based on deployment type
@@ -1384,6 +1377,50 @@ func _flood_fill(start: Vector2i, terrain_type: int, visited: Dictionary) -> voi
 				stack.append(neighbor)
 
 
+## Coverage numbers and the OPR guidelines live together in one sunken card. The guideline text stays in
+## RecommendationsLabel (hidden: it is the text source); the visible rows are one Label per line so a
+## met guideline reads green and a missed one amber.
+func _build_stats_card(body: Control) -> void:
+	var stats := body.get_node_or_null("StatsLabel") as Label
+	var recs := body.get_node_or_null("RecommendationsLabel") as Label
+	if stats == null or recs == null:
+		return
+	var box := VBoxContainer.new()
+	box.name = "StatsBox"
+	var card := HouseStyle.card(box)
+	card.name = "StatsCard"
+	body.add_child(card)
+	stats.reparent(box)
+	stats.theme_type_variation = HouseStyle.SMALL
+	stats.autowrap_mode = TextServer.AUTOWRAP_WORD
+	recs.reparent(box)
+	recs.visible = false
+	_guideline_rows = VBoxContainer.new()
+	_guideline_rows.name = "GuidelineRows"
+	box.add_child(_guideline_rows)
+
+
+## Rebuild the visible guideline rows from the guideline text (one Label per non-empty line).
+func _rebuild_guideline_rows() -> void:
+	if _guideline_rows == null or recommendations_label == null:
+		return
+	for child in _guideline_rows.get_children():
+		_guideline_rows.remove_child(child)
+		child.queue_free()
+	for line in recommendations_label.text.split("\n"):
+		if line.strip_edges().is_empty():
+			continue
+		var row := HouseStyle.label(line, HouseStyle.SMALL)
+		row.autowrap_mode = TextServer.AUTOWRAP_WORD
+		if line.begins_with("\u2713"):
+			row.add_theme_color_override("font_color", HouseStyle.tone_ink(HouseStyle.TONE_OK))
+		elif line.begins_with("\u2717"):
+			row.add_theme_color_override("font_color", HouseStyle.WARN)
+		elif line.ends_with(":"):
+			row.theme_type_variation = HouseStyle.CAPTION
+		_guideline_rows.add_child(row)
+
+
 func _update_recommendations() -> void:
 	_update_stats()
 
@@ -1435,12 +1472,7 @@ Tip: Connected cells = 1 piece""" % [
 		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score
 	]
 
-	# Color code the recommendations - Glassmorphism accent colors
-	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok and extended.max_gap_ok and extended.symmetry_ok
-	if all_ok:
-		recommendations_label.add_theme_color_override("font_color", HudTokens.SUCCESS)  # Accent green
-	else:
-		recommendations_label.add_theme_color_override("font_color", HudTokens.AMBER)  # Accent amber
+	_rebuild_guideline_rows()
 
 
 func _get_grid_rect() -> Rect2:

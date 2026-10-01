@@ -35,6 +35,20 @@ static var mission_vp_memo: Dictionary = {}
 ## BattleSim.apply_destroy_step can advance it by reference).
 static var mission_markers: Array = []
 static var mission_destroy_seq: Array = [0]
+## NML-1010 D2a: Attack & Defend roles, {"attacker": slot, "defender": slot}; {} = no roles.
+static var mission_roles: Dictionary = {}
+
+
+## R7a: the AI roll-off winner takes the +25 % side where the mission grants one, else defends.
+static func roles_ai_pick(mission: Dictionary) -> String:
+	return "attacker" if float(mission.get("attacker_points_factor", 1.0)) > 1.0 else "defender"
+
+
+## The two slots by role, from the roll-off winner's pick.
+static func roles_assign(winner_slot: int, other_slot: int, winner_role: String) -> Dictionary:
+	if winner_role == "attacker":
+		return {"attacker": winner_slot, "defender": other_slot}
+	return {"attacker": other_slot, "defender": winner_slot}
 
 
 static func marker_metadata(spec: Dictionary) -> Array:
@@ -62,6 +76,7 @@ static func mission_reset(scoring: String, flavour: Dictionary, markers: Array =
 	mission_vp_memo = {}
 	mission_markers = markers
 	mission_destroy_seq = [0]
+	mission_roles = {}
 
 
 ## S1-15: the live mission state above as JSON-safe data, for the save and the MP full-state push.
@@ -75,6 +90,7 @@ static func mission_state_to_dict(mission_id: String) -> Dictionary:
 		"vp_memo": mission_vp_memo.duplicate(true),
 		"markers": mission_markers.duplicate(true),
 		"destroy_seq": mission_destroy_seq.duplicate(),
+		"roles": mission_roles.duplicate(),
 	}
 
 
@@ -101,6 +117,9 @@ static func mission_state_from_dict(data: Dictionary) -> String:
 	var seq: Variant = _ints_from_json(data.get("destroy_seq"))
 	if seq is Array and not (seq as Array).is_empty() and seq[0] is int:
 		mission_destroy_seq = [seq[0]]
+	var roles: Variant = _ints_from_json(data.get("roles"))
+	if roles is Dictionary and roles.get("attacker") is int and roles.get("defender") is int:
+		mission_roles = {"attacker": roles["attacker"], "defender": roles["defender"]}
 	var id: Variant = data.get("id", "")
 	return id if id is String else ""
 
@@ -3752,6 +3771,11 @@ func _core_plan(state: Dictionary, me: int) -> Dictionary:
 		_core_selfcheck(state, me, out)
 	print("[CORE] ACT r%d p%d us=%d n=%d mean_us=%d max_us=%d" % [_current_round(), me,
 		dt, _core_calls, _core_us_total / maxi(_core_calls, 1), _core_us_max])
+	# Tree search knob (rules-must-log): a pick the tree made says how far it searched.
+	if out.has("tree"):
+		var tree: Dictionary = out["tree"]
+		print("[CORE] TREE completed=%d deadline=%s" % [int(tree.get("completed", 0)),
+			str(tree.get("deadline_hit", false))])
 	if _shadow_on():
 		_shadow_plan(state, me, plain, statics, sig, out)
 	return _core_pick_of(out, state)
