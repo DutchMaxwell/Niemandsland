@@ -16,8 +16,12 @@ use nml_core::plan::{seams_of, tuning_of};
 use nml_core::playout::{other_player, Policy};
 use nml_core::rollout::{Rollout, Stop};
 use nml_core::sim::{reach_index_for_state, Scratch, Unsupported};
-use nml_core::tree::{advance, leaf_value, menu, playout, referee, transition, Node, Step};
-use nml_core::{act_statics, full_playout_bent, load_acts, ActCorpus, ArbBend, GodotRng, State, TreeDice,
+use nml_core::score::score_with;
+use nml_core::sim::reply_threat;
+use nml_core::tree::{
+    advance, expand, leaf_value, menu, playout, ranked, referee, root_children, transition, Node, Step,
+};
+use nml_core::{act_statics, full_playout_bent, load_acts, plan_with_rollout, ActCorpus, ArbBend, GodotRng, State, TreeDice,
                TreeLeaf, UnitStatic};
 
 const ACTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_25.jsonl");
@@ -268,4 +272,78 @@ fn chance_edges_are_reproducible_and_decline_unported() {
               {spread} spread within one edge; declined {declined:?}");
     assert!(n > 0 && moved > 0 && spread > 0, "the tray draws are inert");
     assert!(declined.contains_key("deadly"), "no Deadly activation declined");
+}
+
+/// Step 6a — the ROOT's children are the one-ply's own prefilter rows in its
+/// order, pool first: on every answered act of acts_25 `ranked` carries the
+/// one-ply trace's scores bit for bit in its ranked order, and
+/// `root_children` is `pool_idx`, then the rest of that order.
+#[test]
+fn root_children_follow_the_one_ply_order() {
+    let c = load(ACTS);
+    let per_act = act_statics(&c, REPO);
+    let (mut n, mut sc) = (0usize, Scratch::default());
+    for (ai, act) in c.acts.iter().enumerate() {
+        let Ok(pick) = plan_with_rollout(&act.state, &c.terrain, &per_act[ai], &c.knobs, &act.statics, act.player)
+        else { continue };
+        with_roll(&c, ai, &per_act[ai], |roll| {
+            let (rows, order) = ranked(roll, &act.state, act.player, &mut sc).unwrap();
+            let got: Vec<(i64, u64)> = order.iter().map(|&i| (i as i64, rows[i].score.to_bits())).collect();
+            let want: Vec<(i64, u64)> = pick.scored.iter().map(|s| (s.0, s.3.to_bits())).collect();
+            assert_eq!(got, want, "act {ai}: the ranked rows are not the one-ply's");
+            let kids: Vec<usize> = root_children(&rows, &order, &pick.pool_idx).iter().map(|k| k.idx).collect();
+            let mut want = pick.pool_idx.clone();
+            want.extend(pick.scored.iter().map(|s| s.0 as usize).filter(|i| !pick.pool_idx.contains(i)));
+            assert_eq!(kids, want, "act {ai}: root order");
+        });
+        n += 1;
+    }
+    println!("root children: {n} of {} acts in the one-ply's order", c.acts.len());
+    assert!(n >= 20, "only {n} acts answered");
+}
+
+/// Step 6a — a deeper node generates its children on its first expansion,
+/// ordered by the prefilter's 1-ply rule for ITS mover (checked by an
+/// independent sort: score desc, build index asc), and widens by `k` in that
+/// order, never touching an opened child again.
+#[test]
+fn deeper_children_follow_an_independent_rank_and_widen() {
+    let (mut n, mut sc) = (0usize, Scratch::default());
+    for path in [ACTS, WIDE] {
+        let c = load(path);
+        let per_act = act_statics(&c, REPO);
+        for (ai, act) in c.acts.iter().enumerate() {
+            let p = act.player;
+            with_roll(&c, ai, &per_act[ai], |roll| {
+                let (rows, order) = ranked(roll, &act.state, p, &mut sc).unwrap();
+                let mut root = Node::new(act.state.clone(), Step::Mover(p), p);
+                root.children = root_children(&rows, &order, &[]);
+                assert_eq!(expand(roll, &mut root, 2, TreeDice::Ev, 1, None, p, &mut sc).unwrap(), 2);
+                assert!(root.next_child == 2 && root.children[2].nodes.is_empty(), "act {ai}: root widening");
+                let kid = &mut root.children[0].nodes[0];
+                if kid.terminal.is_some() {
+                    return;
+                }
+                let (m, st) = (kid.mover, kid.state.clone());
+                expand(roll, kid, 3, TreeDice::Ev, 1, None, p, &mut sc).unwrap();
+                let statics = roll.policy.statics;
+                let mut want: Vec<(usize, f64)> = menu(roll, &st, m, &mut sc).iter().enumerate().map(|(i, cand)| {
+                    let next = roll.policy.resolve(&st, cand).unwrap();
+                    (i, score_with(&next, statics, m, &reply_threat(statics, &next, m), None))
+                }).collect();
+                want.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap().then(a.0.cmp(&b.0)));
+                let got: Vec<usize> = kid.children.iter().map(|k| k.idx).collect();
+                assert_eq!(got, want.iter().map(|w| w.0).collect::<Vec<_>>(), "act {ai}: deeper order");
+                let open = kid.next_child;
+                expand(roll, kid, 3, TreeDice::Ev, 1, None, p, &mut sc).unwrap();
+                let lens: Vec<usize> = kid.children.iter().map(|k| k.nodes.len()).collect();
+                let bar = (open + 3).min(lens.len());
+                assert!(open == 3.min(lens.len()) && kid.next_child == bar, "act {ai}: widening {open}/{}", kid.next_child);
+                assert!(lens[..bar].iter().all(|&l| l == 1) && lens[bar..].iter().all(|&l| l == 0), "act {ai}: {lens:?}");
+                n += 1;
+            });
+        }
+    }
+    println!("deeper children: {n} depth-1 nodes in the independent order");
+    assert!(n >= 20, "only {n} deeper nodes checked");
 }
