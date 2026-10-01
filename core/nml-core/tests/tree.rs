@@ -9,14 +9,16 @@
 //! `Debug` print carries every field, floats at round-trip precision), with
 //! the same `Stop`. Tail caps are zeroed: the tree never applies them.
 
+use std::collections::BTreeMap;
+
 use nml_core::menu::Candidate;
 use nml_core::plan::{seams_of, tuning_of};
 use nml_core::playout::{other_player, Policy};
 use nml_core::rollout::{Rollout, Stop};
-use nml_core::sim::{reach_index_for_state, Scratch};
-use nml_core::tree::{advance, leaf_value, menu, playout, referee, Node, Step};
-use nml_core::{act_statics, full_playout_bent, load_acts, ActCorpus, ArbBend, GodotRng, State, TreeLeaf,
-               UnitStatic};
+use nml_core::sim::{reach_index_for_state, Scratch, Unsupported};
+use nml_core::tree::{advance, leaf_value, menu, playout, referee, transition, Node, Step};
+use nml_core::{act_statics, full_playout_bent, load_acts, ActCorpus, ArbBend, GodotRng, State, TreeDice,
+               TreeLeaf, UnitStatic};
 
 const ACTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_25.jsonl");
 const WIDE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_wide_25.jsonl");
@@ -214,4 +216,56 @@ fn a_terminal_playout_stays_inside_the_arbitration_guard() {
         println!("{}: {n} uniform playouts to the end, at most {worst} activations in one round",
                  path.rsplit('/').next().unwrap());
     }
+}
+
+/// Every field of a state, floats at round-trip precision.
+fn canon(states: &[State]) -> Vec<String> {
+    states.iter().map(|s| format!("{s:?}")).collect()
+}
+
+/// Step 5 — chance edges, over every menu row of every act of both fixtures:
+/// `Ev` is `Policy::resolve` bit for bit; `Tray` draws `samples` states, the
+/// same stream base twice is byte-identical, another base moves some edge,
+/// the samples of one edge differ among themselves somewhere, and an
+/// activation the tray path flags unported declines by name (the fixtures
+/// carry Deadly(3) weapons); `Tray` with no base declines.
+#[test]
+fn chance_edges_are_reproducible_and_decline_unported() {
+    let (mut n, mut moved, mut spread, mut declined) = (0usize, 0usize, 0usize, BTreeMap::new());
+    for path in [ACTS, WIDE] {
+        let c = load(path);
+        let per_act = act_statics(&c, REPO);
+        let mut sc = Scratch::default();
+        for (ai, act) in c.acts.iter().enumerate() {
+            let base = 740_000_000 + 1_000 * ai as i64;
+            with_roll(&c, ai, &per_act[ai], |roll| for cand in menu(roll, &act.state, act.player, &mut sc) {
+                let edge = |dice, b| transition(roll, &act.state, &cand, dice, 4, b);
+                let want = roll.policy.resolve(&act.state, &cand).unwrap();
+                assert!(canon(&edge(TreeDice::Ev, None).unwrap()) == canon(&[want]), "act {ai}: Ev is not resolve");
+                match edge(TreeDice::Tray, Some(base)) {
+                    Err(Unsupported::TreeUnported(what)) => *declined.entry(what).or_insert(0usize) += 1,
+                    Err(e) => panic!("act {ai} {}: {e:?}", cand.kind),
+                    Ok(a) => {
+                        let (a, b) = (canon(&a), canon(&edge(TreeDice::Tray, Some(base)).unwrap()));
+                        // Another base may roll into an unported branch itself (a Deadly
+                        // weapon flags only when it lands): that counts as moved too.
+                        let other = edge(TreeDice::Tray, Some(base + 7)).map(|v| canon(&v)).ok();
+                        assert!(a.len() == 4 && a == b, "act {ai}: the same base drew different samples");
+                        moved += usize::from(other.as_ref() != Some(&a));
+                        spread += usize::from(a.iter().any(|s| s != &a[0]));
+                        n += 1;
+                    }
+                }
+            });
+            let none = with_roll(&c, ai, &per_act[ai], |roll| {
+                let rows = menu(roll, &act.state, act.player, &mut sc);
+                transition(roll, &act.state, &rows[0], TreeDice::Tray, 4, None)
+            });
+            assert_eq!(none.map(|v| v.len()), Err(Unsupported::TreeDiceSeed), "act {ai}: Tray with no base");
+        }
+    }
+    println!("chance edges: {n} tray edges reproduced, {moved} moved by another base, \
+              {spread} spread within one edge; declined {declined:?}");
+    assert!(n > 0 && moved > 0 && spread > 0, "the tray draws are inert");
+    assert!(declined.contains_key("deadly"), "no Deadly activation declined");
 }
