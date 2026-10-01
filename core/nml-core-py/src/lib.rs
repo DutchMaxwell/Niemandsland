@@ -305,6 +305,13 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
             Value::Array(p.cands.iter().map(cand_plain).collect()),
         );
     }
+    // Stamp law: `pool_completed` rides ONLY a pick where `pool_wall_ms` was on.
+    if let Some((n, hit)) = p.pool_completed {
+        let mut m = Map::new();
+        m.insert("completed".into(), (n as i64).into());
+        m.insert("deadline_hit".into(), hit.into());
+        trace.insert("pool_completed".into(), Value::Object(m));
+    }
     trace.insert("best_idx".into(), p.best_idx.into());
     trace.insert("runner_idx".into(), p.runner_idx.into());
     trace.insert(
