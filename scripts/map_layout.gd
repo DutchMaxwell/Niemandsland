@@ -1878,6 +1878,24 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 		_rebuild_derived()
 
 
+## Adopt a layout received from the host. Writes the SOURCE model (free_cells / free_walls) as well as
+## the derived one, so the next _rebuild_derived() on this client keeps the synced terrain.
+## Decoration objects are not part of the source model and are kept only until the next rebuild.
+func apply_synced_layout(cells: Dictionary, walls: Array, objects: Array, rotation_degrees: float) -> void:
+	placed_pieces.clear()
+	free_cells = cells.duplicate(true)
+	free_walls.assign(walls.duplicate(true))
+	_undo_stack.clear()
+	_redo_stack.clear()
+	grid_cells = cells.duplicate(true)
+	wall_segments.assign(walls.duplicate(true))
+	placed_objects.assign(objects.duplicate(true))
+	grid_rotation_degrees = rotation_degrees
+	_update_undo_redo_buttons()
+	if grid_container:
+		grid_container.queue_redraw()
+
+
 func _emit_layout_update() -> void:
 	layout_updated.emit(grid_cells.duplicate(), table_size_feet, grid_rotation_degrees,
 		wall_segments.duplicate(), placed_objects.duplicate())
