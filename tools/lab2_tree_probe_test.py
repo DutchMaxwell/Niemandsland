@@ -74,3 +74,33 @@ def test_dry_run_prints_the_plan_and_exits_0():
                           "--namespace", "t", "--dry-run", "--workers", "4", "--wall-hours", "6",
                           "--rss-gib", "6"], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0 and "dry-run plan" in out.stdout and "RED-VP" in out.stdout, out.stdout + out.stderr
+
+
+def test_allowance_is_4x_median_capped_floored_and_at_least_1us():
+    assert lab.allowance_us([1.0, 2.0, 3.0]) == 8000          # 4 x 2 ms = 8000 us
+    assert lab.allowance_us([900.0]) == 1_000_000             # capped at 1000 ms
+    assert lab.allowance_us([0.0000001]) == 1                 # never below 1 us
+    assert lab.allowance_us([1.00000049]) == 4000             # rounded DOWN
+
+
+def test_a_short_timing_cell_fails_the_instrument():
+    import pytest
+    ok = [{"cell": "c1", "i": i} for i in range(12)] + [{"cell": "c2", "i": i} for i in range(12)]
+    assert {c: len(v) for c, v in lab.pick_states(ok).items()} == {"c1": 12, "c2": 12}
+    with pytest.raises(SystemExit):
+        lab.pick_states(ok[:-1])
+
+
+def test_measure_takes_one_warmup_and_three_timed_calls():
+    n = []
+    t = lab.measure(lambda: n.append(1))
+    assert len(n) == 4 and len(t) == 3
+
+
+def test_projected_mde_matches_the_prereg_formula_and_the_chi2_constant():
+    # chi2 quantile(0.10, df=12) = 6.3038 (table value); F = 12 / 6.3038.
+    assert abs(lab.CHI2_Q10_DF12 - 6.3038) < 1e-4
+    v = 12 * (1 / 12) ** 2 * 0.25 / 40  # 12 cells of s2 = 0.25, n_c = 40
+    want = 100 * (2.5758293 + 0.8416212) * (12 / 6.3038 * v) ** 0.5
+    assert abs(lab.projected_mde({"c%d" % i: 0.25 for i in range(12)}, 40) - want) < 1e-3
+    assert lab.projected_mde({"c": 0.0}, 40) == 0.0  # zero variance is reported, not hidden
