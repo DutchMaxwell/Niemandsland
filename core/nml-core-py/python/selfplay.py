@@ -1599,7 +1599,7 @@ def _fork_playout(core, pre_state, action, turn: int, round_no: int, owners0, fr
     state, last = _fork_run_activations(core, state, next_turn, frng)
     opener = (2 if last == 1 else 1) if last != 0 else next_turn
     state, owners = core.playout_seize(state, owners)
-    for r in range(round_no + 1, ROUNDS + 1):
+    for r in range(round_no + 1, state.rounds_total + 1):
         state = state.refresh_round(r)
         state, last = _fork_run_activations(core, state, opener, frng)
         if last != 0:
@@ -1902,7 +1902,8 @@ def _ledger_of(state) -> dict[str, Any]:
     return {"scoring": p.get("scoring") or "end", "vp": list(p.get("vp") or [0, 0]),
             "vp_flavour": p.get("vp_flavour") or {}, "vp_memo": p.get("vp_memo") or {},
             "markers_meta": mm, "destroy_seq": list(p.get("destroy_seq") or [0]),
-            "carry": any(m.get("carry") for m in mm)}
+            "carry": any(m.get("carry") for m in mm),
+            "rounds": int(p.get("rounds_total") or ROUNDS)}
 
 
 def _round_end(core, state, owners: list[int], led: dict[str, Any], round_no: int,
@@ -1922,7 +1923,7 @@ def _round_end(core, state, owners: list[int], led: dict[str, Any], round_no: in
     if led["scoring"] == "round_vp":
         led["vp"], led["vp_memo"] = core.vp_score_round(
             owners, led["vp"], led["vp_flavour"], led["vp_memo"], led["markers_meta"])
-        if round_no == ROUNDS:
+        if round_no == led.get("rounds", ROUNDS):
             led["vp"] = core.vp_score_end(owners, led["vp"], led["vp_flavour"])
     elif led["scoring"] == "end":
         led["vp"] = core.vp_round_add(owners, led["vp"])
@@ -2018,7 +2019,7 @@ def play_from_state(
     log: list[dict[str, Any]] = []
     rounds_log: list[dict[str, Any]] = []
     rounds_played = 0
-    for round_no in range(1, ROUNDS + 1):
+    for round_no in range(1, led["rounds"] + 1):
         p = state.plain()
         _round_start(p, round_no, profiles)
         state = core.state_of(p)
@@ -2870,6 +2871,8 @@ def play_game(
     vp_flavour = mission_def.get("vp", {})
     mk_spec = mission_def.get("markers", {})
     markers_meta = mission_markers(mk_spec, len(objectives))
+    rounds = int(mission_def.get("rounds", ROUNDS))  # NML-1010 D1: the catalog's match length
+    plain["rounds_total"] = rounds
     plain["scoring"] = eff_scoring
     if eff_scoring == "round_vp":
         plain["vp"], plain["vp_flavour"], plain["vp_memo"] = [0, 0], vp_flavour, {}
@@ -2883,7 +2886,8 @@ def play_game(
 
     owners = [0] * len(objectives)
     led = {"scoring": eff_scoring, "vp": [0, 0], "vp_flavour": vp_flavour, "vp_memo": {},
-           "markers_meta": markers_meta, "destroy_seq": [0], "carry": bool(mk_spec.get("carry"))}
+           "markers_meta": markers_meta, "destroy_seq": [0], "carry": bool(mk_spec.get("carry")),
+           "rounds": rounds}
     if not arena:
         # The d6 roll-off, P1 winning ties — and BOTH dice are drawn, left first.
         left = rng.randi_range(1, 6)
@@ -2892,7 +2896,7 @@ def play_game(
     log: list[dict[str, Any]] = []
     rounds_log: list[dict[str, Any]] = []
     rounds_played = 0
-    for round_no in range(1, ROUNDS + 1):
+    for round_no in range(1, rounds + 1):
         plain = state.plain()
         _round_start(plain, round_no, profiles, magic)
         if arrivals is not None:
@@ -3057,7 +3061,7 @@ def play_game(
         "mission": {
             "family": mission_def.get("family", "face_off"),
             "name": mission,
-            "rounds": ROUNDS,
+            "rounds": rounds,
             "deployment": "zone12",
             "symmetric": True,
             "objective_count": len(owners),

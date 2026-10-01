@@ -179,6 +179,10 @@ pub struct PlanBend {
     pub top_k_first: bool,
     /// The playout arbitration's own seams — see `arbitration::ArbBend`.
     pub arb: ArbBend,
+    /// Tree search: `None` = the knob. `Some(n)` forces the leaf budget AND
+    /// switches the wall clock off — how a replay reproduces a deadline-cut
+    /// record from its stamped `completed`, no clock needed.
+    pub tree_budget: Option<i64>,
 }
 
 impl Default for PlanBend {
@@ -189,6 +193,7 @@ impl Default for PlanBend {
             dedupe_by_value: false,
             top_k_first: false,
             arb: ArbBend::default(),
+            tree_budget: None,
         }
     }
 }
@@ -785,7 +790,8 @@ impl<'a> Search<'a> {
         let k = &self.roll.knobs;
         let cfg = TreeCfg {
             leaf: k.tree_leaf, dice: k.tree_dice, samples: k.tree_samples.max(1) as usize,
-            batch: k.tree_batch.max(1) as usize, budget: k.tree_budget.max(1) as usize, player,
+            batch: k.tree_batch.max(1) as usize, budget: self.bend.tree_budget.unwrap_or(k.tree_budget).max(1) as usize,
+            wall_ms: if self.bend.tree_budget.is_some() { 0 } else { k.tree_wall_ms.max(0) as u64 }, player,
             opener_seat: self.act.opener_seat, sig: self.sig, hook: self.leaf_value, w: self.leaf_value_w,
         };
         let mut root = Node::new(state.clone(), Step::Mover(player), player);

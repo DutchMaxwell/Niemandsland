@@ -1527,6 +1527,15 @@ struct PlainTrace {
     /// `null` unless the stochastic arbitration decided that pick.
     #[serde(default)]
     arbitration: serde_json::Value,
+    /// Tree search knob — present only on a pick the tree made.
+    #[serde(default)]
+    tree: Option<PlainTreeTrace>,
+}
+
+/// `trace.tree`'s replay half: the leaf evaluations the search completed.
+#[derive(Debug, Deserialize)]
+struct PlainTreeTrace {
+    completed: usize,
 }
 
 /// `trace.arbitration` (ai_planner.gd:263-264) as a typed record — the M2-4
@@ -1684,6 +1693,9 @@ pub struct Act {
     /// `trace.arbitration` — `Value::Null` unless the playout arbitration fired.
     pub arbitration: serde_json::Value,
     pub pick: Option<PickRec>,
+    /// Tree search knob — `trace.tree.completed`, the leaf evaluations a tree
+    /// pick completed; a replay forces it as the budget. `None` elsewhere.
+    pub tree_completed: Option<usize>,
 }
 
 impl Act {
@@ -1869,6 +1881,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
             statics: pa.statics,
             arbitration: pa.trace.arbitration,
             pick: pa.pick,
+            tree_completed: pa.trace.tree.map(|t| t.completed),
         });
     }
     Ok(ActCorpus { profiles, terrain, knobs, acts })
