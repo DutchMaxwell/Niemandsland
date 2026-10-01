@@ -2893,6 +2893,15 @@ def play_game(
         left = rng.randi_range(1, 6)
         right = rng.randi_range(1, 6)
         opener = 1 if left >= right else 2
+    attacker = 0
+    if mission_def.get("roles"):
+        # D2b: the roll-off winner (the opener) picks by R7a — the +25 % side where the
+        # mission grants one, else defender — and the pick rides the state as `attacker`.
+        wins_attack = float(mission_def.get("attacker_points_factor", 1.0)) > 1.0
+        attacker = opener if wins_attack else (2 if opener == 1 else 1)
+        p0 = state.plain()
+        p0["attacker"] = attacker
+        state = core.state_of(p0)
     log: list[dict[str, Any]] = []
     rounds_log: list[dict[str, Any]] = []
     rounds_played = 0
@@ -3062,6 +3071,7 @@ def play_game(
             "family": mission_def.get("family", "face_off"),
             "name": mission,
             "rounds": rounds,
+            **({"role_p1": "attacker" if attacker == 1 else "defender"} if attacker else {}),
             "deployment": "zone12",
             "symmetric": True,
             "objective_count": len(owners),

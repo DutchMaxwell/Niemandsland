@@ -91,6 +91,24 @@ func test_the_table_choice_stamps_the_header() -> void:
 	assert_str(str(m.get("scoring", ""))).override_failure_message("header stamp 'scoring'").is_equal("round_vp")
 
 
+## D2b: an Attack & Defend mission adds rounds + P1's role to the stamp; every other mission's
+## stamp keeps exactly its three keys.
+func test_a_roles_mission_stamps_rounds_and_the_p1_role_and_others_do_not() -> void:
+	MissionCatalog._catalog()["roles_fixture"] = {"name": "Roles Fixture", "family": "attack_defend",
+		"rounds": 6, "scoring": "end", "roles": true, "markers": {"count": 1}}
+	AiActRecorder.set_mission("roles_fixture")
+	SoloController.mission_reset("end", {})
+	SoloController.mission_roles = {"attacker": 2, "defender": 1}
+	var m: Dictionary = AiActRecorder._header_line(_state(), Callable()).get("mission", {})
+	assert_int(int(m.get("rounds", 0))).is_equal(6)
+	assert_str(str(m.get("role_p1", ""))).is_equal("defender")
+	AiActRecorder.set_mission("domination")
+	var d: Dictionary = AiActRecorder._header_line(_state(), Callable()).get("mission", {})
+	assert_array(d.keys()).contains_exactly(["id", "family", "scoring"])
+	SoloController.mission_reset("end", {})
+	MissionCatalog.reset_cache()
+
+
 ## No mission chosen stamps the catalog default EXPLICITLY — the key is never
 ## omitted, because an absent key would mean "predates the stamp" to every
 ## reader (the same reading `ActHeader::mission_id` gives old recordings).

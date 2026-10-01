@@ -542,8 +542,13 @@ static func _mission_stamp() -> Dictionary:
 	if not MissionCatalog.mission_ids().has(mid):
 		mid = "duel"
 	var m := MissionCatalog.get_mission(mid)
-	return {"id": mid, "family": str(m.get("family", "face_off")),
+	var stamp := {"id": mid, "family": str(m.get("family", "face_off")),
 		"scoring": str(m.get("scoring", "end"))}
+	if bool(m.get("roles", false)):   # NML-1010 D2b: Attack & Defend only — every other header stays as is
+		stamp["rounds"] = int(m.get("rounds", 4))
+		if not SoloController.mission_roles.is_empty():
+			stamp["role_p1"] = "attacker" if int(SoloController.mission_roles["attacker"]) == 1 else "defender"
+	return stamp
 
 
 ## Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): the NAMED copy's
