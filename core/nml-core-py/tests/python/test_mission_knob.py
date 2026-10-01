@@ -150,3 +150,20 @@ def test_carry_catalog_entries_pin_three_relics_and_scoring():
         assert sp.mission_markers(mission["markers"], 3) == [
             {"carry": True, "carried_by": -1} for _ in range(3)
         ]
+
+
+@needs_lists
+def test_a_six_round_catalog_mission_plays_six_rounds_and_duel_stays_at_four():
+    """NML-1010 D1: the match length is catalog data. No shipped mission is longer than 4,
+    so a synthetic 6-round clone of duel is the fixture; duel itself must stay at 4."""
+    core = nml_core.load(str(REPO))
+    sp.resolve_mission("duel", REPO)
+    catalog = sp._MISSION_CATALOG_CACHE[str(REPO)]
+    catalog["six_round_fixture"] = dict(catalog["duel"], rounds=6)
+    try:
+        six = _play("six_round_fixture", core)
+        duel = _play("duel", core)
+    finally:
+        del catalog["six_round_fixture"]
+    assert six["rounds_played"] == 6 and six["mission"]["rounds"] == 6
+    assert duel["rounds_played"] == 4 and duel["mission"]["rounds"] == 4
