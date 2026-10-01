@@ -27,7 +27,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nml_core::acts::PickRec;
-use nml_core::arbitration::ArbBend;
+use nml_core::arbitration::{adjudicate_end, ArbBend};
+use nml_core::Marker;
 use nml_core::menu::Candidate;
 use nml_core::plan::{PlanBend, Search};
 use nml_core::playout::Policy;
@@ -449,4 +450,43 @@ fn a_close_top_two_without_a_signature_declines() {
     }
     println!("without sig: {declined}/{arbitrated} arbitrated acts declined");
     assert_eq!(declined, arbitrated, "a missing signature must never be guessed around");
+}
+
+/// `adjudicate_end` is the referee `full_playout` ends on, factored out for the
+/// tree operator. Hand-built end states must read p1 / p2 / draw, and with no
+/// markers on the board the alive-model count breaks the tie.
+#[test]
+fn adjudicate_end_reads_every_verdict() {
+    let c = corpus();
+    let base = c.acts[0].state.clone();
+    let null = serde_json::Value::Null;
+    let who = |owners: &[i64]| adjudicate_end("markers", owners, [0, 0], &null, &base, 3).winner;
+    assert_eq!(who(&[1, 1, 2]), "p1");
+    assert_eq!(who(&[2, 2, 1]), "p2");
+    assert_eq!(who(&[1, 2]), "draw");
+    assert_eq!(adjudicate_end("markers", &[1, 2, 0], [0, 0], &null, &base, 3).objectives, (1, 1, 1));
+    assert_eq!(adjudicate_end("round_vp", &[1, 2], [3, 1], &null, &base, 3).winner, "p1");
+
+    let mut sab = base.clone();
+    sab.markers_meta = vec![
+        Marker { owned_by: 1, ..Marker::default() },
+        Marker { owned_by: 2, destroyed: true, ..Marker::default() },
+    ];
+    assert_eq!(adjudicate_end("sabotage", &[], [0, 0], &null, &sab, 3).winner, "p1");
+
+    // No markers: the alive tiebreak.
+    let mut alive = base.clone();
+    let k1 = alive.player.iter().position(|&p| p == 1).expect("a p1 unit");
+    let k2 = alive.player.iter().position(|&p| p == 2).expect("a p2 unit");
+    for a in alive.alive.iter_mut() {
+        *a = 0;
+    }
+    alive.alive[k1] = 5;
+    alive.alive[k2] = 2;
+    assert_eq!(adjudicate_end("markers", &[], [0, 0], &null, &alive, 3).winner, "p1");
+    alive.alive[k2] = 9;
+    let r = adjudicate_end("markers", &[], [0, 0], &null, &alive, 3);
+    assert_eq!((r.winner, r.survivors, r.rounds_played), ("p2", [5, 9], 3));
+    alive.alive[k2] = 5;
+    assert_eq!(adjudicate_end("markers", &[], [0, 0], &null, &alive, 3).winner, "draw");
 }

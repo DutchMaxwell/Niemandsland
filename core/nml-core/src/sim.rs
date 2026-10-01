@@ -160,6 +160,14 @@ pub enum Unsupported {
     TooManyUnits(usize),
     TooManyObjectives(usize),
     TooManyCandidates(usize),
+    /// Tree search, `tree_dice: tray` — a chance edge whose activation the
+    /// tray path flags `unported` (`ShootResult::unported`): the tree
+    /// declines by the flag's name rather than sample a branch this port
+    /// does not reproduce.
+    TreeUnported(&'static str),
+    /// Tree search, `tree_dice: tray` with no stream seed (the playout
+    /// signature): declined, never invented.
+    TreeDiceSeed,
 }
 
 /// `BattleSim._los_clear` battle_sim.gd:666-670, read off the recorded answers.
