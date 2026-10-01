@@ -435,6 +435,8 @@ var _is_army_syncing: bool = false
 ## While set, presence broadcasts are paused so we don't flood a half-dead/rebuilding link
 ## with RPCs that fail and log "ID X not found in cache" (which only feeds the rate limit).
 var _is_reconnecting: bool = false
+## A failed rejoin's status text stays up (the teardown's "Offline" must not wipe it) until the player acts or a new connect starts.
+var _reconnect_failure_shown: bool = false
 ## Buffers an incoming remote army between its header and complete RPCs, so all units are
 ## built in ONE pass (download every model with a single ensure_models call — the download
 ## manager has one shared HTTPRequest, so per-unit concurrent downloads collide). Keyed by
@@ -14201,6 +14203,7 @@ func _on_net_host_confirmed() -> void:
 		url = InternetLobby.DEFAULT_RELAY_URL
 	_local_player_name = PlayerIdentity.sanitize(_net_host_name_input.text)
 	PlayerIdentity.save_name(_local_player_name)
+	_reconnect_failure_shown = false
 	internet_lobby.host_internet_game(url, _net_host_public_check.button_pressed)
 
 
@@ -14235,12 +14238,14 @@ func _on_net_join_confirmed() -> void:
 		url = InternetLobby.DEFAULT_RELAY_URL
 	_local_player_name = PlayerIdentity.sanitize(_net_join_name_input.text)
 	PlayerIdentity.save_name(_local_player_name)
+	_reconnect_failure_shown = false
 	internet_lobby.join_internet_game(code, url)
 
 
 func _on_disconnect_pressed() -> void:
 	network_manager.disconnect_game()
 	_update_network_ui(false, false)
+	_reconnect_failure_shown = false
 	GameMenu.set_status(network_status_label, "Offline", HouseStyle.TONE_MUTED)
 
 
@@ -14585,7 +14590,8 @@ func _on_internet_failed(reason: String) -> void:
 
 func _on_internet_disconnected() -> void:
 	_update_network_ui(false, false)
-	GameMenu.set_status(network_status_label, "Offline", HouseStyle.TONE_MUTED)
+	if not _reconnect_failure_shown:
+		GameMenu.set_status(network_status_label, "Offline", HouseStyle.TONE_MUTED)
 	# Clean up presence nodes
 	_cleanup_all_presence()
 
@@ -14608,6 +14614,7 @@ func _on_relay_connection_lost() -> void:
 
 func _on_relay_reconnecting() -> void:
 	_is_reconnecting = true
+	_reconnect_failure_shown = false
 	GameMenu.set_status(network_status_label, "Reconnecting…", HouseStyle.TONE_WARN)
 
 
@@ -14617,6 +14624,7 @@ func _on_relay_reconnect_failed(reason: String) -> void:
 	_is_reconnecting = false
 	push_warning("[Network] Reconnect failed: %s" % reason)
 	GameMenu.set_status(network_status_label, "Reconnect failed (%s)" % reason, HouseStyle.TONE_DANGER)
+	_reconnect_failure_shown = true
 	# Tear the dead relay peer down cleanly (RC4): close + null the socket, drop the
 	# multiplayer peer, and reset the roster dicts so a later Host/Join starts from a
 	# known-clean state instead of layering over a half-alive session.

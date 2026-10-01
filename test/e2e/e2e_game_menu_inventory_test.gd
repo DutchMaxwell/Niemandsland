@@ -17,7 +17,7 @@ const MP_BUTTONS := ["Host Online Game", "Join Online Game"]
 const LABELS := ["Import / Load:", "Multiplayer:", "Save / Load:", "Graphics:"]
 ## Row 3's status line: [handler, its arguments, today's text, the tone it reads in]. Only the handlers
 ## that touch no socket and send no RPC. Not here: "Reconnect failed (…)" — _on_relay_reconnect_failed
-## tears the relay down, which emits internet_disconnected, which writes "Offline" over it at once.
+## tears the relay down; it has its own test below.
 const STATES := [
 	[&"_on_internet_disconnected", [], "Offline", "muted"],
 	[&"_on_guest_reconnected", [], "Reconnected", "ok"],
@@ -506,6 +506,30 @@ func test_the_status_line_wears_house_tokens_and_wraps_inside_the_column(timeout
 		for i in status.text.length():
 			assert_bool(status.text.unicode_at(i) <= 0x20 or font.has_char(status.text.unicode_at(i))) \
 				.override_failure_message("the status font lacks \"%s\"" % status.text[i]).is_true()
+	await E2EBoot.settle(get_tree())
+
+
+## "Reconnect failed (…)" tears the relay down, which emits internet_disconnected: that must not write
+## "Offline" over the failure at once. The text stays until the player acts or a new connect starts.
+func test_a_failed_reconnect_stays_visible_until_the_player_acts(timeout := 120000) -> void:
+	await _open_menu()
+	_main._on_relay_reconnect_failed("room gone")
+	await _runner.simulate_frames(2)
+	var status: Label = _main.network_status_label
+	assert_str(status.text).override_failure_message("the failure was overwritten by \"%s\"" % status.text) \
+		.is_equal("Reconnect failed (room gone)")
+	assert_str(_tone_of(status.get_theme_color(&"font_color"))).is_equal("danger")
+	# A later teardown of the dead session (no new connect) does not wipe it either.
+	_main._on_internet_disconnected()
+	assert_str(status.text).is_equal("Reconnect failed (room gone)")
+	# The player acts (Disconnect): the line reads Offline again.
+	_main._on_disconnect_pressed()
+	assert_str(status.text).is_equal("Offline")
+	# A failure, then a new attempt starts: the next teardown reads Offline as before.
+	_main._on_relay_reconnect_failed("room gone")
+	_main._on_relay_reconnecting()
+	_main._on_internet_disconnected()
+	assert_str(status.text).is_equal("Offline")
 	await E2EBoot.settle(get_tree())
 
 
