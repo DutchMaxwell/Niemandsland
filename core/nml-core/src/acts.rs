@@ -212,6 +212,32 @@ pub struct Knobs {
     /// exists yet — this field is the registration point, not a new eval.
     #[serde(default)]
     pub eval_variant: i64,
+    /// Tree search knob: `"oneply"` (default, today's search) or `"tree"`.
+    /// Registration only; absent from every recorded corpus, so it replays
+    /// byte-identical.
+    #[serde(default)]
+    pub search_mode: SearchMode,
+    /// Tree search knob: the frontier value, today's blend or a playout to the end.
+    #[serde(default)]
+    pub tree_leaf: TreeLeaf,
+    /// Tree search knob: chance edges as expected value or through the dice tray.
+    #[serde(default)]
+    pub tree_dice: TreeDice,
+    /// Tree search knob: the per-decision budget in leaf evaluations.
+    #[serde(default = "default_tree_budget")]
+    pub tree_budget: i64,
+    /// Tree search knob: dice samples per chance edge under `tree_dice: tray`.
+    #[serde(default = "default_tree_samples")]
+    pub tree_samples: i64,
+    /// Tree search knob: children opened per expansion batch.
+    #[serde(default = "default_tree_batch")]
+    pub tree_batch: i64,
+    /// Tree search knob: wall-clock safety fallback in ms (0 = off).
+    #[serde(default)]
+    pub tree_wall_ms: i64,
+    /// One-ply pool wall-clock fallback in ms (0 = off).
+    #[serde(default)]
+    pub pool_wall_ms: i64,
     /// W2 S0 — `Seams::melee_reach`: `"all"` is today's behaviour (every alive
     /// model of the unit strikes); `"table"` is the p.9 rule, scaling by the
     /// models within 2" of an enemy model instead. Absent from every corpus
@@ -1364,6 +1390,14 @@ impl Default for Knobs {
             // `rows::RULE_VOCAB_VERSION` itself.
             rule_vocab_version: crate::rows::LEGACY_VOCAB_VERSION,
             eval_variant: 0,
+            search_mode: SearchMode::OnePly,
+            tree_leaf: TreeLeaf::Blend,
+            tree_dice: TreeDice::Ev,
+            tree_budget: default_tree_budget(),
+            tree_samples: default_tree_samples(),
+            tree_batch: default_tree_batch(),
+            tree_wall_ms: 0,
+            pool_wall_ms: 0,
             melee_reach: MeleeReach::All,
             consolidate: false,
             cond_ap_dice: false,
@@ -1550,6 +1584,45 @@ pub enum PolicyMode {
     Order,
 }
 
+/// The `search_mode` knob: today's one-ply search or the recursive tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SearchMode {
+    #[default]
+    OnePly,
+    Tree,
+}
+
+/// The `tree_leaf` knob: how a non-terminal frontier state is valued.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TreeLeaf {
+    #[default]
+    Blend,
+    Terminal,
+}
+
+/// The `tree_dice` knob: the tree's chance model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TreeDice {
+    #[default]
+    Ev,
+    Tray,
+}
+
+fn default_tree_budget() -> i64 {
+    128
+}
+
+fn default_tree_samples() -> i64 {
+    4
+}
+
+fn default_tree_batch() -> i64 {
+    8
+}
+
 impl ActStatics {
     /// True when the recording used the heuristic playout this port implements.
     pub fn heuristic_playout(&self) -> bool {
@@ -1682,6 +1755,17 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     let raw: serde_json::Value = serde_json::from_str(text).map_err(|e| format!("act header: {e}"))?;
     // Parse the typed header from the original text: Ordered<Profile> must
     // retain JSON insertion order, which serde_json::Value would sort.
+    for (key, allowed) in [
+        ("search_mode", &["oneply", "tree"][..]),
+        ("tree_leaf", &["blend", "terminal"][..]),
+        ("tree_dice", &["ev", "tray"][..]),
+    ] {
+        if let Some(v) = raw["knobs"].get(key).and_then(|v| v.as_str()) {
+            if !allowed.contains(&v) {
+                return Err(format!("{key} {v:?}: unknown setting (only {allowed:?} exist)"));
+            }
+        }
+    }
     let mut header: Header = serde_json::from_str(text).map_err(|e| format!("act header: {e}"))?;
     header.knobs.rules_epoch = record_rules_epoch(&raw["knobs"], &raw["prescreen"]);
     // The evolved-eval seam: variant 0 (today's frozen eval) and variant 1 (the
@@ -1695,6 +1779,14 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
         return Err(format!(
             "eval_variant {}: no registered arm (only 0 to 3 exist)",
             header.knobs.eval_variant
+        ));
+    }
+    if header.knobs.search_mode == SearchMode::Tree
+        && (header.knobs.tree_budget < 1 || header.knobs.tree_samples < 1 || header.knobs.tree_batch < 1)
+    {
+        return Err(format!(
+            "search_mode tree: tree_budget {}, tree_samples {}, tree_batch {} must all be >= 1",
+            header.knobs.tree_budget, header.knobs.tree_samples, header.knobs.tree_batch
         ));
     }
     header_of(header).map_err(|e| format!("act header: {e}"))
@@ -1785,7 +1877,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 #[cfg(test)]
 mod tests {
     use super::{
-        read_act_header, record_rules_epoch, rule_on, MeleeReach, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
+        read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
     };
 
@@ -1974,6 +2066,29 @@ mod tests {
     /// The evolved-eval seam's other RED proof — a header asking for a variant
     /// with no registered arm is refused HERE, before it can ever reach
     /// `score::score_hand_variant`'s `unreachable!` fallback.
+    #[test]
+    fn an_unknown_search_mode_is_refused_naming_the_key() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"search_mode":"maze"}}"#;
+        let err = read_act_header(head).expect_err("search_mode maze has no arm");
+        assert!(err.contains("search_mode"), "error should name the key: {err}");
+    }
+
+    #[test]
+    fn a_tree_header_with_a_zero_budget_is_refused() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"search_mode":"tree","tree_budget":0}}"#;
+        let err = read_act_header(head).expect_err("tree_budget 0 is no budget");
+        assert!(err.contains("tree_budget"), "error should name the key: {err}");
+    }
+
+    #[test]
+    fn absent_tree_knobs_parse_to_the_defaults() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{}}"#;
+        let k = read_act_header(head).expect("an empty knobs block parses").knobs;
+        assert_eq!((k.search_mode, k.tree_leaf, k.tree_dice), (SearchMode::OnePly, TreeLeaf::Blend, TreeDice::Ev));
+        assert_eq!((k.tree_budget, k.tree_samples, k.tree_batch), (128, 4, 8));
+        assert_eq!((k.tree_wall_ms, k.pool_wall_ms), (0, 0));
+    }
+
     #[test]
     fn an_unregistered_eval_variant_is_refused_at_header_parse() {
         let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":99}}"#;
