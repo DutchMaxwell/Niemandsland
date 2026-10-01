@@ -208,10 +208,11 @@ def bootstrap_intervals(gains, resamples=100_000, seed=0, k=5):
     import numpy as np
     rng = np.random.Generator(np.random.PCG64(seed))
     cells = sorted(gains)
-    vec = {n: [np.array([gains[c][cl][n] for cl in sorted(gains[c])]) for c in cells] for n, _, _ in CONTRASTS}
-    draws = {n: np.empty(resamples) for n, _, _ in CONTRASTS}
+    names = sorted(gains[cells[0]][sorted(gains[cells[0]])[0]])
+    vec = {n: [np.array([gains[c][cl][n] for cl in sorted(gains[c])]) for c in cells] for n in names}
+    draws = {n: np.empty(resamples) for n in names}
     for i in range(resamples):
-        idx = [rng.integers(0, len(vec["A_T"][j]), len(vec["A_T"][j])) for j in range(len(cells))]
+        idx = [rng.integers(0, len(vec[names[0]][j]), len(vec[names[0]][j])) for j in range(len(cells))]
         for n in draws:
             draws[n][i] = 100 * np.mean([vec[n][j][ix].mean() for j, ix in enumerate(idx)])
     q = (0.05 / k / 2, 1 - 0.05 / k / 2)  # alpha .05 / K = .01 two-sided -> the .005 and .995 quantiles
@@ -242,6 +243,68 @@ def cmd_endings(a) -> int:
     res = bootstrap_intervals(gains, a.resamples, a.seed)
     open(a.out, "w").write(canon({"gains": gains, "intervals": res}))
     print("[endings] " + canon(res))
+    return 0
+
+
+# ---- part B: the full games (PREREG section 8-9) ------------------------------------------------
+B_ARMS = ("L", "C")
+
+
+def game_rows(blocks):
+    """The manifest: per board, per candidate arm (L, C), two dice streams x candidate in seat 1 then 2 (4 games per
+    candidate/block). Armies and terrain stay on their physical seats; only the policy swaps."""
+    return [{"row_id": "%s_%s_d%d_s%d" % (b["block"], arm, d, seat), "block": b["block"], "cell": b["cell"], "arm": arm,
+             "seed": b["seed"], "dice": b["dice"][d], "seat": seat, "army1": b["army1"], "army2": b["army2"]}
+            for b in blocks for arm in B_ARMS for d in (0, 1) for seat in (1, 2)]
+
+
+def arm_kwargs(row, wall_ms):
+    """L: the tree on the candidate seat (10/3 = the incumbent pair); C: the one-ply 32/3 rung with the pool deadline."""
+    if row["arm"] == "L":
+        return dict(deep_top_k=10, deep_horizon=3, deep_search_mode="tree", deep_tree_wall_ms=wall_ms)
+    return dict(deep_top_k=32, deep_horizon=3, deep_pool_wall_ms=wall_ms)
+
+
+def board_scores(done):
+    """done: [(row, candidate-seat score)] -> {cell: {block: {B_LI: b_L - .5, B_LC: b_L - b_C}}} (a board is the cluster)."""
+    by = {}
+    for row, y in done:
+        by.setdefault((row["cell"], row["block"]), {}).setdefault(row["arm"], []).append(y)
+    out = {}
+    for (cell, block), arms in by.items():
+        if any(len(arms.get(x, ())) != 4 for x in B_ARMS):
+            raise SystemExit("board %s has %s games, 4 per arm required" % (block, {k: len(v) for k, v in arms.items()}))
+        bl, bc = statistics.fmean(arms["L"]), statistics.fmean(arms["C"])
+        out.setdefault(cell, {})[block] = {"B_LI": bl - 0.5, "B_LC": bl - bc}
+    return out
+
+
+def cmd_fullgames(a) -> int:
+    import importlib
+    import nml_core as nm  # lazy
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
+    import selfplay as sp
+    allow, knobs = json.load(open(a.timing)), json.load(open(a.knobs))
+    mod, fn = a.hooks.split(":")
+    leaf_fn, leaf_w = getattr(importlib.import_module(mod), fn)()  # the net on BOTH seats ({1: hook, 2: hook}, weight)
+    os.makedirs(a.out_dir, exist_ok=True)
+    done = []
+    for row in game_rows(json.load(open(a.blocks))):
+        path = os.path.join(a.out_dir, row["row_id"] + ".json")
+        if not os.path.exists(path):
+            wall = max(1, allow[row["cell"]]["B_us"] // 1000)  # whole ms; 0 would mean OFF
+            res = sp.play_game(row["seed"], row["army1"], row["army2"], a.repo, a.bank, None, dice_seed=row["dice"],
+                               deep_player=row["seat"], leaf_value_fn=leaf_fn, leaf_value_w=leaf_w,
+                               **arm_kwargs(row, wall), **knobs)
+            y = 0.5 if res["winner"] == "draw" else float(res["winner"] == "p%d" % row["seat"])
+            tmp = path + ".tmp"
+            json.dump({"row": row, "y": y, "winner": res["winner"]}, open(tmp, "w"))
+            os.replace(tmp, path)  # atomic per game; a rerun resumes, never replays a valid game
+        rec = json.load(open(path))
+        done.append((rec["row"], rec["y"]))
+    res = bootstrap_intervals(board_scores(done), a.resamples, a.seed)
+    open(a.out, "w").write(canon(res))
+    print("[fullgames] " + canon(res))
     return 0
 
 
@@ -304,8 +367,19 @@ def main(argv) -> int:
     e.add_argument("--seed", type=int, default=0)
     e.add_argument("--repo", default=".")
     e.add_argument("--out", required=True)
+    f = sub.add_parser("fullgames")
+    f.add_argument("--blocks", required=True, help="JSON list of {block, cell, seed, dice: [d0, d1], army1, army2}")
+    f.add_argument("--timing", required=True)
+    f.add_argument("--knobs", required=True, help="JSON of play_game kwargs of the shipped grade")
+    f.add_argument("--hooks", required=True, help="module:function returning (leaf_value_fn, leaf_value_w), the net on both seats")
+    f.add_argument("--bank", required=True)
+    f.add_argument("--out-dir", required=True)
+    f.add_argument("--resamples", type=int, default=100_000)
+    f.add_argument("--seed", type=int, default=1)
+    f.add_argument("--repo", default=".")
+    f.add_argument("--out", required=True)
     a = ap.parse_args(argv)
-    return {"timing": cmd_timing, "endings": cmd_endings}.get(a.cmd, cmd_pilot)(a)
+    return {"timing": cmd_timing, "endings": cmd_endings, "fullgames": cmd_fullgames}.get(a.cmd, cmd_pilot)(a)
 
 
 if __name__ == "__main__":

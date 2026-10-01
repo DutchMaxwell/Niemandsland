@@ -132,3 +132,32 @@ def test_bootstrap_known_winner_identical_arms_and_four_games_are_not_four_block
     w_boards = lab.bootstrap_intervals(boards(1), resamples=300, seed=1)["A_T"]
     w_games = lab.bootstrap_intervals(boards(4), resamples=300, seed=1)["A_T"]
     assert w_boards["hi"] - w_boards["lo"] > w_games["hi"] - w_games["lo"]
+
+
+def _blocks(n=2):
+    return [{"block": "b%d" % i, "cell": "c1", "seed": 10 + i, "dice": [100 + i, 200 + i], "army1": "a", "army2": "b"} for i in range(n)]
+
+
+def test_manifest_has_four_games_per_candidate_per_block_with_both_seats_and_two_dice():
+    rows = lab.game_rows(_blocks())
+    assert len(rows) == 2 * 2 * 4 and len({r["row_id"] for r in rows}) == len(rows)
+    one = [r for r in rows if r["block"] == "b0" and r["arm"] == "L"]
+    assert sorted((r["dice"], r["seat"]) for r in one) == [(100, 1), (100, 2), (200, 1), (200, 2)]
+    assert all(r["army1"] == "a" and r["army2"] == "b" for r in rows)  # armies stay on their physical seats
+
+
+def test_arm_kwargs_split_the_tree_from_the_one_ply_pool_deadline():
+    L, C = lab.arm_kwargs({"arm": "L"}, 7), lab.arm_kwargs({"arm": "C"}, 7)
+    assert L["deep_search_mode"] == "tree" and L["deep_tree_wall_ms"] == 7 and "deep_pool_wall_ms" not in L
+    assert C == {"deep_top_k": 32, "deep_horizon": 3, "deep_pool_wall_ms": 7}
+
+
+def test_board_scores_are_per_board_and_a_missing_or_short_board_fails():
+    import pytest
+    rows = lab.game_rows(_blocks(1))
+    ys = {"L": [1.0, 1.0, 0.5, 0.5], "C": [0.5, 0.5, 0.0, 0.0]}
+    done = [(r, ys[r["arm"]].pop()) for r in rows]
+    s = lab.board_scores(done)["c1"]["b0"]
+    assert abs(s["B_LI"] - 0.25) < 1e-12 and abs(s["B_LC"] - 0.5) < 1e-12
+    with pytest.raises(SystemExit):
+        lab.board_scores(done[:-1])
