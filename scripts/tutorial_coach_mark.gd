@@ -10,10 +10,10 @@ extends CanvasLayer
 ## spotlight hole absorbs GUI clicks via `_has_point` while the hole falls through to the
 ## game. Steps that need free 3D interaction (drags, camera) run unmasked (dim ignores the
 ## mouse) or in BANNER mode (no dim at all — instruction card only), so a gesture can never
-## be cut off by the overlay. Purely code-drawn (HudTokens palette) — no art assets.
+## be cut off by the overlay. Purely code-drawn (HouseStyle tokens) — no art assets.
 
 # ===== Constants =====
-const DIM_COLOR := Color(0.0, 0.0, 0.0, 0.60)   # soft screen dim outside the spotlight
+const DIM_COLOR := HouseStyle.SCRIM              # soft screen dim outside the spotlight
 const SPOTLIGHT_PAD := 14.0                      # breathing room added around the target rect
 const RING_WIDTH := 3.0
 const PULSE_PERIOD := 1.4                        # seconds per pulse cycle
@@ -113,28 +113,16 @@ func _build() -> void:
 
 	_card = PanelContainer.new()
 	_card.mouse_filter = Control.MOUSE_FILTER_IGNORE  # text never blocks input
-	_card.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", HudTokens.SPACE_16)
-	margin.add_theme_constant_override("margin_right", HudTokens.SPACE_16)
-	margin.add_theme_constant_override("margin_top", HudTokens.SPACE_12)
-	margin.add_theme_constant_override("margin_bottom", HudTokens.SPACE_12)
-	_card.add_child(margin)
+	HouseStyle.apply(_card)
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", HudTokens.SPACE_4)
-	margin.add_child(vbox)
-	_progress_label = Label.new()
-	_progress_label.add_theme_font_override("font", HudTokens.mono_font())
-	_progress_label.add_theme_font_size_override("font_size", 12)
-	_progress_label.add_theme_color_override("font_color", HudTokens.AMBER)
+	vbox.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
+	_card.add_child(vbox)
+	_progress_label = HouseStyle.label("", HouseStyle.NOTE)
 	_progress_label.visible = false
 	vbox.add_child(_progress_label)
-	_label = Label.new()
+	_label = HouseStyle.label("", HouseStyle.BODY)
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_label.custom_minimum_size = Vector2(CARD_MAX_WIDTH, 0)
-	_label.add_theme_font_override("font", HudTokens.body_font())
-	_label.add_theme_font_size_override("font_size", 16)
-	_label.add_theme_color_override("font_color", HudTokens.TEXT)
 	vbox.add_child(_label)
 	add_child(_card)
 
@@ -142,27 +130,20 @@ func _build() -> void:
 	_skip_lesson_btn = _build_button("SKIP LESSON", CARD_MARGIN)
 	_skip_lesson_btn.pressed.connect(func() -> void: skip_lesson_pressed.emit())
 	add_child(_skip_lesson_btn)
-	_end_btn = _build_button("END TUTORIAL", CARD_MARGIN + HudTokens.BUTTON_HEIGHT + HudTokens.SPACE_8)
+	_end_btn = _build_button("END TUTORIAL", CARD_MARGIN + HouseStyle.H_ACTION + HouseStyle.GAP_ROW)
 	_end_btn.pressed.connect(func() -> void: end_pressed.emit())
 	add_child(_end_btn)
 
 
 func _build_button(text: String, top: float) -> Button:
-	var btn := Button.new()
-	btn.text = text
-	btn.focus_mode = Control.FOCUS_NONE
+	var btn := HouseStyle.button(text, HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	btn.theme = HouseStyle.theme()
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	var ghost := HudTokens.ghost_button()
-	btn.add_theme_stylebox_override("normal", ghost["normal"])
-	btn.add_theme_stylebox_override("hover", ghost["hover"])
-	btn.add_theme_stylebox_override("pressed", ghost["pressed"])
-	btn.add_theme_color_override("font_color", HudTokens.TEXT)
-	btn.add_theme_font_size_override("font_size", 13)
 	btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	btn.offset_left = -(BUTTON_W + CARD_MARGIN)
 	btn.offset_right = -CARD_MARGIN
 	btn.offset_top = top
-	btn.offset_bottom = top + HudTokens.BUTTON_HEIGHT
+	btn.offset_bottom = top + HouseStyle.H_ACTION
 	return btn
 
 
@@ -213,7 +194,7 @@ class _DimLayer extends Control:
 		draw_rect(Rect2(r.end.x, r.position.y, size.x - r.end.x, r.size.y), DIM_COLOR)    # right
 		# Pulsing accent ring (cyan primary, breathes 0..1 over the period).
 		var t := 0.5 - 0.5 * cos(TAU * owner_overlay._pulse_phase / PULSE_PERIOD)
-		var glow := HudTokens.CYAN
+		var glow := HouseStyle.ACCENT
 		glow.a = 0.55 + 0.45 * t
 		var ring := r.grow(2.0 + 4.0 * t)
 		draw_rect(ring, glow, false, RING_WIDTH)

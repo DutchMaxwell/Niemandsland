@@ -257,12 +257,27 @@ pub fn full_playout_bent(
         }
         book_round_end(&mut state, &mut owners, &mut vp, &flavour, &mut memo);
     }
+    Ok(adjudicate_end(&state0.scoring, &owners, vp, &flavour, &state, rounds_total.max(round0)))
+}
+
+/// The referee at a reached game end, factored out of `full_playout_bent`:
+/// closes the VP ledger, counts markers and living models, and names the
+/// winner (incl. the alive-model tiebreak when no marker is on the board).
+/// `scoring` is the mission's scoring id (`state0.scoring`).
+pub fn adjudicate_end(
+    scoring: &str,
+    owners: &[i64],
+    mut vp: [i64; 2],
+    flavour: &Value,
+    state: &State,
+    rounds_played: i64,
+) -> PlayoutResult {
     // Face-Off is END-scored per book: the ledger is always closed out, but
     // WHICH currency decides is the mission's business (:1394-1399).
-    vp_score_end(&owners, &mut vp, &flavour);
+    vp_score_end(owners, &mut vp, flavour);
 
     let (mut p1, mut p2) = (0i64, 0i64);
-    for &o in &owners {
+    for &o in owners {
         if o == 1 {
             p1 += 1;
         } else if o == 2 {
@@ -277,7 +292,6 @@ pub fn full_playout_bent(
             alive2 += state.alive[k];
         }
     }
-    let scoring: &str = &state0.scoring;
     let (mut pts1, mut pts2) = if scoring == "round_vp" { (vp[0], vp[1]) } else { (p1, p2) };
     if scoring == "sabotage" {
         // W3: the playout speaks sabotage's own goal — destroy theirs, keep yours.
@@ -300,15 +314,15 @@ pub fn full_playout_bent(
     } else {
         "draw"
     };
-    Ok(PlayoutResult {
+    PlayoutResult {
         p1: pts1,
         p2: pts2,
         vp,
         objectives: (p1, p2, owners.len() as i64 - p1 - p2),
         survivors: [alive1, alive2],
-        rounds_played: rounds_total.max(round0),
+        rounds_played,
         winner,
-    })
+    }
 }
 
 /// The three calls every playout round end makes, in order (ai_planner.gd:
