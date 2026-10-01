@@ -12,6 +12,7 @@ on:
     paths:
       - 'core/nml-core-godot/**'
       - '.github/workflows/onnx-spike.yml'
+      - '.github/actions/setup-mingw-x86-64/**'
 
 concurrency:
   group: onnx-spike-${{ github.ref }}
@@ -27,7 +28,7 @@ jobs:
   linux-tract:
     name: linux tract (golden + size)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -70,7 +71,7 @@ jobs:
   linux-ort:
     name: linux ort (golden + size)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -117,18 +118,17 @@ jobs:
   windows-size-tract:
     name: windows tract (cross size)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
-      - name: MinGW toolchain
-        run: |
-          rustup target add x86_64-pc-windows-gnu
-          sudo apt-get update
-          sudo apt-get install -y mingw-w64
+      - name: Windows-gnu target
+        run: rustup target add x86_64-pc-windows-gnu
+      - name: MinGW toolchain (x86_64 only, cached)
+        uses: ./.github/actions/setup-mingw-x86-64
       - name: Build, strip, size (tract, cross)
         continue-on-error: true
         run: |
@@ -151,18 +151,17 @@ jobs:
   windows-size-ort:
     name: windows ort (cross size)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
-      - name: MinGW toolchain
-        run: |
-          rustup target add x86_64-pc-windows-gnu
-          sudo apt-get update
-          sudo apt-get install -y mingw-w64 unzip
+      - name: Windows-gnu target
+        run: rustup target add x86_64-pc-windows-gnu
+      - name: MinGW toolchain (x86_64 only, cached)
+        uses: ./.github/actions/setup-mingw-x86-64
       - name: Fetch ONNX Runtime (win-x64)
         run: |
           set -euo pipefail
@@ -194,7 +193,7 @@ jobs:
   windows-tract:
     name: windows tract (golden)
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -224,7 +223,7 @@ jobs:
   windows-ort:
     name: windows ort (golden)
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

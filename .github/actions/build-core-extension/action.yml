@@ -13,41 +13,10 @@ runs:
       uses: Swatinem/rust-cache@v2
       with:
         workspaces: core
-    # Windows cross-build toolchain: ONLY the x86_64 posix gcc + binutils (the `mingw-w64` metapackage
-    # also pulls the i686 and win32 variants, 277 MB; azure.archive.ubuntu.com measured at ~100 kB/s
-    # in run 36920335452 and the step hit the job timeout). The .deb files are cached per runner image
-    # version, so a warm run installs them with dpkg and downloads nothing.
-    - name: Key the mingw cache by runner image
-      id: mingwkey
+    # x86_64-only MinGW toolchain with cached .deb files (shared with onnx-spike.yml).
+    - name: Setup mingw-w64 (x86_64 only)
       if: inputs.target == 'windows'
-      shell: bash
-      run: echo "image=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
-    - name: Restore mingw-w64 packages
-      id: mingw
-      if: inputs.target == 'windows'
-      uses: actions/cache@v4
-      with:
-        path: ~/mingw-debs
-        key: mingw-x86-64-posix-${{ runner.os }}-${{ steps.mingwkey.outputs.image }}
-    - name: Install mingw-w64 (x86_64 only)
-      if: inputs.target == 'windows'
-      shell: bash
-      run: |
-        DIR="$HOME/mingw-debs"
-        if [ "${{ steps.mingw.outputs.cache-hit }}" = "true" ] && ls "$DIR"/*.deb >/dev/null 2>&1; then
-          echo "mingw cache hit: $(ls "$DIR"/*.deb | wc -l) packages, no download"
-          sudo dpkg -i "$DIR"/*.deb
-        else
-          mkdir -p "$DIR"
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends -o Dir::Cache::archives="$DIR" -o APT::Keep-Downloaded-Packages=true \
-            gcc-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64
-          # apt ran as root: hand the files to the runner user so the cache post-step can read them.
-          sudo rm -rf "$DIR/lock" "$DIR/partial"
-          sudo chown -R "$USER" "$DIR"
-        fi
-        x86_64-w64-mingw32-gcc --version | head -1
-        x86_64-w64-mingw32-objdump --version | head -1
+      uses: ./.github/actions/setup-mingw-x86-64
     - name: Build NmlCore extension
       shell: bash
       run: |
