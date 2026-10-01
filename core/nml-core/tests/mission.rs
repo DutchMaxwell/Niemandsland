@@ -185,3 +185,29 @@ fn threatened_enemy_carrier_loses_relic_control_probability() {
     assert_eq!(score(&st, 1, &[1.0]), 0.5);
     assert_eq!(score(&st, 2, &[1.0]), 0.5);
 }
+
+/// D2b: the Attack & Defend attacker slot rides the state; 0 (no roles, every older record) is
+/// never written, so old records round-trip byte-identical.
+#[test]
+fn attacker_slot_round_trips_and_zero_is_omitted() {
+    let mut st = carry_state();
+    assert!(plain_of(&st).get("attacker").is_none(), "no roles: no key");
+    st.attacker = 2;
+    let out = plain_of(&st);
+    assert_eq!(out["attacker"], json!(2));
+    let header = read_act_header(HEADER).expect("header");
+    let mut cache = ProfileCache::new(header.profiles);
+    let loaded = state_from_json(&out.to_string(), &mut cache, &mut None).expect("round trip");
+    assert_eq!(loaded.attacker, 2);
+    assert_eq!(plain_of(&loaded).to_string(), out.to_string());
+}
+
+#[test]
+fn header_mission_stamp_reads_role_and_rounds_and_defaults_without_them() {
+    let h = |m: &str| read_act_header(&format!(r#"{{"kind":"header","knobs":{{}},"profiles":{{}},"mission":{m}}}"#)).expect("header");
+    let with = h(r#"{"id":"the_raid","role_p1":"attacker","rounds":6}"#);
+    let m = with.mission.expect("mission");
+    assert_eq!((m.role_p1.as_str(), m.rounds), ("attacker", 6));
+    let old = h(r#"{"id":"duel"}"#).mission.expect("mission");
+    assert_eq!((old.role_p1.as_str(), old.rounds), ("", 0));
+}

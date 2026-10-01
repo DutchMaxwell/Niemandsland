@@ -97,8 +97,6 @@ theme_override_constants/separation = 12
 
 [node name="TerrainLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
-theme_override_font_sizes/font_size = 18
 text = "Terrain Types"
 
 [node name="TerrainButtons" type="VBoxContainer" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
@@ -108,13 +106,11 @@ theme_override_constants/separation = 8
 
 [node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
-theme_override_styles/separator = null
 modulate = Color(1, 1, 1, 0.2)
 
 [node name="RotationLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.73, 0.8, 1)
 text = "Rotation: 0°"
 
 [node name="RotationSlider" type="HSlider" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
@@ -126,7 +122,6 @@ step = 1.0
 [node name="SymmetryCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.87, 0.92, 1)
 text = "Point Symmetry (Mirror)"
 
 [node name="HSeparator3" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
@@ -136,9 +131,6 @@ modulate = Color(1, 1, 1, 0.2)
 [node name="AutoGenButton" type="Button" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.3, 0.85, 0.55, 1)
-theme_override_colors/font_hover_color = Color(0.4, 1.0, 0.65, 1)
-theme_override_font_sizes/font_size = 16
 text = "Auto-Generate Layout"
 
 [node name="HSeparator3b" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
@@ -147,26 +139,21 @@ modulate = Color(1, 1, 1, 0.2)
 
 [node name="DeploymentLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
-theme_override_font_sizes/font_size = 16
 text = "Deployment Zones"
 
 [node name="DeploymentTypeOption" type="OptionButton" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
 
 [node name="DeploymentCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.87, 0.92, 1)
 text = "Show in Preview"
 
 [node name="ObjectivesCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
-theme_override_colors/font_color = Color(0.85, 0.87, 0.92, 1)
 text = "Show Objectives"
 
 [node name="HSeparator3c" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
@@ -176,8 +163,6 @@ modulate = Color(1, 1, 1, 0.2)
 [node name="StatsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.73, 0.8, 1)
-theme_override_font_sizes/font_size = 13
 text = "Current Coverage:"
 
 [node name="HSeparator4" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
@@ -187,8 +172,6 @@ modulate = Color(1, 1, 1, 0.2)
 [node name="RecommendationsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1.0, 0.75, 0.35, 1)
-theme_override_font_sizes/font_size = 13
 text = "OPR Recommendations:"
 
 [node name="GridPanel" type="PanelContainer" parent="MarginContainer/VBox/MainContent"]
