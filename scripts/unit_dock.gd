@@ -448,6 +448,9 @@ func _card_data(unit: GameUnit) -> Dictionary:
 		"alive": alive,
 		"total": unit.models.size(),
 		"activated": unit.is_activated,
+		# D23 stage 2: the "Activate" button — a live game, a unit that has not started its activation.
+		"can_activate": alive > 0 and not unit.is_activated and army_manager != null \
+			and army_manager.game_phase == OPRArmyManager.GamePhase.PLAYING,
 		"fatigued": unit.is_fatigued,
 		"shaken": unit.is_shaken,
 		"caster": unit.is_caster(),
@@ -806,6 +809,9 @@ func _card_action(kind: String) -> void:
 		"activation":
 			if radial_menu_controller != null:
 				radial_menu_controller.card_toggle_activation(unit)
+		"start_activation":
+			if radial_menu_controller != null:
+				radial_menu_controller.card_start_activation(unit)
 		"fatigued":
 			if radial_menu_controller != null:
 				radial_menu_controller.card_toggle_fatigued(unit)
