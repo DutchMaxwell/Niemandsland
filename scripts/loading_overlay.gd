@@ -1,7 +1,7 @@
 class_name LoadingOverlay
 extends CanvasLayer
-## Reusable full-screen loading overlay: a black background, a centred mono label and a
-## thin cyan bar whose fill EASES continuously toward its target (exponential smoothing,
+## Reusable full-screen loading overlay: a near-black cover, a centred eyebrow label and a
+## thin accent bar whose fill EASES continuously toward its target (exponential smoothing,
 ## never stepping/jumping). Used for the menu build, the scene transitions (menu -> game,
 ## table chooser -> game) and in-game army model caching, so they all read the same and
 ## always communicate "something is happening".
@@ -22,7 +22,6 @@ const SMOOTH_RATE := 2.6
 const CREEP_TARGET := 0.9
 const CREEP_RATE := 0.18  # ratio per second
 const FADE_S := 0.4
-const MONO_FONT_PATH := "res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf"
 
 # === Private variables ===
 
@@ -54,7 +53,7 @@ func _ready() -> void:
 
 	if not compact:
 		var bg := ColorRect.new()
-		bg.color = Color.BLACK
+		bg.color = HouseStyle.SHEET_FILL
 		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_content.add_child(bg)
@@ -66,30 +65,20 @@ func _ready() -> void:
 
 	var box := VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 10)
+	box.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
 
 	# Compact: wrap the box in a glass panel so it reads as a small floating window.
 	if compact:
 		var panel := PanelContainer.new()
-		panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-		panel.add_child(HudFrame.new())
-		var margin := MarginContainer.new()
-		for side in ["left", "right", "top", "bottom"]:
-			margin.add_theme_constant_override("margin_" + side, 18)
-		panel.add_child(margin)
-		margin.add_child(box)
+		HouseStyle.apply(panel)
+		panel.add_child(box)
 		center.add_child(panel)
 	else:
 		center.add_child(box)
 
-	var mono := FontVariation.new()
-	mono.base_font = load(MONO_FONT_PATH)
-	mono.spacing_glyph = 2
-	_label = Label.new()
+	_label = HouseStyle.label("", HouseStyle.EYEBROW)
+	_label.theme = HouseStyle.theme()
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_label.add_theme_font_override("font", mono)
-	_label.add_theme_font_size_override("font_size", 13)
-	_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 	box.add_child(_label)
 
 	var track := Control.new()
@@ -97,12 +86,12 @@ func _ready() -> void:
 	track.clip_contents = true
 	box.add_child(track)
 	var track_bg := ColorRect.new()
-	track_bg.color = Color(1, 1, 1, 0.08)
+	track_bg.color = HouseStyle.FILL_RAISED
 	track_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	track_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	track.add_child(track_bg)
 	_fill = ColorRect.new()
-	_fill.color = HudTokens.CYAN
+	_fill.color = HouseStyle.ACCENT
 	_fill.size = Vector2(0.0, BAR_H)
 	_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	track.add_child(_fill)

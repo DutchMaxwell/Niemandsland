@@ -1,7 +1,7 @@
 class_name NetDialog
 extends RefCounted
-## Shared chrome + fields for the online Host / Join / Browse dialogs: a HudTokens
-## glass panel with corner brackets and an Orbitron header. Used by BOTH the startup
+## Shared chrome + fields for the online Host / Join / Browse dialogs: an eyebrow header with its NET index in
+## the house style (MenuDialog). Used by BOTH the startup
 ## menu and the in-game multiplayer panel so the two entry points look identical.
 
 # === Public (static) ===
@@ -13,22 +13,18 @@ static func build(title_text: String, index: String, ok_text: String) -> AcceptD
 	dialog.title = title_text.capitalize()
 	dialog.ok_button_text = ok_text
 
-	var panel := PanelContainer.new()
-	panel.name = "NetPanel"
-	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	panel.add_child(HudFrame.new())
-
-	var margin := MarginContainer.new()
-	UiPolish.set_dialog_margins(margin)
-	panel.add_child(margin)
-
 	var vbox := VBoxContainer.new()
 	vbox.name = "NetContent"
-	vbox.add_theme_constant_override("separation", HudTokens.SPACE_12)
-	vbox.add_child(HudTokens.header(title_text, index))
-	margin.add_child(vbox)
-
-	dialog.add_child(panel)
+	vbox.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+	var head := HBoxContainer.new()
+	var heading := HouseStyle.label(title_text.to_upper(), HouseStyle.EYEBROW)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(heading)
+	head.add_child(HouseStyle.label(index, HouseStyle.CAPTION))
+	vbox.add_child(head)
+	dialog.add_child(vbox)
+	# Styled when it opens: the caller has added every field by then.
+	dialog.about_to_popup.connect(func() -> void: MenuDialog.style(dialog))
 	return dialog
 
 
