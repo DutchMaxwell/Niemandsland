@@ -182,6 +182,18 @@ func test_panel_is_a_house_style_sheet_that_is_not_modal() -> void:
 	assert_object(root.theme).is_same(HouseStyle.theme())
 
 
+func test_controls_wear_the_house_look_once_the_sheet_opens() -> void:
+	_panel.hide()
+	_panel.show()
+	for t: String in PRESETS + ["Close"]:
+		assert_str(String(_button(t).theme_type_variation)).override_failure_message("%s is not a house line" % t).is_equal(String(HouseStyle.BUTTON))
+	for t: String in ["ATMOSPHERE:", "PARAMETERS:", "AUDIO:", "DISPLAY:"]:
+		assert_str(String(_label(t).theme_type_variation)).override_failure_message("%s is not an eyebrow" % t).is_equal(String(HouseStyle.EYEBROW))
+		assert_bool(_label(t).has_theme_font_size_override("font_size")).is_false()
+	assert_str(String(_label("Sun Color").theme_type_variation)).is_equal(String(HouseStyle.BODY))
+	assert_object(HouseStyle.theme().get_stylebox(&"grabber_area", &"HSlider")).is_not_null()
+
+
 func test_volume_sliders_set_their_bus_and_are_put_back() -> void:
 	for bus: String in _panel.volume_sliders:
 		var s: HSlider = _panel.volume_sliders[bus]

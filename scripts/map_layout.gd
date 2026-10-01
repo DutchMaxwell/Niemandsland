@@ -66,6 +66,8 @@ enum DeploymentType {
 # Custom zone editing state
 var custom_zone_editing := false
 var custom_zone_symmetric := true
+var _custom_zone_stale_p1 := false  ## an old zone is kept on screen until the first new vertex replaces it
+var _custom_zone_stale_p2 := false
 var custom_zone_current_player := 1  # 1 or 2
 # Vertices stored as FLOAT coordinates for precise boundary placement
 # This allows vertices to be placed exactly at grid-boundary intersections
@@ -142,6 +144,7 @@ var free_walls: Array[Dictionary] = []
 
 ## Undo / redo snapshot stacks of {pieces, free_cells, free_walls}
 var _undo_stack: Array[Dictionary] = []
+var _stroke_snapshot: Dictionary = {}
 var _redo_stack: Array[Dictionary] = []
 const UNDO_LIMIT := 50
 
@@ -212,12 +215,15 @@ var _modular_terrain_panel: VBoxContainer = null
 var _prefab_option_btn: OptionButton = null
 var _editor_mode_btn: Button = null
 var _wall_option_btn: OptionButton = null
+var _prefab_row: HBoxContainer = null  # field_row holding the piece dropdown (hidden outside Place mode)
+var _wall_row: HBoxContainer = null
 var _undo_btn: Button = null
 var _redo_btn: Button = null
 var _modular_status_label: Label = null
 
 
 func _ready() -> void:
+	HouseStyle.apply(self)
 	close_button.pressed.connect(_on_close_pressed)
 	clear_button.pressed.connect(_on_clear_pressed)
 	rotation_slider.value_changed.connect(_on_rotation_changed)
@@ -260,41 +266,34 @@ func _ready() -> void:
 	_update_recommendations()
 
 
-## Restyle the scene-defined "MAP LAYOUT EDITOR" title to the tactical HUD language
-## (Orbitron head font) and drop a thin amber->cyan accent line beneath the header row.
+## Dress the scene-defined header in the house style: theme on the root, variants on title + buttons.
 func _style_header_chrome() -> void:
 	var title := get_node_or_null("MarginContainer/VBox/Header/Title") as Label
 	if title:
-		title.add_theme_font_override("font", HudTokens.head_font())
-		title.add_theme_color_override("font_color", HudTokens.TEXT)
-
+		title.theme_type_variation = HouseStyle.EYEBROW
 	var header := get_node_or_null("MarginContainer/VBox/Header")
-	if header and header.get_parent():
-		var vbox := header.get_parent()
-		var line := HBoxContainer.new()
-		line.name = "HeaderAccentLine"
-		line.add_theme_constant_override("separation", 0)
-		var amber := ColorRect.new()
-		amber.color = HudTokens.AMBER
-		amber.custom_minimum_size = Vector2(24, HudTokens.ACCENT_LINE)
-		var cyan := ColorRect.new()
-		cyan.color = Color(HudTokens.CYAN.r, HudTokens.CYAN.g, HudTokens.CYAN.b, 0.85)
-		cyan.custom_minimum_size = Vector2(0, HudTokens.ACCENT_LINE)
-		cyan.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		line.add_child(amber)
-		line.add_child(cyan)
-		vbox.add_child(line)
-		vbox.move_child(line, header.get_index() + 1)
+	if header:
+		header.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
+	var bg := get_node_or_null("Background") as ColorRect
+	if bg:
+		bg.color = HouseStyle.SHEET_FILL
 
-	# Migrate the scene-defined header action buttons to token colours + variations.
 	if save_button:
-		save_button.theme_type_variation = "PrimaryButton"
+		save_button.theme_type_variation = HouseStyle.PRIMARY
+	if load_button:
+		load_button.theme_type_variation = HouseStyle.BUTTON
 	if clear_button:
-		clear_button.add_theme_color_override("font_color", HudTokens.AMBER)
-		clear_button.add_theme_color_override(
-			"font_hover_color", Color(HudTokens.AMBER.r, HudTokens.AMBER.g, HudTokens.AMBER.b, 1.0))
+		clear_button.theme_type_variation = HouseStyle.DANGER_BUTTON
 	if close_button:
-		close_button.theme_type_variation = "DangerButton"
+		close_button.theme_type_variation = HouseStyle.ICON
+	var terrain_label := find_child("TerrainLabel", true, false) as Label
+	if terrain_label:
+		terrain_label.theme_type_variation = HouseStyle.EYEBROW
+	if rotation_label:
+		rotation_label.theme_type_variation = HouseStyle.CAPTION
+	if autogen_button:
+		autogen_button.theme_type_variation = HouseStyle.PRIMARY
+		autogen_button.custom_minimum_size = Vector2(0, HouseStyle.H_ACTION)
 
 	# Migrate the scene-defined left-panel labels to token greys/whites + amber accents.
 	# These scene nodes have been reparented into tabs by _setup_tabs(), so search the
@@ -302,41 +301,23 @@ func _style_header_chrome() -> void:
 	var left_panel := get_node_or_null(
 		"MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel")
 	if left_panel:
-		for label_name in ["TerrainLabel", "DeploymentLabel"]:
+		for label_name in ["DeploymentLabel"]:
 			var lbl := left_panel.find_child(label_name, true, false) as Label
 			if lbl:
 				lbl.add_theme_font_override("font", HudTokens.head_font())
 				lbl.add_theme_color_override("font_color", HudTokens.TEXT)
-		var rot_lbl := left_panel.find_child("RotationLabel", true, false) as Label
-		if rot_lbl:
-			rot_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 		var stats_lbl := left_panel.find_child("StatsLabel", true, false) as Label
 		if stats_lbl:
 			stats_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 		var recs_lbl := left_panel.find_child("RecommendationsLabel", true, false) as Label
 		if recs_lbl:
 			recs_lbl.add_theme_color_override("font_color", HudTokens.AMBER)
-		var sym_chk := left_panel.find_child("SymmetryCheck", true, false) as CheckBox
-		if sym_chk:
-			sym_chk.add_theme_color_override("font_color", HudTokens.TEXT)
 		var deploy_chk := left_panel.find_child("DeploymentCheck", true, false) as CheckBox
 		if deploy_chk:
 			deploy_chk.add_theme_color_override("font_color", HudTokens.TEXT)
 		var deploy_opt := left_panel.find_child("DeploymentTypeOption", true, false) as OptionButton
 		if deploy_opt:
 			deploy_opt.add_theme_color_override("font_color", HudTokens.TEXT)
-		var autogen := left_panel.find_child("AutoGenButton", true, false) as Button
-		if autogen:
-			autogen.add_theme_color_override("font_color", HudTokens.SUCCESS)
-			autogen.add_theme_color_override(
-				"font_hover_color", Color(HudTokens.SUCCESS.r, HudTokens.SUCCESS.g, HudTokens.SUCCESS.b, 1.0))
-
-	# Make the left tool panel read as a HUD module: deep-navy fill + corner brackets.
-	var left_container := get_node_or_null(
-		"MarginContainer/VBox/MainContent/LeftPanelContainer") as PanelContainer
-	if left_container:
-		left_container.add_theme_stylebox_override("panel", HudTokens.panel_style())
-		left_container.add_child(HudFrame.new())
 
 
 ## Reorganize the flat left panel into Terrain / Objectives / Deployment tabs.
@@ -346,27 +327,44 @@ func _setup_tabs() -> void:
 	if not left_panel:
 		return
 
-	var tabs := TabContainer.new()
+	var tabs := VBoxContainer.new()
 	tabs.name = "EditorTabs"
 	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tabs.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 
 	var gelaende := VBoxContainer.new()
-	gelaende.name = "TabGelaende"
+	gelaende.name = "TabTerrain"
 	gelaende.add_theme_constant_override("separation", 8)
 	var ziele := VBoxContainer.new()
-	ziele.name = "TabZiele"
+	ziele.name = "TabObjectives"
 	ziele.add_theme_constant_override("separation", 8)
 	var aufstellung := VBoxContainer.new()
-	aufstellung.name = "TabAufstellung"
+	aufstellung.name = "TabDeployment"
 	aufstellung.add_theme_constant_override("separation", 8)
+
+	# Three segment buttons switch which body is visible (exactly one selected).
+	var bodies: Array[VBoxContainer] = [gelaende, ziele, aufstellung]
+	var tab_row := HBoxContainer.new()
+	tab_row.name = "TabRow"
+	tab_row.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
+	var tab_buttons: Array[Button] = []
+	for spec in [["Terrain", "TabTerrainButton"], ["Objectives", "TabObjectivesButton"], ["Deployment", "TabDeploymentButton"]]:
+		var tb := HouseStyle.button(spec[0], HouseStyle.SEGMENT)
+		tb.name = spec[1]
+		tab_row.add_child(tb)
+		tab_buttons.append(tb)
+	for i in 3:
+		tab_buttons[i].pressed.connect(func() -> void:
+			for j in 3:
+				HouseStyle.set_selected(tab_buttons[j], j == i)
+				bodies[j].visible = (j == i))
+	tabs.add_child(tab_row)
 	tabs.add_child(gelaende)
 	tabs.add_child(ziele)
 	tabs.add_child(aufstellung)
 	left_panel.add_child(tabs)
-	tabs.set_tab_title(0, "Terrain")
-	tabs.set_tab_title(1, "Objectives")
-	tabs.set_tab_title(2, "Deployment")
+	tab_buttons[0].pressed.emit()
 
 	var into := func(tab: VBoxContainer, node: Node) -> void:
 		if node and is_instance_valid(node) and node.get_parent() == left_panel:
@@ -521,29 +519,37 @@ func _update_custom_zone_ui_visibility() -> void:
 		_custom_zone_panel.visible = (deployment_type == DeploymentType.CUSTOM)
 
 
-## Start custom zone drawing
+## Start custom zone drawing. Existing zones stay visible until the first NEW vertex replaces them.
 func _on_custom_zone_start() -> void:
 	custom_zone_editing = true
 	custom_zone_current_player = 1
+	_custom_zone_stale_p1 = true
+	_custom_zone_stale_p2 = custom_zone_symmetric
 
-	# Clear previous vertices if starting fresh
 	if custom_zone_symmetric:
-		custom_zone_vertices_p1.clear()
-		custom_zone_vertices_p2.clear()
-		_custom_zone_status_label.text = "Drawing zones (symmetric)..."
+		_custom_zone_status_label.text = "Drawing zones (symmetric)... (at least 3 points)"
 	else:
-		custom_zone_vertices_p1.clear()
-		_custom_zone_status_label.text = "Drawing Player 1 zone..."
+		_custom_zone_status_label.text = "Drawing Player 1 zone... (at least 3 points)"
 
 	_custom_zone_start_btn.disabled = true
 	_custom_zone_symmetric_check.disabled = true
-	_custom_zone_confirm_btn.disabled = false
+	_custom_zone_confirm_btn.disabled = true
 
 	grid_container.queue_redraw()
 
 
+## Vertices the zone being drawn really has (a kept old zone does not count until replaced).
+func _custom_zone_current_count() -> int:
+	if custom_zone_symmetric or custom_zone_current_player == 1:
+		return 0 if _custom_zone_stale_p1 else custom_zone_vertices_p1.size()
+	return 0 if _custom_zone_stale_p2 else custom_zone_vertices_p2.size()
+
+
 ## Confirm current zone and move to next (or finish)
 func _on_custom_zone_confirm() -> void:
+	if _custom_zone_current_count() < 3:
+		_custom_zone_status_label.text = "Need at least 3 points"
+		return
 	if custom_zone_symmetric:
 		# Symmetric mode - both zones done at once
 		custom_zone_editing = false
@@ -554,7 +560,9 @@ func _on_custom_zone_confirm() -> void:
 		if custom_zone_current_player == 1:
 			# Move to player 2
 			custom_zone_current_player = 2
-			_custom_zone_status_label.text = "Drawing Player 2 zone..."
+			_custom_zone_stale_p2 = true
+			_custom_zone_confirm_btn.disabled = true
+			_custom_zone_status_label.text = "Drawing Player 2 zone... (at least 3 points)"
 		else:
 			# Done with both
 			custom_zone_editing = false
@@ -580,11 +588,15 @@ func _on_custom_zone_clear() -> void:
 	custom_zone_vertices_p2.clear()
 	custom_zone_editing = false
 	custom_zone_current_player = 1
+	_custom_zone_stale_p1 = false
+	_custom_zone_stale_p2 = false
 	_custom_zone_status_label.text = "Click grid to add zone vertices"
 	_custom_zone_start_btn.disabled = false
 	_custom_zone_symmetric_check.disabled = false
 	_custom_zone_confirm_btn.disabled = true
 	grid_container.queue_redraw()
+	# The 3D table must drop the cleared zones too (it only hears about zones through this signal)
+	deployment_type_changed.emit(DeploymentType.CUSTOM)
 
 
 ## Handle click during custom zone editing
@@ -594,6 +606,11 @@ func _handle_custom_zone_click(cell: Vector2) -> void:
 		return
 
 	if custom_zone_symmetric:
+		if _custom_zone_stale_p1:
+			custom_zone_vertices_p1.clear()
+			custom_zone_vertices_p2.clear()
+			_custom_zone_stale_p1 = false
+			_custom_zone_stale_p2 = false
 		# Add to player 1 vertices, mirrored vertex added automatically
 		custom_zone_vertices_p1.append(cell)
 		var mirrored = _get_mirrored_cell(cell)
@@ -606,11 +623,18 @@ func _handle_custom_zone_click(cell: Vector2) -> void:
 	else:
 		# Add to current player's vertices
 		if custom_zone_current_player == 1:
+			if _custom_zone_stale_p1:
+				custom_zone_vertices_p1.clear()
+				_custom_zone_stale_p1 = false
 			custom_zone_vertices_p1.append(cell)
 			_custom_zone_status_label.text = "Player 1: %d vertices" % custom_zone_vertices_p1.size()
 		else:
+			if _custom_zone_stale_p2:
+				custom_zone_vertices_p2.clear()
+				_custom_zone_stale_p2 = false
 			custom_zone_vertices_p2.append(cell)
 			_custom_zone_status_label.text = "Player 2: %d vertices" % custom_zone_vertices_p2.size()
+	_custom_zone_confirm_btn.disabled = _custom_zone_current_count() < 3
 
 	grid_container.queue_redraw()
 
@@ -620,50 +644,11 @@ func _setup_terrain_buttons() -> void:
 		child.queue_free()
 
 	for type in [TerrainType.RUINS, TerrainType.FOREST, TerrainType.CONTAINER, TerrainType.DANGEROUS, TerrainType.NONE]:
-		var btn = Button.new()
-		btn.text = TERRAIN_NAMES[type]
-		btn.custom_minimum_size = Vector2(0, 44)
-		btn.toggle_mode = true
-		btn.button_pressed = (type == selected_terrain_type)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-		# Glassmorphism style - semi-transparent with terrain color tint
-		var terrain_color = TERRAIN_COLORS[type]
-
-		# Normal state - glass panel with terrain color
-		var style = StyleBoxFlat.new()
-		style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.25)
-		style.set_corner_radius_all(HudTokens.RADIUS)
-		style.border_width_left = 1
-		style.border_width_top = 1
-		style.border_width_right = 1
-		style.border_width_bottom = 1
-		style.border_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.4)
-		style.content_margin_left = 12
-		style.content_margin_right = 12
-		btn.add_theme_stylebox_override("normal", style)
-
-		# Hover state - brighter
-		var hover_style = style.duplicate()
-		hover_style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.35)
-		hover_style.border_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.6)
-		btn.add_theme_stylebox_override("hover", hover_style)
-
-		# Pressed/selected state - solid with glow border
-		var pressed_style = style.duplicate()
-		pressed_style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.5)
-		pressed_style.border_width_left = 2
-		pressed_style.border_width_top = 2
-		pressed_style.border_width_right = 2
-		pressed_style.border_width_bottom = 2
-		pressed_style.border_color = Color(1.0, 1.0, 1.0, 0.8)
-		btn.add_theme_stylebox_override("pressed", pressed_style)
-
-		# Text color
-		btn.add_theme_color_override("font_color", HudTokens.TEXT)
-		btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0, 1.0))
-		btn.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0, 1.0))
-
+		var btn := HouseStyle.button(TERRAIN_NAMES[type], HouseStyle.SEGMENT, 36)
+		btn.name = "Terrain%sButton" % TERRAIN_NAMES[type]
+		btn.icon = _terrain_chip(TERRAIN_COLORS[type])
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		HouseStyle.set_selected(btn, type == selected_terrain_type)
 		btn.pressed.connect(_on_terrain_button_pressed.bind(type, btn))
 		terrain_buttons.add_child(btn)
 
@@ -671,12 +656,23 @@ func _setup_terrain_buttons() -> void:
 			btn.tooltip_text = TERRAIN_DESCRIPTIONS[type]
 
 
-func _on_terrain_button_pressed(type: TerrainType, button: Button) -> void:
-	selected_terrain_type = type
-	# Update button states
+## A small square in the terrain's own colour (data colour, same on the canvas) for a type button.
+func _terrain_chip(color: Color) -> ImageTexture:
+	var img := Image.create(14, 14, false, Image.FORMAT_RGBA8)
+	img.fill(Color(color.r, color.g, color.b, 1.0))
+	return ImageTexture.create_from_image(img)
+
+
+## Mark the type button of `type` selected (gold) and the others resting.
+func _select_terrain_button(type: TerrainType) -> void:
 	for child in terrain_buttons.get_children():
 		if child is Button:
-			child.button_pressed = (child == button)
+			HouseStyle.set_selected(child, child.text == TERRAIN_NAMES[type])
+
+
+func _on_terrain_button_pressed(type: TerrainType, _button: Button) -> void:
+	selected_terrain_type = type
+	_select_terrain_button(type)
 
 
 # ==============================================================================
@@ -698,57 +694,32 @@ func _setup_modular_terrain_ui() -> void:
 	sep.modulate = Color(1, 1, 1, 0.2)
 	_modular_terrain_panel.add_child(sep)
 
-	var header := Label.new()
-	header.text = "Modular Terrain"
-	header.add_theme_font_override("font", HudTokens.head_font())
-	header.add_theme_font_size_override("font_size", 16)
-	header.add_theme_color_override("font_color", HudTokens.TEXT)
-	_modular_terrain_panel.add_child(header)
+	_modular_terrain_panel.add_child(HouseStyle.label("Modular Terrain", HouseStyle.EYEBROW))
 
 	# Prefab palette: canonical 1-click pieces (footprint + walls + decoration)
-	var prefab_label := Label.new()
-	prefab_label.text = "Terrain Piece:"
-	prefab_label.add_theme_font_size_override("font_size", 13)
-	prefab_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
-	_modular_terrain_panel.add_child(prefab_label)
-
 	_prefab_option_btn = OptionButton.new()
-	_prefab_option_btn.add_theme_color_override("font_color", HudTokens.TEXT)
 	for prefab_key in TerrainPrefabs.keys():
 		_prefab_option_btn.add_item(TerrainPrefabs.display_name(prefab_key))
 	_prefab_option_btn.item_selected.connect(_on_prefab_selected)
-	_modular_terrain_panel.add_child(_prefab_option_btn)
+	_prefab_row = HouseStyle.field_row("Piece", _prefab_option_btn)
+	_modular_terrain_panel.add_child(_prefab_row)
 	var prefab_keys := TerrainPrefabs.keys()
 	if not prefab_keys.is_empty():
 		selected_prefab_key = prefab_keys[0]
 
 	# Editor mode toggle
-	_editor_mode_btn = Button.new()
-	_editor_mode_btn.text = "Mode: Paint Cells"
-	_editor_mode_btn.custom_minimum_size = Vector2(0, 36)
-	_editor_mode_btn.add_theme_color_override("font_color", HudTokens.AMBER)
-	_editor_mode_btn.add_theme_color_override(
-		"font_hover_color", Color(HudTokens.AMBER.r, HudTokens.AMBER.g, HudTokens.AMBER.b, 1.0))
+	_editor_mode_btn = HouseStyle.button("Mode: Paint Cells", HouseStyle.BUTTON, 36)
 	_editor_mode_btn.pressed.connect(_on_editor_mode_toggled)
-	_modular_terrain_panel.add_child(_editor_mode_btn)
+	_modular_terrain_panel.add_child(HouseStyle.field_row("Mode", _editor_mode_btn))
 
 	# Wall variant selection (visible when PLACE_WALLS mode)
-	var wall_label := Label.new()
-	wall_label.text = "Wall Variant:"
-	wall_label.add_theme_font_size_override("font_size", 13)
-	wall_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
-	_modular_terrain_panel.add_child(wall_label)
-
 	_wall_option_btn = OptionButton.new()
-	_wall_option_btn.add_theme_color_override("font_color", HudTokens.TEXT)
 	_wall_option_btn.item_selected.connect(_on_wall_variant_selected)
-	_modular_terrain_panel.add_child(_wall_option_btn)
+	_wall_row = HouseStyle.field_row("Wall", _wall_option_btn)
+	_modular_terrain_panel.add_child(_wall_row)
 
 	# Status label
-	_modular_status_label = Label.new()
-	_modular_status_label.text = "Walls: 0 | Objects: 0"
-	_modular_status_label.add_theme_font_size_override("font_size", 12)
-	_modular_status_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	_modular_status_label = HouseStyle.label("Walls: 0 | Objects: 0", HouseStyle.SMALL)
 	_modular_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_modular_terrain_panel.add_child(_modular_status_label)
 
@@ -758,27 +729,18 @@ func _setup_modular_terrain_ui() -> void:
 	_modular_terrain_panel.add_child(sep2)
 
 	# Undo / Redo row
-	var undo_row := HBoxContainer.new()
-	undo_row.add_theme_constant_override("separation", 8)
+	var undo_row := HouseStyle.button_row(["↶ Undo", "↷ Redo"], HouseStyle.BUTTON, 36)
 	_modular_terrain_panel.add_child(undo_row)
 
-	_undo_btn = Button.new()
-	_undo_btn.text = "↶ Undo"
-	_undo_btn.custom_minimum_size = Vector2(0, 36)
-	_undo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_undo_btn = undo_row.get_child(0)
 	_undo_btn.disabled = true
 	_undo_btn.tooltip_text = "Undo (Ctrl+Z)"
 	_undo_btn.pressed.connect(undo)
-	undo_row.add_child(_undo_btn)
 
-	_redo_btn = Button.new()
-	_redo_btn.text = "↷ Redo"
-	_redo_btn.custom_minimum_size = Vector2(0, 36)
-	_redo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_redo_btn = undo_row.get_child(1)
 	_redo_btn.disabled = true
 	_redo_btn.tooltip_text = "Redo (Ctrl+Y)"
 	_redo_btn.pressed.connect(redo)
-	undo_row.add_child(_redo_btn)
 
 	# Built-in default wall for manual edge placement (procedural hologram wall).
 	# No terrain theme needed — the renderer builds wall geometry procedurally.
@@ -803,20 +765,12 @@ func _update_modular_terrain_ui() -> void:
 			_editor_mode_btn.text = "Mode: Move Pieces  (R/F · Del)"
 
 	# Wall selection only visible in PLACE_WALLS mode
-	if _wall_option_btn:
-		_wall_option_btn.visible = (editor_mode == EditorMode.PLACE_WALLS)
-		var wall_label_node: Node = _wall_option_btn.get_parent().get_child(
-			_wall_option_btn.get_index() - 1)
-		if wall_label_node:
-			wall_label_node.visible = (editor_mode == EditorMode.PLACE_WALLS)
+	if _wall_row:
+		_wall_row.visible = (editor_mode == EditorMode.PLACE_WALLS)
 
 	# Prefab selection only visible in PLACE_PREFAB mode
-	if _prefab_option_btn:
-		_prefab_option_btn.visible = (editor_mode == EditorMode.PLACE_PREFAB)
-		var prefab_label_node: Node = _prefab_option_btn.get_parent().get_child(
-			_prefab_option_btn.get_index() - 1)
-		if prefab_label_node:
-			prefab_label_node.visible = (editor_mode == EditorMode.PLACE_PREFAB)
+	if _prefab_row:
+		_prefab_row.visible = (editor_mode == EditorMode.PLACE_PREFAB)
 
 	_update_wall_option_list()
 	_update_modular_status()
@@ -1039,6 +993,21 @@ func _push_undo() -> void:
 	_update_undo_redo_buttons()
 
 
+## Remember the state at the start of a paint stroke; it becomes an undo step only if the stroke changed something.
+func _begin_stroke() -> void:
+	_stroke_snapshot = _snapshot()
+
+
+func _end_stroke() -> void:
+	if not _stroke_snapshot.is_empty() and _stroke_snapshot != _snapshot():
+		_undo_stack.append(_stroke_snapshot)
+		if _undo_stack.size() > UNDO_LIMIT:
+			_undo_stack.pop_front()
+		_redo_stack.clear()
+		_update_undo_redo_buttons()
+	_stroke_snapshot = {}
+
+
 func undo() -> void:
 	if _undo_stack.is_empty():
 		return
@@ -1151,49 +1120,31 @@ func _setup_objectives_ui() -> void:
 	left_panel.move_child(_objectives_panel, deploy_check_idx + 1)
 
 	# Section label
-	var label = Label.new()
-	label.text = "Mission Objectives"
-	label.add_theme_font_override("font", HudTokens.head_font())
-	label.add_theme_font_size_override("font_size", 16)
-	label.add_theme_color_override("font_color", HudTokens.TEXT)
-	_objectives_panel.add_child(label)
+	_objectives_panel.add_child(HouseStyle.label("Mission Objectives", HouseStyle.EYEBROW))
 
 	# Status label
-	_objectives_status_label = Label.new()
-	_objectives_status_label.text = "No objectives placed"
-	_objectives_status_label.add_theme_font_size_override("font_size", 12)
-	_objectives_status_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	_objectives_status_label = HouseStyle.label("No objectives placed", HouseStyle.CAPTION)
 	_objectives_panel.add_child(_objectives_status_label)
 
 	# Warning label (for 9" rule)
-	_objectives_warning_label = Label.new()
-	_objectives_warning_label.text = ""
-	_objectives_warning_label.add_theme_font_size_override("font_size", 12)
-	_objectives_warning_label.add_theme_color_override("font_color", HudTokens.DANGER)
+	_objectives_warning_label = HouseStyle.label("", HouseStyle.SMALL)
+	_objectives_warning_label.add_theme_color_override("font_color", HouseStyle.tone_ink(HouseStyle.TONE_DANGER))
 	_objectives_warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_objectives_panel.add_child(_objectives_warning_label)
 
 	# Button container
-	var btn_row = HBoxContainer.new()
-	btn_row.add_theme_constant_override("separation", 8)
+	var btn_row := HouseStyle.button_row(["Deploy Objectives", "Clear"], HouseStyle.SEGMENT, 36)
 	_objectives_panel.add_child(btn_row)
 
-	# Deploy/Stop button (toggle)
-	_objectives_toggle_btn = Button.new()
-	_objectives_toggle_btn.text = "Deploy Objectives"
+	# Deploy/Stop button (toggle; gold while deploying)
+	_objectives_toggle_btn = btn_row.get_child(0)
 	_objectives_toggle_btn.toggle_mode = true
-	_objectives_toggle_btn.add_theme_color_override("font_color", HudTokens.AMBER)
-	_objectives_toggle_btn.add_theme_color_override(
-		"font_hover_color", Color(HudTokens.AMBER.r, HudTokens.AMBER.g, HudTokens.AMBER.b, 1.0))
 	_objectives_toggle_btn.toggled.connect(_on_objectives_deploy_toggled)
-	btn_row.add_child(_objectives_toggle_btn)
 
 	# Clear button
-	_objectives_clear_btn = Button.new()
-	_objectives_clear_btn.text = "Clear"
-	_objectives_clear_btn.add_theme_color_override("font_color", HudTokens.AMBER)
+	_objectives_clear_btn = btn_row.get_child(1)
+	_objectives_clear_btn.theme_type_variation = HouseStyle.BUTTON
 	_objectives_clear_btn.pressed.connect(_on_objectives_clear)
-	btn_row.add_child(_objectives_clear_btn)
 
 	_update_objectives_status()
 
@@ -1201,13 +1152,12 @@ func _setup_objectives_ui() -> void:
 ## Toggle objectives deployment mode
 func _on_objectives_deploy_toggled(enabled: bool) -> void:
 	objectives_editing = enabled
+	HouseStyle.set_selected(_objectives_toggle_btn, enabled)
 	if enabled:
 		_objectives_toggle_btn.text = "Stop Deploying"
 		# Deselect terrain type when entering objectives mode
 		selected_terrain_type = TerrainType.NONE
-		for child in terrain_buttons.get_children():
-			if child is Button:
-				child.button_pressed = (child.text == "None")
+		_select_terrain_button(TerrainType.NONE)
 	else:
 		_objectives_toggle_btn.text = "Deploy Objectives"
 		# Emit signal to update 3D view
@@ -1314,6 +1264,8 @@ func _calculate_grid_dimensions() -> Vector2i:
 
 
 func _update_stats() -> void:
+	if stats_label == null or recommendations_label == null:
+		return  # the editor runs without its UI built (headless tools): nothing to show the stats on
 	var grid_dims = _calculate_grid_dimensions()
 	var total_cells = grid_dims.x * grid_dims.y
 
@@ -1478,7 +1430,7 @@ func _update_recommendations_with_values(total_pieces: int, coverage_pct: float,
 %s 1 dangerous piece per player (have: %d)
 
 Extended Guidelines:
-%s Max 12" gap between terrain (%.1f")
+%s Max 12" gap between terrain (%s)
 %s Balanced symmetry (%.0f%%)
 
 Tip: Connected cells = 1 piece""" % [
@@ -1488,7 +1440,7 @@ Tip: Connected cells = 1 piece""" % [
 		check_mark if cover_ok else cross_mark, cover_pct,
 		check_mark if difficult_ok else cross_mark, difficult_pct,
 		check_mark if dangerous_ok else cross_mark, dangerous_pieces,
-		check_mark if extended.max_gap_ok else cross_mark, extended.max_gap_inches,
+		check_mark if extended.max_gap_ok else cross_mark, extended.max_gap_text,
 		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score
 	]
 
@@ -1754,8 +1706,8 @@ func _input(event: InputEvent) -> void:
 					# Single click only; place_prefab / add_wall_segment push their own undo
 					_paint_at_position(event.global_position)
 				else:
-					# PAINT_CELLS: one undo snapshot per stroke, then drag-paint
-					_push_undo()
+					# PAINT_CELLS: one undo snapshot per stroke (kept only if the stroke changed something)
+					_begin_stroke()
 					is_painting = true
 					_paint_at_position(event.global_position)
 			else:
@@ -1770,6 +1722,8 @@ func _input(event: InputEvent) -> void:
 						]
 					# Emit signal to update 3D terrain overlay
 					deployment_type_changed.emit(DeploymentType.CUSTOM)
+				if is_painting:
+					_end_stroke()
 				is_painting = false
 				_dragging_piece = false
 				_drag_pushed = false
@@ -1841,6 +1795,24 @@ func _paint_at_position(screen_pos: Vector2) -> void:
 			if point_symmetry_enabled:
 				free_cells[Vector2i(_get_mirrored_cell(cell))] = selected_terrain_type
 		_rebuild_derived()
+
+
+## Adopt a layout received from the host. Writes the SOURCE model (free_cells / free_walls) as well as
+## the derived one, so the next _rebuild_derived() on this client keeps the synced terrain.
+## Decoration objects are not part of the source model and are kept only until the next rebuild.
+func apply_synced_layout(cells: Dictionary, walls: Array, objects: Array, rotation_degrees: float) -> void:
+	placed_pieces.clear()
+	free_cells = cells.duplicate(true)
+	free_walls.assign(walls.duplicate(true))
+	_undo_stack.clear()
+	_redo_stack.clear()
+	grid_cells = cells.duplicate(true)
+	wall_segments.assign(walls.duplicate(true))
+	placed_objects.assign(objects.duplicate(true))
+	grid_rotation_degrees = rotation_degrees
+	_update_undo_redo_buttons()
+	if grid_container:
+		grid_container.queue_redraw()
 
 
 func _emit_layout_update() -> void:
@@ -2330,6 +2302,7 @@ func _check_extended_guidelines() -> Dictionary:
 	var results = {
 		"max_gap_ok": true,
 		"max_gap_inches": 0.0,
+		"max_gap_text": "–",
 		"symmetry_ok": true,
 		"symmetry_score": 0.0
 	}
@@ -2339,22 +2312,28 @@ func _check_extended_guidelines() -> Dictionary:
 	var grid_dims = _calculate_grid_dimensions()
 	var max_gap = 0.0
 
-	# Sample points across the table
-	for test_x in range(0, int(table_size_feet.x * 12), 3):
-		for test_y in range(0, int(table_size_feet.y * 12), 3):
+	# Sample points across the table (table inches, origin = table corner) against cell centres
+	# mapped from grid coordinates (centred on the table, rotated by the grid rotation) into the same frame.
+	var table_w = table_size_feet.x * 12.0
+	var table_h = table_size_feet.y * 12.0
+	var rot = deg_to_rad(grid_rotation_degrees)
+	var centers: Array[Vector2] = []
+	for cell_pos in grid_cells:
+		if grid_cells[cell_pos] == TerrainType.NONE:
+			continue
+		var local = Vector2(cell_pos.x - grid_dims.x / 2.0 + 0.5, cell_pos.y - grid_dims.y / 2.0 + 0.5) * GRID_SIZE_INCHES
+		centers.append(local.rotated(rot) + Vector2(table_w, table_h) / 2.0)
+
+	for test_x in range(0, int(table_w) + 1, 3):
+		for test_y in range(0, int(table_h) + 1, 3):
 			var min_dist = INF
-			# Find nearest terrain
-			for cell_pos in grid_cells:
-				if grid_cells[cell_pos] == TerrainType.NONE:
-					continue
-				var cell_center_x = (cell_pos.x + 0.5) * GRID_SIZE_INCHES
-				var cell_center_y = (cell_pos.y + 0.5) * GRID_SIZE_INCHES
-				var dist = Vector2(test_x, test_y).distance_to(Vector2(cell_center_x, cell_center_y))
-				min_dist = min(min_dist, dist)
+			for c in centers:
+				min_dist = min(min_dist, Vector2(test_x, test_y).distance_to(c))
 			max_gap = max(max_gap, min_dist)
 
 	results.max_gap_inches = max_gap
 	results.max_gap_ok = max_gap <= 12.0
+	results.max_gap_text = "–" if is_inf(max_gap) else "%.1f\"" % max_gap
 
 	# Symmetry check (simplified - count terrain in each half)
 	var half_x = grid_dims.x / 2

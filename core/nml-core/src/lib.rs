@@ -35,6 +35,7 @@ pub mod spell;
 pub mod state;
 pub mod terrain;
 pub mod tokens;
+pub mod tree;
 pub mod unit;
 
 /// `BattleSim.IN2M` — battle_sim.gd:11. Table units are metres, the book is inches.
@@ -51,7 +52,7 @@ pub const DESTROY_DEFENCE_WEIGHT: f64 = 0.8;
 pub use acts::{
     load_acts, read_act_header, read_acts, rule_on, vocab_version_of_header, Act, ActCorpus,
     ActHeader, ActStatics, ArbitrationRec, Expectation, Knobs, MeleeReach, Mission, PickRec,
-    PolicyMode, RolloutValue, RunnerRec, Scored, Sighting, CURRENT_RULES_EPOCH,
+    PolicyMode, RolloutValue, RunnerRec, Scored, SearchMode, Sighting, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH,
     EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU,
 };
 pub use arbitration::{

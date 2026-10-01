@@ -357,19 +357,22 @@ func test_table_and_army_buttons_do_what_they_do_today(timeout := 120000) -> voi
 	assert_bool(_main._sandbox_shelf.visible).is_false()
 
 	await _click(_button("Clear Table"))
-	var confirm: ConfirmationDialog = _main._action_confirm_dialog
-	assert_bool(confirm != null and confirm.visible and confirm.title == "Clear Table").override_failure_message("Clear Table did not ask first").is_true()
-	confirm.hide()
+	var confirm: PromptCard = _main._action_confirm_card
+	assert_bool(is_instance_valid(confirm) and confirm.title == "Clear Table").override_failure_message("Clear Table did not ask first").is_true()
+	confirm.cancel_button.pressed.emit()
+	await _runner.simulate_frames(2)
 	await _click(_button("Sort Table"))
-	assert_bool(confirm.visible and confirm.title == "Sort Table").override_failure_message("Sort Table did not ask first").is_true()
-	confirm.hide()
+	confirm = _main._action_confirm_card
+	assert_bool(is_instance_valid(confirm) and confirm.title == "Sort Table").override_failure_message("Sort Table did not ask first").is_true()
+	confirm.cancel_button.pressed.emit()
+	await _runner.simulate_frames(2)
 	var next := _button("Next Round")
 	var before: int = _main.opr_army_manager.current_round
 	assert_str(next.text).is_equal(_main.next_round_button_label(before, false))
 	await _click(next)
-	assert_bool(confirm.visible and confirm.title == next.text).override_failure_message("Next Round did not ask first").is_true()
-	confirm.confirmed.emit()
-	confirm.hide()
+	confirm = _main._action_confirm_card
+	assert_bool(is_instance_valid(confirm) and confirm.title == next.text).override_failure_message("Next Round did not ask first").is_true()
+	confirm.ok_button.pressed.emit()
 	await _runner.simulate_frames(4)
 	assert_int(_main.opr_army_manager.current_round).is_equal(before + 1)
 	assert_str(next.text).override_failure_message("Next Round does not name the next round").is_equal(_main.next_round_button_label(before + 1, false))
@@ -419,11 +422,11 @@ func test_save_load_graphics_and_end_battle_do_what_they_do_today(timeout := 120
 	assert_int(GraphicsSettings.current_preset).is_equal(kept)
 
 	await _click(_button("End Battle - To Main Menu"))
-	var end: ConfirmationDialog = _main.end_battle_confirm_dialog
-	assert_bool(end.visible).override_failure_message("End Battle did not ask first").is_true()
-	assert_bool(end.confirmed.is_connected(Callable(_main, &"_on_end_battle_confirmed"))) \
+	var end: PromptCard = _main._action_confirm_card
+	assert_bool(is_instance_valid(end) and end.title == "End Battle").override_failure_message("End Battle did not ask first").is_true()
+	assert_bool(_main._pending_confirm_action == Callable(_main, &"_on_end_battle_confirmed")) \
 		.override_failure_message("confirming End Battle no longer returns to the main menu").is_true()
-	end.hide()
+	end.cancel_button.pressed.emit()
 	await E2EBoot.settle(get_tree())
 
 
