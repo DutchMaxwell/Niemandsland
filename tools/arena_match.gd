@@ -384,6 +384,7 @@ func _run() -> void:
 		quit(1)
 		return
 	solo._rng.seed = _seed
+	solo.game_rounds = main._solo_mission_rounds(_mission_id)   # NML-1010 D1: the catalog's match length
 	if _act_capture.is_valid():
 		solo.ai_unit_activated.connect(_act_capture)   # trail dump + PNG queue (NML_CAPTURE_ACTS=1)
 		main.solo_activation_done = _act_capture_png   # the grab itself, on the settled board
