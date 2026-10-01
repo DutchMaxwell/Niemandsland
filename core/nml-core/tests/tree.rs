@@ -19,7 +19,8 @@ use nml_core::sim::{reach_index_for_state, Scratch, Unsupported};
 use nml_core::score::score_with;
 use nml_core::sim::reply_threat;
 use nml_core::tree::{
-    advance, expand, leaf_value, menu, playout, ranked, referee, root_children, transition, Node, Step,
+    advance, expand, leaf_value, menu, playout, ranked, referee, root_children, run, select, transition, Child,
+    Node, Step, TreeCfg, TreeTrace,
 };
 use nml_core::{act_statics, full_playout_bent, load_acts, plan_with_rollout, ActCorpus, ArbBend, GodotRng, State, TreeDice,
                TreeLeaf, UnitStatic};
@@ -346,4 +347,128 @@ fn deeper_children_follow_an_independent_rank_and_widen() {
     }
     println!("deeper children: {n} depth-1 nodes in the independent order");
     assert!(n >= 20, "only {n} deeper nodes checked");
+}
+
+/// A tree search over `st` for `p`: root children in the hand order
+/// (`ranked`, no pool), the given leaf mode, budget and batch, EV edges.
+fn search(roll: &Rollout, st: &State, p: i64, leaf: TreeLeaf, budget: usize, batch: usize,
+          sc: &mut Scratch) -> (usize, TreeTrace, Vec<usize>) {
+    let (rows, order) = ranked(roll, st, p, sc).unwrap();
+    let mut root = Node::new(st.clone(), Step::Mover(p), p);
+    root.children = root_children(&rows, &order, &[]);
+    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, player: p, opener_seat: false,
+                        sig: None, hook: None, w: 0.0 };
+    let (best, trace) = run(roll, &cfg, &mut root, &mut GodotRng::new(7), sc).unwrap();
+    (best, trace, order)
+}
+
+/// Every final-round act's state cut down to ONE activation left in the
+/// game — pool unit `u` — so every root child ends the game in one step.
+fn last_activations(c: &ActCorpus) -> Vec<(usize, State)> {
+    let mut out = Vec::new();
+    for (ai, act) in c.acts.iter().enumerate().filter(|(_, a)| a.state.round >= a.state.rounds_total) {
+        for key in &act.pool {
+            let u = act.state.roster.index[key.as_str()];
+            let mut st = act.state.clone();
+            st.activated.iter_mut().enumerate().for_each(|(i, a)| *a |= i != u);
+            out.push((ai, st));
+        }
+    }
+    out
+}
+
+/// Step 6b — budget 1 opens exactly the hand's top row and picks it.
+#[test]
+fn budget_one_picks_the_hands_top_row() {
+    let mut sc = Scratch::default();
+    for path in [ACTS, WIDE] {
+        let c = load(path);
+        let per_act = act_statics(&c, REPO);
+        for (ai, act) in c.acts.iter().enumerate() {
+            let (best, trace, order) = with_roll(&c, ai, &per_act[ai], |roll| {
+                search(roll, &act.state, act.player, TreeLeaf::Blend, 1, 8, &mut sc)
+            });
+            assert!(best == 0 && trace.completed == 1 && trace.root.len() == 1 && trace.root[0].0 == order[0],
+                    "act {ai}: {best} {trace:?}");
+        }
+    }
+}
+
+/// Step 6b — one activation from the end every root child is a game end; at
+/// a budget past the root width the pick is the argmax of `full_playout`'s
+/// verdict (dice off) over the root rows, first in order on ties, computed
+/// here without the tree. Batch 1 and batch 8 below the width visit the
+/// same root children.
+#[test]
+fn last_activation_picks_the_referee_argmax_at_any_batch() {
+    let (mut n, mut varied, mut sc) = (0usize, 0usize, Scratch::default());
+    for path in [ACTS, WIDE] {
+        let c = load(path);
+        let per_act = act_statics(&c, REPO);
+        for (ai, st) in last_activations(&c) {
+            let p = c.acts[ai].player;
+            with_roll(&c, ai, &per_act[ai], |roll| {
+                let (rows, order) = ranked(roll, &st, p, &mut sc).unwrap();
+                let bend = ArbBend { stochastic_wounds: false, ..ArbBend::default() };
+                let want: Vec<f64> = order.iter().map(|&i| {
+                    let r = full_playout_bent(roll, &st, &rows[i].cand, p, &mut GodotRng::new(0), bend, &mut sc);
+                    verdict(r.unwrap().winner, p)
+                }).collect();
+                let top = want.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                let first = want.iter().position(|&v| v == top).unwrap();
+                varied += usize::from(first > 0);
+                let (best, trace, _) = search(roll, &st, p, TreeLeaf::Terminal, want.len() + 3, 8, &mut sc);
+                let means: Vec<f64> = trace.root.iter().map(|r| r.2).collect();
+                assert_eq!((best, means), (first, want.clone()), "act {ai}: pick vs the referee argmax");
+                let k = (want.len() - 1).min(6);
+                let seen = |t: TreeTrace| t.root.iter().map(|r| r.0).collect::<Vec<_>>();
+                let one = seen(search(roll, &st, p, TreeLeaf::Blend, k, 1, &mut sc).1);
+                assert_eq!(one, seen(search(roll, &st, p, TreeLeaf::Blend, k, 8, &mut sc).1), "act {ai}: batch");
+                n += 1;
+            });
+        }
+    }
+    println!("last activation: {n} synthetic states pick the referee argmax ({varied} past the hand's \
+              top row), batch 1 = batch 8");
+    assert!(n > 0 && varied > 0, "no synthetic state whose argmax leaves the top row: {n}/{varied}");
+}
+
+/// Step 6b — past the root width the search descends (deeper expansions),
+/// and the same act twice gives the identical pick and trace in both modes.
+#[test]
+fn the_same_search_twice_is_identical() {
+    let (mut deep, mut sc) = (0usize, Scratch::default());
+    let c = load(ACTS);
+    let per_act = act_statics(&c, REPO);
+    for (ai, act) in c.acts.iter().enumerate() {
+        with_roll(&c, ai, &per_act[ai], |roll| for leaf in [TreeLeaf::Blend, TreeLeaf::Terminal] {
+            let width = menu(roll, &act.state, act.player, &mut sc).len();
+            let a = search(roll, &act.state, act.player, leaf, width + 12, 4, &mut sc);
+            let b = search(roll, &act.state, act.player, leaf, width + 12, 4, &mut sc);
+            assert!(a.0 == b.0 && a.1 == b.1, "act {ai} {leaf:?}: {:?} vs {:?}", a.1, b.1);
+            assert!(a.1.completed >= width + 12, "act {ai}: {} of {}", a.1.completed, width + 12);
+            deep += usize::from(a.1.root.iter().any(|r| r.1 > 1));
+        });
+    }
+    println!("repeatability: {deep} searches descended below the root");
+    assert!(deep > 0, "no search descended: depth is untested");
+}
+
+/// Step 6b — UCT takes the MOVER's side: over the same three children at
+/// equal visits the searcher's node picks the highest mean, the opponent's
+/// node the lowest.
+#[test]
+fn select_takes_the_movers_side() {
+    let c = load(ACTS);
+    let st = &c.acts[0].state;
+    let mut node = Node::new(st.clone(), Step::Mover(1), 1);
+    node.n = 6;
+    for (i, mean) in [0.5, 0.9, 0.1].into_iter().enumerate() {
+        let mut leaf = Node::new(st.clone(), Step::Mover(2), 1);
+        (leaf.n, leaf.w) = (2, 2.0 * mean);
+        node.children.push(Child { idx: i, cand: Candidate::hold(st.key(0)), nodes: vec![leaf] });
+    }
+    assert_eq!(select(&node, 1), 1, "the searcher's own node takes the argmax");
+    node.mover = 2;
+    assert_eq!(select(&node, 1), 2, "the opponent's node takes the argmin");
 }
