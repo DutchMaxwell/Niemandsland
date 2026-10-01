@@ -277,6 +277,14 @@ func _style_header_chrome() -> void:
 		clear_button.theme_type_variation = HouseStyle.DANGER_BUTTON
 	if close_button:
 		close_button.theme_type_variation = HouseStyle.ICON
+	var terrain_label := find_child("TerrainLabel", true, false) as Label
+	if terrain_label:
+		terrain_label.theme_type_variation = HouseStyle.EYEBROW
+	if rotation_label:
+		rotation_label.theme_type_variation = HouseStyle.CAPTION
+	if autogen_button:
+		autogen_button.theme_type_variation = HouseStyle.PRIMARY
+		autogen_button.custom_minimum_size = Vector2(0, HouseStyle.H_ACTION)
 
 	# Migrate the scene-defined left-panel labels to token greys/whites + amber accents.
 	# These scene nodes have been reparented into tabs by _setup_tabs(), so search the
@@ -284,34 +292,23 @@ func _style_header_chrome() -> void:
 	var left_panel := get_node_or_null(
 		"MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel")
 	if left_panel:
-		for label_name in ["TerrainLabel", "DeploymentLabel"]:
+		for label_name in ["DeploymentLabel"]:
 			var lbl := left_panel.find_child(label_name, true, false) as Label
 			if lbl:
 				lbl.add_theme_font_override("font", HudTokens.head_font())
 				lbl.add_theme_color_override("font_color", HudTokens.TEXT)
-		var rot_lbl := left_panel.find_child("RotationLabel", true, false) as Label
-		if rot_lbl:
-			rot_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 		var stats_lbl := left_panel.find_child("StatsLabel", true, false) as Label
 		if stats_lbl:
 			stats_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
 		var recs_lbl := left_panel.find_child("RecommendationsLabel", true, false) as Label
 		if recs_lbl:
 			recs_lbl.add_theme_color_override("font_color", HudTokens.AMBER)
-		var sym_chk := left_panel.find_child("SymmetryCheck", true, false) as CheckBox
-		if sym_chk:
-			sym_chk.add_theme_color_override("font_color", HudTokens.TEXT)
 		var deploy_chk := left_panel.find_child("DeploymentCheck", true, false) as CheckBox
 		if deploy_chk:
 			deploy_chk.add_theme_color_override("font_color", HudTokens.TEXT)
 		var deploy_opt := left_panel.find_child("DeploymentTypeOption", true, false) as OptionButton
 		if deploy_opt:
 			deploy_opt.add_theme_color_override("font_color", HudTokens.TEXT)
-		var autogen := left_panel.find_child("AutoGenButton", true, false) as Button
-		if autogen:
-			autogen.add_theme_color_override("font_color", HudTokens.SUCCESS)
-			autogen.add_theme_color_override(
-				"font_hover_color", Color(HudTokens.SUCCESS.r, HudTokens.SUCCESS.g, HudTokens.SUCCESS.b, 1.0))
 
 
 ## Reorganize the flat left panel into Terrain / Objectives / Deployment tabs.
@@ -723,27 +720,18 @@ func _setup_modular_terrain_ui() -> void:
 	_modular_terrain_panel.add_child(sep2)
 
 	# Undo / Redo row
-	var undo_row := HBoxContainer.new()
-	undo_row.add_theme_constant_override("separation", 8)
+	var undo_row := HouseStyle.button_row(["↶ Undo", "↷ Redo"], HouseStyle.BUTTON, 36)
 	_modular_terrain_panel.add_child(undo_row)
 
-	_undo_btn = Button.new()
-	_undo_btn.text = "↶ Undo"
-	_undo_btn.custom_minimum_size = Vector2(0, 36)
-	_undo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_undo_btn = undo_row.get_child(0)
 	_undo_btn.disabled = true
 	_undo_btn.tooltip_text = "Undo (Ctrl+Z)"
 	_undo_btn.pressed.connect(undo)
-	undo_row.add_child(_undo_btn)
 
-	_redo_btn = Button.new()
-	_redo_btn.text = "↷ Redo"
-	_redo_btn.custom_minimum_size = Vector2(0, 36)
-	_redo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_redo_btn = undo_row.get_child(1)
 	_redo_btn.disabled = true
 	_redo_btn.tooltip_text = "Redo (Ctrl+Y)"
 	_redo_btn.pressed.connect(redo)
-	undo_row.add_child(_redo_btn)
 
 	# Built-in default wall for manual edge placement (procedural hologram wall).
 	# No terrain theme needed — the renderer builds wall geometry procedurally.
@@ -1123,49 +1111,31 @@ func _setup_objectives_ui() -> void:
 	left_panel.move_child(_objectives_panel, deploy_check_idx + 1)
 
 	# Section label
-	var label = Label.new()
-	label.text = "Mission Objectives"
-	label.add_theme_font_override("font", HudTokens.head_font())
-	label.add_theme_font_size_override("font_size", 16)
-	label.add_theme_color_override("font_color", HudTokens.TEXT)
-	_objectives_panel.add_child(label)
+	_objectives_panel.add_child(HouseStyle.label("Mission Objectives", HouseStyle.EYEBROW))
 
 	# Status label
-	_objectives_status_label = Label.new()
-	_objectives_status_label.text = "No objectives placed"
-	_objectives_status_label.add_theme_font_size_override("font_size", 12)
-	_objectives_status_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	_objectives_status_label = HouseStyle.label("No objectives placed", HouseStyle.CAPTION)
 	_objectives_panel.add_child(_objectives_status_label)
 
 	# Warning label (for 9" rule)
-	_objectives_warning_label = Label.new()
-	_objectives_warning_label.text = ""
-	_objectives_warning_label.add_theme_font_size_override("font_size", 12)
-	_objectives_warning_label.add_theme_color_override("font_color", HudTokens.DANGER)
+	_objectives_warning_label = HouseStyle.label("", HouseStyle.SMALL)
+	_objectives_warning_label.add_theme_color_override("font_color", HouseStyle.tone_ink(HouseStyle.TONE_DANGER))
 	_objectives_warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_objectives_panel.add_child(_objectives_warning_label)
 
 	# Button container
-	var btn_row = HBoxContainer.new()
-	btn_row.add_theme_constant_override("separation", 8)
+	var btn_row := HouseStyle.button_row(["Deploy Objectives", "Clear"], HouseStyle.SEGMENT, 36)
 	_objectives_panel.add_child(btn_row)
 
-	# Deploy/Stop button (toggle)
-	_objectives_toggle_btn = Button.new()
-	_objectives_toggle_btn.text = "Deploy Objectives"
+	# Deploy/Stop button (toggle; gold while deploying)
+	_objectives_toggle_btn = btn_row.get_child(0)
 	_objectives_toggle_btn.toggle_mode = true
-	_objectives_toggle_btn.add_theme_color_override("font_color", HudTokens.AMBER)
-	_objectives_toggle_btn.add_theme_color_override(
-		"font_hover_color", Color(HudTokens.AMBER.r, HudTokens.AMBER.g, HudTokens.AMBER.b, 1.0))
 	_objectives_toggle_btn.toggled.connect(_on_objectives_deploy_toggled)
-	btn_row.add_child(_objectives_toggle_btn)
 
 	# Clear button
-	_objectives_clear_btn = Button.new()
-	_objectives_clear_btn.text = "Clear"
-	_objectives_clear_btn.add_theme_color_override("font_color", HudTokens.AMBER)
+	_objectives_clear_btn = btn_row.get_child(1)
+	_objectives_clear_btn.theme_type_variation = HouseStyle.BUTTON
 	_objectives_clear_btn.pressed.connect(_on_objectives_clear)
-	btn_row.add_child(_objectives_clear_btn)
 
 	_update_objectives_status()
 
@@ -1173,6 +1143,7 @@ func _setup_objectives_ui() -> void:
 ## Toggle objectives deployment mode
 func _on_objectives_deploy_toggled(enabled: bool) -> void:
 	objectives_editing = enabled
+	HouseStyle.set_selected(_objectives_toggle_btn, enabled)
 	if enabled:
 		_objectives_toggle_btn.text = "Stop Deploying"
 		# Deselect terrain type when entering objectives mode
