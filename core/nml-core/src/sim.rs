@@ -160,6 +160,14 @@ pub enum Unsupported {
     TooManyUnits(usize),
     TooManyObjectives(usize),
     TooManyCandidates(usize),
+    /// Tree search, `tree_dice: tray` — a chance edge whose activation the
+    /// tray path flags `unported` (`ShootResult::unported`): the tree
+    /// declines by the flag's name rather than sample a branch this port
+    /// does not reproduce.
+    TreeUnported(&'static str),
+    /// Tree search, `tree_dice: tray` with no stream seed (the playout
+    /// signature): declined, never invented.
+    TreeDiceSeed,
 }
 
 /// `BattleSim._los_clear` battle_sim.gd:666-670, read off the recorded answers.
@@ -2901,9 +2909,8 @@ fn fold_min(have: i64, cand: i64) -> i64 {
     if cand > 0 && (cand < have || have == 0) { cand } else { have }
 }
 
-/// D21 (`EPOCH_68_MODIFIER_SUM`) — the DICE paths stamp the summed save target off the RECORD's epoch
-/// (Amendment B1); the EV imagination (`ctx_live(.., CURRENT_RULES_EPOCH)` and the menu) never calls
-/// this, so recorded scores replay byte-exact.
+/// D21 (`EPOCH_68_MODIFIER_SUM`) — the record's epoch (Amendment B1). `ctx_for` already stamps the
+/// same value at static build; this re-stamp on the dice defs is a harmless duplicate.
 pub(crate) fn with_modifier_sum(mut c: Ctx, rules_epoch: u32) -> Ctx {
     c.modifier_sum = rule_on(rules_epoch, EPOCH_68_MODIFIER_SUM);
     c
