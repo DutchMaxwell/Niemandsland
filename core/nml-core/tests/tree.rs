@@ -22,7 +22,7 @@ use nml_core::tree::{
     advance, expand, leaf_value, menu, playout, ranked, referee, root_children, run, select, transition, Child,
     Node, Step, TreeCfg, TreeTrace,
 };
-use nml_core::{act_statics, full_playout_bent, load_acts, plan_with_rollout, ActCorpus, ArbBend, GodotRng, State, TreeDice,
+use nml_core::{act_statics, full_playout_bent, load_acts, plan_with_rollout, SearchMode, ActCorpus, ArbBend, GodotRng, State, TreeDice,
                TreeLeaf, UnitStatic};
 
 const ACTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_25.jsonl");
@@ -471,4 +471,35 @@ fn select_takes_the_movers_side() {
     assert_eq!(select(&node, 1), 1, "the searcher's own node takes the argmax");
     node.mover = 2;
     assert_eq!(select(&node, 1), 2, "the opponent's node takes the argmin");
+}
+
+/// Step 7 — the knob wired into `Search::run`. Absent, no pick carries a tree
+/// trace (the byte-identical proof is the EXISTING gates: G3/G4/G5, parity,
+/// playout_rush_k, menu_advance_k). At `search_mode: tree`, budget 64, every
+/// pick of acts_25 carries the trace, `rs` is its root statistics, and at
+/// least one act picks differently; an arbitration act declines by name.
+#[test]
+fn the_tree_knob_parts_the_pick_and_stamps_it() {
+    let c = load(ACTS);
+    let per_act = act_statics(&c, REPO);
+    let mut knobs = c.knobs;
+    (knobs.search_mode, knobs.tree_budget) = (SearchMode::Tree, 64);
+    let (mut n, mut moved) = (0usize, 0usize);
+    for (ai, act) in c.acts.iter().enumerate() {
+        let pick = |k| plan_with_rollout(&act.state, &c.terrain, &per_act[ai], k, &act.statics, act.player).unwrap();
+        let (one, tree) = (pick(&c.knobs), pick(&knobs));
+        assert!(one.tree.is_none(), "act {ai}: a default pick carries a tree trace");
+        let t = tree.tree.as_ref().unwrap_or_else(|| panic!("act {ai}: the tree pick carries no trace"));
+        assert_eq!(tree.rs, t.root.iter().map(|r| (r.0 as i64, r.2)).collect::<Vec<_>>(), "act {ai}: rs");
+        assert!(t.completed >= 64 && !t.deadline_hit, "act {ai}: {} leaves", t.completed);
+        moved += usize::from(tree.unit_key != one.unit_key || format!("{:?}", tree.action) != format!("{:?}", one.action));
+        n += 1;
+    }
+    let mut arb = c.acts[0].statics.clone();
+    arb.playout_search = true;
+    let a = &c.acts[0];
+    let err = plan_with_rollout(&a.state, &c.terrain, &per_act[0], &knobs, &arb, a.player).unwrap_err();
+    assert_eq!(err, Unsupported::TreeOutOfScope("playout_search"));
+    println!("tree knob: {n} acts stamped, {moved} picked differently at budget 64");
+    assert!(n == c.acts.len() && moved >= 1, "{n} acts, {moved} moved");
 }
