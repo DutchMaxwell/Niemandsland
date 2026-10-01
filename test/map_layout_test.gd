@@ -140,3 +140,28 @@ func test_terrain_tooltips_name_real_heights_not_categories() -> void:
 		assert_str(text) \
 			.override_failure_message("NML-972 — the %s tooltip must name its real height (%s\"): %s" % [str(t), inches, text]) \
 			.contains("%s\"" % inches)
+
+
+# ===== F1: the max-gap meter measures the TABLE, not the grid corner =====
+
+func test_max_gap_empty_map_reports_dash_not_inf() -> void:
+	var ml := _layout()
+	ml.table_size_feet = Vector2(6, 4)
+	var res: Dictionary = ml._check_extended_guidelines()
+	assert_bool(res.max_gap_ok).is_false()
+	assert_str(str(res.get("max_gap_text", "<missing>"))).is_equal("–")
+
+
+func test_max_gap_lattice_covering_the_table_is_under_12_inches() -> void:
+	# 6x4 table -> 30x30 grid; the table spans grid cells x 3..26, y 7..22 (grid is centred on
+	# the table, 9" / 21" margins). A 12" lattice over exactly that window leaves <= ~10.6" gaps.
+	var ml := _layout()
+	ml.table_size_feet = Vector2(6, 4)
+	for cx in range(4, 27, 4):
+		for cy in range(8, 23, 4):
+			ml.grid_cells[Vector2i(cx, cy)] = ml.TerrainType.RUINS
+	var res: Dictionary = ml._check_extended_guidelines()
+	assert_float(res.max_gap_inches) \
+		.override_failure_message("F1 — gap meter sampled from the table corner but cells live in grid coordinates: %s" % res.max_gap_inches) \
+		.is_less(12.0)
+	assert_bool(res.max_gap_ok).is_true()

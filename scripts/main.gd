@@ -235,10 +235,9 @@ var terrain_overlay: Node3D = null
 
 # End Battle / Main Menu
 @onready var end_battle_btn: Button = %EndBattleBtn
-@onready var end_battle_confirm_dialog: ConfirmationDialog = %EndBattleConfirmDialog
 
-# Reusable confirmation dialog for destructive table actions (Clear / Sort / Next Round)
-var _action_confirm_dialog: ConfirmationDialog = null
+# The open confirmation card for destructive table actions (Clear / Sort / Next Round / End Battle)
+var _action_confirm_card: PromptCard = null
 var _pending_confirm_action: Callable = Callable()
 
 # Overlay shown while an army's 3D models are downloaded from R2 (first time only).
@@ -478,11 +477,8 @@ func _ready() -> void:
 	if has_node("/root/ThemeManager"):
 		left_panel_scroll.theme = get_node("/root/ThemeManager").get_current_theme()
 
-	# Connect End Battle button and confirmation dialog
+	# Connect End Battle button (its question is the shared confirmation card)
 	end_battle_btn.pressed.connect(_on_end_battle_pressed)
-	end_battle_confirm_dialog.confirmed.connect(_on_end_battle_confirmed)
-	if has_node("/root/ThemeManager"):
-		end_battle_confirm_dialog.theme = get_node("/root/ThemeManager").get_current_theme()
 
 	# Connect UI buttons
 	clear_all_btn.pressed.connect(_on_clear_all)
@@ -12413,22 +12409,21 @@ func _show_fps_advisory() -> void:
 	print("[FPS] low-framerate advisory shown")  # parseable signal for the MP soak harness
 	var panel := PanelContainer.new()
 	panel.name = "FpsAdvisory"
-	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 90)
+	HouseStyle.apply(panel)
+	panel.add_theme_stylebox_override(&"panel", HouseStyle.warning_box())
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
 	panel.add_child(row)
-	var label := Label.new()
-	label.text = "Low framerate may be destabilising your online connection."
-	row.add_child(label)
-	var lower := Button.new()
-	lower.text = "Lower Graphics Quality"
+	row.add_child(HouseStyle.label("Low framerate may be destabilising your online connection.", HouseStyle.BODY))
+	var lower := HouseStyle.button("Lower Graphics Quality", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	lower.pressed.connect(_on_fps_advisory_lower.bind(panel))
 	row.add_child(lower)
-	var dismiss := Button.new()
-	dismiss.text = "Dismiss"
+	var dismiss := HouseStyle.button("Dismiss", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	dismiss.pressed.connect(_free_if_valid.bind(panel))
 	row.add_child(dismiss)
 	$UI.add_child(panel)
+	# After the content exists: the preset centres on the panel's real width (on an empty panel it hung off to the right).
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 90)
 	var t := create_tween()
 	t.tween_interval(20.0)
 	t.tween_callback(_free_if_valid.bind(panel))
@@ -12711,26 +12706,18 @@ func _process(delta: float) -> void:
 	_broadcast_presence(delta)
 
 
-## Shows a warning + confirmation before running a destructive table action, so a
-## stray click can't wipe / rearrange / advance the whole table. Reuses one dialog.
+## Shows a warning + confirmation before running a destructive table action, so a stray click can't wipe /
+## rearrange / advance the whole table. ONE in-viewport card (PromptCard, D98 a) at a time: OK runs the action,
+## cancel / Esc / x run nothing.
 func _show_action_confirm(title: String, message: String, ok_text: String, action: Callable) -> void:
-	if not _action_confirm_dialog:
-		_action_confirm_dialog = ConfirmationDialog.new()
-		# Match the app's glassmorphism look instead of the default grey Godot dialog.
-		if has_node("/root/ThemeManager"):
-			_action_confirm_dialog.theme = get_node("/root/ThemeManager").get_current_theme()
-		add_child(_action_confirm_dialog)
-		_action_confirm_dialog.confirmed.connect(_on_action_confirmed)
-	_action_confirm_dialog.title = title
-	_action_confirm_dialog.dialog_text = message
-	_action_confirm_dialog.ok_button_text = ok_text
+	if is_instance_valid(_action_confirm_card):
+		return
+	_action_confirm_card = PromptCard.new(title, message, ok_text, "Cancel")
+	add_child(_action_confirm_card)
 	_pending_confirm_action = action
-	_action_confirm_dialog.popup_centered()
-
-
-func _on_action_confirmed() -> void:
-	if _pending_confirm_action.is_valid():
-		_pending_confirm_action.call()
+	var card := _action_confirm_card
+	if await card.answer(false) and action.is_valid():
+		action.call()
 	_pending_confirm_action = Callable()
 
 
@@ -12891,7 +12878,7 @@ func _on_hamburger_pressed() -> void:
 
 ## Show confirmation dialog before ending battle
 func _on_end_battle_pressed() -> void:
-	end_battle_confirm_dialog.popup_centered()
+	_show_action_confirm("End Battle", "Really quit to main menu?\nAll unsaved progress will be lost.", "Yes, Exit", _on_end_battle_confirmed)
 
 
 ## Confirmed: End Battle and return to Main Menu
@@ -14751,6 +14738,7 @@ func _ensure_cache_progress_ui() -> void:
 	if _cache_progress_panel:
 		return
 	_cache_progress_panel = PanelContainer.new()
+	HouseStyle.apply(_cache_progress_panel)
 	# Fully centred on screen (both axes).
 	_cache_progress_panel.anchor_left = 0.5
 	_cache_progress_panel.anchor_right = 0.5
@@ -14761,16 +14749,11 @@ func _ensure_cache_progress_ui() -> void:
 	# It renders as a centred modal with a progress bar, so it owns its clicks: with IGNORE every
 	# click on it fell straight through to the table behind.
 	_cache_progress_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_cache_progress_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
 	_cache_progress_panel.visible = false
-	var margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 12)
-	_cache_progress_panel.add_child(margin)
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 6)
-	margin.add_child(vb)
-	_cache_progress_label = Label.new()
+	vb.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+	_cache_progress_panel.add_child(vb)
+	_cache_progress_label = HouseStyle.label("", HouseStyle.EYEBROW)
 	_cache_progress_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(_cache_progress_label)
 	_cache_progress_bar = ProgressBar.new()
@@ -15101,10 +15084,6 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 		var rot = float(layout.get("grid_rotation", 0.0))
 		if terrain_overlay and terrain_overlay.has_method("update_overlay"):
 			terrain_overlay.update_overlay(grid_cells, table_sz, rot)
-		# Also update local map_layout_editor data
-		if map_layout_editor:
-			map_layout_editor.grid_cells = grid_cells
-			map_layout_editor.grid_rotation_degrees = rot
 
 		# Deserialize and apply wall segments (role/taper_dir drive the ruin shell
 		# walls; defaults keep peers on older layout payloads rendering "full" panels)
@@ -15120,8 +15099,6 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 					"role": str(w.get("role", "full")),
 					"taper_dir": int(w.get("taper_dir", -1)),
 				})
-		if map_layout_editor:
-			map_layout_editor.wall_segments = wall_segments
 		if terrain_overlay and terrain_overlay.has_method("update_wall_models"):
 			terrain_overlay.update_wall_models(wall_segments, table_sz, rot)
 
@@ -15135,10 +15112,11 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 					"offset": Vector2(float(o.get("offset_x", 0.5)), float(o.get("offset_y", 0.5))),
 					"object_type": str(o.get("object_type", "tree")),
 				})
-		if map_layout_editor:
-			map_layout_editor.placed_objects = placed_objects
 		if terrain_overlay and terrain_overlay.has_method("update_placed_objects"):
 			terrain_overlay.update_placed_objects(placed_objects, table_sz, rot)
+		# Also update the local map_layout_editor - through its source model, so a rebuild keeps the terrain
+		if map_layout_editor:
+			map_layout_editor.apply_synced_layout(grid_cells, wall_segments, placed_objects, rot)
 
 		print("[Settings] Terrain layout received: %d cells, %d walls, %d objects" % [
 			grid_cells.size(), wall_segments.size(), placed_objects.size()])
@@ -15593,8 +15571,8 @@ func _apply_ui_theme() -> void:
 	# so it gets no tactical corner brackets and keeps its look whatever the HUD theme is.
 
 	# Apply to all file dialogs
-	save_game_dialog.theme = current_theme
-	load_game_dialog.theme = current_theme
+	save_game_dialog.theme = HouseStyle.theme()   # native FileDialogs take the theme only
+	load_game_dialog.theme = HouseStyle.theme()
 
 
 ## ============================================================================
@@ -15628,27 +15606,30 @@ func _open_ai_opponent_dialog() -> void:
 	if manifest.is_empty():
 		_solo_show_toast("No AI lists available (no connection yet?) — import any list with the AI checkbox instead")
 		return
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "AI Opponent"
-	dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 220)
-	if ThemeManager != null:
-		dlg.theme = ThemeManager.get_current_theme()
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
+	_show_ai_opponent_dialog(manifest)
 
-	box.add_child(_dialog_label("NACHTMAHR builds its own list."))
-	box.add_child(_dialog_label("Faction:"))
+
+## The AI Opponent question over an already loaded manifest. `loader(file, slot)` runs on OK
+## (default: _load_ai_opponent_list) so the dialog can be driven without the network.
+func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable()) -> void:
+	var parts := HouseStyle.overlay_sheet("AI Opponent", SOLO_DIALOG_MIN_WIDTH)
+	var layer := CanvasLayer.new()
+	layer.name = "AiOpponentLayer"
+	layer.layer = 90
+	var box: VBoxContainer = parts["body"]
+	box.add_child(HouseStyle.label("NACHTMAHR builds its own list.", HouseStyle.BODY))
 	var fac_opt := OptionButton.new()
+	fac_opt.theme_type_variation = HouseStyle.BUTTON
 	var fac_keys: Array = manifest.keys()
 	fac_keys.sort()
 	for i in fac_keys.size():
 		var fk: String = fac_keys[i]
 		fac_opt.add_item(str((manifest[fk] as Dictionary).get("name", fk)), i)
-	box.add_child(fac_opt)
+	box.add_child(HouseStyle.field_row("Faction:", fac_opt))
 
-	box.add_child(_dialog_label("Points:"))
 	var pts_opt := OptionButton.new()
-	box.add_child(pts_opt)
+	pts_opt.theme_type_variation = HouseStyle.BUTTON
+	box.add_child(HouseStyle.field_row("Points:", pts_opt))
 	var refresh_points := func() -> void:
 		pts_opt.clear()
 		var fk: String = fac_keys[maxi(0, fac_opt.selected)]
@@ -15659,8 +15640,8 @@ func _open_ai_opponent_dialog() -> void:
 	refresh_points.call()
 	fac_opt.item_selected.connect(func(_i: int) -> void: refresh_points.call())
 
-	box.add_child(_dialog_label("AI plays as:"))
 	var slot_opt := OptionButton.new()
+	slot_opt.theme_type_variation = HouseStyle.BUTTON
 	slot_opt.add_item("Player 2 (Red)", 2)
 	slot_opt.add_item("Player 1 (Blue)", 1)
 	# #196 — slots a connected human occupies are not on offer.
@@ -15672,29 +15653,37 @@ func _open_ai_opponent_dialog() -> void:
 		if not slot_opt.is_item_disabled(i):
 			slot_opt.select(i)
 			break
-	box.add_child(slot_opt)
+	box.add_child(HouseStyle.field_row("AI plays as:", slot_opt))
 
-	dlg.add_child(box)
-	dlg.get_ok_button().text = "Build & deploy list"
-	dlg.confirmed.connect(func() -> void:
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
+	box.add_child(actions)
+	var cancel := HouseStyle.button("Cancel", HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	cancel.name = "CancelButton"
+	actions.add_child(cancel)
+	var ok := HouseStyle.button("Build & deploy list", HouseStyle.PRIMARY)
+	ok.name = "OkButton"
+	ok.focus_mode = Control.FOCUS_ALL
+	actions.add_child(ok)
+	var close := func() -> void: layer.queue_free()
+	cancel.pressed.connect(close)
+	(parts["close"] as Button).pressed.connect(close)
+	ok.gui_input.connect(func(e: InputEvent) -> void:
+		if e.is_action_pressed("ui_cancel"):
+			close.call())
+	ok.pressed.connect(func() -> void:
 		var fk: String = fac_keys[maxi(0, fac_opt.selected)]
 		var lists: Array = (manifest[fk] as Dictionary).get("lists", [])
 		if pts_opt.selected < 0 or pts_opt.selected >= lists.size():
+			close.call()
 			return
 		var file: String = str((lists[pts_opt.selected] as Dictionary).get("file", ""))
 		var slot: int = slot_opt.get_item_id(slot_opt.selected)
-		_load_ai_opponent_list(file, slot))
-	dlg.confirmed.connect(dlg.queue_free)
-	dlg.canceled.connect(dlg.queue_free)
-	add_child(dlg)
-	dlg.popup_centered()
-
-
-func _dialog_label(text: String) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", 13)
-	return l
+		(loader if loader.is_valid() else Callable(self, &"_load_ai_opponent_list")).call(file, slot)
+		close.call())
+	layer.add_child(parts["root"] as Control)
+	add_child(layer)
+	ok.grab_focus()
 
 
 ## Load + parse an AI list (bundle → user-cache → CDN, in that order) and route it through the
