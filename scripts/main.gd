@@ -14191,6 +14191,15 @@ func _adjust_camera_for_table_size(size_feet: Vector2) -> void:
 ## Network UI handlers — the in-game Host/Join buttons open the SAME online
 ## relay dialogs as the startup menu (shared NetDialog chrome); the connection
 ## then runs through internet_lobby, exactly like a menu-launched online game.
+## The top bar's connection chip: 0 offline (chip hidden), 1 online, 2 reconnecting, 3 reconnect failed.
+func connection_state() -> int:
+	if _reconnect_failure_shown:
+		return 3
+	if _is_reconnecting:
+		return 2
+	return 1 if network_manager != null and network_manager.is_multiplayer_active() else 0
+
+
 func _on_host_pressed() -> void:
 	if _net_host_popup:
 		_net_host_popup.queue_free()
