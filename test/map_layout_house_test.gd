@@ -121,7 +121,7 @@ func _assert_no_paint_overrides(fn: String) -> void:
 
 
 func test_a4_terrain_type_buttons_are_segments_with_a_colour_chip() -> void:
-	for t in ["Ruins", "Forest", "Container", "Dangerous", "None"]:
+	for t in ["Ruins", "Forest", "Container", "Dangerous", "Erase"]:
 		var b := _ed.find_child("Terrain%sButton" % t, true, false) as Button
 		assert_object(b).override_failure_message("A4 — Terrain%sButton missing" % t).is_not_null()
 		if b == null:
@@ -129,10 +129,10 @@ func test_a4_terrain_type_buttons_are_segments_with_a_colour_chip() -> void:
 		assert_str(String(b.theme_type_variation).trim_suffix(HouseStyle.SELECTED_SUFFIX)).is_equal(String(HouseStyle.SEGMENT))
 		assert_object(b.icon).override_failure_message("A4 — %s has no colour chip" % t).is_not_null()
 	# "None" is the pre-selected type today (R1 changes that), so exactly it is selected.
-	var selected := ["Ruins", "Forest", "Container", "Dangerous", "None"].filter(func(t):
+	var selected := ["Ruins", "Forest", "Container", "Dangerous", "Erase"].filter(func(t):
 		var b := _ed.find_child("Terrain%sButton" % t, true, false) as Button
 		return b != null and HouseStyle.is_selected(b))
-	assert_array(selected).contains_exactly(["None"])
+	assert_array(selected).contains_exactly(["Ruins"])
 
 
 func test_a4_pressing_a_type_moves_the_gold_selection() -> void:
@@ -140,12 +140,12 @@ func test_a4_pressing_a_type_moves_the_gold_selection() -> void:
 	if forest != null:
 		forest.pressed.emit()
 	assert_bool(forest != null and HouseStyle.is_selected(forest)).is_true()
-	var none := _ed.find_child("TerrainNoneButton", true, false) as Button
+	var none := _ed.find_child("TerrainEraseButton", true, false) as Button
 	assert_bool(none != null and HouseStyle.is_selected(none)).is_false()
 
 
 func test_a4_mode_piece_and_wall_controls_sit_in_field_rows() -> void:
-	for c in [_ed._editor_mode_btn, _ed._prefab_option_btn, _ed._wall_option_btn]:
+	for c in [_ed._prefab_option_btn, _ed._wall_option_btn]:
 		var row := (c as Control).get_parent()
 		assert_bool(row is HBoxContainer and row.get_child(0) is Label and row.get_child(1) == c) \
 			.override_failure_message("A4 — %s is not inside a HouseStyle.field_row" % c.name).is_true()
