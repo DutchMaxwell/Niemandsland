@@ -1349,6 +1349,8 @@ func _calculate_grid_dimensions() -> Vector2i:
 
 
 func _update_stats() -> void:
+	if stats_label == null or recommendations_label == null:
+		return  # the editor runs without its UI built (headless tools): nothing to show the stats on
 	var grid_dims = _calculate_grid_dimensions()
 	var total_cells = grid_dims.x * grid_dims.y
 
