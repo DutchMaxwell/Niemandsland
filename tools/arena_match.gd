@@ -842,7 +842,8 @@ static func search_knobs() -> Dictionary:
 		"deploy_threat_seat": SoloController.deploy_threat_seat,
 		"deploy_threat_preset": SoloController.deploy_threat_preset,
 		"shadow_menu": OS.get_environment("NML_SHADOW_MENU"),
-	}
+		# Tree plan step 13: the tree search knobs this game ran with, ONLY those set.
+	}.merged(AiPlanner.tree_knobs())
 
 
 ## Planner calibration pairs (parity wave, NML-995): fold the per-activation expectation records into
