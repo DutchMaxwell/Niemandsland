@@ -586,6 +586,8 @@ impl NmlCore {
         d.set("horizon", h.knobs.horizon);
         d.set("seam_spacing", h.knobs.seam_spacing);
         d.set("seam_path", h.knobs.seam_path);
+        let mode = if h.knobs.search_mode == nml_core::SearchMode::Tree { "tree" } else { "oneply" };
+        d.set("search_mode", &GString::from(mode));
         d.set("statics_builds", self.scache.builds as i64);
         d
     }

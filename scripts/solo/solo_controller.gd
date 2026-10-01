@@ -3771,6 +3771,11 @@ func _core_plan(state: Dictionary, me: int) -> Dictionary:
 		_core_selfcheck(state, me, out)
 	print("[CORE] ACT r%d p%d us=%d n=%d mean_us=%d max_us=%d" % [_current_round(), me,
 		dt, _core_calls, _core_us_total / maxi(_core_calls, 1), _core_us_max])
+	# Tree search knob (rules-must-log): a pick the tree made says how far it searched.
+	if out.has("tree"):
+		var tree: Dictionary = out["tree"]
+		print("[CORE] TREE completed=%d deadline=%s" % [int(tree.get("completed", 0)),
+			str(tree.get("deadline_hit", false))])
 	if _shadow_on():
 		_shadow_plan(state, me, plain, statics, sig, out)
 	return _core_pick_of(out, state)
