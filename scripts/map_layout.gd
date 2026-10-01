@@ -215,6 +215,8 @@ var _modular_terrain_panel: VBoxContainer = null
 var _prefab_option_btn: OptionButton = null
 var _editor_mode_btn: Button = null
 var _wall_option_btn: OptionButton = null
+var _prefab_row: HBoxContainer = null  # field_row holding the piece dropdown (hidden outside Place mode)
+var _wall_row: HBoxContainer = null
 var _undo_btn: Button = null
 var _redo_btn: Button = null
 var _modular_status_label: Label = null
@@ -636,50 +638,11 @@ func _setup_terrain_buttons() -> void:
 		child.queue_free()
 
 	for type in [TerrainType.RUINS, TerrainType.FOREST, TerrainType.CONTAINER, TerrainType.DANGEROUS, TerrainType.NONE]:
-		var btn = Button.new()
-		btn.text = TERRAIN_NAMES[type]
-		btn.custom_minimum_size = Vector2(0, 44)
-		btn.toggle_mode = true
-		btn.button_pressed = (type == selected_terrain_type)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-		# Glassmorphism style - semi-transparent with terrain color tint
-		var terrain_color = TERRAIN_COLORS[type]
-
-		# Normal state - glass panel with terrain color
-		var style = StyleBoxFlat.new()
-		style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.25)
-		style.set_corner_radius_all(HudTokens.RADIUS)
-		style.border_width_left = 1
-		style.border_width_top = 1
-		style.border_width_right = 1
-		style.border_width_bottom = 1
-		style.border_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.4)
-		style.content_margin_left = 12
-		style.content_margin_right = 12
-		btn.add_theme_stylebox_override("normal", style)
-
-		# Hover state - brighter
-		var hover_style = style.duplicate()
-		hover_style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.35)
-		hover_style.border_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.6)
-		btn.add_theme_stylebox_override("hover", hover_style)
-
-		# Pressed/selected state - solid with glow border
-		var pressed_style = style.duplicate()
-		pressed_style.bg_color = Color(terrain_color.r, terrain_color.g, terrain_color.b, 0.5)
-		pressed_style.border_width_left = 2
-		pressed_style.border_width_top = 2
-		pressed_style.border_width_right = 2
-		pressed_style.border_width_bottom = 2
-		pressed_style.border_color = Color(1.0, 1.0, 1.0, 0.8)
-		btn.add_theme_stylebox_override("pressed", pressed_style)
-
-		# Text color
-		btn.add_theme_color_override("font_color", HudTokens.TEXT)
-		btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0, 1.0))
-		btn.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0, 1.0))
-
+		var btn := HouseStyle.button(TERRAIN_NAMES[type], HouseStyle.SEGMENT, 36)
+		btn.name = "Terrain%sButton" % TERRAIN_NAMES[type]
+		btn.icon = _terrain_chip(TERRAIN_COLORS[type])
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		HouseStyle.set_selected(btn, type == selected_terrain_type)
 		btn.pressed.connect(_on_terrain_button_pressed.bind(type, btn))
 		terrain_buttons.add_child(btn)
 
@@ -687,12 +650,23 @@ func _setup_terrain_buttons() -> void:
 			btn.tooltip_text = TERRAIN_DESCRIPTIONS[type]
 
 
-func _on_terrain_button_pressed(type: TerrainType, button: Button) -> void:
-	selected_terrain_type = type
-	# Update button states
+## A small square in the terrain's own colour (data colour, same on the canvas) for a type button.
+func _terrain_chip(color: Color) -> ImageTexture:
+	var img := Image.create(14, 14, false, Image.FORMAT_RGBA8)
+	img.fill(Color(color.r, color.g, color.b, 1.0))
+	return ImageTexture.create_from_image(img)
+
+
+## Mark the type button of `type` selected (gold) and the others resting.
+func _select_terrain_button(type: TerrainType) -> void:
 	for child in terrain_buttons.get_children():
 		if child is Button:
-			child.button_pressed = (child == button)
+			HouseStyle.set_selected(child, child.text == TERRAIN_NAMES[type])
+
+
+func _on_terrain_button_pressed(type: TerrainType, _button: Button) -> void:
+	selected_terrain_type = type
+	_select_terrain_button(type)
 
 
 # ==============================================================================
@@ -714,57 +688,32 @@ func _setup_modular_terrain_ui() -> void:
 	sep.modulate = Color(1, 1, 1, 0.2)
 	_modular_terrain_panel.add_child(sep)
 
-	var header := Label.new()
-	header.text = "Modular Terrain"
-	header.add_theme_font_override("font", HudTokens.head_font())
-	header.add_theme_font_size_override("font_size", 16)
-	header.add_theme_color_override("font_color", HudTokens.TEXT)
-	_modular_terrain_panel.add_child(header)
+	_modular_terrain_panel.add_child(HouseStyle.label("Modular Terrain", HouseStyle.EYEBROW))
 
 	# Prefab palette: canonical 1-click pieces (footprint + walls + decoration)
-	var prefab_label := Label.new()
-	prefab_label.text = "Terrain Piece:"
-	prefab_label.add_theme_font_size_override("font_size", 13)
-	prefab_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
-	_modular_terrain_panel.add_child(prefab_label)
-
 	_prefab_option_btn = OptionButton.new()
-	_prefab_option_btn.add_theme_color_override("font_color", HudTokens.TEXT)
 	for prefab_key in TerrainPrefabs.keys():
 		_prefab_option_btn.add_item(TerrainPrefabs.display_name(prefab_key))
 	_prefab_option_btn.item_selected.connect(_on_prefab_selected)
-	_modular_terrain_panel.add_child(_prefab_option_btn)
+	_prefab_row = HouseStyle.field_row("Piece", _prefab_option_btn)
+	_modular_terrain_panel.add_child(_prefab_row)
 	var prefab_keys := TerrainPrefabs.keys()
 	if not prefab_keys.is_empty():
 		selected_prefab_key = prefab_keys[0]
 
 	# Editor mode toggle
-	_editor_mode_btn = Button.new()
-	_editor_mode_btn.text = "Mode: Paint Cells"
-	_editor_mode_btn.custom_minimum_size = Vector2(0, 36)
-	_editor_mode_btn.add_theme_color_override("font_color", HudTokens.AMBER)
-	_editor_mode_btn.add_theme_color_override(
-		"font_hover_color", Color(HudTokens.AMBER.r, HudTokens.AMBER.g, HudTokens.AMBER.b, 1.0))
+	_editor_mode_btn = HouseStyle.button("Mode: Paint Cells", HouseStyle.BUTTON, 36)
 	_editor_mode_btn.pressed.connect(_on_editor_mode_toggled)
-	_modular_terrain_panel.add_child(_editor_mode_btn)
+	_modular_terrain_panel.add_child(HouseStyle.field_row("Mode", _editor_mode_btn))
 
 	# Wall variant selection (visible when PLACE_WALLS mode)
-	var wall_label := Label.new()
-	wall_label.text = "Wall Variant:"
-	wall_label.add_theme_font_size_override("font_size", 13)
-	wall_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
-	_modular_terrain_panel.add_child(wall_label)
-
 	_wall_option_btn = OptionButton.new()
-	_wall_option_btn.add_theme_color_override("font_color", HudTokens.TEXT)
 	_wall_option_btn.item_selected.connect(_on_wall_variant_selected)
-	_modular_terrain_panel.add_child(_wall_option_btn)
+	_wall_row = HouseStyle.field_row("Wall", _wall_option_btn)
+	_modular_terrain_panel.add_child(_wall_row)
 
 	# Status label
-	_modular_status_label = Label.new()
-	_modular_status_label.text = "Walls: 0 | Objects: 0"
-	_modular_status_label.add_theme_font_size_override("font_size", 12)
-	_modular_status_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	_modular_status_label = HouseStyle.label("Walls: 0 | Objects: 0", HouseStyle.SMALL)
 	_modular_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_modular_terrain_panel.add_child(_modular_status_label)
 
@@ -819,20 +768,12 @@ func _update_modular_terrain_ui() -> void:
 			_editor_mode_btn.text = "Mode: Move Pieces  (R/F · Del)"
 
 	# Wall selection only visible in PLACE_WALLS mode
-	if _wall_option_btn:
-		_wall_option_btn.visible = (editor_mode == EditorMode.PLACE_WALLS)
-		var wall_label_node: Node = _wall_option_btn.get_parent().get_child(
-			_wall_option_btn.get_index() - 1)
-		if wall_label_node:
-			wall_label_node.visible = (editor_mode == EditorMode.PLACE_WALLS)
+	if _wall_row:
+		_wall_row.visible = (editor_mode == EditorMode.PLACE_WALLS)
 
 	# Prefab selection only visible in PLACE_PREFAB mode
-	if _prefab_option_btn:
-		_prefab_option_btn.visible = (editor_mode == EditorMode.PLACE_PREFAB)
-		var prefab_label_node: Node = _prefab_option_btn.get_parent().get_child(
-			_prefab_option_btn.get_index() - 1)
-		if prefab_label_node:
-			prefab_label_node.visible = (editor_mode == EditorMode.PLACE_PREFAB)
+	if _prefab_row:
+		_prefab_row.visible = (editor_mode == EditorMode.PLACE_PREFAB)
 
 	_update_wall_option_list()
 	_update_modular_status()
@@ -1236,9 +1177,7 @@ func _on_objectives_deploy_toggled(enabled: bool) -> void:
 		_objectives_toggle_btn.text = "Stop Deploying"
 		# Deselect terrain type when entering objectives mode
 		selected_terrain_type = TerrainType.NONE
-		for child in terrain_buttons.get_children():
-			if child is Button:
-				child.button_pressed = (child.text == "None")
+		_select_terrain_button(TerrainType.NONE)
 	else:
 		_objectives_toggle_btn.text = "Deploy Objectives"
 		# Emit signal to update 3D view
