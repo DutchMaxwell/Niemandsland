@@ -2751,18 +2751,50 @@ func _on_solo_deploy_pressed() -> void:
 		# setup; objectives sit centre-line, so the edges are near-symmetric) and deploys first.
 		# NACHTMAHR won: it leaves the player his own drawn zone and takes the opposite one.
 		var ai_neg_z := not _solo_human_zone_is_neg_z()
+		if _solo_mission_has_roles():
+			_solo_roles_set(solo_controller.ai_slot, SoloController.roles_ai_pick(MissionCatalog.get_mission(_solo_mission_id)))
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.GENERAL,
 				"NACHTMAHR wins %d:%d — it takes the far edge and deploys first" % [ai_roll, you_roll], true)
 		await _solo_deploy_begin_side(ai_neg_z)
+	elif _solo_mission_has_roles():
+		_solo_deploy_ui_show("Roll-off %d:%d — YOU win.\nDo you attack or defend?" % [you_roll, ai_roll],
+			"Attack", func() -> void: _solo_roles_chosen("attacker", you_roll, ai_roll),
+			"Defend", func() -> void: _solo_roles_chosen("defender", you_roll, ai_roll))
 	else:
-		# YOU win: choose your edge — NACHTMAHR takes the opposite one.
-		# The labels name what the player SEES: the near edge is the one on his side of the camera.
-		# NACHTMAHR always takes the other one.
-		# The labels name the zones the table is already SHOWING him, not an abstract edge.
-		_solo_deploy_ui_show("Roll-off %d:%d — YOU win and deploy first.\nWhich deployment zone do you take?" % [you_roll, ai_roll],
-			"Keep my zone", func() -> void: _solo_deploy_pick_side(false),
-			"Take the other zone", func() -> void: _solo_deploy_pick_side(true))
+		_solo_deploy_side_prompt(you_roll, ai_roll)
+
+
+## NML-1010 D2a: the human roll-off winner picked a role; the zone choice follows as usual.
+func _solo_roles_chosen(role: String, you_roll: int, ai_roll: int) -> void:
+	_solo_roles_set(solo_controller.human_slot, role)
+	_solo_deploy_side_prompt(you_roll, ai_roll)
+
+
+## True for a catalog mission with the Attack & Defend roles flag.
+func _solo_mission_has_roles() -> bool:
+	return not _solo_mission_id.is_empty() and bool(MissionCatalog.get_mission(_solo_mission_id).get("roles", false))
+
+
+## Record the roll-off winner's role in the mission ledger and log it.
+func _solo_roles_set(winner_slot: int, winner_role: String) -> void:
+	var other: int = solo_controller.human_slot if winner_slot == solo_controller.ai_slot else solo_controller.ai_slot
+	SoloController.mission_roles = SoloController.roles_assign(winner_slot, other, winner_role)
+	_log_rule_event(BattleLog.Category.GENERAL, "Roll-off: %s attacks, %s defends" % [
+		_solo_player_label(int(SoloController.mission_roles["attacker"])),
+		_solo_player_label(int(SoloController.mission_roles["defender"]))], true)
+
+
+func _solo_deploy_side_prompt(you_roll: int, ai_roll: int) -> void:
+	# YOU win: choose your edge — NACHTMAHR takes the opposite one.
+	# The labels name what the player SEES: the near edge is the one on his side of the camera.
+	# NACHTMAHR always takes the other one.
+	# The labels name the zones the table is already SHOWING him, not an abstract edge.
+	_solo_deploy_ui_show("Roll-off %d:%d — YOU win and deploy first.\nWhich deployment zone do you take?" % [you_roll, ai_roll],
+		"Keep my zone", func() -> void: _solo_deploy_pick_side(false),
+		"Take the other zone", func() -> void: _solo_deploy_pick_side(true))
+
+
 ## Fire one strip button. The callbacks used to live inside `_solo_deploy_fsm`, which is REASSIGNED
 ## wholesale when deployment starts — anything holding a prompt open across that point clicked into
 ## the void and waited forever. They belong to the strip now. A dead callback says so instead of
