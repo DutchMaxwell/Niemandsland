@@ -224,6 +224,7 @@ jobs:
     # Stable required-check name: unchanged from the pre-split single job.
     name: Build and test core crates
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [clippy, core-tests, core-ignored, godot-build, py]
     if: ${{ always() }}
     steps:
