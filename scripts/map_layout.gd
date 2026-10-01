@@ -144,6 +144,7 @@ var free_walls: Array[Dictionary] = []
 
 ## Undo / redo snapshot stacks of {pieces, free_cells, free_walls}
 var _undo_stack: Array[Dictionary] = []
+var _stroke_snapshot: Dictionary = {}
 var _redo_stack: Array[Dictionary] = []
 const UNDO_LIMIT := 50
 
@@ -1056,6 +1057,21 @@ func _push_undo() -> void:
 	_update_undo_redo_buttons()
 
 
+## Remember the state at the start of a paint stroke; it becomes an undo step only if the stroke changed something.
+func _begin_stroke() -> void:
+	_stroke_snapshot = _snapshot()
+
+
+func _end_stroke() -> void:
+	if not _stroke_snapshot.is_empty() and _stroke_snapshot != _snapshot():
+		_undo_stack.append(_stroke_snapshot)
+		if _undo_stack.size() > UNDO_LIMIT:
+			_undo_stack.pop_front()
+		_redo_stack.clear()
+		_update_undo_redo_buttons()
+	_stroke_snapshot = {}
+
+
 func undo() -> void:
 	if _undo_stack.is_empty():
 		return
@@ -1771,8 +1787,8 @@ func _input(event: InputEvent) -> void:
 					# Single click only; place_prefab / add_wall_segment push their own undo
 					_paint_at_position(event.global_position)
 				else:
-					# PAINT_CELLS: one undo snapshot per stroke, then drag-paint
-					_push_undo()
+					# PAINT_CELLS: one undo snapshot per stroke (kept only if the stroke changed something)
+					_begin_stroke()
 					is_painting = true
 					_paint_at_position(event.global_position)
 			else:
@@ -1787,6 +1803,8 @@ func _input(event: InputEvent) -> void:
 						]
 					# Emit signal to update 3D terrain overlay
 					deployment_type_changed.emit(DeploymentType.CUSTOM)
+				if is_painting:
+					_end_stroke()
 				is_painting = false
 				_dragging_piece = false
 				_drag_pushed = false
