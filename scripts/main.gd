@@ -2025,10 +2025,10 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 		# referee, the ledger after it. Dump mode only (NML_ACT_DUMP); no capture otherwise.
 		var referee_pre: Dictionary = solo_controller.capture_board() if AiActRecorder.active() else {}
 		_solo_auto_seize()
-		_solo_book_mission_vp(round_no >= SOLO_GAME_ROUNDS)
+		_solo_book_mission_vp(round_no >= _solo_total_rounds())
 		if not referee_pre.is_empty() and terrain_overlay != null:
 			AiActRecorder.round_end(round_no, referee_pre, terrain_overlay.get_objective_owners())
-		if round_no >= SOLO_GAME_ROUNDS:
+		if round_no >= _solo_total_rounds():
 			BattleSim.prof_mark("round", _prof_rd_t0)
 			if not _solo_game_finished:
 				_solo_game_finished = true
@@ -2319,8 +2319,8 @@ func _solo_book_mission_vp(final: bool) -> void:
 
 func _solo_end_round() -> void:
 	_solo_auto_seize()
-	_solo_book_mission_vp(opr_army_manager.current_round >= SOLO_GAME_ROUNDS)
-	if opr_army_manager.current_round >= SOLO_GAME_ROUNDS:
+	_solo_book_mission_vp(opr_army_manager.current_round >= _solo_total_rounds())
+	if opr_army_manager.current_round >= _solo_total_rounds():
 		if not _solo_game_finished:
 			_solo_game_finished = true
 			_solo_show_game_summary()
@@ -2500,7 +2500,7 @@ func _solo_show_game_summary() -> void:
 	var vp_b: int = int(ledger[ai_slot - 1]) if ledger.size() >= ai_slot else 0
 	var scored_by_vp: bool = SoloController.mission_scoring == "round_vp"
 	if battle_log != null:
-		_log_rule_event(BattleLog.Category.GENERAL, "=== GAME OVER — %d rounds played ===" % SOLO_GAME_ROUNDS, true)
+		_log_rule_event(BattleLog.Category.GENERAL, "=== GAME OVER — %d rounds played ===" % _solo_total_rounds(), true)
 		if not objectives.is_empty():
 			_log_rule_event(BattleLog.Category.GENERAL, "Objectives — %s: %d · %s: %d · neutral: %d" % [
 				side_a_label, human_held, side_b_label, ai_held, neutral], true)
@@ -2517,7 +2517,7 @@ func _solo_show_game_summary() -> void:
 	var vp_block: String = ("Mission VP (decides):\n  %s: %d\n  %s: %d\n\n" % [
 		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), vp_a, side_b_label, vp_b]) \
 		if scored_by_vp else ""
-	GameOverPanel.open(self, "%d rounds played.\n\n%s%s%s" % [SOLO_GAME_ROUNDS, obj_block, vp_block, verdict],
+	GameOverPanel.open(self, "%d rounds played.\n\n%s%s%s" % [_solo_total_rounds(), obj_block, vp_block, verdict],
 		_maybe_prompt_for_evaluation_sharing)
 
 
@@ -2639,7 +2639,7 @@ func _ensure_solo_controller() -> void:
 		# learns which round is the match's last; without a scored match length it never fires.
 		solo_controller.round_provider = func() -> int:
 			return int(opr_army_manager.current_round) if opr_army_manager != null else 0
-		solo_controller.game_rounds = SOLO_GAME_ROUNDS
+		solo_controller.game_rounds = _solo_mission_rounds(_solo_mission_id)
 	_solo_apply_difficulty()
 
 
@@ -2648,6 +2648,20 @@ func _ensure_solo_controller() -> void:
 ## panel and a headless arena game agree on the catalog's rules. "" (Duel, no mission — the
 ## selector's default) is a no-op on purpose: SoloController's live statics and the hand-placed
 ## overlay objectives stay exactly what today's table already does — byte-identical.
+## Match length of a mission from the catalog (NML-1010 D1); "" (Duel, no mission) = the const.
+func _solo_mission_rounds(mission_id: String) -> int:
+	if mission_id.is_empty():
+		return SOLO_GAME_ROUNDS
+	return int(MissionCatalog.get_mission(mission_id).get("rounds", SOLO_GAME_ROUNDS))
+
+
+## The live match length: the controller's value (catalog-driven), the const when none is set.
+func _solo_total_rounds() -> int:
+	if solo_controller != null and solo_controller.game_rounds > 0:
+		return solo_controller.game_rounds
+	return SOLO_GAME_ROUNDS
+
+
 func _solo_apply_mission_if_chosen() -> void:
 	# D-MISSIONS: the recorder learns the table's choice BEFORE the early
 	# return — an empty choice RESETS the stamp (the fresh-file contract
@@ -2656,6 +2670,8 @@ func _solo_apply_mission_if_chosen() -> void:
 	if _solo_mission_id.is_empty():
 		return
 	var mission := MissionCatalog.get_mission(_solo_mission_id)
+	if solo_controller != null:
+		solo_controller.game_rounds = _solo_mission_rounds(_solo_mission_id)
 	var mk: Dictionary = mission.get("markers", {})
 	var mmeta: Array = SoloController.marker_metadata(mk)
 	SoloController.mission_reset(str(mission.get("scoring", "end")), (mission.get("vp", {}) as Dictionary), mmeta)
