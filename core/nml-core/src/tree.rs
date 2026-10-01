@@ -282,6 +282,9 @@ pub struct TreeCfg<'a> {
     pub samples: usize,
     pub batch: usize,
     pub budget: usize,
+    /// The wall-clock SAFETY fallback in ms (0 = off), checked between
+    /// expansion batches; the budget stays the leaf count.
+    pub wall_ms: u64,
     pub player: i64,
     pub opener_seat: bool,
     /// The chance streams' root seed (the playout signature); `None`
@@ -339,8 +342,14 @@ pub fn select(node: &Node, player: i64) -> usize {
 pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, sc: &mut Scratch)
            -> Result<(usize, TreeTrace), Unsupported> {
     let per_child = if cfg.dice == TreeDice::Tray { cfg.samples } else { 1 };
-    let mut completed = 0;
+    let (start, mut completed, mut deadline_hit) = (std::time::Instant::now(), 0, false);
     while completed < cfg.budget {
+        // The wall is a SAFETY fallback between batches, never the budget:
+        // the first batch always completes, so there is a pick to stamp.
+        if cfg.wall_ms > 0 && completed > 0 && start.elapsed().as_millis() >= u128::from(cfg.wall_ms) {
+            deadline_hit = true;
+            break;
+        }
         let (mut node, mut path, mut base) = (&mut *root, Vec::new(), cfg.sig);
         while node.terminal.is_none() && !node.children.is_empty() && node.next_child == node.children.len() {
             let c = select(node, cfg.player);
@@ -395,5 +404,5 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             best = (i, mean);
         }
     }
-    Ok((best.0, TreeTrace { completed, deadline_hit: false, root: trace }))
+    Ok((best.0, TreeTrace { completed, deadline_hit, root: trace }))
 }
