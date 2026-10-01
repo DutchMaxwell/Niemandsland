@@ -25,13 +25,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  rust:
-    name: Build and test core crates
+  # The old single job ("Build and test core crates") is split into parallel jobs
+  # that run the same commands. The gate job at the bottom keeps that exact name
+  # and fails unless every split job passed, so the required-check name is stable.
+  clippy:
+    name: Clippy and epoch gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Blocking since 2026-09-03: the core crates drive the training corpus,
-    # the fidelity gates and the promoted AI player, so a red build or test
-    # here is a red workflow (external review 03.09., item 2).
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,6 +61,7 @@ jobs:
           # F7: the three core crates are ONE Cargo workspace now — one
           # workspace root, one target dir. Cache the workspace, not each crate.
           workspaces: core
+          shared-key: core-clippy
 
       - name: Clippy — no NEW findings
         # Differential on purpose, never `-D warnings`: main carries findings
@@ -69,8 +70,50 @@ jobs:
         # or a new code appears, and it refuses to pass on an empty measurement.
         run: bash tools/clippy_gate.sh
 
+  core-tests:
+    name: Test nml-core
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        # rust-toolchain.toml at the repo root pins the exact rustc; this step
+        # only makes sure rustup is present so that pin can be honoured.
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          # F7: the three core crates are ONE Cargo workspace now — one
+          # workspace root, one target dir. Cache the workspace, not each crate.
+          workspaces: core
+          shared-key: core-release
+
       - name: Test nml-core
         run: cargo test --manifest-path core/nml-core/Cargo.toml --release
+
+  core-ignored:
+    name: Fixture-gated nml-core tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        # rust-toolchain.toml at the repo root pins the exact rustc; this step
+        # only makes sure rustup is present so that pin can be honoured.
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          # F7: the three core crates are ONE Cargo workspace now — one
+          # workspace root, one target dir. Cache the workspace, not each crate.
+          workspaces: core
+          shared-key: core-release
 
       - name: Fixture-gated tests
         # Private fixtures are not in the repo: run the ignored policy tests
@@ -82,8 +125,50 @@ jobs:
           NML_POLICY_CORPUS: selfplay_out/qbg_ref
           NML_POLICY_NET: nml-mission/netlab/nets/policy_v1.json
 
+  godot-build:
+    name: Build nml-core-godot
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        # rust-toolchain.toml at the repo root pins the exact rustc; this step
+        # only makes sure rustup is present so that pin can be honoured.
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          # F7: the three core crates are ONE Cargo workspace now — one
+          # workspace root, one target dir. Cache the workspace, not each crate.
+          workspaces: core
+          shared-key: core-godot
+
       - name: Build nml-core-godot
         run: cargo build --manifest-path core/nml-core-godot/Cargo.toml --release
+
+  py:
+    name: nml-core-py build, pytest and tools pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        # rust-toolchain.toml at the repo root pins the exact rustc; this step
+        # only makes sure rustup is present so that pin can be honoured.
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          # F7: the three core crates are ONE Cargo workspace now — one
+          # workspace root, one target dir. Cache the workspace, not each crate.
+          workspaces: core
+          shared-key: core-py
 
       - name: Check nml-core-py
         run: cargo check --manifest-path core/nml-core-py/Cargo.toml
@@ -134,3 +219,22 @@ jobs:
           PYTHONPATH=core/nml-core-py/python python3 -m pytest -q --timeout 900
           core/nml-core-py/tests/python/test_rules_epoch_stamp.py
           core/nml-core-py/tests/python/test_mass_fast.py::test_the_worker_passes_the_fidelity_knobs_into_the_game
+
+  rust:
+    # Stable required-check name: unchanged from the pre-split single job.
+    name: Build and test core crates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [clippy, core-tests, core-ignored, godot-build, py]
+    if: ${{ always() }}
+    steps:
+      - name: Every split job must have succeeded (core-ignored may skip, its fixtures are private)
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+          IGNORED: ${{ needs.core-ignored.result }}
+        run: |
+          echo "split job results: $RESULTS"
+          for r in ${{ needs.clippy.result }} ${{ needs.core-tests.result }} ${{ needs.godot-build.result }} ${{ needs.py.result }}; do
+            [ "$r" = "success" ] || { echo "::error::a split job finished as $r"; exit 1; }
+          done
+          [ "$IGNORED" = "success" ] || [ "$IGNORED" = "skipped" ] || { echo "::error::core-ignored finished as $IGNORED"; exit 1; }

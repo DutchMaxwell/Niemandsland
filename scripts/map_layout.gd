@@ -239,6 +239,15 @@ func _ready() -> void:
 		autogen_button.pressed.connect(_on_autogen_pressed)
 	if deployment_check:
 		deployment_check.toggled.connect(_on_deployment_toggled)
+	# File dialogs are Windows (they do not inherit this root's theme): give them the house look too
+	for dlg: FileDialog in [save_file_dialog, load_file_dialog]:
+		if dlg:
+			dlg.theme = HouseStyle.theme()
+	# The engine rewrites a FileDialog title when its mode is applied; pin the English titles
+	if save_file_dialog:
+		save_file_dialog.title = "Save Terrain Layout"
+	if load_file_dialog:
+		load_file_dialog.title = "Load Terrain Layout"
 	if save_file_dialog:
 		save_file_dialog.file_selected.connect(_on_save_file_selected)
 	if load_file_dialog:
@@ -1107,49 +1116,31 @@ func _setup_objectives_ui() -> void:
 	left_panel.move_child(_objectives_panel, deploy_check_idx + 1)
 
 	# Section label
-	var label = Label.new()
-	label.text = "Mission Objectives"
-	label.add_theme_font_override("font", HudTokens.head_font())
-	label.add_theme_font_size_override("font_size", 16)
-	label.add_theme_color_override("font_color", HudTokens.TEXT)
-	_objectives_panel.add_child(label)
+	_objectives_panel.add_child(HouseStyle.label("Mission Objectives", HouseStyle.EYEBROW))
 
 	# Status label
-	_objectives_status_label = Label.new()
-	_objectives_status_label.text = "No objectives placed"
-	_objectives_status_label.add_theme_font_size_override("font_size", 12)
-	_objectives_status_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	_objectives_status_label = HouseStyle.label("No objectives placed", HouseStyle.CAPTION)
 	_objectives_panel.add_child(_objectives_status_label)
 
 	# Warning label (for 9" rule)
-	_objectives_warning_label = Label.new()
-	_objectives_warning_label.text = ""
-	_objectives_warning_label.add_theme_font_size_override("font_size", 12)
-	_objectives_warning_label.add_theme_color_override("font_color", HudTokens.DANGER)
+	_objectives_warning_label = HouseStyle.label("", HouseStyle.SMALL)
+	_objectives_warning_label.add_theme_color_override("font_color", HouseStyle.tone_ink(HouseStyle.TONE_DANGER))
 	_objectives_warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_objectives_panel.add_child(_objectives_warning_label)
 
 	# Button container
-	var btn_row = HBoxContainer.new()
-	btn_row.add_theme_constant_override("separation", 8)
+	var btn_row := HouseStyle.button_row(["Deploy Objectives", "Clear"], HouseStyle.SEGMENT, 36)
 	_objectives_panel.add_child(btn_row)
 
-	# Deploy/Stop button (toggle)
-	_objectives_toggle_btn = Button.new()
-	_objectives_toggle_btn.text = "Deploy Objectives"
+	# Deploy/Stop button (toggle; gold while deploying)
+	_objectives_toggle_btn = btn_row.get_child(0)
 	_objectives_toggle_btn.toggle_mode = true
-	_objectives_toggle_btn.add_theme_color_override("font_color", HudTokens.AMBER)
-	_objectives_toggle_btn.add_theme_color_override(
-		"font_hover_color", Color(HudTokens.AMBER.r, HudTokens.AMBER.g, HudTokens.AMBER.b, 1.0))
 	_objectives_toggle_btn.toggled.connect(_on_objectives_deploy_toggled)
-	btn_row.add_child(_objectives_toggle_btn)
 
 	# Clear button
-	_objectives_clear_btn = Button.new()
-	_objectives_clear_btn.text = "Clear"
-	_objectives_clear_btn.add_theme_color_override("font_color", HudTokens.AMBER)
+	_objectives_clear_btn = btn_row.get_child(1)
+	_objectives_clear_btn.theme_type_variation = HouseStyle.BUTTON
 	_objectives_clear_btn.pressed.connect(_on_objectives_clear)
-	btn_row.add_child(_objectives_clear_btn)
 
 	_update_objectives_status()
 
@@ -1157,6 +1148,7 @@ func _setup_objectives_ui() -> void:
 ## Toggle objectives deployment mode
 func _on_objectives_deploy_toggled(enabled: bool) -> void:
 	objectives_editing = enabled
+	HouseStyle.set_selected(_objectives_toggle_btn, enabled)
 	if enabled:
 		_objectives_toggle_btn.text = "Stop Deploying"
 		# Deselect terrain type when entering objectives mode

@@ -10,13 +10,15 @@ use crate::arbitration::adjudicate_end;
 use crate::dice::Tray;
 use crate::menu::{candidates_tuned, Candidate};
 use crate::mission::vp_of;
+use crate::plan::{rank, LeafValue, ScoredRow};
 use crate::playout::other_player;
 use crate::rng::GodotRng;
+use crate::score::score_with;
 use crate::rollout::{
     cross_round, delayed_action_passer, imagined_round_end, reinforcement_round_start,
     spawn_round_start, Rollout,
 };
-use crate::sim::{resolve_stochastic_tray_on_board, Scratch, Unsupported};
+use crate::sim::{reply_threat, resolve_stochastic_tray_on_board, Scratch, Unsupported};
 use crate::state::State;
 
 /// One decision node: `mover` picks among `children`, opened in order
@@ -33,10 +35,13 @@ pub struct Node {
     pub terminal: Option<f64>,
 }
 
-/// One edge out of a decision node; `node` is built when the edge is opened.
+/// One edge out of a decision node: `idx` is the row's build index in the
+/// node's menu, `nodes` one per chance sample (one under EV), empty until
+/// the edge is opened.
 pub struct Child {
+    pub idx: usize,
     pub cand: Candidate,
-    pub node: Option<Box<Node>>,
+    pub nodes: Vec<Node>,
 }
 
 /// What the walk found: the side that moves next, or the game's end.
@@ -209,4 +214,195 @@ pub fn transition(roll: &Rollout, state: &State, cand: &Candidate, dice: TreeDic
             }
         })
         .collect()
+}
+
+/// `player`'s rows at `state`, each resolved once (EV) and scored by the
+/// prefilter's own 1-ply rule (plan.rs `prefilter`: `score_with` with the
+/// reply threat, for the side that acts), with `rank`'s order: score desc,
+/// build index on ties.
+pub fn ranked(roll: &Rollout, state: &State, player: i64, sc: &mut Scratch)
+              -> Result<(Vec<ScoredRow>, Vec<usize>), Unsupported> {
+    let (statics, fit) = (roll.policy.statics, roll.policy.fit);
+    let mut rows = Vec::new();
+    for cand in menu(roll, state, player, sc) {
+        let next = roll.policy.resolve(state, &cand)?;
+        let score = score_with(&next, statics, player, &reply_threat(statics, &next, player), fit);
+        rows.push(ScoredRow { idx: rows.len(), unit_key: cand.unit.clone(), cand, score });
+    }
+    let order = rank(&rows, true);
+    Ok((rows, order))
+}
+
+/// The ROOT's children: the one-ply's prefilter rows, its rolled `pool`
+/// first in pool order, then the rest of its ranked `order`. The hand order
+/// ORDERS, it never cuts: every row is a child.
+pub fn root_children(rows: &[ScoredRow], order: &[usize], pool: &[usize]) -> Vec<Child> {
+    let rest = order.iter().filter(|i| !pool.contains(i));
+    pool.iter().chain(rest).map(|&i| Child { idx: i, cand: rows[i].cand.clone(), nodes: Vec::new() }).collect()
+}
+
+/// Opens up to `k` more of `node`'s children, in order (progressive
+/// widening: an opened child is never touched again, none is removed); a
+/// node below the root builds its children from `ranked` for its mover on
+/// its first expansion. An opened child gets one node per `transition`
+/// state: the Coordinate hand-off, then `advance` to the next decision, a
+/// game end priced by the referee for `player`. Returns how many opened.
+#[allow(clippy::too_many_arguments)]
+pub fn expand(roll: &Rollout, node: &mut Node, k: usize, dice: TreeDice, samples: usize, base: Option<i64>,
+              player: i64, sc: &mut Scratch) -> Result<usize, Unsupported> {
+    if node.terminal.is_some() {
+        return Ok(0);
+    }
+    if node.children.is_empty() {
+        let (rows, order) = ranked(roll, &node.state, node.mover, sc)?;
+        node.children = root_children(&rows, &order, &[]);
+    }
+    let (from, to) = (node.next_child, (node.next_child + k).min(node.children.len()));
+    for c in from..to {
+        let cand = node.children[c].cand.clone();
+        for mut cur in transition(roll, &node.state, &cand, dice, samples, base)? {
+            roll.coordinate_hand_off(&mut cur, &cand, player, sc)?;
+            let turn = other_player(&cur, node.mover);
+            let step = advance(roll, &mut cur, turn, None);
+            node.children[c].nodes.push(Node::new(cur, step, player));
+        }
+    }
+    node.next_child = to;
+    Ok(to - from)
+}
+
+/// UCT's exploration constant — the pilot's starting point (plan D-T2).
+pub const UCT_C: f64 = 0.5;
+
+/// One tree search's settings: the tree knobs resolved, plus the searcher.
+#[derive(Clone, Copy)]
+pub struct TreeCfg<'a> {
+    pub leaf: TreeLeaf,
+    pub dice: TreeDice,
+    pub samples: usize,
+    pub batch: usize,
+    pub budget: usize,
+    /// The wall-clock SAFETY fallback in ms (0 = off), checked between
+    /// expansion batches; the budget stays the leaf count.
+    pub wall_ms: u64,
+    pub player: i64,
+    pub opener_seat: bool,
+    /// The chance streams' root seed (the playout signature); `None`
+    /// declines under `Tray`.
+    pub sig: Option<i64>,
+    pub hook: Option<&'a dyn LeafValue>,
+    pub w: f64,
+}
+
+/// Leaf evaluations completed, the wall-clock stamp, and every opened root
+/// child as (build idx, visits, mean).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TreeTrace {
+    pub completed: usize,
+    pub deadline_hit: bool,
+    pub root: Vec<(usize, u32, f64)>,
+}
+
+/// A child's mean over its sample nodes (equally likely chance outcomes)
+/// and its visits.
+fn child_stat(c: &Child) -> (f64, u32) {
+    let n = c.nodes.iter().map(|x| x.n).sum();
+    let seen = c.nodes.iter().filter(|x| x.n > 0);
+    (seen.clone().map(|x| x.w / x.n as f64).sum::<f64>() / seen.count().max(1) as f64, n)
+}
+
+/// UCT in the searcher's frame: the searcher's nodes take the argmax of
+/// `mean + c * sqrt(ln N / n)`, the opponent's the argmin of `mean - ...`;
+/// ties keep the first child in order.
+pub fn select(node: &Node, player: i64) -> usize {
+    let (sign, ln_n) = (if node.mover == player { 1.0 } else { -1.0 }, (node.n.max(1) as f64).ln());
+    let mut best = (0, f64::NEG_INFINITY);
+    for (i, c) in node.children.iter().enumerate() {
+        let (mean, n) = child_stat(c);
+        let u = sign * mean + UCT_C * (ln_n / n.max(1) as f64).sqrt();
+        if u > best.1 {
+            best = (i, u);
+        }
+    }
+    best.0
+}
+
+/// The tree search from `root` (its children set, e.g. by `root_children`).
+/// Each iteration selects by UCT from the root down to a node with unopened
+/// children or a game end (sample nodes least-visited first), opens up to
+/// `batch` children there, values the new leaves with ONE hook call, and
+/// adds them to every node on the path. It stops once `budget` leaf
+/// evaluations completed; a chance child's samples are never split, so the
+/// last batch may overshoot by fewer than `samples`. Every child of a node
+/// is opened before the search descends below it (no widening-rate
+/// constant yet). Streams: the root's base is `sig`, a sample node's base
+/// derives from its parent's and its (child, sample) index. The Terminal
+/// playouts resolve with EV in both dice modes. The pick is the opened root
+/// child with the highest mean, the first in order on ties.
+pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, sc: &mut Scratch)
+           -> Result<(usize, TreeTrace), Unsupported> {
+    let per_child = if cfg.dice == TreeDice::Tray { cfg.samples } else { 1 };
+    let (start, mut completed, mut deadline_hit) = (std::time::Instant::now(), 0, false);
+    while completed < cfg.budget {
+        // The wall is a SAFETY fallback between batches, never the budget:
+        // the first batch always completes, so there is a pick to stamp.
+        if cfg.wall_ms > 0 && completed > 0 && start.elapsed().as_millis() >= u128::from(cfg.wall_ms) {
+            deadline_hit = true;
+            break;
+        }
+        let (mut node, mut path, mut base) = (&mut *root, Vec::new(), cfg.sig);
+        while node.terminal.is_none() && !node.children.is_empty() && node.next_child == node.children.len() {
+            let c = select(node, cfg.player);
+            let s = (0..node.children[c].nodes.len()).min_by_key(|&s| node.children[c].nodes[s].n).unwrap_or(0);
+            base = base.map(|b| b.wrapping_mul(1_000_003).wrapping_add((c * per_child + s + 1) as i64));
+            path.push((c, s));
+            node = &mut node.children[c].nodes[s];
+        }
+        let mut vals = Vec::new();
+        if let Some(v) = node.terminal {
+            vals.push(v);
+        } else {
+            let from = node.next_child;
+            let k = cfg.batch.min((cfg.budget - completed).div_ceil(per_child));
+            expand(roll, node, k, cfg.dice, cfg.samples, base, cfg.player, sc)?;
+            let fresh = || node.children[from..node.next_child].iter().flat_map(|c| &c.nodes);
+            let states: Vec<&State> = fresh().filter(|x| x.terminal.is_none()).map(|x| &x.state).collect();
+            let hv = match cfg.hook.filter(|_| cfg.leaf == TreeLeaf::Blend && cfg.w != 0.0) {
+                Some(h) => h.value(&states, cfg.player)?,
+                None => Vec::new(),
+            };
+            if !hv.is_empty() && hv.len() != states.len() {
+                return Err(Unsupported::LeafValue(hv.len(), states.len()));
+            }
+            let mut j = 0;
+            for c in from..node.next_child {
+                for x in node.children[c].nodes.iter_mut() {
+                    let own = if hv.is_empty() || x.terminal.is_some() { &[][..] } else { j += 1; &hv[j - 1..j] };
+                    let v = leaf_value(roll, x, cfg.leaf, cfg.player, cfg.opener_seat, own, cfg.w, rng, sc)?;
+                    (x.n, x.w) = (1, v);
+                    vals.push(v);
+                }
+            }
+        }
+        if vals.is_empty() {
+            break;
+        }
+        let (cnt, sum) = (vals.len() as u32, vals.iter().sum::<f64>());
+        let mut cur = &mut *root;
+        (cur.n, cur.w) = (cur.n + cnt, cur.w + sum);
+        for &(c, s) in &path {
+            cur = &mut cur.children[c].nodes[s];
+            (cur.n, cur.w) = (cur.n + cnt, cur.w + sum);
+        }
+        completed += vals.len();
+    }
+    let (mut best, mut trace) = ((0, f64::NEG_INFINITY), Vec::new());
+    for (i, c) in root.children[..root.next_child].iter().enumerate() {
+        let (mean, n) = child_stat(c);
+        trace.push((c.idx, n, mean));
+        if n > 0 && mean > best.1 {
+            best = (i, mean);
+        }
+    }
+    Ok((best.0, TreeTrace { completed, deadline_hit, root: trace }))
 }
