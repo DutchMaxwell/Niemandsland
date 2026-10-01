@@ -495,13 +495,16 @@ pub fn profile_ev(
     let melee = p.range <= 0;
     // --- to-hit target (ai_ev.gd:335-357) ---
     let mut target;
+    // D21: the running unclamped sum beside the clamped target (== target below the gate).
+    let mut raw;
     if melee {
         if att.fatigued {
             // Fatigue (p.9): hits ONLY on an unmodified 6 — a hard target
             // OUTSIDE the modifier pipeline (ai_ev.gd:336-341).
             target = 6;
+            raw = 6;
         } else {
-            target = thrust_to_hit(att.quality, charging && p.thrust, BEST_HIT_TARGET);
+            raw = thrust_to_hit(att.quality, charging && p.thrust, def.def_floor());
             // The Stealth data-alias pair rides the fold, but the EV
             // imagination measures NO pre-charge gap (ai_ev.gd:442's melee
             // branch has no alias leg either) — charge_from_in stays 0.0,
@@ -525,10 +528,10 @@ pub fn profile_ev(
             if p.unstoppable_ev && melee_mod < 0 {
                 melee_mod = 0;
             }
-            target = modified_hit_target(target, melee_mod);
+            (raw, target) = fold_hit(def.modifier_sum, raw, melee_mod);
         }
     } else {
-        target = reliable_quality(att.quality, p.reliable);
+        raw = reliable_quality(att.quality, p.reliable);
         // ai_ev.gd:352 never reads Shot Modifier (Good Shot / Bad Shot /
         // Targeting Visor) OR the Stealth data-alias family (ai_ev.gd:151's
         // `ctx_for` reads only the literal "Stealth" name too) — the EV
@@ -545,7 +548,7 @@ pub fn profile_ev(
         if p.unstoppable_ev && shoot_mod < 0 {
             shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
         }
-        target = modified_hit_target(target, shoot_mod);
+        (raw, target) = fold_hit(def.modifier_sum, raw, shoot_mod);
     }
     // --- Versatile Attack (ai_ev.gd:361-368) ---
     let mut versatile_ap = 0;
@@ -566,10 +569,10 @@ pub fn profile_ev(
             versatile_best_mode(target, choose_def, p.ap, p.bane)
         };
         versatile_ap = ap_mod;
-        target = modified_hit_target(target, hit_mod);
+        (raw, target) = fold_hit(def.modifier_sum, raw, hit_mod);
     }
     if p.precise {
-        target = modified_hit_target(target, 1);
+        (_, target) = fold_hit(def.modifier_sum, raw, 1);
     }
     let mut hits = attacks_f * success_chance(target);
     // --- per-unmodified-6 bonus hits (ai_ev.gd:373-385) ---
@@ -918,5 +921,31 @@ mod tests {
             profile_ev(&with_bonus, 6, &att, &def, 12.0, false),
             "the EV planner must stay blind to Shot Modifier, like the table's own AiEv"
         );
+    }
+
+    // ------------- D21 (EPOCH_68_MODIFIER_SUM): the EV prices the to-hit as ONE sum ---------
+
+    /// F3.5 of PLAN_evfloor: Q2 Thrust charge vs Evasive is 2 - 1 + 1 = 2+ (one sum); the old ladder
+    /// floored the Thrust at 2+ first and priced 3+.
+    #[test]
+    fn ev_q2_thrust_charge_vs_evasive_follows_the_sum() {
+        let att = Ctx { quality: 2, models: 5, ..Default::default() };
+        let old = Ctx { defense: 4, tough: 1, models: 5, evasive: true, ..Default::default() };
+        let new = Ctx { modifier_sum: true, ..old };
+        let p = ShootProfile { attacks: 10, thrust: true, ..Default::default() };
+        assert!((profile_ev(&p, 10, &att, &old, 0.0, true) - 10.0 * (4.0 / 6.0) * 0.5).abs() < 1e-9, "below the gate: 3+");
+        assert!((profile_ev(&p, 10, &att, &new, 0.0, true) - 10.0 * (5.0 / 6.0) * 0.5).abs() < 1e-9, "from the gate: 2+");
+    }
+
+    /// F3.6: Q5 vs Artillery + Stealth over 9" with Precise is 5 + 2 - 1 = 6+ (one sum); the old
+    /// ladder clamped to 6+ first and Precise walked it back to 5+.
+    #[test]
+    fn ev_precise_folds_into_the_sum() {
+        let att = Ctx { quality: 5, models: 5, ..Default::default() };
+        let old = Ctx { defense: 4, tough: 1, models: 5, stealth: true, artillery: true, ..Default::default() };
+        let new = Ctx { modifier_sum: true, ..old };
+        let p = ShootProfile { attacks: 10, range: 24, precise: true, ..Default::default() };
+        assert!((profile_ev(&p, 10, &att, &old, 12.0, false) - 10.0 * (2.0 / 6.0) * 0.5).abs() < 1e-9, "below the gate: 5+");
+        assert!((profile_ev(&p, 10, &att, &new, 12.0, false) - 10.0 * (1.0 / 6.0) * 0.5).abs() < 1e-9, "from the gate: 6+");
     }
 }
