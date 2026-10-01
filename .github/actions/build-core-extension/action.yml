@@ -13,6 +13,10 @@ runs:
       uses: Swatinem/rust-cache@v2
       with:
         workspaces: core
+    # x86_64-only MinGW toolchain with cached .deb files (shared with onnx-spike.yml).
+    - name: Setup mingw-w64 (x86_64 only)
+      if: inputs.target == 'windows'
+      uses: ./.github/actions/setup-mingw-x86-64
     - name: Build NmlCore extension
       shell: bash
       run: |
@@ -25,8 +29,6 @@ runs:
             # runtime (libgcc_s / libstdc++ / libwinpthread) a player machine lacks;
             # export-windows asserts that with objdump.
             rustup target add x86_64-pc-windows-gnu
-            sudo apt-get update
-            sudo apt-get install -y mingw-w64
             RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$GITHUB_WORKSPACE=/workspace --remap-path-prefix=$HOME=/build" \
               cargo build --release --features onnx-tract --target x86_64-pc-windows-gnu --manifest-path core/nml-core-godot/Cargo.toml ;;
           macos)

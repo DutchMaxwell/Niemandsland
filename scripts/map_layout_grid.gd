@@ -7,13 +7,26 @@ var map_layout: Control = null  # Reference to parent MapLayout
 
 ## Sandbox-terrain mirror: metres-per-inch and the per-kind footprint fill/border colours
 ## (ObjectManager.SandboxPropKind: 0=RUIN, 1=FOREST, 2=HAZARD_CLUSTER).
+# Grid chrome: house-style tokens by name (terrain-type fills are data and stay in map_layout.gd)
+const GRID_BACKGROUND := HouseStyle.SHEET_FILL
+const CELL_BORDER := Color(HouseStyle.LINE, 0.5)
+const RUIN_INSET_LINE := HouseStyle.ACCENT
+const GRID_LINE := Color(HouseStyle.MUTED, 0.3)
+const FINE_GRID_LINE := Color(HouseStyle.MUTED, 0.2)
+const TABLE_EDGE := HouseStyle.INK
+const CENTER_DOT := Color(HouseStyle.GOLD, 0.8)
+const SYMMETRY_AXIS := Color(HouseStyle.GOLD, 0.3)
+const RELIC_RING := HouseStyle.GOLD
+const LABEL_INK := HouseStyle.INK
+const LABEL_SIZE := HouseStyle.FONT_CAPTION
+
 const SANDBOX_INCH_M := 0.0254
 const SANDBOX_FILL_COLORS := {
 	0: Color(0.45, 0.55, 0.70, 0.45),  # ruin — slate blue
 	1: Color(0.25, 0.55, 0.28, 0.45),  # forest — green
 	2: Color(0.75, 0.30, 0.25, 0.45),  # hazard cluster — red
 }
-const SANDBOX_BORDER_COLOR := Color(0.95, 0.95, 0.95, 0.85)
+const SANDBOX_BORDER_COLOR := Color(HouseStyle.INK, 0.85)
 
 func _ready() -> void:
 	# Find MapLayout parent
@@ -97,7 +110,7 @@ func _draw() -> void:
 	# Clip to container bounds
 	var visible_grid_rect = grid_rect.intersection(clip_rect)
 	if visible_grid_rect.size.x > 0 and visible_grid_rect.size.y > 0:
-		draw_rect(visible_grid_rect, Color(0.15, 0.15, 0.15, 1.0), true)
+		draw_rect(visible_grid_rect, GRID_BACKGROUND, true)
 
 	# Calculate half extents for centering the grid
 	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
@@ -157,7 +170,7 @@ func _draw() -> void:
 			# Draw cell border
 			for i in range(4):
 				var next_i = (i + 1) % 4
-				draw_line(corners_rotated[i], corners_rotated[next_i], Color(0.4, 0.4, 0.4, 0.5), 1.0)
+				draw_line(corners_rotated[i], corners_rotated[next_i], CELL_BORDER, 1.0)
 
 			# Draw special markers for Ruins (blue border lines for impassable walls)
 			if terrain_type == map_layout.TerrainType.RUINS:
@@ -174,10 +187,10 @@ func _draw() -> void:
 
 				for i in range(4):
 					var next_i = (i + 1) % 4
-					draw_line(inner_corners[i], inner_corners[next_i], Color(0.2, 0.4, 0.9, 0.9), 2.0)
+					draw_line(inner_corners[i], inner_corners[next_i], RUIN_INSET_LINE, 2.0)
 
 	# Draw grid lines with manual rotation and clipping
-	var line_color = Color(0.6, 0.6, 0.6, 0.4)
+	var line_color = GRID_LINE
 
 	# Vertical lines (centered on intersection point)
 	for x in range(grid_dims.x + 1):
@@ -247,13 +260,13 @@ func _draw() -> void:
 		var centre: Vector2 = map_layout._inch_to_screen_pos(map_layout.relic_drop_centre)
 		var px_per_in: float = (pixels_per_inch_x + pixels_per_inch_y) * 0.5
 		draw_arc(centre, (map_layout.relic_drop_radius_in + 1.0) * px_per_in,
-			0.0, TAU, 64, Color(1.0, 0.85, 0.2), 3.0)
+			0.0, TAU, 64, RELIC_RING, 3.0)
 
 	# Draw table outline (always axis-aligned - represents the actual table)
-	draw_rect(grid_rect, Color.WHITE, false, 3.0)
+	draw_rect(grid_rect, TABLE_EDGE, false, 3.0)
 
 	# Draw center point (for symmetry reference)
-	draw_circle(center, 5.0, Color(1.0, 1.0, 0.0, 0.8))
+	draw_circle(center, 5.0, CENTER_DOT)
 
 	# Draw symmetry indicator if enabled
 	if map_layout.point_symmetry_enabled:
@@ -269,9 +282,9 @@ func _draw() -> void:
 		var v_clipped = _clip_line_to_rect(v_start, v_end, grid_rect)
 
 		if h_clipped:
-			draw_line(h_clipped[0], h_clipped[1], Color(1.0, 1.0, 0.0, 0.3), 2.0)
+			draw_line(h_clipped[0], h_clipped[1], SYMMETRY_AXIS, 2.0)
 		if v_clipped:
-			draw_line(v_clipped[0], v_clipped[1], Color(1.0, 1.0, 0.0, 0.3), 2.0)
+			draw_line(v_clipped[0], v_clipped[1], SYMMETRY_AXIS, 2.0)
 
 	# Draw table size info
 	var table_size = map_layout.table_size_feet
@@ -280,7 +293,7 @@ func _draw() -> void:
 		table_size.x * 12, table_size.y * 12,
 		grid_dims.x, grid_dims.y
 	]
-	draw_string(ThemeDB.fallback_font, grid_rect.position + Vector2(5, -5), size_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
+	draw_string(HouseStyle.theme().default_font, grid_rect.position + Vector2(5, -5), size_text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_SIZE, LABEL_INK)
 
 
 func _clip_line_to_rect(p1: Vector2, p2: Vector2, rect: Rect2) -> Variant:
@@ -365,10 +378,10 @@ func _draw_deployment_zones(grid_rect: Rect2) -> void:
 	var pixels_per_inch_x = grid_rect.size.x / table_size_inches.x
 	var pixels_per_inch_y = grid_rect.size.y / table_size_inches.y
 
-	var zone_color_p1 = Color(0.2, 0.5, 1.0, 0.25)  # Blue for player 1
-	var zone_color_p2 = Color(1.0, 0.3, 0.3, 0.25)  # Red for player 2
-	var zone_border_p1 = Color(0.3, 0.6, 1.0, 0.6)
-	var zone_border_p2 = Color(1.0, 0.4, 0.4, 0.6)
+	var zone_color_p1 = ZONE_FILL_P1
+	var zone_color_p2 = ZONE_FILL_P2
+	var zone_border_p1 = ZONE_EDGE_P1
+	var zone_border_p2 = ZONE_EDGE_P2
 
 	# Check deployment type by value (0=NONE, 1=FRONT_LINE, 2=CUSTOM)
 	var deploy_type = map_layout.deployment_type
@@ -390,7 +403,7 @@ func _draw_deployment_zones(grid_rect: Rect2) -> void:
 		draw_rect(p2_rect, zone_border_p2, false, 2.0)
 
 		# Draw labels
-		var font = ThemeDB.fallback_font
+		var font = _font()
 		draw_string(font, p1_rect.position + Vector2(10, 20), "Player 1 (12\")", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, zone_border_p1)
 		draw_string(font, p2_rect.position + Vector2(10, 20), "Player 2 (12\")", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, zone_border_p2)
 
@@ -471,14 +484,14 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 		draw_circle(screen_pos, vertex_size, zone_border_p1)
 		if is_editing:
 			# Show vertex number
-			draw_string(ThemeDB.fallback_font, screen_pos + Vector2(8, -4), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, zone_border_p1)
+			draw_string(_font(), screen_pos + Vector2(8, -4), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, zone_border_p1)
 
 	# Player 2 vertices
 	for i in range(p2_verts.size()):
 		var screen_pos = inch_to_screen.call(p2_verts[i])
 		draw_circle(screen_pos, vertex_size, zone_border_p2)
 		if is_editing:
-			draw_string(ThemeDB.fallback_font, screen_pos + Vector2(8, -4), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, zone_border_p2)
+			draw_string(_font(), screen_pos + Vector2(8, -4), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, zone_border_p2)
 
 	# Draw lines connecting vertices while editing (even if < 3 vertices)
 	if is_editing:
@@ -495,7 +508,7 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 				draw_line(start, end_pt, zone_border_p2, 1.5)
 
 	# Draw labels
-	var font = ThemeDB.fallback_font
+	var font = _font()
 	if p1_verts.size() > 0:
 		var first_pos = inch_to_screen.call(p1_verts[0])
 		draw_string(font, first_pos + Vector2(-40, -20), "P1", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, zone_border_p1)
@@ -507,7 +520,7 @@ func _draw_custom_zones(grid_rect: Rect2, zone_color_p1: Color, zone_color_p2: C
 func _draw_fine_grid(grid_rect: Rect2, pixels_per_inch_x: float, pixels_per_inch_y: float) -> void:
 	## Draw 1" fine grid for custom deployment zone editing
 	## Grid lines rotate with the main 3" grid, covering the full diagonal
-	var line_color = Color(0.5, 0.5, 0.5, 0.3)
+	var line_color = FINE_GRID_LINE
 	var center = grid_rect.position + grid_rect.size / 2.0
 	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 
@@ -594,7 +607,7 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 		var inch_y = local.y / pixels_per_inch_y + half_inches_y
 		return Vector2(inch_x, inch_y)
 
-	var snap_color = Color(1.0, 1.0, 0.3, 0.9)  # Yellow
+	var snap_color = SNAP_POINT
 	var zoom = map_layout.zoom_level if map_layout else 1.0
 	var snap_size = 4.0 * zoom
 
@@ -648,7 +661,7 @@ func _draw_boundary_snap_points(grid_rect: Rect2, pixels_per_inch_x: float, pixe
 			add_snap_point.call(clipped[1], snap_color, snap_size)
 
 	# Always add the 4 table corners as snap points
-	var corner_color = Color(1.0, 0.6, 0.2, 1.0)  # Orange for corners
+	var corner_color = SNAP_CORNER
 	var corner_size = 6.0 * zoom
 	var corners = [
 		grid_rect.position,                                      # Top-left
@@ -698,10 +711,10 @@ func _draw_mission_objectives(grid_rect: Rect2, pixels_per_inch_x: float, pixels
 	var seize_radius_pixels = seize_radius_inches * (pixels_per_inch_x + pixels_per_inch_y) / 2.0
 
 	# Colors
-	var objective_color = Color(1.0, 0.85, 0.2, 1.0)  # Gold/yellow
-	var objective_outline = Color(0.2, 0.15, 0.05, 1.0)  # Dark outline
-	var seize_ring_color = Color(1.0, 0.85, 0.2, 0.3)  # Semi-transparent gold
-	var seize_ring_border = Color(1.0, 0.85, 0.2, 0.6)  # Brighter border
+	var objective_color = OBJECTIVE
+	var objective_outline = OBJECTIVE_OUTLINE
+	var seize_ring_color = Color(OBJECTIVE, 0.3)
+	var seize_ring_border = Color(OBJECTIVE, 0.6)
 	var objective_size = 12.0 * zoom  # Size in pixels
 
 	# First pass: Draw 3" seize radius rings (behind objectives)
@@ -734,7 +747,7 @@ func _draw_mission_objectives(grid_rect: Rect2, pixels_per_inch_x: float, pixels
 		draw_circle(screen_pos, objective_size * 0.25, objective_outline)
 
 		# Draw objective number
-		var font = ThemeDB.fallback_font
+		var font = _font()
 		var label = str(i + 1)
 		draw_string(font, screen_pos + Vector2(objective_size + 4, 4) * zoom, label,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, int(12 * zoom), objective_color)
@@ -790,15 +803,15 @@ func _draw_sandbox_terrain(grid_rect: Rect2, pixels_per_inch_x: float, pixels_pe
 		var levels := int(node.get_meta("sandbox_level_count", 1))
 		if levels > 1:
 			var center_px: Vector2 = to_screen.call(center_inch)
-			draw_string(ThemeDB.fallback_font, center_px + Vector2(-4, 5), str(levels),
+			draw_string(_font(), center_px + Vector2(-4, 5), str(levels),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 14, SANDBOX_BORDER_COLOR)
 
 
 ## Draw warning indicators between objectives that are closer than 9"
 func _draw_objective_distance_warnings(inch_to_screen: Callable, zoom: float) -> void:
 	const MIN_DISTANCE_INCHES := 9.0
-	var warning_color = Color(1.0, 0.25, 0.2, 0.9)  # Bright red
-	var warning_fill = Color(1.0, 0.25, 0.2, 0.3)  # Semi-transparent red
+	var warning_color = WARNING_LINE
+	var warning_fill = Color(HouseStyle.DANGER, 0.3)
 
 	for i in range(map_layout.mission_objectives.size()):
 		for j in range(i + 1, map_layout.mission_objectives.size()):
@@ -818,7 +831,7 @@ func _draw_objective_distance_warnings(inch_to_screen: Callable, zoom: float) ->
 				_draw_exclamation_mark(midpoint, warning_color, warning_fill, zoom)
 
 				# Draw distance label
-				var font = ThemeDB.fallback_font
+				var font = _font()
 				var dist_label = "%.1f\"" % dist
 				draw_string(font, midpoint + Vector2(12, -8) * zoom, dist_label,
 					HORIZONTAL_ALIGNMENT_LEFT, -1, int(11 * zoom), warning_color)
@@ -907,8 +920,8 @@ func _draw_wall_segments(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vector
 	var angle_rad = deg_to_rad(map_layout.grid_rotation_degrees)
 	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
 
-	var wall_color = Color(0.9, 0.6, 0.2, 0.9)  # Orange for walls
-	var wall_outline = Color(0.3, 0.2, 0.05, 0.8)
+	var wall_color = WALL
+	var wall_outline = WALL_OUTLINE
 	var zoom = map_layout.zoom_level if map_layout else 1.0
 	var wall_width = 4.0 * zoom
 
@@ -979,9 +992,9 @@ func _draw_placed_objects(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vecto
 	var half_grid_cells = Vector2(grid_dims.x / 2.0, grid_dims.y / 2.0)
 	var zoom = map_layout.zoom_level if map_layout else 1.0
 
-	var tree_color = Color(0.1, 0.7, 0.1, 0.8)
-	var container_color = Color(0.7, 0.4, 0.1, 0.8)
-	var dangerous_color = Color(0.85, 0.2, 0.2, 0.8)
+	var tree_color = Color(HouseStyle.OK, 0.8)
+	var container_color = Color(HouseStyle.WARN, 0.8)
+	var dangerous_color = Color(HouseStyle.DANGER, 0.8)
 	var marker_size = 4.0 * zoom
 
 	var rotate_point = func(p: Vector2) -> Vector2:
@@ -1006,14 +1019,14 @@ func _draw_placed_objects(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vecto
 			# Tree: filled circle with a white cross
 			draw_circle(screen_pos, marker_size, tree_color)
 			var cross_len = marker_size * 0.7
-			draw_line(screen_pos - Vector2(cross_len, 0), screen_pos + Vector2(cross_len, 0), Color.WHITE, 1.0)
-			draw_line(screen_pos - Vector2(0, cross_len), screen_pos + Vector2(0, cross_len), Color.WHITE, 1.0)
+			draw_line(screen_pos - Vector2(cross_len, 0), screen_pos + Vector2(cross_len, 0), HouseStyle.INK, 1.0)
+			draw_line(screen_pos - Vector2(0, cross_len), screen_pos + Vector2(0, cross_len), HouseStyle.INK, 1.0)
 		elif obj_type == "container":
 			# Container: filled square
 			var half = marker_size * 0.8
 			var rect = Rect2(screen_pos - Vector2(half, half), Vector2(half * 2, half * 2))
 			draw_rect(rect, container_color, true)
-			draw_rect(rect, Color.WHITE, false, 1.0)
+			draw_rect(rect, HouseStyle.INK, false, 1.0)
 		else:
 			# Dangerous hazard (mine / puddle): filled diamond
 			var d = marker_size
@@ -1055,7 +1068,7 @@ func _draw_prefab_preview(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vecto
 	var flip: bool = map_layout._preview_flip
 
 	var ttype: int = TerrainPrefabs.terrain_type(key)
-	var col: Color = map_layout.TERRAIN_COLORS.get(ttype, Color.WHITE)
+	var col: Color = map_layout.TERRAIN_COLORS.get(ttype, HouseStyle.INK)
 	col.a = 0.45
 	for cell in TerrainPrefabs.footprint_cells(key, origin, rot, flip):
 		var poly := PackedVector2Array([
@@ -1066,14 +1079,14 @@ func _draw_prefab_preview(grid_rect: Rect2, cell_size: Vector2, grid_dims: Vecto
 		])
 		draw_colored_polygon(poly, col)
 		for i in range(4):
-			draw_line(poly[i], poly[(i + 1) % 4], Color(1, 1, 1, 0.7), 1.0)
+			draw_line(poly[i], poly[(i + 1) % 4], Color(HouseStyle.INK, 0.7), 1.0)
 
 	for seg in TerrainPrefabs.wall_segments_for(key, origin, rot, flip):
 		var pts := _edge_corners(seg["edge_cell"], seg["edge_side"])
 		draw_line(
 			_grid_point_to_screen(pts[0].x, pts[0].y, grid_rect, cell_size, grid_dims),
 			_grid_point_to_screen(pts[1].x, pts[1].y, grid_rect, cell_size, grid_dims),
-			Color(0.3, 0.6, 1.0, 0.95), 3.0)
+			Color(HouseStyle.ACCENT, 0.95), 3.0)
 
 
 ## Bright outline around every footprint cell of the currently selected piece.
@@ -1090,4 +1103,23 @@ func _draw_selected_piece_outline(grid_rect: Rect2, cell_size: Vector2, grid_dim
 			_grid_point_to_screen(cell.x, cell.y + 1, grid_rect, cell_size, grid_dims),
 		])
 		for i in range(4):
-			draw_line(poly[i], poly[(i + 1) % 4], Color(1.0, 0.9, 0.2, 0.95), 2.5)
+			draw_line(poly[i], poly[(i + 1) % 4], Color(HouseStyle.GOLD, 0.95), 2.5)
+
+
+# Zone / objective / wall / snap colours from the house tokens (terrain-type fills are data: map_layout.gd)
+const ZONE_FILL_P1 := Color(HouseStyle.ACCENT, 0.25)
+const ZONE_FILL_P2 := Color(HouseStyle.DANGER, 0.25)
+const ZONE_EDGE_P1 := Color(HouseStyle.ACCENT, 0.6)
+const ZONE_EDGE_P2 := Color(HouseStyle.DANGER, 0.6)
+const SNAP_POINT := Color(HouseStyle.GOLD, 0.9)
+const SNAP_CORNER := HouseStyle.WARN
+const OBJECTIVE := HouseStyle.GOLD
+const OBJECTIVE_OUTLINE := HouseStyle.ON_GOLD
+const WARNING_LINE := Color(HouseStyle.DANGER, 0.9)
+const WALL := Color(HouseStyle.WARN, 0.9)
+const WALL_OUTLINE := Color(HouseStyle.ON_GOLD, 0.8)
+
+
+## The house font for canvas text.
+func _font() -> Font:
+	return HouseStyle.theme().default_font

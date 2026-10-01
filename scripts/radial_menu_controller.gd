@@ -960,6 +960,13 @@ func card_toggle_activation(unit: GameUnit) -> void:
 		_toggle_activation({"game_unit": unit})
 
 
+## D23 stage 2: the card's "Activate" button — the committed start (main.begin_activation, then the unit
+## counts as spent). Not a toggle: a unit that already started does nothing here.
+func card_start_activation(unit: GameUnit) -> void:
+	if unit != null and not unit.is_activated:
+		await _toggle_activation({"game_unit": unit})
+
+
 func card_toggle_fatigued(unit: GameUnit) -> void:
 	if unit != null:
 		_toggle_fatigued({"game_unit": unit})
