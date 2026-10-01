@@ -600,6 +600,7 @@ func _on_custom_zone_clear() -> void:
 func _handle_custom_zone_click(cell: Vector2) -> void:
 	if not custom_zone_editing:
 		return
+	_push_undo()  # one undo step per vertex
 
 	if custom_zone_symmetric:
 		if _custom_zone_stale_p1:
@@ -1034,6 +1035,9 @@ func _rebuild_derived() -> void:
 
 func _snapshot() -> Dictionary:
 	return {
+		"zone_p1": custom_zone_vertices_p1.duplicate(),
+		"zone_p2": custom_zone_vertices_p2.duplicate(),
+		"zone_stale": [_custom_zone_stale_p1, _custom_zone_stale_p2],
 		"pieces": placed_pieces.duplicate(true),
 		"free_cells": free_cells.duplicate(true),
 		"free_walls": free_walls.duplicate(true),
@@ -1045,9 +1049,23 @@ func _apply_snapshot(snap: Dictionary) -> void:
 	placed_pieces = (snap["pieces"] as Array).duplicate(true)
 	free_cells = (snap["free_cells"] as Dictionary).duplicate(true)
 	free_walls = (snap["free_walls"] as Array).duplicate(true)
+	if snap.has("zone_p1"):
+		_apply_zone_snapshot(snap)
 	_next_piece_id = int(snap.get("next_id", _next_piece_id))
 	_rebuild_derived()
 	_update_modular_status()
+
+
+## Restore the custom-zone vertices (and the "old zone kept until the first new vertex" flags).
+func _apply_zone_snapshot(snap: Dictionary) -> void:
+	custom_zone_vertices_p1.assign(snap["zone_p1"])
+	custom_zone_vertices_p2.assign(snap["zone_p2"])
+	_custom_zone_stale_p1 = snap["zone_stale"][0]
+	_custom_zone_stale_p2 = snap["zone_stale"][1]
+	if _custom_zone_confirm_btn:
+		_custom_zone_confirm_btn.disabled = not custom_zone_editing or _custom_zone_current_count() < 3
+	if deployment_type == DeploymentType.CUSTOM:
+		deployment_type_changed.emit(DeploymentType.CUSTOM)
 
 
 ## Push the current state onto the undo stack (call BEFORE a mutation).
