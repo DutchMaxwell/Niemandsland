@@ -13,7 +13,11 @@ import argparse
 import copy
 import hashlib
 import json
+import os
+import resource
+import statistics
 import sys
+import time
 
 
 def canon(obj) -> str:
@@ -69,6 +73,93 @@ def red_die(rec):
     return bad
 
 
+# ---- part 2: the timing set (PREREG section 6) ---------------------------------------------------
+BUDGETS = (32, 64, 128, 256)
+#: chi2 quantile(0.10, 12) — the prereg's small-pilot variance allowance F = 12 / this.
+CHI2_Q10_DF12 = 6.303801
+Z_995, Z_80 = statistics.NormalDist().inv_cdf(0.995), statistics.NormalDist().inv_cdf(0.80)
+
+
+def pick_states(states, per_cell=12):
+    """The first `per_cell` legal pre-pick states of every cell, in source order; a short cell fails."""
+    out = {}
+    for st in states:
+        out.setdefault(st["cell"], [])
+        if len(out[st["cell"]]) < per_cell:
+            out[st["cell"]].append(st)
+    short = {c: len(v) for c, v in out.items() if len(v) < per_cell}
+    if short:
+        raise SystemExit("timing instrument fails: short cells %s" % short)
+    return out
+
+
+def measure(call, reps=3):
+    """One unmeasured warm-up, then `reps` monotonic wall times in ms of the full planner call."""
+    call()
+    times = []
+    for _ in range(reps):
+        t0 = time.perf_counter()
+        call()
+        times.append((time.perf_counter() - t0) * 1e3)
+    return times
+
+
+def allowance_us(times_ms):
+    """B(cell) = min(4 x median, 1000 ms), rounded DOWN to integer microseconds, at least 1."""
+    return max(1, int(min(4 * statistics.median(times_ms), 1000.0) * 1000))
+
+
+def projected_mde(var_by_cell, n_c, cells=12):
+    """Projected MDE in points: 100 (z.995 + z.80) sqrt(F V), V = sum_c (1/cells)^2 s_c^2 / n_c."""
+    v = sum((1 / cells) ** 2 * s2 / n_c for s2 in var_by_cell.values())
+    return 100 * (Z_995 + Z_80) * (cells / CHI2_Q10_DF12 * v) ** 0.5
+
+
+def peak_rss_mib():
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+
+
+def cmd_timing(a) -> int:
+    import nml_core as nm  # lazy
+    states = pick_states(json.load(open(a.states)), a.per_cell)
+    core = nm.load(a.repo)
+    base = json.load(open(a.header))
+    if a.statics:
+        statics = json.loads(a.statics)
+    else:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
+        import selfplay
+        statics = selfplay.TRAINER_STATICS
+    rows, report = {}, ["# Tree pilot timing set", ""]
+    for cell, sts in sorted(states.items()):
+        def run(st, extra):
+            core.set_header(dict(base, knobs=dict(base["knobs"], **extra)))
+            return lambda: core.plan_with_rollout(core.state_of(st["state"]), st["player"], statics)
+        inc = [t for st in sts for t in measure(run(st, {}))]
+        rows[cell] = {"incumbent_median_ms": statistics.median(inc), "B_us": allowance_us(inc), "tree": {}}
+        for b in BUDGETS:
+            ex = {"search_mode": "tree", "tree_budget": b, "tree_wall_ms": rows[cell]["B_us"] // 1000}
+            times, active, done, hit = [], 0, [], 0
+            for st in sts:
+                times += measure(run(st, ex))
+                tr = (run(st, ex)() or {}).get("trace", {}).get("tree")
+                active += tr is not None
+                done += [tr["completed"]] if tr else []
+                hit += bool(tr and tr.get("deadline_hit"))
+            rows[cell]["tree"][b] = {"median_ms": statistics.median(times), "tree_active": active == len(sts),
+                                     "completed": done, "deadline_hits": hit, "decisions": len(sts)}
+        report.append("- %s: incumbent median %.1f ms, B=%d us; tree %s" % (
+            cell, rows[cell]["incumbent_median_ms"], rows[cell]["B_us"],
+            {b: (round(v["median_ms"], 1), "ACTIVE" if v["tree_active"] else "INVALID: knob not live") for b, v in rows[cell]["tree"].items()}))
+    report.append("\npeak RSS %.0f MiB" % peak_rss_mib())
+    if a.block_variance:
+        var = json.load(open(a.block_variance))
+        report.append("projected MDE A %.2f pts, B %.2f pts" % (projected_mde(var["A"], 40), projected_mde(var["B"], 104)))
+    open(a.out, "w").write("\n".join(report) + "\n")
+    json.dump(rows, open(a.out + ".json", "w"), sort_keys=True)
+    return 0
+
+
 def cmd_pilot(a) -> int:
     plan = {"transitions": a.count, "reds": ["RED-VP", "RED-DIE"], "workers": a.workers,
             "wall_hours": a.wall_hours, "rss_gib": a.rss_gib, "namespace": a.namespace}
@@ -112,8 +203,16 @@ def main(argv) -> int:
     p.add_argument("--expect-epoch", type=int)
     p.add_argument("--expect-model-sha")
     p.add_argument("--dry-run", action="store_true")
+    t = sub.add_parser("timing")
+    t.add_argument("--states", required=True, help="JSON list of {cell, state, player}")
+    t.add_argument("--header", required=True, help="JSON header with a knobs block (the incumbent 10/3)")
+    t.add_argument("--statics", default=None)
+    t.add_argument("--per-cell", type=int, default=12)
+    t.add_argument("--block-variance", default="", help='JSON {"A": {cell: s2}, "B": {cell: s2}}')
+    t.add_argument("--repo", default=".")
+    t.add_argument("--out", required=True)
     a = ap.parse_args(argv)
-    return cmd_pilot(a)
+    return cmd_timing(a) if a.cmd == "timing" else cmd_pilot(a)
 
 
 if __name__ == "__main__":
