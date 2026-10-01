@@ -313,8 +313,29 @@ static func theme() -> Theme:
 	# Progress bars (the model download): a sunken track, the fill in the accent.
 	t.set_stylebox(&"background", &"ProgressBar", _box(WELL, LINE, RADIUS_CONTROL, 0, 0))
 	t.set_stylebox(&"fill", &"ProgressBar", _box(ACCENT, ACCENT, RADIUS_CONTROL, 0, 0))
+
+	# A slim slider (the Map editor's rotation): a sunken groove, an accent fill, a gold knob.
+	var groove := _box(WELL, LINE, 3, 0, 0)
+	groove.content_margin_top = 3
+	groove.content_margin_bottom = 3
+	t.set_stylebox(&"slider", &"HSlider", groove)
+	t.set_stylebox(&"grabber_area", &"HSlider", _box(_alpha(ACCENT, 0.55), _alpha(ACCENT, 0.55), 3, 0, 0))
+	t.set_stylebox(&"grabber_area_highlight", &"HSlider", _box(ACCENT, ACCENT, 3, 0, 0))
+	for icon_name: StringName in [&"grabber", &"grabber_highlight", &"grabber_disabled"]:
+		t.set_icon(icon_name, &"HSlider", _knob(GOLD if icon_name != &"grabber_disabled" else LINE))
 	_theme = t
 	return t
+
+
+## A round knob texture (slider grabber) in `color`.
+static func _knob(color: Color) -> ImageTexture:
+	var d := 16
+	var img := Image.create(d, d, false, Image.FORMAT_RGBA8)
+	for y in d:
+		for x in d:
+			var dist := Vector2(x + 0.5, y + 0.5).distance_to(Vector2(d / 2.0, d / 2.0))
+			img.set_pixel(x, y, Color(color.r, color.g, color.b, clampf(d / 2.0 - dist, 0.0, 1.0)))
+	return ImageTexture.create_from_image(img)
 
 
 # ===== Builder =====

@@ -1229,6 +1229,12 @@ EXPLORE_SEED_STRIDE = 700001
 # `game_seed * CAP_SEED_STRIDE + seq`: a stride of its own, disjoint from every
 # other derived-seed family here, so no stream can observe another's draws.
 CAP_SEED_STRIDE = 700003
+# The tree search knobs' defaults (acts.rs `Knobs`), so a per-seat value equal
+# to its default is not a part and stays unstamped.
+TREE_KNOB_DEFAULTS = {
+    "search_mode": "oneply", "tree_leaf": "blend", "tree_dice": "ev", "tree_budget": 128,
+    "tree_samples": 4, "tree_batch": 8, "tree_wall_ms": 0, "pool_wall_ms": 0,
+}
 
 
 # ------------------------------------------------------------------- game ----
@@ -1317,6 +1323,11 @@ def _pick_for(
     extra = {"cand_logits": logits, "policy_mode": policy_mode} if logits is not None else {}
     vhook = (pool_value_fn or {}).get(player)
     lhook = (leaf_value_fn or {}).get(player)
+    # A Tray-dice tree seat needs the chance stream's signature; the dedicated
+    # per-activation stream seed is it when the caller passes none.
+    kn = core.knobs()
+    if kn.get("search_mode") == "tree" and kn.get("tree_dice") == "tray":
+        extra = dict(extra, sig=explore_seed)
     if lhook is not None:
         extra = dict(extra, leaf_value_fn=lhook, leaf_value_w=leaf_value_w)
     pick = core.plan_with_rollout(
@@ -2116,6 +2127,14 @@ def play_game(
     deep_player: int = 0,
     deep_top_k: int | None = None,
     deep_horizon: int | None = None,
+    deep_search_mode: str | None = None,
+    deep_tree_leaf: str | None = None,
+    deep_tree_dice: str | None = None,
+    deep_tree_budget: int | None = None,
+    deep_tree_samples: int | None = None,
+    deep_tree_batch: int | None = None,
+    deep_tree_wall_ms: int | None = None,
+    deep_pool_wall_ms: int | None = None,
     record_cands: bool = False,
     eval_variant_player: int = 0,
     eval_variant: int = 0,
@@ -2340,7 +2359,13 @@ def play_game(
     State objects are core-independent (`state_of`/`resolve_*` take them as
     arguments), so the two cores share one game; the other seat keeps the base
     core and every caller that passes nothing (0, the default) plays the
-    identical game the pre-knob code did. A deep game whose deep pair EQUALS
+    identical game the pre-knob code did. The eight `deep_search_mode` /
+    `deep_tree_*` / `deep_pool_wall_ms` kwargs (None = unset) join the deep
+    core's header knobs the same way (the tree search knobs, keys `search_mode`,
+    `tree_leaf`, ... `pool_wall_ms`); a value EQUAL to the knob's default is
+    not a part, and only a value that parted is stamped into that seat's
+    `knobs_by_seat` entry. A tree kwarg without `deep_player` raises. A deep
+    game whose deep pair EQUALS
     the resolved base pair digests byte-identically to a plain game — the
     proof that the second core really sees the same header — and when the
     pair parts, the result stamps both seats' resolved depths as
@@ -2376,6 +2401,18 @@ def play_game(
     `cap_share`, stamping `row["cap"]` (True = cap core planned the act, a
     value-only row; False = the seat's full-search core, the policy target).
     0.0, the default, builds no core, draws no coin, stamps no key."""
+    # Tree search knobs of the deep seat: only a value that PARTS from the
+    # knob's default joins the header and the stamp (NML-1147a pattern).
+    tree_seat = {
+        k: v for k, v in (
+            ("search_mode", deep_search_mode), ("tree_leaf", deep_tree_leaf),
+            ("tree_dice", deep_tree_dice), ("tree_budget", deep_tree_budget),
+            ("tree_samples", deep_tree_samples), ("tree_batch", deep_tree_batch),
+            ("tree_wall_ms", deep_tree_wall_ms), ("pool_wall_ms", deep_pool_wall_ms),
+        ) if v is not None and v != TREE_KNOB_DEFAULTS[k]
+    }
+    if tree_seat and deep_player not in (1, 2):
+        raise ValueError(f"tree knobs {sorted(tree_seat)} need deep_player 1 or 2")
     units1 = load_army(list_p1, 1, rules_epoch)
     units2 = load_army(list_p2, 2, rules_epoch)
     if not units1 or not units2:
@@ -2579,7 +2616,8 @@ def play_game(
         d_menu_wide = eff_deep_menu_wide
         deep_core.set_header(
             {**header, "knobs": dict(knobs, top_k=d_top_k, horizon=d_horizon,
-                                     menu_los=d_menu_los, menu_wide=d_menu_wide)}
+                                     menu_los=d_menu_los, menu_wide=d_menu_wide,
+                                     **tree_seat)}
         )
         if legacy_source_qd:
             deep_core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
@@ -2589,10 +2627,10 @@ def play_game(
         # NML-1147a pattern: the stamp rides ONLY a game whose deep pair parted
         # from the base pair — an equal-knobs deep game digests byte-identically
         # to a plain game, stamp included.
-        if (d_top_k, d_horizon, d_menu_los, d_menu_wide) != (
+        if tree_seat or (d_top_k, d_horizon, d_menu_los, d_menu_wide) != (
             eff_top_k, eff_horizon, eff_menu_los, eff_menu_wide
         ):
-            deep_stamp: dict[str, Any] = {"top_k": d_top_k, "horizon": d_horizon}
+            deep_stamp: dict[str, Any] = {"top_k": d_top_k, "horizon": d_horizon, **tree_seat}
             base_stamp: dict[str, Any] = {"top_k": eff_top_k, "horizon": eff_horizon}
             # NML-1161b, NML-1147a pattern: the MENU half of the stamp rides
             # only a game whose two seats actually parted on it, so a
