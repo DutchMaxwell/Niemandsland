@@ -146,7 +146,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         rounds_total: 4,
         scoring: Rc::from("markers"),
         objectives: markers.iter().map(|m| Objective { pos: [m[0] * IN2M, m[1] * IN2M, m[2] * IN2M], owner: 0 }).collect(),
-        markers_meta: Vec::new(), destroy_seq: Vec::new(),
+        markers_meta: Vec::new(), destroy_seq: Vec::new(), attacker: 0,
         vp: None, vp_flavour: None, vp_memo: None, cast_events: Vec::new(),
         player: (0..n).map(|i| if i < na { 1 } else { 2 }).collect(),
         alive,

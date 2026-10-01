@@ -426,6 +426,8 @@ pub struct State {
     pub objectives: Vec<Objective>,
     pub markers_meta: Vec<Marker>,
     pub destroy_seq: Vec<i64>,
+    /// Attack & Defend: the attacker's player slot (1 or 2); 0 = no roles (every older record).
+    pub attacker: i64,
     pub vp: Option<Rc<serde_json::Value>>,
     pub vp_flavour: Option<Rc<serde_json::Value>>,
     pub vp_memo: Option<Rc<serde_json::Value>>,

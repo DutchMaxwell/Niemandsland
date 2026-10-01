@@ -167,3 +167,22 @@ def test_a_six_round_catalog_mission_plays_six_rounds_and_duel_stays_at_four():
         del catalog["six_round_fixture"]
     assert six["rounds_played"] == 6 and six["mission"]["rounds"] == 6
     assert duel["rounds_played"] == 4 and duel["mission"]["rounds"] == 4
+
+
+@needs_lists
+def test_roles_mission_stamps_the_roll_off_winners_pick_and_duel_stays_roles_free():
+    """NML-1010 D2b: R7a — the roll-off winner attacks when the mission grants the +25 % side,
+    else defends. Same seed = same winner, so the two catalogs stamp opposite P1 roles."""
+    core = nml_core.load(str(REPO))
+    sp.resolve_mission("duel", REPO)
+    catalog = sp._MISSION_CATALOG_CACHE[str(REPO)]
+    base = dict(catalog["duel"], roles=True)
+    catalog["roles_bonus"] = dict(base, attacker_points_factor=1.25)
+    catalog["roles_even"] = dict(base, attacker_points_factor=1.0)
+    try:
+        bonus, even = _play("roles_bonus", core), _play("roles_even", core)
+        duel = _play("duel", core)
+    finally:
+        del catalog["roles_bonus"], catalog["roles_even"]
+    assert {bonus["mission"]["role_p1"], even["mission"]["role_p1"]} == {"attacker", "defender"}
+    assert "role_p1" not in duel["mission"]

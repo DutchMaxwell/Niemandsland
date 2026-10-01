@@ -66,11 +66,11 @@ func _tab_button(title: String) -> Button:
 
 func test_every_control_of_the_editor_is_present() -> void:
 	var missing := _missing(["Save", "Load", "Clear All", "Close", "Ruins", "Forest", "Container",
-		"Dangerous", "None", "↶ Undo", "↷ Redo", "Point Symmetry (Mirror)", "Auto-Generate Layout",
+		"Dangerous", "Erase", "↶ Undo", "↷ Redo", "Point Symmetry (Mirror)", "Auto-Generate Layout",
 		"Deploy Objectives", "Show in Preview", "Symmetric (point-mirrored)", "Start Drawing", "Confirm"])
 	assert_array(missing).override_failure_message("controls missing from the editor: %s" % [missing]).is_empty()
 	assert_object(_ed.find_child("EditorTabs", true, false)).is_not_null()
-	assert_str(_ed._editor_mode_btn.text).starts_with("Mode: ")
+	assert_object(_ed.find_child("ModePlaceButton", true, false)).is_not_null()
 	assert_object(_ed._prefab_option_btn).is_not_null()
 	assert_object(_ed._wall_option_btn).is_not_null()
 	assert_object(_ed.rotation_slider).is_not_null()
@@ -129,30 +129,20 @@ func test_clear_all_clears_pieces_cells_and_walls_and_undo_brings_them_back() ->
 func test_terrain_type_buttons_select_the_type() -> void:
 	for pair: Array in [["Ruins", _ed.TerrainType.RUINS], ["Forest", _ed.TerrainType.FOREST],
 			["Container", _ed.TerrainType.CONTAINER], ["Dangerous", _ed.TerrainType.DANGEROUS],
-			["None", _ed.TerrainType.NONE]]:
+			["Erase", _ed.TerrainType.NONE]]:
 		var b := _by_text(pair[0])
 		b.button_pressed = true
 		b.pressed.emit()
 		assert_int(_ed.selected_terrain_type).is_equal(pair[1])
 
 
-func test_mode_button_cycles_paint_walls_place_move_paint() -> void:
+func test_mode_segments_switch_modes_in_one_click() -> void:
 	var seen: Array = [_ed.editor_mode]
-	for _i in 4:
-		_ed._editor_mode_btn.pressed.emit()
+	for n in ["ModeMoveButton", "ModePaintButton", "ModeWallsButton", "ModePlaceButton"]:
+		_ed.find_child(n, true, false).pressed.emit()
 		seen.append(_ed.editor_mode)
-	assert_array(seen).contains_exactly([_ed.EditorMode.PAINT_CELLS, _ed.EditorMode.PLACE_WALLS,
-		_ed.EditorMode.PLACE_PREFAB, _ed.EditorMode.MOVE_PIECES, _ed.EditorMode.PAINT_CELLS])
-	assert_str(_ed._editor_mode_btn.text).is_equal("Mode: Paint Cells")
-
-
-func test_mode_button_text_names_the_keys() -> void:
-	_ed._editor_mode_btn.pressed.emit()
-	assert_str(_ed._editor_mode_btn.text).is_equal("Mode: Place Walls")
-	_ed._editor_mode_btn.pressed.emit()
-	assert_str(_ed._editor_mode_btn.text).contains("R rotate").contains("F flip")
-	_ed._editor_mode_btn.pressed.emit()
-	assert_str(_ed._editor_mode_btn.text).contains("Del")
+	assert_array(seen).contains_exactly([_ed.EditorMode.PLACE_PREFAB, _ed.EditorMode.MOVE_PIECES,
+		_ed.EditorMode.PAINT_CELLS, _ed.EditorMode.PLACE_WALLS, _ed.EditorMode.PLACE_PREFAB])
 
 
 func test_prefab_dropdown_selects_a_piece_and_switches_to_place_mode() -> void:
