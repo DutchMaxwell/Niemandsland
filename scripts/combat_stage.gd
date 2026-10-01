@@ -150,12 +150,16 @@ func _render() -> void:
 		call_deferred("_place_default")
 
 
-## Default spot: top-centre under the turn banner; a drag wins from then on.
+## Default spot: top-centre BELOW the three status lanes (banner 92 / toast 116 / peer 140 in main.gd,
+## each ~26 px tall), so NACHTMAHR's turn banner stays readable; a drag wins from then on.
+const DEFAULT_TOP := 172.0
+
+
 func _place_default() -> void:
 	if _panel == null or not is_instance_valid(_panel):
 		return
 	var vp := _panel.get_viewport_rect().size
-	_panel.position = Vector2((vp.x - _panel.size.x) * 0.5, 64.0)
+	_panel.position = Vector2((vp.x - _panel.size.x) * 0.5, DEFAULT_TOP)
 
 
 func _ensure_panel() -> void:
