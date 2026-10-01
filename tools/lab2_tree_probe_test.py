@@ -104,3 +104,31 @@ def test_projected_mde_matches_the_prereg_formula_and_the_chi2_constant():
     want = 100 * (2.5758293 + 0.8416212) * (12 / 6.3038 * v) ** 0.5
     assert abs(lab.projected_mde({"c%d" % i: 0.25 for i in range(12)}, 40) - want) < 1e-3
     assert lab.projected_mde({"c": 0.0}, 40) == 0.0  # zero variance is reported, not hidden
+
+
+def test_streams_are_shared_across_arms_and_distinct_across_positions_and_replicates():
+    seeds = {(p, r): lab.stream_pair(Nm, p, r)[0].state for p in range(3) for r in range(8)}
+    assert len(set(seeds.values())) == 24 and seeds[(0, 0)] == 740_000_000
+    assert lab.stream_pair(Nm, 1, 2)[0].state == lab.stream_pair(Nm, 1, 2)[0].state  # the same pair for every arm
+
+
+def test_position_gains_are_mean_stream_differences():
+    y = {"I": [0.0, 0.5, 1.0, 0.0] * 2, "L": [1.0] * 8, "T": [0.5] * 8}
+    g = lab.position_gains(y)
+    assert abs(g["A_L"] - 0.625) < 1e-12 and abs(g["A_T"] - 0.125) < 1e-12 and abs(g["A_TL"] + 0.5) < 1e-12
+
+
+def test_bootstrap_known_winner_identical_arms_and_four_games_are_not_four_blocks():
+    np = __import__("pytest").importorskip("numpy")
+    cells = ["c%d" % i for i in range(12)]
+    mk = lambda v: {c: {"g%d" % j: {"A_T": v, "A_L": v, "A_TL": 0.0} for j in range(5)} for c in cells}
+    win = lab.bootstrap_intervals(mk(0.2), resamples=300, seed=1)
+    assert abs(win["A_T"]["point"] - 20.0) < 1e-9 and win["A_T"]["lo"] > 0       # a known winning arm
+    zero = lab.bootstrap_intervals(mk(0.0), resamples=300, seed=1)
+    assert all(v["point"] == 0 and v["lo"] == 0 and v["hi"] == 0 for v in zero.values())  # identical arms: all gains zero
+    # two boards (gains 0 and 0.4) in every cell; counting each board's four correlated games as four
+    # independent clusters narrows the interval, and the scorer must be the WIDER one (clusters = boards)
+    boards = lambda reps: {c: {"b%d_%d" % (b, j): {"A_T": 0.4 * b, "A_L": 0.0, "A_TL": 0.0} for b in (0, 1) for j in range(reps)} for c in cells}
+    w_boards = lab.bootstrap_intervals(boards(1), resamples=300, seed=1)["A_T"]
+    w_games = lab.bootstrap_intervals(boards(4), resamples=300, seed=1)["A_T"]
+    assert w_boards["hi"] - w_boards["lo"] > w_games["hi"] - w_games["lo"]
