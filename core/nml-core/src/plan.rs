@@ -136,6 +136,10 @@ pub struct Pick {
     /// joined by `trace.scored`'s `idx`; every other consumer ignores it, so
     /// the default answer is byte-identical to what it always was.
     pub cands: Vec<Candidate>,
+    /// `(rollouts completed, deadline hit)` — `Some` ONLY when `pool_wall_ms`
+    /// is on (the stamp law: a new record key rides only a pick where the knob
+    /// is set). `pool_idx` / `rs` then cover exactly the completed rollouts.
+    pub pool_completed: Option<(usize, bool)>,
 }
 
 /// NML-1165 R4 (DESIGN_value_net §7) — the LEAF VALUE seam. `Search::run`
@@ -583,7 +587,7 @@ impl<'a> Search<'a> {
         }
 
         // PHASE 3 — the pool.
-        let (covered, pool) = build_pool(&scored, &order, top_k, self.bend);
+        let (mut covered, mut pool) = build_pool(&scored, &order, top_k, self.bend);
 
         // PHASE 4 — exactly ONE rollout per pool candidate, in pool order.
         //
@@ -595,8 +599,25 @@ impl<'a> Search<'a> {
         // all, so splitting the loop moves nothing — with no hook wired 4b is
         // skipped and 4c prices exactly what the single loop priced.
         let mut ends_of: Vec<Vec<State>> = Vec::with_capacity(pool.len());
+        // `pool_wall_ms` (off = 0): the SAFETY deadline on this pass. The first
+        // rollout always completes, so there is always a pick; a hit drops the
+        // unrolled tail of the pool and the pick is over the completed rows.
+        let wall = self.roll.knobs.pool_wall_ms;
+        let started = std::time::Instant::now();
+        let mut pool_completed = None;
         for &i in &pool {
+            if wall > 0 && !ends_of.is_empty() && started.elapsed().as_millis() as i64 >= wall {
+                break;
+            }
             ends_of.push(self.roll.rollout_boundaries(state, &scored[i].cand, player, -1, sc)?);
+        }
+        if wall > 0 {
+            let cut = ends_of.len() < pool.len();
+            pool_completed = Some((ends_of.len(), cut));
+            if cut {
+                pool.truncate(ends_of.len());
+                covered.retain(|k| pool.iter().any(|&i| scored[i].unit_key == *k));
+            }
         }
         let mut leaf_vals: Vec<f64> = Vec::new();
         if let Some(h) = self.leaf_value.filter(|_| self.leaf_value_w != 0.0) {
@@ -726,6 +747,7 @@ impl<'a> Search<'a> {
             arbitration,
             explored,
             cands: scored.iter().map(|r| r.cand.clone()).collect(),
+            pool_completed,
         })
     }
 }

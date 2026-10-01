@@ -63,21 +63,21 @@ const PLACEMENT_TRIES := 20
 ## size = footprint in 3" cells; wall_shape "L" = walls on north + west outer edges.
 const PREFABS := {
 	"ruine_9x9": {
-		"display": "Ruine 9×9",
+		"display": "Ruin 9×9",
 		"type": TYPE_RUINS,
 		"size": Vector2i(3, 3),
 		"wall_shape": "L",
 		"deco": "",
 	},
 	"ruine_9x6": {
-		"display": "Ruine 9×6",
+		"display": "Ruin 9×6",
 		"type": TYPE_RUINS,
 		"size": Vector2i(3, 2),
 		"wall_shape": "L",
 		"deco": "",
 	},
 	"wald_9x9": {
-		"display": "Wald 9×9",
+		"display": "Forest 9×9",
 		"type": TYPE_FOREST,
 		"size": Vector2i(3, 3),
 		"wall_shape": "",

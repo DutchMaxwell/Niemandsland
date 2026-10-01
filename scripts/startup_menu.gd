@@ -553,7 +553,7 @@ func _show_host_popup() -> void:
 	_host_public_check.focus_mode = Control.FOCUS_ALL
 	content.add_child(_host_public_check)
 	var info := NetDialog.label("Your invitation code appears once you connect at the table.")
-	info.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	info.theme_type_variation = HouseStyle.CAPTION
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	content.add_child(info)
 
@@ -602,7 +602,7 @@ func _show_join_popup() -> void:
 	# Validation feedback right under the field it belongs to; hidden until Join is
 	# pressed with an unusable code (see _on_join_confirmed).
 	_join_error_label = NetDialog.label("")
-	_join_error_label.add_theme_color_override("font_color", HudTokens.DANGER)
+	_join_error_label.add_theme_color_override("font_color", HouseStyle.tone_ink(HouseStyle.TONE_DANGER))
 	_join_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_join_error_label.visible = false
 	content.add_child(_join_error_label)
@@ -698,7 +698,7 @@ func _show_browse_popup() -> void:
 	content.add_child(scroll)
 	_browse_rooms_vbox = VBoxContainer.new()
 	_browse_rooms_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_browse_rooms_vbox.add_theme_constant_override("separation", HudTokens.SPACE_4)
+	_browse_rooms_vbox.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
 	scroll.add_child(_browse_rooms_vbox)
 
 	# A reusable lobby just for listing (its _process polls the relay socket).
@@ -742,7 +742,7 @@ func _on_browse_rooms_received(rooms: Array) -> void:
 	# Count line above the rows, mirroring the explicit 0-state.
 	var count_label := Label.new()
 	count_label.text = "%d game%s online:" % [rooms.size(), "" if rooms.size() == 1 else "s"]
-	count_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	count_label.theme_type_variation = HouseStyle.CAPTION
 	_browse_rooms_vbox.add_child(count_label)
 	for room: Variant in rooms:
 		var code := str(room.get("code", ""))
@@ -750,7 +750,7 @@ func _on_browse_rooms_received(rooms: Array) -> void:
 		if code.is_empty():
 			continue
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", HudTokens.SPACE_8)
+		row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 		var label := Label.new()
 		label.text = "%s   %d/%d" % [InternetLobby._format_code(code), players, InternetLobby.MAX_ROOM_PLAYERS]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -797,7 +797,7 @@ func _set_browse_status(text: String) -> void:
 		child.queue_free()
 	var label := Label.new()
 	label.text = text
-	label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	label.theme_type_variation = HouseStyle.CAPTION
 	_browse_rooms_vbox.add_child(label)
 
 
@@ -850,6 +850,7 @@ func _open_load_battle_dialog() -> void:
 		_load_dialog.ok_button_text = "Open"
 		_load_dialog.cancel_button_text = "Cancel"
 		_load_dialog.file_selected.connect(_on_load_file_selected)
+		_load_dialog.theme = HouseStyle.theme()   # native FileDialog: the theme only
 		add_child(_load_dialog)
 		# A hard 800x600 is nearly full-screen on a 1366x768 laptop; clamp to the host
 		# window instead (and re-clamp when it is resized).
