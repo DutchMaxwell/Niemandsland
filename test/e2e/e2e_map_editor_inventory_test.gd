@@ -65,7 +65,7 @@ func _tab_button(title: String) -> Button:
 # ===== presence =====
 
 func test_every_control_of_the_editor_is_present() -> void:
-	var missing := _missing(["Save", "Load", "Clear All", "Close", "Ruins", "Forest", "Container",
+	var missing := _missing(["Save", "Load", "Clear terrain", "Close", "Ruins", "Forest", "Container",
 		"Dangerous", "Erase", "↶ Undo", "↷ Redo", "Point Symmetry (Mirror)", "Auto-Generate Layout",
 		"Deploy Objectives", "Show in Preview", "Symmetric (point-mirrored)", "Start Drawing", "Confirm"])
 	assert_array(missing).override_failure_message("controls missing from the editor: %s" % [missing]).is_empty()
@@ -117,7 +117,9 @@ func test_clear_all_clears_pieces_cells_and_walls_and_undo_brings_them_back() ->
 	_ed.free_cells[Vector2i(2, 2)] = _ed.TerrainType.FOREST
 	var before: int = _ed.placed_pieces.size()
 	assert_int(before).is_greater(0)
-	_by_text("Clear All").pressed.emit()
+	_by_text("Clear terrain").pressed.emit()
+	assert_int(_ed.placed_pieces.size()).is_equal(before)  # asks first
+	_ed.get_node("ClearConfirm").find_child("ConfirmClearButton", true, false).pressed.emit()
 	assert_int(_ed.placed_pieces.size()).is_equal(0)
 	assert_int(_ed.free_cells.size()).is_equal(0)
 	_ed.undo()

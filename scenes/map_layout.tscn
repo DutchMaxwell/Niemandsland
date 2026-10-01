@@ -60,7 +60,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 size_flags_horizontal = 0
-text = "Clear All"
+text = "Clear terrain"
 
 [node name="CloseButton" type="Button" parent="MarginContainer/VBox/Header"]
 unique_name_in_owner = true
