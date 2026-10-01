@@ -264,7 +264,7 @@ func test_the_dream_overlay_breathes_centred_and_lets_clicks_through(timeout := 
 # === row 15: the Combat Stage =================================================================
 
 ## The card: headline, phase title with its count, the rule lines, ◂ / ⏸ / ▸ and the hint; top-centre
-## under the turn banner. Pause (button and SPACE) holds the beat; a click on the card advances.
+## under the status lines (banner / toast / peer). Pause (button and SPACE) holds the beat; a click on the card advances.
 func test_the_stage_card_holds_pauses_and_advances(timeout := 120000) -> void:
 	_open_stage()
 	var held: Array = []
@@ -277,7 +277,7 @@ func test_the_stage_card_holds_pauses_and_advances(timeout := 120000) -> void:
 	assert_str(_stage_text()).contains("To hit  (1/1)")
 	assert_str(_stage_text()).contains("· Rifle: 3 hits")
 	assert_float(card.get_global_rect().get_center().x).is_equal_approx(_vp_size().x * 0.5, 2.0)
-	assert_float(card.global_position.y).is_equal_approx(64.0, 1.0)
+	assert_float(card.global_position.y).is_equal_approx(CombatStage.DEFAULT_TOP, 1.0)
 	await _key(KEY_SPACE)
 	assert_bool(_stage()._paused).override_failure_message("SPACE did not pause").is_true()
 	await _key(KEY_SPACE)
