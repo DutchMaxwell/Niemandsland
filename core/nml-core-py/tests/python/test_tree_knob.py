@@ -64,6 +64,7 @@ def test_tray_dice_plays_and_stamps():
 
 
 def test_a_tree_knob_without_a_deep_seat_is_refused():
+    """The refusal comes before any list or terrain is read, so it needs neither (it runs in CI)."""
+    missing = Path("/nonexistent/list.json")
     with pytest.raises(ValueError, match="deep_player"):
-        core = nml_core.load(str(REPO))
-        sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, deep_search_mode="tree", **FAST)
+        sp.play_game(SEED, missing, missing, REPO, missing, None, deep_search_mode="tree", **FAST)

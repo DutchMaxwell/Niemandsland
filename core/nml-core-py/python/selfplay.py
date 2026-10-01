@@ -2401,6 +2401,18 @@ def play_game(
     `cap_share`, stamping `row["cap"]` (True = cap core planned the act, a
     value-only row; False = the seat's full-search core, the policy target).
     0.0, the default, builds no core, draws no coin, stamps no key."""
+    # Tree search knobs of the deep seat: only a value that PARTS from the
+    # knob's default joins the header and the stamp (NML-1147a pattern).
+    tree_seat = {
+        k: v for k, v in (
+            ("search_mode", deep_search_mode), ("tree_leaf", deep_tree_leaf),
+            ("tree_dice", deep_tree_dice), ("tree_budget", deep_tree_budget),
+            ("tree_samples", deep_tree_samples), ("tree_batch", deep_tree_batch),
+            ("tree_wall_ms", deep_tree_wall_ms), ("pool_wall_ms", deep_pool_wall_ms),
+        ) if v is not None and v != TREE_KNOB_DEFAULTS[k]
+    }
+    if tree_seat and deep_player not in (1, 2):
+        raise ValueError(f"tree knobs {sorted(tree_seat)} need deep_player 1 or 2")
     units1 = load_army(list_p1, 1, rules_epoch)
     units2 = load_army(list_p2, 2, rules_epoch)
     if not units1 or not units2:
@@ -2582,18 +2594,6 @@ def play_game(
     # base core, which is every caller that passes nothing.
     act_cores: dict[int, Any] | None = None
     seat_knobs: dict[str, Any] | None = None
-    # Tree search knobs of the deep seat: only a value that PARTS from the
-    # knob's default joins the header and the stamp (NML-1147a pattern).
-    tree_seat = {
-        k: v for k, v in (
-            ("search_mode", deep_search_mode), ("tree_leaf", deep_tree_leaf),
-            ("tree_dice", deep_tree_dice), ("tree_budget", deep_tree_budget),
-            ("tree_samples", deep_tree_samples), ("tree_batch", deep_tree_batch),
-            ("tree_wall_ms", deep_tree_wall_ms), ("pool_wall_ms", deep_pool_wall_ms),
-        ) if v is not None and v != TREE_KNOB_DEFAULTS[k]
-    }
-    if tree_seat and deep_player not in (1, 2):
-        raise ValueError(f"tree knobs {sorted(tree_seat)} need deep_player 1 or 2")
     if deep_player in (1, 2):
         d_top_k = resolve_top_k(deep_top_k)
         d_horizon = resolve_horizon(deep_horizon)
