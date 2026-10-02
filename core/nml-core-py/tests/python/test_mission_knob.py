@@ -186,3 +186,36 @@ def test_roles_mission_stamps_the_roll_off_winners_pick_and_duel_stays_roles_fre
         del catalog["roles_bonus"], catalog["roles_even"]
     assert {bonus["mission"]["role_p1"], even["mission"]["role_p1"]} == {"attacker", "defender"}
     assert "role_p1" not in duel["mission"]
+
+
+def test_style_zone_args_bound_a_disc_by_its_square_and_front_line_has_none():
+    """NML-1010 D5: the pair the Rust spot search takes — the disc list plus its bounding rect."""
+    assert sp.resolve_zone_style({"deployment": "front_line"}, REPO) is None
+    style = sp.resolve_zone_style({"deployment": "centre_disc_12"}, REPO)
+    rect, zl = sp._style_zone_args(style, "1")
+    r = 12.0 * sp.IN2M
+    assert rect == pytest.approx([-r, -r, 2 * r, 2 * r]) and zl == [{"disc": {"c": [0, 0], "r_in": 12}}]
+
+
+@needs_lists
+def test_an_arena_game_hands_the_missions_zone_to_the_deploy_pipeline(monkeypatch):
+    """The disc mission's zone reaches `nml_core.deploy_side`; duel's (front_line) stays None."""
+    core = nml_core.load(str(REPO))
+    sp.resolve_mission("duel", REPO)
+    catalog = sp._MISSION_CATALOG_CACHE[str(REPO)]
+    catalog["disc_fixture"] = dict(catalog["duel"], deployment="centre_disc_12")
+    seen: list = []
+    real = nml_core.deploy_side
+
+    def spy(*a, **kw):
+        seen.append(kw.get("zones"))
+        return real(*a, **kw)
+
+    monkeypatch.setattr(nml_core, "deploy_side", spy)
+    try:
+        for m in ("disc_fixture", "duel"):
+            sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission=m, deployment="arena", **FAST)
+    finally:
+        del catalog["disc_fixture"]
+    disc = [{"disc": {"c": [0, 0], "r_in": 12}}]
+    assert seen == [disc, disc, None, None]  # two deploy_side calls (one per slot) per game
