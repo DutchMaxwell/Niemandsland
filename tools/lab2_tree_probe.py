@@ -284,22 +284,44 @@ def position_gains(y):
     return {n: statistics.fmean(a - b for a, b in zip(y[x], y[z])) for n, x, z in CONTRASTS}
 
 
+def cell_key(cell):
+    """c1 .. c12 numerically (a string sort puts c10 before c2)."""
+    tail = str(cell).lstrip("c")
+    return (0, int(tail), "") if tail.isdigit() else (1, 0, str(cell))
+
+
+def order_stat(sorted_draws, q):
+    """The 1-indexed round(q R)-th of R sorted draws, never interpolated: 500 / 99,500 of 100,000 at K=5."""
+    return float(sorted_draws[max(1, round(q * len(sorted_draws))) - 1])
+
+
 def bootstrap_intervals(gains, resamples=100_000, seed=0, k=5):
     """gains[cell][cluster] = {contrast: a}; cluster bootstrap within each cell (n_c clusters drawn with
-    replacement, resample index first, then cell), 100 x equal-cell mean, Bonferroni K=5 (0.005 / 0.995)."""
+    replacement, resample index first, then cell c1..c12 numerically, clusters in ID order), 100 x equal-cell mean.
+    `seed` is the part's hashed bootstrap key (PCG64). Bounds: the Bonferroni K order statistics (0.005 / 0.995 at
+    K=5) and the descriptive 95 % ones (2,500 / 97,500 of 100,000) of the same draws, plus the sha256 of the drawn
+    index stream."""
+    import hashlib
     import numpy as np
-    rng = np.random.Generator(np.random.PCG64(seed))
-    cells = sorted(gains)
+    rng, digest = np.random.Generator(np.random.PCG64(int(seed))), hashlib.sha256()
+    cells = sorted(gains, key=cell_key)
     names = sorted(gains[cells[0]][sorted(gains[cells[0]])[0]])
     vec = {n: [np.array([gains[c][cl][n] for cl in sorted(gains[c])]) for c in cells] for n in names}
     draws = {n: np.empty(resamples) for n in names}
     for i in range(resamples):
         idx = [rng.integers(0, len(vec[names[0]][j]), len(vec[names[0]][j])) for j in range(len(cells))]
+        for ix in idx:
+            digest.update(ix.astype("<i8").tobytes())
         for n in draws:
             draws[n][i] = 100 * np.mean([vec[n][j][ix].mean() for j, ix in enumerate(idx)])
-    q = (0.05 / k / 2, 1 - 0.05 / k / 2)  # alpha .05 / K = .01 two-sided -> the .005 and .995 quantiles
-    return {n: {"point": 100 * float(np.mean([v.mean() for v in vec[n]])),
-                "lo": float(np.quantile(d, q[0])), "hi": float(np.quantile(d, q[1]))} for n, d in draws.items()}
+    q = (0.05 / k / 2, 1 - 0.05 / k / 2)  # alpha .05 / K = .01 two-sided -> the .005 and .995 order statistics
+    out = {}
+    for n, d in draws.items():
+        d.sort()
+        out[n] = {"point": 100 * float(np.mean([v.mean() for v in vec[n]])), "lo": order_stat(d, q[0]),
+                  "hi": order_stat(d, q[1]), "lo95": order_stat(d, 0.025), "hi95": order_stat(d, 0.975),
+                  "index_sha256": digest.hexdigest()}
+    return out
 
 
 def run_context(nm, prereg, net):
@@ -592,7 +614,7 @@ def main(argv) -> int:
     e.add_argument("--header", required=True)
     e.add_argument("--timing", required=True, help="the timing subcommand's .json (B_us per cell)")
     e.add_argument("--resamples", type=int, default=100_000)
-    e.add_argument("--seed", type=int, default=0)
+    e.add_argument("--seed", type=int, default=0, help="PCG64 seed: part A hashed bootstrap key (decimal)")
     e.add_argument("--rows-dir", required=True, help="one stage0-row/1 JSON per ending")
     e.add_argument("--prereg-sha256", required=True)
     e.add_argument("--workers", type=int, default=1, help="spawn-mode workers over complete clusters (P1 fixes N)")
@@ -608,7 +630,7 @@ def main(argv) -> int:
     f.add_argument("--bank", required=True)
     f.add_argument("--out-dir", required=True)
     f.add_argument("--resamples", type=int, default=100_000)
-    f.add_argument("--seed", type=int, default=1)
+    f.add_argument("--seed", type=int, default=1, help="PCG64 seed: part B hashed bootstrap key (decimal)")
     f.add_argument("--prereg-sha256", required=True)
     f.add_argument("--workers", type=int, default=1, help="spawn-mode workers over complete clusters (P1 fixes N)")
     f.add_argument("--scheduler-key", default="", help="the part's hashed scheduler key (decimal)")
