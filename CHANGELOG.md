@@ -42,7 +42,7 @@ The ladder, the new house-style interface and the map builder rework. NACHTMAHR 
 - The T-02 "box select" step completes from a real rubber band. (#1122)
 
 ### Figures
-- **The Saurian Starhost (Age of Fantasy) have their own 3D models** for their units, served from the asset CDN. *(DRAFT: nothing in this repository proves the R2 state — the lead confirms it is live, or deletes this line, before the tag.)*
+- **The Saurian Starhost (Age of Fantasy) are live with their own 3D models:** ten units, the Spiked Lizard and the Dragon Lizard, served from the asset CDN (no game update needed for the models themselves). *(DRAFT: the Dragon Lizard upload was still running on 02.10. — drop it from this line if it is not live at the tag.)*
 
 ### Multiplayer
 - See Gameplay & AI (co-op roll routing, Utility-Buff givers) and UI (connection chip, "Reconnect failed").
