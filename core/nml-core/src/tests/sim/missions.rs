@@ -12,7 +12,8 @@ use std::rc::Rc;
 
 use super::*;
 use crate::mission::{
-    apply_destroy_step, mission_winner, playout_seize, sabotage_winner, vp_score_end,
+    apply_destroy_step, escort_winner, extract_winner, mission_winner, playout_seize, role_winner,
+    sabotage_winner, vp_score_end,
     vp_score_round,
 };
 use crate::objectives::marker_positions;
@@ -345,4 +346,57 @@ fn demolition_own_marker_stands_and_first_fallen_collects() {
     let mut rvp = [0i64; 2];
     vp_score_round(&owners, &mut rvp, &flavour, &mut memo, &revenge);
     assert_eq!(rvp, [0, 1], "once both fell, the FIRST-fallen side (seq 1 = P2) collects");
+}
+
+/// One marker on (x_in, z_in) over the referee board, the attacker in slot `att`.
+fn role_board(att: i64, x_in: f64, z_in: f64) -> State {
+    let mut st = ref_board("escort");
+    parked(&mut st);
+    st.attacker = att;
+    st.objectives = vec![Objective { pos: [x_in * IN2M, 0.0, z_in * IN2M], owner: 0 }];
+    st.markers_meta = vec![Marker::default()];
+    st
+}
+
+#[test]
+fn escort_defender_wins_within_six_of_the_opposite_edge() {
+    // deployed on the +z edge, so the target is the -z edge (z = -24")
+    assert_eq!(escort_winner(&role_board(1, 0.0, -18.0), 1, 48.0), "p2", "6.0\" from the target edge");
+    assert_eq!(escort_winner(&role_board(2, 0.0, -18.0), 1, 48.0), "p1", "slot 2 attacks, so slot 1 defends");
+    assert_eq!(escort_winner(&role_board(1, 0.0, -17.0), 1, 48.0), "p1", "7\" out: the attacker wins");
+    assert_eq!(escort_winner(&role_board(1, 0.0, 22.0), 1, 48.0), "p1", "the HOME edge does not count");
+}
+
+#[test]
+fn escort_carried_marker_uses_the_carrier_base_edge() {
+    let mut st = role_board(1, 0.0, 0.0);
+    st.markers_meta[0].carry = true;
+    st.markers_meta[0].carried_by = 2;
+    place(&mut st, 2, 0.0, -20.0);
+    st.radii[2] = vec![1.0 * IN2M];
+    assert_eq!(escort_winner(&st, 1, 48.0), "p2", "centre 4\" out, base edge 3\"");
+    place(&mut st, 2, 0.0, -17.5);
+    assert_eq!(escort_winner(&st, 1, 48.0), "p2", "centre 6.5\" out, base edge 5.5\"");
+    place(&mut st, 2, 0.0, -16.5);
+    assert_eq!(escort_winner(&st, 1, 48.0), "p1", "base edge 6.5\" out");
+    st.attacker = 0;
+    assert_eq!(escort_winner(&st, 1, 48.0), "draw", "no roles, no verdict");
+}
+
+#[test]
+fn extract_attacker_wins_within_six_of_any_edge() {
+    assert_eq!(extract_winner(&role_board(1, 30.0, 0.0), 72.0, 48.0), "p1", "6\" from the +x edge");
+    assert_eq!(extract_winner(&role_board(2, 0.0, 18.0), 72.0, 48.0), "p2", "6\" from the +z edge");
+    assert_eq!(extract_winner(&role_board(1, 29.0, 0.0), 72.0, 48.0), "p2", "7\" from every edge: the defender holds");
+    assert_eq!(extract_winner(&role_board(1, -30.0, -17.0), 72.0, 48.0), "p1", "any edge, any corner");
+}
+
+#[test]
+fn extract_skips_destroyed_markers_and_reads_the_scoring_id() {
+    let mut st = role_board(1, 35.0, 0.0);
+    assert_eq!(role_winner("extract", &st, 0, 72.0, 48.0), Some("p1"));
+    st.markers_meta[0].destroyed = true;
+    assert_eq!(role_winner("extract", &st, 0, 72.0, 48.0), Some("p2"), "a removed marker is not extracted");
+    assert_eq!(role_winner("escort", &st, 1, 72.0, 48.0), Some("p1"), "no marker home: the attacker wins");
+    assert_eq!(role_winner("end", &st, 1, 72.0, 48.0), None, "other ids keep their own referee");
 }

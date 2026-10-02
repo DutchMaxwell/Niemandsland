@@ -253,21 +253,29 @@ def test_t_decisions_receive_different_sigs(env):
     assert {d["seed"] for d in row_["search"]} == {int(snap["search"]["T"][0][str(snap["mover"])])}
 
 
-def test_play_row_runs_real_games_on_the_net(env):
-    import lab2_tree_probe as lab
-    b = {"block": "b0", "cell": "c1", "mission": "domination", "army1": os.path.join(LISTS, "robot_legions_1000.json"),
-         "army2": os.path.join(LISTS, "blessed_sisters_1000.json"),
-         "seeds": {"terrain": "29", "layout": "1029", "deploy": "2029", "play_general": ["3029", "3030"],
-                   "tray": ["4029", "4030"], "search": {"L": {"1": "501", "2": "502"}}}}
-    for arm in ("I", "L"):
-        rec = lab.play_row(sp, lab.game_rows([b], (arm,))[0], REPO, BANK, {}, env[1], 20)
-        assert rec["valid"] and all(c > 0 for c in rec["net_calls"].values()) and rec["winner"] in ("p1", "p2", "draw")
-
-
 CTX = {"prereg": "p" * 64, "build": {"commit": "abc", "dirty": False, "rules_epoch": 68, "wheel_sha256": "w"}}
 PRINCIPLES_ROW = ("schema prereg_sha256 row_id split part cell source arm opponent seat replicate seeds build model_sha256 "
                   "header_sha256 net decisions y winner valid reason wall_s rss_hwm_mib done").split()
 PRINCIPLES_DECISION = "seq side arm allocated_us elapsed_us overshoot_us tree deadline search net_calls".split()
+
+
+def test_play_row_runs_real_games_as_schema_rows(env):
+    import lab2_tree_probe as lab
+    b = {"block": "b0", "cell": "c1", "mission": "domination", "army1": os.path.join(LISTS, "robot_legions_1000.json"),
+         "army2": os.path.join(LISTS, "blessed_sisters_1000.json"),
+         "seeds": {"terrain": "29", "layout": "1029", "deploy": "2029", "play_general": ["3029", "3030"],
+                   "tray": ["4029", "4030"], "search": {"L": {"1": "501", "2": "502"}, "C": {"1": "601", "2": "602"}}}}
+    for arm in ("I", "L", "C"):
+        rec = lab.play_row(nml_core, sp, lab.game_rows([b], (arm,))[0], REPO, BANK, {}, env[1], 20000, CTX)
+        assert list(rec) == PRINCIPLES_ROW and rec["valid"] and rec["winner"] in ("p1", "p2", "draw")
+        assert all(list(d) == PRINCIPLES_DECISION for d in rec["decisions"]) and rec["decisions"]
+        deep = [d for d in rec["decisions"] if d["arm"] != "I"]
+        assert (arm == "I") == (not deep)
+        if arm == "L":
+            assert all(d["tree"] and d["allocated_us"] == 20000 and d["search"] for d in deep)
+            assert all(d["tree"] is None for d in rec["decisions"] if d["arm"] == "I")
+        if arm == "C":
+            assert all(d["deadline"] and d["tree"] is None and d["allocated_us"] == 20000 for d in deep)
 
 
 def test_ending_rows_carry_tree_only_on_tree_decisions(env):
