@@ -129,8 +129,9 @@ def peak_rss_mib():
 
 def cmd_timing(a) -> int:
     import nml_core as nm  # lazy
+    from lab2_net import ShippedNet
     states = pick_states(json.load(open(a.states)), a.per_cell)
-    core = nm.load(a.repo)
+    core, net = nm.load(a.repo), ShippedNet(a.repo)
     base = json.load(open(a.header))
     if a.statics:
         statics = json.loads(a.statics)
@@ -138,15 +139,17 @@ def cmd_timing(a) -> int:
         sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
         import selfplay
         statics = selfplay.TRAINER_STATICS
-    rows, report = {}, ["# Tree pilot timing set", ""]
+    rows, report = {}, ["# Tree pilot timing set (hardware: %s, net %s...)" % (a.hardware, net.model_sha256[:8]), ""]
     for cell, sts in sorted(states.items()):
         def run(st, extra):
             core.set_header(dict(base, knobs=dict(base["knobs"], **extra)))
-            return lambda: core.plan_with_rollout(core.state_of(st["state"]), st["player"], statics)
+            # the shipped net prices the leaves of EVERY timed call (section 6: encoding/inference inside the call)
+            return lambda: core.plan_with_rollout(core.state_of(st["state"]), st["player"], statics,
+                                                  leaf_value_fn=net.hook(st["player"]), leaf_value_w=1.0)
         inc = [t for st in sts for t in measure(run(st, {}))]
         rows[cell] = {"incumbent_median_ms": statistics.median(inc), "B_us": allowance_us(inc), "tree": {}}
         for b in BUDGETS:
-            ex = {"search_mode": "tree", "tree_budget": b, "tree_wall_ms": rows[cell]["B_us"] // 1000}
+            ex = {"search_mode": "tree", "tree_budget": b, "deadline_us": rows[cell]["B_us"]}  # from the planner call
             times, active, done, hit = [], 0, [], 0
             for st in sts:
                 times += measure(run(st, ex))
@@ -159,11 +162,14 @@ def cmd_timing(a) -> int:
         report.append("- %s: incumbent median %.1f ms, B=%d us; tree %s" % (
             cell, rows[cell]["incumbent_median_ms"], rows[cell]["B_us"],
             {b: (round(v["median_ms"], 1), "ACTIVE" if v["tree_active"] else "INVALID: knob not live") for b, v in rows[cell]["tree"].items()}))
-    report.append("\npeak RSS %.0f MiB" % peak_rss_mib())
+    report.append("\nThe 32/64/128/256 tree_budget sweep is a D-ONLY DIAGNOSTIC, not configuration.")
+    report.append("peak RSS %.0f MiB" % peak_rss_mib())
     if a.block_variance:
         var = json.load(open(a.block_variance))
         report.append("projected MDE A %.2f pts, B %.2f pts" % (projected_mde(var["A"], 40), projected_mde(var["B"], 104)))
     open(a.out, "w").write("\n".join(report) + "\n")
+    rows["_meta"] = {"hardware": a.hardware, "model_sha256": net.model_sha256,
+                     "sweep": "D-only diagnostic, not configuration"}
     json.dump(rows, open(a.out + ".json", "w"), sort_keys=True)
     return 0
 
@@ -451,6 +457,7 @@ def main(argv) -> int:
     t.add_argument("--header", required=True, help="JSON header with a knobs block (the incumbent 10/3)")
     t.add_argument("--statics", default=None)
     t.add_argument("--per-cell", type=int, default=12)
+    t.add_argument("--hardware", required=True, help="the hardware class label (m_h(c) is per class), stamped into the output")
     t.add_argument("--block-variance", default="", help='JSON {"A": {cell: s2}, "B": {cell: s2}}')
     t.add_argument("--repo", default=".")
     t.add_argument("--out", required=True)

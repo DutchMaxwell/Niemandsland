@@ -6,6 +6,7 @@ positions; a replay of the truth passes, and each RED control (VP +1 on the reco
 one recorded die face changed) must FAIL the replay check. Run: python3 -m pytest -q tools/lab2_tree_probe_test.py
 """
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -253,3 +254,53 @@ def test_an_i_row_has_no_deep_core_and_a_never_called_hook_is_invalid():
     rec = lab.play_row(sp, row, "repo", "bank", {}, sp.net, 5)
     assert "deep_player" not in sp.calls[0][1] and "search_seeds" not in sp.calls[0][1]
     assert rec["valid"] is False and rec["reason"] == "net_inactive"
+
+
+class TimingCore:
+    """A stub core: records the live header knobs and every planner call's kwargs."""
+    def __init__(self):
+        self.knobs, self.calls = {}, []
+
+    def set_header(self, header):
+        self.knobs = dict(header["knobs"])
+
+    def state_of(self, plain):
+        return plain
+
+    def plan_with_rollout(self, state, player, statics, **kw):
+        self.calls.append((dict(self.knobs), kw))
+        return {"trace": {"tree": {"completed": 1, "deadline_hit": False}}}
+
+
+def _timing_run(monkeypatch, tmp_path, B_us=None):
+    import types
+    core, hooked = TimingCore(), []
+    net = types.SimpleNamespace(model_sha256="ab" * 32, hook=lambda side: (lambda leaves, _s=None: hooked.append(side) or []))
+    monkeypatch.setitem(sys.modules, "nml_core", types.SimpleNamespace(load=lambda repo: core))
+    monkeypatch.setitem(sys.modules, "lab2_net", types.SimpleNamespace(ShippedNet=lambda repo: net))
+    if B_us is not None:
+        monkeypatch.setattr(lab, "allowance_us", lambda times: B_us)
+    states = [{"cell": "c1", "state": {"i": i}, "player": 1 + i % 2} for i in range(2)]
+    (tmp_path / "s.json").write_text(json.dumps(states))
+    (tmp_path / "h.json").write_text(json.dumps({"knobs": {"top_k": 10}}))
+    out = str(tmp_path / "t.txt")
+    rc = lab.main(["timing", "--states", str(tmp_path / "s.json"), "--header", str(tmp_path / "h.json"), "--statics", "{}",
+                   "--per-cell", "2", "--hardware", "laptop-x", "--out", out])
+    return rc, core, out
+
+
+def test_timing_prices_every_call_with_the_net_and_passes_the_allowance_as_deadline_us(monkeypatch, tmp_path):
+    rc, core, out = _timing_run(monkeypatch, tmp_path, B_us=900)
+    assert rc == 0 and core.calls
+    assert all(kw["leaf_value_w"] == 1.0 and callable(kw["leaf_value_fn"]) for _, kw in core.calls)  # incumbent calls too
+    tree = [k for k, _ in core.calls if k.get("search_mode") == "tree"]
+    assert tree and all(k["deadline_us"] == 900 and "tree_wall_ms" not in k for k in tree)  # 900 us stays 900 (not 0 ms = OFF)
+    assert any("search_mode" not in k for k, _ in core.calls)
+
+
+def test_timing_stamps_hardware_and_labels_the_sweep(monkeypatch, tmp_path):
+    rc, core, out = _timing_run(monkeypatch, tmp_path)
+    meta = json.load(open(out + ".json"))["_meta"]
+    assert meta["hardware"] == "laptop-x" and meta["model_sha256"] == "ab" * 32 and "diagnostic" in meta["sweep"]
+    text = open(out).read()
+    assert "hardware: laptop-x" in text and "D-ONLY DIAGNOSTIC" in text
