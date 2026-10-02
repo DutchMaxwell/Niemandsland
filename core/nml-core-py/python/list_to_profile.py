@@ -1373,6 +1373,7 @@ def deploy_unit_specs(
                 # port wired it; the wave-4 epoch gate lives at the record
                 # boundary (selfplay._gate_transport_fill), not here.
                 "transport_capacity": _transport_capacity_of_rules(u["special_rules"]),
+                "points": sum(int(m.get("cost", 0)) for m in group),
                 "facing_rad": 0.0,
                 "model_shapes": shapes,
             }
@@ -1444,6 +1445,7 @@ def _units_from_list(
             # a selection that joins nothing, so `or ""` and not `get(.., "")`.
             "selection_id": str(ud.get("selectionId", "")),
             "join_to_unit": str(ud.get("joinToUnit") or ""),
+            "cost": int(ud.get("cost", 0)),   # D7b: orders a deployment phase, most expensive first
             "special_rules": rules,
             "item_grants": grants,
             "weapons": [],
