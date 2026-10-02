@@ -18,7 +18,7 @@ class StubObjectManager extends Node:
 		spawned.append({"prop_id": prop_id, "kind": kind, "pos": pos})
 
 
-func _shelf(om: Node) -> Window:
+func _shelf(om: Node) -> Control:
 	var shelf := SandboxTerrainShelf.new()
 	add_child(shelf)
 	auto_free(shelf)

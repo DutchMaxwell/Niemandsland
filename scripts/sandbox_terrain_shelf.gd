@@ -1,10 +1,10 @@
 class_name SandboxTerrainShelf
-extends Window
+extends PanelContainer
 ## The casual "terrain shelf": a biome-filtered browser of free-placed terrain pieces
 ## (grassland ruins first, plus tree-group forests and minefield clusters). Picking a piece
 ## spawns it on the 3D table at the cursor as a draggable SandboxTerrainProp / TerrainGroupBase
 ## — the player then pushes and rotates it freely, ungated by the competitive 3" grid. The
-## window is built entirely in code so it needs no scene wiring.
+## panel is an in-viewport house-style panel docked at the left, built entirely in code (no scene wiring).
 
 # === Constants ===
 
@@ -17,7 +17,9 @@ const BIOMES: Array[Dictionary] = [
 	{"label": "Alien Jungle", "prefix": "jungle_"},
 	{"label": "Urban Ruins", "prefix": "urban_"},
 ]
-const WINDOW_SIZE := Vector2i(380, 460)
+const PANEL_SIZE := Vector2(320, 440)
+## Docked on the left, right of the left unit panel (it ends at x 270, main.tscn) and below the top bar.
+const DOCK_OFFSET := Vector2(280, 96)
 
 # === Signals ===
 
@@ -38,17 +40,21 @@ var _biome_option: OptionButton = null
 var _list: ItemList = null
 ## Click-to-place: armed with the selected piece, follows the cursor on the table (see SandboxPlacementGhost).
 var _ghost: SandboxPlacementGhost = null
-## Last table point the player aimed at while the cursor was OUTSIDE this window; Place lands there.
+## Last table point aimed at while the cursor was OUTSIDE this panel; Place lands there.
 var _last_table_point := Vector3.ZERO
 var _mouse_over_shelf := false
 
 # === Lifecycle ===
 
 func _ready() -> void:
-	title = "Terrain Shelf"
-	size = WINDOW_SIZE
-	min_size = WINDOW_SIZE
-	close_requested.connect(_emit_closed)
+	name = "TerrainShelf"
+	HouseStyle.apply(self)
+	theme_type_variation = HouseStyle.PANEL_VARIANT
+	set_anchors_preset(Control.PRESET_TOP_LEFT)
+	position = DOCK_OFFSET
+	custom_minimum_size = PANEL_SIZE
+	size = PANEL_SIZE
+	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_entered.connect(func(): _mouse_over_shelf = true)
 	mouse_exited.connect(func(): _mouse_over_shelf = false)
 	visible = false
@@ -66,15 +72,16 @@ func setup(object_manager: Node) -> void:
 	_refresh_list()
 
 
-## Open the shelf centered.
+## Open the shelf (docked left).
 func open() -> void:
-	popup_centered()
+	show()
 	_refresh_list()
 
 # === Private ===
 
 func _process(_delta: float) -> void:
 	if visible:
+		_mouse_over_shelf = get_global_rect().has_point(get_viewport().get_mouse_position())
 		_track_cursor()
 
 
@@ -85,21 +92,13 @@ func _track_cursor() -> void:
 
 
 func _build_ui() -> void:
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	margin.anchor_right = 1.0
-	margin.anchor_bottom = 1.0
-	add_child(margin)
-
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	margin.add_child(vbox)
+	vbox.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+	add_child(vbox)
 
-	var hint := Label.new()
-	hint.text = "Pick a piece, then click on the table to drop it (Esc cancels).\nOr press Place. Drag to move it, hold R to rotate."
+	vbox.add_child(HouseStyle.label("TERRAIN SHELF", HouseStyle.EYEBROW))
+
+	var hint := HouseStyle.label("Pick a piece, then click on the table to drop it (Esc cancels).\nOr press Place. Drag to move it, hold R to rotate.", HouseStyle.CAPTION)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(hint)
 
@@ -107,7 +106,7 @@ func _build_ui() -> void:
 	for biome in BIOMES:
 		_biome_option.add_item(biome["label"])
 	_biome_option.item_selected.connect(_on_biome_selected)
-	vbox.add_child(_biome_option)
+	vbox.add_child(HouseStyle.field_row("Biome", _biome_option))
 
 	_list = ItemList.new()
 	_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -115,19 +114,13 @@ func _build_ui() -> void:
 	_list.item_selected.connect(_on_item_selected)
 	vbox.add_child(_list)
 
-	var button_row := HBoxContainer.new()
-	button_row.alignment = BoxContainer.ALIGNMENT_END
+	var button_row := HouseStyle.button_row(["Place", "Close"], HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	vbox.add_child(button_row)
-
-	var spawn_btn := Button.new()
-	spawn_btn.text = "Place"
+	var spawn_btn: Button = button_row.get_child(0)
+	spawn_btn.theme_type_variation = HouseStyle.PRIMARY
 	spawn_btn.pressed.connect(_on_place_pressed)
-	button_row.add_child(spawn_btn)
-
-	var close_btn := Button.new()
-	close_btn.text = "Close"
+	var close_btn: Button = button_row.get_child(1)
 	close_btn.pressed.connect(_emit_closed)
-	button_row.add_child(close_btn)
 
 
 ## The click-to-place ghost (null before setup()).
@@ -179,7 +172,6 @@ func _place(index: int) -> void:
 	var entry: Dictionary = _list.get_item_metadata(index)
 	if entry.is_empty():
 		return
-	# Over the window the cursor ray hits the table BEHIND the shelf: use the last aimed point instead.
 	var cursor_pos: Vector3 = _last_table_point if _mouse_over_shelf else _object_manager.get_cursor_table_position()
 	_object_manager.spawn_sandbox_terrain(entry.get("prop_id", ""), int(entry.get("kind", 0)), cursor_pos)
 	piece_placed.emit(str(entry.get("prop_id", "")))
