@@ -8,6 +8,9 @@ import pytest
 _SPEC = importlib.util.spec_from_file_location("lab2_p9", os.path.join(os.path.dirname(os.path.abspath(__file__)), "lab2_p9.py"))
 p9 = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(p9)
+_LAB = importlib.util.spec_from_file_location("lab2_tree_probe", os.path.join(os.path.dirname(p9.__file__), "lab2_tree_probe.py"))
+lab = importlib.util.module_from_spec(_LAB)
+_LAB.loader.exec_module(lab)
 CELLS = ["c%d" % i for i in range(1, 13)]
 
 
@@ -63,3 +66,20 @@ def test_a_tray_decline_is_incompleteness_and_rules_out_mode_a():
 def test_a_missing_probe_cell_is_incompleteness():
     mode, proj = p9.decide(_probes()[:-2], L_GAMES, pilot_left_h=100, confirm_left_h=100, workers=4)
     assert (mode, proj["complete"]) == ("MODE_B", False)
+
+
+def test_the_mode_b_control_is_l_through_the_true_tray():
+    l_arm, l_tray = (lab.arm_kwargs({"arm": a}, 5) for a in ("L", "L_tray"))
+    assert l_tray == dict(l_arm, deep_tree_dice="tray") and "deep_tree_dice" not in l_arm
+    with pytest.raises(ValueError):
+        lab.arm_kwargs({"arm": "Ltray"}, 5)  # a misspelt arm must not fall through to the C rung
+
+
+def test_l_tray_rows_carry_their_own_search_keys_and_score_descriptively():
+    seeds = {"terrain": "1", "layout": "2", "deploy": "3", "play_general": ["4", "5"], "tray": ["6", "7"],
+             "search": {"L": {"1": "10"}, "L_tray": {"1": "8", "2": "9"}}}
+    rows = lab.game_rows([{"block": "b1", "cell": "c3", "mission": "duel", "army1": "a", "army2": "b",
+                           "seeds": seeds}], ("L_tray",))
+    assert len(rows) == 4 and all(r["seeds"]["search"] == {"1": "8", "2": "9"} for r in rows)
+    done = list(zip(rows, (1.0, 1.0, 0.5, 0.0)))
+    assert lab.control_scores(done) == {"c3": {"b1": {"L_tray_I": 0.125}}}
