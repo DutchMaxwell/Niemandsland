@@ -670,3 +670,25 @@ def test_vp_aware_hand_score_matches_the_table_pin():
     behind = _vp_fixture(core.state_of, copy.deepcopy(acts[0]["state"]), [3, 1])
     assert core.score_hand_incoming(behind, 1, zero, 3) > core.score_hand_incoming(state, 1, zero, 3)
     assert core.score_hand_incoming(behind, 1, zero, 0) == core.score_hand_incoming(state, 1, zero, 0)
+
+
+def test_role_winner_twin_pins():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    for unit in plain["units"].values():
+        unit.update(alive=0, positions=[], radii=[], wounds=[])
+    plain["attacker"] = 1
+    inch = 0.0254
+
+    def verdict(scoring, x, z, deploy_edge=1, **marker):
+        plain["objectives"] = [{"pos": [x * inch, 0, z * inch], "owner": 0}]
+        plain["markers_meta"] = [dict(marker)]
+        return core.role_winner(core.state_of(plain), scoring, deploy_edge, 72.0, 48.0)
+
+    assert verdict("escort", 0.0, -18.0) == "p2"
+    assert verdict("escort", 0.0, -17.0) == "p1"
+    assert verdict("extract", 30.0, 0.0) == "p1"
+    assert verdict("extract", 29.0, 0.0) == "p2"
+    assert verdict("extract", 35.0, 0.0, destroyed=True) == "p2"
+    assert verdict("end", 0.0, 0.0) is None
