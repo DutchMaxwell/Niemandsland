@@ -24,13 +24,27 @@ def canon(obj) -> str:
     return json.dumps(obj, sort_keys=True, ensure_ascii=True, allow_nan=True)
 
 
+EXTENSIONS = (".so", ".pyd", ".dylib")
+
+
+def binary_path(nm):
+    """The loaded nml_core BINARY. A wheel installs the package shim `nml_core/__init__.py` (the same few lines in
+    every build) plus the compiled submodule `nml_core/nml_core*.so`, so the submodule's file is hashed; a bare
+    extension module on sys.path is its own file. None when no compiled file is found (a strict stamp then fails)."""
+    for mod in (getattr(nm, "nml_core", None), nm):
+        path = getattr(mod, "__file__", None)
+        if path and path.endswith(EXTENSIONS) and os.path.exists(path):
+            return path
+    return None
+
+
 def env_stamp(nm, net_path, expect, strict=False):
     """The environment, and the list of mismatches against the expected values. `strict` (a real pilot): every
     expectation must be given ("missing:<key>") and the build must be clean (`dirty` is False)."""
     info = dict(getattr(nm, "BUILD_INFO", {}))
     sha = hashlib.sha256(open(net_path, "rb").read()).hexdigest() if net_path else None
-    so = getattr(nm, "__file__", None)   # the loaded nml_core binary = the installed wheel's extension module
-    wheel = hashlib.sha256(open(so, "rb").read()).hexdigest() if so and os.path.exists(so) else None
+    so = binary_path(nm)   # the compiled extension module, never the package shim
+    wheel = hashlib.sha256(open(so, "rb").read()).hexdigest() if so else None
     stamp = {"python": sys.version.split()[0], "commit": info.get("commit"), "rules_epoch": info.get("rules_epoch"),
              "model_sha256": sha, "dirty": info.get("dirty"), "wheel_sha256": wheel}
     bad = [k for k, v in expect.items() if v is not None and stamp.get(k) != v]
@@ -456,16 +470,28 @@ B_ARMS = ("L", "C")
 ALL_ARMS = ("I",) + B_ARMS
 
 
+def row_search(block, arm, d, seat):
+    """One game's registered search keys {owner: seed}. The adapter registers them per dice stream AND candidate
+    seat, `search["d<d>c<seat>"][arm]` (prereg section 4: one stream per game/arm/owner). I searches nothing; a tree
+    arm without its key refuses the whole manifest before any game is played."""
+    if arm == "I":
+        return {}
+    keys = block["seeds"]["search"].get("d%dc%d" % (d, seat), {}).get(arm, {})
+    if not keys and arm in ("L", "L_tray"):
+        raise SystemExit("block %s has no registered search key d%dc%d/%s" % (block["block"], d, seat, arm))
+    return keys
+
+
 def game_rows(blocks, arms=ALL_ARMS):
     """The manifest: per block, per arm, two dice streams x candidate in seat 1 then 2 (4 games per arm/block; "I" =
     the incumbent pair on both seats, no deep core). Armies and terrain stay on their physical seats; only the
     policy swaps. A block carries cell, mission and seeds {terrain, layout, deploy, play_general[d], tray[d],
-    search[arm][seat]}; a row carries the seeds of its own dice stream."""
+    search["d<d>c<seat>"][arm][owner]}; a row carries the seeds of its own dice stream and candidate seat."""
     return [{"row_id": "%s_%s_d%d_s%d" % (b["block"], arm, d, seat), "block": b["block"], "cell": b["cell"], "arm": arm,
              "mission": b["mission"], "seat": seat, "d": d, "army1": b["army1"], "army2": b["army2"],
              "seeds": {"terrain": b["seeds"]["terrain"], "layout": b["seeds"]["layout"], "deploy": b["seeds"]["deploy"],
                        "play_general": b["seeds"]["play_general"][d], "tray": b["seeds"]["tray"][d],
-                       "search": b["seeds"]["search"].get(arm, {})}}
+                       "search": row_search(b, arm, d, seat)}}
             for b in blocks for arm in arms for d in (0, 1) for seat in (1, 2)]
 
 

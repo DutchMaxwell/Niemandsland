@@ -147,7 +147,10 @@ def test_bootstrap_known_winner_identical_arms_and_four_games_are_not_four_block
 def _blocks(n=2, cell="c1", mission="duel"):
     return [{"block": "b%d" % i, "cell": cell, "mission": mission, "army1": "a", "army2": "b",
              "seeds": {"terrain": "1%d" % i, "layout": "2%d" % i, "deploy": "3%d" % i, "play_general": ["4%d" % i, "5%d" % i],
-                       "tray": ["6%d" % i, "7%d" % i], "search": {"L": {"1": "81", "2": "82"}, "C": {"1": "91", "2": "92"}}}}
+                       "tray": ["6%d" % i, "7%d" % i],
+                       "search": {"d%dc%d" % (d, s): {arm: {o: "%d%d%d%d%d" % (pre, i, d, s, int(o)) for o in ("1", "2")}
+                                                      for arm, pre in (("I", 7), ("L", 8), ("C", 9))}
+                                  for d in (0, 1) for s in (1, 2)}}}
             for i in range(n)]
 
 
@@ -157,8 +160,23 @@ def test_manifest_has_four_games_per_arm_per_block_with_both_seats_and_two_dice(
     assert len(lab.game_rows(_blocks(1), ("L", "C"))) == 8
     one = [r for r in rows if r["block"] == "b0" and r["arm"] == "L"]
     assert sorted((r["seeds"]["tray"], r["seat"]) for r in one) == [("60", 1), ("60", 2), ("70", 1), ("70", 2)]
-    assert [r["seeds"]["search"] for r in one][0] == {"1": "81", "2": "82"} and all(r["mission"] == "duel" for r in rows)
+    assert [r["seeds"]["search"] for r in one][0] == {"1": "80011", "2": "80012"} and all(r["mission"] == "duel" for r in rows)
     assert all(r["army1"] == "a" and r["army2"] == "b" for r in rows)  # armies stay on their physical seats
+
+
+def test_every_game_takes_the_search_keys_registered_for_its_own_dice_and_seat():
+    rows = lab.game_rows(_blocks(1))
+    L = {(r["d"], r["seat"]): r["seeds"]["search"] for r in rows if r["arm"] == "L"}
+    assert L == {(d, s): {"1": "80%d%d1" % (d, s), "2": "80%d%d2" % (d, s)} for d in (0, 1) for s in (1, 2)}
+    assert len({json.dumps(v, sort_keys=True) for v in L.values()}) == 4      # four games, four streams
+    assert all(r["seeds"]["search"] == {} for r in rows if r["arm"] == "I")   # I searches nothing
+    gap = _blocks(1)
+    del gap[0]["seeds"]["search"]["d1c2"]["L"]
+    try:
+        lab.game_rows(gap)
+        raise AssertionError("a tree arm without its registered key must refuse the manifest")
+    except SystemExit as e:
+        assert "d1c2/L" in str(e)
 
 
 def test_arm_kwargs_split_the_tree_from_the_one_ply_pool_deadline():
@@ -183,6 +201,19 @@ class StampNm:
     """A stand-in nml_core for the pilot's environment gate (no replay ever runs)."""
     BUILD_INFO = {"commit": "abc", "rules_epoch": 68, "dirty": False}
     __file__ = __file__
+    nml_core = None   # the compiled submodule; a test that needs a wheel stamp plants one
+
+
+def _wheel(tmp_path, monkeypatch, binary):
+    """A wheel-shaped nml_core: the package shim plus a compiled submodule holding `binary`."""
+    pkg = tmp_path / "nml_core"
+    pkg.mkdir(exist_ok=True)
+    (pkg / "__init__.py").write_text("from .nml_core import *\n")
+    so = pkg / "nml_core.cpython-314-x86_64-linux-gnu.so"
+    so.write_bytes(binary)
+    monkeypatch.setattr(StampNm, "__file__", str(pkg / "__init__.py"))
+    monkeypatch.setattr(StampNm, "nml_core", type("Ext", (), {"__file__": str(so)}))
+    return so
 
 
 def _pilot(monkeypatch, extra, build_info=None):
@@ -205,11 +236,24 @@ def test_a_dirty_build_stops_the_pilot(monkeypatch, capsys):
     assert "dirty" in capsys.readouterr().out
 
 
-def test_the_strict_stamp_records_dirty_and_the_wheel_sha():
+def test_the_strict_stamp_records_dirty_and_the_wheel_sha(tmp_path, monkeypatch):
+    _wheel(tmp_path, monkeypatch, b"build one")
     stamp, bad = lab.env_stamp(StampNm, "", {"commit": "abc", "rules_epoch": 68, "model_sha256": None,
                                               "wheel_sha256": None}, strict=True)
     assert stamp["dirty"] is False and len(stamp["wheel_sha256"]) == 64
     assert bad == ["missing:model_sha256", "missing:wheel_sha256"]
+
+
+def test_the_wheel_stamp_hashes_the_compiled_module_so_a_changed_binary_fails(tmp_path, monkeypatch):
+    import hashlib
+    so = _wheel(tmp_path, monkeypatch, b"build one")
+    want = hashlib.sha256(b"build one").hexdigest()
+    stamp, bad = lab.env_stamp(StampNm, "", {"wheel_sha256": want})
+    assert stamp["wheel_sha256"] == want and bad == []
+    so.write_bytes(b"build two")   # another binary behind the SAME __init__.py shim
+    assert lab.env_stamp(StampNm, "", {"wheel_sha256": want})[1] == ["wheel_sha256"]
+    monkeypatch.setattr(StampNm, "nml_core", None)   # only the shim left: no stamp, never the shim's sha
+    assert lab.env_stamp(StampNm, "", {"wheel_sha256": want}) == ({**stamp, "wheel_sha256": None}, ["wheel_sha256"])
 
 
 class SpySp:
@@ -266,9 +310,9 @@ def test_a_cell_7_row_plays_breakthrough_with_the_split_seeds_and_the_live_ledge
     (args, kw), = sp.calls
     assert kw["mission"] == "breakthrough" and kw["objectives"] == "mission" and kw["live_ledger"] is True
     assert args[0] == 10 and (kw["layout_seed"], kw["deploy_seed"], kw["play_seed"], kw["dice_seed"]) == (20, 30, 40, 60)
-    assert kw["search_seeds"] == {1: 81, 2: 82} and kw["deep_player"] == 1 and kw["leaf_value_w"] == 1.0
+    assert kw["search_seeds"] == {1: 80011, 2: 80012} and kw["deep_player"] == 1 and kw["leaf_value_w"] == 1.0
     assert kw["deep_deadline_us"] == 5 and rec["valid"] and rec["net"]["1"] == {"calls": 1, "leaves": 0}
-    assert list(rec) == PRINCIPLES_ROW and rec["seeds"]["search_general"] == "81" and rec["rss_hwm_mib"] > 0
+    assert list(rec) == PRINCIPLES_ROW and rec["seeds"]["search_general"] == "80011" and rec["rss_hwm_mib"] > 0
 
 
 def test_an_i_row_has_no_deep_core_and_a_never_called_hook_is_invalid():

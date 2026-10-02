@@ -10565,6 +10565,7 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 		"all_units": all_units, "section_of": section_of, "occupied": [], "deployed": 0,
 		"seed": seed_value, "forward_y": forward_y, "scout_ids": scout_ids,
 		"blocked_normal": blocked_normal, "blocked_flying": blocked_flying}
+	_deploy_alt["main_total"] = main_queue.size()
 	return main_queue.size() + scout_queue.size()
 
 
@@ -10594,6 +10595,68 @@ func deploy_next_one() -> GameUnit:
 	if queue.is_empty():
 		return null
 	return _deploy_place_id(int(queue.pop_front()))
+
+
+## D7a — deployment PHASES (Attack & Defend). Units a phase's share covers for a side with `total`
+## main units of which `placed` already stand: half = floor(n / 2) (R5a), all, rest = what is left.
+static func phase_quota(share: String, total: int, placed: int) -> int:
+	match share:
+		"half":
+			return total / 2
+		"rest":
+			return maxi(0, total - placed)
+	return total
+
+
+## The catalog's phase list, [[role, share, zone_style_id], ...]; [] for a mission without phases.
+static func deploy_phases_of(mission: Dictionary) -> Array:
+	var raw: Variant = mission.get("deploy_phases", [])
+	return (raw as Array).duplicate(true) if raw is Array else []
+
+
+## Main units the AI side deploys in total (placed + still queued); set when the queue is built.
+func deploy_main_total() -> int:
+	return int(_deploy_alt.get("main_total", 0))
+
+
+## R5a: queue the AI's most expensive units first, so a "half" phase deploys the floor(n / 2) highest
+## points. Stable (equal costs keep their drawn order); returns the new queue as unit names.
+func deploy_prioritise_by_points() -> Array:
+	var queue: Array = _deploy_alt.get("queue", [])
+	var all_units: Array = _deploy_alt.get("all_units", [])
+	var cost := func(id: int) -> int:
+		var sd: Variant = (all_units[id] as GameUnit).source_data
+		return int(sd.cost) if sd != null and "cost" in sd else 0
+	var keyed: Array = []
+	for i in queue.size():
+		keyed.append([int(queue[i]), i])
+	keyed.sort_custom(func(a, b) -> bool:
+		var ca: int = cost.call(a[0])
+		var cb: int = cost.call(b[0])
+		return ca > cb or (ca == cb and a[1] < b[1]))
+	var names: Array = []
+	for k in keyed.size():
+		queue[k] = keyed[k][0]
+		names.append((all_units[int(queue[k])] as GameUnit).get_name())
+	return names
+
+
+## A phase's zone for the AI's next placements: the bounding rect plus the optional shape probe.
+func deploy_set_zone(zone: Rect2, zone_test: Callable = Callable()) -> void:
+	_deploy_alt["zone"] = zone
+	_deploy_alt["forward_y"] = zone.position.y if absf(zone.position.y) < absf(zone.end.y) else zone.end.y
+	_deploy_zone_test = zone_test
+
+
+## Place up to `n` queued MAIN units (one phase's AI quota); returns the units placed.
+func deploy_place_n(n: int) -> Array:
+	var placed: Array = []
+	for _i in n:
+		var u := deploy_next_one()
+		if u == null:
+			break
+		placed.append(u)
+	return placed
 
 
 ## Place the NEXT queued SCOUT unit (the scout phase's AI turn — 12" band ahead of the zone).
