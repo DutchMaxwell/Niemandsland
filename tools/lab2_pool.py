@@ -13,6 +13,7 @@ import json
 import multiprocessing
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lab2_rows import vmhwm_mib  # noqa: E402
@@ -41,9 +42,12 @@ def run_clusters(clusters, workers, init, work, init_args=(), key=""):
     if workers <= 1:
         _init(init, init_args)
         return [_task(work, cid, clusters[cid]) for cid in order]
-    with multiprocessing.get_context("spawn").Pool(workers, _init, (init, init_args)) as pool:
-        pending = [pool.apply_async(_task, (work, cid, clusters[cid])) for cid in order]
-        return [p.get() for p in pending]
+    # an executor, not a Pool: a worker that dies (a core panic outside `guarded`) fails the run with
+    # BrokenProcessPool, where a Pool replaces the worker and waits forever for the lost cluster
+    with ProcessPoolExecutor(workers, mp_context=multiprocessing.get_context("spawn"), initializer=_init,
+                             initargs=(init, init_args)) as ex:
+        pending = [ex.submit(_task, work, cid, clusters[cid]) for cid in order]
+        return [p.result() for p in pending]
 
 
 def worker_hwms(reports):

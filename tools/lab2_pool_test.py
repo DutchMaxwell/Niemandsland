@@ -66,3 +66,28 @@ def test_p1_rule_on_synthetic_peaks(tmp_path):
     assert pool.main(["p1", "--rss", str(f)]) == 0
     f.write_text("[600]")
     assert pool.main(["p1", "--rss", str(f)]) == 1
+
+
+def die_on_bb(ctx, cid, payload):
+    """A worker killed outright mid-cluster, as an uncaught core panic does."""
+    if cid == "posBB":
+        os._exit(3)
+    return work(ctx, cid, payload)
+
+
+def test_a_dying_worker_fails_the_run_instead_of_hanging(tmp_path):
+    import concurrent.futures
+    import threading
+    out = {}
+    t = threading.Thread(target=lambda: out.update(r=_run_or_raise(tmp_path)), daemon=True)
+    t.start()
+    t.join(120)                                   # the old Pool waited forever for the lost cluster
+    assert not t.is_alive(), "run_clusters hung on a dead worker"
+    assert isinstance(out["r"], concurrent.futures.process.BrokenProcessPool)
+
+
+def _run_or_raise(tmp_path):
+    try:
+        return pool.run_clusters(CLUSTERS, 2, init, die_on_bb, (str(tmp_path),))
+    except Exception as e:  # noqa: BLE001 - the test reads the exception type
+        return e
