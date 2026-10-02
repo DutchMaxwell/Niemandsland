@@ -1975,6 +1975,13 @@ impl Core {
         mission::role_winner(scoring, &state.inner, deploy_edge, table_w_in, table_d_in).map(str::to_string)
     }
 
+    /// D10b: the round-start move of the mobile (VIP) marker the defender controls.
+    fn apply_marker_move(&self, state: PyRef<'_, PyState>, table_d_in: f64) -> PyState {
+        let mut st = state.inner.clone();
+        mission::apply_marker_move(&mut st, table_d_in);
+        PyState::derived(st)
+    }
+
     /// Return all relics held by a unit to the deterministic R3a drop point.
     fn drop_carried(&self, state: PyRef<'_, PyState>, unit: usize) -> PyState {
         let mut st = state.inner.clone();

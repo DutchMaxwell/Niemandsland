@@ -398,3 +398,30 @@ pub fn role_winner(scoring: &str, state: &State, deploy_edge: i64, table_w_in: f
         _ => None,
     }
 }
+
+/// D10b (R10a): the z a VIP marker walks to — straight toward the edge OPPOSITE
+/// `deploy_edge` (its z sign), up to 12", stopping 6" short of that edge; x is
+/// untouched. A marker already inside the 6" stays. The twin of
+/// `SoloController.vip_walk_z`.
+pub fn vip_walk_z(z_in: f64, deploy_edge: i64, depth_in: f64) -> f64 {
+    let dir = -(deploy_edge.signum() as f64);
+    let to_stop = (depth_in / 2.0 - 6.0) * dir - z_in;
+    z_in + dir * (to_stop * dir).clamp(0.0, 12.0)
+}
+
+/// D10b: the round-START move of every mobile marker the DEFENDER (`3 - attacker`)
+/// controls, before any activation. No roles, no table depth or no deploy edge = no move.
+pub fn apply_marker_move(state: &mut State, table_d_in: f64) {
+    let att = state.attacker;
+    if (att != 1 && att != 2) || table_d_in <= 0.0 {
+        return;
+    }
+    for i in 0..state.markers_meta.len().min(state.objectives.len()) {
+        let mk = &state.markers_meta[i];
+        if !mk.mobile || mk.destroyed || mk.deploy_edge == 0 || state.objectives[i].owner != 3 - att {
+            continue;
+        }
+        let z_in = state.objectives[i].pos[2] / IN2M;
+        state.objectives[i].pos[2] = vip_walk_z(z_in, mk.deploy_edge, table_d_in) * IN2M;
+    }
+}

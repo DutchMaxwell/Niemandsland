@@ -692,3 +692,21 @@ def test_role_winner_twin_pins():
     assert verdict("extract", 29.0, 0.0) == "p2"
     assert verdict("extract", 35.0, 0.0, destroyed=True) == "p2"
     assert verdict("end", 0.0, 0.0) is None
+
+
+def test_marker_move_twin_and_selfplay_markers():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    plain["attacker"] = 1
+    plain["objectives"] = [{"pos": [0, 0, 0], "owner": 2}]
+    plain["markers_meta"] = [{"mobile": True, "deploy_edge": 1}]
+    moved = core.apply_marker_move(core.state_of(plain), 48.0).plain()
+    assert abs(moved["objectives"][0]["pos"][2] + 12 * 0.0254) < 1e-9
+    plain["objectives"][0]["owner"] = 1
+    still = core.apply_marker_move(core.state_of(plain), 48.0).plain()
+    assert still["objectives"][0]["pos"][2] == 0
+    import selfplay
+    assert selfplay.mission_markers({"mobile": True, "deploy_edge": -1}, 1) == [
+        {"mobile": True, "deploy_edge": -1}]
+    assert selfplay.mission_markers({}, 1) == []

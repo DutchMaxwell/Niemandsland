@@ -419,6 +419,8 @@ impl<'a> Rollout<'a> {
                         &mut cur,
                     );
                     spawn_round_start(self.statics(), self.policy.terrain, self.policy.seams, &mut cur);
+                    // D10b: the VIP marker walks at the round START, before the opener acts.
+                    crate::mission::apply_marker_move(&mut cur, self.policy.terrain.board_in()[1]);
                     continue;
                 }
             }
