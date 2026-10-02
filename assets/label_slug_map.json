@@ -36,6 +36,22 @@
   "priest": "staff",
   "master priest": "staff",
   "_comment_ratmen": "Ratmen (AoF, uid tOWt5fgqK2nfpoBN) go-live: Model Forge's gain -> part-slug vocabulary for the 23 accepted Ratmen units, consulted ONLY for faction folder 'ratmen' (ModelLibrary._label_slug_by_faction), so these gain names (Flamethrower, Gatling Gun, Heavy Cannon, ...) can never re-slug another faction's models. Item names listed here (Pet Giant Rat, Captain Rider, Holy Statue, ...) also join a model's labels when their composed variant is shipped (labels_with_available_items). Shared entries above still apply to Ratmen.",
+  "_faction_saurians": {
+    "javelin": "javelin",
+    "blowpipe": "blowpipe",
+    "giant blowpipe": "blowpipe",
+    "fire bolas": "bolas",
+    "rock barrage": "rocks",
+    "bolt thrower": "boltthrower",
+    "javelin crew": "javelins",
+    "godly altar": "altar",
+    "priest rider": "priestrider",
+    "serpent ark": "serpentark",
+    "solar beam": "solarbeam",
+    "mace tail": "macetail",
+    "dread behemoth fighter": "behemoth",
+    "dread behemoth carrier": "carrier"
+  },
   "_faction_ratmen": {
     "pet giant rat": "petrat",
     "rat ogre": "ratogre",
