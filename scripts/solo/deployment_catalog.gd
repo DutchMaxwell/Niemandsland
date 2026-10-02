@@ -67,6 +67,12 @@ static func in_zone(style: Dictionary, player: int, p: Vector2) -> bool:
 	if not (polys is Array):
 		return false
 	for poly in polys:
+		if poly is Dictionary:   # D4a: a disc primitive {"disc": {"c": [x, z], "r_in": r}}
+			var d: Dictionary = (poly as Dictionary).get("disc", {})
+			var c: Array = d.get("c", [0, 0])
+			if p.distance_to(Vector2(c[0], c[1])) <= float(d.get("r_in", 0.0)):
+				return true
+			continue
 		var pts := PackedVector2Array()
 		for xz in poly:
 			pts.append(Vector2(xz[0], xz[1]))
@@ -83,3 +89,25 @@ static func zone_test(id: String, player: int) -> Callable:
 	var style := get_style(id)
 	return func(p_m: Vector2) -> bool:
 		return in_zone(style, player, p_m / IN2M)
+
+
+## `player`'s zone as polygons in centered table inches, a disc approximated by `segments` points —
+## what the overlay draws (the exact disc test stays in `in_zone`).
+static func zone_polygons(style: Dictionary, player: int, segments: int = 48) -> Array:
+	var out: Array = []
+	var polys: Variant = (style.get("zones", {}) as Dictionary).get(str(player))
+	if not (polys is Array):
+		return out
+	for poly in polys:
+		var pts := PackedVector2Array()
+		if poly is Dictionary:
+			var d: Dictionary = (poly as Dictionary).get("disc", {})
+			var c: Array = d.get("c", [0, 0])
+			for i in segments:
+				var a := TAU * float(i) / float(segments)
+				pts.append(Vector2(c[0], c[1]) + Vector2(cos(a), sin(a)) * float(d.get("r_in", 0.0)))
+		else:
+			for xz in poly:
+				pts.append(Vector2(xz[0], xz[1]))
+		out.append(pts)
+	return out

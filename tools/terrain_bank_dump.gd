@@ -72,6 +72,8 @@ const LATTICE_OFFSET_IN := 1.25
 var _out := ""
 var _from := 1
 var _to := 200
+var _symmetric := true
+var _seeds_file := ""
 var _ovl: Node3D
 
 
@@ -85,6 +87,10 @@ func _init() -> void:
 			_from = int(arg.substr(5))
 		elif arg.begins_with("to="):
 			_to = int(arg.substr(3))
+		elif arg.begins_with("symmetric="):
+			_symmetric = arg.substr(10) != "0"
+		elif arg.begins_with("seeds="):
+			_seeds_file = arg.substr(6)
 
 
 ## The NML-1155 overlay harvest needs the tree initialized (the overlay builds
@@ -105,8 +111,9 @@ func _run() -> void:
 	var walls_total := 0
 	var blockers_total := 0
 	var boxes_total := 0
-	for layout_seed in range(from, to + 1):
-		var world := SchoolTerrain.generate(layout_seed)
+	var seeds: Array = parse_seeds(_seeds_file) if _seeds_file != "" else range(from, to + 1)
+	for layout_seed in seeds:
+		var world := SchoolTerrain.generate(layout_seed, 6.0, 4.0, _symmetric)
 		var n := int(world["n"])
 		cells_total += (world["cells"] as Dictionary).size()
 		var board := {
@@ -123,6 +130,8 @@ func _run() -> void:
 			"pieces": world.get("pieces", []),
 			"lattice": _lattice(world, n),
 		}
+		if not _symmetric:
+			board["symmetric"] = 0
 		# --- NML-1155: the prop layer, harvested from the REAL overlay. The
 		# arena seeds the same layouter this way (arena_match.gd:278-283 with
 		# symmetric=1, which SchoolTerrain.generate pins, school_terrain.gd:21),
@@ -130,7 +139,7 @@ func _run() -> void:
 		# grid_cells equality below proves the second run matches the first.
 		var ml: Control = (load("res://scripts/map_layout.gd") as GDScript).new()
 		ml.table_size_feet = Vector2(6.0, 4.0)
-		ml.point_symmetry_enabled = true
+		ml.point_symmetry_enabled = _symmetric
 		ml.grid_rotation_degrees = 0.0
 		seed(layout_seed)
 		ml._generate_terrain_layout()
@@ -191,8 +200,21 @@ func _run() -> void:
 		f.store_string(JSON.stringify(board, "", true, true))
 		f.close()
 	print("[BANK] wrote %d boards (seeds %d..%d) to %s — %d terrain cells, %d wall segments, %d blocker discs, %d blocker boxes"
-		% [to - from + 1, from, to, out, cells_total, walls_total, blockers_total, boxes_total])
+		% [seeds.size(), seeds[0] if not seeds.is_empty() else 0, seeds[-1] if not seeds.is_empty() else 0, out, cells_total, walls_total, blockers_total, boxes_total])
 	quit(0)
+
+
+## One decimal layout seed per line (63-bit safe, blank lines skipped).
+static func parse_seeds(path: String) -> Array:
+	var out: Array = []
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return out
+	while not f.eof_reached():
+		var line := f.get_line().strip_edges()
+		if line != "":
+			out.append(line.to_int())
+	return out
 
 
 ## NML-1152 step 4d: the probe-visible collision footprints of one overlay

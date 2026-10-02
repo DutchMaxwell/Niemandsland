@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "comment": "Deployment catalog v1 (grill 2026-08-12, D4): the six standard-family Face-Off deployment styles; only the standard family ships in v1. Zones are polygons in centered table inches (table 72x48, x in [-36,36], z in [-24,24]); player 1 owns the z-negative side. Every zone is a list of polygons (list of list of [x,z] pairs), even where one polygon suffices, so multi-part zones like disordered share the same shape as the rest. Wording is our own; geometry follows the official standard-style diagrams.",
+  "comment": "Deployment catalog v1 (grill 2026-08-12, D4): the six standard-family Face-Off deployment styles; only the standard family ships in v1. Zones are polygons in centered table inches (table 72x48, x in [-36,36], z in [-24,24]); player 1 owns the z-negative side. Every zone is a list of polygons (list of list of [x,z] pairs), even where one polygon suffices, so multi-part zones like disordered share the same shape as the rest. Attack & Defend styles (D4a) are role-agnostic: both player keys carry the same zone; a zone element is a polygon or a disc object with centre c and radius r_in (inches). Wording is our own; geometry follows the official standard-style diagrams.",
   "styles": {
     "front_line": {
       "family": "standard",
@@ -42,6 +42,27 @@
       "zones": {
         "1": [[[-36,0],[-12,0],[-12,24],[-36,24]]],
         "2": [[[12,-24],[36,-24],[36,0],[12,0]]]
+      }
+    },
+    "centre_disc_12": {
+      "family": "attack_defend",
+      "zones": {
+        "1": [{"disc": {"c": [0, 0], "r_in": 12}}],
+        "2": [{"disc": {"c": [0, 0], "r_in": 12}}]
+      }
+    },
+    "edge_band_12": {
+      "family": "attack_defend",
+      "zones": {
+        "1": [[[-36,-24],[36,-24],[36,-12],[-36,-12]],[[-36,12],[36,12],[36,24],[-36,24]],[[-36,-12],[-24,-12],[-24,12],[-36,12]],[[24,-12],[36,-12],[36,12],[24,12]]],
+        "2": [[[-36,-24],[36,-24],[36,-12],[-36,-12]],[[-36,12],[36,12],[36,24],[-36,24]],[[-36,-12],[-24,-12],[-24,12],[-36,12]],[[24,-12],[36,-12],[36,12],[24,12]]]
+      }
+    },
+    "anywhere": {
+      "family": "attack_defend",
+      "zones": {
+        "1": [[[-36,-24],[36,-24],[36,24],[-36,24]]],
+        "2": [[[-36,-24],[36,-24],[36,24],[-36,24]]]
       }
     }
   }

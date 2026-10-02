@@ -19,7 +19,7 @@ const STAT_PAD_X := 6
 
 
 ## Presented card content (the big card). `on_action` (optional) is called with the action kind string
-## ("activation"/"fatigued"/"shaken"/"casts"/"wounds"/"details"/"revive") when an action chip is pressed;
+## ("activation"/"start_activation"/"fatigued"/"shaken"/"casts"/"wounds"/"details"/"revive") when an action chip is pressed;
 ## the dock connects it to _card_action. Left empty for strip cards (and the dev preview): the chips are
 ## then plain display pills and the card is the compact strip layout. `card_w` is the card's width.
 static func build_presented(data: Dictionary, on_action: Callable = Callable(), collapse_weapons: bool = false,
@@ -92,6 +92,10 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 		if bool(data.get("woundable", false)):
 			strip.add_child(_status_chip("✚ Wounds", false, HouseStyle.TONE_WARN, compact, on_action, "wounds"))
 	col.add_child(strip)
+	if not compact and bool(data.get("can_activate", false)):
+		var go := HouseStyle.button("Activate", HouseStyle.PRIMARY)
+		go.pressed.connect(func() -> void: on_action.call("start_activation"))
+		col.add_child(go)
 
 	# Weapons — one row per distinct weapon (name+count · range, attacks, AP), its rules as links below.
 	# data.weapons = [{name, meta, rules}] from the dock's distributed-loadout aggregation (D8 reuse).
