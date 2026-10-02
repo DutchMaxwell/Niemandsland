@@ -18,7 +18,7 @@ def test_absent_tree_knobs_read_back_the_defaults():
     k = core.knobs()
     assert (k["search_mode"], k["tree_leaf"], k["tree_dice"]) == ("oneply", "blend", "ev")
     assert (k["tree_budget"], k["tree_samples"], k["tree_batch"]) == (128, 4, 8)
-    assert (k["tree_wall_ms"], k["pool_wall_ms"]) == (0, 0)
+    assert (k["tree_wall_ms"], k["pool_wall_ms"], k["deadline_us"]) == (0, 0, 0)
 
 
 def test_stamped_tree_knobs_round_trip():
@@ -26,11 +26,16 @@ def test_stamped_tree_knobs_round_trip():
     core.set_header({"profiles": {}, "knobs": {
         "search_mode": "tree", "tree_leaf": "terminal", "tree_dice": "tray",
         "tree_budget": 64, "tree_samples": 2, "tree_batch": 4,
-        "tree_wall_ms": 500, "pool_wall_ms": 700}})
+        "tree_wall_ms": 500, "pool_wall_ms": 700, "deadline_us": 900}})
     k = core.knobs()
     assert (k["search_mode"], k["tree_leaf"], k["tree_dice"]) == ("tree", "terminal", "tray")
     assert (k["tree_budget"], k["tree_samples"], k["tree_batch"]) == (64, 2, 4)
-    assert (k["tree_wall_ms"], k["pool_wall_ms"]) == (500, 700)
+    assert (k["tree_wall_ms"], k["pool_wall_ms"], k["deadline_us"]) == (500, 700, 900)
+
+
+def test_a_negative_deadline_is_refused_naming_the_key():
+    with pytest.raises(Exception, match="deadline_us"):
+        _core().set_header({"profiles": {}, "knobs": {"deadline_us": -1}})
 
 
 def test_an_unknown_search_mode_is_refused_loudly():

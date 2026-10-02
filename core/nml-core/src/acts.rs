@@ -238,6 +238,10 @@ pub struct Knobs {
     /// One-ply pool wall-clock fallback in ms (0 = off).
     #[serde(default)]
     pub pool_wall_ms: i64,
+    /// The decision allowance in microseconds, measured from the planner call
+    /// (0 = off). Parsed and carried; no search reads it yet.
+    #[serde(default)]
+    pub deadline_us: i64,
     /// Tree search knob: the widening rate. 0.0 (default) opens every child of
     /// a node before the search descends; > 0 keeps at most
     /// ceil(max(n, 1) ^ tree_widen) children of an n-visit node open.
@@ -1403,6 +1407,7 @@ impl Default for Knobs {
             tree_batch: default_tree_batch(),
             tree_wall_ms: 0,
             pool_wall_ms: 0,
+            deadline_us: 0,
             tree_widen: 0.0,
             melee_reach: MeleeReach::All,
             consolidate: false,
@@ -1807,6 +1812,9 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     if header.knobs.tree_widen.is_nan() || header.knobs.tree_widen < 0.0 {
         return Err(format!("tree_widen {}: must be >= 0 (0 opens every child first)", header.knobs.tree_widen));
     }
+    if header.knobs.deadline_us < 0 {
+        return Err(format!("deadline_us {}: must be >= 0 (0 = off)", header.knobs.deadline_us));
+    }
     if header.knobs.search_mode == SearchMode::Tree
         && (header.knobs.tree_budget < 1 || header.knobs.tree_samples < 1 || header.knobs.tree_batch < 1)
     {
@@ -2113,7 +2121,14 @@ mod tests {
         let k = read_act_header(head).expect("an empty knobs block parses").knobs;
         assert_eq!((k.search_mode, k.tree_leaf, k.tree_dice), (SearchMode::OnePly, TreeLeaf::Blend, TreeDice::Ev));
         assert_eq!((k.tree_budget, k.tree_samples, k.tree_batch), (128, 4, 8));
-        assert_eq!((k.tree_wall_ms, k.pool_wall_ms), (0, 0));
+        assert_eq!((k.tree_wall_ms, k.pool_wall_ms, k.deadline_us), (0, 0, 0));
+    }
+
+    #[test]
+    fn a_negative_deadline_is_refused_naming_the_key() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"deadline_us":-1}}"#;
+        let err = read_act_header(head).expect_err("a negative allowance is no allowance");
+        assert!(err.contains("deadline_us"), "error should name the key: {err}");
     }
 
     #[test]
