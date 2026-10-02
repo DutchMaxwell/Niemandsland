@@ -256,3 +256,31 @@ use super::*;
         // Wound 4: the whole chain is dead now — wasted, not an error.
         assert_eq!(land_deadly_wounds(&mut st, 0, 1, 1, s), 0);
     }
+
+    /// B8 (stage-0 freeze 02.10., row T_c4_L_d0_s2): a joined hero that holds a
+    /// WOUND slot but no POSITION — the trainer's arena fold below
+    /// `EPOCH_69_HERO_FOLD` built exactly that for the hero of an Ambush host.
+    /// The host chain is wiped, the Deadly wound spills onto the ghost hero and
+    /// `positions.remove` on the empty vector panicked the whole process. The
+    /// guard drops the wound slot, removes no position, and COUNTS the desync
+    /// (the stderr line rides on the same counter) — it never panics.
+    #[test]
+    fn a_deadly_spill_onto_a_hero_without_positions_logs_instead_of_panicking() {
+        let mut st = deadly_chain();
+        st.wounds[0] = vec![];
+        st.positions[0] = vec![];
+        st.radii[0] = vec![];
+        st.alive[0] = 0;
+        st.positions[1] = vec![];
+        st.radii[1] = vec![];
+        st.alive[1] = 0; // the ghost: wounds [1], no model on the table
+        let s = Seams { rules_epoch: crate::acts::EPOCH_67_MARKERS_BURSTS, hero_attach: true, ..Seams::default() };
+        let before = crate::sim::DESYNC_HITS.load(std::sync::atomic::Ordering::Relaxed);
+        land_deadly_wounds(&mut st, 0, 1, 3, s);
+        assert_eq!(st.wounds[1], Vec::<i64>::new(), "the ghost's wound slot is spent: {:?}", st.wounds);
+        assert_eq!((st.positions[1].len(), st.alive[1]), (0, 0));
+        assert!(
+            crate::sim::DESYNC_HITS.load(std::sync::atomic::Ordering::Relaxed) > before,
+            "the guard must log the desync, never hide it"
+        );
+    }
