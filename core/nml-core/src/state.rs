@@ -385,6 +385,12 @@ pub struct Marker {
     /// D10a: the z sign (+1/-1) of the edge the defender deployed on; 0 = unset.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub deploy_edge: i64,
+    /// D12a: `Some("trap" | "relic" | "")` marks a secret marker (Smash & Grab); `None` = not secret.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret: Option<String>,
+    /// D12a: the attacker has turned the marker up.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub revealed: bool,
 }
 
 fn is_zero(v: &i64) -> bool { *v == 0 }
@@ -395,7 +401,7 @@ fn is_no_carrier(v: &i64) -> bool { *v == -1 }
 impl Default for Marker {
     fn default() -> Self {
         Self { owned_by: 0, destructible: false, destroyed: false, destroyed_seq: 0,
-            carry: false, carried_by: -1, mobile: false, deploy_edge: 0 }
+            carry: false, carried_by: -1, mobile: false, deploy_edge: 0, secret: None, revealed: false }
     }
 }
 

@@ -265,3 +265,16 @@ fn mobile_flags_round_trip_and_stay_out_of_older_records() {
     assert!(old["markers_meta"][0].get("mobile").is_none(), "older records gain no key");
     assert!(old["markers_meta"][0].get("deploy_edge").is_none());
 }
+
+#[test]
+fn secret_flags_round_trip_and_stay_out_of_older_records() {
+    let mut st = vip_state(1, 0.0);
+    st.markers_meta[0].secret = Some(String::new());
+    let plain = plain_of(&st);
+    assert_eq!(plain["markers_meta"][0]["secret"], json!(""), "an empty secret marker is still secret");
+    assert!(plain["markers_meta"][0].get("revealed").is_none());
+    st.markers_meta[0].revealed = true;
+    assert_eq!(plain_of(&st)["markers_meta"][0]["revealed"], json!(true));
+    let old = plain_of(&carry_state());
+    assert!(old["markers_meta"][0].get("secret").is_none(), "older records gain no key");
+}
