@@ -6,29 +6,56 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
-### Added
-- **Automodus: Charge, Advance & Shoot and Rush on the solo radial.** Pick the verb, click the enemy —
-  the engine moves your unit along a legal path and rolls the attack, saves and morale for you, the
-  same executor NACHTMAHR's own activations run through. A suggested target is named in the log; a
-  panel switch (on after your first executed intent) skips the save-roll confirmation. See
-  `KNOWN_ISSUES.md` for this version's limits. (NML-202)
+## [0.3.14.0-alpha] — DRAFT (date set at release)
+
+The ladder, the new house-style interface and the map builder rework. NACHTMAHR gets four selectable difficulty grades, you can order your own units around with one click (Charge, Advance & Shoot, Rush), the in-game windows share one look, the Map Layout editor is rebuilt, the Relic Hunt and Capture & Hold missions work end to end, and the Mac build carries Erlkönig too.
+
+### Gameplay & AI
+- **NACHTMAHR has four difficulty grades.** Dämmerung, Zwielicht and Finsternis play the decision tree; **Albtraum**, the default, plays with Erlkönig. A picker in the solo panel remembers your choice, and the game log names the grade at the start of a game. Every grade plays by the rules. (NML-1018; #1126, #1127)
+- **Automodus: Charge, Advance & Shoot and Rush on the solo radial.** Pick the verb, click the enemy — the engine moves your unit along a legal path and rolls the attack, saves and morale for you, the same door NACHTMAHR's own activations use. A suggested target is named in the log; a panel switch (on after your first executed intent) skips the save-roll confirmation. There is also an **Activate** button on the unit card, and the once-per-game **Speed Feat** is spent from the radial wheel. (NML-202, NML-977, NML-984; #1173, #1185, #1313, #1134)
+- **The radial menu keeps the main verbs on the ring.** Charge, Advance and Rush outrank Spot, Speed Feat and Pass; a crowded menu puts the rest in pills beside the ring. (#1194, #1150)
+- **Fixed — rules the AI and the table now agree on:** to-hit modifiers and defence modifiers are summed and clamped once (Def 2+ in cover against AP(1) saves on 2+); Counter-Attack units strike first when charged; Thrust's +1 applies only when charging; a weapon with printed Unstoppable ignores Regeneration; Deadly wounds finish an already-wounded Tough model first and spill onto a joined hero; Crossing Attack, Surprise Attack, Piercing Spotter / Target and Precision Spotter follow their book text; Fearless, morale and melee wipes judge joined heroes correctly; a squad gets cover only when its models are fully inside the terrain; a joined hero sees through its own squad. (#1113–#1116, #1132, #1131, #1129, #1179–#1181, #1208–#1209, #1216, #1223, #1230–#1232, #1251)
+- **Fixed — the AI:** it removes casualties so the survivors' chain stays coherent; same-name weapons with different attacks keep their own bearers; it ignores destroyed units when it looks for the table centre; it resets its movement budget at each activation. (NML-1036; #1148, #1097, #1188, #1207)
+- **Fixed — Utility-Buff givers work in a plain human-vs-human room, every defender-owned roll goes to its owner in co-op,** and a Solo game keeps its mission and scoring through save and load. (NML-939; #1125, #1100, #1124)
+
+### Missions
+- **Relic Hunt and Capture & Hold are playable end to end.** A carried relic is picked up and dropped on the table (you choose the drop point), stays with its carrier, survives save and load, and counts for the score; NACHTMAHR prices relic carriers. (#1158, #1164, #1192, #1193, #1195, #1198, #1214)
+- **Attack & Defend gets points advice** in the panel, the AI dialog and the roll-off log (advice only, nothing is enforced). (#1328)
+- Owned mission markers are assigned after the deployment-side choice. (#1119)
+
+### Map builder
+- **The Map Layout editor is rebuilt in the house style:** header and tabs as segment buttons, terrain, objectives and deployment tabs, stats and guidelines card, a docked terrain shelf with click-to-place ghost, house-themed file dialogs, and a hint line under the mode selector (the wheel always zooms). (#1268–#1275, #1278, #1280, #1281, #1283, #1285, #1287, #1288, #1296)
+- **Safer editing:** Clear terrain, Load and a table-size change say what they clear and can be undone; undo covers objectives and custom zone vertices; a no-op paint stroke pushes no undo step; Clear zones also clears the 3D table; a custom zone needs three points. (#1289, #1293–#1297, #1262–#1266, #1291)
+
+### UI
+- **One house style across the game:** the tool rail (Dice / Measure / Terrain / View), the top bar with round and phase, the ☰ game menu with a gold Start Game action, unit cards, the Battle Log, chat and hint line, the deployment strip, Wounds / Caster points windows, the solo yes/no prompts, Game over and after-game cards, Import OPR Army, AI Opponent, Settings, Privacy & data, file dialogs, online dialogs, the army loading bar, the model download panel, tutorial dialogs and the low-framerate notice. (#1138–#1146, #1224–#1259)
+- **A connection chip in the top bar** shows ONLINE, RECONNECTING or CONNECTION LOST in a session, and "Reconnect failed" stays visible instead of being overwritten by "Offline". (#1316, #1310)
+- **Shift+F now only clears the sight / range fan; regiment frontage moves to B.** (#1140)
+- **Fixed:** dropdown lists no longer cover their button, so the opening click cannot pick an entry; the hover hint no longer sits on the Units tab; the Combat Stage card no longer covers the NACHTMAHR turn banner; the model-info popup and the radial "Info" entry are gone. (#1147, #1254, #1253, #1255)
+- **The menu loads faster:** its trees parse on the worker pool and billboards stand in until they are ready. (#1099)
+
+### Terrain & rules at the table
+- **Heights are rules:** climbing a container or ruin floor spends its height (GF p.11); melee "Who Can Strike" also measures 4" vertically; the 3" coherency allowance triggers on real elevation, not a drag lift; the mouse wheel picks which floor of a multi-storey ruin a drag lands on. (NML-972, phase B1; #1154, #1155, #1157, #1160)
+
+### Tutorial
+- **Trial by Fire: First Steps** teaches the camera, squad selection, movement and measuring on a small table; completion follows the sixth step and the chapter can be replayed. (#1161–#1178)
+- The T-02 "box select" step completes from a real rubber band. (#1122)
+
+### Figures
+- **The Saurian Starhost (Age of Fantasy) are live with their own 3D models:** ten units, the Spiked Lizard and the Dragon Lizard, served from the asset CDN (no game update needed for the models themselves). *(DRAFT: the Dragon Lizard upload was still running on 02.10. — drop it from this line if it is not live at the tag.)*
+
+### Multiplayer
+- See Gameplay & AI (co-op roll routing, Utility-Buff givers) and UI (connection chip, "Reconnect failed").
+
+### Changed
+- **macOS builds carry the rules core, so NACHTMAHR plays Erlkönig there too.** The app ships a universal (Apple Silicon + Intel) core library; the release build proves on a GitHub macOS runner that it loads and plays before the zip is published. If the core fails to load, the game falls back to the decision tree as before. (#1133, #1136)
 
 ### Fixed
-- **Unit coherency's 3" allowance now triggers on real elevation, not a drag lift.** The
-  threshold was 3" tall, so a model on a 2.5" container roof and its mate on the ground
-  counted as "same level" and had to stand 1" apart, which the wall face makes
-  impossible; it is now GF p.11's own 1" floor, and a drag pickup is never mistaken for
-  standing on elevated terrain. (NML-972, phase B1)
-- **Melee "Who Can Strike" also measures 4" vertically (GF/AoF p.9).** A unit standing on
-  a 6" ruin floor could strike, and be struck by, infantry at the wall foot. (NML-972,
-  phase B1)
-- **A human move pays its climb cost, and the player can pick a ruin floor.** Climbing a
-  container or a ruin's floor slab now spends its height (up and down, GF p.11), a step
-  over 3" is refused under the movement limit, and the mouse wheel steps which floor of a
-  multi-storey ruin a drag lands on. (NML-972, phase B1)
+- Ctrl+D on army models makes plain copies, not alias copies of the unit; the unit card's Wounds button applies the Tough(1) gate the radial route has; the privacy example record carries the real version. (#1121, #1120, #1123)
 
-### Added
-- **Trial by Fire: First Steps** teaches the camera, squad selection, movement and measuring on a small table; completion follows the sixth step and the chapter can be replayed.
+### Internal
+- The Rust core gains a tree search planner, a decision-time allowance (`deadline_us`), a per-seat search stream, a live mission ledger and the relic and Attack & Defend referee groundwork; none of it changes the shipped opponent. Strength experiments run through the lab tools. (#1277–#1345 series)
+- CI: time-balanced gdUnit shards (10), parallel Rust jobs, cached Windows export, job timeouts. (#1301–#1322)
 
 ## [0.3.13.1-alpha] — 2026-09-25
 

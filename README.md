@@ -9,9 +9,9 @@ Fantasy). Built in Godot.
      (§ Release checklist); never hardcode a version elsewhere in the UI. -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.13.1--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.14.0--alpha-orange.svg)]()
 
-> **Status: public alpha (`0.3.13.1`).** The tabletop sandbox, OPR army import, multiplayer
+> **Status: public alpha (`0.3.14.0`).** The tabletop sandbox, OPR army import, multiplayer
 > and the 3D-model pipeline work. **Solo play against the built-in AI opponent (NACHTMAHR)**
 > resolves turns, combat, spells and terrain effects automatically; human-vs-human multiplayer
 > is still a manual-rules sandbox. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest
@@ -23,9 +23,9 @@ Fantasy). Built in Godot.
 What the code actually does today:
 
 - **Solo mode vs NACHTMAHR** — play a whole game against the built-in opponent. NACHTMAHR is a
-  game AI (no LLM) that decides entirely offline and never cheats. In the Windows and Linux builds it
+  game AI (no LLM) that decides entirely offline and never cheats. In the Windows, Linux and macOS builds it
   plays with its new AI model **Erlkönig**: a search guided by a trained neural network (value net)
-  that ships with the game and runs in the Rust rules core; without the core (always on macOS) it plays by the official OPR solo
+  that ships with the game and runs in the Rust rules core; without the core (when it does not load) it plays by the official OPR solo
   decision trees. The game log names which one plays. Mark an imported army as AI-controlled,
   or let NACHTMAHR bring one of its own pre-built lists (fetched at runtime, cached locally).
   Deployment is a click-guided rulebook flow (roll-off, alternating placement, scouts, ambush
@@ -37,7 +37,7 @@ What the code actually does today:
   residue, and the battle log names any rule it applies (or asks for manual handling) per unit, so
   you can apply the rest by hand. When your unit takes wounds and the choice matters (Tough models,
   mixed loadouts), **you allocate them by clicking** — LMB places one wound, RMB auto-allocates
-  the rest. One difficulty (full strength) — selectable grades are on the roadmap.
+  the rest. Four difficulty grades (Dämmerung, Zwielicht, Finsternis, Albtraum — the default, full-strength Erlkönig) are picked in the solo panel.
 - **3D tabletop** — choose the table size (6×4 ft default, 4×4, or custom 12–240 in) and one of six
   biomes before the match; on the Medium preset and above the biome also dresses the table (display
   only). Orbit/pan/zoom camera.
