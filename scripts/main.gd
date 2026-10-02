@@ -362,6 +362,7 @@ var _solo_batch: bool = false                # headless sweeps: instant (non-phy
 var _solo_relic_drop_queue: Array = []
 var _solo_relic_drop_active: Dictionary = {}
 var _solo_relic_drop_gen := 0
+var _solo_secret_pick: Dictionary = {}   # D12a-2: the human defender's two clicks {relic, trap} (marker indexes)
 var _solo_dev: bool = false                  # developer mode: render the AI's decision records into the battle log
 ## Per-activation stderr trace of the both-AI arena loop (env NML_AI_TRACE=1) — the ladder tooling's
 ## progress/stall diagnostic for long unattended headless matches. Off by default: zero output in normal play.
@@ -746,6 +747,9 @@ func _ready() -> void:
 	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
 	map_layout_editor.objectives_changed.connect(_on_objectives_changed)
 	map_layout_editor.relic_drop_chosen.connect(_solo_relic_drop_chosen)
+	map_layout_editor.marker_picked.connect(_solo_secret_marker_picked)
+	map_layout_editor.marker_pick_refused.connect(func() -> void:
+		_show_toast("Click one of the markers"))
 	map_layout_editor.relic_drop_refused.connect(func() -> void:
 		_show_toast("Place the relic within 1\" of the carrier's base"))
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
@@ -2537,10 +2541,55 @@ func _solo_secret_markers_assign() -> void:
 	var markers: Array = SoloController.mission_markers
 	if terrain_overlay == null or table == null or markers.is_empty() or not (markers[0] as Dictionary).has("secret"):
 		return
+	var defender := int(SoloController.mission_roles.get("defender", 0))
+	if solo_controller != null and defender == solo_controller.human_slot and markers.size() >= 2 \
+			and not _solo_batch and not _solo_both_ai and map_layout_editor != null:
+		_solo_secret_pick = {"relic": -1, "trap": -1}
+		_solo_sync_relic_map()   # the editor lists the live marker spots, same order as the overlay
+		_on_map_layout_pressed()
+		map_layout_editor.begin_marker_pick()
+		_show_toast("Hide your secrets: click the marker that holds the RELIC (close or Esc = default)")
+		return
+	_solo_secret_apply(_solo_secret_default_kinds())
+
+
+## The AI rule's kinds for the live markers (the human's fallback when the clicks are skipped).
+func _solo_secret_default_kinds() -> Array:
 	var pts: Array = []
 	for pos in terrain_overlay.get_objectives():
 		pts.append(Vector2((pos as Vector3).x, (pos as Vector3).z) / SoloController.INCHES_TO_METERS)
-	var kinds: Array = SoloController.secret_assign(pts, table.table_size.x * 12.0, table.table_size.y * 12.0)
+	return SoloController.secret_assign(pts, table.table_size.x * 12.0, table.table_size.y * 12.0)
+
+
+## The human defender's click: first the relic, then the trap (a different marker). The second click
+## finishes the assignment; closing the editor early takes the AI rule for what is missing.
+func _solo_secret_marker_picked(index: int) -> void:
+	if _solo_secret_pick.is_empty():
+		return
+	if int(_solo_secret_pick["relic"]) < 0:
+		_solo_secret_pick["relic"] = index
+		_show_toast("Now click the marker that holds the TRAP")
+		return
+	if index == int(_solo_secret_pick["relic"]):
+		_show_toast("That marker holds the relic - pick another one for the trap")
+		return
+	_solo_secret_pick["trap"] = index
+	map_layout_editor._on_close_pressed()
+
+
+func _solo_secret_pick_finished() -> void:
+	var picked := _solo_secret_pick
+	_solo_secret_pick = {}
+	var kinds: Array = _solo_secret_default_kinds()
+	if int(picked["relic"]) >= 0 and int(picked["trap"]) >= 0:
+		kinds = []
+		for i in range(SoloController.mission_markers.size()):
+			kinds.append("relic" if i == int(picked["relic"]) else ("trap" if i == int(picked["trap"]) else ""))
+	_solo_secret_apply(kinds)
+
+
+func _solo_secret_apply(kinds: Array) -> void:
+	var markers: Array = SoloController.mission_markers
 	for i in range(mini(markers.size(), kinds.size())):
 		(markers[i] as Dictionary)["secret"] = kinds[i]
 		if kinds[i] == "relic":
@@ -16752,6 +16801,9 @@ func _on_map_layout_closed() -> void:
 	# Reset zoom when closing map layout editor
 	if map_layout_editor and map_layout_editor.has_method("reset_zoom"):
 		map_layout_editor.reset_zoom()
+	if not _solo_secret_pick.is_empty():
+		_solo_secret_pick_finished()
+		return
 	if not _solo_relic_drop_active.is_empty():
 		_solo_log_relic_drop(_solo_relic_drop_active)
 		_solo_relic_drop_active = {}
