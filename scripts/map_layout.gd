@@ -180,6 +180,10 @@ var relic_drop_radius_in := 0.0
 var relic_drop_reach_in := 1.0
 signal relic_drop_chosen(world_pos: Vector3)
 signal relic_drop_refused
+## D12a-2: the defender's pick of the relic and the trap among the markers (two clicks).
+var marker_pick_active := false
+signal marker_picked(index: int)
+signal marker_pick_refused
 
 # Signal to notify terrain_overlay of objectives changes
 signal objectives_changed(objectives: Array)
@@ -1096,8 +1100,9 @@ func _on_symmetry_toggled(enabled: bool) -> void:
 
 
 func _on_close_pressed() -> void:
-	if relic_drop_active:
+	if relic_drop_active or marker_pick_active:
 		relic_drop_active = false
+		marker_pick_active = false
 		layout_closed.emit()  # closing this prompt keeps the deterministic default
 		hide()
 		return
@@ -1766,6 +1771,17 @@ func _is_valid_inch_pos(inch_pos: Vector2) -> bool:
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
+	if marker_pick_active:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			_on_close_pressed()
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var pick_click: Vector2 = grid_container.get_global_transform_with_canvas().affine_inverse() * event.position
+			if Rect2(Vector2.ZERO, grid_container.size).has_point(pick_click):
+				try_marker_pick(_get_inch_at_screen_pos(event.position, false))
+				get_viewport().set_input_as_handled()
+			return
 	if relic_drop_active:
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			_on_close_pressed()
@@ -2780,6 +2796,27 @@ func try_relic_drop(inch_pos: Vector2) -> bool:
 		(valid.position.y + valid.size.y / 2.0) * GRID_SIZE_INCHES)
 	var world := (inch_pos - centre).rotated(deg_to_rad(grid_rotation_degrees)) * 0.0254
 	relic_drop_chosen.emit(Vector3(world.x, 0.0, world.y))
+	return true
+
+
+func begin_marker_pick() -> void:
+	marker_pick_active = true
+	grid_container.queue_redraw()
+
+
+## A click within the snap tolerance of a marker picks it; anything else is refused.
+func try_marker_pick(inch_pos: Vector2) -> bool:
+	var best := -1
+	var best_d := OBJECTIVE_SNAP_TOLERANCE
+	for i in range(mission_objectives.size()):
+		var d := inch_pos.distance_to(mission_objectives[i])
+		if d <= best_d:
+			best = i
+			best_d = d
+	if not marker_pick_active or best < 0:
+		marker_pick_refused.emit()
+		return false
+	marker_picked.emit(best)
 	return true
 
 
