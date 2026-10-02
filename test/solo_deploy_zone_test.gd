@@ -79,3 +79,26 @@ func test_catalog_zone_test_probes_world_metres() -> void:
 	var probe := DeploymentCatalog.zone_test("front_line", 1)
 	assert_bool(probe.call(Vector2(0.0, -18.0 * IN2M))).is_true()
 	assert_bool(probe.call(Vector2(0.0, 18.0 * IN2M))).is_false()
+
+
+## NML-1010 D5: a non-rectangular zone (the Attack & Defend 12" disc) — the AI deploys a whole army
+## inside it (zone rect = the disc's bounding square, the probe = the catalog's disc test). Every
+## model must stand in the disc: no section strip, cleanup reshift or fallback may leave it.
+func test_a_12_inch_disc_zone_holds_every_model_of_a_crowded_army() -> void:
+	var disc_rect := Rect2(Vector2(-12.0 * IN2M, -12.0 * IN2M), Vector2(24.0 * IN2M, 24.0 * IN2M))
+	var units: Array = []
+	for i in range(7):
+		units.append(_unit(2, 5, "D%d" % i))
+	var sc := _controller(units)
+	sc.deploy_army(disc_rect, [Vector2(0.0, 0.0)], Callable(), Callable(), 11,
+		DeploymentCatalog.zone_test("centre_disc_12", 2))
+	var outside := 0
+	var spots := {}
+	for u in units:
+		for m in (u as GameUnit).models:
+			var p: Vector3 = (m as ModelInstance).node.global_position
+			spots[Vector2(snappedf(p.x, 0.001), snappedf(p.z, 0.001))] = true
+			if Vector2(p.x, p.z).length() > 12.0 * IN2M + 0.001:
+				outside += 1
+	assert_int(spots.size()).override_failure_message("units were not placed").is_greater(20)
+	assert_int(outside).override_failure_message("%d models outside the disc" % outside).is_equal(0)
