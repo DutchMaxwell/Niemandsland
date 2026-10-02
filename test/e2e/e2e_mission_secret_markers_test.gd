@@ -94,3 +94,54 @@ func test_a_marker_the_defender_holds_stays_hidden() -> void:
 	_seize_with("trap", 2)
 	assert_bool(bool(SoloController.mission_markers[0]["revealed"])).is_false()
 	assert_bool(bool(SoloController.mission_markers[0].get("destroyed", false))).is_false()
+
+
+## D12a-2: a HUMAN defender hides trap and relic with two clicks on the Map Tool (the C3 flow).
+func _human_defender_with_three_markers() -> Control:
+	SoloController.mission_roles = {"attacker": 2, "defender": 1}
+	_main.solo_ai_slots = {2: true}
+	_main.solo_controller.human_slot = 1
+	_main._solo_batch = false
+	_main.terrain_overlay.update_objectives([Vector3.ZERO, Vector3(30 * 0.0254, 0, 0), Vector3(-34 * 0.0254, 0, 0)])
+	SoloController.mission_markers = [{"secret": "", "revealed": false}, {"secret": "", "revealed": false},
+		{"secret": "", "revealed": false}]
+	_main._solo_secret_markers_assign()
+	return _main.map_layout_editor
+
+
+func _click_marker(editor: Control, index: int, offset := Vector2.ZERO) -> void:
+	var spot: Vector2 = editor.mission_objectives[index] + offset
+	var canvas_pos: Vector2 = editor.grid_container.get_global_transform() * editor._inch_to_screen_pos(spot)
+	E2EBoot.motion_canvas(get_viewport(), canvas_pos)
+	E2EBoot.click_canvas(get_viewport(), canvas_pos, true)
+	E2EBoot.click_canvas(get_viewport(), canvas_pos, false)
+
+
+func test_the_human_defender_clicks_the_relic_then_the_trap() -> void:
+	var editor := _human_defender_with_three_markers()
+	await _runner.simulate_frames(2)
+	assert_bool(editor.marker_pick_active).is_true()
+	_click_marker(editor, 1)                       # the relic
+	assert_bool(editor.marker_pick_active).is_true()
+	_click_marker(editor, 1)                       # the relic again: refused for the trap
+	assert_bool(editor.marker_pick_active).is_true()
+	_click_marker(editor, 2, Vector2(5, 5))        # nowhere near a marker: refused
+	assert_bool(editor.marker_pick_active).is_true()
+	_click_marker(editor, 2)                       # the trap
+	assert_bool(editor.visible).is_false()
+	var mm: Array = SoloController.mission_markers
+	assert_str(String(mm[1]["secret"])).is_equal("relic")
+	assert_bool(bool(mm[1]["carry"])).is_true()
+	assert_str(String(mm[2]["secret"])).is_equal("trap")
+	assert_str(String(mm[0]["secret"])).is_equal("")
+	assert_str(_log_text()).contains("hides the trap and the relic")
+
+
+func test_closing_the_pick_early_takes_the_ai_rule() -> void:
+	var editor := _human_defender_with_three_markers()
+	await _runner.simulate_frames(2)
+	_click_marker(editor, 1)
+	editor._on_close_pressed()
+	var mm: Array = SoloController.mission_markers
+	assert_str(String(mm[0]["secret"])).is_equal("relic")   # the AI rule: farthest from the edges
+	assert_str(String(mm[2]["secret"])).is_equal("trap")
