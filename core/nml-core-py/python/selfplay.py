@@ -2163,11 +2163,18 @@ def play_game(
     leaf_value_w: float = 0.0,
     mission: str = "duel",
     live_ledger: bool = False,
+    layout_seed: int | None = None,
+    deploy_seed: int | None = None,
+    play_seed: int | None = None,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
     `live_ledger=True` writes the live mission ledger into the planner state before
     every round, as the table does (`_write_ledger`); False keeps today's VP 0:0 state.
+
+    The seed split (None = `seed`, today's game): `layout_seed` draws the marker
+    layout, `deploy_seed` the roll-off and deployment, `play_seed` the game stream
+    from round 1 on.
 
     `cand_logits_fn` / `policy_mode` are the R4 seam (NML-1164,
     DESIGN_policy_player §6): `{side: fn(state, menu, side) -> list[float] |
@@ -2706,6 +2713,7 @@ def play_game(
     magic = _magic_init(units, books)
 
     rng = nml_core.Rng(seed)
+    lay = seed if layout_seed is None else layout_seed  # the marker layout's own seed
     # THE STREAM SPLIT (NML-1073 M5 D1-B3). `rng` above is the game's own
     # generator — deployment, the opener roll-off and every played activation
     # draw from it, exactly as `tools/core_selfplay.gd:_play_one` does. The
@@ -2733,7 +2741,7 @@ def play_game(
         # (count + roll-off, the stream contract — same count and first placer as the
         # rulebook of this seed) and replaces ONLY the candidate choice, which the
         # doctrine takes from the two armies' profiles with zero RNG of its own.
-        draw = nml_core.objective_layout(terrain, seed, "d3+2", FRONT_LINE_ZONES)
+        draw = nml_core.objective_layout(terrain, lay, "d3+2", FRONT_LINE_ZONES)
         if eff_objectives == "rulebook":
             objective_layout = draw
         else:
@@ -2776,7 +2784,7 @@ def play_game(
         mk_spec = resolve_mission(mission, repo_root).get("markers", {})
         mk_placement = str(mk_spec.get("placement", "alternate"))
         if mk_placement == "alternate":
-            draw = nml_core.objective_layout(terrain, seed, mk_spec.get("count", "d3+2"), FRONT_LINE_ZONES)
+            draw = nml_core.objective_layout(terrain, lay, mk_spec.get("count", "d3+2"), FRONT_LINE_ZONES)
             objective_layout = draw
             positions = draw["positions"]
         else:
@@ -2795,7 +2803,7 @@ def play_game(
         # off a fresh generator on the layout seed; a doctrine ply draws
         # nothing. The sweep is the last resort for either side, x ascending.
         placement = resolve_mixed_placement(doctrine_mode)
-        rng = nml_core.Rng(seed)
+        rng = nml_core.Rng(lay)
         count_roll = rng.randi_range(1, 3) + 2
         first_placer = 1
         for _ in range(100):
@@ -2835,7 +2843,7 @@ def play_game(
             "mode": "mixed",
             "count_roll": count_roll,
             "first_placer": first_placer,
-            "layout_seed": seed,
+            "layout_seed": lay,
             "edge_margin_in": 3,
             "positions": placed,
             "placed_by": [first_placer if i % 2 == 0 else 3 - first_placer for i in range(len(placed))],
@@ -2848,6 +2856,8 @@ def play_game(
         ]
     else:
         objectives = [[f32(-16.0 * IN2M), 0.0, 0.0], [0.0, 0.0, 0.0], [f32(16.0 * IN2M), 0.0, 0.0]]
+    # The roll-off + deployment generator: the game stream unless `deploy_seed` splits it off.
+    drng, dep = (rng, seed) if deploy_seed is None else (nml_core.Rng(deploy_seed), deploy_seed)
     arena = eff_deployment in ("arena", "interleaved")
     deploy_seq: list[list[Any]] = []
     if arena:
@@ -2856,21 +2866,21 @@ def play_game(
         # cap fallback 1 matching `roll_off_traced`), then the Rust pipeline
         # on per-side streams: the game stream advances by the roll-off and
         # NOTHING else before the first activation.
-        roll_attempts = _arena_roll_off(rng)
+        roll_attempts = _arena_roll_off(drng)
         opener = 1 if roll_attempts[-1][0] >= roll_attempts[-1][1] else 2
         pos1, pos2, reserved, deploy_seq = _deploy_arena(
-            seed, units1, units2, list_p1, list_p2, board, objectives, opener,
+            dep, units1, units2, list_p1, list_p2, board, objectives, opener,
             eff_deployment == "interleaved", rules_epoch=rules_epoch,
         )
     elif deploy_rng_seed is None:
-        pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
-        pos2 = deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
+        pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, drng)
+        pos2 = deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, drng)
     else:
         side = nml_core.Rng(deploy_rng_seed)
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, side)
         pos2 = deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, side)
-        deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
-        deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
+        deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, drng)
+        deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, drng)
     # The arrival reads are the registry's, taken once off the header the way
     # `capture_reads` is — never re-derived in Python. Only `ambush="table"`
     # asks for them, so an "off" game builds byte-identically to every corpus
@@ -2905,8 +2915,8 @@ def play_game(
            "rounds": rounds}
     if not arena:
         # The d6 roll-off, P1 winning ties — and BOTH dice are drawn, left first.
-        left = rng.randi_range(1, 6)
-        right = rng.randi_range(1, 6)
+        left = drng.randi_range(1, 6)
+        right = drng.randi_range(1, 6)
         opener = 1 if left >= right else 2
     attacker = 0
     if mission_def.get("roles"):
@@ -2920,6 +2930,8 @@ def play_game(
     log: list[dict[str, Any]] = []
     rounds_log: list[dict[str, Any]] = []
     rounds_played = 0
+    if play_seed is not None:  # the played generator, split off right before round 1
+        rng = nml_core.Rng(play_seed)
     for round_no in range(1, rounds + 1):
         plain = state.plain()
         _round_start(plain, round_no, profiles, magic)
