@@ -416,6 +416,7 @@ pub fn build_state(
             .collect(),
         markers_meta,
         destroy_seq: darr(plain, "destroy_seq").iter_shared().map(|v| int(&v)).collect(),
+        attacker: dint(plain, "attacker", 0),
         // Wave 3 S4-U1: the live mission ledger (battle_sim.gd:1789-1792 sends it
         // on round_vp missions); absent = None, as `io::state_of` reads it.
         vp: plain.get("vp").map(|v| Rc::new(crate::mvcall::flat(&v))),
@@ -1110,6 +1111,8 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         tree_batch: dint(d, "tree_batch", dflt.tree_batch),
         tree_wall_ms: dint(d, "tree_wall_ms", dflt.tree_wall_ms),
         pool_wall_ms: dint(d, "pool_wall_ms", dflt.pool_wall_ms),
+        deadline_us: dint(d, "deadline_us", dflt.deadline_us),
+        tree_widen: dnum(d, "tree_widen", dflt.tree_widen),
     }
 }
 

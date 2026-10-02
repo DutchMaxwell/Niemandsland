@@ -1229,6 +1229,12 @@ EXPLORE_SEED_STRIDE = 700001
 # `game_seed * CAP_SEED_STRIDE + seq`: a stride of its own, disjoint from every
 # other derived-seed family here, so no stream can observe another's draws.
 CAP_SEED_STRIDE = 700003
+# The tree search knobs' defaults (acts.rs `Knobs`), so a per-seat value equal
+# to its default is not a part and stays unstamped.
+TREE_KNOB_DEFAULTS = {
+    "search_mode": "oneply", "tree_leaf": "blend", "tree_dice": "ev", "tree_budget": 128,
+    "tree_samples": 4, "tree_batch": 8, "tree_wall_ms": 0, "pool_wall_ms": 0, "deadline_us": 0,
+}
 
 
 # ------------------------------------------------------------------- game ----
@@ -1240,6 +1246,7 @@ def _pick_for(
     policy_mode: str | None = None,
     pool_value_fn: dict[int, Any] | None = None, pool_value_w: float = 0.0,
     leaf_value_fn: dict[int, Any] | None = None, leaf_value_w: float = 0.0,
+    sig: int | None = None,
 ) -> dict[str, Any]:
     """`_pick_for` core_selfplay.gd:398-459 — the full planner for whichever side
     still has a living, un-activated unit; `{}` when the side is dry.
@@ -1317,6 +1324,13 @@ def _pick_for(
     extra = {"cand_logits": logits, "policy_mode": policy_mode} if logits is not None else {}
     vhook = (pool_value_fn or {}).get(player)
     lhook = (leaf_value_fn or {}).get(player)
+    # A tree seat's search stream: the caller's `sig` (`_search_sig`) when given;
+    # else a Tray-dice tree seat takes the per-activation stream seed.
+    kn = core.knobs()
+    if kn.get("search_mode") == "tree" and sig is not None:
+        extra = dict(extra, sig=sig)
+    elif kn.get("search_mode") == "tree" and kn.get("tree_dice") == "tray":
+        extra = dict(extra, sig=explore_seed)
     if lhook is not None:
         extra = dict(extra, leaf_value_fn=lhook, leaf_value_w=leaf_value_w)
     pick = core.plan_with_rollout(
@@ -1352,6 +1366,21 @@ def _pick_for(
             pick["action"], pick["unit_key"] = act, act["unit"]
             pick["played_idx"] = pool_idx[bi]
     return pick
+
+
+def _search_sig(streams: dict[int, dict] | None, seat: int, planning) -> dict[str, Any]:
+    """`seat`'s next search signature `{sig, seed, counter}` off its own stream
+    (`play_game(search_seeds=)`), `{}` unless that seat has one and its acting core
+    is a tree. Two `randi_range` draws per decision, sig = (hi << 31 | lo) + 1; a
+    drawn sig stays pending until a pick actually lands (a dry side draws nothing)."""
+    st = (streams or {}).get(seat)
+    if st is None or planning.knobs().get("search_mode") != "tree":
+        return {}
+    if st["pending"] is None:
+        hi = st["rng"].randi_range(0, 2147483647)
+        lo = st["rng"].randi_range(0, 2147483647)
+        st["pending"] = {"sig": ((hi << 31) | lo) + 1, "seed": st["seed"], "counter": st["counter"]}
+    return st["pending"]
 
 
 @contextlib.contextmanager
@@ -1588,7 +1617,7 @@ def _fork_playout(core, pre_state, action, turn: int, round_no: int, owners0, fr
     state, last = _fork_run_activations(core, state, next_turn, frng)
     opener = (2 if last == 1 else 1) if last != 0 else next_turn
     state, owners = core.playout_seize(state, owners)
-    for r in range(round_no + 1, ROUNDS + 1):
+    for r in range(round_no + 1, state.rounds_total + 1):
         state = state.refresh_round(r)
         state, last = _fork_run_activations(core, state, opener, frng)
         if last != 0:
@@ -1666,6 +1695,7 @@ def _play_round(
     pool_value_w: float = 0.0,
     leaf_value_fn: dict[int, Any] | None = None,
     leaf_value_w: float = 0.0,
+    search_streams: dict[int, dict] | None = None,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -1756,17 +1786,21 @@ def _play_round(
             pf_kw.update(pool_value_fn=pool_value_fn, pool_value_w=pool_value_w)
         if leaf_value_fn is not None:
             pf_kw.update(leaf_value_fn=leaf_value_fn, leaf_value_w=leaf_value_w)
+        s_kw = _search_sig(search_streams, turn, planning)
         pick = _pick_for(planning, state, turn, net_player, eps, explore_seed,
-                         cands=record_cands, **pf_kw)
+                         cands=record_cands, **pf_kw, **({"sig": s_kw["sig"]} if s_kw else {}))
         if not pick:
             other = 2 if turn == 1 else 1
+            s_kw = _search_sig(search_streams, other, cap_core if use_cap else cores[other])
             pick = _pick_for(
                 cap_core if use_cap else cores[other], state, other, net_player, eps, explore_seed,
-                cands=record_cands, **pf_kw,
+                cands=record_cands, **pf_kw, **({"sig": s_kw["sig"]} if s_kw else {}),
             )
             if not pick:
                 break
             turn = other
+        if s_kw:  # the pending sig landed: the stream moves on
+            search_streams[turn].update(pending=None, counter=s_kw["counter"] + 1)
         action = pick["action"]
         row = {
             "side": turn,
@@ -1778,6 +1812,8 @@ def _play_round(
             "action": action,
             "intent": str(pick.get("intent", "")),
         }
+        if s_kw:  # only where a search stream fed the pick
+            row["search"] = {"seed": s_kw["seed"], "counter": s_kw["counter"]}
         if eps > 0.0:
             # NML-1158c: present only on a game the knob actually rode —
             # TRUE only when the coin fired on THIS pick. Omitted at eps=0.0
@@ -1891,7 +1927,8 @@ def _ledger_of(state) -> dict[str, Any]:
     return {"scoring": p.get("scoring") or "end", "vp": list(p.get("vp") or [0, 0]),
             "vp_flavour": p.get("vp_flavour") or {}, "vp_memo": p.get("vp_memo") or {},
             "markers_meta": mm, "destroy_seq": list(p.get("destroy_seq") or [0]),
-            "carry": any(m.get("carry") for m in mm)}
+            "carry": any(m.get("carry") for m in mm),
+            "rounds": int(p.get("rounds_total") or ROUNDS)}
 
 
 def _round_end(core, state, owners: list[int], led: dict[str, Any], round_no: int,
@@ -1911,11 +1948,22 @@ def _round_end(core, state, owners: list[int], led: dict[str, Any], round_no: in
     if led["scoring"] == "round_vp":
         led["vp"], led["vp_memo"] = core.vp_score_round(
             owners, led["vp"], led["vp_flavour"], led["vp_memo"], led["markers_meta"])
-        if round_no == ROUNDS:
+        if round_no == led.get("rounds", ROUNDS):
             led["vp"] = core.vp_score_end(owners, led["vp"], led["vp_flavour"])
     elif led["scoring"] == "end":
         led["vp"] = core.vp_round_add(owners, led["vp"])
     return state, owners
+
+
+def _write_ledger(plain: dict[str, Any], led: dict[str, Any]) -> None:
+    """`led` into a planner state the way battle_sim.gd:1862-1870 writes the LIVE
+    ledger into every capture (NML-1010 W2); a duel (no VP, no markers) gets nothing."""
+    if led["scoring"] == "round_vp":
+        plain["vp"] = [int(led["vp"][0]), int(led["vp"][1])]
+        plain["vp_flavour"], plain["vp_memo"] = led["vp_flavour"], dict(led["vp_memo"])
+    if led["markers_meta"]:
+        plain["markers_meta"] = [dict(m) for m in led["markers_meta"]]
+        plain["destroy_seq"] = [int(led["destroy_seq"][0])]
 
 
 def _verdict(core, owners: list[int], led: dict[str, Any]) -> str:
@@ -2007,7 +2055,7 @@ def play_from_state(
     log: list[dict[str, Any]] = []
     rounds_log: list[dict[str, Any]] = []
     rounds_played = 0
-    for round_no in range(1, ROUNDS + 1):
+    for round_no in range(1, led["rounds"] + 1):
         p = state.plain()
         _round_start(p, round_no, profiles)
         state = core.state_of(p)
@@ -2116,6 +2164,15 @@ def play_game(
     deep_player: int = 0,
     deep_top_k: int | None = None,
     deep_horizon: int | None = None,
+    deep_search_mode: str | None = None,
+    deep_tree_leaf: str | None = None,
+    deep_tree_dice: str | None = None,
+    deep_tree_budget: int | None = None,
+    deep_tree_samples: int | None = None,
+    deep_tree_batch: int | None = None,
+    deep_tree_wall_ms: int | None = None,
+    deep_pool_wall_ms: int | None = None,
+    deep_deadline_us: int | None = None,
     record_cands: bool = False,
     eval_variant_player: int = 0,
     eval_variant: int = 0,
@@ -2131,8 +2188,21 @@ def play_game(
     leaf_value_fn: dict[int, Any] | None = None,
     leaf_value_w: float = 0.0,
     mission: str = "duel",
+    live_ledger: bool = False,
+    layout_seed: int | None = None,
+    deploy_seed: int | None = None,
+    play_seed: int | None = None,
+    search_seeds: dict[int, int] | None = None,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
+
+    `live_ledger=True` writes the live mission ledger into the planner state before
+    every round, as the table does (`_write_ledger`); False keeps today's VP 0:0 state.
+
+    The seed split (None = `seed`, today's game): `layout_seed` draws the marker
+    layout, `deploy_seed` the roll-off and deployment, `play_seed` the game stream
+    from round 1 on; `search_seeds[seat]` feeds that seat's tree searches
+    (`_search_sig`), each row then carries its stream `search: {seed, counter}`.
 
     `cand_logits_fn` / `policy_mode` are the R4 seam (NML-1164,
     DESIGN_policy_player §6): `{side: fn(state, menu, side) -> list[float] |
@@ -2340,7 +2410,13 @@ def play_game(
     State objects are core-independent (`state_of`/`resolve_*` take them as
     arguments), so the two cores share one game; the other seat keeps the base
     core and every caller that passes nothing (0, the default) plays the
-    identical game the pre-knob code did. A deep game whose deep pair EQUALS
+    identical game the pre-knob code did. The nine `deep_search_mode` /
+    `deep_tree_*` / `deep_pool_wall_ms` / `deep_deadline_us` kwargs (None = unset) join
+    the deep core's header knobs the same way (the tree search knobs, keys `search_mode`,
+    `tree_leaf`, ... `deadline_us`); a value EQUAL to the knob's default is
+    not a part, and only a value that parted is stamped into that seat's
+    `knobs_by_seat` entry. A tree kwarg without `deep_player` raises. A deep
+    game whose deep pair EQUALS
     the resolved base pair digests byte-identically to a plain game — the
     proof that the second core really sees the same header — and when the
     pair parts, the result stamps both seats' resolved depths as
@@ -2376,6 +2452,19 @@ def play_game(
     `cap_share`, stamping `row["cap"]` (True = cap core planned the act, a
     value-only row; False = the seat's full-search core, the policy target).
     0.0, the default, builds no core, draws no coin, stamps no key."""
+    # Tree search knobs of the deep seat: only a value that PARTS from the
+    # knob's default joins the header and the stamp (NML-1147a pattern).
+    tree_seat = {
+        k: v for k, v in (
+            ("search_mode", deep_search_mode), ("tree_leaf", deep_tree_leaf),
+            ("tree_dice", deep_tree_dice), ("tree_budget", deep_tree_budget),
+            ("tree_samples", deep_tree_samples), ("tree_batch", deep_tree_batch),
+            ("tree_wall_ms", deep_tree_wall_ms), ("pool_wall_ms", deep_pool_wall_ms),
+            ("deadline_us", deep_deadline_us),
+        ) if v is not None and v != TREE_KNOB_DEFAULTS[k]
+    }
+    if tree_seat and deep_player not in (1, 2):
+        raise ValueError(f"tree knobs {sorted(tree_seat)} need deep_player 1 or 2")
     units1 = load_army(list_p1, 1, rules_epoch)
     units2 = load_army(list_p2, 2, rules_epoch)
     if not units1 or not units2:
@@ -2579,7 +2668,8 @@ def play_game(
         d_menu_wide = eff_deep_menu_wide
         deep_core.set_header(
             {**header, "knobs": dict(knobs, top_k=d_top_k, horizon=d_horizon,
-                                     menu_los=d_menu_los, menu_wide=d_menu_wide)}
+                                     menu_los=d_menu_los, menu_wide=d_menu_wide,
+                                     **tree_seat)}
         )
         if legacy_source_qd:
             deep_core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
@@ -2589,10 +2679,10 @@ def play_game(
         # NML-1147a pattern: the stamp rides ONLY a game whose deep pair parted
         # from the base pair — an equal-knobs deep game digests byte-identically
         # to a plain game, stamp included.
-        if (d_top_k, d_horizon, d_menu_los, d_menu_wide) != (
+        if tree_seat or (d_top_k, d_horizon, d_menu_los, d_menu_wide) != (
             eff_top_k, eff_horizon, eff_menu_los, eff_menu_wide
         ):
-            deep_stamp: dict[str, Any] = {"top_k": d_top_k, "horizon": d_horizon}
+            deep_stamp: dict[str, Any] = {"top_k": d_top_k, "horizon": d_horizon, **tree_seat}
             base_stamp: dict[str, Any] = {"top_k": eff_top_k, "horizon": eff_horizon}
             # NML-1161b, NML-1147a pattern: the MENU half of the stamp rides
             # only a game whose two seats actually parted on it, so a
@@ -2652,6 +2742,7 @@ def play_game(
     magic = _magic_init(units, books)
 
     rng = nml_core.Rng(seed)
+    lay = seed if layout_seed is None else layout_seed  # the marker layout's own seed
     # THE STREAM SPLIT (NML-1073 M5 D1-B3). `rng` above is the game's own
     # generator — deployment, the opener roll-off and every played activation
     # draw from it, exactly as `tools/core_selfplay.gd:_play_one` does. The
@@ -2679,7 +2770,7 @@ def play_game(
         # (count + roll-off, the stream contract — same count and first placer as the
         # rulebook of this seed) and replaces ONLY the candidate choice, which the
         # doctrine takes from the two armies' profiles with zero RNG of its own.
-        draw = nml_core.objective_layout(terrain, seed, "d3+2", FRONT_LINE_ZONES)
+        draw = nml_core.objective_layout(terrain, lay, "d3+2", FRONT_LINE_ZONES)
         if eff_objectives == "rulebook":
             objective_layout = draw
         else:
@@ -2722,7 +2813,7 @@ def play_game(
         mk_spec = resolve_mission(mission, repo_root).get("markers", {})
         mk_placement = str(mk_spec.get("placement", "alternate"))
         if mk_placement == "alternate":
-            draw = nml_core.objective_layout(terrain, seed, mk_spec.get("count", "d3+2"), FRONT_LINE_ZONES)
+            draw = nml_core.objective_layout(terrain, lay, mk_spec.get("count", "d3+2"), FRONT_LINE_ZONES)
             objective_layout = draw
             positions = draw["positions"]
         else:
@@ -2741,7 +2832,7 @@ def play_game(
         # off a fresh generator on the layout seed; a doctrine ply draws
         # nothing. The sweep is the last resort for either side, x ascending.
         placement = resolve_mixed_placement(doctrine_mode)
-        rng = nml_core.Rng(seed)
+        rng = nml_core.Rng(lay)
         count_roll = rng.randi_range(1, 3) + 2
         first_placer = 1
         for _ in range(100):
@@ -2781,7 +2872,7 @@ def play_game(
             "mode": "mixed",
             "count_roll": count_roll,
             "first_placer": first_placer,
-            "layout_seed": seed,
+            "layout_seed": lay,
             "edge_margin_in": 3,
             "positions": placed,
             "placed_by": [first_placer if i % 2 == 0 else 3 - first_placer for i in range(len(placed))],
@@ -2794,6 +2885,8 @@ def play_game(
         ]
     else:
         objectives = [[f32(-16.0 * IN2M), 0.0, 0.0], [0.0, 0.0, 0.0], [f32(16.0 * IN2M), 0.0, 0.0]]
+    # The roll-off + deployment generator: the game stream unless `deploy_seed` splits it off.
+    drng, dep = (rng, seed) if deploy_seed is None else (nml_core.Rng(deploy_seed), deploy_seed)
     arena = eff_deployment in ("arena", "interleaved")
     deploy_seq: list[list[Any]] = []
     if arena:
@@ -2802,21 +2895,21 @@ def play_game(
         # cap fallback 1 matching `roll_off_traced`), then the Rust pipeline
         # on per-side streams: the game stream advances by the roll-off and
         # NOTHING else before the first activation.
-        roll_attempts = _arena_roll_off(rng)
+        roll_attempts = _arena_roll_off(drng)
         opener = 1 if roll_attempts[-1][0] >= roll_attempts[-1][1] else 2
         pos1, pos2, reserved, deploy_seq = _deploy_arena(
-            seed, units1, units2, list_p1, list_p2, board, objectives, opener,
+            dep, units1, units2, list_p1, list_p2, board, objectives, opener,
             eff_deployment == "interleaved", rules_epoch=rules_epoch,
         )
     elif deploy_rng_seed is None:
-        pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
-        pos2 = deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
+        pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, drng)
+        pos2 = deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, drng)
     else:
         side = nml_core.Rng(deploy_rng_seed)
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, side)
         pos2 = deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, side)
-        deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
-        deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
+        deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, drng)
+        deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, drng)
     # The arrival reads are the registry's, taken once off the header the way
     # `capture_reads` is — never re-derived in Python. Only `ambush="table"`
     # asks for them, so an "off" game builds byte-identically to every corpus
@@ -2832,6 +2925,8 @@ def play_game(
     vp_flavour = mission_def.get("vp", {})
     mk_spec = mission_def.get("markers", {})
     markers_meta = mission_markers(mk_spec, len(objectives))
+    rounds = int(mission_def.get("rounds", ROUNDS))  # NML-1010 D1: the catalog's match length
+    plain["rounds_total"] = rounds
     plain["scoring"] = eff_scoring
     if eff_scoring == "round_vp":
         plain["vp"], plain["vp_flavour"], plain["vp_memo"] = [0, 0], vp_flavour, {}
@@ -2845,20 +2940,36 @@ def play_game(
 
     owners = [0] * len(objectives)
     led = {"scoring": eff_scoring, "vp": [0, 0], "vp_flavour": vp_flavour, "vp_memo": {},
-           "markers_meta": markers_meta, "destroy_seq": [0], "carry": bool(mk_spec.get("carry"))}
+           "markers_meta": markers_meta, "destroy_seq": [0], "carry": bool(mk_spec.get("carry")),
+           "rounds": rounds}
     if not arena:
         # The d6 roll-off, P1 winning ties — and BOTH dice are drawn, left first.
-        left = rng.randi_range(1, 6)
-        right = rng.randi_range(1, 6)
+        left = drng.randi_range(1, 6)
+        right = drng.randi_range(1, 6)
         opener = 1 if left >= right else 2
+    attacker = 0
+    if mission_def.get("roles"):
+        # D2b: the roll-off winner (the opener) picks by R7a — the +25 % side where the
+        # mission grants one, else defender — and the pick rides the state as `attacker`.
+        wins_attack = float(mission_def.get("attacker_points_factor", 1.0)) > 1.0
+        attacker = opener if wins_attack else (2 if opener == 1 else 1)
+        p0 = state.plain()
+        p0["attacker"] = attacker
+        state = core.state_of(p0)
     log: list[dict[str, Any]] = []
     rounds_log: list[dict[str, Any]] = []
     rounds_played = 0
-    for round_no in range(1, ROUNDS + 1):
+    if play_seed is not None:  # the played generator, split off right before round 1
+        rng = nml_core.Rng(play_seed)
+    streams = {s: {"seed": v, "rng": nml_core.Rng(v), "counter": 0, "pending": None}
+               for s, v in (search_seeds or {}).items()} or None
+    for round_no in range(1, rounds + 1):
         plain = state.plain()
         _round_start(plain, round_no, profiles, magic)
         if arrivals is not None:
             _arrive_reserves(plain, arrivals, board, objectives, opener, round_no)
+        if live_ledger:
+            _write_ledger(plain, led)
         state = core.state_of(plain)
         state, opener = _play_round(
             core, state, opener, rng, log, round_no,
@@ -2871,6 +2982,7 @@ def play_game(
             cand_logits_fn=cand_logits_fn, policy_mode=policy_mode,
             pool_value_fn=pool_value_fn, pool_value_w=pool_value_w,
             leaf_value_fn=leaf_value_fn, leaf_value_w=leaf_value_w,
+            **({"search_streams": streams} if streams else {}),
         )
         state, owners = _round_end(core, state, owners, led, round_no)
         rounds_played = round_no
@@ -2912,6 +3024,9 @@ def play_game(
             "charge_gate": charge_gate,
             # Stamped only away from "duel" (the `deployment`/`ambush` idiom).
             **({"mission": mission} if mission != "duel" else {}),
+            # Stamped only where the write fired: a duel has no ledger to write.
+            **({"live_ledger": True}
+               if live_ledger and (eff_scoring == "round_vp" or markers_meta) else {}),
             # NML-1157: stamped only when ON, the way `deployment` is — a
             # default game writes the identical object it wrote before the knob
             # existed, so no Godot parity gate sees a new key.
@@ -3019,7 +3134,8 @@ def play_game(
         "mission": {
             "family": mission_def.get("family", "face_off"),
             "name": mission,
-            "rounds": ROUNDS,
+            "rounds": rounds,
+            **({"role_p1": "attacker" if attacker == 1 else "defender"} if attacker else {}),
             "deployment": "zone12",
             "symmetric": True,
             "objective_count": len(owners),

@@ -88,6 +88,19 @@ static var _mak_env := -2
 ## unread.
 static var playout_rush_k := 1
 static var _prk_env := -2
+## TREE SEARCH KNOBS (tree plan step 13): the Rust core's tree search behind `search_mode`. Each
+## key rides the core header ONLY when its env var is set (NML_SEARCH_MODE, NML_TREE_LEAF,
+## NML_TREE_DICE, NML_TREE_BUDGET, NML_TREE_SAMPLES, NML_TREE_BATCH, NML_TREE_WALL_MS,
+## NML_POOL_WALL_MS, NML_TREE_WIDEN; words checked, numbers clamped), so an unset game writes the
+## header it always did and the core answers with today's one-ply search. The GDScript planner
+## does not read them: the core decides, and on a decline the table answers as today. Tests set
+## tree_knob_stamp directly; _tk_env = false means unread.
+static var tree_knob_stamp := {}
+static var _tk_env := false
+const _TREE_WORDS := {"search_mode": ["oneply", "tree"], "tree_leaf": ["blend", "terminal"],
+	"tree_dice": ["ev", "tray"]}
+const _TREE_INTS := [["tree_budget", 1, 4096], ["tree_samples", 1, 64], ["tree_batch", 1, 64],
+	["tree_wall_ms", 0, 60000], ["pool_wall_ms", 0, 60000]]
 
 
 ## Ship path (22.09.): pin the search budget for the shipped Erlkönig grade. An explicit
@@ -1175,6 +1188,23 @@ static func menu_advance_k_on() -> int:
 			menu_advance_k = clampi(int(e), 1, 8)
 		_mak_env = 0
 	return menu_advance_k
+
+
+static func tree_knobs() -> Dictionary:
+	if not _tk_env:
+		_tk_env = true
+		for key in _TREE_WORDS:
+			var e := OS.get_environment("NML_" + str(key).to_upper())
+			if e in _TREE_WORDS[key]:
+				tree_knob_stamp[key] = e
+		for spec in _TREE_INTS:
+			var e := OS.get_environment("NML_" + str(spec[0]).to_upper())
+			if e.is_valid_int():
+				tree_knob_stamp[spec[0]] = clampi(int(e), spec[1], spec[2])
+		var w := OS.get_environment("NML_TREE_WIDEN")
+		if w.is_valid_float():
+			tree_knob_stamp["tree_widen"] = clampf(float(w), 0.0, 1.0)
+	return tree_knob_stamp
 
 
 static func playout_rush_k_on() -> int:
