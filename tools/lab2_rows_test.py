@@ -96,3 +96,20 @@ def test_a_dry_pick_logs_nothing_and_guarded_turns_declines_into_reasons_but_not
     assert rows.guarded(Nm, boom(TimeoutError("30 s"))) == (None, "timeout: 30 s")
     with pytest.raises(ZeroDivisionError):
         rows.guarded(Nm, boom(ZeroDivisionError()))
+
+
+def test_a_core_panic_ends_the_row_as_invalid_but_other_base_exceptions_still_raise():
+    class Nm:
+        class Unsupported(Exception):
+            pass
+
+    PanicException = type("PanicException", (BaseException,), {})   # pyo3_runtime's: NOT an Exception
+
+    def boom(exc):
+        def f():
+            raise exc
+        return f
+    msg = "removal index (is 0) should be < len (is 0)"
+    assert rows.guarded(Nm, boom(PanicException(msg))) == (None, "panic: " + msg)
+    with pytest.raises(KeyboardInterrupt):
+        rows.guarded(Nm, boom(KeyboardInterrupt()))
