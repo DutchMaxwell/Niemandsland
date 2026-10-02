@@ -2470,3 +2470,33 @@ fn deploy_side_in_keeps_every_model_inside_a_disc_zone() {
     assert!(inside(&free) > 0, "the control: the bounding square alone lets bases stand outside the disc");
     assert_eq!(free, deployment::deploy_side(&specs, &rect, &objs, &empty_board(), 11, 15), "None == the old entry");
 }
+
+/// D6b: the distance gates. A thin strip whose objective sits at the centre: the ungated unit takes
+/// the centre; with the enemy gate (12") against a base on the objective and the marker gate (12")
+/// the only legal spots are the strip's two ends, > 12" away.
+#[test]
+fn distance_gates_push_the_only_legal_spot_past_the_gate() {
+    let r = 0.016;
+    let spec = |key: &str| deployment::UnitSpec {
+        key: key.into(),
+        model_count: 1,
+        base_r_m: r,
+        footprint: deployment::deploy_footprint_offsets(1, r, false),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 1 }],
+        ..Default::default()
+    };
+    let specs = vec![spec("g0")];
+    let strip = deployment::Rect::new(-20.0 * IN2M, -IN2M, 40.0 * IN2M, 2.0 * IN2M);
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let enemy = [deployment::Occupied { pos: (0.0, 0.0), radius: r }];
+    let gates = deployment::Gates { min_from_enemy_m: 12.0 * IN2M, min_from_marker_m: 12.0 * IN2M, ..Default::default() };
+    let free = deployment::deploy_side_gated(&specs, &strip, None, None, &enemy, &objs, &empty_board(), 3, 15);
+    let fs = free.placements[0].spot;
+    assert!(fs.0.hypot(fs.1) <= 12.0 * IN2M + 2.0 * r, "ungated: inside the gate radius {fs:?}");
+    let gated = deployment::deploy_side_gated(&specs, &strip, None, Some(&gates), &enemy, &objs, &empty_board(), 3, 15);
+    let spot = gated.placements[0].spot;
+    assert!(spot.0.hypot(spot.1) > 12.0 * IN2M + 2.0 * r, "past the gate: {spot:?}");
+    assert!(spot.0.abs() <= 20.0 * IN2M, "still inside the strip: {spot:?}");
+    let none = deployment::deploy_side_gated(&specs, &strip, None, None, &[], &objs, &empty_board(), 3, 15);
+    assert_eq!(none, deployment::deploy_side(&specs, &strip, &objs, &empty_board(), 3, 15), "no gates == the old entry");
+}
