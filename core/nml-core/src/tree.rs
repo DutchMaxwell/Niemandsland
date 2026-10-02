@@ -285,6 +285,9 @@ pub struct TreeCfg<'a> {
     /// The wall-clock SAFETY fallback in ms (0 = off), checked between
     /// expansion batches; the budget stays the leaf count.
     pub wall_ms: u64,
+    /// The `deadline_us` instant (None = off), checked before EVERY batch,
+    /// the first included.
+    pub deadline: Option<std::time::Instant>,
     /// The widening rate: 0.0 opens every child of a node before the search
     /// descends; > 0 keeps at most ceil(max(n, 1) ^ widen) of an n-visit
     /// node's children open.
@@ -298,13 +301,23 @@ pub struct TreeCfg<'a> {
     pub w: f64,
 }
 
-/// Leaf evaluations completed, the wall-clock stamp, and every opened root
-/// child as (build idx, visits, mean).
+/// Leaf evaluations completed, the wall-clock stamp, every opened root
+/// child as (build idx, visits, mean), and the deadline fallback that
+/// answered when no batch completed (`None` = the search picked).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TreeTrace {
     pub completed: usize,
     pub deadline_hit: bool,
     pub root: Vec<(usize, u32, f64)>,
+    pub fallback: Option<&'static str>,
+    /// Search iterations that valued something: an expansion batch, or a game end revisited.
+    pub batches: usize,
+    /// Leaf evaluations of a non-terminal state; `frontier + terminal == completed`.
+    pub frontier: usize,
+    /// Leaf evaluations of a game end, priced by the referee.
+    pub terminal: usize,
+    /// Microseconds from the planner call to the pick (`Search::run`); 0 from a bare `run`.
+    pub elapsed_us: u64,
 }
 
 /// A child's mean over its sample nodes (equally likely chance outcomes)
@@ -352,7 +365,12 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
         if cfg.widen > 0.0 { f64::from(x.n.max(1)).powf(cfg.widen).ceil() as usize } else { usize::MAX }
     };
     let (start, mut completed, mut deadline_hit) = (std::time::Instant::now(), 0, false);
+    let (mut batches, mut frontier, mut terminal) = (0, 0, 0);
     while completed < cfg.budget {
+        if cfg.deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+            deadline_hit = true;
+            break;
+        }
         // The wall is a SAFETY fallback between batches, never the budget:
         // the first batch always completes, so there is a pick to stamp.
         if cfg.wall_ms > 0 && completed > 0 && start.elapsed().as_millis() >= u128::from(cfg.wall_ms) {
@@ -370,6 +388,7 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
         let mut vals = Vec::new();
         if let Some(v) = node.terminal {
             vals.push(v);
+            terminal += 1;
         } else {
             let from = node.next_child;
             let k = cfg.batch.min((cfg.budget - completed).div_ceil(per_child)).min(cap(node) - from);
@@ -390,12 +409,14 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
                     let v = leaf_value(roll, x, cfg.leaf, cfg.player, cfg.opener_seat, own, cfg.w, rng, sc)?;
                     (x.n, x.w) = (1, v);
                     vals.push(v);
+                    if x.terminal.is_some() { terminal += 1 } else { frontier += 1 }
                 }
             }
         }
         if vals.is_empty() {
             break;
         }
+        batches += 1;
         let (cnt, sum) = (vals.len() as u32, vals.iter().sum::<f64>());
         let mut cur = &mut *root;
         (cur.n, cur.w) = (cur.n + cnt, cur.w + sum);
@@ -413,5 +434,5 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             best = (i, mean);
         }
     }
-    Ok((best.0, TreeTrace { completed, deadline_hit, root: trace }))
+    Ok((best.0, TreeTrace { completed, deadline_hit, root: trace, fallback: None, batches, frontier, terminal, elapsed_us: 0 }))
 }

@@ -1111,6 +1111,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         tree_batch: dint(d, "tree_batch", dflt.tree_batch),
         tree_wall_ms: dint(d, "tree_wall_ms", dflt.tree_wall_ms),
         pool_wall_ms: dint(d, "pool_wall_ms", dflt.pool_wall_ms),
+        deadline_us: dint(d, "deadline_us", dflt.deadline_us),
         tree_widen: dnum(d, "tree_widen", dflt.tree_widen),
     }
 }

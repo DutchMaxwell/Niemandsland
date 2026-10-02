@@ -6,6 +6,7 @@ positions; a replay of the truth passes, and each RED control (VP +1 on the reco
 one recorded die face changed) must FAIL the replay check. Run: python3 -m pytest -q tools/lab2_tree_probe_test.py
 """
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -106,10 +107,19 @@ def test_projected_mde_matches_the_prereg_formula_and_the_chi2_constant():
     assert lab.projected_mde({"c": 0.0}, 40) == 0.0  # zero variance is reported, not hidden
 
 
-def test_streams_are_shared_across_arms_and_distinct_across_positions_and_replicates():
-    seeds = {(p, r): lab.stream_pair(Nm, p, r)[0].state for p in range(3) for r in range(8)}
-    assert len(set(seeds.values())) == 24 and seeds[(0, 0)] == 740_000_000
-    assert lab.stream_pair(Nm, 1, 2)[0].state == lab.stream_pair(Nm, 1, 2)[0].state  # the same pair for every arm
+def test_streams_come_from_the_position_eval_keys_and_are_shared_across_arms():
+    pos = {"eval": [{"general": str(900_000_000_000_000_001 + r), "tray": str(r + 7)} for r in range(8)]}
+    pairs = [lab.eval_streams(Nm, pos, r) for r in range(8)]
+    assert [p[0].state for p in pairs] == [900_000_000_000_000_001 + r for r in range(8)]  # 63-bit seeds, no float
+    assert lab.eval_streams(Nm, pos, 2)[0].state == lab.eval_streams(Nm, pos, 2)[0].state  # the same pair for every arm
+    assert not hasattr(lab, "stream_pair") and not hasattr(lab, "STREAM_BASE")
+
+
+def test_arm_headers_differ_only_in_tree_leaf_and_a_stray_knob_is_refused(monkeypatch):
+    base = {"knobs": {"top_k": 10}}
+    assert lab.arm_headers_differ_only_in_leaf(base, 5)
+    monkeypatch.setitem(lab.ARM_KNOBS, "T", dict(lab.ARM_KNOBS["T"], tree_budget=64))
+    assert not lab.arm_headers_differ_only_in_leaf(base, 5)
 
 
 def test_position_gains_are_mean_stream_differences():
@@ -134,15 +144,20 @@ def test_bootstrap_known_winner_identical_arms_and_four_games_are_not_four_block
     assert w_boards["hi"] - w_boards["lo"] > w_games["hi"] - w_games["lo"]
 
 
-def _blocks(n=2):
-    return [{"block": "b%d" % i, "cell": "c1", "seed": 10 + i, "dice": [100 + i, 200 + i], "army1": "a", "army2": "b"} for i in range(n)]
+def _blocks(n=2, cell="c1", mission="duel"):
+    return [{"block": "b%d" % i, "cell": cell, "mission": mission, "army1": "a", "army2": "b",
+             "seeds": {"terrain": "1%d" % i, "layout": "2%d" % i, "deploy": "3%d" % i, "play_general": ["4%d" % i, "5%d" % i],
+                       "tray": ["6%d" % i, "7%d" % i], "search": {"L": {"1": "81", "2": "82"}, "C": {"1": "91", "2": "92"}}}}
+            for i in range(n)]
 
 
-def test_manifest_has_four_games_per_candidate_per_block_with_both_seats_and_two_dice():
+def test_manifest_has_four_games_per_arm_per_block_with_both_seats_and_two_dice():
     rows = lab.game_rows(_blocks())
-    assert len(rows) == 2 * 2 * 4 and len({r["row_id"] for r in rows}) == len(rows)
+    assert len(lab.game_rows(_blocks(1))) == 12 and len(rows) == 2 * 3 * 4 and len({r["row_id"] for r in rows}) == len(rows)
+    assert len(lab.game_rows(_blocks(1), ("L", "C"))) == 8
     one = [r for r in rows if r["block"] == "b0" and r["arm"] == "L"]
-    assert sorted((r["dice"], r["seat"]) for r in one) == [(100, 1), (100, 2), (200, 1), (200, 2)]
+    assert sorted((r["seeds"]["tray"], r["seat"]) for r in one) == [("60", 1), ("60", 2), ("70", 1), ("70", 2)]
+    assert [r["seeds"]["search"] for r in one][0] == {"1": "81", "2": "82"} and all(r["mission"] == "duel" for r in rows)
     assert all(r["army1"] == "a" and r["army2"] == "b" for r in rows)  # armies stay on their physical seats
 
 
@@ -155,9 +170,137 @@ def test_arm_kwargs_split_the_tree_from_the_one_ply_pool_deadline():
 def test_board_scores_are_per_board_and_a_missing_or_short_board_fails():
     import pytest
     rows = lab.game_rows(_blocks(1))
-    ys = {"L": [1.0, 1.0, 0.5, 0.5], "C": [0.5, 0.5, 0.0, 0.0]}
+    ys = {"L": [1.0, 1.0, 0.5, 0.5], "C": [0.5, 0.5, 0.0, 0.0], "I": [1.0, 0.0, 1.0, 0.0]}
     done = [(r, ys[r["arm"]].pop()) for r in rows]
     s = lab.board_scores(done)["c1"]["b0"]
-    assert abs(s["B_LI"] - 0.25) < 1e-12 and abs(s["B_LC"] - 0.5) < 1e-12
+    assert abs(s["B_LI"] - 0.25) < 1e-12 and abs(s["B_LC"] - 0.5) < 1e-12 and set(s) == {"B_LI", "B_LC"}  # I rows change nothing
+    assert lab.i_seat1_means(done) == {"c1": {"b0": 0.5}}
     with pytest.raises(SystemExit):
-        lab.board_scores(done[:-1])
+        lab.board_scores([d for d in done if d[0]['arm'] != 'I'][:-1])
+
+
+class StampNm:
+    """A stand-in nml_core for the pilot's environment gate (no replay ever runs)."""
+    BUILD_INFO = {"commit": "abc", "rules_epoch": 68, "dirty": False}
+    __file__ = __file__
+
+
+def _pilot(monkeypatch, extra, build_info=None):
+    monkeypatch.setitem(sys.modules, "nml_core", StampNm)
+    monkeypatch.setattr(StampNm, "BUILD_INFO", build_info or StampNm.BUILD_INFO)
+    return lab.main(["pilot", "--namespace", "t", *extra])
+
+
+FULL = ["--expect-commit", "abc", "--expect-epoch", "68", "--expect-model-sha", "m", "--expect-wheel-sha", "w"]
+
+
+def test_a_non_dry_pilot_without_every_expectation_stops_with_exit_2(monkeypatch, capsys):
+    assert _pilot(monkeypatch, FULL[:6]) == 2          # no --expect-wheel-sha
+    assert "missing" in capsys.readouterr().out
+    assert _pilot(monkeypatch, []) == 2
+
+
+def test_a_dirty_build_stops_the_pilot(monkeypatch, capsys):
+    assert _pilot(monkeypatch, FULL, {"commit": "abc", "rules_epoch": 68, "dirty": True}) == 2
+    assert "dirty" in capsys.readouterr().out
+
+
+def test_the_strict_stamp_records_dirty_and_the_wheel_sha():
+    stamp, bad = lab.env_stamp(StampNm, "", {"commit": "abc", "rules_epoch": 68, "model_sha256": None,
+                                              "wheel_sha256": None}, strict=True)
+    assert stamp["dirty"] is False and len(stamp["wheel_sha256"]) == 64
+    assert bad == ["missing:model_sha256", "missing:wheel_sha256"]
+
+
+class SpySp:
+    """A stand-in selfplay: records every play_game call; `quiet` leaves the net hooks uncalled."""
+    def __init__(self, net, quiet=False):
+        self.calls, self.net, self.quiet = [], net, quiet
+
+    def play_game(self, *args, **kw):
+        self.calls.append((args, kw))
+        if not self.quiet:
+            for side in (1, 2):
+                kw["leaf_value_fn"][side]([], side)
+        return {"winner": "p1"}
+
+
+class CountNet:
+    def __init__(self):
+        self.counts = {1: {"calls": 0}, 2: {"calls": 0}}
+
+    def hook(self, side):
+        def fn(leaves, _side=None):
+            self.counts[side]["calls"] += 1
+            return []
+        return fn
+
+
+def test_a_cell_7_row_plays_breakthrough_with_the_split_seeds_and_the_live_ledger():
+    row = lab.game_rows(_blocks(1, "c7", "breakthrough"), ("L",))[0]
+    net = CountNet()
+    sp = SpySp(net)
+    rec = lab.play_row(sp, row, "repo", "bank", {"top_k": 3}, net, 5)
+    (args, kw), = sp.calls
+    assert kw["mission"] == "breakthrough" and kw["objectives"] == "mission" and kw["live_ledger"] is True
+    assert args[0] == 10 and (kw["layout_seed"], kw["deploy_seed"], kw["play_seed"], kw["dice_seed"]) == (20, 30, 40, 60)
+    assert kw["search_seeds"] == {1: 81, 2: 82} and kw["deep_player"] == 1 and kw["leaf_value_w"] == 1.0
+    assert rec["valid"] and rec["net_calls"] == {1: 1, 2: 1}
+
+
+def test_an_i_row_has_no_deep_core_and_a_never_called_hook_is_invalid():
+    row = lab.game_rows(_blocks(1), ("I",))[0]
+    sp = SpySp(CountNet(), quiet=True)
+    rec = lab.play_row(sp, row, "repo", "bank", {}, sp.net, 5)
+    assert "deep_player" not in sp.calls[0][1] and "search_seeds" not in sp.calls[0][1]
+    assert rec["valid"] is False and rec["reason"] == "net_inactive"
+
+
+class TimingCore:
+    """A stub core: records the live header knobs and every planner call's kwargs."""
+    def __init__(self):
+        self.knobs, self.calls = {}, []
+
+    def set_header(self, header):
+        self.knobs = dict(header["knobs"])
+
+    def state_of(self, plain):
+        return plain
+
+    def plan_with_rollout(self, state, player, statics, **kw):
+        self.calls.append((dict(self.knobs), kw))
+        return {"trace": {"tree": {"completed": 1, "deadline_hit": False}}}
+
+
+def _timing_run(monkeypatch, tmp_path, B_us=None):
+    import types
+    core, hooked = TimingCore(), []
+    net = types.SimpleNamespace(model_sha256="ab" * 32, hook=lambda side: (lambda leaves, _s=None: hooked.append(side) or []))
+    monkeypatch.setitem(sys.modules, "nml_core", types.SimpleNamespace(load=lambda repo: core))
+    monkeypatch.setitem(sys.modules, "lab2_net", types.SimpleNamespace(ShippedNet=lambda repo: net))
+    if B_us is not None:
+        monkeypatch.setattr(lab, "allowance_us", lambda times: B_us)
+    states = [{"cell": "c1", "state": {"i": i}, "player": 1 + i % 2} for i in range(2)]
+    (tmp_path / "s.json").write_text(json.dumps(states))
+    (tmp_path / "h.json").write_text(json.dumps({"knobs": {"top_k": 10}}))
+    out = str(tmp_path / "t.txt")
+    rc = lab.main(["timing", "--states", str(tmp_path / "s.json"), "--header", str(tmp_path / "h.json"), "--statics", "{}",
+                   "--per-cell", "2", "--hardware", "laptop-x", "--out", out])
+    return rc, core, out
+
+
+def test_timing_prices_every_call_with_the_net_and_passes_the_allowance_as_deadline_us(monkeypatch, tmp_path):
+    rc, core, out = _timing_run(monkeypatch, tmp_path, B_us=900)
+    assert rc == 0 and core.calls
+    assert all(kw["leaf_value_w"] == 1.0 and callable(kw["leaf_value_fn"]) for _, kw in core.calls)  # incumbent calls too
+    tree = [k for k, _ in core.calls if k.get("search_mode") == "tree"]
+    assert tree and all(k["deadline_us"] == 900 and "tree_wall_ms" not in k for k in tree)  # 900 us stays 900 (not 0 ms = OFF)
+    assert any("search_mode" not in k for k, _ in core.calls)
+
+
+def test_timing_stamps_hardware_and_labels_the_sweep(monkeypatch, tmp_path):
+    rc, core, out = _timing_run(monkeypatch, tmp_path)
+    meta = json.load(open(out + ".json"))["_meta"]
+    assert meta["hardware"] == "laptop-x" and meta["model_sha256"] == "ab" * 32 and "diagnostic" in meta["sweep"]
+    text = open(out).read()
+    assert "hardware: laptop-x" in text and "D-ONLY DIAGNOSTIC" in text

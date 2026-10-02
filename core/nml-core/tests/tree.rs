@@ -363,7 +363,7 @@ fn search_widen(roll: &Rollout, st: &State, p: i64, leaf: TreeLeaf, budget: usiz
     let (rows, order) = ranked(roll, st, p, sc).unwrap();
     let mut root = Node::new(st.clone(), Step::Mover(p), p);
     root.children = root_children(&rows, &order, &[]);
-    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, wall_ms: 0, widen, player: p,
+    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, wall_ms: 0, deadline: None, widen, player: p,
                         opener_seat: false, sig: None, hook: None, w: 0.0 };
     let (best, trace) = run(roll, &cfg, &mut root, &mut GodotRng::new(7), sc).unwrap();
     (best, trace, order)
@@ -438,6 +438,27 @@ fn last_activation_picks_the_referee_argmax_at_any_batch() {
     println!("last activation: {n} synthetic states pick the referee argmax ({varied} past the hand's \
               top row), batch 1 = batch 8");
     assert!(n > 0 && varied > 0, "no synthetic state whose argmax leaves the top row: {n}/{varied}");
+}
+
+/// The trace counters on the depth-1 synthetic states: within the root width
+/// every leaf is a game end or a frontier state, they sum to `completed`, and
+/// the batches are the budget cut into `batch`-sized slices.
+#[test]
+fn the_trace_counts_batches_frontier_and_terminal() {
+    let (mut n, mut ends, mut sc) = (0usize, 0usize, Scratch::default());
+    let c = load(WIDE);
+    let per_act = act_statics(&c, REPO);
+    for (ai, st) in last_activations(&c) {
+        let p = c.acts[ai].player;
+        with_roll(&c, ai, &per_act[ai], |roll| {
+            let (budget, batch) = (menu(roll, &st, p, &mut sc).len().min(7), 3);
+            let t = search(roll, &st, p, TreeLeaf::Blend, budget, batch, &mut sc).1;
+            assert_eq!((t.frontier + t.terminal, t.completed), (budget, budget), "act {ai}: {t:?}");
+            assert_eq!(t.batches, budget.div_ceil(batch), "act {ai}: {t:?}");
+            (n, ends) = (n + 1, ends + t.terminal);
+        });
+    }
+    assert!(n > 0 && ends > 0, "no depth-1 state counted a game end: {n}/{ends}");
 }
 
 /// Step 6b — past the root width the search descends (deeper expansions),
