@@ -2814,6 +2814,33 @@ func _solo_roles_chosen(role: String, you_roll: int, ai_roll: int) -> void:
 	_solo_deploy_side_prompt(you_roll, ai_roll)
 
 
+## D6a: the catalog's deployment distance gates for the side `slot` plays ({} without roles or gates).
+func _solo_deploy_gates_for(slot: int) -> Dictionary:
+	if not _solo_mission_has_roles() or SoloController.mission_roles.is_empty():
+		return {}
+	var role := "attacker" if int(SoloController.mission_roles["attacker"]) == slot else "defender"
+	return (MissionCatalog.get_mission(_solo_mission_id).get("deploy_gates", {}) as Dictionary).get(role, {})
+
+
+## D6a: the gate a human placement breaks ("" = none), in the words the toast shows.
+func _solo_human_gate_violation(gu: GameUnit) -> String:
+	var gates := _solo_deploy_gates_for(solo_controller.human_slot)
+	if gates.is_empty():
+		return ""
+	var models: Array = []
+	for m in gu.get_alive_models():
+		var mi := m as ModelInstance
+		if mi != null and mi.node != null:
+			models.append({"pos": Vector2(mi.node.global_position.x, mi.node.global_position.z),
+				"radius": solo_controller.model_base_radius_m(mi)})
+	var markers: Array = []
+	if terrain_overlay != null:
+		for o in terrain_overlay.get_objectives():
+			markers.append(Vector2(o.x, o.z))
+	return SoloController.gate_violation(gates, models, solo_controller.bases_of_slot(solo_controller.ai_slot),
+		solo_controller.bases_of_slot(solo_controller.human_slot, gu), markers)
+
+
 ## Points of a slot's imported army; 0 without one.
 func _solo_army_points(slot: int) -> int:
 	var army = opr_army_manager.armies.get(slot) if opr_army_manager != null else null
@@ -3065,7 +3092,7 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 	var zone := Rect2(Vector2(-w / 2.0, zmin), Vector2(w, depth))
 	var queued: int = solo_controller.deploy_begin(zone, _solo_deploy_fsm.get("objectives", []),
 		_solo_deploy_fsm.get("blocked_normal", Callable()), _solo_deploy_fsm.get("blocked_flying", Callable()),
-		int(_solo_deploy_fsm.get("seed", 0)))
+		int(_solo_deploy_fsm.get("seed", 0)), Callable(), _solo_deploy_gates_for(solo_controller.ai_slot))
 	print("[Solo/AI] deployment queued: %d AI unit(s) (%d scouts held for the scout phase)" % [
 		queued, solo_controller.deploy_scouts_pending()])
 	# Ambush reserves on BOTH sides (GF/AoF v3.5.1 p.13 "May be set aside before deployment") —
@@ -3132,6 +3159,12 @@ func _solo_deploy_human_done_one() -> void:
 		_solo_show_toast("Nothing new on the table — place a unit first, then ✓")
 		_solo_deploy_show_human_turn()
 		return
+	for gu in placed:   # D6a: a roles mission's distance gates
+		var broken := _solo_human_gate_violation(gu as GameUnit)
+		if not broken.is_empty():
+			_solo_show_toast("%s %s — move it, then ✓" % [(gu as GameUnit).get_name(), broken])
+			_solo_deploy_show_human_turn()
+			return
 	for gu in placed:
 		(_solo_deploy_fsm["human_placed"] as Dictionary)[(gu as GameUnit).unit_id] = true
 	_solo_deploy_fsm["human_turn"] = false
