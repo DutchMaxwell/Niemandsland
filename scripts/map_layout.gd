@@ -26,7 +26,7 @@ const TERRAIN_COLORS := {
 }
 
 const TERRAIN_NAMES := {
-	TerrainType.NONE: "None",
+	TerrainType.NONE: "Erase",
 	TerrainType.RUINS: "Ruins",
 	TerrainType.FOREST: "Forest",
 	TerrainType.CONTAINER: "Container",
@@ -83,7 +83,7 @@ const VERTEX_CLICK_RADIUS := 10.0  # Pixels for vertex selection
 var table_size_feet := Vector2(6, 4)  # Default 6x4 table
 var grid_rotation_degrees := 0.0
 var grid_cells := {}  # Dictionary[Vector2i, TerrainType]
-var selected_terrain_type := TerrainType.NONE
+var selected_terrain_type := TerrainType.RUINS  # the eraser is never pre-selected
 var is_painting := false
 var point_symmetry_enabled := false  # Mirror placement across center
 
@@ -94,7 +94,7 @@ var point_symmetry_enabled := false  # Mirror placement across center
 ## Editor modes: paint free cells, place walls on edges, drop complete prefab pieces,
 ## or select/move/rotate already-placed pieces.
 enum EditorMode { PAINT_CELLS, PLACE_WALLS, PLACE_PREFAB, MOVE_PIECES }
-var editor_mode := EditorMode.PAINT_CELLS
+var editor_mode := EditorMode.PLACE_PREFAB  # the modular pieces are what the 3D table renders
 
 ## Selected canonical prefab key for one-click placement (see terrain_prefabs.gd)
 var selected_prefab_key := ""
@@ -213,13 +213,16 @@ var _objectives_warning_label: Label = null
 # Modular Terrain UI (prefab palette, walls, undo/redo)
 var _modular_terrain_panel: VBoxContainer = null
 var _prefab_option_btn: OptionButton = null
-var _editor_mode_btn: Button = null
+var _mode_buttons: Dictionary = {}  # EditorMode -> segment Button (one visible button per mode)
+var _mode_hint: HFlowContainer = null  # one muted line naming the keys and mouse of the current mode
 var _wall_option_btn: OptionButton = null
 var _prefab_row: HBoxContainer = null  # field_row holding the piece dropdown (hidden outside Place mode)
 var _wall_row: HBoxContainer = null
 var _undo_btn: Button = null
 var _redo_btn: Button = null
 var _modular_status_label: Label = null
+var _guideline_rows: VBoxContainer = null
+var _table_notice: Label = null  # one line after a table-size change cleared the map
 
 
 func _ready() -> void:
@@ -301,23 +304,9 @@ func _style_header_chrome() -> void:
 	var left_panel := get_node_or_null(
 		"MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel")
 	if left_panel:
-		for label_name in ["DeploymentLabel"]:
-			var lbl := left_panel.find_child(label_name, true, false) as Label
-			if lbl:
-				lbl.add_theme_font_override("font", HudTokens.head_font())
-				lbl.add_theme_color_override("font_color", HudTokens.TEXT)
-		var stats_lbl := left_panel.find_child("StatsLabel", true, false) as Label
-		if stats_lbl:
-			stats_lbl.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
-		var recs_lbl := left_panel.find_child("RecommendationsLabel", true, false) as Label
-		if recs_lbl:
-			recs_lbl.add_theme_color_override("font_color", HudTokens.AMBER)
-		var deploy_chk := left_panel.find_child("DeploymentCheck", true, false) as CheckBox
-		if deploy_chk:
-			deploy_chk.add_theme_color_override("font_color", HudTokens.TEXT)
-		var deploy_opt := left_panel.find_child("DeploymentTypeOption", true, false) as OptionButton
-		if deploy_opt:
-			deploy_opt.add_theme_color_override("font_color", HudTokens.TEXT)
+		var deploy_label := left_panel.find_child("DeploymentLabel", true, false) as Label
+		if deploy_label:
+			deploy_label.theme_type_variation = HouseStyle.EYEBROW
 
 
 ## Reorganize the flat left panel into Terrain / Objectives / Deployment tabs.
@@ -380,13 +369,14 @@ func _setup_tabs() -> void:
 	into.call(gelaende, left_panel.get_node_or_null("AutoGenButton"))
 	into.call(gelaende, left_panel.get_node_or_null("StatsLabel"))
 	into.call(gelaende, left_panel.get_node_or_null("RecommendationsLabel"))
+	_build_stats_card(gelaende)
 
 	# Missionsziele: objectives (the ObjectivesCheck was replaced by this panel)
 	into.call(ziele, _objectives_panel)
 
 	# Aufstellung: deployment zones + custom zone editor
 	into.call(aufstellung, left_panel.get_node_or_null("DeploymentLabel"))
-	into.call(aufstellung, left_panel.get_node_or_null("DeploymentTypeOption"))
+	into.call(aufstellung, left_panel.get_node_or_null("DeploymentTypeRow"))
 	into.call(aufstellung, left_panel.get_node_or_null("DeploymentCheck"))
 	into.call(aufstellung, _custom_zone_panel)
 
@@ -417,6 +407,15 @@ func _setup_deployment_type_option() -> void:
 
 	# Setup custom zone UI (initially hidden)
 	_setup_custom_zone_ui()
+
+	# The type dropdown sits in a captioned house row (after the zone UI found its parent panel)
+	var panel := deployment_type_option.get_parent()
+	var idx := deployment_type_option.get_index()
+	panel.remove_child(deployment_type_option)
+	var row := HouseStyle.field_row("Zones", deployment_type_option)
+	row.name = "DeploymentTypeRow"
+	panel.add_child(row)
+	panel.move_child(row, idx)
 
 
 ## Handle deployment zone type selection
@@ -474,43 +473,30 @@ func _setup_custom_zone_ui() -> void:
 	_custom_zone_symmetric_check = CheckBox.new()
 	_custom_zone_symmetric_check.text = "Symmetric (point-mirrored)"
 	_custom_zone_symmetric_check.button_pressed = true
-	_custom_zone_symmetric_check.add_theme_color_override("font_color", HudTokens.TEXT)
 	_custom_zone_symmetric_check.toggled.connect(func(v): custom_zone_symmetric = v)
 	_custom_zone_panel.add_child(_custom_zone_symmetric_check)
 
 	# Status label
-	_custom_zone_status_label = Label.new()
-	_custom_zone_status_label.text = "Click grid to add zone vertices"
-	_custom_zone_status_label.add_theme_font_size_override("font_size", 12)
-	_custom_zone_status_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	_custom_zone_status_label = HouseStyle.label("Click grid to add zone vertices", HouseStyle.CAPTION)
 	_custom_zone_panel.add_child(_custom_zone_status_label)
 
 	# Button container
-	var btn_row = HBoxContainer.new()
-	btn_row.add_theme_constant_override("separation", 8)
+	var btn_row := HouseStyle.button_row(["Start Drawing", "Confirm", "Clear"], HouseStyle.BUTTON, 36)
 	_custom_zone_panel.add_child(btn_row)
 
-	# Start button
-	_custom_zone_start_btn = Button.new()
-	_custom_zone_start_btn.text = "Start Drawing"
-	_custom_zone_start_btn.add_theme_color_override("font_color", HudTokens.SUCCESS)
+	# Start button (the one main action of this panel)
+	_custom_zone_start_btn = btn_row.get_child(0)
+	_custom_zone_start_btn.theme_type_variation = HouseStyle.PRIMARY
 	_custom_zone_start_btn.pressed.connect(_on_custom_zone_start)
-	btn_row.add_child(_custom_zone_start_btn)
 
 	# Confirm button
-	_custom_zone_confirm_btn = Button.new()
-	_custom_zone_confirm_btn.text = "Confirm"
+	_custom_zone_confirm_btn = btn_row.get_child(1)
 	_custom_zone_confirm_btn.disabled = true
-	_custom_zone_confirm_btn.add_theme_color_override("font_color", HudTokens.CYAN)
 	_custom_zone_confirm_btn.pressed.connect(_on_custom_zone_confirm)
-	btn_row.add_child(_custom_zone_confirm_btn)
 
 	# Clear button
-	_custom_zone_clear_btn = Button.new()
-	_custom_zone_clear_btn.text = "Clear"
-	_custom_zone_clear_btn.add_theme_color_override("font_color", HudTokens.AMBER)
+	_custom_zone_clear_btn = btn_row.get_child(2)
 	_custom_zone_clear_btn.pressed.connect(_on_custom_zone_clear)
-	btn_row.add_child(_custom_zone_clear_btn)
 
 
 ## Update visibility of custom zone UI based on deployment type
@@ -604,6 +590,7 @@ func _on_custom_zone_clear() -> void:
 func _handle_custom_zone_click(cell: Vector2) -> void:
 	if not custom_zone_editing:
 		return
+	_push_undo()  # one undo step per vertex
 
 	if custom_zone_symmetric:
 		if _custom_zone_stale_p1:
@@ -707,10 +694,20 @@ func _setup_modular_terrain_ui() -> void:
 	if not prefab_keys.is_empty():
 		selected_prefab_key = prefab_keys[0]
 
-	# Editor mode toggle
-	_editor_mode_btn = HouseStyle.button("Mode: Paint Cells", HouseStyle.BUTTON, 36)
-	_editor_mode_btn.pressed.connect(_on_editor_mode_toggled)
-	_modular_terrain_panel.add_child(HouseStyle.field_row("Mode", _editor_mode_btn))
+	# Editor mode: four visible segments, the current one gold
+	var mode_row := HouseStyle.button_row(["Paint", "Walls", "Place", "Move"], HouseStyle.SEGMENT, 34)
+	mode_row.name = "ModeRow"
+	var mode_ids := [EditorMode.PAINT_CELLS, EditorMode.PLACE_WALLS, EditorMode.PLACE_PREFAB, EditorMode.MOVE_PIECES]
+	for i in mode_ids.size():
+		var mb: Button = mode_row.get_child(i)
+		mb.name = "Mode%sButton" % ["Paint", "Walls", "Place", "Move"][i]
+		mb.pressed.connect(_set_editor_mode.bind(mode_ids[i]))
+		_mode_buttons[mode_ids[i]] = mb
+	_modular_terrain_panel.add_child(mode_row)
+
+	_mode_hint = HFlowContainer.new()
+	_mode_hint.name = "ModeHint"
+	_modular_terrain_panel.add_child(_mode_hint)
 
 	# Wall variant selection (visible when PLACE_WALLS mode)
 	_wall_option_btn = OptionButton.new()
@@ -751,18 +748,13 @@ func _setup_modular_terrain_ui() -> void:
 
 
 func _update_modular_terrain_ui() -> void:
-	if not _editor_mode_btn:
+	if _mode_buttons.is_empty():
 		return
 
-	match editor_mode:
-		EditorMode.PAINT_CELLS:
-			_editor_mode_btn.text = "Mode: Paint Cells"
-		EditorMode.PLACE_WALLS:
-			_editor_mode_btn.text = "Mode: Place Walls"
-		EditorMode.PLACE_PREFAB:
-			_editor_mode_btn.text = "Mode: Place Piece  (R rotate · F flip)"
-		EditorMode.MOVE_PIECES:
-			_editor_mode_btn.text = "Mode: Move Pieces  (R/F · Del)"
+	for mode in _mode_buttons:
+		HouseStyle.set_selected(_mode_buttons[mode], mode == editor_mode)
+
+	_update_mode_hint()
 
 	# Wall selection only visible in PLACE_WALLS mode
 	if _wall_row:
@@ -774,6 +766,27 @@ func _update_modular_terrain_ui() -> void:
 
 	_update_wall_option_list()
 	_update_modular_status()
+
+
+## Keys and mouse of each mode: ["key", "R"] is a key cap, anything else muted text.
+const MODE_HINTS := {
+	EditorMode.PAINT_CELLS: [["text", "drag to paint"], ["text", "· wheel zoom"]],
+	EditorMode.PLACE_WALLS: [["text", "click an edge to add · right-click removes"], ["text", "· wheel zoom"]],
+	EditorMode.PLACE_PREFAB: [["key", "R"], ["text", "rotate"], ["key", "F"], ["text", "flip"],
+		["key", "Shift"], ["text", "+ wheel rotate · wheel zoom"]],
+	EditorMode.MOVE_PIECES: [["text", "drag to move"], ["key", "R"], ["text", "rotate"], ["key", "F"], ["text", "flip"],
+		["key", "Del"], ["text", "delete"]],
+}
+
+
+func _update_mode_hint() -> void:
+	if _mode_hint == null:
+		return
+	for child in _mode_hint.get_children():
+		_mode_hint.remove_child(child)
+		child.queue_free()
+	for part: Array in MODE_HINTS[editor_mode]:
+		_mode_hint.add_child(HouseStyle.key_cap(part[1]) if part[0] == "key" else HouseStyle.label(part[1], HouseStyle.SMALL))
 
 
 func _update_wall_option_list() -> void:
@@ -797,16 +810,8 @@ func _update_modular_status() -> void:
 		wall_segments.size(), placed_objects.size()]
 
 
-func _on_editor_mode_toggled() -> void:
-	match editor_mode:
-		EditorMode.PAINT_CELLS:
-			editor_mode = EditorMode.PLACE_WALLS
-		EditorMode.PLACE_WALLS:
-			editor_mode = EditorMode.PLACE_PREFAB
-		EditorMode.PLACE_PREFAB:
-			editor_mode = EditorMode.MOVE_PIECES
-		EditorMode.MOVE_PIECES:
-			editor_mode = EditorMode.PAINT_CELLS
+func _set_editor_mode(mode: EditorMode) -> void:
+	editor_mode = mode
 	_selected_piece_id = -1
 	_dragging_piece = false
 	_preview_active = false
@@ -875,6 +880,18 @@ func _piece_index_by_id(piece_id: int) -> int:
 
 
 ## Rotate the prefab preview (PLACE_PREFAB) or the selected piece (MOVE_PIECES) 90° CW.
+## The wheel always zooms; Shift+wheel turns the piece being placed (R does the same from the keyboard).
+func _handle_wheel(up: bool, shift: bool, local_mouse: Vector2) -> void:
+	if shift and editor_mode == EditorMode.PLACE_PREFAB:
+		_preview_rotation = wrapi(_preview_rotation + (90 if up else -90), 0, 360)
+		if grid_container:
+			grid_container.queue_redraw()
+	elif up:
+		_zoom_in(local_mouse)
+	else:
+		_zoom_out(local_mouse)
+
+
 func _rotate_active() -> void:
 	if editor_mode == EditorMode.PLACE_PREFAB:
 		_preview_rotation = wrapi(_preview_rotation + 90, 0, 360)
@@ -968,20 +985,49 @@ func _rebuild_derived() -> void:
 
 func _snapshot() -> Dictionary:
 	return {
+		"zone_p1": custom_zone_vertices_p1.duplicate(),
+		"zone_p2": custom_zone_vertices_p2.duplicate(),
+		"zone_stale": [_custom_zone_stale_p1, _custom_zone_stale_p2],
 		"pieces": placed_pieces.duplicate(true),
 		"free_cells": free_cells.duplicate(true),
 		"free_walls": free_walls.duplicate(true),
 		"next_id": _next_piece_id,
+		"objectives": mission_objectives.duplicate(),
 	}
 
 
 func _apply_snapshot(snap: Dictionary) -> void:
+	if snap.has("table"):  # an undo step made by Load: bring the old table + rotation back too
+		table_size_feet = snap["table"]
+		grid_rotation_degrees = snap["rotation"]
+		if rotation_slider:
+			rotation_slider.set_value_no_signal(grid_rotation_degrees)
+		if _table_notice:
+			_table_notice.visible = false
 	placed_pieces = (snap["pieces"] as Array).duplicate(true)
 	free_cells = (snap["free_cells"] as Dictionary).duplicate(true)
 	free_walls = (snap["free_walls"] as Array).duplicate(true)
+	if snap.has("zone_p1"):
+		_apply_zone_snapshot(snap)
 	_next_piece_id = int(snap.get("next_id", _next_piece_id))
+	if snap.has("objectives"):
+		mission_objectives.assign(snap["objectives"])
+		_update_objectives_status()
+		objectives_changed.emit(mission_objectives)
 	_rebuild_derived()
 	_update_modular_status()
+
+
+## Restore the custom-zone vertices (and the "old zone kept until the first new vertex" flags).
+func _apply_zone_snapshot(snap: Dictionary) -> void:
+	custom_zone_vertices_p1.assign(snap["zone_p1"])
+	custom_zone_vertices_p2.assign(snap["zone_p2"])
+	_custom_zone_stale_p1 = snap["zone_stale"][0]
+	_custom_zone_stale_p2 = snap["zone_stale"][1]
+	if _custom_zone_confirm_btn:
+		_custom_zone_confirm_btn.disabled = not custom_zone_editing or _custom_zone_current_count() < 3
+	if deployment_type == DeploymentType.CUSTOM:
+		deployment_type_changed.emit(DeploymentType.CUSTOM)
 
 
 ## Push the current state onto the undo stack (call BEFORE a mutation).
@@ -1063,6 +1109,38 @@ func _on_close_pressed() -> void:
 
 
 func _on_clear_pressed() -> void:
+	if placed_pieces.is_empty() and free_cells.is_empty() and free_walls.is_empty():
+		return  # nothing to clear
+	if get_node_or_null("ClearConfirm") != null:
+		return
+	var parts := HouseStyle.overlay_sheet("Clear terrain?", 420)
+	var root: Control = parts["root"]
+	root.name = "ClearConfirm"
+	var body: VBoxContainer = parts["body"]
+	var msg := HouseStyle.label("Removes every terrain piece, painted cell and wall from this map. " \
+		+ "Objectives and deployment zones are not touched. Ctrl+Z brings the terrain back.", HouseStyle.BODY)
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD
+	body.add_child(msg)
+	var row := HouseStyle.button_row(["Clear terrain", "Cancel"], HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	body.add_child(row)
+	var confirm: Button = row.get_child(0)
+	confirm.name = "ConfirmClearButton"
+	confirm.theme_type_variation = HouseStyle.DANGER_BUTTON
+	confirm.pressed.connect(func() -> void:
+		root.queue_free()
+		root.name = "ClearConfirmDone"
+		_clear_terrain())
+	var cancel: Button = row.get_child(1)
+	cancel.name = "CancelClearButton"
+	cancel.pressed.connect(func() -> void:
+		root.name = "ClearConfirmDone"
+		root.queue_free())
+	(parts["close"] as Button).pressed.connect(cancel.pressed.emit)
+	add_child(root)
+
+
+## Clear pieces, painted cells and walls (one undo step).
+func _clear_terrain() -> void:
 	_push_undo()
 	placed_pieces.clear()
 	free_cells.clear()
@@ -1168,6 +1246,9 @@ func _on_objectives_deploy_toggled(enabled: bool) -> void:
 
 ## Clear all objectives
 func _on_objectives_clear() -> void:
+	if mission_objectives.is_empty():
+		return
+	_push_undo()
 	mission_objectives.clear()
 	_update_objectives_status()
 	grid_container.queue_redraw()
@@ -1214,19 +1295,50 @@ func _on_save_file_selected(path: String) -> void:
 
 
 func _on_load_file_selected(path: String) -> void:
-	if not load_layout(path):
-		push_error("Failed to load layout")
+	if (placed_pieces.is_empty() and free_cells.is_empty() and free_walls.is_empty() and mission_objectives.is_empty()) \
+			or get_node_or_null("LoadConfirm") != null:
+		if get_node_or_null("LoadConfirm") == null and not load_layout(path):
+			push_error("Failed to load layout")
+		return
+	var parts := HouseStyle.overlay_sheet("Load this map?", 420)
+	var root: Control = parts["root"]
+	root.name = "LoadConfirm"
+	var body: VBoxContainer = parts["body"]
+	var msg := HouseStyle.label("Loading replaces the map you are editing. Ctrl+Z brings it back.", HouseStyle.BODY)
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD
+	body.add_child(msg)
+	var row := HouseStyle.button_row(["Load", "Cancel"], HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	body.add_child(row)
+	var confirm: Button = row.get_child(0)
+	confirm.name = "ConfirmLoadButton"
+	confirm.theme_type_variation = HouseStyle.PRIMARY
+	confirm.pressed.connect(func() -> void:
+		root.name = "LoadConfirmDone"
+		root.queue_free()
+		if not load_layout(path):
+			push_error("Failed to load layout"))
+	var cancel: Button = row.get_child(1)
+	cancel.name = "CancelLoadButton"
+	cancel.pressed.connect(func() -> void:
+		root.name = "LoadConfirmDone"
+		root.queue_free())
+	(parts["close"] as Button).pressed.connect(cancel.pressed.emit)
+	add_child(root)
 
 
 func set_table_size(size_feet: Vector2) -> void:
 	# Check if table size actually changed
 	var size_changed = table_size_feet != size_feet
+	var old_size := table_size_feet
 
 	table_size_feet = size_feet
 
 	# CRITICAL: If table size changed and we have terrain/objective data, clear it
 	# Grid cell coordinates are ABSOLUTE and become invalid when grid dimensions change
 	if size_changed:
+		var had_map := not (placed_pieces.is_empty() and free_cells.is_empty() and free_walls.is_empty() and mission_objectives.is_empty())
+		if had_map:
+			_remember_map_before_table_change(old_size)
 		if not placed_pieces.is_empty() or not free_cells.is_empty() or not free_walls.is_empty():
 			push_warning("Table size changed - clearing terrain data (grid coordinates are now invalid)")
 			placed_pieces.clear()
@@ -1244,6 +1356,37 @@ func set_table_size(size_feet: Vector2) -> void:
 	_update_stats()
 	# NOTE: Don't emit layout_updated here - it may be called during initialization
 	# before terrain_overlay exists. Updates are sent when user closes editor.
+
+
+## The map a table-size change is about to wipe becomes one undo step (with its table size, restored by the
+## "table" key of _apply_snapshot), and a one-line notice says what was cleared.
+func _remember_map_before_table_change(old_size: Vector2) -> void:
+	var replaced := _snapshot()
+	replaced["table"] = old_size
+	replaced["rotation"] = grid_rotation_degrees
+	_undo_stack.append(replaced)
+	if _undo_stack.size() > UNDO_LIMIT:
+		_undo_stack.pop_front()
+	_redo_stack.clear()
+	_update_undo_redo_buttons()
+	var pieces := placed_pieces.size()
+	var objs := mission_objectives.size()
+	_show_table_notice("Table size changed - cleared %d piece%s, %d objective%s. Ctrl+Z brings the map back." % [
+		pieces, "" if pieces == 1 else "s", objs, "" if objs == 1 else "s"])
+
+
+func _show_table_notice(text: String) -> void:
+	if _modular_terrain_panel == null:
+		return
+	if _table_notice == null:
+		_table_notice = HouseStyle.label("", HouseStyle.SMALL)
+		_table_notice.name = "TableSizeNotice"
+		_table_notice.autowrap_mode = TextServer.AUTOWRAP_WORD
+		_table_notice.add_theme_color_override("font_color", HouseStyle.WARN)
+		_modular_terrain_panel.add_child(_table_notice)
+		_modular_terrain_panel.move_child(_table_notice, 0)
+	_table_notice.text = text
+	_table_notice.visible = true
 
 
 func _calculate_grid_dimensions() -> Vector2i:
@@ -1393,6 +1536,50 @@ func _flood_fill(start: Vector2i, terrain_type: int, visited: Dictionary) -> voi
 				stack.append(neighbor)
 
 
+## Coverage numbers and the OPR guidelines live together in one sunken card. The guideline text stays in
+## RecommendationsLabel (hidden: it is the text source); the visible rows are one Label per line so a
+## met guideline reads green and a missed one amber.
+func _build_stats_card(body: Control) -> void:
+	var stats := body.get_node_or_null("StatsLabel") as Label
+	var recs := body.get_node_or_null("RecommendationsLabel") as Label
+	if stats == null or recs == null:
+		return
+	var box := VBoxContainer.new()
+	box.name = "StatsBox"
+	var card := HouseStyle.card(box)
+	card.name = "StatsCard"
+	body.add_child(card)
+	stats.reparent(box)
+	stats.theme_type_variation = HouseStyle.SMALL
+	stats.autowrap_mode = TextServer.AUTOWRAP_WORD
+	recs.reparent(box)
+	recs.visible = false
+	_guideline_rows = VBoxContainer.new()
+	_guideline_rows.name = "GuidelineRows"
+	box.add_child(_guideline_rows)
+
+
+## Rebuild the visible guideline rows from the guideline text (one Label per non-empty line).
+func _rebuild_guideline_rows() -> void:
+	if _guideline_rows == null or recommendations_label == null:
+		return
+	for child in _guideline_rows.get_children():
+		_guideline_rows.remove_child(child)
+		child.queue_free()
+	for line in recommendations_label.text.split("\n"):
+		if line.strip_edges().is_empty():
+			continue
+		var row := HouseStyle.label(line, HouseStyle.SMALL)
+		row.autowrap_mode = TextServer.AUTOWRAP_WORD
+		if line.begins_with("\u2713"):
+			row.add_theme_color_override("font_color", HouseStyle.tone_ink(HouseStyle.TONE_OK))
+		elif line.begins_with("\u2717"):
+			row.add_theme_color_override("font_color", HouseStyle.WARN)
+		elif line.ends_with(":"):
+			row.theme_type_variation = HouseStyle.CAPTION
+		_guideline_rows.add_child(row)
+
+
 func _update_recommendations() -> void:
 	_update_stats()
 
@@ -1444,12 +1631,7 @@ Tip: Connected cells = 1 piece""" % [
 		check_mark if extended.symmetry_ok else cross_mark, extended.symmetry_score
 	]
 
-	# Color code the recommendations - Glassmorphism accent colors
-	var all_ok = pieces_ok and coverage_ok and blocking_ok and cover_ok and difficult_ok and dangerous_ok and extended.max_gap_ok and extended.symmetry_ok
-	if all_ok:
-		recommendations_label.add_theme_color_override("font_color", HudTokens.SUCCESS)  # Accent green
-	else:
-		recommendations_label.add_theme_color_override("font_color", HudTokens.AMBER)  # Accent amber
+	_rebuild_guideline_rows()
 
 
 func _get_grid_rect() -> Rect2:
@@ -1632,18 +1814,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if mouse_in_grid:
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-				if editor_mode == EditorMode.PLACE_PREFAB:
-					_rotate_active()
-				else:
-					_zoom_in(local_mouse)
+				_handle_wheel(true, event.shift_pressed, local_mouse)
 				get_viewport().set_input_as_handled()
 				return
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-				if editor_mode == EditorMode.PLACE_PREFAB:
-					_preview_rotation = wrapi(_preview_rotation - 90, 0, 360)
-					grid_container.queue_redraw()
-				else:
-					_zoom_out(local_mouse)
+				_handle_wheel(false, event.shift_pressed, local_mouse)
 				get_viewport().set_input_as_handled()
 				return
 
@@ -2198,6 +2373,11 @@ func load_layout(file_path: String) -> bool:
 		push_error("Invalid layout data")
 		return false
 
+	# The map being replaced becomes one undo step (with the table it sat on)
+	var replaced := _snapshot()
+	replaced["table"] = table_size_feet
+	replaced["rotation"] = grid_rotation_degrees
+
 	# Load table size
 	if data.has("table_size"):
 		var ts = data.table_size
@@ -2248,7 +2428,9 @@ func load_layout(file_path: String) -> bool:
 	free_cells.clear()
 	free_walls.clear()
 	_next_piece_id = 1
-	_undo_stack.clear()
+	_undo_stack.append(replaced)
+	if _undo_stack.size() > UNDO_LIMIT:
+		_undo_stack.pop_front()
 	_redo_stack.clear()
 	_selected_piece_id = -1
 
@@ -2607,6 +2789,7 @@ const OBJECTIVE_SNAP_TOLERANCE := 1.5  # Inches - how close to click to remove a
 
 ## Toggle objective at the given 1" position (add if not present, remove if present)
 func _toggle_objective_at_position(inch_pos: Vector2) -> void:
+	_push_undo()
 	# Check if there's already an objective near this position
 	var existing_idx = _find_objective_near_position(inch_pos)
 

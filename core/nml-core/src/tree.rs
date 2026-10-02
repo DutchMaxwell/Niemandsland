@@ -285,6 +285,10 @@ pub struct TreeCfg<'a> {
     /// The wall-clock SAFETY fallback in ms (0 = off), checked between
     /// expansion batches; the budget stays the leaf count.
     pub wall_ms: u64,
+    /// The widening rate: 0.0 opens every child of a node before the search
+    /// descends; > 0 keeps at most ceil(max(n, 1) ^ widen) of an n-visit
+    /// node's children open.
+    pub widen: f64,
     pub player: i64,
     pub opener_seat: bool,
     /// The chance streams' root seed (the playout signature); `None`
@@ -312,12 +316,12 @@ fn child_stat(c: &Child) -> (f64, u32) {
 }
 
 /// UCT in the searcher's frame: the searcher's nodes take the argmax of
-/// `mean + c * sqrt(ln N / n)`, the opponent's the argmin of `mean - ...`;
-/// ties keep the first child in order.
+/// `mean + c * sqrt(ln N / n)`, the opponent's the argmin of `mean - ...`,
+/// over the OPENED children; ties keep the first child in order.
 pub fn select(node: &Node, player: i64) -> usize {
     let (sign, ln_n) = (if node.mover == player { 1.0 } else { -1.0 }, (node.n.max(1) as f64).ln());
     let mut best = (0, f64::NEG_INFINITY);
-    for (i, c) in node.children.iter().enumerate() {
+    for (i, c) in node.children[..node.next_child].iter().enumerate() {
         let (mean, n) = child_stat(c);
         let u = sign * mean + UCT_C * (ln_n / n.max(1) as f64).sqrt();
         if u > best.1 {
@@ -334,14 +338,19 @@ pub fn select(node: &Node, player: i64) -> usize {
 /// adds them to every node on the path. It stops once `budget` leaf
 /// evaluations completed; a chance child's samples are never split, so the
 /// last batch may overshoot by fewer than `samples`. Every child of a node
-/// is opened before the search descends below it (no widening-rate
-/// constant yet). Streams: the root's base is `sig`, a sample node's base
+/// is opened before the search descends below it, unless `widen` caps the
+/// open children (progressive widening). Streams: the root's base is `sig`, a sample node's base
 /// derives from its parent's and its (child, sample) index. The Terminal
 /// playouts resolve with EV in both dice modes. The pick is the opened root
 /// child with the highest mean, the first in order on ties.
 pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, sc: &mut Scratch)
            -> Result<(usize, TreeTrace), Unsupported> {
     let per_child = if cfg.dice == TreeDice::Tray { cfg.samples } else { 1 };
+    // Progressive widening: how many of a node's children may be open. Off
+    // (0.0), every child opens before the search descends.
+    let cap = |x: &Node| {
+        if cfg.widen > 0.0 { f64::from(x.n.max(1)).powf(cfg.widen).ceil() as usize } else { usize::MAX }
+    };
     let (start, mut completed, mut deadline_hit) = (std::time::Instant::now(), 0, false);
     while completed < cfg.budget {
         // The wall is a SAFETY fallback between batches, never the budget:
@@ -351,7 +360,7 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             break;
         }
         let (mut node, mut path, mut base) = (&mut *root, Vec::new(), cfg.sig);
-        while node.terminal.is_none() && !node.children.is_empty() && node.next_child == node.children.len() {
+        while node.terminal.is_none() && !node.children.is_empty() && node.next_child >= node.children.len().min(cap(node)) {
             let c = select(node, cfg.player);
             let s = (0..node.children[c].nodes.len()).min_by_key(|&s| node.children[c].nodes[s].n).unwrap_or(0);
             base = base.map(|b| b.wrapping_mul(1_000_003).wrapping_add((c * per_child + s + 1) as i64));
@@ -363,7 +372,7 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             vals.push(v);
         } else {
             let from = node.next_child;
-            let k = cfg.batch.min((cfg.budget - completed).div_ceil(per_child));
+            let k = cfg.batch.min((cfg.budget - completed).div_ceil(per_child)).min(cap(node) - from);
             expand(roll, node, k, cfg.dice, cfg.samples, base, cfg.player, sc)?;
             let fresh = || node.children[from..node.next_child].iter().flat_map(|c| &c.nodes);
             let states: Vec<&State> = fresh().filter(|x| x.terminal.is_none()).map(|x| &x.state).collect();

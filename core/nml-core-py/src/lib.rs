@@ -856,6 +856,8 @@ impl Core {
         m.insert("tree_batch".into(), self.knobs.tree_batch.into());
         m.insert("tree_wall_ms".into(), self.knobs.tree_wall_ms.into());
         m.insert("pool_wall_ms".into(), self.knobs.pool_wall_ms.into());
+        m.insert("deadline_us".into(), self.knobs.deadline_us.into());
+        m.insert("tree_widen".into(), self.knobs.tree_widen.into());
         m.insert(
             "melee_reach".into(),
             Value::String(

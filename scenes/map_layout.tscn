@@ -60,7 +60,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 size_flags_horizontal = 0
-text = "Clear All"
+text = "Clear terrain"
 
 [node name="CloseButton" type="Button" parent="MarginContainer/VBox/Header"]
 unique_name_in_owner = true
@@ -139,26 +139,21 @@ modulate = Color(1, 1, 1, 0.2)
 
 [node name="DeploymentLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
-theme_override_font_sizes/font_size = 16
 text = "Deployment Zones"
 
 [node name="DeploymentTypeOption" type="OptionButton" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
 
 [node name="DeploymentCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.87, 0.92, 1)
 text = "Show in Preview"
 
 [node name="ObjectivesCheck" type="CheckBox" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
-theme_override_colors/font_color = Color(0.85, 0.87, 0.92, 1)
 text = "Show Objectives"
 
 [node name="HSeparator3c" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
@@ -168,8 +163,6 @@ modulate = Color(1, 1, 1, 0.2)
 [node name="StatsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.73, 0.8, 1)
-theme_override_font_sizes/font_size = 13
 text = "Current Coverage:"
 
 [node name="HSeparator4" type="HSeparator" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
@@ -179,8 +172,6 @@ modulate = Color(1, 1, 1, 0.2)
 [node name="RecommendationsLabel" type="Label" parent="MarginContainer/VBox/MainContent/LeftPanelContainer/LeftPanelScroll/LeftPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1.0, 0.75, 0.35, 1)
-theme_override_font_sizes/font_size = 13
 text = "OPR Recommendations:"
 
 [node name="GridPanel" type="PanelContainer" parent="MarginContainer/VBox/MainContent"]

@@ -2751,18 +2751,79 @@ func _on_solo_deploy_pressed() -> void:
 		# setup; objectives sit centre-line, so the edges are near-symmetric) and deploys first.
 		# NACHTMAHR won: it leaves the player his own drawn zone and takes the opposite one.
 		var ai_neg_z := not _solo_human_zone_is_neg_z()
+		if _solo_mission_has_roles():
+			_solo_roles_set(solo_controller.ai_slot, SoloController.roles_ai_pick(MissionCatalog.get_mission(_solo_mission_id)))
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.GENERAL,
 				"NACHTMAHR wins %d:%d — it takes the far edge and deploys first" % [ai_roll, you_roll], true)
 		await _solo_deploy_begin_side(ai_neg_z)
+	elif _solo_mission_has_roles():
+		_solo_deploy_ui_show("Roll-off %d:%d — YOU win.\nDo you attack or defend?" % [you_roll, ai_roll],
+			"Attack", func() -> void: _solo_roles_chosen("attacker", you_roll, ai_roll),
+			"Defend", func() -> void: _solo_roles_chosen("defender", you_roll, ai_roll))
 	else:
-		# YOU win: choose your edge — NACHTMAHR takes the opposite one.
-		# The labels name what the player SEES: the near edge is the one on his side of the camera.
-		# NACHTMAHR always takes the other one.
-		# The labels name the zones the table is already SHOWING him, not an abstract edge.
-		_solo_deploy_ui_show("Roll-off %d:%d — YOU win and deploy first.\nWhich deployment zone do you take?" % [you_roll, ai_roll],
-			"Keep my zone", func() -> void: _solo_deploy_pick_side(false),
-			"Take the other zone", func() -> void: _solo_deploy_pick_side(true))
+		_solo_deploy_side_prompt(you_roll, ai_roll)
+
+
+## NML-1010 D2a: the human roll-off winner picked a role; the zone choice follows as usual.
+func _solo_roles_chosen(role: String, you_roll: int, ai_roll: int) -> void:
+	_solo_roles_set(solo_controller.human_slot, role)
+	_solo_deploy_side_prompt(you_roll, ai_roll)
+
+
+## Points of a slot's imported army; 0 without one.
+func _solo_army_points(slot: int) -> int:
+	var army = opr_army_manager.armies.get(slot) if opr_army_manager != null else null
+	return int(army.points) if army != null else 0
+
+
+## The picked mission's attacker points factor (> 1 only for a roles mission that grants one).
+func _solo_points_factor() -> float:
+	if not _solo_mission_has_roles():
+		return 1.0
+	return float(MissionCatalog.get_mission(_solo_mission_id).get("attacker_points_factor", 1.0))
+
+
+## D3 (R6a, advice only): what the AI list should weigh in each role; "" when nothing applies.
+func _solo_points_advice_text() -> String:
+	var factor := _solo_points_factor()
+	var mine := _solo_army_points(solo_controller.human_slot if solo_controller != null else 1)
+	if factor <= 1.0 or mine <= 0:
+		return ""
+	var adv := SoloController.points_advice(factor, mine)
+	return "Attacker +%d %% points: if you attack, NACHTMAHR ~%d pts; if you defend, ~%d pts." % [
+		int(round((factor - 1.0) * 100.0)), int(adv["ai_defends"]), int(adv["ai_attacks"])]
+
+
+## True for a catalog mission with the Attack & Defend roles flag.
+func _solo_mission_has_roles() -> bool:
+	return not _solo_mission_id.is_empty() and bool(MissionCatalog.get_mission(_solo_mission_id).get("roles", false))
+
+
+## Record the roll-off winner's role in the mission ledger and log it.
+func _solo_roles_set(winner_slot: int, winner_role: String) -> void:
+	var other: int = solo_controller.human_slot if winner_slot == solo_controller.ai_slot else solo_controller.ai_slot
+	SoloController.mission_roles = SoloController.roles_assign(winner_slot, other, winner_role)
+	var atk: int = int(SoloController.mission_roles["attacker"])
+	var dfn: int = int(SoloController.mission_roles["defender"])
+	_log_rule_event(BattleLog.Category.GENERAL, "Roll-off: %s attacks, %s defends" % [
+		_solo_player_label(atk), _solo_player_label(dfn)], true)
+	if _solo_points_factor() > 1.0 and _solo_army_points(atk) > 0 and _solo_army_points(dfn) > 0:
+		_log_rule_event(BattleLog.Category.GENERAL, "Points: attacker %d, defender %d (ratio %.2f, target %.2f)" % [
+			_solo_army_points(atk), _solo_army_points(dfn),
+			float(_solo_army_points(atk)) / float(_solo_army_points(dfn)), _solo_points_factor()], true)
+
+
+func _solo_deploy_side_prompt(you_roll: int, ai_roll: int) -> void:
+	# YOU win: choose your edge — NACHTMAHR takes the opposite one.
+	# The labels name what the player SEES: the near edge is the one on his side of the camera.
+	# NACHTMAHR always takes the other one.
+	# The labels name the zones the table is already SHOWING him, not an abstract edge.
+	_solo_deploy_ui_show("Roll-off %d:%d — YOU win and deploy first.\nWhich deployment zone do you take?" % [you_roll, ai_roll],
+		"Keep my zone", func() -> void: _solo_deploy_pick_side(false),
+		"Take the other zone", func() -> void: _solo_deploy_pick_side(true))
+
+
 ## Fire one strip button. The callbacks used to live inside `_solo_deploy_fsm`, which is REASSIGNED
 ## wholesale when deployment starts — anything holding a prompt open across that point clicked into
 ## the void and waited forever. They belong to the strip now. A dead callback says so instead of
@@ -15670,6 +15731,12 @@ func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable(
 		for j in lists.size():
 			pts_opt.add_item("%d points" % int((lists[j] as Dictionary).get("points", 0)), j)
 		pts_opt.select(mini(lists.size() - 1, lists.size() - 1))   # default: the largest bracket
+		var mine := _solo_army_points(solo_controller.human_slot if solo_controller != null else 1)
+		if _solo_points_factor() > 1.0 and mine > 0 and not lists.is_empty():
+			var sizes: Array = []
+			for l in lists:
+				sizes.append(int((l as Dictionary).get("points", 0)))
+			pts_opt.select(SoloController.bracket_at_or_above(sizes, int(round(mine * _solo_points_factor()))))
 	refresh_points.call()
 	fac_opt.item_selected.connect(func(_i: int) -> void: refresh_points.call())
 
@@ -16659,10 +16726,20 @@ func _refresh_solo_panel() -> void:
 		if mission_ids[i] == _solo_mission_id:
 			mission_idx = i + 1
 	solo_mission_option.select(mission_idx)
+	var points_advice := Label.new()
+	points_advice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	points_advice.theme_type_variation = HouseStyle.CAPTION
+	points_advice.name = "PointsAdvice"
+	points_advice.custom_minimum_size.x = 220.0   # a wrapping Label measures width 0 in a container without a floor
 	solo_mission_option.item_selected.connect(func(idx: int) -> void:
-		_solo_mission_id = str(solo_mission_option.get_item_metadata(idx)))
+		_solo_mission_id = str(solo_mission_option.get_item_metadata(idx))
+		points_advice.text = _solo_points_advice_text()
+		points_advice.visible = not points_advice.text.is_empty())
 	DropdownPlacement.keep_button_clear(solo_mission_option)
 	solo_panel_box.add_child(solo_mission_option)
+	points_advice.text = _solo_points_advice_text()
+	points_advice.visible = not points_advice.text.is_empty()
+	solo_panel_box.add_child(points_advice)
 	var deploy_btn := Button.new()
 	deploy_btn.text = "Start Deployment"
 	deploy_btn.tooltip_text = "GF v3.5.1: roll-off, the winner picks a table edge and deploys first; then alternate one unit each (hand-over by click), then the Scout phase. The roll-off winner takes round 1's first turn."

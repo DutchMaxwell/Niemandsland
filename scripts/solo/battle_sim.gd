@@ -1871,6 +1871,8 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			mm.append((mk as Dictionary).duplicate())
 		state["markers_meta"] = mm
 		state["destroy_seq"] = [int(SoloController.mission_destroy_seq[0])]
+	if not SoloController.mission_roles.is_empty():   # D2a: absent for every roles-less mission
+		state["attacker"] = int(SoloController.mission_roles["attacker"])
 	if terrain_at.is_valid():   # absent key = pre-T2b snapshot, byte-identical
 		state["terrain_at"] = terrain_at
 	return state

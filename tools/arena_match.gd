@@ -697,6 +697,8 @@ func _mission_stamp() -> Dictionary:
 		"rounds": int(m.get("rounds", 4)), "scoring": str(m.get("scoring", "end")),
 		"deployment": str(m.get("deployment", "front_line")), "symmetric": _symmetric,
 		"objective_count": _objectives_placed, "packs": []}
+	if not SoloController.mission_roles.is_empty():   # D2b: roles missions only, else unchanged
+		out["role_p1"] = "attacker" if int(SoloController.mission_roles["attacker"]) == 1 else "defender"
 	# D8a: the layout INPUTS, so a reader can re-derive the markers instead of trusting
 	# them. Additive and only when armed — an unset run's result file is unchanged.
 	if not AiActRecorder.objectives_stamp.is_empty():
@@ -842,7 +844,8 @@ static func search_knobs() -> Dictionary:
 		"deploy_threat_seat": SoloController.deploy_threat_seat,
 		"deploy_threat_preset": SoloController.deploy_threat_preset,
 		"shadow_menu": OS.get_environment("NML_SHADOW_MENU"),
-	}
+		# Tree plan step 13: the tree search knobs this game ran with, ONLY those set.
+	}.merged(AiPlanner.tree_knobs())
 
 
 ## Planner calibration pairs (parity wave, NML-995): fold the per-activation expectation records into
