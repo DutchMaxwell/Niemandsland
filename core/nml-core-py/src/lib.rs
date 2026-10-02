@@ -347,6 +347,9 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
 
 // ------------------------------------------------------------------ State ---
 
+/// `apply_reveal_step`'s return: `(state, owners, events, rolls)`.
+type RevealOut = (PyState, Vec<i64>, Py<PyAny>, Py<PyAny>);
+
 /// One battle state. Opaque on purpose: the struct-of-arrays below is the whole
 /// point of the port, and handing it out as a dict per call would spend more
 /// time marshalling than searching. `plain()` is the escape hatch.
@@ -1991,7 +1994,7 @@ impl Core {
         state: PyRef<'_, PyState>,
         owners: Vec<i64>,
         tray: Option<&mut PyTray>,
-    ) -> PyResult<(PyState, Vec<i64>, Py<PyAny>, Py<PyAny>)> {
+    ) -> PyResult<RevealOut> {
         let statics = self.statics_for(&state.inner)?;
         let mut st = state.inner.clone();
         let mut own = owners;
