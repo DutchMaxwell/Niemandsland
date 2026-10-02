@@ -987,6 +987,7 @@ func _snapshot() -> Dictionary:
 		"free_cells": free_cells.duplicate(true),
 		"free_walls": free_walls.duplicate(true),
 		"next_id": _next_piece_id,
+		"objectives": mission_objectives.duplicate(),
 	}
 
 
@@ -995,6 +996,10 @@ func _apply_snapshot(snap: Dictionary) -> void:
 	free_cells = (snap["free_cells"] as Dictionary).duplicate(true)
 	free_walls = (snap["free_walls"] as Array).duplicate(true)
 	_next_piece_id = int(snap.get("next_id", _next_piece_id))
+	if snap.has("objectives"):
+		mission_objectives.assign(snap["objectives"])
+		_update_objectives_status()
+		objectives_changed.emit(mission_objectives)
 	_rebuild_derived()
 	_update_modular_status()
 
@@ -1215,6 +1220,9 @@ func _on_objectives_deploy_toggled(enabled: bool) -> void:
 
 ## Clear all objectives
 func _on_objectives_clear() -> void:
+	if mission_objectives.is_empty():
+		return
+	_push_undo()
 	mission_objectives.clear()
 	_update_objectives_status()
 	grid_container.queue_redraw()
@@ -2686,6 +2694,7 @@ const OBJECTIVE_SNAP_TOLERANCE := 1.5  # Inches - how close to click to remove a
 
 ## Toggle objective at the given 1" position (add if not present, remove if present)
 func _toggle_objective_at_position(inch_pos: Vector2) -> void:
+	_push_undo()
 	# Check if there's already an objective near this position
 	var existing_idx = _find_objective_near_position(inch_pos)
 
