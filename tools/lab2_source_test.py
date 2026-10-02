@@ -89,6 +89,28 @@ def test_cli_writes_positions_proof_and_exit_code(tmp_path):
     assert data["net"]["1"]["calls"] > 0 and data["net"]["2"]["calls"] > 0
 
 
+GRADE = {"top_k": 2, "horizon": 1, "dice": "table", "hero_attach": "table", "seam_cast": True, "deployment": "arena"}
+
+
+def test_knobs_play_the_source_games_at_the_shipped_grade_and_refuse_what_the_source_fixes(tmp_path):
+    import csv, json
+    tsv, header, knobs, out = (tmp_path / n for n in ("s.tsv", "h.json", "k.json", "p.json"))
+    with open(tsv, "w", newline="") as f:
+        w = csv.DictWriter(f, list(row("a")), delimiter="\t")
+        w.writeheader(), w.writerow(row("a"))
+    header.write_text(json.dumps({"knobs": {"top_k": 9, "horizon": 9}}))
+    knobs.write_text(json.dumps(GRADE))
+    argv = ["source", "--slots", str(tsv), "--bank", BANK, "--lists", LISTS, "--header", str(header),
+            "--knobs", str(knobs), "--out", str(out), "--transitions-out", str(tmp_path / "x.json")]
+    ls.main(argv)
+    played = json.loads((tmp_path / "x.json.headers").read_text())["s1:a"]["knobs"]  # the header the game really set
+    assert played["seam_cast"] is True and played["hero_attach"] is True and played["deployment"] == "arena"
+    assert (played["top_k"], played["horizon"]) == (2, 1) and json.loads(out.read_text())["play_kwargs"] == GRADE
+    knobs.write_text(json.dumps(dict(GRADE, mission="duel", dice="expected")))
+    with pytest.raises(SystemExit, match="mission,dice"):
+        ls.main(argv)
+
+
 def test_timing_set_lists_games_and_activations_in_order(env):
     timing = ls.TimingSet(per_cell=1000)
     core, net = env
