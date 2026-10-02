@@ -174,7 +174,10 @@ ARMS = ("I", "L", "T")
 #: the SAME pair for every arm (common random numbers).
 STREAMS = 8
 ARM_KNOBS = {"I": {}, "L": {"search_mode": "tree", "tree_leaf": "blend"},
-             "T": {"search_mode": "tree", "tree_leaf": "terminal"}}
+             "T": {"search_mode": "tree", "tree_leaf": "terminal"},
+             # P9 tray arms: configured here, run only by the tray probe (step 27), never by `endings`
+             "L_tray": {"search_mode": "tree", "tree_leaf": "blend", "tree_dice": "tray"},
+             "T_tray": {"search_mode": "tree", "tree_leaf": "terminal", "tree_dice": "tray"}}
 CONTRASTS = (("A_T", "T", "I"), ("A_L", "L", "I"), ("A_TL", "T", "L"))
 
 
@@ -182,17 +185,30 @@ def eval_streams(nm, pos, r):
     return nm.Rng(int(pos["eval"][r]["general"])), nm.Tray(int(pos["eval"][r]["tray"]))
 
 
-def finish_ending(nm, sp, cores, pos, rng, tray):
+def search_streams(nm, pos, arm, r):
+    """One search stream per seat for (position, replicate, arm): `pos["search"][arm][r][owner]` decimal keys."""
+    return {int(o): {"rng": nm.Rng(int(k)), "seed": int(k), "counter": 0, "pending": None}
+            for o, k in pos["search"][arm][r].items()}
+
+
+def finish_ending(nm, sp, cores, pos, rng, tray, net=None, search=None, log=None):
     """Finish the last round from a pre-pick state: the mover's EVERY decision from `cores["cand"]`, the
     other side's from `cores["inc"]`; then the round-end referee (round count from the state's own ledger)
-    and the mission verdict. Returns (final state, owners, verdict)."""
+    and the mission verdict. Returns (final state, owners, verdict). With `net` every side's planner prices its
+    leaves with the shipped net (weight 1.0); with `search` a tree core draws its `sig` from its seat's stream
+    (two draws per decision, as `play_game(search_seeds=)`) and the draw is appended to `log`."""
     mover, state = pos["mover"], cores["inc"].state_of(pos["state"])
     core_of = lambda side: cores["cand"] if side == mover else cores["inc"]
     owners, led, turn = list(pos["owners_before_round"]), sp._ledger_of(state), mover
+    hooks = {side: {"leaf_value_fn": {side: net.hook(side)}, "leaf_value_w": 1.0} for side in (1, 2)} if net else {}
     for _ in range(state.units * 2 + 4):
         for side in (turn, 3 - turn):
-            act = sp._pick_for(core_of(side), state, side)
+            sg = sp._search_sig(search, side, core_of(side))
+            act = sp._pick_for(core_of(side), state, side, **hooks.get(side, {}), **({"sig": sg["sig"]} if sg else {}))
             if act:
+                if sg:
+                    search[side].update(pending=None, counter=sg["counter"] + 1)
+                    log.append({"side": side, "seed": sg["seed"], "counter": sg["counter"], "sig": sg["sig"]})
                 break
         else:
             break
@@ -207,6 +223,19 @@ def play_ending(nm, sp, cores, pos, rng, tray):
     """`finish_ending`'s verdict as the candidate seat's score 1 / 0.5 / 0."""
     win = finish_ending(nm, sp, cores, pos, rng, tray)[2]
     return 0.5 if win == "draw" else float(win == "p%d" % pos["mover"])
+
+
+def run_ending(nm, sp, cores, pos, rng, tray, arm, net=None, search=None):
+    """One ending row: the candidate's score, the net calls it cost, the search draws; INVALID "net_inactive"
+    unless the net priced leaves for the I opponent always and for the candidate side in the I and L arms."""
+    before = {s: dict(c) for s, c in (net.counts if net else {}).items()}
+    log = []
+    win = finish_ending(nm, sp, cores, pos, rng, tray, net, search, log)[2]
+    calls = {s: c["calls"] - before.get(s, {"calls": 0})["calls"] for s, c in (net.counts if net else {}).items()}
+    need = [3 - pos["mover"]] + ([pos["mover"]] if arm in ("I", "L") else [])
+    ok = net is None or all(calls.get(s, 0) > 0 for s in need)
+    return {"arm": arm, "y": 0.5 if win == "draw" else float(win == "p%d" % pos["mover"]), "valid": ok,
+            "reason": None if ok else "net_inactive", "net_calls": calls, "search": log}
 
 
 def arm_headers_differ_only_in_leaf(base, wall):
@@ -242,8 +271,11 @@ def cmd_endings(a) -> int:
     import nml_core as nm  # lazy
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
     import selfplay as sp
+    from lab2_net import ShippedNet
+    net = ShippedNet(a.repo)
     base, allow = json.load(open(a.header)), json.load(open(a.timing))
     positions = json.load(open(a.positions))
+    invalid = []
     def core(extra):
         c = nm.load(a.repo)
         c.set_header(dict(base, knobs=dict(base["knobs"], **extra)))
@@ -259,9 +291,15 @@ def cmd_endings(a) -> int:
         y = {}
         for arm in ARMS:
             cand = core(dict(ARM_KNOBS[arm], **({"tree_wall_ms": wall} if arm != "I" else {})))
-            y[arm] = [play_ending(nm, sp, {"inc": inc, "cand": cand}, pos, *eval_streams(nm, pos, r)) for r in range(STREAMS)]
+            rows = [run_ending(nm, sp, {"inc": inc, "cand": cand}, pos, *eval_streams(nm, pos, r), arm, net,
+                               search_streams(nm, pos, arm, r) if arm != "I" else None) for r in range(STREAMS)]
+            invalid += [(pos["slot"], arm, r) for r, row in enumerate(rows) if not row["valid"]]
+            y[arm] = [row["y"] for row in rows]
         gains.setdefault(pos["cell"], {})[pos["cluster"]] = position_gains(y)
         print("[endings] %d/%d %s %s" % (i + 1, len(positions), pos["cell"], canon(gains[pos["cell"]][pos["cluster"]])), flush=True)
+    if invalid:
+        print("[endings] INVALID net_inactive rows: %s" % invalid)
+        return 1
     res = bootstrap_intervals(gains, a.resamples, a.seed)
     open(a.out, "w").write(canon({"gains": gains, "intervals": res}))
     print("[endings] " + canon(res))
