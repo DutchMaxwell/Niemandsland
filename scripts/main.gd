@@ -2435,6 +2435,7 @@ func _solo_auto_seize() -> void:
 			"radii": _solo_alive_radii(gu)})
 	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners,
 		SoloController.mission_markers)
+	_solo_secret_reveals(infos, objectives, res)
 	# NML-1010 wave C step C2 (Relic Hunt/Capture & Hold): a marker just seized this round is
 	# picked up onto the seizing side's nearest eligible unit; the overlay hides its own token
 	# while carried (drop hooks re-show it — main.gd:_solo_drop_carried).
@@ -2483,6 +2484,70 @@ func _solo_auto_seize() -> void:
 		for i in locked_near:
 			if not changed_indices.has(i):
 				battle_log.log_event(BattleLog.Category.GENERAL, "Objective %d: %s" % [int(i) + 1, locked_near[i]], true)
+
+
+## D12a: the attacker's seize turns up its secret markers (Smash & Grab). A trap hits the seizing
+## unit (D6+1 hits on the real tray), any non-relic marker is removed, the relic stays for the carry
+## step. A removed marker leaves the seize `changes` so the overlay does not hand it to the seizer.
+func _solo_secret_reveals(infos: Array, objectives: Array, res: Dictionary) -> void:
+	if not SoloController.mission_roles.has("attacker"):
+		return
+	var events: Array = SoloController.secret_reveal_step(infos, objectives, res["owners"],
+		SoloController.mission_markers, int(SoloController.mission_roles["attacker"]))
+	for ev in events:
+		var e := ev as Dictionary
+		var idx: int = int(e["index"])
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Secret marker %d revealed by %s: %s" % [
+				idx + 1, str(e["name"]), str(e["secret"]).to_upper() if str(e["secret"]) != "" else "empty"], true)
+		if str(e["secret"]) == "relic":
+			continue
+		terrain_overlay.set_objective_carried(idx, true)   # hides the removed token
+		terrain_overlay.set_objective_owner(idx, 0)
+		var kept: Array = []
+		for c in res.get("changes", []):
+			if int((c as Dictionary).get("index", -1)) != idx:
+				kept.append(c)
+		res["changes"] = kept
+		if str(e["secret"]) == "trap":
+			var victim: GameUnit = opr_army_manager.game_units.get(str(e["unit_id"]), null)
+			if victim != null:
+				_solo_secret_trap_hits(victim)
+
+
+## Trap: D6+1 hits on the seizing unit, saved and landed through the normal save seam.
+func _solo_secret_trap_hits(victim: GameUnit) -> void:
+	var faces: Array = await _solo_tray_roll(1, 1, _solo_owner_label(victim), "attack",
+		"Trap: D6+1 hits on %s" % victim.get_name())
+	if faces.is_empty():
+		return
+	var hits: int = int(faces[0]) + 1
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Trap: %s takes %d hits" % [victim.get_name(), hits], true)
+	var profile: Dictionary = {"name": "Trap", "ap": 0, "deadly": 0, "rules": []}
+	var w: int = await _solo_resolve_saves(victim, victim, "Trap", [], hits,
+		_solo_defense_vs(victim, AiCombatMath.HIT_SOURCE_MELEE), profile, not _solo_is_ai_unit(victim), true)
+	if w > 0:
+		await _solo_land_wounds(victim, w, 0)
+
+
+## D12a: the defender assigns trap and relic when the roles are known. The human's two clicks are
+## D12a-2; until then (and for the AI) SoloController.secret_assign decides.
+func _solo_secret_markers_assign() -> void:
+	var markers: Array = SoloController.mission_markers
+	if terrain_overlay == null or table == null or markers.is_empty() or not (markers[0] as Dictionary).has("secret"):
+		return
+	var pts: Array = []
+	for pos in terrain_overlay.get_objectives():
+		pts.append(Vector2((pos as Vector3).x, (pos as Vector3).z) / SoloController.INCHES_TO_METERS)
+	var kinds: Array = SoloController.secret_assign(pts, table.table_size.x * 12.0, table.table_size.y * 12.0)
+	for i in range(mini(markers.size(), kinds.size())):
+		(markers[i] as Dictionary)["secret"] = kinds[i]
+		if kinds[i] == "relic":
+			(markers[i] as Dictionary)["carry"] = true
+			(markers[i] as Dictionary)["carried_by"] = ""
+	_log_rule_event(BattleLog.Category.GENERAL, "Defender (%s) hides the trap and the relic among %d markers" % [
+		_solo_player_label(int(SoloController.mission_roles.get("defender", 0))), markers.size()], true)
 
 
 ## Player label for logs/summary: "P<n> (<army>)" when the slot has an imported army, else "P<n>".
@@ -2851,6 +2916,7 @@ func _solo_roles_set(winner_slot: int, winner_role: String) -> void:
 	var dfn: int = int(SoloController.mission_roles["defender"])
 	_log_rule_event(BattleLog.Category.GENERAL, "Roll-off: %s attacks, %s defends" % [
 		_solo_player_label(atk), _solo_player_label(dfn)], true)
+	_solo_secret_markers_assign()
 	if _solo_points_factor() > 1.0 and _solo_army_points(atk) > 0 and _solo_army_points(dfn) > 0:
 		_log_rule_event(BattleLog.Category.GENERAL, "Points: attacker %d, defender %d (ratio %.2f, target %.2f)" % [
 			_solo_army_points(atk), _solo_army_points(dfn),

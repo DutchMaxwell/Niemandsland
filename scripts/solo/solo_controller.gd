@@ -75,7 +75,8 @@ static func marker_metadata(spec: Dictionary) -> Array:
 	var owned := bool(spec.get("owned", false))
 	var carry := bool(spec.get("carry", false))
 	var mobile := bool(spec.get("mobile", false))
-	if not owned and not carry and not mobile:
+	var secret := bool(spec.get("secret", false))
+	if not owned and not carry and not mobile and not secret:
 		return []
 	var markers: Array = []
 	for i in range(int(spec.get("count", 2))):
@@ -86,6 +87,9 @@ static func marker_metadata(spec: Dictionary) -> Array:
 		if carry:
 			marker["carry"] = true
 			marker["carried_by"] = ""
+		if secret:
+			marker["secret"] = ""
+			marker["revealed"] = false
 		if mobile:
 			marker["mobile"] = true
 			marker["deploy_edge"] = int(spec.get("deploy_edge", 0))
@@ -9559,6 +9563,65 @@ static func carry_step(unit_infos: Array, objectives: Array, owners: Array, mark
 		if not best_id.is_empty():
 			mk["carried_by"] = best_id
 			events.append({"index": i, "unit_id": best_id, "name": best_name})
+	return events
+
+
+## D12a (R9a, AI defender): the relic is the marker FARTHEST from every table edge, the trap the
+## NEAREST one (first index on a tie); the rest stay plain. `points_in` = marker spots in table inches.
+static func secret_assign(points_in: Array, table_w_in: float, table_d_in: float) -> Array:
+	var out: Array = []
+	var best := -INF
+	var worst := INF
+	var relic := -1
+	var trap := -1
+	for i in range(points_in.size()):
+		out.append("")
+		var p: Vector2 = points_in[i]
+		var gap := minf(table_w_in / 2.0 - absf(p.x), table_d_in / 2.0 - absf(p.y))
+		if gap > best:
+			best = gap
+			relic = i
+		if gap < worst:
+			worst = gap
+			trap = i
+	if relic >= 0:
+		out[relic] = "relic"
+	if trap >= 0 and trap != relic:
+		out[trap] = "trap"
+	return out
+
+
+## D12a: the round-end reveal. A secret marker the ATTACKER now holds is turned up by its nearest
+## eligible unit: the relic stays (carry_step picks it up next), a trap or a plain marker is removed
+## (`destroyed`, owner zeroed). Returns [{index, secret, unit_id, name}] in marker order.
+static func secret_reveal_step(unit_infos: Array, objectives: Array, owners: Array, markers: Array,
+		attacker: int) -> Array:
+	var events: Array = []
+	for i in range(markers.size()):
+		var mk: Dictionary = markers[i]
+		if not mk.has("secret") or bool(mk.get("revealed", false)) or bool(mk.get("destroyed", false)):
+			continue
+		if i >= owners.size() or i >= objectives.size() or int(owners[i]) != attacker:
+			continue
+		var best: Dictionary = {}
+		var best_gap := INF
+		for info in unit_infos:
+			var d := info as Dictionary
+			if int(d.get("player", 0)) != attacker or bool(d.get("shaken", false)) \
+					or bool(d.get("ambush_locked", false)) or bool(d.get("aircraft", false)):
+				continue
+			var gap := objective_gap_in(d, objectives[i])
+			if gap < best_gap:
+				best_gap = gap
+				best = d
+		if best.is_empty():
+			continue
+		mk["revealed"] = true
+		if String(mk["secret"]) != "relic":
+			mk["destroyed"] = true
+			owners[i] = 0
+		events.append({"index": i, "secret": String(mk["secret"]), "unit_id": String(best.get("unit_id", "")),
+			"name": String(best.get("name", ""))})
 	return events
 
 
