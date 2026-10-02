@@ -242,7 +242,8 @@ fn alternate_placement_is_untouched_by_this_rung() {
 fn attack_defend_zone_styles_match_the_tables_pinned_points() {
     let cat: serde_json::Value =
         serde_json::from_str(include_str!("../../../assets/solo/deployments.json")).unwrap();
-    let pins: [(&str, [(i64, i64, bool); 6]); 3] = [
+    type Pin = (i64, i64, bool);
+    let pins: [(&str, [Pin; 6]); 3] = [
         ("centre_disc_12", [(0, 0, true), (11, 0, true), (13, 0, false), (0, -13, false), (8, 8, true), (9, 9, false)]),
         ("edge_band_12", [(0, -20, true), (30, 0, true), (0, 0, false), (23, 0, false), (0, 11, false), (-35, 23, true)]),
         ("anywhere", [(0, 0, true), (35, 23, true), (-35, -23, true), (37, 0, false), (0, 25, false), (37, 25, false)]),
