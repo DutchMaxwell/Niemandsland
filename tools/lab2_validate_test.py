@@ -47,6 +47,16 @@ def test_a_clean_set_passes_and_keeps_its_flags():
     assert ok and probs == [] and val.pass_flags(ok, {"A_T": True, "net": False}) == {"A_T": True, "net": False}
 
 
+def test_a_row_s_own_expected_header_map_overrides_its_arm_s():
+    rows, manifest = _set()
+    rows[0]["header_sha256"] = {"1": "i", "2": "l"}             # the same L candidate, now in seat 2
+    assert [p["problem"] for p in val.validate(rows, manifest)[1]] == ["wrong_header_sha256"]   # one map per arm cannot hold it
+    manifest["rows"]["b1_L"]["headers"] = {"1": "i", "2": "l"}
+    assert val.validate(rows, manifest) == (True, [])
+    rows[0]["header_sha256"] = {"1": "i", "2": "x"}             # played other knobs than registered for THIS row
+    assert [p["problem"] for p in val.validate(rows, manifest)[1]] == ["wrong_header_sha256"]
+
+
 
 def test_in_memory_rows_with_int_seat_keys_validate_like_their_json():
     rows, manifest = _set()
