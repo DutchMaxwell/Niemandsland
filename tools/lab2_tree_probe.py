@@ -406,10 +406,14 @@ def game_rows(blocks, arms=ALL_ARMS):
 
 
 def arm_kwargs(row, allowance_us):
-    """L: the tree on the candidate seat (10/3 = the incumbent pair); C: the one-ply 32/3 rung. Both carry the
-    allowance as `deadline_us`, measured from the planner call."""
-    if row["arm"] == "L":
-        return dict(deep_top_k=10, deep_horizon=3, deep_search_mode="tree", deep_deadline_us=allowance_us)
+    """L: the tree on the candidate seat (10/3 = the incumbent pair); L_tray: L through the true tray (P9 MODE_B's
+    control, `--arms L_tray`); C: the one-ply 32/3 rung. All carry the allowance as `deadline_us`, measured from
+    the planner call."""
+    if row["arm"] in ("L", "L_tray"):
+        tray = {"deep_tree_dice": "tray"} if row["arm"] == "L_tray" else {}
+        return dict(deep_top_k=10, deep_horizon=3, deep_search_mode="tree", deep_deadline_us=allowance_us, **tray)
+    if row["arm"] != "C":
+        raise ValueError("no fullgames arm %r" % row["arm"])
     return dict(deep_top_k=32, deep_horizon=3, deep_deadline_us=allowance_us)
 
 
@@ -473,6 +477,15 @@ def i_seat1_means(done):
     return {c: {b: statistics.fmean(v) for b, v in blocks.items()} for c, blocks in by.items()}
 
 
+def control_scores(done, arm="L_tray"):
+    """Descriptive only (P9 MODE_B): the control's candidate-seat score per board minus .5 -> {cell: {block: {..}}}."""
+    by = {}
+    for row, y in done:
+        if row["arm"] == arm:
+            by.setdefault(row["cell"], {}).setdefault(row["block"], []).append(y)
+    return {c: {b: {arm + "_I": statistics.fmean(v) - 0.5} for b, v in bl.items()} for c, bl in by.items()}
+
+
 def _fullgames_init(cfg):
     nm, sp, ShippedNet = _libs()
     net = ShippedNet(cfg["repo"])
@@ -510,8 +523,12 @@ def cmd_fullgames(a) -> int:
     if invalid:
         print("[fullgames] INVALID rows (run continued): %s" % invalid)
         return 1
-    res = bootstrap_intervals(board_scores([d for d in done if d[0]["arm"] in B_ARMS]), a.resamples, a.seed)
-    open(a.out, "w").write(canon({"intervals": res, "I_seat1_descriptive": i_seat1_means(done)}))
+    arms = {d[0]["arm"] for d in done}
+    res = bootstrap_intervals(board_scores([d for d in done if d[0]["arm"] in B_ARMS]), a.resamples, a.seed) \
+        if set(B_ARMS) <= arms else {}
+    ctl = {"L_tray_descriptive_95": bootstrap_intervals(control_scores(done), a.resamples, a.seed, k=1)} \
+        if "L_tray" in arms else {}
+    open(a.out, "w").write(canon({"intervals": res, "I_seat1_descriptive": i_seat1_means(done), **ctl}))
     print("[fullgames] " + canon(res))
     return 0
 
