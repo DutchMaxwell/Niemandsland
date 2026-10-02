@@ -2547,3 +2547,40 @@ fn phased_deployment_runs_phase_by_phase_most_expensive_first() {
     assert!(stands_in(&out.side2, "d1", "centre_disc_12") && stands_in(&out.side2, "d3", "centre_disc_12"));
     assert!(out.side1.placements.iter().all(|p| stands_in(&out.side1, &p.key, "edge_band_12")), "the attacker stands in the frame");
 }
+
+/// D8b: a side that reserves keeps what its phases left over off the table, in `reserved`; and an
+/// arrival inside a catalog zone shape lands in it, clear of the enemy ring.
+#[test]
+fn leftover_units_are_reserved_and_an_arrival_stays_in_the_zone_shape() {
+    let r = 0.016;
+    let mk = |i: usize| deployment::UnitSpec {
+        key: format!("u{i}"),
+        model_count: 2,
+        base_r_m: r,
+        points: 100 - i as i64,
+        footprint: deployment::deploy_footprint_offsets(2, r, false),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 2 }],
+        ..Default::default()
+    };
+    let specs: Vec<_> = (0..5).map(mk).collect();
+    let cat: serde_json::Value = serde_json::from_str(include_str!("../../../assets/solo/deployments.json")).unwrap();
+    let disc = nml_core::objectives::zones_of_style(&cat["styles"]["centre_disc_12"]);
+    let table = deployment::Rect::new(-36.0 * IN2M, -24.0 * IN2M, 72.0 * IN2M, 48.0 * IN2M);
+    let rect = deployment::Rect::new(-12.0 * IN2M, -12.0 * IN2M, 24.0 * IN2M, 24.0 * IN2M);
+    let phases = vec![deployment::Phase { side: 0, share: "half".into(), rect, zones: disc.clone() }];
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let out = deployment::deploy_phased_reserving(&specs, &specs, &table, &table, &phases, [None, None], [true, false], &objs, &empty_board(), 3, 4, 1, 15);
+    assert_eq!(out.side1.placements.len(), 2, "floor(5/2) deployed");
+    assert_eq!(out.side1.reserved, vec!["u2", "u3", "u4"], "the rest set aside, in queue order after the points sort");
+    assert_eq!(out.side2.placements.len(), 5, "a side without the reserve flag deploys everything");
+
+    let zone = deployment::ArrivalZone::Rect(table);
+    let enemy = [deployment::ArrivalEnemy { pos: (6.0 * IN2M, 0.0), min_dist_m: 0.0, pad_m: r }];
+    let fp = deployment::deploy_footprint_offsets(2, r, false);
+    let radius = deployment::deploy_footprint_radius(2, r);
+    let mut occ = Vec::new();
+    let spot = deployment::arrive_one_in(&zone, Some(&disc), &objs, &mut occ, &enemy, &[], 12.0 * IN2M, &empty_board(), radius, &fp, r, false);
+    assert!(spot.0.is_finite(), "a legal spot exists inside the disc");
+    assert!(fp.iter().all(|o| deployment::zones_contain(&disc, (spot.0 + o.0, spot.1 + o.1))), "every base in the disc: {spot:?}");
+    assert!(((spot.0 - 6.0 * IN2M).hypot(spot.1)) > 12.0 * IN2M, "outside the 12\" ring: {spot:?}");
+}

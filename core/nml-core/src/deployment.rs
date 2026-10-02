@@ -1650,6 +1650,30 @@ pub fn deploy_phased(
     first: i64,
     rules_epoch: u32,
 ) -> InterleavedDeploy {
+    deploy_phased_reserving(
+        specs1, specs2, zone1, zone2, phases, gates, [false, false], objectives, board, seed1, seed2, first, rules_epoch,
+    )
+}
+
+/// `deploy_phased` where a side with `reserve[k]` SETS ASIDE what its phases left over instead of
+/// deploying it (D8b: the Attack & Defend reserve rule): the leftover keys join `reserved`, off the
+/// table until a round-start arrival brings them in.
+#[allow(clippy::too_many_arguments)]
+pub fn deploy_phased_reserving(
+    specs1: &[UnitSpec],
+    specs2: &[UnitSpec],
+    zone1: &Rect,
+    zone2: &Rect,
+    phases: &[Phase],
+    gates: [Option<&Gates>; 2],
+    reserve: [bool; 2],
+    objectives: &[(f64, f64)],
+    board: &Terrain,
+    seed1: i64,
+    seed2: i64,
+    first: i64,
+    rules_epoch: u32,
+) -> InterleavedDeploy {
     let walls = board.walls_world_m();
     let specs = [specs1, specs2];
     let mut q = [deploy_begin(specs1, zone1, seed1), deploy_begin(specs2, zone2, seed2)];
@@ -1682,7 +1706,13 @@ pub fn deploy_phased(
     }
     for k in 0..2 {
         while cur[k] < total[k] {
-            place(&mut q, k, &mut cur, &mut sequence);
+            if reserve[k] {
+                let key = specs[k][q[k].main[cur[k]]].key.clone();
+                q[k].out.reserved.push(key);
+                cur[k] += 1;
+            } else {
+                place(&mut q, k, &mut cur, &mut sequence);
+            }
         }
         q[k].zone = home[k].0;
         q[k].forward_y = home[k].1;
@@ -3325,11 +3355,40 @@ pub fn arrive_one(
     base_r: f64,
     flying: bool,
 ) -> (f64, f64) {
+    arrive_one_in(
+        zone, None, objectives, occupied, enemies, beacons, own_ring_m, board, radius, footprint, base_r, flying,
+    )
+}
+
+/// D8b: `arrive_one` inside a catalog zone SHAPE (a disc, a frame): every footprint base must stand in
+/// it, on top of `zone`'s own law (the rect only bounds the search). `None` = `arrive_one`.
+#[allow(clippy::too_many_arguments)]
+pub fn arrive_one_in(
+    zone: &ArrivalZone,
+    shape: Option<&[Zone]>,
+    objectives: &[(f64, f64)],
+    occupied: &mut Vec<Occupied>,
+    enemies: &[ArrivalEnemy],
+    beacons: &[ArrivalBeacon],
+    own_ring_m: f64,
+    board: &Terrain,
+    radius: f64,
+    footprint: &[(f64, f64)],
+    base_r: f64,
+    flying: bool,
+) -> (f64, f64) {
     // The zone's own law rides INSIDE `blocked`, so it applies to both passes:
     // a beacon circle may reach out of an edge strip, and a waiver on enemy
     // DISTANCES is not a waiver on where the rule says the copy may stand.
     let blocked = |p: (f64, f64)| {
         !zone.admits(p, radius, footprint, base_r)
+            || shape.is_some_and(|z| {
+                if footprint.is_empty() {
+                    !zones_contain(z, p)
+                } else {
+                    footprint.iter().any(|o| !zones_contain(z, (p.0 + o.0, p.1 + o.1)))
+                }
+            })
             || spot_blocked(board, p, flying, radius, footprint, base_r)
     };
     for b in beacons {
