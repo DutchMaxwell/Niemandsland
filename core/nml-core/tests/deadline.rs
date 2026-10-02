@@ -2,7 +2,7 @@
 //! call. Off (0) leaves every pool pick unstamped; 10^9 µs never fires and must
 //! leave every pick byte-identical; 1 µs is spent before the first rollout, so
 //! every pool pick is the prefilter's top row, stamped with the fallback.
-use nml_core::plan::{seams_of, DeadlineTrace, Search};
+use nml_core::plan::{seams_of, Search};
 use nml_core::playout::Policy;
 use nml_core::rollout::Rollout;
 use nml_core::sim::Scratch;
@@ -42,6 +42,11 @@ fn picks_in(c: &ActCorpus, deadline_us: i64, tree: bool) -> Vec<Pick> {
     out
 }
 
+/// The pool stamp without its clock: (completed, cut, fallback).
+fn stamp(p: &Pick) -> Option<(usize, bool, Option<&'static str>)> {
+    p.deadline.as_ref().map(|d| (d.completed, d.cut, d.fallback))
+}
+
 #[test]
 fn a_deadline_that_never_fires_moves_no_pool_pick() {
     let c = corpus();
@@ -53,8 +58,8 @@ fn a_deadline_that_never_fires_moves_no_pool_pick() {
     for (i, (b, h)) in base.iter().zip(&huge).enumerate() {
         assert_eq!((&b.unit_key, &b.pool_idx, &b.rs), (&h.unit_key, &h.pool_idx, &h.rs), "act {i}");
         assert_eq!(b.expectation_after.to_bits(), h.expectation_after.to_bits(), "act {i}");
-        let stamp = DeadlineTrace { completed: b.pool_idx.len(), cut: false, fallback: None };
-        assert_eq!(h.deadline, Some(stamp), "act {i}");
+        assert_eq!(stamp(h), Some((b.pool_idx.len(), false, None)), "act {i}");
+        assert!(h.deadline.as_ref().is_some_and(|d| d.elapsed_us > 0), "act {i}: the clock ran");
     }
 }
 
@@ -64,8 +69,7 @@ fn a_one_us_deadline_answers_every_pool_pick_with_the_top_row() {
     let cut = picks(&c, 1);
     assert_eq!(cut.len(), picks(&c, 0).len());
     for (i, p) in cut.iter().enumerate() {
-        let stamp = DeadlineTrace { completed: 0, cut: true, fallback: Some("deadline_before_first_rollout") };
-        assert_eq!(p.deadline, Some(stamp), "act {i}");
+        assert_eq!(stamp(p), Some((0, true, Some("deadline_before_first_rollout"))), "act {i}");
         let top = &p.scored[0];
         assert_eq!((&p.unit_key, p.action.kind, p.best_idx, p.rs.len()), (&top.1, top.2, 0, 0), "act {i}: top row");
         assert_eq!(p.expectation_after.to_bits(), top.3.to_bits(), "act {i}");
@@ -79,7 +83,9 @@ fn the_tree_checks_before_its_first_batch_and_falls_back_to_the_top_row() {
     assert_eq!((base.len(), huge.len()), (cut.len(), cut.len()));
     assert!(base.len() >= 10, "enough answerable acts: {} picks", base.len());
     for (i, ((b, h), p)) in base.iter().zip(&huge).zip(&cut).enumerate() {
-        assert_eq!((&b.unit_key, &b.rs, &b.tree), (&h.unit_key, &h.rs, &h.tree), "act {i}: a deadline that never fires");
+        let same = |x: &Pick| (x.unit_key.clone(), x.rs.clone(), x.tree.as_ref().map(|t| (t.completed, t.root.clone())));
+        assert_eq!(same(b), same(h), "act {i}: a deadline that never fires");
+        assert!(b.tree.as_ref().is_some_and(|t| t.elapsed_us > 0), "act {i}: the clock ran from the planner call");
         let t = p.tree.as_ref().unwrap_or_else(|| panic!("act {i}: a tree pick carries its trace"));
         assert_eq!((t.completed, t.deadline_hit, t.fallback), (0, true, Some("deadline_before_first_batch")), "act {i}");
         assert_eq!((&p.unit_key, p.action.kind, p.best_idx), (&p.scored[0].1, p.scored[0].2, 0), "act {i}: top row");
