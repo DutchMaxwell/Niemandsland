@@ -222,6 +222,7 @@ var _undo_btn: Button = null
 var _redo_btn: Button = null
 var _modular_status_label: Label = null
 var _guideline_rows: VBoxContainer = null
+var _table_notice: Label = null  # one line after a table-size change cleared the map
 
 
 func _ready() -> void:
@@ -1001,6 +1002,8 @@ func _apply_snapshot(snap: Dictionary) -> void:
 		grid_rotation_degrees = snap["rotation"]
 		if rotation_slider:
 			rotation_slider.set_value_no_signal(grid_rotation_degrees)
+		if _table_notice:
+			_table_notice.visible = false
 	placed_pieces = (snap["pieces"] as Array).duplicate(true)
 	free_cells = (snap["free_cells"] as Dictionary).duplicate(true)
 	free_walls = (snap["free_walls"] as Array).duplicate(true)
@@ -1326,12 +1329,16 @@ func _on_load_file_selected(path: String) -> void:
 func set_table_size(size_feet: Vector2) -> void:
 	# Check if table size actually changed
 	var size_changed = table_size_feet != size_feet
+	var old_size := table_size_feet
 
 	table_size_feet = size_feet
 
 	# CRITICAL: If table size changed and we have terrain/objective data, clear it
 	# Grid cell coordinates are ABSOLUTE and become invalid when grid dimensions change
 	if size_changed:
+		var had_map := not (placed_pieces.is_empty() and free_cells.is_empty() and free_walls.is_empty() and mission_objectives.is_empty())
+		if had_map:
+			_remember_map_before_table_change(old_size)
 		if not placed_pieces.is_empty() or not free_cells.is_empty() or not free_walls.is_empty():
 			push_warning("Table size changed - clearing terrain data (grid coordinates are now invalid)")
 			placed_pieces.clear()
@@ -1349,6 +1356,37 @@ func set_table_size(size_feet: Vector2) -> void:
 	_update_stats()
 	# NOTE: Don't emit layout_updated here - it may be called during initialization
 	# before terrain_overlay exists. Updates are sent when user closes editor.
+
+
+## The map a table-size change is about to wipe becomes one undo step (with its table size, restored by the
+## "table" key of _apply_snapshot), and a one-line notice says what was cleared.
+func _remember_map_before_table_change(old_size: Vector2) -> void:
+	var replaced := _snapshot()
+	replaced["table"] = old_size
+	replaced["rotation"] = grid_rotation_degrees
+	_undo_stack.append(replaced)
+	if _undo_stack.size() > UNDO_LIMIT:
+		_undo_stack.pop_front()
+	_redo_stack.clear()
+	_update_undo_redo_buttons()
+	var pieces := placed_pieces.size()
+	var objs := mission_objectives.size()
+	_show_table_notice("Table size changed - cleared %d piece%s, %d objective%s. Ctrl+Z brings the map back." % [
+		pieces, "" if pieces == 1 else "s", objs, "" if objs == 1 else "s"])
+
+
+func _show_table_notice(text: String) -> void:
+	if _modular_terrain_panel == null:
+		return
+	if _table_notice == null:
+		_table_notice = HouseStyle.label("", HouseStyle.SMALL)
+		_table_notice.name = "TableSizeNotice"
+		_table_notice.autowrap_mode = TextServer.AUTOWRAP_WORD
+		_table_notice.add_theme_color_override("font_color", HouseStyle.WARN)
+		_modular_terrain_panel.add_child(_table_notice)
+		_modular_terrain_panel.move_child(_table_notice, 0)
+	_table_notice.text = text
+	_table_notice.visible = true
 
 
 func _calculate_grid_dimensions() -> Vector2i:
