@@ -1,6 +1,8 @@
 """lab2_validate: one fixture per row problem the prereg's section 6 names (missing row, duplicate/conflicting row,
 wrong seat/net/hash/epoch, illegal action, unsupported path), plus the pilot's row checks (unknown row, tree stamp
-iff tree arm, non-finite timing, dirty build). Every problem fails validation and withholds every PASS flag."""
+iff tree arm, non-finite timing, dirty build). Every problem fails validation and withholds every PASS flag. The
+scorer item the driver tests do not cover end to end: four correlated games, grouped by the real `board_scores`,
+are ONE cluster (identical arms and a known winner: lab2_tree_probe_test.py)."""
 import importlib.util
 import math
 import os
@@ -17,7 +19,7 @@ def _load(name):
     return mod
 
 
-val = _load("lab2_validate")
+val, lab = _load("lab2_validate"), _load("lab2_tree_probe")
 SHA = {"prereg_sha256": "p" * 64, "model_sha256": "m" * 64, "wheel_sha256": "w" * 64, "rules_epoch": 68}
 HEADERS = {"I": {"1": "i", "2": "i"}, "L": {"1": "l", "2": "i"}}
 
@@ -85,3 +87,15 @@ def test_an_injected_failure_report_fails_validation_instead_of_scoring(reason):
     ok, probs = val.validate(rows, manifest)
     assert not ok and {"row_id": "b1_L", "problem": "invalid", "detail": reason} in probs
 
+
+def test_one_board_with_four_correlated_games_is_one_cluster():
+    """L wins all four games of board b1 and loses all four of b2. Clustered by board, the B_LI interval spans both
+    boards; four games read as four independent blocks would shrink it — the RED this fixture exists to catch."""
+    done = [({"cell": "c1", "block": b, "arm": a}, y) for b, y in (("b1", 1.0), ("b2", 0.0)) for a in "LC" for _ in "1234"]
+    boards = lab.board_scores(done)
+    assert sorted(boards["c1"]) == ["b1", "b2"]
+    ci = lab.bootstrap_intervals(boards, resamples=2000, k=1)["B_LI"]
+    assert (ci["lo"], ci["hi"]) == (-50.0, 50.0)
+    games = {"c1": {i: {"B_LI": y - 0.5} for i, (row, y) in enumerate(done) if row["arm"] == "L"}}
+    naive = lab.bootstrap_intervals(games, resamples=2000, k=1)["B_LI"]
+    assert naive["hi"] - naive["lo"] < 100.0, "games-as-blocks gives the same interval: the fixture is blind"
