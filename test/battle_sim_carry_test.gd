@@ -106,3 +106,50 @@ func test_drop_carried_moves_the_marker_and_clears_the_flag() -> void:
 	assert_vector(objectives[0]["pos"]).is_equal_approx(
 		Vector3(9.0 * IN2M, 0, 0), Vector3(0.001, 0.001, 0.001))
 	assert_str(String(markers[1]["carried_by"])).is_equal("Other")
+
+
+## D9 (R11a): escort/extract verdicts — escort = the defender wins within 6" of
+## the edge opposite the deploy edge, extract = the attacker wins within 6" of
+## ANY edge; a carried marker is measured at the carrier's base edge. Twins of
+## mission.rs escort_winner / extract_winner (same inches, same verdicts).
+func _role_state(att: int, x_in: float, z_in: float) -> Dictionary:
+	var u := _unit(2, [Vector3(100.0, 0, 100.0)], "Far")
+	var state := _state([u], [Vector3(x_in * IN2M, 0, z_in * IN2M)], [0])
+	state["attacker"] = att
+	state["markers_meta"] = [{"carry": false, "carried_by": ""}]
+	return state
+
+
+func test_escort_winner_pins() -> void:
+	assert_str(BattleSim.escort_winner(_role_state(1, 0.0, -18.0), 1, 48.0)).is_equal("p2")
+	assert_str(BattleSim.escort_winner(_role_state(2, 0.0, -18.0), 1, 48.0)).is_equal("p1")
+	assert_str(BattleSim.escort_winner(_role_state(1, 0.0, -17.0), 1, 48.0)).is_equal("p1")
+	assert_str(BattleSim.escort_winner(_role_state(1, 0.0, 22.0), 1, 48.0)).is_equal("p1")
+
+
+func test_escort_carried_marker_uses_the_carrier_base_edge() -> void:
+	var carrier := _unit(1, [Vector3(0, 0, -17.5 * IN2M)], "Carrier")
+	var state := _state([carrier], [Vector3.ZERO], [0])
+	state["attacker"] = 1
+	state["units"]["Carrier"]["radii"] = [1.0 * IN2M]
+	state["markers_meta"] = [{"carry": true, "carried_by": "Carrier"}]
+	assert_str(BattleSim.escort_winner(state, 1, 48.0)).is_equal("p2")
+	state["units"]["Carrier"]["positions"] = [Vector3(0, 0, -16.5 * IN2M)]
+	assert_str(BattleSim.escort_winner(state, 1, 48.0)).is_equal("p1")
+	state["attacker"] = 0
+	assert_str(BattleSim.escort_winner(state, 1, 48.0)).is_equal("draw")
+
+
+func test_extract_winner_pins() -> void:
+	assert_str(BattleSim.extract_winner(_role_state(1, 30.0, 0.0), 72.0, 48.0)).is_equal("p1")
+	assert_str(BattleSim.extract_winner(_role_state(2, 0.0, 18.0), 72.0, 48.0)).is_equal("p2")
+	assert_str(BattleSim.extract_winner(_role_state(1, 29.0, 0.0), 72.0, 48.0)).is_equal("p2")
+	assert_str(BattleSim.extract_winner(_role_state(1, -30.0, -17.0), 72.0, 48.0)).is_equal("p1")
+
+
+func test_role_winner_reads_the_scoring_id_and_skips_destroyed() -> void:
+	var state := _role_state(1, 35.0, 0.0)
+	assert_str(BattleSim.role_winner("extract", state, 0, 72.0, 48.0)).is_equal("p1")
+	state["markers_meta"][0]["destroyed"] = true
+	assert_str(BattleSim.role_winner("extract", state, 0, 72.0, 48.0)).is_equal("p2")
+	assert_str(BattleSim.role_winner("end", state, 1, 72.0, 48.0)).is_equal("")

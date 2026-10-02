@@ -18,7 +18,7 @@ use serde_json::Value;
 
 use crate::score::{can_hold_marker, control_gap_in};
 use crate::state::{Marker, State};
-use crate::{CONTROL_EPS, OBJECTIVE_CONTROL_IN};
+use crate::{CONTROL_EPS, IN2M, OBJECTIVE_CONTROL_IN};
 
 /// GDScript `int(Variant)` for the two places a recorded number reaches this
 /// file: a JSON integer, or a float that `int()` truncates toward zero.
@@ -340,4 +340,61 @@ pub fn mission_winner(
         return if alive1 > alive2 { "p1" } else { "p2" };
     }
     "draw"
+}
+
+/// R11a: a marker's horizontal point in inches — a CARRIED marker sits at its
+/// carrier's first model, less that model's base radius (the carrier's nearest
+/// base edge, the same measure as `control_gap_in`); a free one at its spot.
+fn marker_point_in(state: &State, i: usize) -> Option<([f64; 2], f64)> {
+    let mk = state.markers_meta.get(i)?;
+    if mk.destroyed {
+        return None;
+    }
+    if mk.carry && mk.carried_by >= 0 {
+        let k = mk.carried_by as usize;
+        let p = *state.positions.get(k)?.first()?;
+        let r = state.radii.get(k).and_then(|rs| rs.first()).copied().unwrap_or(0.0);
+        return Some(([p[0] / IN2M, p[2] / IN2M], r / IN2M));
+    }
+    let p = state.objectives.get(i)?.pos;
+    Some(([p[0] / IN2M, p[2] / IN2M], 0.0))
+}
+
+/// Attack & Defend VIP verdict: a marker within 6" of the edge OPPOSITE the
+/// one the defender deployed on (`deploy_edge` = the z sign of that edge,
+/// +1/-1) means the defender wins, otherwise the attacker. No roles = draw.
+pub fn escort_winner(state: &State, deploy_edge: i64, table_d_in: f64) -> &'static str {
+    let att = state.attacker;
+    if (att != 1 && att != 2) || deploy_edge == 0 {
+        return "draw";
+    }
+    let target = -(deploy_edge.signum() as f64);
+    let home = (0..state.markers_meta.len()).filter_map(|i| marker_point_in(state, i)).any(
+        |(p, r)| table_d_in / 2.0 - target * p[1] - r <= 6.0 + CONTROL_EPS,
+    );
+    if home { if att == 1 { "p2" } else { "p1" } } else if att == 1 { "p1" } else { "p2" }
+}
+
+/// Smash & Grab / Rescue verdict: a marker within 6" of ANY table edge means
+/// the attacker wins, otherwise the defender. No roles = draw.
+pub fn extract_winner(state: &State, table_w_in: f64, table_d_in: f64) -> &'static str {
+    let att = state.attacker;
+    if att != 1 && att != 2 {
+        return "draw";
+    }
+    let out = (0..state.markers_meta.len()).filter_map(|i| marker_point_in(state, i)).any(|(p, r)| {
+        let gap = (table_w_in / 2.0 - p[0].abs()).min(table_d_in / 2.0 - p[1].abs()) - r;
+        gap <= 6.0 + CONTROL_EPS
+    });
+    if out == (att == 1) { "p1" } else { "p2" }
+}
+
+/// The `escort` / `extract` scoring ids of `BattleSim.mission_winner`; `None`
+/// for every other id, which keeps its own referee.
+pub fn role_winner(scoring: &str, state: &State, deploy_edge: i64, table_w_in: f64, table_d_in: f64) -> Option<&'static str> {
+    match scoring {
+        "escort" => Some(escort_winner(state, deploy_edge, table_d_in)),
+        "extract" => Some(extract_winner(state, table_w_in, table_d_in)),
+        _ => None,
+    }
 }
