@@ -285,6 +285,9 @@ pub struct TreeCfg<'a> {
     /// The wall-clock SAFETY fallback in ms (0 = off), checked between
     /// expansion batches; the budget stays the leaf count.
     pub wall_ms: u64,
+    /// The `deadline_us` instant (None = off), checked before EVERY batch,
+    /// the first included.
+    pub deadline: Option<std::time::Instant>,
     /// The widening rate: 0.0 opens every child of a node before the search
     /// descends; > 0 keeps at most ceil(max(n, 1) ^ widen) of an n-visit
     /// node's children open.
@@ -298,13 +301,15 @@ pub struct TreeCfg<'a> {
     pub w: f64,
 }
 
-/// Leaf evaluations completed, the wall-clock stamp, and every opened root
-/// child as (build idx, visits, mean).
+/// Leaf evaluations completed, the wall-clock stamp, every opened root
+/// child as (build idx, visits, mean), and the deadline fallback that
+/// answered when no batch completed (`None` = the search picked).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TreeTrace {
     pub completed: usize,
     pub deadline_hit: bool,
     pub root: Vec<(usize, u32, f64)>,
+    pub fallback: Option<&'static str>,
 }
 
 /// A child's mean over its sample nodes (equally likely chance outcomes)
@@ -353,6 +358,10 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
     };
     let (start, mut completed, mut deadline_hit) = (std::time::Instant::now(), 0, false);
     while completed < cfg.budget {
+        if cfg.deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+            deadline_hit = true;
+            break;
+        }
         // The wall is a SAFETY fallback between batches, never the budget:
         // the first batch always completes, so there is a pick to stamp.
         if cfg.wall_ms > 0 && completed > 0 && start.elapsed().as_millis() >= u128::from(cfg.wall_ms) {
@@ -413,5 +422,5 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             best = (i, mean);
         }
     }
-    Ok((best.0, TreeTrace { completed, deadline_hit, root: trace }))
+    Ok((best.0, TreeTrace { completed, deadline_hit, root: trace, fallback: None }))
 }

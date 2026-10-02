@@ -6,7 +6,7 @@ use nml_core::plan::{seams_of, DeadlineTrace, Search};
 use nml_core::playout::Policy;
 use nml_core::rollout::Rollout;
 use nml_core::sim::Scratch;
-use nml_core::{act_statics, load_acts, ActCorpus, Pick};
+use nml_core::{act_statics, load_acts, ActCorpus, Pick, SearchMode};
 
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_wide_25.jsonl");
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -19,10 +19,18 @@ fn corpus() -> ActCorpus {
 }
 
 fn picks(c: &ActCorpus, deadline_us: i64) -> Vec<Pick> {
+    picks_in(c, deadline_us, false)
+}
+
+/// `tree`: the same acts under `search_mode: tree` with a 32-leaf budget.
+fn picks_in(c: &ActCorpus, deadline_us: i64, tree: bool) -> Vec<Pick> {
     let per_act = act_statics(c, REPO);
     let seams = seams_of(&c.knobs);
     let mut knobs = c.knobs;
     knobs.deadline_us = deadline_us;
+    if tree {
+        (knobs.search_mode, knobs.tree_budget) = (SearchMode::Tree, 32);
+    }
     let mut sc = Scratch::default();
     let mut out = Vec::new();
     for (ai, act) in c.acts.iter().enumerate() {
@@ -61,5 +69,19 @@ fn a_one_us_deadline_answers_every_pool_pick_with_the_top_row() {
         let top = &p.scored[0];
         assert_eq!((&p.unit_key, p.action.kind, p.best_idx, p.rs.len()), (&top.1, top.2, 0, 0), "act {i}: top row");
         assert_eq!(p.expectation_after.to_bits(), top.3.to_bits(), "act {i}");
+    }
+}
+
+#[test]
+fn the_tree_checks_before_its_first_batch_and_falls_back_to_the_top_row() {
+    let c = corpus();
+    let (base, huge, cut) = (picks_in(&c, 0, true), picks_in(&c, 1_000_000_000, true), picks_in(&c, 1, true));
+    assert_eq!((base.len(), huge.len()), (cut.len(), cut.len()));
+    assert!(base.len() >= 10, "enough answerable acts: {} picks", base.len());
+    for (i, ((b, h), p)) in base.iter().zip(&huge).zip(&cut).enumerate() {
+        assert_eq!((&b.unit_key, &b.rs, &b.tree), (&h.unit_key, &h.rs, &h.tree), "act {i}: a deadline that never fires");
+        let t = p.tree.as_ref().unwrap_or_else(|| panic!("act {i}: a tree pick carries its trace"));
+        assert_eq!((t.completed, t.deadline_hit, t.fallback), (0, true, Some("deadline_before_first_batch")), "act {i}");
+        assert_eq!((&p.unit_key, p.action.kind, p.best_idx), (&p.scored[0].1, p.scored[0].2, 0), "act {i}: top row");
     }
 }
