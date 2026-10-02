@@ -141,11 +141,14 @@ pub fn referee(state: &State, player: i64) -> f64 {
 /// One uniform-random playout from `state` (`mover` to act) to the game end,
 /// priced by the referee for `player`: every activation draws one of the
 /// mover's flat `menu` rows uniformly off `rng` (never the greedy tail) and
-/// resolves it with the EV transition. Also returns the most activations any
+/// resolves it with the EV transition — or, with `tray_base`, through the TRUE
+/// tray path off `Rng(tray_base)` / `Tray(tray_base + TRAY_OFFSET)`, an
+/// unported branch declining by name. Also returns the most activations any
 /// one round took; past the arbitration tail's backstop (`units * 2 + 4`,
 /// arbitration.rs `playout_round_tail`) the state is priced as it stands.
 pub fn playout(roll: &Rollout, state: &State, mover: i64, player: i64, rng: &mut GodotRng,
-               sc: &mut Scratch) -> Result<(f64, usize), Unsupported> {
+               tray_base: Option<i64>, sc: &mut Scratch) -> Result<(f64, usize), Unsupported> {
+    let mut dice = tray_base.map(|b| (GodotRng::new(b), Tray::seeded(b.wrapping_add(TRAY_OFFSET))));
     let (mut cur, mut turn) = (state.clone(), mover);
     let (cap, mut round, mut steps, mut most) = (state.units() * 2 + 4, state.round, 0usize, 0usize);
     while let Step::Mover(t) = advance(roll, &mut cur, turn, None) {
@@ -159,7 +162,17 @@ pub fn playout(roll: &Rollout, state: &State, mover: i64, player: i64, rng: &mut
         }
         let rows = menu(roll, &cur, t, sc);
         let a = &rows[rng.randi_range(0, rows.len() as i64 - 1) as usize];
-        cur = roll.policy.resolve(&cur, a)?;
+        cur = match dice.as_mut() {
+            None => roll.policy.resolve(&cur, a)?,
+            Some((r, t)) => {
+                let p = &roll.policy;
+                let (next, shot) = resolve_stochastic_tray_on_board(p.statics, &cur, &a.action(), p.terrain, p.seams, r, t)?;
+                if let Some(&what) = shot.unported.first() {
+                    return Err(Unsupported::TreeUnported(what));
+                }
+                next
+            }
+        };
         roll.coordinate_hand_off(&mut cur, a, player, sc)?;
         turn = other_player(&cur, t);
     }
@@ -170,16 +183,18 @@ pub fn playout(roll: &Rollout, state: &State, mover: i64, player: i64, rng: &mut
 /// the referee's in both modes. Otherwise `Blend` is the one-ply's own leaf,
 /// `blend_score_leaf` over this one state (`vals`: its hook value from the
 /// caller's one batch per expansion, empty = the hand leaf untouched), and
-/// `Terminal` is one uniform playout to the end.
+/// `Terminal` is one uniform playout to the end (through the tray from
+/// `tray_base`, the node's own stream base, under `TreeDice::Tray`).
 #[allow(clippy::too_many_arguments)]
 pub fn leaf_value(roll: &Rollout, node: &Node, mode: TreeLeaf, player: i64, opener_seat: bool,
-                  vals: &[f64], w: f64, rng: &mut GodotRng, sc: &mut Scratch) -> Result<f64, Unsupported> {
+                  vals: &[f64], w: f64, rng: &mut GodotRng, tray_base: Option<i64>, sc: &mut Scratch)
+                  -> Result<f64, Unsupported> {
     if let Some(v) = node.terminal {
         return Ok(v);
     }
     match mode {
         TreeLeaf::Blend => Ok(roll.blend_score_leaf(std::slice::from_ref(&node.state), player, opener_seat, vals, w)),
-        TreeLeaf::Terminal => Ok(playout(roll, &node.state, node.mover, player, rng, sc)?.0),
+        TreeLeaf::Terminal => Ok(playout(roll, &node.state, node.mover, player, rng, tray_base, sc)?.0),
     }
 }
 
@@ -344,6 +359,11 @@ pub fn select(node: &Node, player: i64) -> usize {
     best.0
 }
 
+/// The stream base of a node's sample node `slot` (= child * samples + sample).
+fn child_base(base: Option<i64>, slot: usize) -> Option<i64> {
+    base.map(|b| b.wrapping_mul(1_000_003).wrapping_add((slot + 1) as i64))
+}
+
 /// The tree search from `root` (its children set, e.g. by `root_children`).
 /// Each iteration selects by UCT from the root down to a node with unopened
 /// children or a game end (sample nodes least-visited first), opens up to
@@ -353,8 +373,9 @@ pub fn select(node: &Node, player: i64) -> usize {
 /// last batch may overshoot by fewer than `samples`. Every child of a node
 /// is opened before the search descends below it, unless `widen` caps the
 /// open children (progressive widening). Streams: the root's base is `sig`, a sample node's base
-/// derives from its parent's and its (child, sample) index. The Terminal
-/// playouts resolve with EV in both dice modes. The pick is the opened root
+/// derives from its parent's and its (child, sample) index (`child_base`). The
+/// Terminal playouts resolve with EV under `Ev` and through the tray off the
+/// leaf node's own stream base under `Tray`. The pick is the opened root
 /// child with the highest mean, the first in order on ties.
 pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, sc: &mut Scratch)
            -> Result<(usize, TreeTrace), Unsupported> {
@@ -381,7 +402,7 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
         while node.terminal.is_none() && !node.children.is_empty() && node.next_child >= node.children.len().min(cap(node)) {
             let c = select(node, cfg.player);
             let s = (0..node.children[c].nodes.len()).min_by_key(|&s| node.children[c].nodes[s].n).unwrap_or(0);
-            base = base.map(|b| b.wrapping_mul(1_000_003).wrapping_add((c * per_child + s + 1) as i64));
+            base = child_base(base, c * per_child + s);
             path.push((c, s));
             node = &mut node.children[c].nodes[s];
         }
@@ -404,9 +425,10 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             }
             let mut j = 0;
             for c in from..node.next_child {
-                for x in node.children[c].nodes.iter_mut() {
+                for (s, x) in node.children[c].nodes.iter_mut().enumerate() {
                     let own = if hv.is_empty() || x.terminal.is_some() { &[][..] } else { j += 1; &hv[j - 1..j] };
-                    let v = leaf_value(roll, x, cfg.leaf, cfg.player, cfg.opener_seat, own, cfg.w, rng, sc)?;
+                    let tb = if cfg.dice == TreeDice::Tray { child_base(base, c * per_child + s) } else { None };
+                    let v = leaf_value(roll, x, cfg.leaf, cfg.player, cfg.opener_seat, own, cfg.w, rng, tb, sc)?;
                     (x.n, x.w) = (1, v);
                     vals.push(v);
                     if x.terminal.is_some() { terminal += 1 } else { frontier += 1 }
