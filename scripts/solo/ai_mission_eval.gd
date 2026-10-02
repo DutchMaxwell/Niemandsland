@@ -452,6 +452,12 @@ static func _score_hand(state: Dictionary, player: int, incoming: Dictionary = {
 		# (the four-draw probe). Weighting defence at 0.8 makes breaking the
 		# stalemate worth something while a lost home marker still hurts.
 		return clampf(0.5 + 0.5 * (att - DESTROY_DEFENCE_WEIGHT * deff), 0.0, 1.0)
+	var role := _role_term(state, player)
+	if role >= 0.0:
+		var control := 0.0
+		for i in range(objectives.size()):
+			control += _objective_p_roles(state, objectives[i] as Dictionary, player, incoming, i)
+		return ROLE_TERM_WEIGHT * role + (1.0 - ROLE_TERM_WEIGHT) * control / objectives.size()
 	var total := 0.0
 	for i in range(objectives.size()):
 		total += _objective_p(state, objectives[i] as Dictionary, player, incoming, i)
@@ -459,6 +465,104 @@ static func _score_hand(state: Dictionary, player: int, incoming: Dictionary = {
 
 
 const DESTROY_DEFENCE_WEIGHT := 0.8
+## D13 (core twin: score.rs role_term / objective_p_roles): the default 6x4 ft table the role terms
+## measure on, the share of the score the role term carries, the rest being the reserve-aware control mean.
+const ROLE_TABLE_W_IN := 72.0
+const ROLE_TABLE_D_IN := 48.0
+const ROLE_TERM_WEIGHT := 0.5
+## D12c-2 (core twin: score.rs TRAP_COST): what stepping on an unknown marker may cost the attacker,
+## in value units, spread over the n hidden markers (each is the trap with probability 1/n).
+const TRAP_COST := 0.1
+
+
+## D13: a unit still in reserve projects strength x DISCOUNT x rounds_left / rounds_total of future
+## presence at every marker (it arrives next round and holds from then on).
+static func _reserve_presence(state: Dictionary, su: Dictionary) -> float:
+	if not bool(su.get("dormant", false)):
+		return 0.0
+	var strength := 0.0
+	for w in su.get("dormant_wounds", []):
+		strength += float(w)
+	var rounds_total := int(state["rounds_total"])
+	var left := maxi(rounds_total - int(state["round"]), 0)
+	return strength * DISCOUNT * float(left) / float(maxi(rounds_total, 1))
+
+
+static func _objective_p_roles(state: Dictionary, obj: Dictionary, player: int,
+		incoming: Dictionary, obj_index: int) -> float:
+	var markers: Array = state.get("markers_meta", [])
+	if obj_index < markers.size() and bool((markers[obj_index] as Dictionary).get("carry", false)) \
+			and not String((markers[obj_index] as Dictionary).get("carried_by", "")).is_empty():
+		return _objective_p(state, obj, player, incoming, obj_index)
+	var mine := 0.0
+	var theirs := 0.0
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		var presence := _presence(state, su, obj["pos"] as Vector3,
+			float(incoming.get(str(key), 0.0))) + _reserve_presence(state, su)
+		if int(su["player"]) == player:
+			mine += presence
+		else:
+			theirs += presence
+	if mine + theirs <= 0.0:
+		var owner := int(obj.get("owner", 0))
+		return 0.5 if owner == 0 else (1.0 if owner == player else 0.0)
+	return mine / (mine + theirs)
+
+
+## D13: the role term. escort = the DEFENDER's value 1 - dist(marker, target edge) / depth (the target
+## edge is opposite deploy_edge), the attacker's the mirror; extract = the ATTACKER's value
+## 1 - dist(relic, nearest edge) / half depth (the relic = the secret:"relic" marker, else every live
+## marker; the best one counts), the defender's the mirror. Carried markers are measured at the
+## carrier's base edge (R11a). Returns -1.0 when the state is not a role mission.
+static func _role_term(state: Dictionary, player: int) -> float:
+	var att := int(state.get("attacker", 0))
+	var scoring := str(state.get("scoring", ""))
+	if (att != 1 and att != 2) or (scoring != "escort" and scoring != "extract"):
+		return -1.0
+	var markers: Array = state.get("markers_meta", [])
+	var live: Array = []
+	for i in range(markers.size()):
+		var pt := BattleSim.marker_point_in(state, i)
+		if not pt.is_empty():
+			live.append({"pt": pt, "relic": str((markers[i] as Dictionary).get("secret", "")) == "relic",
+				"hidden": bool((markers[i] as Dictionary).get("secret_hidden", false))})
+	var attacker_side := player == att
+	if scoring == "escort":
+		var edge := 0
+		for mk in markers:
+			if bool((mk as Dictionary).get("mobile", false)):
+				edge = int((mk as Dictionary).get("deploy_edge", 0))
+				break
+		if edge == 0:
+			return 0.5
+		var target := -float(signi(edge))
+		var defender_value := 0.0
+		for e in live:
+			var pt: Array = e["pt"]
+			defender_value = maxf(defender_value, clampf(
+				1.0 - (ROLE_TABLE_D_IN / 2.0 - target * float(pt[1]) - float(pt[2])) / ROLE_TABLE_D_IN, 0.0, 1.0))
+		return 1.0 - defender_value if attacker_side else defender_value
+	var any_relic := false
+	for e in live:
+		any_relic = any_relic or bool(e["relic"])
+	var attacker_value := 0.0
+	# R9a fog: while no relic is known the attacker's hidden markers are each the relic with probability
+	# 1/n (the MEAN value) and the trap with probability 1/n (TRAP_COST / n).
+	var hidden_sum := 0.0
+	var hidden_n := 0
+	for e in live:
+		var pt: Array = e["pt"]
+		var gap := minf(ROLE_TABLE_W_IN / 2.0 - absf(float(pt[0])), ROLE_TABLE_D_IN / 2.0 - absf(float(pt[1]))) - float(pt[2])
+		var value := clampf(1.0 - gap / (ROLE_TABLE_D_IN / 2.0), 0.0, 1.0)
+		if bool(e["hidden"]):
+			hidden_sum += value
+			hidden_n += 1
+		if not (any_relic and not bool(e["relic"])):
+			attacker_value = maxf(attacker_value, value)
+	if attacker_side and not any_relic and hidden_n > 0:
+		attacker_value = clampf(hidden_sum / float(hidden_n) - TRAP_COST / float(hidden_n), 0.0, 1.0)
+	return attacker_value if attacker_side else 1.0 - attacker_value
 
 
 static func _is_destroy_mission(state: Dictionary) -> bool:
