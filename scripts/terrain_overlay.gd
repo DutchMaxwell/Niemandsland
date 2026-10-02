@@ -72,7 +72,8 @@ enum OverlayMode {
 enum DeploymentType {
 	NONE = 0,
 	FRONT_LINE = 1,   # 12" from long edges (OPR free rules)
-	CUSTOM = 2        # User-defined polygon zones
+	CUSTOM = 2,       # User-defined polygon zones
+	STYLE = 3         # A DeploymentCatalog style (polygons + discs), see set_style_zones
 }
 
 # Terrain colors (matching map_layout.gd)
@@ -283,6 +284,7 @@ const RUBBLE_TEXTURE_TILE_M := 0.085
 
 var overlay_meshes: Array[MeshInstance3D] = []
 var deployment_zone_meshes: Array[MeshInstance3D] = []
+var _style_zones: Dictionary = {}   # the catalog style drawn while DeploymentType.STYLE is current
 var table_size_feet := Vector2(6, 4)
 var current_deployment_type := DeploymentType.NONE
 var deployment_zones_visible := false
@@ -657,6 +659,26 @@ func _update_deployment_zones() -> void:
 			_create_front_line_zones(table_width_m, table_depth_m)
 		DeploymentType.CUSTOM:
 			_create_custom_polygon_zones()
+		DeploymentType.STYLE:
+			_create_style_zones()
+
+
+## D4a: draw a catalog style's zones (polygons, discs as 48-gons, bands as four polygons).
+func set_style_zones(style: Dictionary) -> void:
+	_style_zones = style
+	set_deployment_zones(DeploymentType.STYLE)
+
+
+func _create_style_zones() -> void:
+	for player in [1, 2]:
+		for poly in DeploymentCatalog.zone_polygons(_style_zones, player):
+			var verts: Array[Vector3] = []
+			for p2 in poly:
+				verts.append(Vector3(p2.x * INCHES_TO_METERS, 0.0, p2.y * INCHES_TO_METERS))
+			var mesh := _create_polygon_zone_mesh(verts, _zone_color("player%d" % player))
+			add_child(mesh)
+			deployment_zone_meshes.append(mesh)
+			mesh.visible = deployment_zones_visible
 
 
 ## Create Front-line deployment zones (12" from long table edges)
