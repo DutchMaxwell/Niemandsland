@@ -1930,6 +1930,17 @@ def _round_end(core, state, owners: list[int], led: dict[str, Any], round_no: in
     return state, owners
 
 
+def _write_ledger(plain: dict[str, Any], led: dict[str, Any]) -> None:
+    """`led` into a planner state the way battle_sim.gd:1862-1870 writes the LIVE
+    ledger into every capture (NML-1010 W2); a duel (no VP, no markers) gets nothing."""
+    if led["scoring"] == "round_vp":
+        plain["vp"] = [int(led["vp"][0]), int(led["vp"][1])]
+        plain["vp_flavour"], plain["vp_memo"] = led["vp_flavour"], dict(led["vp_memo"])
+    if led["markers_meta"]:
+        plain["markers_meta"] = [dict(m) for m in led["markers_meta"]]
+        plain["destroy_seq"] = [int(led["destroy_seq"][0])]
+
+
 def _verdict(core, owners: list[int], led: dict[str, Any]) -> str:
     """`_write_result` :700-706: Face-Off is END-scored (the end bonus, then MARKERS
     decide); every other mission asks `BattleSim.mission_winner`'s own referee."""
@@ -2151,8 +2162,12 @@ def play_game(
     leaf_value_fn: dict[int, Any] | None = None,
     leaf_value_w: float = 0.0,
     mission: str = "duel",
+    live_ledger: bool = False,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
+
+    `live_ledger=True` writes the live mission ledger into the planner state before
+    every round, as the table does (`_write_ledger`); False keeps today's VP 0:0 state.
 
     `cand_logits_fn` / `policy_mode` are the R4 seam (NML-1164,
     DESIGN_policy_player §6): `{side: fn(state, menu, side) -> list[float] |
@@ -2910,6 +2925,8 @@ def play_game(
         _round_start(plain, round_no, profiles, magic)
         if arrivals is not None:
             _arrive_reserves(plain, arrivals, board, objectives, opener, round_no)
+        if live_ledger:
+            _write_ledger(plain, led)
         state = core.state_of(plain)
         state, opener = _play_round(
             core, state, opener, rng, log, round_no,
@@ -2963,6 +2980,9 @@ def play_game(
             "charge_gate": charge_gate,
             # Stamped only away from "duel" (the `deployment`/`ambush` idiom).
             **({"mission": mission} if mission != "duel" else {}),
+            # Stamped only where the write fired: a duel has no ledger to write.
+            **({"live_ledger": True}
+               if live_ledger and (eff_scoring == "round_vp" or markers_meta) else {}),
             # NML-1157: stamped only when ON, the way `deployment` is — a
             # default game writes the identical object it wrote before the knob
             # existed, so no Godot parity gate sees a new key.
