@@ -187,8 +187,9 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## on the Regeneration fold).
 ## Wave 3 batch B moves this stamp to 65 with EPOCH_65_MELEE_TRUTH, batch C to 66 with
 ## EPOCH_66_DISTANCE_TRUTH, batch D to 67 with EPOCH_67_MARKERS_BURSTS (D42/W3-4/D19/D20),
-## batch E to 68 with EPOCH_68_MODIFIER_SUM (D21 modifier arithmetic).
-static var rules_epoch: int = 68
+## batch E to 68 with EPOCH_68_MODIFIER_SUM (D21 modifier arithmetic), B8 to 69 with
+## EPOCH_69_HERO_FOLD (the trainer's arena hero fold; this table's capture already matched it).
+static var rules_epoch: int = 69
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
