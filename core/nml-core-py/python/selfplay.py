@@ -257,6 +257,21 @@ def _role_gates(mission_def: dict[str, Any], attacker: int) -> dict[str, Any]:
     return {str(s): gates.get("attacker" if s == attacker else "defender") for s in (1, 2)}
 
 
+def _phase_args(mission_def: dict[str, Any], attacker: int, repo_root: str | Path) -> list[dict[str, Any]]:
+    """D7b: the mission's `deploy_phases` (`[[role, share, style_id], ..]`) as `nml_core.deploy_phased`
+    phase dicts: the role picks the side (0 = slot 1), the style the zone rect + shape. [] = none."""
+    raw = mission_def.get("deploy_phases") or []
+    if not attacker or not raw:
+        return []
+    styles = json.loads((Path(repo_root) / "assets" / "solo" / "deployments.json").read_text(encoding="utf-8"))["styles"]
+    out = []
+    for role, share, style_id in raw:
+        rect, zl = _style_zone_args(styles[style_id], "1")
+        out.append({"side": (attacker - 1) if role == "attacker" else (2 - attacker),
+                    "share": share, "zone": rect, "zones": zl})
+    return out
+
+
 def resolve_zone_style(mission_def: dict[str, Any], repo_root: str | Path) -> dict[str, Any] | None:
     """The mission's deployment style from `assets/solo/deployments.json`, or None for `front_line`
     (the arena's own rects — byte-identical to every mission before wave D)."""
@@ -308,6 +323,7 @@ def _deploy_arena(
     rules_epoch: int = nml_core.CURRENT_RULES_EPOCH,
     zone_style: dict[str, Any] | None = None,
     gates: dict[str, Any] | None = None,
+    phases: list[dict[str, Any]] | None = None,
 ) -> tuple[list[list[list[float]]], list[list[list[float]]], set[str], list[list[Any]]]:
     """The table's pre-game through the step-7 binding: `deploy_side` per side
     with the per-side stream `seed + slot` (arena_match.gd:486-488 — the game
@@ -341,7 +357,15 @@ def _deploy_arena(
         hero_fold.update(fold)
     objs2 = [[o[0], o[2]] for o in objectives]
     sequence: list[list[Any]] = []
-    if interleave:
+    if phases:  # D7b: the catalog's phases replace the alternation (phase-major sequence)
+        out = nml_core.deploy_phased(
+            roster["1"], roster["2"], zones["1"], zones["2"], phases, objs2, board,
+            seed + 1, seed + 2, opener, rules_epoch=int(rules_epoch),
+            gates1=(gates or {}).get("1"), gates2=(gates or {}).get("2"),
+        )
+        placed_by = {"1": out["side1"], "2": out["side2"]}
+        sequence = [list(e) for e in out["sequence"]]
+    elif interleave:
         # The record's epoch reaches the placement gates (`EPOCH_16_FREE_PLACEMENT`,
         # `EPOCH_64_DEPLOY_LARGE_RESPOT`); without it the binding ran them at the
         # live epoch and a replay re-deployed an old corpus the new way.
@@ -2981,6 +3005,7 @@ def play_game(
             eff_deployment == "interleaved", rules_epoch=rules_epoch,
             zone_style=resolve_zone_style(mission_def0, repo_root),
             gates=_role_gates(mission_def0, _ai_attacker(mission_def0, opener)),
+            phases=_phase_args(mission_def0, _ai_attacker(mission_def0, opener), repo_root),
         )
     elif deploy_rng_seed is None:
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, drng)

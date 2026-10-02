@@ -2583,6 +2583,62 @@ fn deploy_gates(gates: &Bound<'_, PyAny>) -> PyResult<deployment::Gates> {
     })
 }
 
+/// D7b: the catalog's deployment PHASES. `phases` = `[{"side": 0|1, "share": "half"|"all"|"rest",
+/// "zone": [x, y, w, h] (metres), "zones": [..catalog zone list..]}, ..]`; same return shape as
+/// `deploy_interleaved`, the sequence phase-major.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+#[pyo3(signature = (units1, units2, zone1, zone2, phases, objectives, board, seed1, seed2, first, rules_epoch=None, gates1=None, gates2=None))]
+fn deploy_phased(
+    py: Python<'_>,
+    units1: &Bound<'_, PyAny>,
+    units2: &Bound<'_, PyAny>,
+    zone1: &Bound<'_, PyAny>,
+    zone2: &Bound<'_, PyAny>,
+    phases: &Bound<'_, PyAny>,
+    objectives: &Bound<'_, PyAny>,
+    board: PyRef<'_, Board>,
+    seed1: i64,
+    seed2: i64,
+    first: i64,
+    rules_epoch: Option<u32>,
+    gates1: Option<&Bound<'_, PyAny>>,
+    gates2: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Py<PyAny>> {
+    let (gate1, gate2) = (gates1.map(deploy_gates).transpose()?, gates2.map(deploy_gates).transpose()?);
+    let specs1: Vec<UnitSpec> = json_of(units1, "units1")?;
+    let specs2: Vec<UnitSpec> = json_of(units2, "units2")?;
+    let z1: [f64; 4] = json_of(zone1, "zone1")?;
+    let z2: [f64; 4] = json_of(zone2, "zone2")?;
+    let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
+    let raw: Vec<serde_json::Value> = json_of(phases, "phases")?;
+    let mut list: Vec<deployment::Phase> = Vec::new();
+    for p in &raw {
+        let z: [f64; 4] = serde_json::from_value(p["zone"].clone()).map_err(|e| Unsupported::new_err(format!("phase zone: {e}")))?;
+        list.push(deployment::Phase {
+            side: p["side"].as_u64().unwrap_or(0) as usize,
+            share: p["share"].as_str().unwrap_or("all").to_string(),
+            rect: Rect::new(z[0], z[1], z[2], z[3]),
+            zones: objectives::zones_of_list(&p["zones"]),
+        });
+    }
+    let out = deployment::deploy_phased(
+        &specs1,
+        &specs2,
+        &Rect::new(z1[0], z1[1], z1[2], z1[3]),
+        &Rect::new(z2[0], z2[1], z2[2], z2[3]),
+        &list,
+        [gate1.as_ref(), gate2.as_ref()],
+        &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
+        &board.inner,
+        seed1,
+        seed2,
+        first,
+        rules_epoch.unwrap_or(CURRENT_RULES_EPOCH),
+    );
+    to_py(py, &serde_json::to_value(&out).map_err(|e| Unsupported::new_err(e.to_string()))?)
+}
+
 /// The per-side placement (§3.2's plain-dict signature). `units` = the roster
 /// in list order (ambush rows included; serde has no defaults, every key
 /// present, transport_capacity 0 on the corpus); `objectives` = the rulebook
@@ -2943,6 +2999,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // NML-1152 step 7 — the twin's deployment pipeline for the trainer.
     m.add_function(wrap_pyfunction!(deploy_side, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_interleaved, m)?)?;
+    m.add_function(wrap_pyfunction!(deploy_phased, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_finish, m)?)?;
     m.add_function(wrap_pyfunction!(arrive_one, m)?)?;
     m.add_function(wrap_pyfunction!(place_models, m)?)?;

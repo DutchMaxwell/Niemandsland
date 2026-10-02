@@ -255,3 +255,44 @@ def test_an_interleaved_game_hands_each_side_its_role_gates_to_the_deploy_pipeli
     # the winner (opener) attacks under factor 1.25; P1's role is stamped in the result
     want = (gates["attacker"], gates["defender"]) if res["mission"]["role_p1"] == "attacker" else (gates["defender"], gates["attacker"])
     assert seen == [want, (None, None)]
+
+
+def test_phase_args_map_roles_to_sides_and_styles_to_zones():
+    """NML-1010 D7b: attacker slot 1 -> side 0, the defender -> side 1; a style gives rect + shape."""
+    md = {"roles": True, "deploy_phases": [["defender", "half", "centre_disc_12"], ["attacker", "all", "edge_band_12"]]}
+    ph = sp._phase_args(md, 1, REPO)
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "half"), (0, "all")]
+    assert ph[0]["zones"] == [{"disc": {"c": [0, 0], "r_in": 12}}] and len(ph[1]["zones"]) == 4
+    assert [p["side"] for p in sp._phase_args(md, 2, REPO)] == [0, 1]
+    assert sp._phase_args(md, 0, REPO) == [] and sp._phase_args({"roles": True}, 1, REPO) == []
+
+
+@needs_lists
+def test_an_arena_game_runs_the_missions_phases_through_deploy_phased(monkeypatch):
+    core = nml_core.load(str(REPO))
+    sp.resolve_mission("duel", REPO)
+    catalog = sp._MISSION_CATALOG_CACHE[str(REPO)]
+    catalog["phase_fixture"] = dict(catalog["duel"], roles=True, attacker_points_factor=1.25,
+                                    deploy_phases=[["defender", "half", "centre_disc_12"], ["attacker", "all", "edge_band_12"],
+                                                   ["defender", "rest", "anywhere"]])
+    seen: list = []
+    real = nml_core.deploy_phased
+
+    def spy(*a, **kw):
+        out = real(*a, **kw)
+        seen.append([e[0] for e in out["sequence"]])
+        return out
+
+    monkeypatch.setattr(nml_core, "deploy_phased", spy)
+    try:
+        res = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="phase_fixture", deployment="arena", **FAST)
+        sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="duel", deployment="arena", **FAST)
+    finally:
+        del catalog["phase_fixture"]
+    assert len(seen) == 1, "duel has no phases"
+    seq = seen[0]
+    attacker = 1 if res["mission"]["role_p1"] == "attacker" else 2
+    defender = 3 - attacker
+    first_attack = seq.index(attacker)
+    assert seq[:first_attack] and set(seq[:first_attack]) == {defender}, "the defender's half goes first"
+    assert seq[-1] == defender or defender in seq[first_attack:], "the defender's rest follows the attacker"
