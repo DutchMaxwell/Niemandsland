@@ -32,10 +32,6 @@ planned and where ideas go. For what already works see
   pick a ruin floor) shipped; Phase B2 makes both AI planners climb pieces up to 3", measured on the
   yardstick; Phase C ports skirmish jump/fall (GFF p.14/p.55); Phase D lets the AI value elevated
   firing spots by sight gain only. _L_
-- **NACHTMAHR difficulty ladder (NML-1018) — on `main`, unreleased.** Four selectable grades
-  (Dämmerung, Zwielicht, Finsternis, Albtraum) with a picker in the solo panel; Albtraum, the default, is
-  the Erlkönig-driven opponent ([#1126](../../../pull/1126), [#1127](../../../pull/1127), 2026-09-26).
-  Ships with the next tagged release. _M_
 - **Guided tutorial — course expanded in `0.3.10.0-alpha`.** Event-gated guided play on the real table
   (coach-mark spotlight overlay; steps advance on real signals, never a "Next" button). The course now
   runs **64 steps across 11 chapters**: camera & table · selecting · moving/rotating/arranging ·
@@ -56,7 +52,7 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   V2** (→ R2; this also resolves the `saurians` ↔ `saurian_starhost` faction-folder mismatch). The
   **Ratmen** ship in `0.3.13.0-alpha` ([#1076](../../../pull/1076)).
   Live Regiments import vs a real `aofr` list is **verified** (2026-06-29). **Regiments handling polish — SHIPPED:** auto-face-on-drop
-  facing fix (P0); frontage cycle (Shift+F), axis-locked drag (Shift+drag), pivot snap (Ctrl+R),
+  facing fix (P0); frontage cycle (B), axis-locked drag (Shift+drag), pivot snap (Ctrl+R),
   mouse-driven rotation (R-hold, AoF:R p.8 "Pivoting"); pooled-wound counter with back-rank casualty
   removal + standard WoundsDialog (p.9, Tough(1) pooled / Tough(X>1) classic), regiment radial menu,
   45° arc quadrants on the selected unit (p.5), live rotation-degrees readout, unit-card for trays.
@@ -218,6 +214,13 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 ## ✅ Recently shipped
 
 See [`CHANGELOG.md`](../CHANGELOG.md).
+
+**`0.3.14.0-alpha` (DRAFT — date set at release):** four NACHTMAHR difficulty grades with a picker in the solo panel
+([#1126](../../../pull/1126), [#1127](../../../pull/1127)); Charge, Advance & Shoot and Rush from the radial plus an
+Activate button and the Speed Feat ([#1173](../../../pull/1173), [#1313](../../../pull/1313), [#1134](../../../pull/1134));
+the in-game windows in one house style; the rebuilt Map Layout editor; Relic Hunt and Capture & Hold end to end;
+climbing and heights as rules (NML-972 phase B1); the Mac build carries the rules core ([#1136](../../../pull/1136));
+rules fixes through epochs 65–68. See the CHANGELOG.
 
 **`0.3.13.1-alpha` (2026-09-25):** save/load and multiplayer fixes from a code review (a saved Solo game keeps
 its AI opponent, formed regiments survive a save, Load Game is host-only in a session); see the CHANGELOG.

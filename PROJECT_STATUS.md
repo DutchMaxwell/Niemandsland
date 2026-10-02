@@ -1,6 +1,6 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.13.1-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.14.0-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
@@ -18,9 +18,9 @@ nothing about a turn leaves the machine. One qualification, because "no network 
 if you let NACHTMAHR bring **its own** list, that list is fetched from the asset CDN the first time
 and cached (see below), so the very first use of **AI Opponent** needs a connection. Your own
 imported armies, and every decision NACHTMAHR makes, need none.
-**A four-grade difficulty ladder is on `main`** (NML-1018, #1126 and
-#1127, merged 2026-09-26, not yet in a tagged release; source: git log): Dämmerung, Zwielicht and Finsternis play the decision tree; **Albtraum**, the default,
-plays with Erlkönig, NACHTMAHR's stronger model, where the core and its model load (on macOS it plays the
+**A four-grade difficulty ladder** (NML-1018, #1126 and
+#1127, shipped in 0.3.14.0-alpha): Dämmerung, Zwielicht and Finsternis play the decision tree; **Albtraum**, the default,
+plays with Erlkönig, NACHTMAHR's stronger model, where the core and its model load (when it does not, the
 tree's ceiling). The picker sits in the solo panel and the choice is remembered
 (`scripts/solo/solo_grade.gd`). Every grade plays by the rules. The match
 runs the rulebook flow end to end: roll-off → the winner picks a table edge and deploys
@@ -356,7 +356,7 @@ and `hero_attachment_dialog.gd` were removed as dead code in January 2026 — th
 
 ## Known issues
 
-- **Solo is alpha.** Four selectable difficulty grades (unreleased, see above); co-op against the AI is
+- **Solo is alpha.** Four selectable difficulty grades (see above); co-op against the AI is
   a first version; the rules listed under *Not automated* above must be
   applied by hand; all solo UI is English-only. The macOS rules core is verified on GitHub's
   macOS runners only (no real-Mac test yet); AI thinking time has been measured on one machine.
