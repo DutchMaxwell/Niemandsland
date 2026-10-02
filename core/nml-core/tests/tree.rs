@@ -232,8 +232,10 @@ fn canon(states: &[State]) -> Vec<String> {
 /// `Ev` is `Policy::resolve` bit for bit; `Tray` draws `samples` states, the
 /// same stream base twice is byte-identical, another base moves some edge,
 /// the samples of one edge differ among themselves somewhere, and an
-/// activation the tray path flags unported declines by name (the fixtures
-/// carry Deadly(3) weapons); `Tray` with no base declines.
+/// activation the tray path flags unported declines by name (here
+/// `surge_gates` / `dangerous_rigid_end_only`; the fixtures' Deadly(3) weapons
+/// land per model from `EPOCH_14_DEADLY_LANDING` and no longer decline, stage-0
+/// P9); `Tray` with no base declines.
 #[test]
 fn chance_edges_are_reproducible_and_decline_unported() {
     let (mut n, mut moved, mut spread, mut declined) = (0usize, 0usize, 0usize, BTreeMap::new());
@@ -252,8 +254,8 @@ fn chance_edges_are_reproducible_and_decline_unported() {
                     Err(e) => panic!("act {ai} {}: {e:?}", cand.kind),
                     Ok(a) => {
                         let (a, b) = (canon(&a), canon(&edge(TreeDice::Tray, Some(base)).unwrap()));
-                        // Another base may roll into an unported branch itself (a Deadly
-                        // weapon flags only when it lands): that counts as moved too.
+                        // Another base may roll into an unported branch itself (a branch
+                        // flags only when its dice reach it): that counts as moved too.
                         let other = edge(TreeDice::Tray, Some(base + 7)).map(|v| canon(&v)).ok();
                         assert!(a.len() == 4 && a == b, "act {ai}: the same base drew different samples");
                         moved += usize::from(other.as_ref() != Some(&a));
@@ -272,12 +274,13 @@ fn chance_edges_are_reproducible_and_decline_unported() {
     println!("chance edges: {n} tray edges reproduced, {moved} moved by another base, \
               {spread} spread within one edge; declined {declined:?}");
     assert!(n > 0 && moved > 0 && spread > 0, "the tray draws are inert");
-    assert!(declined.contains_key("deadly"), "no Deadly activation declined");
+    assert!(!declined.is_empty() && !declined.contains_key("deadly"), "decline by name, never Deadly: {declined:?}");
 }
 
 /// Step 14 — the true-tray Terminal playout: with a stream base every step
 /// rolls the tray, so the same base twice is the identical value, another
-/// base moves some value on the fixtures, and a Deadly weapon declines by name
+/// base moves some value on the fixtures, and a still-unported branch declines
+/// by name — Deadly no longer does (per-model landing from `EPOCH_14_DEADLY_LANDING`)
 /// (`None`, the EV playout, is pinned by `a_terminal_playout_stays_inside_the_arbitration_guard`).
 #[test]
 fn tray_playouts_roll_the_leaf_stream_and_decline_unported() {
@@ -307,7 +310,7 @@ fn tray_playouts_roll_the_leaf_stream_and_decline_unported() {
     }
     println!("tray playouts: {n} reproduced, {moved} moved by another base; declined {declined:?}");
     assert!(n > 0 && moved > 0, "the tray playouts are inert: {n}/{moved}");
-    assert!(declined.contains_key("deadly"), "no Deadly playout declined");
+    assert!(!declined.is_empty() && !declined.contains_key("deadly"), "decline by name, never Deadly: {declined:?}");
 }
 
 /// Step 6a — the ROOT's children are the one-ply's own prefilter rows in its
