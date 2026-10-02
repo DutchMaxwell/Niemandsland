@@ -347,6 +347,9 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
 
 // ------------------------------------------------------------------ State ---
 
+/// `apply_reveal_step`'s return: `(state, owners, events, rolls)`.
+type RevealOut = (PyState, Vec<i64>, Py<PyAny>, Py<PyAny>);
+
 /// One battle state. Opaque on purpose: the struct-of-arrays below is the whole
 /// point of the port, and handing it out as a dict per call would spend more
 /// time marshalling than searching. `plain()` is the escape hatch.
@@ -1980,6 +1983,32 @@ impl Core {
         let mut st = state.inner.clone();
         mission::apply_marker_move(&mut st, table_d_in);
         PyState::derived(st)
+    }
+
+    /// D12b: the round-end secret-marker reveal (relic stays, trap/empty removed, a trap hits the
+    /// revealing unit on `tray`; no tray = no trap hits). Returns `(state, owners, events, rolls)`.
+    #[pyo3(signature = (state, owners, tray=None))]
+    fn apply_reveal_step(
+        &mut self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        owners: Vec<i64>,
+        tray: Option<&mut PyTray>,
+    ) -> PyResult<RevealOut> {
+        let statics = self.statics_for(&state.inner)?;
+        let mut st = state.inner.clone();
+        let mut own = owners;
+        let (events, rolls) = mission::apply_reveal_step(&statics, &mut st, &mut own, tray.map(|t| &mut t.inner));
+        let ev: Vec<Value> = events
+            .iter()
+            .map(|e| serde_json::json!({"index": e.index, "secret": e.secret, "unit": e.unit}))
+            .collect();
+        let rl: Vec<Value> = rolls
+            .iter()
+            .map(|r| serde_json::json!({"kind": r.kind, "count": r.count, "target": r.target,
+                "faces": r.faces.iter().map(|&f| f as i64).collect::<Vec<i64>>(), "owner": r.owner}))
+            .collect();
+        Ok((PyState::derived(st), own, to_py(py, &Value::Array(ev))?, to_py(py, &Value::Array(rl))?))
     }
 
     /// Return all relics held by a unit to the deterministic R3a drop point.

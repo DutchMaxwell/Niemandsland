@@ -752,7 +752,7 @@ _MISSION_CATALOG_CACHE: dict[str, dict[str, Any]] = {}
 
 def mission_markers(spec: dict[str, Any], count: int) -> list[dict[str, Any]]:
     """Arm owned or carried marker state without changing legacy empty records."""
-    if not spec.get("owned") and not spec.get("carry") and not spec.get("mobile"):
+    if not spec.get("owned") and not spec.get("carry") and not spec.get("mobile") and not spec.get("secret"):
         return []
     markers = []
     for i in range(count):
@@ -760,10 +760,26 @@ def mission_markers(spec: dict[str, Any], count: int) -> list[dict[str, Any]]:
             if spec.get("owned") else {}
         if spec.get("carry"):
             marker.update(carry=True, carried_by=-1)
+        if spec.get("secret"):
+            marker.update(secret="", revealed=False)
         if spec.get("mobile"):
             marker.update(mobile=True, deploy_edge=int(spec.get("deploy_edge", 0)))
         markers.append(marker)
     return markers
+
+
+def secret_assign(points_in: list[tuple[float, float]]) -> list[str]:
+    """D12a's AI assignment, twin of `SoloController.secret_assign`: the relic is the marker
+    FARTHEST from every table edge, the trap the NEAREST (first index on a tie)."""
+    gaps = [min(TABLE_W_IN / 2.0 - abs(x), TABLE_D_IN / 2.0 - abs(z)) for x, z in points_in]
+    out = [""] * len(gaps)
+    if gaps:
+        relic = max(range(len(gaps)), key=lambda i: (gaps[i], -i))
+        trap = min(range(len(gaps)), key=lambda i: (gaps[i], i))
+        out[relic] = "relic"
+        if trap != relic:
+            out[trap] = "trap"
+    return out
 
 
 def resolve_mission(mission: str, repo_root: str | Path) -> dict[str, Any]:
@@ -1986,17 +2002,21 @@ def _ledger_of(state) -> dict[str, Any]:
             "vp_flavour": p.get("vp_flavour") or {}, "vp_memo": p.get("vp_memo") or {},
             "markers_meta": mm, "destroy_seq": list(p.get("destroy_seq") or [0]),
             "carry": any(m.get("carry") for m in mm),
+            "secret": any(m.get("secret") is not None for m in mm),
             "rounds": int(p.get("rounds_total") or ROUNDS)}
 
 
 def _round_end(core, state, owners: list[int], led: dict[str, Any], round_no: int,
-               skip_carry: bool = False):
+               skip_carry: bool = False, tray=None):
     """THE ROUND-END REFEREE, once for `play_game`, `play_from_state` and the wave-C
     parity gate (tools/mission_referee_gate.py), in the table's order (main.gd
     `_solo_auto_seize`, then `_solo_book_mission_vp`): seize, carry pickup, an
     enemy-held owned marker falls, then the mission's VP. Updates `led` in place and
     returns `(state, owners)`. `skip_carry` exists for the gate's RED only."""
     state, owners = core.playout_seize(state, owners)
+    if led.get("secret"):  # D12b: the attacker's seize turns up its secret markers, relic stays
+        state, owners, _events, _rolls = core.apply_reveal_step(state, owners, tray)
+        led["markers_meta"] = state.plain()["markers_meta"]
     if led["carry"] and not skip_carry:
         state = core.apply_carry_step(state, owners)
         led["markers_meta"] = state.plain()["markers_meta"]
@@ -3002,7 +3022,7 @@ def play_game(
     owners = [0] * len(objectives)
     led = {"scoring": eff_scoring, "vp": [0, 0], "vp_flavour": vp_flavour, "vp_memo": {},
            "markers_meta": markers_meta, "destroy_seq": [0], "carry": bool(mk_spec.get("carry")),
-           "rounds": rounds}
+           "secret": bool(mk_spec.get("secret")), "rounds": rounds}
     if not arena:
         # The d6 roll-off, P1 winning ties — and BOTH dice are drawn, left first.
         left = drng.randi_range(1, 6)
@@ -3013,6 +3033,14 @@ def play_game(
         # D2b: the roll-off winner (the opener) picks by R7a; the pick rides the state as `attacker`.
         p0 = state.plain()
         p0["attacker"] = attacker
+        if any(m.get("secret") is not None for m in p0.get("markers_meta") or []):
+            kinds = secret_assign([(o["pos"][0] / IN2M, o["pos"][2] / IN2M) for o in p0["objectives"]])
+            for m, kind in zip(p0["markers_meta"], kinds):
+                m["secret"] = kind
+                if kind == "relic":
+                    m.update(carry=True, carried_by=-1)
+                    led["carry"] = True
+            led["markers_meta"] = [dict(m) for m in p0["markers_meta"]]
         state = core.state_of(p0)
     log: list[dict[str, Any]] = []
     rounds_log: list[dict[str, Any]] = []
@@ -3044,7 +3072,7 @@ def play_game(
             leaf_value_fn=leaf_value_fn, leaf_value_w=leaf_value_w,
             **({"search_streams": streams} if streams else {}),
         )
-        state, owners = _round_end(core, state, owners, led, round_no)
+        state, owners = _round_end(core, state, owners, led, round_no, tray=tray)
         rounds_played = round_no
         entry = {"round": round_no, "owners": list(owners), "vp": list(led["vp"])}
         if record_aux:

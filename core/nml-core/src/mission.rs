@@ -425,3 +425,68 @@ pub fn apply_marker_move(state: &mut State, table_d_in: f64) {
         state.objectives[i].pos[2] = vip_walk_z(z_in, mk.deploy_edge, table_d_in) * IN2M;
     }
 }
+
+/// One secret marker turned up by `apply_reveal_step`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reveal {
+    pub index: usize,
+    pub secret: String,
+    pub unit: usize,
+}
+
+/// D12b — the round-end reveal, the twin of `SoloController.secret_reveal_step` plus the trap's
+/// dice. Every unrevealed secret marker the ATTACKER holds (`owners`) is turned up by its nearest
+/// eligible attacker unit (`can_hold_marker`, strict `<` in capture order): a relic stays (the carry
+/// step picks it up next); a trap or an empty marker is removed (`destroyed`, owner zeroed). A trap
+/// then hits the revealing unit: one tray die, D6+1 hits, saved on the same tray and landed. Without
+/// a tray (expected-value dice) the trap costs nothing — the tray path only, like Mend.
+pub fn apply_reveal_step(
+    statics: &[crate::unit::UnitStatic],
+    state: &mut State,
+    owners: &mut [i64],
+    mut tray: Option<&mut crate::dice::Tray>,
+) -> (Vec<Reveal>, Vec<crate::dice::Roll>) {
+    let att = state.attacker;
+    let (mut events, mut rolls) = (Vec::new(), Vec::new());
+    if att != 1 && att != 2 {
+        return (events, rolls);
+    }
+    for i in 0..state.markers_meta.len().min(state.objectives.len()) {
+        let mk = &state.markers_meta[i];
+        let Some(kind) = mk.secret.clone() else { continue };
+        if mk.revealed || mk.destroyed || owners.get(i).copied() != Some(att) {
+            continue;
+        }
+        let obj = state.objectives[i].pos;
+        let mut best: Option<(usize, f64)> = None;
+        for k in 0..state.units() {
+            if state.player[k] != att || !can_hold_marker(state, k, state.round) {
+                continue;
+            }
+            let gap = control_gap_in(state, k, obj);
+            if best.map_or(true, |(_, g)| gap < g) {
+                best = Some((k, gap));
+            }
+        }
+        let Some((unit, _)) = best else { continue };
+        state.markers_meta[i].revealed = true;
+        if kind != "relic" {
+            state.markers_meta[i].destroyed = true;
+            owners[i] = 0;
+        }
+        events.push(Reveal { index: i, secret: kind.clone(), unit });
+        if kind != "trap" {
+            continue;
+        }
+        let Some(t) = tray.as_deref_mut() else { continue };
+        let die = t.roll(1);
+        let hits = i64::from(die[0]) + 1;
+        let us = &statics[state.roster.profile[unit]];
+        rolls.push(crate::dice::Roll { kind: "attack", count: 1, target: 1, faces: die, owner: us.name.to_string() });
+        let def = crate::sim::ctx_of(us, state, unit);
+        let out = crate::dice::resolve_storm_hits_with_tray(hits, 0, false, false, &def, &us.name, t);
+        rolls.extend(out.rolls.iter().cloned());
+        crate::sim::land_wounds(state, unit, out.wounds);
+    }
+    (events, rolls)
+}
