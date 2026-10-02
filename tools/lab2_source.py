@@ -13,7 +13,8 @@ ride along as `keys`.
 `source --slots D_sources.tsv --bank B --lists L --header I.json --cap 20 --out positions.json`: the slots
 file is tab-separated, one row per (slot, candidate) with the columns above in frozen key order. Header: only
 `top_k` / `horizon` of its knobs reach `play_game`; every other header knob is reported as ignored, never
-applied silently. Exit 1 when a slot is MISSING.
+applied silently. Exit 1 when a slot is MISSING. With `--timing-out F` the same games also feed the timing set (first 12
+legal pre-pick states per cell, all rounds); a cell below 12 fails the timing instrument (exit 1).
 Run: ~/.cache/nml-stage0/venv/bin/python3 tools/lab2_source.py source ...
 """
 import argparse
@@ -39,18 +40,41 @@ class _Eligible(Exception):
         self.snapshot = snapshot
 
 
+class TimingSet:
+    """The first `per_cell` legal pre-pick states of every cell, in source-game / activation order (the
+    `--states` shape of lab2_tree_probe timing). A cell below `per_cell` fails the timing instrument."""
+
+    def __init__(self, per_cell=12):
+        self.per_cell, self.states, self.count = per_cell, [], {}
+
+    def full(self, cell):
+        return self.count.get(cell, 0) >= self.per_cell
+
+    def add(self, rec):
+        self.states.append(rec)
+        self.count[rec["cell"]] = self.count.get(rec["cell"], 0) + 1
+
+    def short(self, cells):
+        return {c: self.count.get(c, 0) for c in sorted(cells) if not self.full(c)}
+
+
 class Spy:
     """State-only watcher for ONE source game: counts round ends, remembers the owners, and raises
     `_Eligible` at the first eligible pre-pick state. It never reads a game outcome."""
 
-    def __init__(self, sp, row):
-        self.sp, self.row = sp, row
+    def __init__(self, sp, row, timing=None):
+        self.sp, self.row, self.timing, self.seq = sp, row, timing, 0
         self.ended, self.owners, self.total, self.stage = 0, None, None, 0
 
     def look(self, core, state, player):
         sp, row = self.sp, self.row
         if self.total is None:
             self.total = int(state.plain().get("rounds_total") or sp.ROUNDS)
+        if self.timing is not None and state.pool(player, bool(core.knobs().get("hero_attach", True))):
+            self.seq += 1  # every legal pre-pick state counts, collected or not
+            if not self.timing.full(row["cell"]):
+                self.timing.add({"cell": row["cell"], "source": row["slot"] + ":" + row["candidate"],
+                                 "seq": self.seq, "state": state.plain(), "player": player})
         if self.ended + 1 != self.total or self.owners is None:
             return
         self.stage = max(self.stage, 1)
@@ -92,9 +116,9 @@ class Spy:
             sp._round_end = real_end
 
 
-def play_candidate(sp, core, row, repo, bank, lists, net, play_kw):
+def play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing=None):
     """One source game for one candidate row -> (snapshot or None, log row)."""
-    spy, t0 = Spy(sp, row), time.perf_counter()
+    spy, t0 = Spy(sp, row, timing), time.perf_counter()
     kw = dict(play_kw, mission=row["mission"], objectives="mission", live_ledger=True,
               layout_seed=int(row["layout"]), deploy_seed=int(row["deploy"]), play_seed=int(row["play"]),
               dice_seed=int(row["tray"]), leaf_value_fn={1: net.hook(1), 2: net.hook(2)}, leaf_value_w=1.0)
@@ -110,12 +134,12 @@ def play_candidate(sp, core, row, repo, bank, lists, net, play_kw):
     return snapshot, log
 
 
-def generate(sp, core, slots, repo, bank, lists, net, cap, play_kw):
+def generate(sp, core, slots, repo, bank, lists, net, cap, play_kw, timing=None):
     """-> (positions, discarded, missing slot ids). At most `cap` candidates per slot, first eligible wins."""
     positions, discarded, missing = [], [], []
     for slot, rows in slots.items():
         for row in rows[:cap]:
-            snapshot, log = play_candidate(sp, core, row, repo, bank, lists, net, play_kw)
+            snapshot, log = play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing)
             if snapshot:
                 positions.append(snapshot)
                 break
@@ -147,13 +171,19 @@ def cmd_source(a):
     play_kw = {k: knobs[k] for k in HEADER_KNOBS if k in knobs}
     ignored = sorted(set(knobs) - set(HEADER_KNOBS))
     net = ShippedNet(a.repo)
-    positions, discarded, missing = generate(sp, nm.load(a.repo), read_slots(a.slots), a.repo, a.bank, a.lists,
-                                             net, a.cap, play_kw)
+    slots = read_slots(a.slots)
+    timing = TimingSet() if a.timing_out else None
+    positions, discarded, missing = generate(sp, nm.load(a.repo), slots, a.repo, a.bank, a.lists, net, a.cap,
+                                             play_kw, timing)
     out = {"positions": positions, "discarded": discarded, "missing": missing, "ignored_header_knobs": ignored,
            "net": net.proof()}
     json.dump(out, open(a.out, "w"))  # no sort_keys: net.proof() mixes int seats with a str key
     print("[source] positions %d discarded %d missing %s" % (len(positions), len(discarded), missing))
-    return 1 if missing else 0
+    short = timing.short({r["cell"] for rows in slots.values() for r in rows}) if timing else {}
+    if timing:
+        json.dump(timing.states, open(a.timing_out, "w"))
+        print("[source] timing states %d, short cells %s" % (len(timing.states), short))
+    return 1 if missing or short else 0
 
 
 def main(argv=None):
@@ -166,6 +196,7 @@ def main(argv=None):
     s.add_argument("--header", required=True)
     s.add_argument("--cap", type=int, default=20)
     s.add_argument("--out", required=True)
+    s.add_argument("--timing-out", help="write the first 12 legal pre-pick states per cell (timing --states shape)")
     s.add_argument("--repo", default=os.path.dirname(_HERE))
     return cmd_source(ap.parse_args(argv))
 

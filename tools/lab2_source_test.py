@@ -79,8 +79,32 @@ def test_cli_writes_positions_proof_and_exit_code(tmp_path):
         w = csv.DictWriter(f, list(row("a")), delimiter="\t")
         w.writeheader(), w.writerow(row("a"))
     header.write_text(json.dumps({"knobs": {"top_k": 2, "horizon": 1, "menu_wide": "table"}}))
-    argv = ["source", "--slots", str(tsv), "--bank", BANK, "--lists", LISTS, "--header", str(header), "--out", str(out)]
+    argv = ["source", "--slots", str(tsv), "--bank", BANK, "--lists", LISTS, "--header", str(header), "--out", str(out),
+            "--timing-out", str(tmp_path / "t.json")]
     assert ls.main(argv) == 0
     data = json.loads(out.read_text())
     assert len(data["positions"]) == 1 and data["ignored_header_knobs"] == ["menu_wide"]
+    assert len(json.loads((tmp_path / "t.json").read_text())) == 12
     assert data["net"]["1"]["calls"] > 0 and data["net"]["2"]["calls"] > 0
+
+
+def test_timing_set_lists_games_and_activations_in_order(env):
+    timing = ls.TimingSet(per_cell=1000)
+    core, net = env
+    slots = {"s1": [row("a", seed=29)], "s2": [dict(row("b", seed=31, mover=2), slot="s2")]}
+    ls.generate(sp, core, slots, REPO, BANK, LISTS, net, 1, PLAY_KW, timing)
+    sources = [r["source"] for r in timing.states]
+    assert sorted(set(sources)) == ["s1:a", "s2:b"] and sources == sorted(sources)  # game 1 wholly before game 2
+    for src in set(sources):
+        seqs = [r["seq"] for r in timing.states if r["source"] == src]
+        assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs) and seqs[0] == 1
+    assert all(core.state_of(r["state"]).pool(r["player"], True) for r in timing.states[:3])
+
+
+def test_timing_set_keeps_twelve_and_a_short_cell_fails(env):
+    timing = ls.TimingSet()
+    core, net = env
+    ls.generate(sp, core, {"s1": [row("a")]}, REPO, BANK, LISTS, net, 1, PLAY_KW, timing)
+    assert timing.count == {"c1": 12} and [r["seq"] for r in timing.states] == list(range(1, 13))
+    assert timing.short({"c1"}) == {} and timing.short({"c1", "c2"}) == {"c2": 0}
+    assert ls.TimingSet(per_cell=13).short({"c1"}) == {"c1": 0}
