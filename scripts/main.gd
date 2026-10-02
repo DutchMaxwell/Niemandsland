@@ -3192,15 +3192,109 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 	_solo_deploy_fsm["phase"] = "main"
 	_solo_deploy_fsm["human_out"] = false
 	_solo_flush_dev()
+	var phases: Array = SoloController.deploy_phases_of(MissionCatalog.get_mission(_solo_mission_id)) \
+		if _solo_mission_has_roles() and not SoloController.mission_roles.is_empty() else []
+	if not phases.is_empty():   # D7a: Attack & Defend phases replace the one-for-one alternation
+		_solo_deploy_fsm["phases"] = phases
+		_solo_deploy_fsm["phase_i"] = 0
+		_solo_deploy_fsm["phase_placed"] = {}
+		_log_rule_event(BattleLog.Category.GENERAL, "NACHTMAHR deploys by points, most expensive first: %s" % ", ".join(
+			PackedStringArray(solo_controller.deploy_prioritise_by_points())), true)
+		_solo_phase_start()
+		return
 	if bool(_solo_deploy_fsm.get("winner_is_ai", false)):
 		await _solo_deploy_ai_turn()
 	else:
 		_solo_deploy_show_human_turn()
 
 
+## D7a: the zone style's bounding rect in world metres (what the AI's search scans).
+func _solo_style_rect(style: Dictionary) -> Rect2:
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for poly in DeploymentCatalog.zone_polygons(style, 1):
+		for pt in poly:
+			lo = Vector2(minf(lo.x, pt.x), minf(lo.y, pt.y))
+			hi = Vector2(maxf(hi.x, pt.x), maxf(hi.y, pt.y))
+	return Rect2(lo * 0.0254, (hi - lo) * 0.0254)
+
+
+## D7a: start the current deployment phase (role, share, zone style): the AI side deploys its whole
+## quota at once, the human side gets the quota panel and the zone drawn; after the last phase the
+## game moves on to the scout phase as before.
+func _solo_phase_start() -> void:
+	var phases: Array = _solo_deploy_fsm["phases"]
+	var i: int = int(_solo_deploy_fsm["phase_i"])
+	if i >= phases.size():
+		_solo_deploy_fsm.erase("phases")
+		_solo_deploy_fsm["human_out"] = true
+		_solo_deploy_phase_advance()
+		return
+	var role: String = str((phases[i] as Array)[0])
+	var share: String = str((phases[i] as Array)[1])
+	var style_id: String = str((phases[i] as Array)[2])
+	var style := DeploymentCatalog.get_style(style_id)
+	var slot: int = int(SoloController.mission_roles[role])
+	var placed: Dictionary = _solo_deploy_fsm["phase_placed"]
+	var ai_side: bool = slot == solo_controller.ai_slot
+	var total: int = solo_controller.deploy_main_total() if ai_side else _solo_human_main_units().size()
+	var quota: int = SoloController.phase_quota(share, total, int(placed.get(slot, 0)))
+	if terrain_overlay != null:
+		terrain_overlay.set_style_zones(style)
+	if ai_side:
+		solo_controller.deploy_set_zone(_solo_style_rect(style), DeploymentCatalog.zone_test(style_id, 1))
+		var done: Array = solo_controller.deploy_place_n(quota)
+		placed[slot] = int(placed.get(slot, 0)) + done.size()
+		_log_rule_event(BattleLog.Category.GENERAL, "Phase %d of %d (%s, %s): NACHTMAHR deploys %d unit(s)" % [
+			i + 1, phases.size(), role, share, done.size()], true)
+		_solo_deploy_fsm["phase_i"] = i + 1
+		_solo_phase_start()
+		return
+	_solo_deploy_fsm["phase_left"] = quota
+	_solo_deploy_fsm["human_turn"] = true
+	if quota <= 0:
+		_solo_deploy_fsm["phase_i"] = i + 1
+		_solo_phase_start()
+		return
+	_solo_phase_panel()
+
+
+## The human phase panel: which phase, how many units are still owed.
+func _solo_phase_panel() -> void:
+	var phases: Array = _solo_deploy_fsm["phases"]
+	var i: int = int(_solo_deploy_fsm["phase_i"])
+	_solo_deploy_ui_show("Phase %d of %d (%s, %s): deploy %d more unit(s) inside the marked zone, then ✓ for each." % [
+		i + 1, phases.size(), str((phases[i] as Array)[0]), str((phases[i] as Array)[1]),
+		int(_solo_deploy_fsm["phase_left"])], "✓ Unit placed", func() -> void: _solo_deploy_human_done_one())
+
+
+## The human's main-phase units: alive, not attached, not a scout, not held in reserve.
+func _solo_human_main_units() -> Array:
+	var out: Array = []
+	for u in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
+		var gu := u as GameUnit
+		if gu != null and gu.get_alive_count() > 0 and not (gu.has_method("is_attached") and gu.is_attached()) \
+				and not SoloController.unit_has_scout(gu) and not bool(gu.unit_properties.get("ambush_reserve", false)):
+			out.append(gu)
+	return out
+
+
+## D7a: a human placement outside the phase's zone ("" = fine).
+func _solo_phase_zone_violation(gu: GameUnit) -> String:
+	var phases: Array = _solo_deploy_fsm["phases"]
+	var style_id: String = str((phases[int(_solo_deploy_fsm["phase_i"])] as Array)[2])
+	var c := solo_controller.unit_centre(gu)
+	if DeploymentCatalog.in_zone(DeploymentCatalog.get_style(style_id), 1, Vector2(c.x, c.z) / 0.0254):
+		return ""
+	return "must be placed inside the marked zone"
+
+
 ## The human's MAIN/SCOUT-phase turn panel: place ONE unit, then hand over by click.
 func _solo_deploy_show_human_turn() -> void:
 	_solo_deploy_fsm["human_turn"] = true
+	if _solo_deploy_fsm.has("phases"):   # D7a: the phase panel, never the one-for-one alternation text
+		_solo_phase_panel()
+		return
 	var phase := str(_solo_deploy_fsm.get("phase", "main"))
 	var ai_left: int = solo_controller.deploy_pending() if phase == "main" else solo_controller.deploy_scouts_pending()
 	var what := "one unit" if phase == "main" else "one SCOUT unit (up to 12\" ahead of your zone)"
@@ -3231,8 +3325,24 @@ func _solo_deploy_human_done_one() -> void:
 			_solo_show_toast("%s %s — move it, then ✓" % [(gu as GameUnit).get_name(), broken])
 			_solo_deploy_show_human_turn()
 			return
+	if _solo_deploy_fsm.has("phases"):   # D7a: the unit must stand in the phase's zone
+		for gu in placed:
+			var outside := _solo_phase_zone_violation(gu as GameUnit)
+			if not outside.is_empty():
+				_solo_show_toast("%s %s — move it, then ✓" % [(gu as GameUnit).get_name(), outside])
+				return
 	for gu in placed:
 		(_solo_deploy_fsm["human_placed"] as Dictionary)[(gu as GameUnit).unit_id] = true
+	if _solo_deploy_fsm.has("phases"):
+		var left: int = int(_solo_deploy_fsm["phase_left"]) - placed.size()
+		var slot: int = solo_controller.human_slot
+		(_solo_deploy_fsm["phase_placed"] as Dictionary)[slot] = int((_solo_deploy_fsm["phase_placed"] as Dictionary).get(slot, 0)) + placed.size()
+		_solo_deploy_fsm["phase_left"] = left
+		if left <= 0:
+			_solo_deploy_fsm["human_turn"] = false
+			_solo_deploy_fsm["phase_i"] = int(_solo_deploy_fsm["phase_i"]) + 1
+			_solo_phase_start()
+		return
 	_solo_deploy_fsm["human_turn"] = false
 	_solo_deploy_ai_turn()
 
