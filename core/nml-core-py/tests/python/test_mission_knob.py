@@ -219,3 +219,39 @@ def test_an_arena_game_hands_the_missions_zone_to_the_deploy_pipeline(monkeypatc
         del catalog["disc_fixture"]
     disc = [{"disc": {"c": [0, 0], "r_in": 12}}]
     assert seen == [disc, disc, None, None]  # two deploy_side calls (one per slot) per game
+
+
+def test_roles_decide_each_slots_gates_and_a_roles_less_mission_has_none():
+    """NML-1010 D6b: R7a picks the attacker from the roll-off winner; the catalog gates follow the role."""
+    ad = {"roles": True, "attacker_points_factor": 1.25,
+          "deploy_gates": {"attacker": {"min_from_enemy_in": 12}, "defender": {"max_from_friend_in": 6}}}
+    assert sp._ai_attacker(ad, 2) == 2 and sp._ai_attacker(dict(ad, attacker_points_factor=1.0), 2) == 1
+    assert sp._ai_attacker({"scoring": "end"}, 2) == 0
+    assert sp._role_gates(ad, 2) == {"1": {"max_from_friend_in": 6}, "2": {"min_from_enemy_in": 12}}
+    assert sp._role_gates(ad, 0) == {} and sp._role_gates({"roles": True}, 1) == {}
+
+
+@needs_lists
+def test_an_interleaved_game_hands_each_side_its_role_gates_to_the_deploy_pipeline(monkeypatch):
+    core = nml_core.load(str(REPO))
+    sp.resolve_mission("duel", REPO)
+    catalog = sp._MISSION_CATALOG_CACHE[str(REPO)]
+    gates = {"attacker": {"min_from_enemy_in": 12}, "defender": {"max_from_friend_in": 6}}
+    catalog["gates_fixture"] = dict(catalog["duel"], roles=True, attacker_points_factor=1.25, deploy_gates=gates)
+    seen: list = []
+    real = nml_core.deploy_interleaved
+
+    def spy(*a, **kw):
+        seen.append((kw.get("gates1"), kw.get("gates2")))
+        return real(*a, **kw)
+
+    monkeypatch.setattr(nml_core, "deploy_interleaved", spy)
+    try:
+        res = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="gates_fixture",
+                           deployment="interleaved", **FAST)
+        sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="duel", deployment="interleaved", **FAST)
+    finally:
+        del catalog["gates_fixture"]
+    # the winner (opener) attacks under factor 1.25; P1's role is stamped in the result
+    want = (gates["attacker"], gates["defender"]) if res["mission"]["role_p1"] == "attacker" else (gates["defender"], gates["attacker"])
+    assert seen == [want, (None, None)]
