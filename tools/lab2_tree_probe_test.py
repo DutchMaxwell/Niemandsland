@@ -170,3 +170,36 @@ def test_board_scores_are_per_board_and_a_missing_or_short_board_fails():
     assert abs(s["B_LI"] - 0.25) < 1e-12 and abs(s["B_LC"] - 0.5) < 1e-12
     with pytest.raises(SystemExit):
         lab.board_scores(done[:-1])
+
+
+class StampNm:
+    """A stand-in nml_core for the pilot's environment gate (no replay ever runs)."""
+    BUILD_INFO = {"commit": "abc", "rules_epoch": 68, "dirty": False}
+    __file__ = __file__
+
+
+def _pilot(monkeypatch, extra, build_info=None):
+    monkeypatch.setitem(sys.modules, "nml_core", StampNm)
+    monkeypatch.setattr(StampNm, "BUILD_INFO", build_info or StampNm.BUILD_INFO)
+    return lab.main(["pilot", "--namespace", "t", *extra])
+
+
+FULL = ["--expect-commit", "abc", "--expect-epoch", "68", "--expect-model-sha", "m", "--expect-wheel-sha", "w"]
+
+
+def test_a_non_dry_pilot_without_every_expectation_stops_with_exit_2(monkeypatch, capsys):
+    assert _pilot(monkeypatch, FULL[:6]) == 2          # no --expect-wheel-sha
+    assert "missing" in capsys.readouterr().out
+    assert _pilot(monkeypatch, []) == 2
+
+
+def test_a_dirty_build_stops_the_pilot(monkeypatch, capsys):
+    assert _pilot(monkeypatch, FULL, {"commit": "abc", "rules_epoch": 68, "dirty": True}) == 2
+    assert "dirty" in capsys.readouterr().out
+
+
+def test_the_strict_stamp_records_dirty_and_the_wheel_sha():
+    stamp, bad = lab.env_stamp(StampNm, "", {"commit": "abc", "rules_epoch": 68, "model_sha256": None,
+                                              "wheel_sha256": None}, strict=True)
+    assert stamp["dirty"] is False and len(stamp["wheel_sha256"]) == 64
+    assert bad == ["missing:model_sha256", "missing:wheel_sha256"]
