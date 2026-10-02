@@ -95,10 +95,15 @@ def make_row(identity, build, model_sha256, header_sha256, net, rec, y, winner, 
 
 
 def guarded(nm, fn):
-    """(fn(), None), or (None, reason) when the core declined (Unsupported) or the call timed out."""
+    """(fn(), None), or (None, reason) when the core declined (Unsupported), the call timed out or the core PANICKED
+    (pyo3's PanicException is a BaseException: uncaught it kills the worker; caught, it ends this row as INVALID)."""
     try:
         return fn(), None
     except nm.Unsupported as e:
         return None, "unsupported: %s" % e
     except TimeoutError as e:
         return None, "timeout: %s" % e
+    except BaseException as e:
+        if type(e).__name__ != "PanicException":
+            raise
+        return None, "panic: %s" % e
