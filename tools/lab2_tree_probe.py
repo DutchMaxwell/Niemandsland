@@ -95,6 +95,46 @@ def red_die(rec):
     return bad
 
 
+def source_of(rec):
+    """The source game of a transition, timing state or position: `slot:candidate` (lab2_source's header key)."""
+    return rec.get("source") or ("%s:%s" % (rec["slot"], rec["candidate"]) if "candidate" in rec else None)
+
+
+def game_header(headers, source, base, extra=None):
+    """The header a recorded state is played under. A header carries ITS game's profiles, terrain and knobs, so with
+    `headers` (lab2_source's `<transitions>.headers`, source -> that game's recorded header) it is the source game's
+    header with the base header's knobs, then the arm's, overlaid; without, the one base header (one-game fixtures)."""
+    if headers is None:
+        hdr = base
+    elif source in headers:
+        hdr = headers[source]
+    else:
+        raise SystemExit("no recorded game header for source %r" % source)
+    return dict(hdr, knobs={**hdr.get("knobs", {}), **base.get("knobs", {}), **(extra or {})})
+
+
+def make_core(nm, repo, base, headers):
+    """core(extra, source) -> (a fresh core under that game's header + the arm's knobs, the header's sha)."""
+    import lab2_rows
+
+    def core(extra, source=None):
+        hdr = game_header(headers, source, base, extra)
+        c = nm.load(repo)
+        c.set_header(hdr)
+        return c, lab2_rows.sha_of(hdr)
+    return core
+
+
+def replay_records(nm, repo, recs, headers):
+    """Part 1: every record and both REDs replayed on a fresh core under the record's OWN game header."""
+    core = make_core(nm, repo, {}, headers)
+    run = lambda rec, shown: replay_transition(nm, core({}, source_of(rec))[0], shown)
+    red_rec = next(r for r in recs if r["after"].get("vp") is not None)
+    die_rec = next(r for r in recs if any(x["faces"] for x in r["rolls"]))
+    return [run(r, r) for r in recs], {"RED-VP": run(red_rec, red_vp(red_rec))["ok"],
+                                       "RED-DIE": run(die_rec, red_die(die_rec))["ok"]}
+
+
 # ---- part 2: the timing set (PREREG section 6) ---------------------------------------------------
 BUDGETS = (32, 64, 128, 256)
 #: chi2 quantile(0.10, 12) — the prereg's small-pilot variance allowance F = 12 / this.
@@ -146,7 +186,7 @@ def cmd_timing(a) -> int:
     from lab2_net import ShippedNet
     states = pick_states(json.load(open(a.states)), a.per_cell)
     core, net = nm.load(a.repo), ShippedNet(a.repo)
-    base = json.load(open(a.header))
+    base, headers = json.load(open(a.header)), (json.load(open(a.headers)) if a.headers else None)
     if a.statics:
         statics = json.loads(a.statics)
     else:
@@ -156,7 +196,7 @@ def cmd_timing(a) -> int:
     rows, report = {}, ["# Tree pilot timing set (hardware: %s, net %s...)" % (a.hardware, net.model_sha256[:8]), ""]
     for cell, sts in sorted(states.items()):
         def run(st, extra):
-            core.set_header(dict(base, knobs=dict(base["knobs"], **extra)))
+            core.set_header(game_header(headers, source_of(st), base, extra))  # the state's own game header
             # the shipped net prices the leaves of EVERY timed call (section 6: encoding/inference inside the call)
             return lambda: core.plan_with_rollout(core.state_of(st["state"]), st["player"], statics,
                                                   leaf_value_fn=net.hook(st["player"]), leaf_value_w=1.0)
@@ -360,26 +400,22 @@ def _libs():
 
 def _endings_init(cfg):
     """Once per worker: the core, the net, the headers and the row identity (one core + one net per worker)."""
-    import lab2_rows
     nm, sp, ShippedNet = _libs()
     net, base = ShippedNet(cfg["repo"]), json.load(open(cfg["header"]))
-
-    def core(extra):
-        hdr = dict(base, knobs=dict(base["knobs"], **extra))
-        c = nm.load(cfg["repo"])
-        c.set_header(hdr)
-        return c, lab2_rows.sha_of(hdr)
-    inc, inc_sha = core({})
-    return {"nm": nm, "sp": sp, "net": net, "core": core, "inc": inc, "inc_sha": inc_sha, "cfg": cfg,
+    headers = json.load(open(cfg["headers"])) if cfg.get("headers") else None
+    return {"nm": nm, "sp": sp, "net": net, "core": make_core(nm, cfg["repo"], base, headers), "cfg": cfg,
             "allow": json.load(open(cfg["timing"])), "ctx": run_context(nm, cfg["prereg"], net)}
 
 
 def _endings_work(w, cid, pos):
-    """One complete position cluster: every arm x every replicate; rows written, y per arm returned."""
-    y, bad, hdr = {}, [], {"inc": w["inc_sha"]}
+    """One complete position cluster: every arm x every replicate, every core under the position's own game header;
+    rows written, y per arm returned."""
+    src = source_of(pos)
+    inc, inc_sha = w["core"]({}, src)
+    y, bad, hdr = {}, [], {"inc": inc_sha}
     for arm in ARMS:
-        cand, hdr[arm] = w["core"](dict(ARM_KNOBS[arm], **({"deadline_us": w["allow"][pos["cell"]]["B_us"]} if arm != "I" else {})))
-        rows = [ending_row(w["nm"], w["sp"], {"inc": w["inc"], "cand": cand}, pos, arm, r, w["net"], dict(w["ctx"], hdr=hdr))
+        cand, hdr[arm] = w["core"](dict(ARM_KNOBS[arm], **({"deadline_us": w["allow"][pos["cell"]]["B_us"]} if arm != "I" else {})), src)
+        rows = [ending_row(w["nm"], w["sp"], {"inc": inc, "cand": cand}, pos, arm, r, w["net"], dict(w["ctx"], hdr=hdr))
                 for r in range(STREAMS)]
         for row in rows:
             write_row(w["cfg"]["rows_dir"], row)
@@ -405,7 +441,13 @@ def cmd_endings(a) -> int:
         if not arm_headers_differ_only_in_leaf(base, allow[cell]["B_us"]):
             print("[endings] STOP: the L and T headers of %s differ in more than tree_leaf" % cell)
             return 2
-    cfg = {"repo": a.repo, "header": a.header, "timing": a.timing, "rows_dir": a.rows_dir, "prereg": a.prereg_sha256}
+    if a.headers:
+        missing = sorted({str(source_of(p)) for p in positions} - set(json.load(open(a.headers))))
+        if missing:
+            print("[endings] STOP: no recorded game header for %s" % missing)
+            return 2
+    cfg = {"repo": a.repo, "header": a.header, "headers": a.headers, "timing": a.timing, "rows_dir": a.rows_dir,
+           "prereg": a.prereg_sha256}
     reports = lab2_pool.run_clusters({pos["slot"]: pos for pos in positions}, a.workers, _endings_init, _endings_work,
                                      (cfg,), key=a.scheduler_key)
     if a.pilot_json:
@@ -595,11 +637,12 @@ def cmd_pilot(a) -> int:
         print("[pilot] STOP: environment mismatch on %s: %s" % (bad, canon(stamp)))
         return 2
     recs = json.load(open(a.transitions))[: a.count]
-    core = nm.load(a.repo)
-    results = [replay_transition(nm, core, r) for r in recs]
-    red_rec = next(r for r in recs if r["after"].get("vp") is not None)
-    reds = {"RED-VP": replay_transition(nm, core, red_vp(red_rec))["ok"],
-            "RED-DIE": replay_transition(nm, core, red_die(next(r for r in recs if any(x["faces"] for x in r["rolls"]))))["ok"]}
+    headers = json.load(open(a.headers or a.transitions + ".headers"))
+    missing = sorted({str(source_of(r)) for r in recs} - set(headers))
+    if missing:
+        print("[pilot] STOP: no recorded game header for %s" % missing)
+        return 2
+    results, reds = replay_records(nm, a.repo, recs, headers)
     passed = len(results) == a.count and all(r["ok"] for r in results) and not any(reds.values())
     out = {"plan": plan, "stamp": stamp, "replayed": len(results), "failed": [i for i, r in enumerate(results) if not r["ok"]],
            "reds_passed_the_check": [k for k, v in reds.items() if v], "pass": passed}
@@ -614,6 +657,7 @@ def main(argv) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("pilot")
     p.add_argument("--transitions", default="")
+    p.add_argument("--headers", default="", help="source -> recorded game header (default: <transitions>.headers)")
     p.add_argument("--count", type=int, default=100)
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--wall-hours", type=float, default=6)
@@ -629,6 +673,7 @@ def main(argv) -> int:
     t = sub.add_parser("timing")
     t.add_argument("--states", required=True, help="JSON list of {cell, state, player}")
     t.add_argument("--header", required=True, help="JSON header with a knobs block (the incumbent 10/3)")
+    t.add_argument("--headers", default="", help="lab2_source's <transitions>.headers: each state's own game header")
     t.add_argument("--statics", default=None)
     t.add_argument("--per-cell", type=int, default=12)
     t.add_argument("--hardware", required=True, help="the hardware class label (m_h(c) is per class), stamped into the output")
@@ -638,6 +683,7 @@ def main(argv) -> int:
     e = sub.add_parser("endings")
     e.add_argument("--positions", required=True, help="JSON list of {cell, cluster, mover, state, owners_before_round}")
     e.add_argument("--header", required=True)
+    e.add_argument("--headers", default="", help="lab2_source's <transitions>.headers: each position's own game header")
     e.add_argument("--timing", required=True, help="the timing subcommand's .json (B_us per cell)")
     e.add_argument("--resamples", type=int, default=100_000)
     e.add_argument("--seed", type=int, default=0, help="PCG64 seed: part A hashed bootstrap key (decimal)")
