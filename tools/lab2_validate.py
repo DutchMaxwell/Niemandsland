@@ -3,8 +3,9 @@
 
 `validate(rows, manifest)` -> (ok, problems). A row follows the shared row schema ("stage0-row/1"); the manifest is
 {"rows": {row_id: {"arm", "seat", "net_seats" (default both)}}, "prereg_sha256", "rules_epoch", "model_sha256",
-"wheel_sha256", "headers": {arm: {seat: sha256}}}. Problems: an unknown, missing, duplicate or conflicting row ID; a
-wrong seat/arm/net/hash/epoch or a dirty build; an invalid row (illegal action, unported / overflow / unsupported
+"wheel_sha256", "headers": {arm: {seat: sha256}}}; a row entry's own "headers": {seat: sha256} overrides its arm's
+(the candidate seat, the cell's allowance and the source game move a real row's map). Problems: an unknown, missing,
+duplicate or conflicting row ID; a wrong seat/arm/net/hash/epoch or a dirty build; an invalid row (illegal action, unported / overflow / unsupported
 path, net_inactive — it never reaches a score); a valid row without an outcome; a tree stamp on a non-tree decision
 or none on a tree decision; a non-finite timing. `pass_flags` withholds every PASS flag unless validation passed.
 """
@@ -36,7 +37,8 @@ def _row_problems(row, want, m):
             out.append(("wrong_" + key, got))
     if build.get("dirty") is not False:
         out.append(("dirty_build", build.get("dirty")))
-    heads = {str(s): h for s, h in m["headers"].get(row.get("arm"), {}).items()}
+    expect = want["headers"] if "headers" in want else m["headers"].get(row.get("arm"), {})
+    heads = {str(s): h for s, h in expect.items()}
     if {str(s): h for s, h in (row.get("header_sha256") or {}).items()} != heads:
         out.append(("wrong_header_sha256", row.get("header_sha256")))
     net = row.get("net") or {}
