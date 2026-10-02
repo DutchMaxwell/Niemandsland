@@ -50,6 +50,13 @@ def test_tree_seat_parts_and_stamps_by_seat():
 
 
 @needs_lists
+def test_a_deadline_stamps_its_seat_only_when_it_parts():
+    assert "knobs_by_seat" not in _play(deep_player=1, deep_deadline_us=0)
+    assert _play(deep_player=1, deep_search_mode="tree", deep_deadline_us=900)["knobs_by_seat"]["p1"] == {
+        "top_k": 2, "horizon": 1, "search_mode": "tree", "deadline_us": 900}
+
+
+@needs_lists
 def test_the_same_seed_twice_is_byte_identical():
     a = _play(deep_player=2, deep_search_mode="tree")
     b = _play(deep_player=2, deep_search_mode="tree")

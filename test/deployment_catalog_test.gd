@@ -11,9 +11,10 @@ func before_test() -> void:
 	DeploymentCatalog.reset_cache()
 
 
-func test_catalog_lists_the_v1_six() -> void:
+func test_catalog_lists_the_v1_six_and_the_attack_defend_three() -> void:
 	assert_that(DeploymentCatalog.style_ids()).is_equal(
-		["disordered", "front_line", "ground_war", "opposing_forces", "side_battle", "spearhead"])
+		["anywhere", "centre_disc_12", "disordered", "edge_band_12", "front_line", "ground_war",
+		"opposing_forces", "side_battle", "spearhead"])
 
 
 func test_front_line_matches_todays_live_constants() -> void:
@@ -51,3 +52,36 @@ func test_opposing_forces_corners() -> void:
 	assert_bool(DeploymentCatalog.in_zone(style, 1, Vector2(-30, -20))).is_false()
 	assert_bool(DeploymentCatalog.in_zone(style, 2, Vector2(30, -20))).is_true()
 	assert_bool(DeploymentCatalog.in_zone(style, 2, Vector2(30, 20))).is_false()
+
+
+## D4a: the SAME six points per style are pinned in core/nml-core/tests/objectives.rs (D4b).
+const AD_POINTS := {
+	"centre_disc_12": [[0, 0, true], [11, 0, true], [13, 0, false], [0, -13, false], [8, 8, true], [9, 9, false]],
+	"edge_band_12": [[0, -20, true], [30, 0, true], [0, 0, false], [23, 0, false], [0, 11, false], [-35, 23, true]],
+	"anywhere": [[0, 0, true], [35, 23, true], [-35, -23, true], [37, 0, false], [0, 25, false], [36.5, 24.5, false]],
+}
+
+
+func test_attack_defend_styles_pin_six_points_each_for_both_players() -> void:
+	for id in AD_POINTS:
+		var style := DeploymentCatalog.get_style(id)
+		for pt in AD_POINTS[id]:
+			for player in [1, 2]:
+				assert_bool(DeploymentCatalog.in_zone(style, player, Vector2(pt[0], pt[1]))) \
+					.override_failure_message("%s p%d (%s, %s)" % [id, player, pt[0], pt[1]]).is_equal(pt[2])
+
+
+func test_zone_polygons_turn_a_disc_into_a_ring_and_keep_polygons() -> void:
+	var disc := DeploymentCatalog.zone_polygons(DeploymentCatalog.get_style("centre_disc_12"), 1)
+	assert_int(disc.size()).is_equal(1)
+	assert_int((disc[0] as PackedVector2Array).size()).is_equal(48)
+	assert_float((disc[0] as PackedVector2Array)[7].length()).is_equal_approx(12.0, 0.001)
+	assert_int(DeploymentCatalog.zone_polygons(DeploymentCatalog.get_style("edge_band_12"), 2).size()).is_equal(4)
+
+
+func test_the_overlay_draws_one_mesh_per_polygon_for_a_style() -> void:
+	var ov = auto_free(preload("res://scripts/terrain_overlay.gd").new())
+	ov.set_style_zones(DeploymentCatalog.get_style("edge_band_12"))
+	assert_int(ov.deployment_zone_meshes.size()).is_equal(8)
+	ov.set_style_zones(DeploymentCatalog.get_style("centre_disc_12"))
+	assert_int(ov.deployment_zone_meshes.size()).is_equal(2)

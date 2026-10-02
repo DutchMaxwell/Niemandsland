@@ -24,13 +24,21 @@ def canon(obj) -> str:
     return json.dumps(obj, sort_keys=True, ensure_ascii=True, allow_nan=True)
 
 
-def env_stamp(nm, net_path, expect):
-    """The environment, and the list of mismatches against the expected values."""
+def env_stamp(nm, net_path, expect, strict=False):
+    """The environment, and the list of mismatches against the expected values. `strict` (a real pilot): every
+    expectation must be given ("missing:<key>") and the build must be clean (`dirty` is False)."""
     info = dict(getattr(nm, "BUILD_INFO", {}))
     sha = hashlib.sha256(open(net_path, "rb").read()).hexdigest() if net_path else None
-    stamp = {"python": sys.version.split()[0], "commit": info.get("commit"),
-             "rules_epoch": info.get("rules_epoch"), "model_sha256": sha}
-    return stamp, [k for k, v in expect.items() if v is not None and stamp.get(k) != v]
+    so = getattr(nm, "__file__", None)   # the loaded nml_core binary = the installed wheel's extension module
+    wheel = hashlib.sha256(open(so, "rb").read()).hexdigest() if so and os.path.exists(so) else None
+    stamp = {"python": sys.version.split()[0], "commit": info.get("commit"), "rules_epoch": info.get("rules_epoch"),
+             "model_sha256": sha, "dirty": info.get("dirty"), "wheel_sha256": wheel}
+    bad = [k for k, v in expect.items() if v is not None and stamp.get(k) != v]
+    if strict:
+        bad += ["missing:" + k for k, v in expect.items() if v is None]
+        if stamp["dirty"] is not False:
+            bad.append("dirty")
+    return stamp, bad
 
 
 def replay_transition(nm, core, rec):
@@ -162,39 +170,78 @@ def cmd_timing(a) -> int:
 
 # ---- part A: the endings (PREREG section 8-9) ---------------------------------------------------
 ARMS = ("I", "L", "T")
-#: Played streams: stream r of position p seeds `Rng(base)` and `Tray(base + TRAY_OFFSET)`, the SAME pair for
-#: every arm (common random numbers).
-STREAM_BASE, POS_STRIDE, TRAY_OFFSET, STREAMS = 740_000_000, 100_000, 50_000, 8
+#: The 8 played streams of a position come from its `eval` list (decimal key seeds: `Rng(general)`, `Tray(tray)`),
+#: the SAME pair for every arm (common random numbers).
+STREAMS = 8
 ARM_KNOBS = {"I": {}, "L": {"search_mode": "tree", "tree_leaf": "blend"},
-             "T": {"search_mode": "tree", "tree_leaf": "terminal"}}
+             "T": {"search_mode": "tree", "tree_leaf": "terminal"},
+             # P9 tray arms: configured here, run only by the tray probe (step 27), never by `endings`
+             "L_tray": {"search_mode": "tree", "tree_leaf": "blend", "tree_dice": "tray"},
+             "T_tray": {"search_mode": "tree", "tree_leaf": "terminal", "tree_dice": "tray"}}
 CONTRASTS = (("A_T", "T", "I"), ("A_L", "L", "I"), ("A_TL", "T", "L"))
 
 
-def stream_pair(nm, pos_i, r):
-    base = STREAM_BASE + pos_i * POS_STRIDE + r
-    return nm.Rng(base), nm.Tray(base + TRAY_OFFSET)
+def eval_streams(nm, pos, r):
+    return nm.Rng(int(pos["eval"][r]["general"])), nm.Tray(int(pos["eval"][r]["tray"]))
 
 
-def play_ending(nm, sp, cores, pos, rng, tray):
+def search_streams(nm, pos, arm, r):
+    """One search stream per seat for (position, replicate, arm): `pos["search"][arm][r][owner]` decimal keys."""
+    return {int(o): {"rng": nm.Rng(int(k)), "seed": int(k), "counter": 0, "pending": None}
+            for o, k in pos["search"][arm][r].items()}
+
+
+def finish_ending(nm, sp, cores, pos, rng, tray, net=None, search=None, log=None):
     """Finish the last round from a pre-pick state: the mover's EVERY decision from `cores["cand"]`, the
-    other side's from `cores["inc"]`; then the round-end referee and the mission verdict. Returns the
-    candidate seat's score 1 / 0.5 / 0."""
+    other side's from `cores["inc"]`; then the round-end referee (round count from the state's own ledger)
+    and the mission verdict. Returns (final state, owners, verdict). With `net` every side's planner prices its
+    leaves with the shipped net (weight 1.0); with `search` a tree core draws its `sig` from its seat's stream
+    (two draws per decision, as `play_game(search_seeds=)`) and the draw is appended to `log`."""
     mover, state = pos["mover"], cores["inc"].state_of(pos["state"])
     core_of = lambda side: cores["cand"] if side == mover else cores["inc"]
     owners, led, turn = list(pos["owners_before_round"]), sp._ledger_of(state), mover
+    hooks = {side: {"leaf_value_fn": {side: net.hook(side)}, "leaf_value_w": 1.0} for side in (1, 2)} if net else {}
     for _ in range(state.units * 2 + 4):
         for side in (turn, 3 - turn):
-            act = sp._pick_for(core_of(side), state, side)
+            sg = sp._search_sig(search, side, core_of(side))
+            act = sp._pick_for(core_of(side), state, side, **hooks.get(side, {}), **({"sig": sg["sig"]} if sg else {}))
             if act:
+                if sg:
+                    search[side].update(pending=None, counter=sg["counter"] + 1)
+                    log.append({"side": side, "seed": sg["seed"], "counter": sg["counter"], "sig": sg["sig"]})
                 break
         else:
             break
         state, _ = core_of(side).resolve_with_tray(state, act["action"], rng, tray)
         state = cores["inc"].restamp_los(state)
         turn = 3 - side
-    state, owners = sp._round_end(cores["inc"], state, owners, led, sp.ROUNDS)
-    win = sp._verdict(cores["inc"], owners, led)
-    return 0.5 if win == "draw" else float(win == "p%d" % mover)
+    state, owners = sp._round_end(cores["inc"], state, owners, led, led["rounds"])
+    return state, owners, sp._verdict(cores["inc"], owners, led)
+
+
+def play_ending(nm, sp, cores, pos, rng, tray):
+    """`finish_ending`'s verdict as the candidate seat's score 1 / 0.5 / 0."""
+    win = finish_ending(nm, sp, cores, pos, rng, tray)[2]
+    return 0.5 if win == "draw" else float(win == "p%d" % pos["mover"])
+
+
+def run_ending(nm, sp, cores, pos, rng, tray, arm, net=None, search=None):
+    """One ending row: the candidate's score, the net calls it cost, the search draws; INVALID "net_inactive"
+    unless the net priced leaves for the I opponent always and for the candidate side in the I and L arms."""
+    before = {s: dict(c) for s, c in (net.counts if net else {}).items()}
+    log = []
+    win = finish_ending(nm, sp, cores, pos, rng, tray, net, search, log)[2]
+    calls = {s: c["calls"] - before.get(s, {"calls": 0})["calls"] for s, c in (net.counts if net else {}).items()}
+    need = [3 - pos["mover"]] + ([pos["mover"]] if arm in ("I", "L") else [])
+    ok = net is None or all(calls.get(s, 0) > 0 for s in need)
+    return {"arm": arm, "y": 0.5 if win == "draw" else float(win == "p%d" % pos["mover"]), "valid": ok,
+            "reason": None if ok else "net_inactive", "net_calls": calls, "search": log}
+
+
+def arm_headers_differ_only_in_leaf(base, wall):
+    """The L and T knob sets (prereg section 6: same EV model and operator settings) differ ONLY in tree_leaf."""
+    knobs = {a: dict(base["knobs"], **ARM_KNOBS[a], tree_wall_ms=wall) for a in ("L", "T")}
+    return {k for k in set(knobs["L"]) | set(knobs["T"]) if knobs["L"].get(k) != knobs["T"].get(k)} == {"tree_leaf"}
 
 
 def position_gains(y):
@@ -224,22 +271,35 @@ def cmd_endings(a) -> int:
     import nml_core as nm  # lazy
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
     import selfplay as sp
+    from lab2_net import ShippedNet
+    net = ShippedNet(a.repo)
     base, allow = json.load(open(a.header)), json.load(open(a.timing))
     positions = json.load(open(a.positions))
+    invalid = []
     def core(extra):
         c = nm.load(a.repo)
         c.set_header(dict(base, knobs=dict(base["knobs"], **extra)))
         return c
     inc = core({})
+    for cell in sorted({pos["cell"] for pos in positions}):
+        if not arm_headers_differ_only_in_leaf(base, max(1, allow[cell]["B_us"] // 1000)):
+            print("[endings] STOP: the L and T headers of %s differ in more than tree_leaf" % cell)
+            return 2
     gains = {}
     for i, pos in enumerate(positions):
         wall = max(1, allow[pos["cell"]]["B_us"] // 1000)  # the knob is whole ms; 0 would mean OFF
         y = {}
         for arm in ARMS:
             cand = core(dict(ARM_KNOBS[arm], **({"tree_wall_ms": wall} if arm != "I" else {})))
-            y[arm] = [play_ending(nm, sp, {"inc": inc, "cand": cand}, pos, *stream_pair(nm, i, r)) for r in range(STREAMS)]
+            rows = [run_ending(nm, sp, {"inc": inc, "cand": cand}, pos, *eval_streams(nm, pos, r), arm, net,
+                               search_streams(nm, pos, arm, r) if arm != "I" else None) for r in range(STREAMS)]
+            invalid += [(pos["slot"], arm, r) for r, row in enumerate(rows) if not row["valid"]]
+            y[arm] = [row["y"] for row in rows]
         gains.setdefault(pos["cell"], {})[pos["cluster"]] = position_gains(y)
         print("[endings] %d/%d %s %s" % (i + 1, len(positions), pos["cell"], canon(gains[pos["cell"]][pos["cluster"]])), flush=True)
+    if invalid:
+        print("[endings] INVALID net_inactive rows: %s" % invalid)
+        return 1
     res = bootstrap_intervals(gains, a.resamples, a.seed)
     open(a.out, "w").write(canon({"gains": gains, "intervals": res}))
     print("[endings] " + canon(res))
@@ -316,7 +376,8 @@ def cmd_pilot(a) -> int:
         return 0
     import nml_core as nm  # lazy: a dry run needs no core
     stamp, bad = env_stamp(nm, a.net, {"commit": a.expect_commit, "rules_epoch": a.expect_epoch,
-                                       "model_sha256": a.expect_model_sha})
+                                       "model_sha256": a.expect_model_sha, "wheel_sha256": a.expect_wheel_sha},
+                           strict=True)
     if bad:
         print("[pilot] STOP: environment mismatch on %s: %s" % (bad, canon(stamp)))
         return 2
@@ -350,6 +411,7 @@ def main(argv) -> int:
     p.add_argument("--expect-commit")
     p.add_argument("--expect-epoch", type=int)
     p.add_argument("--expect-model-sha")
+    p.add_argument("--expect-wheel-sha", help="sha256 of the loaded nml_core binary (the wheel's .so)")
     p.add_argument("--dry-run", action="store_true")
     t = sub.add_parser("timing")
     t.add_argument("--states", required=True, help="JSON list of {cell, state, player}")

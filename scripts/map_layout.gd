@@ -222,6 +222,7 @@ var _undo_btn: Button = null
 var _redo_btn: Button = null
 var _modular_status_label: Label = null
 var _guideline_rows: VBoxContainer = null
+var _table_notice: Label = null  # one line after a table-size change cleared the map
 
 
 func _ready() -> void:
@@ -589,6 +590,7 @@ func _on_custom_zone_clear() -> void:
 func _handle_custom_zone_click(cell: Vector2) -> void:
 	if not custom_zone_editing:
 		return
+	_push_undo()  # one undo step per vertex
 
 	if custom_zone_symmetric:
 		if _custom_zone_stale_p1:
@@ -983,20 +985,49 @@ func _rebuild_derived() -> void:
 
 func _snapshot() -> Dictionary:
 	return {
+		"zone_p1": custom_zone_vertices_p1.duplicate(),
+		"zone_p2": custom_zone_vertices_p2.duplicate(),
+		"zone_stale": [_custom_zone_stale_p1, _custom_zone_stale_p2],
 		"pieces": placed_pieces.duplicate(true),
 		"free_cells": free_cells.duplicate(true),
 		"free_walls": free_walls.duplicate(true),
 		"next_id": _next_piece_id,
+		"objectives": mission_objectives.duplicate(),
 	}
 
 
 func _apply_snapshot(snap: Dictionary) -> void:
+	if snap.has("table"):  # an undo step made by Load: bring the old table + rotation back too
+		table_size_feet = snap["table"]
+		grid_rotation_degrees = snap["rotation"]
+		if rotation_slider:
+			rotation_slider.set_value_no_signal(grid_rotation_degrees)
+		if _table_notice:
+			_table_notice.visible = false
 	placed_pieces = (snap["pieces"] as Array).duplicate(true)
 	free_cells = (snap["free_cells"] as Dictionary).duplicate(true)
 	free_walls = (snap["free_walls"] as Array).duplicate(true)
+	if snap.has("zone_p1"):
+		_apply_zone_snapshot(snap)
 	_next_piece_id = int(snap.get("next_id", _next_piece_id))
+	if snap.has("objectives"):
+		mission_objectives.assign(snap["objectives"])
+		_update_objectives_status()
+		objectives_changed.emit(mission_objectives)
 	_rebuild_derived()
 	_update_modular_status()
+
+
+## Restore the custom-zone vertices (and the "old zone kept until the first new vertex" flags).
+func _apply_zone_snapshot(snap: Dictionary) -> void:
+	custom_zone_vertices_p1.assign(snap["zone_p1"])
+	custom_zone_vertices_p2.assign(snap["zone_p2"])
+	_custom_zone_stale_p1 = snap["zone_stale"][0]
+	_custom_zone_stale_p2 = snap["zone_stale"][1]
+	if _custom_zone_confirm_btn:
+		_custom_zone_confirm_btn.disabled = not custom_zone_editing or _custom_zone_current_count() < 3
+	if deployment_type == DeploymentType.CUSTOM:
+		deployment_type_changed.emit(DeploymentType.CUSTOM)
 
 
 ## Push the current state onto the undo stack (call BEFORE a mutation).
@@ -1215,6 +1246,9 @@ func _on_objectives_deploy_toggled(enabled: bool) -> void:
 
 ## Clear all objectives
 func _on_objectives_clear() -> void:
+	if mission_objectives.is_empty():
+		return
+	_push_undo()
 	mission_objectives.clear()
 	_update_objectives_status()
 	grid_container.queue_redraw()
@@ -1261,19 +1295,50 @@ func _on_save_file_selected(path: String) -> void:
 
 
 func _on_load_file_selected(path: String) -> void:
-	if not load_layout(path):
-		push_error("Failed to load layout")
+	if (placed_pieces.is_empty() and free_cells.is_empty() and free_walls.is_empty() and mission_objectives.is_empty()) \
+			or get_node_or_null("LoadConfirm") != null:
+		if get_node_or_null("LoadConfirm") == null and not load_layout(path):
+			push_error("Failed to load layout")
+		return
+	var parts := HouseStyle.overlay_sheet("Load this map?", 420)
+	var root: Control = parts["root"]
+	root.name = "LoadConfirm"
+	var body: VBoxContainer = parts["body"]
+	var msg := HouseStyle.label("Loading replaces the map you are editing. Ctrl+Z brings it back.", HouseStyle.BODY)
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD
+	body.add_child(msg)
+	var row := HouseStyle.button_row(["Load", "Cancel"], HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	body.add_child(row)
+	var confirm: Button = row.get_child(0)
+	confirm.name = "ConfirmLoadButton"
+	confirm.theme_type_variation = HouseStyle.PRIMARY
+	confirm.pressed.connect(func() -> void:
+		root.name = "LoadConfirmDone"
+		root.queue_free()
+		if not load_layout(path):
+			push_error("Failed to load layout"))
+	var cancel: Button = row.get_child(1)
+	cancel.name = "CancelLoadButton"
+	cancel.pressed.connect(func() -> void:
+		root.name = "LoadConfirmDone"
+		root.queue_free())
+	(parts["close"] as Button).pressed.connect(cancel.pressed.emit)
+	add_child(root)
 
 
 func set_table_size(size_feet: Vector2) -> void:
 	# Check if table size actually changed
 	var size_changed = table_size_feet != size_feet
+	var old_size := table_size_feet
 
 	table_size_feet = size_feet
 
 	# CRITICAL: If table size changed and we have terrain/objective data, clear it
 	# Grid cell coordinates are ABSOLUTE and become invalid when grid dimensions change
 	if size_changed:
+		var had_map := not (placed_pieces.is_empty() and free_cells.is_empty() and free_walls.is_empty() and mission_objectives.is_empty())
+		if had_map:
+			_remember_map_before_table_change(old_size)
 		if not placed_pieces.is_empty() or not free_cells.is_empty() or not free_walls.is_empty():
 			push_warning("Table size changed - clearing terrain data (grid coordinates are now invalid)")
 			placed_pieces.clear()
@@ -1291,6 +1356,37 @@ func set_table_size(size_feet: Vector2) -> void:
 	_update_stats()
 	# NOTE: Don't emit layout_updated here - it may be called during initialization
 	# before terrain_overlay exists. Updates are sent when user closes editor.
+
+
+## The map a table-size change is about to wipe becomes one undo step (with its table size, restored by the
+## "table" key of _apply_snapshot), and a one-line notice says what was cleared.
+func _remember_map_before_table_change(old_size: Vector2) -> void:
+	var replaced := _snapshot()
+	replaced["table"] = old_size
+	replaced["rotation"] = grid_rotation_degrees
+	_undo_stack.append(replaced)
+	if _undo_stack.size() > UNDO_LIMIT:
+		_undo_stack.pop_front()
+	_redo_stack.clear()
+	_update_undo_redo_buttons()
+	var pieces := placed_pieces.size()
+	var objs := mission_objectives.size()
+	_show_table_notice("Table size changed - cleared %d piece%s, %d objective%s. Ctrl+Z brings the map back." % [
+		pieces, "" if pieces == 1 else "s", objs, "" if objs == 1 else "s"])
+
+
+func _show_table_notice(text: String) -> void:
+	if _modular_terrain_panel == null:
+		return
+	if _table_notice == null:
+		_table_notice = HouseStyle.label("", HouseStyle.SMALL)
+		_table_notice.name = "TableSizeNotice"
+		_table_notice.autowrap_mode = TextServer.AUTOWRAP_WORD
+		_table_notice.add_theme_color_override("font_color", HouseStyle.WARN)
+		_modular_terrain_panel.add_child(_table_notice)
+		_modular_terrain_panel.move_child(_table_notice, 0)
+	_table_notice.text = text
+	_table_notice.visible = true
 
 
 func _calculate_grid_dimensions() -> Vector2i:
@@ -2277,6 +2373,11 @@ func load_layout(file_path: String) -> bool:
 		push_error("Invalid layout data")
 		return false
 
+	# The map being replaced becomes one undo step (with the table it sat on)
+	var replaced := _snapshot()
+	replaced["table"] = table_size_feet
+	replaced["rotation"] = grid_rotation_degrees
+
 	# Load table size
 	if data.has("table_size"):
 		var ts = data.table_size
@@ -2327,7 +2428,9 @@ func load_layout(file_path: String) -> bool:
 	free_cells.clear()
 	free_walls.clear()
 	_next_piece_id = 1
-	_undo_stack.clear()
+	_undo_stack.append(replaced)
+	if _undo_stack.size() > UNDO_LIMIT:
+		_undo_stack.pop_front()
 	_redo_stack.clear()
 	_selected_piece_id = -1
 
@@ -2686,6 +2789,7 @@ const OBJECTIVE_SNAP_TOLERANCE := 1.5  # Inches - how close to click to remove a
 
 ## Toggle objective at the given 1" position (add if not present, remove if present)
 func _toggle_objective_at_position(inch_pos: Vector2) -> void:
+	_push_undo()
 	# Check if there's already an objective near this position
 	var existing_idx = _find_objective_near_position(inch_pos)
 
