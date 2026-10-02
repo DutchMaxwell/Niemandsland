@@ -11845,10 +11845,57 @@ static func ambush_earliest_round(gu: GameUnit) -> int:
 static func may_arrive_this_round(gu: GameUnit, round_number: int) -> bool:
 	if gu == null:
 		return false
+	if bool(gu.unit_properties.get("mission_reserve", false)):   # D8a: only after this round's winning roll
+		return int(gu.unit_properties.get("mission_arrival_round", 0)) == round_number
 	var due := int(gu.unit_properties.get("ambush_return_round", 0))
 	if due > 0:
 		return round_number == due
 	return round_number >= ambush_earliest_round(gu)
+
+
+## D8a — MISSION reserves (Attack & Defend: Rescue, Last Stand). The units a mission sets aside are
+## flagged `mission_reserve` + `ambush_reserve` (off-table, never activatable) and arrive only on a
+## winning die: from `from_round` on, each round every such unit rolls once and arrives on `arrive_on`+.
+
+## The AI's still-queued MAIN units, taken off the queue (what its phases did not deploy).
+func deploy_take_queue() -> Array:
+	var queue: Array = _deploy_alt.get("queue", [])
+	var all_units: Array = _deploy_alt.get("all_units", [])
+	var out: Array = []
+	for id in queue:
+		out.append(all_units[int(id)])
+	queue.clear()
+	return out
+
+
+## Set `units` aside as mission reserves; the AI's join its paced arrival list, a human's are held by the flag.
+func mission_reserve_set(units: Array) -> void:
+	for u in units:
+		var gu := u as GameUnit
+		if gu == null:
+			continue
+		gu.unit_properties["ambush_reserve"] = true
+		gu.unit_properties["mission_reserve"] = true
+		if int(gu.unit_properties.get("player_id", 0)) == ai_slot and not ambush_reserve.has(gu):
+			ambush_reserve.append(gu)
+
+
+## Roll the round's arrival die once for every held mission reserve of `slot` (from `from_round` on):
+## `die` is Callable() -> int (the real tray in a game). Returns [{unit, roll, arrives}] in held order.
+func mission_arrival_rolls(slot: int, round_number: int, from_round: int, arrive_on: int, die: Callable) -> Array:
+	var out: Array = []
+	if round_number < from_round or army_manager == null:
+		return out
+	for u in army_manager.get_game_units_for_player(slot):
+		var gu := u as GameUnit
+		if gu == null or gu.is_destroyed() or not bool(gu.unit_properties.get("mission_reserve", false)) \
+				or not bool(gu.unit_properties.get("ambush_reserve", false)):
+			continue
+		var roll: int = int(die.call())
+		var ok: bool = roll >= arrive_on
+		gu.unit_properties["mission_arrival_round"] = round_number if ok else 0
+		out.append({"unit": gu, "roll": roll, "arrives": ok})
+	return out
 
 
 ## How many of the AI's held reserves could arrive in `round_number` (the round-start gate: with
