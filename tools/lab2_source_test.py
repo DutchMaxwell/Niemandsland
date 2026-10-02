@@ -70,3 +70,17 @@ def test_spy_reads_no_result_field():
     for word in ("winner", "rounds_log", "verdict", "result", '"vp"', "expectation"):
         assert word not in src, word
 
+
+
+def test_cli_writes_positions_proof_and_exit_code(tmp_path):
+    import csv, json
+    tsv, header, out = tmp_path / "s.tsv", tmp_path / "h.json", tmp_path / "p.json"
+    with open(tsv, "w", newline="") as f:
+        w = csv.DictWriter(f, list(row("a")), delimiter="\t")
+        w.writeheader(), w.writerow(row("a"))
+    header.write_text(json.dumps({"knobs": {"top_k": 2, "horizon": 1, "menu_wide": "table"}}))
+    argv = ["source", "--slots", str(tsv), "--bank", BANK, "--lists", LISTS, "--header", str(header), "--out", str(out)]
+    assert ls.main(argv) == 0
+    data = json.loads(out.read_text())
+    assert len(data["positions"]) == 1 and data["ignored_header_knobs"] == ["menu_wide"]
+    assert data["net"]["1"]["calls"] > 0 and data["net"]["2"]["calls"] > 0

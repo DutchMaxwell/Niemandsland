@@ -8,9 +8,18 @@ and the mover's menu holds >= 2 generated choices. Eligibility reads state only,
 game, so no later outcome is ever computed. The first eligible candidate fills the slot; none within
 `cap` -> the slot is MISSING. A candidate row carries slot, cell, mission, mover, candidate, list_p1,
 list_p2 (file names under `lists`), terrain, layout, deploy, play, tray (decimal seeds); other columns
-ride along as `keys`. The slots-file reader and the `source` command follow in step 16b.
+ride along as `keys`.
+
+`source --slots D_sources.tsv --bank B --lists L --header I.json --cap 20 --out positions.json`: the slots
+file is tab-separated, one row per (slot, candidate) with the columns above in frozen key order. Header: only
+`top_k` / `horizon` of its knobs reach `play_game`; every other header knob is reported as ignored, never
+applied silently. Exit 1 when a slot is MISSING.
+Run: ~/.cache/nml-stage0/venv/bin/python3 tools/lab2_source.py source ...
 """
+import argparse
 import contextlib
+import csv
+import json
 import os
 import sys
 import time
@@ -22,6 +31,7 @@ POOL_RANGE = (2, 3)
 STAGES = ("no_last_round_state", "mover_mismatch", "pool_size", "menu_lt_2")
 REQUIRED = ("slot", "cell", "mission", "mover", "candidate", "list_p1", "list_p2",
             "terrain", "layout", "deploy", "play", "tray")
+HEADER_KNOBS = ("top_k", "horizon")
 
 
 class _Eligible(Exception):
@@ -113,3 +123,52 @@ def generate(sp, core, slots, repo, bank, lists, net, cap, play_kw):
         else:
             missing.append(slot)
     return positions, discarded, missing
+
+
+def read_slots(path):
+    """Slot id -> candidate rows in file order; the slot order is the order of first appearance."""
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        missing = [c for c in REQUIRED if c not in (reader.fieldnames or [])]
+        if missing:
+            raise SystemExit("slots file lacks columns: " + ",".join(missing))
+        slots = {}
+        for row in reader:
+            slots.setdefault(row["slot"], []).append(row)
+    return slots
+
+
+def cmd_source(a):
+    import nml_core as nm
+    sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "core", "nml-core-py", "python"))
+    import selfplay as sp
+    from lab2_net import ShippedNet
+    knobs = json.load(open(a.header)).get("knobs", {})
+    play_kw = {k: knobs[k] for k in HEADER_KNOBS if k in knobs}
+    ignored = sorted(set(knobs) - set(HEADER_KNOBS))
+    net = ShippedNet(a.repo)
+    positions, discarded, missing = generate(sp, nm.load(a.repo), read_slots(a.slots), a.repo, a.bank, a.lists,
+                                             net, a.cap, play_kw)
+    out = {"positions": positions, "discarded": discarded, "missing": missing, "ignored_header_knobs": ignored,
+           "net": net.proof()}
+    json.dump(out, open(a.out, "w"))  # no sort_keys: net.proof() mixes int seats with a str key
+    print("[source] positions %d discarded %d missing %s" % (len(positions), len(discarded), missing))
+    return 1 if missing else 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("source")
+    s.add_argument("--slots", required=True)
+    s.add_argument("--bank", required=True)
+    s.add_argument("--lists", required=True)
+    s.add_argument("--header", required=True)
+    s.add_argument("--cap", type=int, default=20)
+    s.add_argument("--out", required=True)
+    s.add_argument("--repo", default=os.path.dirname(_HERE))
+    return cmd_source(ap.parse_args(argv))
+
+
+if __name__ == "__main__":
+    sys.exit(main())
