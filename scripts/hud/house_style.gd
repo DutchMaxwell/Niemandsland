@@ -130,9 +130,12 @@ const CHIP := &"HsChip"             # a top-bar state chip: the phase (muted)
 const CHIP_ROUND := &"HsChipRound"  # the round (gold)
 const CHIP_TURN := &"HsChipTurn"    # your turn (accent dot)
 const CHIP_ENEMY := &"HsChipEnemy"  # the opponent's turn (danger dot)
+const CHIP_ONLINE := &"HsChipOnline"  # the connection: online (green dot)
+const CHIP_LINK_WARN := &"HsChipLinkWarn"  # the connection: reconnecting (amber dot)
 ## A chip's text colour and its dot (transparent = no dot).
-const CHIP_INK := {CHIP: MUTED, CHIP_ROUND: GOLD, CHIP_TURN: INK, CHIP_ENEMY: INK}
-const CHIP_DOT := {CHIP: Color(0, 0, 0, 0), CHIP_ROUND: Color(0, 0, 0, 0), CHIP_TURN: ACCENT, CHIP_ENEMY: DANGER}
+const CHIP_INK := {CHIP: MUTED, CHIP_ROUND: GOLD, CHIP_TURN: INK, CHIP_ENEMY: INK, CHIP_ONLINE: INK, CHIP_LINK_WARN: INK}
+const CHIP_DOT := {CHIP: Color(0, 0, 0, 0), CHIP_ROUND: Color(0, 0, 0, 0), CHIP_TURN: ACCENT, CHIP_ENEMY: DANGER,
+	CHIP_ONLINE: OK, CHIP_LINK_WARN: WARN}
 const SELECTED_SUFFIX := "On"
 
 # ===== Glyphs (Inter carries each one; the dice-panel inventory test checks has_char) =====
@@ -265,8 +268,9 @@ static func theme() -> Theme:
 	_button_variant(t, BAR_PRIMARY, _pad_x(primary[0], PAD_BAR_PRIMARY_X), _pad_x(primary[1], PAD_BAR_PRIMARY_X),
 		_pad_x(primary[2], PAD_BAR_PRIMARY_X), _pad_x(primary[3], PAD_BAR_PRIMARY_X), ON_GOLD, FONT_ACTION)
 	t.set_color(&"font_disabled_color", BAR_PRIMARY, _alpha(ON_GOLD, 0.7))
-	for v: StringName in [CHIP, CHIP_ROUND, CHIP_TURN, CHIP_ENEMY]:
-		var tint: Color = {CHIP: LINE, CHIP_ROUND: GOLD, CHIP_TURN: ACCENT, CHIP_ENEMY: DANGER}[v]
+	for v: StringName in [CHIP, CHIP_ROUND, CHIP_TURN, CHIP_ENEMY, CHIP_ONLINE, CHIP_LINK_WARN]:
+		var tint: Color = {CHIP: LINE, CHIP_ROUND: GOLD, CHIP_TURN: ACCENT, CHIP_ENEMY: DANGER,
+			CHIP_ONLINE: OK, CHIP_LINK_WARN: WARN}[v]
 		t.set_type_variation(v, &"PanelContainer")
 		t.set_stylebox(&"panel", v, _box(PANEL.blend(_alpha(tint, 0.10 if v != CHIP else 0.0)),
 			tint if v == CHIP else _alpha(tint, 0.55), RADIUS_CARD, PAD_CHIP_X, 0))
