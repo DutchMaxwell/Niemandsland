@@ -505,7 +505,9 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# through the legacy branches and the gate's 200/200 proves the OLD rules.
 			# Additive: a header written before this key still parses and still reads
 			# `0`, so every older corpus keeps replaying exactly as it did.
-			"rules_epoch": rules_epoch}}
+			# Tree plan step 13: the tree search knobs, ONLY those an env var set
+			# (AiPlanner.tree_knobs), so an unset game writes exactly the keys above.
+			"rules_epoch": rules_epoch}.merged(AiPlanner.tree_knobs())}
 	# D8a: additive, and only when the harness armed the rulebook generator — an unset
 	# run's header keeps exactly the keys it had before.
 	if not objectives_stamp.is_empty():
@@ -540,8 +542,13 @@ static func _mission_stamp() -> Dictionary:
 	if not MissionCatalog.mission_ids().has(mid):
 		mid = "duel"
 	var m := MissionCatalog.get_mission(mid)
-	return {"id": mid, "family": str(m.get("family", "face_off")),
+	var stamp := {"id": mid, "family": str(m.get("family", "face_off")),
 		"scoring": str(m.get("scoring", "end"))}
+	if bool(m.get("roles", false)):   # NML-1010 D2b: Attack & Defend only — every other header stays as is
+		stamp["rounds"] = int(m.get("rounds", 4))
+		if not SoloController.mission_roles.is_empty():
+			stamp["role_p1"] = "attacker" if int(SoloController.mission_roles["attacker"]) == 1 else "defender"
+	return stamp
 
 
 ## Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): the NAMED copy's

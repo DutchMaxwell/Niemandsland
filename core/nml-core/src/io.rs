@@ -343,6 +343,8 @@ pub(crate) struct PlainState {
     #[serde(default)]
     destroy_seq: Vec<i64>,
     #[serde(default)]
+    attacker: i64,
+    #[serde(default)]
     vp: Option<serde_json::Value>,
     #[serde(default)]
     vp_flavour: Option<serde_json::Value>,
@@ -873,6 +875,7 @@ pub(crate) fn state_of(
         objectives: plain.objectives,
         markers_meta,
         destroy_seq: plain.destroy_seq,
+        attacker: plain.attacker,
         vp: plain.vp.map(Rc::new),
         vp_flavour: plain.vp_flavour.map(Rc::new),
         vp_memo: plain.vp_memo.map(Rc::new),
@@ -1385,6 +1388,9 @@ pub fn plain_of(st: &State) -> serde_json::Value {
             "markers_meta".into(),
             serde_json::to_value(&st.markers_meta).unwrap_or(Value::Array(Vec::new())),
         );
+    }
+    if st.attacker != 0 {
+        out.insert("attacker".into(), st.attacker.into());
     }
     if !st.destroy_seq.is_empty() {
         out.insert(
