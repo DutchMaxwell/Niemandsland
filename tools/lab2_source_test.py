@@ -291,3 +291,33 @@ def test_ending_rows_carry_tree_only_on_tree_decisions(env):
     assert mine and all(d["tree"] and d["search"] and d["allocated_us"] == 50000 for d in mine)
     assert all(d["tree"] is None for d in row_t["decisions"] if d["arm"] == "I")
     assert all(d["tree"] is None and d["allocated_us"] is None for d in row_i["decisions"])
+
+
+def test_fullgames_on_two_workers_write_the_same_rows_as_one(env, tmp_path, monkeypatch):
+    import json
+    import lab2_tree_probe as lab
+    monkeypatch.setattr(lab, "bootstrap_intervals", lambda *a, **k: {})  # arm I alone has no L/C contrasts to resample
+    blocks = []
+    for i, seed in enumerate(("29", "31")):
+        blocks.append({"block": "b%d" % i, "cell": "c1", "mission": "domination",
+                       "army1": os.path.join(LISTS, "robot_legions_1000.json"), "army2": os.path.join(LISTS, "blessed_sisters_1000.json"),
+                       "seeds": {"terrain": seed, "layout": "10" + seed, "deploy": "20" + seed, "play_general": ["30" + seed, "31" + seed],
+                                 "tray": ["40" + seed, "41" + seed], "search": {}}})
+    for name, data in (("blocks", blocks), ("timing", {"c1": {"B_us": 20000}}), ("knobs", {"top_k": 2, "horizon": 1})):
+        (tmp_path / (name + ".json")).write_text(json.dumps(data))
+    pilot = tmp_path / "pilot.json"
+    for workers in (1, 2):
+        argv = ["fullgames", "--blocks", str(tmp_path / "blocks.json"), "--timing", str(tmp_path / "timing.json"),
+                "--knobs", str(tmp_path / "knobs.json"), "--bank", BANK, "--out-dir", str(tmp_path / ("w%d" % workers)),
+                "--prereg-sha256", "p" * 64, "--arms", "I", "--resamples", "50", "--out", str(tmp_path / ("o%d" % workers)),
+                "--repo", REPO, "--workers", str(workers), "--scheduler-key", "7"]
+        assert lab.main(argv + (["--pilot-json", str(pilot)] if workers == 2 else [])) == 0
+    names = sorted(os.listdir(tmp_path / "w1"))
+    assert names == sorted(os.listdir(tmp_path / "w2")) and len(names) == 8
+    drop = ("wall_s", "rss_hwm_mib")
+    strip = lambda r: {k: ([{kk: vv for kk, vv in d.items() if kk not in ("elapsed_us", "overshoot_us")} for d in v] if k == "decisions" else v)
+                       for k, v in r.items() if k not in drop}
+    for n in names:
+        assert strip(json.load(open(tmp_path / "w1" / n))) == strip(json.load(open(tmp_path / "w2" / n))), n
+    info = json.load(open(pilot))
+    assert info["workers"] == 2 and abs(info["sum_hwm_mib"] - sum(info["worker_hwm_mib"].values())) < 1e-9
