@@ -175,6 +175,10 @@ const ROLE_TABLE_D_IN: f64 = 48.0;
 /// D13: the share of the score the role term carries; the rest is the reserve-aware control mean.
 const ROLE_TERM_WEIGHT: f64 = 0.5;
 
+/// D12c: what stepping on an unknown marker may cost the attacker, in value units — the trap's
+/// D6+1 hits, spread over the `n` hidden markers (each is the trap with probability 1/n).
+const TRAP_COST: f64 = 0.1;
+
 /// D13: a unit still in reserve projects `strength x DISCOUNT x rounds_left / rounds_total` of
 /// future presence at every marker (it arrives next round and holds from then on).
 fn reserve_presence(state: &State, i: usize) -> f64 {
@@ -234,15 +238,23 @@ fn role_term(state: &State, player: i64) -> Option<f64> {
             .fold(0.0f64, f64::max);
         return Some(if attacker_side { 1.0 - defender_value } else { defender_value });
     }
+    let value_at = |p: &[f64; 2], r: f64| {
+        let gap = (ROLE_TABLE_W_IN / 2.0 - p[0].abs()).min(ROLE_TABLE_D_IN / 2.0 - p[1].abs()) - r;
+        (1.0 - gap / (ROLE_TABLE_D_IN / 2.0)).clamp(0.0, 1.0)
+    };
     let any_relic = live.iter().any(|m| m.2);
-    let attacker_value = live
-        .iter()
-        .filter(|m| m.2 || !any_relic)
-        .map(|(p, r, _)| {
-            let gap = (ROLE_TABLE_W_IN / 2.0 - p[0].abs()).min(ROLE_TABLE_D_IN / 2.0 - p[1].abs()) - r;
-            (1.0 - gap / (ROLE_TABLE_D_IN / 2.0)).clamp(0.0, 1.0)
-        })
-        .fold(0.0f64, f64::max);
+    // R9a fog: the attacker cannot tell the hidden markers apart, so while no relic is known each is
+    // the relic with probability 1/n (the MEAN value) and the trap with probability 1/n (TRAP_COST/n).
+    let hidden: Vec<f64> = (0..state.markers_meta.len())
+        .filter(|&i| state.markers_meta[i].secret_hidden && !state.markers_meta[i].destroyed)
+        .filter_map(|i| crate::mission::marker_point_in(state, i).map(|(p, r)| value_at(&p, r)))
+        .collect();
+    let attacker_value = if attacker_side && !any_relic && !hidden.is_empty() {
+        let n = hidden.len() as f64;
+        (hidden.iter().sum::<f64>() / n - TRAP_COST / n).clamp(0.0, 1.0)
+    } else {
+        live.iter().filter(|m| m.2 || !any_relic).map(|(p, r, _)| value_at(p, *r)).fold(0.0f64, f64::max)
+    };
     Some(if attacker_side { attacker_value } else { 1.0 - attacker_value })
 }
 
@@ -968,5 +980,35 @@ mod tests {
         assert_eq!(super::reserve_presence(&st, 1), 6.0 * 0.5 * 3.0 / 4.0);
         assert!(hand(&st, 2) > before, "the arriving reserve lifts its side's control share");
         assert_eq!(hand(&st, 2) + hand(&st, 1), 1.0 + 0.0, "a zero-sum pair");
+    }
+
+    /// D12c: the attacker's fogged view prices the hidden markers at 1/n relic value (the mean) minus
+    /// 1/n trap cost, not at the best marker as if it were the known relic.
+    #[test]
+    fn hidden_markers_are_priced_at_one_over_n_relic_and_one_over_n_trap() {
+        let hidden = crate::state::Marker { secret_hidden: true, ..Default::default() };
+        let mut st = role_state("extract", 1, 30.0, 0.0, hidden.clone());
+        for (x, z) in [(0.0, 0.0), (0.0, 18.0)] {
+            st.objectives.push(crate::state::Objective { pos: [x * crate::IN2M, 0.0, z * crate::IN2M], owner: 0 });
+            st.markers_meta.push(hidden.clone());
+        }
+        let mean = (0.75 + 0.0 + 0.75) / 3.0;
+        let want = 0.5 * (mean - super::TRAP_COST / 3.0) + 0.25;
+        assert!((hand(&st, 1) - want).abs() < 1e-12, "{} vs {want}", hand(&st, 1));
+        assert!(want < 0.5 * 0.75 + 0.25, "less than the peeking value of the nearest marker");
+        st.markers_meta[0].secret = Some("relic".into());
+        st.markers_meta[0].secret_hidden = false;
+        assert_eq!(hand(&st, 1), 0.5 * 0.75 + 0.25, "a known relic ends the guessing");
+        let mut one = role_state("extract", 1, 30.0, 0.0, hidden);
+        one.attacker = 1;
+        assert!((hand(&one, 1) - (0.5 * (0.75 - super::TRAP_COST) + 0.25)).abs() < 1e-12, "n = 1: the marker IS the relic or the trap");
+    }
+
+    #[test]
+    fn secret_hidden_round_trips_and_stays_out_of_older_records() {
+        let mut st = role_state("extract", 1, 0.0, 0.0, crate::state::Marker::default());
+        assert!(crate::io::plain_of(&st)["markers_meta"][0].get("secret_hidden").is_none());
+        st.markers_meta[0].secret_hidden = true;
+        assert_eq!(crate::io::plain_of(&st)["markers_meta"][0]["secret_hidden"], serde_json::json!(true));
     }
 }

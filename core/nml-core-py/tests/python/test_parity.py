@@ -762,3 +762,21 @@ def test_role_aware_hand_eval_twin_numbers():
     plain["markers_meta"] = [{"secret": "relic", "revealed": False}]
     state = core.state_of(plain)
     assert abs(core.score_hand_incoming(state, 1, inc) - (0.5 * 0.75 + 0.25)) < 1e-12
+
+
+def test_fogged_markers_are_priced_one_over_n():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    for unit in plain["units"].values():
+        unit.update(alive=0, positions=[], radii=[], wounds=[], dormant=False)
+    first = next(k for k, u in plain["units"].items() if u["player"] == 1)
+    plain["units"][first].update(alive=1, positions=[[100 * 0.0254, 0, 0]], radii=[0.02], wounds=[1],
+                                 shaken=False, aircraft=False, activated=True, ambush_arrived_round=-1)
+    plain.update(round=4, rounds_total=4, attacker=1, scoring="extract")
+    spots = [(30, 0), (0, 0), (0, 18)]
+    plain["objectives"] = [{"pos": [x * 0.0254, 0, z * 0.0254], "owner": 0} for x, z in spots]
+    plain["markers_meta"] = [{"secret_hidden": True, "revealed": False} for _ in spots]
+    state = core.state_of(plain)
+    mean = (0.75 + 0.0 + 0.75) / 3.0
+    assert abs(core.score_hand_incoming(state, 1, [0.0] * state.units) - (0.5 * (mean - 0.1 / 3.0) + 0.25)) < 1e-12

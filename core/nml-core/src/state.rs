@@ -391,6 +391,10 @@ pub struct Marker {
     /// D12a: the attacker has turned the marker up.
     #[serde(default, skip_serializing_if = "is_false")]
     pub revealed: bool,
+    /// D12c: the attacker's view of an unrevealed secret marker — the kind is masked, only the
+    /// fact that it IS one survives (`BattleSim.mask_secret_for`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub secret_hidden: bool,
 }
 
 fn is_zero(v: &i64) -> bool { *v == 0 }
@@ -401,7 +405,7 @@ fn is_no_carrier(v: &i64) -> bool { *v == -1 }
 impl Default for Marker {
     fn default() -> Self {
         Self { owned_by: 0, destructible: false, destroyed: false, destroyed_seq: 0,
-            carry: false, carried_by: -1, mobile: false, deploy_edge: 0, secret: None, revealed: false }
+            carry: false, carried_by: -1, mobile: false, deploy_edge: 0, secret: None, revealed: false, secret_hidden: false }
     }
 }
 
