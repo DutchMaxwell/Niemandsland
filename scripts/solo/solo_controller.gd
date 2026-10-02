@@ -74,7 +74,8 @@ static func roles_assign(winner_slot: int, other_slot: int, winner_role: String)
 static func marker_metadata(spec: Dictionary) -> Array:
 	var owned := bool(spec.get("owned", false))
 	var carry := bool(spec.get("carry", false))
-	if not owned and not carry:
+	var mobile := bool(spec.get("mobile", false))
+	if not owned and not carry and not mobile:
 		return []
 	var markers: Array = []
 	for i in range(int(spec.get("count", 2))):
@@ -85,8 +86,21 @@ static func marker_metadata(spec: Dictionary) -> Array:
 		if carry:
 			marker["carry"] = true
 			marker["carried_by"] = ""
+		if mobile:
+			marker["mobile"] = true
+			marker["deploy_edge"] = int(spec.get("deploy_edge", 0))
 		markers.append(marker)
 	return markers
+
+
+## D10a (R10a): the VIP marker moves up to 12" and stops 6" from the target edge, which is the
+## edge OPPOSITE `deploy_edge` (its z sign). Returns the new z in inches; x is unchanged.
+const VIP_MOVE_IN := 12.0
+static func vip_walk_z(z_in: float, deploy_edge: int, depth_in: float) -> float:
+	var dir := -float(signi(deploy_edge))
+	var to_stop := (depth_in / 2.0 - 6.0) * dir - z_in
+	var step := clampf(to_stop * dir, 0.0, VIP_MOVE_IN)
+	return z_in + dir * step
 
 
 static func mission_reset(scoring: String, flavour: Dictionary, markers: Array = []) -> void:
