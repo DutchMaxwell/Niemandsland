@@ -65,3 +65,28 @@ func test_an_ordinary_ambush_unit_keeps_its_own_gate() -> void:
 	u.unit_properties["special_rules"] = ["Ambush"]
 	assert_bool(SoloController.may_arrive_this_round(u, 1)).is_false()
 	assert_bool(SoloController.may_arrive_this_round(u, 2)).is_true()
+
+
+## D8a-2: where a winning mission reserve lands — wholly inside the arrival zone (the 12" frame),
+## more than the enemy gate from enemy bases and more than the marker gate from the marker.
+func test_a_mission_reserve_lands_in_the_zone_clear_of_the_enemy_and_the_marker() -> void:
+	var u := _unit(2, "Res")
+	u.unit_properties["ambush_reserve"] = true
+	u.unit_properties["mission_reserve"] = true
+	u.unit_properties["mission_arrival_round"] = 2
+	var sc := _controller([u])
+	sc.ambush_reserve = [u]
+	var marker := Vector2(0.0, 22.0 * IN2M)   # in the frame's top strip
+	sc._deploy_objectives = [marker]
+	var enemy := [{"pos": Vector2(6.0 * IN2M, 22.0 * IN2M), "min_dist_m": 0.0, "pad_m": 0.016}]
+	var frame := DeploymentCatalog.zone_test("edge_band_12", 2)
+	sc.mission_arrival_set(frame, {"min_from_enemy_in": 12, "min_from_marker_in": 12})
+	var zone := Rect2(Vector2(-36.0 * IN2M, -24.0 * IN2M), Vector2(72.0 * IN2M, 48.0 * IN2M))
+	var arrived := sc.arrive_one_ambush_unit(zone, enemy, [], 2, [])
+	assert_object(arrived).is_equal(u)
+	var c := sc.unit_centre(u)
+	var at := Vector2(c.x, c.z)
+	assert_bool(bool(frame.call(at))).override_failure_message("inside the 12\" frame").is_true()
+	assert_float(at.distance_to(enemy[0]["pos"]) / IN2M).is_greater(12.0)
+	assert_float(at.distance_to(marker) / IN2M).is_greater(12.0)
+	assert_bool(bool(u.unit_properties.get("mission_reserve", false))).override_failure_message("an ordinary unit now").is_false()
