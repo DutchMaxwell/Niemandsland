@@ -162,23 +162,22 @@ def cmd_timing(a) -> int:
 
 # ---- part A: the endings (PREREG section 8-9) ---------------------------------------------------
 ARMS = ("I", "L", "T")
-#: Played streams: stream r of position p seeds `Rng(base)` and `Tray(base + TRAY_OFFSET)`, the SAME pair for
-#: every arm (common random numbers).
-STREAM_BASE, POS_STRIDE, TRAY_OFFSET, STREAMS = 740_000_000, 100_000, 50_000, 8
+#: The 8 played streams of a position come from its `eval` list (decimal key seeds: `Rng(general)`, `Tray(tray)`),
+#: the SAME pair for every arm (common random numbers).
+STREAMS = 8
 ARM_KNOBS = {"I": {}, "L": {"search_mode": "tree", "tree_leaf": "blend"},
              "T": {"search_mode": "tree", "tree_leaf": "terminal"}}
 CONTRASTS = (("A_T", "T", "I"), ("A_L", "L", "I"), ("A_TL", "T", "L"))
 
 
-def stream_pair(nm, pos_i, r):
-    base = STREAM_BASE + pos_i * POS_STRIDE + r
-    return nm.Rng(base), nm.Tray(base + TRAY_OFFSET)
+def eval_streams(nm, pos, r):
+    return nm.Rng(int(pos["eval"][r]["general"])), nm.Tray(int(pos["eval"][r]["tray"]))
 
 
-def play_ending(nm, sp, cores, pos, rng, tray):
+def finish_ending(nm, sp, cores, pos, rng, tray):
     """Finish the last round from a pre-pick state: the mover's EVERY decision from `cores["cand"]`, the
-    other side's from `cores["inc"]`; then the round-end referee and the mission verdict. Returns the
-    candidate seat's score 1 / 0.5 / 0."""
+    other side's from `cores["inc"]`; then the round-end referee (round count from the state's own ledger)
+    and the mission verdict. Returns (final state, owners, verdict)."""
     mover, state = pos["mover"], cores["inc"].state_of(pos["state"])
     core_of = lambda side: cores["cand"] if side == mover else cores["inc"]
     owners, led, turn = list(pos["owners_before_round"]), sp._ledger_of(state), mover
@@ -192,9 +191,20 @@ def play_ending(nm, sp, cores, pos, rng, tray):
         state, _ = core_of(side).resolve_with_tray(state, act["action"], rng, tray)
         state = cores["inc"].restamp_los(state)
         turn = 3 - side
-    state, owners = sp._round_end(cores["inc"], state, owners, led, sp.ROUNDS)
-    win = sp._verdict(cores["inc"], owners, led)
-    return 0.5 if win == "draw" else float(win == "p%d" % mover)
+    state, owners = sp._round_end(cores["inc"], state, owners, led, led["rounds"])
+    return state, owners, sp._verdict(cores["inc"], owners, led)
+
+
+def play_ending(nm, sp, cores, pos, rng, tray):
+    """`finish_ending`'s verdict as the candidate seat's score 1 / 0.5 / 0."""
+    win = finish_ending(nm, sp, cores, pos, rng, tray)[2]
+    return 0.5 if win == "draw" else float(win == "p%d" % pos["mover"])
+
+
+def arm_headers_differ_only_in_leaf(base, wall):
+    """The L and T knob sets (prereg section 6: same EV model and operator settings) differ ONLY in tree_leaf."""
+    knobs = {a: dict(base["knobs"], **ARM_KNOBS[a], tree_wall_ms=wall) for a in ("L", "T")}
+    return {k for k in set(knobs["L"]) | set(knobs["T"]) if knobs["L"].get(k) != knobs["T"].get(k)} == {"tree_leaf"}
 
 
 def position_gains(y):
@@ -231,13 +241,17 @@ def cmd_endings(a) -> int:
         c.set_header(dict(base, knobs=dict(base["knobs"], **extra)))
         return c
     inc = core({})
+    for cell in sorted({pos["cell"] for pos in positions}):
+        if not arm_headers_differ_only_in_leaf(base, max(1, allow[cell]["B_us"] // 1000)):
+            print("[endings] STOP: the L and T headers of %s differ in more than tree_leaf" % cell)
+            return 2
     gains = {}
     for i, pos in enumerate(positions):
         wall = max(1, allow[pos["cell"]]["B_us"] // 1000)  # the knob is whole ms; 0 would mean OFF
         y = {}
         for arm in ARMS:
             cand = core(dict(ARM_KNOBS[arm], **({"tree_wall_ms": wall} if arm != "I" else {})))
-            y[arm] = [play_ending(nm, sp, {"inc": inc, "cand": cand}, pos, *stream_pair(nm, i, r)) for r in range(STREAMS)]
+            y[arm] = [play_ending(nm, sp, {"inc": inc, "cand": cand}, pos, *eval_streams(nm, pos, r)) for r in range(STREAMS)]
         gains.setdefault(pos["cell"], {})[pos["cluster"]] = position_gains(y)
         print("[endings] %d/%d %s %s" % (i + 1, len(positions), pos["cell"], canon(gains[pos["cell"]][pos["cluster"]])), flush=True)
     res = bootstrap_intervals(gains, a.resamples, a.seed)

@@ -106,10 +106,19 @@ def test_projected_mde_matches_the_prereg_formula_and_the_chi2_constant():
     assert lab.projected_mde({"c": 0.0}, 40) == 0.0  # zero variance is reported, not hidden
 
 
-def test_streams_are_shared_across_arms_and_distinct_across_positions_and_replicates():
-    seeds = {(p, r): lab.stream_pair(Nm, p, r)[0].state for p in range(3) for r in range(8)}
-    assert len(set(seeds.values())) == 24 and seeds[(0, 0)] == 740_000_000
-    assert lab.stream_pair(Nm, 1, 2)[0].state == lab.stream_pair(Nm, 1, 2)[0].state  # the same pair for every arm
+def test_streams_come_from_the_position_eval_keys_and_are_shared_across_arms():
+    pos = {"eval": [{"general": str(900_000_000_000_000_001 + r), "tray": str(r + 7)} for r in range(8)]}
+    pairs = [lab.eval_streams(Nm, pos, r) for r in range(8)]
+    assert [p[0].state for p in pairs] == [900_000_000_000_000_001 + r for r in range(8)]  # 63-bit seeds, no float
+    assert lab.eval_streams(Nm, pos, 2)[0].state == lab.eval_streams(Nm, pos, 2)[0].state  # the same pair for every arm
+    assert not hasattr(lab, "stream_pair") and not hasattr(lab, "STREAM_BASE")
+
+
+def test_arm_headers_differ_only_in_tree_leaf_and_a_stray_knob_is_refused(monkeypatch):
+    base = {"knobs": {"top_k": 10}}
+    assert lab.arm_headers_differ_only_in_leaf(base, 5)
+    monkeypatch.setitem(lab.ARM_KNOBS, "T", dict(lab.ARM_KNOBS["T"], tree_budget=64))
+    assert not lab.arm_headers_differ_only_in_leaf(base, 5)
 
 
 def test_position_gains_are_mean_stream_differences():
