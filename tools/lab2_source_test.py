@@ -208,7 +208,7 @@ def ending_env(env, seed=29):
 
     def cores(arm):
         cand = nml_core.load(REPO)
-        extra = dict(lab_arm(arm), **({"tree_wall_ms": 50} if arm != "I" else {}))
+        extra = dict(lab_arm(arm), **({"deadline_us": 50000} if arm != "I" else {}))
         cand.set_header(dict(header, knobs=dict(header["knobs"], **extra)))
         return {"inc": core, "cand": cand}
     return snap, cores
@@ -262,3 +262,24 @@ def test_play_row_runs_real_games_on_the_net(env):
     for arm in ("I", "L"):
         rec = lab.play_row(sp, lab.game_rows([b], (arm,))[0], REPO, BANK, {}, env[1], 20)
         assert rec["valid"] and all(c > 0 for c in rec["net_calls"].values()) and rec["winner"] in ("p1", "p2", "draw")
+
+
+CTX = {"prereg": "p" * 64, "build": {"commit": "abc", "dirty": False, "rules_epoch": 68, "wheel_sha256": "w"}}
+PRINCIPLES_ROW = ("schema prereg_sha256 row_id split part cell source arm opponent seat replicate seeds build model_sha256 "
+                  "header_sha256 net decisions y winner valid reason wall_s rss_hwm_mib done").split()
+PRINCIPLES_DECISION = "seq side arm allocated_us elapsed_us overshoot_us tree deadline search net_calls".split()
+
+
+def test_ending_rows_carry_tree_only_on_tree_decisions(env):
+    import lab2_tree_probe as lab
+    snap, cores = ending_env(env)
+    snap["eval"] = [{"general": str(7000 + r), "tray": str(8000 + r)} for r in range(8)]
+    snap["search"]["L"] = snap["search"]["T"]
+    ctx = dict(CTX, hdr={"inc": "h0", "T": "h1", "I": "h0"})
+    row_t = lab.ending_row(nml_core, sp, cores("T"), snap, "T", 0, env[1], ctx)
+    row_i = lab.ending_row(nml_core, sp, cores("I"), snap, "I", 0, env[1], ctx)
+    assert list(row_t) == PRINCIPLES_ROW and row_t["valid"] and row_t["row_id"].endswith("_T_r0")
+    mine = [d for d in row_t["decisions"] if d["arm"] == "T"]
+    assert mine and all(d["tree"] and d["search"] and d["allocated_us"] == 50000 for d in mine)
+    assert all(d["tree"] is None for d in row_t["decisions"] if d["arm"] == "I")
+    assert all(d["tree"] is None and d["allocated_us"] is None for d in row_i["decisions"])
