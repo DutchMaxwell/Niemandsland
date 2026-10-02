@@ -77,9 +77,11 @@ def test_the_mode_b_control_is_l_through_the_true_tray():
 
 def test_l_tray_rows_carry_their_own_search_keys_and_score_descriptively():
     seeds = {"terrain": "1", "layout": "2", "deploy": "3", "play_general": ["4", "5"], "tray": ["6", "7"],
-             "search": {"L": {"1": "10"}, "L_tray": {"1": "8", "2": "9"}}}
+             "search": {"d%dc%d" % (d, s): {"L": {"1": "10"}, "L_tray": {"1": "8%d%d" % (d, s), "2": "9%d%d" % (d, s)}}
+                        for d in (0, 1) for s in (1, 2)}}
     rows = lab.game_rows([{"block": "b1", "cell": "c3", "mission": "duel", "army1": "a", "army2": "b",
                            "seeds": seeds}], ("L_tray",))
-    assert len(rows) == 4 and all(r["seeds"]["search"] == {"1": "8", "2": "9"} for r in rows)
+    assert len(rows) == 4 and all(r["seeds"]["search"] == {"1": "8%d%d" % (r["d"], r["seat"]), "2": "9%d%d" % (r["d"], r["seat"])}
+                                  for r in rows)
     done = list(zip(rows, (1.0, 1.0, 0.5, 0.0)))
     assert lab.control_scores(done) == {"c3": {"b1": {"L_tray_I": 0.125}}}

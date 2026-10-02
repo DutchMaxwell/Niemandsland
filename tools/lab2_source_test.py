@@ -264,7 +264,8 @@ def test_play_row_runs_real_games_as_schema_rows(env):
     b = {"block": "b0", "cell": "c1", "mission": "domination", "army1": os.path.join(LISTS, "robot_legions_1000.json"),
          "army2": os.path.join(LISTS, "blessed_sisters_1000.json"),
          "seeds": {"terrain": "29", "layout": "1029", "deploy": "2029", "play_general": ["3029", "3030"],
-                   "tray": ["4029", "4030"], "search": {"L": {"1": "501", "2": "502"}, "C": {"1": "601", "2": "602"}}}}
+                   "tray": ["4029", "4030"], "search": {"d%dc%d" % (d, s): {"L": {"1": "501", "2": "502"}, "C": {"1": "601", "2": "602"}}
+                                                        for d in (0, 1) for s in (1, 2)}}}
     for arm in ("I", "L", "C"):
         rec = lab.play_row(nml_core, sp, lab.game_rows([b], (arm,))[0], REPO, BANK, {}, env[1], 20000, CTX)
         assert list(rec) == PRINCIPLES_ROW and rec["valid"] and rec["winner"] in ("p1", "p2", "draw")
