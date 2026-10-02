@@ -3276,6 +3276,7 @@ func _solo_phase_start() -> void:
 	var i: int = int(_solo_deploy_fsm["phase_i"])
 	if i >= phases.size():
 		_solo_deploy_fsm.erase("phases")
+		_solo_mission_reserves_set_aside()
 		_solo_deploy_fsm["human_out"] = true
 		_solo_deploy_phase_advance()
 		return
@@ -3315,6 +3316,109 @@ func _solo_phase_panel() -> void:
 	_solo_deploy_ui_show("Phase %d of %d (%s, %s): deploy %d more unit(s) inside the marked zone, then ✓ for each." % [
 		i + 1, phases.size(), str((phases[i] as Array)[0]), str((phases[i] as Array)[1]),
 		int(_solo_deploy_fsm["phase_left"])], "✓ Unit placed", func() -> void: _solo_deploy_human_done_one())
+
+
+## D8a: the catalog's reserve rules ({} = none): `who` ("both"/"attacker"/"defender"), `arrive_on`,
+## `from_round`, `zone` (a deployment style id) and `gates`.
+func _solo_reserve_cfg() -> Dictionary:
+	if not _solo_mission_has_roles() or SoloController.mission_roles.is_empty():
+		return {}
+	return MissionCatalog.get_mission(_solo_mission_id).get("reserves", {})
+
+
+## The slots whose leftover units a reserve rule covers.
+func _solo_reserve_slots(cfg: Dictionary) -> Array:
+	var who := str(cfg.get("who", "both"))
+	var out: Array = []
+	for role in ["attacker", "defender"]:
+		if who == "both" or who == role:
+			out.append(int(SoloController.mission_roles[role]))
+	return out
+
+
+## D8a: after the last phase, whatever a covered side has not deployed is set aside in reserve (the AI's
+## queue leftover; the human's units still off the table stay on the tray).
+func _solo_mission_reserves_set_aside() -> void:
+	var cfg := _solo_reserve_cfg()
+	if cfg.is_empty():
+		return
+	var tw: float = table.table_size.x * 0.3048 if table != null else 99.0
+	var td: float = table.table_size.y * 0.3048 if table != null else 99.0
+	var trect := Rect2(Vector2(-tw / 2.0, -td / 2.0), Vector2(tw, td))
+	for slot in _solo_reserve_slots(cfg):
+		var units: Array = []
+		if slot == solo_controller.ai_slot:
+			units = solo_controller.deploy_take_queue()
+		else:
+			for u in _solo_human_main_units():
+				var c := solo_controller.unit_centre(u as GameUnit)
+				if not trect.has_point(Vector2(c.x, c.z)):
+					units.append(u)
+		solo_controller.mission_reserve_set(units)
+		var names: PackedStringArray = []
+		for u in units:
+			names.append((u as GameUnit).get_name())
+		if not units.is_empty():
+			_log_rule_event(BattleLog.Category.GENERAL, "%s sets %d unit(s) aside in reserve (%s) — each arrives on %d+ from round %d" % [
+				_solo_player_label(slot), units.size(), ", ".join(names), int(cfg.get("arrive_on", 4)),
+				int(cfg.get("from_round", 2))], slot == solo_controller.ai_slot)
+
+
+## D8a: the round's reserve rolls — ONE tray roll per side with a held unit (a die each, recorded by the
+## dice recorder), then the arrival zone and gates are handed to the controller for the arrivals that follow.
+func _solo_mission_reserve_rolls(round_number: int) -> void:
+	var cfg := _solo_reserve_cfg()
+	if cfg.is_empty() or round_number < int(cfg.get("from_round", 2)):
+		return
+	var on: int = int(cfg.get("arrive_on", 4))
+	for slot in _solo_reserve_slots(cfg):
+		var held := 0
+		for u in opr_army_manager.get_game_units_for_player(slot):
+			var gu := u as GameUnit
+			if gu != null and not gu.is_destroyed() and bool(gu.unit_properties.get("mission_reserve", false)) \
+					and bool(gu.unit_properties.get("ambush_reserve", false)):
+				held += 1
+		if held == 0:
+			continue
+		var faces: Array = await _solo_tray_roll(held, on, _solo_player_label(slot), "attack",
+			"%s: reserve arrival (%d+)" % [_solo_player_label(slot), on])
+		var queue: Array = faces.duplicate()
+		var rolled: Array = solo_controller.mission_arrival_rolls(slot, round_number, int(cfg.get("from_round", 2)), on,
+			func() -> int: return int(queue.pop_front()))
+		for e in rolled:
+			_log_rule_event(BattleLog.Category.GENERAL, "Reserve roll: %s rolls %d (needs %d+) — %s" % [
+				(e["unit"] as GameUnit).get_name(), int(e["roll"]), on,
+				"arrives this round" if bool(e["arrives"]) else "stays off the table"], slot == solo_controller.ai_slot)
+	solo_controller.mission_arrival_set(DeploymentCatalog.zone_test(str(cfg.get("zone", "anywhere")), 1),
+		(cfg.get("gates", {}) as Dictionary))
+
+
+## D8a: the first rule a human reserve placement breaks (zone, then the gates), "" when fine or when none
+## of the placed units is a mission reserve.
+func _solo_reserve_arrival_violation(placed: Array) -> String:
+	var cfg := _solo_reserve_cfg()
+	for g in placed:
+		var gu := g as GameUnit
+		if cfg.is_empty() or gu == null or not bool(gu.unit_properties.get("mission_reserve", false)):
+			continue
+		var c := solo_controller.unit_centre(gu)
+		if not DeploymentCatalog.in_zone(DeploymentCatalog.get_style(str(cfg.get("zone", "anywhere"))), 1, Vector2(c.x, c.z) / 0.0254):
+			return "%s must arrive inside the marked zone — move it, then ✓" % gu.get_name()
+		var models: Array = []
+		for m in gu.get_alive_models():
+			var mi := m as ModelInstance
+			if mi != null and mi.node != null:
+				models.append({"pos": Vector2(mi.node.global_position.x, mi.node.global_position.z),
+					"radius": solo_controller.model_base_radius_m(mi)})
+		var markers: Array = []
+		if terrain_overlay != null:
+			for o in terrain_overlay.get_objectives():
+				markers.append(Vector2(o.x, o.z))
+		var why := SoloController.gate_violation((cfg.get("gates", {}) as Dictionary), models,
+			solo_controller.bases_of_slot(solo_controller.ai_slot), [], markers)
+		if not why.is_empty():
+			return "%s %s — move it, then ✓" % [gu.get_name(), why]
+	return ""
 
 
 ## The human's main-phase units: alive, not attached, not a scout, not held in reserve.
@@ -12099,6 +12203,7 @@ func _solo_round_start_recovery_rule(gu: GameUnit) -> String:
 func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 	if solo_controller == null or table == null or opr_army_manager == null:
 		return
+	await _solo_mission_reserve_rolls(round_number)   # D8a: a roles mission's reserve dice; no-op otherwise
 	var human_is_ai: bool = solo_ai_slots.has(solo_controller.human_slot)
 	var w: float = table.table_size.x * 0.3048
 	var d: float = table.table_size.y * 0.3048
@@ -12288,6 +12393,12 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 					(pe["unit"] as GameUnit).get_name(), int(pe["on"]), int(pe["total"])])
 			else:
 				_solo_show_toast("No new reserve unit detected on the table — place it first, then ✓")
+			_solo_unlock_table()
+			_solo_deploy_ui_hide()
+			return await _solo_ambush_human_turn(round_number, pool)
+		var broken := _solo_reserve_arrival_violation(placed)   # D8a: a mission reserve's own zone and gates
+		if not broken.is_empty():
+			_solo_show_toast(broken)
 			_solo_unlock_table()
 			_solo_deploy_ui_hide()
 			return await _solo_ambush_human_turn(round_number, pool)
