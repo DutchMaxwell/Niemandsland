@@ -21,6 +21,7 @@ const MARGIN := 10   # from the screen edge, like the menu button
 var _main: Node = null
 var _round: PanelContainer = null
 var _state: PanelContainer = null
+var _link: PanelContainer = null   # the connection chip: shown only in an online session
 var _log: Button = null
 var _controls: Button = null
 var _next: Button = null
@@ -49,6 +50,10 @@ func setup(main: Node, overlay_parent: Node) -> void:
 	_state = HouseStyle.chip("DEPLOYMENT", HouseStyle.CHIP)
 	_state.name = "State"
 	left.add_child(_state)
+	_link = HouseStyle.chip("ONLINE", HouseStyle.CHIP_ONLINE)
+	_link.name = "Link"
+	_link.visible = false
+	left.add_child(_link)
 
 	var right := _row(true)
 	_log = _button("Battle Log", HouseStyle.BAR_BUTTON, "Battle Log — every roll, move and rule of this game")
@@ -78,7 +83,7 @@ func setup(main: Node, overlay_parent: Node) -> void:
 
 ## The bar's items by function, for tests and captures: round, state, log, controls, next.
 func items() -> Dictionary:
-	return {"round": _round, "state": _state, "log": _log, "controls": _controls, "next": _next}
+	return {"round": _round, "state": _state, "link": _link, "log": _log, "controls": _controls, "next": _next}
 
 
 func overlay() -> ControlsOverlay:
@@ -95,11 +100,13 @@ func refresh() -> void:
 	var rnd: int = m.current_round if m != null else 1
 	var deploying: bool = m == null or m.game_phase == OPRArmyManager.GamePhase.DEPLOYMENT
 	var source := _main.get(&"next_round_btn") as Button
-	var key := "%d|%s|%d|%s|%s" % [rnd, deploying, _turn(), source.text, source.disabled]
+	var link := int(_main.call(&"connection_state"))
+	var key := "%d|%s|%d|%s|%s|%d" % [rnd, deploying, _turn(), source.text, source.disabled, link]
 	if key == _shown:
 		return
 	_shown = key
 	show_state(rnd, deploying, _turn())
+	show_link(link)
 	_next.text = source.text
 	_next.disabled = source.disabled
 
@@ -113,6 +120,18 @@ func show_state(rnd: int, deploying: bool, turn: int) -> void:
 		HouseStyle.set_chip(_state, "YOUR TURN", HouseStyle.CHIP_TURN)
 	else:
 		HouseStyle.set_chip(_state, "NACHTMAHR'S TURN", HouseStyle.CHIP_ENEMY)
+
+
+## Draws the connection chip: hidden offline, otherwise online / reconnecting / lost (see main.connection_state).
+func show_link(state: int) -> void:
+	_link.visible = state != 0
+	match state:
+		1:
+			HouseStyle.set_chip(_link, "ONLINE", HouseStyle.CHIP_ONLINE)
+		2:
+			HouseStyle.set_chip(_link, "RECONNECTING", HouseStyle.CHIP_LINK_WARN)
+		3:
+			HouseStyle.set_chip(_link, "CONNECTION LOST", HouseStyle.CHIP_ENEMY)
 
 
 ## Solo only: the AI's activation chain running = its turn, otherwise yours.
