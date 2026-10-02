@@ -2957,7 +2957,7 @@ func _current_round() -> int:
 func capture_board() -> Dictionary:
 	return BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at)
+		terrain_type_at, int(ai_slot))
 
 
 func _is_final_round() -> bool:
@@ -3548,7 +3548,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	var _prof_cap_t0 := BattleSim.prof_t0()
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at)
+		terrain_type_at, int(ai_slot))
 	BattleSim.prof_mark("capture", _prof_cap_t0)
 	if act_wall_enabled():
 		_phase_mark("capture", _ph_cap)
@@ -4225,7 +4225,7 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 		do_shoot: bool, band_in: float, kite: bool) -> void:
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at)
+		terrain_type_at, int(ai_slot))
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
 	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var key := _state_key_of(state, unit)
@@ -4342,7 +4342,7 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 	AiPlanner.playout_net = net if _playout_net_gate() else {}
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at)
+		terrain_type_at, int(ai_slot))
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
 	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var key := _state_key_of(state, unit)
@@ -4576,7 +4576,7 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 		_ph_cap2 = _phase_enter()
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at)
+		terrain_type_at, int(ai_slot))
 	if act_wall_enabled():
 		_phase_mark("capture", _ph_cap2)
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates

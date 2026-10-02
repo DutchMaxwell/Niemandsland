@@ -153,3 +153,38 @@ func test_role_winner_reads_the_scoring_id_and_skips_destroyed() -> void:
 	state["markers_meta"][0]["destroyed"] = true
 	assert_str(BattleSim.role_winner("extract", state, 0, 72.0, 48.0)).is_equal("p2")
 	assert_str(BattleSim.role_winner("end", state, 1, 72.0, 48.0)).is_equal("")
+
+
+## D12c (R9a): the attacker's view of an unrevealed secret marker carries no `secret`, `carry` or
+## `carried_by` (the relic's tell); the defender's view and a revealed marker keep them.
+func _fog_state(viewer: int) -> Dictionary:
+	var u := _unit(2, [Vector3(100.0, 0, 100.0)], "Far")
+	SoloController.mission_markers = [
+		{"secret": "relic", "revealed": false, "carry": true, "carried_by": ""},
+		{"secret": "trap", "revealed": false},
+		{"secret": "relic", "revealed": true, "carry": true, "carried_by": ""}]
+	SoloController.mission_roles = {"attacker": 1, "defender": 2}
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Far": u}
+	var pts := [Vector3.ZERO, Vector3(1, 0, 0), Vector3(2, 0, 0)]
+	return BattleSim.capture(army, func() -> Array: return pts, func(_i: int) -> int: return 0,
+		1, 4, Callable(), Callable(), Callable(), viewer)
+
+
+func test_the_attackers_capture_hides_unrevealed_secrets() -> void:
+	var mm: Array = _fog_state(1)["markers_meta"]
+	for i in range(2):
+		for key in ["secret", "carry", "carried_by"]:
+			assert_bool((mm[i] as Dictionary).has(key)).is_false()
+		assert_bool(bool(mm[i]["revealed"])).is_false()
+	assert_str(String(mm[2]["secret"])).is_equal("relic")
+	SoloController.mission_reset("end", {})
+
+
+func test_the_defenders_capture_and_the_unseated_capture_keep_the_secrets() -> void:
+	for viewer in [2, 0]:
+		var mm: Array = _fog_state(viewer)["markers_meta"]
+		assert_str(String(mm[0]["secret"])).is_equal("relic")
+		assert_bool(bool(mm[0]["carry"])).is_true()
+		assert_str(String(mm[1]["secret"])).is_equal("trap")
+	SoloController.mission_reset("end", {})

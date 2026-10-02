@@ -345,7 +345,7 @@ pub fn mission_winner(
 /// R11a: a marker's horizontal point in inches — a CARRIED marker sits at its
 /// carrier's first model, less that model's base radius (the carrier's nearest
 /// base edge, the same measure as `control_gap_in`); a free one at its spot.
-fn marker_point_in(state: &State, i: usize) -> Option<([f64; 2], f64)> {
+pub(crate) fn marker_point_in(state: &State, i: usize) -> Option<([f64; 2], f64)> {
     let mk = state.markers_meta.get(i)?;
     if mk.destroyed {
         return None;

@@ -733,3 +733,32 @@ def test_reveal_step_twin_and_assignment():
     import selfplay
     assert selfplay.secret_assign([(0, 0), (30, 0), (-34, 0)]) == ["relic", "", "trap"]
     assert selfplay.mission_markers({"secret": True}, 2) == [{"secret": "", "revealed": False}] * 2
+
+
+def test_role_aware_hand_eval_twin_numbers():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    first = {1: None, 2: None}
+    for key, unit in plain["units"].items():
+        side = unit["player"]
+        if first[side] is None:
+            first[side] = key
+        unit.update(alive=0, positions=[], radii=[], wounds=[], dormant=False)
+    for side, x in ((1, 100.0), (2, -100.0)):
+        plain["units"][first[side]].update(alive=1, positions=[[x * 0.0254, 0, 0]], radii=[0.02],
+                                           wounds=[1], shaken=False, aircraft=False, activated=False,
+                                           ambush_arrived_round=-1)
+    plain.update(round=4, rounds_total=4, attacker=1, scoring="escort")
+    plain["objectives"] = [{"pos": [0, 0, -18 * 0.0254], "owner": 0}]
+    plain["markers_meta"] = [{"mobile": True, "deploy_edge": 1}]
+    state = core.state_of(plain)
+    inc = [0.0] * state.units
+    # the same numbers tests/ai_mission_eval_test.gd pins on the GDScript side
+    assert abs(core.score_hand_incoming(state, 2, inc) - (0.5 * 0.875 + 0.25)) < 1e-12
+    assert abs(core.score_hand_incoming(state, 1, inc) - (0.5 * 0.125 + 0.25)) < 1e-12
+    plain.update(scoring="extract")
+    plain["objectives"] = [{"pos": [30 * 0.0254, 0, 0], "owner": 0}]
+    plain["markers_meta"] = [{"secret": "relic", "revealed": False}]
+    state = core.state_of(plain)
+    assert abs(core.score_hand_incoming(state, 1, inc) - (0.5 * 0.75 + 0.25)) < 1e-12
