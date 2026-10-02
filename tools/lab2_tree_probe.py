@@ -308,14 +308,20 @@ def cmd_endings(a) -> int:
 
 # ---- part B: the full games (PREREG section 8-9) ------------------------------------------------
 B_ARMS = ("L", "C")
+ALL_ARMS = ("I",) + B_ARMS
 
 
-def game_rows(blocks):
-    """The manifest: per board, per candidate arm (L, C), two dice streams x candidate in seat 1 then 2 (4 games per
-    candidate/block). Armies and terrain stay on their physical seats; only the policy swaps."""
+def game_rows(blocks, arms=ALL_ARMS):
+    """The manifest: per block, per arm, two dice streams x candidate in seat 1 then 2 (4 games per arm/block; "I" =
+    the incumbent pair on both seats, no deep core). Armies and terrain stay on their physical seats; only the
+    policy swaps. A block carries cell, mission and seeds {terrain, layout, deploy, play_general[d], tray[d],
+    search[arm][seat]}; a row carries the seeds of its own dice stream."""
     return [{"row_id": "%s_%s_d%d_s%d" % (b["block"], arm, d, seat), "block": b["block"], "cell": b["cell"], "arm": arm,
-             "seed": b["seed"], "dice": b["dice"][d], "seat": seat, "army1": b["army1"], "army2": b["army2"]}
-            for b in blocks for arm in B_ARMS for d in (0, 1) for seat in (1, 2)]
+             "mission": b["mission"], "seat": seat, "army1": b["army1"], "army2": b["army2"],
+             "seeds": {"terrain": b["seeds"]["terrain"], "layout": b["seeds"]["layout"], "deploy": b["seeds"]["deploy"],
+                       "play_general": b["seeds"]["play_general"][d], "tray": b["seeds"]["tray"][d],
+                       "search": b["seeds"]["search"].get(arm, {})}}
+            for b in blocks for arm in arms for d in (0, 1) for seat in (1, 2)]
 
 
 def arm_kwargs(row, wall_ms):
@@ -339,31 +345,58 @@ def board_scores(done):
     return out
 
 
+def play_row(sp, row, repo, bank, knobs, net, wall_ms):
+    """One full game of a manifest row on the live ledger, the step-10 seeds and the shipped net on BOTH seats.
+    INVALID "net_inactive" unless the net priced leaves on both seats."""
+    before = {s: net.counts.get(s, {"calls": 0})["calls"] for s in (1, 2)}
+    sd = row["seeds"]
+    extra = dict(deep_player=row["seat"], **arm_kwargs(row, wall_ms)) if row["arm"] != "I" else {}
+    search = {int(s): int(k) for s, k in sd["search"].items()}
+    res = sp.play_game(int(sd["terrain"]), row["army1"], row["army2"], repo, bank, None, mission=row["mission"],
+                       objectives="mission", live_ledger=True, layout_seed=int(sd["layout"]), deploy_seed=int(sd["deploy"]),
+                       play_seed=int(sd["play_general"]), dice_seed=int(sd["tray"]),
+                       leaf_value_fn={1: net.hook(1), 2: net.hook(2)}, leaf_value_w=1.0,
+                       **({"search_seeds": search} if search else {}), **extra, **knobs)
+    calls = {s: net.counts[s]["calls"] - before[s] for s in (1, 2)}
+    seat = 1 if row["arm"] == "I" else row["seat"]  # I/I: seat 1's score, descriptive
+    ok = all(c > 0 for c in calls.values())
+    return {"row": row, "y": 0.5 if res["winner"] == "draw" else float(res["winner"] == "p%d" % seat),
+            "winner": res["winner"], "valid": ok, "reason": None if ok else "net_inactive", "net_calls": calls}
+
+
+def i_seat1_means(done):
+    """Descriptive only, never a contrast: the I/I mean seat-1 score per board -> {cell: {block: mean}}."""
+    by = {}
+    for row, y in done:
+        if row["arm"] == "I":
+            by.setdefault(row["cell"], {}).setdefault(row["block"], []).append(y)
+    return {c: {b: statistics.fmean(v) for b, v in blocks.items()} for c, blocks in by.items()}
+
+
 def cmd_fullgames(a) -> int:
-    import importlib
-    import nml_core as nm  # lazy
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
     import selfplay as sp
+    from lab2_net import ShippedNet
+    net = ShippedNet(a.repo)
     allow, knobs = json.load(open(a.timing)), json.load(open(a.knobs))
-    mod, fn = a.hooks.split(":")
-    leaf_fn, leaf_w = getattr(importlib.import_module(mod), fn)()  # the net on BOTH seats ({1: hook, 2: hook}, weight)
     os.makedirs(a.out_dir, exist_ok=True)
-    done = []
-    for row in game_rows(json.load(open(a.blocks))):
+    done, invalid = [], []
+    for row in game_rows(json.load(open(a.blocks)), tuple(a.arms.split(","))):
         path = os.path.join(a.out_dir, row["row_id"] + ".json")
         if not os.path.exists(path):
-            wall = max(1, allow[row["cell"]]["B_us"] // 1000)  # whole ms; 0 would mean OFF
-            res = sp.play_game(row["seed"], row["army1"], row["army2"], a.repo, a.bank, None, dice_seed=row["dice"],
-                               deep_player=row["seat"], leaf_value_fn=leaf_fn, leaf_value_w=leaf_w,
-                               **arm_kwargs(row, wall), **knobs)
-            y = 0.5 if res["winner"] == "draw" else float(res["winner"] == "p%d" % row["seat"])
+            rec = play_row(sp, row, a.repo, a.bank, knobs, net, max(1, allow[row["cell"]]["B_us"] // 1000))  # whole ms
             tmp = path + ".tmp"
-            json.dump({"row": row, "y": y, "winner": res["winner"]}, open(tmp, "w"))
+            json.dump(rec, open(tmp, "w"))
             os.replace(tmp, path)  # atomic per game; a rerun resumes, never replays a valid game
         rec = json.load(open(path))
         done.append((rec["row"], rec["y"]))
-    res = bootstrap_intervals(board_scores(done), a.resamples, a.seed)
-    open(a.out, "w").write(canon(res))
+        if not rec["valid"]:
+            invalid.append(row["row_id"])
+    if invalid:
+        print("[fullgames] INVALID net_inactive rows: %s" % invalid)
+        return 1
+    res = bootstrap_intervals(board_scores([d for d in done if d[0]["arm"] in B_ARMS]), a.resamples, a.seed)
+    open(a.out, "w").write(canon({"intervals": res, "I_seat1_descriptive": i_seat1_means(done)}))
     print("[fullgames] " + canon(res))
     return 0
 
@@ -430,10 +463,10 @@ def main(argv) -> int:
     e.add_argument("--repo", default=".")
     e.add_argument("--out", required=True)
     f = sub.add_parser("fullgames")
-    f.add_argument("--blocks", required=True, help="JSON list of {block, cell, seed, dice: [d0, d1], army1, army2}")
+    f.add_argument("--blocks", required=True, help="JSON list of {block, cell, mission, army1, army2, seeds}")
     f.add_argument("--timing", required=True)
     f.add_argument("--knobs", required=True, help="JSON of play_game kwargs of the shipped grade")
-    f.add_argument("--hooks", required=True, help="module:function returning (leaf_value_fn, leaf_value_w), the net on both seats")
+    f.add_argument("--arms", default="I,L,C", help='"I,L,C" (pilot) or "L,C" (confirmation)')
     f.add_argument("--bank", required=True)
     f.add_argument("--out-dir", required=True)
     f.add_argument("--resamples", type=int, default=100_000)
