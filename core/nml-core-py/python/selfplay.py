@@ -224,6 +224,32 @@ def _arena_zones() -> dict[str, list[float]]:
     }
 
 
+def _style_zone_args(style: dict[str, Any], slot: str) -> tuple[list[float], list[Any]]:
+    """D5: a catalog style's zone list for `slot` plus the `[x, y, w, h]` metre rect that bounds it
+    (a disc by its square), the pair `nml_core.deploy_side` takes."""
+    zl = style["zones"][slot]
+    pts: list[tuple[float, float]] = []
+    for e in zl:
+        if isinstance(e, dict):
+            (cx, cz), r = e["disc"]["c"], float(e["disc"]["r_in"])
+            pts += [(cx - r, cz - r), (cx + r, cz + r)]
+        else:
+            pts += [(x, z) for x, z in e]
+    x0, z0 = min(p[0] for p in pts), min(p[1] for p in pts)
+    x1, z1 = max(p[0] for p in pts), max(p[1] for p in pts)
+    return [x0 * IN2M, z0 * IN2M, (x1 - x0) * IN2M, (z1 - z0) * IN2M], zl
+
+
+def resolve_zone_style(mission_def: dict[str, Any], repo_root: str | Path) -> dict[str, Any] | None:
+    """The mission's deployment style from `assets/solo/deployments.json`, or None for `front_line`
+    (the arena's own rects — byte-identical to every mission before wave D)."""
+    name = mission_def.get("deployment", "front_line")
+    if name == "front_line":
+        return None
+    path = Path(repo_root) / "assets" / "solo" / "deployments.json"
+    return json.loads(path.read_text(encoding="utf-8"))["styles"][name]
+
+
 def _arena_roll_off(rng: "nml_core.Rng") -> list[list[int]]:
     """`SoloController.roll_off` (solo_controller.gd:7517-7528) over the GAME
     stream: a d6 pair per attempt, TIES RE-ROLL (cap 100), every attempt kept.
@@ -263,6 +289,7 @@ def _deploy_arena(
     opener: int,
     interleave: bool = False,
     rules_epoch: int = nml_core.CURRENT_RULES_EPOCH,
+    zone_style: dict[str, Any] | None = None,
 ) -> tuple[list[list[list[float]]], list[list[list[float]]], set[str], list[list[Any]]]:
     """The table's pre-game through the step-7 binding: `deploy_side` per side
     with the per-side stream `seed + slot` (arena_match.gd:486-488 — the game
@@ -278,6 +305,10 @@ def _deploy_arena(
     same per-side streams, same finish. Returns the capture positions and the
     cross-side `[[slot, key], ..]` placement sequence (empty when off)."""
     zones = _arena_zones()
+    shapes: dict[str, Any] = {"1": None, "2": None}
+    if zone_style is not None:  # D5: a non-rectangular zone binds the spot search
+        for slot in ("1", "2"):
+            zones[slot], shapes[slot] = _style_zone_args(zone_style, slot)
     sides: dict[str, dict[str, Any]] = {}
     reserved: dict[str, list[str]] = {}
     hero_fold: dict[str, tuple[str, int, int]] = {}
@@ -299,6 +330,7 @@ def _deploy_arena(
         out = nml_core.deploy_interleaved(
             roster["1"], roster["2"], zones["1"], zones["2"], objs2, board,
             seed + 1, seed + 2, opener, rules_epoch=int(rules_epoch),
+            zones1=shapes["1"], zones2=shapes["2"],
         )
         placed_by = {"1": out["side1"], "2": out["side2"]}
         sequence = [list(e) for e in out["sequence"]]
@@ -306,7 +338,7 @@ def _deploy_arena(
         placed_by = {
             slot: nml_core.deploy_side(
                 roster[slot], zones[slot], objs2, board, seed + int(slot),
-                rules_epoch=int(rules_epoch),
+                rules_epoch=int(rules_epoch), zones=shapes[slot],
             )
             for slot in ("1", "2")
         }
@@ -2900,6 +2932,7 @@ def play_game(
         pos1, pos2, reserved, deploy_seq = _deploy_arena(
             dep, units1, units2, list_p1, list_p2, board, objectives, opener,
             eff_deployment == "interleaved", rules_epoch=rules_epoch,
+            zone_style=resolve_zone_style(resolve_mission(mission, repo_root), repo_root),
         )
     elif deploy_rng_seed is None:
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, drng)

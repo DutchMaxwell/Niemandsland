@@ -2254,6 +2254,9 @@ func _solo_sync_relic_map() -> void:
 
 
 func _solo_log_relic_drop(entry: Dictionary) -> void:
+	if entry.has("move"):
+		_solo_finish_marker_move(entry)
+		return
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"Relic dropped by %s (%s), placed by %s" % [entry["name"], entry["reason"], entry["placer"]], true)
@@ -2264,8 +2267,11 @@ func _solo_next_relic_drop_prompt() -> void:
 		return
 	_solo_relic_drop_active = _solo_relic_drop_queue.pop_front()
 	_on_map_layout_pressed()
-	map_layout_editor.begin_relic_drop(_solo_relic_drop_active["centre"], _solo_relic_drop_active["radius"])
-	_show_toast("Place the dropped relic within 1\" of the carrier's base; close or Esc to use default")
+	var is_move: bool = _solo_relic_drop_active.has("move")
+	map_layout_editor.begin_relic_drop(_solo_relic_drop_active["centre"], _solo_relic_drop_active["radius"],
+		SoloController.VIP_MOVE_IN if is_move else 1.0)
+	_show_toast("Move the marker up to 12\" (click a point); close or Esc to walk it toward the edge" if is_move \
+		else "Place the dropped relic within 1\" of the carrier's base; close or Esc to use default")
 	_solo_relic_drop_gen += 1
 	get_tree().create_timer(20.0).timeout.connect(_solo_relic_drop_timeout.bind(_solo_relic_drop_gen))
 
@@ -2276,12 +2282,49 @@ func _solo_relic_drop_chosen(pos: Vector3) -> void:
 	terrain_overlay.set_objective_position(int(_solo_relic_drop_active["index"]), pos)
 	_solo_sync_relic_map()
 	_solo_relic_drop_active["placer"] = "P%d" % solo_controller.human_slot
+	_solo_relic_drop_active["chosen"] = true
 	map_layout_editor._on_close_pressed()
 
 
 func _solo_relic_drop_timeout(gen: int) -> void:
 	if gen == _solo_relic_drop_gen and not _solo_relic_drop_active.is_empty():
 		map_layout_editor._on_close_pressed()
+
+
+## D10a: round start of a mission with a mobile (VIP) marker. While the DEFENDER controls it, it
+## moves up to 12": a human defender clicks the point (the relic-drop click flow, 12" reach), the AI
+## and a skipped prompt take R10a (SoloController.vip_walk_z). The attacker holding it = no move.
+func _solo_mobile_marker_round_start() -> void:
+	if terrain_overlay == null or not SoloController.mission_roles.has("defender"):
+		return
+	var defender := int(SoloController.mission_roles["defender"])
+	var owners: Array = terrain_overlay.get_objective_owners()
+	var human_moves := solo_controller != null and defender == solo_controller.human_slot \
+		and not _solo_batch and not _solo_both_ai
+	for i in range(SoloController.mission_markers.size()):
+		var mk: Dictionary = SoloController.mission_markers[i]
+		var edge := int(mk.get("deploy_edge", 0))
+		if not bool(mk.get("mobile", false)) or edge == 0 or i >= owners.size() or int(owners[i]) != defender:
+			continue
+		var from: Vector3 = terrain_overlay.get_objectives()[i]
+		var depth_in: float = table.table_size.y * 12.0
+		var to := Vector3(from.x, from.y, SoloController.vip_walk_z(from.z / 0.0254, edge, depth_in) * 0.0254)
+		var entry := {"move": true, "index": i, "default": to, "centre": from, "radius": 0.0,
+			"placer": "P%d" % defender}
+		if human_moves:
+			_solo_relic_drop_queue.append(entry)
+		else:
+			_solo_finish_marker_move(entry)
+	_solo_next_relic_drop_prompt()
+
+
+func _solo_finish_marker_move(entry: Dictionary) -> void:
+	if not bool(entry.get("chosen", false)):
+		terrain_overlay.set_objective_position(int(entry["index"]), entry["default"])
+	_solo_sync_relic_map()
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"%s moves the marker (round %d)" % [entry["placer"], opr_army_manager.current_round], true)
 
 
 func _solo_book_mission_vp(final: bool) -> void:
@@ -11471,6 +11514,7 @@ func _solo_round_start(round_number: int) -> void:
 	if solo_controller != null:
 		solo_controller.reset_round_claims()   # albtraum v2: the overkill ledger never outlives a round
 	_solo_growth_round_start()   # coverage wave: per-round growth markers tick before anyone acts
+	_solo_mobile_marker_round_start()
 	await _solo_battleborn_recovery()
 	# Ambush arrivals happen at the start of ANY round after the first (GF/AoF v3.5.1 p.13), so a unit
 	# with no clear spot in round 2 gets another chance later. B12: players ALTERNATE placing them.
