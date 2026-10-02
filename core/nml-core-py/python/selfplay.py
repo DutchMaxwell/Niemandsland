@@ -728,7 +728,7 @@ _MISSION_CATALOG_CACHE: dict[str, dict[str, Any]] = {}
 
 def mission_markers(spec: dict[str, Any], count: int) -> list[dict[str, Any]]:
     """Arm owned or carried marker state without changing legacy empty records."""
-    if not spec.get("owned") and not spec.get("carry"):
+    if not spec.get("owned") and not spec.get("carry") and not spec.get("mobile"):
         return []
     markers = []
     for i in range(count):
@@ -736,6 +736,8 @@ def mission_markers(spec: dict[str, Any], count: int) -> list[dict[str, Any]]:
             if spec.get("owned") else {}
         if spec.get("carry"):
             marker.update(carry=True, carried_by=-1)
+        if spec.get("mobile"):
+            marker.update(mobile=True, deploy_edge=int(spec.get("deploy_edge", 0)))
         markers.append(marker)
     return markers
 
@@ -3004,6 +3006,8 @@ def play_game(
         if live_ledger:
             _write_ledger(plain, led)
         state = core.state_of(plain)
+        if any(m.get("mobile") for m in plain.get("markers_meta") or []):
+            state = core.apply_marker_move(state, TABLE_D_IN)  # D10b: the VIP walks at round start
         state, opener = _play_round(
             core, state, opener, rng, log, round_no,
             seed=seed, owners=owners, sidecars=sidecars,
