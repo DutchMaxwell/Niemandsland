@@ -259,3 +259,23 @@ func test_the_bar_covers_no_more_than_todays_top_items(timeout := 120000) -> voi
 	assert_float(widest.x).override_failure_message("the widest state covers %d px² > today's %d px²" % [widest.x, TODAY_TOP_AREA]) \
 		.is_less_equal(TODAY_TOP_AREA)
 	assert_array(_missing_items()).is_empty()
+
+
+## N14: the connection chip is hidden offline and reads online / reconnecting / lost otherwise.
+func test_the_connection_chip_follows_the_session(timeout := 120000) -> void:
+	var link: PanelContainer = _bar().items()["link"]
+	await _runner.simulate_frames(2)
+	assert_bool(link.visible).override_failure_message("the connection chip shows offline").is_false()
+	var text := func() -> String: return (link.get_node("Row/Text") as Label).text
+	_main._is_reconnecting = true
+	await _runner.simulate_frames(2)
+	assert_bool(link.visible).is_true()
+	assert_str(text.call()).is_equal("RECONNECTING")
+	_main._is_reconnecting = false
+	_main._reconnect_failure_shown = true
+	await _runner.simulate_frames(2)
+	assert_str(text.call()).is_equal("CONNECTION LOST")
+	_main._reconnect_failure_shown = false
+	await _runner.simulate_frames(2)
+	assert_bool(link.visible).is_false()
+	assert_int(_main.connection_state()).is_equal(0)
