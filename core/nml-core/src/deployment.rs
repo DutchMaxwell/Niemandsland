@@ -675,6 +675,19 @@ fn v2_add(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
 /// One `occupied` entry — `{"pos": Vector2, "radius": float}` (solo_controller.gd:9170).
 /// `Deserialize` so the py seam can hand these in as plain dicts (the
 /// module's JSON marshalling contract, `nml-core-py/src/lib.rs`).
+/// D6b — Attack & Defend distance gates for one side's main placements, in METRES (0 = no such
+/// gate). The twin of `SoloController._deploy_gates` (D6a): a disc per enemy base and marker the
+/// search may not enter, and the friend reach (a unit after the side's first stays within it).
+#[derive(Debug, Clone, Copy, Default, PartialEq, serde::Deserialize)]
+pub struct Gates {
+    #[serde(default)]
+    pub min_from_enemy_m: f64,
+    #[serde(default)]
+    pub max_from_friend_m: f64,
+    #[serde(default)]
+    pub min_from_marker_m: f64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
 pub struct Occupied {
     pub pos: (f64, f64),
@@ -1100,8 +1113,57 @@ pub fn deploy_place_id_in(
     rules_epoch: u32,
     zones: Option<&[Zone]>,
 ) -> PlaceOutcome {
+    deploy_place_id_gated(
+        zone, sec, forward_y, objectives, occupied, board, walls, radius, footprint, base_r, flying,
+        vanguard, push_m, rules_epoch, zones, None, &[],
+    )
+}
+
+/// D6b: `deploy_place_id_in` plus the distance `gates` over the enemy's placed `enemy` bases
+/// (`Occupied` = base centre + radius). `None` = `deploy_place_id_in`, byte-identical.
+#[allow(clippy::too_many_arguments)]
+pub fn deploy_place_id_gated(
+    zone: &Rect,
+    sec: &Rect,
+    forward_y: f64,
+    objectives: &[(f64, f64)],
+    occupied: &mut Vec<Occupied>,
+    board: &Terrain,
+    walls: &[WallSeg],
+    radius: f64,
+    footprint: &[(f64, f64)],
+    base_r: f64,
+    flying: bool,
+    vanguard: bool,
+    push_m: f64,
+    rules_epoch: u32,
+    zones: Option<&[Zone]>,
+    gates: Option<&Gates>,
+    enemy: &[Occupied],
+) -> PlaceOutcome {
     let terrain_only =
         |p: (f64, f64)| spot_blocked(board, p, flying, radius, footprint, base_r);
+    // discs the search may not enter: gate + radius around every enemy base, the marker gate around
+    // each marker (constant for this placement; the retry marks live in `occupied`)
+    let mut gate_occ: Vec<Occupied> = Vec::new();
+    if let Some(g) = gates {
+        if g.min_from_enemy_m > 0.0 {
+            gate_occ.extend(enemy.iter().map(|e| Occupied { pos: e.pos, radius: g.min_from_enemy_m + e.radius }));
+        }
+        if g.min_from_marker_m > 0.0 {
+            gate_occ.extend(objectives.iter().map(|&pos| Occupied { pos, radius: g.min_from_marker_m }));
+        }
+    }
+    let friends: Vec<Occupied> = match gates {
+        Some(g) if g.max_from_friend_m > 0.0 => occupied.clone(),
+        _ => Vec::new(),
+    };
+    let reach = gates.map_or(0.0, |g| g.max_from_friend_m);
+    let with_gates = |o: &[Occupied]| -> Vec<Occupied> {
+        let mut v = o.to_vec();
+        v.extend(gate_occ.iter().copied());
+        v
+    };
     // wholly within the zone: EVERY footprint base counts, not just the unit's centre
     let outside = |z: &[Zone], p: (f64, f64)| {
         if footprint.is_empty() {
@@ -1110,9 +1172,20 @@ pub fn deploy_place_id_in(
             footprint.iter().any(|o| !zones_contain(z, (p.0 + o.0, p.1 + o.1)))
         }
     };
-    let blocked = |p: (f64, f64)| zones.is_some_and(|z| outside(z, p)) || terrain_only(p);
-    let mut spot =
-        best_spot(sec, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y);
+    let zone_blocked = |p: (f64, f64)| zones.is_some_and(|z| outside(z, p)) || terrain_only(p);
+    // the friend reach: not near any friend placed so far = blocked (the side's first unit is free)
+    let blocked = |p: (f64, f64)| {
+        if friends.is_empty() || reach <= 0.0 {
+            return zone_blocked(p);
+        }
+        let near = friends.iter().any(|f| {
+            ((p.0 - f.pos.0).powi(2) + (p.1 - f.pos.1).powi(2)).sqrt() <= radius + f.radius + reach
+        });
+        if near { zone_blocked(p) } else { true }
+    };
+    let mut spot = best_spot(
+        sec, objectives, &with_gates(occupied), radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y,
+    );
     // DEPLOYLARGE (solo_controller.gd `_deploy_place_id`, the static switch
     // `large_zone_search`), gated from `EPOCH_64_DEPLOY_LARGE_RESPOT` so every
     // earlier corpus re-deploys as it was recorded (#1048 shipped it ungated):
@@ -1131,7 +1204,7 @@ pub fn deploy_place_id_in(
         && sec_behind > LARGE_ZONE_SPOT_BEHIND_M
     {
         let zone_spot = best_spot(
-            zone, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
+            zone, objectives, &with_gates(occupied), radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
             forward_y,
         );
         if !zone_spot.0.is_infinite() && (zone_spot.1 - forward_y).abs() < sec_behind {
@@ -1153,19 +1226,19 @@ pub fn deploy_place_id_in(
         occupied.push(Occupied { pos: spot, radius: radius * 0.6 });
         marks += 1;
         spot = best_spot(
-            sec, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y,
+            sec, objectives, &with_gates(occupied), radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y,
         );
     }
     if spot.0.is_infinite() {
         rung = 1;
         spot = best_spot(
-            zone, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y,
+            zone, objectives, &with_gates(occupied), radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y,
         );
     }
     if spot.0.is_infinite() {
         rung = 2;
         spot = best_spot(
-            zone, objectives, &[], radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y,
+            zone, objectives, &gate_occ, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y,
         );
     }
     if spot.0.is_infinite() {
@@ -1324,6 +1397,8 @@ pub struct SideQueue {
     zone: Rect,
     /// D5: the catalog zone shape inside `zone`, main queue only (scouts stay rect-only).
     zones: Option<Vec<Zone>>,
+    /// D6b: the side's distance gates (main queue only), None = today's path.
+    gates: Option<Gates>,
     forward_y: f64,
 }
 
@@ -1356,6 +1431,7 @@ fn deploy_begin(specs: &[UnitSpec], zone: &Rect, seed_value: i64) -> SideQueue {
         occupied: Vec::new(),
         zone: *zone,
         zones: None,
+        gates: None,
         forward_y: if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 },
     };
     if specs.is_empty() {
@@ -1385,6 +1461,7 @@ fn deploy_begin(specs: &[UnitSpec], zone: &Rect, seed_value: i64) -> SideQueue {
 /// (solo_controller.gd:9078-9091) into `_deploy_place_id` (:9093-9178) — the
 /// unit at spec index `i` lands through the step-5 ladder and drops its models
 /// on the FIXED 0.04 m place grid, its footprint joining the side's `occupied`.
+#[allow(clippy::too_many_arguments)] // the placement context rides as arguments, like deploy_place_id
 fn deploy_place_next(
     q: &mut SideQueue,
     specs: &[UnitSpec],
@@ -1393,6 +1470,7 @@ fn deploy_place_next(
     board: &Terrain,
     walls: &[WallSeg],
     rules_epoch: u32,
+    enemy: &[Occupied],
 ) {
     let s = &specs[i];
     let (zone, section, forward_y) = (q.zone, q.section_of[i], q.forward_y);
@@ -1414,10 +1492,12 @@ fn deploy_place_next(
     // the push band: the registry's place_in when the list carries it,
     // the table's 9" fallback otherwise (solo_controller.gd:9627)
     let push_m = s.place_in_m.unwrap_or(VANGUARD_PLACE_M);
-    let o = deploy_place_id_in(
+    let o = deploy_place_id_gated(
         &unit_zone, &sec, fwd, objectives, &mut q.occupied, board, walls,
         radius, &s.footprint, base_r, s.ignores_terrain, s.vanguard, push_m, rules_epoch,
         if s.scout { None } else { q.zones.as_deref() },
+        if s.scout { None } else { q.gates.as_ref() },
+        enemy,
     );
     q.out.placements.push(Placement {
         key: s.key.clone(),
@@ -1488,12 +1568,29 @@ pub fn deploy_side_in(
     seed_value: i64,
     rules_epoch: u32,
 ) -> SideDeploy {
+    deploy_side_gated(specs, zone, zones, None, &[], objectives, board, seed_value, rules_epoch)
+}
+
+/// `deploy_side_in` under distance `gates` against the enemy's already placed `enemy` bases (D6b).
+#[allow(clippy::too_many_arguments)]
+pub fn deploy_side_gated(
+    specs: &[UnitSpec],
+    zone: &Rect,
+    zones: Option<&[Zone]>,
+    gates: Option<&Gates>,
+    enemy: &[Occupied],
+    objectives: &[(f64, f64)],
+    board: &Terrain,
+    seed_value: i64,
+    rules_epoch: u32,
+) -> SideDeploy {
     let mut q = deploy_begin(specs, zone, seed_value);
     q.zones = zones.map(|z| z.to_vec());
+    q.gates = gates.copied();
     let walls = board.walls_world_m();
     let order: Vec<usize> = q.main.iter().chain(q.scouts.iter()).copied().collect();
     for i in order {
-        deploy_place_next(&mut q, specs, i, objectives, board, walls, rules_epoch);
+        deploy_place_next(&mut q, specs, i, objectives, board, walls, rules_epoch, enemy);
     }
     // The FINISH (deploy_finish, solo_controller.gd:9180-9188) is NOT run
     // here — step 6d split placement from the finish so the caller drives the
@@ -1548,6 +1645,18 @@ pub fn deploy_interleaved(
     )
 }
 
+/// The footprint bases a side has placed so far, as `Occupied` (spot + footprint offset, base radius).
+fn placed_bases(q: &SideQueue, specs: &[UnitSpec]) -> Vec<Occupied> {
+    let mut out = Vec::new();
+    for p in &q.out.placements {
+        if let Some(s) = specs.iter().find(|s| s.key == p.key) {
+            let radius = deploy_base_radius_of(s);
+            out.extend(s.footprint.iter().map(|o| Occupied { pos: (p.spot.0 + o.0, p.spot.1 + o.1), radius }));
+        }
+    }
+    out
+}
+
 /// `deploy_interleaved` inside catalog zone shapes (D5); `[None, None]` = `deploy_interleaved`.
 #[allow(clippy::too_many_arguments)]
 pub fn deploy_interleaved_in(
@@ -1563,11 +1672,35 @@ pub fn deploy_interleaved_in(
     first: i64,
     rules_epoch: u32,
 ) -> InterleavedDeploy {
+    deploy_interleaved_gated(
+        specs1, specs2, zone1, zone2, zones, [None, None], objectives, board, seed1, seed2, first, rules_epoch,
+    )
+}
+
+/// `deploy_interleaved_in` under per-side distance `gates` (D6b); the enemy bases are the other
+/// side's placements so far. `[None, None]` = `deploy_interleaved_in`.
+#[allow(clippy::too_many_arguments)]
+pub fn deploy_interleaved_gated(
+    specs1: &[UnitSpec],
+    specs2: &[UnitSpec],
+    zone1: &Rect,
+    zone2: &Rect,
+    zones: [Option<&[Zone]>; 2],
+    gates: [Option<&Gates>; 2],
+    objectives: &[(f64, f64)],
+    board: &Terrain,
+    seed1: i64,
+    seed2: i64,
+    first: i64,
+    rules_epoch: u32,
+) -> InterleavedDeploy {
     let walls = board.walls_world_m();
     let specs = [specs1, specs2];
     let mut q = [deploy_begin(specs1, zone1, seed1), deploy_begin(specs2, zone2, seed2)];
     q[0].zones = zones[0].map(|z| z.to_vec());
     q[1].zones = zones[1].map(|z| z.to_vec());
+    q[0].gates = gates[0].copied();
+    q[1].gates = gates[1].copied();
     let order: [usize; 2] = if first == 2 { [1, 0] } else { [0, 1] };
     let mut sequence: Vec<(i64, String)> = Vec::new();
     for scouts in [false, true] {
@@ -1581,7 +1714,8 @@ pub fn deploy_interleaved_in(
                 }
                 let i = if scouts { q[k].scouts[cur[k]] } else { q[k].main[cur[k]] };
                 cur[k] += 1;
-                deploy_place_next(&mut q[k], specs[k], i, objectives, board, walls, rules_epoch);
+                let enemy = if q[k].gates.is_some() { placed_bases(&q[1 - k], specs[1 - k]) } else { Vec::new() };
+                deploy_place_next(&mut q[k], specs[k], i, objectives, board, walls, rules_epoch, &enemy);
                 sequence.push((k as i64 + 1, specs[k][i].key.clone()));
                 placed = true;
             }
