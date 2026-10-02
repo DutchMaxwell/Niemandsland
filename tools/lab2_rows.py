@@ -34,6 +34,12 @@ def vmhwm_mib():
     return 0.0
 
 
+class Declined(Exception):
+    """A planner answered NO pick while its side still had units to activate: the core's `used: false` decline (e.g.
+    TreeUnported("deadly")), which `_pick_for` turns into `{}` and the play loop would read as a dry side. Never a
+    silent pass (prereg section 2: an unsupported transition is INVALID) - `guarded` ends the row as INVALID."""
+
+
 class Recorder:
     """Decisions of ONE game/ending. `arm_of(player)` names the arm that seat plays; `net` (or None) gives the
     per-seat call counts the decision cost."""
@@ -51,6 +57,10 @@ class Recorder:
         def timed(core, state, player, *args, **kwargs):
             before, t0 = self.calls(player), time.perf_counter_ns()
             pick = real(core, state, player, *args, **kwargs)
+            if not pick:
+                pool = state.pool(player, bool(core.knobs().get("hero_attach", True)))
+                if pool:
+                    raise Declined("side %d (%s) declined with %d units to activate" % (player, self.arm_of(player), len(pool)))
             if pick:
                 self.add(player, core.knobs().get("deadline_us", 0), (time.perf_counter_ns() - t0) // 1000,
                          pick.get("trace") or {}, self.calls(player) - before, kwargs.get("sig"))
@@ -103,6 +113,8 @@ def guarded(nm, fn):
         return None, "unsupported: %s" % e
     except TimeoutError as e:
         return None, "timeout: %s" % e
+    except Declined as e:
+        return None, "declined: %s" % e
     except BaseException as e:
         if type(e).__name__ != "PanicException":
             raise
