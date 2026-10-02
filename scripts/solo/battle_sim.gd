@@ -620,7 +620,7 @@ static func mission_winner(scoring: String, owners: Array, vp: Array,
 ## D9 (R11a): a marker's horizontal point in inches — a CARRIED marker sits at its
 ## carrier's first model less that model's base radius (the carrier's nearest base
 ## edge, as control_gap_in measures), a free one at its spot. [] = destroyed/none.
-static func _marker_point_in(state: Dictionary, i: int) -> Array:
+static func marker_point_in(state: Dictionary, i: int) -> Array:
 	var markers: Array = state.get("markers_meta", [])
 	var objs: Array = state.get("objectives", [])
 	if i >= markers.size() or i >= objs.size() or bool((markers[i] as Dictionary).get("destroyed", false)):
@@ -648,7 +648,7 @@ static func escort_winner(state: Dictionary, deploy_edge: int, table_d_in: float
 	var target := -float(signi(deploy_edge))
 	var home := false
 	for i in range(state.get("objectives", []).size()):
-		var pt := _marker_point_in(state, i)
+		var pt := marker_point_in(state, i)
 		if not pt.is_empty() and table_d_in / 2.0 - target * float(pt[1]) - float(pt[2]) <= 6.0 + CONTROL_EPS:
 			home = true
 	var defender := 3 - att
@@ -662,7 +662,7 @@ static func extract_winner(state: Dictionary, table_w_in: float, table_d_in: flo
 		return "draw"
 	var out := false
 	for i in range(state.get("objectives", []).size()):
-		var pt := _marker_point_in(state, i)
+		var pt := marker_point_in(state, i)
 		if pt.is_empty():
 			continue
 		var gap := minf(table_w_in / 2.0 - absf(float(pt[0])), table_d_in / 2.0 - absf(float(pt[1]))) - float(pt[2])
