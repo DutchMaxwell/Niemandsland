@@ -15,10 +15,10 @@ const IN2M := 0.0254
 ## -> {"cells": {Vector2i: TerrainType}, "n": grid_size,
 ##     "pieces": [[type, centre_x_in, centre_z_in, w_in, h_in, rot]]}
 ## `pieces` is the judge-bench drawing list; `cells` is the sim's truth.
-static func generate(layout_seed: int, table_w_ft := 6.0, table_d_ft := 4.0) -> Dictionary:
+static func generate(layout_seed: int, table_w_ft := 6.0, table_d_ft := 4.0, symmetric := true) -> Dictionary:
 	var ml: Control = (load("res://scripts/map_layout.gd") as GDScript).new()
 	ml.table_size_feet = Vector2(table_w_ft, table_d_ft)
-	ml.point_symmetry_enabled = true
+	ml.point_symmetry_enabled = symmetric
 	ml.grid_rotation_degrees = 0.0
 	seed(layout_seed)
 	ml._generate_terrain_layout()
