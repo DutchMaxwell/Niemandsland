@@ -1246,6 +1246,7 @@ def _pick_for(
     policy_mode: str | None = None,
     pool_value_fn: dict[int, Any] | None = None, pool_value_w: float = 0.0,
     leaf_value_fn: dict[int, Any] | None = None, leaf_value_w: float = 0.0,
+    sig: int | None = None,
 ) -> dict[str, Any]:
     """`_pick_for` core_selfplay.gd:398-459 — the full planner for whichever side
     still has a living, un-activated unit; `{}` when the side is dry.
@@ -1323,10 +1324,12 @@ def _pick_for(
     extra = {"cand_logits": logits, "policy_mode": policy_mode} if logits is not None else {}
     vhook = (pool_value_fn or {}).get(player)
     lhook = (leaf_value_fn or {}).get(player)
-    # A Tray-dice tree seat needs the chance stream's signature; the dedicated
-    # per-activation stream seed is it when the caller passes none.
+    # A tree seat's search stream: the caller's `sig` (`_search_sig`) when given;
+    # else a Tray-dice tree seat takes the per-activation stream seed.
     kn = core.knobs()
-    if kn.get("search_mode") == "tree" and kn.get("tree_dice") == "tray":
+    if kn.get("search_mode") == "tree" and sig is not None:
+        extra = dict(extra, sig=sig)
+    elif kn.get("search_mode") == "tree" and kn.get("tree_dice") == "tray":
         extra = dict(extra, sig=explore_seed)
     if lhook is not None:
         extra = dict(extra, leaf_value_fn=lhook, leaf_value_w=leaf_value_w)
@@ -1363,6 +1366,21 @@ def _pick_for(
             pick["action"], pick["unit_key"] = act, act["unit"]
             pick["played_idx"] = pool_idx[bi]
     return pick
+
+
+def _search_sig(streams: dict[int, dict] | None, seat: int, planning) -> dict[str, Any]:
+    """`seat`'s next search signature `{sig, seed, counter}` off its own stream
+    (`play_game(search_seeds=)`), `{}` unless that seat has one and its acting core
+    is a tree. Two `randi_range` draws per decision, sig = (hi << 31 | lo) + 1; a
+    drawn sig stays pending until a pick actually lands (a dry side draws nothing)."""
+    st = (streams or {}).get(seat)
+    if st is None or planning.knobs().get("search_mode") != "tree":
+        return {}
+    if st["pending"] is None:
+        hi = st["rng"].randi_range(0, 2147483647)
+        lo = st["rng"].randi_range(0, 2147483647)
+        st["pending"] = {"sig": ((hi << 31) | lo) + 1, "seed": st["seed"], "counter": st["counter"]}
+    return st["pending"]
 
 
 @contextlib.contextmanager
@@ -1677,6 +1695,7 @@ def _play_round(
     pool_value_w: float = 0.0,
     leaf_value_fn: dict[int, Any] | None = None,
     leaf_value_w: float = 0.0,
+    search_streams: dict[int, dict] | None = None,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -1767,17 +1786,21 @@ def _play_round(
             pf_kw.update(pool_value_fn=pool_value_fn, pool_value_w=pool_value_w)
         if leaf_value_fn is not None:
             pf_kw.update(leaf_value_fn=leaf_value_fn, leaf_value_w=leaf_value_w)
+        s_kw = _search_sig(search_streams, turn, planning)
         pick = _pick_for(planning, state, turn, net_player, eps, explore_seed,
-                         cands=record_cands, **pf_kw)
+                         cands=record_cands, **pf_kw, **({"sig": s_kw["sig"]} if s_kw else {}))
         if not pick:
             other = 2 if turn == 1 else 1
+            s_kw = _search_sig(search_streams, other, cap_core if use_cap else cores[other])
             pick = _pick_for(
                 cap_core if use_cap else cores[other], state, other, net_player, eps, explore_seed,
-                cands=record_cands, **pf_kw,
+                cands=record_cands, **pf_kw, **({"sig": s_kw["sig"]} if s_kw else {}),
             )
             if not pick:
                 break
             turn = other
+        if s_kw:  # the pending sig landed: the stream moves on
+            search_streams[turn].update(pending=None, counter=s_kw["counter"] + 1)
         action = pick["action"]
         row = {
             "side": turn,
@@ -1789,6 +1812,8 @@ def _play_round(
             "action": action,
             "intent": str(pick.get("intent", "")),
         }
+        if s_kw:  # only where a search stream fed the pick
+            row["search"] = {"seed": s_kw["seed"], "counter": s_kw["counter"]}
         if eps > 0.0:
             # NML-1158c: present only on a game the knob actually rode —
             # TRUE only when the coin fired on THIS pick. Omitted at eps=0.0
@@ -2166,6 +2191,7 @@ def play_game(
     layout_seed: int | None = None,
     deploy_seed: int | None = None,
     play_seed: int | None = None,
+    search_seeds: dict[int, int] | None = None,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -2174,7 +2200,8 @@ def play_game(
 
     The seed split (None = `seed`, today's game): `layout_seed` draws the marker
     layout, `deploy_seed` the roll-off and deployment, `play_seed` the game stream
-    from round 1 on.
+    from round 1 on; `search_seeds[seat]` feeds that seat's tree searches
+    (`_search_sig`), each row then carries its stream `search: {seed, counter}`.
 
     `cand_logits_fn` / `policy_mode` are the R4 seam (NML-1164,
     DESIGN_policy_player §6): `{side: fn(state, menu, side) -> list[float] |
@@ -2932,6 +2959,8 @@ def play_game(
     rounds_played = 0
     if play_seed is not None:  # the played generator, split off right before round 1
         rng = nml_core.Rng(play_seed)
+    streams = {s: {"seed": v, "rng": nml_core.Rng(v), "counter": 0, "pending": None}
+               for s, v in (search_seeds or {}).items()} or None
     for round_no in range(1, rounds + 1):
         plain = state.plain()
         _round_start(plain, round_no, profiles, magic)
@@ -2951,6 +2980,7 @@ def play_game(
             cand_logits_fn=cand_logits_fn, policy_mode=policy_mode,
             pool_value_fn=pool_value_fn, pool_value_w=pool_value_w,
             leaf_value_fn=leaf_value_fn, leaf_value_w=leaf_value_w,
+            **({"search_streams": streams} if streams else {}),
         )
         state, owners = _round_end(core, state, owners, led, round_no)
         rounds_played = round_no
