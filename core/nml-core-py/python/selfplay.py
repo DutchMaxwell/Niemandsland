@@ -1669,6 +1669,16 @@ FORK_REP_STRIDE = 70001
 FORK_REPS = 3
 
 
+#: A derived per-activation seed (`seed * STRIDE + seq`) wraps into the 64-bit range the core's Rng takes: a 63-bit game
+#: seed (hashed seed registries draw 1 + sha256 mod (2**63 - 1)) times a stride overflows a C long. Every seed below
+#: 2**63 / stride derives exactly as before, so recorded digests stay byte-identical.
+SEED_WRAP = 2 ** 63
+
+
+def _derived(seed: int) -> int:
+    return seed % SEED_WRAP
+
+
 def _local_rng(seed: int, skip: int) -> "nml_core.Rng":
     """One sidecar generator. `skip` is the RED PROOF knob and nothing else: it
     advances the stream by that many draws before the clone is resolved, so the
@@ -1731,9 +1741,9 @@ def _pair_block(core, state, pick, runner, seed: int, seq: int, skip: int) -> di
     """E0b, `_play_round` core_selfplay.gd:281-294 — the CHOSEN and the REJECTED
     candidate each resolved on a clone, both end boards logged. The generator is
     log-local, so the game's dice stream never moves."""
-    lrng = _local_rng(seed * PAIR_SEED_STRIDE + seq, skip)
+    lrng = _local_rng(_derived(seed * PAIR_SEED_STRIDE + seq), skip)
     st_ch = core.resolve_stochastic_rng(state, pick["action"], lrng)
-    lrng.seed(seed * PAIR_SEED_STRIDE + seq + PAIR_RUNNER_OFFSET)
+    lrng.seed(_derived(seed * PAIR_SEED_STRIDE + seq + PAIR_RUNNER_OFFSET))
     for _ in range(max(skip, 0)):
         lrng.randf()
     st_ru = core.resolve_stochastic_rng(state, runner["action"], lrng)
@@ -1753,10 +1763,10 @@ def _fork_block(core, state, pick, runner, turn: int, round_no: int, owners, see
     c_runs: list[dict[str, int]] = []
     r_runs: list[dict[str, int]] = []
     for rep in range(FORK_REPS):
-        base = seed * FORK_SEED_STRIDE + seq + rep * FORK_REP_STRIDE + salt
+        base = _derived(seed * FORK_SEED_STRIDE + seq + rep * FORK_REP_STRIDE + salt)
         frng = _local_rng(base, skip)
         c_runs.append(_fork_playout(core, state, pick["action"], turn, round_no, owners, frng))
-        frng.seed(base + FORK_RUNNER_OFFSET)
+        frng.seed(_derived(base + FORK_RUNNER_OFFSET))
         for _ in range(max(skip, 0)):
             frng.randf()
         r_runs.append(_fork_playout(core, state, runner["action"], turn, round_no, owners, frng))
@@ -1863,14 +1873,14 @@ def _play_round(
         # own ordinal (`len(log)` before its row is appended) exactly as the
         # pair/fork formulas above already read it after the fact.
         seq = len(log)
-        explore_seed = seed * EXPLORE_SEED_STRIDE + seq
+        explore_seed = _derived(seed * EXPLORE_SEED_STRIDE + seq)
         # PLAYOUT-CAP (expert-iteration step 2): the per-activation coin off
         # its own generator — `rng` and the sidecars never see a draw, and off
         # it takes zero draws, exactly like `eps=0.0`. The fallback pick below
         # is the SAME activation, so it rides the same coin.
         use_cap = False
         if cap_core is not None:
-            use_cap = nml_core.Rng(seed * CAP_SEED_STRIDE + seq).randf() < cap_share
+            use_cap = nml_core.Rng(_derived(seed * CAP_SEED_STRIDE + seq)).randf() < cap_share
         planning = cap_core if use_cap else cores[turn]
         # R4 kwargs ride ONLY when armed: a tool that swaps in its own
         # `_pick_for`-shaped callable via `forced_picks` (game_narrator,
