@@ -15,6 +15,8 @@ file is tab-separated, one row per (slot, candidate) with the columns above in f
 `top_k` / `horizon` of its knobs reach `play_game`; every other header knob is reported as ignored, never
 applied silently. Exit 1 when a slot is MISSING. With `--timing-out F` the same games also feed the timing set (first 12
 legal pre-pick states per cell, all rounds); a cell below 12 fails the timing instrument (exit 1).
+With `--transitions-out F` a core proxy (`Tap`) records the first 9 / 8 resolves per cell in the
+`replay_transition` shape (+ `F.headers`: source -> the game header a replay needs); a cell below its quota exits 1.
 Run: ~/.cache/nml-stage0/venv/bin/python3 tools/lab2_source.py source ...
 """
 import argparse
@@ -56,6 +58,59 @@ class TimingSet:
 
     def short(self, cells):
         return {c: self.count.get(c, 0) for c in sorted(cells) if not self.full(c)}
+
+
+def default_quota(cell):
+    """9 transitions in cells 1-4, 8 in cells 5-12 (100 in all); the cell label's digits are its number."""
+    return 9 if int("".join(ch for ch in cell if ch.isdigit())) <= 4 else 8
+
+
+class TransitionSet:
+    """The first `quota(cell)` recorded resolves per cell, in source-game / activation order."""
+
+    def __init__(self, quota=default_quota):
+        self.quota, self.records, self.count, self.headers = quota, [], {}, {}  # headers: source -> game header
+
+    def full(self, cell):
+        return self.count.get(cell, 0) >= self.quota(cell)
+
+    def add(self, rec):
+        self.records.append(rec)
+        self.count[rec["cell"]] = self.count.get(rec["cell"], 0) + 1
+
+    def short(self, cells):
+        return {c: self.count.get(c, 0) for c in sorted(cells) if not self.full(c)}
+
+
+class Tap:
+    """A core proxy for ONE source game: every call is the real core's; `resolve_with_tray` also records the
+    `replay_transition` shape (before, action, streams before/after, tray faces consumed so far, rolls)."""
+
+    def __init__(self, core, row, sink):
+        self.core, self.row, self.sink, self.faces, self.seq = core, row, sink, 0, 0
+
+    def __getattr__(self, name):
+        return getattr(self.core, name)
+
+    def set_header(self, header):  # `Core` has no header getter; a replay needs the game's own header
+        self.sink.headers[self.row["slot"] + ":" + self.row["candidate"]] = header
+        return self.core.set_header(header)
+
+    def resolve_with_tray(self, state, action, rng, tray):
+        cell = self.row["cell"]
+        keep = not self.sink.full(cell)
+        before = (state.plain(), rng.state, tray.state) if keep else None
+        faces_before = self.faces
+        nxt, rep = self.core.resolve_with_tray(state, action, rng, tray)
+        self.seq += 1
+        self.faces += sum(len(r["faces"]) for r in rep["rolls"])
+        if keep:
+            self.sink.add({"cell": cell, "source": self.row["slot"] + ":" + self.row["candidate"], "seq": self.seq,
+                           "before": before[0], "action": action, "rng_state": before[1], "tray_state": before[2],
+                           "faces_before": faces_before, "after": nxt.plain(), "rolls": rep["rolls"],
+                           "tray_state_after": tray.state, "rng_state_after": rng.state,
+                           "dice_seed": int(self.row["tray"])})
+        return nxt, rep
 
 
 class Spy:
@@ -116,13 +171,15 @@ class Spy:
             sp._round_end = real_end
 
 
-def play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing=None):
+def play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing=None, transitions=None):
     """One source game for one candidate row -> (snapshot or None, log row)."""
     spy, t0 = Spy(sp, row, timing), time.perf_counter()
-    kw = dict(play_kw, mission=row["mission"], objectives="mission", live_ledger=True,
+    kw = dict(play_kw, mission=row["mission"], objectives="mission", live_ledger=True, dice="table",
               layout_seed=int(row["layout"]), deploy_seed=int(row["deploy"]), play_seed=int(row["play"]),
               dice_seed=int(row["tray"]), leaf_value_fn={1: net.hook(1), 2: net.hook(2)}, leaf_value_w=1.0)
     snapshot = None
+    if transitions is not None:
+        core = Tap(core, row, transitions)
     try:
         with spy.armed():
             sp.play_game(int(row["terrain"]), os.path.join(lists, row["list_p1"]), os.path.join(lists, row["list_p2"]),
@@ -134,12 +191,12 @@ def play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing=None):
     return snapshot, log
 
 
-def generate(sp, core, slots, repo, bank, lists, net, cap, play_kw, timing=None):
+def generate(sp, core, slots, repo, bank, lists, net, cap, play_kw, timing=None, transitions=None):
     """-> (positions, discarded, missing slot ids). At most `cap` candidates per slot, first eligible wins."""
     positions, discarded, missing = [], [], []
     for slot, rows in slots.items():
         for row in rows[:cap]:
-            snapshot, log = play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing)
+            snapshot, log = play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing, transitions)
             if snapshot:
                 positions.append(snapshot)
                 break
@@ -173,8 +230,9 @@ def cmd_source(a):
     net = ShippedNet(a.repo)
     slots = read_slots(a.slots)
     timing = TimingSet() if a.timing_out else None
+    transitions = TransitionSet() if a.transitions_out else None
     positions, discarded, missing = generate(sp, nm.load(a.repo), slots, a.repo, a.bank, a.lists, net, a.cap,
-                                             play_kw, timing)
+                                             play_kw, timing, transitions)
     out = {"positions": positions, "discarded": discarded, "missing": missing, "ignored_header_knobs": ignored,
            "net": net.proof()}
     json.dump(out, open(a.out, "w"))  # no sort_keys: net.proof() mixes int seats with a str key
@@ -183,6 +241,12 @@ def cmd_source(a):
     if timing:
         json.dump(timing.states, open(a.timing_out, "w"))
         print("[source] timing states %d, short cells %s" % (len(timing.states), short))
+    cells = {r["cell"] for rows in slots.values() for r in rows}
+    if transitions:
+        json.dump(transitions.records, open(a.transitions_out, "w"))
+        json.dump(transitions.headers, open(a.transitions_out + ".headers", "w"))
+        short.update({"transitions " + c: n for c, n in transitions.short(cells).items()})
+        print("[source] transitions %d, short cells %s" % (len(transitions.records), transitions.short(cells)))
     return 1 if missing or short else 0
 
 
@@ -196,6 +260,7 @@ def main(argv=None):
     s.add_argument("--header", required=True)
     s.add_argument("--cap", type=int, default=20)
     s.add_argument("--out", required=True)
+    s.add_argument("--transitions-out", help="write the first 9 (cells 1-4) / 8 (cells 5-12) resolves per cell")
     s.add_argument("--timing-out", help="write the first 12 legal pre-pick states per cell (timing --states shape)")
     s.add_argument("--repo", default=os.path.dirname(_HERE))
     return cmd_source(ap.parse_args(argv))
