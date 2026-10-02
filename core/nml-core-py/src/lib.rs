@@ -2985,6 +2985,8 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // keys on (see the module's `acts::EPOCH_7_TABLE_RULES` note). Exported so
     // a py-side read's gate uses the same frozen constant, never the literal.
     m.add("EPOCH_7_TABLE_RULES", nmlcore::EPOCH_7_TABLE_RULES)?;
+    // B8: the arena hero fold's py-side gate (`selfplay._deploy_arena`), same reason.
+    m.add("EPOCH_69_HERO_FOLD", nmlcore::acts::EPOCH_69_HERO_FOLD)?;
     m.add("BUILD_COMMIT", BUILD_COMMIT)?;
     m.add("BUILD_DIRTY", env!("NML_BUILD_DIRTY") == "true")?;
     m.add("BUILD_INFO", to_py(m.py(), &build_info())?)?;

@@ -407,6 +407,16 @@ def _deploy_arena(
         # A hero rides its host's group — including a host held in reserve,
         # where the slice of an empty list is empty too.
         pos[hero_key] = pos.get(host_key, [])[offset : offset + count]
+    held = {k for slot in ("1", "2") for k in reserved[slot]}
+    if rules_epoch >= nml_core.EPOCH_69_HERO_FOLD:
+        # B8: the host keeps ONLY its own models (`capture` gives it its own
+        # wounds_max; the hero slices above are the heroes'), and a joined hero
+        # of a reserved host waits dormant with it instead of keeping wounds
+        # with no model on the table. Below the epoch the old split replays.
+        for hero_key, (host_key, offset, _count) in hero_fold.items():
+            pos[host_key] = pos.get(host_key, [])[:offset]
+            if host_key in held:
+                held.add(hero_key)
     # The reserve KEYS ride out with the positions: `capture` needs them to
     # mark a unit dormant (battle_sim.gd:1483 asks `unit_in_reserve`), and an
     # empty placement list is not the same signal — a folded hero of a reserved
@@ -414,7 +424,7 @@ def _deploy_arena(
     return (
         [pos[u["unit_id"]] for u in units1],
         [pos[u["unit_id"]] for u in units2],
-        {k for slot in ("1", "2") for k in reserved[slot]},
+        held,
         sequence,
     )
 
@@ -1096,6 +1106,8 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
     ]
     queue = {1: [], 2: []}
     for key, u in units.items():
+        if units.get(u.get("attached_to") or "", {}).get("dormant"):
+            continue  # B8 (EPOCH_69_HERO_FOLD): a joined hero drops WITH its host, below
         if u.get("dormant") and u.get("earliest_arrival_round", -1) <= round_no:
             queue[int(u["player"])].append(key)
     turn, arrived = int(opener), 0
@@ -1132,18 +1144,27 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
         )
         if spot is None:
             continue
-        n = int(u.get("dormant_models", 0))
-        models = nml_core.place_models((spot[0], spot[1]), n)
-        u["positions"] = [[f32(m[0]), 0.0, f32(m[1])] for m in models]
-        u["wounds"] = list(u.get("dormant_wounds", []))
-        u["radii"] = [r["base_r"]] * n
-        u["alive"] = n
-        u["dormant"] = False
-        u["ambush_arrived_round"] = round_no
-        for gone in ("dormant_models", "dormant_wounds", "earliest_arrival_round"):
-            u.pop(gone, None)
+        # The host's models first, then each dormant joined hero's — one group,
+        # like the deployment fold (`_place_unit_at` -> `_deploy_models`). Only
+        # `EPOCH_69_HERO_FOLD` makes a joined hero dormant, so below it the
+        # group is the host alone and the placement is unchanged.
+        group = [key] + [h for h in u.get("attached", []) if units.get(h, {}).get("dormant")]
+        counts = [int(units[k].get("dormant_models", 0)) for k in group]
+        models = nml_core.place_models((spot[0], spot[1]), sum(counts))
+        at = 0
+        for k, n in zip(group, counts):
+            g = units[k]
+            g["positions"] = [[f32(m[0]), 0.0, f32(m[1])] for m in models[at : at + n]]
+            g["wounds"] = list(g.get("dormant_wounds", []))
+            g["radii"] = [reads[k]["base_r"]] * n
+            g["alive"] = n
+            g["dormant"] = False
+            g["ambush_arrived_round"] = round_no
+            for gone in ("dormant_models", "dormant_wounds", "earliest_arrival_round"):
+                g.pop(gone, None)
+            live.append((k, g))
+            at += n
         occ.append({"pos": spot, "radius": r["radius"]})
-        live.append((key, u))
         arrived += 1
     return arrived
 

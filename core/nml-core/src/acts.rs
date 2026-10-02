@@ -636,7 +636,16 @@ pub const EPOCH_67_MARKERS_BURSTS: u32 = 67;
 /// 2+ before the AP is added (Def 2+ in cover vs AP(1) saves on 3+). `68` is
 /// one past `EPOCH_67_MARKERS_BURSTS`; every call site reads THIS constant.
 pub const EPOCH_68_MODIFIER_SUM: u32 = 68;
-pub const CURRENT_RULES_EPOCH: u32 = 68;
+/// B8 (stage-0 freeze 02.10.), the trainer's arena hero fold: from this epoch
+/// `selfplay._deploy_arena` hands a host ONLY its own models (below it the host
+/// also kept the joined hero's slice — a phantom model with no wound slot), and
+/// the joined hero of an Ambush host waits dormant with it and drops with it
+/// (below it the hero kept its wounds with no model on the table, and a Deadly
+/// spill onto it panicked `land_deadly_wounds`). Py-side only, like
+/// `EPOCH_7_TABLE_RULES`'s transport gate: the table's `BattleSim.capture`
+/// always wrote one wound and one position per living model of THAT unit.
+pub const EPOCH_69_HERO_FOLD: u32 = 69;
+pub const CURRENT_RULES_EPOCH: u32 = 69;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1934,7 +1943,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 68, "the live epoch is EPOCH_68_MODIFIER_SUM");
+        assert_eq!(CURRENT_RULES_EPOCH, 69, "the live epoch is EPOCH_69_HERO_FOLD");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1944,11 +1953,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":68}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":69}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 68"
+            "a fresh play_game() now stamps the bumped epoch, 69"
         );
     }
 
