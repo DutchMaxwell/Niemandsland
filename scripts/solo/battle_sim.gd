@@ -1798,7 +1798,7 @@ static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionar
 static func capture(army: OPRArmyManager, objectives_provider: Callable = Callable(),
 		objective_owner_of: Callable = Callable(), round_no: int = 1,
 		rounds_total: int = 4, cover_of: Callable = Callable(),
-		los_of: Callable = Callable(), terrain_at: Callable = Callable()) -> Dictionary:
+		los_of: Callable = Callable(), terrain_at: Callable = Callable(), viewer: int = 0) -> Dictionary:
 	var units := {}
 	for uid in army.game_units:
 		var u: GameUnit = army.game_units[uid]
@@ -1932,7 +1932,7 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		# destruction state, or they optimise a mission that no longer exists.
 		var mm: Array = []
 		for mk in SoloController.mission_markers:
-			mm.append((mk as Dictionary).duplicate())
+			mm.append(mask_secret_for((mk as Dictionary).duplicate(), viewer))
 		state["markers_meta"] = mm
 		state["destroy_seq"] = [int(SoloController.mission_destroy_seq[0])]
 	if not SoloController.mission_roles.is_empty():   # D2a: absent for every roles-less mission
@@ -1940,6 +1940,20 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 	if terrain_at.is_valid():   # absent key = pre-T2b snapshot, byte-identical
 		state["terrain_at"] = terrain_at
 	return state
+
+
+## D12c (R9a, fog of war): an unrevealed secret marker is hidden from the ATTACKER's view. The
+## `secret` kind goes, and so do `carry` / `carried_by`, which only the relic carries and would give
+## it away. `revealed: false` stays, so a viewer can still tell "a marker I know nothing about".
+## `viewer` 0 (the default) = no viewing seat, nothing is masked.
+static func mask_secret_for(mk: Dictionary, viewer: int) -> Dictionary:
+	if viewer == 0 or int(SoloController.mission_roles.get("attacker", 0)) != viewer:
+		return mk
+	if mk.has("secret") and not bool(mk.get("revealed", false)):
+		mk.erase("secret")
+		mk.erase("carry")
+		mk.erase("carried_by")
+	return mk
 
 
 ## NML-1073 M1-0: `state` as plain (JSON-safe) data — the node corpus contract
