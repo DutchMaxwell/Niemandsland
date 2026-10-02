@@ -44,6 +44,26 @@ static func roles_ai_pick(mission: Dictionary) -> String:
 	return "attacker" if float(mission.get("attacker_points_factor", 1.0)) > 1.0 else "defender"
 
 
+## R6a advice: the AI list size for both roles from the human list's points. The AI defends against
+## a human attacker with points / factor, and attacks a human defender with points * factor.
+static func points_advice(factor: float, human_points: int) -> Dictionary:
+	return {"ai_defends": int(round(human_points / factor)), "ai_attacks": int(round(human_points * factor))}
+
+
+## Index of the smallest bracket >= target, else of the largest; -1 for no brackets.
+static func bracket_at_or_above(brackets: Array, target: int) -> int:
+	var best := -1
+	for i in brackets.size():
+		var p := int(brackets[i])
+		if p >= target and (best < 0 or p < int(brackets[best])):
+			best = i
+	if best < 0:
+		for i in brackets.size():
+			if best < 0 or int(brackets[i]) > int(brackets[best]):
+				best = i
+	return best
+
+
 ## The two slots by role, from the roll-off winner's pick.
 static func roles_assign(winner_slot: int, other_slot: int, winner_role: String) -> Dictionary:
 	if winner_role == "attacker":
