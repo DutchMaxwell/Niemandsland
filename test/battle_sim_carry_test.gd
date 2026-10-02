@@ -177,6 +177,7 @@ func test_the_attackers_capture_hides_unrevealed_secrets() -> void:
 		for key in ["secret", "carry", "carried_by"]:
 			assert_bool((mm[i] as Dictionary).has(key)).is_false()
 		assert_bool(bool(mm[i]["revealed"])).is_false()
+		assert_bool(bool(mm[i]["secret_hidden"])).is_true()
 	assert_str(String(mm[2]["secret"])).is_equal("relic")
 	SoloController.mission_reset("end", {})
 

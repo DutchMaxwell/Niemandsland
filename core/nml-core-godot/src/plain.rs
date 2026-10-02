@@ -375,6 +375,7 @@ pub fn build_state(
             deploy_edge: dint(&m, "deploy_edge", 0),
             secret: m.get("secret").map(|v| text(&v)),
             revealed: dflag(&m, "revealed"),
+            secret_hidden: dflag(&m, "secret_hidden"),
             carried_by: match m.get("carried_by") {
                 Some(v) if v.try_to::<GString>().is_ok() =>
                     roster.index.get(&text(&v)).map(|&i| i as i64).unwrap_or(-1),

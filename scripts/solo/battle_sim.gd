@@ -1953,6 +1953,7 @@ static func mask_secret_for(mk: Dictionary, viewer: int) -> Dictionary:
 		mk.erase("secret")
 		mk.erase("carry")
 		mk.erase("carried_by")
+		mk["secret_hidden"] = true   # D12c-2: the eval prices it at 1/n relic, 1/n trap
 	return mk
 
 
