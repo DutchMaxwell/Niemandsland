@@ -306,7 +306,7 @@ fn leaf_vals(a1: f64, a2: f64) -> [i64; 2] {
 /// The search's frozen inputs: grid bounds, legality, the canonical pair with
 /// their zone rectangles and style labels. Zero RNG by construction.
 struct SearchCtx<'x> {
-    hx: i64, hz: i64, zones: Vec<objectives::Poly>, cells: &'x objectives::Cells,
+    hx: i64, hz: i64, zones: Vec<objectives::Zone>, cells: &'x objectives::Cells,
     z1: Zone, z2: Zone, first: &'x Value, second: &'x Value,
     lab_a: StyleLabel, lab_b: StyleLabel,
 }

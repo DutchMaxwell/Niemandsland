@@ -6,7 +6,7 @@
 //! lattice bounds, the 9" test, the zone polygons or the impassable-cell lookup shows
 //! up as a mismatching case.
 
-use nml_core::objectives::{self, Cells, Poly};
+use nml_core::objectives::{self, Cells, Zone};
 
 fn fixture() -> serde_json::Value {
     let raw = include_str!("fixtures/objective_layout.json");
@@ -30,7 +30,7 @@ fn cells_of(f: &serde_json::Value) -> Cells {
     Cells::from_pairs(&pairs, n)
 }
 
-fn zones_of(f: &serde_json::Value) -> Vec<Poly> {
+fn zones_of(f: &serde_json::Value) -> Vec<Zone> {
     objectives::zones_of_style(&serde_json::json!({ "zones": f["zones"] }))
 }
 
@@ -134,7 +134,7 @@ fn a_shifted_marker_breaks_the_match() {
 #[test]
 fn exactly_nine_inches_apart_is_not_legal() {
     let cells = Cells::from_pairs(&[], 30);
-    let zones: Vec<Poly> = Vec::new();
+    let zones: Vec<Zone> = Vec::new();
     assert!(!objectives::is_legal(9, 0, &[(0, 0)], &zones, &cells));
     assert!(objectives::is_legal(10, 0, &[(0, 0)], &zones, &cells));
 }
@@ -156,7 +156,7 @@ fn the_zone_boundary_counts_as_inside() {
 /// An impassable (CONTAINER) cell is unreachable, so no marker may land on it.
 #[test]
 fn an_impassable_cell_is_rejected() {
-    let zones: Vec<Poly> = Vec::new();
+    let zones: Vec<Zone> = Vec::new();
     // n = 30, cell 3" — inches 0..3 land in cell (15, 15).
     let cells = Cells::from_pairs(&[((15, 15), 3)], 30);
     assert!(!objectives::is_legal(1, 1, &[], &zones, &cells));
@@ -234,4 +234,26 @@ fn alternate_placement_is_untouched_by_this_rung() {
     let style = front_line_style();
     assert_eq!(objectives::marker_positions("alternate", 12.0, &style, 72.0, 48.0), Vec::<(f64, f64)>::new());
     assert_eq!(objectives::marker_positions("unknown", 12.0, &style, 72.0, 48.0), Vec::<(f64, f64)>::new());
+}
+
+/// D4b: the SAME six points per Attack & Defend style that `test/deployment_catalog_test.gd`
+/// (D4a, `AD_POINTS`) pins on the table, tested against the real `deployments.json`.
+#[test]
+fn attack_defend_zone_styles_match_the_tables_pinned_points() {
+    let cat: serde_json::Value =
+        serde_json::from_str(include_str!("../../../assets/solo/deployments.json")).unwrap();
+    type Pin = (i64, i64, bool);
+    let pins: [(&str, [Pin; 6]); 3] = [
+        ("centre_disc_12", [(0, 0, true), (11, 0, true), (13, 0, false), (0, -13, false), (8, 8, true), (9, 9, false)]),
+        ("edge_band_12", [(0, -20, true), (30, 0, true), (0, 0, false), (23, 0, false), (0, 11, false), (-35, 23, true)]),
+        ("anywhere", [(0, 0, true), (35, 23, true), (-35, -23, true), (37, 0, false), (0, 25, false), (37, 25, false)]),
+    ];
+    for (id, pts) in pins {
+        let zones = objectives::zones_of_style(&cat["styles"][id]);
+        assert!(!zones.is_empty(), "{id}: no zones read");
+        for (x, z, want) in pts {
+            assert_eq!(zones.iter().any(|zn| objectives::in_zone(x, z, zn)), want, "{id} ({x}, {z})");
+        }
+    }
+    assert!(matches!(objectives::zones_of_style(&cat["styles"]["centre_disc_12"])[0], Zone::Disc { r: 12, .. }));
 }
