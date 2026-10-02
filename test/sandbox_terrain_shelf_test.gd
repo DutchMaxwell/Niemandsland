@@ -60,4 +60,4 @@ func test_shelf_hint_tells_the_truth() -> void:
 	var texts: Array = []
 	for l in shelf.find_children("*", "Label", true, false):
 		texts.append((l as Label).text)
-	assert_str(" ".join(texts)).not_contains("click on the table")
+	assert_str(" ".join(texts)).contains("Esc cancels")  # R12: click-to-place is real now

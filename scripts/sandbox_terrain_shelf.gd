@@ -36,6 +36,8 @@ signal piece_placed(prop_id: String)
 var _object_manager: Node = null
 var _biome_option: OptionButton = null
 var _list: ItemList = null
+## Click-to-place: armed with the selected piece, follows the cursor on the table (see SandboxPlacementGhost).
+var _ghost: SandboxPlacementGhost = null
 ## Last table point the player aimed at while the cursor was OUTSIDE this window; Place lands there.
 var _last_table_point := Vector3.ZERO
 var _mouse_over_shelf := false
@@ -57,6 +59,10 @@ func _ready() -> void:
 ## Bind the object manager (the spawn target) and fill the list. Call once after adding.
 func setup(object_manager: Node) -> void:
 	_object_manager = object_manager
+	_ghost = SandboxPlacementGhost.new()
+	object_manager.add_child(_ghost)
+	_ghost.setup(object_manager)
+	_ghost.dropped.connect(func(prop_id: String) -> void: piece_placed.emit(prop_id))
 	_refresh_list()
 
 
@@ -93,7 +99,7 @@ func _build_ui() -> void:
 	margin.add_child(vbox)
 
 	var hint := Label.new()
-	hint.text = "Pick a piece and press Place: it lands where you last aimed on the table.\nDrag to move it, hold R to rotate."
+	hint.text = "Pick a piece, then click on the table to drop it (Esc cancels).\nOr press Place. Drag to move it, hold R to rotate."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(hint)
 
@@ -106,6 +112,7 @@ func _build_ui() -> void:
 	_list = ItemList.new()
 	_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_list.item_activated.connect(_on_item_activated)
+	_list.item_selected.connect(_on_item_selected)
 	vbox.add_child(_list)
 
 	var button_row := HBoxContainer.new()
@@ -123,7 +130,20 @@ func _build_ui() -> void:
 	button_row.add_child(close_btn)
 
 
+## The click-to-place ghost (null before setup()).
+func placement_ghost() -> SandboxPlacementGhost:
+	return _ghost
+
+
+func _on_item_selected(index: int) -> void:
+	var entry: Dictionary = _list.get_item_metadata(index)
+	if _ghost != null and not entry.is_empty():
+		_ghost.arm(entry)
+
+
 func _emit_closed() -> void:
+	if _ghost != null:
+		_ghost.cancel()
 	hide()
 	closed.emit()
 
