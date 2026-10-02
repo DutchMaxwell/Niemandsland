@@ -1969,6 +1969,12 @@ impl Core {
         PyState::derived(st)
     }
 
+    /// The `escort` / `extract` verdicts of `BattleSim.mission_winner` (D9);
+    /// `None` for any other scoring id.
+    fn role_winner(&self, state: PyRef<'_, PyState>, scoring: &str, deploy_edge: i64, table_w_in: f64, table_d_in: f64) -> Option<String> {
+        mission::role_winner(scoring, &state.inner, deploy_edge, table_w_in, table_d_in).map(str::to_string)
+    }
+
     /// Return all relics held by a unit to the deterministic R3a drop point.
     fn drop_carried(&self, state: PyRef<'_, PyState>, unit: usize) -> PyState {
         let mut st = state.inner.clone();
