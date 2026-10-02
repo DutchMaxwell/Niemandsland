@@ -2433,3 +2433,40 @@ fn redeployment_pass_skips_when_the_gain_is_below_three_inches() {
     assert!(out.events.is_empty(), "no trace line without a re-place: {:?}", out.events);
     assert_eq!(side1.placements[0].spot, (0.0, -0.584), "already optimal: {:?}", side1.placements[0].spot);
 }
+
+
+/// D5: a whole crowded army deploys INSIDE a catalog disc (the 12" Attack & Defend zone) when the
+/// zone shape rides `deploy_side_in`; without it the same call spreads over the bounding rect.
+#[test]
+fn deploy_side_in_keeps_every_model_inside_a_disc_zone() {
+    let zones = nml_core::objectives::zones_of_list(&serde_json::json!([{"disc": {"c": [0, 0], "r_in": 12}}]));
+    let r = 12.0 * IN2M;
+    let rect = deployment::Rect::new(-r, -r, 2.0 * r, 2.0 * r);
+    let base_r = 0.016;
+    let specs: Vec<deployment::UnitSpec> = (0..7)
+        .map(|i| deployment::UnitSpec {
+            key: format!("d{i}"),
+            model_count: 5,
+            base_r_m: base_r,
+            footprint: deployment::deploy_footprint_offsets(5, base_r, false),
+            model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 5 }],
+            ..Default::default()
+        })
+        .collect();
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    // the search guards the unit's FOOTPRINT bases (spot + grid offsets), not the later model rows
+    let fp = deployment::deploy_footprint_offsets(5, base_r, false);
+    let inside = |sd: &deployment::SideDeploy| {
+        sd.placements
+            .iter()
+            .flat_map(|p| fp.iter().map(move |o| (p.spot.0 + o.0, p.spot.1 + o.1)))
+            .filter(|m| m.0.hypot(m.1) > r + 1e-6)
+            .count()
+    };
+    let bound = deployment::deploy_side_in(&specs, &rect, Some(&zones), &objs, &empty_board(), 11, 15);
+    assert_eq!(bound.placements.len(), 7);
+    assert_eq!(inside(&bound), 0, "every model stands in the disc");
+    let free = deployment::deploy_side_in(&specs, &rect, None, &objs, &empty_board(), 11, 15);
+    assert!(inside(&free) > 0, "the control: the bounding square alone lets bases stand outside the disc");
+    assert_eq!(free, deployment::deploy_side(&specs, &rect, &objs, &empty_board(), 11, 15), "None == the old entry");
+}

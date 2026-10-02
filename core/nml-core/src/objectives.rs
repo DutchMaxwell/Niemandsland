@@ -260,32 +260,32 @@ pub fn in_poly(px: i64, pz: i64, poly: &Poly) -> bool {
 pub fn zones_of_style(style: &Value) -> Vec<Zone> {
     let mut out: Vec<Zone> = Vec::new();
     for pk in ["1", "2"] {
-        let Some(polys) = style.get("zones").and_then(|z| z.get(pk)).and_then(|v| v.as_array())
-        else {
-            continue;
-        };
-        for poly in polys {
-            if let Some(d) = poly.get("disc") {
-                let c = d.get("c").and_then(|c| c.as_array());
-                let at = |i: usize| c.and_then(|c| c.get(i)).and_then(|v| v.as_f64()).unwrap_or(0.0) as i64;
-                let r = d.get("r_in").and_then(|v| v.as_f64()).unwrap_or(0.0) as i64;
-                out.push(Zone::Disc { c: [at(0), at(1)], r });
-                continue;
-            }
-            let Some(pts) = poly.as_array() else { continue };
-            out.push(Zone::Poly(
-                pts.iter()
-                    .filter_map(|p| p.as_array())
-                    .filter(|p| p.len() >= 2)
-                    .map(|p| {
-                        [
-                            p[0].as_f64().unwrap_or(0.0) as i64,
-                            p[1].as_f64().unwrap_or(0.0) as i64,
-                        ]
-                    })
-                    .collect(),
-            ));
+        if let Some(polys) = style.get("zones").and_then(|z| z.get(pk)) {
+            out.extend(zones_of_list(polys));
         }
+    }
+    out
+}
+
+/// One player's zone list (`[polygon | {"disc": {c, r_in}}, ..]`) as `Zone`s.
+pub fn zones_of_list(polys: &Value) -> Vec<Zone> {
+    let mut out: Vec<Zone> = Vec::new();
+    for poly in polys.as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+        if let Some(d) = poly.get("disc") {
+            let c = d.get("c").and_then(|c| c.as_array());
+            let at = |i: usize| c.and_then(|c| c.get(i)).and_then(|v| v.as_f64()).unwrap_or(0.0) as i64;
+            let r = d.get("r_in").and_then(|v| v.as_f64()).unwrap_or(0.0) as i64;
+            out.push(Zone::Disc { c: [at(0), at(1)], r });
+            continue;
+        }
+        let Some(pts) = poly.as_array() else { continue };
+        out.push(Zone::Poly(
+            pts.iter()
+                .filter_map(|p| p.as_array())
+                .filter(|p| p.len() >= 2)
+                .map(|p| [p[0].as_f64().unwrap_or(0.0) as i64, p[1].as_f64().unwrap_or(0.0) as i64])
+                .collect(),
+        ));
     }
     out
 }

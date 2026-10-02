@@ -314,44 +314,73 @@ def write_row(directory, row):
     os.replace(path + ".tmp", path)  # atomic per row
 
 
-def cmd_endings(a) -> int:
+def _libs():
     import nml_core as nm  # lazy
-    import lab2_rows
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
     import selfplay as sp
     from lab2_net import ShippedNet
-    net = ShippedNet(a.repo)
-    base, allow = json.load(open(a.header)), json.load(open(a.timing))
-    positions = json.load(open(a.positions))
-    os.makedirs(a.rows_dir, exist_ok=True)
-    ctx, invalid = run_context(nm, a.prereg_sha256, net), []
+    return nm, sp, ShippedNet
+
+
+def _endings_init(cfg):
+    """Once per worker: the core, the net, the headers and the row identity (one core + one net per worker)."""
+    import lab2_rows
+    nm, sp, ShippedNet = _libs()
+    net, base = ShippedNet(cfg["repo"]), json.load(open(cfg["header"]))
 
     def core(extra):
         hdr = dict(base, knobs=dict(base["knobs"], **extra))
-        c = nm.load(a.repo)
+        c = nm.load(cfg["repo"])
         c.set_header(hdr)
         return c, lab2_rows.sha_of(hdr)
-    inc, ctx["hdr"] = core({})[0], {"inc": core({})[1]}
+    inc, inc_sha = core({})
+    return {"nm": nm, "sp": sp, "net": net, "core": core, "inc": inc, "inc_sha": inc_sha, "cfg": cfg,
+            "allow": json.load(open(cfg["timing"])), "ctx": run_context(nm, cfg["prereg"], net)}
+
+
+def _endings_work(w, cid, pos):
+    """One complete position cluster: every arm x every replicate; rows written, y per arm returned."""
+    y, bad, hdr = {}, [], {"inc": w["inc_sha"]}
+    for arm in ARMS:
+        cand, hdr[arm] = w["core"](dict(ARM_KNOBS[arm], **({"deadline_us": w["allow"][pos["cell"]]["B_us"]} if arm != "I" else {})))
+        rows = [ending_row(w["nm"], w["sp"], {"inc": w["inc"], "cand": cand}, pos, arm, r, w["net"], dict(w["ctx"], hdr=hdr))
+                for r in range(STREAMS)]
+        for row in rows:
+            write_row(w["cfg"]["rows_dir"], row)
+        bad += [row["row_id"] for row in rows if not row["valid"]]
+        y[arm] = [row["y"] for row in rows]
+    return {"y": y, "invalid": bad, "cell": pos["cell"], "cluster": pos["cluster"]}
+
+
+def write_pilot_json(path, reports):
+    """Per-worker VmHWM and their sum (P1 reads the peaks, P1's 6 GiB cap the sum)."""
+    import lab2_pool
+    peaks, total = lab2_pool.worker_hwms(reports)
+    json.dump({"workers": len(peaks), "worker_hwm_mib": {str(k): v for k, v in peaks.items()}, "sum_hwm_mib": total},
+              open(path, "w"), sort_keys=True)
+
+
+def cmd_endings(a) -> int:
+    import lab2_pool
+    base, allow = json.load(open(a.header)), json.load(open(a.timing))
+    positions = json.load(open(a.positions))
+    os.makedirs(a.rows_dir, exist_ok=True)
     for cell in sorted({pos["cell"] for pos in positions}):
         if not arm_headers_differ_only_in_leaf(base, allow[cell]["B_us"]):
             print("[endings] STOP: the L and T headers of %s differ in more than tree_leaf" % cell)
             return 2
-    gains = {}
-    for i, pos in enumerate(positions):
-        y = {}
-        for arm in ARMS:
-            cand, ctx["hdr"][arm] = core(dict(ARM_KNOBS[arm], **({"deadline_us": allow[pos["cell"]]["B_us"]} if arm != "I" else {})))
-            rows = [ending_row(nm, sp, {"inc": inc, "cand": cand}, pos, arm, r, net, ctx) for r in range(STREAMS)]
-            for row in rows:
-                write_row(a.rows_dir, row)
-            invalid += [row["row_id"] for row in rows if not row["valid"]]
-            y[arm] = [row["y"] for row in rows]
-        if not invalid:
-            gains.setdefault(pos["cell"], {})[pos["cluster"]] = position_gains(y)
-        print("[endings] %d/%d %s" % (i + 1, len(positions), pos["cell"]), flush=True)
+    cfg = {"repo": a.repo, "header": a.header, "timing": a.timing, "rows_dir": a.rows_dir, "prereg": a.prereg_sha256}
+    reports = lab2_pool.run_clusters({pos["slot"]: pos for pos in positions}, a.workers, _endings_init, _endings_work,
+                                     (cfg,), key=a.scheduler_key)
+    if a.pilot_json:
+        write_pilot_json(a.pilot_json, reports)
+    invalid = [i for r in reports for i in r["result"]["invalid"]]
     if invalid:
         print("[endings] INVALID rows (run continued): %s" % invalid)
         return 1
+    gains = {}
+    for r in reports:
+        gains.setdefault(r["result"]["cell"], {})[r["result"]["cluster"]] = position_gains(r["result"]["y"])
     res = bootstrap_intervals(gains, a.resamples, a.seed)
     open(a.out, "w").write(canon({"gains": gains, "intervals": res}))
     print("[endings] " + canon(res))
@@ -444,23 +473,40 @@ def i_seat1_means(done):
     return {c: {b: statistics.fmean(v) for b, v in blocks.items()} for c, blocks in by.items()}
 
 
-def cmd_fullgames(a) -> int:
-    import nml_core as nm  # lazy
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
-    import selfplay as sp
-    from lab2_net import ShippedNet
-    net = ShippedNet(a.repo)
-    allow, knobs, ctx = json.load(open(a.timing)), json.load(open(a.knobs)), run_context(nm, a.prereg_sha256, net)
-    os.makedirs(a.out_dir, exist_ok=True)
-    done, invalid = [], []
-    for row in game_rows(json.load(open(a.blocks)), tuple(a.arms.split(","))):
-        path = os.path.join(a.out_dir, row["row_id"] + ".json")
-        if not os.path.exists(path):  # a rerun resumes, never replays a valid game
-            write_row(a.out_dir, play_row(nm, sp, row, a.repo, a.bank, knobs, net, allow[row["cell"]]["B_us"], ctx))
+def _fullgames_init(cfg):
+    nm, sp, ShippedNet = _libs()
+    net = ShippedNet(cfg["repo"])
+    return {"nm": nm, "sp": sp, "net": net, "cfg": cfg, "allow": json.load(open(cfg["timing"])),
+            "knobs": json.load(open(cfg["knobs"])), "ctx": run_context(nm, cfg["prereg"], net)}
+
+
+def _fullgames_work(w, cid, rows):
+    """One complete block cluster: every arm x dice x seat; a rerun resumes, never replays a valid game."""
+    cfg, out = w["cfg"], []
+    for row in rows:
+        path = os.path.join(cfg["out_dir"], row["row_id"] + ".json")
+        if not os.path.exists(path):
+            write_row(cfg["out_dir"], play_row(w["nm"], w["sp"], row, cfg["repo"], cfg["bank"], w["knobs"], w["net"],
+                                               w["allow"][row["cell"]]["B_us"], w["ctx"]))
         rec = json.load(open(path))
-        done.append((row, rec["y"]))
-        if not rec["valid"]:
-            invalid.append(row["row_id"])
+        out.append({"row_id": row["row_id"], "y": rec["y"], "valid": rec["valid"]})
+    return out
+
+
+def cmd_fullgames(a) -> int:
+    import lab2_pool
+    os.makedirs(a.out_dir, exist_ok=True)
+    rows = game_rows(json.load(open(a.blocks)), tuple(a.arms.split(",")))
+    by_id, blocks = {r["row_id"]: r for r in rows}, {}
+    for r in rows:
+        blocks.setdefault(r["block"], []).append(r)
+    cfg = {"repo": a.repo, "timing": a.timing, "knobs": a.knobs, "bank": a.bank, "out_dir": a.out_dir, "prereg": a.prereg_sha256}
+    reports = lab2_pool.run_clusters(blocks, a.workers, _fullgames_init, _fullgames_work, (cfg,), key=a.scheduler_key)
+    if a.pilot_json:
+        write_pilot_json(a.pilot_json, reports)
+    results = {x["row_id"]: x for r in reports for x in r["result"]}
+    done = [(by_id[i], results[i]["y"]) for i in by_id]
+    invalid = [i for i, x in results.items() if not x["valid"]]
     if invalid:
         print("[fullgames] INVALID rows (run continued): %s" % invalid)
         return 1
@@ -532,6 +578,9 @@ def main(argv) -> int:
     e.add_argument("--seed", type=int, default=0)
     e.add_argument("--rows-dir", required=True, help="one stage0-row/1 JSON per ending")
     e.add_argument("--prereg-sha256", required=True)
+    e.add_argument("--workers", type=int, default=1, help="spawn-mode workers over complete clusters (P1 fixes N)")
+    e.add_argument("--scheduler-key", default="", help="the part's hashed scheduler key (decimal)")
+    e.add_argument("--pilot-json", default="", help="write per-worker VmHWM and their sum")
     e.add_argument("--repo", default=".")
     e.add_argument("--out", required=True)
     f = sub.add_parser("fullgames")
@@ -544,6 +593,9 @@ def main(argv) -> int:
     f.add_argument("--resamples", type=int, default=100_000)
     f.add_argument("--seed", type=int, default=1)
     f.add_argument("--prereg-sha256", required=True)
+    f.add_argument("--workers", type=int, default=1, help="spawn-mode workers over complete clusters (P1 fixes N)")
+    f.add_argument("--scheduler-key", default="", help="the part's hashed scheduler key (decimal)")
+    f.add_argument("--pilot-json", default="", help="write per-worker VmHWM and their sum")
     f.add_argument("--repo", default=".")
     f.add_argument("--out", required=True)
     a = ap.parse_args(argv)
