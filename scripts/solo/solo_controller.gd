@@ -10378,8 +10378,8 @@ static func _axis_scale(start: float, d: float, limit: float) -> float:
 ## `zone` = the AI deployment zone in table XZ; `objectives` = XZ points; `blocked_normal` /
 ## `blocked_flying` classify terrain for ground vs Strider/Flying units. Seeded → reproducible.
 ## Returns {deployed, reserved, seed}.
-func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable()) -> Dictionary:
-	deploy_begin(zone, objectives, blocked_normal, blocked_flying, seed_value, zone_test)
+func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable(), gates: Dictionary = {}) -> Dictionary:
+	deploy_begin(zone, objectives, blocked_normal, blocked_flying, seed_value, zone_test, gates)
 	return deploy_remaining()
 
 
@@ -10392,12 +10392,16 @@ var _deploy_alt := {}   # {"zone", "queue", "all_units", "section_of", "occupied
 # M2b — arbitrary deployment zones: optional probe Callable(Vector2 world metres) -> bool
 # (DeploymentCatalog.zone_test). Invalid = today's rect-only deployment, byte-identical.
 var _deploy_zone_test := Callable()
+# D6a — Attack & Defend distance gates for the AI's main placements: {"min_from_enemy_in",
+# "max_from_friend_in", "min_from_marker_in"} in inches (a missing key = no such gate). {} = today's path.
+var _deploy_gates := {}
 
 
-func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable()) -> int:
+func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable(), gates: Dictionary = {}) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	_deploy_zone_test = zone_test
+	_deploy_gates = gates
 	# Stash the context so the round-2 ambush arrival reuses the same objectives + terrain rules.
 	_deploy_objectives = objectives
 	_deploy_blocked_normal = blocked_normal
@@ -10577,9 +10581,30 @@ func _deploy_place_id(id: int) -> GameUnit:
 				outside = outside or not bool(ztest.call(p + off))
 			return outside \
 				or (terrain_only.is_valid() and bool(terrain_only.call(p)))
+	# D6a — Attack & Defend distance gates (main placements only, like the zone shape): a disc per
+	# enemy model / marker the search may not enter, and the friend reach as a blocked-ground test.
+	var gate_occ: Array = []
+	if not is_scout and not _deploy_gates.is_empty():
+		var g_enemy := float(_deploy_gates.get("min_from_enemy_in", 0.0)) * INCHES_TO_METERS
+		if g_enemy > 0.0:
+			for e in bases_of_slot(human_slot):
+				gate_occ.append({"pos": e["pos"], "radius": g_enemy + float(e["radius"])})
+		var g_marker := float(_deploy_gates.get("min_from_marker_in", 0.0)) * INCHES_TO_METERS
+		if g_marker > 0.0:
+			for mk in objectives:
+				gate_occ.append({"pos": mk, "radius": g_marker})
+		var g_friend := float(_deploy_gates.get("max_from_friend_in", 0.0)) * INCHES_TO_METERS
+		if g_friend > 0.0 and not occupied.is_empty():
+			var inner_blocked := blocked
+			var friends: Array = occupied.duplicate()
+			blocked = func(p: Vector2) -> bool:
+				for f in friends:
+					if p.distance_to((f as Dictionary)["pos"]) <= radius + float((f as Dictionary)["radius"]) + g_friend:
+						return bool(inner_blocked.call(p)) if inner_blocked.is_valid() else false
+				return true
 	var threat := _deploy_threat_cb(unit)
 	var threat_w := deploy_threat_in * INCHES_TO_METERS if threat.is_valid() else 0.0
-	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+	var spot := AiDeployment.best_spot(sec, objectives, occupied + gate_occ, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 	var spot_why := "best legal spot toward nearest objective (section, forward-edge doctrine)"
 	if threat.is_valid() and spot != Vector2.INF:
 		spot_why += " (threat-aware: %d enemy envelope(s) over the spot)" % int(threat.call(spot))
@@ -10591,7 +10616,7 @@ func _deploy_place_id(id: int) -> GameUnit:
 	if (large_zone_search and not is_scout and spot != Vector2.INF and forward_y != INF
 			and base_r >= LARGE_BASE_RADIUS_IN * INCHES_TO_METERS
 			and sec_behind > LARGE_ZONE_SPOT_BEHIND_M):
-		var zone_spot := AiDeployment.best_spot(zone, objectives, occupied, radius, blocked,
+		var zone_spot := AiDeployment.best_spot(zone, objectives, occupied + gate_occ, radius, blocked,
 				0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		if zone_spot != Vector2.INF and absf(zone_spot.y - forward_y) < sec_behind:
 			spot = zone_spot
@@ -10605,17 +10630,17 @@ func _deploy_place_id(id: int) -> GameUnit:
 		if not bisected and not _deploy_footprint_boxed(spot, footprint, base_r):
 			break
 		occupied.append({"pos": spot, "radius": radius * 0.6})
-		spot = AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+		spot = AiDeployment.best_spot(sec, objectives, occupied + gate_occ, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "re-sited — wall bisected the formation" if bisected \
 				else "re-sited — walls boxed the base in (no straight 12\" exit)"
 	if spot == Vector2.INF:
-		spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+		spot = AiDeployment.best_spot(zone, objectives, occupied + gate_occ, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "section full — whole-zone fallback"
 	if spot == Vector2.INF:
 		# Crowded out of every spaced spot: relax the 1" spacing (allow neighbours to bunch) but STILL
 		# reject blocking/impassable terrain — the army MUST deploy, yet a legal footprint always beats
 		# a spot inside a wall/forest (field-test finding 3: units deployed inside blocking terrain).
-		spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+		spot = AiDeployment.best_spot(zone, objectives, gate_occ, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "crowded — nearest legal (non-terrain) spot, spacing relaxed"
 	if spot == Vector2.INF:
 		# Truly no fully terrain-legal cell anywhere (a terrain-choked table) — must still deploy, so pick
@@ -10876,6 +10901,58 @@ func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Ca
 					continue
 				return cand
 	return best if is_finite(forward_y) else Vector3.INF
+
+
+## D6a: which deployment distance gate a placement breaks, "" when none. `models`, `enemy` and
+## `friends` are [{"pos": Vector2, "radius": float}] (world metres), `markers` [Vector2]. Distances
+## are base edge to base edge; a marker is a point. `friends` empty = the side's FIRST unit, which is
+## free of the friend gate (R12a).
+static func gate_violation(gates: Dictionary, models: Array, enemy: Array, friends: Array, markers: Array) -> String:
+	var gap: float = float(gates.get("min_from_enemy_in", 0.0))
+	if gap > 0.0:
+		for m in models:
+			for e in enemy:
+				if _gate_edge_gap(m, e) <= gap * INCHES_TO_METERS:
+					return "must be more than %s\" from enemy units" % _gate_in(gap)
+	var near: float = float(gates.get("min_from_marker_in", 0.0))
+	if near > 0.0:
+		for m in models:
+			for mk in markers:
+				if (m["pos"] as Vector2).distance_to(mk as Vector2) - float(m["radius"]) <= near * INCHES_TO_METERS:
+					return "must be more than %s\" from the objective" % _gate_in(near)
+	var reach: float = float(gates.get("max_from_friend_in", 0.0))
+	if reach > 0.0 and not friends.is_empty():
+		for m in models:
+			for f in friends:
+				if _gate_edge_gap(m, f) <= reach * INCHES_TO_METERS:
+					return ""
+		return "must be within %s\" of a friendly unit" % _gate_in(reach)
+	return ""
+
+
+static func _gate_edge_gap(a: Dictionary, b: Dictionary) -> float:
+	return (a["pos"] as Vector2).distance_to(b["pos"] as Vector2) - float(a["radius"]) - float(b["radius"])
+
+
+static func _gate_in(v: float) -> String:
+	return str(int(v)) if is_equal_approx(v, floorf(v)) else "%.1f" % v
+
+
+## Live bases of one slot's units on the table as [{"pos", "radius"}], optionally without one unit.
+func bases_of_slot(slot: int, except_unit: GameUnit = null) -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for u in army_manager.get_game_units_for_player(slot):
+		var gu := u as GameUnit
+		if gu == null or gu == except_unit or gu.get_alive_count() <= 0 or unit_in_reserve(gu):
+			continue
+		for m in gu.get_alive_models():
+			var mi := m as ModelInstance
+			if mi != null and mi.node != null and is_instance_valid(mi.node):
+				var p := mi.node.global_position
+				out.append({"pos": Vector2(p.x, p.z), "radius": model_base_radius_m(mi)})
+	return out
 
 
 ## Zone + table-edge legality of a repair spot (brief deploycoh): the spot must sit inside the
