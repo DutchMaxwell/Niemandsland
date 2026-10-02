@@ -626,7 +626,7 @@ impl<'a> Search<'a> {
         // Tree search knob — absent from every recorded corpus and shipped
         // game, so nothing below moves unless a header asked for the tree.
         if self.roll.knobs.search_mode == SearchMode::Tree {
-            return self.tree_pick(state, player, base, &scored, &order, &pos_of, &pool, sc);
+            return self.tree_pick(state, player, base, &scored, &order, &pos_of, &pool, deadline, sc);
         }
 
         // PHASE 4 — exactly ONE rollout per pool candidate, in pool order.
@@ -844,19 +844,29 @@ impl<'a> Search<'a> {
     /// seeded by `sig` (0 without one).
     #[allow(clippy::too_many_arguments)]
     fn tree_pick(&self, state: &State, player: i64, base: f64, scored: &[ScoredRow], order: &[usize],
-                 pos_of: &[usize], pool: &[usize], sc: &mut Scratch) -> Result<Pick, Unsupported> {
+                 pos_of: &[usize], pool: &[usize], deadline: Option<std::time::Instant>, sc: &mut Scratch)
+                 -> Result<Pick, Unsupported> {
         let k = &self.roll.knobs;
+        // A replay's forced budget switches every clock off; `deadline_us` overrides the wall.
+        let deadline = deadline.filter(|_| self.bend.tree_budget.is_none());
         let cfg = TreeCfg {
             leaf: k.tree_leaf, dice: k.tree_dice, samples: k.tree_samples.max(1) as usize,
             batch: k.tree_batch.max(1) as usize, budget: self.bend.tree_budget.unwrap_or(k.tree_budget).max(1) as usize,
-            wall_ms: if self.bend.tree_budget.is_some() { 0 } else { k.tree_wall_ms.max(0) as u64 },
-            widen: k.tree_widen, player,
+            wall_ms: if self.bend.tree_budget.is_some() || deadline.is_some() { 0 } else { k.tree_wall_ms.max(0) as u64 },
+            deadline, widen: k.tree_widen, player,
             opener_seat: self.act.opener_seat, sig: self.sig, hook: self.leaf_value, w: self.leaf_value_w,
         };
         let mut root = Node::new(state.clone(), Step::Mover(player), player);
         root.children = tree::root_children(scored, order, pool);
         let mut rng = GodotRng::new(self.sig.unwrap_or(0));
-        let (best, trace) = tree::run(&self.roll, &cfg, &mut root, &mut rng, sc)?;
+        let (best, mut trace) = tree::run(&self.roll, &cfg, &mut root, &mut rng, sc)?;
+        if trace.root.is_empty() {
+            // The deadline hit before the first batch: root child 0 = the prefilter's top row.
+            let fallback = "deadline_before_first_batch";
+            trace.fallback = Some(fallback);
+            let p = self.deadline_fallback(state, player, base, scored, order, fallback);
+            return Ok(Pick { tree: Some(trace), deadline: None, ..p });
+        }
         let rs: Vec<(i64, f64)> = trace.root.iter().map(|&(i, _, m)| (i as i64, m)).collect();
         let mut runner: Option<usize> = None;
         for j in (0..rs.len()).filter(|&j| j != best) {
