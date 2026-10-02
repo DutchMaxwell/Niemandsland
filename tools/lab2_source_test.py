@@ -80,11 +80,12 @@ def test_cli_writes_positions_proof_and_exit_code(tmp_path):
         w.writeheader(), w.writerow(row("a"))
     header.write_text(json.dumps({"knobs": {"top_k": 2, "horizon": 1, "menu_wide": "table"}}))
     argv = ["source", "--slots", str(tsv), "--bank", BANK, "--lists", LISTS, "--header", str(header), "--out", str(out),
-            "--timing-out", str(tmp_path / "t.json")]
+            "--timing-out", str(tmp_path / "t.json"), "--transitions-out", str(tmp_path / "x.json")]
     assert ls.main(argv) == 0
     data = json.loads(out.read_text())
     assert len(data["positions"]) == 1 and data["ignored_header_knobs"] == ["menu_wide"]
     assert len(json.loads((tmp_path / "t.json").read_text())) == 12
+    assert len(json.loads((tmp_path / "x.json").read_text())) == 9 and "s1:a" in json.loads((tmp_path / "x.json.headers").read_text())
     assert data["net"]["1"]["calls"] > 0 and data["net"]["2"]["calls"] > 0
 
 
@@ -108,3 +109,33 @@ def test_timing_set_keeps_twelve_and_a_short_cell_fails(env):
     assert timing.count == {"c1": 12} and [r["seq"] for r in timing.states] == list(range(1, 13))
     assert timing.short({"c1"}) == {} and timing.short({"c1", "c2"}) == {"c2": 0}
     assert ls.TimingSet(per_cell=13).short({"c1"}) == {"c1": 0}
+
+
+def test_transitions_replay_and_the_reds_fail(env):
+    import lab2_tree_probe as lab
+    core, net = env
+    trans = ls.TransitionSet(quota=lambda cell: 40)
+    ls.generate(sp, core, {"s1": [row("a")]}, REPO, BANK, LISTS, net, 1, PLAY_KW, None, trans)
+    recs = trans.records
+    assert len(recs) == 40 and [r["seq"] for r in recs] == list(range(1, 41))
+    assert list(trans.headers) == ["s1:a"]
+
+    def fresh():  # a replay core needs its game's header, as `lab2_tree_probe` pilot will have to supply
+        c = nml_core.load(REPO)
+        c.set_header(trans.headers["s1:a"])
+        return c
+    results = [lab.replay_transition(nml_core, fresh(), r) for r in recs]
+    assert all(r["ok"] for r in results), [r["checks"] for r in results if not r["ok"]][:1]
+    red_rec = next(r for r in recs if r["after"].get("vp") is not None)
+    die_rec = next(r for r in recs if any(x["faces"] for x in r["rolls"]))
+    assert not lab.replay_transition(nml_core, fresh(), lab.red_vp(red_rec))["ok"]
+    assert not lab.replay_transition(nml_core, fresh(), lab.red_die(die_rec))["ok"]
+
+
+def test_default_quota_is_100_and_short_cells_are_named():
+    assert sum(ls.default_quota("c%d" % n) for n in range(1, 13)) == 100
+    assert [ls.default_quota(c) for c in ("c4", "c5", "c12")] == [9, 8, 8]
+    t = ls.TransitionSet()
+    for _ in range(9):
+        t.add({"cell": "c1"})
+    assert t.full("c1") and t.short({"c1", "c5"}) == {"c5": 0}
