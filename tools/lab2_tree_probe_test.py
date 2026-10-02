@@ -143,15 +143,20 @@ def test_bootstrap_known_winner_identical_arms_and_four_games_are_not_four_block
     assert w_boards["hi"] - w_boards["lo"] > w_games["hi"] - w_games["lo"]
 
 
-def _blocks(n=2):
-    return [{"block": "b%d" % i, "cell": "c1", "seed": 10 + i, "dice": [100 + i, 200 + i], "army1": "a", "army2": "b"} for i in range(n)]
+def _blocks(n=2, cell="c1", mission="duel"):
+    return [{"block": "b%d" % i, "cell": cell, "mission": mission, "army1": "a", "army2": "b",
+             "seeds": {"terrain": "1%d" % i, "layout": "2%d" % i, "deploy": "3%d" % i, "play_general": ["4%d" % i, "5%d" % i],
+                       "tray": ["6%d" % i, "7%d" % i], "search": {"L": {"1": "81", "2": "82"}, "C": {"1": "91", "2": "92"}}}}
+            for i in range(n)]
 
 
-def test_manifest_has_four_games_per_candidate_per_block_with_both_seats_and_two_dice():
+def test_manifest_has_four_games_per_arm_per_block_with_both_seats_and_two_dice():
     rows = lab.game_rows(_blocks())
-    assert len(rows) == 2 * 2 * 4 and len({r["row_id"] for r in rows}) == len(rows)
+    assert len(lab.game_rows(_blocks(1))) == 12 and len(rows) == 2 * 3 * 4 and len({r["row_id"] for r in rows}) == len(rows)
+    assert len(lab.game_rows(_blocks(1), ("L", "C"))) == 8
     one = [r for r in rows if r["block"] == "b0" and r["arm"] == "L"]
-    assert sorted((r["dice"], r["seat"]) for r in one) == [(100, 1), (100, 2), (200, 1), (200, 2)]
+    assert sorted((r["seeds"]["tray"], r["seat"]) for r in one) == [("60", 1), ("60", 2), ("70", 1), ("70", 2)]
+    assert [r["seeds"]["search"] for r in one][0] == {"1": "81", "2": "82"} and all(r["mission"] == "duel" for r in rows)
     assert all(r["army1"] == "a" and r["army2"] == "b" for r in rows)  # armies stay on their physical seats
 
 
@@ -164,12 +169,13 @@ def test_arm_kwargs_split_the_tree_from_the_one_ply_pool_deadline():
 def test_board_scores_are_per_board_and_a_missing_or_short_board_fails():
     import pytest
     rows = lab.game_rows(_blocks(1))
-    ys = {"L": [1.0, 1.0, 0.5, 0.5], "C": [0.5, 0.5, 0.0, 0.0]}
+    ys = {"L": [1.0, 1.0, 0.5, 0.5], "C": [0.5, 0.5, 0.0, 0.0], "I": [1.0, 0.0, 1.0, 0.0]}
     done = [(r, ys[r["arm"]].pop()) for r in rows]
     s = lab.board_scores(done)["c1"]["b0"]
-    assert abs(s["B_LI"] - 0.25) < 1e-12 and abs(s["B_LC"] - 0.5) < 1e-12
+    assert abs(s["B_LI"] - 0.25) < 1e-12 and abs(s["B_LC"] - 0.5) < 1e-12 and set(s) == {"B_LI", "B_LC"}  # I rows change nothing
+    assert lab.i_seat1_means(done) == {"c1": {"b0": 0.5}}
     with pytest.raises(SystemExit):
-        lab.board_scores(done[:-1])
+        lab.board_scores([d for d in done if d[0]['arm'] != 'I'][:-1])
 
 
 class StampNm:
@@ -203,3 +209,47 @@ def test_the_strict_stamp_records_dirty_and_the_wheel_sha():
                                               "wheel_sha256": None}, strict=True)
     assert stamp["dirty"] is False and len(stamp["wheel_sha256"]) == 64
     assert bad == ["missing:model_sha256", "missing:wheel_sha256"]
+
+
+class SpySp:
+    """A stand-in selfplay: records every play_game call; `quiet` leaves the net hooks uncalled."""
+    def __init__(self, net, quiet=False):
+        self.calls, self.net, self.quiet = [], net, quiet
+
+    def play_game(self, *args, **kw):
+        self.calls.append((args, kw))
+        if not self.quiet:
+            for side in (1, 2):
+                kw["leaf_value_fn"][side]([], side)
+        return {"winner": "p1"}
+
+
+class CountNet:
+    def __init__(self):
+        self.counts = {1: {"calls": 0}, 2: {"calls": 0}}
+
+    def hook(self, side):
+        def fn(leaves, _side=None):
+            self.counts[side]["calls"] += 1
+            return []
+        return fn
+
+
+def test_a_cell_7_row_plays_breakthrough_with_the_split_seeds_and_the_live_ledger():
+    row = lab.game_rows(_blocks(1, "c7", "breakthrough"), ("L",))[0]
+    net = CountNet()
+    sp = SpySp(net)
+    rec = lab.play_row(sp, row, "repo", "bank", {"top_k": 3}, net, 5)
+    (args, kw), = sp.calls
+    assert kw["mission"] == "breakthrough" and kw["objectives"] == "mission" and kw["live_ledger"] is True
+    assert args[0] == 10 and (kw["layout_seed"], kw["deploy_seed"], kw["play_seed"], kw["dice_seed"]) == (20, 30, 40, 60)
+    assert kw["search_seeds"] == {1: 81, 2: 82} and kw["deep_player"] == 1 and kw["leaf_value_w"] == 1.0
+    assert rec["valid"] and rec["net_calls"] == {1: 1, 2: 1}
+
+
+def test_an_i_row_has_no_deep_core_and_a_never_called_hook_is_invalid():
+    row = lab.game_rows(_blocks(1), ("I",))[0]
+    sp = SpySp(CountNet(), quiet=True)
+    rec = lab.play_row(sp, row, "repo", "bank", {}, sp.net, 5)
+    assert "deep_player" not in sp.calls[0][1] and "search_seeds" not in sp.calls[0][1]
+    assert rec["valid"] is False and rec["reason"] == "net_inactive"
