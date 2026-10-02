@@ -522,10 +522,11 @@ fn save_batch(
 ///     flags nothing; every pre-epoch record keeps the ungated read, and the
 ///     MELEE leg (whose gates are no-ops at dist 0) keeps the mark.
 ///   * `hazardous`   — Hazardous wounds the FIRER on its natural 1s (:16555).
-///   * `deadly`      — the activation carried a Deadly weapon; the landing's
-///     shape is the `EPOCH_14_DEADLY_LANDING` gate's (per model with no
-///     carry-over from 14 on, the pooled multiply below — audit 2026-09-13
-///     §2.1).
+///   * `deadly`      — LEGACY REPLAY ONLY: the activation carried a Deadly
+///     weapon below `EPOCH_14_DEADLY_LANDING`, where the pooled multiply still
+///     lands it (audit 2026-09-13 §2.1). From 14 the per-model landing IS the
+///     table's and flags nothing (stage-0 P9: the tray tree declined every
+///     Deadly activation on this flag alone).
 ///   * `takedown`    — resolved "as a unit of [1]" against a picked model, with
 ///     that model's own Defense (:3155).
 ///   * `strafing`    — the table splits a Strafing weapon per model (:2918).
@@ -1260,7 +1261,11 @@ pub fn resolve_volley_leg(
             out.log.push(format!(
                 "Unstoppable: {} — ignores {}'s Regeneration (aura)", sh.owner, def_owner));
         }
-        if p.deadly > 0 {
+        // Only the pooled LEGACY leg is a divergence: from EPOCH_14 the
+        // per-model groups below land through `land_deadly_wounds`, the
+        // table's own `apply_deadly_wounds` (and the tray tree declines on
+        // every flag, stage-0 P9).
+        if p.deadly > 0 && !deadly_per_model {
             out.mark("deadly");
         }
         if deadly_per_model && p.deadly > 0 {
@@ -1919,8 +1924,8 @@ pub fn resolve_melee_leg(
                 out.log.push(format!(
                     "Unstoppable: {} — ignores {}'s Regeneration (once)", sh.owner, def_owner));
             }
-            if p.deadly > 0 {
-                out.mark("deadly");
+            if p.deadly > 0 && !deadly_per_model {
+                out.mark("deadly"); // the volley fold's twin: only the pooled legacy leg diverges
             }
             if deadly_per_model && p.deadly > 0 {
                 let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
