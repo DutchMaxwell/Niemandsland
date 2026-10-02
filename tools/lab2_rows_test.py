@@ -47,9 +47,18 @@ class Sp:
         yield
 
 
-def run(sp, rec, core, player, **kw):
+class St:
+    """A state stub: `pool` lists the side's units still to activate (empty = a dry side)."""
+    def __init__(self, pool=()):
+        self._pool = list(pool)
+
+    def pool(self, player, attach):
+        return self._pool
+
+
+def run(sp, rec, core, player, state=None, **kw):
     with rec.armed(sp):
-        return sp._pick_for_live(core, None, player, **kw)
+        return sp._pick_for_live(core, state or St(), player, **kw)
 
 
 TREE = {"completed": 6, "deadline_hit": True, "batches": 3, "frontier": 5, "terminal": 1, "elapsed_us": 90, "fallback": None}
@@ -96,6 +105,23 @@ def test_a_dry_pick_logs_nothing_and_guarded_turns_declines_into_reasons_but_not
     assert rows.guarded(Nm, boom(TimeoutError("30 s"))) == (None, "timeout: 30 s")
     with pytest.raises(ZeroDivisionError):
         rows.guarded(Nm, boom(ZeroDivisionError()))
+
+
+def test_an_empty_pick_with_units_left_is_a_declined_invalid_row_and_a_dry_side_is_not():
+    rec = rows.Recorder(lambda s: "L_tray", Net)
+    assert run(Sp([{}]), rec, Core(0), 1, state=St()) == {}                 # dry side: no units, a legal pass
+    with pytest.raises(rows.Declined, match="side 1 .L_tray. declined with 4 units"):
+        run(Sp([{}]), rec, Core(0), 1, state=St(["u1", "u2", "u3", "u4"]))   # used:false with 4 units waiting
+
+    class Nm:
+        class Unsupported(Exception):
+            pass
+
+    def play():
+        return run(Sp([{}]), rows.Recorder(lambda s: "L_tray", Net), Core(0), 1, state=St(["u1"]))
+    out, why = rows.guarded(Nm, play)
+    assert out is None and why.startswith("declined: side 1 (L_tray) declined with 1 units")
+    assert rec.decisions == []
 
 
 def test_a_core_panic_ends_the_row_as_invalid_but_other_base_exceptions_still_raise():
