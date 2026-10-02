@@ -177,6 +177,7 @@ var objectives_editing := false  # Whether we're in objective placement mode
 var relic_drop_active := false
 var relic_drop_centre := Vector2.ZERO
 var relic_drop_radius_in := 0.0
+var relic_drop_reach_in := 1.0
 signal relic_drop_chosen(world_pos: Vector3)
 signal relic_drop_refused
 
@@ -2760,17 +2761,18 @@ func _relic_world_to_inch(pos: Vector3) -> Vector2:
 	return Vector2(pos.x, pos.z).rotated(-deg_to_rad(grid_rotation_degrees)) / 0.0254 + centre
 
 
-func begin_relic_drop(centre: Vector3, base_radius_m: float) -> void:
+func begin_relic_drop(centre: Vector3, base_radius_m: float, reach_in := 1.0) -> void:
+	relic_drop_reach_in = reach_in
 	relic_drop_centre = _relic_world_to_inch(centre)
 	relic_drop_radius_in = base_radius_m / 0.0254
 	relic_drop_active = true
 	grid_container.queue_redraw()
 
 
-## Valid clicks are outside the base and at most 1" from its edge; no grid snap is applied.
+## Valid clicks are outside the base and at most `reach` (1" for a dropped relic, 12" for the VIP move) from its edge; no grid snap is applied.
 func try_relic_drop(inch_pos: Vector2) -> bool:
 	var gap := inch_pos.distance_to(relic_drop_centre) - relic_drop_radius_in
-	if not relic_drop_active or not _is_valid_inch_pos(inch_pos) or gap < -0.001 or gap > 1.001:
+	if not relic_drop_active or not _is_valid_inch_pos(inch_pos) or gap < -0.001 or gap > relic_drop_reach_in + 0.001:
 		relic_drop_refused.emit()
 		return false
 	var valid := _get_valid_cell_range()
