@@ -146,13 +146,15 @@ def test_attach_eval_takes_decimal_keys_and_refuses_a_missing_position(tmp_path)
     tsv = tmp_path / "e.tsv"
     with open(tsv, "w", newline="") as f:
         w = csv.writer(f, delimiter="\t")
-        w.writerow(["cell", "source", "replicate", "purpose", "seed"])
+        w.writerow(["cell", "source", "replicate", "purpose", "owner", "arm", "seed"])
         for r in range(8):
-            w.writerow(["c1", "k1", r, "eval_general", 9_000_000_000_000_000_000 + r])
-            w.writerow(["c1", "k1", r, "eval_tray", 5 + r])
+            w.writerow(["c1", "k1", r, "eval_general", "", "", 9_000_000_000_000_000_000 + r])
+            w.writerow(["c1", "k1", r, "eval_tray", "", "", 5 + r])
+            w.writerows(["c1", "k1", r, "search_general", o, arm, 100 * r + int(o)] for o in "12" for arm in ("L", "T", "L_tray", "T_tray"))
     pos = [{"slot": "s", "cell": "c1", "keys": {"source": "k1"}}]
     ls.attach_eval(pos, str(tsv))
     assert pos[0]["eval"][3] == {"general": "9000000000000000003", "tray": "8"} and len(pos[0]["eval"]) == 8
+    assert pos[0]["search"]["T"][3] == {"1": "301", "2": "302"} and set(pos[0]["search"]) == {"L", "T", "L_tray", "T_tray"}
     with pytest.raises(SystemExit):
         ls.attach_eval([{"slot": "t", "cell": "c1", "keys": {"source": "k2"}}], str(tsv))
 
@@ -187,3 +189,65 @@ def test_a_one_vp_corruption_of_the_snapshot_flips_the_verdict(env):
     assert lab.finish_ending(nml_core, sp, {"inc": core, "cand": core}, snap, *restored(snap["streams"]))[2] == "draw"
     bad = dict(snap, state=dict(snap["state"], vp=[snap["state"]["vp"][0] + 1, snap["state"]["vp"][1]]))
     assert lab.finish_ending(nml_core, sp, {"inc": core, "cand": core}, bad, *restored(snap["streams"]))[2] == "p1"
+
+
+class StubNet:
+    """A net whose hooks answer 0.0 and never count: the `net_inactive` tripwire must catch it."""
+    counts = {1: {"calls": 0, "leaves": 0}, 2: {"calls": 0, "leaves": 0}}
+
+    def hook(self, side):
+        return lambda leaves, _side=None: [0.0] * len(leaves)
+
+
+def ending_env(env, seed=29):
+    """(snapshot, cores factory) of one source game on the hand planner; the game header gives the arm cores."""
+    core, trans = env[0], ls.TransitionSet(quota=lambda cell: 1)
+    snap, _ = ls.play_candidate(sp, core, row("a", seed=seed), REPO, BANK, LISTS, None, PLAY_KW, None, trans)
+    snap["search"] = {a: [{"1": str(1000 + r), "2": str(2000 + r)} for r in range(8)] for a in ("L", "T")}
+    header = trans.headers["s1:a"]
+
+    def cores(arm):
+        cand = nml_core.load(REPO)
+        extra = dict(lab_arm(arm), **({"tree_wall_ms": 50} if arm != "I" else {}))
+        cand.set_header(dict(header, knobs=dict(header["knobs"], **extra)))
+        return {"inc": core, "cand": cand}
+    return snap, cores
+
+
+def lab_arm(arm):
+    import lab2_tree_probe as lab
+    return lab.ARM_KNOBS[arm]
+
+
+def test_a_never_called_net_makes_the_row_invalid(env):
+    import lab2_tree_probe as lab
+    snap, cores = ending_env(env)
+    row_ = lab.run_ending(nml_core, sp, cores("I"), snap, *restored(snap["streams"]), "I", StubNet())
+    assert row_["valid"] is False and row_["reason"] == "net_inactive"
+
+
+def test_rows_are_byte_identical_and_the_real_net_is_active(env):
+    import lab2_tree_probe as lab
+    snap, cores = ending_env(env)
+    net = env[1]
+    out = [lab.run_ending(nml_core, sp, cores("T"), snap, *restored(snap["streams"]), "T", net,
+                          lab.search_streams(nml_core, snap, "T", 0)) for _ in range(2)]
+    assert lab.canon(out[0]) == lab.canon(out[1])
+    assert out[0]["valid"] and out[0]["net_calls"][3 - snap["mover"]] > 0 and len(out[0]["search"]) >= 2
+
+
+def test_t_decisions_receive_different_sigs(env):
+    import lab2_tree_probe as lab
+    snap, cores = ending_env(env)
+    seen, real = [], sp._pick_for
+
+    def spy(core, state, player, *args, **kwargs):
+        if "sig" in kwargs:
+            seen.append(kwargs["sig"])
+        return real(core, state, player, *args, **kwargs)
+    with sp.forced_picks(spy):
+        row_ = lab.run_ending(nml_core, sp, cores("T"), snap, *restored(snap["streams"]), "T", None,
+                              lab.search_streams(nml_core, snap, "T", 0))
+    sigs = [d["sig"] for d in row_["search"]]  # landed picks; a dry side's pending sig is re-offered, never redrawn
+    assert len(sigs) >= 2 and len(set(sigs)) == len(sigs) and set(sigs) <= set(seen)
+    assert {d["seed"] for d in row_["search"]} == {int(snap["search"]["T"][0][str(snap["mover"])])}

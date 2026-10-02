@@ -236,17 +236,20 @@ def read_slots(path):
 
 
 def attach_eval(positions, path):
-    """`eval[r] = {general, tray}` (decimal key seeds, r 0..7) from the long-format D_endings_eval.tsv
-    (columns cell, source, replicate, purpose, seed); a position matches on (cell, keys["source"])."""
+    """`eval[r] = {general, tray}` and `search[arm][r][owner]` (decimal key seeds, r 0..7) from the long-format
+    D_endings_eval.tsv (columns cell, source, replicate, purpose, owner, arm, seed); a position matches on
+    (cell, keys["source"])."""
     table = {}
     with open(path, newline="") as f:
         for r in csv.DictReader(f, delimiter="\t"):
-            table[(r["cell"], r["source"], r["replicate"], r["purpose"])] = r["seed"]
+            table[(r["cell"], r["source"], r["replicate"], r["purpose"], r.get("arm", ""), r.get("owner", ""))] = r["seed"]
     for pos in positions:
         k = (pos["cell"], pos["keys"].get("source"))
         try:
-            pos["eval"] = [{"general": table[k + (str(i), "eval_general")], "tray": table[k + (str(i), "eval_tray")]}
+            pos["eval"] = [{"general": table[k + (str(i), "eval_general", "", "")], "tray": table[k + (str(i), "eval_tray", "", "")]}
                            for i in range(8)]
+            pos["search"] = {arm: [{o: table[k + (str(i), "search_general", arm, o)] for o in ("1", "2")} for i in range(8)]
+                             for arm in ("L", "T", "L_tray", "T_tray")}
         except KeyError as miss:
             raise SystemExit("no eval keys for position %s: %s" % (pos["slot"], miss))
 
