@@ -144,6 +144,18 @@ pub struct Pick {
     /// Tree search knob — the search trace, `Some` ONLY on a pick the tree
     /// made (`search_mode: tree`); every default pick carries `None`.
     pub tree: Option<TreeTrace>,
+    /// `deadline_us` on a pool pick — `Some` ONLY when the knob is set.
+    pub deadline: Option<DeadlineTrace>,
+}
+
+/// The `deadline_us` stamp of a pool pick: rollouts completed, whether the
+/// deadline cut the pool, and the fallback that answered when it hit before
+/// the first rollout (`None` = the pick came from the completed rollouts).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeadlineTrace {
+    pub completed: usize,
+    pub cut: bool,
+    pub fallback: Option<&'static str>,
 }
 
 /// NML-1165 R4 (DESIGN_value_net §7) — the LEAF VALUE seam. `Search::run`
@@ -551,6 +563,10 @@ impl<'a> Search<'a> {
         sc: &mut Scratch,
         mut explore: Option<(f64, &mut GodotRng)>,
     ) -> Result<Pick, Unsupported> {
+        // `deadline_us` (0 = off) runs from HERE, the planner call, before PHASE 0.
+        let deadline = (self.roll.knobs.deadline_us > 0).then(|| {
+            std::time::Instant::now() + std::time::Duration::from_micros(self.roll.knobs.deadline_us as u64)
+        });
         self.admissible()?;
         let top_k = self.top_k();
         if top_k <= 0 {
@@ -626,22 +642,31 @@ impl<'a> Search<'a> {
         // `pool_wall_ms` (off = 0): the SAFETY deadline on this pass. The first
         // rollout always completes, so there is always a pick; a hit drops the
         // unrolled tail of the pool and the pick is over the completed rows.
-        let wall = self.roll.knobs.pool_wall_ms;
+        // `deadline_us` overrides it and checks before EVERY rollout, the first
+        // included; a hit before the first answers with `deadline_fallback`.
+        let wall = if deadline.is_some() { 0 } else { self.roll.knobs.pool_wall_ms };
         let started = std::time::Instant::now();
         let mut pool_completed = None;
         for &i in &pool {
             if wall > 0 && !ends_of.is_empty() && started.elapsed().as_millis() as i64 >= wall {
                 break;
             }
+            if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+                break;
+            }
             ends_of.push(self.roll.rollout_boundaries(state, &scored[i].cand, player, -1, sc)?);
         }
+        if deadline.is_some() && ends_of.is_empty() {
+            return Ok(self.deadline_fallback(state, player, base, &scored, &order, "deadline_before_first_rollout"));
+        }
+        let cut = ends_of.len() < pool.len();
+        let deadline_trace = deadline.map(|_| DeadlineTrace { completed: ends_of.len(), cut, fallback: None });
         if wall > 0 {
-            let cut = ends_of.len() < pool.len();
             pool_completed = Some((ends_of.len(), cut));
-            if cut {
-                pool.truncate(ends_of.len());
-                covered.retain(|k| pool.iter().any(|&i| scored[i].unit_key == *k));
-            }
+        }
+        if cut {
+            pool.truncate(ends_of.len());
+            covered.retain(|k| pool.iter().any(|&i| scored[i].unit_key == *k));
         }
         let mut leaf_vals: Vec<f64> = Vec::new();
         if let Some(h) = self.leaf_value.filter(|_| self.leaf_value_w != 0.0) {
@@ -773,7 +798,40 @@ impl<'a> Search<'a> {
             cands: scored.iter().map(|r| r.cand.clone()).collect(),
             pool_completed,
             tree: None,
+            deadline: deadline_trace,
         })
+    }
+
+    /// The `deadline_us` fallback when the deadline hit before the first
+    /// rollout: the prefilter's top row (deterministic, already scored,
+    /// legal), valued at its prefilter score, with no rollout trace.
+    fn deadline_fallback(&self, state: &State, player: i64, base: f64, scored: &[ScoredRow], order: &[usize],
+                         fallback: &'static str) -> Pick {
+        let (top, hero_attach) = (order[0], self.roll.policy.seams.hero_attach);
+        let unit_key = scored[top].unit_key.clone();
+        Pick {
+            waits: (0..state.units())
+                .filter(|&i| state.can_activate(i, player, hero_attach) && state.key(i) != unit_key)
+                .count() as i64,
+            unit_key,
+            action: scored[top].cand.clone(),
+            expectation_before: base,
+            expectation_after: scored[top].score,
+            runner_up: None,
+            rolled_units: Vec::new(),
+            scored: order.iter().map(|&i| (i as i64, scored[i].unit_key.clone(), scored[i].cand.kind, scored[i].score)).collect(),
+            pool_idx: Vec::new(),
+            rs: Vec::new(),
+            best_idx: 0,
+            runner_idx: -1,
+            last_leaf: None,
+            arbitration: None,
+            explored: false,
+            cands: scored.iter().map(|r| r.cand.clone()).collect(),
+            pool_completed: None,
+            tree: None,
+            deadline: Some(DeadlineTrace { completed: 0, cut: true, fallback: Some(fallback) }),
+        }
     }
 
     /// Tree search knob — PHASES 4-5.5 replaced by `tree::run` over the
@@ -836,6 +894,7 @@ impl<'a> Search<'a> {
             cands: scored.iter().map(|r| r.cand.clone()).collect(),
             pool_completed: None,
             tree: Some(trace),
+            deadline: None,
         })
     }
 }
