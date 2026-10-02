@@ -240,6 +240,23 @@ def _style_zone_args(style: dict[str, Any], slot: str) -> tuple[list[float], lis
     return [x0 * IN2M, z0 * IN2M, (x1 - x0) * IN2M, (z1 - z0) * IN2M], zl
 
 
+def _ai_attacker(mission_def: dict[str, Any], opener: int) -> int:
+    """D2b/R7a: the roll-off winner (the opener) attacks when the mission grants the +25 % side,
+    else defends; 0 for a mission without `roles`."""
+    if not mission_def.get("roles"):
+        return 0
+    wins_attack = float(mission_def.get("attacker_points_factor", 1.0)) > 1.0
+    return opener if wins_attack else (2 if opener == 1 else 1)
+
+
+def _role_gates(mission_def: dict[str, Any], attacker: int) -> dict[str, Any]:
+    """D6b: each slot's catalog distance gates by its role ({} = none), keyed by slot "1"/"2"."""
+    gates = mission_def.get("deploy_gates") or {}
+    if not attacker or not gates:
+        return {}
+    return {str(s): gates.get("attacker" if s == attacker else "defender") for s in (1, 2)}
+
+
 def resolve_zone_style(mission_def: dict[str, Any], repo_root: str | Path) -> dict[str, Any] | None:
     """The mission's deployment style from `assets/solo/deployments.json`, or None for `front_line`
     (the arena's own rects — byte-identical to every mission before wave D)."""
@@ -290,6 +307,7 @@ def _deploy_arena(
     interleave: bool = False,
     rules_epoch: int = nml_core.CURRENT_RULES_EPOCH,
     zone_style: dict[str, Any] | None = None,
+    gates: dict[str, Any] | None = None,
 ) -> tuple[list[list[list[float]]], list[list[list[float]]], set[str], list[list[Any]]]:
     """The table's pre-game through the step-7 binding: `deploy_side` per side
     with the per-side stream `seed + slot` (arena_match.gd:486-488 — the game
@@ -331,17 +349,23 @@ def _deploy_arena(
             roster["1"], roster["2"], zones["1"], zones["2"], objs2, board,
             seed + 1, seed + 2, opener, rules_epoch=int(rules_epoch),
             zones1=shapes["1"], zones2=shapes["2"],
+            gates1=(gates or {}).get("1"), gates2=(gates or {}).get("2"),
         )
         placed_by = {"1": out["side1"], "2": out["side2"]}
         sequence = [list(e) for e in out["sequence"]]
     else:
-        placed_by = {
-            slot: nml_core.deploy_side(
+        placed_by: dict[str, Any] = {}
+        for slot in ("1", "2"):
+            enemy: list[list[float]] = []
+            if (gates or {}).get(slot) and "1" in placed_by and slot == "2":
+                radius = {u["key"]: float(u["base_r_m"]) for u in roster["1"]}
+                enemy = [[m[0], m[1], radius[p["key"]]]
+                         for p in placed_by["1"]["placements"] for m in p["models"]]
+            placed_by[slot] = nml_core.deploy_side(
                 roster[slot], zones[slot], objs2, board, seed + int(slot),
                 rules_epoch=int(rules_epoch), zones=shapes[slot],
+                gates=(gates or {}).get(slot), enemy=enemy or None,
             )
-            for slot in ("1", "2")
-        }
     for slot in ("1", "2"):
         placed = placed_by[slot]
         sides[slot] = {
@@ -2931,10 +2955,12 @@ def play_game(
         # NOTHING else before the first activation.
         roll_attempts = _arena_roll_off(drng)
         opener = 1 if roll_attempts[-1][0] >= roll_attempts[-1][1] else 2
+        mission_def0 = resolve_mission(mission, repo_root)
         pos1, pos2, reserved, deploy_seq = _deploy_arena(
             dep, units1, units2, list_p1, list_p2, board, objectives, opener,
             eff_deployment == "interleaved", rules_epoch=rules_epoch,
-            zone_style=resolve_zone_style(resolve_mission(mission, repo_root), repo_root),
+            zone_style=resolve_zone_style(mission_def0, repo_root),
+            gates=_role_gates(mission_def0, _ai_attacker(mission_def0, opener)),
         )
     elif deploy_rng_seed is None:
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, drng)
@@ -2982,12 +3008,9 @@ def play_game(
         left = drng.randi_range(1, 6)
         right = drng.randi_range(1, 6)
         opener = 1 if left >= right else 2
-    attacker = 0
-    if mission_def.get("roles"):
-        # D2b: the roll-off winner (the opener) picks by R7a — the +25 % side where the
-        # mission grants one, else defender — and the pick rides the state as `attacker`.
-        wins_attack = float(mission_def.get("attacker_points_factor", 1.0)) > 1.0
-        attacker = opener if wins_attack else (2 if opener == 1 else 1)
+    attacker = _ai_attacker(mission_def, opener)
+    if attacker:
+        # D2b: the roll-off winner (the opener) picks by R7a; the pick rides the state as `attacker`.
         p0 = state.plain()
         p0["attacker"] = attacker
         state = core.state_of(p0)

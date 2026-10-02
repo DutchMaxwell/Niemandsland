@@ -2542,6 +2542,18 @@ fn zone_shape(zones: &Bound<'_, PyAny>) -> PyResult<Vec<objectives::Zone>> {
     Ok(objectives::zones_of_list(&value_of(zones)?))
 }
 
+/// D6b: a side's distance gates, `{"min_from_enemy_in", "max_from_friend_in", "min_from_marker_in"}`
+/// in inches (the catalog's spelling) as the core's metres.
+fn deploy_gates(gates: &Bound<'_, PyAny>) -> PyResult<deployment::Gates> {
+    let v = value_of(gates)?;
+    let m = |k: &str| v.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0) * nmlcore::IN2M;
+    Ok(deployment::Gates {
+        min_from_enemy_m: m("min_from_enemy_in"),
+        max_from_friend_m: m("max_from_friend_in"),
+        min_from_marker_m: m("min_from_marker_in"),
+    })
+}
+
 /// The per-side placement (§3.2's plain-dict signature). `units` = the roster
 /// in list order (ambush rows included; serde has no defaults, every key
 /// present, transport_capacity 0 on the corpus); `objectives` = the rulebook
@@ -2551,7 +2563,7 @@ fn zone_shape(zones: &Bound<'_, PyAny>) -> PyResult<Vec<objectives::Zone>> {
 /// `board` = a Board carrying the bank v2 prop layer (`set_bank_props`).
 /// Returns `SideDeploy` as a plain dict.
 #[pyfunction]
-#[pyo3(signature = (units, zone, objectives, board, seed_value, rules_epoch=None, zones=None))]
+#[pyo3(signature = (units, zone, objectives, board, seed_value, rules_epoch=None, zones=None, gates=None, enemy=None))]
 #[allow(clippy::too_many_arguments)]
 fn deploy_side(
     py: Python<'_>,
@@ -2562,17 +2574,25 @@ fn deploy_side(
     seed_value: i64,
     rules_epoch: Option<u32>,
     zones: Option<&Bound<'_, PyAny>>,
+    gates: Option<&Bound<'_, PyAny>>,
+    enemy: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
     let specs: Vec<UnitSpec> = json_of(units, "units")?;
     let z: [f64; 4] = json_of(zone, "zone")?;
     let shape = zones.map(zone_shape).transpose()?;
+    let gate = gates.map(deploy_gates).transpose()?;
+    let foes: Vec<[f64; 3]> = enemy.map(|e| json_of(e, "enemy")).transpose()?.unwrap_or_default();
+    let foes: Vec<deployment::Occupied> =
+        foes.iter().map(|b| deployment::Occupied { pos: (b[0], b[1]), radius: b[2] }).collect();
     let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
     // The record's rules epoch: the trainer's fresh runs ride the live stamp,
     // a replay pins the corpus's own (e.g. 15 for the recorded pregame dumps).
-    let sd = deployment::deploy_side_in(
+    let sd = deployment::deploy_side_gated(
         &specs,
         &Rect::new(z[0], z[1], z[2], z[3]),
         shape.as_deref(),
+        gate.as_ref(),
+        &foes,
         &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
         &board.inner,
         seed_value,
@@ -2702,7 +2722,7 @@ fn place_models(py: Python<'_>, spot: (f64, f64), n: usize) -> PyResult<Py<PyAny
 /// `placement_sequence`, and the one the interleave gate compares.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
-#[pyo3(signature = (units1, units2, zone1, zone2, objectives, board, seed1, seed2, first, rules_epoch=None, zones1=None, zones2=None))]
+#[pyo3(signature = (units1, units2, zone1, zone2, objectives, board, seed1, seed2, first, rules_epoch=None, zones1=None, zones2=None, gates1=None, gates2=None))]
 fn deploy_interleaved(
     py: Python<'_>,
     units1: &Bound<'_, PyAny>,
@@ -2717,19 +2737,23 @@ fn deploy_interleaved(
     rules_epoch: Option<u32>,
     zones1: Option<&Bound<'_, PyAny>>,
     zones2: Option<&Bound<'_, PyAny>>,
+    gates1: Option<&Bound<'_, PyAny>>,
+    gates2: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
+    let (gate1, gate2) = (gates1.map(deploy_gates).transpose()?, gates2.map(deploy_gates).transpose()?);
     let (shape1, shape2) = (zones1.map(zone_shape).transpose()?, zones2.map(zone_shape).transpose()?);
     let specs1: Vec<UnitSpec> = json_of(units1, "units1")?;
     let specs2: Vec<UnitSpec> = json_of(units2, "units2")?;
     let z1: [f64; 4] = json_of(zone1, "zone1")?;
     let z2: [f64; 4] = json_of(zone2, "zone2")?;
     let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
-    let out = deployment::deploy_interleaved_in(
+    let out = deployment::deploy_interleaved_gated(
         &specs1,
         &specs2,
         &Rect::new(z1[0], z1[1], z1[2], z1[3]),
         &Rect::new(z2[0], z2[1], z2[2], z2[3]),
         [shape1.as_deref(), shape2.as_deref()],
+        [gate1.as_ref(), gate2.as_ref()],
         &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
         &board.inner,
         seed1,
