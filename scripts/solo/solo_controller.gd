@@ -11857,6 +11857,16 @@ static func may_arrive_this_round(gu: GameUnit, round_number: int) -> bool:
 ## flagged `mission_reserve` + `ambush_reserve` (off-table, never activatable) and arrive only on a
 ## winning die: from `from_round` on, each round every such unit rolls once and arrives on `arrive_on`+.
 
+## How a mission reserve lands: {"zone_test": Callable(Vector2 metres) -> bool, "min_from_enemy_in",
+## "min_from_marker_in"} (inches; a missing key = no such gate). Set by the round flow before the arrivals.
+var _mission_arrival := {}
+
+
+func mission_arrival_set(zone_test: Callable, gates: Dictionary) -> void:
+	_mission_arrival = {"zone_test": zone_test, "min_from_enemy_in": float(gates.get("min_from_enemy_in", 0.0)),
+		"min_from_marker_in": float(gates.get("min_from_marker_in", 0.0))}
+
+
 ## The AI's still-queued MAIN units, taken off the queue (what its phases did not deploy).
 func deploy_take_queue() -> Array:
 	var queue: Array = _deploy_alt.get("queue", [])
@@ -12095,11 +12105,21 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 	var radius := _deploy_footprint_radius(unit)
 	var footprint := _deploy_footprint_offsets(unit)   # per-model footprint (finding 1)
 	var base_r := _deploy_base_radius(_deploy_models(unit))
+	var mission_land: bool = bool(unit.unit_properties.get("mission_reserve", false)) and not _mission_arrival.is_empty()
+	var mission_zone: Callable = _mission_arrival.get("zone_test", Callable()) if mission_land else Callable()
+	if mission_zone.is_valid():   # D8a: wholly inside the mission's arrival zone, every footprint base
+		var inner := blocked
+		var fp_offsets := footprint
+		blocked = func(p: Vector2) -> bool:
+			var outside: bool = not bool(mission_zone.call(p))
+			for off in fp_offsets:
+				outside = outside or not bool(mission_zone.call(p + off))
+			return outside or bool(inner.call(p))
 	# Ambush Beacon pass: land inside a friendly beacon's circle and EVERY enemy distance restriction is
 	# waived (maintainer ruling — "distance restrictions", plural: the 9"/3" ring AND Repel Ambushers'
 	# 12"), so the search runs against `occupied` alone (already-placed footprints / live bases). A box
 	# corner outside the circle is rejected: only a spot truly within the radius is waived.
-	for b in beacons:
+	for b in (beacons if not mission_land else []):   # a mission reserve has no beacon waiver
 		var bd := b as Dictionary
 		var bpos := bd["pos"] as Vector2
 		var brad := float(bd.get("radius_m", AMBUSH_BEACON_RADIUS_IN * INCHES_TO_METERS))
@@ -12126,9 +12146,17 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 	# its ring is the LARGER of the arriving unit's own distance and the enemy's projected one (the
 	# rule's hard "must be set up over 12\" away" overrides even the 3" Infiltrate concession).
 	var search_occupied: Array = occupied
+	if mission_land:   # D8a: the markers' gate, as discs the search may not enter
+		var g_marker: float = float(_mission_arrival.get("min_from_marker_in", 0.0)) * INCHES_TO_METERS
+		if g_marker > 0.0:
+			search_occupied = occupied.duplicate()
+			for mk in _deploy_objectives:
+				search_occupied.append({"pos": mk, "radius": g_marker})
 	if not enemy_positions.is_empty():
-		search_occupied = occupied.duplicate()
+		search_occupied = search_occupied.duplicate() if search_occupied == occupied else search_occupied
 		var ring := _reserve_min_enemy_dist_m(unit)
+		if mission_land:
+			ring = float(_mission_arrival.get("min_from_enemy_in", 0.0)) * INCHES_TO_METERS
 		for e in enemy_positions:
 			if e is Dictionary:
 				# pad_m = the enemy MODEL's base radius (maintainer field find: the ring is measured
@@ -12165,6 +12193,7 @@ func _finish_reserve_arrival(unit: GameUnit, spot: Vector2, occupied: Array, rad
 	unit.unit_properties["ambush_reserve"] = false
 	unit.unit_properties["ambush_arrived_round"] = round_no
 	unit.unit_properties.erase("ambush_return_round")
+	unit.unit_properties.erase("mission_reserve")   # D8a: on the table now, an ordinary unit
 
 
 # === Human Ambush reserves (field-test finding 5 — the game must ASK) ========================
