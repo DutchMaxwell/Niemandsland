@@ -1437,6 +1437,7 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
                         ignores_terrain: if g.is_null() { false } else { g["ignores_terrain"].as_bool().unwrap() },
                         vanguard: if g.is_null() { false } else { g["vanguard_pushed"].as_bool().unwrap() },
                         place_in_m: None,
+                        points: 0,
                         re_deploy: false,
                         re_deploy_max_units: None,
                         transport_capacity: 0,
@@ -2499,4 +2500,50 @@ fn distance_gates_push_the_only_legal_spot_past_the_gate() {
     assert!(spot.0.abs() <= 20.0 * IN2M, "still inside the strip: {spot:?}");
     let none = deployment::deploy_side_gated(&specs, &strip, None, None, &[], &objs, &empty_board(), 3, 15);
     assert_eq!(none, deployment::deploy_side(&specs, &strip, &objs, &empty_board(), 3, 15), "no gates == the old entry");
+}
+
+
+/// D7b: phase-major deployment. Defender = side 2 (index 1): half in the 12" disc, then the attacker
+/// (side 1) all in the frame, then the defender's rest anywhere; the most expensive units go first.
+#[test]
+fn phased_deployment_runs_phase_by_phase_most_expensive_first() {
+    assert_eq!((deployment::phase_quota("half", 5, 0), deployment::phase_quota("half", 4, 0)), (2, 2));
+    assert_eq!((deployment::phase_quota("all", 5, 0), deployment::phase_quota("rest", 5, 2), deployment::phase_quota("rest", 2, 5)), (5, 3, 0));
+    let r = 0.016;
+    let mk = |tag: &str, i: usize, pts: i64| deployment::UnitSpec {
+        key: format!("{tag}{i}"),
+        model_count: 2,
+        base_r_m: r,
+        points: pts,
+        footprint: deployment::deploy_footprint_offsets(2, r, false),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 2 }],
+        ..Default::default()
+    };
+    let costs = [30, 90, 10, 70, 50];
+    let s1: Vec<_> = costs.iter().enumerate().map(|(i, &c)| mk("a", i, c)).collect();
+    let s2: Vec<_> = costs.iter().enumerate().map(|(i, &c)| mk("d", i, c)).collect();
+    let cat: serde_json::Value = serde_json::from_str(include_str!("../../../assets/solo/deployments.json")).unwrap();
+    let zones_of = |id: &str| nml_core::objectives::zones_of_style(&cat["styles"][id]);
+    let in2 = IN2M;
+    let table = deployment::Rect::new(-36.0 * in2, -24.0 * in2, 72.0 * in2, 48.0 * in2);
+    let disc = deployment::Rect::new(-12.0 * in2, -12.0 * in2, 24.0 * in2, 24.0 * in2);
+    let phases = vec![
+        deployment::Phase { side: 1, share: "half".into(), rect: disc, zones: zones_of("centre_disc_12") },
+        deployment::Phase { side: 0, share: "all".into(), rect: table, zones: zones_of("edge_band_12") },
+        deployment::Phase { side: 1, share: "rest".into(), rect: table, zones: zones_of("anywhere") },
+    ];
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let out = deployment::deploy_phased(&s1, &s2, &table, &table, &phases, [None, None], &objs, &empty_board(), 3, 4, 1, 15);
+    let sides: Vec<i64> = out.sequence.iter().map(|e| e.0).collect();
+    assert_eq!(sides, vec![2, 2, 1, 1, 1, 1, 1, 2, 2, 2], "defender half, attacker all, defender rest");
+    let keys: Vec<&str> = out.sequence.iter().map(|e| e.1.as_str()).collect();
+    assert_eq!(&keys[..2], ["d1", "d3"], "the 90- and 70-point units first");
+    let fp = deployment::deploy_footprint_offsets(2, r, false);
+    let stands_in = |side: &deployment::SideDeploy, key: &str, id: &str| {
+        let p = side.placements.iter().find(|p| p.key == key).unwrap();
+        let z = zones_of(id);
+        fp.iter().all(|o| deployment::zones_contain(&z, (p.spot.0 + o.0, p.spot.1 + o.1)))
+    };
+    assert!(stands_in(&out.side2, "d1", "centre_disc_12") && stands_in(&out.side2, "d3", "centre_disc_12"));
+    assert!(out.side1.placements.iter().all(|p| stands_in(&out.side1, &p.key, "edge_band_12")), "the attacker stands in the frame");
 }

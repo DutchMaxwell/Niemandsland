@@ -75,6 +75,9 @@ pub struct UnitSpec {
     /// like the table's `carriers[0]` read.
     #[serde(default)]
     pub re_deploy_max_units: Option<i64>,
+    /// The unit's list cost; orders a phase's units most-expensive-first (D7b, R5a). 0 = unknown.
+    #[serde(default)]
+    pub points: i64,
     pub transport_capacity: i64,
     /// The deploy yaw (the model node's `global_rotation.y`; 0.0 corpus-wide).
     pub facing_rad: f64,
@@ -1604,6 +1607,108 @@ pub fn deploy_side_gated(
     // `settle_units` rebuilds the live state, `deploy_finish_all` runs one
     // finish pass.
     q.out
+}
+
+/// D7b — an Attack & Defend deployment phase: which side deploys, how much of its main army, where.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Phase {
+    /// 0 = side 1, 1 = side 2.
+    pub side: usize,
+    /// "half" | "all" | "rest".
+    pub share: String,
+    pub rect: Rect,
+    pub zones: Vec<Zone>,
+}
+
+/// Units a phase's share covers for a side with `total` main units of which `placed` already
+/// stand: half = floor(n / 2) (R5a), all, rest = what is left. The twin of
+/// `SoloController.phase_quota`.
+pub fn phase_quota(share: &str, total: usize, placed: usize) -> usize {
+    match share {
+        "half" => total / 2,
+        "rest" => total.saturating_sub(placed),
+        _ => total,
+    }
+}
+
+/// Both armies deployed in the catalog's PHASES (D7b): each phase's side places its quota of main
+/// units, most expensive first (stable), inside the phase's zone; gates ride per side. Whatever the
+/// phases leave over deploys in the last phase's zone, then the scouts alternate from `first` in
+/// each side's ORIGINAL zone — exactly the table's flow (`_solo_phase_start`).
+#[allow(clippy::too_many_arguments)]
+pub fn deploy_phased(
+    specs1: &[UnitSpec],
+    specs2: &[UnitSpec],
+    zone1: &Rect,
+    zone2: &Rect,
+    phases: &[Phase],
+    gates: [Option<&Gates>; 2],
+    objectives: &[(f64, f64)],
+    board: &Terrain,
+    seed1: i64,
+    seed2: i64,
+    first: i64,
+    rules_epoch: u32,
+) -> InterleavedDeploy {
+    let walls = board.walls_world_m();
+    let specs = [specs1, specs2];
+    let mut q = [deploy_begin(specs1, zone1, seed1), deploy_begin(specs2, zone2, seed2)];
+    let home = [(q[0].zone, q[0].forward_y), (q[1].zone, q[1].forward_y)];
+    for k in 0..2 {
+        q[k].gates = gates[k].copied();
+        let sp = specs[k];
+        q[k].main.sort_by_key(|&i| std::cmp::Reverse(sp[i].points));
+    }
+    let total = [q[0].main.len(), q[1].main.len()];
+    let mut cur = [0usize, 0usize];
+    let mut sequence: Vec<(i64, String)> = Vec::new();
+    let place = |q: &mut [SideQueue; 2], k: usize, cur: &mut [usize; 2], sequence: &mut Vec<(i64, String)>| {
+        let i = q[k].main[cur[k]];
+        cur[k] += 1;
+        let enemy = if q[k].gates.is_some() { placed_bases(&q[1 - k], specs[1 - k]) } else { Vec::new() };
+        deploy_place_next(&mut q[k], specs[k], i, objectives, board, walls, rules_epoch, &enemy);
+        sequence.push((k as i64 + 1, specs[k][i].key.clone()));
+    };
+    for ph in phases {
+        let k = ph.side;
+        let end = ph.rect.end();
+        q[k].zone = ph.rect;
+        q[k].forward_y = if ph.rect.pos.1.abs() < end.1.abs() { ph.rect.pos.1 } else { end.1 };
+        q[k].zones = Some(ph.zones.clone());
+        let n = phase_quota(&ph.share, total[k], cur[k]).min(total[k] - cur[k]);
+        for _ in 0..n {
+            place(&mut q, k, &mut cur, &mut sequence);
+        }
+    }
+    for k in 0..2 {
+        while cur[k] < total[k] {
+            place(&mut q, k, &mut cur, &mut sequence);
+        }
+        q[k].zone = home[k].0;
+        q[k].forward_y = home[k].1;
+        q[k].zones = None;
+    }
+    let order: [usize; 2] = if first == 2 { [1, 0] } else { [0, 1] };
+    let mut sc = [0usize, 0usize];
+    loop {
+        let mut placed = false;
+        for &k in order.iter() {
+            if sc[k] >= q[k].scouts.len() {
+                continue;
+            }
+            let i = q[k].scouts[sc[k]];
+            sc[k] += 1;
+            let enemy = if q[k].gates.is_some() { placed_bases(&q[1 - k], specs[1 - k]) } else { Vec::new() };
+            deploy_place_next(&mut q[k], specs[k], i, objectives, board, walls, rules_epoch, &enemy);
+            sequence.push((k as i64 + 1, specs[k][i].key.clone()));
+            placed = true;
+        }
+        if !placed {
+            break;
+        }
+    }
+    let [q1, q2] = q;
+    InterleavedDeploy { side1: q1.out, side2: q2.out, sequence }
 }
 
 /// Both armies deployed the RULEBOOK way, plus the order they went down in.
