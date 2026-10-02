@@ -2,7 +2,7 @@
 //! VP; plus playout_seize (unopposed presence) and can_hold_marker (its three
 //! round-end exclusions). No production line touched.
 use nml_core::{
-    apply_carry_step, can_hold_marker, drop_carried, mission_winner, plain_of, playout_seize,
+    apply_carry_step, apply_marker_move, can_hold_marker, vip_walk_z, drop_carried, mission_winner, plain_of, playout_seize,
     read_act_header, sabotage_winner, score, state_from_json, vp_score_end, vp_score_round, Marker,
     ProfileCache,
 };
@@ -210,4 +210,58 @@ fn header_mission_stamp_reads_role_and_rounds_and_defaults_without_them() {
     assert_eq!((m.role_p1.as_str(), m.rounds), ("attacker", 6));
     let old = h(r#"{"id":"duel"}"#).mission.expect("mission");
     assert_eq!((old.role_p1.as_str(), old.rounds), ("", 0));
+}
+
+fn vip_state(owner: i64, z_in: f64) -> nml_core::State {
+    let plain = format!(
+        r#"{{"round":2,"rounds_total":6,"scoring":"end","attacker":1,"objectives":[{{"pos":[0,0,{}],"owner":{}}}],"markers_meta":[{{"mobile":true,"deploy_edge":1}}],"units":{{"p1_0_a":{{"player":1,"alive":1,"positions":[[1,0,1]],"radii":[0.02]}},"p2_0_a":{{"player":2,"alive":1,"positions":[[-1,0,-1]],"radii":[0.02]}}}}}}"#,
+        z_in * 0.0254, owner
+    );
+    let header = read_act_header(HEADER).expect("header");
+    let mut cache = ProfileCache::new(header.profiles);
+    state_from_json(&plain, &mut cache, &mut None).expect("state")
+}
+
+fn z_in(st: &nml_core::State) -> f64 {
+    st.objectives[0].pos[2] / 0.0254
+}
+
+#[test]
+fn vip_walk_is_twelve_inches_then_stops_six_from_the_target_edge() {
+    assert_eq!(vip_walk_z(0.0, 1, 48.0), -12.0);
+    assert_eq!(vip_walk_z(-10.0, 1, 48.0), -18.0, "only 8\" left to the 6\" stop");
+    assert_eq!(vip_walk_z(-20.0, 1, 48.0), -20.0, "already inside: stays");
+    assert_eq!(vip_walk_z(0.0, -1, 48.0), 12.0, "deployed on -z: walks to +z");
+}
+
+#[test]
+fn marker_move_belongs_to_the_defenders_marker_only() {
+    let mut st = vip_state(2, 0.0);
+    apply_marker_move(&mut st, 48.0);
+    assert!((z_in(&st) + 12.0).abs() < 1e-9, "defender (slot 2) holds it: it walks");
+    let mut held = vip_state(1, 0.0);
+    apply_marker_move(&mut held, 48.0);
+    assert_eq!(z_in(&held), 0.0, "the attacker holds it: no move");
+    let mut neutral = vip_state(0, 0.0);
+    apply_marker_move(&mut neutral, 48.0);
+    assert_eq!(z_in(&neutral), 0.0, "nobody holds it: no move");
+    let mut no_roles = vip_state(2, 0.0);
+    no_roles.attacker = 0;
+    apply_marker_move(&mut no_roles, 48.0);
+    assert_eq!(z_in(&no_roles), 0.0, "no roles: no move");
+    let mut gone = vip_state(2, 0.0);
+    gone.markers_meta[0].destroyed = true;
+    apply_marker_move(&mut gone, 48.0);
+    assert_eq!(z_in(&gone), 0.0, "a destroyed marker stays");
+}
+
+#[test]
+fn mobile_flags_round_trip_and_stay_out_of_older_records() {
+    let st = vip_state(2, 0.0);
+    let plain = plain_of(&st);
+    assert_eq!(plain["markers_meta"][0]["mobile"], json!(true));
+    assert_eq!(plain["markers_meta"][0]["deploy_edge"], json!(1));
+    let old = plain_of(&carry_state());
+    assert!(old["markers_meta"][0].get("mobile").is_none(), "older records gain no key");
+    assert!(old["markers_meta"][0].get("deploy_edge").is_none());
 }
