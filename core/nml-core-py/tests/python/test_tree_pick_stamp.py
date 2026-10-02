@@ -35,5 +35,19 @@ def test_trace_tree_rides_only_a_tree_pick():
         stamp = b["trace"]["tree"]
         assert stamp["completed"] >= 16 and stamp["deadline_hit"] is False
         assert [r[0] for r in stamp["root"]] == b["trace"]["pool_idx"]
+        assert stamp["frontier"] + stamp["terminal"] == stamp["completed"] and stamp["batches"] >= 1
+        assert "fallback" not in stamp and stamp["elapsed_us"] > 0
+        assert "deadline" not in a["trace"] and "deadline" not in b["trace"]
         seen += 1
     assert seen == 6
+
+
+def test_trace_deadline_rides_only_a_deadline_pick():
+    lines = (FIXTURES / "acts_25.jsonl").read_text().splitlines()
+    header, act = json.loads(lines[0]), json.loads(lines[1])
+    core = nml_core.load(str(REPO))
+    core.set_header({**header, "knobs": {**header.get("knobs", {}), "deadline_us": 1}})
+    b = core.plan_with_rollout(core.state_of(act["state"]), act["player"], act["statics"])
+    d = b["trace"]["deadline"]
+    assert (d["completed"], d["cut"], d["fallback"]) == (0, True, "deadline_before_first_rollout")
+    assert d["elapsed_us"] >= 1 and "tree" not in b["trace"]

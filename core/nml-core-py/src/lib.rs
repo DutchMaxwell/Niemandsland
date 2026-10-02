@@ -322,8 +322,20 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
     // stamp law), so a default pick object is the one it always was.
     if let Some(t) = &p.tree {
         let root: Vec<Value> = t.root.iter().map(|&(i, n, m)| serde_json::json!([i, n, m])).collect();
-        let tree = serde_json::json!({"completed": t.completed, "deadline_hit": t.deadline_hit, "root": root});
+        let mut tree = serde_json::json!({"completed": t.completed, "deadline_hit": t.deadline_hit, "root": root,
+            "batches": t.batches, "frontier": t.frontier, "terminal": t.terminal, "elapsed_us": t.elapsed_us});
+        if let Some(f) = t.fallback {
+            tree["fallback"] = f.into();
+        }
         trace.insert("tree".into(), tree);
+    }
+    // `deadline_us`: the key rides ONLY a pool pick where the knob was set.
+    if let Some(d) = &p.deadline {
+        let mut m = serde_json::json!({"completed": d.completed, "cut": d.cut, "elapsed_us": d.elapsed_us});
+        if let Some(f) = d.fallback {
+            m["fallback"] = f.into();
+        }
+        trace.insert("deadline".into(), m);
     }
     out.insert("trace".into(), Value::Object(trace));
     out.insert(
