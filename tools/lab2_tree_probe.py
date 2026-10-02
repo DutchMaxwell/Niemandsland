@@ -24,13 +24,21 @@ def canon(obj) -> str:
     return json.dumps(obj, sort_keys=True, ensure_ascii=True, allow_nan=True)
 
 
-def env_stamp(nm, net_path, expect):
-    """The environment, and the list of mismatches against the expected values."""
+def env_stamp(nm, net_path, expect, strict=False):
+    """The environment, and the list of mismatches against the expected values. `strict` (a real pilot): every
+    expectation must be given ("missing:<key>") and the build must be clean (`dirty` is False)."""
     info = dict(getattr(nm, "BUILD_INFO", {}))
     sha = hashlib.sha256(open(net_path, "rb").read()).hexdigest() if net_path else None
-    stamp = {"python": sys.version.split()[0], "commit": info.get("commit"),
-             "rules_epoch": info.get("rules_epoch"), "model_sha256": sha}
-    return stamp, [k for k, v in expect.items() if v is not None and stamp.get(k) != v]
+    so = getattr(nm, "__file__", None)   # the loaded nml_core binary = the installed wheel's extension module
+    wheel = hashlib.sha256(open(so, "rb").read()).hexdigest() if so and os.path.exists(so) else None
+    stamp = {"python": sys.version.split()[0], "commit": info.get("commit"), "rules_epoch": info.get("rules_epoch"),
+             "model_sha256": sha, "dirty": info.get("dirty"), "wheel_sha256": wheel}
+    bad = [k for k, v in expect.items() if v is not None and stamp.get(k) != v]
+    if strict:
+        bad += ["missing:" + k for k, v in expect.items() if v is None]
+        if stamp["dirty"] is not False:
+            bad.append("dirty")
+    return stamp, bad
 
 
 def replay_transition(nm, core, rec):
@@ -330,7 +338,8 @@ def cmd_pilot(a) -> int:
         return 0
     import nml_core as nm  # lazy: a dry run needs no core
     stamp, bad = env_stamp(nm, a.net, {"commit": a.expect_commit, "rules_epoch": a.expect_epoch,
-                                       "model_sha256": a.expect_model_sha})
+                                       "model_sha256": a.expect_model_sha, "wheel_sha256": a.expect_wheel_sha},
+                           strict=True)
     if bad:
         print("[pilot] STOP: environment mismatch on %s: %s" % (bad, canon(stamp)))
         return 2
@@ -364,6 +373,7 @@ def main(argv) -> int:
     p.add_argument("--expect-commit")
     p.add_argument("--expect-epoch", type=int)
     p.add_argument("--expect-model-sha")
+    p.add_argument("--expect-wheel-sha", help="sha256 of the loaded nml_core binary (the wheel's .so)")
     p.add_argument("--dry-run", action="store_true")
     t = sub.add_parser("timing")
     t.add_argument("--states", required=True, help="JSON list of {cell, state, player}")
