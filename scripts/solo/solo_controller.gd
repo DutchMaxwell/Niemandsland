@@ -10569,8 +10569,13 @@ func _deploy_place_id(id: int) -> GameUnit:
 	# overlap-cleanup reshift stays rect-only. Invalid callable = today's path, byte-identical.
 	if not is_scout and _deploy_zone_test.is_valid():
 		var ztest := _deploy_zone_test
+		# D5: wholly within the zone — every footprint base is probed, not only the centre
+		var fp_offsets := footprint
 		blocked = func(p: Vector2) -> bool:
-			return not bool(ztest.call(p)) \
+			var outside: bool = not bool(ztest.call(p))
+			for off in fp_offsets:
+				outside = outside or not bool(ztest.call(p + off))
+			return outside \
 				or (terrain_only.is_valid() and bool(terrain_only.call(p)))
 	var threat := _deploy_threat_cb(unit)
 	var threat_w := deploy_threat_in * INCHES_TO_METERS if threat.is_valid() else 0.0
@@ -10880,6 +10885,8 @@ func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Ca
 func _repair_spot_in_zone(unit: GameUnit, p: Vector2, base_r: float) -> bool:
 	if _deploy_zone_of.has(unit) and not (_deploy_zone_of[unit] as Rect2).has_point(p):
 		return false
+	if _deploy_zone_of.has(unit) and _deploy_zone_test.is_valid() and not bool(_deploy_zone_test.call(p)):
+		return false   # D5: the catalog zone shape (a disc), not only its bounding rect
 	var margin := base_r + INCHES_TO_METERS
 	var h := _table_half_extents()
 	return absf(p.x) <= h.x - margin and absf(p.y) <= h.y - margin
@@ -11044,6 +11051,8 @@ func _deploy_cfg_in_zone(unit: GameUnit, models: Array, cfg: Array) -> bool:
 		if p.x - r < zone.position.x or p.x + r > zone.end.x \
 				or p.z - r < zone.position.y or p.z + r > zone.end.y:
 			return false
+		if _deploy_zone_test.is_valid() and not bool(_deploy_zone_test.call(Vector2(p.x, p.z))):
+			return false   # D5: the catalog zone shape, not only its bounding rect
 	return true
 
 
@@ -11062,6 +11071,20 @@ func _deploy_zone_reshift(unit: GameUnit, models: Array, cfg: Array) -> Vector2:
 		shift.x = minf(shift.x, zone.end.x - (p.x + r + shift.x))
 		shift.y = maxf(shift.y, zone.position.y - (p.z - r + shift.y))
 		shift.y = minf(shift.y, zone.end.y - (p.z + r + shift.y))
+	if _deploy_zone_test.is_valid():
+		# D5: a non-rectangular zone — walk the whole unit toward the zone's centre in 0.25" steps
+		# until every base centre passes the shape test (convex zones; bounded).
+		var to_centre := (zone.get_center() - Vector2(cfg[0].x, cfg[0].z) - shift).normalized() * 0.25 * INCHES_TO_METERS
+		for _step in range(80):
+			var all_in := true
+			for i in range(cfg.size()):
+				var q: Vector3 = cfg[i]
+				if not bool(_deploy_zone_test.call(Vector2(q.x + shift.x, q.z + shift.y))):
+					all_in = false
+					break
+			if all_in:
+				break
+			shift += to_centre
 	return shift
 
 
