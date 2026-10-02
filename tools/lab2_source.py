@@ -87,18 +87,27 @@ class Tap:
     `replay_transition` shape (before, action, streams before/after, tray faces consumed so far, rolls)."""
 
     def __init__(self, core, row, sink):
-        self.core, self.row, self.sink, self.faces, self.seq = core, row, sink, 0, 0
+        self.core, self.row, self.sink, self.faces, self.seq, self.last = core, row, sink, 0, 0, None
 
     def __getattr__(self, name):
         return getattr(self.core, name)
 
     def set_header(self, header):  # `Core` has no header getter; a replay needs the game's own header
-        self.sink.headers[self.row["slot"] + ":" + self.row["candidate"]] = header
+        if self.sink is not None:
+            self.sink.headers[self.row["slot"] + ":" + self.row["candidate"]] = header
         return self.core.set_header(header)
+
+    def streams(self):
+        """The played streams NOW (None before the first resolve): what a continuation restores."""
+        if self.last is None:
+            return None
+        return {"rng_state": self.last[0].state, "tray_state": self.last[1].state, "faces_before": self.faces,
+                "dice_seed": int(self.row["tray"])}
 
     def resolve_with_tray(self, state, action, rng, tray):
         cell = self.row["cell"]
-        keep = not self.sink.full(cell)
+        keep = self.sink is not None and not self.sink.full(cell)
+        self.last = (rng, tray)
         before = (state.plain(), rng.state, tray.state) if keep else None
         faces_before = self.faces
         nxt, rep = self.core.resolve_with_tray(state, action, rng, tray)
@@ -145,7 +154,8 @@ class Spy:
         if not menu.get("used") or len(menu["trace"]["cands"]) < 2:
             return
         raise _Eligible({"state": state.plain(), "owners_before_round": list(self.owners), "mover": player,
-                         "slot": row["slot"], "candidate": row["candidate"], "cell": row["cell"],
+                         "slot": row["slot"], "candidate": row["candidate"], "cell": row["cell"], "cluster": row["slot"],
+                         "streams": core.streams() if isinstance(core, Tap) else None,
                          "keys": {k: v for k, v in row.items() if k not in REQUIRED}})
 
     @contextlib.contextmanager
@@ -171,15 +181,21 @@ class Spy:
             sp._round_end = real_end
 
 
+def source_kwargs(row, net, play_kw):
+    """The `play_game` kwargs of one source game; `net=None` plays the hand planner (a test affordance)."""
+    kw = dict(play_kw, mission=row["mission"], objectives="mission", live_ledger=True, dice="table",
+              layout_seed=int(row["layout"]), deploy_seed=int(row["deploy"]), play_seed=int(row["play"]),
+              dice_seed=int(row["tray"]))
+    if net is not None:
+        kw.update(leaf_value_fn={1: net.hook(1), 2: net.hook(2)}, leaf_value_w=1.0)
+    return kw
+
+
 def play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing=None, transitions=None):
     """One source game for one candidate row -> (snapshot or None, log row)."""
     spy, t0 = Spy(sp, row, timing), time.perf_counter()
-    kw = dict(play_kw, mission=row["mission"], objectives="mission", live_ledger=True, dice="table",
-              layout_seed=int(row["layout"]), deploy_seed=int(row["deploy"]), play_seed=int(row["play"]),
-              dice_seed=int(row["tray"]), leaf_value_fn={1: net.hook(1), 2: net.hook(2)}, leaf_value_w=1.0)
-    snapshot = None
-    if transitions is not None:
-        core = Tap(core, row, transitions)
+    kw = source_kwargs(row, net, play_kw)
+    snapshot, core = None, Tap(core, row, transitions)
     try:
         with spy.armed():
             sp.play_game(int(row["terrain"]), os.path.join(lists, row["list_p1"]), os.path.join(lists, row["list_p2"]),
@@ -219,6 +235,22 @@ def read_slots(path):
     return slots
 
 
+def attach_eval(positions, path):
+    """`eval[r] = {general, tray}` (decimal key seeds, r 0..7) from the long-format D_endings_eval.tsv
+    (columns cell, source, replicate, purpose, seed); a position matches on (cell, keys["source"])."""
+    table = {}
+    with open(path, newline="") as f:
+        for r in csv.DictReader(f, delimiter="\t"):
+            table[(r["cell"], r["source"], r["replicate"], r["purpose"])] = r["seed"]
+    for pos in positions:
+        k = (pos["cell"], pos["keys"].get("source"))
+        try:
+            pos["eval"] = [{"general": table[k + (str(i), "eval_general")], "tray": table[k + (str(i), "eval_tray")]}
+                           for i in range(8)]
+        except KeyError as miss:
+            raise SystemExit("no eval keys for position %s: %s" % (pos["slot"], miss))
+
+
 def cmd_source(a):
     import nml_core as nm
     sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "core", "nml-core-py", "python"))
@@ -233,6 +265,8 @@ def cmd_source(a):
     transitions = TransitionSet() if a.transitions_out else None
     positions, discarded, missing = generate(sp, nm.load(a.repo), slots, a.repo, a.bank, a.lists, net, a.cap,
                                              play_kw, timing, transitions)
+    if a.eval:
+        attach_eval(positions, a.eval)
     out = {"positions": positions, "discarded": discarded, "missing": missing, "ignored_header_knobs": ignored,
            "net": net.proof()}
     json.dump(out, open(a.out, "w"))  # no sort_keys: net.proof() mixes int seats with a str key
@@ -260,6 +294,7 @@ def main(argv=None):
     s.add_argument("--header", required=True)
     s.add_argument("--cap", type=int, default=20)
     s.add_argument("--out", required=True)
+    s.add_argument("--eval", help="D_endings_eval.tsv: attach the 8 eval stream keys to every position")
     s.add_argument("--transitions-out", help="write the first 9 (cells 1-4) / 8 (cells 5-12) resolves per cell")
     s.add_argument("--timing-out", help="write the first 12 legal pre-pick states per cell (timing --states shape)")
     s.add_argument("--repo", default=os.path.dirname(_HERE))

@@ -139,3 +139,51 @@ def test_default_quota_is_100_and_short_cells_are_named():
     for _ in range(9):
         t.add({"cell": "c1"})
     assert t.full("c1") and t.short({"c1", "c5"}) == {"c5": 0}
+
+
+def test_attach_eval_takes_decimal_keys_and_refuses_a_missing_position(tmp_path):
+    import csv
+    tsv = tmp_path / "e.tsv"
+    with open(tsv, "w", newline="") as f:
+        w = csv.writer(f, delimiter="\t")
+        w.writerow(["cell", "source", "replicate", "purpose", "seed"])
+        for r in range(8):
+            w.writerow(["c1", "k1", r, "eval_general", 9_000_000_000_000_000_000 + r])
+            w.writerow(["c1", "k1", r, "eval_tray", 5 + r])
+    pos = [{"slot": "s", "cell": "c1", "keys": {"source": "k1"}}]
+    ls.attach_eval(pos, str(tsv))
+    assert pos[0]["eval"][3] == {"general": "9000000000000000003", "tray": "8"} and len(pos[0]["eval"]) == 8
+    with pytest.raises(SystemExit):
+        ls.attach_eval([{"slot": "t", "cell": "c1", "keys": {"source": "k2"}}], str(tsv))
+
+
+def test_ending_from_the_source_snapshot_reproduces_the_source_game(env):
+    """Fidelity (hand planner on both sides so the I/I ending is the source game's own continuation)."""
+    import lab2_tree_probe as lab
+    core = env[0]
+    r = row("a", seed=29)
+    snap, _ = ls.play_candidate(sp, core, r, REPO, BANK, LISTS, None, PLAY_KW)
+    full = sp.play_game(29, os.path.join(LISTS, r["list_p1"]), os.path.join(LISTS, r["list_p2"]), REPO, BANK, core,
+                        record_final_state=True, **ls.source_kwargs(r, None, PLAY_KW))
+    state, _, win = lab.finish_ending(nml_core, sp, {"inc": core, "cand": core}, snap, *restored(snap["streams"]))
+    assert win == full["winner"] and sp.final_state_digest(state) == full["final_state_hash"]
+
+
+def restored(st):
+    rng, tray, n = nml_core.Rng(0), nml_core.Tray(st["dice_seed"]), st["faces_before"]
+    rng.state = st["rng_state"]
+    while n > 0:
+        tray.roll(min(n, 4096))
+        n -= min(n, 4096)
+    assert tray.state == st["tray_state"]
+    return rng, tray
+
+
+def test_a_one_vp_corruption_of_the_snapshot_flips_the_verdict(env):
+    """Seed 34 on domination ends 7:7 (a draw): +1 VP in the snapshot's own ledger must decide it."""
+    import lab2_tree_probe as lab
+    core = env[0]
+    snap, _ = ls.play_candidate(sp, core, row("a", seed=34), REPO, BANK, LISTS, None, PLAY_KW)
+    assert lab.finish_ending(nml_core, sp, {"inc": core, "cand": core}, snap, *restored(snap["streams"]))[2] == "draw"
+    bad = dict(snap, state=dict(snap["state"], vp=[snap["state"]["vp"][0] + 1, snap["state"]["vp"][1]]))
+    assert lab.finish_ending(nml_core, sp, {"inc": core, "cand": core}, bad, *restored(snap["streams"]))[2] == "p1"
