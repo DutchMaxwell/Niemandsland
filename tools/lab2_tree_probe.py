@@ -244,9 +244,38 @@ def run_ending(nm, sp, cores, pos, rng, tray, arm, net=None, search=None):
             "reason": None if ok else "net_inactive", "net_calls": calls, "search": log}
 
 
-def arm_headers_differ_only_in_leaf(base, wall):
+def ending_row(nm, sp, cores, pos, arm, r, net, ctx):
+    """One endings row of the shared schema (lab2_rows): decisions timed, INVALID instead of a crash on a decline.
+    ctx = {prereg, build, hdr: {"inc": sha, arm: sha}}."""
+    import lab2_rows as rows
+    mover = pos["mover"]
+    rec = rows.Recorder(lambda side: arm if side == mover else "I", net)
+    search = search_streams(nm, pos, arm, r) if arm != "I" else None
+    before, t0 = {s: dict(c) for s, c in net.counts.items()}, time.perf_counter()
+
+    def play():
+        with rec.armed(sp):
+            return run_ending(nm, sp, cores, pos, *eval_streams(nm, pos, r), arm, net, search)
+    out, why = rows.guarded(nm, play)
+    if out:
+        rec.attach_search(out["search"])
+    used = {str(s): {k: c[k] - before.get(s, {"calls": 0, "leaves": 0})[k] for k in ("calls", "leaves")}
+            for s, c in net.counts.items()}
+    seeds = {"eval_general": pos["eval"][r]["general"], "eval_tray": pos["eval"][r]["tray"]}
+    if arm != "I":
+        seeds["search_general"] = pos["search"][arm][r][str(mover)]
+    ident = {"prereg_sha256": ctx["prereg"], "row_id": "%s_%s_r%d" % (pos["slot"], arm, r), "split": "D", "part": "A",
+             "cell": pos["cell"], "source": pos["slot"], "arm": arm, "opponent": "I", "seat": mover, "replicate": r,
+             "seeds": seeds}
+    hdr = {str(mover): ctx["hdr"][arm], str(3 - mover): ctx["hdr"]["inc"]}
+    ok = bool(out and out["valid"])
+    return rows.make_row(ident, ctx["build"], net.model_sha256, hdr, used, rec, out["y"] if out else None,
+                         None, ok, why or (out and out["reason"]), round(time.perf_counter() - t0, 3))
+
+
+def arm_headers_differ_only_in_leaf(base, allowance_us):
     """The L and T knob sets (prereg section 6: same EV model and operator settings) differ ONLY in tree_leaf."""
-    knobs = {a: dict(base["knobs"], **ARM_KNOBS[a], tree_wall_ms=wall) for a in ("L", "T")}
+    knobs = {a: dict(base["knobs"], **ARM_KNOBS[a], deadline_us=allowance_us) for a in ("L", "T")}
     return {k for k in set(knobs["L"]) | set(knobs["T"]) if knobs["L"].get(k) != knobs["T"].get(k)} == {"tree_leaf"}
 
 
@@ -273,38 +302,55 @@ def bootstrap_intervals(gains, resamples=100_000, seed=0, k=5):
                 "lo": float(np.quantile(d, q[0])), "hi": float(np.quantile(d, q[1]))} for n, d in draws.items()}
 
 
+def run_context(nm, prereg, net):
+    """Identity every row carries: the prereg hash and the build stamp (commit, dirty, rules_epoch, wheel sha)."""
+    stamp = env_stamp(nm, None, {})[0]
+    return {"prereg": prereg, "build": {k: stamp[k] for k in ("commit", "dirty", "rules_epoch", "wheel_sha256")}}
+
+
+def write_row(directory, row):
+    path = os.path.join(directory, row["row_id"] + ".json")
+    json.dump(row, open(path + ".tmp", "w"), sort_keys=True)
+    os.replace(path + ".tmp", path)  # atomic per row
+
+
 def cmd_endings(a) -> int:
     import nml_core as nm  # lazy
+    import lab2_rows
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
     import selfplay as sp
     from lab2_net import ShippedNet
     net = ShippedNet(a.repo)
     base, allow = json.load(open(a.header)), json.load(open(a.timing))
     positions = json.load(open(a.positions))
-    invalid = []
+    os.makedirs(a.rows_dir, exist_ok=True)
+    ctx, invalid = run_context(nm, a.prereg_sha256, net), []
+
     def core(extra):
+        hdr = dict(base, knobs=dict(base["knobs"], **extra))
         c = nm.load(a.repo)
-        c.set_header(dict(base, knobs=dict(base["knobs"], **extra)))
-        return c
-    inc = core({})
+        c.set_header(hdr)
+        return c, lab2_rows.sha_of(hdr)
+    inc, ctx["hdr"] = core({})[0], {"inc": core({})[1]}
     for cell in sorted({pos["cell"] for pos in positions}):
-        if not arm_headers_differ_only_in_leaf(base, max(1, allow[cell]["B_us"] // 1000)):
+        if not arm_headers_differ_only_in_leaf(base, allow[cell]["B_us"]):
             print("[endings] STOP: the L and T headers of %s differ in more than tree_leaf" % cell)
             return 2
     gains = {}
     for i, pos in enumerate(positions):
-        wall = max(1, allow[pos["cell"]]["B_us"] // 1000)  # the knob is whole ms; 0 would mean OFF
         y = {}
         for arm in ARMS:
-            cand = core(dict(ARM_KNOBS[arm], **({"tree_wall_ms": wall} if arm != "I" else {})))
-            rows = [run_ending(nm, sp, {"inc": inc, "cand": cand}, pos, *eval_streams(nm, pos, r), arm, net,
-                               search_streams(nm, pos, arm, r) if arm != "I" else None) for r in range(STREAMS)]
-            invalid += [(pos["slot"], arm, r) for r, row in enumerate(rows) if not row["valid"]]
+            cand, ctx["hdr"][arm] = core(dict(ARM_KNOBS[arm], **({"deadline_us": allow[pos["cell"]]["B_us"]} if arm != "I" else {})))
+            rows = [ending_row(nm, sp, {"inc": inc, "cand": cand}, pos, arm, r, net, ctx) for r in range(STREAMS)]
+            for row in rows:
+                write_row(a.rows_dir, row)
+            invalid += [row["row_id"] for row in rows if not row["valid"]]
             y[arm] = [row["y"] for row in rows]
-        gains.setdefault(pos["cell"], {})[pos["cluster"]] = position_gains(y)
-        print("[endings] %d/%d %s %s" % (i + 1, len(positions), pos["cell"], canon(gains[pos["cell"]][pos["cluster"]])), flush=True)
+        if not invalid:
+            gains.setdefault(pos["cell"], {})[pos["cluster"]] = position_gains(y)
+        print("[endings] %d/%d %s" % (i + 1, len(positions), pos["cell"]), flush=True)
     if invalid:
-        print("[endings] INVALID net_inactive rows: %s" % invalid)
+        print("[endings] INVALID rows (run continued): %s" % invalid)
         return 1
     res = bootstrap_intervals(gains, a.resamples, a.seed)
     open(a.out, "w").write(canon({"gains": gains, "intervals": res}))
@@ -323,18 +369,19 @@ def game_rows(blocks, arms=ALL_ARMS):
     policy swaps. A block carries cell, mission and seeds {terrain, layout, deploy, play_general[d], tray[d],
     search[arm][seat]}; a row carries the seeds of its own dice stream."""
     return [{"row_id": "%s_%s_d%d_s%d" % (b["block"], arm, d, seat), "block": b["block"], "cell": b["cell"], "arm": arm,
-             "mission": b["mission"], "seat": seat, "army1": b["army1"], "army2": b["army2"],
+             "mission": b["mission"], "seat": seat, "d": d, "army1": b["army1"], "army2": b["army2"],
              "seeds": {"terrain": b["seeds"]["terrain"], "layout": b["seeds"]["layout"], "deploy": b["seeds"]["deploy"],
                        "play_general": b["seeds"]["play_general"][d], "tray": b["seeds"]["tray"][d],
                        "search": b["seeds"]["search"].get(arm, {})}}
             for b in blocks for arm in arms for d in (0, 1) for seat in (1, 2)]
 
 
-def arm_kwargs(row, wall_ms):
-    """L: the tree on the candidate seat (10/3 = the incumbent pair); C: the one-ply 32/3 rung with the pool deadline."""
+def arm_kwargs(row, allowance_us):
+    """L: the tree on the candidate seat (10/3 = the incumbent pair); C: the one-ply 32/3 rung. Both carry the
+    allowance as `deadline_us`, measured from the planner call."""
     if row["arm"] == "L":
-        return dict(deep_top_k=10, deep_horizon=3, deep_search_mode="tree", deep_tree_wall_ms=wall_ms)
-    return dict(deep_top_k=32, deep_horizon=3, deep_pool_wall_ms=wall_ms)
+        return dict(deep_top_k=10, deep_horizon=3, deep_search_mode="tree", deep_deadline_us=allowance_us)
+    return dict(deep_top_k=32, deep_horizon=3, deep_deadline_us=allowance_us)
 
 
 def board_scores(done):
@@ -351,23 +398,41 @@ def board_scores(done):
     return out
 
 
-def play_row(sp, row, repo, bank, knobs, net, wall_ms):
-    """One full game of a manifest row on the live ledger, the step-10 seeds and the shipped net on BOTH seats.
-    INVALID "net_inactive" unless the net priced leaves on both seats."""
-    before = {s: net.counts.get(s, {"calls": 0})["calls"] for s in (1, 2)}
-    sd = row["seeds"]
-    extra = dict(deep_player=row["seat"], **arm_kwargs(row, wall_ms)) if row["arm"] != "I" else {}
+def play_row(nm, sp, row, repo, bank, knobs, net, allowance_us, ctx):
+    """One full game of a manifest row on the live ledger, the step-10 seeds and the shipped net on BOTH seats,
+    as a stage0-row/1 row. INVALID "net_inactive" unless the net priced leaves on both seats; a core decline
+    or timeout is an INVALID row too and the run continues."""
+    import lab2_rows
+    seat, sd = row["seat"], row["seeds"]
+    rec = lab2_rows.Recorder(lambda side: row["arm"] if row["arm"] != "I" and side == seat else "I", net)
+    extra = dict(deep_player=seat, **arm_kwargs(row, allowance_us)) if row["arm"] != "I" else {}
     search = {int(s): int(k) for s, k in sd["search"].items()}
-    res = sp.play_game(int(sd["terrain"]), row["army1"], row["army2"], repo, bank, None, mission=row["mission"],
-                       objectives="mission", live_ledger=True, layout_seed=int(sd["layout"]), deploy_seed=int(sd["deploy"]),
-                       play_seed=int(sd["play_general"]), dice_seed=int(sd["tray"]),
-                       leaf_value_fn={1: net.hook(1), 2: net.hook(2)}, leaf_value_w=1.0,
-                       **({"search_seeds": search} if search else {}), **extra, **knobs)
-    calls = {s: net.counts[s]["calls"] - before[s] for s in (1, 2)}
-    seat = 1 if row["arm"] == "I" else row["seat"]  # I/I: seat 1's score, descriptive
-    ok = all(c > 0 for c in calls.values())
-    return {"row": row, "y": 0.5 if res["winner"] == "draw" else float(res["winner"] == "p%d" % seat),
-            "winner": res["winner"], "valid": ok, "reason": None if ok else "net_inactive", "net_calls": calls}
+    before, t0 = {s: dict(c) for s, c in net.counts.items()}, time.perf_counter()
+
+    def play():
+        with rec.armed(sp):
+            return sp.play_game(int(sd["terrain"]), row["army1"], row["army2"], repo, bank, None, mission=row["mission"],
+                                objectives="mission", live_ledger=True, layout_seed=int(sd["layout"]),
+                                deploy_seed=int(sd["deploy"]), play_seed=int(sd["play_general"]), dice_seed=int(sd["tray"]),
+                                leaf_value_fn={1: net.hook(1), 2: net.hook(2)}, leaf_value_w=1.0,
+                                **({"search_seeds": search} if search else {}), **extra, **knobs)
+    res, why = lab2_rows.guarded(nm, play)
+    used = {str(s): {k: c[k] - before.get(s, {"calls": 0, "leaves": 0})[k] for k in ("calls", "leaves")}
+            for s, c in net.counts.items()}
+    ok = bool(res) and all(used.get(str(s), {"calls": 0})["calls"] > 0 for s in (1, 2))
+    why = why or (None if ok else "net_inactive")
+    if res:
+        rec.attach_logged_search(res.get("planner_positions", []))
+    score_seat = 1 if row["arm"] == "I" else seat  # I/I: seat 1's score, descriptive
+    y = None if not res else 0.5 if res["winner"] == "draw" else float(res["winner"] == "p%d" % score_seat)
+    by_seat = (res or {}).get("knobs_by_seat", {})
+    hdr = {str(s): lab2_rows.sha_of(by_seat.get(s) or by_seat.get(str(s)) or (res or {}).get("knobs", {})) for s in (1, 2)}
+    seeds = {"terrain": sd["terrain"], "layout": sd["layout"], "deploy": sd["deploy"], "play_general": sd["play_general"],
+             "tray": sd["tray"], **({"search_general": sd["search"][str(seat)]} if search else {})}
+    ident = {"prereg_sha256": ctx["prereg"], "row_id": row["row_id"], "split": "D", "part": "B", "cell": row["cell"],
+             "source": row["block"], "arm": row["arm"], "opponent": "I", "seat": seat, "replicate": row["d"], "seeds": seeds}
+    return lab2_rows.make_row(ident, ctx["build"], net.model_sha256, hdr, used, rec, y, res and res["winner"], ok, why,
+                              round(time.perf_counter() - t0, 3))
 
 
 def i_seat1_means(done):
@@ -380,26 +445,24 @@ def i_seat1_means(done):
 
 
 def cmd_fullgames(a) -> int:
+    import nml_core as nm  # lazy
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "nml-core-py", "python"))
     import selfplay as sp
     from lab2_net import ShippedNet
     net = ShippedNet(a.repo)
-    allow, knobs = json.load(open(a.timing)), json.load(open(a.knobs))
+    allow, knobs, ctx = json.load(open(a.timing)), json.load(open(a.knobs)), run_context(nm, a.prereg_sha256, net)
     os.makedirs(a.out_dir, exist_ok=True)
     done, invalid = [], []
     for row in game_rows(json.load(open(a.blocks)), tuple(a.arms.split(","))):
         path = os.path.join(a.out_dir, row["row_id"] + ".json")
-        if not os.path.exists(path):
-            rec = play_row(sp, row, a.repo, a.bank, knobs, net, max(1, allow[row["cell"]]["B_us"] // 1000))  # whole ms
-            tmp = path + ".tmp"
-            json.dump(rec, open(tmp, "w"))
-            os.replace(tmp, path)  # atomic per game; a rerun resumes, never replays a valid game
+        if not os.path.exists(path):  # a rerun resumes, never replays a valid game
+            write_row(a.out_dir, play_row(nm, sp, row, a.repo, a.bank, knobs, net, allow[row["cell"]]["B_us"], ctx))
         rec = json.load(open(path))
-        done.append((rec["row"], rec["y"]))
+        done.append((row, rec["y"]))
         if not rec["valid"]:
             invalid.append(row["row_id"])
     if invalid:
-        print("[fullgames] INVALID net_inactive rows: %s" % invalid)
+        print("[fullgames] INVALID rows (run continued): %s" % invalid)
         return 1
     res = bootstrap_intervals(board_scores([d for d in done if d[0]["arm"] in B_ARMS]), a.resamples, a.seed)
     open(a.out, "w").write(canon({"intervals": res, "I_seat1_descriptive": i_seat1_means(done)}))
@@ -467,6 +530,8 @@ def main(argv) -> int:
     e.add_argument("--timing", required=True, help="the timing subcommand's .json (B_us per cell)")
     e.add_argument("--resamples", type=int, default=100_000)
     e.add_argument("--seed", type=int, default=0)
+    e.add_argument("--rows-dir", required=True, help="one stage0-row/1 JSON per ending")
+    e.add_argument("--prereg-sha256", required=True)
     e.add_argument("--repo", default=".")
     e.add_argument("--out", required=True)
     f = sub.add_parser("fullgames")
@@ -478,6 +543,7 @@ def main(argv) -> int:
     f.add_argument("--out-dir", required=True)
     f.add_argument("--resamples", type=int, default=100_000)
     f.add_argument("--seed", type=int, default=1)
+    f.add_argument("--prereg-sha256", required=True)
     f.add_argument("--repo", default=".")
     f.add_argument("--out", required=True)
     a = ap.parse_args(argv)

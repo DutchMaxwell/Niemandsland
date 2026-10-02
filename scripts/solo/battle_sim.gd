@@ -617,6 +617,70 @@ static func mission_winner(scoring: String, owners: Array, vp: Array,
 	return "draw"
 
 
+## D9 (R11a): a marker's horizontal point in inches — a CARRIED marker sits at its
+## carrier's first model less that model's base radius (the carrier's nearest base
+## edge, as control_gap_in measures), a free one at its spot. [] = destroyed/none.
+static func _marker_point_in(state: Dictionary, i: int) -> Array:
+	var markers: Array = state.get("markers_meta", [])
+	var objs: Array = state.get("objectives", [])
+	if i >= markers.size() or i >= objs.size() or bool((markers[i] as Dictionary).get("destroyed", false)):
+		return []
+	var mk: Dictionary = markers[i]
+	var carrier := String(mk.get("carried_by", ""))
+	if bool(mk.get("carry", false)) and not carrier.is_empty():
+		var cu: Dictionary = (state.get("units", {}) as Dictionary).get(carrier, {})
+		var ps: Array = cu.get("positions", [])
+		if ps.is_empty():
+			return []
+		var rs: Array = cu.get("radii", [])
+		var r_in: float = (float(rs[0]) / IN2M) if not rs.is_empty() else 0.0
+		return [(ps[0] as Vector3).x / IN2M, (ps[0] as Vector3).z / IN2M, r_in]
+	var op: Vector3 = (objs[i] as Dictionary)["pos"]
+	return [op.x / IN2M, op.z / IN2M, 0.0]
+
+
+## D9 VIP verdict: a marker within 6" of the edge OPPOSITE the one the defender
+## deployed on (deploy_edge = that edge's z sign, +1/-1) = defender, else attacker.
+static func escort_winner(state: Dictionary, deploy_edge: int, table_d_in: float) -> String:
+	var att := int(state.get("attacker", 0))
+	if (att != 1 and att != 2) or deploy_edge == 0:
+		return "draw"
+	var target := -float(signi(deploy_edge))
+	var home := false
+	for i in range(state.get("objectives", []).size()):
+		var pt := _marker_point_in(state, i)
+		if not pt.is_empty() and table_d_in / 2.0 - target * float(pt[1]) - float(pt[2]) <= 6.0 + CONTROL_EPS:
+			home = true
+	var defender := 3 - att
+	return "p%d" % (defender if home else att)
+
+
+## D9 Smash & Grab / Rescue verdict: a marker within 6" of ANY table edge = attacker.
+static func extract_winner(state: Dictionary, table_w_in: float, table_d_in: float) -> String:
+	var att := int(state.get("attacker", 0))
+	if att != 1 and att != 2:
+		return "draw"
+	var out := false
+	for i in range(state.get("objectives", []).size()):
+		var pt := _marker_point_in(state, i)
+		if pt.is_empty():
+			continue
+		var gap := minf(table_w_in / 2.0 - absf(float(pt[0])), table_d_in / 2.0 - absf(float(pt[1]))) - float(pt[2])
+		if gap <= 6.0 + CONTROL_EPS:
+			out = true
+	return "p%d" % (att if out else 3 - att)
+
+
+## The `escort` / `extract` scoring ids of mission_winner; "" for any other id.
+static func role_winner(scoring: String, state: Dictionary, deploy_edge: int,
+		table_w_in: float, table_d_in: float) -> String:
+	if scoring == "escort":
+		return escort_winner(state, deploy_edge, table_d_in)
+	if scoring == "extract":
+		return extract_winner(state, table_w_in, table_d_in)
+	return ""
+
+
 ## One activation with stochastic rounding (core self-play games).
 static func resolve_stochastic(state: Dictionary, action: Dictionary,
 		rng: RandomNumberGenerator) -> Dictionary:

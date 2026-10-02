@@ -163,8 +163,8 @@ def test_manifest_has_four_games_per_arm_per_block_with_both_seats_and_two_dice(
 
 def test_arm_kwargs_split_the_tree_from_the_one_ply_pool_deadline():
     L, C = lab.arm_kwargs({"arm": "L"}, 7), lab.arm_kwargs({"arm": "C"}, 7)
-    assert L["deep_search_mode"] == "tree" and L["deep_tree_wall_ms"] == 7 and "deep_pool_wall_ms" not in L
-    assert C == {"deep_top_k": 32, "deep_horizon": 3, "deep_pool_wall_ms": 7}
+    assert L["deep_search_mode"] == "tree" and L["deep_deadline_us"] == 7 and "deep_tree_wall_ms" not in L
+    assert C == {"deep_top_k": 32, "deep_horizon": 3, "deep_deadline_us": 7}
 
 
 def test_board_scores_are_per_board_and_a_missing_or_short_board_fails():
@@ -213,47 +213,79 @@ def test_the_strict_stamp_records_dirty_and_the_wheel_sha():
 
 
 class SpySp:
-    """A stand-in selfplay: records every play_game call; `quiet` leaves the net hooks uncalled."""
-    def __init__(self, net, quiet=False):
-        self.calls, self.net, self.quiet = [], net, quiet
+    """A stand-in selfplay: records every play_game call; `quiet` leaves the net hooks uncalled; `boom` declines."""
+    def __init__(self, net, quiet=False, boom=None):
+        self.calls, self.net, self.quiet, self.boom = [], net, quiet, boom
+
+    def _pick_for(self, *a, **k):
+        return {}
+
+    @__import__("contextlib").contextmanager
+    def forced_picks(self, fn):
+        yield
 
     def play_game(self, *args, **kw):
         self.calls.append((args, kw))
+        if self.boom:
+            raise self.boom
         if not self.quiet:
             for side in (1, 2):
                 kw["leaf_value_fn"][side]([], side)
-        return {"winner": "p1"}
+        return {"winner": "p1", "knobs": {"top_k": 2}, "planner_positions": []}
 
 
 class CountNet:
+    model_sha256 = "cd" * 32
+
     def __init__(self):
-        self.counts = {1: {"calls": 0}, 2: {"calls": 0}}
+        self.counts = {1: {"calls": 0, "leaves": 0}, 2: {"calls": 0, "leaves": 0}}
 
     def hook(self, side):
         def fn(leaves, _side=None):
             self.counts[side]["calls"] += 1
+            self.counts[side]["leaves"] += len(leaves)
             return []
         return fn
+
+
+class Declining(Exception):
+    pass
+
+
+NmStub = type("NmStub", (), {"Unsupported": Declining})
+CTX = {"prereg": "p" * 64, "build": {"commit": "abc", "dirty": False, "rules_epoch": 68, "wheel_sha256": "w"}}
+PRINCIPLES_ROW = ("schema prereg_sha256 row_id split part cell source arm opponent seat replicate seeds build model_sha256 "
+                  "header_sha256 net decisions y winner valid reason wall_s rss_hwm_mib done").split()
 
 
 def test_a_cell_7_row_plays_breakthrough_with_the_split_seeds_and_the_live_ledger():
     row = lab.game_rows(_blocks(1, "c7", "breakthrough"), ("L",))[0]
     net = CountNet()
     sp = SpySp(net)
-    rec = lab.play_row(sp, row, "repo", "bank", {"top_k": 3}, net, 5)
+    rec = lab.play_row(NmStub, sp, row, "repo", "bank", {"top_k": 3}, net, 5, CTX)
     (args, kw), = sp.calls
     assert kw["mission"] == "breakthrough" and kw["objectives"] == "mission" and kw["live_ledger"] is True
     assert args[0] == 10 and (kw["layout_seed"], kw["deploy_seed"], kw["play_seed"], kw["dice_seed"]) == (20, 30, 40, 60)
     assert kw["search_seeds"] == {1: 81, 2: 82} and kw["deep_player"] == 1 and kw["leaf_value_w"] == 1.0
-    assert rec["valid"] and rec["net_calls"] == {1: 1, 2: 1}
+    assert kw["deep_deadline_us"] == 5 and rec["valid"] and rec["net"]["1"] == {"calls": 1, "leaves": 0}
+    assert list(rec) == PRINCIPLES_ROW and rec["seeds"]["search_general"] == "81" and rec["rss_hwm_mib"] > 0
 
 
 def test_an_i_row_has_no_deep_core_and_a_never_called_hook_is_invalid():
     row = lab.game_rows(_blocks(1), ("I",))[0]
     sp = SpySp(CountNet(), quiet=True)
-    rec = lab.play_row(sp, row, "repo", "bank", {}, sp.net, 5)
+    rec = lab.play_row(NmStub, sp, row, "repo", "bank", {}, sp.net, 5, CTX)
     assert "deep_player" not in sp.calls[0][1] and "search_seeds" not in sp.calls[0][1]
-    assert rec["valid"] is False and rec["reason"] == "net_inactive"
+    assert rec["valid"] is False and rec["reason"] == "net_inactive" and "search_general" not in rec["seeds"]
+
+
+def test_a_declined_game_is_an_invalid_row_and_the_next_row_runs():
+    rows = lab.game_rows(_blocks(1), ("L",))[:2]
+    net = CountNet()
+    bad = lab.play_row(NmStub, SpySp(net, boom=Declining("unported: x")), rows[0], "r", "b", {}, net, 5, CTX)
+    good = lab.play_row(NmStub, SpySp(net), rows[1], "r", "b", {}, net, 5, CTX)
+    assert bad["valid"] is False and bad["reason"] == "unsupported: unported: x" and bad["y"] is None and list(bad) == PRINCIPLES_ROW
+    assert good["valid"] is True and good["y"] == 0.5 * 0 + (1.0 if rows[1]["seat"] == 1 else 0.0)
 
 
 class TimingCore:
