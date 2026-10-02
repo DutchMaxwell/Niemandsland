@@ -13,7 +13,8 @@ ride along as `keys`.
 `source --slots D_sources.tsv --bank B --lists L --header I.json --cap 20 --out positions.json`: the slots
 file is tab-separated, one row per (slot, candidate) with the columns above in frozen key order. Header: only
 `top_k` / `horizon` of its knobs reach `play_game`; every other header knob is reported as ignored, never
-applied silently. Exit 1 when a slot is MISSING. With `--timing-out F` the same games also feed the timing set (first 12
+applied silently; `--knobs F` (the fullgames play_game-kwargs file of the shipped grade) plays the source games at that
+grade. Exit 1 when a slot is MISSING. With `--timing-out F` the same games also feed the timing set (first 12
 legal pre-pick states per cell, all rounds); a cell below 12 fails the timing instrument (exit 1).
 With `--transitions-out F` a core proxy (`Tap`) records the first 9 / 8 resolves per cell in the
 `replay_transition` shape (+ `F.headers`: source -> the game header a replay needs); a cell below its quota exits 1.
@@ -191,6 +192,20 @@ def source_kwargs(row, net, play_kw):
     return kw
 
 
+#: The `play_game` kwargs a source game sets itself (`source_kwargs`); a `--knobs` file may not move them.
+SOURCE_SET = ("mission", "objectives", "live_ledger", "layout_seed", "deploy_seed", "play_seed", "dice_seed",
+              "leaf_value_fn", "leaf_value_w")
+
+
+def grade_kwargs(kw):
+    """The shipped grade's `play_game` kwargs (`--knobs`, the same file fullgames takes) for the source games;
+    refuses a key the source sets itself, and any dice but "table" (played games use the true tray)."""
+    clash = sorted(set(kw) & set(SOURCE_SET)) + (["dice"] if kw.get("dice", "table") != "table" else [])
+    if clash:
+        raise SystemExit("--knobs sets what a source game fixes itself: " + ",".join(clash))
+    return kw
+
+
 def play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing=None, transitions=None):
     """One source game for one candidate row -> (snapshot or None, log row)."""
     spy, t0 = Spy(sp, row, timing), time.perf_counter()
@@ -262,6 +277,8 @@ def cmd_source(a):
     knobs = json.load(open(a.header)).get("knobs", {})
     play_kw = {k: knobs[k] for k in HEADER_KNOBS if k in knobs}
     ignored = sorted(set(knobs) - set(HEADER_KNOBS))
+    if a.knobs:
+        play_kw.update(grade_kwargs(json.load(open(a.knobs))))
     net = ShippedNet(a.repo)
     slots = read_slots(a.slots)
     timing = TimingSet() if a.timing_out else None
@@ -271,7 +288,7 @@ def cmd_source(a):
     if a.eval:
         attach_eval(positions, a.eval)
     out = {"positions": positions, "discarded": discarded, "missing": missing, "ignored_header_knobs": ignored,
-           "net": net.proof()}
+           "play_kwargs": play_kw, "net": net.proof()}
     json.dump(out, open(a.out, "w"))  # no sort_keys: net.proof() mixes int seats with a str key
     print("[source] positions %d discarded %d missing %s" % (len(positions), len(discarded), missing))
     short = timing.short({r["cell"] for rows in slots.values() for r in rows}) if timing else {}
@@ -295,6 +312,7 @@ def main(argv=None):
     s.add_argument("--bank", required=True)
     s.add_argument("--lists", required=True)
     s.add_argument("--header", required=True)
+    s.add_argument("--knobs", help="JSON of play_game kwargs of the shipped grade (the fullgames --knobs file)")
     s.add_argument("--cap", type=int, default=20)
     s.add_argument("--out", required=True)
     s.add_argument("--eval", help="D_endings_eval.tsv: attach the 8 eval stream keys to every position")

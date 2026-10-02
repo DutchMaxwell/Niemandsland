@@ -348,7 +348,7 @@ class TimingCore:
         return {"trace": {"tree": {"completed": 1, "deadline_hit": False}}}
 
 
-def _timing_run(monkeypatch, tmp_path, B_us=None):
+def _timing_run(monkeypatch, tmp_path, B_us=None, headers=None):
     import types
     core, hooked = TimingCore(), []
     net = types.SimpleNamespace(model_sha256="ab" * 32, hook=lambda side: (lambda leaves, _s=None: hooked.append(side) or []))
@@ -356,12 +356,14 @@ def _timing_run(monkeypatch, tmp_path, B_us=None):
     monkeypatch.setitem(sys.modules, "lab2_net", types.SimpleNamespace(ShippedNet=lambda repo: net))
     if B_us is not None:
         monkeypatch.setattr(lab, "allowance_us", lambda times: B_us)
-    states = [{"cell": "c1", "state": {"i": i}, "player": 1 + i % 2} for i in range(2)]
+    states = [{"cell": "c1", "state": {"i": i}, "player": 1 + i % 2, "source": "g%d:a" % (i + 1)} for i in range(2)]
     (tmp_path / "s.json").write_text(json.dumps(states))
     (tmp_path / "h.json").write_text(json.dumps({"knobs": {"top_k": 10}}))
+    (tmp_path / "g.json").write_text(json.dumps(headers or {}))
     out = str(tmp_path / "t.txt")
     rc = lab.main(["timing", "--states", str(tmp_path / "s.json"), "--header", str(tmp_path / "h.json"), "--statics", "{}",
-                   "--per-cell", "2", "--hardware", "laptop-x", "--out", out])
+                   "--per-cell", "2", "--hardware", "laptop-x", "--out", out]
+                  + (["--headers", str(tmp_path / "g.json")] if headers else []))
     return rc, core, out
 
 
@@ -380,3 +382,63 @@ def test_timing_stamps_hardware_and_labels_the_sweep(monkeypatch, tmp_path):
     assert meta["hardware"] == "laptop-x" and meta["model_sha256"] == "ab" * 32 and "diagnostic" in meta["sweep"]
     text = open(out).read()
     assert "hardware: laptop-x" in text and "D-ONLY DIAGNOSTIC" in text
+
+
+# ---- every recorded state under its OWN game header (pilot part 1, timing, endings) ----
+GAME_HEADERS = {g: {"profiles": g, "knobs": {"seam_cast": True, "game": g}} for g in ("g1:a", "g2:a")}
+
+
+class GameCore(Core):
+    """Refuses without a header (as nml_core does) and resolves into a state stamped with ITS header's game."""
+    header = None
+
+    def set_header(self, header):
+        self.header = header
+
+    def state_of(self, plain):
+        if self.header is None:
+            raise RuntimeError("no header")
+        return St(plain)
+
+    def resolve_with_tray(self, st, action, rng, tray):
+        nxt, rep = Core.resolve_with_tray(self, st, action, rng, tray)
+        return St(dict(nxt.plain(), game=self.header["profiles"])), rep
+
+
+def test_game_header_overlays_base_then_arm_knobs_on_the_recorded_header():
+    import pytest
+    h = lab.game_header(GAME_HEADERS, "g2:a", {"knobs": {"top_k": 3}}, {"search_mode": "tree"})
+    assert h == {"profiles": "g2:a", "knobs": {"seam_cast": True, "game": "g2:a", "top_k": 3, "search_mode": "tree"}}
+    assert lab.game_header(None, "g2:a", {"knobs": {"x": 1}}, {"y": 2}) == {"knobs": {"x": 1, "y": 2}}
+    assert lab.source_of({"slot": "c1_k1", "candidate": "4"}) == "c1_k1:4"
+    with pytest.raises(SystemExit, match="g9:z"):
+        lab.game_header(GAME_HEADERS, "g9:z", {})
+
+
+def test_every_record_replays_under_its_own_game_header():
+    import copy
+    import pytest
+    recs = [dict(copy.deepcopy(TRUTH), source=g, after=dict(TRUTH["after"], game=g)) for g in GAME_HEADERS]
+    nm = type("NmG", (Nm,), {"load": staticmethod(lambda repo: GameCore())})
+    results, reds = lab.replay_records(nm, "repo", recs, GAME_HEADERS)
+    assert all(r["ok"] for r in results) and reds == {"RED-VP": False, "RED-DIE": False}
+    one = {g: GAME_HEADERS["g1:a"] for g in GAME_HEADERS}   # one header for both games: the second replay fails
+    assert [r["ok"] for r in lab.replay_records(nm, "repo", recs, one)[0]] == [True, False]
+    with pytest.raises(RuntimeError, match="no header"):      # the old part 1: one header-less core
+        lab.replay_transition(nm, GameCore(), recs[0])
+
+
+def test_timing_sets_each_state_s_own_game_header(monkeypatch, tmp_path):
+    rc, core, out = _timing_run(monkeypatch, tmp_path, headers=GAME_HEADERS)
+    assert rc == 0 and {k["game"] for k, _ in core.calls} == set(GAME_HEADERS)
+    assert all(k["seam_cast"] is True and k["top_k"] == 10 for k, _ in core.calls)   # recorded knobs + the base overlay
+
+
+def test_endings_build_every_core_under_the_position_s_own_game_header(monkeypatch, tmp_path):
+    seen = []
+    w = {"core": lambda extra, source=None: seen.append(source) or ("core", "sha"), "nm": None, "sp": None, "net": None,
+         "ctx": {}, "allow": {"c1": {"B_us": 7}}, "cfg": {"rows_dir": str(tmp_path)}}
+    monkeypatch.setattr(lab, "ending_row", lambda *a, **k: {"row_id": "r", "valid": True, "y": 1.0})
+    monkeypatch.setattr(lab, "write_row", lambda d, row: None)
+    lab._endings_work(w, "c1_k1", {"slot": "c1_k1", "candidate": "3", "cell": "c1", "cluster": "c1_k1"})
+    assert seen == ["c1_k1:3"] * (1 + len(lab.ARMS))   # the incumbent core and one core per arm

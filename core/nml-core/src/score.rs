@@ -168,6 +168,84 @@ fn objective_p(
     mine / (mine + theirs)
 }
 
+/// D13: the table the role terms measure on, inches. The state carries no table, so the eval
+/// reads the default 6x4 ft one (the same constants the referee twins take as arguments).
+const ROLE_TABLE_W_IN: f64 = 72.0;
+const ROLE_TABLE_D_IN: f64 = 48.0;
+/// D13: the share of the score the role term carries; the rest is the reserve-aware control mean.
+const ROLE_TERM_WEIGHT: f64 = 0.5;
+
+/// D13: a unit still in reserve projects `strength x DISCOUNT x rounds_left / rounds_total` of
+/// future presence at every marker (it arrives next round and holds from then on).
+fn reserve_presence(state: &State, i: usize) -> f64 {
+    if !state.dormant[i] {
+        return 0.0;
+    }
+    let strength: f64 = state.dormant_wounds[i].iter().map(|&w| w as f64).sum();
+    let left = (state.rounds_total - state.round).max(0) as f64;
+    strength * DISCOUNT * left / (state.rounds_total.max(1) as f64)
+}
+
+/// D13: `objective_p` with the reserves counted — twin of `AiMissionEval._objective_p_roles`.
+fn objective_p_roles(
+    state: &State, statics: &[UnitStatic], i: usize, player: i64, incoming: Incoming,
+) -> f64 {
+    if state.markers_meta.get(i).is_some_and(|m| m.carry && m.carried_by >= 0) {
+        return objective_p(state, statics, i, player, incoming, true);
+    }
+    let obj = state.objectives[i];
+    let (mut mine, mut theirs) = (0.0f64, 0.0f64);
+    for u in 0..state.units() {
+        let p = presence(state, statics, u, obj.pos, threat_of(incoming, u)) + reserve_presence(state, u);
+        if state.player[u] == player { mine += p } else { theirs += p }
+    }
+    if mine + theirs <= 0.0 {
+        return if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 };
+    }
+    mine / (mine + theirs)
+}
+
+/// D13: the role term. `escort`: the DEFENDER's value is `1 - dist(marker, target edge) / depth`
+/// (the target edge is opposite `deploy_edge`), the attacker's the mirror. `extract`: the ATTACKER's
+/// value is `1 - dist(relic, nearest edge) / half depth` (the relic = the `secret: relic` marker,
+/// else every live marker; the best one counts), the defender's the mirror. Carried markers are
+/// measured at the carrier's base edge (R11a). `None` = not a role mission.
+fn role_term(state: &State, player: i64) -> Option<f64> {
+    let att = state.attacker;
+    if (att != 1 && att != 2) || !matches!(&*state.scoring, "escort" | "extract") {
+        return None;
+    }
+    let live: Vec<([f64; 2], f64, bool)> = (0..state.markers_meta.len())
+        .filter_map(|i| {
+            let (p, r) = crate::mission::marker_point_in(state, i)?;
+            Some((p, r, state.markers_meta[i].secret.as_deref() == Some("relic")))
+        })
+        .collect();
+    let attacker_side = player == att;
+    if &*state.scoring == "escort" {
+        let edge = state.markers_meta.iter().find(|m| m.mobile).map_or(0, |m| m.deploy_edge);
+        if edge == 0 {
+            return Some(0.5);
+        }
+        let target = -(edge.signum() as f64);
+        let defender_value = live
+            .iter()
+            .map(|(p, r, _)| (1.0 - (ROLE_TABLE_D_IN / 2.0 - target * p[1] - r) / ROLE_TABLE_D_IN).clamp(0.0, 1.0))
+            .fold(0.0f64, f64::max);
+        return Some(if attacker_side { 1.0 - defender_value } else { defender_value });
+    }
+    let any_relic = live.iter().any(|m| m.2);
+    let attacker_value = live
+        .iter()
+        .filter(|m| m.2 || !any_relic)
+        .map(|(p, r, _)| {
+            let gap = (ROLE_TABLE_W_IN / 2.0 - p[0].abs()).min(ROLE_TABLE_D_IN / 2.0 - p[1].abs()) - r;
+            (1.0 - gap / (ROLE_TABLE_D_IN / 2.0)).clamp(0.0, 1.0)
+        })
+        .fold(0.0f64, f64::max);
+    Some(if attacker_side { attacker_value } else { 1.0 - attacker_value })
+}
+
 /// `AiMissionEval._is_destroy_mission` ai_mission_eval.gd:413-416.
 fn is_destroy_mission(state: &State) -> bool {
     if &*state.scoring == "sabotage" {
@@ -225,6 +303,13 @@ fn score_hand_carry(
             }
         }
         return (0.5 + 0.5 * (att - DESTROY_DEFENCE_WEIGHT * deff)).clamp(0.0, 1.0);
+    }
+    if let Some(role) = role_term(state, player) {
+        let n = state.objectives.len() as f64;
+        let control: f64 = (0..state.objectives.len())
+            .map(|i| objective_p_roles(state, statics, i, player, incoming))
+            .sum::<f64>() / n;
+        return ROLE_TERM_WEIGHT * role + (1.0 - ROLE_TERM_WEIGHT) * control;
     }
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
@@ -806,5 +891,82 @@ mod tests {
         // Clamped into the hand range at both ends (0.5 + delta = 1.26).
         assert_eq!(combine_residual(0.5, FIT, 1.0), 1.0);
         assert_eq!(combine_residual(0.0, 0.0, 1.0), 0.0);
+    }
+
+    /// D13 fixture: both units activated in the LAST round and far from the marker, so no one can
+    /// project presence and the control mean is the neutral 0.5 — the score is then
+    /// `0.5 * role + 0.25`, which isolates the role term.
+    fn role_state(scoring: &str, att: i64, x_in: f64, z_in: f64, marker: crate::state::Marker) -> crate::state::State {
+        let mut st = vp_state(
+            &[U("p1_0_a", 1, 5.0, 6, false, true), U("p2_0_a", 2, -5.0, 6, false, true)],
+            &[0.0], 4, scoring, "{}", [0, 0],
+        );
+        st.attacker = att;
+        st.objectives[0].pos = [x_in * crate::IN2M, 0.0, z_in * crate::IN2M];
+        st.markers_meta = vec![marker];
+        st
+    }
+
+    fn hand(st: &crate::state::State, player: i64) -> f64 {
+        score_hand(st, &[], player, NO_INCOMING)
+    }
+
+    /// escort: defender value `1 - dist / depth` to the edge opposite the deploy edge, the
+    /// attacker the mirror.
+    #[test]
+    fn escort_prices_the_defenders_progress_toward_the_target_edge() {
+        let vip = crate::state::Marker { mobile: true, deploy_edge: 1, ..Default::default() };
+        let near = role_state("escort", 1, 0.0, -18.0, vip.clone());
+        assert_eq!(hand(&near, 2), 0.5 * 0.875 + 0.25, "defender: 6\" from the target edge");
+        assert_eq!(hand(&near, 1), 0.5 * 0.125 + 0.25, "attacker: the mirror");
+        let centre = role_state("escort", 1, 0.0, 0.0, vip.clone());
+        assert_eq!(hand(&centre, 2), 0.5, "mid-table: even");
+        let home = role_state("escort", 1, 0.0, 20.0, vip);
+        assert!(hand(&home, 2) < 0.5 && hand(&home, 1) > 0.5, "still at home: the attacker leads");
+    }
+
+    /// extract: attacker value `1 - dist(relic, nearest edge) / half depth`; the relic marker is the
+    /// one that counts when a marker is flagged `secret: relic`.
+    #[test]
+    fn extract_prices_the_relics_distance_to_the_nearest_edge() {
+        let relic = crate::state::Marker { secret: Some("relic".into()), ..Default::default() };
+        let out = role_state("extract", 1, 30.0, 0.0, relic.clone());
+        assert_eq!(hand(&out, 1), 0.5 * 0.75 + 0.25, "attacker: 6\" from the +x edge");
+        assert_eq!(hand(&out, 2), 0.5 * 0.25 + 0.25, "defender: the mirror");
+        let mid = role_state("extract", 1, 0.0, 0.0, relic);
+        assert_eq!(hand(&mid, 1), 0.25, "table centre: no progress");
+        let mut two = role_state("extract", 1, 0.0, 0.0, crate::state::Marker { secret: Some("trap".into()), ..Default::default() });
+        two.objectives.push(crate::state::Objective { pos: [30.0 * crate::IN2M, 0.0, 0.0], owner: 0 });
+        two.markers_meta.push(crate::state::Marker { secret: Some("relic".into()), ..Default::default() });
+        assert_eq!(hand(&two, 1), 0.5 * 0.75 + 0.25, "only the relic counts, not the trap at the edge-far spot");
+    }
+
+    /// A destroyed marker (the plain/trap one) and no roles both leave the old arithmetic alone.
+    #[test]
+    fn role_term_stands_down_without_roles_or_live_markers() {
+        let relic = crate::state::Marker { secret: Some("relic".into()), ..Default::default() };
+        let mut gone = role_state("extract", 1, 30.0, 0.0, relic.clone());
+        gone.markers_meta[0].destroyed = true;
+        assert_eq!(hand(&gone, 1), 0.25, "no live marker: the attacker has nothing to extract");
+        let no_roles = role_state("extract", 0, 30.0, 0.0, relic);
+        assert_eq!(hand(&no_roles, 1), 0.5, "attacker 0: the generic control mean alone");
+    }
+
+    /// Reserves are future presence: `strength x DISCOUNT x rounds_left / rounds_total`.
+    #[test]
+    fn a_reserve_counts_as_rounds_left_weighted_future_presence() {
+        let relic = crate::state::Marker { secret: Some("relic".into()), ..Default::default() };
+        let mut st = role_state("extract", 1, 0.0, 0.0, relic);
+        st.round = 1;
+        for a in st.activated.iter_mut() { *a = false; }
+        st.positions[1] = vec![[100.0, 0.0, 0.0]];
+        st.positions[0] = vec![[100.0, 0.0, 0.0]];
+        let before = hand(&st, 2);
+        st.alive[1] = 0;
+        st.dormant[1] = true;
+        st.dormant_wounds[1] = vec![6];
+        assert_eq!(super::reserve_presence(&st, 1), 6.0 * 0.5 * 3.0 / 4.0);
+        assert!(hand(&st, 2) > before, "the arriving reserve lifts its side's control share");
+        assert_eq!(hand(&st, 2) + hand(&st, 1), 1.0 + 0.0, "a zero-sum pair");
     }
 }
