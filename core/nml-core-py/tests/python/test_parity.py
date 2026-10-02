@@ -710,3 +710,26 @@ def test_marker_move_twin_and_selfplay_markers():
     assert selfplay.mission_markers({"mobile": True, "deploy_edge": -1}, 1) == [
         {"mobile": True, "deploy_edge": -1}]
     assert selfplay.mission_markers({}, 1) == []
+
+
+def test_reveal_step_twin_and_assignment():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    keys = list(plain["units"])
+    first = next(k for k in keys if plain["units"][k]["player"] == 1)
+    for k, unit in plain["units"].items():
+        unit.update(alive=0, positions=[], radii=[], wounds=[], shaken=False, aircraft=False,
+                    ambush_arrived_round=0)
+    plain["units"][first].update(alive=1, positions=[[0.0, 0, 0.01]], radii=[0.02], wounds=[1])
+    plain["attacker"] = 1
+    plain["round"] = 2
+    plain["objectives"] = [{"pos": [0, 0, 0], "owner": 1}]
+    plain["markers_meta"] = [{"secret": "", "revealed": False}]
+    state, owners, events, rolls = core.apply_reveal_step(core.state_of(plain), [1])
+    assert owners == [0] and rolls == []
+    assert events == [{"index": 0, "secret": "", "unit": list(plain["units"]).index(first)}]
+    assert state.plain()["markers_meta"][0]["destroyed"] is True
+    import selfplay
+    assert selfplay.secret_assign([(0, 0), (30, 0), (-34, 0)]) == ["relic", "", "trap"]
+    assert selfplay.mission_markers({"secret": True}, 2) == [{"secret": "", "revealed": False}] * 2
