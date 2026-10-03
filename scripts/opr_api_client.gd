@@ -767,6 +767,11 @@ const VEHICLE_KEYWORDS: Array[String] = ["apc", "tank", "transport", "carrier", 
 const WALKER_KEYWORDS: Array[String] = ["walker", "mech", "dreadnought", "sentinel", "war-suit", "warsuit", "exo", "knight", "suit"]
 const ARTILLERY_KEYWORDS: Array[String] = ["artillery", "cannon", "mortar", "howitzer", "battery", "ballista", "catapult", "bombard"]
 const MONSTER_KEYWORDS: Array[String] = ["dragon", "beast", "monster", "wyrm", "behemoth", "daemon", "demon", "hive", "kraken", "hydra", "giant", "ogre", "troll"]
+## EXACT unit names (lowercase) the keywords would misread, with their verdict. Exact on purpose: a "titan" keyword
+## would also turn the robot titans (Titan Lords, Vinci, Macaque, ...) into monsters. The Vampiric Undead Butcher
+## Titan is a stitched corpse giant with no Army Forge base; keyword-less at Tough 18 it read as a vehicle
+## (105x170 oval, the model ~211 mm tall).
+const BIG_MODEL_NAME_VERDICTS: Dictionary = {"butcher titan": "monster"}
 
 
 ## Walker / monster base (ROUND mm) by Tough — tall, narrow footprint, so it grows MODESTLY with
@@ -819,6 +824,8 @@ static func _classify_big_model(unit: OPRUnit, tough: int) -> String:
 	if unit.size > 1:
 		return ""
 	var n := unit.name.to_lower()
+	if BIG_MODEL_NAME_VERDICTS.has(n.strip_edges()):
+		return BIG_MODEL_NAME_VERDICTS[n.strip_edges()]
 	# NML-993 — vehicle keywords WIN over walker keywords for ambiguous names.
 	# A "Knight Brothers APC" is a wide-track transport, not a knight-walker.
 	for kw in VEHICLE_KEYWORDS:

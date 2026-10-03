@@ -14,6 +14,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   `KNOWN_ISSUES.md` for this version's limits. (NML-202)
 
 ### Fixed
+- **The Vampiric Undead Butcher Titan stands on a monster base, not a vehicle oval.** Army Forge gives
+  it no base, and the size fallback read the keyword-less Tough(18) giant as a vehicle: a 105×170 mm
+  oval that scaled the model to about 21 cm. It now gets the 120 mm round monster base; every other
+  unit named Titan keeps its base.
 - **Unit coherency's 3" allowance now triggers on real elevation, not a drag lift.** The
   threshold was 3" tall, so a model on a 2.5" container roof and its mate on the ground
   counted as "same level" and had to stand 1" apart, which the wall face makes
