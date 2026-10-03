@@ -742,9 +742,13 @@ mod tests {
     }
 
     fn board(cells: &[(i64, i64, i32)]) -> Terrain {
+        board_with(cells, Vec::new())
+    }
+
+    fn board_with(cells: &[(i64, i64, i32)], sandbox: Vec<Obb>) -> Terrain {
         Terrain::build(&PlainTerrain {
             cells: cells.iter().map(|&(x, z, k)| [x as f64, z as f64, k as f64]).collect(),
-            sandbox: Vec::<Obb>::new(),
+            sandbox,
             pieces: vec![],
             walls: vec![],
             cell_params: CellParams {
@@ -878,5 +882,18 @@ mod tests {
             })
             .collect();
         assert!(wrong.is_empty(), "{} of 1000 disagree, first {:?}", wrong.len(), &wrong[..wrong.len().min(10)]);
+    }
+
+    /// The dormant shelf-sight seam: ON, a free CONTAINER piece of the recorded
+    /// header blocks the way the table's box does; OFF, the core keeps today's
+    /// painted-cells-only reading, so every corpus and rollout is unchanged.
+    #[test]
+    fn the_shelf_seam_adds_free_pieces_and_off_changes_nothing() {
+        let piece = Obb { c: [0.0, 0.0], he: [3.0 * M, 1.5 * M], yaw: 0.0, kind: terrain::CONTAINER };
+        let t = board_with(&[], vec![piece]);
+        let (west, east) = (cyl(-8.0, 0.0, 32.0), cyl(8.0, 0.0, 32.0));
+        assert!(zones_of_with(&t, false).is_empty());
+        assert!(has_los(&west, &east, false, &zones_of_with(&t, false), &[]));
+        assert!(!has_los(&west, &east, false, &zones_of_with(&t, true), &[]));
     }
 }
