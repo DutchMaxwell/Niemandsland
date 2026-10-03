@@ -317,3 +317,21 @@ fn a_marker_drops_at_its_own_distance_past_the_carrier_and_defaults_to_one_inch(
     assert!((d1 - (r + 0.0254)).abs() < 1e-9, "default: one inch past the base edge, got {d1}");
     assert!((d6 - (r + 6.0 * 0.0254)).abs() < 1e-9, "Rescue: six inches, got {d6}");
 }
+
+/// D14.5d: an `attacker_only` relic (Rescue) is picked up only by the ATTACKER's units; any marker
+/// without the flag still goes to whichever side holds it.
+#[test]
+fn an_attacker_only_relic_is_picked_up_only_by_the_attacking_side() {
+    let mut st = carry_state();
+    st.markers_meta[0].attacker_only = true;
+    st.attacker = 2;
+    apply_carry_step(&mut st, &[1]);
+    assert_eq!(st.markers_meta[0].carried_by, -1, "side 1 is the defender: no pickup");
+    st.attacker = 1;
+    apply_carry_step(&mut st, &[1]);
+    assert_eq!(st.markers_meta[0].carried_by, 0, "side 1 attacks: it picks the relic up");
+    let mut free = carry_state();
+    free.attacker = 2;
+    apply_carry_step(&mut free, &[1]);
+    assert_eq!(free.markers_meta[0].carried_by, 0, "no flag: the holder carries, whoever attacks");
+}

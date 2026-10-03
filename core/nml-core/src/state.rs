@@ -398,6 +398,9 @@ pub struct Marker {
     /// D14.5: how far (inches) past the carrier's base edge a dropped relic lands; 0 = the default 1".
     #[serde(default, skip_serializing_if = "is_zero_f")]
     pub drop_in: f64,
+    /// D14.5d: only the ATTACKER's units pick this relic up (Rescue: "if an attacking unit seizes the marker").
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub attacker_only: bool,
 }
 
 fn is_zero(v: &i64) -> bool { *v == 0 }
@@ -409,7 +412,7 @@ fn is_no_carrier(v: &i64) -> bool { *v == -1 }
 impl Default for Marker {
     fn default() -> Self {
         Self { owned_by: 0, destructible: false, destroyed: false, destroyed_seq: 0,
-            carry: false, carried_by: -1, mobile: false, deploy_edge: 0, secret: None, revealed: false, secret_hidden: false, drop_in: 0.0 }
+            carry: false, carried_by: -1, mobile: false, deploy_edge: 0, secret: None, revealed: false, secret_hidden: false, drop_in: 0.0, attacker_only: false }
     }
 }
 

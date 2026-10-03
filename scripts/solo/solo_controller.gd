@@ -92,6 +92,8 @@ static func marker_metadata(spec: Dictionary) -> Array:
 			marker["carried_by"] = ""
 			if spec.has("drop_in"):   # D14.5: this mission's relic drops this far (inches) past the carrier
 				marker["drop_in"] = float(spec["drop_in"])
+			if str(spec.get("carry_by", "")) == "attacker":   # D14.5d: only attacking units carry it
+				marker["attacker_only"] = true
 		if secret:
 			marker["secret"] = ""
 			marker["revealed"] = false
@@ -9567,6 +9569,8 @@ static func carry_step(unit_infos: Array, objectives: Array, owners: Array, mark
 		var side := int(owners[i])
 		if side != 1 and side != 2:
 			continue
+		if bool(mk.get("attacker_only", false)) and side != int(mission_roles.get("attacker", 0)):
+			continue   # D14.5d: Rescue — only an attacking unit picks the relic up
 		var op: Vector3 = objectives[i]
 		var best_id := ""
 		var best_name := ""

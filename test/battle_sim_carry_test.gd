@@ -189,3 +189,23 @@ func test_the_defenders_capture_and_the_unseated_capture_keep_the_secrets() -> v
 		assert_bool(bool(mm[0]["carry"])).is_true()
 		assert_str(String(mm[1]["secret"])).is_equal("trap")
 	SoloController.mission_reset("end", {})
+
+
+## D14.5d (Rescue): an `attacker_only` relic is picked up only by the ATTACKER's units — the roles
+## stamp `attacker` on the captured state; the defender's unit on the marker leaves it where it lies.
+func test_an_attacker_only_relic_is_not_carried_by_the_defender() -> void:
+	var holder := _unit(1, [Vector3(1.0 * IN2M, 0, 0)], "Holder")
+	var state := _state([holder], [Vector3.ZERO], [1])
+	state["attacker"] = 2   # side 1 defends
+	var markers := [{"carry": true, "carried_by": "", "attacker_only": true}]
+	BattleSim.apply_carry_step(state, markers, [1])
+	assert_str(String(markers[0]["carried_by"])).is_equal("")
+	state["attacker"] = 1
+	BattleSim.apply_carry_step(state, markers, [1])
+	assert_str(String(markers[0]["carried_by"])).is_equal("Holder")
+	var infos := [{"unit_id": "H", "name": "H", "player": 1, "pos": Vector3(1.0 * IN2M, 0, 0), "models": [Vector3(1.0 * IN2M, 0, 0)], "radii": [0.016]}]
+	SoloController.mission_roles = {"attacker": 2, "defender": 1}
+	var live_markers := [{"carry": true, "carried_by": "", "attacker_only": true}]
+	SoloController.carry_step(infos, [Vector3.ZERO], [1], live_markers)
+	assert_str(String(live_markers[0]["carried_by"])).override_failure_message("live step: the defender may not carry").is_equal("")
+	SoloController.mission_reset("end", {})

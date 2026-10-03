@@ -880,6 +880,8 @@ def mission_markers(spec: dict[str, Any], count: int) -> list[dict[str, Any]]:
             marker.update(carry=True, carried_by=-1)
             if "drop_in" in spec:  # D14.5: this mission's relic drops this far (inches) past the carrier
                 marker["drop_in"] = float(spec["drop_in"])
+            if spec.get("carry_by") == "attacker":  # D14.5d: only attacking units carry it
+                marker["attacker_only"] = True
         if spec.get("secret"):
             marker.update(secret="", revealed=False)
         if spec.get("mobile"):

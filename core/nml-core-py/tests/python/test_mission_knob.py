@@ -535,3 +535,30 @@ def test_a_carry_markers_drop_in_reaches_the_core_and_moves_the_drop_point():
 
     d1, d6 = dropped_distance(None), dropped_distance(6)
     assert d6 - d1 == pytest.approx(5 * 0.0254, abs=1e-6), (d1, d6)
+
+
+def test_a_carry_by_attacker_spec_marks_the_marker_attacker_only_and_the_core_honours_it():
+    """NML-1010 D14.5d: the catalog's `carry_by: attacker` reaches the core as `attacker_only`; a defender
+    unit on the marker does not pick it up, the attacker's does."""
+    assert sp.mission_markers({"carry": True, "carry_by": "attacker"}, 1)[0]["attacker_only"] is True
+    assert "attacker_only" not in sp.mission_markers({"carry": True}, 1)[0]
+    lines = (FIXTURES / "acts_25.jsonl").read_text().splitlines()
+    header, plain = json.loads(lines[0]), json.loads(lines[1])["state"]
+    core = nml_core.load(str(REPO))
+    core.set_header(header)
+
+    def carrier_of(attacker):
+        p = json.loads(json.dumps(plain))
+        first = {}
+        for i, (key, unit) in enumerate(p["units"].items()):
+            first.setdefault(unit["player"], (i, key))
+            unit.update(alive=1, positions=[[2.0 + i, 0, 2.0 + i]], radii=[0.02], wounds=[1],
+                        shaken=False, aircraft=False, ambush_arrived_round=0)
+        p["units"][first[1][1]]["positions"] = [[0.04, 0, 0]]
+        p["objectives"] = [{"pos": [0, 0, 0], "owner": 0}]
+        p["markers_meta"] = [sp.mission_markers({"carry": True, "carry_by": "attacker"}, 1)[0]]
+        p["attacker"] = attacker
+        return core.apply_carry_step(core.state_of(p), [1]).plain()["markers_meta"][0].get("carried_by", -1)
+
+    assert carrier_of(2) == -1, "side 1 defends: it cannot carry"
+    assert carrier_of(1) >= 0, "side 1 attacks: it picks the relic up"

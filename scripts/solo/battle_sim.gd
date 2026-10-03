@@ -412,6 +412,8 @@ static func apply_carry_step(state: Dictionary, markers: Array, owners: Array) -
 		var side := int(owners[i])
 		if side != 1 and side != 2:
 			continue
+		if bool(mk.get("attacker_only", false)) and side != int(state.get("attacker", 0)):
+			continue   # D14.5d: Rescue — only an attacking unit picks the relic up
 		var op: Vector3 = (objs[i] as Dictionary)["pos"]
 		var best_key := ""
 		var best_gap := INF

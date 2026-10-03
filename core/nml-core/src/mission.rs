@@ -87,6 +87,7 @@ pub fn apply_carry_step(state: &mut State, owners: &[i64]) {
             continue;
         }
         if side != 1 && side != 2 { continue; }
+        if state.markers_meta[i].attacker_only && side != state.attacker { continue; }
         let op = state.objectives[i].pos;
         let mut best = None;
         let mut best_gap = f64::INFINITY;
