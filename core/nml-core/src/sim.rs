@@ -4502,7 +4502,7 @@ fn strike_phase(
     // own: on from the current rules epoch onward, pre-port corpora replay
     // byte-exact (dice.rs::save_batch's gate).
     let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
-    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), tray);
+    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), seams.tray_exact, tray);
     // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
     // here; the gated aliases never reach a melee save batch, exactly the
     // table's own `dist_in: -1.0` read, main.gd:6119).
@@ -4604,6 +4604,7 @@ fn strike_phase(
 /// pools are resolved SEPARATELY because :6304 re-checks the defender's alive
 /// count before each one: an Impact pool that wipes the defender means the Heavy
 /// pool never rolls. Returns the pre-Regeneration wounds caused.
+#[allow(clippy::too_many_arguments)]
 fn impact_phase(
     statics: &[UnitStatic],
     next: &mut State,
@@ -4612,18 +4613,30 @@ fn impact_phase(
     tray: &mut Tray,
     shot: &mut ShootResult,
     rules_epoch: u32,
+    charge_from_in: f64,
+    exact: bool,
 ) -> i64 {
     let us = &statics[next.roster.profile[si]];
     let ut = &statics[next.roster.profile[ti]];
-    let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &ctx_of(ut, next, ti));
+    let mut cut_by = ctx_of(ut, next, ti);
+    if exact {
+        // Tray-exact tail — the table's Impact cut walks the host AND its living attached heroes
+        // (`counter_models_of`, solo_controller.gd:8465), each at its own per-model magnitude.
+        cut_by.counter_models = std::iter::once(ti).chain(next.attached[ti].iter().copied())
+            .filter(|&m| next.alive[m] > 0)
+            .map(|m| { let c = ctx_of(&statics[next.roster.profile[m]], next, m); c.counter_models * c.counter_impact_per_model.unwrap_or(1) })
+            .sum();
+        cut_by.counter_impact_per_model = Some(1);
+    }
+    let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &cut_by);
     let mut caused = 0;
     for (dice, ap) in pools {
         if dice <= 0 || next.alive[ti] <= 0 {
             continue; // :6304 — nothing left to hit, no dice
         }
         let def = ctx_of(ut, next, ti);
-        let r = crate::dice::resolve_impact_pool_with_tray(
-            dice, ap, &us.name, &def, &ut.name, tray,
+        let r = crate::dice::resolve_impact_pool_at(
+            dice, ap, &us.name, &def, &ut.name, Some((charge_from_in, exact)), tray,
         );
         caused += r.caused;
         let w = shot.absorb(r);
@@ -4793,9 +4806,16 @@ fn tray_charge(
     charge_from_in: f64,
     cover: Cover,
 ) -> Option<usize> {
-    if statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter && p.counter_strikes_first.unwrap_or(true)) {
+    let strikes_first =
+        |u: usize| statics[next.roster.profile[u]].melee.iter().any(|p| p.counter && p.counter_strikes_first.unwrap_or(true));
+    // The table asks the host AND its living attached heroes (`_solo_has_counter`, main.gd:7050);
+    // tray-exact reads the heroes too, the old read sees the host only.
+    let hero_counter = next.attached[ti].iter().any(|&h| next.alive[h] > 0 && strikes_first(h));
+    let epoch13 = rule_on(seams.rules_epoch, EPOCH_13_WHO_WINS);
+    if (!epoch13 && strikes_first(ti)) || (hero_counter && !seams.tray_exact) {
         // :8055-8059 — a Counter weapon runs a WHOLE extra strike phase before
-        // Impact, and strips Impact dice with it.
+        // Impact, and strips Impact dice with it: unported below 13, and for a
+        // joined hero's Counter without tray_exact.
         shot.mark("counter_strikes_first");
     }
     // Audit 2026-09-13 §2.2, strike-order half — main.gd:8268-8274: at the
@@ -4803,11 +4823,7 @@ fn tray_charge(
     // strike phase BEFORE Impact, counted into the defender's tally; only
     // the NON-counter weapons remain for the normal strike-back slot
     // (:8315). Below the epoch the core keeps its marker-only reading.
-    let counter_first = rule_on(seams.rules_epoch, EPOCH_13_WHO_WINS)
-        && statics[next.roster.profile[ti]]
-            .melee
-            .iter()
-            .any(|p| p.counter && p.counter_strikes_first.unwrap_or(true));
+    let counter_first = epoch13 && (strikes_first(ti) || (seams.tray_exact && hero_counter));
     let mut by_su = 0;
     let mut by_tu = 0;
     if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
@@ -4818,7 +4834,7 @@ fn tray_charge(
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
     if next.alive[si] > 0 && next.alive[ti] > 0 {
-        by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch);
+        by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     // main.gd:8035 — the charger's Mark lands after Impact and before the
     // strikes, measured at 0" (the two units are in base contact).

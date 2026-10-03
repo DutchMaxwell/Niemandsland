@@ -288,6 +288,7 @@ var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-ar
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
 var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
+var _esc_owned := false   # set at each Esc press: something else owned it (see _esc_owner_active)
 var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome, spots, strip, armed} while a Takedown / wound / Reanimation pick awaits a model click (strip/armed: NML-1040)
 # TC-023 (Takedown, GF v3.5.1 p.14 "resolved as if it was a unit of [1]"): while this holds the picked
 # model, the shared target-side readers answer for THAT MODEL ALONE — its own unit's rules (the joined
@@ -640,6 +641,10 @@ func _ready() -> void:
 	# startup menu, before this scene existed); the light, the biome reference and the intro add theirs above it.
 	render_state = RenderState.new(world_environment.environment)
 	GraphicsSettings.apply_environment_settings(GraphicsSettings.PRESETS[GraphicsSettings.current_preset])
+	# The window (fullscreen + present mode, frame cap, UI scale) is re-asserted here too, as the removed duplicate
+	# GraphicsSettings node in main.tscn did by accident: without it Low ran in the slow mode (36 ms GPU instead of
+	# 26) in 8 of 8 test-display runs, with it in 2 of 12 (03.10.) — the start-up menu's own call does not stick.
+	GraphicsSettings.apply_window_constraints()
 
 	# Initialize Lighting Controller
 	lighting_controller = Node.new()
@@ -775,6 +780,9 @@ func _ready() -> void:
 
 	# Give object_manager reference to terrain_overlay for terrain hints
 	object_manager.terrain_overlay = terrain_overlay
+	# NML-001: the overlay reads the free-placed shelf pieces as typed OBBs (frame-cached, they are draggable) in EVERY
+	# game. Wired here: wiring it only when a Solo AI controller is built left human/MP/tutorial games blind to them.
+	terrain_overlay.sandbox_shapes_provider = _sandbox_terrain_shapes
 
 	# Connect object_manager signals for deployment checking
 	object_manager.drag_ended.connect(_on_unit_moved)
@@ -2883,10 +2891,7 @@ func _ensure_solo_controller() -> void:
 			return _solo_sighted_count(s, t, SOLO_LOS_UNBOUNDED_RANGE_IN) > 0
 		# Real terrain / walls / objectives feed the shared pure modules (decide_solo, MovementPlanner,
 		# TerrainRules) — goal 003 P3. Each is a graceful no-op when the overlay is absent.
-		# NML-001: das Overlay bekommt die frei platzierten Shelf-Stücke als typed OBBs
-		# (frame-gecacht — Stücke sind draggable, der Scan läuft max. 1x pro Frame).
-		if terrain_overlay != null and "sandbox_shapes_provider" in terrain_overlay:
-			terrain_overlay.sandbox_shapes_provider = _sandbox_terrain_shapes
+		# (The overlay already reads the free shelf pieces: wired at game start, NML-001.)
 		solo_controller.terrain_type_at = func(p: Vector3) -> int:
 			return terrain_overlay.get_terrain_at_world_position(p) if terrain_overlay != null else int(TerrainRules.TerrainType.NONE)
 		solo_controller.walls_provider = func() -> Array:
@@ -10732,11 +10737,19 @@ func solo_owns_mouse() -> bool:
 ## deliver mouse events, and it is the correct stage: it runs after the GUI, so a click that a HUD
 ## control owns never reaches targeting in the first place — no hand-rolled "is the pointer over UI?"
 ## check needed (that heuristic, _solo_over_blocking_ui, is deleted).
-## Keys (ESC) keep flowing through _unhandled_key_input; only mouse events are handled here.
+## Keys (ESC) keep flowing through _unhandled_key_input; here only the mouse, and last of all an Esc nobody took.
 func _unhandled_input(event: InputEvent) -> void:
 	# B5: an active Takedown model pick owns the mouse first — one click chooses the sniped model.
 	if not _solo_model_pick.is_empty():
 		if _solo_model_pick_input(event):
+			get_viewport().set_input_as_handled()
+		return
+	# Esc that reached the table unowned opens / closes the ☰ game menu (maintainer 03.10.2026, Esc = A): a
+	# LAST fallback, every window, ghost, radial, drag and pick mode before it keeps its own Esc.
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+		if not _esc_owned:
+			_on_hamburger_pressed()
 			get_viewport().set_input_as_handled()
 		return
 	if _solo_target_mode.is_empty():
@@ -10745,6 +10758,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if await _solo_targeting_input(event):
 		get_viewport().set_input_as_handled()
+
+
+## At each Esc press, before any handler acts: does something else own it? (_unhandled_input reads the answer.)
+func _input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+		_esc_owned = _esc_owner_active()
+
+
+## Esc owners that act without consuming the key (a drag cancels, these panels hide) and any window that holds
+## the keyboard focus (a sheet's OK button) — after them the key still reaches the table, so the menu must not
+## open on top. The ☰ button and the menu's own controls do not count: Esc closes the menu they belong to.
+func _esc_owner_active() -> bool:
+	if object_manager != null and object_manager._is_dragging:
+		return true
+	for panel: Variant in [lighting_panel, privacy_menu, after_game_card, map_layout_editor]:
+		if panel != null and is_instance_valid(panel) and panel.visible:
+			return true
+	var focus := get_viewport().gui_get_focus_owner()
+	return focus != null and focus != hamburger_button and not left_panel_scroll.is_ancestor_of(focus)
 
 
 ## B5 (test game 2, decided: Ziel-MODELL-Pick): while a Takedown pick is active, LMB on an alive
