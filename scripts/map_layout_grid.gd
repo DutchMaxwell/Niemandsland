@@ -256,6 +256,12 @@ func _draw() -> void:
 	# Draw mission objectives (always shown if any exist)
 	if map_layout.mission_objectives.size() > 0 or map_layout.objectives_editing:
 		_draw_mission_objectives(grid_rect, pixels_per_inch_x, pixels_per_inch_y)
+	if map_layout.vip_pick_active:   # D14.4: the two 6" edge bands the VIP may start in
+		for band in map_layout.vip_band_polygons():
+			var screen := PackedVector2Array()
+			for pt in band:
+				screen.append(map_layout._inch_to_screen_pos(pt))
+			draw_colored_polygon(screen, Color(RELIC_RING, 0.28))
 	if map_layout.relic_drop_active:
 		var centre: Vector2 = map_layout._inch_to_screen_pos(map_layout.relic_drop_centre)
 		var px_per_in: float = (pixels_per_inch_x + pixels_per_inch_y) * 0.5
