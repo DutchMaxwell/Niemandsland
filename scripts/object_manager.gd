@@ -235,8 +235,10 @@ const MINIATURE_COLLISION_LAYER: int = 2
 ## movable terrain for selection/layouter tooling. Kept in sync with SandboxTerrainProp.
 const MOVABLE_TERRAIN_COLLISION_LAYER: int = 4
 
-## Casual-sandbox terrain categories (see SandboxTerrainProp / TerrainGroupBase).
-enum SandboxPropKind { RUIN, FOREST, HAZARD_CLUSTER }
+## Casual-sandbox terrain categories (see SandboxTerrainProp / TerrainGroupBase). Saves and the MP
+## spawn RPC carry the int: append new kinds, never renumber. BLOCKER (3) = a solid 6x3x2.5" piece,
+## the grid Blocker's profile.
+enum SandboxPropKind { RUIN, FOREST, HAZARD_CLUSTER, BLOCKER }
 
 
 ## Rules terrain type of a free-placed piece, by its prop kind (NONE for an unknown kind).
@@ -248,6 +250,8 @@ static func sandbox_terrain_type(kind: int) -> int:
 			return TerrainRules.TerrainType.FOREST
 		SandboxPropKind.HAZARD_CLUSTER:
 			return TerrainRules.TerrainType.DANGEROUS
+		SandboxPropKind.BLOCKER:
+			return TerrainRules.TerrainType.CONTAINER
 	return TerrainRules.TerrainType.NONE
 
 
@@ -3211,6 +3215,11 @@ func _get_hazards_library() -> HazardsLibrary:
 ## selectable object, so the existing drag/rotate/undo/multiplayer paths move it. Syncs to
 ## peers when `broadcast` and multiplayer is active.
 func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: bool = true, network_id: int = -1) -> Node3D:
+	# A kind this build does not know (a newer save or peer, a corrupt record) builds nothing: as a ruin it
+	# would silently get a ruin's cover and area sight. The shelf, save load and MP spawn all handle null.
+	if kind != SandboxPropKind.RUIN and kind != SandboxPropKind.FOREST and kind != SandboxPropKind.HAZARD_CLUSTER:
+		print("[Terrain] unknown sandbox kind %d (prop '%s') skipped" % [kind, prop_id])
+		return null
 	_object_counter += 1
 	var obj_network_id: int = network_id if network_id >= 0 else _object_counter + SANDBOX_TERRAIN_NETWORK_OFFSET
 
