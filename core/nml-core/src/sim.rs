@@ -345,6 +345,49 @@ pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool
     state.alive[ti] = state.positions[ti].len() as i64;
 }
 
+/// The table AI's Takedown pick (`attacker_pick_target`): the host's most valuable living model,
+/// `casualty_order(..).last()`; without kits the core's last slot. Call with a living model.
+fn takedown_pick(state: &State, ti: usize) -> usize {
+    crate::casualty::casualty_order(state, ti).and_then(|o| o.last().copied()).unwrap_or(state.positions[ti].len() - 1)
+}
+
+/// Tray-exact S8 — `_solo_model_in_cover` for the Takedown pick: the centre probe of ITS square.
+/// The table picks per profile (main.gd:4171), after the earlier Takedown groups of the volley landed
+/// inline, so this replays `land_takedown_groups` on a scratch copy of the target's slots: a killed
+/// pick is gone, a wounded one ranks first for removal and so never last for the sniper. A recorded
+/// node carries no board, so it keeps the unit's flag.
+fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: bool, groups: &[i64]) -> bool {
+    let Cover::Board(t) = cover else { return unit_flag };
+    let (mut pos, mut wounds) = (state.positions[ti].clone(), state.wounds[ti].clone());
+    let mut kits: Vec<crate::state::Kit> = state.kits.get(ti).map(|k| k.to_vec()).unwrap_or_default();
+    let pick = |kits: &[crate::state::Kit], pos: &[[f64; 3]], wounds: &[i64]| -> usize {
+        if !kits.is_empty() && kits.len() == pos.len() {
+            crate::casualty::casualty_order_of(kits, pos, wounds).last().copied().unwrap_or(pos.len() - 1)
+        } else {
+            pos.len() - 1
+        }
+    };
+    for &g in groups.iter().filter(|&&g| g > 0) {
+        if pos.is_empty() || wounds.len() != pos.len() {
+            return unit_flag;
+        }
+        let p = pick(&kits, &pos, &wounds);
+        wounds[p] -= g.min(wounds[p]);
+        if wounds[p] <= 0 {
+            pos.remove(p);
+            wounds.remove(p);
+            if p < kits.len() {
+                kits.remove(p);
+            }
+        }
+    }
+    if pos.is_empty() || wounds.len() != pos.len() {
+        return unit_flag;
+    }
+    let p = pos[pick(&kits, &pos, &wounds)];
+    crate::terrain::gives_cover(t.type_at([p[0] as f32, p[1] as f32, p[2] as f32]))
+}
+
 /// Tray-exact S7 — `_solo_land_takedown_wounds` (main.gd, Bug 25 / TC-023): each Takedown group
 /// lands on ONE model, the attacker's pick `attacker_pick_target` = the target's most valuable
 /// living model (`casualty_order(..).last()`; the table's AI never snipes a joined hero), and the
@@ -356,7 +399,7 @@ fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult) {
         if w <= 0 || n == 0 {
             continue;
         }
-        let pick = crate::casualty::casualty_order(state, ti).and_then(|o| o.last().copied()).unwrap_or(n - 1);
+        let pick = takedown_pick(state, ti);
         let take = w.min(state.wounds[ti][pick]);
         state.wounds[ti][pick] -= take;
         let killed = state.wounds[ti][pick] <= 0;
@@ -1150,6 +1193,7 @@ pub(crate) fn tray_strafing(
         shred_boost_active(seams.rules_epoch),
         rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
         seams.tray_exact,
+        &|gr: &[i64]| takedown_pick_cover_after(next, target, cover, def.in_cover, gr),
         tray,
     );
     // The volley tail, the shoot branch's own shape: spent Limited marks,
@@ -7715,6 +7759,7 @@ fn resolve_with(
                                 // `EPOCH_14_DEADLY_LANDING`, pool multiply below.
                                 rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
                                 seams.tray_exact,
+                                &|gr: &[i64]| takedown_pick_cover_after(&next, g.ti, cover, def.in_cover, gr),
                                 tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a

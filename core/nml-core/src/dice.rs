@@ -700,7 +700,7 @@ pub fn resolve_volley_with_tray(
     shred_boost_dice: bool,
     tray: &mut Tray,
 ) -> ShootResult {
-    resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, tray)
+    resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, &|_| false, tray)
 }
 
 // The leg split adds one gate-bool to the resolver's existing pack.
@@ -717,6 +717,7 @@ pub fn resolve_volley_leg(
     shred_boost_dice: bool,
     deadly_per_model: bool,
     takedown_exact: bool,
+    takedown_cover: &dyn Fn(&[i64]) -> bool,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -1094,8 +1095,11 @@ pub fn resolve_volley_leg(
         if p.sergeant_attacks > 0 {
             hits += sixes(&faces).min(p.sergeant_attacks);
         }
+        // Tray-exact S8: a Takedown resolves as a unit of [1] — Blast has one model to spill onto
+        // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
+        let unit_of_one = takedown_exact && p.takedown;
         if hits > 0 && p.blast > 1 {
-            hits *= p.blast.clamp(1, def.models.max(1));
+            hits *= p.blast.clamp(1, if unit_of_one { 1 } else { def.models.max(1) });
         }
         if hits <= 0 {
             continue; // :3210 — no hits, no save batch
@@ -1138,10 +1142,14 @@ pub fn resolve_volley_leg(
         // at :329-333).
         base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded, def.def_floor());
         shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
+        // Tray-exact S8: a Takedown save reads its pick's OWN square, and the pick is the one the
+        // table makes for THIS profile, after the volley's earlier Takedown groups landed (it re-picks
+        // per profile, main.gd:4171) — the caller answers from the groups so far.
+        let td_own = unit_of_one && takedown_cover(&out.takedown_groups);
         let save_def = if p.blast > 1 || p.indirect || p.ignores_cover {
             base
         } else {
-            covered_defense(base, def.in_cover, def.def_floor())
+            covered_defense(base, if unit_of_one { td_own } else { def.in_cover }, def.def_floor())
         };
         // Wave 3 — rules-must-log: the unit-level Indirect names ("Indirect
         // when Shooting" / "Ignores Cover when Shooting", unit.rs build_for's
