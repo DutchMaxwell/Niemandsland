@@ -3162,6 +3162,12 @@ const SANDBOX_GROUPS: Dictionary = {
 	"minefield": {"kind": SandboxPropKind.HAZARD_CLUSTER, "footprint": Vector2(6, 4), "label": "Dangerous Terrain"},
 }
 
+## Solid pieces: the grid Blocker's 6x3x2.5" profile placed freely (SandboxSolidProp, CONTAINER rules). Spawnable
+## (saves, MP), not offered on the shelf yet. Keyed by prop_id -> {kind, footprint}.
+const SANDBOX_SOLIDS: Dictionary = {
+	"blocker_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3)},
+}
+
 ## Biome prefixes a sandbox FOREST or HAZARD field can carry, encoded INTO its prop_id (e.g.
 ## "desert_forest_small", "desert_minefield") so save + broadcast preserve the biome through the
 ## existing prop_id field — no new wire/save fields. Kept in sync with SandboxTerrainShelf.BIOMES.
@@ -3217,7 +3223,8 @@ func _get_hazards_library() -> HazardsLibrary:
 func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: bool = true, network_id: int = -1) -> Node3D:
 	# A kind this build does not know (a newer save or peer, a corrupt record) builds nothing: as a ruin it
 	# would silently get a ruin's cover and area sight. The shelf, save load and MP spawn all handle null.
-	if kind != SandboxPropKind.RUIN and kind != SandboxPropKind.FOREST and kind != SandboxPropKind.HAZARD_CLUSTER:
+	if kind != SandboxPropKind.RUIN and kind != SandboxPropKind.FOREST and kind != SandboxPropKind.HAZARD_CLUSTER \
+			and kind != SandboxPropKind.BLOCKER:
 		print("[Terrain] unknown sandbox kind %d (prop '%s') skipped" % [kind, prop_id])
 		return null
 	_object_counter += 1
@@ -3226,6 +3233,13 @@ func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: 
 	var spawned: Node3D
 	if kind == SandboxPropKind.FOREST or kind == SandboxPropKind.HAZARD_CLUSTER:
 		spawned = _build_terrain_group(prop_id, kind, obj_network_id)
+	elif kind == SandboxPropKind.BLOCKER:
+		var spec: Dictionary = SANDBOX_SOLIDS.get(prop_id, SANDBOX_SOLIDS["blocker_6x3"])
+		var solid := SandboxSolidProp.new()
+		solid.name = "SandboxSolid_%d" % _object_counter
+		solid.configure(prop_id, kind, spec["footprint"])
+		solid.set_meta("network_id", obj_network_id)
+		spawned = solid
 	else:
 		spawned = _build_sandbox_ruin(prop_id, kind, obj_network_id)
 
