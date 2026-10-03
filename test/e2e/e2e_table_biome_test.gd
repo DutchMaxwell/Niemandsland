@@ -205,6 +205,22 @@ func test_low_presets_keep_the_battlemap_table(timeout := 120000) -> void:
 	assert_bool(dressed_on_low).override_failure_message("the table stayed dressed on the Low preset").is_false()
 
 
+## The table tier never owns the viewport: undressing must not write back the render scale it saw when it dressed.
+## Medium (dressed) -> Performance undresses, and the reference's teardown put Medium's 1.0 over Performance's 0.77.
+func test_undressing_keeps_the_presets_render_scale(timeout := 120000) -> void:
+	var presenter := await _dress("temperate_grassland")
+	assert_bool(presenter.is_dressed()).is_true()
+	var viewport := get_tree().root
+	var scale_before := viewport.scaling_3d_scale
+	viewport.scaling_3d_scale = 0.77   # Performance's deferred write (headless never fires frame_post_draw)
+	presenter.enabled = false
+	await presenter.rebuild()
+	var scale_after := viewport.scaling_3d_scale
+	viewport.scaling_3d_scale = scale_before
+	assert_float(scale_after).override_failure_message(
+		"undressing wrote the render scale back to %.2f over the preset's 0.77" % scale_after).is_equal_approx(0.77, 0.001)
+
+
 func test_layout_events_during_play_do_not_rebuild(timeout := 120000) -> void:
 	var presenter := await _dress("frozen_tundra")
 	var builds := [0]

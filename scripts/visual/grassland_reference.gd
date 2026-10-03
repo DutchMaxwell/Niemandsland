@@ -250,7 +250,9 @@ func _build_dust(main: Node) -> void:
 
 func apply_lighting(mood: String) -> void:
 	_current_mood = mood
-	if _previous_viewport.is_empty():
+	# Only the reference scene owns TAA / render scale / shadow atlas (set below); the table tier leaves them to the
+	# quality preset, so its teardown must not write back the scale it saw when it dressed (Performance lost its 0.77).
+	if _previous_viewport.is_empty() and not table_tier:
 		_previous_viewport = {"taa":get_viewport().use_taa,"scale":get_viewport().scaling_3d_scale}
 	var light: Node = _main.lighting_controller
 	# D1 (table tier): Night uses the profile's sunset values too.
