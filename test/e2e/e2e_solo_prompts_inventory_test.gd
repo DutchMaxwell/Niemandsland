@@ -15,7 +15,7 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const PROMPT_LAYER := 90
 ## The prompts already moved into the in-viewport card (PromptCard, D98 = a); each must come up as one.
 const CARDS := ["Incoming fire!", "Strike back?", "Cast window", "Versatile Attack", "Ambush Re-Deployment",
-	"Summon Imps", "Hero morale", "Split fire?"]
+	"Summon Imps", "Hero morale", "Split fire?", "Enemy spell!", "Spotted target!", "Boost your cast?"]
 
 var _runner: GdUnitSceneRunner
 var _main: Node

@@ -9,6 +9,8 @@ const TreePass := preload("res://scripts/visual/table_tree_pass.gd")
 const Materials := preload("res://scripts/visual/reference_materials.gd")
 const KEYS: Array[String] = ["ssao_enabled", "ssao_radius", "ssao_intensity", "ssil_enabled", "sdfgi_enabled",
 	"ssr_enabled", "ssr_fade_in", "glow_enabled", "glow_intensity", "glow_bloom", "volumetric_fog_enabled"]
+const SUN_KEYS: Array[String] = ["shadow_bias", "shadow_normal_bias", "directional_shadow_max_distance",
+	"directional_shadow_pancake_size", "light_volumetric_fog_energy"]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -62,6 +64,9 @@ func _state() -> Dictionary:
 	var state := {"dressed": _main._table_biome_presenter.is_dressed()}
 	for key in KEYS:
 		state[key] = snappedf(env.get(key), 0.001) if env.get(key) is float else env.get(key)
+	var sun: DirectionalLight3D = _main.get_node("DirectionalLight3D")
+	for key in SUN_KEYS:
+		state["sun_" + key] = snappedf(sun.get(key), 0.001)
 	return state
 
 
@@ -85,3 +90,18 @@ func test_overcast_and_ultra_in_either_order_give_one_state(timeout := 120000) -
 	await _preset(4)
 	await _mood("Overcast")
 	assert_dict(_state()).is_equal(mood_first)
+
+
+## A table dressed while Overcast shows (probe 03.10.: High/Ultra) must look like one dressed in Sunset before the
+## switch to Overcast — the way every game gets there, since each game starts in Sunset.
+func test_dressing_in_overcast_gives_the_state_of_dressing_before_overcast(timeout := 120000) -> void:
+	await _boot(3)
+	await _mood("Overcast")
+	var dressed_before := _state()
+	var presenter: TableBiomePresenter = _main._table_biome_presenter
+	presenter.enabled = false
+	await presenter.rebuild()
+	presenter.enabled = true
+	await presenter.rebuild()
+	await _runner.simulate_frames(2)
+	assert_dict(_state()).is_equal(dressed_before)

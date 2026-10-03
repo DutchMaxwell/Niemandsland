@@ -36,7 +36,7 @@
 //!     :1075-1081 says a zone of exactly the radii sum makes a packed model's
 //!     every outgoing tangent step read as blocked; the corpus agrees loudly.
 
-use nml_core::mv::cost::{empty_cells, StepOpts, Wall, Zone};
+use nml_core::mv::cost::{empty_cells, Ledge, StepOpts, Wall, Zone};
 use nml_core::mv::flow::{
     centroid, flow_order, linked_r, plan_sequential_flow, pull_into_placed, recorded_endpoints,
     run_call, untangle_endpoints, FlowBend, FlowOpts,
@@ -341,6 +341,7 @@ fn a_two_model_flow_places_the_leader_then_pulls_the_straggler_in() {
         charge_goal: None,
         charge_tgt_bases: &[],
         charge_slots: &[],
+        ledges: &[],
     };
     let got = plan_sequential_flow(
         &pos, delta, &radii, &walls, &grid, &opts, 40.0, false, ThetaCfg::default(),
@@ -360,6 +361,46 @@ fn a_two_model_flow_places_the_leader_then_pulls_the_straggler_in() {
     assert_eq!(got.entries[1].pulled, [18.0, 10.0], "and `pulled` is what the trace records");
     assert!(got.swaps.is_empty(), "a swap would need both new chords inside the 8\" allowance");
     assert!(got.searches.is_empty(), "both straight shots took the early-out");
+}
+
+/// Heights B2 (mirror of test/movement_planner_test.gd): one model, a 6" advance and a ledge 2" ahead.
+fn ledge_flow(dy_in: f64) -> (V2, Vec<V2>, Vec<Ledge>) {
+    let ledges = vec![Ledge { a: [12.0, 0.0], b: [12.0, 20.0], dy_in }];
+    let opts = FlowOpts {
+        clearance: 0.0,
+        zones: &[],
+        zones_rest_only: false,
+        avoid_cells: empty_cells(),
+        board_y_in: 48.0,
+        dangerous_debuff: false,
+        difficult_debuff: false,
+        charge_allowance: None,
+        charge_goal: None,
+        charge_tgt_bases: &[],
+        charge_slots: &[],
+        ledges: &ledges,
+    };
+    let got = plan_sequential_flow(
+        &[[10.0, 10.0]], [6.0, 0.0], &[0.5], &[], &Grid::new(), &opts, 48.0, false,
+        ThetaCfg::default(), FlowBend::default(),
+    );
+    (got.result[0], got.trails[0].clone(), ledges)
+}
+
+#[test]
+fn an_advance_across_a_ledge_ends_on_the_roof_and_pays_the_climb() {
+    // 2" flat + 2.5" climb + 1.5" flat = 6" of movement.
+    let (end, trail, ledges) = ledge_flow(2.5);
+    assert!((end[0] as f64 - 13.5).abs() < 0.05, "ended at {end:?}");
+    let flat: f64 = trail.windows(2).map(|w| distance_to(w[0], w[1])).sum();
+    let climb = nml_core::mv::ledge_cost(trail[0], *trail.last().unwrap(), &ledges);
+    assert!((flat + climb - 6.0).abs() < 0.05, "flat {flat} + climb {climb}");
+}
+
+#[test]
+fn a_ledge_over_three_inches_behaves_like_a_wall() {
+    let (end, _, _) = ledge_flow(3.5);
+    assert!(end[0] < 12.0, "ended at {end:?}");
 }
 
 // === Unit tests — the leaves ================================================
@@ -435,6 +476,7 @@ fn charge_flow(slot: V2, allowance: f64) -> nml_core::mv::FlowResult {
         charge_goal: Some([20.0, 10.0]),
         charge_tgt_bases: &bases,
         charge_slots: &slots,
+        ledges: &[],
     };
     plan_sequential_flow(
         &pos, [8.0, 0.0], &radii, &walls, &grid, &opts, 40.0, true, ThetaCfg::default(),

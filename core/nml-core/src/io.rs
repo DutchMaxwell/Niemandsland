@@ -34,6 +34,11 @@ pub(crate) struct PlainKit {
     wounds_max: i64,
 }
 
+/// Tray-exact S1b: how many parsed units carried a `kits` list that did not cover exactly their
+/// positions (a GDScript-simulated node after casualties — that sim never touches kits). Such a
+/// list is refused (none carried) and logged on stderr, the 1st hit and every power of two after.
+pub(crate) static KIT_MISMATCHES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// The unit's kits with weapon names interned to unit-local ids, plus the name table.
 pub(crate) fn intern_kits(plain: Vec<PlainKit>) -> (Vec<Kit>, Vec<String>) {
     let mut names: Vec<String> = Vec::new();
@@ -1035,7 +1040,15 @@ pub(crate) fn state_of(
         st.positions.push(u.positions);
         st.wounds.push(u.wounds);
         st.radii.push(u.radii);
-        let (kits, kit_names) = intern_kits(u.kits);
+        let (mut kits, kit_names) = intern_kits(u.kits);
+        if !kits.is_empty() && kits.len() != st.positions[ui].len() {
+            let n = KIT_MISMATCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            if n.is_power_of_two() {
+                eprintln!("[core-kits] unit #{ui}: {} kits for {} models - none carried (hit #{n})",
+                          kits.len(), st.positions[ui].len());
+            }
+            kits.clear();
+        }
         st.kits.push(Rc::new(kits));
         st.kit_names.push(Rc::new(kit_names));
         st.mods.push(u.mods);
@@ -1740,6 +1753,20 @@ mod tests {
         assert_eq!(st.kit_names[ui].as_slice(), ["Rifle", "Missile Launcher"]);
         assert_eq!(plain_of(&st)["units"][&key]["kits"], serde_json::Value::Array(kits));
         assert!(!plain_of(&state_of(LEDGER_PLAIN)).to_string().contains("\"kits\""));
+    }
+
+    /// Tray-exact S1b: a `kits` list that does not cover exactly the unit's positions (a
+    /// GDScript-simulated node after casualties: that sim never touches kits) is refused — none
+    /// carried — and counted in `KIT_MISMATCHES`, which the stderr line rides on.
+    #[test]
+    fn a_misaligned_kits_list_is_refused_and_counted() {
+        let mut v: serde_json::Value = serde_json::from_str(LEDGER_PLAIN).unwrap();
+        let k = serde_json::json!({"weapons": ["Rifle"], "equipment": 0, "wounds_max": 1});
+        v["units"]["p1_0_a"]["kits"] = serde_json::json!([k.clone(), k]); // one model, two kits
+        let before = super::KIT_MISMATCHES.load(std::sync::atomic::Ordering::Relaxed);
+        let st = state_of(&v.to_string());
+        assert!(st.kits[st.roster.index["p1_0_a"]].is_empty(), "{:?}", st.kits);
+        assert!(super::KIT_MISMATCHES.load(std::sync::atomic::Ordering::Relaxed) > before, "refused silently");
     }
 
     /// The byte-identity half: the qbg/qag bundles were recorded before either

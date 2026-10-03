@@ -317,6 +317,7 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
             if state.positions[ti].len() == 1 { drop_carried(state, ti); }
             state.wounds[ti].remove(0);
             remove_position_or_log(state, ti, 0, "land_wounds");
+            state.kit_remove(ti, 0);
             // radii stay aligned with positions or the base-edge measure lies.
             if !state.radii[ti].is_empty() {
                 state.radii[ti].remove(0);
@@ -391,6 +392,7 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
             if state.positions[m].len() == 1 { drop_carried(state, m); }
             state.wounds[m].remove(best);
             remove_position_or_log(state, m, best, "land_deadly_wounds");
+            state.kit_remove(m, best);
             // radii stay aligned with positions or the base-edge measure lies.
             if !state.radii[m].is_empty() {
                 state.radii[m].remove(best);
@@ -787,6 +789,7 @@ pub(crate) fn tray_reanimation(
         next.wounds[u].insert(0, back);
         next.positions[u].insert(0, spot);
         next.radii[u].insert(0, DEFAULT_BASE_RADIUS_M);
+        next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
         left -= back;
         shot.log.push(format!("Reanimation: 1 model restored ({back} wound(s) back)"));
@@ -4266,6 +4269,7 @@ fn expected_melee_morale(
         state.wounds[li].clear();
         state.positions[li].clear();
         state.radii[li].clear();
+        state.kits_drop(li);
         state.alive[li] = 0;
     } else {
         state.shaken[li] = true;
@@ -4498,7 +4502,7 @@ fn strike_phase(
     // own: on from the current rules epoch onward, pre-port corpora replay
     // byte-exact (dice.rs::save_batch's gate).
     let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
-    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), tray);
+    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), seams.tray_exact, tray);
     // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
     // here; the gated aliases never reach a melee save batch, exactly the
     // table's own `dist_in: -1.0` read, main.gd:6119).
@@ -4600,6 +4604,7 @@ fn strike_phase(
 /// pools are resolved SEPARATELY because :6304 re-checks the defender's alive
 /// count before each one: an Impact pool that wipes the defender means the Heavy
 /// pool never rolls. Returns the pre-Regeneration wounds caused.
+#[allow(clippy::too_many_arguments)]
 fn impact_phase(
     statics: &[UnitStatic],
     next: &mut State,
@@ -4608,6 +4613,8 @@ fn impact_phase(
     tray: &mut Tray,
     shot: &mut ShootResult,
     rules_epoch: u32,
+    charge_from_in: f64,
+    exact: bool,
 ) -> i64 {
     let us = &statics[next.roster.profile[si]];
     let ut = &statics[next.roster.profile[ti]];
@@ -4618,8 +4625,8 @@ fn impact_phase(
             continue; // :6304 — nothing left to hit, no dice
         }
         let def = ctx_of(ut, next, ti);
-        let r = crate::dice::resolve_impact_pool_with_tray(
-            dice, ap, &us.name, &def, &ut.name, tray,
+        let r = crate::dice::resolve_impact_pool_at(
+            dice, ap, &us.name, &def, &ut.name, Some((charge_from_in, exact)), tray,
         );
         caused += r.caused;
         let w = shot.absorb(r);
@@ -4762,6 +4769,7 @@ fn tray_morale(
             state.wounds[i].clear();
             state.positions[i].clear();
             state.radii[i].clear();
+            state.kits_drop(i);
             state.alive[i] = 0;
         }
     }
@@ -4813,7 +4821,7 @@ fn tray_charge(
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
     if next.alive[si] > 0 && next.alive[ti] > 0 {
-        by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch);
+        by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     // main.gd:8035 — the charger's Mark lands after Impact and before the
     // strikes, measured at 0" (the two units are in base contact).
