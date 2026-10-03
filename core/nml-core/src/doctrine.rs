@@ -159,6 +159,8 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         positions: spots,
         wounds,
         radii,
+        kits: Vec::new(),
+        kit_names: Vec::new(),
         mods: vec![Mods::default(); n], mods_base: vec![Rc::new(Mods::default()); n],
         attached: Rc::new(vec![Vec::new(); n]), attached_to: Rc::new(vec![None; n]),
         los: vec![None; n], los_pairs: None,

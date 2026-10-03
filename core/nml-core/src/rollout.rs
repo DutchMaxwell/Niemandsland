@@ -856,6 +856,8 @@ pub fn mint_template_slot(
     st.positions.push(Vec::new());
     st.wounds.push(Vec::new());
     st.radii.push(Vec::new());
+    st.kits.push(Rc::new(Vec::new()));
+    st.kit_names.push(Rc::new(Vec::new()));
     st.mods.push(crate::state::Mods::default());
     st.mods_base.push(Rc::new(crate::state::Mods::default()));
     Rc::make_mut(&mut st.attached).push(Vec::new());
