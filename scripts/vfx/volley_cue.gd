@@ -57,7 +57,7 @@ func fire(pairs: Array, family: Family) -> int:
 		var line := _segment(pair[0], pair[1], LINE_R, TINTS[family])
 		var tw := line.create_tween()
 		tw.tween_interval(n * STAGGER_S + (0.0 if still else TRAVEL_S))
-		tw.tween_property(line.material_override, "albedo_color:a", 0.0, LINGER_S)
+		tw.tween_property(line, "transparency", 1.0, LINGER_S)
 		tw.tween_callback(line.queue_free)
 		if not still:
 			var dir: Vector3 = (pair[1] - pair[0]).normalized()
@@ -71,22 +71,32 @@ func fire(pairs: Array, family: Family) -> int:
 	return n
 
 
+## One shared unit cylinder and one material per tint: a burst used to build a mesh + material per tracer
+## (measured ~+0.35 ms GPU p50 on Medium for a 10-model volley every 0.8 s). The length and radius ride the
+## transform's scale; the fade rides GeometryInstance3D.transparency, so nothing per-tracer is uploaded.
+static var _unit_cylinder: CylinderMesh
+static var _materials := {}
+
+
 func _segment(a: Vector3, b: Vector3, r: float, tint: Color) -> MeshInstance3D:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = r
-	mesh.bottom_radius = r
-	mesh.height = maxf(a.distance_to(b), 0.001)
-	mesh.radial_segments = 6
-	mesh.rings = 1
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = tint
+	if _unit_cylinder == null:
+		_unit_cylinder = CylinderMesh.new()
+		_unit_cylinder.top_radius = 1.0
+		_unit_cylinder.bottom_radius = 1.0
+		_unit_cylinder.height = 1.0
+		_unit_cylinder.radial_segments = 6
+		_unit_cylinder.rings = 1
+	if not _materials.has(tint):
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = tint
+		_materials[tint] = mat
 	var seg := MeshInstance3D.new()
-	seg.mesh = mesh
-	seg.material_override = mat
+	seg.mesh = _unit_cylinder
+	seg.material_override = _materials[tint]
 	seg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(seg)
 	var dir := (b - a).normalized()
-	seg.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, dir)) if dir.length() > 0.5 else Basis(), (a + b) * 0.5)
+	var basis := Basis(Quaternion(Vector3.UP, dir)) if dir.length() > 0.5 else Basis()
+	seg.global_transform = Transform3D(basis.scaled_local(Vector3(r, maxf(a.distance_to(b), 0.001), r)), (a + b) * 0.5)
 	return seg
