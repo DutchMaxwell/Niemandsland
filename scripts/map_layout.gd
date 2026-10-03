@@ -180,6 +180,12 @@ var relic_drop_radius_in := 0.0
 var relic_drop_reach_in := 1.0
 signal relic_drop_chosen(world_pos: Vector3)
 signal relic_drop_refused
+## D14.4 (VIP Escort, maintainer choice B): the human defender's ONE click inside either 6" edge band
+## (top + bottom) sets the VIP's starting spot; its z sign is the deploy edge.
+var vip_pick_active := false
+const VIP_BAND_IN := 6.0
+signal vip_spot_chosen(spot_in: Vector2)   # table-centred inches
+signal vip_pick_refused
 ## D12a-2: the defender's pick of the relic and the trap among the markers (two clicks).
 var marker_pick_active := false
 signal marker_picked(index: int)
@@ -1100,9 +1106,10 @@ func _on_symmetry_toggled(enabled: bool) -> void:
 
 
 func _on_close_pressed() -> void:
-	if relic_drop_active or marker_pick_active:
+	if relic_drop_active or marker_pick_active or vip_pick_active:
 		relic_drop_active = false
 		marker_pick_active = false
+		vip_pick_active = false
 		layout_closed.emit()  # closing this prompt keeps the deterministic default
 		hide()
 		return
@@ -1771,6 +1778,17 @@ func _is_valid_inch_pos(inch_pos: Vector2) -> bool:
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
+	if vip_pick_active:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			_on_close_pressed()
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var vip_click: Vector2 = grid_container.get_global_transform_with_canvas().affine_inverse() * event.position
+			if Rect2(Vector2.ZERO, grid_container.size).has_point(vip_click):
+				try_vip_pick(_get_inch_at_screen_pos(event.position, false))
+				get_viewport().set_input_as_handled()
+			return
 	if marker_pick_active:
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			_on_close_pressed()
@@ -2796,6 +2814,43 @@ func try_relic_drop(inch_pos: Vector2) -> bool:
 		(valid.position.y + valid.size.y / 2.0) * GRID_SIZE_INCHES)
 	var world := (inch_pos - centre).rotated(deg_to_rad(grid_rotation_degrees)) * 0.0254
 	relic_drop_chosen.emit(Vector3(world.x, 0.0, world.y))
+	return true
+
+
+func begin_vip_pick() -> void:
+	vip_pick_active = true
+	grid_container.queue_redraw()
+
+
+## An editor-frame click as a table-centred inch spot (the inverse of `_relic_world_to_inch`).
+func vip_table_spot(inch_pos: Vector2) -> Vector2:
+	var valid := _get_valid_cell_range()
+	var centre := Vector2((valid.position.x + valid.size.x / 2.0) * GRID_SIZE_INCHES,
+		(valid.position.y + valid.size.y / 2.0) * GRID_SIZE_INCHES)
+	return (inch_pos - centre).rotated(deg_to_rad(grid_rotation_degrees))
+
+
+## The two 6" bands along the table's z edges, as editor-frame polygons (for the shading).
+func vip_band_polygons() -> Array:
+	var half_w := table_size_feet.x * 6.0
+	var half_d := table_size_feet.y * 6.0
+	var out: Array = []
+	for z in [[-half_d, -half_d + VIP_BAND_IN], [half_d - VIP_BAND_IN, half_d]]:
+		var poly := PackedVector2Array()
+		for corner in [Vector2(-half_w, z[0]), Vector2(half_w, z[0]), Vector2(half_w, z[1]), Vector2(-half_w, z[1])]:
+			poly.append(_relic_world_to_inch(Vector3(corner.x, 0.0, corner.y) * 0.0254))
+		out.append(poly)
+	return out
+
+
+## A click inside either band picks the spot; anything else is refused (the spot must also lie on the table).
+func try_vip_pick(inch_pos: Vector2) -> bool:
+	var spot := vip_table_spot(inch_pos)
+	var half_d := table_size_feet.y * 6.0
+	if not vip_pick_active or not _is_valid_inch_pos(inch_pos) or absf(spot.y) < half_d - VIP_BAND_IN - 0.001:
+		vip_pick_refused.emit()
+		return false
+	vip_spot_chosen.emit(spot)
 	return true
 
 
