@@ -2528,9 +2528,9 @@ fn phased_deployment_runs_phase_by_phase_most_expensive_first() {
     let table = deployment::Rect::new(-36.0 * in2, -24.0 * in2, 72.0 * in2, 48.0 * in2);
     let disc = deployment::Rect::new(-12.0 * in2, -12.0 * in2, 24.0 * in2, 24.0 * in2);
     let phases = vec![
-        deployment::Phase { side: 1, share: "half".into(), rect: disc, zones: zones_of("centre_disc_12") },
-        deployment::Phase { side: 0, share: "all".into(), rect: table, zones: zones_of("edge_band_12") },
-        deployment::Phase { side: 1, share: "rest".into(), rect: table, zones: zones_of("anywhere") },
+        deployment::Phase { side: 1, share: "half".into(), rect: disc, zones: zones_of("centre_disc_12"), gates: None },
+        deployment::Phase { side: 0, share: "all".into(), rect: table, zones: zones_of("edge_band_12"), gates: None },
+        deployment::Phase { side: 1, share: "rest".into(), rect: table, zones: zones_of("anywhere"), gates: None },
     ];
     let objs = vec![(0.0_f64, 0.0_f64)];
     let out = deployment::deploy_phased(&s1, &s2, &table, &table, &phases, [None, None], &objs, &empty_board(), 3, 4, 1, 15);
@@ -2567,7 +2567,7 @@ fn leftover_units_are_reserved_and_an_arrival_stays_in_the_zone_shape() {
     let disc = nml_core::objectives::zones_of_style(&cat["styles"]["centre_disc_12"]);
     let table = deployment::Rect::new(-36.0 * IN2M, -24.0 * IN2M, 72.0 * IN2M, 48.0 * IN2M);
     let rect = deployment::Rect::new(-12.0 * IN2M, -12.0 * IN2M, 24.0 * IN2M, 24.0 * IN2M);
-    let phases = vec![deployment::Phase { side: 0, share: "half".into(), rect, zones: disc.clone() }];
+    let phases = vec![deployment::Phase { side: 0, share: "half".into(), rect, zones: disc.clone(), gates: None }];
     let objs = vec![(0.0_f64, 0.0_f64)];
     let out = deployment::deploy_phased_reserving(&specs, &specs, &table, &table, &phases, [None, None], [true, false], &objs, &empty_board(), 3, 4, 1, 15);
     assert_eq!(out.side1.placements.len(), 2, "floor(5/2) deployed");
@@ -2583,4 +2583,46 @@ fn leftover_units_are_reserved_and_an_arrival_stays_in_the_zone_shape() {
     assert!(spot.0.is_finite(), "a legal spot exists inside the disc");
     assert!(fp.iter().all(|o| deployment::zones_contain(&disc, (spot.0 + o.0, spot.1 + o.1))), "every base in the disc: {spot:?}");
     assert!(((spot.0 - 6.0 * IN2M).hypot(spot.1)) > 12.0 * IN2M, "outside the 12\" ring: {spot:?}");
+}
+
+
+/// D7d: a phase's own gates bind that phase only. Side 2 puts half its army in the centre disc, then
+/// side 1 deploys everywhere: with `min_from_enemy` on THAT phase every attacker base stays > 12" from
+/// the defender's; the same phase without it crowds them.
+#[test]
+fn a_phase_gate_binds_its_phase() {
+    let r = 0.016;
+    let mk = |tag: &str, i: usize| deployment::UnitSpec {
+        key: format!("{tag}{i}"),
+        model_count: 2,
+        base_r_m: r,
+        points: 100 - i as i64,
+        footprint: deployment::deploy_footprint_offsets(2, r, false),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 2 }],
+        ..Default::default()
+    };
+    let s1: Vec<_> = (0..4).map(|i| mk("a", i)).collect();
+    let s2: Vec<_> = (0..4).map(|i| mk("d", i)).collect();
+    let cat: serde_json::Value = serde_json::from_str(include_str!("../../../assets/solo/deployments.json")).unwrap();
+    let zones_of = |id: &str| nml_core::objectives::zones_of_style(&cat["styles"][id]);
+    let table = deployment::Rect::new(-36.0 * IN2M, -24.0 * IN2M, 72.0 * IN2M, 48.0 * IN2M);
+    let disc = deployment::Rect::new(-12.0 * IN2M, -12.0 * IN2M, 24.0 * IN2M, 24.0 * IN2M);
+    let gate = deployment::Gates { min_from_enemy_m: 12.0 * IN2M, ..Default::default() };
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let near = |g: Option<deployment::Gates>| {
+        let phases = vec![
+            deployment::Phase { side: 1, share: "half".into(), rect: disc, zones: zones_of("centre_disc_12"), gates: None },
+            deployment::Phase { side: 0, share: "all".into(), rect: table, zones: zones_of("anywhere"), gates: g },
+        ];
+        let out = deployment::deploy_phased(&s1, &s2, &table, &table, &phases, [None, None], &objs, &empty_board(), 3, 4, 1, 15);
+        let fp = deployment::deploy_footprint_offsets(2, r, false);
+        let enemy: Vec<(f64, f64)> = out.side2.placements.iter().take(2)
+            .flat_map(|p| fp.iter().map(move |o| (p.spot.0 + o.0, p.spot.1 + o.1))).collect();
+        out.side1.placements.iter()
+            .flat_map(|p| fp.iter().map(move |o| (p.spot.0 + o.0, p.spot.1 + o.1)))
+            .flat_map(|a| enemy.iter().map(move |e| (a.0 - e.0).hypot(a.1 - e.1)))
+            .fold(f64::INFINITY, f64::min)
+    };
+    assert!(near(None) < 12.0 * IN2M, "ungated: the attacker crowds the defender's half");
+    assert!(near(Some(gate)) > 12.0 * IN2M, "gated for that phase: every attacker base stays clear");
 }

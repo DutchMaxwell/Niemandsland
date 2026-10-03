@@ -2574,13 +2574,16 @@ fn zone_shape(zones: &Bound<'_, PyAny>) -> PyResult<Vec<objectives::Zone>> {
 /// D6b: a side's distance gates, `{"min_from_enemy_in", "max_from_friend_in", "min_from_marker_in"}`
 /// in inches (the catalog's spelling) as the core's metres.
 fn deploy_gates(gates: &Bound<'_, PyAny>) -> PyResult<deployment::Gates> {
-    let v = value_of(gates)?;
+    Ok(gates_from_value(&value_of(gates)?))
+}
+
+fn gates_from_value(v: &Value) -> deployment::Gates {
     let m = |k: &str| v.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0) * nmlcore::IN2M;
-    Ok(deployment::Gates {
+    deployment::Gates {
         min_from_enemy_m: m("min_from_enemy_in"),
         max_from_friend_m: m("max_from_friend_in"),
         min_from_marker_m: m("min_from_marker_in"),
-    })
+    }
 }
 
 /// D7b: the catalog's deployment PHASES. `phases` = `[{"side": 0|1, "share": "half"|"all"|"rest",
@@ -2622,6 +2625,7 @@ fn deploy_phased(
             share: p["share"].as_str().unwrap_or("all").to_string(),
             rect: Rect::new(z[0], z[1], z[2], z[3]),
             zones: objectives::zones_of_list(&p["zones"]),
+            gates: p.get("gates").filter(|g| g.is_object()).map(gates_from_value),
         });
     }
     let out = deployment::deploy_phased_reserving(
