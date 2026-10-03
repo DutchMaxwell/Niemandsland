@@ -645,7 +645,7 @@ func _ready() -> void:
 	lighting_controller = Node.new()
 	lighting_controller.set_script(load("res://scripts/lighting_controller.gd"))
 	add_child(lighting_controller)
-	lighting_controller.initialize(directional_light, world_environment, fill_light)
+	lighting_controller.initialize(directional_light, world_environment, fill_light, render_state)
 
 	# Initialize Lighting Panel UI
 	lighting_panel = load("res://scripts/lighting_panel.gd").new()
