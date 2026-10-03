@@ -510,6 +510,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
             charge_goal: ci.map(|c| planner_point(unit_centre(state, c), t, self.rules_epoch)),
             charge_tgt_bases: tgt_bases,
             charge_slots,
+            ledges: Vec::new(),
         },
         planned: Vec::new(),
         trails: Vec::new(),

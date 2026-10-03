@@ -440,6 +440,7 @@ impl ReachIndex {
         let board = call.board();
         let grid: &Grid = &call.grid;
         let opts = StepOpts {
+            ledges: &[],
             clearance: 0.0,
             zones: &[],
             avoid_cells: &call.opts.avoid_cells,

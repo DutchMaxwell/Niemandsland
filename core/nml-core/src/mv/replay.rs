@@ -117,6 +117,7 @@ impl ReplaySearch {
     pub fn opts<'a>(&'a self, call: &'a MoveCall) -> ThetaOpts<'a> {
         ThetaOpts {
             step: StepOpts {
+                ledges: &call.opts.ledges,
                 clearance: call.opts.clearance,
                 zones: &self.zones,
                 avoid_cells: &call.opts.avoid_cells,
