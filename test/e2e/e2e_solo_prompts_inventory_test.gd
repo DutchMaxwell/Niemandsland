@@ -445,6 +445,7 @@ func test_the_spell_picker_offers_every_spell_and_cancel(timeout := 120000) -> v
 	_main.add_child(picker)
 	(func() -> void: out.append(await picker.pick("Warboss", 1, entries))).call()
 	var p := await _await_prompt("Warboss — cast a spell (1 token)")
+	_assert_house_card(p)   # row 36 on the house card (asserted here: its title carries the token count)
 	_assert_controls(p, ["Bolt  (1 token)", "Storm  (3 tokens)", "Cancel"])
 	assert_str(_text_of(p)).contains("Deal 2 hits.")
 	assert_str(_text_of(p)).contains("Deal 6 hits.")
