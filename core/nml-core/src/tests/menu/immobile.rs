@@ -84,6 +84,8 @@ use super::*;
             wounds: vec![vec![1], vec![1]],
             positions: vec![vec![[0.0, 0.0, 0.0]], vec![[8.0 * IN2M, 0.0, 0.0]]],
             radii: vec![vec![IN2M], vec![IN2M]],
+            kits: Vec::new(),
+            kit_names: Vec::new(),
             mods: vec![Mods::default(); n],
             mods_base: (0..n).map(|_| Rc::new(Mods::default())).collect(),
             attached: Rc::new(attached),
