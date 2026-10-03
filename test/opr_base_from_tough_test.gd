@@ -171,3 +171,51 @@ func test_usable_base_value() -> void:
 	assert_bool(OPRApiClient._is_usable_base_value("32")).is_true()
 	assert_bool(OPRApiClient._is_usable_base_value("120x92")).is_true()
 	assert_bool(OPRApiClient._is_usable_base_value(60)).is_true()
+
+
+## The Vampiric Undead Butcher Titan (AoF) has no Army Forge base (3.5.3: round "" / square ""). Keyword-less at
+## Tough(18) the fallback read it as a VEHICLE: a 105x170 oval that scaled the stitched corpse giant to ~211 mm. It gets
+## the rulebook's GIANT base (AoF Advanced Rules v3.5.1 p.4: "Giants: 100mm tall on 120mm oval bases"), 120x92 like
+## every AoF titan with a listed base.
+func test_fallback_butcher_titan_gets_rulebook_giant_oval() -> void:
+	var unit := OPRApiClient.OPRUnit.new()
+	unit.name = "Butcher Titan"
+	unit.size = 1
+	unit.special_rules = ["Fear(3)", "Slow", "Tough(18)", "Fearless", "Cursed Undead"]
+	unit.base_size_round = 32
+	OPRApiClient._apply_tough_base_fallback(unit)
+	assert_bool(unit.base_is_oval).is_true()
+	assert_int(unit.base_width_mm).is_equal(92)    # short axis
+	assert_int(unit.base_depth_mm).is_equal(120)   # long / facing axis
+	assert_int(unit.base_size_round).is_equal(120)
+
+
+## Regression guard for the Butcher Titan fix: every OTHER unit named "...Titan..." that reaches this fallback (no usable
+## Army Forge base, army books 02.10.2026) keeps the base it got before. Titans WITH a book base (e.g. the Saurian Dread
+## Titan 120x92, the Titan Lords) never reach the fallback.
+func test_fallback_other_bookless_titans_keep_their_bases() -> void:
+	# [name, tough, oval, width_or_round_mm, depth_mm]
+	var cases := [
+		["Vinci Titan", 24, true, 105, 170],
+		["Desert Titan", 24, true, 105, 170],
+		["God-Titan", 24, true, 105, 170],
+		["Macaque Titan", 18, true, 105, 170],
+		["Dread Titan", 24, true, 105, 170],
+		["Artillery Titan", 18, true, 52, 90],
+		["Hive Titan", 18, false, 120, 120],
+		["Dragon Titan", 18, false, 120, 120],
+		["Beast Titan", 24, false, 120, 120],
+	]
+	for c in cases:
+		var unit := OPRApiClient.OPRUnit.new()
+		unit.name = c[0]
+		unit.size = 1
+		unit.special_rules = ["Tough(%d)" % c[1]]
+		unit.base_size_round = 32
+		OPRApiClient._apply_tough_base_fallback(unit)
+		assert_bool(unit.base_is_oval).override_failure_message("%s oval" % c[0]).is_equal(c[2])
+		if c[2]:
+			assert_int(unit.base_width_mm).override_failure_message("%s width" % c[0]).is_equal(c[3])
+			assert_int(unit.base_depth_mm).override_failure_message("%s depth" % c[0]).is_equal(c[4])
+		else:
+			assert_int(unit.base_size_round).override_failure_message("%s round" % c[0]).is_equal(c[3])

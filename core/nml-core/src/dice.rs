@@ -519,8 +519,10 @@ fn save_batch(
 ///   * `surge_gates` — LEGACY REPLAY ONLY since the epoch-3 surge-gates port:
 ///     the volley now reads the table's own gates off the profile
 ///     (`surge_within_in`, `surge_low`/`surge_over_in`, main.gd:4465-4482) and
-///     flags nothing; every pre-epoch record keeps the ungated read, and the
-///     MELEE leg (whose gates are no-ops at dist 0) keeps the mark.
+///     flags nothing; every pre-epoch record keeps the ungated read. The
+///     MELEE fold is the table's own 0.0" read and flags nothing either; only
+///     its Bloodthirsty extra dice flag, when a sentinel low window's 5s go
+///     unpaid there (main.gd:7128 pays them).
 ///   * `hazardous`   — Hazardous wounds the FIRER on its natural 1s (:16555).
 ///   * `deadly`      — LEGACY REPLAY ONLY: the activation carried a Deadly
 ///     weapon below `EPOCH_14_DEADLY_LANDING`, where the pooled multiply still
@@ -1733,8 +1735,9 @@ pub fn resolve_melee_leg(
             let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
             let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
             if p.surge {
+                // No flag: at 0.0" this IS the table's gated read (the within
+                // cap passes, the low window below opens only for the sentinel).
                 hits += sixes(&faces) * p.bonus_hits_per_six.max(1);
-                out.mark("surge_gates");
                 // EPOCH_50 SURGE LOW — the volley fold's twin (:996-1007): the
                 // entry's own printed low window (Great Sergeant's "5 or 6")
                 // pays its successful unmodified 5s in melee too. Melee
@@ -1872,7 +1875,11 @@ pub fn resolve_melee_leg(
                     let mut bt_hits = faces_to_hits(&bt_faces, count_target as u8) as i64;
                     if p.surge {
                         bt_hits += sixes(&bt_faces) * p.bonus_hits_per_six.max(1);
-                        out.mark("surge_gates");
+                        // The one real gap: the table's `_solo_hits` (main.gd:7128)
+                        // also pays the sentinel window's 5s on these extra dice.
+                        if p.surge_low < 6 && p.surge_over_in < 0.0 {
+                            out.mark("surge_gates");
+                        }
                     }
                     bt_hits += surge_attack_hits(p, &bt_faces, count_target, sh.owner, tray, &mut out.rolls);
                     if bt_hits > 0 {
