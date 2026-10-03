@@ -1171,3 +1171,32 @@ func test_wall_cull_matches_the_exact_loop_on_a_seeded_fuzz() -> void:
 		var ab := _ab_step_blocked(p, c, walls, opts)
 		assert_bool(ab[0]).override_failure_message(
 			"fuzz case %d: p=%s c=%s walls=%s opts=%s" % [case_i, p, c, walls, opts]).is_equal(ab[1])
+
+
+# === Ledges (B2, GF p.11: a piece up to 3" tall may be climbed; the climb spends movement) ===
+
+func _ledge_flow(dy_in: float) -> Array:
+	var ledges := [{"a": Vector2(12, 0), "b": Vector2(12, 20), "dy_in": dy_in}]
+	var radii: Array = [0.5]
+	var trails: Array = []
+	var out := MovementPlanner.plan_sequential_flow([Vector2(10, 10)], Vector2(6, 0), radii, [],
+			{}, {"radii": radii, "ledges": ledges}, 48.0, false, trails)
+	return [out[0], trails[0], ledges]
+
+
+func test_advance_across_a_ledge_ends_on_the_roof_and_pays_the_climb() -> void:
+	# 6" advance, a 2.5" ledge 2" ahead: 2" flat + 2.5" climb + 1.5" flat = 6" of movement.
+	var r := _ledge_flow(2.5)
+	var end: Vector2 = r[0]
+	var opts := {"ledges": r[2]}
+	assert_float(end.x).is_equal_approx(13.5, 0.05)
+	var flat := 0.0
+	var trail: Array = r[1]
+	for i in range(1, trail.size()):
+		flat += (trail[i - 1] as Vector2).distance_to(trail[i] as Vector2)
+	assert_float(flat + MovementPlanner.ledge_cost(trail[0], trail[trail.size() - 1], opts)).is_equal_approx(6.0, 0.05)
+
+
+func test_a_ledge_over_three_inches_behaves_like_a_wall() -> void:
+	var end: Vector2 = _ledge_flow(3.5)[0]
+	assert_float(end.x).is_less(12.0)
