@@ -4502,7 +4502,7 @@ fn strike_phase(
     // own: on from the current rules epoch onward, pre-port corpora replay
     // byte-exact (dice.rs::save_batch's gate).
     let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
-    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), tray);
+    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), seams.tray_exact, tray);
     // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
     // here; the gated aliases never reach a melee save batch, exactly the
     // table's own `dist_in: -1.0` read, main.gd:6119).
@@ -4604,6 +4604,7 @@ fn strike_phase(
 /// pools are resolved SEPARATELY because :6304 re-checks the defender's alive
 /// count before each one: an Impact pool that wipes the defender means the Heavy
 /// pool never rolls. Returns the pre-Regeneration wounds caused.
+#[allow(clippy::too_many_arguments)]
 fn impact_phase(
     statics: &[UnitStatic],
     next: &mut State,
@@ -4612,6 +4613,8 @@ fn impact_phase(
     tray: &mut Tray,
     shot: &mut ShootResult,
     rules_epoch: u32,
+    charge_from_in: f64,
+    exact: bool,
 ) -> i64 {
     let us = &statics[next.roster.profile[si]];
     let ut = &statics[next.roster.profile[ti]];
@@ -4622,8 +4625,8 @@ fn impact_phase(
             continue; // :6304 — nothing left to hit, no dice
         }
         let def = ctx_of(ut, next, ti);
-        let r = crate::dice::resolve_impact_pool_with_tray(
-            dice, ap, &us.name, &def, &ut.name, tray,
+        let r = crate::dice::resolve_impact_pool_at(
+            dice, ap, &us.name, &def, &ut.name, Some((charge_from_in, exact)), tray,
         );
         caused += r.caused;
         let w = shot.absorb(r);
@@ -4818,7 +4821,7 @@ fn tray_charge(
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
     if next.alive[si] > 0 && next.alive[ti] > 0 {
-        by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch);
+        by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     // main.gd:8035 — the charger's Mark lands after Impact and before the
     // strikes, measured at 0" (the two units are in base contact).
