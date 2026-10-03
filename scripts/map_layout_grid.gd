@@ -17,6 +17,7 @@ const TABLE_EDGE := HouseStyle.INK
 const CENTER_DOT := Color(HouseStyle.GOLD, 0.8)
 const SYMMETRY_AXIS := Color(HouseStyle.GOLD, 0.3)
 const RELIC_RING := HouseStyle.GOLD
+const VIP_BAND_FILL := Color(HouseStyle.GOLD, 0.28)   # D14.4: the 6" edge bands of the VIP pick
 const LABEL_INK := HouseStyle.INK
 const LABEL_SIZE := HouseStyle.FONT_CAPTION
 
@@ -261,7 +262,7 @@ func _draw() -> void:
 			var screen := PackedVector2Array()
 			for pt in band:
 				screen.append(map_layout._inch_to_screen_pos(pt))
-			draw_colored_polygon(screen, Color(RELIC_RING, 0.28))
+			draw_colored_polygon(screen, VIP_BAND_FILL)
 	if map_layout.relic_drop_active:
 		var centre: Vector2 = map_layout._inch_to_screen_pos(map_layout.relic_drop_centre)
 		var px_per_in: float = (pixels_per_inch_x + pixels_per_inch_y) * 0.5
