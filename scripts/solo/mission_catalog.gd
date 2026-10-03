@@ -77,6 +77,25 @@ static func marker_count(mission: Dictionary, rng: RandomNumberGenerator) -> int
 	return rng.randi_range(1, 3) + 2
 
 
+## Player-facing VIP Escort text, English and German (the pattern of the privacy card: one table per
+## language, German when the locale starts with "de"). `%s` / `%.0f` are filled by the caller.
+const VIP_TEXT := {
+	"en": {"pick": "Click the VIP's starting spot",
+		"refused": "Click inside one of the shaded edge bands (6\")",
+		"set": "Defender (%s) sets the VIP marker %.0f\" from its table edge"},
+	"de": {"pick": "Klicke auf den Startpunkt des VIP",
+		"refused": "Klicke in eines der markierten Randbänder (6\")",
+		"set": "Verteidiger (%s) setzt den VIP-Marker %.0f\" von seiner Tischkante"},
+}
+
+
+static func vip_text(key: String, locale: String = "") -> String:
+	var loc := locale if not locale.is_empty() else TranslationServer.get_locale()
+	var lang := "de" if loc.to_lower().begins_with("de") else "en"
+	var table: Dictionary = VIP_TEXT[lang]
+	return str(table.get(key, (VIP_TEXT["en"] as Dictionary).get(key, key)))
+
+
 ## D14.4 (VIP Escort, GF/AoF v3.5.1 p.27/p.26: the defender sets up 1 marker within 6" of any table edge):
 ## the AI defender's start. It takes ITS OWN table edge (player 1 owns the z-negative side, player 2 the
 ## z-positive one) and puts the marker on the centre line 3" in from it. `deploy_edge` is that edge's z sign,
