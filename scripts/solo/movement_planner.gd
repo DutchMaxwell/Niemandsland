@@ -22,6 +22,8 @@ extends RefCounted
 ##   • Terrain grid: the same typed 3" cells as TerrainRules (CONTAINER = Impassable) — used by the A* rescue.
 
 const EPS := 0.0001
+const LEDGE_CLIMB_MAX_IN := 3.0             # GF p.11: pieces over 3" tall are impassable — such ledges stay walls
+const LEDGE_STOP_IN := 0.05                 # a model that cannot pay a climb halts this far short of the ledge
 
 # --- Coherency (mirrors CoherencyChecker; folded into centre-to-centre point space) ---
 const BASE_CONTACT_IN := 2.0                # centre-to-centre distance at base contact (== SoloSim.CONTACT_IN)
@@ -1065,6 +1067,13 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 	# Resolve the board ONCE and hand the extents down explicitly: the per-model option dictionaries
 	# below are rebuilt from scratch, so anything carried in opts alone would not survive the trip (#215).
 	var board := board_extents(board_in, opts)
+	# Ledges over 3" tall are impassable (GF p.11): they join the walls; the rest stay priced climbs.
+	var ledges: Array = []
+	for l in opts.get("ledges", []):
+		if float(l["dy_in"]) > LEDGE_CLIMB_MAX_IN + EPS:
+			walls = walls + [[l["a"], l["b"]]]
+		else:
+			ledges.append(l)
 	# A Charge routes its nearest models to base contact, and the ONLY path to the target may DETOUR around
 	# obstacles / other units' zones / a large enemy base — a bend whose arc length exceeds the straight
 	# gap. The straight-line delta length was the sole arc budget, so any detour starved the charge and it
@@ -1129,6 +1138,8 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 				var jc: Vector2 = result[j] if placed.has(j) else model_pos[j]
 				zones.append({"c": jc, "r": maxf(0.0, float(radii[j]) + float(radii[idx]) - CONTACT_SLIDE_EPS_IN)})
 		var oi := {"clearance": base_clearance, "avoid_cells": avoid_cells, "zones": zones}
+		if not ledges.is_empty():
+			oi["ledges"] = ledges
 		var slot: Vector2 = (model_pos[idx] as Vector2) + delta
 		# CHARGE body-goal (charge-reach fix): aim the charging model at the ENEMY BODY (opts.charge_goal, the
 		# target centre) rather than the fixed along-the-line slot. If the direct line is blocked (an obstacle
@@ -1336,13 +1347,34 @@ static func _terrain_cost_at(p: Vector2, grid: Dictionary, opts: Dictionary) -> 
 static func _segment_cost(a: Vector2, b: Vector2, grid: Dictionary, opts: Dictionary) -> float:
 	var span := a.distance_to(b)
 	if grid.is_empty() or span <= EPS:
-		return span
+		return span + ledge_cost(a, b, opts)
 	var steps := maxi(1, int(ceil(span / (PLAN_CELL_IN * 0.5))))
 	var sub := span / float(steps)
 	var total := 0.0
 	for i in range(steps):
 		var m := _terrain_cost_at(a.lerp(b, (float(i) + 0.5) / float(steps)), grid, opts)
 		total += sub * (1.0 if is_inf(m) else m)
+	return total + ledge_cost(a, b, opts)
+
+
+## Ledges (GF p.11: a terrain piece up to 3" tall may be climbed as part of a move): opts["ledges"] = Array of
+## {"a","b": Vector2, "dy_in": float} in the planner inch frame. A leg crossing a ledge pays its dy_in on top
+## of its flat length (up or down alike); sorted [t along a→b, dy_in] pairs. No key = no crossings.
+static func ledge_crossings(a: Vector2, b: Vector2, opts: Dictionary) -> Array:
+	var out: Array = []
+	for l in opts.get("ledges", []):
+		var hit: Variant = Geometry2D.segment_intersects_segment(a, b, l["a"], l["b"])
+		if hit != null:
+			out.append([a.distance_to(hit as Vector2) / maxf(a.distance_to(b), EPS), float(l["dy_in"])])
+	out.sort_custom(func(x, y): return x[0] < y[0])
+	return out
+
+
+## Summed climb inches the straight leg a→b pays (see ledge_crossings).
+static func ledge_cost(a: Vector2, b: Vector2, opts: Dictionary) -> float:
+	var total := 0.0
+	for c in ledge_crossings(a, b, opts):
+		total += float(c[1])
 	return total
 
 
@@ -1590,9 +1622,24 @@ static func _walk_offset(start_pt: Vector2, taut: Array, offset: Vector2, allowa
 					if f > EPS:
 						out.append(a.lerp(stop, f))
 			break
-		if spent + leg <= allowance + EPS:
+		var climb := ledge_cost(a, b, opts)
+		if spent + leg + climb <= allowance + EPS:
 			out.append(b)
-			spent += leg
+			spent += leg + climb
+		elif climb > 0.0:
+			# Out of movement on a leg with ledges: stop where the budget ends, or just short of a ledge whose
+			# climb cannot be paid (a model may not end its move mid-climb, GF p.11).
+			var paid := 0.0
+			var stop_t := (allowance - spent) / leg
+			for c in ledge_crossings(a, b, opts):
+				if (c[0] as float) * leg + paid + float(c[1]) > allowance - spent + EPS:
+					stop_t = minf((allowance - spent - paid) / leg, (c[0] as float) - LEDGE_STOP_IN / leg)
+					break
+				paid += float(c[1])
+				stop_t = (allowance - spent - paid) / leg
+			if stop_t > EPS:
+				out.append(a.lerp(b, minf(stop_t, 1.0)))
+			break
 		else:
 			var frac := (allowance - spent) / leg
 			if frac > EPS:
