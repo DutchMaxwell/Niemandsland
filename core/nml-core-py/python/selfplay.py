@@ -295,8 +295,13 @@ def _phase_args(mission_def: dict[str, Any], attacker: int, repo_root: str | Pat
     out = []
     for entry in raw:
         role, share, style_id = entry[0], entry[1], entry[2]
-        rect, zl = _style_zone_args(styles[style_id], "1")
-        out.append({"side": (attacker - 1) if role == "attacker" else (2 - attacker),
+        side = (attacker - 1) if role == "attacker" else (2 - attacker)
+        # D14.2: "own" = the mission's standard deployment style at the side's OWN table half
+        # (slot 1 = the -Z band, slot 2 = the +Z band); any other id is the role-agnostic style's zone.
+        own = style_id == "own"
+        rect, zl = _style_zone_args(styles[mission_def.get("deployment", "front_line") if own else style_id],
+                                    str(side + 1) if own else "1")
+        out.append({"side": side,
                     "share": share, "zone": rect, "zones": zl,
                     # D7d: an optional 4th catalog element = this phase's own gates (inches)
                     **({"gates": entry[3]} if len(entry) > 3 and isinstance(entry[3], dict) else {})})
