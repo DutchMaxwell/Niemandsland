@@ -303,6 +303,10 @@ static func theme() -> Theme:
 	t.set_color(&"default_color", &"RichTextLabel", INK)
 	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
 		t.set_color(c, &"CheckBox", INK)
+	# The empty check box (maintainer 03.10., D1 = b): Godot's own draws at ~1:1 on the house panels; a muted
+	# outline the size of the engine's checked box reads at a glance. The checked box stays the engine's.
+	t.set_icon(&"unchecked", &"CheckBox", _check_square(MUTED))
+	t.set_icon(&"unchecked_disabled", &"CheckBox", _check_square(LINE))
 
 	# A slim scrollbar for sunken lists (the dice log).
 	var grab := _box(LINE, LINE, RADIUS_CONTROL, 0, 0)
@@ -339,6 +343,19 @@ static func _knob(color: Color) -> ImageTexture:
 		for x in d:
 			var dist := Vector2(x + 0.5, y + 0.5).distance_to(Vector2(d / 2.0, d / 2.0))
 			img.set_pixel(x, y, Color(color.r, color.g, color.b, clampf(d / 2.0 - dist, 0.0, 1.0)))
+	return ImageTexture.create_from_image(img)
+
+
+## An empty check box texture: a 16 px rounded square outline (1.5 px, radius 3) in `rim`.
+static func _check_square(rim: Color) -> ImageTexture:
+	var d := 16
+	var img := Image.create(d, d, false, Image.FORMAT_RGBA8)
+	for y in d:
+		for x in d:
+			# Signed distance to a 14 px square with radius 3 (negative inside), the stroke just inside its edge.
+			var q := (Vector2(x + 0.5, y + 0.5) - Vector2(d / 2.0, d / 2.0)).abs() - Vector2(4.0, 4.0)
+			var dist := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0) - 3.0
+			img.set_pixel(x, y, Color(rim.r, rim.g, rim.b, clampf(1.25 - absf(dist + 0.75), 0.0, 1.0)))
 	return ImageTexture.create_from_image(img)
 
 
