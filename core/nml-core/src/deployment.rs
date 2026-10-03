@@ -1618,6 +1618,8 @@ pub struct Phase {
     pub share: String,
     pub rect: Rect,
     pub zones: Vec<Zone>,
+    /// The phase's OWN distance gates (D7d); `None` = the side's role gates.
+    pub gates: Option<Gates>,
 }
 
 /// Units a phase's share covers for a side with `total` main units of which `placed` already
@@ -1699,6 +1701,7 @@ pub fn deploy_phased_reserving(
         q[k].zone = ph.rect;
         q[k].forward_y = if ph.rect.pos.1.abs() < end.1.abs() { ph.rect.pos.1 } else { end.1 };
         q[k].zones = Some(ph.zones.clone());
+        q[k].gates = ph.gates.or(gates[k].copied());
         let n = phase_quota(&ph.share, total[k], cur[k]).min(total[k] - cur[k]);
         for _ in 0..n {
             place(&mut q, k, &mut cur, &mut sequence);
@@ -1717,6 +1720,7 @@ pub fn deploy_phased_reserving(
         q[k].zone = home[k].0;
         q[k].forward_y = home[k].1;
         q[k].zones = None;
+        q[k].gates = gates[k].copied();
     }
     let order: [usize; 2] = if first == 2 { [1, 0] } else { [0, 1] };
     let mut sc = [0usize, 0usize];
