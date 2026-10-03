@@ -751,7 +751,7 @@ func _ready() -> void:
 	map_layout_editor.marker_pick_refused.connect(func() -> void:
 		_show_toast("Click one of the markers"))
 	map_layout_editor.relic_drop_refused.connect(func() -> void:
-		_show_toast("Place the relic within 1\" of the carrier's base"))
+		_show_toast("Place the relic within %d\" of the carrier's base" % int(map_layout_editor.relic_drop_reach_in)))
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
 
 	# Initialize Terrain Overlay (on the 3D table)
@@ -2226,19 +2226,19 @@ func _solo_drop_carried(gu: GameUnit, reason: String) -> void:
 		var other := u as GameUnit
 		if other != null and int(other.unit_properties.get("player_id", 0)) != carrier_side:
 			opponents.append(other)
-	var drop_pos := SoloController.drop_point(gu, opponents)
 	var human_places := solo_controller != null and carrier_side != solo_controller.human_slot \
 		and not _solo_batch and not _solo_both_ai
 	for i in range(SoloController.mission_markers.size()):
 		var mk: Dictionary = SoloController.mission_markers[i]
 		if bool(mk.get("carry", false)) and String(mk.get("carried_by", "")) == gu.unit_id:
 			mk["carried_by"] = ""
-			terrain_overlay.set_objective_position(i, drop_pos)
+			var reach_in := float(mk.get("drop_in", 1.0))   # D14.5: Rescue drops 6", the others 1"
+			terrain_overlay.set_objective_position(i, SoloController.drop_point(gu, opponents, reach_in))
 			terrain_overlay.set_objective_carried(i, false)
 			var entry := {"index": i, "name": gu.get_name(), "reason": reason,
 				"centre": (gu.models[0] as ModelInstance).node.global_position,
 				"radius": SoloController.model_base_radius_m(gu.models[0] as ModelInstance),
-				"placer": "P%d" % (3 - carrier_side)}
+				"placer": "P%d" % (3 - carrier_side), "reach": reach_in}
 			if human_places:
 				_solo_relic_drop_queue.append(entry)
 			else:
@@ -2273,9 +2273,9 @@ func _solo_next_relic_drop_prompt() -> void:
 	_on_map_layout_pressed()
 	var is_move: bool = _solo_relic_drop_active.has("move")
 	map_layout_editor.begin_relic_drop(_solo_relic_drop_active["centre"], _solo_relic_drop_active["radius"],
-		SoloController.VIP_MOVE_IN if is_move else 1.0)
+		SoloController.VIP_MOVE_IN if is_move else float(_solo_relic_drop_active.get("reach", 1.0)))
 	_show_toast("Move the marker up to 12\" (click a point); close or Esc to walk it toward the edge" if is_move \
-		else "Place the dropped relic within 1\" of the carrier's base; close or Esc to use default")
+		else "Place the dropped relic within %d\" of the carrier's base; close or Esc to use default" % int(_solo_relic_drop_active.get("reach", 1.0)))
 	_solo_relic_drop_gen += 1
 	get_tree().create_timer(20.0).timeout.connect(_solo_relic_drop_timeout.bind(_solo_relic_drop_gen))
 

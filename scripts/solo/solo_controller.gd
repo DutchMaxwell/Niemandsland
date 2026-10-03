@@ -90,6 +90,8 @@ static func marker_metadata(spec: Dictionary) -> Array:
 		if carry:
 			marker["carry"] = true
 			marker["carried_by"] = ""
+			if spec.has("drop_in"):   # D14.5: this mission's relic drops this far (inches) past the carrier
+				marker["drop_in"] = float(spec["drop_in"])
 		if secret:
 			marker["secret"] = ""
 			marker["revealed"] = false
@@ -9645,9 +9647,9 @@ static func secret_reveal_step(unit_infos: Array, objectives: Array, owners: Arr
 	return events
 
 
-## One inch past the carrier's first base edge, toward the nearest opposing model.
+## `drop_in` inches (default one) past the carrier's first base edge, toward the nearest opposing model.
 ## The first model stays available after destruction, when get_alive_models() is empty.
-static func drop_point(carrier: GameUnit, opponent_units: Array) -> Vector3:
+static func drop_point(carrier: GameUnit, opponent_units: Array, drop_in := 1.0) -> Vector3:
 	if carrier == null or carrier.models.is_empty():
 		return Vector3.ZERO
 	var first := carrier.models[0] as ModelInstance
@@ -9669,7 +9671,7 @@ static func drop_point(carrier: GameUnit, opponent_units: Array) -> Vector3:
 			if delta.length_squared() < closest and delta.length_squared() > 0.000001:
 				closest = delta.length_squared()
 				direction = delta.normalized()
-	return centre + direction * (model_base_radius_m(first) + 0.0254)
+	return centre + direction * (model_base_radius_m(first) + drop_in * 0.0254)
 
 
 static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array,
