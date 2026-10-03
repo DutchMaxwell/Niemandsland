@@ -728,6 +728,22 @@ impl State {
             && self.alive[i] > 0
             && !(hero_attach && self.attached_to[i].is_some())
     }
+    /// Tray-exact S1b: slot `i` of unit `u` left the table — its kit goes with it, so `kits`
+    /// stays slot-aligned with `positions`. A no-op when the unit carries none.
+    pub fn kit_remove(&mut self, u: usize, i: usize) {
+        if let Some(k) = self.kits.get_mut(u).filter(|k| i < k.len()) {
+            Rc::make_mut(k).remove(i);
+        }
+    }
+
+    /// Tray-exact S1b: the unit's slots changed in a way no kit can follow (all models gone,
+    /// or a body came back whose kit is unknown) — it carries none from here (slot order).
+    pub fn kits_drop(&mut self, u: usize) {
+        if let Some(k) = self.kits.get_mut(u).filter(|k| !k.is_empty()) {
+            *k = Rc::new(Vec::new());
+        }
+    }
+
     pub fn units(&self) -> usize {
         self.roster.len()
     }
