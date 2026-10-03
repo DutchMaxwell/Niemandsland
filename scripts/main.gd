@@ -788,6 +788,9 @@ func _ready() -> void:
 
 	# Give object_manager reference to terrain_overlay for terrain hints
 	object_manager.terrain_overlay = terrain_overlay
+	# NML-001: the overlay reads the free-placed shelf pieces as typed OBBs (frame-cached, they are draggable) in EVERY
+	# game. Wired here: wiring it only when a Solo AI controller is built left human/MP/tutorial games blind to them.
+	terrain_overlay.sandbox_shapes_provider = _sandbox_terrain_shapes
 
 	# Connect object_manager signals for deployment checking
 	object_manager.drag_ended.connect(_on_unit_moved)
@@ -2896,10 +2899,7 @@ func _ensure_solo_controller() -> void:
 			return _solo_sighted_count(s, t, SOLO_LOS_UNBOUNDED_RANGE_IN) > 0
 		# Real terrain / walls / objectives feed the shared pure modules (decide_solo, MovementPlanner,
 		# TerrainRules) — goal 003 P3. Each is a graceful no-op when the overlay is absent.
-		# NML-001: das Overlay bekommt die frei platzierten Shelf-Stücke als typed OBBs
-		# (frame-gecacht — Stücke sind draggable, der Scan läuft max. 1x pro Frame).
-		if terrain_overlay != null and "sandbox_shapes_provider" in terrain_overlay:
-			terrain_overlay.sandbox_shapes_provider = _sandbox_terrain_shapes
+		# (The overlay already reads the free shelf pieces: wired at game start, NML-001.)
 		solo_controller.terrain_type_at = func(p: Vector3) -> int:
 			return terrain_overlay.get_terrain_at_world_position(p) if terrain_overlay != null else int(TerrainRules.TerrainType.NONE)
 		solo_controller.walls_provider = func() -> Array:
