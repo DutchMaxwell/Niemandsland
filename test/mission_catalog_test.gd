@@ -14,7 +14,7 @@ func before_test() -> void:
 func test_catalog_lists_the_shipped_missions() -> void:
 	# The original ten, the two carried-marker missions, and the Attack & Defend ones that shipped.
 	assert_that(MissionCatalog.mission_ids()).is_equal(
-		["breakthrough", "capture_and_hold", "demolition", "domination", "duel",
+		["ambush", "breakthrough", "capture_and_hold", "demolition", "domination", "duel",
 		"headquarters", "king_of_the_hill", "last_stand", "mosh_pit", "pitched_battle",
 		"relic_hunt", "sabotage", "seize_ground", "smash_and_grab", "vip_escort"])
 
@@ -195,3 +195,34 @@ func test_vip_escort_is_the_attack_and_defend_escort_mission() -> void:
 	assert_bool(DeploymentCatalog.style_ids().has("edge_band_12")).is_true()
 	assert_bool(DeploymentCatalog.style_ids().has("marker_disc_12")).override_failure_message(
 		"marker_disc_12 only exists at run time").is_false()
+
+
+## D14.2 — Ambush (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles, d3 markers, the defender
+## deploys half in its own zone, the attacker anywhere >12" from enemies and within 6" of a friend, the
+## defender's rest >12" from enemies; the most markers wins. (The count is spelled "d3+0": the dice-term
+## parsers of table, core and seam read "d3+N".)
+func test_ambush_is_the_attack_and_defend_phase_mission_with_per_phase_gates() -> void:
+	var m := MissionCatalog.get_mission("ambush")
+	assert_str(str(m["name"])).is_equal("Ambush")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("end")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_bool(m.has("attacker_points_factor")).is_false()
+	assert_str(str(m["deployment"])).is_equal("front_line")
+	var ph: Array = m["deploy_phases"]
+	assert_int(ph.size()).is_equal(3)
+	assert_that(ph[0]).is_equal(["defender", "half", "own"])
+	assert_that((ph[1] as Array).slice(0, 3)).is_equal(["attacker", "all", "anywhere"])
+	assert_float(float(ph[1][3]["min_from_enemy_in"])).is_equal(12.0)
+	assert_float(float(ph[1][3]["max_from_friend_in"])).is_equal(6.0)
+	assert_that((ph[2] as Array).slice(0, 3)).is_equal(["defender", "rest", "anywhere"])
+	assert_float(float(ph[2][3]["min_from_enemy_in"])).is_equal(12.0)
+	assert_int((ph[2][3] as Dictionary).size()).is_equal(1)
+	var mk: Dictionary = m["markers"]
+	assert_str(str(mk["placement"])).is_equal("alternate")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	for _i in 20:
+		var n := MissionCatalog.marker_count(m, rng)
+		assert_bool(n >= 1 and n <= 3).override_failure_message("d3 markers, got %d" % n).is_true()
