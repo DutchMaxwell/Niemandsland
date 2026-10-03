@@ -238,6 +238,29 @@ const MOVABLE_TERRAIN_COLLISION_LAYER: int = 4
 ## Casual-sandbox terrain categories (see SandboxTerrainProp / TerrainGroupBase).
 enum SandboxPropKind { RUIN, FOREST, HAZARD_CLUSTER }
 
+
+## Rules terrain type of a free-placed piece, by its prop kind (NONE for an unknown kind).
+static func sandbox_terrain_type(kind: int) -> int:
+	match kind:
+		SandboxPropKind.RUIN:
+			return TerrainRules.TerrainType.RUINS
+		SandboxPropKind.FOREST:
+			return TerrainRules.TerrainType.FOREST
+		SandboxPropKind.HAZARD_CLUSTER:
+			return TerrainRules.TerrainType.DANGEROUS
+	return TerrainRules.TerrainType.NONE
+
+
+## Every free-placed piece exactly once. TerrainGroupBase sits in BOTH "sandbox_terrain" and
+## "terrain_group_base", so a plain concatenation of the two groups lists forests/hazards twice.
+static func sandbox_pieces(tree: SceneTree) -> Array:
+	var out: Array = []
+	for group in ["sandbox_terrain", "terrain_group_base"]:
+		for n in tree.get_nodes_in_group(group):
+			if not out.has(n):
+				out.append(n)
+	return out
+
 ## Surface raycast probe: cast straight down from this height to this depth (metres) at a
 ## model's base centre to find the highest ground surface beneath it (table top = 0).
 const SURFACE_PROBE_TOP_Y: float = 5.0
