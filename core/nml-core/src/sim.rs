@@ -32,6 +32,7 @@ use crate::acts::{
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
+    EPOCH_70_RIGID_DANGEROUS_ROUTE,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -2767,15 +2768,27 @@ pub(crate) fn dangerous_dice(
             if seams.hero_attach {
                 units.extend(state.attached[si].iter().copied());
             }
-            // Tree plan step 5b: this end-only reading can part from the table's
-            // per-model trail ONLY where a model's straight route meets a
-            // Dangerous cell, so the flag names exactly those moves. Samples one
-            // base radius apart overlap; the dice below never read the flag.
+            // EPOCH_70_RIGID_DANGEROUS_ROUTE: the rigid move's own route IS each
+            // model's straight segment, so the table's predicate on it
+            // (`leg_crosses`, `_path_crosses_terrain`) is exact and nothing is
+            // flagged. Below it — tree plan step 5b — this end-only reading can
+            // part from the table's per-model trail ONLY where a model's straight
+            // route meets a Dangerous cell, so the flag names exactly those moves.
+            // Samples one base radius apart overlap; the dice never read the flag.
+            let route = rule_on(seams.rules_epoch, EPOCH_70_RIGID_DANGEROUS_ROUTE);
             let mut meets = false;
             for u in units {
                 for m in 0..next.positions[u].len() {
                     let (b, r) = (next.positions[u][m], radius(next, u, m));
-                    movers.push((u, m, in_dang(&b, r)));
+                    let crossed = in_dang(&b, r)
+                        || (route && state.positions[u].get(m).is_some_and(|a| {
+                            let leg = [t.to_inch(geom::to_f32(*a)), t.to_inch(geom::to_f32(b))];
+                            crate::mv::step::leg_crosses(&leg, r, t, is_dangerous)
+                        }));
+                    movers.push((u, m, crossed));
+                    if route {
+                        continue;
+                    }
                     let Some(a) = state.positions[u].get(m).filter(|_| !meets) else { continue };
                     let steps = (geom::length(geom::sub(geom::to_f32(b), geom::to_f32(*a))) as f64 / r.max(1e-3)).ceil().max(1.0) as usize;
                     meets = (0..=steps).any(|k| {

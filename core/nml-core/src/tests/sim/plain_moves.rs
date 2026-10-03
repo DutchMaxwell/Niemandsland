@@ -166,3 +166,29 @@ use super::*;
         assert!((plain_next.positions[0][0][0] - (st.positions[0][0][0] + 6.0 * IN2M as f64)).abs() < 1e-6);
         assert!(plain_shot.log.is_empty());
     }
+
+    /// Tray-exact series (maintainer D151 = B): a RIGID rush whose start and end bases
+    /// are clear of the Dangerous bar but whose straight segment runs THROUGH it. The
+    /// table tests every model whose route crossed a Dangerous cell
+    /// (`_dangerous_trail_flags` over `_path_crosses_terrain`); from
+    /// `EPOCH_70_RIGID_DANGEROUS_ROUTE` the rigid move tests its own segment the same
+    /// way — 4 dice, no flag. Below it the end-only reading rolls nothing and flags.
+    #[test]
+    fn a_rigid_rush_through_a_dangerous_bar_tests_every_crossing_model_from_epoch_70() {
+        let (st, statics) = dangerous_line();
+        let t = dangerous_bar_board();
+        let rush = Action { kind: RUSH, ..advance_to(100.0) };
+        let run = |rules_epoch: u32| {
+            let (mut tray, mut rng) = (Tray::seeded(1), crate::rng::GodotRng::new(0));
+            let seams = Seams { rules_epoch, ..Seams::default() };
+            resolve_stochastic_tray_on_board(&statics, &st, &rush, &t, seams, &mut rng, &mut tray).unwrap()
+        };
+        let (next, shot) = run(crate::acts::EPOCH_70_RIGID_DANGEROUS_ROUTE);
+        assert!(next.positions[0].iter().all(|p| p[0] > 10.0 * IN2M as f64), "fixture: past the bar {:?}", next.positions[0]);
+        let a_rolls: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "a").collect();
+        assert_eq!(a_rolls.first().map(|r| r.count), Some(4), "{:?}", shot.rolls);
+        assert!(!shot.unported.contains(&"dangerous_rigid_end_only"), "{:?}", shot.unported);
+        let (_, old) = run(crate::acts::EPOCH_69_HERO_FOLD);
+        assert!(old.rolls.iter().all(|r| r.owner != "a"), "below 70 the crossing rolls nothing: {:?}", old.rolls);
+        assert!(old.unported.contains(&"dangerous_rigid_end_only"), "{:?}", old.unported);
+    }
