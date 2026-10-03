@@ -33,6 +33,9 @@ use super::*;
         let a_rolls: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "a").collect();
         assert_eq!(a_rolls.len(), 2, "{:?}", shot.rolls);
         assert_eq!((a_rolls[0].count, a_rolls[1].count), (4, 1));
+        // Stage-0 tray census: the PORTED test is no divergence, so it must not
+        // flag — a flag here declined every such move in the true-tray tree.
+        assert!(!shot.unported.contains(&"dangerous_end_morale"), "{:?}", shot.unported);
     }
 
     /// The same crossing with losses BELOW half: no morale die is drawn, and
@@ -77,6 +80,8 @@ use super::*;
         assert!(next.alive[0] > 0 && next.alive[0] <= 2, "setup didn't kill >= half: {}", next.alive[0]);
         let a_rolls: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "a").collect();
         assert_eq!(a_rolls.len(), 1, "knob off must not draw the morale die: {:?}", shot.rolls);
+        // ...and the SKIPPED table test is the divergence the flag names.
+        assert!(shot.unported.contains(&"dangerous_end_morale"), "{:?}", shot.unported);
     }
 
     /// S3 — a NON-charge move goes through `mv::step::plain_move` once
