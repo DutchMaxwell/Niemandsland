@@ -416,6 +416,7 @@ var spell_seal: SpellSeal = null  # VFX #3: the cast's glyph circle at the caste
 var _vfx_seq := 0                       # VFX cue ids, per session
 var _vfx_session: int = Time.get_ticks_usec()   # tells this boot's cues from a previous one's (same peer id)
 var _vfx_seen := {}                     # "<peer>:<session>:<id>" of every cue drawn
+var _vfx_saves_made := 0                # saves made by the save batches of the current _solo_resolve_saves
 var _vfx_seals := {}                    # "<peer>:<session>:<seal id>" -> the live seal node
 var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat stage (solo)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
@@ -7565,6 +7566,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 		solo: Dictionary = {}) -> int:
 	if hits <= 0:
 		return 0
+	_vfx_saves_made = 0   # VFX #1: the save batches below add the saves they made
 	# Base AP plus any conditional AP (Shatter/Tear/Melee Slayer/Disintegrate; range-gated Slayer/
 	# Piercing Hunter need `dist_in` — -1 = unknown, their ranged leg then stays off, conservative)
 	# this weapon gets against THIS defender — registry-driven, system-scoped.
@@ -7618,6 +7620,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	var normal: int = hits - ap4_hits
 	if normal > 0:
 		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
+	_vfx_hit_strip(defender, hits, _vfx_saves_made)
 	return total
 
 
@@ -7783,6 +7786,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 					shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
 			_solo_rule_float(defender, "%s +%d" % [(boost_rule if boost_low > 1 else shred_name), shred_extra], Color(1.0, 0.5, 0.4))
 	var unsaved := maxi(0, count - blocks)
+	_vfx_saves_made += blocks
 	# apply_deadly=false (Bug: Deadly no-carry-over): return the RAW unsaved count so the caller can
 	# apply Deadly per-model (each ×X, capped at one model, no spill). The pooled deadly_multiplier path
 	# below stays for spells and every non-Deadly weapon (identical to before). Shred rides the pool.
@@ -13078,6 +13082,18 @@ func _vfx_volley(member: GameUnit, target: GameUnit, profile: Dictionary, pairs:
 	var up_to := Vector3.UP * _solo_unit_los_height_m(target)
 	_vfx_emit({"k": "volley", "f": int(VolleyCue.family_of(str(profile.get("name", "")))),
 		"pairs": pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to])})
+
+
+## VFX #1, the unit-level beat: hits and saves belong to the unit, not to one model, so they sit over the
+## defender's centre — ivory dots for the hits that called for saves, blue rings above for the saves made.
+func _vfx_hit_strip(defender: GameUnit, hits: int, saves: int) -> void:
+	var c: Vector3 = solo_controller.unit_centre(defender) if solo_controller != null and defender != null else Vector3.INF
+	if c == Vector3.INF or c == Vector3.ZERO:
+		return
+	var eye := c + Vector3.UP * (_solo_unit_los_height_m(defender) + 0.03)
+	_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.HIT), "at": eye, "n": hits})
+	if saves > 0:
+		_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.SAVE), "at": eye + Vector3.UP * 0.016, "n": saves})
 
 
 ## VFX #1: one result mark over a model's LOS eye, from the allocation that just happened.
