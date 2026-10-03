@@ -72,7 +72,7 @@ func test_smash_and_grab_sizes_its_secret_markers_to_the_placed_objectives() -> 
 		Vector3(0, 0, 10 * 0.0254)])
 	_main.solo_ai_slots = {2: true}
 	_main.solo_controller.human_slot = 1
-	_main._solo_roles_set(1, "attacker")
+	_main._solo_roles_set(2, "attacker")   # NACHTMAHR attacks, the human defends and keeps the 4 markers he placed
 	assert_int(SoloController.mission_markers.size()).is_equal(4)
 	var kinds := SoloController.mission_markers.map(func(m: Variant) -> String: return str((m as Dictionary)["secret"]))
 	assert_int(kinds.count("relic")).is_equal(1)
