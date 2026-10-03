@@ -25,11 +25,7 @@ func test_the_outer_edge_is_the_spell_range_radius() -> void:
 	var radius := rr.ring_outer_radius_for_props({"base_size_round": 32}, 12)
 	rr.free()
 	var seal: MeshInstance3D = s.begin(CENTRE, radius, "damage")
-	# UV radius 0.5 (where the shader's outer edge sits) is the handed radius; the band is the only geometry.
-	var uv_r: float = 0.5 / (seal.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_TEX_UV][0].distance_to(Vector2(0.5, 0.5)) \
-		* (seal.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX][0].length()
-	assert_float(uv_r).is_equal_approx(0.016 + 12 * 0.0254, 0.001)
-	assert_float(seal.mesh.get_aabb().size.x * 0.5).is_between(radius, radius * 1.01)
+	assert_float((seal.mesh as PlaneMesh).size.x * 0.5).is_equal_approx(0.016 + 12 * 0.0254, 0.001)
 	assert_float(float(_param(seal, "band")) * radius).is_equal_approx(SealScript.BAND_M, 1e-6)
 	assert_float(seal.global_position.x).is_equal_approx(CENTRE.x, 1e-6)
 	assert_float(seal.global_position.z).is_equal_approx(CENTRE.z, 1e-6)
