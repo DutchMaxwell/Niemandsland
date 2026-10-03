@@ -476,8 +476,10 @@ def _deploy_arena(
             )
     for slot in ("1", "2"):
         placed = placed_by[slot]
+        held = set(placed["reserved"])  # set aside (Ambush or a mission reserve): nothing to settle
         sides[slot] = {
-            "units": roster[slot], "placements": placed["placements"], "zone": zones[slot]
+            "units": [u for u in roster[slot] if u["key"] not in held],
+            "placements": placed["placements"], "zone": zones[slot],
         }
         reserved[slot] = list(placed["reserved"])
     finished = nml_core.deploy_finish(sides, board, {}, opener)

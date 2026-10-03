@@ -209,6 +209,33 @@
         "placement": "table_centre"
       }
     },
+    "the_rescue": {
+      "name": "The Rescue",
+      "family": "attack_defend",
+      "rounds": 6,
+      "scoring": "extract",
+      "roles": true,
+      "attacker_points_factor": 1.25,
+      "deployment": "front_line",
+      "deploy_phases": [
+        ["defender", "half", "own"],
+        ["attacker", "half", "own"]
+      ],
+      "reserves": {
+        "who": "both",
+        "arrive_on": 4,
+        "from_round": 2,
+        "zone": "edge_band_12",
+        "gates": {"min_from_enemy_in": 12, "min_from_marker_in": 12}
+      },
+      "markers": {
+        "count": 1,
+        "placement": "table_centre",
+        "carry": true,
+        "carry_by": "attacker",
+        "drop_in": 6
+      }
+    },
     "last_stand": {
       "name": "Last Stand",
       "family": "attack_defend",
