@@ -235,8 +235,10 @@ const MINIATURE_COLLISION_LAYER: int = 2
 ## movable terrain for selection/layouter tooling. Kept in sync with SandboxTerrainProp.
 const MOVABLE_TERRAIN_COLLISION_LAYER: int = 4
 
-## Casual-sandbox terrain categories (see SandboxTerrainProp / TerrainGroupBase).
-enum SandboxPropKind { RUIN, FOREST, HAZARD_CLUSTER }
+## Casual-sandbox terrain categories (see SandboxTerrainProp / TerrainGroupBase). Saves and the MP
+## spawn RPC carry the int: append new kinds, never renumber. BLOCKER (3) = a solid 6x3x2.5" piece,
+## the grid Blocker's profile.
+enum SandboxPropKind { RUIN, FOREST, HAZARD_CLUSTER, BLOCKER }
 
 
 ## Rules terrain type of a free-placed piece, by its prop kind (NONE for an unknown kind).
@@ -248,6 +250,8 @@ static func sandbox_terrain_type(kind: int) -> int:
 			return TerrainRules.TerrainType.FOREST
 		SandboxPropKind.HAZARD_CLUSTER:
 			return TerrainRules.TerrainType.DANGEROUS
+		SandboxPropKind.BLOCKER:
+			return TerrainRules.TerrainType.CONTAINER
 	return TerrainRules.TerrainType.NONE
 
 

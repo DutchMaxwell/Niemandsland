@@ -41,7 +41,7 @@
 
 use std::collections::VecDeque;
 
-use super::cost::{empty_cells, step_blocked, CellSet, Grid, StepOpts, Wall, Zone};
+use super::cost::{empty_cells, step_blocked, CellSet, Grid, Ledge, StepOpts, Wall, Zone, LEDGE_CLIMB_MAX_IN};
 use super::geom2::{
     add, distance_squared_to, distance_to, div, length, mul, polyline_length, sub, V2,
 };
@@ -100,6 +100,8 @@ pub struct FlowOpts<'a> {
     pub charge_tgt_bases: &'a [(V2, f64)],
     /// `opts["charge_slots"]` (:1105).
     pub charge_slots: &'a [V2],
+    /// `opts["ledges"]` (heights B2) — climbable edges; those over 3" are folded into the walls.
+    pub ledges: &'a [Ledge],
 }
 
 impl<'a> FlowOpts<'a> {
@@ -117,6 +119,7 @@ impl<'a> FlowOpts<'a> {
             charge_goal: call.opts.charge_goal,
             charge_tgt_bases: &call.opts.charge_tgt_bases,
             charge_slots: &call.opts.charge_slots,
+            ledges: &call.opts.ledges,
         }
     }
 }
@@ -281,6 +284,11 @@ pub fn plan_sequential_flow(
     if n == 0 {
         return out;
     }
+    // Ledges over 3" are impassable (GF p.11): they join the walls; the rest stay priced climbs.
+    let (soft_ledges, tall): (Vec<Ledge>, Vec<Ledge>) =
+        opts.ledges.iter().partition(|l| l.dy_in <= LEDGE_CLIMB_MAX_IN + EPS);
+    let walls_all: Vec<Wall> = walls.iter().copied().chain(tall.iter().map(|l| [l.a, l.b])).collect();
+    let walls: &[Wall] = &walls_all;
     // :1029 — the board is resolved ONCE and handed down: the per-model option
     // dictionaries below are rebuilt from scratch.
     let board = board_extents(board_in, opts.board_y_in);
@@ -330,6 +338,7 @@ pub fn plan_sequential_flow(
                 });
             }
             let cstep = StepOpts {
+                ledges: &soft_ledges,
                 clearance: base_clearance,
                 zones: &czones,
                 avoid_cells: opts.avoid_cells,
@@ -373,6 +382,7 @@ pub fn plan_sequential_flow(
         }
 
         let step = StepOpts {
+            ledges: &soft_ledges,
             clearance: base_clearance,
             zones: &zones,
             avoid_cells: opts.avoid_cells,
@@ -438,6 +448,7 @@ pub fn plan_sequential_flow(
     // :1173-1179 — the endpoint 2-opt, then a re-route of every trail whose end
     // moved. `untangle_oi` carries the OTHER units' zones only, never the bodies.
     let ustep = StepOpts {
+        ledges: &[],
         clearance: base_clearance,
         zones: &base,
         avoid_cells: opts.avoid_cells,
@@ -563,6 +574,7 @@ pub fn pull_into_placed(
         return pos;
     }
     let step = StepOpts {
+        ledges: &[],
         clearance,
         zones: other_zones,
         avoid_cells,
