@@ -727,6 +727,8 @@ impl Core {
             dangerous_end_morale: self.knobs.dangerous_end_morale,
             // Tray-exact series: dormant until its one epoch bump (io.rs `Seams::tray_exact`).
             tray_exact: false,
+            // Dormant: only the search's root seams will set it (io.rs `Seams::plain_only`).
+            plain_only: false,
             // GF v3.5.1 p.9 — `consolidate="table"` in the header.
             consolidate: self.knobs.consolidate,
             // Rung I (DEFECT_LEDGER row 31) — `cond_ap_dice` in the header.

@@ -598,6 +598,14 @@ pub struct Seams {
     /// (`--red-move-rigid`). Default OFF, so nothing replays differently.
     #[serde(default)]
     pub move_rigid: bool,
+    /// `movement` limited to its plain ADVANCE/RUSH routing: the CHARGE port
+    /// (aim, arc budget, falls-short snap), the oval engage gaps and the Hit &
+    /// Run kite keep their rigid / radius readings. The seam the search's ROOT
+    /// moves are to use under `route_root` (the measured cheap form of table
+    /// thinking: the routing alone carried the strength, the other pieces
+    /// nothing). DORMANT: no header sets it; tests do.
+    #[serde(default)]
+    pub plain_only: bool,
     /// NML-1073 M5 D1-B8 — the RED switch for the p.12 DANGEROUS-terrain test,
     /// and inverted on purpose: the test is not a research seam but a rule, so
     /// `false` (the `Default`, and every corpus's) RUNS it. It fires only on the
