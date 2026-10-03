@@ -139,6 +139,42 @@ pub struct Zone {
     yaw: f64,
     y1: f64,
     solid: bool,
+    /// `Some` for a freely placed shelf piece: an upright box instead of cells.
+    foot: Option<BoxFoot>,
+}
+
+/// A free shelf piece's footprint (`TerrainOverlay._sandbox_volumes` "box"): metres, `yaw` as in
+/// `TerrainRules.point_in_obb` (local +X -> (cos, -sin)), standing from `y0`.
+#[derive(Debug, Clone, Copy)]
+struct BoxFoot {
+    c: [f64; 2],
+    he: [f64; 2],
+    yaw: f64,
+    y0: f64,
+}
+
+impl BoxFoot {
+    fn local(&self, p: [f64; 2]) -> [f64; 2] {
+        let (d, (s, c)) = ([p[0] - self.c[0], p[1] - self.c[1]], self.yaw.sin_cos());
+        [d[0] * c - d[1] * s, d[0] * s + d[1] * c]
+    }
+
+    fn holds_point(&self, p: [f64; 2]) -> bool {
+        let q = self.local(p);
+        q[0].abs() <= self.he[0] && q[1].abs() <= self.he[1]
+    }
+
+    /// `TerrainRules.segment_intersects_obb` — an end inside, or an edge crossed.
+    fn hit_by(&self, p: [f64; 2], q: [f64; 2]) -> bool {
+        if self.holds_point(p) || self.holds_point(q) {
+            return true;
+        }
+        let (s, c) = self.yaw.sin_cos();
+        let (dx, dz) = ([c * self.he[0], -s * self.he[0]], [s * self.he[1], c * self.he[1]]);
+        let k = [(1.0, 1.0), (1.0, -1.0), (-1.0, -1.0), (-1.0, 1.0)]
+            .map(|(i, j)| [self.c[0] + i * dx[0] + j * dz[0], self.c[1] + i * dx[1] + j * dz[1]]);
+        (0..4).any(|i| seg_seg(p, q, k[i], k[(i + 1) % 4]).is_some())
+    }
 }
 
 /// `TerrainRules.cell_of(p.rotated(-yaw), cell_size)` — `VolumetricLos.cells_key`.
@@ -154,9 +190,21 @@ fn cell_of(p: [f64; 2], yaw: f64, cell_m: f64) -> (i64, i64) {
 }
 
 impl Zone {
+    /// A freely placed shelf piece as an upright box. Nothing builds one yet.
+    pub fn shelf_box(c: [f64; 2], he: [f64; 2], yaw: f64, y0: f64, y1: f64, solid: bool) -> Zone {
+        let foot = Some(BoxFoot { c, he, yaw, y0 });
+        Zone { cells: HashSet::new(), cell_m: 1.0, yaw, y1, solid, foot }
+    }
+
     /// `VolumetricLos.segment_hits_cells` — the quarter-cell walk of the flat
-    /// segment, each sample's interpolated height tested against the slab.
+    /// segment, each sample's interpolated height tested against the slab. A
+    /// box: `segment_hits_box`, the slab clip then the flat OBB test.
     fn hits(&self, a: [f64; 3], b: [f64; 3]) -> bool {
+        if let Some(f) = &self.foot {
+            let (t0, t1) = slab_t(a, b, f.y0, self.y1);
+            let at = |t: f64| [a[0] + (b[0] - a[0]) * t, a[2] + (b[2] - a[2]) * t];
+            return t0 <= t1 && f.hit_by(at(t0), at(t1));
+        }
         let (dx, dz) = (b[0] - a[0], b[2] - a[2]);
         let span = (dx * dx + dz * dz).sqrt();
         if span < MIN_SPAN_M {
@@ -191,6 +239,12 @@ impl Zone {
     fn holds(&self, cy: &Cyl) -> bool {
         if cy.y1 > self.y1 + Y_EPS_M {
             return false;
+        }
+        if let Some(f) = &self.foot {
+            // `circle_in_footprint`, box branch: the base disc touches the footprint.
+            let q = f.local(cy.c);
+            let near = [q[0].clamp(-f.he[0], f.he[0]), q[1].clamp(-f.he[1], f.he[1])];
+            return (q[0] - near[0]).hypot(q[1] - near[1]) <= cy.r;
         }
         let (lo, hi) = (
             cell_of([cy.c[0] - cy.r, cy.c[1] - cy.r], self.yaw, self.cell_m),
@@ -429,6 +483,7 @@ pub fn zones_of(t: &Terrain) -> Vec<Zone> {
             yaw: t.grid_yaw(),
             y1: volume_height_in(kind) * IN2M,
             solid: !(kind == terrain::FOREST || kind == terrain::RUINS),
+            foot: None,
         });
     }
     out
