@@ -489,6 +489,22 @@ pub fn zones_of(t: &Terrain) -> Vec<Zone> {
     out
 }
 
+/// `zones_of`, plus with `shelf` (the dormant `Seams::shelf_sight`) every freely
+/// placed shelf piece of the header as its own upright box of its type's height —
+/// `TerrainOverlay._sandbox_volumes` (:1283-1300). The header records no floor
+/// slabs (act_recorder.gd keeps c/he/yaw/type), so a multi-storey free ruin's
+/// upper floors are not here.
+pub fn zones_of_with(t: &Terrain, shelf: bool) -> Vec<Zone> {
+    let mut out = zones_of(t);
+    if shelf && t.is_valid() {
+        for s in t.sandbox().iter().filter(|s| volume_height_in(s.kind) > 0.0) {
+            let solid = !(s.kind == terrain::FOREST || s.kind == terrain::RUINS);
+            out.push(Zone::shelf_box(s.c, s.he, s.yaw, 0.0, volume_height_in(s.kind) * IN2M, solid));
+        }
+    }
+    out
+}
+
 /// The largest base radius among a unit's alive models —
 /// `main._solo_unit_base_radius_m` :4227-4234, the width of its sight cylinder.
 pub fn unit_radius_m(state: &State, i: usize) -> f64 {
