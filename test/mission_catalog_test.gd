@@ -12,10 +12,10 @@ func before_test() -> void:
 
 
 func test_catalog_lists_the_shipped_missions() -> void:
-	# The original ten, the two carried-marker missions, and the first Attack & Defend one.
+	# The original ten, the two carried-marker missions, and the Attack & Defend ones that shipped.
 	assert_that(MissionCatalog.mission_ids()).is_equal(
 		["breakthrough", "capture_and_hold", "demolition", "domination", "duel",
-		"headquarters", "king_of_the_hill", "mosh_pit", "pitched_battle",
+		"headquarters", "king_of_the_hill", "last_stand", "mosh_pit", "pitched_battle",
 		"relic_hunt", "sabotage", "seize_ground", "smash_and_grab"])
 
 
@@ -149,3 +149,26 @@ func test_marker_positions_modes() -> void:
 	assert_that(MissionCatalog.marker_positions(koth, style)).is_equal([Vector2.ZERO])
 	var duel := MissionCatalog.get_mission("duel")
 	assert_that(MissionCatalog.marker_positions(duel, style)).is_equal([])
+
+
+## D14.3 — Last Stand (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles, the defender's whole
+## army in the 12" disc round the central marker, the attacker in the 12" edge frame; a destroyed
+## attacker unit returns to reserve once on a 6; the marker's holder wins.
+func test_last_stand_is_the_attack_and_defend_recycle_mission() -> void:
+	var m := MissionCatalog.get_mission("last_stand")
+	assert_str(str(m["name"])).is_equal("Last Stand")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("end")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_bool(m.has("attacker_points_factor")).override_failure_message("the book grants no +25 % here").is_false()
+	assert_that(m["deploy_phases"]).is_equal([["defender", "all", "centre_disc_12"], ["attacker", "all", "edge_band_12"]])
+	var r: Dictionary = m["reserves"]
+	assert_str(str(r["who"])).is_equal("attacker")
+	assert_bool(bool(r["recycle"])).is_true()
+	assert_int(int(r["arrive_on"])).is_equal(6)
+	assert_str(str(r["zone"])).is_equal("edge_band_12")
+	var style := DeploymentCatalog.get_style("front_line")
+	assert_that(MissionCatalog.marker_positions(m, style)).is_equal([Vector2.ZERO])
+	for id in ["centre_disc_12", "edge_band_12"]:
+		assert_bool(DeploymentCatalog.style_ids().has(id)).is_true()

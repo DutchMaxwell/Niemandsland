@@ -161,6 +161,18 @@ def test_smash_and_grab_catalog_entry_pins_rounds_roles_and_secret_markers():
     assert sp.mission_markers(snap["markers"], 4) == [{"secret": "", "revealed": False}] * 4
 
 
+def test_last_stand_catalog_entry_pins_phases_recycling_and_the_central_marker():
+    snap = sp.resolve_mission("last_stand", REPO)
+    assert snap["name"] == "Last Stand" and snap["scoring"] == "end" and snap["rounds"] == 6 and snap["roles"] is True
+    assert "attacker_points_factor" not in snap
+    assert snap["markers"] == {"count": 1, "placement": "table_centre"}
+    assert snap["reserves"] == {"who": "attacker", "recycle": True, "arrive_on": 6, "from_round": 2,
+                                "zone": "edge_band_12", "gates": {}}
+    ph = sp._phase_args(snap, 1, REPO)   # attacker = slot 1: the defender (side 1) goes first
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "all"), (0, "all")]
+    assert sp._reserve_args(snap, 1)[0] == [True, False], "only the attacker recycles"
+
+
 @needs_lists
 def test_a_six_round_catalog_mission_plays_six_rounds_and_duel_stays_at_four():
     """NML-1010 D1: the match length is catalog data. No shipped mission is longer than 4,
