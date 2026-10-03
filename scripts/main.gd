@@ -13126,7 +13126,8 @@ func _vfx_emit(cue: Dictionary) -> int:
 	cue["id"] = _vfx_seq
 	cue["s"] = _vfx_session
 	_vfx_draw(cue, 0)
-	if network_manager != null and network_manager.is_multiplayer_active():
+	# A cosmetic cue must never take a resolution down: no live session in the tree, no send.
+	if network_manager != null and network_manager.is_inside_tree() and network_manager.is_multiplayer_active():
 		network_manager.send_command("vfx_cue", cue, 0)
 	return _vfx_seq
 

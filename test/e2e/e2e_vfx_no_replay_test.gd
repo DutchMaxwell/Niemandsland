@@ -86,6 +86,7 @@ func test_a_late_joiners_state_sync_replays_no_cue(timeout := 240000) -> void:
 	var state: Dictionary = _main.save_manager.serialize_game_state()
 	var real: Node = _main.network_manager
 	var fake := FakeNet.new()
+	_main.add_child(fake)   # in the tree like a live session's network node, so a stray cue WOULD be sent
 	_main.network_manager = fake
 	state["_host_version"] = fake.get_game_version()
 	await _main._rpc_sync_game_state(state)

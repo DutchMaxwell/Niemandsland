@@ -70,6 +70,7 @@ func test_a_peer_seal_forms_and_ends(timeout := 120000) -> void:
 func test_the_resolving_peer_sends_each_cue_once(timeout := 120000) -> void:
 	var real: Node = _main.network_manager
 	var stub := StubNet.new()
+	_main.add_child(stub)   # a live session's network node sits in the tree (out of it, nothing is sent)
 	_main.network_manager = stub
 	var mi := ModelInstance.new()
 	mi.node = Node3D.new()
