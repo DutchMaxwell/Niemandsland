@@ -39,6 +39,8 @@ func test_ai_advance_climbs_a_ledge_pays_it_and_settles_on_the_roof() -> void:
 
 func test_without_the_ledge_wiring_the_edge_stays_a_wall() -> void:
 	var s := _setup(2.5, false)
-	(s[0] as SoloController)._execute_move(s[1], Vector3(1.0, 0, 0), 6.0, false)
-	assert_float((s[2] as ModelInstance).node.global_position.x).is_less(EDGE_X_M)
-	assert_float((s[0] as SoloController).last_move_climb_in).is_equal(0.0)
+	# Plan only (a blocked execute walks the boxed-in ladder, which needs an army manager).
+	var solo: SoloController = s[0]
+	var models: Array = solo._moving_models(s[1])
+	var out: Array = solo._plan_positions(s[1], models, solo._positions_of(models), Vector3(6.0 * 0.0254, 0, 0), false)
+	assert_float((out[0] as Vector3).x).is_less(EDGE_X_M)
