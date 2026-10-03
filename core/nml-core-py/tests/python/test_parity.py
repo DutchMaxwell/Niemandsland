@@ -780,3 +780,24 @@ def test_fogged_markers_are_priced_one_over_n():
     state = core.state_of(plain)
     mean = (0.75 + 0.0 + 0.75) / 3.0
     assert abs(core.score_hand_incoming(state, 1, [0.0] * state.units) - (0.5 * (mean - 0.1 / 3.0) + 0.25)) < 1e-12
+
+
+def test_selfplay_verdict_decides_the_role_missions_on_the_board():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    import selfplay
+    plain = copy.deepcopy(acts[0]["state"])
+    for unit in plain["units"].values():
+        unit.update(alive=0, positions=[], radii=[], wounds=[])
+    plain.update(attacker=1, scoring="extract")
+    plain["objectives"] = [{"pos": [30 * 0.0254, 0, 0], "owner": 0}]
+    plain["markers_meta"] = [{"carry": True, "carried_by": -1}]
+    led = {"scoring": "extract", "vp": [0, 0], "markers_meta": plain["markers_meta"]}
+    assert selfplay._verdict(core, [0], led, core.state_of(plain)) == "p1"
+    plain["objectives"][0]["pos"] = [0, 0, 0]
+    assert selfplay._verdict(core, [0], led, core.state_of(plain)) == "p2"
+    led2 = {"scoring": "escort", "vp": [0, 0], "markers_meta": [{"mobile": True, "deploy_edge": 1}]}
+    plain.update(scoring="escort")
+    plain["markers_meta"] = led2["markers_meta"]
+    plain["objectives"] = [{"pos": [0, 0, -18 * 0.0254], "owner": 0}]
+    assert selfplay._verdict(core, [0], led2, core.state_of(plain)) == "p2"
