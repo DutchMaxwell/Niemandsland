@@ -157,6 +157,7 @@ def test_smash_and_grab_catalog_entry_pins_rounds_roles_and_secret_markers():
     assert snap["name"] == "Smash & Grab" and snap["scoring"] == "extract"
     assert snap["rounds"] == 6 and snap["roles"] is True and snap["attacker_points_factor"] == 1.25
     assert snap["markers"]["count"] == "d3+2" and snap["markers"]["secret"] is True
+    assert snap["markers"]["placer"] == "defender"
     assert "carry" not in snap["markers"]
     assert sp.mission_markers(snap["markers"], 4) == [{"secret": "", "revealed": False}] * 4
 
