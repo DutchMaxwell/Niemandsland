@@ -122,26 +122,16 @@ func _update_active_markers(markers: Array) -> void:
 
 		var value = _marker_value_for(marker_name)
 
-		var label = Label.new()
+		var label := HouseStyle.label("%s: %d" % [marker_name, value] if value >= 0 else marker_name, HouseStyle.BODY)
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		label.text = "%s: %d" % [marker_name, value] if value >= 0 else marker_name
 		hbox.add_child(label)
 
 		if value >= 0:
-			var minus_btn = Button.new()
-			minus_btn.text = "-"
-			minus_btn.pressed.connect(_on_counter_changed.bind(marker_name, -1))
-			hbox.add_child(minus_btn)
+			hbox.add_child(_small(HouseStyle.step_text(-1, true), _on_counter_changed.bind(marker_name, -1)))
+			hbox.add_child(_small(HouseStyle.step_text(1, true), _on_counter_changed.bind(marker_name, 1)))
 
-			var plus_btn = Button.new()
-			plus_btn.text = "+"
-			plus_btn.pressed.connect(_on_counter_changed.bind(marker_name, 1))
-			hbox.add_child(plus_btn)
-
-		var remove_btn = Button.new()
-		remove_btn.text = "×"   # U+00D7: Inter (the UI font) has no U+2715
-		remove_btn.pressed.connect(_on_remove_marker_pressed.bind(marker_name))
-		hbox.add_child(remove_btn)
+		# U+00D7: Inter (the UI font) has no U+2715
+		hbox.add_child(_small(HouseStyle.GLYPH_CLOSE, _on_remove_marker_pressed.bind(marker_name)))
 
 		active_container.add_child(hbox)
 
@@ -160,9 +150,8 @@ func _update_library_section() -> void:
 	for token_name in names:
 		var row = HBoxContainer.new()
 
-		var apply_btn = Button.new()
-		apply_btn.text = token_name
-		apply_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var apply_btn := HouseStyle.button(token_name, HouseStyle.BUTTON)
+		apply_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		# The token colour tells buff (green) from debuff (red) at a glance; the effect text from
 		# the army book (rule/spell) rides on the tooltip so picking needs no rules lookup.
 		apply_btn.add_theme_color_override("font_color", token_library.get_color(token_name))
@@ -172,10 +161,8 @@ func _update_library_section() -> void:
 		apply_btn.pressed.connect(_on_library_apply.bind(token_name))
 		row.add_child(apply_btn)
 
-		var edit_btn = Button.new()
-		edit_btn.text = "✎"
+		var edit_btn := _small("Edit", _enter_edit_mode.bind(token_name))   # the UI font has no ✎
 		edit_btn.tooltip_text = "Edit '%s' (name/color/effect) for all instances" % token_name
-		edit_btn.pressed.connect(_enter_edit_mode.bind(token_name))
 		row.add_child(edit_btn)
 
 		library_container.add_child(row)
@@ -338,103 +325,28 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## Creates the dialog programmatically (no scene). Full-rect overlay that dims +
-## blocks the game, with a centered panel - mirrors WoundsDialog / CastsDialog.
+## Creates the dialog programmatically (no scene), in the house style (maintainer D98 = a): the shared unit
+## dialog frame (house scrim + centred house panel), mirroring WoundsDialog / CastsDialog.
 static func create_simple() -> MarkerDialog:
 	var dialog = MarkerDialog.new()
 	dialog.name = "MarkerDialog"
-	dialog.theme = ThemeManager.get_current_theme()  # so PrimaryButton/DangerButton variations resolve
-	dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dialog.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	# Dim background that blocks input to the scene behind
-	var bg = ColorRect.new()
-	bg.name = "Background"
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0, 0, 0, 0.4)
-	bg.mouse_filter = Control.MOUSE_FILTER_STOP
-	dialog.add_child(bg)
-
-	# Centered panel
-	var panel = PanelContainer.new()
-	panel.name = "Panel"
-	panel.custom_minimum_size = Vector2(360, 0)
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
-	dialog.add_child(panel)
-
-	var margin = MarginContainer.new()
-	UiPolish.set_dialog_margins(margin)
-	panel.add_child(margin)
-
-	var vbox = VBoxContainer.new()
-	vbox.name = "VBox"
-	vbox.add_theme_constant_override("separation", HudTokens.SPACE_8)
-	margin.add_child(vbox)
-
-	# Tactical header (Orbitron title + amber index + accent line)
-	vbox.add_child(HudTokens.header("MARKERS", "/// MARK"))
+	var vbox := HouseStyle.dialog_frame(dialog, "MARKERS", Vector2(360, 0))
 
 	# Title (per-target name, updated in _update_display)
-	var title = Label.new()
-	title.text = "Tokens"
-	title.add_theme_font_override("font", HudTokens.mono_font())
-	title.add_theme_font_size_override("font_size", 12)
-	title.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
-	vbox.add_child(title)
-	dialog.title_label = title
+	dialog.title_label = _caption(vbox, "Tokens")
 
 	# Active tokens
-	var active_label = Label.new()
-	active_label.text = "ACTIVE"
-	active_label.add_theme_font_override("font", HudTokens.mono_font())
-	active_label.add_theme_font_size_override("font_size", 12)
-	active_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
-	vbox.add_child(active_label)
-
-	var active_scroll = ScrollContainer.new()
-	active_scroll.custom_minimum_size = Vector2(0, 90)
-	active_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(active_scroll)
-
-	var active_vbox = VBoxContainer.new()
-	active_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	active_scroll.add_child(active_vbox)
-	dialog.active_container = active_vbox
-
+	_caption(vbox, "ACTIVE")
+	dialog.active_container = _list(vbox)
 	vbox.add_child(HSeparator.new())
 
 	# Reusable token library
-	var lib_label = Label.new()
-	lib_label.text = "SAVED TOKENS (CLICK TO APPLY, ✎ TO EDIT)"
-	lib_label.add_theme_font_override("font", HudTokens.mono_font())
-	lib_label.add_theme_font_size_override("font_size", 12)
-	lib_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
-	vbox.add_child(lib_label)
-
-	var lib_scroll = ScrollContainer.new()
-	lib_scroll.custom_minimum_size = Vector2(0, 90)
-	lib_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(lib_scroll)
-
-	var lib_vbox = VBoxContainer.new()
-	lib_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lib_scroll.add_child(lib_vbox)
-	dialog.library_container = lib_vbox
-
+	_caption(vbox, "SAVED TOKENS (CLICK TO APPLY, EDIT TO CHANGE)")
+	dialog.library_container = _list(vbox)
 	vbox.add_child(HSeparator.new())
 
 	# New / edit token
-	var new_label = Label.new()
-	new_label.text = "NEW / EDIT TOKEN"
-	new_label.add_theme_font_override("font", HudTokens.mono_font())
-	new_label.add_theme_font_size_override("font_size", 12)
-	new_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
-	vbox.add_child(new_label)
-
+	_caption(vbox, "NEW / EDIT TOKEN")
 	var name_hbox = HBoxContainer.new()
 	vbox.add_child(name_hbox)
 
@@ -445,6 +357,7 @@ static func create_simple() -> MarkerDialog:
 	dialog.custom_input = custom_input
 
 	var color_picker = OptionButton.new()
+	color_picker.theme_type_variation = HouseStyle.BUTTON
 	name_hbox.add_child(color_picker)
 	dialog.color_picker = color_picker
 
@@ -454,15 +367,11 @@ static func create_simple() -> MarkerDialog:
 	var counter_check = CheckBox.new()
 	counter_check.text = "Counter"
 	counter_check.tooltip_text = "Adjustable +/- value for resource/stacking rules"
+	counter_check.theme_type_variation = HouseStyle.BUTTON   # a check line, as in the game menu
 	counter_hbox.add_child(counter_check)
 	dialog.counter_check = counter_check
 
-	var start_label = Label.new()
-	start_label.text = "START"
-	start_label.add_theme_font_override("font", HudTokens.mono_font())
-	start_label.add_theme_font_size_override("font_size", 12)
-	start_label.add_theme_color_override("font_color", UiPolish.TEXT_MUTED)
-	counter_hbox.add_child(start_label)
+	_caption(counter_hbox, "START")
 
 	var counter_spin = SpinBox.new()
 	counter_spin.min_value = 0
@@ -477,27 +386,41 @@ static func create_simple() -> MarkerDialog:
 	vbox.add_child(effect_field)
 	dialog.effect_input = effect_field
 
-	# Action buttons (always visible at the bottom)
+	# Action buttons (always visible at the bottom): Add is the main action
 	var buttons_hbox = HBoxContainer.new()
+	buttons_hbox.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
 	vbox.add_child(buttons_hbox)
-
-	var add_btn = Button.new()
-	add_btn.text = "Add"
-	add_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_btn.theme_type_variation = "PrimaryButton"
-	UiPolish.primary_button(add_btn)
-	buttons_hbox.add_child(add_btn)
-	dialog.add_custom_button = add_btn
-
-	var close_btn = Button.new()
-	close_btn.text = "Close"
-	close_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UiPolish.primary_button(close_btn)
-	buttons_hbox.add_child(close_btn)
-	dialog.close_button = close_btn
-
-	# Corner-bracket chrome on top (instrumentation look) — must be the panel's last child
-	panel.add_child(HudFrame.new())
+	dialog.add_custom_button = HouseStyle.button("Add", HouseStyle.PRIMARY)
+	buttons_hbox.add_child(dialog.add_custom_button)
+	dialog.close_button = HouseStyle.button("Close", HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	buttons_hbox.add_child(dialog.close_button)
 
 	dialog._setup_ui()
 	return dialog
+
+
+static func _caption(box: Container, text: String) -> Label:
+	var l := HouseStyle.label(text, HouseStyle.CAPTION)
+	box.add_child(l)
+	return l
+
+
+## A scrolling list (active tokens, the library), 90 px tall.
+static func _list(box: VBoxContainer) -> VBoxContainer:
+	var scroll = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 90)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(scroll)
+	var list = VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	return list
+
+
+## A small house button of a token row (− / + / × / Edit), as wide as its word.
+static func _small(text: String, on_press: Callable) -> Button:
+	var b := HouseStyle.button(text, HouseStyle.BUTTON, HouseStyle.H_PIP)
+	b.custom_minimum_size.x = HouseStyle.H_PIP
+	b.size_flags_horizontal = Control.SIZE_SHRINK_END
+	b.pressed.connect(on_press)
+	return b

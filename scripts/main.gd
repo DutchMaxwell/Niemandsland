@@ -62,6 +62,8 @@ var cinematic_intro: CinematicIntro = null
 ## black and dissolves cleanly into the intro (freed once the intro's own black is up).
 var _prompt_overlay: CanvasLayer = null
 
+## One owner of the table's contested Environment values (preset, mood light, biome reference, intro).
+var render_state: RenderState = null
 # Lighting Controller
 var lighting_controller: Node = null
 var lighting_panel: CanvasLayer = null
@@ -286,6 +288,7 @@ var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-ar
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
 var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
+var _esc_owned := false   # set at each Esc press: something else owned it (see _esc_owner_active)
 var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome, spots, strip, armed} while a Takedown / wound / Reanimation pick awaits a model click (strip/armed: NML-1040)
 # TC-023 (Takedown, GF v3.5.1 p.14 "resolved as if it was a unit of [1]"): while this holds the picked
 # model, the shared target-side readers answer for THAT MODEL ALONE — its own unit's rules (the joined
@@ -634,11 +637,20 @@ func _ready() -> void:
 	table.setup_table(DEFAULT_TABLE_SIZE_FEET)
 	_adjust_camera_for_table_size(DEFAULT_TABLE_SIZE_FEET)
 
+	# The quality preset is the render state's lowest layer, applied by rule at the start (the autoload ran at the
+	# startup menu, before this scene existed); the light, the biome reference and the intro add theirs above it.
+	render_state = RenderState.new(world_environment.environment)
+	GraphicsSettings.apply_environment_settings(GraphicsSettings.PRESETS[GraphicsSettings.current_preset])
+	# The window (fullscreen + present mode, frame cap, UI scale) is re-asserted here too, as the removed duplicate
+	# GraphicsSettings node in main.tscn did by accident: without it Low ran in the slow mode (36 ms GPU instead of
+	# 26) in 8 of 8 test-display runs, with it in 2 of 12 (03.10.) — the start-up menu's own call does not stick.
+	GraphicsSettings.apply_window_constraints()
+
 	# Initialize Lighting Controller
 	lighting_controller = Node.new()
 	lighting_controller.set_script(load("res://scripts/lighting_controller.gd"))
 	add_child(lighting_controller)
-	lighting_controller.initialize(directional_light, world_environment, fill_light)
+	lighting_controller.initialize(directional_light, world_environment, fill_light, render_state)
 
 	# Initialize Lighting Panel UI
 	lighting_panel = load("res://scripts/lighting_panel.gd").new()
@@ -10684,7 +10696,7 @@ func _solo_split_declare_second(target: GameUnit) -> void:
 			", ".join(rest), sf.get_name(), ", ".join(sb), target.get_name()])
 	_solo_deploy_ui_show("Split fire declared:\n· %s → %s\n· %s → %s" % [
 		", ".join(rest), sf.get_name(), ", ".join(sb), target.get_name()],
-		"🔥 Fire!", _solo_split_commit, "× Cancel attack", _solo_split_abort)
+		"Fire!", _solo_split_commit, "× Cancel attack", _solo_split_abort)
 
 
 ## The GO button of the declared split — only now do dice roll. Awaitable (tests wait on
@@ -10725,11 +10737,19 @@ func solo_owns_mouse() -> bool:
 ## deliver mouse events, and it is the correct stage: it runs after the GUI, so a click that a HUD
 ## control owns never reaches targeting in the first place — no hand-rolled "is the pointer over UI?"
 ## check needed (that heuristic, _solo_over_blocking_ui, is deleted).
-## Keys (ESC) keep flowing through _unhandled_key_input; only mouse events are handled here.
+## Keys (ESC) keep flowing through _unhandled_key_input; here only the mouse, and last of all an Esc nobody took.
 func _unhandled_input(event: InputEvent) -> void:
 	# B5: an active Takedown model pick owns the mouse first — one click chooses the sniped model.
 	if not _solo_model_pick.is_empty():
 		if _solo_model_pick_input(event):
+			get_viewport().set_input_as_handled()
+		return
+	# Esc that reached the table unowned opens / closes the ☰ game menu (maintainer 03.10.2026, Esc = A): a
+	# LAST fallback, every window, ghost, radial, drag and pick mode before it keeps its own Esc.
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+		if not _esc_owned:
+			_on_hamburger_pressed()
 			get_viewport().set_input_as_handled()
 		return
 	if _solo_target_mode.is_empty():
@@ -10738,6 +10758,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if await _solo_targeting_input(event):
 		get_viewport().set_input_as_handled()
+
+
+## At each Esc press, before any handler acts: does something else own it? (_unhandled_input reads the answer.)
+func _input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+		_esc_owned = _esc_owner_active()
+
+
+## Esc owners that act without consuming the key (a drag cancels, these panels hide) and any window that holds
+## the keyboard focus (a sheet's OK button) — after them the key still reaches the table, so the menu must not
+## open on top. The ☰ button and the menu's own controls do not count: Esc closes the menu they belong to.
+func _esc_owner_active() -> bool:
+	if object_manager != null and object_manager._is_dragging:
+		return true
+	for panel: Variant in [lighting_panel, privacy_menu, after_game_card, map_layout_editor]:
+		if panel != null and is_instance_valid(panel) and panel.visible:
+			return true
+	var focus := get_viewport().gui_get_focus_owner()
+	return focus != null and focus != hamburger_button and not left_panel_scroll.is_ancestor_of(focus)
 
 
 ## B5 (test game 2, decided: Ziel-MODELL-Pick): while a Takedown pick is active, LMB on an alive
@@ -11269,34 +11309,22 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 ## The split-fire question itself (#226): one check box per weapon group; returns the checked names
 ## ([] = "All at <target>"). Apart from the guards above so the prompt is drivable headless.
 func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Split fire?"
-	dlg.ok_button_text = "Pick 2nd target"
-	dlg.cancel_button_text = "All at %s" % target_a.get_name()
-	var box := VBoxContainer.new()
-	var lbl := Label.new()
-	lbl.text = "Up to two targets (GF v3.5.1 p.8). Checked weapons fire at a SECOND target:"
-	box.add_child(lbl)
+	var card := PromptCard.new("Split fire?",
+		"Up to two targets (GF v3.5.1 p.8). Checked weapons fire at a SECOND target:",
+		"Pick 2nd target", "All at %s" % target_a.get_name())
 	var checks: Array = []
 	for n in names:
 		var cb := CheckBox.new()
 		cb.text = str(n)
-		box.add_child(cb)
+		card.rows.add_child(cb)
 		checks.append(cb)
-	dlg.add_child(box)
-	var outcome: Array = []
-	dlg.confirmed.connect(func() -> void: outcome.append(true))
-	dlg.canceled.connect(func() -> void: outcome.append(false))
-	add_child(dlg)
-	dlg.popup_centered()
-	while outcome.is_empty():
-		await get_tree().process_frame
+	GameMenu.section(card.rows)   # the check boxes as house lines, as in the game menu
+	add_child(card)
 	var picked: Array = []
-	if bool(outcome[0]):
+	if bool(await card.answer()):
 		for i in checks.size():
 			if (checks[i] as CheckBox).button_pressed:
 				picked.append(names[i])
-	dlg.queue_free()
 	return picked
 
 

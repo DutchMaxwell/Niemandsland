@@ -15,10 +15,6 @@ const CARD_MIN_ASPECT := 2.0
 const CARD_MAX_ASPECT := 2.8
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
 const LOGO = preload("res://assets/ui_glassmorphism/fonts/Orbitron.ttf")
-const INK := Color("e9e9df")
-const MUTED := Color("a7b0b6")
-const CYAN := Color("87babc")
-const GOLD := Color("d9bd83")
 # Keys are the TABLE's biome ids (table.gd BIOMES): the selection goes straight into table.set_biome.
 const BIOMES := {
 	"urban_ruins":["Urban ruins","Fractured stone, scarred concrete and scattered rubble."],
@@ -82,11 +78,11 @@ class Footprint extends Control:
 		for i in range(1,8):
 			var y := origin.y+extent.y*float(i)/8
 			draw_line(Vector2(origin.x,y),Vector2(origin.x+extent.x,y),Color("234048"))
-		draw_rect(Rect2(origin,extent),CYAN,false,1)
+		draw_rect(Rect2(origin,extent),HouseStyle.ACCENT,false,1)
 		var factor := 2.54 if centimeters else 1.0
 		var unit := "cm" if centimeters else "in"
-		draw_string(FONT,Vector2(origin.x,origin.y-8),"%s %s" % [TableSizeDialog.number(inches.x*factor),unit],HORIZONTAL_ALIGNMENT_CENTER,extent.x,11,MUTED)
-		draw_string(FONT,Vector2(origin.x+extent.x+8,origin.y+extent.y*0.5+4),"%s %s" % [TableSizeDialog.number(inches.y*factor),unit],HORIZONTAL_ALIGNMENT_LEFT,65,11,MUTED)
+		draw_string(FONT,Vector2(origin.x,origin.y-8),"%s %s" % [TableSizeDialog.number(inches.x*factor),unit],HORIZONTAL_ALIGNMENT_CENTER,extent.x,11,HouseStyle.MUTED)
+		draw_string(FONT,Vector2(origin.x+extent.x+8,origin.y+extent.y*0.5+4),"%s %s" % [TableSizeDialog.number(inches.y*factor),unit],HORIZONTAL_ALIGNMENT_LEFT,65,11,HouseStyle.MUTED)
 
 
 func _ready() -> void:
@@ -141,7 +137,7 @@ func _build_ui() -> void:
 	var brand := _label("NIEMANDS",27)
 	brand.add_theme_font_override("font",LOGO)
 	wordmark.add_child(brand)
-	var land := _label("LAND",27,CYAN)
+	var land := _label("LAND",27,HouseStyle.ACCENT)
 	land.add_theme_font_override("font",LOGO)
 	wordmark.add_child(land)
 	var spacer := Control.new()
@@ -155,7 +151,7 @@ func _build_ui() -> void:
 	intro.add_theme_constant_override("separation",8)
 	_page.add_child(intro)
 	intro.add_child(_label("Prepare your table.",34))
-	intro.add_child(_label("Choose the setting and the space. Build the battlefield your way.",13,MUTED,true))
+	intro.add_child(_label("Choose the setting and the space. Build the battlefield your way.",13,HouseStyle.MUTED,true))
 	_columns = BoxContainer.new()
 	_columns.add_theme_constant_override("separation",36)
 	_page.add_child(_columns)
@@ -224,10 +220,10 @@ func _build_ui() -> void:
 		column.offset_right = -8
 		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		button.add_child(column)
-		column.add_child(_label(spec[1],11,MUTED))
+		column.add_child(_label(spec[1],11,HouseStyle.MUTED))
 		var value := _label("Your dimensions",13)
 		column.add_child(value)
-		column.add_child(_label(spec[2],10,MUTED))
+		column.add_child(_label(spec[2],10,HouseStyle.MUTED))
 		_size_labels[spec[0]] = value
 		button.pressed.connect(_select_size.bind(spec[0]))
 		presets.add_child(button)
@@ -239,7 +235,7 @@ func _build_ui() -> void:
 		var column := VBoxContainer.new()
 		column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_custom.add_child(column)
-		var caption := _label(title_value+" (in)",12,MUTED)
+		var caption := _label(title_value+" (in)",12,HouseStyle.MUTED)
 		column.add_child(caption)
 		_unit_labels.append(caption)
 		var input := LineEdit.new()
@@ -253,11 +249,11 @@ func _build_ui() -> void:
 			_length_input = input
 	_error = _label("",12,Color("eab2a2"),true)
 	left.add_child(_error)
-	left.add_child(_label("Table size is fixed once you create it.",11,MUTED))
+	left.add_child(_label("Table size is fixed once you create it.",11,HouseStyle.MUTED))
 	_add_left_air(left)
 	left.add_child(HSeparator.new())
-	left.add_child(_label("+   Your terrain. Your layout.",14,CYAN))
-	left.add_child(_label("Place and rearrange terrain freely after creating your table. The biome defines its visual style.",12,MUTED,true))
+	left.add_child(_label("+   Your terrain. Your layout.",14,HouseStyle.ACCENT))
+	left.add_child(_label("Place and rearrange terrain freely after creating your table. The biome defines its visual style.",12,HouseStyle.MUTED,true))
 	var right := VBoxContainer.new()
 	_right = right
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -294,9 +290,9 @@ func _build_ui() -> void:
 	_hero.add_child(caption)
 	_preview_title = _label("",29)
 	caption.add_child(_preview_title)
-	_preview_description = _label("",12,MUTED,true)
+	_preview_description = _label("",12,HouseStyle.MUTED,true)
 	caption.add_child(_preview_description)
-	right.add_child(_label("Example terrain arrangement. Your layout is up to you.",11,MUTED,true))
+	right.add_child(_label("Example terrain arrangement. Your layout is up to you.",11,HouseStyle.MUTED,true))
 	right.add_child(HSeparator.new())
 	var footprint_row := HBoxContainer.new()
 	footprint_row.size_flags_vertical = Control.SIZE_EXPAND_FILL   # takes the right column's slack
@@ -304,10 +300,10 @@ func _build_ui() -> void:
 	var details := VBoxContainer.new()
 	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	footprint_row.add_child(details)
-	details.add_child(_label("TABLE FOOTPRINT",10,CYAN))
+	details.add_child(_label("TABLE FOOTPRINT",10,HouseStyle.ACCENT))
 	_feet_label = _label("",21)
 	details.add_child(_feet_label)
-	_secondary_size = _label("",12,MUTED)
+	_secondary_size = _label("",12,HouseStyle.MUTED)
 	details.add_child(_secondary_size)
 	_footprint = Footprint.new()
 	_footprint.custom_minimum_size = Vector2(240,110)
@@ -320,7 +316,7 @@ func _build_ui() -> void:
 	var summary_column := VBoxContainer.new()
 	summary_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_footer.add_child(summary_column)
-	summary_column.add_child(_label("YOUR TABLE",10,MUTED))
+	summary_column.add_child(_label("YOUR TABLE",10,HouseStyle.MUTED))
 	_summary = _label("",16)
 	summary_column.add_child(_summary)
 	_create = _button("Create table     →")
@@ -543,7 +539,7 @@ func _grow(controls: Array, cap: float, usable: float) -> void:
 		control.custom_minimum_size.y = floorf(fits)
 
 
-func _label(value: String, font_size: int, color := INK, wrap := false) -> Label:
+func _label(value: String, font_size: int, color := HouseStyle.INK, wrap := false) -> Label:
 	var label := Label.new()
 	label.text = value
 	label.add_theme_font_override("font",FONT)
@@ -567,12 +563,12 @@ func _button(value: String) -> Button:
 
 func _style(button: Button, selected: bool, primary := false) -> void:
 	for state in ["normal","hover","pressed","focus"]:
-		var color := GOLD if primary else Color("253035") if selected else Color("142027")
+		var color := HouseStyle.GOLD if primary else Color("253035") if selected else Color("142027")
 		if state == "hover":
 			color = Color("ebd19a") if primary else Color("293b43")
-		button.add_theme_stylebox_override(state,_box(color,GOLD if selected or state == "focus" else Color("334047")))
+		button.add_theme_stylebox_override(state,_box(color,HouseStyle.GOLD if selected or state == "focus" else HouseStyle.LINE))
 	for state in ["font_color","font_hover_color","font_pressed_color","font_focus_color"]:
-		button.add_theme_color_override(state,Color.TRANSPARENT if button.has_meta("visual_card") else Color("192125") if primary else INK)
+		button.add_theme_color_override(state,Color.TRANSPARENT if button.has_meta("visual_card") else Color("192125") if primary else HouseStyle.INK)
 
 
 func _box(color: Color, border: Color) -> StyleBoxFlat:
