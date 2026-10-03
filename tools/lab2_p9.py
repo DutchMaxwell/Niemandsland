@@ -33,10 +33,14 @@ def decide(probe_rows, l_game_s, pilot_left_h, confirm_left_h, workers):
     cost = {}
     for r in probe_rows:
         cost[r["cell"]] = max(cost.get(r["cell"], 0.0), float(r["wall_s"]))
-    complete = len(probe_rows) == len(CONTROLS) * CELLS and len(cost) == CELLS and all(r["valid"] is True for r in probe_rows)
+    # HOLD until D151 (b): a BLOCKED-STRATUM probe (an unported true-tray transition) is counted and reported but is
+    # not incompleteness; any other invalid probe still is
+    blocked = sum(1 for r in probe_rows if r.get("blocked"))
+    complete = len(probe_rows) == len(CONTROLS) * CELLS and len(cost) == CELLS and \
+        all(r["valid"] is True or r.get("blocked") is True for r in probe_rows)
     per_cell = len(CONTROLS) * STREAMS
     proj = {
-        "cost_s": cost, "complete": complete,
+        "cost_s": cost, "complete": complete, "blocked_stratum": blocked,
         "mode_a_pilot_h": sum(2 * c * (D_ENDINGS * per_cell - len(CONTROLS)) for c in cost.values()) / 3600 / workers,
         "mode_a_confirm_h": sum(2 * c * A_POSITIONS * per_cell for c in cost.values()) / 3600 / workers,
         "mode_b_pilot_h": sum(2 * max(v) * B_GAMES for v in l_game_s.values()) / 3600 / workers,

@@ -40,6 +40,27 @@ class Declined(Exception):
     silent pass (prereg section 2: an unsupported transition is INVALID) - `guarded` ends the row as INVALID."""
 
 
+#: The P9 true-tray controls (descriptive, outside the confirmatory family). HOLD until D151 (b).
+CONTROL_ARMS = ("L_tray", "T_tray")
+
+
+class BlockedStratum(Exception):
+    """A CONTROL arm declined on an unported true-tray transition (TreeUnported): the row belongs to a stratum the
+    true-tray resolver does not cover. Counted and reported, excluded from pass/stop (D151 (b)); never a score, and
+    never applied to a primary arm, whose declines stay INVALID."""
+
+
+def decline_reason(sp, core, state, player, kwargs):
+    """The core's own reason for a declined pick: the same planner call once more (same sig, same leaf hook), read
+    for its `unsupported` field. "" when the repeat does not decline (then the decline stays a plain INVALID)."""
+    again = {k: kwargs[k] for k in ("sig", "leaf_value_w") if kwargs.get(k) is not None}
+    hook = (kwargs.get("leaf_value_fn") or {}).get(player)
+    if hook is not None:
+        again["leaf_value_fn"] = hook
+    raw = core.plan_with_rollout(state, player, sp.TRAINER_STATICS, **again)
+    return "" if raw.get("used") else str(raw.get("unsupported") or "")
+
+
 class Recorder:
     """Decisions of ONE game/ending. `arm_of(player)` names the arm that seat plays; `net` (or None) gives the
     per-seat call counts the decision cost."""
@@ -60,7 +81,11 @@ class Recorder:
             if not pick:
                 pool = state.pool(player, bool(core.knobs().get("hero_attach", True)))
                 if pool:
-                    raise Declined("side %d (%s) declined with %d units to activate" % (player, self.arm_of(player), len(pool)))
+                    why = decline_reason(sp, core, state, player, kwargs)
+                    if self.arm_of(player) in CONTROL_ARMS and why.startswith("TreeUnported"):
+                        raise BlockedStratum("side %d (%s): %s" % (player, self.arm_of(player), why))
+                    raise Declined("side %d (%s) declined with %d units to activate: %s"
+                                   % (player, self.arm_of(player), len(pool), why))
             if pick:
                 self.add(player, core.knobs().get("deadline_us", 0), (time.perf_counter_ns() - t0) // 1000,
                          pick.get("trace") or {}, self.calls(player) - before, kwargs.get("sig"))
@@ -113,6 +138,8 @@ def guarded(nm, fn):
         return None, "unsupported: %s" % e
     except TimeoutError as e:
         return None, "timeout: %s" % e
+    except BlockedStratum as e:
+        return None, "blocked_stratum: %s" % e
     except Declined as e:
         return None, "declined: %s" % e
     except BaseException as e:

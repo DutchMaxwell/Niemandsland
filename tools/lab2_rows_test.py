@@ -21,11 +21,15 @@ IDENT = dict(prereg_sha256="p", row_id="r", split="D", part="A", cell="1", sourc
 
 
 class Core:
-    def __init__(self, deadline_us):
-        self._k = {"deadline_us": deadline_us}
+    def __init__(self, deadline_us, unsupported=None):
+        self._k, self.unsupported = {"deadline_us": deadline_us}, unsupported
 
     def knobs(self):
         return self._k
+
+    def plan_with_rollout(self, state, player, statics, **kw):
+        """The repeat call `decline_reason` makes: the core's decline value (or a pick, if none is configured)."""
+        return {"used": False, "unsupported": self.unsupported} if self.unsupported else {"used": True}
 
 
 class Net:
@@ -34,6 +38,8 @@ class Net:
 
 class Sp:
     """Stand-in selfplay: `_pick_for` answers the queued picks and bumps the net counter like a hook would."""
+    TRAINER_STATICS = {}
+
     def __init__(self, picks):
         self.picks = list(picks)
 
@@ -107,21 +113,33 @@ def test_a_dry_pick_logs_nothing_and_guarded_turns_declines_into_reasons_but_not
         rows.guarded(Nm, boom(ZeroDivisionError()))
 
 
-def test_an_empty_pick_with_units_left_is_a_declined_invalid_row_and_a_dry_side_is_not():
-    rec = rows.Recorder(lambda s: "L_tray", Net)
-    assert run(Sp([{}]), rec, Core(0), 1, state=St()) == {}                 # dry side: no units, a legal pass
-    with pytest.raises(rows.Declined, match="side 1 .L_tray. declined with 4 units"):
-        run(Sp([{}]), rec, Core(0), 1, state=St(["u1", "u2", "u3", "u4"]))   # used:false with 4 units waiting
+TRAY = 'TreeUnported("takedown")'
 
-    class Nm:
-        class Unsupported(Exception):
-            pass
+
+class Nm:
+    class Unsupported(Exception):
+        pass
+
+
+def test_an_empty_pick_with_units_left_is_a_declined_invalid_row_and_a_dry_side_is_not():
+    rec = rows.Recorder(lambda s: "L", Net)
+    assert run(Sp([{}]), rec, Core(0, TRAY), 1, state=St()) == {}           # dry side: no units, a legal pass
+    with pytest.raises(rows.Declined, match="side 1 .L. declined with 4 units"):
+        run(Sp([{}]), rec, Core(0, TRAY), 1, state=St(["u1", "u2", "u3", "u4"]))   # a PRIMARY arm: always INVALID
 
     def play():
-        return run(Sp([{}]), rows.Recorder(lambda s: "L_tray", Net), Core(0), 1, state=St(["u1"]))
-    out, why = rows.guarded(Nm, play)
-    assert out is None and why.startswith("declined: side 1 (L_tray) declined with 1 units")
+        return run(Sp([{}]), rows.Recorder(lambda s: "L_tray", Net), Core(0, "Unsupported(x)"), 1, state=St(["u1"]))
+    out, why = rows.guarded(Nm, play)   # a control arm declining for any reason but TreeUnported stays INVALID
+    assert out is None and why.startswith("declined: side 1 (L_tray) declined with 1 units") and why.endswith("Unsupported(x)")
     assert rec.decisions == []
+
+
+def test_a_control_arm_on_an_unported_tray_transition_is_blocked_stratum_not_invalid():
+    def play(arm):
+        return lambda: run(Sp([{}]), rows.Recorder(lambda s: arm, Net), Core(0, TRAY), 1, state=St(["u1", "u2"]))
+    assert rows.guarded(Nm, play("T_tray")) == (None, 'blocked_stratum: side 1 (T_tray): ' + TRAY)
+    assert rows.guarded(Nm, play("L_tray"))[1].startswith("blocked_stratum: ")
+    assert rows.guarded(Nm, play("T"))[1].startswith("declined: ")   # the primary T: never blocked
 
 
 def test_a_core_panic_ends_the_row_as_invalid_but_other_base_exceptions_still_raise():

@@ -63,6 +63,16 @@ def test_a_tray_decline_is_incompleteness_and_rules_out_mode_a():
     assert (mode, proj["complete"]) == ("MODE_B", False)
 
 
+def test_a_blocked_stratum_probe_is_counted_but_not_incompleteness():
+    rows = _probes()
+    for i in (3, 5, 17):  # unported true-tray transitions (HOLD until D151 (b))
+        rows[i] = Blind(rows[i], valid=False, blocked=True, reason='blocked_stratum: TreeUnported("takedown")')
+    mode, proj = p9.decide(rows, L_GAMES, pilot_left_h=100, confirm_left_h=100, workers=4)
+    assert (mode, proj["complete"], proj["blocked_stratum"]) == ("MODE_A", True, 3)
+    rows[8] = Blind(rows[8], valid=False, reason="declined: side 1 (L_tray) declined with 2 units to activate: ")
+    assert p9.decide(rows, L_GAMES, pilot_left_h=100, confirm_left_h=100, workers=4)[1]["complete"] is False
+
+
 def test_a_missing_probe_cell_is_incompleteness():
     mode, proj = p9.decide(_probes()[:-2], L_GAMES, pilot_left_h=100, confirm_left_h=100, workers=4)
     assert (mode, proj["complete"]) == ("MODE_B", False)

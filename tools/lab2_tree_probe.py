@@ -571,9 +571,14 @@ def control_scores(done, arm="L_tray"):
     """Descriptive only (P9 MODE_B): the control's candidate-seat score per board minus .5 -> {cell: {block: {..}}}."""
     by = {}
     for row, y in done:
-        if row["arm"] == arm:
+        if row["arm"] == arm and y is not None:  # a BLOCKED-STRATUM row has no score and describes nothing
             by.setdefault(row["cell"], {}).setdefault(row["block"], []).append(y)
     return {c: {b: {arm + "_I": statistics.fmean(v) - 0.5} for b, v in bl.items()} for c, bl in by.items()}
+
+
+def is_blocked(x):
+    """A control row whose arm hit an unported true-tray transition (lab2_rows.BlockedStratum, HOLD until D151 (b))."""
+    return not x.get("valid") and str(x.get("reason") or "").startswith("blocked_stratum")
 
 
 def _fullgames_init(cfg):
@@ -592,7 +597,7 @@ def _fullgames_work(w, cid, rows):
             write_row(cfg["out_dir"], play_row(w["nm"], w["sp"], row, cfg["repo"], cfg["bank"], w["knobs"], w["net"],
                                                w["allow"][row["cell"]]["B_us"], w["ctx"]))
         rec = json.load(open(path))
-        out.append({"row_id": row["row_id"], "y": rec["y"], "valid": rec["valid"]})
+        out.append({"row_id": row["row_id"], "y": rec["y"], "valid": rec["valid"], "reason": rec["reason"]})
     return out
 
 
@@ -609,14 +614,19 @@ def cmd_fullgames(a) -> int:
         write_pilot_json(a.pilot_json, reports)
     results = {x["row_id"]: x for r in reports for x in r["result"]}
     done = [(by_id[i], results[i]["y"]) for i in by_id]
-    invalid = [i for i, x in results.items() if not x["valid"]]
+    blocked = sorted(i for i, x in results.items() if is_blocked(x))  # counted + reported, excluded from pass/stop
+    invalid = [i for i, x in results.items() if not x["valid"] and i not in blocked]
+    if blocked:
+        print("[fullgames] BLOCKED-STRATUM control rows (excluded): %d" % len(blocked))
     if invalid:
         print("[fullgames] INVALID rows (run continued): %s" % invalid)
         return 1
     arms = {d[0]["arm"] for d in done}
     res = bootstrap_intervals(board_scores([d for d in done if d[0]["arm"] in B_ARMS]), a.resamples, a.seed) \
         if set(B_ARMS) <= arms else {}
-    ctl = {"L_tray_descriptive_95": bootstrap_intervals(control_scores(done), a.resamples, a.seed, k=1)} \
+    scored = control_scores(done)
+    ctl = {"L_tray_descriptive_95": bootstrap_intervals(scored, a.resamples, a.seed, k=1) if scored else None,
+           "blocked_stratum": {"rows": len(blocked), "of": sum(1 for d in done if d[0]["arm"] == "L_tray"), "ids": blocked}} \
         if "L_tray" in arms else {}
     open(a.out, "w").write(canon({"intervals": res, "I_seat1_descriptive": i_seat1_means(done), **ctl}))
     print("[fullgames] " + canon(res))

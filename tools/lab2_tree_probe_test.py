@@ -442,3 +442,13 @@ def test_endings_build_every_core_under_the_position_s_own_game_header(monkeypat
     monkeypatch.setattr(lab, "write_row", lambda d, row: None)
     lab._endings_work(w, "c1_k1", {"slot": "c1_k1", "candidate": "3", "cell": "c1", "cluster": "c1_k1"})
     assert seen == ["c1_k1:3"] * (1 + len(lab.ARMS))   # the incumbent core and one core per arm
+
+
+def test_blocked_stratum_control_rows_are_excluded_from_the_control_score_and_never_hit_a_primary_row():
+    blocked = {"valid": False, "reason": 'blocked_stratum: side 1 (L_tray): TreeUnported("takedown")'}
+    assert lab.is_blocked(blocked) and not lab.is_blocked({"valid": False, "reason": "declined: side 1 (L) ..."})
+    assert not lab.is_blocked({"valid": True, "reason": "blocked_stratum: x"})   # a valid row is never blocked
+    rows = [
+        {"arm": "L_tray", "cell": "c1", "block": "b0"}, {"arm": "L_tray", "cell": "c1", "block": "b0"},
+        {"arm": "L_tray", "cell": "c1", "block": "b1"}]
+    assert lab.control_scores(list(zip(rows, (1.0, None, None)))) == {"c1": {"b0": {"L_tray_I": 0.5}}}
