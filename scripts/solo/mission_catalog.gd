@@ -77,6 +77,16 @@ static func marker_count(mission: Dictionary, rng: RandomNumberGenerator) -> int
 	return rng.randi_range(1, 3) + 2
 
 
+## D14.4 (VIP Escort, GF/AoF v3.5.1 p.27/p.26: the defender sets up 1 marker within 6" of any table edge):
+## the AI defender's start. It takes ITS OWN table edge (player 1 owns the z-negative side, player 2 the
+## z-positive one) and puts the marker on the centre line 3" in from it. `deploy_edge` is that edge's z sign,
+## the +-1 the winner, the eval and the walk measure the OPPOSITE edge from. A human defender chooses the
+## edge himself once the maintainer has decided the input (REPORT_missionsd2.md); until then he gets this one.
+static func vip_start(defender_slot: int, table_d_in: float = 48.0) -> Dictionary:
+	var edge := -1 if defender_slot == 1 else 1
+	return {"pos": Vector2(0.0, float(edge) * (table_d_in / 2.0 - 3.0)), "deploy_edge": edge}
+
+
 ## M3 — AUTOMATIC marker placement (grill 2026-08-12 D2): resolves the
 ## catalog's placement mode into centered table-inch positions. 'alternate'
 ## (Duel) returns [] on purpose — the players' hand-placement flow stays.
