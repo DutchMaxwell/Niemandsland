@@ -176,11 +176,12 @@ func _ready() -> void:
 	# Load saved settings or use default
 	load_settings()
 	apply_preset(current_preset)
-	_apply_window_constraints()
+	apply_window_constraints()
 
 
-## Enforce the minimum window size and apply the saved UI scale. Reachability floor.
-func _apply_window_constraints() -> void:
+## Enforce the minimum window size and apply the saved UI scale. Reachability floor. Also called by the game scene
+## at its start (main.gd), when the real game window is up.
+func apply_window_constraints() -> void:
 	var window := get_window()
 	if window:
 		window.min_size = MIN_WINDOW_SIZE
