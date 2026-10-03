@@ -9,12 +9,14 @@ extends CanvasLayer
 ##   var card := PromptCard.new("Strike back?", text, "Strike back", "Hold")
 ##   add_child(card)
 ##   var yes: bool = await card.answer()
-## A caller that answers with more than yes / no sets ok_value / cancel_value or calls resolve() itself.
+## A caller with more than yes / no adds its controls to `rows` (split fire: one check box per weapon) and
+## sets ok_value / cancel_value or calls resolve() itself.
 
 const LAYER := 90       # over the HUD and the action strip (85), under the loading overlay (200)
 const WIDTH := 420      # data text never decides the width (UI audit 2026-07-24)
 
 var title := ""
+var rows: VBoxContainer         # the caller's controls, between the text and the buttons
 var ok_button: Button           # null without an OK ("" as its text)
 var cancel_button: Button       # null when the question has no way out (the saves)
 var ok_value: Variant = true
@@ -48,6 +50,9 @@ func _init(title_text: String, text: String = "", ok_text: String = "OK", cancel
 	box.add_child(header)
 	if text != "":
 		box.add_child(_wrap(HouseStyle.label(text, HouseStyle.BODY), WIDTH - 2 * HouseStyle.PAD_PANEL))
+	rows = VBoxContainer.new()
+	rows.add_theme_constant_override(&"separation", HouseStyle.GAP_ROW)
+	box.add_child(rows)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
 	box.add_child(actions)
@@ -59,6 +64,10 @@ func _init(title_text: String, text: String = "", ok_text: String = "OK", cancel
 	var close := header.get_node("CloseButton") as Button
 	close.visible = cancel_button != null
 	close.pressed.connect(func() -> void: _press(cancel_button))
+
+
+func _ready() -> void:
+	rows.visible = rows.get_child_count() > 0
 
 
 ## Ends the question with `value`; the first answer wins.
