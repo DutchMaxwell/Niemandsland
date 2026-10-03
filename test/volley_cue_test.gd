@@ -17,9 +17,8 @@ func _cue():
 
 
 func _ends(seg: MeshInstance3D) -> Array:
-	var half := (seg.mesh as CylinderMesh).height * 0.5
-	var up := seg.global_transform.basis.y.normalized()
-	return [seg.global_position - up * half, seg.global_position + up * half]
+	var half := seg.global_transform.basis.y * (seg.mesh as CylinderMesh).height * 0.5   # length rides the scale
+	return [seg.global_position - half, seg.global_position + half]
 
 
 func test_the_line_runs_eye_to_eye_within_a_millimetre() -> void:
