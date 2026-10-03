@@ -467,3 +467,17 @@ def test_a_phase_carries_its_own_gates_as_the_optional_fourth_element():
                                            ["attacker", "all", "edge_band_12", {"min_from_enemy_in": 12}]]}
     ph = sp._phase_args(md, 1, REPO)
     assert "gates" not in ph[0] and ph[1]["gates"] == {"min_from_enemy_in": 12}
+
+
+def test_the_own_phase_zone_is_the_mission_style_at_each_sides_own_half():
+    """NML-1010 D14.2: "own" resolves per side — slot 1 holds the -Z band of front_line, slot 2 the +Z band."""
+    md = {"roles": True, "deployment": "front_line",
+          "deploy_phases": [["defender", "half", "own"], ["attacker", "all", "anywhere"]]}
+    ph = sp._phase_args(md, 1, REPO)   # attacker = slot 1, so the defender is slot 2 (side index 1)
+    assert ph[0]["side"] == 1 and ph[1]["side"] == 0
+    in2 = sp.IN2M
+    # defender: the +Z band, z in [12", 24"]; attacker "anywhere" = the whole table
+    assert ph[0]["zone"] == pytest.approx([-36 * in2, 12 * in2, 72 * in2, 12 * in2])
+    assert ph[1]["zone"] == pytest.approx([-36 * in2, -24 * in2, 72 * in2, 48 * in2])
+    ph2 = sp._phase_args(md, 2, REPO)  # attacker = slot 2: the defender is slot 1, the -Z band
+    assert ph2[0]["side"] == 0 and ph2[0]["zone"] == pytest.approx([-36 * in2, -24 * in2, 72 * in2, 12 * in2])
