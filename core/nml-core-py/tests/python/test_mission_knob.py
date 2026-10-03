@@ -288,6 +288,50 @@ def test_phase_args_map_roles_to_sides_and_styles_to_zones():
     assert sp._phase_args(md, 0, REPO) == [] and sp._phase_args({"roles": True}, 1, REPO) == []
 
 
+def test_vip_start_and_disc_style_twin_the_table_rule():
+    """D14.4b: the defender's own edge, centre line, 3 in in; `deploy_edge` its z sign; a disc for both slots."""
+    assert sp.vip_start(1) == ([0.0, -21.0], -1) and sp.vip_start(2) == ([0.0, 21.0], 1)
+    assert sp.disc_style([0.0, 21.0], 12.0)["zones"] == {"1": [{"disc": {"c": [0.0, 21.0], "r_in": 12.0}}],
+                                                         "2": [{"disc": {"c": [0.0, 21.0], "r_in": 12.0}}]}
+
+
+def test_vip_setup_arms_the_marker_the_edge_the_owner_and_the_runtime_zone():
+    md = {"roles": True, "markers": {"count": 1, "placement": "vip_edge", "mobile": True}}
+    vip = sp._vip_setup(md, 1)   # slot 1 attacks, slot 2 defends
+    assert vip["defender"] == 2 and vip["deploy_edge"] == 1
+    assert vip["objectives"] == [[0.0, 0.0, sp.f32(21.0 * sp.IN2M)]]
+    assert vip["styles"]["marker_disc_12"]["zones"]["2"][0]["disc"]["c"] == [0.0, 21.0]
+    assert sp._vip_setup(md, 0) is None and sp._vip_setup({"roles": True, "markers": {"count": 1}}, 1) is None
+    assert sp.mission_markers(md["markers"], 1) == [{"mobile": True, "deploy_edge": 0}]
+
+
+def test_phase_args_resolve_a_runtime_style_id():
+    md = {"roles": True, "deploy_phases": [["defender", "all", "marker_disc_12"], ["attacker", "all", "edge_band_12"]]}
+    vip = sp._vip_setup({"roles": True, "markers": {"mobile": True}}, 1)
+    ph = sp._phase_args(md, 1, REPO, vip["styles"])
+    assert ph[0]["side"] == 1 and ph[0]["zones"] == [{"disc": {"c": [0.0, 21.0], "r_in": 12.0}}]
+    assert ph[0]["zone"] == pytest.approx([-12 * sp.IN2M, 9 * sp.IN2M, 24 * sp.IN2M, 24 * sp.IN2M])
+    with pytest.raises(KeyError):
+        sp._phase_args(md, 1, REPO)   # without the runtime style the id is unknown, loudly
+
+
+@needs_lists
+def test_an_arena_vip_game_starts_the_marker_at_the_defender_edge_and_walks_it(monkeypatch):
+    core = nml_core.load(str(REPO))
+    sp.resolve_mission("duel", REPO)
+    catalog = sp._MISSION_CATALOG_CACHE[str(REPO)]
+    catalog["vip_fixture"] = dict(catalog["duel"], rounds=6, roles=True, scoring="escort",
+                                  markers={"count": 1, "placement": "vip_edge", "mobile": True},
+                                  deploy_phases=[["defender", "all", "marker_disc_12"], ["attacker", "all", "edge_band_12"]])
+    try:
+        res = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="vip_fixture", deployment="arena", **FAST)
+    finally:
+        del catalog["vip_fixture"]
+    meta = res["markers_meta"][0]
+    assert meta["mobile"] is True and meta["deploy_edge"] in (-1, 1)
+    assert res["rounds_played"] == 6 and res["winner"] in ("p1", "p2", "draw")
+
+
 @needs_lists
 def test_an_arena_game_runs_the_missions_phases_through_deploy_phased(monkeypatch):
     core = nml_core.load(str(REPO))

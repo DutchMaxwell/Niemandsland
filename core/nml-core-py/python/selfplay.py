@@ -257,13 +257,41 @@ def _role_gates(mission_def: dict[str, Any], attacker: int) -> dict[str, Any]:
     return {str(s): gates.get("attacker" if s == attacker else "defender") for s in (1, 2)}
 
 
-def _phase_args(mission_def: dict[str, Any], attacker: int, repo_root: str | Path) -> list[dict[str, Any]]:
+def vip_start(defender: int, table_d_in: float = TABLE_D_IN) -> tuple[list[float], int]:
+    """D14.4a's AI rule, twin of `MissionCatalog.vip_start`: the VIP marker sits on the defender's OWN table
+    edge (slot 1 = z-negative side, slot 2 = z-positive), on the centre line, 3 in in. Returns the spot
+    `[x_in, z_in]` and `deploy_edge`, that edge's z sign."""
+    edge = -1 if defender == 1 else 1
+    return [0.0, float(edge) * (table_d_in / 2.0 - 3.0)], edge
+
+
+def disc_style(centre_in: list[float], r_in: float) -> dict[str, Any]:
+    """Twin of `DeploymentCatalog.disc_style`: a role-agnostic disc zone for both slots."""
+    zone = [{"disc": {"c": [centre_in[0], centre_in[1]], "r_in": r_in}}]
+    return {"zones": {"1": zone, "2": [dict(z) for z in zone]}}
+
+
+def _vip_setup(mission_def: dict[str, Any], attacker: int) -> dict[str, Any] | None:
+    """D14.4b: a `mobile` marker spec (VIP Escort) is placed by the defender's start rule once the roles
+    are known: the objective, `deploy_edge`, the defender as its owner and the runtime zone style
+    "marker_disc_12" (12 in around it). None for every other mission."""
+    if not attacker or not (mission_def.get("markers") or {}).get("mobile"):
+        return None
+    defender = 3 - attacker
+    spot, edge = vip_start(defender)
+    return {"objectives": [[f32(spot[0] * IN2M), 0.0, f32(spot[1] * IN2M)]], "deploy_edge": edge,
+            "defender": defender, "styles": {"marker_disc_12": disc_style(spot, 12.0)}}
+
+
+def _phase_args(mission_def: dict[str, Any], attacker: int, repo_root: str | Path,
+                extra_styles: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """D7b: the mission's `deploy_phases` (`[[role, share, style_id], ..]`) as `nml_core.deploy_phased`
     phase dicts: the role picks the side (0 = slot 1), the style the zone rect + shape. [] = none."""
     raw = mission_def.get("deploy_phases") or []
     if not attacker or not raw:
         return []
     styles = json.loads((Path(repo_root) / "assets" / "solo" / "deployments.json").read_text(encoding="utf-8"))["styles"]
+    styles.update(extra_styles or {})
     out = []
     for role, share, style_id in raw:
         rect, zl = _style_zone_args(styles[style_id], "1")
@@ -3088,6 +3116,7 @@ def play_game(
     # The roll-off + deployment generator: the game stream unless `deploy_seed` splits it off.
     drng, dep = (rng, seed) if deploy_seed is None else (nml_core.Rng(deploy_seed), deploy_seed)
     arena = eff_deployment in ("arena", "interleaved")
+    vip: dict[str, Any] | None = None
     deploy_seq: list[list[Any]] = []
     mission_reserved: set[str] = set()
     reserve_cfg: dict[str, Any] = {}
@@ -3102,12 +3131,16 @@ def play_game(
         opener = 1 if roll_attempts[-1][0] >= roll_attempts[-1][1] else 2
         mission_def0 = resolve_mission(mission, repo_root)
         reserve_flags, reserve_cfg = _reserve_args(mission_def0, _ai_attacker(mission_def0, opener))
+        vip = _vip_setup(mission_def0, _ai_attacker(mission_def0, opener))
+        if vip:  # D14.4b: the VIP marker and its disc zone exist before the first unit is placed
+            objectives = vip["objectives"]
         pos1, pos2, reserved, deploy_seq = _deploy_arena(
             dep, units1, units2, list_p1, list_p2, board, objectives, opener,
             eff_deployment == "interleaved", rules_epoch=rules_epoch,
             zone_style=resolve_zone_style(mission_def0, repo_root),
             gates=_role_gates(mission_def0, _ai_attacker(mission_def0, opener)),
-            phases=_phase_args(mission_def0, _ai_attacker(mission_def0, opener), repo_root),
+            phases=_phase_args(mission_def0, _ai_attacker(mission_def0, opener), repo_root,
+                               vip["styles"] if vip else None),
             reserve=reserve_flags, mission_keys=mission_reserved,
         )
     elif deploy_rng_seed is None:
@@ -3136,6 +3169,10 @@ def play_game(
     vp_flavour = mission_def.get("vp", {})
     mk_spec = mission_def.get("markers", {})
     markers_meta = mission_markers(mk_spec, len(objectives))
+    if vip:  # D14.4b: the defender owns the VIP marker from the start (D10a lets it walk it)
+        for m in markers_meta:
+            m["deploy_edge"] = vip["deploy_edge"]
+        plain["objectives"][0]["owner"] = vip["defender"]
     rounds = int(mission_def.get("rounds", ROUNDS))  # NML-1010 D1: the catalog's match length
     plain["rounds_total"] = rounds
     plain["scoring"] = eff_scoring
@@ -3149,7 +3186,7 @@ def play_game(
         # state it hands the planner, and this is the same state.
         state = core.restamp_los(state)
 
-    owners = [0] * len(objectives)
+    owners = [vip["defender"]] if vip else [0] * len(objectives)
     led = {"scoring": eff_scoring, "vp": [0, 0], "vp_flavour": vp_flavour, "vp_memo": {},
            "markers_meta": markers_meta, "destroy_seq": [0], "carry": bool(mk_spec.get("carry")),
            "secret": bool(mk_spec.get("secret")), "rounds": rounds}
