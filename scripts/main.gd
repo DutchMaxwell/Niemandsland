@@ -411,6 +411,8 @@ var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 var result_pips: ResultPips = null  # VFX #1: wound ticks / casualty crosses over the models (presentation only)
+var volley_cue: VolleyCue = null  # VFX #2: tracers along the rule sight pairs (presentation only)
+var spell_seal: SpellSeal = null  # VFX #3: the cast's glyph circle at the caster (presentation only)
 var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat stage (solo)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
@@ -4132,9 +4134,10 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# of volleys that never roll). Indirect (wave 5) targets as if in line of sight — its per-model
 		# sighting is range-only; the Aircraft penalty (-12") and Ranged Shrouding (-6" min 6") shorten
 		# the reach here too.
+		var sight_pairs: Array = []   # VFX #2: the model pairs the count below cleared (tracer segments)
 		var sighted: int = _solo_sighted_count(member, target,
 			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
-			bool(profile.get("indirect", false)) or granted_indirect)   # GH #325
+			bool(profile.get("indirect", false)) or granted_indirect, sight_pairs)   # GH #325
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
 		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
 		var attacks: int = int(volley_report["attacks"])
@@ -4225,6 +4228,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 					member.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 		_solo_log_hit_mod(mod_info, target, to_hit)
 		var shooter_name: String = member.get_name()
+		_vfx_volley(member, target, profile, sight_pairs.slice(0, shot_bearers if shot_bearers >= 0 else sight_pairs.size()),
+			bool(profile.get("indirect", false)) or granted_indirect)
 		var faces: Array = await _solo_tray_roll(attacks, to_hit, "AI (%s)" % shooter_name, "attack",
 			"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 		if bool(profile.get("limited", false)):
@@ -4401,6 +4406,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
 	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
 	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
+	var seal := _vfx_seal_begin(caster, entry, effect)
 	if battle_log != null:
 		var token_note := "%d token%s" % [int(cast.get("threshold", 0)), ("" if int(cast.get("threshold", 0)) == 1 else "s")]
 		if boost > 0:
@@ -4416,12 +4422,16 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	if bool(cast.get("interference_open", false)) and not _solo_both_ai:
 		interference += await _solo_prompt_interference(caster, caster_unit, spell_name,
 			base_target, boost, _solo_cast_target_label(targets))
+	if interference > 0 and spell_seal != null:
+		spell_seal.interfere(seal)
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
 	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
 		"Casting %s (%d+)" % [spell_name, target_num])
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
+	if spell_seal != null:
+		spell_seal.finish(seal, SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: cast roll %d vs %d+ — %s" % [
 			spell_name, (int(faces[0]) if not faces.is_empty() else 0), target_num,
@@ -13038,6 +13048,33 @@ func _solo_wound_models(unit: GameUnit, wounds: int, pid: int, deferred_deaths =
 	return remaining
 
 
+## VFX #3: the cast's seal forms at the caster, its edge on the spell range exactly as the purple preview ring
+## draws it (RangeRingController: base edge + range). A Spell Conduit origin is not drawn (nor is it by the preview).
+func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary) -> MeshInstance3D:
+	if spell_seal == null or range_ring_controller == null or caster == null:
+		return null
+	for m in caster.get_alive_models():
+		var node := (m as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			var radius: float = range_ring_controller.ring_outer_radius_for_props(
+				range_ring_controller._props_of(node), int(entry.get("range_in", 0)))
+			return spell_seal.begin(node.global_position, radius, str(effect.get("kind", "utility")))
+	return null
+
+
+## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as
+## _solo_true_los_callable). Indirect fire and an Aircraft target have no tested segment (LOS waived /
+## abstract), so they draw none — no line through a wall. A weapon carried by fewer models than can see
+## (a special weapon) draws only as many tracers as it has bearers.
+func _vfx_volley(member: GameUnit, target: GameUnit, profile: Dictionary, pairs: Array, los_waived: bool) -> void:
+	if volley_cue == null or pairs.is_empty() or los_waived or SoloController.is_aircraft(target):
+		return
+	var up_from := Vector3.UP * _solo_unit_los_height_m(member)
+	var up_to := Vector3.UP * _solo_unit_los_height_m(target)
+	volley_cue.fire(pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to]),
+		VolleyCue.family_of(str(profile.get("name", ""))))
+
+
 ## VFX #1: one result mark over a model, from the allocation that just happened (headless spawns nothing).
 func _vfx_pip(kind: ResultPips.Kind, mi: ModelInstance, count: int) -> void:
 	if result_pips != null:
@@ -18339,6 +18376,12 @@ func _init_radial_menu() -> void:
 	result_pips = ResultPips.new()
 	result_pips.name = "ResultPips"
 	add_child(result_pips)
+	volley_cue = VolleyCue.new()
+	volley_cue.name = "VolleyCue"
+	add_child(volley_cue)
+	spell_seal = SpellSeal.new()
+	spell_seal.name = "SpellSeal"
+	add_child(spell_seal)
 	# Pacing grill 31.07.: the combat stage — the volleys hold at phase boundaries on a
 	# central card; it reads its rule lines from the battle log's COMBAT stream.
 	combat_stage = CombatStage.new()

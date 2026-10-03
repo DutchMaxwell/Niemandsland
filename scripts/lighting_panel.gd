@@ -287,9 +287,10 @@ func _build_ui() -> void:
 	vfx_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.show_combat_effects = on
 		GraphicsSettings.save_settings()
-		var rp := get_node_or_null("/root/Main/ResultPips")
-		if rp != null:
-			rp.enabled = on)
+		for fx_name in ["ResultPips", "VolleyCue", "SpellSeal"]:
+			var fx := get_node_or_null("/root/Main/" + fx_name)
+			if fx != null:
+				fx.enabled = on)
 	vbox.add_child(vfx_cb)
 
 	# Tilt-Shift (cinematic depth of field): sharp while zoomed out, softly blurred in
