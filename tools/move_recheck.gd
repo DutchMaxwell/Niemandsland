@@ -198,6 +198,8 @@ func _rebuild_opts(o: Dictionary) -> Dictionary:
 				out[key] = _cell_dict(o[k])
 			"zones":
 				out[key] = _zones_rebuild(o[k])
+			"ledges":
+				out[key] = MoveRecorder.ledges_from_rows(o[k])
 			"charge_goal":
 				var v: Array = o[k]
 				out[key] = Vector2(float(v[0]), float(v[1]))

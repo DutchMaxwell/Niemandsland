@@ -303,6 +303,13 @@ static func theme() -> Theme:
 	t.set_color(&"default_color", &"RichTextLabel", INK)
 	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
 		t.set_color(c, &"CheckBox", INK)
+	# Check boxes (maintainer 03.10., D1 = b): the ☰ menu's bold square and filled tick for EVERY house box. Without
+	# them a box outside the menu fell back to Godot's own, whose empty square draws at ~1:1 on the house panels;
+	# a disabled box shows the same pair at 40 %.
+	for pair: Array in [[&"unchecked", "square-bold.svg"], [&"checked", "check-square-fill.svg"]]:
+		var icon := load("res://assets/ui_glassmorphism/icons/" + String(pair[1])) as Texture2D
+		t.set_icon(pair[0], &"CheckBox", icon)
+		t.set_icon(StringName(String(pair[0]) + "_disabled"), &"CheckBox", _dimmed(icon, 0.4))
 
 	# A slim scrollbar for sunken lists (the dice log).
 	var grab := _box(LINE, LINE, RADIUS_CONTROL, 0, 0)
@@ -339,6 +346,20 @@ static func _knob(color: Color) -> ImageTexture:
 		for x in d:
 			var dist := Vector2(x + 0.5, y + 0.5).distance_to(Vector2(d / 2.0, d / 2.0))
 			img.set_pixel(x, y, Color(color.r, color.g, color.b, clampf(d / 2.0 - dist, 0.0, 1.0)))
+	return ImageTexture.create_from_image(img)
+
+
+## `icon` at `alpha` of its own opacity (a disabled check box).
+static func _dimmed(icon: Texture2D, alpha: float) -> ImageTexture:
+	var img := Image.new()
+	img.copy_from(icon.get_image())   # a copy: an imported texture hands out its own cached image (measured)
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			img.set_pixel(x, y, Color(c.r, c.g, c.b, c.a * alpha))
 	return ImageTexture.create_from_image(img)
 
 
