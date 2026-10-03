@@ -3812,21 +3812,17 @@ func _sandbox_terrain_shapes() -> Array:
 		return _sandbox_shapes_cache["shapes"]
 	var shapes: Array = []
 	var in2m := 0.0254
-	for n in get_tree().get_nodes_in_group("sandbox_terrain") + get_tree().get_nodes_in_group("terrain_group_base"):
+	for n in ObjectManager.sandbox_pieces(get_tree()):
 		var node := n as Node3D
 		if node == null or not is_instance_valid(node):
 			continue
 		var fp: Vector2 = node.get("footprint_inches") if node.get("footprint_inches") != null else Vector2.ZERO
 		if fp == Vector2.ZERO:
 			continue
+		# Typed by prop kind (TerrainGroupBase also sits in the "sandbox_terrain" group, so group membership
+		# says nothing): Regal-Ruine = RUINS (Cover + Area-LoS), Wald = FOREST, Gefahrenfeld = DANGEROUS.
 		var kind := int(node.get("prop_kind")) if node.get("prop_kind") != null else -1
-		var ttype := TerrainRules.TerrainType.NONE
-		if node.is_in_group("sandbox_terrain"):
-			ttype = TerrainRules.TerrainType.RUINS   # Regal-Ruine: Cover + Area-LoS (Innenwände v1 unmodelliert)
-		elif kind == ObjectManager.SandboxPropKind.FOREST:
-			ttype = TerrainRules.TerrainType.FOREST
-		elif kind == ObjectManager.SandboxPropKind.HAZARD_CLUSTER:
-			ttype = TerrainRules.TerrainType.DANGEROUS
+		var ttype := ObjectManager.sandbox_terrain_type(kind)
 		if ttype == TerrainRules.TerrainType.NONE:
 			continue
 		# NML-972: a multi-storey shelf ruin also hands over its walkable floor slabs, so the 3D
