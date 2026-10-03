@@ -172,6 +172,30 @@
         "destructible": true
       }
     },
+    "last_stand": {
+      "name": "Last Stand",
+      "family": "attack_defend",
+      "rounds": 6,
+      "scoring": "end",
+      "roles": true,
+      "deployment": "front_line",
+      "deploy_phases": [
+        ["defender", "all", "centre_disc_12"],
+        ["attacker", "all", "edge_band_12"]
+      ],
+      "reserves": {
+        "who": "attacker",
+        "recycle": true,
+        "arrive_on": 6,
+        "from_round": 2,
+        "zone": "edge_band_12",
+        "gates": {}
+      },
+      "markers": {
+        "count": 1,
+        "placement": "table_centre"
+      }
+    },
     "smash_and_grab": {
       "name": "Smash & Grab",
       "family": "attack_defend",

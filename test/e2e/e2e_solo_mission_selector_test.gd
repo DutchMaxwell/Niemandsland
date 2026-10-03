@@ -79,6 +79,22 @@ func test_smash_and_grab_sizes_its_secret_markers_to_the_placed_objectives() -> 
 	assert_int(kinds.count("trap")).is_equal(1)
 
 
+## D14.3: Last Stand plays six rounds; once the roles are set the table reads its two phases and its
+## recycling reserve rule from the catalog (the defender holds the centre, the attacker's dead return).
+func test_last_stand_reads_its_phases_and_recycling_reserve_from_the_catalog() -> void:
+	_main._ensure_solo_controller()
+	_main._solo_mission_id = "last_stand"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	_main.solo_ai_slots = {2: true}
+	_main._solo_roles_set(1, "attacker")
+	assert_int(SoloController.deploy_phases_of(MissionCatalog.get_mission("last_stand")).size()).is_equal(2)
+	var cfg: Dictionary = _main._solo_reserve_cfg()
+	assert_bool(bool(cfg.get("recycle", false))).is_true()
+	assert_that(_main._solo_reserve_slots(cfg)).is_equal([1])   # the attacker's slot
+	assert_that(_main._solo_deploy_gates_for(1)).is_equal({})
+
+
 func test_relic_hunt_arms_three_carried_markers() -> void:
 	_main._solo_mission_id = "relic_hunt"
 	_main._solo_apply_mission_if_chosen()
