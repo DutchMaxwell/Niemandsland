@@ -2569,6 +2569,39 @@ func _solo_secret_default_kinds() -> Array:
 	return SoloController.secret_assign(pts, table.table_size.x * 12.0, table.table_size.y * 12.0)
 
 
+## Smash & Grab (GF v3.5.1 p.27 / AoF v3.5.1 p.26: "the defender must set up a total of D3+2 objective markers"):
+## the DEFENDER places ALL the markers. The hand flow lets the human place them before the roll-off, so a
+## human who turns out to be the attacker would have placed the defender's markers. When the AI defends,
+## the human's markers are dropped and the AI places D3+2 by the rulebook layout (the arena's own draw);
+## a human defender keeps the markers he placed.
+func _solo_defender_places_markers() -> void:
+	var mission: Dictionary = MissionCatalog.get_mission(_solo_mission_id) if not _solo_mission_id.is_empty() else {}
+	if str((mission.get("markers", {}) as Dictionary).get("placer", "")) != "defender" or terrain_overlay == null \
+			or table == null or map_layout_editor == null:
+		return
+	var defender := int(SoloController.mission_roles.get("defender", 0))
+	if solo_controller == null or defender != solo_controller.ai_slot:
+		return
+	var dropped: int = terrain_overlay.get_objectives().size()
+	var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
+	var stamp := ObjectiveLayout.generate(int(_solo_deploy_fsm.get("seed", 0)), mission, style,
+		terrain_overlay.grid_cells, map_layout_editor._calculate_grid_dimensions().x,
+		table.table_size.x * 12.0, table.table_size.y * 12.0)
+	var world: Array = []
+	var fsm_spots: Array = []
+	for rp in (stamp["positions"] as Array):
+		var spot := Vector3(float(rp[0]), 0.0, float(rp[1])) * SoloController.INCHES_TO_METERS
+		world.append(spot)
+		fsm_spots.append(Vector2(spot.x, spot.z))
+	terrain_overlay.update_objectives(world, [])
+	if _solo_deploy_fsm.has("objectives"):
+		_solo_deploy_fsm["objectives"] = fsm_spots   # the deployment gates read the NEW markers
+	_solo_sync_relic_map()
+	_log_rule_event(BattleLog.Category.GENERAL,
+		"Defender (%s) places the %d markers (D3+2 rolled %d)%s" % [_solo_player_label(defender), world.size(),
+		int(stamp["count_roll"]), (" - the %d you placed were removed" % dropped) if dropped > 0 else ""], true)
+
+
 ## D14.4: a mission whose markers are `mobile` (VIP Escort) gets its marker once the defender is known:
 ## the start spot and `deploy_edge` from MissionCatalog.vip_start, the objective on the table, and the
 ## runtime zone style "marker_disc_12" (12" around the marker) the defender's deployment phase names.
@@ -3023,6 +3056,7 @@ func _solo_roles_set(winner_slot: int, winner_role: String) -> void:
 	var dfn: int = int(SoloController.mission_roles["defender"])
 	_log_rule_event(BattleLog.Category.GENERAL, "Roll-off: %s attacks, %s defends" % [
 		_solo_player_label(atk), _solo_player_label(dfn)], true)
+	_solo_defender_places_markers()
 	_solo_secret_markers_assign()
 	_solo_vip_setup()
 	if _solo_points_factor() > 1.0 and _solo_army_points(atk) > 0 and _solo_army_points(dfn) > 0:

@@ -34,6 +34,7 @@ func test_smash_and_grab_is_the_attack_and_defend_extract_mission() -> void:
 	assert_str(str(mk["count"])).is_equal("d3+2")
 	assert_str(str(mk["placement"])).is_equal("alternate")
 	assert_bool(bool(mk["secret"])).is_true()
+	assert_str(str(mk["placer"])).is_equal("defender")
 	assert_bool(mk.has("carry")).is_false()   # only the relic carries, and it is chosen at the roll-off
 	assert_that(MissionCatalog.marker_positions(m, DeploymentCatalog.get_style("front_line"))).is_equal([])
 
