@@ -3232,6 +3232,7 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 				"%s: P%d owns the -Z marker; P%d owns the +Z marker" % [
 					MissionCatalog.display_name(_solo_mission_id), neg_owner, pos_owner], true)
 	_solo_rapid_round_one_done = false   # a fresh game owes its round-1 Rapid Ambush beat again
+	_solo_deploy_fsm["ai_neg_z"] = ai_neg_z   # D14.2: the phases' "own" zone follows the side actually chosen
 	var w: float = float(_solo_deploy_fsm.get("w", 0.0))
 	var d: float = float(_solo_deploy_fsm.get("d", 0.0))
 	var depth: float = float(_solo_deploy_fsm.get("depth", 0.3048))
@@ -3290,14 +3291,26 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 
 
 ## D7a: the zone style's bounding rect in world metres (what the AI's search scans).
-func _solo_style_rect(style: Dictionary) -> Rect2:
+func _solo_style_rect(style: Dictionary, player: int = 1) -> Rect2:
 	var lo := Vector2(INF, INF)
 	var hi := Vector2(-INF, -INF)
-	for poly in DeploymentCatalog.zone_polygons(style, 1):
+	for poly in DeploymentCatalog.zone_polygons(style, player):
 		for pt in poly:
 			lo = Vector2(minf(lo.x, pt.x), minf(lo.y, pt.y))
 			hi = Vector2(maxf(hi.x, pt.x), maxf(hi.y, pt.y))
 	return Rect2(lo * 0.0254, (hi - lo) * 0.0254)
+
+
+## D14.2: a phase's zone style and the player key its zone means. The pseudo-id "own" is the mission's
+## standard deployment style at the side's own table half (R13a: Ambush's "their deployment zone").
+func _solo_phase_zone(entry: Array, slot: int) -> Dictionary:
+	var id := str(entry[2])
+	if id != "own":
+		return {"style": DeploymentCatalog.get_style(id), "id": id, "player": 1}
+	var sid := str(MissionCatalog.get_mission(_solo_mission_id).get("deployment", "front_line"))
+	var ai_key: int = 1 if bool(_solo_deploy_fsm.get("ai_neg_z", true)) else 2
+	return {"style": DeploymentCatalog.get_style(sid), "id": sid,
+		"player": ai_key if slot == solo_controller.ai_slot else 3 - ai_key}
 
 
 ## D7a: start the current deployment phase (role, share, zone style): the AI side deploys its whole
@@ -3314,18 +3327,19 @@ func _solo_phase_start() -> void:
 		return
 	var role: String = str((phases[i] as Array)[0])
 	var share: String = str((phases[i] as Array)[1])
-	var style_id: String = str((phases[i] as Array)[2])
-	var style := DeploymentCatalog.get_style(style_id)
 	var slot: int = int(SoloController.mission_roles[role])
+	var zone := _solo_phase_zone(phases[i] as Array, slot)
+	var style: Dictionary = zone["style"]
 	var placed: Dictionary = _solo_deploy_fsm["phase_placed"]
 	var ai_side: bool = slot == solo_controller.ai_slot
 	var phase_gates := _solo_phase_gates(phases[i] as Array, slot)
 	var total: int = solo_controller.deploy_main_total() if ai_side else _solo_human_main_units().size()
 	var quota: int = SoloController.phase_quota(share, total, int(placed.get(slot, 0)))
 	if terrain_overlay != null:
-		terrain_overlay.set_style_zones(style)
+		terrain_overlay.set_style_zones(style, int(zone["player"]) if str((phases[i] as Array)[2]) == "own" else 0)
 	if ai_side:
-		solo_controller.deploy_set_zone(_solo_style_rect(style), DeploymentCatalog.zone_test(style_id, 1))
+		solo_controller.deploy_set_zone(_solo_style_rect(style, int(zone["player"])),
+			DeploymentCatalog.zone_test(str(zone["id"]), int(zone["player"])))
 		solo_controller.deploy_set_gates(phase_gates)
 		var done: Array = solo_controller.deploy_place_n(quota)
 		placed[slot] = int(placed.get(slot, 0)) + done.size()
@@ -3539,9 +3553,9 @@ func _solo_human_main_units() -> Array:
 ## D7a: a human placement outside the phase's zone ("" = fine).
 func _solo_phase_zone_violation(gu: GameUnit) -> String:
 	var phases: Array = _solo_deploy_fsm["phases"]
-	var style_id: String = str((phases[int(_solo_deploy_fsm["phase_i"])] as Array)[2])
+	var zone := _solo_phase_zone(phases[int(_solo_deploy_fsm["phase_i"])] as Array, solo_controller.human_slot)
 	var c := solo_controller.unit_centre(gu)
-	if DeploymentCatalog.in_zone(DeploymentCatalog.get_style(style_id), 1, Vector2(c.x, c.z) / 0.0254):
+	if DeploymentCatalog.in_zone(zone["style"], int(zone["player"]), Vector2(c.x, c.z) / 0.0254):
 		return ""
 	return "must be placed inside the marked zone"
 

@@ -284,6 +284,7 @@ const RUBBLE_TEXTURE_TILE_M := 0.085
 
 var overlay_meshes: Array[MeshInstance3D] = []
 var deployment_zone_meshes: Array[MeshInstance3D] = []
+var _style_only_player := 0   # 0 = draw both players' zones of the style, else just that one
 var _style_zones: Dictionary = {}   # the catalog style drawn while DeploymentType.STYLE is current
 var table_size_feet := Vector2(6, 4)
 var current_deployment_type := DeploymentType.NONE
@@ -664,13 +665,14 @@ func _update_deployment_zones() -> void:
 
 
 ## D4a: draw a catalog style's zones (polygons, discs as 48-gons, bands as four polygons).
-func set_style_zones(style: Dictionary) -> void:
+func set_style_zones(style: Dictionary, only_player: int = 0) -> void:
 	_style_zones = style
+	_style_only_player = only_player
 	set_deployment_zones(DeploymentType.STYLE)
 
 
 func _create_style_zones() -> void:
-	for player in [1, 2]:
+	for player in ([_style_only_player] if _style_only_player > 0 else [1, 2]):
 		for poly in DeploymentCatalog.zone_polygons(_style_zones, player):
 			var verts: Array[Vector3] = []
 			for p2 in poly:
