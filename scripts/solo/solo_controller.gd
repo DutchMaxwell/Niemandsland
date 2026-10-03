@@ -8911,7 +8911,10 @@ static func alive_bearers_of(member: GameUnit, weapon_name: String, attacks_per_
 ## Dynasty Warriors example: 3 of 5 in range+LOS → 3 attacks). `los` is injected (terrain_overlay in the
 ## game, a TerrainRules grid in tests) so this stays pure. Nearest-target-model first + early-out keeps
 ## the check cheap; range gates before the LOS call (the expensive half).
-static func sighted_models(shooter_positions: Array, target_positions: Array, range_m: float, los: Callable) -> int:
+## `pairs_out` (optional, VFX volley cue): receives [shooter_pos, target_pos] for every model that counted —
+## the very pair whose LOS call said yes, so a tracer follows the segment the rule tested. The count never changes.
+static func sighted_models(shooter_positions: Array, target_positions: Array, range_m: float, los: Callable,
+		pairs_out = null) -> int:
 	if shooter_positions.is_empty() or target_positions.is_empty():
 		return 0
 	var range2 := range_m * range_m
@@ -8930,6 +8933,8 @@ static func sighted_models(shooter_positions: Array, target_positions: Array, ra
 				break   # sorted by distance — everything after is farther still
 			if not los.is_valid() or bool(los.call(sp, tp)):
 				n += 1
+				if pairs_out != null:
+					(pairs_out as Array).append([sp, tp])
 				break
 	return n
 

@@ -60,13 +60,13 @@ use super::*;
         UnitStatic::build_for(&mut reg, p, 7)
     }
 
-    /// The strike-phase mark: the profile's own entry says
-    /// `strikes_first: false`, so the mark must NOT fire — while the
-    /// default entry replays the recorded unconditional mark. On main the
-    /// mark is hard-coded to the `counter` flag alone, so the second assert
-    /// sees the mark anyway (RED).
+    /// The entry's `strikes_first` is stamped onto every Counter melee profile — the switch the
+    /// charge's strike-first gate reads (`sim::tray_charge`) — and the strike LEG never marks
+    /// `counter_strikes_first`: it cannot tell a charger from a defender, a charger's Counter weapon
+    /// strikes in its normal slot at the table, and the charge flags the cases the core cannot play
+    /// (a joined hero's Counter without `Seams::tray_exact`, epochs below 13).
     #[test]
-    fn a_counter_entrys_strikes_first_switches_the_strike_phase_mark() {
+    fn a_counter_entrys_strikes_first_is_stamped_and_the_strike_leg_never_marks() {
         let strike = |us: &UnitStatic| {
             let profiles = [us.melee[0].clone()];
             let att = Ctx { quality: 4, ..Default::default() };
@@ -81,20 +81,15 @@ use super::*;
             &counter_registry("ctr_on", "gf", "testfac", "Counter", "Counter", "{}"),
             CTR_HEADER,
         );
-        assert!(
-            strike(&on).unported.contains(&"counter_strikes_first"),
-            "the default entry keeps the recorded unconditional strike-phase mark"
-        );
         let off = art_static(
             &counter_registry(
                 "ctr_off", "gf", "testfac", "Counter", "Counter", r#"{"strikes_first":false}"#,
             ),
             CTR_HEADER,
         );
-        assert!(
-            !strike(&off).unported.contains(&"counter_strikes_first"),
-            "the entry's strikes_first:false retires the mark — on main it cannot (RED)"
-        );
+        assert_eq!((on.melee[0].counter_strikes_first, off.melee[0].counter_strikes_first), (Some(true), Some(false)));
+        assert!(!strike(&on).unported.contains(&"counter_strikes_first"), "the leg is no gap");
+        assert!(!strike(&off).unported.contains(&"counter_strikes_first"), "the leg is no gap");
     }
 
     /// The over-9" artillery legs: the entry's `shooter_hit_bonus: 0` drops
