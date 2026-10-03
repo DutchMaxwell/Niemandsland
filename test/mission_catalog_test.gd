@@ -279,3 +279,13 @@ func test_the_rescue_is_the_attack_and_defend_carry_and_reserve_mission() -> voi
 	assert_float(float(mk["drop_in"])).is_equal(6.0)
 	var style := DeploymentCatalog.get_style("front_line")
 	assert_that(MissionCatalog.marker_positions(m, style)).is_equal([Vector2.ZERO])
+
+
+## VIP Escort's player-facing text exists in English and German, and an unknown key names itself.
+func test_the_vip_texts_are_english_and_german() -> void:
+	assert_str(MissionCatalog.vip_text("pick", "en_US")).is_equal("Click the VIP's starting spot")
+	assert_str(MissionCatalog.vip_text("pick", "de_DE")).is_equal("Klicke auf den Startpunkt des VIP")
+	assert_str(MissionCatalog.vip_text("refused", "de")).contains("Randbänder")
+	assert_str(MissionCatalog.vip_text("set", "de") % ["P1", 3.0]).contains("3\"")
+	assert_str(MissionCatalog.vip_text("nope", "de")).is_equal("nope")
+	assert_str(MissionCatalog.vip_text("pick", "fr")).is_equal("Click the VIP's starting spot")

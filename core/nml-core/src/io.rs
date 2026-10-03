@@ -20,8 +20,39 @@ use crate::acts::{rule_on, EPOCH_67_MARKERS_BURSTS, EPOCH_7_TABLE_RULES, EPOCH_8
 use crate::mods::LiveMod;
 use crate::rules::spawn_target_rule;
 use crate::state::{
-    Bands, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, Roster, State,
+    Bands, Kit, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, Roster, State,
 };
+
+/// Tray-exact series S1 — one model's `kits` entry as the capture writes it.
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct PlainKit {
+    #[serde(default)]
+    weapons: Vec<String>,
+    #[serde(default)]
+    equipment: u16,
+    #[serde(default)]
+    wounds_max: i64,
+}
+
+/// The unit's kits with weapon names interned to unit-local ids, plus the name table.
+pub(crate) fn intern_kits(plain: Vec<PlainKit>) -> (Vec<Kit>, Vec<String>) {
+    let mut names: Vec<String> = Vec::new();
+    let kits = plain
+        .into_iter()
+        .map(|k| Kit {
+            weapons: k.weapons.into_iter().map(|w| match names.iter().position(|n| *n == w) {
+                Some(i) => i as u16,
+                None => {
+                    names.push(w);
+                    (names.len() - 1) as u16
+                }
+            }).collect(),
+            equipment: k.equipment,
+            wounds_max: k.wounds_max,
+        })
+        .collect();
+    (kits, names)
+}
 
 /// A JSON object read as an ordered `Vec` of entries.
 pub(crate) struct Ordered<T>(pub(crate) Vec<(String, T)>);
@@ -92,6 +123,9 @@ pub(crate) struct PlainUnit {
     wounds: Vec<i64>,
     #[serde(default)]
     radii: Vec<f64>,
+    /// Tray-exact series S1, slot-aligned with `positions`; absent = none carried.
+    #[serde(default)]
+    kits: Vec<PlainKit>,
     #[serde(default)]
     mods: Mods,
     #[serde(default)]
@@ -604,6 +638,12 @@ pub struct Seams {
     /// bug this replaces exactly for corpora that predate it.
     #[serde(default)]
     pub dangerous_end_morale: bool,
+    /// Tray-exact series (maintainer D151 = B, 03.10.) — DORMANT: no header sets
+    /// it, so every game plays the recorded rules. The series' ONE epoch bump at
+    /// its end replaces every read with `rule_on(.., EPOCH_70_*)`; a dormant
+    /// epoch constant is what the CI epoch gate refuses (rule 4). Tests set it.
+    #[serde(default)]
+    pub tray_exact: bool,
 
     /// GF Advanced Rules v3.5.1 p.9 "Consolidation Moves" — `consolidate=
     /// "table"` in the header: after a melee that wipes one side, the survivor
@@ -898,6 +938,8 @@ pub(crate) fn state_of(
         positions: Vec::with_capacity(n),
         wounds: Vec::with_capacity(n),
         radii: Vec::with_capacity(n),
+        kits: Vec::with_capacity(n),
+        kit_names: Vec::with_capacity(n),
         mods: Vec::with_capacity(n),
         mods_base: Vec::with_capacity(n),
         attached: Rc::new(Vec::new()),
@@ -993,6 +1035,9 @@ pub(crate) fn state_of(
         st.positions.push(u.positions);
         st.wounds.push(u.wounds);
         st.radii.push(u.radii);
+        let (kits, kit_names) = intern_kits(u.kits);
+        st.kits.push(Rc::new(kits));
+        st.kit_names.push(Rc::new(kit_names));
         st.mods.push(u.mods);
         st.mods_base.push(Rc::new(u.mods_base));
         st.los.push(u.los.map(Rc::new));
@@ -1337,6 +1382,14 @@ pub fn plain_of(st: &State) -> serde_json::Value {
         );
         u.insert("wounds".into(), Value::Array(st.wounds[i].iter().map(|&w| w.into()).collect()));
         u.insert("radii".into(), Value::Array(st.radii[i].iter().map(|&r| r.into()).collect()));
+        // Tray-exact S1: written only when carried, so an old corpus keeps its bytes.
+        if let (Some(kits), Some(names)) = (st.kits.get(i).filter(|k| !k.is_empty()), st.kit_names.get(i)) {
+            let named = |w: u16| names.get(w as usize).cloned().unwrap_or_default();
+            u.insert("kits".into(), Value::Array(kits.iter().map(|k| serde_json::json!({
+                "weapons": k.weapons.iter().map(|&w| named(w)).collect::<Vec<_>>(),
+                "equipment": k.equipment, "wounds_max": k.wounds_max,
+            })).collect()));
+        }
         u.insert("mods".into(), serde_json::to_value(st.mods[i]).unwrap_or(Value::Null));
         u.insert("mods_base".into(), serde_json::to_value(*st.mods_base[i]).unwrap_or(Value::Null));
         u.insert(
@@ -1661,6 +1714,32 @@ mod tests {
         assert_eq!(u["dormant_models"], serde_json::json!(3));
         assert_eq!(u["dormant_wounds"], serde_json::json!([2, 3, 3]));
         assert_eq!(u["earliest_arrival_round"], serde_json::json!(2));
+    }
+
+    /// Tray-exact series S1 RED/GREEN — the per-model `kits` survive `plain ->
+    /// State -> plain` (weapon names interned per unit, duplicates kept), and a
+    /// corpus recorded without the key gets none back (byte identity).
+    #[test]
+    fn a_units_kits_survive_the_round_trip_and_an_old_corpus_gets_none() {
+        let mut v: serde_json::Value = serde_json::from_str(LEDGER_PLAIN).unwrap();
+        let (key, n) = ("p1_0_a".to_string(), 2usize);
+        let u = &mut v["units"][&key]; // the fixture's one model, plus a second at 1"
+        let p0 = u["positions"][0].clone();
+        u["positions"].as_array_mut().unwrap().push(serde_json::json!([p0[0].as_f64().unwrap() + crate::IN2M, p0[1], p0[2]]));
+        let (w0, r0) = (u["wounds"][0].clone(), u["radii"][0].clone());
+        u["wounds"].as_array_mut().unwrap().push(w0);
+        u["radii"].as_array_mut().unwrap().push(r0);
+        u["alive"] = serde_json::json!(2);
+        let kits: Vec<serde_json::Value> = (0..n).map(|i| serde_json::json!({
+            "weapons": if i == 0 { vec!["Rifle", "Missile Launcher"] } else { vec!["Rifle"] },
+            "equipment": i % 2, "wounds_max": 1 + i % 2})).collect();
+        v["units"][&key]["kits"] = serde_json::Value::Array(kits.clone());
+        let st = state_of(&v.to_string());
+        let ui = st.roster.index[&key];
+        assert_eq!((st.kits[ui].len(), st.kits[ui][0].weapons.clone()), (n, vec![0, 1]));
+        assert_eq!(st.kit_names[ui].as_slice(), ["Rifle", "Missile Launcher"]);
+        assert_eq!(plain_of(&st)["units"][&key]["kits"], serde_json::Value::Array(kits));
+        assert!(!plain_of(&state_of(LEDGER_PLAIN)).to_string().contains("\"kits\""));
     }
 
     /// The byte-identity half: the qbg/qag bundles were recorded before either
