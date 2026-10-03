@@ -95,3 +95,25 @@ func test_outside_the_zone_is_refused_then_the_attacker_and_the_defenders_rest_f
 	var down: Array = ai.filter(func(u: GameUnit) -> bool: return _on_table(u))
 	assert_int(down.size()).override_failure_message("the defender's rest follows: all 5 stand").is_equal(5)
 	assert_bool(_main._solo_deploy_fsm.has("phases")).is_false()
+
+
+## D7d: a phase may carry its OWN gates as a 4th catalog element. The attacker phase here forbids
+## standing within 12" of an enemy base; a role-flat gate could not say it for this phase alone.
+func test_a_phase_gate_refuses_a_spot_beside_an_enemy_base_for_that_phase_only() -> void:
+	MissionCatalog._catalog()["phase_fixture"]["deploy_phases"] = [["defender", "half", "centre_disc_12"],
+		["attacker", "all", "anywhere", {"min_from_enemy_in": 12}], ["defender", "rest", "anywhere"]]
+	var ai := _start(5)
+	var h1 := _reg(E2EBoot.make_unit(_main, 1, "Hu1", [TRAY]))
+	var h2 := _reg(E2EBoot.make_unit(_main, 1, "Hu2", [TRAY]))
+	await _main._solo_deploy_begin_side(true)
+	var base: Vector3 = Vector3.ZERO
+	for u in ai:
+		if _on_table(u):
+			base = _main.solo_controller.unit_centre(u)
+			break
+	_move(h1, base + Vector3(4.0 * INCH, 0.0, 0.0))   # 4" from a defender base: inside the zone, inside the gate
+	_main._solo_deploy_human_done_one()
+	assert_int(int(_main._solo_deploy_fsm["phase_left"])).override_failure_message("refused: still owes 2").is_equal(2)
+	_move(h1, Vector3(33.0 * INCH, 0.0, -20.0 * INCH))   # far from every enemy base
+	_main._solo_deploy_human_done_one()
+	assert_int(int(_main._solo_deploy_fsm["phase_left"])).is_equal(1)

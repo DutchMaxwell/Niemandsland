@@ -2968,6 +2968,8 @@ func _solo_deploy_gates_for(slot: int) -> Dictionary:
 ## D6a: the gate a human placement breaks ("" = none), in the words the toast shows.
 func _solo_human_gate_violation(gu: GameUnit) -> String:
 	var gates := _solo_deploy_gates_for(solo_controller.human_slot)
+	if _solo_deploy_fsm.has("phases") and _solo_deploy_fsm.has("phase_gates"):   # D7d: the running phase's own
+		gates = _solo_deploy_fsm["phase_gates"]
 	if gates.is_empty():
 		return ""
 	var models: Array = []
@@ -3317,12 +3319,14 @@ func _solo_phase_start() -> void:
 	var slot: int = int(SoloController.mission_roles[role])
 	var placed: Dictionary = _solo_deploy_fsm["phase_placed"]
 	var ai_side: bool = slot == solo_controller.ai_slot
+	var phase_gates := _solo_phase_gates(phases[i] as Array, slot)
 	var total: int = solo_controller.deploy_main_total() if ai_side else _solo_human_main_units().size()
 	var quota: int = SoloController.phase_quota(share, total, int(placed.get(slot, 0)))
 	if terrain_overlay != null:
 		terrain_overlay.set_style_zones(style)
 	if ai_side:
 		solo_controller.deploy_set_zone(_solo_style_rect(style), DeploymentCatalog.zone_test(style_id, 1))
+		solo_controller.deploy_set_gates(phase_gates)
 		var done: Array = solo_controller.deploy_place_n(quota)
 		placed[slot] = int(placed.get(slot, 0)) + done.size()
 		_log_rule_event(BattleLog.Category.GENERAL, "Phase %d of %d (%s, %s): NACHTMAHR deploys %d unit(s)" % [
@@ -3331,6 +3335,7 @@ func _solo_phase_start() -> void:
 		_solo_phase_start()
 		return
 	_solo_deploy_fsm["phase_left"] = quota
+	_solo_deploy_fsm["phase_gates"] = phase_gates
 	_solo_deploy_fsm["human_turn"] = true
 	if quota <= 0:
 		_solo_deploy_fsm["phase_i"] = i + 1
@@ -3511,6 +3516,13 @@ func _solo_reserve_arrival_violation(placed: Array) -> String:
 		if not why.is_empty():
 			return "%s %s — move it, then ✓" % [gu.get_name(), why]
 	return ""
+
+
+## D7d: a phase's own distance gates (an optional 4th element of the catalog entry), else the role's.
+func _solo_phase_gates(entry: Array, slot: int) -> Dictionary:
+	if entry.size() > 3 and entry[3] is Dictionary:
+		return entry[3]
+	return _solo_deploy_gates_for(slot)
 
 
 ## The human's main-phase units: alive, not attached, not a scout, not held in reserve.
