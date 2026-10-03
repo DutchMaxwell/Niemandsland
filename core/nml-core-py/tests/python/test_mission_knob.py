@@ -152,6 +152,15 @@ def test_carry_catalog_entries_pin_three_relics_and_scoring():
         ]
 
 
+def test_smash_and_grab_catalog_entry_pins_rounds_roles_and_secret_markers():
+    snap = sp.resolve_mission("smash_and_grab", REPO)
+    assert snap["name"] == "Smash & Grab" and snap["scoring"] == "extract"
+    assert snap["rounds"] == 6 and snap["roles"] is True and snap["attacker_points_factor"] == 1.25
+    assert snap["markers"]["count"] == "d3+2" and snap["markers"]["secret"] is True
+    assert "carry" not in snap["markers"]
+    assert sp.mission_markers(snap["markers"], 4) == [{"secret": "", "revealed": False}] * 4
+
+
 @needs_lists
 def test_a_six_round_catalog_mission_plays_six_rounds_and_duel_stays_at_four():
     """NML-1010 D1: the match length is catalog data. No shipped mission is longer than 4,

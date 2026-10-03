@@ -139,6 +139,13 @@ def test_carry_catalog_layouts_use_the_same_alternate_core_door():
         assert nml_core.mission_marker_positions(markers["placement"], 12.0, style, 72.0, 48.0) == []
 
 
+def test_smash_and_grab_uses_the_alternate_core_door():
+    catalog = json.loads((REPO / "assets/solo/missions.json").read_text())["missions"]
+    style = json.loads((REPO / "assets/solo/deployments.json").read_text())["styles"]["front_line"]
+    markers = catalog["smash_and_grab"]["markers"]
+    assert nml_core.mission_marker_positions(markers["placement"], 12.0, style, 72.0, 48.0) == []
+
+
 def close(a, b):
     return abs(float(a) - float(b)) <= EPS
 

@@ -79,7 +79,10 @@ static func marker_metadata(spec: Dictionary) -> Array:
 	if not owned and not carry and not mobile and not secret:
 		return []
 	var markers: Array = []
-	for i in range(int(spec.get("count", 2))):
+	# A dice-term count ("d3+2") is NOT a number here: String.to_int would strip the letters and read
+	# 32. Its markers are sized once they are on the table (main._solo_secret_markers_assign).
+	var raw_count: Variant = spec.get("count", 2)
+	for i in range(int(raw_count) if raw_count is int or raw_count is float else 0):
 		var marker: Dictionary = {}
 		if owned:
 			marker = {"owned_by": i + 1, "destructible": bool(spec.get("destructible", false)),
