@@ -272,6 +272,25 @@ def _phase_args(mission_def: dict[str, Any], attacker: int, repo_root: str | Pat
     return out
 
 
+def _reserve_args(mission_def: dict[str, Any], attacker: int) -> tuple[list[bool], dict[str, Any]]:
+    """D8b: the mission's `reserves` ({who, arrive_on, from_round, zone, gates}) as the per-side
+    reserve flags of `deploy_phased` (side 0 = slot 1) and the cfg; ([False, False], {}) without."""
+    cfg = mission_def.get("reserves") or {}
+    if not attacker or not cfg:
+        return [False, False], {}
+    who = cfg.get("who", "both")
+    flags = [False, False]
+    for role, slot in (("attacker", attacker), ("defender", 3 - attacker)):
+        if who in ("both", role):
+            flags[slot - 1] = True
+    return flags, cfg
+
+
+def _style_by_id(style_id: str, repo_root: str | Path) -> dict[str, Any]:
+    """A deployment style by id from `assets/solo/deployments.json` (the reserve zone's)."""
+    return json.loads((Path(repo_root) / "assets" / "solo" / "deployments.json").read_text(encoding="utf-8"))["styles"][style_id]
+
+
 def resolve_zone_style(mission_def: dict[str, Any], repo_root: str | Path) -> dict[str, Any] | None:
     """The mission's deployment style from `assets/solo/deployments.json`, or None for `front_line`
     (the arena's own rects — byte-identical to every mission before wave D)."""
@@ -324,6 +343,8 @@ def _deploy_arena(
     zone_style: dict[str, Any] | None = None,
     gates: dict[str, Any] | None = None,
     phases: list[dict[str, Any]] | None = None,
+    reserve: list[bool] | None = None,
+    mission_keys: set[str] | None = None,
 ) -> tuple[list[list[list[float]]], list[list[list[float]]], set[str], list[list[Any]]]:
     """The table's pre-game through the step-7 binding: `deploy_side` per side
     with the per-side stream `seed + slot` (arena_match.gd:486-488 — the game
@@ -362,9 +383,13 @@ def _deploy_arena(
             roster["1"], roster["2"], zones["1"], zones["2"], phases, objs2, board,
             seed + 1, seed + 2, opener, rules_epoch=int(rules_epoch),
             gates1=(gates or {}).get("1"), gates2=(gates or {}).get("2"),
+            reserve1=bool((reserve or [False, False])[0]), reserve2=bool((reserve or [False, False])[1]),
         )
         placed_by = {"1": out["side1"], "2": out["side2"]}
         sequence = [list(e) for e in out["sequence"]]
+        if mission_keys is not None:  # D8b: the set-aside leftover = reserved keys that are not Ambush units
+            ambush = {u["key"] for slot in ("1", "2") for u in roster[slot] if u["ambush"]}
+            mission_keys.update(k for slot in ("1", "2") for k in placed_by[slot]["reserved"] if k not in ambush)
     elif interleave:
         # The record's epoch reaches the placement gates (`EPOCH_16_FREE_PLACEMENT`,
         # `EPOCH_64_DEPLOY_LARGE_RESPOT`); without it the binding ran them at the
@@ -1078,7 +1103,8 @@ LEGACY_FIDELITY_KNOBS: dict[str, Any] = dict(
 )
 
 
-def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int) -> int:
+def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int,
+                     mission: dict[str, Any] | None = None) -> int:
     """The table's round-start ambush beat (`main._solo_round_start` :10096-10106
     through `_solo_alternate_ambush_arrivals` :10419-10485), over the PLAIN
     state — the same layer `_round_start` already works on.
@@ -1111,6 +1137,7 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
         if u.get("dormant") and u.get("earliest_arrival_round", -1) <= round_no:
             queue[int(u["player"])].append(key)
     turn, arrived = int(opener), 0
+    held = set((mission or {}).get("keys", ()))   # D8b: Attack & Defend mission reserves (roll + zone + gates)
     while queue[1] or queue[2]:
         if not queue[turn]:
             turn = 3 - turn
@@ -1120,6 +1147,16 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
         u = units[key]
         r = reads[key]
         side = int(u["player"])
+        shape, ring = None, r["ring_m"]
+        occ_in = occ
+        if key in held:
+            cfg = mission["cfg"]
+            if round_no < int(cfg.get("from_round", 2)) or mission["rng"].randi_range(1, 6) < int(cfg.get("arrive_on", 4)):
+                continue   # not yet due / the die says no: it stays in reserve, one die per unit per round
+            shape = mission["zones"]
+            ring = float((cfg.get("gates") or {}).get("min_from_enemy_in", 0.0)) * IN2M
+            marker = float((cfg.get("gates") or {}).get("min_from_marker_in", 0.0)) * IN2M
+            occ_in = occ + [{"pos": o, "radius": marker} for o in objs] if marker > 0 else occ
         # A RESERVE enemy projects nothing (main.gd:10523); a reserve beacon
         # carrier likewise stands nowhere (`beacon_points` :9781+).
         enemies = [
@@ -1139,8 +1176,8 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
             for p in ou["positions"]
         ]
         spot = nml_core.arrive_one(
-            zone, objs, occ, enemies, r["ring_m"], r["radius"], r["footprint"],
-            r["base_r"], r["flying"], board, beacons,
+            zone, objs, occ_in, enemies, ring, r["radius"], r["footprint"],
+            r["base_r"], r["flying"], board, [] if key in held else beacons, zones=shape,
         )
         if spot is None:
             continue
@@ -3022,6 +3059,8 @@ def play_game(
     drng, dep = (rng, seed) if deploy_seed is None else (nml_core.Rng(deploy_seed), deploy_seed)
     arena = eff_deployment in ("arena", "interleaved")
     deploy_seq: list[list[Any]] = []
+    mission_reserved: set[str] = set()
+    reserve_cfg: dict[str, Any] = {}
     if arena:
         # NML-1152 step 8 — the table's pre-game. Roll-off FIRST from the game
         # stream (ties re-rolled; the winner of the last attempt opens, the
@@ -3031,12 +3070,14 @@ def play_game(
         roll_attempts = _arena_roll_off(drng)
         opener = 1 if roll_attempts[-1][0] >= roll_attempts[-1][1] else 2
         mission_def0 = resolve_mission(mission, repo_root)
+        reserve_flags, reserve_cfg = _reserve_args(mission_def0, _ai_attacker(mission_def0, opener))
         pos1, pos2, reserved, deploy_seq = _deploy_arena(
             dep, units1, units2, list_p1, list_p2, board, objectives, opener,
             eff_deployment == "interleaved", rules_epoch=rules_epoch,
             zone_style=resolve_zone_style(mission_def0, repo_root),
             gates=_role_gates(mission_def0, _ai_attacker(mission_def0, opener)),
             phases=_phase_args(mission_def0, _ai_attacker(mission_def0, opener), repo_root),
+            reserve=reserve_flags, mission_keys=mission_reserved,
         )
     elif deploy_rng_seed is None:
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, drng)
@@ -3051,11 +3092,13 @@ def play_game(
     # `capture_reads` is — never re-derived in Python. Only `ambush="table"`
     # asks for them, so an "off" game builds byte-identically to every corpus
     # written before this knob.
-    arrivals = core.arrival_reads() if (arena and eff_ambush) else None
+    arrivals = core.arrival_reads() if (arena and (eff_ambush or reserve_cfg)) else None
+    earliest = {k: v["earliest"] for k, v in arrivals.items()} if arrivals is not None else None
+    for k in mission_reserved:  # D8b: a mission reserve is due from the mission's first reserve round
+        earliest[k] = int(reserve_cfg.get("from_round", 2))
     plain = capture(
         units, pos1 + pos2, reads, board, objectives, attached, attached_to,
-        reserved if arrivals is not None else None,
-        {k: v["earliest"] for k, v in arrivals.items()} if arrivals is not None else None,
+        reserved if arrivals is not None else None, earliest,
     )
     mission_def = resolve_mission(mission, repo_root)  # SoloController.mission_reset mirrored
     eff_scoring = mission_def.get("scoring", "end")
@@ -3109,7 +3152,10 @@ def play_game(
         plain = state.plain()
         _round_start(plain, round_no, profiles, magic)
         if arrivals is not None:
-            _arrive_reserves(plain, arrivals, board, objectives, opener, round_no)
+            _arrive_reserves(plain, arrivals, board, objectives, opener, round_no, mission=(
+                {"keys": mission_reserved, "cfg": reserve_cfg, "rng": rng,
+                 "zones": _style_zone_args(_style_by_id(reserve_cfg.get("zone", "anywhere"), repo_root), "1")[1]}
+                if mission_reserved else None))
         if live_ledger:
             _write_ledger(plain, led)
         state = core.state_of(plain)
