@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://main001"]
+[gd_scene load_steps=13 format=3 uid="uid://main001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Shader" path="res://shaders/space_skybox.gdshader" id="10_spacesky"]
@@ -8,7 +8,6 @@
 [ext_resource type="Script" path="res://scripts/dice_tray.gd" id="5_diceroller"]
 [ext_resource type="Script" path="res://scripts/network_manager.gd" id="6_network"]
 [ext_resource type="Script" path="res://scripts/save_manager.gd" id="7_savemgr"]
-[ext_resource type="Script" path="res://scripts/graphics_settings.gd" id="9_graphics"]
 
 [sub_resource type="ShaderMaterial" id="SpaceSky_1"]
 shader = ExtResource("10_spacesky")
@@ -123,10 +122,6 @@ script = ExtResource("6_network")
 [node name="SaveManager" type="Node" parent="."]
 unique_name_in_owner = true
 script = ExtResource("7_savemgr")
-
-[node name="GraphicsSettings" type="Node" parent="."]
-unique_name_in_owner = true
-script = ExtResource("9_graphics")
 
 [node name="UI" type="CanvasLayer" parent="."]
 

@@ -319,3 +319,18 @@ func test_shelf_forest_hull_is_area_terrain_of_tree_height() -> void:
 	var areas := _boxes(o, false)
 	assert_int(areas.size()).is_equal(1)
 	assert_array(_tops_inches(areas)).is_equal([OverlayScript.TREE_HEIGHT_INCHES])
+
+
+# === Free-placed pieces are typed by kind and listed once (main._sandbox_terrain_shapes) ===
+
+func test_free_pieces_are_typed_by_kind_and_listed_exactly_once() -> void:
+	var ruin := _prop("ruin_small_1f", ObjectManager.SandboxPropKind.RUIN, Vector2(3, 3), [0.0])
+	var forest := _group("forest_a", ObjectManager.SandboxPropKind.FOREST, Vector2(6, 6))
+	var hazard := _group("mines_a", ObjectManager.SandboxPropKind.HAZARD_CLUSTER, Vector2(6, 6))
+	var pieces := ObjectManager.sandbox_pieces(get_tree())
+	for n in [ruin, forest, hazard]:
+		assert_int(pieces.count(n)).is_equal(1)   # TerrainGroupBase is in two groups — never listed twice
+	var want := {ruin: TerrainRules.TerrainType.RUINS, forest: TerrainRules.TerrainType.FOREST,
+		hazard: TerrainRules.TerrainType.DANGEROUS}
+	for n in want:
+		assert_int(ObjectManager.sandbox_terrain_type(int(n.prop_kind))).is_equal(int(want[n]))   # a forest is difficult, not RUINS

@@ -62,6 +62,8 @@ var cinematic_intro: CinematicIntro = null
 ## black and dissolves cleanly into the intro (freed once the intro's own black is up).
 var _prompt_overlay: CanvasLayer = null
 
+## One owner of the table's contested Environment values (preset, mood light, biome reference, intro).
+var render_state: RenderState = null
 # Lighting Controller
 var lighting_controller: Node = null
 var lighting_panel: CanvasLayer = null
@@ -634,11 +636,16 @@ func _ready() -> void:
 	table.setup_table(DEFAULT_TABLE_SIZE_FEET)
 	_adjust_camera_for_table_size(DEFAULT_TABLE_SIZE_FEET)
 
+	# The quality preset is the render state's lowest layer, applied by rule at the start (the autoload ran at the
+	# startup menu, before this scene existed); the light, the biome reference and the intro add theirs above it.
+	render_state = RenderState.new(world_environment.environment)
+	GraphicsSettings.apply_environment_settings(GraphicsSettings.PRESETS[GraphicsSettings.current_preset])
+
 	# Initialize Lighting Controller
 	lighting_controller = Node.new()
 	lighting_controller.set_script(load("res://scripts/lighting_controller.gd"))
 	add_child(lighting_controller)
-	lighting_controller.initialize(directional_light, world_environment, fill_light)
+	lighting_controller.initialize(directional_light, world_environment, fill_light, render_state)
 
 	# Initialize Lighting Panel UI
 	lighting_panel = load("res://scripts/lighting_panel.gd").new()
@@ -3815,21 +3822,17 @@ func _sandbox_terrain_shapes() -> Array:
 		return _sandbox_shapes_cache["shapes"]
 	var shapes: Array = []
 	var in2m := 0.0254
-	for n in get_tree().get_nodes_in_group("sandbox_terrain") + get_tree().get_nodes_in_group("terrain_group_base"):
+	for n in ObjectManager.sandbox_pieces(get_tree()):
 		var node := n as Node3D
 		if node == null or not is_instance_valid(node):
 			continue
 		var fp: Vector2 = node.get("footprint_inches") if node.get("footprint_inches") != null else Vector2.ZERO
 		if fp == Vector2.ZERO:
 			continue
+		# Typed by prop kind (TerrainGroupBase also sits in the "sandbox_terrain" group, so group membership
+		# says nothing): Regal-Ruine = RUINS (Cover + Area-LoS), Wald = FOREST, Gefahrenfeld = DANGEROUS.
 		var kind := int(node.get("prop_kind")) if node.get("prop_kind") != null else -1
-		var ttype := TerrainRules.TerrainType.NONE
-		if node.is_in_group("sandbox_terrain"):
-			ttype = TerrainRules.TerrainType.RUINS   # Regal-Ruine: Cover + Area-LoS (Innenwände v1 unmodelliert)
-		elif kind == ObjectManager.SandboxPropKind.FOREST:
-			ttype = TerrainRules.TerrainType.FOREST
-		elif kind == ObjectManager.SandboxPropKind.HAZARD_CLUSTER:
-			ttype = TerrainRules.TerrainType.DANGEROUS
+		var ttype := ObjectManager.sandbox_terrain_type(kind)
 		if ttype == TerrainRules.TerrainType.NONE:
 			continue
 		# NML-972: a multi-storey shelf ruin also hands over its walkable floor slabs, so the 3D
