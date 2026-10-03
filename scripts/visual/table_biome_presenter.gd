@@ -30,8 +30,9 @@ const PRESET_DENSITY := {2: 1.0, 3: 1.0, 4: 1.0}   # MEDIUM, HIGH, ULTRA
 const HIDE_GROUND_MIST := true
 ## Scatter counts are per m²; above a 6x4 ft table the density falls instead of the frame rate.
 const REFERENCE_AREA_M2 := 6.0 * 0.3048 * 4.0 * 0.3048
+## The sun values only the reference sets (the profile's shadow bias included: no mood sets it back).
 const SUN_PROPS: Array[String] = ["directional_shadow_max_distance", "directional_shadow_pancake_size",
-	"light_volumetric_fog_energy"]
+	"light_volumetric_fog_energy", "shadow_bias", "shadow_normal_bias"]
 
 signal presentation_built(reference_biome: String)
 signal presentation_removed
