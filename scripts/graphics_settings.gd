@@ -176,11 +176,12 @@ func _ready() -> void:
 	# Load saved settings or use default
 	load_settings()
 	apply_preset(current_preset)
-	_apply_window_constraints()
+	apply_window_constraints()
 
 
-## Enforce the minimum window size and apply the saved UI scale. Reachability floor.
-func _apply_window_constraints() -> void:
+## Enforce the minimum window size and apply the saved UI scale. Reachability floor. Also called by the game scene
+## at its start (main.gd), when the real game window is up.
+func apply_window_constraints() -> void:
 	var window := get_window()
 	if window:
 		window.min_size = MIN_WINDOW_SIZE
@@ -312,7 +313,9 @@ func _apply_scaling_3d_staggered(scale: float) -> void:
 		return
 	vp = get_viewport()
 	if vp:
-		vp.scaling_3d_scale = scale
+		# The preset current NOW, not the one that started this wait: a second preset inside the two frames
+		# (Performance -> Low) returned early above and would otherwise get the stale 0.77.
+		vp.scaling_3d_scale = PRESETS[current_preset]["fsr_scale"]
 
 
 ## Apply environment settings

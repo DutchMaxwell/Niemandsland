@@ -1544,8 +1544,8 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 /// FLAGGED per activation, never skipped in silence: `deadly` (the landing's
 /// shape is the `EPOCH_14_DEADLY_LANDING` gate's — per model from 14 on, the
 /// pooled multiply below, audit 2026-09-13 §2.1), `takedown`, `hazardous`,
-/// `surge_gates`, and `counter_strikes_first` (a defender Counter weapon runs a
-/// whole EXTRA strike phase before Impact, :8058).
+/// and `surge_gates`. (`counter_strikes_first` is the charge's, `sim::tray_charge`:
+/// a CHARGER's Counter weapon strikes in its normal slot, and was never a gap.)
 ///
 /// NOT PORTED, in the order they cost the most, and none of them has a field
 /// this port can flag them by:
@@ -1588,7 +1588,7 @@ pub fn resolve_melee_with_tray(
 ) -> ShootResult {
     resolve_melee_leg(
         strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice,
-        false, 0.0, false, tray,
+        false, 0.0, false, false, tray,
     )
 }
 
@@ -1606,6 +1606,7 @@ pub fn resolve_melee_leg(
     deadly_per_model: bool,
     charge_from_in: f64,
     screened_melee: bool,
+    tray_exact: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     // The alias's charged leg fires on the CHARGER's strikes only — a
@@ -1676,9 +1677,6 @@ pub fn resolve_melee_leg(
             let n = sh.attacks[k];
             if n <= 0 {
                 continue;
-            }
-            if p.counter && p.counter_strikes_first.unwrap_or(true) {
-                out.mark("counter_strikes_first");
             }
             // Wave 4 follow-up — "Takedown Strike" names itself once per
             // strike (rules-must-log, the table's own log line at
@@ -1791,9 +1789,15 @@ pub fn resolve_melee_leg(
                 0
             };
             let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
-            // Melee reads neither Cover nor Guarded (`profile_ev` keeps both on
-            // the shooting side); Shielded is the whole Defense ladder here.
-            let save_def = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
+            // Melee reads no Cover (`profile_ev` keeps it on the shooting side). Guarded (over 9")
+            // DOES reach the charged side's saves at the table (main.gd:7096-7098): tray-exact
+            // applies it; without the switch the old Shielded-only read stands, flagged.
+            let over9 = def.guarded && charge_from_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
+            if over9 && !tray_exact {
+                out.mark("guarded_over9");
+            }
+            let save_def = guarded_defense(
+                shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), over9 && tray_exact, def.def_floor());
             shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
@@ -2009,11 +2013,32 @@ pub fn resolve_impact_pool_with_tray(
     def_owner: &str,
     tray: &mut Tray,
 ) -> ShootResult {
+    resolve_impact_pool_at(dice, ap, att_owner, def, def_owner, None, tray)
+}
+
+/// `resolve_impact_pool_with_tray` knowing the charge: `charge` = (the pre-charge gap in inches,
+/// `Seams::tray_exact`). Tray-exact: a Guarded-family defender charged from over 9" saves at
+/// +1 Defense (main.gd:7440-7441), unflagged; without the switch the old save, flagged only when
+/// that gate really applies. `None` (no charge known) keeps the old blanket flag.
+pub fn resolve_impact_pool_at(
+    dice: i64,
+    ap: i64,
+    att_owner: &str,
+    def: &Ctx,
+    def_owner: &str,
+    charge: Option<(f64, bool)>,
+    tray: &mut Tray,
+) -> ShootResult {
     let mut out = ShootResult::default();
     if dice <= 0 {
         return out;
     }
-    if def.guarded {
+    let over9 = match charge {
+        None => def.guarded,
+        Some((gap_in, _)) => def.guarded && gap_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded,
+    };
+    let exact = over9 && matches!(charge, Some((_, true)));
+    if over9 && !exact {
         out.mark("guarded_over9");
     }
     let faces = tray.roll(dice as usize);
@@ -2031,7 +2056,8 @@ pub fn resolve_impact_pool_with_tray(
     // "Impact is not a weapon": no Deadly, no Bane, no Shred — a bare profile
     // carrying only the pool's AP, exactly as :6325 builds it.
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), ap, false, false, 1, false, tray, &mut out);
+    let sd = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), exact, def.def_floor());
+    let w = save_batch(&bare, def, def_owner, hits, sd, ap, false, false, 1, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out

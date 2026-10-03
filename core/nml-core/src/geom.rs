@@ -185,7 +185,7 @@ impl BaseShape {
     /// The half-axes in METRES for a model whose recorded (circumscribing)
     /// radius is `r`. A degenerate axis pair falls back to the circle.
     #[inline]
-    fn semis(self, r: f64) -> (f64, f64) {
+    pub(crate) fn semis(self, r: f64) -> (f64, f64) {
         match self {
             BaseShape::Round => (r, r),
             BaseShape::Oval { w_mm, d_mm, .. } => {
