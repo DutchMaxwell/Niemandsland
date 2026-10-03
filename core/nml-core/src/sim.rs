@@ -7163,9 +7163,13 @@ fn resolve_with(
                     // morale tests from wounds at the end of an activation").
                     // Knob-gated (DEFECT_LEDGER #12): OFF replays a corpus
                     // recorded before this rule unchanged.
+                    // The flag names the SKIPPED test (knob off), never the
+                    // ported one: the tray tree declines on every flag, and
+                    // the stage-0 census found it on 491 ported moves.
                     if kind != CHARGE && seams.dangerous_end_morale {
-                        shot.mark("dangerous_end_morale");
                         dangerous_morale_due = Some((alive_before, wounds_before));
+                    } else if kind != CHARGE {
+                        shot.mark("dangerous_end_morale");
                     }
                 }
             }
