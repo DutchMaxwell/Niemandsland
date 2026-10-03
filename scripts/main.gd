@@ -640,6 +640,10 @@ func _ready() -> void:
 	# startup menu, before this scene existed); the light, the biome reference and the intro add theirs above it.
 	render_state = RenderState.new(world_environment.environment)
 	GraphicsSettings.apply_environment_settings(GraphicsSettings.PRESETS[GraphicsSettings.current_preset])
+	# The window (fullscreen + present mode, frame cap, UI scale) is re-asserted here too, as the removed duplicate
+	# GraphicsSettings node in main.tscn did by accident: without it Low ran in the slow mode (36 ms GPU instead of
+	# 26) in 8 of 8 test-display runs, with it in 2 of 12 (03.10.) — the start-up menu's own call does not stick.
+	GraphicsSettings.apply_window_constraints()
 
 	# Initialize Lighting Controller
 	lighting_controller = Node.new()
