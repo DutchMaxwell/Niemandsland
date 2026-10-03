@@ -312,7 +312,9 @@ func _apply_scaling_3d_staggered(scale: float) -> void:
 		return
 	vp = get_viewport()
 	if vp:
-		vp.scaling_3d_scale = scale
+		# The preset current NOW, not the one that started this wait: a second preset inside the two frames
+		# (Performance -> Low) returned early above and would otherwise get the stale 0.77.
+		vp.scaling_3d_scale = PRESETS[current_preset]["fsr_scale"]
 
 
 ## Apply environment settings
