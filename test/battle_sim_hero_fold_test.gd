@@ -287,3 +287,14 @@ func test_the_header_stamps_the_engage_fold_and_cond_ap() -> void:
 			"seam_spacing", "hero_attach", "dice"]:
 		assert_bool(knobs_on.has(k)) \
 			.override_failure_message("header knob '%s' vanished" % k).is_true()
+
+
+## Tray census side finding (03.10.): the table ALWAYS rolls the p.10 morale test after a
+## non-charge activation's dangerous-terrain losses (main.gd:1092-1098), and the Rust twin runs
+## it only when this header's `dangerous_end_morale` says so (an absent key reads OFF,
+## core/nml-core/src/acts.rs) — so the in-game Rust planner predicted a game without the test.
+## The constant `true`: the table has no switch. A corpus recorded before the key replays as it did.
+func test_the_header_stamps_the_dangerous_end_morale_the_table_always_rolls() -> void:
+	var knobs: Dictionary = AiActRecorder._header_line(_state(), Callable())["knobs"]
+	assert_bool(bool(knobs.get("dangerous_end_morale", false))) \
+		.override_failure_message("the Rust planner skips the p.10 test the table rolls").is_true()
