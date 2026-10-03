@@ -58,6 +58,17 @@ func test_the_roles_step_sets_up_the_marker_and_the_disc_zone() -> void:
 	assert_bool(DeploymentCatalog.in_zone(disc, 1, Vector2(11, 21))).is_true()
 
 
+func test_the_shipped_entry_drives_the_same_setup() -> void:
+	_main._solo_mission_id = "vip_escort"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	assert_str(SoloController.mission_scoring).is_equal("escort")
+	_main._solo_roles_set(2, "attacker")   # P2 attacks, so P1 defends
+	assert_int(int(SoloController.mission_markers[0]["deploy_edge"])).is_equal(-1)
+	assert_float((_main.terrain_overlay.get_objectives()[0] as Vector3).z / 0.0254).is_equal_approx(-21.0, 0.001)
+	assert_bool(DeploymentCatalog.style_ids().has("marker_disc_12")).is_true()
+
+
 func test_a_mission_without_a_mobile_marker_is_left_alone() -> void:
 	_main._solo_mission_id = "duel"
 	_main._solo_vip_setup()

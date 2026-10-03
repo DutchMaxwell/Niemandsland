@@ -315,6 +315,18 @@ def test_phase_args_resolve_a_runtime_style_id():
         sp._phase_args(md, 1, REPO)   # without the runtime style the id is unknown, loudly
 
 
+def test_vip_escort_catalog_entry_pins_phases_gates_and_the_mobile_marker():
+    snap = sp.resolve_mission("vip_escort", REPO)
+    assert snap["name"] == "VIP Escort" and snap["scoring"] == "escort" and snap["rounds"] == 6
+    assert snap["roles"] is True and "attacker_points_factor" not in snap
+    assert snap["markers"] == {"count": 1, "placement": "vip_edge", "mobile": True}
+    assert snap["deploy_gates"] == {"attacker": {"min_from_enemy_in": 12}}
+    vip = sp._vip_setup(snap, 1)
+    ph = sp._phase_args(snap, 1, REPO, vip["styles"])   # attacker = slot 1: the defender (side 1) goes first
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "all"), (0, "all")]
+    assert sp._role_gates(snap, 1) == {"1": {"min_from_enemy_in": 12}, "2": None}
+
+
 @needs_lists
 def test_an_arena_vip_game_starts_the_marker_at_the_defender_edge_and_walks_it(monkeypatch):
     core = nml_core.load(str(REPO))

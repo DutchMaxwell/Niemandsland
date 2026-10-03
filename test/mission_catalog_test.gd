@@ -16,7 +16,7 @@ func test_catalog_lists_the_shipped_missions() -> void:
 	assert_that(MissionCatalog.mission_ids()).is_equal(
 		["breakthrough", "capture_and_hold", "demolition", "domination", "duel",
 		"headquarters", "king_of_the_hill", "last_stand", "mosh_pit", "pitched_battle",
-		"relic_hunt", "sabotage", "seize_ground", "smash_and_grab"])
+		"relic_hunt", "sabotage", "seize_ground", "smash_and_grab", "vip_escort"])
 
 
 ## D14.6 — Smash & Grab (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles with the
@@ -172,3 +172,26 @@ func test_last_stand_is_the_attack_and_defend_recycle_mission() -> void:
 	assert_that(MissionCatalog.marker_positions(m, style)).is_equal([Vector2.ZERO])
 	for id in ["centre_disc_12", "edge_band_12"]:
 		assert_bool(DeploymentCatalog.style_ids().has(id)).is_true()
+
+
+## D14.4 — VIP Escort (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles, one marker the defender
+## walks 12" a round, the defender's whole army in the 12" disc round it, the attacker in the edge frame at
+## least 12" from the enemy; decided by the VIP reaching the edge opposite the one it started on.
+func test_vip_escort_is_the_attack_and_defend_escort_mission() -> void:
+	var m := MissionCatalog.get_mission("vip_escort")
+	assert_str(str(m["name"])).is_equal("VIP Escort")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("escort")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_bool(m.has("attacker_points_factor")).is_false()
+	assert_that(m["deploy_phases"]).is_equal([["defender", "all", "marker_disc_12"], ["attacker", "all", "edge_band_12"]])
+	assert_float(float(m["deploy_gates"]["attacker"]["min_from_enemy_in"])).is_equal(12.0)
+	var mk: Dictionary = m["markers"]
+	assert_int(int(mk["count"])).is_equal(1)
+	assert_bool(bool(mk["mobile"])).is_true()
+	# the spot is chosen at the roles step (MissionCatalog.vip_start), never by the layout
+	assert_that(MissionCatalog.marker_positions(m, DeploymentCatalog.get_style("front_line"))).is_equal([])
+	assert_bool(DeploymentCatalog.style_ids().has("edge_band_12")).is_true()
+	assert_bool(DeploymentCatalog.style_ids().has("marker_disc_12")).override_failure_message(
+		"marker_disc_12 only exists at run time").is_false()
