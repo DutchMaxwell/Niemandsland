@@ -1,0 +1,43 @@
+{
+ "about": "Tray-exact S4: hand-built units, positions in metres (x, y, z). 'expected' is the TABLE's SoloController.casualty_order (test/casualty_order_parity_test.gd pins it) and the core's casualty::casualty_order must return the same (casualty.rs test).",
+ "units": [
+  {"name": "plain line", "expected": [3, 0, 1, 2], "models": [
+   {"pos": [0.0, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.03, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.06, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.12, 0.0, 0.01], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1}]},
+  {"name": "special weapon", "expected": [3, 0, 4, 1, 2], "models": [
+   {"pos": [0.0, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.03, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.06, 0.0, 0.0], "weapons": ["Missile Launcher"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.0, 0.0, 0.03], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.03, 0.0, 0.035], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1}]},
+  {"name": "weapon team", "expected": [0, 3, 2, 1], "models": [
+   {"pos": [0.0, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.04, 0.0, 0.0], "weapons": ["Heavy Gun"], "equipment": 0, "wounds_max": 3, "wounds": 3},
+   {"pos": [0.08, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.12, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1}]},
+  {"name": "wounded tough first", "expected": [2, 0, 1], "models": [
+   {"pos": [0.0, 0.0, 0.0], "weapons": ["Blade"], "equipment": 0, "wounds_max": 3, "wounds": 2},
+   {"pos": [0.05, 0.0, 0.0], "weapons": ["Blade"], "equipment": 0, "wounds_max": 3, "wounds": 3},
+   {"pos": [0.1, 0.0, 0.0], "weapons": ["Blade"], "equipment": 0, "wounds_max": 3, "wounds": 1}]},
+  {"name": "equipment and sergeant", "expected": [3, 2, 1, 0], "models": [
+   {"pos": [0.0, 0.0, 0.0], "weapons": ["Pistol", "CCW"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.03, 0.0, 0.01], "weapons": ["Rifle"], "equipment": 1, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.06, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.09, 0.0, 0.02], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1}]}
+ ],
+ "about_chains": "Tray-exact S5: round bases of base_mm at base scale 1; expected = the TABLE SoloController.chain_casualty_order(unit), every pick; the core casualty::chain_casualty_order must return the same.",
+ "chains": [
+  {"name": "bridge", "base_mm": 32, "expected": [0, 4, 1, 2, 3], "models": [
+   {"pos": [0.0, 0.0, 0.003], "weapons": ["Rifle"], "equipment": 1, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.0574, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 1, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.1148, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 0, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.1722, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 1, "wounds_max": 1, "wounds": 1},
+   {"pos": [0.2296, 0.0, 0.0], "weapons": ["Rifle"], "equipment": 1, "wounds_max": 1, "wounds": 1}]},
+  {"name": "wounded bridge", "base_mm": 32, "expected": [1, 0, 2], "models": [
+   {"pos": [0.0, 0.0, 0.002], "weapons": ["Blade"], "equipment": 0, "wounds_max": 3, "wounds": 3},
+   {"pos": [0.0574, 0.0, 0.0], "weapons": ["Blade"], "equipment": 0, "wounds_max": 3, "wounds": 1},
+   {"pos": [0.1148, 0.0, 0.0], "weapons": ["Blade"], "equipment": 0, "wounds_max": 3, "wounds": 3}]}
+ ]
+}

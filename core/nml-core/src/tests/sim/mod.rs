@@ -1700,6 +1700,7 @@ mod breath_attack;
 mod breath_score;
 mod buff_consumption_bridge;
 mod caster_boost;
+mod casualty_chain;
 mod caster_interference;
     mod cast_debuff;
     mod cast_ev;
