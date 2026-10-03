@@ -335,13 +335,28 @@ def test_an_arena_vip_game_starts_the_marker_at_the_defender_edge_and_walks_it(m
     catalog["vip_fixture"] = dict(catalog["duel"], rounds=6, roles=True, scoring="escort",
                                   markers={"count": 1, "placement": "vip_edge", "mobile": True},
                                   deploy_phases=[["defender", "all", "marker_disc_12"], ["attacker", "all", "edge_band_12"]])
+    walks: list[tuple[float, float]] = []
+
+    class Spy:  # the pyo3 Core is read-only: delegate everything, record the round-start walk
+        def __getattr__(self, name):
+            return getattr(core, name)
+
+        def apply_marker_move(self, state, depth):
+            before = state.plain()["objectives"][0]["pos"][2] / sp.IN2M
+            out = core.apply_marker_move(state, depth)
+            walks.append((before, out.plain()["objectives"][0]["pos"][2] / sp.IN2M))
+            return out
+
     try:
-        res = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="vip_fixture", deployment="arena", **FAST)
+        res = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, Spy(), mission="vip_fixture", deployment="arena", **FAST)
     finally:
         del catalog["vip_fixture"]
-    meta = res["markers_meta"][0]
-    assert meta["mobile"] is True and meta["deploy_edge"] in (-1, 1)
-    assert res["rounds_played"] == 6 and res["winner"] in ("p1", "p2", "draw")
+    assert res["rounds_played"] == 6 and res["mission"]["objective_count"] == 1
+    assert res["winner"] in ("p1", "p2", "draw") and res["mission"]["role_p1"] in ("attacker", "defender")
+    assert len(walks) == 6, "the walk runs at every round start"
+    start = walks[0][0]
+    assert abs(abs(start) - 21.0) < 0.01, "the VIP starts 3 in from a table edge"
+    assert any(abs(b - a) > 0.01 for a, b in walks), "and the defender walks it at least once (12 in toward the far edge)"
 
 
 @needs_lists
