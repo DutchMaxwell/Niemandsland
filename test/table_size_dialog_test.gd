@@ -89,3 +89,8 @@ func test_footprint_follows_dimensions_without_changing_biome_image() -> void:
 	dialog._select_size("square")
 	assert_vector(dialog._footprint.inches).is_equal(Vector2(48,48))
 	assert_object(dialog._preview.texture).is_same(texture)
+func test_the_chooser_takes_the_house_palette() -> void:
+	var src := FileAccess.get_file_as_string("res://scripts/table_size_dialog.gd")
+	for name in ["const INK :=", "const MUTED :=", "const CYAN :=", "const GOLD :="]:
+		assert_str(src).override_failure_message("table_size_dialog.gd still defines its own %s instead of using HouseStyle" % name).not_contains(name)
+	assert_str(src).contains("HouseStyle.INK")
