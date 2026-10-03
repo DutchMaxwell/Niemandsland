@@ -16,7 +16,7 @@ func test_catalog_lists_the_shipped_missions() -> void:
 	assert_that(MissionCatalog.mission_ids()).is_equal(
 		["ambush", "breakthrough", "capture_and_hold", "demolition", "domination", "duel",
 		"headquarters", "king_of_the_hill", "last_stand", "mosh_pit", "pitched_battle",
-		"relic_hunt", "sabotage", "seize_ground", "smash_and_grab", "vip_escort"])
+		"relic_hunt", "sabotage", "seize_ground", "smash_and_grab", "the_raid", "vip_escort"])
 
 
 ## D14.6 — Smash & Grab (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles with the
@@ -226,3 +226,25 @@ func test_ambush_is_the_attack_and_defend_phase_mission_with_per_phase_gates() -
 	for _i in 20:
 		var n := MissionCatalog.marker_count(m, rng)
 		assert_bool(n >= 1 and n <= 3).override_failure_message("d3 markers, got %d" % n).is_true()
+
+
+## D14.1 — The Raid (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles with the attacker's
+## +25 % points, the defender's marker at the centre with half its army in the 12" disc round it, the
+## attacker anywhere within 12" of an edge, the defender's rest > 12" from enemies and the marker;
+## the marker's holder wins. (The defender's free choice "within 12" of the centre" is the centre itself.)
+func test_the_raid_is_the_attack_and_defend_disc_and_frame_mission() -> void:
+	var m := MissionCatalog.get_mission("the_raid")
+	assert_str(str(m["name"])).is_equal("The Raid")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("end")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_float(float(m["attacker_points_factor"])).is_equal(1.25)
+	var ph: Array = m["deploy_phases"]
+	assert_that((ph[0] as Array)).is_equal(["defender", "half", "centre_disc_12"])
+	assert_that((ph[1] as Array)).is_equal(["attacker", "all", "edge_band_12"])
+	assert_that((ph[2] as Array).slice(0, 3)).is_equal(["defender", "rest", "anywhere"])
+	assert_float(float(ph[2][3]["min_from_enemy_in"])).is_equal(12.0)
+	assert_float(float(ph[2][3]["min_from_marker_in"])).is_equal(12.0)
+	var style := DeploymentCatalog.get_style("front_line")
+	assert_that(MissionCatalog.marker_positions(m, style)).is_equal([Vector2.ZERO])

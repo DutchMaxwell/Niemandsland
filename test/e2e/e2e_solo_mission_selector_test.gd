@@ -113,6 +113,24 @@ func test_ambush_reads_its_three_phases_with_their_own_gates() -> void:
 	assert_bool(_main._solo_reserve_cfg().is_empty()).is_true()
 
 
+## D14.1: The Raid plays six rounds; the defender's rest phase (and only it) carries the 12" enemy and
+## marker gates, the disc and frame phases none.
+func test_the_raid_gates_only_the_defenders_rest_phase() -> void:
+	_main._ensure_solo_controller()
+	_main._solo_mission_id = "the_raid"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	_main.solo_ai_slots = {2: true}
+	_main._solo_roles_set(1, "attacker")
+	var ph: Array = SoloController.deploy_phases_of(MissionCatalog.get_mission("the_raid"))
+	assert_int(ph.size()).is_equal(3)
+	assert_that(_main._solo_phase_gates(ph[0], 2)).is_equal({})
+	assert_that(_main._solo_phase_gates(ph[1], 1)).is_equal({})
+	var g: Dictionary = _main._solo_phase_gates(ph[2], 2)
+	assert_float(float(g["min_from_enemy_in"])).is_equal(12.0)
+	assert_float(float(g["min_from_marker_in"])).is_equal(12.0)
+
+
 func test_relic_hunt_arms_three_carried_markers() -> void:
 	_main._solo_mission_id = "relic_hunt"
 	_main._solo_apply_mission_if_chosen()
