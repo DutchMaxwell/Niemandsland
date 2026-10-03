@@ -362,6 +362,7 @@ var _solo_batch: bool = false                # headless sweeps: instant (non-phy
 var _solo_relic_drop_queue: Array = []
 var _solo_relic_drop_active: Dictionary = {}
 var _solo_relic_drop_gen := 0
+var _solo_vip_pick: Dictionary = {}   # D14.4: the human VIP defender's one click {spot}
 var _solo_secret_pick: Dictionary = {}   # D12a-2: the human defender's two clicks {relic, trap} (marker indexes)
 var _solo_dev: bool = false                  # developer mode: render the AI's decision records into the battle log
 ## Per-activation stderr trace of the both-AI arena loop (env NML_AI_TRACE=1) — the ladder tooling's
@@ -747,6 +748,9 @@ func _ready() -> void:
 	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
 	map_layout_editor.objectives_changed.connect(_on_objectives_changed)
 	map_layout_editor.relic_drop_chosen.connect(_solo_relic_drop_chosen)
+	map_layout_editor.vip_spot_chosen.connect(_solo_vip_spot_chosen)
+	map_layout_editor.vip_pick_refused.connect(func() -> void:
+		_show_toast(MissionCatalog.vip_text("refused")))
 	map_layout_editor.marker_picked.connect(_solo_secret_marker_picked)
 	map_layout_editor.marker_pick_refused.connect(func() -> void:
 		_show_toast("Click one of the markers"))
@@ -1129,6 +1133,9 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# EXECUTE: replay the models along their REAL planner routes (walls visibly walked around, not through)
 	# — corridors appear, an attention beat, then the models glide; the state was applied + broadcast first.
 	await _solo_animate_move(solo_controller.last_move_paths)
+	if has_move and solo_controller.last_move_climb_in > 0.0:
+		_log_rule_event(BattleLog.Category.MOVEMENT, "%s climbs onto terrain (+%.1f\" of its move) — GF p.11" % [
+			unit.get_name(), solo_controller.last_move_climb_in], true)
 	if has_move:
 		await _solo_pace_attention()   # (f) before attacks resolve
 		_solo_spend_once_kind(unit, ["speed"])   # NML-006: speed once-mods are spent by the executed move
@@ -2611,16 +2618,50 @@ func _solo_vip_setup() -> void:
 	if not bool(spec.get("mobile", false)) or terrain_overlay == null or table == null:
 		return
 	var defender := int(SoloController.mission_roles.get("defender", 0))
+	if solo_controller != null and defender == solo_controller.human_slot and not _solo_batch \
+			and not _solo_both_ai and map_layout_editor != null:
+		# Maintainer choice B: the Map Tool shades both 6" edge bands, ONE click picks the spot.
+		_solo_vip_pick = {"spot": null}
+		_on_map_layout_pressed()
+		map_layout_editor.begin_vip_pick()
+		_show_toast(MissionCatalog.vip_text("pick"))
+		return
 	var start := MissionCatalog.vip_start(defender, table.table_size.y * 12.0)
-	var pos: Vector2 = start["pos"]
+	_solo_vip_apply(start["pos"], int(start["deploy_edge"]))
+
+
+## The VIP marker at `pos` (table inches) with `edge` (the z sign of the edge it starts on), owned by the
+## defender, plus the runtime zone "marker_disc_12" the defender's deployment phase names.
+func _solo_vip_apply(pos: Vector2, edge: int) -> void:
+	var spec: Dictionary = MissionCatalog.get_mission(_solo_mission_id).get("markers", {})
+	var defender := int(SoloController.mission_roles.get("defender", 0))
 	SoloController.mission_markers = SoloController.marker_metadata(spec)
 	for mk in SoloController.mission_markers:
-		(mk as Dictionary)["deploy_edge"] = int(start["deploy_edge"])
+		(mk as Dictionary)["deploy_edge"] = edge
 	terrain_overlay.update_objectives([Vector3(pos.x, 0.0, pos.y) * SoloController.INCHES_TO_METERS], [defender])
 	_solo_sync_relic_map()
 	DeploymentCatalog.register_style("marker_disc_12", DeploymentCatalog.disc_style(pos, 12.0))
-	_log_rule_event(BattleLog.Category.GENERAL, "Defender (%s) sets the VIP marker 3\" from its table edge" % [
-		_solo_player_label(defender)], true)
+	_log_rule_event(BattleLog.Category.GENERAL, MissionCatalog.vip_text("set") % [
+		_solo_player_label(defender), table.table_size.y * 6.0 - absf(pos.y)], true)
+
+
+## The human defender's click: the spot is taken, the Map Tool closes, and the close handler applies it.
+func _solo_vip_spot_chosen(spot: Vector2) -> void:
+	if _solo_vip_pick.is_empty():
+		return
+	_solo_vip_pick["spot"] = spot
+	map_layout_editor._on_close_pressed()
+
+
+## Closing the Map Tool ends the pick: a chosen spot is applied, a skipped click takes the AI rule.
+func _solo_vip_pick_finished() -> void:
+	var picked: Variant = _solo_vip_pick.get("spot")
+	_solo_vip_pick = {}
+	if picked is Vector2:
+		_solo_vip_apply(picked, 1 if (picked as Vector2).y > 0.0 else -1)
+		return
+	var start := MissionCatalog.vip_start(int(SoloController.mission_roles.get("defender", 0)), table.table_size.y * 12.0)
+	_solo_vip_apply(start["pos"], int(start["deploy_edge"]))
 
 
 ## The human defender's click: first the relic, then the trap (a different marker). The second click
@@ -17065,6 +17106,9 @@ func _on_map_layout_closed() -> void:
 	# Reset zoom when closing map layout editor
 	if map_layout_editor and map_layout_editor.has_method("reset_zoom"):
 		map_layout_editor.reset_zoom()
+	if not _solo_vip_pick.is_empty():
+		_solo_vip_pick_finished()
+		return
 	if not _solo_secret_pick.is_empty():
 		_solo_secret_pick_finished()
 		return

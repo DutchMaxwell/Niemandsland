@@ -638,6 +638,12 @@ pub struct Seams {
     /// bug this replaces exactly for corpora that predate it.
     #[serde(default)]
     pub dangerous_end_morale: bool,
+    /// Tray-exact series (maintainer D151 = B, 03.10.) — DORMANT: no header sets
+    /// it, so every game plays the recorded rules. The series' ONE epoch bump at
+    /// its end replaces every read with `rule_on(.., EPOCH_70_*)`; a dormant
+    /// epoch constant is what the CI epoch gate refuses (rule 4). Tests set it.
+    #[serde(default)]
+    pub tray_exact: bool,
 
     /// GF Advanced Rules v3.5.1 p.9 "Consolidation Moves" — `consolidate=
     /// "table"` in the header: after a melee that wipes one side, the survivor
