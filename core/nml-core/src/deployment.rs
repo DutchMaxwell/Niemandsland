@@ -3481,6 +3481,7 @@ pub fn withdraw_as_destroyed(st: &mut crate::state::State, i: usize, round_no: i
     st.positions[i] = Vec::new();
     st.wounds[i] = Vec::new();
     st.radii[i] = Vec::new();
+    st.kits_drop(i); // tray-exact S1b: no models, no kits (an arrival starts with none)
     st.alive[i] = 0;
     st.shaken[i] = false;
     st.fatigued[i] = false;
@@ -3525,6 +3526,7 @@ pub fn arrive_unit(
     st.positions[i] = place_unit_models(spot, n).into_iter().map(|(x, z)| [x, 0.0, z]).collect();
     st.wounds[i] = std::mem::take(&mut st.dormant_wounds[i]);
     st.radii[i] = vec![base_r; n];
+    st.kits_drop(i); // tray-exact S1b: the arriving bodies' kits are unknown here
     st.alive[i] = n as i64;
     st.dormant_models[i] = 0;
     st.dormant[i] = false;
