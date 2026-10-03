@@ -168,6 +168,13 @@ def test_the_raid_marker_sits_on_the_table_centre_through_the_core_door():
     assert len(got) == 1 and abs(got[0][0]) < 1e-9 and abs(got[0][1]) < 1e-9
 
 
+def test_the_rescue_marker_sits_on_the_table_centre_through_the_core_door():
+    catalog = json.loads((REPO / "assets/solo/missions.json").read_text())["missions"]
+    style = json.loads((REPO / "assets/solo/deployments.json").read_text())["styles"]["front_line"]
+    got = nml_core.mission_marker_positions(catalog["the_rescue"]["markers"]["placement"], 12.0, style, 72.0, 48.0)
+    assert len(got) == 1 and abs(got[0][0]) < 1e-9 and abs(got[0][1]) < 1e-9
+
+
 def close(a, b):
     return abs(float(a) - float(b)) <= EPS
 

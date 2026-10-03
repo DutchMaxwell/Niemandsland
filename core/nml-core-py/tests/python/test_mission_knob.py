@@ -197,6 +197,19 @@ def test_the_raid_catalog_entry_pins_disc_frame_rest_and_the_attackers_points():
     assert sp._ai_attacker(snap, 2) == 2, "the +25 % side is the one the roll-off winner takes (R7a)"
 
 
+def test_the_rescue_catalog_entry_pins_the_carry_marker_reserves_and_phases():
+    snap = sp.resolve_mission("the_rescue", REPO)
+    assert snap["name"] == "The Rescue" and snap["scoring"] == "extract" and snap["rounds"] == 6 and snap["roles"] is True
+    assert snap["attacker_points_factor"] == 1.25
+    assert snap["markers"] == {"count": 1, "placement": "table_centre", "carry": True, "carry_by": "attacker", "drop_in": 6}
+    assert sp.mission_markers(snap["markers"], 1) == [{"carry": True, "carried_by": -1, "drop_in": 6.0, "attacker_only": True}]
+    flags, cfg = sp._reserve_args(snap, 1)
+    assert flags == [True, True] and cfg["arrive_on"] == 4 and cfg["from_round"] == 2 and "recycle" not in cfg
+    assert cfg["gates"] == {"min_from_enemy_in": 12, "min_from_marker_in": 12}
+    ph = sp._phase_args(snap, 1, REPO)
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "half"), (0, "half")]
+
+
 @needs_lists
 def test_a_six_round_catalog_mission_plays_six_rounds_and_duel_stays_at_four():
     """NML-1010 D1: the match length is catalog data. No shipped mission is longer than 4,
@@ -562,3 +575,12 @@ def test_a_carry_by_attacker_spec_marks_the_marker_attacker_only_and_the_core_ho
 
     assert carrier_of(2) == -1, "side 1 defends: it cannot carry"
     assert carrier_of(1) >= 0, "side 1 attacks: it picks the relic up"
+
+
+@needs_lists
+def test_a_game_with_mission_reserves_on_both_sides_plays_to_the_end():
+    """NML-1010 D14.5e: the Rescue sets half of EACH army aside; the pre-game finish used to index a
+    placement for every non-Ambush unit and panicked on the set-aside ones ("no entry found for key")."""
+    core = nml_core.load(str(REPO))
+    res = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="the_rescue", deployment="arena", **FAST)
+    assert res["rounds_played"] == 6 and res["mission"]["name"] == "the_rescue"

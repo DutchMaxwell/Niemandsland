@@ -16,7 +16,7 @@ func test_catalog_lists_the_shipped_missions() -> void:
 	assert_that(MissionCatalog.mission_ids()).is_equal(
 		["ambush", "breakthrough", "capture_and_hold", "demolition", "domination", "duel",
 		"headquarters", "king_of_the_hill", "last_stand", "mosh_pit", "pitched_battle",
-		"relic_hunt", "sabotage", "seize_ground", "smash_and_grab", "the_raid", "vip_escort"])
+		"relic_hunt", "sabotage", "seize_ground", "smash_and_grab", "the_raid", "the_rescue", "vip_escort"])
 
 
 ## D14.6 — Smash & Grab (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles with the
@@ -246,5 +246,35 @@ func test_the_raid_is_the_attack_and_defend_disc_and_frame_mission() -> void:
 	assert_that((ph[2] as Array).slice(0, 3)).is_equal(["defender", "rest", "anywhere"])
 	assert_float(float(ph[2][3]["min_from_enemy_in"])).is_equal(12.0)
 	assert_float(float(ph[2][3]["min_from_marker_in"])).is_equal(12.0)
+	var style := DeploymentCatalog.get_style("front_line")
+	assert_that(MissionCatalog.marker_positions(m, style)).is_equal([Vector2.ZERO])
+
+
+## D14.5 — The Rescue (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles with the attacker's
+## +25 % points, one marker at the centre that only an ATTACKING unit carries (dropped within 6", the
+## defender places it), both sides deploy half in their own zone and keep half in reserve (4+ from round
+## 2, within 12" of an edge, > 12" from enemies and the marker); the attacker wins if the marker ends
+## within 6" of any table edge.
+func test_the_rescue_is_the_attack_and_defend_carry_and_reserve_mission() -> void:
+	var m := MissionCatalog.get_mission("the_rescue")
+	assert_str(str(m["name"])).is_equal("The Rescue")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("extract")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_float(float(m["attacker_points_factor"])).is_equal(1.25)
+	assert_that(m["deploy_phases"]).is_equal([["defender", "half", "own"], ["attacker", "half", "own"]])
+	var r: Dictionary = m["reserves"]
+	assert_str(str(r["who"])).is_equal("both")
+	assert_int(int(r["arrive_on"])).is_equal(4)
+	assert_int(int(r["from_round"])).is_equal(2)
+	assert_str(str(r["zone"])).is_equal("edge_band_12")
+	assert_bool(r.has("recycle")).is_false()
+	assert_float(float(r["gates"]["min_from_enemy_in"])).is_equal(12.0)
+	assert_float(float(r["gates"]["min_from_marker_in"])).is_equal(12.0)
+	var mk: Dictionary = m["markers"]
+	assert_bool(bool(mk["carry"])).is_true()
+	assert_str(str(mk["carry_by"])).is_equal("attacker")
+	assert_float(float(mk["drop_in"])).is_equal(6.0)
 	var style := DeploymentCatalog.get_style("front_line")
 	assert_that(MissionCatalog.marker_positions(m, style)).is_equal([Vector2.ZERO])
