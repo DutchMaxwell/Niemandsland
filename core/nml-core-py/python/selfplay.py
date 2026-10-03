@@ -286,6 +286,29 @@ def _reserve_args(mission_def: dict[str, Any], attacker: int) -> tuple[list[bool
     return flags, cfg
 
 
+def _last_stand_plain(plain: dict[str, Any], round_no: int, cfg: dict[str, Any],
+                      flags: list[bool], held: set[str]) -> None:
+    """D11b over the plain state at a round start: a recycled unit is due from the mission's first
+    reserve round, and a covered side with no unit on the table has its reserves lost (R8a)."""
+    units = plain["units"]
+    for k in held:
+        if k in units and units[k].get("dormant"):
+            units[k]["earliest_arrival_round"] = max(int(cfg.get("from_round", 2)), int(units[k].get("earliest_arrival_round", -1)))
+    if round_no < int(cfg.get("from_round", 2)):
+        return
+    for slot in (1, 2):
+        if not flags[slot - 1]:
+            continue
+        mine = [k for k, u in units.items() if int(u["player"]) == slot]
+        if any(not units[k].get("dormant") and units[k].get("positions") for k in mine):
+            continue
+        for k in mine:
+            if k in held and units[k].get("dormant"):
+                units[k].update(dormant=False, positions=[], radii=[], wounds=[], alive=0)
+                for gone in ("dormant_models", "dormant_wounds", "earliest_arrival_round"):
+                    units[k].pop(gone, None)
+
+
 def _style_by_id(style_id: str, repo_root: str | Path) -> dict[str, Any]:
     """A deployment style by id from `assets/solo/deployments.json` (the reserve zone's)."""
     return json.loads((Path(repo_root) / "assets" / "solo" / "deployments.json").read_text(encoding="utf-8"))["styles"][style_id]
@@ -3061,6 +3084,7 @@ def play_game(
     deploy_seq: list[list[Any]] = []
     mission_reserved: set[str] = set()
     reserve_cfg: dict[str, Any] = {}
+    reserve_flags: list[bool] = [False, False]
     if arena:
         # NML-1152 step 8 — the table's pre-game. Roll-off FIRST from the game
         # stream (ties re-rolled; the winner of the last attempt opens, the
@@ -3149,7 +3173,14 @@ def play_game(
     streams = {s: {"seed": v, "rng": nml_core.Rng(v), "counter": 0, "pending": None}
                for s, v in (search_seeds or {}).items()} or None
     for round_no in range(1, rounds + 1):
+        if reserve_cfg.get("recycle"):  # D11b: Last Stand — the covered side's destroyed units return once
+            for slot in (1, 2):
+                if reserve_flags[slot - 1]:
+                    state, keys = nml_core.recycle_destroyed(state, slot, round_no - 1)
+                    mission_reserved.update(keys)
         plain = state.plain()
+        if reserve_cfg.get("recycle"):
+            _last_stand_plain(plain, round_no, reserve_cfg, reserve_flags, mission_reserved)
         _round_start(plain, round_no, profiles, magic)
         if arrivals is not None:
             _arrive_reserves(plain, arrivals, board, objectives, opener, round_no, mission=(
