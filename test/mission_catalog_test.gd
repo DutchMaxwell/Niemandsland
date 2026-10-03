@@ -11,12 +11,31 @@ func before_test() -> void:
 	MissionCatalog.reset_cache()
 
 
-func test_catalog_lists_the_v3_twelve() -> void:
-	# The original ten plus the two carried-marker missions.
+func test_catalog_lists_the_shipped_missions() -> void:
+	# The original ten, the two carried-marker missions, and the first Attack & Defend one.
 	assert_that(MissionCatalog.mission_ids()).is_equal(
 		["breakthrough", "capture_and_hold", "demolition", "domination", "duel",
 		"headquarters", "king_of_the_hill", "mosh_pit", "pitched_battle",
-		"relic_hunt", "sabotage", "seize_ground"])
+		"relic_hunt", "sabotage", "seize_ground", "smash_and_grab"])
+
+
+## D14.6 — Smash & Grab (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles with the
+## attacker's +25 % points, d3+2 markers hiding a trap and a relic, decided by an edge extraction.
+func test_smash_and_grab_is_the_attack_and_defend_extract_mission() -> void:
+	var m := MissionCatalog.get_mission("smash_and_grab")
+	assert_str(str(m["name"])).is_equal("Smash & Grab")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("extract")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_float(float(m["attacker_points_factor"])).is_equal(1.25)
+	assert_str(str(m["deployment"])).is_equal("front_line")
+	var mk: Dictionary = m["markers"]
+	assert_str(str(mk["count"])).is_equal("d3+2")
+	assert_str(str(mk["placement"])).is_equal("alternate")
+	assert_bool(bool(mk["secret"])).is_true()
+	assert_bool(mk.has("carry")).is_false()   # only the relic carries, and it is chosen at the roll-off
+	assert_that(MissionCatalog.marker_positions(m, DeploymentCatalog.get_style("front_line"))).is_equal([])
 
 
 func test_carry_missions_have_three_alternate_relics() -> void:

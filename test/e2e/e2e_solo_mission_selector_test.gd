@@ -59,6 +59,26 @@ func test_starting_with_a_mission_arms_the_controller_statics() -> void:
 	assert_str(_log_text()).contains("Mission: Sabotage")
 
 
+## D14.6: Smash & Grab's marker count is a dice term, so the table arms NO markers up front (the old
+## int(spec) read "d3+2" as 32); once the markers are placed and the roles are set the list is sized to
+## the objectives and the AI defender hides a relic and a trap.
+func test_smash_and_grab_sizes_its_secret_markers_to_the_placed_objectives() -> void:
+	_main._ensure_solo_controller()
+	_main._solo_mission_id = "smash_and_grab"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(SoloController.mission_markers.size()).is_equal(0)
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	_main.terrain_overlay.update_objectives([Vector3.ZERO, Vector3(30 * 0.0254, 0, 0), Vector3(-34 * 0.0254, 0, 0),
+		Vector3(0, 0, 10 * 0.0254)])
+	_main.solo_ai_slots = {2: true}
+	_main.solo_controller.human_slot = 1
+	_main._solo_roles_set(1, "attacker")
+	assert_int(SoloController.mission_markers.size()).is_equal(4)
+	var kinds := SoloController.mission_markers.map(func(m: Variant) -> String: return str((m as Dictionary)["secret"]))
+	assert_int(kinds.count("relic")).is_equal(1)
+	assert_int(kinds.count("trap")).is_equal(1)
+
+
 func test_relic_hunt_arms_three_carried_markers() -> void:
 	_main._solo_mission_id = "relic_hunt"
 	_main._solo_apply_mission_if_chosen()

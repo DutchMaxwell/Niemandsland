@@ -2538,6 +2538,14 @@ func _solo_secret_trap_hits(victim: GameUnit) -> void:
 ## D12a: the defender assigns trap and relic when the roles are known. The human's two clicks are
 ## D12a-2; until then (and for the AI) SoloController.secret_assign decides.
 func _solo_secret_markers_assign() -> void:
+	# The count of a dice-term spec ("d3+2") is only known once the markers are on the table.
+	var spec: Dictionary = (MissionCatalog.get_mission(_solo_mission_id).get("markers", {}) as Dictionary) \
+		if not _solo_mission_id.is_empty() else {}
+	if bool(spec.get("secret", false)) and terrain_overlay != null \
+			and SoloController.mission_markers.size() != terrain_overlay.get_objectives().size():
+		var sized: Dictionary = spec.duplicate()
+		sized["count"] = terrain_overlay.get_objectives().size()
+		SoloController.mission_markers = SoloController.marker_metadata(sized)
 	var markers: Array = SoloController.mission_markers
 	if terrain_overlay == null or table == null or markers.is_empty() or not (markers[0] as Dictionary).has("secret"):
 		return
