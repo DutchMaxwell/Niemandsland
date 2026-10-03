@@ -11232,34 +11232,22 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 ## The split-fire question itself (#226): one check box per weapon group; returns the checked names
 ## ([] = "All at <target>"). Apart from the guards above so the prompt is drivable headless.
 func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Split fire?"
-	dlg.ok_button_text = "Pick 2nd target"
-	dlg.cancel_button_text = "All at %s" % target_a.get_name()
-	var box := VBoxContainer.new()
-	var lbl := Label.new()
-	lbl.text = "Up to two targets (GF v3.5.1 p.8). Checked weapons fire at a SECOND target:"
-	box.add_child(lbl)
+	var card := PromptCard.new("Split fire?",
+		"Up to two targets (GF v3.5.1 p.8). Checked weapons fire at a SECOND target:",
+		"Pick 2nd target", "All at %s" % target_a.get_name())
 	var checks: Array = []
 	for n in names:
 		var cb := CheckBox.new()
 		cb.text = str(n)
-		box.add_child(cb)
+		card.rows.add_child(cb)
 		checks.append(cb)
-	dlg.add_child(box)
-	var outcome: Array = []
-	dlg.confirmed.connect(func() -> void: outcome.append(true))
-	dlg.canceled.connect(func() -> void: outcome.append(false))
-	add_child(dlg)
-	dlg.popup_centered()
-	while outcome.is_empty():
-		await get_tree().process_frame
+	GameMenu.section(card.rows)   # the check boxes as house lines, as in the game menu
+	add_child(card)
 	var picked: Array = []
-	if bool(outcome[0]):
+	if bool(await card.answer()):
 		for i in checks.size():
 			if (checks[i] as CheckBox).button_pressed:
 				picked.append(names[i])
-	dlg.queue_free()
 	return picked
 
 
