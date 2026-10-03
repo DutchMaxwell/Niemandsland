@@ -113,3 +113,47 @@ use super::*;
             "epoch 12 replays the old order: the charger's Impact pool opens the stream"
         );
     }
+
+    /// Tray-exact tail — the table's Counter walk covers the host AND its living attached heroes
+    /// (`_solo_has_counter` main.gd:7050, `counter_models_of` solo_controller.gd:8465): a joined
+    /// hero's Counter weapon strikes first and cuts the charger's Impact dice although the host
+    /// carries none. With `Seams::tray_exact` the core does both, unflagged; without it the old
+    /// host-only read stands and `counter_strikes_first` names the gap. A CHARGER's own Counter
+    /// weapon strikes in its normal slot and is never flagged.
+    #[test]
+    fn a_joined_heros_counter_strikes_first_and_cuts_impact_with_tray_exact() {
+        let profile: Profile = serde_json::from_str(r#"{"unit_id":"u","name":"u"}"#).unwrap();
+        let unit = |name: &str, models: i64, impact: i64, counter: bool| UnitStatic {
+            ctx: Ctx { quality: 4, defense: 4, tough: 1, models, impact, counter_models: counter as i64, ..Default::default() },
+            name: name.into(),
+            melee: vec![ShootProfile { name: "Blade".into(), attacks: 1, count: 1, range: 0, counter, ..Default::default() }],
+            model_count: models,
+            wounds_max: vec![1; models as usize],
+            ..Default::default()
+        };
+        let charge = |charger_counter: bool, tray_exact: bool| {
+            let statics = vec![unit("Charger", 5, 2, charger_counter), unit("Host", 3, 0, false), unit("Hero", 1, 0, !charger_counter)];
+            let mut st = four_unit_line();
+            st.roster = Rc::new(Roster { keys: vec!["a".into(), "b".into(), "bh".into()], index: HashMap::new(), profile: vec![0, 1, 2] });
+            st.profiles = Rc::new(Profiles { list: vec![profile.clone(), profile.clone(), profile.clone()], index: HashMap::new() });
+            st.player = vec![0, 1, 1];
+            st.alive = vec![5, 3, 1];
+            st.attached = Rc::new(vec![vec![], vec![2], vec![]]);
+            st.attached_to = Rc::new(vec![None, None, Some(1)]);
+            st.positions[0] = (1..=5).map(|i| [i as f64 * IN2M, 0.0, 0.0]).collect();
+            (st.wounds[0], st.radii[0]) = (vec![1; 5], vec![IN2M; 5]);
+            (st.positions[1], st.wounds[1], st.radii[1]) = (vec![[0.0, 0.0, 0.0]; 3], vec![1; 3], vec![IN2M; 3]);
+            (st.positions[2], st.wounds[2], st.radii[2]) = (vec![[0.0, 0.0, 0.0]], vec![1], vec![IN2M]);
+            let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact, ..Default::default() };
+            let (mut tray, mut shot) = (Tray::seeded(27), ShootResult::default());
+            tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0, Cover::Recorded(None));
+            shot
+        };
+        let impact_dice = |s: &ShootResult| s.rolls.iter().find(|r| r.owner == "Charger").map(|r| r.count).unwrap_or(-1);
+        let (exact, old) = (charge(false, true), charge(false, false));
+        assert_eq!((exact.rolls[0].owner.as_str(), exact.unported.is_empty()), ("Hero", true), "{:?}", exact.unported);
+        assert_eq!((old.rolls[0].owner.as_str(), old.unported.contains(&"counter_strikes_first")), ("Charger", true));
+        assert_eq!(impact_dice(&old) - impact_dice(&exact), 1, "the hero's one Counter model cuts one Impact die");
+        assert!(!charge(true, false).unported.contains(&"counter_strikes_first"), "a charger's own Counter is no gap");
+    }
+
