@@ -2641,10 +2641,10 @@ func _solo_show_game_summary() -> void:
 	# _solo_book_mission_vp fills every round, so on the four progressive missions the two drifted apart:
 	# over 633 self-play games, 55 of the 233 round_vp ones named the LOSING side (seed 3003000: board
 	# 1:2 markers, ledger 6:5 VP, referee "p1", summary "P2 wins").
-	var winner_side: String = BattleSim.mission_winner(SoloController.mission_scoring,
-		terrain_overlay.get_objective_owners() if terrain_overlay != null else [],
-		SoloController.mission_vp, SoloController.mission_markers,
-		_solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
+	var summary_owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay != null else []
+	var winner_side: String = solo_controller.end_verdict(summary_owners, _solo_side_alive(1), _solo_side_alive(2)) \
+		if solo_controller != null else BattleSim.mission_winner(SoloController.mission_scoring, summary_owners,
+			SoloController.mission_vp, SoloController.mission_markers, _solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
 	var human_won: bool = winner_side == ("p%d" % human_slot)
 	var ai_won: bool = winner_side == ("p%d" % ai_slot)
 	var verdict: String = win_a if human_won else (win_b if ai_won else "Draw")

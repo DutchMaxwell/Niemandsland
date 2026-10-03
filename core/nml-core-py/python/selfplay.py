@@ -2136,9 +2136,16 @@ def _write_ledger(plain: dict[str, Any], led: dict[str, Any]) -> None:
         plain["destroy_seq"] = [int(led["destroy_seq"][0])]
 
 
-def _verdict(core, owners: list[int], led: dict[str, Any]) -> str:
+def _verdict(core, owners: list[int], led: dict[str, Any], state=None) -> str:
     """`_write_result` :700-706: Face-Off is END-scored (the end bonus, then MARKERS
-    decide); every other mission asks `BattleSim.mission_winner`'s own referee."""
+    decide); every other mission asks `BattleSim.mission_winner`'s own referee. D14.0: the role
+    missions (`escort`, `extract`) are decided on the board by `role_winner`, like
+    `SoloController.end_verdict` does on the table (it needs the final `state`)."""
+    if led["scoring"] in ("escort", "extract") and state is not None:
+        edge = next((int(m.get("deploy_edge", 0)) for m in led["markers_meta"] if m.get("deploy_edge")), 0)
+        role = core.role_winner(state, led["scoring"], edge, TABLE_W_IN, TABLE_D_IN)
+        if role is not None:
+            return role
     if led["scoring"] != "end":
         return core.mission_winner(led["scoring"], owners, led["vp"], led["markers_meta"], 0, 0)
     led["vp"] = core.vp_end_bonus(owners, led["vp"])
@@ -2237,7 +2244,7 @@ def play_from_state(
         state, owners = _round_end(core, state, owners, led, round_no)
         rounds_played = round_no
         rounds_log.append({"round": round_no, "owners": list(owners), "vp": list(led["vp"])})
-    winner = _verdict(core, owners, led)
+    winner = _verdict(core, owners, led, state)
     p1 = sum(1 for o in owners if o == 1)
     p2 = sum(1 for o in owners if o == 2)
     return {
@@ -3180,7 +3187,7 @@ def play_game(
         if record_aux:
             entry.update(_aux_alive_wounds(state, profiles))
         rounds_log.append(entry)
-    winner = _verdict(core, owners, led)
+    winner = _verdict(core, owners, led, state)
     vp = led["vp"]
 
     p1 = sum(1 for o in owners if o == 1)
