@@ -1133,6 +1133,9 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# EXECUTE: replay the models along their REAL planner routes (walls visibly walked around, not through)
 	# — corridors appear, an attention beat, then the models glide; the state was applied + broadcast first.
 	await _solo_animate_move(solo_controller.last_move_paths)
+	if has_move and solo_controller.last_move_climb_in > 0.0:
+		_log_rule_event(BattleLog.Category.MOVEMENT, "%s climbs onto terrain (+%.1f\" of its move) — GF p.11" % [
+			unit.get_name(), solo_controller.last_move_climb_in], true)
 	if has_move:
 		await _solo_pace_attention()   # (f) before attacks resolve
 		_solo_spend_once_kind(unit, ["speed"])   # NML-006: speed once-mods are spent by the executed move

@@ -480,6 +480,14 @@ var terrain_type_at: Callable = Callable()
 var walls_provider: Callable = Callable()
 var objectives_provider: Callable = Callable()
 var objective_owner_of: Callable = Callable()
+## Climbing (heights B2, GF p.11 — a piece up to 3" tall may be climbed as part of a move):
+##   ledges_provider    : Callable() -> Array   ({"a","b": Vector2 world m, "dy_in": float} climbable edges)
+##   surface_y_provider : Callable(Vector2) -> float   (height in metres a model standing at the world XZ stands on)
+## A ledge's edge leaves the walls and is priced as a climb by the planner; the AI settles on the surface.
+var ledges_provider: Callable = Callable()
+var surface_y_provider: Callable = Callable()
+## Largest climb (inches) any model of the last move paid — main logs it.
+var last_move_climb_in: float = 0.0
 
 var turn_manager: TurnManager = null
 var _rng := RandomNumberGenerator.new()
@@ -5924,8 +5932,12 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# The decision-log / label arc is the PLANNED within-budget move (pre-gate route), so the move-band audit
 	# and the "X / Y" label stay truthful; the gate's physical un-stack nudge is not counted as extra distance.
 	var longest_arc_m := 0.0
+	var ledges_w := _ledges_world(unit)   # the climb is movement spent: it joins the arc (GF p.11)
+	last_move_climb_in = 0.0
 	for t in trails:
-		longest_arc_m = maxf(longest_arc_m, MovementPlanner.polyline_length(t as Array))
+		var climb_in := _trail_climb_in(t as Array, ledges_w) if not ledges_w.is_empty() else 0.0
+		last_move_climb_in = maxf(last_move_climb_in, climb_in)
+		longest_arc_m = maxf(longest_arc_m, MovementPlanner.polyline_length(t as Array) + climb_in * INCHES_TO_METERS)
 	if not _is_regiment(unit):
 		# Retrace each animation trail to its GATED endpoint so the glide ends exactly where the state now is.
 		for i in range(mini(trails.size(), new_positions.size())):
@@ -5959,7 +5971,8 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# flow-collapse audits (token moves ⇒ BOTH numbers tiny) keep their signal.
 	var achieved_arc_m := 0.0
 	for t in trails:
-		achieved_arc_m = maxf(achieved_arc_m, MovementPlanner.polyline_length(t as Array))
+		var climb_in := _trail_climb_in(t as Array, ledges_w) if not ledges_w.is_empty() else 0.0
+		achieved_arc_m = maxf(achieved_arc_m, MovementPlanner.polyline_length(t as Array) + climb_in * INCHES_TO_METERS)
 	var centroid_m := _achieved_m(positions, new_positions)
 	var why := "difficult cap" if reach < inches else ("around difficult" if avoid else "direct")
 	if gate_shortened:
@@ -7048,7 +7061,10 @@ func _apply_model_positions(models: Array, new_positions: Array) -> void:
 		if node == null or not is_instance_valid(node):
 			continue
 		var np: Vector3 = new_positions[i]
-		node.global_position = Vector3(np.x, node.global_position.y, np.z)
+		# Y is preserved unless climbing is wired: then the AI settles on the surface like the drop probe.
+		var ny: float = surface_y_provider.call(Vector2(np.x, np.z)) if surface_y_provider.is_valid() \
+			else node.global_position.y
+		node.global_position = Vector3(np.x, ny, np.z)
 		if node.has_meta("network_id"):
 			batch.append(node.get_meta("network_id"))
 			batch.append(node.global_position.x)
@@ -7085,6 +7101,9 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	# and fed the gate's wall clamp spurious reverts (live-test Bug 20: the torn winged unit). The
 	# REST legality (not ending inside a container) stays with the terrain projection, which is exact.
 	var walls_world: Array = [] if unit.has_special_rule("Flying") else _walls_world()
+	var ledges_world := _ledges_world(unit)
+	if not ledges_world.is_empty():
+		walls_world = walls_world.filter(func(w): return not _is_ledge_edge(w, ledges_world))
 	var half := _table_half_extents()
 	var off := Vector2(half.x, half.y)
 	var board_in: float = (half.x * 2.0) / INCHES_TO_METERS      # X extent (long side on a 6x4)
@@ -7104,6 +7123,12 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	var own_r_m := _move_base_radius_m(models)
 	var opts := {"clearance": own_r_m / INCHES_TO_METERS + CLEARANCE_EPS_IN,
 		"board_y_in": board_y_in}   # the planner's second axis; without it every bound would be square
+	if not ledges_world.is_empty():
+		var ledges_in: Array = []
+		for l in ledges_world:
+			ledges_in.append({"a": ((l["a"] as Vector2) + off) / INCHES_TO_METERS,
+				"b": ((l["b"] as Vector2) + off) / INCHES_TO_METERS, "dy_in": float(l["dy_in"])})
+		opts["ledges"] = ledges_in
 	# EPOCH_27_TERRAIN_DEBUFF (sweep A): the carried terrain debuffs ride the SAME opts the
 	# planner reads cells from — _terrain_cost_at prices them exactly like a Dangerous/Difficult cell.
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_27_TERRAIN_DEBUFF:
@@ -7952,6 +7977,35 @@ func _walls_world() -> Array:
 		var arr: Array = w
 		return arr
 	return []
+
+
+## Climbable edges (world metres) from the provider; Flying ignores terrain while moving (GF p.13) → none.
+func _ledges_world(unit: GameUnit) -> Array:
+	if not ledges_provider.is_valid() or unit.has_special_rule("Flying"):
+		return []
+	var l: Variant = ledges_provider.call()
+	return l if l is Array else []
+
+
+## True if wall segment `w` is the same edge as one of the ledges (either direction).
+static func _is_ledge_edge(w: Array, ledges: Array) -> bool:
+	for l in ledges:
+		var a: Vector2 = l["a"]
+		var b: Vector2 = l["b"]
+		if (a.is_equal_approx(w[0]) and b.is_equal_approx(w[1])) or (a.is_equal_approx(w[1]) and b.is_equal_approx(w[0])):
+			return true
+	return false
+
+
+## Climb inches (GF p.11) a world-space trail pays over `ledges`.
+static func _trail_climb_in(trail: Array, ledges: Array) -> float:
+	var total := 0.0
+	var opts := {"ledges": ledges}
+	for i in range(1, trail.size()):
+		var p: Vector3 = trail[i - 1]
+		var q: Vector3 = trail[i]
+		total += MovementPlanner.ledge_cost(Vector2(p.x, p.z), Vector2(q.x, q.z), opts)
+	return total
 
 
 ## The objective the activating unit should head for — the nearest marker this AI side does NOT control,
