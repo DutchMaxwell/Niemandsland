@@ -435,6 +435,49 @@ def test_the_arena_fold_hands_every_unit_only_its_own_models(tmp_path):
     assert hero2 not in reserved_old and set(_one_model_list(old)) == {units[1][1]["unit_id"], hero2}
 
 
+def test_the_tables_kits_ride_the_capture_and_the_arrival_from_their_sidecar(tmp_path, monkeypatch, capsys):
+    """Tray-exact S3 (variant b): the table's per-model kits (tools/export_model_kits.gd) reach the
+    trainer's plain state keyed by the import's deterministic ids, on the table at capture and on
+    an Ambush arrival. A missing sidecar plays without kits, a count mismatch carries none — both
+    say so on stderr. RED: main has no `kits_sidecar` and its capture writes no `kits`."""
+    ambush = json.loads(json.dumps(JOIN_LIST))
+    ambush["units"][1]["rules"] = ambush["units"][1]["rules"] + [{"label": "Ambush", "name": "Ambush"}]
+    lists, paths = {1: JOIN_LIST, 2: ambush}, {}
+    for s, data in lists.items():
+        paths[s] = tmp_path / str(s) / "robot_legions_1000.json"
+        paths[s].parent.mkdir()
+        paths[s].write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setenv("NML_KITS_DIR", str(tmp_path / "kits"))
+    assert sp.kits_sidecar(paths[1], 1) is None and "plays without kits" in capsys.readouterr().err
+    (tmp_path / "kits").mkdir()
+    kit = {"weapons": ["Rifle"], "equipment": 0, "wounds_max": 3}
+    lone = {"weapons": ["Rifle"], "equipment": 0, "wounds_max": 1}
+    (tmp_path / "kits" / "robot_legions_1000.kits.json").write_text(json.dumps(
+        {"units": {"0_h": [kit, kit], "1_a": [kit, kit], "2_b": [lone]}}), encoding="utf-8")
+    kits = {**sp.kits_sidecar(paths[1], 1), **sp.kits_sidecar(paths[2], 2)}
+    profiles = {s: profiles_from_army_forge_json(d, "robot_legions", s) for s, d in lists.items()}
+    units = {s: list(profiles[s].values()) for s in lists}
+    hero1, host1, lone1 = (u["unit_id"] for u in units[1])
+    hero2, host2, _ = (u["unit_id"] for u in units[2])
+    header, _ = read_acts("acts_25.jsonl")
+    board = nml_core.board(header["terrain"])
+    core = nml_core.load(str(REPO))
+    core.set_header({"profiles": {**profiles[1], **profiles[2]}, "terrain": header["terrain"],
+                     "knobs": sp.TRAINER_KNOBS})
+    sels = {**selections_from_army_forge_json(JOIN_LIST, 1), **selections_from_army_forge_json(ambush, 2)}
+    attached, attached_to = sp.derive_attachment(units[1] + units[2], sels)
+    objs = [[0.0, 0.0, 0.0]]
+    p1, p2, reserved, _ = sp._deploy_arena(7, units[1], units[2], paths[1], paths[2], board, objs, 1)
+    plain = sp.capture(units[1] + units[2], p1 + p2, core.capture_reads(), board, objs, attached,
+                       attached_to, reserved, {}, kits)
+    u = plain["units"]
+    assert u[host1]["kits"] == [kit, kit] and u[lone1]["kits"] == [lone]
+    assert "kits" not in u[hero1] and "1 models - none carried" in capsys.readouterr().err
+    assert "kits" not in u[host2] and "kits" not in u[hero2], "a reserve has no table presence"
+    sp._arrive_reserves(plain, core.arrival_reads(), board, objs, 1, 2, kits=kits)
+    assert u[host2]["kits"] == [kit, kit] and "kits" not in u[hero2], "the host's 2 back, the hero's 2 != 1"
+
+
 def test_the_arena_fixture_carries_four_joined_heroes():
     """The gate's arena reader over an in-repo recording: `acts_25.jsonl` is a
     real arena game and its first act joins four heroes. RED half: the same
