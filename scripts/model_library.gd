@@ -137,7 +137,18 @@ func labels_with_available_items(faction: String, unit_name: String, labels: Arr
 ## name ("Heavy Exo-Suit") matches a manifest key generated from a slug-derived name
 ## ("Heavy Exo Suit") — hyphens/underscores/extra spaces in the unit name are folded.
 static func make_key(faction: String, unit_name: String) -> String:
-	return "%s/%s" % [faction.strip_edges().to_lower(), _normalize_unit(unit_name)]
+	return "%s/%s" % [canonical_folder(faction), _normalize_unit(unit_name)]
+
+
+## Book folders whose art was published under another folder name (the live manifest holds Machine
+## Cults under `machine_cult`). Applied to both the manifest keys and every lookup, so only these
+## folders change; every other faction resolves exactly as before.
+const FOLDER_ALIASES: Dictionary = {"machine_cults": "machine_cult"}
+
+
+static func canonical_folder(faction: String) -> String:
+	var f := faction.strip_edges().to_lower()
+	return str(FOLDER_ALIASES.get(f, f))
 
 
 ## Lowercase a unit name, fold -/_ to spaces, collapse repeats. Both sides of the lookup.
@@ -206,7 +217,7 @@ const MIN_MATCH_KEYWORD_LEN: int = 3
 ## drives the token scoring; when omitted the keywords themselves form the token set (legacy behaviour).
 ## Returns the manifest unit-name part (resolvable via get_cached_path / ensure_model) or "" if none.
 func find_faction_model_matching(faction: String, keywords: Array, full_name: String = "") -> String:
-	var prefix: String = faction.strip_edges().to_lower() + "/"
+	var prefix: String = canonical_folder(faction) + "/"
 	var want_tokens: PackedStringArray = _name_tokens(full_name if not full_name.is_empty() else " ".join(keywords))
 	var best: String = ""
 	var best_overlap: int = -1
