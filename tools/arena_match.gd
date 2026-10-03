@@ -573,8 +573,7 @@ func _run() -> void:
 	# NML-1048: the verdict is no longer computed here. BattleSim.mission_winner is the ONE referee —
 	# the same call main._solo_show_game_summary makes — so the result JSON and the summary the table
 	# reads can never name different sides again (measured: 55 of 233 round_vp games disagreed).
-	var winner: String = BattleSim.mission_winner(SoloController.mission_scoring, owners,
-		SoloController.mission_vp, SoloController.mission_markers,
+	var winner: String = main.solo_controller.end_verdict(owners,
 		int(main._solo_side_alive(1)), int(main._solo_side_alive(2)))
 	printerr("[ARENA] RESULT seed=%d dice=%d P1(%s) objectives=%d P2(%s) objectives=%d vp=%d:%d → %s" % [
 		_seed, _dice_seed, _p1_grade, p1, _p2_grade, p2, vp1, vp2, winner])
