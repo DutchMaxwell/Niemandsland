@@ -3211,6 +3211,11 @@ func _get_hazards_library() -> HazardsLibrary:
 ## selectable object, so the existing drag/rotate/undo/multiplayer paths move it. Syncs to
 ## peers when `broadcast` and multiplayer is active.
 func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: bool = true, network_id: int = -1) -> Node3D:
+	# A kind this build does not know (a newer save or peer, a corrupt record) builds nothing: as a ruin it
+	# would silently get a ruin's cover and area sight. The shelf, save load and MP spawn all handle null.
+	if kind != SandboxPropKind.RUIN and kind != SandboxPropKind.FOREST and kind != SandboxPropKind.HAZARD_CLUSTER:
+		print("[Terrain] unknown sandbox kind %d (prop '%s') skipped" % [kind, prop_id])
+		return null
 	_object_counter += 1
 	var obj_network_id: int = network_id if network_id >= 0 else _object_counter + SANDBOX_TERRAIN_NETWORK_OFFSET
 
