@@ -181,6 +181,10 @@ pub struct ShootResult {
     /// tally keeps it (`total_caused += w`, main.gd:3318) while the landing
     /// uses the group's post-regeneration count.
     pub deadly_tally: i64,
+    /// Tray-exact S7 — the volley's Takedown groups (`Seams::tray_exact` only): per Takedown weapon,
+    /// its unsaved wounds x max(Deadly, 1) AFTER the picked model's Regeneration (main.gd:4059-4067);
+    /// the drain lands each on ONE model, overkill lost. Their raw count rides `deadly_tally`.
+    pub takedown_groups: Vec<i64>,
 }
 
 impl ShootResult {
@@ -207,6 +211,7 @@ impl ShootResult {
         self.bane_rerolled += other.bane_rerolled;
         self.deadly_groups.extend(other.deadly_groups);
         self.deadly_tally += other.deadly_tally;
+        self.takedown_groups.extend(other.takedown_groups);
         for u in other.unported {
             self.mark(u);
         }
@@ -695,7 +700,7 @@ pub fn resolve_volley_with_tray(
     shred_boost_dice: bool,
     tray: &mut Tray,
 ) -> ShootResult {
-    resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, tray)
+    resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, tray)
 }
 
 // The leg split adds one gate-bool to the resolver's existing pack.
@@ -711,6 +716,7 @@ pub fn resolve_volley_leg(
     shred_alias_dice: bool,
     shred_boost_dice: bool,
     deadly_per_model: bool,
+    takedown_exact: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -1270,7 +1276,13 @@ pub fn resolve_volley_leg(
         if p.deadly > 0 && !deadly_per_model {
             out.mark("deadly");
         }
-        if deadly_per_model && p.deadly > 0 {
+        if takedown_exact && p.takedown {
+            // Tray-exact S7 — the table's Takedown landing: w x max(Deadly, 1) BEFORE the
+            // picked model's own Regeneration roll, all of it for that one model (the drain).
+            let td = w * p.deadly.max(1);
+            out.takedown_groups.push(if ignores_regen { td } else { regen_batch(td, def, def_owner, tray, &mut out.rolls) });
+            out.deadly_tally += w;
+        } else if deadly_per_model && p.deadly > 0 {
             let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
             out.deadly_groups.push((post, p.deadly.max(1)));
             out.deadly_tally += w;
