@@ -371,6 +371,13 @@ pub fn build_state(
             // ORDER here; `vp_score_round` reads it back.
             destroyed_seq: dint(&m, "destroyed_seq", 0),
             carry: dflag(&m, "carry"),
+            mobile: dflag(&m, "mobile"),
+            deploy_edge: dint(&m, "deploy_edge", 0),
+            secret: m.get("secret").map(|v| text(&v)),
+            revealed: dflag(&m, "revealed"),
+            secret_hidden: dflag(&m, "secret_hidden"),
+            drop_in: m.get("drop_in").map(|v| num(&v)).unwrap_or(0.0),
+            attacker_only: dflag(&m, "attacker_only"),
             carried_by: match m.get("carried_by") {
                 Some(v) if v.try_to::<GString>().is_ok() =>
                     roster.index.get(&text(&v)).map(|&i| i as i64).unwrap_or(-1),

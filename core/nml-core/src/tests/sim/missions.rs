@@ -12,7 +12,8 @@ use std::rc::Rc;
 
 use super::*;
 use crate::mission::{
-    apply_destroy_step, mission_winner, playout_seize, sabotage_winner, vp_score_end,
+    apply_destroy_step, escort_winner, extract_winner, mission_winner, playout_seize, role_winner,
+    sabotage_winner, vp_score_end, apply_reveal_step, Reveal,
     vp_score_round,
 };
 use crate::objectives::marker_positions;
@@ -345,4 +346,125 @@ fn demolition_own_marker_stands_and_first_fallen_collects() {
     let mut rvp = [0i64; 2];
     vp_score_round(&owners, &mut rvp, &flavour, &mut memo, &revenge);
     assert_eq!(rvp, [0, 1], "once both fell, the FIRST-fallen side (seq 1 = P2) collects");
+}
+
+/// One marker on (x_in, z_in) over the referee board, the attacker in slot `att`.
+fn role_board(att: i64, x_in: f64, z_in: f64) -> State {
+    let mut st = ref_board("escort");
+    parked(&mut st);
+    st.attacker = att;
+    st.objectives = vec![Objective { pos: [x_in * IN2M, 0.0, z_in * IN2M], owner: 0 }];
+    st.markers_meta = vec![Marker::default()];
+    st
+}
+
+#[test]
+fn escort_defender_wins_within_six_of_the_opposite_edge() {
+    // deployed on the +z edge, so the target is the -z edge (z = -24")
+    assert_eq!(escort_winner(&role_board(1, 0.0, -18.0), 1, 48.0), "p2", "6.0\" from the target edge");
+    assert_eq!(escort_winner(&role_board(2, 0.0, -18.0), 1, 48.0), "p1", "slot 2 attacks, so slot 1 defends");
+    assert_eq!(escort_winner(&role_board(1, 0.0, -17.0), 1, 48.0), "p1", "7\" out: the attacker wins");
+    assert_eq!(escort_winner(&role_board(1, 0.0, 22.0), 1, 48.0), "p1", "the HOME edge does not count");
+}
+
+#[test]
+fn escort_carried_marker_uses_the_carrier_base_edge() {
+    let mut st = role_board(1, 0.0, 0.0);
+    st.markers_meta[0].carry = true;
+    st.markers_meta[0].carried_by = 2;
+    place(&mut st, 2, 0.0, -20.0);
+    st.radii[2] = vec![1.0 * IN2M];
+    assert_eq!(escort_winner(&st, 1, 48.0), "p2", "centre 4\" out, base edge 3\"");
+    place(&mut st, 2, 0.0, -17.5);
+    assert_eq!(escort_winner(&st, 1, 48.0), "p2", "centre 6.5\" out, base edge 5.5\"");
+    place(&mut st, 2, 0.0, -16.5);
+    assert_eq!(escort_winner(&st, 1, 48.0), "p1", "base edge 6.5\" out");
+    st.attacker = 0;
+    assert_eq!(escort_winner(&st, 1, 48.0), "draw", "no roles, no verdict");
+}
+
+#[test]
+fn extract_attacker_wins_within_six_of_any_edge() {
+    assert_eq!(extract_winner(&role_board(1, 30.0, 0.0), 72.0, 48.0), "p1", "6\" from the +x edge");
+    assert_eq!(extract_winner(&role_board(2, 0.0, 18.0), 72.0, 48.0), "p2", "6\" from the +z edge");
+    assert_eq!(extract_winner(&role_board(1, 29.0, 0.0), 72.0, 48.0), "p2", "7\" from every edge: the defender holds");
+    assert_eq!(extract_winner(&role_board(1, -30.0, -17.0), 72.0, 48.0), "p1", "any edge, any corner");
+}
+
+#[test]
+fn extract_skips_destroyed_markers_and_reads_the_scoring_id() {
+    let mut st = role_board(1, 35.0, 0.0);
+    assert_eq!(role_winner("extract", &st, 0, 72.0, 48.0), Some("p1"));
+    st.markers_meta[0].destroyed = true;
+    assert_eq!(role_winner("extract", &st, 0, 72.0, 48.0), Some("p2"), "a removed marker is not extracted");
+    assert_eq!(role_winner("escort", &st, 1, 72.0, 48.0), Some("p1"), "no marker home: the attacker wins");
+    assert_eq!(role_winner("end", &st, 1, 72.0, 48.0), None, "other ids keep their own referee");
+}
+
+/// Four plain statics for the reveal tests: Defense 4, one model each.
+fn plain_statics() -> Vec<crate::unit::UnitStatic> {
+    ["a", "ah", "b", "bh"]
+        .iter()
+        .map(|n| {
+            let mut s = crate::unit::UnitStatic { name: (*n).into(), ..Default::default() };
+            s.model_count = 1;
+            s.wounds_max = vec![1];
+            s.ctx.defense = 4;
+            s
+        })
+        .collect()
+}
+
+/// Attacker slot 1, unit 0 standing on the marker; marker secret kind `kind`, owned by `owner`.
+fn reveal_board(kind: Option<&str>, owner: i64) -> (State, Vec<i64>) {
+    let mut st = role_board(1, 0.0, 0.0);
+    place(&mut st, 0, 0.0, 0.5);
+    st.markers_meta[0].secret = kind.map(str::to_string);
+    st.objectives[0].owner = owner;
+    (st, vec![owner])
+}
+
+#[test]
+fn reveal_removes_an_empty_marker_and_keeps_the_relic() {
+    let (mut st, mut owners) = reveal_board(Some(""), 1);
+    let (ev, rolls) = apply_reveal_step(&plain_statics(), &mut st, &mut owners, None);
+    assert_eq!(ev, vec![Reveal { index: 0, secret: String::new(), unit: 0 }]);
+    assert!(rolls.is_empty());
+    assert!(st.markers_meta[0].revealed && st.markers_meta[0].destroyed);
+    assert_eq!(owners, [0], "an empty marker is gone and nobody owns it");
+    let (mut st, mut owners) = reveal_board(Some("relic"), 1);
+    let (ev, _) = apply_reveal_step(&plain_statics(), &mut st, &mut owners, None);
+    assert_eq!(ev.len(), 1);
+    assert!(st.markers_meta[0].revealed && !st.markers_meta[0].destroyed, "the relic stays for the carry step");
+    assert_eq!(owners, [1]);
+}
+
+#[test]
+fn reveal_skips_defender_held_plain_and_already_revealed_markers() {
+    for (kind, owner, revealed) in [(Some("trap"), 2, false), (None, 1, false), (Some("trap"), 1, true)] {
+        let (mut st, mut owners) = reveal_board(kind, owner);
+        st.markers_meta[0].revealed = revealed;
+        let (ev, _) = apply_reveal_step(&plain_statics(), &mut st, &mut owners, None);
+        assert!(ev.is_empty(), "{kind:?} owner {owner} revealed {revealed}");
+        assert!(!st.markers_meta[0].destroyed);
+    }
+}
+
+#[test]
+fn reveal_trap_rolls_d6_plus_one_hits_on_the_tray_and_none_without_one() {
+    let (mut st, mut owners) = reveal_board(Some("trap"), 1);
+    apply_reveal_step(&plain_statics(), &mut st, &mut owners, None);
+    assert_eq!(st.alive[0], 1, "expected-value dice: the trap costs nothing");
+    let seed = 11;
+    let die = i64::from(Tray::seeded(seed).roll(1)[0]);
+    let (mut st, mut owners) = reveal_board(Some("trap"), 1);
+    let mut tray = Tray::seeded(seed);
+    let (ev, rolls) = apply_reveal_step(&plain_statics(), &mut st, &mut owners, Some(&mut tray));
+    assert_eq!(ev[0].secret, "trap");
+    assert_eq!(rolls[0].faces, vec![die as u8], "the first tray die is the D6");
+    assert_eq!(rolls[1].kind, "defense");
+    assert_eq!(rolls[1].count, die + 1, "D6+1 hits go to the save batch");
+    let saved = crate::dice::faces_to_hits(&rolls[1].faces, 4) as i64;
+    assert_eq!(st.alive[0], if die + 1 - saved > 0 { 0 } else { 1 }, "unsaved hits kill the lone model");
+    assert!(st.markers_meta[0].destroyed, "the trap is spent");
 }

@@ -224,6 +224,142 @@ def _arena_zones() -> dict[str, list[float]]:
     }
 
 
+def _style_zone_args(style: dict[str, Any], slot: str) -> tuple[list[float], list[Any]]:
+    """D5: a catalog style's zone list for `slot` plus the `[x, y, w, h]` metre rect that bounds it
+    (a disc by its square), the pair `nml_core.deploy_side` takes."""
+    zl = style["zones"][slot]
+    pts: list[tuple[float, float]] = []
+    for e in zl:
+        if isinstance(e, dict):
+            (cx, cz), r = e["disc"]["c"], float(e["disc"]["r_in"])
+            pts += [(cx - r, cz - r), (cx + r, cz + r)]
+        else:
+            pts += [(x, z) for x, z in e]
+    x0, z0 = min(p[0] for p in pts), min(p[1] for p in pts)
+    x1, z1 = max(p[0] for p in pts), max(p[1] for p in pts)
+    return [x0 * IN2M, z0 * IN2M, (x1 - x0) * IN2M, (z1 - z0) * IN2M], zl
+
+
+def _ai_attacker(mission_def: dict[str, Any], opener: int) -> int:
+    """D2b/R7a: the roll-off winner (the opener) attacks when the mission grants the +25 % side,
+    else defends; 0 for a mission without `roles`."""
+    if not mission_def.get("roles"):
+        return 0
+    wins_attack = float(mission_def.get("attacker_points_factor", 1.0)) > 1.0
+    return opener if wins_attack else (2 if opener == 1 else 1)
+
+
+def _role_gates(mission_def: dict[str, Any], attacker: int) -> dict[str, Any]:
+    """D6b: each slot's catalog distance gates by its role ({} = none), keyed by slot "1"/"2"."""
+    gates = mission_def.get("deploy_gates") or {}
+    if not attacker or not gates:
+        return {}
+    return {str(s): gates.get("attacker" if s == attacker else "defender") for s in (1, 2)}
+
+
+def vip_start(defender: int, table_d_in: float = TABLE_D_IN) -> tuple[list[float], int]:
+    """D14.4a's AI rule, twin of `MissionCatalog.vip_start`: the VIP marker sits on the defender's OWN table
+    edge (slot 1 = z-negative side, slot 2 = z-positive), on the centre line, 3 in in. Returns the spot
+    `[x_in, z_in]` and `deploy_edge`, that edge's z sign."""
+    edge = -1 if defender == 1 else 1
+    return [0.0, float(edge) * (table_d_in / 2.0 - 3.0)], edge
+
+
+def disc_style(centre_in: list[float], r_in: float) -> dict[str, Any]:
+    """Twin of `DeploymentCatalog.disc_style`: a role-agnostic disc zone for both slots."""
+    zone = [{"disc": {"c": [centre_in[0], centre_in[1]], "r_in": r_in}}]
+    return {"zones": {"1": zone, "2": [dict(z) for z in zone]}}
+
+
+def _vip_setup(mission_def: dict[str, Any], attacker: int) -> dict[str, Any] | None:
+    """D14.4b: a `mobile` marker spec (VIP Escort) is placed by the defender's start rule once the roles
+    are known: the objective, `deploy_edge`, the defender as its owner and the runtime zone style
+    "marker_disc_12" (12 in around it). None for every other mission."""
+    if not attacker or not (mission_def.get("markers") or {}).get("mobile"):
+        return None
+    defender = 3 - attacker
+    spot, edge = vip_start(defender)
+    return {"objectives": [[f32(spot[0] * IN2M), 0.0, f32(spot[1] * IN2M)]], "deploy_edge": edge,
+            "defender": defender, "styles": {"marker_disc_12": disc_style(spot, 12.0)}}
+
+
+def _phase_args(mission_def: dict[str, Any], attacker: int, repo_root: str | Path,
+                extra_styles: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """D7b: the mission's `deploy_phases` (`[[role, share, style_id], ..]`) as `nml_core.deploy_phased`
+    phase dicts: the role picks the side (0 = slot 1), the style the zone rect + shape. [] = none."""
+    raw = mission_def.get("deploy_phases") or []
+    if not attacker or not raw:
+        return []
+    styles = json.loads((Path(repo_root) / "assets" / "solo" / "deployments.json").read_text(encoding="utf-8"))["styles"]
+    styles.update(extra_styles or {})
+    out = []
+    for entry in raw:
+        role, share, style_id = entry[0], entry[1], entry[2]
+        side = (attacker - 1) if role == "attacker" else (2 - attacker)
+        # D14.2: "own" = the mission's standard deployment style at the side's OWN table half
+        # (slot 1 = the -Z band, slot 2 = the +Z band); any other id is the role-agnostic style's zone.
+        own = style_id == "own"
+        rect, zl = _style_zone_args(styles[mission_def.get("deployment", "front_line") if own else style_id],
+                                    str(side + 1) if own else "1")
+        out.append({"side": side,
+                    "share": share, "zone": rect, "zones": zl,
+                    # D7d: an optional 4th catalog element = this phase's own gates (inches)
+                    **({"gates": entry[3]} if len(entry) > 3 and isinstance(entry[3], dict) else {})})
+    return out
+
+
+def _reserve_args(mission_def: dict[str, Any], attacker: int) -> tuple[list[bool], dict[str, Any]]:
+    """D8b: the mission's `reserves` ({who, arrive_on, from_round, zone, gates}) as the per-side
+    reserve flags of `deploy_phased` (side 0 = slot 1) and the cfg; ([False, False], {}) without."""
+    cfg = mission_def.get("reserves") or {}
+    if not attacker or not cfg:
+        return [False, False], {}
+    who = cfg.get("who", "both")
+    flags = [False, False]
+    for role, slot in (("attacker", attacker), ("defender", 3 - attacker)):
+        if who in ("both", role):
+            flags[slot - 1] = True
+    return flags, cfg
+
+
+def _last_stand_plain(plain: dict[str, Any], round_no: int, cfg: dict[str, Any],
+                      flags: list[bool], held: set[str]) -> None:
+    """D11b over the plain state at a round start: a recycled unit is due from the mission's first
+    reserve round, and a covered side with no unit on the table has its reserves lost (R8a)."""
+    units = plain["units"]
+    for k in held:
+        if k in units and units[k].get("dormant"):
+            units[k]["earliest_arrival_round"] = max(int(cfg.get("from_round", 2)), int(units[k].get("earliest_arrival_round", -1)))
+    if round_no < int(cfg.get("from_round", 2)):
+        return
+    for slot in (1, 2):
+        if not flags[slot - 1]:
+            continue
+        mine = [k for k, u in units.items() if int(u["player"]) == slot]
+        if any(not units[k].get("dormant") and units[k].get("positions") for k in mine):
+            continue
+        for k in mine:
+            if k in held and units[k].get("dormant"):
+                units[k].update(dormant=False, positions=[], radii=[], wounds=[], alive=0)
+                for gone in ("dormant_models", "dormant_wounds", "earliest_arrival_round"):
+                    units[k].pop(gone, None)
+
+
+def _style_by_id(style_id: str, repo_root: str | Path) -> dict[str, Any]:
+    """A deployment style by id from `assets/solo/deployments.json` (the reserve zone's)."""
+    return json.loads((Path(repo_root) / "assets" / "solo" / "deployments.json").read_text(encoding="utf-8"))["styles"][style_id]
+
+
+def resolve_zone_style(mission_def: dict[str, Any], repo_root: str | Path) -> dict[str, Any] | None:
+    """The mission's deployment style from `assets/solo/deployments.json`, or None for `front_line`
+    (the arena's own rects — byte-identical to every mission before wave D)."""
+    name = mission_def.get("deployment", "front_line")
+    if name == "front_line":
+        return None
+    path = Path(repo_root) / "assets" / "solo" / "deployments.json"
+    return json.loads(path.read_text(encoding="utf-8"))["styles"][name]
+
+
 def _arena_roll_off(rng: "nml_core.Rng") -> list[list[int]]:
     """`SoloController.roll_off` (solo_controller.gd:7517-7528) over the GAME
     stream: a d6 pair per attempt, TIES RE-ROLL (cap 100), every attempt kept.
@@ -263,6 +399,11 @@ def _deploy_arena(
     opener: int,
     interleave: bool = False,
     rules_epoch: int = nml_core.CURRENT_RULES_EPOCH,
+    zone_style: dict[str, Any] | None = None,
+    gates: dict[str, Any] | None = None,
+    phases: list[dict[str, Any]] | None = None,
+    reserve: list[bool] | None = None,
+    mission_keys: set[str] | None = None,
 ) -> tuple[list[list[list[float]]], list[list[list[float]]], set[str], list[list[Any]]]:
     """The table's pre-game through the step-7 binding: `deploy_side` per side
     with the per-side stream `seed + slot` (arena_match.gd:486-488 — the game
@@ -278,6 +419,10 @@ def _deploy_arena(
     same per-side streams, same finish. Returns the capture positions and the
     cross-side `[[slot, key], ..]` placement sequence (empty when off)."""
     zones = _arena_zones()
+    shapes: dict[str, Any] = {"1": None, "2": None}
+    if zone_style is not None:  # D5: a non-rectangular zone binds the spot search
+        for slot in ("1", "2"):
+            zones[slot], shapes[slot] = _style_zone_args(zone_style, slot)
     sides: dict[str, dict[str, Any]] = {}
     reserved: dict[str, list[str]] = {}
     hero_fold: dict[str, tuple[str, int, int]] = {}
@@ -292,28 +437,49 @@ def _deploy_arena(
         hero_fold.update(fold)
     objs2 = [[o[0], o[2]] for o in objectives]
     sequence: list[list[Any]] = []
-    if interleave:
+    if phases:  # D7b: the catalog's phases replace the alternation (phase-major sequence)
+        out = nml_core.deploy_phased(
+            roster["1"], roster["2"], zones["1"], zones["2"], phases, objs2, board,
+            seed + 1, seed + 2, opener, rules_epoch=int(rules_epoch),
+            gates1=(gates or {}).get("1"), gates2=(gates or {}).get("2"),
+            reserve1=bool((reserve or [False, False])[0]), reserve2=bool((reserve or [False, False])[1]),
+        )
+        placed_by = {"1": out["side1"], "2": out["side2"]}
+        sequence = [list(e) for e in out["sequence"]]
+        if mission_keys is not None:  # D8b: the set-aside leftover = reserved keys that are not Ambush units
+            ambush = {u["key"] for slot in ("1", "2") for u in roster[slot] if u["ambush"]}
+            mission_keys.update(k for slot in ("1", "2") for k in placed_by[slot]["reserved"] if k not in ambush)
+    elif interleave:
         # The record's epoch reaches the placement gates (`EPOCH_16_FREE_PLACEMENT`,
         # `EPOCH_64_DEPLOY_LARGE_RESPOT`); without it the binding ran them at the
         # live epoch and a replay re-deployed an old corpus the new way.
         out = nml_core.deploy_interleaved(
             roster["1"], roster["2"], zones["1"], zones["2"], objs2, board,
             seed + 1, seed + 2, opener, rules_epoch=int(rules_epoch),
+            zones1=shapes["1"], zones2=shapes["2"],
+            gates1=(gates or {}).get("1"), gates2=(gates or {}).get("2"),
         )
         placed_by = {"1": out["side1"], "2": out["side2"]}
         sequence = [list(e) for e in out["sequence"]]
     else:
-        placed_by = {
-            slot: nml_core.deploy_side(
+        placed_by: dict[str, Any] = {}
+        for slot in ("1", "2"):
+            enemy: list[list[float]] = []
+            if (gates or {}).get(slot) and "1" in placed_by and slot == "2":
+                radius = {u["key"]: float(u["base_r_m"]) for u in roster["1"]}
+                enemy = [[m[0], m[1], radius[p["key"]]]
+                         for p in placed_by["1"]["placements"] for m in p["models"]]
+            placed_by[slot] = nml_core.deploy_side(
                 roster[slot], zones[slot], objs2, board, seed + int(slot),
-                rules_epoch=int(rules_epoch),
+                rules_epoch=int(rules_epoch), zones=shapes[slot],
+                gates=(gates or {}).get(slot), enemy=enemy or None,
             )
-            for slot in ("1", "2")
-        }
     for slot in ("1", "2"):
         placed = placed_by[slot]
+        held = set(placed["reserved"])  # set aside (Ambush or a mission reserve): nothing to settle
         sides[slot] = {
-            "units": roster[slot], "placements": placed["placements"], "zone": zones[slot]
+            "units": [u for u in roster[slot] if u["key"] not in held],
+            "placements": placed["placements"], "zone": zones[slot],
         }
         reserved[slot] = list(placed["reserved"])
     finished = nml_core.deploy_finish(sides, board, {}, opener)
@@ -327,6 +493,16 @@ def _deploy_arena(
         # A hero rides its host's group — including a host held in reserve,
         # where the slice of an empty list is empty too.
         pos[hero_key] = pos.get(host_key, [])[offset : offset + count]
+    held = {k for slot in ("1", "2") for k in reserved[slot]}
+    if rules_epoch >= nml_core.EPOCH_69_HERO_FOLD:
+        # B8: the host keeps ONLY its own models (`capture` gives it its own
+        # wounds_max; the hero slices above are the heroes'), and a joined hero
+        # of a reserved host waits dormant with it instead of keeping wounds
+        # with no model on the table. Below the epoch the old split replays.
+        for hero_key, (host_key, offset, _count) in hero_fold.items():
+            pos[host_key] = pos.get(host_key, [])[:offset]
+            if host_key in held:
+                held.add(hero_key)
     # The reserve KEYS ride out with the positions: `capture` needs them to
     # mark a unit dormant (battle_sim.gd:1483 asks `unit_in_reserve`), and an
     # empty placement list is not the same signal — a folded hero of a reserved
@@ -334,7 +510,7 @@ def _deploy_arena(
     return (
         [pos[u["unit_id"]] for u in units1],
         [pos[u["unit_id"]] for u in units2],
-        {k for slot in ("1", "2") for k in reserved[slot]},
+        held,
         sequence,
     )
 
@@ -696,7 +872,7 @@ _MISSION_CATALOG_CACHE: dict[str, dict[str, Any]] = {}
 
 def mission_markers(spec: dict[str, Any], count: int) -> list[dict[str, Any]]:
     """Arm owned or carried marker state without changing legacy empty records."""
-    if not spec.get("owned") and not spec.get("carry"):
+    if not spec.get("owned") and not spec.get("carry") and not spec.get("mobile") and not spec.get("secret"):
         return []
     markers = []
     for i in range(count):
@@ -704,8 +880,30 @@ def mission_markers(spec: dict[str, Any], count: int) -> list[dict[str, Any]]:
             if spec.get("owned") else {}
         if spec.get("carry"):
             marker.update(carry=True, carried_by=-1)
+            if "drop_in" in spec:  # D14.5: this mission's relic drops this far (inches) past the carrier
+                marker["drop_in"] = float(spec["drop_in"])
+            if spec.get("carry_by") == "attacker":  # D14.5d: only attacking units carry it
+                marker["attacker_only"] = True
+        if spec.get("secret"):
+            marker.update(secret="", revealed=False)
+        if spec.get("mobile"):
+            marker.update(mobile=True, deploy_edge=int(spec.get("deploy_edge", 0)))
         markers.append(marker)
     return markers
+
+
+def secret_assign(points_in: list[tuple[float, float]]) -> list[str]:
+    """D12a's AI assignment, twin of `SoloController.secret_assign`: the relic is the marker
+    FARTHEST from every table edge, the trap the NEAREST (first index on a tie)."""
+    gaps = [min(TABLE_W_IN / 2.0 - abs(x), TABLE_D_IN / 2.0 - abs(z)) for x, z in points_in]
+    out = [""] * len(gaps)
+    if gaps:
+        relic = max(range(len(gaps)), key=lambda i: (gaps[i], -i))
+        trap = min(range(len(gaps)), key=lambda i: (gaps[i], i))
+        out[relic] = "relic"
+        if trap != relic:
+            out[trap] = "trap"
+    return out
 
 
 def resolve_mission(mission: str, repo_root: str | Path) -> dict[str, Any]:
@@ -970,7 +1168,8 @@ LEGACY_FIDELITY_KNOBS: dict[str, Any] = dict(
 )
 
 
-def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int) -> int:
+def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int,
+                     mission: dict[str, Any] | None = None) -> int:
     """The table's round-start ambush beat (`main._solo_round_start` :10096-10106
     through `_solo_alternate_ambush_arrivals` :10419-10485), over the PLAIN
     state — the same layer `_round_start` already works on.
@@ -998,9 +1197,12 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
     ]
     queue = {1: [], 2: []}
     for key, u in units.items():
+        if units.get(u.get("attached_to") or "", {}).get("dormant"):
+            continue  # B8 (EPOCH_69_HERO_FOLD): a joined hero drops WITH its host, below
         if u.get("dormant") and u.get("earliest_arrival_round", -1) <= round_no:
             queue[int(u["player"])].append(key)
     turn, arrived = int(opener), 0
+    held = set((mission or {}).get("keys", ()))   # D8b: Attack & Defend mission reserves (roll + zone + gates)
     while queue[1] or queue[2]:
         if not queue[turn]:
             turn = 3 - turn
@@ -1010,6 +1212,16 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
         u = units[key]
         r = reads[key]
         side = int(u["player"])
+        shape, ring = None, r["ring_m"]
+        occ_in = occ
+        if key in held:
+            cfg = mission["cfg"]
+            if round_no < int(cfg.get("from_round", 2)) or mission["rng"].randi_range(1, 6) < int(cfg.get("arrive_on", 4)):
+                continue   # not yet due / the die says no: it stays in reserve, one die per unit per round
+            shape = mission["zones"]
+            ring = float((cfg.get("gates") or {}).get("min_from_enemy_in", 0.0)) * IN2M
+            marker = float((cfg.get("gates") or {}).get("min_from_marker_in", 0.0)) * IN2M
+            occ_in = occ + [{"pos": o, "radius": marker} for o in objs] if marker > 0 else occ
         # A RESERVE enemy projects nothing (main.gd:10523); a reserve beacon
         # carrier likewise stands nowhere (`beacon_points` :9781+).
         enemies = [
@@ -1029,23 +1241,32 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
             for p in ou["positions"]
         ]
         spot = nml_core.arrive_one(
-            zone, objs, occ, enemies, r["ring_m"], r["radius"], r["footprint"],
-            r["base_r"], r["flying"], board, beacons,
+            zone, objs, occ_in, enemies, ring, r["radius"], r["footprint"],
+            r["base_r"], r["flying"], board, [] if key in held else beacons, zones=shape,
         )
         if spot is None:
             continue
-        n = int(u.get("dormant_models", 0))
-        models = nml_core.place_models((spot[0], spot[1]), n)
-        u["positions"] = [[f32(m[0]), 0.0, f32(m[1])] for m in models]
-        u["wounds"] = list(u.get("dormant_wounds", []))
-        u["radii"] = [r["base_r"]] * n
-        u["alive"] = n
-        u["dormant"] = False
-        u["ambush_arrived_round"] = round_no
-        for gone in ("dormant_models", "dormant_wounds", "earliest_arrival_round"):
-            u.pop(gone, None)
+        # The host's models first, then each dormant joined hero's — one group,
+        # like the deployment fold (`_place_unit_at` -> `_deploy_models`). Only
+        # `EPOCH_69_HERO_FOLD` makes a joined hero dormant, so below it the
+        # group is the host alone and the placement is unchanged.
+        group = [key] + [h for h in u.get("attached", []) if units.get(h, {}).get("dormant")]
+        counts = [int(units[k].get("dormant_models", 0)) for k in group]
+        models = nml_core.place_models((spot[0], spot[1]), sum(counts))
+        at = 0
+        for k, n in zip(group, counts):
+            g = units[k]
+            g["positions"] = [[f32(m[0]), 0.0, f32(m[1])] for m in models[at : at + n]]
+            g["wounds"] = list(g.get("dormant_wounds", []))
+            g["radii"] = [reads[k]["base_r"]] * n
+            g["alive"] = n
+            g["dormant"] = False
+            g["ambush_arrived_round"] = round_no
+            for gone in ("dormant_models", "dormant_wounds", "earliest_arrival_round"):
+                g.pop(gone, None)
+            live.append((k, g))
+            at += n
         occ.append({"pos": spot, "radius": r["radius"]})
-        live.append((key, u))
         arrived += 1
     return arrived
 
@@ -1571,6 +1792,16 @@ FORK_REP_STRIDE = 70001
 FORK_REPS = 3
 
 
+#: A derived per-activation seed (`seed * STRIDE + seq`) wraps into the 64-bit range the core's Rng takes: a 63-bit game
+#: seed (hashed seed registries draw 1 + sha256 mod (2**63 - 1)) times a stride overflows a C long. Every seed below
+#: 2**63 / stride derives exactly as before, so recorded digests stay byte-identical.
+SEED_WRAP = 2 ** 63
+
+
+def _derived(seed: int) -> int:
+    return seed % SEED_WRAP
+
+
 def _local_rng(seed: int, skip: int) -> "nml_core.Rng":
     """One sidecar generator. `skip` is the RED PROOF knob and nothing else: it
     advances the stream by that many draws before the clone is resolved, so the
@@ -1633,9 +1864,9 @@ def _pair_block(core, state, pick, runner, seed: int, seq: int, skip: int) -> di
     """E0b, `_play_round` core_selfplay.gd:281-294 — the CHOSEN and the REJECTED
     candidate each resolved on a clone, both end boards logged. The generator is
     log-local, so the game's dice stream never moves."""
-    lrng = _local_rng(seed * PAIR_SEED_STRIDE + seq, skip)
+    lrng = _local_rng(_derived(seed * PAIR_SEED_STRIDE + seq), skip)
     st_ch = core.resolve_stochastic_rng(state, pick["action"], lrng)
-    lrng.seed(seed * PAIR_SEED_STRIDE + seq + PAIR_RUNNER_OFFSET)
+    lrng.seed(_derived(seed * PAIR_SEED_STRIDE + seq + PAIR_RUNNER_OFFSET))
     for _ in range(max(skip, 0)):
         lrng.randf()
     st_ru = core.resolve_stochastic_rng(state, runner["action"], lrng)
@@ -1655,10 +1886,10 @@ def _fork_block(core, state, pick, runner, turn: int, round_no: int, owners, see
     c_runs: list[dict[str, int]] = []
     r_runs: list[dict[str, int]] = []
     for rep in range(FORK_REPS):
-        base = seed * FORK_SEED_STRIDE + seq + rep * FORK_REP_STRIDE + salt
+        base = _derived(seed * FORK_SEED_STRIDE + seq + rep * FORK_REP_STRIDE + salt)
         frng = _local_rng(base, skip)
         c_runs.append(_fork_playout(core, state, pick["action"], turn, round_no, owners, frng))
-        frng.seed(base + FORK_RUNNER_OFFSET)
+        frng.seed(_derived(base + FORK_RUNNER_OFFSET))
         for _ in range(max(skip, 0)):
             frng.randf()
         r_runs.append(_fork_playout(core, state, runner["action"], turn, round_no, owners, frng))
@@ -1765,14 +1996,14 @@ def _play_round(
         # own ordinal (`len(log)` before its row is appended) exactly as the
         # pair/fork formulas above already read it after the fact.
         seq = len(log)
-        explore_seed = seed * EXPLORE_SEED_STRIDE + seq
+        explore_seed = _derived(seed * EXPLORE_SEED_STRIDE + seq)
         # PLAYOUT-CAP (expert-iteration step 2): the per-activation coin off
         # its own generator — `rng` and the sidecars never see a draw, and off
         # it takes zero draws, exactly like `eps=0.0`. The fallback pick below
         # is the SAME activation, so it rides the same coin.
         use_cap = False
         if cap_core is not None:
-            use_cap = nml_core.Rng(seed * CAP_SEED_STRIDE + seq).randf() < cap_share
+            use_cap = nml_core.Rng(_derived(seed * CAP_SEED_STRIDE + seq)).randf() < cap_share
         planning = cap_core if use_cap else cores[turn]
         # R4 kwargs ride ONLY when armed: a tool that swaps in its own
         # `_pick_for`-shaped callable via `forced_picks` (game_narrator,
@@ -1928,17 +2159,21 @@ def _ledger_of(state) -> dict[str, Any]:
             "vp_flavour": p.get("vp_flavour") or {}, "vp_memo": p.get("vp_memo") or {},
             "markers_meta": mm, "destroy_seq": list(p.get("destroy_seq") or [0]),
             "carry": any(m.get("carry") for m in mm),
+            "secret": any(m.get("secret") is not None for m in mm),
             "rounds": int(p.get("rounds_total") or ROUNDS)}
 
 
 def _round_end(core, state, owners: list[int], led: dict[str, Any], round_no: int,
-               skip_carry: bool = False):
+               skip_carry: bool = False, tray=None):
     """THE ROUND-END REFEREE, once for `play_game`, `play_from_state` and the wave-C
     parity gate (tools/mission_referee_gate.py), in the table's order (main.gd
     `_solo_auto_seize`, then `_solo_book_mission_vp`): seize, carry pickup, an
     enemy-held owned marker falls, then the mission's VP. Updates `led` in place and
     returns `(state, owners)`. `skip_carry` exists for the gate's RED only."""
     state, owners = core.playout_seize(state, owners)
+    if led.get("secret"):  # D12b: the attacker's seize turns up its secret markers, relic stays
+        state, owners, _events, _rolls = core.apply_reveal_step(state, owners, tray)
+        led["markers_meta"] = state.plain()["markers_meta"]
     if led["carry"] and not skip_carry:
         state = core.apply_carry_step(state, owners)
         led["markers_meta"] = state.plain()["markers_meta"]
@@ -1966,9 +2201,16 @@ def _write_ledger(plain: dict[str, Any], led: dict[str, Any]) -> None:
         plain["destroy_seq"] = [int(led["destroy_seq"][0])]
 
 
-def _verdict(core, owners: list[int], led: dict[str, Any]) -> str:
+def _verdict(core, owners: list[int], led: dict[str, Any], state=None) -> str:
     """`_write_result` :700-706: Face-Off is END-scored (the end bonus, then MARKERS
-    decide); every other mission asks `BattleSim.mission_winner`'s own referee."""
+    decide); every other mission asks `BattleSim.mission_winner`'s own referee. D14.0: the role
+    missions (`escort`, `extract`) are decided on the board by `role_winner`, like
+    `SoloController.end_verdict` does on the table (it needs the final `state`)."""
+    if led["scoring"] in ("escort", "extract") and state is not None:
+        edge = next((int(m.get("deploy_edge", 0)) for m in led["markers_meta"] if m.get("deploy_edge")), 0)
+        role = core.role_winner(state, led["scoring"], edge, TABLE_W_IN, TABLE_D_IN)
+        if role is not None:
+            return role
     if led["scoring"] != "end":
         return core.mission_winner(led["scoring"], owners, led["vp"], led["markers_meta"], 0, 0)
     led["vp"] = core.vp_end_bonus(owners, led["vp"])
@@ -2067,7 +2309,7 @@ def play_from_state(
         state, owners = _round_end(core, state, owners, led, round_no)
         rounds_played = round_no
         rounds_log.append({"round": round_no, "owners": list(owners), "vp": list(led["vp"])})
-    winner = _verdict(core, owners, led)
+    winner = _verdict(core, owners, led, state)
     p1 = sum(1 for o in owners if o == 1)
     p2 = sum(1 for o in owners if o == 2)
     return {
@@ -2888,7 +3130,11 @@ def play_game(
     # The roll-off + deployment generator: the game stream unless `deploy_seed` splits it off.
     drng, dep = (rng, seed) if deploy_seed is None else (nml_core.Rng(deploy_seed), deploy_seed)
     arena = eff_deployment in ("arena", "interleaved")
+    vip: dict[str, Any] | None = None
     deploy_seq: list[list[Any]] = []
+    mission_reserved: set[str] = set()
+    reserve_cfg: dict[str, Any] = {}
+    reserve_flags: list[bool] = [False, False]
     if arena:
         # NML-1152 step 8 — the table's pre-game. Roll-off FIRST from the game
         # stream (ties re-rolled; the winner of the last attempt opens, the
@@ -2897,9 +3143,19 @@ def play_game(
         # NOTHING else before the first activation.
         roll_attempts = _arena_roll_off(drng)
         opener = 1 if roll_attempts[-1][0] >= roll_attempts[-1][1] else 2
+        mission_def0 = resolve_mission(mission, repo_root)
+        reserve_flags, reserve_cfg = _reserve_args(mission_def0, _ai_attacker(mission_def0, opener))
+        vip = _vip_setup(mission_def0, _ai_attacker(mission_def0, opener))
+        if vip:  # D14.4b: the VIP marker and its disc zone exist before the first unit is placed
+            objectives = vip["objectives"]
         pos1, pos2, reserved, deploy_seq = _deploy_arena(
             dep, units1, units2, list_p1, list_p2, board, objectives, opener,
             eff_deployment == "interleaved", rules_epoch=rules_epoch,
+            zone_style=resolve_zone_style(mission_def0, repo_root),
+            gates=_role_gates(mission_def0, _ai_attacker(mission_def0, opener)),
+            phases=_phase_args(mission_def0, _ai_attacker(mission_def0, opener), repo_root,
+                               vip["styles"] if vip else None),
+            reserve=reserve_flags, mission_keys=mission_reserved,
         )
     elif deploy_rng_seed is None:
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, drng)
@@ -2914,17 +3170,23 @@ def play_game(
     # `capture_reads` is — never re-derived in Python. Only `ambush="table"`
     # asks for them, so an "off" game builds byte-identically to every corpus
     # written before this knob.
-    arrivals = core.arrival_reads() if (arena and eff_ambush) else None
+    arrivals = core.arrival_reads() if (arena and (eff_ambush or reserve_cfg)) else None
+    earliest = {k: v["earliest"] for k, v in arrivals.items()} if arrivals is not None else None
+    for k in mission_reserved:  # D8b: a mission reserve is due from the mission's first reserve round
+        earliest[k] = int(reserve_cfg.get("from_round", 2))
     plain = capture(
         units, pos1 + pos2, reads, board, objectives, attached, attached_to,
-        reserved if arrivals is not None else None,
-        {k: v["earliest"] for k, v in arrivals.items()} if arrivals is not None else None,
+        reserved if arrivals is not None else None, earliest,
     )
     mission_def = resolve_mission(mission, repo_root)  # SoloController.mission_reset mirrored
     eff_scoring = mission_def.get("scoring", "end")
     vp_flavour = mission_def.get("vp", {})
     mk_spec = mission_def.get("markers", {})
     markers_meta = mission_markers(mk_spec, len(objectives))
+    if vip:  # D14.4b: the defender owns the VIP marker from the start (D10a lets it walk it)
+        for m in markers_meta:
+            m["deploy_edge"] = vip["deploy_edge"]
+        plain["objectives"][0]["owner"] = vip["defender"]
     rounds = int(mission_def.get("rounds", ROUNDS))  # NML-1010 D1: the catalog's match length
     plain["rounds_total"] = rounds
     plain["scoring"] = eff_scoring
@@ -2938,23 +3200,28 @@ def play_game(
         # state it hands the planner, and this is the same state.
         state = core.restamp_los(state)
 
-    owners = [0] * len(objectives)
+    owners = [vip["defender"]] if vip else [0] * len(objectives)
     led = {"scoring": eff_scoring, "vp": [0, 0], "vp_flavour": vp_flavour, "vp_memo": {},
            "markers_meta": markers_meta, "destroy_seq": [0], "carry": bool(mk_spec.get("carry")),
-           "rounds": rounds}
+           "secret": bool(mk_spec.get("secret")), "rounds": rounds}
     if not arena:
         # The d6 roll-off, P1 winning ties — and BOTH dice are drawn, left first.
         left = drng.randi_range(1, 6)
         right = drng.randi_range(1, 6)
         opener = 1 if left >= right else 2
-    attacker = 0
-    if mission_def.get("roles"):
-        # D2b: the roll-off winner (the opener) picks by R7a — the +25 % side where the
-        # mission grants one, else defender — and the pick rides the state as `attacker`.
-        wins_attack = float(mission_def.get("attacker_points_factor", 1.0)) > 1.0
-        attacker = opener if wins_attack else (2 if opener == 1 else 1)
+    attacker = _ai_attacker(mission_def, opener)
+    if attacker:
+        # D2b: the roll-off winner (the opener) picks by R7a; the pick rides the state as `attacker`.
         p0 = state.plain()
         p0["attacker"] = attacker
+        if any(m.get("secret") is not None for m in p0.get("markers_meta") or []):
+            kinds = secret_assign([(o["pos"][0] / IN2M, o["pos"][2] / IN2M) for o in p0["objectives"]])
+            for m, kind in zip(p0["markers_meta"], kinds):
+                m["secret"] = kind
+                if kind == "relic":
+                    m.update(carry=True, carried_by=-1)
+                    led["carry"] = True
+            led["markers_meta"] = [dict(m) for m in p0["markers_meta"]]
         state = core.state_of(p0)
     log: list[dict[str, Any]] = []
     rounds_log: list[dict[str, Any]] = []
@@ -2964,13 +3231,25 @@ def play_game(
     streams = {s: {"seed": v, "rng": nml_core.Rng(v), "counter": 0, "pending": None}
                for s, v in (search_seeds or {}).items()} or None
     for round_no in range(1, rounds + 1):
+        if reserve_cfg.get("recycle"):  # D11b: Last Stand — the covered side's destroyed units return once
+            for slot in (1, 2):
+                if reserve_flags[slot - 1]:
+                    state, keys = nml_core.recycle_destroyed(state, slot, round_no - 1)
+                    mission_reserved.update(keys)
         plain = state.plain()
+        if reserve_cfg.get("recycle"):
+            _last_stand_plain(plain, round_no, reserve_cfg, reserve_flags, mission_reserved)
         _round_start(plain, round_no, profiles, magic)
         if arrivals is not None:
-            _arrive_reserves(plain, arrivals, board, objectives, opener, round_no)
+            _arrive_reserves(plain, arrivals, board, objectives, opener, round_no, mission=(
+                {"keys": mission_reserved, "cfg": reserve_cfg, "rng": rng,
+                 "zones": _style_zone_args(_style_by_id(reserve_cfg.get("zone", "anywhere"), repo_root), "1")[1]}
+                if mission_reserved else None))
         if live_ledger:
             _write_ledger(plain, led)
         state = core.state_of(plain)
+        if any(m.get("mobile") for m in plain.get("markers_meta") or []):
+            state = core.apply_marker_move(state, TABLE_D_IN)  # D10b: the VIP walks at round start
         state, opener = _play_round(
             core, state, opener, rng, log, round_no,
             seed=seed, owners=owners, sidecars=sidecars,
@@ -2984,13 +3263,13 @@ def play_game(
             leaf_value_fn=leaf_value_fn, leaf_value_w=leaf_value_w,
             **({"search_streams": streams} if streams else {}),
         )
-        state, owners = _round_end(core, state, owners, led, round_no)
+        state, owners = _round_end(core, state, owners, led, round_no, tray=tray)
         rounds_played = round_no
         entry = {"round": round_no, "owners": list(owners), "vp": list(led["vp"])}
         if record_aux:
             entry.update(_aux_alive_wounds(state, profiles))
         rounds_log.append(entry)
-    winner = _verdict(core, owners, led)
+    winner = _verdict(core, owners, led, state)
     vp = led["vp"]
 
     p1 = sum(1 for o in owners if o == 1)

@@ -187,8 +187,9 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## on the Regeneration fold).
 ## Wave 3 batch B moves this stamp to 65 with EPOCH_65_MELEE_TRUTH, batch C to 66 with
 ## EPOCH_66_DISTANCE_TRUTH, batch D to 67 with EPOCH_67_MARKERS_BURSTS (D42/W3-4/D19/D20),
-## batch E to 68 with EPOCH_68_MODIFIER_SUM (D21 modifier arithmetic).
-static var rules_epoch: int = 68
+## batch E to 68 with EPOCH_68_MODIFIER_SUM (D21 modifier arithmetic), B8 to 69 with
+## EPOCH_69_HERO_FOLD (the trainer's arena hero fold; this table's capture already matched it).
+static var rules_epoch: int = 69
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
@@ -480,6 +481,12 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# (plain.rs `knobs_of` reads no such key, like `dice`); it exists so a reader can
 			# tell a post-#448 corpus from an older one without dating the file.
 			"cond_ap": true,
+			# Tray census side finding (03.10.): the table ALWAYS rolls the p.10 morale test after a
+			# non-charge activation's dangerous-terrain losses (main.gd:1092-1098); the Rust twin runs
+			# it only when this key is on (DEFECT_LEDGER #12, an absent key reads OFF), so the live
+			# planner (_core_plan reads THIS header) predicted a game without it. No switch here: the
+			# constant `true`. A corpus recorded before the key still replays without the test.
+			"dangerous_end_morale": true,
 			# NML-1073 M5 D1-B7: which RESOLVER produced this corpus row. The table has only
 			# one — every combat die goes through main._solo_tray_roll — so this side is the
 			# constant "table"; the fast trainer stamps the same key from its own `dice` knob

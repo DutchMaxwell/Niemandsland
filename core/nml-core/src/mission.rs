@@ -18,7 +18,7 @@ use serde_json::Value;
 
 use crate::score::{can_hold_marker, control_gap_in};
 use crate::state::{Marker, State};
-use crate::{CONTROL_EPS, OBJECTIVE_CONTROL_IN};
+use crate::{CONTROL_EPS, IN2M, OBJECTIVE_CONTROL_IN};
 
 /// GDScript `int(Variant)` for the two places a recorded number reaches this
 /// file: a JSON integer, or a float that `int()` truncates toward zero.
@@ -87,6 +87,7 @@ pub fn apply_carry_step(state: &mut State, owners: &[i64]) {
             continue;
         }
         if side != 1 && side != 2 { continue; }
+        if state.markers_meta[i].attacker_only && side != state.attacker { continue; }
         let op = state.objectives[i].pos;
         let mut best = None;
         let mut best_gap = f64::INFINITY;
@@ -105,8 +106,9 @@ pub fn apply_carry_step(state: &mut State, owners: &[i64]) {
     }
 }
 
-/// Drop every relic held by a unit 1 inch past its first base edge toward the
-/// nearest living opposing model, measured horizontally (plan amendment M-C1).
+/// Drop every relic held by a unit past its first base edge toward the nearest living opposing model,
+/// measured horizontally (plan amendment M-C1): 1 inch, or the marker's own `drop_in` (D14.5, Rescue: 6").
+/// The distance is the FIRST held marker's, one drop point serves them all.
 pub fn drop_carried(state: &mut State, unit: usize) {
     if unit >= state.units() { return; }
     if !state.markers_meta.iter().any(|m| m.carry && m.carried_by == unit as i64) { return; }
@@ -127,7 +129,8 @@ pub fn drop_carried(state: &mut State, unit: usize) {
         }
     }
     let radius = state.radii[unit].first().copied().unwrap_or(0.016);
-    let distance = radius + crate::IN2M;
+    let drop_in = state.markers_meta.iter().find(|m| m.carry && m.carried_by == unit as i64).map_or(0.0, |m| m.drop_in);
+    let distance = radius + if drop_in > 0.0 { drop_in } else { 1.0 } * crate::IN2M;
     let point = [centre[0] + direction[0] * distance, centre[1], centre[2] + direction[1] * distance];
     for i in 0..state.markers_meta.len() {
         if state.markers_meta[i].carry && state.markers_meta[i].carried_by == unit as i64 {
@@ -340,4 +343,153 @@ pub fn mission_winner(
         return if alive1 > alive2 { "p1" } else { "p2" };
     }
     "draw"
+}
+
+/// R11a: a marker's horizontal point in inches — a CARRIED marker sits at its
+/// carrier's first model, less that model's base radius (the carrier's nearest
+/// base edge, the same measure as `control_gap_in`); a free one at its spot.
+pub(crate) fn marker_point_in(state: &State, i: usize) -> Option<([f64; 2], f64)> {
+    let mk = state.markers_meta.get(i)?;
+    if mk.destroyed {
+        return None;
+    }
+    if mk.carry && mk.carried_by >= 0 {
+        let k = mk.carried_by as usize;
+        let p = *state.positions.get(k)?.first()?;
+        let r = state.radii.get(k).and_then(|rs| rs.first()).copied().unwrap_or(0.0);
+        return Some(([p[0] / IN2M, p[2] / IN2M], r / IN2M));
+    }
+    let p = state.objectives.get(i)?.pos;
+    Some(([p[0] / IN2M, p[2] / IN2M], 0.0))
+}
+
+/// Attack & Defend VIP verdict: a marker within 6" of the edge OPPOSITE the
+/// one the defender deployed on (`deploy_edge` = the z sign of that edge,
+/// +1/-1) means the defender wins, otherwise the attacker. No roles = draw.
+pub fn escort_winner(state: &State, deploy_edge: i64, table_d_in: f64) -> &'static str {
+    let att = state.attacker;
+    if (att != 1 && att != 2) || deploy_edge == 0 {
+        return "draw";
+    }
+    let target = -(deploy_edge.signum() as f64);
+    let home = (0..state.markers_meta.len()).filter_map(|i| marker_point_in(state, i)).any(
+        |(p, r)| table_d_in / 2.0 - target * p[1] - r <= 6.0 + CONTROL_EPS,
+    );
+    if home { if att == 1 { "p2" } else { "p1" } } else if att == 1 { "p1" } else { "p2" }
+}
+
+/// Smash & Grab / Rescue verdict: a marker within 6" of ANY table edge means
+/// the attacker wins, otherwise the defender. No roles = draw.
+pub fn extract_winner(state: &State, table_w_in: f64, table_d_in: f64) -> &'static str {
+    let att = state.attacker;
+    if att != 1 && att != 2 {
+        return "draw";
+    }
+    let out = (0..state.markers_meta.len()).filter_map(|i| marker_point_in(state, i)).any(|(p, r)| {
+        let gap = (table_w_in / 2.0 - p[0].abs()).min(table_d_in / 2.0 - p[1].abs()) - r;
+        gap <= 6.0 + CONTROL_EPS
+    });
+    if out == (att == 1) { "p1" } else { "p2" }
+}
+
+/// The `escort` / `extract` scoring ids of `BattleSim.mission_winner`; `None`
+/// for every other id, which keeps its own referee.
+pub fn role_winner(scoring: &str, state: &State, deploy_edge: i64, table_w_in: f64, table_d_in: f64) -> Option<&'static str> {
+    match scoring {
+        "escort" => Some(escort_winner(state, deploy_edge, table_d_in)),
+        "extract" => Some(extract_winner(state, table_w_in, table_d_in)),
+        _ => None,
+    }
+}
+
+/// D10b (R10a): the z a VIP marker walks to — straight toward the edge OPPOSITE
+/// `deploy_edge` (its z sign), up to 12", stopping 6" short of that edge; x is
+/// untouched. A marker already inside the 6" stays. The twin of
+/// `SoloController.vip_walk_z`.
+pub fn vip_walk_z(z_in: f64, deploy_edge: i64, depth_in: f64) -> f64 {
+    let dir = -(deploy_edge.signum() as f64);
+    let to_stop = (depth_in / 2.0 - 6.0) * dir - z_in;
+    z_in + dir * (to_stop * dir).clamp(0.0, 12.0)
+}
+
+/// D10b: the round-START move of every mobile marker the DEFENDER (`3 - attacker`)
+/// controls, before any activation. No roles, no table depth or no deploy edge = no move.
+pub fn apply_marker_move(state: &mut State, table_d_in: f64) {
+    let att = state.attacker;
+    if (att != 1 && att != 2) || table_d_in <= 0.0 {
+        return;
+    }
+    for i in 0..state.markers_meta.len().min(state.objectives.len()) {
+        let mk = &state.markers_meta[i];
+        if !mk.mobile || mk.destroyed || mk.deploy_edge == 0 || state.objectives[i].owner != 3 - att {
+            continue;
+        }
+        let z_in = state.objectives[i].pos[2] / IN2M;
+        state.objectives[i].pos[2] = vip_walk_z(z_in, mk.deploy_edge, table_d_in) * IN2M;
+    }
+}
+
+/// One secret marker turned up by `apply_reveal_step`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reveal {
+    pub index: usize,
+    pub secret: String,
+    pub unit: usize,
+}
+
+/// D12b — the round-end reveal, the twin of `SoloController.secret_reveal_step` plus the trap's
+/// dice. Every unrevealed secret marker the ATTACKER holds (`owners`) is turned up by its nearest
+/// eligible attacker unit (`can_hold_marker`, strict `<` in capture order): a relic stays (the carry
+/// step picks it up next); a trap or an empty marker is removed (`destroyed`, owner zeroed). A trap
+/// then hits the revealing unit: one tray die, D6+1 hits, saved on the same tray and landed. Without
+/// a tray (expected-value dice) the trap costs nothing — the tray path only, like Mend.
+pub fn apply_reveal_step(
+    statics: &[crate::unit::UnitStatic],
+    state: &mut State,
+    owners: &mut [i64],
+    mut tray: Option<&mut crate::dice::Tray>,
+) -> (Vec<Reveal>, Vec<crate::dice::Roll>) {
+    let att = state.attacker;
+    let (mut events, mut rolls) = (Vec::new(), Vec::new());
+    if att != 1 && att != 2 {
+        return (events, rolls);
+    }
+    for i in 0..state.markers_meta.len().min(state.objectives.len()) {
+        let mk = &state.markers_meta[i];
+        let Some(kind) = mk.secret.clone() else { continue };
+        if mk.revealed || mk.destroyed || owners.get(i).copied() != Some(att) {
+            continue;
+        }
+        let obj = state.objectives[i].pos;
+        let mut best: Option<(usize, f64)> = None;
+        for k in 0..state.units() {
+            if state.player[k] != att || !can_hold_marker(state, k, state.round) {
+                continue;
+            }
+            let gap = control_gap_in(state, k, obj);
+            if best.map_or(true, |(_, g)| gap < g) {
+                best = Some((k, gap));
+            }
+        }
+        let Some((unit, _)) = best else { continue };
+        state.markers_meta[i].revealed = true;
+        if kind != "relic" {
+            state.markers_meta[i].destroyed = true;
+            owners[i] = 0;
+        }
+        events.push(Reveal { index: i, secret: kind.clone(), unit });
+        if kind != "trap" {
+            continue;
+        }
+        let Some(t) = tray.as_deref_mut() else { continue };
+        let die = t.roll(1);
+        let hits = i64::from(die[0]) + 1;
+        let us = &statics[state.roster.profile[unit]];
+        rolls.push(crate::dice::Roll { kind: "attack", count: 1, target: 1, faces: die, owner: us.name.to_string() });
+        let def = crate::sim::ctx_of(us, state, unit);
+        let out = crate::dice::resolve_storm_hits_with_tray(hits, 0, false, false, &def, &us.name, t);
+        rolls.extend(out.rolls.iter().cloned());
+        crate::sim::land_wounds(state, unit, out.wounds);
+    }
+    (events, rolls)
 }

@@ -152,6 +152,65 @@ def test_carry_catalog_entries_pin_three_relics_and_scoring():
         ]
 
 
+def test_smash_and_grab_catalog_entry_pins_rounds_roles_and_secret_markers():
+    snap = sp.resolve_mission("smash_and_grab", REPO)
+    assert snap["name"] == "Smash & Grab" and snap["scoring"] == "extract"
+    assert snap["rounds"] == 6 and snap["roles"] is True and snap["attacker_points_factor"] == 1.25
+    assert snap["markers"]["count"] == "d3+2" and snap["markers"]["secret"] is True
+    assert snap["markers"]["placer"] == "defender"
+    assert "carry" not in snap["markers"]
+    assert sp.mission_markers(snap["markers"], 4) == [{"secret": "", "revealed": False}] * 4
+
+
+def test_last_stand_catalog_entry_pins_phases_recycling_and_the_central_marker():
+    snap = sp.resolve_mission("last_stand", REPO)
+    assert snap["name"] == "Last Stand" and snap["scoring"] == "end" and snap["rounds"] == 6 and snap["roles"] is True
+    assert "attacker_points_factor" not in snap
+    assert snap["markers"] == {"count": 1, "placement": "table_centre"}
+    assert snap["reserves"] == {"who": "attacker", "recycle": True, "arrive_on": 6, "from_round": 2,
+                                "zone": "edge_band_12", "gates": {}}
+    ph = sp._phase_args(snap, 1, REPO)   # attacker = slot 1: the defender (side 1) goes first
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "all"), (0, "all")]
+    assert sp._reserve_args(snap, 1)[0] == [True, False], "only the attacker recycles"
+
+
+def test_ambush_catalog_entry_pins_phases_gates_and_d3_markers():
+    snap = sp.resolve_mission("ambush", REPO)
+    assert snap["name"] == "Ambush" and snap["scoring"] == "end" and snap["rounds"] == 6 and snap["roles"] is True
+    assert "attacker_points_factor" not in snap and "reserves" not in snap
+    assert snap["markers"]["count"] == "d3+0" and snap["markers"]["placement"] == "alternate"
+    ph = sp._phase_args(snap, 1, REPO)   # attacker = slot 1; the defender is slot 2 (side index 1)
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "half"), (0, "all"), (1, "rest")]
+    assert "gates" not in ph[0]
+    assert ph[1]["gates"] == {"min_from_enemy_in": 12, "max_from_friend_in": 6}
+    assert ph[2]["gates"] == {"min_from_enemy_in": 12}
+
+
+def test_the_raid_catalog_entry_pins_disc_frame_rest_and_the_attackers_points():
+    snap = sp.resolve_mission("the_raid", REPO)
+    assert snap["name"] == "The Raid" and snap["scoring"] == "end" and snap["rounds"] == 6 and snap["roles"] is True
+    assert snap["attacker_points_factor"] == 1.25 and "reserves" not in snap
+    assert snap["markers"] == {"count": 1, "placement": "table_centre"}
+    ph = sp._phase_args(snap, 1, REPO)   # attacker = slot 1; the defender is slot 2 (side index 1)
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "half"), (0, "all"), (1, "rest")]
+    assert "gates" not in ph[0] and "gates" not in ph[1]
+    assert ph[2]["gates"] == {"min_from_enemy_in": 12, "min_from_marker_in": 12}
+    assert sp._ai_attacker(snap, 2) == 2, "the +25 % side is the one the roll-off winner takes (R7a)"
+
+
+def test_the_rescue_catalog_entry_pins_the_carry_marker_reserves_and_phases():
+    snap = sp.resolve_mission("the_rescue", REPO)
+    assert snap["name"] == "The Rescue" and snap["scoring"] == "extract" and snap["rounds"] == 6 and snap["roles"] is True
+    assert snap["attacker_points_factor"] == 1.25
+    assert snap["markers"] == {"count": 1, "placement": "table_centre", "carry": True, "carry_by": "attacker", "drop_in": 6}
+    assert sp.mission_markers(snap["markers"], 1) == [{"carry": True, "carried_by": -1, "drop_in": 6.0, "attacker_only": True}]
+    flags, cfg = sp._reserve_args(snap, 1)
+    assert flags == [True, True] and cfg["arrive_on"] == 4 and cfg["from_round"] == 2 and "recycle" not in cfg
+    assert cfg["gates"] == {"min_from_enemy_in": 12, "min_from_marker_in": 12}
+    ph = sp._phase_args(snap, 1, REPO)
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "half"), (0, "half")]
+
+
 @needs_lists
 def test_a_six_round_catalog_mission_plays_six_rounds_and_duel_stays_at_four():
     """NML-1010 D1: the match length is catalog data. No shipped mission is longer than 4,
@@ -186,3 +245,343 @@ def test_roles_mission_stamps_the_roll_off_winners_pick_and_duel_stays_roles_fre
         del catalog["roles_bonus"], catalog["roles_even"]
     assert {bonus["mission"]["role_p1"], even["mission"]["role_p1"]} == {"attacker", "defender"}
     assert "role_p1" not in duel["mission"]
+
+
+def test_style_zone_args_bound_a_disc_by_its_square_and_front_line_has_none():
+    """NML-1010 D5: the pair the Rust spot search takes — the disc list plus its bounding rect."""
+    assert sp.resolve_zone_style({"deployment": "front_line"}, REPO) is None
+    style = sp.resolve_zone_style({"deployment": "centre_disc_12"}, REPO)
+    rect, zl = sp._style_zone_args(style, "1")
+    r = 12.0 * sp.IN2M
+    assert rect == pytest.approx([-r, -r, 2 * r, 2 * r]) and zl == [{"disc": {"c": [0, 0], "r_in": 12}}]
+
+
+@needs_lists
+def test_an_arena_game_hands_the_missions_zone_to_the_deploy_pipeline(monkeypatch):
+    """The disc mission's zone reaches `nml_core.deploy_side`; duel's (front_line) stays None."""
+    core = nml_core.load(str(REPO))
+    sp.resolve_mission("duel", REPO)
+    catalog = sp._MISSION_CATALOG_CACHE[str(REPO)]
+    catalog["disc_fixture"] = dict(catalog["duel"], deployment="centre_disc_12")
+    seen: list = []
+    real = nml_core.deploy_side
+
+    def spy(*a, **kw):
+        seen.append(kw.get("zones"))
+        return real(*a, **kw)
+
+    monkeypatch.setattr(nml_core, "deploy_side", spy)
+    try:
+        for m in ("disc_fixture", "duel"):
+            sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission=m, deployment="arena", **FAST)
+    finally:
+        del catalog["disc_fixture"]
+    disc = [{"disc": {"c": [0, 0], "r_in": 12}}]
+    assert seen == [disc, disc, None, None]  # two deploy_side calls (one per slot) per game
+
+
+def test_roles_decide_each_slots_gates_and_a_roles_less_mission_has_none():
+    """NML-1010 D6b: R7a picks the attacker from the roll-off winner; the catalog gates follow the role."""
+    ad = {"roles": True, "attacker_points_factor": 1.25,
+          "deploy_gates": {"attacker": {"min_from_enemy_in": 12}, "defender": {"max_from_friend_in": 6}}}
+    assert sp._ai_attacker(ad, 2) == 2 and sp._ai_attacker(dict(ad, attacker_points_factor=1.0), 2) == 1
+    assert sp._ai_attacker({"scoring": "end"}, 2) == 0
+    assert sp._role_gates(ad, 2) == {"1": {"max_from_friend_in": 6}, "2": {"min_from_enemy_in": 12}}
+    assert sp._role_gates(ad, 0) == {} and sp._role_gates({"roles": True}, 1) == {}
+
+
+@needs_lists
+def test_an_interleaved_game_hands_each_side_its_role_gates_to_the_deploy_pipeline(monkeypatch):
+    core = nml_core.load(str(REPO))
+    sp.resolve_mission("duel", REPO)
+    catalog = sp._MISSION_CATALOG_CACHE[str(REPO)]
+    gates = {"attacker": {"min_from_enemy_in": 12}, "defender": {"max_from_friend_in": 6}}
+    catalog["gates_fixture"] = dict(catalog["duel"], roles=True, attacker_points_factor=1.25, deploy_gates=gates)
+    seen: list = []
+    real = nml_core.deploy_interleaved
+
+    def spy(*a, **kw):
+        seen.append((kw.get("gates1"), kw.get("gates2")))
+        return real(*a, **kw)
+
+    monkeypatch.setattr(nml_core, "deploy_interleaved", spy)
+    try:
+        res = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="gates_fixture",
+                           deployment="interleaved", **FAST)
+        sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="duel", deployment="interleaved", **FAST)
+    finally:
+        del catalog["gates_fixture"]
+    # the winner (opener) attacks under factor 1.25; P1's role is stamped in the result
+    want = (gates["attacker"], gates["defender"]) if res["mission"]["role_p1"] == "attacker" else (gates["defender"], gates["attacker"])
+    assert seen == [want, (None, None)]
+
+
+def test_phase_args_map_roles_to_sides_and_styles_to_zones():
+    """NML-1010 D7b: attacker slot 1 -> side 0, the defender -> side 1; a style gives rect + shape."""
+    md = {"roles": True, "deploy_phases": [["defender", "half", "centre_disc_12"], ["attacker", "all", "edge_band_12"]]}
+    ph = sp._phase_args(md, 1, REPO)
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "half"), (0, "all")]
+    assert ph[0]["zones"] == [{"disc": {"c": [0, 0], "r_in": 12}}] and len(ph[1]["zones"]) == 4
+    assert [p["side"] for p in sp._phase_args(md, 2, REPO)] == [0, 1]
+    assert sp._phase_args(md, 0, REPO) == [] and sp._phase_args({"roles": True}, 1, REPO) == []
+
+
+def test_vip_start_and_disc_style_twin_the_table_rule():
+    """D14.4b: the defender's own edge, centre line, 3 in in; `deploy_edge` its z sign; a disc for both slots."""
+    assert sp.vip_start(1) == ([0.0, -21.0], -1) and sp.vip_start(2) == ([0.0, 21.0], 1)
+    assert sp.disc_style([0.0, 21.0], 12.0)["zones"] == {"1": [{"disc": {"c": [0.0, 21.0], "r_in": 12.0}}],
+                                                         "2": [{"disc": {"c": [0.0, 21.0], "r_in": 12.0}}]}
+
+
+def test_vip_setup_arms_the_marker_the_edge_the_owner_and_the_runtime_zone():
+    md = {"roles": True, "markers": {"count": 1, "placement": "vip_edge", "mobile": True}}
+    vip = sp._vip_setup(md, 1)   # slot 1 attacks, slot 2 defends
+    assert vip["defender"] == 2 and vip["deploy_edge"] == 1
+    assert vip["objectives"] == [[0.0, 0.0, sp.f32(21.0 * sp.IN2M)]]
+    assert vip["styles"]["marker_disc_12"]["zones"]["2"][0]["disc"]["c"] == [0.0, 21.0]
+    assert sp._vip_setup(md, 0) is None and sp._vip_setup({"roles": True, "markers": {"count": 1}}, 1) is None
+    assert sp.mission_markers(md["markers"], 1) == [{"mobile": True, "deploy_edge": 0}]
+
+
+def test_phase_args_resolve_a_runtime_style_id():
+    md = {"roles": True, "deploy_phases": [["defender", "all", "marker_disc_12"], ["attacker", "all", "edge_band_12"]]}
+    vip = sp._vip_setup({"roles": True, "markers": {"mobile": True}}, 1)
+    ph = sp._phase_args(md, 1, REPO, vip["styles"])
+    assert ph[0]["side"] == 1 and ph[0]["zones"] == [{"disc": {"c": [0.0, 21.0], "r_in": 12.0}}]
+    assert ph[0]["zone"] == pytest.approx([-12 * sp.IN2M, 9 * sp.IN2M, 24 * sp.IN2M, 24 * sp.IN2M])
+    with pytest.raises(KeyError):
+        sp._phase_args(md, 1, REPO)   # without the runtime style the id is unknown, loudly
+
+
+def test_vip_escort_catalog_entry_pins_phases_gates_and_the_mobile_marker():
+    snap = sp.resolve_mission("vip_escort", REPO)
+    assert snap["name"] == "VIP Escort" and snap["scoring"] == "escort" and snap["rounds"] == 6
+    assert snap["roles"] is True and "attacker_points_factor" not in snap
+    assert snap["markers"] == {"count": 1, "placement": "vip_edge", "mobile": True}
+    assert snap["deploy_gates"] == {"attacker": {"min_from_enemy_in": 12}}
+    vip = sp._vip_setup(snap, 1)
+    ph = sp._phase_args(snap, 1, REPO, vip["styles"])   # attacker = slot 1: the defender (side 1) goes first
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "all"), (0, "all")]
+    assert sp._role_gates(snap, 1) == {"1": {"min_from_enemy_in": 12}, "2": None}
+
+
+@needs_lists
+def test_an_arena_vip_game_starts_the_marker_at_the_defender_edge_and_walks_it(monkeypatch):
+    core = nml_core.load(str(REPO))
+    sp.resolve_mission("duel", REPO)
+    catalog = sp._MISSION_CATALOG_CACHE[str(REPO)]
+    catalog["vip_fixture"] = dict(catalog["duel"], rounds=6, roles=True, scoring="escort",
+                                  markers={"count": 1, "placement": "vip_edge", "mobile": True},
+                                  deploy_phases=[["defender", "all", "marker_disc_12"], ["attacker", "all", "edge_band_12"]])
+    walks: list[tuple[float, float]] = []
+
+    class Spy:  # the pyo3 Core is read-only: delegate everything, record the round-start walk
+        def __getattr__(self, name):
+            return getattr(core, name)
+
+        def apply_marker_move(self, state, depth):
+            before = state.plain()["objectives"][0]["pos"][2] / sp.IN2M
+            out = core.apply_marker_move(state, depth)
+            walks.append((before, out.plain()["objectives"][0]["pos"][2] / sp.IN2M))
+            return out
+
+    try:
+        res = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, Spy(), mission="vip_fixture", deployment="arena", **FAST)
+    finally:
+        del catalog["vip_fixture"]
+    assert res["rounds_played"] == 6 and res["mission"]["objective_count"] == 1
+    assert res["winner"] in ("p1", "p2", "draw") and res["mission"]["role_p1"] in ("attacker", "defender")
+    assert len(walks) == 6, "the walk runs at every round start"
+    start = walks[0][0]
+    assert abs(abs(start) - 21.0) < 0.01, "the VIP starts 3 in from a table edge"
+    assert any(abs(b - a) > 0.01 for a, b in walks), "and the defender walks it at least once (12 in toward the far edge)"
+
+
+@needs_lists
+def test_an_arena_game_runs_the_missions_phases_through_deploy_phased(monkeypatch):
+    core = nml_core.load(str(REPO))
+    sp.resolve_mission("duel", REPO)
+    catalog = sp._MISSION_CATALOG_CACHE[str(REPO)]
+    catalog["phase_fixture"] = dict(catalog["duel"], roles=True, attacker_points_factor=1.25,
+                                    deploy_phases=[["defender", "half", "centre_disc_12"], ["attacker", "all", "edge_band_12"],
+                                                   ["defender", "rest", "anywhere"]])
+    seen: list = []
+    real = nml_core.deploy_phased
+
+    def spy(*a, **kw):
+        out = real(*a, **kw)
+        seen.append([e[0] for e in out["sequence"]])
+        return out
+
+    monkeypatch.setattr(nml_core, "deploy_phased", spy)
+    try:
+        res = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="phase_fixture", deployment="arena", **FAST)
+        sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="duel", deployment="arena", **FAST)
+    finally:
+        del catalog["phase_fixture"]
+    assert len(seen) == 1, "duel has no phases"
+    seq = seen[0]
+    attacker = 1 if res["mission"]["role_p1"] == "attacker" else 2
+    defender = 3 - attacker
+    first_attack = seq.index(attacker)
+    assert seq[:first_attack] and set(seq[:first_attack]) == {defender}, "the defender's half goes first"
+    assert seq[-1] == defender or defender in seq[first_attack:], "the defender's rest follows the attacker"
+
+
+class _Dice:
+    """A scripted game-stream stand-in: `randi_range` answers the queued faces in order."""
+
+    def __init__(self, faces):
+        self.faces = list(faces)
+
+    def randi_range(self, lo, hi):
+        return self.faces.pop(0)
+
+
+def _reserve_fixture():
+    plain = {"units": {"m1": {"player": 1, "dormant": True, "dormant_models": 2, "dormant_wounds": [1, 1],
+                              "earliest_arrival_round": 2, "positions": [], "radii": []}}}
+    reads = {"m1": {"repel_m": 0.0, "beacon": False, "beacon_r_m": 0.0, "ring_m": 0.0, "radius": 0.04,
+                    "footprint": [[0.0, 0.0]], "base_r": 0.016, "flying": False}}
+    return plain, reads
+
+
+def test_a_mission_reserve_arrives_only_on_the_winning_die_and_inside_its_zone():
+    """NML-1010 D8b: one die per held unit per round from from_round; a 4+ lands it in the 12" frame."""
+    cfg = {"from_round": 2, "arrive_on": 4, "zone": "edge_band_12",
+           "gates": {"min_from_enemy_in": 12, "min_from_marker_in": 12}}
+    zl = sp._style_zone_args(sp._style_by_id("edge_band_12", REPO), "1")[1]
+    objs = [[0.0, 0.0, 0.0]]
+
+    def run(round_no, faces):
+        plain, reads = _reserve_fixture()
+        dice = _Dice(faces)
+        n = sp._arrive_reserves(plain, reads, None, objs, 1, round_no,
+                                mission={"keys": {"m1"}, "cfg": cfg, "rng": dice, "zones": zl})
+        return n, plain["units"]["m1"], dice.faces
+
+    n, u, left = run(1, [6])
+    assert n == 0 and u["dormant"] and left == [6], "before from_round: no die is even rolled"
+    n, u, left = run(2, [3])
+    assert n == 0 and u["dormant"] and left == [], "a 3 on a 4+ stays in reserve"
+    n, u, _ = run(2, [4])
+    assert n == 1 and not u["dormant"] and u["ambush_arrived_round"] == 2
+    x, z = u["positions"][0][0], u["positions"][0][2]
+    assert abs(x) >= 24 * sp.IN2M - 1e-6 or abs(z) >= 12 * sp.IN2M - 1e-6, "inside the 12\" frame, not the centre"
+    assert (x * x + z * z) ** 0.5 > 12 * sp.IN2M + 0.016, "more than the marker gate from the marker"
+
+
+def test_core_recycles_a_destroyed_unit_once_and_the_plain_hook_applies_the_last_stand_rules():
+    """NML-1010 D11b: `recycle_destroyed` parks the covered side's dead (once); at a round start the
+    plain hook makes the copy due from the mission's first reserve round and drops the reserves of a
+    side with no unit left on the table."""
+    lines = (FIXTURES / "acts_25.jsonl").read_text().splitlines()
+    header, plain = json.loads(lines[0]), json.loads(lines[1])["state"]
+    core = nml_core.load(str(REPO))
+    core.set_header(header)
+    p2 = [k for k, u in plain["units"].items() if u["player"] == 2]
+    for k, u in plain["units"].items():
+        u.update(alive=0 if k in p2 else 1, positions=[] if k in p2 else [[1.0, 0, 1.0]],
+                 radii=[] if k in p2 else [0.02], wounds=[] if k in p2 else [1], shaken=False, aircraft=False)
+    state = core.state_of(plain)
+    state, keys = nml_core.recycle_destroyed(state, 2, 2)
+    assert sorted(keys) == sorted(p2)
+    back = state.plain()["units"]
+    assert all(back[k].get("dormant") for k in keys)
+    _, again = nml_core.recycle_destroyed(state, 2, 3)
+    assert again == [], "parked units are skipped"
+    cfg = {"from_round": 4, "arrive_on": 6, "recycle": True}
+    units = state.plain()["units"]
+    sp._last_stand_plain({"units": units}, 3, cfg, [False, True], set(keys))
+    assert all(units[k]["earliest_arrival_round"] == 4 for k in keys), "due from the first reserve round"
+    # round 4 and the covered side has nothing on the table: the reserves are lost
+    sp._last_stand_plain({"units": units}, 4, cfg, [False, True], set(keys))
+    assert all(not units[k]["dormant"] and units[k]["alive"] == 0 for k in keys)
+
+
+def test_a_phase_carries_its_own_gates_as_the_optional_fourth_element():
+    """NML-1010 D7d: `_phase_args` forwards a phase's own gates; an entry without them stays as it was."""
+    md = {"roles": True, "deploy_phases": [["defender", "half", "centre_disc_12"],
+                                           ["attacker", "all", "edge_band_12", {"min_from_enemy_in": 12}]]}
+    ph = sp._phase_args(md, 1, REPO)
+    assert "gates" not in ph[0] and ph[1]["gates"] == {"min_from_enemy_in": 12}
+
+
+def test_the_own_phase_zone_is_the_mission_style_at_each_sides_own_half():
+    """NML-1010 D14.2: "own" resolves per side — slot 1 holds the -Z band of front_line, slot 2 the +Z band."""
+    md = {"roles": True, "deployment": "front_line",
+          "deploy_phases": [["defender", "half", "own"], ["attacker", "all", "anywhere"]]}
+    ph = sp._phase_args(md, 1, REPO)   # attacker = slot 1, so the defender is slot 2 (side index 1)
+    assert ph[0]["side"] == 1 and ph[1]["side"] == 0
+    in2 = sp.IN2M
+    # defender: the +Z band, z in [12", 24"]; attacker "anywhere" = the whole table
+    assert ph[0]["zone"] == pytest.approx([-36 * in2, 12 * in2, 72 * in2, 12 * in2])
+    assert ph[1]["zone"] == pytest.approx([-36 * in2, -24 * in2, 72 * in2, 48 * in2])
+    ph2 = sp._phase_args(md, 2, REPO)  # attacker = slot 2: the defender is slot 1, the -Z band
+    assert ph2[0]["side"] == 0 and ph2[0]["zone"] == pytest.approx([-36 * in2, -24 * in2, 72 * in2, 12 * in2])
+
+
+def test_a_carry_markers_drop_in_reaches_the_core_and_moves_the_drop_point():
+    """NML-1010 D14.5: `mission_markers` carries the spec's `drop_in`; the core drops the relic that far
+    past the carrier's base edge (Rescue: 6"), and 1" without it."""
+    assert sp.mission_markers({"carry": True, "drop_in": 6}, 1) == [{"carry": True, "carried_by": -1, "drop_in": 6.0}]
+    assert "drop_in" not in sp.mission_markers({"carry": True}, 1)[0]
+    lines = (FIXTURES / "acts_25.jsonl").read_text().splitlines()
+    header, plain = json.loads(lines[0]), json.loads(lines[1])["state"]
+    core = nml_core.load(str(REPO))
+    core.set_header(header)
+
+    def dropped_distance(drop_in):
+        p = json.loads(json.dumps(plain))
+        first = {}
+        for i, (key, unit) in enumerate(p["units"].items()):
+            first.setdefault(unit["player"], (i, key))
+            unit.update(alive=1, positions=[[2.0 + i, 0, 2.0 + i]], radii=[0.02], wounds=[1],
+                        shaken=False, aircraft=False, ambush_arrived_round=0)
+        carrier_i, carrier_key = first[1]
+        p["units"][carrier_key]["positions"] = [[0.04, 0, 0]]
+        p["objectives"] = [{"pos": [0, 0, 0], "owner": 0}]
+        p["markers_meta"] = [sp.mission_markers({"carry": True, **({"drop_in": drop_in} if drop_in else {})}, 1)[0]]
+        state = core.apply_carry_step(core.state_of(p), [1])
+        assert state.plain()["markers_meta"][0]["carried_by"] == carrier_i
+        pos = core.drop_carried(state, carrier_i).plain()["objectives"][0]["pos"]
+        return ((pos[0] - 0.04) ** 2 + pos[2] ** 2) ** 0.5
+
+    d1, d6 = dropped_distance(None), dropped_distance(6)
+    assert d6 - d1 == pytest.approx(5 * 0.0254, abs=1e-6), (d1, d6)
+
+
+def test_a_carry_by_attacker_spec_marks_the_marker_attacker_only_and_the_core_honours_it():
+    """NML-1010 D14.5d: the catalog's `carry_by: attacker` reaches the core as `attacker_only`; a defender
+    unit on the marker does not pick it up, the attacker's does."""
+    assert sp.mission_markers({"carry": True, "carry_by": "attacker"}, 1)[0]["attacker_only"] is True
+    assert "attacker_only" not in sp.mission_markers({"carry": True}, 1)[0]
+    lines = (FIXTURES / "acts_25.jsonl").read_text().splitlines()
+    header, plain = json.loads(lines[0]), json.loads(lines[1])["state"]
+    core = nml_core.load(str(REPO))
+    core.set_header(header)
+
+    def carrier_of(attacker):
+        p = json.loads(json.dumps(plain))
+        first = {}
+        for i, (key, unit) in enumerate(p["units"].items()):
+            first.setdefault(unit["player"], (i, key))
+            unit.update(alive=1, positions=[[2.0 + i, 0, 2.0 + i]], radii=[0.02], wounds=[1],
+                        shaken=False, aircraft=False, ambush_arrived_round=0)
+        p["units"][first[1][1]]["positions"] = [[0.04, 0, 0]]
+        p["objectives"] = [{"pos": [0, 0, 0], "owner": 0}]
+        p["markers_meta"] = [sp.mission_markers({"carry": True, "carry_by": "attacker"}, 1)[0]]
+        p["attacker"] = attacker
+        return core.apply_carry_step(core.state_of(p), [1]).plain()["markers_meta"][0].get("carried_by", -1)
+
+    assert carrier_of(2) == -1, "side 1 defends: it cannot carry"
+    assert carrier_of(1) >= 0, "side 1 attacks: it picks the relic up"
+
+
+@needs_lists
+def test_a_game_with_mission_reserves_on_both_sides_plays_to_the_end():
+    """NML-1010 D14.5e: the Rescue sets half of EACH army aside; the pre-game finish used to index a
+    placement for every non-Ambush unit and panicked on the set-aside ones ("no entry found for key")."""
+    core = nml_core.load(str(REPO))
+    res = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, mission="the_rescue", deployment="arena", **FAST)
+    assert res["rounds_played"] == 6 and res["mission"]["name"] == "the_rescue"

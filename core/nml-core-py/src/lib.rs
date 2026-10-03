@@ -322,8 +322,20 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
     // stamp law), so a default pick object is the one it always was.
     if let Some(t) = &p.tree {
         let root: Vec<Value> = t.root.iter().map(|&(i, n, m)| serde_json::json!([i, n, m])).collect();
-        let tree = serde_json::json!({"completed": t.completed, "deadline_hit": t.deadline_hit, "root": root});
+        let mut tree = serde_json::json!({"completed": t.completed, "deadline_hit": t.deadline_hit, "root": root,
+            "batches": t.batches, "frontier": t.frontier, "terminal": t.terminal, "elapsed_us": t.elapsed_us});
+        if let Some(f) = t.fallback {
+            tree["fallback"] = f.into();
+        }
         trace.insert("tree".into(), tree);
+    }
+    // `deadline_us`: the key rides ONLY a pool pick where the knob was set.
+    if let Some(d) = &p.deadline {
+        let mut m = serde_json::json!({"completed": d.completed, "cut": d.cut, "elapsed_us": d.elapsed_us});
+        if let Some(f) = d.fallback {
+            m["fallback"] = f.into();
+        }
+        trace.insert("deadline".into(), m);
     }
     out.insert("trace".into(), Value::Object(trace));
     out.insert(
@@ -334,6 +346,9 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
 }
 
 // ------------------------------------------------------------------ State ---
+
+/// `apply_reveal_step`'s return: `(state, owners, events, rolls)`.
+type RevealOut = (PyState, Vec<i64>, Py<PyAny>, Py<PyAny>);
 
 /// One battle state. Opaque on purpose: the struct-of-arrays below is the whole
 /// point of the port, and handing it out as a dict per call would spend more
@@ -1957,6 +1972,45 @@ impl Core {
         PyState::derived(st)
     }
 
+    /// The `escort` / `extract` verdicts of `BattleSim.mission_winner` (D9);
+    /// `None` for any other scoring id.
+    fn role_winner(&self, state: PyRef<'_, PyState>, scoring: &str, deploy_edge: i64, table_w_in: f64, table_d_in: f64) -> Option<String> {
+        mission::role_winner(scoring, &state.inner, deploy_edge, table_w_in, table_d_in).map(str::to_string)
+    }
+
+    /// D10b: the round-start move of the mobile (VIP) marker the defender controls.
+    fn apply_marker_move(&self, state: PyRef<'_, PyState>, table_d_in: f64) -> PyState {
+        let mut st = state.inner.clone();
+        mission::apply_marker_move(&mut st, table_d_in);
+        PyState::derived(st)
+    }
+
+    /// D12b: the round-end secret-marker reveal (relic stays, trap/empty removed, a trap hits the
+    /// revealing unit on `tray`; no tray = no trap hits). Returns `(state, owners, events, rolls)`.
+    #[pyo3(signature = (state, owners, tray=None))]
+    fn apply_reveal_step(
+        &mut self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        owners: Vec<i64>,
+        tray: Option<&mut PyTray>,
+    ) -> PyResult<RevealOut> {
+        let statics = self.statics_for(&state.inner)?;
+        let mut st = state.inner.clone();
+        let mut own = owners;
+        let (events, rolls) = mission::apply_reveal_step(&statics, &mut st, &mut own, tray.map(|t| &mut t.inner));
+        let ev: Vec<Value> = events
+            .iter()
+            .map(|e| serde_json::json!({"index": e.index, "secret": e.secret, "unit": e.unit}))
+            .collect();
+        let rl: Vec<Value> = rolls
+            .iter()
+            .map(|r| serde_json::json!({"kind": r.kind, "count": r.count, "target": r.target,
+                "faces": r.faces.iter().map(|&f| f as i64).collect::<Vec<i64>>(), "owner": r.owner}))
+            .collect();
+        Ok((PyState::derived(st), own, to_py(py, &Value::Array(ev))?, to_py(py, &Value::Array(rl))?))
+    }
+
     /// Return all relics held by a unit to the deterministic R3a drop point.
     fn drop_carried(&self, state: PyRef<'_, PyState>, unit: usize) -> PyState {
         let mut st = state.inner.clone();
@@ -2512,6 +2566,96 @@ fn write_back(
     }
 }
 
+/// D5: one player's catalog zone list (`[polygon | {"disc": ..}]`) as the spot search's shape.
+fn zone_shape(zones: &Bound<'_, PyAny>) -> PyResult<Vec<objectives::Zone>> {
+    Ok(objectives::zones_of_list(&value_of(zones)?))
+}
+
+/// D6b: a side's distance gates, `{"min_from_enemy_in", "max_from_friend_in", "min_from_marker_in"}`
+/// in inches (the catalog's spelling) as the core's metres.
+fn deploy_gates(gates: &Bound<'_, PyAny>) -> PyResult<deployment::Gates> {
+    Ok(gates_from_value(&value_of(gates)?))
+}
+
+fn gates_from_value(v: &Value) -> deployment::Gates {
+    let m = |k: &str| v.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0) * nmlcore::IN2M;
+    deployment::Gates {
+        min_from_enemy_m: m("min_from_enemy_in"),
+        max_from_friend_m: m("max_from_friend_in"),
+        min_from_marker_m: m("min_from_marker_in"),
+    }
+}
+
+/// D7b: the catalog's deployment PHASES. `phases` = `[{"side": 0|1, "share": "half"|"all"|"rest",
+/// "zone": [x, y, w, h] (metres), "zones": [..catalog zone list..]}, ..]`; same return shape as
+/// `deploy_interleaved`, the sequence phase-major.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+#[pyo3(signature = (units1, units2, zone1, zone2, phases, objectives, board, seed1, seed2, first, rules_epoch=None, gates1=None, gates2=None, reserve1=false, reserve2=false))]
+fn deploy_phased(
+    py: Python<'_>,
+    units1: &Bound<'_, PyAny>,
+    units2: &Bound<'_, PyAny>,
+    zone1: &Bound<'_, PyAny>,
+    zone2: &Bound<'_, PyAny>,
+    phases: &Bound<'_, PyAny>,
+    objectives: &Bound<'_, PyAny>,
+    board: PyRef<'_, Board>,
+    seed1: i64,
+    seed2: i64,
+    first: i64,
+    rules_epoch: Option<u32>,
+    gates1: Option<&Bound<'_, PyAny>>,
+    gates2: Option<&Bound<'_, PyAny>>,
+    reserve1: bool,
+    reserve2: bool,
+) -> PyResult<Py<PyAny>> {
+    let (gate1, gate2) = (gates1.map(deploy_gates).transpose()?, gates2.map(deploy_gates).transpose()?);
+    let specs1: Vec<UnitSpec> = json_of(units1, "units1")?;
+    let specs2: Vec<UnitSpec> = json_of(units2, "units2")?;
+    let z1: [f64; 4] = json_of(zone1, "zone1")?;
+    let z2: [f64; 4] = json_of(zone2, "zone2")?;
+    let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
+    let raw: Vec<serde_json::Value> = json_of(phases, "phases")?;
+    let mut list: Vec<deployment::Phase> = Vec::new();
+    for p in &raw {
+        let z: [f64; 4] = serde_json::from_value(p["zone"].clone()).map_err(|e| Unsupported::new_err(format!("phase zone: {e}")))?;
+        list.push(deployment::Phase {
+            side: p["side"].as_u64().unwrap_or(0) as usize,
+            share: p["share"].as_str().unwrap_or("all").to_string(),
+            rect: Rect::new(z[0], z[1], z[2], z[3]),
+            zones: objectives::zones_of_list(&p["zones"]),
+            gates: p.get("gates").filter(|g| g.is_object()).map(gates_from_value),
+        });
+    }
+    let out = deployment::deploy_phased_reserving(
+        &specs1,
+        &specs2,
+        &Rect::new(z1[0], z1[1], z1[2], z1[3]),
+        &Rect::new(z2[0], z2[1], z2[2], z2[3]),
+        &list,
+        [gate1.as_ref(), gate2.as_ref()],
+        [reserve1, reserve2],
+        &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
+        &board.inner,
+        seed1,
+        seed2,
+        first,
+        rules_epoch.unwrap_or(CURRENT_RULES_EPOCH),
+    );
+    to_py(py, &serde_json::to_value(&out).map_err(|e| Unsupported::new_err(e.to_string()))?)
+}
+
+/// D11b: Last Stand recycling — every destroyed, never-recycled unit of `side` returns to reserve
+/// ONCE as a fresh copy (`deployment::recycle_destroyed`); `(state, [keys])`.
+#[pyfunction]
+fn recycle_destroyed(py: Python<'_>, state: &PyState, side: i64, round_no: i64) -> PyResult<(PyState, Vec<String>)> {
+    let mut out = state.copy(py);
+    let idx = deployment::recycle_destroyed(&mut out.inner, side, round_no);
+    let keys = idx.iter().map(|&i| out.inner.key(i).to_string()).collect();
+    Ok((out, keys))
+}
+
 /// The per-side placement (§3.2's plain-dict signature). `units` = the roster
 /// in list order (ambush rows included; serde has no defaults, every key
 /// present, transport_capacity 0 on the corpus); `objectives` = the rulebook
@@ -2521,7 +2665,8 @@ fn write_back(
 /// `board` = a Board carrying the bank v2 prop layer (`set_bank_props`).
 /// Returns `SideDeploy` as a plain dict.
 #[pyfunction]
-#[pyo3(signature = (units, zone, objectives, board, seed_value, rules_epoch=None))]
+#[pyo3(signature = (units, zone, objectives, board, seed_value, rules_epoch=None, zones=None, gates=None, enemy=None))]
+#[allow(clippy::too_many_arguments)]
 fn deploy_side(
     py: Python<'_>,
     units: &Bound<'_, PyAny>,
@@ -2530,15 +2675,26 @@ fn deploy_side(
     board: PyRef<'_, Board>,
     seed_value: i64,
     rules_epoch: Option<u32>,
+    zones: Option<&Bound<'_, PyAny>>,
+    gates: Option<&Bound<'_, PyAny>>,
+    enemy: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
     let specs: Vec<UnitSpec> = json_of(units, "units")?;
     let z: [f64; 4] = json_of(zone, "zone")?;
+    let shape = zones.map(zone_shape).transpose()?;
+    let gate = gates.map(deploy_gates).transpose()?;
+    let foes: Vec<[f64; 3]> = enemy.map(|e| json_of(e, "enemy")).transpose()?.unwrap_or_default();
+    let foes: Vec<deployment::Occupied> =
+        foes.iter().map(|b| deployment::Occupied { pos: (b[0], b[1]), radius: b[2] }).collect();
     let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
     // The record's rules epoch: the trainer's fresh runs ride the live stamp,
     // a replay pins the corpus's own (e.g. 15 for the recorded pregame dumps).
-    let sd = deployment::deploy_side(
+    let sd = deployment::deploy_side_gated(
         &specs,
         &Rect::new(z[0], z[1], z[2], z[3]),
+        shape.as_deref(),
+        gate.as_ref(),
+        &foes,
         &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
         &board.inner,
         seed_value,
@@ -2587,7 +2743,7 @@ fn no_terrain() -> Terrain {
 /// `_finish_reserve_arrival`), and the caller reads the booking back off the
 /// returned list so the next unit of the same alternating round sees it.
 #[pyfunction]
-#[pyo3(signature = (zone, objectives, occupied, enemies, own_ring_m, radius, footprint, base_r, flying, board=None, beacons=None, edge_band_m=None))]
+#[pyo3(signature = (zone, objectives, occupied, enemies, own_ring_m, radius, footprint, base_r, flying, board=None, beacons=None, edge_band_m=None, zones=None))]
 #[allow(clippy::too_many_arguments)]
 fn arrive_one(
     py: Python<'_>,
@@ -2603,7 +2759,9 @@ fn arrive_one(
     board: Option<PyRef<'_, Board>>,
     beacons: Option<&Bound<'_, PyAny>>,
     edge_band_m: Option<f64>,
+    zones: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
+    let shape = zones.map(zone_shape).transpose()?;
     let z: [f64; 4] = json_of(zone, "zone")?;
     let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
     let mut occ: Vec<deployment::Occupied> = json_of(occupied, "occupied")?;
@@ -2626,8 +2784,9 @@ fn arrive_one(
         Some(band_m) => deployment::ArrivalZone::EdgeStrip { table: rect, band_m },
         None => deployment::ArrivalZone::Rect(rect),
     };
-    let spot = deployment::arrive_one(
+    let spot = deployment::arrive_one_in(
         &zone,
+        shape.as_deref(),
         &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
         &mut occ,
         &ene,
@@ -2668,7 +2827,7 @@ fn place_models(py: Python<'_>, spot: (f64, f64), n: usize) -> PyResult<Py<PyAny
 /// `placement_sequence`, and the one the interleave gate compares.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
-#[pyo3(signature = (units1, units2, zone1, zone2, objectives, board, seed1, seed2, first, rules_epoch=None))]
+#[pyo3(signature = (units1, units2, zone1, zone2, objectives, board, seed1, seed2, first, rules_epoch=None, zones1=None, zones2=None, gates1=None, gates2=None))]
 fn deploy_interleaved(
     py: Python<'_>,
     units1: &Bound<'_, PyAny>,
@@ -2681,17 +2840,25 @@ fn deploy_interleaved(
     seed2: i64,
     first: i64,
     rules_epoch: Option<u32>,
+    zones1: Option<&Bound<'_, PyAny>>,
+    zones2: Option<&Bound<'_, PyAny>>,
+    gates1: Option<&Bound<'_, PyAny>>,
+    gates2: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
+    let (gate1, gate2) = (gates1.map(deploy_gates).transpose()?, gates2.map(deploy_gates).transpose()?);
+    let (shape1, shape2) = (zones1.map(zone_shape).transpose()?, zones2.map(zone_shape).transpose()?);
     let specs1: Vec<UnitSpec> = json_of(units1, "units1")?;
     let specs2: Vec<UnitSpec> = json_of(units2, "units2")?;
     let z1: [f64; 4] = json_of(zone1, "zone1")?;
     let z2: [f64; 4] = json_of(zone2, "zone2")?;
     let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
-    let out = deployment::deploy_interleaved(
+    let out = deployment::deploy_interleaved_gated(
         &specs1,
         &specs2,
         &Rect::new(z1[0], z1[1], z1[2], z1[3]),
         &Rect::new(z2[0], z2[1], z2[2], z2[3]),
+        [shape1.as_deref(), shape2.as_deref()],
+        [gate1.as_ref(), gate2.as_ref()],
         &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
         &board.inner,
         seed1,
@@ -2838,6 +3005,8 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // keys on (see the module's `acts::EPOCH_7_TABLE_RULES` note). Exported so
     // a py-side read's gate uses the same frozen constant, never the literal.
     m.add("EPOCH_7_TABLE_RULES", nmlcore::EPOCH_7_TABLE_RULES)?;
+    // B8: the arena hero fold's py-side gate (`selfplay._deploy_arena`), same reason.
+    m.add("EPOCH_69_HERO_FOLD", nmlcore::acts::EPOCH_69_HERO_FOLD)?;
     m.add("BUILD_COMMIT", BUILD_COMMIT)?;
     m.add("BUILD_DIRTY", env!("NML_BUILD_DIRTY") == "true")?;
     m.add("BUILD_INFO", to_py(m.py(), &build_info())?)?;
@@ -2852,6 +3021,8 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // NML-1152 step 7 — the twin's deployment pipeline for the trainer.
     m.add_function(wrap_pyfunction!(deploy_side, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_interleaved, m)?)?;
+    m.add_function(wrap_pyfunction!(deploy_phased, m)?)?;
+    m.add_function(wrap_pyfunction!(recycle_destroyed, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_finish, m)?)?;
     m.add_function(wrap_pyfunction!(arrive_one, m)?)?;
     m.add_function(wrap_pyfunction!(place_models, m)?)?;

@@ -11,12 +11,32 @@ func before_test() -> void:
 	MissionCatalog.reset_cache()
 
 
-func test_catalog_lists_the_v3_twelve() -> void:
-	# The original ten plus the two carried-marker missions.
+func test_catalog_lists_the_shipped_missions() -> void:
+	# The original ten, the two carried-marker missions, and the Attack & Defend ones that shipped.
 	assert_that(MissionCatalog.mission_ids()).is_equal(
-		["breakthrough", "capture_and_hold", "demolition", "domination", "duel",
-		"headquarters", "king_of_the_hill", "mosh_pit", "pitched_battle",
-		"relic_hunt", "sabotage", "seize_ground"])
+		["ambush", "breakthrough", "capture_and_hold", "demolition", "domination", "duel",
+		"headquarters", "king_of_the_hill", "last_stand", "mosh_pit", "pitched_battle",
+		"relic_hunt", "sabotage", "seize_ground", "smash_and_grab", "the_raid", "the_rescue", "vip_escort"])
+
+
+## D14.6 — Smash & Grab (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles with the
+## attacker's +25 % points, d3+2 markers hiding a trap and a relic, decided by an edge extraction.
+func test_smash_and_grab_is_the_attack_and_defend_extract_mission() -> void:
+	var m := MissionCatalog.get_mission("smash_and_grab")
+	assert_str(str(m["name"])).is_equal("Smash & Grab")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("extract")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_float(float(m["attacker_points_factor"])).is_equal(1.25)
+	assert_str(str(m["deployment"])).is_equal("front_line")
+	var mk: Dictionary = m["markers"]
+	assert_str(str(mk["count"])).is_equal("d3+2")
+	assert_str(str(mk["placement"])).is_equal("alternate")
+	assert_bool(bool(mk["secret"])).is_true()
+	assert_str(str(mk["placer"])).is_equal("defender")
+	assert_bool(mk.has("carry")).is_false()   # only the relic carries, and it is chosen at the roll-off
+	assert_that(MissionCatalog.marker_positions(m, DeploymentCatalog.get_style("front_line"))).is_equal([])
 
 
 func test_carry_missions_have_three_alternate_relics() -> void:
@@ -130,3 +150,132 @@ func test_marker_positions_modes() -> void:
 	assert_that(MissionCatalog.marker_positions(koth, style)).is_equal([Vector2.ZERO])
 	var duel := MissionCatalog.get_mission("duel")
 	assert_that(MissionCatalog.marker_positions(duel, style)).is_equal([])
+
+
+## D14.3 — Last Stand (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles, the defender's whole
+## army in the 12" disc round the central marker, the attacker in the 12" edge frame; a destroyed
+## attacker unit returns to reserve once on a 6; the marker's holder wins.
+func test_last_stand_is_the_attack_and_defend_recycle_mission() -> void:
+	var m := MissionCatalog.get_mission("last_stand")
+	assert_str(str(m["name"])).is_equal("Last Stand")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("end")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_bool(m.has("attacker_points_factor")).override_failure_message("the book grants no +25 % here").is_false()
+	assert_that(m["deploy_phases"]).is_equal([["defender", "all", "centre_disc_12"], ["attacker", "all", "edge_band_12"]])
+	var r: Dictionary = m["reserves"]
+	assert_str(str(r["who"])).is_equal("attacker")
+	assert_bool(bool(r["recycle"])).is_true()
+	assert_int(int(r["arrive_on"])).is_equal(6)
+	assert_str(str(r["zone"])).is_equal("edge_band_12")
+	var style := DeploymentCatalog.get_style("front_line")
+	assert_that(MissionCatalog.marker_positions(m, style)).is_equal([Vector2.ZERO])
+	for id in ["centre_disc_12", "edge_band_12"]:
+		assert_bool(DeploymentCatalog.style_ids().has(id)).is_true()
+
+
+## D14.4 — VIP Escort (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles, one marker the defender
+## walks 12" a round, the defender's whole army in the 12" disc round it, the attacker in the edge frame at
+## least 12" from the enemy; decided by the VIP reaching the edge opposite the one it started on.
+func test_vip_escort_is_the_attack_and_defend_escort_mission() -> void:
+	var m := MissionCatalog.get_mission("vip_escort")
+	assert_str(str(m["name"])).is_equal("VIP Escort")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("escort")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_bool(m.has("attacker_points_factor")).is_false()
+	assert_that(m["deploy_phases"]).is_equal([["defender", "all", "marker_disc_12"], ["attacker", "all", "edge_band_12"]])
+	assert_float(float(m["deploy_gates"]["attacker"]["min_from_enemy_in"])).is_equal(12.0)
+	var mk: Dictionary = m["markers"]
+	assert_int(int(mk["count"])).is_equal(1)
+	assert_bool(bool(mk["mobile"])).is_true()
+	# the spot is chosen at the roles step (MissionCatalog.vip_start), never by the layout
+	assert_that(MissionCatalog.marker_positions(m, DeploymentCatalog.get_style("front_line"))).is_equal([])
+	assert_bool(DeploymentCatalog.style_ids().has("edge_band_12")).is_true()
+	assert_bool(DeploymentCatalog.style_ids().has("marker_disc_12")).override_failure_message(
+		"marker_disc_12 only exists at run time").is_false()
+
+
+## D14.2 — Ambush (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles, d3 markers, the defender
+## deploys half in its own zone, the attacker anywhere >12" from enemies and within 6" of a friend, the
+## defender's rest >12" from enemies; the most markers wins. (The count is spelled "d3+0": the dice-term
+## parsers of table, core and seam read "d3+N".)
+func test_ambush_is_the_attack_and_defend_phase_mission_with_per_phase_gates() -> void:
+	var m := MissionCatalog.get_mission("ambush")
+	assert_str(str(m["name"])).is_equal("Ambush")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("end")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_bool(m.has("attacker_points_factor")).is_false()
+	assert_str(str(m["deployment"])).is_equal("front_line")
+	var ph: Array = m["deploy_phases"]
+	assert_int(ph.size()).is_equal(3)
+	assert_that(ph[0]).is_equal(["defender", "half", "own"])
+	assert_that((ph[1] as Array).slice(0, 3)).is_equal(["attacker", "all", "anywhere"])
+	assert_float(float(ph[1][3]["min_from_enemy_in"])).is_equal(12.0)
+	assert_float(float(ph[1][3]["max_from_friend_in"])).is_equal(6.0)
+	assert_that((ph[2] as Array).slice(0, 3)).is_equal(["defender", "rest", "anywhere"])
+	assert_float(float(ph[2][3]["min_from_enemy_in"])).is_equal(12.0)
+	assert_int((ph[2][3] as Dictionary).size()).is_equal(1)
+	var mk: Dictionary = m["markers"]
+	assert_str(str(mk["placement"])).is_equal("alternate")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	for _i in 20:
+		var n := MissionCatalog.marker_count(m, rng)
+		assert_bool(n >= 1 and n <= 3).override_failure_message("d3 markers, got %d" % n).is_true()
+
+
+## D14.1 — The Raid (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles with the attacker's
+## +25 % points, the defender's marker at the centre with half its army in the 12" disc round it, the
+## attacker anywhere within 12" of an edge, the defender's rest > 12" from enemies and the marker;
+## the marker's holder wins. (The defender's free choice "within 12" of the centre" is the centre itself.)
+func test_the_raid_is_the_attack_and_defend_disc_and_frame_mission() -> void:
+	var m := MissionCatalog.get_mission("the_raid")
+	assert_str(str(m["name"])).is_equal("The Raid")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("end")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_float(float(m["attacker_points_factor"])).is_equal(1.25)
+	var ph: Array = m["deploy_phases"]
+	assert_that((ph[0] as Array)).is_equal(["defender", "half", "centre_disc_12"])
+	assert_that((ph[1] as Array)).is_equal(["attacker", "all", "edge_band_12"])
+	assert_that((ph[2] as Array).slice(0, 3)).is_equal(["defender", "rest", "anywhere"])
+	assert_float(float(ph[2][3]["min_from_enemy_in"])).is_equal(12.0)
+	assert_float(float(ph[2][3]["min_from_marker_in"])).is_equal(12.0)
+	var style := DeploymentCatalog.get_style("front_line")
+	assert_that(MissionCatalog.marker_positions(m, style)).is_equal([Vector2.ZERO])
+
+
+## D14.5 — The Rescue (GF/AoF Advanced Rules v3.5.1, p.27 / p.26): 6 rounds, roles with the attacker's
+## +25 % points, one marker at the centre that only an ATTACKING unit carries (dropped within 6", the
+## defender places it), both sides deploy half in their own zone and keep half in reserve (4+ from round
+## 2, within 12" of an edge, > 12" from enemies and the marker); the attacker wins if the marker ends
+## within 6" of any table edge.
+func test_the_rescue_is_the_attack_and_defend_carry_and_reserve_mission() -> void:
+	var m := MissionCatalog.get_mission("the_rescue")
+	assert_str(str(m["name"])).is_equal("The Rescue")
+	assert_str(str(m["family"])).is_equal("attack_defend")
+	assert_int(int(m["rounds"])).is_equal(6)
+	assert_str(str(m["scoring"])).is_equal("extract")
+	assert_bool(bool(m["roles"])).is_true()
+	assert_float(float(m["attacker_points_factor"])).is_equal(1.25)
+	assert_that(m["deploy_phases"]).is_equal([["defender", "half", "own"], ["attacker", "half", "own"]])
+	var r: Dictionary = m["reserves"]
+	assert_str(str(r["who"])).is_equal("both")
+	assert_int(int(r["arrive_on"])).is_equal(4)
+	assert_int(int(r["from_round"])).is_equal(2)
+	assert_str(str(r["zone"])).is_equal("edge_band_12")
+	assert_bool(r.has("recycle")).is_false()
+	assert_float(float(r["gates"]["min_from_enemy_in"])).is_equal(12.0)
+	assert_float(float(r["gates"]["min_from_marker_in"])).is_equal(12.0)
+	var mk: Dictionary = m["markers"]
+	assert_bool(bool(mk["carry"])).is_true()
+	assert_str(str(mk["carry_by"])).is_equal("attacker")
+	assert_float(float(mk["drop_in"])).is_equal(6.0)
+	var style := DeploymentCatalog.get_style("front_line")
+	assert_that(MissionCatalog.marker_positions(m, style)).is_equal([Vector2.ZERO])

@@ -256,3 +256,82 @@ use super::*;
         // Wound 4: the whole chain is dead now — wasted, not an error.
         assert_eq!(land_deadly_wounds(&mut st, 0, 1, 1, s), 0);
     }
+
+    /// B8 (stage-0 freeze 02.10., row T_c4_L_d0_s2): a joined hero that holds a
+    /// WOUND slot but no POSITION — the trainer's arena fold below
+    /// `EPOCH_69_HERO_FOLD` built exactly that for the hero of an Ambush host.
+    /// The host chain is wiped, the Deadly wound spills onto the ghost hero and
+    /// `positions.remove` on the empty vector panicked the whole process. The
+    /// guard drops the wound slot, removes no position, and COUNTS the desync
+    /// (the stderr line rides on the same counter) — it never panics.
+    #[test]
+    fn a_deadly_spill_onto_a_hero_without_positions_logs_instead_of_panicking() {
+        let mut st = deadly_chain();
+        st.wounds[0] = vec![];
+        st.positions[0] = vec![];
+        st.radii[0] = vec![];
+        st.alive[0] = 0;
+        st.positions[1] = vec![];
+        st.radii[1] = vec![];
+        st.alive[1] = 0; // the ghost: wounds [1], no model on the table
+        let s = Seams { rules_epoch: crate::acts::EPOCH_67_MARKERS_BURSTS, hero_attach: true, ..Seams::default() };
+        let before = crate::sim::DESYNC_HITS.load(std::sync::atomic::Ordering::Relaxed);
+        land_deadly_wounds(&mut st, 0, 1, 3, s);
+        assert_eq!(st.wounds[1], Vec::<i64>::new(), "the ghost's wound slot is spent: {:?}", st.wounds);
+        assert_eq!((st.positions[1].len(), st.alive[1]), (0, 0));
+        assert!(
+            crate::sim::DESYNC_HITS.load(std::sync::atomic::Ordering::Relaxed) > before,
+            "the guard must log the desync, never hide it"
+        );
+    }
+
+    /// Stage-0 P9 (the tray controls, freeze report B10): under
+    /// `TreeDice::Tray` the tree declines on ANY `unported` flag (tree.rs
+    /// `transition` / `playout`), and every Deadly activation was flagged
+    /// `deadly` although the per-model landing above IS the table's
+    /// `apply_deadly_wounds` from `EPOCH_14_DEADLY_LANDING` — so every L_tray /
+    /// T_tray pick of a Deadly army declined. From 14 neither leg (volley,
+    /// melee) flags it; below 14 the pooled multiply is a real divergence and
+    /// still does. The landed state stays one model list per unit.
+    #[test]
+    fn a_per_model_deadly_activation_is_ported_so_the_tray_tree_takes_it() {
+        let (mut st, mut statics) = deadly_line();
+        // The live epoch's landing reads `Profile::wounds_max` (the epoch-67 leg, `deadly_chain`'s note).
+        st.profiles = Rc::new(Profiles {
+            list: vec![
+                Profile { wounds_max: vec![1], ..host_profile("a") },
+                host_profile("ah"),
+                Profile { wounds_max: vec![3, 3, 3], model_count: 3, ..host_profile("b") },
+                host_profile("bh"),
+            ],
+            index: HashMap::new(),
+        });
+        statics[0].melee = vec![ShootProfile {
+            name: "Deadly blade".into(), attacks: 4, count: 1, ap: 2, deadly: 3, ..Default::default()
+        }];
+        let charge = Action {
+            kind: CHARGE, unit: "a".into(), dest: None, shoot: None, charge: Some("b".into()),
+            patient: false, split: None, traced: None, teleport: None,
+        };
+        let mut near = st.clone(); // the charge fixtures' 2.5" (buff_consumption_bridge.rs)
+        near.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0], [2.52 * IN2M, 0.0, 0.0], [2.54 * IN2M, 0.0, 0.0]];
+        let fight = |rules_epoch: u32| {
+            let (mut rng, mut tray) = (GodotRng::new(0), Tray::seeded(2));
+            let seams = Seams { rules_epoch, ..Seams::default() };
+            resolve_stochastic_tray_on_board(&statics, &near, &charge, &Terrain::default(), seams, &mut rng, &mut tray)
+                .unwrap()
+        };
+        let one_list = |s: &State| {
+            (0..s.units()).all(|u| s.wounds[u].len() == s.positions[u].len() && s.alive[u] as usize == s.positions[u].len())
+        };
+        for epoch in [crate::acts::EPOCH_14_DEADLY_LANDING, crate::acts::CURRENT_RULES_EPOCH] {
+            let (next, shot) = run_shoot(&st, &statics, 2, epoch);
+            assert!(shot.deadly_tally > 0, "epoch {epoch}: the volley landed Deadly wounds: {:?}", shot.rolls);
+            assert!(shot.unported.is_empty() && one_list(&next), "epoch {epoch} volley: {:?}", shot.unported);
+            let (next, melee) = fight(epoch);
+            assert!(melee.deadly_tally > 0, "epoch {epoch}: the charge landed Deadly wounds: {:?}", melee.rolls);
+            assert!(melee.unported.is_empty() && one_list(&next), "epoch {epoch} melee: {:?}", melee.unported);
+        }
+        assert!(run_shoot(&st, &statics, 2, 13).1.unported.contains(&"deadly"), "legacy volley leg flags");
+        assert!(fight(13).1.unported.contains(&"deadly"), "legacy melee leg flags");
+    }

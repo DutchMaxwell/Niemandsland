@@ -131,3 +131,13 @@ func test_the_ai_dialog_preselects_the_bracket_at_or_above_human_points_times_th
 	_main._show_ai_opponent_dialog(manifest, func(_f: String, _s: int) -> void: pass)
 	await _runner.simulate_frames(2)
 	assert_str(_points_option().get_item_text(_points_option().selected)).is_equal("2000 points")
+
+
+func test_the_deploy_gates_follow_the_side_s_role() -> void:
+	MissionCatalog._catalog()["roles_fixture"]["deploy_gates"] = {"attacker": {"min_from_enemy_in": 12}, "defender": {"max_from_friend_in": 6}}
+	_main._solo_mission_id = "roles_fixture"
+	SoloController.mission_roles = {"attacker": 1, "defender": 2}
+	assert_that(_main._solo_deploy_gates_for(1)).is_equal({"min_from_enemy_in": 12})
+	assert_that(_main._solo_deploy_gates_for(2)).is_equal({"max_from_friend_in": 6})
+	_main._solo_mission_id = "domination"
+	assert_that(_main._solo_deploy_gates_for(1)).is_equal({})

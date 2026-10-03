@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "comment": "Mission catalog v1 (grill 2026-08-12, D1-D4): twelve Face-Off and Progressive missions. One catalog feeds game selection AND ladder rotation. Wording is our own; rules follow the official advanced missions. marker count is an int or a dice term like 'd3+2'; placement modes: alternate (players place outside zones, min_gap apart), quarter_centres, deploy_zone_centres, deploy_zone_front (zone centre across, edge_in inches from the owner's table edge), table_centre. W3: owned/destructible marker flags; scoring 'sabotage' = destroy-theirs-keep-yours end verdict. Wave C: carried-marker flag.",
+  "comment": "Mission catalog v1 (grill 2026-08-12, D1-D4): twelve Face-Off and Progressive missions. One catalog feeds game selection AND ladder rotation. Wording is our own; rules follow the official advanced missions. marker count is an int or a dice term like 'd3+2'; placement modes: alternate (players place outside zones, min_gap apart), quarter_centres, deploy_zone_centres, deploy_zone_front (zone centre across, edge_in inches from the owner's table edge), table_centre. W3: owned/destructible marker flags; scoring 'sabotage' = destroy-theirs-keep-yours end verdict. Wave C: carried-marker flag. Wave D (Attack & Defend): rounds, roles + attacker_points_factor, scoring 'extract'/'escort' (decided on the board by BattleSim.role_winner), secret markers (trap + relic hidden among the placed markers; the relic is the only one that carries).",
   "missions": {
     "duel": {
       "name": "Duel",
@@ -170,6 +170,131 @@
         "edge_in": 12,
         "owned": true,
         "destructible": true
+      }
+    },
+    "ambush": {
+      "name": "Ambush",
+      "family": "attack_defend",
+      "rounds": 6,
+      "scoring": "end",
+      "roles": true,
+      "deployment": "front_line",
+      "deploy_phases": [
+        ["defender", "half", "own"],
+        ["attacker", "all", "anywhere", {"min_from_enemy_in": 12, "max_from_friend_in": 6}],
+        ["defender", "rest", "anywhere", {"min_from_enemy_in": 12}]
+      ],
+      "markers": {
+        "count": "d3+0",
+        "placement": "alternate",
+        "min_gap_in": 9,
+        "outside_zones_in": 9
+      }
+    },
+    "the_raid": {
+      "name": "The Raid",
+      "family": "attack_defend",
+      "rounds": 6,
+      "scoring": "end",
+      "roles": true,
+      "attacker_points_factor": 1.25,
+      "deployment": "front_line",
+      "deploy_phases": [
+        ["defender", "half", "centre_disc_12"],
+        ["attacker", "all", "edge_band_12"],
+        ["defender", "rest", "anywhere", {"min_from_enemy_in": 12, "min_from_marker_in": 12}]
+      ],
+      "markers": {
+        "count": 1,
+        "placement": "table_centre"
+      }
+    },
+    "the_rescue": {
+      "name": "The Rescue",
+      "family": "attack_defend",
+      "rounds": 6,
+      "scoring": "extract",
+      "roles": true,
+      "attacker_points_factor": 1.25,
+      "deployment": "front_line",
+      "deploy_phases": [
+        ["defender", "half", "own"],
+        ["attacker", "half", "own"]
+      ],
+      "reserves": {
+        "who": "both",
+        "arrive_on": 4,
+        "from_round": 2,
+        "zone": "edge_band_12",
+        "gates": {"min_from_enemy_in": 12, "min_from_marker_in": 12}
+      },
+      "markers": {
+        "count": 1,
+        "placement": "table_centre",
+        "carry": true,
+        "carry_by": "attacker",
+        "drop_in": 6
+      }
+    },
+    "last_stand": {
+      "name": "Last Stand",
+      "family": "attack_defend",
+      "rounds": 6,
+      "scoring": "end",
+      "roles": true,
+      "deployment": "front_line",
+      "deploy_phases": [
+        ["defender", "all", "centre_disc_12"],
+        ["attacker", "all", "edge_band_12"]
+      ],
+      "reserves": {
+        "who": "attacker",
+        "recycle": true,
+        "arrive_on": 6,
+        "from_round": 2,
+        "zone": "edge_band_12",
+        "gates": {}
+      },
+      "markers": {
+        "count": 1,
+        "placement": "table_centre"
+      }
+    },
+    "smash_and_grab": {
+      "name": "Smash & Grab",
+      "family": "attack_defend",
+      "rounds": 6,
+      "scoring": "extract",
+      "roles": true,
+      "attacker_points_factor": 1.25,
+      "deployment": "front_line",
+      "markers": {
+        "count": "d3+2",
+        "placement": "alternate",
+        "min_gap_in": 9,
+        "outside_zones_in": 9,
+        "placer": "defender",
+        "secret": true
+      }
+    },
+    "vip_escort": {
+      "name": "VIP Escort",
+      "family": "attack_defend",
+      "rounds": 6,
+      "scoring": "escort",
+      "roles": true,
+      "deployment": "front_line",
+      "deploy_phases": [
+        ["defender", "all", "marker_disc_12"],
+        ["attacker", "all", "edge_band_12"]
+      ],
+      "deploy_gates": {
+        "attacker": {"min_from_enemy_in": 12}
+      },
+      "markers": {
+        "count": 1,
+        "placement": "vip_edge",
+        "mobile": true
       }
     }
   }

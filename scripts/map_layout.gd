@@ -177,8 +177,19 @@ var objectives_editing := false  # Whether we're in objective placement mode
 var relic_drop_active := false
 var relic_drop_centre := Vector2.ZERO
 var relic_drop_radius_in := 0.0
+var relic_drop_reach_in := 1.0
 signal relic_drop_chosen(world_pos: Vector3)
 signal relic_drop_refused
+## D14.4 (VIP Escort, maintainer choice B): the human defender's ONE click inside either 6" edge band
+## (top + bottom) sets the VIP's starting spot; its z sign is the deploy edge.
+var vip_pick_active := false
+const VIP_BAND_IN := 6.0
+signal vip_spot_chosen(spot_in: Vector2)   # table-centred inches
+signal vip_pick_refused
+## D12a-2: the defender's pick of the relic and the trap among the markers (two clicks).
+var marker_pick_active := false
+signal marker_picked(index: int)
+signal marker_pick_refused
 
 # Signal to notify terrain_overlay of objectives changes
 signal objectives_changed(objectives: Array)
@@ -1095,8 +1106,10 @@ func _on_symmetry_toggled(enabled: bool) -> void:
 
 
 func _on_close_pressed() -> void:
-	if relic_drop_active:
+	if relic_drop_active or marker_pick_active or vip_pick_active:
 		relic_drop_active = false
+		marker_pick_active = false
+		vip_pick_active = false
 		layout_closed.emit()  # closing this prompt keeps the deterministic default
 		hide()
 		return
@@ -1765,6 +1778,28 @@ func _is_valid_inch_pos(inch_pos: Vector2) -> bool:
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
+	if vip_pick_active:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			_on_close_pressed()
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var vip_click: Vector2 = grid_container.get_global_transform_with_canvas().affine_inverse() * event.position
+			if Rect2(Vector2.ZERO, grid_container.size).has_point(vip_click):
+				try_vip_pick(_get_inch_at_screen_pos(event.position, false))
+				get_viewport().set_input_as_handled()
+			return
+	if marker_pick_active:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			_on_close_pressed()
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var pick_click: Vector2 = grid_container.get_global_transform_with_canvas().affine_inverse() * event.position
+			if Rect2(Vector2.ZERO, grid_container.size).has_point(pick_click):
+				try_marker_pick(_get_inch_at_screen_pos(event.position, false))
+				get_viewport().set_input_as_handled()
+			return
 	if relic_drop_active:
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			_on_close_pressed()
@@ -2760,17 +2795,18 @@ func _relic_world_to_inch(pos: Vector3) -> Vector2:
 	return Vector2(pos.x, pos.z).rotated(-deg_to_rad(grid_rotation_degrees)) / 0.0254 + centre
 
 
-func begin_relic_drop(centre: Vector3, base_radius_m: float) -> void:
+func begin_relic_drop(centre: Vector3, base_radius_m: float, reach_in := 1.0) -> void:
+	relic_drop_reach_in = reach_in
 	relic_drop_centre = _relic_world_to_inch(centre)
 	relic_drop_radius_in = base_radius_m / 0.0254
 	relic_drop_active = true
 	grid_container.queue_redraw()
 
 
-## Valid clicks are outside the base and at most 1" from its edge; no grid snap is applied.
+## Valid clicks are outside the base and at most `reach` (1" for a dropped relic, 12" for the VIP move) from its edge; no grid snap is applied.
 func try_relic_drop(inch_pos: Vector2) -> bool:
 	var gap := inch_pos.distance_to(relic_drop_centre) - relic_drop_radius_in
-	if not relic_drop_active or not _is_valid_inch_pos(inch_pos) or gap < -0.001 or gap > 1.001:
+	if not relic_drop_active or not _is_valid_inch_pos(inch_pos) or gap < -0.001 or gap > relic_drop_reach_in + 0.001:
 		relic_drop_refused.emit()
 		return false
 	var valid := _get_valid_cell_range()
@@ -2778,6 +2814,64 @@ func try_relic_drop(inch_pos: Vector2) -> bool:
 		(valid.position.y + valid.size.y / 2.0) * GRID_SIZE_INCHES)
 	var world := (inch_pos - centre).rotated(deg_to_rad(grid_rotation_degrees)) * 0.0254
 	relic_drop_chosen.emit(Vector3(world.x, 0.0, world.y))
+	return true
+
+
+func begin_vip_pick() -> void:
+	vip_pick_active = true
+	grid_container.queue_redraw()
+
+
+## An editor-frame click as a table-centred inch spot (the inverse of `_relic_world_to_inch`).
+func vip_table_spot(inch_pos: Vector2) -> Vector2:
+	var valid := _get_valid_cell_range()
+	var centre := Vector2((valid.position.x + valid.size.x / 2.0) * GRID_SIZE_INCHES,
+		(valid.position.y + valid.size.y / 2.0) * GRID_SIZE_INCHES)
+	return (inch_pos - centre).rotated(deg_to_rad(grid_rotation_degrees))
+
+
+## The two 6" bands along the table's z edges, as editor-frame polygons (for the shading).
+func vip_band_polygons() -> Array:
+	var half_w := table_size_feet.x * 6.0
+	var half_d := table_size_feet.y * 6.0
+	var out: Array = []
+	for z in [[-half_d, -half_d + VIP_BAND_IN], [half_d - VIP_BAND_IN, half_d]]:
+		var poly := PackedVector2Array()
+		for corner in [Vector2(-half_w, z[0]), Vector2(half_w, z[0]), Vector2(half_w, z[1]), Vector2(-half_w, z[1])]:
+			poly.append(_relic_world_to_inch(Vector3(corner.x, 0.0, corner.y) * 0.0254))
+		out.append(poly)
+	return out
+
+
+## A click inside either band picks the spot; anything else is refused (the spot must also lie on the table).
+func try_vip_pick(inch_pos: Vector2) -> bool:
+	var spot := vip_table_spot(inch_pos)
+	var half_d := table_size_feet.y * 6.0
+	if not vip_pick_active or not _is_valid_inch_pos(inch_pos) or absf(spot.y) < half_d - VIP_BAND_IN - 0.001:
+		vip_pick_refused.emit()
+		return false
+	vip_spot_chosen.emit(spot)
+	return true
+
+
+func begin_marker_pick() -> void:
+	marker_pick_active = true
+	grid_container.queue_redraw()
+
+
+## A click within the snap tolerance of a marker picks it; anything else is refused.
+func try_marker_pick(inch_pos: Vector2) -> bool:
+	var best := -1
+	var best_d := OBJECTIVE_SNAP_TOLERANCE
+	for i in range(mission_objectives.size()):
+		var d := inch_pos.distance_to(mission_objectives[i])
+		if d <= best_d:
+			best = i
+			best_d = d
+	if not marker_pick_active or best < 0:
+		marker_pick_refused.emit()
+		return false
+	marker_picked.emit(best)
 	return true
 
 

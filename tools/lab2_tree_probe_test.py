@@ -147,7 +147,10 @@ def test_bootstrap_known_winner_identical_arms_and_four_games_are_not_four_block
 def _blocks(n=2, cell="c1", mission="duel"):
     return [{"block": "b%d" % i, "cell": cell, "mission": mission, "army1": "a", "army2": "b",
              "seeds": {"terrain": "1%d" % i, "layout": "2%d" % i, "deploy": "3%d" % i, "play_general": ["4%d" % i, "5%d" % i],
-                       "tray": ["6%d" % i, "7%d" % i], "search": {"L": {"1": "81", "2": "82"}, "C": {"1": "91", "2": "92"}}}}
+                       "tray": ["6%d" % i, "7%d" % i],
+                       "search": {"d%dc%d" % (d, s): {arm: {o: "%d%d%d%d%d" % (pre, i, d, s, int(o)) for o in ("1", "2")}
+                                                      for arm, pre in (("I", 7), ("L", 8), ("C", 9))}
+                                  for d in (0, 1) for s in (1, 2)}}}
             for i in range(n)]
 
 
@@ -157,14 +160,29 @@ def test_manifest_has_four_games_per_arm_per_block_with_both_seats_and_two_dice(
     assert len(lab.game_rows(_blocks(1), ("L", "C"))) == 8
     one = [r for r in rows if r["block"] == "b0" and r["arm"] == "L"]
     assert sorted((r["seeds"]["tray"], r["seat"]) for r in one) == [("60", 1), ("60", 2), ("70", 1), ("70", 2)]
-    assert [r["seeds"]["search"] for r in one][0] == {"1": "81", "2": "82"} and all(r["mission"] == "duel" for r in rows)
+    assert [r["seeds"]["search"] for r in one][0] == {"1": "80011", "2": "80012"} and all(r["mission"] == "duel" for r in rows)
     assert all(r["army1"] == "a" and r["army2"] == "b" for r in rows)  # armies stay on their physical seats
+
+
+def test_every_game_takes_the_search_keys_registered_for_its_own_dice_and_seat():
+    rows = lab.game_rows(_blocks(1))
+    L = {(r["d"], r["seat"]): r["seeds"]["search"] for r in rows if r["arm"] == "L"}
+    assert L == {(d, s): {"1": "80%d%d1" % (d, s), "2": "80%d%d2" % (d, s)} for d in (0, 1) for s in (1, 2)}
+    assert len({json.dumps(v, sort_keys=True) for v in L.values()}) == 4      # four games, four streams
+    assert all(r["seeds"]["search"] == {} for r in rows if r["arm"] == "I")   # I searches nothing
+    gap = _blocks(1)
+    del gap[0]["seeds"]["search"]["d1c2"]["L"]
+    try:
+        lab.game_rows(gap)
+        raise AssertionError("a tree arm without its registered key must refuse the manifest")
+    except SystemExit as e:
+        assert "d1c2/L" in str(e)
 
 
 def test_arm_kwargs_split_the_tree_from_the_one_ply_pool_deadline():
     L, C = lab.arm_kwargs({"arm": "L"}, 7), lab.arm_kwargs({"arm": "C"}, 7)
-    assert L["deep_search_mode"] == "tree" and L["deep_tree_wall_ms"] == 7 and "deep_pool_wall_ms" not in L
-    assert C == {"deep_top_k": 32, "deep_horizon": 3, "deep_pool_wall_ms": 7}
+    assert L["deep_search_mode"] == "tree" and L["deep_deadline_us"] == 7 and "deep_tree_wall_ms" not in L
+    assert C == {"deep_top_k": 32, "deep_horizon": 3, "deep_deadline_us": 7}
 
 
 def test_board_scores_are_per_board_and_a_missing_or_short_board_fails():
@@ -183,6 +201,19 @@ class StampNm:
     """A stand-in nml_core for the pilot's environment gate (no replay ever runs)."""
     BUILD_INFO = {"commit": "abc", "rules_epoch": 68, "dirty": False}
     __file__ = __file__
+    nml_core = None   # the compiled submodule; a test that needs a wheel stamp plants one
+
+
+def _wheel(tmp_path, monkeypatch, binary):
+    """A wheel-shaped nml_core: the package shim plus a compiled submodule holding `binary`."""
+    pkg = tmp_path / "nml_core"
+    pkg.mkdir(exist_ok=True)
+    (pkg / "__init__.py").write_text("from .nml_core import *\n")
+    so = pkg / "nml_core.cpython-314-x86_64-linux-gnu.so"
+    so.write_bytes(binary)
+    monkeypatch.setattr(StampNm, "__file__", str(pkg / "__init__.py"))
+    monkeypatch.setattr(StampNm, "nml_core", type("Ext", (), {"__file__": str(so)}))
+    return so
 
 
 def _pilot(monkeypatch, extra, build_info=None):
@@ -205,55 +236,100 @@ def test_a_dirty_build_stops_the_pilot(monkeypatch, capsys):
     assert "dirty" in capsys.readouterr().out
 
 
-def test_the_strict_stamp_records_dirty_and_the_wheel_sha():
+def test_the_strict_stamp_records_dirty_and_the_wheel_sha(tmp_path, monkeypatch):
+    _wheel(tmp_path, monkeypatch, b"build one")
     stamp, bad = lab.env_stamp(StampNm, "", {"commit": "abc", "rules_epoch": 68, "model_sha256": None,
                                               "wheel_sha256": None}, strict=True)
     assert stamp["dirty"] is False and len(stamp["wheel_sha256"]) == 64
     assert bad == ["missing:model_sha256", "missing:wheel_sha256"]
 
 
+def test_the_wheel_stamp_hashes_the_compiled_module_so_a_changed_binary_fails(tmp_path, monkeypatch):
+    import hashlib
+    so = _wheel(tmp_path, monkeypatch, b"build one")
+    want = hashlib.sha256(b"build one").hexdigest()
+    stamp, bad = lab.env_stamp(StampNm, "", {"wheel_sha256": want})
+    assert stamp["wheel_sha256"] == want and bad == []
+    so.write_bytes(b"build two")   # another binary behind the SAME __init__.py shim
+    assert lab.env_stamp(StampNm, "", {"wheel_sha256": want})[1] == ["wheel_sha256"]
+    monkeypatch.setattr(StampNm, "nml_core", None)   # only the shim left: no stamp, never the shim's sha
+    assert lab.env_stamp(StampNm, "", {"wheel_sha256": want}) == ({**stamp, "wheel_sha256": None}, ["wheel_sha256"])
+
+
 class SpySp:
-    """A stand-in selfplay: records every play_game call; `quiet` leaves the net hooks uncalled."""
-    def __init__(self, net, quiet=False):
-        self.calls, self.net, self.quiet = [], net, quiet
+    """A stand-in selfplay: records every play_game call; `quiet` leaves the net hooks uncalled; `boom` declines."""
+    def __init__(self, net, quiet=False, boom=None):
+        self.calls, self.net, self.quiet, self.boom = [], net, quiet, boom
+
+    def _pick_for(self, *a, **k):
+        return {}
+
+    @__import__("contextlib").contextmanager
+    def forced_picks(self, fn):
+        yield
 
     def play_game(self, *args, **kw):
         self.calls.append((args, kw))
+        if self.boom:
+            raise self.boom
         if not self.quiet:
             for side in (1, 2):
                 kw["leaf_value_fn"][side]([], side)
-        return {"winner": "p1"}
+        return {"winner": "p1", "knobs": {"top_k": 2}, "planner_positions": []}
 
 
 class CountNet:
+    model_sha256 = "cd" * 32
+
     def __init__(self):
-        self.counts = {1: {"calls": 0}, 2: {"calls": 0}}
+        self.counts = {1: {"calls": 0, "leaves": 0}, 2: {"calls": 0, "leaves": 0}}
 
     def hook(self, side):
         def fn(leaves, _side=None):
             self.counts[side]["calls"] += 1
+            self.counts[side]["leaves"] += len(leaves)
             return []
         return fn
+
+
+class Declining(Exception):
+    pass
+
+
+NmStub = type("NmStub", (), {"Unsupported": Declining})
+CTX = {"prereg": "p" * 64, "build": {"commit": "abc", "dirty": False, "rules_epoch": 68, "wheel_sha256": "w"}}
+PRINCIPLES_ROW = ("schema prereg_sha256 row_id split part cell source arm opponent seat replicate seeds build model_sha256 "
+                  "header_sha256 net decisions y winner valid reason wall_s rss_hwm_mib done").split()
 
 
 def test_a_cell_7_row_plays_breakthrough_with_the_split_seeds_and_the_live_ledger():
     row = lab.game_rows(_blocks(1, "c7", "breakthrough"), ("L",))[0]
     net = CountNet()
     sp = SpySp(net)
-    rec = lab.play_row(sp, row, "repo", "bank", {"top_k": 3}, net, 5)
+    rec = lab.play_row(NmStub, sp, row, "repo", "bank", {"top_k": 3}, net, 5, CTX)
     (args, kw), = sp.calls
     assert kw["mission"] == "breakthrough" and kw["objectives"] == "mission" and kw["live_ledger"] is True
     assert args[0] == 10 and (kw["layout_seed"], kw["deploy_seed"], kw["play_seed"], kw["dice_seed"]) == (20, 30, 40, 60)
-    assert kw["search_seeds"] == {1: 81, 2: 82} and kw["deep_player"] == 1 and kw["leaf_value_w"] == 1.0
-    assert rec["valid"] and rec["net_calls"] == {1: 1, 2: 1}
+    assert kw["search_seeds"] == {1: 80011, 2: 80012} and kw["deep_player"] == 1 and kw["leaf_value_w"] == 1.0
+    assert kw["deep_deadline_us"] == 5 and rec["valid"] and rec["net"]["1"] == {"calls": 1, "leaves": 0}
+    assert list(rec) == PRINCIPLES_ROW and rec["seeds"]["search_general"] == "80011" and rec["rss_hwm_mib"] > 0
 
 
 def test_an_i_row_has_no_deep_core_and_a_never_called_hook_is_invalid():
     row = lab.game_rows(_blocks(1), ("I",))[0]
     sp = SpySp(CountNet(), quiet=True)
-    rec = lab.play_row(sp, row, "repo", "bank", {}, sp.net, 5)
+    rec = lab.play_row(NmStub, sp, row, "repo", "bank", {}, sp.net, 5, CTX)
     assert "deep_player" not in sp.calls[0][1] and "search_seeds" not in sp.calls[0][1]
-    assert rec["valid"] is False and rec["reason"] == "net_inactive"
+    assert rec["valid"] is False and rec["reason"] == "net_inactive" and "search_general" not in rec["seeds"]
+
+
+def test_a_declined_game_is_an_invalid_row_and_the_next_row_runs():
+    rows = lab.game_rows(_blocks(1), ("L",))[:2]
+    net = CountNet()
+    bad = lab.play_row(NmStub, SpySp(net, boom=Declining("unported: x")), rows[0], "r", "b", {}, net, 5, CTX)
+    good = lab.play_row(NmStub, SpySp(net), rows[1], "r", "b", {}, net, 5, CTX)
+    assert bad["valid"] is False and bad["reason"] == "unsupported: unported: x" and bad["y"] is None and list(bad) == PRINCIPLES_ROW
+    assert good["valid"] is True and good["y"] == 0.5 * 0 + (1.0 if rows[1]["seat"] == 1 else 0.0)
 
 
 class TimingCore:
@@ -272,7 +348,7 @@ class TimingCore:
         return {"trace": {"tree": {"completed": 1, "deadline_hit": False}}}
 
 
-def _timing_run(monkeypatch, tmp_path, B_us=None):
+def _timing_run(monkeypatch, tmp_path, B_us=None, headers=None):
     import types
     core, hooked = TimingCore(), []
     net = types.SimpleNamespace(model_sha256="ab" * 32, hook=lambda side: (lambda leaves, _s=None: hooked.append(side) or []))
@@ -280,12 +356,14 @@ def _timing_run(monkeypatch, tmp_path, B_us=None):
     monkeypatch.setitem(sys.modules, "lab2_net", types.SimpleNamespace(ShippedNet=lambda repo: net))
     if B_us is not None:
         monkeypatch.setattr(lab, "allowance_us", lambda times: B_us)
-    states = [{"cell": "c1", "state": {"i": i}, "player": 1 + i % 2} for i in range(2)]
+    states = [{"cell": "c1", "state": {"i": i}, "player": 1 + i % 2, "source": "g%d:a" % (i + 1)} for i in range(2)]
     (tmp_path / "s.json").write_text(json.dumps(states))
     (tmp_path / "h.json").write_text(json.dumps({"knobs": {"top_k": 10}}))
+    (tmp_path / "g.json").write_text(json.dumps(headers or {}))
     out = str(tmp_path / "t.txt")
     rc = lab.main(["timing", "--states", str(tmp_path / "s.json"), "--header", str(tmp_path / "h.json"), "--statics", "{}",
-                   "--per-cell", "2", "--hardware", "laptop-x", "--out", out])
+                   "--per-cell", "2", "--hardware", "laptop-x", "--out", out]
+                  + (["--headers", str(tmp_path / "g.json")] if headers else []))
     return rc, core, out
 
 
@@ -304,3 +382,63 @@ def test_timing_stamps_hardware_and_labels_the_sweep(monkeypatch, tmp_path):
     assert meta["hardware"] == "laptop-x" and meta["model_sha256"] == "ab" * 32 and "diagnostic" in meta["sweep"]
     text = open(out).read()
     assert "hardware: laptop-x" in text and "D-ONLY DIAGNOSTIC" in text
+
+
+# ---- every recorded state under its OWN game header (pilot part 1, timing, endings) ----
+GAME_HEADERS = {g: {"profiles": g, "knobs": {"seam_cast": True, "game": g}} for g in ("g1:a", "g2:a")}
+
+
+class GameCore(Core):
+    """Refuses without a header (as nml_core does) and resolves into a state stamped with ITS header's game."""
+    header = None
+
+    def set_header(self, header):
+        self.header = header
+
+    def state_of(self, plain):
+        if self.header is None:
+            raise RuntimeError("no header")
+        return St(plain)
+
+    def resolve_with_tray(self, st, action, rng, tray):
+        nxt, rep = Core.resolve_with_tray(self, st, action, rng, tray)
+        return St(dict(nxt.plain(), game=self.header["profiles"])), rep
+
+
+def test_game_header_overlays_base_then_arm_knobs_on_the_recorded_header():
+    import pytest
+    h = lab.game_header(GAME_HEADERS, "g2:a", {"knobs": {"top_k": 3}}, {"search_mode": "tree"})
+    assert h == {"profiles": "g2:a", "knobs": {"seam_cast": True, "game": "g2:a", "top_k": 3, "search_mode": "tree"}}
+    assert lab.game_header(None, "g2:a", {"knobs": {"x": 1}}, {"y": 2}) == {"knobs": {"x": 1, "y": 2}}
+    assert lab.source_of({"slot": "c1_k1", "candidate": "4"}) == "c1_k1:4"
+    with pytest.raises(SystemExit, match="g9:z"):
+        lab.game_header(GAME_HEADERS, "g9:z", {})
+
+
+def test_every_record_replays_under_its_own_game_header():
+    import copy
+    import pytest
+    recs = [dict(copy.deepcopy(TRUTH), source=g, after=dict(TRUTH["after"], game=g)) for g in GAME_HEADERS]
+    nm = type("NmG", (Nm,), {"load": staticmethod(lambda repo: GameCore())})
+    results, reds = lab.replay_records(nm, "repo", recs, GAME_HEADERS)
+    assert all(r["ok"] for r in results) and reds == {"RED-VP": False, "RED-DIE": False}
+    one = {g: GAME_HEADERS["g1:a"] for g in GAME_HEADERS}   # one header for both games: the second replay fails
+    assert [r["ok"] for r in lab.replay_records(nm, "repo", recs, one)[0]] == [True, False]
+    with pytest.raises(RuntimeError, match="no header"):      # the old part 1: one header-less core
+        lab.replay_transition(nm, GameCore(), recs[0])
+
+
+def test_timing_sets_each_state_s_own_game_header(monkeypatch, tmp_path):
+    rc, core, out = _timing_run(monkeypatch, tmp_path, headers=GAME_HEADERS)
+    assert rc == 0 and {k["game"] for k, _ in core.calls} == set(GAME_HEADERS)
+    assert all(k["seam_cast"] is True and k["top_k"] == 10 for k, _ in core.calls)   # recorded knobs + the base overlay
+
+
+def test_endings_build_every_core_under_the_position_s_own_game_header(monkeypatch, tmp_path):
+    seen = []
+    w = {"core": lambda extra, source=None: seen.append(source) or ("core", "sha"), "nm": None, "sp": None, "net": None,
+         "ctx": {}, "allow": {"c1": {"B_us": 7}}, "cfg": {"rows_dir": str(tmp_path)}}
+    monkeypatch.setattr(lab, "ending_row", lambda *a, **k: {"row_id": "r", "valid": True, "y": 1.0})
+    monkeypatch.setattr(lab, "write_row", lambda d, row: None)
+    lab._endings_work(w, "c1_k1", {"slot": "c1_k1", "candidate": "3", "cell": "c1", "cluster": "c1_k1"})
+    assert seen == ["c1_k1:3"] * (1 + len(lab.ARMS))   # the incumbent core and one core per arm

@@ -12,6 +12,21 @@ func test_make_key_is_case_insensitive() -> void:
 	assert_str(ModelLibrary.make_key("Alien_Hives", " Hive Lord ")).is_equal("alien_hives/hive lord")
 
 
+func test_machine_cults_book_folder_resolves_to_the_published_machine_cult_art() -> void:
+	var lib := _lib()
+	lib.apply_manifest_text(JSON.stringify({
+		"version": 1, "base_url": "",
+		"models": {"machine_cult/cult leader": {"url": "c.glb", "sha256": "abc", "size": 1},
+			"alien_hives/hive lord": {"url": "h.glb", "sha256": "def", "size": 1}},
+	}))
+	assert_bool(lib.has_model("machine_cults", "Cult Leader")).is_true()
+	assert_bool(lib.has_model("machine_cult", "Cult Leader")).is_true()
+	assert_str(ModelLibrary.make_key("machine_cults", "Cult Leader")).is_equal("machine_cult/cult leader")
+	# No other folder is touched: a lookalike folder still misses.
+	assert_bool(lib.has_model("machine_cultists", "Cult Leader")).is_false()
+	assert_str(ModelLibrary.make_key("titan_lords_war_disciples", "War Duke Titan")).is_equal("titan_lords_war_disciples/war duke titan")
+
+
 func test_manifest_parse_and_has_model() -> void:
 	var lib := _lib()
 	lib.apply_manifest_text(JSON.stringify({

@@ -1437,6 +1437,7 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
                         ignores_terrain: if g.is_null() { false } else { g["ignores_terrain"].as_bool().unwrap() },
                         vanguard: if g.is_null() { false } else { g["vanguard_pushed"].as_bool().unwrap() },
                         place_in_m: None,
+                        points: 0,
                         re_deploy: false,
                         re_deploy_max_units: None,
                         transport_capacity: 0,
@@ -2432,4 +2433,196 @@ fn redeployment_pass_skips_when_the_gain_is_below_three_inches() {
     assert!(out.re_placed.is_empty(), "no 3\" gain, no re-place: {:?}", out.re_placed);
     assert!(out.events.is_empty(), "no trace line without a re-place: {:?}", out.events);
     assert_eq!(side1.placements[0].spot, (0.0, -0.584), "already optimal: {:?}", side1.placements[0].spot);
+}
+
+
+/// D5: a whole crowded army deploys INSIDE a catalog disc (the 12" Attack & Defend zone) when the
+/// zone shape rides `deploy_side_in`; without it the same call spreads over the bounding rect.
+#[test]
+fn deploy_side_in_keeps_every_model_inside_a_disc_zone() {
+    let zones = nml_core::objectives::zones_of_list(&serde_json::json!([{"disc": {"c": [0, 0], "r_in": 12}}]));
+    let r = 12.0 * IN2M;
+    let rect = deployment::Rect::new(-r, -r, 2.0 * r, 2.0 * r);
+    let base_r = 0.016;
+    let specs: Vec<deployment::UnitSpec> = (0..7)
+        .map(|i| deployment::UnitSpec {
+            key: format!("d{i}"),
+            model_count: 5,
+            base_r_m: base_r,
+            footprint: deployment::deploy_footprint_offsets(5, base_r, false),
+            model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 5 }],
+            ..Default::default()
+        })
+        .collect();
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    // the search guards the unit's FOOTPRINT bases (spot + grid offsets), not the later model rows
+    let fp = deployment::deploy_footprint_offsets(5, base_r, false);
+    let inside = |sd: &deployment::SideDeploy| {
+        sd.placements
+            .iter()
+            .flat_map(|p| fp.iter().map(move |o| (p.spot.0 + o.0, p.spot.1 + o.1)))
+            .filter(|m| m.0.hypot(m.1) > r + 1e-6)
+            .count()
+    };
+    let bound = deployment::deploy_side_in(&specs, &rect, Some(&zones), &objs, &empty_board(), 11, 15);
+    assert_eq!(bound.placements.len(), 7);
+    assert_eq!(inside(&bound), 0, "every model stands in the disc");
+    let free = deployment::deploy_side_in(&specs, &rect, None, &objs, &empty_board(), 11, 15);
+    assert!(inside(&free) > 0, "the control: the bounding square alone lets bases stand outside the disc");
+    assert_eq!(free, deployment::deploy_side(&specs, &rect, &objs, &empty_board(), 11, 15), "None == the old entry");
+}
+
+/// D6b: the distance gates. A thin strip whose objective sits at the centre: the ungated unit takes
+/// the centre; with the enemy gate (12") against a base on the objective and the marker gate (12")
+/// the only legal spots are the strip's two ends, > 12" away.
+#[test]
+fn distance_gates_push_the_only_legal_spot_past_the_gate() {
+    let r = 0.016;
+    let spec = |key: &str| deployment::UnitSpec {
+        key: key.into(),
+        model_count: 1,
+        base_r_m: r,
+        footprint: deployment::deploy_footprint_offsets(1, r, false),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 1 }],
+        ..Default::default()
+    };
+    let specs = vec![spec("g0")];
+    let strip = deployment::Rect::new(-20.0 * IN2M, -IN2M, 40.0 * IN2M, 2.0 * IN2M);
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let enemy = [deployment::Occupied { pos: (0.0, 0.0), radius: r }];
+    let gates = deployment::Gates { min_from_enemy_m: 12.0 * IN2M, min_from_marker_m: 12.0 * IN2M, ..Default::default() };
+    let free = deployment::deploy_side_gated(&specs, &strip, None, None, &enemy, &objs, &empty_board(), 3, 15);
+    let fs = free.placements[0].spot;
+    assert!(fs.0.hypot(fs.1) <= 12.0 * IN2M + 2.0 * r, "ungated: inside the gate radius {fs:?}");
+    let gated = deployment::deploy_side_gated(&specs, &strip, None, Some(&gates), &enemy, &objs, &empty_board(), 3, 15);
+    let spot = gated.placements[0].spot;
+    assert!(spot.0.hypot(spot.1) > 12.0 * IN2M + 2.0 * r, "past the gate: {spot:?}");
+    assert!(spot.0.abs() <= 20.0 * IN2M, "still inside the strip: {spot:?}");
+    let none = deployment::deploy_side_gated(&specs, &strip, None, None, &[], &objs, &empty_board(), 3, 15);
+    assert_eq!(none, deployment::deploy_side(&specs, &strip, &objs, &empty_board(), 3, 15), "no gates == the old entry");
+}
+
+
+/// D7b: phase-major deployment. Defender = side 2 (index 1): half in the 12" disc, then the attacker
+/// (side 1) all in the frame, then the defender's rest anywhere; the most expensive units go first.
+#[test]
+fn phased_deployment_runs_phase_by_phase_most_expensive_first() {
+    assert_eq!((deployment::phase_quota("half", 5, 0), deployment::phase_quota("half", 4, 0)), (2, 2));
+    assert_eq!((deployment::phase_quota("all", 5, 0), deployment::phase_quota("rest", 5, 2), deployment::phase_quota("rest", 2, 5)), (5, 3, 0));
+    let r = 0.016;
+    let mk = |tag: &str, i: usize, pts: i64| deployment::UnitSpec {
+        key: format!("{tag}{i}"),
+        model_count: 2,
+        base_r_m: r,
+        points: pts,
+        footprint: deployment::deploy_footprint_offsets(2, r, false),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 2 }],
+        ..Default::default()
+    };
+    let costs = [30, 90, 10, 70, 50];
+    let s1: Vec<_> = costs.iter().enumerate().map(|(i, &c)| mk("a", i, c)).collect();
+    let s2: Vec<_> = costs.iter().enumerate().map(|(i, &c)| mk("d", i, c)).collect();
+    let cat: serde_json::Value = serde_json::from_str(include_str!("../../../assets/solo/deployments.json")).unwrap();
+    let zones_of = |id: &str| nml_core::objectives::zones_of_style(&cat["styles"][id]);
+    let in2 = IN2M;
+    let table = deployment::Rect::new(-36.0 * in2, -24.0 * in2, 72.0 * in2, 48.0 * in2);
+    let disc = deployment::Rect::new(-12.0 * in2, -12.0 * in2, 24.0 * in2, 24.0 * in2);
+    let phases = vec![
+        deployment::Phase { side: 1, share: "half".into(), rect: disc, zones: zones_of("centre_disc_12"), gates: None },
+        deployment::Phase { side: 0, share: "all".into(), rect: table, zones: zones_of("edge_band_12"), gates: None },
+        deployment::Phase { side: 1, share: "rest".into(), rect: table, zones: zones_of("anywhere"), gates: None },
+    ];
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let out = deployment::deploy_phased(&s1, &s2, &table, &table, &phases, [None, None], &objs, &empty_board(), 3, 4, 1, 15);
+    let sides: Vec<i64> = out.sequence.iter().map(|e| e.0).collect();
+    assert_eq!(sides, vec![2, 2, 1, 1, 1, 1, 1, 2, 2, 2], "defender half, attacker all, defender rest");
+    let keys: Vec<&str> = out.sequence.iter().map(|e| e.1.as_str()).collect();
+    assert_eq!(&keys[..2], ["d1", "d3"], "the 90- and 70-point units first");
+    let fp = deployment::deploy_footprint_offsets(2, r, false);
+    let stands_in = |side: &deployment::SideDeploy, key: &str, id: &str| {
+        let p = side.placements.iter().find(|p| p.key == key).unwrap();
+        let z = zones_of(id);
+        fp.iter().all(|o| deployment::zones_contain(&z, (p.spot.0 + o.0, p.spot.1 + o.1)))
+    };
+    assert!(stands_in(&out.side2, "d1", "centre_disc_12") && stands_in(&out.side2, "d3", "centre_disc_12"));
+    assert!(out.side1.placements.iter().all(|p| stands_in(&out.side1, &p.key, "edge_band_12")), "the attacker stands in the frame");
+}
+
+/// D8b: a side that reserves keeps what its phases left over off the table, in `reserved`; and an
+/// arrival inside a catalog zone shape lands in it, clear of the enemy ring.
+#[test]
+fn leftover_units_are_reserved_and_an_arrival_stays_in_the_zone_shape() {
+    let r = 0.016;
+    let mk = |i: usize| deployment::UnitSpec {
+        key: format!("u{i}"),
+        model_count: 2,
+        base_r_m: r,
+        points: 100 - i as i64,
+        footprint: deployment::deploy_footprint_offsets(2, r, false),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 2 }],
+        ..Default::default()
+    };
+    let specs: Vec<_> = (0..5).map(mk).collect();
+    let cat: serde_json::Value = serde_json::from_str(include_str!("../../../assets/solo/deployments.json")).unwrap();
+    let disc = nml_core::objectives::zones_of_style(&cat["styles"]["centre_disc_12"]);
+    let table = deployment::Rect::new(-36.0 * IN2M, -24.0 * IN2M, 72.0 * IN2M, 48.0 * IN2M);
+    let rect = deployment::Rect::new(-12.0 * IN2M, -12.0 * IN2M, 24.0 * IN2M, 24.0 * IN2M);
+    let phases = vec![deployment::Phase { side: 0, share: "half".into(), rect, zones: disc.clone(), gates: None }];
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let out = deployment::deploy_phased_reserving(&specs, &specs, &table, &table, &phases, [None, None], [true, false], &objs, &empty_board(), 3, 4, 1, 15);
+    assert_eq!(out.side1.placements.len(), 2, "floor(5/2) deployed");
+    assert_eq!(out.side1.reserved, vec!["u2", "u3", "u4"], "the rest set aside, in queue order after the points sort");
+    assert_eq!(out.side2.placements.len(), 5, "a side without the reserve flag deploys everything");
+
+    let zone = deployment::ArrivalZone::Rect(table);
+    let enemy = [deployment::ArrivalEnemy { pos: (6.0 * IN2M, 0.0), min_dist_m: 0.0, pad_m: r }];
+    let fp = deployment::deploy_footprint_offsets(2, r, false);
+    let radius = deployment::deploy_footprint_radius(2, r);
+    let mut occ = Vec::new();
+    let spot = deployment::arrive_one_in(&zone, Some(&disc), &objs, &mut occ, &enemy, &[], 12.0 * IN2M, &empty_board(), radius, &fp, r, false);
+    assert!(spot.0.is_finite(), "a legal spot exists inside the disc");
+    assert!(fp.iter().all(|o| deployment::zones_contain(&disc, (spot.0 + o.0, spot.1 + o.1))), "every base in the disc: {spot:?}");
+    assert!(((spot.0 - 6.0 * IN2M).hypot(spot.1)) > 12.0 * IN2M, "outside the 12\" ring: {spot:?}");
+}
+
+
+/// D7d: a phase's own gates bind that phase only. Side 2 puts half its army in the centre disc, then
+/// side 1 deploys everywhere: with `min_from_enemy` on THAT phase every attacker base stays > 12" from
+/// the defender's; the same phase without it crowds them.
+#[test]
+fn a_phase_gate_binds_its_phase() {
+    let r = 0.016;
+    let mk = |tag: &str, i: usize| deployment::UnitSpec {
+        key: format!("{tag}{i}"),
+        model_count: 2,
+        base_r_m: r,
+        points: 100 - i as i64,
+        footprint: deployment::deploy_footprint_offsets(2, r, false),
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 2 }],
+        ..Default::default()
+    };
+    let s1: Vec<_> = (0..4).map(|i| mk("a", i)).collect();
+    let s2: Vec<_> = (0..4).map(|i| mk("d", i)).collect();
+    let cat: serde_json::Value = serde_json::from_str(include_str!("../../../assets/solo/deployments.json")).unwrap();
+    let zones_of = |id: &str| nml_core::objectives::zones_of_style(&cat["styles"][id]);
+    let table = deployment::Rect::new(-36.0 * IN2M, -24.0 * IN2M, 72.0 * IN2M, 48.0 * IN2M);
+    let disc = deployment::Rect::new(-12.0 * IN2M, -12.0 * IN2M, 24.0 * IN2M, 24.0 * IN2M);
+    let gate = deployment::Gates { min_from_enemy_m: 12.0 * IN2M, ..Default::default() };
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let near = |g: Option<deployment::Gates>| {
+        let phases = vec![
+            deployment::Phase { side: 1, share: "half".into(), rect: disc, zones: zones_of("centre_disc_12"), gates: None },
+            deployment::Phase { side: 0, share: "all".into(), rect: table, zones: zones_of("anywhere"), gates: g },
+        ];
+        let out = deployment::deploy_phased(&s1, &s2, &table, &table, &phases, [None, None], &objs, &empty_board(), 3, 4, 1, 15);
+        let fp = deployment::deploy_footprint_offsets(2, r, false);
+        let enemy: Vec<(f64, f64)> = out.side2.placements.iter().take(2)
+            .flat_map(|p| fp.iter().map(move |o| (p.spot.0 + o.0, p.spot.1 + o.1))).collect();
+        out.side1.placements.iter()
+            .flat_map(|p| fp.iter().map(move |o| (p.spot.0 + o.0, p.spot.1 + o.1)))
+            .flat_map(|a| enemy.iter().map(move |e| (a.0 - e.0).hypot(a.1 - e.1)))
+            .fold(f64::INFINITY, f64::min)
+    };
+    assert!(near(None) < 12.0 * IN2M, "ungated: the attacker crowds the defender's half");
+    assert!(near(Some(gate)) > 12.0 * IN2M, "gated for that phase: every attacker base stays clear");
 }

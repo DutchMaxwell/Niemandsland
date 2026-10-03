@@ -362,6 +362,7 @@ var _solo_batch: bool = false                # headless sweeps: instant (non-phy
 var _solo_relic_drop_queue: Array = []
 var _solo_relic_drop_active: Dictionary = {}
 var _solo_relic_drop_gen := 0
+var _solo_secret_pick: Dictionary = {}   # D12a-2: the human defender's two clicks {relic, trap} (marker indexes)
 var _solo_dev: bool = false                  # developer mode: render the AI's decision records into the battle log
 ## Per-activation stderr trace of the both-AI arena loop (env NML_AI_TRACE=1) — the ladder tooling's
 ## progress/stall diagnostic for long unattended headless matches. Off by default: zero output in normal play.
@@ -746,8 +747,11 @@ func _ready() -> void:
 	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
 	map_layout_editor.objectives_changed.connect(_on_objectives_changed)
 	map_layout_editor.relic_drop_chosen.connect(_solo_relic_drop_chosen)
+	map_layout_editor.marker_picked.connect(_solo_secret_marker_picked)
+	map_layout_editor.marker_pick_refused.connect(func() -> void:
+		_show_toast("Click one of the markers"))
 	map_layout_editor.relic_drop_refused.connect(func() -> void:
-		_show_toast("Place the relic within 1\" of the carrier's base"))
+		_show_toast("Place the relic within %d\" of the carrier's base" % int(map_layout_editor.relic_drop_reach_in)))
 	map_layout_btn.pressed.connect(_on_map_layout_pressed)
 
 	# Initialize Terrain Overlay (on the 3D table)
@@ -2222,19 +2226,19 @@ func _solo_drop_carried(gu: GameUnit, reason: String) -> void:
 		var other := u as GameUnit
 		if other != null and int(other.unit_properties.get("player_id", 0)) != carrier_side:
 			opponents.append(other)
-	var drop_pos := SoloController.drop_point(gu, opponents)
 	var human_places := solo_controller != null and carrier_side != solo_controller.human_slot \
 		and not _solo_batch and not _solo_both_ai
 	for i in range(SoloController.mission_markers.size()):
 		var mk: Dictionary = SoloController.mission_markers[i]
 		if bool(mk.get("carry", false)) and String(mk.get("carried_by", "")) == gu.unit_id:
 			mk["carried_by"] = ""
-			terrain_overlay.set_objective_position(i, drop_pos)
+			var reach_in := float(mk.get("drop_in", 1.0))   # D14.5: Rescue drops 6", the others 1"
+			terrain_overlay.set_objective_position(i, SoloController.drop_point(gu, opponents, reach_in))
 			terrain_overlay.set_objective_carried(i, false)
 			var entry := {"index": i, "name": gu.get_name(), "reason": reason,
 				"centre": (gu.models[0] as ModelInstance).node.global_position,
 				"radius": SoloController.model_base_radius_m(gu.models[0] as ModelInstance),
-				"placer": "P%d" % (3 - carrier_side)}
+				"placer": "P%d" % (3 - carrier_side), "reach": reach_in}
 			if human_places:
 				_solo_relic_drop_queue.append(entry)
 			else:
@@ -2254,6 +2258,9 @@ func _solo_sync_relic_map() -> void:
 
 
 func _solo_log_relic_drop(entry: Dictionary) -> void:
+	if entry.has("move"):
+		_solo_finish_marker_move(entry)
+		return
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"Relic dropped by %s (%s), placed by %s" % [entry["name"], entry["reason"], entry["placer"]], true)
@@ -2264,8 +2271,11 @@ func _solo_next_relic_drop_prompt() -> void:
 		return
 	_solo_relic_drop_active = _solo_relic_drop_queue.pop_front()
 	_on_map_layout_pressed()
-	map_layout_editor.begin_relic_drop(_solo_relic_drop_active["centre"], _solo_relic_drop_active["radius"])
-	_show_toast("Place the dropped relic within 1\" of the carrier's base; close or Esc to use default")
+	var is_move: bool = _solo_relic_drop_active.has("move")
+	map_layout_editor.begin_relic_drop(_solo_relic_drop_active["centre"], _solo_relic_drop_active["radius"],
+		SoloController.VIP_MOVE_IN if is_move else float(_solo_relic_drop_active.get("reach", 1.0)))
+	_show_toast("Move the marker up to 12\" (click a point); close or Esc to walk it toward the edge" if is_move \
+		else "Place the dropped relic within %d\" of the carrier's base; close or Esc to use default" % int(_solo_relic_drop_active.get("reach", 1.0)))
 	_solo_relic_drop_gen += 1
 	get_tree().create_timer(20.0).timeout.connect(_solo_relic_drop_timeout.bind(_solo_relic_drop_gen))
 
@@ -2276,12 +2286,49 @@ func _solo_relic_drop_chosen(pos: Vector3) -> void:
 	terrain_overlay.set_objective_position(int(_solo_relic_drop_active["index"]), pos)
 	_solo_sync_relic_map()
 	_solo_relic_drop_active["placer"] = "P%d" % solo_controller.human_slot
+	_solo_relic_drop_active["chosen"] = true
 	map_layout_editor._on_close_pressed()
 
 
 func _solo_relic_drop_timeout(gen: int) -> void:
 	if gen == _solo_relic_drop_gen and not _solo_relic_drop_active.is_empty():
 		map_layout_editor._on_close_pressed()
+
+
+## D10a: round start of a mission with a mobile (VIP) marker. While the DEFENDER controls it, it
+## moves up to 12": a human defender clicks the point (the relic-drop click flow, 12" reach), the AI
+## and a skipped prompt take R10a (SoloController.vip_walk_z). The attacker holding it = no move.
+func _solo_mobile_marker_round_start() -> void:
+	if terrain_overlay == null or not SoloController.mission_roles.has("defender"):
+		return
+	var defender := int(SoloController.mission_roles["defender"])
+	var owners: Array = terrain_overlay.get_objective_owners()
+	var human_moves := solo_controller != null and defender == solo_controller.human_slot \
+		and not _solo_batch and not _solo_both_ai
+	for i in range(SoloController.mission_markers.size()):
+		var mk: Dictionary = SoloController.mission_markers[i]
+		var edge := int(mk.get("deploy_edge", 0))
+		if not bool(mk.get("mobile", false)) or edge == 0 or i >= owners.size() or int(owners[i]) != defender:
+			continue
+		var from: Vector3 = terrain_overlay.get_objectives()[i]
+		var depth_in: float = table.table_size.y * 12.0
+		var to := Vector3(from.x, from.y, SoloController.vip_walk_z(from.z / 0.0254, edge, depth_in) * 0.0254)
+		var entry := {"move": true, "index": i, "default": to, "centre": from, "radius": 0.0,
+			"placer": "P%d" % defender}
+		if human_moves:
+			_solo_relic_drop_queue.append(entry)
+		else:
+			_solo_finish_marker_move(entry)
+	_solo_next_relic_drop_prompt()
+
+
+func _solo_finish_marker_move(entry: Dictionary) -> void:
+	if not bool(entry.get("chosen", false)):
+		terrain_overlay.set_objective_position(int(entry["index"]), entry["default"])
+	_solo_sync_relic_map()
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"%s moves the marker (round %d)" % [entry["placer"], opr_army_manager.current_round], true)
 
 
 func _solo_book_mission_vp(final: bool) -> void:
@@ -2392,6 +2439,7 @@ func _solo_auto_seize() -> void:
 			"radii": _solo_alive_radii(gu)})
 	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners,
 		SoloController.mission_markers)
+	_solo_secret_reveals(infos, objectives, res)
 	# NML-1010 wave C step C2 (Relic Hunt/Capture & Hold): a marker just seized this round is
 	# picked up onto the seizing side's nearest eligible unit; the overlay hides its own token
 	# while carried (drop hooks re-show it — main.gd:_solo_drop_carried).
@@ -2442,6 +2490,177 @@ func _solo_auto_seize() -> void:
 				battle_log.log_event(BattleLog.Category.GENERAL, "Objective %d: %s" % [int(i) + 1, locked_near[i]], true)
 
 
+## D12a: the attacker's seize turns up its secret markers (Smash & Grab). A trap hits the seizing
+## unit (D6+1 hits on the real tray), any non-relic marker is removed, the relic stays for the carry
+## step. A removed marker leaves the seize `changes` so the overlay does not hand it to the seizer.
+func _solo_secret_reveals(infos: Array, objectives: Array, res: Dictionary) -> void:
+	if not SoloController.mission_roles.has("attacker"):
+		return
+	var events: Array = SoloController.secret_reveal_step(infos, objectives, res["owners"],
+		SoloController.mission_markers, int(SoloController.mission_roles["attacker"]))
+	for ev in events:
+		var e := ev as Dictionary
+		var idx: int = int(e["index"])
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Secret marker %d revealed by %s: %s" % [
+				idx + 1, str(e["name"]), str(e["secret"]).to_upper() if str(e["secret"]) != "" else "empty"], true)
+		if str(e["secret"]) == "relic":
+			continue
+		terrain_overlay.set_objective_carried(idx, true)   # hides the removed token
+		terrain_overlay.set_objective_owner(idx, 0)
+		var kept: Array = []
+		for c in res.get("changes", []):
+			if int((c as Dictionary).get("index", -1)) != idx:
+				kept.append(c)
+		res["changes"] = kept
+		if str(e["secret"]) == "trap":
+			var victim: GameUnit = opr_army_manager.game_units.get(str(e["unit_id"]), null)
+			if victim != null:
+				_solo_secret_trap_hits(victim)
+
+
+## Trap: D6+1 hits on the seizing unit, saved and landed through the normal save seam.
+func _solo_secret_trap_hits(victim: GameUnit) -> void:
+	var faces: Array = await _solo_tray_roll(1, 1, _solo_owner_label(victim), "attack",
+		"Trap: D6+1 hits on %s" % victim.get_name())
+	if faces.is_empty():
+		return
+	var hits: int = int(faces[0]) + 1
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Trap: %s takes %d hits" % [victim.get_name(), hits], true)
+	var profile: Dictionary = {"name": "Trap", "ap": 0, "deadly": 0, "rules": []}
+	var w: int = await _solo_resolve_saves(victim, victim, "Trap", [], hits,
+		_solo_defense_vs(victim, AiCombatMath.HIT_SOURCE_MELEE), profile, not _solo_is_ai_unit(victim), true)
+	if w > 0:
+		await _solo_land_wounds(victim, w, 0)
+
+
+## D12a: the defender assigns trap and relic when the roles are known. The human's two clicks are
+## D12a-2; until then (and for the AI) SoloController.secret_assign decides.
+func _solo_secret_markers_assign() -> void:
+	# The count of a dice-term spec ("d3+2") is only known once the markers are on the table.
+	var spec: Dictionary = (MissionCatalog.get_mission(_solo_mission_id).get("markers", {}) as Dictionary) \
+		if not _solo_mission_id.is_empty() else {}
+	if bool(spec.get("secret", false)) and terrain_overlay != null \
+			and SoloController.mission_markers.size() != terrain_overlay.get_objectives().size():
+		var sized: Dictionary = spec.duplicate()
+		sized["count"] = terrain_overlay.get_objectives().size()
+		SoloController.mission_markers = SoloController.marker_metadata(sized)
+	var markers: Array = SoloController.mission_markers
+	if terrain_overlay == null or table == null or markers.is_empty() or not (markers[0] as Dictionary).has("secret"):
+		return
+	var defender := int(SoloController.mission_roles.get("defender", 0))
+	if solo_controller != null and defender == solo_controller.human_slot and markers.size() >= 2 \
+			and not _solo_batch and not _solo_both_ai and map_layout_editor != null:
+		_solo_secret_pick = {"relic": -1, "trap": -1}
+		_solo_sync_relic_map()   # the editor lists the live marker spots, same order as the overlay
+		_on_map_layout_pressed()
+		map_layout_editor.begin_marker_pick()
+		_show_toast("Hide your secrets: click the marker that holds the RELIC (close or Esc = default)")
+		return
+	_solo_secret_apply(_solo_secret_default_kinds())
+
+
+## The AI rule's kinds for the live markers (the human's fallback when the clicks are skipped).
+func _solo_secret_default_kinds() -> Array:
+	var pts: Array = []
+	for pos in terrain_overlay.get_objectives():
+		pts.append(Vector2((pos as Vector3).x, (pos as Vector3).z) / SoloController.INCHES_TO_METERS)
+	return SoloController.secret_assign(pts, table.table_size.x * 12.0, table.table_size.y * 12.0)
+
+
+## Smash & Grab (GF v3.5.1 p.27 / AoF v3.5.1 p.26: "the defender must set up a total of D3+2 objective markers"):
+## the DEFENDER places ALL the markers. The hand flow lets the human place them before the roll-off, so a
+## human who turns out to be the attacker would have placed the defender's markers. When the AI defends,
+## the human's markers are dropped and the AI places D3+2 by the rulebook layout (the arena's own draw);
+## a human defender keeps the markers he placed.
+func _solo_defender_places_markers() -> void:
+	var mission: Dictionary = MissionCatalog.get_mission(_solo_mission_id) if not _solo_mission_id.is_empty() else {}
+	if str((mission.get("markers", {}) as Dictionary).get("placer", "")) != "defender" or terrain_overlay == null \
+			or table == null or map_layout_editor == null:
+		return
+	var defender := int(SoloController.mission_roles.get("defender", 0))
+	if solo_controller == null or defender != solo_controller.ai_slot:
+		return
+	var dropped: int = terrain_overlay.get_objectives().size()
+	var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
+	var stamp := ObjectiveLayout.generate(int(_solo_deploy_fsm.get("seed", 0)), mission, style,
+		terrain_overlay.grid_cells, map_layout_editor._calculate_grid_dimensions().x,
+		table.table_size.x * 12.0, table.table_size.y * 12.0)
+	var world: Array = []
+	var fsm_spots: Array = []
+	for rp in (stamp["positions"] as Array):
+		var spot := Vector3(float(rp[0]), 0.0, float(rp[1])) * SoloController.INCHES_TO_METERS
+		world.append(spot)
+		fsm_spots.append(Vector2(spot.x, spot.z))
+	terrain_overlay.update_objectives(world, [])
+	if _solo_deploy_fsm.has("objectives"):
+		_solo_deploy_fsm["objectives"] = fsm_spots   # the deployment gates read the NEW markers
+	_solo_sync_relic_map()
+	_log_rule_event(BattleLog.Category.GENERAL,
+		"Defender (%s) places the %d markers (D3+2 rolled %d)%s" % [_solo_player_label(defender), world.size(),
+		int(stamp["count_roll"]), (" - the %d you placed were removed" % dropped) if dropped > 0 else ""], true)
+
+
+## D14.4: a mission whose markers are `mobile` (VIP Escort) gets its marker once the defender is known:
+## the start spot and `deploy_edge` from MissionCatalog.vip_start, the objective on the table, and the
+## runtime zone style "marker_disc_12" (12" around the marker) the defender's deployment phase names.
+func _solo_vip_setup() -> void:
+	var spec: Dictionary = (MissionCatalog.get_mission(_solo_mission_id).get("markers", {}) as Dictionary) \
+		if not _solo_mission_id.is_empty() else {}
+	if not bool(spec.get("mobile", false)) or terrain_overlay == null or table == null:
+		return
+	var defender := int(SoloController.mission_roles.get("defender", 0))
+	var start := MissionCatalog.vip_start(defender, table.table_size.y * 12.0)
+	var pos: Vector2 = start["pos"]
+	SoloController.mission_markers = SoloController.marker_metadata(spec)
+	for mk in SoloController.mission_markers:
+		(mk as Dictionary)["deploy_edge"] = int(start["deploy_edge"])
+	terrain_overlay.update_objectives([Vector3(pos.x, 0.0, pos.y) * SoloController.INCHES_TO_METERS], [defender])
+	_solo_sync_relic_map()
+	DeploymentCatalog.register_style("marker_disc_12", DeploymentCatalog.disc_style(pos, 12.0))
+	_log_rule_event(BattleLog.Category.GENERAL, "Defender (%s) sets the VIP marker 3\" from its table edge" % [
+		_solo_player_label(defender)], true)
+
+
+## The human defender's click: first the relic, then the trap (a different marker). The second click
+## finishes the assignment; closing the editor early takes the AI rule for what is missing.
+func _solo_secret_marker_picked(index: int) -> void:
+	if _solo_secret_pick.is_empty():
+		return
+	if int(_solo_secret_pick["relic"]) < 0:
+		_solo_secret_pick["relic"] = index
+		_show_toast("Now click the marker that holds the TRAP")
+		return
+	if index == int(_solo_secret_pick["relic"]):
+		_show_toast("That marker holds the relic - pick another one for the trap")
+		return
+	_solo_secret_pick["trap"] = index
+	map_layout_editor._on_close_pressed()
+
+
+func _solo_secret_pick_finished() -> void:
+	var picked := _solo_secret_pick
+	_solo_secret_pick = {}
+	var kinds: Array = _solo_secret_default_kinds()
+	if int(picked["relic"]) >= 0 and int(picked["trap"]) >= 0:
+		kinds = []
+		for i in range(SoloController.mission_markers.size()):
+			kinds.append("relic" if i == int(picked["relic"]) else ("trap" if i == int(picked["trap"]) else ""))
+	_solo_secret_apply(kinds)
+
+
+func _solo_secret_apply(kinds: Array) -> void:
+	var markers: Array = SoloController.mission_markers
+	for i in range(mini(markers.size(), kinds.size())):
+		(markers[i] as Dictionary)["secret"] = kinds[i]
+		if kinds[i] == "relic":
+			(markers[i] as Dictionary)["carry"] = true
+			(markers[i] as Dictionary)["carried_by"] = ""
+	_log_rule_event(BattleLog.Category.GENERAL, "Defender (%s) hides the trap and the relic among %d markers" % [
+		_solo_player_label(int(SoloController.mission_roles.get("defender", 0))), markers.size()], true)
+
+
 ## Player label for logs/summary: "P<n> (<army>)" when the slot has an imported army, else "P<n>".
 func _solo_player_label(pid: int) -> String:
 	if opr_army_manager != null and opr_army_manager.armies.has(pid):
@@ -2484,10 +2703,10 @@ func _solo_show_game_summary() -> void:
 	# _solo_book_mission_vp fills every round, so on the four progressive missions the two drifted apart:
 	# over 633 self-play games, 55 of the 233 round_vp ones named the LOSING side (seed 3003000: board
 	# 1:2 markers, ledger 6:5 VP, referee "p1", summary "P2 wins").
-	var winner_side: String = BattleSim.mission_winner(SoloController.mission_scoring,
-		terrain_overlay.get_objective_owners() if terrain_overlay != null else [],
-		SoloController.mission_vp, SoloController.mission_markers,
-		_solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
+	var summary_owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay != null else []
+	var winner_side: String = solo_controller.end_verdict(summary_owners, _solo_side_alive(1), _solo_side_alive(2)) \
+		if solo_controller != null else BattleSim.mission_winner(SoloController.mission_scoring, summary_owners,
+			SoloController.mission_vp, SoloController.mission_markers, _solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
 	var human_won: bool = winner_side == ("p%d" % human_slot)
 	var ai_won: bool = winner_side == ("p%d" % ai_slot)
 	var verdict: String = win_a if human_won else (win_b if ai_won else "Draw")
@@ -2771,6 +2990,35 @@ func _solo_roles_chosen(role: String, you_roll: int, ai_roll: int) -> void:
 	_solo_deploy_side_prompt(you_roll, ai_roll)
 
 
+## D6a: the catalog's deployment distance gates for the side `slot` plays ({} without roles or gates).
+func _solo_deploy_gates_for(slot: int) -> Dictionary:
+	if not _solo_mission_has_roles() or SoloController.mission_roles.is_empty():
+		return {}
+	var role := "attacker" if int(SoloController.mission_roles["attacker"]) == slot else "defender"
+	return (MissionCatalog.get_mission(_solo_mission_id).get("deploy_gates", {}) as Dictionary).get(role, {})
+
+
+## D6a: the gate a human placement breaks ("" = none), in the words the toast shows.
+func _solo_human_gate_violation(gu: GameUnit) -> String:
+	var gates := _solo_deploy_gates_for(solo_controller.human_slot)
+	if _solo_deploy_fsm.has("phases") and _solo_deploy_fsm.has("phase_gates"):   # D7d: the running phase's own
+		gates = _solo_deploy_fsm["phase_gates"]
+	if gates.is_empty():
+		return ""
+	var models: Array = []
+	for m in gu.get_alive_models():
+		var mi := m as ModelInstance
+		if mi != null and mi.node != null:
+			models.append({"pos": Vector2(mi.node.global_position.x, mi.node.global_position.z),
+				"radius": solo_controller.model_base_radius_m(mi)})
+	var markers: Array = []
+	if terrain_overlay != null:
+		for o in terrain_overlay.get_objectives():
+			markers.append(Vector2(o.x, o.z))
+	return SoloController.gate_violation(gates, models, solo_controller.bases_of_slot(solo_controller.ai_slot),
+		solo_controller.bases_of_slot(solo_controller.human_slot, gu), markers)
+
+
 ## Points of a slot's imported army; 0 without one.
 func _solo_army_points(slot: int) -> int:
 	var army = opr_army_manager.armies.get(slot) if opr_army_manager != null else null
@@ -2808,6 +3056,9 @@ func _solo_roles_set(winner_slot: int, winner_role: String) -> void:
 	var dfn: int = int(SoloController.mission_roles["defender"])
 	_log_rule_event(BattleLog.Category.GENERAL, "Roll-off: %s attacks, %s defends" % [
 		_solo_player_label(atk), _solo_player_label(dfn)], true)
+	_solo_defender_places_markers()
+	_solo_secret_markers_assign()
+	_solo_vip_setup()
 	if _solo_points_factor() > 1.0 and _solo_army_points(atk) > 0 and _solo_army_points(dfn) > 0:
 		_log_rule_event(BattleLog.Category.GENERAL, "Points: attacker %d, defender %d (ratio %.2f, target %.2f)" % [
 			_solo_army_points(atk), _solo_army_points(dfn),
@@ -3015,6 +3266,7 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 				"%s: P%d owns the -Z marker; P%d owns the +Z marker" % [
 					MissionCatalog.display_name(_solo_mission_id), neg_owner, pos_owner], true)
 	_solo_rapid_round_one_done = false   # a fresh game owes its round-1 Rapid Ambush beat again
+	_solo_deploy_fsm["ai_neg_z"] = ai_neg_z   # D14.2: the phases' "own" zone follows the side actually chosen
 	var w: float = float(_solo_deploy_fsm.get("w", 0.0))
 	var d: float = float(_solo_deploy_fsm.get("d", 0.0))
 	var depth: float = float(_solo_deploy_fsm.get("depth", 0.3048))
@@ -3022,7 +3274,7 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 	var zone := Rect2(Vector2(-w / 2.0, zmin), Vector2(w, depth))
 	var queued: int = solo_controller.deploy_begin(zone, _solo_deploy_fsm.get("objectives", []),
 		_solo_deploy_fsm.get("blocked_normal", Callable()), _solo_deploy_fsm.get("blocked_flying", Callable()),
-		int(_solo_deploy_fsm.get("seed", 0)))
+		int(_solo_deploy_fsm.get("seed", 0)), Callable(), _solo_deploy_gates_for(solo_controller.ai_slot))
 	print("[Solo/AI] deployment queued: %d AI unit(s) (%d scouts held for the scout phase)" % [
 		queued, solo_controller.deploy_scouts_pending()])
 	# Ambush reserves on BOTH sides (GF/AoF v3.5.1 p.13 "May be set aside before deployment") —
@@ -3056,15 +3308,298 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 	_solo_deploy_fsm["phase"] = "main"
 	_solo_deploy_fsm["human_out"] = false
 	_solo_flush_dev()
+	var phases: Array = SoloController.deploy_phases_of(MissionCatalog.get_mission(_solo_mission_id)) \
+		if _solo_mission_has_roles() and not SoloController.mission_roles.is_empty() else []
+	if not phases.is_empty():   # D7a: Attack & Defend phases replace the one-for-one alternation
+		_solo_deploy_fsm["phases"] = phases
+		_solo_deploy_fsm["phase_i"] = 0
+		_solo_deploy_fsm["phase_placed"] = {}
+		_log_rule_event(BattleLog.Category.GENERAL, "NACHTMAHR deploys by points, most expensive first: %s" % ", ".join(
+			PackedStringArray(solo_controller.deploy_prioritise_by_points())), true)
+		_solo_phase_start()
+		return
 	if bool(_solo_deploy_fsm.get("winner_is_ai", false)):
 		await _solo_deploy_ai_turn()
 	else:
 		_solo_deploy_show_human_turn()
 
 
+## D7a: the zone style's bounding rect in world metres (what the AI's search scans).
+func _solo_style_rect(style: Dictionary, player: int = 1) -> Rect2:
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for poly in DeploymentCatalog.zone_polygons(style, player):
+		for pt in poly:
+			lo = Vector2(minf(lo.x, pt.x), minf(lo.y, pt.y))
+			hi = Vector2(maxf(hi.x, pt.x), maxf(hi.y, pt.y))
+	return Rect2(lo * 0.0254, (hi - lo) * 0.0254)
+
+
+## D14.2: a phase's zone style and the player key its zone means. The pseudo-id "own" is the mission's
+## standard deployment style at the side's own table half (R13a: Ambush's "their deployment zone").
+func _solo_phase_zone(entry: Array, slot: int) -> Dictionary:
+	var id := str(entry[2])
+	if id != "own":
+		return {"style": DeploymentCatalog.get_style(id), "id": id, "player": 1}
+	var sid := str(MissionCatalog.get_mission(_solo_mission_id).get("deployment", "front_line"))
+	var ai_key: int = 1 if bool(_solo_deploy_fsm.get("ai_neg_z", true)) else 2
+	return {"style": DeploymentCatalog.get_style(sid), "id": sid,
+		"player": ai_key if slot == solo_controller.ai_slot else 3 - ai_key}
+
+
+## D7a: start the current deployment phase (role, share, zone style): the AI side deploys its whole
+## quota at once, the human side gets the quota panel and the zone drawn; after the last phase the
+## game moves on to the scout phase as before.
+func _solo_phase_start() -> void:
+	var phases: Array = _solo_deploy_fsm["phases"]
+	var i: int = int(_solo_deploy_fsm["phase_i"])
+	if i >= phases.size():
+		_solo_deploy_fsm.erase("phases")
+		_solo_mission_reserves_set_aside()
+		_solo_deploy_fsm["human_out"] = true
+		_solo_deploy_phase_advance()
+		return
+	var role: String = str((phases[i] as Array)[0])
+	var share: String = str((phases[i] as Array)[1])
+	var slot: int = int(SoloController.mission_roles[role])
+	var zone := _solo_phase_zone(phases[i] as Array, slot)
+	var style: Dictionary = zone["style"]
+	var placed: Dictionary = _solo_deploy_fsm["phase_placed"]
+	var ai_side: bool = slot == solo_controller.ai_slot
+	var phase_gates := _solo_phase_gates(phases[i] as Array, slot)
+	var total: int = solo_controller.deploy_main_total() if ai_side else _solo_human_main_units().size()
+	var quota: int = SoloController.phase_quota(share, total, int(placed.get(slot, 0)))
+	if terrain_overlay != null:
+		terrain_overlay.set_style_zones(style, int(zone["player"]) if str((phases[i] as Array)[2]) == "own" else 0)
+	if ai_side:
+		solo_controller.deploy_set_zone(_solo_style_rect(style, int(zone["player"])),
+			DeploymentCatalog.zone_test(str(zone["id"]), int(zone["player"])))
+		solo_controller.deploy_set_gates(phase_gates)
+		var done: Array = solo_controller.deploy_place_n(quota)
+		placed[slot] = int(placed.get(slot, 0)) + done.size()
+		_log_rule_event(BattleLog.Category.GENERAL, "Phase %d of %d (%s, %s): NACHTMAHR deploys %d unit(s)" % [
+			i + 1, phases.size(), role, share, done.size()], true)
+		_solo_deploy_fsm["phase_i"] = i + 1
+		_solo_phase_start()
+		return
+	_solo_deploy_fsm["phase_left"] = quota
+	_solo_deploy_fsm["phase_gates"] = phase_gates
+	_solo_deploy_fsm["human_turn"] = true
+	if quota <= 0:
+		_solo_deploy_fsm["phase_i"] = i + 1
+		_solo_phase_start()
+		return
+	_solo_phase_panel()
+
+
+## The human phase panel: which phase, how many units are still owed.
+func _solo_phase_panel() -> void:
+	var phases: Array = _solo_deploy_fsm["phases"]
+	var i: int = int(_solo_deploy_fsm["phase_i"])
+	_solo_deploy_ui_show("Phase %d of %d (%s, %s): deploy %d more unit(s) inside the marked zone, then ✓ for each." % [
+		i + 1, phases.size(), str((phases[i] as Array)[0]), str((phases[i] as Array)[1]),
+		int(_solo_deploy_fsm["phase_left"])], "✓ Unit placed", func() -> void: _solo_deploy_human_done_one())
+
+
+## D8a: the catalog's reserve rules ({} = none): `who` ("both"/"attacker"/"defender"), `arrive_on`,
+## `from_round`, `zone` (a deployment style id) and `gates`.
+func _solo_reserve_cfg() -> Dictionary:
+	if not _solo_mission_has_roles() or SoloController.mission_roles.is_empty():
+		return {}
+	return MissionCatalog.get_mission(_solo_mission_id).get("reserves", {})
+
+
+## The slots whose leftover units a reserve rule covers.
+func _solo_reserve_slots(cfg: Dictionary) -> Array:
+	var who := str(cfg.get("who", "both"))
+	var out: Array = []
+	for role in ["attacker", "defender"]:
+		if who == "both" or who == role:
+			out.append(int(SoloController.mission_roles[role]))
+	return out
+
+
+## D8a: after the last phase, whatever a covered side has not deployed is set aside in reserve (the AI's
+## queue leftover; the human's units still off the table stay on the tray).
+func _solo_mission_reserves_set_aside() -> void:
+	var cfg := _solo_reserve_cfg()
+	if cfg.is_empty():
+		return
+	var tw: float = table.table_size.x * 0.3048 if table != null else 99.0
+	var td: float = table.table_size.y * 0.3048 if table != null else 99.0
+	var trect := Rect2(Vector2(-tw / 2.0, -td / 2.0), Vector2(tw, td))
+	for slot in _solo_reserve_slots(cfg):
+		var units: Array = []
+		if slot == solo_controller.ai_slot:
+			units = solo_controller.deploy_take_queue()
+		else:
+			for u in _solo_human_main_units():
+				var c := solo_controller.unit_centre(u as GameUnit)
+				if not trect.has_point(Vector2(c.x, c.z)):
+					units.append(u)
+		solo_controller.mission_reserve_set(units)
+		var names: PackedStringArray = []
+		for u in units:
+			names.append((u as GameUnit).get_name())
+		if not units.is_empty():
+			_log_rule_event(BattleLog.Category.GENERAL, "%s sets %d unit(s) aside in reserve (%s) — each arrives on %d+ from round %d" % [
+				_solo_player_label(slot), units.size(), ", ".join(names), int(cfg.get("arrive_on", 4)),
+				int(cfg.get("from_round", 2))], slot == solo_controller.ai_slot)
+
+
+## D11a (Last Stand, R8a): a covered side's unit that is destroyed for the FIRST time comes back as a
+## full-strength copy in reserve (parked off the table, a mission reserve like any other: it rolls the
+## mission's die each round). The copy is marked `recycled`, so its own destruction is final.
+func _solo_recycle_if_due(gu: GameUnit) -> void:
+	var cfg := _solo_reserve_cfg()
+	if cfg.is_empty() or not bool(cfg.get("recycle", false)) or gu == null or table == null:
+		return
+	if bool(gu.unit_properties.get("recycled", false)) or bool(gu.unit_properties.get("mission_reserve", false)):
+		return
+	var pid: int = int(gu.unit_properties.get("player_id", 0))
+	var src := gu.source_data as OPRApiClient.OPRUnit
+	if not _solo_reserve_slots(cfg).has(pid) or src == null:
+		return
+	var profile := src.duplicate_unit()
+	profile.selection_id = ""
+	profile.join_to_unit = ""
+	var tx: float = table.table_size.x * 0.3048 / 2.0 + 0.5
+	var spots: Array = []
+	for i in profile.size:
+		spots.append(Vector3(tx, 0.0, -0.3 + float(i) * 0.04))   # the tray side, off the table
+	var copy: GameUnit = opr_army_manager.create_runtime_unit({"opr_unit": profile,
+		"faction_folder": str(gu.unit_properties.get("faction_folder", "")),
+		"rule_descriptions": gu.unit_properties.get("rule_descriptions", {}),
+		"display_suffix": str(gu.unit_properties.get("display_suffix", ""))}, pid, spots, "recycled")
+	if copy == null:
+		return
+	copy.unit_properties["recycled"] = true
+	solo_controller.mission_reserve_set([copy])
+	_log_rule_event(BattleLog.Category.GENERAL, "%s is destroyed — a full-strength copy returns to reserve ONCE, arriving on %d+ from round %d" % [
+		gu.get_name(), int(cfg.get("arrive_on", 6)), int(cfg.get("from_round", 2))], pid == solo_controller.ai_slot)
+
+
+## D11a: at a round start with no unit of a covering side left on the table, that side's reserves are lost.
+func _solo_recycle_reserves_lost(round_number: int) -> void:
+	var cfg := _solo_reserve_cfg()
+	if cfg.is_empty() or not bool(cfg.get("recycle", false)) or round_number < int(cfg.get("from_round", 2)):
+		return
+	for slot in _solo_reserve_slots(cfg):
+		var held: Array = []
+		var on_table := 0
+		for u in opr_army_manager.get_game_units_for_player(slot):
+			var gu := u as GameUnit
+			if gu == null or gu.is_destroyed():
+				continue
+			if bool(gu.unit_properties.get("mission_reserve", false)) and bool(gu.unit_properties.get("ambush_reserve", false)):
+				held.append(gu)
+			else:
+				on_table += 1
+		if on_table > 0 or held.is_empty():
+			continue
+		for gu in held:
+			(gu as GameUnit).unit_properties["ambush_reserve"] = false
+			(gu as GameUnit).unit_properties.erase("mission_reserve")
+			solo_controller.ambush_reserve.erase(gu)
+			for m in (gu as GameUnit).models:
+				(m as ModelInstance).is_alive = false
+			_solo_set_unit_visible(gu as GameUnit, false)
+		_log_rule_event(BattleLog.Category.GENERAL, "%s has no unit on the table at the start of round %d — its %d reserve unit(s) are lost" % [
+			_solo_player_label(slot), round_number, held.size()], slot == solo_controller.ai_slot)
+
+
+## D8a: the round's reserve rolls — ONE tray roll per side with a held unit (a die each, recorded by the
+## dice recorder), then the arrival zone and gates are handed to the controller for the arrivals that follow.
+func _solo_mission_reserve_rolls(round_number: int) -> void:
+	_solo_recycle_reserves_lost(round_number)
+	var cfg := _solo_reserve_cfg()
+	if cfg.is_empty() or round_number < int(cfg.get("from_round", 2)):
+		return
+	var on: int = int(cfg.get("arrive_on", 4))
+	for slot in _solo_reserve_slots(cfg):
+		var held := 0
+		for u in opr_army_manager.get_game_units_for_player(slot):
+			var gu := u as GameUnit
+			if gu != null and not gu.is_destroyed() and bool(gu.unit_properties.get("mission_reserve", false)) \
+					and bool(gu.unit_properties.get("ambush_reserve", false)):
+				held += 1
+		if held == 0:
+			continue
+		var faces: Array = await _solo_tray_roll(held, on, _solo_player_label(slot), "attack",
+			"%s: reserve arrival (%d+)" % [_solo_player_label(slot), on])
+		var queue: Array = faces.duplicate()
+		var rolled: Array = solo_controller.mission_arrival_rolls(slot, round_number, int(cfg.get("from_round", 2)), on,
+			func() -> int: return int(queue.pop_front()))
+		for e in rolled:
+			_log_rule_event(BattleLog.Category.GENERAL, "Reserve roll: %s rolls %d (needs %d+) — %s" % [
+				(e["unit"] as GameUnit).get_name(), int(e["roll"]), on,
+				"arrives this round" if bool(e["arrives"]) else "stays off the table"], slot == solo_controller.ai_slot)
+	solo_controller.mission_arrival_set(DeploymentCatalog.zone_test(str(cfg.get("zone", "anywhere")), 1),
+		(cfg.get("gates", {}) as Dictionary))
+
+
+## D8a: the first rule a human reserve placement breaks (zone, then the gates), "" when fine or when none
+## of the placed units is a mission reserve.
+func _solo_reserve_arrival_violation(placed: Array) -> String:
+	var cfg := _solo_reserve_cfg()
+	for g in placed:
+		var gu := g as GameUnit
+		if cfg.is_empty() or gu == null or not bool(gu.unit_properties.get("mission_reserve", false)):
+			continue
+		var c := solo_controller.unit_centre(gu)
+		if not DeploymentCatalog.in_zone(DeploymentCatalog.get_style(str(cfg.get("zone", "anywhere"))), 1, Vector2(c.x, c.z) / 0.0254):
+			return "%s must arrive inside the marked zone — move it, then ✓" % gu.get_name()
+		var models: Array = []
+		for m in gu.get_alive_models():
+			var mi := m as ModelInstance
+			if mi != null and mi.node != null:
+				models.append({"pos": Vector2(mi.node.global_position.x, mi.node.global_position.z),
+					"radius": solo_controller.model_base_radius_m(mi)})
+		var markers: Array = []
+		if terrain_overlay != null:
+			for o in terrain_overlay.get_objectives():
+				markers.append(Vector2(o.x, o.z))
+		var why := SoloController.gate_violation((cfg.get("gates", {}) as Dictionary), models,
+			solo_controller.bases_of_slot(solo_controller.ai_slot), [], markers)
+		if not why.is_empty():
+			return "%s %s — move it, then ✓" % [gu.get_name(), why]
+	return ""
+
+
+## D7d: a phase's own distance gates (an optional 4th element of the catalog entry), else the role's.
+func _solo_phase_gates(entry: Array, slot: int) -> Dictionary:
+	if entry.size() > 3 and entry[3] is Dictionary:
+		return entry[3]
+	return _solo_deploy_gates_for(slot)
+
+
+## The human's main-phase units: alive, not attached, not a scout, not held in reserve.
+func _solo_human_main_units() -> Array:
+	var out: Array = []
+	for u in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
+		var gu := u as GameUnit
+		if gu != null and gu.get_alive_count() > 0 and not (gu.has_method("is_attached") and gu.is_attached()) \
+				and not SoloController.unit_has_scout(gu) and not bool(gu.unit_properties.get("ambush_reserve", false)):
+			out.append(gu)
+	return out
+
+
+## D7a: a human placement outside the phase's zone ("" = fine).
+func _solo_phase_zone_violation(gu: GameUnit) -> String:
+	var phases: Array = _solo_deploy_fsm["phases"]
+	var zone := _solo_phase_zone(phases[int(_solo_deploy_fsm["phase_i"])] as Array, solo_controller.human_slot)
+	var c := solo_controller.unit_centre(gu)
+	if DeploymentCatalog.in_zone(zone["style"], int(zone["player"]), Vector2(c.x, c.z) / 0.0254):
+		return ""
+	return "must be placed inside the marked zone"
+
+
 ## The human's MAIN/SCOUT-phase turn panel: place ONE unit, then hand over by click.
 func _solo_deploy_show_human_turn() -> void:
 	_solo_deploy_fsm["human_turn"] = true
+	if _solo_deploy_fsm.has("phases"):   # D7a: the phase panel, never the one-for-one alternation text
+		_solo_phase_panel()
+		return
 	var phase := str(_solo_deploy_fsm.get("phase", "main"))
 	var ai_left: int = solo_controller.deploy_pending() if phase == "main" else solo_controller.deploy_scouts_pending()
 	var what := "one unit" if phase == "main" else "one SCOUT unit (up to 12\" ahead of your zone)"
@@ -3089,8 +3624,30 @@ func _solo_deploy_human_done_one() -> void:
 		_solo_show_toast("Nothing new on the table — place a unit first, then ✓")
 		_solo_deploy_show_human_turn()
 		return
+	for gu in placed:   # D6a: a roles mission's distance gates
+		var broken := _solo_human_gate_violation(gu as GameUnit)
+		if not broken.is_empty():
+			_solo_show_toast("%s %s — move it, then ✓" % [(gu as GameUnit).get_name(), broken])
+			_solo_deploy_show_human_turn()
+			return
+	if _solo_deploy_fsm.has("phases"):   # D7a: the unit must stand in the phase's zone
+		for gu in placed:
+			var outside := _solo_phase_zone_violation(gu as GameUnit)
+			if not outside.is_empty():
+				_solo_show_toast("%s %s — move it, then ✓" % [(gu as GameUnit).get_name(), outside])
+				return
 	for gu in placed:
 		(_solo_deploy_fsm["human_placed"] as Dictionary)[(gu as GameUnit).unit_id] = true
+	if _solo_deploy_fsm.has("phases"):
+		var left: int = int(_solo_deploy_fsm["phase_left"]) - placed.size()
+		var slot: int = solo_controller.human_slot
+		(_solo_deploy_fsm["phase_placed"] as Dictionary)[slot] = int((_solo_deploy_fsm["phase_placed"] as Dictionary).get(slot, 0)) + placed.size()
+		_solo_deploy_fsm["phase_left"] = left
+		if left <= 0:
+			_solo_deploy_fsm["human_turn"] = false
+			_solo_deploy_fsm["phase_i"] = int(_solo_deploy_fsm["phase_i"]) + 1
+			_solo_phase_start()
+		return
 	_solo_deploy_fsm["human_turn"] = false
 	_solo_deploy_ai_turn()
 
@@ -11471,6 +12028,7 @@ func _solo_round_start(round_number: int) -> void:
 	if solo_controller != null:
 		solo_controller.reset_round_claims()   # albtraum v2: the overkill ledger never outlives a round
 	_solo_growth_round_start()   # coverage wave: per-round growth markers tick before anyone acts
+	_solo_mobile_marker_round_start()
 	await _solo_battleborn_recovery()
 	# Ambush arrivals happen at the start of ANY round after the first (GF/AoF v3.5.1 p.13), so a unit
 	# with no clear spot in round 2 gets another chance later. B12: players ALTERNATE placing them.
@@ -11797,6 +12355,7 @@ func _solo_round_start_recovery_rule(gu: GameUnit) -> String:
 func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 	if solo_controller == null or table == null or opr_army_manager == null:
 		return
+	await _solo_mission_reserve_rolls(round_number)   # D8a: a roles mission's reserve dice; no-op otherwise
 	var human_is_ai: bool = solo_ai_slots.has(solo_controller.human_slot)
 	var w: float = table.table_size.x * 0.3048
 	var d: float = table.table_size.y * 0.3048
@@ -11986,6 +12545,12 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 					(pe["unit"] as GameUnit).get_name(), int(pe["on"]), int(pe["total"])])
 			else:
 				_solo_show_toast("No new reserve unit detected on the table — place it first, then ✓")
+			_solo_unlock_table()
+			_solo_deploy_ui_hide()
+			return await _solo_ambush_human_turn(round_number, pool)
+		var broken := _solo_reserve_arrival_violation(placed)   # D8a: a mission reserve's own zone and gates
+		if not broken.is_empty():
+			_solo_show_toast(broken)
 			_solo_unlock_table()
 			_solo_deploy_ui_hide()
 			return await _solo_ambush_human_turn(round_number, pool)
@@ -13547,6 +14112,7 @@ func _on_battle_log_dead(node, dead: bool) -> void:
 		if alive == 0:
 			battle_log.on_unit_destroyed(gu.get_name())
 			_solo_drop_carried(gu, "destroyed")
+			_solo_recycle_if_due(gu)
 		else:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s loses a model (%d/%d)" % [gu.get_name(), alive, total])
 	else:
@@ -16499,6 +17065,9 @@ func _on_map_layout_closed() -> void:
 	# Reset zoom when closing map layout editor
 	if map_layout_editor and map_layout_editor.has_method("reset_zoom"):
 		map_layout_editor.reset_zoom()
+	if not _solo_secret_pick.is_empty():
+		_solo_secret_pick_finished()
+		return
 	if not _solo_relic_drop_active.is_empty():
 		_solo_log_relic_drop(_solo_relic_drop_active)
 		_solo_relic_drop_active = {}

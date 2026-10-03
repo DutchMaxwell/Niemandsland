@@ -379,6 +379,62 @@ def test_hero_attach_refuses_a_mode_it_does_not_have():
         sp.resolve_hero_attach("Table")
 
 
+def _one_model_list(plain):
+    """B8's invariant: a unit on the table is ONE model list — a wound slot and
+    a position per living model, `alive` their count. Returns the violators."""
+    return {k: (len(u["wounds"]), len(u["positions"]), u["alive"])
+            for k, u in plain["units"].items()
+            if not u.get("dormant") and not len(u["wounds"]) == len(u["positions"]) == u["alive"]}
+
+
+def test_the_arena_fold_hands_every_unit_only_its_own_models(tmp_path):
+    """B8 (stage-0 freeze 02.10., row T_c4_L_d0_s2) — `_deploy_arena` handed the
+    HOST its whole settled group (its models PLUS the joined hero's slice) while
+    `capture` gives it only its own `wounds_max`: a phantom model with no wound
+    slot that can never be removed. And the hero of an Ambush host kept its
+    wounds with NO model on the table — the Deadly spill onto it panicked the
+    core (sim.rs land_deadly_wounds). From `EPOCH_69_HERO_FOLD` the host keeps
+    its own models, the hero waits dormant with its host and drops with it
+    (`_place_unit_at` -> `_deploy_models`, "incl. attached heroes"). RED half:
+    the epoch below replays the old split byte-identically."""
+    ambush = json.loads(json.dumps(JOIN_LIST))
+    ambush["units"][1]["rules"] = ambush["units"][1]["rules"] + [{"label": "Ambush", "name": "Ambush"}]
+    lists = {1: JOIN_LIST, 2: ambush}
+    paths = {}
+    for s, data in lists.items():
+        paths[s] = tmp_path / str(s) / "robot_legions_1000.json"
+        paths[s].parent.mkdir()
+        paths[s].write_text(json.dumps(data), encoding="utf-8")
+    profiles = {s: profiles_from_army_forge_json(d, "robot_legions", s) for s, d in lists.items()}
+    units = {s: list(profiles[s].values()) for s in lists}
+    hero2, host2, _ = (u["unit_id"] for u in units[2])
+    header, _ = read_acts("acts_25.jsonl")
+    board = nml_core.board(header["terrain"])
+    core = nml_core.load(str(REPO))
+    core.set_header({"profiles": {**profiles[1], **profiles[2]}, "terrain": header["terrain"],
+                     "knobs": sp.TRAINER_KNOBS})
+    sels = {**selections_from_army_forge_json(JOIN_LIST, 1), **selections_from_army_forge_json(ambush, 2)}
+    attached, attached_to = sp.derive_attachment(units[1] + units[2], sels)
+    objs = [[0.0, 0.0, 0.0]]
+
+    def deploy(epoch):
+        p1, p2, reserved, _ = sp._deploy_arena(7, units[1], units[2], paths[1], paths[2], board, objs, 1,
+                                               rules_epoch=epoch)
+        plain = sp.capture(units[1] + units[2], p1 + p2, core.capture_reads(), board, objs, attached,
+                           attached_to, reserved, {})
+        return plain, reserved
+
+    plain, reserved = deploy(nml_core.CURRENT_RULES_EPOCH)
+    assert _one_model_list(plain) == {}, "unit -> (wound slots, positions, alive)"
+    assert {host2, hero2} <= reserved, "the hero waits with its Ambush host: %r" % reserved
+    sp._arrive_reserves(plain, core.arrival_reads(), board, objs, 1, 2)
+    assert _one_model_list(plain) == {} and plain["units"][hero2]["alive"] == 1
+    assert plain["units"][hero2]["ambush_arrived_round"] == plain["units"][host2]["ambush_arrived_round"] == 2
+
+    old, reserved_old = deploy(nml_core.EPOCH_69_HERO_FOLD - 1)
+    assert hero2 not in reserved_old and set(_one_model_list(old)) == {units[1][1]["unit_id"], hero2}
+
+
 def test_the_arena_fixture_carries_four_joined_heroes():
     """The gate's arena reader over an in-repo recording: `acts_25.jsonl` is a
     real arena game and its first act joins four heroes. RED half: the same

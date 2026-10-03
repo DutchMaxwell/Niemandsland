@@ -285,6 +285,29 @@ fn apply_expected_wounds(state: &mut State, ti: usize, ev: f64, rng: Option<&mut
 /// The casualty half of `_apply_expected_wounds` battle_sim.gd:1140-1155 — whole
 /// wounds fill model by model in ARRAY order. Shared with the D1 dice path, so a
 /// real-dice volley kills exactly the models the EV volley would have.
+/// B8 (stage-0 freeze 02.10.) — how often a casualty found a WOUND slot with no
+/// POSITION behind it. Every writer in this core keeps `wounds` and `positions`
+/// one model list; a state that arrives desynced (the trainer's arena fold
+/// below `EPOCH_69_HERO_FOLD` built one) used to panic the whole process on
+/// `positions.remove`. The wound slot still goes; the missing position is
+/// LOGGED on stderr — the 1st hit and every power of two after it, so a
+/// rollout storm cannot flood stderr while the count stays visible.
+pub static DESYNC_HITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+fn remove_position_or_log(state: &mut State, u: usize, i: usize, site: &str) {
+    if i < state.positions[u].len() {
+        state.positions[u].remove(i);
+        return;
+    }
+    let n = DESYNC_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    if n.is_power_of_two() {
+        eprintln!(
+            "[core-desync] {site}: {} has {} wound slots left but {} positions, no position {i} to remove (hit #{n})",
+            state.key(u), state.wounds[u].len(), state.positions[u].len()
+        );
+    }
+}
+
 pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
     while left > 0 && !state.wounds[ti].is_empty() {
         let take = left.min(state.wounds[ti][0]);
@@ -293,7 +316,7 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
         if state.wounds[ti][0] <= 0 {
             if state.positions[ti].len() == 1 { drop_carried(state, ti); }
             state.wounds[ti].remove(0);
-            state.positions[ti].remove(0);
+            remove_position_or_log(state, ti, 0, "land_wounds");
             // radii stay aligned with positions or the base-edge measure lies.
             if !state.radii[ti].is_empty() {
                 state.radii[ti].remove(0);
@@ -367,7 +390,7 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
         if state.wounds[m][best] <= 0 {
             if state.positions[m].len() == 1 { drop_carried(state, m); }
             state.wounds[m].remove(best);
-            state.positions[m].remove(best);
+            remove_position_or_log(state, m, best, "land_deadly_wounds");
             // radii stay aligned with positions or the base-edge measure lies.
             if !state.radii[m].is_empty() {
                 state.radii[m].remove(best);
@@ -7140,9 +7163,13 @@ fn resolve_with(
                     // morale tests from wounds at the end of an activation").
                     // Knob-gated (DEFECT_LEDGER #12): OFF replays a corpus
                     // recorded before this rule unchanged.
+                    // The flag names the SKIPPED test (knob off), never the
+                    // ported one: the tray tree declines on every flag, and
+                    // the stage-0 census found it on 491 ported moves.
                     if kind != CHARGE && seams.dangerous_end_morale {
-                        shot.mark("dangerous_end_morale");
                         dangerous_morale_due = Some((alive_before, wounds_before));
+                    } else if kind != CHARGE {
+                        shot.mark("dangerous_end_morale");
                     }
                 }
             }

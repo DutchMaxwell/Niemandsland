@@ -379,8 +379,32 @@ pub struct Marker {
     pub carry: bool,
     #[serde(default = "no_carrier", skip_serializing_if = "is_no_carrier")]
     pub carried_by: i64,
+    /// D10a: the VIP marker, moved at every round start while the defender controls it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mobile: bool,
+    /// D10a: the z sign (+1/-1) of the edge the defender deployed on; 0 = unset.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub deploy_edge: i64,
+    /// D12a: `Some("trap" | "relic" | "")` marks a secret marker (Smash & Grab); `None` = not secret.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret: Option<String>,
+    /// D12a: the attacker has turned the marker up.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub revealed: bool,
+    /// D12c: the attacker's view of an unrevealed secret marker — the kind is masked, only the
+    /// fact that it IS one survives (`BattleSim.mask_secret_for`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub secret_hidden: bool,
+    /// D14.5: how far (inches) past the carrier's base edge a dropped relic lands; 0 = the default 1".
+    #[serde(default, skip_serializing_if = "is_zero_f")]
+    pub drop_in: f64,
+    /// D14.5d: only the ATTACKER's units pick this relic up (Rescue: "if an attacking unit seizes the marker").
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub attacker_only: bool,
 }
 
+fn is_zero(v: &i64) -> bool { *v == 0 }
+fn is_zero_f(v: &f64) -> bool { *v == 0.0 }
 fn no_carrier() -> i64 { -1 }
 fn is_false(v: &bool) -> bool { !*v }
 fn is_no_carrier(v: &i64) -> bool { *v == -1 }
@@ -388,7 +412,7 @@ fn is_no_carrier(v: &i64) -> bool { *v == -1 }
 impl Default for Marker {
     fn default() -> Self {
         Self { owned_by: 0, destructible: false, destroyed: false, destroyed_seq: 0,
-            carry: false, carried_by: -1 }
+            carry: false, carried_by: -1, mobile: false, deploy_edge: 0, secret: None, revealed: false, secret_hidden: false, drop_in: 0.0, attacker_only: false }
     }
 }
 

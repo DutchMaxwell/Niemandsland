@@ -59,6 +59,98 @@ func test_starting_with_a_mission_arms_the_controller_statics() -> void:
 	assert_str(_log_text()).contains("Mission: Sabotage")
 
 
+## D14.6: Smash & Grab's marker count is a dice term, so the table arms NO markers up front (the old
+## int(spec) read "d3+2" as 32); once the markers are placed and the roles are set the list is sized to
+## the objectives and the AI defender hides a relic and a trap.
+func test_smash_and_grab_sizes_its_secret_markers_to_the_placed_objectives() -> void:
+	_main._ensure_solo_controller()
+	_main._solo_mission_id = "smash_and_grab"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(SoloController.mission_markers.size()).is_equal(0)
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	_main.terrain_overlay.update_objectives([Vector3.ZERO, Vector3(30 * 0.0254, 0, 0), Vector3(-34 * 0.0254, 0, 0),
+		Vector3(0, 0, 10 * 0.0254)])
+	_main.solo_ai_slots = {2: true}
+	_main.solo_controller.human_slot = 1
+	_main._solo_batch = true   # no pick UI for the human defender: the AI rule hides trap and relic
+	_main._solo_roles_set(2, "attacker")   # NACHTMAHR attacks, the human defends and keeps the 4 markers he placed
+	assert_int(SoloController.mission_markers.size()).is_equal(4)
+	var kinds := SoloController.mission_markers.map(func(m: Variant) -> String: return str((m as Dictionary)["secret"]))
+	assert_int(kinds.count("relic")).is_equal(1)
+	assert_int(kinds.count("trap")).is_equal(1)
+
+
+## D14.3: Last Stand plays six rounds; once the roles are set the table reads its two phases and its
+## recycling reserve rule from the catalog (the defender holds the centre, the attacker's dead return).
+func test_last_stand_reads_its_phases_and_recycling_reserve_from_the_catalog() -> void:
+	_main._ensure_solo_controller()
+	_main._solo_mission_id = "last_stand"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	_main.solo_ai_slots = {2: true}
+	_main._solo_roles_set(1, "attacker")
+	assert_int(SoloController.deploy_phases_of(MissionCatalog.get_mission("last_stand")).size()).is_equal(2)
+	var cfg: Dictionary = _main._solo_reserve_cfg()
+	assert_bool(bool(cfg.get("recycle", false))).is_true()
+	assert_that(_main._solo_reserve_slots(cfg)).is_equal([1])   # the attacker's slot
+	assert_that(_main._solo_deploy_gates_for(1)).is_equal({})
+
+
+## D14.2: Ambush plays six rounds; once the roles are set the table reads its three phases, the attacker
+## phase carrying its own gates (not the role's), and no reserve rule.
+func test_ambush_reads_its_three_phases_with_their_own_gates() -> void:
+	_main._ensure_solo_controller()
+	_main._solo_mission_id = "ambush"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	_main.solo_ai_slots = {2: true}
+	_main._solo_roles_set(1, "attacker")
+	var ph: Array = SoloController.deploy_phases_of(MissionCatalog.get_mission("ambush"))
+	assert_int(ph.size()).is_equal(3)
+	var g: Dictionary = _main._solo_phase_gates(ph[1], 1)
+	assert_float(float(g["min_from_enemy_in"])).is_equal(12.0)
+	assert_float(float(g["max_from_friend_in"])).is_equal(6.0)
+	assert_that(_main._solo_phase_gates(ph[0], 2)).is_equal({})   # the defender's half: no gate
+	assert_bool(_main._solo_reserve_cfg().is_empty()).is_true()
+
+
+## D14.1: The Raid plays six rounds; the defender's rest phase (and only it) carries the 12" enemy and
+## marker gates, the disc and frame phases none.
+func test_the_raid_gates_only_the_defenders_rest_phase() -> void:
+	_main._ensure_solo_controller()
+	_main._solo_mission_id = "the_raid"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	_main.solo_ai_slots = {2: true}
+	_main._solo_roles_set(1, "attacker")
+	var ph: Array = SoloController.deploy_phases_of(MissionCatalog.get_mission("the_raid"))
+	assert_int(ph.size()).is_equal(3)
+	assert_that(_main._solo_phase_gates(ph[0], 2)).is_equal({})
+	assert_that(_main._solo_phase_gates(ph[1], 1)).is_equal({})
+	var g: Dictionary = _main._solo_phase_gates(ph[2], 2)
+	assert_float(float(g["min_from_enemy_in"])).is_equal(12.0)
+	assert_float(float(g["min_from_marker_in"])).is_equal(12.0)
+
+
+## D14.5: The Rescue plays six rounds, arms ONE attacker-only carry marker that drops 6", and (once the
+## roles are set) covers BOTH sides with the 4+ reserve rule.
+func test_the_rescue_arms_an_attacker_only_marker_and_reserves_for_both_sides() -> void:
+	_main._ensure_solo_controller()
+	_main._solo_mission_id = "the_rescue"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	assert_int(SoloController.mission_markers.size()).is_equal(1)
+	var mk: Dictionary = SoloController.mission_markers[0]
+	assert_bool(bool(mk.get("carry", false))).is_true()
+	assert_bool(bool(mk.get("attacker_only", false))).is_true()
+	assert_float(float(mk.get("drop_in", 0.0))).is_equal(6.0)
+	_main.solo_ai_slots = {2: true}
+	_main._solo_roles_set(1, "attacker")
+	var cfg: Dictionary = _main._solo_reserve_cfg()
+	assert_that(_main._solo_reserve_slots(cfg)).is_equal([1, 2])
+	assert_int(int(cfg["arrive_on"])).is_equal(4)
+
+
 func test_relic_hunt_arms_three_carried_markers() -> void:
 	_main._solo_mission_id = "relic_hunt"
 	_main._solo_apply_mission_if_chosen()

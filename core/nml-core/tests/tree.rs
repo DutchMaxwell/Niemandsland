@@ -147,7 +147,7 @@ fn the_blend_leaf_is_the_one_ply_value_and_a_game_end_the_referee() {
             }
             let open = Node::new(ends[0].clone(), Step::Mover(p), p);
             let mut leaf = |node: &Node, mode, vals: &[f64], w| {
-                leaf_value(roll, node, mode, p, seat, vals, w, &mut rng, &mut sc).unwrap()
+                leaf_value(roll, node, mode, p, seat, vals, w, &mut rng, None, &mut sc).unwrap()
             };
             let hand = leaf(&open, TreeLeaf::Blend, &[], 0.0);
             assert!((hand - rv.rs).abs() <= 1e-9, "act {ai} idx {}: {hand} vs recorded {}", rv.idx, rv.rs);
@@ -187,7 +187,7 @@ fn the_terminal_leaf_one_activation_from_the_end_is_the_playout_verdict() {
                 let node = Node::new(st.clone(), Step::Mover(p), p);
                 for seed in 0..2 {
                     let got = leaf_value(roll, &node, TreeLeaf::Terminal, p, false, &[], 0.0,
-                                         &mut GodotRng::new(seed), &mut sc).unwrap();
+                                         &mut GodotRng::new(seed), None, &mut sc).unwrap();
                     let bend = ArbBend { stochastic_wounds: false, ..ArbBend::default() };
                     let r = full_playout_bent(roll, &st, &Candidate::hold(key), p, &mut GodotRng::new(seed),
                                               bend, &mut sc).unwrap();
@@ -213,7 +213,7 @@ fn a_terminal_playout_stays_inside_the_arbitration_guard() {
         for (ai, act) in c.acts.iter().enumerate() {
             let cap = act.state.units() * 2 + 4;
             let (v, most) = with_roll(&c, ai, &per_act[ai], |roll| {
-                playout(roll, &act.state, act.player, act.player, &mut GodotRng::new(ai as i64), &mut sc).unwrap()
+                playout(roll, &act.state, act.player, act.player, &mut GodotRng::new(ai as i64), None, &mut sc).unwrap()
             });
             assert!([0.0, 0.5, 1.0].contains(&v) && most <= cap, "act {ai}: value {v}, {most} > {cap} steps");
             (n, worst) = (n + 1, worst.max(most));
@@ -232,8 +232,10 @@ fn canon(states: &[State]) -> Vec<String> {
 /// `Ev` is `Policy::resolve` bit for bit; `Tray` draws `samples` states, the
 /// same stream base twice is byte-identical, another base moves some edge,
 /// the samples of one edge differ among themselves somewhere, and an
-/// activation the tray path flags unported declines by name (the fixtures
-/// carry Deadly(3) weapons); `Tray` with no base declines.
+/// activation the tray path flags unported declines by name (here
+/// `surge_gates` / `dangerous_rigid_end_only`; the fixtures' Deadly(3) weapons
+/// land per model from `EPOCH_14_DEADLY_LANDING` and no longer decline, stage-0
+/// P9); `Tray` with no base declines.
 #[test]
 fn chance_edges_are_reproducible_and_decline_unported() {
     let (mut n, mut moved, mut spread, mut declined) = (0usize, 0usize, 0usize, BTreeMap::new());
@@ -252,8 +254,8 @@ fn chance_edges_are_reproducible_and_decline_unported() {
                     Err(e) => panic!("act {ai} {}: {e:?}", cand.kind),
                     Ok(a) => {
                         let (a, b) = (canon(&a), canon(&edge(TreeDice::Tray, Some(base)).unwrap()));
-                        // Another base may roll into an unported branch itself (a Deadly
-                        // weapon flags only when it lands): that counts as moved too.
+                        // Another base may roll into an unported branch itself (a branch
+                        // flags only when its dice reach it): that counts as moved too.
                         let other = edge(TreeDice::Tray, Some(base + 7)).map(|v| canon(&v)).ok();
                         assert!(a.len() == 4 && a == b, "act {ai}: the same base drew different samples");
                         moved += usize::from(other.as_ref() != Some(&a));
@@ -272,7 +274,43 @@ fn chance_edges_are_reproducible_and_decline_unported() {
     println!("chance edges: {n} tray edges reproduced, {moved} moved by another base, \
               {spread} spread within one edge; declined {declined:?}");
     assert!(n > 0 && moved > 0 && spread > 0, "the tray draws are inert");
-    assert!(declined.contains_key("deadly"), "no Deadly activation declined");
+    assert!(!declined.is_empty() && !declined.contains_key("deadly"), "decline by name, never Deadly: {declined:?}");
+}
+
+/// Step 14 — the true-tray Terminal playout: with a stream base every step
+/// rolls the tray, so the same base twice is the identical value, another
+/// base moves some value on the fixtures, and a still-unported branch declines
+/// by name — Deadly no longer does (per-model landing from `EPOCH_14_DEADLY_LANDING`)
+/// (`None`, the EV playout, is pinned by `a_terminal_playout_stays_inside_the_arbitration_guard`).
+#[test]
+fn tray_playouts_roll_the_leaf_stream_and_decline_unported() {
+    let (mut n, mut moved, mut declined) = (0usize, 0usize, BTreeMap::new());
+    for path in [ACTS, WIDE] {
+        let c = load(path);
+        let per_act = act_statics(&c, REPO);
+        let mut sc = Scratch::default();
+        for (ai, act) in c.acts.iter().enumerate() {
+            let base = 740_000_000 + 1_000 * ai as i64;
+            with_roll(&c, ai, &per_act[ai], |roll| {
+                let mut play = |b: i64| {
+                    playout(roll, &act.state, act.player, act.player, &mut GodotRng::new(ai as i64), Some(b), &mut sc)
+                        .map(|r| r.0.to_bits())
+                };
+                match play(base) {
+                    Err(Unsupported::TreeUnported(what)) => *declined.entry(what).or_insert(0usize) += 1,
+                    Err(e) => panic!("act {ai}: {e:?}"),
+                    Ok(v) => {
+                        assert_eq!(play(base), Ok(v), "act {ai}: the same base rolled a different playout");
+                        moved += usize::from(play(base + 7) != Ok(v));
+                        n += 1;
+                    }
+                }
+            });
+        }
+    }
+    println!("tray playouts: {n} reproduced, {moved} moved by another base; declined {declined:?}");
+    assert!(n > 0 && moved > 0, "the tray playouts are inert: {n}/{moved}");
+    assert!(!declined.is_empty() && !declined.contains_key("deadly"), "decline by name, never Deadly: {declined:?}");
 }
 
 /// Step 6a — the ROOT's children are the one-ply's own prefilter rows in its

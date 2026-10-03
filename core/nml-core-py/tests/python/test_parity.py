@@ -139,6 +139,42 @@ def test_carry_catalog_layouts_use_the_same_alternate_core_door():
         assert nml_core.mission_marker_positions(markers["placement"], 12.0, style, 72.0, 48.0) == []
 
 
+def test_smash_and_grab_uses_the_alternate_core_door():
+    catalog = json.loads((REPO / "assets/solo/missions.json").read_text())["missions"]
+    style = json.loads((REPO / "assets/solo/deployments.json").read_text())["styles"]["front_line"]
+    markers = catalog["smash_and_grab"]["markers"]
+    assert nml_core.mission_marker_positions(markers["placement"], 12.0, style, 72.0, 48.0) == []
+
+
+def test_last_stand_marker_sits_on_the_table_centre_through_the_core_door():
+    catalog = json.loads((REPO / "assets/solo/missions.json").read_text())["missions"]
+    style = json.loads((REPO / "assets/solo/deployments.json").read_text())["styles"]["front_line"]
+    markers = catalog["last_stand"]["markers"]
+    got = nml_core.mission_marker_positions(markers["placement"], 12.0, style, 72.0, 48.0)
+    assert len(got) == 1 and abs(got[0][0]) < 1e-9 and abs(got[0][1]) < 1e-9
+
+
+def test_ambush_uses_the_alternate_core_door():
+    catalog = json.loads((REPO / "assets/solo/missions.json").read_text())["missions"]
+    style = json.loads((REPO / "assets/solo/deployments.json").read_text())["styles"]["front_line"]
+    markers = catalog["ambush"]["markers"]
+    assert nml_core.mission_marker_positions(markers["placement"], 12.0, style, 72.0, 48.0) == []
+
+
+def test_the_raid_marker_sits_on_the_table_centre_through_the_core_door():
+    catalog = json.loads((REPO / "assets/solo/missions.json").read_text())["missions"]
+    style = json.loads((REPO / "assets/solo/deployments.json").read_text())["styles"]["front_line"]
+    got = nml_core.mission_marker_positions(catalog["the_raid"]["markers"]["placement"], 12.0, style, 72.0, 48.0)
+    assert len(got) == 1 and abs(got[0][0]) < 1e-9 and abs(got[0][1]) < 1e-9
+
+
+def test_the_rescue_marker_sits_on_the_table_centre_through_the_core_door():
+    catalog = json.loads((REPO / "assets/solo/missions.json").read_text())["missions"]
+    style = json.loads((REPO / "assets/solo/deployments.json").read_text())["styles"]["front_line"]
+    got = nml_core.mission_marker_positions(catalog["the_rescue"]["markers"]["placement"], 12.0, style, 72.0, 48.0)
+    assert len(got) == 1 and abs(got[0][0]) < 1e-9 and abs(got[0][1]) < 1e-9
+
+
 def close(a, b):
     return abs(float(a) - float(b)) <= EPS
 
@@ -670,3 +706,134 @@ def test_vp_aware_hand_score_matches_the_table_pin():
     behind = _vp_fixture(core.state_of, copy.deepcopy(acts[0]["state"]), [3, 1])
     assert core.score_hand_incoming(behind, 1, zero, 3) > core.score_hand_incoming(state, 1, zero, 3)
     assert core.score_hand_incoming(behind, 1, zero, 0) == core.score_hand_incoming(state, 1, zero, 0)
+
+
+def test_role_winner_twin_pins():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    for unit in plain["units"].values():
+        unit.update(alive=0, positions=[], radii=[], wounds=[])
+    plain["attacker"] = 1
+    inch = 0.0254
+
+    def verdict(scoring, x, z, deploy_edge=1, **marker):
+        plain["objectives"] = [{"pos": [x * inch, 0, z * inch], "owner": 0}]
+        plain["markers_meta"] = [dict(marker)]
+        return core.role_winner(core.state_of(plain), scoring, deploy_edge, 72.0, 48.0)
+
+    assert verdict("escort", 0.0, -18.0) == "p2"
+    assert verdict("escort", 0.0, -17.0) == "p1"
+    assert verdict("extract", 30.0, 0.0) == "p1"
+    assert verdict("extract", 29.0, 0.0) == "p2"
+    assert verdict("extract", 35.0, 0.0, destroyed=True) == "p2"
+    assert verdict("end", 0.0, 0.0) is None
+
+
+def test_marker_move_twin_and_selfplay_markers():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    plain["attacker"] = 1
+    plain["objectives"] = [{"pos": [0, 0, 0], "owner": 2}]
+    plain["markers_meta"] = [{"mobile": True, "deploy_edge": 1}]
+    moved = core.apply_marker_move(core.state_of(plain), 48.0).plain()
+    assert abs(moved["objectives"][0]["pos"][2] + 12 * 0.0254) < 1e-9
+    plain["objectives"][0]["owner"] = 1
+    still = core.apply_marker_move(core.state_of(plain), 48.0).plain()
+    assert still["objectives"][0]["pos"][2] == 0
+    import selfplay
+    assert selfplay.mission_markers({"mobile": True, "deploy_edge": -1}, 1) == [
+        {"mobile": True, "deploy_edge": -1}]
+    assert selfplay.mission_markers({}, 1) == []
+
+
+def test_reveal_step_twin_and_assignment():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    keys = list(plain["units"])
+    first = next(k for k in keys if plain["units"][k]["player"] == 1)
+    for k, unit in plain["units"].items():
+        unit.update(alive=0, positions=[], radii=[], wounds=[], shaken=False, aircraft=False,
+                    ambush_arrived_round=0)
+    plain["units"][first].update(alive=1, positions=[[0.0, 0, 0.01]], radii=[0.02], wounds=[1])
+    plain["attacker"] = 1
+    plain["round"] = 2
+    plain["objectives"] = [{"pos": [0, 0, 0], "owner": 1}]
+    plain["markers_meta"] = [{"secret": "", "revealed": False}]
+    state, owners, events, rolls = core.apply_reveal_step(core.state_of(plain), [1])
+    assert owners == [0] and rolls == []
+    assert events == [{"index": 0, "secret": "", "unit": list(plain["units"]).index(first)}]
+    assert state.plain()["markers_meta"][0]["destroyed"] is True
+    import selfplay
+    assert selfplay.secret_assign([(0, 0), (30, 0), (-34, 0)]) == ["relic", "", "trap"]
+    assert selfplay.mission_markers({"secret": True}, 2) == [{"secret": "", "revealed": False}] * 2
+
+
+def test_role_aware_hand_eval_twin_numbers():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    first = {1: None, 2: None}
+    for key, unit in plain["units"].items():
+        side = unit["player"]
+        if first[side] is None:
+            first[side] = key
+        unit.update(alive=0, positions=[], radii=[], wounds=[], dormant=False)
+    for side, x in ((1, 100.0), (2, -100.0)):
+        plain["units"][first[side]].update(alive=1, positions=[[x * 0.0254, 0, 0]], radii=[0.02],
+                                           wounds=[1], shaken=False, aircraft=False, activated=False,
+                                           ambush_arrived_round=-1)
+    plain.update(round=4, rounds_total=4, attacker=1, scoring="escort")
+    plain["objectives"] = [{"pos": [0, 0, -18 * 0.0254], "owner": 0}]
+    plain["markers_meta"] = [{"mobile": True, "deploy_edge": 1}]
+    state = core.state_of(plain)
+    inc = [0.0] * state.units
+    # the same numbers tests/ai_mission_eval_test.gd pins on the GDScript side
+    assert abs(core.score_hand_incoming(state, 2, inc) - (0.5 * 0.875 + 0.25)) < 1e-12
+    assert abs(core.score_hand_incoming(state, 1, inc) - (0.5 * 0.125 + 0.25)) < 1e-12
+    plain.update(scoring="extract")
+    plain["objectives"] = [{"pos": [30 * 0.0254, 0, 0], "owner": 0}]
+    plain["markers_meta"] = [{"secret": "relic", "revealed": False}]
+    state = core.state_of(plain)
+    assert abs(core.score_hand_incoming(state, 1, inc) - (0.5 * 0.75 + 0.25)) < 1e-12
+
+
+def test_fogged_markers_are_priced_one_over_n():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    plain = copy.deepcopy(acts[0]["state"])
+    for unit in plain["units"].values():
+        unit.update(alive=0, positions=[], radii=[], wounds=[], dormant=False)
+    first = next(k for k, u in plain["units"].items() if u["player"] == 1)
+    plain["units"][first].update(alive=1, positions=[[100 * 0.0254, 0, 0]], radii=[0.02], wounds=[1],
+                                 shaken=False, aircraft=False, activated=True, ambush_arrived_round=-1)
+    plain.update(round=4, rounds_total=4, attacker=1, scoring="extract")
+    spots = [(30, 0), (0, 0), (0, 18)]
+    plain["objectives"] = [{"pos": [x * 0.0254, 0, z * 0.0254], "owner": 0} for x, z in spots]
+    plain["markers_meta"] = [{"secret_hidden": True, "revealed": False} for _ in spots]
+    state = core.state_of(plain)
+    mean = (0.75 + 0.0 + 0.75) / 3.0
+    assert abs(core.score_hand_incoming(state, 1, [0.0] * state.units) - (0.5 * (mean - 0.1 / 3.0) + 0.25)) < 1e-12
+
+
+def test_selfplay_verdict_decides_the_role_missions_on_the_board():
+    header, acts = load("acts_25.jsonl")
+    core = core_for(header)
+    import selfplay
+    plain = copy.deepcopy(acts[0]["state"])
+    for unit in plain["units"].values():
+        unit.update(alive=0, positions=[], radii=[], wounds=[])
+    plain.update(attacker=1, scoring="extract")
+    plain["objectives"] = [{"pos": [30 * 0.0254, 0, 0], "owner": 0}]
+    plain["markers_meta"] = [{"carry": True, "carried_by": -1}]
+    led = {"scoring": "extract", "vp": [0, 0], "markers_meta": plain["markers_meta"]}
+    assert selfplay._verdict(core, [0], led, core.state_of(plain)) == "p1"
+    plain["objectives"][0]["pos"] = [0, 0, 0]
+    assert selfplay._verdict(core, [0], led, core.state_of(plain)) == "p2"
+    led2 = {"scoring": "escort", "vp": [0, 0], "markers_meta": [{"mobile": True, "deploy_edge": 1}]}
+    plain.update(scoring="escort")
+    plain["markers_meta"] = led2["markers_meta"]
+    plain["objectives"] = [{"pos": [0, 0, -18 * 0.0254], "owner": 0}]
+    assert selfplay._verdict(core, [0], led2, core.state_of(plain)) == "p2"

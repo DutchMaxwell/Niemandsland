@@ -412,6 +412,8 @@ static func apply_carry_step(state: Dictionary, markers: Array, owners: Array) -
 		var side := int(owners[i])
 		if side != 1 and side != 2:
 			continue
+		if bool(mk.get("attacker_only", false)) and side != int(state.get("attacker", 0)):
+			continue   # D14.5d: Rescue — only an attacking unit picks the relic up
 		var op: Vector3 = (objs[i] as Dictionary)["pos"]
 		var best_key := ""
 		var best_gap := INF
@@ -615,6 +617,70 @@ static func mission_winner(scoring: String, owners: Array, vp: Array,
 	if owners.is_empty() and alive1 != alive2:
 		return "p1" if alive1 > alive2 else "p2"
 	return "draw"
+
+
+## D9 (R11a): a marker's horizontal point in inches — a CARRIED marker sits at its
+## carrier's first model less that model's base radius (the carrier's nearest base
+## edge, as control_gap_in measures), a free one at its spot. [] = destroyed/none.
+static func marker_point_in(state: Dictionary, i: int) -> Array:
+	var markers: Array = state.get("markers_meta", [])
+	var objs: Array = state.get("objectives", [])
+	if i >= markers.size() or i >= objs.size() or bool((markers[i] as Dictionary).get("destroyed", false)):
+		return []
+	var mk: Dictionary = markers[i]
+	var carrier := String(mk.get("carried_by", ""))
+	if bool(mk.get("carry", false)) and not carrier.is_empty():
+		var cu: Dictionary = (state.get("units", {}) as Dictionary).get(carrier, {})
+		var ps: Array = cu.get("positions", [])
+		if ps.is_empty():
+			return []
+		var rs: Array = cu.get("radii", [])
+		var r_in: float = (float(rs[0]) / IN2M) if not rs.is_empty() else 0.0
+		return [(ps[0] as Vector3).x / IN2M, (ps[0] as Vector3).z / IN2M, r_in]
+	var op: Vector3 = (objs[i] as Dictionary)["pos"]
+	return [op.x / IN2M, op.z / IN2M, 0.0]
+
+
+## D9 VIP verdict: a marker within 6" of the edge OPPOSITE the one the defender
+## deployed on (deploy_edge = that edge's z sign, +1/-1) = defender, else attacker.
+static func escort_winner(state: Dictionary, deploy_edge: int, table_d_in: float) -> String:
+	var att := int(state.get("attacker", 0))
+	if (att != 1 and att != 2) or deploy_edge == 0:
+		return "draw"
+	var target := -float(signi(deploy_edge))
+	var home := false
+	for i in range(state.get("objectives", []).size()):
+		var pt := marker_point_in(state, i)
+		if not pt.is_empty() and table_d_in / 2.0 - target * float(pt[1]) - float(pt[2]) <= 6.0 + CONTROL_EPS:
+			home = true
+	var defender := 3 - att
+	return "p%d" % (defender if home else att)
+
+
+## D9 Smash & Grab / Rescue verdict: a marker within 6" of ANY table edge = attacker.
+static func extract_winner(state: Dictionary, table_w_in: float, table_d_in: float) -> String:
+	var att := int(state.get("attacker", 0))
+	if att != 1 and att != 2:
+		return "draw"
+	var out := false
+	for i in range(state.get("objectives", []).size()):
+		var pt := marker_point_in(state, i)
+		if pt.is_empty():
+			continue
+		var gap := minf(table_w_in / 2.0 - absf(float(pt[0])), table_d_in / 2.0 - absf(float(pt[1]))) - float(pt[2])
+		if gap <= 6.0 + CONTROL_EPS:
+			out = true
+	return "p%d" % (att if out else 3 - att)
+
+
+## The `escort` / `extract` scoring ids of mission_winner; "" for any other id.
+static func role_winner(scoring: String, state: Dictionary, deploy_edge: int,
+		table_w_in: float, table_d_in: float) -> String:
+	if scoring == "escort":
+		return escort_winner(state, deploy_edge, table_d_in)
+	if scoring == "extract":
+		return extract_winner(state, table_w_in, table_d_in)
+	return ""
 
 
 ## One activation with stochastic rounding (core self-play games).
@@ -1734,7 +1800,7 @@ static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionar
 static func capture(army: OPRArmyManager, objectives_provider: Callable = Callable(),
 		objective_owner_of: Callable = Callable(), round_no: int = 1,
 		rounds_total: int = 4, cover_of: Callable = Callable(),
-		los_of: Callable = Callable(), terrain_at: Callable = Callable()) -> Dictionary:
+		los_of: Callable = Callable(), terrain_at: Callable = Callable(), viewer: int = 0) -> Dictionary:
 	var units := {}
 	for uid in army.game_units:
 		var u: GameUnit = army.game_units[uid]
@@ -1868,7 +1934,7 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		# destruction state, or they optimise a mission that no longer exists.
 		var mm: Array = []
 		for mk in SoloController.mission_markers:
-			mm.append((mk as Dictionary).duplicate())
+			mm.append(mask_secret_for((mk as Dictionary).duplicate(), viewer))
 		state["markers_meta"] = mm
 		state["destroy_seq"] = [int(SoloController.mission_destroy_seq[0])]
 	if not SoloController.mission_roles.is_empty():   # D2a: absent for every roles-less mission
@@ -1876,6 +1942,21 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 	if terrain_at.is_valid():   # absent key = pre-T2b snapshot, byte-identical
 		state["terrain_at"] = terrain_at
 	return state
+
+
+## D12c (R9a, fog of war): an unrevealed secret marker is hidden from the ATTACKER's view. The
+## `secret` kind goes, and so do `carry` / `carried_by`, which only the relic carries and would give
+## it away. `revealed: false` stays, so a viewer can still tell "a marker I know nothing about".
+## `viewer` 0 (the default) = no viewing seat, nothing is masked.
+static func mask_secret_for(mk: Dictionary, viewer: int) -> Dictionary:
+	if viewer == 0 or int(SoloController.mission_roles.get("attacker", 0)) != viewer:
+		return mk
+	if mk.has("secret") and not bool(mk.get("revealed", false)):
+		mk.erase("secret")
+		mk.erase("carry")
+		mk.erase("carried_by")
+		mk["secret_hidden"] = true   # D12c-2: the eval prices it at 1/n relic, 1/n trap
+	return mk
 
 
 ## NML-1073 M1-0: `state` as plain (JSON-safe) data — the node corpus contract

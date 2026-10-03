@@ -87,7 +87,7 @@ impl Cells {
 pub fn generate(
     layout_seed: i64,
     count: &Value,
-    zones: &[Poly],
+    zones: &[Zone],
     cells: &Cells,
     table_w_in: f64,
     table_d_in: f64,
@@ -160,7 +160,7 @@ fn draw(
     hx: i64,
     hz: i64,
     pos: &[(i64, i64)],
-    zones: &[Poly],
+    zones: &[Zone],
     cells: &Cells,
 ) -> Option<(i64, i64)> {
     for _ in 0..DRAW_CAP {
@@ -179,7 +179,7 @@ pub fn sweep(
     hx: i64,
     hz: i64,
     pos: &[(i64, i64)],
-    zones: &[Poly],
+    zones: &[Zone],
     cells: &Cells,
 ) -> Option<(i64, i64)> {
     for x in -hx..=hx {
@@ -194,7 +194,7 @@ pub fn sweep(
 
 /// The book's three constraints, exact in integers. Public: the gate's legality
 /// self-test calls it, so one definition answers for both the rule and the check.
-pub fn is_legal(x: i64, z: i64, pos: &[(i64, i64)], zones: &[Poly], cells: &Cells) -> bool {
+pub fn is_legal(x: i64, z: i64, pos: &[(i64, i64)], zones: &[Zone], cells: &Cells) -> bool {
     for &(qx, qz) in pos {
         let (dx, dz) = (x - qx, z - qz);
         // "over 9 inches" — exactly 9.0 is NOT over.
@@ -202,12 +202,28 @@ pub fn is_legal(x: i64, z: i64, pos: &[(i64, i64)], zones: &[Poly], cells: &Cell
             return false;
         }
     }
-    for poly in zones {
-        if in_poly(x, z, poly) {
+    for zone in zones {
+        if in_zone(x, z, zone) {
             return false;
         }
     }
     cells.type_at_in(x, z) != CONTAINER
+}
+
+/// A deployment zone element: a polygon, or (Attack & Defend) a disc of integer
+/// inches. `DeploymentCatalog.in_zone` is the table's twin.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Zone {
+    Poly(Poly),
+    Disc { c: [i64; 2], r: i64 },
+}
+
+/// A point on the boundary counts as INSIDE for both shapes (exact integers).
+pub fn in_zone(px: i64, pz: i64, zone: &Zone) -> bool {
+    match zone {
+        Zone::Poly(poly) => in_poly(px, pz, poly),
+        Zone::Disc { c, r } => (px - c[0]).pow(2) + (pz - c[1]).pow(2) <= r * r,
+    }
 }
 
 /// `ObjectiveLayout._in_poly` — even-odd crossing in pure integers; a point ON the
@@ -241,28 +257,35 @@ pub fn in_poly(px: i64, pz: i64, poly: &Poly) -> bool {
 
 /// The two players' zone polygons out of a `DeploymentCatalog` style, flattened —
 /// the legality test does not care which side a polygon belongs to.
-pub fn zones_of_style(style: &Value) -> Vec<Poly> {
-    let mut out: Vec<Poly> = Vec::new();
+pub fn zones_of_style(style: &Value) -> Vec<Zone> {
+    let mut out: Vec<Zone> = Vec::new();
     for pk in ["1", "2"] {
-        let Some(polys) = style.get("zones").and_then(|z| z.get(pk)).and_then(|v| v.as_array())
-        else {
-            continue;
-        };
-        for poly in polys {
-            let Some(pts) = poly.as_array() else { continue };
-            out.push(
-                pts.iter()
-                    .filter_map(|p| p.as_array())
-                    .filter(|p| p.len() >= 2)
-                    .map(|p| {
-                        [
-                            p[0].as_f64().unwrap_or(0.0) as i64,
-                            p[1].as_f64().unwrap_or(0.0) as i64,
-                        ]
-                    })
-                    .collect(),
-            );
+        if let Some(polys) = style.get("zones").and_then(|z| z.get(pk)) {
+            out.extend(zones_of_list(polys));
         }
+    }
+    out
+}
+
+/// One player's zone list (`[polygon | {"disc": {c, r_in}}, ..]`) as `Zone`s.
+pub fn zones_of_list(polys: &Value) -> Vec<Zone> {
+    let mut out: Vec<Zone> = Vec::new();
+    for poly in polys.as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+        if let Some(d) = poly.get("disc") {
+            let c = d.get("c").and_then(|c| c.as_array());
+            let at = |i: usize| c.and_then(|c| c.get(i)).and_then(|v| v.as_f64()).unwrap_or(0.0) as i64;
+            let r = d.get("r_in").and_then(|v| v.as_f64()).unwrap_or(0.0) as i64;
+            out.push(Zone::Disc { c: [at(0), at(1)], r });
+            continue;
+        }
+        let Some(pts) = poly.as_array() else { continue };
+        out.push(Zone::Poly(
+            pts.iter()
+                .filter_map(|p| p.as_array())
+                .filter(|p| p.len() >= 2)
+                .map(|p| [p[0].as_f64().unwrap_or(0.0) as i64, p[1].as_f64().unwrap_or(0.0) as i64])
+                .collect(),
+        ));
     }
     out
 }

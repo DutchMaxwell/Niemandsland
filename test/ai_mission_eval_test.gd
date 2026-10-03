@@ -577,3 +577,69 @@ func test_vp_arm_matches_the_core_pin() -> void:
 
 func after_test() -> void:
 	AiMissionEval.eval_variant = 0
+
+
+## D13 — the role-aware hand eval. Twins of the score.rs `role_state` fixtures: both units far from the
+## marker in the LAST round, so nobody projects presence and the control mean is the neutral 0.5; the
+## score is then 0.5 * role + 0.25, which isolates the role term. Same numbers as the core tests.
+func _role_state(scoring: String, att: int, x_in: float, z_in: float, marker: Dictionary) -> Dictionary:
+	var state := _state([
+		_unit(1, [Vector3(100.0 * IN2M, 0, 0)], "A"),
+		_unit(2, [Vector3(-100.0 * IN2M, 0, 0)], "B"),
+	], [Vector3(x_in * IN2M, 0, z_in * IN2M)], [0], 4, 4)
+	state["scoring"] = scoring
+	state["attacker"] = att
+	state["markers_meta"] = [marker]
+	return state
+
+
+func test_escort_prices_the_defenders_progress_toward_the_target_edge() -> void:
+	var vip := {"mobile": true, "deploy_edge": 1}
+	var near := _role_state("escort", 1, 0.0, -18.0, vip)
+	assert_float(AiMissionEval.score(near, 2)).is_equal_approx(0.5 * 0.875 + 0.25, 0.00001)
+	assert_float(AiMissionEval.score(near, 1)).is_equal_approx(0.5 * 0.125 + 0.25, 0.00001)
+	assert_float(AiMissionEval.score(_role_state("escort", 1, 0.0, 0.0, vip), 2)).is_equal_approx(0.5, 0.00001)
+
+
+func test_extract_prices_the_relics_distance_to_the_nearest_edge() -> void:
+	var relic := {"secret": "relic"}
+	var out := _role_state("extract", 1, 30.0, 0.0, relic)
+	assert_float(AiMissionEval.score(out, 1)).is_equal_approx(0.5 * 0.75 + 0.25, 0.00001)
+	assert_float(AiMissionEval.score(out, 2)).is_equal_approx(0.5 * 0.25 + 0.25, 0.00001)
+	assert_float(AiMissionEval.score(_role_state("extract", 1, 0.0, 0.0, relic), 1)).is_equal_approx(0.25, 0.00001)
+
+
+func test_role_term_stands_down_without_roles_or_live_markers() -> void:
+	var gone := _role_state("extract", 1, 30.0, 0.0, {"secret": "relic", "destroyed": true})
+	assert_float(AiMissionEval.score(gone, 1)).is_equal_approx(0.25, 0.00001)
+	var no_roles := _role_state("extract", 0, 30.0, 0.0, {"secret": "relic"})
+	assert_float(AiMissionEval.score(no_roles, 1)).is_equal_approx(0.5, 0.00001)
+
+
+func test_a_reserve_counts_as_rounds_left_weighted_future_presence() -> void:
+	var state := _role_state("extract", 1, 0.0, 0.0, {"secret": "relic"})
+	state["round"] = 1
+	var before := AiMissionEval.score(state, 2)
+	var b: Dictionary = state["units"]["B"]
+	b["alive"] = 0
+	b["dormant"] = true
+	b["dormant_wounds"] = [6]
+	assert_float(AiMissionEval._reserve_presence(state, b)).is_equal_approx(6.0 * 0.5 * 3.0 / 4.0, 0.00001)
+	assert_float(AiMissionEval.score(state, 2)).is_greater(before)
+
+
+## D12c-2: the attacker's fogged view prices the hidden markers at 1/n relic value (the mean) minus
+## 1/n trap cost; the same numbers score.rs pins (mean 0.5, trap 0.1 / 3).
+func test_hidden_markers_are_priced_at_one_over_n_relic_and_one_over_n_trap() -> void:
+	var hidden := {"secret_hidden": true, "revealed": false}
+	var state := _state([
+		_unit(1, [Vector3(100.0 * IN2M, 0, 0)], "A"),
+		_unit(2, [Vector3(-100.0 * IN2M, 0, 0)], "B"),
+	], [Vector3(30.0 * IN2M, 0, 0), Vector3.ZERO, Vector3(0, 0, 18.0 * IN2M)], [0, 0, 0], 4, 4)
+	state["scoring"] = "extract"
+	state["attacker"] = 1
+	state["markers_meta"] = [hidden.duplicate(), hidden.duplicate(), hidden.duplicate()]
+	var mean := (0.75 + 0.0 + 0.75) / 3.0
+	assert_float(AiMissionEval.score(state, 1)).is_equal_approx(0.5 * (mean - 0.1 / 3.0) + 0.25, 0.00001)
+	state["markers_meta"][0] = {"secret": "relic", "revealed": false}
+	assert_float(AiMissionEval.score(state, 1)).is_equal_approx(0.5 * 0.75 + 0.25, 0.00001)

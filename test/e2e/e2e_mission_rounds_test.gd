@@ -36,12 +36,16 @@ func test_a_six_round_mission_sets_the_controller_match_length() -> void:
 	assert_int(_main.solo_controller.game_rounds).is_equal(6)
 
 
-func test_every_shipped_mission_stays_at_four_rounds() -> void:
+## The match length IS the catalog's `rounds`: the face-off and progressive missions stay at four, the
+## Attack & Defend ones (D14: so far Smash & Grab, GF/AoF v3.5.1 p.27/p.26) play six.
+func test_every_shipped_mission_plays_its_catalog_rounds() -> void:
 	for id in MissionCatalog.mission_ids():
 		if id != "six_round_fixture":
 			_main._solo_mission_id = id
 			_main._solo_apply_mission_if_chosen()
-			assert_int(_main.solo_controller.game_rounds).is_equal(4)
+			var want := 6 if str(MissionCatalog.get_mission(id).get("family", "")) == "attack_defend" else 4
+			assert_int(_main.solo_controller.game_rounds).is_equal(want)
+			assert_int(want).is_equal(int(MissionCatalog.get_mission(id)["rounds"]))
 
 
 func test_round_four_does_not_end_a_six_round_game_but_round_six_does() -> void:

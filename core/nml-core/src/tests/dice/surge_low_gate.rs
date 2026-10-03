@@ -84,6 +84,33 @@ use super::*;
             "the Boost's 5s stay shut in melee - the recorded read");
     }
 
+    /// Stage-0 tray census: the melee fold resolves at 0.0" exactly as the
+    /// table's `_solo_hits(.., 0.0, ..)` (main.gd:7062) does — the within cap
+    /// always passes, the low window opens only for the sentinel — so a melee
+    /// Surge is no divergence and must not flag `surge_gates` (the true-tray
+    /// tree declines on every flag). The one real gap: the Bloodthirsty extra
+    /// dice (main.gd:7128, the same `_solo_hits`, fives included) never pay
+    /// the sentinel's 5s here, so that leg alone still flags.
+    #[test]
+    fn a_melee_surge_flags_only_the_bloodthirsty_low_window_gap() {
+        let att = Ctx { quality: 4, models: 1, ..Default::default() };
+        let strike = |p: &ShootProfile, seed: i64| {
+            let ps = [p.clone()];
+            let mut t = Tray::seeded(seed);
+            resolve_melee_with_tray(&[striker(&ps, &[0], &[64], &att)], &defender(4, 5), "Target", false, true, true, &mut t)
+        };
+        let plain = ShootProfile { surge: true, ..rifle(64) };
+        let gs = ShootProfile { surge: true, surge_low: 5, surge_over_in: -1.0, ..rifle(64) };
+        for p in [&plain, &gs] {
+            assert!(!strike(p, 6).unported.contains(&"surge_gates"), "{:?}", strike(p, 6).unported);
+        }
+        let bt = |p: &ShootProfile| ShootProfile { bloodthirsty_rule: "Bloodthirsty Fighter".into(), ..p.clone() };
+        let r = strike(&bt(&plain), 27);
+        assert!(r.log.iter().any(|l| l.contains("extra attack")), "fixture: seed 27 reaches the leg: {:?}", r.log);
+        assert!(!r.unported.contains(&"surge_gates"), "{:?}", r.unported);
+        assert!(strike(&bt(&gs), 27).unported.contains(&"surge_gates"), "the extra dice skip the sentinel's 5s");
+    }
+
     /// The default-6 read (the brief's "surge_low (default 6)"): an alias
     /// whose entry prints no `surge_low` (Brutal, aof/halflings) keeps the
     /// 6s read at the live epoch - the walk must not leak the Boost reader's

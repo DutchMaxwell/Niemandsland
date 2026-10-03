@@ -1239,7 +1239,25 @@ fn pick_out(p: &Pick, root: &plain::Captured, sig: i64) -> VarDictionary {
             rows.push(&row.to_variant());
         }
         d.set("root", &rows);
+        d.set("batches", t.batches as i64);
+        d.set("frontier", t.frontier as i64);
+        d.set("terminal", t.terminal as i64);
+        d.set("elapsed_us", t.elapsed_us as i64);
+        if let Some(f) = t.fallback {
+            d.set("fallback", f);
+        }
         out.set("tree", &d);
+    }
+    // `deadline_us`: the key rides ONLY a pool pick where the knob was set.
+    if let Some(dl) = &p.deadline {
+        let mut d = VarDictionary::new();
+        d.set("completed", dl.completed as i64);
+        d.set("cut", dl.cut);
+        d.set("elapsed_us", dl.elapsed_us as i64);
+        if let Some(f) = dl.fallback {
+            d.set("fallback", f);
+        }
+        out.set("deadline", &d);
     }
     out
 }

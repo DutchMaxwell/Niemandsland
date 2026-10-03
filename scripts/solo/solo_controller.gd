@@ -74,10 +74,15 @@ static func roles_assign(winner_slot: int, other_slot: int, winner_role: String)
 static func marker_metadata(spec: Dictionary) -> Array:
 	var owned := bool(spec.get("owned", false))
 	var carry := bool(spec.get("carry", false))
-	if not owned and not carry:
+	var mobile := bool(spec.get("mobile", false))
+	var secret := bool(spec.get("secret", false))
+	if not owned and not carry and not mobile and not secret:
 		return []
 	var markers: Array = []
-	for i in range(int(spec.get("count", 2))):
+	# A dice-term count ("d3+2") is NOT a number here: String.to_int would strip the letters and read
+	# 32. Its markers are sized once they are on the table (main._solo_secret_markers_assign).
+	var raw_count: Variant = spec.get("count", 2)
+	for i in range(int(raw_count) if raw_count is int or raw_count is float else 0):
 		var marker: Dictionary = {}
 		if owned:
 			marker = {"owned_by": i + 1, "destructible": bool(spec.get("destructible", false)),
@@ -85,8 +90,28 @@ static func marker_metadata(spec: Dictionary) -> Array:
 		if carry:
 			marker["carry"] = true
 			marker["carried_by"] = ""
+			if spec.has("drop_in"):   # D14.5: this mission's relic drops this far (inches) past the carrier
+				marker["drop_in"] = float(spec["drop_in"])
+			if str(spec.get("carry_by", "")) == "attacker":   # D14.5d: only attacking units carry it
+				marker["attacker_only"] = true
+		if secret:
+			marker["secret"] = ""
+			marker["revealed"] = false
+		if mobile:
+			marker["mobile"] = true
+			marker["deploy_edge"] = int(spec.get("deploy_edge", 0))
 		markers.append(marker)
 	return markers
+
+
+## D10a (R10a): the VIP marker moves up to 12" and stops 6" from the target edge, which is the
+## edge OPPOSITE `deploy_edge` (its z sign). Returns the new z in inches; x is unchanged.
+const VIP_MOVE_IN := 12.0
+static func vip_walk_z(z_in: float, deploy_edge: int, depth_in: float) -> float:
+	var dir := -float(signi(deploy_edge))
+	var to_stop := (depth_in / 2.0 - 6.0) * dir - z_in
+	var step := clampf(to_stop * dir, 0.0, VIP_MOVE_IN)
+	return z_in + dir * step
 
 
 static func mission_reset(scoring: String, flavour: Dictionary, markers: Array = []) -> void:
@@ -2939,7 +2964,24 @@ func _current_round() -> int:
 func capture_board() -> Dictionary:
 	return BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at)
+		terrain_type_at, int(ai_slot))
+
+
+## D14.0: THE end-of-game referee for every consumer (summary, arena result). The role missions
+## (`escort`, `extract`) are decided on the board (BattleSim.role_winner needs the marker spots, the
+## carriers, the attacker and the table); every other scoring id keeps BattleSim.mission_winner's
+## arguments exactly as before. Returns "p1" / "p2" / "draw".
+func end_verdict(owners: Array, alive1: int, alive2: int) -> String:
+	if mission_scoring == "escort" or mission_scoring == "extract":
+		var edge := 0
+		for mk in mission_markers:
+			if edge == 0:
+				edge = int((mk as Dictionary).get("deploy_edge", 0))
+		var table_in := _table_half_extents() * 2.0 / INCHES_TO_METERS
+		var verdict := BattleSim.role_winner(mission_scoring, capture_board(), edge, table_in.x, table_in.y)
+		if verdict != "":
+			return verdict
+	return BattleSim.mission_winner(mission_scoring, owners, mission_vp, mission_markers, alive1, alive2)
 
 
 func _is_final_round() -> bool:
@@ -3530,7 +3572,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	var _prof_cap_t0 := BattleSim.prof_t0()
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at)
+		terrain_type_at, int(ai_slot))
 	BattleSim.prof_mark("capture", _prof_cap_t0)
 	if act_wall_enabled():
 		_phase_mark("capture", _ph_cap)
@@ -4207,7 +4249,7 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 		do_shoot: bool, band_in: float, kite: bool) -> void:
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at)
+		terrain_type_at, int(ai_slot))
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
 	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var key := _state_key_of(state, unit)
@@ -4324,7 +4366,7 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 	AiPlanner.playout_net = net if _playout_net_gate() else {}
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at)
+		terrain_type_at, int(ai_slot))
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
 	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var key := _state_key_of(state, unit)
@@ -4558,7 +4600,7 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 		_ph_cap2 = _phase_enter()
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at)
+		terrain_type_at, int(ai_slot))
 	if act_wall_enabled():
 		_phase_mark("capture", _ph_cap2)
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
@@ -9527,6 +9569,8 @@ static func carry_step(unit_infos: Array, objectives: Array, owners: Array, mark
 		var side := int(owners[i])
 		if side != 1 and side != 2:
 			continue
+		if bool(mk.get("attacker_only", false)) and side != int(mission_roles.get("attacker", 0)):
+			continue   # D14.5d: Rescue — only an attacking unit picks the relic up
 		var op: Vector3 = objectives[i]
 		var best_id := ""
 		var best_name := ""
@@ -9548,9 +9592,68 @@ static func carry_step(unit_infos: Array, objectives: Array, owners: Array, mark
 	return events
 
 
-## One inch past the carrier's first base edge, toward the nearest opposing model.
+## D12a (R9a, AI defender): the relic is the marker FARTHEST from every table edge, the trap the
+## NEAREST one (first index on a tie); the rest stay plain. `points_in` = marker spots in table inches.
+static func secret_assign(points_in: Array, table_w_in: float, table_d_in: float) -> Array:
+	var out: Array = []
+	var best := -INF
+	var worst := INF
+	var relic := -1
+	var trap := -1
+	for i in range(points_in.size()):
+		out.append("")
+		var p: Vector2 = points_in[i]
+		var gap := minf(table_w_in / 2.0 - absf(p.x), table_d_in / 2.0 - absf(p.y))
+		if gap > best:
+			best = gap
+			relic = i
+		if gap < worst:
+			worst = gap
+			trap = i
+	if relic >= 0:
+		out[relic] = "relic"
+	if trap >= 0 and trap != relic:
+		out[trap] = "trap"
+	return out
+
+
+## D12a: the round-end reveal. A secret marker the ATTACKER now holds is turned up by its nearest
+## eligible unit: the relic stays (carry_step picks it up next), a trap or a plain marker is removed
+## (`destroyed`, owner zeroed). Returns [{index, secret, unit_id, name}] in marker order.
+static func secret_reveal_step(unit_infos: Array, objectives: Array, owners: Array, markers: Array,
+		attacker: int) -> Array:
+	var events: Array = []
+	for i in range(markers.size()):
+		var mk: Dictionary = markers[i]
+		if not mk.has("secret") or bool(mk.get("revealed", false)) or bool(mk.get("destroyed", false)):
+			continue
+		if i >= owners.size() or i >= objectives.size() or int(owners[i]) != attacker:
+			continue
+		var best: Dictionary = {}
+		var best_gap := INF
+		for info in unit_infos:
+			var d := info as Dictionary
+			if int(d.get("player", 0)) != attacker or bool(d.get("shaken", false)) \
+					or bool(d.get("ambush_locked", false)) or bool(d.get("aircraft", false)):
+				continue
+			var gap := objective_gap_in(d, objectives[i])
+			if gap < best_gap:
+				best_gap = gap
+				best = d
+		if best.is_empty():
+			continue
+		mk["revealed"] = true
+		if String(mk["secret"]) != "relic":
+			mk["destroyed"] = true
+			owners[i] = 0
+		events.append({"index": i, "secret": String(mk["secret"]), "unit_id": String(best.get("unit_id", "")),
+			"name": String(best.get("name", ""))})
+	return events
+
+
+## `drop_in` inches (default one) past the carrier's first base edge, toward the nearest opposing model.
 ## The first model stays available after destruction, when get_alive_models() is empty.
-static func drop_point(carrier: GameUnit, opponent_units: Array) -> Vector3:
+static func drop_point(carrier: GameUnit, opponent_units: Array, drop_in := 1.0) -> Vector3:
 	if carrier == null or carrier.models.is_empty():
 		return Vector3.ZERO
 	var first := carrier.models[0] as ModelInstance
@@ -9572,7 +9675,7 @@ static func drop_point(carrier: GameUnit, opponent_units: Array) -> Vector3:
 			if delta.length_squared() < closest and delta.length_squared() > 0.000001:
 				closest = delta.length_squared()
 				direction = delta.normalized()
-	return centre + direction * (model_base_radius_m(first) + 0.0254)
+	return centre + direction * (model_base_radius_m(first) + drop_in * 0.0254)
 
 
 static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array,
@@ -10364,8 +10467,8 @@ static func _axis_scale(start: float, d: float, limit: float) -> float:
 ## `zone` = the AI deployment zone in table XZ; `objectives` = XZ points; `blocked_normal` /
 ## `blocked_flying` classify terrain for ground vs Strider/Flying units. Seeded → reproducible.
 ## Returns {deployed, reserved, seed}.
-func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable()) -> Dictionary:
-	deploy_begin(zone, objectives, blocked_normal, blocked_flying, seed_value, zone_test)
+func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable(), gates: Dictionary = {}) -> Dictionary:
+	deploy_begin(zone, objectives, blocked_normal, blocked_flying, seed_value, zone_test, gates)
 	return deploy_remaining()
 
 
@@ -10378,12 +10481,16 @@ var _deploy_alt := {}   # {"zone", "queue", "all_units", "section_of", "occupied
 # M2b — arbitrary deployment zones: optional probe Callable(Vector2 world metres) -> bool
 # (DeploymentCatalog.zone_test). Invalid = today's rect-only deployment, byte-identical.
 var _deploy_zone_test := Callable()
+# D6a — Attack & Defend distance gates for the AI's main placements: {"min_from_enemy_in",
+# "max_from_friend_in", "min_from_marker_in"} in inches (a missing key = no such gate). {} = today's path.
+var _deploy_gates := {}
 
 
-func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable()) -> int:
+func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable(), gates: Dictionary = {}) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	_deploy_zone_test = zone_test
+	_deploy_gates = gates
 	# Stash the context so the round-2 ambush arrival reuses the same objectives + terrain rules.
 	_deploy_objectives = objectives
 	_deploy_blocked_normal = blocked_normal
@@ -10484,6 +10591,7 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 		"all_units": all_units, "section_of": section_of, "occupied": [], "deployed": 0,
 		"seed": seed_value, "forward_y": forward_y, "scout_ids": scout_ids,
 		"blocked_normal": blocked_normal, "blocked_flying": blocked_flying}
+	_deploy_alt["main_total"] = main_queue.size()
 	return main_queue.size() + scout_queue.size()
 
 
@@ -10513,6 +10621,73 @@ func deploy_next_one() -> GameUnit:
 	if queue.is_empty():
 		return null
 	return _deploy_place_id(int(queue.pop_front()))
+
+
+## D7a — deployment PHASES (Attack & Defend). Units a phase's share covers for a side with `total`
+## main units of which `placed` already stand: half = floor(n / 2) (R5a), all, rest = what is left.
+static func phase_quota(share: String, total: int, placed: int) -> int:
+	match share:
+		"half":
+			return total / 2
+		"rest":
+			return maxi(0, total - placed)
+	return total
+
+
+## The catalog's phase list, [[role, share, zone_style_id], ...]; [] for a mission without phases.
+static func deploy_phases_of(mission: Dictionary) -> Array:
+	var raw: Variant = mission.get("deploy_phases", [])
+	return (raw as Array).duplicate(true) if raw is Array else []
+
+
+## Main units the AI side deploys in total (placed + still queued); set when the queue is built.
+func deploy_main_total() -> int:
+	return int(_deploy_alt.get("main_total", 0))
+
+
+## R5a: queue the AI's most expensive units first, so a "half" phase deploys the floor(n / 2) highest
+## points. Stable (equal costs keep their drawn order); returns the new queue as unit names.
+func deploy_prioritise_by_points() -> Array:
+	var queue: Array = _deploy_alt.get("queue", [])
+	var all_units: Array = _deploy_alt.get("all_units", [])
+	var cost := func(id: int) -> int:
+		var sd: Variant = (all_units[id] as GameUnit).source_data
+		return int(sd.cost) if sd != null and "cost" in sd else 0
+	var keyed: Array = []
+	for i in queue.size():
+		keyed.append([int(queue[i]), i])
+	keyed.sort_custom(func(a, b) -> bool:
+		var ca: int = cost.call(a[0])
+		var cb: int = cost.call(b[0])
+		return ca > cb or (ca == cb and a[1] < b[1]))
+	var names: Array = []
+	for k in keyed.size():
+		queue[k] = keyed[k][0]
+		names.append((all_units[int(queue[k])] as GameUnit).get_name())
+	return names
+
+
+## A phase's zone for the AI's next placements: the bounding rect plus the optional shape probe.
+func deploy_set_zone(zone: Rect2, zone_test: Callable = Callable()) -> void:
+	_deploy_alt["zone"] = zone
+	_deploy_alt["forward_y"] = zone.position.y if absf(zone.position.y) < absf(zone.end.y) else zone.end.y
+	_deploy_zone_test = zone_test
+
+
+## A phase's own distance gates for the AI's next placements (D7d); {} = none.
+func deploy_set_gates(gates: Dictionary) -> void:
+	_deploy_gates = gates
+
+
+## Place up to `n` queued MAIN units (one phase's AI quota); returns the units placed.
+func deploy_place_n(n: int) -> Array:
+	var placed: Array = []
+	for _i in n:
+		var u := deploy_next_one()
+		if u == null:
+			break
+		placed.append(u)
+	return placed
 
 
 ## Place the NEXT queued SCOUT unit (the scout phase's AI turn — 12" band ahead of the zone).
@@ -10555,12 +10730,38 @@ func _deploy_place_id(id: int) -> GameUnit:
 	# overlap-cleanup reshift stays rect-only. Invalid callable = today's path, byte-identical.
 	if not is_scout and _deploy_zone_test.is_valid():
 		var ztest := _deploy_zone_test
+		# D5: wholly within the zone — every footprint base is probed, not only the centre
+		var fp_offsets := footprint
 		blocked = func(p: Vector2) -> bool:
-			return not bool(ztest.call(p)) \
+			var outside: bool = not bool(ztest.call(p))
+			for off in fp_offsets:
+				outside = outside or not bool(ztest.call(p + off))
+			return outside \
 				or (terrain_only.is_valid() and bool(terrain_only.call(p)))
+	# D6a — Attack & Defend distance gates (main placements only, like the zone shape): a disc per
+	# enemy model / marker the search may not enter, and the friend reach as a blocked-ground test.
+	var gate_occ: Array = []
+	if not is_scout and not _deploy_gates.is_empty():
+		var g_enemy := float(_deploy_gates.get("min_from_enemy_in", 0.0)) * INCHES_TO_METERS
+		if g_enemy > 0.0:
+			for e in bases_of_slot(human_slot):
+				gate_occ.append({"pos": e["pos"], "radius": g_enemy + float(e["radius"])})
+		var g_marker := float(_deploy_gates.get("min_from_marker_in", 0.0)) * INCHES_TO_METERS
+		if g_marker > 0.0:
+			for mk in objectives:
+				gate_occ.append({"pos": mk, "radius": g_marker})
+		var g_friend := float(_deploy_gates.get("max_from_friend_in", 0.0)) * INCHES_TO_METERS
+		if g_friend > 0.0 and not occupied.is_empty():
+			var inner_blocked := blocked
+			var friends: Array = occupied.duplicate()
+			blocked = func(p: Vector2) -> bool:
+				for f in friends:
+					if p.distance_to((f as Dictionary)["pos"]) <= radius + float((f as Dictionary)["radius"]) + g_friend:
+						return bool(inner_blocked.call(p)) if inner_blocked.is_valid() else false
+				return true
 	var threat := _deploy_threat_cb(unit)
 	var threat_w := deploy_threat_in * INCHES_TO_METERS if threat.is_valid() else 0.0
-	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+	var spot := AiDeployment.best_spot(sec, objectives, occupied + gate_occ, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 	var spot_why := "best legal spot toward nearest objective (section, forward-edge doctrine)"
 	if threat.is_valid() and spot != Vector2.INF:
 		spot_why += " (threat-aware: %d enemy envelope(s) over the spot)" % int(threat.call(spot))
@@ -10572,7 +10773,7 @@ func _deploy_place_id(id: int) -> GameUnit:
 	if (large_zone_search and not is_scout and spot != Vector2.INF and forward_y != INF
 			and base_r >= LARGE_BASE_RADIUS_IN * INCHES_TO_METERS
 			and sec_behind > LARGE_ZONE_SPOT_BEHIND_M):
-		var zone_spot := AiDeployment.best_spot(zone, objectives, occupied, radius, blocked,
+		var zone_spot := AiDeployment.best_spot(zone, objectives, occupied + gate_occ, radius, blocked,
 				0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		if zone_spot != Vector2.INF and absf(zone_spot.y - forward_y) < sec_behind:
 			spot = zone_spot
@@ -10586,17 +10787,17 @@ func _deploy_place_id(id: int) -> GameUnit:
 		if not bisected and not _deploy_footprint_boxed(spot, footprint, base_r):
 			break
 		occupied.append({"pos": spot, "radius": radius * 0.6})
-		spot = AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+		spot = AiDeployment.best_spot(sec, objectives, occupied + gate_occ, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "re-sited — wall bisected the formation" if bisected \
 				else "re-sited — walls boxed the base in (no straight 12\" exit)"
 	if spot == Vector2.INF:
-		spot = AiDeployment.best_spot(zone, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+		spot = AiDeployment.best_spot(zone, objectives, occupied + gate_occ, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "section full — whole-zone fallback"
 	if spot == Vector2.INF:
 		# Crowded out of every spaced spot: relax the 1" spacing (allow neighbours to bunch) but STILL
 		# reject blocking/impassable terrain — the army MUST deploy, yet a legal footprint always beats
 		# a spot inside a wall/forest (field-test finding 3: units deployed inside blocking terrain).
-		spot = AiDeployment.best_spot(zone, objectives, [], radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
+		spot = AiDeployment.best_spot(zone, objectives, gate_occ, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
 		spot_why = "crowded — nearest legal (non-terrain) spot, spacing relaxed"
 	if spot == Vector2.INF:
 		# Truly no fully terrain-legal cell anywhere (a terrain-choked table) — must still deploy, so pick
@@ -10859,6 +11060,58 @@ func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Ca
 	return best if is_finite(forward_y) else Vector3.INF
 
 
+## D6a: which deployment distance gate a placement breaks, "" when none. `models`, `enemy` and
+## `friends` are [{"pos": Vector2, "radius": float}] (world metres), `markers` [Vector2]. Distances
+## are base edge to base edge; a marker is a point. `friends` empty = the side's FIRST unit, which is
+## free of the friend gate (R12a).
+static func gate_violation(gates: Dictionary, models: Array, enemy: Array, friends: Array, markers: Array) -> String:
+	var gap: float = float(gates.get("min_from_enemy_in", 0.0))
+	if gap > 0.0:
+		for m in models:
+			for e in enemy:
+				if _gate_edge_gap(m, e) <= gap * INCHES_TO_METERS:
+					return "must be more than %s\" from enemy units" % _gate_in(gap)
+	var near: float = float(gates.get("min_from_marker_in", 0.0))
+	if near > 0.0:
+		for m in models:
+			for mk in markers:
+				if (m["pos"] as Vector2).distance_to(mk as Vector2) - float(m["radius"]) <= near * INCHES_TO_METERS:
+					return "must be more than %s\" from the objective" % _gate_in(near)
+	var reach: float = float(gates.get("max_from_friend_in", 0.0))
+	if reach > 0.0 and not friends.is_empty():
+		for m in models:
+			for f in friends:
+				if _gate_edge_gap(m, f) <= reach * INCHES_TO_METERS:
+					return ""
+		return "must be within %s\" of a friendly unit" % _gate_in(reach)
+	return ""
+
+
+static func _gate_edge_gap(a: Dictionary, b: Dictionary) -> float:
+	return (a["pos"] as Vector2).distance_to(b["pos"] as Vector2) - float(a["radius"]) - float(b["radius"])
+
+
+static func _gate_in(v: float) -> String:
+	return str(int(v)) if is_equal_approx(v, floorf(v)) else "%.1f" % v
+
+
+## Live bases of one slot's units on the table as [{"pos", "radius"}], optionally without one unit.
+func bases_of_slot(slot: int, except_unit: GameUnit = null) -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for u in army_manager.get_game_units_for_player(slot):
+		var gu := u as GameUnit
+		if gu == null or gu == except_unit or gu.get_alive_count() <= 0 or unit_in_reserve(gu):
+			continue
+		for m in gu.get_alive_models():
+			var mi := m as ModelInstance
+			if mi != null and mi.node != null and is_instance_valid(mi.node):
+				var p := mi.node.global_position
+				out.append({"pos": Vector2(p.x, p.z), "radius": model_base_radius_m(mi)})
+	return out
+
+
 ## Zone + table-edge legality of a repair spot (brief deploycoh): the spot must sit inside the
 ## unit's recorded deployment zone (`_deploy_zone_of`, set by `_deploy_place_id` — no record, e.g.
 ## a scout band, means the ZONE rule is skipped but the table rule never is) and its centre at
@@ -10866,6 +11119,8 @@ func _deploy_ring_spot(ms: Array, pts: Array, comp: Array, idx: int, blocked: Ca
 func _repair_spot_in_zone(unit: GameUnit, p: Vector2, base_r: float) -> bool:
 	if _deploy_zone_of.has(unit) and not (_deploy_zone_of[unit] as Rect2).has_point(p):
 		return false
+	if _deploy_zone_of.has(unit) and _deploy_zone_test.is_valid() and not bool(_deploy_zone_test.call(p)):
+		return false   # D5: the catalog zone shape (a disc), not only its bounding rect
 	var margin := base_r + INCHES_TO_METERS
 	var h := _table_half_extents()
 	return absf(p.x) <= h.x - margin and absf(p.y) <= h.y - margin
@@ -11030,6 +11285,8 @@ func _deploy_cfg_in_zone(unit: GameUnit, models: Array, cfg: Array) -> bool:
 		if p.x - r < zone.position.x or p.x + r > zone.end.x \
 				or p.z - r < zone.position.y or p.z + r > zone.end.y:
 			return false
+		if _deploy_zone_test.is_valid() and not bool(_deploy_zone_test.call(Vector2(p.x, p.z))):
+			return false   # D5: the catalog zone shape, not only its bounding rect
 	return true
 
 
@@ -11048,6 +11305,20 @@ func _deploy_zone_reshift(unit: GameUnit, models: Array, cfg: Array) -> Vector2:
 		shift.x = minf(shift.x, zone.end.x - (p.x + r + shift.x))
 		shift.y = maxf(shift.y, zone.position.y - (p.z - r + shift.y))
 		shift.y = minf(shift.y, zone.end.y - (p.z + r + shift.y))
+	if _deploy_zone_test.is_valid():
+		# D5: a non-rectangular zone — walk the whole unit toward the zone's centre in 0.25" steps
+		# until every base centre passes the shape test (convex zones; bounded).
+		var to_centre := (zone.get_center() - Vector2(cfg[0].x, cfg[0].z) - shift).normalized() * 0.25 * INCHES_TO_METERS
+		for _step in range(80):
+			var all_in := true
+			for i in range(cfg.size()):
+				var q: Vector3 = cfg[i]
+				if not bool(_deploy_zone_test.call(Vector2(q.x + shift.x, q.z + shift.y))):
+					all_in = false
+					break
+			if all_in:
+				break
+			shift += to_centre
 	return shift
 
 
@@ -11605,10 +11876,67 @@ static func ambush_earliest_round(gu: GameUnit) -> int:
 static func may_arrive_this_round(gu: GameUnit, round_number: int) -> bool:
 	if gu == null:
 		return false
+	if bool(gu.unit_properties.get("mission_reserve", false)):   # D8a: only after this round's winning roll
+		return int(gu.unit_properties.get("mission_arrival_round", 0)) == round_number
 	var due := int(gu.unit_properties.get("ambush_return_round", 0))
 	if due > 0:
 		return round_number == due
 	return round_number >= ambush_earliest_round(gu)
+
+
+## D8a — MISSION reserves (Attack & Defend: Rescue, Last Stand). The units a mission sets aside are
+## flagged `mission_reserve` + `ambush_reserve` (off-table, never activatable) and arrive only on a
+## winning die: from `from_round` on, each round every such unit rolls once and arrives on `arrive_on`+.
+
+## How a mission reserve lands: {"zone_test": Callable(Vector2 metres) -> bool, "min_from_enemy_in",
+## "min_from_marker_in"} (inches; a missing key = no such gate). Set by the round flow before the arrivals.
+var _mission_arrival := {}
+
+
+func mission_arrival_set(zone_test: Callable, gates: Dictionary) -> void:
+	_mission_arrival = {"zone_test": zone_test, "min_from_enemy_in": float(gates.get("min_from_enemy_in", 0.0)),
+		"min_from_marker_in": float(gates.get("min_from_marker_in", 0.0))}
+
+
+## The AI's still-queued MAIN units, taken off the queue (what its phases did not deploy).
+func deploy_take_queue() -> Array:
+	var queue: Array = _deploy_alt.get("queue", [])
+	var all_units: Array = _deploy_alt.get("all_units", [])
+	var out: Array = []
+	for id in queue:
+		out.append(all_units[int(id)])
+	queue.clear()
+	return out
+
+
+## Set `units` aside as mission reserves; the AI's join its paced arrival list, a human's are held by the flag.
+func mission_reserve_set(units: Array) -> void:
+	for u in units:
+		var gu := u as GameUnit
+		if gu == null:
+			continue
+		gu.unit_properties["ambush_reserve"] = true
+		gu.unit_properties["mission_reserve"] = true
+		if int(gu.unit_properties.get("player_id", 0)) == ai_slot and not ambush_reserve.has(gu):
+			ambush_reserve.append(gu)
+
+
+## Roll the round's arrival die once for every held mission reserve of `slot` (from `from_round` on):
+## `die` is Callable() -> int (the real tray in a game). Returns [{unit, roll, arrives}] in held order.
+func mission_arrival_rolls(slot: int, round_number: int, from_round: int, arrive_on: int, die: Callable) -> Array:
+	var out: Array = []
+	if round_number < from_round or army_manager == null:
+		return out
+	for u in army_manager.get_game_units_for_player(slot):
+		var gu := u as GameUnit
+		if gu == null or gu.is_destroyed() or not bool(gu.unit_properties.get("mission_reserve", false)) \
+				or not bool(gu.unit_properties.get("ambush_reserve", false)):
+			continue
+		var roll: int = int(die.call())
+		var ok: bool = roll >= arrive_on
+		gu.unit_properties["mission_arrival_round"] = round_number if ok else 0
+		out.append({"unit": gu, "roll": roll, "arrives": ok})
+	return out
 
 
 ## How many of the AI's held reserves could arrive in `round_number` (the round-start gate: with
@@ -11808,11 +12136,21 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 	var radius := _deploy_footprint_radius(unit)
 	var footprint := _deploy_footprint_offsets(unit)   # per-model footprint (finding 1)
 	var base_r := _deploy_base_radius(_deploy_models(unit))
+	var mission_land: bool = bool(unit.unit_properties.get("mission_reserve", false)) and not _mission_arrival.is_empty()
+	var mission_zone: Callable = _mission_arrival.get("zone_test", Callable()) if mission_land else Callable()
+	if mission_zone.is_valid():   # D8a: wholly inside the mission's arrival zone, every footprint base
+		var inner := blocked
+		var fp_offsets := footprint
+		blocked = func(p: Vector2) -> bool:
+			var outside: bool = not bool(mission_zone.call(p))
+			for off in fp_offsets:
+				outside = outside or not bool(mission_zone.call(p + off))
+			return outside or bool(inner.call(p))
 	# Ambush Beacon pass: land inside a friendly beacon's circle and EVERY enemy distance restriction is
 	# waived (maintainer ruling — "distance restrictions", plural: the 9"/3" ring AND Repel Ambushers'
 	# 12"), so the search runs against `occupied` alone (already-placed footprints / live bases). A box
 	# corner outside the circle is rejected: only a spot truly within the radius is waived.
-	for b in beacons:
+	for b in (beacons if not mission_land else []):   # a mission reserve has no beacon waiver
 		var bd := b as Dictionary
 		var bpos := bd["pos"] as Vector2
 		var brad := float(bd.get("radius_m", AMBUSH_BEACON_RADIUS_IN * INCHES_TO_METERS))
@@ -11839,9 +12177,17 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 	# its ring is the LARGER of the arriving unit's own distance and the enemy's projected one (the
 	# rule's hard "must be set up over 12\" away" overrides even the 3" Infiltrate concession).
 	var search_occupied: Array = occupied
+	if mission_land:   # D8a: the markers' gate, as discs the search may not enter
+		var g_marker: float = float(_mission_arrival.get("min_from_marker_in", 0.0)) * INCHES_TO_METERS
+		if g_marker > 0.0:
+			search_occupied = occupied.duplicate()
+			for mk in _deploy_objectives:
+				search_occupied.append({"pos": mk, "radius": g_marker})
 	if not enemy_positions.is_empty():
-		search_occupied = occupied.duplicate()
+		search_occupied = search_occupied.duplicate() if search_occupied == occupied else search_occupied
 		var ring := _reserve_min_enemy_dist_m(unit)
+		if mission_land:
+			ring = float(_mission_arrival.get("min_from_enemy_in", 0.0)) * INCHES_TO_METERS
 		for e in enemy_positions:
 			if e is Dictionary:
 				# pad_m = the enemy MODEL's base radius (maintainer field find: the ring is measured
@@ -11878,6 +12224,7 @@ func _finish_reserve_arrival(unit: GameUnit, spot: Vector2, occupied: Array, rad
 	unit.unit_properties["ambush_reserve"] = false
 	unit.unit_properties["ambush_arrived_round"] = round_no
 	unit.unit_properties.erase("ambush_return_round")
+	unit.unit_properties.erase("mission_reserve")   # D8a: on the table now, an ordinary unit
 
 
 # === Human Ambush reserves (field-test finding 5 — the game must ASK) ========================
