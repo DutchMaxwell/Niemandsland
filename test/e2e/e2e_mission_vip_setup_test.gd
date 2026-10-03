@@ -99,7 +99,7 @@ func test_a_human_defender_clicks_the_far_band_and_the_edge_follows_the_click() 
 	var editor := _human_defender_opens_the_pick()
 	await _runner.simulate_frames(2)
 	assert_bool(editor.vip_pick_active).is_true()
-	assert_int(SoloController.mission_markers.size()).is_equal(0)   # nothing is placed before the click
+	assert_int(_main.terrain_overlay.get_objectives().size()).is_equal(0)   # no marker is on the table before the click
 	_click_table_spot(editor, 12.0, 21.0)   # the +z band, NOT the human's own (-z) edge
 	assert_bool(editor.visible).is_false()
 	assert_int(int(SoloController.mission_markers[0]["deploy_edge"])).is_equal(1)
