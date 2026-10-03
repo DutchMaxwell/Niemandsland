@@ -770,4 +770,34 @@ mod tests {
         }
         assert!(has_los(&west, &east, false, &wood, &[]));
     }
+
+    /// A free shelf piece as an upright box — `VolumetricLos.segment_hits_box`
+    /// and the box branch of `circle_in_footprint`. A 6x3" solid at 45 deg,
+    /// 2.5" tall (the grid Blocker's profile), centred on the origin.
+    #[test]
+    fn a_free_solid_blocks_through_it_not_over_or_beside_it() {
+        let yaw = std::f64::consts::FRAC_PI_4;
+        let solid = [Zone::shelf_box([0.0, 0.0], [3.0 * M, 1.5 * M], yaw, 0.0, 2.5 * M, true)];
+        let (west, east) = (cyl(-8.0, 0.0, 32.0), cyl(8.0, 0.0, 32.0)); // eyes 1.25" up
+        assert!(!has_los(&west, &east, false, &solid, &[]));
+        let (mut up_w, mut up_e) = (west, east);
+        for c in [&mut up_w, &mut up_e] {
+            c.y0 += 3.0 * M;
+            c.y1 += 3.0 * M; // both on a 3" floor: eyes above the 2.5" roof
+        }
+        assert!(has_los(&up_w, &up_e, false, &solid, &[]));
+        // 6" north clears the rotated corner (its reach is (3 + 1.5) * sin 45 = 3.2").
+        assert!(has_los(&cyl(-8.0, 6.0, 32.0), &cyl(8.0, 6.0, 32.0), false, &solid, &[]));
+    }
+
+    /// An AREA box (a free ruin's 6" hull): see in, see out, never through.
+    #[test]
+    fn an_area_box_lets_its_occupant_see_out_but_nobody_through() {
+        let ruin = [Zone::shelf_box([0.0, 0.0], [4.5 * M, 3.0 * M], 0.0, 0.0, 6.0 * M, false)];
+        let inside = cyl(0.0, 0.0, 32.0);
+        let (west, east) = (cyl(-10.0, 0.0, 32.0), cyl(10.0, 0.0, 32.0));
+        assert!(has_los(&inside, &east, false, &ruin, &[]));
+        assert!(has_los(&west, &inside, false, &ruin, &[]));
+        assert!(!has_los(&west, &east, false, &ruin, &[]));
+    }
 }
