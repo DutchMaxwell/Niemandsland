@@ -95,6 +95,24 @@ func test_last_stand_reads_its_phases_and_recycling_reserve_from_the_catalog() -
 	assert_that(_main._solo_deploy_gates_for(1)).is_equal({})
 
 
+## D14.2: Ambush plays six rounds; once the roles are set the table reads its three phases, the attacker
+## phase carrying its own gates (not the role's), and no reserve rule.
+func test_ambush_reads_its_three_phases_with_their_own_gates() -> void:
+	_main._ensure_solo_controller()
+	_main._solo_mission_id = "ambush"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	_main.solo_ai_slots = {2: true}
+	_main._solo_roles_set(1, "attacker")
+	var ph: Array = SoloController.deploy_phases_of(MissionCatalog.get_mission("ambush"))
+	assert_int(ph.size()).is_equal(3)
+	var g: Dictionary = _main._solo_phase_gates(ph[1], 1)
+	assert_float(float(g["min_from_enemy_in"])).is_equal(12.0)
+	assert_float(float(g["max_from_friend_in"])).is_equal(6.0)
+	assert_that(_main._solo_phase_gates(ph[0], 2)).is_equal({})   # the defender's half: no gate
+	assert_bool(_main._solo_reserve_cfg().is_empty()).is_true()
+
+
 func test_relic_hunt_arms_three_carried_markers() -> void:
 	_main._solo_mission_id = "relic_hunt"
 	_main._solo_apply_mission_if_chosen()
