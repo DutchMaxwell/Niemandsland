@@ -10668,6 +10668,11 @@ func deploy_set_zone(zone: Rect2, zone_test: Callable = Callable()) -> void:
 	_deploy_zone_test = zone_test
 
 
+## A phase's own distance gates for the AI's next placements (D7d); {} = none.
+func deploy_set_gates(gates: Dictionary) -> void:
+	_deploy_gates = gates
+
+
 ## Place up to `n` queued MAIN units (one phase's AI quota); returns the units placed.
 func deploy_place_n(n: int) -> Array:
 	var placed: Array = []
