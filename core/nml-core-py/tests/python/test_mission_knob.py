@@ -432,3 +432,11 @@ def test_core_recycles_a_destroyed_unit_once_and_the_plain_hook_applies_the_last
     # round 4 and the covered side has nothing on the table: the reserves are lost
     sp._last_stand_plain({"units": units}, 4, cfg, [False, True], set(keys))
     assert all(not units[k]["dormant"] and units[k]["alive"] == 0 for k in keys)
+
+
+def test_a_phase_carries_its_own_gates_as_the_optional_fourth_element():
+    """NML-1010 D7d: `_phase_args` forwards a phase's own gates; an entry without them stays as it was."""
+    md = {"roles": True, "deploy_phases": [["defender", "half", "centre_disc_12"],
+                                           ["attacker", "all", "edge_band_12", {"min_from_enemy_in": 12}]]}
+    ph = sp._phase_args(md, 1, REPO)
+    assert "gates" not in ph[0] and ph[1]["gates"] == {"min_from_enemy_in": 12}

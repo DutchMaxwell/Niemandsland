@@ -293,10 +293,13 @@ def _phase_args(mission_def: dict[str, Any], attacker: int, repo_root: str | Pat
     styles = json.loads((Path(repo_root) / "assets" / "solo" / "deployments.json").read_text(encoding="utf-8"))["styles"]
     styles.update(extra_styles or {})
     out = []
-    for role, share, style_id in raw:
+    for entry in raw:
+        role, share, style_id = entry[0], entry[1], entry[2]
         rect, zl = _style_zone_args(styles[style_id], "1")
         out.append({"side": (attacker - 1) if role == "attacker" else (2 - attacker),
-                    "share": share, "zone": rect, "zones": zl})
+                    "share": share, "zone": rect, "zones": zl,
+                    # D7d: an optional 4th catalog element = this phase's own gates (inches)
+                    **({"gates": entry[3]} if len(entry) > 3 and isinstance(entry[3], dict) else {})})
     return out
 
 
