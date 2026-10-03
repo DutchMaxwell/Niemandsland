@@ -105,8 +105,9 @@ pub fn apply_carry_step(state: &mut State, owners: &[i64]) {
     }
 }
 
-/// Drop every relic held by a unit 1 inch past its first base edge toward the
-/// nearest living opposing model, measured horizontally (plan amendment M-C1).
+/// Drop every relic held by a unit past its first base edge toward the nearest living opposing model,
+/// measured horizontally (plan amendment M-C1): 1 inch, or the marker's own `drop_in` (D14.5, Rescue: 6").
+/// The distance is the FIRST held marker's, one drop point serves them all.
 pub fn drop_carried(state: &mut State, unit: usize) {
     if unit >= state.units() { return; }
     if !state.markers_meta.iter().any(|m| m.carry && m.carried_by == unit as i64) { return; }
@@ -127,7 +128,8 @@ pub fn drop_carried(state: &mut State, unit: usize) {
         }
     }
     let radius = state.radii[unit].first().copied().unwrap_or(0.016);
-    let distance = radius + crate::IN2M;
+    let drop_in = state.markers_meta.iter().find(|m| m.carry && m.carried_by == unit as i64).map_or(0.0, |m| m.drop_in);
+    let distance = radius + if drop_in > 0.0 { drop_in } else { 1.0 } * crate::IN2M;
     let point = [centre[0] + direction[0] * distance, centre[1], centre[2] + direction[1] * distance];
     for i in 0..state.markers_meta.len() {
         if state.markers_meta[i].carry && state.markers_meta[i].carried_by == unit as i64 {
