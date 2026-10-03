@@ -46,6 +46,12 @@ func test_wound_ticks_count_the_landed_wounds() -> void:
 	assert_float((pip.mesh as QuadMesh).size.x).is_equal_approx(3 * ResultPipsScript.SIZE_M, 1e-6)
 
 
+func test_a_long_strip_is_capped_at_ten_symbols() -> void:
+	var pip: MeshInstance3D = _pips().mark(ResultPipsScript.Kind.HIT, Vector3.ZERO, 23)
+	assert_int(int((pip.material_override as ShaderMaterial).get_shader_parameter("count"))).is_equal(ResultPipsScript.MAX_TICKS)
+	assert_float((pip.mesh as QuadMesh).size.x).is_equal_approx(ResultPipsScript.MAX_TICKS * ResultPipsScript.SIZE_M, 1e-6)
+
+
 func test_a_casualty_gets_a_cross_over_its_eye() -> void:
 	var p = _pips()
 	var mi := _model_at(Vector3(0.5, 0.1, -0.3))

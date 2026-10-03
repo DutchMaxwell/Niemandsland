@@ -12,6 +12,7 @@ const LIFT_M := 0.01
 const RISE_M := 0.012
 const LIFE_S := 1.8
 const MAX_LIVE := 32
+const MAX_TICKS := 10   # one strip shows at most 10 symbols; the exact totals stay in the outcome text
 const SHADER := "shader_type spatial;
 render_mode unshaded, depth_test_disabled, cull_disabled;
 uniform vec4 tint : source_color; uniform int shape; uniform int count = 1; uniform float fade = 1.0;
@@ -68,6 +69,7 @@ func mark(kind: Kind, eye: Vector3, count: int) -> MeshInstance3D:
 	mat.shader = _shader
 	mat.set_shader_parameter("tint", COLORS[kind])
 	mat.set_shader_parameter("shape", int(kind))
+	count = mini(count, MAX_TICKS)
 	mat.set_shader_parameter("count", count)
 	mat.set_shader_parameter("fade", 1.0)
 	var quad := QuadMesh.new()
