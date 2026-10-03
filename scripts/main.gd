@@ -2569,6 +2569,27 @@ func _solo_secret_default_kinds() -> Array:
 	return SoloController.secret_assign(pts, table.table_size.x * 12.0, table.table_size.y * 12.0)
 
 
+## D14.4: a mission whose markers are `mobile` (VIP Escort) gets its marker once the defender is known:
+## the start spot and `deploy_edge` from MissionCatalog.vip_start, the objective on the table, and the
+## runtime zone style "marker_disc_12" (12" around the marker) the defender's deployment phase names.
+func _solo_vip_setup() -> void:
+	var spec: Dictionary = (MissionCatalog.get_mission(_solo_mission_id).get("markers", {}) as Dictionary) \
+		if not _solo_mission_id.is_empty() else {}
+	if not bool(spec.get("mobile", false)) or terrain_overlay == null or table == null:
+		return
+	var defender := int(SoloController.mission_roles.get("defender", 0))
+	var start := MissionCatalog.vip_start(defender, table.table_size.y * 12.0)
+	var pos: Vector2 = start["pos"]
+	SoloController.mission_markers = SoloController.marker_metadata(spec)
+	for mk in SoloController.mission_markers:
+		(mk as Dictionary)["deploy_edge"] = int(start["deploy_edge"])
+	terrain_overlay.update_objectives([Vector3(pos.x, 0.0, pos.y) * SoloController.INCHES_TO_METERS], [defender])
+	_solo_sync_relic_map()
+	DeploymentCatalog.register_style("marker_disc_12", DeploymentCatalog.disc_style(pos, 12.0))
+	_log_rule_event(BattleLog.Category.GENERAL, "Defender (%s) sets the VIP marker 3\" from its table edge" % [
+		_solo_player_label(defender)], true)
+
+
 ## The human defender's click: first the relic, then the trap (a different marker). The second click
 ## finishes the assignment; closing the editor early takes the AI rule for what is missing.
 func _solo_secret_marker_picked(index: int) -> void:
@@ -3001,6 +3022,7 @@ func _solo_roles_set(winner_slot: int, winner_role: String) -> void:
 	_log_rule_event(BattleLog.Category.GENERAL, "Roll-off: %s attacks, %s defends" % [
 		_solo_player_label(atk), _solo_player_label(dfn)], true)
 	_solo_secret_markers_assign()
+	_solo_vip_setup()
 	if _solo_points_factor() > 1.0 and _solo_army_points(atk) > 0 and _solo_army_points(dfn) > 0:
 		_log_rule_event(BattleLog.Category.GENERAL, "Points: attacker %d, defender %d (ratio %.2f, target %.2f)" % [
 			_solo_army_points(atk), _solo_army_points(dfn),

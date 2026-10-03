@@ -41,6 +41,19 @@ static func _catalog() -> Dictionary:
 	return _cache
 
 
+## D14.4: a style that only exists at run time (VIP Escort's disc around the marker, whose centre is
+## chosen at the table). Registered into the cache, so every consumer that asks `get_style(id)` finds it;
+## `reset_cache()` forgets it.
+static func register_style(id: String, style: Dictionary) -> void:
+	_catalog()[id] = style
+
+
+## A role-agnostic disc zone (both player keys, like the D4a styles) around `centre_in` (table inches).
+static func disc_style(centre_in: Vector2, r_in: float) -> Dictionary:
+	var zone := [{"disc": {"c": [centre_in.x, centre_in.y], "r_in": r_in}}]
+	return {"name": "Disc around the marker", "family": "attack_defend", "zones": {"1": zone, "2": zone.duplicate(true)}}
+
+
 static func style_ids() -> Array:
 	var ids: Array = _catalog().keys()
 	ids.sort()
