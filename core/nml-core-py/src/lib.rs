@@ -2642,6 +2642,16 @@ fn deploy_phased(
     to_py(py, &serde_json::to_value(&out).map_err(|e| Unsupported::new_err(e.to_string()))?)
 }
 
+/// D11b: Last Stand recycling — every destroyed, never-recycled unit of `side` returns to reserve
+/// ONCE as a fresh copy (`deployment::recycle_destroyed`); `(state, [keys])`.
+#[pyfunction]
+fn recycle_destroyed(py: Python<'_>, state: &PyState, side: i64, round_no: i64) -> PyResult<(PyState, Vec<String>)> {
+    let mut out = state.copy(py);
+    let idx = deployment::recycle_destroyed(&mut out.inner, side, round_no);
+    let keys = idx.iter().map(|&i| out.inner.key(i).to_string()).collect();
+    Ok((out, keys))
+}
+
 /// The per-side placement (§3.2's plain-dict signature). `units` = the roster
 /// in list order (ambush rows included; serde has no defaults, every key
 /// present, transport_capacity 0 on the corpus); `objectives` = the rulebook
@@ -3008,6 +3018,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(deploy_side, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_interleaved, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_phased, m)?)?;
+    m.add_function(wrap_pyfunction!(recycle_destroyed, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_finish, m)?)?;
     m.add_function(wrap_pyfunction!(arrive_one, m)?)?;
     m.add_function(wrap_pyfunction!(place_models, m)?)?;

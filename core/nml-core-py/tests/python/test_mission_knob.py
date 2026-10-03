@@ -348,3 +348,31 @@ def test_a_mission_reserve_arrives_only_on_the_winning_die_and_inside_its_zone()
     x, z = u["positions"][0][0], u["positions"][0][2]
     assert abs(x) >= 24 * sp.IN2M - 1e-6 or abs(z) >= 12 * sp.IN2M - 1e-6, "inside the 12\" frame, not the centre"
     assert (x * x + z * z) ** 0.5 > 12 * sp.IN2M + 0.016, "more than the marker gate from the marker"
+
+
+def test_core_recycles_a_destroyed_unit_once_and_the_plain_hook_applies_the_last_stand_rules():
+    """NML-1010 D11b: `recycle_destroyed` parks the covered side's dead (once); at a round start the
+    plain hook makes the copy due from the mission's first reserve round and drops the reserves of a
+    side with no unit left on the table."""
+    lines = (FIXTURES / "acts_25.jsonl").read_text().splitlines()
+    header, plain = json.loads(lines[0]), json.loads(lines[1])["state"]
+    core = nml_core.load(str(REPO))
+    core.set_header(header)
+    p2 = [k for k, u in plain["units"].items() if u["player"] == 2]
+    for k, u in plain["units"].items():
+        u.update(alive=0 if k in p2 else 1, positions=[] if k in p2 else [[1.0, 0, 1.0]],
+                 radii=[] if k in p2 else [0.02], wounds=[] if k in p2 else [1], shaken=False, aircraft=False)
+    state = core.state_of(plain)
+    state, keys = nml_core.recycle_destroyed(state, 2, 2)
+    assert sorted(keys) == sorted(p2)
+    back = state.plain()["units"]
+    assert all(back[k].get("dormant") for k in keys)
+    _, again = nml_core.recycle_destroyed(state, 2, 3)
+    assert again == [], "parked units are skipped"
+    cfg = {"from_round": 4, "arrive_on": 6, "recycle": True}
+    units = state.plain()["units"]
+    sp._last_stand_plain({"units": units}, 3, cfg, [False, True], set(keys))
+    assert all(units[k]["earliest_arrival_round"] == 4 for k in keys), "due from the first reserve round"
+    # round 4 and the covered side has nothing on the table: the reserves are lost
+    sp._last_stand_plain({"units": units}, 4, cfg, [False, True], set(keys))
+    assert all(not units[k]["dormant"] and units[k]["alive"] == 0 for k in keys)

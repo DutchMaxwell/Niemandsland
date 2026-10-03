@@ -481,6 +481,12 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# (plain.rs `knobs_of` reads no such key, like `dice`); it exists so a reader can
 			# tell a post-#448 corpus from an older one without dating the file.
 			"cond_ap": true,
+			# Tray census side finding (03.10.): the table ALWAYS rolls the p.10 morale test after a
+			# non-charge activation's dangerous-terrain losses (main.gd:1092-1098); the Rust twin runs
+			# it only when this key is on (DEFECT_LEDGER #12, an absent key reads OFF), so the live
+			# planner (_core_plan reads THIS header) predicted a game without it. No switch here: the
+			# constant `true`. A corpus recorded before the key still replays without the test.
+			"dangerous_end_morale": true,
 			# NML-1073 M5 D1-B7: which RESOLVER produced this corpus row. The table has only
 			# one — every combat die goes through main._solo_tray_roll — so this side is the
 			# constant "table"; the fast trainer stamps the same key from its own `dice` knob

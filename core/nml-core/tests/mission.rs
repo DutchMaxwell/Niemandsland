@@ -278,3 +278,24 @@ fn secret_flags_round_trip_and_stay_out_of_older_records() {
     let old = plain_of(&carry_state());
     assert!(old["markers_meta"][0].get("secret").is_none(), "older records gain no key");
 }
+
+/// D11b: Last Stand recycling in the core. A destroyed unit of the covered side returns to reserve
+/// ONCE (parked, full strength, marked used); the other side's dead stay dead; a second destruction
+/// of the copy is final (the `reinforcement_used` ledger row).
+#[test]
+fn recycle_destroyed_returns_a_covered_unit_once_and_leaves_the_other_side_dead() {
+    const PLAIN: &str = r#"{"round":3,"rounds_total":6,"scoring":"end","objectives":[],"units":{"p1_0_a":{"player":1,"alive":0,"positions":[],"radii":[]},"p2_0_a":{"player":2,"alive":0,"positions":[],"radii":[]},"p1_1_b":{"player":2,"alive":1,"positions":[[0.04,0,0]],"radii":[0.02]}}}"#;
+    let header = read_act_header(HEADER).expect("header");
+    let mut cache = ProfileCache::new(header.profiles);
+    let mut st = state_from_json(PLAIN, &mut cache, &mut None).expect("state");
+    let first = nml_core::deployment::recycle_destroyed(&mut st, 2, 3);
+    assert_eq!(first.len(), 1, "only side 2's destroyed unit");
+    let i = first[0];
+    assert!(st.dormant[i] && st.dormant_models[i] >= 1 && st.alive[i] == 0 && st.reinforcement_used[i]);
+    assert_eq!(st.earliest_arrival_round[i], 4, "due from the next round");
+    assert!(!st.dormant[0], "the other side's dead unit is not recycled");
+    // the copy dies again: parked units are skipped, and a spent one never returns
+    st.dormant[i] = false;
+    st.alive[i] = 0;
+    assert!(nml_core::deployment::recycle_destroyed(&mut st, 2, 4).is_empty(), "the second destruction is final");
+}

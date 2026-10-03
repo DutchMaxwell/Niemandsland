@@ -3485,6 +3485,23 @@ pub fn withdraw_as_destroyed(st: &mut crate::state::State, i: usize, round_no: i
     st.earliest_arrival_round[i] = round_no + 1;
 }
 
+/// D11b (Last Stand, R8a): every unit of `side` that stands destroyed (no models, not parked, not
+/// recycled before) goes back into reserve ONCE as a fresh full-strength copy (`withdraw_as_destroyed`)
+/// and is marked in the `reinforcement_used` ledger, so its own destruction is final. Returns the
+/// roster indices recycled, in roster order.
+pub fn recycle_destroyed(st: &mut crate::state::State, side: i64, round_no: i64) -> Vec<usize> {
+    let mut out = Vec::new();
+    for i in 0..st.units() {
+        if st.player[i] != side || st.dormant[i] || st.alive[i] > 0 || st.reinforcement_used[i] {
+            continue;
+        }
+        withdraw_as_destroyed(st, i, round_no);
+        st.reinforcement_used[i] = true;
+        out.push(i);
+    }
+    out
+}
+
 /// Puts a parked unit back on the table at `spot`, in the round `round_no`.
 /// The STATICS ride in explicitly since the S5 template seam (SPAWN_DESIGN
 /// _2026-09-08 §3.3): the caller owns which profile's shape the unit comes
