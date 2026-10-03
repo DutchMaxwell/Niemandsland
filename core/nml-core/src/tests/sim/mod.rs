@@ -67,6 +67,8 @@
             positions: xs.iter().map(|x| vec![[x * IN2M, 0.0, 0.0]]).collect(),
             wounds: vec![vec![1]; 4],
             radii: vec![vec![IN2M]; 4],
+            kits: Vec::new(),
+            kit_names: Vec::new(),
             mods: vec![Mods::default(); 4],
             mods_base: (0..4).map(|_| Rc::new(Mods::default())).collect(),
             attached: Rc::new(vec![vec![1], vec![], vec![3], vec![]]),

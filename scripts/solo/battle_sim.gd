@@ -1797,6 +1797,17 @@ static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionar
 		loser["shaken"] = true
 
 
+## Tray-exact S2 — what SoloController.casualty_order (solo_controller.gd:9151-9220) ranks ONE model by:
+## its weapon entries by name (duplicates kept), its equipment count and its own Tough. The Rust core
+## reads the list as the plain state's per-unit `kits` (core/nml-core/src/io.rs PlainKit).
+static func _model_kit(m: ModelInstance) -> Dictionary:
+	var names: Array = []
+	for w in m.properties.get("weapons", []) as Array:
+		names.append(str((w as Dictionary).get("name", "")))
+	return {"weapons": names, "equipment": (m.properties.get("equipment", []) as Array).size(),
+		"wounds_max": int(m.wounds_max)}
+
+
 static func capture(army: OPRArmyManager, objectives_provider: Callable = Callable(),
 		objective_owner_of: Callable = Callable(), round_no: int = 1,
 		rounds_total: int = 4, cover_of: Callable = Callable(),
@@ -1807,6 +1818,7 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		var positions: Array = []
 		var wounds: Array = []
 		var radii: Array = []
+		var kits: Array = []   # tray-exact S2: one _model_kit per living model, aligned with positions
 		# Arrivals S1: a unit still on the tray (Ambush reserve) enters the
 		# snapshot DORMANT — zero table presence (alive=0, so every existing
 		# dead-unit guard already excludes it from eligibility, targeting and
@@ -1828,6 +1840,7 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 				# holds the marker). Without this the sim's ring is a base
 				# radius too tight and it scores a rule the game does not have.
 				radii.append(SoloController.model_base_radius_m(m as ModelInstance))
+				kits.append(_model_kit(m as ModelInstance))
 		# NML-1073 S1: attachment as snapshot KEYS (not GameUnit refs — the plain-state
 		# encoder can't carry object references) — lets _spacing_fraction exempt a
 		# mover's own attached heroes the same way SoloController._spacing_zones_world
@@ -1841,6 +1854,7 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		units[uid] = {
 			"unit": u,
 			"radii": radii,
+			"kits": kits,
 			"attached": attached,
 			"attached_to": attached_to,
 			# Neither can seize or contest: an Aircraft ever, a unit that
@@ -1968,7 +1982,8 @@ const _UNIT_DYNAMIC := ["alive", "wounds", "radii", "in_cover", "shaken", "fatig
 	"activated", "casts", "mods", "mods_base", "aircraft", "ambush_arrived_round",
 	"player", "morale_bonus", "dormant", "dormant_models", "dormant_wounds",
 	"earliest_arrival_round", "wound_frac",   # wound_frac: _apply_expected_wounds :1039/:1041
-	"attached", "attached_to"]   # NML-1073 S1: capture()'s attachment keys, verbatim
+	"attached", "attached_to",   # NML-1073 S1: capture()'s attachment keys, verbatim
+	"kits"]   # tray-exact S2: casualty_order's per-model read, aligned with positions (io.rs PlainKit)
 ## `with_profile` false skips the per-unit STATIC profile (identical on every
 ## node of one game — a recorder that already wrote it once, e.g. NML-1073's
 ## nodes.jsonl header line, passes false to save the recompute AND the bytes).
