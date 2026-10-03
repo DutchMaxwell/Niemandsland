@@ -2588,7 +2588,7 @@ fn deploy_gates(gates: &Bound<'_, PyAny>) -> PyResult<deployment::Gates> {
 /// `deploy_interleaved`, the sequence phase-major.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
-#[pyo3(signature = (units1, units2, zone1, zone2, phases, objectives, board, seed1, seed2, first, rules_epoch=None, gates1=None, gates2=None))]
+#[pyo3(signature = (units1, units2, zone1, zone2, phases, objectives, board, seed1, seed2, first, rules_epoch=None, gates1=None, gates2=None, reserve1=false, reserve2=false))]
 fn deploy_phased(
     py: Python<'_>,
     units1: &Bound<'_, PyAny>,
@@ -2604,6 +2604,8 @@ fn deploy_phased(
     rules_epoch: Option<u32>,
     gates1: Option<&Bound<'_, PyAny>>,
     gates2: Option<&Bound<'_, PyAny>>,
+    reserve1: bool,
+    reserve2: bool,
 ) -> PyResult<Py<PyAny>> {
     let (gate1, gate2) = (gates1.map(deploy_gates).transpose()?, gates2.map(deploy_gates).transpose()?);
     let specs1: Vec<UnitSpec> = json_of(units1, "units1")?;
@@ -2622,13 +2624,14 @@ fn deploy_phased(
             zones: objectives::zones_of_list(&p["zones"]),
         });
     }
-    let out = deployment::deploy_phased(
+    let out = deployment::deploy_phased_reserving(
         &specs1,
         &specs2,
         &Rect::new(z1[0], z1[1], z1[2], z1[3]),
         &Rect::new(z2[0], z2[1], z2[2], z2[3]),
         &list,
         [gate1.as_ref(), gate2.as_ref()],
+        [reserve1, reserve2],
         &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
         &board.inner,
         seed1,
@@ -2726,7 +2729,7 @@ fn no_terrain() -> Terrain {
 /// `_finish_reserve_arrival`), and the caller reads the booking back off the
 /// returned list so the next unit of the same alternating round sees it.
 #[pyfunction]
-#[pyo3(signature = (zone, objectives, occupied, enemies, own_ring_m, radius, footprint, base_r, flying, board=None, beacons=None, edge_band_m=None))]
+#[pyo3(signature = (zone, objectives, occupied, enemies, own_ring_m, radius, footprint, base_r, flying, board=None, beacons=None, edge_band_m=None, zones=None))]
 #[allow(clippy::too_many_arguments)]
 fn arrive_one(
     py: Python<'_>,
@@ -2742,7 +2745,9 @@ fn arrive_one(
     board: Option<PyRef<'_, Board>>,
     beacons: Option<&Bound<'_, PyAny>>,
     edge_band_m: Option<f64>,
+    zones: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
+    let shape = zones.map(zone_shape).transpose()?;
     let z: [f64; 4] = json_of(zone, "zone")?;
     let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
     let mut occ: Vec<deployment::Occupied> = json_of(occupied, "occupied")?;
@@ -2765,8 +2770,9 @@ fn arrive_one(
         Some(band_m) => deployment::ArrivalZone::EdgeStrip { table: rect, band_m },
         None => deployment::ArrivalZone::Rect(rect),
     };
-    let spot = deployment::arrive_one(
+    let spot = deployment::arrive_one_in(
         &zone,
+        shape.as_deref(),
         &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
         &mut occ,
         &ene,

@@ -3364,9 +3364,71 @@ func _solo_mission_reserves_set_aside() -> void:
 				int(cfg.get("from_round", 2))], slot == solo_controller.ai_slot)
 
 
+## D11a (Last Stand, R8a): a covered side's unit that is destroyed for the FIRST time comes back as a
+## full-strength copy in reserve (parked off the table, a mission reserve like any other: it rolls the
+## mission's die each round). The copy is marked `recycled`, so its own destruction is final.
+func _solo_recycle_if_due(gu: GameUnit) -> void:
+	var cfg := _solo_reserve_cfg()
+	if cfg.is_empty() or not bool(cfg.get("recycle", false)) or gu == null or table == null:
+		return
+	if bool(gu.unit_properties.get("recycled", false)) or bool(gu.unit_properties.get("mission_reserve", false)):
+		return
+	var pid: int = int(gu.unit_properties.get("player_id", 0))
+	var src := gu.source_data as OPRApiClient.OPRUnit
+	if not _solo_reserve_slots(cfg).has(pid) or src == null:
+		return
+	var profile := src.duplicate_unit()
+	profile.selection_id = ""
+	profile.join_to_unit = ""
+	var tx: float = table.table_size.x * 0.3048 / 2.0 + 0.5
+	var spots: Array = []
+	for i in profile.size:
+		spots.append(Vector3(tx, 0.0, -0.3 + float(i) * 0.04))   # the tray side, off the table
+	var copy: GameUnit = opr_army_manager.create_runtime_unit({"opr_unit": profile,
+		"faction_folder": str(gu.unit_properties.get("faction_folder", "")),
+		"rule_descriptions": gu.unit_properties.get("rule_descriptions", {}),
+		"display_suffix": str(gu.unit_properties.get("display_suffix", ""))}, pid, spots, "recycled")
+	if copy == null:
+		return
+	copy.unit_properties["recycled"] = true
+	solo_controller.mission_reserve_set([copy])
+	_log_rule_event(BattleLog.Category.GENERAL, "%s is destroyed — a full-strength copy returns to reserve ONCE, arriving on %d+ from round %d" % [
+		gu.get_name(), int(cfg.get("arrive_on", 6)), int(cfg.get("from_round", 2))], pid == solo_controller.ai_slot)
+
+
+## D11a: at a round start with no unit of a covering side left on the table, that side's reserves are lost.
+func _solo_recycle_reserves_lost(round_number: int) -> void:
+	var cfg := _solo_reserve_cfg()
+	if cfg.is_empty() or not bool(cfg.get("recycle", false)) or round_number < int(cfg.get("from_round", 2)):
+		return
+	for slot in _solo_reserve_slots(cfg):
+		var held: Array = []
+		var on_table := 0
+		for u in opr_army_manager.get_game_units_for_player(slot):
+			var gu := u as GameUnit
+			if gu == null or gu.is_destroyed():
+				continue
+			if bool(gu.unit_properties.get("mission_reserve", false)) and bool(gu.unit_properties.get("ambush_reserve", false)):
+				held.append(gu)
+			else:
+				on_table += 1
+		if on_table > 0 or held.is_empty():
+			continue
+		for gu in held:
+			(gu as GameUnit).unit_properties["ambush_reserve"] = false
+			(gu as GameUnit).unit_properties.erase("mission_reserve")
+			solo_controller.ambush_reserve.erase(gu)
+			for m in (gu as GameUnit).models:
+				(m as ModelInstance).is_alive = false
+			_solo_set_unit_visible(gu as GameUnit, false)
+		_log_rule_event(BattleLog.Category.GENERAL, "%s has no unit on the table at the start of round %d — its %d reserve unit(s) are lost" % [
+			_solo_player_label(slot), round_number, held.size()], slot == solo_controller.ai_slot)
+
+
 ## D8a: the round's reserve rolls — ONE tray roll per side with a held unit (a die each, recorded by the
 ## dice recorder), then the arrival zone and gates are handed to the controller for the arrivals that follow.
 func _solo_mission_reserve_rolls(round_number: int) -> void:
+	_solo_recycle_reserves_lost(round_number)
 	var cfg := _solo_reserve_cfg()
 	if cfg.is_empty() or round_number < int(cfg.get("from_round", 2)):
 		return
@@ -13960,6 +14022,7 @@ func _on_battle_log_dead(node, dead: bool) -> void:
 		if alive == 0:
 			battle_log.on_unit_destroyed(gu.get_name())
 			_solo_drop_carried(gu, "destroyed")
+			_solo_recycle_if_due(gu)
 		else:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s loses a model (%d/%d)" % [gu.get_name(), alive, total])
 	else:
