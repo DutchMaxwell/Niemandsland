@@ -2960,6 +2960,23 @@ func capture_board() -> Dictionary:
 		terrain_type_at, int(ai_slot))
 
 
+## D14.0: THE end-of-game referee for every consumer (summary, arena result). The role missions
+## (`escort`, `extract`) are decided on the board (BattleSim.role_winner needs the marker spots, the
+## carriers, the attacker and the table); every other scoring id keeps BattleSim.mission_winner's
+## arguments exactly as before. Returns "p1" / "p2" / "draw".
+func end_verdict(owners: Array, alive1: int, alive2: int) -> String:
+	if mission_scoring == "escort" or mission_scoring == "extract":
+		var edge := 0
+		for mk in mission_markers:
+			if edge == 0:
+				edge = int((mk as Dictionary).get("deploy_edge", 0))
+		var table_in := _table_half_extents() * 2.0 / INCHES_TO_METERS
+		var verdict := BattleSim.role_winner(mission_scoring, capture_board(), edge, table_in.x, table_in.y)
+		if verdict != "":
+			return verdict
+	return BattleSim.mission_winner(mission_scoring, owners, mission_vp, mission_markers, alive1, alive2)
+
+
 func _is_final_round() -> bool:
 	return game_rounds > 0 and _current_round() >= game_rounds
 
