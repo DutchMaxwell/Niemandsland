@@ -505,3 +505,33 @@ def test_the_own_phase_zone_is_the_mission_style_at_each_sides_own_half():
     assert ph[1]["zone"] == pytest.approx([-36 * in2, -24 * in2, 72 * in2, 48 * in2])
     ph2 = sp._phase_args(md, 2, REPO)  # attacker = slot 2: the defender is slot 1, the -Z band
     assert ph2[0]["side"] == 0 and ph2[0]["zone"] == pytest.approx([-36 * in2, -24 * in2, 72 * in2, 12 * in2])
+
+
+def test_a_carry_markers_drop_in_reaches_the_core_and_moves_the_drop_point():
+    """NML-1010 D14.5: `mission_markers` carries the spec's `drop_in`; the core drops the relic that far
+    past the carrier's base edge (Rescue: 6"), and 1" without it."""
+    assert sp.mission_markers({"carry": True, "drop_in": 6}, 1) == [{"carry": True, "carried_by": -1, "drop_in": 6.0}]
+    assert "drop_in" not in sp.mission_markers({"carry": True}, 1)[0]
+    lines = (FIXTURES / "acts_25.jsonl").read_text().splitlines()
+    header, plain = json.loads(lines[0]), json.loads(lines[1])["state"]
+    core = nml_core.load(str(REPO))
+    core.set_header(header)
+
+    def dropped_distance(drop_in):
+        p = json.loads(json.dumps(plain))
+        first = {}
+        for i, (key, unit) in enumerate(p["units"].items()):
+            first.setdefault(unit["player"], (i, key))
+            unit.update(alive=1, positions=[[2.0 + i, 0, 2.0 + i]], radii=[0.02], wounds=[1],
+                        shaken=False, aircraft=False, ambush_arrived_round=0)
+        carrier_i, carrier_key = first[1]
+        p["units"][carrier_key]["positions"] = [[0.04, 0, 0]]
+        p["objectives"] = [{"pos": [0, 0, 0], "owner": 0}]
+        p["markers_meta"] = [sp.mission_markers({"carry": True, **({"drop_in": drop_in} if drop_in else {})}, 1)[0]]
+        state = core.apply_carry_step(core.state_of(p), [1])
+        assert state.plain()["markers_meta"][0]["carried_by"] == carrier_i
+        pos = core.drop_carried(state, carrier_i).plain()["objectives"][0]["pos"]
+        return ((pos[0] - 0.04) ** 2 + pos[2] ** 2) ** 0.5
+
+    d1, d6 = dropped_distance(None), dropped_distance(6)
+    assert d6 - d1 == pytest.approx(5 * 0.0254, abs=1e-6), (d1, d6)
