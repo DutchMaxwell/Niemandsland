@@ -448,6 +448,8 @@ pub fn build_state(
         positions: Vec::with_capacity(n),
         wounds: Vec::with_capacity(n),
         radii: Vec::with_capacity(n),
+        kits: Vec::with_capacity(n),
+        kit_names: Vec::with_capacity(n),
         mods: Vec::with_capacity(n),
         mods_base: Vec::with_capacity(n),
         attached: Rc::new(Vec::new()),
@@ -542,6 +544,9 @@ pub fn build_state(
         st.positions.push(darr(&u, "positions").iter_shared().map(|v| vec3(&v)).collect());
         st.wounds.push(darr(&u, "wounds").iter_shared().map(|v| int(&v)).collect());
         st.radii.push(darr(&u, "radii").iter_shared().map(|v| num(&v)).collect());
+        // Tray-exact S1: the table's capture does not write `kits` yet (S2) — none carried.
+        st.kits.push(Rc::new(Vec::new()));
+        st.kit_names.push(Rc::new(Vec::new()));
         st.mods.push(mods_of(&ddict(&u, "mods")));
         st.mods_base.push(Rc::new(mods_of(&ddict(&u, "mods_base"))));
         attached_keys.push(strings(&darr(&u, "attached")));

@@ -434,6 +434,17 @@ impl SidestepBudget {
     }
 }
 
+/// Tray-exact series S1 — one living model as `SoloController.casualty_order`
+/// (solo_controller.gd:9151-9220) ranks it: its weapon entries (unit-local name
+/// ids into `State::kit_names`, duplicates kept, like the table's array), its
+/// equipment count and its own Tough (`wounds_max`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Kit {
+    pub weapons: Vec<u16>,
+    pub equipment: u16,
+    pub wounds_max: i64,
+}
+
 /// The dynamic layer. `#[derive(Clone)]` reproduces `BattleSim.clone_state`
 /// battle_sim.gd:463-505 exactly: positions/wounds/radii/mods/objectives/
 /// markers_meta/destroy_seq are deep, roster + profiles + mods_base + los + the
@@ -482,6 +493,14 @@ pub struct State {
     pub positions: Vec<Vec<[f64; 3]>>,
     pub wounds: Vec<Vec<i64>>,
     pub radii: Vec<Vec<f64>>,
+    /// Tray-exact series S1: per living model, what the table's `casualty_order`
+    /// reads (`Kit`), slot-aligned with `positions`/`wounds`/`radii`. An EMPTY
+    /// list means the state carried none (every record before the key), and so
+    /// does a MISSING unit entry (hand-built fixtures leave the Vec empty):
+    /// readers use `get`, and keep the slot-order behaviour. `kit_names` maps the
+    /// unit-local weapon ids back to names for `plain_of`.
+    pub kits: Vec<Rc<Vec<Kit>>>,
+    pub kit_names: Vec<Rc<Vec<String>>>,
     pub mods: Vec<Mods>,
     pub mods_base: Vec<Rc<Mods>>,
     /// `capture()`'s attachment keys resolved to ROSTER indices — battle_sim.gd:
@@ -709,6 +728,22 @@ impl State {
             && self.alive[i] > 0
             && !(hero_attach && self.attached_to[i].is_some())
     }
+    /// Tray-exact S1b: slot `i` of unit `u` left the table — its kit goes with it, so `kits`
+    /// stays slot-aligned with `positions`. A no-op when the unit carries none.
+    pub fn kit_remove(&mut self, u: usize, i: usize) {
+        if let Some(k) = self.kits.get_mut(u).filter(|k| i < k.len()) {
+            Rc::make_mut(k).remove(i);
+        }
+    }
+
+    /// Tray-exact S1b: the unit's slots changed in a way no kit can follow (all models gone,
+    /// or a body came back whose kit is unknown) — it carries none from here (slot order).
+    pub fn kits_drop(&mut self, u: usize) {
+        if let Some(k) = self.kits.get_mut(u).filter(|k| !k.is_empty()) {
+            *k = Rc::new(Vec::new());
+        }
+    }
+
     pub fn units(&self) -> usize {
         self.roster.len()
     }

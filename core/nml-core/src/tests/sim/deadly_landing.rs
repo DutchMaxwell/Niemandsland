@@ -335,3 +335,22 @@ use super::*;
         assert!(run_shoot(&st, &statics, 2, 13).1.unported.contains(&"deadly"), "legacy volley leg flags");
         assert!(fight(13).1.unported.contains(&"deadly"), "legacy melee leg flags");
     }
+
+    /// Tray-exact S1b: every casualty writer keeps `kits` slot-aligned with `positions` and
+    /// takes the DYING model's kit (told apart here by `wounds_max`): land_wounds' slot 0,
+    /// land_deadly_wounds' pick, and a withdraw that empties the unit.
+    #[test]
+    fn every_casualty_takes_its_own_kit_and_the_lists_stay_aligned() {
+        let kit = |wmax: i64| crate::state::Kit { weapons: vec![0], equipment: 0, wounds_max: wmax };
+        let mut st = deadly_chain();
+        st.kits = vec![Rc::new(vec![kit(1), kit(3)]), Rc::new(vec![kit(7)])];
+        let aligned = |st: &State| (0..2).all(|u| st.kits[u].len() == st.positions[u].len());
+        land_wounds(&mut st, 0, 1); // slot 0 (the Tough(1) body) dies
+        assert!(aligned(&st), "{:?}", st.kits);
+        assert_eq!(st.kits[0].iter().map(|k| k.wounds_max).collect::<Vec<_>>(), vec![3]);
+        let s = Seams { rules_epoch: crate::acts::EPOCH_67_MARKERS_BURSTS, hero_attach: true, ..Seams::default() };
+        land_deadly_wounds(&mut st, 0, 1, 3, s); // the Tough(3) member, then nothing left in the host
+        assert!(aligned(&st) && st.kits[0].is_empty(), "{:?}", st.kits);
+        crate::deployment::withdraw_as_destroyed(&mut st, 1, 1);
+        assert!(aligned(&st) && st.kits[1].is_empty(), "{:?}", st.kits);
+    }

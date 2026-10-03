@@ -7,6 +7,8 @@ var _directional_light: DirectionalLight3D
 var _fill_light: DirectionalLight3D
 var _world_environment: WorldEnvironment
 var _environment: Environment
+## The game table's RenderState (null outside the game: menu diorama). The contested values go through it.
+var _render_state: RenderState = null
 
 # Current lighting settings
 var current_preset: Dictionary = {}
@@ -125,8 +127,10 @@ func _ready() -> void:
 
 
 ## Initialize with scene references
-func initialize(directional_light: DirectionalLight3D, world_env: WorldEnvironment, fill_light: DirectionalLight3D = null) -> void:
+func initialize(directional_light: DirectionalLight3D, world_env: WorldEnvironment, fill_light: DirectionalLight3D = null,
+		render_state: RenderState = null) -> void:
 	_directional_light = directional_light
+	_render_state = render_state
 	_fill_light = fill_light
 	_world_environment = world_env
 	_environment = world_env.environment
@@ -263,19 +267,19 @@ func set_fill_light_color(color: Color) -> void:
 
 func set_ssao_intensity(value: float) -> void:
 	if _environment:
-		_environment.ssao_intensity = value
+		_set_env("ssao_intensity", value)
 		current_preset.ssao_intensity = value
 
 
 func set_ssr_intensity(value: float) -> void:
 	if _environment:
-		_environment.ssr_fade_in = value
+		_set_env("ssr_fade_in", value)
 		current_preset.ssr_intensity = value
 
 
 func set_glow_intensity(value: float) -> void:
 	if _environment:
-		_environment.glow_intensity = value
+		_set_env("glow_intensity", value)
 		current_preset.glow_intensity = value
 
 
@@ -289,6 +293,15 @@ func set_saturation(value: float) -> void:
 	if _environment:
 		_environment.adjustment_saturation = value
 		current_preset.saturation = value
+
+
+## SSAO / SSR / glow intensities are contested (preset, biome reference): on the game table they are the render
+## state's light layer, which sits above the preset and below the reference.
+func _set_env(key: String, value: float) -> void:
+	if _render_state != null:
+		_render_state.merge_layer("light", {key: value})
+	else:
+		_environment.set(key, value)
 
 
 ## Print current settings to console
