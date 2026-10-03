@@ -62,6 +62,8 @@ var cinematic_intro: CinematicIntro = null
 ## black and dissolves cleanly into the intro (freed once the intro's own black is up).
 var _prompt_overlay: CanvasLayer = null
 
+## One owner of the table's contested Environment values (preset, mood light, biome reference, intro).
+var render_state: RenderState = null
 # Lighting Controller
 var lighting_controller: Node = null
 var lighting_panel: CanvasLayer = null
@@ -634,11 +636,16 @@ func _ready() -> void:
 	table.setup_table(DEFAULT_TABLE_SIZE_FEET)
 	_adjust_camera_for_table_size(DEFAULT_TABLE_SIZE_FEET)
 
+	# The quality preset is the render state's lowest layer, applied by rule at the start (the autoload ran at the
+	# startup menu, before this scene existed); the light, the biome reference and the intro add theirs above it.
+	render_state = RenderState.new(world_environment.environment)
+	GraphicsSettings.apply_environment_settings(GraphicsSettings.PRESETS[GraphicsSettings.current_preset])
+
 	# Initialize Lighting Controller
 	lighting_controller = Node.new()
 	lighting_controller.set_script(load("res://scripts/lighting_controller.gd"))
 	add_child(lighting_controller)
-	lighting_controller.initialize(directional_light, world_environment, fill_light)
+	lighting_controller.initialize(directional_light, world_environment, fill_light, render_state)
 
 	# Initialize Lighting Panel UI
 	lighting_panel = load("res://scripts/lighting_panel.gd").new()

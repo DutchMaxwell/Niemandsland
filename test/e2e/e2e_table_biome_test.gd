@@ -160,6 +160,9 @@ func test_teardown_gives_the_table_back(timeout := 120000) -> void:
 	var surface := table.get_node("TableMesh") as MeshInstance3D
 	var mesh_before := surface.mesh
 	var shadow_before := surface.cast_shadow
+	# The profile sets the sun's shadow bias; no mood sets it back, so the teardown has to.
+	var bias_before := _sun().shadow_bias
+	var normal_bias_before := _sun().shadow_normal_bias
 	var base_shader_before: Shader = table.get_base_top_material().shader
 	var env: Environment = _main.get_node("WorldEnvironment").environment
 	var ssr_before := env.ssr_enabled
@@ -183,6 +186,8 @@ func test_teardown_gives_the_table_back(timeout := 120000) -> void:
 	assert_bool(env.ssr_enabled == ssr_before).is_true()
 	assert_int(env.ambient_light_source).is_equal(ambient_source_before)
 	assert_bool(mist.visible).is_equal(mist_before)
+	assert_float(_sun().shadow_bias).is_equal_approx(bias_before, 0.0001)
+	assert_float(_sun().shadow_normal_bias).is_equal_approx(normal_bias_before, 0.0001)
 	assert_int(presenter.get_child_count()).is_equal(0)
 
 
