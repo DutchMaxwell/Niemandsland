@@ -29,6 +29,8 @@ var _seated_first := 0
 var _wall_top := 0.0635
 var _camera: Camera3D
 var _dof: CameraAttributesPractical
+## The RenderState this reference wrote its layer into (the game table); its teardown clears the layer.
+var _render_state: RenderState = null
 var _tilt_shift_enabled := true
 var biome := "grassland"
 ## Game-table tier (TableBiomePresenter): no TRELLIS prop replacement, the render scale / TAA / shadow
@@ -298,41 +300,34 @@ func apply_lighting(mood: String) -> void:
 ## Reference environment, isolated so a quality-preset change can be countered. Keeps the
 ## game's space skybox as the visible background and reflection source (the starfield is
 ## part of the identity, maintainer decision) and pins the tuned miniature-scale values.
-func _apply_reference_environment() -> void:
-	var env: Environment = _main.get_node("WorldEnvironment").environment
-	env.background_mode = Environment.BG_SKY
-	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ssao_radius = 0.035
-	env.ssao_intensity = 2.0
-	env.ssao_power = 1.4
-	env.ssil_enabled = false
-	env.sdfgi_enabled = false
-	env.tonemap_agx_contrast = 1.15
+## On the game table the values are the RenderState's reference layer: above the preset in every mood, so the tuned
+## look wins by rule. light_values (the profile moods, D1) adds the intensities the mood light would otherwise set.
+func _apply_reference_environment(light_values := true) -> void:
 	# Damp-surface screen-space reflections; no bloom (rejected by the maintainer). The table tier follows
 	# the player's quality preset for SSR and volumetric fog (Medium: both off, High/Ultra: on).
 	var preset := _preset_values()
-	env.ssr_enabled = bool(preset.get("ssr", true)) if table_tier else true
-	env.ssr_max_steps = 32
-	env.ssr_fade_in = 0.08
-	env.ssr_fade_out = 1.6
-	env.ssr_depth_tolerance = 0.20
-	env.volumetric_fog_enabled = bool(preset.get("volumetric_fog", true)) if table_tier else true
-	env.volumetric_fog_density = 0.0
-	env.volumetric_fog_albedo = Color(0.72,0.73,0.70)
-	env.volumetric_fog_emission = Color(0.0,0.0,0.0)
-	env.volumetric_fog_length = 18.0
-	env.volumetric_fog_detail_spread = 2.0
-	env.volumetric_fog_gi_inject = 0.0
-	env.volumetric_fog_ambient_inject = 0.10
-	env.volumetric_fog_temporal_reprojection_enabled = true
-	env.volumetric_fog_temporal_reprojection_amount = 0.9
-	# Pin the glow to the accepted reference look so ULTRA's stronger glow/bloom cannot
-	# wash the scene out; the light controller's set_glow_intensity(0.16) still wins on intensity.
-	env.glow_enabled = true
-	env.glow_bloom = 0.1
-	env.glow_intensity = 0.16
-	env.fog_enabled = false
+	var values := {"background_mode": Environment.BG_SKY, "reflected_light_source": Environment.REFLECTION_SOURCE_SKY,
+		"ambient_light_source": Environment.AMBIENT_SOURCE_COLOR, "ssao_radius": 0.035, "ssao_power": 1.4,
+		"ssil_enabled": false, "sdfgi_enabled": false, "tonemap_agx_contrast": 1.15,
+		"ssr_enabled": bool(preset.get("ssr", true)) if table_tier else true, "ssr_max_steps": 32,
+		"ssr_fade_out": 1.6, "ssr_depth_tolerance": 0.20,
+		"volumetric_fog_enabled": bool(preset.get("volumetric_fog", true)) if table_tier else true,
+		"volumetric_fog_density": 0.0, "volumetric_fog_albedo": Color(0.72,0.73,0.70),
+		"volumetric_fog_emission": Color(0.0,0.0,0.0), "volumetric_fog_length": 18.0,
+		"volumetric_fog_detail_spread": 2.0, "volumetric_fog_gi_inject": 0.0, "volumetric_fog_ambient_inject": 0.10,
+		"volumetric_fog_temporal_reprojection_enabled": true, "volumetric_fog_temporal_reprojection_amount": 0.9,
+		# Pin the glow to the accepted reference look so ULTRA's stronger glow/bloom cannot wash the scene out.
+		"glow_enabled": true, "glow_bloom": 0.1, "fog_enabled": false}
+	if light_values:
+		values.merge({"ssao_intensity": 2.0, "ssr_fade_in": 0.08, "glow_intensity": 0.16})
+	var render_state = _main.get("render_state")
+	if render_state != null:
+		render_state.set_layer("reference", values)
+		_render_state = render_state
+		return
+	var env: Environment = _main.get_node("WorldEnvironment").environment
+	for key: String in values:
+		env.set(key, values[key])
 
 
 ## The player's current quality preset values (GraphicsSettings.PRESETS); empty outside the game.
@@ -356,6 +351,8 @@ func _on_graphics_settings_applied(_preset_name: String) -> void:
 func apply_table_mood(mood: String) -> void:
 	if mood in TABLE_PROFILE_MOODS:
 		apply_lighting(mood)
+	else:
+		_apply_reference_environment(false)   # the tuned environment stays; the mood's own intensities show
 
 
 ## The game's current atmosphere mood (atmosphere_controller), "Day" outside the game.
@@ -654,6 +651,8 @@ func _weather_ruin(node: Node) -> void:
 
 
 func _exit_tree() -> void:
+	if _render_state != null:
+		_render_state.set_layer("reference", {})   # the preset and the mood light show again, nothing to snapshot
 	# Teardown: a same-biome teardown keeps the overlay's props (set_biome returns early), so unseat them here.
 	if table_tier and _main != null and is_instance_valid(_main.terrain_overlay):
 		for prop in _main.terrain_overlay._object_instances:

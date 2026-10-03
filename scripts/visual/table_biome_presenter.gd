@@ -11,7 +11,8 @@ extends Node3D
 ## During play only a load or a biome change rebuilds (both hitch anyway) — never a mid-game freeze.
 ##
 ## The reference writes into nodes it does not own (table plane + material, grass field, base tops, table
-## frame, environment, sun). Everything it touches is snapshot before apply() and restored by teardown();
+## frame, sun). Everything it touches is snapshot before apply() and restored by teardown(); its environment values
+## are a RenderState layer that the reference clears itself (a snapshot wrote back the preset of the dress time);
 ## walls and placed objects are rebuilt by the terrain overlay, which drops their reference dressing.
 ## The trees are swapped by a tree pass (table_tree_pass.gd) that prepares its sources off the main thread
 ## and restores the old trees on teardown.
@@ -29,13 +30,6 @@ const PRESET_DENSITY := {2: 1.0, 3: 1.0, 4: 1.0}   # MEDIUM, HIGH, ULTRA
 const HIDE_GROUND_MIST := true
 ## Scatter counts are per m²; above a 6x4 ft table the density falls instead of the frame rate.
 const REFERENCE_AREA_M2 := 6.0 * 0.3048 * 4.0 * 0.3048
-const ENV_PROPS: Array[String] = ["background_mode", "reflected_light_source", "ambient_light_source",
-	"ssao_radius", "ssao_intensity", "ssao_power", "ssil_enabled", "sdfgi_enabled", "tonemap_agx_contrast",
-	"ssr_enabled", "ssr_max_steps", "ssr_fade_in", "ssr_fade_out", "ssr_depth_tolerance",
-	"volumetric_fog_enabled", "volumetric_fog_density", "volumetric_fog_albedo", "volumetric_fog_emission",
-	"volumetric_fog_length", "volumetric_fog_detail_spread", "volumetric_fog_gi_inject",
-	"volumetric_fog_ambient_inject", "volumetric_fog_temporal_reprojection_enabled",
-	"volumetric_fog_temporal_reprojection_amount", "glow_enabled", "glow_bloom", "glow_intensity", "fog_enabled"]
 const SUN_PROPS: Array[String] = ["directional_shadow_max_distance", "directional_shadow_pancake_size",
 	"light_volumetric_fog_energy"]
 
@@ -228,11 +222,6 @@ func _snapshot() -> void:
 		if is_instance_valid(floor_mesh):
 			floors[floor_mesh] = floor_mesh.material_override
 	_saved["floors"] = floors
-	var env: Environment = _main.get_node("WorldEnvironment").environment
-	var env_values := {}
-	for prop in ENV_PROPS:
-		env_values[prop] = env.get(prop)
-	_saved["env"] = env_values
 	var sun: DirectionalLight3D = _main.get_node("DirectionalLight3D")
 	var sun_values := {}
 	for prop in SUN_PROPS:
@@ -262,9 +251,6 @@ func _restore() -> void:
 	for floor_mesh in _saved["floors"]:
 		if is_instance_valid(floor_mesh):
 			floor_mesh.material_override = _saved["floors"][floor_mesh]
-	var env: Environment = _main.get_node("WorldEnvironment").environment
-	for prop in _saved["env"]:
-		env.set(prop, _saved["env"][prop])
 	var sun: DirectionalLight3D = _main.get_node("DirectionalLight3D")
 	for prop in _saved["sun"]:
 		sun.set(prop, _saved["sun"][prop])
