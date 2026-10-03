@@ -651,10 +651,10 @@ pub struct Seams {
     /// bug this replaces exactly for corpora that predate it.
     #[serde(default)]
     pub dangerous_end_morale: bool,
-    /// Tray-exact series (maintainer D151 = B, 03.10.) — DORMANT: no header sets
-    /// it, so every game plays the recorded rules. The series' ONE epoch bump at
-    /// its end replaces every read with `rule_on(.., EPOCH_70_*)`; a dormant
-    /// epoch constant is what the CI epoch gate refuses (rule 4). Tests set it.
+    /// Tray-exact series (maintainer D151 = B, 03.10.): ON from `EPOCH_70_TRAY_EXACT`.
+    /// The two builders that read a header (`plan::seams_of`, the trainer's
+    /// `nml-core-py` seam) derive it from `rules_epoch`, so a record below 70
+    /// replays the old slot order and flags byte-exact. Tests set it directly.
     #[serde(default)]
     pub tray_exact: bool,
 
