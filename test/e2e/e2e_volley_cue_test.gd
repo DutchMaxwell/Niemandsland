@@ -96,3 +96,24 @@ func test_indirect_fire_draws_no_tracer(timeout := 240000) -> void:
 		.override_failure_message("fixture: the indirect weapon must fire").contains("Rifle")
 	assert_int(_main.volley_cue.get_child_count()).is_equal(0)
 	await E2EBoot.settle(get_tree())
+
+
+func test_the_players_own_volley_traces_too(timeout := 240000) -> void:
+	var shooters := _unit(1, "Squad", [Vector3(0, 0, 0), Vector3(0.06, 0, 0)])
+	var opr := OPRApiClient.OPRUnit.new()
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Rifle"
+	w.range_value = 24
+	w.attacks = 1
+	w.count = 2
+	opr.weapons = [w] as Array[OPRApiClient.OPRWeapon]
+	shooters.source_type = "opr"
+	shooters.source_data = opr
+	var target := _unit(2, "Mark", [Vector3(0, 0, 10 * INCH)])
+	await _main._run_human_shooting(shooters, target)
+	var lines := _lines()
+	assert_int(lines.size()).is_equal(2)
+	var up_from: Vector3 = Vector3.UP * _main._solo_unit_los_height_m(shooters)
+	assert_float(((lines[0] as Array)[0] as Vector3).distance_to(shooters.models[0].node.global_position + up_from)).is_less(0.001)
+	await E2EBoot.settle(get_tree())
+

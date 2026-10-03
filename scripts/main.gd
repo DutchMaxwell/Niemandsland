@@ -11928,6 +11928,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
 						attacker.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 			_solo_log_hit_mod(p_mod, target, to_hit)
+			_vfx_player_volley(group.get("member"), target, profile, bool(profile.get("indirect", false))
+				or h_granted_indirect or _solo_target_grants_indirect(target))
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You", "attack",
 				"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
@@ -13082,6 +13084,18 @@ func _vfx_volley(member: GameUnit, target: GameUnit, profile: Dictionary, pairs:
 	var up_to := Vector3.UP * _solo_unit_los_height_m(target)
 	_vfx_emit({"k": "volley", "f": int(VolleyCue.family_of(str(profile.get("name", "")))),
 		"pairs": pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to])})
+
+
+## VFX #2 for the player's own volley: _solo_attack_groups keeps no pairs, and a cosmetic key must never ride a
+## rules profile (it would split dice batches), so the same read-only sight query runs once more at the same
+## reach for this weapon's member. A weapon with fewer copies than seeing models draws one tracer per copy.
+func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary, los_waived: bool) -> void:
+	if member == null or los_waived:
+		return
+	var pairs: Array = []
+	_solo_sighted_count(member, target, int(SoloController.effective_shoot_reach_in(float(profile.get("range", 0))
+		+ float(SoloController.shooting_range_bonus(member)), target)), false, pairs)
+	_vfx_volley(member, target, profile, pairs.slice(0, maxi(int(profile.get("count", 1)), 1)), false)
 
 
 ## VFX #1, the unit-level beat: hits and saves belong to the unit, not to one model, so they sit over the
