@@ -131,6 +131,25 @@ func test_the_raid_gates_only_the_defenders_rest_phase() -> void:
 	assert_float(float(g["min_from_marker_in"])).is_equal(12.0)
 
 
+## D14.5: The Rescue plays six rounds, arms ONE attacker-only carry marker that drops 6", and (once the
+## roles are set) covers BOTH sides with the 4+ reserve rule.
+func test_the_rescue_arms_an_attacker_only_marker_and_reserves_for_both_sides() -> void:
+	_main._ensure_solo_controller()
+	_main._solo_mission_id = "the_rescue"
+	_main._solo_apply_mission_if_chosen()
+	assert_int(_main.solo_controller.game_rounds).is_equal(6)
+	assert_int(SoloController.mission_markers.size()).is_equal(1)
+	var mk: Dictionary = SoloController.mission_markers[0]
+	assert_bool(bool(mk.get("carry", false))).is_true()
+	assert_bool(bool(mk.get("attacker_only", false))).is_true()
+	assert_float(float(mk.get("drop_in", 0.0))).is_equal(6.0)
+	_main.solo_ai_slots = {2: true}
+	_main._solo_roles_set(1, "attacker")
+	var cfg: Dictionary = _main._solo_reserve_cfg()
+	assert_that(_main._solo_reserve_slots(cfg)).is_equal([1, 2])
+	assert_int(int(cfg["arrive_on"])).is_equal(4)
+
+
 func test_relic_hunt_arms_three_carried_markers() -> void:
 	_main._solo_mission_id = "relic_hunt"
 	_main._solo_apply_mission_if_chosen()
