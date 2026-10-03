@@ -50,6 +50,8 @@ var screen_index: int = -1
 var show_move_trails: bool = true
 ## Transparency stage 2: rising rule texts at the table ("Blast ×3", "Artillery +1").
 var show_rule_floats: bool = true
+## Combat effects (VFX: result pips, volley cue, spell seal). Default OFF until the look is approved.
+var show_combat_effects: bool = false
 ## Cinematic depth of field ("tilt-shift") on the table camera: sharp while zoomed
 ## out, softly blurred in the foreground/background as the camera zooms towards the
 ## models. On by default (the intended look); persisted; bound to the Settings
@@ -386,6 +388,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "screen_index", screen_index)
 	config.set_value("graphics", "show_move_trails", show_move_trails)
 	config.set_value("graphics", "show_rule_floats", show_rule_floats)
+	config.set_value("graphics", "show_combat_effects", show_combat_effects)
 	config.set_value("graphics", "tilt_shift", tilt_shift)
 	config.set_value("graphics", "show_combat_stage", show_combat_stage)
 	config.set_value("graphics", "combat_stage_hold_s", combat_stage_hold_s)
@@ -411,6 +414,7 @@ func load_settings() -> void:
 	screen_index = config.get_value("graphics", "screen_index", -1)
 	show_move_trails = config.get_value("graphics", "show_move_trails", true)
 	show_rule_floats = config.get_value("graphics", "show_rule_floats", true)
+	show_combat_effects = config.get_value("graphics", "show_combat_effects", false)
 	tilt_shift = config.get_value("graphics", "tilt_shift", true)
 	show_combat_stage = config.get_value("graphics", "show_combat_stage", true)
 	combat_stage_hold_s = float(config.get_value("graphics", "combat_stage_hold_s", 2.5))

@@ -1,11 +1,9 @@
 class_name ResultPips
 extends Node3D
-## VFX #1 (special-effects plan, first three): small marks AT the models a resolved attack really touched —
-## one red tick per wound that landed on a model that survives it, a red cross where a model was taken out.
-## Read off the allocation the resolver already made (SoloController.apply_wounds_to_models' callbacks), never
-## rolled, never written back: pure visuals under /root/Main like FloatingRuleText, no RNG of any kind.
-## Performance/Low and Reduce Motion get the still form (no rise); the pool is capped so a long volley cannot
-## grow nodes. The mark hovers over the model's sight-cylinder top, the same eye the LOS rule uses.
+## VFX #1: marks AT the models a resolved attack touched — a red tick per wound that landed on a survivor, a
+## red cross on a casualty — read off the resolver's own allocation, never rolled or written back, no RNG.
+## Over the model's sight-cylinder top (the LOS rule's eye). Still form on Performance/Low + Reduce Motion;
+## capped pool. Off unless GraphicsSettings.show_combat_effects (default off until the look is approved).
 
 enum Kind { WOUND, KILL, HIT, SAVE }
 const COLORS := [Color(0.88, 0.2, 0.18), Color(0.88, 0.2, 0.18), Color(0.96, 0.93, 0.84), Color(0.4, 0.68, 0.95)]
@@ -30,6 +28,11 @@ void fragment() {
 var enabled: bool = true
 var force_for_tests: bool = false   # plain headless never spawns (FloatingRuleText's orphan lesson)
 static var _shader: Shader
+
+
+func _ready() -> void:
+	var gs := get_node_or_null("/root/GraphicsSettings")
+	enabled = gs != null and bool(gs.get("show_combat_effects"))
 
 
 ## Still form: no rise on Performance (0) / Low (1), nor with Reduce Motion — the mark appears and fades.

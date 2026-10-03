@@ -10,7 +10,22 @@ func _pips():
 	var p = auto_free(ResultPipsScript.new())
 	p.force_for_tests = true
 	add_child(p)
+	p.enabled = true   # the player setting defaults to off (see the first test)
 	return p
+
+
+func test_off_by_default_until_the_look_is_approved() -> void:
+	var p = auto_free(ResultPipsScript.new())
+	p.force_for_tests = true
+	add_child(p)
+	assert_bool(GraphicsSettings.show_combat_effects).is_false()
+	assert_object(p.mark(ResultPipsScript.Kind.KILL, Vector3.ZERO, 1)).is_null()
+	GraphicsSettings.show_combat_effects = true
+	var q = auto_free(ResultPipsScript.new())
+	q.force_for_tests = true
+	add_child(q)
+	GraphicsSettings.show_combat_effects = false
+	assert_object(q.mark(ResultPipsScript.Kind.KILL, Vector3.ZERO, 1)).is_not_null()
 
 
 func _model_at(pos: Vector3) -> ModelInstance:
