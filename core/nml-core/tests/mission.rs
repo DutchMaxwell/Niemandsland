@@ -299,3 +299,21 @@ fn recycle_destroyed_returns_a_covered_unit_once_and_leaves_the_other_side_dead(
     st.alive[i] = 0;
     assert!(nml_core::deployment::recycle_destroyed(&mut st, 2, 4).is_empty(), "the second destruction is final");
 }
+
+/// D14.5: a carried marker may carry its own drop distance (Rescue: 6"); without it the drop stays 1".
+#[test]
+fn a_marker_drops_at_its_own_distance_past_the_carrier_and_defaults_to_one_inch() {
+    let mut st = carry_state();
+    apply_carry_step(&mut st, &[1]);
+    let carrier = st.markers_meta[0].carried_by as usize;
+    let base = st.positions[carrier][0];
+    let mut one = st.clone();
+    drop_carried(&mut one, carrier);
+    let d1 = ((one.objectives[0].pos[0] - base[0]).powi(2) + (one.objectives[0].pos[2] - base[2]).powi(2)).sqrt();
+    st.markers_meta[0].drop_in = 6.0;
+    drop_carried(&mut st, carrier);
+    let d6 = ((st.objectives[0].pos[0] - base[0]).powi(2) + (st.objectives[0].pos[2] - base[2]).powi(2)).sqrt();
+    let r = 0.02;
+    assert!((d1 - (r + 0.0254)).abs() < 1e-9, "default: one inch past the base edge, got {d1}");
+    assert!((d6 - (r + 6.0 * 0.0254)).abs() < 1e-9, "Rescue: six inches, got {d6}");
+}
