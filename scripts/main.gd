@@ -10691,7 +10691,7 @@ func _solo_split_declare_second(target: GameUnit) -> void:
 			", ".join(rest), sf.get_name(), ", ".join(sb), target.get_name()])
 	_solo_deploy_ui_show("Split fire declared:\n· %s → %s\n· %s → %s" % [
 		", ".join(rest), sf.get_name(), ", ".join(sb), target.get_name()],
-		"🔥 Fire!", _solo_split_commit, "× Cancel attack", _solo_split_abort)
+		"Fire!", _solo_split_commit, "× Cancel attack", _solo_split_abort)
 
 
 ## The GO button of the declared split — only now do dice roll. Awaitable (tests wait on
