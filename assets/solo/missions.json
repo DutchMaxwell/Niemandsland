@@ -273,6 +273,7 @@
         "placement": "alternate",
         "min_gap_in": 9,
         "outside_zones_in": 9,
+        "placer": "defender",
         "secret": true
       }
     },
