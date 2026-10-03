@@ -296,3 +296,46 @@ def test_an_arena_game_runs_the_missions_phases_through_deploy_phased(monkeypatc
     first_attack = seq.index(attacker)
     assert seq[:first_attack] and set(seq[:first_attack]) == {defender}, "the defender's half goes first"
     assert seq[-1] == defender or defender in seq[first_attack:], "the defender's rest follows the attacker"
+
+
+class _Dice:
+    """A scripted game-stream stand-in: `randi_range` answers the queued faces in order."""
+
+    def __init__(self, faces):
+        self.faces = list(faces)
+
+    def randi_range(self, lo, hi):
+        return self.faces.pop(0)
+
+
+def _reserve_fixture():
+    plain = {"units": {"m1": {"player": 1, "dormant": True, "dormant_models": 2, "dormant_wounds": [1, 1],
+                              "earliest_arrival_round": 2, "positions": [], "radii": []}}}
+    reads = {"m1": {"repel_m": 0.0, "beacon": False, "beacon_r_m": 0.0, "ring_m": 0.0, "radius": 0.04,
+                    "footprint": [[0.0, 0.0]], "base_r": 0.016, "flying": False}}
+    return plain, reads
+
+
+def test_a_mission_reserve_arrives_only_on_the_winning_die_and_inside_its_zone():
+    """NML-1010 D8b: one die per held unit per round from from_round; a 4+ lands it in the 12" frame."""
+    cfg = {"from_round": 2, "arrive_on": 4, "zone": "edge_band_12",
+           "gates": {"min_from_enemy_in": 12, "min_from_marker_in": 12}}
+    zl = sp._style_zone_args(sp._style_by_id("edge_band_12", REPO), "1")[1]
+    objs = [[0.0, 0.0, 0.0]]
+
+    def run(round_no, faces):
+        plain, reads = _reserve_fixture()
+        dice = _Dice(faces)
+        n = sp._arrive_reserves(plain, reads, None, objs, 1, round_no,
+                                mission={"keys": {"m1"}, "cfg": cfg, "rng": dice, "zones": zl})
+        return n, plain["units"]["m1"], dice.faces
+
+    n, u, left = run(1, [6])
+    assert n == 0 and u["dormant"] and left == [6], "before from_round: no die is even rolled"
+    n, u, left = run(2, [3])
+    assert n == 0 and u["dormant"] and left == [], "a 3 on a 4+ stays in reserve"
+    n, u, _ = run(2, [4])
+    assert n == 1 and not u["dormant"] and u["ambush_arrived_round"] == 2
+    x, z = u["positions"][0][0], u["positions"][0][2]
+    assert abs(x) >= 24 * sp.IN2M - 1e-6 or abs(z) >= 12 * sp.IN2M - 1e-6, "inside the 12\" frame, not the centre"
+    assert (x * x + z * z) ** 0.5 > 12 * sp.IN2M + 0.016, "more than the marker gate from the marker"

@@ -452,12 +452,32 @@ func _fork_run_activations(state: Dictionary, turn: int,
 
 ## Fork-continuation pick: cheap policy step only (see _fork_run_activations).
 func _fork_pick(state: Dictionary, player: int) -> Dictionary:
+	state = _seat_view(state, player)
 	for k in state["units"]:
 		var su: Dictionary = state["units"][k]
 		if int(su["player"]) == player and not bool(su["activated"]) and int(su["alive"]) > 0:
 			var a := AiPlanner._policy_step(state, player, true)
 			return {} if a.is_empty() else {"action": a}
 	return {}
+
+
+## R9a fog of war: both seats play on ONE captured state, so each seat plans on its own view of it. The
+## attacker's view of an unrevealed secret marker carries no `secret` / `carry` / `carried_by`
+## (BattleSim.mask_secret_for); the defender's view is the state itself. A game without secret markers
+## is handed the very same dict, untouched.
+func _seat_view(state: Dictionary, player: int) -> Dictionary:
+	var mm: Array = state.get("markers_meta", [])
+	var has_secret := false
+	for mk in mm:
+		has_secret = has_secret or (mk as Dictionary).has("secret")
+	if not has_secret:
+		return state
+	var view := state.duplicate()
+	var masked: Array = []
+	for mk in mm:
+		masked.append(BattleSim.mask_secret_for((mk as Dictionary).duplicate(), player))
+	view["markers_meta"] = masked
+	return view
 
 
 func _pick_for(state: Dictionary, player: int) -> Dictionary:
@@ -473,7 +493,7 @@ func _pick_for(state: Dictionary, player: int) -> Dictionary:
 	# of the cost; planner remains the default for quality data. NOT recorded
 	# (NML-1073 M3-0): the oracle wrap below only covers the full-planner pick.
 	if OS.get_environment("NML_CORE_ACTOR") == "policy":
-		var a := AiPlanner._policy_step(state, player, true)
+		var a := AiPlanner._policy_step(_seat_view(state, player), player, true)
 		return {} if a.is_empty() else {"used": true, "action": a}
 	# NML-1073 M3-0: the oracle — same begin()/finish() contract
 	# SoloController._planner_pick_unit uses (solo_controller.gd:3008-3015), so
@@ -482,7 +502,7 @@ func _pick_for(state: Dictionary, player: int) -> Dictionary:
 	# is the header's terrain fallback (act_recorder.gd:_school_terrain_line).
 	var act_rec := AiActRecorder.begin(state, player, pool, Callable(), _world)
 	var _prof_t0 := Time.get_ticks_usec() if BattleSim.profile_enabled() else 0
-	var pick := AiPlanner.plan_with_rollout(state, player)
+	var pick := AiPlanner.plan_with_rollout(_seat_view(state, player), player)
 	if BattleSim.profile_enabled():
 		BattleSim.profile["plan"] += Time.get_ticks_usec() - _prof_t0
 		BattleSim.profile["plan_n"] += 1
