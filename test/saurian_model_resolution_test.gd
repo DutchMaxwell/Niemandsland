@@ -61,7 +61,8 @@ func test_saurian_upgrade_words_map_to_the_plan_slugs() -> void:
 		"Dread Behemoth Fighter": "behemoth", "Dread Behemoth Carrier": "carrier",
 		"Champion Javelin": "javelin", "Champion Blowpipe": "blowpipe", "Champion Fire Bolas": "bolas",
 		"Deinonychus": "deinonychus", "Pterodactyl": "pterodactyl", "Ripjawdactyl": "ripjawdactyl",
-		"Ancient Palanquin": "palanquin", "Starseer Palanquin": "palanquin"}
+		"Ancient Palanquin": "palanquin", "Starseer Palanquin": "palanquin",
+		"Queztalcoatl": "skyserpent"}
 	for word in expected:
 		assert_str(lib.variant_slug([word], "saurians")).is_equal(expected[word])
 	# Scoped: another faction does not read the Saurian words.
