@@ -645,14 +645,6 @@ pub const EPOCH_68_MODIFIER_SUM: u32 = 68;
 /// `EPOCH_7_TABLE_RULES`'s transport gate: the table's `BattleSim.capture`
 /// always wrote one wound and one position per living model of THAT unit.
 pub const EPOCH_69_HERO_FOLD: u32 = 69;
-/// Tray-exact series (maintainer D151 = B, 03.10.), DORMANT until the one bump at
-/// the end of the series (`CURRENT_RULES_EPOCH` stays 69 until then): a RIGID move
-/// (no ported trail) tests each model's own straight segment, start to end, for
-/// Dangerous terrain with the table's predicate (`_path_crosses_terrain` via
-/// `mv::step::leg_crosses`: half-cell steps, base edge included). Below it only
-/// the start and end bases counted and the move was flagged
-/// `dangerous_rigid_end_only`.
-pub const EPOCH_70_RIGID_DANGEROUS_ROUTE: u32 = 70;
 pub const CURRENT_RULES_EPOCH: u32 = 69;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,

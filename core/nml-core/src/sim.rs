@@ -32,7 +32,6 @@ use crate::acts::{
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
-    EPOCH_70_RIGID_DANGEROUS_ROUTE,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -2768,14 +2767,15 @@ pub(crate) fn dangerous_dice(
             if seams.hero_attach {
                 units.extend(state.attached[si].iter().copied());
             }
-            // EPOCH_70_RIGID_DANGEROUS_ROUTE: the rigid move's own route IS each
-            // model's straight segment, so the table's predicate on it
-            // (`leg_crosses`, `_path_crosses_terrain`) is exact and nothing is
-            // flagged. Below it — tree plan step 5b — this end-only reading can
-            // part from the table's per-model trail ONLY where a model's straight
-            // route meets a Dangerous cell, so the flag names exactly those moves.
-            // Samples one base radius apart overlap; the dice never read the flag.
-            let route = rule_on(seams.rules_epoch, EPOCH_70_RIGID_DANGEROUS_ROUTE);
+            // Tray-exact (`Seams::tray_exact`, dormant until the series' one
+            // EPOCH_70 bump): the rigid move's own route IS each model's straight
+            // segment, so the table's predicate on it (`leg_crosses`,
+            // `_path_crosses_terrain`) is exact and nothing is flagged. Without
+            // it — tree plan step 5b — this end-only reading can part from the
+            // table's per-model trail ONLY where a model's straight route meets a
+            // Dangerous cell, so the flag names exactly those moves. Samples one
+            // base radius apart overlap; the dice never read the flag.
+            let route = seams.tray_exact;
             let mut meets = false;
             for u in units {
                 for m in 0..next.positions[u].len() {
