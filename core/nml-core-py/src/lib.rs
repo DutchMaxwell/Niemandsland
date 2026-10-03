@@ -725,6 +725,8 @@ impl Core {
             // NEW rule, so an absent key (every corpus recorded before it)
             // stays OFF.
             dangerous_end_morale: self.knobs.dangerous_end_morale,
+            // Tray-exact series: dormant until its one epoch bump (io.rs `Seams::tray_exact`).
+            tray_exact: false,
             // GF v3.5.1 p.9 — `consolidate="table"` in the header.
             consolidate: self.knobs.consolidate,
             // Rung I (DEFECT_LEDGER row 31) — `cond_ap_dice` in the header.
