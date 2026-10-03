@@ -185,6 +185,18 @@ def test_ambush_catalog_entry_pins_phases_gates_and_d3_markers():
     assert ph[2]["gates"] == {"min_from_enemy_in": 12}
 
 
+def test_the_raid_catalog_entry_pins_disc_frame_rest_and_the_attackers_points():
+    snap = sp.resolve_mission("the_raid", REPO)
+    assert snap["name"] == "The Raid" and snap["scoring"] == "end" and snap["rounds"] == 6 and snap["roles"] is True
+    assert snap["attacker_points_factor"] == 1.25 and "reserves" not in snap
+    assert snap["markers"] == {"count": 1, "placement": "table_centre"}
+    ph = sp._phase_args(snap, 1, REPO)   # attacker = slot 1; the defender is slot 2 (side index 1)
+    assert [(p["side"], p["share"]) for p in ph] == [(1, "half"), (0, "all"), (1, "rest")]
+    assert "gates" not in ph[0] and "gates" not in ph[1]
+    assert ph[2]["gates"] == {"min_from_enemy_in": 12, "min_from_marker_in": 12}
+    assert sp._ai_attacker(snap, 2) == 2, "the +25 % side is the one the roll-off winner takes (R7a)"
+
+
 @needs_lists
 def test_a_six_round_catalog_mission_plays_six_rounds_and_duel_stays_at_four():
     """NML-1010 D1: the match length is catalog data. No shipped mission is longer than 4,
