@@ -1310,6 +1310,8 @@ mod tests {
                 .map(|u| u.iter().map(|p| geom::to_f64(*p)).collect())
                 .collect(),
             radii: radii_m,
+            kits: Vec::new(),
+            kit_names: Vec::new(),
             mods: vec![Mods::default(); n],
             mods_base: (0..n).map(|_| Rc::new(Mods::default())).collect(),
             attached: Rc::new(attached),

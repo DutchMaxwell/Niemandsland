@@ -317,6 +317,7 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
             if state.positions[ti].len() == 1 { drop_carried(state, ti); }
             state.wounds[ti].remove(0);
             remove_position_or_log(state, ti, 0, "land_wounds");
+            state.kit_remove(ti, 0);
             // radii stay aligned with positions or the base-edge measure lies.
             if !state.radii[ti].is_empty() {
                 state.radii[ti].remove(0);
@@ -391,6 +392,7 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
             if state.positions[m].len() == 1 { drop_carried(state, m); }
             state.wounds[m].remove(best);
             remove_position_or_log(state, m, best, "land_deadly_wounds");
+            state.kit_remove(m, best);
             // radii stay aligned with positions or the base-edge measure lies.
             if !state.radii[m].is_empty() {
                 state.radii[m].remove(best);
@@ -787,6 +789,7 @@ pub(crate) fn tray_reanimation(
         next.wounds[u].insert(0, back);
         next.positions[u].insert(0, spot);
         next.radii[u].insert(0, DEFAULT_BASE_RADIUS_M);
+        next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
         left -= back;
         shot.log.push(format!("Reanimation: 1 model restored ({back} wound(s) back)"));
@@ -4266,6 +4269,7 @@ fn expected_melee_morale(
         state.wounds[li].clear();
         state.positions[li].clear();
         state.radii[li].clear();
+        state.kits_drop(li);
         state.alive[li] = 0;
     } else {
         state.shaken[li] = true;
@@ -4762,6 +4766,7 @@ fn tray_morale(
             state.wounds[i].clear();
             state.positions[i].clear();
             state.radii[i].clear();
+            state.kits_drop(i);
             state.alive[i] = 0;
         }
     }
