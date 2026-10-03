@@ -308,19 +308,37 @@ fn remove_position_or_log(state: &mut State, u: usize, i: usize, site: &str) {
     }
 }
 
-pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
+pub fn land_wounds(state: &mut State, ti: usize, left: i64) {
+    land_wounds_with(state, ti, left, false);
+}
+
+/// `land_wounds` with the casualty order chosen: `exact` (`Seams::tray_exact`, tray-exact S6) is the
+/// table's `apply_wounds_to_models` — `chain_casualty_order(unit, wounds)` computed ONCE, each model
+/// soaking wounds until it dies, the next one after it. Without kits, or without `exact`, slot 0
+/// goes first exactly as before.
+pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool) {
+    let mut order = if exact {
+        crate::casualty::chain_casualty_order(state, ti, Some(left.max(0) as usize)).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     while left > 0 && !state.wounds[ti].is_empty() {
-        let take = left.min(state.wounds[ti][0]);
-        state.wounds[ti][0] -= take;
+        let s = order.first().copied().unwrap_or(0);
+        let take = left.min(state.wounds[ti][s]);
+        state.wounds[ti][s] -= take;
         left -= take;
-        if state.wounds[ti][0] <= 0 {
+        if state.wounds[ti][s] <= 0 {
             if state.positions[ti].len() == 1 { drop_carried(state, ti); }
-            state.wounds[ti].remove(0);
-            remove_position_or_log(state, ti, 0, "land_wounds");
-            state.kit_remove(ti, 0);
+            state.wounds[ti].remove(s);
+            remove_position_or_log(state, ti, s, "land_wounds");
+            state.kit_remove(ti, s);
             // radii stay aligned with positions or the base-edge measure lies.
-            if !state.radii[ti].is_empty() {
-                state.radii[ti].remove(0);
+            if s < state.radii[ti].len() {
+                state.radii[ti].remove(s);
+            }
+            if !order.is_empty() {
+                order.remove(0);
+                order.iter_mut().filter(|o| **o > s).for_each(|o| *o -= 1);
             }
         }
     }
@@ -369,7 +387,15 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
             break; // everything in the chain is dead — the remaining wounds are wasted
         };
         let m = chain[ci];
-        let best = if epoch67 {
+        // Tray-exact S6: the table's `deadly_pick` — the member's chain_casualty_order(.., 1)[0].
+        let exact = if seams.tray_exact {
+            crate::casualty::chain_casualty_order(state, m, Some(1)).and_then(|o| o.first().copied())
+        } else {
+            None
+        };
+        let best = if let Some(b) = exact {
+            b
+        } else if epoch67 {
             (0..state.wounds[m].len())
                 .find(|&i| {
                     max_of[ci].get(i).copied().unwrap_or(1) > 1
@@ -651,7 +677,7 @@ pub(crate) fn tray_breath_attack(
     let wounds_before = wounds_left(next, ti);
     let out = crate::dice::resolve_breath_attack_with_tray(hits, BREATH_AP, &def, &ut.name, tray);
     let landed = shot.absorb(out);
-    land_wounds(next, ti, landed);
+    land_wounds_with(next, ti, landed, seams.tray_exact);
     if shooting_morale_trigger(next, ut, ti, alive_before, wounds_before) {
         tray_morale(next, statics, ti, false, seams, tray, shot);
     }
@@ -864,7 +890,7 @@ fn surprise_strike(
     let def = ctx_of(ut, next, best);
     let (ab, wb) = (next.alive[best], wounds_left(next, best));
     let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(successes, spec.ap, false, false, &def, &ut.name, tray));
-    land_wounds(next, best, landed);
+    land_wounds_with(next, best, landed, seams.tray_exact);
     if shooting_morale_trigger(next, ut, best, ab, wb) {
         tray_morale(next, statics, best, false, seams, tray, shot);
     }
@@ -987,7 +1013,7 @@ pub(crate) fn tray_crossing_attack(
             "Crossing Attack: {owner} crosses {tname} — {wounds} of {n} dice wound"
         ));
         if wounds > 0 {
-            land_wounds(next, target, wounds);
+            land_wounds_with(next, target, wounds, seams.tray_exact);
         }
     }
 }
@@ -1101,7 +1127,7 @@ pub(crate) fn tray_strafing(
     for (b, keep, _, _) in &parts {
         mark_spent_limited(&statics[next.roster.profile[*b]].strafe_shoot, keep, &mut next.limited_used[*b]);
     }
-    land_wounds(next, target, shot.absorb(r));
+    land_wounds_with(next, target, shot.absorb(r), seams.tray_exact);
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
         let dl = land_deadly_wounds(next, target, post, dx, seams);
         shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
@@ -1168,7 +1194,7 @@ pub(crate) fn tray_storm_attack(
                     StormFacet::Shred => (0, false, true), StormFacet::Surge => (0, false, false),
                 };
                 let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(hits, ap, bane, shred, &def, &ut.name, tray));
-                land_wounds(next, best, landed);
+                land_wounds_with(next, best, landed, seams.tray_exact);
                 if shooting_morale_trigger(next, ut, best, alive_before, wounds_before) {
                     tray_morale(next, statics, best, false, seams, tray, shot);
                 }
@@ -1595,7 +1621,7 @@ fn control_morale_passed(
     );
     mods::spend_once(next, ti, &[mods::Role::Morale], false);
     let self_wounds = shot.absorb(rolled);
-    land_wounds(next, ti, self_wounds);
+    land_wounds_with(next, ti, self_wounds, seams.tray_exact);
     if outcome == Morale::Passed { return true; }
     next.shaken[ti] = true;
     if seams.hero_attach {
@@ -2532,7 +2558,7 @@ pub(crate) fn tray_retreating_strike(
             faces: faces.clone(), owner: statics[next.roster.profile[bearer]].name.clone(),
         });
         let landed = crate::dice::regen_batch(w, &def, &def_owner, tray, &mut shot.rolls);
-        land_wounds(next, ti, landed);
+        land_wounds_with(next, ti, landed, seams.tray_exact);
         shot.log.push(format!(
             "{}: {} strikes while retreating -- {} dice -> {} wound(s) on {} (no save)",
             spec.name, statics[next.roster.profile[bearer]].name, dice, w, def_owner));
@@ -4534,7 +4560,7 @@ fn strike_phase(
     // defender unit's own alive count — nothing else moves `alive[ti]` inside
     // this phase.
     let alive_before = next.alive[ti];
-    land_wounds(next, ti, w);
+    land_wounds_with(next, ti, w, seams.tray_exact);
     // Audit 2026-09-13 §2.1 — Deadly lands PER MODEL with no carry-over (the
     // table's `apply_deadly_wounds`, solo_controller.gd:8333), and the melee
     // tally is the DEALT count so the multiply still decides who wins
@@ -4568,7 +4594,7 @@ fn strike_phase(
             hits, &sctx, &su.name, tray, &mut shot.rolls,
         );
         if unsaved > 0 {
-            land_wounds(next, si, landed);
+            land_wounds_with(next, si, landed, seams.tray_exact);
             retaliated = unsaved; // _solo_retaliate_credit += rw (main.gd:6171)
         }
     }
@@ -4594,7 +4620,7 @@ fn strike_phase(
         let (_, landed) = crate::dice::retaliate_saves_with_tray(
             hits, &sctx, &su.name, tray, &mut shot.rolls,
         );
-        land_wounds(next, si, landed);
+        land_wounds_with(next, si, landed, seams.tray_exact);
     }
     spend_exchange(next, si, ti, true); // main.gd:6152, per strike phase
     (caused, retaliated)
@@ -4640,7 +4666,7 @@ fn impact_phase(
         );
         caused += r.caused;
         let w = shot.absorb(r);
-        land_wounds(next, ti, w);
+        land_wounds_with(next, ti, w, exact);
     }
     caused
 }
@@ -4767,7 +4793,7 @@ fn tray_morale(
     );
     mods::spend_once(state, i, &[mods::Role::Morale], melee);
     let self_wounds = shot.absorb(r);
-    land_wounds(state, i, self_wounds);
+    land_wounds_with(state, i, self_wounds, seams.tray_exact);
     match outcome {
         Morale::Passed => {}
         Morale::Shaken => {
@@ -7191,7 +7217,7 @@ fn resolve_with(
                     // BEFORE these wounds land.
                     let alive_before = next.alive[si];
                     let wounds_before = wounds_left(&next, si);
-                    land_wounds(&mut next, si, w);
+                    land_wounds_with(&mut next, si, w, seams.tray_exact);
                     // main.gd:1096-1098 — a NON-charge activation tests morale for
                     // these wounds at its very END ("units in melee don't take
                     // morale tests from wounds at the end of an activation").
@@ -7677,7 +7703,7 @@ fn resolve_with(
                             // lands separately below — not an ignored wound.
                             let ignored = r.caused - r.wounds - r.deadly_tally;
                             let w = shot.absorb(r);
-                            land_wounds(&mut next, g.ti, w);
+                            land_wounds_with(&mut next, g.ti, w, seams.tray_exact);
                             // Audit 2026-09-13 §2.1 — Deadly lands PER MODEL
                             // with no carry-over (the table's
                             // `apply_deadly_wounds`, solo_controller.gd:8333):
