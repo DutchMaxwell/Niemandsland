@@ -767,11 +767,13 @@ const VEHICLE_KEYWORDS: Array[String] = ["apc", "tank", "transport", "carrier", 
 const WALKER_KEYWORDS: Array[String] = ["walker", "mech", "dreadnought", "sentinel", "war-suit", "warsuit", "exo", "knight", "suit"]
 const ARTILLERY_KEYWORDS: Array[String] = ["artillery", "cannon", "mortar", "howitzer", "battery", "ballista", "catapult", "bombard"]
 const MONSTER_KEYWORDS: Array[String] = ["dragon", "beast", "monster", "wyrm", "behemoth", "daemon", "demon", "hive", "kraken", "hydra", "giant", "ogre", "troll"]
-## EXACT unit names (lowercase) the keywords would misread, with their verdict. Exact on purpose: a "titan" keyword
-## would also turn the robot titans (Titan Lords, Vinci, Macaque, ...) into monsters. The Vampiric Undead Butcher
-## Titan is a stitched corpse giant with no Army Forge base; keyword-less at Tough 18 it read as a vehicle
-## (105x170 oval, the model ~211 mm tall).
-const BIG_MODEL_NAME_VERDICTS: Dictionary = {"butcher titan": "monster"}
+## EXACT unit names (lowercase) with no Army Forge base whose base comes from the OPR rulebook's base guide instead of
+## the Tough fallback: [width_mm, depth_mm] of an OVAL (depth = the long / facing axis). Exact on purpose: a "titan"
+## keyword would also reclassify the robot titans (Titan Lords, Vinci, Macaque, ...).
+## "butcher titan" (Vampiric Undead, Army Forge 3.5.3: round "" / square ""): a stitched corpse GIANT. AoF Advanced
+## Rules v3.5.1 p.4 "Scale Conventions": "Giants: 100mm tall on 120mm oval bases"; the 92 mm short axis is the Army
+## Forge oval every AoF titan with a listed base uses (120x92). Without this it read as a Tough(18) vehicle (105x170).
+const BIG_MODEL_NAME_BASES: Dictionary = {"butcher titan": [92, 120]}
 
 
 ## Walker / monster base (ROUND mm) by Tough — tall, narrow footprint, so it grows MODESTLY with
@@ -824,8 +826,6 @@ static func _classify_big_model(unit: OPRUnit, tough: int) -> String:
 	if unit.size > 1:
 		return ""
 	var n := unit.name.to_lower()
-	if BIG_MODEL_NAME_VERDICTS.has(n.strip_edges()):
-		return BIG_MODEL_NAME_VERDICTS[n.strip_edges()]
 	# NML-993 — vehicle keywords WIN over walker keywords for ambiguous names.
 	# A "Knight Brothers APC" is a wide-track transport, not a knight-walker.
 	for kw in VEHICLE_KEYWORDS:
@@ -858,6 +858,12 @@ static func _apply_tough_base_fallback(unit: OPRUnit) -> void:
 	var tough := _tough_from_rules(unit.special_rules)
 	if tough < 3:
 		return  # normal infantry / heroes — keep the default base
+	var exact: Variant = BIG_MODEL_NAME_BASES.get(unit.name.to_lower().strip_edges())
+	if exact != null:
+		push_warning("OPRBaseFallback: '%s' (size=%d, tough=%d) → rulebook base %dx%d oval" % [
+			unit.name, unit.size, tough, int(exact[1]), int(exact[0])])
+		_set_oval_base(unit, int(exact[0]), int(exact[1]))
+		return
 	var verdict := _classify_big_model(unit, tough)
 	push_warning("OPRBaseFallback: '%s' (size=%d, tough=%d) → %s" % [
 		unit.name, unit.size, tough, (verdict if not verdict.is_empty() else "large-infantry")])

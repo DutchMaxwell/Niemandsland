@@ -173,17 +173,20 @@ func test_usable_base_value() -> void:
 	assert_bool(OPRApiClient._is_usable_base_value(60)).is_true()
 
 
-## The Vampiric Undead Butcher Titan (AoF) has no Army Forge base. Its name carries no keyword and it is a Tough(18)
-## single model, so the keyword fallback read it as a VEHICLE: a 105x170 oval, which scaled the stitched corpse giant
-## to ~211 mm. It is a monster: ROUND on the walker ladder (T18 -> 120).
-func test_fallback_butcher_titan_is_monster_round() -> void:
+## The Vampiric Undead Butcher Titan (AoF) has no Army Forge base (3.5.3: round "" / square ""). Keyword-less at
+## Tough(18) the fallback read it as a VEHICLE: a 105x170 oval that scaled the stitched corpse giant to ~211 mm. It gets
+## the rulebook's GIANT base (AoF Advanced Rules v3.5.1 p.4: "Giants: 100mm tall on 120mm oval bases"), 120x92 like
+## every AoF titan with a listed base.
+func test_fallback_butcher_titan_gets_rulebook_giant_oval() -> void:
 	var unit := OPRApiClient.OPRUnit.new()
 	unit.name = "Butcher Titan"
 	unit.size = 1
-	unit.special_rules = ["Cursed Undead", "Fear(3)", "Slow", "Tough(18)", "Fearless"]
+	unit.special_rules = ["Fear(3)", "Slow", "Tough(18)", "Fearless", "Cursed Undead"]
 	unit.base_size_round = 32
 	OPRApiClient._apply_tough_base_fallback(unit)
-	assert_bool(unit.base_is_oval).is_false()
+	assert_bool(unit.base_is_oval).is_true()
+	assert_int(unit.base_width_mm).is_equal(92)    # short axis
+	assert_int(unit.base_depth_mm).is_equal(120)   # long / facing axis
 	assert_int(unit.base_size_round).is_equal(120)
 
 
