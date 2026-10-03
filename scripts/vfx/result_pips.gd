@@ -42,11 +42,16 @@ static func still_form(preset: int, reduce_motion: bool) -> bool:
 
 ## Mark `count` results of `kind` over a model (its node's spot, lifted to its sight-cylinder eye).
 func mark_model(kind: Kind, mi: ModelInstance, count: int) -> MeshInstance3D:
+	var eye := eye_of(mi)
+	return null if eye == Vector3.INF else mark(kind, eye, count)
+
+
+## A model's sight-cylinder top (its node's spot + its base-table height) in metres; INF without a live node.
+static func eye_of(mi: ModelInstance) -> Vector3:
 	if mi == null or mi.node == null or not is_instance_valid(mi.node):
-		return null
-	var eye_m := VolumetricLos.height_in_for_base_mm(VolumetricLos.model_base_radius_m(mi) * 2000.0) \
-		* VolumetricLos.INCHES_TO_METERS
-	return mark(kind, mi.node.global_position + Vector3.UP * eye_m, count)
+		return Vector3.INF
+	return mi.node.global_position + Vector3.UP * VolumetricLos.height_in_for_base_mm(
+		VolumetricLos.model_base_radius_m(mi) * 2000.0) * VolumetricLos.INCHES_TO_METERS
 
 
 func mark(kind: Kind, eye: Vector3, count: int) -> MeshInstance3D:
