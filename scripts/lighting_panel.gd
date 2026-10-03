@@ -279,6 +279,19 @@ func _build_ui() -> void:
 			rf.enabled = on)
 	vbox.add_child(floats_cb)
 
+	# Combat effects (VFX preview: wound ticks / casualty crosses at the models). Off by default
+	# until the look is approved; the switch makes the preview reachable without editing a file.
+	var vfx_cb := CheckButton.new()
+	vfx_cb.text = "Combat Effects (preview)"
+	vfx_cb.button_pressed = GraphicsSettings.show_combat_effects
+	vfx_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.show_combat_effects = on
+		GraphicsSettings.save_settings()
+		var rp := get_node_or_null("/root/Main/ResultPips")
+		if rp != null:
+			rp.enabled = on)
+	vbox.add_child(vfx_cb)
+
 	# Tilt-Shift (cinematic depth of field): sharp while zoomed out, softly blurred in
 	# the foreground/background as the camera zooms towards the models. On by default;
 	# persisted; CameraController applies it live.
