@@ -117,3 +117,26 @@ func test_a_phase_gate_refuses_a_spot_beside_an_enemy_base_for_that_phase_only()
 	_move(h1, Vector3(33.0 * INCH, 0.0, -20.0 * INCH))   # far from every enemy base
 	_main._solo_deploy_human_done_one()
 	assert_int(int(_main._solo_deploy_fsm["phase_left"])).is_equal(1)
+
+
+## D14.2: the pseudo-zone "own" is the mission's standard deployment zone at the side's OWN table half
+## (Ambush's defender, R13a) — the -Z band when the AI took the -Z edge, the +Z band otherwise.
+func _own_zone_half_stands_in_its_band(ai_neg_z: bool) -> void:
+	MissionCatalog._catalog()["phase_fixture"]["deploy_phases"] = [["defender", "half", "own"],
+		["attacker", "all", "anywhere"]]
+	var ai := _start(5)
+	_reg(E2EBoot.make_unit(_main, 1, "Hu1", [TRAY]))
+	await _main._solo_deploy_begin_side(ai_neg_z)
+	var down: Array = ai.filter(func(u: GameUnit) -> bool: return _on_table(u))
+	assert_int(down.size()).is_equal(2)
+	for u in down:
+		var z: float = _main.solo_controller.unit_centre(u).z / INCH
+		assert_bool(z <= -12.0 if ai_neg_z else z >= 12.0).override_failure_message("z=%.1f in" % z).is_true()
+
+
+func test_the_own_zone_is_the_ai_defenders_negative_band_when_it_took_the_negative_edge() -> void:
+	await _own_zone_half_stands_in_its_band(true)
+
+
+func test_the_own_zone_is_the_positive_band_when_the_ai_took_the_other_edge() -> void:
+	await _own_zone_half_stands_in_its_band(false)
