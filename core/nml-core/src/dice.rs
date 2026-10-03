@@ -1544,8 +1544,8 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 /// FLAGGED per activation, never skipped in silence: `deadly` (the landing's
 /// shape is the `EPOCH_14_DEADLY_LANDING` gate's — per model from 14 on, the
 /// pooled multiply below, audit 2026-09-13 §2.1), `takedown`, `hazardous`,
-/// `surge_gates`, and `counter_strikes_first` (a defender Counter weapon runs a
-/// whole EXTRA strike phase before Impact, :8058).
+/// and `surge_gates`. (`counter_strikes_first` is the charge's, `sim::tray_charge`:
+/// a CHARGER's Counter weapon strikes in its normal slot, and was never a gap.)
 ///
 /// NOT PORTED, in the order they cost the most, and none of them has a field
 /// this port can flag them by:
@@ -1677,9 +1677,6 @@ pub fn resolve_melee_leg(
             let n = sh.attacks[k];
             if n <= 0 {
                 continue;
-            }
-            if p.counter && p.counter_strikes_first.unwrap_or(true) {
-                out.mark("counter_strikes_first");
             }
             // Wave 4 follow-up — "Takedown Strike" names itself once per
             // strike (rules-must-log, the table's own log line at

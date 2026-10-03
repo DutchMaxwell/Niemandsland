@@ -860,6 +860,32 @@ func test_sighted_models_gates_per_model_behind_a_blocker() -> void:
 		func(_a: Vector3, _b: Vector3) -> bool: return true)).is_equal(4)
 
 
+## VFX volley cue: the pairs handed out are exactly the counted models, each with the target model its LOS
+## call cleared (the nearest visible one) — and asking for them never changes the count.
+func test_sighted_models_reports_the_pairs_it_counted() -> void:
+	var m := 0.0254
+	var grid := {}
+	for x in range(0, 8):
+		grid[Vector2i(x, 1)] = TerrainRules.TerrainType.CONTAINER   # blocks x in [0,24)" between the lines
+	var los := func(a: Vector3, b: Vector3) -> bool:
+		return SoloSim.terrain_has_los(grid, Vector2(a.x, a.z) / m, Vector2(b.x, b.z) / m)
+	var shooters := [Vector3(2 * m, 0, 0), Vector3(5 * m, 0, 0), Vector3(26 * m, 0, 0), Vector3(29 * m, 0, 0)]
+	var targets := [Vector3(2 * m, 0, 12 * m), Vector3(26 * m, 0, 12 * m)]
+	var pairs: Array = []
+	assert_int(SoloController.sighted_models(shooters, targets, 24.0 * m, los, pairs)).is_equal(2)
+	assert_array(pairs).contains_exactly([[shooters[2], targets[1]], [shooters[3], targets[1]]])
+	assert_int(SoloController.sighted_models(shooters, targets, 24.0 * m, los)).is_equal(2)
+	var open_pairs: Array = []
+	SoloController.sighted_models(shooters, targets, 24.0 * m, func(_a: Vector3, _b: Vector3) -> bool: return true, open_pairs)
+	assert_array(open_pairs.map(func(p: Array) -> Vector3: return p[1])) \
+		.contains_exactly([targets[0], targets[0], targets[1], targets[1]])
+	# The nearest target model is hidden from shooter 3: its pair is the one LOS cleared, not the nearest.
+	var picky := func(a: Vector3, b: Vector3) -> bool: return not (a == shooters[2] and b == targets[1])
+	var picked: Array = []
+	SoloController.sighted_models(shooters, targets, 30.0 * m, picky, picked)
+	assert_array(picked[2]).is_equal([shooters[2], targets[0]])
+
+
 func test_sighted_models_range_order_uses_horizontal_distance() -> void:
 	var m := 0.0254
 	var shooters := [Vector3.ZERO]

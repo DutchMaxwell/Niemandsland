@@ -22,7 +22,9 @@
 //! PRECISION. `spent`, `allowance`, every leg length and both fractions are
 //! GDScript `float` = f64; the points and `lerp`'s weight are f32.
 
-use super::cost::{cspace_blocked, legs_cost, segment_cost, Grid, StepOpts, Wall};
+use super::cost::{
+    cspace_blocked, ledge_cost, ledge_crossings, legs_cost, segment_cost, Grid, StepOpts, Wall, LEDGE_STOP_IN,
+};
 use super::geom2::{add, distance_to, lerp, to_f32, V2};
 use super::{COHERENCY_BISECT_STEPS, EPS};
 
@@ -176,9 +178,28 @@ pub fn walk_offset_bent(
             }
             break;
         }
-        if fits(spent, leg) {
+        let climb = ledge_cost(a, b, opts.ledges);
+        if fits(spent, leg + climb) {
             out.push(b);
-            spent += leg;
+            spent += leg + climb;
+        } else if climb > 0.0 {
+            // Out of movement on a leg with ledges: stop where the budget ends, or just short of a ledge
+            // whose climb cannot be paid (a model may not end its move mid-climb, GF p.11).
+            let remaining = allowance - spent;
+            let mut paid = 0.0f64;
+            let mut stop_t = remaining / leg;
+            for (t, dy) in ledge_crossings(a, b, opts.ledges) {
+                if t * leg + paid + dy > remaining + EPS {
+                    stop_t = ((remaining - paid) / leg).min(t - LEDGE_STOP_IN / leg);
+                    break;
+                }
+                paid += dy;
+                stop_t = (remaining - paid) / leg;
+            }
+            if stop_t > EPS {
+                out.push(lerp(a, b, stop_t.min(1.0)));
+            }
+            break;
         } else {
             let frac = (allowance - spent) / leg;
             if frac > EPS {

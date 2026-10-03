@@ -4644,7 +4644,17 @@ fn impact_phase(
 ) -> i64 {
     let us = &statics[next.roster.profile[si]];
     let ut = &statics[next.roster.profile[ti]];
-    let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &ctx_of(ut, next, ti));
+    let mut cut_by = ctx_of(ut, next, ti);
+    if exact {
+        // Tray-exact tail — the table's Impact cut walks the host AND its living attached heroes
+        // (`counter_models_of`, solo_controller.gd:8465), each at its own per-model magnitude.
+        cut_by.counter_models = std::iter::once(ti).chain(next.attached[ti].iter().copied())
+            .filter(|&m| next.alive[m] > 0)
+            .map(|m| { let c = ctx_of(&statics[next.roster.profile[m]], next, m); c.counter_models * c.counter_impact_per_model.unwrap_or(1) })
+            .sum();
+        cut_by.counter_impact_per_model = Some(1);
+    }
+    let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &cut_by);
     let mut caused = 0;
     for (dice, ap) in pools {
         if dice <= 0 || next.alive[ti] <= 0 {
@@ -4822,9 +4832,16 @@ fn tray_charge(
     charge_from_in: f64,
     cover: Cover,
 ) -> Option<usize> {
-    if statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter && p.counter_strikes_first.unwrap_or(true)) {
+    let strikes_first =
+        |u: usize| statics[next.roster.profile[u]].melee.iter().any(|p| p.counter && p.counter_strikes_first.unwrap_or(true));
+    // The table asks the host AND its living attached heroes (`_solo_has_counter`, main.gd:7050);
+    // tray-exact reads the heroes too, the old read sees the host only.
+    let hero_counter = next.attached[ti].iter().any(|&h| next.alive[h] > 0 && strikes_first(h));
+    let epoch13 = rule_on(seams.rules_epoch, EPOCH_13_WHO_WINS);
+    if (!epoch13 && strikes_first(ti)) || (hero_counter && !seams.tray_exact) {
         // :8055-8059 — a Counter weapon runs a WHOLE extra strike phase before
-        // Impact, and strips Impact dice with it.
+        // Impact, and strips Impact dice with it: unported below 13, and for a
+        // joined hero's Counter without tray_exact.
         shot.mark("counter_strikes_first");
     }
     // Audit 2026-09-13 §2.2, strike-order half — main.gd:8268-8274: at the
@@ -4832,11 +4849,7 @@ fn tray_charge(
     // strike phase BEFORE Impact, counted into the defender's tally; only
     // the NON-counter weapons remain for the normal strike-back slot
     // (:8315). Below the epoch the core keeps its marker-only reading.
-    let counter_first = rule_on(seams.rules_epoch, EPOCH_13_WHO_WINS)
-        && statics[next.roster.profile[ti]]
-            .melee
-            .iter()
-            .any(|p| p.counter && p.counter_strikes_first.unwrap_or(true));
+    let counter_first = epoch13 && (strikes_first(ti) || (seams.tray_exact && hero_counter));
     let mut by_su = 0;
     let mut by_tu = 0;
     if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
