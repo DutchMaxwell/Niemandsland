@@ -39,6 +39,9 @@ signal movement_capped(consumed_inches: float, cap_inches: float, dry: bool, rea
 ## enemy base-contact snap or the other-unit 1" push (Phase 1 of _resolve_drop_separation). Lets
 ## the tutorial confirm the player felt the red 1" wall; carries whether a snap/push was applied.
 signal drop_separated(applied: bool)
+## Emitted on drop when free shelf pieces were put back to their drag start because their footprint reached
+## painted grid terrain (maintainer D2: refuse; the grid would win every rules lookup there).
+signal terrain_drop_refused(nodes: Array)
 signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 
 @export var drag_height: float = 0.5  # Drag height in meters
@@ -1345,6 +1348,9 @@ func _stop_dragging() -> void:
 		# units and snap a near-miss to enemy contact. Done BEFORE the batch / undo below
 		# so the resolved position flows the normal move path (undo + MP broadcast).
 		_resolve_drop_separation()
+		# Free shelf pieces may not land on painted grid terrain: back to their start BEFORE the batch / undo, so
+		# peers, the undo stack and the move log all see "did not move".
+		_refuse_drops_on_painted_terrain()
 
 		# Build batch of final positions for network broadcast
 		var drop_batch: Array = []
@@ -1819,6 +1825,35 @@ func _trail_owner_of(obj: Node3D) -> int:
 			if child is Node3D and child.has_meta("model_instance"):
 				return _trail_owner_of(child)
 	return 0
+
+
+## Maintainer D2 (04.10.): a free shelf piece whose footprint reaches a painted grid cell goes back to its drag start
+## (position + yaw) — the grid wins every rules lookup there (TerrainOverlay.get_terrain_at_world_position), so the
+## piece would silently lose its own type. The footprint is sampled on a 9x9 grid, corners included.
+func _refuse_drops_on_painted_terrain() -> void:
+	if terrain_overlay == null or terrain_overlay.grid_cells.is_empty():
+		return
+	var refused: Array = []
+	for obj in _selected_objects:
+		if not is_instance_valid(obj) or not obj.is_in_group("sandbox_terrain") or not _drag_start_positions.has(obj):
+			continue
+		var he: Vector2 = Vector2(obj.get("footprint_inches")) * 0.0254 * 0.5
+		var yaw := obj.global_rotation.y
+		var c := Vector2(obj.global_position.x, obj.global_position.z)
+		var ax := Vector2(cos(yaw), -sin(yaw)) * he.x
+		var az := Vector2(sin(yaw), cos(yaw)) * he.y
+		var hit := false
+		for i in 9:
+			for j in 9:
+				var p := c + ax * (i / 4.0 - 1.0) + az * (j / 4.0 - 1.0)
+				hit = hit or int(terrain_overlay.grid_cells.get(terrain_overlay.world_to_cell(Vector3(p.x, 0.0, p.y)), 0)) != 0
+		if hit:
+			obj.global_position = _drag_start_positions[obj]
+			obj.rotation.y = float(_drag_start_rotations.get(obj, obj.rotation.y))
+			print("[Terrain] drop refused: %s overlaps painted grid terrain, back to its start" % obj.get("prop_id"))
+			refused.append(obj)
+	if not refused.is_empty():
+		terrain_drop_refused.emit(refused)
 
 
 ## Records the just-finished drag as one undoable MoveAction. No-op if nothing
