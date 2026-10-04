@@ -288,6 +288,17 @@ pub fn reach_of(seams: Seams, state: &State, terrain: &Terrain) -> Option<ReachI
 /// knobs are turned into that tuning. NML-1073 M3-5 added `charge_gate` there:
 /// a caller that wires no charge-legality gate (tools/core_selfplay.gd) is
 /// offered charges the arena's gate refuses, and both menus have to agree on it.
+/// `Knobs::route_root` — the search's (playout, root) seams: off, the header's
+/// own seams and no root override (today's search); on, rigid playouts and a
+/// root on `movement`'s plain routing alone.
+pub fn route_root_seams(knobs: &Knobs, seams: Seams) -> (Seams, Option<Seams>) {
+    if !knobs.route_root {
+        return (seams, None);
+    }
+    let root = Seams { movement: true, move_rigid: false, plain_only: true, ..seams };
+    (Seams { movement: false, ..seams }, Some(root))
+}
+
 fn policy_of<'a>(
     statics: &'a [UnitStatic],
     terrain: &'a Terrain,
@@ -295,7 +306,9 @@ fn policy_of<'a>(
     reach: Option<&'a ReachIndex>,
     knobs: &Knobs,
 ) -> Policy<'a> {
+    let (seams, root) = route_root_seams(knobs, seams);
     let mut p = Policy::new(statics, terrain, seams);
+    p.root_seams = root;
     p.reach = reach;
     p.tuning = tuning_of(knobs);
     p
@@ -500,7 +513,7 @@ impl<'a> Search<'a> {
                 candidates_tuned(state, terrain, statics, i, sc, self.roll.policy.tuning)
             };
             for cand in menu {
-                let next = self.roll.policy.resolve(state, &cand)?;
+                let next = self.roll.policy.resolve_root(state, &cand)?;
                 let s =
                     score_with(&next, statics, player, &reply_threat(statics, &next, player), fit);
                 scored.push(ScoredRow {

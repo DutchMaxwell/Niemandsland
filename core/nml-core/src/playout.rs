@@ -70,6 +70,9 @@ pub struct Policy<'a> {
     /// unless `ActStatics.policy_mode == Order`; `Search::admissible`
     /// declines an `Order` act that reaches it without one.
     pub policy_net: Option<&'a crate::policy::Policy>,
+    /// `Knobs::route_root` — the seams of the ROOT move (`resolve_root`), or
+    /// `None`: the root resolves like every playout move (today's search).
+    pub root_seams: Option<Seams>,
 }
 
 impl<'a> Policy<'a> {
@@ -83,6 +86,7 @@ impl<'a> Policy<'a> {
             force_leaf: None,
             fit: None,
             policy_net: None,
+            root_seams: None,
         }
     }
 
@@ -259,6 +263,17 @@ impl<'a> Policy<'a> {
 
     /// `BattleSim.resolve` against the live board — the one entry point every
     /// imagined activation goes through.
+    /// The ROOT move — the menu's own resolve and a rollout's opening move — on
+    /// `root_seams` when `route_root` set them, else exactly `resolve`.
+    pub fn resolve_root(&self, state: &State, c: &Candidate) -> Result<State, Unsupported> {
+        match self.root_seams {
+            None => self.resolve(state, c),
+            Some(seams) => {
+                resolve_on_board_reach(self.statics, state, &c.action(), self.terrain, seams, self.reach)
+            }
+        }
+    }
+
     pub fn resolve(&self, state: &State, c: &Candidate) -> Result<State, Unsupported> {
         let a: Action = c.action();
         resolve_on_board_reach(self.statics, state, &a, self.terrain, self.seams, self.reach)

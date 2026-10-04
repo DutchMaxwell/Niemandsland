@@ -339,7 +339,7 @@ impl<'a> Rollout<'a> {
     ) -> Result<(Vec<State>, Stop), Unsupported> {
         let horizon_rounds = if horizon_rounds <= 0 { self.horizon() } else { horizon_rounds };
         let mut out: Vec<State> = Vec::new();
-        let mut cur = self.policy.resolve(state, first_action)?;
+        let mut cur = self.policy.resolve_root(state, first_action)?;
         // The OPENER is an activation like any other, so its own end is a
         // Coordinate trigger like any other. Skipping it here would make the
         // rule invisible to exactly the pick the search is pricing.
