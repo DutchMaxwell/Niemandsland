@@ -276,7 +276,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
 /// NML-1073 M4-7 — the tier-2 obstacle index for THIS planner call, built once
 /// from the root state and shared by every rollout underneath it. `None` unless
 /// the path seam is on, which is what keeps a seam-off search byte-identical.
-fn reach_of(seams: Seams, state: &State, terrain: &Terrain) -> Option<ReachIndex> {
+pub fn reach_of(seams: Seams, state: &State, terrain: &Terrain) -> Option<ReachIndex> {
     if !seams.path {
         return None;
     }

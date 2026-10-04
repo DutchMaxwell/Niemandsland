@@ -181,6 +181,10 @@ pub struct ShootResult {
     /// tally keeps it (`total_caused += w`, main.gd:3318) while the landing
     /// uses the group's post-regeneration count.
     pub deadly_tally: i64,
+    /// Tray-exact S7 — the volley's Takedown groups (`Seams::tray_exact` only): per Takedown weapon,
+    /// its unsaved wounds x max(Deadly, 1) AFTER the picked model's Regeneration (main.gd:4059-4067);
+    /// the drain lands each on ONE model, overkill lost. Their raw count rides `deadly_tally`.
+    pub takedown_groups: Vec<i64>,
 }
 
 impl ShootResult {
@@ -207,6 +211,7 @@ impl ShootResult {
         self.bane_rerolled += other.bane_rerolled;
         self.deadly_groups.extend(other.deadly_groups);
         self.deadly_tally += other.deadly_tally;
+        self.takedown_groups.extend(other.takedown_groups);
         for u in other.unported {
             self.mark(u);
         }
@@ -695,7 +700,7 @@ pub fn resolve_volley_with_tray(
     shred_boost_dice: bool,
     tray: &mut Tray,
 ) -> ShootResult {
-    resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, tray)
+    resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, &|_| false, tray)
 }
 
 // The leg split adds one gate-bool to the resolver's existing pack.
@@ -711,6 +716,8 @@ pub fn resolve_volley_leg(
     shred_alias_dice: bool,
     shred_boost_dice: bool,
     deadly_per_model: bool,
+    takedown_exact: bool,
+    takedown_cover: &dyn Fn(&[i64]) -> bool,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -1088,8 +1095,11 @@ pub fn resolve_volley_leg(
         if p.sergeant_attacks > 0 {
             hits += sixes(&faces).min(p.sergeant_attacks);
         }
+        // Tray-exact S8: a Takedown resolves as a unit of [1] — Blast has one model to spill onto
+        // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
+        let unit_of_one = takedown_exact && p.takedown;
         if hits > 0 && p.blast > 1 {
-            hits *= p.blast.clamp(1, def.models.max(1));
+            hits *= p.blast.clamp(1, if unit_of_one { 1 } else { def.models.max(1) });
         }
         if hits <= 0 {
             continue; // :3210 — no hits, no save batch
@@ -1132,10 +1142,14 @@ pub fn resolve_volley_leg(
         // at :329-333).
         base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded, def.def_floor());
         shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
+        // Tray-exact S8: a Takedown save reads its pick's OWN square, and the pick is the one the
+        // table makes for THIS profile, after the volley's earlier Takedown groups landed (it re-picks
+        // per profile, main.gd:4171) — the caller answers from the groups so far.
+        let td_own = unit_of_one && takedown_cover(&out.takedown_groups);
         let save_def = if p.blast > 1 || p.indirect || p.ignores_cover {
             base
         } else {
-            covered_defense(base, def.in_cover, def.def_floor())
+            covered_defense(base, if unit_of_one { td_own } else { def.in_cover }, def.def_floor())
         };
         // Wave 3 — rules-must-log: the unit-level Indirect names ("Indirect
         // when Shooting" / "Ignores Cover when Shooting", unit.rs build_for's
@@ -1270,7 +1284,13 @@ pub fn resolve_volley_leg(
         if p.deadly > 0 && !deadly_per_model {
             out.mark("deadly");
         }
-        if deadly_per_model && p.deadly > 0 {
+        if takedown_exact && p.takedown {
+            // Tray-exact S7 — the table's Takedown landing: w x max(Deadly, 1) BEFORE the
+            // picked model's own Regeneration roll, all of it for that one model (the drain).
+            let td = w * p.deadly.max(1);
+            out.takedown_groups.push(if ignores_regen { td } else { regen_batch(td, def, def_owner, tray, &mut out.rolls) });
+            out.deadly_tally += w;
+        } else if deadly_per_model && p.deadly > 0 {
             let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
             out.deadly_groups.push((post, p.deadly.max(1)));
             out.deadly_tally += w;
@@ -1544,8 +1564,8 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 /// FLAGGED per activation, never skipped in silence: `deadly` (the landing's
 /// shape is the `EPOCH_14_DEADLY_LANDING` gate's — per model from 14 on, the
 /// pooled multiply below, audit 2026-09-13 §2.1), `takedown`, `hazardous`,
-/// `surge_gates`, and `counter_strikes_first` (a defender Counter weapon runs a
-/// whole EXTRA strike phase before Impact, :8058).
+/// and `surge_gates`. (`counter_strikes_first` is the charge's, `sim::tray_charge`:
+/// a CHARGER's Counter weapon strikes in its normal slot, and was never a gap.)
 ///
 /// NOT PORTED, in the order they cost the most, and none of them has a field
 /// this port can flag them by:
@@ -1677,9 +1697,6 @@ pub fn resolve_melee_leg(
             let n = sh.attacks[k];
             if n <= 0 {
                 continue;
-            }
-            if p.counter && p.counter_strikes_first.unwrap_or(true) {
-                out.mark("counter_strikes_first");
             }
             // Wave 4 follow-up — "Takedown Strike" names itself once per
             // strike (rules-must-log, the table's own log line at

@@ -1367,9 +1367,15 @@ impl Core {
         }
         let statics = self.statics_for(&state.inner)?;
         let seams = self.seams();
+        // NML-1073 M4-7: the path seam's tier-2 index, built once from the root
+        // state for this whole search — what `plan::reach_of` hands every plan.rs
+        // entry. This binding builds its own `Policy` and never set it, so
+        // `seam_path` was silently inert in the Python search.
+        let index = nmlcore::plan::reach_of(seams, &state.inner, &self.terrain);
         let tuning = self.tuning();
         let mut policy = Policy::new(&statics, &self.terrain, seams);
         policy.tuning = tuning;
+        policy.reach = index.as_ref();
         // The net is this core's `AiMissionEval.fit_mode`, but WHETHER it is
         // switched on is the activation's own static. An act recorded with the
         // hand eval must replay on the hand eval even on a core that carries a

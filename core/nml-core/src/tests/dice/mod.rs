@@ -419,6 +419,7 @@ mod indirect_moved;
 mod guarded_over9;
 mod melee_impact_order;
 mod relentless_thrust;
+mod takedown_unit_of_one;
 mod morale_dice;
 mod morale_rating;
 mod rung_i_dice;
