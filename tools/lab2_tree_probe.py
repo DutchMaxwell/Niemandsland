@@ -235,11 +235,14 @@ ARMS = ("I", "L", "T")
 #: The 8 played streams of a position come from its `eval` list (decimal key seeds: `Rng(general)`, `Tray(tray)`),
 #: the SAME pair for every arm (common random numbers).
 STREAMS = 8
-ARM_KNOBS = {"I": {}, "L": {"search_mode": "tree", "tree_leaf": "blend"},
-             "T": {"search_mode": "tree", "tree_leaf": "terminal"},
+#: Every searching arm runs its allowance from the END of the root preselection (stage-0 amendment A3,
+#: `deadline_after_preselect`): `deadline_us` bounds the search alone, the preselection time rides each decision.
+A3 = {"deadline_after_preselect": True}
+ARM_KNOBS = {"I": {}, "L": {"search_mode": "tree", "tree_leaf": "blend", **A3},
+             "T": {"search_mode": "tree", "tree_leaf": "terminal", **A3},
              # P9 tray arms: configured here, run only by the tray probe (step 27), never by `endings`
-             "L_tray": {"search_mode": "tree", "tree_leaf": "blend", "tree_dice": "tray"},
-             "T_tray": {"search_mode": "tree", "tree_leaf": "terminal", "tree_dice": "tray"}}
+             "L_tray": {"search_mode": "tree", "tree_leaf": "blend", "tree_dice": "tray", **A3},
+             "T_tray": {"search_mode": "tree", "tree_leaf": "terminal", "tree_dice": "tray", **A3}}
 CONTRASTS = (("A_T", "T", "I"), ("A_L", "L", "I"), ("A_TL", "T", "L"))
 
 
@@ -409,21 +412,44 @@ def _endings_init(cfg):
             "allow": json.load(open(cfg["timing"])), "ctx": run_context(nm, cfg["prereg"], net)}
 
 
-def _endings_work(w, cid, pos):
-    """One complete position cluster: every arm x every replicate, every core under the position's own game header;
-    rows written, y per arm returned."""
+def endings_units(positions):
+    """The endings' scheduling units (stage-0 amendment A4.1, game-level): ONE unit per row = (position, arm,
+    replicate), so a heavy position no longer pins one worker for all its 24 rows. The rows, their seeds and their
+    headers are exactly those of the complete position cluster; `merge_endings` puts them back together."""
+    return {"%s/%s/r%d" % (p["slot"], arm, r): {"pos": p, "arms": (arm,), "reps": (r,)}
+            for p in positions for arm in ARMS for r in range(STREAMS)}
+
+
+def merge_endings(results):
+    """Unit results (any order) -> per position {"y": {arm: the STREAMS scores in replicate order}, cell, cluster}."""
+    by = {}
+    for res in results:
+        p = by.setdefault(res["slot"], {"y": {}, "invalid": [], "cell": res["cell"], "cluster": res["cluster"]})
+        for arm, ys in res["y"].items():
+            p["y"].setdefault(arm, {}).update(ys)
+        p["invalid"] += res["invalid"]
+    for p in by.values():
+        p["y"] = {arm: [ys[r] for r in range(STREAMS)] for arm, ys in p["y"].items()}
+    return by
+
+
+def _endings_work(w, cid, unit):
+    """One scheduling unit of a position (its arms x its replicates; A4.1: one row), every core under the position's
+    own game header; rows written, y per arm and replicate returned."""
+    pos = unit["pos"]
     src = source_of(pos)
     inc, inc_sha = w["core"]({}, src)
-    y, bad, hdr = {}, [], {"inc": inc_sha}
-    for arm in ARMS:
-        cand, hdr[arm] = w["core"](dict(ARM_KNOBS[arm], **({"deadline_us": w["allow"][pos["cell"]]["B_us"]} if arm != "I" else {})), src)
+    y, bad = {}, []
+    for arm in unit["arms"]:
+        cand, sha = w["core"](dict(ARM_KNOBS[arm], **({"deadline_us": w["allow"][pos["cell"]]["B_us"]} if arm != "I" else {})), src)
+        hdr = {"inc": inc_sha, arm: sha}
         rows = [ending_row(w["nm"], w["sp"], {"inc": inc, "cand": cand}, pos, arm, r, w["net"], dict(w["ctx"], hdr=hdr))
-                for r in range(STREAMS)]
+                for r in unit["reps"]]
         for row in rows:
             write_row(w["cfg"]["rows_dir"], row)
         bad += [row["row_id"] for row in rows if not row["valid"]]
-        y[arm] = [row["y"] for row in rows]
-    return {"y": y, "invalid": bad, "cell": pos["cell"], "cluster": pos["cluster"]}
+        y[arm] = {r: row["y"] for r, row in zip(unit["reps"], rows)}
+    return {"y": y, "invalid": bad, "cell": pos["cell"], "cluster": pos["cluster"], "slot": pos["slot"]}
 
 
 def write_pilot_json(path, reports):
@@ -450,17 +476,18 @@ def cmd_endings(a) -> int:
             return 2
     cfg = {"repo": a.repo, "header": a.header, "headers": a.headers, "timing": a.timing, "rows_dir": a.rows_dir,
            "prereg": a.prereg_sha256}
-    reports = lab2_pool.run_clusters({pos["slot"]: pos for pos in positions}, a.workers, _endings_init, _endings_work,
+    reports = lab2_pool.run_clusters(endings_units(positions), a.workers, _endings_init, _endings_work,
                                      (cfg,), key=a.scheduler_key)
     if a.pilot_json:
         write_pilot_json(a.pilot_json, reports)
-    invalid = [i for r in reports for i in r["result"]["invalid"]]
+    merged = merge_endings([r["result"] for r in reports])
+    invalid = sorted(i for p in merged.values() for i in p["invalid"])
     if invalid:
         print("[endings] INVALID rows (run continued): %s" % invalid)
         return 1
     gains = {}
-    for r in reports:
-        gains.setdefault(r["result"]["cell"], {})[r["result"]["cluster"]] = position_gains(r["result"]["y"])
+    for p in merged.values():
+        gains.setdefault(p["cell"], {})[p["cluster"]] = position_gains(p["y"])
     res = bootstrap_intervals(gains, a.resamples, a.seed)
     open(a.out, "w").write(canon({"gains": gains, "intervals": res}))
     print("[endings] " + canon(res))
@@ -500,13 +527,14 @@ def game_rows(blocks, arms=ALL_ARMS):
 def arm_kwargs(row, allowance_us):
     """L: the tree on the candidate seat (10/3 = the incumbent pair); L_tray: L through the true tray (P9 MODE_B's
     control, `--arms L_tray`); C: the one-ply 32/3 rung. All carry the allowance as `deadline_us`, measured from
-    the planner call."""
+    the end of the root preselection (A3 + its addendum: the same clock rule for every searching arm, C included)."""
+    a3 = {"deep_deadline_after_preselect": True}
     if row["arm"] in ("L", "L_tray"):
         tray = {"deep_tree_dice": "tray"} if row["arm"] == "L_tray" else {}
-        return dict(deep_top_k=10, deep_horizon=3, deep_search_mode="tree", deep_deadline_us=allowance_us, **tray)
+        return dict(deep_top_k=10, deep_horizon=3, deep_search_mode="tree", deep_deadline_us=allowance_us, **tray, **a3)
     if row["arm"] != "C":
         raise ValueError("no fullgames arm %r" % row["arm"])
-    return dict(deep_top_k=32, deep_horizon=3, deep_deadline_us=allowance_us)
+    return dict(deep_top_k=32, deep_horizon=3, deep_deadline_us=allowance_us, **a3)
 
 
 def board_scores(done):
@@ -585,8 +613,15 @@ def _fullgames_init(cfg):
             "knobs": json.load(open(cfg["knobs"])), "ctx": run_context(nm, cfg["prereg"], net)}
 
 
+def fullgames_units(rows):
+    """The full games' scheduling units (stage-0 amendment A4.1, game-level): ONE unit per game, so a heavy block no
+    longer pins one worker for all its games. The games and their seeds are exactly those of the block."""
+    return {r["row_id"]: [r] for r in rows}
+
+
 def _fullgames_work(w, cid, rows):
-    """One complete block cluster: every arm x dice x seat; a rerun resumes, never replays a valid game."""
+    """One scheduling unit (A4.1: one game) of a block: its arm x dice x seat rows; a rerun resumes, never replays a
+    valid game."""
     cfg, out = w["cfg"], []
     for row in rows:
         path = os.path.join(cfg["out_dir"], row["row_id"] + ".json")
@@ -602,11 +637,10 @@ def cmd_fullgames(a) -> int:
     import lab2_pool
     os.makedirs(a.out_dir, exist_ok=True)
     rows = game_rows(json.load(open(a.blocks)), tuple(a.arms.split(",")))
-    by_id, blocks = {r["row_id"]: r for r in rows}, {}
-    for r in rows:
-        blocks.setdefault(r["block"], []).append(r)
+    by_id = {r["row_id"]: r for r in rows}
     cfg = {"repo": a.repo, "timing": a.timing, "knobs": a.knobs, "bank": a.bank, "out_dir": a.out_dir, "prereg": a.prereg_sha256}
-    reports = lab2_pool.run_clusters(blocks, a.workers, _fullgames_init, _fullgames_work, (cfg,), key=a.scheduler_key)
+    reports = lab2_pool.run_clusters(fullgames_units(rows), a.workers, _fullgames_init, _fullgames_work, (cfg,),
+                                     key=a.scheduler_key)
     if a.pilot_json:
         write_pilot_json(a.pilot_json, reports)
     results = {x["row_id"]: x for r in reports for x in r["result"]}

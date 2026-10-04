@@ -58,8 +58,10 @@ def test_scheduler_order_is_the_sha256_order_and_independent_of_listing_order():
 
 
 def test_p1_rule_on_synthetic_peaks(tmp_path):
-    assert pool.p1_workers([300, 200])["workers"] == 4          # 4 x 300 = 1200 MiB <= 6 GiB
-    assert pool.p1_workers([512])["workers"] == 4               # 4 x 512 = 2048 <= 6144, and 512 is allowed
+    # amendment A4: up to 24 workers under a 12 GiB aggregate cap (24 x 512 MiB) on the pilot's dedicated box
+    assert pool.p1_workers([300, 200])["workers"] == 32         # A4.2: 32 x 300 = 9600 MiB <= 16 GiB
+    assert pool.p1_workers([512])["workers"] == 32              # 32 x 512 = 16384 <= 16384, and 512 is allowed
+    assert pool.p1_workers([512])["cap_mib"] == 16 * 1024
     assert pool.p1_workers([513])["workers"] == 0               # above the 512 MiB per-worker cap: no allowed N
     f = tmp_path / "pilot.json"
     f.write_text(json.dumps({"worker_hwm_mib": {"1": 100.0, "2": 480.0}}))
