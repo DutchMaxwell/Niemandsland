@@ -457,5 +457,30 @@ def test_endings_build_every_core_under_the_position_s_own_game_header(monkeypat
          "ctx": {}, "allow": {"c1": {"B_us": 7}}, "cfg": {"rows_dir": str(tmp_path)}}
     monkeypatch.setattr(lab, "ending_row", lambda *a, **k: {"row_id": "r", "valid": True, "y": 1.0})
     monkeypatch.setattr(lab, "write_row", lambda d, row: None)
-    lab._endings_work(w, "c1_k1", {"slot": "c1_k1", "candidate": "3", "cell": "c1", "cluster": "c1_k1"})
+    pos = {"slot": "c1_k1", "candidate": "3", "cell": "c1", "cluster": "c1_k1"}
+    lab._endings_work(w, "c1_k1", {"pos": pos, "arms": lab.ARMS, "reps": tuple(range(lab.STREAMS))})
     assert seen == ["c1_k1:3"] * (1 + len(lab.ARMS))   # the incumbent core and one core per arm
+
+
+def test_a41_one_unit_per_row_and_the_endings_merge_back_in_replicate_order(monkeypatch, tmp_path):
+    """Stage-0 amendment A4.1: endings and full games are scheduled per row, never per cluster, so a heavy position
+    or block no longer pins one worker; the endings come back together per position in replicate order, whatever
+    order the units finished in, and equal the complete-cluster result."""
+    pos = [{"slot": s, "candidate": "0", "cell": "c1", "cluster": s} for s in ("p1", "p2")]
+    units = lab.endings_units(pos)
+    assert len(units) == 2 * len(lab.ARMS) * lab.STREAMS
+    assert all(len(u["arms"]) == len(u["reps"]) == 1 for u in units.values())
+    w = {"core": lambda extra, source=None: ("core", "sha"), "nm": None, "sp": None, "net": None, "ctx": {},
+         "allow": {"c1": {"B_us": 7}}, "cfg": {"rows_dir": str(tmp_path)}}
+    monkeypatch.setattr(lab, "ending_row", lambda nm, sp, cores, p, arm, r, net, ctx: {
+        "row_id": "%s_%s_r%d" % (p["slot"], arm, r), "valid": (p["slot"], arm, r) != ("p2", "T", 5), "y": r / 10 + len(arm)})
+    monkeypatch.setattr(lab, "write_row", lambda d, row: None)
+    merged = lab.merge_endings([lab._endings_work(w, cid, u) for cid, u in sorted(units.items(), reverse=True)])
+    whole = {p["slot"]: lab._endings_work(w, p["slot"], {"pos": p, "arms": lab.ARMS, "reps": tuple(range(lab.STREAMS))})
+             for p in pos}
+    for s in ("p1", "p2"):
+        assert merged[s]["y"] == {arm: [whole[s]["y"][arm][r] for r in range(lab.STREAMS)] for arm in lab.ARMS}
+        assert (merged[s]["cell"], merged[s]["cluster"], merged[s]["invalid"]) == ("c1", s, whole[s]["invalid"])
+    assert merged["p2"]["invalid"] == ["p2_T_r5"]
+    rows = lab.game_rows(_blocks())
+    assert lab.fullgames_units(rows) == {r["row_id"]: [r] for r in rows} and len(rows) == 24

@@ -412,21 +412,44 @@ def _endings_init(cfg):
             "allow": json.load(open(cfg["timing"])), "ctx": run_context(nm, cfg["prereg"], net)}
 
 
-def _endings_work(w, cid, pos):
-    """One complete position cluster: every arm x every replicate, every core under the position's own game header;
-    rows written, y per arm returned."""
+def endings_units(positions):
+    """The endings' scheduling units (stage-0 amendment A4.1, game-level): ONE unit per row = (position, arm,
+    replicate), so a heavy position no longer pins one worker for all its 24 rows. The rows, their seeds and their
+    headers are exactly those of the complete position cluster; `merge_endings` puts them back together."""
+    return {"%s/%s/r%d" % (p["slot"], arm, r): {"pos": p, "arms": (arm,), "reps": (r,)}
+            for p in positions for arm in ARMS for r in range(STREAMS)}
+
+
+def merge_endings(results):
+    """Unit results (any order) -> per position {"y": {arm: the STREAMS scores in replicate order}, cell, cluster}."""
+    by = {}
+    for res in results:
+        p = by.setdefault(res["slot"], {"y": {}, "invalid": [], "cell": res["cell"], "cluster": res["cluster"]})
+        for arm, ys in res["y"].items():
+            p["y"].setdefault(arm, {}).update(ys)
+        p["invalid"] += res["invalid"]
+    for p in by.values():
+        p["y"] = {arm: [ys[r] for r in range(STREAMS)] for arm, ys in p["y"].items()}
+    return by
+
+
+def _endings_work(w, cid, unit):
+    """One scheduling unit of a position (its arms x its replicates; A4.1: one row), every core under the position's
+    own game header; rows written, y per arm and replicate returned."""
+    pos = unit["pos"]
     src = source_of(pos)
     inc, inc_sha = w["core"]({}, src)
-    y, bad, hdr = {}, [], {"inc": inc_sha}
-    for arm in ARMS:
-        cand, hdr[arm] = w["core"](dict(ARM_KNOBS[arm], **({"deadline_us": w["allow"][pos["cell"]]["B_us"]} if arm != "I" else {})), src)
+    y, bad = {}, []
+    for arm in unit["arms"]:
+        cand, sha = w["core"](dict(ARM_KNOBS[arm], **({"deadline_us": w["allow"][pos["cell"]]["B_us"]} if arm != "I" else {})), src)
+        hdr = {"inc": inc_sha, arm: sha}
         rows = [ending_row(w["nm"], w["sp"], {"inc": inc, "cand": cand}, pos, arm, r, w["net"], dict(w["ctx"], hdr=hdr))
-                for r in range(STREAMS)]
+                for r in unit["reps"]]
         for row in rows:
             write_row(w["cfg"]["rows_dir"], row)
         bad += [row["row_id"] for row in rows if not row["valid"]]
-        y[arm] = [row["y"] for row in rows]
-    return {"y": y, "invalid": bad, "cell": pos["cell"], "cluster": pos["cluster"]}
+        y[arm] = {r: row["y"] for r, row in zip(unit["reps"], rows)}
+    return {"y": y, "invalid": bad, "cell": pos["cell"], "cluster": pos["cluster"], "slot": pos["slot"]}
 
 
 def write_pilot_json(path, reports):
@@ -453,17 +476,18 @@ def cmd_endings(a) -> int:
             return 2
     cfg = {"repo": a.repo, "header": a.header, "headers": a.headers, "timing": a.timing, "rows_dir": a.rows_dir,
            "prereg": a.prereg_sha256}
-    reports = lab2_pool.run_clusters({pos["slot"]: pos for pos in positions}, a.workers, _endings_init, _endings_work,
+    reports = lab2_pool.run_clusters(endings_units(positions), a.workers, _endings_init, _endings_work,
                                      (cfg,), key=a.scheduler_key)
     if a.pilot_json:
         write_pilot_json(a.pilot_json, reports)
-    invalid = [i for r in reports for i in r["result"]["invalid"]]
+    merged = merge_endings([r["result"] for r in reports])
+    invalid = sorted(i for p in merged.values() for i in p["invalid"])
     if invalid:
         print("[endings] INVALID rows (run continued): %s" % invalid)
         return 1
     gains = {}
-    for r in reports:
-        gains.setdefault(r["result"]["cell"], {})[r["result"]["cluster"]] = position_gains(r["result"]["y"])
+    for p in merged.values():
+        gains.setdefault(p["cell"], {})[p["cluster"]] = position_gains(p["y"])
     res = bootstrap_intervals(gains, a.resamples, a.seed)
     open(a.out, "w").write(canon({"gains": gains, "intervals": res}))
     print("[endings] " + canon(res))
@@ -589,8 +613,15 @@ def _fullgames_init(cfg):
             "knobs": json.load(open(cfg["knobs"])), "ctx": run_context(nm, cfg["prereg"], net)}
 
 
+def fullgames_units(rows):
+    """The full games' scheduling units (stage-0 amendment A4.1, game-level): ONE unit per game, so a heavy block no
+    longer pins one worker for all its games. The games and their seeds are exactly those of the block."""
+    return {r["row_id"]: [r] for r in rows}
+
+
 def _fullgames_work(w, cid, rows):
-    """One complete block cluster: every arm x dice x seat; a rerun resumes, never replays a valid game."""
+    """One scheduling unit (A4.1: one game) of a block: its arm x dice x seat rows; a rerun resumes, never replays a
+    valid game."""
     cfg, out = w["cfg"], []
     for row in rows:
         path = os.path.join(cfg["out_dir"], row["row_id"] + ".json")
@@ -606,11 +637,10 @@ def cmd_fullgames(a) -> int:
     import lab2_pool
     os.makedirs(a.out_dir, exist_ok=True)
     rows = game_rows(json.load(open(a.blocks)), tuple(a.arms.split(",")))
-    by_id, blocks = {r["row_id"]: r for r in rows}, {}
-    for r in rows:
-        blocks.setdefault(r["block"], []).append(r)
+    by_id = {r["row_id"]: r for r in rows}
     cfg = {"repo": a.repo, "timing": a.timing, "knobs": a.knobs, "bank": a.bank, "out_dir": a.out_dir, "prereg": a.prereg_sha256}
-    reports = lab2_pool.run_clusters(blocks, a.workers, _fullgames_init, _fullgames_work, (cfg,), key=a.scheduler_key)
+    reports = lab2_pool.run_clusters(fullgames_units(rows), a.workers, _fullgames_init, _fullgames_work, (cfg,),
+                                     key=a.scheduler_key)
     if a.pilot_json:
         write_pilot_json(a.pilot_json, reports)
     results = {x["row_id"]: x for r in reports for x in r["result"]}

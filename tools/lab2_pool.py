@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Workers, scheduler and the P1 rule of the stage-0 lab driver (tree plan step 25).
 
-`run_clusters` runs COMPLETE clusters (a position with all arms and replicates, a block with all arms, dice and
-seats) in sha256(scheduler key : cluster id) order, one cluster per task, one `init()` context (core + net) per
-worker process (spawn mode); a cluster never spans workers. Every task reports its worker pid and VmHWM.
+`run_clusters` runs scheduling UNITS in sha256(scheduler key : unit id) order, one unit per task, one `init()` context
+(core + net) per worker process (spawn mode); a unit never spans workers. The caller chooses the unit: since stage-0
+amendment A4.1 the endings, the full games and the P9 rows schedule ONE row/game per unit (a complete cluster pinned
+one worker to its heaviest position or block); the source keeps one slot per unit (its candidates run in order until
+the first eligible). Every task reports its worker pid and VmHWM.
 `p1_workers` is prereg P1 as amendment A4 widened it for the pilot's dedicated >= 32-vCPU box: the highest N in 1..24 with
 N x max worker VmHWM <= 12 GiB (24 x 512 MiB) and max <= 512 MiB (was 1..4 and 6 GiB on the laptop).
 Run:  python3 tools/lab2_pool.py p1 --rss worker_hwms.json
