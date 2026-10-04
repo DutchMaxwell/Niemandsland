@@ -6,8 +6,8 @@ paired difference); B: block gains b_LI = b_L - 0.5, b_LC = b_L - b_C (mean of a
 and cell s_c^2 is the variance over the cell's two pilot clusters; V = sum_c (1/12)^2 s_c^2 / n_c (n_c = 40 for A, 105 in
 c1/c2 and 104 elsewhere for B), MDE = 100 (z.995 + z.80) sqrt(F V), F = 12 / chi2(0.10, 12). Bars: A <= 3 each, B_LI <= 2,
 B_LC reported only. Missing / invalid rows or a failed validation -> PILOT_STOP and every flag withheld.
-Deadline gate: every decision that had an allowance has a finite elapsed time. RSS gate: workers x max VmHWM <= 6 GiB and
-max VmHWM <= 512 MiB. All contrasts at zero variance pass only with `red_sensitive` (the RED fixtures showed arm sensitivity).
+Deadline gate: every decision that had an allowance has a finite elapsed time. RSS gate: workers x max VmHWM <= the P1 cap
+(12 GiB under amendment A4, lab2_pool.CAP_MIB) and max VmHWM <= 512 MiB. All contrasts at zero variance pass only with `red_sensitive` (the RED fixtures showed arm sensitivity).
 """
 import json
 import math
@@ -18,6 +18,7 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 import lab2_tree_probe as lab  # noqa: E402
+import lab2_pool as pool  # noqa: E402
 import lab2_validate as val  # noqa: E402
 
 CELLS = ["c%d" % i for i in range(1, 13)]
@@ -74,7 +75,7 @@ def part1(rows, validation_ok, red_sensitive=False, workers=1):
     hwm = max([r.get("rss_hwm_mib") or 0 for r in rows] or [0])
     late = [d for r in rows for d in r.get("decisions") or () if d.get("allocated_us") is not None and not val._finite(d.get("elapsed_us"))]
     flags = {"rows_complete": not problems, "validated": bool(validation_ok), "deadlines": not late,
-             "rss": workers * hwm <= 6144 and hwm <= 512,
+             "rss": workers * hwm <= pool.CAP_MIB and hwm <= pool.PER_WORKER_MIB,
              "zero_variance_shows_sensitivity": red_sensitive or any(s2 for v in var.values() for s2 in v.values() if s2),
              **{"mde_" + k: k in mdes and mdes[k] <= bar for k, bar in BARS.items()}}
     flags = val.pass_flags(validation_ok and not problems, flags)
