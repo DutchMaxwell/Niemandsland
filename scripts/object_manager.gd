@@ -3274,6 +3274,8 @@ func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: 
 		solid.name = "SandboxSolid_%d" % _object_counter
 		solid.configure(prop_id, kind, spec["footprint"], spec.get("look", "plain"))
 		solid.set_meta("network_id", obj_network_id)
+		if spec.has("model"):
+			apply_solid_model(solid, spec["model"])   # not awaited: the bundled look shows until the GLB is cached
 		spawned = solid
 	else:
 		spawned = _build_sandbox_ruin(prop_id, kind, obj_network_id)
@@ -3323,6 +3325,30 @@ func _build_sandbox_ruin(prop_id: String, kind: int, obj_network_id: int) -> San
 	prop.configure(prop_id, kind, footprint, floors, biome_prefix)
 	prop.set_meta("network_id", obj_network_id)
 	return prop
+
+
+## Detailed GLBs of the shelf solids (catalogue key "model"), delivered like the hazard models: SHA-checked R2
+## download into the cache, parsed once, mipmaps rebuilt. Created on first use, one per ObjectManager.
+var _solid_models: HazardsLibrary = null
+
+
+func solid_models_library() -> HazardsLibrary:
+	if _solid_models == null:
+		_solid_models = HazardsLibrary.new()
+		_solid_models.name = "SolidModelsLibrary"
+		add_child(_solid_models)
+	return _solid_models
+
+
+## Swap a solid's bundled look for its detailed model once the GLB is cached and parses. Not in the manifest, download
+## failed, corrupt file or the piece deleted meanwhile -> the bundled look stays. Visual only: the rules never change.
+func apply_solid_model(solid: SandboxSolidProp, model: String) -> void:
+	var lib := solid_models_library()
+	if not lib.has_model(model) or not await lib.ensure_model(model):
+		return
+	var scene := lib.get_model_scene(model)
+	if scene != null and is_instance_valid(solid):
+		solid.use_model(scene.instantiate())
 
 
 ## Catalogue of placeable sandbox pieces for the shelf browser. EVERY biome lists the ruins +
