@@ -20,6 +20,11 @@ extends RefCounted
 ##   • Walls = Impassable (terrain_overlay.gd wall segments): a thin segment blocks a model's path. The sim's
 ##     wall layer mirrors terrain_overlay._last_wall_segments as a list of [Vector2 a, Vector2 b] pairs.
 ##   • Terrain grid: the same typed 3" cells as TerrainRules (CONTAINER = Impassable) — used by the A* rescue.
+##   • Ledges (GF p.11, heights B2): opts["ledges"] edges are climbed, not walled — a leg crossing one pays its
+##     dy_in (up and down alike), a model never ends mid-climb, ledges over 3" stay walls. The plan is 2D and
+##     coherency stays 1" in XZ even across a ledge: that is STRICTER than the book's 3" allowance on elevation
+##     (GF p.11), which is legal — the table never applies a rule more loosely than the book. Decision of record:
+##     PLAN_heights step 22; no code follows from it.
 
 const EPS := 0.0001
 const LEDGE_CLIMB_MAX_IN := 3.0             # GF p.11: pieces over 3" tall are impassable — such ledges stay walls
