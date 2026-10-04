@@ -657,6 +657,12 @@ pub struct Seams {
     /// replays the old slot order and flags byte-exact. Tests set it directly.
     #[serde(default)]
     pub tray_exact: bool,
+    /// Fantasy-table S2 — DORMANT: with it, the table-style sight sweep also reads
+    /// the header's freely placed shelf pieces as boxes (`sight::zones_of_with`), the
+    /// way `TerrainOverlay._sandbox_volumes` does. No header sets it: every corpus
+    /// and rollout reads painted cells only, as recorded. Tests set it.
+    #[serde(default)]
+    pub shelf_sight: bool,
 
     /// GF Advanced Rules v3.5.1 p.9 "Consolidation Moves" — `consolidate=
     /// "table"` in the header: after a melee that wipes one side, the survivor
