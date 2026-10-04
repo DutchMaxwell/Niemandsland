@@ -1024,7 +1024,11 @@ pub fn resolve_volley_leg(
             out.mark("strafing");
         }
         if p.takedown {
-            out.mark("takedown");
+            if takedown_exact {
+                out.log.push(takedown_pick_line(p, def_owner)); // tray-exact S10, main.gd:4171's pick line
+            } else {
+                out.mark("takedown");
+            }
             // Wave 4 (rules-wave4-renames): the UNIT-level name that stamped
             // the flag ("Takedown when Shooting") names itself here
             // (rules-must-log); a weapon's own Takedown tag carries no name
@@ -1151,6 +1155,12 @@ pub fn resolve_volley_leg(
         } else {
             covered_defense(base, if unit_of_one { td_own } else { def.in_cover }, def.def_floor())
         };
+        if unit_of_one {
+            // Tray-exact S10 — `_solo_log_takedown_context`: the save the pick really rolls, and why.
+            let why = if p.blast > 1 || p.indirect || p.ignores_cover { "cover ignored" }
+                else if td_own { "in cover of its own" } else { "no cover of its own" };
+            out.log.push(format!("Takedown ({}): the pick saves on {save_def}+ ({why})", p.name));
+        }
         // Wave 3 — rules-must-log: the unit-level Indirect names ("Indirect
         // when Shooting" / "Ignores Cover when Shooting", unit.rs build_for's
         // epoch-6 walk) stamp their skip with an `*_alias` marker, so the
@@ -1707,7 +1717,11 @@ pub fn resolve_melee_leg(
                     p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
             }
             if p.takedown {
-                out.mark("takedown");
+                if tray_exact {
+                    out.log.push(takedown_pick_line(p, def_owner)); // tray-exact S10, main.gd:7191
+                } else {
+                    out.mark("takedown");
+                }
             }
             if p.hazardous {
                 out.mark("hazardous");
@@ -2031,6 +2045,13 @@ pub fn impact_pools(att: &Ctx, def: &Ctx) -> [(i64, i64); 2] {
 ///
 /// FLAGGED: `guarded_over9` — the table raises the Impact save by 1 when the
 /// charge came from over 9" (:6309), a pre-charge gap this port never measured.
+/// Tray-exact S10 — `_solo_takedown_pick`'s line: the rule (its unit-level name, else Takedown), the
+/// weapon, and the unit of [1] it resolves as.
+fn takedown_pick_line(p: &ShootProfile, def_owner: &str) -> String {
+    let rule = if p.takedown_rule.is_empty() { "Takedown" } else { p.takedown_rule.as_str() };
+    format!("{rule} ({}): targets the most valuable model in {def_owner} — resolved as a unit of [1]", p.name)
+}
+
 pub fn resolve_impact_pool_with_tray(
     dice: i64,
     ap: i64,
