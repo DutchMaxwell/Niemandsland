@@ -3272,7 +3272,7 @@ func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: 
 		var spec: Dictionary = SANDBOX_SOLIDS.get(prop_id, SANDBOX_SOLIDS["blocker_6x3"])
 		var solid := SandboxSolidProp.new()
 		solid.name = "SandboxSolid_%d" % _object_counter
-		solid.configure(prop_id, kind, spec["footprint"])
+		solid.configure(prop_id, kind, spec["footprint"], spec.get("look", "plain"))
 		solid.set_meta("network_id", obj_network_id)
 		spawned = solid
 	else:
