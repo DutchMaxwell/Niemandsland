@@ -68,3 +68,23 @@ use super::*;
         assert_eq!(kit_ids(&st), vec![1, 0], "the Deadly pick follows the same order");
     }
 
+    /// Tray-exact S8: the Takedown re-pick's own square (`takedown_pick_cover_after`). Three models in
+    /// a line at x = 4" (forest) / 7" / 8" (open); the launcher (Tough 2) at 4" is picked first. Once a
+    /// group KILLS it, the next pick stands in the open; a group that only WOUNDS it moves the pick on
+    /// as well (a wounded body ranks first for removal, never last for the sniper). No board: the flag.
+    #[test]
+    fn the_takedown_re_pick_reads_the_next_picks_own_square() {
+        let board = forest_bar_board();
+        let mut st = four_unit_line();
+        st.positions[0] = vec![[4.0 * IN2M, 0.0, 0.0], [7.0 * IN2M, 0.0, 0.0], [8.0 * IN2M, 0.0, 0.0]];
+        (st.wounds[0], st.radii[0], st.alive[0]) = (vec![2, 1, 1], vec![0.016; 3], 3);
+        let k = |w: u16, x: i64| crate::state::Kit { weapons: vec![w], equipment: 0, wounds_max: x };
+        st.kits = vec![Rc::new(vec![k(1, 2), k(0, 1), k(0, 1)])];
+        let at = |groups: &[i64]| takedown_pick_cover_after(&st, 0, Cover::Board(&board), false, groups);
+        assert!(at(&[]), "the first pick, the launcher, stands in the forest");
+        assert!(!at(&[2]), "killed: the next pick stands in the open");
+        assert!(!at(&[1]), "wounded: the pick moves on as well");
+        assert!(at(&[0]), "a group that landed nothing changes nothing");
+        assert!(takedown_pick_cover_after(&st, 0, Cover::Recorded(None), true, &[2]), "no board: the unit flag");
+    }
+

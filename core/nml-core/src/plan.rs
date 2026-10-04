@@ -264,6 +264,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         moved_shoot: knobs.menu_wide || knobs.moved_shoot,
         dangerous_end_morale: knobs.dangerous_end_morale,
         tray_exact: false, // dormant until the tray-exact series' one epoch bump (io.rs)
+        plain_only: false, // dormant: only the search's root seams will set it (io.rs)
         consolidate: knobs.consolidate,
         cond_ap_dice: knobs.cond_ap_dice,
         versatile_reach: knobs.versatile_reach,
@@ -275,7 +276,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
 /// NML-1073 M4-7 — the tier-2 obstacle index for THIS planner call, built once
 /// from the root state and shared by every rollout underneath it. `None` unless
 /// the path seam is on, which is what keeps a seam-off search byte-identical.
-fn reach_of(seams: Seams, state: &State, terrain: &Terrain) -> Option<ReachIndex> {
+pub fn reach_of(seams: Seams, state: &State, terrain: &Terrain) -> Option<ReachIndex> {
     if !seams.path {
         return None;
     }
@@ -287,6 +288,17 @@ fn reach_of(seams: Seams, state: &State, terrain: &Terrain) -> Option<ReachIndex
 /// knobs are turned into that tuning. NML-1073 M3-5 added `charge_gate` there:
 /// a caller that wires no charge-legality gate (tools/core_selfplay.gd) is
 /// offered charges the arena's gate refuses, and both menus have to agree on it.
+/// `Knobs::route_root` — the search's (playout, root) seams: off, the header's
+/// own seams and no root override (today's search); on, rigid playouts and a
+/// root on `movement`'s plain routing alone.
+pub fn route_root_seams(knobs: &Knobs, seams: Seams) -> (Seams, Option<Seams>) {
+    if !knobs.route_root {
+        return (seams, None);
+    }
+    let root = Seams { movement: true, move_rigid: false, plain_only: true, ..seams };
+    (Seams { movement: false, ..seams }, Some(root))
+}
+
 fn policy_of<'a>(
     statics: &'a [UnitStatic],
     terrain: &'a Terrain,
@@ -294,7 +306,9 @@ fn policy_of<'a>(
     reach: Option<&'a ReachIndex>,
     knobs: &Knobs,
 ) -> Policy<'a> {
+    let (seams, root) = route_root_seams(knobs, seams);
     let mut p = Policy::new(statics, terrain, seams);
+    p.root_seams = root;
     p.reach = reach;
     p.tuning = tuning_of(knobs);
     p
@@ -499,7 +513,7 @@ impl<'a> Search<'a> {
                 candidates_tuned(state, terrain, statics, i, sc, self.roll.policy.tuning)
             };
             for cand in menu {
-                let next = self.roll.policy.resolve(state, &cand)?;
+                let next = self.roll.policy.resolve_root(state, &cand)?;
                 let s =
                     score_with(&next, statics, player, &reply_threat(statics, &next, player), fit);
                 scored.push(ScoredRow {
