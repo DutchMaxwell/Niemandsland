@@ -348,7 +348,7 @@ class TimingCore:
         return {"trace": {"tree": {"completed": 1, "deadline_hit": False}}}
 
 
-def _timing_run(monkeypatch, tmp_path, B_us=None, headers=None):
+def _timing_run(monkeypatch, tmp_path, B_us=None, headers=None, extra=()):
     import types
     core, hooked = TimingCore(), []
     net = types.SimpleNamespace(model_sha256="ab" * 32, hook=lambda side: (lambda leaves, _s=None: hooked.append(side) or []))
@@ -363,8 +363,17 @@ def _timing_run(monkeypatch, tmp_path, B_us=None, headers=None):
     out = str(tmp_path / "t.txt")
     rc = lab.main(["timing", "--states", str(tmp_path / "s.json"), "--header", str(tmp_path / "h.json"), "--statics", "{}",
                    "--per-cell", "2", "--hardware", "laptop-x", "--out", out]
-                  + (["--headers", str(tmp_path / "g.json")] if headers else []))
+                  + (["--headers", str(tmp_path / "g.json")] if headers else []) + list(extra))
     return rc, core, out
+
+
+def test_no_sweep_times_only_the_incumbent_and_keeps_the_same_allowance(monkeypatch, tmp_path):
+    rc, core, out = _timing_run(monkeypatch, tmp_path, B_us=900, extra=["--no-sweep"])
+    assert rc == 0 and core.calls and not [k for k, _ in core.calls if k.get("search_mode") == "tree"]
+    assert len(core.calls) == 2 * 4                         # 2 states x (1 warm-up + 3 timed incumbent calls)
+    js = json.load(open(out + ".json"))
+    assert js["c1"]["B_us"] == 900 and js["c1"]["tree"] == {} and js["_meta"]["sweep"] == "omitted (--no-sweep)"
+    assert "OMITTED" in open(out).read()
 
 
 def test_timing_prices_every_call_with_the_net_and_passes_the_allowance_as_deadline_us(monkeypatch, tmp_path):
