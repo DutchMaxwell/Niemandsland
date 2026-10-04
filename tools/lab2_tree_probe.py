@@ -202,7 +202,7 @@ def cmd_timing(a) -> int:
                                                   leaf_value_fn=net.hook(st["player"]), leaf_value_w=1.0)
         inc = [t for st in sts for t in measure(run(st, {}))]
         rows[cell] = {"incumbent_median_ms": statistics.median(inc), "B_us": allowance_us(inc), "tree": {}}
-        for b in BUDGETS:
+        for b in (() if a.no_sweep else BUDGETS):  # --no-sweep: the D-only diagnostic is omitted (prereg section 6)
             ex = {"search_mode": "tree", "tree_budget": b, "deadline_us": rows[cell]["B_us"]}  # from the planner call
             times, active, done, hit = [], 0, [], 0
             for st in sts:
@@ -216,14 +216,16 @@ def cmd_timing(a) -> int:
         report.append("- %s: incumbent median %.1f ms, B=%d us; tree %s" % (
             cell, rows[cell]["incumbent_median_ms"], rows[cell]["B_us"],
             {b: (round(v["median_ms"], 1), "ACTIVE" if v["tree_active"] else "INVALID: knob not live") for b, v in rows[cell]["tree"].items()}))
-    report.append("\nThe 32/64/128/256 tree_budget sweep is a D-ONLY DIAGNOSTIC, not configuration.")
+    report.append("\nThe 32/64/128/256 tree_budget sweep is a D-ONLY DIAGNOSTIC, not configuration." if not a.no_sweep else
+                  "\nThe D-only 32/64/128/256 tree_budget sweep was OMITTED (--no-sweep; prereg section 6 lets optional "
+                  "diagnostics be omitted before mandatory work).")
     report.append("peak RSS %.0f MiB" % peak_rss_mib())
     if a.block_variance:
         var = json.load(open(a.block_variance))
         report.append("projected MDE A %.2f pts, B %.2f pts" % (projected_mde(var["A"], 40), projected_mde(var["B"], 104)))
     open(a.out, "w").write("\n".join(report) + "\n")
     rows["_meta"] = {"hardware": a.hardware, "model_sha256": net.model_sha256,
-                     "sweep": "D-only diagnostic, not configuration"}
+                     "sweep": "omitted (--no-sweep)" if a.no_sweep else "D-only diagnostic, not configuration"}
     json.dump(rows, open(a.out + ".json", "w"), sort_keys=True)
     return 0
 
@@ -676,6 +678,7 @@ def main(argv) -> int:
     t.add_argument("--headers", default="", help="lab2_source's <transitions>.headers: each state's own game header")
     t.add_argument("--statics", default=None)
     t.add_argument("--per-cell", type=int, default=12)
+    t.add_argument("--no-sweep", action="store_true", help="omit the D-only 32/64/128/256 sweep: only the incumbent calls (B_h)")
     t.add_argument("--hardware", required=True, help="the hardware class label (m_h(c) is per class), stamped into the output")
     t.add_argument("--block-variance", default="", help='JSON {"A": {cell: s2}, "B": {cell: s2}}')
     t.add_argument("--repo", default=".")
