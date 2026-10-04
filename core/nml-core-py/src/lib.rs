@@ -725,8 +725,8 @@ impl Core {
             // NEW rule, so an absent key (every corpus recorded before it)
             // stays OFF.
             dangerous_end_morale: self.knobs.dangerous_end_morale,
-            // Tray-exact series: dormant until its one epoch bump (io.rs `Seams::tray_exact`).
-            tray_exact: false,
+            // Tray-exact series (io.rs `Seams::tray_exact`): on from its one epoch bump.
+            tray_exact: nmlcore::acts::rule_on(self.knobs.rules_epoch, nmlcore::acts::EPOCH_70_TRAY_EXACT),
             // Dormant: only the search's root seams will set it (io.rs `Seams::plain_only`).
             plain_only: false,
             // GF v3.5.1 p.9 — `consolidate="table"` in the header.

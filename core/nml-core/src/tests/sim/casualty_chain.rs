@@ -88,3 +88,25 @@ use super::*;
         assert!(takedown_pick_cover_after(&st, 0, Cover::Recorded(None), true, &[2]), "no board: the unit flag");
     }
 
+    /// EPOCH_70_TRAY_EXACT, the tray-exact series' one bump: `seams_of` (the planner, in-game too)
+    /// turns `Seams::tray_exact` on from 70 only. A record at EPOCH_69_HERO_FOLD replays the core's old
+    /// slot order (the launcher in slot 0 dies first); a fresh game at 70 plays the table's.
+    #[test]
+    fn epoch_70_turns_tray_exact_on_and_epoch_69_replays_the_old_order() {
+        let exact_at = |e: u32| crate::plan::seams_of(&crate::acts::Knobs { rules_epoch: e, ..Default::default() }).tray_exact;
+        let survivors = |e: u32| {
+            let mut st = four_unit_line();
+            let s = 0.0574; // 32 mm bases, 1-inch edge gaps
+            st.positions[0] = vec![[0.0, 0.0, 0.0], [s, 0.0, 0.0], [2.0 * s, 0.0, 0.0]];
+            (st.wounds[0], st.radii[0], st.alive[0]) = (vec![1, 1, 1], vec![0.016; 3], 3);
+            let k = |w: Vec<u16>| crate::state::Kit { weapons: w, equipment: 0, wounds_max: 1 };
+            st.kits = vec![Rc::new(vec![k(vec![1]), k(vec![0]), k(vec![0])])]; // 1 = the launcher
+            (st.positions[1], st.radii[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
+            crate::sim::land_wounds_with(&mut st, 0, 1, exact_at(e));
+            st.kits[0].iter().map(|k| k.weapons[0]).collect::<Vec<_>>()
+        };
+        assert_eq!(survivors(crate::acts::EPOCH_69_HERO_FOLD), vec![0, 0], "69: slot 0, the launcher, dies");
+        assert_eq!(survivors(crate::acts::EPOCH_70_TRAY_EXACT), vec![1, 0], "70: the end Rifle dies");
+        assert_eq!(crate::acts::CURRENT_RULES_EPOCH, crate::acts::EPOCH_70_TRAY_EXACT);
+    }
+

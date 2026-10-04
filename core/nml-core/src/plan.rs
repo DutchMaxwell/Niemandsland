@@ -263,7 +263,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         // per-seat A/B grants the permission alone to the resolving core.
         moved_shoot: knobs.menu_wide || knobs.moved_shoot,
         dangerous_end_morale: knobs.dangerous_end_morale,
-        tray_exact: false, // dormant until the tray-exact series' one epoch bump (io.rs)
+        tray_exact: crate::acts::rule_on(knobs.rules_epoch, crate::acts::EPOCH_70_TRAY_EXACT),
         plain_only: false, // dormant: only the search's root seams will set it (io.rs)
         consolidate: knobs.consolidate,
         cond_ap_dice: knobs.cond_ap_dice,
