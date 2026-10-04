@@ -487,6 +487,11 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# planner (_core_plan reads THIS header) predicted a game without it. No switch here: the
 			# constant `true`. A corpus recorded before the key still replays without the test.
 			"dangerous_end_morale": true,
+			# route_root (#1480): the live planner's search routes its ROOT advance/rush per model around
+			# terrain, the way this table walks it, and keeps the deeper playout moves rigid. The table always
+			# executes per model, so the constant `true`. Search-only: an absent key reads OFF (acts.rs), and a
+			# rigid executor must NOT stamp it (it measured -13.6 points there: the root plans a route nobody walks).
+			"route_root": true,
 			# NML-1073 M5 D1-B7: which RESOLVER produced this corpus row. The table has only
 			# one — every combat die goes through main._solo_tray_roll — so this side is the
 			# constant "table"; the fast trainer stamps the same key from its own `dice` knob
