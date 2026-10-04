@@ -191,6 +191,16 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 			_run_remote_save_attack()
 	elif action == "confirm_save":
 		ok = _confirm_save_prompt()
+	elif action == "vfx_burst":
+		# Combat effects in co-op: the resolving peer emits one cue of every kind through the production
+		# path (_vfx_emit); each peer must draw each exactly once (headless draws nothing, but counts).
+		ok = _require_role("host", action)
+		if ok:
+			var sid: int = _main._vfx_emit({"k": "seal", "at": Vector3.ZERO, "r": 0.3, "kind": "buff"})
+			_main._vfx_emit({"k": "seal_dim", "sid": sid})
+			_main._vfx_emit({"k": "volley", "f": 1, "pairs": [[Vector3.ZERO, Vector3(0, 0, 0.3)]]})
+			_main._vfx_emit({"k": "pip", "t": 1, "at": Vector3(0, 0.03, 0.3), "n": 1})
+			_main._vfx_emit({"k": "seal_end", "sid": sid, "o": 0})
 	elif action == "snapshot":
 		pass
 	elif action == "quit":
@@ -367,6 +377,7 @@ func _snapshot() -> Dictionary:
 		"remote_save_wounds": _remote_save_wounds,
 		"save_prompt_visible": false,
 		"battle_log_tail": [],
+		"vfx_cues": (_main._vfx_seen as Dictionary).size() if _main != null else 0,
 	}
 	if nm != null:
 		var slots: Array[int] = []

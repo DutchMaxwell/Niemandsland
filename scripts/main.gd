@@ -413,6 +413,10 @@ var spell_seal: SpellSeal = null  # VFX #3: the cast's glyph circle at the caste
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 var result_pips: ResultPips = null  # VFX #1: wound ticks / blood markers over the models (presentation only)
 var _vfx_saves_made := 0   # saves made by the save batches of the current _solo_resolve_saves (VFX #1 strip)
+var _vfx_seq := 0                       # VFX cue ids, per session
+var _vfx_session: int = Time.get_ticks_usec()   # tells this boot's cues from a previous one's (same peer id)
+var _vfx_seen := {}                     # "<peer>:<session>:<id>" of every cue drawn
+var _vfx_seals := {}                    # "<peer>:<session>:<seal id>" -> the live seal node
 var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat stage (solo)
 var volley_cue: VolleyCue = null  # VFX #2: tracers along the rule sight pairs (presentation only)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
@@ -4319,19 +4323,19 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 ## abstract), so they draw none — no line through a wall. A weapon carried by fewer models than can see
 ## (a special weapon) draws only as many tracers as it has bearers.
 func _vfx_volley(member: GameUnit, target: GameUnit, profile: Dictionary, pairs: Array, los_waived: bool) -> void:
-	if volley_cue == null or pairs.is_empty() or los_waived or SoloController.is_aircraft(target):
+	if pairs.is_empty() or los_waived or SoloController.is_aircraft(target):
 		return
 	var up_from := Vector3.UP * _solo_unit_los_height_m(member)
 	var up_to := Vector3.UP * _solo_unit_los_height_m(target)
-	volley_cue.fire(pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to]),
-		VolleyCue.family_of(str(profile.get("name", ""))))
+	_vfx_emit({"k": "volley", "f": int(VolleyCue.family_of(str(profile.get("name", "")))),
+		"pairs": pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to])})
 
 
 ## VFX #2 for the player's own volley: _solo_attack_groups keeps no pairs, and a cosmetic key must never ride a
 ## rules profile (it would split dice batches), so the same read-only sight query runs once more at the same
 ## reach for this weapon's member. A weapon with fewer copies than seeing models draws one tracer per copy.
 func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary, los_waived: bool) -> void:
-	if member == null or los_waived or volley_cue == null:
+	if member == null or los_waived:
 		return
 	var pairs: Array = []
 	_solo_sighted_count(member, target, int(SoloController.effective_shoot_reach_in(float(profile.get("range", 0))
@@ -4441,7 +4445,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
 	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
 	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
-	var seal := _vfx_seal_begin(caster, entry, effect)
+	var seal_id := _vfx_seal_begin(caster, entry, effect)
 	if battle_log != null:
 		var token_note := "%d token%s" % [int(cast.get("threshold", 0)), ("" if int(cast.get("threshold", 0)) == 1 else "s")]
 		if boost > 0:
@@ -4457,16 +4461,16 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	if bool(cast.get("interference_open", false)) and not _solo_both_ai:
 		interference += await _solo_prompt_interference(caster, caster_unit, spell_name,
 			base_target, boost, _solo_cast_target_label(targets))
-	if interference > 0 and spell_seal != null:
-		spell_seal.interfere(seal)
+	if interference > 0 and seal_id > 0:
+		_vfx_emit({"k": "seal_dim", "sid": seal_id})
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
 	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
 		"Casting %s (%d+)" % [spell_name, target_num])
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
-	if spell_seal != null:
-		spell_seal.finish(seal, SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL)
+	if seal_id > 0:
+		_vfx_emit({"k": "seal_end", "sid": seal_id, "o": int(SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL)})
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: cast roll %d vs %d+ — %s" % [
 			spell_name, (int(faces[0]) if not faces.is_empty() else 0), target_num,
@@ -4499,15 +4503,17 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 
 ## VFX #3: the cast's seal forms at the caster, its edge on the spell range exactly as the purple preview ring
 ## draws it (RangeRingController: base edge + range). A Spell Conduit origin is not drawn (nor is it by the preview).
-func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary) -> MeshInstance3D:
-	if spell_seal == null or range_ring_controller == null or caster == null:
-		return null
+## Returns the seal's cue id for the dim / end cues (0 = none).
+func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary) -> int:
+	if range_ring_controller == null or caster == null:
+		return 0
 	for m in caster.get_alive_models():
 		var node := (m as ModelInstance).node
 		if node != null and is_instance_valid(node):
-			return spell_seal.begin(node.global_position, range_ring_controller.ring_outer_radius_for_props(
-				range_ring_controller._props_of(node), int(entry.get("range_in", 0))), str(effect.get("kind", "utility")))
-	return null
+			return _vfx_emit({"k": "seal", "at": node.global_position, "kind": str(effect.get("kind", "utility")),
+				"r": range_ring_controller.ring_outer_radius_for_props(range_ring_controller._props_of(node),
+					int(entry.get("range_in", 0)))})
+	return 0
 
 
 ## The damage-spell resolution against ONE target: fixed hits (no to-hit roll), the optional trigger
@@ -13105,18 +13111,61 @@ func _solo_wound_models(unit: GameUnit, wounds: int, pid: int, deferred_deaths =
 ## defender's centre — ivory dots for the hits that called for saves, blue rings above for the saves made.
 func _vfx_hit_strip(defender: GameUnit, hits: int, saves: int) -> void:
 	var c: Vector3 = solo_controller.unit_centre(defender) if solo_controller != null and defender != null else Vector3.INF
-	if result_pips == null or c == Vector3.INF or c == Vector3.ZERO:
+	if c == Vector3.INF or c == Vector3.ZERO:
 		return
 	var eye := c + Vector3.UP * (_solo_unit_los_height_m(defender) + 0.03)
-	result_pips.mark(ResultPips.Kind.HIT, eye, hits)
+	_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.HIT), "at": eye, "n": hits})
 	if saves > 0:
-		result_pips.mark(ResultPips.Kind.SAVE, eye + Vector3.UP * 0.016, saves)
+		_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.SAVE), "at": eye + Vector3.UP * 0.016, "n": saves})
 
 
-## VFX #1: one result mark over a model, from the allocation that just happened (headless spawns nothing).
+## VFX #1: one result mark over a model's LOS eye, from the allocation that just happened.
 func _vfx_pip(kind: ResultPips.Kind, mi: ModelInstance, count: int) -> void:
-	if result_pips != null:
-		result_pips.mark_model(kind, mi, count)
+	var eye := ResultPips.eye_of(mi)
+	if eye != Vector3.INF and count > 0:
+		_vfx_emit({"k": "pip", "t": int(kind), "at": eye, "n": count})
+
+
+## VFX in co-op: every cue is plain data (positions in metres) drawn by ONE path, _vfx_draw — here, and on
+## the other peers via the command channel — so both screens show the same cue exactly once. Sent whatever
+## the local setting says (each peer's own setting and quality decide there). Cues are never saved and the
+## relay keeps no backlog, so a load / rejoin / undo replays none.
+func _vfx_emit(cue: Dictionary) -> int:
+	_vfx_seq += 1
+	cue["id"] = _vfx_seq
+	cue["s"] = _vfx_session
+	_vfx_draw(cue, 0)
+	# A cosmetic cue must never take a resolution down: no live session in the tree, no send.
+	if network_manager != null and network_manager.is_inside_tree() and network_manager.is_multiplayer_active():
+		network_manager.send_command("vfx_cue", cue, 0)
+	return _vfx_seq
+
+
+## Draw one cue, local or a peer's: never rolls, never touches game state, never re-sends; a duplicate frame
+## or a malformed payload draws nothing.
+func _vfx_draw(cue: Dictionary, from_peer: int) -> void:
+	var key := "%d:%d:%d" % [from_peer, int(cue.get("s", 0)), int(cue.get("id", 0))]
+	if result_pips == null or _vfx_seen.has(key):
+		return
+	if _vfx_seen.size() > 512:
+		_vfx_seen.clear()
+	_vfx_seen[key] = true
+	var seal_key := "%d:%d:%d" % [from_peer, int(cue.get("s", 0)), int(cue.get("sid", cue.get("id", 0)))]
+	var at: Variant = cue.get("at")
+	match str(cue.get("k", "")):
+		"pip" when at is Vector3:
+			result_pips.mark(clampi(int(cue.get("t", 0)), 0, 3) as ResultPips.Kind, at, mini(int(cue.get("n", 0)), 12))
+		"volley" when cue.get("pairs") is Array:
+			volley_cue.fire((cue["pairs"] as Array).slice(0, 64).filter(func(p: Variant) -> bool:
+				return p is Array and p.size() == 2 and p[0] is Vector3 and p[1] is Vector3),
+				clampi(int(cue.get("f", 0)), 0, 4) as VolleyCue.Family)
+		"seal" when at is Vector3:
+			_vfx_seals[seal_key] = spell_seal.begin(at, clampf(float(cue.get("r", 0.0)), 0.0, 3.0), str(cue.get("kind", "")))
+		"seal_dim":
+			spell_seal.interfere(_vfx_seals.get(seal_key))
+		"seal_end":
+			spell_seal.finish(_vfx_seals.get(seal_key), clampi(int(cue.get("o", 0)), 0, 2) as SpellSeal.Outcome)
+			_vfx_seals.erase(seal_key)
 
 
 func _capture_bug_report() -> void:
@@ -16164,6 +16213,8 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_request_roll(payload, _from_peer)
 	elif type == "roll_result" and payload is Dictionary:
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
+	elif type == "vfx_cue" and payload is Dictionary:
+		_vfx_draw(payload, _from_peer)
 
 
 ## #673 co-op: the wire shape of the AI-slot designation sync — sorted player ids, one message
