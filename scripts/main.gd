@@ -2903,6 +2903,12 @@ func _ensure_solo_controller() -> void:
 				if n is SandboxTerrainProp and is_instance_valid(n):
 					w.append_array((n as SandboxTerrainProp).wall_segments_world())
 			return w
+		# Heights B2 (dormant SoloController.climb_seam, GF p.11): container edges are climbs, not walls, and the AI settles on the
+		# surface it climbs onto. The controller applies both only while the seam is on.
+		solo_controller.ledges_provider = func() -> Array:
+			return terrain_overlay.get_ledges_world() if terrain_overlay != null else []
+		solo_controller.surface_y_provider = func(p: Vector2) -> float:
+			return terrain_overlay.surface_y_at(p) if terrain_overlay != null else 0.0
 		solo_controller.objectives_provider = func() -> Array:
 			return terrain_overlay.get_objectives() if terrain_overlay != null else []
 		solo_controller.objective_owner_of = func(index: int) -> int:
