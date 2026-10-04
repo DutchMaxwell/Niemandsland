@@ -6,7 +6,7 @@ extends Control
 var map_layout: Control = null  # Reference to parent MapLayout
 
 ## Sandbox-terrain mirror: metres-per-inch and the per-kind footprint fill/border colours
-## (ObjectManager.SandboxPropKind: 0=RUIN, 1=FOREST, 2=HAZARD_CLUSTER).
+## (ObjectManager.SandboxPropKind: 0=RUIN, 1=FOREST, 2=HAZARD_CLUSTER, 3=BLOCKER).
 # Grid chrome: house-style tokens by name (terrain-type fills are data and stay in map_layout.gd)
 const GRID_BACKGROUND := HouseStyle.SHEET_FILL
 const CELL_BORDER := Color(HouseStyle.LINE, 0.5)
@@ -26,6 +26,7 @@ const SANDBOX_FILL_COLORS := {
 	0: Color(0.45, 0.55, 0.70, 0.45),  # ruin — slate blue
 	1: Color(0.25, 0.55, 0.28, 0.45),  # forest — green
 	2: Color(0.75, 0.30, 0.25, 0.45),  # hazard cluster — red
+	3: Color(0.6, 0.4, 0.2, 0.45),     # solid (CONTAINER rules) — map_layout.gd's container brown
 }
 const SANDBOX_BORDER_COLOR := Color(HouseStyle.INK, 0.85)
 
