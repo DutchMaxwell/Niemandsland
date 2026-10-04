@@ -17985,6 +17985,45 @@ func _on_units_dropped(moves: Array) -> void:
 		var unit := UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)
 		if unit != null:
 			unit.unit_properties["moved_round"] = opr_army_manager.current_round
+			await _resolve_skirmish_drop(mv, unit)
+
+
+## Human drops use the same surface truth, tray, casualties and activation flow as combat.
+func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
+	if not CoherencyChecker.is_skirmish_system(unit) or object_manager == null:
+		return
+	var node: Node3D = mv.node
+	var model := unit.get_model_for_node(node)
+	if model == null or not model.is_alive:
+		return
+	for drop in JumpRules.drops(mv.get("path", PackedVector2Array()), object_manager._surface_fn(), mv.get("from_raw", node.position).y):
+		var page := "GFF p.14" if unit.unit_properties.game_system == "gff" else "AoFS p.15"
+		if JumpRules.drop_kind(drop.dy_in) == JumpRules.DropKind.IMPASSABLE:
+			_log_rule_event(BattleLog.Category.MOVEMENT, "%s: drop over 6\", impassable (%s)" % [unit.get_name(), page])
+			return
+		while _solo_tray_busy:
+			await get_tree().process_frame
+		var target := JumpRules.jump_target(model.has_special_rule("Strider") or unit.has_special_rule("Strider"), model.has_special_rule("Flying") or unit.has_special_rule("Flying"))
+		var faces: Array = [] if target == 0 else await _solo_tray_roll(JumpRules.jump_dice(drop.dy_in), target, _solo_owner_label(unit), "jump", "Jump (%s)" % page)
+		var fell := faces.any(func(face): return int(face) < target)
+		_log_rule_event(BattleLog.Category.MOVEMENT, "%s jumps %.1f\": %s (%s)" % [unit.get_name(), drop.dy_in, "falls" if fell else "passed", page])
+		if not fell:
+			continue
+		if node.has_meta("drop_tween"):
+			(node.get_meta("drop_tween") as Tween).kill()
+		node.global_position = drop.foot
+		if network_manager != null and node.has_meta("network_id"):
+			network_manager.broadcast_move(node.get_meta("network_id"), node.global_position)
+		var ap := JumpRules.fall_hit_ap(drop.dy_in)
+		_log_rule_event(BattleLog.Category.COMBAT, "%s falls: %s; activation ends (%s)" % [unit.get_name(), "model killed" if unit.get_alive_count() > 1 else "1 hit AP(%d)" % ap, page])
+		if unit.get_alive_count() > 1:
+			model.apply_damage(model.wounds_current)
+			await _solo_remove_dead_models(unit, [model], int(unit.unit_properties.get("player_id", 1)))
+		else:
+			var saves := await _solo_tray_roll(1, AiCombatMath.save_target(unit.get_defense(), ap), _solo_owner_label(unit), "save", "Fall AP(%d) (%s)" % [ap, page])
+			await _solo_land_wounds(unit, AiCombatMath.wounds(1, saves, unit.get_defense(), ap), 0)
+		await _solo_complete_human_attack(unit)
+		return
 
 
 ## Check coherency for all currently selected units
