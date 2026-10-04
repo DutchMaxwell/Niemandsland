@@ -727,6 +727,8 @@ impl Core {
             dangerous_end_morale: self.knobs.dangerous_end_morale,
             // Tray-exact series: dormant until its one epoch bump (io.rs `Seams::tray_exact`).
             tray_exact: false,
+            // Dormant: only the search's root seams will set it (io.rs `Seams::plain_only`).
+            plain_only: false,
             // GF v3.5.1 p.9 — `consolidate="table"` in the header.
             consolidate: self.knobs.consolidate,
             // Rung I (DEFECT_LEDGER row 31) — `cond_ap_dice` in the header.
@@ -1365,9 +1367,17 @@ impl Core {
         }
         let statics = self.statics_for(&state.inner)?;
         let seams = self.seams();
+        // NML-1073 M4-7: the path seam's tier-2 index, built once from the root
+        // state for this whole search — what `plan::reach_of` hands every plan.rs
+        // entry. This binding builds its own `Policy` and never set it, so
+        // `seam_path` was silently inert in the Python search.
+        let index = nmlcore::plan::reach_of(seams, &state.inner, &self.terrain);
         let tuning = self.tuning();
+        let (seams, root) = nmlcore::plan::route_root_seams(&self.knobs, seams);
         let mut policy = Policy::new(&statics, &self.terrain, seams);
         policy.tuning = tuning;
+        policy.reach = index.as_ref();
+        policy.root_seams = root;
         // The net is this core's `AiMissionEval.fit_mode`, but WHETHER it is
         // switched on is the activation's own static. An act recorded with the
         // hand eval must replay on the hand eval even on a core that carries a

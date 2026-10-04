@@ -169,6 +169,14 @@ pub struct Knobs {
     /// Absent from every corpus, so the default is OFF.
     #[serde(default)]
     pub move_rigid: bool,
+    /// The search routes its ROOT moves — the menu's own resolve and every
+    /// rollout's opening move — per model on the plain ADVANCE/RUSH arm
+    /// (`Seams::plain_only`) and plays every deeper playout move rigid, whatever
+    /// `movement` says: the measured cheap form of table thinking. A SEARCH knob:
+    /// resolves outside the search keep the header's own seams. Absent from every
+    /// corpus, so the default is OFF and every search is byte-identical.
+    #[serde(default)]
+    pub route_root: bool,
     /// NML-1073 M5 D1-B8 — the p.12 DANGEROUS-terrain test. NOT a feature knob:
     /// the test is part of `dice="table"` and defaults ON, exactly the way
     /// `charge_gate` defaults ON. It exists so a gate can switch it OFF and prove
@@ -1399,6 +1407,7 @@ impl Default for Knobs {
             menu_wide: false,
             moved_shoot: false,
             move_rigid: false,
+            route_root: false,
             dangerous: true,
             engage_fold: false,
             dangerous_end_morale: false,
