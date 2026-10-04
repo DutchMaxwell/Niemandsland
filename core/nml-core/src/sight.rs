@@ -855,4 +855,28 @@ mod tests {
         assert!(has_los(&west, &inside, false, &ruin, &[]));
         assert!(!has_los(&west, &east, false, &ruin, &[]));
     }
+
+    /// The table's own verdicts on 1,000 free shelf pieces (tools/shelf_sight_parity.gd, pinned to
+    /// `VolumetricLos.has_los` by test/shelf_sight_parity_test.gd): the core agrees on every one.
+    #[test]
+    fn free_shelf_piece_sight_matches_the_table_on_1000_cases() {
+        let fx: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../test/fixtures/shelf_sight_parity/cases.json"
+        ))
+        .unwrap();
+        let f = |v: &serde_json::Value| v.as_f64().unwrap();
+        let pair = |v: &serde_json::Value| [f(&v[0]), f(&v[1])];
+        let cy = |d: &serde_json::Value| Cyl { c: pair(&d["c"]), r: f(&d["r"]), y0: f(&d["y0"]), y1: f(&d["y1"]) };
+        let cases = fx["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 1000);
+        let wrong: Vec<usize> = (0..cases.len())
+            .filter(|&i| {
+                let c = &cases[i];
+                let solid = c["solid"].as_bool().unwrap();
+                let z = [Zone::shelf_box(pair(&c["c"]), pair(&c["he"]), f(&c["yaw"]), 0.0, f(&c["y1"]), solid)];
+                has_los(&cy(&c["from"]), &cy(&c["to"]), false, &z, &[]) != c["los"].as_bool().unwrap()
+            })
+            .collect();
+        assert!(wrong.is_empty(), "{} of 1000 disagree, first {:?}", wrong.len(), &wrong[..wrong.len().min(10)]);
+    }
 }

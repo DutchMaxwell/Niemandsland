@@ -69,7 +69,11 @@ pub fn ledge_crossings(a: V2, b: V2, ledges: &[Ledge]) -> Vec<(f64, f64)> {
             [px * bn[0] + py * bn[1], py * bn[0] - px * bn[1]]
         };
         let (c, d) = (rot(l.a), rot(l.b));
-        if (c[1] < 0.0 && d[1] < 0.0) || (c[1] >= 0.0 && d[1] >= 0.0) {
+        // Godot 4: both ends strictly on one side (CMP_EPSILON band) or parallel (`is_equal_approx`) → none;
+        // a leg that only touches an edge's end still crosses it.
+        const CMP: f32 = 0.00001;
+        let approx = |x: f32, y: f32| x == y || (x - y).abs() < (CMP * x.abs()).max(CMP);
+        if (c[1] < -CMP && d[1] < -CMP) || (c[1] > CMP && d[1] > CMP) || approx(c[1], d[1]) {
             continue;
         }
         let abpos = d[0] + (c[0] - d[0]) * d[1] / (d[1] - c[1]);

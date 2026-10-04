@@ -5,6 +5,18 @@ extends GdUnitTestSuite
 const EDGE_X_M := 2.0 * 0.0254          # a container edge 2" ahead of the model
 const ROOF_M := 2.5 * 0.0254
 
+var _seam0 := false
+
+
+func before_test() -> void:
+	_seam0 = SoloController.climb_seam   # statics leak across gdUnit tests — restored in after_test
+	SoloController.climb_seam = true
+
+
+func after_test() -> void:
+	SoloController.climb_seam = _seam0
+
+
 func _setup(dy_in: float, wired: bool) -> Array:
 	var solo: SoloController = auto_free(SoloController.new())
 	add_child(solo)
@@ -40,6 +52,15 @@ func test_ai_advance_climbs_a_ledge_pays_it_and_settles_on_the_roof() -> void:
 func test_without_the_ledge_wiring_the_edge_stays_a_wall() -> void:
 	var s := _setup(2.5, false)
 	# Plan only (a blocked execute walks the boxed-in ladder, which needs an army manager).
+	var solo: SoloController = s[0]
+	var models: Array = solo._moving_models(s[1])
+	var out: Array = solo._plan_positions(s[1], models, solo._positions_of(models), Vector3(6.0 * 0.0254, 0, 0), false)
+	assert_float((out[0] as Vector3).x).is_less(EDGE_X_M)
+
+
+func test_with_the_seam_off_the_wired_edge_stays_a_wall() -> void:
+	SoloController.climb_seam = false
+	var s := _setup(2.5, true)
 	var solo: SoloController = s[0]
 	var models: Array = solo._moving_models(s[1])
 	var out: Array = solo._plan_positions(s[1], models, solo._positions_of(models), Vector3(6.0 * 0.0254, 0, 0), false)
