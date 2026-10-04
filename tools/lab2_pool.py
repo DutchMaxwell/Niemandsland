@@ -5,9 +5,9 @@
 (core + net) per worker process (spawn mode); a unit never spans workers. The caller chooses the unit: since stage-0
 amendment A4.1 the endings, the full games and the P9 rows schedule ONE row/game per unit (a complete cluster pinned
 one worker to its heaviest position or block); the source keeps one slot per unit (its candidates run in order until
-the first eligible). Every task reports its worker pid and VmHWM.
-`p1_workers` is prereg P1 as amendment A4 widened it for the pilot's dedicated >= 32-vCPU box: the highest N in 1..24 with
-N x max worker VmHWM <= 12 GiB (24 x 512 MiB) and max <= 512 MiB (was 1..4 and 6 GiB on the laptop).
+the first eligible) unless A4.2's --candidate-width runs a slot's candidates in parallel and keeps the serial output. Every task reports its worker pid and VmHWM.
+`p1_workers` is prereg P1 as amendment A4 widened it for the pilot's dedicated >= 32-vCPU box: the highest N in 1..32 with
+N x max worker VmHWM <= 16 GiB (32 x 512 MiB) and max <= 512 MiB (A4.2; A4 had 1..24 and 12 GiB, the laptop 1..4 and 6 GiB).
 Run:  python3 tools/lab2_pool.py p1 --rss worker_hwms.json
 """
 import argparse
@@ -21,7 +21,7 @@ from concurrent.futures import ProcessPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lab2_rows import vmhwm_mib  # noqa: E402
 
-CAP_MIB, PER_WORKER_MIB, MAX_WORKERS = 12 * 1024, 512, 24   # amendment A4 (was 6 GiB, 4 workers)
+CAP_MIB, PER_WORKER_MIB, MAX_WORKERS = 16 * 1024, 512, 32   # amendment A4.2 (A4: 12 GiB, 24; prereg: 6 GiB, 4)
 _CTX = {}
 
 
@@ -38,10 +38,11 @@ def _task(work, cid, payload):
     return {"id": cid, "pid": os.getpid(), "result": work(_CTX["ctx"], cid, payload), "hwm_mib": vmhwm_mib()}
 
 
-def run_clusters(clusters, workers, init, work, init_args=(), key=""):
+def run_clusters(clusters, workers, init, work, init_args=(), key="", ordered=False):
     """clusters {id: payload}; `init` / `work` are module-level callables (spawn pickles them by name). Returns
-    the task reports in schedule order, whatever order the workers finished in."""
-    order = schedule_order(list(clusters), key)
+    the task reports in schedule order, whatever order the workers finished in. `ordered`: submit in the dict's own
+    order instead of the hashed one (A4.2: candidate 0 of every source slot first)."""
+    order = list(clusters) if ordered else schedule_order(list(clusters), key)
     if workers <= 1:
         _init(init, init_args)
         return [_task(work, cid, clusters[cid]) for cid in order]

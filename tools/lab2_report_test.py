@@ -91,8 +91,8 @@ def test_rss_and_deadline_gates():
     assert rep.part1(big, True, workers=4)["flags"]["rss"] is False
     ok24 = a_rows() + b_rows()
     ok24[0]["rss_hwm_mib"] = 500.0
-    assert rep.part1(ok24, True, workers=24)["flags"]["rss"] is True     # A4: 24 x 500 = 12000 MiB <= 12 GiB
-    assert rep.part1(ok24, True, workers=25)["flags"]["rss"] is False    # 25 x 500 = 12500 MiB > 12 GiB
+    assert rep.part1(ok24, True, workers=32)["flags"]["rss"] is True     # A4.2: 32 x 500 = 16000 MiB <= 16 GiB
+    assert rep.part1(ok24, True, workers=33)["flags"]["rss"] is False    # 33 x 500 = 16500 MiB > 16 GiB
     late = a_rows() + b_rows()
     late[0]["decisions"] = [{"allocated_us": 10, "elapsed_us": float("nan"), "overshoot_us": 0}]
     assert rep.part1(late, True)["flags"]["deadlines"] is False
