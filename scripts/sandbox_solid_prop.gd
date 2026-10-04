@@ -26,9 +26,9 @@ const LOOKS := {
 		[-2.95, 2.95, 1.2, 2.4, -1.45, 1.45, "granite_top"], [-2.4, -1.4, 2.4, 2.5, -0.9, -0.1, "lichen"],
 		[0.3, 1.5, 2.4, 2.5, 0.2, 1.0, "lichen"], [1.8, 2.5, 2.4, 2.48, -1.1, -0.4, "tuft"]],
 }
-const COLOURS := {"stone": STONE_COLOR, "moss": Color(0.20, 0.25, 0.10), "ashlar": Color(0.36, 0.35, 0.32),
-	"coping": Color(0.31, 0.30, 0.28), "wood": Color(0.30, 0.20, 0.12), "grass": Color(0.30, 0.33, 0.14),
-	"granite": Color(0.30, 0.30, 0.31), "granite_top": Color(0.36, 0.36, 0.36), "lichen": Color(0.48, 0.48, 0.22),
+const COLOURS := {"stone": STONE_COLOR, "moss": Color(0.20, 0.25, 0.10), "ashlar": Color(0.29, 0.29, 0.305),
+	"coping": Color(0.23, 0.235, 0.25), "wood": Color(0.27, 0.18, 0.11), "grass": Color(0.27, 0.30, 0.13),
+	"granite": Color(0.31, 0.315, 0.33), "granite_top": Color(0.36, 0.365, 0.38), "lichen": Color(0.38, 0.40, 0.22),
 	"tuft": Color(0.33, 0.24, 0.14)}
 
 var prop_id: String = ""
