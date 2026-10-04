@@ -589,7 +589,8 @@ impl<'a> Search<'a> {
         sc: &mut Scratch,
         mut explore: Option<(f64, &mut GodotRng)>,
     ) -> Result<Pick, Unsupported> {
-        // `deadline_us` (0 = off) runs from HERE, the planner call, before PHASE 0.
+        // `deadline_us` (0 = off) runs from HERE, the planner call, before PHASE 0
+        // (`deadline_after_preselect` restarts it after PHASE 3, below).
         let t0 = std::time::Instant::now();
         let deadline = (self.roll.knobs.deadline_us > 0)
             .then(|| t0 + std::time::Duration::from_micros(self.roll.knobs.deadline_us as u64));
@@ -653,8 +654,16 @@ impl<'a> Search<'a> {
         if self.bend.preselect_delay_us > 0 {
             std::thread::sleep(std::time::Duration::from_micros(self.bend.preselect_delay_us));
         }
-        let preselect_us = (self.roll.knobs.deadline_after_preselect && deadline.is_some())
-            .then(|| t0.elapsed().as_micros() as u64);
+        // `deadline_after_preselect` (stage-0 amendment A3): the allowance restarts NOW and bounds the search
+        // alone; the preselection's own time rides the trace. Off = the call-start deadline above, unchanged.
+        let (deadline, preselect_us) = match deadline {
+            Some(_) if self.roll.knobs.deadline_after_preselect => {
+                let now = std::time::Instant::now();
+                (Some(now + std::time::Duration::from_micros(self.roll.knobs.deadline_us as u64)),
+                 Some(now.duration_since(t0).as_micros() as u64))
+            }
+            d => (d, None),
+        };
         // Tree search knob — absent from every recorded corpus and shipped
         // game, so nothing below moves unless a header asked for the tree.
         if self.roll.knobs.search_mode == SearchMode::Tree {

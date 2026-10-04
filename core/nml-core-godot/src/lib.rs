@@ -1264,6 +1264,10 @@ fn pick_out(p: &Pick, root: &plain::Captured, sig: i64) -> VarDictionary {
         if let Some(f) = t.fallback {
             d.set("fallback", f);
         }
+        // `deadline_after_preselect`: the key rides ONLY a pick where that knob ran the clock.
+        if let Some(us) = t.preselect_us {
+            d.set("preselect_us", us as i64);
+        }
         out.set("tree", &d);
     }
     // `deadline_us`: the key rides ONLY a pool pick where the knob was set.
@@ -1274,6 +1278,9 @@ fn pick_out(p: &Pick, root: &plain::Captured, sig: i64) -> VarDictionary {
         d.set("elapsed_us", dl.elapsed_us as i64);
         if let Some(f) = dl.fallback {
             d.set("fallback", f);
+        }
+        if let Some(us) = dl.preselect_us {
+            d.set("preselect_us", us as i64);
         }
         out.set("deadline", &d);
     }
