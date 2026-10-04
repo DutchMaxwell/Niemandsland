@@ -3162,10 +3162,10 @@ const SANDBOX_GROUPS: Dictionary = {
 	"minefield": {"kind": SandboxPropKind.HAZARD_CLUSTER, "footprint": Vector2(6, 4), "label": "Dangerous Terrain"},
 }
 
-## Solid pieces: the grid Blocker's 6x3x2.5" profile placed freely (SandboxSolidProp, CONTAINER rules). Spawnable
-## (saves, MP), not offered on the shelf yet. Keyed by prop_id -> {kind, footprint}.
+## Solid pieces: the grid Blocker's 6x3x2.5" profile placed freely (SandboxSolidProp, CONTAINER rules), offered on
+## every biome's shelf under one unprefixed id (the look is plain stone). Keyed by prop_id -> {kind, footprint, label}.
 const SANDBOX_SOLIDS: Dictionary = {
-	"blocker_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3)},
+	"blocker_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3), "label": "Building (6×3)"},
 }
 
 ## Biome prefixes a sandbox FOREST or HAZARD field can carry, encoded INTO its prop_id (e.g.
@@ -3308,6 +3308,8 @@ func sandbox_catalog(biome_prefix: String = "") -> Array:
 		# save/broadcast round-trip the biome via the existing prop_id field.
 		var entry_id: String = (biome_prefix + id) if (kind == SandboxPropKind.FOREST or kind == SandboxPropKind.HAZARD_CLUSTER) else id
 		entries.append({"prop_id": entry_id, "kind": kind, "label": spec.get("label", id)})
+	for id in SANDBOX_SOLIDS.keys():
+		entries.append({"prop_id": id, "kind": SANDBOX_SOLIDS[id]["kind"], "label": SANDBOX_SOLIDS[id]["label"]})
 	return entries
 
 
