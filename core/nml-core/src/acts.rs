@@ -250,6 +250,13 @@ pub struct Knobs {
     /// (0 = off). Parsed and carried; no search reads it yet.
     #[serde(default)]
     pub deadline_us: i64,
+    /// Lab knob (stage-0 amendment A3): `deadline_us` counts from the END of the
+    /// root preselection (prefilter, sort, pool) instead of the planner call, so
+    /// the allowance bounds the search alone; the preselection's own time rides
+    /// the pick's trace as `preselect_us`. Off (default) = the call-start clock,
+    /// byte-identical; absent from every shipped header.
+    #[serde(default)]
+    pub deadline_after_preselect: bool,
     /// Tree search knob: the widening rate. 0.0 (default) opens every child of
     /// a node before the search descends; > 0 keeps at most
     /// ceil(max(n, 1) ^ tree_widen) children of an n-visit node open.
@@ -1432,6 +1439,7 @@ impl Default for Knobs {
             tree_wall_ms: 0,
             pool_wall_ms: 0,
             deadline_us: 0,
+            deadline_after_preselect: false,
             tree_widen: 0.0,
             melee_reach: MeleeReach::All,
             consolidate: false,

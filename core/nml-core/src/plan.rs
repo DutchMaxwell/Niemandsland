@@ -158,6 +158,9 @@ pub struct DeadlineTrace {
     pub fallback: Option<&'static str>,
     /// Microseconds from the planner call to the pick, bookkeeping included.
     pub elapsed_us: u64,
+    /// `deadline_after_preselect`: microseconds the root preselection took (the
+    /// planner call to the clock start) — `Some` ONLY when that knob is on.
+    pub preselect_us: Option<u64>,
 }
 
 /// NML-1165 R4 (DESIGN_value_net §7) — the LEAF VALUE seam. `Search::run`
@@ -197,6 +200,10 @@ pub struct PlanBend {
     /// switches the wall clock off — how a replay reproduces a deadline-cut
     /// record from its stamped `completed`, no clock needed.
     pub tree_budget: Option<i64>,
+    /// Sleeps this many microseconds right after the root preselection (0 =
+    /// never), so a red proof can make the preselection outlast an allowance
+    /// deterministically (`deadline_after_preselect`).
+    pub preselect_delay_us: u64,
 }
 
 impl Default for PlanBend {
@@ -208,6 +215,7 @@ impl Default for PlanBend {
             top_k_first: false,
             arb: ArbBend::default(),
             tree_budget: None,
+            preselect_delay_us: 0,
         }
     }
 }
@@ -581,7 +589,8 @@ impl<'a> Search<'a> {
         sc: &mut Scratch,
         mut explore: Option<(f64, &mut GodotRng)>,
     ) -> Result<Pick, Unsupported> {
-        // `deadline_us` (0 = off) runs from HERE, the planner call, before PHASE 0.
+        // `deadline_us` (0 = off) runs from HERE, the planner call, before PHASE 0
+        // (`deadline_after_preselect` restarts it after PHASE 3, below).
         let t0 = std::time::Instant::now();
         let deadline = (self.roll.knobs.deadline_us > 0)
             .then(|| t0 + std::time::Duration::from_micros(self.roll.knobs.deadline_us as u64));
@@ -641,10 +650,24 @@ impl<'a> Search<'a> {
 
         // PHASE 3 — the pool.
         let (mut covered, mut pool) = build_pool(&scored, &order, top_k, self.bend);
+        // The root preselection (PHASES 0-3) ends HERE.
+        if self.bend.preselect_delay_us > 0 {
+            std::thread::sleep(std::time::Duration::from_micros(self.bend.preselect_delay_us));
+        }
+        // `deadline_after_preselect` (stage-0 amendment A3): the allowance restarts NOW and bounds the search
+        // alone; the preselection's own time rides the trace. Off = the call-start deadline above, unchanged.
+        let (deadline, preselect_us) = match deadline {
+            Some(_) if self.roll.knobs.deadline_after_preselect => {
+                let now = std::time::Instant::now();
+                (Some(now + std::time::Duration::from_micros(self.roll.knobs.deadline_us as u64)),
+                 Some(now.duration_since(t0).as_micros() as u64))
+            }
+            d => (d, None),
+        };
         // Tree search knob — absent from every recorded corpus and shipped
         // game, so nothing below moves unless a header asked for the tree.
         if self.roll.knobs.search_mode == SearchMode::Tree {
-            return self.tree_pick(state, player, base, &scored, &order, &pos_of, &pool, (t0, deadline), sc);
+            return self.tree_pick(state, player, base, &scored, &order, &pos_of, &pool, (t0, deadline, preselect_us), sc);
         }
 
         // PHASE 4 — exactly ONE rollout per pool candidate, in pool order.
@@ -675,10 +698,12 @@ impl<'a> Search<'a> {
             ends_of.push(self.roll.rollout_boundaries(state, &scored[i].cand, player, -1, sc)?);
         }
         if deadline.is_some() && ends_of.is_empty() {
-            return Ok(self.deadline_fallback(state, player, base, &scored, &order, "deadline_before_first_rollout", t0));
+            return Ok(self.deadline_fallback(state, player, base, &scored, &order, "deadline_before_first_rollout", t0,
+                                             preselect_us));
         }
         let cut = ends_of.len() < pool.len();
-        let deadline_trace = deadline.map(|_| DeadlineTrace { completed: ends_of.len(), cut, fallback: None, elapsed_us: 0 });
+        let deadline_trace =
+            deadline.map(|_| DeadlineTrace { completed: ends_of.len(), cut, fallback: None, elapsed_us: 0, preselect_us });
         if wall > 0 {
             pool_completed = Some((ends_of.len(), cut));
         }
@@ -825,7 +850,7 @@ impl<'a> Search<'a> {
     /// legal), valued at its prefilter score, with no rollout trace.
     #[allow(clippy::too_many_arguments)]
     fn deadline_fallback(&self, state: &State, player: i64, base: f64, scored: &[ScoredRow], order: &[usize],
-                         fallback: &'static str, t0: std::time::Instant) -> Pick {
+                         fallback: &'static str, t0: std::time::Instant, preselect_us: Option<u64>) -> Pick {
         let (top, hero_attach) = (order[0], self.roll.policy.seams.hero_attach);
         let unit_key = scored[top].unit_key.clone();
         Pick {
@@ -851,6 +876,7 @@ impl<'a> Search<'a> {
             tree: None,
             deadline: Some(DeadlineTrace {
                 completed: 0, cut: true, fallback: Some(fallback), elapsed_us: t0.elapsed().as_micros() as u64,
+                preselect_us,
             }),
         }
     }
@@ -865,11 +891,12 @@ impl<'a> Search<'a> {
     /// seeded by `sig` (0 without one).
     #[allow(clippy::too_many_arguments)]
     fn tree_pick(&self, state: &State, player: i64, base: f64, scored: &[ScoredRow], order: &[usize],
-                 pos_of: &[usize], pool: &[usize], clock: (std::time::Instant, Option<std::time::Instant>),
+                 pos_of: &[usize], pool: &[usize],
+                 clock: (std::time::Instant, Option<std::time::Instant>, Option<u64>),
                  sc: &mut Scratch) -> Result<Pick, Unsupported> {
         let k = &self.roll.knobs;
         // A replay's forced budget switches every clock off; `deadline_us` overrides the wall.
-        let (t0, deadline) = (clock.0, clock.1.filter(|_| self.bend.tree_budget.is_none()));
+        let (t0, deadline, preselect_us) = (clock.0, clock.1.filter(|_| self.bend.tree_budget.is_none()), clock.2);
         let cfg = TreeCfg {
             leaf: k.tree_leaf, dice: k.tree_dice, samples: k.tree_samples.max(1) as usize,
             batch: k.tree_batch.max(1) as usize, budget: self.bend.tree_budget.unwrap_or(k.tree_budget).max(1) as usize,
@@ -881,11 +908,12 @@ impl<'a> Search<'a> {
         root.children = tree::root_children(scored, order, pool);
         let mut rng = GodotRng::new(self.sig.unwrap_or(0));
         let (best, mut trace) = tree::run(&self.roll, &cfg, &mut root, &mut rng, sc)?;
+        trace.preselect_us = preselect_us;
         if trace.root.is_empty() {
             // The deadline hit before the first batch: root child 0 = the prefilter's top row.
             let fallback = "deadline_before_first_batch";
             trace.fallback = Some(fallback);
-            let p = self.deadline_fallback(state, player, base, scored, order, fallback, t0);
+            let p = self.deadline_fallback(state, player, base, scored, order, fallback, t0, preselect_us);
             trace.elapsed_us = t0.elapsed().as_micros() as u64;
             return Ok(Pick { tree: Some(trace), deadline: None, ..p });
         }

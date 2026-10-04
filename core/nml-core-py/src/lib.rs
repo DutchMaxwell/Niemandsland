@@ -327,6 +327,10 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
         if let Some(f) = t.fallback {
             tree["fallback"] = f.into();
         }
+        // `deadline_after_preselect`: the key rides ONLY a pick where that knob ran the clock.
+        if let Some(us) = t.preselect_us {
+            tree["preselect_us"] = us.into();
+        }
         trace.insert("tree".into(), tree);
     }
     // `deadline_us`: the key rides ONLY a pool pick where the knob was set.
@@ -334,6 +338,9 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
         let mut m = serde_json::json!({"completed": d.completed, "cut": d.cut, "elapsed_us": d.elapsed_us});
         if let Some(f) = d.fallback {
             m["fallback"] = f.into();
+        }
+        if let Some(us) = d.preselect_us {
+            m["preselect_us"] = us.into();
         }
         trace.insert("deadline".into(), m);
     }
@@ -878,6 +885,7 @@ impl Core {
         m.insert("tree_wall_ms".into(), self.knobs.tree_wall_ms.into());
         m.insert("pool_wall_ms".into(), self.knobs.pool_wall_ms.into());
         m.insert("deadline_us".into(), self.knobs.deadline_us.into());
+        m.insert("deadline_after_preselect".into(), self.knobs.deadline_after_preselect.into());
         m.insert("tree_widen".into(), self.knobs.tree_widen.into());
         m.insert(
             "melee_reach".into(),

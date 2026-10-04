@@ -1126,6 +1126,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         tree_wall_ms: dint(d, "tree_wall_ms", dflt.tree_wall_ms),
         pool_wall_ms: dint(d, "pool_wall_ms", dflt.pool_wall_ms),
         deadline_us: dint(d, "deadline_us", dflt.deadline_us),
+        // Stage-0 amendment A3, a lab knob: absent (every shipped header) = OFF.
+        deadline_after_preselect: d
+            .get("deadline_after_preselect")
+            .map(|v| flag(&v))
+            .unwrap_or(dflt.deadline_after_preselect),
         tree_widen: dnum(d, "tree_widen", dflt.tree_widen),
     }
 }
