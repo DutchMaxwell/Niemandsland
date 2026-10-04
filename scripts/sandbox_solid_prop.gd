@@ -9,7 +9,7 @@ const GROUP := "sandbox_terrain"
 const GROUND_COLLISION_LAYER := 1
 const MOVABLE_TERRAIN_COLLISION_LAYER := 4
 const INCHES_TO_METERS := 0.0254
-const STONE_COLOR := Color(0.52, 0.50, 0.46)   # SandboxTerrainProp.PLACEHOLDER_COLOR
+const STONE_COLOR := Color(0.28, 0.29, 0.305)   # plain stone grey, a touch cool so warm Sunset light keeps it grey (maintainer 04.10.)
 
 var prop_id: String = ""
 var prop_kind: int = 0
