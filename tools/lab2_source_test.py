@@ -72,6 +72,28 @@ def test_spy_reads_no_result_field():
 
 
 
+def test_two_workers_write_the_same_positions_timing_and_transitions_as_one_process(tmp_path):
+    import csv, json
+    tsv = tmp_path / "s.tsv"
+    with open(tsv, "w", newline="") as f:
+        w = csv.DictWriter(f, list(row("a")), delimiter="\t")
+        w.writeheader()
+        w.writerow(dict(row("a"), slot="s1"))
+        w.writerow(dict(row("b", seed=31, mover=2), slot="s2"))
+    (tmp_path / "h.json").write_text(json.dumps({"knobs": {"top_k": 2, "horizon": 1}}))
+    outs = {}
+    for n in (1, 2):
+        d = tmp_path / ("w%d" % n)
+        d.mkdir()
+        ls.main(["source", "--slots", str(tsv), "--bank", BANK, "--lists", LISTS, "--header", str(tmp_path / "h.json"),
+                 "--out", str(d / "p.json"), "--timing-out", str(d / "t.json"), "--transitions-out", str(d / "x.json"),
+                 "--workers", str(n)])
+        p = json.loads((d / "p.json").read_text())
+        outs[n] = (p["positions"], [(c["slot"], c["eligible"]) for c in p["candidates"]], (d / "t.json").read_text(),
+                   (d / "x.json").read_text(), json.loads((d / "x.json.headers").read_text()))
+    assert outs[1] == outs[2] and len(outs[1][0]) == 2
+
+
 def test_cli_writes_positions_proof_and_exit_code(tmp_path):
     import csv, json
     tsv, header, out = tmp_path / "s.tsv", tmp_path / "h.json", tmp_path / "p.json"
