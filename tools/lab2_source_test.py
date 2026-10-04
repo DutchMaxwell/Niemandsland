@@ -300,7 +300,7 @@ def test_t_decisions_receive_different_sigs(env):
 CTX = {"prereg": "p" * 64, "build": {"commit": "abc", "dirty": False, "rules_epoch": 68, "wheel_sha256": "w"}}
 PRINCIPLES_ROW = ("schema prereg_sha256 row_id split part cell source arm opponent seat replicate seeds build model_sha256 "
                   "header_sha256 net decisions y winner valid reason wall_s rss_hwm_mib done").split()
-PRINCIPLES_DECISION = "seq side arm allocated_us elapsed_us overshoot_us tree deadline search net_calls".split()
+PRINCIPLES_DECISION = "seq side arm allocated_us elapsed_us preselect_us overshoot_us tree deadline search net_calls".split()
 
 
 def test_play_row_runs_real_games_as_schema_rows(env):
@@ -316,6 +316,9 @@ def test_play_row_runs_real_games_as_schema_rows(env):
         assert all(list(d) == PRINCIPLES_DECISION for d in rec["decisions"]) and rec["decisions"]
         deep = [d for d in rec["decisions"] if d["arm"] != "I"]
         assert (arm == "I") == (not deep)
+        # A3: every searching arm (L and C alike) runs its allowance after the root preselection and stamps its time
+        assert all(isinstance(d["preselect_us"], int) and 0 < d["preselect_us"] <= d["elapsed_us"] for d in deep)
+        assert all(d["preselect_us"] is None for d in rec["decisions"] if d["arm"] == "I")
         if arm == "L":
             assert all(d["tree"] and d["allocated_us"] == 20000 and d["search"] for d in deep)
             assert all(d["tree"] is None for d in rec["decisions"] if d["arm"] == "I")
