@@ -1796,7 +1796,7 @@ pub fn resolve_melee_leg(
                 hits += sixes(&faces).min(p.sergeant_attacks);
             }
             if hits > 0 && p.blast > 1 {
-                hits *= p.blast.clamp(1, def.models.max(1));
+                hits *= p.blast.clamp(1, if tray_exact && p.takedown { 1 } else { def.models.max(1) });
             }
             if hits <= 0 {
                 continue;
@@ -1958,7 +1958,13 @@ pub fn resolve_melee_leg(
             if p.deadly > 0 && !deadly_per_model {
                 out.mark("deadly"); // the volley fold's twin: only the pooled legacy leg diverges
             }
-            if deadly_per_model && p.deadly > 0 {
+            if tray_exact && p.takedown {
+                // Tray-exact S9 — the melee twin of S7 (Takedown Strike included, main.gd:7275-7283):
+                // w x max(Deadly, 1) through the pick's Regeneration, one model, overkill lost.
+                let td = w * p.deadly.max(1);
+                out.takedown_groups.push(if ignores_regen { td } else { regen_batch(td, def, def_owner, tray, &mut out.rolls) });
+                out.deadly_tally += w;
+            } else if deadly_per_model && p.deadly > 0 {
                 let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
                 out.deadly_groups.push((post, p.deadly.max(1)));
                 out.deadly_tally += w;

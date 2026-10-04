@@ -4642,17 +4642,25 @@ fn strike_phase(
     // defender unit's own alive count — nothing else moves `alive[ti]` inside
     // this phase.
     let alive_before = next.alive[ti];
-    land_wounds_with(next, ti, w, seams.tray_exact);
+    if !seams.tray_exact {
+        land_wounds_with(next, ti, w, false);
+    }
     // Audit 2026-09-13 §2.1 — Deadly lands PER MODEL with no carry-over (the
     // table's `apply_deadly_wounds`, solo_controller.gd:8333), and the melee
     // tally is the DEALT count so the multiply still decides who wins
-    // (main.gd:6190-6191).
-    let mut dealt = 0i64;
+    // (main.gd:6190-6191). Tray-exact S9: a Takedown group counts what it
+    // LANDED, overkill included (`caused += td_dealt`, main.gd:7284), and the
+    // table's order holds: Takedown, Deadly, then the pool.
+    let mut dealt: i64 = shot.takedown_groups.iter().sum();
+    land_takedown_groups(next, ti, shot);
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
         let d = land_deadly_wounds(next, ti, post, dx, seams);
         dealt += d;
         shot.log.push(format!(
             "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
+    }
+    if seams.tray_exact {
+        land_wounds_with(next, ti, w, true);
     }
     caused = caused - raw_deadly + dealt;
     // rules-wave3-growthmark (epoch 6) — the ignore-wound marker AFTER the
