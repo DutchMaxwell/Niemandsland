@@ -1373,9 +1373,11 @@ impl Core {
         // `seam_path` was silently inert in the Python search.
         let index = nmlcore::plan::reach_of(seams, &state.inner, &self.terrain);
         let tuning = self.tuning();
+        let (seams, root) = nmlcore::plan::route_root_seams(&self.knobs, seams);
         let mut policy = Policy::new(&statics, &self.terrain, seams);
         policy.tuning = tuning;
         policy.reach = index.as_ref();
+        policy.root_seams = root;
         // The net is this core's `AiMissionEval.fit_mode`, but WHETHER it is
         // switched on is the activation's own static. An act recorded with the
         // hand eval must replay on the hand eval even on a core that carries a
