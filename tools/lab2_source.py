@@ -222,12 +222,15 @@ def play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing=None, 
     return snapshot, log
 
 
-def generate(sp, core, slots, repo, bank, lists, net, cap, play_kw, timing=None, transitions=None):
-    """-> (positions, discarded, missing slot ids). At most `cap` candidates per slot, first eligible wins."""
+def generate(sp, core, slots, repo, bank, lists, net, cap, play_kw, timing=None, transitions=None, logs=None):
+    """-> (positions, discarded, missing slot ids). At most `cap` candidates per slot, first eligible wins. `logs` (a list)
+    collects EVERY played candidate with cell, mover and `eligible` (the throughput report's source yield and times)."""
     positions, discarded, missing = [], [], []
     for slot, rows in slots.items():
         for row in rows[:cap]:
             snapshot, log = play_candidate(sp, core, row, repo, bank, lists, net, play_kw, timing, transitions)
+            if logs is not None:
+                logs.append(dict(log, cell=row["cell"], mover=int(row["mover"]), eligible=snapshot is not None))
             if snapshot:
                 positions.append(snapshot)
                 break
@@ -235,6 +238,48 @@ def generate(sp, core, slots, repo, bank, lists, net, cap, play_kw, timing=None,
         else:
             missing.append(slot)
     return positions, discarded, missing
+
+
+def _slot_init(cfg):
+    """Once per worker process: one core and one shipped net (lab2_pool spawn workers)."""
+    import nml_core as nm
+    sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "core", "nml-core-py", "python"))
+    import selfplay as sp
+    from lab2_net import ShippedNet
+    return {"sp": sp, "core": nm.load(cfg["repo"]), "net": ShippedNet(cfg["repo"]), "cfg": cfg}
+
+
+def _slot_work(w, slot, rows):
+    """One slot in a worker: its candidates in order, with its OWN timing / transition sinks (merged in slot order)."""
+    c = w["cfg"]
+    timing, transitions, logs = (TimingSet() if c["timing"] else None), (TransitionSet() if c["transitions"] else None), []
+    pos, disc, miss = generate(w["sp"], w["core"], {slot: rows}, c["repo"], c["bank"], c["lists"], w["net"], c["cap"],
+                               c["play_kw"], timing, transitions, logs)
+    return {"positions": pos, "discarded": disc, "missing": miss, "logs": logs, "timing": timing and timing.states,
+            "transitions": transitions and transitions.records, "headers": transitions and transitions.headers,
+            "net": w["net"].proof()}
+
+
+def merge_slots(order, results, timing, transitions):
+    """Per-slot results in MANIFEST order into the single-process shape: the timing / transition sets take states in
+    that order and keep the first per cell exactly as one sequential pass would; net calls add up over the workers."""
+    out = {"positions": [], "discarded": [], "missing": [], "logs": [], "net": {}}
+    for slot in order:
+        r = results[slot]
+        for k in ("positions", "discarded", "missing", "logs"):
+            out[k] += r[k]
+        for st in (r["timing"] or []) if timing is not None else []:
+            if not timing.full(st["cell"]):
+                timing.add(st)
+        for rec in (r["transitions"] or []) if transitions is not None else []:
+            if not transitions.full(rec["cell"]):
+                transitions.add(rec)
+        if transitions is not None:
+            transitions.headers.update(r["headers"] or {})
+        for side, v in r["net"].items():
+            prev = out["net"].get(side)
+            out["net"][side] = {k: prev[k] + v[k] for k in v} if isinstance(v, dict) and prev else v
+    return out
 
 
 def read_slots(path):
@@ -279,16 +324,25 @@ def cmd_source(a):
     ignored = sorted(set(knobs) - set(HEADER_KNOBS))
     if a.knobs:
         play_kw.update(grade_kwargs(json.load(open(a.knobs))))
-    net = ShippedNet(a.repo)
     slots = read_slots(a.slots)
     timing = TimingSet() if a.timing_out else None
     transitions = TransitionSet() if a.transitions_out else None
-    positions, discarded, missing = generate(sp, nm.load(a.repo), slots, a.repo, a.bank, a.lists, net, a.cap,
-                                             play_kw, timing, transitions)
+    if a.workers > 1:  # slots in parallel processes, merged in manifest order (identical rows to one process)
+        import lab2_pool
+        cfg = {"repo": a.repo, "bank": a.bank, "lists": a.lists, "cap": a.cap, "play_kw": play_kw,
+               "timing": bool(timing is not None), "transitions": bool(transitions is not None)}
+        reports = lab2_pool.run_clusters(slots, a.workers, _slot_init, _slot_work, (cfg,))
+        m = merge_slots(list(slots), {r["id"]: r["result"] for r in reports}, timing, transitions)
+        positions, discarded, missing, logs, proof = m["positions"], m["discarded"], m["missing"], m["logs"], m["net"]
+    else:
+        net, logs = ShippedNet(a.repo), []
+        positions, discarded, missing = generate(sp, nm.load(a.repo), slots, a.repo, a.bank, a.lists, net, a.cap,
+                                                 play_kw, timing, transitions, logs)
+        proof = net.proof()
     if a.eval:
         attach_eval(positions, a.eval)
     out = {"positions": positions, "discarded": discarded, "missing": missing, "ignored_header_knobs": ignored,
-           "play_kwargs": play_kw, "net": net.proof()}
+           "play_kwargs": play_kw, "candidates": logs, "net": proof}
     json.dump(out, open(a.out, "w"))  # no sort_keys: net.proof() mixes int seats with a str key
     print("[source] positions %d discarded %d missing %s" % (len(positions), len(discarded), missing))
     short = timing.short({r["cell"] for rows in slots.values() for r in rows}) if timing else {}
@@ -314,6 +368,7 @@ def main(argv=None):
     s.add_argument("--header", required=True)
     s.add_argument("--knobs", help="JSON of play_game kwargs of the shipped grade (the fullgames --knobs file)")
     s.add_argument("--cap", type=int, default=20)
+    s.add_argument("--workers", type=int, default=1, help="slots in N spawn workers, merged in manifest order (same rows)")
     s.add_argument("--out", required=True)
     s.add_argument("--eval", help="D_endings_eval.tsv: attach the 8 eval stream keys to every position")
     s.add_argument("--transitions-out", help="write the first 9 (cells 1-4) / 8 (cells 5-12) resolves per cell")
