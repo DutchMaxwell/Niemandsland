@@ -182,7 +182,15 @@ def test_every_game_takes_the_search_keys_registered_for_its_own_dice_and_seat()
 def test_arm_kwargs_split_the_tree_from_the_one_ply_pool_deadline():
     L, C = lab.arm_kwargs({"arm": "L"}, 7), lab.arm_kwargs({"arm": "C"}, 7)
     assert L["deep_search_mode"] == "tree" and L["deep_deadline_us"] == 7 and "deep_tree_wall_ms" not in L
-    assert C == {"deep_top_k": 32, "deep_horizon": 3, "deep_deadline_us": 7}
+    assert C == {"deep_top_k": 32, "deep_horizon": 3, "deep_deadline_us": 7, "deep_deadline_after_preselect": True}
+
+
+def test_every_searching_arm_runs_its_allowance_after_the_preselection_and_the_incumbent_has_none():
+    """Stage-0 amendment A3 + its addendum: L, T, the P9 tray controls and the matched-compute control C run
+    `deadline_us` from the end of the root preselection; the incumbent I carries no allowance at all."""
+    assert lab.ARM_KNOBS["I"] == {}
+    assert all(lab.ARM_KNOBS[a]["deadline_after_preselect"] is True for a in ("L", "T", "L_tray", "T_tray"))
+    assert all(lab.arm_kwargs({"arm": a}, 7)["deep_deadline_after_preselect"] is True for a in ("L", "L_tray", "C"))
 
 
 def test_board_scores_are_per_board_and_a_missing_or_short_board_fails():

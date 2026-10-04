@@ -235,11 +235,14 @@ ARMS = ("I", "L", "T")
 #: The 8 played streams of a position come from its `eval` list (decimal key seeds: `Rng(general)`, `Tray(tray)`),
 #: the SAME pair for every arm (common random numbers).
 STREAMS = 8
-ARM_KNOBS = {"I": {}, "L": {"search_mode": "tree", "tree_leaf": "blend"},
-             "T": {"search_mode": "tree", "tree_leaf": "terminal"},
+#: Every searching arm runs its allowance from the END of the root preselection (stage-0 amendment A3,
+#: `deadline_after_preselect`): `deadline_us` bounds the search alone, the preselection time rides each decision.
+A3 = {"deadline_after_preselect": True}
+ARM_KNOBS = {"I": {}, "L": {"search_mode": "tree", "tree_leaf": "blend", **A3},
+             "T": {"search_mode": "tree", "tree_leaf": "terminal", **A3},
              # P9 tray arms: configured here, run only by the tray probe (step 27), never by `endings`
-             "L_tray": {"search_mode": "tree", "tree_leaf": "blend", "tree_dice": "tray"},
-             "T_tray": {"search_mode": "tree", "tree_leaf": "terminal", "tree_dice": "tray"}}
+             "L_tray": {"search_mode": "tree", "tree_leaf": "blend", "tree_dice": "tray", **A3},
+             "T_tray": {"search_mode": "tree", "tree_leaf": "terminal", "tree_dice": "tray", **A3}}
 CONTRASTS = (("A_T", "T", "I"), ("A_L", "L", "I"), ("A_TL", "T", "L"))
 
 
@@ -500,13 +503,14 @@ def game_rows(blocks, arms=ALL_ARMS):
 def arm_kwargs(row, allowance_us):
     """L: the tree on the candidate seat (10/3 = the incumbent pair); L_tray: L through the true tray (P9 MODE_B's
     control, `--arms L_tray`); C: the one-ply 32/3 rung. All carry the allowance as `deadline_us`, measured from
-    the planner call."""
+    the end of the root preselection (A3 + its addendum: the same clock rule for every searching arm, C included)."""
+    a3 = {"deep_deadline_after_preselect": True}
     if row["arm"] in ("L", "L_tray"):
         tray = {"deep_tree_dice": "tray"} if row["arm"] == "L_tray" else {}
-        return dict(deep_top_k=10, deep_horizon=3, deep_search_mode="tree", deep_deadline_us=allowance_us, **tray)
+        return dict(deep_top_k=10, deep_horizon=3, deep_search_mode="tree", deep_deadline_us=allowance_us, **tray, **a3)
     if row["arm"] != "C":
         raise ValueError("no fullgames arm %r" % row["arm"])
-    return dict(deep_top_k=32, deep_horizon=3, deep_deadline_us=allowance_us)
+    return dict(deep_top_k=32, deep_horizon=3, deep_deadline_us=allowance_us, **a3)
 
 
 def board_scores(done):

@@ -2,8 +2,10 @@
 """Row schema and per-decision log of the stage-0 lab driver (tree plan step 22, "stage0-row/1").
 
 `Recorder` wraps the real `_pick_for` (selfplay.forced_picks) and times every planner call with
-perf_counter_ns; each landed pick becomes one decision {seq, side, arm, allocated_us, elapsed_us,
-overshoot_us, tree, deadline, search, net_calls}. `make_row` assembles the row of the shared schema,
+perf_counter_ns; each landed pick becomes one decision {seq, side, arm, allocated_us, elapsed_us, preselect_us,
+overshoot_us, tree, deadline, search, net_calls}. Under `deadline_after_preselect` (stage-0 amendment A3) the
+core stamps the root preselection's time: `preselect_us` carries it (None without the knob), elapsed = preselection
++ search, and the overshoot is the SEARCH's over the allowance. `make_row` assembles the row of the shared schema,
 `guarded` turns an Unsupported / timeout into an INVALID row so the run continues (anything else is a
 bug and propagates), `vmhwm_mib` is the worker's peak RSS.
 """
@@ -16,8 +18,8 @@ SCHEMA = "stage0-row/1"
 ROW_KEYS = ("schema", "prereg_sha256", "row_id", "split", "part", "cell", "source", "arm", "opponent", "seat",
             "replicate", "seeds", "build", "model_sha256", "header_sha256", "net", "decisions", "y", "winner", "valid",
             "reason", "wall_s", "rss_hwm_mib", "done")
-DECISION_KEYS = ("seq", "side", "arm", "allocated_us", "elapsed_us", "overshoot_us", "tree", "deadline", "search",
-                 "net_calls")
+DECISION_KEYS = ("seq", "side", "arm", "allocated_us", "elapsed_us", "preselect_us", "overshoot_us", "tree", "deadline",
+                 "search", "net_calls")
 TREE_KEYS = ("completed", "deadline_hit", "batches", "frontier", "terminal")
 
 
@@ -72,9 +74,11 @@ class Recorder:
     def add(self, side, allocated, elapsed, trace, net_calls, sig=None):
         tree, dl = trace.get("tree"), trace.get("deadline")
         alloc = allocated if allocated and allocated > 0 else None
+        pre = (tree or dl or {}).get("preselect_us")
         self.decisions.append({
             "seq": len(self.decisions) + 1, "side": side, "arm": self.arm_of(side), "allocated_us": alloc,
-            "elapsed_us": elapsed, "overshoot_us": max(0, elapsed - alloc) if alloc else None,
+            "elapsed_us": elapsed, "preselect_us": pre,
+            "overshoot_us": max(0, elapsed - (pre or 0) - alloc) if alloc else None,
             "tree": dict({k: tree[k] for k in TREE_KEYS}, fallback=tree.get("fallback")) if tree else None,
             "deadline": {"completed": dl["completed"], "cut": dl["cut"], "fallback": dl.get("fallback")} if dl else None,
             "search": None, "net_calls": net_calls})

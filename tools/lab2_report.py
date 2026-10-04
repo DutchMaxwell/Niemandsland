@@ -81,7 +81,27 @@ def part1(rows, validation_ok, red_sensitive=False, workers=1):
     stop = not (validation_ok and not problems)
     return {"verdict": "PILOT_STOP" if stop else "PASS" if all(flags.values()) else "FAIL", "problems": problems,
             "mde": mdes, "variance": var, "n_c": {p: {c: n_c(p, c) for c in CELLS} for p in EXPECT}, "F": F,
-            "flags": flags, "max_rss_mib": hwm, "late_decisions": len(late)}
+            "flags": flags, "max_rss_mib": hwm, "late_decisions": len(late), "decision_time_ms": decision_times(rows)}
+
+
+def decision_times(rows):
+    """Stage-0 amendment A3: per arm, a decision's wall time as preselection + search = total (ms, median / p90).
+    A decision without a preselection stamp (the incumbent, or no `deadline_after_preselect`) reports its total only."""
+    by = {}
+    for r in rows:
+        for d in r.get("decisions") or ():
+            if val._finite(d.get("elapsed_us")):
+                by.setdefault(d.get("arm"), []).append(d)
+
+    def q(xs):
+        return {"median": round(statistics.median(xs), 1), "p90": round(sorted(xs)[max(0, math.ceil(0.9 * len(xs)) - 1)], 1)} if xs else None
+    out = {}
+    for arm, ds in sorted(by.items(), key=lambda kv: str(kv[0])):
+        stamped = [d for d in ds if d.get("preselect_us") is not None]
+        out[arm] = {"decisions": len(ds), "total_ms": q([d["elapsed_us"] / 1e3 for d in ds]),
+                    "preselect_ms": q([d["preselect_us"] / 1e3 for d in stamped]),
+                    "search_ms": q([(d["elapsed_us"] - d["preselect_us"]) / 1e3 for d in stamped])}
+    return out
 
 
 def freeze(report, rows, p1=None, timing=None):
