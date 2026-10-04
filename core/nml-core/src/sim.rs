@@ -2690,7 +2690,7 @@ fn tray_hit_and_run(
         Cover::Board(t) => Some(t),
         Cover::Recorded(_) => None,
     };
-    if seams.movement && !seams.move_rigid {
+    if seams.movement && !seams.move_rigid && !seams.plain_only {
         if let Cover::Board(t) = cover {
             let land = nearest_enemy_of(next, si).and_then(|foe| {
                 // `_move_away` :4767 — the table's own `_nearest_enemy_of`
@@ -2966,7 +2966,7 @@ fn engage_gap_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
     // table (`main._run_ai_melee` -> `nearest_melee_gap_in` :8536 ->
     // `SeparationChecker.edge_distance`), which walks the exact support extent
     // of an oval base. Same seam split `hero_attach` already draws for the fold.
-    let shaped = seams.charge_landing || seams.movement;
+    let shaped = seams.charge_landing || (seams.movement && !seams.plain_only);
     let shape = |u: usize| if shaped { state.base_shape(u) } else { geom::BaseShape::Round };
     let mut best = f64::INFINITY;
     for a in side(si) {
@@ -7087,7 +7087,7 @@ fn resolve_with(
     // the melee snap may spend (solo_controller.gd:8659). Infinite while the
     // seam is off: the second engage gate then never refuses anything, which is
     // what every corpus recorded before D5-1 replayed with.
-    let mut charge_remaining_in = if seams.movement && rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+    let mut charge_remaining_in = if seams.movement && !seams.plain_only && rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
         band_in.max(0.0)
     } else { f64::INFINITY };
     // D5-2, seam-gated: the CHARGE moves per model through the M4 movement port
@@ -7100,7 +7100,7 @@ fn resolve_with(
     // S10-a: a kite whose cap floors at zero moves NOTHING on the table (the
     // `_move_away` is_zero_approx guard) — neither the plain arm nor rigid.
     let mut hold = false;
-    if seams.movement && kind == CHARGE && band_in > 0.0 {
+    if seams.movement && !seams.plain_only && kind == CHARGE && band_in > 0.0 {
         if let (Cover::Board(t), Some(ti)) = (cover, ci) {
             landing = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).charge_move(
                 &next,
@@ -7884,7 +7884,7 @@ fn resolve_with(
                 && (engage_gap_in <= BASE_CONTACT_EPSILON_IN
                     || engage_gap_in <= charge_remaining_in + BASE_CONTACT_EPSILON_IN)
             {
-                if seams.movement {
+                if seams.movement && !seams.plain_only {
                     (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch })
                         .snap_charge_state(&mut next, si, ti, charge_remaining_in, seams.hero_attach);
                 }
