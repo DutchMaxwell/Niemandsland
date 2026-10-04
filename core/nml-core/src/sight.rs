@@ -489,6 +489,22 @@ pub fn zones_of(t: &Terrain) -> Vec<Zone> {
     out
 }
 
+/// `zones_of`, plus with `shelf` (the dormant `Seams::shelf_sight`) every freely
+/// placed shelf piece of the header as its own upright box of its type's height —
+/// `TerrainOverlay._sandbox_volumes` (:1283-1300). The header records no floor
+/// slabs (act_recorder.gd keeps c/he/yaw/type), so a multi-storey free ruin's
+/// upper floors are not here.
+pub fn zones_of_with(t: &Terrain, shelf: bool) -> Vec<Zone> {
+    let mut out = zones_of(t);
+    if shelf && t.is_valid() {
+        for s in t.sandbox().iter().filter(|s| volume_height_in(s.kind) > 0.0) {
+            let solid = !(s.kind == terrain::FOREST || s.kind == terrain::RUINS);
+            out.push(Zone::shelf_box(s.c, s.he, s.yaw, 0.0, volume_height_in(s.kind) * IN2M, solid));
+        }
+    }
+    out
+}
+
 /// The largest base radius among a unit's alive models —
 /// `main._solo_unit_base_radius_m` :4227-4234, the width of its sight cylinder.
 pub fn unit_radius_m(state: &State, i: usize) -> f64 {
@@ -742,9 +758,13 @@ mod tests {
     }
 
     fn board(cells: &[(i64, i64, i32)]) -> Terrain {
+        board_with(cells, Vec::new())
+    }
+
+    fn board_with(cells: &[(i64, i64, i32)], sandbox: Vec<Obb>) -> Terrain {
         Terrain::build(&PlainTerrain {
             cells: cells.iter().map(|&(x, z, k)| [x as f64, z as f64, k as f64]).collect(),
-            sandbox: Vec::<Obb>::new(),
+            sandbox,
             pieces: vec![],
             walls: vec![],
             cell_params: CellParams {
@@ -878,5 +898,18 @@ mod tests {
             })
             .collect();
         assert!(wrong.is_empty(), "{} of 1000 disagree, first {:?}", wrong.len(), &wrong[..wrong.len().min(10)]);
+    }
+
+    /// The dormant shelf-sight seam: ON, a free CONTAINER piece of the recorded
+    /// header blocks the way the table's box does; OFF, the core keeps today's
+    /// painted-cells-only reading, so every corpus and rollout is unchanged.
+    #[test]
+    fn the_shelf_seam_adds_free_pieces_and_off_changes_nothing() {
+        let piece = Obb { c: [0.0, 0.0], he: [3.0 * M, 1.5 * M], yaw: 0.0, kind: terrain::CONTAINER };
+        let t = board_with(&[], vec![piece]);
+        let (west, east) = (cyl(-8.0, 0.0, 32.0), cyl(8.0, 0.0, 32.0));
+        assert!(zones_of_with(&t, false).is_empty());
+        assert!(has_los(&west, &east, false, &zones_of_with(&t, false), &[]));
+        assert!(!has_los(&west, &east, false, &zones_of_with(&t, true), &[]));
     }
 }

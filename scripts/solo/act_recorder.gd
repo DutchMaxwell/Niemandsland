@@ -657,6 +657,12 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 ## 6x4ft school table). Same header SHAPE as the overlay branch above (so
 ## act_recheck's terrain_at_from_plain reads either the same way): no sandbox
 ## (SchoolTerrain has none), no rotation (the school layout never rotates).
+## Walls (table-realism, 04.10.): the same layout raises the table's ruin walls on
+## an overlay, but a SchoolTerrain world carries none, so this line wrote `[]` and a
+## trainer reading the bank planned and moved on a wall-less table. A world that
+## brings its overlay's walls (`world["walls"]`, the overlay branch's exact shape:
+## get_wall_segments_world() flattened, world metres) hands them through; a world
+## without the key keeps `[]`, so every board and corpus written before is unchanged.
 static func _school_terrain_line(world: Dictionary) -> Variant:
 	if world.is_empty():
 		return null
@@ -664,7 +670,7 @@ static func _school_terrain_line(world: Dictionary) -> Variant:
 	for k in (world["cells"] as Dictionary):
 		var c := k as Vector2i
 		cells.append([c.x, c.y, int(world["cells"][k])])
-	return {"cells": cells, "sandbox": [], "walls": [],
+	return {"cells": cells, "sandbox": [], "walls": world.get("walls", []),
 		"cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0,
 			"grid_size_inches": SchoolTerrain.CELL_IN, "inches_to_meters": SchoolTerrain.IN2M}}
 
