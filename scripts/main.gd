@@ -497,6 +497,8 @@ func _ready() -> void:
 	# Connect to object manager signals
 	object_manager.distance_changed.connect(_on_distance_changed)
 	object_manager.movement_capped.connect(_on_movement_capped)
+	object_manager.terrain_drop_refused.connect(func(_nodes: Array) -> void:
+		_show_toast("Terrain can't overlap painted grid terrain — moved back"))
 	object_manager.measurement_finished.connect(_on_measurement_finished)
 	object_manager.drag_ended.connect(_on_drag_ended)
 	object_manager.drag_updated.connect(_check_coherency_for_selected_units)
