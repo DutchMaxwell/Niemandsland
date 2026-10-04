@@ -7,7 +7,9 @@
 (the candidate seat, the cell's allowance and the source game move a real row's map). Problems: an unknown, missing,
 duplicate or conflicting row ID; a wrong seat/arm/net/hash/epoch or a dirty build; an invalid row (illegal action, unported / overflow / unsupported
 path, net_inactive — it never reaches a score); a valid row without an outcome; a tree stamp on a non-tree decision
-or none on a tree decision; a non-finite timing. `pass_flags` withholds every PASS flag unless validation passed.
+or none on a tree decision; a decision that never searched (zero_search: a deadline fallback of the core, or a tree
+trace without one completed playout - the arm then played the preselection's top row, not itself); a non-finite
+timing. `pass_flags` withholds every PASS flag unless validation passed.
 """
 import json
 import math
@@ -53,6 +55,9 @@ def _row_problems(row, want, m):
     for d in row.get("decisions") or ():
         if (d.get("tree") is not None) != (d.get("arm") in TREE_ARMS):
             out.append(("tree_stamp", d.get("seq")))
+        for trace in (d.get("tree"), d.get("deadline")):
+            if trace and (trace.get("fallback") or not trace.get("completed")):
+                out.append(("zero_search", "%s@%s" % (trace.get("fallback") or "no_playout", d.get("seq"))))
         bad = [k for k in TIMINGS if not _finite(d.get(k)) and (k == "elapsed_us" or d.get(k) is not None)]
         out += [("non_finite", "%s@%s" % (k, d.get("seq"))) for k in bad]
     return out
