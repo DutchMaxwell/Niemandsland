@@ -17,7 +17,7 @@ import math
 SCHEMA = "stage0-row/1"
 TREE_ARMS = ("L", "T", "L_tray", "T_tray")
 VOLATILE = ("wall_s", "rss_hwm_mib")  # provenance two writes of the same row may differ in
-TIMINGS = ("allocated_us", "elapsed_us", "overshoot_us")
+TIMINGS = ("allocated_us", "elapsed_us", "preselect_us", "overshoot_us")
 
 
 def _canon(row):

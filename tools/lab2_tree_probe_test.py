@@ -182,7 +182,15 @@ def test_every_game_takes_the_search_keys_registered_for_its_own_dice_and_seat()
 def test_arm_kwargs_split_the_tree_from_the_one_ply_pool_deadline():
     L, C = lab.arm_kwargs({"arm": "L"}, 7), lab.arm_kwargs({"arm": "C"}, 7)
     assert L["deep_search_mode"] == "tree" and L["deep_deadline_us"] == 7 and "deep_tree_wall_ms" not in L
-    assert C == {"deep_top_k": 32, "deep_horizon": 3, "deep_deadline_us": 7}
+    assert C == {"deep_top_k": 32, "deep_horizon": 3, "deep_deadline_us": 7, "deep_deadline_after_preselect": True}
+
+
+def test_every_searching_arm_runs_its_allowance_after_the_preselection_and_the_incumbent_has_none():
+    """Stage-0 amendment A3 + its addendum: L, T, the P9 tray controls and the matched-compute control C run
+    `deadline_us` from the end of the root preselection; the incumbent I carries no allowance at all."""
+    assert lab.ARM_KNOBS["I"] == {}
+    assert all(lab.ARM_KNOBS[a]["deadline_after_preselect"] is True for a in ("L", "T", "L_tray", "T_tray"))
+    assert all(lab.arm_kwargs({"arm": a}, 7)["deep_deadline_after_preselect"] is True for a in ("L", "L_tray", "C"))
 
 
 def test_board_scores_are_per_board_and_a_missing_or_short_board_fails():
@@ -449,5 +457,30 @@ def test_endings_build_every_core_under_the_position_s_own_game_header(monkeypat
          "ctx": {}, "allow": {"c1": {"B_us": 7}}, "cfg": {"rows_dir": str(tmp_path)}}
     monkeypatch.setattr(lab, "ending_row", lambda *a, **k: {"row_id": "r", "valid": True, "y": 1.0})
     monkeypatch.setattr(lab, "write_row", lambda d, row: None)
-    lab._endings_work(w, "c1_k1", {"slot": "c1_k1", "candidate": "3", "cell": "c1", "cluster": "c1_k1"})
+    pos = {"slot": "c1_k1", "candidate": "3", "cell": "c1", "cluster": "c1_k1"}
+    lab._endings_work(w, "c1_k1", {"pos": pos, "arms": lab.ARMS, "reps": tuple(range(lab.STREAMS))})
     assert seen == ["c1_k1:3"] * (1 + len(lab.ARMS))   # the incumbent core and one core per arm
+
+
+def test_a41_one_unit_per_row_and_the_endings_merge_back_in_replicate_order(monkeypatch, tmp_path):
+    """Stage-0 amendment A4.1: endings and full games are scheduled per row, never per cluster, so a heavy position
+    or block no longer pins one worker; the endings come back together per position in replicate order, whatever
+    order the units finished in, and equal the complete-cluster result."""
+    pos = [{"slot": s, "candidate": "0", "cell": "c1", "cluster": s} for s in ("p1", "p2")]
+    units = lab.endings_units(pos)
+    assert len(units) == 2 * len(lab.ARMS) * lab.STREAMS
+    assert all(len(u["arms"]) == len(u["reps"]) == 1 for u in units.values())
+    w = {"core": lambda extra, source=None: ("core", "sha"), "nm": None, "sp": None, "net": None, "ctx": {},
+         "allow": {"c1": {"B_us": 7}}, "cfg": {"rows_dir": str(tmp_path)}}
+    monkeypatch.setattr(lab, "ending_row", lambda nm, sp, cores, p, arm, r, net, ctx: {
+        "row_id": "%s_%s_r%d" % (p["slot"], arm, r), "valid": (p["slot"], arm, r) != ("p2", "T", 5), "y": r / 10 + len(arm)})
+    monkeypatch.setattr(lab, "write_row", lambda d, row: None)
+    merged = lab.merge_endings([lab._endings_work(w, cid, u) for cid, u in sorted(units.items(), reverse=True)])
+    whole = {p["slot"]: lab._endings_work(w, p["slot"], {"pos": p, "arms": lab.ARMS, "reps": tuple(range(lab.STREAMS))})
+             for p in pos}
+    for s in ("p1", "p2"):
+        assert merged[s]["y"] == {arm: [whole[s]["y"][arm][r] for r in range(lab.STREAMS)] for arm in lab.ARMS}
+        assert (merged[s]["cell"], merged[s]["cluster"], merged[s]["invalid"]) == ("c1", s, whole[s]["invalid"])
+    assert merged["p2"]["invalid"] == ["p2_T_r5"]
+    rows = lab.game_rows(_blocks())
+    assert lab.fullgames_units(rows) == {r["row_id"]: [r] for r in rows} and len(rows) == 24
