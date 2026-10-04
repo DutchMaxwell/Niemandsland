@@ -397,6 +397,19 @@ fn an_advance_across_a_ledge_ends_on_the_roof_and_pays_the_climb() {
     assert!((flat + climb - 6.0).abs() < 0.05, "flat {flat} + climb {climb}");
 }
 
+/// Live selfcheck (seed 1, call #4): a leg that only TOUCHES a container corner counts as crossing both
+/// edges that meet there — Godot's `segment_intersects_segment` keeps a CMP_EPSILON band, so the Rust port
+/// must too, or the two planners price the same leg differently and pick different routes.
+#[test]
+fn a_leg_touching_a_ledge_corner_pays_both_edges() {
+    let ledges = [
+        Ledge { a: [24.0, 15.0], b: [18.0, 15.0], dy_in: 2.5 },
+        Ledge { a: [24.0, 18.0], b: [24.0, 15.0], dy_in: 2.5 },
+    ];
+    let cost = nml_core::mv::ledge_cost([23.5, 14.5], [26.5, 17.5], &ledges);
+    assert!((cost - 5.0).abs() < 1e-9, "a corner touch pays both edges, got {cost}");
+}
+
 #[test]
 fn a_ledge_over_three_inches_behaves_like_a_wall() {
     let (end, _, _) = ledge_flow(3.5);
