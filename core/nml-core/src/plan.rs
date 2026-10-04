@@ -265,6 +265,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         dangerous_end_morale: knobs.dangerous_end_morale,
         tray_exact: crate::acts::rule_on(knobs.rules_epoch, crate::acts::EPOCH_70_TRAY_EXACT),
         plain_only: false, // dormant: only the search's root seams will set it (io.rs)
+        shelf_sight: false, // dormant: free shelf pieces in sight (io.rs `Seams::shelf_sight`)
         consolidate: knobs.consolidate,
         cond_ap_dice: knobs.cond_ap_dice,
         versatile_reach: knobs.versatile_reach,

@@ -729,6 +729,8 @@ impl Core {
             tray_exact: nmlcore::acts::rule_on(self.knobs.rules_epoch, nmlcore::acts::EPOCH_70_TRAY_EXACT),
             // Dormant: only the search's root seams will set it (io.rs `Seams::plain_only`).
             plain_only: false,
+            // Free shelf pieces in sight: dormant (io.rs `Seams::shelf_sight`).
+            shelf_sight: false,
             // GF v3.5.1 p.9 — `consolidate="table"` in the header.
             consolidate: self.knobs.consolidate,
             // Rung I (DEFECT_LEDGER row 31) — `cond_ap_dice` in the header.
