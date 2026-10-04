@@ -5169,7 +5169,9 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 ## target's models include its attached heroes' (they are part of the unit). `ignore_los` (wave 5,
 ## Indirect: "may target enemies that are not in line of sight as if in line of sight") keeps the range
 ## gate but waives the sight test.
-func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ignore_los: bool = false) -> int:
+## `pairs_out` (optional) collects each counted model's [shooter_pos, target_pos] (see SoloController.sighted_models).
+func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ignore_los: bool = false,
+		pairs_out = null) -> int:
 	if shooter == null or target == null:
 		return 0
 	var _prof_sight_t0 := BattleSim.prof_t0()   # NML-1072: LOS/sight computation
@@ -5191,7 +5193,7 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 	# base radii is the centre-space equivalent of subtracting them from every pair distance.
 	var edge_slack_m: float = _solo_unit_base_radius_m(shooter) + _solo_unit_base_radius_m(target)
 	var _sighted := SoloController.sighted_models(SoloController.alive_positions(shooter), target_positions,
-		float(range_in) * MoveIntent.INCHES_TO_METERS + edge_slack_m, los)
+		float(range_in) * MoveIntent.INCHES_TO_METERS + edge_slack_m, los, pairs_out)
 	BattleSim.prof_mark("sight", _prof_sight_t0)
 	return _sighted
 

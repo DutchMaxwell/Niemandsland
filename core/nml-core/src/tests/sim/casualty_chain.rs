@@ -37,3 +37,34 @@ use super::*;
             assert_eq!(crate::casualty::chain_casualty_order(&st, 0, None), Some(want), "{}", c["name"]);
         }
     }
+
+    /// Tray-exact S6 (LIVE behind `Seams::tray_exact`): casualties come off in the table's
+    /// `chain_casualty_order` — `apply_wounds_to_models` for plain wounds, `deadly_pick` for Deadly —
+    /// so the Missile Launcher bearer in slot 0 is NOT the first to die. Without the switch, and on a
+    /// unit without kits, slot 0 still goes first (every game today).
+    #[test]
+    fn with_tray_exact_the_launcher_in_slot_0_outlives_the_cheap_end_model() {
+        let line = || {
+            let mut st = four_unit_line();
+            let s = 0.0574; // 32 mm bases, 1-inch edge gaps
+            st.positions[0] = vec![[0.0, 0.0, 0.0], [s, 0.0, 0.0], [2.0 * s, 0.0, 0.0]];
+            (st.wounds[0], st.radii[0], st.alive[0]) = (vec![1, 1, 1], vec![0.016; 3], 3);
+            let k = |w: Vec<u16>| crate::state::Kit { weapons: w, equipment: 0, wounds_max: 1 };
+            st.kits = vec![Rc::new(vec![k(vec![1]), k(vec![0]), k(vec![0])])]; // 1 = the launcher
+            (st.positions[1], st.radii[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
+            st
+        };
+        let kit_ids = |st: &State| st.kits[0].iter().map(|k| k.weapons[0]).collect::<Vec<_>>();
+        let mut st = line();
+        crate::sim::land_wounds_with(&mut st, 0, 1, true);
+        assert_eq!((st.alive[0], kit_ids(&st)), (2, vec![1, 0]), "the end Rifle died, the launcher stands");
+        let mut old = line();
+        crate::sim::land_wounds_with(&mut old, 0, 1, false);
+        assert_eq!(kit_ids(&old), vec![0, 0], "without the switch slot 0 (the launcher) dies");
+        let exact = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() };
+        let mut st = line();
+        st.profiles = Rc::new(Profiles { list: vec![Profile { wounds_max: vec![1, 1, 1], model_count: 3, ..st.profiles.list[0].clone() }; 4], index: HashMap::new() });
+        land_deadly_wounds(&mut st, 0, 1, 3, exact);
+        assert_eq!(kit_ids(&st), vec![1, 0], "the Deadly pick follows the same order");
+    }
+
