@@ -32,3 +32,13 @@ func test_collider_is_exactly_the_rule_box() -> void:
 	assert_vector(size).is_equal_approx(Vector3(6, 2.5, 3) * IN2M, Vector3.ONE * 0.001)
 	assert_float(col.position.y + size.y * 0.5).is_equal_approx(2.5 * IN2M, 0.001)   # the roof, +-1 mm
 	assert_vector(Vector3(col.position.x, 0.0, col.position.z)).is_equal(Vector3.ZERO)
+
+
+## The plain block is a plain STONE GREY (maintainer 04.10.): a mid luminance and no warm cast. The first colour
+## (0.52, 0.50, 0.46) read as pale beige cardboard in the Sunset light of the real table.
+func test_the_plain_block_is_neutral_stone_grey() -> void:
+	var meshes := _solid().find_children("*", "MeshInstance3D", false, false)
+	assert_int(meshes.size()).is_equal(1)
+	var c: Color = (((meshes[0] as MeshInstance3D).mesh as PrimitiveMesh).material as StandardMaterial3D).albedo_color
+	assert_float(0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b).is_between(0.2, 0.38)
+	assert_float(absf(c.r - c.b)).is_less_equal(0.03)
