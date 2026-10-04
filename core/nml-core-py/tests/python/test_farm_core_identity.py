@@ -37,6 +37,9 @@ def test_fleet_recorder_preserves_identity(recorder, tiny_record, tmp_path, monk
     # Use a real core-produced game, then exercise the actual recorder main,
     # including serialization. Training/model execution is outside this test.
     fresh = play(tiny_record, True)
+    # The fixture game's own notices (its test list has no kits sidecar) are not the recorder's: the empty-stderr
+    # check at the end covers the recorder run only.
+    capsys.readouterr()
     bank, army = tiny_record
     checkpoint = tmp_path / "checkpoint"
     checkpoint.write_bytes(b"identity-test-only")
