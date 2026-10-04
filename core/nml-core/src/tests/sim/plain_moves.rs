@@ -188,6 +188,34 @@ use super::*;
         assert!(engage_gap_in(&st, 0, 2, Seams { movement: true, ..Seams::default() }) > 10.3);
     }
 
+    /// `Knobs::route_root`: with the header's `movement` ON, the search's playout
+    /// moves are rigid and its ROOT move routes (RED: drop the override in
+    /// `route_root_seams` and the playout advance routes too); OFF leaves both on
+    /// the header's seams.
+    #[test]
+    fn route_root_routes_the_root_move_and_keeps_the_playouts_rigid() {
+        let (st, statics) = buff_line();
+        let t = forest_bar_board();
+        let adv = crate::menu::Candidate { unit: "a".into(), kind: ADVANCE, dest: Some([8.0 * IN2M as f64, 0.0, 0.0]),
+            shoot: None, charge: None, patient: false, wave: None };
+        let rigid = resolve_on_board(&statics, &st, &adv.action(), &t, Seams::default()).unwrap();
+        let routed = resolve_on_board(&statics, &st, &adv.action(), &t, Seams { movement: true, ..Seams::default() })
+            .unwrap();
+        let policy = |route_root: bool| {
+            let knobs = crate::acts::Knobs { movement: true, route_root, ..Default::default() };
+            let (seams, root) = crate::plan::route_root_seams(&knobs, crate::plan::seams_of(&knobs));
+            let mut p = crate::playout::Policy::new(&statics, &t, seams);
+            p.root_seams = root;
+            p
+        };
+        let on = policy(true);
+        assert_eq!(on.resolve(&st, &adv).unwrap().positions, rigid.positions);
+        assert_eq!(on.resolve_root(&st, &adv).unwrap().positions, routed.positions);
+        let off = policy(false);
+        assert_eq!(off.resolve(&st, &adv).unwrap().positions, routed.positions);
+        assert_eq!(off.resolve_root(&st, &adv).unwrap().positions, routed.positions);
+    }
+
     /// NML-1152 B14 step 1 — the table RECORDS the Bounding die, the twin
     /// REPLAYS it: a `traced` draw of `faces:[2], plus:1` grows the 6" band by
     /// exactly 2+1 = 3" for THIS act (RED for the arm: comment out the
