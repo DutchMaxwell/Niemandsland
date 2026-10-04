@@ -298,3 +298,12 @@ func test_the_header_stamps_the_dangerous_end_morale_the_table_always_rolls() ->
 	var knobs: Dictionary = AiActRecorder._header_line(_state(), Callable())["knobs"]
 	assert_bool(bool(knobs.get("dangerous_end_morale", false))) \
 		.override_failure_message("the Rust planner skips the p.10 test the table rolls").is_true()
+
+
+## route_root (#1480): the in-game Rust planner routes its ROOT advance/rush per model around terrain, the
+## way this table walks it, and keeps the deeper playout moves rigid; an absent key reads OFF
+## (core/nml-core/src/acts.rs). The constant `true`: the table always executes per model.
+func test_the_header_stamps_route_root_for_the_per_model_table() -> void:
+	var knobs: Dictionary = AiActRecorder._header_line(_state(), Callable())["knobs"]
+	assert_bool(bool(knobs.get("route_root", false))) \
+		.override_failure_message("the in-game planner plans rigid moves the table walks per model").is_true()

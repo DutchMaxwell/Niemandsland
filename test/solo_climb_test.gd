@@ -5,16 +5,16 @@ extends GdUnitTestSuite
 const EDGE_X_M := 2.0 * 0.0254          # a container edge 2" ahead of the model
 const ROOF_M := 2.5 * 0.0254
 
-var _seam0 := false
+var _epoch0 := 0
 
 
 func before_test() -> void:
-	_seam0 = SoloController.climb_seam   # statics leak across gdUnit tests — restored in after_test
-	SoloController.climb_seam = true
+	_epoch0 = AiActRecorder.rules_epoch   # statics leak across gdUnit tests — restored in after_test
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_70_TRAY_EXACT
 
 
 func after_test() -> void:
-	SoloController.climb_seam = _seam0
+	AiActRecorder.rules_epoch = _epoch0
 
 
 func _setup(dy_in: float, wired: bool) -> Array:
@@ -58,8 +58,8 @@ func test_without_the_ledge_wiring_the_edge_stays_a_wall() -> void:
 	assert_float((out[0] as Vector3).x).is_less(EDGE_X_M)
 
 
-func test_with_the_seam_off_the_wired_edge_stays_a_wall() -> void:
-	SoloController.climb_seam = false
+func test_at_epoch_69_the_wired_edge_stays_a_wall() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_70_TRAY_EXACT - 1
 	var s := _setup(2.5, true)
 	var solo: SoloController = s[0]
 	var models: Array = solo._moving_models(s[1])

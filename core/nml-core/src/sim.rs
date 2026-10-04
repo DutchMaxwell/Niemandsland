@@ -7554,7 +7554,7 @@ fn resolve_with(
                         // table's own, per member and per WEAPON — the board's
                         // sight volumes are built once for the whole volley.
                         let zones = match (seams.sighting, cover) {
-                            (true, Cover::Board(t)) => sight::zones_of(t),
+                            (true, Cover::Board(t)) => sight::zones_of_with(t, seams.shelf_sight),
                             _ => Vec::new(),
                         };
                         // D1-B4: the table's dice, in the table's draw order —
