@@ -260,6 +260,60 @@ def _slot_work(w, slot, rows):
             "net": w["net"].proof()}
 
 
+def _cand_work(w, uid, job):
+    """One source CANDIDATE in a worker (stage-0 amendment A4.2): the single-candidate slot result, tagged with its slot
+    and candidate index."""
+    slot, k, row = job
+    return dict(_slot_work(w, slot, [row]), slot=slot, k=k)
+
+
+def serial_keep(slots, eligible, cap):
+    """A4.2: from {(slot, k): eligible?} of the candidates played so far -> (the candidates the SERIAL pass plays, in
+    manifest order: each slot up to and including its first eligible one, at most `cap`; the slots that stay missing;
+    the slots still undecided because a candidate the serial pass would play has not run yet)."""
+    keep, missing, undecided = [], [], []
+    for s, rows in slots.items():
+        for k in range(min(cap, len(rows))):
+            if (s, k) not in eligible:
+                undecided.append(s)
+                break
+            keep.append((s, k))
+            if eligible[(s, k)]:
+                break
+        else:
+            missing.append(s)
+    return keep, missing, undecided
+
+
+def source_parallel(slots, workers, width, cfg, timing, transitions):
+    """A4.2: every undecided slot's next `width` candidates run in parallel across the pool (candidate 0 of every slot
+    first), wave after wave; then exactly the serial pass's candidates (`serial_keep`) are merged in manifest order and
+    every speculative candidate after a slot's first eligible one is dropped unseen (rows, logs, timing, transitions,
+    headers, net calls), so the output equals the serial pass."""
+    import lab2_pool
+    names = list(slots)
+    results, eligible = {}, {}
+    while True:
+        keep, missing, undecided = serial_keep(slots, eligible, cfg["cap"])
+        if not undecided:
+            break
+        jobs = {}
+        for s in undecided:
+            n = min(cfg["cap"], len(slots[s]))
+            first = next(k for k in range(n) if (s, k) not in eligible)
+            for k in range(first, min(first + width, n)):
+                jobs[(s, k)] = slots[s][k]
+        order = sorted(jobs, key=lambda sk: (sk[1], names.index(sk[0])))
+        units = {"%s/%d" % sk: (sk[0], sk[1], jobs[sk]) for sk in order}
+        for r in lab2_pool.run_clusters(units, workers, _slot_init, _cand_work, (cfg,), ordered=True):
+            res = r["result"]
+            results[(res["slot"], res["k"])] = res
+            eligible[(res["slot"], res["k"])] = bool(res["positions"])
+    m = merge_slots(["%s/%d" % sk for sk in keep], {"%s/%d" % sk: results[sk] for sk in keep}, timing, transitions)
+    m["missing"] = missing
+    return m
+
+
 def merge_slots(order, results, timing, transitions):
     """Per-slot results in MANIFEST order into the single-process shape: the timing / transition sets take states in
     that order and keep the first per cell exactly as one sequential pass would; net calls add up over the workers."""
@@ -331,8 +385,11 @@ def cmd_source(a):
         import lab2_pool
         cfg = {"repo": a.repo, "bank": a.bank, "lists": a.lists, "cap": a.cap, "play_kw": play_kw,
                "timing": bool(timing is not None), "transitions": bool(transitions is not None)}
-        reports = lab2_pool.run_clusters(slots, a.workers, _slot_init, _slot_work, (cfg,))
-        m = merge_slots(list(slots), {r["id"]: r["result"] for r in reports}, timing, transitions)
+        if a.candidate_width > 1:   # A4.2: a slot's candidates in parallel too; output = the serial pass's
+            m = source_parallel(slots, a.workers, a.candidate_width, cfg, timing, transitions)
+        else:
+            reports = lab2_pool.run_clusters(slots, a.workers, _slot_init, _slot_work, (cfg,))
+            m = merge_slots(list(slots), {r["id"]: r["result"] for r in reports}, timing, transitions)
         positions, discarded, missing, logs, proof = m["positions"], m["discarded"], m["missing"], m["logs"], m["net"]
     else:
         net, logs = ShippedNet(a.repo), []
@@ -369,6 +426,8 @@ def main(argv=None):
     s.add_argument("--knobs", help="JSON of play_game kwargs of the shipped grade (the fullgames --knobs file)")
     s.add_argument("--cap", type=int, default=20)
     s.add_argument("--workers", type=int, default=1, help="slots in N spawn workers, merged in manifest order (same rows)")
+    s.add_argument("--candidate-width", type=int, default=1,
+                   help="A4.2: run up to N candidates of a slot at once (with --workers > 1); the output equals the serial pass")
     s.add_argument("--out", required=True)
     s.add_argument("--eval", help="D_endings_eval.tsv: attach the 8 eval stream keys to every position")
     s.add_argument("--transitions-out", help="write the first 9 (cells 1-4) / 8 (cells 5-12) resolves per cell")
