@@ -4,7 +4,8 @@
 `run_clusters` runs COMPLETE clusters (a position with all arms and replicates, a block with all arms, dice and
 seats) in sha256(scheduler key : cluster id) order, one cluster per task, one `init()` context (core + net) per
 worker process (spawn mode); a cluster never spans workers. Every task reports its worker pid and VmHWM.
-`p1_workers` is prereg P1: the highest N in 1..4 with N x max worker VmHWM <= 6 GiB and max <= 512 MiB.
+`p1_workers` is prereg P1 as amendment A4 widened it for the pilot's dedicated >= 32-vCPU box: the highest N in 1..24 with
+N x max worker VmHWM <= 12 GiB (24 x 512 MiB) and max <= 512 MiB (was 1..4 and 6 GiB on the laptop).
 Run:  python3 tools/lab2_pool.py p1 --rss worker_hwms.json
 """
 import argparse
@@ -18,7 +19,7 @@ from concurrent.futures import ProcessPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lab2_rows import vmhwm_mib  # noqa: E402
 
-CAP_MIB, PER_WORKER_MIB, MAX_WORKERS = 6 * 1024, 512, 4
+CAP_MIB, PER_WORKER_MIB, MAX_WORKERS = 12 * 1024, 512, 24   # amendment A4 (was 6 GiB, 4 workers)
 _CTX = {}
 
 
