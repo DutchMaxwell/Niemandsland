@@ -15,7 +15,7 @@ extends SceneTree
 ## never leave a 3" cell and the red proof would be vacuous.
 ##
 ## Run: godot --headless -s res://tools/terrain_bank_dump.gd -- \
-##        [out=<dir>] [from=1] [to=200]
+##        [out=<dir>] [from=1] [to=200] [walls=1]
 ## Writes one file per seed: <out>/board_<seed>.json
 ##
 ## NML-1073 M3-9b: each board ALSO carries `pieces`, `SchoolTerrain.generate`'s
@@ -74,6 +74,7 @@ var _from := 1
 var _to := 200
 var _symmetric := true
 var _seeds_file := ""
+var _walls := false     # walls=1: the header line carries the table's walls (table-realism, 04.10.)
 var _ovl: Node3D
 
 
@@ -91,6 +92,8 @@ func _init() -> void:
 			_symmetric = arg.substr(10) != "0"
 		elif arg.begins_with("seeds="):
 			_seeds_file = arg.substr(6)
+		elif arg.begins_with("walls="):
+			_walls = arg.substr(6) != "0"
 
 
 ## The NML-1155 overlay harvest needs the tree initialized (the overlay builds
@@ -150,6 +153,11 @@ func _run() -> void:
 			return
 		_ovl.update_wall_models(ml.wall_segments, Vector2(6.0, 4.0), 0.0)
 		_ovl.update_placed_objects(ml.placed_objects, Vector2(6.0, 4.0), 0.0)
+		if _walls:
+			# walls=1: the header line carries the table's walls, flattened exactly as the live
+			# table's header does (AiActRecorder._terrain_line). Off: the line keeps `[]`.
+			world["walls"] = MoveRecorder._flatten(_ovl.get_wall_segments_world())
+			board["terrain"] = AiActRecorder._school_terrain_line(world)
 		var walls: Array = []
 		for seg in _ovl.get_wall_segments_world():
 			walls.append([seg[0].x / IN2M, seg[0].y / IN2M, seg[1].x / IN2M, seg[1].y / IN2M])
