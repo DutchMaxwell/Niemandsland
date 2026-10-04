@@ -2382,6 +2382,10 @@ def play_game(
     # 16.09. (D-MAGIC): the cast SUB-PHASE switch as a kwarg, so a replay of a record stamped
     # `seam_cast: true` (#1023) plays it ON; None = TRAINER_KNOBS["seam_cast"] (the fork door).
     seam_cast: bool | None = None,
+    # #1480's ROOT-move routing (`Knobs::route_root`): every searching seat routes its root moves per model; the
+    # playouts stay rigid. Pairs with movement="table" (a rigid-executing game loses with it, movefidelity part 3c).
+    # False = the header and the record stay byte-identical (stamped only when on).
+    route_root: bool = False,
     hero_attach: str = "off",
     dice: str = "expected",
     charge_landing: str = "off",
@@ -2831,6 +2835,7 @@ def play_game(
         # chain either (`sim::caster_of`).
         cast_fold=bool(cast_fold),
         seam_cast=(TRAINER_KNOBS["seam_cast"] if seam_cast is None else bool(seam_cast)),
+        **({"route_root": True} if route_root else {}),
         # NML-1073 M5 D1-B4b: the SEAM half of `hero_attach`. Deriving the
         # attachment is not enough — without this the hero would fire inside its
         # host's volley AND still be handed a full activation of its own
@@ -3359,6 +3364,7 @@ def play_game(
             # digest and no existing record moves — and a bank is verifiable
             # by its own headers (the record tells the truth).
             **({"seam_cast": True} if knobs["seam_cast"] else {}),
+            **({"route_root": True} if knobs.get("route_root") else {}),
             "hero_attach": hero_attach,
             "dice": eff_dice,
             "charge_landing": charge_landing,
