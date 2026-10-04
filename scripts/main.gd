@@ -411,6 +411,7 @@ var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 var result_pips: ResultPips = null  # VFX #1: wound ticks / blood markers over the models (presentation only)
+var _vfx_saves_made := 0   # saves made by the save batches of the current _solo_resolve_saves (VFX #1 strip)
 var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat stage (solo)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
@@ -7560,6 +7561,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 		solo: Dictionary = {}) -> int:
 	if hits <= 0:
 		return 0
+	_vfx_saves_made = 0   # VFX #1: the save batches below add the saves they made
 	# Base AP plus any conditional AP (Shatter/Tear/Melee Slayer/Disintegrate; range-gated Slayer/
 	# Piercing Hunter need `dist_in` — -1 = unknown, their ranged leg then stays off, conservative)
 	# this weapon gets against THIS defender — registry-driven, system-scoped.
@@ -7613,6 +7615,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	var normal: int = hits - ap4_hits
 	if normal > 0:
 		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
+	_vfx_hit_strip(defender, hits, _vfx_saves_made)
 	return total
 
 
@@ -7778,6 +7781,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 					shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
 			_solo_rule_float(defender, "%s +%d" % [(boost_rule if boost_low > 1 else shred_name), shred_extra], Color(1.0, 0.5, 0.4))
 	var unsaved := maxi(0, count - blocks)
+	_vfx_saves_made += blocks
 	# apply_deadly=false (Bug: Deadly no-carry-over): return the RAW unsaved count so the caller can
 	# apply Deadly per-model (each ×X, capped at one model, no spill). The pooled deadly_multiplier path
 	# below stays for spells and every non-Deadly weapon (identical to before). Shred rides the pool.
@@ -13045,6 +13049,18 @@ func _solo_wound_models(unit: GameUnit, wounds: int, pid: int, deferred_deaths =
 		else:
 			deferred_deaths.append({"unit": unit, "models": died_models})
 	return remaining
+
+
+## VFX #1, the unit-level beat: hits and saves belong to the unit, not to one model, so they sit over the
+## defender's centre — ivory dots for the hits that called for saves, blue rings above for the saves made.
+func _vfx_hit_strip(defender: GameUnit, hits: int, saves: int) -> void:
+	var c: Vector3 = solo_controller.unit_centre(defender) if solo_controller != null and defender != null else Vector3.INF
+	if result_pips == null or c == Vector3.INF or c == Vector3.ZERO:
+		return
+	var eye := c + Vector3.UP * (_solo_unit_los_height_m(defender) + 0.03)
+	result_pips.mark(ResultPips.Kind.HIT, eye, hits)
+	if saves > 0:
+		result_pips.mark(ResultPips.Kind.SAVE, eye + Vector3.UP * 0.016, saves)
 
 
 ## VFX #1: one result mark over a model, from the allocation that just happened (headless spawns nothing).
