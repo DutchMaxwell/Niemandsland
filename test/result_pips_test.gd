@@ -14,17 +14,21 @@ func _pips():
 	return p
 
 
-func test_off_by_default_until_the_look_is_approved() -> void:
+## Maintainer look verdicts 05.10.: every combat effect GO - on by default; the player's switch still turns them off.
+func test_on_by_default_and_the_switch_turns_them_off() -> void:
+	var fresh: Object = auto_free(load("res://scripts/graphics_settings.gd").new())
+	assert_bool(fresh.get("show_combat_effects") == true).override_failure_message("on by default").is_true()
+	var before: bool = GraphicsSettings.show_combat_effects
+	GraphicsSettings.show_combat_effects = false
 	var p = auto_free(ResultPipsScript.new())
 	p.force_for_tests = true
 	add_child(p)
-	assert_bool(GraphicsSettings.show_combat_effects).is_false()
-	assert_object(p.mark(ResultPipsScript.Kind.KILL, Vector3.ZERO, 1)).is_null()
+	assert_object(p.mark(ResultPipsScript.Kind.KILL, Vector3.ZERO, 1)).override_failure_message("switched off").is_null()
 	GraphicsSettings.show_combat_effects = true
 	var q = auto_free(ResultPipsScript.new())
 	q.force_for_tests = true
 	add_child(q)
-	GraphicsSettings.show_combat_effects = false
+	GraphicsSettings.show_combat_effects = before
 	assert_object(q.mark(ResultPipsScript.Kind.KILL, Vector3.ZERO, 1)).is_not_null()
 
 
