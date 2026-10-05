@@ -306,6 +306,14 @@ func _build_ui() -> void:
 		if pivot != null and pivot.has_method("set_tilt_shift_enabled"):
 			pivot.set_tilt_shift_enabled(on))
 	vbox.add_child(tilt_cb)
+	var grade := OptionButton.new()
+	grade.name = "BiomeGradeStrengthOption"
+	for title in ["Biome grade: Subtle", "Biome grade: Clear", "Biome grade: Strong"]:
+		grade.add_item(title)
+	grade.select(GraphicsSettings.biome_grade_strength)
+	grade.tooltip_text = "Biome color strength. Active at Medium quality and above."
+	grade.item_selected.connect(GraphicsSettings.set_biome_grade_strength)
+	vbox.add_child(grade)
 
 	# Gore (combat effects): how bloody wounds and casualties look — Off shows dust instead of blood.
 	var gore_row := HBoxContainer.new()
