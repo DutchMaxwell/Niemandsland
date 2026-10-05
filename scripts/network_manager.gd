@@ -1917,8 +1917,7 @@ func sync_object_visibility(object_id: int, is_visible: bool) -> void:
 		return
 	for child in object_manager.get_children():
 		if child.has_meta("network_id") and int(child.get_meta("network_id")) == object_id:
-			child.visible = is_visible
-			child.set_meta("deleted", not is_visible)
+			DeletedState.apply(child, not is_visible)
 			break
 
 

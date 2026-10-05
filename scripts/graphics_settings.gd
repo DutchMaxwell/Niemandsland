@@ -50,6 +50,8 @@ var screen_index: int = -1
 var show_move_trails: bool = true
 ## Transparency stage 2: rising rule texts at the table ("Blast ×3", "Artillery +1").
 var show_rule_floats: bool = true
+## Combat effects (VFX: result pips, volley cue, spell seal). Default OFF until the look is approved.
+var show_combat_effects: bool = false
 ## Cinematic depth of field ("tilt-shift") on the table camera: sharp while zoomed
 ## out, softly blurred in the foreground/background as the camera zooms towards the
 ## models. On by default (the intended look); persisted; bound to the Settings
@@ -58,6 +60,8 @@ var tilt_shift: bool = true
 ## Pacing grill 31.07.: the central combat stage (solo) — phases hold, click skips.
 var show_combat_stage: bool = true
 var combat_stage_hold_s: float = 2.5
+## How bloody the combat effects are: 0 Off (dust instead of blood), 1 Normal, 2 Extra. Players and streamers turn it down.
+var gore_level: int = 1
 
 ## Strict "dry brush" movement enforcement: hard-stop a movement path-paint / drag at the
 ## model's MAX legal band (Rush/Charge). ON = Strict (the maintainer's default — you learn the
@@ -313,7 +317,9 @@ func _apply_scaling_3d_staggered(scale: float) -> void:
 		return
 	vp = get_viewport()
 	if vp:
-		vp.scaling_3d_scale = scale
+		# The preset current NOW, not the one that started this wait: a second preset inside the two frames
+		# (Performance -> Low) returned early above and would otherwise get the stale 0.77.
+		vp.scaling_3d_scale = PRESETS[current_preset]["fsr_scale"]
 
 
 ## Apply environment settings
@@ -387,9 +393,11 @@ func save_settings() -> void:
 	config.set_value("graphics", "screen_index", screen_index)
 	config.set_value("graphics", "show_move_trails", show_move_trails)
 	config.set_value("graphics", "show_rule_floats", show_rule_floats)
+	config.set_value("graphics", "show_combat_effects", show_combat_effects)
 	config.set_value("graphics", "tilt_shift", tilt_shift)
 	config.set_value("graphics", "show_combat_stage", show_combat_stage)
 	config.set_value("graphics", "combat_stage_hold_s", combat_stage_hold_s)
+	config.set_value("graphics", "gore_level", gore_level)
 	config.set_value("graphics", "enforce_movement_limit", enforce_movement_limit)
 	config.set_value("graphics", "ai_explain_persistent", ai_explain_persistent)
 	config.save("user://graphics_settings.cfg")
@@ -412,8 +420,10 @@ func load_settings() -> void:
 	screen_index = config.get_value("graphics", "screen_index", -1)
 	show_move_trails = config.get_value("graphics", "show_move_trails", true)
 	show_rule_floats = config.get_value("graphics", "show_rule_floats", true)
+	show_combat_effects = config.get_value("graphics", "show_combat_effects", false)
 	tilt_shift = config.get_value("graphics", "tilt_shift", true)
 	show_combat_stage = config.get_value("graphics", "show_combat_stage", true)
 	combat_stage_hold_s = float(config.get_value("graphics", "combat_stage_hold_s", 2.5))
+	gore_level = clampi(int(config.get_value("graphics", "gore_level", 1)), 0, 2)
 	enforce_movement_limit = config.get_value("graphics", "enforce_movement_limit", true)
 	ai_explain_persistent = config.get_value("graphics", "ai_explain_persistent", true)

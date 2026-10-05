@@ -1,0 +1,22 @@
+{
+  "label": "Ruined Borderland",
+  "table_feet": [6, 4],
+  "biome": "temperate_grassland",
+  "mood": "Sunset",
+  "pieces": [
+    {"prop_id": "longhouse_6x3", "kind": 3, "x_in": -18.43, "z_in": -10.06, "yaw_deg": 9.8},
+    {"prop_id": "longhouse_6x3", "kind": 3, "x_in": 18.43, "z_in": 10.06, "yaw_deg": 189.8},
+    {"prop_id": "ruin_small_1f", "kind": 0, "x_in": -25.04, "z_in": -14.9, "yaw_deg": -16.1},
+    {"prop_id": "ruin_small_1f", "kind": 0, "x_in": 25.04, "z_in": 14.9, "yaw_deg": 163.9},
+    {"prop_id": "outcrop_6x3", "kind": 3, "x_in": -24.73, "z_in": 8.15, "yaw_deg": 19.3},
+    {"prop_id": "outcrop_6x3", "kind": 3, "x_in": 24.73, "z_in": -8.15, "yaw_deg": 199.3},
+    {"prop_id": "ruin_large_2f", "kind": 0, "x_in": -3.98, "z_in": -10.98, "yaw_deg": 8.4},
+    {"prop_id": "ruin_large_2f", "kind": 0, "x_in": 3.98, "z_in": 10.98, "yaw_deg": 188.4},
+    {"prop_id": "ruin_corner_wall", "kind": 0, "x_in": 3.35, "z_in": -11.32, "yaw_deg": 28.1},
+    {"prop_id": "ruin_corner_wall", "kind": 0, "x_in": -3.35, "z_in": 11.32, "yaw_deg": 208.1},
+    {"prop_id": "forest_large", "kind": 1, "x_in": -31.35, "z_in": -3.58, "yaw_deg": 81.3},
+    {"prop_id": "forest_large", "kind": 1, "x_in": 31.35, "z_in": 3.58, "yaw_deg": 261.3},
+    {"prop_id": "forest_small", "kind": 1, "x_in": -12.06, "z_in": 1.53, "yaw_deg": 10.3},
+    {"prop_id": "forest_small", "kind": 1, "x_in": 12.06, "z_in": -1.53, "yaw_deg": 190.3}
+  ]
+}

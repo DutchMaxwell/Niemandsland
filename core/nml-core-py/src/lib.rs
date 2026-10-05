@@ -327,6 +327,10 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
         if let Some(f) = t.fallback {
             tree["fallback"] = f.into();
         }
+        // `deadline_after_preselect`: the key rides ONLY a pick where that knob ran the clock.
+        if let Some(us) = t.preselect_us {
+            tree["preselect_us"] = us.into();
+        }
         trace.insert("tree".into(), tree);
     }
     // `deadline_us`: the key rides ONLY a pool pick where the knob was set.
@@ -334,6 +338,9 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
         let mut m = serde_json::json!({"completed": d.completed, "cut": d.cut, "elapsed_us": d.elapsed_us});
         if let Some(f) = d.fallback {
             m["fallback"] = f.into();
+        }
+        if let Some(us) = d.preselect_us {
+            m["preselect_us"] = us.into();
         }
         trace.insert("deadline".into(), m);
     }
@@ -725,8 +732,12 @@ impl Core {
             // NEW rule, so an absent key (every corpus recorded before it)
             // stays OFF.
             dangerous_end_morale: self.knobs.dangerous_end_morale,
-            // Tray-exact series: dormant until its one epoch bump (io.rs `Seams::tray_exact`).
-            tray_exact: false,
+            // Tray-exact series (io.rs `Seams::tray_exact`): on from its one epoch bump.
+            tray_exact: nmlcore::acts::rule_on(self.knobs.rules_epoch, nmlcore::acts::EPOCH_70_TRAY_EXACT),
+            // Dormant: only the search's root seams will set it (io.rs `Seams::plain_only`).
+            plain_only: false,
+            // Free shelf pieces in sight: dormant (io.rs `Seams::shelf_sight`).
+            shelf_sight: false,
             // GF v3.5.1 p.9 — `consolidate="table"` in the header.
             consolidate: self.knobs.consolidate,
             // Rung I (DEFECT_LEDGER row 31) — `cond_ap_dice` in the header.
@@ -874,6 +885,7 @@ impl Core {
         m.insert("tree_wall_ms".into(), self.knobs.tree_wall_ms.into());
         m.insert("pool_wall_ms".into(), self.knobs.pool_wall_ms.into());
         m.insert("deadline_us".into(), self.knobs.deadline_us.into());
+        m.insert("deadline_after_preselect".into(), self.knobs.deadline_after_preselect.into());
         m.insert("tree_widen".into(), self.knobs.tree_widen.into());
         m.insert(
             "melee_reach".into(),
@@ -1365,9 +1377,17 @@ impl Core {
         }
         let statics = self.statics_for(&state.inner)?;
         let seams = self.seams();
+        // NML-1073 M4-7: the path seam's tier-2 index, built once from the root
+        // state for this whole search — what `plan::reach_of` hands every plan.rs
+        // entry. This binding builds its own `Policy` and never set it, so
+        // `seam_path` was silently inert in the Python search.
+        let index = nmlcore::plan::reach_of(seams, &state.inner, &self.terrain);
         let tuning = self.tuning();
+        let (seams, root) = nmlcore::plan::route_root_seams(&self.knobs, seams);
         let mut policy = Policy::new(&statics, &self.terrain, seams);
         policy.tuning = tuning;
+        policy.reach = index.as_ref();
+        policy.root_seams = root;
         // The net is this core's `AiMissionEval.fit_mode`, but WHETHER it is
         // switched on is the activation's own static. An act recorded with the
         // hand eval must replay on the hand eval even on a core that carries a

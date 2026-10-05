@@ -188,8 +188,12 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## Wave 3 batch B moves this stamp to 65 with EPOCH_65_MELEE_TRUTH, batch C to 66 with
 ## EPOCH_66_DISTANCE_TRUTH, batch D to 67 with EPOCH_67_MARKERS_BURSTS (D42/W3-4/D19/D20),
 ## batch E to 68 with EPOCH_68_MODIFIER_SUM (D21 modifier arithmetic), B8 to 69 with
-## EPOCH_69_HERO_FOLD (the trainer's arena hero fold; this table's capture already matched it).
-static var rules_epoch: int = 69
+## EPOCH_69_HERO_FOLD (the trainer's arena hero fold; this table's capture already matched it), the
+## tray-exact series to 70 with EPOCH_70_TRAY_EXACT (the core now plays this table's casualty order,
+## Takedown, Guarded over 9" and Counter) and turns the AI climb on (heights B2, SoloController.climb_on).
+static var rules_epoch: int = 70
+## The tray-exact series' one bump, mirrored for the table-side gate it carries (the AI climb).
+const EPOCH_70_TRAY_EXACT := 70
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
@@ -487,6 +491,11 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# planner (_core_plan reads THIS header) predicted a game without it. No switch here: the
 			# constant `true`. A corpus recorded before the key still replays without the test.
 			"dangerous_end_morale": true,
+			# route_root (#1480): the live planner's search routes its ROOT advance/rush per model around
+			# terrain, the way this table walks it, and keeps the deeper playout moves rigid. The table always
+			# executes per model, so the constant `true`. Search-only: an absent key reads OFF (acts.rs), and a
+			# rigid executor must NOT stamp it (it measured -13.6 points there: the root plans a route nobody walks).
+			"route_root": true,
 			# NML-1073 M5 D1-B7: which RESOLVER produced this corpus row. The table has only
 			# one — every combat die goes through main._solo_tray_roll — so this side is the
 			# constant "table"; the fast trainer stamps the same key from its own `dice` knob
@@ -648,6 +657,12 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 ## 6x4ft school table). Same header SHAPE as the overlay branch above (so
 ## act_recheck's terrain_at_from_plain reads either the same way): no sandbox
 ## (SchoolTerrain has none), no rotation (the school layout never rotates).
+## Walls (table-realism, 04.10.): the same layout raises the table's ruin walls on
+## an overlay, but a SchoolTerrain world carries none, so this line wrote `[]` and a
+## trainer reading the bank planned and moved on a wall-less table. A world that
+## brings its overlay's walls (`world["walls"]`, the overlay branch's exact shape:
+## get_wall_segments_world() flattened, world metres) hands them through; a world
+## without the key keeps `[]`, so every board and corpus written before is unchanged.
 static func _school_terrain_line(world: Dictionary) -> Variant:
 	if world.is_empty():
 		return null
@@ -655,7 +670,7 @@ static func _school_terrain_line(world: Dictionary) -> Variant:
 	for k in (world["cells"] as Dictionary):
 		var c := k as Vector2i
 		cells.append([c.x, c.y, int(world["cells"][k])])
-	return {"cells": cells, "sandbox": [], "walls": [],
+	return {"cells": cells, "sandbox": [], "walls": world.get("walls", []),
 		"cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0,
 			"grid_size_inches": SchoolTerrain.CELL_IN, "inches_to_meters": SchoolTerrain.IN2M}}
 

@@ -19,7 +19,7 @@ use std::io::{BufRead, BufReader};
 
 use serde::Deserialize;
 
-use super::cost::{CellSet, Grid, Wall, Zone};
+use super::cost::{CellSet, Grid, Ledge, Wall, Zone};
 use super::geom2::{to_f32, V2};
 
 fn v2(p: [f64; 2]) -> V2 {
@@ -198,6 +198,9 @@ pub struct CallOpts {
     /// `opts["charge_tgt_bases"]` — `[[centre, radius], …]`.
     pub charge_tgt_bases: Vec<(V2, f64)>,
     pub charge_slots: Vec<V2>,
+    /// `opts["ledges"]` (heights B2) — climbable edges, recorded as `[ax, ay, bx, by, dy_in]` rows
+    /// (`MoveRecorder.ledge_rows`); absent = none, so every earlier corpus replays byte-identically.
+    pub ledges: Vec<Ledge>,
 }
 
 #[derive(Deserialize)]
@@ -238,6 +241,8 @@ struct PlainOpts {
     charge_tgt_bases: Vec<serde_json::Value>,
     #[serde(default)]
     charge_slots: Vec<[f64; 2]>,
+    #[serde(default)]
+    ledges: Vec<[f64; 5]>,
 }
 
 /// One `MoveRecorder.trace_model` entry — move_recorder.gd:198. A model's
@@ -472,6 +477,7 @@ fn call_of(pc: PlainCall, header: &MoveHeader, path: &str, ln: usize) -> Result<
         charge_goal: o.charge_goal.map(v2),
         charge_tgt_bases,
         charge_slots: o.charge_slots.into_iter().map(v2).collect(),
+        ledges: o.ledges.iter().map(|r| Ledge { a: v2([r[0], r[1]]), b: v2([r[2], r[3]]), dy_in: r[4] }).collect(),
     };
     let trace = Trace {
         flow: pc

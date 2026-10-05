@@ -598,6 +598,14 @@ pub struct Seams {
     /// (`--red-move-rigid`). Default OFF, so nothing replays differently.
     #[serde(default)]
     pub move_rigid: bool,
+    /// `movement` limited to its plain ADVANCE/RUSH routing: the CHARGE port
+    /// (aim, arc budget, falls-short snap), the oval engage gaps and the Hit &
+    /// Run kite keep their rigid / radius readings. The seam the search's ROOT
+    /// moves are to use under `route_root` (the measured cheap form of table
+    /// thinking: the routing alone carried the strength, the other pieces
+    /// nothing). DORMANT: no header sets it; tests do.
+    #[serde(default)]
+    pub plain_only: bool,
     /// NML-1073 M5 D1-B8 — the RED switch for the p.12 DANGEROUS-terrain test,
     /// and inverted on purpose: the test is not a research seam but a rule, so
     /// `false` (the `Default`, and every corpus's) RUNS it. It fires only on the
@@ -643,12 +651,18 @@ pub struct Seams {
     /// bug this replaces exactly for corpora that predate it.
     #[serde(default)]
     pub dangerous_end_morale: bool,
-    /// Tray-exact series (maintainer D151 = B, 03.10.) — DORMANT: no header sets
-    /// it, so every game plays the recorded rules. The series' ONE epoch bump at
-    /// its end replaces every read with `rule_on(.., EPOCH_70_*)`; a dormant
-    /// epoch constant is what the CI epoch gate refuses (rule 4). Tests set it.
+    /// Tray-exact series (maintainer D151 = B, 03.10.): ON from `EPOCH_70_TRAY_EXACT`.
+    /// The two builders that read a header (`plan::seams_of`, the trainer's
+    /// `nml-core-py` seam) derive it from `rules_epoch`, so a record below 70
+    /// replays the old slot order and flags byte-exact. Tests set it directly.
     #[serde(default)]
     pub tray_exact: bool,
+    /// Fantasy-table S2 — DORMANT: with it, the table-style sight sweep also reads
+    /// the header's freely placed shelf pieces as boxes (`sight::zones_of_with`), the
+    /// way `TerrainOverlay._sandbox_volumes` does. No header sets it: every corpus
+    /// and rollout reads painted cells only, as recorded. Tests set it.
+    #[serde(default)]
+    pub shelf_sight: bool,
 
     /// GF Advanced Rules v3.5.1 p.9 "Consolidation Moves" — `consolidate=
     /// "table"` in the header: after a melee that wipes one side, the survivor

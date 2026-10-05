@@ -354,3 +354,80 @@ use super::*;
         crate::deployment::withdraw_as_destroyed(&mut st, 1, 1);
         assert!(aligned(&st) && st.kits[1].is_empty(), "{:?}", st.kits);
     }
+
+    /// Tray-exact S7: a Takedown weapon (here also Deadly(3)) resolves as a unit of [1] against the
+    /// target's MOST VALUABLE model (`casualty_order(..).last()`, the table's `attacker_pick_target`):
+    /// w x 3 lands on that one model, overkill lost, so one model dies however many wounds go
+    /// through. Without the switch the same unsaved wounds land per model and kill one each.
+    #[test]
+    fn a_takedown_volley_kills_only_the_picked_model_with_tray_exact() {
+        let (mut st, mut statics) = deadly_line();
+        (statics[0].shoot[0].takedown, statics[0].shoot[0].attacks) = (true, 6);
+        (st.wounds[2], statics[2].wounds_max) = (vec![1, 1, 1], vec![1, 1, 1]);
+        st.profiles = Rc::new(Profiles {
+            list: vec![
+                Profile { wounds_max: vec![1], ..host_profile("a") },
+                host_profile("ah"),
+                Profile { wounds_max: vec![1, 1, 1], model_count: 3, ..host_profile("b") },
+                host_profile("bh"),
+            ],
+            index: HashMap::new(),
+        });
+        let k = |w: u16| crate::state::Kit { weapons: vec![w], equipment: 0, wounds_max: 1 };
+        st.kits = vec![Rc::new(vec![]), Rc::new(vec![]), Rc::new(vec![k(1), k(0), k(0)])]; // slot 0 = launcher
+        let action = Action {
+            kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None,
+            patient: false, split: None, traced: None, teleport: None,
+        };
+        let shoot = |tray_exact: bool| {
+            let (mut rng, mut tray) = (GodotRng::new(0), Tray::seeded(2));
+            let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact, ..Seams::default() };
+            resolve_stochastic_tray_on_board(&statics, &st, &action, &Terrain::default(), seams, &mut rng, &mut tray).unwrap()
+        };
+        let (next, shot) = shoot(true);
+        assert!(shot.deadly_tally >= 2, "fixture: at least two unsaved: {:?}", shot.rolls);
+        assert_eq!(next.alive[2], 2, "one model, however many wounds: {:?}", next.wounds);
+        assert_eq!(next.kits[2].iter().map(|k| k.weapons[0]).collect::<Vec<_>>(), vec![0, 0], "the launcher was picked");
+        assert!(shot.log.iter().any(|l| l.starts_with("Takedown:")), "{:?}", shot.log);
+        assert!(shoot(false).0.alive[2] < 2, "without the switch each unsaved Deadly wound takes a model");
+    }
+
+    /// Tray-exact S9: the melee twin — a charging Takedown blade (Deadly(3)) lands on the target's
+    /// most valuable model only (main.gd:7275-7283), Takedown first, overkill lost. Without the
+    /// switch each unsaved Deadly wound takes a model.
+    #[test]
+    fn a_takedown_charge_kills_only_the_picked_model_with_tray_exact() {
+        let (mut st, mut statics) = deadly_line();
+        statics[0].melee = vec![ShootProfile {
+            name: "Takedown blade".into(), attacks: 6, count: 1, deadly: 3, takedown: true, ..Default::default()
+        }];
+        (st.wounds[2], statics[2].wounds_max) = (vec![1, 1, 1], vec![1, 1, 1]);
+        st.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0], [2.52 * IN2M, 0.0, 0.0], [2.54 * IN2M, 0.0, 0.0]];
+        st.profiles = Rc::new(Profiles {
+            list: vec![
+                Profile { wounds_max: vec![1], ..host_profile("a") },
+                host_profile("ah"),
+                Profile { wounds_max: vec![1, 1, 1], model_count: 3, ..host_profile("b") },
+                host_profile("bh"),
+            ],
+            index: HashMap::new(),
+        });
+        let k = |w: u16| crate::state::Kit { weapons: vec![w], equipment: 0, wounds_max: 1 };
+        st.kits = vec![Rc::new(vec![]), Rc::new(vec![]), Rc::new(vec![k(1), k(0), k(0)])]; // slot 0 = launcher
+        let charge = Action {
+            kind: CHARGE, unit: "a".into(), dest: None, shoot: None, charge: Some("b".into()),
+            patient: false, split: None, traced: None, teleport: None,
+        };
+        let fight = |tray_exact: bool| {
+            let (mut rng, mut tray) = (GodotRng::new(0), Tray::seeded(2));
+            let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact, ..Seams::default() };
+            resolve_stochastic_tray_on_board(&statics, &st, &charge, &Terrain::default(), seams, &mut rng, &mut tray).unwrap()
+        };
+        let (next, shot) = fight(true);
+        assert!(shot.deadly_tally >= 2, "fixture: at least two unsaved: {:?}", shot.rolls);
+        assert_eq!(next.alive[2], 2, "one model, however many wounds: {:?}", next.wounds);
+        assert_eq!(next.kits[2].iter().map(|k| k.weapons[0]).collect::<Vec<_>>(), vec![0, 0], "the launcher was picked");
+        assert!(shot.log.iter().any(|l| l.starts_with("Takedown:")), "{:?}", shot.log);
+        assert!(fight(false).0.alive[2] < 2, "without the switch each unsaved Deadly wound takes a model");
+    }
+

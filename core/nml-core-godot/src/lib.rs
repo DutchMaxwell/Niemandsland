@@ -470,6 +470,10 @@ impl NmlCore {
             None => Terrain::absent(),
         };
         let mut knobs = plain::knobs_of(&plain::sub_dict(&header, "knobs"));
+        // The route_root A/B door says so once per game, so a game log proves it was armed.
+        if let Ok(seat) = std::env::var("NML_ROUTE_ROOT_SEAT") {
+            godot_print!("route_root: door NML_ROUTE_ROOT_SEAT={} header={}", seat.trim(), knobs.route_root);
+        }
         // S4-U4: `acts::header_of`'s rule. A header carrying `books` is a table
         // recording whose bands already fold every move grant.
         knobs.bands_prefolded |= header.contains_key("books");
@@ -865,6 +869,9 @@ impl NmlCore {
         let act = act_statics_of(statics);
         let mut knobs = h.knobs;
         knobs.seam_path = knobs.seam_path || path_seam;
+        // `Knobs::route_root`'s A/B door: the header is stamped once per game, so a
+        // seat-against-seat test turns the knob on per SEARCH, by seat.
+        knobs.route_root = knobs.route_root || route_root_seat(player);
         #[cfg(feature = "onnx-tract")]
         if let Some(loaded) = self.onnx.as_ref() {
             // ONNX precedence: the in-process brain answers the leaves; the HTTP
@@ -1088,6 +1095,17 @@ impl NmlCore {
     }
 }
 
+/// `NML_ROUTE_ROOT_SEAT` — `"1"` / `"2"` turns `Knobs::route_root` on for that
+/// seat's searches, `"both"` for both; unset (every shipped run) = the header's
+/// own value. A test door for the real-table A/B, read per search.
+fn route_root_seat(player: i64) -> bool {
+    match std::env::var("NML_ROUTE_ROOT_SEAT") {
+        Ok(s) if s.trim() == "both" => true,
+        Ok(s) => s.trim().parse::<i64>() == Ok(player),
+        Err(_) => false,
+    }
+}
+
 /// `AiPlanner._policy_candidates` ai_planner.gd:517-545 — the planner's own
 /// action dictionary, read off a Variant.
 fn action_of(d: &VarDictionary) -> Action {
@@ -1246,6 +1264,10 @@ fn pick_out(p: &Pick, root: &plain::Captured, sig: i64) -> VarDictionary {
         if let Some(f) = t.fallback {
             d.set("fallback", f);
         }
+        // `deadline_after_preselect`: the key rides ONLY a pick where that knob ran the clock.
+        if let Some(us) = t.preselect_us {
+            d.set("preselect_us", us as i64);
+        }
         out.set("tree", &d);
     }
     // `deadline_us`: the key rides ONLY a pool pick where the knob was set.
@@ -1256,6 +1278,9 @@ fn pick_out(p: &Pick, root: &plain::Captured, sig: i64) -> VarDictionary {
         d.set("elapsed_us", dl.elapsed_us as i64);
         if let Some(f) = dl.fallback {
             d.set("fallback", f);
+        }
+        if let Some(us) = dl.preselect_us {
+            d.set("preselect_us", us as i64);
         }
         out.set("deadline", &d);
     }

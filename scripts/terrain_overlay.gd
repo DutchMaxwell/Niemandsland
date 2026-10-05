@@ -1753,6 +1753,15 @@ func get_blocker_edges_world() -> Array:
 	return out
 
 
+## Heights B2 (GF p.11): the container OBB edges as climbable ledges — `{"a","b": Vector2 world m, "dy_in"}`,
+## each priced at the container's real height. The planner treats a leg crossing one as a climb, not a wall.
+func get_ledges_world() -> Array:
+	var out: Array = []
+	for e in _blocker_edges:
+		out.append({"a": e[0], "b": e[1], "dy_in": CONTAINER_HEIGHT_INCHES})
+	return out
+
+
 func get_wall_segments_world() -> Array:
 	var out: Array = []
 	for e in _blocker_edges:

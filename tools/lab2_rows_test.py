@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for tools/lab2_rows.py (stage0-row/1) on stub cores: no data, no nml_core. Run: python3 -m pytest -q tools/lab2_rows_test.py"""
 import contextlib
+import time
 import importlib.util
 import os
 import sys
@@ -15,7 +16,7 @@ _SPEC.loader.exec_module(rows)
 
 PRINCIPLES_ROW = ("schema prereg_sha256 row_id split part cell source arm opponent seat replicate seeds build model_sha256 "
                   "header_sha256 net decisions y winner valid reason wall_s rss_hwm_mib done").split()
-PRINCIPLES_DECISION = "seq side arm allocated_us elapsed_us overshoot_us tree deadline search net_calls".split()
+PRINCIPLES_DECISION = "seq side arm allocated_us elapsed_us preselect_us overshoot_us tree deadline search net_calls".split()
 IDENT = dict(prereg_sha256="p", row_id="r", split="D", part="A", cell="1", source="s", arm="T", opponent="I", seat=1,
              replicate=0, seeds={"eval_general": "1"})
 
@@ -139,3 +140,26 @@ def test_a_core_panic_ends_the_row_as_invalid_but_other_base_exceptions_still_ra
     assert rows.guarded(Nm, boom(PanicException(msg))) == (None, "panic: " + msg)
     with pytest.raises(KeyboardInterrupt):
         rows.guarded(Nm, boom(KeyboardInterrupt()))
+
+
+class SlowSp(Sp):
+    """`Sp` whose planner call takes at least 2 ms, so the recorder's elapsed time is large enough to tell formulas apart."""
+    def _pick_for(self, core, state, player, *a, **k):
+        time.sleep(0.002)
+        return super()._pick_for(core, state, player, *a, **k)
+
+
+def test_a3_the_preselection_time_is_its_own_field_and_the_overshoot_counts_the_search_alone():
+    """Stage-0 amendment A3: under `deadline_after_preselect` the core stamps `preselect_us` on the tree or the deadline
+    trace. The decision carries it, `elapsed_us` stays the whole call, and the overshoot is the search's."""
+    sp = SlowSp([{"trace": {"tree": dict(TREE, preselect_us=400)}},
+                 {"trace": {"deadline": {"completed": 2, "cut": False, "elapsed_us": 9, "preselect_us": 300}}},
+                 {"trace": {"tree": TREE}}])
+    rec = rows.Recorder(lambda side: "T", Net)
+    for _ in range(3):
+        run(sp, rec, Core(1), 1)
+    a3_tree, a3_pool, plain = rec.decisions
+    assert (a3_tree["preselect_us"], a3_pool["preselect_us"], plain["preselect_us"]) == (400, 300, None)
+    assert a3_tree["elapsed_us"] >= 2000 and a3_tree["overshoot_us"] == a3_tree["elapsed_us"] - 400 - 1
+    assert a3_pool["overshoot_us"] == a3_pool["elapsed_us"] - 300 - 1 and plain["overshoot_us"] == plain["elapsed_us"] - 1
+    assert "preselect_us" not in a3_tree["tree"] and "preselect_us" not in a3_pool["deadline"]
