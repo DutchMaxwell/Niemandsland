@@ -41,7 +41,9 @@ func test_a_model_missing_from_the_manifest_keeps_the_look() -> void:
 	var solid := _solid(om)
 	await om.apply_solid_model(solid, "no_such_solid_model")
 	assert_bool(_look_visible(solid)).is_true()
-	assert_int(solid.get_child_count()).is_equal(1 + solid.find_children("*", "MeshInstance3D", false, false).size())
+	var added := solid.get_children().filter(func(c: Node) -> bool:
+		return not (c is MeshInstance3D or c is CollisionShape3D or c is Decal))
+	assert_int(added.size()).is_equal(0)   # no model was added
 
 
 func test_a_corrupt_cached_model_keeps_the_look() -> void:

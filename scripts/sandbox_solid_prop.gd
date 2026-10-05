@@ -31,6 +31,12 @@ const COLOURS := {"stone": STONE_COLOR, "moss": Color(0.20, 0.25, 0.10), "ashlar
 	"granite": Color(0.31, 0.315, 0.33), "granite_top": Color(0.36, 0.365, 0.38), "lichen": Color(0.38, 0.40, 0.22),
 	"tuft": Color(0.33, 0.24, 0.14)}
 
+const SKIRT_MARGIN_INCHES := 0.8
+const SKIRT_HEIGHT_INCHES := 0.4   # reaches the table and the lowest 0.2" of the walls, nothing higher
+const SKIRT_OPACITY := 0.7
+
+static var _skirt_textures := {}   # footprint -> ImageTexture, shared by every piece of that size
+
 var prop_id: String = ""
 var prop_kind: int = 0
 var footprint_inches: Vector2 = Vector2.ZERO
@@ -80,3 +86,29 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_lo
 		visual.mesh = mesh
 		visual.position = (hi + lo) * 0.5 * INCHES_TO_METERS
 		add_child(visual)
+	# Soft contact shadow (maintainer 05.10.): a Decal child, so it moves, turns and goes with the piece. Decoration only.
+	var skirt := Decal.new()
+	skirt.name = "ContactSkirt"
+	skirt.texture_albedo = _skirt_texture(footprint_inches)
+	skirt.modulate = Color(1, 1, 1, SKIRT_OPACITY)
+	skirt.size = Vector3(footprint_inches.x + 2.0 * SKIRT_MARGIN_INCHES, SKIRT_HEIGHT_INCHES,
+		footprint_inches.y + 2.0 * SKIRT_MARGIN_INCHES) * INCHES_TO_METERS
+	add_child(skirt)
+
+
+## Opaque under the footprint, fading (squared) to nothing SKIRT_MARGIN_INCHES outside its edge, 10 px per inch; built
+## once per footprint. (A GradientTexture2D square fill stayed near-transparent in that ring, measured 05.10.)
+static func _skirt_texture(fp: Vector2) -> ImageTexture:
+	if _skirt_textures.has(fp):
+		return _skirt_textures[fp]
+	var w := fp.x + 2.0 * SKIRT_MARGIN_INCHES
+	var h := fp.y + 2.0 * SKIRT_MARGIN_INCHES
+	var img := Image.create(int(w * 10.0), int(h * 10.0), false, Image.FORMAT_RGBA8)
+	for py in img.get_height():
+		for px in img.get_width():
+			var dx := maxf(absf((px + 0.5) / 10.0 - w * 0.5) - fp.x * 0.5, 0.0)
+			var dz := maxf(absf((py + 0.5) / 10.0 - h * 0.5) - fp.y * 0.5, 0.0)
+			var a := clampf(1.0 - sqrt(dx * dx + dz * dz) / SKIRT_MARGIN_INCHES, 0.0, 1.0)
+			img.set_pixel(px, py, Color(0, 0, 0, a * a))
+	_skirt_textures[fp] = ImageTexture.create_from_image(img)
+	return _skirt_textures[fp]
