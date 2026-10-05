@@ -6,12 +6,14 @@ extends GdUnitTestSuite
 var _biome := "desert_dunes"
 var _mood := "Day"
 var _started := false
+var _relayouts := 0
 
 
 func _hooks() -> Dictionary:
 	return {"started": func() -> bool: return _started,
 		"biome_get": func() -> String: return _biome, "biome_set": func(b: String) -> void: _biome = b,
-		"mood_get": func() -> String: return _mood, "mood_set": func(m: String) -> void: _mood = m}
+		"mood_get": func() -> String: return _mood, "mood_set": func(m: String) -> void: _mood = m,
+		"relayout": func() -> void: _relayouts += 1}
 
 
 func _om() -> ObjectManager:
@@ -39,6 +41,7 @@ func test_apply_replaces_the_table_and_one_undo_restores_it() -> void:
 	assert_bool(_live(om).has(old)).is_false()
 	assert_str(_biome).is_equal("temperate_grassland")
 	assert_str(_mood).is_equal("Sunset")
+	assert_int(_relayouts).is_equal(1)   # the biome dressing is re-laid for the new pieces
 	var first: Node3D = action.spawned[0]
 	assert_vector(first.global_position).is_equal_approx(theme.pieces[0]["position"], Vector3.ONE * 0.0001)
 	assert_float(first.rotation_degrees.y).is_equal_approx(float(theme.pieces[0]["yaw_deg"]), 0.01)
@@ -46,6 +49,7 @@ func test_apply_replaces_the_table_and_one_undo_restores_it() -> void:
 	assert_array(_live(om)).contains_exactly([old])
 	assert_str(_biome).is_equal("desert_dunes")
 	assert_str(_mood).is_equal("Day")
+	assert_int(_relayouts).is_equal(2)
 	action.redo()
 	assert_int(_live(om).size()).is_equal(14)
 
