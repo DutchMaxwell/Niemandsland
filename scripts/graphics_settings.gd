@@ -13,6 +13,7 @@ enum QualityPreset {
 }
 
 var current_preset: QualityPreset = QualityPreset.MEDIUM
+var _frame_materials: Dictionary = {}  # Two shared grain orientations, independent of table size.
 
 # ===== Window / UI reachability =====
 ## Supported layout floor: the window can never shrink below this, so the left
@@ -278,6 +279,18 @@ func apply_preset(preset: QualityPreset) -> void:
 	save_settings()
 
 	settings_applied.emit(settings["name"])
+
+
+## Finish the existing frame boxes; cheap tiers keep their original material.
+func table_frame_material(original: Material, along_z: bool) -> Material:
+	if current_preset < QualityPreset.MEDIUM:
+		return original
+	if not _frame_materials.has(along_z):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/table_frame.gdshader")
+		mat.set_shader_parameter("along_z", along_z)
+		_frame_materials[along_z] = mat
+	return _frame_materials[along_z]
 
 
 ## Apply rendering settings to project

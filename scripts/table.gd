@@ -102,6 +102,7 @@ func _ready() -> void:
 	_grass_field.set_biome(biome)
 	_load_fallback_texture()
 	_apply_biome(biome)
+	GraphicsSettings.settings_applied.connect(_apply_frame_finish)
 
 
 ## Setup table with given size in feet
@@ -336,6 +337,13 @@ func _make_detail_noise(as_normal: bool) -> NoiseTexture2D:
 	return tex
 
 
+func _apply_frame_finish(_preset_name: String = "") -> void:
+	for child in get_children():
+		if child is MeshInstance3D and child.has_meta("graphics_frame_original"):
+			child.material_override = GraphicsSettings.table_frame_material(
+				child.get_meta("graphics_frame_original"), child.get_meta("graphics_frame_axis"))
+
+
 func _create_table_border(size_meters: Vector2) -> void:
 	var border_height = 0.05
 	var border_width = 0.015  # thin rim (halved from 0.03)
@@ -380,7 +388,9 @@ func _create_table_border(size_meters: Vector2) -> void:
 
 		var border_instance = MeshInstance3D.new()
 		border_instance.mesh = border_mesh
-		border_instance.material_override = border_material
+		border_instance.set_meta("graphics_frame_original", border_material)
+		border_instance.set_meta("graphics_frame_axis", i >= 2)
+		border_instance.material_override = GraphicsSettings.table_frame_material(border_material, i >= 2)
 		border_instance.position = positions[i]
 		add_child(border_instance)
 
@@ -398,5 +408,4 @@ func _create_table_border(size_meters: Vector2) -> void:
 
 		wall.position = wall_positions[i]
 		add_child(wall)
-
 
