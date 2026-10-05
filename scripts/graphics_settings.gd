@@ -16,6 +16,44 @@ var current_preset: QualityPreset = QualityPreset.MEDIUM
 var table_frame_style: int = 0  # Today's look / Walnut / Oak / Ivory.
 var _frame_materials: Dictionary = {}  # Two shared grain orientations, independent of table size.
 
+## Midtone RGB curve, saturation, AgX contrast, highlight glow. Black/white stay neutral.
+const BIOME_GRADES := {
+	"temperate_grassland": [Color(0.49, 0.53, 0.46), 1.06, 1.15, 0.12],
+	"arid_desert": [Color(0.55, 0.51, 0.45), 0.96, 1.10, 0.10],
+	"frozen_tundra": [Color(0.47, 0.50, 0.55), 0.88, 1.08, 0.08],
+	"volcanic_ash": [Color(0.52, 0.46, 0.43), 0.92, 1.20, 0.18],
+	"alien_jungle": [Color(0.47, 0.55, 0.46), 1.12, 1.16, 0.14],
+	"urban_ruins": [Color(0.47, 0.49, 0.51), 0.85, 1.18, 0.10],
+}
+## Maintainer render picks (1oEL55): Subtle = 0.65, Clear = 1.8.
+## Alien jungle has no saved pick; retain its previous Clear default.
+const BIOME_GRADE_WEIGHTS := {
+	"temperate_grassland": 0.65, "arid_desert": 1.8, "frozen_tundra": 0.65,
+	"urban_ruins": 1.8, "volcanic_ash": 0.65, "alien_jungle": 1.8,
+}
+var _biome_grade_curves := {}
+
+
+func biome_grade_values(biome: String) -> Dictionary:
+	if current_preset < QualityPreset.MEDIUM or not BIOME_GRADES.has(biome):
+		return {}
+	var grade: Array = BIOME_GRADES[biome]
+	var weight: float = BIOME_GRADE_WEIGHTS[biome]
+	if not _biome_grade_curves.has(biome):
+		var curve := GradientTexture1D.new()
+		curve.width = 256
+		curve.gradient = Gradient.new()
+		curve.gradient.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+		curve.gradient.colors = PackedColorArray([Color.BLACK, Color(0.5, 0.5, 0.5).lerp(grade[0], weight), Color.WHITE])
+		_biome_grade_curves[biome] = curve
+	return {"adjustment_enabled": true, "adjustment_color_correction": _biome_grade_curves[biome],
+		"adjustment_contrast": 1.0 + 0.05 * weight, "adjustment_saturation": lerpf(1.0, grade[1], weight),
+		"tonemap_agx_contrast": lerpf(1.0, grade[2], weight), "glow_intensity": grade[3], "glow_bloom": 0.0}
+
+
+func _on_grading_biome_changed(_biome: String) -> void:
+	apply_environment_settings(PRESETS[current_preset])
+
 # ===== Window / UI reachability =====
 ## Supported layout floor: the window can never shrink below this, so the left
 ## command panel, dice roller and unit card never collapse into each other. Below the
@@ -366,6 +404,11 @@ func apply_environment_settings(settings: Dictionary) -> void:
 	var render_state = world_env.get_parent().get("render_state")
 	if render_state != null:
 		render_state.set_layer("preset", values)
+		var table: Node = world_env.get_parent().get_node_or_null("Table")
+		if table != null:
+			render_state.set_layer("grading", biome_grade_values(str(table.biome)))
+			if not table.biome_changed.is_connected(_on_grading_biome_changed):
+				table.biome_changed.connect(_on_grading_biome_changed)
 	else:
 		for key: String in values:
 			env.set(key, values[key])
