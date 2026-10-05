@@ -10,7 +10,8 @@ const Materials := preload("res://scripts/visual/reference_materials.gd")
 const KEYS: Array[String] = ["ssao_enabled", "ssao_radius", "ssao_intensity", "ssil_enabled", "sdfgi_enabled",
 	"ssr_enabled", "ssr_fade_in", "glow_enabled", "glow_intensity", "glow_bloom", "volumetric_fog_enabled"]
 const SUN_KEYS: Array[String] = ["shadow_bias", "shadow_normal_bias", "directional_shadow_max_distance",
-	"directional_shadow_pancake_size", "light_volumetric_fog_energy"]
+	"directional_shadow_pancake_size", "light_volumetric_fog_energy",
+	"directional_shadow_split_1", "directional_shadow_split_2", "directional_shadow_split_3"]
 
 var _runner: GdUnitSceneRunner
 var _main: Node

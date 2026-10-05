@@ -8,14 +8,14 @@ extends RefCounted
 ##
 ## Layers, lowest first. A property no layer sets falls back to the value the Environment had when a layer first
 ## touched it (the scene's own value).
-const LAYERS: Array[String] = ["preset", "light", "reference", "intro"]
+const LAYERS: Array[String] = ["preset", "light", "reference", "quality", "intro"]
 
-var _env: Environment
+var _env: Object  # Environment or DirectionalLight3D; each owns an independent layer stack.
 var _base := {}
 var _layers := {}
 
 
-func _init(env: Environment) -> void:
+func _init(env: Object) -> void:
 	_env = env
 	for layer in LAYERS:
 		_layers[layer] = {}

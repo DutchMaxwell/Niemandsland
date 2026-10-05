@@ -14,6 +14,12 @@ enum QualityPreset {
 
 var current_preset: QualityPreset = QualityPreset.MEDIUM
 
+## Miniature contact shadows. Same atlas/cascade count; less normal offset at the feet.
+const SUN_SHADOW_VALUES := {"shadow_bias": 0.01, "shadow_normal_bias": 0.15,
+	"directional_shadow_split_1": 0.30, "directional_shadow_split_2": 0.55,
+	"directional_shadow_split_3": 0.80, "directional_shadow_max_distance": 3.0,
+	"directional_shadow_pancake_size": 1.0}
+
 # ===== Window / UI reachability =====
 ## Supported layout floor: the window can never shrink below this, so the left
 ## command panel, dice roller and unit card never collapse into each other. Below the
@@ -83,7 +89,7 @@ const PRESETS = {
 		"msaa_3d": 0,  # No MSAA - use FXAA only
 		"use_taa": false,
 		"shadow_size": 1024,
-		"shadow_filter": 1,  # Basic shadows
+		"shadow_filter": RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM,  # Preserve today's project default.
 		"ssao": false,  # Disabled for max performance
 		"ssao_radius": 0.5,
 		"ssao_intensity": 0.5,
@@ -102,7 +108,7 @@ const PRESETS = {
 		"msaa_3d": 1,  # 2x MSAA (was 4x)
 		"use_taa": false,
 		"shadow_size": 2048,
-		"shadow_filter": 2,
+		"shadow_filter": RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM,
 		"ssao": false,  # Disabled for better FPS
 		"ssao_radius": 0.8,
 		"ssao_intensity": 0.8,
@@ -121,7 +127,7 @@ const PRESETS = {
 		"msaa_3d": 2,  # 4x MSAA (was 8x)
 		"use_taa": false,
 		"shadow_size": 4096,
-		"shadow_filter": 3,
+		"shadow_filter": RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM,
 		"ssao": true,
 		"ssao_radius": 0.8,
 		"ssao_intensity": 0.4,
@@ -140,7 +146,7 @@ const PRESETS = {
 		"msaa_3d": 2,  # 4x MSAA (was 8x)
 		"use_taa": false,
 		"shadow_size": 4096,  # Reduced from 8192
-		"shadow_filter": 4,
+		"shadow_filter": RenderingServer.SHADOW_QUALITY_SOFT_HIGH,
 		"ssao": true,
 		"ssao_radius": 1.0,
 		"ssao_intensity": 0.5,
@@ -160,7 +166,7 @@ const PRESETS = {
 		# fullscreen 8GB GPU — for no visible gain; 4x matches High)
 		"use_taa": false,
 		"shadow_size": 8192,
-		"shadow_filter": 5,
+		"shadow_filter": RenderingServer.SHADOW_QUALITY_SOFT_ULTRA,
 		"ssao": true,
 		"ssao_radius": 1.2,
 		"ssao_intensity": 0.6,
@@ -290,6 +296,7 @@ func apply_rendering_settings(settings: Dictionary) -> void:
 
 	# Shadow quality (runtime changes limited, mostly project settings)
 	RenderingServer.directional_shadow_atlas_set_size(settings["shadow_size"], true)
+	_set_shadow_filter_quality(settings["shadow_filter"])
 
 	# 3D resolution scaling. Performance (0.77) is the ONLY sub-native tier, so this is
 	# the only preset switch that RESIZES the 3D render target. Bundling that resize in
@@ -302,6 +309,12 @@ func apply_rendering_settings(settings: Dictionary) -> void:
 	# Low<->Ultra switches (all 1.0) stay instant — only Performance<->X actually defers.
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	_apply_scaling_3d_staggered(settings["fsr_scale"])
+
+
+## Apply both filters on every preset switch, including the return to cheap tiers.
+func _set_shadow_filter_quality(quality: RenderingServer.ShadowQuality) -> void:
+	RenderingServer.directional_soft_shadow_filter_set_quality(quality)
+	RenderingServer.positional_soft_shadow_filter_set_quality(quality)
 
 
 ## Applies the 3D resolution scale on a later frame to de-burst the Performance-boundary
@@ -340,6 +353,7 @@ func apply_environment_settings(settings: Dictionary) -> void:
 	# The game table's RenderState owns these values: the preset is its lowest layer (the mood light, the biome
 	# reference and the intro sit above it), so the end state no longer depends on which script ran last.
 	var values := environment_values(settings, current_preset)
+	set_sun_layer(world_env.get_parent().get_node_or_null("DirectionalLight3D"), "preset", {})
 	var render_state = world_env.get_parent().get("render_state")
 	if render_state != null:
 		render_state.set_layer("preset", values)
@@ -351,6 +365,20 @@ func apply_environment_settings(settings: Dictionary) -> void:
 	# Re-introduce once the fixed-exposure baseline is dialled in.
 	if world_env.camera_attributes:
 		world_env.camera_attributes.auto_exposure_enabled = false
+
+
+## All contested sun properties follow the same ownership rule as Environment values.
+func set_sun_layer(sun: DirectionalLight3D, layer: String, values: Dictionary, replace := false) -> void:
+	if sun == null:
+		return
+	if not sun.has_meta("graphics_sun_state"):
+		sun.set_meta("graphics_sun_state", RenderState.new(sun))
+	var state: RenderState = sun.get_meta("graphics_sun_state")
+	if replace:
+		state.set_layer(layer, values)
+	else:
+		state.merge_layer(layer, values)
+	state.set_layer("quality", SUN_SHADOW_VALUES if current_preset >= QualityPreset.MEDIUM else {})
 
 
 ## The preset's Environment values: SSAO, SSIL, SSR, glow; SDFGI on ULTRA only; fog off.

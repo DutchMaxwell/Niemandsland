@@ -356,12 +356,9 @@ func apply_table_mood(mood: String) -> void:
 ## The sun's miniature-scale shadow values (bias, shadow range, fog energy): table geometry, not mood light, so the
 ## dressed table carries them in every mood. No mood preset sets them; the presenter's teardown restores them.
 func _apply_reference_sun() -> void:
-	var light: Node = _main.lighting_controller
-	light.set_shadow_bias(0.015)
-	light.set_shadow_normal_bias(0.25)
 	var sun: DirectionalLight3D = _main.get_node("DirectionalLight3D")
-	sun.directional_shadow_max_distance = 3.0
-	sun.directional_shadow_pancake_size = 1.0
+	GraphicsSettings.set_sun_layer(sun, "reference", {"shadow_bias": 0.015, "shadow_normal_bias": 0.25,
+		"directional_shadow_max_distance": 3.0, "directional_shadow_pancake_size": 1.0})
 	sun.light_volumetric_fog_energy = 0.9
 
 

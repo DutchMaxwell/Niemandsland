@@ -243,13 +243,13 @@ func set_shadow_blur(value: float) -> void:
 
 func set_shadow_bias(value: float) -> void:
 	if _directional_light:
-		_directional_light.shadow_bias = value  # Correct property name in Godot 4
+		GraphicsSettings.set_sun_layer(_directional_light, "light", {"shadow_bias": value})
 		current_preset.shadow_bias = value
 
 
 func set_shadow_normal_bias(value: float) -> void:
 	if _directional_light:
-		_directional_light.shadow_normal_bias = value  # Correct property name in Godot 4
+		GraphicsSettings.set_sun_layer(_directional_light, "light", {"shadow_normal_bias": value})
 		current_preset.shadow_normal_bias = value
 
 

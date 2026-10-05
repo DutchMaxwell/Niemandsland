@@ -31,8 +31,7 @@ const HIDE_GROUND_MIST := true
 ## Scatter counts are per m²; above a 6x4 ft table the density falls instead of the frame rate.
 const REFERENCE_AREA_M2 := 6.0 * 0.3048 * 4.0 * 0.3048
 ## The sun values only the reference sets (the profile's shadow bias included: no mood sets it back).
-const SUN_PROPS: Array[String] = ["directional_shadow_max_distance", "directional_shadow_pancake_size",
-	"light_volumetric_fog_energy", "shadow_bias", "shadow_normal_bias"]
+const SUN_PROPS: Array[String] = ["light_volumetric_fog_energy"]
 
 signal presentation_built(reference_biome: String)
 signal presentation_removed
@@ -253,6 +252,7 @@ func _restore() -> void:
 		if is_instance_valid(floor_mesh):
 			floor_mesh.material_override = _saved["floors"][floor_mesh]
 	var sun: DirectionalLight3D = _main.get_node("DirectionalLight3D")
+	GraphicsSettings.set_sun_layer(sun, "reference", {}, true)
 	for prop in _saved["sun"]:
 		sun.set(prop, _saved["sun"][prop])
 	# Walls and placed objects: the overlay rebuild drops weathering, hidden trees and attached dressing.
