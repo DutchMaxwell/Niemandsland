@@ -76,3 +76,82 @@ def test_parallel_candidates_write_exactly_the_serial_output_and_drop_speculativ
         assert (t.states, x.records, x.headers) == (serial_t.states, serial_x.records, serial_x.headers), width
         assert ran[0][:3] == ["A/0", "B/0", "C/0"]                       # candidate 0 of every slot first
     assert "A/2" in ran[0] and "A/2" not in x.headers and got["net"][1]["calls"] == 5   # width 3 played A/2, unseen
+
+
+def _spread_slots():
+    return {s: [{"cell": c, "slot": s, "candidate": "0", "tray": "1"}]
+            for c in ("c1", "c5") for s in (c + "_k1", c + "_k2")}
+
+
+def _spread_results(slots):
+    return {s + "/0": {"positions": [], "discarded": [], "missing": [], "logs": [], "timing": None,
+                       "headers": {}, "net": {},
+                       "transitions": [{"cell": rows[0]["cell"], "source": s + ":0", "seq": i,
+                                        "after": {"scoring": "end"} if s.endswith("k1") else
+                                                 {"scoring": "round_vp", "vp": [0, 0]}}
+                                       for i in range(ls.default_quota(rows[0]["cell"]))]}
+            for s, rows in slots.items()}
+
+
+def test_spread_shares_split_each_cell_quota_over_its_slots_in_manifest_order():
+    assert ls.spread_shares(_spread_slots()) == {"c1": {"c1_k1": 5, "c1_k2": 4},
+                                               "c5": {"c5_k1": 4, "c5_k2": 4}}
+
+
+def test_spread_puts_both_scoring_modes_of_a_cell_into_the_transition_set():
+    slots = _spread_slots()
+    ts = ls.TransitionSet(shares=ls.spread_shares(slots))
+    ls.merge_slots([s + "/0" for s in slots], _spread_results(slots), None, ts)
+    assert [(r["source"], r["seq"]) for r in ts.records] == \
+        [(s + ":0", i) for s, n in (("c1_k1", 5), ("c1_k2", 4), ("c5_k1", 4), ("c5_k2", 4)) for i in range(n)]
+    assert len(ts.records) == 17 and ts.short({"c1", "c5"}) == {}
+    assert next(r for r in ts.records if r["after"].get("vp") is not None)
+
+
+def test_without_spread_the_first_slot_still_fills_the_cell():
+    slots, ts = _spread_slots(), ls.TransitionSet()
+    ls.merge_slots([s + "/0" for s in slots], _spread_results(slots), None, ts)
+    assert [r["source"] for r in ts.records] == ["c1_k1:0"] * 9 + ["c5_k1:0"] * 8
+    assert not any(r["after"].get("vp") is not None for r in ts.records)
+
+
+def test_the_serial_tap_fills_each_slot_share():
+    class FakeState:
+        def plain(self):
+            return {"scoring": "end"}
+
+    class FakeCore:
+        def resolve_with_tray(self, state, action, rng, tray):
+            return FakeState(), {"rolls": []}
+
+    class Stream:
+        state = 1
+
+    slots = _spread_slots()
+    ts = ls.TransitionSet(shares=ls.spread_shares(slots))
+    for s in ("c1_k1", "c1_k2"):
+        tap = ls.Tap(FakeCore(), slots[s][0], ts)
+        for _ in range(9):
+            tap.resolve_with_tray(FakeState(), {}, Stream(), Stream())
+    assert [(r["source"], r["seq"]) for r in ts.records] == \
+        [("c1_k1:0", i) for i in range(1, 6)] + [("c1_k2:0", i) for i in range(1, 5)]
+
+
+def test_auto_width_fills_the_pool_each_wave_and_keeps_the_serial_output(monkeypatch):
+    import lab2_pool
+    slots = {s: [{"cell": "c1", "slot": s, "candidate": str(k)} for k in range(len(v))] for s, v in TRUTH.items()}
+    serial_t, serial_x = ls.TimingSet(), ls.TransitionSet()
+    want = ls.merge_slots(SERIAL, {u: _unit(u, "c1") for u in SERIAL}, serial_t, serial_x)
+    ran = []
+    monkeypatch.setattr(lab2_pool, "run_clusters", _fake_pool(ran))
+    t, x = ls.TimingSet(), ls.TransitionSet()
+    got = ls.source_parallel(slots, 4, "auto", {"cap": 20}, t, x)
+    assert ran == [["A/0", "B/0", "C/0", "A/1"], ["B/1"]]
+    assert got["missing"] == ["B"] and {k: got[k] for k in ("positions", "discarded", "logs", "net")} == \
+        {k: want[k] for k in ("positions", "discarded", "logs", "net")}
+    assert (t.states, x.records, x.headers) == (serial_t.states, serial_x.records, serial_x.headers)
+
+
+def test_width_arg_accepts_auto_and_integers():
+    assert ls.width_arg("auto") == "auto"
+    assert ls.width_arg("3") == 3

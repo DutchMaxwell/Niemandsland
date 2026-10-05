@@ -371,7 +371,8 @@ def test_fullgames_on_two_workers_write_the_same_rows_as_one(env, tmp_path, monk
     assert info["workers"] == 2 and abs(info["sum_hwm_mib"] - sum(info["worker_hwm_mib"].values())) < 1e-9
 
 
-def test_parallel_candidates_write_the_same_output_as_the_serial_pass(tmp_path):
+@pytest.mark.parametrize("extra_flags", ([], ["--transition-spread"]))
+def test_parallel_candidates_write_the_same_output_as_the_serial_pass(tmp_path, extra_flags):
     """Stage-0 amendment A4.2: a slot's candidates run in parallel (--candidate-width) and the written positions,
     discarded and candidate logs, timing states, transitions, headers and net calls equal the serial pass's (wall
     times aside)."""
@@ -389,11 +390,12 @@ def test_parallel_candidates_write_the_same_output_as_the_serial_pass(tmp_path):
     def calm(logs):
         return [{k: v for k, v in x.items() if k != "wall_s"} for x in logs]
     outs = {}
-    for name, extra in (("serial", ["--workers", "1"]), ("parallel", ["--workers", "4", "--candidate-width", "3"])):
+    width = "auto" if extra_flags else "3"
+    for name, extra in (("serial", ["--workers", "1"]), ("parallel", ["--workers", "4", "--candidate-width", width])):
         d = tmp_path / name
         d.mkdir()
         rc = ls.main(["source", "--slots", str(tsv), "--bank", BANK, "--lists", LISTS, "--header", str(tmp_path / "h.json"),
-                      "--out", str(d / "p.json"), "--timing-out", str(d / "t.json"), "--transitions-out", str(d / "x.json")] + extra)
+                      "--out", str(d / "p.json"), "--timing-out", str(d / "t.json"), "--transitions-out", str(d / "x.json")] + extra + extra_flags)
         p = json.loads((d / "p.json").read_text())
         outs[name] = (rc, p["positions"], calm(p["discarded"]), p["missing"], calm(p["candidates"]), p["net"],
                       (d / "t.json").read_text(), (d / "x.json").read_text(), (d / "x.json.headers").read_text())
