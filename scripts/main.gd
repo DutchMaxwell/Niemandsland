@@ -409,8 +409,10 @@ var _solo_difficulty_grades: Dictionary = {} # player-slot -> SoloDifficulty pre
 var _solo_arena_seed: int = 0                # game-level base seed for the reproducible difficulty knob draws
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
+var spell_seal: SpellSeal = null  # VFX #3: the cast's glyph circle at the caster (presentation only)
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 var result_pips: ResultPips = null  # VFX #1: wound ticks / blood markers over the models (presentation only)
+var _vfx_saves_made := 0   # saves made by the save batches of the current _solo_resolve_saves (VFX #1 strip)
 var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat stage (solo)
 var volley_cue: VolleyCue = null  # VFX #2: tracers along the rule sight pairs (presentation only)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
@@ -4439,6 +4441,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
 	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
 	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
+	var seal := _vfx_seal_begin(caster, entry, effect)
 	if battle_log != null:
 		var token_note := "%d token%s" % [int(cast.get("threshold", 0)), ("" if int(cast.get("threshold", 0)) == 1 else "s")]
 		if boost > 0:
@@ -4454,12 +4457,16 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	if bool(cast.get("interference_open", false)) and not _solo_both_ai:
 		interference += await _solo_prompt_interference(caster, caster_unit, spell_name,
 			base_target, boost, _solo_cast_target_label(targets))
+	if interference > 0 and spell_seal != null:
+		spell_seal.interfere(seal)
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
 	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
 		"Casting %s (%d+)" % [spell_name, target_num])
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
+	if spell_seal != null:
+		spell_seal.finish(seal, SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: cast roll %d vs %d+ — %s" % [
 			spell_name, (int(faces[0]) if not faces.is_empty() else 0), target_num,
@@ -4488,6 +4495,19 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	_solo_clear_announce(announce)
 	await _solo_show_outcome("%s resolves %s" % [caster.get_name(), spell_name])
 	_solo_stage_end()
+
+
+## VFX #3: the cast's seal forms at the caster, its edge on the spell range exactly as the purple preview ring
+## draws it (RangeRingController: base edge + range). A Spell Conduit origin is not drawn (nor is it by the preview).
+func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary) -> MeshInstance3D:
+	if spell_seal == null or range_ring_controller == null or caster == null:
+		return null
+	for m in caster.get_alive_models():
+		var node := (m as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			return spell_seal.begin(node.global_position, range_ring_controller.ring_outer_radius_for_props(
+				range_ring_controller._props_of(node), int(entry.get("range_in", 0))), str(effect.get("kind", "utility")))
+	return null
 
 
 ## The damage-spell resolution against ONE target: fixed hits (no to-hit roll), the optional trigger
@@ -7589,6 +7609,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 		solo: Dictionary = {}) -> int:
 	if hits <= 0:
 		return 0
+	_vfx_saves_made = 0   # VFX #1: the save batches below add the saves they made
 	# Base AP plus any conditional AP (Shatter/Tear/Melee Slayer/Disintegrate; range-gated Slayer/
 	# Piercing Hunter need `dist_in` — -1 = unknown, their ranged leg then stays off, conservative)
 	# this weapon gets against THIS defender — registry-driven, system-scoped.
@@ -7642,6 +7663,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	var normal: int = hits - ap4_hits
 	if normal > 0:
 		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
+	_vfx_hit_strip(defender, hits, _vfx_saves_made)
 	return total
 
 
@@ -7807,6 +7829,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 					shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
 			_solo_rule_float(defender, "%s +%d" % [(boost_rule if boost_low > 1 else shred_name), shred_extra], Color(1.0, 0.5, 0.4))
 	var unsaved := maxi(0, count - blocks)
+	_vfx_saves_made += blocks
 	# apply_deadly=false (Bug: Deadly no-carry-over): return the RAW unsaved count so the caller can
 	# apply Deadly per-model (each ×X, capped at one model, no spill). The pooled deadly_multiplier path
 	# below stays for spells and every non-Deadly weapon (identical to before). Shred rides the pool.
@@ -13078,6 +13101,18 @@ func _solo_wound_models(unit: GameUnit, wounds: int, pid: int, deferred_deaths =
 	return remaining
 
 
+## VFX #1, the unit-level beat: hits and saves belong to the unit, not to one model, so they sit over the
+## defender's centre — ivory dots for the hits that called for saves, blue rings above for the saves made.
+func _vfx_hit_strip(defender: GameUnit, hits: int, saves: int) -> void:
+	var c: Vector3 = solo_controller.unit_centre(defender) if solo_controller != null and defender != null else Vector3.INF
+	if result_pips == null or c == Vector3.INF or c == Vector3.ZERO:
+		return
+	var eye := c + Vector3.UP * (_solo_unit_los_height_m(defender) + 0.03)
+	result_pips.mark(ResultPips.Kind.HIT, eye, hits)
+	if saves > 0:
+		result_pips.mark(ResultPips.Kind.SAVE, eye + Vector3.UP * 0.016, saves)
+
+
 ## VFX #1: one result mark over a model, from the allocation that just happened (headless spawns nothing).
 func _vfx_pip(kind: ResultPips.Kind, mi: ModelInstance, count: int) -> void:
 	if result_pips != null:
@@ -13097,6 +13132,44 @@ func _capture_bug_report() -> void:
 		_show_toast("⚠ Bug report could not be saved")
 	else:
 		_show_toast("📸 Bug report saved to your Desktop: %s" % path.get_file())
+
+
+## One-click table theme (S5, maintainer 05.10.: an entry in the map editor). Refused on a table of another size
+## (lead D11; the editor greys the entry out too), on painted grid terrain (D9) and once the game is being played;
+## otherwise the theme replaces the free pieces, sets the biome and the evening light, reaches the other table and is
+## ONE step on the table's undo history.
+func apply_table_theme(theme_id: String) -> bool:
+	var theme := TableTheme.load_theme(theme_id)
+	if theme == null:
+		return false
+	if not theme.fits(table.table_size):
+		_show_toast("%s needs a %d x %d ft table" % [theme.label, int(theme.table_feet.x), int(theme.table_feet.y)])
+		return false
+	if terrain_overlay != null and terrain_overlay.grid_cells.values().any(func(v: Variant) -> bool: return int(v) != 0):
+		_show_toast("Clear the grid terrain first, then apply %s" % theme.label)
+		return false
+	var action := theme.apply(object_manager, {
+		"started": func() -> bool:
+			return opr_army_manager != null and int(opr_army_manager.game_phase) == OPRArmyManager.GamePhase.PLAYING,
+		"biome_get": func() -> String: return table.biome,
+		"biome_set": func(b: String) -> void: table.set_biome(b),
+		"mood_get": func() -> String: return str(atmosphere_controller.get_current_atmosphere()),
+		"mood_set": func(m: String) -> void: atmosphere_controller.apply_atmosphere(m),
+		"relayout": _redress_table_layout,
+		"net": network_manager})
+	if action == null:
+		_show_toast("Table themes can only be applied before the game starts")
+		return false
+	action.peer_id = network_manager.get_my_peer_id() if network_manager else 0
+	if undo_manager != null:
+		undo_manager.push(action)
+	_show_toast("%s laid out - Ctrl+Z puts the old table back" % theme.label)
+	return true
+
+
+func _redress_table_layout() -> void:
+	if _table_biome_presenter != null:
+		_table_biome_presenter.request_rebuild("layout")
 
 
 ## Brief, non-blocking on-screen message that auto-fades (there was no toast system before).
@@ -18408,6 +18481,9 @@ func _init_radial_menu() -> void:
 	move_trails = MoveTrailsScript.new()
 	move_trails.name = "MoveTrails"
 	add_child(move_trails)
+	spell_seal = SpellSeal.new()
+	spell_seal.name = "SpellSeal"
+	add_child(spell_seal)
 	object_manager.move_trails = move_trails
 	# Transparency wave stage 2 (grilled 2026-07-30): applied rules announce themselves AT
 	# the table — rising billboard texts on the affected unit, stagger-cascaded so full
