@@ -39,9 +39,9 @@ func test_a_cached_model_replaces_the_bundled_look() -> void:
 	src.free()
 	var solid: SandboxSolidProp = om.spawn_sandbox_terrain("blocker_6x3", ObjectManager.SandboxPropKind.BLOCKER,
 		Vector3.ZERO, false, 7401)
-	await om.apply_solid_model(solid, "test_solid")
-	var added := solid.get_children().filter(func(c: Node) -> bool:
-		return not (c is MeshInstance3D or c is CollisionShape3D or c is Decal))
-	assert_int(added.size()).is_equal(1)
 	var look := solid.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D)
+	var before := solid.get_child_count()
+	await om.apply_solid_model(solid, "test_solid")
+	# A one-mesh GLB comes back with the mesh itself as the scene root, so count children instead of filtering types.
+	assert_int(solid.get_child_count()).is_equal(before + 1)
 	assert_bool(look.any(func(m: Node) -> bool: return m.visible)).is_false()
