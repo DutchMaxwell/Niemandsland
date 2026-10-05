@@ -18500,12 +18500,11 @@ func _stain_base_radius_m(props: Dictionary) -> float:
 	return float(props.get("base_size_round", 32)) / 2.0 * 0.001
 
 
-## A removed model is a vehicle (-> oil + fire, not blood) if its unit is Tough(6+), the OPR
-## convention for vehicles/large monsters.
+## A removed model is a vehicle (-> oil + fire, not blood) when its unit reads as a machine.
 func _stain_is_vehicle(props: Dictionary) -> bool:
-	if opr_army_manager == null:
-		return false
-	return opr_army_manager._get_tough_value_from_rules(props.get("special_rules", [])) >= 6
+	# The army data has no model kind; machine words in the name / rules decide, and a Tough(6+) unit only stays a
+	# vehicle when nothing hints at a creature (a Tough(12) monster used to burn with oil).
+	return ModelStuff.stuff_of_props(props) == ModelStuff.Stuff.MACHINE
 
 
 ## Called when a remote peer changes unit activation
