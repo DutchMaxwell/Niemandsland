@@ -109,5 +109,27 @@
     "toxin catapult": "catapult",
     "heavy cannon": "heavy_cannon",
     "giant otter": "otter"
+  },
+  "_comment_vampiric_undead": "Vampiric Undead (AoF, uid qABIfXYbYxmA75yL) go-live: Model Forge's gain -> part-slug vocabulary, consulted ONLY for faction folder 'vampiric_undead'. The Vampiric Undead bakes name their command models sergeant / banner / musician and their weapons and mounts by the book word, so this section overrides the shared crest / horn / heavy / heavylance / heavyhalberd / heavyspear / steed slugs for this faction only. A default weapon that is mapped here (Heavy Hand Weapon, Cursed Lance) joins every model's slug, so its command and mount bakes are keyed with it (e.g. 'vampire knights#heavy_hand_weapon+sergeant').",
+  "_faction_vampiric_undead": {
+    "sergeant": "sergeant",
+    "musician": "musician",
+    "cursed halberd": "halberd",
+    "heavy halberd": "halberd",
+    "cursed spear": "spear",
+    "heavy spear": "spear",
+    "cursed lance": "lance",
+    "heavy lance": "heavy_lance",
+    "heavy hand weapon": "heavy_hand_weapon",
+    "cursed dual hand weapons": "dual",
+    "dual heavy hand weapons": "dual",
+    "cursed greatsword": "greatsword",
+    "heavy great weapon": "great_weapon",
+    "champion cursed crossbow": "crossbow",
+    "carving tool": "carving_tool",
+    "skeletal steed": "skeletal_steed",
+    "abyssal beast": "abyssal_beast",
+    "steed": "steed",
+    "hunting pet": "hunting_pet"
   }
 }
