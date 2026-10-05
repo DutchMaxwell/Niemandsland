@@ -10,12 +10,19 @@ class StubTable extends Node3D:
 
 
 var _table: StubTable
+var _preset_was: int
 
 
 func before_test() -> void:
 	_table = auto_free(StubTable.new())
 	_table.add_to_group("table")
 	add_child(_table)
+	_preset_was = get_node("/root/GraphicsSettings").current_preset
+	get_node("/root/GraphicsSettings").current_preset = 2   # MEDIUM: a preset that dresses the table (headless runs lower)
+
+
+func after_test() -> void:
+	get_node("/root/GraphicsSettings").current_preset = _preset_was
 
 
 func _dressing(n: Node) -> Decal:
@@ -56,7 +63,6 @@ func test_the_dressing_shows_on_grassland_only() -> void:
 ## so the wall-foot dressing and scatter switch off there and come back with the preset.
 func test_low_and_performance_switch_the_foot_dressing_and_scatter_off() -> void:
 	var graphics := get_node("/root/GraphicsSettings")
-	var was: int = graphics.current_preset
 	var solid: SandboxSolidProp = auto_free(SandboxSolidProp.new())
 	solid.configure("blocker_6x3", 3, Vector2(6, 3))
 	add_child(solid)
@@ -67,4 +73,3 @@ func test_low_and_performance_switch_the_foot_dressing_and_scatter_off() -> void
 		graphics.settings_applied.emit("probe")
 		for p: Node3D in parts:
 			assert_bool(p.visible).override_failure_message("%s at preset %d" % [p.name, preset]).is_equal(preset >= 2)
-	graphics.current_preset = was

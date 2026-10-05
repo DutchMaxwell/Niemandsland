@@ -4,7 +4,8 @@ extends Node3D
 ## picture): a stone and a grass MultiMesh in a ring up to 2.5" outside the footprint, the grass also reaching a little
 ## under the walls. A child of the piece, so it moves, turns and goes with it. Decoration only (no collision, rules
 ## untouched). Uses the grassland dressing's own tuft and stone meshes and colours. Grassland only for now (lead D12):
-## shown while the table is "temperate_grassland" and following biome changes; without a table it stays visible.
+## shown while the table is "temperate_grassland" and following biome changes, and only on the quality presets that
+## dress the table (Medium and up); without a table it stays visible.
 
 const RING_INCHES := 2.5
 const GRASSLAND := "temperate_grassland"
@@ -28,10 +29,13 @@ func _ready() -> void:
 		return
 	_show_for(str(table.get("biome")))
 	table.biome_changed.connect(_show_for)
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null:   # Low / Performance keep the plain battlemap table (plan gate S6)
+		graphics.settings_applied.connect(func(_preset: String) -> void: _show_for(str(table.get("biome"))))
 
 
 func _show_for(biome: String) -> void:
-	visible = biome == GRASSLAND
+	visible = biome == GRASSLAND and GrasslandFootDressing.dressed_preset(self)
 
 
 func _add_layer(kind: String, count: int, fp: Vector2, rng: RandomNumberGenerator, min_out: float) -> void:
