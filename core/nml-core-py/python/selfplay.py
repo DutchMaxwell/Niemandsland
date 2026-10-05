@@ -81,6 +81,7 @@ import os
 import re
 import struct
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -341,6 +342,7 @@ def _last_stand_plain(plain: dict[str, Any], round_no: int, cfg: dict[str, Any],
         for k in mine:
             if k in held and units[k].get("dormant"):
                 units[k].update(dormant=False, positions=[], radii=[], wounds=[], alive=0)
+                units[k].pop("kits", None)  # tray-exact S3: no models, no kits
                 for gone in ("dormant_models", "dormant_wounds", "earliest_arrival_round"):
                     units[k].pop(gone, None)
 
@@ -552,6 +554,27 @@ def derive_attachment(
     return attached, attached_to
 
 
+#: Tray-exact S3 (variant b): the sidecar paths already reported missing, so a long run logs each once.
+_KITS_MISSING: set[str] = set()
+
+
+def kits_sidecar(list_path, player: int) -> dict[str, list[dict[str, Any]]] | None:
+    """The table's per-model kits for one list — `BattleSim._model_kit` over the table's own
+    import (`tools/export_model_kits.gd`), keyed by THIS seat's unit ids (`p<player>_<index>_<id>`,
+    the import's deterministic id). The AI-list dirs are read-only reference corpora, so the
+    sidecar `<stem>.kits.json` lives in NML_KITS_DIR, else next to the list. None — logged once —
+    when there is none: that army plays without kits (the core's slot-order casualties)."""
+    p = Path(list_path)
+    side = Path(os.environ.get("NML_KITS_DIR") or p.parent) / (p.stem + ".kits.json")
+    if not side.is_file():
+        if str(side) not in _KITS_MISSING:
+            _KITS_MISSING.add(str(side))
+            print("kits: no sidecar %s - %s plays without kits" % (side, p.name), file=sys.stderr)
+        return None
+    units = json.loads(side.read_text(encoding="utf-8")).get("units", {})
+    return {"p%d_%s" % (player, k): v for k, v in units.items()}
+
+
 def capture(
     units: list[dict[str, Any]],
     positions: list[list[list[float]]],
@@ -562,6 +585,7 @@ def capture(
     attached_to: dict[str, str] | None = None,
     reserved: set[str] | None = None,
     earliest: dict[str, int] | None = None,
+    kits: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     """`_capture` (core_selfplay.gd:608-637) through `BattleSim.capture` and
     `BattleSim.state_to_plain(state, false)` — the plain state the search reads.
@@ -649,6 +673,15 @@ def capture(
                 dormant_wounds=list(u["wounds_max"]),
                 earliest_arrival_round=(earliest or {}).get(key, 2),
             )
+        # Tray-exact S3: the table's per-model kits (`kits_sidecar`), on the table only and only
+        # when they cover exactly the placed models — a mismatch carries none, and says so.
+        kit = (kits or {}).get(key)
+        if kit is not None and not us[key].get("dormant"):
+            if len(kit) == len(pos):
+                us[key]["kits"] = [dict(k) for k in kit]
+            else:
+                print("kits: %s has %d kits for %d models - none carried" % (key, len(kit), len(pos)),
+                      file=sys.stderr)
     state = {
         "round": 1,
         "rounds_total": ROUNDS,
@@ -1169,7 +1202,8 @@ LEGACY_FIDELITY_KNOBS: dict[str, Any] = dict(
 
 
 def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int,
-                     mission: dict[str, Any] | None = None) -> int:
+                     mission: dict[str, Any] | None = None,
+                     kits: dict[str, list[dict[str, Any]]] | None = None) -> int:
     """The table's round-start ambush beat (`main._solo_round_start` :10096-10106
     through `_solo_alternate_ambush_arrivals` :10419-10485), over the PLAIN
     state — the same layer `_round_start` already works on.
@@ -1259,6 +1293,9 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
             g["positions"] = [[f32(m[0]), 0.0, f32(m[1])] for m in models[at : at + n]]
             g["wounds"] = list(g.get("dormant_wounds", []))
             g["radii"] = [reads[k]["base_r"]] * n
+            kit = (kits or {}).get(k)  # tray-exact S3: a full-strength arrival gets its table kits back
+            if kit is not None and len(kit) == n:
+                g["kits"] = [dict(x) for x in kit]
             g["alive"] = n
             g["dormant"] = False
             g["ambush_arrived_round"] = round_no
@@ -1455,6 +1492,7 @@ CAP_SEED_STRIDE = 700003
 TREE_KNOB_DEFAULTS = {
     "search_mode": "oneply", "tree_leaf": "blend", "tree_dice": "ev", "tree_budget": 128,
     "tree_samples": 4, "tree_batch": 8, "tree_wall_ms": 0, "pool_wall_ms": 0, "deadline_us": 0,
+    "deadline_after_preselect": False,
 }
 
 
@@ -2345,6 +2383,10 @@ def play_game(
     # 16.09. (D-MAGIC): the cast SUB-PHASE switch as a kwarg, so a replay of a record stamped
     # `seam_cast: true` (#1023) plays it ON; None = TRAINER_KNOBS["seam_cast"] (the fork door).
     seam_cast: bool | None = None,
+    # #1480's ROOT-move routing (`Knobs::route_root`): every searching seat routes its root moves per model; the
+    # playouts stay rigid. Pairs with movement="table" (a rigid-executing game loses with it, movefidelity part 3c).
+    # False = the header and the record stay byte-identical (stamped only when on).
+    route_root: bool = False,
     hero_attach: str = "off",
     dice: str = "expected",
     charge_landing: str = "off",
@@ -2415,6 +2457,7 @@ def play_game(
     deep_tree_wall_ms: int | None = None,
     deep_pool_wall_ms: int | None = None,
     deep_deadline_us: int | None = None,
+    deep_deadline_after_preselect: bool | None = None,
     record_cands: bool = False,
     eval_variant_player: int = 0,
     eval_variant: int = 0,
@@ -2652,8 +2695,8 @@ def play_game(
     State objects are core-independent (`state_of`/`resolve_*` take them as
     arguments), so the two cores share one game; the other seat keeps the base
     core and every caller that passes nothing (0, the default) plays the
-    identical game the pre-knob code did. The nine `deep_search_mode` /
-    `deep_tree_*` / `deep_pool_wall_ms` / `deep_deadline_us` kwargs (None = unset) join
+    identical game the pre-knob code did. The ten `deep_search_mode` /
+    `deep_tree_*` / `deep_pool_wall_ms` / `deep_deadline_us` / `deep_deadline_after_preselect` kwargs (None = unset) join
     the deep core's header knobs the same way (the tree search knobs, keys `search_mode`,
     `tree_leaf`, ... `deadline_us`); a value EQUAL to the knob's default is
     not a part, and only a value that parted is stamped into that seat's
@@ -2702,13 +2745,15 @@ def play_game(
             ("tree_dice", deep_tree_dice), ("tree_budget", deep_tree_budget),
             ("tree_samples", deep_tree_samples), ("tree_batch", deep_tree_batch),
             ("tree_wall_ms", deep_tree_wall_ms), ("pool_wall_ms", deep_pool_wall_ms),
-            ("deadline_us", deep_deadline_us),
+            ("deadline_us", deep_deadline_us), ("deadline_after_preselect", deep_deadline_after_preselect),
         ) if v is not None and v != TREE_KNOB_DEFAULTS[k]
     }
     if tree_seat and deep_player not in (1, 2):
         raise ValueError(f"tree knobs {sorted(tree_seat)} need deep_player 1 or 2")
     units1 = load_army(list_p1, 1, rules_epoch)
     units2 = load_army(list_p2, 2, rules_epoch)
+    # Tray-exact S3: the table's per-model kits, when the lists have sidecars ({} = none).
+    kits = {**(kits_sidecar(list_p1, 1) or {}), **(kits_sidecar(list_p2, 2) or {})}
     if not units1 or not units2:
         raise ValueError("empty army (%s / %s)" % (list_p1, list_p2))
     units = units1 + units2
@@ -2792,6 +2837,7 @@ def play_game(
         # chain either (`sim::caster_of`).
         cast_fold=bool(cast_fold),
         seam_cast=(TRAINER_KNOBS["seam_cast"] if seam_cast is None else bool(seam_cast)),
+        **({"route_root": True} if route_root else {}),
         # NML-1073 M5 D1-B4b: the SEAM half of `hero_attach`. Deriving the
         # attachment is not enough — without this the hero would fire inside its
         # host's volley AND still be handed a full activation of its own
@@ -3176,7 +3222,7 @@ def play_game(
         earliest[k] = int(reserve_cfg.get("from_round", 2))
     plain = capture(
         units, pos1 + pos2, reads, board, objectives, attached, attached_to,
-        reserved if arrivals is not None else None, earliest,
+        reserved if arrivals is not None else None, earliest, kits or None,
     )
     mission_def = resolve_mission(mission, repo_root)  # SoloController.mission_reset mirrored
     eff_scoring = mission_def.get("scoring", "end")
@@ -3244,7 +3290,7 @@ def play_game(
             _arrive_reserves(plain, arrivals, board, objectives, opener, round_no, mission=(
                 {"keys": mission_reserved, "cfg": reserve_cfg, "rng": rng,
                  "zones": _style_zone_args(_style_by_id(reserve_cfg.get("zone", "anywhere"), repo_root), "1")[1]}
-                if mission_reserved else None))
+                if mission_reserved else None), kits=kits or None)
         if live_ledger:
             _write_ledger(plain, led)
         state = core.state_of(plain)
@@ -3320,6 +3366,7 @@ def play_game(
             # digest and no existing record moves — and a bank is verifiable
             # by its own headers (the record tells the truth).
             **({"seam_cast": True} if knobs["seam_cast"] else {}),
+            **({"route_root": True} if knobs.get("route_root") else {}),
             "hero_attach": hero_attach,
             "dice": eff_dice,
             "charge_landing": charge_landing,
@@ -3362,6 +3409,9 @@ def play_game(
             **({"deployment": eff_deployment} if eff_deployment != "zone" else {}),
             "engage_fold": engage_fold,
             "dangerous_end_morale": dangerous_end_morale,
+            # Tray-exact S3: stamped only when a list had a kits sidecar, so a game without one
+            # is the same object it was before the sidecars existed.
+            **({"kits": "sidecar"} if kits else {}),
             "cond_ap": cond_ap,
             # The CLASS FIX's own record stamp (root cause of the Gen-2 replay
             # gap this closes): `rules_epoch` rode ONLY `core.set_header`'s

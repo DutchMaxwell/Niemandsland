@@ -139,6 +139,42 @@ pub struct Zone {
     yaw: f64,
     y1: f64,
     solid: bool,
+    /// `Some` for a freely placed shelf piece: an upright box instead of cells.
+    foot: Option<BoxFoot>,
+}
+
+/// A free shelf piece's footprint (`TerrainOverlay._sandbox_volumes` "box"): metres, `yaw` as in
+/// `TerrainRules.point_in_obb` (local +X -> (cos, -sin)), standing from `y0`.
+#[derive(Debug, Clone, Copy)]
+struct BoxFoot {
+    c: [f64; 2],
+    he: [f64; 2],
+    yaw: f64,
+    y0: f64,
+}
+
+impl BoxFoot {
+    fn local(&self, p: [f64; 2]) -> [f64; 2] {
+        let (d, (s, c)) = ([p[0] - self.c[0], p[1] - self.c[1]], self.yaw.sin_cos());
+        [d[0] * c - d[1] * s, d[0] * s + d[1] * c]
+    }
+
+    fn holds_point(&self, p: [f64; 2]) -> bool {
+        let q = self.local(p);
+        q[0].abs() <= self.he[0] && q[1].abs() <= self.he[1]
+    }
+
+    /// `TerrainRules.segment_intersects_obb` — an end inside, or an edge crossed.
+    fn hit_by(&self, p: [f64; 2], q: [f64; 2]) -> bool {
+        if self.holds_point(p) || self.holds_point(q) {
+            return true;
+        }
+        let (s, c) = self.yaw.sin_cos();
+        let (dx, dz) = ([c * self.he[0], -s * self.he[0]], [s * self.he[1], c * self.he[1]]);
+        let k = [(1.0, 1.0), (1.0, -1.0), (-1.0, -1.0), (-1.0, 1.0)]
+            .map(|(i, j)| [self.c[0] + i * dx[0] + j * dz[0], self.c[1] + i * dx[1] + j * dz[1]]);
+        (0..4).any(|i| seg_seg(p, q, k[i], k[(i + 1) % 4]).is_some())
+    }
 }
 
 /// `TerrainRules.cell_of(p.rotated(-yaw), cell_size)` — `VolumetricLos.cells_key`.
@@ -154,9 +190,21 @@ fn cell_of(p: [f64; 2], yaw: f64, cell_m: f64) -> (i64, i64) {
 }
 
 impl Zone {
+    /// A freely placed shelf piece as an upright box. Nothing builds one yet.
+    pub fn shelf_box(c: [f64; 2], he: [f64; 2], yaw: f64, y0: f64, y1: f64, solid: bool) -> Zone {
+        let foot = Some(BoxFoot { c, he, yaw, y0 });
+        Zone { cells: HashSet::new(), cell_m: 1.0, yaw, y1, solid, foot }
+    }
+
     /// `VolumetricLos.segment_hits_cells` — the quarter-cell walk of the flat
-    /// segment, each sample's interpolated height tested against the slab.
+    /// segment, each sample's interpolated height tested against the slab. A
+    /// box: `segment_hits_box`, the slab clip then the flat OBB test.
     fn hits(&self, a: [f64; 3], b: [f64; 3]) -> bool {
+        if let Some(f) = &self.foot {
+            let (t0, t1) = slab_t(a, b, f.y0, self.y1);
+            let at = |t: f64| [a[0] + (b[0] - a[0]) * t, a[2] + (b[2] - a[2]) * t];
+            return t0 <= t1 && f.hit_by(at(t0), at(t1));
+        }
         let (dx, dz) = (b[0] - a[0], b[2] - a[2]);
         let span = (dx * dx + dz * dz).sqrt();
         if span < MIN_SPAN_M {
@@ -191,6 +239,12 @@ impl Zone {
     fn holds(&self, cy: &Cyl) -> bool {
         if cy.y1 > self.y1 + Y_EPS_M {
             return false;
+        }
+        if let Some(f) = &self.foot {
+            // `circle_in_footprint`, box branch: the base disc touches the footprint.
+            let q = f.local(cy.c);
+            let near = [q[0].clamp(-f.he[0], f.he[0]), q[1].clamp(-f.he[1], f.he[1])];
+            return (q[0] - near[0]).hypot(q[1] - near[1]) <= cy.r;
         }
         let (lo, hi) = (
             cell_of([cy.c[0] - cy.r, cy.c[1] - cy.r], self.yaw, self.cell_m),
@@ -429,7 +483,24 @@ pub fn zones_of(t: &Terrain) -> Vec<Zone> {
             yaw: t.grid_yaw(),
             y1: volume_height_in(kind) * IN2M,
             solid: !(kind == terrain::FOREST || kind == terrain::RUINS),
+            foot: None,
         });
+    }
+    out
+}
+
+/// `zones_of`, plus with `shelf` (the dormant `Seams::shelf_sight`) every freely
+/// placed shelf piece of the header as its own upright box of its type's height —
+/// `TerrainOverlay._sandbox_volumes` (:1283-1300). The header records no floor
+/// slabs (act_recorder.gd keeps c/he/yaw/type), so a multi-storey free ruin's
+/// upper floors are not here.
+pub fn zones_of_with(t: &Terrain, shelf: bool) -> Vec<Zone> {
+    let mut out = zones_of(t);
+    if shelf && t.is_valid() {
+        for s in t.sandbox().iter().filter(|s| volume_height_in(s.kind) > 0.0) {
+            let solid = !(s.kind == terrain::FOREST || s.kind == terrain::RUINS);
+            out.push(Zone::shelf_box(s.c, s.he, s.yaw, 0.0, volume_height_in(s.kind) * IN2M, solid));
+        }
     }
     out
 }
@@ -687,9 +758,13 @@ mod tests {
     }
 
     fn board(cells: &[(i64, i64, i32)]) -> Terrain {
+        board_with(cells, Vec::new())
+    }
+
+    fn board_with(cells: &[(i64, i64, i32)], sandbox: Vec<Obb>) -> Terrain {
         Terrain::build(&PlainTerrain {
             cells: cells.iter().map(|&(x, z, k)| [x as f64, z as f64, k as f64]).collect(),
-            sandbox: Vec::<Obb>::new(),
+            sandbox,
             pieces: vec![],
             walls: vec![],
             cell_params: CellParams {
@@ -769,5 +844,72 @@ mod tests {
             c.y1 += 4.0 * M; // both on a 4" roof, eyes above the 3.4" canopy
         }
         assert!(has_los(&west, &east, false, &wood, &[]));
+    }
+
+    /// A free shelf piece as an upright box — `VolumetricLos.segment_hits_box`
+    /// and the box branch of `circle_in_footprint`. A 6x3" solid at 45 deg,
+    /// 2.5" tall (the grid Blocker's profile), centred on the origin.
+    #[test]
+    fn a_free_solid_blocks_through_it_not_over_or_beside_it() {
+        let yaw = std::f64::consts::FRAC_PI_4;
+        let solid = [Zone::shelf_box([0.0, 0.0], [3.0 * M, 1.5 * M], yaw, 0.0, 2.5 * M, true)];
+        let (west, east) = (cyl(-8.0, 0.0, 32.0), cyl(8.0, 0.0, 32.0)); // eyes 1.25" up
+        assert!(!has_los(&west, &east, false, &solid, &[]));
+        let (mut up_w, mut up_e) = (west, east);
+        for c in [&mut up_w, &mut up_e] {
+            c.y0 += 3.0 * M;
+            c.y1 += 3.0 * M; // both on a 3" floor: eyes above the 2.5" roof
+        }
+        assert!(has_los(&up_w, &up_e, false, &solid, &[]));
+        // 6" north clears the rotated corner (its reach is (3 + 1.5) * sin 45 = 3.2").
+        assert!(has_los(&cyl(-8.0, 6.0, 32.0), &cyl(8.0, 6.0, 32.0), false, &solid, &[]));
+    }
+
+    /// An AREA box (a free ruin's 6" hull): see in, see out, never through.
+    #[test]
+    fn an_area_box_lets_its_occupant_see_out_but_nobody_through() {
+        let ruin = [Zone::shelf_box([0.0, 0.0], [4.5 * M, 3.0 * M], 0.0, 0.0, 6.0 * M, false)];
+        let inside = cyl(0.0, 0.0, 32.0);
+        let (west, east) = (cyl(-10.0, 0.0, 32.0), cyl(10.0, 0.0, 32.0));
+        assert!(has_los(&inside, &east, false, &ruin, &[]));
+        assert!(has_los(&west, &inside, false, &ruin, &[]));
+        assert!(!has_los(&west, &east, false, &ruin, &[]));
+    }
+
+    /// The table's own verdicts on 1,000 free shelf pieces (tools/shelf_sight_parity.gd, pinned to
+    /// `VolumetricLos.has_los` by test/shelf_sight_parity_test.gd): the core agrees on every one.
+    #[test]
+    fn free_shelf_piece_sight_matches_the_table_on_1000_cases() {
+        let fx: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../test/fixtures/shelf_sight_parity/cases.json"
+        ))
+        .unwrap();
+        let f = |v: &serde_json::Value| v.as_f64().unwrap();
+        let pair = |v: &serde_json::Value| [f(&v[0]), f(&v[1])];
+        let cy = |d: &serde_json::Value| Cyl { c: pair(&d["c"]), r: f(&d["r"]), y0: f(&d["y0"]), y1: f(&d["y1"]) };
+        let cases = fx["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 1000);
+        let wrong: Vec<usize> = (0..cases.len())
+            .filter(|&i| {
+                let c = &cases[i];
+                let solid = c["solid"].as_bool().unwrap();
+                let z = [Zone::shelf_box(pair(&c["c"]), pair(&c["he"]), f(&c["yaw"]), 0.0, f(&c["y1"]), solid)];
+                has_los(&cy(&c["from"]), &cy(&c["to"]), false, &z, &[]) != c["los"].as_bool().unwrap()
+            })
+            .collect();
+        assert!(wrong.is_empty(), "{} of 1000 disagree, first {:?}", wrong.len(), &wrong[..wrong.len().min(10)]);
+    }
+
+    /// The dormant shelf-sight seam: ON, a free CONTAINER piece of the recorded
+    /// header blocks the way the table's box does; OFF, the core keeps today's
+    /// painted-cells-only reading, so every corpus and rollout is unchanged.
+    #[test]
+    fn the_shelf_seam_adds_free_pieces_and_off_changes_nothing() {
+        let piece = Obb { c: [0.0, 0.0], he: [3.0 * M, 1.5 * M], yaw: 0.0, kind: terrain::CONTAINER };
+        let t = board_with(&[], vec![piece]);
+        let (west, east) = (cyl(-8.0, 0.0, 32.0), cyl(8.0, 0.0, 32.0));
+        assert!(zones_of_with(&t, false).is_empty());
+        assert!(has_los(&west, &east, false, &zones_of_with(&t, false), &[]));
+        assert!(!has_los(&west, &east, false, &zones_of_with(&t, true), &[]));
     }
 }

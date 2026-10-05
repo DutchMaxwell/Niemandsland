@@ -20,12 +20,12 @@ func _write(path: String, text: String) -> void:
 	f.close()
 
 
-func _dump(out: String, seeds: String, symmetric: int) -> int:
+func _dump(out: String, seeds: String, symmetric: int, extra: Array = []) -> int:
 	var seeds_file := out.path_join("seeds.txt")
 	_write(seeds_file, seeds)
 	var output := []
 	return OS.execute(OS.get_executable_path(), ["--headless", "--path", ProjectSettings.globalize_path("res://"),
-		"-s", DUMP, "--", "out=" + out, "seeds=" + seeds_file, "symmetric=%d" % symmetric], output)
+		"-s", DUMP, "--", "out=" + out, "seeds=" + seeds_file, "symmetric=%d" % symmetric] + extra, output)
 
 
 func test_parse_seeds_reads_two_63_bit_seeds_exactly() -> void:
@@ -65,3 +65,21 @@ func test_default_dump_matches_shipped_bank_and_asym_dump_is_flagged() -> void:
 	assert_that(int(board["symmetric"])).is_equal(0)
 	assert_bool(FileAccess.get_file_as_string(out_a.path_join("board_21.json")) \
 		!= FileAccess.get_file_as_string(bank.path_join("board_21.json"))).is_true()
+
+
+## Table-realism (04.10.): a school board's header line carried `walls: []` while the same layout raises
+## the table's ruin walls (the board's own top-level `walls`), so a trainer reading the bank planned and
+## moved on a wall-less table. `walls=1` puts the table's walls into the header line, one entry per wall
+## segment; the default dump keeps `[]` (every bank and corpus written before replays as it was).
+func test_walls_dump_carries_the_tables_walls_in_the_header_line() -> void:
+	var out := _tmp_dir("walls_on")
+	assert_int(_dump(out, "21\n", 1, ["walls=1"])).is_equal(0)
+	var board: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(out.path_join("board_21.json")))
+	var table_walls := (board["walls"] as Array).size()
+	assert_int(table_walls).is_greater(0)
+	assert_int(((board["terrain"] as Dictionary)["walls"] as Array).size()) \
+		.override_failure_message("the header line drops the table's walls").is_equal(table_walls)
+	var off := _tmp_dir("walls_off")
+	assert_int(_dump(off, "21\n", 1)).is_equal(0)
+	var plain: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(off.path_join("board_21.json")))
+	assert_int(((plain["terrain"] as Dictionary)["walls"] as Array).size()).is_equal(0)

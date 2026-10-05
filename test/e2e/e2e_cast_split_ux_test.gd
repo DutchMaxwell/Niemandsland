@@ -125,6 +125,15 @@ func test_second_pick_declares_and_fire_button_resolves(timeout := 240000) -> vo
 		.is_true()
 	assert_bool(shooter.is_activated).is_false()   # no dice yet — the GO button is the trigger
 	assert_str(_log_text()).contains("press Fire!")
+	# The strip's Fire button draws every character with its own font (an emoji the UI font lacks is a box).
+	var lacking: Array = []
+	for n: Node in _main.find_children("*", "Button", true, false):
+		var b := n as Button
+		if b.is_visible_in_tree() and b.text.contains("Fire"):
+			for i in b.text.length():
+				if b.text[i] != " " and not b.get_theme_font(&"font").has_char(b.text.unicode_at(i)):
+					lacking.append("U+%04X in '%s'" % [b.text.unicode_at(i), b.text])
+	assert_array(lacking).override_failure_message("the Fire button's font lacks %s" % [lacking]).is_empty()
 	# Awaiting the commit rides the REAL volleys to completion — a frame budget was
 	# CI-flaky (tray timers are real-time, not frame-count).
 	await _main._solo_split_commit()

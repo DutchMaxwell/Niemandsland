@@ -34,8 +34,8 @@ pub mod theta;
 pub use cap::{cap_difficult_polylines, difficult_at_point, trail_crosses_difficult_cells, CapReport};
 pub use charge::{charge_contact_slots, nearest_base_dist};
 pub use cost::{
-    cell_of, cspace_blocked, legs_cost, path_crosses_wall_opt, segment_cost, segment_cost_at,
-    step_blocked, terrain_cost_at, CellSet, Grid, StepOpts, Wall, Zone,
+    cell_of, cspace_blocked, ledge_cost, ledge_crossings, legs_cost, path_crosses_wall_opt, segment_cost,
+    segment_cost_at, step_blocked, terrain_cost_at, CellSet, Grid, Ledge, StepOpts, Wall, Zone,
 };
 pub use flow::{
     centroid, flow_order, linked_r, plan_sequential_flow, pull_into_placed, recorded_endpoints,

@@ -63,6 +63,7 @@ fn main() {
         for (ci, a, b) in &edges {
             let call = &c.calls[*ci];
             let o = StepOpts {
+                ledges: &[],
                 clearance: call.opts.clearance,
                 zones: &zones_of[*ci],
                 avoid_cells: &call.opts.avoid_cells,
@@ -83,6 +84,7 @@ fn main() {
         for (ci, a, b) in &edges {
             let call = &c.calls[*ci];
             let o = StepOpts {
+                ledges: &[],
                 clearance: call.opts.clearance,
                 zones: &zones_of[*ci],
                 avoid_cells: &call.opts.avoid_cells,

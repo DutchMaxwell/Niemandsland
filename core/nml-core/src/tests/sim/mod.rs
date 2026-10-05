@@ -67,6 +67,8 @@
             positions: xs.iter().map(|x| vec![[x * IN2M, 0.0, 0.0]]).collect(),
             wounds: vec![vec![1]; 4],
             radii: vec![vec![IN2M]; 4],
+            kits: Vec::new(),
+            kit_names: Vec::new(),
             mods: vec![Mods::default(); 4],
             mods_base: (0..4).map(|_| Rc::new(Mods::default())).collect(),
             attached: Rc::new(vec![vec![1], vec![], vec![3], vec![]]),
@@ -1698,6 +1700,7 @@ mod breath_attack;
 mod breath_score;
 mod buff_consumption_bridge;
 mod caster_boost;
+mod casualty_chain;
 mod caster_interference;
     mod cast_debuff;
     mod cast_ev;

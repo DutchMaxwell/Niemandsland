@@ -58,7 +58,7 @@ func test_saurian_upgrade_words_map_to_the_plan_slugs() -> void:
 	var expected := {"Javelin": "javelin", "Blowpipe": "blowpipe", "Fire Bolas": "bolas",
 		"Rock Barrage": "rocks", "Priest Rider": "priestrider", "Javelin Crew": "javelins",
 		"Serpent Ark": "serpentark", "Solar Beam": "solarbeam", "Mace Tail": "macetail",
-		"Dread Behemoth Fighter": "behemoth", "Dread Behemoth Carrier": "carrier",
+		"Dread Behemoth Fighter": "behemoth", "Dread Behemoth Carrier": "carrier", "Dread Pterodactyl": "pterodactyl",
 		"Champion Javelin": "javelin", "Champion Blowpipe": "blowpipe", "Champion Fire Bolas": "bolas",
 		"Deinonychus": "deinonychus", "Pterodactyl": "pterodactyl", "Ripjawdactyl": "ripjawdactyl",
 		"Ancient Palanquin": "palanquin", "Starseer Palanquin": "palanquin",

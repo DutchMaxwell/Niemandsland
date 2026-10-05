@@ -319,3 +319,61 @@ func test_shelf_forest_hull_is_area_terrain_of_tree_height() -> void:
 	var areas := _boxes(o, false)
 	assert_int(areas.size()).is_equal(1)
 	assert_array(_tops_inches(areas)).is_equal([OverlayScript.TREE_HEIGHT_INCHES])
+
+
+# === Free-placed pieces are typed by kind and listed once (main._sandbox_terrain_shapes) ===
+
+func test_free_pieces_are_typed_by_kind_and_listed_exactly_once() -> void:
+	var ruin := _prop("ruin_small_1f", ObjectManager.SandboxPropKind.RUIN, Vector2(3, 3), [0.0])
+	var forest := _group("forest_a", ObjectManager.SandboxPropKind.FOREST, Vector2(6, 6))
+	var hazard := _group("mines_a", ObjectManager.SandboxPropKind.HAZARD_CLUSTER, Vector2(6, 6))
+	var pieces := ObjectManager.sandbox_pieces(get_tree())
+	for n in [ruin, forest, hazard]:
+		assert_int(pieces.count(n)).is_equal(1)   # TerrainGroupBase is in two groups — never listed twice
+	var want := {ruin: TerrainRules.TerrainType.RUINS, forest: TerrainRules.TerrainType.FOREST,
+		hazard: TerrainRules.TerrainType.DANGEROUS}
+	for n in want:
+		assert_int(ObjectManager.sandbox_terrain_type(int(n.prop_kind))).is_equal(int(want[n]))   # a forest is difficult, not RUINS
+
+
+# === A free shelf solid is a CONTAINER: impassable + solid sight, 6x3x2.5" (the grid Blocker's profile) ===
+
+## The free solid's SandboxPropKind value. Saves and the MP spawn RPC carry the int, so it stays 3:
+## appended after HAZARD_CLUSTER, never renumbered.
+const SOLID_KIND := 3
+
+
+func _solid_shape(yaw: float) -> Dictionary:
+	return {"type": ObjectManager.sandbox_terrain_type(SOLID_KIND), "c": Vector2.ZERO,
+		"he": Vector2(6, 3) * INCHES_TO_METERS * 0.5, "yaw": yaw, "slabs": []}
+
+
+## World point of a local (along, across) offset in inches, in the node rotation.y convention
+## TerrainRules.point_in_obb reads (local +X -> (cos, -sin)).
+func _local_to_world(yaw: float, along_in: float, across_in: float) -> Vector3:
+	var p := Vector2(cos(yaw), -sin(yaw)) * along_in + Vector2(sin(yaw), cos(yaw)) * across_in
+	return Vector3(p.x, 0.0, p.y) * INCHES_TO_METERS
+
+
+func test_free_solid_is_typed_container() -> void:
+	assert_int(ObjectManager.sandbox_terrain_type(SOLID_KIND)).is_equal(TerrainRules.TerrainType.CONTAINER)
+
+
+func test_free_solid_is_one_solid_box_of_container_height() -> void:
+	var o := _overlay_fed([_solid_shape(0.0)])
+	var solids := _boxes(o, true)
+	assert_int(solids.size()).is_equal(1)
+	assert_array(_tops_inches(solids)).is_equal([OverlayScript.CONTAINER_HEIGHT_INCHES])
+	assert_int(_boxes(o, false).size()).is_equal(0)   # never area terrain: no see-in/out exception
+
+
+func test_free_solid_footprint_is_exact_at_any_yaw() -> void:
+	var inside := TerrainRules.TerrainType.CONTAINER
+	var outside := TerrainRules.TerrainType.NONE
+	for deg in [0.0, 45.0, 90.0]:
+		var yaw := deg_to_rad(deg)
+		var o := _overlay_fed([_solid_shape(yaw)])
+		assert_int(o.get_terrain_at_world_position(_local_to_world(yaw, 2.9, 1.4))).is_equal(inside)
+		assert_int(o.get_terrain_at_world_position(_local_to_world(yaw, -2.9, -1.4))).is_equal(inside)
+		assert_int(o.get_terrain_at_world_position(_local_to_world(yaw, 3.1, 0.0))).is_equal(outside)
+		assert_int(o.get_terrain_at_world_position(_local_to_world(yaw, 0.0, 1.6))).is_equal(outside)

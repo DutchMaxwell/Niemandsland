@@ -510,6 +510,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
             charge_goal: ci.map(|c| planner_point(unit_centre(state, c), t, self.rules_epoch)),
             charge_tgt_bases: tgt_bases,
             charge_slots,
+            ledges: Vec::new(),
         },
         planned: Vec::new(),
         trails: Vec::new(),
@@ -1310,6 +1311,8 @@ mod tests {
                 .map(|u| u.iter().map(|p| geom::to_f64(*p)).collect())
                 .collect(),
             radii: radii_m,
+            kits: Vec::new(),
+            kit_names: Vec::new(),
             mods: vec![Mods::default(); n],
             mods_base: (0..n).map(|_| Rc::new(Mods::default())).collect(),
             attached: Rc::new(attached),

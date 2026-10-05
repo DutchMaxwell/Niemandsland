@@ -160,6 +160,9 @@ func test_teardown_gives_the_table_back(timeout := 120000) -> void:
 	var surface := table.get_node("TableMesh") as MeshInstance3D
 	var mesh_before := surface.mesh
 	var shadow_before := surface.cast_shadow
+	# The profile sets the sun's shadow bias; no mood sets it back, so the teardown has to.
+	var bias_before := _sun().shadow_bias
+	var normal_bias_before := _sun().shadow_normal_bias
 	var base_shader_before: Shader = table.get_base_top_material().shader
 	var env: Environment = _main.get_node("WorldEnvironment").environment
 	var ssr_before := env.ssr_enabled
@@ -183,6 +186,8 @@ func test_teardown_gives_the_table_back(timeout := 120000) -> void:
 	assert_bool(env.ssr_enabled == ssr_before).is_true()
 	assert_int(env.ambient_light_source).is_equal(ambient_source_before)
 	assert_bool(mist.visible).is_equal(mist_before)
+	assert_float(_sun().shadow_bias).is_equal_approx(bias_before, 0.0001)
+	assert_float(_sun().shadow_normal_bias).is_equal_approx(normal_bias_before, 0.0001)
 	assert_int(presenter.get_child_count()).is_equal(0)
 
 
@@ -198,6 +203,22 @@ func test_low_presets_keep_the_battlemap_table(timeout := 120000) -> void:
 	var dressed_on_low := presenter.is_dressed()
 	graphics.current_preset = previous
 	assert_bool(dressed_on_low).override_failure_message("the table stayed dressed on the Low preset").is_false()
+
+
+## The table tier never owns the viewport: undressing must not write back the render scale it saw when it dressed.
+## Medium (dressed) -> Performance undresses, and the reference's teardown put Medium's 1.0 over Performance's 0.77.
+func test_undressing_keeps_the_presets_render_scale(timeout := 120000) -> void:
+	var presenter := await _dress("temperate_grassland")
+	assert_bool(presenter.is_dressed()).is_true()
+	var viewport := get_tree().root
+	var scale_before := viewport.scaling_3d_scale
+	viewport.scaling_3d_scale = 0.77   # Performance's deferred write (headless never fires frame_post_draw)
+	presenter.enabled = false
+	await presenter.rebuild()
+	var scale_after := viewport.scaling_3d_scale
+	viewport.scaling_3d_scale = scale_before
+	assert_float(scale_after).override_failure_message(
+		"undressing wrote the render scale back to %.2f over the preset's 0.77" % scale_after).is_equal_approx(0.77, 0.001)
 
 
 func test_layout_events_during_play_do_not_rebuild(timeout := 120000) -> void:

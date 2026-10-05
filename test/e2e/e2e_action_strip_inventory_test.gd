@@ -224,10 +224,10 @@ func test_the_strip_wears_the_house_style(timeout := 120000) -> void:
 				or c.modulate != Color.WHITE:
 			own.append(c.name)
 	assert_array(own).override_failure_message("own colour / size / tint on %s" % [own]).is_empty()
-	# The call sites' words ("🔥 Fire!" left out: no UI font carries the emoji — today's neither).
+	# The call sites' words.
 	var font: Font = _button("Keep my zone").get_theme_font(&"font")
 	var lacking: Array = []
-	for t: String in ["✓ Unit placed", "✓ Done — close the phase", "× Cancel attack", "None this round — keep waiting"]:
+	for t: String in ["✓ Unit placed", "✓ Done — close the phase", "Fire!", "× Cancel attack", "None this round — keep waiting"]:
 		for i in t.length():
 			if t[i] != " " and not font.has_char(t.unicode_at(i)):
 				lacking.append("U+%04X in '%s'" % [t.unicode_at(i), t])

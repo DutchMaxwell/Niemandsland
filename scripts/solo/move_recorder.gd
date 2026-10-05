@@ -167,8 +167,28 @@ static func _flatten_opts(opts: Dictionary) -> Dictionary:
 			continue
 		if k == "avoid_cells" or k == "avoid_fine" or k == "forbid_cells":
 			out[str(k)] = _cell_list(opts[k] as Dictionary)
+		elif k == "ledges":
+			out["ledges"] = ledge_rows(opts[k] as Array)
 		else:
 			out[str(k)] = _flatten(opts[k])
+	return out
+
+
+## opts["ledges"] (heights B2, climbable edges) as [ax, ay, bx, by, dy_in] rows; absent key = no ledges, so
+## every corpus recorded before the key replays byte-identically. ledges_from_rows is the inverse.
+static func ledge_rows(ledges: Array) -> Array:
+	var out: Array = []
+	for l in ledges:
+		var a: Vector2 = l["a"]
+		var b: Vector2 = l["b"]
+		out.append([a.x, a.y, b.x, b.y, float(l["dy_in"])])
+	return out
+
+
+static func ledges_from_rows(rows: Array) -> Array:
+	var out: Array = []
+	for r in rows:
+		out.append({"a": Vector2(float(r[0]), float(r[1])), "b": Vector2(float(r[2]), float(r[3])), "dy_in": float(r[4])})
 	return out
 
 

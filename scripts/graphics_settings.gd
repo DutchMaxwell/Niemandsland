@@ -50,6 +50,8 @@ var screen_index: int = -1
 var show_move_trails: bool = true
 ## Transparency stage 2: rising rule texts at the table ("Blast ×3", "Artillery +1").
 var show_rule_floats: bool = true
+## Combat effects (VFX: result pips, volley cue, spell seal). Default OFF until the look is approved.
+var show_combat_effects: bool = false
 ## Cinematic depth of field ("tilt-shift") on the table camera: sharp while zoomed
 ## out, softly blurred in the foreground/background as the camera zooms towards the
 ## models. On by default (the intended look); persisted; bound to the Settings
@@ -58,6 +60,8 @@ var tilt_shift: bool = true
 ## Pacing grill 31.07.: the central combat stage (solo) — phases hold, click skips.
 var show_combat_stage: bool = true
 var combat_stage_hold_s: float = 2.5
+## How bloody the combat effects are: 0 Off (dust instead of blood), 1 Normal, 2 Extra. Players and streamers turn it down.
+var gore_level: int = 1
 
 ## Strict "dry brush" movement enforcement: hard-stop a movement path-paint / drag at the
 ## model's MAX legal band (Rush/Charge). ON = Strict (the maintainer's default — you learn the
@@ -176,11 +180,12 @@ func _ready() -> void:
 	# Load saved settings or use default
 	load_settings()
 	apply_preset(current_preset)
-	_apply_window_constraints()
+	apply_window_constraints()
 
 
-## Enforce the minimum window size and apply the saved UI scale. Reachability floor.
-func _apply_window_constraints() -> void:
+## Enforce the minimum window size and apply the saved UI scale. Reachability floor. Also called by the game scene
+## at its start (main.gd), when the real game window is up.
+func apply_window_constraints() -> void:
 	var window := get_window()
 	if window:
 		window.min_size = MIN_WINDOW_SIZE
@@ -312,7 +317,9 @@ func _apply_scaling_3d_staggered(scale: float) -> void:
 		return
 	vp = get_viewport()
 	if vp:
-		vp.scaling_3d_scale = scale
+		# The preset current NOW, not the one that started this wait: a second preset inside the two frames
+		# (Performance -> Low) returned early above and would otherwise get the stale 0.77.
+		vp.scaling_3d_scale = PRESETS[current_preset]["fsr_scale"]
 
 
 ## Apply environment settings
@@ -330,56 +337,45 @@ func apply_environment_settings(settings: Dictionary) -> void:
 	if not env:
 		return
 
-	# SSAO
-	env.ssao_enabled = settings["ssao"]
-	if settings.has("ssao_radius"):
-		env.ssao_radius = settings["ssao_radius"]
-	if settings.has("ssao_intensity"):
-		env.ssao_intensity = settings["ssao_intensity"]
-
-	# SSIL
-	env.ssil_enabled = settings.get("ssil", false)
-
-	# SSR
-	env.ssr_enabled = settings["ssr"]
-
-	# --- Tier-gated atmosphere / GI (centralised so all 5 presets stay consistent) ---
-	var tier: int = current_preset
-
-	# SDFGI: realtime bounce GI — ULTRA only (expensive; can shimmer on small minis).
-	if tier == QualityPreset.ULTRA:
-		env.sdfgi_enabled = true
-		env.sdfgi_cascades = 4
-		env.sdfgi_use_occlusion = true
-		# Do NOT inject the procedural sky into SDFGI: the space-skybox radiance bake is
-		# an unreliable light source (intermittent GPU-garbage cubemap floods the scene
-		# magenta/green/white). Scene lighting is decoupled from the sky (ambient=Color,
-		# reflections disabled in main.tscn); SDFGI keeps geometry bounce only.
-		env.sdfgi_read_sky_light = false
-		env.sdfgi_bounce_feedback = 0.5
-		env.sdfgi_min_cell_size = 0.2
-		env.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_75_PERCENT
+	# The game table's RenderState owns these values: the preset is its lowest layer (the mood light, the biome
+	# reference and the intro sit above it), so the end state no longer depends on which script ran last.
+	var values := environment_values(settings, current_preset)
+	var render_state = world_env.get_parent().get("render_state")
+	if render_state != null:
+		render_state.set_layer("preset", values)
 	else:
-		env.sdfgi_enabled = false
-
-	# Atmospheric fog is off: the scene is set in space (no aerial perspective), and the
-	# low ground mist is now drawn by the dedicated white shader-plane system
-	# (atmospheric_clouds.gd) rather than environment volumetric fog, which a 1–2 cm
-	# ground layer cannot be resolved by and which tinted everything warm/brown.
-	env.fog_enabled = false
-	env.volumetric_fog_enabled = false
+		for key: String in values:
+			env.set(key, values[key])
 
 	# Auto-exposure: disabled for now — it blew the physical-sky scene out to white.
 	# Re-introduce once the fixed-exposure baseline is dialled in.
 	if world_env.camera_attributes:
 		world_env.camera_attributes.auto_exposure_enabled = false
 
-	# Glow
-	env.glow_enabled = settings["glow"]
-	if settings.has("glow_intensity"):
-		env.glow_intensity = settings["glow_intensity"]
-	if settings.has("glow_bloom"):
-		env.glow_bloom = settings["glow_bloom"]
+
+## The preset's Environment values: SSAO, SSIL, SSR, glow; SDFGI on ULTRA only; fog off.
+static func environment_values(settings: Dictionary, tier: int) -> Dictionary:
+	var values := {"ssao_enabled": settings["ssao"], "ssil_enabled": settings.get("ssil", false),
+		"ssr_enabled": settings["ssr"], "glow_enabled": settings["glow"],
+		# SDFGI: realtime bounce GI — ULTRA only (expensive; can shimmer on small minis).
+		"sdfgi_enabled": tier == QualityPreset.ULTRA,
+		# Atmospheric fog is off: the scene is set in space (no aerial perspective), and the
+		# low ground mist is now drawn by the dedicated white shader-plane system
+		# (atmospheric_clouds.gd) rather than environment volumetric fog, which a 1–2 cm
+		# ground layer cannot be resolved by and which tinted everything warm/brown.
+		"fog_enabled": false, "volumetric_fog_enabled": false}
+	for key: String in ["ssao_radius", "ssao_intensity", "glow_intensity", "glow_bloom"]:
+		if settings.has(key):
+			values[key] = settings[key]
+	if tier == QualityPreset.ULTRA:
+		# Do NOT inject the procedural sky into SDFGI: the space-skybox radiance bake is
+		# an unreliable light source (intermittent GPU-garbage cubemap floods the scene
+		# magenta/green/white). Scene lighting is decoupled from the sky (ambient=Color,
+		# reflections disabled in main.tscn); SDFGI keeps geometry bounce only.
+		values.merge({"sdfgi_cascades": 4, "sdfgi_use_occlusion": true, "sdfgi_read_sky_light": false,
+			"sdfgi_bounce_feedback": 0.5, "sdfgi_min_cell_size": 0.2,
+			"sdfgi_y_scale": Environment.SDFGI_Y_SCALE_75_PERCENT})
+	return values
 
 
 ## Get current preset name
@@ -397,9 +393,11 @@ func save_settings() -> void:
 	config.set_value("graphics", "screen_index", screen_index)
 	config.set_value("graphics", "show_move_trails", show_move_trails)
 	config.set_value("graphics", "show_rule_floats", show_rule_floats)
+	config.set_value("graphics", "show_combat_effects", show_combat_effects)
 	config.set_value("graphics", "tilt_shift", tilt_shift)
 	config.set_value("graphics", "show_combat_stage", show_combat_stage)
 	config.set_value("graphics", "combat_stage_hold_s", combat_stage_hold_s)
+	config.set_value("graphics", "gore_level", gore_level)
 	config.set_value("graphics", "enforce_movement_limit", enforce_movement_limit)
 	config.set_value("graphics", "ai_explain_persistent", ai_explain_persistent)
 	config.save("user://graphics_settings.cfg")
@@ -422,8 +420,10 @@ func load_settings() -> void:
 	screen_index = config.get_value("graphics", "screen_index", -1)
 	show_move_trails = config.get_value("graphics", "show_move_trails", true)
 	show_rule_floats = config.get_value("graphics", "show_rule_floats", true)
+	show_combat_effects = config.get_value("graphics", "show_combat_effects", false)
 	tilt_shift = config.get_value("graphics", "tilt_shift", true)
 	show_combat_stage = config.get_value("graphics", "show_combat_stage", true)
 	combat_stage_hold_s = float(config.get_value("graphics", "combat_stage_hold_s", 2.5))
+	gore_level = clampi(int(config.get_value("graphics", "gore_level", 1)), 0, 2)
 	enforce_movement_limit = config.get_value("graphics", "enforce_movement_limit", true)
 	ai_explain_persistent = config.get_value("graphics", "ai_explain_persistent", true)

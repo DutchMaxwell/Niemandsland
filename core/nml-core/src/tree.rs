@@ -333,6 +333,9 @@ pub struct TreeTrace {
     pub terminal: usize,
     /// Microseconds from the planner call to the pick (`Search::run`); 0 from a bare `run`.
     pub elapsed_us: u64,
+    /// `deadline_after_preselect`: microseconds of the root preselection before the
+    /// search clock started — `Some` ONLY when that knob is on (set by `Search::run`).
+    pub preselect_us: Option<u64>,
 }
 
 /// A child's mean over its sample nodes (equally likely chance outcomes)
@@ -456,5 +459,6 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             best = (i, mean);
         }
     }
-    Ok((best.0, TreeTrace { completed, deadline_hit, root: trace, fallback: None, batches, frontier, terminal, elapsed_us: 0 }))
+    Ok((best.0, TreeTrace { completed, deadline_hit, root: trace, fallback: None, batches, frontier, terminal, elapsed_us: 0,
+                            preselect_us: None }))
 }

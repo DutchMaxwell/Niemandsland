@@ -339,7 +339,7 @@ impl<'a> Rollout<'a> {
     ) -> Result<(Vec<State>, Stop), Unsupported> {
         let horizon_rounds = if horizon_rounds <= 0 { self.horizon() } else { horizon_rounds };
         let mut out: Vec<State> = Vec::new();
-        let mut cur = self.policy.resolve(state, first_action)?;
+        let mut cur = self.policy.resolve_root(state, first_action)?;
         // The OPENER is an activation like any other, so its own end is a
         // Coordinate trigger like any other. Skipping it here would make the
         // rule invisible to exactly the pick the search is pricing.
@@ -856,6 +856,8 @@ pub fn mint_template_slot(
     st.positions.push(Vec::new());
     st.wounds.push(Vec::new());
     st.radii.push(Vec::new());
+    st.kits.push(Rc::new(Vec::new()));
+    st.kit_names.push(Rc::new(Vec::new()));
     st.mods.push(crate::state::Mods::default());
     st.mods_base.push(Rc::new(crate::state::Mods::default()));
     Rc::make_mut(&mut st.attached).push(Vec::new());

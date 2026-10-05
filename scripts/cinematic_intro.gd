@@ -195,19 +195,20 @@ func _save_environment() -> void:
 func _setup_environment() -> void:
 	if not (world_environment and world_environment.environment):
 		return
-	var env := world_environment.environment
-
 	# Keep the star-field skybox as the backdrop.
-	env.background_mode = Environment.BG_SKY
-
 	# Calm boot glow — same Softlight blend as gameplay and a raised HDR threshold so
 	# clustered stars stay as crisp points instead of blooming into white sheets. The
 	# strongly-emissive holo grid is far above the threshold, so it still blooms.
-	env.glow_enabled = true
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
-	env.glow_intensity = 1.2
-	env.glow_bloom = GLOW_BLOOM_INTRO
-	env.glow_hdr_threshold = GLOW_THRESHOLD_INTRO
+	var values := {"background_mode": Environment.BG_SKY, "glow_enabled": true,
+		"glow_blend_mode": Environment.GLOW_BLEND_MODE_SOFTLIGHT, "glow_intensity": 1.2,
+		"glow_bloom": GLOW_BLOOM_INTRO, "glow_hdr_threshold": GLOW_THRESHOLD_INTRO}
+	# In the game this is the RenderState's top layer: a biome dressed during the intro cannot pull its glow down.
+	var render_state = _render_state()
+	if render_state != null:
+		render_state.set_layer("intro", values)
+	else:
+		for key: String in values:
+			world_environment.environment.set(key, values[key])
 
 	# NOTE: no volumetric fog. It scattered the scene's warm directional light into an
 	# ugly brown wash over the whole intro, and rendering it sharp (DOF-free) for one
@@ -638,10 +639,23 @@ func _hide_main_scene() -> void:
 			cam.current = false
 
 
+## The game's RenderState (null for a mock main), found next to the WorldEnvironment.
+func _render_state() -> Variant:
+	return world_environment.get_parent().get("render_state") if world_environment else null
+
+
 func _restore_environment() -> void:
 	if not (world_environment and world_environment.environment):
 		return
 	var env := world_environment.environment
+	var render_state = _render_state()
+	if render_state != null:
+		# Dropping the layer brings back whatever preset / light / biome reference holds NOW — the values saved at
+		# the start of the intro may predate the table's dressing.
+		render_state.set_layer("intro", {})
+		if _sky_material:
+			_sky_material.set_shader_parameter("star_brightness", _orig_star_brightness)
+		return
 	env.background_mode = _orig_bg_mode
 	env.background_color = _orig_bg_color
 	env.glow_enabled = _orig_glow_enabled
