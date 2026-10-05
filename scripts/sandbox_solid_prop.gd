@@ -86,6 +86,7 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_lo
 		visual.mesh = mesh
 		visual.position = (hi + lo) * 0.5 * INCHES_TO_METERS
 		add_child(visual)
+	add_child(GrasslandFootScatter.new().setup(footprint_inches, false))   # stones + grass at the foot (S6-2)
 	# Soft contact shadow (maintainer 05.10.): a Decal child, so it moves, turns and goes with the piece. Decoration only.
 	var skirt := Decal.new()
 	skirt.name = "ContactSkirt"
