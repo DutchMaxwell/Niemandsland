@@ -13200,6 +13200,11 @@ func apply_table_theme(theme_id: String) -> bool:
 	if not theme.fits(table.table_size):
 		_show_toast("%s needs a %d x %d ft table" % [theme.label, int(theme.table_feet.x), int(theme.table_feet.y)])
 		return false
+	var in_the_way := theme.models_in_the_way(get_tree())
+	if in_the_way > 0:   # lead D16: never move models, their positions are rules
+		_show_toast("%d %s where the theme would place terrain - clear %s first" % [in_the_way,
+			"model stands" if in_the_way == 1 else "models stand", "it" if in_the_way == 1 else "them"])
+		return false
 	if terrain_overlay != null and terrain_overlay.grid_cells.values().any(func(v: Variant) -> bool: return int(v) != 0):
 		_show_toast("Clear the grid terrain first, then apply %s" % theme.label)
 		return false
