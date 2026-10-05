@@ -87,6 +87,28 @@ func test_frog_mage_on_the_queztalcoatl_resolves_the_sky_serpent_variant() -> vo
 		.is_equal(["Frog-Mage#skyserpent"])
 
 
+func test_saurian_veteran_obsidian_great_weapon_resolves_its_form() -> void:
+	var manager := _manager(["saurians/saurian veteran#heavy", "saurians/saurian veteran#obsidian"])
+	var army := _army([{"armyId": SAURIAN_ARMY, "name": "Saurian Veteran", "size": 1, "bases": {"round": "32"},
+		"loadout": [{"type": "ArmyBookWeapon", "name": "Obsidian Great Weapon", "attacks": 3, "count": 1}]}])
+	assert_array(manager._unit_model_variant_names(army.units[0], "saurians")) \
+		.is_equal(["Saurian Veteran#obsidian"])
+
+
+func test_saurian_guardians_banner_keeps_its_badge_with_the_obsidian_word() -> void:
+	# Guardians carry the Obsidian Great Weapon by default, so the banner model asks for #banner+obsidian:
+	# the live manifest carries that key (and #crest/#horn+obsidian) as copies of #banner etc. since 05.10.
+	var manager := _manager(["saurians/saurian guardians", "saurians/saurian guardians#banner",
+		"saurians/saurian guardians#banner+obsidian"])
+	var army := _army([{"armyId": SAURIAN_ARMY, "name": "Saurian Guardians", "size": 5, "bases": {"round": "32"},
+		"loadout": [
+			{"type": "ArmyBookWeapon", "name": "Obsidian Great Weapon", "attacks": 1, "count": 5},
+			{"type": "ArmyBookItem", "name": "Banner", "count": 1, "content": []}]}])
+	var names: Array = manager._unit_model_variant_names(army.units[0], "saurians")
+	assert_int(names.count("Saurian Guardians#banner+obsidian")).is_equal(1)
+	assert_int(names.count("")).is_equal(4)
+
+
 func test_saurian_upgrade_words_map_to_the_plan_slugs() -> void:
 	var lib: ModelLibrary = auto_free(ModelLibrary.new())
 	lib._load_label_slug_map()
@@ -97,7 +119,8 @@ func test_saurian_upgrade_words_map_to_the_plan_slugs() -> void:
 		"Champion Javelin": "javelin", "Champion Blowpipe": "blowpipe", "Champion Fire Bolas": "bolas",
 		"Deinonychus": "deinonychus", "Pterodactyl": "pterodactyl", "Ripjawdactyl": "ripjawdactyl",
 		"Ancient Palanquin": "palanquin", "Starseer Palanquin": "palanquin", "Tyrannosaur": "tyrannosaur",
-		"Raptor": "raptor", "Queztalcoatl": "skyserpent"}
+		"Raptor": "raptor", "Queztalcoatl": "skyserpent",
+		"Obsidian Great Weapon": "obsidian"}
 	for word in expected:
 		assert_str(lib.variant_slug([word], "saurians")).is_equal(expected[word])
 	# Scoped: another faction does not read the Saurian words.
