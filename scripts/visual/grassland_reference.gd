@@ -526,7 +526,8 @@ func _keep_props_seated(overlay: Node3D) -> void:
 
 func _dress_movable_forests() -> void:
 	for group in get_tree().get_nodes_in_group("terrain_group_base"):
-		if group.prop_kind != TerrainGroupBase.KIND_FOREST or group.biome_prefix != "":
+		if group.prop_kind != TerrainGroupBase.KIND_FOREST or group.biome_prefix != "" \
+				or bool(group.get_meta("deleted", false)):   # a deleted (hidden, undoable) wood leaves no floor or litter
 			continue
 		var radius: Vector2 = group.footprint_inches * 0.0254 * 0.5
 		_regions.append(Vector4(group.global_position.x,group.global_position.z,radius.x,radius.y))

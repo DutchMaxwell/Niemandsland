@@ -42,3 +42,12 @@ func test_hazard_cluster_is_not_a_forest_region() -> void:
 	var presentation := _presentation()
 	presentation._dress_movable_forests()
 	assert_int(presentation._regions.size()).is_equal(0)
+
+
+## A deleted wood is hidden, not freed (undoable): it must leave no forest floor or leaf litter behind (05.10.).
+func test_a_deleted_forest_is_not_a_forest_region() -> void:
+	var group := _group(TerrainGroupBase.KIND_FOREST, "forest_large")
+	DeletedState.apply(group, true)
+	var presentation := _presentation()
+	presentation._dress_movable_forests()
+	assert_int(presentation._regions.size()).is_equal(0)
