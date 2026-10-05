@@ -60,7 +60,9 @@
     "dread behemoth fighter": "behemoth",
     "dread behemoth carrier": "carrier",
     "dread pterodactyl": "pterodactyl",
-    "tyrannosaur": "tyrannosaur"
+    "tyrannosaur": "tyrannosaur",
+    "raptor": "raptor",
+    "queztalcoatl": "skyserpent"
   },
   "_faction_ratmen": {
     "pet giant rat": "petrat",
