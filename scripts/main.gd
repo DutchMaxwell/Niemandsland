@@ -766,6 +766,9 @@ func _ready() -> void:
 	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
 	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
 	map_layout_editor.objectives_changed.connect(_on_objectives_changed)
+	map_layout_editor.theme_requested.connect(func(theme_id: String) -> void:
+		if apply_table_theme(theme_id):
+			map_layout_editor._on_close_pressed())   # close the editor so the laid-out table shows
 	map_layout_editor.relic_drop_chosen.connect(_solo_relic_drop_chosen)
 	map_layout_editor.vip_spot_chosen.connect(_solo_vip_spot_chosen)
 	map_layout_editor.vip_pick_refused.connect(func() -> void:
