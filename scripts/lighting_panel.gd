@@ -306,6 +306,14 @@ func _build_ui() -> void:
 		if pivot != null and pivot.has_method("set_tilt_shift_enabled"):
 			pivot.set_tilt_shift_enabled(on))
 	vbox.add_child(tilt_cb)
+	var frame := OptionButton.new()
+	frame.name = "TableFrameStrengthOption"
+	for title in ["Frame: Subtle walnut", "Frame: Clear oak", "Frame: Strong ivory"]:
+		frame.add_item(title)
+	frame.select(GraphicsSettings.table_frame_strength)
+	frame.tooltip_text = "Frame finish. Active at Medium quality and above."
+	frame.item_selected.connect(GraphicsSettings.set_table_frame_strength)
+	vbox.add_child(frame)
 
 	# Gore (combat effects): how bloody wounds and casualties look — Off shows dust instead of blood.
 	var gore_row := HBoxContainer.new()

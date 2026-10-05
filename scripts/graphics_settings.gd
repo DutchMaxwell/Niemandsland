@@ -13,6 +13,7 @@ enum QualityPreset {
 }
 
 var current_preset: QualityPreset = QualityPreset.MEDIUM
+var table_frame_strength: int = 1  # Subtle walnut / Clear oak / Strong ivory.
 var _frame_materials: Dictionary = {}  # Two shared grain orientations, independent of table size.
 
 # ===== Window / UI reachability =====
@@ -290,7 +291,15 @@ func table_frame_material(original: Material, along_z: bool) -> Material:
 		mat.shader = preload("res://shaders/table_frame.gdshader")
 		mat.set_shader_parameter("along_z", along_z)
 		_frame_materials[along_z] = mat
+	_frame_materials[along_z].set_shader_parameter("frame_strength", table_frame_strength)
 	return _frame_materials[along_z]
+
+
+func set_table_frame_strength(strength: int) -> void:
+	table_frame_strength = clampi(strength, 0, 2)
+	for mat: ShaderMaterial in _frame_materials.values():
+		mat.set_shader_parameter("frame_strength", table_frame_strength)
+	save_settings()
 
 
 ## Apply rendering settings to project
@@ -399,6 +408,7 @@ func get_current_preset_name() -> String:
 ## Save settings to config file
 func save_settings() -> void:
 	var config = ConfigFile.new()
+	config.set_value("graphics", "table_frame_strength", table_frame_strength)
 	config.set_value("graphics", "preset", current_preset)
 	config.set_value("graphics", "ui_scale", ui_scale)
 	config.set_value("graphics", "reduce_motion", reduce_motion)
@@ -427,6 +437,7 @@ func load_settings() -> void:
 		return
 
 	current_preset = config.get_value("graphics", "preset", QualityPreset.MEDIUM)
+	table_frame_strength = clampi(int(config.get_value("graphics", "table_frame_strength", 1)), 0, 2)
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
 	fullscreen = config.get_value("graphics", "fullscreen", true)
