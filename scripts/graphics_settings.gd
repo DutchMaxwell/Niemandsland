@@ -13,7 +13,6 @@ enum QualityPreset {
 }
 
 var current_preset: QualityPreset = QualityPreset.MEDIUM
-var biome_grade_strength: int = 1  # Subtle / Clear / Strong; Clear is the capture default.
 
 ## Midtone RGB curve, saturation, AgX contrast, highlight glow. Black/white stay neutral.
 const BIOME_GRADES := {
@@ -24,6 +23,12 @@ const BIOME_GRADES := {
 	"alien_jungle": [Color(0.47, 0.55, 0.46), 1.12, 1.16, 0.14],
 	"urban_ruins": [Color(0.47, 0.49, 0.51), 0.85, 1.18, 0.10],
 }
+## Maintainer render picks (1oEL55): Subtle = 0.65, Clear = 1.8.
+## Alien jungle has no saved pick; retain its previous Clear default.
+const BIOME_GRADE_WEIGHTS := {
+	"temperate_grassland": 0.65, "arid_desert": 1.8, "frozen_tundra": 0.65,
+	"urban_ruins": 1.8, "volcanic_ash": 0.65, "alien_jungle": 1.8,
+}
 var _biome_grade_curves := {}
 
 
@@ -31,24 +36,17 @@ func biome_grade_values(biome: String) -> Dictionary:
 	if current_preset < QualityPreset.MEDIUM or not BIOME_GRADES.has(biome):
 		return {}
 	var grade: Array = BIOME_GRADES[biome]
-	var weight: float = [0.65, 1.8, 3.0][biome_grade_strength]
-	var key := "%s/%d" % [biome, biome_grade_strength]
-	if not _biome_grade_curves.has(key):
+	var weight: float = BIOME_GRADE_WEIGHTS[biome]
+	if not _biome_grade_curves.has(biome):
 		var curve := GradientTexture1D.new()
 		curve.width = 256
 		curve.gradient = Gradient.new()
 		curve.gradient.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
 		curve.gradient.colors = PackedColorArray([Color.BLACK, Color(0.5, 0.5, 0.5).lerp(grade[0], weight), Color.WHITE])
-		_biome_grade_curves[key] = curve
-	return {"adjustment_enabled": true, "adjustment_color_correction": _biome_grade_curves[key],
+		_biome_grade_curves[biome] = curve
+	return {"adjustment_enabled": true, "adjustment_color_correction": _biome_grade_curves[biome],
 		"adjustment_contrast": 1.0 + 0.05 * weight, "adjustment_saturation": lerpf(1.0, grade[1], weight),
 		"tonemap_agx_contrast": lerpf(1.0, grade[2], weight), "glow_intensity": grade[3], "glow_bloom": 0.0}
-
-
-func set_biome_grade_strength(strength: int) -> void:
-	biome_grade_strength = clampi(strength, 0, 2)
-	apply_environment_settings(PRESETS[current_preset])
-	save_settings()
 
 
 func _on_grading_biome_changed(_biome: String) -> void:
@@ -431,7 +429,6 @@ func get_current_preset_name() -> String:
 ## Save settings to config file
 func save_settings() -> void:
 	var config = ConfigFile.new()
-	config.set_value("graphics", "biome_grade_strength", biome_grade_strength)
 	config.set_value("graphics", "preset", current_preset)
 	config.set_value("graphics", "ui_scale", ui_scale)
 	config.set_value("graphics", "reduce_motion", reduce_motion)
@@ -460,7 +457,6 @@ func load_settings() -> void:
 		return
 
 	current_preset = config.get_value("graphics", "preset", QualityPreset.MEDIUM)
-	biome_grade_strength = clampi(int(config.get_value("graphics", "biome_grade_strength", 1)), 0, 2)
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
 	fullscreen = config.get_value("graphics", "fullscreen", true)
