@@ -6,33 +6,109 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
-### Added
-- **Automodus: Charge, Advance & Shoot and Rush on the solo radial.** Pick the verb, click the enemy —
-  the engine moves your unit along a legal path and rolls the attack, saves and morale for you, the
-  same executor NACHTMAHR's own activations run through. A suggested target is named in the log; a
-  panel switch (on after your first executed intent) skips the save-roll confirmation. See
-  `KNOWN_ISSUES.md` for this version's limits. (NML-202)
+## [0.3.14.0-alpha] — DRAFT (date set at release)
 
-### Fixed
-- **The Vampiric Undead Butcher Titan stands on the rulebook's giant base, not a vehicle oval.** Army
-  Forge gives it no base, and the size fallback read the keyword-less Tough(18) giant as a vehicle: a
-  105×170 mm oval that scaled the model to about 21 cm. It now gets the 120×92 mm oval the AoF rules
-  give giants (Advanced Rules v3.5.1 p.4); every other unit named Titan keeps its base.
-- **Unit coherency's 3" allowance now triggers on real elevation, not a drag lift.** The
-  threshold was 3" tall, so a model on a 2.5" container roof and its mate on the ground
-  counted as "same level" and had to stand 1" apart, which the wall face makes
-  impossible; it is now GF p.11's own 1" floor, and a drag pickup is never mistaken for
-  standing on elevated terrain. (NML-972, phase B1)
-- **Melee "Who Can Strike" also measures 4" vertically (GF/AoF p.9).** A unit standing on
-  a 6" ruin floor could strike, and be struck by, infantry at the wall foot. (NML-972,
-  phase B1)
-- **A human move pays its climb cost, and the player can pick a ruin floor.** Climbing a
-  container or a ruin's floor slab now spends its height (up and down, GF p.11), a step
-  over 3" is refused under the movement limit, and the mouse wheel steps which floor of a
-  multi-storey ruin a drag lands on. (NML-972, phase B1)
+More ways to play solo, new missions, a refreshed interface and map editor, and fixes to movement,
+combat and terrain. Prepared for maintainer review; this version has not been released.
 
-### Added
-- **Trial by Fire: First Steps** teaches the camera, squad selection, movement and measuring on a small table; completion follows the sixth step and the chapter can be replayed.
+### AI
+- **Four selectable difficulty levels**, with your choice remembered between games. The strongest
+  level is the default; the game log identifies the opponent used. (#1126, #1127)
+- **Order a whole activation with Charge, Advance & Shoot or Rush.** Choose the action and click
+  an enemy; your unit follows a legal path and resolves attacks, saves and morale. Suggested targets
+  appear in the log, and automatic save confirmation is optional. These actions currently exclude
+  co-op rooms, regiments, aircraft and embarked units. (#1173, #1183, #1185, #1186)
+- **AI movement plans individual models' routes** and can climb container ledges up to 3" while
+  paying the climb distance. Each activation starts with a fresh movement budget. (#1207, #1484, #1485)
+- **AI casualties better preserve the surviving squad's chain**, and combat predictions account for
+  individual weapons, equipment and Tough models, including targeted Takedown attacks. Weapons with
+  the same name but different attack counts keep their own bearers. (#1097, #1148, #1481, #1484)
+- **macOS can use the neural opponent on Apple Silicon and Intel.** Builds with a working rules
+  core and model use it at the strongest level. A build without the core, or a load failure, falls
+  back to the decision tree; check the engine named in the game log. (#1133, #1136)
+
+### Rules
+- **Eight more missions:** Relic Hunt, Capture & Hold, The Raid, Ambush, Last Stand, VIP Escort,
+  The Rescue and Smash & Grab. Setup follows each mission's roles, deployment zones, reserves and
+  round limit; escort, extraction, hidden markers and returning defenders follow the chosen mission.
+  Attack & Defend setup also shows points advice. (#1214, #1328, #1409–#1427)
+- **Carried relics stay with their carriers and survive save/load.** Players can choose legal drop
+  positions; The Rescue restricts carrying to the attacker. Solo saves also retain the mission and
+  scoring state, and owned markers follow the deployment-side choice. (#1119, #1124, #1193, #1195,
+  #1198, #1423, #1426)
+- **Combat modifiers are combined before the final limit is applied.** For example, Defense 2+
+  in cover against AP(1) saves on 2+. Shooting range modifiers use the nearest base-edge gap.
+  (#1202, #1250, #1251)
+- **Counter-Attack strikes first when charged** and its aliases reduce Impact; Thrust's hit bonus
+  applies only on a charge. Shaken strike-back, melee wipes, joined-hero morale, Fearless and Mind
+  Control now resolve more consistently. (#1113, #1114, #1172, #1179–#1184, #1189)
+- **Deadly respects Tough models and wound allocation**, including already-wounded models and joined
+  heroes in combat predictions. Printed Unstoppable and Bane correctly bypass Regeneration, and
+  granted regeneration flags are respected. (#1115, #1132, #1159, #1190, #1230)
+- **Corrected special-rule timing and dice:** Rapid Rush affects Rush only; Teleport is a separate
+  reposition; Rapid Charge Mark extends charge reach; Piercing Spotter, Precision Spotter,
+  Piercing Target, Surprise Attack and Crossing Attack follow their individual triggers and model
+  counts. A roll with no dice no longer consumes an extra die. (#1197, #1200, #1204, #1208, #1209,
+  #1216, #1223, #1231, #1232)
+- **Cover requires models to be fully inside the terrain**, and a joined hero sees through its own
+  squad. Stationary AI activations no longer trigger movement-only Dangerous tests. (#1117, #1129, #1131)
+- **Co-op defensive rolls go to the unit's owner.** Utility buffs also work in human-vs-human rooms,
+  and attacker-side spell grants no longer benefit or get consumed by the enemy target. (#1100, #1116, #1125)
+- **Activate from the unit card**, and spend the once-per-game Speed Feat from the radial menu.
+  (#1134, #1135, #1313)
+
+### Terrain
+- **Climbing spends movement distance**, including up and down ruin floors; the mouse wheel selects
+  the landing floor while dragging. Melee checks its 4" vertical reach, and the 3" coherency allowance
+  uses real elevation instead of the temporary lift while dragging. (#1154, #1155, #1157, #1160)
+- **Free-standing solid terrain in every biome:** place a stone-grey block, slab-roof storehouse or
+  heather outcrop from the shelf. The storehouse and outcrop support their detailed downloadable
+  models, with bundled simpler looks available. (#1474, #1491, #1503–#1505, #1508)
+- **Free terrain has the correct type** for sight and movement aids in every mode. Forests and
+  hazards are no longer mistaken for ruins or counted twice; unknown saved types are skipped.
+  Solid pieces retain their type through saves and multiplayer sync. (#1443, #1460, #1467, #1483)
+- **Invalid terrain drops return to their starting position** when they overlap painted grid terrain.
+  Deleted free pieces stop blocking sight, movement and placement; undo restores them, including
+  on multiplayer peers. (#1489, #1509)
+
+### Graphics & effects
+- **Soft contact shadows ground free-standing solid terrain.** (#1507)
+- **Graphics presets keep their intended render scale** when switching from a dressed biome to
+  Performance, including deferred setting changes. Game start reapplies window settings, and
+  biome shadow scale stays consistent across moods. (#1445, #1447, #1453, #1455, #1456)
+- **Menu trees load in the background**, with temporary billboards while their models are prepared.
+  (#1099)
+
+### UI
+- **A consistent dark-panel style across the game:** tool rail, top bar, game menu, unit cards,
+  battle log, chat, settings, import/download windows, multiplayer dialogs and tutorial overlays.
+  Combat prompts, spell selection, interference and tokens share the same controls. (#1138–#1146,
+  #1224–#1259, #1435–#1454)
+- **A rebuilt Map Layout editor** with clear editing modes, a docked terrain shelf, placement ghost,
+  guidance and themed file dialogs. The wheel zooms the editor; it opens in Place mode. (#1268–#1296)
+- **Safer map editing:** Clear terrain and Load ask first; loading and size changes preserve an undo
+  step. Undo also covers objectives and custom-zone vertices. Clearing zones reaches the table,
+  custom zones need three points, and empty paint strokes do not clutter undo history.
+  (#1263–#1266, #1289, #1291, #1293–#1297)
+- **Connection status stays visible**, including a failed reconnect. Esc opens the game menu when
+  there is nothing else to close. Regiment frontage uses **B**; **Shift+F** clears sight/range fans.
+  (#1140, #1310, #1316, #1440)
+- **Crowded radial menus keep key actions accessible.** Dropdowns no longer select an entry on the
+  opening click, and hints and combat cards no longer cover other controls. The redundant model-info
+  popup is removed. (#1147, #1149, #1150, #1194, #1253–#1255)
+- **Trial by Fire: First Steps** teaches camera controls, squad selection, movement and measuring
+  across six steps on a practice table. It can be replayed; the older box-select lesson now requires
+  a real selection box. (#1122, #1178)
+- **Duplicate army models become independent copies**, and the unit-card Wounds button respects
+  Tough(1). Privacy example records display the actual application version. (#1120, #1121, #1123)
+
+### Models
+- **Saurian model selection recognises more unit, weapon and mount names**, including Gecko Champion
+  options, Pterodactyl and Ripjawdactyl mounts, Ancient and Starseer Palanquins, and the Dread Titan's
+  Dread Pterodactyl upgrade. (#1386, #1393, #1396, #1425, #1428, #1506)
+- **Machine Cults resolve to their published model collection.** (#1429)
+- **The Vampiric Undead Butcher Titan uses the 120×92 mm giant oval base**, correcting its oversized
+  vehicle base and model scale. (#1403)
 
 ## [0.3.13.1-alpha] — 2026-09-25
 

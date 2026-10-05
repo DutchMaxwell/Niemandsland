@@ -1,0 +1,304 @@
+Release 0.3.14 preparation — 2026-10-05
+
+Audited baseline: facede8984b3068b81d37fed17c831e7591eecc2 (origin/main at start).
+Last release tag: v0.3.13.1-alpha; 392 merged commits since that tag.
+Target branch: release/0.3.14-prep. No fetch, network, push, merge, tag or release.
+Version metadata remains 0.3.13.1-alpha; the changelog uses the repository format
+0.3.14.0-alpha with an explicit draft date. Release awaits the maintainer's live view.
+
+Sources and scope
+-----------------
+Read the complete release brief and the full local commit log since the release tag.
+No AGENTS.md was found in the worktree or its ancestor directories.
+No release PR text exists under docs/ in this snapshot. During the branch audit,
+release/0.3.14-draft (15c23baf) was found and its CHANGELOG.md draft was read.
+Its version bump was not copied. Its macOS guarantee is too strong: the release
+workflow retains a no-core fallback. Its Saurian delivery claim still contains a
+Dragon Lizard upload caveat; CDN availability cannot be established offline. The
+new changelog therefore describes the merged model-name mappings, not a verified
+complete faction upload. The old draft also predates the later missions/terrain.
+
+Documentation truth pass
+------------------------
+The file:line references below point to the audited baseline, before these edits.
+All 30 current-document statements found stale in this pass have been corrected.
+Coverage: root README/PROJECT_STATUS, current docs guides, architecture, roadmap,
+AI plan/status and rules coverage, with targeted searches across other Markdown
+and comparison to the merged changes. Dated design/audit records under docs/plans/,
+the historical ROAD_TO_ALPHA plan, and old changelog/release-history sections are
+historical evidence; their claims are not rewritten as current release behavior.
+The pooled GDScript sim limitations are distinct from the newly updated Rust core;
+the coverage matrix explicitly excludes that core and is not relabelled as ported.
+
+1. README.md:26
+   Was: In the Windows and Linux builds it plays with its new AI model
+   Correction: At the strongest difficulty it plays with its AI model
+   Evidence: scripts/solo/solo_grade.gd:preset_for; #1126
+
+2. README.md:28
+   Was: without the core (always on macOS) it plays by the official OPR solo
+   Correction: without a working core and model it plays by the official OPR solo
+   Evidence: .github/workflows/build.yml:export-macos and fallback; #1136
+
+3. README.md:40
+   Was: the rest. One difficulty (full strength) — selectable grades are on the roadmap.
+   Correction: the rest. Four selectable difficulties are available on main for the next release: Dämmerung, Zwielicht, Finsternis and Albtraum (default). The solo panel remembers your choice. The macOS build can include a universal Apple Silicon/Intel rules core; if its CI build or proof fails, the release workflow can still export a build without it. The battle log identifies the engine actually running.
+   Evidence: scripts/solo/solo_grade.gd; #1126, #1127, #1136
+
+4. README.md:93
+   Was: a built-in Tactical-HUD UI theme (sleek; cyan/amber)
+   Correction: a shared dark-panel UI with muted teal accents and gold primary actions
+   Evidence: scripts/hud/house_style.gd; #1138–#1454
+
+5. docs/GETTING_STARTED.md:52
+   Was: The size is fixed once the table exists.
+   Correction: Map Layout can change the table size; it reports cleared terrain and objectives, and Ctrl+Z restores the previous layout.
+   Evidence: scripts/map_layout.gd:set_table_size; #1297
+
+6. docs/GETTING_STARTED.md:66
+   Was: NACHTMAHR is a game AI (no LLM) that runs entirely offline and never cheats. On Windows and Linux it plays with its new AI model **Erlkönig**, a trained neural network (value net) that ships with the game; without the Rust rules core (always on macOS) it plays by the official OPR solo decision trees. One difficulty ships (full strength); see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
+   Correction: NACHTMAHR is a game AI (no LLM) that runs entirely offline and never cheats. On main, ready for the next release, the solo panel offers **Dämmerung, Zwielicht, Finsternis and Albtraum** and remembers your choice. Albtraum is the default: it uses **Erlkönig**, the bundled neural network, when the Rust rules core and model load; otherwise it uses the decision tree. The other three grades use the decision tree. The macOS build can include a universal Apple Silicon/Intel rules core; if its CI build or proof fails, the release workflow can still export a build without it. The battle log identifies the engine actually running. See [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
+   Evidence: scripts/solo/solo_grade.gd; .github/workflows/build.yml; #1126, #1127, #1136
+
+7. docs/KNOWN_ISSUES.md:18
+   Was: both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: one difficulty (full strength), co-op against the AI in multiplayer is a first version, the UI is
+   Correction: both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: four selectable difficulties are on main for the next release; co-op against the AI in multiplayer is a first version, the UI is
+   Evidence: scripts/solo/solo_grade.gd; #1126, #1127
+
+8. docs/KNOWN_ISSUES.md:60
+   Was: - **macOS plays without the rules core.** The Windows and Linux builds carry the Rust rules core that runs the trained network; the macOS build has no core, so NACHTMAHR plays its decision-tree opponent there, not the stronger Erlkönig model.
+   Correction: - **macOS core availability depends on the build.** The macOS build can include a universal Apple Silicon/Intel rules core; if its CI build or proof fails, the release workflow can still export a build without it. The battle log identifies the engine actually running. The difficulty picker still says "on macOS still without Erlkönig" even in a build with the core; use the start-of-game engine log to check.
+   Evidence: .github/workflows/build.yml; scripts/solo/solo_grade.gd:description; #1136
+
+9. PROJECT_STATUS.md:13
+   Was: On Linux and Windows builds NACHTMAHR searches its moves with a **trained neural network (value net)** that ships with the game, inside the bundled Rust rules core; on macOS, or when that core does not load, it plays
+   Correction: At the strongest difficulty, NACHTMAHR searches its moves with a **trained neural network (value net)** that ships with the game, inside the Rust rules core; when the core or model does not load, it plays
+   Evidence: scripts/solo/solo_grade.gd; #1126, #1136
+
+10. PROJECT_STATUS.md:23
+   Was: where the core and its model load (on macOS it plays the tree's ceiling).
+   Correction: where the core and its model load (otherwise it plays the tree's ceiling). The macOS build can include a universal Apple Silicon/Intel rules core; if its CI build or proof fails, the release workflow can still export a build without it. The battle log identifies the engine actually running.
+   Evidence: .github/workflows/build.yml; #1136
+
+11. PROJECT_STATUS.md:272
+   Was: a built-in Tactical-HUD UI theme (sleek; cyan/amber)
+   Correction: a shared dark-panel UI with muted teal accents and gold primary actions
+   Evidence: scripts/hud/house_style.gd; #1138–#1454
+
+12. PROJECT_STATUS.md:338
+   Was: on Linux and Windows builds NACHTMAHR's move search also scores positions with a trained neural network (value net) in the bundled Rust rules core.
+   Correction: at the strongest difficulty, NACHTMAHR's move search also scores positions with a trained neural network (value net) when the Rust rules core and model load.
+   Evidence: scripts/solo/solo_grade.gd; #1126, #1136
+
+13. PROJECT_STATUS.md:345
+   Was: the fallback and is the only AI on macOS (see [`docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md`](docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md)).
+   Correction: the fallback, including on macOS when the core is unavailable (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#rust-rules-core-optional)).
+   Evidence: .github/workflows/build.yml; #1136
+
+14. PROJECT_STATUS.md:361
+   Was: applied by hand; all solo UI is English-only. macOS builds carry no rules core, so there NACHTMAHR plays the decision tree only; AI thinking time has been measured on one machine.
+   Correction: applied by hand; most solo UI is English (VIP setup prompts also support German). macOS can fall back to a build without the rules core; the engine log identifies the active opponent. AI thinking time has been measured on one machine.
+   Evidence: scripts/solo/mission_catalog.gd:VIP_TEXT; .github/workflows/build.yml; #1433, #1136
+
+15. docs/ARCHITECTURE.md:148
+   Was: - `solo_difficulty.gd` (`SoloDifficulty`) — the single shipped grade (full strength); every legacy grade name resolves to it.
+   Correction: - `solo_grade.gd` (`SoloGrade`) — four selectable grades and saved player choice (Albtraum by default). `solo_difficulty.gd` (`SoloDifficulty`) supplies their presets; legacy grade aliases still resolve to the ceiling.
+   Evidence: scripts/solo/solo_grade.gd and solo_difficulty.gd; #1126
+
+16. docs/ARCHITECTURE.md:180
+   Was: - `glassmorphism_theme.gd` + `hud/` (`hud_frame`, `hud_tokens`, `state_panel`, `ui_motion`) — the Tactical-HUD UI language and overlay.
+   Correction: - `hud/house_style.gd` — shared palette, typography and control variants for the migrated game windows, editor and menu. `glassmorphism_theme.gd` and `hud/` (`hud_frame`, `hud_tokens`, `state_panel`, `ui_motion`) retain the underlying theme and remaining legacy overlays.
+   Evidence: scripts/hud/house_style.gd; #1138–#1454
+
+17. docs/ARCHITECTURE.md:192
+   Was: the one player-facing grade runs the search planner
+   Correction: the strongest player-facing grade, Albtraum, runs the search planner
+   Evidence: scripts/solo/solo_grade.gd; #1126
+
+18. docs/ARCHITECTURE.md:197
+   Was: macOS release builds carry no core library, so they always run the GDScript engine.
+   Correction: macOS can carry a universal Apple Silicon/Intel core library, built and run-proven by `export-macos`; the release workflow retains a no-core fallback export if that job or its artifact is unavailable.
+   Evidence: .github/workflows/build.yml; #1136
+
+19. docs/ROADMAP.md:32
+   Was: pick a ruin floor) shipped; Phase B2 makes both AI planners climb pieces up to 3", measured on the yardstick; Phase C ports skirmish jump/fall (GFF p.14/p.55); Phase D lets the AI value elevated firing spots by sight gain only.
+   Correction: pick a ruin floor) is on main; Phase B2 now lets both AI movement planners climb container ledges up to 3" in fresh games. AI coherency still uses a stricter 1" horizontal chain across levels. Phase C has pure skirmish jump/fall helpers, but no live drop resolver yet; Phase D remains planned: value elevated firing spots by sight gain only.
+   Evidence: scripts/solo/solo_controller.gd:climb_on; scripts/solo/jump_rules.gd; #1484, #1502
+
+20. docs/ROADMAP.md:59
+   Was: frontage cycle (Shift+F)
+   Correction: frontage cycle (B)
+   Evidence: scripts/object_manager.gd; #1140
+
+21. docs/SOLO_AI_PLAN.md:9
+   Was: > game against today. On Linux and Windows release builds it plays with a search planner and a trained > neural network (value net, the Erlkönig model) on the Rust rules core when both load, else with the > GDScript decision tree; macOS always uses the tree.
+   Correction: > game against today. At the strongest grade it plays with a search planner and a trained > neural network (value net, the Erlkönig model) on the Rust rules core when both load, else with the > GDScript decision tree. macOS can include the universal core, with a no-core CI fallback export.
+   Evidence: scripts/solo/solo_grade.gd; .github/workflows/build.yml; #1126, #1136
+
+22. docs/SOLO_AI_PLAN.md:15
+   Was: what remains (rules coverage and core parity, difficulty grades)
+   Correction: what remains (rules coverage and core parity); the opening status now records four selectable grades on main
+   Evidence: scripts/solo/solo_grade.gd; #1126, #1127
+
+23. docs/SOLO_AI_PLAN.md:374
+   Was: `SoloDifficulty`, and exactly one grade ships: NACHTMAHR.
+   Correction: `SoloDifficulty`. Four grades are selectable on main through `SoloGrade`: Dämmerung, Zwielicht, Finsternis and Albtraum (default); legacy preset aliases still resolve to the ceiling.
+   Evidence: scripts/solo/solo_grade.gd and solo_difficulty.gd; #1126
+
+24. docs/SOLO_AI_RULES_COVERAGE.md:751
+   Was: > game exposes exactly **one** difficulty; every one of those grade names resolves to the same > single strength, NACHTMAHR, today. Kept as a record of how the knobs work, for whenever > selectable grades ship.
+   Correction: > game on main now offers Dämmerung, Zwielicht, Finsternis and Albtraum through `SoloGrade`. > The old preset names below still resolve to the ceiling through `SoloDifficulty`; the three > new lower-grade keys have distinct presets. Albtraum selects the neural search when available.
+   Evidence: scripts/solo/solo_grade.gd and solo_difficulty.gd; #1126
+
+25. docs/SOLO_AI_RULES_COVERAGE.md:794
+   Was: (the only grade name the shipped game resolves today)
+   Correction: (legacy ceiling presets; the new lower-grade keys are also accepted)
+   Evidence: scripts/solo/solo_difficulty.gd; #1126
+
+26. docs/SOLO_AI_RULES_COVERAGE.md:916
+   Was: note under **AI ARENA** above; every grade name resolves to NACHTMAHR today)
+   Correction: note under **AI ARENA** above; these legacy grade aliases still resolve to the ceiling)
+   Evidence: scripts/solo/solo_difficulty.gd; #1126
+
+27. docs/SOLO_AI_RULES_COVERAGE.md:1041
+   Was: inside the 12″ charge band — and never off a marker within 3″. Carried objective markers are a no-op in our missions (only static, round-end-seized markers exist); the TODO for carry-the-relic missions sits on `ambush_redeploy_withdraw`.
+   Correction: inside the 12″ charge band — and never off a marker within 3″. Carry missions now exist, but `ambush_redeploy_withdraw` still has no explicit carried-marker drop. That interaction remains an open gap; the general round-end carry referee is not a withdrawal-time drop.
+   Evidence: scripts/solo/solo_controller.gd:ambush_redeploy_withdraw; scripts/main.gd:_solo_ambush_redeploy_execute; #1214
+
+28. README.md:54
+   Was: sight, cover, difficult / dangerous ground; in the sandbox and in multiplayer it stays visual — though since `0.3.12` the measure tool's own LOS verdict is volumetric and height-aware in every mode.)
+   Correction: sight, cover, difficult / dangerous ground. Sight, placement and movement aids also account for free terrain in the sandbox and multiplayer; human-vs-human combat and damage remain manual.)
+   Evidence: scripts/main.gd:_sandbox_terrain_shapes; #1467, #1509
+
+29. docs/KNOWN_ISSUES.md:13
+   Was: **terrain has no gameplay effect** there (it's visual + line-of-sight only) — though since `0.3.12` the measure tool's own LOS verdict is volumetric and height-aware in every mode. You
+   Correction: terrain contributes to line of sight, placement and movement aids, including free shelf pieces, while human-vs-human combat and terrain damage remain manual. You
+   Evidence: scripts/main.gd:_sandbox_terrain_shapes; #1467, #1509
+
+30. PROJECT_STATUS.md:207
+   Was: the effects themselves — terrain has **no automated movement/cover/damage effects** there, by design.
+   Correction: combat effects themselves — terrain affects sight, placement and movement aids in every mode, but human-vs-human cover saves and terrain damage remain manual.
+   Evidence: scripts/main.gd:_sandbox_terrain_shapes; #1467, #1509
+
+Additional findings retained for maintainer review
+-------------------------------------------------
+- docs/SOLO_AI_RULES_COVERAGE.md:1041 formerly said only static markers exist.
+  Carry missions are now merged, but scripts/solo/solo_controller.gd:12108
+  (ambush_redeploy_withdraw) and scripts/main.gd:1377
+  (_solo_ambush_redeploy_execute) do not explicitly drop a carried relic at
+  withdrawal. The coverage note now names this open interaction; no runtime fix
+  is claimed by a documentation-only preparation.
+- scripts/solo/solo_grade.gd:description still hardcodes the macOS no-Erlkönig
+  picker message even though the build can include the core. KNOWN_ISSUES now
+  points players to the actual engine log. No build artifact was available to
+  prove what the eventual release will contain.
+- JumpRules is referenced only by its helper/tests, not by the live drop flow.
+  Live jumps are excluded from the changelog. AI climb is enabled for fresh games
+  at epoch 70; its horizontal coherency remains stricter than the book.
+- Rust shelf_sight remains dormant; merged free-terrain table behavior is not
+  evidence that the AI search has full free-piece sight parity enabled.
+- Visual result pips, tracers and spell seals remain on unmerged branches and
+  are excluded from the graphics/effects release claims.
+
+Branch audit (local snapshot only)
+---------------------------------
+RELEASEPREP_0.3.14_BRANCHES.tsv contains all 2,188 refs present at audit start,
+including full tip hashes, unmerged commit IDs/counts and individual patch matches.
+1,567 refs have commits outside baseline ancestry: 832 local and 735 remote-tracking
+refs, covering 1,965 distinct non-merge commits. Remote-tracking refs are cached;
+their server state is unknown because no fetch was allowed.
+The inventory deliberately keeps old branches visible instead of treating every
+unmerged ancestor as a pending feature. Squash merges, rebases and altered test
+formatting mean ancestry and patch-ID mismatch alone do not prove missing work.
+For 149 distinct release-related tips, the files changed since the merge base
+were also compared with baseline: matching files establish integrated content.
+Differing files can still be older versions; inspect the branch delta before
+cherry-picking. No branch was merged, reset, deleted or pushed.
+
+Priority review candidates (not included as released functionality):
+
+release/0.3.14-draft: Existing draft/version bump and macOS documentation. Superseded by this prep; reconcile deliberately instead of merging its stale release assertions.
+  refs/heads/release/0.3.14-draft @ 15c23bafcc2e — 3 non-merge / 0 merge commits outside baseline
+  refs/remotes/origin/release/0.3.14-draft @ 15c23bafcc2e — 3 non-merge / 0 merge commits outside baseline
+
+fantasytable/theme-data: Ruined Borderland theme JSON/loader and export inclusion are absent from baseline; terrain-theme groundwork remains pending.
+  refs/heads/fantasytable/theme-data @ 97d09cdebc43 — 2 non-merge / 0 merge commits outside baseline
+  refs/remotes/origin/fantasytable/theme-data @ 97d09cdebc43 — 2 non-merge / 0 merge commits outside baseline
+
+heights-step24: 3072084c wires human skirmish jumps/falls into the drop flow. Only the preceding JumpRules helper is on baseline.
+  refs/heads/heights-step24 @ 3072084cfd7f — 2 non-merge / 0 merge commits outside baseline
+
+models/saurian-queztalcoatl: bf006f92 adds the Frog-Mage Queztalcoatl -> skyserpent mount mapping, absent from baseline.
+  refs/heads/models/saurian-queztalcoatl @ bf006f9298cc — 1 non-merge / 0 merge commits outside baseline
+  refs/remotes/origin/models/saurian-queztalcoatl @ bf006f9298cc — 1 non-merge / 0 merge commits outside baseline
+
+vfx/result-pips: Result-pip presenter and cap; not in baseline.
+  refs/heads/vfx/result-pips @ 1c28c094c1db — 4 non-merge / 0 merge commits outside baseline
+  refs/remotes/origin/vfx/result-pips @ 1c28c094c1db — 4 non-merge / 0 merge commits outside baseline
+
+vfx/result-pips-hook: 21c23ff7 connects pips to actual wound allocation; local follow-up.
+  refs/heads/vfx/result-pips-hook @ 21c23ff7f626 — 5 non-merge / 0 merge commits outside baseline
+
+vfx/volley-cue: Volley tracers/presenter; not in baseline. The sight-pair helper alone is merged.
+  refs/heads/vfx/volley-cue @ 08a4c02e43af — 2 non-merge / 0 merge commits outside baseline
+  refs/remotes/origin/vfx/volley-cue @ 08a4c02e43af — 2 non-merge / 0 merge commits outside baseline
+
+vfx/volley-hook: f5a390b1 connects volley effects to the actual AI volley; local follow-up.
+  refs/heads/vfx/volley-hook @ f5a390b1ecf1 — 10 non-merge / 1 merge commits outside baseline
+
+vfx/spell-seal: Spell-seal presenter, including an annulus optimization revert; not in baseline.
+  refs/heads/vfx/spell-seal @ 84a1dd800ea0 — 3 non-merge / 0 merge commits outside baseline
+  refs/remotes/origin/vfx/spell-seal @ 84a1dd800ea0 — 3 non-merge / 0 merge commits outside baseline
+
+vfx/seal-hook: 85b328e1 connects spell seals to actual casting; local follow-up.
+  refs/heads/vfx/seal-hook @ 85b328e19ea7 — 10 non-merge / 1 merge commits outside baseline
+
+vfx/look: Combined visual-effects WIP, with a live-session cosmetic-send guard; needs visual approval and integration review.
+  refs/heads/vfx/look @ c80a30aa1805 — 21 non-merge / 6 merge commits outside baseline
+  refs/remotes/origin/vfx/look @ c80a30aa1805 — 21 non-merge / 6 merge commits outside baseline
+
+vfx/spells: Earlier spell effects and lifecycle/malformed-payload tests; compare with the newer effect branches, do not stack blindly.
+  refs/heads/vfx/spells @ 25388b1d6b60 — 28 non-merge / 1 merge commits outside baseline
+
+vfx/v2: Earlier local effect WIP; compare with newer effect branches.
+  refs/heads/vfx/v2 @ ee8c6fdf3551 — 20 non-merge / 1 merge commits outside baseline
+
+vfx/v3: Earlier local weapon-family effects and sound hooks; compare with newer effect branches.
+  refs/heads/vfx/v3 @ c17f3c561bad — 26 non-merge / 1 merge commits outside baseline
+
+core/tray-exact-local-pre-fold: 22cd73cf adjusts a second Takedown profile's save square. The S7–S10 ancestry is substantially merged; compare this follow-up rather than merging the entire old stack.
+  refs/heads/core/tray-exact-local-pre-fold @ 22cd73cf4a62 — 6 non-merge / 0 merge commits outside baseline
+
+tools/lab2-p9-blocked-stratum: 781233a5 changes unsupported control rows from INVALID to BLOCKED-STRATUM. Its commit explicitly says HOLD for a maintainer decision; newer merged rule ports may have changed the premise.
+  refs/heads/tools/lab2-p9-blocked-stratum @ 781233a5b123 — 1 non-merge / 0 merge commits outside baseline
+  refs/remotes/origin/tools/lab2-p9-blocked-stratum @ 781233a5b123 — 1 non-merge / 0 merge commits outside baseline
+
+tools/lab2-a3-clock: Two non-ancestor commits, but the main A3 feature already landed as #1498. Changed files still differ; reconcile tests/report code before treating this as additional release work.
+  refs/heads/tools/lab2-a3-clock @ 69c044f1f027 — 2 non-merge / 0 merge commits outside baseline
+  refs/remotes/origin/tools/lab2-a3-clock @ 69c044f1f027 — 2 non-merge / 0 merge commits outside baseline
+
+Already integrated examples (do not re-announce as pending):
+- fantasytable/deleted-terrain-rules: changed files match baseline (#1509).
+- fantasytable/solid-models-live: changed files match baseline (#1508).
+- Most recent UI, missions and terrain topic refs retain non-ancestor commits
+  because main uses squash merges. Use the inventory assessment and local diff,
+  not git branch --no-merged alone, to decide what remains.
+
+Reproduce without network
+-------------------------
+git tag --sort=-creatordate | head
+git log v0.3.13.1-alpha..facede8984b3068b81d37fed17c831e7591eecc2 --oneline
+git for-each-ref --format="%(refname) %(objectname)" refs/heads refs/remotes
+git log --no-merges facede8984b3068b81d37fed17c831e7591eecc2..<branch> --oneline
+git diff facede8984b3068b81d37fed17c831e7591eecc2...<branch> --stat
+git diff facede8984b3068b81d37fed17c831e7591eecc2 <branch> -- <changed-paths>
+Individual equivalence: git log/show -p --no-renames | git patch-id --stable.
+The TSV excludes this newly created prep branch so that the input snapshot is fixed.
+
+Validation
+----------
+Documentation-only change. git diff --check passes. Static checks verify the six
+changelog groups, unchanged older release history and version metadata, baseline
+commit/ref counts, correction coverage and relative documentation link targets.
+No game/runtime test, release build, CDN verification or hosted CI run was performed.
+The lead pushes this branch; publishing and tagging wait for the maintainer.

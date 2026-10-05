@@ -23,9 +23,9 @@ Fantasy). Built in Godot.
 What the code actually does today:
 
 - **Solo mode vs NACHTMAHR** — play a whole game against the built-in opponent. NACHTMAHR is a
-  game AI (no LLM) that decides entirely offline and never cheats. In the Windows and Linux builds it
-  plays with its new AI model **Erlkönig**: a search guided by a trained neural network (value net)
-  that ships with the game and runs in the Rust rules core; without the core (always on macOS) it plays by the official OPR solo
+  game AI (no LLM) that decides entirely offline and never cheats. At the strongest difficulty it
+  plays with its AI model **Erlkönig**: a search guided by a trained neural network (value net)
+  that ships with the game and runs in the Rust rules core; without a working core and model it plays by the official OPR solo
   decision trees. The game log names which one plays. Mark an imported army as AI-controlled,
   or let NACHTMAHR bring one of its own pre-built lists (fetched at runtime, cached locally).
   Deployment is a click-guided rulebook flow (roll-off, alternating placement, scouts, ambush
@@ -37,7 +37,11 @@ What the code actually does today:
   residue, and the battle log names any rule it applies (or asks for manual handling) per unit, so
   you can apply the rest by hand. When your unit takes wounds and the choice matters (Tough models,
   mixed loadouts), **you allocate them by clicking** — LMB places one wound, RMB auto-allocates
-  the rest. One difficulty (full strength) — selectable grades are on the roadmap.
+  the rest. Four selectable difficulties are available on main for the next release: Dämmerung,
+  Zwielicht, Finsternis and Albtraum (default). The solo panel remembers your choice.
+  The macOS build can include a universal Apple Silicon/Intel rules core; if its CI build or proof
+  fails, the release workflow can still export a build without it. The battle log identifies the
+  engine actually running.
 - **3D tabletop** — choose the table size (6×4 ft default, 4×4, or custom 12–240 in) and one of six
   biomes before the match; on the Medium preset and above the biome also dresses the table (display
   only). Orbit/pan/zoom camera.
@@ -51,9 +55,8 @@ What the code actually does today:
 - **Map layout editor** — top-down 3″ grid, terrain pieces (ruins / forest /
   container / dangerous), front-line + custom-polygon deployment zones, objectives,
   auto-generate, 3D overlay, save/load layouts. (In solo mode terrain is rules-active — line of
-  sight, cover, difficult / dangerous ground; in the sandbox and in multiplayer it stays visual —
-  though since `0.3.12` the measure tool's own LOS verdict is volumetric and height-aware in
-  every mode.)
+  sight, cover, difficult / dangerous ground. Sight, placement and movement aids also account for
+  free terrain in the sandbox and multiplayer; human-vs-human combat and damage remain manual.)
 - **OPR units** — import Army Forge lists via the OPR API, per-model wounds, caster
   points, unit coherency check + visualizer, radial context menu, a bottom unit-card
   dock (the whole army as live stat cards) plus an in-game battle log (exportable to a
@@ -90,7 +93,7 @@ What the code actually does today:
 - **Asset pipeline** — the offline pipeline that generates the 3D miniatures
   (image generation → TRELLIS mesh) lives in a separate private repository; the
   game consumes only its R2-delivered outputs.
-- **Presentation** — a built-in Tactical-HUD UI theme (sleek; cyan/amber), atmosphere
+- **Presentation** — a shared dark-panel UI with muted teal accents and gold primary actions, atmosphere
   presets (Day / Sunset / Night / Overcast / Rain), graphics quality presets, SSAO, glow.
 
 ## Quick start

@@ -145,8 +145,9 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
   through `VolumetricLos`.
 - `transport_state.gd` (`TransportState`, in `scripts/`) — embark / capacity / disembark-formation / destruction-
   spill state (see [Save format](#save-format-nml)).
-- `solo_difficulty.gd` (`SoloDifficulty`) — the single shipped grade (full strength); every legacy
-  grade name resolves to it. `solo_sim.gd` (`SoloSim`) is the headless self-play harness that runs
+- `solo_grade.gd` (`SoloGrade`) — four selectable grades and saved player choice (Albtraum by default).
+  `solo_difficulty.gd` (`SoloDifficulty`) supplies their presets; legacy grade aliases still resolve
+  to the ceiling. `solo_sim.gd` (`SoloSim`) is the headless self-play harness that runs
   the same pure modules for balance/regression proofs.
 
 **Play aids & dialogs**
@@ -177,8 +178,9 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
 - `atmosphere_controller.gd` / `rain_effect.gd` / `fire_prop.gd` / `war_ambience.gd` /
   `ambience_synth.gd` / `ambience_library.gd` — one-click weather/mood, rain + lightning,
   war-torn fires and CC0 battlefield ambience (see [`ATMOSPHERE.md`](ATMOSPHERE.md)).
-- `glassmorphism_theme.gd` + `hud/` (`hud_frame`, `hud_tokens`,
-  `state_panel`, `ui_motion`) — the Tactical-HUD UI language and overlay.
+- `hud/house_style.gd` — shared palette, typography and control variants for the migrated game
+  windows, editor and menu. `glassmorphism_theme.gd` and `hud/` (`hud_frame`, `hud_tokens`,
+  `state_panel`, `ui_motion`) retain the underlying theme and remaining legacy overlays.
 - `grass_field.gd`, `atmospheric_clouds.gd`, `cinematic_intro.gd`,
   `opr_stats_tooltip.gd`, `selection_spill_light.gd`.
 
@@ -189,13 +191,14 @@ extension) and `nml-core-py` (Python bindings) — used for fast look-ahead and 
 loads it only as an optional GDExtension (`core/nml_core.gdextension.in`, installed by
 `core/install_gdextension.sh`). Until 22.09.2026 the extension shipped dormant inside the Linux and
 Windows exports; since then a **release build wants the core by default** (`BattleSim.core_wanted`,
-`NML_CORE=0` opts out; debug builds still need the explicit `NML_CORE=1`): the one player-facing grade
+`NML_CORE=0` opts out; debug builds still need the explicit `NML_CORE=1`): the strongest player-facing grade, Albtraum,
 runs the search planner with the packed ONNX leaf evaluator (`assets/solo/brains/erlkoenig.onnx`,
 handed to `NmlCore.set_brain_onnx`) when the extension and the model load, and movement planning goes
 through the core's planner (`NML_CORE_MOVE=0` opts out). Without the built library, with a refused
 model, or with the switch off, the GDScript engine runs unchanged and the game log says which path is
-live (`opponent: erlkoenig … move=core` / `opponent: tree — …`). macOS release builds carry no
-core library, so they always run the GDScript engine. The core reads its rule files and the
+live (`opponent: erlkoenig … move=core` / `opponent: tree — …`). macOS can carry a universal
+Apple Silicon/Intel core library, built and run-proven by `export-macos`; the release workflow
+retains a no-core fallback export if that job or its artifact is unavailable. The core reads its rule files and the
 model from a staged copy under `user://nml_core/<version>/` (`CoreAssets`), because a packed export has
 no files on disk. See [`DEV_BRAIN_BRIDGE.md`](DEV_BRAIN_BRIDGE.md) for the developer-only loopback
 evaluator, which still exists for experiments.
