@@ -12899,12 +12899,20 @@ func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true) -> voi
 			for model in alive:
 				remaining_pool += int((model as ModelInstance).wounds_current)
 			var final_wounds: int = reg.wounds_taken + wounds
+			var vfx_eye := _vfx_unit_eye(target)   # VFX #1: taken before the casualties leave the ranks
 			if not alive.is_empty() and wounds >= remaining_pool and _solo_combined_alive(target) == alive.size() \
 					and not _solo_split_rules(target).is_empty():
 				if alive.size() > 1:
 					opr_army_manager.apply_regiment_wounds(reg, reg.wounds_taken + remaining_pool - 1)
 				await _solo_split_from_last_model(target, target.get_alive_models()[0] as ModelInstance)
 			opr_army_manager.apply_regiment_wounds(reg, final_wounds)
+			# VFX #1: a pooled regiment has no per-model allocation (casualties come off the back and the ranks
+			# close), so its losses sit over the unit: ticks for the wounds that landed, crosses for the models lost.
+			if pips and vfx_eye != Vector3.INF:
+				_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.WOUND), "at": vfx_eye, "n": mini(wounds, remaining_pool)})
+				if alive.size() > target.get_alive_count():
+					_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.KILL), "at": vfx_eye + Vector3.UP * 0.016,
+						"n": alive.size() - target.get_alive_count()})
 			return
 	var pid: int = int(target.unit_properties.get("player_id", 1))
 	var requested := wounds
@@ -13113,13 +13121,18 @@ func _solo_wound_models(unit: GameUnit, wounds: int, pid: int, deferred_deaths =
 ## VFX #1, the unit-level beat: hits and saves belong to the unit, not to one model, so they sit over the
 ## defender's centre — ivory dots for the hits that called for saves, blue rings above for the saves made.
 func _vfx_hit_strip(defender: GameUnit, hits: int, saves: int) -> void:
-	var c: Vector3 = solo_controller.unit_centre(defender) if solo_controller != null and defender != null else Vector3.INF
-	if c == Vector3.INF or c == Vector3.ZERO:
+	var eye := _vfx_unit_eye(defender)
+	if eye == Vector3.INF:
 		return
-	var eye := c + Vector3.UP * (_solo_unit_los_height_m(defender) + 0.03)
 	_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.HIT), "at": eye, "n": hits})
 	if saves > 0:
 		_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.SAVE), "at": eye + Vector3.UP * 0.016, "n": saves})
+
+
+## VFX #1: where a unit's strips sit — over its centre at its LOS height; INF without a live centre.
+func _vfx_unit_eye(unit: GameUnit) -> Vector3:
+	var c: Vector3 = solo_controller.unit_centre(unit) if solo_controller != null and unit != null else Vector3.INF
+	return Vector3.INF if c == Vector3.INF or c == Vector3.ZERO else c + Vector3.UP * (_solo_unit_los_height_m(unit) + 0.03)
 
 
 ## VFX #1: one result mark over a model's LOS eye, from the allocation that just happened.
@@ -13186,6 +13199,9 @@ func _capture_bug_report() -> void:
 		_show_toast("📸 Bug report saved to your Desktop: %s" % path.get_file())
 
 
+var _theme_action: TableTheme.ThemeAction = null   # the last theme laid out on this table
+
+
 ## One-click table theme (S5, maintainer 05.10.: an entry in the map editor). Refused on a table of another size
 ## (lead D11; the editor greys the entry out too), on painted grid terrain (D9) and once the game is being played;
 ## otherwise the theme replaces the free pieces, sets the biome and the evening light, reaches the other table and is
@@ -13197,8 +13213,16 @@ func apply_table_theme(theme_id: String) -> bool:
 	if not theme.fits(table.table_size):
 		_show_toast("%s needs a %d x %d ft table" % [theme.label, int(theme.table_feet.x), int(theme.table_feet.y)])
 		return false
+	var in_the_way := theme.models_in_the_way(get_tree())
+	if in_the_way > 0:   # lead D16: never move models, their positions are rules
+		_show_toast("%d %s where the theme would place terrain - clear %s first" % [in_the_way,
+			"model stands" if in_the_way == 1 else "models stand", "it" if in_the_way == 1 else "them"])
+		return false
 	if terrain_overlay != null and terrain_overlay.grid_cells.values().any(func(v: Variant) -> bool: return int(v) != 0):
 		_show_toast("Clear the grid terrain first, then apply %s" % theme.label)
+		return false
+	if _theme_action != null and _theme_action.is_current(object_manager):   # D15 a: no 14 more hidden pieces
+		_show_toast("%s is already laid out" % theme.label)
 		return false
 	var action := theme.apply(object_manager, {
 		"started": func() -> bool:
@@ -13208,11 +13232,14 @@ func apply_table_theme(theme_id: String) -> bool:
 		"mood_get": func() -> String: return str(atmosphere_controller.get_current_atmosphere()),
 		"mood_set": func(m: String) -> void: atmosphere_controller.apply_atmosphere(m),
 		"relayout": _redress_table_layout,
+		"paths_get": func() -> Array: return TablePaths.of(table).paths,   # the worn paths (D14)
+		"paths_set": func(p: Array) -> void: TablePaths.of(table).set_paths(p),
 		"net": network_manager})
 	if action == null:
 		_show_toast("Table themes can only be applied before the game starts")
 		return false
 	action.peer_id = network_manager.get_my_peer_id() if network_manager else 0
+	_theme_action = action
 	if undo_manager != null:
 		undo_manager.push(action)
 	_show_toast("%s laid out - Ctrl+Z puts the old table back" % theme.label)
