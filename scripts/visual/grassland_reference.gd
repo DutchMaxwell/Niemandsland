@@ -118,7 +118,8 @@ func apply(main: Node) -> void:
 	frame.roughness = 0.86
 	for child in table.get_children():
 		if child is MeshInstance3D and child != table.get_node("TableMesh"):
-			child.material_override = frame
+			child.set_meta("graphics_frame_reference", frame)
+			child.material_override = GraphicsSettings.table_frame_material(frame, child.get_meta("graphics_frame_axis", false))
 	var overlay: Node3D = main.terrain_overlay
 	if _profile["forests"]:
 		_dress_grid_forest(overlay)
