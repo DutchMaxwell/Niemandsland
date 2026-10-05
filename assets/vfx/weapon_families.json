@@ -1,0 +1,15 @@
+{
+  "_comment": "Which shot a ranged weapon draws (VolleyCue.family_for). The FIRST family in this list with a word of the weapon name starting with one of its prefixes (or ending with one of its suffixes; names split at spaces and hyphens) wins. A name that matches nothing falls to the rules: Indirect or Blast = artillery, else neutral. A ballistic weapon without Blast and with auto_min_attacks or more attacks per copy is a machine gun. sounds: per family and moment (launch / impact / blast) a res:// path to an audio file; empty = silent (the hook still fires).",
+  "families": [
+    {"family": "flame", "prefixes": ["flame", "inferno", "pyro", "incinerat", "burn", "fire", "lava", "napalm", "magma", "scorch", "blaze", "molten", "torch"], "suffixes": []},
+    {"family": "beam", "prefixes": ["laser", "lasgun", "lascannon", "beam", "ray", "gaze", "tesla", "lightning", "lance", "stare"], "suffixes": []},
+    {"family": "energy", "prefixes": ["plasma", "fusion", "melta", "energy", "gauss", "photon", "disintegrat", "pulse", "ion", "blaster", "shock", "psy", "fuser", "fuse", "neutron", "atom", "volt", "staff", "wand", "magic", "sorcer", "arcane", "hex", "soul", "spirit"], "suffixes": []},
+    {"family": "artillery", "prefixes": ["mortar", "artillery", "howitzer", "catapult", "trebuchet", "rocket", "missile", "bombard", "gl", "pod", "thrower", "flak", "siege", "shell", "launcher", "rpg", "warhead"], "suffixes": []},
+    {"family": "auto", "prefixes": ["machinegun", "machine", "mg", "gatling", "minigun", "auto", "chaingun", "burst", "ribauldequin", "organ"], "suffixes": ["mg"]},
+    {"family": "bow", "prefixes": ["bow", "crossbow", "arrow", "blowpipe", "ballista", "harpoon", "spingarde"], "suffixes": ["bow", "bows"]},
+    {"family": "thrown", "prefixes": ["javelin", "spear", "throw", "hurl", "sling", "bolas", "chakram", "shuriken", "knife", "knives", "grenade", "bomb", "rock", "stone", "boulder", "debris", "dart", "spit", "spurt", "venom", "acid", "axe", "explosive"], "suffixes": []},
+    {"family": "ballistic", "prefixes": ["rifle", "gun", "shotgun", "pistol", "carbine", "cannon", "musket", "sniper", "blunderbuss", "shooter", "revolver", "arquebus", "handgun", "shard", "spike", "needle", "slug", "jezzail", "fusil", "shot", "destructor", "devastator", "accelerator", "destroyer"], "suffixes": ["gun", "cannon"]}
+  ],
+  "auto_min_attacks": 4,
+  "sounds": {}
+}

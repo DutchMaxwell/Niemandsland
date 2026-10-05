@@ -412,6 +412,7 @@ var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move l
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 var result_pips: ResultPips = null  # VFX #1: wound ticks / blood markers over the models (presentation only)
 var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat stage (solo)
+var volley_cue: VolleyCue = null  # VFX #2: tracers along the rule sight pairs (presentation only)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
 var battlefield_stains: BattlefieldStains = null
@@ -4141,9 +4142,10 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# of volleys that never roll). Indirect (wave 5) targets as if in line of sight — its per-model
 		# sighting is range-only; the Aircraft penalty (-12") and Ranged Shrouding (-6" min 6") shorten
 		# the reach here too.
+		var sight_pairs: Array = []   # VFX #2: the model pairs the count below cleared (tracer segments)
 		var sighted: int = _solo_sighted_count(member, target,
 			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
-			bool(profile.get("indirect", false)) or granted_indirect)   # GH #325
+			bool(profile.get("indirect", false)) or granted_indirect, sight_pairs)   # GH #325
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
 		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
 		var attacks: int = int(volley_report["attacks"])
@@ -4234,6 +4236,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 					member.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 		_solo_log_hit_mod(mod_info, target, to_hit)
 		var shooter_name: String = member.get_name()
+		_vfx_volley(member, target, profile, sight_pairs.slice(0, shot_bearers if shot_bearers >= 0 else sight_pairs.size()),
+			bool(profile.get("indirect", false)) or granted_indirect)
 		var faces: Array = await _solo_tray_roll(attacks, to_hit, "AI (%s)" % shooter_name, "attack",
 			"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 		if bool(profile.get("limited", false)):
@@ -4306,6 +4310,31 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
+
+
+## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as
+## _solo_true_los_callable). Indirect fire and an Aircraft target have no tested segment (LOS waived /
+## abstract), so they draw none — no line through a wall. A weapon carried by fewer models than can see
+## (a special weapon) draws only as many tracers as it has bearers.
+func _vfx_volley(member: GameUnit, target: GameUnit, profile: Dictionary, pairs: Array, los_waived: bool) -> void:
+	if volley_cue == null or pairs.is_empty() or los_waived or SoloController.is_aircraft(target):
+		return
+	var up_from := Vector3.UP * _solo_unit_los_height_m(member)
+	var up_to := Vector3.UP * _solo_unit_los_height_m(target)
+	volley_cue.fire(pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to]),
+		VolleyCue.family_of(str(profile.get("name", ""))))
+
+
+## VFX #2 for the player's own volley: _solo_attack_groups keeps no pairs, and a cosmetic key must never ride a
+## rules profile (it would split dice batches), so the same read-only sight query runs once more at the same
+## reach for this weapon's member. A weapon with fewer copies than seeing models draws one tracer per copy.
+func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary, los_waived: bool) -> void:
+	if member == null or los_waived or volley_cue == null:
+		return
+	var pairs: Array = []
+	_solo_sighted_count(member, target, int(SoloController.effective_shoot_reach_in(float(profile.get("range", 0))
+		+ float(SoloController.shooting_range_bonus(member)), target)), false, pairs)
+	_vfx_volley(member, target, profile, pairs.slice(0, maxi(int(profile.get("count", 1)), 1)), false)
 
 
 # === Wave 6 — Caster(X) cast resolution (official Solo v3.5.0 procedure; real tray dice) ===
@@ -11919,6 +11948,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
 						attacker.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 			_solo_log_hit_mod(p_mod, target, to_hit)
+			_vfx_player_volley(group.get("member"), target, profile, bool(profile.get("indirect", false))
+				or h_granted_indirect or _solo_target_grants_indirect(target))
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You", "attack",
 				"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
@@ -18353,6 +18384,9 @@ func _init_radial_menu() -> void:
 	combat_stage = CombatStage.new()
 	combat_stage.name = "CombatStage"
 	add_child(combat_stage)
+	volley_cue = VolleyCue.new()
+	volley_cue.name = "VolleyCue"
+	add_child(volley_cue)
 	if battle_log != null:
 		battle_log.entry_added.connect(_solo_stage_collect)
 	# Measure-on-pickup ghost (ROADMAP UX polish): translucent origin silhouettes while dragging —

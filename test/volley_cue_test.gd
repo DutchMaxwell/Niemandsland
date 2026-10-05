@@ -46,13 +46,25 @@ func test_full_form_adds_a_slug_still_form_does_not() -> void:
 
 
 func test_the_family_comes_from_the_name_with_a_neutral_fallback() -> void:
-	var F = VolleyCueScript.Family
-	var table := {"Assault Rifle": F.BALLISTIC, "Heavy Machinegun": F.BALLISTIC, "Autocannon": F.BALLISTIC,
-		"Scorpion Pistol": F.BALLISTIC, "Plasma Rifle": F.ENERGY, "Laser Cannon": F.ENERGY, "Heavy Flamer": F.FLAME,
-		"Flamethrower": F.FLAME, "Crossbow": F.BOW, "Longbow": F.BOW, "Javelins": F.BOW, "Spore Mine": F.NEUTRAL,
-		"Hand Weapon": F.NEUTRAL, "": F.NEUTRAL}
+	var F: Dictionary = VolleyCueScript.Family
+	var table := {"Assault Rifle": "BALLISTIC", "Heavy Machinegun": "AUTO", "Autocannon": "AUTO", "Gatling Gun": "AUTO",
+		"Scorpion Pistol": "BALLISTIC", "Plasma Rifle": "ENERGY", "Laser Cannon": "BEAM", "Heavy Flamer": "FLAME",
+		"Flamethrower": "FLAME", "Crossbow": "BOW", "Longbow": "BOW", "Javelins": "THROWN", "Sling": "THROWN",
+		"Frag Grenades": "THROWN", "Mortar": "ARTILLERY", "Rocket Launcher": "ARTILLERY", "Missile Pod": "ARTILLERY",
+		"Spore Mine": "NEUTRAL", "Hand Weapon": "NEUTRAL", "": "NEUTRAL"}
 	for weapon: String in table:
-		assert_int(VolleyCueScript.family_of(weapon)).override_failure_message(weapon).is_equal(table[weapon])
+		assert_int(VolleyCueScript.family_of(weapon)).override_failure_message(weapon).is_equal(F.get(table[weapon], -1))
+
+
+## Where the name says nothing, the rules do: Indirect is a lobbed shell, Blast an explosive; a ballistic weapon with
+## four or more attacks per copy is a machine gun.
+func test_the_rules_decide_what_the_name_leaves_open() -> void:
+	var F: Dictionary = VolleyCueScript.Family
+	var table := [[{"name": "Spore Mine", "indirect": true}, "ARTILLERY"], [{"name": "Big Shooty", "blast": 3}, "ARTILLERY"],
+		[{"name": "Heavy Rifle", "attacks": 8, "count": 2}, "AUTO"], [{"name": "Heavy Rifle", "attacks": 6, "count": 2}, "BALLISTIC"],
+		[{"name": "Plasma Cannon", "blast": 3}, "ENERGY"], [{"name": "Claws", "attacks": 4, "count": 1}, "NEUTRAL"]]
+	for row: Array in table:
+		assert_int(VolleyCueScript.family_for(row[0])).override_failure_message(str(row[0])).is_equal(F.get(row[1], -1))
 
 
 func test_off_spawns_nothing_and_the_pool_is_capped() -> void:

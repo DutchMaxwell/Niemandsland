@@ -66,18 +66,33 @@ def default_quota(cell):
     return 9 if int("".join(ch for ch in cell if ch.isdigit())) <= 4 else 8
 
 
+def spread_shares(slots, quota=default_quota):
+    """Split each cell's quota evenly over its slots, giving the remainder in manifest order."""
+    cells = {}
+    for slot, rows in slots.items():
+        cells.setdefault(rows[0]["cell"], []).append(slot)
+    return {cell: {slot: quota(cell) // len(names) + (i < quota(cell) % len(names))
+                   for i, slot in enumerate(names)} for cell, names in cells.items()}
+
+
 class TransitionSet:
-    """The first `quota(cell)` recorded resolves per cell, in source-game / activation order."""
+    """The first recorded resolves per cell, or per slot share with `shares`, in source-game / activation order."""
 
-    def __init__(self, quota=default_quota):
+    def __init__(self, quota=default_quota, shares=None):
         self.quota, self.records, self.count, self.headers = quota, [], {}, {}  # headers: source -> game header
+        self.shares, self.slot_count = shares, {}
 
-    def full(self, cell):
+    def full(self, cell, slot=None):
+        if self.shares is not None and slot is not None:
+            return self.slot_count.get((cell, slot), 0) >= self.shares[cell][slot]
         return self.count.get(cell, 0) >= self.quota(cell)
 
-    def add(self, rec):
+    def add(self, rec, slot=None):
         self.records.append(rec)
         self.count[rec["cell"]] = self.count.get(rec["cell"], 0) + 1
+        if slot is not None:
+            key = (rec["cell"], slot)
+            self.slot_count[key] = self.slot_count.get(key, 0) + 1
 
     def short(self, cells):
         return {c: self.count.get(c, 0) for c in sorted(cells) if not self.full(c)}
@@ -107,7 +122,7 @@ class Tap:
 
     def resolve_with_tray(self, state, action, rng, tray):
         cell = self.row["cell"]
-        keep = self.sink is not None and not self.sink.full(cell)
+        keep = self.sink is not None and not self.sink.full(cell, self.row["slot"])
         self.last = (rng, tray)
         before = (state.plain(), rng.state, tray.state) if keep else None
         faces_before = self.faces
@@ -119,7 +134,7 @@ class Tap:
                            "before": before[0], "action": action, "rng_state": before[1], "tray_state": before[2],
                            "faces_before": faces_before, "after": nxt.plain(), "rolls": rep["rolls"],
                            "tray_state_after": tray.state, "rng_state_after": rng.state,
-                           "dice_seed": int(self.row["tray"])})
+                           "dice_seed": int(self.row["tray"])}, self.row["slot"])
         return nxt, rep
 
 
@@ -289,7 +304,8 @@ def source_parallel(slots, workers, width, cfg, timing, transitions):
     """A4.2: every undecided slot's next `width` candidates run in parallel across the pool (candidate 0 of every slot
     first), wave after wave; then exactly the serial pass's candidates (`serial_keep`) are merged in manifest order and
     every speculative candidate after a slot's first eligible one is dropped unseen (rows, logs, timing, transitions,
-    headers, net calls), so the output equals the serial pass."""
+    headers, net calls), so the output equals the serial pass. With `auto`, each wave splits the worker count over
+    undecided slots in manifest order, with at least one candidate per slot."""
     import lab2_pool
     names = list(slots)
     results, eligible = {}, {}
@@ -297,11 +313,13 @@ def source_parallel(slots, workers, width, cfg, timing, transitions):
         keep, missing, undecided = serial_keep(slots, eligible, cfg["cap"])
         if not undecided:
             break
+        w = {s: max(1, workers // len(undecided) + (i < workers % len(undecided))) if width == "auto" else width
+             for i, s in enumerate(undecided)}
         jobs = {}
         for s in undecided:
             n = min(cfg["cap"], len(slots[s]))
             first = next(k for k in range(n) if (s, k) not in eligible)
-            for k in range(first, min(first + width, n)):
+            for k in range(first, min(first + w[s], n)):
                 jobs[(s, k)] = slots[s][k]
         order = sorted(jobs, key=lambda sk: (sk[1], names.index(sk[0])))
         units = {"%s/%d" % sk: (sk[0], sk[1], jobs[sk]) for sk in order}
@@ -318,16 +336,16 @@ def merge_slots(order, results, timing, transitions):
     """Per-slot results in MANIFEST order into the single-process shape: the timing / transition sets take states in
     that order and keep the first per cell exactly as one sequential pass would; net calls add up over the workers."""
     out = {"positions": [], "discarded": [], "missing": [], "logs": [], "net": {}}
-    for slot in order:
-        r = results[slot]
+    for entry in order:
+        r, slot = results[entry], entry.split("/")[0]
         for k in ("positions", "discarded", "missing", "logs"):
             out[k] += r[k]
         for st in (r["timing"] or []) if timing is not None else []:
             if not timing.full(st["cell"]):
                 timing.add(st)
         for rec in (r["transitions"] or []) if transitions is not None else []:
-            if not transitions.full(rec["cell"]):
-                transitions.add(rec)
+            if not transitions.full(rec["cell"], slot):
+                transitions.add(rec, slot)
         if transitions is not None:
             transitions.headers.update(r["headers"] or {})
         for side, v in r["net"].items():
@@ -380,12 +398,12 @@ def cmd_source(a):
         play_kw.update(grade_kwargs(json.load(open(a.knobs))))
     slots = read_slots(a.slots)
     timing = TimingSet() if a.timing_out else None
-    transitions = TransitionSet() if a.transitions_out else None
+    transitions = TransitionSet(shares=spread_shares(slots) if a.transition_spread else None) if a.transitions_out else None
     if a.workers > 1:  # slots in parallel processes, merged in manifest order (identical rows to one process)
         import lab2_pool
         cfg = {"repo": a.repo, "bank": a.bank, "lists": a.lists, "cap": a.cap, "play_kw": play_kw,
                "timing": bool(timing is not None), "transitions": bool(transitions is not None)}
-        if a.candidate_width > 1:   # A4.2: a slot's candidates in parallel too; output = the serial pass's
+        if a.candidate_width == "auto" or a.candidate_width > 1:   # A4.2: parallel candidates, serial output
             m = source_parallel(slots, a.workers, a.candidate_width, cfg, timing, transitions)
         else:
             reports = lab2_pool.run_clusters(slots, a.workers, _slot_init, _slot_work, (cfg,))
@@ -415,6 +433,10 @@ def cmd_source(a):
     return 1 if missing or short else 0
 
 
+def width_arg(s):
+    return "auto" if s == "auto" else int(s)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -426,11 +448,13 @@ def main(argv=None):
     s.add_argument("--knobs", help="JSON of play_game kwargs of the shipped grade (the fullgames --knobs file)")
     s.add_argument("--cap", type=int, default=20)
     s.add_argument("--workers", type=int, default=1, help="slots in N spawn workers, merged in manifest order (same rows)")
-    s.add_argument("--candidate-width", type=int, default=1,
-                   help="A4.2: run up to N candidates of a slot at once (with --workers > 1); the output equals the serial pass")
+    s.add_argument("--candidate-width", type=width_arg, default=1,
+                   help="A4.2: N candidates per slot, or auto to split workers over undecided slots (with --workers > 1); serial output")
     s.add_argument("--out", required=True)
     s.add_argument("--eval", help="D_endings_eval.tsv: attach the 8 eval stream keys to every position")
-    s.add_argument("--transitions-out", help="write the first 9 (cells 1-4) / 8 (cells 5-12) resolves per cell")
+    s.add_argument("--transitions-out", help="write the first 9 (cells 1-4) / 8 (cells 5-12) resolves per cell; optionally --transition-spread")
+    s.add_argument("--transition-spread", action="store_true",
+                   help="split each cell's transition quota evenly over its slots in manifest order, keeping each slot's first resolves")
     s.add_argument("--timing-out", help="write the first 12 legal pre-pick states per cell (timing --states shape)")
     s.add_argument("--repo", default=os.path.dirname(_HERE))
     return cmd_source(ap.parse_args(argv))
