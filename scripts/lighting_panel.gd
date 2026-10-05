@@ -216,6 +216,15 @@ func _build_ui() -> void:
 		GraphicsSettings.save_settings())
 	vbox.add_child(reduce_cb)
 
+	var idle_cb := CheckButton.new()
+	idle_cb.text = "Miniature Idle Motion"
+	idle_cb.button_pressed = GraphicsSettings.idle_motion
+	idle_cb.tooltip_text = "Animate supported miniatures nearby. Off on Low/Performance and with Reduce Motion."
+	idle_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.idle_motion = on
+		GraphicsSettings.save_settings())
+	vbox.add_child(idle_cb)
+
 	# Fullscreen (safe borderless mode, not the crash-prone exclusive fullscreen).
 	var fs_cb := CheckButton.new()
 	fs_cb.text = "Fullscreen"
