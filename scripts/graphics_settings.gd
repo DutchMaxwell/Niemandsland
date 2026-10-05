@@ -81,6 +81,7 @@ const PRESETS = {
 		"name": "Performance",
 		"description": "Maximum FPS, Minimal Effects",
 		"msaa_3d": 0,  # No MSAA - use FXAA only
+		"screen_space_aa": Viewport.SCREEN_SPACE_AA_FXAA,
 		"use_taa": false,
 		"shadow_size": 1024,
 		"shadow_filter": 1,  # Basic shadows
@@ -100,6 +101,7 @@ const PRESETS = {
 		"name": "Low",
 		"description": "Good Performance",
 		"msaa_3d": 1,  # 2x MSAA (was 4x)
+		"screen_space_aa": Viewport.SCREEN_SPACE_AA_FXAA,
 		"use_taa": false,
 		"shadow_size": 2048,
 		"shadow_filter": 2,
@@ -119,6 +121,7 @@ const PRESETS = {
 		"name": "Medium",
 		"description": "Balanced Quality/Performance",
 		"msaa_3d": 2,  # 4x MSAA (was 8x)
+		"screen_space_aa": Viewport.SCREEN_SPACE_AA_DISABLED,
 		"use_taa": false,
 		"shadow_size": 4096,
 		"shadow_filter": 3,
@@ -138,6 +141,7 @@ const PRESETS = {
 		"name": "High",
 		"description": "High Quality",
 		"msaa_3d": 2,  # 4x MSAA (was 8x)
+		"screen_space_aa": Viewport.SCREEN_SPACE_AA_DISABLED,
 		"use_taa": false,
 		"shadow_size": 4096,  # Reduced from 8192
 		"shadow_filter": 4,
@@ -158,6 +162,7 @@ const PRESETS = {
 		"description": "Maximum Quality",
 		"msaa_3d": 2,  # 4x MSAA (8x doubled the render target — huge on a 2560x1600
 		# fullscreen 8GB GPU — for no visible gain; 4x matches High)
+		"screen_space_aa": Viewport.SCREEN_SPACE_AA_DISABLED,
 		"use_taa": false,
 		"shadow_size": 8192,
 		"shadow_filter": 5,
@@ -286,7 +291,9 @@ func apply_rendering_settings(settings: Dictionary) -> void:
 	var vp = get_viewport()
 	vp.msaa_3d = settings["msaa_3d"]
 	vp.use_taa = settings["use_taa"]
-	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if not settings["use_taa"] else Viewport.SCREEN_SPACE_AA_DISABLED
+	# Medium+ already smooths geometry with 4x MSAA. A second FXAA pass blurs painted
+	# miniature detail; keep it only on the cheaper tiers, and never stack it with TAA.
+	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED if settings["use_taa"] else settings["screen_space_aa"]
 
 	# Shadow quality (runtime changes limited, mostly project settings)
 	RenderingServer.directional_shadow_atlas_set_size(settings["shadow_size"], true)
