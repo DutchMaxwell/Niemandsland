@@ -1,0 +1,12 @@
+{
+  "_comment": "Ambient hero auras per model key (ModelLibrary.make_key: faction folder / unit name). anchors: [x, y, z] with x and z in base radii and y in the model's height; kind: lightning (more kinds later). arcs_per_s and strike_every_s are the calm rates; a cast multiplies them.",
+  "auras": {
+    "saurian_starhost/frog mage": {
+      "kind": "lightning",
+      "tint": [0.55, 0.9, 1.7],
+      "anchors": [[-0.55, 0.72, 0.25], [0.6, 0.95, 0.05]],
+      "arcs_per_s": 10.0,
+      "strike_every_s": [2.5, 5.0]
+    }
+  }
+}
