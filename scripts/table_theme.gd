@@ -13,6 +13,7 @@ var table_feet := Vector2.ZERO
 var biome: String = ""
 var mood: String = ""
 var pieces: Array[Dictionary] = []   # {prop_id, kind, position: Vector3 metres (y 0), yaw_deg}
+var paths: Array = []   # worn paths, polylines of [x, z] inches from the centre (TablePaths, D14)
 
 
 static func load_theme(theme_id: String) -> TableTheme:
@@ -27,6 +28,7 @@ static func load_theme(theme_id: String) -> TableTheme:
 	t.table_feet = Vector2(float(feet[0]), float(feet[1]))
 	t.biome = str(data.get("biome", ""))
 	t.mood = str(data.get("mood", ""))
+	t.paths = data.get("paths", [])
 	for p: Dictionary in data.get("pieces", []):
 		t.pieces.append({"prop_id": str(p["prop_id"]), "kind": int(p["kind"]),
 			"position": Vector3(float(p["x_in"]), 0.0, float(p["z_in"])) * IN2M, "yaw_deg": float(p["yaw_deg"])})
@@ -60,8 +62,9 @@ func apply(om: ObjectManager, hooks: Dictionary) -> ThemeAction:
 			if action.net_live():
 				hooks["net"].broadcast_rotation(int(node.get_meta("network_id")), node.rotation.y)
 			action.spawned.append(node)
-	action.before = [hooks["biome_get"].call(), hooks["mood_get"].call()]
-	action.after = [biome, mood]
+	action.before = [hooks["biome_get"].call(), hooks["mood_get"].call(),
+		hooks["paths_get"].call() if hooks.has("paths_get") else []]
+	action.after = [biome, mood, paths]
 	action.redo()
 	print("[Theme] '%s' applied: %d pieces, %d replaced" % [id, action.spawned.size(), action.replaced.size()])
 	return action
@@ -92,8 +95,12 @@ class ThemeAction extends UndoManager.UndoableAction:
 		for n in spawned:
 			_hide(n, not applied)
 		hooks["biome_set"].call(to[0])
+		var settings := {"biome": to[0]}
+		if hooks.has("paths_set"):   # the table's worn paths (D14), saved with the table
+			hooks["paths_set"].call(to[2])
+			settings["paths"] = to[2]
 		if net_live():
-			hooks["net"].broadcast_table_settings({"biome": to[0]})
+			hooks["net"].broadcast_table_settings(settings)
 		hooks["mood_set"].call(to[1])
 		if hooks.has("relayout"):
 			hooks["relayout"].call()   # the biome dressing places litter around woods: re-dress for the new layout

@@ -7,13 +7,15 @@ var _biome := "desert_dunes"
 var _mood := "Day"
 var _started := false
 var _relayouts := 0
+var _paths: Array = [[[1.0, 1.0], [2.0, 2.0]]]   # the table's paths before
 
 
 func _hooks() -> Dictionary:
 	return {"started": func() -> bool: return _started,
 		"biome_get": func() -> String: return _biome, "biome_set": func(b: String) -> void: _biome = b,
 		"mood_get": func() -> String: return _mood, "mood_set": func(m: String) -> void: _mood = m,
-		"relayout": func() -> void: _relayouts += 1}
+		"relayout": func() -> void: _relayouts += 1,
+		"paths_get": func() -> Array: return _paths, "paths_set": func(p: Array) -> void: _paths = p}
 
 
 func _om() -> ObjectManager:
@@ -42,6 +44,7 @@ func test_apply_replaces_the_table_and_one_undo_restores_it() -> void:
 	assert_str(_biome).is_equal("temperate_grassland")
 	assert_str(_mood).is_equal("Sunset")
 	assert_int(_relayouts).is_equal(1)   # the biome dressing is re-laid for the new pieces
+	assert_int(_paths.size()).is_equal(3)   # the theme's worn paths
 	var first: Node3D = action.spawned[0]
 	assert_vector(first.global_position).is_equal_approx(theme.pieces[0]["position"], Vector3.ONE * 0.0001)
 	assert_float(first.rotation_degrees.y).is_equal_approx(float(theme.pieces[0]["yaw_deg"]), 0.01)
@@ -50,6 +53,7 @@ func test_apply_replaces_the_table_and_one_undo_restores_it() -> void:
 	assert_str(_biome).is_equal("desert_dunes")
 	assert_str(_mood).is_equal("Day")
 	assert_int(_relayouts).is_equal(2)
+	assert_array(_paths).is_equal([[[1.0, 1.0], [2.0, 2.0]]])   # the old paths back
 	action.redo()
 	assert_int(_live(om).size()).is_equal(14)
 
