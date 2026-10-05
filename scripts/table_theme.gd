@@ -40,7 +40,9 @@ func fits(size_feet: Vector2) -> bool:
 
 ## Lay the theme out: the live free pieces are replaced (hidden the undoable way, D10), the theme pieces spawn at
 ## their spot and angle, the biome and the mood (local, D13) change. hooks = {started, biome_get, biome_set, mood_get,
-## mood_set, optional relayout} (Callables). Returns the action to push on the undo history, or null once the game has started.
+## mood_set, optional relayout} (Callables) + optional net (NetworkManager): in a multiplayer game the spawns, angles,
+## hidden pieces and the biome reach the other table, for undo and redo too. Returns the action to push on the undo
+## history, or null once the game has started.
 func apply(om: ObjectManager, hooks: Dictionary) -> ThemeAction:
 	if hooks["started"].call():
 		print("[Theme] '%s' refused: the game has started" % id)
@@ -52,9 +54,11 @@ func apply(om: ObjectManager, hooks: Dictionary) -> ThemeAction:
 		if n is Node3D and not bool(n.get_meta("deleted", false)):
 			action.replaced.append(n)
 	for p: Dictionary in pieces:
-		var node := om.spawn_sandbox_terrain(p["prop_id"], p["kind"], p["position"], false)
+		var node := om.spawn_sandbox_terrain(p["prop_id"], p["kind"], p["position"], true)   # broadcasts in multiplayer
 		if node != null:
 			node.rotation_degrees.y = p["yaw_deg"]
+			if action.net_live():
+				hooks["net"].broadcast_rotation(int(node.get_meta("network_id")), node.rotation.y)
 			action.spawned.append(node)
 	action.before = [hooks["biome_get"].call(), hooks["mood_get"].call()]
 	action.after = [biome, mood]
@@ -78,12 +82,23 @@ class ThemeAction extends UndoManager.UndoableAction:
 	func redo() -> void:
 		_swap(after, true)
 
+	func net_live() -> bool:
+		var net: Node = hooks.get("net")
+		return net != null and net.is_multiplayer_active()
+
 	func _swap(to: Array, applied: bool) -> void:
 		for n in replaced:
-			DeletedState.apply(n, applied)
+			_hide(n, applied)
 		for n in spawned:
-			DeletedState.apply(n, not applied)
+			_hide(n, not applied)
 		hooks["biome_set"].call(to[0])
+		if net_live():
+			hooks["net"].broadcast_table_settings({"biome": to[0]})
 		hooks["mood_set"].call(to[1])
 		if hooks.has("relayout"):
 			hooks["relayout"].call()   # the biome dressing places litter around woods: re-dress for the new layout
+
+	func _hide(n: Node3D, hidden: bool) -> void:
+		DeletedState.apply(n, hidden)
+		if net_live() and n.has_meta("network_id"):
+			hooks["net"].broadcast_object_visibility(int(n.get_meta("network_id")), not hidden)
