@@ -399,6 +399,22 @@ class Run:
         )
         self.checkpoint("fixture", states)
 
+        # Combat effects in co-op: five cues from the resolving peer, drawn exactly once on each side.
+        self.command("host", "vfx_burst")
+        states = self.wait_condition(
+            "five combat-effect cues drawn on both peers",
+            lambda s: all(v.get("vfx_cues") == 5 for v in s.values()),
+            diagnostic=lambda s: "vfx_cues: " + repr({r: s[r].get("vfx_cues") for r in s}),
+        )
+        self.command_both("snapshot")
+        time.sleep(1.0)
+        states = self.wait_condition(
+            "still exactly five cues a second later (no duplicate, no echo)",
+            lambda s: all(v.get("vfx_cues") == 5 for v in s.values()),
+            diagnostic=lambda s: "vfx_cues: " + repr({r: s[r].get("vfx_cues") for r in s}),
+        )
+        self.checkpoint("vfx-cues-once", states)
+
         self.command("host", "place_spell")
         states = self.wait_condition(
             "spell token and modifier on both peers",
