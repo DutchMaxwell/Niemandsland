@@ -2966,6 +2966,7 @@ func _brighten_trellis_materials(node: Node) -> void:
 					adjusted_mat.roughness_texture = _ensure_texture_mipmaps(adjusted_mat.roughness_texture)
 					adjusted_mat.emission_texture = _ensure_texture_mipmaps(adjusted_mat.emission_texture)
 					adjusted_mat.ao_texture = _ensure_texture_mipmaps(adjusted_mat.ao_texture)
+					GraphicsSettings.register_miniature_material(adjusted_mat)
 					mesh_instance.mesh.surface_set_material(surface_idx, adjusted_mat)
 
 
@@ -2989,6 +2990,7 @@ func _brighten_ctex_materials(node: Node) -> void:
 			mat.roughness = 0.7
 			mat.roughness_texture = null
 			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+			GraphicsSettings.register_miniature_material(mat)
 
 
 ## Returns a copy of [param tex] with a generated mipmap chain, for runtime GLTF

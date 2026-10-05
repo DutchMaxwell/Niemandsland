@@ -14,6 +14,11 @@ enum QualityPreset {
 
 var current_preset: QualityPreset = QualityPreset.MEDIUM
 
+## Track prepared miniature materials without owning them or changing material sharing.
+const MINIATURE_RIM_BASELINE := &"graphics_original_rim"
+const MINIATURE_RIM_TINT := 0.65  # Mostly paint-coloured, not a white emissive outline.
+var _miniature_materials: Dictionary = {}  # instance ID -> WeakRef
+
 # ===== Window / UI reachability =====
 ## Supported layout floor: the window can never shrink below this, so the left
 ## command panel, dice roller and unit card never collapse into each other. Below the
@@ -79,6 +84,7 @@ var ai_explain_persistent: bool = true
 const PRESETS = {
 	QualityPreset.PERFORMANCE: {
 		"name": "Performance",
+		"miniature_rim": 0.0,
 		"description": "Maximum FPS, Minimal Effects",
 		"msaa_3d": 0,  # No MSAA - use FXAA only
 		"use_taa": false,
@@ -98,6 +104,7 @@ const PRESETS = {
 	},
 	QualityPreset.LOW: {
 		"name": "Low",
+		"miniature_rim": 0.0,
 		"description": "Good Performance",
 		"msaa_3d": 1,  # 2x MSAA (was 4x)
 		"use_taa": false,
@@ -117,6 +124,7 @@ const PRESETS = {
 	},
 	QualityPreset.MEDIUM: {
 		"name": "Medium",
+		"miniature_rim": 0.12,
 		"description": "Balanced Quality/Performance",
 		"msaa_3d": 2,  # 4x MSAA (was 8x)
 		"use_taa": false,
@@ -136,6 +144,7 @@ const PRESETS = {
 	},
 	QualityPreset.HIGH: {
 		"name": "High",
+		"miniature_rim": 0.12,
 		"description": "High Quality",
 		"msaa_3d": 2,  # 4x MSAA (was 8x)
 		"use_taa": false,
@@ -155,6 +164,7 @@ const PRESETS = {
 	},
 	QualityPreset.ULTRA: {
 		"name": "Ultra",
+		"miniature_rim": 0.12,
 		"description": "Maximum Quality",
 		"msaa_3d": 2,  # 4x MSAA (8x doubled the render target — huge on a 2560x1600
 		# fullscreen 8GB GPU — for no visible gain; 4x matches High)
@@ -273,11 +283,34 @@ func apply_preset(preset: QualityPreset) -> void:
 
 	# Apply environment settings
 	apply_environment_settings(settings)
+	for id in _miniature_materials.keys():
+		var mat := (_miniature_materials[id] as WeakRef).get_ref() as StandardMaterial3D
+		if mat == null:
+			_miniature_materials.erase(id)
+		else:
+			_apply_miniature_rim(mat)
 
 	# Save settings
 	save_settings()
 
 	settings_applied.emit(settings["name"])
+
+
+## Called only by the existing miniature material preparation paths. No extra pass,
+## textures or lights; retain authored rim values for exact Low/Performance restoration.
+func register_miniature_material(mat: StandardMaterial3D) -> void:
+	if not mat.has_meta(MINIATURE_RIM_BASELINE):
+		mat.set_meta(MINIATURE_RIM_BASELINE, [mat.rim_enabled, mat.rim, mat.rim_tint])
+	_miniature_materials[mat.get_instance_id()] = weakref(mat)
+	_apply_miniature_rim(mat)
+
+
+func _apply_miniature_rim(mat: StandardMaterial3D) -> void:
+	var original: Array = mat.get_meta(MINIATURE_RIM_BASELINE)
+	var amount: float = PRESETS[current_preset]["miniature_rim"]
+	mat.rim_enabled = true if amount > 0.0 else original[0]
+	mat.rim = amount if amount > 0.0 else original[1]
+	mat.rim_tint = MINIATURE_RIM_TINT if amount > 0.0 else original[2]
 
 
 ## Apply rendering settings to project
