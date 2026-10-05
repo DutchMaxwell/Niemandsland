@@ -18,6 +18,47 @@ static func ctex_compatible(manifest_godot_version: String) -> bool:
 	return manifest_godot_version == engine_mm or manifest_godot_version.begins_with(engine_mm + ".")
 
 
+## Equal texture sets share a material, provided ALL other rendering properties match.
+## Weak values and resource IDs in keys do not retain an unloaded army's textures.
+static var _material_cache: Dictionary = {}
+
+
+static func _shared_material(base: Material, changes: Dictionary) -> StandardMaterial3D:
+	var source := base as StandardMaterial3D
+	if source == null:
+		source = StandardMaterial3D.new()
+	var signature: Array = []
+	for prop in source.get_property_list():
+		var key: String = prop.name
+		if not (int(prop.usage) & PROPERTY_USAGE_STORAGE) or key.begins_with("resource_") or key.begins_with("metadata/"):
+			continue
+		var value: Variant = changes.get(key, source.get(key))
+		signature.append(key)
+		signature.append(value.get_instance_id() if value is Resource else value)
+	if _material_cache.has(signature):
+		var existing: StandardMaterial3D = _material_cache[signature].get_ref()
+		if existing != null:
+			return existing
+	var material := source.duplicate() as StandardMaterial3D
+	for key in changes:
+		material.set(key, changes[key])
+	_material_cache[signature] = weakref(material)
+	return material
+
+
+## The only shared-material edit: table appearance, once before the first draw.
+## Per-model effects must swap materials/overlays instead of mutating this resource.
+static func brighten_once(material: StandardMaterial3D) -> void:
+	if material.has_meta("ctex_brightened"):
+		return
+	material.metallic = 0.0
+	material.metallic_texture = null
+	material.roughness = 0.7
+	material.roughness_texture = null
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	material.set_meta("ctex_brightened", true)
+
+
 ## Load a .ctex from a runtime (user://) path → CompressedTexture2D, or null if missing/unloadable.
 ## CACHE_MODE_REUSE: every model of a unit (and every unit sharing a texture) gets the SAME texture
 ## instead of its own upload of identical bytes. Safe because the cache is content-addressed
@@ -77,25 +118,19 @@ static func apply_to_mesh(mesh_root: Node3D, albedo_path: String, normal_path: S
 		if mi.mesh == null:
 			continue
 		for s in range(mi.mesh.get_surface_count()):
-			var base := mi.get_active_material(s)
-			var mat: StandardMaterial3D = (base as StandardMaterial3D).duplicate() if base is StandardMaterial3D else StandardMaterial3D.new()
+			var changes := {}
 			if albedo != null:
-				mat.albedo_texture = albedo
+				changes["albedo_texture"] = albedo
 			if normal != null:
-				mat.normal_enabled = true
-				mat.normal_texture = normal
+				changes.merge({"normal_enabled": true, "normal_texture": normal})
 			if orm != null:
-				mat.metallic = 1.0
-				mat.roughness = 1.0
-				mat.roughness_texture = orm
-				mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
-				mat.metallic_texture = orm
-				mat.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+				changes.merge({"metallic": 1.0, "roughness": 1.0,
+					"roughness_texture": orm, "roughness_texture_channel": BaseMaterial3D.TEXTURE_CHANNEL_GREEN,
+					"metallic_texture": orm, "metallic_texture_channel": BaseMaterial3D.TEXTURE_CHANNEL_BLUE})
 				if orm_has_ao:
-					mat.ao_enabled = true
-					mat.ao_texture = orm
-					mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
-			mi.set_surface_override_material(s, mat)
+					changes.merge({"ao_enabled": true, "ao_texture": orm,
+						"ao_texture_channel": BaseMaterial3D.TEXTURE_CHANNEL_RED})
+			mi.set_surface_override_material(s, _shared_material(mi.mesh.surface_get_material(s), changes))
 
 
 ## Apply PER-SURFACE ctex materials (contract-v1 multi-material form, I1). `surfaces` = array of
@@ -121,12 +156,10 @@ static func apply_materials_to_mesh(mesh_root: Node3D, surfaces: Array) -> void:
 		for s in range(mi.mesh.get_surface_count()):
 			if by_index.has(global_index):
 				var tex: Dictionary = by_index[global_index]
-				var base := mi.get_active_material(s)
-				var mat: StandardMaterial3D = (base as StandardMaterial3D).duplicate() if base is StandardMaterial3D else StandardMaterial3D.new()
+				var changes := {}
 				if tex.get("albedo") != null:
-					mat.albedo_texture = tex["albedo"]
+					changes["albedo_texture"] = tex["albedo"]
 				if tex.get("normal") != null:
-					mat.normal_enabled = true
-					mat.normal_texture = tex["normal"]
-				mi.set_surface_override_material(s, mat)
+					changes.merge({"normal_enabled": true, "normal_texture": tex["normal"]})
+				mi.set_surface_override_material(s, _shared_material(mi.mesh.surface_get_material(s), changes))
 			global_index += 1
