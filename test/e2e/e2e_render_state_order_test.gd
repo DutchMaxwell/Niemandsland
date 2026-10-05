@@ -8,7 +8,7 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const TreePass := preload("res://scripts/visual/table_tree_pass.gd")
 const Materials := preload("res://scripts/visual/reference_materials.gd")
 const KEYS: Array[String] = ["ssao_enabled", "ssao_radius", "ssao_intensity", "ssil_enabled", "sdfgi_enabled",
-	"ssr_enabled", "ssr_fade_in", "glow_enabled", "glow_intensity", "glow_bloom", "volumetric_fog_enabled"]
+	"ssr_enabled", "ssr_fade_in", "glow_enabled", "glow_intensity", "glow_bloom", "volumetric_fog_enabled", "ssao_detail"]
 const SUN_KEYS: Array[String] = ["shadow_bias", "shadow_normal_bias", "directional_shadow_max_distance",
 	"directional_shadow_pancake_size", "light_volumetric_fog_energy"]
 

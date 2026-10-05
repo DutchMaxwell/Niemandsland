@@ -87,6 +87,7 @@ const PRESETS = {
 		"ssao": false,  # Disabled for max performance
 		"ssao_radius": 0.5,
 		"ssao_intensity": 0.5,
+		"ssao_detail": 0.5,  # Restore the scene baseline when leaving a higher tier.
 		"ssil": false,
 		"ssr": false,
 		"sdfgi": false,
@@ -106,6 +107,7 @@ const PRESETS = {
 		"ssao": false,  # Disabled for better FPS
 		"ssao_radius": 0.8,
 		"ssao_intensity": 0.8,
+		"ssao_detail": 0.5,
 		"ssil": false,
 		"ssr": false,
 		"sdfgi": false,
@@ -125,6 +127,7 @@ const PRESETS = {
 		"ssao": true,
 		"ssao_radius": 0.8,
 		"ssao_intensity": 0.4,
+		"ssao_detail": 0.65,  # Small creases/contact, without widening the biome's AO radius.
 		"ssil": false,
 		"ssr": false,  # Disabled - expensive and not critical for tabletop
 		"sdfgi": false,
@@ -144,6 +147,7 @@ const PRESETS = {
 		"ssao": true,
 		"ssao_radius": 1.0,
 		"ssao_intensity": 0.5,
+		"ssao_detail": 0.75,
 		"ssil": false,  # Disabled - very expensive
 		"ssr": true,
 		"sdfgi": false,  # Disabled - extremely expensive
@@ -164,6 +168,7 @@ const PRESETS = {
 		"ssao": true,
 		"ssao_radius": 1.2,
 		"ssao_intensity": 0.6,
+		"ssao_detail": 0.75,
 		"ssil": true,
 		"ssr": true,
 		"sdfgi": false,  # Disabled by default - too expensive for most setups
@@ -364,7 +369,7 @@ static func environment_values(settings: Dictionary, tier: int) -> Dictionary:
 		# (atmospheric_clouds.gd) rather than environment volumetric fog, which a 1–2 cm
 		# ground layer cannot be resolved by and which tinted everything warm/brown.
 		"fog_enabled": false, "volumetric_fog_enabled": false}
-	for key: String in ["ssao_radius", "ssao_intensity", "glow_intensity", "glow_bloom"]:
+	for key: String in ["ssao_radius", "ssao_intensity", "ssao_detail", "glow_intensity", "glow_bloom"]:
 		if settings.has(key):
 			values[key] = settings[key]
 	if tier == QualityPreset.ULTRA:
