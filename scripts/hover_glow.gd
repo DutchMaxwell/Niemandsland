@@ -52,7 +52,7 @@ func set_target(obj: Node3D) -> void:
 	_target = obj
 	for mesh: MeshInstance3D in _collect_meshes(obj):
 		_prev_overlays[mesh] = mesh.material_overlay
-		mesh.material_overlay = _material
+		mesh.material_overlay = preload("res://scripts/visual/bone_texture_idle.gd").overlay_for(mesh, _material)
 		_meshes.append(mesh)
 
 

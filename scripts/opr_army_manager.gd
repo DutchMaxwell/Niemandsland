@@ -635,6 +635,7 @@ static var _dead_shader: Shader = null   # shared greyscale shader for dead mode
 ## Desaturate every surface of a model (dead look), keeping texture detail via a greyscale shader.
 ## The pre-death surface overrides are stashed under a meta so revive can restore them exactly.
 func _desaturate_model(node: Node3D) -> void:
+	preload("res://scripts/visual/bone_texture_idle.gd").set_dead(node, true)
 	for child in node.find_children("*", "MeshInstance3D", true, false):
 		var mi := child as MeshInstance3D
 		if mi.mesh == null or mi.has_meta("dead_orig_override"):
@@ -658,6 +659,7 @@ func _desaturate_model(node: Node3D) -> void:
 
 ## Restore a revived model's original per-surface materials.
 func _restore_model_material(node: Node3D) -> void:
+	preload("res://scripts/visual/bone_texture_idle.gd").set_dead(node, false)
 	for child in node.find_children("*", "MeshInstance3D", true, false):
 		var mi := child as MeshInstance3D
 		if not mi.has_meta("dead_orig_override"):
@@ -1737,6 +1739,11 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
 			model_height = fit.height
+			if model_library != null:
+				preload("res://scripts/visual/bone_texture_idle.gd").attach(glb_instance,
+					model_library.idle_cached_paths(faction_folder, glb_name),
+					model_library.get_idle_entry(faction_folder, glb_name),
+					"%s/%s" % [glb_name, wrapper.get_instance_id()])
 
 	# Fallback: Create placeholder body if no GLB model found
 	if not use_glb_model:
@@ -1915,6 +1922,11 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0, glb_n
 			wrapper.add_child(glb_instance)
 			use_glb_model = true
 			model_height = fit.height
+			if model_library != null:
+				preload("res://scripts/visual/bone_texture_idle.gd").attach(glb_instance,
+					model_library.idle_cached_paths(faction_folder, glb_name),
+					model_library.get_idle_entry(faction_folder, glb_name),
+					"%s/%s" % [glb_name, wrapper.get_instance_id()])
 
 	# Fallback: Create placeholder body if no GLB model found
 	if not use_glb_model:

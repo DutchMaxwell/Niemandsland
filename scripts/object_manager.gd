@@ -1016,7 +1016,7 @@ func _highlight_object(obj: Node3D) -> void:
 	for mesh: MeshInstance3D in _collect_glow_meshes(obj):
 		if not mesh.has_meta("_sel_prev_overlay"):
 			mesh.set_meta("_sel_prev_overlay", mesh.material_overlay)
-		mesh.material_overlay = mat
+		mesh.material_overlay = preload("res://scripts/visual/bone_texture_idle.gd").overlay_for(mesh, mat)
 	_add_spill_light(obj)
 
 
