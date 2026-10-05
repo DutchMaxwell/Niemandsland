@@ -27,3 +27,13 @@ func test_the_borderland_theme_loads_as_the_approved_table() -> void:
 			return q["prop_id"] == id and (q["position"] as Vector3).is_equal_approx(-pos) \
 				and is_equal_approx(fposmod(float(q["yaw_deg"]) - float(p["yaw_deg"]), 360.0), 180.0))
 		assert_int(twins.size()).override_failure_message("%s at %s has no mirrored twin" % [id, pos]).is_equal(1)
+
+
+## JSON is only exported when listed: without this filter an exported game would not find its themes.
+func test_every_export_preset_ships_the_themes() -> void:
+	var cfg := ConfigFile.new()
+	assert_int(cfg.load("res://export_presets.cfg")).is_equal(OK)
+	var presets := Array(cfg.get_sections()).filter(func(s: String) -> bool: return s.count(".") == 1)
+	assert_int(presets.size()).is_greater(0)
+	for section: String in presets:
+		assert_str(str(cfg.get_value(section, "include_filter", ""))).contains("assets/themes/*.json")
