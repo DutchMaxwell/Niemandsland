@@ -39,7 +39,9 @@ func push(action: UndoableAction) -> void:
 		return
 	_undo_stack.append(action)
 	if _undo_stack.size() > MAX_HISTORY:
-		_undo_stack.pop_front()
+		_undo_stack.pop_front().discard()   # off the end: it can never be undone again
+	for dropped in _redo_stack:
+		dropped.discard()   # a new branch: an undone action can never be redone
 	_redo_stack.clear()
 	_emit_changed()
 
@@ -173,6 +175,12 @@ class UndoableAction:
 		pass
 
 	func redo() -> void:
+		pass
+
+	## Called once when the action is dropped for good (off the end of the history, or with the redo branch when a
+	## new action starts a branch). Most actions keep everything (dead models stay revivable); a table theme frees
+	## the pieces it hides (lead D15 b).
+	func discard() -> void:
 		pass
 
 
