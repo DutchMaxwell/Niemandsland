@@ -2,20 +2,15 @@ class_name VolleyCue
 extends Node3D
 ## VFX #2: a short tracer per firing model along the RULE sight pair — the eye-to-eye segment the volumetric
 ## LOS check itself tested (VolumetricLos.eye), never a muzzle ray the rules never saw. The tint names only the
-## weapon FAMILY from its name (bow / flame / energy / ballistic); anything unknown stays neutral chalk. Full
+## weapon FAMILY (family_for: name words from a data table, then the rules); anything unknown stays neutral chalk. Full
 ## form: a slug travels the segment and leaves a fading chalk line. Still form (Performance/Low, Reduce Motion):
 ## the line alone. No RNG; off unless GraphicsSettings.show_combat_effects (default off until the look GO).
 
-enum Family { NEUTRAL, BALLISTIC, BOW, FLAME, ENERGY }
+enum Family { NEUTRAL, BALLISTIC, BOW, FLAME, ENERGY, AUTO, ARTILLERY, THROWN, BEAM }   # append only: cues carry the int
 const TINTS := [Color(0.93, 0.92, 0.86), Color(1.0, 0.84, 0.52), Color(0.8, 0.66, 0.42), Color(1.0, 0.5, 0.16),
-	Color(0.45, 0.9, 1.0)]
-## Word prefixes (and a few suffixes: "Longbow", "Machinegun", "Autocannon") per family, in this order.
-const WORDS := [[Family.FLAME, ["flame", "inferno", "pyro", "incinerat", "burn"], []],
-	[Family.ENERGY, ["las", "plasma", "beam", "fusion", "melta", "lightning", "energy", "tesla", "gauss",
-		"photon", "disintegrat"], []],
-	[Family.BOW, ["bow", "crossbow", "sling", "javelin", "arrow", "dart", "throwing"], ["bow"]],
-	[Family.BALLISTIC, ["rifle", "gun", "shotgun", "pistol", "carbine", "cannon", "musket", "sniper",
-		"blunderbuss", "launcher"], ["gun", "cannon"]]]
+	Color(0.45, 0.9, 1.0), Color(1.0, 0.76, 0.42), Color(0.92, 0.72, 0.5), Color(0.78, 0.72, 0.62), Color(1.0, 0.42, 0.48)]
+## Which family a weapon draws is data (assets/vfx/weapon_families.json): name words first, then the rules.
+const DATA := "res://assets/vfx/weapon_families.json"
 const LINE_R := 0.0009
 const SLUG_R := 0.0016
 const TRAVEL_S := 0.22
@@ -32,14 +27,43 @@ func _ready() -> void:
 	enabled = gs != null and gs.get("show_combat_effects") == true
 
 
+static var _table := {}
+
+
+static func table() -> Dictionary:
+	if _table.is_empty() and FileAccess.file_exists(DATA):
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(DATA))
+		_table = parsed if parsed is Dictionary else {}
+	return _table
+
+
+## The family a weapon NAME names: the first family in the table with a word starting with one of its prefixes or
+## ending with one of its suffixes; NEUTRAL when none does.
 static func family_of(weapon_name: String) -> Family:
 	var words := weapon_name.to_lower().replace("-", " ").split(" ", false)
-	for entry in WORDS:
+	for entry: Variant in table().get("families", []):
+		if not (entry is Dictionary):
+			continue
+		var pre: Array = (entry as Dictionary).get("prefixes", [])
+		var suf: Array = (entry as Dictionary).get("suffixes", [])
 		for w in words:
-			if (entry[1] as Array).any(func(p: String) -> bool: return w.begins_with(p)) \
-					or (entry[2] as Array).any(func(x: String) -> bool: return w.ends_with(x)):
-				return entry[0]
+			if pre.any(func(p: Variant) -> bool: return w.begins_with(str(p))) \
+					or suf.any(func(x: Variant) -> bool: return w.ends_with(str(x))):
+				return Family.get(str((entry as Dictionary).get("family", "")).to_upper(), Family.NEUTRAL)
 	return Family.NEUTRAL
+
+
+## The family of a shooting profile (ai_shooting's shape: name, attacks, count, blast, indirect): the name first; a
+## nameless kind falls to the rules (Indirect or Blast = artillery); a ballistic weapon without Blast and with many
+## attacks per copy is a machine gun.
+static func family_for(profile: Dictionary) -> Family:
+	var f := family_of(str(profile.get("name", "")))
+	if f == Family.NEUTRAL and (bool(profile.get("indirect", false)) or int(profile.get("blast", 0)) > 0):
+		return Family.ARTILLERY
+	var copies := maxi(int(profile.get("count", 1)), 1)
+	if f == Family.BALLISTIC and int(profile.get("blast", 0)) <= 0 and int(profile.get("attacks", 0)) >= int(table().get("auto_min_attacks", 4)) * copies:
+		return Family.AUTO
+	return f
 
 
 ## One tracer per [from_eye, to_eye] pair; returns how many were drawn.

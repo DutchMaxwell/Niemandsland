@@ -105,7 +105,8 @@ func _serialize_table() -> Dictionary:
 
 	var data = {
 		"size_feet": [table.table_size.x, table.table_size.y],
-		"biome": table.biome
+		"biome": table.biome,
+		"paths": TablePaths.of(table).paths,   # worn paths of a table theme (D14)
 	}
 
 	# Serialize map layout data from map_layout_editor
@@ -499,6 +500,7 @@ func _deserialize_table(table_data: Dictionary) -> void:
 
 	if table_data.has("biome") and table.has_method("set_biome"):
 		table.set_biome(table_data["biome"])
+	TablePaths.of(table).set_paths(table_data.get("paths", []))   # an older save has none: clear them
 
 	# Restore map layout data
 	_deserialize_map_layout(table_data, table_size)
