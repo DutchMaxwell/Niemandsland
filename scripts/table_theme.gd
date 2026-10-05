@@ -109,3 +109,13 @@ class ThemeAction extends UndoManager.UndoableAction:
 		DeletedState.apply(n, hidden)
 		if net_live() and n.has_meta("network_id"):
 			hooks["net"].broadcast_object_visibility(int(n.get_meta("network_id")), not hidden)
+
+	## Dropped for good (D15 b): the pieces it hides now can never come back — the replaced ones while it is applied,
+	## its own while it is undone — so free them instead of keeping hidden nodes forever.
+	func discard() -> void:
+		for n in (replaced if _is_applied() else spawned):
+			if is_instance_valid(n) and bool(n.get_meta("deleted", false)):
+				n.queue_free()
+
+	func _is_applied() -> bool:
+		return not spawned.is_empty() and is_instance_valid(spawned[0]) and not bool(spawned[0].get_meta("deleted", false))
