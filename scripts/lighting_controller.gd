@@ -285,13 +285,13 @@ func set_glow_intensity(value: float) -> void:
 
 func set_contrast(value: float) -> void:
 	if _environment:
-		_environment.adjustment_contrast = value
+		_set_env("adjustment_contrast", value)
 		current_preset.contrast = value
 
 
 func set_saturation(value: float) -> void:
 	if _environment:
-		_environment.adjustment_saturation = value
+		_set_env("adjustment_saturation", value)
 		current_preset.saturation = value
 
 
