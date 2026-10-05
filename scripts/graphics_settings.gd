@@ -79,6 +79,7 @@ var ai_explain_persistent: bool = true
 const PRESETS = {
 	QualityPreset.PERFORMANCE: {
 		"name": "Performance",
+		"hover_grow_m": 0.003,
 		"description": "Maximum FPS, Minimal Effects",
 		"msaa_3d": 0,  # No MSAA - use FXAA only
 		"use_taa": false,
@@ -98,6 +99,7 @@ const PRESETS = {
 	},
 	QualityPreset.LOW: {
 		"name": "Low",
+		"hover_grow_m": 0.003,
 		"description": "Good Performance",
 		"msaa_3d": 1,  # 2x MSAA (was 4x)
 		"use_taa": false,
@@ -117,6 +119,7 @@ const PRESETS = {
 	},
 	QualityPreset.MEDIUM: {
 		"name": "Medium",
+		"hover_grow_m": 0.001,
 		"description": "Balanced Quality/Performance",
 		"msaa_3d": 2,  # 4x MSAA (was 8x)
 		"use_taa": false,
@@ -136,6 +139,7 @@ const PRESETS = {
 	},
 	QualityPreset.HIGH: {
 		"name": "High",
+		"hover_grow_m": 0.001,
 		"description": "High Quality",
 		"msaa_3d": 2,  # 4x MSAA (was 8x)
 		"use_taa": false,
@@ -155,6 +159,7 @@ const PRESETS = {
 	},
 	QualityPreset.ULTRA: {
 		"name": "Ultra",
+		"hover_grow_m": 0.001,
 		"description": "Maximum Quality",
 		"msaa_3d": 2,  # 4x MSAA (8x doubled the render target — huge on a 2560x1600
 		# fullscreen 8GB GPU — for no visible gain; 4x matches High)
@@ -278,6 +283,12 @@ func apply_preset(preset: QualityPreset) -> void:
 	save_settings()
 
 	settings_applied.emit(settings["name"])
+
+
+## Keep the existing hover pass and colours; Medium+ reduces shell growth threefold.
+## Growth is in mesh space (metres before node scaling). Cheap tiers retain 0.003.
+func apply_hover_material(mat: StandardMaterial3D) -> void:
+	mat.grow_amount = PRESETS[current_preset]["hover_grow_m"]
 
 
 ## Apply rendering settings to project

@@ -1084,8 +1084,9 @@ func _spill_light_cap() -> int:
 			return 12
 
 
-## Rebuild spill lights on the current selection after a preset change.
+## Refresh the active hover material and rebuild selection spill lights after a preset change.
 func _on_graphics_settings_applied(_preset_name: String) -> void:
+	_hover_glow.apply_graphics_settings()
 	for obj: Node3D in _selected_objects:
 		if is_instance_valid(obj):
 			_remove_spill_light(obj)

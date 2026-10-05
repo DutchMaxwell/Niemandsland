@@ -17,8 +17,6 @@ const COLOR: Color = Color(1.0, 0.8, 0.25)
 const EMISSION_ENERGY: float = 2.0
 ## Overlay tint opacity.
 const TINT_ALPHA: float = 0.40
-## Outward shell growth for a subtle edge that pops against neighbours (metres).
-const GROW_AMOUNT: float = 0.003
 ## Child nodes with this name (the selection ring) are never glowed.
 const SKIP_NODE_NAME: String = "SelectionHighlight"
 
@@ -36,6 +34,11 @@ func _init() -> void:
 	_material = _make_material()
 
 # === Public API ===
+
+## ObjectManager forwards quality changes even while the pointer stays still.
+func apply_graphics_settings() -> void:
+	GraphicsSettings.apply_hover_material(_material)
+
 
 ## The object currently glowing, or null.
 func get_target() -> Node3D:
@@ -95,5 +98,5 @@ func _make_material() -> StandardMaterial3D:
 	mat.emission = COLOR
 	mat.emission_energy_multiplier = EMISSION_ENERGY
 	mat.grow = true
-	mat.grow_amount = GROW_AMOUNT
+	GraphicsSettings.apply_hover_material(mat)
 	return mat
