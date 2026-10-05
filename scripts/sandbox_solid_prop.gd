@@ -95,6 +95,7 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_lo
 	skirt.size = Vector3(footprint_inches.x + 2.0 * SKIRT_MARGIN_INCHES, SKIRT_HEIGHT_INCHES,
 		footprint_inches.y + 2.0 * SKIRT_MARGIN_INCHES) * INCHES_TO_METERS
 	add_child(skirt)
+	add_child(GrasslandFootDressing.new().setup(footprint_inches))   # earth + moss at the foot (S6-1)
 
 
 ## Opaque under the footprint, fading (squared) to nothing SKIRT_MARGIN_INCHES outside its edge, 10 px per inch; built
