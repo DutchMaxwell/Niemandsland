@@ -2,6 +2,8 @@ extends GdUnitTestSuite
 ## CasualtyShow, step 1 (maintainer look verdicts: "more gore and blood", then gore GO "not too bloody but not
 ## harmless"): a wound on flesh leaves pools by the Gore setting (Off none, Normal one, Extra three); a big wound on a
 ## machine leaves one oil spot, on the undead no pool; nothing draws when the show is off; the game RNG stays alone.
+## Step 2: a falling model's ghost is only its meshes (no marker, collision, group or script); a shake hands the camera
+## its offsets back, even when two shakes overlap.
 
 const CasualtyScript = preload("res://scripts/vfx/casualty_show.gd")
 var _gore_before: int
@@ -68,3 +70,37 @@ func test_off_draws_nothing_and_the_game_rng_stays_alone() -> void:
 	on.ricochets([Vector3.ZERO, Vector3.ONE], 4)
 	assert_int(randi()).is_equal(expected)
 	assert_int(on.get_child_count()).is_greater(2)
+
+
+func test_the_ghost_is_only_the_miniature() -> void:
+	var model := auto_free(StaticBody3D.new()) as StaticBody3D
+	model.add_to_group("miniature")
+	add_child(model)
+	model.global_position = Vector3(0.2, 0.0, 0.1)
+	for part in ["Base", "Figure", "WoundMarker"]:
+		var m := MeshInstance3D.new()
+		m.name = part
+		m.mesh = BoxMesh.new()
+		model.add_child(m)
+	model.add_child(CollisionShape3D.new())
+	var ghost: Node3D = _show().collapse(model, 3)
+	assert_object(ghost).is_not_null()
+	assert_int(ghost.get_child_count()).override_failure_message("Base + Figure, never the marker").is_equal(2)
+	assert_array(ghost.find_children("*", "CollisionShape3D", true, false)).is_empty()
+	assert_bool(ghost.is_in_group("miniature")).is_false()
+	assert_object(ghost.get_script()).is_null()
+	assert_float(ghost.global_position.distance_to(model.global_position)).is_less(0.0001)
+
+
+func test_a_shake_gives_the_camera_offsets_back(timeout := 10000) -> void:
+	var cam := auto_free(Camera3D.new()) as Camera3D
+	add_child(cam)
+	cam.current = true
+	cam.h_offset = 0.02
+	var show := _show()
+	show.shake(0.01)
+	await get_tree().create_timer(0.05).timeout   # the second shake starts in the middle of the first
+	show.shake(0.01)   # ... and must not keep the first one's offset
+	await get_tree().create_timer(0.6).timeout
+	assert_float(cam.h_offset).is_equal_approx(0.02, 1e-6)
+	assert_float(cam.v_offset).is_equal_approx(0.0, 1e-6)
