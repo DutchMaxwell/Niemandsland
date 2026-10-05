@@ -36,3 +36,20 @@ func test_a_free_forest_counts_in_a_game_without_a_solo_ai() -> void:
 	var areas: Array = (_main.terrain_overlay.los_volumes() as Array).filter(
 		func(v: Dictionary) -> bool: return not bool(v.get("solid", true)))
 	assert_int(areas.size()).is_equal(1)   # the forest's area sight hull (see in/out, not through)
+
+
+## Delete hides a free piece (undoable, "deleted" meta) instead of freeing it. The rules must then ignore it: a
+## deleted solid that still blocked sight and movement would be an invisible wall (found 05.10. while planning the
+## theme's replace step).
+func test_a_deleted_free_piece_stops_counting_for_the_rules() -> void:
+	_main.terrain_overlay.grid_cells.clear()
+	var solid: Node3D = _main.object_manager.spawn_sandbox_terrain("blocker_6x3", ObjectManager.SandboxPropKind.BLOCKER,
+		FOREST_AT, false, 7202)
+	await _runner.simulate_frames(2)
+	assert_int(_main.terrain_overlay.get_terrain_at_world_position(FOREST_AT)).is_equal(TerrainRules.TerrainType.CONTAINER)
+	_main.radial_menu_controller.delete_objects([solid])   # the Delete-key path
+	await _runner.simulate_frames(2)
+	assert_bool(solid.visible).is_false()
+	assert_int(_main.terrain_overlay.get_terrain_at_world_position(FOREST_AT)).is_equal(TerrainRules.TerrainType.NONE)
+	assert_int((_main.terrain_overlay.los_volumes() as Array).size()).is_equal(0)
+	assert_float(_main.object_manager._surface_y_under(FOREST_AT)).is_less(0.005)   # a model set down here stands on the table
