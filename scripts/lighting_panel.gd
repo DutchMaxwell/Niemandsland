@@ -293,6 +293,22 @@ func _build_ui() -> void:
 			pivot.set_tilt_shift_enabled(on))
 	vbox.add_child(tilt_cb)
 
+	# Gore (combat effects): how bloody wounds and casualties look — Off shows dust instead of blood.
+	var gore_row := HBoxContainer.new()
+	gore_row.add_theme_constant_override("separation", 8)
+	var gore_lbl := Label.new()
+	gore_lbl.text = "Gore"
+	gore_row.add_child(gore_lbl)
+	var gore_ob := OptionButton.new()
+	for item in ["Off", "Normal", "Extra"]:
+		gore_ob.add_item(item)
+	gore_ob.select(clampi(GraphicsSettings.gore_level, 0, 2))
+	gore_ob.item_selected.connect(func(index: int) -> void:
+		GraphicsSettings.gore_level = index
+		GraphicsSettings.save_settings())
+	gore_row.add_child(gore_ob)
+	vbox.add_child(gore_row)
+
 	# Pacing grill 31.07.: the combat stage's discoverable switch + its beat length.
 	var stage_cb := CheckButton.new()
 	stage_cb.text = "Combat Stage (paces the resolution)"
