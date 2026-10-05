@@ -13118,6 +13118,44 @@ func _capture_bug_report() -> void:
 		_show_toast("📸 Bug report saved to your Desktop: %s" % path.get_file())
 
 
+## One-click table theme (S5, maintainer 05.10.: an entry in the map editor). Refused on a table of another size
+## (lead D11; the editor greys the entry out too), on painted grid terrain (D9) and once the game is being played;
+## otherwise the theme replaces the free pieces, sets the biome and the evening light, reaches the other table and is
+## ONE step on the table's undo history.
+func apply_table_theme(theme_id: String) -> bool:
+	var theme := TableTheme.load_theme(theme_id)
+	if theme == null:
+		return false
+	if not theme.fits(table.table_size):
+		_show_toast("%s needs a %d x %d ft table" % [theme.label, int(theme.table_feet.x), int(theme.table_feet.y)])
+		return false
+	if terrain_overlay != null and terrain_overlay.grid_cells.values().any(func(v: Variant) -> bool: return int(v) != 0):
+		_show_toast("Clear the grid terrain first, then apply %s" % theme.label)
+		return false
+	var action := theme.apply(object_manager, {
+		"started": func() -> bool:
+			return opr_army_manager != null and int(opr_army_manager.game_phase) == OPRArmyManager.GamePhase.PLAYING,
+		"biome_get": func() -> String: return table.biome,
+		"biome_set": func(b: String) -> void: table.set_biome(b),
+		"mood_get": func() -> String: return str(atmosphere_controller.get_current_atmosphere()),
+		"mood_set": func(m: String) -> void: atmosphere_controller.apply_atmosphere(m),
+		"relayout": _redress_table_layout,
+		"net": network_manager})
+	if action == null:
+		_show_toast("Table themes can only be applied before the game starts")
+		return false
+	action.peer_id = network_manager.get_my_peer_id() if network_manager else 0
+	if undo_manager != null:
+		undo_manager.push(action)
+	_show_toast("%s laid out - Ctrl+Z puts the old table back" % theme.label)
+	return true
+
+
+func _redress_table_layout() -> void:
+	if _table_biome_presenter != null:
+		_table_biome_presenter.request_rebuild("layout")
+
+
 ## Brief, non-blocking on-screen message that auto-fades (there was no toast system before).
 func _show_toast(text: String) -> void:
 	var label := Label.new()
