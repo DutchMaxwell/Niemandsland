@@ -412,6 +412,7 @@ var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move l
 var spell_seal: SpellSeal = null  # VFX #3: the cast's glyph circle at the caster (presentation only)
 var casualty_show: CasualtyShow = null  # VFX: blood / sparks / ricochets / falling ghosts / shake (presentation)
 var shot_show: ShotShow = null  # VFX: muzzle / round / impact per weapon family on top of the tracers (presentation)
+var spell_show: SpellShow = null  # VFX: the cast's charge and its release / collapse around the seal (presentation)
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 var result_pips: ResultPips = null  # VFX #1: wound ticks / blood markers over the models (presentation only)
 var _vfx_saves_made := 0   # saves made by the save batches of the current _solo_resolve_saves (VFX #1 strip)
@@ -4450,7 +4451,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
 	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
 	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
-	var seal_id := _vfx_seal_begin(caster, entry, effect)
+	var seal_id := _vfx_seal_begin(caster, entry, effect, spell_name)
 	if battle_log != null:
 		var token_note := "%d token%s" % [int(cast.get("threshold", 0)), ("" if int(cast.get("threshold", 0)) == 1 else "s")]
 		if boost > 0:
@@ -4475,7 +4476,9 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 		"Casting %s (%d+)" % [spell_name, target_num])
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
 	if seal_id > 0:
-		_vfx_emit({"k": "seal_end", "sid": seal_id, "o": int(SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL)})
+		_vfx_emit({"k": "seal_end", "sid": seal_id, "o": int(SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL),
+			"tg": targets.map(_vfx_unit_eye).filter(func(e: Vector3) -> bool: return e != Vector3.INF) if success else [],
+			"dmg": str(effect.get("kind", "")) == "damage"})
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: cast roll %d vs %d+ — %s" % [
 			spell_name, (int(faces[0]) if not faces.is_empty() else 0), target_num,
@@ -4509,14 +4512,14 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 ## VFX #3: the cast's seal forms at the caster, its edge on the spell range exactly as the purple preview ring
 ## draws it (RangeRingController: base edge + range). A Spell Conduit origin is not drawn (nor is it by the preview).
 ## Returns the seal's cue id for the dim / end cues (0 = none).
-func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary) -> int:
+func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary, spell_name: String = "") -> int:
 	if range_ring_controller == null or caster == null:
 		return 0
 	for m in caster.get_alive_models():
 		var node := (m as ModelInstance).node
 		if node != null and is_instance_valid(node):
 			return _vfx_emit({"k": "seal", "at": node.global_position, "kind": str(effect.get("kind", "utility")),
-				"r": range_ring_controller.ring_outer_radius_for_props(range_ring_controller._props_of(node),
+				"el": int(SpellLook.element_of(spell_name)), "r": range_ring_controller.ring_outer_radius_for_props(range_ring_controller._props_of(node),
 					int(entry.get("range_in", 0)))})
 	return 0
 
@@ -13197,12 +13200,30 @@ func _vfx_draw(cue: Dictionary, from_peer: int) -> void:
 				shot_show.volley(pairs, fam, show_seed, clampi(_vfx_int(cue.get("b"), 0), 0, 12),
 					clampf(float(h) if (h is int or h is float) else 0.0, 0.0, 0.2))
 		"seal" when at is Vector3:
-			_vfx_seals[seal_key] = spell_seal.begin(at, clampf(float(cue.get("r", 0.0)), 0.0, 3.0), str(cue.get("kind", "")))
+			var r: Variant = cue.get("r", 0.0)   # a peer's payload: typed, finite, on the table
+			var el: Variant = cue.get("el", 0)
+			if not (r is float or r is int) or not (el is int) or not (cue.get("kind", "") is String):
+				return
+			if not is_finite(float(r)) or float(r) <= SpellSeal.BAND_M or not SpellShow.valid_point(at):
+				return
+			_vfx_seals[seal_key] = spell_seal.begin(at, clampf(float(r), 0.0, 3.0), str(cue.get("kind", "")))
+			if spell_show != null:
+				spell_show.begin(seal_key, at, clampf(float(r), 0.0, 3.0), clampi(int(el), 0, 4), show_seed)
+			if model_auras != null:
+				model_auras.boost_near(seal_key, at, 0.15)   # a hero's aura runs wild while it casts
 		"seal_dim":
 			spell_seal.interfere(_vfx_seals.get(seal_key))
 		"seal_end":
+			if not (cue.get("o", 0) is int) or not (cue.get("tg", []) is Array) or not (cue.get("dmg", false) is bool):
+				return
 			spell_seal.finish(_vfx_seals.get(seal_key), clampi(int(cue.get("o", 0)), 0, 2) as SpellSeal.Outcome)
 			_vfx_seals.erase(seal_key)
+			if spell_show != null:
+				spell_show.end(seal_key, clampi(int(cue.get("o", 0)), 0, 2),
+					_vfx_points(cue.get("tg"), 8).filter(func(p: Vector3) -> bool: return SpellShow.valid_point(p)), cue.get("dmg") == true,
+					show_seed)
+			if model_auras != null:
+				model_auras.settle(seal_key)
 
 
 ## VFX: what a resolved result does to the models, from a pip cue (blood / sparks / bone dust where wounds landed,
@@ -18621,6 +18642,9 @@ func _init_radial_menu() -> void:
 	shot_show = ShotShow.new()
 	shot_show.name = "ShotShow"
 	add_child(shot_show)
+	spell_show = SpellShow.new()
+	spell_show.name = "SpellShow"
+	add_child(spell_show)
 	object_manager.move_trails = move_trails
 	# Transparency wave stage 2 (grilled 2026-07-30): applied rules announce themselves AT
 	# the table — rising billboard texts on the affected unit, stagger-cascaded so full
