@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## VFX #1 result pips (INV_vfx §5): the marks read the allocation the resolver already made — one tick per
-## wound that landed on a surviving model, one cross per casualty — and spawn nothing when switched off,
+## wound that landed on a surviving model, one blood marker per casualty — and spawn nothing when switched off,
 ## for a zero count, or headless without the test opt-in. They never touch the game's RNG.
 
 const ResultPipsScript = preload("res://scripts/vfx/result_pips.gd")
@@ -52,7 +52,7 @@ func test_a_long_strip_is_capped_at_ten_symbols() -> void:
 	assert_float((pip.mesh as QuadMesh).size.x).is_equal_approx(ResultPipsScript.MAX_TICKS * ResultPipsScript.SIZE_M, 1e-6)
 
 
-func test_a_casualty_gets_a_cross_over_its_eye() -> void:
+func test_a_casualty_gets_its_marker_over_its_eye() -> void:
 	var p = _pips()
 	var mi := _model_at(Vector3(0.5, 0.1, -0.3))
 	var pip: MeshInstance3D = p.mark_model(ResultPipsScript.Kind.KILL, mi, 1)
@@ -62,6 +62,15 @@ func test_a_casualty_gets_a_cross_over_its_eye() -> void:
 		* VolumetricLos.INCHES_TO_METERS
 	assert_float(pip.global_position.y).is_equal_approx(0.1 + eye_m + ResultPipsScript.LIFT_M, 1e-5)
 	assert_float(pip.global_position.x).is_equal_approx(0.5, 1e-6)
+
+
+## Maintainer 05.10.: the casualty mark is a small blood splat, not an X. (The Gore setting, once it exists, turns it
+## into a neutral marker with Gore Off and a bigger splat with Extra; without it the mark is Normal: blood.)
+func test_a_casualty_gets_a_blood_marker_not_an_x() -> void:
+	var pip: MeshInstance3D = _pips().mark(ResultPipsScript.Kind.KILL, Vector3.ZERO, 1)
+	var blood: Color = (pip.material_override as ShaderMaterial).get_shader_parameter("tint")
+	assert_bool(blood.r > 4.0 * blood.g and blood.r < 0.8).override_failure_message("dark blood red").is_true()
+	assert_bool(ResultPipsScript.SHADER.contains("abs(p.x - p.y)")).override_failure_message("the X is gone").is_false()
 
 
 func test_off_or_zero_spawns_nothing() -> void:
