@@ -411,6 +411,7 @@ var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
 var spell_seal: SpellSeal = null  # VFX #3: the cast's glyph circle at the caster (presentation only)
 var casualty_show: CasualtyShow = null  # VFX: blood / sparks / ricochets / falling ghosts / shake (presentation)
+var shot_show: ShotShow = null  # VFX: muzzle / round / impact per weapon family on top of the tracers (presentation)
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 var result_pips: ResultPips = null  # VFX #1: wound ticks / blood markers over the models (presentation only)
 var _vfx_saves_made := 0   # saves made by the save batches of the current _solo_resolve_saves (VFX #1 strip)
@@ -4331,7 +4332,7 @@ func _vfx_volley(member: GameUnit, target: GameUnit, profile: Dictionary, pairs:
 		return
 	var up_from := Vector3.UP * _solo_unit_los_height_m(member)
 	var up_to := Vector3.UP * _solo_unit_los_height_m(target)
-	_vfx_emit({"k": "volley", "f": int(VolleyCue.family_of(str(profile.get("name", "")))),
+	_vfx_emit({"k": "volley", "f": int(VolleyCue.family_for(profile)), "b": int(profile.get("blast", 0)), "h": up_to.y,
 		"pairs": pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to])})
 
 
@@ -13187,9 +13188,14 @@ func _vfx_draw(cue: Dictionary, from_peer: int) -> void:
 			result_pips.mark(clampi(_vfx_int(cue.get("t"), 0), 0, 3) as ResultPips.Kind, at, mini(_vfx_int(cue.get("n"), 0), 12))
 			_vfx_show_pip(cue, at, show_seed)
 		"volley" when cue.get("pairs") is Array:
-			volley_cue.fire((cue["pairs"] as Array).slice(0, 64).filter(func(p: Variant) -> bool:
-				return p is Array and p.size() == 2 and p[0] is Vector3 and p[1] is Vector3),
-				clampi(int(cue.get("f", 0)), 0, 4) as VolleyCue.Family)
+			var pairs: Array = (cue["pairs"] as Array).slice(0, 64).filter(func(p: Variant) -> bool:
+				return p is Array and p.size() == 2 and p[0] is Vector3 and p[1] is Vector3)
+			var h: Variant = cue.get("h", 0.0)
+			var fam := clampi(_vfx_int(cue.get("f"), 0), 0, VolleyCue.Family.size() - 1)
+			volley_cue.fire(pairs, fam as VolleyCue.Family)
+			if shot_show != null:
+				shot_show.volley(pairs, fam, show_seed, clampi(_vfx_int(cue.get("b"), 0), 0, 12),
+					clampf(float(h) if (h is int or h is float) else 0.0, 0.0, 0.2))
 		"seal" when at is Vector3:
 			_vfx_seals[seal_key] = spell_seal.begin(at, clampf(float(cue.get("r", 0.0)), 0.0, 3.0), str(cue.get("kind", "")))
 		"seal_dim":
@@ -18612,6 +18618,9 @@ func _init_radial_menu() -> void:
 	casualty_show = CasualtyShow.new()
 	casualty_show.name = "CasualtyShow"
 	add_child(casualty_show)
+	shot_show = ShotShow.new()
+	shot_show.name = "ShotShow"
+	add_child(shot_show)
 	object_manager.move_trails = move_trails
 	# Transparency wave stage 2 (grilled 2026-07-30): applied rules announce themselves AT
 	# the table — rising billboard texts on the affected unit, stagger-cascaded so full
