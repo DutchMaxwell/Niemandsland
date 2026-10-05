@@ -34,3 +34,10 @@ func test_paths_come_back_after_a_save_and_load() -> void:
 	await _runner.simulate_frames(4)
 	assert_array(TablePaths.of(_main.table).paths).is_equal(PATH)
 	assert_int(TablePaths.of(_main.table).find_children("*", "Decal", false, false).size()).is_equal(2)
+
+
+## The other table draws the paths it receives with the table settings (D14: sent via broadcast_table_settings).
+func test_paths_received_with_the_table_settings_are_drawn() -> void:
+	_main._on_remote_table_settings_changed({"paths": PATH})
+	assert_array(TablePaths.of(_main.table).paths).is_equal(PATH)
+	assert_int(TablePaths.of(_main.table).find_children("*", "Decal", false, false).size()).is_equal(2)

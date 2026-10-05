@@ -3,10 +3,14 @@ extends Node3D
 ## Combat effects: what a resolved hit does to the models — drawn only from the resolver's results, never deciding
 ## one: a burst where a wound landed (blood mist and drops on flesh, sparks and an oil spot on machines, bone dust on
 ## the undead), pools on the ground by the Gore setting (Off: dust, no blood), ricochet sparks on the defending models
-## when saves hold. Reduce Motion: no show at all. (The falling model comes in the next step.)
+## when saves hold; where a model fell, a dust burst plus a GHOST of it that tips over and sinks while the real model
+## is parked at once (state timing unchanged; the ghost is only meshes — no script, group or collision). A heavy kill
+## shakes the camera a little through its h/v offset, never the controller. Reduce Motion: no show at all.
 
 enum Gore { OFF, NORMAL, EXTRA }
 const SPLAT_LIFE_S := [0.0, 10.0, 30.0]   # per Gore level
+const SKIP_PARTS := ["Marker", "Ring", "Preview", "Selection", "Overlay", "Highlight", "Aura"]   # never on a ghost
+const COLLAPSE_S := 0.7
 
 var enabled := true
 var force_for_tests := false
@@ -73,3 +77,67 @@ func ricochets(points: Array, rng_seed: int) -> void:
 	for i in (points.size() if p >= 0 else 0):
 		FxBurst.spawn(self, FxBurst.Look.SPARK, points[i], Vector3.UP, 5, rng_seed + i, p, 0.8)
 		FxBurst.spawn(self, FxBurst.Look.FLASH, points[i], Vector3.ZERO, 1, rng_seed + i, p, 0.4)
+
+
+## A model fell at `base` (its base spot): dust, the wound burst at its eye, and a shake when `heavy`.
+func kill(eye: Vector3, base: Vector3, stuff: ModelStuff.Stuff, heavy: bool, rng_seed: int) -> void:
+	var p := _preset()
+	if p < 0:
+		return
+	wound(eye, base, stuff, 2, rng_seed, true)
+	FxBurst.spawn(self, FxBurst.Look.DUST, base, Vector3.UP, 12, rng_seed + 3, p, 1.2)
+	if heavy:
+		shake(0.006)
+
+
+## The picture of a falling model: a mesh-only copy tips over and sinks while the real one is already parked.
+func collapse(model: Node3D, rng_seed: int) -> Node3D:
+	if _preset() < 0 or model == null or not is_instance_valid(model) or not model.is_inside_tree():
+		return null
+	var ghost := Node3D.new()
+	add_child(ghost)
+	ghost.global_transform = model.global_transform
+	_copy_meshes(model, model, ghost)
+	var axis := Vector3(cos(rng_seed * 0.7), 0.0, sin(rng_seed * 0.7))   # a fixed fall direction per seed, no RNG
+	var tw := ghost.create_tween()
+	tw.tween_property(ghost, "transform:basis", Basis(axis, deg_to_rad(80.0)) * ghost.transform.basis,
+		COLLAPSE_S * 0.6).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(ghost, "position:y", ghost.position.y - 0.01, COLLAPSE_S * 0.4)
+	tw.tween_callback(ghost.queue_free)
+	return ghost
+
+
+func _copy_meshes(root: Node3D, n: Node, ghost: Node3D) -> void:
+	for c in n.get_children():
+		if SKIP_PARTS.any(func(s: String) -> bool: return String(c.name).contains(s)):
+			continue
+		if c is MeshInstance3D and (c as MeshInstance3D).is_visible_in_tree() and (c as MeshInstance3D).skin == null:
+			var m := MeshInstance3D.new()
+			m.mesh = (c as MeshInstance3D).mesh
+			m.material_override = (c as MeshInstance3D).material_override
+			for si in (m.mesh.get_surface_count() if m.mesh != null else 0):
+				m.set_surface_override_material(si, (c as MeshInstance3D).get_surface_override_material(si))
+			ghost.add_child(m)
+			m.transform = root.global_transform.affine_inverse() * (c as MeshInstance3D).global_transform
+		_copy_meshes(root, c, ghost)
+
+
+## A small decaying camera shake through h/v offset (a fixed pattern, no RNG).
+func shake(strength: float) -> void:
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if cam == null or _preset() < 0:
+		return
+	var h0 := float(cam.get_meta("vfx_h0", cam.h_offset))   # the offsets as they were before any shake began
+	var v0 := float(cam.get_meta("vfx_v0", cam.v_offset))
+	cam.set_meta("vfx_h0", h0)
+	cam.set_meta("vfx_v0", v0)
+	var tw := cam.create_tween()
+	for i in 6:
+		var k := strength * (1.0 - i / 6.0)
+		tw.tween_property(cam, "h_offset", h0 + k * (1.0 if i % 2 == 0 else -1.0), 0.035)
+		tw.parallel().tween_property(cam, "v_offset", v0 + k * 0.6 * (1.0 if i % 3 == 0 else -1.0), 0.035)
+	tw.tween_property(cam, "h_offset", h0, 0.04)
+	tw.parallel().tween_property(cam, "v_offset", v0, 0.04)
+	tw.tween_callback(func() -> void:
+		cam.remove_meta("vfx_h0")
+		cam.remove_meta("vfx_v0"))
