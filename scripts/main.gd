@@ -15821,6 +15821,8 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			_adjust_camera_for_table_size(size_feet)
 			print("[Settings] Table resized to %.1fx%.1f feet" % [size_feet.x, size_feet.y])
 
+	if settings.has("paths"):   # a table theme's worn paths (D14)
+		TablePaths.of(table).set_paths(settings["paths"])
 	if settings.has("biome") and table.has_method("set_biome"):
 		table.set_biome(settings["biome"])
 		print("[Settings] Biome set to %s" % str(settings["biome"]))
