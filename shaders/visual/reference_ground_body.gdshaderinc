@@ -2,6 +2,7 @@
 // menu diorama + reference scene) and reference_ground_table.gdshader (the game-table tier, which defines
 // TABLE_TIER). Without TABLE_TIER this is the reference shader unchanged.
 #include "res://shaders/visual/reference_ground.gdshaderinc"
+#include "res://shaders/base_flock.gdshaderinc"
 uniform bool clip_base = false;
 uniform bool surface_relief = false;
 // The small-scale noise relief (+-5.5 mm everywhere). Off on the game table, where props and miniatures stand at
@@ -20,6 +21,7 @@ float full_relief(vec2 p) {
 }
 varying vec2 ground_xz;
 void vertex() {
+ flock_xz = VERTEX.xz;
  ground_xz = (MODEL_MATRIX * vec4(VERTEX,1.0)).xz;
  if(surface_relief) { VERTEX.y += full_relief(ground_xz); }
 }
@@ -108,4 +110,11 @@ void fragment() {
 	vec3 surface_normal=normalize(vec3((h-hx)*14.0+slope_x,1.0,(h-hz)*14.0+slope_z));
 	NORMAL=normalize((VIEW_MATRIX*vec4(surface_normal,0.0)).xyz);
 #endif
+	if (clip_base && flock_enabled) {
+		ALBEDO = flock_colour(ALBEDO, flock_xz);
+		NORMAL = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+		NORMAL_MAP = texture(flock_normal, flock_xz * FLOCK_TILING).rgb;
+		NORMAL_MAP_DEPTH = 0.75;
+		ROUGHNESS = 0.95;
+	}
 }

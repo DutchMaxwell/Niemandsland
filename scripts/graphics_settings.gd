@@ -273,11 +273,21 @@ func apply_preset(preset: QualityPreset) -> void:
 
 	# Apply environment settings
 	apply_environment_settings(settings)
+	var rim := BaseDecor.rim_material()
+	rim.roughness = 0.42 if current_preset >= QualityPreset.MEDIUM else BaseDecor.RIM_ROUGHNESS
+	rim.albedo_color = Color(0.085, 0.075, 0.065) if current_preset >= QualityPreset.MEDIUM else BaseDecor.RIM_COLOR
 
 	# Save settings
 	save_settings()
 
 	settings_applied.emit(settings["name"])
+
+
+## Reuse the table's mipmapped detail pair: one binding for every miniature base.
+func apply_base_finish(mat: ShaderMaterial, height: Texture2D, normal: Texture2D) -> void:
+	mat.set_shader_parameter("flock_enabled", current_preset >= QualityPreset.MEDIUM and height != null)
+	mat.set_shader_parameter("flock_height", height)
+	mat.set_shader_parameter("flock_normal", normal)
 
 
 ## Apply rendering settings to project

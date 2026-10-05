@@ -102,6 +102,7 @@ func _ready() -> void:
 	_grass_field.set_biome(biome)
 	_load_fallback_texture()
 	_apply_biome(biome)
+	GraphicsSettings.settings_applied.connect(_apply_base_finish)
 
 
 ## Setup table with given size in feet
@@ -315,6 +316,12 @@ func _update_base_top_material() -> void:
 		_base_top_material.set_shader_parameter("detail_normal", _detail_normal_tex)
 	if _detail_height_tex != null:
 		_base_top_material.set_shader_parameter("detail_height", _detail_height_tex)
+	_apply_base_finish()
+
+
+func _apply_base_finish(_preset_name: String = "") -> void:
+	if _base_top_material != null:
+		GraphicsSettings.apply_base_finish(_base_top_material, _detail_height_tex, _detail_normal_tex)
 
 
 ## Generate a seamless tiling noise texture for ground micro-detail. As a normal map
@@ -398,5 +405,4 @@ func _create_table_border(size_meters: Vector2) -> void:
 
 		wall.position = wall_positions[i]
 		add_child(wall)
-
 

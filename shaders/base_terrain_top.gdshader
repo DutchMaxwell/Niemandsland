@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
+#include "res://shaders/base_flock.gdshaderinc"
 
 // Terrain-projected miniature base top: reads as a seamless window onto the battlefield
 // ground directly beneath the model, like a hobbyist basing a mini to match the table.
@@ -52,6 +53,7 @@ varying vec2 world_xz;
 varying vec2 shape_uv;
 
 void vertex() {
+	flock_xz = VERTEX.xz;
 	world_xz = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
 	shape_uv = UV;
 }
@@ -91,4 +93,10 @@ void fragment() {
 	vec3 n = texture(detail_normal, duv).xyz;
 	NORMAL_MAP = n;
 	NORMAL_MAP_DEPTH = detail_normal_strength;
+	if (flock_enabled) {
+		ALBEDO = flock_colour(ALBEDO, flock_xz);
+		NORMAL_MAP = texture(flock_normal, flock_xz * FLOCK_TILING).rgb;
+		NORMAL_MAP_DEPTH = 0.75;
+		ROUGHNESS = 0.95;
+	}
 }

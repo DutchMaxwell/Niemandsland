@@ -60,6 +60,8 @@ func _mood(mood: String) -> void:
 
 
 func _state() -> Dictionary:
+	var base: ShaderMaterial = _main.get_node("Table").get_base_top_material()
+	assert_bool(base.get_shader_parameter("flock_enabled")).is_equal(_graphics().current_preset >= 2)
 	var env: Environment = _main.get_node("WorldEnvironment").environment
 	var state := {"dressed": _main._table_biome_presenter.is_dressed()}
 	for key in KEYS:
