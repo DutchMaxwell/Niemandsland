@@ -3201,6 +3201,10 @@ const SANDBOX_GROUPS: Dictionary = {
 ## every biome's shelf under one unprefixed id (the look is plain stone). Keyed by prop_id -> {kind, footprint, label}.
 const SANDBOX_SOLIDS: Dictionary = {
 	"blocker_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3), "label": "Building (6×3)"},
+	"longhouse_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3),
+		"label": "Slab-roof storehouse (6×3)", "look": "house_b"},
+	"outcrop_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3),
+		"label": "Heather outcrop (6×3)", "look": "rock_c"},
 }
 
 ## Biome prefixes a sandbox FOREST or HAZARD field can carry, encoded INTO its prop_id (e.g.
