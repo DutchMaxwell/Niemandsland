@@ -16,6 +16,7 @@ func test_the_borderland_theme_loads_as_the_approved_table() -> void:
 	assert_bool(t.fits(Vector2(6, 4))).is_true()
 	assert_bool(t.fits(Vector2(4, 4))).is_false()
 	assert_int(t.pieces.size()).is_equal(14)
+	assert_int(t.paths.size()).is_equal(3)   # worn paths through the gaps (D14: a table setting)
 	for p: Dictionary in t.pieces:
 		var id: String = p["prop_id"]
 		var known: bool = ObjectManager.SANDBOX_SOLIDS.has(id) or ObjectManager.SANDBOX_RUINS.has(id) \

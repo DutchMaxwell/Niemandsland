@@ -149,7 +149,7 @@ static func _sample_polyline(points: PackedVector2Array, step_m: float) -> Packe
 ## `max_step_in` is the single biggest |Δy| step seen (free or not) — climb_blocks' own
 ## >3" impassable check reads it. Returns {"climb_in": float, "max_step_in": float} in
 ## inches. Pure; 0/0 for fewer than 2 points.
-static func climb_report(points: PackedVector2Array, surface_fn: Callable) -> Dictionary:
+static func climb_report(points: PackedVector2Array, surface_fn: Callable, skirmish: bool = false) -> Dictionary:
 	var out := {"climb_in": 0.0, "max_step_in": 0.0}
 	if points.size() < 2:
 		return out
@@ -158,6 +158,8 @@ static func climb_report(points: PackedVector2Array, surface_fn: Callable) -> Di
 	for i in range(1, samples.size()):
 		var y: float = surface_fn.call(samples[i])
 		var step_in: float = absf(y - prev_y) / INCHES_TO_METERS
+		if skirmish and y < prev_y and step_in <= 6.00001:
+			step_in = 0.0  # GFF p.14 / AoFS p.15: regular drops or jumps, resolved at drop.
 		out["max_step_in"] = maxf(out["max_step_in"], step_in)
 		if step_in > CLIMB_FREE_IN:
 			out["climb_in"] += step_in
