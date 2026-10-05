@@ -13208,6 +13208,8 @@ func apply_table_theme(theme_id: String) -> bool:
 		"mood_get": func() -> String: return str(atmosphere_controller.get_current_atmosphere()),
 		"mood_set": func(m: String) -> void: atmosphere_controller.apply_atmosphere(m),
 		"relayout": _redress_table_layout,
+		"paths_get": func() -> Array: return TablePaths.of(table).paths,   # the worn paths (D14)
+		"paths_set": func(p: Array) -> void: TablePaths.of(table).set_paths(p),
 		"net": network_manager})
 	if action == null:
 		_show_toast("Table themes can only be applied before the game starts")
