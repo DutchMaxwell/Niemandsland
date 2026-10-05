@@ -13,6 +13,8 @@ enum QualityPreset {
 }
 
 var current_preset: QualityPreset = QualityPreset.MEDIUM
+var table_frame_style: int = 0  # Today's look / Walnut / Oak / Ivory.
+var _frame_materials: Dictionary = {}  # Two shared grain orientations, independent of table size.
 
 ## Midtone RGB curve, saturation, AgX contrast, highlight glow. Black/white stay neutral.
 const BIOME_GRADES := {
@@ -318,6 +320,27 @@ func apply_preset(preset: QualityPreset) -> void:
 	settings_applied.emit(settings["name"])
 
 
+## Finish the existing frame boxes; cheap tiers keep their original material.
+func table_frame_material(original: Material, along_z: bool) -> Material:
+	if current_preset < QualityPreset.MEDIUM or table_frame_style == 0:
+		return original
+	if not _frame_materials.has(along_z):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/table_frame.gdshader")
+		mat.set_shader_parameter("along_z", along_z)
+		_frame_materials[along_z] = mat
+	_frame_materials[along_z].set_shader_parameter("frame_strength", table_frame_style - 1)
+	return _frame_materials[along_z]
+
+
+func set_table_frame_style(style: int) -> void:
+	table_frame_style = clampi(style, 0, 3)
+	var table := get_node_or_null("/root/Main/Table")
+	if table != null:
+		table._apply_frame_finish()
+	save_settings()
+
+
 ## Apply rendering settings to project
 func apply_rendering_settings(settings: Dictionary) -> void:
 	# MSAA
@@ -429,6 +452,7 @@ func get_current_preset_name() -> String:
 ## Save settings to config file
 func save_settings() -> void:
 	var config = ConfigFile.new()
+	config.set_value("graphics", "table_frame_style", table_frame_style)
 	config.set_value("graphics", "preset", current_preset)
 	config.set_value("graphics", "ui_scale", ui_scale)
 	config.set_value("graphics", "reduce_motion", reduce_motion)
@@ -457,6 +481,7 @@ func load_settings() -> void:
 		return
 
 	current_preset = config.get_value("graphics", "preset", QualityPreset.MEDIUM)
+	table_frame_style = clampi(int(config.get_value("graphics", "table_frame_style", 0)), 0, 3)
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
 	fullscreen = config.get_value("graphics", "fullscreen", true)

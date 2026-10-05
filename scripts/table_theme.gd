@@ -62,6 +62,7 @@ func apply(om: ObjectManager, hooks: Dictionary) -> ThemeAction:
 			if action.net_live():
 				hooks["net"].broadcast_rotation(int(node.get_meta("network_id")), node.rotation.y)
 			action.spawned.append(node)
+			action._placed.append([node.global_position, node.rotation.y])
 	action.before = [hooks["biome_get"].call(), hooks["mood_get"].call(),
 		hooks["paths_get"].call() if hooks.has("paths_get") else []]
 	action.after = [biome, mood, paths]
@@ -78,6 +79,8 @@ class ThemeAction extends UndoManager.UndoableAction:
 	var before: Array = []   # [biome, mood]
 	var after: Array = []
 	var hooks: Dictionary = {}
+	var applied := false
+	var _placed: Array = []   # [position, yaw] of each spawned piece as laid out
 
 	func undo() -> void:
 		_swap(before, false)
@@ -85,15 +88,32 @@ class ThemeAction extends UndoManager.UndoableAction:
 	func redo() -> void:
 		_swap(after, true)
 
+	## The table still shows this theme exactly as laid out: applied, every piece live and unmoved, and no other live
+	## free piece (D15 a: a second click there is a no-op instead of 14 more hidden pieces).
+	func is_current(om: ObjectManager) -> bool:
+		if not applied:
+			return false
+		var live := ObjectManager.sandbox_pieces(om.get_tree()).filter(func(n: Node) -> bool:
+			return not bool(n.get_meta("deleted", false)))
+		if live.size() != spawned.size():
+			return false
+		for i in spawned.size():
+			var n := spawned[i]
+			if not is_instance_valid(n) or not live.has(n) or not n.global_position.is_equal_approx(_placed[i][0]) \
+					or not is_equal_approx(n.rotation.y, _placed[i][1]):
+				return false
+		return true
+
 	func net_live() -> bool:
 		var net: Node = hooks.get("net")
 		return net != null and net.is_multiplayer_active()
 
-	func _swap(to: Array, applied: bool) -> void:
+	func _swap(to: Array, on: bool) -> void:
+		applied = on
 		for n in replaced:
-			_hide(n, applied)
+			_hide(n, on)
 		for n in spawned:
-			_hide(n, not applied)
+			_hide(n, not on)
 		hooks["biome_set"].call(to[0])
 		var settings := {"biome": to[0]}
 		if hooks.has("paths_set"):   # the table's worn paths (D14), saved with the table
