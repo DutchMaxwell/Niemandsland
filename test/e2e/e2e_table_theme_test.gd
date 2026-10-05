@@ -37,9 +37,12 @@ func test_the_theme_lays_out_and_one_undo_takes_it_back() -> void:
 	assert_bool(_main.apply_table_theme("ruined_borderland")).is_true()
 	assert_int(_live()).is_equal(14)
 	assert_str(_main.table.biome).is_equal("temperate_grassland")
+	assert_int(TablePaths.of(_main.table).paths.size()).is_equal(3)   # the worn paths (D14)
+	assert_int(TablePaths.of(_main.table).get_child_count()).is_greater(0)
 	_main.undo_manager.undo()
 	assert_int(_live()).is_equal(0)
 	assert_str(_main.table.biome).is_equal(biome_before)
+	assert_int(TablePaths.of(_main.table).paths.size()).is_equal(0)   # the table had none before
 
 
 func test_refused_on_painted_grid_terrain_on_another_size_and_in_play() -> void:
