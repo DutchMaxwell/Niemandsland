@@ -50,3 +50,21 @@ func test_the_dressing_shows_on_grassland_only() -> void:
 	assert_bool(d.visible).is_false()
 	_table.biome_changed.emit("temperate_grassland")
 	assert_bool(d.visible).is_true()
+
+
+## Plan gate S6: Low and Performance keep the plain battlemap table (TableBiomePresenter dresses Medium and up only),
+## so the wall-foot dressing and scatter switch off there and come back with the preset.
+func test_low_and_performance_switch_the_foot_dressing_and_scatter_off() -> void:
+	var graphics := get_node("/root/GraphicsSettings")
+	var was: int = graphics.current_preset
+	var solid: SandboxSolidProp = auto_free(SandboxSolidProp.new())
+	solid.configure("blocker_6x3", 3, Vector2(6, 3))
+	add_child(solid)
+	var parts: Array = [_dressing(solid)] + solid.find_children("FootScatter", "Node3D", false, false)
+	assert_int(parts.size()).is_equal(2)
+	for preset: int in [1, 0, 2]:   # LOW, PERFORMANCE, MEDIUM (GraphicsSettings.QualityPreset)
+		graphics.current_preset = preset
+		graphics.settings_applied.emit("probe")
+		for p: Node3D in parts:
+			assert_bool(p.visible).override_failure_message("%s at preset %d" % [p.name, preset]).is_equal(preset >= 2)
+	graphics.current_preset = was
