@@ -193,6 +193,8 @@ signal marker_pick_refused
 
 # Signal to notify terrain_overlay of objectives changes
 signal objectives_changed(objectives: Array)
+## One-click table theme (S5, maintainer d7b: an entry right under "Auto-Generate Layout"); main lays it out.
+signal theme_requested(theme_id: String)
 
 # Signal to notify terrain_overlay of deployment changes
 signal deployment_type_changed(type: int)
@@ -250,6 +252,7 @@ func _ready() -> void:
 		symmetry_check.toggled.connect(_on_symmetry_toggled)
 	if autogen_button:
 		autogen_button.pressed.connect(_on_autogen_pressed)
+		_setup_theme_entry()
 	if deployment_check:
 		deployment_check.toggled.connect(_on_deployment_toggled)
 	# File dialogs are Windows (they do not inherit this root's theme): give them the house look too
@@ -378,6 +381,7 @@ func _setup_tabs() -> void:
 	into.call(gelaende, left_panel.get_node_or_null("RotationSlider"))
 	into.call(gelaende, left_panel.get_node_or_null("SymmetryCheck"))
 	into.call(gelaende, left_panel.get_node_or_null("AutoGenButton"))
+	into.call(gelaende, left_panel.get_node_or_null("ThemeBorderlandBtn"))   # the one-click theme, right under it
 	into.call(gelaende, left_panel.get_node_or_null("StatsLabel"))
 	into.call(gelaende, left_panel.get_node_or_null("RecommendationsLabel"))
 	_build_stats_card(gelaende)
@@ -1161,6 +1165,30 @@ func _clear_terrain() -> void:
 	_selected_piece_id = -1
 	_rebuild_derived()
 	_update_modular_status()
+
+
+const THEME_ID := "ruined_borderland"
+var _theme_entry: Button = null
+
+
+func _setup_theme_entry() -> void:
+	_theme_entry = Button.new()
+	_theme_entry.name = "ThemeBorderlandBtn"
+	_theme_entry.text = "Ruined Borderland"
+	_theme_entry.custom_minimum_size = Vector2(0, HouseStyle.H_ACTION)
+	_theme_entry.pressed.connect(func() -> void: theme_requested.emit(THEME_ID))
+	autogen_button.add_sibling(_theme_entry)
+	visibility_changed.connect(_refresh_theme_entry)
+	_refresh_theme_entry()
+
+
+## Greyed out on a table of another size (lead D11); main refuses there too.
+func _refresh_theme_entry() -> void:
+	var theme := TableTheme.load_theme(THEME_ID)
+	var fits := theme != null and theme.fits(table_size_feet)
+	_theme_entry.disabled = not fits
+	_theme_entry.tooltip_text = "One click: grassland, evening light and a whole table - Ctrl+Z takes it back" \
+		if fits else "Needs a %d x %d ft table" % [int(theme.table_feet.x), int(theme.table_feet.y)] if theme else ""
 
 
 func _on_autogen_pressed() -> void:
