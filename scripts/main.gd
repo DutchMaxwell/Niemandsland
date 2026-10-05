@@ -414,6 +414,7 @@ var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat 
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
 var battlefield_stains: BattlefieldStains = null
+var model_auras: ModelAuras = null  # VFX: ambient hero auras bound to model keys (presentation; off behind the effects switch)
 
 # Deployment Zones UI (visibility toggle only - editing is in Map Tool;
 # unit-placement compliance is verified manually by the players)
@@ -18383,6 +18384,10 @@ func _init_radial_menu() -> void:
 	battlefield_stains = BattlefieldStains.new()
 	battlefield_stains.name = "BattlefieldStains"
 	add_child(battlefield_stains)
+	# Hero auras (data: assets/vfx/model_auras.json): each matching miniature gets its aura on the next scan.
+	model_auras = ModelAuras.new()
+	model_auras.name = "ModelAuras"
+	add_child(model_auras)
 	radial_menu_controller.model_deleted.connect(_on_model_removed_stain)
 	radial_menu_controller.unit_deleted.connect(_on_unit_removed_stain)
 
