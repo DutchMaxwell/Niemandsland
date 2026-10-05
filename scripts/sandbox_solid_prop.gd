@@ -36,6 +36,15 @@ var prop_kind: int = 0
 var footprint_inches: Vector2 = Vector2.ZERO
 
 
+## Show a detailed model (3.5) instead of the bundled look. The model's origin is the footprint centre on the ground,
+## like the prop's; the collider stays the rule box.
+func use_model(model: Node3D) -> void:
+	for child in get_children():
+		if child is MeshInstance3D:
+			child.visible = false
+	add_child(model)
+
+
 ## Call once right after `new()`, before adding to the tree / positioning.
 func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_look: String = "plain") -> void:
 	prop_id = p_prop_id
