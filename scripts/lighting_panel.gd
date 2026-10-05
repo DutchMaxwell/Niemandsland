@@ -279,6 +279,20 @@ func _build_ui() -> void:
 			rf.enabled = on)
 	vbox.add_child(floats_cb)
 
+	# Combat effects (result marks, shots, falls, spells, hero auras): one switch for all of them; an effect that is
+	# not in the game yet is skipped.
+	var vfx_cb := CheckButton.new()
+	vfx_cb.text = "Combat Effects (preview)"
+	vfx_cb.button_pressed = GraphicsSettings.show_combat_effects
+	vfx_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.show_combat_effects = on
+		GraphicsSettings.save_settings()
+		for fx_name in ["ResultPips", "VolleyCue", "SpellSeal", "ShotShow", "SpellShow", "CasualtyShow", "ModelAuras"]:
+			var fx := get_node_or_null("/root/Main/" + fx_name)
+			if fx != null:
+				fx.enabled = on)
+	vbox.add_child(vfx_cb)
+
 	# Tilt-Shift (cinematic depth of field): sharp while zoomed out, softly blurred in
 	# the foreground/background as the camera zooms towards the models. On by default;
 	# persisted; CameraController applies it live.

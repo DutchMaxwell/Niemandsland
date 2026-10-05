@@ -73,6 +73,21 @@ func test_a_casualty_gets_a_blood_marker_not_an_x() -> void:
 	assert_bool(ResultPipsScript.SHADER.contains("abs(p.x - p.y)")).override_failure_message("the X is gone").is_false()
 
 
+## With the Gore setting (#1513): Off makes the casualty marker neutral, Extra a bigger splat, Normal stays blood.
+func test_the_blood_marker_follows_the_gore_setting() -> void:
+	var before: int = GraphicsSettings.gore_level
+	var looks: Array = []
+	for gore in [0, 1, 2]:
+		GraphicsSettings.gore_level = gore
+		var pip: MeshInstance3D = _pips().mark(ResultPipsScript.Kind.KILL, Vector3.ZERO, 1)
+		looks.append([(pip.material_override as ShaderMaterial).get_shader_parameter("tint"), (pip.mesh as QuadMesh).size.y])
+	GraphicsSettings.gore_level = before
+	var off: Color = looks[0][0]
+	assert_float(absf(off.r - off.g) + absf(off.g - off.b)).override_failure_message("Gore Off: a neutral marker").is_less(0.15)
+	assert_bool((looks[1][0] as Color).r > 4.0 * (looks[1][0] as Color).g).override_failure_message("Normal: blood").is_true()
+	assert_float(float(looks[2][1])).override_failure_message("Extra: a bigger splat").is_greater(float(looks[1][1]))
+
+
 func test_off_or_zero_spawns_nothing() -> void:
 	var p = _pips()
 	assert_object(p.mark(ResultPipsScript.Kind.WOUND, Vector3.ZERO, 0)).is_null()
