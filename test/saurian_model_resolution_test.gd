@@ -52,6 +52,17 @@ func test_deinonychus_javelin_replaces_the_lance() -> void:
 		.is_equal(["Deinonychus Riders#javelin", "Deinonychus Riders#javelin"])
 
 
+func test_saurian_veteran_on_the_tyrannosaur_resolves_the_composed_variant() -> void:
+	var manager := _manager(["saurians/saurian veteran#heavy+tyrannosaur"])
+	var army := _army([{"armyId": SAURIAN_ARMY, "name": "Saurian Veteran", "size": 1, "bases": {"round": "120x92"},
+		"loadout": [
+			{"type": "ArmyBookWeapon", "name": "Heavy Hand Weapon", "attacks": 3, "count": 1},
+			{"type": "ArmyBookItem", "name": "Tyrannosaur", "count": 1,
+				"content": [{"type": "ArmyBookRule", "name": "Tough", "rating": 12}]}]}])
+	assert_array(manager._unit_model_variant_names(army.units[0], "saurians")) \
+		.is_equal(["Saurian Veteran#heavy+tyrannosaur"])
+
+
 func test_saurian_upgrade_words_map_to_the_plan_slugs() -> void:
 	var lib: ModelLibrary = auto_free(ModelLibrary.new())
 	lib._load_label_slug_map()
@@ -61,7 +72,7 @@ func test_saurian_upgrade_words_map_to_the_plan_slugs() -> void:
 		"Dread Behemoth Fighter": "behemoth", "Dread Behemoth Carrier": "carrier", "Dread Pterodactyl": "pterodactyl",
 		"Champion Javelin": "javelin", "Champion Blowpipe": "blowpipe", "Champion Fire Bolas": "bolas",
 		"Deinonychus": "deinonychus", "Pterodactyl": "pterodactyl", "Ripjawdactyl": "ripjawdactyl",
-		"Ancient Palanquin": "palanquin", "Starseer Palanquin": "palanquin"}
+		"Ancient Palanquin": "palanquin", "Starseer Palanquin": "palanquin", "Tyrannosaur": "tyrannosaur"}
 	for word in expected:
 		assert_str(lib.variant_slug([word], "saurians")).is_equal(expected[word])
 	# Scoped: another faction does not read the Saurian words.

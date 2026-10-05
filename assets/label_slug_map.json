@@ -59,7 +59,8 @@
     "mace tail": "macetail",
     "dread behemoth fighter": "behemoth",
     "dread behemoth carrier": "carrier",
-    "dread pterodactyl": "pterodactyl"
+    "dread pterodactyl": "pterodactyl",
+    "tyrannosaur": "tyrannosaur"
   },
   "_faction_ratmen": {
     "pet giant rat": "petrat",
