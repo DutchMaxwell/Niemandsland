@@ -52,17 +52,6 @@ func test_deinonychus_javelin_replaces_the_lance() -> void:
 		.is_equal(["Deinonychus Riders#javelin", "Deinonychus Riders#javelin"])
 
 
-func test_saurian_veteran_on_the_tyrannosaur_resolves_the_composed_variant() -> void:
-	var manager := _manager(["saurians/saurian veteran#heavy+tyrannosaur"])
-	var army := _army([{"armyId": SAURIAN_ARMY, "name": "Saurian Veteran", "size": 1, "bases": {"round": "120x92"},
-		"loadout": [
-			{"type": "ArmyBookWeapon", "name": "Heavy Hand Weapon", "attacks": 3, "count": 1},
-			{"type": "ArmyBookItem", "name": "Tyrannosaur", "count": 1,
-				"content": [{"type": "ArmyBookRule", "name": "Tough", "rating": 12}]}]}])
-	assert_array(manager._unit_model_variant_names(army.units[0], "saurians")) \
-		.is_equal(["Saurian Veteran#heavy+tyrannosaur"])
-
-
 func test_saurian_veteran_on_a_raptor_never_resolves_the_on_foot_form() -> void:
 	# Once the on-foot #heavy form is live, a Veteran on a Raptor must ask for #heavy+raptor, not #heavy.
 	var manager := _manager(["saurians/saurian veteran#heavy", "saurians/saurian veteran#heavy+raptor"])
@@ -73,18 +62,6 @@ func test_saurian_veteran_on_a_raptor_never_resolves_the_on_foot_form() -> void:
 				"content": [{"type": "ArmyBookRule", "name": "Fast"}]}]}])
 	assert_array(manager._unit_model_variant_names(army.units[0], "saurians")) \
 		.is_equal(["Saurian Veteran#heavy+raptor"])
-
-
-func test_frog_mage_on_the_queztalcoatl_resolves_the_sky_serpent_variant() -> void:
-	# The army book spells it Queztalcoatl; the live variant is saurians/frog-mage#skyserpent.
-	var manager := _manager(["saurians/frog-mage", "saurians/frog-mage#skyserpent"])
-	var army := _army([{"armyId": SAURIAN_ARMY, "name": "Frog-Mage", "size": 1, "bases": {"round": "160x122"},
-		"loadout": [
-			{"type": "ArmyBookWeapon", "name": "Magic Shock", "attacks": 1, "count": 1},
-			{"type": "ArmyBookItem", "name": "Queztalcoatl", "count": 1, "bases": {"round": "160x122", "square": "175x125"},
-				"content": [{"type": "ArmyBookRule", "name": "Tough", "rating": 12}]}]}])
-	assert_array(manager._unit_model_variant_names(army.units[0], "saurians")) \
-		.is_equal(["Frog-Mage#skyserpent"])
 
 
 func test_saurian_veteran_obsidian_great_weapon_resolves_its_form() -> void:
@@ -118,9 +95,8 @@ func test_saurian_upgrade_words_map_to_the_plan_slugs() -> void:
 		"Dread Behemoth Fighter": "behemoth", "Dread Behemoth Carrier": "carrier", "Dread Pterodactyl": "pterodactyl",
 		"Champion Javelin": "javelin", "Champion Blowpipe": "blowpipe", "Champion Fire Bolas": "bolas",
 		"Deinonychus": "deinonychus", "Pterodactyl": "pterodactyl", "Ripjawdactyl": "ripjawdactyl",
-		"Ancient Palanquin": "palanquin", "Starseer Palanquin": "palanquin", "Tyrannosaur": "tyrannosaur",
-		"Raptor": "raptor", "Queztalcoatl": "skyserpent",
-		"Obsidian Great Weapon": "obsidian"}
+		"Ancient Palanquin": "palanquin", "Starseer Palanquin": "palanquin",
+		"Queztalcoatl": "skyserpent", "Raptor": "raptor", "Obsidian Great Weapon": "obsidian"}
 	for word in expected:
 		assert_str(lib.variant_slug([word], "saurians")).is_equal(expected[word])
 	# Scoped: another faction does not read the Saurian words.

@@ -2,7 +2,8 @@ extends GdUnitTestSuite
 ## SpellForms (the spell effects' shapes), step 1: a ribbon is a tapered strip along its path; a ring stays a ring (no
 ## vertex near its centre, so no spoke, centre line or crossbar can ever be drawn — maintainer 05.10.: no religious
 ## symbols); a target ripple is a small annulus, never the whole range disc; anything retired fades and frees itself;
-## all materials share two shaders.
+## all materials share two shaders. Step 2: the ice prisms' placement is a pure function of the seed and scattered (never
+## an evenly spaced radial star); a stream draws one ribbon per strand and frees them; no game RNG anywhere.
 
 const FormsScript = preload("res://scripts/vfx/spell_forms.gd")
 
@@ -50,4 +51,32 @@ func test_a_retired_form_fades_and_frees_itself(timeout := 5000) -> void:
 	await get_tree().create_timer(0.2).timeout
 	assert_float(float((ring.material_override as ShaderMaterial).get_shader_parameter("fade"))).is_less(1.0)
 	await get_tree().create_timer(0.4).timeout
+	assert_int(h.get_child_count()).is_equal(0)
+
+
+func test_ice_prisms_are_seeded_and_scattered_never_a_star() -> void:
+	var plan: Array = FormsScript.crystal_plan(71, 11)
+	assert_array(plan).is_equal(FormsScript.crystal_plan(71, 11))
+	assert_array(plan).is_not_equal(FormsScript.crystal_plan(72, 11))
+	var angles: Array = plan.map(func(t: Transform3D) -> float: return fposmod(atan2(t.origin.z, t.origin.x), TAU))
+	angles.sort()
+	var gaps: Array = []
+	for i in angles.size():
+		gaps.append(fposmod(float(angles[(i + 1) % angles.size()]) - float(angles[i]), TAU))
+	gaps.sort()
+	assert_float(float(gaps[-1]) - float(gaps[0])).override_failure_message("evenly spaced = a star").is_greater(0.2)
+	var h := _host()
+	FormsScript.crystals(h, Vector3.ZERO, 71, 11, true)
+	assert_int((h.get_child(0) as MultiMeshInstance3D).multimesh.instance_count).is_equal(11)
+
+
+func test_a_stream_draws_its_strands_and_frees_them(timeout := 5000) -> void:
+	var h := _host()
+	seed(9)
+	var expected := randi()
+	seed(9)
+	FormsScript.stream(h, Vector3.ZERO, Vector3(0.2, 0.0, 0.1), Color.WHITE, 33, 3)
+	assert_int(randi()).is_equal(expected)
+	assert_int(h.get_child_count()).is_equal(3)
+	await get_tree().create_timer(1.0).timeout
 	assert_int(h.get_child_count()).is_equal(0)

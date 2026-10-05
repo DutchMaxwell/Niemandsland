@@ -2,7 +2,8 @@ class_name SpellForms
 extends RefCounted
 ## Small procedural spell meshes. Distances are metres, angles radians; no textures or game RNG.
 ## Rings and spirals have no spokes, no centre line and no crossbar: nothing here can draw a cross, star or wheel.
-## This step: the two materials, the tapered ribbon, the helix / ring, the target ripple and the fade-out.
+## The two materials, the tapered ribbon, the helix / ring, the target ripple, the fade-out, the braided stream from
+## caster to target and the seeded ice prisms (scattered, never a radial star).
 
 const INK := "shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never, blend_add;
@@ -22,6 +23,7 @@ void fragment() { ALBEDO = tint.rgb; ALPHA = tint.a * fade; }"
 const SEGMENTS := 64
 static var _ink: Shader
 static var _soft: Shader
+static var _crystal: CylinderMesh
 
 
 static func material(tint: Color, solid := false) -> ShaderMaterial:
@@ -100,3 +102,69 @@ static func ripple(host: Node3D, at: Vector3, tint: Color, radius_m := 0.075, in
 		tw.tween_property(ring, "scale", Vector3.ONE * (0.05 if inward else 1.0), 0.55)
 	retire(ring, 0.25, 0.4)
 	return ring
+
+
+## A swept, seeded braid from caster to target; each strand is curved, with a moving head and trailing tail.
+static func stream(host: Node3D, from: Vector3, to: Vector3, tint: Color, s: int, strands := 2) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = s
+	var direction := (to - from).normalized()
+	var side := direction.cross(Vector3.UP).normalized()
+	for strand in strands:
+		var points := PackedVector3Array()
+		var phase := rng.randf_range(0.0, TAU)
+		for i in SEGMENTS + 1:
+			var t := float(i) / SEGMENTS
+			var angle := t * TAU * 1.5 + phase
+			points.append(from.lerp(to, t) + (Vector3.UP * (0.035 + sin(angle) * 0.018)
+				+ side * cos(angle) * 0.018) * sin(PI * t))
+		var trail := ribbon(host, points, 0.003 if strand == 0 else 0.0015, tint)
+		var mat := trail.material_override as ShaderMaterial
+		mat.set_shader_parameter("head", 0.0)
+		var tw := trail.create_tween()
+		tw.tween_property(mat, "shader_parameter/head", 1.05, 0.42)
+		tw.parallel().tween_property(mat, "shader_parameter/tail", 0.95, 0.7).set_delay(0.08)
+		tw.tween_callback(trail.queue_free)
+
+
+## Seeded irregular crystal placement, not an evenly spaced radial mark. Shared by render and tests.
+static func crystal_plan(s: int, count: int) -> Array[Transform3D]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = s
+	var result: Array[Transform3D] = []
+	for i in count:
+		var angle := rng.randf_range(0.0, TAU)
+		var radius := rng.randf_range(0.014, 0.065)
+		var height := rng.randf_range(0.022, 0.065)
+		var basis := Basis.from_euler(Vector3(rng.randf_range(-0.25, 0.25), angle, rng.randf_range(-0.3, 0.3)))
+		result.append(Transform3D(basis.scaled_local(Vector3(0.007, height, 0.009)),
+			Vector3(cos(angle) * radius, height * 0.4, sin(angle) * radius)))
+	return result
+
+
+static func crystals(host: Node3D, at: Vector3, s: int, count: int, still := false) -> void:
+	if _crystal == null:
+		_crystal = CylinderMesh.new()
+		_crystal.top_radius = 0.0
+		_crystal.bottom_radius = 0.65
+		_crystal.height = 1.0
+		_crystal.radial_segments = 5
+		_crystal.rings = 1
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = _crystal
+	mm.instance_count = count
+	var plan := crystal_plan(s, count)
+	for i in count:
+		mm.set_instance_transform(i, plan[i])
+	var ice := MultiMeshInstance3D.new()
+	ice.name = "IcePrisms"
+	ice.multimesh = mm
+	ice.material_override = material(Color(0.48, 0.85, 1.25, 0.9), true)
+	ice.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	host.add_child(ice)
+	ice.global_position = at
+	if not still:
+		ice.scale.y = 0.02
+		ice.create_tween().tween_property(ice, "scale:y", 1.0, 0.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	retire(ice, 0.6, 0.45)
