@@ -340,8 +340,11 @@ func _make_detail_noise(as_normal: bool) -> NoiseTexture2D:
 func _apply_frame_finish(_preset_name: String = "") -> void:
 	for child in get_children():
 		if child is MeshInstance3D and child.has_meta("graphics_frame_original"):
+			var original: Material = child.get_meta("graphics_frame_original")
+			if GraphicsSettings.current_preset >= GraphicsSettings.QualityPreset.MEDIUM:
+				original = child.get_meta("graphics_frame_reference", original)
 			child.material_override = GraphicsSettings.table_frame_material(
-				child.get_meta("graphics_frame_original"), child.get_meta("graphics_frame_axis"))
+				original, child.get_meta("graphics_frame_axis"))
 
 
 func _create_table_border(size_meters: Vector2) -> void:
@@ -408,4 +411,3 @@ func _create_table_border(size_meters: Vector2) -> void:
 
 		wall.position = wall_positions[i]
 		add_child(wall)
-
