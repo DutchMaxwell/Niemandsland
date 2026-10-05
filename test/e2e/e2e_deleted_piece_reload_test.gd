@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
-## A deleted free piece stays out of the rules after a real save and load on scenes/main.tscn (guards #1509 across a
-## reload): the save keeps it hidden, the load restores the "deleted" mark and drops its collision, so its spot reads
-## NONE, no sight volume remains and a model set down there stands on the table. The table theme hides the pieces it
-## replaces the same way, so a saved themed table depends on this too.
+## A deleted free piece stays out of the rules after a load on scenes/main.tscn (guards #1509 across a reload). A file
+## save leaves deleted free pieces out since lead D15 c, so this writes a save the old way, with the hidden piece in it:
+## the load restores the "deleted" mark and drops its collision, so its spot reads NONE, no sight volume remains and a
+## model set down there stands on the table.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const SAVE := "user://e2e_deleted_piece_reload.nml"
@@ -35,7 +35,7 @@ func test_a_deleted_piece_stays_out_of_the_rules_after_a_reload() -> void:
 		AT, false, 7701)
 	await _runner.simulate_frames(2)
 	_main.radial_menu_controller.delete_objects([solid])
-	assert_int(_main.save_manager.save_game(SAVE)).is_equal(OK)
+	assert_int(_main.save_manager.save_state_to_file(_main.save_manager.serialize_game_state(), SAVE)).is_equal(OK)
 	assert_int(await _main.save_manager.load_game(SAVE)).is_equal(OK)
 	await _runner.simulate_frames(6)
 	assert_int(_main.terrain_overlay.get_terrain_at_world_position(AT)).is_equal(TerrainRules.TerrainType.NONE)
