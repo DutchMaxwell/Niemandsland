@@ -6,13 +6,14 @@
 > `scripts/solo/` (M1 skeleton, M2 combat brain, the headless self-play sim, **P3** — the sim's pure
 > modules wired into the real game — and **P2** — the in-game auto-game: alternating activation,
 > objective scoring, the 4-round match). NACHTMAHR is an in-game **AI Opponent** you can play a full
-> game against today. On Linux and Windows release builds it plays with a search planner and a trained
+> game against today. At the strongest grade it plays with a search planner and a trained
 > neural network (value net, the Erlkönig model) on the Rust rules core when both load, else with the
-> GDScript decision tree; macOS always uses the tree. This document is retained as the design record;
+> GDScript decision tree. Four selectable grades are on main. macOS can include the universal core,
+> with a no-core CI fallback export. This document is retained as the design record;
 > the sections below describe how the shipped system was built, so some milestone framing ("to
 > merge-ready") is historical — where later work changed a detail (the unit pick, the round opener, the
 > result texts, Fast AI), the code and the coverage matrix are authoritative.
-> See [`ROADMAP.md`](ROADMAP.md) for what remains (rules coverage and core parity, difficulty grades),
+> See [`ROADMAP.md`](ROADMAP.md) for what remains (rules coverage and core parity),
 > [`SOLO_AI_RULES_COVERAGE.md`](SOLO_AI_RULES_COVERAGE.md) for the rule-by-rule coverage matrix, and
 > [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the system map.
 
@@ -371,7 +372,8 @@ layer so a watching MP guest still sees the AI's moves. Layers:
   coherency; regiment block-move + auto-face already exist and should be reused.
 - **Determinism/replay** — seed all AI randomness so a solo game is reproducible (helps tests).
 - **Difficulty** — only Challenge Bonus is official (not implemented); homebrew knobs live in
-  `SoloDifficulty`, and exactly one grade ships: NACHTMAHR.
+  `SoloDifficulty`. Four grades are selectable on main through `SoloGrade`: Dämmerung,
+  Zwielicht, Finsternis and Albtraum (default); legacy preset aliases still resolve to the ceiling.
 - **Testing** — perception + trees + utility are pure/headless-testable (gdUnit); the turn
   engine has headless harnesses (`tools/solo_field_test.gd`, `tools/arena_match.gd`).
 

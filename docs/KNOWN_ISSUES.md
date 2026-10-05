@@ -10,13 +10,14 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **No rules automation between two humans.** In a local or multiplayer game against another
   person the simulator **shows, it does not decide.** It presents ranges, coherency, movement
   bands and unit state, but it does **not** resolve turns, shooting, melee or morale, and
-  **terrain has no gameplay effect** there (it's visual + line-of-sight only) — though since
-  `0.3.12` the measure tool's own LOS verdict is volumetric and height-aware in every mode. You
+  terrain contributes to line of sight, placement and movement aids, including free shelf pieces,
+  while human-vs-human combat and terrain damage remain manual. You
   play the game; the table assists.
 - **Solo against NACHTMAHR is the exception.** When an army is AI-controlled the game does
   resolve activations, dice, wounds, morale, terrain effects and hundreds of special rules for
-  both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: one
-  difficulty (full strength), co-op against the AI in multiplayer is a first version, the UI is
+  both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: four
+  selectable difficulties are on main for the next release; co-op against the AI in multiplayer is
+  a first version, the UI is
   English (the privacy & data screens also come in German), and a small residue
   of special rules is still manual — the battle log names any rule it applies (or asks for
   manual handling).
@@ -57,9 +58,11 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **macOS is ad-hoc signed but not notarized** (no Apple Developer account): first launch needs
   **right-click → Open**, or the one-time `xattr -dr com.apple.quarantine` fallback — see the
   README's macOS note. The in-browser (web) build is parked (post-Alpha).
-- **macOS plays without the rules core.** The Windows and Linux builds carry the Rust rules core
-  that runs the trained network; the macOS build has no core, so NACHTMAHR plays its decision-tree
-  opponent there, not the stronger Erlkönig model.
+- **macOS core availability depends on the build.** The macOS build can include a universal Apple Silicon/Intel rules core; if its CI build or proof
+  fails, the release workflow can still export a build without it. The battle log identifies the
+  engine actually running.
+  The difficulty picker still says "on macOS still without Erlkönig" even in a build with the core;
+  use the start-of-game engine log to check.
 - **Windows: an in-game update from 0.3.12.0 restarts the game once.** The 0.3.12.0 updater
   replaces only `Niemandsland.exe`; on its first start 0.3.13.0 copies the missing rules-core file
   (`nml_core_godot.dll`) from the downloaded update next to the game and restarts once by itself.

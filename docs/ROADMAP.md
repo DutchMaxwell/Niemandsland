@@ -29,9 +29,10 @@ planned and where ideas go. For what already works see
   on wide tables without a frame-cost regression. _M_
 - **Elevation — Phase B/C/D (NML-972).** Heights are rules, not scenery: Phase B1 (climbing pays its
   inches, melee reaches only 4" up/down, coherency's 3" allowance is real elevation, the player can
-  pick a ruin floor) shipped; Phase B2 makes both AI planners climb pieces up to 3", measured on the
-  yardstick; Phase C ports skirmish jump/fall (GFF p.14/p.55); Phase D lets the AI value elevated
-  firing spots by sight gain only. _L_
+  pick a ruin floor) is on main; Phase B2 now lets both AI movement planners climb container
+  ledges up to 3" in fresh games. AI coherency still uses a stricter 1" horizontal chain across
+  levels. Phase C has pure skirmish jump/fall helpers, but no live drop resolver yet; Phase D
+  remains planned: value elevated firing spots by sight gain only. _L_
 - **NACHTMAHR difficulty ladder (NML-1018) — on `main`, unreleased.** Four selectable grades
   (Dämmerung, Zwielicht, Finsternis, Albtraum) with a picker in the solo panel; Albtraum, the default, is
   the Erlkönig-driven opponent ([#1126](../../../pull/1126), [#1127](../../../pull/1127), 2026-09-26).
@@ -56,7 +57,7 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   V2** (→ R2; this also resolves the `saurians` ↔ `saurian_starhost` faction-folder mismatch). The
   **Ratmen** ship in `0.3.13.0-alpha` ([#1076](../../../pull/1076)).
   Live Regiments import vs a real `aofr` list is **verified** (2026-06-29). **Regiments handling polish — SHIPPED:** auto-face-on-drop
-  facing fix (P0); frontage cycle (Shift+F), axis-locked drag (Shift+drag), pivot snap (Ctrl+R),
+  facing fix (P0); frontage cycle (B), axis-locked drag (Shift+drag), pivot snap (Ctrl+R),
   mouse-driven rotation (R-hold, AoF:R p.8 "Pivoting"); pooled-wound counter with back-rank casualty
   removal + standard WoundsDialog (p.9, Tough(1) pooled / Tough(X>1) classic), regiment radial menu,
   45° arc quadrants on the selected unit (p.5), live rotation-degrees readout, unit-card for trays.

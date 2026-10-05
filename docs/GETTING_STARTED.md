@@ -49,7 +49,7 @@ The chapter earns a check mark only after the last step; you can replay it or le
 
 ### Start a game
 
-From the start menu, choose **Prepare a new table**. Pick a biome (six to choose from) and the table size — Standard 6×4 ft (default), Square 4×4 ft or Custom (12–240 in) — then press **Create table**. The size is fixed once the table exists. Terrain comes after that: open **Map Layout…** in the left panel (☰) to lay it out, or generate one automatically.
+From the start menu, choose **Prepare a new table**. Pick a biome (six to choose from) and the table size — Standard 6×4 ft (default), Square 4×4 ft or Custom (12–240 in) — then press **Create table**. Map Layout can change the table size; it reports cleared terrain and objectives, and Ctrl+Z restores the previous layout. Terrain comes after that: open **Map Layout…** in the left panel (☰) to lay it out, or generate one automatically.
 
 The table opens in the **Deployment** phase — place your army, then press **Start Game** (left panel) to begin play. In multiplayer both players signal ready and the host starts once both are. During play, dragging a model paints a measured **move trail** (`T` hides / `Shift`+`T` clears); the *Enforce Movement Limit* setting (on by default) stops the drag at the model's Advance/Rush-Charge band.
 
@@ -63,7 +63,7 @@ To play a full game against the built-in AI opponent:
 2. Follow the **guided deployment**: a roll-off decides who picks a table edge and deploys first, then both sides place units alternately with explicit hand-over clicks (Scout, Ambush and Infiltrate reserves are handled for you).
 3. On **Start Game**, play alternates unit by unit. You act through the **radial menu** — **Shoot**, **Fight**, **Cast**, or one whole activation at once with **Charge**, **Advance & Shoot** and **Rush** (pick the verb, click the enemy — the engine moves the unit along a legal path and rolls the attack, saves and morale for you) — with real dice in the tray for both sides; NACHTMAHR takes its own activations, and **every applied rule writes a battle-log line** so you can follow (and audit) each decision. The remaining uncovered special rules are a small residue; the battle log names any rule it applies (or asks for manual handling) per unit, so you can apply the rest by hand.
 
-NACHTMAHR is a game AI (no LLM) that runs entirely offline and never cheats. On Windows and Linux it plays with its new AI model **Erlkönig**, a trained neural network (value net) that ships with the game; without the Rust rules core (always on macOS) it plays by the official OPR solo decision trees. One difficulty ships (full strength); see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
+NACHTMAHR is a game AI (no LLM) that runs entirely offline and never cheats. On main, ready for the next release, the solo panel offers **Dämmerung, Zwielicht, Finsternis and Albtraum** and remembers your choice. Albtraum is the default: it uses **Erlkönig**, the bundled neural network, when the Rust rules core and model load; otherwise it uses the decision tree. The other three grades use the decision tree. The macOS build can include a universal Apple Silicon/Intel rules core; if its CI build or proof fails, the release workflow can still export a build without it. The battle log identifies the engine actually running. See [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
 
 ### Camera
 

@@ -748,9 +748,9 @@ a symmetric board, deploys both sides, runs the graded match).
 
 > **Historical design record.** This section documents the knob machinery in full — four preset
 > knob-vectors (Rekrut / Veteran / Kriegsherr / Albtraum) built for a graded arena. The shipped
-> game exposes exactly **one** difficulty; every one of those grade names resolves to the same
-> single strength, NACHTMAHR, today. Kept as a record of how the knobs work, for whenever
-> selectable grades ship.
+> game on main now offers Dämmerung, Zwielicht, Finsternis and Albtraum through `SoloGrade`.
+> The old preset names below still resolve to the ceiling through `SoloDifficulty`; the three
+> new lower-grade keys have distinct presets. Albtraum selects the neural search when available.
 
 All in `[0,1]` unless noted; every seeded draw is a PURE hash of explicit integer parts (base seed · acting
 side · monotonic activation index · unit-name hash · per-knob salt) — no shared RNG, no `Math.random`-style
@@ -791,7 +791,7 @@ preset knob-vectors:
 
 **Per-side grading** (the maintainer's graded-arena requirement) is set with a difficulty per slot
 (`SoloController.set_difficulty(slot, …)`, indexed by the acting side, flips with `ai_slot`), e.g. `NML_AI_P1=
-nachtmahr NML_AI_P2=nachtmahr` (the only grade name the shipped game resolves today). Tests: `solo_difficulty_test.gd` (10) + `solo_arena_test.gd` (6), incl. the
+nachtmahr NML_AI_P2=nachtmahr` (legacy ceiling presets; the new lower-grade keys are also accepted). Tests: `solo_difficulty_test.gd` (10) + `solo_arena_test.gd` (6), incl. the
 headless both-AI game-completion driver.
 
 ## Wave 5 — rules-registry wiring + top-breadth primitives (real game, 2026-07-13)
@@ -913,7 +913,7 @@ Def 2-3+ and regen-bypass) against the CONCRETE defender; unknown facets are con
 - Tokens are SPENT at plan time (the official cost is paid on the attempt, before the roll);
   MP-synced via the existing `broadcast_unit_casts` seam.
 - Difficulty ladder (same axis as all knobs, never illegal — historical design record, see the
-  note under **AI ARENA** above; every grade name resolves to NACHTMAHR today): Rekrut/default =
+  note under **AI ARENA** above; these legacy grade aliases still resolve to the ceiling): Rekrut/default =
   the official D3+X first-valid; Veteran = D3+X but cycles past 0-EV spells; Kriegsherr/Albtraum =
   EV-best castable spell (the same die-replacement licence as the targeting tie-break) + the
   marginal boost spend (`SoloDifficulty.spend_boosts`, the pre-built gate).
@@ -1038,9 +1038,9 @@ carry `primitive: "Ambush"` plus their own params — `beacon_in`, `arrive_from_
    (`ambush_return_round`, honoured by `may_arrive_this_round` — that round, not earlier, not later). The
    "all models" quantifier includes joined heroes: a hero without the rule locks the unit out. AI heuristic
    (documented, deliberately simple, in the decision log): leave when under pressure — Shaken, or an enemy
-   inside the 12″ charge band — and never off a marker within 3″. Carried objective markers are a no-op in
-   our missions (only static, round-end-seized markers exist); the TODO for carry-the-relic missions sits on
-   `ambush_redeploy_withdraw`. A transport takes its cargo along on the existing reserve machinery.
+   inside the 12″ charge band — and never off a marker within 3″. Carry missions now exist, but
+   `ambush_redeploy_withdraw` still has no explicit carried-marker drop. That interaction remains
+   an open gap; the general round-end carry referee is not a withdrawal-time drop. A transport takes its cargo along on the existing reserve machinery.
 
 **Prefix lesson, again.** `GameUnit.has_special_rule` matched by PREFIX (since fixed: exact name or its
 parenthesised form, NML-1112), so *"Ambush Beacon"* and

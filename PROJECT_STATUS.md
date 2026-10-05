@@ -10,9 +10,9 @@ the full change history is in `git log`.
 
 **Solo mode — a full game against NACHTMAHR** — mark any imported army as AI-controlled
 (checkbox at import, or later in the solo panel), or press **AI Opponent** and let
-NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). On Linux and Windows
-builds NACHTMAHR searches its moves with a **trained neural network (value net)** that ships with
-the game, inside the bundled Rust rules core; on macOS, or when that core does not load, it plays
+NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). At the strongest difficulty,
+NACHTMAHR searches its moves with a **trained neural network (value net)** that ships with
+the game, inside the Rust rules core; when the core or model does not load, it plays
 the **rule-based decision tree**. No language model, and **every decision is made offline**: the same inputs produce the same decisions, and
 nothing about a turn leaves the machine. One qualification, because "no network call" was too broad:
 if you let NACHTMAHR bring **its own** list, that list is fetched from the asset CDN the first time
@@ -20,8 +20,10 @@ and cached (see below), so the very first use of **AI Opponent** needs a connect
 imported armies, and every decision NACHTMAHR makes, need none.
 **A four-grade difficulty ladder is on `main`** (NML-1018, #1126 and
 #1127, merged 2026-09-26, not yet in a tagged release; source: git log): Dämmerung, Zwielicht and Finsternis play the decision tree; **Albtraum**, the default,
-plays with Erlkönig, NACHTMAHR's stronger model, where the core and its model load (on macOS it plays the
-tree's ceiling). The picker sits in the solo panel and the choice is remembered
+plays with Erlkönig, NACHTMAHR's stronger model, where the core and its model load (otherwise it plays the
+tree's ceiling). The macOS build can include a universal Apple Silicon/Intel rules core; if its CI build or proof
+fails, the release workflow can still export a build without it. The battle log identifies the
+engine actually running. The picker sits in the solo panel and the choice is remembered
 (`scripts/solo/solo_grade.gd`). Every grade plays by the rules. The match
 runs the rulebook flow end to end: roll-off → the winner picks a table edge and deploys
 first → both sides alternate unit by unit with explicit hand-over clicks → scout phase in
@@ -204,8 +206,9 @@ base-size table, every terrain piece is a real 3D volume, and a sight query is o
 segment (a 🚫 marker on the measure line when LOS is blocked). **Units also block sight lines**:
 a model blocks the line when it stands tall enough to, gaps under 1″ inside a unit count as
 closed, and a unit never blocks its own line. In a **human-vs-human** game the players apply
-the effects themselves — terrain has **no automated movement/cover/damage effects**
-there, by design. In a **solo** game the same pieces are rules-active for both sides
+combat effects themselves — terrain affects sight, placement and movement aids in every mode,
+but human-vs-human cover saves and terrain damage remain manual. In a **solo** game the same
+pieces are rules-active for both sides
 (line of sight, cover, difficult and dangerous ground — `scripts/solo/terrain_rules.gd`).
 
 **Units (OPR)** — Army Forge import via the OPR API; per-model architecture
@@ -269,7 +272,7 @@ spacing, Start-Game phase gate). It ships with a bundled board (official lists, 
 auto-generated terrain), progress persistence and an end assessment. Still open for later
 waves: Settings, hosting/multiplayer, Regiments, and an OPR-rules / solo-play track.
 
-**Presentation** — a built-in Tactical-HUD UI theme (sleek; cyan/amber), atmosphere
+**Presentation** — a shared dark-panel UI with muted teal accents and gold primary actions, atmosphere
 presets (Day/Sunset/Night/Overcast/Rain), graphics quality presets, SSAO + glow, cinematic intro. **Battlefield atmosphere**
 ([`docs/ATMOSPHERE.md`](docs/ATMOSPHERE.md)): one-click Day/Sunset/Night/Overcast/Rain
 presets (2 s blends, rain particles, lightning + delayed thunder), a "war-torn" toggle
@@ -335,15 +338,15 @@ special rules for both sides. Those systems only activate in a solo game; a huma
 table gets only the bookkeeping listed above. The legacy AI system + battle simulator (~5500 lines) was
 removed and was **not** revived — today's solo engine (`scripts/solo/`) was written from
 scratch against OPR's official Solo & Co-Op ruleset, deterministic and explainable by design;
-on Linux and Windows builds NACHTMAHR's move search also scores positions with a trained
-neural network (value net) in the bundled Rust rules core.
+at the strongest difficulty, NACHTMAHR's move search also scores positions with a trained
+neural network (value net) when the Rust rules core and model load.
 
 **Co-op** (two or more people in one multiplayer room against an AI-controlled army) is a
 first version: the AI designation reaches every player, and each player rolls saves for their
 own units (#835, #836).
 Still out of scope: campaigns and ladders. The rule-based decision tree stays in every build as
-the fallback and is the only AI on macOS (see
-[`docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md`](docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md)).
+the fallback, including on macOS when the core is unavailable (see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#rust-rules-core-optional)).
 Sharing game records with the developer will only ever be opt-in and is off by default (see
 [`docs/PRIVACY_DATA_SHARING.md`](docs/PRIVACY_DATA_SHARING.md)).
 
@@ -358,8 +361,9 @@ and `hero_attachment_dialog.gd` were removed as dead code in January 2026 — th
 
 - **Solo is alpha.** Four selectable difficulty grades (unreleased, see above); co-op against the AI is
   a first version; the rules listed under *Not automated* above must be
-  applied by hand; all solo UI is English-only. macOS builds carry no rules core, so there
-  NACHTMAHR plays the decision tree only; AI thinking time has been measured on one machine.
+  applied by hand; most solo UI is English (VIP setup prompts also support German). macOS can
+  fall back to a build without the rules core; the engine log identifies the active opponent.
+  AI thinking time has been measured on one machine.
 - Dice can occasionally jitter at miniature scale (mitigated by the scaled-SubViewport
   dice approach; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#scaling)).
 - Some TTS texture-loading errors (non-fatal).
