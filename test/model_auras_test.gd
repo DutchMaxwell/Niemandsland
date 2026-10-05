@@ -1,8 +1,9 @@
 extends GdUnitTestSuite
-## Hero auras, step 1 (maintainer look verdict 05.10.: Frog-Mage aura GO): the data table, keyed exactly like the model
+## Hero auras (maintainer look verdict 05.10.: Frog-Mage aura GO): the data table, keyed exactly like the model
 ## library, says which miniature carries an aura ("Frog Mage" and "Frog-Mage" are one key, other units carry none); a
 ## miniature gets its aura once, with a soft glow at each anchor; the glow hides when the model is a casualty and on
-## Performance, and stays on Low (it is the whole aura there).
+## Performance, and stays on Low (it is the whole aura there). The arcs crackle at the data rate, three times as busy
+## while the model casts and calm again after, from the aura's own RNG; Low draws no arcs.
 
 const AuraScript = preload("res://scripts/vfx/model_auras.gd")
 var _preset_before: int
@@ -75,3 +76,29 @@ func test_the_glow_hides_with_its_model_and_on_performance() -> void:
 	mi.is_alive = false
 	aura._process(0.1)
 	assert_bool(aura.visible).override_failure_message("a casualty keeps no aura").is_false()
+
+
+func test_the_arcs_crackle_busier_while_casting_and_leave_the_game_rng_alone() -> void:
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
+	var auras := _auras()
+	var frog := _miniature(_frog())
+	auras.refresh()
+	var aura = frog.get_node("ModelAura")
+	seed(7)
+	var expected := randi()
+	seed(7)
+	aura._process(1.0)
+	var calm: int = aura.arcs
+	auras.boost_near("k", frog.global_position, 0.15)
+	aura._process(1.0)
+	var wild: int = aura.arcs - calm
+	auras.settle("k", 0.0)
+	aura._process(1.0)
+	assert_int(randi()).override_failure_message("an aura drew from the game RNG").is_equal(expected)
+	assert_int(calm).is_equal(10)
+	assert_int(wild).override_failure_message("a cast makes it three times as busy").is_equal(30)
+	assert_int(aura.arcs - calm - wild).override_failure_message("after the cast it calms down").is_equal(10)
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.LOW
+	var before: int = aura.arcs
+	aura._process(1.0)
+	assert_int(aura.arcs).override_failure_message("Low is the glow only").is_equal(before)

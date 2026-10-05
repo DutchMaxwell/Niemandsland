@@ -28,11 +28,23 @@ class MenuTransitionProbe extends "res://scripts/startup_menu.gd":
 	func _refresh_browse_list() -> void:
 		_set_browse_status("Loading rooms…")
 
+## The runtime-only flags the menu arms for main.gd (never persisted). On a machine without tutorial progress the
+## "Learn the controls" click launches the tutorial and arms tutorial_mode; left armed, the next suite that boots
+## main.tscn loads the tutorial board and crashes mid-boot (CI shard 3, 05.10.). Saved before, restored after.
+const MENU_FLAGS := ["niemandsland/tutorial_mode", "niemandsland/tutorial_lesson", "niemandsland/pending_load_path",
+	"niemandsland/pending_table_setup", "niemandsland/scenario_mode", "niemandsland/scenario_path",
+	"niemandsland/scenario_chapter", "niemandsland/open_game_school", "niemandsland/pending_internet_lobby",
+	"niemandsland/internet_is_host", "niemandsland/internet_relay_url", "niemandsland/internet_room_code",
+	"niemandsland/player_name"]
+
 var _menu: Control
 var _view: Control
+var _saved_flags := {}
 
 
 func before_test() -> void:
+	for flag: String in MENU_FLAGS:
+		_saved_flags[flag] = ProjectSettings.get_setting(flag) if ProjectSettings.has_setting(flag) else null
 	_menu = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	_menu.set_script(MenuTransitionProbe)
 	add_child(_menu)
@@ -41,6 +53,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	for flag: String in _saved_flags:
+		ProjectSettings.set_setting(flag, _saved_flags[flag])   # null erases a flag that was not there before
 	_menu = null
 	_view = null
 
