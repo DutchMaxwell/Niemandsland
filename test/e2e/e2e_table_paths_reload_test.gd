@@ -30,7 +30,7 @@ func test_paths_come_back_after_a_save_and_load() -> void:
 	TablePaths.of(_main.table).set_paths(PATH)
 	assert_int(_main.save_manager.save_game(SAVE)).is_equal(OK)
 	TablePaths.of(_main.table).set_paths([])
-	assert_int(_main.save_manager.load_game(SAVE)).is_equal(OK)
+	assert_int(await _main.save_manager.load_game(SAVE)).is_equal(OK)
 	await _runner.simulate_frames(4)
 	assert_array(TablePaths.of(_main.table).paths).is_equal(PATH)
 	assert_int(TablePaths.of(_main.table).find_children("*", "Decal", false, false).size()).is_equal(2)
