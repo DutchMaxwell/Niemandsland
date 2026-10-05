@@ -39,10 +39,65 @@ pub struct Zone {
     pub r: f64,
 }
 
+/// An `opts["ledges"]` entry (heights B2, movement_planner.gd `ledge_crossings`) — a climbable edge
+/// `{"a", "b", "dy_in"}`: a leg crossing it pays `dy_in` inches on top of its flat length (GF p.11).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ledge {
+    pub a: V2,
+    pub b: V2,
+    pub dy_in: f64,
+}
+
+/// GF p.11: pieces over 3" tall are impassable — such ledges stay walls.
+pub const LEDGE_CLIMB_MAX_IN: f64 = 3.0;
+/// A model that cannot pay a climb halts this far short of the ledge.
+pub const LEDGE_STOP_IN: f64 = 0.05;
+
+/// `MovementPlanner.ledge_crossings` — `[t along a→b, dy_in]` per crossed ledge, sorted by `t`. The hit
+/// point is Godot's `Geometry2D.segment_intersects_segment`, ported in f32 (no hit for parallels).
+pub fn ledge_crossings(a: V2, b: V2, ledges: &[Ledge]) -> Vec<(f64, f64)> {
+    let mut out: Vec<(f64, f64)> = Vec::new();
+    for l in ledges {
+        let bv = [b[0] - a[0], b[1] - a[1]];
+        let ablen = bv[0] * bv[0] + bv[1] * bv[1];
+        if ablen <= 0.0 {
+            continue;
+        }
+        let bn = [bv[0] / ablen, bv[1] / ablen];
+        let rot = |p: V2| -> [f32; 2] {
+            let (px, py) = (p[0] - a[0], p[1] - a[1]);
+            [px * bn[0] + py * bn[1], py * bn[0] - px * bn[1]]
+        };
+        let (c, d) = (rot(l.a), rot(l.b));
+        // Godot 4: both ends strictly on one side (CMP_EPSILON band) or parallel (`is_equal_approx`) → none;
+        // a leg that only touches an edge's end still crosses it.
+        const CMP: f32 = 0.00001;
+        let approx = |x: f32, y: f32| x == y || (x - y).abs() < (CMP * x.abs()).max(CMP);
+        if (c[1] < -CMP && d[1] < -CMP) || (c[1] > CMP && d[1] > CMP) || approx(c[1], d[1]) {
+            continue;
+        }
+        let abpos = d[0] + (c[0] - d[0]) * d[1] / (d[1] - c[1]);
+        if !(0.0..=1.0).contains(&abpos) {
+            continue;
+        }
+        let hit = [a[0] + bv[0] * abpos, a[1] + bv[1] * abpos];
+        out.push((distance_to(a, hit) / distance_to(a, b).max(EPS), l.dy_in));
+    }
+    out.sort_by(|x, y| x.0.total_cmp(&y.0));
+    out
+}
+
+/// `MovementPlanner.ledge_cost` — the climb inches the straight leg a→b pays.
+pub fn ledge_cost(a: V2, b: V2, ledges: &[Ledge]) -> f64 {
+    ledge_crossings(a, b, ledges).iter().map(|c| c.1).sum()
+}
+
 /// The subset of `opts` the step/cost layer reads. Everything else in the
 /// planner's `opts` dictionary belongs to a later stage.
 #[derive(Clone, Copy, Debug)]
 pub struct StepOpts<'a> {
+    /// `opts["ledges"]` — climbable edges priced by `segment_cost` and spent by the walk.
+    pub ledges: &'a [Ledge],
     /// `opts["clearance"]` — the moving model's base radius + `CLEARANCE_EPS_IN`.
     pub clearance: f64,
     /// `opts["zones"]` — no-go discs. NOTE the flow rebuilds this per model.
@@ -72,6 +127,7 @@ impl<'a> StepOpts<'a> {
     /// Walls-and-zones only — the legacy `opts = {}` shape plus a clearance.
     pub fn new(clearance: f64, zones: &'a [Zone]) -> Self {
         StepOpts {
+            ledges: &[],
             clearance,
             zones,
             avoid_cells: empty_cells(),
@@ -213,7 +269,7 @@ pub fn segment_cost(a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> f64 {
 pub fn segment_cost_at(a: V2, b: V2, grid: &Grid, opts: &StepOpts, sample_in: f64) -> f64 {
     let span = distance_to(a, b);
     if grid.is_empty() || span <= EPS {
-        return span;
+        return span + ledge_cost(a, b, opts.ledges);
     }
     let steps = ((span / sample_in).ceil() as i64).max(1);
     let sub = span / steps as f64;
@@ -226,7 +282,7 @@ pub fn segment_cost_at(a: V2, b: V2, grid: &Grid, opts: &StepOpts, sample_in: f6
         );
         total += sub * if m.is_infinite() { 1.0 } else { m };
     }
-    total
+    total + ledge_cost(a, b, opts.ledges)
 }
 
 /// `MovementPlanner._legs_cost` — movement_planner.gd:1483. Summed soft cost of

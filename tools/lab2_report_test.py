@@ -89,6 +89,10 @@ def test_rss_and_deadline_gates():
     big = a_rows() + b_rows()
     big[0]["rss_hwm_mib"] = 600.0
     assert rep.part1(big, True, workers=4)["flags"]["rss"] is False
+    ok24 = a_rows() + b_rows()
+    ok24[0]["rss_hwm_mib"] = 500.0
+    assert rep.part1(ok24, True, workers=32)["flags"]["rss"] is True     # A4.2: 32 x 500 = 16000 MiB <= 16 GiB
+    assert rep.part1(ok24, True, workers=33)["flags"]["rss"] is False    # 33 x 500 = 16500 MiB > 16 GiB
     late = a_rows() + b_rows()
     late[0]["decisions"] = [{"allocated_us": 10, "elapsed_us": float("nan"), "overshoot_us": 0}]
     assert rep.part1(late, True)["flags"]["deadlines"] is False
@@ -99,3 +103,16 @@ def test_freeze_carries_p1_p2_p3_and_the_raw_gains():
     fz = rep.freeze(rep.part1(rows, True), rows, {"workers": 3}, {"c1": {"B_us": 8000}})
     assert fz["p1"] == {"workers": 3} and fz["p2"] == {"c1": 8000} and fz["p3"]["F"] == F
     assert fz["raw_gains"]["A_T"]["c1"]["c1_k2"] == 0.5
+
+
+def test_decision_times_split_preselection_and_search_per_arm():
+    """Stage-0 amendment A3: preselection + search = total per arm (ms, median / nearest-rank p90); an unstamped
+    decision reports its total only, a non-finite one is left out."""
+    rows = [{"decisions": [{"arm": "L", "elapsed_us": 3000, "preselect_us": 1000},
+                           {"arm": "L", "elapsed_us": 5000, "preselect_us": 2000},
+                           {"arm": "I", "elapsed_us": 1500, "preselect_us": None},
+                           {"arm": "I", "elapsed_us": float("nan"), "preselect_us": None}]}]
+    t = rep.decision_times(rows)
+    assert t["L"] == {"decisions": 2, "total_ms": {"median": 4.0, "p90": 5.0},
+                      "preselect_ms": {"median": 1.5, "p90": 2.0}, "search_ms": {"median": 2.5, "p90": 3.0}}
+    assert t["I"] == {"decisions": 1, "total_ms": {"median": 1.5, "p90": 1.5}, "preselect_ms": None, "search_ms": None}

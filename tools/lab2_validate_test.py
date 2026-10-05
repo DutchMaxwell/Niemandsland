@@ -21,7 +21,7 @@ def _load(name):
 
 val, lab = _load("lab2_validate"), _load("lab2_tree_probe")
 SHA = {"prereg_sha256": "p" * 64, "model_sha256": "m" * 64, "wheel_sha256": "w" * 64, "rules_epoch": 68}
-HEADERS = {"I": {"1": "i", "2": "i"}, "L": {"1": "l", "2": "i"}}
+HEADERS = {"I": {"1": "i", "2": "i"}, "L": {"1": "l", "2": "i"}, "T": {"1": "t", "2": "i"}, "C": {"1": "c", "2": "i"}}
 
 
 def _row(rid, arm="L", y=1):
@@ -88,6 +88,34 @@ def test_each_problem_fails_validation_and_withholds_every_flag(problem):
     ok, probs = val.validate(rows, manifest)
     assert not ok and problem in {p["problem"] for p in probs}, probs
     assert val.pass_flags(ok, {"A_T": True, "B_LI": True}) == {"A_T": False, "B_LI": False}
+
+
+#: arm -> a mutation of that arm's first decision after which it never searched (the core's two deadline fallbacks,
+#: plan.rs deadline_fallback, and a tree trace without one completed playout)
+ZERO_SEARCH = {
+    "T_tree_fallback": ("T", lambda d: d["tree"].update(completed=0, batches=0, frontier=0, deadline_hit=True,
+                                                        fallback="deadline_before_first_batch")),
+    "L_tree_without_a_playout": ("L", lambda d: d["tree"].update(completed=0)),
+    "C_rollout_fallback": ("C", lambda d: d.update(deadline={"completed": 0, "cut": True,
+                                                             "fallback": "deadline_before_first_rollout"})),
+}
+
+
+@pytest.mark.parametrize("how", sorted(ZERO_SEARCH))
+def test_a_decision_that_never_searched_fails_its_row_although_the_row_says_valid(how):
+    """When the preselection alone outlasts the allowance, the core plays the preselection's top row with zero search
+    steps. The row still says valid (a T row never calls the net, so net_inactive cannot catch it), but it is not the
+    arm it names: the validator must fail it."""
+    arm, mutate = ZERO_SEARCH[how]
+    rows, manifest = _set()
+    rows.append(_row("b2_" + arm, arm=arm))
+    manifest["rows"]["b2_" + arm] = {"arm": arm, "seat": 1}
+    assert val.validate(rows, manifest) == (True, [])
+    mutate(rows[-1]["decisions"][0])
+    ok, probs = val.validate(rows, manifest)
+    assert rows[-1]["valid"] is True and not ok
+    assert [(p["row_id"], p["problem"]) for p in probs] == [("b2_" + arm, "zero_search")], probs
+    assert val.pass_flags(ok, {"A_T": True}) == {"A_T": False}
 
 
 @pytest.mark.parametrize("reason", ["illegal", "unported:deadly", "overflow", "unsupported"])

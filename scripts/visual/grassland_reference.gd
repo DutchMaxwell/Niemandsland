@@ -270,12 +270,7 @@ func apply_lighting(mood: String) -> void:
 	light.set_saturation(_profile["saturation"])
 	light.set_shadow_opacity(0.60)
 	light.set_shadow_blur(1.5)
-	light.set_shadow_bias(0.015)
-	light.set_shadow_normal_bias(0.25)
-	var sun: DirectionalLight3D = _main.get_node("DirectionalLight3D")
-	sun.directional_shadow_max_distance = 3.0
-	sun.directional_shadow_pancake_size = 1.0
-	sun.light_volumetric_fog_energy = 0.9
+	_apply_reference_sun()
 	if not table_tier:
 		RenderingServer.directional_shadow_atlas_set_size(8192,true)
 		get_viewport().use_taa = false
@@ -354,7 +349,20 @@ func apply_table_mood(mood: String) -> void:
 	if mood in TABLE_PROFILE_MOODS:
 		apply_lighting(mood)
 	else:
+		_apply_reference_sun()
 		_apply_reference_environment(false)   # the tuned environment stays; the mood's own intensities show
+
+
+## The sun's miniature-scale shadow values (bias, shadow range, fog energy): table geometry, not mood light, so the
+## dressed table carries them in every mood. No mood preset sets them; the presenter's teardown restores them.
+func _apply_reference_sun() -> void:
+	var light: Node = _main.lighting_controller
+	light.set_shadow_bias(0.015)
+	light.set_shadow_normal_bias(0.25)
+	var sun: DirectionalLight3D = _main.get_node("DirectionalLight3D")
+	sun.directional_shadow_max_distance = 3.0
+	sun.directional_shadow_pancake_size = 1.0
+	sun.light_volumetric_fog_energy = 0.9
 
 
 ## The game's current atmosphere mood (atmosphere_controller), "Day" outside the game.
@@ -518,7 +526,8 @@ func _keep_props_seated(overlay: Node3D) -> void:
 
 func _dress_movable_forests() -> void:
 	for group in get_tree().get_nodes_in_group("terrain_group_base"):
-		if group.prop_kind != TerrainGroupBase.KIND_FOREST or group.biome_prefix != "":
+		if group.prop_kind != TerrainGroupBase.KIND_FOREST or group.biome_prefix != "" \
+				or bool(group.get_meta("deleted", false)):   # a deleted (hidden, undoable) wood leaves no floor or litter
 			continue
 		var radius: Vector2 = group.footprint_inches * 0.0254 * 0.5
 		_regions.append(Vector4(group.global_position.x,group.global_position.z,radius.x,radius.y))

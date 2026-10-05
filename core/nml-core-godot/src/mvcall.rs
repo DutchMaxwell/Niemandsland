@@ -121,12 +121,34 @@ fn opts_json(d: &VarDictionary) -> Value {
             "avoid_cells" | "avoid_fine" | "forbid_cells" => {
                 m.insert(key, cell_rows(&v, false));
             }
+            "ledges" => {
+                m.insert(key, ledge_rows(&v));
+            }
             _ => {
                 m.insert(key, flat(&v));
             }
         }
     }
     Value::Object(m)
+}
+
+/// `MoveRecorder.ledge_rows` — `opts["ledges"]` as `[ax, ay, bx, by, dy_in]` rows. Live, each ledge is a
+/// `{"a": Vector2, "b": Vector2, "dy_in": float}` dictionary; a re-parsed corpus line already holds rows.
+fn ledge_rows(v: &Variant) -> Value {
+    let mut out = Vec::new();
+    for e in any_array(v).iter_shared() {
+        let Ok(d) = e.try_to::<VarDictionary>() else {
+            out.push(flat(&e));
+            continue;
+        };
+        let pt = |k: &str| d.get(k).unwrap_or_else(Variant::nil).try_to::<Vector2>().unwrap_or_default();
+        let (a, b) = (pt("a"), pt("b"));
+        let dy = d.get("dy_in").map(|x| num(&x)).unwrap_or(0.0);
+        out.push(Value::Array(
+            [a.x as f64, a.y as f64, b.x as f64, b.y as f64, dy].iter().map(|x| Value::from(*x)).collect(),
+        ));
+    }
+    Value::Array(out)
 }
 
 /// `MoveRecorder.begin`'s `{"kind": "call", …}` line — move_recorder.gd:79-86.
@@ -272,6 +294,17 @@ fn opts_dict(o: &nml_core::mv::CallOpts) -> VarDictionary {
     }
     if !o.charge_slots.is_empty() {
         d.set("charge_slots", &v2_array(&o.charge_slots));
+    }
+    if !o.ledges.is_empty() {
+        let mut a = VarArray::new();
+        for l in &o.ledges {
+            let mut ld = VarDictionary::new();
+            ld.set("a", v2_out(l.a));
+            ld.set("b", v2_out(l.b));
+            ld.set("dy_in", l.dy_in);
+            a.push(&ld.to_variant());
+        }
+        d.set("ledges", &a);
     }
     d
 }

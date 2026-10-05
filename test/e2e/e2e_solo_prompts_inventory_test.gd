@@ -15,7 +15,7 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const PROMPT_LAYER := 90
 ## The prompts already moved into the in-viewport card (PromptCard, D98 = a); each must come up as one.
 const CARDS := ["Incoming fire!", "Strike back?", "Cast window", "Versatile Attack", "Ambush Re-Deployment",
-	"Summon Imps", "Hero morale", "Split fire?"]
+	"Summon Imps", "Hero morale", "Split fire?", "Enemy spell!", "Spotted target!", "Boost your cast?"]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -445,6 +445,7 @@ func test_the_spell_picker_offers_every_spell_and_cancel(timeout := 120000) -> v
 	_main.add_child(picker)
 	(func() -> void: out.append(await picker.pick("Warboss", 1, entries))).call()
 	var p := await _await_prompt("Warboss — cast a spell (1 token)")
+	_assert_house_card(p)   # row 36 on the house card (asserted here: its title carries the token count)
 	_assert_controls(p, ["Bolt  (1 token)", "Storm  (3 tokens)", "Cancel"])
 	assert_str(_text_of(p)).contains("Deal 2 hits.")
 	assert_str(_text_of(p)).contains("Deal 6 hits.")

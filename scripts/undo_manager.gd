@@ -453,10 +453,7 @@ class DeleteAction extends UndoableAction:
 		_net.broadcast_object_visibility(int(node.get_meta("network_id")), is_visible)
 
 	func _set_node_hidden(node: Node3D, hidden: bool) -> void:
-		if node == null or not is_instance_valid(node):
-			return
-		node.visible = not hidden
-		node.set_meta("deleted", hidden)
+		DeletedState.apply(node, hidden)
 
 	## Remove the blood/oil residue a removed model left behind when its deletion is UNDONE.
 	## battlefield_stains.gd records the stain nodes in the model node's "stain_nodes" meta and sets a

@@ -1037,6 +1037,8 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // absent (every corpus) = `Knobs::default()` = OFF, so the non-charge arm
         // follows `movement` unless a gate writes this key.
         move_rigid: d.get("move_rigid").map(|v| flag(&v)).unwrap_or(dflt.move_rigid),
+        // `Knobs::route_root`, a search knob: absent (every header today) = OFF.
+        route_root: d.get("route_root").map(|v| flag(&v)).unwrap_or(dflt.route_root),
         // NML-1073 M5 D1-B8. Not a seam: the p.12 test belongs to `dice="table"`
         // and defaults ON. Absent (every corpus) = `Knobs::default()` = true, and
         // a gate that writes `false` gets the RED reading.
@@ -1124,6 +1126,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         tree_wall_ms: dint(d, "tree_wall_ms", dflt.tree_wall_ms),
         pool_wall_ms: dint(d, "pool_wall_ms", dflt.pool_wall_ms),
         deadline_us: dint(d, "deadline_us", dflt.deadline_us),
+        // Stage-0 amendment A3, a lab knob: absent (every shipped header) = OFF.
+        deadline_after_preselect: d
+            .get("deadline_after_preselect")
+            .map(|v| flag(&v))
+            .unwrap_or(dflt.deadline_after_preselect),
         tree_widen: dnum(d, "tree_widen", dflt.tree_widen),
     }
 }

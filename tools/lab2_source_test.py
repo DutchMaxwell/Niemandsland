@@ -72,6 +72,28 @@ def test_spy_reads_no_result_field():
 
 
 
+def test_two_workers_write_the_same_positions_timing_and_transitions_as_one_process(tmp_path):
+    import csv, json
+    tsv = tmp_path / "s.tsv"
+    with open(tsv, "w", newline="") as f:
+        w = csv.DictWriter(f, list(row("a")), delimiter="\t")
+        w.writeheader()
+        w.writerow(dict(row("a"), slot="s1"))
+        w.writerow(dict(row("b", seed=31, mover=2), slot="s2"))
+    (tmp_path / "h.json").write_text(json.dumps({"knobs": {"top_k": 2, "horizon": 1}}))
+    outs = {}
+    for n in (1, 2):
+        d = tmp_path / ("w%d" % n)
+        d.mkdir()
+        ls.main(["source", "--slots", str(tsv), "--bank", BANK, "--lists", LISTS, "--header", str(tmp_path / "h.json"),
+                 "--out", str(d / "p.json"), "--timing-out", str(d / "t.json"), "--transitions-out", str(d / "x.json"),
+                 "--workers", str(n)])
+        p = json.loads((d / "p.json").read_text())
+        outs[n] = (p["positions"], [(c["slot"], c["eligible"]) for c in p["candidates"]], (d / "t.json").read_text(),
+                   (d / "x.json").read_text(), json.loads((d / "x.json.headers").read_text()))
+    assert outs[1] == outs[2] and len(outs[1][0]) == 2
+
+
 def test_cli_writes_positions_proof_and_exit_code(tmp_path):
     import csv, json
     tsv, header, out = tmp_path / "s.tsv", tmp_path / "h.json", tmp_path / "p.json"
@@ -278,7 +300,7 @@ def test_t_decisions_receive_different_sigs(env):
 CTX = {"prereg": "p" * 64, "build": {"commit": "abc", "dirty": False, "rules_epoch": 68, "wheel_sha256": "w"}}
 PRINCIPLES_ROW = ("schema prereg_sha256 row_id split part cell source arm opponent seat replicate seeds build model_sha256 "
                   "header_sha256 net decisions y winner valid reason wall_s rss_hwm_mib done").split()
-PRINCIPLES_DECISION = "seq side arm allocated_us elapsed_us overshoot_us tree deadline search net_calls".split()
+PRINCIPLES_DECISION = "seq side arm allocated_us elapsed_us preselect_us overshoot_us tree deadline search net_calls".split()
 
 
 def test_play_row_runs_real_games_as_schema_rows(env):
@@ -294,6 +316,9 @@ def test_play_row_runs_real_games_as_schema_rows(env):
         assert all(list(d) == PRINCIPLES_DECISION for d in rec["decisions"]) and rec["decisions"]
         deep = [d for d in rec["decisions"] if d["arm"] != "I"]
         assert (arm == "I") == (not deep)
+        # A3: every searching arm (L and C alike) runs its allowance after the root preselection and stamps its time
+        assert all(isinstance(d["preselect_us"], int) and 0 < d["preselect_us"] <= d["elapsed_us"] for d in deep)
+        assert all(d["preselect_us"] is None for d in rec["decisions"] if d["arm"] == "I")
         if arm == "L":
             assert all(d["tree"] and d["allocated_us"] == 20000 and d["search"] for d in deep)
             assert all(d["tree"] is None for d in rec["decisions"] if d["arm"] == "I")
@@ -344,3 +369,32 @@ def test_fullgames_on_two_workers_write_the_same_rows_as_one(env, tmp_path, monk
         assert strip(json.load(open(tmp_path / "w1" / n))) == strip(json.load(open(tmp_path / "w2" / n))), n
     info = json.load(open(pilot))
     assert info["workers"] == 2 and abs(info["sum_hwm_mib"] - sum(info["worker_hwm_mib"].values())) < 1e-9
+
+
+def test_parallel_candidates_write_the_same_output_as_the_serial_pass(tmp_path):
+    """Stage-0 amendment A4.2: a slot's candidates run in parallel (--candidate-width) and the written positions,
+    discarded and candidate logs, timing states, transitions, headers and net calls equal the serial pass's (wall
+    times aside)."""
+    import csv, json
+    tsv = tmp_path / "s.tsv"
+    rows_ = [dict(row(c, seed=sd), slot="s1") for c, sd in (("a", 29), ("b", 31), ("c", 33))] + \
+        [dict(row("d", seed=35, mover=2), slot="s2")]
+    with open(tsv, "w", newline="") as f:
+        w = csv.DictWriter(f, list(rows_[0]), delimiter="\t")
+        w.writeheader()
+        for r in rows_:
+            w.writerow(r)
+    (tmp_path / "h.json").write_text(json.dumps({"knobs": {"top_k": 2, "horizon": 1}}))
+
+    def calm(logs):
+        return [{k: v for k, v in x.items() if k != "wall_s"} for x in logs]
+    outs = {}
+    for name, extra in (("serial", ["--workers", "1"]), ("parallel", ["--workers", "4", "--candidate-width", "3"])):
+        d = tmp_path / name
+        d.mkdir()
+        rc = ls.main(["source", "--slots", str(tsv), "--bank", BANK, "--lists", LISTS, "--header", str(tmp_path / "h.json"),
+                      "--out", str(d / "p.json"), "--timing-out", str(d / "t.json"), "--transitions-out", str(d / "x.json")] + extra)
+        p = json.loads((d / "p.json").read_text())
+        outs[name] = (rc, p["positions"], calm(p["discarded"]), p["missing"], calm(p["candidates"]), p["net"],
+                      (d / "t.json").read_text(), (d / "x.json").read_text(), (d / "x.json.headers").read_text())
+    assert outs["serial"] == outs["parallel"] and outs["serial"][1]
