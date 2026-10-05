@@ -2,9 +2,30 @@ extends GdUnitTestSuite
 
 const MAIN := preload("res://scripts/main.gd")
 
+class DropMain extends "res://scripts/main.gd":
+	func _solo_tray_roll(_count: int, _target: int, _owner: String, kind: String = "attack", _purpose: String = "") -> Array:
+		return [1, 6] if kind == "jump" else [6]
 
-func _fixture() -> Dictionary:
-	var main: Node3D = auto_free(MAIN.new())
+func test_skirmish_flying_passes_and_failed_jump_ends_activation() -> void:
+	var f := _fixture(DropMain)
+	add_child(f.model)
+	f.main.battle_log = auto_free(BattleLog.new())
+	f.unit.unit_properties.merge({"game_system": "gff", "special_rules": ["Flying"]})
+	var model := ModelInstance.new()
+	model.node = f.model
+	f.unit.models.append(model)
+	f.army.start_game()
+	var moves := [{"node": f.model, "inches": 4.0, "from_raw": Vector3(0, 0.1016, 0), "path": PackedVector2Array([Vector2.ZERO, Vector2(0.1, 0)])}]
+	await f.main._on_units_dropped(moves)
+	assert_int(f.main.battle_log.entries().size()).is_equal(1)
+	assert_bool(f.unit.is_activated).is_false()
+	f.unit.unit_properties.special_rules = []
+	await f.main._on_units_dropped(moves)
+	assert_bool(f.unit.is_activated).is_true()
+
+
+func _fixture(script = MAIN) -> Dictionary:
+	var main: Node3D = auto_free(script.new())
 	var objects: ObjectManager = auto_free(ObjectManager.new())
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	var unit: GameUnit = auto_free(GameUnit.new())

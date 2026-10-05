@@ -49,6 +49,7 @@
     "ripjawdactyl": "ripjawdactyl",
     "ancient palanquin": "palanquin",
     "starseer palanquin": "palanquin",
+    "queztalcoatl": "skyserpent",
     "rock barrage": "rocks",
     "bolt thrower": "boltthrower",
     "javelin crew": "javelins",
@@ -59,7 +60,9 @@
     "mace tail": "macetail",
     "dread behemoth fighter": "behemoth",
     "dread behemoth carrier": "carrier",
-    "dread pterodactyl": "pterodactyl"
+    "dread pterodactyl": "pterodactyl",
+    "raptor": "raptor",
+    "obsidian great weapon": "obsidian"
   },
   "_faction_ratmen": {
     "pet giant rat": "petrat",
