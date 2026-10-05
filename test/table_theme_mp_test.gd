@@ -41,7 +41,8 @@ func test_a_theme_and_its_undo_reach_the_other_table() -> void:
 		false, 7601)
 	var hooks := {"started": func() -> bool: return false, "net": net,
 		"biome_get": func() -> String: return _biome, "biome_set": func(b: String) -> void: _biome = b,
-		"mood_get": func() -> String: return _mood, "mood_set": func(m: String) -> void: _mood = m}
+		"mood_get": func() -> String: return _mood, "mood_set": func(m: String) -> void: _mood = m,
+		"paths_get": func() -> Array: return [], "paths_set": func(_p: Array) -> void: pass}
 	var action := TableTheme.load_theme("ruined_borderland").apply(om, hooks)
 	assert_object(action).is_not_null()
 	if action == null:
@@ -54,9 +55,12 @@ func test_a_theme_and_its_undo_reach_the_other_table() -> void:
 		assert_int(int(rots[0][1])).is_equal(int(first.get_meta("network_id")))
 		assert_float(float(rots[0][2])).is_equal_approx(first.rotation.y, 0.0001)
 	assert_array(_of(net, "vis")).contains([["vis", 7601, false]])
-	assert_array(_of(net, "settings")).contains([["settings", {"biome": "temperate_grassland"}]])
+	var sent: Array = _of(net, "settings")
+	assert_bool(sent.any(func(c: Array) -> bool: return c[1].get("biome") == "temperate_grassland" \
+		and (c[1].get("paths", []) as Array).size() == 3)).is_true()   # biome and paths reach the other table
 	net.calls.clear()
 	action.undo()
 	assert_array(_of(net, "vis")).contains([["vis", 7601, true]])
 	assert_int(_of(net, "vis").filter(func(c: Array) -> bool: return not bool(c[2])).size()).is_equal(14)
-	assert_array(_of(net, "settings")).contains([["settings", {"biome": "desert_dunes"}]])
+	assert_bool(_of(net, "settings").any(func(c: Array) -> bool: return c[1].get("biome") == "desert_dunes" \
+		and (c[1].get("paths", [0]) as Array).is_empty())).is_true()
