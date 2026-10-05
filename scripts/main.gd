@@ -3837,7 +3837,7 @@ func _sandbox_terrain_shapes() -> Array:
 	var in2m := 0.0254
 	for n in ObjectManager.sandbox_pieces(get_tree()):
 		var node := n as Node3D
-		if node == null or not is_instance_valid(node):
+		if node == null or not is_instance_valid(node) or bool(node.get_meta("deleted", false)):   # deleted = hidden, undoable
 			continue
 		var fp: Vector2 = node.get("footprint_inches") if node.get("footprint_inches") != null else Vector2.ZERO
 		if fp == Vector2.ZERO:
