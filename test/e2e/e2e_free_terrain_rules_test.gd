@@ -53,3 +53,7 @@ func test_a_deleted_free_piece_stops_counting_for_the_rules() -> void:
 	assert_int(_main.terrain_overlay.get_terrain_at_world_position(FOREST_AT)).is_equal(TerrainRules.TerrainType.NONE)
 	assert_int((_main.terrain_overlay.los_volumes() as Array).size()).is_equal(0)
 	assert_float(_main.object_manager._surface_y_under(FOREST_AT)).is_less(0.005)   # a model set down here stands on the table
+	_main.undo_manager.undo()   # undo the delete: the piece is back for the eye, the rules and the ground alike
+	await _runner.simulate_frames(2)
+	assert_int(_main.terrain_overlay.get_terrain_at_world_position(FOREST_AT)).is_equal(TerrainRules.TerrainType.CONTAINER)
+	assert_float(_main.object_manager._surface_y_under(FOREST_AT)).is_equal_approx(2.5 * 0.0254, 0.001)
