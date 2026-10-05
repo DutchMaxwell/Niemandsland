@@ -172,6 +172,7 @@ func _build_routes() -> void:
 		["learn","TutorialBtn","Learn the controls","Classic tutorial: camera, miniatures and tools"],
 		["learn","SpielschuleBtn","Trial by Fire · In development","Short practice scenarios you can play individually"],
 		["help","HelpTutorialBtn","Learn the controls","Open the tutorial"],
+		["help","WhatsNewBtn",WhatsNewContent.new().text_for(TranslationServer.get_locale(), "menu"),""],
 		["help","ReportProblemBtn","Report a problem","Create a diagnostics file to share"]]:
 		var button := _action(row[1],row[2],row[3],"",false,true)
 		routes[row[0]].add_child(button)

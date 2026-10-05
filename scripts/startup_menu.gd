@@ -55,6 +55,7 @@ var _browse_lobby: InternetLobby
 var _browse_request_gen: int = 0  # invalidates a stale request's timeout/reply
 var _continue_path := ""
 var _music_player: AudioStreamPlayer = null
+var _whats_new: WhatsNewDialog
 
 # === Lifecycle ===
 
@@ -99,6 +100,7 @@ func _ready() -> void:
 	exit_game_btn.pressed.connect(_on_exit_pressed)
 	view.buttons.SettingsBtn.pressed.connect(_on_settings_pressed)
 	view.buttons.HelpTutorialBtn.pressed.connect(_on_tutorial_pressed)
+	view.buttons.WhatsNewBtn.pressed.connect(_show_whats_new)
 	diorama.loading_progress.connect(_on_diorama_loading)
 	diorama.diorama_ready.connect(_on_diorama_ready)
 	diorama.rebuild_started.connect(_on_diorama_rebuild_started)
@@ -112,6 +114,27 @@ func _ready() -> void:
 	if ProjectSettings.get_setting("niemandsland/open_game_school", false):
 		ProjectSettings.set_setting("niemandsland/open_game_school", false)
 		call_deferred("_on_spielschule_pressed")
+	_maybe_show_whats_new.call_deferred()
+
+
+func _maybe_show_whats_new() -> void:
+	if get_tree().current_scene != self or not WhatsNewContent.should_show():
+		return
+	# Let another startup dialog (for example the chapter picker) finish first.
+	for child in get_children():
+		if child is Window and child.visible:
+			await child.visibility_changed
+			_maybe_show_whats_new.call_deferred()
+			return
+	_show_whats_new()
+
+
+func _show_whats_new() -> void:
+	view.close_route()
+	if not is_instance_valid(_whats_new):
+		_whats_new = WhatsNewDialog.new()
+		add_child(_whats_new)
+	_whats_new.open()
 
 
 func _on_diorama_loading(label: String, ratio: float) -> void:
@@ -448,6 +471,9 @@ func _maybe_check_for_updates() -> void:
 
 
 func _on_update_available(latest_version: String, release_url: String, release_notes: String) -> void:
+	if is_instance_valid(_whats_new) and _whats_new.visible:
+		await _whats_new.visibility_changed
+		await get_tree().process_frame  # Native modal ownership clears after the hide signal.
 	var prompt := UpdatePrompt.new()
 	prompt.setup(UpdateChecker.get_current_version(), latest_version, release_url, release_notes)
 	prompt.confirmed.connect(_on_update_prompt_closed.bind(prompt, true))
