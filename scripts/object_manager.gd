@@ -3202,9 +3202,9 @@ const SANDBOX_GROUPS: Dictionary = {
 const SANDBOX_SOLIDS: Dictionary = {
 	"blocker_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3), "label": "Building (6×3)"},
 	"longhouse_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3),
-		"label": "Slab-roof storehouse (6×3)", "look": "house_b"},
+		"label": "Slab-roof storehouse (6×3)", "look": "house_b", "model": "solid_storehouse_b"},
 	"outcrop_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3),
-		"label": "Heather outcrop (6×3)", "look": "rock_c"},
+		"label": "Heather outcrop (6×3)", "look": "rock_c", "model": "solid_outcrop_c"},
 }
 
 ## Biome prefixes a sandbox FOREST or HAZARD field can carry, encoded INTO its prop_id (e.g.

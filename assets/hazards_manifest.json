@@ -48,6 +48,16 @@
       "url": "carnivore_plant.glb?v=f9f96394",
       "sha256": "f9f96394e87361acae5624c4672ef0918a85036c4658b09e20b729b757d99b18",
       "size": 7422128
+    },
+    "solid_storehouse_b": {
+      "url": "solid_storehouse_b.glb?v=dc719c8e",
+      "sha256": "dc719c8e3057d9dd79ed222ced0e35c97f539bc0febc8c0c9dcea328b98b93be",
+      "size": 3051424
+    },
+    "solid_outcrop_c": {
+      "url": "solid_outcrop_c.glb?v=3ea95584",
+      "sha256": "3ea95584232fa795ff339ee6e3d85192ea38bdc5292271ddd3f624fb1d51b9b1",
+      "size": 908524
     }
   }
 }
