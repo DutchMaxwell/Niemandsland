@@ -1492,6 +1492,7 @@ CAP_SEED_STRIDE = 700003
 TREE_KNOB_DEFAULTS = {
     "search_mode": "oneply", "tree_leaf": "blend", "tree_dice": "ev", "tree_budget": 128,
     "tree_samples": 4, "tree_batch": 8, "tree_wall_ms": 0, "pool_wall_ms": 0, "deadline_us": 0,
+    "deadline_after_preselect": False,
 }
 
 
@@ -2382,6 +2383,10 @@ def play_game(
     # 16.09. (D-MAGIC): the cast SUB-PHASE switch as a kwarg, so a replay of a record stamped
     # `seam_cast: true` (#1023) plays it ON; None = TRAINER_KNOBS["seam_cast"] (the fork door).
     seam_cast: bool | None = None,
+    # #1480's ROOT-move routing (`Knobs::route_root`): every searching seat routes its root moves per model; the
+    # playouts stay rigid. Pairs with movement="table" (a rigid-executing game loses with it, movefidelity part 3c).
+    # False = the header and the record stay byte-identical (stamped only when on).
+    route_root: bool = False,
     hero_attach: str = "off",
     dice: str = "expected",
     charge_landing: str = "off",
@@ -2452,6 +2457,7 @@ def play_game(
     deep_tree_wall_ms: int | None = None,
     deep_pool_wall_ms: int | None = None,
     deep_deadline_us: int | None = None,
+    deep_deadline_after_preselect: bool | None = None,
     record_cands: bool = False,
     eval_variant_player: int = 0,
     eval_variant: int = 0,
@@ -2689,8 +2695,8 @@ def play_game(
     State objects are core-independent (`state_of`/`resolve_*` take them as
     arguments), so the two cores share one game; the other seat keeps the base
     core and every caller that passes nothing (0, the default) plays the
-    identical game the pre-knob code did. The nine `deep_search_mode` /
-    `deep_tree_*` / `deep_pool_wall_ms` / `deep_deadline_us` kwargs (None = unset) join
+    identical game the pre-knob code did. The ten `deep_search_mode` /
+    `deep_tree_*` / `deep_pool_wall_ms` / `deep_deadline_us` / `deep_deadline_after_preselect` kwargs (None = unset) join
     the deep core's header knobs the same way (the tree search knobs, keys `search_mode`,
     `tree_leaf`, ... `deadline_us`); a value EQUAL to the knob's default is
     not a part, and only a value that parted is stamped into that seat's
@@ -2739,7 +2745,7 @@ def play_game(
             ("tree_dice", deep_tree_dice), ("tree_budget", deep_tree_budget),
             ("tree_samples", deep_tree_samples), ("tree_batch", deep_tree_batch),
             ("tree_wall_ms", deep_tree_wall_ms), ("pool_wall_ms", deep_pool_wall_ms),
-            ("deadline_us", deep_deadline_us),
+            ("deadline_us", deep_deadline_us), ("deadline_after_preselect", deep_deadline_after_preselect),
         ) if v is not None and v != TREE_KNOB_DEFAULTS[k]
     }
     if tree_seat and deep_player not in (1, 2):
@@ -2831,6 +2837,7 @@ def play_game(
         # chain either (`sim::caster_of`).
         cast_fold=bool(cast_fold),
         seam_cast=(TRAINER_KNOBS["seam_cast"] if seam_cast is None else bool(seam_cast)),
+        **({"route_root": True} if route_root else {}),
         # NML-1073 M5 D1-B4b: the SEAM half of `hero_attach`. Deriving the
         # attachment is not enough — without this the hero would fire inside its
         # host's volley AND still be handed a full activation of its own
@@ -3359,6 +3366,7 @@ def play_game(
             # digest and no existing record moves — and a bank is verifiable
             # by its own headers (the record tells the truth).
             **({"seam_cast": True} if knobs["seam_cast"] else {}),
+            **({"route_root": True} if knobs.get("route_root") else {}),
             "hero_attach": hero_attach,
             "dice": eff_dice,
             "charge_landing": charge_landing,

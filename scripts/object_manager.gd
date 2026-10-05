@@ -39,6 +39,9 @@ signal movement_capped(consumed_inches: float, cap_inches: float, dry: bool, rea
 ## enemy base-contact snap or the other-unit 1" push (Phase 1 of _resolve_drop_separation). Lets
 ## the tutorial confirm the player felt the red 1" wall; carries whether a snap/push was applied.
 signal drop_separated(applied: bool)
+## Emitted on drop when free shelf pieces were put back to their drag start because their footprint reached
+## painted grid terrain (maintainer D2: refuse; the grid would win every rules lookup there).
+signal terrain_drop_refused(nodes: Array)
 signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 
 @export var drag_height: float = 0.5  # Drag height in meters
@@ -235,8 +238,10 @@ const MINIATURE_COLLISION_LAYER: int = 2
 ## movable terrain for selection/layouter tooling. Kept in sync with SandboxTerrainProp.
 const MOVABLE_TERRAIN_COLLISION_LAYER: int = 4
 
-## Casual-sandbox terrain categories (see SandboxTerrainProp / TerrainGroupBase).
-enum SandboxPropKind { RUIN, FOREST, HAZARD_CLUSTER }
+## Casual-sandbox terrain categories (see SandboxTerrainProp / TerrainGroupBase). Saves and the MP
+## spawn RPC carry the int: append new kinds, never renumber. BLOCKER (3) = a solid 6x3x2.5" piece,
+## the grid Blocker's profile.
+enum SandboxPropKind { RUIN, FOREST, HAZARD_CLUSTER, BLOCKER }
 
 
 ## Rules terrain type of a free-placed piece, by its prop kind (NONE for an unknown kind).
@@ -248,6 +253,8 @@ static func sandbox_terrain_type(kind: int) -> int:
 			return TerrainRules.TerrainType.FOREST
 		SandboxPropKind.HAZARD_CLUSTER:
 			return TerrainRules.TerrainType.DANGEROUS
+		SandboxPropKind.BLOCKER:
+			return TerrainRules.TerrainType.CONTAINER
 	return TerrainRules.TerrainType.NONE
 
 
@@ -1341,6 +1348,9 @@ func _stop_dragging() -> void:
 		# units and snap a near-miss to enemy contact. Done BEFORE the batch / undo below
 		# so the resolved position flows the normal move path (undo + MP broadcast).
 		_resolve_drop_separation()
+		# Free shelf pieces may not land on painted grid terrain: back to their start BEFORE the batch / undo, so
+		# peers, the undo stack and the move log all see "did not move".
+		_refuse_drops_on_painted_terrain()
 
 		# Build batch of final positions for network broadcast
 		var drop_batch: Array = []
@@ -1815,6 +1825,35 @@ func _trail_owner_of(obj: Node3D) -> int:
 			if child is Node3D and child.has_meta("model_instance"):
 				return _trail_owner_of(child)
 	return 0
+
+
+## Maintainer D2 (04.10.): a free shelf piece whose footprint reaches a painted grid cell goes back to its drag start
+## (position + yaw) — the grid wins every rules lookup there (TerrainOverlay.get_terrain_at_world_position), so the
+## piece would silently lose its own type. The footprint is sampled on a 9x9 grid, corners included.
+func _refuse_drops_on_painted_terrain() -> void:
+	if terrain_overlay == null or terrain_overlay.grid_cells.is_empty():
+		return
+	var refused: Array = []
+	for obj in _selected_objects:
+		if not is_instance_valid(obj) or not obj.is_in_group("sandbox_terrain") or not _drag_start_positions.has(obj):
+			continue
+		var he: Vector2 = Vector2(obj.get("footprint_inches")) * 0.0254 * 0.5
+		var yaw := obj.global_rotation.y
+		var c := Vector2(obj.global_position.x, obj.global_position.z)
+		var ax := Vector2(cos(yaw), -sin(yaw)) * he.x
+		var az := Vector2(sin(yaw), cos(yaw)) * he.y
+		var hit := false
+		for i in 9:
+			for j in 9:
+				var p := c + ax * (i / 4.0 - 1.0) + az * (j / 4.0 - 1.0)
+				hit = hit or int(terrain_overlay.grid_cells.get(terrain_overlay.world_to_cell(Vector3(p.x, 0.0, p.y)), 0)) != 0
+		if hit:
+			obj.global_position = _drag_start_positions[obj]
+			obj.rotation.y = float(_drag_start_rotations.get(obj, obj.rotation.y))
+			print("[Terrain] drop refused: %s overlaps painted grid terrain, back to its start" % obj.get("prop_id"))
+			refused.append(obj)
+	if not refused.is_empty():
+		terrain_drop_refused.emit(refused)
 
 
 ## Records the just-finished drag as one undoable MoveAction. No-op if nothing
@@ -3158,6 +3197,16 @@ const SANDBOX_GROUPS: Dictionary = {
 	"minefield": {"kind": SandboxPropKind.HAZARD_CLUSTER, "footprint": Vector2(6, 4), "label": "Dangerous Terrain"},
 }
 
+## Solid pieces: the grid Blocker's 6x3x2.5" profile placed freely (SandboxSolidProp, CONTAINER rules), offered on
+## every biome's shelf under one unprefixed id (the look is plain stone). Keyed by prop_id -> {kind, footprint, label}.
+const SANDBOX_SOLIDS: Dictionary = {
+	"blocker_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3), "label": "Building (6×3)"},
+	"longhouse_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3),
+		"label": "Slab-roof storehouse (6×3)", "look": "house_b", "model": "solid_storehouse_b"},
+	"outcrop_6x3": {"kind": SandboxPropKind.BLOCKER, "footprint": Vector2(6, 3),
+		"label": "Heather outcrop (6×3)", "look": "rock_c", "model": "solid_outcrop_c"},
+}
+
 ## Biome prefixes a sandbox FOREST or HAZARD field can carry, encoded INTO its prop_id (e.g.
 ## "desert_forest_small", "desert_minefield") so save + broadcast preserve the biome through the
 ## existing prop_id field — no new wire/save fields. Kept in sync with SandboxTerrainShelf.BIOMES.
@@ -3211,12 +3260,27 @@ func _get_hazards_library() -> HazardsLibrary:
 ## selectable object, so the existing drag/rotate/undo/multiplayer paths move it. Syncs to
 ## peers when `broadcast` and multiplayer is active.
 func spawn_sandbox_terrain(prop_id: String, kind: int, pos: Vector3, broadcast: bool = true, network_id: int = -1) -> Node3D:
+	# A kind this build does not know (a newer save or peer, a corrupt record) builds nothing: as a ruin it
+	# would silently get a ruin's cover and area sight. The shelf, save load and MP spawn all handle null.
+	if kind != SandboxPropKind.RUIN and kind != SandboxPropKind.FOREST and kind != SandboxPropKind.HAZARD_CLUSTER \
+			and kind != SandboxPropKind.BLOCKER:
+		print("[Terrain] unknown sandbox kind %d (prop '%s') skipped" % [kind, prop_id])
+		return null
 	_object_counter += 1
 	var obj_network_id: int = network_id if network_id >= 0 else _object_counter + SANDBOX_TERRAIN_NETWORK_OFFSET
 
 	var spawned: Node3D
 	if kind == SandboxPropKind.FOREST or kind == SandboxPropKind.HAZARD_CLUSTER:
 		spawned = _build_terrain_group(prop_id, kind, obj_network_id)
+	elif kind == SandboxPropKind.BLOCKER:
+		var spec: Dictionary = SANDBOX_SOLIDS.get(prop_id, SANDBOX_SOLIDS["blocker_6x3"])
+		var solid := SandboxSolidProp.new()
+		solid.name = "SandboxSolid_%d" % _object_counter
+		solid.configure(prop_id, kind, spec["footprint"], spec.get("look", "plain"))
+		solid.set_meta("network_id", obj_network_id)
+		if spec.has("model"):
+			apply_solid_model(solid, spec["model"])   # not awaited: the bundled look shows until the GLB is cached
+		spawned = solid
 	else:
 		spawned = _build_sandbox_ruin(prop_id, kind, obj_network_id)
 
@@ -3267,6 +3331,30 @@ func _build_sandbox_ruin(prop_id: String, kind: int, obj_network_id: int) -> San
 	return prop
 
 
+## Detailed GLBs of the shelf solids (catalogue key "model"), delivered like the hazard models: SHA-checked R2
+## download into the cache, parsed once, mipmaps rebuilt. Created on first use, one per ObjectManager.
+var _solid_models: HazardsLibrary = null
+
+
+func solid_models_library() -> HazardsLibrary:
+	if _solid_models == null:
+		_solid_models = HazardsLibrary.new()
+		_solid_models.name = "SolidModelsLibrary"
+		add_child(_solid_models)
+	return _solid_models
+
+
+## Swap a solid's bundled look for its detailed model once the GLB is cached and parses. Not in the manifest, download
+## failed, corrupt file or the piece deleted meanwhile -> the bundled look stays. Visual only: the rules never change.
+func apply_solid_model(solid: SandboxSolidProp, model: String) -> void:
+	var lib := solid_models_library()
+	if not lib.has_model(model) or not await lib.ensure_model(model):
+		return
+	var scene := lib.get_model_scene(model)
+	if scene != null and is_instance_valid(solid):
+		solid.use_model(scene.instantiate())
+
+
 ## Catalogue of placeable sandbox pieces for the shelf browser. EVERY biome lists the ruins +
 ## forest/hazard groups; a ruin's wall panels and a forest's trees/floor are themed from the biome
 ## prefix carried in each entry's prop_id. Each entry is {prop_id, kind, label}.
@@ -3285,6 +3373,8 @@ func sandbox_catalog(biome_prefix: String = "") -> Array:
 		# save/broadcast round-trip the biome via the existing prop_id field.
 		var entry_id: String = (biome_prefix + id) if (kind == SandboxPropKind.FOREST or kind == SandboxPropKind.HAZARD_CLUSTER) else id
 		entries.append({"prop_id": entry_id, "kind": kind, "label": spec.get("label", id)})
+	for id in SANDBOX_SOLIDS.keys():
+		entries.append({"prop_id": id, "kind": SANDBOX_SOLIDS[id]["kind"], "label": SANDBOX_SOLIDS[id]["label"]})
 	return entries
 
 

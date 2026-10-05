@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Workers, scheduler and the P1 rule of the stage-0 lab driver (tree plan step 25).
 
-`run_clusters` runs COMPLETE clusters (a position with all arms and replicates, a block with all arms, dice and
-seats) in sha256(scheduler key : cluster id) order, one cluster per task, one `init()` context (core + net) per
-worker process (spawn mode); a cluster never spans workers. Every task reports its worker pid and VmHWM.
-`p1_workers` is prereg P1: the highest N in 1..4 with N x max worker VmHWM <= 6 GiB and max <= 512 MiB.
+`run_clusters` runs scheduling UNITS in sha256(scheduler key : unit id) order, one unit per task, one `init()` context
+(core + net) per worker process (spawn mode); a unit never spans workers. The caller chooses the unit: since stage-0
+amendment A4.1 the endings, the full games and the P9 rows schedule ONE row/game per unit (a complete cluster pinned
+one worker to its heaviest position or block); the source keeps one slot per unit (its candidates run in order until
+the first eligible) unless A4.2's --candidate-width runs a slot's candidates in parallel and keeps the serial output. Every task reports its worker pid and VmHWM.
+`p1_workers` is prereg P1 as amendment A4 widened it for the pilot's dedicated >= 32-vCPU box: the highest N in 1..32 with
+N x max worker VmHWM <= 16 GiB (32 x 512 MiB) and max <= 512 MiB (A4.2; A4 had 1..24 and 12 GiB, the laptop 1..4 and 6 GiB).
 Run:  python3 tools/lab2_pool.py p1 --rss worker_hwms.json
 """
 import argparse
@@ -18,7 +21,7 @@ from concurrent.futures import ProcessPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lab2_rows import vmhwm_mib  # noqa: E402
 
-CAP_MIB, PER_WORKER_MIB, MAX_WORKERS = 6 * 1024, 512, 4
+CAP_MIB, PER_WORKER_MIB, MAX_WORKERS = 16 * 1024, 512, 32   # amendment A4.2 (A4: 12 GiB, 24; prereg: 6 GiB, 4)
 _CTX = {}
 
 
@@ -35,10 +38,11 @@ def _task(work, cid, payload):
     return {"id": cid, "pid": os.getpid(), "result": work(_CTX["ctx"], cid, payload), "hwm_mib": vmhwm_mib()}
 
 
-def run_clusters(clusters, workers, init, work, init_args=(), key=""):
+def run_clusters(clusters, workers, init, work, init_args=(), key="", ordered=False):
     """clusters {id: payload}; `init` / `work` are module-level callables (spawn pickles them by name). Returns
-    the task reports in schedule order, whatever order the workers finished in."""
-    order = schedule_order(list(clusters), key)
+    the task reports in schedule order, whatever order the workers finished in. `ordered`: submit in the dict's own
+    order instead of the hashed one (A4.2: candidate 0 of every source slot first)."""
+    order = list(clusters) if ordered else schedule_order(list(clusters), key)
     if workers <= 1:
         _init(init, init_args)
         return [_task(work, cid, clusters[cid]) for cid in order]

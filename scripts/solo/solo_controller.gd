@@ -486,6 +486,10 @@ var objective_owner_of: Callable = Callable()
 ## A ledge's edge leaves the walls and is priced as a climb by the planner; the AI settles on the surface.
 var ledges_provider: Callable = Callable()
 var surface_y_provider: Callable = Callable()
+## Heights B2: the AI climbs from EPOCH_70_TRAY_EXACT (the one bump of the tray-exact series, which also turns
+## `Seams::tray_exact` on). Below it every move plays the recorded rules: container edges are walls, y preserved.
+static func climb_on() -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_70_TRAY_EXACT
 ## Largest climb (inches) any model of the last move paid — main logs it.
 var last_move_climb_in: float = 0.0
 
@@ -7063,7 +7067,7 @@ func _apply_model_positions(models: Array, new_positions: Array) -> void:
 		var np: Vector3 = new_positions[i]
 		# Y is preserved unless climbing is wired: then the AI settles on the surface like the drop probe.
 		var ny: float = surface_y_provider.call(Vector2(np.x, np.z)) if surface_y_provider.is_valid() \
-			else node.global_position.y
+				and climb_on() else node.global_position.y
 		node.global_position = Vector3(np.x, ny, np.z)
 		if node.has_meta("network_id"):
 			batch.append(node.get_meta("network_id"))
@@ -7980,8 +7984,10 @@ func _walls_world() -> Array:
 
 
 ## Climbable edges (world metres) from the provider; Flying ignores terrain while moving (GF p.13) → none.
+## Below epoch 70 (`climb_on` false): the container edges stay walls and y stays preserved — byte-identical.
 func _ledges_world(unit: GameUnit) -> Array:
-	if not ledges_provider.is_valid() or unit.has_special_rule("Flying"):
+	if not ledges_provider.is_valid() or unit.has_special_rule("Flying") \
+			or not climb_on():
 		return []
 	var l: Variant = ledges_provider.call()
 	return l if l is Array else []
@@ -8911,7 +8917,10 @@ static func alive_bearers_of(member: GameUnit, weapon_name: String, attacks_per_
 ## Dynasty Warriors example: 3 of 5 in range+LOS → 3 attacks). `los` is injected (terrain_overlay in the
 ## game, a TerrainRules grid in tests) so this stays pure. Nearest-target-model first + early-out keeps
 ## the check cheap; range gates before the LOS call (the expensive half).
-static func sighted_models(shooter_positions: Array, target_positions: Array, range_m: float, los: Callable) -> int:
+## `pairs_out` (optional, VFX volley cue): receives [shooter_pos, target_pos] for every model that counted —
+## the very pair whose LOS call said yes, so a tracer follows the segment the rule tested. The count never changes.
+static func sighted_models(shooter_positions: Array, target_positions: Array, range_m: float, los: Callable,
+		pairs_out = null) -> int:
 	if shooter_positions.is_empty() or target_positions.is_empty():
 		return 0
 	var range2 := range_m * range_m
@@ -8930,6 +8939,8 @@ static func sighted_models(shooter_positions: Array, target_positions: Array, ra
 				break   # sorted by distance — everything after is farther still
 			if not los.is_valid() or bool(los.call(sp, tp)):
 				n += 1
+				if pairs_out != null:
+					(pairs_out as Array).append([sp, tp])
 				break
 	return n
 

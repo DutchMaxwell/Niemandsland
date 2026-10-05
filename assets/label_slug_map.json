@@ -58,7 +58,8 @@
     "solar beam": "solarbeam",
     "mace tail": "macetail",
     "dread behemoth fighter": "behemoth",
-    "dread behemoth carrier": "carrier"
+    "dread behemoth carrier": "carrier",
+    "dread pterodactyl": "pterodactyl"
   },
   "_faction_ratmen": {
     "pet giant rat": "petrat",

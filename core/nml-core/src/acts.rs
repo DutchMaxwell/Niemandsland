@@ -169,6 +169,14 @@ pub struct Knobs {
     /// Absent from every corpus, so the default is OFF.
     #[serde(default)]
     pub move_rigid: bool,
+    /// The search routes its ROOT moves — the menu's own resolve and every
+    /// rollout's opening move — per model on the plain ADVANCE/RUSH arm
+    /// (`Seams::plain_only`) and plays every deeper playout move rigid, whatever
+    /// `movement` says: the measured cheap form of table thinking. A SEARCH knob:
+    /// resolves outside the search keep the header's own seams. Absent from every
+    /// corpus, so the default is OFF and every search is byte-identical.
+    #[serde(default)]
+    pub route_root: bool,
     /// NML-1073 M5 D1-B8 — the p.12 DANGEROUS-terrain test. NOT a feature knob:
     /// the test is part of `dice="table"` and defaults ON, exactly the way
     /// `charge_gate` defaults ON. It exists so a gate can switch it OFF and prove
@@ -242,6 +250,13 @@ pub struct Knobs {
     /// (0 = off). Parsed and carried; no search reads it yet.
     #[serde(default)]
     pub deadline_us: i64,
+    /// Lab knob (stage-0 amendment A3): `deadline_us` counts from the END of the
+    /// root preselection (prefilter, sort, pool) instead of the planner call, so
+    /// the allowance bounds the search alone; the preselection's own time rides
+    /// the pick's trace as `preselect_us`. Off (default) = the call-start clock,
+    /// byte-identical; absent from every shipped header.
+    #[serde(default)]
+    pub deadline_after_preselect: bool,
     /// Tree search knob: the widening rate. 0.0 (default) opens every child of
     /// a node before the search descends; > 0 keeps at most
     /// ceil(max(n, 1) ^ tree_widen) children of an n-visit node open.
@@ -645,7 +660,13 @@ pub const EPOCH_68_MODIFIER_SUM: u32 = 68;
 /// `EPOCH_7_TABLE_RULES`'s transport gate: the table's `BattleSim.capture`
 /// always wrote one wound and one position per living model of THAT unit.
 pub const EPOCH_69_HERO_FOLD: u32 = 69;
-pub const CURRENT_RULES_EPOCH: u32 = 69;
+/// Tray-exact series (maintainer D151=B, 03.10.): from this epoch `Seams::tray_exact` is ON for
+/// every fresh game: casualties come off in the table's chain-keeping order (S6), Takedown lands on
+/// the attacker's pick as a unit of [1] (S7-S10), Guarded over 9" reaches Impact and the charged
+/// side's melee saves, and Counter walks the joined chain. Below it every record replays the
+/// core's old slot order and flags, byte-exact.
+pub const EPOCH_70_TRAY_EXACT: u32 = 70;
+pub const CURRENT_RULES_EPOCH: u32 = 70;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1399,6 +1420,7 @@ impl Default for Knobs {
             menu_wide: false,
             moved_shoot: false,
             move_rigid: false,
+            route_root: false,
             dangerous: true,
             engage_fold: false,
             dangerous_end_morale: false,
@@ -1417,6 +1439,7 @@ impl Default for Knobs {
             tree_wall_ms: 0,
             pool_wall_ms: 0,
             deadline_us: 0,
+            deadline_after_preselect: false,
             tree_widen: 0.0,
             melee_reach: MeleeReach::All,
             consolidate: false,
@@ -1943,7 +1966,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 69, "the live epoch is EPOCH_69_HERO_FOLD");
+        assert_eq!(CURRENT_RULES_EPOCH, 70, "the live epoch is EPOCH_70_TRAY_EXACT");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -1953,11 +1976,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":69}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":70}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 69"
+            "a fresh play_game() now stamps the bumped epoch, 70"
         );
     }
 

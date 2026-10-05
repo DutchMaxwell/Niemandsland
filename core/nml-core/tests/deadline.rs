@@ -24,10 +24,16 @@ fn picks(c: &ActCorpus, deadline_us: i64) -> Vec<Pick> {
 
 /// `tree`: the same acts under `search_mode: tree` with a 32-leaf budget.
 fn picks_in(c: &ActCorpus, deadline_us: i64, tree: bool) -> Vec<Pick> {
+    picks_a3(c, deadline_us, tree, false, 0)
+}
+
+/// `picks_in` plus the A3 knob `deadline_after_preselect` (`after`) and the
+/// `preselect_delay_us` seam that stretches every root preselection.
+fn picks_a3(c: &ActCorpus, deadline_us: i64, tree: bool, after: bool, delay_us: u64) -> Vec<Pick> {
     let per_act = act_statics(c, REPO);
     let seams = seams_of(&c.knobs);
     let mut knobs = c.knobs;
-    knobs.deadline_us = deadline_us;
+    (knobs.deadline_us, knobs.deadline_after_preselect) = (deadline_us, after);
     if tree {
         (knobs.search_mode, knobs.tree_budget) = (SearchMode::Tree, 32);
     }
@@ -35,7 +41,9 @@ fn picks_in(c: &ActCorpus, deadline_us: i64, tree: bool) -> Vec<Pick> {
     let mut out = Vec::new();
     for (ai, act) in c.acts.iter().enumerate() {
         let roll = Rollout::new(Policy::new(&per_act[ai], &c.terrain, seams), knobs);
-        if let Ok(p) = Search::new(roll, &act.statics).run(&act.state, act.player, &mut sc, None) {
+        let mut search = Search::new(roll, &act.statics);
+        search.bend.preselect_delay_us = delay_us;
+        if let Ok(p) = search.run(&act.state, act.player, &mut sc, None) {
             out.push(p);
         }
     }
@@ -89,5 +97,51 @@ fn the_tree_checks_before_its_first_batch_and_falls_back_to_the_top_row() {
         let t = p.tree.as_ref().unwrap_or_else(|| panic!("act {i}: a tree pick carries its trace"));
         assert_eq!((t.completed, t.deadline_hit, t.fallback), (0, true, Some("deadline_before_first_batch")), "act {i}");
         assert_eq!((&p.unit_key, p.action.kind, p.best_idx), (&p.scored[0].1, p.scored[0].2, 0), "act {i}: top row");
+    }
+}
+
+/// A3: the root preselection outlasts the allowance (a 100 ms delay seam against a 40 ms deadline). With the
+/// call-start clock every pick falls back before it searched; with `deadline_after_preselect` the allowance starts
+/// after the preselection, so every pick searches, and its trace carries the preselection time. Tree and pool alike.
+#[test]
+fn with_the_clock_after_the_preselection_a_slow_preselection_no_longer_eats_the_allowance() {
+    let c = corpus();
+    for tree in [true, false] {
+        let (off, on) = (picks_a3(&c, 40_000, tree, false, 100_000), picks_a3(&c, 40_000, tree, true, 100_000));
+        assert!(off.len() >= 10 && on.len() == off.len(), "tree {tree}: {} vs {} picks", off.len(), on.len());
+        for (i, (a, b)) in off.iter().zip(&on).enumerate() {
+            if tree {
+                let (ta, tb) = (a.tree.as_ref().expect("tree trace"), b.tree.as_ref().expect("tree trace"));
+                assert_eq!((ta.completed, ta.fallback, ta.preselect_us), (0, Some("deadline_before_first_batch"), None), "act {i}");
+                assert!(tb.completed > 0 && tb.batches > 0 && tb.fallback.is_none(), "act {i}: the tree searched: {tb:?}");
+                let pre = tb.preselect_us.expect("knob on: the preselection time rides the trace");
+                assert!(pre >= 100_000 && tb.elapsed_us >= pre, "act {i}: preselection {pre} us, elapsed {}", tb.elapsed_us);
+            } else {
+                let (da, db) = (a.deadline.as_ref().expect("deadline stamp"), b.deadline.as_ref().expect("deadline stamp"));
+                assert_eq!((da.completed, da.fallback, da.preselect_us), (0, Some("deadline_before_first_rollout"), None), "act {i}");
+                assert!(db.completed > 0 && db.fallback.is_none(), "act {i}: the pool rolled: {db:?}");
+                assert!(db.preselect_us.is_some_and(|us| us >= 100_000 && db.elapsed_us >= us), "act {i}: {db:?}");
+            }
+        }
+    }
+}
+
+/// A3, the other half: when the allowance never binds, the knob moves no pick, and the preselection time is
+/// stamped only with the knob on (and only where a deadline runs at all).
+#[test]
+fn the_knob_moves_no_pick_when_the_allowance_never_binds_and_stamps_only_when_on() {
+    let c = corpus();
+    let pre = |p: &Pick| (p.tree.as_ref().and_then(|t| t.preselect_us), p.deadline.as_ref().and_then(|d| d.preselect_us));
+    for tree in [true, false] {
+        let (off, on) = (picks_a3(&c, 1_000_000_000, tree, false, 0), picks_a3(&c, 1_000_000_000, tree, true, 0));
+        assert!(off.len() >= 10 && on.len() == off.len());
+        for (i, (a, b)) in off.iter().zip(&on).enumerate() {
+            assert_eq!((&a.unit_key, &a.pool_idx, &a.rs), (&b.unit_key, &b.pool_idx, &b.rs), "act {i}");
+            assert_eq!(a.expectation_after.to_bits(), b.expectation_after.to_bits(), "act {i}");
+            assert_eq!(a.tree.as_ref().map(|t| (t.completed, t.root.clone())), b.tree.as_ref().map(|t| (t.completed, t.root.clone())));
+            assert_eq!(pre(a), (None, None), "act {i}: knob off stamps nothing");
+            assert!(if tree { pre(b).0.is_some() } else { pre(b).1.is_some() }, "act {i}: knob on stamps");
+        }
+        assert!(picks_a3(&c, 0, tree, true, 0).iter().all(|p| pre(p) == (None, None)), "no deadline, no stamp");
     }
 }
