@@ -133,6 +133,7 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_fl
 	set_meta("sandbox_level_count", floor_heights_inches.size())
 
 	_build_floor_colliders()
+	add_child(GrasslandFootDressing.new().setup(footprint_inches))   # earth + moss at the foot (S6-1)
 
 
 ## Build the visual (façade panel cells, else procedural placeholder) and, if the panel set
