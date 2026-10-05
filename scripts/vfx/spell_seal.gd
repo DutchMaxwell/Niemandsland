@@ -58,10 +58,8 @@ func begin(centre: Vector3, radius_m: float, kind: String) -> MeshInstance3D:
 		"flare": 0.0, "crack": 0.0, "spin": 0.0}
 	for k: String in params:
 		mat.set_shader_parameter(k, params[k])
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(radius_m, radius_m) * 2.0
 	var seal := MeshInstance3D.new()
-	seal.mesh = plane
+	seal.mesh = annulus(radius_m, maxf(0.0, radius_m - 5.0 * BAND_M))
 	seal.material_override = mat
 	seal.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(seal)
@@ -72,6 +70,23 @@ func begin(centre: Vector3, radius_m: float, kind: String) -> MeshInstance3D:
 		tw.tween_property(mat, "shader_parameter/progress", 1.0, FORM_S)
 		tw.parallel().tween_property(mat, "shader_parameter/spin", 0.25, 8.0)
 	return seal
+
+
+## Only the band the glyph lives in is geometry (like RangeRingController's flat ring): a full plane made every
+## pixel inside an 18" circle run the shader for nothing (measured +0.6 ms GPU p95 on Medium). The polygon
+## circumscribes the circle plus one band, so it never clips the outer ring's smoothing; UVs map the radius to 0.5
+## as the plane did (measured against the plane version: only scattered pixels on the smoothed edge differ).
+static func annulus(radius_m: float, inner_m: float, segments: int = 64) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var outer := (radius_m + BAND_M) / cos(PI / segments)   # room for the shader's edge smoothing past the radius
+	for i in segments:
+		var a := Vector2.from_angle(TAU * i / segments)
+		var b := Vector2.from_angle(TAU * (i + 1) / segments)
+		for v: Vector2 in [a * outer, a * inner_m, b * inner_m, a * outer, b * inner_m, b * outer]:
+			st.set_uv(v / (radius_m * 2.0) + Vector2(0.5, 0.5))
+			st.add_vertex(Vector3(v.x, 0.0, v.y))
+	return st.commit()
 
 
 ## The cast resolved: flare (success), crack (fail) or a plain fade (cancel), then the seal is gone.

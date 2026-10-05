@@ -409,11 +409,15 @@ var _solo_difficulty_grades: Dictionary = {} # player-slot -> SoloDifficulty pre
 var _solo_arena_seed: int = 0                # game-level base seed for the reproducible difficulty knob draws
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
+var spell_seal: SpellSeal = null  # VFX #3: the cast's glyph circle at the caster (presentation only)
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
+var result_pips: ResultPips = null  # VFX #1: wound ticks / blood markers over the models (presentation only)
 var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat stage (solo)
+var volley_cue: VolleyCue = null  # VFX #2: tracers along the rule sight pairs (presentation only)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
 var battlefield_stains: BattlefieldStains = null
+var model_auras: ModelAuras = null  # VFX: ambient hero auras bound to model keys (presentation; off behind the effects switch)
 
 # Deployment Zones UI (visibility toggle only - editing is in Map Tool;
 # unit-placement compliance is verified manually by the players)
@@ -4139,9 +4143,10 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# of volleys that never roll). Indirect (wave 5) targets as if in line of sight — its per-model
 		# sighting is range-only; the Aircraft penalty (-12") and Ranged Shrouding (-6" min 6") shorten
 		# the reach here too.
+		var sight_pairs: Array = []   # VFX #2: the model pairs the count below cleared (tracer segments)
 		var sighted: int = _solo_sighted_count(member, target,
 			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
-			bool(profile.get("indirect", false)) or granted_indirect)   # GH #325
+			bool(profile.get("indirect", false)) or granted_indirect, sight_pairs)   # GH #325
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
 		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
 		var attacks: int = int(volley_report["attacks"])
@@ -4232,6 +4237,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 					member.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 		_solo_log_hit_mod(mod_info, target, to_hit)
 		var shooter_name: String = member.get_name()
+		_vfx_volley(member, target, profile, sight_pairs.slice(0, shot_bearers if shot_bearers >= 0 else sight_pairs.size()),
+			bool(profile.get("indirect", false)) or granted_indirect)
 		var faces: Array = await _solo_tray_roll(attacks, to_hit, "AI (%s)" % shooter_name, "attack",
 			"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 		if bool(profile.get("limited", false)):
@@ -4304,6 +4311,31 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
+
+
+## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as
+## _solo_true_los_callable). Indirect fire and an Aircraft target have no tested segment (LOS waived /
+## abstract), so they draw none — no line through a wall. A weapon carried by fewer models than can see
+## (a special weapon) draws only as many tracers as it has bearers.
+func _vfx_volley(member: GameUnit, target: GameUnit, profile: Dictionary, pairs: Array, los_waived: bool) -> void:
+	if volley_cue == null or pairs.is_empty() or los_waived or SoloController.is_aircraft(target):
+		return
+	var up_from := Vector3.UP * _solo_unit_los_height_m(member)
+	var up_to := Vector3.UP * _solo_unit_los_height_m(target)
+	volley_cue.fire(pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to]),
+		VolleyCue.family_of(str(profile.get("name", ""))))
+
+
+## VFX #2 for the player's own volley: _solo_attack_groups keeps no pairs, and a cosmetic key must never ride a
+## rules profile (it would split dice batches), so the same read-only sight query runs once more at the same
+## reach for this weapon's member. A weapon with fewer copies than seeing models draws one tracer per copy.
+func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary, los_waived: bool) -> void:
+	if member == null or los_waived or volley_cue == null:
+		return
+	var pairs: Array = []
+	_solo_sighted_count(member, target, int(SoloController.effective_shoot_reach_in(float(profile.get("range", 0))
+		+ float(SoloController.shooting_range_bonus(member)), target)), false, pairs)
+	_vfx_volley(member, target, profile, pairs.slice(0, maxi(int(profile.get("count", 1)), 1)), false)
 
 
 # === Wave 6 — Caster(X) cast resolution (official Solo v3.5.0 procedure; real tray dice) ===
@@ -4408,6 +4440,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
 	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
 	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
+	var seal := _vfx_seal_begin(caster, entry, effect)
 	if battle_log != null:
 		var token_note := "%d token%s" % [int(cast.get("threshold", 0)), ("" if int(cast.get("threshold", 0)) == 1 else "s")]
 		if boost > 0:
@@ -4423,12 +4456,16 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	if bool(cast.get("interference_open", false)) and not _solo_both_ai:
 		interference += await _solo_prompt_interference(caster, caster_unit, spell_name,
 			base_target, boost, _solo_cast_target_label(targets))
+	if interference > 0 and spell_seal != null:
+		spell_seal.interfere(seal)
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
 	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
 		"Casting %s (%d+)" % [spell_name, target_num])
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
+	if spell_seal != null:
+		spell_seal.finish(seal, SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: cast roll %d vs %d+ — %s" % [
 			spell_name, (int(faces[0]) if not faces.is_empty() else 0), target_num,
@@ -4457,6 +4494,19 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	_solo_clear_announce(announce)
 	await _solo_show_outcome("%s resolves %s" % [caster.get_name(), spell_name])
 	_solo_stage_end()
+
+
+## VFX #3: the cast's seal forms at the caster, its edge on the spell range exactly as the purple preview ring
+## draws it (RangeRingController: base edge + range). A Spell Conduit origin is not drawn (nor is it by the preview).
+func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary) -> MeshInstance3D:
+	if spell_seal == null or range_ring_controller == null or caster == null:
+		return null
+	for m in caster.get_alive_models():
+		var node := (m as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			return spell_seal.begin(node.global_position, range_ring_controller.ring_outer_radius_for_props(
+				range_ring_controller._props_of(node), int(entry.get("range_in", 0))), str(effect.get("kind", "utility")))
+	return null
 
 
 ## The damage-spell resolution against ONE target: fixed hits (no to-hit roll), the optional trigger
@@ -10101,7 +10151,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bo
 		AiCombatMath.Morale.ROUT:
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fails morale at half strength — ROUTS" % unit.get_name())
-			await _solo_apply_wounds(unit, unit.models.size() * 12)   # overkill wipes the unit via the normal flows
+			await _solo_apply_wounds(unit, unit.models.size() * 12, false)   # overkill wipes the unit via the normal flows
 	return result == AiCombatMath.Morale.PASSED
 
 
@@ -11917,6 +11967,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
 						attacker.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 			_solo_log_hit_mod(p_mod, target, to_hit)
+			_vfx_player_volley(group.get("member"), target, profile, bool(profile.get("indirect", false))
+				or h_granted_indirect or _solo_target_grants_indirect(target))
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You", "attack",
 				"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
@@ -12822,7 +12874,8 @@ func _solo_reset_all_fatigue() -> void:
 ## Apply shooting wounds through the EXISTING flows so parking, battle log and MP sync keep working:
 ## regiments take pooled wounds; loose units lose whole models back-rank-first (defender-optimal
 ## default), Tough models absorb wounds before dying.
-func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
+## `pips` = VFX #1 result marks over the struck models; a rout wipe passes false (a rout is no wound).
+func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true) -> void:
 	if wounds <= 0 or opr_army_manager == null:
 		return
 	if opr_army_manager.regiments.has(target.unit_id):
@@ -12852,14 +12905,14 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 	var remaining := 0
 	var deferred_deaths: Array = []
 	if wounds > 0:
-		remaining = await _solo_wound_models(target, wounds, pid, deferred_deaths)
+		remaining = await _solo_wound_models(target, wounds, pid, deferred_deaths, pips)
 	# A joined hero is part of the unit and takes wounds LAST (defender-optimal, field-test lock).
 	if remaining > 0 and target.has_method("get_attached_heroes"):
 		for h in target.get_attached_heroes():
 			if remaining <= 0:
 				break
 			if h != null:
-				remaining = await _solo_wound_models(h, remaining, pid, deferred_deaths)
+				remaining = await _solo_wound_models(h, remaining, pid, deferred_deaths, pips)
 	if battle_log != null:
 		# Combined alive AND combined total: with a joined hero both numbers must count the same pool
 		# (the old own-models total printed impossible "(4/3)" shapes once the hero soaked the spill).
@@ -12979,6 +13032,7 @@ func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int, appl
 ## on death (the allocation DECISION is host-local; the RESULT syncs as always).
 func _solo_apply_picked_wound(unit: GameUnit, mi: ModelInstance, pid: int) -> void:
 	var died := mi.apply_damage(1)
+	_vfx_pip(ResultPips.Kind.KILL if died else ResultPips.Kind.WOUND, mi, 1)
 	if died:
 		var died_models: Array[ModelInstance] = [mi]
 		await _solo_remove_dead_models(unit, died_models, pid)
@@ -13017,14 +13071,22 @@ func _solo_hero_carries_on(target: GameUnit) -> void:
 ## SoloController.apply_wounds_to_models; this wires the SAME visible seams manual play uses — the wound
 ## token + MP broadcast for a surviving Tough model (maintainer field-test: an AI Tough hero soaked
 ## wounds with no visible tick), and tray-parking on death.
-func _solo_wound_models(unit: GameUnit, wounds: int, pid: int, deferred_deaths = null) -> int:
+func _solo_wound_models(unit: GameUnit, wounds: int, pid: int, deferred_deaths = null, pips: bool = false) -> int:
+	var before := {}   # VFX #1: each model's wounds before the batch, so a tick counts what landed NOW
+	for m in unit.models:
+		if pips and m != null:
+			before[m] = int((m as ModelInstance).wounds_current)
 	var on_changed := func(m: ModelInstance) -> void:
+		if pips:
+			_vfx_pip(ResultPips.Kind.WOUND, m, int(before.get(m, m.wounds_current)) - int(m.wounds_current))
 		if radial_menu_controller != null:
 			radial_menu_controller._update_wound_marker(m)
 		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 			network_manager.broadcast_model_wounds(m)
 	var died_models: Array[ModelInstance] = []
 	var on_died := func(m: ModelInstance) -> void:
+		if pips:
+			_vfx_pip(ResultPips.Kind.KILL, m, 1)   # still on the table: the tray parking comes after
 		died_models.append(m)
 	var remaining := SoloController.apply_wounds_to_models(unit, wounds, on_changed, on_died)
 	if not died_models.is_empty():
@@ -13033,6 +13095,12 @@ func _solo_wound_models(unit: GameUnit, wounds: int, pid: int, deferred_deaths =
 		else:
 			deferred_deaths.append({"unit": unit, "models": died_models})
 	return remaining
+
+
+## VFX #1: one result mark over a model, from the allocation that just happened (headless spawns nothing).
+func _vfx_pip(kind: ResultPips.Kind, mi: ModelInstance, count: int) -> void:
+	if result_pips != null:
+		result_pips.mark_model(kind, mi, count)
 
 
 func _capture_bug_report() -> void:
@@ -18358,6 +18426,9 @@ func _init_radial_menu() -> void:
 	move_trails = MoveTrailsScript.new()
 	move_trails.name = "MoveTrails"
 	add_child(move_trails)
+	spell_seal = SpellSeal.new()
+	spell_seal.name = "SpellSeal"
+	add_child(spell_seal)
 	object_manager.move_trails = move_trails
 	# Transparency wave stage 2 (grilled 2026-07-30): applied rules announce themselves AT
 	# the table — rising billboard texts on the affected unit, stagger-cascaded so full
@@ -18365,11 +18436,17 @@ func _init_radial_menu() -> void:
 	rule_floats = FloatingRuleText.new()
 	rule_floats.name = "FloatingRuleText"
 	add_child(rule_floats)
+	result_pips = ResultPips.new()
+	result_pips.name = "ResultPips"
+	add_child(result_pips)
 	# Pacing grill 31.07.: the combat stage — the volleys hold at phase boundaries on a
 	# central card; it reads its rule lines from the battle log's COMBAT stream.
 	combat_stage = CombatStage.new()
 	combat_stage.name = "CombatStage"
 	add_child(combat_stage)
+	volley_cue = VolleyCue.new()
+	volley_cue.name = "VolleyCue"
+	add_child(volley_cue)
 	if battle_log != null:
 		battle_log.entry_added.connect(_solo_stage_collect)
 	# Measure-on-pickup ghost (ROADMAP UX polish): translucent origin silhouettes while dragging —
@@ -18421,6 +18498,10 @@ func _init_radial_menu() -> void:
 	battlefield_stains = BattlefieldStains.new()
 	battlefield_stains.name = "BattlefieldStains"
 	add_child(battlefield_stains)
+	# Hero auras (data: assets/vfx/model_auras.json): each matching miniature gets its aura on the next scan.
+	model_auras = ModelAuras.new()
+	model_auras.name = "ModelAuras"
+	add_child(model_auras)
 	radial_menu_controller.model_deleted.connect(_on_model_removed_stain)
 	radial_menu_controller.unit_deleted.connect(_on_unit_removed_stain)
 

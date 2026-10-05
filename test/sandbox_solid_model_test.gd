@@ -39,11 +39,10 @@ func test_a_model_missing_from_the_manifest_keeps_the_look() -> void:
 	var om: ObjectManager = auto_free(ObjectManager.new())
 	add_child(om)
 	var solid := _solid(om)
+	var before := solid.get_child_count()   # the piece's own children (collider, look, shadow, dressing) as built
 	await om.apply_solid_model(solid, "no_such_solid_model")
 	assert_bool(_look_visible(solid)).is_true()
-	var added := solid.get_children().filter(func(c: Node) -> bool:
-		return not (c is MeshInstance3D or c is CollisionShape3D or c is Decal))
-	assert_int(added.size()).is_equal(0)   # no model was added
+	assert_int(solid.get_child_count()).is_equal(before)   # no model was added
 
 
 func test_a_corrupt_cached_model_keeps_the_look() -> void:
