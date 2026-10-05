@@ -126,6 +126,7 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_fl
 	add_to_group("selectable")
 	add_to_group("terrain")
 	add_to_group(GROUP)
+	add_child(GrasslandFootScatter.new().setup(p_footprint_inches, true))   # stones + grass at the foot (S6-2)
 	collision_layer = GROUND_COLLISION_LAYER | MOVABLE_TERRAIN_COLLISION_LAYER
 	collision_mask = 0
 	set_meta("prop_id", prop_id)
@@ -133,6 +134,7 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_fl
 	set_meta("sandbox_level_count", floor_heights_inches.size())
 
 	_build_floor_colliders()
+	add_child(GrasslandFootDressing.new().setup(footprint_inches))   # earth + moss at the foot (S6-1)
 
 
 ## Build the visual (façade panel cells, else procedural placeholder) and, if the panel set

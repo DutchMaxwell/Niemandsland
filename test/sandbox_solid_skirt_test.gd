@@ -14,7 +14,7 @@ func _solid() -> SandboxSolidProp:
 
 
 func _skirt(p: Node) -> Decal:
-	var found := p.find_children("*", "Decal", false, false)
+	var found := p.find_children("ContactSkirt", "Decal", false, false)   # the foot dressing (S6-1) is a Decal too
 	return found[0] as Decal if found.size() == 1 else null
 
 
