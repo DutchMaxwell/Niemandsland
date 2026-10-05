@@ -409,6 +409,7 @@ var _solo_difficulty_grades: Dictionary = {} # player-slot -> SoloDifficulty pre
 var _solo_arena_seed: int = 0                # game-level base seed for the reproducible difficulty knob draws
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
+var spell_seal: SpellSeal = null  # VFX #3: the cast's glyph circle at the caster (presentation only)
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 var result_pips: ResultPips = null  # VFX #1: wound ticks / blood markers over the models (presentation only)
 var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat stage (solo)
@@ -4439,6 +4440,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
 	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
 	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
+	var seal := _vfx_seal_begin(caster, entry, effect)
 	if battle_log != null:
 		var token_note := "%d token%s" % [int(cast.get("threshold", 0)), ("" if int(cast.get("threshold", 0)) == 1 else "s")]
 		if boost > 0:
@@ -4454,12 +4456,16 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	if bool(cast.get("interference_open", false)) and not _solo_both_ai:
 		interference += await _solo_prompt_interference(caster, caster_unit, spell_name,
 			base_target, boost, _solo_cast_target_label(targets))
+	if interference > 0 and spell_seal != null:
+		spell_seal.interfere(seal)
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
 	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
 		"Casting %s (%d+)" % [spell_name, target_num])
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
+	if spell_seal != null:
+		spell_seal.finish(seal, SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: cast roll %d vs %d+ — %s" % [
 			spell_name, (int(faces[0]) if not faces.is_empty() else 0), target_num,
@@ -4488,6 +4494,19 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	_solo_clear_announce(announce)
 	await _solo_show_outcome("%s resolves %s" % [caster.get_name(), spell_name])
 	_solo_stage_end()
+
+
+## VFX #3: the cast's seal forms at the caster, its edge on the spell range exactly as the purple preview ring
+## draws it (RangeRingController: base edge + range). A Spell Conduit origin is not drawn (nor is it by the preview).
+func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary) -> MeshInstance3D:
+	if spell_seal == null or range_ring_controller == null or caster == null:
+		return null
+	for m in caster.get_alive_models():
+		var node := (m as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			return spell_seal.begin(node.global_position, range_ring_controller.ring_outer_radius_for_props(
+				range_ring_controller._props_of(node), int(entry.get("range_in", 0))), str(effect.get("kind", "utility")))
+	return null
 
 
 ## The damage-spell resolution against ONE target: fixed hits (no to-hit roll), the optional trigger
@@ -18369,6 +18388,9 @@ func _init_radial_menu() -> void:
 	move_trails = MoveTrailsScript.new()
 	move_trails.name = "MoveTrails"
 	add_child(move_trails)
+	spell_seal = SpellSeal.new()
+	spell_seal.name = "SpellSeal"
+	add_child(spell_seal)
 	object_manager.move_trails = move_trails
 	# Transparency wave stage 2 (grilled 2026-07-30): applied rules announce themselves AT
 	# the table — rising billboard texts on the affected unit, stagger-cascaded so full
