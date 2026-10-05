@@ -2,7 +2,9 @@ extends GdUnitTestSuite
 ## SpellShow, the charge (the spells lane's gates, maintainer look verdicts 05.10.: all spells GO): a declaration
 ## counts once; invalid origins, radii and elements draw nothing;
 ## Performance draws nothing, Low and Reduce Motion a still form (no particles, no lights, no spin); waiting charges
-## are capped and expire; a charge never touches the game's RNG.
+## are capped and expire; a charge never touches the game's RNG. Step 2: on Medium the charge spins with element motes;
+## switching the effects off discards a waiting charge; a fail or cancel never releases at the targets; every element
+## and outcome resolves once and cleans up; a whole cast leaves the game's RNG alone.
 
 var _preset: int
 var _motion: bool
@@ -87,3 +89,57 @@ func test_waiting_charges_are_capped_and_expire(timeout := 40000) -> void:
 	await get_tree().create_timer(SpellShow.MAX_HOLD_S + 0.1).timeout
 	assert_int(show._columns.size()).is_zero()
 	assert_int(show.get_child_count()).is_zero()
+
+
+func test_on_medium_the_charge_spins_with_motes() -> void:
+	var show := _show()
+	show.begin("cast", Vector3.ZERO, 0.3, 1, 1)
+	var focus: Node3D = show.get_child(0)
+	var turn := focus.rotation.y
+	await get_tree().create_timer(0.15).timeout
+	assert_float(focus.rotation.y).override_failure_message("it spins").is_not_equal(turn)
+	assert_int(show.find_children("*", "MultiMeshInstance3D", true, false).size()).is_greater(0)
+
+
+func test_switching_off_discards_an_unresolved_charge() -> void:
+	var show := _show()
+	show.begin("cast", Vector3.ZERO, 0.3, 0, 71)
+	show.enabled = false
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_int(show.get_child_count()).is_zero()
+
+
+func test_failure_and_cancel_never_release_at_targets(timeout := 10000) -> void:
+	for outcome: int in [SpellSeal.Outcome.FAIL, SpellSeal.Outcome.CANCEL]:
+		var show := _show()
+		show.begin("cast", Vector3.ZERO, 0.3, SpellLook.Element.FIRE, 71)
+		show.end("cast", outcome, [Vector3(0.2, 0.03, 0)], true, 71)
+		assert_object(show.get_node_or_null("SpellSuccess")).is_null()
+		if outcome == SpellSeal.Outcome.FAIL:
+			assert_object(show.get_node_or_null("SpellFailure/InwardRipple")).is_not_null()
+		else:
+			assert_object(show.get_node_or_null("SpellFailure")).is_null()
+		await get_tree().create_timer(1.9).timeout
+		assert_int(show.get_child_count()).is_zero()
+
+
+func test_every_element_resolves_once_cleans_up_and_leaves_the_game_rng_alone(timeout := 10000) -> void:
+	seed(192)
+	var expected := randi()
+	seed(192)
+	var shows: Array[SpellShow] = []
+	for el in 5:
+		for outcome: int in [SpellSeal.Outcome.SUCCESS, SpellSeal.Outcome.FAIL]:
+			var show := _show()
+			shows.append(show)
+			show.begin("cast", Vector3.ZERO, 0.3, el, 71)
+			show.end("cast", outcome, [Vector3(0.2, 0.03, 0.1)], true, 71)
+			var count := show.get_child_count()
+			show.end("cast", outcome, [Vector3(0.2, 0.03, 0.1)], true, 71)
+			assert_int(show.get_child_count()).override_failure_message("resolves once").is_equal(count)
+			assert_int(show._columns.size()).is_zero()
+	await get_tree().create_timer(2.4).timeout   # includes the delayed impact callbacks
+	assert_int(randi()).is_equal(expected)
+	for show in shows:
+		assert_int(show.get_child_count()).is_zero()
