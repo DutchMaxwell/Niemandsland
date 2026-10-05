@@ -248,7 +248,9 @@ func _restore() -> void:
 	_table._update_base_top_material()
 	for frame in _saved["frames"]:
 		if is_instance_valid(frame):
+			frame.remove_meta("graphics_frame_reference")
 			frame.material_override = _saved["frames"][frame]
+	_table._apply_frame_finish()  # A saved High finish must not survive a switch to Low.
 	for floor_mesh in _saved["floors"]:
 		if is_instance_valid(floor_mesh):
 			floor_mesh.material_override = _saved["floors"][floor_mesh]
