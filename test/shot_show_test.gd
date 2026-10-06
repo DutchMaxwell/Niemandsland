@@ -1,7 +1,10 @@
 extends GdUnitTestSuite
 ## ShotShow (maintainer look verdicts: "not in a row, more like chaotic fire", then shots GO): the volley's chaos is a
 ## pure function of the cue's seed (every peer sees the same) and not a row; Performance draws nothing; a whole volley
-## leaves the game's RNG alone and cleans up after itself.
+## leaves the game's RNG alone and cleans up after itself. An arrow flies on an arc above the rule line and is gone after
+## its flight; a flamer's gout has no round. Weapon types (maintainer 05.10.: "differentiate by WEAPON TYPE", then GO): no
+## two families look alike; a machine gun fires a burst of rounds per model; a beam stands from muzzle to target at
+## once and fades.
 
 const ShotScript = preload("res://scripts/vfx/shot_show.gd")
 const PAIRS := [[Vector3(0, 0.03, 0), Vector3(0.3, 0.03, 0)], [Vector3(0, 0.03, 0.03), Vector3(0.3, 0.03, 0.03)],
@@ -57,3 +60,62 @@ func test_a_volley_fires_leaves_the_game_rng_alone_and_cleans_up(timeout := 8000
 	assert_int(show.get_child_count()).override_failure_message("the muzzles fired").is_greater(4)
 	await get_tree().create_timer(2.5).timeout
 	assert_int(show.get_child_count()).override_failure_message("everything cleaned up").is_equal(0)
+
+
+func _rounds(show: Node3D) -> Array:
+	return show.get_children().filter(func(c: Node) -> bool: return not (c is FxBurst) and not (c is OmniLight3D))
+
+
+func test_an_arrow_flies_on_an_arc_and_a_gout_has_no_round(timeout := 5000) -> void:
+	var show := _show()
+	var a := Vector3(0, 0.03, 0)
+	var b := Vector3(0.3, 0.03, 0)
+	show._fire(a, b, VolleyCue.Family.BOW, 7, 2)
+	show._fire(a, b, VolleyCue.Family.FLAME, 8, 2)
+	assert_int(_rounds(show).size()).override_failure_message("one arrow, no flame round").is_equal(1)
+	await get_tree().create_timer(ShotScript.SHOTS[VolleyCue.Family.BOW][0] * 0.5).timeout
+	var arrow := _rounds(show)[0] as Node3D
+	assert_float(arrow.global_position.x).is_between(0.05, 0.25)
+	assert_float(arrow.global_position.y).override_failure_message("above the rule line").is_greater(0.03 + 0.01)
+	await get_tree().create_timer(ShotScript.SHOTS[VolleyCue.Family.BOW][0] * 0.6 + 0.1).timeout
+	assert_int(_rounds(show).size()).override_failure_message("gone after its flight").is_equal(0)
+
+
+class FireSpy extends "res://scripts/vfx/shot_show.gd":
+	var fired := 0
+	func _fire(a: Vector3, b: Vector3, family: int, s: int, p: int, muzzle_k := 1.0, echo := false) -> void:
+		fired += 1
+		super._fire(a, b, family, s, p, muzzle_k, echo)
+
+
+func test_no_two_families_look_the_same() -> void:
+	var rows: Array = ShotScript.SHOTS.values()
+	assert_int(rows.size()).is_equal(VolleyCue.Family.size())
+	for i in rows.size():
+		for j in range(i + 1, rows.size()):
+			assert_array(rows[i]).override_failure_message("families %d and %d look alike" % [i, j]).is_not_equal(rows[j])
+
+
+func test_a_machine_gun_fires_a_burst_per_model(timeout := 5000) -> void:
+	var spy := auto_free(FireSpy.new()) as FireSpy
+	spy.force_for_tests = true
+	add_child(spy)
+	spy.enabled = true
+	spy.volley(PAIRS, VolleyCue.Family.AUTO, 3)
+	spy.volley(PAIRS, VolleyCue.Family.BALLISTIC, 4)
+	await get_tree().create_timer(ShotScript.CHAOS_S + ShotScript.AUTO_ROUNDS * ShotScript.ROUND_GAP_S + 0.2).timeout
+	assert_int(ShotScript.AUTO_ROUNDS).override_failure_message("a burst, not a single shot").is_greater_equal(3)
+	assert_int(spy.fired).is_equal(PAIRS.size() * ShotScript.AUTO_ROUNDS + PAIRS.size())
+
+
+func test_a_beam_stands_from_muzzle_to_target_and_fades(timeout := 5000) -> void:
+	var show := _show()
+	var a := Vector3(0, 0.03, 0)
+	var b := Vector3(0.3, 0.03, 0)
+	show._fire(a, b, VolleyCue.Family.BEAM, 9, 2)
+	await get_tree().create_timer(0.08).timeout
+	var beams := show.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D)
+	assert_int(beams.size()).is_equal(1)
+	assert_float((beams[0] as Node3D).global_transform.basis.y.length()).is_equal_approx(a.distance_to(b) - 0.012, 0.002)
+	await get_tree().create_timer(0.4).timeout
+	assert_int(show.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D).size()).is_equal(0)
