@@ -137,6 +137,17 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_fl
 	add_child(GrasslandFootDressing.new().setup(footprint_inches))   # earth + moss at the foot (S6-1)
 
 
+## S8.5: take another biome's wall panels in place — same network id, spot, floors and colliders (only the Visual
+## root is rebuilt); the prop_id keeps carrying the biome for saves and the other table.
+func retheme(prefix: String, lib: RuinsLibrary) -> void:
+	if prefix == _theme_prefix:
+		return
+	prop_id = prefix + prop_id.substr(_theme_prefix.length())
+	_theme_prefix = prefix
+	set_meta("prop_id", prop_id)
+	build_visual(lib)
+
+
 ## Build the visual (façade panel cells, else procedural placeholder) and, if the panel set
 ## isn't cached yet, fetch it and rebuild when it arrives.
 func build_visual(lib: RuinsLibrary) -> void:
