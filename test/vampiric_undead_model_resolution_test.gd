@@ -41,7 +41,8 @@ func test_vampiric_undead_words_map_to_the_baked_slugs() -> void:
 		"Dual Heavy Hand Weapons": "dual", "Cursed Greatsword": "greatsword", "Heavy Great Weapon": "great_weapon",
 		"Champion Cursed Crossbow": "crossbow", "Carving Tool": "carving_tool",
 		"Skeletal Steed": "skeletal_steed", "Abyssal Beast": "abyssal_beast", "Steed": "steed",
-		"Hunting Pet": "hunting_pet", "Cursed Mace": "mace", "Sling": "sling"}
+		"Hunting Pet": "hunting_pet", "Pet Ghoul": "pet_ghoul", "Stitched Leader": "stitched_leader",
+		"Cursed Mace": "mace", "Sling": "sling"}
 	for word in expected:
 		assert_str(lib.variant_slug([word], "vampiric_undead")).is_equal(expected[word])
 	# Scoped: the other factions keep the shared slugs.
@@ -82,3 +83,23 @@ func test_replaced_heavy_hand_weapon_resolves_the_werewolf_cleaver() -> void:
 	var manager := _manager(["vampiric_undead/werewolves#heavy_hand_weapon"])
 	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")).is_equal([
 		"Werewolves#heavy_hand_weapon", "Werewolves#heavy_hand_weapon", "Werewolves#heavy_hand_weapon"])
+
+
+func _drained_leader_with_pet() -> OPRApiClient.OPRArmy:
+	return _army([{"armyId": VU_ARMY, "name": "Drained Leader", "size": 1, "bases": {"round": "25"},
+		"loadout": [
+			{"type": "ArmyBookWeapon", "name": "Great Weapon", "attacks": 3, "count": 1},
+			{"type": "ArmyBookWeapon", "name": "Bow", "attacks": 2, "count": 1},
+			{"type": "ArmyBookItem", "name": "Pet Ghoul", "count": 1,
+				"content": [{"type": "ArmyBookRule", "name": "Repel Ambushers"}]}]}])
+
+
+func test_hero_item_pet_resolves_the_composed_bake_when_shipped() -> void:
+	var manager := _manager(["vampiric_undead/drained leader#bow+greatweapon",
+		"vampiric_undead/drained leader#bow+greatweapon+pet_ghoul"])
+	assert_array(manager._unit_model_variant_names(_drained_leader_with_pet().units[0], "vampiric_undead")) 		.is_equal(["Drained Leader#bow+greatweapon+pet_ghoul"])
+
+
+func test_hero_item_pet_falls_back_to_the_weapon_bake_when_not_shipped() -> void:
+	var manager := _manager(["vampiric_undead/drained leader#bow+greatweapon"])
+	assert_array(manager._unit_model_variant_names(_drained_leader_with_pet().units[0], "vampiric_undead")) 		.is_equal(["Drained Leader#bow+greatweapon"])
