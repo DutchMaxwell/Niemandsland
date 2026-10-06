@@ -10,11 +10,13 @@ const END_INCHES := 1.5   # the segment overlaps its neighbours by this much, so
 const HEIGHT_INCHES := 0.4
 const IN2M := 0.0254
 
-## S8.4 (maintainer 06.10.: the terrain should match the biome): [edge, centre] per table biome; grassland is today's
-## dusty earth, a biome not listed keeps it too.
+## S8.4 (maintainer 06.10.: the terrain should match the biome): [edge, centre, optional alpha] per table biome;
+## grassland is today's dusty earth (alpha 0.42), a biome not listed keeps it too. Lead 06.10.: on sand and ash the
+## track must read — darker packed earth on sand, pale compacted ash on ash (dark lava patches hide a dark track),
+## both more opaque (sand_ash_readable_test measures it against the presenter's ground).
 const PALETTE := {"temperate_grassland": [Color(0.40, 0.33, 0.22), Color(0.33, 0.29, 0.20)],
-	"arid_desert": [Color(0.62, 0.50, 0.34), Color(0.54, 0.43, 0.29)], "frozen_tundra": [Color(0.52, 0.52, 0.52), Color(0.40, 0.39, 0.37)],
-	"volcanic_ash": [Color(0.20, 0.18, 0.17), Color(0.12, 0.11, 0.11)], "urban_ruins": [Color(0.30, 0.29, 0.27), Color(0.24, 0.23, 0.22)],
+	"arid_desert": [Color(0.42, 0.30, 0.20), Color(0.36, 0.26, 0.17), 0.65], "frozen_tundra": [Color(0.52, 0.52, 0.52), Color(0.40, 0.39, 0.37)],
+	"volcanic_ash": [Color(0.70, 0.67, 0.63), Color(0.62, 0.59, 0.56), 0.65], "urban_ruins": [Color(0.30, 0.29, 0.27), Color(0.24, 0.23, 0.22)],
 	"alien_jungle": [Color(0.26, 0.19, 0.11), Color(0.20, 0.15, 0.09)]}
 
 static var _textures := {}   # biome -> strip texture
@@ -67,6 +69,7 @@ static func _strip_texture(biome: String) -> ImageTexture:
 	if _textures.has(biome):
 		return _textures[biome]
 	var pair: Array = PALETTE.get(biome, PALETTE["temperate_grassland"])
+	var alpha: float = pair[2] if pair.size() > 2 else 0.42
 	var img := Image.create(64, 16, false, Image.FORMAT_RGBA8)
 	var noise := FastNoiseLite.new()
 	noise.seed = 7
@@ -78,7 +81,7 @@ static func _strip_texture(biome: String) -> ImageTexture:
 			var nv := noise.get_noise_2d(px, py)
 			var a := clampf((1.0 - across - nv * 0.35) * 1.6, 0.0, 1.0) * clampf(along * 4.0, 0.0, 1.0)
 			var c: Color = pair[0].lerp(pair[1], 0.5 + nv * 0.5)
-			img.set_pixel(px, py, Color(c.r, c.g, c.b, a * 0.42))
+			img.set_pixel(px, py, Color(c.r, c.g, c.b, a * alpha))
 	_textures[biome] = ImageTexture.create_from_image(img)
 	return _textures[biome]
 
