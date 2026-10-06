@@ -1051,6 +1051,10 @@ func _create_army_tray(player_id: int, army_name: String, player_color: Color) -
 	# Add to scene tree BEFORE setting global_position
 	object_manager.get_parent().add_child(tray)
 	tray.global_position = tray_pos
+	var style := preload("res://scripts/visual/army_tray_style.gd").new()
+	style.name = "ArmyTrayStyle"
+	tray.add_child(style)
+	style.setup(tray_size, player_color)
 
 	army_trays[player_id] = tray
 	return tray
