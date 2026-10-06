@@ -1850,9 +1850,9 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     // panicking deep inside a rollout.
     // Variant 2 (wave C G-AB) is variant 0 without the C7 carry term; variant 3
     // (mission-play lane) is the `round_vp` currency.
-    if !matches!(header.knobs.eval_variant, 0..=3) {
+    if !matches!(header.knobs.eval_variant, 0..=4) {
         return Err(format!(
-            "eval_variant {}: no registered arm (only 0 to 3 exist)",
+            "eval_variant {}: no registered arm (only 0 to 4 exist)",
             header.knobs.eval_variant
         ));
     }
