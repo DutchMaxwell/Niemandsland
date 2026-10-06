@@ -238,6 +238,14 @@ func _build_fog(main: Node) -> void:
 	volume.material = fog
 	surface.add_child(volume)
 	volume.position = Vector3(0.0,0.010,0.0)
+	if table_tier:
+		var size_m: Vector2 = main.get_node("Table").table_size * 0.3048
+		volume.size = Vector3(size_m.x + 0.12, 0.24, size_m.y + 0.13)
+		volume.position.y = 0.10
+		fog.density = 0.08 * float(_profile.fog_density)
+		fog.height_falloff = 0.7
+		fog.edge_fade = 0.55
+		fog.albedo = Color(0.80,0.85,0.90) if biome == "grassland" else _profile.fog_color
 	_fog = volume
 
 
@@ -323,6 +331,12 @@ func _apply_reference_environment(light_values := true) -> void:
 		"volumetric_fog_temporal_reprojection_enabled": true, "volumetric_fog_temporal_reprojection_amount": 0.9,
 		# Pin the glow to the accepted reference look so ULTRA's stronger glow/bloom cannot wash the scene out.
 		"glow_enabled": true, "glow_bloom": 0.1, "fog_enabled": false}
+	if table_tier:
+		var graphics := get_node("/root/GraphicsSettings")
+		var policy: Dictionary = graphics.environment_values(preset, graphics.current_preset)
+		for key: String in policy:
+			if key.begins_with("sdfgi_") or key.begins_with("ssil_") or key.begins_with("volumetric_fog_"):
+				values[key] = policy[key]
 	if light_values:
 		values.merge({"ssao_intensity": 2.0, "ssr_fade_in": 0.08, "glow_intensity": 0.16})
 	var render_state = _main.get("render_state")
