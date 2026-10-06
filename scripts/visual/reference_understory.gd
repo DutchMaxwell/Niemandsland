@@ -7,9 +7,12 @@ const ReferenceMaterials = preload("res://scripts/visual/reference_materials.gd"
 var _presentation: Node3D
 var _exclusions: Array[Vector3] = []
 var _walls: Array = []
+var _path_segments := PackedVector4Array()
 
 func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 	_presentation = presentation
+	if _table_tier():
+		_path_segments = TablePaths.of(main.get_node("Table")).surface_segments()
 	_rng.seed = 170927
 	_walls = main.terrain_overlay.get_wall_segments_world()
 	for obj in main.object_manager.get_children():
@@ -251,6 +254,9 @@ func _build_puddles(size: Vector2) -> void:
 	mesh.size = Vector2(1.0,1.0)
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/visual/reference_water.gdshader")
+	if _table_tier():
+		mat.set_shader_parameter("water_roughness", 0.16)
+		mat.set_shader_parameter("water_specular", 0.25)
 	mesh.material = mat
 	var transforms: Array[Transform3D] = []
 	var colors: Array[Color] = []
@@ -259,7 +265,8 @@ func _build_puddles(size: Vector2) -> void:
 		if _excluded(p):
 			continue
 		var path := _path_amount(p)
-		if _rng.randf() > 0.45+path*0.55:
+		var chance := 0.04 + path * 0.45 if _table_tier() else 0.45 + path * 0.55
+		if _rng.randf() > chance:
 			continue
 		var r := _rng.randf_range(0.020,0.075)*(0.7+path)
 		var basis := Basis(Vector3.UP,_rng.randf()*TAU).scaled(Vector3(r,r,r))
@@ -482,7 +489,7 @@ func _litter_mesh() -> ArrayMesh:
 ## A shared winding wear mask also drives the ground material. It is visual only.
 func _path_amount(p: Vector2) -> float:
 	if _table_tier():
-		return 0.0   # the tutorial board's worn path does not belong on a player's table (D2)
+		return TablePaths.surface_amount(p, _path_segments)
 	var center := -0.60+sin(p.y*8.0+0.4)*0.085
 	var width: float = 0.020+_presentation._surface_noise(p*38.0)*0.020
 	return (1.0-smoothstep(width,width+0.030,abs(p.x-center)))*smoothstep(0.02,0.15,p.y)

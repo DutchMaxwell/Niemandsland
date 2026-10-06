@@ -1,5 +1,7 @@
 shader_type spatial;
 render_mode blend_mix, depth_draw_never, cull_disabled;
+uniform float water_roughness = 0.04;
+uniform float water_specular = 1.0;
 uniform float ripple_strength = 0.14;
 varying vec3 world_pos;
 float w_hash(vec2 p) {
@@ -26,8 +28,8 @@ void fragment() {
 	float fres = pow(1.0 - clamp(dot(NORMAL, normalize(VIEW)),0.0,1.0), 3.0);
 	vec3 deep = mix(vec3(0.016,0.026,0.034), vec3(0.045,0.058,0.070), w_noise(world_pos.xz*90.0));
 	ALBEDO = mix(deep, vec3(0.40,0.47,0.56), fres*0.45);
-	ROUGHNESS = 0.04;
-	SPECULAR = 1.0;
+	ROUGHNESS = water_roughness;
+	SPECULAR = water_specular;
 	METALLIC = 0.0;
 	ALPHA = mask * 0.95;
 }
