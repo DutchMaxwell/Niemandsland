@@ -209,6 +209,10 @@ pub struct Knobs {
     /// for the A/B, default OFF (the AI's imagination, not the referee).
     #[serde(default)]
     pub opener_by_finish: bool,
+    /// aifix D5 — no reply threat at the game-end boundary (nobody shoots after
+    /// round `rounds_total`). Research knob for the A/B, default OFF.
+    #[serde(default)]
+    pub no_end_threat: bool,
     /// NML-1134 — which RULE VOCABULARY this corpus's board rows were slotted
     /// with (`data/encoder_rule_vocab_v1.json`, stamped by `act_recorder.gd`).
     /// THE ONE RULE, and every reader gets it from here: the header says, and a
@@ -1430,6 +1434,7 @@ impl Default for Knobs {
             engage_fold: false,
             dangerous_end_morale: false,
             opener_by_finish: false,
+            no_end_threat: false,
             // NML-1134: the CORPUS reading — a header with no `knobs` block at
             // all predates the stamp just as surely as one with an unstamped
             // block does. A caller that plays a FRESH game stamps

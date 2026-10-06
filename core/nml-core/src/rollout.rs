@@ -440,6 +440,16 @@ impl<'a> Rollout<'a> {
         Ok((out, Stop::Guard))
     }
 
+    /// The reply volley a boundary is priced with. Knob `no_end_threat` (aifix
+    /// D5, default off): at the game-end boundary nobody shoots again (GF p.7),
+    /// so the boundary is priced with no incoming fire.
+    fn end_threat(&self, end: &State, player: i64) -> Vec<f64> {
+        if self.knobs.no_end_threat && end.round >= end.rounds_total {
+            return Vec::new();
+        }
+        reply_threat(self.statics(), end, player)
+    }
+
     /// `AiPlanner._blend_score` ai_planner.gd:439-452 — the rollout's boundaries
     /// priced as ONE number. `opener_seat` is the per-pick static
     /// (`AiPlanner.opener_seat`), which the act corpus records per activation.
@@ -472,7 +482,7 @@ impl<'a> Rollout<'a> {
         let variant = self.knobs.eval_variant;
         if (mode == 1 && opener_seat) || (mode == 2 && !opener_seat) {
             let last = &ends[ends.len() - 1];
-            let incoming = reply_threat(self.statics(), last, player);
+            let incoming = self.end_threat(last, player);
             let s = score_with_variant(last, self.statics(), player, &incoming, self.policy.fit, variant);
             return leaf(ends.len() - 1, s);
         }
@@ -487,7 +497,7 @@ impl<'a> Rollout<'a> {
         // saw the discount.
         let mut dw = 1.0f64;
         for (k, end) in ends.iter().enumerate() {
-            let incoming = reply_threat(self.statics(), end, player);
+            let incoming = self.end_threat(end, player);
             let s = score_with_variant(end, self.statics(), player, &incoming, self.policy.fit, variant);
             total += dw * leaf(k, s);
             weights += dw;
