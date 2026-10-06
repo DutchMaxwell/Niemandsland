@@ -1,5 +1,6 @@
 extends GdUnitTestSuite
-## Applying the Borderland theme (5.2a-2) replaces the free pieces (D10), sets grassland and evening light, and ONE
+## Applying the Borderland theme (5.2a-2) replaces the free pieces (D10), keeps the table's biome (S8.1), sets the
+## evening light, and ONE
 ## undo puts the old table back exactly; redo applies it again. Refused once the game has started. Local here: the
 ## multiplayer sync and the map editor entry follow (5.2c, 5.2b).
 
@@ -41,7 +42,7 @@ func test_apply_replaces_the_table_and_one_undo_restores_it() -> void:
 		return
 	assert_int(_live(om).size()).is_equal(14)
 	assert_bool(_live(om).has(old)).is_false()
-	assert_str(_biome).is_equal("temperate_grassland")
+	assert_str(_biome).is_equal("desert_dunes")   # S8.1: the theme keeps the table's biome
 	assert_str(_mood).is_equal("Sunset")
 	assert_int(_relayouts).is_equal(1)   # the biome dressing is re-laid for the new pieces
 	assert_int(_paths.size()).is_equal(3)   # the theme's worn paths
