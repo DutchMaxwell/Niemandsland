@@ -1827,7 +1827,7 @@ mod weapons;
         // symmetry: two identical melee units charge each other for the same threat
         st.shaken[0] = false;
         statics[1].melee = statics[0].melee.clone();
-        statics[1].ctx = statics[0].ctx.clone();
+        statics[1].ctx = statics[0].ctx;
         let (to_b, to_a) = (reply_threat_with(&statics, &st, 1, true)[1], reply_threat_with(&statics, &st, 0, true)[0]);
         assert!(to_b > 0.0 && (to_a - to_b).abs() < 1e-12, "{to_a} vs {to_b}");
     }
