@@ -137,6 +137,9 @@
     "pet ghoul": "pet_ghoul",
     "stitched leader": "stitched_leader",
     "cursed mace": "mace",
-    "sling": "sling"
+    "sling": "sling",
+    "wings": "wings",
+    "heavy rending claws": "claws",
+    "great sword": "greatsword"
   }
 }
