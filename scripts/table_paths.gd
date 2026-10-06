@@ -41,6 +41,7 @@ func set_paths(new_paths: Array) -> void:
 			d.position = (a + b) * 0.5
 			d.rotation.y = -atan2(b.z - a.z, b.x - a.x)
 			add_child(d)
+	sync_surface()
 
 
 ## A worn dusty strip: soft, noisy edges across, faded ends along; built once.
@@ -61,3 +62,36 @@ static func _strip_texture() -> ImageTexture:
 			img.set_pixel(px, py, Color(c.r, c.g, c.b, a * 0.42))
 	_texture = ImageTexture.create_from_image(img)
 	return _texture
+
+
+## Bounded segments shared by the soil shader and surface dressing, in metres.
+func surface_segments() -> PackedVector4Array:
+	var result := PackedVector4Array()
+	for line: Array in paths:
+		for i in range(line.size() - 1):
+			var a := Vector2(line[i][0], line[i][1]) * IN2M
+			var b := Vector2(line[i+1][0], line[i+1][1]) * IN2M
+			if a.distance_squared_to(b) > 0.000001 and result.size() < 64:
+				result.append(Vector4(a.x,a.y,b.x,b.y))
+	return result
+
+static func surface_amount(p: Vector2, segments: PackedVector4Array) -> float:
+	var amount := 0.0
+	for edge in segments:
+		var a := Vector2(edge.x,edge.y)
+		var delta := Vector2(edge.z,edge.w) - a
+		var t := clampf((p-a).dot(delta) / maxf(delta.length_squared(),0.000001),0,1)
+		amount = maxf(amount,1.0-smoothstep(0.026,0.062,p.distance_to(a+delta*t)))
+	return amount
+
+func sync_surface() -> void:
+	var table := get_parent()
+	if table == null or not table.has_method("get_base_top_material"):
+		return
+	var segments := surface_segments()
+	var count := segments.size()
+	segments.resize(64)
+	for mat in [table.get_node("TableMesh").material_override, table.get_base_top_material()]:
+		if mat is ShaderMaterial:
+			mat.set_shader_parameter("path_segments", segments)
+			mat.set_shader_parameter("path_count", count)

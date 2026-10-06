@@ -113,6 +113,8 @@ func apply(main: Node) -> void:
 	_base.set_shader_parameter("volcanic_mode",_profile.get("volcanic_mode",false))
 	_base.set_shader_parameter("jungle_mode",_profile.get("jungle_mode",false))
 	_base.set_shader_parameter("urban_mode",_profile.get("urban_mode",false))
+	if table_tier:
+		TablePaths.of(table).sync_surface()
 	var frame := StandardMaterial3D.new()
 	frame.albedo_color = Color(0.022,0.026,0.023)
 	frame.roughness = 0.86

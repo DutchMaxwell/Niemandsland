@@ -2,6 +2,8 @@
 // menu diorama + reference scene) and reference_ground_table.gdshader (the game-table tier, which defines
 // TABLE_TIER). Without TABLE_TIER this is the reference shader unchanged.
 #include "res://shaders/visual/reference_ground.gdshaderinc"
+uniform int path_count = 0;
+uniform vec4 path_segments[64];
 uniform bool clip_base = false;
 uniform bool surface_relief = false;
 // The small-scale noise relief (+-5.5 mm everywhere). Off on the game table, where props and miniatures stand at
@@ -27,7 +29,12 @@ void fragment() {
  if (clip_base && length(UV) > 1.0) { discard; }
  // Wet-after-rain: damp soil is darker and glossier, strongest along the worn path.
 #ifdef TABLE_TIER
- float path = 0.0;   // the tutorial board's worn path does not belong on a player's table
+ float path = 0.0;
+ for (int i=0; i<path_count; i++) {
+  vec2 a = path_segments[i].xy, delta = path_segments[i].zw-a;
+  float t = clamp(dot(ground_xz-a,delta)/max(dot(delta,delta),0.000001),0.0,1.0);
+  path = max(path,1.0-smoothstep(0.026,0.062,length(ground_xz-a-delta*t)));
+ }
 #else
  float pc = -0.60+sin(ground_xz.y*8.0+0.4)*0.085;
  float pw = 0.020+surface_noise(ground_xz*38.0)*0.020;
@@ -35,6 +42,17 @@ void fragment() {
 #endif
  float wet = (desert_mode || tundra_mode || volcanic_mode || urban_mode) ? 0.0 : clamp(0.10+path*0.62,0.0,1.0);
 	ALBEDO = ground_sample(ground_xz)*mix(1.0,0.80,wet);
+#ifdef TABLE_TIER
+ if (!(desert_mode || tundra_mode || volcanic_mode || urban_mode || jungle_mode)) {
+  vec3 soil = volcanic_surface_sample(earth_tex,ground_xz*6.5);
+  vec3 grass = volcanic_surface_sample(meadow_tex,ground_xz*7.0);
+  float macro = smoothstep(0.3,0.65,surface_noise(ground_xz*4.0));
+  vec3 rich = mix(grass*vec3(0.48,0.53,0.31),soil*vec3(0.73,0.63,0.49),macro*0.45);
+  float track = smoothstep(dot(soil,vec3(0.3,0.5,0.2))*0.4,0.8,path);
+  wet = path*smoothstep(0.38,0.68,surface_noise(ground_xz*23.0))*0.85;
+  ALBEDO = mix(mix(ground_sample(ground_xz),rich,0.65),soil*vec3(0.57,0.46,0.34),track*0.82)*mix(1.0,0.73,wet);
+ }
+#endif
 	ROUGHNESS = mix(0.80,0.24,wet);
 	SPECULAR = mix(0.28,0.68,wet);
 	METALLIC = 0.0;
