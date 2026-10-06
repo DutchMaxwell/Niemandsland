@@ -1,16 +1,20 @@
 class_name TableTheme
 extends RefCounted
-## A one-click table theme (S5, maintainer 05.10.): the biome, the mood and the free shelf pieces of a whole table,
+## A one-click table theme (S5, maintainer 05.10.): the mood and the free shelf pieces of a whole table, laid in the
+## table's biome (S8.1: woods and ruins take the biome's trees and wall panels; a theme may still name a biome),
 ## kept as data in res://assets/themes/<id>.json. Piece positions are inches from the table centre and the yaw is in
 ## degrees, the frame the save files use for free pieces.
 
 const DIR := "res://assets/themes"
 const IN2M := 0.0254
+## Table biome (table.gd BIOMES) -> the sandbox prop_id prefix that themes a wood's trees and a ruin's wall panels.
+const BIOME_PREFIX := {"temperate_grassland": "", "arid_desert": "desert_", "frozen_tundra": "tundra_",
+	"volcanic_ash": "volcanic_", "alien_jungle": "jungle_", "urban_ruins": "urban_"}
 
 var id: String = ""
 var label: String = ""
 var table_feet := Vector2.ZERO
-var biome: String = ""
+var biome: String = ""   # empty: the theme keeps the table's biome
 var mood: String = ""
 var pieces: Array[Dictionary] = []   # {prop_id, kind, position: Vector3 metres (y 0), yaw_deg}
 var paths: Array = []   # worn paths, polylines of [x, z] inches from the centre (TablePaths, D14)
@@ -61,7 +65,8 @@ static func _covers(p: Dictionary, at: Vector3) -> bool:
 
 
 ## Lay the theme out: the live free pieces are replaced (hidden the undoable way, D10), the theme pieces spawn at
-## their spot and angle, the biome and the mood (local, D13) change. hooks = {started, biome_get, biome_set, mood_get,
+## their spot and angle in the table's biome (woods and ruins prefixed, solids as they are), the mood (local, D13)
+## changes. hooks = {started, biome_get, biome_set, mood_get,
 ## mood_set, optional relayout} (Callables) + optional net (NetworkManager): in a multiplayer game the spawns, angles,
 ## hidden pieces and the biome reach the other table, for undo and redo too. Returns the action to push on the undo
 ## history, or null once the game has started.
@@ -75,8 +80,11 @@ func apply(om: ObjectManager, hooks: Dictionary) -> ThemeAction:
 	for n in ObjectManager.sandbox_pieces(om.get_tree()):
 		if n is Node3D and not bool(n.get_meta("deleted", false)):
 			action.replaced.append(n)
+	var to_biome: String = biome if biome != "" else str(hooks["biome_get"].call())
+	var prefix: String = BIOME_PREFIX.get(to_biome, "")
 	for p: Dictionary in pieces:
-		var node := om.spawn_sandbox_terrain(p["prop_id"], p["kind"], p["position"], true)   # broadcasts in multiplayer
+		var prop_id: String = p["prop_id"] if p["kind"] == ObjectManager.SandboxPropKind.BLOCKER else prefix + p["prop_id"]
+		var node := om.spawn_sandbox_terrain(prop_id, p["kind"], p["position"], true)   # broadcasts in multiplayer
 		if node != null:
 			node.rotation_degrees.y = p["yaw_deg"]
 			if action.net_live():
@@ -85,7 +93,7 @@ func apply(om: ObjectManager, hooks: Dictionary) -> ThemeAction:
 			action._placed.append([node.global_position, node.rotation.y])
 	action.before = [hooks["biome_get"].call(), hooks["mood_get"].call(),
 		hooks["paths_get"].call() if hooks.has("paths_get") else []]
-	action.after = [biome, mood, paths]
+	action.after = [to_biome, mood, paths]
 	action.redo()
 	print("[Theme] '%s' applied: %d pieces, %d replaced" % [id, action.spawned.size(), action.replaced.size()])
 	return action
