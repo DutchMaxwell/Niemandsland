@@ -615,17 +615,28 @@ static func seat_mode() -> int:
 ## boundary alone votes — an opener's move only shows its worth after the
 ## enemy's full reply, so the deep look must be allowed to outvote. Mode 2
 ## (inv) swaps which seat gets which treatment; mode 0 (off) never votes last.
+## aifix D5 knob (default OFF, twin of Knobs.no_end_threat): the game-end
+## boundary is priced with no reply volley — nobody shoots after the last round.
+static var no_end_threat := false
+
+
+static func _end_threat(end: Dictionary, player: int) -> Dictionary:
+	if no_end_threat and int(end["round"]) >= int(end["rounds_total"]):
+		return {}
+	return BattleSim.reply_threat(end, player)
+
+
 static func _blend_score(ends: Array, player: int) -> float:
 	var mode := seat_mode()
 	if (mode == 1 and opener_seat) or (mode == 2 and not opener_seat):
 		var last: Dictionary = ends[ends.size() - 1]
-		return AiMissionEval.score(last, player, BattleSim.reply_threat(last, player))
+		return AiMissionEval.score(last, player, _end_threat(last, player))
 	var dd := depth_discount()
 	var total := 0.0
 	var weights := 0.0
 	var w := 1.0
 	for end in ends:
-		total += w * AiMissionEval.score(end, player, BattleSim.reply_threat(end, player))
+		total += w * AiMissionEval.score(end, player, _end_threat(end, player))
 		weights += w
 		w *= dd
 	return total / weights

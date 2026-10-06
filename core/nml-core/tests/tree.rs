@@ -675,3 +675,32 @@ fn the_widening_rate_caps_open_children() {
     let head = r#"{"kind":"header","profiles":{},"knobs":{"tree_widen":-0.5}}"#;
     assert!(read_act_header(head).is_err_and(|e| e.contains("tree_widen")), "a negative rate must be refused");
 }
+
+/// aifix D5 — knob `no_end_threat`: a boundary at `round == rounds_total` is
+/// priced with no reply volley, so its blend equals the score at NO_INCOMING;
+/// with the knob off the same boundary is still discounted by the volley.
+#[test]
+fn the_game_end_boundary_carries_no_reply_threat() {
+    let c = load(ACTS);
+    let per_act = act_statics(&c, REPO);
+    let (mut differs, mut checked) = (0usize, 0usize);
+    for (ai, act) in c.acts.iter().enumerate() {
+        let mut end = act.state.clone();
+        end.round = end.rounds_total;
+        let p = act.player;
+        let price = |on: bool| {
+            let mut knobs = c.knobs;
+            knobs.no_end_threat = on;
+            let mut pol = Policy::new(&per_act[ai], &c.terrain, seams_of(&knobs));
+            pol.tuning = tuning_of(&knobs);
+            let roll = Rollout::new(pol, knobs);
+            let got = roll.blend_score(std::slice::from_ref(&end), p, false);
+            (got, score_with(&end, &per_act[ai], p, nml_core::NO_INCOMING, roll.policy.fit))
+        };
+        let (on, want) = price(true);
+        assert_eq!(on, want, "act {ai}");
+        differs += (price(false).0 != want) as usize;
+        checked += 1;
+    }
+    assert!(checked >= 20 && differs >= 1, "{checked} {differs}");
+}
