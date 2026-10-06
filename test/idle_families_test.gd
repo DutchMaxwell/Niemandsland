@@ -17,6 +17,11 @@ func test_prefix_match_stops_at_the_form_separator() -> void:
 	assert_bool(Families.allows("ratmen/warriors team", 5)).is_false()
 	assert_bool(Families.allows("ratmen/monksters", 0)).is_false()
 
+func test_militia_grenadiers_and_snipers_carry_the_five_bone_tail() -> void:
+	for key in ["ratmen/militia", "ratmen/grenadiers#toxinbombs", "ratmen/snipers#pavise+rifle"]:
+		assert_bool(Families.allows(key, 5)).is_true()
+		assert_bool(Families.allows(key, 0)).is_false()
+
 func test_unlisted_families_are_rejected() -> void:
 	assert_bool(Families.allows("ratmen/rat ogres", 0)).is_false()
 	assert_bool(Families.allows("mummified_undead/royal champion", 0)).is_false()
