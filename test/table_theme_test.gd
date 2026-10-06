@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## The Ruined Borderland theme (maintainer: layout v3 OK, 05.10.): 14 free pieces the shelf knows, all on a 6x4 ft
 ## table, point-symmetric (every piece has a twin at the mirrored spot, turned 180 deg, so neither side gets the
-## better cover), grassland and evening light. Other table sizes do not fit (D11: the entry is greyed out there).
+## better cover), in the table's own biome (S8.1) and evening light. Other table sizes do not fit (D11: the entry is greyed out there).
 
 const IN2M := 0.0254
 
@@ -11,7 +11,7 @@ func test_the_borderland_theme_loads_as_the_approved_table() -> void:
 	assert_object(t).is_not_null()
 	if t == null:
 		return
-	assert_str(t.biome).is_equal("temperate_grassland")
+	assert_str(t.biome).is_empty()   # S8.1: it follows the table
 	assert_str(t.mood).is_equal("Sunset")
 	assert_bool(t.fits(Vector2(6, 4))).is_true()
 	assert_bool(t.fits(Vector2(4, 4))).is_false()
