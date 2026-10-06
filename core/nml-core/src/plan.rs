@@ -271,6 +271,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         // per-seat A/B grants the permission alone to the resolving core.
         moved_shoot: knobs.menu_wide || knobs.moved_shoot,
         dangerous_end_morale: knobs.dangerous_end_morale,
+        morale_by_probability: knobs.morale_by_probability,
         tray_exact: crate::acts::rule_on(knobs.rules_epoch, crate::acts::EPOCH_70_TRAY_EXACT),
         plain_only: false, // dormant: only the search's root seams will set it (io.rs)
         shelf_sight: false, // dormant: free shelf pieces in sight (io.rs `Seams::shelf_sight`)
