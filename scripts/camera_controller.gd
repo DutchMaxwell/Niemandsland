@@ -28,6 +28,7 @@ var _last_mouse_pos: Vector2 = Vector2.ZERO
 const TILT_SHIFT_MAX_AMOUNT := 0.045
 const TILT_SHIFT_FADE_NEAR := 0.35  # full blur at/below this camera distance (m)
 const TILT_SHIFT_FADE_FAR := 0.95   # no blur at/above this camera distance (m)
+var _focus_target: Node3D
 
 var _tilt_shift_enabled: bool = false
 var _camera_attributes: CameraAttributesPractical
@@ -57,6 +58,10 @@ func _ready() -> void:
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null:
 		_tilt_shift_enabled = graphics.tilt_shift
+		graphics.settings_applied.connect(func(_preset: String) -> void: _update_tilt_shift())
+	var manager := get_parent().get_node_or_null("ObjectManager")
+	if manager != null and manager.has_signal("selection_changed"):
+		manager.selection_changed.connect(_on_focus_selection)
 	set_tilt_shift_enabled(_tilt_shift_enabled)
 	_mark_dirty()
 
@@ -102,6 +107,8 @@ func _process(delta: float) -> void:
 	if _transform_dirty:
 		_apply_camera_transform()
 		_transform_dirty = false
+	# A selected miniature can move while the camera stays still.
+	_update_tilt_shift()
 
 
 ## Mark transform as needing update (call instead of direct _update_camera_transform)
@@ -287,10 +294,33 @@ func set_tilt_shift_enabled(enabled: bool) -> void:
 		_camera.attributes = null
 
 
-## Recompute the DOF blur amount from the current camera distance.
+## Focus only changes the optical band; selection never moves the orbit camera.
+func _on_focus_selection(selected: Array[Node3D]) -> void:
+	_focus_target = selected[0] if not selected.is_empty() else null
+	_update_tilt_shift()
+
+
+## Medium+ focuses at the orbit target/selected figure, including the normal ~2 m table view.
 func _update_tilt_shift() -> void:
 	if not _tilt_shift_enabled or _camera_attributes == null:
 		return
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	var amount: float = graphics.table_focus_amount(graphics.current_preset) if graphics != null else 0.0
+	if amount > 0.0:
+		var target := _focus_target.global_position if is_instance_valid(_focus_target) else Vector3(_target_position.x, 0.025, _target_position.z)
+		var depth := maxf(0.06, -_camera.to_local(target).z)
+		var band := 0.16 if _current_zoom < 1.0 else clampf(depth * 0.16, 0.09, 0.32)
+		_camera_attributes.dof_blur_near_distance = maxf(0.0, depth - band)
+		_camera_attributes.dof_blur_far_distance = depth + band
+		_camera_attributes.dof_blur_near_transition = depth * 0.50
+		_camera_attributes.dof_blur_far_transition = depth * 0.50
+		_camera_attributes.dof_blur_amount = 0.095 if _current_zoom < 1.0 else amount
+		return
+	# Restore all legacy values when dropping back to Low/Performance.
+	_camera_attributes.dof_blur_near_distance = 0.10
+	_camera_attributes.dof_blur_near_transition = 0.12
+	_camera_attributes.dof_blur_far_distance = 0.55
+	_camera_attributes.dof_blur_far_transition = 0.55
 	var fade := 1.0 - smoothstep(TILT_SHIFT_FADE_NEAR, TILT_SHIFT_FADE_FAR, _current_zoom)
 	_camera_attributes.dof_blur_amount = TILT_SHIFT_MAX_AMOUNT * fade
 
