@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+from mesh_budget import counts, validate
 
 
 def main():
@@ -20,6 +21,7 @@ def main():
     parser.add_argument('--manifest', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--reauthor', action='store_true')
+    parser.add_argument('--shipped-cache', type=Path, help='Decimate to the actual shipped mesh budget from this cache')
     args = parser.parse_args()
     here = Path(__file__).resolve().parent
     args.out = args.out.resolve()
@@ -46,6 +48,20 @@ def main():
                                 '-P', str(here / 'author_warrior_idle.py'), '--', str(keep_rig), str(source),
                                 str(out / 'animation.json'), str(int(form['twohand']))],
                                stdout=log, stderr=subprocess.STDOUT, check=True, timeout=900)
+        if args.shipped_cache:
+            mesh_sha = manifest['models'][full_key]['ctex']['mesh']['sha256']
+            budget = counts(args.shipped_cache / (mesh_sha + '.glb'))
+            assert set(budget) == {'body', 'parts'}, full_key
+            budget_path = out / 'shipped_budget.json'
+            budget_path.write_text(json.dumps(budget, indent=2) + '\n')
+            reduced = out / 'idle.reduced.glb'
+            with (out / 'decimate.log').open('w') as log:
+                subprocess.run(['blender', '-b', '-t', '2', '--factory-startup', '--python-exit-code', '1',
+                                '-P', str(here / 'decimate_weighted.py'), '--', str(source), str(reduced), str(budget_path)],
+                               stdout=log, stderr=subprocess.STDOUT, check=True, timeout=900)
+            actual = validate(reduced, budget)
+            (out / 'mesh_counts.json').write_text(json.dumps(actual, indent=2) + '\n')
+            source = reduced
         jobs.append(dict(key=full_key, source=str(source), out=str(out),
                          materials_by_name={m['name']: m for m in manifest['models'][full_key]['ctex']['materials']},
                          feet_z=form['feet_z'], tail_bones=form['tail_bones'], twohand=form['twohand'],
