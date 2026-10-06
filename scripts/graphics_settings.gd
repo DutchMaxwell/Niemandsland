@@ -52,8 +52,15 @@ func biome_grade_values(biome: String, mood := "Sunset") -> Dictionary:
 			curve.gradient.offsets = PackedFloat32Array([0.0, 0.2, 0.5, 0.8, 1.0])
 			curve.gradient.colors = PackedColorArray([Color.BLACK, Color(0.20,0.20,0.205),
 				Color(0.52,0.50,0.48) + tint, Color(0.82,0.80,0.76), Color.WHITE])
+			if biome == "arid_desert":
+				curve.gradient.colors = PackedColorArray([Color.BLACK, Color(0.155,0.145,0.12),
+					Color(0.46,0.44,0.395), Color(0.79,0.77,0.715), Color.WHITE])
 		_biome_grade_curves[key] = curve
 	if mood == "Sunset":
+		if biome == "arid_desert":
+			return {"adjustment_enabled":true, "adjustment_color_correction":_biome_grade_curves[key],
+				"adjustment_contrast":1.14, "adjustment_saturation":1.04,
+				"tonemap_agx_contrast":1.23, "glow_intensity":0.10, "glow_bloom":0.0}
 		return {"adjustment_enabled":true, "adjustment_color_correction":_biome_grade_curves[key],
 			"adjustment_contrast":1.12, "adjustment_saturation":1.03 + (grade[1] - 1.06) * weight,
 			"tonemap_agx_contrast":1.15, "glow_intensity":0.30, "glow_bloom":0.0}
