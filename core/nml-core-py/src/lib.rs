@@ -733,6 +733,7 @@ impl Core {
             // stays OFF.
             dangerous_end_morale: self.knobs.dangerous_end_morale,
             morale_by_probability: self.knobs.morale_by_probability,
+            reply_v2: self.knobs.reply_v2,
             // Tray-exact series (io.rs `Seams::tray_exact`): on from its one epoch bump.
             tray_exact: nmlcore::acts::rule_on(self.knobs.rules_epoch, nmlcore::acts::EPOCH_70_TRAY_EXACT),
             // Dormant: only the search's root seams will set it (io.rs `Seams::plain_only`).
@@ -848,6 +849,7 @@ impl Core {
         m.insert("move_rigid".into(), self.knobs.move_rigid.into());
         m.insert("dangerous".into(), self.knobs.dangerous.into());
         m.insert("engage_fold".into(), self.knobs.engage_fold.into());
+        m.insert("reply_v2".into(), self.knobs.reply_v2.into());
         m.insert("opener_by_finish".into(), self.knobs.opener_by_finish.into());
         m.insert("no_end_threat".into(), self.knobs.no_end_threat.into());
         m.insert("morale_by_probability".into(), self.knobs.morale_by_probability.into());

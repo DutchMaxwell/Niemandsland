@@ -5832,25 +5832,42 @@ pub fn melee_threat(statics: &[UnitStatic], state: &State, si: usize, ti: usize)
 /// Each volley prices the LIVE root ctx (families 2-4 of the blindness
 /// report) — see `volley_ev`.
 pub fn reply_threat_at_epoch(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32) -> Vec<f64> {
+    reply_threat_core(statics, state, player, rules_epoch, false)
+}
+
+/// The charge band the v2 reply reads a melee threat inside (GF p.7 Charge: 12").
+const REPLY_CHARGE_IN: f64 = 12.0;
+
+/// `reply_threat` with `Seams::reply_v2` choosing the aifix D2 reading: an enemy
+/// may also CHARGE a unit inside 12" (`melee_threat`, never added before), a
+/// Shaken enemy only holds so it threatens nothing, and each enemy still picks
+/// ONE best target, shooting or charging.
+pub fn reply_threat_with(statics: &[UnitStatic], state: &State, player: i64, v2: bool) -> Vec<f64> {
+    reply_threat_core(statics, state, player, CURRENT_RULES_EPOCH, v2)
+}
+
+fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32, v2: bool) -> Vec<f64> {
     let n = state.units();
     let mut incoming = vec![0.0f64; n];
     let mut sc = Scratch::default();
     for e in 0..n {
-        if state.player[e] == player || state.alive[e] <= 0 {
+        if state.player[e] == player || state.alive[e] <= 0 || (v2 && state.shaken[e]) {
             continue;
         }
         let mut best_key: Option<usize> = None;
         let mut best_ev = 0.0f64;
         for m in 0..n {
-            if state.player[m] != player
-                || state.alive[m] <= 0
-                || !state.sees(e, state.key(m))
-                || !los_clear(state, e, m)
-            {
+            if state.player[m] != player || state.alive[m] <= 0 {
                 continue;
             }
             let d = geom::dist_in(&state.positions[e], &state.positions[m]);
-            let (ev, _) = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch);
+            let mut ev = 0.0f64;
+            if state.sees(e, state.key(m)) && los_clear(state, e, m) {
+                ev = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch).0;
+            }
+            if v2 && d <= REPLY_CHARGE_IN {
+                ev = ev.max(melee_threat_at_epoch(statics, state, e, m, rules_epoch));
+            }
             if ev > best_ev {
                 best_ev = ev;
                 best_key = Some(m);

@@ -26,7 +26,7 @@ use crate::fitted::Fitted;
 use crate::score::{score_with, NO_INCOMING};
 use crate::mv::reach::ReachIndex;
 use crate::sim::{
-    reply_threat, resolve_on_board_reach, trace_rule, Scratch, Unsupported, ADVANCE, CHARGE, HOLD,
+    reply_threat_with, resolve_on_board_reach, trace_rule, Scratch, Unsupported, ADVANCE, CHARGE, HOLD,
     RUSH,
 };
 use crate::state::State;
@@ -244,7 +244,7 @@ impl<'a> Policy<'a> {
             for action in self.policy_candidates(state, i, sc) {
                 let next = self.resolve(state, &action)?;
                 let s = if rich {
-                    let incoming = reply_threat(self.statics, &next, player);
+                    let incoming = reply_threat_with(self.statics, &next, player, self.seams.reply_v2);
                     score_with(&next, self.statics, player, &incoming, self.fit)
                 } else {
                     score_with(&next, self.statics, player, NO_INCOMING, self.fit)
