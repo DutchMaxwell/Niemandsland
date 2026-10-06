@@ -557,7 +557,7 @@ static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: 
 				if rounds_left <= 0 or int(cur["round"]) >= int(cur["rounds_total"]):
 					return out
 				cur = BattleSim.clone_state(cur)
-				turn = _cross_round(cur)
+				turn = _cross_round(cur, _other_player(cur, turn) if opener_by_finish else 0)
 				continue
 		cur = BattleSim.resolve(cur, a)
 		turn = _other_player(cur, turn)
@@ -590,6 +590,11 @@ static func depth_discount() -> float:
 ## best RESPONDER (78%) and a weak opener. The controller sets this per pick:
 ## true = our side opened the current round.
 static var opener_seat := false
+
+## aifix E1 knob (default OFF, twin of Knobs.opener_by_finish): the imagined
+## next-round opener is the side that finished activating first (GF p.7), not
+## the side with fewer alive units.
+static var opener_by_finish := false
 static var _seat_env := -1   # research seam: NML_SEAT_DEPTH off/on/inv retunes the vote (lazy env)
 
 
@@ -656,7 +661,7 @@ static func _round_start_refresh(su: Dictionary) -> void:
 		su["shaken"] = false
 
 
-static func _cross_round(cur: Dictionary) -> int:
+static func _cross_round(cur: Dictionary, finished_first: int = 0) -> int:
 	cur["round"] = int(cur["round"]) + 1
 	var counts := {}
 	for k in cur["units"]:
@@ -664,6 +669,8 @@ static func _cross_round(cur: Dictionary) -> int:
 		_round_start_refresh(su)
 		if int(su["alive"]) > 0:
 			counts[int(su["player"])] = int(counts.get(int(su["player"]), 0)) + 1
+	if finished_first != 0:
+		return finished_first   # knob opener_by_finish (GF p.7)
 	var players: Array = counts.keys()
 	players.sort()
 	if players.size() == 2 and int(counts[players[0]]) != int(counts[players[1]]):
