@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
 ## E2E — combat effects are never replayed: after a resolved volley drew its cues, a late joiner's full
-## state sync (the REAL _rpc_sync_game_state with the host's own serialized payload) and a save + load
-## rebuild the table without drawing a single cue. Cues ride only the resolver paths; state paths carry
-## wounds and casualties, never a burst.
+## state sync (the REAL _rpc_sync_game_state with the host's own serialized payload), a save + load and
+## an undo + redo of the player's own table actions rebuild the table without drawing a single cue. Cues
+## ride only the resolver paths; state and undo paths carry wounds and casualties, never a burst.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -31,6 +31,7 @@ class FakeNet extends Node:
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _shooters: GameUnit   # the volley's shooters (they live through it), for the player's own table actions after it
 
 
 func before_test() -> void:
@@ -43,7 +44,7 @@ func before_test() -> void:
 	_main._ensure_solo_controller()
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main._solo_batch = true
-	for fx in [_main.result_pips, _main.volley_cue, _main.spell_seal]:
+	for fx in _presenters():
 		fx.force_for_tests = true
 		fx.enabled = true
 
@@ -61,6 +62,7 @@ func _volley_then_clear() -> int:
 	var target := E2EBoot.make_unit(_main, 2, "Grunts", [Vector3(0, 0, 8 * INCH), Vector3(0.03, 0, 8 * INCH)])
 	for u in [shooters, target]:
 		_main.opr_army_manager.game_units[u.unit_id] = u
+	_shooters = shooters
 	var w := OPRApiClient.OPRWeapon.new()
 	w.name = "Rifle"
 	w.range_value = 24
@@ -71,14 +73,24 @@ func _volley_then_clear() -> int:
 		"max": 2, "reach": 24, "profile": AiShooting.profiles_in_range([w], 0.0)[0]}], false)
 	var drawn: int = (_main._vfx_seen as Dictionary).size()
 	assert_int(drawn).override_failure_message("fixture: the volley must draw cues").is_greater(0)
-	for fx in [_main.result_pips, _main.volley_cue, _main.spell_seal]:
+	# the shot show lands its rounds late (chaos window + burst + flight, under 1.7 s): let THIS cue finish first
+	await get_tree().create_timer(2.0).timeout
+	for fx in _presenters():
 		for c in fx.get_children():
 			c.free()
 	return drawn
 
 
+func _presenters() -> Array:
+	return [_main.result_pips, _main.volley_cue, _main.spell_seal, _main.casualty_show, _main.shot_show, _main.spell_show]
+
+
 func _children() -> int:
-	return _main.result_pips.get_child_count() + _main.volley_cue.get_child_count() + _main.spell_seal.get_child_count()
+	return _presenters().reduce(func(n: int, fx: Node) -> int: return n + fx.get_child_count(), 0)
+
+
+func _who() -> String:
+	return ", ".join(_presenters().map(func(fx: Node) -> String: return "%s %d" % [fx.name, fx.get_child_count()]))
 
 
 func test_a_late_joiners_state_sync_replays_no_cue(timeout := 240000) -> void:
@@ -93,7 +105,7 @@ func test_a_late_joiners_state_sync_replays_no_cue(timeout := 240000) -> void:
 	await E2EBoot.settle(get_tree())
 	_main.network_manager = real
 	assert_int((_main._vfx_seen as Dictionary).size()).is_equal(drawn)
-	assert_int(_children()).is_equal(0)
+	assert_int(_children()).override_failure_message(_who()).is_equal(0)
 	assert_array(fake.sent.filter(func(s): return s[0] == "vfx_cue")).is_empty()
 	fake.free()
 
@@ -104,4 +116,16 @@ func test_a_save_and_load_replays_no_cue(timeout := 240000) -> void:
 	assert_int(_main.save_manager.load_game(SAVE_PATH)).is_equal(OK)
 	await E2EBoot.settle(get_tree())
 	assert_int((_main._vfx_seen as Dictionary).size()).is_equal(drawn)
-	assert_int(_children()).is_equal(0)
+	assert_int(_children()).override_failure_message(_who()).is_equal(0)
+
+
+func test_undo_and_redo_of_a_removal_replay_no_cue(timeout := 240000) -> void:
+	var drawn := await _volley_then_clear()
+	var removed: Array[Node3D] = [_shooters.models.filter(func(m: ModelInstance) -> bool: return m.is_alive)[0].node]
+	_main.radial_menu_controller.delete_objects(removed)   # the player's own removal: an undoable table action
+	assert_bool(_main.undo_manager.can_undo()).override_failure_message("fixture: the removal must be undoable").is_true()
+	_main._undo()
+	_main._redo()
+	await E2EBoot.settle(get_tree())
+	assert_int((_main._vfx_seen as Dictionary).size()).is_equal(drawn)
+	assert_int(_children()).override_failure_message(_who()).is_equal(0)
