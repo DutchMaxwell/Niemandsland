@@ -410,9 +410,16 @@ var _solo_arena_seed: int = 0                # game-level base seed for the repr
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
 var spell_seal: SpellSeal = null  # VFX #3: the cast's glyph circle at the caster (presentation only)
+var casualty_show: CasualtyShow = null  # VFX: blood / sparks / ricochets / falling ghosts / shake (presentation)
+var shot_show: ShotShow = null  # VFX: muzzle / round / impact per weapon family on top of the tracers (presentation)
+var spell_show: SpellShow = null  # VFX: the cast's charge and its release / collapse around the seal (presentation)
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 var result_pips: ResultPips = null  # VFX #1: wound ticks / blood markers over the models (presentation only)
 var _vfx_saves_made := 0   # saves made by the save batches of the current _solo_resolve_saves (VFX #1 strip)
+var _vfx_seq := 0                       # VFX cue ids, per session
+var _vfx_session: int = Time.get_ticks_usec()   # tells this boot's cues from a previous one's (same peer id)
+var _vfx_seen := {}                     # "<peer>:<session>:<id>" of every cue drawn
+var _vfx_seals := {}                    # "<peer>:<session>:<seal id>" -> the live seal node
 var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat stage (solo)
 var volley_cue: VolleyCue = null  # VFX #2: tracers along the rule sight pairs (presentation only)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
@@ -766,6 +773,9 @@ func _ready() -> void:
 	map_layout_editor.layout_updated.connect(_on_map_layout_updated)
 	map_layout_editor.deployment_type_changed.connect(_on_deployment_type_changed)
 	map_layout_editor.objectives_changed.connect(_on_objectives_changed)
+	map_layout_editor.theme_requested.connect(func(theme_id: String) -> void:
+		if apply_table_theme(theme_id):
+			map_layout_editor._on_close_pressed())   # close the editor so the laid-out table shows
 	map_layout_editor.relic_drop_chosen.connect(_solo_relic_drop_chosen)
 	map_layout_editor.vip_spot_chosen.connect(_solo_vip_spot_chosen)
 	map_layout_editor.vip_pick_refused.connect(func() -> void:
@@ -4315,28 +4325,29 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 
 
 ## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as
-## _solo_true_los_callable). Indirect fire and an Aircraft target have no tested segment (LOS waived /
-## abstract), so they draw none — no line through a wall. A weapon carried by fewer models than can see
-## (a special weapon) draws only as many tracers as it has bearers.
+## _solo_true_los_callable). Indirect fire tested no segment (LOS waived): no chalk line through a wall, only
+## the shot show's lobbed shell arcing over it from the models in range. An Aircraft target is abstract: none.
+## A weapon carried by fewer models than can see (a special weapon) draws only as many shots as it has bearers.
 func _vfx_volley(member: GameUnit, target: GameUnit, profile: Dictionary, pairs: Array, los_waived: bool) -> void:
-	if volley_cue == null or pairs.is_empty() or los_waived or SoloController.is_aircraft(target):
+	if pairs.is_empty() or SoloController.is_aircraft(target):
 		return
 	var up_from := Vector3.UP * _solo_unit_los_height_m(member)
 	var up_to := Vector3.UP * _solo_unit_los_height_m(target)
-	volley_cue.fire(pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to]),
-		VolleyCue.family_of(str(profile.get("name", ""))))
+	var family := VolleyCue.Family.ARTILLERY if los_waived else VolleyCue.family_for(profile)
+	_vfx_emit({"k": "volley", "f": int(family), "i": los_waived, "b": int(profile.get("blast", 0)), "h": up_to.y,
+		"pairs": pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to])})
 
 
 ## VFX #2 for the player's own volley: _solo_attack_groups keeps no pairs, and a cosmetic key must never ride a
 ## rules profile (it would split dice batches), so the same read-only sight query runs once more at the same
 ## reach for this weapon's member. A weapon with fewer copies than seeing models draws one tracer per copy.
 func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary, los_waived: bool) -> void:
-	if member == null or los_waived or volley_cue == null:
+	if member == null:
 		return
 	var pairs: Array = []
 	_solo_sighted_count(member, target, int(SoloController.effective_shoot_reach_in(float(profile.get("range", 0))
-		+ float(SoloController.shooting_range_bonus(member)), target)), false, pairs)
-	_vfx_volley(member, target, profile, pairs.slice(0, maxi(int(profile.get("count", 1)), 1)), false)
+		+ float(SoloController.shooting_range_bonus(member)), target)), los_waived, pairs)
+	_vfx_volley(member, target, profile, pairs.slice(0, maxi(int(profile.get("count", 1)), 1)), los_waived)
 
 
 # === Wave 6 — Caster(X) cast resolution (official Solo v3.5.0 procedure; real tray dice) ===
@@ -4441,7 +4452,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
 	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
 	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
-	var seal := _vfx_seal_begin(caster, entry, effect)
+	var seal_id := _vfx_seal_begin(caster, entry, effect, spell_name)
 	if battle_log != null:
 		var token_note := "%d token%s" % [int(cast.get("threshold", 0)), ("" if int(cast.get("threshold", 0)) == 1 else "s")]
 		if boost > 0:
@@ -4457,16 +4468,18 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	if bool(cast.get("interference_open", false)) and not _solo_both_ai:
 		interference += await _solo_prompt_interference(caster, caster_unit, spell_name,
 			base_target, boost, _solo_cast_target_label(targets))
-	if interference > 0 and spell_seal != null:
-		spell_seal.interfere(seal)
+	if interference > 0 and seal_id > 0:
+		_vfx_emit({"k": "seal_dim", "sid": seal_id})
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
 	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
 		"Casting %s (%d+)" % [spell_name, target_num])
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
-	if spell_seal != null:
-		spell_seal.finish(seal, SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL)
+	if seal_id > 0:
+		_vfx_emit({"k": "seal_end", "sid": seal_id, "o": int(SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL),
+			"tg": targets.map(_vfx_unit_eye).filter(func(e: Vector3) -> bool: return e != Vector3.INF) if success else [],
+			"dmg": str(effect.get("kind", "")) == "damage"})
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: cast roll %d vs %d+ — %s" % [
 			spell_name, (int(faces[0]) if not faces.is_empty() else 0), target_num,
@@ -4499,15 +4512,17 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 
 ## VFX #3: the cast's seal forms at the caster, its edge on the spell range exactly as the purple preview ring
 ## draws it (RangeRingController: base edge + range). A Spell Conduit origin is not drawn (nor is it by the preview).
-func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary) -> MeshInstance3D:
-	if spell_seal == null or range_ring_controller == null or caster == null:
-		return null
+## Returns the seal's cue id for the dim / end cues (0 = none).
+func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary, spell_name: String = "") -> int:
+	if range_ring_controller == null or caster == null:
+		return 0
 	for m in caster.get_alive_models():
 		var node := (m as ModelInstance).node
 		if node != null and is_instance_valid(node):
-			return spell_seal.begin(node.global_position, range_ring_controller.ring_outer_radius_for_props(
-				range_ring_controller._props_of(node), int(entry.get("range_in", 0))), str(effect.get("kind", "utility")))
-	return null
+			return _vfx_emit({"k": "seal", "at": node.global_position, "kind": str(effect.get("kind", "utility")),
+				"el": int(SpellLook.element_of(spell_name)), "r": range_ring_controller.ring_outer_radius_for_props(range_ring_controller._props_of(node),
+					int(entry.get("range_in", 0)))})
+	return 0
 
 
 ## The damage-spell resolution against ONE target: fixed hits (no to-hit roll), the optional trigger
@@ -12890,12 +12905,23 @@ func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true) -> voi
 			for model in alive:
 				remaining_pool += int((model as ModelInstance).wounds_current)
 			var final_wounds: int = reg.wounds_taken + wounds
+			var vfx_eye := _vfx_unit_eye(target)   # VFX #1: taken before the casualties leave the ranks
 			if not alive.is_empty() and wounds >= remaining_pool and _solo_combined_alive(target) == alive.size() \
 					and not _solo_split_rules(target).is_empty():
 				if alive.size() > 1:
 					opr_army_manager.apply_regiment_wounds(reg, reg.wounds_taken + remaining_pool - 1)
 				await _solo_split_from_last_model(target, target.get_alive_models()[0] as ModelInstance)
 			opr_army_manager.apply_regiment_wounds(reg, final_wounds)
+			# VFX #1: a pooled regiment has no per-model allocation (casualties come off the back and the ranks
+			# close), so its losses sit over the unit: ticks for the wounds that landed, crosses for the models lost.
+			if pips and vfx_eye != Vector3.INF:
+				var stuff := int(ModelStuff.stuff_of(target))
+				_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.WOUND), "at": vfx_eye, "n": mini(wounds, remaining_pool),
+					"m": stuff, "b": vfx_eye - Vector3.UP * (_solo_unit_los_height_m(target) + 0.03)})
+				if alive.size() > target.get_alive_count():
+					_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.KILL), "at": vfx_eye + Vector3.UP * 0.016,
+						"n": alive.size() - target.get_alive_count(), "m": stuff,
+						"b": vfx_eye - Vector3.UP * (_solo_unit_los_height_m(target) + 0.03)})
 			return
 	var pid: int = int(target.unit_properties.get("player_id", 1))
 	var requested := wounds
@@ -13104,19 +13130,129 @@ func _solo_wound_models(unit: GameUnit, wounds: int, pid: int, deferred_deaths =
 ## VFX #1, the unit-level beat: hits and saves belong to the unit, not to one model, so they sit over the
 ## defender's centre — ivory dots for the hits that called for saves, blue rings above for the saves made.
 func _vfx_hit_strip(defender: GameUnit, hits: int, saves: int) -> void:
-	var c: Vector3 = solo_controller.unit_centre(defender) if solo_controller != null and defender != null else Vector3.INF
-	if result_pips == null or c == Vector3.INF or c == Vector3.ZERO:
+	var eye := _vfx_unit_eye(defender)
+	if eye == Vector3.INF:
 		return
-	var eye := c + Vector3.UP * (_solo_unit_los_height_m(defender) + 0.03)
-	result_pips.mark(ResultPips.Kind.HIT, eye, hits)
+	_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.HIT), "at": eye, "n": hits})
 	if saves > 0:
-		result_pips.mark(ResultPips.Kind.SAVE, eye + Vector3.UP * 0.016, saves)
+		_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.SAVE), "at": eye + Vector3.UP * 0.016, "n": saves,
+			"pts": defender.get_alive_models().slice(0, mini(saves, 5)).map(func(m) -> Vector3: return ResultPips.eye_of(m))
+				.filter(func(e: Vector3) -> bool: return e != Vector3.INF)})
 
 
-## VFX #1: one result mark over a model, from the allocation that just happened (headless spawns nothing).
+## VFX #1: where a unit's strips sit — over its centre at its LOS height; INF without a live centre.
+func _vfx_unit_eye(unit: GameUnit) -> Vector3:
+	var c: Vector3 = solo_controller.unit_centre(unit) if solo_controller != null and unit != null else Vector3.INF
+	return Vector3.INF if c == Vector3.INF or c == Vector3.ZERO else c + Vector3.UP * (_solo_unit_los_height_m(unit) + 0.03)
+
+
+## VFX #1: one result mark over a model's LOS eye, from the allocation that just happened.
 func _vfx_pip(kind: ResultPips.Kind, mi: ModelInstance, count: int) -> void:
-	if result_pips != null:
-		result_pips.mark_model(kind, mi, count)
+	var eye := ResultPips.eye_of(mi)
+	if eye == Vector3.INF or count <= 0:
+		return
+	var cue := {"k": "pip", "t": int(kind), "at": eye, "n": count, "m": int(ModelStuff.stuff_of(mi.unit)),
+		"b": mi.node.global_position}
+	if kind == ResultPips.Kind.KILL:
+		cue["hv"] = int(mi.wounds_max) >= 3   # a heavy kill (Tough 3+) shakes the camera a little
+		if casualty_show != null:
+			casualty_show.collapse(mi.node, mi.node.get_instance_id())   # local picture: peers get the dust burst
+	_vfx_emit(cue)
+
+
+## VFX in co-op: every cue is plain data (positions in metres) drawn by ONE path, _vfx_draw — here, and on
+## the other peers via the command channel — so both screens show the same cue exactly once. Sent whatever
+## the local setting says (each peer's own setting and quality decide there). Cues are never saved and the
+## relay keeps no backlog, so a load / rejoin / undo replays none.
+func _vfx_emit(cue: Dictionary) -> int:
+	_vfx_seq += 1
+	cue["id"] = _vfx_seq
+	cue["s"] = _vfx_session
+	_vfx_draw(cue, 0)
+	# A cosmetic cue must never take a resolution down: no live session in the tree, no send.
+	if network_manager != null and network_manager.is_inside_tree() and network_manager.is_multiplayer_active():
+		network_manager.send_command("vfx_cue", cue, 0)
+	return _vfx_seq
+
+
+## Draw one cue, local or a peer's: never rolls, never touches game state, never re-sends; a duplicate frame
+## or a malformed payload draws nothing.
+func _vfx_draw(cue: Dictionary, from_peer: int) -> void:
+	var key := "%d:%d:%d" % [from_peer, int(cue.get("s", 0)), int(cue.get("id", 0))]
+	if result_pips == null or _vfx_seen.has(key):
+		return
+	if _vfx_seen.size() > 512:
+		_vfx_seen.clear()
+	_vfx_seen[key] = true
+	var seal_key := "%d:%d:%d" % [from_peer, int(cue.get("s", 0)), int(cue.get("sid", cue.get("id", 0)))]
+	var at: Variant = cue.get("at")
+	var show_seed := hash("%d:%d" % [int(cue.get("s", 0)), int(cue.get("id", 0))])   # the same on every peer
+	match str(cue.get("k", "")):
+		"pip" when at is Vector3:
+			result_pips.mark(clampi(_vfx_int(cue.get("t"), 0), 0, 3) as ResultPips.Kind, at, mini(_vfx_int(cue.get("n"), 0), 12))
+			_vfx_show_pip(cue, at, show_seed)
+		"volley" when cue.get("pairs") is Array:
+			var pairs: Array = (cue["pairs"] as Array).slice(0, 64).filter(func(p: Variant) -> bool:
+				return p is Array and p.size() == 2 and p[0] is Vector3 and p[1] is Vector3)
+			var h: Variant = cue.get("h", 0.0)
+			var fam := clampi(_vfx_int(cue.get("f"), 0), 0, VolleyCue.Family.size() - 1)
+			if cue.get("i") != true:   # indirect fire tested no line: no chalk line, only the lobbed shell
+				volley_cue.fire(pairs, fam as VolleyCue.Family)
+			if shot_show != null:
+				shot_show.volley(pairs, fam, show_seed, clampi(_vfx_int(cue.get("b"), 0), 0, 12),
+					clampf(float(h) if (h is int or h is float) else 0.0, 0.0, 0.2))
+		"seal" when at is Vector3:
+			var r: Variant = cue.get("r", 0.0)   # a peer's payload: typed, finite, on the table
+			var el: Variant = cue.get("el", 0)
+			if not (r is float or r is int) or not (el is int) or not (cue.get("kind", "") is String):
+				return
+			if not is_finite(float(r)) or float(r) <= SpellSeal.BAND_M or not SpellShow.valid_point(at):
+				return
+			_vfx_seals[seal_key] = spell_seal.begin(at, clampf(float(r), 0.0, 3.0), str(cue.get("kind", "")))
+			if spell_show != null:
+				spell_show.begin(seal_key, at, clampf(float(r), 0.0, 3.0), clampi(int(el), 0, 4), show_seed)
+			if model_auras != null:
+				model_auras.boost_near(seal_key, at, 0.15)   # a hero's aura runs wild while it casts
+		"seal_dim":
+			spell_seal.interfere(_vfx_seals.get(seal_key))
+		"seal_end":
+			if not (cue.get("o", 0) is int) or not (cue.get("tg", []) is Array) or not (cue.get("dmg", false) is bool):
+				return
+			spell_seal.finish(_vfx_seals.get(seal_key), clampi(int(cue.get("o", 0)), 0, 2) as SpellSeal.Outcome)
+			_vfx_seals.erase(seal_key)
+			if spell_show != null:
+				spell_show.end(seal_key, clampi(int(cue.get("o", 0)), 0, 2),
+					_vfx_points(cue.get("tg"), 8).filter(func(p: Vector3) -> bool: return SpellShow.valid_point(p)), cue.get("dmg") == true,
+					show_seed)
+			if model_auras != null:
+				model_auras.settle(seal_key)
+
+
+## VFX: what a resolved result does to the models, from a pip cue (blood / sparks / bone dust where wounds landed,
+## a falling-model dust burst and maybe a shake, ricochets on the defending models where saves held).
+func _vfx_show_pip(cue: Dictionary, at: Vector3, show_seed: int) -> void:
+	if casualty_show == null:
+		return
+	var stuff := clampi(_vfx_int(cue.get("m"), 0), 0, 2) as ModelStuff.Stuff
+	match clampi(_vfx_int(cue.get("t"), 0), 0, 3):
+		ResultPips.Kind.WOUND:
+			var ground: Variant = cue.get("b")
+			casualty_show.wound(at, ground if ground is Vector3 else at, stuff, clampi(_vfx_int(cue.get("n"), 1), 1, 6), show_seed)
+		ResultPips.Kind.KILL:
+			var base: Variant = cue.get("b")
+			casualty_show.kill(at, base if base is Vector3 else at, stuff, cue.get("hv") == true, show_seed)
+		ResultPips.Kind.SAVE:
+			casualty_show.ricochets(_vfx_points(cue.get("pts"), 5), show_seed)
+
+
+## A number from a peer's payload, or `fallback` when it is not one (int() of an array or a dictionary raises).
+func _vfx_int(v: Variant, fallback: int) -> int:
+	return int(v) if (v is int or v is float) else fallback
+
+
+## The Vector3 entries of an untrusted array, at most `cap` of them.
+func _vfx_points(v: Variant, cap: int) -> Array:
+	return (v as Array).slice(0, cap).filter(func(p: Variant) -> bool: return p is Vector3) if v is Array else []
 
 
 func _capture_bug_report() -> void:
@@ -13134,6 +13270,9 @@ func _capture_bug_report() -> void:
 		_show_toast("📸 Bug report saved to your Desktop: %s" % path.get_file())
 
 
+var _theme_action: TableTheme.ThemeAction = null   # the last theme laid out on this table
+
+
 ## One-click table theme (S5, maintainer 05.10.: an entry in the map editor). Refused on a table of another size
 ## (lead D11; the editor greys the entry out too), on painted grid terrain (D9) and once the game is being played;
 ## otherwise the theme replaces the free pieces, sets the biome and the evening light, reaches the other table and is
@@ -13145,8 +13284,16 @@ func apply_table_theme(theme_id: String) -> bool:
 	if not theme.fits(table.table_size):
 		_show_toast("%s needs a %d x %d ft table" % [theme.label, int(theme.table_feet.x), int(theme.table_feet.y)])
 		return false
+	var in_the_way := theme.models_in_the_way(get_tree())
+	if in_the_way > 0:   # lead D16: never move models, their positions are rules
+		_show_toast("%d %s where the theme would place terrain - clear %s first" % [in_the_way,
+			"model stands" if in_the_way == 1 else "models stand", "it" if in_the_way == 1 else "them"])
+		return false
 	if terrain_overlay != null and terrain_overlay.grid_cells.values().any(func(v: Variant) -> bool: return int(v) != 0):
 		_show_toast("Clear the grid terrain first, then apply %s" % theme.label)
+		return false
+	if _theme_action != null and _theme_action.is_current(object_manager):   # D15 a: no 14 more hidden pieces
+		_show_toast("%s is already laid out" % theme.label)
 		return false
 	var action := theme.apply(object_manager, {
 		"started": func() -> bool:
@@ -13156,11 +13303,14 @@ func apply_table_theme(theme_id: String) -> bool:
 		"mood_get": func() -> String: return str(atmosphere_controller.get_current_atmosphere()),
 		"mood_set": func(m: String) -> void: atmosphere_controller.apply_atmosphere(m),
 		"relayout": _redress_table_layout,
+		"paths_get": func() -> Array: return TablePaths.of(table).paths,   # the worn paths (D14)
+		"paths_set": func(p: Array) -> void: TablePaths.of(table).set_paths(p),
 		"net": network_manager})
 	if action == null:
 		_show_toast("Table themes can only be applied before the game starts")
 		return false
 	action.peer_id = network_manager.get_my_peer_id() if network_manager else 0
+	_theme_action = action
 	if undo_manager != null:
 		undo_manager.push(action)
 	_show_toast("%s laid out - Ctrl+Z puts the old table back" % theme.label)
@@ -16166,6 +16316,8 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_request_roll(payload, _from_peer)
 	elif type == "roll_result" and payload is Dictionary:
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
+	elif type == "vfx_cue" and payload is Dictionary:
+		_vfx_draw(payload, _from_peer)
 
 
 ## #673 co-op: the wire shape of the AI-slot designation sync — sorted player ids, one message
@@ -18486,6 +18638,15 @@ func _init_radial_menu() -> void:
 	spell_seal = SpellSeal.new()
 	spell_seal.name = "SpellSeal"
 	add_child(spell_seal)
+	casualty_show = CasualtyShow.new()
+	casualty_show.name = "CasualtyShow"
+	add_child(casualty_show)
+	shot_show = ShotShow.new()
+	shot_show.name = "ShotShow"
+	add_child(shot_show)
+	spell_show = SpellShow.new()
+	spell_show.name = "SpellShow"
+	add_child(spell_show)
 	object_manager.move_trails = move_trails
 	# Transparency wave stage 2 (grilled 2026-07-30): applied rules announce themselves AT
 	# the table — rising billboard texts on the affected unit, stagger-cascaded so full

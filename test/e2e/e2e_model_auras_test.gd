@@ -24,13 +24,13 @@ func after_test() -> void:
 	_runner = null
 
 
-func test_the_game_carries_the_auras_off_until_switched_on() -> void:
+func test_the_game_carries_the_auras_and_they_follow_the_switch() -> void:
 	var auras: Variant = _main.get("model_auras")
 	assert_bool(auras is ModelAuras).override_failure_message("main.tscn has no ModelAuras").is_true()
 	if not (auras is ModelAuras):
 		return
 	assert_bool((auras as ModelAuras).is_inside_tree()).is_true()
-	assert_bool((auras as ModelAuras).enabled).override_failure_message("off by default").is_false()
+	assert_bool((auras as ModelAuras).enabled).override_failure_message("follows the Combat Effects switch") 		.is_equal(GraphicsSettings.show_combat_effects)
 	var unit := GameUnit.new()
 	unit.unit_properties = {"name": "Frog Mage", "faction_folder": "saurian_starhost"}
 	var mi := ModelInstance.new()

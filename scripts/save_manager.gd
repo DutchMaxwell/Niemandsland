@@ -339,6 +339,10 @@ func save_game(path: String) -> Error:
 	# reasoning as rule_state in _deserialize_game_state).
 	if ai_slots_getter.is_valid():
 		state["solo_ai_slots"] = ai_slots_getter.call()
+	# Lead D15 c: a deleted free terrain piece only waits for an undo, and no undo survives a reload, so a FILE save
+	# leaves it out (it would come back as a hidden ghost node). The peer push keeps it: an undo there must find it.
+	state["objects"] = state["objects"].filter(func(o: Dictionary) -> bool:
+		return not (o.get("type", "") == "sandbox_terrain" and not bool(o.get("visible", true))))
 	var err := save_state_to_file(state, path)
 	if err == OK:
 		save_completed.emit(path)

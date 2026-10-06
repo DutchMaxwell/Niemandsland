@@ -11,12 +11,19 @@ class StubTable extends Node3D:
 
 
 var _table: StubTable
+var _preset_was: int
 
 
 func before_test() -> void:
 	_table = auto_free(StubTable.new())
 	_table.add_to_group("table")
 	add_child(_table)
+	_preset_was = get_node("/root/GraphicsSettings").current_preset
+	get_node("/root/GraphicsSettings").current_preset = 2   # MEDIUM: a preset that dresses the table (headless runs lower)
+
+
+func after_test() -> void:
+	get_node("/root/GraphicsSettings").current_preset = _preset_was
 
 
 func _scatter(n: Node) -> Node3D:

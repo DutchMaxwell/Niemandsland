@@ -282,7 +282,7 @@ func _build_ui() -> void:
 	# Combat effects (result marks, shots, falls, spells, hero auras): one switch for all of them; an effect that is
 	# not in the game yet is skipped.
 	var vfx_cb := CheckButton.new()
-	vfx_cb.text = "Combat Effects (preview)"
+	vfx_cb.text = "Combat Effects"
 	vfx_cb.button_pressed = GraphicsSettings.show_combat_effects
 	vfx_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.show_combat_effects = on
@@ -306,6 +306,14 @@ func _build_ui() -> void:
 		if pivot != null and pivot.has_method("set_tilt_shift_enabled"):
 			pivot.set_tilt_shift_enabled(on))
 	vbox.add_child(tilt_cb)
+	var frame := OptionButton.new()
+	frame.name = "TableFrameOption"
+	for title in ["Frame: Today's look", "Frame: Walnut", "Frame: Oak", "Frame: Ivory"]:
+		frame.add_item(title)
+	frame.select(GraphicsSettings.table_frame_style)
+	frame.tooltip_text = "Frame finish. Active at Medium quality and above."
+	frame.item_selected.connect(GraphicsSettings.set_table_frame_style)
+	vbox.add_child(frame)
 
 	# Gore (combat effects): how bloody wounds and casualties look — Off shows dust instead of blood.
 	var gore_row := HBoxContainer.new()

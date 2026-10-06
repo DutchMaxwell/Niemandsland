@@ -4,7 +4,7 @@ extends Node3D
 ## LOS check itself tested (VolumetricLos.eye), never a muzzle ray the rules never saw. The tint names only the
 ## weapon FAMILY (family_for: name words from a data table, then the rules); anything unknown stays neutral chalk. Full
 ## form: a slug travels the segment and leaves a fading chalk line. Still form (Performance/Low, Reduce Motion):
-## the line alone. No RNG; off unless GraphicsSettings.show_combat_effects (default off until the look GO).
+## the line alone. No RNG; off when the player switches GraphicsSettings.show_combat_effects off (on by default).
 
 enum Family { NEUTRAL, BALLISTIC, BOW, FLAME, ENERGY, AUTO, ARTILLERY, THROWN, BEAM }   # append only: cues carry the int
 const TINTS := [Color(0.93, 0.92, 0.86), Color(1.0, 0.84, 0.52), Color(0.8, 0.66, 0.42), Color(1.0, 0.5, 0.16),
