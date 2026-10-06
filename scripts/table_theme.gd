@@ -40,6 +40,26 @@ func fits(size_feet: Vector2) -> bool:
 	return size_feet.is_equal_approx(table_feet)
 
 
+## Lead D16: how many live models stand (by their centre) inside the turned footprint of a piece this theme would
+## place. The theme is refused then; models are never moved, their positions are rules.
+func models_in_the_way(tree: SceneTree) -> int:
+	var count := 0
+	for m in tree.get_nodes_in_group("miniature"):
+		if m is Node3D and m.is_visible_in_tree() and not bool(m.get_meta("deleted", false)) \
+				and pieces.any(func(p: Dictionary) -> bool: return _covers(p, m.global_position)):
+			count += 1
+	return count
+
+
+static func _covers(p: Dictionary, at: Vector3) -> bool:
+	var id: String = p["prop_id"]
+	var def: Dictionary = ObjectManager.SANDBOX_RUINS.get(id, ObjectManager.SANDBOX_GROUPS.get(id,
+		ObjectManager.SANDBOX_SOLIDS.get(id, {})))
+	var half: Vector2 = Vector2(def.get("footprint", Vector2.ONE * ObjectManager.SANDBOX_DEFAULT_FOOTPRINT_INCHES)) * IN2M * 0.5
+	var d := Vector2(at.x - p["position"].x, at.z - p["position"].z).rotated(deg_to_rad(p["yaw_deg"]))   # into the piece frame
+	return absf(d.x) <= half.x and absf(d.y) <= half.y
+
+
 ## Lay the theme out: the live free pieces are replaced (hidden the undoable way, D10), the theme pieces spawn at
 ## their spot and angle, the biome and the mood (local, D13) change. hooks = {started, biome_get, biome_set, mood_get,
 ## mood_set, optional relayout} (Callables) + optional net (NetworkManager): in a multiplayer game the spawns, angles,
