@@ -1678,6 +1678,17 @@ static func reset_round_mods(state: Dictionary) -> void:
 ## (melee_threat, inside 12\") and skips Shaken enemies (they only hold).
 static var reply_v2 := false
 const REPLY_CHARGE_IN := 12.0
+const REPLY_ADVANCE_IN := 6.0
+
+
+## E[max(0, w - X)], X ~ Poisson(lambda): the survival tail (twin of sim.rs `expected_remaining`).
+static func _expected_remaining(w: float, lambda: float) -> float:
+	var p := exp(-lambda)
+	var total := 0.0
+	for k in range(int(floor(w))):
+		total += p * (w - k)
+		p *= lambda / (k + 1.0)
+	return total
 
 
 static func reply_threat(state: Dictionary, player: int) -> Dictionary:
@@ -1700,11 +1711,22 @@ static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 					+ float(spell_ev_of(eu, mu, d)["ev"])   # magic is part of the reply
 			if reply_v2 and d <= REPLY_CHARGE_IN:
 				ev = maxf(ev, melee_threat(eu, mu))
+			if reply_v2 and d > REPLY_ADVANCE_IN and sees(eu, str(mk)) and _los_clear(state, eu, mu):
+				var d2 := d - REPLY_ADVANCE_IN
+				ev = maxf(ev, AiEv.shoot_ev(_profiles_of(eu, false, d2), _ctx_of(eu), _ctx_of(mu), d2) \
+					+ float(spell_ev_of(eu, mu, d2)["ev"]))
 			if ev > best_ev:
 				best_ev = ev
 				best_key = str(mk)
 		if best_key != "":
 			incoming[best_key] = float(incoming.get(best_key, 0.0)) + best_ev
+	if reply_v2:
+		# hand `presence` the Poisson tail: max(0, W - incoming) is then the expected wounds left
+		for k in incoming.keys():
+			var w := 0.0
+			for x in (state["units"][k] as Dictionary)["wounds"]:
+				w += float(x)
+			incoming[k] = w - _expected_remaining(w, float(incoming[k]))
 	return incoming
 
 

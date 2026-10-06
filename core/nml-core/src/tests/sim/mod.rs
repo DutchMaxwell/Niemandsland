@@ -1832,3 +1832,19 @@ mod weapons;
         let (to_b, to_a) = (reply_threat_with(&statics, &st, 1, true)[1], reply_threat_with(&statics, &st, 0, true)[0]);
         assert!(to_b > 0.0 && (to_a - to_b).abs() < 1e-12, "{to_a} vs {to_b}");
     }
+
+    /// aifix D2b — v2 also shoots after an Advance and prices the tail: a gun with range 12" and a
+    /// target 17" away threatens nothing today (reach 12 < 17), but advances 6" to 11"; and the
+    /// threat handed on is `w - E[(w - X)+]`, so a 1-wound unit under 8 EV loses less than a flat 1.
+    #[test]
+    fn reply_v2_shoots_after_an_advance_and_prices_the_survival_tail() {
+        let (st, mut statics) = vr_charge_line(15.0);
+        statics[0].melee = Vec::new();
+        statics[0].shoot = vec![ShootProfile { name: "Gun".into(), attacks: 4, count: 1, range: 12, ..Default::default() }];
+        assert_eq!(reply_threat_with(&statics, &st, 1, false)[1], 0.0, "today: 17\" is out of reach");
+        let v2 = reply_threat_with(&statics, &st, 1, true)[1];
+        assert!(v2 > 0.0, "advance + shoot: {v2}");
+        assert!(v2 <= 1.0, "a 1-wound unit can lose at most its wound: {v2}");
+        assert!((expected_remaining(10.0, 8.0) - 3.0).abs() < 0.6 && expected_remaining(10.0, 8.0) > 2.0);
+        assert_eq!(expected_remaining(5.0, 0.0), 5.0);
+    }
