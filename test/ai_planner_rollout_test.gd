@@ -192,6 +192,17 @@ func test_cross_round_hands_the_opener_to_the_side_that_finished_first() -> void
 	assert_int(AiPlanner._cross_round(_state(), 2)).is_equal(2)
 
 
+## aifix D5 knob: the game-end boundary carries no reply threat (off = unchanged).
+func test_end_threat_is_empty_at_the_game_end_only_with_the_knob() -> void:
+	var state := _state()
+	state["round"] = int(state["rounds_total"])
+	AiPlanner.no_end_threat = true
+	var on := AiPlanner._end_threat(state, 1)
+	AiPlanner.no_end_threat = false
+	assert_bool(on.is_empty()).is_true()
+	assert_dict(AiPlanner._end_threat(state, 1)).is_equal(BattleSim.reply_threat(state, 1))
+
+
 # === R7: discounted multi-round leaf (NML-995) ===
 
 ## rollout_boundaries returns one true round-end per horizon round (rounds 1

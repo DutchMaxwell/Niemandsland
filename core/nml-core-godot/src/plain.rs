@@ -1056,6 +1056,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         dangerous_end_morale: d.get("dangerous_end_morale").map(|v| flag(&v))
             .unwrap_or(dflt.dangerous_end_morale),
         opener_by_finish: d.get("opener_by_finish").map(|v| flag(&v)).unwrap_or(dflt.opener_by_finish),
+        no_end_threat: d.get("no_end_threat").map(|v| flag(&v)).unwrap_or(dflt.no_end_threat),
         // NML-1134. The recorder writes this key (act_recorder.gd `_header_line`,
         // from `BattleSim.RULE_VOCAB_VERSION`); absent = `Knobs::default()` = the
         // pre-stamp version 2. INERT for the in-game seam — nothing in
