@@ -34,6 +34,9 @@ const BIOME_GRADE_WEIGHTS := {
 }
 var _biome_grade_curves := {}
 
+func army_tray_dressing_enabled() -> bool:
+	return current_preset >= QualityPreset.MEDIUM
+
 
 func biome_grade_values(biome: String, mood := "Sunset") -> Dictionary:
 	if current_preset < QualityPreset.MEDIUM or not BIOME_GRADES.has(biome):
