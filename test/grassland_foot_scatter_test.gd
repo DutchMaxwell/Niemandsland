@@ -58,7 +58,7 @@ func test_ruins_and_solids_carry_stones_and_grass_at_their_foot() -> void:
 		assert_int(counts[1]).is_greater(counts[0])   # a ruin gets more than a solid
 
 
-func test_the_scatter_shows_on_grassland_only() -> void:
+func test_the_scatter_hides_on_a_biome_without_a_palette() -> void:
 	var solid: SandboxSolidProp = auto_free(SandboxSolidProp.new())
 	solid.configure("blocker_6x3", 3, Vector2(6, 3))
 	add_child(solid)
@@ -66,7 +66,7 @@ func test_the_scatter_shows_on_grassland_only() -> void:
 	assert_object(s).is_not_null()
 	if s == null:
 		return
-	_table.biome_changed.emit("frozen_tundra")
+	_table.biome_changed.emit("no_such_biome")   # S8.3: every table biome has a palette now
 	assert_bool(s.visible).is_false()
 	_table.biome_changed.emit("temperate_grassland")
 	assert_bool(s.visible).is_true()
