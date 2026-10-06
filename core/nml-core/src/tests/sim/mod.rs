@@ -1785,3 +1785,26 @@ mod utility_move_buff_pins;
 mod versatile_reach;
 mod watchborn_latch;
 mod weapons;
+
+    /// aifix D1 — Quality 4+ (fail 3/6) used to fail every imagined test and
+    /// Quality 3+ (2/6) none; with the knob each fails about its own share.
+    #[test]
+    fn morale_by_probability_breaks_each_quality_at_its_own_rate() {
+        let (st, mut statics) = dangerous_line();
+        let rate = |q: i64, on: bool, statics: &mut Vec<UnitStatic>| {
+            statics[0].quality = q;
+            let seams = Seams { morale_by_probability: on, ..Seams::default() };
+            (1..=300)
+                .filter(|&r| {
+                    let mut s = st.clone();
+                    s.round = r;
+                    morale_fails_expected(&s, statics, 0, seams)
+                })
+                .count() as f64
+                / 300.0
+        };
+        assert_eq!((rate(4, false, &mut statics), rate(3, false, &mut statics)), (1.0, 0.0));
+        assert!((rate(4, true, &mut statics) - 0.5).abs() < 0.05);
+        assert!((rate(3, true, &mut statics) - 1.0 / 3.0).abs() < 0.05);
+        assert!((rate(5, true, &mut statics) - 2.0 / 3.0).abs() < 0.05);
+    }
