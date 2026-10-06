@@ -63,3 +63,17 @@ func test_apply_is_refused_once_the_game_started() -> void:
 	_started = true
 	assert_object(TableTheme.load_theme("ruined_borderland").apply(om, _hooks())).is_null()
 	assert_int(_live(om).size()).is_equal(0)
+
+
+## S8.1 (maintainer 06.10.: the terrain should match the biome): the theme follows the table's biome — on a desert
+## table it lays the desert woods and ruins (the biome's R2 trees and wall panels), keeps the solids and the biome.
+func test_on_a_desert_table_the_theme_lays_desert_woods_and_ruins() -> void:
+	_biome = "arid_desert"
+	_started = false   # the suite keeps its fields between cases
+	var om := _om()
+	var action := TableTheme.load_theme("ruined_borderland").apply(om, _hooks())
+	assert_str(_biome).is_equal("arid_desert")
+	var ids: Array = action.spawned.map(func(n: Node) -> String: return str(n.get_meta("prop_id", "")))
+	assert_int(ids.filter(func(i: String) -> bool: return i.begins_with("desert_")).size()).override_failure_message(
+		"ids: %s" % [ids]).is_equal(10)   # 6 ruins + 4 woods
+	assert_int(ids.filter(func(i: String) -> bool: return i in ["longhouse_6x3", "outcrop_6x3"]).size()).is_equal(4)
