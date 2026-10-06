@@ -10,6 +10,11 @@ const TAIL_BONES := {
 	"ratmen/grenadiers": 5,
 	"ratmen/snipers": 5,
 	"ratmen/champion": 0,
+	"saurians/saurian warriors": 0,
+	"saurians/geckos": 0,
+	"saurians/chameleons": 0,
+	"saurians/saurian guardians": 0,
+	"saurians/gators": 0,
 }
 
 static func allows(key: String, tail_bones: int) -> bool:

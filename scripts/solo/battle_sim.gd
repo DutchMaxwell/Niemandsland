@@ -16,6 +16,13 @@ const IN2M := 0.0254
 ## simulation (that is S4). Set only via resolve_stochastic().
 static var stochastic_rng: RandomNumberGenerator = null
 
+## aifix D1 knob (default OFF, twin of Seams::morale_by_probability, sim.rs `morale_dither`): the
+## imagined morale test fails when fail_p exceeds a deterministic low-discrepancy threshold of the
+## unit's roster slot and the round, instead of the 50 % cliff. `resolve` stamps `_slot` on the
+## units (capture order = the core's roster order) and sets `_morale_round` while it is on.
+static var morale_by_probability := false
+static var _morale_round := 1
+
 ## NML-1068/NML-1073 S3: unit spacing is the imagination's DEFAULT (decision
 ## 26.08.) — resolve() honours the 1" no-go rule (mirrors SoloController.
 ## _spacing_zones_world, with the S1 charge-target exemption) unless
@@ -849,6 +856,12 @@ static func _spacing_fraction(next: Dictionary, mover_key: String, positions: Ar
 static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	var _prof_t0 := Time.get_ticks_usec() if profile_enabled() else 0
 	var next := clone_state(state)
+	if morale_by_probability:
+		_morale_round = int(next["round"])
+		var slot := 0
+		for k in next["units"]:
+			(next["units"][k] as Dictionary)["_slot"] = slot
+			slot += 1
 	var su: Dictionary = next["units"][action["unit"]]
 	var was_shaken := bool(su.get("shaken", false))
 	var kind: int = int(action.get("kind", AiDecision.Action.HOLD))
@@ -1758,7 +1771,14 @@ static func _morale_fails_expected(su: Dictionary) -> bool:
 		int(su.get("morale_bonus", 0))) - 1) / 6.0
 	if AiEv.rule_on_all_models(u, "Fearless"):
 		fail_p *= 0.5
+	if morale_by_probability:
+		return fail_p > _morale_dither(int(su.get("_slot", 0)), _morale_round)
 	return fail_p >= 0.5
+
+
+## The die stand-in: golden-ratio sequence over the roster slot, shifted per round (sim.rs `morale_dither`).
+static func _morale_dither(slot: int, round_no: int) -> float:
+	return fposmod((slot + 1.0) * 0.6180339887498949 + round_no * 0.7548776662466927, 1.0)
 
 
 ## Post-volley morale (parity wave step 2, mirrors main.gd's PDF-verified flow):
