@@ -81,23 +81,23 @@ const PRESETS = {
 		"saturation": 0.95,
 	},
 	"Night": {
-		"name": "Night (Moonlit)",
-		"sun_energy": 0.35,  # the sun doubles as cool moonlight
-		"sun_color": Color(0.65, 0.72, 1.0),
+		"name": "Night (Full Moon)",
+		"sun_energy": 1.6,  # the sun doubles as a strong, cool full-moon key
+		"sun_color": Color(0.6, 0.72, 1.0),
 		"sun_angle_h": 120.0,
-		"sun_angle_v": 35.0,
-		"ambient_energy": 0.12,
-		"ambient_color": Color(0.2, 0.25, 0.4),
-		"exposure": 0.8,
-		"shadow_opacity": 0.9,
-		"shadow_blur": 2.0,
+		"sun_angle_v": 24.0,  # low enough that the moon is in the sky at play camera angles
+		"ambient_energy": 0.3,  # blue sky-fill so shadows stay readable, not black
+		"ambient_color": Color(0.24, 0.32, 0.58),
+		"exposure": 1.0,
+		"shadow_opacity": 0.8,
+		"shadow_blur": 3.5,  # soft moon shadows
 		"ssao_intensity": 0.5,
-		"fill_light_energy": 0.1,
-		"fill_light_color": Color(0.5, 0.6, 0.9),
+		"fill_light_energy": 0.25,
+		"fill_light_color": Color(0.45, 0.58, 1.0),
 		"ssr_intensity": 0.3,
-		"glow_intensity": 1.3,  # emissive props (ruin fires) pop in the dark
-		"contrast": 1.1,
-		"saturation": 0.9,
+		"glow_intensity": 1.5,  # slight bloom on the sky and emissive props
+		"contrast": 1.05,
+		"saturation": 0.85,
 	},
 	"Storm": {
 		"name": "Storm (Rain)",

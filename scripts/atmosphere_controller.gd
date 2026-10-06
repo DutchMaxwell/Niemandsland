@@ -43,7 +43,7 @@ const PRESETS := {
 	},
 	"Night": {
 		"lighting": "Night",
-		"star_brightness": 3.2, "nebula_intensity": 0.7,
+		"star_brightness": 3.2, "nebula_intensity": 0.7, "moon": 1.0,
 		"mist_color": Color(0.74, 0.78, 0.88), "mist_density": 1.1,
 		"rain": false, "lightning": false,
 	},
@@ -273,6 +273,9 @@ func _apply_blend(t: float, lighting_from: Dictionary, lighting_to: Dictionary,
 		sky.set_shader_parameter("nebula_intensity",
 				lerpf(sky_from.get("nebula_intensity", preset["nebula_intensity"]),
 						preset["nebula_intensity"], t))
+		# The full-moon disc and halo (Night only) fade in and out with the mood.
+		sky.set_shader_parameter("moon_strength",
+				lerpf(sky_from.get("moon", 0.0), preset.get("moon", 0.0), t))
 
 	_mist_color = mist_color_from.lerp(preset["mist_color"], t)
 	_mist_density = lerpf(mist_density_from, preset["mist_density"], t)
@@ -297,9 +300,11 @@ func _sky_state() -> Dictionary:
 	# to get_shader_parameter) — fall back to the shader defaults.
 	var star: Variant = sky.get_shader_parameter("star_brightness")
 	var nebula: Variant = sky.get_shader_parameter("nebula_intensity")
+	var moon: Variant = sky.get_shader_parameter("moon_strength")
 	return {
 		"star_brightness": float(star) if star != null else SKY_DEFAULT_STAR_BRIGHTNESS,
 		"nebula_intensity": float(nebula) if nebula != null else SKY_DEFAULT_NEBULA_INTENSITY,
+		"moon": float(moon) if moon != null else 0.0,
 	}
 
 

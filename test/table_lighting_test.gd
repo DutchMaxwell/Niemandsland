@@ -13,7 +13,8 @@ func test_sunset_rig_and_weather_have_distinct_lights() -> void:
 	assert_float(sunset.sun_angle_v).is_equal(22.0)
 	for mood in ["Night", "Rain", "Overcast"]:
 		var weather: Dictionary = rig.values(Biomes.GRASSLAND,mood)
-		assert_float(weather.sun_energy).is_less(1.0)
+		# Night is a strong full-moon key (1.6, see the Night mood); it is still far below the sunset key.
+		assert_float(weather.sun_energy).is_less(sunset.sun_energy * 0.6 if mood == "Night" else 1.0)
 		assert_float(weather.sun_color.b).is_greater(weather.sun_color.r)
 	var desert: Dictionary = rig.values(Biomes.ARID_DESERT,"Day")
 	var tundra: Dictionary = rig.values(Biomes.FROZEN_TUNDRA,"Day")
