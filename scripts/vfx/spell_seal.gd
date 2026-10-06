@@ -5,7 +5,7 @@ extends Node3D
 ## preview ring's own convention and 4 mm band). It forms on the cast declaration, flares on success, cracks
 ## on a fail, dims/flickers when interfered with, fades on a cancel. Kind = colour AND rune count (damage /
 ## buff / debuff / utility). Still form (Performance/Low, Reduce Motion): no sweep, spin or flicker.
-## No RNG; off unless GraphicsSettings.show_combat_effects (default off until the look GO).
+## No RNG; off when the player switches GraphicsSettings.show_combat_effects off (on by default).
 
 enum Outcome { SUCCESS, FAIL, CANCEL }
 const KINDS := {"damage": [Color(1.0, 0.46, 0.3), 6], "buff": [Color(0.45, 0.95, 0.55), 8],
