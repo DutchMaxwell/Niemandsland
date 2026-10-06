@@ -419,19 +419,23 @@ impl Terrain {
         if grid_size % 2 != 0 {
             grid_size += 1;
         }
+        let mut bank: Vec<Obb> = p
+            .pieces
+            .iter()
+            .map(|q| Obb {
+                c: [q[1] * crate::IN2M, q[2] * crate::IN2M],
+                he: [q[3] * 0.5 * crate::IN2M, q[4] * 0.5 * crate::IN2M],
+                yaw: q[5].to_radians(),
+                kind: q[0] as i32,
+            })
+            .collect();
+        if bank.is_empty() && p.sandbox.is_empty() {
+            bank = pieces_from_cells(&cells, cell_m, rot_rad, grid_size as f64 / 2.0);
+        }
         let mut out = Terrain {
             cells,
             sandbox: p.sandbox.clone(),
-            bank: p
-                .pieces
-                .iter()
-                .map(|q| Obb {
-                    c: [q[1] * crate::IN2M, q[2] * crate::IN2M],
-                    he: [q[3] * 0.5 * crate::IN2M, q[4] * 0.5 * crate::IN2M],
-                    yaw: q[5].to_radians(),
-                    kind: q[0] as i32,
-                })
-                .collect(),
+            bank,
             cell_m,
             neg_rot: -rot_rad,
             half_grid: grid_size as f64 / 2.0,
@@ -475,6 +479,53 @@ impl Terrain {
         }
         NONE
     }
+}
+
+/// aifix B1 — the live overlay paints `cells` and hands no drawing list, so the
+/// net saw an empty table. Merge same-type neighbours into rectangles (greedy,
+/// row-major) and answer them as pieces in the world frame, largest first so
+/// the `N_TERR` cut drops the smallest.
+fn pieces_from_cells(cells: &HashMap<(i64, i64), i32>, cell_m: f64, rot_rad: f64, half_grid: f64) -> Vec<Obb> {
+    let mut keys: Vec<(i64, i64)> = cells.iter().filter(|(_, &k)| k != NONE).map(|(&c, _)| c).collect();
+    keys.sort_by_key(|&(x, z)| (z, x));
+    let mut used: std::collections::HashSet<(i64, i64)> = std::collections::HashSet::new();
+    let mut rects: Vec<(i64, i64, i64, i64, i32)> = Vec::new(); // x0, z0, w, h, kind
+    for &(x0, z0) in &keys {
+        if used.contains(&(x0, z0)) {
+            continue;
+        }
+        let kind = cells[&(x0, z0)];
+        let free = |c: (i64, i64)| !used.contains(&c) && cells.get(&c) == Some(&kind);
+        let mut w = 1;
+        while free((x0 + w, z0)) {
+            w += 1;
+        }
+        let mut h = 1;
+        while (0..w).all(|dx| free((x0 + dx, z0 + h))) {
+            h += 1;
+        }
+        for dz in 0..h {
+            for dx in 0..w {
+                used.insert((x0 + dx, z0 + dz));
+            }
+        }
+        rects.push((x0, z0, w, h, kind));
+    }
+    rects.sort_by_key(|r| std::cmp::Reverse(r.2 * r.3));
+    let (sin, cos) = rot_rad.sin_cos();
+    rects
+        .into_iter()
+        .map(|(x0, z0, w, h, kind)| {
+            let rx = (x0 as f64 + w as f64 * 0.5 - half_grid) * cell_m;
+            let rz = (z0 as f64 + h as f64 * 0.5 - half_grid) * cell_m;
+            Obb {
+                c: [rx * cos - rz * sin, rx * sin + rz * cos],
+                he: [w as f64 * 0.5 * cell_m, h as f64 * 0.5 * cell_m],
+                yaw: rot_rad,
+                kind,
+            }
+        })
+        .collect()
 }
 
 // ------------------------------------------------- the school 3" LOS grid ---
