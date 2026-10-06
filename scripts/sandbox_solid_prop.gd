@@ -30,6 +30,14 @@ const COLOURS := {"stone": STONE_COLOR, "moss": Color(0.20, 0.25, 0.10), "ashlar
 	"coping": Color(0.23, 0.235, 0.25), "wood": Color(0.27, 0.18, 0.11), "grass": Color(0.27, 0.30, 0.13),
 	"granite": Color(0.31, 0.315, 0.33), "granite_top": Color(0.36, 0.365, 0.38), "lichen": Color(0.38, 0.40, 0.22),
 	"tuft": Color(0.33, 0.24, 0.14)}
+## S8.2 (maintainer 06.10.: the terrain should match the biome): no biome art exists for the solids, so the table's
+## biome tints them. Stone parts and an uploaded model are multiplied by BIOME_TINT, the green foot parts take
+## BIOME_GROUND; grassland (and any biome not listed) keeps today's look. Rules never read colours.
+const BIOME_TINT := {"arid_desert": Color(1.0, 0.86, 0.66), "frozen_tundra": Color(0.90, 0.95, 1.0),
+	"volcanic_ash": Color(0.55, 0.52, 0.50), "urban_ruins": Color(0.86, 0.86, 0.86), "alien_jungle": Color(0.86, 1.0, 0.86)}
+const BIOME_GROUND := {"arid_desert": Color(0.55, 0.45, 0.30), "frozen_tundra": Color(0.72, 0.74, 0.78),
+	"volcanic_ash": Color(0.17, 0.16, 0.16), "urban_ruins": Color(0.36, 0.34, 0.31), "alien_jungle": Color(0.15, 0.28, 0.10)}
+const GROUND_PARTS := ["moss", "grass", "lichen", "tuft"]
 
 const SKIRT_MARGIN_INCHES := 0.8
 const SKIRT_HEIGHT_INCHES := 0.4   # reaches the table and the lowest 0.2" of the walls, nothing higher
@@ -40,6 +48,9 @@ static var _skirt_textures := {}   # footprint -> ImageTexture, shared by every 
 var prop_id: String = ""
 var prop_kind: int = 0
 var footprint_inches: Vector2 = Vector2.ZERO
+var _biome := ""
+var _mats := {}   # colour key -> material of the bundled look
+var _model_mats: Array = []   # [the model surface's own material copy, its own albedo]
 
 
 ## Show a detailed model (3.5) instead of the bundled look. The model's origin is the footprint centre on the ground,
@@ -49,6 +60,35 @@ func use_model(model: Node3D) -> void:
 		if child is MeshInstance3D:
 			child.visible = false
 	add_child(model)
+	var meshes := model.find_children("*", "MeshInstance3D", true, false)
+	if model is MeshInstance3D:
+		meshes.append(model)   # a one-mesh GLB's root is the mesh
+	for mi: MeshInstance3D in meshes:
+		for surface in mi.mesh.get_surface_count():
+			var own := mi.get_active_material(surface) as StandardMaterial3D
+			if own != null:
+				var copy := own.duplicate() as StandardMaterial3D
+				mi.set_surface_override_material(surface, copy)
+				_model_mats.append([copy, own.albedo_color])
+	_tint_for(_biome)
+
+
+func _ready() -> void:
+	var table := get_tree().get_first_node_in_group("table")
+	if table == null:
+		return
+	_tint_for(str(table.get("biome")))
+	table.biome_changed.connect(_tint_for)
+
+
+func _tint_for(biome: String) -> void:
+	_biome = biome
+	var tint: Color = BIOME_TINT.get(biome, Color.WHITE)
+	for key: String in _mats:
+		var ground := GROUND_PARTS.has(key) and BIOME_GROUND.has(biome)
+		_mats[key].albedo_color = BIOME_GROUND[biome] if ground else COLOURS[key] * tint
+	for m: Array in _model_mats:
+		m[0].albedo_color = m[1] * tint
 
 
 ## Call once right after `new()`, before adding to the tree / positioning.
@@ -71,17 +111,16 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_lo
 	col.position.y = size.y * 0.5
 	add_child(col)
 	# The look: boxes of LOOKS[p_look] (unknown -> plain), one material per colour. Rules never read it.
-	var mats := {}
 	for part: Array in LOOKS.get(p_look, LOOKS["plain"]):
 		var lo := Vector3(part[0], part[2], part[4])
 		var hi := Vector3(part[1], part[3], part[5])
-		if not mats.has(part[6]):
-			mats[part[6]] = StandardMaterial3D.new()
-			mats[part[6]].albedo_color = COLOURS[part[6]]
-			mats[part[6]].roughness = 0.93
+		if not _mats.has(part[6]):
+			_mats[part[6]] = StandardMaterial3D.new()
+			_mats[part[6]].albedo_color = COLOURS[part[6]]
+			_mats[part[6]].roughness = 0.93
 		var mesh := BoxMesh.new()
 		mesh.size = (hi - lo) * INCHES_TO_METERS
-		mesh.material = mats[part[6]]
+		mesh.material = _mats[part[6]]
 		var visual := MeshInstance3D.new()
 		visual.mesh = mesh
 		visual.position = (hi + lo) * 0.5 * INCHES_TO_METERS
