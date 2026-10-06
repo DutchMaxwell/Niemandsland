@@ -41,7 +41,7 @@ func test_vampiric_undead_words_map_to_the_baked_slugs() -> void:
 		"Dual Heavy Hand Weapons": "dual", "Cursed Greatsword": "greatsword", "Heavy Great Weapon": "great_weapon",
 		"Champion Cursed Crossbow": "crossbow", "Carving Tool": "carving_tool",
 		"Skeletal Steed": "skeletal_steed", "Abyssal Beast": "abyssal_beast", "Steed": "steed",
-		"Hunting Pet": "hunting_pet"}
+		"Hunting Pet": "hunting_pet", "Cursed Mace": "mace", "Sling": "sling"}
 	for word in expected:
 		assert_str(lib.variant_slug([word], "vampiric_undead")).is_equal(expected[word])
 	# Scoped: the other factions keep the shared slugs.

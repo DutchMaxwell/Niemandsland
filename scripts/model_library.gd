@@ -41,6 +41,7 @@ var _downloader: AssetDownloadManager = null
 ## Separate cache for ctex textures — they MUST keep the .ctex extension so ResourceLoader resolves
 ## CompressedTexture2D (the shared _downloader stores everything as .glb). Meshes still use _downloader.
 var _ctex_tex: AssetDownloadManager = null
+var _idle_assets: AssetDownloadManager = null
 var _models: Dictionary = {}   # key -> { url, sha256, size, ctex? }
 var _label_slug: Dictionary = {}   # lowercased AF option label -> part-slug (I2)
 ## Faction-scoped vocabulary (`"_faction_<folder>": {label: slug}` in the map): consulted only for
@@ -60,6 +61,10 @@ func _ready() -> void:
 	_ctex_tex.name = "CtexTextureDownloader"
 	_ctex_tex.file_extension = "ctex"   # keep .ctex so it loads as CompressedTexture2D
 	add_child(_ctex_tex)
+	_idle_assets = AssetDownloadManager.new()
+	_idle_assets.name = "IdlePayloadDownloader"
+	_idle_assets.file_extension = "res"
+	add_child(_idle_assets)
 	_load_label_slug_map()
 	_load_bundled_manifest()
 	_refresh_remote_manifest()  # fire-and-forget; overlays the live CDN manifest when it arrives
@@ -279,9 +284,17 @@ func ensure_models(unit_specs: Array) -> void:
 	# raw GLB. De-duplicated by sha across the army.
 	var glb: Dictionary = {}    # sha -> url (meshes + legacy GLBs, .glb cache)
 	var ctex: Dictionary = {}   # sha -> url (ctex textures, .ctex cache)
+	var idle_blobs: Dictionary = {}
 	for spec: Dictionary in unit_specs:
 		var faction: String = spec.get("faction", "")
 		var unit_name: String = spec.get("unit_name", "")
+		if DisplayServer.get_name() != "headless":
+			var idle := get_idle_entry(faction, unit_name)
+			if not idle.is_empty():
+				for role in ["mesh", "poses"]:
+					idle_blobs[idle[role].sha256] = _blob_url(idle[role])
+				for blob: Dictionary in _ctex_texture_blobs(idle):
+					ctex[blob.sha256] = _blob_url(blob)
 		var block: Dictionary = get_ctex_entry(faction, unit_name)
 		if not block.is_empty():
 			var mesh: Dictionary = block.get("mesh", {})
@@ -306,6 +319,9 @@ func ensure_models(unit_specs: Array) -> void:
 	for sha in ctex:
 		if not _ctex_tex.is_cached(sha):
 			entries.append({"url": ctex[sha], "sha256": sha, "path": _ctex_tex.cache_path(sha)})
+	for sha in idle_blobs:
+		if not _idle_assets.is_cached(sha):
+			entries.append({"url": idle_blobs[sha], "sha256": sha, "path": _idle_assets.cache_path(sha)})
 	if entries.is_empty():
 		return
 	# progress_updated → caching_progress is wired in _ready(), so the loading bar advances per blob.
@@ -572,3 +588,35 @@ func apply_manifest_text(text: String) -> void:
 				_models[make_key(parts[0], parts[1])] = models[k]
 			else:
 				_models[k] = models[k]
+
+
+## Additive manifest contract. Missing, unsupported and partial payloads use the static model.
+func get_idle_entry(faction: String, unit_name: String) -> Dictionary:
+	var entry: Variant = _entry(faction, unit_name).get("idle", {})
+	if entry is Dictionary and preload("res://scripts/visual/bone_texture_payload.gd").valid_entry(entry):
+		return entry
+	return {}
+
+
+func idle_cached_paths(faction: String, unit_name: String) -> Dictionary:
+	var entry := get_idle_entry(faction, unit_name)
+	if entry.is_empty() or _idle_assets == null:
+		return {}
+	var paths := {}
+	for role in ["mesh", "poses"]:
+		var sha: String = entry[role].sha256
+		if not _idle_assets.is_cached(sha):
+			return {}
+		paths[role] = _idle_assets.cache_path(sha)
+	var surfaces: Array = []
+	for material: Dictionary in entry.get("materials", []):
+		var surface := {"surface": material.surface}
+		for role in CTEX_ACTIVE_TEXTURE_ROLES:
+			if material.has(role):
+				var sha: String = material[role].sha256
+				if _ctex_tex == null or not _ctex_tex.is_cached(sha):
+					return {}
+				surface[role] = _ctex_tex.cache_path(sha)
+		surfaces.append(surface)
+	paths["materials"] = surfaces
+	return paths

@@ -133,6 +133,8 @@
     "skeletal steed": "skeletal_steed",
     "abyssal beast": "abyssal_beast",
     "steed": "steed",
-    "hunting pet": "hunting_pet"
+    "hunting pet": "hunting_pet",
+    "cursed mace": "mace",
+    "sling": "sling"
   }
 }

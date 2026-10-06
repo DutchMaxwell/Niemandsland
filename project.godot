@@ -110,3 +110,10 @@ environment/ssao/intensity=1.0
 environment/ssil/enabled=false
 environment/ssr/enabled=false
 environment/sdfgi/enabled=false
+
+[shader_globals]
+
+idle_freeze_time={
+"type": "float",
+"value": -1.0
+}
