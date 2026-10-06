@@ -10,10 +10,10 @@ enum Kind { WOUND, KILL, HIT, SAVE }
 const COLORS := [Color(0.88, 0.2, 0.18), Color(0.62, 0.05, 0.05), Color(0.96, 0.93, 0.84), Color(0.4, 0.68, 0.95)]
 const NEUTRAL_KILL := Color(0.8, 0.78, 0.72)   # the casualty marker with Gore Off
 const EXTRA_KILL_K := 1.25                      # Gore Extra: a bigger splat
-const SIZE_M := 0.011
+const SIZE_M := 0.018   # the size in the approved look clips (v2-v5)
 const LIFT_M := 0.01
 const RISE_M := 0.012
-const LIFE_S := 1.8
+const LIFE_S := 2.4     # likewise
 const MAX_LIVE := 32
 const MAX_TICKS := 10   # one strip shows at most 10 symbols; the exact totals stay in the outcome text
 const SHADER := "shader_type spatial;
