@@ -56,7 +56,7 @@ func _shots(attacker: GameUnit) -> Array:
 
 ## One seeded volley + one seeded damage cast; returns everything the rules decided.
 func _arm(effects_on: bool) -> Dictionary:
-	for fx in [_main.result_pips, _main.volley_cue, _main.spell_seal]:
+	for fx in [_main.result_pips, _main.volley_cue, _main.spell_seal, _main.casualty_show]:
 		fx.force_for_tests = effects_on
 		fx.enabled = effects_on
 	var shooters := _unit(1, "Rifles", 5, 0.0)
@@ -73,7 +73,8 @@ func _arm(effects_on: bool) -> Dictionary:
 	var drawn: int = _main.result_pips.get_child_count() + _main.volley_cue.get_child_count() \
 		+ _main.spell_seal.get_child_count()
 	return {"wounds": target.models.map(func(m): return [m.is_alive, m.wounds_current]),
-		"log": log, "tray": _main._tray_rng.state, "global": randi(), "drawn": drawn}
+		"log": log, "tray": _main._tray_rng.state, "global": randi(), "drawn": drawn,
+		"shown": _main.casualty_show.get_child_count()}
 
 
 func test_the_off_arm_resolves(timeout := 240000) -> void:
@@ -88,6 +89,7 @@ func test_the_off_arm_resolves(timeout := 240000) -> void:
 func test_the_on_arm_resolves_identically(timeout := 240000) -> void:
 	var on := await _arm(true)
 	assert_int(int(on["drawn"])).override_failure_message("the ON arm drew no cue at all").is_greater(0)
+	assert_int(int(on["shown"])).override_failure_message("the ON arm drew no fall at all").is_greater(0)
 	assert_array(on["wounds"]).is_equal(_off_arm.get("wounds", []))
 	assert_str(str(on["log"])).is_equal(str(_off_arm.get("log", "")))
 	assert_int(int(on["tray"])).is_equal(int(_off_arm.get("tray", -1)))

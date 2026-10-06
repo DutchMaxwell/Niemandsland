@@ -410,6 +410,7 @@ var _solo_arena_seed: int = 0                # game-level base seed for the repr
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
 var spell_seal: SpellSeal = null  # VFX #3: the cast's glyph circle at the caster (presentation only)
+var casualty_show: CasualtyShow = null  # VFX: blood / sparks / ricochets / falling ghosts / shake (presentation)
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 var result_pips: ResultPips = null  # VFX #1: wound ticks / blood markers over the models (presentation only)
 var _vfx_saves_made := 0   # saves made by the save batches of the current _solo_resolve_saves (VFX #1 strip)
@@ -12909,10 +12910,13 @@ func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true) -> voi
 			# VFX #1: a pooled regiment has no per-model allocation (casualties come off the back and the ranks
 			# close), so its losses sit over the unit: ticks for the wounds that landed, crosses for the models lost.
 			if pips and vfx_eye != Vector3.INF:
-				_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.WOUND), "at": vfx_eye, "n": mini(wounds, remaining_pool)})
+				var stuff := int(ModelStuff.stuff_of(target))
+				_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.WOUND), "at": vfx_eye, "n": mini(wounds, remaining_pool),
+					"m": stuff, "b": vfx_eye - Vector3.UP * (_solo_unit_los_height_m(target) + 0.03)})
 				if alive.size() > target.get_alive_count():
 					_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.KILL), "at": vfx_eye + Vector3.UP * 0.016,
-						"n": alive.size() - target.get_alive_count()})
+						"n": alive.size() - target.get_alive_count(), "m": stuff,
+						"b": vfx_eye - Vector3.UP * (_solo_unit_los_height_m(target) + 0.03)})
 			return
 	var pid: int = int(target.unit_properties.get("player_id", 1))
 	var requested := wounds
@@ -13126,7 +13130,9 @@ func _vfx_hit_strip(defender: GameUnit, hits: int, saves: int) -> void:
 		return
 	_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.HIT), "at": eye, "n": hits})
 	if saves > 0:
-		_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.SAVE), "at": eye + Vector3.UP * 0.016, "n": saves})
+		_vfx_emit({"k": "pip", "t": int(ResultPips.Kind.SAVE), "at": eye + Vector3.UP * 0.016, "n": saves,
+			"pts": defender.get_alive_models().slice(0, mini(saves, 5)).map(func(m) -> Vector3: return ResultPips.eye_of(m))
+				.filter(func(e: Vector3) -> bool: return e != Vector3.INF)})
 
 
 ## VFX #1: where a unit's strips sit — over its centre at its LOS height; INF without a live centre.
@@ -13138,8 +13144,15 @@ func _vfx_unit_eye(unit: GameUnit) -> Vector3:
 ## VFX #1: one result mark over a model's LOS eye, from the allocation that just happened.
 func _vfx_pip(kind: ResultPips.Kind, mi: ModelInstance, count: int) -> void:
 	var eye := ResultPips.eye_of(mi)
-	if eye != Vector3.INF and count > 0:
-		_vfx_emit({"k": "pip", "t": int(kind), "at": eye, "n": count})
+	if eye == Vector3.INF or count <= 0:
+		return
+	var cue := {"k": "pip", "t": int(kind), "at": eye, "n": count, "m": int(ModelStuff.stuff_of(mi.unit)),
+		"b": mi.node.global_position}
+	if kind == ResultPips.Kind.KILL:
+		cue["hv"] = int(mi.wounds_max) >= 3   # a heavy kill (Tough 3+) shakes the camera a little
+		if casualty_show != null:
+			casualty_show.collapse(mi.node, mi.node.get_instance_id())   # local picture: peers get the dust burst
+	_vfx_emit(cue)
 
 
 ## VFX in co-op: every cue is plain data (positions in metres) drawn by ONE path, _vfx_draw — here, and on
@@ -13168,9 +13181,11 @@ func _vfx_draw(cue: Dictionary, from_peer: int) -> void:
 	_vfx_seen[key] = true
 	var seal_key := "%d:%d:%d" % [from_peer, int(cue.get("s", 0)), int(cue.get("sid", cue.get("id", 0)))]
 	var at: Variant = cue.get("at")
+	var show_seed := hash("%d:%d" % [int(cue.get("s", 0)), int(cue.get("id", 0))])   # the same on every peer
 	match str(cue.get("k", "")):
 		"pip" when at is Vector3:
-			result_pips.mark(clampi(int(cue.get("t", 0)), 0, 3) as ResultPips.Kind, at, mini(int(cue.get("n", 0)), 12))
+			result_pips.mark(clampi(_vfx_int(cue.get("t"), 0), 0, 3) as ResultPips.Kind, at, mini(_vfx_int(cue.get("n"), 0), 12))
+			_vfx_show_pip(cue, at, show_seed)
 		"volley" when cue.get("pairs") is Array:
 			volley_cue.fire((cue["pairs"] as Array).slice(0, 64).filter(func(p: Variant) -> bool:
 				return p is Array and p.size() == 2 and p[0] is Vector3 and p[1] is Vector3),
@@ -13182,6 +13197,33 @@ func _vfx_draw(cue: Dictionary, from_peer: int) -> void:
 		"seal_end":
 			spell_seal.finish(_vfx_seals.get(seal_key), clampi(int(cue.get("o", 0)), 0, 2) as SpellSeal.Outcome)
 			_vfx_seals.erase(seal_key)
+
+
+## VFX: what a resolved result does to the models, from a pip cue (blood / sparks / bone dust where wounds landed,
+## a falling-model dust burst and maybe a shake, ricochets on the defending models where saves held).
+func _vfx_show_pip(cue: Dictionary, at: Vector3, show_seed: int) -> void:
+	if casualty_show == null:
+		return
+	var stuff := clampi(_vfx_int(cue.get("m"), 0), 0, 2) as ModelStuff.Stuff
+	match clampi(_vfx_int(cue.get("t"), 0), 0, 3):
+		ResultPips.Kind.WOUND:
+			var ground: Variant = cue.get("b")
+			casualty_show.wound(at, ground if ground is Vector3 else at, stuff, clampi(_vfx_int(cue.get("n"), 1), 1, 6), show_seed)
+		ResultPips.Kind.KILL:
+			var base: Variant = cue.get("b")
+			casualty_show.kill(at, base if base is Vector3 else at, stuff, cue.get("hv") == true, show_seed)
+		ResultPips.Kind.SAVE:
+			casualty_show.ricochets(_vfx_points(cue.get("pts"), 5), show_seed)
+
+
+## A number from a peer's payload, or `fallback` when it is not one (int() of an array or a dictionary raises).
+func _vfx_int(v: Variant, fallback: int) -> int:
+	return int(v) if (v is int or v is float) else fallback
+
+
+## The Vector3 entries of an untrusted array, at most `cap` of them.
+func _vfx_points(v: Variant, cap: int) -> Array:
+	return (v as Array).slice(0, cap).filter(func(p: Variant) -> bool: return p is Vector3) if v is Array else []
 
 
 func _capture_bug_report() -> void:
@@ -18567,6 +18609,9 @@ func _init_radial_menu() -> void:
 	spell_seal = SpellSeal.new()
 	spell_seal.name = "SpellSeal"
 	add_child(spell_seal)
+	casualty_show = CasualtyShow.new()
+	casualty_show.name = "CasualtyShow"
+	add_child(casualty_show)
 	object_manager.move_trails = move_trails
 	# Transparency wave stage 2 (grilled 2026-07-30): applied rules announce themselves AT
 	# the table — rising billboard texts on the affected unit, stagger-cascaded so full
