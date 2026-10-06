@@ -9,6 +9,7 @@ const TAIL_BONES := {
 	"ratmen/militia": 5,
 	"ratmen/grenadiers": 5,
 	"ratmen/snipers": 5,
+	"ratmen/champion": 0,
 }
 
 static func allows(key: String, tail_bones: int) -> bool:

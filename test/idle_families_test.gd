@@ -22,6 +22,11 @@ func test_militia_grenadiers_and_snipers_carry_the_five_bone_tail() -> void:
 		assert_bool(Families.allows(key, 5)).is_true()
 		assert_bool(Families.allows(key, 0)).is_false()
 
+func test_champions_are_tailless_like_the_other_armoured_bodies() -> void:
+	assert_bool(Families.allows("ratmen/champion#censer+rifle", 0)).is_true()
+	assert_bool(Families.allows("ratmen/champion", 5)).is_false()
+	assert_bool(Families.allows("ratmen/championship", 0)).is_false()
+
 func test_unlisted_families_are_rejected() -> void:
 	assert_bool(Families.allows("ratmen/rat ogres", 0)).is_false()
 	assert_bool(Families.allows("mummified_undead/royal champion", 0)).is_false()
