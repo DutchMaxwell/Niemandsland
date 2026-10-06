@@ -265,6 +265,7 @@ func apply_lighting(mood: String) -> void:
 		preload("res://scripts/visual/table_lighting.gd").apply(_main, _profile, mood)
 		_apply_reference_sun()
 		_apply_reference_environment(mood in ["Day", "Sunset"])
+		_sync_world()
 		return
 	# Only the reference scene owns TAA / render scale / shadow atlas (set below); the table tier leaves them to the
 	# quality preset, so its teardown must not write back the scale it saw when it dressed (Performance lost its 0.77).
@@ -701,3 +702,16 @@ func _exit_tree() -> void:
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null:
 		RenderingServer.directional_shadow_atlas_set_size(graphics.PRESETS[graphics.current_preset]["shadow_size"],true)
+
+
+func _sync_world() -> void:
+	var world := get_node_or_null("TableWorld")
+	if GraphicsSettings.world_enabled(GraphicsSettings.current_preset):
+		if world == null:
+			world = preload("res://scripts/visual/table_world.gd").new()
+			world.name = "TableWorld"
+			add_child(world)
+			world.setup(_main, _profile)
+	elif world != null:
+		remove_child(world)
+		world.queue_free()

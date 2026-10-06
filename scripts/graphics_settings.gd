@@ -475,6 +475,11 @@ static func table_focus_amount(tier: int) -> float:
 	return 0.11 if tier >= QualityPreset.MEDIUM else 0.0
 
 
+## The surrounding world is the optional expensive tier.
+static func world_enabled(tier: int) -> bool:
+	return tier == QualityPreset.ULTRA
+
+
 ## Get current preset name
 func get_current_preset_name() -> String:
 	return PRESETS[current_preset]["name"]
