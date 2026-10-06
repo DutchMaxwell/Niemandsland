@@ -1803,6 +1803,7 @@ mod weapons;
                 .count() as f64
                 / 300.0
         };
+        assert!((morale_dither(0, 1) - 0.372_911_654_996_587_6).abs() < 1e-12, "pinned for the GDScript twin");
         assert_eq!((rate(4, false, &mut statics), rate(3, false, &mut statics)), (1.0, 0.0));
         assert!((rate(4, true, &mut statics) - 0.5).abs() < 0.05);
         assert!((rate(3, true, &mut statics) - 1.0 / 3.0).abs() < 0.05);
