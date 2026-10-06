@@ -4325,15 +4325,16 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 
 
 ## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as
-## _solo_true_los_callable). Indirect fire and an Aircraft target have no tested segment (LOS waived /
-## abstract), so they draw none — no line through a wall. A weapon carried by fewer models than can see
-## (a special weapon) draws only as many tracers as it has bearers.
+## _solo_true_los_callable). Indirect fire tested no segment (LOS waived): no chalk line through a wall, only
+## the shot show's lobbed shell arcing over it from the models in range. An Aircraft target is abstract: none.
+## A weapon carried by fewer models than can see (a special weapon) draws only as many shots as it has bearers.
 func _vfx_volley(member: GameUnit, target: GameUnit, profile: Dictionary, pairs: Array, los_waived: bool) -> void:
-	if pairs.is_empty() or los_waived or SoloController.is_aircraft(target):
+	if pairs.is_empty() or SoloController.is_aircraft(target):
 		return
 	var up_from := Vector3.UP * _solo_unit_los_height_m(member)
 	var up_to := Vector3.UP * _solo_unit_los_height_m(target)
-	_vfx_emit({"k": "volley", "f": int(VolleyCue.family_for(profile)), "b": int(profile.get("blast", 0)), "h": up_to.y,
+	var family := VolleyCue.Family.ARTILLERY if los_waived else VolleyCue.family_for(profile)
+	_vfx_emit({"k": "volley", "f": int(family), "i": los_waived, "b": int(profile.get("blast", 0)), "h": up_to.y,
 		"pairs": pairs.map(func(p: Array) -> Array: return [p[0] + up_from, p[1] + up_to])})
 
 
@@ -4341,12 +4342,12 @@ func _vfx_volley(member: GameUnit, target: GameUnit, profile: Dictionary, pairs:
 ## rules profile (it would split dice batches), so the same read-only sight query runs once more at the same
 ## reach for this weapon's member. A weapon with fewer copies than seeing models draws one tracer per copy.
 func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary, los_waived: bool) -> void:
-	if member == null or los_waived:
+	if member == null:
 		return
 	var pairs: Array = []
 	_solo_sighted_count(member, target, int(SoloController.effective_shoot_reach_in(float(profile.get("range", 0))
-		+ float(SoloController.shooting_range_bonus(member)), target)), false, pairs)
-	_vfx_volley(member, target, profile, pairs.slice(0, maxi(int(profile.get("count", 1)), 1)), false)
+		+ float(SoloController.shooting_range_bonus(member)), target)), los_waived, pairs)
+	_vfx_volley(member, target, profile, pairs.slice(0, maxi(int(profile.get("count", 1)), 1)), los_waived)
 
 
 # === Wave 6 — Caster(X) cast resolution (official Solo v3.5.0 procedure; real tray dice) ===
@@ -13195,7 +13196,8 @@ func _vfx_draw(cue: Dictionary, from_peer: int) -> void:
 				return p is Array and p.size() == 2 and p[0] is Vector3 and p[1] is Vector3)
 			var h: Variant = cue.get("h", 0.0)
 			var fam := clampi(_vfx_int(cue.get("f"), 0), 0, VolleyCue.Family.size() - 1)
-			volley_cue.fire(pairs, fam as VolleyCue.Family)
+			if cue.get("i") != true:   # indirect fire tested no line: no chalk line, only the lobbed shell
+				volley_cue.fire(pairs, fam as VolleyCue.Family)
 			if shot_show != null:
 				shot_show.volley(pairs, fam, show_seed, clampi(_vfx_int(cue.get("b"), 0), 0, 12),
 					clampf(float(h) if (h is int or h is float) else 0.0, 0.0, 0.2))
