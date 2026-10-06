@@ -33,6 +33,14 @@ func test_saurian_infantry_families_are_listed_with_rigid_tails() -> void:
 		assert_bool(Families.allows(key, 5)).is_false()
 	assert_bool(Families.allows("saurians/gatorsx", 0)).is_false()
 
+func test_saurian_heroes_with_proven_floor_contact_are_listed() -> void:
+	for key in ["saurians/gator veteran#greatweapon", "saurians/gecko champion#blowpipe+lance", "saurians/kikatle"]:
+		assert_bool(Families.allows(key, 0)).is_true()
+		assert_bool(Families.allows(key, 5)).is_false()
+	# Teqi and Hakatlo drag their tails on the floor: they stay static until the tail bones exist
+	assert_bool(Families.allows("saurians/teqi", 0)).is_false()
+	assert_bool(Families.allows("saurians/hakatlo", 0)).is_false()
+
 func test_unlisted_families_are_rejected() -> void:
 	assert_bool(Families.allows("ratmen/rat ogres", 0)).is_false()
 	assert_bool(Families.allows("mummified_undead/royal champion", 0)).is_false()
