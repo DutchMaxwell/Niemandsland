@@ -36,7 +36,7 @@ func test_the_theme_lays_out_and_one_undo_takes_it_back() -> void:
 	var biome_before: String = _main.table.biome
 	assert_bool(_main.apply_table_theme("ruined_borderland")).is_true()
 	assert_int(_live()).is_equal(14)
-	assert_str(_main.table.biome).is_equal("temperate_grassland")
+	assert_str(_main.table.biome).is_equal(biome_before)   # S8.1: the theme keeps the table's biome
 	assert_int(TablePaths.of(_main.table).paths.size()).is_equal(3)   # the worn paths (D14)
 	assert_int(TablePaths.of(_main.table).get_child_count()).is_greater(0)
 	_main.undo_manager.undo()

@@ -165,6 +165,33 @@ fn the_blend_leaf_is_the_one_ply_value_and_a_game_end_the_referee() {
     assert!(n > 0, "no one-boundary rollout: the check is vacuous");
 }
 
+/// aifix E1 — GF v3.5.1 p.7: the side that finished activating first opens the
+/// next round. Every unit already activated, the first side asked is dry first,
+/// so it opens again whatever the head counts (the old rule: fewer alive units,
+/// a tie always to player 1).
+#[test]
+fn the_side_that_ran_dry_first_opens_the_next_round() {
+    let c = load(ACTS);
+    let per_act = act_statics(&c, REPO);
+    let (mut checked, mut p2_opens) = (0usize, 0usize);
+    for (ai, act) in c.acts.iter().enumerate().filter(|(_, a)| a.state.round < a.state.rounds_total) {
+        let mut knobs = c.knobs;
+        (knobs.tail_cap_p1, knobs.tail_cap_p2, knobs.opener_by_finish) = (0, 0, true);
+        let seams = seams_of(&knobs);
+        let mut pol = Policy::new(&per_act[ai], &c.terrain, seams);
+        pol.tuning = tuning_of(&knobs);
+        let roll = &Rollout::new(pol, knobs);
+        for first in [1, 2] {
+            let mut st = act.state.clone();
+            st.activated.iter_mut().for_each(|a| *a = true);
+            assert_eq!(advance(roll, &mut st, first, None), Step::Mover(first), "act {ai} first-dry {first}");
+            checked += 1;
+            p2_opens += (first == 2) as usize;
+        }
+    }
+    assert!(checked >= 20 && p2_opens >= 10, "{checked} {p2_opens}");
+}
+
 /// Step 4 — one activation from the end (every unit but one activated, that
 /// one SHAKEN so its only legal row is the recovery hold), the Terminal leaf
 /// is `full_playout`'s verdict for the same stream seed, with its dice off:

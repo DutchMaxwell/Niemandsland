@@ -56,7 +56,7 @@ func test_a_theme_and_its_undo_reach_the_other_table() -> void:
 		assert_float(float(rots[0][2])).is_equal_approx(first.rotation.y, 0.0001)
 	assert_array(_of(net, "vis")).contains([["vis", 7601, false]])
 	var sent: Array = _of(net, "settings")
-	assert_bool(sent.any(func(c: Array) -> bool: return c[1].get("biome") == "temperate_grassland" \
+	assert_bool(sent.any(func(c: Array) -> bool: return c[1].get("biome") == "desert_dunes" \
 		and (c[1].get("paths", []) as Array).size() == 3)).is_true()   # biome and paths reach the other table
 	net.calls.clear()
 	action.undo()

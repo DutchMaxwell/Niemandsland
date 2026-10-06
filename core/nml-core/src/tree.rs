@@ -90,7 +90,8 @@ pub fn advance(roll: &Rollout, cur: &mut State, mut turn: i64,
         if cur.round >= cur.rounds_total {
             return Step::Terminal;
         }
-        turn = cross_round(statics, cur);
+        let first_dry = roll.knobs.opener_by_finish.then(|| other_player(cur, turn));
+        turn = cross_round(statics, cur, first_dry);
         reinforcement_round_start(statics, terrain, seams, cur);
         spawn_round_start(statics, terrain, seams, cur);
     }

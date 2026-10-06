@@ -22,7 +22,7 @@
    "canonical_sha256": "7633f52655bacd5f8e5032cc313b56ec2b5e36b76e60c388fa00cdc638546a9d"
   }
  },
- "golden_sha256": "c5c7b4b5946aad11a8c0a883c216a3e055a5e60e905f73527a3b2f30a0e26683",
+ "golden_sha256": "2945c97458f36fcb6b372c89f904611b66fe0b6491966cbba4f7cf7e04be73cf",
  "op_census": {
   "Add": 56,
   "Cast": 21,
@@ -82,5 +82,11 @@
   "date": "2026-09-21",
   "why": "the 16.09. objective token columns (objs[0][10]) moved the core leaves; leaves re-captured with the current core, projected to the v1 window (24 rows x 88 design fields + 2 zero pads), expected values re-scored with onnxruntime 1.30.0 (CPU, 1 intra-op thread) on the SHIPPED stand-in (runs.run1.raw_sha256 unchanged); synthetic leaves projected the same way; numbers stored f32-exact",
   "value_shift_vs_previous_golden_max_abs": 0.00048877671
+ },
+ "regenerated_b1": {
+  "date": "2026-10-06",
+  "why": "B1 (#1600): Terrain::build now synthesises terrain pieces from painted cells, so the 48 real leaves of acts_25 carry non-zero terr rows; leaves re-captured with the current core, only the terr block changed (units/units_mask/objs/objs_mask/glob bit-identical on all 48; the 12 synthetic leaves untouched); expected values re-scored with onnxruntime 1.30.0 (CPU, 1 intra-op thread) on the SHIPPED stand-in (runs.run1.raw_sha256 unchanged); the same procedure reproduces the previous golden exactly (max abs 0.0) before the swap",
+  "value_shift_vs_previous_golden_max_abs": 0.009180948138237,
+  "member_shift_vs_previous_golden_max_abs": 0.03213
  }
 }

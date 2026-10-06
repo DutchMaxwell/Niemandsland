@@ -778,6 +778,32 @@ mod tests {
         assert!((a - b).abs() <= 1e-3, "{name}: {a} vs {b}");
     }
 
+    /// aifix B1 — the live overlay paints `cells` and hands no pieces; the net
+    /// must still see that terrain (it was trained on 18 pieces per board).
+    #[test]
+    fn a_cells_only_board_still_reaches_the_net_as_terrain_rows() {
+        let (state, statics) = fixture();
+        let terrain = Terrain::build(&PlainTerrain {
+            cells: vec![[20.0, 20.0, FOREST as f64], [21.0, 20.0, FOREST as f64], [30.0, 25.0, RUINS as f64]],
+            sandbox: vec![],
+            pieces: vec![],
+            walls: vec![],
+            cell_params: CellParams {
+                table_size_feet: [6.0, 4.0],
+                grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0,
+                inches_to_meters: IN2M,
+            },
+        });
+        let cands = cands_fixture();
+        let mut enc = RowEncoder::new(&repo_root());
+        let t = build(&state, 1, &statics, &terrain, &mut enc, &cands, 2, false, true, crate::acts::CURRENT_RULES_EPOCH).expect("build");
+        // two adjacent FOREST cells merge into one 6"x3" piece, plus one RUINS cell
+        assert_eq!(t.terr_mask.iter().map(|&m| m as usize).sum::<usize>(), 2);
+        assert_eq!(t.terr[0][7] + t.terr[1][7], 1.0);
+        assert_eq!(t.terr[0][6] + t.terr[1][6], 1.0);
+    }
+
     #[test]
     fn every_column_of_the_synthetic_position_is_hand_computed() {
         let (state, statics) = fixture();
