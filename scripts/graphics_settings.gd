@@ -3,6 +3,7 @@ extends Node
 ## Handles quality presets and graphics configuration
 
 signal settings_applied(preset_name: String)
+signal idle_motion_changed()
 
 enum QualityPreset {
 	PERFORMANCE,  # New: Maximum FPS mode
@@ -69,7 +70,16 @@ var ui_scale: float = 1.0
 
 ## Accessibility: when true, UI micro-interactions collapse to instant/opacity-only
 ## (WCAG 2.3.3). Read by UiMotion; persisted. Never gate information behind animation.
-var reduce_motion: bool = false
+var reduce_motion: bool = false:
+	set(value):
+		reduce_motion = value
+		idle_motion_changed.emit()
+
+## Real idle is opt-in per asset; old models stay static. Persist the user's preference.
+var idle_motion: bool = true:
+	set(value):
+		idle_motion = value
+		idle_motion_changed.emit()
 
 ## Borderless fullscreen (MODE_FULLSCREEN), NOT exclusive — no display mode switch, so it
 ## avoids the NVIDIA/X11 exclusive-fullscreen surface issues. Persisted + applied on start.
@@ -307,6 +317,8 @@ func apply_ui_scale(factor: float) -> void:
 ## Apply a quality preset
 func apply_preset(preset: QualityPreset) -> void:
 	var settings = PRESETS[preset]
+	if current_preset != preset:
+		idle_motion = preset >= QualityPreset.MEDIUM
 	current_preset = preset
 
 	# Apply rendering settings
@@ -457,6 +469,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "preset", current_preset)
 	config.set_value("graphics", "ui_scale", ui_scale)
 	config.set_value("graphics", "reduce_motion", reduce_motion)
+	config.set_value("graphics", "idle_motion", idle_motion)
 	config.set_value("graphics", "fullscreen", fullscreen)
 	config.set_value("graphics", "screen_index", screen_index)
 	config.set_value("graphics", "show_move_trails", show_move_trails)
@@ -485,6 +498,7 @@ func load_settings() -> void:
 	table_frame_style = clampi(int(config.get_value("graphics", "table_frame_style", 0)), 0, 3)
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
+	idle_motion = config.get_value("graphics", "idle_motion", current_preset >= QualityPreset.MEDIUM)
 	fullscreen = config.get_value("graphics", "fullscreen", true)
 	screen_index = config.get_value("graphics", "screen_index", -1)
 	show_move_trails = config.get_value("graphics", "show_move_trails", true)

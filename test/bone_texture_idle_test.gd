@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 
-const Idle := preload("res://scripts/visual/bone_texture_payload.gd")
+const Idle := preload("res://scripts/visual/bone_texture_idle.gd")
 
 func _entry() -> Dictionary:
 	return {"version": 1, "godot_version": "4.6", "frames": 216, "fps": 24.0,
@@ -57,3 +57,50 @@ func test_manifest_requires_both_cached_blobs_and_preserves_legacy_entry() -> vo
 	DirAccess.remove_absolute(mesh_path)
 	DirAccess.remove_absolute(poses_path)
 	DirAccess.remove_absolute(lib._idle_assets.cache_dir)
+
+
+func test_settings_and_reduced_motion_gate_real_idle() -> void:
+	for preset in [0, 1]:
+		assert_bool(Idle.motion_allowed(preset, true, false)).is_false()
+	for preset in [2, 3, 4]:
+		assert_bool(Idle.motion_allowed(preset, true, false)).is_true()
+		assert_bool(Idle.motion_allowed(preset, false, false)).is_false()
+		assert_bool(Idle.motion_allowed(preset, true, true)).is_false()
+
+
+func test_instances_have_reproducible_distinct_phases_without_gameplay_rng() -> void:
+	var phases := {}
+	seed(412)
+	var expected := randi()
+	seed(412)
+	for i in 30:
+		var identity := "warriors/%d" % i
+		var phase := Idle.phase_for(identity)
+		assert_float(phase).is_equal(Idle.phase_for(identity))
+		assert_bool(phase >= 0.0 and phase < 1.0).is_true()
+		phases[phase] = true
+	assert_int(phases.size()).is_equal(30)
+	assert_int(randi()).is_equal(expected)
+
+
+func test_wrong_texture_dimensions_or_missing_joint_attributes_are_rejected() -> void:
+	var array := ArrayMesh.new()
+	var box := BoxMesh.new()
+	array.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, box.get_mesh_arrays())
+	var poses := ImageTexture.create_from_image(Image.create(171, 216, false, Image.FORMAT_RGBAF))
+	assert_bool(Idle.valid_resources(array, poses, _entry())).is_false()
+	assert_bool(Idle.valid_resources(null, poses, _entry())).is_false()
+
+
+func test_graphics_preference_survives_save_load_and_same_preset_application() -> void:
+	var previous := GraphicsSettings.idle_motion
+	var preset := GraphicsSettings.current_preset
+	GraphicsSettings.idle_motion = false
+	GraphicsSettings.save_settings()
+	GraphicsSettings.idle_motion = true
+	GraphicsSettings.load_settings()
+	assert_bool(GraphicsSettings.idle_motion).is_false()
+	GraphicsSettings.apply_preset(preset)
+	assert_bool(GraphicsSettings.idle_motion).is_false()
+	GraphicsSettings.idle_motion = previous
+	GraphicsSettings.save_settings()
