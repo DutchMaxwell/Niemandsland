@@ -400,6 +400,53 @@ fn objective_own(
     (0.5 + 0.5 * ((a - b) + mine_absent * theirs_absent * keep)).clamp(0.0, 1.0)
 }
 
+/// `eval_variant = 4` (aifix A3) COMPOSES with variant 3: a plain `round_vp`
+/// mission keeps the VP-aware leaf whole (its `objective_own` already carries
+/// the held-marker `keep` term), every state variant 3 hands back to the hand
+/// eval gets the held-marker rule below instead.
+fn score_hand_vp_hold(
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
+) -> f64 {
+    if !state.objectives.is_empty() && &*state.scoring == "round_vp" && !is_destroy_mission(state) {
+        return score_hand_vp(state, statics, player, incoming);
+    }
+    score_hand_hold(state, statics, player, incoming)
+}
+
+/// The hand eval with a held marker that stays
+/// held until contested (GF v3.5.1 p.6: markers stay under the player's control
+/// even if the unit moves away). `objective_p` reads `owner` only when nobody
+/// can reach, so a marker I stand on drops below 0.5 the moment an enemy mob
+/// could walk there. Here the owner's side keeps at least half of it, and the
+/// other side's owner at most half; presence only moves it past 0.5 for the
+/// side that out-weighs the owner. Destroy and role missions are handed back
+/// to variant 0 whole.
+fn score_hand_hold(
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
+) -> f64 {
+    if state.objectives.is_empty()
+        || (!state.markers_meta.is_empty() && is_destroy_mission(state))
+        || role_term(state, player).is_some()
+    {
+        return score_hand(state, statics, player, incoming);
+    }
+    let total: f64 = (0..state.objectives.len())
+        .map(|i| hold_owner_p(state, objective_p(state, statics, i, player, incoming, true), i, player))
+        .sum();
+    total / state.objectives.len() as f64
+}
+
+/// Variant 4's per-marker rule: the owner keeps at least half until contested.
+fn hold_owner_p(state: &State, share: f64, obj_index: usize, player: i64) -> f64 {
+    let carried = state.markers_meta.get(obj_index).is_some_and(|m| m.carry && m.carried_by >= 0);
+    match state.objectives[obj_index].owner {
+        _ if carried => share,
+        0 => share,
+        o if o == player => share.max(0.5),
+        _ => share.min(0.5),
+    }
+}
+
 /// `eval_variant = 1` (ledger row 7) — the marker term the REFEREE would book,
 /// blended into the frozen mean share by how much game is left. `w` rises from
 /// `1/rounds_total` at the opening round to 1.0 at the round that decides the
@@ -491,6 +538,7 @@ pub fn score_hand_variant(
         1 => score_hand_majority(state, statics, player, incoming),
         2 => score_hand_carry(state, statics, player, incoming, false),
         3 => score_hand_vp(state, statics, player, incoming),
+        4 => score_hand_vp_hold(state, statics, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
@@ -663,6 +711,45 @@ mod tests {
         let mut cache = ProfileCache::new(header.profiles);
         let mut roster = None;
         state_from_json(&plain, &mut cache, &mut roster).expect("state")
+    }
+
+    /// aifix A3 composes with variant 3: on a `round_vp` mission variant 4 IS
+    /// variant 3 (the banked VP lead still moves the score), not variant 0.
+    #[test]
+    fn variant_4_keeps_the_vp_term_of_variant_3() {
+        let units = [U("p1_0_a", 1, 0.0, 6, false, false), U("p2_0_a", 2, 5.0, 6, false, false)];
+        let behind = vp_state(&units, &[0.0], 2, "round_vp", r#"{"majority":"end"}"#, [0, 9]);
+        let ahead = vp_state(&units, &[0.0], 2, "round_vp", r#"{"majority":"end"}"#, [9, 0]);
+        for st in [&behind, &ahead] {
+            assert_eq!(
+                score_hand_variant(st, &[], 1, NO_INCOMING, 4),
+                score_hand_variant(st, &[], 1, NO_INCOMING, 3),
+                "round_vp: variant 4 is variant 3 to the bit"
+            );
+        }
+        let (b, a) = (score_hand_variant(&behind, &[], 1, NO_INCOMING, 4), score_hand_variant(&ahead, &[], 1, NO_INCOMING, 4));
+        assert!(b < 0.5 && a > 0.5, "variant 4 still reads the ledger: {b} vs {a}");
+    }
+
+    /// aifix A3 RED: a marker I hold, my weak unit on it, a strong enemy mob in
+    /// reach — variant 0 scores it below half for me (owner read only when
+    /// nobody can reach), variant 4 keeps it mine until contested and leaves the
+    /// enemy's side at most half.
+    #[test]
+    fn variant_4_keeps_a_held_marker_mine_until_contested() {
+        let mut st = vp_state(
+            &[U("p1_0_a", 1, 0.0, 1, false, false), U("p2_0_a", 2, 0.3, 6, false, false)],
+            &[0.0], 2, "end", "{}", [0, 0],
+        );
+        st.objectives[0].owner = 1;
+        let v = |st: &crate::state::State, p, var| score_hand_variant(st, &[], p, NO_INCOMING, var);
+        let v = |p, var| v(&st, p, var);
+        assert!(v(1, 0) < 0.5, "variant 0 today: {}", v(1, 0));
+        assert_eq!(v(1, 4), 0.5);
+        assert!(v(2, 4) <= 0.5 && v(2, 0) > 0.5);
+        st.objectives[0].owner = 0;
+        let unowned = |var| score_hand_variant(&st, &[], 1, NO_INCOMING, var);
+        assert_eq!(unowned(4), unowned(0), "an unowned marker is priced as before");
     }
 
     /// RED-1 (mission-play step 2): my unit holds the one marker, theirs is far

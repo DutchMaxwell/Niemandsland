@@ -352,7 +352,38 @@ static func score(state: Dictionary, player: int, incoming: Dictionary = {}) -> 
 		return (1.0 - fb) * _score_hand(state, player, incoming) 			+ fb * _score_fit(state, player, incoming)
 	if eval_variant == 3:
 		return _score_hand_vp(state, player, incoming)
+	if eval_variant == 4:
+		# composes with variant 3: a plain round_vp mission keeps the VP-aware leaf whole
+		var objs: Array = state["objectives"]
+		if not objs.is_empty() and str(state.get("scoring", "")) == "round_vp" and not _is_destroy_mission(state):
+			return _score_hand_vp(state, player, incoming)
+		return _score_hand_hold(state, player, incoming)
 	return _score_hand(state, player, incoming)
+
+
+## Hand-leaf arm (core `eval_variant` 4, score.rs `score_hand_hold`, aifix A3): a held marker stays
+## held until contested (GF p.6) — the owner keeps at least half of it, the other owner at most half.
+## Destroy and role missions fall back to the frozen hand eval.
+static func _score_hand_hold(state: Dictionary, player: int, incoming: Dictionary = {}) -> float:
+	var objectives: Array = state["objectives"]
+	if objectives.is_empty() or _is_destroy_mission(state) or _role_term(state, player) >= 0.0:
+		return _score_hand(state, player, incoming)
+	var total := 0.0
+	for i in range(objectives.size()):
+		var obj: Dictionary = objectives[i]
+		total += _hold_owner_p(state, obj, player, _objective_p(state, obj, player, incoming, i), i)
+	return total / objectives.size()
+
+
+static func _hold_owner_p(state: Dictionary, obj: Dictionary, player: int, share: float, obj_index: int) -> float:
+	var markers: Array = state.get("markers_meta", [])
+	if obj_index < markers.size() and bool((markers[obj_index] as Dictionary).get("carry", false)) \
+			and not String((markers[obj_index] as Dictionary).get("carried_by", "")).is_empty():
+		return share
+	var owner := int(obj.get("owner", 0))
+	if owner == 0:
+		return share
+	return maxf(share, 0.5) if owner == player else minf(share, 0.5)
 
 
 ## Hand-leaf arm (core `eval_variant` 3, score.rs `score_hand_vp`): banked VP lead + the yield of the
