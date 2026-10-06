@@ -1434,7 +1434,7 @@ func _build_unit_model_nodes(unit: OPRApiClient.OPRUnit, faction_folder: String,
 		# labels — then, ONLY for the mount carrier (model 0) when no variant key matched, the OLD fuzzy
 		# faction-mount GLB (keeps GF bikes + factions without composed mount bakes on their mount).
 		var is_mount: bool = i == 0 and not unit.mount_name.is_empty()
-		var mglb: String = _resolve_carrier_model(unit.name, labels_per_model[i], faction_folder, mount_glb if is_mount else "")
+		var mglb: String = _spawn_model_name(unit, labels_per_model, i, faction_folder, mount_glb if is_mount else "")
 		# A slug was derived but neither a variant bake nor a mount replaced it → base fallback (rare; E6).
 		if mglb.is_empty() and model_library != null and not model_library.variant_slug(labels_per_model[i], faction_folder).is_empty():
 			_variant_missing_count += 1
@@ -2551,6 +2551,24 @@ func _resolve_carrier_model(base_name: String, labels: Array, faction_folder: St
 	return carrier_mount_glb
 
 
+## Per-model variety: a unit whose model carries the BASE loadout (no variant slug) shows the second sculpt
+## `<unit>#var2` on every odd model index when the manifest holds it (VU Bat Horrors: two accepted designs). By
+## index, so both multiplayer clients agree. Variant bakes, the mount carrier's fuzzy mount and units without
+## `#var2` are unchanged. The ONE per-model name used by the spawn loop AND the prefetch, so the second sculpt is
+## downloaded before it is spawned.
+const VARIETY_SLUG := "var2"
+
+
+func _spawn_model_name(unit, labels_per_model: Array, i: int, faction_folder: String, carrier_mount_glb: String) -> String:
+	var name: String = _resolve_carrier_model(unit.name, labels_per_model[i], faction_folder, carrier_mount_glb)
+	if not name.is_empty() or i % 2 == 0 or model_library == null:
+		return name
+	if not model_library.variant_slug(labels_per_model[i], faction_folder).is_empty():
+		return name
+	var second: String = "%s#%s" % [unit.name, VARIETY_SLUG]
+	return second if model_library.has_model(faction_folder, second) else name
+
+
 ## Per-model resolved variant model name ("" = base) for a unit — the SINGLE derivation shared by the
 ## prefetch spec builder AND the spawn loop, so every variant a unit needs is DOWNLOADED, not just
 ## derived at spawn (009). Length == unit.size.
@@ -2560,7 +2578,7 @@ func _unit_model_variant_names(unit, faction_folder: String) -> Array:
 	var labels := _model_labels_for_unit(unit, faction_folder)
 	var out: Array = []
 	for i in range(unit.size):
-		out.append(_resolve_model_variant_name(unit.name, labels[i], faction_folder))
+		out.append(_spawn_model_name(unit, labels, i, faction_folder, ""))
 	return out
 
 

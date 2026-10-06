@@ -213,6 +213,9 @@ pub struct Knobs {
     /// round `rounds_total`). Research knob for the A/B, default OFF.
     #[serde(default)]
     pub no_end_threat: bool,
+    /// aifix D1 — see `Seams::morale_by_probability`. Research knob, default OFF.
+    #[serde(default)]
+    pub morale_by_probability: bool,
     /// NML-1134 — which RULE VOCABULARY this corpus's board rows were slotted
     /// with (`data/encoder_rule_vocab_v1.json`, stamped by `act_recorder.gd`).
     /// THE ONE RULE, and every reader gets it from here: the header says, and a
@@ -1435,6 +1438,7 @@ impl Default for Knobs {
             dangerous_end_morale: false,
             opener_by_finish: false,
             no_end_threat: false,
+            morale_by_probability: false,
             // NML-1134: the CORPUS reading — a header with no `knobs` block at
             // all predates the stamp just as surely as one with an unstamped
             // block does. A caller that plays a FRESH game stamps
@@ -1846,9 +1850,9 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     // panicking deep inside a rollout.
     // Variant 2 (wave C G-AB) is variant 0 without the C7 carry term; variant 3
     // (mission-play lane) is the `round_vp` currency.
-    if !matches!(header.knobs.eval_variant, 0..=3) {
+    if !matches!(header.knobs.eval_variant, 0..=4) {
         return Err(format!(
-            "eval_variant {}: no registered arm (only 0 to 3 exist)",
+            "eval_variant {}: no registered arm (only 0 to 4 exist)",
             header.knobs.eval_variant
         ));
     }

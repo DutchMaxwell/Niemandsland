@@ -27,8 +27,14 @@ func setup(size: Vector2, player_color: Color) -> void:
 		mesh.material_override = _wood
 		mesh.position = Vector3(0,-0.05,0) if i == 0 else Vector3(size.x*0.43*(-1 if i % 2 == 0 else 1),-0.21,size.y*0.43*(-1 if i < 3 else 1))
 		_support.add_child(mesh)
-	GraphicsSettings.settings_applied.connect(_refresh)
+	var graphics := _graphics()
+	if graphics != null:
+		graphics.connect("settings_applied", Callable(self, "_refresh"))
 	_refresh()
+
+## The autoload is absent in standalone --script probes; look it up instead of naming the global.
+func _graphics() -> Node:
+	return get_node_or_null("/root/GraphicsSettings")
 
 static func _material(color: Color, wood: bool) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
@@ -38,10 +44,13 @@ static func _material(color: Color, wood: bool) -> ShaderMaterial:
 	return material
 
 func _refresh(_preset_name := "") -> void:
-	var enabled: bool = GraphicsSettings.army_tray_dressing_enabled()
+	var graphics := _graphics()
+	if graphics == null:
+		return
+	var enabled: bool = graphics.army_tray_dressing_enabled()
 	_support.visible = enabled
 	for i in range(1,5):
-		_support.get_child(i).visible = GraphicsSettings.world_enabled(GraphicsSettings.current_preset)
+		_support.get_child(i).visible = graphics.world_enabled(graphics.current_preset)
 	for mesh: MeshInstance3D in _originals:
 		var original: Material = _originals[mesh]
 		if not enabled:
