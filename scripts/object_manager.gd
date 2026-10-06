@@ -1379,6 +1379,7 @@ func _stop_dragging() -> void:
 					drop_batch.append(obj.global_position.z)
 
 				var tween = create_tween()
+				obj.set_meta("drop_tween", tween)
 				tween.set_ease(Tween.EASE_OUT)
 				tween.set_trans(Tween.TRANS_QUAD)
 				tween.tween_property(obj, "global_position:y", target_y, 0.2)
@@ -1433,7 +1434,7 @@ func _stop_dragging() -> void:
 						MoveLedger.translated(base_path, offset), Vector2(end.x, end.z))
 				moves.append({"node": obj, "from": start, "to": end, "inches": inches,
 						"path": path, "arc_in": MoveLedger.length_inches(path),
-						"climb_in": MoveLedger.climb_report(path, _surface_fn())["climb_in"],
+						"climb_in": _climb_report(path, obj)["climb_in"],
 						"radius_m": _trail_radius_for(obj),
 						"drop_id": drop_id,
 						"from_raw": _drag_start_positions[obj],
@@ -2269,6 +2270,11 @@ func _surface_fn() -> Callable:
 	return func(_xz: Vector2) -> float: return 0.0
 
 
+func _climb_report(path: PackedVector2Array, node: Node3D) -> Dictionary:
+	var unit := UnitUtils.get_game_unit(node)
+	return MoveLedger.climb_report(path, _surface_fn(), unit != null and CoherencyChecker.is_skirmish_system(unit))
+
+
 ## The drag/drop travel readout: a plain "7.3″" when there was no climb, else "7.3″ (+2.5″
 ## climb)". Pure/testable.
 static func travel_label(flat_in: float, climb_in: float) -> String:
@@ -2382,7 +2388,7 @@ func _update_drag(screen_pos: Vector2) -> void:
 				# what the flat cost left of the cap, holds at the last committed point (D5a:
 				# a hard stop only under Strict — non-strict never blocks here).
 				var candidate := MoveLedger.with_final(committed, head)
-				var climb := MoveLedger.climb_report(candidate, _surface_fn())
+				var climb := _climb_report(candidate, _drag_anchor_object)
 				var cap_in := _strict_cap_meters * METERS_TO_INCHES
 				var remaining_in := cap_in - MoveLedger.length_inches(candidate)
 				climb_reason = MoveLedger.climb_blocks(climb, remaining_in, true)
@@ -2450,7 +2456,7 @@ func _update_drag(screen_pos: Vector2) -> void:
 		var climb_in: float = 0.0
 		if have_path and not _drag_path_points.is_empty():
 			var climb_path := MoveLedger.with_final(_drag_path_points, head)
-			climb_in = MoveLedger.climb_report(climb_path, _surface_fn())["climb_in"]
+			climb_in = _climb_report(climb_path, _drag_anchor_object)["climb_in"]
 
 		# The drag line's readout is a MOVEMENT-travel measure — label it with the consumed
 		# arc (matches the trail stamp + HUD counter). Range/charge stays on the measure tool.

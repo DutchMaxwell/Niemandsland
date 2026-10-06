@@ -79,3 +79,47 @@ func test_a_rout_wipe_shows_no_wound_marks(timeout := 240000) -> void:
 	assert_int(target.get_alive_count()).override_failure_message("fixture: the wipe must remove the unit").is_equal(0)
 	assert_int(_main.result_pips.get_child_count()).is_equal(0)
 	await E2EBoot.settle(get_tree())
+
+
+func test_hits_and_saves_sit_over_the_unit(timeout := 240000) -> void:
+	var striker := _unit("Rifles", 1, 1)
+	var target := _unit("Grunts", 5, 1)
+	_main.seed_tray_rng(31337)
+	var w: int = await _main._solo_resolve_saves(striker, target, "Rifle", [], 6, 4, {"ap": 0}, false, false)
+	var hits := _pips(ResultPips.Kind.HIT)
+	var saves := _pips(ResultPips.Kind.SAVE)
+	assert_int(hits.size()).is_equal(1)
+	assert_int(int((hits[0].material_override as ShaderMaterial).get_shader_parameter("count"))).is_equal(6)
+	assert_int(w).override_failure_message("fixture: some saves must fail and some hold").is_between(1, 5)
+	assert_int(int((saves[0].material_override as ShaderMaterial).get_shader_parameter("count"))).is_equal(6 - w)
+	var c: Vector3 = _main.solo_controller.unit_centre(target)
+	assert_float(Vector2(hits[0].global_position.x, hits[0].global_position.z).distance_to(Vector2(c.x, c.z))).is_less(0.001)
+	await E2EBoot.settle(get_tree())
+
+
+func test_a_regiment_shows_its_losses_over_the_unit(timeout := 240000) -> void:
+	var positions: Array = []
+	for i in 10:
+		positions.append(Vector3(8.0 * INCH + 0.025 * (i % 5), 0.0, 0.025 * (i / 5)))
+	var gu := E2EBoot.make_unit(_main, 2, "Phalanx", positions)
+	gu.unit_properties["regiment_mode"] = true
+	gu.unit_properties["base_width_mm"] = 25
+	gu.unit_properties["base_depth_mm"] = 25
+	_main.opr_army_manager.game_units[gu.unit_id] = gu
+	var tray := RegimentTray.new()
+	_main.add_child(tray)
+	var members := RegimentTray.collect_members(gu)
+	tray.form(members.nodes, members.footprints, 5)
+	_main.opr_army_manager.regiments[gu.unit_id] = Regiment.new(gu, tray, 5)
+	var centre: Vector3 = _main.solo_controller.unit_centre(gu)
+	await _main._solo_apply_wounds(gu, 3)
+	assert_int(gu.get_alive_count()).override_failure_message("fixture: three 1-wound models leave the regiment").is_equal(7)
+	var ticks := _pips(ResultPips.Kind.WOUND)
+	var crosses := _pips(ResultPips.Kind.KILL)
+	assert_int(ticks.size()).is_equal(1)
+	assert_int(crosses.size()).override_failure_message("one strip over the unit, no cross on a body").is_equal(1)
+	assert_int(int((ticks[0].material_override as ShaderMaterial).get_shader_parameter("count"))).is_equal(3)
+	assert_int(int((crosses[0].material_override as ShaderMaterial).get_shader_parameter("count"))).is_equal(3)
+	assert_float(Vector2(ticks[0].global_position.x, ticks[0].global_position.z).distance_to(Vector2(centre.x, centre.z))).is_less(0.001)
+	await E2EBoot.settle(get_tree())
+

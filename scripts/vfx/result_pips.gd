@@ -4,16 +4,16 @@ extends Node3D
 ## small blood splat on a casualty (a neutral marker with Gore Off, a bigger splat with Extra) — read off the
 ## resolver's own allocation, never rolled or written back, no RNG.
 ## Over the model's sight-cylinder top (the LOS rule's eye). Still form on Performance/Low + Reduce Motion;
-## capped pool. Off unless GraphicsSettings.show_combat_effects (default off until the look is approved).
+## capped pool. Off when the player switches GraphicsSettings.show_combat_effects off (on by default).
 
 enum Kind { WOUND, KILL, HIT, SAVE }
 const COLORS := [Color(0.88, 0.2, 0.18), Color(0.62, 0.05, 0.05), Color(0.96, 0.93, 0.84), Color(0.4, 0.68, 0.95)]
 const NEUTRAL_KILL := Color(0.8, 0.78, 0.72)   # the casualty marker with Gore Off
 const EXTRA_KILL_K := 1.25                      # Gore Extra: a bigger splat
-const SIZE_M := 0.011
+const SIZE_M := 0.018   # the size in the approved look clips (v2-v5)
 const LIFT_M := 0.01
 const RISE_M := 0.012
-const LIFE_S := 1.8
+const LIFE_S := 2.4     # likewise
 const MAX_LIVE := 32
 const MAX_TICKS := 10   # one strip shows at most 10 symbols; the exact totals stay in the outcome text
 const SHADER := "shader_type spatial;
