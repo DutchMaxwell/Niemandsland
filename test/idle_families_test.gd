@@ -27,6 +27,12 @@ func test_champions_are_tailless_like_the_other_armoured_bodies() -> void:
 	assert_bool(Families.allows("ratmen/champion", 5)).is_false()
 	assert_bool(Families.allows("ratmen/championship", 0)).is_false()
 
+func test_saurian_infantry_families_are_listed_with_rigid_tails() -> void:
+	for key in ["saurians/saurian warriors#spear", "saurians/geckos#banner+javelin", "saurians/chameleons", "saurians/saurian guardians#crest", "saurians/gators#greatweapon"]:
+		assert_bool(Families.allows(key, 0)).is_true()
+		assert_bool(Families.allows(key, 5)).is_false()
+	assert_bool(Families.allows("saurians/gatorsx", 0)).is_false()
+
 func test_unlisted_families_are_rejected() -> void:
 	assert_bool(Families.allows("ratmen/rat ogres", 0)).is_false()
 	assert_bool(Families.allows("mummified_undead/royal champion", 0)).is_false()
