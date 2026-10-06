@@ -30,6 +30,7 @@ func test_each_biome_keeps_its_grade_through_moods_and_restores_low(timeout := 1
 	var picked_weights := {"temperate_grassland": 0.65, "arid_desert": 1.8, "frozen_tundra": 0.65,
 		"urban_ruins": 1.8, "volcanic_ash": 0.65, "alien_jungle": 1.8}
 	for biome in table.BIOMES:
+		main.atmosphere_controller.apply_atmosphere("Day", true)
 		table.set_biome(biome)
 		await get_tree().create_timer(0.7).timeout
 		await runner.simulate_frames(2)
@@ -44,7 +45,7 @@ func test_each_biome_keeps_its_grade_through_moods_and_restores_low(timeout := 1
 		assert_float(env.adjustment_contrast).is_equal_approx(1.0 + 0.05 * weight, 0.0001)
 		main.atmosphere_controller.apply_atmosphere("Overcast", true)
 		await runner.simulate_frames(2)
-		assert_object(env.adjustment_color_correction).is_same(lut)
+		assert_bool((env.adjustment_color_correction as GradientTexture1D).gradient.get_color(1).is_equal_approx(expected)).is_true()
 		assert_float(env.glow_bloom).is_equal_approx(0.0, 0.0001)
 	assert_int(tints.size()).is_equal(6)
 	assert_object(main.lighting_panel.find_child("BiomeGradeStrengthOption", true, false)).is_null()

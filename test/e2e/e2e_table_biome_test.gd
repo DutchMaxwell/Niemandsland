@@ -2,13 +2,14 @@ extends GdUnitTestSuite
 ## E2E — TableBiomePresenter on the REAL scenes/main.tscn (display only).
 ##
 ## The presenter dresses the game table with the accepted reference biome (table tier). These suites pin what
-## must hold on the live table: the biome light profile stays on top of the atmosphere controller (maintainer
-## decision D1, including the restore_saved() the intro runs), the dressing adds no collider and changes no
+## must hold on the live table: biome daylight survives atmosphere re-application while Night/weather keep
+## their own light (approved hero port, replacing D1's Night-as-Sunset), dressing adds no collider and changes no
 ## line-of-sight geometry, and teardown gives the table back. Headless CI skips the dressing by default;
 ## allow_headless opts these suites in.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Biomes := preload("res://scripts/visual/reference_biomes.gd")
+const Lighting := preload("res://scripts/lighting_controller.gd")
 const TreePass := preload("res://scripts/visual/table_tree_pass.gd")
 const Materials := preload("res://scripts/visual/reference_materials.gd")
 
@@ -238,37 +239,37 @@ func test_layout_events_during_play_do_not_rebuild(timeout := 120000) -> void:
 	assert_int(builds[0]).is_equal(1)
 
 
-func test_biome_light_profile_stays_on_top_of_the_atmosphere(timeout := 120000) -> void:
+func test_biome_daylight_wins_and_night_weather_follow_atmosphere(timeout := 120000) -> void:
 	var presenter := await _dress("arid_desert")
 	assert_bool(presenter.is_dressed()).is_true()
 	var profile: Dictionary = Biomes.get_profile("arid_desert")
 	var atmosphere = _main.atmosphere_controller
 
 	# The intro ends with restore_saved() — an INSTANT re-apply of the saved mood (default Sunset). The profile's
-	# own sunset values must win (D1), not the game's "Warm Sunset" lighting.
+	# sunset color still wins over "Warm Sunset". The approved 3.0-energy grassland rig scales the
+	# desert's 2.90/2.55 relative energy to 3.411765 (recorded by the delivered desert broker capture).
 	atmosphere.apply_atmosphere("Sunset", true)
 	await _runner.simulate_frames(2)
-	assert_float(_sun().light_energy).is_equal_approx(float(profile["sun_energy"]), 0.0001)
+	assert_float(_sun().light_energy).is_equal_approx(3.411765, 0.0001)
 	assert_bool(_sun().light_color.is_equal_approx(profile["sun_color_sunset"])) \
 		.override_failure_message("after the atmosphere re-applied Sunset the sun is %s, not the profile's sunset %s" % [_sun().light_color, profile["sun_color_sunset"]]) \
 		.is_true()
 
-	# Night uses the profile's sunset values too (D1).
-	atmosphere.apply_atmosphere("Night", true)
-	await _runner.simulate_frames(2)
-	assert_bool(_sun().light_color.is_equal_approx(profile["sun_color_sunset"])).is_true()
-
-	# Overcast is not a profile mood: the game's own lighting shows.
-	atmosphere.apply_atmosphere("Overcast", true)
-	await _runner.simulate_frames(2)
-	assert_bool(_sun().light_color.is_equal_approx(profile["sun_color_day"])).is_false()
-	assert_bool(_sun().light_color.is_equal_approx(profile["sun_color_sunset"])).is_false()
+	# Atmosphere buttons intentionally retain moonlight and weather, not the old Night-as-Sunset.
+	var weather_moods := {"Night":"Night", "Overcast":"Cool Overcast", "Rain":"Storm"}
+	for mood in weather_moods:
+		var weather: Dictionary = Lighting.PRESETS[weather_moods[mood]]
+		atmosphere.apply_atmosphere(mood, true)
+		await _runner.simulate_frames(2)
+		assert_bool(_sun().light_color.is_equal_approx(weather.sun_color)).is_true()
+		assert_float(_sun().light_energy).is_equal_approx(weather.sun_energy, 0.0001)
+		assert_bool(_sun().light_color.is_equal_approx(profile["sun_color_sunset"])).is_false()
 
 	# Day: the profile is the Day base.
 	atmosphere.apply_atmosphere("Day", true)
 	await _runner.simulate_frames(2)
 	assert_bool(_sun().light_color.is_equal_approx(profile["sun_color_day"])).is_true()
-	assert_float(_sun().light_energy).is_equal_approx(float(profile["sun_energy"]), 0.0001)
+	assert_float(_sun().light_energy).is_equal_approx(3.411765, 0.0001)
 
 
 # === Tree pass (table_tree_pass.gd): the dressed biome's reference trees replace the table's trees ===

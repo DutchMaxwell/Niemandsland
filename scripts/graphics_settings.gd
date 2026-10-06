@@ -35,19 +35,29 @@ const BIOME_GRADE_WEIGHTS := {
 var _biome_grade_curves := {}
 
 
-func biome_grade_values(biome: String) -> Dictionary:
+func biome_grade_values(biome: String, mood := "Sunset") -> Dictionary:
 	if current_preset < QualityPreset.MEDIUM or not BIOME_GRADES.has(biome):
 		return {}
 	var grade: Array = BIOME_GRADES[biome]
 	var weight: float = BIOME_GRADE_WEIGHTS[biome]
-	if not _biome_grade_curves.has(biome):
+	var key := biome + mood
+	if not _biome_grade_curves.has(key):
 		var curve := GradientTexture1D.new()
 		curve.width = 256
 		curve.gradient = Gradient.new()
 		curve.gradient.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
 		curve.gradient.colors = PackedColorArray([Color.BLACK, Color(0.5, 0.5, 0.5).lerp(grade[0], weight), Color.WHITE])
-		_biome_grade_curves[biome] = curve
-	return {"adjustment_enabled": true, "adjustment_color_correction": _biome_grade_curves[biome],
+		if mood == "Sunset":
+			var tint: Color = (grade[0] - BIOME_GRADES["temperate_grassland"][0]) * weight
+			curve.gradient.offsets = PackedFloat32Array([0.0, 0.2, 0.5, 0.8, 1.0])
+			curve.gradient.colors = PackedColorArray([Color.BLACK, Color(0.20,0.20,0.205),
+				Color(0.52,0.50,0.48) + tint, Color(0.82,0.80,0.76), Color.WHITE])
+		_biome_grade_curves[key] = curve
+	if mood == "Sunset":
+		return {"adjustment_enabled":true, "adjustment_color_correction":_biome_grade_curves[key],
+			"adjustment_contrast":1.12, "adjustment_saturation":1.03 + (grade[1] - 1.06) * weight,
+			"tonemap_agx_contrast":1.15, "glow_intensity":0.30, "glow_bloom":0.0}
+	return {"adjustment_enabled": true, "adjustment_color_correction": _biome_grade_curves[key],
 		"adjustment_contrast": 1.0 + 0.05 * weight, "adjustment_saturation": lerpf(1.0, grade[1], weight),
 		"tonemap_agx_contrast": lerpf(1.0, grade[2], weight), "glow_intensity": grade[3], "glow_bloom": 0.0}
 
@@ -419,7 +429,11 @@ func apply_environment_settings(settings: Dictionary) -> void:
 		render_state.set_layer("preset", values)
 		var table: Node = world_env.get_parent().get_node_or_null("Table")
 		if table != null:
-			render_state.set_layer("grading", biome_grade_values(str(table.biome)))
+			var atmosphere: Node = world_env.get_parent().get("atmosphere_controller")
+			var mood: String = atmosphere.get_current_atmosphere() if atmosphere != null else "Sunset"
+			render_state.set_layer("grading", biome_grade_values(str(table.biome), mood))
+			if atmosphere != null and not atmosphere.atmosphere_changed.is_connected(_on_grading_biome_changed):
+				atmosphere.atmosphere_changed.connect(_on_grading_biome_changed)
 			if not table.biome_changed.is_connected(_on_grading_biome_changed):
 				table.biome_changed.connect(_on_grading_biome_changed)
 	else:
