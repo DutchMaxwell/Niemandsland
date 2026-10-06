@@ -1661,22 +1661,32 @@ static func reset_round_mods(state: Dictionary) -> void:
 ## Returns my_unit_key -> expected incoming wounds. V0 simplifications,
 ## documented: shooting only (no charge reply), capture-time sight lines,
 ## already-activated enemies still count (they reply next round).
+## aifix D2 knob (default OFF, twin of Seams::reply_v2): the reply threat also prices a CHARGE
+## (melee_threat, inside 12\") and skips Shaken enemies (they only hold).
+static var reply_v2 := false
+const REPLY_CHARGE_IN := 12.0
+
+
 static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 	var incoming := {}
 	for ek in state["units"]:
 		var eu: Dictionary = state["units"][ek]
-		if int(eu["player"]) == player or int(eu["alive"]) <= 0:
+		if int(eu["player"]) == player or int(eu["alive"]) <= 0 \
+				or (reply_v2 and bool(eu.get("shaken", false))):
 			continue
 		var best_key := ""
 		var best_ev := 0.0
 		for mk in state["units"]:
 			var mu: Dictionary = state["units"][mk]
-			if int(mu["player"]) != player or int(mu["alive"]) <= 0 or not sees(eu, str(mk)) \
-					or not _los_clear(state, eu, mu):
+			if int(mu["player"]) != player or int(mu["alive"]) <= 0:
 				continue
 			var d := dist_in(eu["positions"], mu["positions"])
-			var ev := AiEv.shoot_ev(_profiles_of(eu, false, d), _ctx_of(eu), _ctx_of(mu), d) \
-				+ float(spell_ev_of(eu, mu, d)["ev"])   # magic is part of the reply
+			var ev := 0.0
+			if sees(eu, str(mk)) and _los_clear(state, eu, mu):
+				ev = AiEv.shoot_ev(_profiles_of(eu, false, d), _ctx_of(eu), _ctx_of(mu), d) \
+					+ float(spell_ev_of(eu, mu, d)["ev"])   # magic is part of the reply
+			if reply_v2 and d <= REPLY_CHARGE_IN:
+				ev = maxf(ev, melee_threat(eu, mu))
 			if ev > best_ev:
 				best_ev = ev
 				best_key = str(mk)

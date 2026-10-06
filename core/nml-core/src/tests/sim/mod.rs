@@ -1808,3 +1808,26 @@ mod weapons;
         assert!((rate(3, true, &mut statics) - 1.0 / 3.0).abs() < 0.05);
         assert!((rate(5, true, &mut statics) - 2.0 / 3.0).abs() < 0.05);
     }
+
+    /// aifix D2 RED — a pure-melee enemy 10" from my unit and no guns: the old
+    /// reply threat is 0 (it only reads shooting); with `reply_v2` it prices the
+    /// charge, and a Shaken enemy threatens nothing.
+    #[test]
+    fn reply_v2_prices_a_charge_and_skips_a_shaken_enemy() {
+        let (mut st, mut statics) = vr_charge_line(8.0);
+        // vr_charge_line: "a" carries the melee profile, "b" is the target; "a" is the enemy here
+        let player_b = st.player[1];
+        statics[0].shoot = Vec::new();
+        let old = reply_threat_with(&statics, &st, player_b, false);
+        let new = reply_threat_with(&statics, &st, player_b, true);
+        assert_eq!(old[1], 0.0, "today: no shooting, no threat");
+        assert!(new[1] > 0.0, "v2 prices the charge: {new:?}");
+        st.shaken[0] = true;
+        assert_eq!(reply_threat_with(&statics, &st, player_b, true)[1], 0.0);
+        // symmetry: two identical melee units charge each other for the same threat
+        st.shaken[0] = false;
+        statics[1].melee = statics[0].melee.clone();
+        statics[1].ctx = statics[0].ctx.clone();
+        let (to_b, to_a) = (reply_threat_with(&statics, &st, 1, true)[1], reply_threat_with(&statics, &st, 0, true)[0]);
+        assert!(to_b > 0.0 && (to_a - to_b).abs() < 1e-12, "{to_a} vs {to_b}");
+    }

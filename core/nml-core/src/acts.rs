@@ -216,6 +216,9 @@ pub struct Knobs {
     /// aifix D1 — see `Seams::morale_by_probability`. Research knob, default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
+    /// aifix D2 — see `Seams::reply_v2`. Research knob, default OFF.
+    #[serde(default)]
+    pub reply_v2: bool,
     /// NML-1134 — which RULE VOCABULARY this corpus's board rows were slotted
     /// with (`data/encoder_rule_vocab_v1.json`, stamped by `act_recorder.gd`).
     /// THE ONE RULE, and every reader gets it from here: the header says, and a
@@ -1439,6 +1442,7 @@ impl Default for Knobs {
             opener_by_finish: false,
             no_end_threat: false,
             morale_by_probability: false,
+            reply_v2: false,
             // NML-1134: the CORPUS reading — a header with no `knobs` block at
             // all predates the stamp just as surely as one with an unstamped
             // block does. A caller that plays a FRESH game stamps
