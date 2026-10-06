@@ -457,6 +457,11 @@ static func environment_values(settings: Dictionary, tier: int) -> Dictionary:
 	return values
 
 
+## Medium and above keep the tabletop in focus at normal play distance.
+static func table_focus_amount(tier: int) -> float:
+	return 0.11 if tier >= QualityPreset.MEDIUM else 0.0
+
+
 ## Get current preset name
 func get_current_preset_name() -> String:
 	return PRESETS[current_preset]["name"]
