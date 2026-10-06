@@ -7,6 +7,9 @@ class Mood extends Node:
 	func get_current_atmosphere() -> String:
 		return "Sunset"
 
+class Board extends Node3D:
+	var table_size := Vector2(6,4)
+
 class Host extends Node:
 	var render_state: RenderState
 	var atmosphere_controller: Node
@@ -30,6 +33,9 @@ func test_world_removal_restores_sky_and_disables_sky_gi() -> void:
 		return
 	var main: Host = auto_free(Host.new())
 	add_child(main)
+	var table := Board.new()
+	table.name = "Table"
+	main.add_child(table)
 	main.atmosphere_controller = Mood.new()
 	main.add_child(main.atmosphere_controller)
 	var env := Environment.new()
