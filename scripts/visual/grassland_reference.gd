@@ -251,6 +251,11 @@ func _build_dust(main: Node) -> void:
 
 func apply_lighting(mood: String) -> void:
 	_current_mood = mood
+	if table_tier:
+		preload("res://scripts/visual/table_lighting.gd").apply(_main, _profile, mood)
+		_apply_reference_sun()
+		_apply_reference_environment(mood in ["Day", "Sunset"])
+		return
 	# Only the reference scene owns TAA / render scale / shadow atlas (set below); the table tier leaves them to the
 	# quality preset, so its teardown must not write back the scale it saw when it dressed (Performance lost its 0.77).
 	if _previous_viewport.is_empty() and not table_tier:
@@ -344,10 +349,10 @@ func _on_graphics_settings_applied(_preset_name: String) -> void:
 			apply_lighting(_current_mood)
 
 
-## Table tier, maintainer decision D1: the biome light profile is the Day base; Sunset and Night use the
-## profile's own sunset values; the other game moods (Overcast, Rain) keep the game's own lighting.
+## Approved game rig: Day/Sunset use biome daylight; Night, Overcast and Rain retain their atmosphere.
+## The standalone reference still uses its original profile moods.
 func apply_table_mood(mood: String) -> void:
-	if mood in TABLE_PROFILE_MOODS:
+	if table_tier or mood in TABLE_PROFILE_MOODS:
 		apply_lighting(mood)
 	else:
 		_apply_reference_sun()
@@ -359,11 +364,13 @@ func apply_table_mood(mood: String) -> void:
 func _apply_reference_sun() -> void:
 	var light: Node = _main.lighting_controller
 	light.set_shadow_bias(0.015)
-	light.set_shadow_normal_bias(0.25)
+	light.set_shadow_normal_bias(0.10 if table_tier else 0.25)
 	var sun: DirectionalLight3D = _main.get_node("DirectionalLight3D")
-	sun.directional_shadow_max_distance = 3.0
+	sun.directional_shadow_max_distance = 5.0 if table_tier else 3.0
 	sun.directional_shadow_pancake_size = 1.0
 	sun.light_volumetric_fog_energy = 0.9
+	if table_tier:
+		sun.light_indirect_energy = 1.2
 
 
 ## The game's current atmosphere mood (atmosphere_controller), "Day" outside the game.
