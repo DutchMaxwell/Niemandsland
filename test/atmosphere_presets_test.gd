@@ -89,3 +89,33 @@ func test_sun_angle_blend_takes_the_short_way_around() -> void:
 			Color.WHITE, 1.0)
 	# Halfway between 170 and -170 the short way is +/-180, NOT 0.
 	assert_float(absf(lighting.current_preset["sun_angle_h"])).is_equal_approx(180.0, 0.5)
+
+func test_night_is_a_readable_full_moon_night() -> void:
+	var night: Dictionary = LightingScript.PRESETS["Night"]
+	# bluish moonlight strong enough to read the table, with ambient fill so shadows are not black
+	assert_float(night["sun_energy"]).is_greater_equal(1.2)
+	assert_float(night["ambient_energy"]).is_greater_equal(0.25)
+	assert_float(night["sun_color"].b).is_greater(night["sun_color"].r)
+	# still clearly night: far dimmer than the day key
+	assert_float(night["sun_energy"]).is_less(LightingScript.PRESETS["Default"]["sun_energy"])
+
+
+func test_only_night_shows_the_moon() -> void:
+	for preset_name in AtmosphereScript.PRESETS:
+		var expected := 1.0 if preset_name == "Night" else 0.0
+		assert_float(AtmosphereScript.PRESETS[preset_name].get("moon", 0.0)).is_equal(expected)
+
+
+func test_blend_fades_the_moon_in_the_sky_shader() -> void:
+	var rig := _atmosphere_with_lighting()
+	var atmosphere: Node = rig[0]
+	var sky := ShaderMaterial.new()
+	sky.shader = load("res://shaders/space_skybox.gdshader")
+	var env: Environment = atmosphere._world_env.environment
+	env.sky = Sky.new()
+	env.sky.sky_material = sky
+	var preset: Dictionary = AtmosphereScript.PRESETS["Night"]
+	atmosphere._apply_blend(1.0, {}, LightingScript.PRESETS["Night"], {"moon": 0.0}, preset, Color.WHITE, 1.0)
+	assert_float(float(sky.get_shader_parameter("moon_strength"))).is_equal(1.0)
+	atmosphere._apply_blend(0.5, {}, LightingScript.PRESETS["Night"], {"moon": 0.0}, preset, Color.WHITE, 1.0)
+	assert_float(float(sky.get_shader_parameter("moon_strength"))).is_equal(0.5)
