@@ -28,6 +28,10 @@ uniform float star_density : hint_range(0.0, 1.0) = 0.55;
 uniform float star_brightness : hint_range(0.0, 4.0) = 2.2;
 uniform float twinkle_speed : hint_range(0.0, 5.0) = 0.8;
 
+// Full moon (Night mood): a disc and a soft halo where the key light sits; 0 = no moon.
+uniform float moon_strength : hint_range(0.0, 1.0) = 0.0;
+uniform vec3 moon_color : source_color = vec3(0.72, 0.82, 1.0);
+
 // Per-pixel dither amplitude (in 1/255 units) to break banding in the dark.
 uniform float dither_amount = 4.5;
 
@@ -106,6 +110,14 @@ void sky() {
 
 	// Small stars.
 	col += starfield(dir, TIME) * star_brightness;
+
+	// Moon: LIGHT0_DIRECTION points at the key light, so the disc sits exactly where the moonlight comes from.
+	if (moon_strength > 0.0 && LIGHT0_ENABLED) {
+		float m = max(dot(dir, LIGHT0_DIRECTION), 0.0);
+		float disc = smoothstep(0.99935, 0.99965, m);
+		float halo = pow(m, 220.0) * 0.45 + pow(m, 14.0) * 0.06;
+		col += moon_color * (disc * 2.6 + halo) * moon_strength;
+	}
 
 	// Strong dither to kill banding in the very dark values.
 	float d = hash13(dir * 8888.0) - 0.5;
