@@ -42,7 +42,8 @@ func test_vampiric_undead_words_map_to_the_baked_slugs() -> void:
 		"Champion Cursed Crossbow": "crossbow", "Carving Tool": "carving_tool",
 		"Skeletal Steed": "skeletal_steed", "Abyssal Beast": "abyssal_beast", "Steed": "steed",
 		"Hunting Pet": "hunting_pet", "Pet Ghoul": "pet_ghoul", "Stitched Leader": "stitched_leader",
-		"Cursed Mace": "mace", "Sling": "sling"}
+		"Cursed Mace": "mace", "Sling": "sling",
+		"Wings": "wings", "Heavy Rending Claws": "claws", "Great Sword": "greatsword"}
 	for word in expected:
 		assert_str(lib.variant_slug([word], "vampiric_undead")).is_equal(expected[word])
 	# Scoped: the other factions keep the shared slugs.
@@ -103,3 +104,28 @@ func test_hero_item_pet_resolves_the_composed_bake_when_shipped() -> void:
 func test_hero_item_pet_falls_back_to_the_weapon_bake_when_not_shipped() -> void:
 	var manager := _manager(["vampiric_undead/drained leader#bow+greatweapon"])
 	assert_array(manager._unit_model_variant_names(_drained_leader_with_pet().units[0], "vampiric_undead")) 		.is_equal(["Drained Leader#bow+greatweapon"])
+
+
+func test_bat_beast_wings_item_resolves_the_spread_wings_bake() -> void:
+	var army := _army([{"armyId": VU_ARMY, "name": "Bat Beast", "size": 1, "bases": {"round": "60"},
+		"loadout": [
+			{"type": "ArmyBookWeapon", "name": "Deadly Fangs", "attacks": 6, "count": 1},
+			{"type": "ArmyBookItem", "name": "Wings", "count": 1,
+				"content": [{"type": "ArmyBookRule", "name": "Flying"}]}]}])
+	var manager := _manager(["vampiric_undead/bat beast", "vampiric_undead/bat beast#wings"])
+	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")).is_equal(["Bat Beast#wings"])
+
+
+func test_werewolf_champion_claws_resolve_their_bake() -> void:
+	var army := _army([{"armyId": VU_ARMY, "name": "Werewolf Champion", "size": 1, "bases": {"round": "50"},
+		"loadout": [{"type": "ArmyBookWeapon", "name": "Heavy Rending Claws", "attacks": 6, "count": 1}]}])
+	var manager := _manager(["vampiric_undead/werewolf champion", "vampiric_undead/werewolf champion#claws"])
+	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")).is_equal(["Werewolf Champion#claws"])
+
+
+func test_werewolves_default_claws_fall_back_to_the_base_model() -> void:
+	# 'heavy rending claws' -> claws also covers the Werewolves' default: no werewolves#claws bake -> the base model.
+	var army := _army([{"armyId": VU_ARMY, "name": "Werewolves", "size": 3, "bases": {"round": "40"},
+		"loadout": [{"type": "ArmyBookWeapon", "name": "Heavy Rending Claws", "attacks": 3, "count": 3}]}])
+	var manager := _manager(["vampiric_undead/werewolves", "vampiric_undead/werewolves#heavy_hand_weapon"])
+	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")).is_equal(["", "", ""])
