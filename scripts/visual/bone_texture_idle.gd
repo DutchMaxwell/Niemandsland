@@ -124,14 +124,22 @@ static func set_dead(model: Node3D, dead: bool) -> void:
 
 
 func _ready() -> void:
-	GraphicsSettings.idle_motion_changed.connect(refresh)
-	GraphicsSettings.settings_applied.connect(_preset_changed)
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics == null:
+		return
+	graphics.connect("idle_motion_changed", Callable(self, "refresh"))
+	graphics.connect("settings_applied", Callable(self, "_preset_changed"))
 	_preset_changed("")
 
 
 func _preset_changed(_preset: String) -> void:
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics == null or _visual == null or _visual.mesh == null:
+		return
 	refresh()
-	var rim: float = GraphicsSettings.PRESETS[GraphicsSettings.current_preset].get("miniature_rim", 0.0)
+	var presets: Dictionary = graphics.get_script().get("PRESETS")
+	var preset: Dictionary = presets.get(int(graphics.get("current_preset")), {})
+	var rim: float = preset.get("miniature_rim", 0.0)
 	for s in _visual.mesh.get_surface_count():
 		(_visual.get_surface_override_material(s) as ShaderMaterial).set_shader_parameter("rim_amount", rim)
 
@@ -147,8 +155,11 @@ func refresh() -> void:
 	if not is_inside_tree() or _visual == null:
 		return
 	var camera := get_viewport().get_camera_3d()
-	var active := not _dead and camera != null and motion_allowed(GraphicsSettings.current_preset,
-		GraphicsSettings.idle_motion, GraphicsSettings.reduce_motion)
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics == null:
+		return
+	var active := not _dead and camera != null and motion_allowed(
+		int(graphics.get("current_preset")), bool(graphics.get("idle_motion")), bool(graphics.get("reduce_motion")))
 	if active:
 		active = camera.global_position.distance_squared_to(global_position) <= MAX_DISTANCE * MAX_DISTANCE
 	_visual.visible = active
