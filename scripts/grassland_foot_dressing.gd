@@ -3,7 +3,8 @@ extends Decal
 ## Earth and moss at the foot of a free ruin or solid (S6-1, maintainer 05.10.: the ruins must belong to the picture):
 ## a noisy dirt/moss patch 3" around the footprint, a child of the piece so it moves, turns and goes with it.
 ## Decoration only (no collision, rules untouched). Grassland only for now (lead D12): it shows while the table is
-## "temperate_grassland" and follows biome changes; without a table (previews, tests) it stays visible.
+## "temperate_grassland" and follows biome changes, on the quality presets that dress the table (Medium and up);
+## without a table (previews, tests) it stays visible.
 
 const MARGIN_INCHES := 3.0
 const HEIGHT_INCHES := 0.4
@@ -28,10 +29,20 @@ func _ready() -> void:
 		return
 	_show_for(str(table.get("biome")))
 	table.biome_changed.connect(_show_for)
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null:   # Low / Performance keep the plain battlemap table (plan gate S6)
+		graphics.settings_applied.connect(func(_preset: String) -> void: _show_for(str(table.get("biome"))))
 
 
 func _show_for(biome: String) -> void:
-	visible = biome == GRASSLAND
+	visible = biome == GRASSLAND and GrasslandFootDressing.dressed_preset(self)
+
+
+## The table is dressed on the current quality preset (TableBiomePresenter: Medium and up). Low and Performance keep
+## the plain battlemap table for weak GPUs, so the wall-foot dressing and scatter stay off there. True outside the game.
+static func dressed_preset(node: Node) -> bool:
+	var graphics := node.get_node_or_null("/root/GraphicsSettings")
+	return graphics == null or TableBiomePresenter.PRESET_DENSITY.has(int(graphics.current_preset))
 
 
 ## Opaque at the foot, an organic (noisy) edge fading out MARGIN_INCHES away, dirt and moss mixed; 8 px per inch.
