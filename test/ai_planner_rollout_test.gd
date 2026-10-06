@@ -187,6 +187,11 @@ func test_cross_round_resets_flags_and_hands_the_opener_to_the_smaller_side() ->
 		assert_bool((state["units"][k] as Dictionary)["fatigued"]).is_false()
 
 
+## Knob opener_by_finish: the side the walk names opens, whatever the head count.
+func test_cross_round_hands_the_opener_to_the_side_that_finished_first() -> void:
+	assert_int(AiPlanner._cross_round(_state(), 2)).is_equal(2)
+
+
 # === R7: discounted multi-round leaf (NML-995) ===
 
 ## rollout_boundaries returns one true round-end per horizon round (rounds 1

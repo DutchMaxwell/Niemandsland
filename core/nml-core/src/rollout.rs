@@ -405,7 +405,8 @@ impl<'a> Rollout<'a> {
                     if cur.round >= cur.rounds_total {
                         return Ok((out, Stop::GameEnd));
                     }
-                    turn = cross_round(self.statics(), &mut cur);
+                    let first_dry = self.knobs.opener_by_finish.then(|| other_player(&cur, turn));
+                    turn = cross_round(self.statics(), &mut cur, first_dry);
                     // Wave 4 — the Reinforcement beat sits at the ROUND START,
                     // after `cross_round`'s refresh exactly as the table runs
                     // it after its own round reset (main.gd:10174-10191). It
@@ -1004,7 +1005,11 @@ pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams
     }
 }
 
-pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
+/// `finished_first` (knob `opener_by_finish`, default off) is the side the walk
+/// asked first at "both dry" — the one that did NOT take the last activation,
+/// so it finished first and opens (GF v3.5.1 p.7). `None` keeps the head-count
+/// approximation.
+pub fn cross_round(statics: &[UnitStatic], cur: &mut State, finished_first: Option<i64>) -> i64 {
     cur.round += 1;
     // `counts` is a Dictionary keyed by player id: insertion order is first
     // appearance in capture order, and `players.sort()` then orders it by id.
@@ -1022,6 +1027,9 @@ pub fn cross_round(statics: &[UnitStatic], cur: &mut State) -> i64 {
                 }
             }
         }
+    }
+    if let Some(f) = finished_first {
+        return f;
     }
     let mut order: Vec<usize> = (0..ids.len()).collect();
     order.sort_by_key(|&x| ids[x]);
