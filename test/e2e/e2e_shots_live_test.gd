@@ -60,3 +60,26 @@ func test_a_peer_blast_volley_blasts_and_bad_payloads_raise_nothing(timeout := 3
 		_main._vfx_draw(cue, 2)
 	await get_tree().create_timer(2.0).timeout
 	assert_int(_count(VolleyCue.Family.ARTILLERY, "blast")).override_failure_message("the peer's shell blasts").is_equal(1)
+
+
+## Indirect fire tested no sight line: no chalk line (it would cross the wall), but the shell arcs over it.
+func test_indirect_fire_lobs_its_shell_and_draws_no_chalk_line(timeout := 30000) -> void:
+	_main.volley_cue.force_for_tests = true   # the chalk line must be able to draw, or its absence proves nothing
+	_main.volley_cue.enabled = true
+	var crew := E2EBoot.make_unit(_main, 1, "Mortar Crew", [Vector3(0, 0, 0)])
+	var target := E2EBoot.make_unit(_main, 2, "Targets", [Vector3(0, 0, 0.4)])
+	_main._vfx_volley(crew, target, {"name": "Heavy Rifle", "attacks": 1, "count": 1, "blast": 0},
+		[[Vector3(0, 0, 0), Vector3(0, 0, 0.4)]], true)
+	assert_int(_main.volley_cue.get_child_count()).override_failure_message("no chalk line without a tested line").is_zero()
+	await get_tree().create_timer(1.5).timeout
+	assert_int(_count(VolleyCue.Family.ARTILLERY, "launch")).override_failure_message("the shell is lobbed").is_equal(1)
+	assert_int(_count(VolleyCue.Family.BALLISTIC, "launch")).override_failure_message("never a straight round").is_zero()
+
+
+## The player's own Indirect volley: its pairs come from range alone (no sight test), and it lobs too.
+func test_a_players_indirect_volley_lobs_from_range_alone(timeout := 30000) -> void:
+	var crew := E2EBoot.make_unit(_main, 1, "Mortar Crew", [Vector3(0, 0, 0)])
+	var target := E2EBoot.make_unit(_main, 2, "Targets", [Vector3(0, 0, 0.4)])
+	_main._vfx_player_volley(crew, target, {"name": "Mortar", "range": 30, "attacks": 1, "count": 1, "blast": 3}, true)
+	await get_tree().create_timer(1.5).timeout
+	assert_int(_count(VolleyCue.Family.ARTILLERY, "launch")).override_failure_message("the player's mortar lobs").is_equal(1)
