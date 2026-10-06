@@ -246,6 +246,12 @@ fn morale_fearless(statics: &[UnitStatic], state: &State, i: usize, seams: Seams
 /// `BattleSim._morale_fails_expected` battle_sim.gd:1082-1090 — Shaken always
 /// fails; otherwise the quality target's fail chance, halved by Fearless, and a
 /// fail at 50% or worse.
+///
+/// aifix D1 — `seams.morale_by_probability` (default off) trades that 50 %
+/// cliff (Q4+ always breaks, Q3+ never does) for a deterministic dither: the
+/// unit fails when `fail_p` exceeds a low-discrepancy threshold of its roster
+/// slot and the round, so over many units and rounds it breaks `fail_p` of the
+/// time — the table's die — while one state still answers one way.
 fn morale_fails_expected(state: &State, statics: &[UnitStatic], i: usize, seams: Seams) -> bool {
     if state.shaken[i] {
         return true;
@@ -254,7 +260,16 @@ fn morale_fails_expected(state: &State, statics: &[UnitStatic], i: usize, seams:
     if morale_fearless(statics, state, i, seams) {
         fail_p *= 0.5;
     }
+    if seams.morale_by_probability {
+        return fail_p > morale_dither(i, state.round);
+    }
     fail_p >= 0.5
+}
+
+/// A deterministic stand-in for the die in [0, 1): the golden-ratio sequence
+/// over the roster slot, shifted per round by a second irrational step.
+fn morale_dither(i: usize, round: i64) -> f64 {
+    ((i as f64 + 1.0) * 0.618_033_988_749_894_9 + round as f64 * 0.754_877_666_246_692_7).fract()
 }
 
 /// `BattleSim._apply_expected_wounds` battle_sim.gd:1131-1155 — expected unsaved
