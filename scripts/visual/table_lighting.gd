@@ -18,6 +18,8 @@ static func values(profile: Dictionary, mood: String) -> Dictionary:
 			v.ambient_color = Color(0.55,0.66,0.86)
 			if evening:
 				v.sun_color = Color(1.0,0.85,0.64)
+		if profile.name == "arid_desert":
+			v.exposure = 0.78 # Bright sand needs half a stop of highlight headroom.
 	return v
 
 static func apply(main: Node, profile: Dictionary, mood: String) -> void:
