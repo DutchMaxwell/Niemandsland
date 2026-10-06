@@ -205,10 +205,10 @@ const PRESETS = {
 		"ssao": true,
 		"ssao_radius": 1.0,
 		"ssao_intensity": 0.5,
-		"ssil": false,  # Disabled - very expensive
+		"ssil": true,
 		"ssr": true,
-		"sdfgi": false,  # Disabled - extremely expensive
-		"volumetric_fog": false,
+		"sdfgi": true,
+		"volumetric_fog": true,
 		"fsr_scale": 1.0,
 		"glow": true,
 		"glow_intensity": 0.6,
@@ -227,8 +227,8 @@ const PRESETS = {
 		"ssao_intensity": 0.6,
 		"ssil": true,
 		"ssr": true,
-		"sdfgi": false,  # Disabled by default - too expensive for most setups
-		"volumetric_fog": false,
+		"sdfgi": true,
+		"volumetric_fog": true,
 		"fsr_scale": 1.0,
 		"glow": true,
 		"glow_intensity": 0.7,
@@ -374,6 +374,8 @@ func apply_rendering_settings(settings: Dictionary) -> void:
 
 	# Shadow quality (runtime changes limited, mostly project settings)
 	RenderingServer.directional_shadow_atlas_set_size(settings["shadow_size"], true)
+	if settings.get("sdfgi", false):
+		RenderingServer.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_32)
 
 	# 3D resolution scaling. Performance (0.77) is the ONLY sub-native tier, so this is
 	# the only preset switch that RESIZES the 3D render target. Bundling that resize in
@@ -446,28 +448,25 @@ func apply_environment_settings(settings: Dictionary) -> void:
 		world_env.camera_attributes.auto_exposure_enabled = false
 
 
-## The preset's Environment values: SSAO, SSIL, SSR, glow; SDFGI on ULTRA only; fog off.
+## High+ enables miniature-scale GI and volumetric mist; lower tiers retain their budget.
 static func environment_values(settings: Dictionary, tier: int) -> Dictionary:
 	var values := {"ssao_enabled": settings["ssao"], "ssil_enabled": settings.get("ssil", false),
 		"ssr_enabled": settings["ssr"], "glow_enabled": settings["glow"],
-		# SDFGI: realtime bounce GI — ULTRA only (expensive; can shimmer on small minis).
-		"sdfgi_enabled": tier == QualityPreset.ULTRA,
-		# Atmospheric fog is off: the scene is set in space (no aerial perspective), and the
-		# low ground mist is now drawn by the dedicated white shader-plane system
-		# (atmospheric_clouds.gd) rather than environment volumetric fog, which a 1–2 cm
-		# ground layer cannot be resolved by and which tinted everything warm/brown.
-		"fog_enabled": false, "volumetric_fog_enabled": false}
+		"sdfgi_enabled": settings.get("sdfgi", false),
+		"fog_enabled": false, "volumetric_fog_enabled": settings.get("volumetric_fog", false)}
 	for key: String in ["ssao_radius", "ssao_intensity", "glow_intensity", "glow_bloom"]:
 		if settings.has(key):
 			values[key] = settings[key]
-	if tier == QualityPreset.ULTRA:
-		# Do NOT inject the procedural sky into SDFGI: the space-skybox radiance bake is
-		# an unreliable light source (intermittent GPU-garbage cubemap floods the scene
-		# magenta/green/white). Scene lighting is decoupled from the sky (ambient=Color,
-		# reflections disabled in main.tscn); SDFGI keeps geometry bounce only.
-		values.merge({"sdfgi_cascades": 4, "sdfgi_use_occlusion": true, "sdfgi_read_sky_light": false,
-			"sdfgi_bounce_feedback": 0.5, "sdfgi_min_cell_size": 0.2,
-			"sdfgi_y_scale": Environment.SDFGI_Y_SCALE_75_PERCENT})
+	if tier >= QualityPreset.HIGH:
+		# Never inject the dynamic space sky; the Ultra world supplies a static radiance sky.
+		values.merge({"sdfgi_cascades":4, "sdfgi_use_occlusion":true, "sdfgi_read_sky_light":false,
+			"sdfgi_bounce_feedback":0.5, "sdfgi_min_cell_size":0.0125, "sdfgi_energy":1.1,
+			"sdfgi_y_scale":Environment.SDFGI_Y_SCALE_75_PERCENT,
+			"ssil_radius":0.16, "ssil_intensity":1.0,
+			"volumetric_fog_density":0.002, "volumetric_fog_length":6.0,
+			"volumetric_fog_detail_spread":1.3, "volumetric_fog_gi_inject":1.0,
+			"volumetric_fog_ambient_inject":0.16, "volumetric_fog_anisotropy":0.35,
+			"volumetric_fog_sky_affect":0.5})
 	return values
 
 
