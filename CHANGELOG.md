@@ -7,6 +7,18 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Combat effects, on by default.** What a resolved attack or cast did is now visible at the table,
+  drawn only from the rules' own results and never deciding one:
+  - **marks** over the models (wound ticks, a blood marker on a casualty, hits and saves over the unit);
+  - **shots** per weapon type along the exact line of sight: tracers, machine-gun bursts, arrows and
+    javelins on an arc, flamer gouts, energy bolts, beams, and lobbed shells with a Blast ring;
+  - **falls**: blood, sparks and oil, or bone dust, and a falling model;
+  - **spells**: a charge at the caster and a release per element (arcane, fire, lightning, frost,
+    shadow), or a collapse on a fail;
+  - a lightning **aura** on the Frog-Mage.
+  - **Gore** (Off / Normal / Extra) sets how bloody it gets, and one **Combat Effects** switch in the
+    graphics settings turns everything off.
+  - Every player in an online game sees the same effects once; nothing replays after a load or rejoin.
 - **Automodus: Charge, Advance & Shoot and Rush on the solo radial.** Pick the verb, click the enemy —
   the engine moves your unit along a legal path and rolls the attack, saves and morale for you, the
   same executor NACHTMAHR's own activations run through. A suggested target is named in the log; a
@@ -14,6 +26,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   `KNOWN_ISSUES.md` for this version's limits. (NML-202)
 
 ### Fixed
+- **A Tough(6+) monster leaves blood, not an oil-and-fire stain.** The battlefield stain treated every
+  Tough(6+) unit as a vehicle, so a Carnivo-Rex burned like a tank. Machine and undead keywords now
+  decide; a big unit stays a vehicle only when nothing marks it as a creature.
 - **The Vampiric Undead Butcher Titan stands on the rulebook's giant base, not a vehicle oval.** Army
   Forge gives it no base, and the size fallback read the keyword-less Tough(18) giant as a vehicle: a
   105×170 mm oval that scaled the model to about 21 cm. It now gets the 120×92 mm oval the AoF rules

@@ -282,7 +282,7 @@ func _build_ui() -> void:
 	# Combat effects (result marks, shots, falls, spells, hero auras): one switch for all of them; an effect that is
 	# not in the game yet is skipped.
 	var vfx_cb := CheckButton.new()
-	vfx_cb.text = "Combat Effects (preview)"
+	vfx_cb.text = "Combat Effects"
 	vfx_cb.button_pressed = GraphicsSettings.show_combat_effects
 	vfx_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.show_combat_effects = on

@@ -10,7 +10,7 @@ extends GdUnitTestSuite
 const PRESETS := ["Day", "Sunset", "Night", "Overcast", "Rain"]
 const TOGGLES := ["War-torn (fires at ruins)", "Distant war sounds", "Reduce Motion", "Fullscreen", "Show Move Trails",
 	"Show Rule Texts at the Table", "Tilt-Shift (Depth of Field)", "Combat Stage (paces the resolution)",
-	"Enforce Movement Limit", "AI Explanations Stay Up", "Combat Effects (preview)"]
+	"Enforce Movement Limit", "AI Explanations Stay Up", "Combat Effects"]
 const LABELS := ["ATMOSPHERE:", "PARAMETERS:", "Sun Color", "Ambient Color", "AUDIO:", "DISPLAY:", "UI Scale",
 	"Master Volume", "Music Volume", "SFX Volume", "Ambience Volume", "UI Volume"]
 const SLIDER_KEYS := ["sun_energy", "sun_angle_h", "sun_angle_v", "ambient_energy", "exposure", "shadow_opacity",
@@ -207,7 +207,7 @@ func test_display_toggles_reach_graphics_settings_and_are_put_back() -> void:
 	var fields := {"Reduce Motion": "reduce_motion", "Show Move Trails": "show_move_trails",
 		"Show Rule Texts at the Table": "show_rule_floats", "Tilt-Shift (Depth of Field)": "tilt_shift",
 		"Combat Stage (paces the resolution)": "show_combat_stage", "Enforce Movement Limit": "enforce_movement_limit",
-		"AI Explanations Stay Up": "ai_explain_persistent", "Combat Effects (preview)": "show_combat_effects"}
+		"AI Explanations Stay Up": "ai_explain_persistent", "Combat Effects": "show_combat_effects"}
 	for text: String in fields:
 		var t := _toggle(text)
 		var field: String = fields[text]
