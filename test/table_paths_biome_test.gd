@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
-## S8.4 (maintainer 06.10.: the terrain should match the biome): the worn paths take the table's biome colour — a pale
-## packed-sand track on the desert, a near-black track on volcanic ash, today's dusty earth on grassland — and follow
-## a biome change.
+## S8.4 (maintainer 06.10.: the terrain should match the biome): the worn paths take the table's biome colour — a dark
+## reddish packed-earth track on the desert and a pale compacted-ash track on volcanic ash (lead 06.10.: they must
+## read there, sand_ash_readable_test), today's dusty earth on grassland — and follow a biome change.
 
 
 class StubTable extends Node3D:
@@ -19,8 +19,8 @@ func test_the_paths_take_the_table_biome_colour() -> void:
 	add_child(table)
 	var paths := TablePaths.of(table)
 	paths.set_paths([[[0.0, 0.0], [10.0, 0.0]]])
-	assert_float(_red(paths)).override_failure_message("no sand track on the desert").is_greater(0.45)
+	assert_float(_red(paths)).override_failure_message("no packed-earth track on the desert").is_between(0.3, 0.45)
 	table.biome_changed.emit("volcanic_ash")
-	assert_float(_red(paths)).override_failure_message("no dark track on ash").is_less(0.25)
+	assert_float(_red(paths)).override_failure_message("no pale track on ash").is_greater(0.55)
 	table.biome_changed.emit("temperate_grassland")
 	assert_float(_red(paths)).is_between(0.32, 0.41)   # today's dusty earth

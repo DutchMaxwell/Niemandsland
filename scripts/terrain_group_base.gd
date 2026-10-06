@@ -125,6 +125,7 @@ var _tree_upgrade_started: bool = false
 var _biome_lib: BiomeLibrary = null
 var _floor_mesh: MeshInstance3D = null
 var _floor_upgrade_started: bool = false
+var _base_top := 0.0   # the pad top the trees stand on (S8.5 re-grows them there)
 ## Hazard-prop GLB resolver + one-shot upgrade guard (mirrors the tree upgrade), for biomes whose
 ## dangerous terrain is a real prop (lava crater / carnivore plant) rather than a procedural mine.
 var _hazards_lib: HazardsLibrary = null
@@ -184,6 +185,28 @@ func adopt_members(members: Array) -> void:
 		n.set_meta(MEMBER_META, self)
 
 
+## S8.5: a wood grows another biome's trees in place — the same seeded spots (like the GLB upgrade below), the pad
+## re-cropped from that biome's map; footprint, collider and rules stay. Hazard fields keep their own models.
+func retheme(prefix: String) -> void:
+	if prefix == biome_prefix or prop_kind != KIND_FOREST:
+		return
+	prop_id = prefix + prop_id.substr(biome_prefix.length())
+	biome_prefix = prefix
+	set_meta("prop_id", prop_id)
+	for child in get_children():
+		if child.has_meta(MEMBER_META):
+			remove_child(child)
+			child.queue_free()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _seed_val
+	_populate_forest(rng, _trees_lib, _base_top)
+	_tree_upgrade_started = false
+	if _trees_lib != null and not _trees_lib.all_models_cached(biome_prefix):
+		_upgrade_forest_trees(_base_top)
+	_floor_upgrade_started = false
+	_maybe_upgrade_pad_floor()
+
+
 ## Serialized member arrangement (local position + Y rotation per member) for save files.
 func member_states() -> Array:
 	var states: Array = []
@@ -221,6 +244,7 @@ func _forest_tree_count() -> int:
 ## and turned + a little jitter so it reads natural, not mechanical.
 func _build_forest(rng: RandomNumberGenerator, trees_lib: TreesLibrary) -> void:
 	var base_top := _build_ground_pad()
+	_base_top = base_top
 	# Instant pass: real GLB trees where the biome's models are already cached, procedural cones
 	# otherwise. If the biome set isn't cached yet, download it and swap the cones for real trees
 	# at the SAME seeded layout, so every client converges on identical art.
