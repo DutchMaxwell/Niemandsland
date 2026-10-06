@@ -2,6 +2,7 @@ extends GdUnitTestSuite
 
 const Idle := preload("res://scripts/visual/bone_texture_idle.gd")
 
+
 func _entry() -> Dictionary:
 	return {"version": 1, "godot_version": "4.6", "frames": 216, "fps": 24.0,
 		"bones": 57, "mesh": {"sha256": "a".repeat(64), "url": "mesh.res"},
@@ -36,29 +37,6 @@ func test_json_manifest_round_trip_accepts_ctex_surface_indices() -> void:
 	var decoded: Dictionary = JSON.parse_string(JSON.stringify(entry))
 	assert_bool(Idle.valid_entry(decoded)).is_true()
 
-
-func test_manifest_requires_both_cached_blobs_and_preserves_legacy_entry() -> void:
-	var lib: ModelLibrary = auto_free(ModelLibrary.new())
-	lib._idle_assets = auto_free(AssetDownloadManager.new())
-	lib._idle_assets.file_extension = "res"
-	lib._idle_assets.cache_dir = "user://idle_test_%d" % Time.get_ticks_usec()
-	DirAccess.make_dir_recursive_absolute(lib._idle_assets.cache_dir)
-	var model := {"sha256": "original", "url": "static.glb", "idle": _entry()}
-	lib.apply_manifest_text(JSON.stringify({"models": {"f/u": model, "f/old": {"sha256": "static"}}}))
-	assert_bool(lib.get_idle_entry("f", "old").is_empty()).is_true()
-	assert_bool(lib.idle_cached_paths("f", "u").is_empty()).is_true()
-	var mesh_path := lib._idle_assets.cache_path(model.idle.mesh.sha256)
-	var poses_path := lib._idle_assets.cache_path(model.idle.poses.sha256)
-	FileAccess.open(mesh_path, FileAccess.WRITE).store_string("fixture")
-	assert_bool(lib.idle_cached_paths("f", "u").is_empty()).is_true()
-	FileAccess.open(poses_path, FileAccess.WRITE).store_string("fixture")
-	assert_int(lib.idle_cached_paths("f", "u").size()).is_equal(3)
-	assert_str(lib._entry("f", "u").sha256).is_equal("original")
-	DirAccess.remove_absolute(mesh_path)
-	DirAccess.remove_absolute(poses_path)
-	DirAccess.remove_absolute(lib._idle_assets.cache_dir)
-
-
 func test_settings_and_reduced_motion_gate_real_idle() -> void:
 	for preset in [0, 1]:
 		assert_bool(Idle.motion_allowed(preset, true, false)).is_false()
@@ -83,6 +61,43 @@ func test_instances_have_reproducible_distinct_phases_without_gameplay_rng() -> 
 	assert_int(randi()).is_equal(expected)
 
 
+func test_missing_payload_never_changes_a_static_model() -> void:
+	var root: Node3D = auto_free(Node3D.new())
+	var figure := MeshInstance3D.new()
+	figure.mesh = BoxMesh.new()
+	var original := StandardMaterial3D.new()
+	figure.material_override = original
+	root.add_child(figure)
+	var bounds := figure.mesh.get_aabb()
+	assert_bool(Idle.attach(root, {}, {}, "model/1")).is_false()
+	assert_int(root.get_child_count()).is_equal(1)
+	assert_bool(figure.visible).is_true()
+	assert_bool(figure.material_override == original).is_true()
+	assert_bool(figure.mesh.get_aabb() == bounds).is_true()
+
+
+func test_manifest_requires_both_cached_blobs_and_preserves_legacy_entry() -> void:
+	var lib: ModelLibrary = auto_free(ModelLibrary.new())
+	lib._idle_assets = auto_free(AssetDownloadManager.new())
+	lib._idle_assets.file_extension = "res"
+	lib._idle_assets.cache_dir = "user://idle_test_%d" % Time.get_ticks_usec()
+	DirAccess.make_dir_recursive_absolute(lib._idle_assets.cache_dir)
+	var model := {"sha256": "original", "url": "static.glb", "idle": _entry()}
+	lib.apply_manifest_text(JSON.stringify({"models": {"f/u": model, "f/old": {"sha256": "static"}}}))
+	assert_bool(lib.get_idle_entry("f", "old").is_empty()).is_true()
+	assert_bool(lib.idle_cached_paths("f", "u").is_empty()).is_true()
+	var mesh_path := lib._idle_assets.cache_path(model.idle.mesh.sha256)
+	var poses_path := lib._idle_assets.cache_path(model.idle.poses.sha256)
+	FileAccess.open(mesh_path, FileAccess.WRITE).store_string("fixture")
+	assert_bool(lib.idle_cached_paths("f", "u").is_empty()).is_true()
+	FileAccess.open(poses_path, FileAccess.WRITE).store_string("fixture")
+	assert_int(lib.idle_cached_paths("f", "u").size()).is_equal(3)
+	assert_str(lib._entry("f", "u").sha256).is_equal("original")
+	DirAccess.remove_absolute(mesh_path)
+	DirAccess.remove_absolute(poses_path)
+	DirAccess.remove_absolute(lib._idle_assets.cache_dir)
+
+
 func test_wrong_texture_dimensions_or_missing_joint_attributes_are_rejected() -> void:
 	var array := ArrayMesh.new()
 	var box := BoxMesh.new()
@@ -104,3 +119,51 @@ func test_graphics_preference_survives_save_load_and_same_preset_application() -
 	assert_bool(GraphicsSettings.idle_motion).is_false()
 	GraphicsSettings.idle_motion = previous
 	GraphicsSettings.save_settings()
+
+
+func test_zoom_death_and_reduce_motion_restore_original_visibility_and_transforms() -> void:
+	var old_preset := GraphicsSettings.current_preset
+	var old_idle := GraphicsSettings.idle_motion
+	var old_reduce := GraphicsSettings.reduce_motion
+	GraphicsSettings.apply_preset(2)
+	GraphicsSettings.idle_motion = true
+	GraphicsSettings.reduce_motion = false
+	var model: Node3D = auto_free(Node3D.new())
+	add_child(model)
+	var original := MeshInstance3D.new()
+	original.mesh = BoxMesh.new()
+	model.add_child(original)
+	var transform := original.transform
+	var camera := Camera3D.new()
+	model.add_child(camera)
+	camera.position.z = 0.2
+	camera.make_current()
+	var idle := Idle.new()
+	idle.name = "BoneTextureIdle"
+	idle._static_meshes.append(original)
+	idle._original_visibility.append(true)
+	idle._visual = MeshInstance3D.new()
+	idle._visual.mesh = BoxMesh.new()
+	var material := ShaderMaterial.new()
+	material.shader = Idle.SHADER
+	idle._visual.set_surface_override_material(0, material)
+	idle.add_child(idle._visual)
+	model.add_child(idle)
+	idle.refresh()
+	assert_bool(idle._visual.visible).is_true()
+	assert_bool(original.visible).is_false()
+	camera.position.z = 2.0
+	idle.refresh()
+	assert_bool(idle._visual.visible).is_false()
+	assert_bool(original.visible).is_true()
+	camera.position.z = 0.2
+	Idle.set_dead(model, true)
+	assert_bool(original.visible).is_true()
+	Idle.set_dead(model, false)
+	assert_bool(original.visible).is_false()
+	GraphicsSettings.reduce_motion = true
+	assert_bool(original.visible).is_true()
+	assert_bool(original.transform == transform).is_true()
+	GraphicsSettings.apply_preset(old_preset)
+	GraphicsSettings.idle_motion = old_idle
+	GraphicsSettings.reduce_motion = old_reduce
