@@ -299,6 +299,27 @@ func _ready() -> void:
 	# Rebuild selection spill lights when the graphics preset changes (a drop to a
 	# tier without the lights removes them; a raise adds/recaps them).
 	GraphicsSettings.settings_applied.connect(_on_graphics_settings_applied)
+	call_deferred("_follow_table_biome_changes")
+
+
+## S8.5 (lead D19 = a, 06.10.): ruins and woods take the table's biome when it changes, in place (same network id,
+## spot, floors and footprint), so every client follows its own synced and saved table biome. A load sets the biome
+## before its pieces arrive, so it re-skins nothing. Hazard fields keep their own models.
+func _follow_table_biome_changes() -> void:
+	var table := get_tree().get_first_node_in_group("table")
+	if table != null and table.has_signal("biome_changed"):
+		table.biome_changed.connect(follow_table_biome)
+
+
+func follow_table_biome(biome: String) -> void:
+	if not TableTheme.BIOME_PREFIX.has(biome):
+		return
+	var prefix: String = TableTheme.BIOME_PREFIX[biome]
+	for n in sandbox_pieces(get_tree()):
+		if n is SandboxTerrainProp:
+			n.retheme(prefix, _get_ruins_library())
+		elif n is TerrainGroupBase:
+			n.retheme(prefix)
 
 
 func _get_network_manager() -> void:

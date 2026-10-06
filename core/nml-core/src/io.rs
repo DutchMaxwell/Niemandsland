@@ -651,6 +651,10 @@ pub struct Seams {
     /// bug this replaces exactly for corpora that predate it.
     #[serde(default)]
     pub dangerous_end_morale: bool,
+    /// aifix D1 — the imagined morale test fails with its probability (a
+    /// deterministic dither) instead of the 50 % cliff. Default OFF.
+    #[serde(default)]
+    pub morale_by_probability: bool,
     /// Tray-exact series (maintainer D151 = B, 03.10.): ON from `EPOCH_70_TRAY_EXACT`.
     /// The two builders that read a header (`plan::seams_of`, the trainer's
     /// `nml-core-py` seam) derive it from `rules_epoch`, so a record below 70

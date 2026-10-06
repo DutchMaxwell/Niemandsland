@@ -11,9 +11,10 @@ const HEIGHT_INCHES := 0.4
 const GRASSLAND := "temperate_grassland"
 const DIRT := Color(0.27, 0.21, 0.13)
 const MOSS := Color(0.17, 0.21, 0.09)
-## S8.3: [earth, cover] per table biome; grassland is today's dirt and moss.
-const PALETTE := {"temperate_grassland": [DIRT, MOSS], "arid_desert": [Color(0.52, 0.42, 0.28), Color(0.62, 0.52, 0.36)],
-	"frozen_tundra": [Color(0.45, 0.44, 0.42), Color(0.78, 0.80, 0.84)], "volcanic_ash": [Color(0.10, 0.10, 0.10), Color(0.22, 0.20, 0.19)],
+## S8.3: [earth, cover] per table biome; grassland is today's dirt and moss. Lead 06.10.: the stain must read on sand
+## (darker damp earth) and on ash (pale ash drifts against the walls) — sand_ash_readable_test.
+const PALETTE := {"temperate_grassland": [DIRT, MOSS], "arid_desert": [Color(0.37, 0.27, 0.18), Color(0.45, 0.33, 0.22)],
+	"frozen_tundra": [Color(0.45, 0.44, 0.42), Color(0.78, 0.80, 0.84)], "volcanic_ash": [Color(0.64, 0.61, 0.58), Color(0.54, 0.52, 0.49)],
 	"urban_ruins": [Color(0.33, 0.31, 0.28), Color(0.45, 0.43, 0.40)], "alien_jungle": [Color(0.16, 0.12, 0.07), Color(0.10, 0.20, 0.06)]}
 
 static var _textures := {}   # [footprint, biome] -> ImageTexture, shared by every piece of that size and biome
