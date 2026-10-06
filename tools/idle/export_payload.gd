@@ -29,8 +29,8 @@ func _rel(node: Node3D, scene: Node3D) -> Transform3D:
 	return scene.global_transform.affine_inverse() * node.global_transform
 
 func _export(job: Dictionary) -> void:
-	if not str(job.key).begins_with("ratmen/warriors") or int(job.tail_bones) != 5:
-		_fail(job, "Only proven Warrior forms with five tail bones are allowed")
+	if not preload("idle_families.gd").allows(str(job.key), int(job.tail_bones)):
+		_fail(job, "Only listed idle families with their proven tail-bone count are allowed")
 		return
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
