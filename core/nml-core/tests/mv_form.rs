@@ -229,7 +229,7 @@ fn red_n_moving_the_difficult_cap_by_one_cell_moves_recorded_calls() {
 fn a_three_model_formation_is_separated_and_the_solver_stops_early() {
     let (pos, radii) = triple();
     let walls: Vec<Wall> = Vec::new();
-    let forbid = CellSet::new();
+    let forbid = CellSet::default();
     let opts = SolveOpts { clearance: 0.0, zones: &[], forbid_cells: &forbid, board_y_in: 40.0 };
     // The desired formation is illegal: two overlaps of exactly 1" each.
     assert!((formation_score(&pos, &radii, &forbid, &[]) - 2.0 * 40.0).abs() < 1e-9);
@@ -275,7 +275,7 @@ fn a_three_model_formation_is_separated_and_the_solver_stops_early() {
 fn a_legal_formation_short_circuits_before_the_first_sweep() {
     let pos: Vec<V2> = vec![[10.0, 10.0], [12.5, 10.0], [15.0, 10.0]];
     let radii = vec![1.0, 1.0, 1.0];
-    let forbid = CellSet::new();
+    let forbid = CellSet::default();
     let opts = SolveOpts { clearance: 0.0, zones: &[], forbid_cells: &forbid, board_y_in: 40.0 };
     assert_eq!(formation_score(&pos, &radii, &forbid, &[]), 0.0);
     let got = solve_formation(&pos, &radii, &[], &opts, 40.0, false, FormBend::default());
@@ -290,7 +290,7 @@ fn a_legal_formation_short_circuits_before_the_first_sweep() {
 fn the_forbid_set_is_the_solvers_own_and_a_charge_ignores_it() {
     let pos: Vec<V2> = vec![[10.5, 10.5]];
     let radii = vec![0.5];
-    let mut forbid = CellSet::new();
+    let mut forbid = CellSet::default();
     forbid.insert((10, 10));
     let opts = SolveOpts { clearance: 0.0, zones: &[], forbid_cells: &forbid, board_y_in: 40.0 };
     assert_eq!(formation_score(&pos, &radii, &forbid, &[]), 100.0);
@@ -407,7 +407,7 @@ fn an_exact_tie_in_the_charge_pick_order_goes_to_the_lower_index() {
 
 fn forest_grid() -> Grid {
     // One 3" typed cell of forest: cell (4, 3) covers x in [12, 15), y in [9, 12).
-    let mut g = Grid::new();
+    let mut g = Grid::default();
     g.insert((4, 3), T_FOREST);
     g
 }
@@ -460,7 +460,7 @@ fn the_base_edge_grazing_a_forest_counts() {
 fn an_empty_grid_or_a_zero_cap_disables_the_cap_entirely() {
     let mut trails: Vec<Vec<V2>> = vec![vec![[8.0, 10.0], [18.0, 10.0]]];
     let mut solved: Vec<V2> = vec![[18.0, 10.0]];
-    let empty = Grid::new();
+    let empty = Grid::default();
     assert_eq!(cap_difficult_polylines(&mut trails, &mut solved, &[0.0], &empty, 6.0).trimmed, 0);
     assert_eq!(
         cap_difficult_polylines(&mut trails, &mut solved, &[0.0], &forest_grid(), 0.0).trimmed,

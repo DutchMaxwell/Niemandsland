@@ -28,7 +28,7 @@ fn main() {
     let repeats: usize = args.next().and_then(|s| s.parse().ok()).unwrap_or(200);
     let c = load_moves(&path).unwrap_or_else(|e| panic!("{e}"));
 
-    let empty = CellSet::new();
+    let empty = CellSet::default();
     let mut edges: Vec<(usize, V2, V2)> = Vec::new();
     let mut zones_of: Vec<Vec<Zone>> = Vec::new();
     for (ci, call) in c.calls.iter().enumerate() {

@@ -2127,6 +2127,12 @@ def _play_round(
                 "scored": [score_of[i] for i in range(len(trace["cands"]))],
                 "rs": [rs_of.get(i) for i in range(len(trace["cands"]))],
             }
+            # Teacher data (loop prep, 07.10.): a TREE pick's root statistics ride the
+            # row ONLY when the tree fired (the NML-1147a stamp law) — `[build idx,
+            # visits, mean]` per opened root child plus the completed leaf count — so a
+            # record carries the search's own visit distribution and backed-up value.
+            if trace.get("tree") is not None:
+                row["cands"]["tree"] = {k: trace["tree"][k] for k in ("root", "completed", "deadline_hit")}
         if sidecars:
             # `AiMissionEval.features(state, player, BattleSim.reply_threat(
             # state, player), true)` — the RICH vector, which is what

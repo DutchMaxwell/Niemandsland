@@ -485,6 +485,12 @@ static func table_focus_amount(tier: int) -> float:
 	return 0.11 if tier >= QualityPreset.MEDIUM else 0.0
 
 
+## Wet-ground policy: the Rain mood soaks the table ground on High/Ultra (0.0 = dry, today's surface everywhere
+## else). The volcanic crust never gets wet.
+static func rainfall_for(tier: int, mood: String, biome: String) -> float:
+	return 1.0 if mood == "Rain" and tier >= QualityPreset.HIGH and biome != "volcanic_ash" else 0.0
+
+
 ## The surrounding world is the optional expensive tier.
 static func world_enabled(tier: int) -> bool:
 	return tier == QualityPreset.ULTRA

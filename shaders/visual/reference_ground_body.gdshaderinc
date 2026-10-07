@@ -9,6 +9,8 @@ uniform bool surface_relief = false;
 // The small-scale noise relief (+-5.5 mm everywhere). Off on the game table, where props and miniatures stand at
 // y = 0; the mounds and ridges of drift_height() stay (grassland_reference.apply sets it per tier).
 uniform bool relief_noise = true;
+// Rain soak (GraphicsSettings.rainfall_for): 0 = dry (today's ground exactly), 1 = heavy rain.
+uniform float rainfall = 0.0;
 float relief(vec2 p) {
 	float amp = desert_mode ? 0.45 : 1.0;
 	if (urban_mode) { amp = 0.15; }
@@ -126,4 +128,23 @@ void fragment() {
 	vec3 surface_normal=normalize(vec3((h-hx)*14.0+slope_x,1.0,(h-hz)*14.0+slope_z));
 	NORMAL=normalize((VIEW_MATRIX*vec4(surface_normal,0.0)).xyz);
 #endif
+	// Rain: wet grass stays green but darker, richer and glossier; paths and low spots hold irregular puddles that
+	// mirror the sky and the models (screen-space reflections). After the normal, so the puddle can flatten it.
+	if (rainfall > 0.001 && !(volcanic_mode || tundra_mode)) {
+		float rain = clamp(rainfall, 0.0, 1.0);
+		ALBEDO = pow(ALBEDO, vec3(1.0 + 0.18 * rain)) * mix(1.0, 0.90, rain);
+		float sheen = surface_noise(ground_xz * 13.0);
+		ROUGHNESS = mix(ROUGHNESS, 0.30 + 0.22 * sheen, rain * 0.9);
+		SPECULAR = mix(SPECULAR, 0.62, rain);
+		vec2 warp = vec2(surface_noise(ground_xz * 3.3), surface_noise(ground_xz * 3.3 + 7.3)) * 2.0;
+		float shape = surface_noise(ground_xz * 9.0 + warp) * 0.6 + surface_noise(ground_xz * 21.0 - warp) * 0.4;
+		float lows = smoothstep(0.52, 0.72, 1.0 - surface_noise(ground_xz * 1.9 + warp * 0.5));
+		float pool = smoothstep(0.55, 0.61, max(path * 0.95, lows * 0.5) * 0.42 + shape * 0.58) * rain;
+		ALBEDO = mix(ALBEDO, ALBEDO * 0.35 + vec3(0.012, 0.016, 0.02), pool);
+		ROUGHNESS = mix(ROUGHNESS, 0.03, pool);
+		SPECULAR = mix(SPECULAR, 1.0, pool);
+		vec3 flat_up = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+		vec2 ripple = vec2(shape - 0.5, lows - 0.5);   // reuse the pool noise: no extra taps for the drip texture
+		NORMAL = normalize(mix(NORMAL, flat_up, pool * 0.9) + (VIEW_MATRIX * vec4(ripple.x, 0.0, ripple.y, 0.0)).xyz * 0.08 * pool);
+	}
 }

@@ -15,7 +15,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::geom2::{
-    distance_to, lerp, point_seg_distance, seg_seg_distance, segments_cross, V2,
+    distance_to, lerp, point_seg_distance, seg_seg_distance_apart, segments_cross, V2,
 };
 use super::{
     is_dangerous, is_difficult, CELL_IN, DANGEROUS_COST_MULT, DIFFICULT_COST_MULT, EPS,
@@ -27,10 +27,44 @@ use super::{
 pub type Wall = [V2; 2];
 
 /// `TerrainRules` typed cell grid — `Vector2i -> TerrainType`, terrain_rules.gd:157.
-pub type Grid = HashMap<(i32, i32), i64>;
+pub type Grid = HashMap<(i32, i32), i64, CellBuild>;
 
 /// One of the `avoid_cells` / `avoid_fine` / `forbid_cells` sets (`Vector2i -> true`).
-pub type CellSet = HashSet<(i32, i32)>;
+pub type CellSet = HashSet<(i32, i32), CellBuild>;
+
+/// The cell grids are probed once per planner step, so SipHash (the std default) was ~35 % of the
+/// route planner (aifix preselect-speed profile). A multiplicative Fx-style hasher over the two `i32`
+/// coordinates is enough for these small, trusted, integer keys; the grids are only looked up and
+/// never iterated for a result, so no order-dependence rides on the hasher.
+#[derive(Default, Clone, Copy)]
+pub struct CellHasher(u64);
+
+impl CellHasher {
+    #[inline]
+    fn add(&mut self, x: u64) {
+        self.0 = (self.0.rotate_left(5) ^ x).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+}
+
+impl std::hash::Hasher for CellHasher {
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.add(u64::from(b));
+        }
+    }
+    #[inline]
+    fn write_i32(&mut self, i: i32) {
+        self.add(i as u32 as u64);
+    }
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+/// `BuildHasher` of `Grid` / `CellSet` (`Grid::default()` replaces `Grid::new()`).
+pub type CellBuild = std::hash::BuildHasherDefault<CellHasher>;
 
 /// An `opts["zones"]` entry — `{"c": Vector2, "r": float}`, movement_planner.gd:214.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -120,7 +154,7 @@ pub struct StepOpts<'a> {
 /// An empty cell set, for callers that have no `avoid_*` sets.
 pub fn empty_cells() -> &'static CellSet {
     static EMPTY: std::sync::OnceLock<CellSet> = std::sync::OnceLock::new();
-    EMPTY.get_or_init(CellSet::new)
+    EMPTY.get_or_init(CellSet::default)
 }
 
 impl<'a> StepOpts<'a> {
@@ -148,6 +182,9 @@ pub fn cell_of(p: V2, cell_size: f64) -> (i32, i32) {
     )
 }
 
+/// The f32 rounding guard of the wall culling in `step_blocked`, inches.
+const WALL_CULL_GUARD: f64 = 1e-3;
+
 /// `MovementPlanner._wall_blocks` — movement_planner.gd:188. A crossing always
 /// blocks; with clearance the step may not dip inside the inflated band, unless
 /// it STARTED inside, where only distance-improving escapes are legal.
@@ -159,7 +196,8 @@ pub fn wall_blocks(p: V2, c: V2, wa: V2, wb: V2, clearance: f64) -> bool {
     if clearance <= 0.0 {
         return false;
     }
-    if seg_seg_distance(p, c, wa, wb) >= clearance {
+    // `segments_cross` was just answered false, so the crossing arm of `seg_seg_distance` cannot fire.
+    if seg_seg_distance_apart(p, c, wa, wb) >= clearance {
         return false;
     }
     let d_p = point_seg_distance(p, wa, wb);
@@ -197,7 +235,20 @@ pub fn path_crosses_wall_opt(p: V2, c: V2, walls: &[Wall]) -> bool {
 /// set only blocks a step that ENTERS it from outside (escape is always legal).
 pub fn step_blocked(p: V2, c: V2, walls: &[Wall], opts: &StepOpts) -> bool {
     if opts.clearance > 0.0 {
+        // Exact culling (aifix preselect-speed): a wall whose box lies farther than the clearance
+        // (+ an f32 rounding guard) from the step's box can neither cross the step nor come within
+        // `clearance` of it, so `wall_blocks` would answer false — skip it without the 4 distance tests.
+        let m = opts.clearance + WALL_CULL_GUARD;
+        let (lo_x, hi_x) = ((p[0].min(c[0]) as f64) - m, (p[0].max(c[0]) as f64) + m);
+        let (lo_y, hi_y) = ((p[1].min(c[1]) as f64) - m, (p[1].max(c[1]) as f64) + m);
         for w in walls {
+            if (w[0][0].min(w[1][0]) as f64) > hi_x
+                || (w[0][0].max(w[1][0]) as f64) < lo_x
+                || (w[0][1].min(w[1][1]) as f64) > hi_y
+                || (w[0][1].max(w[1][1]) as f64) < lo_y
+            {
+                continue;
+            }
             if wall_blocks(p, c, w[0], w[1], opts.clearance) {
                 return true;
             }

@@ -146,7 +146,7 @@ fn red_c_raising_the_fast_planner_guard_moves_recorded_paths() {
 
 fn tie_board() -> (Vec<Wall>, Grid, Vec<Zone>, V2, V2, V2) {
     let walls: Vec<Wall> = Vec::new();
-    let grid: Grid = Grid::new();
+    let grid: Grid = Grid::default();
     let zones = vec![
         Zone { c: [3.0, 3.0], r: 0.4 },  // blocks the straight start→goal line
         Zone { c: [1.5, 1.5], r: 0.3 },  // blocks the (1,1) diagonal successor
@@ -164,7 +164,7 @@ fn tie_opts<'a>(zones: &'a [Zone], fine: &'a CellSet) -> ThetaOpts<'a> {
 #[test]
 fn red_b_swapping_two_theta_diag_entries_picks_a_different_reach_node() {
     let (walls, grid, zones, start, goal, board) = tie_board();
-    let fine = CellSet::new();
+    let fine = CellSet::default();
     let o = tie_opts(&zones, &fine);
     // One expansion only: the loop relaxes (1,0) and (0,1), whose distances to
     // the goal are BIT-IDENTICAL (4²+5² == 5²+4²), so `rd < best_reach_d - EPS`
@@ -190,7 +190,7 @@ fn red_b_swapping_two_theta_diag_entries_picks_a_different_reach_node() {
 #[test]
 fn red_a_the_open_list_eps_rule_breaks_an_exact_tie_by_cell_order() {
     let (walls, grid, zones, start, goal, board) = tie_board();
-    let fine = CellSet::new();
+    let fine = CellSet::default();
     let o = tie_opts(&zones, &fine);
     // Two expansions: the second pop chooses between (1,0) and (0,1), which now
     // carry an EXACTLY equal f. The shipped rule takes the `_cell_before`
@@ -248,11 +248,11 @@ fn cell_center_fine_and_board_extents_mirror_godot() {
 #[test]
 fn theta_on_a_hand_built_3x3_grid_bends_around_the_middle_cell() {
     let walls: Vec<Wall> = Vec::new();
-    let grid: Grid = Grid::new();
+    let grid: Grid = Grid::default();
     let start: V2 = [0.5, 0.5];
     let goal: V2 = [2.5, 2.5];
     let board = board_extents(3.0, 3.0);
-    let fine = CellSet::new();
+    let fine = CellSet::default();
     let cfg = ThetaCfg::default();
 
     // No obstacle at all: the early-out returns the straight line untouched.
