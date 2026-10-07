@@ -43,20 +43,24 @@ func test_user_agent_is_honest_product_string() -> void:
 
 func test_user_agent_marks_ci_runs() -> void:
 	# A CI run (GITHUB_ACTIONS=true or CI=true) gets a " CI" suffix, so server-side stats can tell
-	# our own runners from players without losing the honest product UA.
+	# our own runners from players without losing the honest product UA. Env is restored BEFORE any
+	# assertion, so a failure cannot leak a set/unset var into the suites that run after this one.
 	var saved_gha := OS.get_environment("GITHUB_ACTIONS")
 	var saved_ci := OS.get_environment("CI")
 	OS.set_environment("GITHUB_ACTIONS", "true")
 	OS.unset_environment("CI")
-	assert_str(AssetCDN.user_agent()).ends_with(" CI")
+	var gha_marks_ci := AssetCDN.user_agent().ends_with(" CI")
 	OS.unset_environment("GITHUB_ACTIONS")
 	OS.set_environment("CI", "true")
-	assert_str(AssetCDN.user_agent()).ends_with(" CI")
+	var ci_marks_ci := AssetCDN.user_agent().ends_with(" CI")
 	OS.unset_environment("GITHUB_ACTIONS")
 	OS.unset_environment("CI")
-	assert_bool(AssetCDN.user_agent().ends_with(" CI")).is_false()
+	var plain_has_no_marker := AssetCDN.user_agent().ends_with(" CI")
 	_restore_env("GITHUB_ACTIONS", saved_gha)
 	_restore_env("CI", saved_ci)
+	assert_bool(gha_marks_ci).override_failure_message("GITHUB_ACTIONS=true must mark the UA").is_true()
+	assert_bool(ci_marks_ci).override_failure_message("CI=true must mark the UA").is_true()
+	assert_bool(plain_has_no_marker).override_failure_message("a non-CI UA must not carry the marker").is_false()
 
 
 func _restore_env(name: String, value: String) -> void:
