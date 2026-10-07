@@ -20,6 +20,7 @@ const TAIL_BONES := {
 	"mummified_undead/rammit den geddul": 0,
 	"mummified_undead/guardian statues": 0,
 	"mummified_undead/skeleton giant": 0,
+	"mummified_undead/mummies": 0,
 	"saurians/saurian warriors": 5,
 	"saurians/geckos": 5,
 	"saurians/chameleons": 5,
