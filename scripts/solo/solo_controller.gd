@@ -330,6 +330,10 @@ var network_manager: Node = null
 var movement_range: MovementRangeController = null
 var human_slot: int = 1
 var ai_slot: int = 2
+## Lesson seam (D3, default OFF): when true, every AI activation is a HOLD — the unit is marked
+## activated but does not move or shoot. Arena and selfplay never set it, so their numbers are
+## unchanged; only a tutorial step sets it (main._start_lesson, ai_mode == "hold").
+var lesson_hold := false
 ## Units held back by their Ambush rule during deploy_army — they arrive at the start of round 2
 ## following the same deployment rules (goal 003 P1: arrive_ambush_reserve wires the arrival).
 var ambush_reserve: Array = []
@@ -741,7 +745,13 @@ func activate_next_ai_unit() -> GameUnit:
 	var _ph_act := 0
 	if act_wall_enabled():
 		_ph_act = _phase_enter()
-	if unit.is_shaken:
+	if lesson_hold:
+		# Tutorial puppet (D3): the AI takes its activation but holds — no move, no shot — so a
+		# lesson unit stays a stationary target. Same shape as the Shaken idle, flagged lesson_hold.
+		last_report = {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
+			"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false,
+			"dist_in": INF, "dangerous_models": 0, "idle_shaken": false, "lesson_hold": true}
+	elif unit.is_shaken:
 		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover. An AIRCRAFT still
 		# makes its MANDATORY straight move first (GF v3.5.1: the move happens even Shaken, and it does
 		# not break the staying-idle requirement) — _act_aircraft skips targeting/shooting while Shaken.

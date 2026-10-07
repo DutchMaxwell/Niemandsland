@@ -17331,6 +17331,11 @@ func _start_lesson(_object_count: int) -> void:
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
 		"army_manager": opr_army_manager, "table": table,
 		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self})
+	# D3 lesson puppet: a "hold" chapter's AI activates but never moves or shoots. Set before the
+	# controller runs its first activation; the flag is in-memory only (never saved).
+	_ensure_solo_controller()
+	if solo_controller != null:
+		solo_controller.lesson_hold = SpielschuleLessons.ai_mode(_scenario_chapter) == "hold"
 	var progress := SpielschuleProgress.new(_lesson_progress_path)
 	progress.load_from_disk()
 	var runner := LessonRunner.new()
