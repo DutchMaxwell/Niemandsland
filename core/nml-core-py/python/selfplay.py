@@ -2361,6 +2361,41 @@ def play_from_state(
     }
 
 
+#: Named planner-knob bundles for ONE seat (`knob_overrides`). `aifix_all` = the audit fixes of
+#: 06.10.2026 (E1 opener, D5 game-end threat, D1 morale die, A3 held marker on eval_variant 4,
+#: D2 reply threat) — farm/aifix/AB_PRESET.md.
+KNOB_PRESETS: dict[str, dict[str, Any]] = {
+    "aifix_all": {
+        "opener_by_finish": True, "no_end_threat": True, "morale_by_probability": True,
+        "eval_variant": 4, "reply_v2": True,
+    },
+}
+
+
+def core_with_knob_overrides(
+    repo_root: Path, header: dict[str, Any], knobs: dict[str, Any], overrides: dict[str, Any],
+    *, net: Any = None, fit_blend: Any = 0.0, fit_mode: str = "blend",
+    legacy_source_qd: bool = False,
+) -> Any:
+    """A second core off the identical header with `overrides` laid over `knobs` (the seat-core
+    pattern of `deep_player` / `eval_variant_player`). Every override must read back from
+    `Core.knobs()` — the header parser drops unknown keys silently, and a typo'd knob that
+    quietly plays the default would make the A/B arm a no-op."""
+    core = nml_core.load(str(repo_root))
+    if net is not None:
+        core.load_net(str(net), blend=fit_blend, mode=fit_mode)
+    core.set_header({**header, "knobs": dict(knobs, **overrides)})
+    back = core.knobs()
+    bad = {k: v for k, v in overrides.items() if back.get(k) != v}
+    if bad:
+        raise ValueError(f"knob_overrides not read back by the core (typo or unexposed): {bad}")
+    if legacy_source_qd:
+        core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
+    else:
+        core.clear_encoder_source_qd()
+    return core
+
+
 def play_game(
     seed: int,
     list_p1: str | Path,
@@ -2461,6 +2496,8 @@ def play_game(
     record_cands: bool = False,
     eval_variant_player: int = 0,
     eval_variant: int = 0,
+    knob_override_player: int = 0,
+    knob_overrides: dict[str, Any] | None = None,
     record_aux: bool = False,
     record_final_state: bool = False,
     cap_share: float = 0.0,
@@ -2718,6 +2755,14 @@ def play_game(
     not a new eval. Shares the deep-player core when both target the same
     seat. Stamped into `knobs_by_seat` the same way, only when it moved.
 
+    `knob_override_player` / `knob_overrides` (aifix harness, 07.10.) generalise
+    `eval_variant_player` to ANY planner knob: seat 1 or 2 plays on a second
+    core whose header carries `knob_overrides` over the shared knobs (e.g.
+    `KNOB_PRESETS["aifix_all"]`); the other seat keeps the base core. Keys the
+    core does not read back are refused (serde would drop a typo silently), the
+    seat may not also be the `eval_variant_player`, and the stamp goes into
+    `knobs_by_seat` like the others. Empty/None changes nothing.
+
     `record_aux` (expert-iteration step 2) hangs the KataGo-style AUX targets —
     models alive per side, wounds taken per side (`_aux_alive_wounds`) — on
     every `rounds_log` entry and on the result beside `objectives`. Opt-in
@@ -2737,6 +2782,11 @@ def play_game(
     `cap_share`, stamping `row["cap"]` (True = cap core planned the act, a
     value-only row; False = the seat's full-search core, the policy target).
     0.0, the default, builds no core, draws no coin, stamps no key."""
+    if knob_overrides:
+        if knob_override_player not in (1, 2):
+            raise ValueError("knob_overrides needs knob_override_player 1 or 2")
+        if knob_override_player == eval_variant_player:
+            raise ValueError("a seat takes eval_variant_player OR knob_overrides, not both")
     # Tree search knobs of the deep seat: only a value that PARTS from the
     # knob's default joins the header and the stamp (NML-1147a pattern).
     tree_seat = {
@@ -3007,6 +3057,17 @@ def play_game(
             seat_knobs = seat_knobs or {"p1": {}, "p2": {}}
             seat_knobs[seat_key] = dict(seat_knobs.get(seat_key, {}), eval_variant=eval_variant)
             seat_knobs.setdefault(other_key, {})
+    # KNOB-OVERRIDE seam (aifix harness): any planner knob for ONE seat.
+    if knob_overrides:
+        ko_core = core_with_knob_overrides(
+            repo_root, header, knobs, knob_overrides, net=net, fit_blend=fit_blend,
+            fit_mode=fit_mode, legacy_source_qd=legacy_source_qd,
+        )
+        act_cores = {**(act_cores or {}), knob_override_player: ko_core}
+        seat_key, other_key = ("p1", "p2") if knob_override_player == 1 else ("p2", "p1")
+        seat_knobs = seat_knobs or {"p1": {}, "p2": {}}
+        seat_knobs[seat_key] = dict(seat_knobs.get(seat_key, {}), **knob_overrides)
+        seat_knobs.setdefault(other_key, {})
     # PLAYOUT-CAP (expert-iteration step 2): the per-ACTIVATION second core,
     # same header payload with `cap_top_k`/`cap_horizon` in place of the base
     # pair; per-core state mirrored exactly like the deep core above.
