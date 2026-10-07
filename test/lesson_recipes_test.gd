@@ -32,8 +32,18 @@ func test_s02_recipe_is_an_empty_small_table() -> void:
 	assert_array(recipe.get("sides", [])).is_empty()
 
 
+func test_s03_recipe_is_a_standard_empty_table_with_front_line_zones() -> void:
+	var recipe := LessonRecipes.recipe("S-03")
+	for key in ["size_feet", "biome", "deployment", "phase", "round", "sides"]:
+		assert_bool(recipe.has(key)).is_true()
+	assert_vector(recipe.get("size_feet", Vector2.ZERO)).is_equal(Vector2(6, 4))
+	assert_str(recipe.get("biome", "")).is_equal("temperate_grassland")
+	assert_int(recipe.get("deployment", 0)).is_equal(1)
+	assert_array(recipe.get("sides", [])).is_empty()
+
+
 func test_every_recipe_pick_exists_in_its_fixture() -> void:
-	for id in ["S-01", "S-02"]:
+	for id in ["S-01", "S-02", "S-03"]:
 		var recipe := LessonRecipes.recipe(id)
 		for side in recipe.get("sides", []):
 			var path := String(side.get("fixture", ""))

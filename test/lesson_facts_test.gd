@@ -10,8 +10,11 @@ class FakeObjects extends Node:
 
 class FakeArmy extends Node:
 	var units: Array[GameUnit] = []
+	var game_phase := 0
 	func get_all_game_units() -> Array[GameUnit]:
 		return units
+	func get_game_units_for_player(player_id: int) -> Array[GameUnit]:
+		return units if player_id == 1 else []
 
 class FakeTable extends Node:
 	var table_size := Vector2(4, 4)
@@ -134,3 +137,25 @@ func test_missing_scene_refs_report_safe_defaults() -> void:
 	assert_int(snap.get("terrain_pieces", -1)).is_equal(0)
 	assert_int(snap.get("layout_pieces", -1)).is_equal(0)
 	assert_bool(snap.get("menu_open", true)).is_false()
+
+
+func test_player_one_units_zone_and_phase() -> void:
+	var objects: FakeObjects = auto_free(FakeObjects.new())
+	add_child(objects)
+	var army: FakeArmy = auto_free(FakeArmy.new())
+	add_child(army)
+	var facts := Facts.new()
+	facts.setup({"army_manager": army, "object_manager": objects})
+	var empty: Dictionary = facts.snapshot()
+	assert_int(empty.get("units_p1", -1)).is_equal(0)
+	assert_bool(empty.get("p1_all_in_zone", true)).is_false()
+	assert_int(empty.get("phase", -1)).is_equal(0)
+	var unit := _unit("alpha", [Vector3(0.0, 0.0, -18.0 * 0.0254)])
+	army.units = [unit]
+	var inside: Dictionary = facts.snapshot()
+	assert_int(inside.get("units_p1", -1)).is_equal(1)
+	assert_bool(inside.get("p1_all_in_zone", false)).is_true()
+	unit.models[0].node.position = Vector3.ZERO
+	assert_bool(facts.snapshot().get("p1_all_in_zone", true)).is_false()
+	army.game_phase = 1
+	assert_int(facts.snapshot().get("phase", -1)).is_equal(1)

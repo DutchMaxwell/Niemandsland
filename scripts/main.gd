@@ -17335,6 +17335,7 @@ func _start_lesson(_object_count: int) -> void:
 	card.chapter_title = title
 	$UI.add_child(card)
 	card.continue_pressed.connect(func() -> void: facts.bump("continue"))
+	card.action_pressed.connect(_on_lesson_action)
 	card.skip_pressed.connect(runner.skip_step)
 	card.leave_pressed.connect(_leave_lesson)
 	card.stay_pressed.connect(func() -> void: card.hide())
@@ -17347,6 +17348,21 @@ func _leave_lesson() -> void:
 	await _scenario_loader.end_lesson()
 	ProjectSettings.set_setting("niemandsland/open_game_school", true)
 	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
+
+
+## A lesson step's action button: import a bundled practice army so an offline player can continue.
+func _on_lesson_action(fixture: String) -> void:
+	var body := FileAccess.get_file_as_string(fixture)
+	if body.is_empty():
+		push_warning("Lesson action fixture missing: %s" % fixture)
+		return
+	var army: OPRApiClient.OPRArmy = await opr_army_manager.api_client.import_from_tts_json(body)
+	if army == null:
+		push_warning("Lesson action import failed: %s" % fixture)
+		return
+	army.player_id = 1
+	opr_army_manager.armies[1] = army
+	await opr_army_manager.spawn_army(army)
 
 
 ## A lesson finished (played through or skipped) — quick, non-blocking confirmation.
