@@ -104,6 +104,16 @@ func test_unit_moved() -> void:
 	assert_bool(LessonChecks.passes(step, now, base)).is_true()
 
 
+func test_tag_flag() -> void:
+	var step := _step("tag_flag", {"key": "activated", "tag": "alpha", "value": true})
+	var base := {"tags": {"alpha": {"activated": false}}}
+	assert_bool(LessonChecks.passes(step, base, base)).is_false()
+	var now := {"tags": {"alpha": {"activated": true}}}
+	assert_bool(LessonChecks.passes(step, now, base)).is_true()
+	# A tag the snapshot does not carry can never satisfy the check.
+	assert_bool(LessonChecks.passes(step, {"tags": {}}, base)).is_false()
+
+
 func test_missing_tag_is_false_for_unit_checks() -> void:
 	var base := {"tags": {}}
 	var now := {"tags": {}}

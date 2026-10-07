@@ -50,6 +50,24 @@ const _S03_STEPS := [
 ]
 
 
+const _S04_STEPS := [
+	{"id": "bands", "text": "Select alpha and press M: the rings show Advance 6\" and Rush 12\". (p.7)",
+		"rule": "p.7", "all": [{"check": "flag", "args": {"key": "bands"}}]},
+	{"id": "advance_alpha", "text": "Advance: drag alpha up to 6\", then right-click it and choose Activate.",
+		"rule": "", "all": [
+			{"check": "unit_moved", "args": {"tag": "alpha", "inches": 1.0}},
+			{"check": "tag_flag", "args": {"key": "activated", "tag": "alpha", "value": true}}]},
+	{"id": "ai_turn", "text": "Now NACHTMAHR activates one unit — turns alternate, one unit each. (p.7)",
+		"rule": "p.7", "all": [{"check": "tag_flag", "args": {"key": "activated", "tag": "target", "value": true}}]},
+	{"id": "rush_bravo", "text": "Rush: drag bravo more than 6\" (up to 12\") and activate it. A rushing unit may not shoot.",
+		"rule": "", "all": [
+			{"check": "unit_moved", "args": {"tag": "bravo", "inches": 6.5}},
+			{"check": "tag_flag", "args": {"key": "activated", "tag": "bravo", "value": true}}]},
+	{"id": "next_round", "text": "Every unit has acted: press Next Round.",
+		"rule": "", "all": [{"check": "at_least", "args": {"key": "round", "n": 2}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
@@ -60,6 +78,8 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S02_STEPS
 		"S-03":
 			return _S03_STEPS
+		"S-04":
+			return _S04_STEPS
 	return []
 
 
@@ -73,4 +93,6 @@ static func ai_mode(chapter_id: String) -> String:
 			return "none"
 		"S-03":
 			return "none"
+		"S-04":
+			return "hold"
 	return "none"

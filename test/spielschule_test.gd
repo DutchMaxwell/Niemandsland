@@ -56,6 +56,14 @@ func test_chapter_three_is_available_because_its_scenario_ships() -> void:
 	assert_bool(Spielschule.is_available(s03)).is_true()
 
 
+func test_chapter_four_is_available_and_titled_activate_and_move() -> void:
+	var s04 := Spielschule.chapter("S-04")
+	assert_str(String(s04.get("title", ""))).is_equal("Activate & Move")
+	assert_str(String(s04.get("scenario", ""))).is_equal("res://assets/tutorial/scenarios/s04_activate_and_move.nml")
+	assert_bool(FileAccess.file_exists(String(s04.get("scenario", "")))).is_true()
+	assert_bool(Spielschule.is_available(s04)).is_true()
+
+
 func test_chapters_without_a_bundled_scenario_are_not_available() -> void:
 	# Every chapter whose scenario file has not been authored yet stays unavailable ("coming soon").
 	for c in Spielschule.chapters():

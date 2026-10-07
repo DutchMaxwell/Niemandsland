@@ -38,7 +38,8 @@ func snapshot() -> Dictionary:
 		"counters": _counters.duplicate(), "tags": {},
 		"table_size": Vector2.ZERO, "biome": "", "terrain_pieces": 0,
 		"layout_pieces": 0, "deploy_type": 0, "menu_open": false,
-		"units_p1": 0, "p1_all_in_zone": false, "phase": 0}
+		"units_p1": 0, "p1_all_in_zone": false, "phase": 0,
+		"bands": false, "round": 0}
 	if _table != null and "table_size" in _table:
 		facts.table_size = _table.table_size
 	if _table != null and "biome" in _table:
@@ -55,6 +56,12 @@ func snapshot() -> Dictionary:
 	facts.p1_all_in_zone = _p1_all_in_zone(p1_units)
 	if _army_manager != null and "game_phase" in _army_manager:
 		facts.phase = int(_army_manager.game_phase)
+	if _army_manager != null and "current_round" in _army_manager:
+		facts.round = int(_army_manager.current_round)
+	if _object_manager != null and "movement_range_controller" in _object_manager:
+		var mr: Node = _object_manager.movement_range_controller
+		if mr != null and mr.has_method("active_count"):
+			facts.bands = mr.active_count() > 0
 	if is_instance_valid(_camera_pivot):
 		facts.yaw = _camera_pivot.rotation.y
 		facts.pivot = _camera_pivot.global_position
@@ -84,7 +91,8 @@ func snapshot() -> Dictionary:
 				positioned += 1
 			facts.tags[tag] = {"selected_whole": whole,
 				"centroid_in": sum / float(positioned) / METRES_PER_INCH if positioned > 0 else Vector2.ZERO,
-				"alive": alive.size()}
+				"alive": alive.size(), "activated": unit.is_activated,
+				"shaken": unit.is_shaken, "fatigued": unit.is_fatigued}
 	return facts
 
 
