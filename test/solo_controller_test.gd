@@ -3971,7 +3971,12 @@ func test_auto_saves_after_intent_latches_on() -> void:
 func test_eval_variant_follows_the_preset_and_the_env_override() -> void:
 	var solo: SoloController = auto_free(SoloController.new())
 	OS.set_environment("NML_EVAL_VARIANT", "")
-	assert_int(solo._eval_variant_for(SoloDifficulty.for_grade("planner_v0"))).is_equal(3)   # no brain in a unit test
+	# aifix_all (A/B NOT_WORSE 07.10., farm/aifix/aifix_run/AB_RESULT): the hand presets now carry the bundle, and its
+	# eval_variant 4 composes variant 3 (VP term kept) with the held-marker rule -> the preset's 3 reads as 4.
+	assert_int(solo._eval_variant_for(SoloDifficulty.for_grade("planner_v0"))).is_equal(4)   # no brain in a unit test
+	var no_aifix := SoloDifficulty.for_grade("planner_v0")
+	no_aifix.aifix = false
+	assert_int(solo._eval_variant_for(no_aifix)).is_equal(3)   # the pre-aifix mapping, still intact without the bundle
 	assert_int(solo._eval_variant_for(SoloDifficulty.for_grade("nachtmahr"))).is_equal(0)
 	OS.set_environment("NML_EVAL_VARIANT", "0")
 	assert_int(solo._eval_variant_for(SoloDifficulty.for_grade("planner_v0"))).is_equal(0)

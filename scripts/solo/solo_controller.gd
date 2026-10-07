@@ -3569,6 +3569,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# pick, exactly like the line above. env NML_HERO_FOLD=1 pins it on for headless runs.
 	BattleSim.hero_fold = diff != null and diff.hero_fold
 	AiMissionEval.eval_variant = _eval_variant_for(diff)
+	_apply_aifix(diff)
 	# Net-guided playouts (research gate NML_PLAYOUT_NET=1): the loaded clone
 	# steers every imagined activation; OFF or no net = byte-identical heuristics.
 	# NML_PLAYOUT_NET_P<slot> overrides per seat (improvement-operator pattern,
@@ -3786,7 +3787,29 @@ func _eval_variant_for(diff: SoloDifficulty) -> int:
 	var forced := OS.get_environment("NML_EVAL_VARIANT")
 	if forced != "":
 		return int(forced)
-	return diff.eval_variant if diff != null and not shipped_brain_ready() else 0
+	var v := diff.eval_variant if diff != null and not shipped_brain_ready() else 0
+	return 4 if v == 3 and _aifix_on(diff) else v   # A3 composes with variant 3 (score.rs score_hand_vp_hold)
+
+
+## aifix_all for this pick: the preset's `aifix` bundle, only while NO brain is wired (measured on the hand planner;
+## the net waits for its own A/B). env NML_AIFIX=0/1 forces it either way (the A/B's arm switch).
+func _aifix_on(diff: SoloDifficulty) -> bool:
+	var forced := OS.get_environment("NML_AIFIX")
+	if forced != "":
+		return forced == "1"
+	return diff != null and diff.aifix and not shipped_brain_ready()
+
+
+## Stamps the six planner statics of the aifix_all bundle for this pick (the header the live core reads carries
+## them too: act_recorder `_header_line`). eval_variant 4 rides `_eval_variant_for`.
+func _apply_aifix(diff: SoloDifficulty) -> void:
+	var on := _aifix_on(diff)
+	AiPlanner.opener_by_finish = on
+	AiPlanner.no_end_threat = on
+	BattleSim.morale_by_probability = on
+	BattleSim.reply_v2 = on
+	BattleSim.reply_skip_activated = on
+	BattleSim.reply_hold_gate = on
 
 
 ## Ship path (22.09.): true when the core is wanted AND loaded AND the packed brain was
@@ -4580,6 +4603,7 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 	AiPlanner.playout_search = sp_diff != null and sp_diff.playout_search   # S-wave: per preset
 	BattleSim.hero_fold = sp_diff != null and sp_diff.hero_fold   # NML-1073 M5 BUG-3: per preset
 	AiMissionEval.eval_variant = _eval_variant_for(sp_diff)
+	_apply_aifix(sp_diff)
 	# R3: execute the rollout intent when it is still valid (same unit, same
 	# round, target still alive) — re-deriving 1-ply here would undo the tempo
 	# choice the unit pick just made. Any mismatch falls through to the re-plan.
