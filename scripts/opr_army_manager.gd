@@ -2551,9 +2551,10 @@ func _resolve_carrier_model(base_name: String, labels: Array, faction_folder: St
 	return carrier_mount_glb
 
 
-## Per-model variety: a unit whose model carries the BASE loadout (no variant slug) shows the second sculpt
-## `<unit>#var2` on every odd model index when the manifest holds it (VU Bat Horrors: two accepted designs). By
-## index, so both multiplayer clients agree. Variant bakes, the mount carrier's fuzzy mount and units without
+## Per-model variety: a model that resolves to the BASE model (no shipped variant bake - also when its weapon word
+## has no bake of its own, e.g. the VU Ghoul Beast Riders' Lance, whose base key IS the lance form) shows the second
+## sculpt `<unit>#var2` on every odd model index when the manifest holds it (VU Bat Horrors: two accepted designs).
+## By index, so both multiplayer clients agree. Variant bakes, the mount carrier's fuzzy mount and units without
 ## `#var2` are unchanged. The ONE per-model name used by the spawn loop AND the prefetch, so the second sculpt is
 ## downloaded before it is spawned.
 const VARIETY_SLUG := "var2"
@@ -2562,8 +2563,6 @@ const VARIETY_SLUG := "var2"
 func _spawn_model_name(unit, labels_per_model: Array, i: int, faction_folder: String, carrier_mount_glb: String) -> String:
 	var name: String = _resolve_carrier_model(unit.name, labels_per_model[i], faction_folder, carrier_mount_glb)
 	if not name.is_empty() or i % 2 == 0 or model_library == null:
-		return name
-	if not model_library.variant_slug(labels_per_model[i], faction_folder).is_empty():
 		return name
 	var second: String = "%s#%s" % [unit.name, VARIETY_SLUG]
 	return second if model_library.has_model(faction_folder, second) else name
