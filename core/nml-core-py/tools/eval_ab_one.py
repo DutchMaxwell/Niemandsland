@@ -59,7 +59,12 @@ def main() -> int:
     ap.add_argument("--mission", default="duel",
                     help="wave C gate C9.9: a catalog mission plays its own marker layout and "
                          "referee; duel keeps the rulebook layout every earlier run used")
+    ap.add_argument("--preset", choices=sorted(selfplay.KNOB_PRESETS), default=None,
+                    help="a named planner-knob bundle for the candidate seat (selfplay.KNOB_PRESETS); "
+                         "its eval_variant rides the preset, so --cand-variant must stay 0")
     a = ap.parse_args()
+    if a.preset and a.cand_variant != 0:
+        ap.error("--preset carries its own eval_variant; leave --cand-variant at 0")
 
     gr.G["dice"] = a.dice_seed
     deep_on = a.deep_top_k is not None or a.deep_horizon is not None
@@ -79,6 +84,8 @@ def main() -> int:
         )
     if a.cand_variant != 0:
         kwargs.update(eval_variant_player=a.cand_player, eval_variant=a.cand_variant)
+    if a.preset:
+        kwargs.update(knob_override_player=a.cand_player, knob_overrides=selfplay.KNOB_PRESETS[a.preset])
     if a.mission != "duel":
         kwargs.update(objectives="mission", mission=a.mission)
 
@@ -89,6 +96,7 @@ def main() -> int:
 
     suffix = "".join([
         f"_eval{a.cand_variant}" if a.cand_variant != 0 else "",
+        f"_{a.preset}" if a.preset else "",
         "_deep" if deep_on else "",
     ]) or ""
     cand_grade = "planner_v0" + suffix
@@ -110,7 +118,9 @@ def main() -> int:
         "cand_variant": a.cand_variant,
         "knobs_by_seat": (
             {("p1" if a.cand_player == 1 else "p2"): {"eval_variant": a.cand_variant}}
-            if a.cand_variant != 0 else None
+            if a.cand_variant != 0 else
+            ({("p1" if a.cand_player == 1 else "p2"): dict(selfplay.KNOB_PRESETS[a.preset])}
+             if a.preset else None)
         ),
         "knobs": {"charge_gate": "off", "hero_attach": "table",
                   "dice": "table", "charge_landing": "table", "movement": "rigid",
