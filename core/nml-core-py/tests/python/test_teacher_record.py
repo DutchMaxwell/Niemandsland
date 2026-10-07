@@ -132,6 +132,23 @@ def test_rows_resume_and_determinism(tmp_path):
 
 
 @needs_lists
+def test_exploration_off_is_main_on_is_seeded_and_stamped(tmp_path):
+    row = [r for r in fixture_rows() if r["seat"] == 1 and r["d"] == 0][0]
+
+    def rec(tag, **over):
+        w = tr._init(cfg(tmp_path / tag, **over))
+        os.makedirs(w["out"])
+        assert tr._work(w, "x", [row])[0]["valid"]
+        return np.load(tmp_path / tag / (row["row_id"] + ".npz")), json.load(open(tmp_path / tag / (row["row_id"] + ".json")))
+    main, off = rec("main"), rec("off", explore_seed=-1)
+    assert sorted(main[0].files) == sorted(off[0].files) and "explored" not in off[0].files and "explored" not in off[1]["teacher"]
+    assert all(np.array_equal(main[0][k], off[0][k], equal_nan=True) for k in main[0].files)  # pick identity: OFF = main's record
+    a, b, c = rec("a", explore_seed=5), rec("b", explore_seed=5), rec("c", explore_seed=6)
+    assert a[1]["teacher"]["explored"] and all(np.array_equal(a[0][k], b[0][k], equal_nan=True) for k in a[0].files)
+    assert 0 < int(a[0]["explored"].sum()) <= 8 * 2 and not np.array_equal(a[0]["label"], c[0]["label"])
+
+
+@needs_lists
 def test_play_game_stamps_tree_root_only_where_the_tree_fired():
     kw = dict(FAST, record_cands=True)
     tree = sp.play_game(27, ARMY1, ARMY2, REPO, BANK, None, deep_player=1, deep_search_mode="tree", deep_tree_budget=4, **kw)
