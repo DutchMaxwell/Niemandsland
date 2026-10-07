@@ -22,12 +22,28 @@ const _S01_STEPS := [
 ]
 
 
+const _S02_STEPS := [
+	{"id": "table_size", "text": "Open the menu (top left) and set the table to 6' x 4', the standard size. (p.6)",
+		"rule": "p.6", "all": [{"check": "value_is", "args": {"key": "table_size", "value": Vector2(6, 4)}}]},
+	{"id": "biome", "text": "Pick a different battlefield biome.",
+		"rule": "", "all": [{"check": "value_changed", "args": {"key": "biome"}}]},
+	{"id": "terrain_piece", "text": "Turn on Terrain Mode and place one piece of scenery.",
+		"rule": "", "all": [{"check": "at_least", "args": {"key": "terrain_pieces", "n": 1}}]},
+	{"id": "autogen", "text": "Open Map Layout and press Auto-Generate: the rulebook asks for 15 or more pieces. (p.6, p.12)",
+		"rule": "p.12", "all": [{"check": "at_least", "args": {"key": "layout_pieces", "n": 1}}]},
+	{"id": "deploy_type", "text": "In Map Layout, pick a deployment type.",
+		"rule": "", "all": [{"check": "value_changed", "args": {"key": "deploy_type"}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
 	match chapter_id:
 		"S-01":
 			return _S01_STEPS
+		"S-02":
+			return _S02_STEPS
 	return []
 
 
@@ -36,5 +52,7 @@ static func steps_for(chapter_id: String) -> Array:
 static func ai_mode(chapter_id: String) -> String:
 	match chapter_id:
 		"S-01":
+			return "none"
+		"S-02":
 			return "none"
 	return "none"
