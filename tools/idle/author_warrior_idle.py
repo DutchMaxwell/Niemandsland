@@ -1,6 +1,6 @@
 """Preserved from the approved 2026-09-24 real-idle prototype: REAL rig + REAL idle -> animated GLB for the game.
 
-blender -b -P tools/idle/author_warrior_idle.py -- <keep_rig.glb> <out.glb> <out.json> <twohand 0|1>
+blender -b -P tools/idle/author_warrior_idle.py -- <keep_rig.glb> <out.glb> <out.json> <twohand 0|1> [tail-region json]
 
 Same idle as idle_real.py ("## Real idle"): weapons on their bones (W_<bone>_<i>), a 5-bone tail chain along the
 generated 'Joined rat tail' (skipped if the body has none), 9 s additive loop at 24 fps on the calibrated pose,
@@ -12,6 +12,7 @@ import bpy, sys, json
 
 a = sys.argv[sys.argv.index("--") + 1:]
 IN, OUT, SIDE, TWOHAND = a[0], a[1], a[2], a[3] == "1"
+REGION = json.loads(a[4]) if len(a) > 4 else None  # tail merged into the body mesh: {"cut_y": .., "max_z": ..}
 L, FPS, P = 216, 24, "mixamorig:"
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=IN)
@@ -45,7 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from warrior_tail import add_tail
 from warrior_pose import create_pose
 
-tail_bones, info["tail_verts"] = add_tail(arm, body, P)
+tail_bones, info["tail_verts"] = add_tail(arm, body, P, REGION)
 info["tail_bones"] = len(tail_bones)
 ANIM, pose_at = create_pose(arm, tail_bones, TWOHAND, body)
 pb = arm.pose.bones

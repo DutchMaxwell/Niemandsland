@@ -22,10 +22,12 @@ func test_militia_grenadiers_and_snipers_carry_the_five_bone_tail() -> void:
 		assert_bool(Families.allows(key, 5)).is_true()
 		assert_bool(Families.allows(key, 0)).is_false()
 
-func test_champions_are_tailless_like_the_other_armoured_bodies() -> void:
-	assert_bool(Families.allows("ratmen/champion#censer+rifle", 0)).is_true()
-	assert_bool(Families.allows("ratmen/champion", 5)).is_false()
-	assert_bool(Families.allows("ratmen/championship", 0)).is_false()
+func test_champions_and_battle_masters_carry_a_tail_built_from_the_body_mesh() -> void:
+	for key in ["ratmen/champion#censer+rifle", "ratmen/champion", "ratmen/battle master#heavyspear"]:
+		assert_bool(Families.allows(key, 5)).is_true()
+		assert_bool(Families.allows(key, 0)).is_false()
+	assert_bool(Families.allows("ratmen/championship", 5)).is_false()
+	assert_bool(Families.allows("ratmen/battle masterx", 5)).is_false()
 
 func test_saurian_families_carry_their_five_bone_tail() -> void:
 	for key in ["saurians/saurian warriors#spear", "saurians/geckos#banner+javelin", "saurians/chameleons", "saurians/saurian guardians#crest", "saurians/gators#greatweapon",
