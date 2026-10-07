@@ -203,6 +203,26 @@ func test_end_threat_is_empty_at_the_game_end_only_with_the_knob() -> void:
 	assert_dict(AiPlanner._end_threat(state, 1)).is_equal(BattleSim.reply_threat(state, 1))
 
 
+## aifix D2 knob: a Shaken enemy threatens nothing with reply_v2 on, and off changes nothing.
+func test_reply_v2_skips_a_shaken_enemy_only_with_the_knob() -> void:
+	var state := _state()
+	for k in state["units"]:
+		(state["units"][k] as Dictionary)["shaken"] = true
+	var off := BattleSim.reply_threat(state, 1)
+	BattleSim.reply_v2 = true
+	var on := BattleSim.reply_threat(state, 1)
+	BattleSim.reply_v2 = false
+	assert_bool(on.is_empty()).is_true()
+	assert_dict(BattleSim.reply_threat(state, 1)).is_equal(off)
+
+
+## aifix D2b twin: the survival tail is the core's Poisson tail, not the flat W - EV.
+func test_expected_remaining_is_the_poisson_tail() -> void:
+	assert_float(BattleSim._expected_remaining(5.0, 0.0)).is_equal(5.0)
+	var tail := BattleSim._expected_remaining(10.0, 8.0)
+	assert_bool(tail > 2.0 and tail < 3.6).is_true()   # flat W - EV would say 2.0
+
+
 # === R7: discounted multi-round leaf (NML-995) ===
 
 ## rollout_boundaries returns one true round-end per horizon round (rounds 1

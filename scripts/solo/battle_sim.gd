@@ -16,6 +16,13 @@ const IN2M := 0.0254
 ## simulation (that is S4). Set only via resolve_stochastic().
 static var stochastic_rng: RandomNumberGenerator = null
 
+## aifix D1 knob (default OFF, twin of Seams::morale_by_probability, sim.rs `morale_dither`): the
+## imagined morale test fails when fail_p exceeds a deterministic low-discrepancy threshold of the
+## unit's roster slot and the round, instead of the 50 % cliff. `resolve` stamps `_slot` on the
+## units (capture order = the core's roster order) and sets `_morale_round` while it is on.
+static var morale_by_probability := false
+static var _morale_round := 1
+
 ## NML-1068/NML-1073 S3: unit spacing is the imagination's DEFAULT (decision
 ## 26.08.) — resolve() honours the 1" no-go rule (mirrors SoloController.
 ## _spacing_zones_world, with the S1 charge-target exemption) unless
@@ -849,6 +856,12 @@ static func _spacing_fraction(next: Dictionary, mover_key: String, positions: Ar
 static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	var _prof_t0 := Time.get_ticks_usec() if profile_enabled() else 0
 	var next := clone_state(state)
+	if morale_by_probability:
+		_morale_round = int(next["round"])
+		var slot := 0
+		for k in next["units"]:
+			(next["units"][k] as Dictionary)["_slot"] = slot
+			slot += 1
 	var su: Dictionary = next["units"][action["unit"]]
 	var was_shaken := bool(su.get("shaken", false))
 	var kind: int = int(action.get("kind", AiDecision.Action.HOLD))
@@ -1661,27 +1674,59 @@ static func reset_round_mods(state: Dictionary) -> void:
 ## Returns my_unit_key -> expected incoming wounds. V0 simplifications,
 ## documented: shooting only (no charge reply), capture-time sight lines,
 ## already-activated enemies still count (they reply next round).
+## aifix D2 knob (default OFF, twin of Seams::reply_v2): the reply threat also prices a CHARGE
+## (melee_threat, inside 12\") and skips Shaken enemies (they only hold).
+static var reply_v2 := false
+const REPLY_CHARGE_IN := 12.0
+const REPLY_ADVANCE_IN := 6.0
+
+
+## E[max(0, w - X)], X ~ Poisson(lambda): the survival tail (twin of sim.rs `expected_remaining`).
+static func _expected_remaining(w: float, lambda: float) -> float:
+	var p := exp(-lambda)
+	var total := 0.0
+	for k in range(int(floor(w))):
+		total += p * (w - k)
+		p *= lambda / (k + 1.0)
+	return total
+
+
 static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 	var incoming := {}
 	for ek in state["units"]:
 		var eu: Dictionary = state["units"][ek]
-		if int(eu["player"]) == player or int(eu["alive"]) <= 0:
+		if int(eu["player"]) == player or int(eu["alive"]) <= 0 \
+				or (reply_v2 and bool(eu.get("shaken", false))):
 			continue
 		var best_key := ""
 		var best_ev := 0.0
 		for mk in state["units"]:
 			var mu: Dictionary = state["units"][mk]
-			if int(mu["player"]) != player or int(mu["alive"]) <= 0 or not sees(eu, str(mk)) \
-					or not _los_clear(state, eu, mu):
+			if int(mu["player"]) != player or int(mu["alive"]) <= 0:
 				continue
 			var d := dist_in(eu["positions"], mu["positions"])
-			var ev := AiEv.shoot_ev(_profiles_of(eu, false, d), _ctx_of(eu), _ctx_of(mu), d) \
-				+ float(spell_ev_of(eu, mu, d)["ev"])   # magic is part of the reply
+			var ev := 0.0
+			if sees(eu, str(mk)) and _los_clear(state, eu, mu):
+				ev = AiEv.shoot_ev(_profiles_of(eu, false, d), _ctx_of(eu), _ctx_of(mu), d) \
+					+ float(spell_ev_of(eu, mu, d)["ev"])   # magic is part of the reply
+			if reply_v2 and d <= REPLY_CHARGE_IN:
+				ev = maxf(ev, melee_threat(eu, mu))
+			if reply_v2 and d > REPLY_ADVANCE_IN and sees(eu, str(mk)) and _los_clear(state, eu, mu):
+				var d2 := d - REPLY_ADVANCE_IN
+				ev = maxf(ev, AiEv.shoot_ev(_profiles_of(eu, false, d2), _ctx_of(eu), _ctx_of(mu), d2) \
+					+ float(spell_ev_of(eu, mu, d2)["ev"]))
 			if ev > best_ev:
 				best_ev = ev
 				best_key = str(mk)
 		if best_key != "":
 			incoming[best_key] = float(incoming.get(best_key, 0.0)) + best_ev
+	if reply_v2:
+		# hand `presence` the Poisson tail: max(0, W - incoming) is then the expected wounds left
+		for k in incoming.keys():
+			var w := 0.0
+			for x in (state["units"][k] as Dictionary)["wounds"]:
+				w += float(x)
+			incoming[k] = w - _expected_remaining(w, float(incoming[k]))
 	return incoming
 
 
@@ -1748,7 +1793,14 @@ static func _morale_fails_expected(su: Dictionary) -> bool:
 		int(su.get("morale_bonus", 0))) - 1) / 6.0
 	if AiEv.rule_on_all_models(u, "Fearless"):
 		fail_p *= 0.5
+	if morale_by_probability:
+		return fail_p > _morale_dither(int(su.get("_slot", 0)), _morale_round)
 	return fail_p >= 0.5
+
+
+## The die stand-in: golden-ratio sequence over the roster slot, shifted per round (sim.rs `morale_dither`).
+static func _morale_dither(slot: int, round_no: int) -> float:
+	return fposmod((slot + 1.0) * 0.6180339887498949 + round_no * 0.7548776662466927, 1.0)
 
 
 ## Post-volley morale (parity wave step 2, mirrors main.gd's PDF-verified flow):
