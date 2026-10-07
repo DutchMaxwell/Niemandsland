@@ -5837,6 +5837,20 @@ pub fn reply_threat_at_epoch(statics: &[UnitStatic], state: &State, player: i64,
 
 /// The charge band the v2 reply reads a melee threat inside (GF p.7 Charge: 12").
 const REPLY_CHARGE_IN: f64 = 12.0;
+/// The Advance band the v2 reply shoots after (GF p.7: Advance moves 6" and may still fire).
+const REPLY_ADVANCE_IN: f64 = 6.0;
+
+/// E[max(0, w - X)] for X ~ Poisson(lambda): the wounds a unit of `w` keeps standing against an
+/// expected `lambda` unsaved wounds, as a probability tail instead of `max(0, w - lambda)`.
+fn expected_remaining(w: f64, lambda: f64) -> f64 {
+    let mut p = (-lambda).exp();
+    let mut sum = 0.0f64;
+    for k in 0..(w.floor() as i64) {
+        sum += p * (w - k as f64);
+        p *= lambda / (k as f64 + 1.0);
+    }
+    sum
+}
 
 /// `reply_threat` with `Seams::reply_v2` choosing the aifix D2 reading: an enemy
 /// may also CHARGE a unit inside 12" (`melee_threat`, never added before), a
@@ -5868,6 +5882,10 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
             if v2 && d <= REPLY_CHARGE_IN {
                 ev = ev.max(melee_threat_at_epoch(statics, state, e, m, rules_epoch));
             }
+            if v2 && d > REPLY_ADVANCE_IN && state.sees(e, state.key(m)) && los_clear(state, e, m) {
+                let after = volley_ev(statics, state, e, m, d - REPLY_ADVANCE_IN, &mut sc, rules_epoch).0;
+                ev = ev.max(after);
+            }
             if ev > best_ev {
                 best_ev = ev;
                 best_key = Some(m);
@@ -5875,6 +5893,16 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
         }
         if let Some(m) = best_key {
             incoming[m] += best_ev;
+        }
+    }
+    if v2 {
+        // `presence` reads `max(0, W - incoming)`: hand it the Poisson tail instead, so that
+        // expression is exactly the expected wounds left (a 10-wound unit under 8 EV keeps ~2.9, not 2).
+        for (inc, wounds) in incoming.iter_mut().zip(&state.wounds) {
+            if *inc > 0.0 {
+                let w: f64 = wounds.iter().map(|&x| x as f64).sum();
+                *inc = w - expected_remaining(w, *inc);
+            }
         }
     }
     incoming
