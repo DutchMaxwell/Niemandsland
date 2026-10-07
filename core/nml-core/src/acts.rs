@@ -299,6 +299,11 @@ pub struct Knobs {
     /// ceil(max(n, 1) ^ tree_widen) children of an n-visit node open.
     #[serde(default)]
     pub tree_widen: f64,
+    /// NachtmahrZero E1 — PUCT prior at the tree root: `mean + c * p * sqrt(N) / (1 + n)` with `p` the softmax of the caller's
+    /// `cand_logits` (index-parallel to the root rows), root children in prior order. 0.0 = off (UCT and the hand order,
+    /// byte-identical); a root without logits keeps UCT whatever `c` is.
+    #[serde(default)]
+    pub tree_puct: f64,
     /// W2 S0 — `Seams::melee_reach`: `"all"` is today's behaviour (every alive
     /// model of the unit strikes); `"table"` is the p.9 rule, scaling by the
     /// models within 2" of an enemy model instead. Absent from every corpus
@@ -1487,6 +1492,7 @@ impl Default for Knobs {
             deadline_us: 0,
             deadline_after_preselect: false,
             tree_widen: 0.0,
+            tree_puct: 0.0,
             melee_reach: MeleeReach::All,
             consolidate: false,
             cond_ap_dice: false,
@@ -1889,6 +1895,9 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     }
     if header.knobs.tree_widen.is_nan() || header.knobs.tree_widen < 0.0 {
         return Err(format!("tree_widen {}: must be >= 0 (0 opens every child first)", header.knobs.tree_widen));
+    }
+    if header.knobs.tree_puct.is_nan() || header.knobs.tree_puct < 0.0 {
+        return Err(format!("tree_puct {}: must be >= 0 (0 = off)", header.knobs.tree_puct));
     }
     if header.knobs.deadline_us < 0 {
         return Err(format!("deadline_us {}: must be >= 0 (0 = off)", header.knobs.deadline_us));

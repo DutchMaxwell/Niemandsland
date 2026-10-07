@@ -907,11 +907,19 @@ impl<'a> Search<'a> {
             leaf: k.tree_leaf, dice: k.tree_dice, samples: k.tree_samples.max(1) as usize,
             batch: k.tree_batch.max(1) as usize, budget: self.bend.tree_budget.unwrap_or(k.tree_budget).max(1) as usize,
             wall_ms: if self.bend.tree_budget.is_some() || deadline.is_some() { 0 } else { k.tree_wall_ms.max(0) as u64 },
-            deadline, widen: k.tree_widen, player,
+            deadline, widen: k.tree_widen, puct: k.tree_puct, player,
             opener_seat: self.act.opener_seat, sig: self.sig, hook: self.leaf_value, w: self.leaf_value_w,
         };
         let mut root = Node::new(state.clone(), Step::Mover(player), player);
         root.children = tree::root_children(scored, order, pool);
+        if k.tree_puct > 0.0 {
+            if let Some(lg) = self.cand_logits {
+                if lg.len() != scored.len() {
+                    return Err(Unsupported::CandLogits(lg.len(), scored.len()));
+                }
+                tree::apply_root_prior(&mut root, &tree::softmax_prior(lg));
+            }
+        }
         let mut rng = GodotRng::new(self.sig.unwrap_or(0));
         let (best, mut trace) = tree::run(&self.roll, &cfg, &mut root, &mut rng, sc)?;
         trace.preselect_us = preselect_us;
