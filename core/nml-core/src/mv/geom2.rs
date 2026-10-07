@@ -192,6 +192,12 @@ pub fn seg_seg_distance(p1: V2, p2: V2, q1: V2, q2: V2) -> f64 {
     if segments_cross(p1, p2, q1, q2) {
         return 0.0;
     }
+    seg_seg_distance_apart(p1, p2, q1, q2)
+}
+
+/// `seg_seg_distance` for segments the caller already knows do NOT cross: the four endpoint-to-segment
+/// distances, the very expression the crossing check falls through to.
+pub fn seg_seg_distance_apart(p1: V2, p2: V2, q1: V2, q2: V2) -> f64 {
     point_seg_distance(p1, q1, q2)
         .min(point_seg_distance(p2, q1, q2))
         .min(point_seg_distance(q1, p1, p2).min(point_seg_distance(q2, p1, p2)))
