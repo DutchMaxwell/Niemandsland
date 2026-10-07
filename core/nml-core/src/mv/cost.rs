@@ -15,7 +15,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::geom2::{
-    distance_to, lerp, point_seg_distance, seg_seg_distance, segments_cross, V2,
+    distance_to, lerp, point_seg_distance, seg_seg_distance_apart, segments_cross, V2,
 };
 use super::{
     is_dangerous, is_difficult, CELL_IN, DANGEROUS_COST_MULT, DIFFICULT_COST_MULT, EPS,
@@ -148,6 +148,9 @@ pub fn cell_of(p: V2, cell_size: f64) -> (i32, i32) {
     )
 }
 
+/// The f32 rounding guard of the wall culling in `step_blocked`, inches.
+const WALL_CULL_GUARD: f64 = 1e-3;
+
 /// `MovementPlanner._wall_blocks` — movement_planner.gd:188. A crossing always
 /// blocks; with clearance the step may not dip inside the inflated band, unless
 /// it STARTED inside, where only distance-improving escapes are legal.
@@ -159,7 +162,8 @@ pub fn wall_blocks(p: V2, c: V2, wa: V2, wb: V2, clearance: f64) -> bool {
     if clearance <= 0.0 {
         return false;
     }
-    if seg_seg_distance(p, c, wa, wb) >= clearance {
+    // `segments_cross` was just answered false, so the crossing arm of `seg_seg_distance` cannot fire.
+    if seg_seg_distance_apart(p, c, wa, wb) >= clearance {
         return false;
     }
     let d_p = point_seg_distance(p, wa, wb);
@@ -197,7 +201,20 @@ pub fn path_crosses_wall_opt(p: V2, c: V2, walls: &[Wall]) -> bool {
 /// set only blocks a step that ENTERS it from outside (escape is always legal).
 pub fn step_blocked(p: V2, c: V2, walls: &[Wall], opts: &StepOpts) -> bool {
     if opts.clearance > 0.0 {
+        // Exact culling (aifix preselect-speed): a wall whose box lies farther than the clearance
+        // (+ an f32 rounding guard) from the step's box can neither cross the step nor come within
+        // `clearance` of it, so `wall_blocks` would answer false — skip it without the 4 distance tests.
+        let m = opts.clearance + WALL_CULL_GUARD;
+        let (lo_x, hi_x) = ((p[0].min(c[0]) as f64) - m, (p[0].max(c[0]) as f64) + m);
+        let (lo_y, hi_y) = ((p[1].min(c[1]) as f64) - m, (p[1].max(c[1]) as f64) + m);
         for w in walls {
+            if (w[0][0].min(w[1][0]) as f64) > hi_x
+                || (w[0][0].max(w[1][0]) as f64) < lo_x
+                || (w[0][1].min(w[1][1]) as f64) > hi_y
+                || (w[0][1].max(w[1][1]) as f64) < lo_y
+            {
+                continue;
+            }
             if wall_blocks(p, c, w[0], w[1], opts.clearance) {
                 return true;
             }
