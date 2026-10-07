@@ -17331,15 +17331,18 @@ func _start_lesson(_object_count: int) -> void:
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
 		"army_manager": opr_army_manager, "table": table,
 		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self})
-	# D3 lesson puppet: a "hold" chapter's AI activates but never moves or shoots. Set before the
-	# controller runs its first activation; the flag is in-memory only (never saved).
 	if _scenario_mode:
 		# D4: a lesson always plays the gentlest ladder grade, in memory only — the player's saved
 		# grade (SoloGrade.save) is deliberately never written from a lesson.
 		_solo_interactive_grade = "daemmerung"
-	_ensure_solo_controller()
-	if solo_controller != null:
-		solo_controller.lesson_hold = SpielschuleLessons.ai_mode(_scenario_chapter) == "hold"
+	# D3 lesson puppet: only a "hold"/"live" chapter may own a controller — a "none" lesson must never
+	# summon one, because the controller's existence alone arms the alternation pump (see
+	# _ensure_solo_controller). lesson_hold is in-memory only and only means anything with an AI seat.
+	var lesson_ai_mode := SpielschuleLessons.ai_mode(_scenario_chapter)
+	if lesson_ai_mode != "none":
+		_ensure_solo_controller()
+		if solo_controller != null:
+			solo_controller.lesson_hold = lesson_ai_mode == "hold"
 	var progress := SpielschuleProgress.new(_lesson_progress_path)
 	progress.load_from_disk()
 	var runner := LessonRunner.new()
