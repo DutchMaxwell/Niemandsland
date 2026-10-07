@@ -140,6 +140,9 @@
     "sling": "sling",
     "wings": "wings",
     "heavy rending claws": "claws",
-    "great sword": "greatsword"
+    "great sword": "greatsword",
+    "cursed monolith": "monolith",
+    "unholy brazier": "brazier",
+    "corpse pile": "corpse_pile"
   }
 }
