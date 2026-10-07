@@ -45,6 +45,14 @@ pub struct Profile {
     pub defense: i64,
     #[serde(default)]
     pub tough: i64,
+    /// The unit's Army Forge points cost as the army list states it — base cost
+    /// plus the selected upgrades' costs (a combined partner's half is folded
+    /// into its anchor), the same number `GameUnit.get_cost()` answers
+    /// (game_unit.gd:240-241) and `opr_api_client.gd` sums (base :773 + upgrades
+    /// :1809). `0` on every corpus recorded before the points strength knob
+    /// existed, which keeps the raw-wounds reading byte-identical.
+    #[serde(default)]
+    pub cost: i64,
     #[serde(default)]
     pub wounds_max: Vec<i64>,
     #[serde(default)]

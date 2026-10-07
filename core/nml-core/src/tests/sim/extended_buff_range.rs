@@ -8,6 +8,7 @@ use super::*;
     /// hero_link 0). The REAL `build_for` product, read at `epoch`.
     fn ebr_bearer(rules_epoch: u32, faction: (&str, &str), rules: &[&str]) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

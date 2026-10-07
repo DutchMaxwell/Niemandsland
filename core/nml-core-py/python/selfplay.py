@@ -2371,6 +2371,9 @@ def play_from_state(
 #: 06.10.2026 (E1 opener, D5 game-end threat, D1 morale die, A3 held marker on eval_variant 4,
 #: D2 reply threat, E5 spent enemies skipped mid-round, D2c Immobile hold gate) — farm/aifix/AB_PRESET.md.
 KNOB_PRESETS: dict[str, dict[str, Any]] = {
+    # aifix action-space lane (07.10.2026): the menu opens — up to 3 extra HOLD+shoot targets and one
+    # ADVANCE-toward-the-marker-with-a-shot row. A STRENGTH change (bar = better), see farm/aifix/PREREG_MENU_OPEN.md.
+    "menu_open": {"menu_all_targets": 3, "menu_advance_obj_shoot": True},
     "aifix_all": {
         "opener_by_finish": True, "no_end_threat": True, "morale_by_probability": True,
         "eval_variant": 4, "reply_v2": True, "reply_skip_activated": True, "reply_hold_gate": True,

@@ -14,6 +14,7 @@ use crate::rules::Registries;
     /// a friendly Utility Buff with the printed +1.
     fn great_banner_carrier() -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "Banner".into(),
             quality: 4,

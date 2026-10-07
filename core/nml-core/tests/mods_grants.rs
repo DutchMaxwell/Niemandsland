@@ -23,6 +23,7 @@ use nml_core::IN2M;
 /// the LiveMod alone.
 fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
     let profile = Profile {
+        cost: 0,
         unit_id: "u".into(),
         name: "u".into(),
         quality: 4,
@@ -128,6 +129,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
 /// A single-model gf carrier with `rules` and no weapons of its own.
 fn carrier(rules: &[&str]) -> Profile {
     Profile {
+        cost: 0,
         unit_id: "u".into(), name: "u".into(), quality: 4, defense: 4, tough: 1,
         wounds_max: vec![], model_count: 1, weapons: vec![],
         special_rules: rules.iter().map(|s| s.to_string()).collect(),
@@ -331,6 +333,7 @@ fn a_mark_on_the_bearer_hands_its_attacker_the_rending_grant() {
 /// aof's shadow_stalkers, the Wild Veil pair in aof's wood_elves).
 fn shroud_carrier(system: &str, faction: &str, rules: &[&str]) -> Profile {
     Profile {
+        cost: 0,
         unit_id: "u".into(), name: "u".into(), quality: 4, defense: 4, tough: 1,
         wounds_max: vec![], model_count: 1, weapons: vec![],
         special_rules: rules.iter().map(|s| s.to_string()).collect(),

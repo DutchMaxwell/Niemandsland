@@ -16,6 +16,7 @@ use super::*;
     /// read off the REAL registry — the REAL `build_for` product, at `epoch`.
     fn dash_carrier(epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,
