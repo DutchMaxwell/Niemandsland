@@ -18,7 +18,7 @@ use crate::rollout::{
     cross_round, delayed_action_passer, imagined_round_end, reinforcement_round_start,
     spawn_round_start, Rollout,
 };
-use crate::sim::{reply_threat_with, resolve_stochastic_tray_on_board, Scratch, Unsupported};
+use crate::sim::{reply_threat_opts, resolve_stochastic_tray_on_board, Scratch, Unsupported};
 use crate::state::State;
 
 /// One decision node: `mover` picks among `children`, opened in order
@@ -242,7 +242,7 @@ pub fn ranked(roll: &Rollout, state: &State, player: i64, sc: &mut Scratch)
     let mut rows = Vec::new();
     for cand in menu(roll, state, player, sc) {
         let next = roll.policy.resolve(state, &cand)?;
-        let score = score_with(&next, statics, player, &reply_threat_with(statics, &next, player, roll.policy.seams.reply_v2), fit);
+        let score = score_with(&next, statics, player, &reply_threat_opts(statics, &next, player, roll.policy.seams.reply_opts()), fit);
         rows.push(ScoredRow { idx: rows.len(), unit_key: cand.unit.clone(), cand, score });
     }
     let order = rank(&rows, true);

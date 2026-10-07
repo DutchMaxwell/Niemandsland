@@ -1848,3 +1848,33 @@ mod weapons;
         assert!((expected_remaining(10.0, 8.0) - 3.0).abs() < 0.6 && expected_remaining(10.0, 8.0) > 2.0);
         assert_eq!(expected_remaining(5.0, 0.0), 5.0);
     }
+
+    /// aifix E5 — mid-round an enemy that already activated cannot fire again; at a round end
+    /// (everyone activated) the next round's volley still counts.
+    #[test]
+    fn reply_skip_activated_drops_a_spent_enemy_only_mid_round() {
+        let (mut st, mut statics) = vr_charge_line(8.0);
+        statics[0].shoot = vec![ShootProfile { name: "Gun".into(), attacks: 4, count: 1, range: 24, ..Default::default() }];
+        statics[0].melee = Vec::new();
+        let skip = ReplyOpts { skip_activated: true, ..ReplyOpts::default() };
+        st.activated = vec![true, false];
+        assert!(reply_threat_opts(&statics, &st, 1, ReplyOpts::default())[1] > 0.0, "today: a spent gun still shoots");
+        assert_eq!(reply_threat_opts(&statics, &st, 1, skip)[1], 0.0, "E5: it already fired this round");
+        st.activated = vec![true, true];
+        assert!(reply_threat_opts(&statics, &st, 1, skip)[1] > 0.0, "round end: next round's volley counts");
+    }
+
+    /// aifix D2c — an Immobile/Artillery enemy may only Hold: no advance-shoot, no charge.
+    #[test]
+    fn reply_hold_gate_keeps_an_immobile_gun_from_advancing_or_charging() {
+        let (mut st, mut statics) = vr_charge_line(15.0);
+        statics[0].melee = Vec::new();
+        statics[0].shoot = vec![ShootProfile { name: "Gun".into(), attacks: 4, count: 1, range: 12, ..Default::default() }];
+        let v2 = ReplyOpts { v2: true, ..ReplyOpts::default() };
+        let gated = ReplyOpts { v2: true, hold_gate: true, ..ReplyOpts::default() };
+        assert!(reply_threat_opts(&statics, &st, 1, v2)[1] > 0.0, "v2: advances to 11\" and fires");
+        assert!(reply_threat_opts(&statics, &st, 1, gated)[1] > 0.0, "a plain gun still advances under the gate");
+        std::rc::Rc::get_mut(&mut st.profiles).expect("unshared").list[0].special_rules = vec!["Immobile".into()];
+        assert_eq!(reply_threat_opts(&statics, &st, 1, gated)[1], 0.0, "Immobile may only Hold: 17\" is out of reach");
+        assert!(reply_threat_opts(&statics, &st, 1, v2)[1] > 0.0, "gate off: unchanged");
+    }

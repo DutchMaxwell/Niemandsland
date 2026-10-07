@@ -223,6 +223,22 @@ func test_expected_remaining_is_the_poisson_tail() -> void:
 	assert_bool(tail > 2.0 and tail < 3.6).is_true()   # flat W - EV would say 2.0
 
 
+## aifix E5 twin: mid-round, activated enemies do not threaten; off changes nothing.
+func test_reply_skip_activated_drops_spent_enemies_only_with_the_knob() -> void:
+	var state := _state()
+	var first := true
+	for k in state["units"]:
+		(state["units"][k] as Dictionary)["activated"] = first   # one spent, the rest still to act
+		first = false
+	var off := BattleSim.reply_threat(state, 1)
+	BattleSim.reply_skip_activated = true
+	var on := BattleSim.reply_threat(state, 1)
+	BattleSim.reply_skip_activated = false
+	for k in on:
+		assert_bool(float(on[k]) <= float(off.get(k, 0.0))).is_true()
+	assert_dict(BattleSim.reply_threat(state, 1)).is_equal(off)
+
+
 # === R7: discounted multi-round leaf (NML-995) ===
 
 ## rollout_boundaries returns one true round-end per horizon round (rounds 1

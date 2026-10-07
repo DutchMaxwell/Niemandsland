@@ -47,7 +47,7 @@ use crate::rng::GodotRng;
 use crate::rollout::Rollout;
 use crate::score::score_with;
 use crate::mv::reach::ReachIndex;
-use crate::sim::{reach_index_for_state, reply_threat_with, Scratch, Unsupported};
+use crate::sim::{reach_index_for_state, reply_threat_opts, Scratch, Unsupported};
 use crate::state::State;
 use crate::terrain::Terrain;
 use crate::tree::{self, Node, Step, TreeCfg, TreeTrace};
@@ -273,6 +273,8 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         dangerous_end_morale: knobs.dangerous_end_morale,
         morale_by_probability: knobs.morale_by_probability,
         reply_v2: knobs.reply_v2,
+        reply_skip_activated: knobs.reply_skip_activated,
+        reply_hold_gate: knobs.reply_hold_gate,
         tray_exact: crate::acts::rule_on(knobs.rules_epoch, crate::acts::EPOCH_70_TRAY_EXACT),
         plain_only: false, // dormant: only the search's root seams will set it (io.rs)
         shelf_sight: false, // dormant: free shelf pieces in sight (io.rs `Seams::shelf_sight`)
@@ -503,7 +505,7 @@ impl<'a> Search<'a> {
         let statics = self.roll.policy.statics;
         let terrain = self.roll.policy.terrain;
         let fit = self.roll.policy.fit;
-        let base = score_with(state, statics, player, &reply_threat_with(statics, state, player, self.roll.policy.seams.reply_v2), fit);
+        let base = score_with(state, statics, player, &reply_threat_opts(statics, state, player, self.roll.policy.seams.reply_opts()), fit);
         let mut scored: Vec<ScoredRow> = Vec::new();
         let hero_attach = self.roll.policy.seams.hero_attach;
         for i in 0..state.units() {
@@ -526,7 +528,7 @@ impl<'a> Search<'a> {
             for cand in menu {
                 let next = self.roll.policy.resolve_root(state, &cand)?;
                 let s =
-                    score_with(&next, statics, player, &reply_threat_with(statics, &next, player, self.roll.policy.seams.reply_v2), fit);
+                    score_with(&next, statics, player, &reply_threat_opts(statics, &next, player, self.roll.policy.seams.reply_opts()), fit);
                 scored.push(ScoredRow {
                     idx: scored.len(),
                     unit_key: key.to_string(),

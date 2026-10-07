@@ -2363,11 +2363,11 @@ def play_from_state(
 
 #: Named planner-knob bundles for ONE seat (`knob_overrides`). `aifix_all` = the audit fixes of
 #: 06.10.2026 (E1 opener, D5 game-end threat, D1 morale die, A3 held marker on eval_variant 4,
-#: D2 reply threat) — farm/aifix/AB_PRESET.md.
+#: D2 reply threat, E5 spent enemies skipped mid-round, D2c Immobile hold gate) — farm/aifix/AB_PRESET.md.
 KNOB_PRESETS: dict[str, dict[str, Any]] = {
     "aifix_all": {
         "opener_by_finish": True, "no_end_threat": True, "morale_by_probability": True,
-        "eval_variant": 4, "reply_v2": True,
+        "eval_variant": 4, "reply_v2": True, "reply_skip_activated": True, "reply_hold_gate": True,
     },
 }
 
