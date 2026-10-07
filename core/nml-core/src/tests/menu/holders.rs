@@ -260,3 +260,32 @@ use super::*;
         assert_eq!(on.len(), off.len() + 1, "exactly one extra: the holder; the un-activated best is the max-EV pick and dedupes: {:?}", on);
         assert_eq!(on[off.len()], (HOLD, Some("u2".into()), None, None), "the marker holder joins the menu");
     }
+
+    /// aifix action-space lane (finding 7, C1): the OFF menu names ONE HOLD+shoot target ("Wall", max EV); with
+    /// `all_targets` the other visible target ("Squish") joins at the tail, so the search can pick the unit on the marker.
+    #[test]
+    fn all_targets_appends_the_other_visible_targets_and_off_is_unchanged() {
+        let st = holders_line();
+        let statics = holders_statics();
+        let mut sc = Scratch::default();
+        let off = shape(&candidates_tuned(&st, &Terrain::default(), &statics, 0, &mut sc, Tuning::default()));
+        let shots = |m: &[Shape]| m.iter().filter(|c| c.0 == HOLD && c.1.is_some()).count();
+        assert_eq!(shots(&off), 1, "today: one HOLD+shoot row");
+        let on = shape(&candidates_tuned(
+            &st, &Terrain::default(), &statics, 0, &mut sc, Tuning { all_targets: 3, ..Tuning::default() },
+        ));
+        assert_eq!(&on[..off.len()], &off[..], "the OFF entries keep their index");
+        assert_eq!(on.len(), off.len() + 1);
+        assert_eq!(on[off.len()], (HOLD, Some("u2".into()), None, None), "the lower-EV target joins at the tail");
+        let capped = shape(&candidates_tuned(
+            &st, &Terrain::default(), &statics, 0, &mut sc, Tuning { all_targets: 1, ..Tuning::default() },
+        ));
+        assert_eq!(capped.len(), on.len(), "k = 1 already covers the one extra target");
+        // with holders on too, the same target is not offered twice
+        let both = shape(&candidates_tuned(
+            &st, &Terrain::default(), &statics, 0, &mut sc,
+            Tuning { holders: true, all_targets: 3, ..Tuning::default() },
+        ));
+        assert_eq!(both.iter().filter(|c| **c == (HOLD, Some("u2".into()), None, None)).count(), 1, "{both:?}");
+    }
+

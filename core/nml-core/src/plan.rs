@@ -336,6 +336,7 @@ pub fn tuning_of(knobs: &Knobs) -> crate::menu::Tuning {
         holders: knobs.menu_holders,
         wide_shoot: knobs.menu_wide,
         advance_k: knobs.menu_advance_k,
+        all_targets: knobs.menu_all_targets,
         rush_k: knobs.playout_rush_k,
         ..Default::default()
     }
