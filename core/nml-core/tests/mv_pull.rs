@@ -132,7 +132,7 @@ fn g3b_trace_v2_pins_both_stages_on_every_search() {
 // === Hand-built cases =======================================================
 
 fn no_cells() -> CellSet {
-    CellSet::new()
+    CellSet::default()
 }
 
 fn opts<'a>(zones: &'a [Zone], none: &'a CellSet) -> StepOpts<'a> {
@@ -142,7 +142,7 @@ fn opts<'a>(zones: &'a [Zone], none: &'a CellSet) -> StepOpts<'a> {
 /// Two 3" cells of Dangerous ground on the diagonal only — cell (1,1) is the
 /// square [3,6) x [3,6).
 fn dangerous_grid() -> Grid {
-    let mut g = Grid::new();
+    let mut g = Grid::default();
     g.insert((1, 1), T_DANGEROUS);
     g
 }
@@ -150,7 +150,7 @@ fn dangerous_grid() -> Grid {
 #[test]
 fn string_pull_collapses_a_clear_zigzag_to_its_endpoints() {
     let walls: Vec<Wall> = Vec::new();
-    let grid = Grid::new();
+    let grid = Grid::default();
     let none = no_cells();
     let o = opts(&[], &none);
     let path: Vec<V2> = vec![[0.0, 0.0], [1.0, 1.0], [2.0, 0.0], [3.0, 1.0]];
@@ -168,7 +168,7 @@ fn string_pull_keeps_the_unchecked_first_leg_even_when_it_is_blocked() {
     // leg `_cspace_blocked` rejects — which is why `_walk_offset` needs its
     // blocked branch at all.
     let walls: Vec<Wall> = Vec::new();
-    let grid = Grid::new();
+    let grid = Grid::default();
     let none = no_cells();
     let zones = vec![Zone { c: [2.5, 0.9], r: 0.4 }];
     let o = opts(&zones, &none);
@@ -206,7 +206,7 @@ fn red_f_string_pull_must_skip_a_dear_shortcut_not_stop_at_it() {
 #[test]
 fn furthest_clear_bisects_fourteen_times_onto_the_free_side() {
     let walls: Vec<Wall> = Vec::new();
-    let grid = Grid::new();
+    let grid = Grid::default();
     let none = no_cells();
     let zones = vec![Zone { c: [5.0, 0.0], r: 1.0 }];
     let o = opts(&zones, &none);
@@ -227,7 +227,7 @@ fn furthest_clear_bisects_fourteen_times_onto_the_free_side() {
 #[test]
 fn walk_offset_spends_arc_length_and_clips_the_last_leg() {
     let walls: Vec<Wall> = Vec::new();
-    let grid = Grid::new();
+    let grid = Grid::default();
     let none = no_cells();
     let o = opts(&[], &none);
     let board: V2 = [10.0, 10.0];
@@ -265,7 +265,7 @@ fn walk_offset_spends_arc_length_and_clips_the_last_leg() {
 #[test]
 fn walk_offset_stops_at_the_furthest_clear_point_of_a_blocked_leg() {
     let walls: Vec<Wall> = Vec::new();
-    let grid = Grid::new();
+    let grid = Grid::default();
     let none = no_cells();
     let zones = vec![Zone { c: [5.0, 0.0], r: 1.0 }];
     let o = opts(&zones, &none);
@@ -288,7 +288,7 @@ fn walk_offset_stops_at_the_furthest_clear_point_of_a_blocked_leg() {
 #[test]
 fn red_g_the_allowance_eps_order_decides_a_hair_long_leg() {
     let walls: Vec<Wall> = Vec::new();
-    let grid = Grid::new();
+    let grid = Grid::default();
     let none = no_cells();
     let o = opts(&[], &none);
     let board: V2 = [10.0, 10.0];
