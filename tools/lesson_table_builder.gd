@@ -54,6 +54,7 @@ func _build() -> void:
 				_fail("unit not found: %s #%d" % [pick.name, pick.nth])
 				return
 			chosen.append(matches[nth])
+			pick["player"] = int(side.player)
 			placements[matches[nth]] = pick
 		army.units = chosen
 		army.player_id = int(side.player)
@@ -74,8 +75,14 @@ func _build() -> void:
 				_fail("placeholder peg in " + unit.get_name())
 				return
 			model_count += 1
+		_apply_unit_state(manager, unit, placements[opr_unit], int(placements[opr_unit].get("player", 0)))
 	manager.set_game_phase(int(recipe.phase))
 	manager.set_current_round(int(recipe.round))
+	if recipe.has("ai_slots"):
+		var slots: Dictionary = {}
+		for pid in recipe.get("ai_slots", []):
+			slots[int(pid)] = true
+		main.solo_ai_slots = slots
 	await process_frame
 	var path := "user://lesson_%s.nml" % _id
 	var err: Error = await main.save_manager.save_game(path)
@@ -128,3 +135,19 @@ func _move_unit_to(unit: GameUnit, spot: Vector3) -> void:
 func _fail(reason: String) -> void:
 	printerr("LESSON-FAIL %s: %s" % [_id, reason])
 	quit(1)
+
+
+## Start a lesson unit in the state its step teaches: Shaken, Fatigued, or with parked casualties.
+func _apply_unit_state(manager: OPRArmyManager, unit: GameUnit, pick: Dictionary, player: int) -> void:
+	if bool(pick.get("shaken", false)):
+		unit.is_shaken = true
+	if bool(pick.get("fatigued", false)):
+		unit.is_fatigued = true
+	var dead := int(pick.get("dead", 0))
+	if dead <= 0:
+		return
+	var models := unit.models
+	for i in range(models.size() - 1, maxi(models.size() - 1 - dead, -1), -1):
+		var node: Node3D = models[i].node
+		if is_instance_valid(node):
+			manager.set_loose_model_dead(node, player, true, unit.unit_id)
