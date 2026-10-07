@@ -18,6 +18,16 @@ const TAIL_BONES := {
 	"saurians/gator veteran": 0,
 	"saurians/gecko champion": 0,
 	"saurians/kikatle": 0,
+	"vampiric_undead/skeleton guard": 0,
+	"vampiric_undead/skeleton watch": 0,
+	"vampiric_undead/drained soldiers": 0,
+	"vampiric_undead/drained archers": 0,
+	"vampiric_undead/ghouls": 0,
+	"vampiric_undead/skeleton champion": 0,
+	"vampiric_undead/vampire master": 0,
+	"vampiric_undead/stitched zombies": 0,
+	"vampiric_undead/werewolves": 0,
+	"vampiric_undead/stitched butchers": 0,
 }
 
 static func allows(key: String, tail_bones: int) -> bool:
