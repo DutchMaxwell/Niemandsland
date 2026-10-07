@@ -9099,6 +9099,8 @@ func _solo_spawn_pulse_ring(at: Vector3, color: Color) -> MeshInstance3D:
 	ring.material_override = mat
 	add_child(ring)
 	ring.global_position = at + Vector3(0, 0.01, 0)
+	if GraphicsSettings.calm_mode:
+		return ring   # Calm: a static attention marker, no pulsing scale/alpha
 	var tw := ring.create_tween().set_loops()
 	tw.tween_property(ring, "scale", Vector3(1.25, 1.0, 1.25), 0.4).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(ring, "scale", Vector3.ONE, 0.4).set_trans(Tween.TRANS_SINE)
