@@ -41,6 +41,31 @@ func test_user_agent_is_honest_product_string() -> void:
 	assert_bool(ua.to_lower().contains("mozilla")).is_false()
 
 
+func test_user_agent_marks_ci_runs() -> void:
+	# A CI run (GITHUB_ACTIONS=true or CI=true) gets a " CI" suffix, so server-side stats can tell
+	# our own runners from players without losing the honest product UA.
+	var saved_gha := OS.get_environment("GITHUB_ACTIONS")
+	var saved_ci := OS.get_environment("CI")
+	OS.set_environment("GITHUB_ACTIONS", "true")
+	OS.unset_environment("CI")
+	assert_str(AssetCDN.user_agent()).ends_with(" CI")
+	OS.unset_environment("GITHUB_ACTIONS")
+	OS.set_environment("CI", "true")
+	assert_str(AssetCDN.user_agent()).ends_with(" CI")
+	OS.unset_environment("GITHUB_ACTIONS")
+	OS.unset_environment("CI")
+	assert_bool(AssetCDN.user_agent().ends_with(" CI")).is_false()
+	_restore_env("GITHUB_ACTIONS", saved_gha)
+	_restore_env("CI", saved_ci)
+
+
+func _restore_env(name: String, value: String) -> void:
+	if value.is_empty():
+		OS.unset_environment(name)
+	else:
+		OS.set_environment(name, value)
+
+
 func test_headers_carry_ua_and_accept() -> void:
 	var h := AssetCDN.headers("application/json")
 	assert_int(h.size()).is_equal(2)
