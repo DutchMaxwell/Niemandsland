@@ -11,6 +11,7 @@ const TAIL_BONES := {
 	"ratmen/snipers": 5,
 	"ratmen/champion": 5,
 	"ratmen/battle master": 5,
+	"ratmen/night scouts": 0,
 	"saurians/saurian warriors": 5,
 	"saurians/geckos": 5,
 	"saurians/chameleons": 5,

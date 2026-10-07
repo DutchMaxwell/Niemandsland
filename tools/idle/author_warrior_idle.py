@@ -12,7 +12,8 @@ import bpy, sys, json
 
 a = sys.argv[sys.argv.index("--") + 1:]
 IN, OUT, SIDE, TWOHAND = a[0], a[1], a[2], a[3] == "1"
-REGION = json.loads(a[4]) if len(a) > 4 else None  # tail merged into the body mesh: {"cut_y": .., "max_z": ..}
+REGION = json.loads(a[4]) if len(a) > 4 and a[4] != "-" else None  # tail merged into the body mesh: {"cut_y": .., "max_z": ..}
+PET = json.loads(a[5]) if len(a) > 5 else None   # {"glb","pos","rot","scale"}: the composed pet rat part (pet forms)
 L, FPS, P = 216, 24, "mixamorig:"
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=IN)
@@ -50,23 +51,35 @@ tail_bones, info["tail_verts"] = add_tail(arm, body, P, REGION)
 info["tail_bones"] = len(tail_bones)
 ANIM, pose_at = create_pose(arm, tail_bones, TWOHAND, body)
 pb = arm.pose.bones
+pet, pet_bones, pet_pose = None, [], None
+if PET:
+    from pet_rig import add_pet, make_pose
+    pet, pet_bones = add_pet(arm, PET["glb"], PET["pos"], PET.get("rot", [0, 0, 0]), PET.get("scale", 1.0), info["feet_z"])
+    pet_pose = make_pose(arm, view)
+    zs = [(pet.matrix_world @ v.co) for v in pet.data.vertices]
+    info["pet"] = {"bones": len(pet_bones), "tris": len(pet.data.polygons), "bottom_vs_feet_z": min(p.z for p in zs) - info["feet_z"],
+                   "bbox": [[min(p[i] for p in zs) for i in range(3)], [max(p[i] for p in zs) for i in range(3)]]}
 
 mod = next(m for m in body.modifiers if m.type == "ARMATURE")
 mod.show_viewport = False
 for f in range(L + 1):
     pose_at((f % L) / L)
-    for n in ANIM:
+    if pet_pose:
+        pet_pose((f % L) / L)
+    for n in ANIM + pet_bones:
         pb[n].keyframe_insert("rotation_quaternion", frame=f)
         pb[n].keyframe_insert("location", frame=f)
+    for n in pet_bones:
+        pb[n].keyframe_insert("scale", frame=f)
 mod.show_viewport = True
 arm.animation_data.action.name = "idle"
 scene = bpy.context.scene
 scene.render.fps = FPS
 scene.frame_start, scene.frame_end = 0, L
 scene.frame_set(0)
-info["tracks"] = len(ANIM)
+info["tracks"] = len(ANIM) + len(pet_bones)
 bpy.ops.object.select_all(action="DESELECT")
-for o in [arm, body, *weapons]:
+for o in [arm, body, *weapons, *([pet] if pet else [])]:
     o.select_set(True)
 view.objects.active = arm
 bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True, export_yup=True,
