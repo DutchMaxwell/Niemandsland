@@ -10,6 +10,7 @@
     /// number per fold, so a single assertion says which lists were measured.
     pub(crate) fn four_unit_line() -> State {
         let profile = Profile {
+            cost: 0,
             unit_id: "u".into(),
             name: "u".into(),
             quality: 4,
@@ -163,6 +164,7 @@
     /// the REAL gf registry (`assets/solo/rules_mechanics_gf.json`).
     fn storm_bearer(rule: &str, faction: &str, rules_epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,
@@ -1232,6 +1234,7 @@
     /// alone — the same shape the 3" tests use).
     fn boost_carrier(system: &str, faction: &str, rules: &[&str]) -> crate::state::Profile {
         crate::state::Profile {
+            cost: 0,
             unit_id: "u".into(),
             name: "a".into(),
             quality: 4,

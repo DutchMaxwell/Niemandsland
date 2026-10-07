@@ -17,6 +17,7 @@ use super::*;
     /// `solo_move_grant_mods` stamp exists and the fold can read it.
     fn buff_carrier(system: &str, faction: &str, rule: &str) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

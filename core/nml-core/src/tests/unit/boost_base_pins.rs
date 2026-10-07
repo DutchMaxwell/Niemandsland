@@ -14,6 +14,7 @@ use crate::state::{Profile, Weapon};
 
 fn boost_carrier(faction: &str, rules: &[&str], attacks: i64) -> Profile {
     Profile {
+        cost: 0,
         unit_id: "u".into(),
         name: "u".into(),
         quality: 4,

@@ -26,6 +26,7 @@ use nml_core::Registries;
 /// array is non-empty (the boost_bases_family harness, ranged half).
 fn carrier(system: &str, faction: &str, rules: &[&str]) -> Profile {
     Profile {
+        cost: 0,
         unit_id: "u".into(),
         name: "u".into(),
         quality: 4,

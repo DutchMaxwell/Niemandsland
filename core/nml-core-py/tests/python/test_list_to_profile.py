@@ -79,6 +79,7 @@ def _selection(
     quality: int = 4,
     defense: int = 4,
     size: int = 1,
+    cost: int = 0,
     rules: list[dict] | None = None,
     weapons: list[dict] | None = None,
     upgrades: list[dict] | None = None,
@@ -92,6 +93,7 @@ def _selection(
         "quality": quality,
         "defense": defense,
         "size": size,
+        "cost": cost,
         "rules": rules or [],
         "weapons": weapons or [],
         "selectedUpgrades": upgrades or [],
@@ -148,6 +150,45 @@ def test_combined_unit_folds_into_one_profile():
     # Ported as the table has it; no unit in qbf_ref exercises the difference.
     assert prof["tough"] == 2
     assert prof["move_bands"] == {"advance": 8.0, "rush": 16.0}  # Fast: +2"/+4"
+
+
+def test_army_forge_cost_reaches_the_profile():
+    """afpoints step 1: the unit's Army Forge points cost — the army list's own
+    number (base + selected upgrades), with a combined partner's half summed the
+    way `_merge_combined_units` (opr_api_client.gd:1908) folds it — is plumbed
+    into the profile so the `strength_by_points` eval arm can weight presence by
+    price. RED before the field existed: `cost` was absent from the dict."""
+    data = {
+        "gameSystem": "gf",
+        "units": [
+            _selection("host", "Trooper Squad", size=4, cost=140),
+            _selection(
+                "partner",
+                "Trooper Champion",
+                size=1,
+                cost=60,
+                join_to_unit="host",
+                combined=True,
+            ),
+            _selection("tank", "Battle Tank", size=1, cost=670),
+        ],
+    }
+    profiles = profiles_from_army_forge_json(data, "test_faction", player=1)
+    assert profiles["p1_0_host"]["cost"] == 200, "combined halves sum (140 + 60)"
+    assert profiles["p1_1_tank"]["cost"] == 670, "an upgrade-inclusive list cost passes through"
+
+
+def test_a_cost_less_unit_reads_zero():
+    """afpoints step 1 RED: a unit dict with NO `cost` key — the shape
+    `_split_child_template` builds, since a spawned child is not a list
+    selection — must not KeyError in `_unit_profile`; absent cost reads 0, the
+    unpriced reading the `strength_by_points` knob expects. `_units_from_list`
+    always stamps a cost, so drop it to mimic the split-child builder."""
+    data = {"gameSystem": "gf", "units": [_selection("levy", "Levy", size=4)]}
+    built = list_to_profile._units_from_list(data, 1)
+    del built[0]["cost"]
+    prof = list_to_profile._unit_profile(built[0], "test_faction", "gf")
+    assert prof["cost"] == 0, "absent cost reads 0, not a KeyError"
 
 
 def test_joined_hero_stays_a_separate_unit():

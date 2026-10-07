@@ -29,6 +29,7 @@ use super::*;
     /// `great_musician_bearer` fixture.
     fn granted_line(faction: &str, rules_epoch: u32, grants: &[&str]) -> (State, Vec<UnitStatic>) {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

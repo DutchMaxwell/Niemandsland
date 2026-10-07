@@ -610,7 +610,9 @@ mod tests {
     use super::{combine_residual, score_hand, score_hand_variant, NO_INCOMING};
     use crate::acts::read_act_header;
     use crate::io::state_from_json;
+    use crate::rules::Registries;
     use crate::state::ProfileCache;
+    use crate::unit::UnitStatic;
 
     /// The tiny test net's constant answer (`test_fitted.py::FIT`, the
     /// sigmoid(2) any state with a living own unit scores) — the arithmetic
@@ -645,6 +647,24 @@ mod tests {
         let via_seam = score_hand_variant(&state, &[], 1, NO_INCOMING, 0);
         assert_eq!(direct, via_seam, "variant 0 must be byte-identical to the direct call");
         assert_eq!(direct, 0.5, "no objectives -> score_hand's trivial branch");
+    }
+
+    /// afpoints step 1 — the Army Forge points cost rides the profile into the
+    /// `UnitStatic` closure, the value the `strength_by_points` eval arm reads.
+    /// RED before the plumb: `UnitStatic` had no `cost` at all.
+    #[test]
+    fn the_profile_cost_reaches_unit_static() {
+        const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+          "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":3,
+            "cost":123,"wounds_max":[3],"model_count":1,"caster_value":0,"base_radius":0.016,
+            "game_system":"gf","faction_folder":"robot_legions","special_rules":[],
+            "item_grants":[],"attached_hero_rules":[],
+            "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
+        let header = read_act_header(HEADER).expect("header");
+        let mut reg = Registries::default();
+        let statics: Vec<UnitStatic> =
+            header.profiles.list.iter().map(|p| UnitStatic::build(&mut reg, p)).collect();
+        assert_eq!(statics[0].cost, 123, "the list cost reaches UnitStatic.cost");
     }
 
     /// Wave C G-AB: variant 2 is variant 0 WITHOUT the C7 carry term. My unit
