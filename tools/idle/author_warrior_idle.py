@@ -47,7 +47,7 @@ from warrior_pose import create_pose
 
 tail_bones, info["tail_verts"] = add_tail(arm, body, P)
 info["tail_bones"] = len(tail_bones)
-ANIM, pose_at = create_pose(arm, tail_bones, TWOHAND)
+ANIM, pose_at = create_pose(arm, tail_bones, TWOHAND, body)
 pb = arm.pose.bones
 
 mod = next(m for m in body.modifiers if m.type == "ARMATURE")
