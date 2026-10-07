@@ -13,6 +13,14 @@ class FakeArmy extends Node:
 	func get_all_game_units() -> Array[GameUnit]:
 		return units
 
+class FakeTable extends Node:
+	var table_size := Vector2(4, 4)
+	var biome := "temperate_grassland"
+
+class FakeLayout extends Node:
+	var placed_pieces: Array = []
+	var deployment_type := 0
+
 
 func _unit(tag: String, positions: Array[Vector3]) -> GameUnit:
 	var unit := GameUnit.new()
@@ -81,3 +89,48 @@ func test_missing_refs_are_safe_and_empty_unit_is_not_selected() -> void:
 	army.units = [_unit("empty", [])]
 	facts.setup({"army_manager": army})
 	assert_bool(facts.snapshot().tags.get("empty", {}).get("selected_whole", false)).is_false()
+
+
+func test_snapshot_reads_table_layout_and_menu() -> void:
+	var table: FakeTable = auto_free(FakeTable.new())
+	add_child(table)
+	var layout: FakeLayout = auto_free(FakeLayout.new())
+	add_child(layout)
+	var panel: Control = auto_free(Control.new())
+	add_child(panel)
+	panel.visible = false
+	var terrain: Node3D = auto_free(Node3D.new())
+	add_child(terrain)
+	terrain.add_to_group("terrain")
+	var non_terrain: Node3D = auto_free(Node3D.new())
+	add_child(non_terrain)
+	var objects: FakeObjects = auto_free(FakeObjects.new())
+	add_child(objects)
+	var facts := Facts.new()
+	facts.setup({"table": table, "map_layout": layout, "left_panel": panel,
+		"object_manager": objects})
+	var snap: Dictionary = facts.snapshot()
+	assert_vector(snap.get("table_size", Vector2.ZERO)).is_equal(Vector2(4, 4))
+	assert_str(String(snap.get("biome", ""))).is_equal("temperate_grassland")
+	assert_int(snap.get("terrain_pieces", -1)).is_equal(1)
+	assert_int(snap.get("layout_pieces", -1)).is_equal(0)
+	assert_int(snap.get("deploy_type", -1)).is_equal(0)
+	assert_bool(snap.get("menu_open", true)).is_false()
+	layout.placed_pieces = [{"a": 1}, {"b": 2}]
+	layout.deployment_type = 1
+	panel.visible = true
+	var changed: Dictionary = facts.snapshot()
+	assert_int(changed.get("layout_pieces", -1)).is_equal(2)
+	assert_int(changed.get("deploy_type", -1)).is_equal(1)
+	assert_bool(changed.get("menu_open", false)).is_true()
+
+
+func test_missing_scene_refs_report_safe_defaults() -> void:
+	var facts := Facts.new()
+	facts.setup({})
+	var snap: Dictionary = facts.snapshot()
+	assert_vector(snap.get("table_size", Vector2(-1, -1))).is_equal(Vector2.ZERO)
+	assert_str(String(snap.get("biome", "x"))).is_equal("")
+	assert_int(snap.get("terrain_pieces", -1)).is_equal(0)
+	assert_int(snap.get("layout_pieces", -1)).is_equal(0)
+	assert_bool(snap.get("menu_open", true)).is_false()
