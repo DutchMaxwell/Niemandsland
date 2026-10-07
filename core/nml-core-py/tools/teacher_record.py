@@ -6,8 +6,11 @@ its backed-up root value `v_root`, the played child's mean `v_pick`, the played 
 `outcome` (1/0/-1); opponent rows carry `tree_fired` 0 and `pi` 0. One atomic `<row_id>.npz` + `.json` per game (json last =
 complete; existing = skipped); budget-bound by default (`--tree-budget`, no clock: the seeds replay the same moves on any
 machine), `--deadline-us` = the stage-0 wall allowance. Recording moves no pick (proof: test_teacher_record.py).
+`--net-cand X.onnx` (the row's seat) / `--net-inc Y.onnx` (the other seat) make `--arm I` an A/B of two value nets at the
+shipped grade, mirrored by seat (proof: test_teacher_ab.py); default = the shipped net on both seats.
   teacher_record.py --blocks B.json --arm L|T|L_tray|C|I --out D --bank BANK --repo WT [--knobs grade.json]
                     [--tree-budget 128] [--deadline-us 0] [--deep-pair 10,3] [--seats 1,2] [--dice 0,1] [--workers N]
+                    [--net-cand X.onnx --net-inc Y.onnx]
 """
 import argparse, contextlib, json, os, sys  # noqa: E401
 import numpy as np
@@ -76,6 +79,19 @@ def pack(rows, winner):
     return out
 
 
+class SeatNets:
+    # `lab2_net.ShippedNet`'s surface for `play_row` with ONE net per seat (D-L2: an A/B of two value nets at the shipped grade).
+    def __init__(self, nets):
+        self.nets, self.model_sha256 = nets, ":".join(nets[s].model_sha256 for s in (1, 2))
+
+    @property
+    def counts(self):
+        return {s: dict(self.nets[s].counts.get(s, {"calls": 0, "leaves": 0})) for s in (1, 2)}
+
+    def hook(self, side):
+        return self.nets[side].hook(side)
+
+
 def arm_kwargs(row, cfg):
     # The probe's arm kwargs (`lab2_tree_probe.arm_kwargs`, kept as `_PROBE_ARM_KWARGS`) + the recorder's seams: a leaf
     # budget beside/instead of the wall allowance, T = the L tree to the mission end, the deep pair. At the stage-0
@@ -94,14 +110,17 @@ lab._PROBE_ARM_KWARGS, lab.arm_kwargs = lab.arm_kwargs, lambda row, us: arm_kwar
 def _init(cfg):
     import nml_core as nm
     _W.update(cfg)
-    net = lab2_net.ShippedNet(cfg["repo"])
-    return dict(cfg, nm=nm, net=net, ctx=lab.run_context(nm, cfg["prereg"], net))
+    nets = {s: lab2_net.ShippedNet(cfg["repo"], **({"onnx": p, "sha256": lab2_net._sha256(p)} if p else {}))
+            for s, p in ((1, cfg.get("net_cand", "")), (2, cfg.get("net_inc", "")))}
+    return dict(cfg, nm=nm, nets=nets, ctx=lab.run_context(nm, cfg["prereg"], nets[1]))
 
 
 def play(w, row, record=True):
-    # One manifest row through `lab2_tree_probe.play_row` (the stage-0 path), the Capture armed around it.
+    # One manifest row through `lab2_tree_probe.play_row` (the stage-0 path), the Capture armed around it. D-L2: with
+    # `--net-cand` / `--net-inc` the candidate net sits on the ROW'S seat and the incumbent's on the other (mirrored by seat).
+    net = SeatNets({row["seat"]: w["nets"][1], 3 - row["seat"]: w["nets"][2]}) if w.get("net_cand") or w.get("net_inc") else w["nets"][1]
     with (Capture().armed() if record else contextlib.nullcontext()) as cap:
-        meta = lab.play_row(w["nm"], sp, row, w["repo"], w["bank"], dict(w["knobs"], record_cands=record), w["net"], w["allowance"], w["ctx"])
+        meta = lab.play_row(w["nm"], sp, row, w["repo"], w["bank"], dict(w["knobs"], record_cands=record), net, w["allowance"], w["ctx"])
     return meta, cap.rows if cap else []
 
 
@@ -119,7 +138,7 @@ def _work(w, cid, rows):
                 os.replace(base + ".npz.tmp", base + ".npz")
             meta["teacher"] = {"schema": "teacher-game/1", "rows": len(rows_), "tree_rows": int(sum(int(r["tree_fired"]) for r in rows_)),
                                "y_cand": {"draw": 0.5}.get(meta["winner"], float(meta["winner"] == "p%d" % row["seat"])),
-                               "budget": w["budget"], "pair": list(w["pair"])}
+                               "budget": w["budget"], "pair": list(w["pair"]), "nets": [w.get("net_cand", ""), w.get("net_inc", "")]}
             lab.write_row(w["out"], meta)
         t = json.load(open(base + ".json"))
         out.append({"row_id": row["row_id"], "valid": t["valid"], "rows": t["teacher"]["rows"], "tree_rows": t["teacher"]["tree_rows"]})
@@ -130,13 +149,14 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     for k, d in (("--blocks", None), ("--out", None), ("--bank", None), ("--repo", None), ("--arm", "L"), ("--knobs", ""),
                  ("--deep-pair", "10,3"), ("--seats", "1,2"), ("--dice", "0,1"), ("--prereg-sha256", "none"),
-                 ("--tree-budget", 128), ("--deadline-us", 0), ("--workers", 1)):
+                 ("--net-cand", ""), ("--net-inc", ""), ("--tree-budget", 128), ("--deadline-us", 0), ("--workers", 1)):
         ap.add_argument(k, default=d, required=d is None, **({"type": int} if isinstance(d, int) else {}))
     a = ap.parse_args(argv)
     seats, dice = {int(x) for x in a.seats.split(",")}, {int(x) for x in a.dice.split(",")}
     rows = [r for r in lab.game_rows(json.load(open(a.blocks)), (a.arm,)) if r["seat"] in seats and r["d"] in dice]
     cfg = {"repo": a.repo, "bank": a.bank, "out": a.out, "knobs": json.load(open(a.knobs)) if a.knobs else {}, "budget": a.tree_budget,
-           "pair": tuple(int(x) for x in a.deep_pair.split(",")), "allowance": a.deadline_us, "prereg": a.prereg_sha256}
+           "pair": tuple(int(x) for x in a.deep_pair.split(",")), "allowance": a.deadline_us, "prereg": a.prereg_sha256,
+           "net_cand": a.net_cand, "net_inc": a.net_inc}
     os.makedirs(a.out, exist_ok=True)
     res = [x for r in lab2_pool.run_clusters({r["row_id"]: [r] for r in rows}, a.workers, _init, _work, (cfg,)) for x in r["result"]]
     print("[record] games=%d valid=%d rows=%d tree_rows=%d out=%s" % (len(res), sum(x["valid"] for x in res), sum(x["rows"] for x in res),
