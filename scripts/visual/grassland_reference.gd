@@ -374,6 +374,19 @@ func apply_table_mood(mood: String) -> void:
 	else:
 		_apply_reference_sun()
 		_apply_reference_environment(false)   # the tuned environment stays; the mood's own intensities show
+	apply_wet_ground(mood)
+
+
+## Rain soaks the ground shader (darker, glossier grass, puddles in the paths and low spots); a dry mood or a
+## cheap tier writes 0.0 and restores the original surface.
+func apply_wet_ground(mood: String) -> void:
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics == null or _ground == null:
+		return
+	var rainfall: float = graphics.rainfall_for(int(graphics.current_preset), mood, biome)
+	_ground.set_shader_parameter("rainfall", rainfall)
+	if _base != null:
+		_base.set_shader_parameter("rainfall", rainfall)
 
 
 ## The sun's miniature-scale shadow values (bias, shadow range, fog energy): table geometry, not mood light, so the
