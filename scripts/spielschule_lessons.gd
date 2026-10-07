@@ -68,6 +68,16 @@ const _S04_STEPS := [
 ]
 
 
+const _S05_STEPS := [
+	{"id": "card", "text": "Right-click alpha and open its card: the Heavy Rifle shoots 24\". (p.5)",
+		"rule": "p.5", "all": [{"check": "flag", "args": {"key": "card_presented"}}]},
+	{"id": "shoot", "text": "Right-click alpha, choose Shoot, click the enemy squad.",
+		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
+	{"id": "read_log", "text": "Read the log: hits roll against Quality, the target blocks with Defense. (p.8)",
+		"rule": "p.8", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
@@ -80,6 +90,8 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S03_STEPS
 		"S-04":
 			return _S04_STEPS
+		"S-05":
+			return _S05_STEPS
 	return []
 
 
@@ -94,5 +106,7 @@ static func ai_mode(chapter_id: String) -> String:
 		"S-03":
 			return "none"
 		"S-04":
+			return "hold"
+		"S-05":
 			return "hold"
 	return "none"

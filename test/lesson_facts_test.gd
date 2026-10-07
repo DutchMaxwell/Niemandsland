@@ -23,6 +23,11 @@ class FakeMR extends Node:
 	func active_count() -> int:
 		return active
 
+class FakeDock extends Node:
+	var presented: GameUnit = null
+	func get_presented_unit() -> GameUnit:
+		return presented
+
 class FakeTable extends Node:
 	var table_size := Vector2(4, 4)
 	var biome := "temperate_grassland"
@@ -214,3 +219,13 @@ func test_bands_round_and_per_tag_status_flags() -> void:
 	assert_bool(alpha.get("fatigued", true)).is_false()
 	mr.active = 1
 	assert_bool(facts.snapshot().get("bands", false)).is_true()
+
+
+func test_card_presented_reads_the_unit_dock() -> void:
+	var dock: FakeDock = auto_free(FakeDock.new())
+	add_child(dock)
+	var facts := Facts.new()
+	facts.setup({"unit_dock": dock})
+	assert_bool(facts.snapshot().get("card_presented", true)).is_false()
+	dock.presented = _unit("alpha", [])
+	assert_bool(facts.snapshot().get("card_presented", false)).is_true()
