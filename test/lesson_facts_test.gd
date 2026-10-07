@@ -25,6 +25,11 @@ class FakeLayout extends Node:
 	var deployment_type := 0
 
 
+class FakeMain extends Node:
+	signal human_attack_resolved(attacker: GameUnit, melee: bool)
+	signal human_cast_resolved(unit: GameUnit)
+
+
 func _unit(tag: String, positions: Array[Vector3]) -> GameUnit:
 	var unit := GameUnit.new()
 	unit.unit_properties["lesson_tag"] = tag
@@ -80,6 +85,22 @@ func test_counters_only_grow_after_bump_or_measurement() -> void:
 	assert_int(facts.snapshot().counters.get("continue", 0)).is_equal(1)
 	assert_int(facts.snapshot().counters.get("measure", 0)).is_equal(1)
 	assert_int(initial.counters.get("measure", 0)).is_equal(0)
+
+
+func test_combat_seam_signals_count_tagged_units() -> void:
+	var main: FakeMain = auto_free(FakeMain.new())
+	add_child(main)
+	var facts := Facts.new()
+	facts.setup({"main": main})
+	main.human_attack_resolved.emit(_unit("alpha", []), false)
+	main.human_attack_resolved.emit(_unit("alpha", []), true)
+	main.human_cast_resolved.emit(_unit("alpha", []))
+	main.human_attack_resolved.emit(_unit("", []), false)   # untagged units are not counted
+	var counters: Dictionary = facts.snapshot().counters
+	assert_int(counters.get("shoot:alpha", 0)).is_equal(1)
+	assert_int(counters.get("melee:alpha", 0)).is_equal(1)
+	assert_int(counters.get("cast:alpha", 0)).is_equal(1)
+	assert_int(counters.size()).is_equal(3)
 
 
 func test_missing_refs_are_safe_and_empty_unit_is_not_selected() -> void:

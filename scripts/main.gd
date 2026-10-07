@@ -130,6 +130,11 @@ var _top_bar: TopBar = null
 ## count / success / modifier / reroll / movecap. The tutorial director gates T-05 steps on it;
 ## display-consumers only, no game logic reads it back.
 signal dice_controls_changed(kind: StringName, value: int)
+## Lesson seam: a human attack has finished resolving, so a lesson step can count it. melee
+## distinguishes the charge/pile-in leg from a shooting volley. Display-consumers only.
+signal human_attack_resolved(attacker: GameUnit, melee: bool)
+## Lesson seam: a human cast has finished resolving (tokens spent, effects applied).
+signal human_cast_resolved(unit: GameUnit)
 
 var _dice_count: int = DEFAULT_DICE_COUNT
 var _dice_preset_buttons: Array[Button] = []
@@ -10583,6 +10588,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 		"name": spell_name, "targets": targets, "boost": boost, "interference": interference,
 		"base_target": AiSpell.CAST_BASE_TARGET, "threshold": threshold,
 		"owner_label": "You", "human_cast": true})
+	human_cast_resolved.emit(unit)
 
 
 func _solo_end_targeting() -> void:
@@ -11448,6 +11454,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 	# toggle path does the full job (GameUnit.activate marks host + heroes, marker, MP broadcast, log,
 	# alternation reply via unit_activated). A pre-toggled unit falls through to the normal pump so a
 	# mis-click fix never queues a second AI answer.
+	human_attack_resolved.emit(attacker, melee)
 	await _solo_complete_human_attack(attacker)
 
 
@@ -11677,6 +11684,7 @@ func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: G
 			attacker.get_name(), target_a.get_name(), target_b.get_name()], false)
 	await _run_human_shooting(attacker, target_a, b_names, true)
 	await _run_human_shooting(attacker, target_b, b_names, false)
+	human_attack_resolved.emit(attacker, false)
 	await _solo_complete_human_attack(attacker)
 
 
@@ -17322,7 +17330,7 @@ func _start_lesson(_object_count: int) -> void:
 	var facts := LessonFacts.new()
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
 		"army_manager": opr_army_manager, "table": table,
-		"map_layout": map_layout_editor, "left_panel": left_panel_scroll})
+		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self})
 	var progress := SpielschuleProgress.new(_lesson_progress_path)
 	progress.load_from_disk()
 	var runner := LessonRunner.new()
