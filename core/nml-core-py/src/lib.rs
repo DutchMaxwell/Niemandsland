@@ -853,6 +853,7 @@ impl Core {
         m.insert("engage_fold".into(), self.knobs.engage_fold.into());
         m.insert("reply_v2".into(), self.knobs.reply_v2.into());
         m.insert("menu_all_targets".into(), (self.knobs.menu_all_targets as i64).into());
+        m.insert("menu_advance_obj_shoot".into(), self.knobs.menu_advance_obj_shoot.into());
         m.insert("reply_skip_activated".into(), self.knobs.reply_skip_activated.into());
         m.insert("reply_hold_gate".into(), self.knobs.reply_hold_gate.into());
         m.insert("opener_by_finish".into(), self.knobs.opener_by_finish.into());

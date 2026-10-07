@@ -33,6 +33,7 @@ fn main() {
     let (mut max_games, mut top_k, mut horizon) = (usize::MAX, 10i64, 3i64);
     let mut shipped = false;
     let mut all_targets = 0usize;
+    let mut adv_obj = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -50,6 +51,7 @@ fn main() {
             "--top-k" => { i += 1; top_k = args[i].parse().unwrap(); }
             "--horizon" => { i += 1; horizon = args[i].parse().unwrap(); }
             "--shipped" => shipped = true,
+            "--adv-obj" => adv_obj = true,
             "--all-targets" => { i += 1; all_targets = args[i].parse().unwrap(); }
             other => panic!("unknown arg {other}"),
         }
@@ -84,6 +86,7 @@ fn main() {
             knobs.rules_epoch = nml_core::acts::CURRENT_RULES_EPOCH;
         }
         knobs.menu_all_targets = all_targets;
+        knobs.menu_advance_obj_shoot = adv_obj;
         knobs.deadline_us = 3_600_000_000;
         knobs.deadline_after_preselect = true;
         let name = g.file_name().unwrap().to_string_lossy().to_string();
