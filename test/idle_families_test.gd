@@ -41,6 +41,13 @@ func test_saurian_heroes_with_proven_floor_contact_are_listed() -> void:
 	assert_bool(Families.allows("saurians/teqi", 0)).is_false()
 	assert_bool(Families.allows("saurians/hakatlo", 0)).is_false()
 
+func test_vampiric_undead_foot_families_are_listed_without_tail_bones() -> void:
+	for key in ["vampiric_undead/skeleton guard#halberd", "vampiric_undead/skeleton watch", "vampiric_undead/drained soldiers#musician", "vampiric_undead/drained archers#bow+sergeant", "vampiric_undead/ghouls#halberd", "vampiric_undead/skeleton champion", "vampiric_undead/vampire master", "vampiric_undead/stitched zombies#banner", "vampiric_undead/werewolves#heavy_hand_weapon", "vampiric_undead/stitched butchers#carving_tool"]:
+		assert_bool(Families.allows(key, 0)).is_true()
+		assert_bool(Families.allows(key, 5)).is_false()
+	assert_bool(Families.allows("vampiric_undead/ghoulsx", 0)).is_false()
+	assert_bool(Families.allows("vampiric_undead/wolves", 0)).is_false()
+
 func test_unlisted_families_are_rejected() -> void:
 	assert_bool(Families.allows("ratmen/rat ogres", 0)).is_false()
 	assert_bool(Families.allows("mummified_undead/royal champion", 0)).is_false()
