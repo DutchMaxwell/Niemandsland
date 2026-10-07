@@ -5832,7 +5832,7 @@ pub fn melee_threat(statics: &[UnitStatic], state: &State, si: usize, ti: usize)
 /// Each volley prices the LIVE root ctx (families 2-4 of the blindness
 /// report) — see `volley_ev`.
 pub fn reply_threat_at_epoch(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32) -> Vec<f64> {
-    reply_threat_core(statics, state, player, rules_epoch, false)
+    reply_threat_core(statics, state, player, rules_epoch, ReplyOpts::default())
 }
 
 /// The charge band the v2 reply reads a melee threat inside (GF p.7 Charge: 12").
@@ -5857,17 +5857,39 @@ fn expected_remaining(w: f64, lambda: f64) -> f64 {
 /// Shaken enemy only holds so it threatens nothing, and each enemy still picks
 /// ONE best target, shooting or charging.
 pub fn reply_threat_with(statics: &[UnitStatic], state: &State, player: i64, v2: bool) -> Vec<f64> {
-    reply_threat_core(statics, state, player, CURRENT_RULES_EPOCH, v2)
+    reply_threat_opts(statics, state, player, ReplyOpts { v2, ..ReplyOpts::default() })
 }
 
-fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32, v2: bool) -> Vec<f64> {
+/// The reply-threat readings, one flag per audit fix (`Seams::reply_opts`). `v2` = D2 (charge, advance,
+/// Shaken, survival tail); `skip_activated` = E5; `hold_gate` = Immobile/Artillery may only Hold, so
+/// they neither advance-shoot nor charge. The last two only matter with `v2` (they gate its extras)
+/// except `skip_activated`, which stands alone.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ReplyOpts {
+    pub v2: bool,
+    pub skip_activated: bool,
+    pub hold_gate: bool,
+}
+
+pub fn reply_threat_opts(statics: &[UnitStatic], state: &State, player: i64, o: ReplyOpts) -> Vec<f64> {
+    reply_threat_core(statics, state, player, CURRENT_RULES_EPOCH, o)
+}
+
+fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32, o: ReplyOpts) -> Vec<f64> {
+    let v2 = o.v2;
     let n = state.units();
     let mut incoming = vec![0.0f64; n];
     let mut sc = Scratch::default();
+    // E5: mid-round (someone alive has yet to activate) an enemy that already activated cannot fire
+    // again; at a round end everyone is activated and the next round's volley is what is priced.
+    let mid_round = o.skip_activated && (0..n).any(|i| state.alive[i] > 0 && !state.activated[i]);
     for e in 0..n {
-        if state.player[e] == player || state.alive[e] <= 0 || (v2 && state.shaken[e]) {
+        if state.player[e] == player || state.alive[e] <= 0 || (v2 && state.shaken[e])
+            || (mid_round && state.activated[e])
+        {
             continue;
         }
+        let movable = !(o.hold_gate && crate::menu::forces_hold(&state.profile(e).special_rules));
         let mut best_key: Option<usize> = None;
         let mut best_ev = 0.0f64;
         for m in 0..n {
@@ -5879,10 +5901,10 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
             if state.sees(e, state.key(m)) && los_clear(state, e, m) {
                 ev = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch).0;
             }
-            if v2 && d <= REPLY_CHARGE_IN {
+            if v2 && movable && d <= REPLY_CHARGE_IN {
                 ev = ev.max(melee_threat_at_epoch(statics, state, e, m, rules_epoch));
             }
-            if v2 && d > REPLY_ADVANCE_IN && state.sees(e, state.key(m)) && los_clear(state, e, m) {
+            if v2 && movable && d > REPLY_ADVANCE_IN && state.sees(e, state.key(m)) && los_clear(state, e, m) {
                 let after = volley_ev(statics, state, e, m, d - REPLY_ADVANCE_IN, &mut sc, rules_epoch).0;
                 ev = ev.max(after);
             }

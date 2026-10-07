@@ -35,7 +35,7 @@ use crate::mission::{apply_carry_step, apply_destroy_step, playout_seize, sync_c
 use crate::rng::GodotRng;
 use crate::playout::{other_player, Policy};
 use crate::score::{score_with, score_with_variant, NO_INCOMING};
-use crate::sim::{reply_threat_with, Scratch, Unsupported, DEFAULT_BASE_RADIUS_M};
+use crate::sim::{reply_threat_opts, Scratch, Unsupported, DEFAULT_BASE_RADIUS_M};
 use crate::state::State;
 use crate::unit::UnitStatic;
 use crate::{geom, DISCOUNT};
@@ -294,7 +294,7 @@ impl<'a> Rollout<'a> {
         for action in self.policy.policy_candidates(cur, recv, sc) {
             let next = self.policy.resolve(cur, &action)?;
             let s = if rich {
-                let incoming = reply_threat_with(self.statics(), &next, player, self.policy.seams.reply_v2);
+                let incoming = reply_threat_opts(self.statics(), &next, player, self.policy.seams.reply_opts());
                 score_with(&next, self.statics(), player, &incoming, self.policy.fit)
             } else {
                 score_with(&next, self.statics(), player, NO_INCOMING, self.policy.fit)
@@ -447,7 +447,7 @@ impl<'a> Rollout<'a> {
         if self.knobs.no_end_threat && end.round >= end.rounds_total {
             return Vec::new();
         }
-        reply_threat_with(self.statics(), end, player, self.policy.seams.reply_v2)
+        reply_threat_opts(self.statics(), end, player, self.policy.seams.reply_opts())
     }
 
     /// `AiPlanner._blend_score` ai_planner.gd:439-452 — the rollout's boundaries
