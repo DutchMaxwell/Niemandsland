@@ -34,6 +34,7 @@ func test_bilingual_cards_have_two_sentences_and_capture_slots() -> void:
 	assert_int(content.cards().size()).is_equal(5)
 	for card: Dictionary in content.cards():
 		assert_str(card.image).starts_with("res://assets/whats_new/")
+		assert_bool(ResourceLoader.exists(card.image)).is_true()
 		assert_str(card.capture).is_not_empty()
 		for locale: String in ["en", "de"]:
 			assert_str(card[locale].title).is_not_empty()

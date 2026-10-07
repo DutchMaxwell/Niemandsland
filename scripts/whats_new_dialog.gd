@@ -7,6 +7,7 @@ const IMAGE_HEIGHT := 144
 var state_path := WhatsNewContent.STATE_PATH
 var _content := WhatsNewContent.new()
 var _locale := TranslationServer.get_locale()
+var _in_game := false
 var _cards: VBoxContainer
 var _language_button: Button
 
@@ -33,9 +34,11 @@ func _ready() -> void:
 	_refresh()
 
 ## Startup checks acknowledgement; the menu can always open the same sheet explicitly.
-func open(unseen_only: bool = false) -> bool:
+## `in_game` only changes the dismiss label: "Back to the table" mid-battle, "Close" on the menu.
+func open(unseen_only: bool = false, in_game: bool = false) -> bool:
 	if unseen_only and not WhatsNewContent.should_show(state_path):
 		return false
+	_in_game = in_game
 	_refresh()
 	popup_centered()
 	get_ok_button().grab_focus()
@@ -54,7 +57,7 @@ func _switch_language() -> void:
 
 func _refresh() -> void:
 	title = _content.text_for(_locale, "title") % WhatsNewContent.version()
-	ok_button_text = _content.text_for(_locale, "close")
+	ok_button_text = _content.text_for(_locale, "back" if _in_game else "close")
 	for child in _cards.get_children():
 		child.free()
 	for card: Dictionary in _content.cards():
