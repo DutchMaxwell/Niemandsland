@@ -8,6 +8,8 @@ complete; existing = skipped); budget-bound by default (`--tree-budget`, no cloc
 machine), `--deadline-us` = the stage-0 wall allowance. Recording moves no pick (proof: test_teacher_record.py).
 `--net-cand X.onnx` (the row's seat) / `--net-inc Y.onnx` (the other seat) make `--arm I` an A/B of two value nets at the
 shipped grade, mirrored by seat (proof: test_teacher_ab.py); default = the shipped net on both seats.
+  `--cand-knobs JSON|FILE` / `--cand-preset NAME` (--arm I only) give the ROW'S seat one extra knob bundle (selfplay.KNOB_PRESETS or
+inline), mirrored by `--seats 1,2`: "the shipped net + one knob vs the shipped net"; rows record cand_seat / cand_knobs(_sha256).
   teacher_record.py --blocks B.json --arm L|T|L_tray|C|I --out D --bank BANK --repo WT [--knobs grade.json]
                     [--tree-budget 128] [--deadline-us 0] [--deep-pair 10,3] [--seats 1,2] [--dice 0,1] [--workers N]
                     [--net-cand X.onnx --net-inc Y.onnx]
@@ -19,6 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [os.path.join(HERE, "..", "python"), os.path.join(HERE, "..", "..", "..", "tools")]
 import lab2_net  # noqa: E402
 import lab2_pool  # noqa: E402
+import lab2_rows  # noqa: E402
 import lab2_tree_probe as lab  # noqa: E402
 import selfplay as sp  # noqa: E402
 
@@ -119,8 +122,27 @@ def play(w, row, record=True):
     # One manifest row through `lab2_tree_probe.play_row` (the stage-0 path), the Capture armed around it. D-L2: with
     # `--net-cand` / `--net-inc` the candidate net sits on the ROW'S seat and the incumbent's on the other (mirrored by seat).
     net = SeatNets({row["seat"]: w["nets"][1], 3 - row["seat"]: w["nets"][2]}) if w.get("net_cand") or w.get("net_inc") else w["nets"][1]
-    with (Capture().armed() if record else contextlib.nullcontext()) as cap:
-        meta = lab.play_row(w["nm"], sp, row, w["repo"], w["bank"], dict(w["knobs"], record_cands=record), net, w["allowance"], w["ctx"])
+    knobs = dict(w["knobs"], record_cands=record)
+    if w.get("cand_knobs"):
+        # "one knob bundle vs the incumbent": the bundle rides the ROW'S seat only (selfplay.play_game's per-seat core)
+        knobs.update(knob_override_player=row["seat"], knob_overrides=dict(w["cand_knobs"]))
+    played = {}
+    real_play = sp.play_game
+
+    def spy(*a, **k):  # the knobs each seat REALLY played (res["knobs_by_seat"]), kept as the row's evidence
+        res = real_play(*a, **k)
+        played["by_seat"] = res.get("knobs_by_seat") if res else None
+        return res
+
+    if w.get("cand_knobs"):
+        sp.play_game = spy
+    try:
+        with (Capture().armed() if record else contextlib.nullcontext()) as cap:
+            meta = lab.play_row(w["nm"], sp, row, w["repo"], w["bank"], knobs, net, w["allowance"], w["ctx"])
+    finally:
+        sp.play_game = real_play
+    if w.get("cand_knobs"):
+        meta["cand_played"] = played.get("by_seat")
     return meta, cap.rows if cap else []
 
 
@@ -138,25 +160,45 @@ def _work(w, cid, rows):
                 os.replace(base + ".npz.tmp", base + ".npz")
             meta["teacher"] = {"schema": "teacher-game/1", "rows": len(rows_), "tree_rows": int(sum(int(r["tree_fired"]) for r in rows_)),
                                "y_cand": {"draw": 0.5}.get(meta["winner"], float(meta["winner"] == "p%d" % row["seat"])),
-                               "budget": w["budget"], "pair": list(w["pair"]), "nets": [w.get("net_cand", ""), w.get("net_inc", "")]}
+                               "budget": w["budget"], "pair": list(w["pair"]), "nets": [w.get("net_cand", ""), w.get("net_inc", "")],
+                               **({"cand_seat": row["seat"], "cand_knobs": w["cand_knobs"],
+                                   "cand_knobs_sha256": lab2_rows.sha_of(w["cand_knobs"]),
+                                   "knobs_by_seat": meta.pop("cand_played", None)} if w.get("cand_knobs") else {})}
             lab.write_row(w["out"], meta)
         t = json.load(open(base + ".json"))
         out.append({"row_id": row["row_id"], "valid": t["valid"], "rows": t["teacher"]["rows"], "tree_rows": t["teacher"]["tree_rows"]})
     return out
 
 
+def resolve_cand(cand_knobs, cand_preset, arm):
+    """The candidate seat's knob bundle: `selfplay.KNOB_PRESETS[cand_preset]` overlaid by `cand_knobs` (an inline JSON object or a
+    file path), {} when neither is given. Only `--arm I` (both seats the incumbent search) may carry one: a tree arm's deep
+    core sits on the same seat and the per-seat knob core would replace it."""
+    bundle = {}
+    if cand_preset:
+        if cand_preset not in sp.KNOB_PRESETS:
+            raise SystemExit("unknown --cand-preset %r (have %s)" % (cand_preset, sorted(sp.KNOB_PRESETS)))
+        bundle.update(sp.KNOB_PRESETS[cand_preset])
+    if cand_knobs:
+        text = open(cand_knobs).read() if os.path.exists(cand_knobs) else cand_knobs
+        bundle.update(json.loads(text))
+    if bundle and arm != "I":
+        raise SystemExit("--cand-knobs/--cand-preset need --arm I (the tree arms put a deep core on the candidate seat)")
+    return bundle
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     for k, d in (("--blocks", None), ("--out", None), ("--bank", None), ("--repo", None), ("--arm", "L"), ("--knobs", ""),
                  ("--deep-pair", "10,3"), ("--seats", "1,2"), ("--dice", "0,1"), ("--prereg-sha256", "none"),
-                 ("--net-cand", ""), ("--net-inc", ""), ("--tree-budget", 128), ("--deadline-us", 0), ("--workers", 1)):
+                 ("--net-cand", ""), ("--net-inc", ""), ("--cand-knobs", ""), ("--cand-preset", ""), ("--tree-budget", 128), ("--deadline-us", 0), ("--workers", 1)):
         ap.add_argument(k, default=d, required=d is None, **({"type": int} if isinstance(d, int) else {}))
     a = ap.parse_args(argv)
     seats, dice = {int(x) for x in a.seats.split(",")}, {int(x) for x in a.dice.split(",")}
     rows = [r for r in lab.game_rows(json.load(open(a.blocks)), (a.arm,)) if r["seat"] in seats and r["d"] in dice]
     cfg = {"repo": a.repo, "bank": a.bank, "out": a.out, "knobs": json.load(open(a.knobs)) if a.knobs else {}, "budget": a.tree_budget,
            "pair": tuple(int(x) for x in a.deep_pair.split(",")), "allowance": a.deadline_us, "prereg": a.prereg_sha256,
-           "net_cand": a.net_cand, "net_inc": a.net_inc}
+           "net_cand": a.net_cand, "net_inc": a.net_inc, "cand_knobs": resolve_cand(a.cand_knobs, a.cand_preset, a.arm)}
     os.makedirs(a.out, exist_ok=True)
     res = [x for r in lab2_pool.run_clusters({r["row_id"]: [r] for r in rows}, a.workers, _init, _work, (cfg,)) for x in r["result"]]
     print("[record] games=%d valid=%d rows=%d tree_rows=%d out=%s" % (len(res), sum(x["valid"] for x in res), sum(x["rows"] for x in res),
