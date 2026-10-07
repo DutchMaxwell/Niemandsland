@@ -2,14 +2,16 @@
   "en": {
     "menu": "What's new?",
     "title": "What's new in %s",
-    "close": "Back to the table",
+    "close": "Close",
+    "back": "Back to the table",
     "placeholder": "Image coming soon",
     "language": "English / Deutsch"
   },
   "de": {
     "menu": "Was ist neu?",
     "title": "Neu in %s",
-    "close": "Zurück zum Spieltisch",
+    "close": "Schließen",
+    "back": "Zurück zum Spieltisch",
     "placeholder": "Bild folgt",
     "language": "English / Deutsch"
   },

@@ -54,6 +54,9 @@ func test_cards_use_house_style_and_can_switch_to_german() -> void:
 	dialog._locale = "en"
 	dialog._language_button.pressed.emit()
 	assert_str(dialog.title).is_equal("Neu in %s" % _version)
+	dialog.open()
+	assert_str(dialog.get_ok_button().text).is_equal("Schließen")
+	dialog.open(false, true)
 	assert_str(dialog.get_ok_button().text).is_equal("Zurück zum Spieltisch")
 	assert_str(dialog._cards.get_child(0).get_child(0).get_child(0).text).is_equal("Zwei neue Armeen")
 
