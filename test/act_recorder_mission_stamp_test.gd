@@ -142,6 +142,18 @@ func test_an_unknown_env_id_falls_back_to_duel() -> void:
 
 
 ## The hand-leaf arm rides the header's knobs (plain.rs `knobs_of` reads it back into the core's plan call).
+## aifix_all bundle: the live core reads its six knobs from THIS header (plain.rs knobs_of).
+func test_the_header_stamps_the_aifix_knobs() -> void:
+	BattleSim.reply_v2 = true
+	AiPlanner.opener_by_finish = true
+	var k: Dictionary = AiActRecorder._header_line(_state(), Callable()).get("knobs", {})
+	BattleSim.reply_v2 = false
+	AiPlanner.opener_by_finish = false
+	assert_bool(bool(k.get("reply_v2", false))).is_true()
+	assert_bool(bool(k.get("opener_by_finish", false))).is_true()
+	assert_bool(bool(k.get("no_end_threat", true))).is_false()
+
+
 func test_the_header_stamps_the_eval_variant() -> void:
 	AiMissionEval.eval_variant = 3
 	var k: Dictionary = AiActRecorder._header_line(_state(), Callable()).get("knobs", {})
