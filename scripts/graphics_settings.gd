@@ -146,6 +146,10 @@ var _calm_restore: Dictionary = {}
 ## The quiet values Calm forces onto the switches it owns.
 const CALM_VALUES := {"show_combat_effects": false, "idle_motion": false,
 	"reduce_motion": true, "tilt_shift": false}
+## The running VFX nodes that read show_combat_effects once in their _ready(); Calm
+## has to push the new value at them, exactly like the settings panel does.
+const COMBAT_VFX_NODES := ["ResultPips", "VolleyCue", "SpellSeal", "ShotShow",
+	"SpellShow", "CasualtyShow", "ModelAuras"]
 
 
 ## Enable/disable Calm mode. ON snapshots the individual switches then forces the
@@ -166,7 +170,19 @@ func set_calm_mode(on: bool) -> void:
 	calm_mode = on
 	save_settings()
 	apply_environment_settings(PRESETS[current_preset])   # push/strip the calm glow layer
+	_sync_combat_vfx()
 	calm_mode_changed.emit()
+
+## Push show_combat_effects at the running VFX nodes; they read it only at _ready().
+func _sync_combat_vfx() -> void:
+	var tree := get_tree()
+	var main: Node = tree.root.get_node_or_null("Main") if tree != null else null
+	if main == null:
+		return
+	for fx_name: String in COMBAT_VFX_NODES:
+		var fx := main.get_node_or_null(fx_name)
+		if fx != null:
+			fx.enabled = show_combat_effects
 
 ## Strict "dry brush" movement enforcement: hard-stop a movement path-paint / drag at the
 ## model's MAX legal band (Rush/Charge). ON = Strict (the maintainer's default — you learn the
