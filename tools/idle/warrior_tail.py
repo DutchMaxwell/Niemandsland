@@ -1,5 +1,5 @@
 """Build the proven five-bone weighted Warrior tail chain."""
-import bpy, math, heapq
+import bpy, math, heapq, re
 from mathutils import Vector
 from mathutils.kdtree import KDTree
 
@@ -65,4 +65,9 @@ def add_tail(arm, body, prefix):
             for b in range(NB):
                 if ws[b] > 0:
                     groups[b].add([i], ws[b] / tot, "REPLACE")
+    if not tail_bones:
+        # Saurian rigs already carry a weighted Tail0..TailN chain: animate it instead of building one
+        tail_bones = sorted((b.name for b in arm.data.bones if re.fullmatch(r"Tail\d+", b.name)), key=lambda n: int(n[4:]))
+        groups = {body.vertex_groups[n].index for n in tail_bones if n in body.vertex_groups}
+        tail = [v.index for v in body.data.vertices if any(g.group in groups and g.weight > 0.3 for g in v.groups)]
     return tail_bones, len(tail)

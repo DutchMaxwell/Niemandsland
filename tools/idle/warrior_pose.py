@@ -2,7 +2,7 @@
 import bpy, math
 from mathutils import Vector, Matrix
 
-def create_pose(arm, tail_bones, twohand):
+def create_pose(arm, tail_bones, twohand, body=None):
     P, TWOHAND = "mixamorig:", twohand
     view = bpy.context.view_layer
     AWI = arm.matrix_world.to_3x3().normalized().inverted()
@@ -68,6 +68,63 @@ def create_pose(arm, tail_bones, twohand):
         view.update()
 
 
+    # A tail that rests on the floor stays on it: the lowest tail vertices of the calibrated pose are pinned to that height by a small
+    # pitch of the tail root chain after the hip sway (the rigid tail otherwise dips through the floor when the hips roll).
+    follow_verts, follow_rest, skin = [], 0.0, {}
+    if body is not None and tail_bones:
+        tail_groups = {body.vertex_groups[n].index for n in tail_bones if n in body.vertex_groups}
+        deps = bpy.context.evaluated_depsgraph_get()
+        reset()
+        ev = body.evaluated_get(deps)
+        mesh = ev.to_mesh()
+        zs = [(body.matrix_world @ v.co).z for v in mesh.vertices]
+        floor = min(zs)
+        follow_verts = [v.index for v in mesh.vertices if zs[v.index] <= floor + 3e-2 and any(g.group in tail_groups and g.weight > 0.3 for g in body.data.vertices[v.index].groups)]
+        follow_rest = min((zs[i] for i in follow_verts), default=0.0)
+        pinned = follow_rest <= floor + 2e-3   # the tail touches the floor: keep it there; a tail just above the floor only may not dip below it
+        follow_floor_level = floor
+        ev.to_mesh_clear()
+        to_arm = arm.matrix_world.inverted() @ body.matrix_world
+        names = {g.index: g.name for g in body.vertex_groups}
+        skin = {i: ([(names[g.group], g.weight) for g in body.data.vertices[i].groups if g.weight > 0], to_arm @ body.data.vertices[i].co) for i in follow_verts}
+        follow_off = 0.0
+
+    def skin_low():
+        mats = {n: pb[n].matrix @ arm.data.bones[n].matrix_local.inverted() for n in {n for ws, _ in skin.values() for n, _ in ws if n in pb}}
+        low = 1e9
+        for ws, co in skin.values():
+            tot = sum(w for n, w in ws if n in mats) or 1.0
+            p = sum(((mats[n] @ co) * w for n, w in ws if n in mats), Vector()) / tot
+            low = min(low, (arm.matrix_world @ p).z)
+        return low
+
+    def follow_floor():
+        if not follow_verts:
+            return
+        nonlocal follow_off
+        if follow_off == 0.0:   # calibrate the manual skin against Blender's own evaluation once, at the calibrated pose
+            reset()
+            follow_off = follow_rest - skin_low()
+        SHARES = [0.5, 0.3, 0.2] + [0.0] * len(tail_bones)
+        for _ in range(3):
+            low = skin_low() + follow_off
+            err = (follow_rest - low) if pinned else (follow_floor_level - low if low < follow_floor_level else 0.0)
+            if abs(err) < 1e-4:
+                return
+            saved = [pb[n].matrix.copy() for n in tail_bones]
+            z0 = skin_low()
+            for n, s in zip(tail_bones, SHARES):
+                turn(n, SIDE_AX, 1.0 * s)
+            slope = (skin_low() - z0)  # height change per degree of the shared pitch
+            for n, m in zip(tail_bones, saved):
+                pb[n].matrix = m
+                view.update()
+            if abs(slope) < 1e-9:
+                return
+            deg = err / slope
+            for n, s in zip(tail_bones, SHARES):
+                turn(n, SIDE_AX, deg * s)
+
     def pose_at(t):
         reset()
         breath = math.sin(2 * math.pi * 3 * t)
@@ -97,5 +154,6 @@ def create_pose(arm, tail_bones, twohand):
             turn(n, SIDE_AX, 1.0 * math.sin(2 * math.pi * 2 * t - 0.4 * b))
         solve_leg("Left")
         solve_leg("Right")
+        follow_floor()
 
     return ANIM, pose_at
