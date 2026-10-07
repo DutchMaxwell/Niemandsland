@@ -328,7 +328,7 @@ fn a_two_model_flow_places_the_leader_then_pulls_the_straggler_in() {
     let radii = vec![0.5, 0.5];
     let delta: V2 = [8.0, 0.0];
     let walls: Vec<Wall> = Vec::new();
-    let grid = Grid::new();
+    let grid = Grid::default();
     let opts = FlowOpts {
         clearance: 0.0,
         zones: &[],
@@ -381,7 +381,7 @@ fn ledge_flow(dy_in: f64) -> (V2, Vec<V2>, Vec<Ledge>) {
         ledges: &ledges,
     };
     let got = plan_sequential_flow(
-        &[[10.0, 10.0]], [6.0, 0.0], &[0.5], &[], &Grid::new(), &opts, 48.0, false,
+        &[[10.0, 10.0]], [6.0, 0.0], &[0.5], &[], &Grid::default(), &opts, 48.0, false,
         ThetaCfg::default(), FlowBend::default(),
     );
     (got.result[0], got.trails[0].clone(), ledges)
@@ -474,7 +474,7 @@ fn charge_flow(slot: V2, allowance: f64) -> nml_core::mv::FlowResult {
     let pos: Vec<V2> = vec![[10.0, 10.0]];
     let radii = vec![0.5];
     let walls: Vec<Wall> = Vec::new();
-    let grid = Grid::new();
+    let grid = Grid::default();
     let bases = [([20.0f32, 10.0f32], 1.0f64)];
     let slots = [slot];
     let opts = FlowOpts {

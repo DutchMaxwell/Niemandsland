@@ -27,10 +27,44 @@ use super::{
 pub type Wall = [V2; 2];
 
 /// `TerrainRules` typed cell grid — `Vector2i -> TerrainType`, terrain_rules.gd:157.
-pub type Grid = HashMap<(i32, i32), i64>;
+pub type Grid = HashMap<(i32, i32), i64, CellBuild>;
 
 /// One of the `avoid_cells` / `avoid_fine` / `forbid_cells` sets (`Vector2i -> true`).
-pub type CellSet = HashSet<(i32, i32)>;
+pub type CellSet = HashSet<(i32, i32), CellBuild>;
+
+/// The cell grids are probed once per planner step, so SipHash (the std default) was ~35 % of the
+/// route planner (aifix preselect-speed profile). A multiplicative Fx-style hasher over the two `i32`
+/// coordinates is enough for these small, trusted, integer keys; the grids are only looked up and
+/// never iterated for a result, so no order-dependence rides on the hasher.
+#[derive(Default, Clone, Copy)]
+pub struct CellHasher(u64);
+
+impl CellHasher {
+    #[inline]
+    fn add(&mut self, x: u64) {
+        self.0 = (self.0.rotate_left(5) ^ x).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+}
+
+impl std::hash::Hasher for CellHasher {
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.add(u64::from(b));
+        }
+    }
+    #[inline]
+    fn write_i32(&mut self, i: i32) {
+        self.add(i as u32 as u64);
+    }
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+/// `BuildHasher` of `Grid` / `CellSet` (`Grid::default()` replaces `Grid::new()`).
+pub type CellBuild = std::hash::BuildHasherDefault<CellHasher>;
 
 /// An `opts["zones"]` entry — `{"c": Vector2, "r": float}`, movement_planner.gd:214.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -120,7 +154,7 @@ pub struct StepOpts<'a> {
 /// An empty cell set, for callers that have no `avoid_*` sets.
 pub fn empty_cells() -> &'static CellSet {
     static EMPTY: std::sync::OnceLock<CellSet> = std::sync::OnceLock::new();
-    EMPTY.get_or_init(CellSet::new)
+    EMPTY.get_or_init(CellSet::default)
 }
 
 impl<'a> StepOpts<'a> {

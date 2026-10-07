@@ -2127,6 +2127,12 @@ def _play_round(
                 "scored": [score_of[i] for i in range(len(trace["cands"]))],
                 "rs": [rs_of.get(i) for i in range(len(trace["cands"]))],
             }
+            # Teacher data (loop prep, 07.10.): a TREE pick's root statistics ride the
+            # row ONLY when the tree fired (the NML-1147a stamp law) — `[build idx,
+            # visits, mean]` per opened root child plus the completed leaf count — so a
+            # record carries the search's own visit distribution and backed-up value.
+            if trace.get("tree") is not None:
+                row["cands"]["tree"] = {k: trace["tree"][k] for k in ("root", "completed", "deadline_hit")}
         if sidecars:
             # `AiMissionEval.features(state, player, BattleSim.reply_threat(
             # state, player), true)` — the RICH vector, which is what
@@ -2365,6 +2371,9 @@ def play_from_state(
 #: 06.10.2026 (E1 opener, D5 game-end threat, D1 morale die, A3 held marker on eval_variant 4,
 #: D2 reply threat, E5 spent enemies skipped mid-round, D2c Immobile hold gate) — farm/aifix/AB_PRESET.md.
 KNOB_PRESETS: dict[str, dict[str, Any]] = {
+    # aifix action-space lane (07.10.2026): the menu opens — up to 3 extra HOLD+shoot targets and one
+    # ADVANCE-toward-the-marker-with-a-shot row. A STRENGTH change (bar = better), see farm/aifix/PREREG_MENU_OPEN.md.
+    "menu_open": {"menu_all_targets": 3, "menu_advance_obj_shoot": True},
     "aifix_all": {
         "opener_by_finish": True, "no_end_threat": True, "morale_by_probability": True,
         "eval_variant": 4, "reply_v2": True, "reply_skip_activated": True, "reply_hold_gate": True,

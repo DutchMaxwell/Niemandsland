@@ -42,10 +42,24 @@ func test_chapter_one_is_available_because_its_scenario_ships() -> void:
 	assert_bool(Spielschule.is_available(s01)).is_true()
 
 
+func test_chapter_two_is_available_because_its_scenario_ships() -> void:
+	var s02 := Spielschule.chapter("S-02")
+	assert_str(String(s02.get("scenario", ""))).is_equal("res://assets/tutorial/scenarios/s02_table_setup.nml")
+	assert_bool(FileAccess.file_exists(String(s02.get("scenario", "")))).is_true()
+	assert_bool(Spielschule.is_available(s02)).is_true()
+
+
+func test_chapter_three_is_available_because_its_scenario_ships() -> void:
+	var s03 := Spielschule.chapter("S-03")
+	assert_str(String(s03.get("scenario", ""))).is_equal("res://assets/tutorial/scenarios/s03_bring_your_army.nml")
+	assert_bool(FileAccess.file_exists(String(s03.get("scenario", "")))).is_true()
+	assert_bool(Spielschule.is_available(s03)).is_true()
+
+
 func test_chapters_without_a_bundled_scenario_are_not_available() -> void:
-	# Every chapter except S-01 has no scenario yet -> the picker shows "scenario coming soon", disabled.
+	# Every chapter whose scenario file has not been authored yet stays unavailable ("coming soon").
 	for c in Spielschule.chapters():
-		if String(c.get("id", "")) == "S-01":
+		if FileAccess.file_exists(String(c.get("scenario", ""))):
 			continue
 		assert_bool(Spielschule.is_available(c)) \
 			.override_failure_message("%s must be unavailable until its scenario is authored" % c.get("id", "")) \

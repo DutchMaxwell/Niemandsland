@@ -261,3 +261,59 @@ use super::*;
         assert_eq!(on.len(), off.len() + 1, "exactly one extra: the holder; the un-activated best is the max-EV pick and dedupes: {:?}", on);
         assert_eq!(on[off.len()], (HOLD, Some("u2".into()), None, None), "the marker holder joins the menu");
     }
+
+    /// aifix action-space lane (finding 7, C1): the OFF menu names ONE HOLD+shoot target ("Wall", max EV); with
+    /// `all_targets` the other visible target ("Squish") joins at the tail, so the search can pick the unit on the marker.
+    #[test]
+    fn all_targets_appends_the_other_visible_targets_and_off_is_unchanged() {
+        let st = holders_line();
+        let statics = holders_statics();
+        let mut sc = Scratch::default();
+        let off = shape(&candidates_tuned(&st, &Terrain::default(), &statics, 0, &mut sc, Tuning::default()));
+        let shots = |m: &[Shape]| m.iter().filter(|c| c.0 == HOLD && c.1.is_some()).count();
+        assert_eq!(shots(&off), 1, "today: one HOLD+shoot row");
+        let on = shape(&candidates_tuned(
+            &st, &Terrain::default(), &statics, 0, &mut sc, Tuning { all_targets: 3, ..Tuning::default() },
+        ));
+        assert_eq!(&on[..off.len()], &off[..], "the OFF entries keep their index");
+        assert_eq!(on.len(), off.len() + 1);
+        assert_eq!(on[off.len()], (HOLD, Some("u2".into()), None, None), "the lower-EV target joins at the tail");
+        let capped = shape(&candidates_tuned(
+            &st, &Terrain::default(), &statics, 0, &mut sc, Tuning { all_targets: 1, ..Tuning::default() },
+        ));
+        assert_eq!(capped.len(), on.len(), "k = 1 already covers the one extra target");
+        // with holders on too, the same target is not offered twice
+        let both = shape(&candidates_tuned(
+            &st, &Terrain::default(), &statics, 0, &mut sc,
+            Tuning { holders: true, all_targets: 3, ..Tuning::default() },
+        ));
+        assert_eq!(both.iter().filter(|c| **c == (HOLD, Some("u2".into()), None, None)).count(), 1, "{both:?}");
+    }
+
+    /// aifix action-space lane (finding 7, C3): ADVANCE could never "take the marker and still shoot". On the
+    /// holders line (objective 20" down the line, gunner with a 24" rifle) the ON menu gains ONE ADVANCE row that
+    /// walks the full 6" band toward the objective and carries the best shot ("Wall") from where it ends; OFF is
+    /// unchanged; a unit already at the marker gets no row.
+    #[test]
+    fn advance_obj_shoot_adds_one_marker_row_with_a_shot_and_off_is_unchanged() {
+        let st = holders_line();
+        let statics = holders_statics();
+        let mut sc = Scratch::default();
+        let off = shape(&candidates_tuned(&st, &Terrain::default(), &statics, 0, &mut sc, Tuning::default()));
+        let on = shape(&candidates_tuned(
+            &st, &Terrain::default(), &statics, 0, &mut sc, Tuning { advance_obj_shoot: true, ..Tuning::default() },
+        ));
+        assert_eq!(&on[..off.len()], &off[..], "OFF entries keep their index");
+        assert_eq!(on.len(), off.len() + 1, "{on:?}");
+        let row = &on[off.len()];
+        assert_eq!((row.0, row.1.as_deref(), row.2.clone()), (ADVANCE, Some("u1"), None));
+        let x = row.3.expect("dest")[0] / IN2M;
+        assert!((x - 6.0).abs() < 1e-6, "walks the 6\" band toward the marker: {x}");
+        let mut at_marker = st.clone();
+        at_marker.positions[0] = vec![[19.0 * IN2M, 0.0, 0.0]];
+        let none = shape(&candidates_tuned(
+            &at_marker, &Terrain::default(), &statics, 0, &mut sc, Tuning { advance_obj_shoot: true, ..Tuning::default() },
+        ));
+        assert!(none.iter().all(|c| !(c.0 == ADVANCE && c.1.is_some())), "already on the marker: {none:?}");
+    }
+

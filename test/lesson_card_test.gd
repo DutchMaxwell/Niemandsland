@@ -22,7 +22,7 @@ func test_button_inventory_and_house_style() -> void:
 	for entry in [
 		["Content/ContinueButton", "Continue"], ["Content/SkipButton", "Skip step"],
 		["Content/LeaveButton", "Leave lesson"], ["Content/ChapterListButton", "Chapter list"],
-		["Content/StayButton", "Stay on the table"],
+		["Content/StayButton", "Stay on the table"], ["Content/ActionButton", ""],
 	]:
 		var button := _button(card, entry[0])
 		if button != null:
@@ -70,3 +70,35 @@ func test_each_action_emits_its_signal() -> void:
 	_button(card, "Content/ChapterListButton").pressed.emit()
 	_button(card, "Content/StayButton").pressed.emit()
 	assert_array(events).is_equal(["continue", "skip", "leave", "leave", "stay"])
+
+
+func test_action_button_shows_only_on_a_step_with_an_action() -> void:
+	var card := _card()
+	card.show_step(1, 4, {"text": "Import an army.", "rule": "",
+		"all": [{"check": "at_least", "args": {"key": "units_p1", "n": 1}}],
+		"action": {"label": "Use the practice army",
+			"fixture": "res://assets/tutorial/tutorial_army_p1.json"}})
+	var button := card.get_node_or_null("Content/ActionButton") as Button
+	assert_object(button).is_not_null()
+	if button == null:
+		return
+	assert_bool(button.visible).is_true()
+	assert_str(button.text).is_equal("Use the practice army")
+	card.show_step(2, 4, {"text": "Deploy.", "rule": "",
+		"all": [{"check": "flag", "args": {"key": "p1_all_in_zone"}}]})
+	assert_bool(button.visible).is_false()
+
+
+func test_action_button_emits_its_fixture() -> void:
+	var card := _card()
+	var got: Array[String] = []
+	card.action_pressed.connect(func(fixture: String) -> void: got.append(fixture))
+	card.show_step(0, 1, {"text": "t", "rule": "",
+		"all": [{"check": "flag", "args": {"key": "x"}}],
+		"action": {"label": "L", "fixture": "res://f.json"}})
+	var button := card.get_node_or_null("Content/ActionButton") as Button
+	assert_object(button).is_not_null()
+	if button == null:
+		return
+	button.pressed.emit()
+	assert_array(got).is_equal(["res://f.json"])

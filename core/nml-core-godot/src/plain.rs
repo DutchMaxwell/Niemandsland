@@ -1111,6 +1111,8 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // No recorder wrote the key before it, so an absent one answers
         // `Knobs::default()` = 1 — the single candidate every corpus carries.
         menu_advance_k: dint(d, "menu_advance_k", dflt.menu_advance_k as i64) as usize,
+        menu_all_targets: dint(d, "menu_all_targets", 0).max(0) as usize,
+        menu_advance_obj_shoot: d.get("menu_advance_obj_shoot").map(|v| flag(&v)).unwrap_or(false),
         // Wave 6 (`rushk`). A MENU knob, not a seam (like `menu_advance_k`): the
         // rollout's greedy brain rushes the top-k nearest objectives. No recorder
         // wrote the key before it, so an absent one answers `Knobs::default()` = 1

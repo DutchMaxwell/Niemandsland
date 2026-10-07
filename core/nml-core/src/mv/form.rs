@@ -533,7 +533,7 @@ pub fn solve_formation(
         return res;
     }
     // :1588 — a charge drops the rest-position set entirely.
-    let empty: CellSet = CellSet::new();
+    let empty: CellSet = CellSet::default();
     let forbid: &CellSet = if allow_contact { &empty } else { opts.forbid_cells };
     let zones = opts.zones;
     let board = board_extents(board_in, opts.board_y_in);

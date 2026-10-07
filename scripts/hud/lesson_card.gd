@@ -6,12 +6,15 @@ signal continue_pressed
 signal skip_pressed
 signal leave_pressed
 signal stay_pressed
+signal action_pressed(fixture: String)
 
 var chapter_title := ""
 var _header: Label
 var _step_text: Label
 var _rule: Label
 var _progress: Label
+var _action: Button
+var _action_fixture := ""
 var _continue: Button
 var _skip: Button
 var _leave: Button
@@ -48,6 +51,7 @@ func _ready() -> void:
 	_progress = HouseStyle.label("", HouseStyle.SMALL)
 	_progress.name = "Progress"
 	content.add_child(_progress)
+	_action = _add_button(content, "ActionButton", "", HouseStyle.BUTTON)
 	_continue = _add_button(content, "ContinueButton", "Continue", HouseStyle.PRIMARY)
 	_skip = _add_button(content, "SkipButton", "Skip step", HouseStyle.BUTTON)
 	_leave = _add_button(content, "LeaveButton", "Leave lesson", HouseStyle.BUTTON)
@@ -58,7 +62,9 @@ func _ready() -> void:
 	_leave.pressed.connect(func() -> void: leave_pressed.emit())
 	_chapter_list.pressed.connect(func() -> void: leave_pressed.emit())
 	_stay.pressed.connect(func() -> void: stay_pressed.emit())
+	_action.pressed.connect(func() -> void: action_pressed.emit(_action_fixture))
 	_continue.hide()
+	_action.hide()
 	_chapter_list.hide()
 	_stay.hide()
 
@@ -82,6 +88,10 @@ func show_step(index: int, total: int, step: Dictionary) -> void:
 	var first: Dictionary = checks[0] if not checks.is_empty() else {}
 	_continue.visible = first.get("check") == "counter_grew" \
 		and first.get("args", {}).get("key") == "continue"
+	var action: Dictionary = step.get("action", {})
+	_action_fixture = String(action.get("fixture", ""))
+	_action.text = String(action.get("label", ""))
+	_action.visible = not action.is_empty()
 	_skip.show()
 	_leave.show()
 	_chapter_list.hide()
@@ -94,6 +104,7 @@ func show_complete(title: String) -> void:
 	_rule.hide()
 	_progress.hide()
 	_continue.hide()
+	_action.hide()
 	_skip.hide()
 	_leave.hide()
 	_chapter_list.show()
