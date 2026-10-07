@@ -4,6 +4,7 @@ blender -b -P tools/idle/decimate_weighted.py -- source.glb output.glb budgets.j
 Budgets are measured from the shipped body/parts meshes, not a class estimate.
 """
 import bpy
+from mathutils import Vector
 import json
 import sys
 from pathlib import Path
@@ -16,7 +17,8 @@ for obj in list(bpy.context.scene.objects):
     if obj.type == 'MESH' and obj.name.lower().startswith('icosphere'):
         bpy.data.objects.remove(obj, do_unlink=True)
 meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
-body = next(o for o in meshes if any(m.type == 'ARMATURE' for m in o.modifiers))
+skinned = [o for o in meshes if any(m.type == 'ARMATURE' for m in o.modifiers)]
+body = max(skinned, key=lambda o: len(o.data.polygons))   # a rigged pet is a second skinned mesh: the owner body is the larger one
 parts = [o for o in meshes if o != body]
 parts_faces = sum(len(o.data.polygons) for o in parts)
 minimum = {o: min(5000, len(o.data.polygons)) for o in parts}
@@ -36,6 +38,7 @@ for obj in meshes:
     bpy.ops.mesh.remove_doubles(threshold=0.0001)
     bpy.ops.object.mode_set(mode='OBJECT')
     before = len(obj.data.polygons)
+    floor_before = min((obj.matrix_world @ v.co).z for v in obj.data.vertices)
     for attempt in range(2):
         faces = len(obj.data.polygons)
         if faces <= target:
@@ -48,7 +51,13 @@ for obj in meshes:
         bpy.ops.object.modifier_apply(modifier=modifier.name)
     for polygon in obj.data.polygons:
         polygon.use_smooth = True
-    if obj == body:
+    if obj in skinned and obj != body:
+        # a rigged pet rests on the floor: the collapse must not push its feet through it
+        lift = floor_before - min((obj.matrix_world @ v.co).z for v in obj.data.vertices)
+        shift = obj.matrix_world.to_3x3().inverted() @ Vector((0, 0, lift))
+        for v in obj.data.vertices:
+            v.co += shift
+    if obj in skinned:
         # Collapse interpolates deform groups. Keep the GPU contract's strongest four.
         for vertex in obj.data.vertices:
             weights = sorted(((g.group, g.weight) for g in vertex.groups if g.weight > 0), key=lambda x: -x[1])
