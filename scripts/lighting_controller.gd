@@ -134,6 +134,9 @@ func initialize(directional_light: DirectionalLight3D, world_env: WorldEnvironme
 	_fill_light = fill_light
 	_world_environment = world_env
 	_environment = world_env.environment
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null and not graphics.settings_applied.is_connected(_on_graphics_applied):
+		graphics.settings_applied.connect(_on_graphics_applied)
 
 	# Apply a baseline preset synchronously (the light + environment are passed in, so
 	# they already exist). Deferring it raced the atmosphere controller's startup mood:
@@ -271,9 +274,16 @@ func set_ssao_intensity(value: float) -> void:
 		current_preset.ssao_intensity = value
 
 
+## The reflection fade-in depends on the quality tier, so a preset change re-derives it from the mood's strength.
+func _on_graphics_applied(_preset_name: String) -> void:
+	if current_preset.has("ssr_intensity"):
+		set_ssr_intensity(float(current_preset.ssr_intensity))
+
+
 func set_ssr_intensity(value: float) -> void:
 	if _environment:
-		_set_env("ssr_fade_in", value)
+		var graphics := get_node_or_null("/root/GraphicsSettings")
+		_set_env("ssr_fade_in", graphics.ssr_fade_in_for(int(graphics.current_preset), value) if graphics != null else value)
 		current_preset.ssr_intensity = value
 
 
