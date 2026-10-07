@@ -444,7 +444,7 @@ fn call_of(pc: PlainCall, header: &MoveHeader, path: &str, ln: usize) -> Result<
         }
         other => return Err(format!("{path}:{ln} walls: unexpected {other}")),
     };
-    let mut grid = Grid::with_capacity(pc.grid.len());
+    let mut grid = Grid::with_capacity_and_hasher(pc.grid.len(), Default::default());
     for c in &pc.grid {
         grid.insert((c[0] as i32, c[1] as i32), c[2]);
     }
