@@ -17321,7 +17321,8 @@ func _start_tutorial() -> void:
 func _start_lesson(_object_count: int) -> void:
 	var facts := LessonFacts.new()
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
-		"army_manager": opr_army_manager})
+		"army_manager": opr_army_manager, "table": table,
+		"map_layout": map_layout_editor, "left_panel": left_panel_scroll})
 	var progress := SpielschuleProgress.new(_lesson_progress_path)
 	progress.load_from_disk()
 	var runner := LessonRunner.new()

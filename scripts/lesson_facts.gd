@@ -8,6 +8,9 @@ const METRES_PER_INCH := 0.0254
 var _camera_pivot: Node3D
 var _object_manager: Node
 var _army_manager: Node
+var _table: Node
+var _map_layout: Node
+var _left_panel: CanvasItem
 var _counters: Dictionary = {}
 
 
@@ -15,13 +18,29 @@ func setup(refs: Dictionary) -> void:
 	_camera_pivot = refs.get("camera_pivot")
 	_object_manager = refs.get("object_manager")
 	_army_manager = refs.get("army_manager")
+	_table = refs.get("table")
+	_map_layout = refs.get("map_layout")
+	_left_panel = refs.get("left_panel")
 	if _object_manager != null and _object_manager.has_signal("measurement_finished"):
 		if not _object_manager.measurement_finished.is_connected(_on_measurement_finished):
 			_object_manager.measurement_finished.connect(_on_measurement_finished)
 
 func snapshot() -> Dictionary:
 	var facts := {"yaw": 0.0, "cam_dist": 0.0, "pivot": Vector3.ZERO,
-		"counters": _counters.duplicate(), "tags": {}}
+		"counters": _counters.duplicate(), "tags": {},
+		"table_size": Vector2.ZERO, "biome": "", "terrain_pieces": 0,
+		"layout_pieces": 0, "deploy_type": 0, "menu_open": false}
+	if _table != null and "table_size" in _table:
+		facts.table_size = _table.table_size
+	if _table != null and "biome" in _table:
+		facts.biome = String(_table.biome)
+	facts.terrain_pieces = _count_terrain()
+	if _map_layout != null and "placed_pieces" in _map_layout:
+		facts.layout_pieces = (_map_layout.placed_pieces as Array).size()
+	if _map_layout != null and "deployment_type" in _map_layout:
+		facts.deploy_type = int(_map_layout.deployment_type)
+	if is_instance_valid(_left_panel):
+		facts.menu_open = _left_panel.visible
 	if is_instance_valid(_camera_pivot):
 		facts.yaw = _camera_pivot.rotation.y
 		facts.pivot = _camera_pivot.global_position
@@ -61,3 +80,14 @@ func bump(key: String) -> void:
 
 func _on_measurement_finished(_distance_inches: float) -> void:
 	bump("measure")
+
+
+## Free-placed and grid terrain pieces the object manager is responsible for, each counted once.
+func _count_terrain() -> int:
+	if _object_manager == null or not _object_manager.is_inside_tree():
+		return 0
+	var count := 0
+	for obj in _object_manager.get_tree().get_nodes_in_group("terrain"):
+		if obj is Node3D and UnitUtils.is_terrain(obj):
+			count += 1
+	return count
