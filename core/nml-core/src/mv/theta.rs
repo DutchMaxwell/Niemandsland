@@ -26,7 +26,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::cost::{cspace_blocked, segment_cost, step_blocked, terrain_cost_at, Grid, StepOpts, Wall};
+use super::cost::{
+    cspace_blocked, segment_cost, step_blocked, terrain_cost_at, CellBuild, Grid, StepOpts, Wall,
+};
 use super::geom2::{distance_to, to_f32, V2};
 use super::io::ThetaPop;
 use super::{cell_of, EPS, FAST_PLANNER_GUARD, PLAN_CELL_IN, THETA_DIAG};
@@ -234,16 +236,16 @@ fn theta_core(
     let nx = ((board[0] as f64 / PLAN_CELL_IN).ceil() as i64).max(1) as i32;
     let ny = ((board[1] as f64 / PLAN_CELL_IN).ceil() as i64).max(1) as i32;
 
-    let mut g: HashMap<Cell, f64> = HashMap::new();
+    let mut g: HashMap<Cell, f64, CellBuild> = HashMap::default();
     g.insert(start_c, 0.0);
-    let mut parent: HashMap<Cell, Cell> = HashMap::new();
+    let mut parent: HashMap<Cell, Cell, CellBuild> = HashMap::default();
     parent.insert(start_c, start_c);
-    let mut pos: HashMap<Cell, V2> = HashMap::new();
+    let mut pos: HashMap<Cell, V2, CellBuild> = HashMap::default();
     pos.insert(start_c, start);
     let mut open: Vec<Cell> = vec![start_c];
-    let mut open_set: HashSet<Cell> = HashSet::new();
+    let mut open_set: HashSet<Cell, CellBuild> = HashSet::default();
     open_set.insert(start_c);
-    let mut closed: HashSet<Cell> = HashSet::new();
+    let mut closed: HashSet<Cell, CellBuild> = HashSet::default();
 
     let mut guard: i64 = nx as i64 * ny as i64 * 4;
     if cfg.fast_planner {
@@ -254,7 +256,7 @@ fn theta_core(
     let mut best_reach: Cell = start_c;
     let mut best_reach_d: f64 = distance_to(start, goal);
     // trace v2 only — `_pop_idx`, movement_planner.gd:1392.
-    let mut pop_idx: HashMap<Cell, i64> = HashMap::new();
+    let mut pop_idx: HashMap<Cell, i64, CellBuild> = HashMap::default();
 
     let diag = bend.diag();
 
@@ -359,8 +361,8 @@ fn theta_core(
 /// parent chain back to the start (the start is its OWN parent, which ends the
 /// walk) and maps every cell to the point the search stored for it.
 pub fn theta_reconstruct(
-    parent: &HashMap<Cell, Cell>,
-    pos: &HashMap<Cell, V2>,
+    parent: &HashMap<Cell, Cell, CellBuild>,
+    pos: &HashMap<Cell, V2, CellBuild>,
     goal_cell: Cell,
 ) -> Vec<V2> {
     let mut nodes: Vec<Cell> = vec![goal_cell];

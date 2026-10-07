@@ -60,7 +60,7 @@ fn corpus() -> MoveCorpus {
 }
 
 fn no_cells() -> CellSet {
-    CellSet::new()
+    CellSet::default()
 }
 
 /// `plan_sequential_flow`'s `base_zones` — movement_planner.gd:1050 plus the
@@ -619,14 +619,14 @@ fn geometry_primitives_mirror_godot() {
     // cell_of floors, so it is correct on the negative side of the origin.
     assert_eq!(nml_core::mv::cell_of([-0.5, -3.5], 3.0), (-1, -2));
     // an empty grid short-circuits _terrain_cost_at to 1.0 before the avoid sets.
-    let empty: Grid = Grid::new();
-    let mut avoid = CellSet::new();
+    let empty: Grid = Grid::default();
+    let mut avoid = CellSet::default();
     avoid.insert((0, 0));
     let none = no_cells();
     let o = StepOpts { ledges: &[], clearance: 0.0, zones: &[], avoid_cells: &avoid, avoid_fine: &none, dangerous_debuff: false, difficult_debuff: false };
     assert_eq!(nml_core::mv::terrain_cost_at([0.5, 0.5], &empty, &o), 1.0);
     // with a grid, that same avoided cell is a hard block.
-    let mut grid: Grid = Grid::new();
+    let mut grid: Grid = Grid::default();
     grid.insert((0, 0), nml_core::mv::T_NONE);
     assert!(nml_core::mv::terrain_cost_at([0.5, 0.5], &grid, &o).is_infinite());
     // a zero-length wall list with clearance 0 is the legacy path_crosses_wall.

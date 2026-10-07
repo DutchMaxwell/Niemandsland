@@ -259,8 +259,8 @@ fn targets_in(
 
 /// `_terrain_grid_in` :5254 — the typed 3" cell grid plus its avoid set.
 fn terrain_cells(t: &Terrain, board: [f64; 2], avoid_diff: bool, avoid_dang: bool) -> (Grid, CellSet) {
-    let mut grid = Grid::new();
-    let mut avoid = CellSet::new();
+    let mut grid = Grid::default();
+    let mut avoid = CellSet::default();
     if !t.is_valid() {
         return (grid, avoid);
     }
@@ -297,7 +297,7 @@ fn fine_cells(
     t: &Terrain,
     hit: &dyn Fn(V3) -> bool,
 ) -> CellSet {
-    let mut out = CellSet::new();
+    let mut out = CellSet::default();
     if !t.is_valid() || mpos.is_empty() {
         return out;
     }
@@ -456,7 +456,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
                 || (avoid_dang && terrain::base_in_terrain(w, own_r_m, t, terrain::is_dangerous))
         })
     } else {
-        CellSet::new()
+        CellSet::default()
     };
     let forbid_cells = fine_cells(&mpos, mdelta, board, margin_in, t, &|w| {
         let ty = t.type_at(w);
