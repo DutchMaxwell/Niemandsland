@@ -16,35 +16,35 @@
   "cards": [
     {
       "id": "factions",
-      "image": "res://assets/whats_new/factions.png",
+      "image": "res://assets/whats_new/factions.webp",
       "capture": "1920x1080 PNG, no UI or cursor. On a grassland table in daylight, place five Saurian infantry on the left and five Vampiric Undead infantry on the right, with one larger miniature behind each group. Frame both groups from a 35-degree elevated three-quarter view; keep all bases visible and the outer 10 percent clear. Use fully loaded textured models, no selection outlines.",
       "en": {"title": "Two new armies", "body": "Bring Saurians and Vampiric Undead to your table. Discover new miniatures for both armies."},
       "de": {"title": "Zwei neue Armeen", "body": "Bringe Saurier und Vampir-Untote auf deinen Spieltisch. Entdecke neue Miniaturen für beide Armeen."}
     },
     {
       "id": "borderland",
-      "image": "res://assets/whats_new/borderland.png",
+      "image": "res://assets/whats_new/borderland.webp",
       "capture": "1920x1080 PNG, no UI or cursor. Apply the Ruined Borderland table theme with its default 6x4-foot table, grassland biome and Sunset mood. Wait for all terrain to load, then frame the entire table from a 50-degree elevated corner view with both longhouses, paired ruins, woods and paths visible. Leave 5 percent margin around the table frame; place no armies.",
       "en": {"title": "A battlefield in one click", "body": "Choose Ruined Borderland to prepare a complete table in one click. Ruins, woods and paths set the scene for your next battle."},
       "de": {"title": "Ein Schlachtfeld mit einem Klick", "body": "Wähle Ruined Borderland, um mit einem Klick einen vollständigen Spieltisch vorzubereiten. Ruinen, Wälder und Wege bilden die Kulisse für deine nächste Schlacht."}
     },
     {
       "id": "effects",
-      "image": "res://assets/whats_new/effects.png",
+      "image": "res://assets/whats_new/effects.webp",
       "capture": "1920x1080 PNG split into equal left/right halves from actual gameplay, no UI or cursor. Left: capture a melee impact between two infantry units with Settings > Gore set to Normal, one visible hit and casualty. Right: capture a caster's spell effect at peak brightness with caster and target both in frame. Use matching grassland daylight and a 35-degree elevated camera; keep effects inside each half with 10 percent safe margins. Also verify Gore Off replaces blood with dust; do not include that verification shot in the card.",
       "en": {"title": "Feel every clash and spell", "body": "Combat and spells now have richer visual effects. Choose your preferred Gore setting, or turn blood effects off."},
       "de": {"title": "Erlebe jeden Kampf und Zauber", "body": "Kämpfe und Zauber haben jetzt ausdrucksstärkere visuelle Effekte. Wähle deine bevorzugte Bluteinstellung oder schalte Bluteffekte aus."}
     },
     {
       "id": "graphics",
-      "image": "res://assets/whats_new/graphics.png",
+      "image": "res://assets/whats_new/graphics.webp",
       "capture": "1920x1080 PNG split into equal left/right halves, no UI or cursor. Use the same empty 4x4-foot table and fixed 40-degree elevated corner camera in daylight: grassland on the left, arid desert on the right. Include the near corner and both adjoining table-frame edges in each half, with the biome surface filling the rest. Wait for textures to finish loading; keep exposure and camera identical.",
       "en": {"title": "A fresh look for your table", "body": "Biome colours give each battlefield a more distinct look. The updated table frame adds a finishing touch."},
       "de": {"title": "Ein neuer Look für deinen Spieltisch", "body": "Die Farben der Landschaften geben jedem Schlachtfeld einen eigenen Charakter. Der überarbeitete Tischrahmen rundet das Bild ab."}
     },
     {
       "id": "opponent",
-      "image": "res://assets/whats_new/opponent.png",
+      "image": "res://assets/whats_new/opponent.webp",
       "capture": "1920x1080 PNG from a solo battle against NACHTMAHR on Ruined Borderland. At the start of the opponent's activation, frame an objective with the opponent's approaching unit and a player's defending unit in a 45-degree elevated view. Keep the real turn indicator and objective marker visible, close all other panels, and move the cursor off the board. Capture an actual played position, with no debug overlays or fabricated tactical arrows.",
       "en": {"title": "A stronger solo opponent", "body": "NACHTMAHR is now a tougher opponent in solo battles. Prepare your army and put your tactics to the test."},
       "de": {"title": "Ein stärkerer Gegner im Solospiel", "body": "NACHTMAHR ist jetzt ein stärkerer Gegner in Soloschlachten. Stelle deine Armee auf und erprobe deine Taktik."}
