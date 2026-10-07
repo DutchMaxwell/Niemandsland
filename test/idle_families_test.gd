@@ -27,19 +27,12 @@ func test_champions_are_tailless_like_the_other_armoured_bodies() -> void:
 	assert_bool(Families.allows("ratmen/champion", 5)).is_false()
 	assert_bool(Families.allows("ratmen/championship", 0)).is_false()
 
-func test_saurian_infantry_families_are_listed_with_rigid_tails() -> void:
-	for key in ["saurians/saurian warriors#spear", "saurians/geckos#banner+javelin", "saurians/chameleons", "saurians/saurian guardians#crest", "saurians/gators#greatweapon"]:
-		assert_bool(Families.allows(key, 0)).is_true()
-		assert_bool(Families.allows(key, 5)).is_false()
-	assert_bool(Families.allows("saurians/gatorsx", 0)).is_false()
-
-func test_saurian_heroes_with_proven_floor_contact_are_listed() -> void:
-	for key in ["saurians/gator veteran#greatweapon", "saurians/gecko champion#blowpipe+lance", "saurians/kikatle"]:
-		assert_bool(Families.allows(key, 0)).is_true()
-		assert_bool(Families.allows(key, 5)).is_false()
-	# Teqi and Hakatlo drag their tails on the floor: they stay static until the tail bones exist
-	assert_bool(Families.allows("saurians/teqi", 0)).is_false()
-	assert_bool(Families.allows("saurians/hakatlo", 0)).is_false()
+func test_saurian_families_carry_their_five_bone_tail() -> void:
+	for key in ["saurians/saurian warriors#spear", "saurians/geckos#banner+javelin", "saurians/chameleons", "saurians/saurian guardians#crest", "saurians/gators#greatweapon",
+			"saurians/gator veteran#greatweapon", "saurians/gecko champion#blowpipe+lance", "saurians/kikatle", "saurians/teqi", "saurians/hakatlo"]:
+		assert_bool(Families.allows(key, 5)).is_true()
+		assert_bool(Families.allows(key, 0)).is_false()
+	assert_bool(Families.allows("saurians/gatorsx", 5)).is_false()
 
 func test_vampiric_undead_foot_families_are_listed_without_tail_bones() -> void:
 	for key in ["vampiric_undead/skeleton guard#halberd", "vampiric_undead/skeleton watch", "vampiric_undead/drained soldiers#musician", "vampiric_undead/drained archers#bow+sergeant", "vampiric_undead/ghouls#halberd", "vampiric_undead/skeleton champion", "vampiric_undead/vampire master", "vampiric_undead/stitched zombies#banner", "vampiric_undead/werewolves#heavy_hand_weapon", "vampiric_undead/stitched butchers#carving_tool"]:
