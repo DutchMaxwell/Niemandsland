@@ -979,6 +979,12 @@ pub struct UnitStatic {
     pub model_count: i64,
     pub wounds_max: Vec<i64>,
     pub quality: i64,
+    /// The unit's Army Forge points cost (`Profile.cost`, state.rs) — the army
+    /// list's own number, upgrades included. Read by the `strength_by_points`
+    /// eval arm (score.rs) to weight a unit's presence by its price instead of
+    /// its raw wounds. `0` on every pre-knob corpus, so the default eval is
+    /// byte-identical.
+    pub cost: i64,
     pub fearless: bool,
     /// The host/hero's own rule, before the joined-unit all-models gate.
     pub fearless_own: bool,
@@ -6317,6 +6323,7 @@ impl UnitStatic {
             model_count: p.model_count,
             wounds_max: p.wounds_max.clone(),
             quality: p.quality,
+            cost: p.cost,
             fearless: if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
                 rule_on_all_models(p, "Fearless")
             } else {

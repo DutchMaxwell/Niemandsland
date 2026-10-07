@@ -8,6 +8,7 @@ use super::*;
     /// read at `epoch`.
     fn fatigue_bearer(rules_epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

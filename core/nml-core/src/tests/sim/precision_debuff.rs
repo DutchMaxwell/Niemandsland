@@ -24,6 +24,7 @@ use super::*;
     /// `build_for` at `epoch`.
     fn precision_carrier(epoch: u32) -> UnitStatic {
         let p = crate::state::Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

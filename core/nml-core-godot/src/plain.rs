@@ -227,6 +227,9 @@ pub fn profile_of(d: &VarDictionary) -> Profile {
         quality: dint(d, "quality", 0),
         defense: dint(d, "defense", 0),
         tough: dint(d, "tough", 0),
+        // The army list's own points cost (base + upgrades); absent on a
+        // pre-knob header, so the default keeps the raw-wounds eval.
+        cost: dint(d, "cost", 0),
         wounds_max: darr(d, "wounds_max").iter_shared().map(|v| int(&v)).collect(),
         model_count: dint(d, "model_count", 0),
         weapons: darr(d, "weapons")

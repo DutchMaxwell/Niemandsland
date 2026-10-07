@@ -22,6 +22,7 @@ use super::*;
     fn holders_line() -> State {
         let n = 3;
         let gunner = Profile {
+            cost: 0,
             unit_id: "g".into(),
             name: "Gunner".into(),
             quality: 4,

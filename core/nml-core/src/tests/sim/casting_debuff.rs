@@ -18,6 +18,7 @@ use crate::rules::Registries;
     /// "Casting Debuff" as a Utility Buff with the printed -1.
     fn debuff_carrier() -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "Hexer".into(),
             quality: 4,

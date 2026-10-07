@@ -2222,6 +2222,10 @@ static func _unit_profile(u: GameUnit) -> Dictionary:
 	return {
 		"unit_id": u.unit_id, "name": u.get_name(), "quality": u.get_quality(),
 		"defense": u.get_defense(), "tough": maxi(AiEv.unit_rating(u, "Tough"), 1),
+		# The army list's own points cost (base + selected upgrades), read the
+		# way the table reads every unit cost (GameUnit.get_cost, game_unit.gd:240).
+		# Carried so the `strength_by_points` eval arm can weight presence by price.
+		"cost": u.get_cost(),
 		"wounds_max": wounds_max, "model_count": u.models.size(), "weapons": weapons,
 		"special_rules": u.get_special_rules(), "caster_value": u.get_caster_value(),
 		"move_bands": {"advance": float(bands.get("advance", 6)),

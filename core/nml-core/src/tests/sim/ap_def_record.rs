@@ -8,6 +8,7 @@ use super::*;
     /// read at `epoch`.
     fn ap_def_bearer(rules_epoch: u32, faction: (&str, &str), rule: &str) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

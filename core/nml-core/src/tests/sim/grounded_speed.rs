@@ -8,6 +8,7 @@ use super::*;
     /// terrain_within_in 1). The REAL `build_for` product, read at `epoch`.
     fn gs_bearer(rules_epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

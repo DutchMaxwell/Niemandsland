@@ -1244,6 +1244,7 @@ mod tests {
     ) -> State {
         let n = pos.len();
         let profile = Profile {
+            cost: 0,
             unit_id: "u".into(),
             name: "u".into(),
             quality: 4,

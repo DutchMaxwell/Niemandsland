@@ -46,6 +46,7 @@ use crate::spell::cast_success_chance;
     /// conduit test fails for the right reason.
     fn conduit_bearer(name: &str, epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "c".into(),
             name: name.into(),
             quality: 4,

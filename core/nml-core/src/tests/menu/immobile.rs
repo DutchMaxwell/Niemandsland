@@ -15,6 +15,7 @@ use super::*;
     fn hold_line(carrier_rules: &[&str]) -> State {
         let n = 2;
         let carrier = Profile {
+            cost: 0,
             unit_id: "u".into(),
             name: "Holder".into(),
             quality: 4,

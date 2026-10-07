@@ -9,6 +9,7 @@ use super::*;
     /// product, read at `epoch`.
     fn great_musician_bearer(rules_epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,
