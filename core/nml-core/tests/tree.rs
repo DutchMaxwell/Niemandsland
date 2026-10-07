@@ -428,7 +428,7 @@ fn search_widen(roll: &Rollout, st: &State, p: i64, leaf: TreeLeaf, budget: usiz
     let (rows, order) = ranked(roll, st, p, sc).unwrap();
     let mut root = Node::new(st.clone(), Step::Mover(p), p);
     root.children = root_children(&rows, &order, &[]);
-    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, wall_ms: 0, deadline: None, widen, player: p,
+    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, wall_ms: 0, deadline: None, widen, puct: 0.0, player: p,
                         opener_seat: false, sig: None, hook: None, w: 0.0 };
     let (best, trace) = run(roll, &cfg, &mut root, &mut GodotRng::new(7), sc).unwrap();
     (best, trace, order)
@@ -559,7 +559,7 @@ fn select_takes_the_movers_side() {
     for (i, mean) in [0.5, 0.9, 0.1].into_iter().enumerate() {
         let mut leaf = Node::new(st.clone(), Step::Mover(2), 1);
         (leaf.n, leaf.w) = (2, 2.0 * mean);
-        node.children.push(Child { idx: i, cand: Candidate::hold(st.key(0)), nodes: vec![leaf] });
+        node.children.push(Child { idx: i, cand: Candidate::hold(st.key(0)), nodes: vec![leaf], prior: None });
     }
     node.next_child = 3;
     assert_eq!(select(&node, 1), 1, "the searcher's own node takes the argmax");
@@ -704,3 +704,65 @@ fn the_game_end_boundary_carries_no_reply_threat() {
     }
     assert!(checked >= 20 && differs >= 1, "{checked} {differs}");
 }
+
+/// NachtmahrZero E1 — PUCT at the root. With every mean tied, a prior steers the selection to its heaviest child
+/// (UCT, blind to priors, keeps the first); `puct` 0 or no priors is UCT to the bit; the softmax is a distribution.
+#[test]
+fn puct_follows_the_prior_where_uct_is_blind() {
+    use nml_core::tree::{select_puct, softmax_prior};
+    let c = load(ACTS);
+    let st = &c.acts[0].state;
+    let mut node = Node::new(st.clone(), Step::Mover(1), 1);
+    node.n = 6;
+    for (i, p) in [0.1, 0.7, 0.2].into_iter().enumerate() {
+        let mut leaf = Node::new(st.clone(), Step::Mover(2), 1);
+        (leaf.n, leaf.w) = (2, 1.0);
+        node.children.push(Child { idx: i, cand: Candidate::hold(st.key(0)), nodes: vec![leaf], prior: Some(p) });
+    }
+    node.next_child = 3;
+    assert_eq!(select(&node, 1), 0, "UCT with tied means keeps the first child");
+    assert_eq!(select_puct(&node, 1, 1.0), 1, "PUCT goes to the prior's favourite");
+    assert_eq!(select_puct(&node, 1, 0.0), 0, "c = 0 removes the prior term");
+    let pri = softmax_prior(&[0.0, 2.0, 1.0]);
+    assert!((pri.iter().sum::<f64>() - 1.0).abs() < 1e-12 && pri[1] > pri[2] && pri[2] > pri[0]);
+}
+
+/// E1 through `Search::run`: `tree_puct` 0 with logits is byte-identical to no logits (the OFF proof); with `tree_puct`
+/// on and logits that load one row, that row's root visits rise over the UCT run on most acts; no logits = UCT.
+#[test]
+fn tree_puct_off_is_identical_and_on_moves_the_visits_to_the_prior() {
+    let c = load(ACTS);
+    let per_act = act_statics(&c, REPO);
+    let mut off = c.knobs;
+    (off.search_mode, off.tree_budget) = (SearchMode::Tree, 96);
+    let mut on = off;
+    on.tree_puct = 4.0;
+    let (mut raised, mut n) = (0usize, 0usize);
+    for (ai, act) in c.acts.iter().enumerate() {
+        let run = |k: &nml_core::acts::Knobs, lg: Option<&[f32]>| {
+            let seams = seams_of(k);
+            let reach = if seams.path { reach_index_for_state(&act.state, &c.terrain) } else { None };
+            let mut p = Policy::new(&per_act[ai], &c.terrain, seams);
+            (p.tuning, p.reach) = (tuning_of(k), reach.as_ref());
+            let roll = Rollout::new(p, *k);
+            let mut search = Search::new(roll, &act.statics);
+            search.cand_logits = lg;
+            search.run(&act.state, act.player, &mut Scratch::default(), None).unwrap()
+        };
+        let base = run(&off, None);
+        let rows = base.cands.len();
+        let fav = rows - 1; // the hand's LAST row: the prior must pull it up against the hand order
+        let mut lg = vec![0.0f32; rows];
+        lg[fav] = 8.0;
+        let plain = run(&off, Some(&lg));
+        assert_eq!(format!("{:?}", plain.tree.as_ref().unwrap().root), format!("{:?}", base.tree.as_ref().unwrap().root),
+                   "act {ai}: tree_puct 0 with logits must equal no logits");
+        assert_eq!(format!("{:?}", run(&on, None).tree.as_ref().unwrap().root), format!("{:?}", base.tree.as_ref().unwrap().root),
+                   "act {ai}: tree_puct on without logits must equal UCT");
+        let visits = |p: &nml_core::Pick| p.tree.as_ref().unwrap().root.iter().find(|r| r.0 == fav).map_or(0, |r| r.1);
+        n += 1;
+        raised += usize::from(visits(&run(&on, Some(&lg))) > visits(&base));
+    }
+    assert!(raised * 10 >= n * 8, "the prior raised the favoured row's visits on only {raised} of {n} acts");
+}
+
