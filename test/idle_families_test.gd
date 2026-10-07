@@ -63,6 +63,11 @@ func test_mummified_large_rigs_are_listed_without_tail_bones() -> void:
 		assert_bool(Families.allows(key, 5)).is_false()
 	assert_bool(Families.allows("mummified_undead/skeleton giantx", 0)).is_false()
 
+func test_mummies_are_listed_without_tail_bones() -> void:
+	assert_bool(Families.allows("mummified_undead/mummies", 0)).is_true()
+	assert_bool(Families.allows("mummified_undead/mummies", 5)).is_false()
+	assert_bool(Families.allows("mummified_undead/mummiesx", 0)).is_false()
+
 func test_unlisted_families_are_rejected() -> void:
 	assert_bool(Families.allows("ratmen/rat ogres", 0)).is_false()
-	assert_bool(Families.allows("mummified_undead/mummies", 0)).is_false()
+	assert_bool(Families.allows("mummified_undead/chariot", 0)).is_false()
