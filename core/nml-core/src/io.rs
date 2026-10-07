@@ -659,6 +659,13 @@ pub struct Seams {
     /// 12") and skips Shaken enemies. Default OFF.
     #[serde(default)]
     pub reply_v2: bool,
+    /// aifix E5 — mid-round the reply threat skips enemies that already activated. Default OFF.
+    #[serde(default)]
+    pub reply_skip_activated: bool,
+    /// aifix D2c — Immobile/Artillery enemies neither advance-shoot nor charge in the v2 reply.
+    /// Default OFF.
+    #[serde(default)]
+    pub reply_hold_gate: bool,
     /// Tray-exact series (maintainer D151 = B, 03.10.): ON from `EPOCH_70_TRAY_EXACT`.
     /// The two builders that read a header (`plan::seams_of`, the trainer's
     /// `nml-core-py` seam) derive it from `rules_epoch`, so a record below 70
@@ -710,6 +717,17 @@ pub struct Seams {
     /// predates the key.
     #[serde(default)]
     pub bands_prefolded: bool,
+}
+
+impl Seams {
+    /// The reply-threat readings these seams ask for (`sim::reply_threat_opts`).
+    pub fn reply_opts(&self) -> crate::sim::ReplyOpts {
+        crate::sim::ReplyOpts {
+            v2: self.reply_v2,
+            skip_activated: self.reply_skip_activated,
+            hold_gate: self.reply_hold_gate,
+        }
+    }
 }
 
 impl Node {

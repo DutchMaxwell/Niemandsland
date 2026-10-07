@@ -1677,6 +1677,12 @@ static func reset_round_mods(state: Dictionary) -> void:
 ## aifix D2 knob (default OFF, twin of Seams::reply_v2): the reply threat also prices a CHARGE
 ## (melee_threat, inside 12\") and skips Shaken enemies (they only hold).
 static var reply_v2 := false
+## aifix E5 knob (default OFF, twin of Seams::reply_skip_activated): MID-round an enemy that already
+## activated cannot fire again (at a round end everyone is activated and the next round's volley counts).
+static var reply_skip_activated := false
+## aifix D2c knob (default OFF, twin of Seams::reply_hold_gate): Immobile/Artillery enemies neither
+## advance-shoot nor charge in the v2 reply (they may only Hold, p.13).
+static var reply_hold_gate := false
 const REPLY_CHARGE_IN := 12.0
 const REPLY_ADVANCE_IN := 6.0
 
@@ -1693,11 +1699,22 @@ static func _expected_remaining(w: float, lambda: float) -> float:
 
 static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 	var incoming := {}
+	var mid_round := false
+	if reply_skip_activated:
+		for k in state["units"]:
+			var u: Dictionary = state["units"][k]
+			if int(u["alive"]) > 0 and not bool(u.get("activated", false)):
+				mid_round = true
+				break
 	for ek in state["units"]:
 		var eu: Dictionary = state["units"][ek]
 		if int(eu["player"]) == player or int(eu["alive"]) <= 0 \
-				or (reply_v2 and bool(eu.get("shaken", false))):
+				or (reply_v2 and bool(eu.get("shaken", false))) \
+				or (mid_round and bool(eu.get("activated", false))):
 			continue
+		var movable := true
+		if reply_hold_gate and eu.get("unit") != null:
+			movable = not SoloController.forces_hold((eu["unit"] as GameUnit).get_special_rules())
 		var best_key := ""
 		var best_ev := 0.0
 		for mk in state["units"]:
@@ -1709,9 +1726,9 @@ static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 			if sees(eu, str(mk)) and _los_clear(state, eu, mu):
 				ev = AiEv.shoot_ev(_profiles_of(eu, false, d), _ctx_of(eu), _ctx_of(mu), d) \
 					+ float(spell_ev_of(eu, mu, d)["ev"])   # magic is part of the reply
-			if reply_v2 and d <= REPLY_CHARGE_IN:
+			if reply_v2 and movable and d <= REPLY_CHARGE_IN:
 				ev = maxf(ev, melee_threat(eu, mu))
-			if reply_v2 and d > REPLY_ADVANCE_IN and sees(eu, str(mk)) and _los_clear(state, eu, mu):
+			if reply_v2 and movable and d > REPLY_ADVANCE_IN and sees(eu, str(mk)) and _los_clear(state, eu, mu):
 				var d2 := d - REPLY_ADVANCE_IN
 				ev = maxf(ev, AiEv.shoot_ev(_profiles_of(eu, false, d2), _ctx_of(eu), _ctx_of(mu), d2) \
 					+ float(spell_ev_of(eu, mu, d2)["ev"]))
