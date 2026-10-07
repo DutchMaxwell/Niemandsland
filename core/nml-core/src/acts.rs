@@ -97,6 +97,11 @@ pub struct Knobs {
     /// before it, so the default is 1 — byte-identical to today's one candidate.
     #[serde(default = "one")]
     pub menu_advance_k: usize,
+    /// aifix action-space lane (finding 7, C1) — `Tuning::all_targets`: how many EXTRA HOLD+shoot rows (one per
+    /// visible enemy in range, best EV first) the menu appends after the single max-EV one. 0 = off, every
+    /// recorded corpus and shipped game byte-identical.
+    #[serde(default)]
+    pub menu_all_targets: usize,
     /// Wave 6 (`rushk`) — `Tuning::rush_k`, the PLAYOUT leg: how many of the
     /// nearest objectives the rollout's greedy brain rushes instead of only the
     /// nearest. A MENU knob, not a seam: it widens what the search may choose and
@@ -1431,6 +1436,7 @@ impl Default for Knobs {
             menu_targets: false,
             menu_holders: false,
             menu_advance_k: 1,
+            menu_all_targets: 0,
             playout_rush_k: 1,
             hero_attach: false,
             charge_landing: false,

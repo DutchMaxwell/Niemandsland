@@ -161,6 +161,12 @@ pub struct Tuning {
     /// the nearest objective; the same rush/demotion rule runs per objective, in
     /// distance order (stable on ties by `state.objectives` order).
     pub rush_k: usize,
+    /// aifix action-space lane (finding 7, C1) — `Knobs::menu_all_targets`: the menu offers ONE HOLD+shoot row (the
+    /// max-EV target) and the search never saw the unit on the marker or the half-dead one. With k > 0, up to k
+    /// MORE HOLD+shoot rows are appended — one per other visible enemy in range with a positive shot, best EV
+    /// first (stable on ties by capture order). Appended last, so an OFF menu is byte-identical and every
+    /// recorded candidate keeps its index. 0 = off.
+    pub all_targets: usize,
 }
 
 impl Default for Tuning {
@@ -175,6 +181,7 @@ impl Default for Tuning {
             holders: false,
             advance_k: 1,
             rush_k: 1,
+            all_targets: 0,
         }
     }
 }
@@ -304,6 +311,58 @@ pub fn best_shoot(
         }
     }
     best
+}
+
+/// Every visible enemy `best_shoot` would accept (same gates, same strict `ev > 0` bar), best EV first, stable on
+/// ties by capture order — the all-targets leg's source (`Tuning::all_targets`).
+pub fn ranked_shoots(
+    state: &State,
+    statics: &[UnitStatic],
+    i: usize,
+    sc: &mut Scratch,
+    tuning: Tuning,
+    rules_epoch: u32,
+) -> Vec<usize> {
+    let us = &statics[state.roster.profile[i]];
+    let mut rows: Vec<(usize, f64)> = Vec::new();
+    for e in enemy_keys_tuned(state, i, tuning.target_units) {
+        if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
+            continue;
+        }
+        let ut = &statics[state.roster.profile[e]];
+        let d = geom::dist_in(&state.positions[i], &state.positions[e]);
+        profiles_of(us, state.alive[i], d, sc);
+        let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        let def = ctx_live(ctx_of(ut, state, e), statics, state, e, false, rules_epoch);
+        let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
+        if ev > 0.0 {
+            rows.push((e, ev));
+        }
+    }
+    rows.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    rows.into_iter().map(|r| r.0).collect()
+}
+
+/// The extra HOLD+shoot rows of `Tuning::all_targets`: the ranked targets minus the ones the menu already carries
+/// as a HOLD+shoot row, capped at `all_targets`.
+fn all_target_rows(
+    state: &State, statics: &[UnitStatic], unit: usize, sc: &mut Scratch, tuning: Tuning, out: &[Candidate],
+) -> Vec<Candidate> {
+    if tuning.all_targets == 0 {
+        return Vec::new();
+    }
+    let key = state.key(unit);
+    let have = |e: usize| out.iter().any(|c| c.kind == HOLD && c.shoot.as_deref() == Some(state.key(e)));
+    ranked_shoots(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH)
+        .into_iter()
+        .filter(|&e| !have(e))
+        .take(tuning.all_targets)
+        .map(|e| {
+            let mut c = Candidate::new(key, HOLD);
+            c.shoot = Some(state.key(e).to_string());
+            c
+        })
+        .collect()
 }
 
 /// W1 — `AiPlanner.candidates_wide`'s ADVANCE+shoot leg (ai_planner.gd:
@@ -872,6 +931,9 @@ pub fn candidates_tuned(
     if forces_hold(&state.profile(unit).special_rules)
         && statics[state.roster.profile[unit]].hold_only.unwrap_or(true)
     {
+        // hold-only carriers may still fire at any target
+        let extra = all_target_rows(state, statics, unit, sc, tuning, &out);
+        out.extend(extra);
         return out;
     }
     for o in &state.objectives {
@@ -976,6 +1038,9 @@ pub fn candidates_tuned(
             }
         }
     }
+    // aifix all_targets: the extra HOLD+shoot rows, appended after every other leg.
+    let extra = all_target_rows(state, statics, unit, sc, tuning, &out);
+    out.extend(extra);
     out
 }
 

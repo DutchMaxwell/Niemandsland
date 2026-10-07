@@ -32,6 +32,7 @@ fn main() {
     let (mut games, mut out, mut cmp): (Vec<PathBuf>, Option<String>, Option<String>) = (vec![], None, None);
     let (mut max_games, mut top_k, mut horizon) = (usize::MAX, 10i64, 3i64);
     let mut shipped = false;
+    let mut all_targets = 0usize;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -49,6 +50,7 @@ fn main() {
             "--top-k" => { i += 1; top_k = args[i].parse().unwrap(); }
             "--horizon" => { i += 1; horizon = args[i].parse().unwrap(); }
             "--shipped" => shipped = true,
+            "--all-targets" => { i += 1; all_targets = args[i].parse().unwrap(); }
             other => panic!("unknown arg {other}"),
         }
         i += 1;
@@ -58,6 +60,7 @@ fn main() {
     let repo = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
     let mut records: Vec<Value> = Vec::new();
     let (mut pre_ms, mut tot_ms): (Vec<f64>, Vec<f64>) = (vec![], vec![]);
+    let mut menu_w: Vec<f64> = vec![];
     for g in &games {
         let c = load_acts(g.join("acts.jsonl").to_str().unwrap()).unwrap_or_else(|e| panic!("{}: {e}", g.display()));
         let per_act = act_statics(&c, repo);
@@ -80,6 +83,7 @@ fn main() {
             knobs.dangerous_end_morale = true;
             knobs.rules_epoch = nml_core::acts::CURRENT_RULES_EPOCH;
         }
+        knobs.menu_all_targets = all_targets;
         knobs.deadline_us = 3_600_000_000;
         knobs.deadline_after_preselect = true;
         let name = g.file_name().unwrap().to_string_lossy().to_string();
@@ -93,6 +97,7 @@ fn main() {
                 }
             };
             tot_ms.push(t.elapsed().as_secs_f64() * 1e3);
+            menu_w.push(pick.cands.len() as f64);
             if let Some(us) = pick.deadline.as_ref().and_then(|d| d.preselect_us) {
                 pre_ms.push(us as f64 / 1e3);
             }
@@ -112,6 +117,7 @@ fn main() {
         records.len(), games.len(), pct(&mut pre_ms.clone(), 0.5), pct(&mut pre_ms.clone(), 0.9),
         pct(&mut tot_ms.clone(), 0.5), pct(&mut tot_ms.clone(), 0.9)
     );
+    println!("PRESELECT_GATE menu width median={:.0} p90={:.0} max={:.0}", pct(&mut menu_w.clone(), 0.5), pct(&mut menu_w.clone(), 0.9), pct(&mut menu_w.clone(), 1.0));
     if let Some(p) = out {
         std::fs::write(&p, serde_json::to_vec(&records).unwrap()).unwrap();
     }
