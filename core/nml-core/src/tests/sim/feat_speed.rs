@@ -18,6 +18,7 @@ use crate::io;
     /// rush_mod 4 / uses_per_game 1). The REAL `build_for` product.
     fn feat_bearer_static(rules_epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

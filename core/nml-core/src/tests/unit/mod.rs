@@ -154,6 +154,7 @@
     /// `CURRENT_RULES_EPOCH` — so the assertions stay true after a bump.
     fn storm_spec(rule: &str, faction: &str, epoch: u32) -> Vec<StormSpec> {
         let p = Profile {
+            cost: 0,
             unit_id: "carrier".into(),
             name: "carrier".into(),
             special_rules: vec![rule.into()],
@@ -170,6 +171,7 @@
     /// A minimal `Profile` (no `Default`) with everything the stamp reads.
     fn storm_profile_template() -> Profile {
         Profile {
+            cost: 0,
             unit_id: String::new(),
             name: String::new(),
             quality: 0,

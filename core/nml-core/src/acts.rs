@@ -102,6 +102,10 @@ pub struct Knobs {
     /// recorded corpus and shipped game byte-identical.
     #[serde(default)]
     pub menu_all_targets: usize,
+    /// aifix action-space lane (finding 7, C3) — `Tuning::advance_obj_shoot`: ADVANCE rows that walk toward the
+    /// nearest objective WITH a shot on a target that stays in range after the move. Default off.
+    #[serde(default)]
+    pub menu_advance_obj_shoot: bool,
     /// Wave 6 (`rushk`) — `Tuning::rush_k`, the PLAYOUT leg: how many of the
     /// nearest objectives the rollout's greedy brain rushes instead of only the
     /// nearest. A MENU knob, not a seam: it widens what the search may choose and
@@ -1437,6 +1441,7 @@ impl Default for Knobs {
             menu_holders: false,
             menu_advance_k: 1,
             menu_all_targets: 0,
+            menu_advance_obj_shoot: false,
             playout_rush_k: 1,
             hero_attach: false,
             charge_landing: false,

@@ -39,6 +39,18 @@ def test_the_preset_reaches_the_seat_core_and_not_the_base_core():
         assert base.knobs()[key] != want, f"{key} already on in the other seat"
 
 
+def test_every_named_preset_reaches_the_seat_core():
+    """Not only aifix_all: any preset in KNOB_PRESETS must be readable back from the seat core (an unexposed knob
+    raises), and must change something the base core does not already carry."""
+    base = nml_core.load(str(REPO))
+    base.set_header({**HEADER, "knobs": {}})
+    for name, preset in sp.KNOB_PRESETS.items():
+        seat = sp.core_with_knob_overrides(REPO, HEADER, {}, preset)
+        for key, want in preset.items():
+            assert seat.knobs()[key] == want, f"{name}: {key}"
+            assert base.knobs()[key] != want, f"{name}: {key} already on in the base core"
+
+
 def test_a_knob_the_core_does_not_read_back_is_refused():
     with pytest.raises(ValueError, match="not read back"):
         sp.core_with_knob_overrides(REPO, HEADER, {}, {"opener_by_finnish": True})

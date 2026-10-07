@@ -17,6 +17,7 @@ use crate::state::Weapon;
 /// 24" 8-shot rifle and a 6-attack CCW, both AP(0).
 fn mark_carrier(rule: &str, faction: &str, rules_epoch: u32) -> UnitStatic {
     let p = Profile {
+        cost: 0,
         unit_id: "a".into(),
         name: "a".into(),
         quality: 4,

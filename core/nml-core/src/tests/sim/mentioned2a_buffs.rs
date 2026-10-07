@@ -14,6 +14,7 @@ use super::*;
     /// `build_for` product at `epoch`.
     fn bearer(system: &str, faction: &str, rule: &str, epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

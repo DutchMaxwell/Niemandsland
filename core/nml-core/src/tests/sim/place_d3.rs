@@ -16,6 +16,7 @@ use super::*;
     /// registry. The REAL `build_for` product, at `epoch`.
     fn wolfborn(epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,
@@ -159,6 +160,7 @@ use super::*;
     /// the REAL registry. The REAL `build_for` product, at `epoch`.
     fn rapid_blink(epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,
@@ -265,6 +267,7 @@ use super::*;
     /// product, at `epoch`.
     fn wave_step(epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

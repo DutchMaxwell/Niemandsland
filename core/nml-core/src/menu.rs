@@ -167,6 +167,12 @@ pub struct Tuning {
     /// first (stable on ties by capture order). Appended last, so an OFF menu is byte-identical and every
     /// recorded candidate keeps its index. 0 = off.
     pub all_targets: usize,
+    /// aifix action-space lane (finding 7, C3) — `Knobs::menu_advance_obj_shoot`: `ADVANCE` always heads for the enemy
+    /// centre or the safe line, never for the marker, so a unit could not "take the marker and still shoot" (GF p.7:
+    /// Advance moves 6" and can shoot after moving). With this on, ONE extra ADVANCE row walks toward the nearest
+    /// objective (to its control ring, at most the live advance band) and carries the best shot that stays in range
+    /// from where the move ends. Appended last; off = byte-identical.
+    pub advance_obj_shoot: bool,
 }
 
 impl Default for Tuning {
@@ -182,6 +188,7 @@ impl Default for Tuning {
             advance_k: 1,
             rush_k: 1,
             all_targets: 0,
+            advance_obj_shoot: false,
         }
     }
 }
@@ -363,6 +370,61 @@ fn all_target_rows(
             c
         })
         .collect()
+}
+
+/// The ring the walk toward a marker stops at, inches from its centre (inside the 3" control ring).
+const OBJ_STOP_IN: f64 = 2.0;
+
+/// `Tuning::advance_obj_shoot`: ONE ADVANCE row toward the nearest objective with a shot. The unit's models are
+/// displaced by the straight step (at most the live advance band, stopping `OBJ_STOP_IN` from the marker); the
+/// best target by `shoot_ev` from the displaced models (same sight gates and `ev > 0` bar as `best_shoot`) rides
+/// the row. No target in range after the move = no row (RUSH already covers walking without a shot).
+fn advance_objective_shoot(
+    state: &State, statics: &[UnitStatic], unit: usize, sc: &mut Scratch, tuning: Tuning,
+) -> Option<Candidate> {
+    if !tuning.advance_obj_shoot || state.positions[unit].is_empty() {
+        return None;
+    }
+    let ps = &state.positions[unit];
+    let n = ps.len() as f64;
+    let (cx, cz) = (ps.iter().map(|p| p[0]).sum::<f64>() / n, ps.iter().map(|p| p[2]).sum::<f64>() / n);
+    let obj = state.objectives.iter().min_by(|a, b| {
+        let da = (a.pos[0] - cx).hypot(a.pos[2] - cz);
+        let db = (b.pos[0] - cx).hypot(b.pos[2] - cz);
+        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+    })?;
+    let (dx, dz) = (obj.pos[0] - cx, obj.pos[2] - cz);
+    let dist_in = dx.hypot(dz) / IN2M;
+    let (advance_in, _) = crate::sim::live_bands_of(statics, state, unit);
+    let step_in = advance_in.min(dist_in - OBJ_STOP_IN);
+    if step_in < 0.5 {
+        return None;
+    }
+    let k = step_in * IN2M / dx.hypot(dz);
+    let moved: Vec<[f64; 3]> = ps.iter().map(|p| [p[0] + dx * k, p[1], p[2] + dz * k]).collect();
+    let us = &statics[state.roster.profile[unit]];
+    let (mut best, mut best_ev) = (None, 0.0f64);
+    for e in enemy_keys_tuned(state, unit, tuning.target_units) {
+        if !state.sees(unit, state.key(e)) || (tuning.shoot_los && !state.los_clear(unit, e)) {
+            continue;
+        }
+        let d = geom::dist_in(&moved, &state.positions[e]);
+        profiles_of(us, state.alive[unit], d, sc);
+        let att = ctx_live(ctx_of(us, state, unit), statics, state, unit, false, CURRENT_RULES_EPOCH);
+        let def = ctx_live(
+            ctx_of(&statics[state.roster.profile[e]], state, e), statics, state, e, false, CURRENT_RULES_EPOCH,
+        );
+        let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
+        if ev > best_ev {
+            best_ev = ev;
+            best = Some(e);
+        }
+    }
+    let e = best?;
+    let mut c = Candidate::new(state.key(unit), ADVANCE);
+    c.dest = Some([cx + dx * k, ps[0][1], cz + dz * k]);
+    c.shoot = Some(state.key(e).to_string());
+    Some(c)
 }
 
 /// W1 — `AiPlanner.candidates_wide`'s ADVANCE+shoot leg (ai_planner.gd:
@@ -1041,6 +1103,7 @@ pub fn candidates_tuned(
     // aifix all_targets: the extra HOLD+shoot rows, appended after every other leg.
     let extra = all_target_rows(state, statics, unit, sc, tuning, &out);
     out.extend(extra);
+    out.extend(advance_objective_shoot(state, statics, unit, sc, tuning));
     out
 }
 
