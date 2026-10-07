@@ -5793,6 +5793,11 @@ fn volley_ev(
     let us = &statics[state.roster.profile[si]];
     let ut = &statics[state.roster.profile[ti]];
     profiles_of(us, state.alive[si], d, sc);
+    // Exact early-out (aifix training-speed lane): nothing in range and no spell tokens means `shoot_ev` and
+    // `spell_ev_of` are both zero whatever the contexts are — skip the two `ctx_live` builds.
+    if sc.keep.is_empty() && (state.casts[si] <= 0 || !us.is_caster) {
+        return (0.0, 0);
+    }
     let att = ctx_live(ctx_of(us, state, si), statics, state, si, false, rules_epoch);
     let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, false, rules_epoch);
     let shooting = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
