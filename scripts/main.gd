@@ -17333,6 +17333,10 @@ func _start_lesson(_object_count: int) -> void:
 		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self})
 	# D3 lesson puppet: a "hold" chapter's AI activates but never moves or shoots. Set before the
 	# controller runs its first activation; the flag is in-memory only (never saved).
+	if _scenario_mode:
+		# D4: a lesson always plays the gentlest ladder grade, in memory only — the player's saved
+		# grade (SoloGrade.save) is deliberately never written from a lesson.
+		_solo_interactive_grade = "daemmerung"
 	_ensure_solo_controller()
 	if solo_controller != null:
 		solo_controller.lesson_hold = SpielschuleLessons.ai_mode(_scenario_chapter) == "hold"
