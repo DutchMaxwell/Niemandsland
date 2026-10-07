@@ -1075,6 +1075,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // never read anything past 0 here. Absent = `Knobs::default()` = 0,
         // and honoured if a header ever does carry it (mirrors `charge_landing`).
         eval_variant: dint(d, "eval_variant", dflt.eval_variant),
+        // afpoints P1. No recorder writes this key: the SHIPPED table plays
+        // only the frozen hand eval, so the in-game seam answers
+        // `Knobs::default()` = OFF and honours the key if a header carries it —
+        // the same shape as `eval_variant` above.
+        strength_by_points: dflag(d, "strength_by_points"),
         // W2 S0. Header-only, like `sighting`: no recorder writes this key yet,
         // so an absent one is `Knobs::default()` = `MeleeReach::All`.
         melee_reach: match d.get("melee_reach").map(|v| v.to_string()).as_deref() {
