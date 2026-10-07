@@ -3,47 +3,59 @@ import bpy, math, heapq, re
 from mathutils import Vector
 from mathutils.kdtree import KDTree
 
-def add_tail(arm, body, prefix):
+def add_tail(arm, body, prefix, region=None):
     P = prefix
     view = bpy.context.view_layer
     # tail chain along the generated tail
     tail_mats = [i for i, m in enumerate(body.data.materials) if "tail" in m.name.lower()]
     tail = sorted({vi for p in body.data.polygons if p.material_index in tail_mats for vi in p.vertices})
     tail_bones = []
+    region_y = None
+    if not tail and region:
+        # the tail is merged into the body mesh (no tail material): Hips-dominant vertices behind the cut and below the ceiling
+        names = {g.index: g.name for g in body.vertex_groups}
+        to0 = arm.matrix_world.inverted() @ body.matrix_world
+        tail = [v.index for v in body.data.vertices if v.groups and (to0 @ v.co).y > region["cut_y"] and (to0 @ v.co).z < region["max_z"]
+                and names[max(v.groups, key=lambda g: g.weight).group] == P + "Hips"]
+        region_y = region["cut_y"]
     if tail:
         to_arm = arm.matrix_world.inverted() @ body.matrix_world
         rest = {i: to_arm @ body.data.vertices[i].co for i in tail}
-        tail_set = set(tail)
-        other = KDTree(len(body.data.vertices))
-        for v in body.data.vertices:
-            if v.index not in tail_set:
-                other.insert(to_arm @ v.co, v.index)
-        other.balance()
-        root = [i for i in tail if other.find(rest[i])[2] < 0.004]
-        kd = KDTree(len(tail))
-        for k, i in enumerate(tail):
-            kd.insert(rest[i], k)
-        kd.balance()
-        dist = {i: math.inf for i in tail}
-        heap = []
-        for i in root:
-            dist[i] = 0.0
-            heapq.heappush(heap, (0.0, i))
-        while heap:
-            d, i = heapq.heappop(heap)
-            if d > dist[i]:
-                continue
-            for co, k, dd in kd.find_n(rest[i], 10):
-                j = tail[k]
-                if d + dd < dist[j]:
-                    dist[j] = d + dd
-                    heapq.heappush(heap, (d + dd, j))
-        S = max(d for d in dist.values() if d < math.inf)
+        if region_y is None:
+            tail_set = set(tail)
+            other = KDTree(len(body.data.vertices))
+            for v in body.data.vertices:
+                if v.index not in tail_set:
+                    other.insert(to_arm @ v.co, v.index)
+            other.balance()
+            root = [i for i in tail if other.find(rest[i])[2] < 0.004]
+            kd = KDTree(len(tail))
+            for k, i in enumerate(tail):
+                kd.insert(rest[i], k)
+            kd.balance()
+            dist = {i: math.inf for i in tail}
+            heap = []
+            for i in root:
+                dist[i] = 0.0
+                heapq.heappush(heap, (0.0, i))
+            while heap:
+                d, i = heapq.heappop(heap)
+                if d > dist[i]:
+                    continue
+                for co, k, dd in kd.find_n(rest[i], 10):
+                    j = tail[k]
+                    if d + dd < dist[j]:
+                        dist[j] = d + dd
+                        heapq.heappush(heap, (d + dd, j))
+            S = max(d for d in dist.values() if d < math.inf)
+        else:
+            dist = {i: max(0.0, rest[i].y - region_y) for i in tail}   # distance along the tail = depth behind the cut
+            S = max(dist.values())
         NB = 5
         cents = []
         for b in range(NB + 1):
             lo, hi = (b - 0.5) / NB * S, (b + 0.5) / NB * S
-            pts = [rest[i] for i in tail if lo <= dist[i] < hi] or [rest[i] for i in tail if abs(dist[i] - b / NB * S) < S * 0.08]
+            pts = [rest[i] for i in tail if lo <= dist[i] < hi] or [rest[i] for i in tail if abs(dist[i] - b / NB * S) < S * 0.08] or [rest[min(tail, key=lambda i: abs(dist[i] - b / NB * S))]]
             cents.append(sum(pts, Vector()) / len(pts))
         view.objects.active = arm
         bpy.ops.object.mode_set(mode="EDIT")

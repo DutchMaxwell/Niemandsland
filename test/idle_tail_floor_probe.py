@@ -3,9 +3,12 @@ blender -b --factory-startup -P test/idle_tail_floor_probe.py -- <repo tools/idl
 import bpy, json, sys
 from mathutils import Vector
 
-tools, out = sys.argv[sys.argv.index("--") + 1:][:2]
+_a = sys.argv[sys.argv.index("--") + 1:]
+tools, out = _a[:2]
+MERGED = len(_a) > 2 and _a[2] == "merged"   # tail geometry merged into the body mesh, no Tail bones in the rig
 sys.path.insert(0, tools)
 from warrior_pose import create_pose
+from warrior_tail import add_tail
 
 P = "mixamorig:"
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -28,7 +31,7 @@ for n, (h, t, parent) in JOINTS.items():
     if parent:
         b.parent = arm_data.edit_bones[P + parent]
 TAIL = [(0, 0.1, 0.9), (0, 0.4, 0.4), (0, 0.7, 0.08), (0, 1.0, 0.05), (0, 1.3, 0.05), (0, 1.6, 0.05)]
-for i in range(5):
+for i in range(0 if MERGED else 5):
     b = arm_data.edit_bones.new(f"Tail{i}")
     b.head, b.tail = Vector(TAIL[i]), Vector(TAIL[i + 1])
     b.parent = arm_data.edit_bones[P + "Hips"] if i == 0 else arm_data.edit_bones[f"Tail{i - 1}"]
@@ -46,7 +49,7 @@ for i in range(5):
         a = (TAIL[i][0], TAIL[i][1], TAIL[i][2]) if k < 4 else TAIL[i + 1]
         dx, dz = [(0.05, 0), (-0.05, 0), (0, 0.05), (0, -0.05)][k % 4]
         verts.append((a[0] + dx, a[1], a[2] + dz))
-        weights.append((f"Tail{i}", 1.0))
+        weights.append((P + "Hips" if MERGED else f"Tail{i}", 1.0))
 mesh = bpy.data.meshes.new("body")
 mesh.from_pydata(verts, [], [])
 body = bpy.data.objects.new("body", mesh)
@@ -72,6 +75,10 @@ def tail_low():
 
 
 result = {}
+if MERGED:
+    bpy.context.view_layer.update()
+    names, count = add_tail(arm, body, P, {"cut_y": 0.3, "max_z": 1.0})
+    result["region"] = {"bones": names, "verts": count}
 for label, kw in (("rigid_sway", {}), ("floor_follow", {"body": body})):
     for p in arm.pose.bones:  # create_pose takes the current pose as the calibrated base: start every variant from rest
         p.rotation_mode = "QUATERNION"
