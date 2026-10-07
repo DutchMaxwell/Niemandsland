@@ -111,19 +111,44 @@ fn activations_needed(
     Some(needed)
 }
 
+/// afpoints P1 — one unit's hold strength: its remaining wounds, or (with
+/// `by_points`) its Army Forge cost times the remaining-wounds fraction
+/// (`cost * remaining / max`). `UnitStatic.cost`/`wounds_max` come from the
+/// army list; empty statics or a woundless unit fall back to the raw reading.
+fn unit_strength(state: &State, statics: &[UnitStatic], i: usize, by_points: bool) -> f64 {
+    let mut strength = 0.0f64;
+    for w in &state.wounds[i] {
+        strength += *w as f64;
+    }
+    if !by_points {
+        return strength;
+    }
+    let max: i64 = statics.get(i).map_or(0, |s| s.wounds_max.iter().sum());
+    if max > 0 {
+        statics[i].cost as f64 * strength / max as f64
+    } else {
+        strength
+    }
+}
+
 /// `AiMissionEval._presence` ai_mission_eval.gd:591-617 — one unit's projected
 /// hold strength at one marker, discounted per future activation still needed.
 pub fn presence(
     state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], threat: f64,
 ) -> f64 {
+    presence_weighted(state, statics, i, obj_pos, threat, false)
+}
+
+/// `presence` with the strength term switchable — afpoints P1's
+/// `strength_by_points` arm reads it with `by_points = true`.
+fn presence_weighted(
+    state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], threat: f64,
+    by_points: bool,
+) -> f64 {
     let Some(needed) = activations_needed(state, statics, i, obj_pos) else {
         return 0.0;
     };
-    let mut strength = 0.0f64;
-    for w in &state.wounds[i] {
-        strength += *w as f64;
-    }
-    (strength - threat).max(0.0) * DISCOUNT.powf(needed as f64)
+    (unit_strength(state, statics, i, by_points) - threat).max(0.0) * DISCOUNT.powf(needed as f64)
 }
 
 /// `AiMissionEval._objective_p` ai_mission_eval.gd:415-431 — the soft control
@@ -131,7 +156,7 @@ pub fn presence(
 /// `carry_term` = the C7 carrier branch; only `eval_variant = 2` turns it off.
 fn objective_p(
     state: &State, statics: &[UnitStatic], obj_index: usize, player: i64, incoming: Incoming,
-    carry_term: bool,
+    carry_term: bool, by_points: bool,
 ) -> f64 {
     let obj = state.objectives[obj_index];
     if let Some(marker) = state.markers_meta.get(obj_index).filter(|_| carry_term) {
@@ -149,7 +174,7 @@ fn objective_p(
     let mut mine = 0.0f64;
     let mut theirs = 0.0f64;
     for i in 0..state.units() {
-        let p = presence(state, statics, i, obj.pos, threat_of(incoming, i));
+        let p = presence_weighted(state, statics, i, obj.pos, threat_of(incoming, i), by_points);
         if state.player[i] == player {
             mine += p;
         } else {
@@ -193,14 +218,16 @@ fn reserve_presence(state: &State, i: usize) -> f64 {
 /// D13: `objective_p` with the reserves counted — twin of `AiMissionEval._objective_p_roles`.
 fn objective_p_roles(
     state: &State, statics: &[UnitStatic], i: usize, player: i64, incoming: Incoming,
+    by_points: bool,
 ) -> f64 {
     if state.markers_meta.get(i).is_some_and(|m| m.carry && m.carried_by >= 0) {
-        return objective_p(state, statics, i, player, incoming, true);
+        return objective_p(state, statics, i, player, incoming, true, by_points);
     }
     let obj = state.objectives[i];
     let (mut mine, mut theirs) = (0.0f64, 0.0f64);
     for u in 0..state.units() {
-        let p = presence(state, statics, u, obj.pos, threat_of(incoming, u)) + reserve_presence(state, u);
+        let p = presence_weighted(state, statics, u, obj.pos, threat_of(incoming, u), by_points)
+            + reserve_presence(state, u);
         if state.player[u] == player { mine += p } else { theirs += p }
     }
     if mine + theirs <= 0.0 {
@@ -276,7 +303,7 @@ fn is_destroy_mission(state: &State) -> bool {
 pub fn score_hand(
     state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
 ) -> f64 {
-    score_hand_carry(state, statics, player, incoming, true)
+    score_hand_carry(state, statics, player, incoming, true, false)
 }
 
 /// `score_hand` with the C7 carry term switchable — `eval_variant = 2` (wave C
@@ -284,6 +311,7 @@ pub fn score_hand(
 /// priced by presence like any other, the hand eval exactly as before C7.
 fn score_hand_carry(
     state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, carry_term: bool,
+    by_points: bool,
 ) -> f64 {
     if state.objectives.is_empty() {
         return 0.5;
@@ -307,7 +335,7 @@ fn score_hand_carry(
                 }
                 continue;
             }
-            let pctrl = objective_p(state, statics, i, player, incoming, carry_term);
+            let pctrl = objective_p(state, statics, i, player, incoming, carry_term, by_points);
             if ob == player {
                 deff = 1.0 - pctrl;
             } else {
@@ -319,13 +347,13 @@ fn score_hand_carry(
     if let Some(role) = role_term(state, player) {
         let n = state.objectives.len() as f64;
         let control: f64 = (0..state.objectives.len())
-            .map(|i| objective_p_roles(state, statics, i, player, incoming))
+            .map(|i| objective_p_roles(state, statics, i, player, incoming, by_points))
             .sum::<f64>() / n;
         return ROLE_TERM_WEIGHT * role + (1.0 - ROLE_TERM_WEIGHT) * control;
     }
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        total += objective_p(state, statics, i, player, incoming, carry_term);
+        total += objective_p(state, statics, i, player, incoming, carry_term, by_points);
     }
     total / state.objectives.len() as f64
 }
@@ -431,7 +459,7 @@ fn score_hand_hold(
         return score_hand(state, statics, player, incoming);
     }
     let total: f64 = (0..state.objectives.len())
-        .map(|i| hold_owner_p(state, objective_p(state, statics, i, player, incoming, true), i, player))
+        .map(|i| hold_owner_p(state, objective_p(state, statics, i, player, incoming, true, false), i, player))
         .sum();
     total / state.objectives.len() as f64
 }
@@ -468,7 +496,7 @@ fn score_hand_majority(
     let w = (1.0 - left / total_rounds).clamp(0.0, 1.0);
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        let share = objective_p(state, statics, i, player, incoming, true);
+        let share = objective_p(state, statics, i, player, incoming, true, false);
         let own = objective_own(state, statics, i, player, incoming);
         total += (1.0 - w) * share + w * own;
     }
@@ -536,9 +564,12 @@ pub fn score_hand_variant(
     match eval_variant {
         0 => score_hand(state, statics, player, incoming),
         1 => score_hand_majority(state, statics, player, incoming),
-        2 => score_hand_carry(state, statics, player, incoming, false),
+        2 => score_hand_carry(state, statics, player, incoming, false, false),
         3 => score_hand_vp(state, statics, player, incoming),
         4 => score_hand_vp_hold(state, statics, player, incoming),
+        // afpoints P1 — the points-weighted presence arm (`strength_by_points`),
+        // the frozen hand eval with `by_points = true`.
+        5 => score_hand_carry(state, statics, player, incoming, true, true),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
@@ -665,6 +696,27 @@ mod tests {
         let statics: Vec<UnitStatic> =
             header.profiles.list.iter().map(|p| UnitStatic::build(&mut reg, p)).collect();
         assert_eq!(statics[0].cost, 123, "the list cost reaches UnitStatic.cost");
+    }
+
+    /// afpoints P1 RED — the audit's sisters/tank fixture: ten one-wound levy
+    /// models (100 pts) against one Tough(9) tank (600 pts). Raw wounds give
+    /// the levy 10/(10+9) = 0.53; arm 5 prices the army-list cost instead.
+    #[test]
+    fn strength_by_points_weighs_the_tank_over_the_levy() {
+        let mut st = marker_state(
+            &[U("p1_0_a", 1, 0.0, 1, false, false), U("p2_0_a", 2, 0.0, 9, false, false)],
+            0, 4,
+        );
+        st.wounds[0] = vec![1; 10];
+        let statics = [
+            UnitStatic { cost: 100, wounds_max: vec![1; 10], ..Default::default() },
+            UnitStatic { cost: 600, wounds_max: vec![9], ..Default::default() },
+        ];
+        let raw = score_hand_variant(&st, &statics, 1, NO_INCOMING, 0);
+        let pts = score_hand_variant(&st, &statics, 1, NO_INCOMING, 5);
+        assert!((raw - 10.0 / 19.0).abs() < 1e-9, "raw wounds share, got {raw}");
+        assert!(pts < raw, "the 600-pt tank must outweigh 100 pts of levy: {pts} vs {raw}");
+        assert!((pts - 100.0 / 700.0).abs() < 1e-9, "points share, got {pts}");
     }
 
     /// Wave C G-AB: variant 2 is variant 0 WITHOUT the C7 carry term. My unit

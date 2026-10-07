@@ -480,6 +480,10 @@ impl<'a> Rollout<'a> {
         // today's frozen eval) picks which `score::score_hand_variant` arm
         // every taste read below plays.
         let variant = self.knobs.eval_variant;
+        // afpoints P1 — `strength_by_points` selects the points-weighted
+        // presence arm (5) instead of the frozen eval; a separate knob, so it
+        // composes with the default arm 0 rather than renumbering any arm.
+        let variant = if self.knobs.strength_by_points { 5 } else { variant };
         if (mode == 1 && opener_seat) || (mode == 2 && !opener_seat) {
             let last = &ends[ends.len() - 1];
             let incoming = self.end_threat(last, player);

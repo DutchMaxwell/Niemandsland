@@ -250,6 +250,13 @@ pub struct Knobs {
     /// exists yet — this field is the registration point, not a new eval.
     #[serde(default)]
     pub eval_variant: i64,
+    /// afpoints P1 — the `strength_by_points` eval arm: a unit's presence is
+    /// its Army Forge cost times its remaining-wounds fraction instead of its
+    /// raw wounds (score.rs `score_hand_variant` arm 5). Research knob for the
+    /// afpoints A/B, default OFF. Read at the same `Rollout::blend_score_leaf`
+    /// site `eval_variant` is.
+    #[serde(default)]
+    pub strength_by_points: bool,
     /// Tree search knob: `"oneply"` (default, today's search) or `"tree"`.
     /// Registration only; absent from every recorded corpus, so it replays
     /// byte-identical.
@@ -1468,6 +1475,7 @@ impl Default for Knobs {
             // `rows::RULE_VOCAB_VERSION` itself.
             rule_vocab_version: crate::rows::LEGACY_VOCAB_VERSION,
             eval_variant: 0,
+            strength_by_points: false,
             search_mode: SearchMode::OnePly,
             tree_leaf: TreeLeaf::Blend,
             tree_dice: TreeDice::Ev,
