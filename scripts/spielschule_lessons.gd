@@ -71,8 +71,8 @@ const _S04_STEPS := [
 const _S05_STEPS := [
 	{"id": "card", "text": "Right-click alpha and open its card: the Heavy Rifle shoots 24\". (p.5)",
 		"rule": "p.5", "all": [{"check": "flag", "args": {"key": "card_presented"}}]},
-	{"id": "shoot", "text": "Right-click alpha, choose Shoot, click the enemy squad.",
-		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
+	{"id": "shoot", "text": "Right-click alpha, choose Shoot, click the squad in range. The far squad is over 24\" away — out of range.",
+		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
 	{"id": "read_log", "text": "Read the log: hits roll against Quality, the target blocks with Defense. (p.8)",
 		"rule": "p.8", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]

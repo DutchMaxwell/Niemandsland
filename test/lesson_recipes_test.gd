@@ -64,7 +64,7 @@ func test_s05_recipe_is_a_playing_shooting_table() -> void:
 	for side in recipe.get("sides", []):
 		for pick in side.get("units", []):
 			tags.append(String(pick.get("tag", "")))
-	assert_array(tags).contains(["alpha", "target"])
+	assert_array(tags).contains(["alpha", "target", "far"])
 
 
 func test_recipe_schema_names_the_combat_seam_keys() -> void:
