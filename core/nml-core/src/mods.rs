@@ -157,6 +157,15 @@ pub fn sum_logged(
     total
 }
 
+/// Does ANY record on `i`'s joined chain (bearer, host, attached heroes) carry a `grants_rule`? When not,
+/// every `granted*` read for `i` is false by construction (each requires a non-empty `grants_rule`).
+pub fn chain_has_grants(state: &State, i: usize) -> bool {
+    std::iter::once(i)
+        .chain(state.attached_to[i])
+        .chain(state.attached[i].iter().copied())
+        .any(|u| state.buffs[u].iter().any(|r| !r.grants_rule.is_empty()))
+}
+
 /// Does unit `i` carry a live rule GRANT of `rule`? The overlay
 /// `_solo_apply_grant` (main.gd:3730) writes the granted name onto the whole
 /// JOINED CHAIN — bearer, host and attached heroes — so the read walks all
