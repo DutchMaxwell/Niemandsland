@@ -29,7 +29,8 @@ func snapshot() -> Dictionary:
 	var facts := {"yaw": 0.0, "cam_dist": 0.0, "pivot": Vector3.ZERO,
 		"counters": _counters.duplicate(), "tags": {},
 		"table_size": Vector2.ZERO, "biome": "", "terrain_pieces": 0,
-		"layout_pieces": 0, "deploy_type": 0, "menu_open": false}
+		"layout_pieces": 0, "deploy_type": 0, "menu_open": false,
+		"units_p1": 0, "p1_all_in_zone": false, "phase": 0}
 	if _table != null and "table_size" in _table:
 		facts.table_size = _table.table_size
 	if _table != null and "biome" in _table:
@@ -41,6 +42,11 @@ func snapshot() -> Dictionary:
 		facts.deploy_type = int(_map_layout.deployment_type)
 	if is_instance_valid(_left_panel):
 		facts.menu_open = _left_panel.visible
+	var p1_units := _p1_units()
+	facts.units_p1 = p1_units.size()
+	facts.p1_all_in_zone = _p1_all_in_zone(p1_units)
+	if _army_manager != null and "game_phase" in _army_manager:
+		facts.phase = int(_army_manager.game_phase)
 	if is_instance_valid(_camera_pivot):
 		facts.yaw = _camera_pivot.rotation.y
 		facts.pivot = _camera_pivot.global_position
@@ -91,3 +97,27 @@ func _count_terrain() -> int:
 		if obj is Node3D and UnitUtils.is_terrain(obj):
 			count += 1
 	return count
+
+
+func _p1_units() -> Array:
+	if _army_manager != null and _army_manager.has_method("get_game_units_for_player"):
+		return _army_manager.get_game_units_for_player(1)
+	return []
+
+
+## True when there is at least one deployed player-1 model and every one of them stands inside the
+## standard Front Line deployment zone (p.6). No units -> false, so the step cannot fake completion.
+func _p1_all_in_zone(units: Array) -> bool:
+	var probe := DeploymentCatalog.zone_test("front_line", 1)
+	var models := 0
+	for unit in units:
+		if not unit is GameUnit:
+			continue
+		for model in unit.get_alive_models():
+			if not is_instance_valid(model.node):
+				continue
+			models += 1
+			var at := Vector2(model.node.global_position.x, model.node.global_position.z)
+			if not probe.call(at):
+				return false
+	return models > 0

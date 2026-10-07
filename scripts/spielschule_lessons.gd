@@ -36,6 +36,20 @@ const _S02_STEPS := [
 ]
 
 
+const _S03_STEPS := [
+	{"id": "menu", "text": "Open the menu (top left).",
+		"rule": "", "all": [{"check": "flag", "args": {"key": "menu_open"}}]},
+	{"id": "import", "text": "Import an army: paste an Army Forge link — or press Use the practice army (works offline).",
+		"rule": "", "all": [{"check": "at_least", "args": {"key": "units_p1", "n": 1}}],
+		"action": {"label": "Use the practice army",
+			"fixture": "res://assets/tutorial/tutorial_army_p1.json"}},
+	{"id": "deploy", "text": "Drag every unit into your deployment zone, the shaded strip on your side. (p.6)",
+		"rule": "p.6", "all": [{"check": "flag", "args": {"key": "p1_all_in_zone"}}]},
+	{"id": "start", "text": "Press Start Game.",
+		"rule": "", "all": [{"check": "value_is", "args": {"key": "phase", "value": 1}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
@@ -44,6 +58,8 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S01_STEPS
 		"S-02":
 			return _S02_STEPS
+		"S-03":
+			return _S03_STEPS
 	return []
 
 
@@ -54,5 +70,7 @@ static func ai_mode(chapter_id: String) -> String:
 		"S-01":
 			return "none"
 		"S-02":
+			return "none"
+		"S-03":
 			return "none"
 	return "none"

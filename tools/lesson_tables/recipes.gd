@@ -11,4 +11,7 @@ static func recipe(id: String) -> Dictionary:
 	if id == "S-02":
 		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
 			"deployment": -1, "phase": 0, "round": 1, "sides": []}
+	if id == "S-03":
+		return {"size_feet": Vector2(6, 4), "biome": "temperate_grassland",
+			"deployment": 1, "phase": 0, "round": 1, "sides": []}
 	return {}
