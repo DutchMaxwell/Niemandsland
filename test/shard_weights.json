@@ -310,7 +310,6 @@
 "test/menu_backdrop_reveal_test.gd": 7.8,
 "test/menu_cold_exit_test.gd": 2.5,
 "test/menu_diorama_test.gd": 0.1,
-"test/menu_ticker_test.gd": 0.0,
 "test/mission_catalog_test.gd": 0.1,
 "test/model_instance_marker_test.gd": 0.1,
 "test/model_item_variants_test.gd": 0.1,
