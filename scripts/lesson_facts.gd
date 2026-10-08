@@ -103,6 +103,7 @@ func snapshot() -> Dictionary:
 				"centroid_in": sum / float(positioned) / METRES_PER_INCH if positioned > 0 else Vector2.ZERO,
 				"alive": alive.size(), "activated": unit.is_activated,
 				"shaken": unit.is_shaken, "fatigued": unit.is_fatigued,
+				"card_presented": _is_card_presented(unit),
 				"enemy_gap_in": _enemy_gap_in(unit, all_units)}
 	return facts
 
@@ -132,6 +133,16 @@ func _on_battle_log_entry(entry: Dictionary) -> void:
 		bump("log:pile_in")
 	if low.contains("consolidat"):
 		bump("log:consolidate")
+	# Morale outcome lines read "<name> passes morale" / "<name> fails morale …". Bump a counter for
+	# the TESTED unit's lesson tag so a lesson can gate "the volley forced a morale test"
+	# (log:morale:target).
+	for suffix in [" passes morale", " fails morale"]:
+		var mi := text.find(suffix)
+		if mi > 0:
+			var mtag := _tag_for_name(text.substr(0, mi))
+			if not mtag.is_empty():
+				bump("log:morale:%s" % mtag)
+			break
 	# Melee strike lines read "<unit name> strikes with <weapon> at <target> …". Bump a counter for
 	# the STRIKER's lesson tag, so a lesson can gate "the defender struck back" (strike:target).
 	var marker := " strikes with "
@@ -140,6 +151,13 @@ func _on_battle_log_entry(entry: Dictionary) -> void:
 		var tag := _tag_for_name(text.substr(0, at))
 		if not tag.is_empty():
 			bump("strike:%s" % tag)
+
+
+## Whether this unit's card is the one currently presented in the unit dock (S-07 Tough read).
+func _is_card_presented(unit: GameUnit) -> bool:
+	if _unit_dock == null or not _unit_dock.has_method("get_presented_unit"):
+		return false
+	return _unit_dock.get_presented_unit() == unit
 
 
 ## The lesson tag of the tagged unit whose on-screen name is `unit_name`, or "" (untagged units are
