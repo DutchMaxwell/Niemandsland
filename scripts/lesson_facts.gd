@@ -89,6 +89,9 @@ func snapshot() -> Dictionary:
 		if _object_manager != null and _object_manager.has_method("get_selected_objects"):
 			selected = _object_manager.get_selected_objects()
 		var all_units: Array = _army_manager.get_all_game_units()
+		var objectives := _objectives()
+		for i in range(objectives.size()):
+			facts["objective_owner_%d" % i] = _objective_owner(i)
 		for unit in all_units:
 			if not unit is GameUnit:
 				continue
@@ -112,6 +115,7 @@ func snapshot() -> Dictionary:
 				"shaken": unit.is_shaken, "fatigued": unit.is_fatigued,
 				"card_presented": _is_card_presented(unit),
 				"terrain": _terrain_mode(alive),
+				"obj_dist_in": _obj_dists(alive, objectives),
 				"enemy_gap_in": _enemy_gap_in(unit, all_units)}
 	return facts
 
@@ -179,6 +183,36 @@ func _is_card_presented(unit: GameUnit) -> bool:
 	if _unit_dock == null or not _unit_dock.has_method("get_presented_unit"):
 		return false
 	return _unit_dock.get_presented_unit() == unit
+
+
+## The overlay's mission markers (world metres), or [] when there is no overlay.
+func _objectives() -> Array:
+	if _terrain_overlay == null or not _terrain_overlay.has_method("get_objectives"):
+		return []
+	return _terrain_overlay.get_objectives()
+
+
+## Owner (0 neutral, else player_id) of marker `i`, or 0 when there is no overlay.
+func _objective_owner(i: int) -> int:
+	if _terrain_overlay == null or not _terrain_overlay.has_method("get_objective_owner"):
+		return 0
+	return int(_terrain_overlay.get_objective_owner(i))
+
+
+## Per-marker distance (inches) from a unit's NEAREST alive model to each objective, index-aligned to
+## the overlay's markers (S-09 obj_within). INF for a marker when the unit has no placed model.
+func _obj_dists(alive: Array[ModelInstance], objectives: Array) -> Array:
+	var out: Array = []
+	for pos in objectives:
+		var best := INF
+		for model in alive:
+			if not is_instance_valid(model.node):
+				continue
+			var d := Vector2(model.node.global_position.x - (pos as Vector3).x,
+				model.node.global_position.z - (pos as Vector3).z).length() / METRES_PER_INCH
+			best = minf(best, d)
+		out.append(best)
+	return out
 
 
 ## The terrain type MOST of a unit's alive models stand on (S-08), or 0 (NONE) when there is no
