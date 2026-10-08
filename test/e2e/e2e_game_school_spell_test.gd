@@ -60,6 +60,18 @@ func _wait_index(target: int) -> bool:
 	return false
 
 
+## The dock's spell rule link for the presented card (RuleLink sets meta "rule_meta" = "spell:<name>").
+func _find_spell_link() -> Button:
+	var dock: Node = _main.unit_dock
+	if dock == null:
+		return null
+	for node in dock.find_children("*", "Button", true, false):
+		var b := node as Button
+		if b != null and b.has_meta("rule_meta") and str(b.get_meta("rule_meta")).begins_with("spell:"):
+			return b
+	return null
+
+
 func test_s_spell_three_steps_complete(timeout := 120000) -> void:
 	assert_int(_lesson.current_index()).is_equal(0)
 	var alpha := _find("alpha")
@@ -68,22 +80,34 @@ func test_s_spell_three_steps_complete(timeout := 120000) -> void:
 	assert_object(target).is_not_null()
 	assert_int(alpha.casts_current).is_greater(0)
 
-	# The card/hover seam: a spell preview ring is on the table (fact spell_preview).
-	_main.range_ring_controller.show_spell_preview(_main._solo_unit_nodes(alpha), 18)
+	# The card/hover seam the player uses: select the Archivist so the dock builds its card, then
+	# hover the spell link — the very mouse_entered the pointer fires, so broken hover wiring is RED.
+	_main.object_manager.select_objects([alpha.models[0].node])
+	await get_tree().process_frame
+	var link := _find_spell_link()
+	assert_object(link).override_failure_message(
+		"the Archivist's card has no spell link to hover").is_not_null()
+	if link != null:
+		link.mouse_entered.emit()
 	assert_bool(await _wait_index(1)).is_true()   # the range preview shows
 
-	# The caster's first affordable spell, cast through the real human-cast seam. Leave exactly one
+	# The caster's first affordable ENEMY spell that the game's own candidate filter offers on the
+	# enemy squad — the same seam the Cast flow uses to decide legal targets. Leave exactly one
 	# token so the post-spend boost pool is empty — the boost dialog is an interactive prompt that
 	# cannot be answered headless, and this lesson teaches the base cast, not boosting.
 	alpha.casts_current = 1
-	var spells := SpellsRegistry.spells_for_unit(alpha)
 	var entry: Dictionary = {}
-	for sp in spells:
-		if int((sp as Dictionary).get("threshold", 99)) <= alpha.casts_current:
-			entry = sp as Dictionary
+	for sp in SpellsRegistry.spells_for_unit(alpha):
+		var e := sp as Dictionary
+		if int(e.get("threshold", 99)) > alpha.casts_current:
+			continue
+		var cands: Array = _main.solo_controller.spell_candidates(alpha, e,
+			_main.solo_controller.human_slot, _main.solo_controller.ai_slot)
+		if target in cands:
+			entry = e
 			break
 	assert_bool(entry.is_empty()).override_failure_message(
-		"the Archivist has no affordable spell").is_false()
+		"the Archivist has no affordable enemy spell on the target squad").is_false()
 	await _main._run_human_cast(alpha, alpha, entry, [target])
 	assert_bool(await _wait_index(2)).is_true()   # the spell resolved
 

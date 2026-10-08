@@ -154,7 +154,7 @@ const _SSPELL_STEPS := [
 		"rule": "p.13", "all": [{"check": "flag", "args": {"key": "spell_preview"}}]},
 	{"id": "cast", "text": "Right-click the Archivist, choose Cast, then pick the spell and a squad.",
 		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "cast:alpha"}}]},
-	{"id": "tokens", "text": "Casters gain tokens every round and spend them to cast; a spell succeeds on 4+, then press Continue. (p.13)",
+	{"id": "tokens", "text": "Explained, nothing to do here: casters gain a token every round and spend one to cast, and a spell succeeds on a 4+. Read it, then press Continue. (p.13)",
 		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 
