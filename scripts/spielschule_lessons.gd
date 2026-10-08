@@ -160,7 +160,7 @@ const _SSPELL_STEPS := [
 
 
 const _S10_STEPS := [
-	{"id": "finish", "text": "Play the mission to the end: NACHTMAHR plays for real at its easiest grade, Dämmerung, over 4 rounds and holds the markers. Win, lose or draw, the lesson ends when the game does. (p.6)",
+	{"id": "finish", "text": "Play the mission to the end: NACHTMAHR plays for real at its easiest grade, Dämmerung, over 4 rounds with three markers to hold. Win, lose or draw, the lesson ends when the game does. (p.6)",
 		"rule": "p.6", "all": [{"check": "flag", "args": {"key": "game_finished"}}]},
 ]
 
