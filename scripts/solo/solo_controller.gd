@@ -3006,6 +3006,17 @@ func end_verdict(owners: Array, alive1: int, alive2: int) -> String:
 	return BattleSim.mission_winner(mission_scoring, owners, mission_vp, mission_markers, alive1, alive2)
 
 
+## The ONE mission-referee read the finale lesson verdict and the game summary share, so the two can
+## never name different winners (NML-1048 was exactly that drift). A live controller's end_verdict is
+## authoritative — it folds the role missions and the progressive VP ledger; only a room that never
+## built a controller (plain MP/hotseat) falls back to BattleSim's pure referee. `controller` stays
+## untyped so tests can pass a double. Returns "p1" / "p2" / "draw".
+static func winner_side(controller, owners: Array, alive1: int, alive2: int) -> String:
+	if controller != null:
+		return controller.end_verdict(owners, alive1, alive2)
+	return BattleSim.mission_winner(mission_scoring, owners, mission_vp, mission_markers, alive1, alive2)
+
+
 func _is_final_round() -> bool:
 	return game_rounds > 0 and _current_round() >= game_rounds
 
@@ -3798,16 +3809,18 @@ func _eval_variant_for(diff: SoloDifficulty) -> int:
 	if forced != "":
 		return int(forced)
 	var v := diff.eval_variant if diff != null and not shipped_brain_ready() else 0
-	return 4 if v == 3 and _aifix_on(diff) else v   # A3 composes with variant 3 (score.rs score_hand_vp_hold)
+	if _aifix_on(diff) and (v == 3 or shipped_brain_ready()):
+		return 4   # A3 (score.rs score_hand_vp_hold): composes with 3 on the hand planner; the brain takes it directly (T2a ran 4 over the arm-0 net)
+	return v
 
 
-## aifix_all for this pick: the preset's `aifix` bundle, only while NO brain is wired (measured on the hand planner;
-## the net waits for its own A/B). env NML_AIFIX=0/1 forces it either way (the A/B's arm switch).
+## aifix_all for this pick: the preset's `aifix` bundle, with or without the brain (measured NOT_WORSE on the hand
+## planner (#1631) and on the shipped Erlkoenig (T2a 08.10.2026)). env NML_AIFIX=0/1 forces it either way (the A/B's arm switch).
 func _aifix_on(diff: SoloDifficulty) -> bool:
 	var forced := OS.get_environment("NML_AIFIX")
 	if forced != "":
 		return forced == "1"
-	return diff != null and diff.aifix and not shipped_brain_ready()
+	return diff != null and diff.aifix
 
 
 ## Shipped-brain header knobs for this pick: the preset's `brain_knobs` flag AND the brain wired for this game.

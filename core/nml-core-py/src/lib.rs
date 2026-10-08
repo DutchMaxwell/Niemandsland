@@ -733,6 +733,7 @@ impl Core {
             // stays OFF.
             dangerous_end_morale: self.knobs.dangerous_end_morale,
             morale_by_probability: self.knobs.morale_by_probability,
+            hero_counts_in_size: self.knobs.hero_counts_in_size,
             range_by_base_edge: self.knobs.range_by_base_edge,
             reply_v2: self.knobs.reply_v2,
             reply_skip_activated: self.knobs.reply_skip_activated,
@@ -864,6 +865,7 @@ impl Core {
         m.insert("no_end_threat".into(), self.knobs.no_end_threat.into());
         m.insert("range_by_base_edge".into(), self.knobs.range_by_base_edge.into());
         m.insert("morale_by_probability".into(), self.knobs.morale_by_probability.into());
+        m.insert("hero_counts_in_size".into(), self.knobs.hero_counts_in_size.into());
         m.insert("rule_vocab_version".into(), self.knobs.rule_vocab_version.into());
         m.insert("eval_variant".into(), self.knobs.eval_variant.into());
         m.insert("strength_by_points".into(), self.knobs.strength_by_points.into());

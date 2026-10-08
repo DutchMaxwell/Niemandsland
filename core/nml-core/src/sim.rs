@@ -189,11 +189,36 @@ fn wounds_left(state: &State, i: usize) -> i64 {
 /// `BattleSim._below_half` battle_sim.gd:1066-1072 — a single-model unit
 /// measures tough WOUNDS against the model's max, a multi-model unit its alive
 /// count against its starting size.
-fn below_half(state: &State, us: &UnitStatic, i: usize) -> bool {
+///
+/// Inventory C12 (`Seams::hero_counts_in_size`, default off): a joined hero counts in the unit's size
+/// (GF/AoF v3.5.1 p.14), so a host with an attached hero measures the COMBINED living models against the
+/// combined starting size, the same basis as `main._solo_below_half_strength`.
+fn below_half(state: &State, statics: &[UnitStatic], us: &UnitStatic, i: usize, seams: Seams) -> bool {
+    if hero_size_on(state, i, seams) {
+        return at_or_below_half(combined_alive(state, i, seams), combined_total(statics, state, i, us));
+    }
     if us.model_count == 1 {
         return at_or_below_half(wounds_left(state, i), us.wounds_max.first().copied().unwrap_or(0));
     }
     at_or_below_half(state.alive[i], us.model_count)
+}
+
+/// Inventory C12 — the hero-in-size reading applies: knob on, attachment seam on, a hero joined to `i`.
+#[inline]
+fn hero_size_on(state: &State, i: usize, seams: Seams) -> bool {
+    seams.hero_counts_in_size && seams.hero_attach && !state.attached[i].is_empty()
+}
+
+/// `SoloController.combined_total` — the host's starting size plus every joined hero's starting size.
+fn combined_total(statics: &[UnitStatic], state: &State, i: usize, us: &UnitStatic) -> i64 {
+    us.model_count
+        + state.attached[i].iter().map(|&h| statics[state.roster.profile[h]].model_count).sum::<i64>()
+}
+
+/// The living count a morale snapshot is taken on: host + joined heroes with C12 on, the host alone otherwise.
+#[inline]
+fn morale_alive(state: &State, i: usize, seams: Seams) -> i64 {
+    if hero_size_on(state, i, seams) { combined_alive(state, i, seams) } else { state.alive[i] }
 }
 
 /// The best living model's Quality in a joined unit from the melee-truth epoch.
@@ -761,12 +786,12 @@ pub(crate) fn tray_breath_attack(
     let hits = BREATH_BLAST.min(combined_alive(next, ti, seams)).max(1);
     let ut = &statics[next.roster.profile[ti]];
     let def = ctx_of(ut, next, ti);
-    let alive_before = next.alive[ti];
+    let alive_before = morale_alive(next, ti, seams);
     let wounds_before = wounds_left(next, ti);
     let out = crate::dice::resolve_breath_attack_with_tray(hits, BREATH_AP, &def, &ut.name, tray);
     let landed = shot.absorb(out);
     land_wounds_with(next, ti, landed, seams.tray_exact);
-    if shooting_morale_trigger(next, ut, ti, alive_before, wounds_before) {
+    if shooting_morale_trigger(next, statics, seams, ut, ti, alive_before, wounds_before) {
         tray_morale(next, statics, ti, false, seams, tray, shot);
     }
 }
@@ -976,10 +1001,10 @@ fn surprise_strike(
     shot.log.push(format!("Surprise Attack: {owner} strikes unawares — {successes} of {} dice hit", spec.dice));
     let ut = &statics[next.roster.profile[best]];
     let def = ctx_of(ut, next, best);
-    let (ab, wb) = (next.alive[best], wounds_left(next, best));
+    let (ab, wb) = (morale_alive(next, best, seams), wounds_left(next, best));
     let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(successes, spec.ap, false, false, &def, &ut.name, tray));
     land_wounds_with(next, best, landed, seams.tray_exact);
-    if shooting_morale_trigger(next, ut, best, ab, wb) {
+    if shooting_morale_trigger(next, statics, seams, ut, best, ab, wb) {
         tray_morale(next, statics, best, false, seams, tray, shot);
     }
 }
@@ -1172,7 +1197,7 @@ pub(crate) fn tray_strafing(
     // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
     // the def build carries the same terrain gate.
     stealth_alias_terrain_gate(statics, next, target, cover, &mut def);
-    let (alive_before, wounds_before) = (next.alive[target], wounds_left(next, target));
+    let (alive_before, wounds_before) = (morale_alive(next, target, seams), wounds_left(next, target));
     // Per member (host first, then each alive attached hero): the Strafing
     // profiles in range, survivor-scaled — `profiles_of`'s shape over
     // `strafe_shoot`.
@@ -1229,7 +1254,7 @@ pub(crate) fn tray_strafing(
     if seams.tray_exact {
         land_wounds_with(next, target, w, true); // the table's order: Takedown, Deadly, then the pool
     }
-    if shooting_morale_trigger(next, ut, target, alive_before, wounds_before) {
+    if shooting_morale_trigger(next, statics, seams, ut, target, alive_before, wounds_before) {
         tray_morale(next, statics, target, false, seams, tray, shot);
     }
 }
@@ -1285,14 +1310,14 @@ pub(crate) fn tray_storm_attack(
                 }
                 let ut = &statics[next.roster.profile[best]];
                 let def = ctx_of(ut, next, best);
-                let (alive_before, wounds_before) = (next.alive[best], wounds_left(next, best));
+                let (alive_before, wounds_before) = (morale_alive(next, best, seams), wounds_left(next, best));
                 let (ap, bane, shred) = match spec.facet {
                     StormFacet::Ap1 => (1, false, false), StormFacet::Bane => (0, true, false),
                     StormFacet::Shred => (0, false, true), StormFacet::Surge => (0, false, false),
                 };
                 let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(hits, ap, bane, shred, &def, &ut.name, tray));
                 land_wounds_with(next, best, landed, seams.tray_exact);
-                if shooting_morale_trigger(next, ut, best, alive_before, wounds_before) {
+                if shooting_morale_trigger(next, statics, seams, ut, best, alive_before, wounds_before) {
                     tray_morale(next, statics, best, false, seams, tray, shot);
                 }
             }
@@ -3005,7 +3030,8 @@ fn engage_gap_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
 
 /// Inventory C01/C27 — the nearest BASE-EDGE gap (inches) from `a_pos` (unit `si`'s models, or a moved copy
 /// of them) to unit `ti`'s models, through the recorded base shapes: the table's shooting-range and over-9"
-/// measure. Only read with `Knobs::range_by_base_edge`; empty side = INFINITY like `geom::dist_in`.
+/// measure, and (Inventory T05) the charge-distance measure of the by-speed reply. Empty side = INFINITY like
+/// `geom::dist_in`.
 pub fn range_gap_in(state: &State, a_pos: &[[f64; 3]], si: usize, ti: usize) -> f64 {
     let shape = |u: usize| state.roster.profile.get(u)
         .and_then(|&p| state.profiles.list.get(p))
@@ -3061,16 +3087,26 @@ fn modifier_distance_in(state: &State, si: usize, ti: usize, seams: Seams) -> f6
 /// exists only in melee.
 fn shooting_morale_trigger(
     state: &State,
+    statics: &[UnitStatic],
+    seams: Seams,
     us: &UnitStatic,
     ti: usize,
     alive_before: i64,
     wounds_before: i64,
 ) -> bool {
+    if hero_size_on(state, ti, seams) {
+        // C12: `alive_before` is the combined snapshot (`morale_alive`).
+        return should_test_shooting_morale(
+            alive_before,
+            combined_alive(state, ti, seams),
+            combined_total(statics, state, ti, us),
+        );
+    }
     if us.model_count == 1 {
         // A single model measures morale in TOUGH WOUNDS, not models (p.10).
         return state.alive[ti] > 0
             && wounds_left(state, ti) < wounds_before
-            && below_half(state, us, ti);
+            && below_half(state, statics, us, ti, seams);
     }
     should_test_shooting_morale(alive_before, state.alive[ti], us.model_count)
 }
@@ -4420,7 +4456,7 @@ fn expected_melee_morale(
     if !morale_side_alive(state, li, seams) || !morale_fails_expected(state, statics, li, seams) {
         return;
     }
-    if below_half(state, ul, li) {
+    if below_half(state, statics, ul, li, seams) {
         drop_carried(state, li);
         state.wounds[li].clear();
         state.positions[li].clear();
@@ -4921,7 +4957,7 @@ fn tray_morale(
         &ctx,
         &us.name,
         melee,
-        below_half(state, us, i),
+        below_half(state, statics, us, i, seams),
         state.shaken[i],
         // `SoloController.wounds_to_destroy` :6084 also counts the attached
         // heroes' models; this port counts the unit's own wounds, which is the
@@ -5878,19 +5914,6 @@ const REPLY_CHARGE_IN: f64 = 12.0;
 /// The Advance band the v2 reply shoots after (GF p.7: Advance moves 6" and may still fire).
 const REPLY_ADVANCE_IN: f64 = 6.0;
 
-/// Inventory T05 — the nearest BASE-EDGE gap (inches) from `a_pos` (unit `si`'s models) to unit `ti`'s
-/// models through the recorded base shapes: the table's charge-distance measure (p.5). Empty side = INFINITY.
-fn base_gap_in(state: &State, a_pos: &[[f64; 3]], si: usize, ti: usize) -> f64 {
-    let shape = |u: usize| state.roster.profile.get(u)
-        .and_then(|&p| state.profiles.list.get(p))
-        .map_or(geom::BaseShape::Round, crate::state::Profile::shape);
-    geom::edge_gap_shaped_in(
-        a_pos, &state.radii[si], shape(si),
-        &state.positions[ti], &state.radii[ti], shape(ti),
-        DEFAULT_BASE_RADIUS_M,
-    )
-}
-
 /// Inventory T03: the enemy `e`'s live charge reach against `m` — the gate's own band (`charge` or the
 /// Rush band, Fast +4" / Slow -4" already in the bands), Melee-Shrouding folded.
 fn speed_charge_in(statics: &[UnitStatic], state: &State, e: usize, m: usize) -> f64 {
@@ -5973,7 +5996,7 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
             // T03-T06: off = the fixed 12" / 6" bands on the centre distance; on = the enemy's live bands,
             // the base-edge gap for the charge, and no charge against an Aircraft.
             let (charge_gap, charge_reach) = if o.by_speed {
-                (base_gap_in(state, &state.positions[e], e, m).max(0.0), speed_charge_in(statics, state, e, m))
+                (range_gap_in(state, &state.positions[e], e, m).max(0.0), speed_charge_in(statics, state, e, m))
             } else {
                 (d, REPLY_CHARGE_IN)
             };
@@ -7465,7 +7488,7 @@ fn resolve_with(
                 if w > 0 {
                     // main.gd:1042-1043 — the snapshot for that later test, taken
                     // BEFORE these wounds land.
-                    let alive_before = next.alive[si];
+                    let alive_before = morale_alive(&next, si, seams);
                     let wounds_before = wounds_left(&next, si);
                     land_wounds_with(&mut next, si, w, seams.tray_exact);
                     // main.gd:1096-1098 — a NON-charge activation tests morale for
@@ -7660,7 +7683,7 @@ fn resolve_with(
                 // (`sighted_profiles_of`, `main._solo_sighted_count` :4103) and a
                 // folded reach there would let a host weapon fire from a hero's model.
                 let d_ev = if seams.hero_attach { fold_dist_in(&next, si, ti, seams) } else { d };
-                let alive_before = next.alive[ti];
+                let morale_alive_before = morale_alive(&next, ti, seams);
                 let wounds_before = wounds_left(&next, ti);
                 // Seam ON: a plain volley — the cast sub-phase above already
                 // ran. Seam OFF: the LEGACY spell rider (battle_sim.gd:621-628),
@@ -7789,6 +7812,7 @@ fn resolve_with(
                                 growth_log_defender(usg, &def, next.growth_markers[g.ti], shot);
                             }
                             let alive_before_g = next.alive[g.ti];
+                            let morale_alive_g = morale_alive(&next, g.ti, seams);
                             let wounds_before_g = wounds_left(&next, g.ti);
                             let mut feat_spends: Vec<usize> = Vec::new();
                             let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
@@ -8011,7 +8035,7 @@ fn resolve_with(
                             // a `dice="table"` game on a different stream than
                             // the recording.
                             if shooting_morale_trigger(
-                                &next, ut_g, g.ti, alive_before_g, wounds_before_g,
+                                &next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g,
                             ) {
                                 tray_morale(&mut next, statics, g.ti, false, seams, tray, shot);
                             }
@@ -8020,7 +8044,7 @@ fn resolve_with(
                     None => {
                         apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut());
                         let ut = &statics[next.roster.profile[ti]];
-                        if shooting_morale_trigger(&next, ut, ti, alive_before, wounds_before)
+                        if shooting_morale_trigger(&next, statics, seams, ut, ti, morale_alive_before, wounds_before)
                             && morale_fails_expected(&next, statics, ti, seams)
                         {
                             next.shaken[ti] = true;
@@ -8196,7 +8220,7 @@ fn resolve_with(
         if next.alive[si] > 0 {
             if let Some((tray, shot)) = dice.as_mut() {
                 let us = &statics[pi_s];
-                if shooting_morale_trigger(&next, us, si, alive_before, wounds_before) {
+                if shooting_morale_trigger(&next, statics, seams, us, si, alive_before, wounds_before) {
                     tray_morale(&mut next, statics, si, false, seams, tray, shot);
                 }
             }

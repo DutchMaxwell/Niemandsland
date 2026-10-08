@@ -556,9 +556,9 @@ static func rainfall_for(tier: int, mood: String, biome: String) -> float:
 	return 1.0 if mood == "Rain" and tier >= QualityPreset.HIGH and biome != "volcanic_ash" else 0.0
 
 
-## The surrounding world is the optional expensive tier.
+## The surrounding world (landscape, groves, weather-aware sky) instead of the star field: High and Ultra.
 static func world_enabled(tier: int) -> bool:
-	return tier == QualityPreset.ULTRA
+	return tier >= QualityPreset.HIGH
 
 
 ## Get current preset name
