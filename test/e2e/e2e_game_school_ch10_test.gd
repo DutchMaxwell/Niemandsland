@@ -76,6 +76,14 @@ func test_s10_one_step_completes(timeout := 120000) -> void:
 	assert_bool(progress.is_completed("S-10")) \
 		.override_failure_message("S-10 not completed: index=%d" % _lesson.current_index()) \
 		.is_true()
+	var card := _main.get_node_or_null("UI/LessonCard") as LessonCard
+	assert_object(card).is_not_null()
+	if card != null:
+		var txt := String((card.get_node("Content/StepText") as Label).text)
+		assert_bool(txt.begins_with("Chapter complete ✓")).override_failure_message(
+			"finale card complete state missing: %s" % txt).is_true()
+		assert_bool(txt.contains("Victory") or txt.contains("Defeat") or txt.contains("Draw")) \
+			.override_failure_message("finale card must name the mission verdict: %s" % txt).is_true()
 	await Boot.settle(get_tree())
 
 
