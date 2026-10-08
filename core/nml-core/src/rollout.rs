@@ -348,7 +348,8 @@ impl<'a> Rollout<'a> {
 
     /// `rollout_traced` with the opponent's FIRST reply answered by `reply` instead of the scripted
     /// brain (`Knobs::reply_by_net`): the first activation after the opener, when it is the
-    /// opponent's, is `reply`'s pick, resolved as the ROOT move it was priced as (`resolve_root`).
+    /// opponent's, is `reply`'s pick, resolved as the ROOT move it was priced as (`resolve_root`; with
+    /// `Knobs::reply_menu_restricted` the nested search priced it on the playout seams, so `resolve`).
     /// Every later step is today's. A Delayed Action pass in front of it leaves `reply` unasked; an
     /// opponent with nothing left answers `None` and the round goes on as today. `None` = today.
     pub fn rollout_traced_reply(
@@ -465,7 +466,9 @@ impl<'a> Rollout<'a> {
                 }
             }
             let a = a.expect("the dry branch returns above");
-            cur = if forced { self.policy.resolve_root(&cur, &a)? } else { self.policy.resolve(&cur, &a)? };
+            // `reply_menu_restricted`: the nested search priced its pick on the playout seams, so it plays there.
+            let root = forced && !self.knobs.reply_menu_restricted;
+            cur = if root { self.policy.resolve_root(&cur, &a)? } else { self.policy.resolve(&cur, &a)? };
             // Coordinate: the extra activation rides the SAME turn, so the
             // alternation below still flips exactly once. It IS an activation
             // (unlike Delayed Action's pass), so it spends a `steps` of the
