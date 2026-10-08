@@ -37,6 +37,19 @@ func test_unknown_chapter_has_no_steps() -> void:
 	assert_array(SpielschuleLessons.steps_for("S-99")).is_empty()
 
 
+func test_step_texts_never_leak_lesson_tags() -> void:
+	# The player sees unit names, not lesson tags (chapter 1 sets the tone: "one of your models").
+	# A stamped display name like "Alpha Squad" is fine; the bare tag is not.
+	var leak := RegEx.create_from_string("(?i)\\b(?:alpha|bravo|far)\\b(?! squad)")
+	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05"]:
+		for step in SpielschuleLessons.steps_for(chapter_id):
+			var text := String(step.get("text", ""))
+			assert_bool(leak.search(text) != null) \
+				.override_failure_message("%s step '%s' leaks a lesson tag: %s" % [
+					chapter_id, step.get("id", ""), text]) \
+				.is_false()
+
+
 func test_s01_ai_mode_is_none() -> void:
 	assert_str(SpielschuleLessons.ai_mode("S-01")).is_equal("none")
 

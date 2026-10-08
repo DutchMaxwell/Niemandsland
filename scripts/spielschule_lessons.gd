@@ -51,15 +51,15 @@ const _S03_STEPS := [
 
 
 const _S04_STEPS := [
-	{"id": "bands", "text": "Select alpha and press M: the rings show Advance 6\" and Rush 12\". (p.7)",
+	{"id": "bands", "text": "Select Alpha Squad and press M: the rings show Advance 6\" and Rush 12\". (p.7)",
 		"rule": "p.7", "all": [{"check": "flag", "args": {"key": "bands"}}]},
-	{"id": "advance_alpha", "text": "Advance: drag alpha up to 6\", then right-click it and choose Activate.",
+	{"id": "advance_alpha", "text": "Advance: drag Alpha Squad up to 6\", then right-click it and choose Activate.",
 		"rule": "", "all": [
 			{"check": "unit_moved", "args": {"tag": "alpha", "inches": 1.0}},
 			{"check": "tag_flag", "args": {"key": "activated", "tag": "alpha", "value": true}}]},
 	{"id": "ai_turn", "text": "Now NACHTMAHR activates one unit — turns alternate, one unit each. (p.7)",
 		"rule": "p.7", "all": [{"check": "tag_flag", "args": {"key": "activated", "tag": "target", "value": true}}]},
-	{"id": "rush_bravo", "text": "Rush: drag bravo more than 6\" (up to 12\") and activate it. A rushing unit may not shoot.",
+	{"id": "rush_bravo", "text": "Rush: drag Bravo Squad more than 6\" (up to 12\") and activate it. A rushing unit may not shoot.",
 		"rule": "", "all": [
 			{"check": "unit_moved", "args": {"tag": "bravo", "inches": 6.5}},
 			{"check": "tag_flag", "args": {"key": "activated", "tag": "bravo", "value": true}}]},
@@ -69,9 +69,9 @@ const _S04_STEPS := [
 
 
 const _S05_STEPS := [
-	{"id": "card", "text": "Right-click alpha and open its card: the Heavy Rifle shoots 24\". (p.5)",
+	{"id": "card", "text": "Right-click Alpha Squad and open its card: the Heavy Rifle shoots 24\". (p.5)",
 		"rule": "p.5", "all": [{"check": "flag", "args": {"key": "card_presented"}}]},
-	{"id": "shoot", "text": "Right-click alpha, choose Shoot, click the squad in range. The far squad is over 24\" away — out of range.",
+	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad. The further Warriors squad is over 24\" away — out of range.",
 		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
 	{"id": "read_log", "text": "Read the log: hits roll against Quality, the target blocks with Defense. (p.8)",
 		"rule": "p.8", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
