@@ -842,6 +842,8 @@ impl Core {
         m.insert("reply_by_net".into(), self.knobs.reply_by_net.into());
         m.insert("reply_top_k".into(), self.knobs.reply_top_k.into());
         m.insert("reply_horizon".into(), self.knobs.reply_horizon.into());
+        m.insert("reply_pool_cap".into(), self.knobs.reply_pool_cap.into());
+        m.insert("reply_menu_restricted".into(), self.knobs.reply_menu_restricted.into());
         m.insert("seam_cast".into(), self.knobs.seam_cast.into());
         m.insert("seam_spacing".into(), self.knobs.seam_spacing.into());
         m.insert("seam_path".into(), self.knobs.seam_path.into());

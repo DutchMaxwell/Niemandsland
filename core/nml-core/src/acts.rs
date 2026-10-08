@@ -65,6 +65,18 @@ pub struct Knobs {
     /// `reply_by_net`'s horizon in rounds; `<= 0` = `plan::REPLY_HORIZON` (1).
     #[serde(default)]
     pub reply_horizon: i64,
+    /// `reply_by_net`'s nested POOL cap: `> 0` = the opponent's nested reply search prices at most this many
+    /// rows, the top of ITS prefilter order, with no per-unit coverage, patient-advance or second-wave row
+    /// on top (`plan::Search::pool_cap`). `<= 0` = the four guarantees (#1705's nested pool). The root
+    /// search's own pool is never capped. Read only with `reply_by_net` on.
+    #[serde(default)]
+    pub reply_pool_cap: i64,
+    /// `reply_by_net`'s nested MENU: on = the opponent's nested reply search offers the scripted brain's own
+    /// four-option menu (`playout::Policy::policy_candidates`) on the playout seams (no `route_root` table
+    /// move) instead of the full root menu, and the reply it picks is played on those seams. Off = #1705's
+    /// full root menu. Read only with `reply_by_net` on.
+    #[serde(default)]
+    pub reply_menu_restricted: bool,
     /// `BattleSim.cast_phase_enabled()` — NML_SIM_CAST.
     #[serde(default)]
     pub seam_cast: bool,
@@ -1489,6 +1501,8 @@ impl Default for Knobs {
             reply_by_net: false,
             reply_top_k: 0,
             reply_horizon: 0,
+            reply_pool_cap: 0,
+            reply_menu_restricted: false,
             seam_cast: false,
             seam_spacing: false,
             seam_path: false,

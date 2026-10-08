@@ -271,6 +271,13 @@ pub struct Search<'a> {
     /// leaf batch and prices the backup with `blend_score` verbatim.
     pub leaf_value: Option<&'a dyn LeafValue>,
     pub leaf_value_w: f64,
+    /// `Knobs::reply_pool_cap` — set by `reply_search` on the NESTED reply search only, 0 everywhere
+    /// else: `> 0` = PHASE 3's pool is the top `pool_cap` rows of the prefilter order and nothing else
+    /// (`capped_pool`); 0 = `build_pool`'s four guarantees, today's pool.
+    pub pool_cap: usize,
+    /// `Knobs::reply_menu_restricted` — set by `reply_search` on the NESTED reply search only: the
+    /// prefilter offers every unit the scripted brain's menu (`Policy::policy_candidates`).
+    pub menu_restricted: bool,
 }
 
 /// The three seams `resolve` branches on, off the resolved knobs.
@@ -447,7 +454,7 @@ pub fn plan(
 impl<'a> Search<'a> {
     pub fn new(roll: Rollout<'a>, act: &'a ActStatics) -> Search<'a> {
         Search { roll, act, bend: PlanBend::default(), sig: None, cand_logits: None,
-            leaf_value: None, leaf_value_w: 0.0 }
+            leaf_value: None, leaf_value_w: 0.0, pool_cap: 0, menu_restricted: false }
     }
 
     /// `AiPlanner.top_k_default` ai_planner.gd:52-56 — the recorded knob already
@@ -553,6 +560,9 @@ impl<'a> Search<'a> {
             // the same rule the rollout policy applies inside a playout.
             let menu: Vec<Candidate> = if state.shaken[i] {
                 vec![Candidate::hold(key)]
+            } else if self.menu_restricted {
+                // `Knobs::reply_menu_restricted` (the nested reply search only): the scripted brain's menu.
+                self.roll.policy.policy_candidates(state, i, sc)
             } else {
                 // The ROOT menu reads the SAME two class constants the rollout
                 // policy reads, so it takes the same `Tuning`: one knob in the
@@ -687,7 +697,11 @@ impl<'a> Search<'a> {
         }
 
         // PHASE 3 — the pool.
-        let (mut covered, mut pool) = build_pool(&scored, &order, top_k, self.bend);
+        let (mut covered, mut pool) = if self.pool_cap > 0 {
+            capped_pool(&scored, &order, self.pool_cap)
+        } else {
+            build_pool(&scored, &order, top_k, self.bend)
+        };
         // The root preselection (PHASES 0-3) ends HERE.
         if self.bend.preselect_delay_us > 0 {
             std::thread::sleep(std::time::Duration::from_micros(self.bend.preselect_delay_us));
@@ -909,20 +923,38 @@ impl<'a> Search<'a> {
     /// batch (PHASE 4b runs after every rollout, the reply is needed inside one), so it asks the
     /// hook in its own sequential call. `None` = the opponent has nothing left to activate.
     pub fn reply_pick(&self, st: &State, opp: i64, sc: &mut Scratch) -> Result<Option<Candidate>, Unsupported> {
+        match self.reply_search(st, opp, sc) {
+            Ok(p) => Ok(Some(p.action)),
+            Err(Unsupported::NoCandidate) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// `reply_pick`'s nested search with its whole `Pick` (prefilter, pool, rs) — what a test reads.
+    /// `Knobs::reply_pool_cap` caps ITS pool (`pool_cap`), `Knobs::reply_menu_restricted` gives it the
+    /// playout menu on the playout seams (`menu_restricted`, no `root_seams`); the root search is
+    /// untouched by either. Borrowed from the root, never rebuilt: the statics, the board, the tier-2
+    /// reach index with its route memo (`Policy::reach`), the menu tuning, the scratch and the leaf
+    /// hook. Rebuilt per nested search: the opponent's prefilter (its menu, one resolve and one hand
+    /// score per row) and a copy of the `ActStatics` with the seat flipped.
+    pub fn reply_search(&self, st: &State, opp: i64, sc: &mut Scratch) -> Result<Pick, Unsupported> {
         let (top_k, horizon) = self.reply_grade();
         let knobs = Knobs { top_k, horizon, reply_by_net: false, search_mode: SearchMode::OnePly, deadline_us: 0,
                             deadline_after_preselect: false, pool_wall_ms: 0, ..self.roll.knobs };
         let act = ActStatics { opener_seat: !self.act.opener_seat, playout_search: false,
                                policy_mode: PolicyMode::Off, ..self.act.clone() };
         let seat = self.leaf_value.map(|inner| SeatHook { inner, opener_seat: act.opener_seat });
-        let mut nested = Search::new(Rollout::new(self.roll.policy, knobs), &act);
+        let policy = if self.roll.knobs.reply_menu_restricted {
+            Policy { root_seams: None, ..self.roll.policy }
+        } else {
+            self.roll.policy
+        };
+        let mut nested = Search::new(Rollout::new(policy, knobs), &act);
+        nested.pool_cap = self.roll.knobs.reply_pool_cap.max(0) as usize;
+        nested.menu_restricted = self.roll.knobs.reply_menu_restricted;
         nested.leaf_value = seat.as_ref().map(|h| h as &dyn LeafValue);
         nested.leaf_value_w = self.leaf_value_w;
-        match nested.run(st, opp, sc, None) {
-            Ok(p) => Ok(Some(p.action)),
-            Err(Unsupported::NoCandidate) => Ok(None),
-            Err(e) => Err(e),
-        }
+        nested.run(st, opp, sc, None)
     }
 
     /// The `deadline_us` fallback when the deadline hit before the first
@@ -1191,6 +1223,20 @@ pub fn build_pool(
             continue;
         }
         push_pool(&mut pool, scored, i, bend.dedupe_by_value);
+    }
+    (covered, pool)
+}
+
+/// `Knobs::reply_pool_cap` — the NESTED reply search's PHASE 3: the top `cap` rows of the ranked order
+/// and nothing on top (no coverage, patient or second-wave guarantee). `covered` = their units, in
+/// the order the pool meets them.
+pub fn capped_pool(scored: &[ScoredRow], order: &[usize], cap: usize) -> (Vec<String>, Vec<usize>) {
+    let pool: Vec<usize> = order.iter().copied().take(cap).collect();
+    let mut covered: Vec<String> = Vec::new();
+    for &i in &pool {
+        if !covered.contains(&scored[i].unit_key) {
+            covered.push(scored[i].unit_key.clone());
+        }
     }
     (covered, pool)
 }
