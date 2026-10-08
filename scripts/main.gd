@@ -219,7 +219,6 @@ var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
 var game_record_collector: GameRecordCollector = null   # in-memory opt-in game record (PR B1, local only)
 var _tutorial_mode: bool = false              # guided tutorial: set from the startup-menu flag, drives _start_tutorial
-var _solo_hotseat: bool = false               # tutorial table = two humans: retires the implicit "P2 is NACHTMAHR" default (plan B1)
 var _tutorial_director: TutorialDirector = null
 var _tutorial_start_lesson: String = ""       # chapter-picker lesson id ("" = assessment/resume flow)
 var _tutorial_board_pending: bool = false     # the bundled tutorial board was queued on the pending-load path
@@ -881,7 +880,6 @@ func _ready() -> void:
 	if tutorial_mode:
 		ProjectSettings.set_setting("niemandsland/tutorial_mode", false)
 		_tutorial_mode = true
-		_solo_hotseat = true   # from the first frame: the board loads before the director starts
 		_tutorial_start_lesson = str(ProjectSettings.get_setting("niemandsland/tutorial_lesson", ""))
 		ProjectSettings.set_setting("niemandsland/tutorial_lesson", "")
 		if str(ProjectSettings.get_setting("niemandsland/pending_load_path", "")).is_empty() \
@@ -1006,7 +1004,7 @@ func _dismiss_transition_overlay() -> void:
 ## Solo/AI (F11, debug fallback): run the WHOLE remaining AI side — every eligible unit of the designated
 ## AI army activates in sequence (goal 003 P2; the normal flow is alternating activation via
 ## _on_solo_human_activated). The AI army is whichever slot is marked in solo_ai_slots (import checkbox /
-## Solo panel); with no designation it falls back to player 2 (backward compat).
+## Solo panel); with no designation the F11 press designates player 2 explicitly (plan 2.2: no implicit AI).
 func _run_solo_ai_turn() -> void:
 	# F11 is a FOURTH door into play, and it is player-facing — the import dialog and the Solo panel both
 	# advertise it. Ungated it was the worst of them: _solo_ensure_playing_phase() below deploys the AI's
@@ -1018,8 +1016,10 @@ func _run_solo_ai_turn() -> void:
 	if opr_army_manager == null or movement_range_controller == null:
 		push_warning("[Solo/AI] not ready — import armies first")
 		return
+	if solo_ai_slots.is_empty():
+		_on_solo_ai_toggled(true, 2)   # F11 is an explicit "run the AI": designate player 2 (plan 2.2)
 	_ensure_solo_controller()
-	if _solo_ai_busy:
+	if solo_controller == null or _solo_ai_busy:
 		return
 	_solo_ai_busy = true
 	# Community #163: F11 gets the same "NACHTMAHR dreams…" indicator the alternation pump
@@ -2872,10 +2872,7 @@ func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
 	# designated AI slot — a cast/targeting click in a human-vs-human room must not summon
 	# NACHTMAHR (the controller's existence alone arms the alternation pump).
-	if solo_ai_slots.is_empty() and network_manager != null and network_manager.is_multiplayer_active():
-		return
-	# Plan B1, tutorial only: same rule on the tutorial table — no designation, no controller.
-	if solo_ai_slots.is_empty() and _solo_hotseat:
+	if solo_ai_slots.is_empty():
 		return
 	var ai_slot := _solo_ai_slot()
 	# In native both-AI mode the driver flips solo_controller.ai_slot per activation, so a slot-mismatch is
@@ -3021,7 +3018,7 @@ func _on_solo_deploy_pressed() -> void:
 	# the controller — the guided flow would null-crash right here. The rulebook deployment
 	# in multiplayer is the players' own alternating placement (free drags), not this flow.
 	if solo_controller == null:
-		_solo_show_toast("Guided deployment is a solo-game flow — in multiplayer, deploy freely by dragging from the trays")
+		_solo_show_toast("Guided deployment needs an AI army (tick NACHTMAHR on the import) — otherwise deploy freely by dragging from the trays")
 		return
 	var w: float = table.table_size.x * 0.3048
 	var d: float = table.table_size.y * 0.3048
@@ -10294,16 +10291,9 @@ func _solo_is_ai_unit(unit: GameUnit) -> bool:
 		return false
 	if solo_ai_slots.has(pid):
 		return true
-	# The implicit "no designation → P2 is the AI" default is a SOLO-mode convention. In
-	# multiplayer nobody is an AI unit unless explicitly designated — this implicit branch
-	# is what let NACHTMAHR hijack the guest's army in a human-vs-human room.
-	if network_manager != null and network_manager.is_multiplayer_active():
-		return false
-	# Plan B1, tutorial only: the tutorial table is two humans at one screen — an explicit
-	# designation (above) still wins, the implicit default does not apply there.
-	if _solo_hotseat:
-		return false
-	return solo_ai_slots.is_empty() and pid == _solo_ai_slot()
+	# Plan 2.2 ("no AI without its tick"): no designation means nobody is an AI unit — the
+	# old implicit "player 2 is NACHTMAHR" default is retired (local, tutorial and multiplayer alike).
+	return false
 
 
 ## #673 co-op: the player slot that owns a unit — a PER-UNIT lookup, because co-op has TWO
@@ -16279,7 +16269,6 @@ func _on_load_file_selected(path: String) -> void:
 	if _scenario_loader != null and not path.begins_with(ScenarioLoader.SCENARIO_DIR):
 		_scenario_loader.leave_lesson_for_external_load()
 		_scenario_mode = false
-	_solo_hotseat = false   # a loaded battle is not the tutorial table: the solo default applies again
 	var error = await save_manager.load_game(path)
 	if error != OK:
 		push_error("Failed to load game: %d" % error)
@@ -17322,7 +17311,6 @@ const TUTORIAL_BOARD_TIMEOUT_S := 120.0
 func _start_tutorial() -> void:
 	if is_instance_valid(_tutorial_director):
 		return  # already running (guard against a double call_deferred)
-	_solo_hotseat = true   # plan B1: the tutorial table never hands player 2 to NACHTMAHR
 	# The board .nml deserializes asynchronously (unit-by-unit): wait for its
 	# load_completed/load_failed gate, with a hard timeout so a broken board never
 	# hangs the tutorial (it then runs degraded: banner spotlights, no unit target).
