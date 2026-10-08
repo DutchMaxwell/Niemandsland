@@ -106,7 +106,8 @@ jobs:
       # Asset blobs are content-addressed (sha256) and immutable, so the CDN cache dirs under
       # user:// (~/.local/share/godot/app_userdata/Niemandsland/ on the Linux runner) can be
       # restored across runs. Keyed by the pinned manifest the tests now use, so a warm run
-      # downloads 0 blobs; a manifest change re-keys and re-downloads.
+      # downloads 0 blobs; a manifest change re-keys and re-downloads. One key per shard: each
+      # shard fetches a different blob set, so a shared key would let one shard's save shadow the rest.
       - name: Cache CDN asset blobs (content-addressed)
         uses: actions/cache@v4
         with:
@@ -119,9 +120,9 @@ jobs:
             ~/.local/share/godot/app_userdata/Niemandsland/ruins_cache
             ~/.local/share/godot/app_userdata/Niemandsland/trees_cache
             ~/.local/share/godot/app_userdata/Niemandsland/reference_terrain_cache
-          key: nml-asset-cache-${{ hashFiles('assets/model_manifest.json') }}
+          key: nml-asset-cache-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}
           restore-keys: |
-            nml-asset-cache-
+            nml-asset-cache-shard${{ matrix.shard }}-
 
       - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path .
